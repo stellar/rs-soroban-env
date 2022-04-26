@@ -1,17 +1,17 @@
 // provide bits of rust's runtime interface: allocator, panic handling, etc.
 
-#[cfg(target_family = "wasm")]
+#[cfg(all(target_family = "wasm", not(feature = "host_context")))]
 #[inline(always)]
 pub fn trap() -> ! {
     core::arch::wasm32::unreachable()
 }
 
-#[cfg(not(target_family = "wasm"))]
+#[cfg(any(not(target_family = "wasm"), feature = "host_context"))]
 pub fn trap() -> ! {
     panic!()
 }
 
-#[cfg(target_family = "wasm")]
+#[cfg(all(target_family = "wasm", not(feature = "host_context")))]
 #[panic_handler]
 fn handle_panic(_: &core::panic::PanicInfo) -> ! {
     trap();

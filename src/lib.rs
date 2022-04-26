@@ -1,3 +1,5 @@
+#![cfg_attr(not(feature = "host_context"), no_std)]
+
 mod bitset;
 mod host;
 #[cfg(feature = "host_context")]
