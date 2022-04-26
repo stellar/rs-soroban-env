@@ -2,7 +2,7 @@ use super::val::{Tag, Val, ValType};
 use stellar_xdr::ScObjectType;
 
 #[repr(transparent)]
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone)]
 pub struct Object(Val);
 
 impl ValType for Object {

@@ -18,7 +18,7 @@ pub use symbol::Symbol;
 pub use val::{Val, ValType};
 
 #[cfg(feature = "host_context")]
-pub use host_context::HostContext;
+pub use host_context::{HostContext,HostObject};
 
 #[inline(always)]
 // Awkward: this is a free function rather than a trait call because
