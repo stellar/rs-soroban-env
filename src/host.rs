@@ -1,12 +1,78 @@
+use stellar_xdr::ScObjectType;
+
+use crate::{or_abort::OrAbort, ValType};
+
 use super::{Object, Val};
 use core::any;
+
+// HostConvertable is similar to ValType but also covers types with conversions
+// that need a Host -- those that might require allocating an Object. ValType
+// covers types that can always be directly converted to Val with no Host.
+pub trait HostConvertable: Sized {
+    fn val_from<H: Host + ?Sized>(self, host: &mut H) -> Val;
+    fn try_val_into<H: Host + ?Sized>(v: Val, host: &mut H) -> Option<Self>;
+}
+
+impl<V: ValType> HostConvertable for V {
+    fn val_from<H: Host + ?Sized>(self, _host: &mut H) -> Val {
+        self.into()
+    }
+
+    fn try_val_into<H: Host + ?Sized>(v: Val, _host: &mut H) -> Option<Self> {
+        if <V as ValType>::is_val_type(v) {
+            Some(unsafe { <V as ValType>::unchecked_from_val(v) })
+        } else {
+            None
+        }
+    }
+}
+
+impl HostConvertable for i64 {
+    fn val_from<H: Host + ?Sized>(self, host: &mut H) -> Val {
+        if self >= 0 {
+            unsafe { Val::unchecked_from_u63(self) }
+        } else {
+            host.obj_from_i64(self).into()
+        }
+    }
+
+    fn try_val_into<H: Host + ?Sized>(v: Val, host: &mut H) -> Option<Self> {
+        if v.is_u63() {
+            Some(unsafe { v.unchecked_as_u63() })
+        } else if Object::val_is_obj_type(v, ScObjectType::ScoI64) {
+            Some(host.obj_to_i64(unsafe { Object::unchecked_from_val(v) }))
+        } else {
+            None
+        }
+    }
+}
+
+impl HostConvertable for u64 {
+    fn val_from<H: Host + ?Sized>(self, host: &mut H) -> Val {
+        if self <= (u64::MAX >> 1) {
+            unsafe { Val::unchecked_from_u63(self as i64) }
+        } else {
+            host.obj_from_u64(self).into()
+        }
+    }
+
+    fn try_val_into<H: Host + ?Sized>(v: Val, host: &mut H) -> Option<Self> {
+        if v.is_u63() {
+            Some(unsafe { v.unchecked_as_u63() } as u64)
+        } else if Object::val_is_obj_type(v, ScObjectType::ScoU64) {
+            Some(host.obj_to_u64(unsafe { Object::unchecked_from_val(v) }))
+        } else {
+            None
+        }
+    }
+}
 
 // This trait needs to be implemented by any type that plays the role of the
 // host for a contract. In a contract test or core setting this will be a full
 // HostContext, whereas in a contract's wasm build it will be an empty
 // type that calls through to global wasm imports provided at
 // wasm-module-instantiation time.
-trait Host {
+pub trait Host {
     // Used for recovering the concrete type of the Host.
     fn as_mut_any(&mut self) -> &mut dyn any::Any;
 
@@ -18,15 +84,16 @@ trait Host {
     fn obj_from_i64(&mut self, i: i64) -> Object;
     fn obj_to_i64(&mut self, i: Object) -> i64;
 
-    // Helper for the case where you want to project into Val
-    // from an i64 even if it's negative: you get either a
-    // 63-bit tagged Val if it's posiive, or a full Object if
-    // it's negative.
-    fn val_from_i64(&mut self, i: i64) -> Val {
-        match i.try_into() {
-            Ok(v) => v,
-            Err(_) => self.obj_from_i64(i).into(),
-        }
+    fn val_from<HC: HostConvertable>(&mut self, v: HC) -> Val {
+        v.val_from(self)
+    }
+
+    fn try_val_into<HC: HostConvertable>(&mut self, v: Val) -> Option<HC> {
+        HC::try_val_into(v, self)
+    }
+
+    fn val_into<HC: HostConvertable>(&mut self, v: Val) -> HC {
+        self.try_val_into::<HC>(v).or_abort()
     }
 
     fn map_new(&mut self) -> Object;
