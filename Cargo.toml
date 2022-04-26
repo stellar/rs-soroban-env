@@ -1,5 +1,5 @@
 [package]
-name = "rs-stellar-contract-host"
+name = "stellar-contract-host"
 version = "0.1.0"
 edition = "2021"
 
