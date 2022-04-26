@@ -1,4 +1,5 @@
 use super::val::{Tag, Val, ValType};
+use std::hash::Hash;
 use stellar_xdr::ScStatusType;
 
 #[repr(transparent)]
@@ -27,6 +28,34 @@ impl From<Status> for Val {
     #[inline(always)]
     fn from(s: Status) -> Self {
         s.0
+    }
+}
+
+impl Hash for Status {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.0.get_payload().hash(state);
+    }
+}
+
+impl PartialEq for Status {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.get_payload() == other.0.get_payload()
+    }
+}
+
+impl Eq for Status {}
+
+impl PartialOrd for Status {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for Status {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        let self_tup = (self.0.get_minor(), self.0.get_major());
+        let other_tup = (other.0.get_minor(), other.0.get_major());
+        self_tup.cmp(&other_tup)
     }
 }
 

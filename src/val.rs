@@ -9,6 +9,10 @@ const TAG_MASK: u64 = (1u64 << TAG_BITS) - 1;
 sa::const_assert!(TAG_MASK == 0x7);
 
 #[allow(dead_code)]
+pub(crate) const BODY_BITS: usize = WORD_BITS - (TAG_BITS + 1);
+sa::const_assert!(BODY_BITS == 60);
+
+#[allow(dead_code)]
 const MAJOR_BITS: usize = 32;
 #[allow(dead_code)]
 const MINOR_BITS: usize = 28;
@@ -17,12 +21,10 @@ const MAJOR_MASK: u64 = (1u64 << MAJOR_BITS) - 1;
 const MINOR_MASK: u64 = (1u64 << MINOR_BITS) - 1;
 sa::const_assert!(MAJOR_MASK == 0xffff_ffff);
 sa::const_assert!(MINOR_MASK == 0x0fff_ffff);
-
-// The most structured words are [MAJOR:32 | MINOR:28 | TAG:3 | 0/1 ]
-sa::const_assert!(MAJOR_BITS + MINOR_BITS + TAG_BITS + 1 == WORD_BITS);
+sa::const_assert!(MAJOR_BITS + MINOR_BITS == BODY_BITS);
 
 #[repr(u8)]
-#[derive(Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Tag {
     U32 = 0,
     I32 = 1,
@@ -37,7 +39,7 @@ pub enum Tag {
 }
 
 #[repr(u32)]
-#[derive(Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Static {
     Void = 0,
     True = 1,
@@ -45,7 +47,7 @@ pub enum Static {
 }
 
 #[repr(transparent)]
-#[derive(Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone)]
 pub struct Val(u64);
 
 pub trait ValType: Into<Val> {
@@ -205,6 +207,11 @@ impl From<i32> for Val {
 
 impl Val {
     #[inline(always)]
+    pub(crate) const fn get_payload(&self) -> u64 {
+        self.0
+    }
+
+    #[inline(always)]
     pub(crate) const fn is_u63(&self) -> bool {
         (self.0 & 1) == 0
     }
@@ -267,7 +274,7 @@ impl Val {
 
     #[inline(always)]
     pub(crate) const fn get_major(&self) -> u32 {
-        (self.get_body() >> MINOR_MASK) as u32
+        (self.get_body() >> MINOR_BITS) as u32
     }
 
     #[inline(always)]
