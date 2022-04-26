@@ -14,6 +14,7 @@ mod val;
 use core::panic;
 
 pub use bitset::BitSet;
+pub use host::{Host, HostConvertable};
 pub use object::{ObjType, Object};
 pub use status::{Status, OK, UNKNOWN_ERROR};
 pub use symbol::Symbol;
