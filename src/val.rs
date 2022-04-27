@@ -207,8 +207,13 @@ impl From<i32> for Val {
 
 impl Val {
     #[inline(always)]
-    pub(crate) const fn get_payload(&self) -> u64 {
+    pub const fn get_payload(&self) -> u64 {
         self.0
+    }
+
+    #[inline(always)]
+    pub const fn from_payload(&self, x: u64) -> Self {
+        Self(x)
     }
 
     #[inline(always)]
