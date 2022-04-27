@@ -4,9 +4,7 @@ use core::cell::RefCell;
 use im_rc::{OrdMap, Vector};
 
 use std::rc::Rc;
-use stellar_xdr::{
-    Int32, Int64, ScMap, ScMapEntry, ScObject, ScStatic, ScVal, ScVec, Uint32, Uint64,
-};
+use stellar_xdr::{ScMap, ScMapEntry, ScObject, ScStatic, ScVal, ScVec};
 
 use crate::{val::Tag, Host, Object, Val, ValType};
 
@@ -46,16 +44,14 @@ impl HostContext {
 
     pub fn from_host_val(&self, val: Val) -> Result<ScVal, ()> {
         if val.is_u63() {
-            Ok(ScVal::ScvU63(Uint64(
-                unsafe { val.unchecked_as_u63() } as u64
-            )))
+            Ok(ScVal::ScvU63(unsafe { val.unchecked_as_u63() } as u64))
         } else {
             match val.get_tag() {
                 Tag::U32 => Ok(ScVal::ScvU32(unsafe {
-                    Uint32(<u32 as ValType>::unchecked_from_val(val))
+                    <u32 as ValType>::unchecked_from_val(val)
                 })),
                 Tag::I32 => Ok(ScVal::ScvI32(unsafe {
-                    Int32(<i32 as ValType>::unchecked_from_val(val))
+                    <i32 as ValType>::unchecked_from_val(val)
                 })),
                 Tag::Static => todo!(),
                 Tag::Object => unsafe {
@@ -74,14 +70,14 @@ impl HostContext {
     pub fn to_host_val(&mut self, v: &ScVal) -> Result<Val, ()> {
         match v {
             ScVal::ScvU63(u) => {
-                if u.0 <= (i64::MAX as u64) {
-                    Ok(unsafe { Val::unchecked_from_u63(u.0 as i64) })
+                if *u <= (i64::MAX as u64) {
+                    Ok(unsafe { Val::unchecked_from_u63(*u as i64) })
                 } else {
                     Err(())
                 }
             }
-            ScVal::ScvU32(u) => Ok(u.0.into()),
-            ScVal::ScvI32(i) => Ok(i.0.into()),
+            ScVal::ScvU32(u) => Ok((*u).into()),
+            ScVal::ScvI32(i) => Ok((*i).into()),
             ScVal::ScvStatic(ScStatic::ScsVoid) => Ok(Val::from_void()),
             ScVal::ScvStatic(ScStatic::ScsTrue) => Ok(Val::from_bool(true)),
             ScVal::ScvStatic(ScStatic::ScsFalse) => Ok(Val::from_bool(false)),
@@ -115,8 +111,8 @@ impl HostContext {
                         }
                         Ok(ScObject::ScoMap(ScMap(mv)))
                     }
-                    HostObject::U64(u) => Ok(ScObject::ScoU64(Uint64(*u))),
-                    HostObject::I64(i) => Ok(ScObject::ScoI64(Int64(*i))),
+                    HostObject::U64(u) => Ok(ScObject::ScoU64(*u)),
+                    HostObject::I64(i) => Ok(ScObject::ScoI64(*i)),
                     HostObject::Str(_) => todo!(),
                     HostObject::Bin(_) => todo!(),
                     HostObject::BigInt(_) => todo!(),
@@ -152,8 +148,8 @@ impl HostContext {
                 }
                 self.add_host_object(mm)
             }
-            ScObject::ScoU64(u) => self.add_host_object(u.0),
-            ScObject::ScoI64(i) => self.add_host_object(i.0),
+            ScObject::ScoU64(u) => self.add_host_object(*u),
+            ScObject::ScoI64(i) => self.add_host_object(*i),
             ScObject::ScoString(s) => {
                 let ss = match String::from_utf8(s.clone()) {
                     Ok(ss) => ss,
@@ -330,7 +326,7 @@ impl Host for HostContext {
 
 #[cfg(test)]
 mod test {
-    use stellar_xdr::{ScObject, ScObjectType, ScVal, ScVec, Uint32};
+    use stellar_xdr::{ScObject, ScObjectType, ScVal, ScVec};
 
     use super::HostContext;
     use crate::{or_abort::OrAbort, Host, Object};
@@ -347,8 +343,8 @@ mod test {
     #[test]
     fn vec_host_objs() {
         let mut host = HostContext::default();
-        let scvec0: ScVec = ScVec(vec![ScVal::ScvU32(Uint32(1))]);
-        let scvec1: ScVec = ScVec(vec![ScVal::ScvU32(Uint32(1))]);
+        let scvec0: ScVec = ScVec(vec![ScVal::ScvU32(1)]);
+        let scvec1: ScVec = ScVec(vec![ScVal::ScvU32(1)]);
         let scobj0: ScObject = ScObject::ScoVec(scvec0);
         let scobj1: ScObject = ScObject::ScoVec(scvec1);
         let scval0 = ScVal::ScvObject(Some(Box::new(scobj0)));
