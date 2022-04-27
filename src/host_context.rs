@@ -4,9 +4,11 @@ use core::cell::RefCell;
 use im_rc::{OrdMap, Vector};
 
 use std::rc::Rc;
-use stellar_xdr::{ScObject, ScStatic, ScVal};
+use stellar_xdr::{
+    Int32, Int64, ScMap, ScMapEntry, ScObject, ScStatic, ScVal, ScVec, Uint32, Uint64,
+};
 
-use crate::{Host, Object, Val, ValType};
+use crate::{val::Tag, Host, Object, Val, ValType};
 
 mod debug;
 mod host_object;
@@ -42,6 +44,33 @@ impl HostContext {
         ValInContext { ctx, val }
     }
 
+    pub fn from_host_val(&self, val: Val) -> Result<ScVal, ()> {
+        if val.is_u63() {
+            Ok(ScVal::ScvU63(Uint64(
+                unsafe { val.unchecked_as_u63() } as u64
+            )))
+        } else {
+            match val.get_tag() {
+                Tag::U32 => Ok(ScVal::ScvU32(unsafe {
+                    Uint32(<u32 as ValType>::unchecked_from_val(val))
+                })),
+                Tag::I32 => Ok(ScVal::ScvI32(unsafe {
+                    Int32(<i32 as ValType>::unchecked_from_val(val))
+                })),
+                Tag::Static => todo!(),
+                Tag::Object => unsafe {
+                    let ob = <Object as ValType>::unchecked_from_val(val);
+                    let scob = self.from_host_obj(ob)?;
+                    Ok(ScVal::ScvObject(Some(Box::new(scob))))
+                },
+                Tag::Symbol => todo!(),
+                Tag::BitSet => todo!(),
+                Tag::Status => todo!(),
+                Tag::Reserved => todo!(),
+            }
+        }
+    }
+
     pub fn to_host_val(&mut self, v: &ScVal) -> Result<Val, ()> {
         match v {
             ScVal::ScvU63(u) => {
@@ -61,6 +90,39 @@ impl HostContext {
             ScVal::ScvSymbol(_) => todo!(),
             ScVal::ScvBitset(_) => todo!(),
             ScVal::ScvStatus(_) => todo!(),
+        }
+    }
+
+    pub fn from_host_obj(&self, ob: Object) -> Result<ScObject, ()> {
+        unsafe {
+            self.0.unchecked_visit_val_obj(ob.into(), |ob| match ob {
+                None => Err(()),
+                Some(ho) => match ho {
+                    HostObject::Box(v) => Ok(ScObject::ScoBox(self.from_host_val(v.val)?)),
+                    HostObject::Vec(vv) => {
+                        let mut sv = Vec::new();
+                        for e in vv.iter() {
+                            sv.push(self.from_host_val(e.val)?);
+                        }
+                        Ok(ScObject::ScoVec(ScVec(sv)))
+                    }
+                    HostObject::Map(mm) => {
+                        let mut mv = Vec::new();
+                        for (k, v) in mm.iter() {
+                            let key = self.from_host_val(k.val)?;
+                            let val = self.from_host_val(v.val)?;
+                            mv.push(ScMapEntry { key, val });
+                        }
+                        Ok(ScObject::ScoMap(ScMap(mv)))
+                    }
+                    HostObject::U64(u) => Ok(ScObject::ScoU64(Uint64(*u))),
+                    HostObject::I64(i) => Ok(ScObject::ScoI64(Int64(*i))),
+                    HostObject::Str(_) => todo!(),
+                    HostObject::Bin(_) => todo!(),
+                    HostObject::BigInt(_) => todo!(),
+                    HostObject::BigRat(_) => todo!(),
+                },
+            })
         }
     }
 
