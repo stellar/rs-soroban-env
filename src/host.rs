@@ -49,7 +49,7 @@ impl HostConvertable for i64 {
 
 impl HostConvertable for u64 {
     fn val_from<H: Host + ?Sized>(self, host: &mut H) -> Val {
-        if self <= (u64::MAX >> 1) {
+        if self <= (i64::MAX as u64) {
             unsafe { Val::unchecked_from_u63(self as i64) }
         } else {
             host.obj_from_u64(self).into()
