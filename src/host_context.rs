@@ -2,141 +2,27 @@
 
 use core::cell::RefCell;
 use im_rc::{OrdMap, Vector};
-use num_bigint::BigInt;
-use num_rational::BigRational;
-use std::cmp::Ordering;
-use std::rc::{Rc, Weak};
-use stellar_xdr::{ScObject, ScObjectType, ScStatic, ScVal};
 
-use crate::val::Tag;
-use crate::{require, BitSet, Host, Object, Status, Symbol, Val, ValType};
+use std::rc::Rc;
+use stellar_xdr::{ScObject, ScStatic, ScVal};
+
+use crate::{Host, Object, Val, ValType};
 
 mod debug;
+mod host_object;
+mod val_in_context;
 
-#[derive(Clone)]
-pub struct ValInContext {
-    ctx: Weak<HostContext>,
-    val: Val,
-}
+pub use host_object::HostObject;
+use host_object::HostObjectType;
 
-impl ValInContext {
-    pub fn get_context(&self) -> Rc<HostContext> {
-        self.ctx
-            .upgrade()
-            .expect("ValInContext.get_context() on expired context")
-    }
-    pub fn check_same_context(&self, other: &Self) -> Rc<HostContext> {
-        let self_ctx = self.get_context();
-        let other_ctx = other.get_context();
-        require(Rc::ptr_eq(&self_ctx, &other_ctx));
-        self_ctx
-    }
-}
-
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub enum HostObject {
-    Box(ValInContext),
-    Vec(Vector<ValInContext>),
-    Map(OrdMap<ValInContext, ValInContext>),
-    U64(u64),
-    I64(i64),
-    Str(String),
-    Blob(Vec<u8>),
-    BigInt(BigInt),
-    BigRat(BigRational),
-    // TODO: waiting for Ord, PartialOrd on these
-    //LedgerKey(LedgerKey),
-    //Operation(Operation),
-    //OperationResult(OperationResult),
-    //Transaction(Transaction),
-    //Asset(Asset),
-    //Price(Price),
-    //AccountID(AccountID)
-}
-
-impl Eq for ValInContext {}
-
-impl PartialEq for ValInContext {
-    fn eq(&self, other: &Self) -> bool {
-        let ctx = self.check_same_context(other);
-        if self.val.get_payload() == other.val.get_payload() {
-            // Fast path: bit-identical vals.
-            true
-        } else if self.val.get_tag() != Tag::Object || other.val.get_tag() != Tag::Object {
-            // Other fast path: non-identical non-objects, must be non-equal.
-            false
-        } else {
-            // Slow path: deep object comparison.
-            unsafe {
-                ctx.unchecked_visit_val_obj(self.val, |a| {
-                    ctx.unchecked_visit_val_obj(other.val, |b| a.eq(&b))
-                })
-            }
-        }
-    }
-}
-
-impl PartialOrd for ValInContext {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for ValInContext {
-    fn cmp(&self, other: &Self) -> Ordering {
-        let ctx = self.check_same_context(other);
-        let self_tag = self.val.get_tag();
-        let other_tag = other.val.get_tag();
-        if self_tag < other_tag {
-            Ordering::Less
-        } else if self_tag > other_tag {
-            Ordering::Greater
-        } else {
-            // Tags are equal so we only have to switch on one.
-            match self_tag {
-                Tag::U32 => {
-                    let a = unsafe { <u32 as ValType>::unchecked_from_val(self.val) };
-                    let b = unsafe { <u32 as ValType>::unchecked_from_val(other.val) };
-                    a.cmp(&b)
-                }
-                Tag::I32 => {
-                    let a = unsafe { <i32 as ValType>::unchecked_from_val(self.val) };
-                    let b = unsafe { <i32 as ValType>::unchecked_from_val(other.val) };
-                    a.cmp(&b)
-                }
-                Tag::Static => self.val.get_body().cmp(&other.val.get_body()),
-                Tag::Object => unsafe {
-                    ctx.unchecked_visit_val_obj(self.val, |a| {
-                        ctx.unchecked_visit_val_obj(other.val, |b| a.cmp(&b))
-                    })
-                },
-                Tag::Symbol => {
-                    let a = unsafe { <Symbol as ValType>::unchecked_from_val(self.val) };
-                    let b = unsafe { <Symbol as ValType>::unchecked_from_val(other.val) };
-                    a.cmp(&b)
-                }
-                Tag::BitSet => {
-                    let a = unsafe { <BitSet as ValType>::unchecked_from_val(self.val) };
-                    let b = unsafe { <BitSet as ValType>::unchecked_from_val(other.val) };
-                    a.cmp(&b)
-                }
-                Tag::Status => {
-                    let a = unsafe { <Status as ValType>::unchecked_from_val(self.val) };
-                    let b = unsafe { <Status as ValType>::unchecked_from_val(other.val) };
-                    a.cmp(&b)
-                }
-                Tag::Reserved => self.val.get_payload().cmp(&other.val.get_payload()),
-            }
-        }
-    }
-}
+use val_in_context::ValInContext;
 
 #[derive(Default)]
-pub struct HostContext {
+pub(crate) struct HostContextImpl {
     objects: RefCell<Vec<HostObject>>,
 }
 
-impl HostContext {
+impl HostContextImpl {
     unsafe fn unchecked_visit_val_obj<F, U>(&self, val: Val, f: F) -> U
     where
         F: FnOnce(Option<&HostObject>) -> U,
@@ -145,13 +31,18 @@ impl HostContext {
         let index = <Object as ValType>::unchecked_from_val(val).get_handle() as usize;
         f(r.get(index))
     }
+}
 
-    pub fn associate(self: &Rc<Self>, val: Val) -> ValInContext {
-        let ctx = Rc::downgrade(&self);
+#[derive(Default)]
+pub struct HostContext(Rc<HostContextImpl>);
+
+impl HostContext {
+    pub fn associate(&mut self, val: Val) -> ValInContext {
+        let ctx = Rc::downgrade(&self.0);
         ValInContext { ctx, val }
     }
 
-    pub fn to_host_val(self: &Rc<Self>, v: &ScVal) -> Result<Val, ()> {
+    pub fn to_host_val(&mut self, v: &ScVal) -> Result<Val, ()> {
         match v {
             ScVal::ScvU63(u) => {
                 if u.0 <= (i64::MAX as u64) {
@@ -173,38 +64,42 @@ impl HostContext {
         }
     }
 
-    pub fn to_host_obj(self: &Rc<Self>, ob: &ScObject) -> Result<Object, ()> {
-        let (ty, hobj) = match ob {
-            ScObject::ScoBox(b) => (
-                ScObjectType::ScoBox,
-                HostObject::Box(self.associate(self.to_host_val(b)?)),
-            ),
+    pub fn to_host_obj(&mut self, ob: &ScObject) -> Result<Object, ()> {
+        match ob {
+            ScObject::ScoBox(b) => {
+                let hv = self.to_host_val(b)?;
+                let vic = self.associate(hv);
+                self.add_host_object(vic)
+            }
             ScObject::ScoVec(v) => {
                 let mut vv = Vector::new();
                 for e in v.0.iter() {
-                    vv.push_back(self.associate(self.to_host_val(e)?))
+                    let v = self.to_host_val(e)?;
+                    vv.push_back(self.associate(v))
                 }
-                (ScObjectType::ScoVec, HostObject::Vec(vv))
+                self.add_host_object(vv)
             }
             ScObject::ScoMap(m) => {
                 let mut mm = OrdMap::new();
                 for pair in m.0.iter() {
-                    let k = self.associate(self.to_host_val(&pair.key)?);
-                    let v = self.associate(self.to_host_val(&pair.val)?);
+                    let kv = self.to_host_val(&pair.key)?;
+                    let vv = self.to_host_val(&pair.val)?;
+                    let k = self.associate(kv);
+                    let v = self.associate(vv);
                     mm.insert(k, v);
                 }
-                (ScObjectType::ScoMap, HostObject::Map(mm))
+                self.add_host_object(mm)
             }
-            ScObject::ScoU64(u) => (ScObjectType::ScoU64, HostObject::U64(u.0)),
-            ScObject::ScoI64(i) => (ScObjectType::ScoU64, HostObject::I64(i.0)),
+            ScObject::ScoU64(u) => self.add_host_object(u.0),
+            ScObject::ScoI64(i) => self.add_host_object(i.0),
             ScObject::ScoString(s) => {
                 let ss = match String::from_utf8(s.clone()) {
                     Ok(ss) => ss,
                     Err(_) => return Err(()),
                 };
-                (ScObjectType::ScoU64, HostObject::Str(ss))
+                self.add_host_object(ss)
             }
-            ScObject::ScoBinary(b) => (ScObjectType::ScoBinary, HostObject::Blob(b.clone())),
+            ScObject::ScoBinary(b) => self.add_host_object(b.clone()),
 
             ScObject::ScoBigint(_) => todo!(),
             ScObject::ScoBigrat(_) => todo!(),
@@ -220,14 +115,16 @@ impl HostContext {
             ScObject::ScoAsset(_) => todo!(),
             ScObject::ScoPrice(_) => todo!(),
             ScObject::ScoAccountid(_) => todo!(),
-        };
+        }
+    }
 
-        let handle = self.objects.borrow().len();
+    pub fn add_host_object<HOT: HostObjectType>(&mut self, hot: HOT) -> Result<Object, ()> {
+        let handle = self.0.objects.borrow().len();
         if handle > u32::MAX as usize {
             return Err(());
         }
-        self.objects.borrow_mut().push(hobj);
-        Ok(Object::from_type_and_handle(ty, handle as u32))
+        self.0.objects.borrow_mut().push(HOT::inject(hot));
+        Ok(Object::from_type_and_handle(HOT::get_type(), handle as u32))
     }
 }
 
@@ -261,7 +158,7 @@ impl Host for HostContext {
     }
 
     fn map_new(&mut self) -> Object {
-        todo!()
+        self.add_host_object(OrdMap::new()).unwrap()
     }
 
     fn map_put(&mut self, m: Object, k: Val, v: Val) -> Object {
@@ -371,7 +268,6 @@ impl Host for HostContext {
 
 #[cfg(test)]
 mod test {
-    use std::rc::Rc;
     use stellar_xdr::{ScObject, ScObjectType, ScVal, ScVec, Uint32};
 
     use super::HostContext;
@@ -388,7 +284,7 @@ mod test {
 
     #[test]
     fn vec_host_objs() {
-        let host = Rc::new(HostContext::default());
+        let mut host = HostContext::default();
         let scvec0: ScVec = ScVec(vec![ScVal::ScvU32(Uint32(1))]);
         let scvec1: ScVec = ScVec(vec![ScVal::ScvU32(Uint32(1))]);
         let scobj0: ScObject = ScObject::ScoVec(scvec0);
@@ -409,5 +305,12 @@ mod test {
         assert_ne!(val0.get_payload(), val1.get_payload());
         // But also that they compare deep-equal.
         assert_eq!(host.associate(val0), host.associate(val1));
+    }
+
+    #[test]
+    fn vec_host_fn() {
+        let mut host = HostContext::default();
+        let m = host.map_new();
+        assert!(m.is_type(ScObjectType::ScoMap));
     }
 }
