@@ -212,7 +212,7 @@ impl Val {
     }
 
     #[inline(always)]
-    pub const fn from_payload(&self, x: u64) -> Self {
+    pub const fn from_payload(x: u64) -> Self {
         Self(x)
     }
 
