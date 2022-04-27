@@ -1,13 +1,17 @@
 #![allow(unused_variables)]
 
+use core::cell::RefCell;
 use im_rc::{OrdMap, Vector};
 use num_bigint::BigInt;
 use num_rational::BigRational;
 use std::cmp::Ordering;
 use std::rc::{Rc, Weak};
+use stellar_xdr::{ScObject, ScObjectType, ScStatic, ScVal};
 
 use crate::val::Tag;
 use crate::{require, BitSet, Host, Object, Status, Symbol, Val, ValType};
+
+mod debug;
 
 #[derive(Clone)]
 pub struct ValInContext {
@@ -40,6 +44,14 @@ pub enum HostObject {
     Blob(Vec<u8>),
     BigInt(BigInt),
     BigRat(BigRational),
+    // TODO: waiting for Ord, PartialOrd on these
+    //LedgerKey(LedgerKey),
+    //Operation(Operation),
+    //OperationResult(OperationResult),
+    //Transaction(Transaction),
+    //Asset(Asset),
+    //Price(Price),
+    //AccountID(AccountID)
 }
 
 impl Eq for ValInContext {}
@@ -55,9 +67,11 @@ impl PartialEq for ValInContext {
             false
         } else {
             // Slow path: deep object comparison.
-            let self_hobj = unsafe { ctx.unchecked_host_obj_from_val(self.val) };
-            let other_hobj = unsafe { ctx.unchecked_host_obj_from_val(other.val) };
-            *self_hobj == *other_hobj
+            unsafe {
+                ctx.unchecked_visit_val_obj(self.val, |a| {
+                    ctx.unchecked_visit_val_obj(other.val, |b| a.eq(&b))
+                })
+            }
         }
     }
 }
@@ -91,11 +105,11 @@ impl Ord for ValInContext {
                     a.cmp(&b)
                 }
                 Tag::Static => self.val.get_body().cmp(&other.val.get_body()),
-                Tag::Object => {
-                    let a = unsafe { ctx.unchecked_host_obj_from_val(self.val) };
-                    let b = unsafe { ctx.unchecked_host_obj_from_val(other.val) };
-                    a.cmp(b)
-                }
+                Tag::Object => unsafe {
+                    ctx.unchecked_visit_val_obj(self.val, |a| {
+                        ctx.unchecked_visit_val_obj(other.val, |b| a.cmp(&b))
+                    })
+                },
                 Tag::Symbol => {
                     let a = unsafe { <Symbol as ValType>::unchecked_from_val(self.val) };
                     let b = unsafe { <Symbol as ValType>::unchecked_from_val(other.val) };
@@ -119,17 +133,101 @@ impl Ord for ValInContext {
 
 #[derive(Default)]
 pub struct HostContext {
-    objects: Vec<HostObject>,
+    objects: RefCell<Vec<HostObject>>,
 }
 
 impl HostContext {
-    unsafe fn unchecked_host_obj_from_val(&self, val: Val) -> &HostObject {
-        &self.objects[<Object as ValType>::unchecked_from_val(val).get_handle() as usize]
+    unsafe fn unchecked_visit_val_obj<F, U>(&self, val: Val, f: F) -> U
+    where
+        F: FnOnce(Option<&HostObject>) -> U,
+    {
+        let r = self.objects.borrow();
+        let index = <Object as ValType>::unchecked_from_val(val).get_handle() as usize;
+        f(r.get(index))
     }
 
-    pub fn associate(self: Rc<Self>, val: Val) -> ValInContext {
+    pub fn associate(self: &Rc<Self>, val: Val) -> ValInContext {
         let ctx = Rc::downgrade(&self);
         ValInContext { ctx, val }
+    }
+
+    pub fn to_host_val(self: &Rc<Self>, v: &ScVal) -> Result<Val, ()> {
+        match v {
+            ScVal::ScvU63(u) => {
+                if u.0 <= (i64::MAX as u64) {
+                    Ok(unsafe { Val::unchecked_from_u63(u.0 as i64) })
+                } else {
+                    Err(())
+                }
+            }
+            ScVal::ScvU32(u) => Ok(u.0.into()),
+            ScVal::ScvI32(i) => Ok(i.0.into()),
+            ScVal::ScvStatic(ScStatic::ScsVoid) => Ok(Val::from_void()),
+            ScVal::ScvStatic(ScStatic::ScsTrue) => Ok(Val::from_bool(true)),
+            ScVal::ScvStatic(ScStatic::ScsFalse) => Ok(Val::from_bool(false)),
+            ScVal::ScvObject(None) => Err(()),
+            ScVal::ScvObject(Some(ob)) => Ok(self.to_host_obj(&*ob)?.into()),
+            ScVal::ScvSymbol(_) => todo!(),
+            ScVal::ScvBitset(_) => todo!(),
+            ScVal::ScvStatus(_) => todo!(),
+        }
+    }
+
+    pub fn to_host_obj(self: &Rc<Self>, ob: &ScObject) -> Result<Object, ()> {
+        let (ty, hobj) = match ob {
+            ScObject::ScoBox(b) => (
+                ScObjectType::ScoBox,
+                HostObject::Box(self.associate(self.to_host_val(b)?)),
+            ),
+            ScObject::ScoVec(v) => {
+                let mut vv = Vector::new();
+                for e in v.0.iter() {
+                    vv.push_back(self.associate(self.to_host_val(e)?))
+                }
+                (ScObjectType::ScoVec, HostObject::Vec(vv))
+            }
+            ScObject::ScoMap(m) => {
+                let mut mm = OrdMap::new();
+                for pair in m.0.iter() {
+                    let k = self.associate(self.to_host_val(&pair.key)?);
+                    let v = self.associate(self.to_host_val(&pair.val)?);
+                    mm.insert(k, v);
+                }
+                (ScObjectType::ScoMap, HostObject::Map(mm))
+            }
+            ScObject::ScoU64(u) => (ScObjectType::ScoU64, HostObject::U64(u.0)),
+            ScObject::ScoI64(i) => (ScObjectType::ScoU64, HostObject::I64(i.0)),
+            ScObject::ScoString(s) => {
+                let ss = match String::from_utf8(s.clone()) {
+                    Ok(ss) => ss,
+                    Err(_) => return Err(()),
+                };
+                (ScObjectType::ScoU64, HostObject::Str(ss))
+            }
+            ScObject::ScoBinary(b) => (ScObjectType::ScoBinary, HostObject::Blob(b.clone())),
+
+            ScObject::ScoBigint(_) => todo!(),
+            ScObject::ScoBigrat(_) => todo!(),
+
+            ScObject::ScoLedgerkey(None) => return Err(()),
+            ScObject::ScoLedgerkey(Some(lk)) => todo!(),
+
+            ScObject::ScoOperation(None) => return Err(()),
+            ScObject::ScoOperation(Some(op)) => todo!(),
+
+            ScObject::ScoOperationResult(_) => todo!(),
+            ScObject::ScoTransaction(_) => todo!(),
+            ScObject::ScoAsset(_) => todo!(),
+            ScObject::ScoPrice(_) => todo!(),
+            ScObject::ScoAccountid(_) => todo!(),
+        };
+
+        let handle = self.objects.borrow().len();
+        if handle > u32::MAX as usize {
+            return Err(());
+        }
+        self.objects.borrow_mut().push(hobj);
+        Ok(Object::from_type_and_handle(ty, handle as u32))
     }
 }
 
@@ -273,8 +371,11 @@ impl Host for HostContext {
 
 #[cfg(test)]
 mod test {
+    use std::rc::Rc;
+    use stellar_xdr::{ScObject, ScObjectType, ScVal, ScVec, Uint32};
+
     use super::HostContext;
-    use crate::Host;
+    use crate::{or_abort::OrAbort, Host, Object};
 
     #[test]
     fn i64_roundtrip() {
@@ -283,5 +384,30 @@ mod test {
         let v = host.val_from(i);
         let j = host.val_into::<i64>(v);
         assert_eq!(i, j);
+    }
+
+    #[test]
+    fn vec_host_objs() {
+        let host = Rc::new(HostContext::default());
+        let scvec0: ScVec = ScVec(vec![ScVal::ScvU32(Uint32(1))]);
+        let scvec1: ScVec = ScVec(vec![ScVal::ScvU32(Uint32(1))]);
+        let scobj0: ScObject = ScObject::ScoVec(scvec0);
+        let scobj1: ScObject = ScObject::ScoVec(scvec1);
+        let scval0 = ScVal::ScvObject(Some(Box::new(scobj0)));
+        let scval1 = ScVal::ScvObject(Some(Box::new(scobj1)));
+        let val0 = host.to_host_val(&scval0).or_abort();
+        let val1 = host.to_host_val(&scval1).or_abort();
+        assert!(val0.is::<Object>());
+        assert!(val1.is::<Object>());
+        let obj0: Object = val0.try_into().or_abort();
+        let obj1: Object = val1.try_into().or_abort();
+        assert_eq!(obj0.get_handle(), 0);
+        assert_eq!(obj1.get_handle(), 1);
+        assert!(obj0.is_type(ScObjectType::ScoVec));
+        assert!(obj1.is_type(ScObjectType::ScoVec));
+        // Check that we got 2 distinct Vec objects
+        assert_ne!(val0.get_payload(), val1.get_payload());
+        // But also that they compare deep-equal.
+        assert_eq!(host.associate(val0), host.associate(val1));
     }
 }
