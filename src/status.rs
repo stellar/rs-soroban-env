@@ -63,8 +63,11 @@ impl Status {
     // NB: we don't provide a "get_type" to avoid casting a bad bit-pattern into
     // an ScStatusType. Instead we provide an "is_type" to check any specific
     // bit-pattern.
-    fn is_type(&self, ty: ScStatusType) -> bool {
+    pub fn is_type(&self, ty: ScStatusType) -> bool {
         self.0.has_minor(ty as u32)
+    }
+    pub fn get_code(&self) -> u32 {
+        self.0.get_major()
     }
     pub fn is_ok(&self) -> bool {
         self.is_type(ScStatusType::SstOk)

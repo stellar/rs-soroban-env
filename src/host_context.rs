@@ -4,9 +4,9 @@ use core::cell::RefCell;
 use im_rc::{OrdMap, Vector};
 
 use std::rc::Rc;
-use stellar_xdr::{ScMap, ScMapEntry, ScObject, ScStatic, ScVal, ScVec};
+use stellar_xdr::{ScMap, ScMapEntry, ScObject, ScStatic, ScStatus, ScStatusType, ScVal, ScVec};
 
-use crate::{val::Tag, Host, Object, Val, ValType};
+use crate::{val::Tag, Host, Object, Status, Symbol, Val, ValType};
 
 mod debug;
 mod host_object;
@@ -53,16 +53,43 @@ impl HostContext {
                 Tag::I32 => Ok(ScVal::ScvI32(unsafe {
                     <i32 as ValType>::unchecked_from_val(val)
                 })),
-                Tag::Static => todo!(),
+                Tag::Static => {
+                    if let Some(b) = <bool as ValType>::try_convert(val) {
+                        if b {
+                            Ok(ScVal::ScvStatic(ScStatic::ScsTrue))
+                        } else {
+                            Ok(ScVal::ScvStatic(ScStatic::ScsFalse))
+                        }
+                    } else if <() as ValType>::is_val_type(val) {
+                        Ok(ScVal::ScvStatic(ScStatic::ScsVoid))
+                    } else {
+                        Err(())
+                    }
+                }
                 Tag::Object => unsafe {
                     let ob = <Object as ValType>::unchecked_from_val(val);
                     let scob = self.from_host_obj(ob)?;
                     Ok(ScVal::ScvObject(Some(Box::new(scob))))
                 },
-                Tag::Symbol => todo!(),
-                Tag::BitSet => todo!(),
-                Tag::Status => todo!(),
-                Tag::Reserved => todo!(),
+                Tag::Symbol => {
+                    let sym: Symbol = unsafe { <Symbol as ValType>::unchecked_from_val(val) };
+                    let str: String = sym.into_iter().collect();
+                    Ok(ScVal::ScvSymbol(str.as_bytes().into()))
+                }
+                Tag::BitSet => Ok(ScVal::ScvBitset(val.get_payload())),
+                Tag::Status => {
+                    let status: Status = unsafe { <Status as ValType>::unchecked_from_val(val) };
+                    if status.is_ok() {
+                        Ok(ScVal::ScvStatus(ScStatus::SstOk))
+                    } else if status.is_type(ScStatusType::SstUnknownError) {
+                        Ok(ScVal::ScvStatus(ScStatus::SstUnknownError(
+                            status.get_code(),
+                        )))
+                    } else {
+                        Err(())
+                    }
+                }
+                Tag::Reserved => Err(()),
             }
         }
     }
@@ -83,7 +110,7 @@ impl HostContext {
             ScVal::ScvStatic(ScStatic::ScsFalse) => Ok(Val::from_bool(false)),
             ScVal::ScvObject(None) => Err(()),
             ScVal::ScvObject(Some(ob)) => Ok(self.to_host_obj(&*ob)?.into()),
-            ScVal::ScvSymbol(_) => todo!(),
+            ScVal::ScvSymbol(bytes) => todo!(),
             ScVal::ScvBitset(_) => todo!(),
             ScVal::ScvStatus(_) => todo!(),
         }
