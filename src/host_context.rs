@@ -74,7 +74,7 @@ impl HostContext {
                 Tag::Symbol => {
                     let sym: Symbol = unsafe { <Symbol as ValType>::unchecked_from_val(val) };
                     let str: String = sym.into_iter().collect();
-                    Ok(ScVal::ScvSymbol(str.as_bytes().into()))
+                    Ok(ScVal::ScvSymbol(str.as_bytes().try_into()?))
                 }
                 Tag::BitSet => Ok(ScVal::ScvBitset(val.get_payload())),
                 Tag::Status => {
@@ -127,7 +127,7 @@ impl HostContext {
                         for e in vv.iter() {
                             sv.push(self.from_host_val(e.val)?);
                         }
-                        Ok(ScObject::ScoVec(ScVec(sv)))
+                        Ok(ScObject::ScoVec(ScVec(sv.try_into()?)))
                     }
                     HostObject::Map(mm) => {
                         let mut mv = Vec::new();
@@ -136,7 +136,7 @@ impl HostContext {
                             let val = self.from_host_val(v.val)?;
                             mv.push(ScMapEntry { key, val });
                         }
-                        Ok(ScObject::ScoMap(ScMap(mv)))
+                        Ok(ScObject::ScoMap(ScMap(mv.try_into()?)))
                     }
                     HostObject::U64(u) => Ok(ScObject::ScoU64(*u)),
                     HostObject::I64(i) => Ok(ScObject::ScoI64(*i)),
@@ -178,13 +178,13 @@ impl HostContext {
             ScObject::ScoU64(u) => self.add_host_object(*u),
             ScObject::ScoI64(i) => self.add_host_object(*i),
             ScObject::ScoString(s) => {
-                let ss = match String::from_utf8(s.clone()) {
+                let ss = match String::from_utf8(s.clone().into()) {
                     Ok(ss) => ss,
                     Err(_) => return Err(()),
                 };
                 self.add_host_object(ss)
             }
-            ScObject::ScoBinary(b) => self.add_host_object(b.clone()),
+            ScObject::ScoBinary(b) => self.add_host_object::<Vec<u8>>(b.clone().into()),
 
             ScObject::ScoBigint(_) => todo!(),
             ScObject::ScoBigrat(_) => todo!(),
@@ -368,10 +368,10 @@ mod test {
     }
 
     #[test]
-    fn vec_host_objs() {
+    fn vec_host_objs() -> Result<(), ()> {
         let mut host = HostContext::default();
-        let scvec0: ScVec = ScVec(vec![ScVal::ScvU32(1)]);
-        let scvec1: ScVec = ScVec(vec![ScVal::ScvU32(1)]);
+        let scvec0: ScVec = ScVec(vec![ScVal::ScvU32(1)].try_into()?);
+        let scvec1: ScVec = ScVec(vec![ScVal::ScvU32(1)].try_into()?);
         let scobj0: ScObject = ScObject::ScoVec(scvec0);
         let scobj1: ScObject = ScObject::ScoVec(scvec1);
         let scval0 = ScVal::ScvObject(Some(Box::new(scobj0)));
@@ -390,6 +390,7 @@ mod test {
         assert_ne!(val0.get_payload(), val1.get_payload());
         // But also that they compare deep-equal.
         assert_eq!(host.associate(val0), host.associate(val1));
+        Ok(())
     }
 
     #[test]
