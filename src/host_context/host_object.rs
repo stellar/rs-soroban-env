@@ -1,6 +1,8 @@
 use super::ValInContext;
 use im_rc::{OrdMap, Vector};
-use stellar_xdr::ScObjectType;
+use stellar_xdr::{
+    AccountId, Asset, LedgerKey, Operation, OperationResult, Price, ScObjectType, Transaction,
+};
 
 use num_bigint::BigInt;
 use num_rational::BigRational;
@@ -19,14 +21,13 @@ pub enum HostObject {
     Bin(Vec<u8>),
     BigInt(BigInt),
     BigRat(BigRational),
-    // TODO: waiting for Ord, PartialOrd on these
-    //LedgerKey(LedgerKey),
-    //Operation(Operation),
-    //OperationResult(OperationResult),
-    //Transaction(Transaction),
-    //Asset(Asset),
-    //Price(Price),
-    //AccountID(AccountID)
+    LedgerKey(LedgerKey),
+    Operation(Operation),
+    OperationResult(OperationResult),
+    Transaction(Transaction),
+    Asset(Asset),
+    Price(Price),
+    AccountID(AccountId),
 }
 
 pub trait HostObjectType: Sized {
@@ -57,3 +58,11 @@ declare_host_object_type!(String, ScoString, Str);
 declare_host_object_type!(Vec<u8>, ScoBinary, Bin);
 declare_host_object_type!(BigInt, ScoBigint, BigInt);
 declare_host_object_type!(BigRational, ScoBigrat, BigRat);
+
+declare_host_object_type!(LedgerKey, ScoLedgerkey, LedgerKey);
+declare_host_object_type!(Operation, ScoOperation, Operation);
+declare_host_object_type!(OperationResult, ScoOperationResult, OperationResult);
+declare_host_object_type!(Transaction, ScoTransaction, Transaction);
+declare_host_object_type!(Asset, ScoAsset, Asset);
+declare_host_object_type!(Price, ScoPrice, Price);
+declare_host_object_type!(AccountId, ScoAccountid, AccountID);

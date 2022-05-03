@@ -6,7 +6,7 @@ use im_rc::{OrdMap, Vector};
 use std::rc::Rc;
 use stellar_xdr::{ScMap, ScMapEntry, ScObject, ScStatic, ScStatus, ScStatusType, ScVal, ScVec};
 
-use crate::{val::Tag, Host, Object, Status, Symbol, Val, ValType};
+use crate::{val::Tag, BitSet, Host, Object, Status, Symbol, Val, ValType};
 
 mod debug;
 mod host_object;
@@ -110,9 +110,23 @@ impl HostContext {
             ScVal::ScvStatic(ScStatic::ScsFalse) => Ok(Val::from_bool(false)),
             ScVal::ScvObject(None) => Err(()),
             ScVal::ScvObject(Some(ob)) => Ok(self.to_host_obj(&*ob)?.into()),
-            ScVal::ScvSymbol(bytes) => todo!(),
-            ScVal::ScvBitset(_) => todo!(),
-            ScVal::ScvStatus(_) => todo!(),
+            ScVal::ScvSymbol(bytes) => {
+                let ss = match std::str::from_utf8(bytes.as_slice()) {
+                    Ok(ss) => ss,
+                    Err(_) => return Err(()),
+                };
+                Ok(Symbol::try_from_str(ss)?.into())
+            }
+            ScVal::ScvBitset(i) => Ok(BitSet::try_from_u64(*i)?.into()),
+            ScVal::ScvStatus(st) => {
+                let status = match st {
+                    ScStatus::SstOk => Status::from_type_and_code(ScStatusType::SstOk, 0),
+                    ScStatus::SstUnknownError(e) => {
+                        Status::from_type_and_code(ScStatusType::SstUnknownError, *e)
+                    }
+                };
+                Ok(status.into())
+            }
         }
     }
 
@@ -140,10 +154,17 @@ impl HostContext {
                     }
                     HostObject::U64(u) => Ok(ScObject::ScoU64(*u)),
                     HostObject::I64(i) => Ok(ScObject::ScoI64(*i)),
-                    HostObject::Str(_) => todo!(),
-                    HostObject::Bin(_) => todo!(),
+                    HostObject::Str(s) => Ok(ScObject::ScoString(s.as_bytes().into())),
+                    HostObject::Bin(b) => Ok(ScObject::ScoBinary(b.clone())),
                     HostObject::BigInt(_) => todo!(),
                     HostObject::BigRat(_) => todo!(),
+                    HostObject::LedgerKey(_) => todo!(),
+                    HostObject::Operation(_) => todo!(),
+                    HostObject::OperationResult(_) => todo!(),
+                    HostObject::Transaction(_) => todo!(),
+                    HostObject::Asset(_) => todo!(),
+                    HostObject::Price(_) => todo!(),
+                    HostObject::AccountID(_) => todo!(),
                 },
             })
         }
@@ -189,17 +210,21 @@ impl HostContext {
             ScObject::ScoBigint(_) => todo!(),
             ScObject::ScoBigrat(_) => todo!(),
 
-            ScObject::ScoLedgerkey(None) => return Err(()),
-            ScObject::ScoLedgerkey(Some(lk)) => todo!(),
+            ScObject::ScoLedgerkey(None) => Err(()),
+            ScObject::ScoLedgerkey(Some(lk)) => self.add_host_object(lk.clone()),
 
-            ScObject::ScoOperation(None) => return Err(()),
-            ScObject::ScoOperation(Some(op)) => todo!(),
+            ScObject::ScoOperation(None) => Err(()),
+            ScObject::ScoOperation(Some(op)) => self.add_host_object(op.clone()),
 
-            ScObject::ScoOperationResult(_) => todo!(),
-            ScObject::ScoTransaction(_) => todo!(),
-            ScObject::ScoAsset(_) => todo!(),
-            ScObject::ScoPrice(_) => todo!(),
-            ScObject::ScoAccountid(_) => todo!(),
+            ScObject::ScoOperationResult(None) => Err(()),
+            ScObject::ScoOperationResult(Some(o)) => self.add_host_object(o.clone()),
+
+            ScObject::ScoTransaction(None) => Err(()),
+            ScObject::ScoTransaction(Some(t)) => self.add_host_object(t.clone()),
+
+            ScObject::ScoAsset(a) => self.add_host_object(a.clone()),
+            ScObject::ScoPrice(p) => self.add_host_object(p.clone()),
+            ScObject::ScoAccountid(a) => self.add_host_object(a.clone()),
         }
     }
 

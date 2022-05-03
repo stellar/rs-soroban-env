@@ -48,3 +48,16 @@ impl Ord for BitSet {
         self.0.get_body().cmp(&other.0.get_body())
     }
 }
+
+impl BitSet {
+    pub const fn try_from_u64(u: u64) -> Result<BitSet, ()> {
+        if u & 0x0fff_ffff_ffff_ffff == u {
+            Ok(BitSet(unsafe { Val::from_body_and_tag(u, Tag::BitSet) }))
+        } else {
+            Err(())
+        }
+    }
+    pub const fn to_u64(&self) -> u64 {
+        self.0.get_body()
+    }
+}
