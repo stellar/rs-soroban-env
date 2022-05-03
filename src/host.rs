@@ -1,6 +1,6 @@
 use stellar_xdr::ScObjectType;
 
-use crate::{or_abort::OrAbort, ValType};
+use crate::ValType;
 
 use super::{Object, Val};
 use core::any;
@@ -83,18 +83,6 @@ pub trait Host {
     fn obj_to_u64(&mut self, u: Object) -> u64;
     fn obj_from_i64(&mut self, i: i64) -> Object;
     fn obj_to_i64(&mut self, i: Object) -> i64;
-
-    fn val_from<HC: HostConvertable>(&mut self, v: HC) -> Val {
-        v.into_val(self)
-    }
-
-    fn try_val_into<HC: HostConvertable>(&mut self, v: Val) -> Option<HC> {
-        HC::try_from_val(v, self)
-    }
-
-    fn val_into<HC: HostConvertable>(&mut self, v: Val) -> HC {
-        self.try_val_into::<HC>(v).or_abort()
-    }
 
     fn map_new(&mut self) -> Object;
     fn map_put(&mut self, m: Object, k: Val, v: Val) -> Object;
