@@ -230,7 +230,7 @@ impl Host for HostContext {
         todo!()
     }
 
-    fn obj_to_u64(&mut self, u: Object) -> u64 {
+    fn obj_to_u64(&self, u: Object) -> u64 {
         todo!()
     }
 
@@ -238,7 +238,7 @@ impl Host for HostContext {
         todo!()
     }
 
-    fn obj_to_i64(&mut self, i: Object) -> i64 {
+    fn obj_to_i64(&self, i: Object) -> i64 {
         todo!()
     }
 
