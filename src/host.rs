@@ -10,7 +10,7 @@ use core::any;
 // covers types that can always be directly converted to Val with no Host.
 pub trait HostConvertable: Sized {
     fn into_val<H: Host + ?Sized>(self, host: &mut H) -> Val;
-    fn try_from_val<H: Host + ?Sized>(v: Val, host: &mut H) -> Option<Self>;
+    fn try_from_val<H: Host + ?Sized>(v: Val, host: &H) -> Option<Self>;
 }
 
 impl<V: ValType> HostConvertable for V {
@@ -18,7 +18,7 @@ impl<V: ValType> HostConvertable for V {
         self.into()
     }
 
-    fn try_from_val<H: Host + ?Sized>(v: Val, _host: &mut H) -> Option<Self> {
+    fn try_from_val<H: Host + ?Sized>(v: Val, _host: &H) -> Option<Self> {
         if <V as ValType>::is_val_type(v) {
             Some(unsafe { <V as ValType>::unchecked_from_val(v) })
         } else {
@@ -36,7 +36,7 @@ impl HostConvertable for i64 {
         }
     }
 
-    fn try_from_val<H: Host + ?Sized>(v: Val, host: &mut H) -> Option<Self> {
+    fn try_from_val<H: Host + ?Sized>(v: Val, host: &H) -> Option<Self> {
         if v.is_u63() {
             Some(unsafe { v.unchecked_as_u63() })
         } else if Object::val_is_obj_type(v, ScObjectType::ScoI64) {
@@ -56,7 +56,7 @@ impl HostConvertable for u64 {
         }
     }
 
-    fn try_from_val<H: Host + ?Sized>(v: Val, host: &mut H) -> Option<Self> {
+    fn try_from_val<H: Host + ?Sized>(v: Val, host: &H) -> Option<Self> {
         if v.is_u63() {
             Some(unsafe { v.unchecked_as_u63() } as u64)
         } else if Object::val_is_obj_type(v, ScObjectType::ScoU64) {
@@ -80,9 +80,9 @@ pub trait Host {
     fn get_last_operation_result(&mut self) -> Object;
 
     fn obj_from_u64(&mut self, u: u64) -> Object;
-    fn obj_to_u64(&mut self, u: Object) -> u64;
+    fn obj_to_u64(&self, u: Object) -> u64;
     fn obj_from_i64(&mut self, i: i64) -> Object;
-    fn obj_to_i64(&mut self, i: Object) -> i64;
+    fn obj_to_i64(&self, i: Object) -> i64;
 
     fn val_from<HC: HostConvertable>(&mut self, v: HC) -> Val {
         v.into_val(self)
