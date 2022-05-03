@@ -356,14 +356,14 @@ mod test {
     use stellar_xdr::{ScObject, ScObjectType, ScVal, ScVec};
 
     use super::HostContext;
-    use crate::{or_abort::OrAbort, Host, Object};
+    use crate::{or_abort::OrAbort, Host, HostConvertable, Object};
 
     #[test]
     fn i64_roundtrip() {
         let mut host = HostContext::default();
         let i = 12345_i64;
-        let v = host.val_from(i);
-        let j = host.val_into::<i64>(v);
+        let v = i.into_val(&mut host);
+        let j = i64::try_from_val(v, &mut host).or_abort();
         assert_eq!(i, j);
     }
 
