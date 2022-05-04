@@ -1,6 +1,15 @@
-use super::{xdr::ScObjectType, Env, EnvVal, RawObj, Tag, Val, ValType};
+use super::{xdr::ScObjectType, Env, EnvVal, HasEnv, RawObj, Tag, Val, ValType};
 
 pub struct EnvObj<E: Env>(EnvVal<E>);
+
+impl<E: Env> HasEnv<E> for EnvObj<E> {
+    fn env(&self) -> &E {
+        &self.0.env
+    }
+    fn mut_env(&mut self) -> &mut E {
+        &mut self.0.env
+    }
+}
 
 impl<E: Env> AsRef<EnvVal<E>> for EnvObj<E> {
     fn as_ref(&self) -> &EnvVal<E> {
