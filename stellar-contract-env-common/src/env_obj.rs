@@ -1,5 +1,6 @@
 use super::{xdr::ScObjectType, Env, EnvVal, HasEnv, RawObj, Tag, Val, ValType};
 
+#[derive(Clone)]
 pub struct EnvObj<E: Env>(EnvVal<E>);
 
 impl<E: Env> HasEnv<E> for EnvObj<E> {
