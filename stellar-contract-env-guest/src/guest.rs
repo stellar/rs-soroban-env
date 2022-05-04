@@ -8,7 +8,7 @@ pub struct Guest;
 
 impl Env for Guest {
     fn as_mut_any(&mut self) -> &mut dyn std::any::Any {
-        todo!()
+        self
     }
 
     fn check_same_env(&self, other: &Self) {
@@ -21,135 +21,135 @@ impl Env for Guest {
     }
 
     fn log_value(&mut self, v: Val) -> Val {
-        todo!()
+        unsafe { context::log_value(v) }
     }
 
     fn get_last_operation_result(&mut self) -> Val {
-        todo!()
+        unsafe { context::get_last_operation_result() }
     }
 
     fn obj_from_u64(&mut self, u: u64) -> Val {
-        todo!()
+        unsafe { u64::from_u64(u) }
     }
 
     fn obj_to_u64(&mut self, u: Val) -> u64 {
-        todo!()
+        unsafe { u64::to_u64(u) }
     }
 
     fn obj_from_i64(&mut self, i: i64) -> Val {
-        todo!()
+        unsafe { i64::from_i64(i) }
     }
 
     fn obj_to_i64(&mut self, i: Val) -> i64 {
-        todo!()
+        unsafe { i64::to_i64(i) }
     }
 
     fn map_new(&mut self) -> Val {
-        todo!()
+        unsafe { map::new() }
     }
 
     fn map_put(&mut self, m: Val, k: Val, v: Val) -> Val {
-        todo!()
+        unsafe { map::put(m, k, v) }
     }
 
     fn map_get(&mut self, m: Val, k: Val) -> Val {
-        todo!()
+        unsafe { map::get(m, k) }
     }
 
     fn map_del(&mut self, m: Val, k: Val) -> Val {
-        todo!()
+        unsafe { map::del(m, k) }
     }
 
     fn map_len(&mut self, m: Val) -> Val {
-        todo!()
+        unsafe { map::len(m) }
     }
 
     fn map_keys(&mut self, m: Val) -> Val {
-        todo!()
+        unsafe { map::keys(m) }
     }
 
     fn map_has(&mut self, m: Val, k: Val) -> Val {
-        todo!()
+        unsafe { map::has(m, k) }
     }
 
     fn vec_new(&mut self) -> Val {
-        todo!()
+        unsafe { vec::new() }
     }
 
     fn vec_put(&mut self, v: Val, i: Val, x: Val) -> Val {
-        todo!()
+        unsafe { vec::put(v, i, x) }
     }
 
     fn vec_get(&mut self, v: Val, i: Val) -> Val {
-        todo!()
+        unsafe { vec::get(v, i) }
     }
 
     fn vec_del(&mut self, v: Val, i: Val) -> Val {
-        todo!()
+        unsafe { vec::del(v, i) }
     }
 
     fn vec_len(&mut self, v: Val) -> Val {
-        todo!()
+        unsafe { vec::len(v) }
     }
 
     fn vec_push(&mut self, v: Val, x: Val) -> Val {
-        todo!()
+        unsafe { vec::push(v, x) }
     }
 
     fn vec_pop(&mut self, v: Val) -> Val {
-        todo!()
+        unsafe { vec::pop(v) }
     }
 
     fn vec_take(&mut self, v: Val, n: Val) -> Val {
-        todo!()
+        unsafe { vec::take(v, n) }
     }
 
     fn vec_drop(&mut self, v: Val, n: Val) -> Val {
-        todo!()
+        unsafe { vec::drop(v, n) }
     }
 
     fn vec_front(&mut self, v: Val) -> Val {
-        todo!()
+        unsafe { vec::front(v) }
     }
 
     fn vec_back(&mut self, v: Val) -> Val {
-        todo!()
+        unsafe { vec::back(v) }
     }
 
     fn vec_insert(&mut self, v: Val, i: Val, n: Val) -> Val {
-        todo!()
+        unsafe { vec::insert(v, i, n) }
     }
 
     fn vec_append(&mut self, v1: Val, v2: Val) -> Val {
-        todo!()
+        unsafe { vec::append(v1, v2) }
     }
 
     fn pay(&mut self, src: Val, dst: Val, asset: Val, amount: Val) -> Val {
-        todo!()
+        unsafe { ledger::pay(src, dst, asset, amount) }
     }
 
     fn account_balance(&mut self, acc: Val) -> Val {
-        todo!()
+        unsafe { ledger::account_balance(acc) }
     }
 
     fn account_trust_line(&mut self, acc: Val, asset: Val) -> Val {
-        todo!()
+        unsafe { ledger::account_trust_line(acc, asset) }
     }
 
     fn trust_line_balance(&mut self, tl: Val) -> Val {
-        todo!()
+        unsafe { ledger::trust_line_balance(tl) }
     }
 
     fn get_contract_data(&mut self, k: Val) -> Val {
-        todo!()
+        unsafe { ledger::get_contract_data(k) }
     }
 
     fn put_contract_data(&mut self, k: Val, v: Val) -> Val {
-        todo!()
+        unsafe { ledger::put_contract_data(k, v) }
     }
 
     fn has_contract_data(&mut self, k: Val) -> Val {
-        todo!()
+        unsafe { ledger::has_contract_data(k) }
     }
 }
 
@@ -193,12 +193,12 @@ mod context {
         // these possibilities seem unlikely at present, but either way they're
         // fairly straightforward.
         #[cfg_attr(target_family = "wasm", link_name = "$_")]
-        fn log_value(v: Val) -> Val;
+        pub fn log_value(v: Val) -> Val;
 
         // Fetches an OpResult object for inspection, in the rare case the user
         // wants more detail than is conveyed in a simple Status.
         #[cfg_attr(target_family = "wasm", link_name = "$0")]
-        fn get_last_operation_result() -> Val;
+        pub fn get_last_operation_result() -> Val;
     }
 }
 
@@ -208,9 +208,9 @@ mod u64 {
     #[link(wasm_import_module = "u")]
     extern "C" {
         #[cfg_attr(target_family = "wasm", link_name = "$_")]
-        fn from_u64(x: u64) -> Val;
+        pub fn from_u64(x: u64) -> Val;
         #[cfg_attr(target_family = "wasm", link_name = "$0")]
-        fn to_u64(x: Val) -> u64;
+        pub fn to_u64(x: Val) -> u64;
     }
 }
 
@@ -220,9 +220,9 @@ mod i64 {
     #[link(wasm_import_module = "i")]
     extern "C" {
         #[cfg_attr(target_family = "wasm", link_name = "$_")]
-        fn from_i64(x: i64) -> Val;
+        pub fn from_i64(x: i64) -> Val;
         #[cfg_attr(target_family = "wasm", link_name = "$0")]
-        fn to_i64(x: Val) -> i64;
+        pub fn to_i64(x: Val) -> i64;
     }
 }
 
@@ -232,19 +232,19 @@ mod map {
     #[link(wasm_import_module = "m")]
     extern "C" {
         #[cfg_attr(target_family = "wasm", link_name = "$_")]
-        fn new() -> Val;
+        pub fn new() -> Val;
         #[cfg_attr(target_family = "wasm", link_name = "$0")]
-        fn put(m: Val, k: Val, v: Val) -> Val;
+        pub fn put(m: Val, k: Val, v: Val) -> Val;
         #[cfg_attr(target_family = "wasm", link_name = "$1")]
-        fn get(m: Val, k: Val) -> Val;
+        pub fn get(m: Val, k: Val) -> Val;
         #[cfg_attr(target_family = "wasm", link_name = "$2")]
-        fn del(m: Val, k: Val) -> Val;
+        pub fn del(m: Val, k: Val) -> Val;
         #[cfg_attr(target_family = "wasm", link_name = "$3")]
-        fn len(m: Val) -> Val;
+        pub fn len(m: Val) -> Val;
         #[cfg_attr(target_family = "wasm", link_name = "$4")]
-        fn keys(m: Val) -> Val;
+        pub fn keys(m: Val) -> Val;
         #[cfg_attr(target_family = "wasm", link_name = "$5")]
-        fn has(m: Val, k: Val) -> Val;
+        pub fn has(m: Val, k: Val) -> Val;
     }
 }
 
@@ -254,32 +254,32 @@ mod vec {
     #[link(wasm_import_module = "v")]
     extern "C" {
         #[cfg_attr(target_family = "wasm", link_name = "$_")]
-        fn new() -> Val;
+        pub fn new() -> Val;
         #[cfg_attr(target_family = "wasm", link_name = "$0")]
-        fn put(v: Val, i: Val, x: Val) -> Val;
+        pub fn put(v: Val, i: Val, x: Val) -> Val;
         #[cfg_attr(target_family = "wasm", link_name = "$1")]
-        fn get(v: Val, i: Val) -> Val;
+        pub fn get(v: Val, i: Val) -> Val;
         #[cfg_attr(target_family = "wasm", link_name = "$2")]
-        fn del(v: Val, i: Val) -> Val;
+        pub fn del(v: Val, i: Val) -> Val;
         #[cfg_attr(target_family = "wasm", link_name = "$3")]
-        fn len(v: Val) -> Val;
+        pub fn len(v: Val) -> Val;
 
         #[cfg_attr(target_family = "wasm", link_name = "$4")]
-        fn push(v: Val, x: Val) -> Val;
+        pub fn push(v: Val, x: Val) -> Val;
         #[cfg_attr(target_family = "wasm", link_name = "$5")]
-        fn pop(v: Val) -> Val;
+        pub fn pop(v: Val) -> Val;
         #[cfg_attr(target_family = "wasm", link_name = "$6")]
-        fn take(v: Val, n: Val) -> Val;
+        pub fn take(v: Val, n: Val) -> Val;
         #[cfg_attr(target_family = "wasm", link_name = "$7")]
-        fn drop(v: Val, n: Val) -> Val;
+        pub fn drop(v: Val, n: Val) -> Val;
         #[cfg_attr(target_family = "wasm", link_name = "$8")]
-        fn front(v: Val) -> Val;
+        pub fn front(v: Val) -> Val;
         #[cfg_attr(target_family = "wasm", link_name = "$9")]
-        fn back(v: Val) -> Val;
+        pub fn back(v: Val) -> Val;
         #[cfg_attr(target_family = "wasm", link_name = "$A")]
-        fn insert(v: Val, i: Val, x: Val) -> Val;
+        pub fn insert(v: Val, i: Val, x: Val) -> Val;
         #[cfg_attr(target_family = "wasm", link_name = "$B")]
-        fn append(v1: Val, v2: Val) -> Val;
+        pub fn append(v1: Val, v2: Val) -> Val;
     }
 }
 
@@ -289,34 +289,34 @@ mod ledger {
     #[link(wasm_import_module = "l")]
     extern "C" {
         #[cfg_attr(target_family = "wasm", link_name = "$_")]
-        fn get_current_ledger_num() -> Val;
+        pub fn get_current_ledger_num() -> Val;
 
         // NB: this returns a raw/unboxed u64, not a Val union.
         #[cfg_attr(target_family = "wasm", link_name = "$0")]
-        fn get_current_ledger_close_time() -> u64;
+        pub fn get_current_ledger_close_time() -> u64;
 
         // NB: returns a Status; details can be fetched with
         // get_last_operation_result.
         #[cfg_attr(target_family = "wasm", link_name = "$1")]
-        fn pay(src: Val, dst: Val, asset: Val, amount: Val) -> Val;
+        pub fn pay(src: Val, dst: Val, asset: Val, amount: Val) -> Val;
 
         #[cfg_attr(target_family = "wasm", link_name = "$2")]
-        fn put_contract_data(key: Val, val: Val) -> Val;
+        pub fn put_contract_data(key: Val, val: Val) -> Val;
         #[cfg_attr(target_family = "wasm", link_name = "$3")]
-        fn has_contract_data(key: Val) -> Val;
+        pub fn has_contract_data(key: Val) -> Val;
         #[cfg_attr(target_family = "wasm", link_name = "$4")]
-        fn get_contract_data(key: Val) -> Val;
+        pub fn get_contract_data(key: Val) -> Val;
         #[cfg_attr(target_family = "wasm", link_name = "$5")]
-        fn del_contract_data(key: Val) -> Val;
+        pub fn del_contract_data(key: Val) -> Val;
 
         #[cfg_attr(target_family = "wasm", link_name = "$6")]
-        fn account_balance(acc: Val) -> Val;
+        pub fn account_balance(acc: Val) -> Val;
 
         #[cfg_attr(target_family = "wasm", link_name = "$7")]
-        fn account_trust_line(acc: Val, asset: Val) -> Val;
+        pub fn account_trust_line(acc: Val, asset: Val) -> Val;
 
         #[cfg_attr(target_family = "wasm", link_name = "$8")]
-        fn trust_line_balance(tl: Val) -> Val;
+        pub fn trust_line_balance(tl: Val) -> Val;
     }
 }
 
@@ -332,15 +332,15 @@ mod call {
         // successfully returned a status, or call failed and failure _generated_ a
         // status. Possibly this distinction is too fussy to disambiguate.
         #[cfg_attr(target_family = "wasm", link_name = "$_")]
-        fn call0(contract: Val, func: Val) -> Val;
+        pub fn call0(contract: Val, func: Val) -> Val;
         #[cfg_attr(target_family = "wasm", link_name = "$0")]
-        fn call1(contract: Val, func: Val, a: Val) -> Val;
+        pub fn call1(contract: Val, func: Val, a: Val) -> Val;
         #[cfg_attr(target_family = "wasm", link_name = "$1")]
-        fn call2(contract: Val, func: Val, a: Val, b: Val) -> Val;
+        pub fn call2(contract: Val, func: Val, a: Val, b: Val) -> Val;
         #[cfg_attr(target_family = "wasm", link_name = "$2")]
-        fn call3(contract: Val, func: Val, a: Val, b: Val, c: Val) -> Val;
+        pub fn call3(contract: Val, func: Val, a: Val, b: Val, c: Val) -> Val;
         #[cfg_attr(target_family = "wasm", link_name = "$3")]
-        fn call4(contract: Val, func: Val, a: Val, b: Val, c: Val, d: Val) -> Val;
+        pub fn call4(contract: Val, func: Val, a: Val, b: Val, c: Val, d: Val) -> Val;
     }
 }
 
@@ -350,52 +350,52 @@ mod bignum {
     #[link(wasm_import_module = "b")]
     extern "C" {
         #[cfg_attr(target_family = "wasm", link_name = "$_")]
-        fn from_u64(x: u64) -> Val;
+        pub fn from_u64(x: u64) -> Val;
         #[cfg_attr(target_family = "wasm", link_name = "$0")]
-        fn add(lhs: Val, rhs: Val) -> Val;
+        pub fn add(lhs: Val, rhs: Val) -> Val;
         #[cfg_attr(target_family = "wasm", link_name = "$1")]
-        fn sub(lhs: Val, rhs: Val) -> Val;
+        pub fn sub(lhs: Val, rhs: Val) -> Val;
         #[cfg_attr(target_family = "wasm", link_name = "$2")]
-        fn mul(lhs: Val, rhs: Val) -> Val;
+        pub fn mul(lhs: Val, rhs: Val) -> Val;
         #[cfg_attr(target_family = "wasm", link_name = "$3")]
-        fn div(lhs: Val, rhs: Val) -> Val;
+        pub fn div(lhs: Val, rhs: Val) -> Val;
         #[cfg_attr(target_family = "wasm", link_name = "$4")]
-        fn rem(lhs: Val, rhs: Val) -> Val;
+        pub fn rem(lhs: Val, rhs: Val) -> Val;
         #[cfg_attr(target_family = "wasm", link_name = "$5")]
-        fn and(lhs: Val, rhs: Val) -> Val;
+        pub fn and(lhs: Val, rhs: Val) -> Val;
         #[cfg_attr(target_family = "wasm", link_name = "$6")]
-        fn or(lhs: Val, rhs: Val) -> Val;
+        pub fn or(lhs: Val, rhs: Val) -> Val;
         #[cfg_attr(target_family = "wasm", link_name = "$7")]
-        fn xor(lhs: Val, rhs: Val) -> Val;
+        pub fn xor(lhs: Val, rhs: Val) -> Val;
         #[cfg_attr(target_family = "wasm", link_name = "$8")]
-        fn shl(lhs: Val, rhs: u64) -> Val;
+        pub fn shl(lhs: Val, rhs: u64) -> Val;
         #[cfg_attr(target_family = "wasm", link_name = "$9")]
-        fn shr(lhs: Val, rhs: u64) -> Val;
+        pub fn shr(lhs: Val, rhs: u64) -> Val;
         #[cfg_attr(target_family = "wasm", link_name = "$A")]
-        fn cmp(lhs: Val, rhs: Val) -> Val;
+        pub fn cmp(lhs: Val, rhs: Val) -> Val;
         #[cfg_attr(target_family = "wasm", link_name = "$B")]
-        fn is_zero(x: Val) -> Val;
+        pub fn is_zero(x: Val) -> Val;
         #[cfg_attr(target_family = "wasm", link_name = "$C")]
-        fn neg(x: Val) -> Val;
+        pub fn neg(x: Val) -> Val;
         #[cfg_attr(target_family = "wasm", link_name = "$D")]
-        fn not(x: Val) -> Val;
+        pub fn not(x: Val) -> Val;
         #[cfg_attr(target_family = "wasm", link_name = "$E")]
-        fn gcd(lhs: Val, rhs: Val) -> Val;
+        pub fn gcd(lhs: Val, rhs: Val) -> Val;
         #[cfg_attr(target_family = "wasm", link_name = "$F")]
-        fn lcm(lhs: Val, rhs: Val) -> Val;
+        pub fn lcm(lhs: Val, rhs: Val) -> Val;
         #[cfg_attr(target_family = "wasm", link_name = "$G")]
-        fn pow(lhs: Val, rhs: u64) -> Val;
+        pub fn pow(lhs: Val, rhs: u64) -> Val;
         #[cfg_attr(target_family = "wasm", link_name = "$H")]
-        fn pow_mod(p: Val, q: Val, m: Val) -> Val;
+        pub fn pow_mod(p: Val, q: Val, m: Val) -> Val;
         #[cfg_attr(target_family = "wasm", link_name = "$I")]
-        fn sqrt(x: Val) -> Val;
+        pub fn sqrt(x: Val) -> Val;
         #[cfg_attr(target_family = "wasm", link_name = "$J")]
-        fn bits(x: Val) -> u64;
+        pub fn bits(x: Val) -> u64;
         #[cfg_attr(target_family = "wasm", link_name = "$K")]
-        fn to_u64(x: Val) -> u64;
+        pub fn to_u64(x: Val) -> u64;
         #[cfg_attr(target_family = "wasm", link_name = "$L")]
-        fn to_i64(x: Val) -> i64;
+        pub fn to_i64(x: Val) -> i64;
         #[cfg_attr(target_family = "wasm", link_name = "$M")]
-        fn from_i64(x: i64) -> Val;
+        pub fn from_i64(x: i64) -> Val;
     }
 }
