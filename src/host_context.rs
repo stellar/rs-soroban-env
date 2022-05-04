@@ -154,8 +154,8 @@ impl HostContext {
                     }
                     HostObject::U64(u) => Ok(ScObject::ScoU64(*u)),
                     HostObject::I64(i) => Ok(ScObject::ScoI64(*i)),
-                    HostObject::Str(s) => Ok(ScObject::ScoString(s.as_bytes().into())),
-                    HostObject::Bin(b) => Ok(ScObject::ScoBinary(b.clone())),
+                    HostObject::Str(s) => Ok(ScObject::ScoString(s.as_bytes().try_into()?)),
+                    HostObject::Bin(b) => Ok(ScObject::ScoBinary(b.clone().try_into()?)),
                     HostObject::BigInt(_) => todo!(),
                     HostObject::BigRat(_) => todo!(),
                     HostObject::LedgerKey(_) => todo!(),
