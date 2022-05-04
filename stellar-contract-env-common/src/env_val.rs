@@ -47,6 +47,9 @@ impl<E: Env> From<EnvVal<E>> for Val {
 pub trait EnvValType: Sized {
     fn into_env_val<E: Env>(self, env: E) -> EnvVal<E>;
     fn try_from_env_val<E: Env>(ev: EnvVal<E>) -> Option<Self>;
+    fn try_from_val<E: Env>(e: E, v: Val) -> Option<Self> {
+        Self::try_from_env_val(EnvVal { env: e, val: v })
+    }
 }
 
 impl<V: ValType> EnvValType for V {
