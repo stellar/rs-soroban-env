@@ -1,0 +1,11 @@
+[package]
+name = "stellar-contract-env-host"
+version = "0.0.0"
+edition = "2021"
+
+[dependencies]
+stellar-contract-env-common = { path = "../stellar-contract-env-common" }
+static_assertions = "1.1.0"
+im-rc = "15.0.0"
+num-bigint = "0.4"
+num-rational = "0.4"

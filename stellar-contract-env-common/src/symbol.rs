@@ -1,5 +1,9 @@
 use crate::require;
-use std::hash::Hash;
+use core::{
+    cmp::Ordering,
+    fmt::Debug,
+    hash::{Hash, Hasher},
+};
 
 extern crate static_assertions as sa;
 
@@ -34,7 +38,7 @@ impl ValType for Symbol {
 }
 
 impl Hash for Symbol {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+    fn hash<H: Hasher>(&self, state: &mut H) {
         self.0.get_payload().hash(state);
     }
 }
@@ -48,14 +52,22 @@ impl PartialEq for Symbol {
 impl Eq for Symbol {}
 
 impl PartialOrd for Symbol {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
 impl Ord for Symbol {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+    fn cmp(&self, other: &Self) -> Ordering {
         Iterator::cmp(self.into_iter(), other.into_iter())
+    }
+}
+
+impl Debug for Symbol {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_tuple("Symbol")
+            .field(&self.into_iter().collect::<String>())
+            .finish()
     }
 }
 
@@ -150,6 +162,7 @@ impl FromIterator<char> for Symbol {
 mod test {
     use super::Symbol;
     extern crate std;
+    use std::string::String;
 
     #[test]
     fn test_roundtrip() {

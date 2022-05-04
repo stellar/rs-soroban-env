@@ -1,0 +1,13 @@
+[package]
+name = "stellar-contract-env"
+version = "0.0.0"
+edition = "2021"
+
+[dependencies]
+stellar-contract-env-guest = { path = "../stellar-contract-env-guest", optional = true }
+stellar-contract-env-host = { path = "../stellar-contract-env-host", optional = true }
+
+[features]
+default = ["host"]
+host = ["stellar-contract-env-host"]
+guest = ["stellar-contract-env-guest"]

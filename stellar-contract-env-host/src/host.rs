@@ -1,50 +1,72 @@
 #![allow(unused_variables)]
 
 use core::cell::RefCell;
+use core::cmp::Ordering;
+use core::fmt::Debug;
 use im_rc::{OrdMap, Vector};
 
-use std::rc::Rc;
-use stellar_xdr::{ScMap, ScMapEntry, ScObject, ScStatic, ScStatus, ScStatusType, ScVal, ScVec};
+use super::xdr::{ScMap, ScMapEntry, ScObject, ScStatic, ScStatus, ScStatusType, ScVal, ScVec};
+use std::rc::{Rc, Weak};
 
-use crate::{val::Tag, BitSet, Host, Object, Status, Symbol, Val, ValType};
-
-mod debug;
-mod host_object;
-mod val_in_context;
-
-pub use host_object::HostObject;
-use host_object::HostObjectType;
-
-use val_in_context::ValInContext;
+use super::{
+    BitSet, Env, EnvValType, HostEnv, HostMap, HostObject, HostObjectType, HostVal, Object, RawObj,
+    Status, Symbol, Tag, Val, ValType,
+};
 
 #[derive(Default)]
-pub(crate) struct HostContextImpl {
+pub struct Host {
     objects: RefCell<Vec<HostObject>>,
 }
 
-impl HostContextImpl {
+// WeakHost is a newtype on Weak<Host> so we can impl Env for it below.
+#[derive(Clone)]
+pub struct WeakHost(Weak<Host>);
+
+impl From<&HostEnv> for WeakHost {
+    fn from(he: &HostEnv) -> Self {
+        WeakHost(Rc::downgrade(he))
+    }
+}
+
+impl Debug for WeakHost {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "WeakHost({:x})", self.0.as_ptr() as usize)
+    }
+}
+
+impl WeakHost {
+    fn get_host(&self) -> Rc<Host> {
+        self.0.upgrade().expect("WeakHost upgrade")
+    }
+}
+
+impl Host {
     unsafe fn unchecked_visit_val_obj<F, U>(&self, val: Val, f: F) -> U
     where
         F: FnOnce(Option<&HostObject>) -> U,
     {
         let r = self.objects.borrow();
-        let index = <Object as ValType>::unchecked_from_val(val).get_handle() as usize;
+        let index = <RawObj as ValType>::unchecked_from_val(val).get_handle() as usize;
         f(r.get(index))
     }
 }
 
-#[derive(Default)]
-pub struct HostContext(Rc<HostContextImpl>);
+impl Host {
+    pub fn associate(self: &Rc<Self>, val: Val) -> HostVal {
+        let env = WeakHost(Rc::downgrade(self));
+        HostVal { env, val }
+    }
 
-impl HostContext {
-    pub fn associate(&mut self, val: Val) -> ValInContext {
-        let ctx = Rc::downgrade(&self.0);
-        ValInContext { ctx, val }
+    pub fn env_val_from<V: EnvValType>(self: &Rc<Self>, v: V) -> HostVal {
+        let env: WeakHost = self.into();
+        v.into_env_val(env)
     }
 
     pub fn from_host_val(&self, val: Val) -> Result<ScVal, ()> {
-        if val.is_u63() {
-            Ok(ScVal::ScvU63(unsafe { val.unchecked_as_u63() } as u64))
+        if val.is_positive_i64() {
+            Ok(ScVal::ScvU63(
+                unsafe { val.unchecked_as_positive_i64() } as u64
+            ))
         } else {
             match val.get_tag() {
                 Tag::U32 => Ok(ScVal::ScvU32(unsafe {
@@ -67,7 +89,7 @@ impl HostContext {
                     }
                 }
                 Tag::Object => unsafe {
-                    let ob = <Object as ValType>::unchecked_from_val(val);
+                    let ob = <RawObj as ValType>::unchecked_from_val(val);
                     let scob = self.from_host_obj(ob)?;
                     Ok(ScVal::ScvObject(Some(Box::new(scob))))
                 },
@@ -94,30 +116,30 @@ impl HostContext {
         }
     }
 
-    pub fn to_host_val(&mut self, v: &ScVal) -> Result<Val, ()> {
-        match v {
+    pub fn to_host_val(self: &mut Rc<Self>, v: &ScVal) -> Result<HostVal, ()> {
+        let ok = match v {
             ScVal::ScvU63(u) => {
                 if *u <= (i64::MAX as u64) {
-                    Ok(unsafe { Val::unchecked_from_u63(*u as i64) })
+                    unsafe { Val::unchecked_from_positive_i64(*u as i64) }
                 } else {
-                    Err(())
+                    return Err(());
                 }
             }
-            ScVal::ScvU32(u) => Ok((*u).into()),
-            ScVal::ScvI32(i) => Ok((*i).into()),
-            ScVal::ScvStatic(ScStatic::ScsVoid) => Ok(Val::from_void()),
-            ScVal::ScvStatic(ScStatic::ScsTrue) => Ok(Val::from_bool(true)),
-            ScVal::ScvStatic(ScStatic::ScsFalse) => Ok(Val::from_bool(false)),
-            ScVal::ScvObject(None) => Err(()),
-            ScVal::ScvObject(Some(ob)) => Ok(self.to_host_obj(&*ob)?.into()),
+            ScVal::ScvU32(u) => (*u).into(),
+            ScVal::ScvI32(i) => (*i).into(),
+            ScVal::ScvStatic(ScStatic::ScsVoid) => Val::from_void(),
+            ScVal::ScvStatic(ScStatic::ScsTrue) => Val::from_bool(true),
+            ScVal::ScvStatic(ScStatic::ScsFalse) => Val::from_bool(false),
+            ScVal::ScvObject(None) => return Err(()),
+            ScVal::ScvObject(Some(ob)) => return Ok(self.to_host_obj(&*ob)?.into()),
             ScVal::ScvSymbol(bytes) => {
                 let ss = match std::str::from_utf8(bytes.as_slice()) {
                     Ok(ss) => ss,
                     Err(_) => return Err(()),
                 };
-                Ok(Symbol::try_from_str(ss)?.into())
+                Symbol::try_from_str(ss)?.into()
             }
-            ScVal::ScvBitset(i) => Ok(BitSet::try_from_u64(*i)?.into()),
+            ScVal::ScvBitset(i) => BitSet::try_from_u64(*i)?.into(),
             ScVal::ScvStatus(st) => {
                 let status = match st {
                     ScStatus::SstOk => Status::from_type_and_code(ScStatusType::SstOk, 0),
@@ -125,14 +147,15 @@ impl HostContext {
                         Status::from_type_and_code(ScStatusType::SstUnknownError, *e)
                     }
                 };
-                Ok(status.into())
+                status.into()
             }
-        }
+        };
+        Ok(self.associate(ok))
     }
 
-    pub fn from_host_obj(&self, ob: Object) -> Result<ScObject, ()> {
+    pub fn from_host_obj(&self, ob: RawObj) -> Result<ScObject, ()> {
         unsafe {
-            self.0.unchecked_visit_val_obj(ob.into(), |ob| match ob {
+            self.unchecked_visit_val_obj(ob.into(), |ob| match ob {
                 None => Err(()),
                 Some(ho) => match ho {
                     HostObject::Box(v) => Ok(ScObject::ScoBox(self.from_host_val(v.val)?)),
@@ -154,8 +177,8 @@ impl HostContext {
                     }
                     HostObject::U64(u) => Ok(ScObject::ScoU64(*u)),
                     HostObject::I64(i) => Ok(ScObject::ScoI64(*i)),
-                    HostObject::Str(s) => Ok(ScObject::ScoString(s.as_bytes().into())),
-                    HostObject::Bin(b) => Ok(ScObject::ScoBinary(b.clone())),
+                    HostObject::Str(s) => Ok(ScObject::ScoString(s.as_bytes().try_into()?)),
+                    HostObject::Bin(b) => Ok(ScObject::ScoBinary(b.clone().try_into()?)),
                     HostObject::BigInt(_) => todo!(),
                     HostObject::BigRat(_) => todo!(),
                     HostObject::LedgerKey(_) => todo!(),
@@ -170,28 +193,24 @@ impl HostContext {
         }
     }
 
-    pub fn to_host_obj(&mut self, ob: &ScObject) -> Result<Object, ()> {
+    pub fn to_host_obj(self: &mut Rc<Self>, ob: &ScObject) -> Result<Object, ()> {
         match ob {
             ScObject::ScoBox(b) => {
                 let hv = self.to_host_val(b)?;
-                let vic = self.associate(hv);
-                self.add_host_object(vic)
+                self.add_host_object(hv)
             }
             ScObject::ScoVec(v) => {
                 let mut vv = Vector::new();
                 for e in v.0.iter() {
-                    let v = self.to_host_val(e)?;
-                    vv.push_back(self.associate(v))
+                    vv.push_back(self.to_host_val(e)?)
                 }
                 self.add_host_object(vv)
             }
             ScObject::ScoMap(m) => {
                 let mut mm = OrdMap::new();
                 for pair in m.0.iter() {
-                    let kv = self.to_host_val(&pair.key)?;
-                    let vv = self.to_host_val(&pair.val)?;
-                    let k = self.associate(kv);
-                    let v = self.associate(vv);
+                    let k = self.to_host_val(&pair.key)?;
+                    let v = self.to_host_val(&pair.val)?;
                     mm.insert(k, v);
                 }
                 self.add_host_object(mm)
@@ -228,138 +247,165 @@ impl HostContext {
         }
     }
 
-    pub fn add_host_object<HOT: HostObjectType>(&mut self, hot: HOT) -> Result<Object, ()> {
-        let handle = self.0.objects.borrow().len();
+    pub fn add_host_object<HOT: HostObjectType>(
+        self: &mut Rc<Self>,
+        hot: HOT,
+    ) -> Result<Object, ()> {
+        let handle = self.objects.borrow().len();
         if handle > u32::MAX as usize {
             return Err(());
         }
-        self.0.objects.borrow_mut().push(HOT::inject(hot));
-        Ok(Object::from_type_and_handle(HOT::get_type(), handle as u32))
+        self.objects.borrow_mut().push(HOT::inject(hot));
+        let env = WeakHost(Rc::downgrade(self));
+        Ok(Object::from_type_and_handle(
+            HOT::get_type(),
+            handle as u32,
+            env,
+        ))
     }
 }
 
-impl Host for HostContext {
-    fn as_mut_any(&mut self) -> &mut dyn core::any::Any {
+impl Env for WeakHost {
+    fn as_mut_any(&mut self) -> &mut dyn std::any::Any {
         todo!()
+    }
+
+    fn check_same_env(&self, other: &Self) {
+        assert!(Rc::ptr_eq(&self.get_host(), &other.get_host()));
+    }
+
+    fn obj_cmp(&self, a: Val, b: Val) -> i64 {
+        let h = self.get_host();
+        let res = unsafe {
+            h.unchecked_visit_val_obj(a, |ao| h.unchecked_visit_val_obj(b, |bo| ao.cmp(&bo)))
+        };
+        match res {
+            Ordering::Less => -1,
+            Ordering::Equal => 0,
+            Ordering::Greater => 1,
+        }
     }
 
     fn log_value(&mut self, v: Val) -> Val {
         todo!()
     }
 
-    fn get_last_operation_result(&mut self) -> Object {
+    fn get_last_operation_result(&mut self) -> Val {
         todo!()
     }
 
-    fn obj_from_u64(&mut self, u: u64) -> Object {
+    fn obj_from_u64(&mut self, u: u64) -> Val {
         todo!()
     }
 
-    fn obj_to_u64(&mut self, u: Object) -> u64 {
+    fn obj_to_u64(&mut self, u: Val) -> u64 {
         todo!()
     }
 
-    fn obj_from_i64(&mut self, i: i64) -> Object {
+    fn obj_from_i64(&mut self, i: i64) -> Val {
         todo!()
     }
 
-    fn obj_to_i64(&mut self, i: Object) -> i64 {
+    fn obj_to_i64(&mut self, i: Val) -> i64 {
         todo!()
     }
 
-    fn map_new(&mut self) -> Object {
-        self.add_host_object(OrdMap::new()).unwrap()
+    fn map_new(&mut self) -> Val {
+        self.get_host()
+            .add_host_object(HostMap::new())
+            .expect("map_new")
+            .into()
     }
 
-    fn map_put(&mut self, m: Object, k: Val, v: Val) -> Object {
+    fn map_put(&mut self, m: Val, k: Val, v: Val) -> Val {
         todo!()
     }
 
-    fn map_get(&mut self, m: Object, k: Val) -> Val {
+    fn map_get(&mut self, m: Val, k: Val) -> Val {
         todo!()
     }
 
-    fn map_del(&mut self, m: Object, k: Val) -> Object {
+    fn map_del(&mut self, m: Val, k: Val) -> Val {
         todo!()
     }
 
-    fn map_len(&mut self, m: Object) -> Val {
+    fn map_len(&mut self, m: Val) -> Val {
         todo!()
     }
 
-    fn map_keys(&mut self, m: Object) -> Object {
+    fn map_keys(&mut self, m: Val) -> Val {
         todo!()
     }
 
-    fn map_has(&mut self, m: Object, k: Val) -> Val {
+    fn map_has(&mut self, m: Val, k: Val) -> Val {
         todo!()
     }
 
-    fn vec_new(&mut self) -> Object {
+    fn vec_new(&mut self) -> Val {
         todo!()
     }
 
-    fn vec_put(&mut self, v: Object, i: Val, x: Val) -> Object {
+    fn vec_put(&mut self, v: Val, i: Val, x: Val) -> Val {
         todo!()
     }
 
-    fn vec_get(&mut self, v: Object, i: Val) -> Val {
+    fn vec_get(&mut self, v: Val, i: Val) -> Val {
         todo!()
     }
 
-    fn vec_del(&mut self, v: Object, i: Val) -> Object {
+    fn vec_del(&mut self, v: Val, i: Val) -> Val {
         todo!()
     }
 
-    fn vec_len(&mut self, v: Object) -> Val {
+    fn vec_len(&mut self, v: Val) -> Val {
         todo!()
     }
 
-    fn vec_push(&mut self, v: Object, x: Val) -> Object {
+    fn vec_push(&mut self, v: Val, x: Val) -> Val {
         todo!()
     }
 
-    fn vec_pop(&mut self, v: Object) -> Object {
+    fn vec_pop(&mut self, v: Val) -> Val {
         todo!()
     }
 
-    fn vec_take(&mut self, v: Object, n: Val) -> Object {
+    fn vec_take(&mut self, v: Val, n: Val) -> Val {
         todo!()
     }
 
-    fn vec_drop(&mut self, v: Object, n: Val) -> Object {
+    fn vec_drop(&mut self, v: Val, n: Val) -> Val {
         todo!()
     }
 
-    fn vec_front(&mut self, v: Object) -> Val {
+    fn vec_front(&mut self, v: Val) -> Val {
         todo!()
     }
 
-    fn vec_back(&mut self, v: Object) -> Val {
+    fn vec_back(&mut self, v: Val) -> Val {
         todo!()
     }
 
-    fn vec_insert(&mut self, v: Object, i: Val, n: Val) -> Object {
+    fn vec_insert(&mut self, v: Val, i: Val, n: Val) -> Val {
         todo!()
     }
 
-    fn vec_append(&mut self, v1: Object, v2: Object) -> Object {
+    fn vec_append(&mut self, v1: Val, v2: Val) -> Val {
         todo!()
     }
 
-    fn pay(&mut self, src: Object, dst: Object, asset: Object, amount: Val) -> Val {
+    fn pay(&mut self, src: Val, dst: Val, asset: Val, amount: Val) -> Val {
         todo!()
     }
 
-    fn account_balance(&mut self, acc: Object) -> Val {
+    fn account_balance(&mut self, acc: Val) -> Val {
         todo!()
     }
 
-    fn account_trust_line(&mut self, acc: Object, asset: Object) -> Object {
+    fn account_trust_line(&mut self, acc: Val, asset: Val) -> Val {
         todo!()
     }
 
-    fn trust_line_balance(&mut self, tl: Object) -> Val {
+    fn trust_line_balance(&mut self, tl: Val) -> Val {
         todo!()
     }
 
@@ -378,23 +424,23 @@ impl Host for HostContext {
 
 #[cfg(test)]
 mod test {
-    use stellar_xdr::{ScObject, ScObjectType, ScVal, ScVec};
 
-    use super::HostContext;
-    use crate::{or_abort::OrAbort, Host, Object};
+    use crate::xdr::{ScObject, ScObjectType, ScVal, ScVec};
+
+    use crate::{Env, EnvValType, HostEnv, OrAbort, RawObj, WeakHost};
 
     #[test]
     fn i64_roundtrip() {
-        let mut host = HostContext::default();
+        let host = HostEnv::default();
         let i = 12345_i64;
-        let v = host.val_from(i);
-        let j = host.val_into::<i64>(v);
+        let v = host.env_val_from(i);
+        let j = <i64 as EnvValType>::try_from_env_val(v).unwrap();
         assert_eq!(i, j);
     }
 
     #[test]
     fn vec_host_objs() -> Result<(), ()> {
-        let mut host = HostContext::default();
+        let mut host = HostEnv::default();
         let scvec0: ScVec = ScVec(vec![ScVal::ScvU32(1)].try_into()?);
         let scvec1: ScVec = ScVec(vec![ScVal::ScvU32(1)].try_into()?);
         let scobj0: ScObject = ScObject::ScoVec(scvec0);
@@ -403,25 +449,26 @@ mod test {
         let scval1 = ScVal::ScvObject(Some(Box::new(scobj1)));
         let val0 = host.to_host_val(&scval0).or_abort();
         let val1 = host.to_host_val(&scval1).or_abort();
-        assert!(val0.is::<Object>());
-        assert!(val1.is::<Object>());
-        let obj0: Object = val0.try_into().or_abort();
-        let obj1: Object = val1.try_into().or_abort();
+        assert!(val0.val.is::<RawObj>());
+        assert!(val1.val.is::<RawObj>());
+        let obj0: RawObj = val0.val.try_into().or_abort();
+        let obj1: RawObj = val1.val.try_into().or_abort();
         assert_eq!(obj0.get_handle(), 0);
         assert_eq!(obj1.get_handle(), 1);
         assert!(obj0.is_type(ScObjectType::ScoVec));
         assert!(obj1.is_type(ScObjectType::ScoVec));
         // Check that we got 2 distinct Vec objects
-        assert_ne!(val0.get_payload(), val1.get_payload());
+        assert_ne!(val0.val.get_payload(), val1.val.get_payload());
         // But also that they compare deep-equal.
-        assert_eq!(host.associate(val0), host.associate(val1));
+        assert_eq!(val0, val1);
         Ok(())
     }
 
     #[test]
     fn vec_host_fn() {
-        let mut host = HostContext::default();
-        let m = host.map_new();
-        assert!(m.is_type(ScObjectType::ScoMap));
+        let host = HostEnv::default();
+        let mut weak: WeakHost = (&host).into();
+        let m = weak.map_new();
+        assert!(RawObj::val_is_obj_type(m, ScObjectType::ScoMap));
     }
 }

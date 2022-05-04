@@ -1,4 +1,5 @@
-use super::{BitSet, Object, Status, Symbol};
+use super::{BitSet, RawObj, Status, Symbol};
+use core::fmt::Debug;
 
 extern crate static_assertions as sa;
 
@@ -89,8 +90,8 @@ impl TryFrom<Val> for i64 {
     type Error = ();
 
     fn try_from(value: Val) -> Result<Self, Self::Error> {
-        if value.is_u63() {
-            Ok(unsafe { value.unchecked_as_u63() })
+        if value.is_positive_i64() {
+            Ok(unsafe { value.unchecked_as_positive_i64() })
         } else {
             Err(())
         }
@@ -102,7 +103,7 @@ impl TryFrom<i64> for Val {
 
     fn try_from(value: i64) -> Result<Self, Self::Error> {
         if value >= 0 {
-            Ok(unsafe { Val::unchecked_from_u63(value) })
+            Ok(unsafe { Val::unchecked_from_positive_i64(value) })
         } else {
             Err(())
         }
@@ -113,8 +114,8 @@ declare_tryfrom!(());
 declare_tryfrom!(bool);
 declare_tryfrom!(u32);
 declare_tryfrom!(i32);
-declare_tryfrom!(Object);
 declare_tryfrom!(Symbol);
+declare_tryfrom!(RawObj);
 declare_tryfrom!(BitSet);
 declare_tryfrom!(Status);
 
@@ -217,17 +218,17 @@ impl Val {
     }
 
     #[inline(always)]
-    pub(crate) const fn is_u63(&self) -> bool {
+    pub const fn is_positive_i64(&self) -> bool {
         (self.0 & 1) == 0
     }
 
     #[inline(always)]
-    pub(crate) const unsafe fn unchecked_as_u63(&self) -> i64 {
+    pub const unsafe fn unchecked_as_positive_i64(&self) -> i64 {
         (self.0 >> 1) as i64
     }
 
     #[inline(always)]
-    pub(crate) const unsafe fn unchecked_from_u63(i: i64) -> Self {
+    pub const unsafe fn unchecked_from_positive_i64(i: i64) -> Self {
         Self((i as u64) << 1)
     }
 
@@ -237,7 +238,7 @@ impl Val {
     }
 
     #[inline(always)]
-    pub(crate) const fn get_tag(&self) -> Tag {
+    pub const fn get_tag(&self) -> Tag {
         unsafe { ::core::mem::transmute(self.get_tag_u8()) }
     }
 
@@ -248,7 +249,7 @@ impl Val {
 
     #[inline(always)]
     pub(crate) const fn has_tag(&self, tag: Tag) -> bool {
-        !self.is_u63() && self.get_tag_u8() == tag as u8
+        !self.is_positive_i64() && self.get_tag_u8() == tag as u8
     }
 
     #[inline(always)]
@@ -306,5 +307,55 @@ impl Val {
     #[inline(always)]
     pub const fn from_i32(i: i32) -> Val {
         unsafe { Val::from_body_and_tag((i as u32) as u64, Tag::I32) }
+    }
+}
+
+impl Debug for Val {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        if self.is_positive_i64() {
+            f.debug_struct("Val")
+                .field("pos64", &unsafe { self.unchecked_as_positive_i64() })
+                .finish()
+        } else if self.has_tag(Tag::Object) {
+            f.debug_struct("Val")
+                .field("obj", &self.get_major())
+                .field("ty", &self.get_minor())
+                .finish()
+        } else if self.has_tag(Tag::Status) {
+            f.debug_struct("Val")
+                .field("code", &self.get_major())
+                .field("ty", &self.get_minor())
+                .finish()
+        } else if self.has_tag(Tag::Symbol) {
+            f.debug_struct("Val")
+                .field("symbol", &unsafe {
+                    <Symbol as ValType>::unchecked_from_val(*self)
+                })
+                .finish()
+        } else if self.is::<()>() {
+            f.debug_struct("Val").field("void", &()).finish()
+        } else if self.is::<bool>() {
+            f.debug_struct("Val")
+                .field("bool", &unsafe {
+                    <bool as ValType>::unchecked_from_val(*self)
+                })
+                .finish()
+        } else if self.has_tag(Tag::U32) {
+            f.debug_struct("Val")
+                .field("u32", &unsafe {
+                    <u32 as ValType>::unchecked_from_val(*self)
+                })
+                .finish()
+        } else if self.has_tag(Tag::I32) {
+            f.debug_struct("Val")
+                .field("i32", &unsafe {
+                    <i32 as ValType>::unchecked_from_val(*self)
+                })
+                .finish()
+        } else {
+            f.debug_struct("Val")
+                .field("payload", &self.get_payload())
+                .finish()
+        }
     }
 }
