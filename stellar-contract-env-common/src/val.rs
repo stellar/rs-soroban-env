@@ -86,30 +86,6 @@ macro_rules! declare_tryfrom {
     };
 }
 
-impl TryFrom<Val> for i64 {
-    type Error = ();
-
-    fn try_from(value: Val) -> Result<Self, Self::Error> {
-        if value.is_positive_i64() {
-            Ok(unsafe { value.unchecked_as_positive_i64() })
-        } else {
-            Err(())
-        }
-    }
-}
-
-impl TryFrom<i64> for Val {
-    type Error = ();
-
-    fn try_from(value: i64) -> Result<Self, Self::Error> {
-        if value >= 0 {
-            Ok(unsafe { Val::unchecked_from_positive_i64(value) })
-        } else {
-            Err(())
-        }
-    }
-}
-
 declare_tryfrom!(());
 declare_tryfrom!(bool);
 declare_tryfrom!(u32);

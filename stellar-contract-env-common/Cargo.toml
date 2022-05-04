@@ -5,8 +5,8 @@ edition = "2021"
 
 [dependencies]
 static_assertions = "1.1.0"
-stellar-xdr = { git = "https://github.com/stellar/rs-stellar-xdr", rev = "05a9a133e9807181df213c059131c3e0ee4a63ed" }
+stellar-xdr = { git = "https://github.com/stellar/rs-stellar-xdr", rev = "1fa7c3ebdefd6c78719ede6b294aa64e13077d2a", default-features = false }
 
 [features]
 default = ["std"]
-std = []
+std = ["stellar-xdr/std"]
