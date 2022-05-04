@@ -8,6 +8,5 @@ stellar-contract-env-guest = { path = "../stellar-contract-env-guest", optional 
 stellar-contract-env-host = { path = "../stellar-contract-env-host", optional = true }
 
 [features]
-default = ["host"]
 host = ["stellar-contract-env-host"]
 guest = ["stellar-contract-env-guest"]
