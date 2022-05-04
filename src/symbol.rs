@@ -60,13 +60,15 @@ impl Ord for Symbol {
 }
 
 impl Symbol {
-    pub const fn from_str(s: &'static str) -> Symbol {
+    pub const fn try_from_str(s: &str) -> Result<Symbol, ()> {
         let mut n = 0;
         let mut accum: u64 = 0;
         let b: &[u8] = s.as_bytes();
         while n < b.len() {
             let ch = b[n] as char;
-            require(n < MAX_CHARS);
+            if n >= MAX_CHARS {
+                return Err(());
+            }
             n += 1;
             accum <<= CODE_BITS;
             let v = match ch {
@@ -74,12 +76,19 @@ impl Symbol {
                 '0'..='9' => 2 + ((ch as u64) - ('0' as u64)),
                 'A'..='Z' => 12 + ((ch as u64) - ('A' as u64)),
                 'a'..='z' => 38 + ((ch as u64) - ('a' as u64)),
-                _ => break,
+                _ => return Err(()),
             };
             accum |= v;
         }
         let v = unsafe { Val::from_body_and_tag(accum, Tag::Symbol) };
-        Symbol(v)
+        Ok(Symbol(v))
+    }
+
+    pub const fn from_str(s: &str) -> Symbol {
+        match Self::try_from_str(s) {
+            Ok(sym) => sym,
+            Err(_) => panic!(),
+        }
     }
 }
 

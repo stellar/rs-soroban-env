@@ -208,8 +208,13 @@ impl Val {
     }
 
     #[inline(always)]
-    pub(crate) fn get_tag(&self) -> Tag {
-        unsafe { ::core::mem::transmute(((self.0 >> 1) & TAG_MASK) as u8) }
+    const fn get_tag_u8(&self) -> u8 {
+        ((self.0 >> 1) & TAG_MASK) as u8
+    }
+
+    #[inline(always)]
+    pub(crate) const fn get_tag(&self) -> Tag {
+        unsafe { ::core::mem::transmute(self.get_tag_u8()) }
     }
 
     #[inline(always)]
@@ -218,8 +223,8 @@ impl Val {
     }
 
     #[inline(always)]
-    pub(crate) fn has_tag(&self, tag: Tag) -> bool {
-        !self.is_u63() && self.get_tag() == tag
+    pub(crate) const fn has_tag(&self, tag: Tag) -> bool {
+        !self.is_u63() && self.get_tag_u8() == tag as u8
     }
 
     #[inline(always)]
