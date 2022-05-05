@@ -4,4 +4,4 @@ version = "0.0.0"
 edition = "2021"
 
 [dependencies]
-stellar-contract-env-common = { path = "../stellar-contract-env-common" }
+stellar-contract-env-common = { path = "../stellar-contract-env-common", default-features = false }
