@@ -6,10 +6,7 @@ use core::fmt::Debug;
 use im_rc::{OrdMap, Vector};
 
 use super::xdr::{ScMap, ScMapEntry, ScObject, ScStatic, ScStatus, ScStatusType, ScVal, ScVec};
-use std::{
-    ptr,
-    rc::{Rc, Weak},
-};
+use std::rc::{Rc, Weak};
 
 use super::{
     BitSet, Env, EnvValType, HostMap, HostObject, HostObjectType, HostVal, Object, RawObj, Status,
@@ -17,22 +14,16 @@ use super::{
 };
 
 #[derive(Default, Clone)]
-pub struct Host {
+pub struct HostImpl {
     objects: RefCell<Vec<HostObject>>,
 }
 
-// WeakHost is a newtype on Weak<Host> so we can impl Env for it below.
+// WeakHost is a newtype on Weak<HostImpl> so we can impl Env for it below.
 #[derive(Clone)]
-pub struct WeakHost(Weak<Host>);
+pub struct WeakHost(Weak<HostImpl>);
 
-impl From<&Rc<Host>> for WeakHost {
-    fn from(h: &Rc<Host>) -> Self {
-        WeakHost(Rc::downgrade(h))
-    }
-}
-
-impl From<&RcHost> for WeakHost {
-    fn from(h: &RcHost) -> Self {
+impl From<&Host> for WeakHost {
+    fn from(h: &Host) -> Self {
         WeakHost(Rc::downgrade(&h.0))
     }
 }
@@ -44,40 +35,28 @@ impl Debug for WeakHost {
 }
 
 impl WeakHost {
-    fn get_host(&self) -> RcHost {
-        RcHost(self.0.upgrade().expect("WeakHost upgrade"))
+    fn get_host(&self) -> Host {
+        Host(self.0.upgrade().expect("WeakHost upgrade"))
     }
 }
 
-// RcHost is a newtype on Weak<Host> so we can impl Env for it below.
+// Host is a newtype on Rc<HostImpl> so we can impl Env for it below.
 #[derive(Default, Clone)]
-pub struct RcHost(Rc<Host>);
+pub struct Host(Rc<HostImpl>);
 
-// impl From<&Rc<Host>> for RcHost {
-//     fn from(h: &Rc<Host>) -> Self {
-//         RcHost(*h)
-//     }
-// }
-
-impl From<Rc<Host>> for RcHost {
-    fn from(h: Rc<Host>) -> Self {
-        RcHost(h)
-    }
-}
-
-impl From<&WeakHost> for RcHost {
+impl From<&WeakHost> for Host {
     fn from(w: &WeakHost) -> Self {
         w.get_host()
     }
 }
 
-impl Debug for RcHost {
+impl Debug for Host {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "RcHost({:x})", Rc::<Host>::as_ptr(&self.0) as usize)
+        write!(f, "RcHost({:x})", Rc::<HostImpl>::as_ptr(&self.0) as usize)
     }
 }
 
-impl RcHost {
+impl Host {
     unsafe fn unchecked_visit_val_obj<F, U>(&self, val: Val, f: F) -> U
     where
         F: FnOnce(Option<&HostObject>) -> U,
@@ -88,7 +67,7 @@ impl RcHost {
     }
 }
 
-impl RcHost {
+impl Host {
     pub fn associate(&self, val: Val) -> HostVal {
         let env = WeakHost(Rc::downgrade(&self.0));
         HostVal { env, val }
@@ -299,13 +278,13 @@ impl RcHost {
     }
 }
 
-impl Env for RcHost {
+impl Env for Host {
     fn as_mut_any(&mut self) -> &mut dyn std::any::Any {
         todo!()
     }
 
     fn check_same_env(&self, other: &Self) {
-        assert!(ptr::eq(self, other));
+        assert!(Rc::ptr_eq(&self.0, &other.0));
     }
 
     fn obj_cmp(&self, a: Val, b: Val) -> i64 {
