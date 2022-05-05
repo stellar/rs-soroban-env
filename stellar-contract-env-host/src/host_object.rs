@@ -1,18 +1,19 @@
-use super::ValInContext;
-use im_rc::{OrdMap, Vector};
-use stellar_xdr::{
+use super::xdr::{
     AccountId, Asset, LedgerKey, Operation, OperationResult, Price, ScObjectType, Transaction,
 };
+use super::{EnvVal, WeakHost};
+use im_rc::{OrdMap, Vector};
 
 use num_bigint::BigInt;
 use num_rational::BigRational;
 
-type HostMap = OrdMap<ValInContext, ValInContext>;
-type HostVec = Vector<ValInContext>;
+pub type HostVal = EnvVal<WeakHost>;
+pub type HostMap = OrdMap<HostVal, HostVal>;
+pub type HostVec = Vector<HostVal>;
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum HostObject {
-    Box(ValInContext),
+    Box(HostVal),
     Vec(HostVec),
     Map(HostMap),
     U64(u64),
@@ -49,7 +50,7 @@ macro_rules! declare_host_object_type {
     };
 }
 
-declare_host_object_type!(ValInContext, ScoBox, Box);
+declare_host_object_type!(HostVal, ScoBox, Box);
 declare_host_object_type!(HostMap, ScoMap, Map);
 declare_host_object_type!(HostVec, ScoVec, Vec);
 declare_host_object_type!(u64, ScoU64, U64);

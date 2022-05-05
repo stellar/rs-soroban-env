@@ -1,27 +1,29 @@
-#![cfg_attr(not(feature = "host_context"), no_std)]
+#![cfg_attr(not(feature = "std"), no_std)]
 
 mod bitset;
-mod host;
-#[cfg(feature = "host_context")]
-mod host_context;
-mod object;
+mod env;
+mod env_obj;
+mod env_val;
+mod has_env;
 mod or_abort;
+mod raw_obj;
 mod rt;
 mod status;
 mod symbol;
 mod val;
 
-use core::panic;
-
 pub use bitset::BitSet;
-pub use host::{Host, HostConvertable};
-pub use object::{ObjType, Object};
+pub use env::Env;
+pub use env_obj::EnvObj;
+pub use env_val::{EnvVal, EnvValType};
+pub use has_env::HasEnv;
+pub use or_abort::OrAbort;
+pub use raw_obj::RawObj;
+pub use rt::trap;
 pub use status::{Status, OK, UNKNOWN_ERROR};
-pub use symbol::Symbol;
-pub use val::{Val, ValType};
-
-#[cfg(feature = "host_context")]
-pub use host_context::{HostContext, HostObject};
+pub use stellar_xdr as xdr;
+pub use symbol::{Symbol, SymbolIter};
+pub use val::{Tag, Val, ValType};
 
 #[inline(always)]
 // Awkward: this is a free function rather than a trait call because

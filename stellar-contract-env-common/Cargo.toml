@@ -1,0 +1,12 @@
+[package]
+name = "stellar-contract-env-common"
+version = "0.0.0"
+edition = "2021"
+
+[dependencies]
+static_assertions = "1.1.0"
+stellar-xdr = { git = "https://github.com/stellar/rs-stellar-xdr", rev = "1fa7c3ebdefd6c78719ede6b294aa64e13077d2a", default-features = false }
+
+[features]
+default = ["std"]
+std = ["stellar-xdr/std"]

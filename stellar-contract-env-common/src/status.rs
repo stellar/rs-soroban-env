@@ -1,5 +1,8 @@
 use super::val::{Tag, Val, ValType};
-use std::hash::Hash;
+use core::{
+    cmp::Ordering,
+    hash::{Hash, Hasher},
+};
 use stellar_xdr::ScStatusType;
 
 #[repr(transparent)]
@@ -31,13 +34,29 @@ impl From<Status> for Val {
     }
 }
 
+impl AsRef<Val> for Status {
+    #[inline(always)]
+    fn as_ref(&self) -> &Val {
+        &self.0
+    }
+}
+
+impl AsMut<Val> for Status {
+    #[inline(always)]
+    fn as_mut(&mut self) -> &mut Val {
+        &mut self.0
+    }
+}
+
 impl Hash for Status {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+    #[inline(always)]
+    fn hash<H: Hasher>(&self, state: &mut H) {
         self.0.get_payload().hash(state);
     }
 }
 
 impl PartialEq for Status {
+    #[inline(always)]
     fn eq(&self, other: &Self) -> bool {
         self.0.get_payload() == other.0.get_payload()
     }
@@ -46,13 +65,15 @@ impl PartialEq for Status {
 impl Eq for Status {}
 
 impl PartialOrd for Status {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+    #[inline(always)]
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
 impl Ord for Status {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+    #[inline(always)]
+    fn cmp(&self, other: &Self) -> Ordering {
         let self_tup = (self.0.get_minor(), self.0.get_major());
         let other_tup = (other.0.get_minor(), other.0.get_major());
         self_tup.cmp(&other_tup)
@@ -63,16 +84,22 @@ impl Status {
     // NB: we don't provide a "get_type" to avoid casting a bad bit-pattern into
     // an ScStatusType. Instead we provide an "is_type" to check any specific
     // bit-pattern.
+    #[inline(always)]
     pub const fn is_type(&self, ty: ScStatusType) -> bool {
         self.0.has_minor(ty as u32)
     }
+
+    #[inline(always)]
     pub const fn get_code(&self) -> u32 {
         self.0.get_major()
     }
+
+    #[inline(always)]
     pub const fn is_ok(&self) -> bool {
         self.is_type(ScStatusType::SstOk)
     }
 
+    #[inline(always)]
     pub const fn from_type_and_code(ty: ScStatusType, code: u32) -> Status {
         Status(unsafe { Val::from_major_minor_and_tag(code, ty as u32, Tag::Status) })
     }
