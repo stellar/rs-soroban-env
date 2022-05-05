@@ -14,7 +14,7 @@ use super::{
 };
 
 #[derive(Default, Clone)]
-pub struct HostImpl {
+struct HostImpl {
     objects: RefCell<Vec<HostObject>>,
 }
 
