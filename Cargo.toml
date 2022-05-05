@@ -1,7 +1,6 @@
 [workspace]
 
 members = [
-    "stellar-contract-env",
     "stellar-contract-env-host",
     "stellar-contract-env-guest",
     "stellar-contract-env-common",
