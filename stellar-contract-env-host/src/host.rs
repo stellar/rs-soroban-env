@@ -6,14 +6,17 @@ use core::fmt::Debug;
 use im_rc::{OrdMap, Vector};
 
 use super::xdr::{ScMap, ScMapEntry, ScObject, ScStatic, ScStatus, ScStatusType, ScVal, ScVec};
-use std::rc::{Rc, Weak};
-
-use super::{
-    BitSet, Env, EnvValType, HostEnv, HostMap, HostObject, HostObjectType, HostVal, Object, RawObj,
-    Status, Symbol, Tag, Val, ValType,
+use std::{
+    ptr,
+    rc::{Rc, Weak},
 };
 
-#[derive(Default)]
+use super::{
+    BitSet, Env, EnvValType, HostMap, HostObject, HostObjectType, HostVal, Object, RawObj, Status,
+    Symbol, Tag, Val, ValType,
+};
+
+#[derive(Default, Clone)]
 pub struct Host {
     objects: RefCell<Vec<HostObject>>,
 }
@@ -22,9 +25,15 @@ pub struct Host {
 #[derive(Clone)]
 pub struct WeakHost(Weak<Host>);
 
-impl From<&HostEnv> for WeakHost {
-    fn from(he: &HostEnv) -> Self {
-        WeakHost(Rc::downgrade(he))
+impl From<&Rc<Host>> for WeakHost {
+    fn from(h: &Rc<Host>) -> Self {
+        WeakHost(Rc::downgrade(h))
+    }
+}
+
+impl From<&RcHost> for WeakHost {
+    fn from(h: &RcHost) -> Self {
+        WeakHost(Rc::downgrade(&h.0))
     }
 }
 
@@ -35,29 +44,57 @@ impl Debug for WeakHost {
 }
 
 impl WeakHost {
-    fn get_host(&self) -> Rc<Host> {
-        self.0.upgrade().expect("WeakHost upgrade")
+    fn get_host(&self) -> RcHost {
+        RcHost(self.0.upgrade().expect("WeakHost upgrade"))
     }
 }
 
-impl Host {
+// RcHost is a newtype on Weak<Host> so we can impl Env for it below.
+#[derive(Default, Clone)]
+pub struct RcHost(Rc<Host>);
+
+// impl From<&Rc<Host>> for RcHost {
+//     fn from(h: &Rc<Host>) -> Self {
+//         RcHost(*h)
+//     }
+// }
+
+impl From<Rc<Host>> for RcHost {
+    fn from(h: Rc<Host>) -> Self {
+        RcHost(h)
+    }
+}
+
+impl From<&WeakHost> for RcHost {
+    fn from(w: &WeakHost) -> Self {
+        w.get_host()
+    }
+}
+
+impl Debug for RcHost {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "RcHost({:x})", Rc::<Host>::as_ptr(&self.0) as usize)
+    }
+}
+
+impl RcHost {
     unsafe fn unchecked_visit_val_obj<F, U>(&self, val: Val, f: F) -> U
     where
         F: FnOnce(Option<&HostObject>) -> U,
     {
-        let r = self.objects.borrow();
+        let r = self.0.objects.borrow();
         let index = <RawObj as ValType>::unchecked_from_val(val).get_handle() as usize;
         f(r.get(index))
     }
 }
 
-impl Host {
-    pub fn associate(self: &Rc<Self>, val: Val) -> HostVal {
-        let env = WeakHost(Rc::downgrade(self));
+impl RcHost {
+    pub fn associate(&self, val: Val) -> HostVal {
+        let env = WeakHost(Rc::downgrade(&self.0));
         HostVal { env, val }
     }
 
-    pub fn env_val_from<V: EnvValType>(self: &Rc<Self>, v: V) -> HostVal {
+    pub fn env_val_from<V: EnvValType>(&self, v: V) -> HostVal {
         let env: WeakHost = self.into();
         v.into_env_val(env)
     }
@@ -116,7 +153,7 @@ impl Host {
         }
     }
 
-    pub fn to_host_val(self: &mut Rc<Self>, v: &ScVal) -> Result<HostVal, ()> {
+    pub fn to_host_val(&mut self, v: &ScVal) -> Result<HostVal, ()> {
         let ok = match v {
             ScVal::ScvU63(u) => {
                 if *u <= (i64::MAX as u64) {
@@ -193,7 +230,7 @@ impl Host {
         }
     }
 
-    pub fn to_host_obj(self: &mut Rc<Self>, ob: &ScObject) -> Result<Object, ()> {
+    pub fn to_host_obj(&mut self, ob: &ScObject) -> Result<Object, ()> {
         match ob {
             ScObject::ScoBox(b) => {
                 let hv = self.to_host_val(b)?;
@@ -247,21 +284,173 @@ impl Host {
         }
     }
 
-    pub fn add_host_object<HOT: HostObjectType>(
-        self: &mut Rc<Self>,
-        hot: HOT,
-    ) -> Result<Object, ()> {
-        let handle = self.objects.borrow().len();
+    pub fn add_host_object<HOT: HostObjectType>(&mut self, hot: HOT) -> Result<Object, ()> {
+        let handle = self.0.objects.borrow().len();
         if handle > u32::MAX as usize {
             return Err(());
         }
-        self.objects.borrow_mut().push(HOT::inject(hot));
-        let env = WeakHost(Rc::downgrade(self));
+        self.0.objects.borrow_mut().push(HOT::inject(hot));
+        let env = WeakHost(Rc::downgrade(&self.0));
         Ok(Object::from_type_and_handle(
             HOT::get_type(),
             handle as u32,
             env,
         ))
+    }
+}
+
+impl Env for RcHost {
+    fn as_mut_any(&mut self) -> &mut dyn std::any::Any {
+        todo!()
+    }
+
+    fn check_same_env(&self, other: &Self) {
+        assert!(ptr::eq(self, other));
+    }
+
+    fn obj_cmp(&self, a: Val, b: Val) -> i64 {
+        let res = unsafe {
+            self.unchecked_visit_val_obj(a, |ao| self.unchecked_visit_val_obj(b, |bo| ao.cmp(&bo)))
+        };
+        match res {
+            Ordering::Less => -1,
+            Ordering::Equal => 0,
+            Ordering::Greater => 1,
+        }
+    }
+
+    fn log_value(&mut self, v: Val) -> Val {
+        todo!()
+    }
+
+    fn get_last_operation_result(&mut self) -> Val {
+        todo!()
+    }
+
+    fn obj_from_u64(&mut self, u: u64) -> Val {
+        todo!()
+    }
+
+    fn obj_to_u64(&mut self, u: Val) -> u64 {
+        todo!()
+    }
+
+    fn obj_from_i64(&mut self, i: i64) -> Val {
+        todo!()
+    }
+
+    fn obj_to_i64(&mut self, i: Val) -> i64 {
+        todo!()
+    }
+
+    fn map_new(&mut self) -> Val {
+        self.add_host_object(HostMap::new())
+            .expect("map_new")
+            .into()
+    }
+
+    fn map_put(&mut self, m: Val, k: Val, v: Val) -> Val {
+        todo!()
+    }
+
+    fn map_get(&mut self, m: Val, k: Val) -> Val {
+        todo!()
+    }
+
+    fn map_del(&mut self, m: Val, k: Val) -> Val {
+        todo!()
+    }
+
+    fn map_len(&mut self, m: Val) -> Val {
+        todo!()
+    }
+
+    fn map_keys(&mut self, m: Val) -> Val {
+        todo!()
+    }
+
+    fn map_has(&mut self, m: Val, k: Val) -> Val {
+        todo!()
+    }
+
+    fn vec_new(&mut self) -> Val {
+        todo!()
+    }
+
+    fn vec_put(&mut self, v: Val, i: Val, x: Val) -> Val {
+        todo!()
+    }
+
+    fn vec_get(&mut self, v: Val, i: Val) -> Val {
+        todo!()
+    }
+
+    fn vec_del(&mut self, v: Val, i: Val) -> Val {
+        todo!()
+    }
+
+    fn vec_len(&mut self, v: Val) -> Val {
+        todo!()
+    }
+
+    fn vec_push(&mut self, v: Val, x: Val) -> Val {
+        todo!()
+    }
+
+    fn vec_pop(&mut self, v: Val) -> Val {
+        todo!()
+    }
+
+    fn vec_take(&mut self, v: Val, n: Val) -> Val {
+        todo!()
+    }
+
+    fn vec_drop(&mut self, v: Val, n: Val) -> Val {
+        todo!()
+    }
+
+    fn vec_front(&mut self, v: Val) -> Val {
+        todo!()
+    }
+
+    fn vec_back(&mut self, v: Val) -> Val {
+        todo!()
+    }
+
+    fn vec_insert(&mut self, v: Val, i: Val, n: Val) -> Val {
+        todo!()
+    }
+
+    fn vec_append(&mut self, v1: Val, v2: Val) -> Val {
+        todo!()
+    }
+
+    fn pay(&mut self, src: Val, dst: Val, asset: Val, amount: Val) -> Val {
+        todo!()
+    }
+
+    fn account_balance(&mut self, acc: Val) -> Val {
+        todo!()
+    }
+
+    fn account_trust_line(&mut self, acc: Val, asset: Val) -> Val {
+        todo!()
+    }
+
+    fn trust_line_balance(&mut self, tl: Val) -> Val {
+        todo!()
+    }
+
+    fn get_contract_data(&mut self, k: Val) -> Val {
+        todo!()
+    }
+
+    fn put_contract_data(&mut self, k: Val, v: Val) -> Val {
+        todo!()
+    }
+
+    fn has_contract_data(&mut self, k: Val) -> Val {
+        todo!()
     }
 }
 
@@ -271,7 +460,7 @@ impl Env for WeakHost {
     }
 
     fn check_same_env(&self, other: &Self) {
-        assert!(Rc::ptr_eq(&self.get_host(), &other.get_host()));
+        self.get_host().check_same_env(&other.get_host())
     }
 
     fn obj_cmp(&self, a: Val, b: Val) -> i64 {
