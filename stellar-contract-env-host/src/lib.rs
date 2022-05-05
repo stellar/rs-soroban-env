@@ -1,7 +1,7 @@
 mod host;
 mod host_object;
 
-pub use host::{HostImpl, Host, WeakHost};
+pub use host::{Host, HostImpl, WeakHost};
 pub use host_object::{HostMap, HostObject, HostObjectType, HostVal, HostVec};
 pub use stellar_contract_env_common::*;
 
