@@ -1,6 +1,6 @@
 mod guest;
+
+pub use guest::Guest;
 pub use stellar_contract_env_common::*;
 
-use guest::Guest;
-pub type GuestEnv = Guest;
 pub type Object = EnvObj<Guest>;

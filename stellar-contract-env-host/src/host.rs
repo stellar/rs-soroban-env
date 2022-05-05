@@ -595,11 +595,11 @@ mod test {
 
     use crate::xdr::{ScObject, ScObjectType, ScVal, ScVec};
 
-    use crate::{Env, EnvValType, HostEnv, OrAbort, RawObj, WeakHost};
+    use crate::{Env, EnvValType, Host, OrAbort, RawObj, WeakHost};
 
     #[test]
     fn i64_roundtrip() {
-        let host = HostEnv::default();
+        let host = Host::default();
         let i = 12345_i64;
         let v = host.env_val_from(i);
         let j = <i64 as EnvValType>::try_from_env_val(v).unwrap();
@@ -608,7 +608,7 @@ mod test {
 
     #[test]
     fn vec_host_objs() -> Result<(), ()> {
-        let mut host = HostEnv::default();
+        let mut host = Host::default();
         let scvec0: ScVec = ScVec(vec![ScVal::ScvU32(1)].try_into()?);
         let scvec1: ScVec = ScVec(vec![ScVal::ScvU32(1)].try_into()?);
         let scobj0: ScObject = ScObject::ScoVec(scvec0);
@@ -634,7 +634,7 @@ mod test {
 
     #[test]
     fn vec_host_fn() {
-        let host = HostEnv::default();
+        let host = Host::default();
         let mut weak: WeakHost = (&host).into();
         let m = weak.map_new();
         assert!(RawObj::val_is_obj_type(m, ScObjectType::ScoMap));
