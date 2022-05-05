@@ -9,7 +9,7 @@ use super::xdr::{ScMap, ScMapEntry, ScObject, ScStatic, ScStatus, ScStatusType, 
 use std::rc::{Rc, Weak};
 
 use super::{
-    BitSet, Env, EnvValType, HostMap, HostObject, HostObjectType, HostVal, Object, RawObj, Status,
+    BitSet, Env, EnvObj, EnvValType, HostMap, HostObject, HostObjectType, HostVal, RawObj, Status,
     Symbol, Tag, Val, ValType,
 };
 
@@ -209,7 +209,7 @@ impl Host {
         }
     }
 
-    pub fn to_host_obj(&mut self, ob: &ScObject) -> Result<Object, ()> {
+    pub fn to_host_obj(&mut self, ob: &ScObject) -> Result<EnvObj<WeakHost>, ()> {
         match ob {
             ScObject::ScoBox(b) => {
                 let hv = self.to_host_val(b)?;
@@ -263,14 +263,17 @@ impl Host {
         }
     }
 
-    pub fn add_host_object<HOT: HostObjectType>(&mut self, hot: HOT) -> Result<Object, ()> {
+    pub fn add_host_object<HOT: HostObjectType>(
+        &mut self,
+        hot: HOT,
+    ) -> Result<EnvObj<WeakHost>, ()> {
         let handle = self.0.objects.borrow().len();
         if handle > u32::MAX as usize {
             return Err(());
         }
         self.0.objects.borrow_mut().push(HOT::inject(hot));
         let env = WeakHost(Rc::downgrade(&self.0));
-        Ok(Object::from_type_and_handle(
+        Ok(EnvObj::<WeakHost>::from_type_and_handle(
             HOT::get_type(),
             handle as u32,
             env,
