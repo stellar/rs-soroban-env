@@ -46,6 +46,9 @@ impl<E: Env> From<EnvVal<E>> for Val {
 // covers types that can always be directly converted to Val with no Env.
 pub trait EnvValType: Sized {
     fn into_env_val<E: Env>(self, env: E) -> EnvVal<E>;
+    fn into_val<E: Env>(self, env: E) -> Val {
+        Self::into_env_val(self, env).val
+    }
     fn try_from_env_val<E: Env>(ev: EnvVal<E>) -> Option<Self>;
     fn try_from_val<E: Env>(e: E, v: Val) -> Option<Self> {
         Self::try_from_env_val(EnvVal { env: e, val: v })
@@ -58,6 +61,10 @@ impl<V: ValType> EnvValType for V {
             env,
             val: self.into(),
         }
+    }
+
+    fn into_val<E: Env>(self, _env: E) -> Val {
+        self.into()
     }
 
     fn try_from_env_val<E: Env>(ev: EnvVal<E>) -> Option<Self> {
