@@ -3,7 +3,7 @@
 
 use core::cell::RefCell;
 use core::cmp::Ordering;
-use core::fmt::Debug;
+use core::fmt::{Debug, Display};
 use im_rc::{OrdMap, Vector};
 
 use crate::weak_host::WeakHost;
@@ -13,6 +13,17 @@ use std::rc::Rc;
 
 use crate::host_object::{HostMap, HostObj, HostObject, HostObjectType, HostVal, HostVec};
 use crate::{BitSet, Env, EnvObj, EnvValType, RawObj, RawVal, RawValType, Status, Symbol, Tag};
+
+#[derive(Debug)]
+pub enum Error {
+    General,
+}
+
+impl Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "host::Error")
+    }
+}
 
 #[derive(Default, Clone)]
 pub(crate) struct HostImpl {
