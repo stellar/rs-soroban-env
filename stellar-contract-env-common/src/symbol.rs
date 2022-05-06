@@ -3,6 +3,7 @@ use core::{
     cmp::Ordering,
     fmt::Debug,
     hash::{Hash, Hasher},
+    str,
 };
 
 extern crate static_assertions as sa;
@@ -65,9 +66,8 @@ impl Ord for Symbol {
 
 impl Debug for Symbol {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.debug_tuple("Symbol")
-            .field(&self.into_iter().collect::<String>())
-            .finish()
+        let s: SymbolStr = self.into();
+        f.debug_tuple("Symbol").field(&s).finish()
     }
 }
 
@@ -101,6 +101,64 @@ impl Symbol {
             Ok(sym) => sym,
             Err(_) => panic!(),
         }
+    }
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+pub struct SymbolStr([u8; MAX_CHARS]);
+
+impl SymbolStr {
+    pub fn len(&self) -> usize {
+        let s: &[u8] = &self.0;
+        for (i, x) in s.iter().enumerate() {
+            if *x == 0 {
+                return i;
+            }
+        }
+        s.len()
+    }
+}
+
+impl Debug for SymbolStr {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let s: &str = self.as_ref();
+        f.debug_tuple("SymbolStr").field(&s).finish()
+    }
+}
+
+impl AsRef<[u8]> for SymbolStr {
+    fn as_ref(&self) -> &[u8] {
+        let s: &[u8] = &self.0;
+        &s[..self.len()]
+    }
+}
+
+impl AsRef<str> for SymbolStr {
+    fn as_ref(&self) -> &str {
+        let s: &[u8] = self.as_ref();
+        unsafe { str::from_utf8_unchecked(&s) }
+    }
+}
+
+impl From<&Symbol> for SymbolStr {
+    fn from(s: &Symbol) -> Self {
+        let mut chars = [b'\x00'; MAX_CHARS];
+        for (i, ch) in s.into_iter().enumerate() {
+            chars[i] = ch as u8
+        }
+        SymbolStr(chars)
+    }
+}
+
+impl From<Symbol> for SymbolStr {
+    fn from(s: Symbol) -> Self {
+        (&s).into()
+    }
+}
+
+impl From<&str> for SymbolStr {
+    fn from(s: &str) -> Self {
+        s.into()
     }
 }
 
@@ -159,7 +217,52 @@ impl FromIterator<char> for Symbol {
 }
 
 #[cfg(test)]
-mod test {
+mod test_without_string {
+    use super::{Symbol, SymbolStr};
+
+    #[test]
+    fn test_roundtrip() {
+        let input = "stellar";
+        let sym = Symbol::from_str(input);
+        let sym_str = SymbolStr::from(sym);
+        let s: &str = sym_str.as_ref();
+        assert_eq!(s, input);
+    }
+
+    #[test]
+    fn test_roundtrip_zero() {
+        let input = "";
+        let sym = Symbol::from_str(input);
+        let sym_str = SymbolStr::from(sym);
+        let s: &str = sym_str.as_ref();
+        assert_eq!(s, input);
+    }
+
+    #[test]
+    fn test_roundtrip_ten() {
+        let input = "0123456789";
+        let sym = Symbol::from_str(input);
+        let sym_str = SymbolStr::from(sym);
+        let s: &str = sym_str.as_ref();
+        assert_eq!(s, input);
+    }
+
+    #[test]
+    fn test_ord() {
+        let a_in = "Hello";
+        let b_in = "hello";
+        let c_in = "hellos";
+        let a_sym = Symbol::from_str(a_in);
+        let b_sym = Symbol::from_str(b_in);
+        let c_sym = Symbol::from_str(c_in);
+        assert!(a_sym < b_sym);
+        assert!(b_sym < c_sym);
+        assert!(a_sym < c_sym);
+    }
+}
+
+#[cfg(test)]
+mod test_with_string {
     use super::Symbol;
     extern crate std;
     use std::string::String;
@@ -186,18 +289,5 @@ mod test {
         let sym = Symbol::from_str(input);
         let s: String = sym.into_iter().collect();
         assert_eq!(input, &s);
-    }
-
-    #[test]
-    fn test_ord() {
-        let a_in = "Hello";
-        let b_in = "hello";
-        let c_in = "hellos";
-        let a_sym = Symbol::from_str(a_in);
-        let b_sym = Symbol::from_str(b_in);
-        let c_sym = Symbol::from_str(c_in);
-        assert!(a_sym < b_sym);
-        assert!(b_sym < c_sym);
-        assert!(a_sym < c_sym);
     }
 }
