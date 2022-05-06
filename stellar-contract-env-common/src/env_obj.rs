@@ -26,6 +26,17 @@ impl<E: Env> AsMut<EnvVal<E>> for EnvObj<E> {
     }
 }
 
+impl<E: Env> TryFrom<EnvVal<E>> for EnvObj<E> {
+    type Error = ();
+
+    fn try_from(ev: EnvVal<E>) -> Result<Self, Self::Error> {
+        match ev.val.get_tag() {
+            Tag::Object => Ok(EnvObj(ev)),
+            _ => Err(()),
+        }
+    }
+}
+
 impl<E: Env> Into<EnvVal<E>> for EnvObj<E> {
     fn into(self) -> EnvVal<E> {
         self.0
