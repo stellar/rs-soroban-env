@@ -11,8 +11,8 @@ pub fn trap() -> ! {
     panic!()
 }
 
-#[cfg(not(feature = "std"))]
-#[panic_handler]
-fn handle_panic(_: &core::panic::PanicInfo) -> ! {
-    trap();
-}
+//#[cfg(not(feature = "std"))]
+//#[panic_handler]
+//fn handle_panic(_: &core::panic::PanicInfo) -> ! {
+//    trap();
+//}
