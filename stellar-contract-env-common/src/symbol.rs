@@ -112,7 +112,7 @@ impl SymbolStr {
         let s: &[u8] = &self.0;
         for (i, x) in s.iter().enumerate() {
             if *x == 0 {
-                return i
+                return i;
             }
         }
         s.len()
