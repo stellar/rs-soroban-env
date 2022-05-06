@@ -111,9 +111,14 @@ jobs:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             profile: test
+            features:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            profile: test
+            features: vm
     runs-on: ${{ matrix.os }}
     steps:
     - uses: actions/checkout@v3
     - run: rustup update stable && rustup default stable
     - run: rustup target add ${{ matrix.target }}
-    - run: cargo test --verbose --profile ${{ matrix.profile }} --target ${{ matrix.target }} -p stellar-contract-env-host
+    - run: cargo test --verbose --profile ${{ matrix.profile }} --target ${{ matrix.target }} --features '${{ matrix.features }}' -p stellar-contract-env-host
