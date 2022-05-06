@@ -121,7 +121,8 @@ impl SymbolStr {
 
 impl Debug for SymbolStr {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.debug_tuple("Symbol").field(&self.0).finish()
+        let s: &str = self.as_ref();
+        f.debug_tuple("Symbol").field(&s).finish()
     }
 }
 
