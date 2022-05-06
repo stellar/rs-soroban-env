@@ -1,4 +1,4 @@
-use super::Val;
+use super::RawVal;
 use core::any;
 
 // This trait needs to be implemented by any type that plays the role of the
@@ -15,43 +15,43 @@ pub trait Env: Sized + Clone {
 
     // Used to deep-compare objects, result is an -1, 0, 1
     // value for lt, eq, gt, respectively.
-    fn obj_cmp(&self, a: Val, b: Val) -> i64;
+    fn obj_cmp(&self, a: RawVal, b: RawVal) -> i64;
 
-    fn log_value(&mut self, v: Val) -> Val;
-    fn get_last_operation_result(&mut self) -> Val;
+    fn log_value(&mut self, v: RawVal) -> RawVal;
+    fn get_last_operation_result(&mut self) -> RawVal;
 
-    fn obj_from_u64(&mut self, u: u64) -> Val;
-    fn obj_to_u64(&mut self, u: Val) -> u64;
-    fn obj_from_i64(&mut self, i: i64) -> Val;
-    fn obj_to_i64(&mut self, i: Val) -> i64;
+    fn obj_from_u64(&mut self, u: u64) -> RawVal;
+    fn obj_to_u64(&mut self, u: RawVal) -> u64;
+    fn obj_from_i64(&mut self, i: i64) -> RawVal;
+    fn obj_to_i64(&mut self, i: RawVal) -> i64;
 
-    fn map_new(&mut self) -> Val;
-    fn map_put(&mut self, m: Val, k: Val, v: Val) -> Val;
-    fn map_get(&mut self, m: Val, k: Val) -> Val;
-    fn map_del(&mut self, m: Val, k: Val) -> Val;
-    fn map_len(&mut self, m: Val) -> Val;
-    fn map_keys(&mut self, m: Val) -> Val;
-    fn map_has(&mut self, m: Val, k: Val) -> Val;
+    fn map_new(&mut self) -> RawVal;
+    fn map_put(&mut self, m: RawVal, k: RawVal, v: RawVal) -> RawVal;
+    fn map_get(&mut self, m: RawVal, k: RawVal) -> RawVal;
+    fn map_del(&mut self, m: RawVal, k: RawVal) -> RawVal;
+    fn map_len(&mut self, m: RawVal) -> RawVal;
+    fn map_keys(&mut self, m: RawVal) -> RawVal;
+    fn map_has(&mut self, m: RawVal, k: RawVal) -> RawVal;
 
-    fn vec_new(&mut self) -> Val;
-    fn vec_put(&mut self, v: Val, i: Val, x: Val) -> Val;
-    fn vec_get(&mut self, v: Val, i: Val) -> Val;
-    fn vec_del(&mut self, v: Val, i: Val) -> Val;
-    fn vec_len(&mut self, v: Val) -> Val;
-    fn vec_push(&mut self, v: Val, x: Val) -> Val;
-    fn vec_pop(&mut self, v: Val) -> Val;
-    fn vec_take(&mut self, v: Val, n: Val) -> Val;
-    fn vec_drop(&mut self, v: Val, n: Val) -> Val;
-    fn vec_front(&mut self, v: Val) -> Val;
-    fn vec_back(&mut self, v: Val) -> Val;
-    fn vec_insert(&mut self, v: Val, i: Val, n: Val) -> Val;
-    fn vec_append(&mut self, v1: Val, v2: Val) -> Val;
+    fn vec_new(&mut self) -> RawVal;
+    fn vec_put(&mut self, v: RawVal, i: RawVal, x: RawVal) -> RawVal;
+    fn vec_get(&mut self, v: RawVal, i: RawVal) -> RawVal;
+    fn vec_del(&mut self, v: RawVal, i: RawVal) -> RawVal;
+    fn vec_len(&mut self, v: RawVal) -> RawVal;
+    fn vec_push(&mut self, v: RawVal, x: RawVal) -> RawVal;
+    fn vec_pop(&mut self, v: RawVal) -> RawVal;
+    fn vec_take(&mut self, v: RawVal, n: RawVal) -> RawVal;
+    fn vec_drop(&mut self, v: RawVal, n: RawVal) -> RawVal;
+    fn vec_front(&mut self, v: RawVal) -> RawVal;
+    fn vec_back(&mut self, v: RawVal) -> RawVal;
+    fn vec_insert(&mut self, v: RawVal, i: RawVal, n: RawVal) -> RawVal;
+    fn vec_append(&mut self, v1: RawVal, v2: RawVal) -> RawVal;
 
-    fn pay(&mut self, src: Val, dst: Val, asset: Val, amount: Val) -> Val;
-    fn account_balance(&mut self, acc: Val) -> Val;
-    fn account_trust_line(&mut self, acc: Val, asset: Val) -> Val;
-    fn trust_line_balance(&mut self, tl: Val) -> Val;
-    fn get_contract_data(&mut self, k: Val) -> Val;
-    fn put_contract_data(&mut self, k: Val, v: Val) -> Val;
-    fn has_contract_data(&mut self, k: Val) -> Val;
+    fn pay(&mut self, src: RawVal, dst: RawVal, asset: RawVal, amount: RawVal) -> RawVal;
+    fn account_balance(&mut self, acc: RawVal) -> RawVal;
+    fn account_trust_line(&mut self, acc: RawVal, asset: RawVal) -> RawVal;
+    fn trust_line_balance(&mut self, tl: RawVal) -> RawVal;
+    fn get_contract_data(&mut self, k: RawVal) -> RawVal;
+    fn put_contract_data(&mut self, k: RawVal, v: RawVal) -> RawVal;
+    fn has_contract_data(&mut self, k: RawVal) -> RawVal;
 }

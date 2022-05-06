@@ -1,84 +1,61 @@
 #![allow(unused_variables)]
+#![allow(dead_code)]
 
 use core::cell::RefCell;
 use core::cmp::Ordering;
 use core::fmt::Debug;
 use im_rc::{OrdMap, Vector};
 
-use super::xdr::{ScMap, ScMapEntry, ScObject, ScStatic, ScStatus, ScStatusType, ScVal, ScVec};
-use std::rc::{Rc, Weak};
+use crate::weak_host::WeakHost;
 
-use super::{
-    BitSet, Env, EnvObj, EnvValType, HostMap, HostObject, HostObjectType, HostVal, RawObj, Status,
-    Symbol, Tag, Val, ValType,
-};
+use super::xdr::{ScMap, ScMapEntry, ScObject, ScStatic, ScStatus, ScStatusType, ScVal, ScVec};
+use std::rc::Rc;
+
+use crate::host_object::{HostMap, HostObj, HostObject, HostObjectType, HostVal, HostVec};
+use crate::{BitSet, Env, EnvObj, EnvValType, RawObj, RawVal, RawValType, Status, Symbol, Tag};
 
 #[derive(Default, Clone)]
-struct HostImpl {
+pub(crate) struct HostImpl {
     objects: RefCell<Vec<HostObject>>,
-}
-
-// WeakHost is a newtype on Weak<HostImpl> so we can impl Env for it below.
-#[derive(Clone)]
-pub struct WeakHost(Weak<HostImpl>);
-
-impl From<&Host> for WeakHost {
-    fn from(h: &Host) -> Self {
-        WeakHost(Rc::downgrade(&h.0))
-    }
-}
-
-impl Debug for WeakHost {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "WeakHost({:x})", self.0.as_ptr() as usize)
-    }
-}
-
-impl WeakHost {
-    fn get_host(&self) -> Host {
-        Host(self.0.upgrade().expect("WeakHost upgrade"))
-    }
 }
 
 // Host is a newtype on Rc<HostImpl> so we can impl Env for it below.
 #[derive(Default, Clone)]
-pub struct Host(Rc<HostImpl>);
-
-impl From<&WeakHost> for Host {
-    fn from(w: &WeakHost) -> Self {
-        w.get_host()
-    }
-}
+pub struct Host(pub(crate) Rc<HostImpl>);
 
 impl Debug for Host {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "RcHost({:x})", Rc::<HostImpl>::as_ptr(&self.0) as usize)
+        write!(f, "Host({:x})", Rc::<HostImpl>::as_ptr(&self.0) as usize)
     }
 }
 
 impl Host {
-    unsafe fn unchecked_visit_val_obj<F, U>(&self, val: Val, f: F) -> U
+    unsafe fn unchecked_visit_val_obj<F, U>(&self, val: RawVal, f: F) -> U
     where
         F: FnOnce(Option<&HostObject>) -> U,
     {
         let r = self.0.objects.borrow();
-        let index = <RawObj as ValType>::unchecked_from_val(val).get_handle() as usize;
+        let index = <RawObj as RawValType>::unchecked_from_val(val).get_handle() as usize;
         f(r.get(index))
     }
 }
 
 impl Host {
-    pub fn associate(&self, val: Val) -> HostVal {
-        let env = WeakHost(Rc::downgrade(&self.0));
+    pub(crate) fn get_weak(&self) -> WeakHost {
+        WeakHost(Rc::downgrade(&self.0))
+    }
+
+    pub(crate) fn associate_raw_val(&self, val: RawVal) -> HostVal {
+        let env = self.get_weak();
         HostVal { env, val }
     }
 
-    pub fn env_val_from<V: EnvValType>(&self, v: V) -> HostVal {
-        let env: WeakHost = self.into();
+    pub(crate) fn associate_env_val_type<V: EnvValType>(&self, v: V) -> HostVal {
+        let env = self.get_weak();
         v.into_env_val(env)
     }
 
-    pub fn from_host_val(&self, val: Val) -> Result<ScVal, ()> {
+    pub(crate) fn from_host_val(&self, val: RawVal) -> Result<ScVal, ()> {
         if val.is_positive_i64() {
             Ok(ScVal::ScvU63(
                 unsafe { val.unchecked_as_positive_i64() } as u64
@@ -86,37 +63,37 @@ impl Host {
         } else {
             match val.get_tag() {
                 Tag::U32 => Ok(ScVal::ScvU32(unsafe {
-                    <u32 as ValType>::unchecked_from_val(val)
+                    <u32 as RawValType>::unchecked_from_val(val)
                 })),
                 Tag::I32 => Ok(ScVal::ScvI32(unsafe {
-                    <i32 as ValType>::unchecked_from_val(val)
+                    <i32 as RawValType>::unchecked_from_val(val)
                 })),
                 Tag::Static => {
-                    if let Some(b) = <bool as ValType>::try_convert(val) {
+                    if let Some(b) = <bool as RawValType>::try_convert(val) {
                         if b {
                             Ok(ScVal::ScvStatic(ScStatic::ScsTrue))
                         } else {
                             Ok(ScVal::ScvStatic(ScStatic::ScsFalse))
                         }
-                    } else if <() as ValType>::is_val_type(val) {
+                    } else if <() as RawValType>::is_val_type(val) {
                         Ok(ScVal::ScvStatic(ScStatic::ScsVoid))
                     } else {
                         Err(())
                     }
                 }
                 Tag::Object => unsafe {
-                    let ob = <RawObj as ValType>::unchecked_from_val(val);
+                    let ob = <RawObj as RawValType>::unchecked_from_val(val);
                     let scob = self.from_host_obj(ob)?;
                     Ok(ScVal::ScvObject(Some(Box::new(scob))))
                 },
                 Tag::Symbol => {
-                    let sym: Symbol = unsafe { <Symbol as ValType>::unchecked_from_val(val) };
+                    let sym: Symbol = unsafe { <Symbol as RawValType>::unchecked_from_val(val) };
                     let str: String = sym.into_iter().collect();
                     Ok(ScVal::ScvSymbol(str.as_bytes().try_into()?))
                 }
                 Tag::BitSet => Ok(ScVal::ScvBitset(val.get_payload())),
                 Tag::Status => {
-                    let status: Status = unsafe { <Status as ValType>::unchecked_from_val(val) };
+                    let status: Status = unsafe { <Status as RawValType>::unchecked_from_val(val) };
                     if status.is_ok() {
                         Ok(ScVal::ScvStatus(ScStatus::SstOk))
                     } else if status.is_type(ScStatusType::SstUnknownError) {
@@ -132,20 +109,20 @@ impl Host {
         }
     }
 
-    pub fn to_host_val(&mut self, v: &ScVal) -> Result<HostVal, ()> {
+    pub(crate) fn to_host_val(&mut self, v: &ScVal) -> Result<HostVal, ()> {
         let ok = match v {
             ScVal::ScvU63(u) => {
                 if *u <= (i64::MAX as u64) {
-                    unsafe { Val::unchecked_from_positive_i64(*u as i64) }
+                    unsafe { RawVal::unchecked_from_positive_i64(*u as i64) }
                 } else {
                     return Err(());
                 }
             }
             ScVal::ScvU32(u) => (*u).into(),
             ScVal::ScvI32(i) => (*i).into(),
-            ScVal::ScvStatic(ScStatic::ScsVoid) => Val::from_void(),
-            ScVal::ScvStatic(ScStatic::ScsTrue) => Val::from_bool(true),
-            ScVal::ScvStatic(ScStatic::ScsFalse) => Val::from_bool(false),
+            ScVal::ScvStatic(ScStatic::ScsVoid) => RawVal::from_void(),
+            ScVal::ScvStatic(ScStatic::ScsTrue) => RawVal::from_bool(true),
+            ScVal::ScvStatic(ScStatic::ScsFalse) => RawVal::from_bool(false),
             ScVal::ScvObject(None) => return Err(()),
             ScVal::ScvObject(Some(ob)) => return Ok(self.to_host_obj(&*ob)?.into()),
             ScVal::ScvSymbol(bytes) => {
@@ -166,10 +143,10 @@ impl Host {
                 status.into()
             }
         };
-        Ok(self.associate(ok))
+        Ok(self.associate_raw_val(ok))
     }
 
-    pub fn from_host_obj(&self, ob: RawObj) -> Result<ScObject, ()> {
+    pub(crate) fn from_host_obj(&self, ob: RawObj) -> Result<ScObject, ()> {
         unsafe {
             self.unchecked_visit_val_obj(ob.into(), |ob| match ob {
                 None => Err(()),
@@ -209,7 +186,7 @@ impl Host {
         }
     }
 
-    pub fn to_host_obj(&mut self, ob: &ScObject) -> Result<EnvObj<WeakHost>, ()> {
+    pub(crate) fn to_host_obj(&mut self, ob: &ScObject) -> Result<HostObj, ()> {
         match ob {
             ScObject::ScoBox(b) => {
                 let hv = self.to_host_val(b)?;
@@ -263,10 +240,7 @@ impl Host {
         }
     }
 
-    pub fn add_host_object<HOT: HostObjectType>(
-        &mut self,
-        hot: HOT,
-    ) -> Result<EnvObj<WeakHost>, ()> {
+    pub(crate) fn add_host_object<HOT: HostObjectType>(&mut self, hot: HOT) -> Result<HostObj, ()> {
         let handle = self.0.objects.borrow().len();
         if handle > u32::MAX as usize {
             return Err(());
@@ -290,7 +264,7 @@ impl Env for Host {
         assert!(Rc::ptr_eq(&self.0, &other.0));
     }
 
-    fn obj_cmp(&self, a: Val, b: Val) -> i64 {
+    fn obj_cmp(&self, a: RawVal, b: RawVal) -> i64 {
         let res = unsafe {
             self.unchecked_visit_val_obj(a, |ao| self.unchecked_visit_val_obj(b, |bo| ao.cmp(&bo)))
         };
@@ -301,345 +275,151 @@ impl Env for Host {
         }
     }
 
-    fn log_value(&mut self, v: Val) -> Val {
+    fn log_value(&mut self, v: RawVal) -> RawVal {
         todo!()
     }
 
-    fn get_last_operation_result(&mut self) -> Val {
+    fn get_last_operation_result(&mut self) -> RawVal {
         todo!()
     }
 
-    fn obj_from_u64(&mut self, u: u64) -> Val {
+    fn obj_from_u64(&mut self, u: u64) -> RawVal {
         todo!()
     }
 
-    fn obj_to_u64(&mut self, u: Val) -> u64 {
+    fn obj_to_u64(&mut self, u: RawVal) -> u64 {
         todo!()
     }
 
-    fn obj_from_i64(&mut self, i: i64) -> Val {
+    fn obj_from_i64(&mut self, i: i64) -> RawVal {
+        self.add_host_object(i).expect("obj_from_i64").into()
+    }
+
+    fn obj_to_i64(&mut self, i: RawVal) -> i64 {
         todo!()
     }
 
-    fn obj_to_i64(&mut self, i: Val) -> i64 {
-        todo!()
-    }
-
-    fn map_new(&mut self) -> Val {
+    fn map_new(&mut self) -> RawVal {
         self.add_host_object(HostMap::new())
             .expect("map_new")
             .into()
     }
 
-    fn map_put(&mut self, m: Val, k: Val, v: Val) -> Val {
+    fn map_put(&mut self, m: RawVal, k: RawVal, v: RawVal) -> RawVal {
         todo!()
     }
 
-    fn map_get(&mut self, m: Val, k: Val) -> Val {
+    fn map_get(&mut self, m: RawVal, k: RawVal) -> RawVal {
         todo!()
     }
 
-    fn map_del(&mut self, m: Val, k: Val) -> Val {
+    fn map_del(&mut self, m: RawVal, k: RawVal) -> RawVal {
         todo!()
     }
 
-    fn map_len(&mut self, m: Val) -> Val {
+    fn map_len(&mut self, m: RawVal) -> RawVal {
         todo!()
     }
 
-    fn map_keys(&mut self, m: Val) -> Val {
+    fn map_keys(&mut self, m: RawVal) -> RawVal {
         todo!()
     }
 
-    fn map_has(&mut self, m: Val, k: Val) -> Val {
+    fn map_has(&mut self, m: RawVal, k: RawVal) -> RawVal {
         todo!()
     }
 
-    fn vec_new(&mut self) -> Val {
-        todo!()
-    }
-
-    fn vec_put(&mut self, v: Val, i: Val, x: Val) -> Val {
-        todo!()
-    }
-
-    fn vec_get(&mut self, v: Val, i: Val) -> Val {
-        todo!()
-    }
-
-    fn vec_del(&mut self, v: Val, i: Val) -> Val {
-        todo!()
-    }
-
-    fn vec_len(&mut self, v: Val) -> Val {
-        todo!()
-    }
-
-    fn vec_push(&mut self, v: Val, x: Val) -> Val {
-        todo!()
-    }
-
-    fn vec_pop(&mut self, v: Val) -> Val {
-        todo!()
-    }
-
-    fn vec_take(&mut self, v: Val, n: Val) -> Val {
-        todo!()
-    }
-
-    fn vec_drop(&mut self, v: Val, n: Val) -> Val {
-        todo!()
-    }
-
-    fn vec_front(&mut self, v: Val) -> Val {
-        todo!()
-    }
-
-    fn vec_back(&mut self, v: Val) -> Val {
-        todo!()
-    }
-
-    fn vec_insert(&mut self, v: Val, i: Val, n: Val) -> Val {
-        todo!()
-    }
-
-    fn vec_append(&mut self, v1: Val, v2: Val) -> Val {
-        todo!()
-    }
-
-    fn pay(&mut self, src: Val, dst: Val, asset: Val, amount: Val) -> Val {
-        todo!()
-    }
-
-    fn account_balance(&mut self, acc: Val) -> Val {
-        todo!()
-    }
-
-    fn account_trust_line(&mut self, acc: Val, asset: Val) -> Val {
-        todo!()
-    }
-
-    fn trust_line_balance(&mut self, tl: Val) -> Val {
-        todo!()
-    }
-
-    fn get_contract_data(&mut self, k: Val) -> Val {
-        todo!()
-    }
-
-    fn put_contract_data(&mut self, k: Val, v: Val) -> Val {
-        todo!()
-    }
-
-    fn has_contract_data(&mut self, k: Val) -> Val {
-        todo!()
-    }
-}
-
-impl Env for WeakHost {
-    fn as_mut_any(&mut self) -> &mut dyn std::any::Any {
-        todo!()
-    }
-
-    fn check_same_env(&self, other: &Self) {
-        self.get_host().check_same_env(&other.get_host())
-    }
-
-    fn obj_cmp(&self, a: Val, b: Val) -> i64 {
-        let h = self.get_host();
-        let res = unsafe {
-            h.unchecked_visit_val_obj(a, |ao| h.unchecked_visit_val_obj(b, |bo| ao.cmp(&bo)))
-        };
-        match res {
-            Ordering::Less => -1,
-            Ordering::Equal => 0,
-            Ordering::Greater => 1,
-        }
-    }
-
-    fn log_value(&mut self, v: Val) -> Val {
-        todo!()
-    }
-
-    fn get_last_operation_result(&mut self) -> Val {
-        todo!()
-    }
-
-    fn obj_from_u64(&mut self, u: u64) -> Val {
-        todo!()
-    }
-
-    fn obj_to_u64(&mut self, u: Val) -> u64 {
-        todo!()
-    }
-
-    fn obj_from_i64(&mut self, i: i64) -> Val {
-        todo!()
-    }
-
-    fn obj_to_i64(&mut self, i: Val) -> i64 {
-        todo!()
-    }
-
-    fn map_new(&mut self) -> Val {
-        self.get_host()
-            .add_host_object(HostMap::new())
-            .expect("map_new")
+    fn vec_new(&mut self) -> RawVal {
+        self.add_host_object(HostVec::new())
+            .expect("vec_new")
             .into()
     }
 
-    fn map_put(&mut self, m: Val, k: Val, v: Val) -> Val {
+    fn vec_put(&mut self, v: RawVal, i: RawVal, x: RawVal) -> RawVal {
         todo!()
     }
 
-    fn map_get(&mut self, m: Val, k: Val) -> Val {
+    fn vec_get(&mut self, v: RawVal, i: RawVal) -> RawVal {
         todo!()
     }
 
-    fn map_del(&mut self, m: Val, k: Val) -> Val {
+    fn vec_del(&mut self, v: RawVal, i: RawVal) -> RawVal {
         todo!()
     }
 
-    fn map_len(&mut self, m: Val) -> Val {
+    fn vec_len(&mut self, v: RawVal) -> RawVal {
         todo!()
     }
 
-    fn map_keys(&mut self, m: Val) -> Val {
+    fn vec_push(&mut self, v: RawVal, x: RawVal) -> RawVal {
+        let x = self.associate_raw_val(x);
+        let vnew = unsafe {
+            self.unchecked_visit_val_obj(v, move |ho| {
+                if let Some(HostObject::Vec(vec)) = ho {
+                    let mut vnew = vec.clone();
+                    vnew.push_back(x);
+                    vnew
+                } else {
+                    panic!("bad or nonexistent host object ref")
+                }
+            })
+        };
+        self.add_host_object(vnew).expect("vec_push").into()
+    }
+
+    fn vec_pop(&mut self, v: RawVal) -> RawVal {
         todo!()
     }
 
-    fn map_has(&mut self, m: Val, k: Val) -> Val {
+    fn vec_take(&mut self, v: RawVal, n: RawVal) -> RawVal {
         todo!()
     }
 
-    fn vec_new(&mut self) -> Val {
+    fn vec_drop(&mut self, v: RawVal, n: RawVal) -> RawVal {
         todo!()
     }
 
-    fn vec_put(&mut self, v: Val, i: Val, x: Val) -> Val {
+    fn vec_front(&mut self, v: RawVal) -> RawVal {
         todo!()
     }
 
-    fn vec_get(&mut self, v: Val, i: Val) -> Val {
+    fn vec_back(&mut self, v: RawVal) -> RawVal {
         todo!()
     }
 
-    fn vec_del(&mut self, v: Val, i: Val) -> Val {
+    fn vec_insert(&mut self, v: RawVal, i: RawVal, n: RawVal) -> RawVal {
         todo!()
     }
 
-    fn vec_len(&mut self, v: Val) -> Val {
+    fn vec_append(&mut self, v1: RawVal, v2: RawVal) -> RawVal {
         todo!()
     }
 
-    fn vec_push(&mut self, v: Val, x: Val) -> Val {
+    fn pay(&mut self, src: RawVal, dst: RawVal, asset: RawVal, amount: RawVal) -> RawVal {
         todo!()
     }
 
-    fn vec_pop(&mut self, v: Val) -> Val {
+    fn account_balance(&mut self, acc: RawVal) -> RawVal {
         todo!()
     }
 
-    fn vec_take(&mut self, v: Val, n: Val) -> Val {
+    fn account_trust_line(&mut self, acc: RawVal, asset: RawVal) -> RawVal {
         todo!()
     }
 
-    fn vec_drop(&mut self, v: Val, n: Val) -> Val {
+    fn trust_line_balance(&mut self, tl: RawVal) -> RawVal {
         todo!()
     }
 
-    fn vec_front(&mut self, v: Val) -> Val {
+    fn get_contract_data(&mut self, k: RawVal) -> RawVal {
         todo!()
     }
 
-    fn vec_back(&mut self, v: Val) -> Val {
+    fn put_contract_data(&mut self, k: RawVal, v: RawVal) -> RawVal {
         todo!()
     }
 
-    fn vec_insert(&mut self, v: Val, i: Val, n: Val) -> Val {
+    fn has_contract_data(&mut self, k: RawVal) -> RawVal {
         todo!()
-    }
-
-    fn vec_append(&mut self, v1: Val, v2: Val) -> Val {
-        todo!()
-    }
-
-    fn pay(&mut self, src: Val, dst: Val, asset: Val, amount: Val) -> Val {
-        todo!()
-    }
-
-    fn account_balance(&mut self, acc: Val) -> Val {
-        todo!()
-    }
-
-    fn account_trust_line(&mut self, acc: Val, asset: Val) -> Val {
-        todo!()
-    }
-
-    fn trust_line_balance(&mut self, tl: Val) -> Val {
-        todo!()
-    }
-
-    fn get_contract_data(&mut self, k: Val) -> Val {
-        todo!()
-    }
-
-    fn put_contract_data(&mut self, k: Val, v: Val) -> Val {
-        todo!()
-    }
-
-    fn has_contract_data(&mut self, k: Val) -> Val {
-        todo!()
-    }
-}
-
-#[cfg(test)]
-mod test {
-
-    use crate::xdr::{ScObject, ScObjectType, ScVal, ScVec};
-
-    use crate::{Env, EnvValType, Host, OrAbort, RawObj, WeakHost};
-
-    #[test]
-    fn i64_roundtrip() {
-        let host = Host::default();
-        let i = 12345_i64;
-        let v = host.env_val_from(i);
-        let j = <i64 as EnvValType>::try_from_env_val(v).unwrap();
-        assert_eq!(i, j);
-    }
-
-    #[test]
-    fn vec_host_objs() -> Result<(), ()> {
-        let mut host = Host::default();
-        let scvec0: ScVec = ScVec(vec![ScVal::ScvU32(1)].try_into()?);
-        let scvec1: ScVec = ScVec(vec![ScVal::ScvU32(1)].try_into()?);
-        let scobj0: ScObject = ScObject::ScoVec(scvec0);
-        let scobj1: ScObject = ScObject::ScoVec(scvec1);
-        let scval0 = ScVal::ScvObject(Some(Box::new(scobj0)));
-        let scval1 = ScVal::ScvObject(Some(Box::new(scobj1)));
-        let val0 = host.to_host_val(&scval0).or_abort();
-        let val1 = host.to_host_val(&scval1).or_abort();
-        assert!(val0.val.is::<RawObj>());
-        assert!(val1.val.is::<RawObj>());
-        let obj0: RawObj = val0.val.try_into().or_abort();
-        let obj1: RawObj = val1.val.try_into().or_abort();
-        assert_eq!(obj0.get_handle(), 0);
-        assert_eq!(obj1.get_handle(), 1);
-        assert!(obj0.is_type(ScObjectType::ScoVec));
-        assert!(obj1.is_type(ScObjectType::ScoVec));
-        // Check that we got 2 distinct Vec objects
-        assert_ne!(val0.val.get_payload(), val1.val.get_payload());
-        // But also that they compare deep-equal.
-        assert_eq!(val0, val1);
-        Ok(())
-    }
-
-    #[test]
-    fn vec_host_fn() {
-        let host = Host::default();
-        let mut weak: WeakHost = (&host).into();
-        let m = weak.map_new();
-        assert!(RawObj::val_is_obj_type(m, ScObjectType::ScoMap));
     }
 }
