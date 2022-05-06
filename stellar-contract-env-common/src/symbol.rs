@@ -122,7 +122,7 @@ impl SymbolStr {
 impl Debug for SymbolStr {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         let s: &str = self.as_ref();
-        f.debug_tuple("Symbol").field(&s).finish()
+        f.debug_tuple("SymbolStr").field(&s).finish()
     }
 }
 
