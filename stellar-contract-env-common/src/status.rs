@@ -1,4 +1,4 @@
-use super::val::{Tag, Val, ValType};
+use super::raw_val::{RawVal, RawValType, Tag};
 use core::{
     cmp::Ordering,
     hash::{Hash, Hasher},
@@ -7,43 +7,43 @@ use stellar_xdr::ScStatusType;
 
 #[repr(transparent)]
 #[derive(Copy, Clone)]
-pub struct Status(Val);
+pub struct Status(RawVal);
 
 pub const UNKNOWN_ERROR: Status = Status(unsafe {
-    Val::from_major_minor_and_tag(0, ScStatusType::SstUnknownError as u32, Tag::Status)
+    RawVal::from_major_minor_and_tag(0, ScStatusType::SstUnknownError as u32, Tag::Status)
 });
 pub const OK: Status =
-    Status(unsafe { Val::from_major_minor_and_tag(0, ScStatusType::SstOk as u32, Tag::Status) });
+    Status(unsafe { RawVal::from_major_minor_and_tag(0, ScStatusType::SstOk as u32, Tag::Status) });
 
-impl ValType for Status {
+impl RawValType for Status {
     #[inline(always)]
-    fn is_val_type(v: Val) -> bool {
+    fn is_val_type(v: RawVal) -> bool {
         v.has_tag(Tag::Status)
     }
 
     #[inline(always)]
-    unsafe fn unchecked_from_val(v: Val) -> Self {
+    unsafe fn unchecked_from_val(v: RawVal) -> Self {
         Status(v)
     }
 }
 
-impl From<Status> for Val {
+impl From<Status> for RawVal {
     #[inline(always)]
     fn from(s: Status) -> Self {
         s.0
     }
 }
 
-impl AsRef<Val> for Status {
+impl AsRef<RawVal> for Status {
     #[inline(always)]
-    fn as_ref(&self) -> &Val {
+    fn as_ref(&self) -> &RawVal {
         &self.0
     }
 }
 
-impl AsMut<Val> for Status {
+impl AsMut<RawVal> for Status {
     #[inline(always)]
-    fn as_mut(&mut self) -> &mut Val {
+    fn as_mut(&mut self) -> &mut RawVal {
         &mut self.0
     }
 }
@@ -101,6 +101,6 @@ impl Status {
 
     #[inline(always)]
     pub const fn from_type_and_code(ty: ScStatusType, code: u32) -> Status {
-        Status(unsafe { Val::from_major_minor_and_tag(code, ty as u32, Tag::Status) })
+        Status(unsafe { RawVal::from_major_minor_and_tag(code, ty as u32, Tag::Status) })
     }
 }
