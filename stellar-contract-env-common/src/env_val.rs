@@ -1,19 +1,19 @@
 use crate::{BitSet, Status, Symbol, Tag};
 
 use super::{
-    val::{Val, ValType},
+    raw_val::{RawVal, RawValType},
     xdr::ScObjectType,
     Env, HasEnv, RawObj,
 };
 use core::{cmp::Ordering, fmt::Debug};
 
-// EnvVal is a Val coupled to a specific instance of Env. In the
+// EnvVal is a RawVal coupled to a specific instance of Env. In the
 // guest we will use this with a zero-sized Guest unit struct,
-// but in the host we provide a Weak<Host> for Env.
+// but in the host we provide a Host and Weak<Host> for Env.
 #[derive(Clone)]
 pub struct EnvVal<E: Env> {
     pub env: E,
-    pub val: Val,
+    pub val: RawVal,
 }
 
 impl<E: Env> HasEnv<E> for EnvVal<E> {
@@ -25,37 +25,28 @@ impl<E: Env> HasEnv<E> for EnvVal<E> {
     }
 }
 
-impl<E: Env> EnvVal<E> {
-    fn from_val_in_self_env(&self, val: Val) -> Self {
-        Self {
-            val,
-            env: self.env.clone(),
-        }
-    }
-}
-
-impl<E: Env> From<EnvVal<E>> for Val {
+impl<E: Env> From<EnvVal<E>> for RawVal {
     #[inline(always)]
     fn from(ev: EnvVal<E>) -> Self {
         ev.val
     }
 }
 
-// EnvValType is similar to ValType but also covers types with conversions
+// EnvValType is similar to RawValType but also covers types with conversions
 // that need an Env -- those that might require allocating an Object. ValType
 // covers types that can always be directly converted to Val with no Env.
 pub trait EnvValType: Sized {
     fn into_env_val<E: Env>(self, env: E) -> EnvVal<E>;
-    fn into_val<E: Env>(self, env: E) -> Val {
+    fn into_raw_val<E: Env>(self, env: E) -> RawVal {
         Self::into_env_val(self, env).val
     }
     fn try_from_env_val<E: Env>(ev: EnvVal<E>) -> Option<Self>;
-    fn try_from_val<E: Env>(e: E, v: Val) -> Option<Self> {
+    fn try_from_raw_val<E: Env>(e: E, v: RawVal) -> Option<Self> {
         Self::try_from_env_val(EnvVal { env: e, val: v })
     }
 }
 
-impl<V: ValType> EnvValType for V {
+impl<V: RawValType> EnvValType for V {
     fn into_env_val<E: Env>(self, env: E) -> EnvVal<E> {
         EnvVal {
             env,
@@ -63,13 +54,13 @@ impl<V: ValType> EnvValType for V {
         }
     }
 
-    fn into_val<E: Env>(self, _env: E) -> Val {
+    fn into_raw_val<E: Env>(self, _env: E) -> RawVal {
         self.into()
     }
 
     fn try_from_env_val<E: Env>(ev: EnvVal<E>) -> Option<Self> {
-        if <V as ValType>::is_val_type(ev.val) {
-            Some(unsafe { <V as ValType>::unchecked_from_val(ev.val) })
+        if <V as RawValType>::is_val_type(ev.val) {
+            Some(unsafe { <V as RawValType>::unchecked_from_val(ev.val) })
         } else {
             None
         }
@@ -79,7 +70,7 @@ impl<V: ValType> EnvValType for V {
 impl EnvValType for i64 {
     fn into_env_val<E: Env>(self, mut env: E) -> EnvVal<E> {
         let val = if self >= 0 {
-            unsafe { Val::unchecked_from_positive_i64(self) }
+            unsafe { RawVal::unchecked_from_positive_i64(self) }
         } else {
             env.obj_from_i64(self)
         };
@@ -100,7 +91,7 @@ impl EnvValType for i64 {
 impl EnvValType for u64 {
     fn into_env_val<E: Env>(self, mut env: E) -> EnvVal<E> {
         let val = if self <= (i64::MAX as u64) {
-            unsafe { Val::unchecked_from_positive_i64(self as i64) }
+            unsafe { RawVal::unchecked_from_positive_i64(self as i64) }
         } else {
             env.obj_from_u64(self)
         };
@@ -165,13 +156,13 @@ impl<E: Env> Ord for EnvVal<E> {
             // Tags are equal so we only have to switch on one.
             match self_tag {
                 Tag::U32 => {
-                    let a = unsafe { <u32 as ValType>::unchecked_from_val(self.val) };
-                    let b = unsafe { <u32 as ValType>::unchecked_from_val(other.val) };
+                    let a = unsafe { <u32 as RawValType>::unchecked_from_val(self.val) };
+                    let b = unsafe { <u32 as RawValType>::unchecked_from_val(other.val) };
                     a.cmp(&b)
                 }
                 Tag::I32 => {
-                    let a = unsafe { <i32 as ValType>::unchecked_from_val(self.val) };
-                    let b = unsafe { <i32 as ValType>::unchecked_from_val(other.val) };
+                    let a = unsafe { <i32 as RawValType>::unchecked_from_val(self.val) };
+                    let b = unsafe { <i32 as RawValType>::unchecked_from_val(other.val) };
                     a.cmp(&b)
                 }
                 Tag::Static => self.val.get_body().cmp(&other.val.get_body()),
@@ -186,50 +177,22 @@ impl<E: Env> Ord for EnvVal<E> {
                     }
                 }
                 Tag::Symbol => {
-                    let a = unsafe { <Symbol as ValType>::unchecked_from_val(self.val) };
-                    let b = unsafe { <Symbol as ValType>::unchecked_from_val(other.val) };
+                    let a = unsafe { <Symbol as RawValType>::unchecked_from_val(self.val) };
+                    let b = unsafe { <Symbol as RawValType>::unchecked_from_val(other.val) };
                     a.cmp(&b)
                 }
                 Tag::BitSet => {
-                    let a = unsafe { <BitSet as ValType>::unchecked_from_val(self.val) };
-                    let b = unsafe { <BitSet as ValType>::unchecked_from_val(other.val) };
+                    let a = unsafe { <BitSet as RawValType>::unchecked_from_val(self.val) };
+                    let b = unsafe { <BitSet as RawValType>::unchecked_from_val(other.val) };
                     a.cmp(&b)
                 }
                 Tag::Status => {
-                    let a = unsafe { <Status as ValType>::unchecked_from_val(self.val) };
-                    let b = unsafe { <Status as ValType>::unchecked_from_val(other.val) };
+                    let a = unsafe { <Status as RawValType>::unchecked_from_val(self.val) };
+                    let b = unsafe { <Status as RawValType>::unchecked_from_val(other.val) };
                     a.cmp(&b)
                 }
                 Tag::Reserved => self.val.get_payload().cmp(&other.val.get_payload()),
             }
         }
-    }
-}
-
-impl<E: Env> PartialEq<Val> for EnvVal<E> {
-    fn eq(&self, other: &Val) -> bool {
-        let other_ev = self.from_val_in_self_env(*other);
-        *self == other_ev
-    }
-}
-
-impl<E: Env> PartialEq<EnvVal<E>> for Val {
-    fn eq(&self, other: &EnvVal<E>) -> bool {
-        let self_ev = other.from_val_in_self_env(*self);
-        self_ev == *other
-    }
-}
-
-impl<E: Env> PartialOrd<Val> for EnvVal<E> {
-    fn partial_cmp(&self, other: &Val) -> Option<core::cmp::Ordering> {
-        let other_ev = self.from_val_in_self_env(*other);
-        self.partial_cmp(&other_ev)
-    }
-}
-
-impl<E: Env> PartialOrd<EnvVal<E>> for Val {
-    fn partial_cmp(&self, other: &EnvVal<E>) -> Option<Ordering> {
-        let self_ev = other.from_val_in_self_env(*self);
-        self_ev.partial_cmp(other)
     }
 }

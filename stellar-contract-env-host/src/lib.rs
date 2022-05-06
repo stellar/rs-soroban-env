@@ -1,6 +1,9 @@
 mod host;
-mod host_object;
+pub(crate) mod host_object;
+pub(crate) mod weak_host;
 
-pub use host::{Host, WeakHost};
-pub use host_object::{HostMap, HostObject, HostObjectType, HostVal, HostVec};
+#[cfg(test)]
+mod test;
+
+pub use host::Host;
 pub use stellar_contract_env_common::*;

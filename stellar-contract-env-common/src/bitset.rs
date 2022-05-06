@@ -1,39 +1,39 @@
-use super::val::{Tag, ValType};
-use super::Val;
+use super::raw_val::{RawValType, Tag};
+use super::RawVal;
 use core::cmp::Ordering;
 use core::hash::{Hash, Hasher};
 
 #[repr(transparent)]
 #[derive(Copy, Clone)]
-pub struct BitSet(Val);
+pub struct BitSet(RawVal);
 
-impl ValType for BitSet {
-    fn is_val_type(v: Val) -> bool {
+impl RawValType for BitSet {
+    fn is_val_type(v: RawVal) -> bool {
         v.has_tag(Tag::BitSet)
     }
 
-    unsafe fn unchecked_from_val(v: Val) -> Self {
+    unsafe fn unchecked_from_val(v: RawVal) -> Self {
         BitSet(v)
     }
 }
 
-impl From<BitSet> for Val {
+impl From<BitSet> for RawVal {
     #[inline(always)]
     fn from(b: BitSet) -> Self {
         b.0
     }
 }
 
-impl AsRef<Val> for BitSet {
+impl AsRef<RawVal> for BitSet {
     #[inline(always)]
-    fn as_ref(&self) -> &Val {
+    fn as_ref(&self) -> &RawVal {
         &self.0
     }
 }
 
-impl AsMut<Val> for BitSet {
+impl AsMut<RawVal> for BitSet {
     #[inline(always)]
-    fn as_mut(&mut self) -> &mut Val {
+    fn as_mut(&mut self) -> &mut RawVal {
         &mut self.0
     }
 }
@@ -72,7 +72,7 @@ impl BitSet {
     #[inline(always)]
     pub const fn try_from_u64(u: u64) -> Result<BitSet, ()> {
         if u & 0x0fff_ffff_ffff_ffff == u {
-            Ok(BitSet(unsafe { Val::from_body_and_tag(u, Tag::BitSet) }))
+            Ok(BitSet(unsafe { RawVal::from_body_and_tag(u, Tag::BitSet) }))
         } else {
             Err(())
         }

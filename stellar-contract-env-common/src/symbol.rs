@@ -7,7 +7,7 @@ use core::{
 
 extern crate static_assertions as sa;
 
-use super::val::{Tag, Val, ValType, BODY_BITS};
+use super::raw_val::{RawVal, RawValType, Tag, BODY_BITS};
 
 const MAX_CHARS: usize = 10;
 const CODE_BITS: usize = 6;
@@ -17,22 +17,22 @@ sa::const_assert!(CODE_BITS * MAX_CHARS == BODY_BITS);
 
 #[repr(transparent)]
 #[derive(Copy, Clone)]
-pub struct Symbol(pub(crate) Val);
+pub struct Symbol(pub(crate) RawVal);
 
-impl From<Symbol> for Val {
+impl From<Symbol> for RawVal {
     #[inline(always)]
     fn from(s: Symbol) -> Self {
         s.0
     }
 }
 
-impl ValType for Symbol {
+impl RawValType for Symbol {
     #[inline(always)]
-    unsafe fn unchecked_from_val(v: Val) -> Self {
+    unsafe fn unchecked_from_val(v: RawVal) -> Self {
         Symbol(v)
     }
 
-    fn is_val_type(v: Val) -> bool {
+    fn is_val_type(v: RawVal) -> bool {
         v.has_tag(Tag::Symbol)
     }
 }
@@ -92,7 +92,7 @@ impl Symbol {
             };
             accum |= v;
         }
-        let v = unsafe { Val::from_body_and_tag(accum, Tag::Symbol) };
+        let v = unsafe { RawVal::from_body_and_tag(accum, Tag::Symbol) };
         Ok(Symbol(v))
     }
 
@@ -153,7 +153,7 @@ impl FromIterator<char> for Symbol {
             };
             accum |= v;
         }
-        let v = unsafe { Val::from_body_and_tag(accum, Tag::Symbol) };
+        let v = unsafe { RawVal::from_body_and_tag(accum, Tag::Symbol) };
         Symbol(v)
     }
 }

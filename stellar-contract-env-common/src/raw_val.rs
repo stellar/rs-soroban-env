@@ -1,4 +1,4 @@
-use super::{BitSet, RawObj, Status, Symbol};
+use super::{BitSet, Env, EnvVal, RawObj, Status, Symbol};
 use core::fmt::Debug;
 
 extern crate static_assertions as sa;
@@ -49,18 +49,18 @@ pub enum Static {
 
 #[repr(transparent)]
 #[derive(Copy, Clone)]
-pub struct Val(u64);
+pub struct RawVal(u64);
 
-pub trait ValType: Into<Val> {
-    fn is_val_type(v: Val) -> bool;
-    unsafe fn unchecked_from_val(v: Val) -> Self;
+pub trait RawValType: Into<RawVal> {
+    fn is_val_type(v: RawVal) -> bool;
+    unsafe fn unchecked_from_val(v: RawVal) -> Self;
 
     // Try_convert has a default implementation that is
     // test-and-unchecked-convert, but also allows us to customize its
     // implementation for types in which that would produce an undesirable
     // replication of tests.
     #[inline(always)]
-    fn try_convert(v: Val) -> Option<Self> {
+    fn try_convert(v: RawVal) -> Option<Self> {
         if Self::is_val_type(v) {
             Some(unsafe { Self::unchecked_from_val(v) })
         } else {
@@ -72,11 +72,11 @@ pub trait ValType: Into<Val> {
 // Orphan rules mean we have to macro these, can't blanket-impl on V:Valtype.
 macro_rules! declare_tryfrom {
     ($T:ty) => {
-        impl TryFrom<Val> for $T {
+        impl TryFrom<RawVal> for $T {
             type Error = ();
             #[inline(always)]
-            fn try_from(v: Val) -> Result<Self, Self::Error> {
-                if let Some(c) = <Self as ValType>::try_convert(v) {
+            fn try_from(v: RawVal) -> Result<Self, Self::Error> {
+                if let Some(c) = <Self as RawValType>::try_convert(v) {
                     Ok(c)
                 } else {
                     Err(())
@@ -95,29 +95,29 @@ declare_tryfrom!(RawObj);
 declare_tryfrom!(BitSet);
 declare_tryfrom!(Status);
 
-impl ValType for () {
+impl RawValType for () {
     #[inline(always)]
-    fn is_val_type(v: Val) -> bool {
+    fn is_val_type(v: RawVal) -> bool {
         v.has_tag(Tag::Static) && v.get_body() == Static::Void as u64
     }
     #[inline(always)]
-    unsafe fn unchecked_from_val(_v: Val) -> Self {
+    unsafe fn unchecked_from_val(_v: RawVal) -> Self {
         ()
     }
 }
 
-impl ValType for bool {
+impl RawValType for bool {
     #[inline(always)]
-    fn is_val_type(v: Val) -> bool {
+    fn is_val_type(v: RawVal) -> bool {
         v.has_tag(Tag::Static)
             && (v.get_body() == Static::True as u64 || v.get_body() == Static::False as u64)
     }
     #[inline(always)]
-    unsafe fn unchecked_from_val(v: Val) -> Self {
+    unsafe fn unchecked_from_val(v: RawVal) -> Self {
         v.get_body() == Static::True as u64
     }
     #[inline(always)]
-    fn try_convert(v: Val) -> Option<Self> {
+    fn try_convert(v: RawVal) -> Option<Self> {
         if v.has_tag(Tag::Static) {
             if v.get_body() == Static::True as u64 {
                 Some(true)
@@ -132,57 +132,64 @@ impl ValType for bool {
     }
 }
 
-impl ValType for u32 {
+impl RawValType for u32 {
     #[inline(always)]
-    fn is_val_type(v: Val) -> bool {
+    fn is_val_type(v: RawVal) -> bool {
         v.has_tag(Tag::U32)
     }
     #[inline(always)]
-    unsafe fn unchecked_from_val(v: Val) -> Self {
+    unsafe fn unchecked_from_val(v: RawVal) -> Self {
         v.get_body() as u32
     }
 }
 
-impl ValType for i32 {
+impl RawValType for i32 {
     #[inline(always)]
-    fn is_val_type(v: Val) -> bool {
+    fn is_val_type(v: RawVal) -> bool {
         v.has_tag(Tag::I32)
     }
     #[inline(always)]
-    unsafe fn unchecked_from_val(v: Val) -> Self {
+    unsafe fn unchecked_from_val(v: RawVal) -> Self {
         v.get_body() as i32
     }
 }
 
-impl From<bool> for Val {
+impl From<bool> for RawVal {
     #[inline(always)]
     fn from(b: bool) -> Self {
-        Val::from_bool(b)
+        RawVal::from_bool(b)
     }
 }
 
-impl From<()> for Val {
+impl From<()> for RawVal {
     #[inline(always)]
     fn from(_: ()) -> Self {
-        Val::from_void()
+        RawVal::from_void()
     }
 }
 
-impl From<u32> for Val {
+impl From<u32> for RawVal {
     #[inline(always)]
     fn from(u: u32) -> Self {
-        Val::from_u32(u)
+        RawVal::from_u32(u)
     }
 }
 
-impl From<i32> for Val {
+impl From<i32> for RawVal {
     #[inline(always)]
     fn from(i: i32) -> Self {
-        Val::from_i32(i)
+        RawVal::from_i32(i)
     }
 }
 
-impl Val {
+impl RawVal {
+    pub fn in_env<E: Env>(&self, env: &E) -> EnvVal<E> {
+        EnvVal {
+            env: env.clone(),
+            val: *self,
+        }
+    }
+
     #[inline(always)]
     pub const fn get_payload(&self) -> u64 {
         self.0
@@ -229,21 +236,25 @@ impl Val {
     }
 
     #[inline(always)]
-    pub fn is<T: ValType>(self) -> bool {
+    pub fn is<T: RawValType>(self) -> bool {
         T::is_val_type(self)
     }
 
     #[inline(always)]
     // This does no checking, so it can be used in const fns
     // below; it should not be made public.
-    pub(crate) const unsafe fn from_body_and_tag(body: u64, tag: Tag) -> Val {
+    pub(crate) const unsafe fn from_body_and_tag(body: u64, tag: Tag) -> RawVal {
         let body = (body << TAG_BITS) | (tag as u64);
-        Val((body << 1) | 1)
+        RawVal((body << 1) | 1)
     }
 
     #[inline(always)]
     // This also does not checking, is a crate-local helper.
-    pub(crate) const unsafe fn from_major_minor_and_tag(major: u32, minor: u32, tag: Tag) -> Val {
+    pub(crate) const unsafe fn from_major_minor_and_tag(
+        major: u32,
+        minor: u32,
+        tag: Tag,
+    ) -> RawVal {
         let major = major as u64;
         let minor = minor as u64;
         Self::from_body_and_tag((major << MINOR_BITS) | minor, tag)
@@ -265,28 +276,28 @@ impl Val {
     }
 
     #[inline(always)]
-    pub const fn from_void() -> Val {
-        unsafe { Val::from_body_and_tag(Static::Void as u64, Tag::Static) }
+    pub const fn from_void() -> RawVal {
+        unsafe { RawVal::from_body_and_tag(Static::Void as u64, Tag::Static) }
     }
 
     #[inline(always)]
-    pub const fn from_bool(b: bool) -> Val {
+    pub const fn from_bool(b: bool) -> RawVal {
         let body = if b { Static::True } else { Static::False };
-        unsafe { Val::from_body_and_tag(body as u64, Tag::Static) }
+        unsafe { RawVal::from_body_and_tag(body as u64, Tag::Static) }
     }
 
     #[inline(always)]
-    pub const fn from_u32(u: u32) -> Val {
-        unsafe { Val::from_body_and_tag(u as u64, Tag::U32) }
+    pub const fn from_u32(u: u32) -> RawVal {
+        unsafe { RawVal::from_body_and_tag(u as u64, Tag::U32) }
     }
 
     #[inline(always)]
-    pub const fn from_i32(i: i32) -> Val {
-        unsafe { Val::from_body_and_tag((i as u32) as u64, Tag::I32) }
+    pub const fn from_i32(i: i32) -> RawVal {
+        unsafe { RawVal::from_body_and_tag((i as u32) as u64, Tag::I32) }
     }
 }
 
-impl Debug for Val {
+impl Debug for RawVal {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         if self.is_positive_i64() {
             f.debug_struct("Val")
@@ -305,7 +316,7 @@ impl Debug for Val {
         } else if self.has_tag(Tag::Symbol) {
             f.debug_struct("Val")
                 .field("symbol", &unsafe {
-                    <Symbol as ValType>::unchecked_from_val(*self)
+                    <Symbol as RawValType>::unchecked_from_val(*self)
                 })
                 .finish()
         } else if self.is::<()>() {
@@ -313,19 +324,19 @@ impl Debug for Val {
         } else if self.is::<bool>() {
             f.debug_struct("Val")
                 .field("bool", &unsafe {
-                    <bool as ValType>::unchecked_from_val(*self)
+                    <bool as RawValType>::unchecked_from_val(*self)
                 })
                 .finish()
         } else if self.has_tag(Tag::U32) {
             f.debug_struct("Val")
                 .field("u32", &unsafe {
-                    <u32 as ValType>::unchecked_from_val(*self)
+                    <u32 as RawValType>::unchecked_from_val(*self)
                 })
                 .finish()
         } else if self.has_tag(Tag::I32) {
             f.debug_struct("Val")
                 .field("i32", &unsafe {
-                    <i32 as ValType>::unchecked_from_val(*self)
+                    <i32 as RawValType>::unchecked_from_val(*self)
                 })
                 .finish()
         } else {

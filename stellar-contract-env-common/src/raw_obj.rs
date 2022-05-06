@@ -1,38 +1,40 @@
-use super::{xdr::ScObjectType, Tag, Val, ValType};
+use super::{xdr::ScObjectType, RawVal, RawValType, Tag};
 
+// RawObj is just an RawVal that is statically guaranteed (by construction) to refer
+// to Tag::Object, so it's safe to call methods on it that are meaningful to objects.
 #[repr(transparent)]
 #[derive(Copy, Clone)]
-pub struct RawObj(Val);
+pub struct RawObj(RawVal);
 
-impl ValType for RawObj {
+impl RawValType for RawObj {
     #[inline(always)]
-    fn is_val_type(v: Val) -> bool {
+    fn is_val_type(v: RawVal) -> bool {
         v.has_tag(Tag::Object)
     }
 
     #[inline(always)]
-    unsafe fn unchecked_from_val(v: Val) -> Self {
+    unsafe fn unchecked_from_val(v: RawVal) -> Self {
         RawObj(v)
     }
 }
 
-impl From<RawObj> for Val {
+impl From<RawObj> for RawVal {
     #[inline(always)]
     fn from(s: RawObj) -> Self {
         s.0
     }
 }
 
-impl AsRef<Val> for RawObj {
+impl AsRef<RawVal> for RawObj {
     #[inline(always)]
-    fn as_ref(&self) -> &Val {
+    fn as_ref(&self) -> &RawVal {
         &self.0
     }
 }
 
-impl AsMut<Val> for RawObj {
+impl AsMut<RawVal> for RawObj {
     #[inline(always)]
-    fn as_mut(&mut self) -> &mut Val {
+    fn as_mut(&mut self) -> &mut RawVal {
         &mut self.0
     }
 }
@@ -42,7 +44,7 @@ impl RawObj {
     // an ScStatusType. Instead we provide an "is_type" to check any specific
     // bit-pattern.
     #[inline(always)]
-    pub const fn is_type(&self, ty: ScObjectType) -> bool {
+    pub const fn is_obj_type(&self, ty: ScObjectType) -> bool {
         self.0.has_minor(ty as u32)
     }
 
@@ -52,12 +54,12 @@ impl RawObj {
     }
 
     #[inline(always)]
-    pub fn val_is_obj_type(v: Val, ty: ScObjectType) -> bool {
+    pub fn val_is_obj_type(v: RawVal, ty: ScObjectType) -> bool {
         v.has_tag(Tag::Object) && v.has_minor(ty as u32)
     }
 
     #[inline(always)]
     pub const fn from_type_and_code(ty: ScObjectType, code: u32) -> RawObj {
-        RawObj(unsafe { Val::from_major_minor_and_tag(code, ty as u32, Tag::Object) })
+        RawObj(unsafe { RawVal::from_major_minor_and_tag(code, ty as u32, Tag::Object) })
     }
 }

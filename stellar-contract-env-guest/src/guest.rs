@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 #![allow(unused_variables)]
-use super::{Env, Val};
+use super::{Env, RawVal};
 
 // In guest code the environment is global/implicit, so is represented as a unit struct.
 #[derive(Copy, Clone, Default)]
@@ -16,139 +16,139 @@ impl Env for Guest {
         ()
     }
 
-    fn obj_cmp(&self, a: Val, b: Val) -> i64 {
+    fn obj_cmp(&self, a: RawVal, b: RawVal) -> i64 {
         todo!()
     }
 
-    fn log_value(&mut self, v: Val) -> Val {
+    fn log_value(&mut self, v: RawVal) -> RawVal {
         unsafe { context::log_value(v) }
     }
 
-    fn get_last_operation_result(&mut self) -> Val {
+    fn get_last_operation_result(&mut self) -> RawVal {
         unsafe { context::get_last_operation_result() }
     }
 
-    fn obj_from_u64(&mut self, u: u64) -> Val {
+    fn obj_from_u64(&mut self, u: u64) -> RawVal {
         unsafe { u64::from_u64(u) }
     }
 
-    fn obj_to_u64(&mut self, u: Val) -> u64 {
+    fn obj_to_u64(&mut self, u: RawVal) -> u64 {
         unsafe { u64::to_u64(u) }
     }
 
-    fn obj_from_i64(&mut self, i: i64) -> Val {
+    fn obj_from_i64(&mut self, i: i64) -> RawVal {
         unsafe { i64::from_i64(i) }
     }
 
-    fn obj_to_i64(&mut self, i: Val) -> i64 {
+    fn obj_to_i64(&mut self, i: RawVal) -> i64 {
         unsafe { i64::to_i64(i) }
     }
 
-    fn map_new(&mut self) -> Val {
+    fn map_new(&mut self) -> RawVal {
         unsafe { map::new() }
     }
 
-    fn map_put(&mut self, m: Val, k: Val, v: Val) -> Val {
+    fn map_put(&mut self, m: RawVal, k: RawVal, v: RawVal) -> RawVal {
         unsafe { map::put(m, k, v) }
     }
 
-    fn map_get(&mut self, m: Val, k: Val) -> Val {
+    fn map_get(&mut self, m: RawVal, k: RawVal) -> RawVal {
         unsafe { map::get(m, k) }
     }
 
-    fn map_del(&mut self, m: Val, k: Val) -> Val {
+    fn map_del(&mut self, m: RawVal, k: RawVal) -> RawVal {
         unsafe { map::del(m, k) }
     }
 
-    fn map_len(&mut self, m: Val) -> Val {
+    fn map_len(&mut self, m: RawVal) -> RawVal {
         unsafe { map::len(m) }
     }
 
-    fn map_keys(&mut self, m: Val) -> Val {
+    fn map_keys(&mut self, m: RawVal) -> RawVal {
         unsafe { map::keys(m) }
     }
 
-    fn map_has(&mut self, m: Val, k: Val) -> Val {
+    fn map_has(&mut self, m: RawVal, k: RawVal) -> RawVal {
         unsafe { map::has(m, k) }
     }
 
-    fn vec_new(&mut self) -> Val {
+    fn vec_new(&mut self) -> RawVal {
         unsafe { vec::new() }
     }
 
-    fn vec_put(&mut self, v: Val, i: Val, x: Val) -> Val {
+    fn vec_put(&mut self, v: RawVal, i: RawVal, x: RawVal) -> RawVal {
         unsafe { vec::put(v, i, x) }
     }
 
-    fn vec_get(&mut self, v: Val, i: Val) -> Val {
+    fn vec_get(&mut self, v: RawVal, i: RawVal) -> RawVal {
         unsafe { vec::get(v, i) }
     }
 
-    fn vec_del(&mut self, v: Val, i: Val) -> Val {
+    fn vec_del(&mut self, v: RawVal, i: RawVal) -> RawVal {
         unsafe { vec::del(v, i) }
     }
 
-    fn vec_len(&mut self, v: Val) -> Val {
+    fn vec_len(&mut self, v: RawVal) -> RawVal {
         unsafe { vec::len(v) }
     }
 
-    fn vec_push(&mut self, v: Val, x: Val) -> Val {
+    fn vec_push(&mut self, v: RawVal, x: RawVal) -> RawVal {
         unsafe { vec::push(v, x) }
     }
 
-    fn vec_pop(&mut self, v: Val) -> Val {
+    fn vec_pop(&mut self, v: RawVal) -> RawVal {
         unsafe { vec::pop(v) }
     }
 
-    fn vec_take(&mut self, v: Val, n: Val) -> Val {
+    fn vec_take(&mut self, v: RawVal, n: RawVal) -> RawVal {
         unsafe { vec::take(v, n) }
     }
 
-    fn vec_drop(&mut self, v: Val, n: Val) -> Val {
+    fn vec_drop(&mut self, v: RawVal, n: RawVal) -> RawVal {
         unsafe { vec::drop(v, n) }
     }
 
-    fn vec_front(&mut self, v: Val) -> Val {
+    fn vec_front(&mut self, v: RawVal) -> RawVal {
         unsafe { vec::front(v) }
     }
 
-    fn vec_back(&mut self, v: Val) -> Val {
+    fn vec_back(&mut self, v: RawVal) -> RawVal {
         unsafe { vec::back(v) }
     }
 
-    fn vec_insert(&mut self, v: Val, i: Val, n: Val) -> Val {
+    fn vec_insert(&mut self, v: RawVal, i: RawVal, n: RawVal) -> RawVal {
         unsafe { vec::insert(v, i, n) }
     }
 
-    fn vec_append(&mut self, v1: Val, v2: Val) -> Val {
+    fn vec_append(&mut self, v1: RawVal, v2: RawVal) -> RawVal {
         unsafe { vec::append(v1, v2) }
     }
 
-    fn pay(&mut self, src: Val, dst: Val, asset: Val, amount: Val) -> Val {
+    fn pay(&mut self, src: RawVal, dst: RawVal, asset: RawVal, amount: RawVal) -> RawVal {
         unsafe { ledger::pay(src, dst, asset, amount) }
     }
 
-    fn account_balance(&mut self, acc: Val) -> Val {
+    fn account_balance(&mut self, acc: RawVal) -> RawVal {
         unsafe { ledger::account_balance(acc) }
     }
 
-    fn account_trust_line(&mut self, acc: Val, asset: Val) -> Val {
+    fn account_trust_line(&mut self, acc: RawVal, asset: RawVal) -> RawVal {
         unsafe { ledger::account_trust_line(acc, asset) }
     }
 
-    fn trust_line_balance(&mut self, tl: Val) -> Val {
+    fn trust_line_balance(&mut self, tl: RawVal) -> RawVal {
         unsafe { ledger::trust_line_balance(tl) }
     }
 
-    fn get_contract_data(&mut self, k: Val) -> Val {
+    fn get_contract_data(&mut self, k: RawVal) -> RawVal {
         unsafe { ledger::get_contract_data(k) }
     }
 
-    fn put_contract_data(&mut self, k: Val, v: Val) -> Val {
+    fn put_contract_data(&mut self, k: RawVal, v: RawVal) -> RawVal {
         unsafe { ledger::put_contract_data(k, v) }
     }
 
-    fn has_contract_data(&mut self, k: Val) -> Val {
+    fn has_contract_data(&mut self, k: RawVal) -> RawVal {
         unsafe { ledger::has_contract_data(k) }
     }
 }
@@ -177,7 +177,7 @@ impl Env for Guest {
 
 // General context-access functions live in the wasm 'x' module.
 mod context {
-    use crate::Val;
+    use crate::RawVal;
     #[link(wasm_import_module = "x")]
     extern "C" {
 
@@ -193,136 +193,136 @@ mod context {
         // these possibilities seem unlikely at present, but either way they're
         // fairly straightforward.
         #[cfg_attr(target_family = "wasm", link_name = "$_")]
-        pub fn log_value(v: Val) -> Val;
+        pub(crate) fn log_value(v: RawVal) -> RawVal;
 
         // Fetches an OpResult object for inspection, in the rare case the user
         // wants more detail than is conveyed in a simple Status.
         #[cfg_attr(target_family = "wasm", link_name = "$0")]
-        pub fn get_last_operation_result() -> Val;
+        pub(crate) fn get_last_operation_result() -> RawVal;
     }
 }
 
 // U64 functions live in the wasm 'u' module
 mod u64 {
-    use crate::Val;
+    use crate::RawVal;
     #[link(wasm_import_module = "u")]
     extern "C" {
         #[cfg_attr(target_family = "wasm", link_name = "$_")]
-        pub fn from_u64(x: u64) -> Val;
+        pub(crate) fn from_u64(x: u64) -> RawVal;
         #[cfg_attr(target_family = "wasm", link_name = "$0")]
-        pub fn to_u64(x: Val) -> u64;
+        pub(crate) fn to_u64(x: RawVal) -> u64;
     }
 }
 
 // I64 functions live in the wasm 'i' module
 mod i64 {
-    use crate::Val;
+    use crate::RawVal;
     #[link(wasm_import_module = "i")]
     extern "C" {
         #[cfg_attr(target_family = "wasm", link_name = "$_")]
-        pub fn from_i64(x: i64) -> Val;
+        pub(crate) fn from_i64(x: i64) -> RawVal;
         #[cfg_attr(target_family = "wasm", link_name = "$0")]
-        pub fn to_i64(x: Val) -> i64;
+        pub(crate) fn to_i64(x: RawVal) -> i64;
     }
 }
 
 // Map functions live in the wasm 'm' module
 mod map {
-    use crate::Val;
+    use crate::RawVal;
     #[link(wasm_import_module = "m")]
     extern "C" {
         #[cfg_attr(target_family = "wasm", link_name = "$_")]
-        pub fn new() -> Val;
+        pub(crate) fn new() -> RawVal;
         #[cfg_attr(target_family = "wasm", link_name = "$0")]
-        pub fn put(m: Val, k: Val, v: Val) -> Val;
+        pub(crate) fn put(m: RawVal, k: RawVal, v: RawVal) -> RawVal;
         #[cfg_attr(target_family = "wasm", link_name = "$1")]
-        pub fn get(m: Val, k: Val) -> Val;
+        pub(crate) fn get(m: RawVal, k: RawVal) -> RawVal;
         #[cfg_attr(target_family = "wasm", link_name = "$2")]
-        pub fn del(m: Val, k: Val) -> Val;
+        pub(crate) fn del(m: RawVal, k: RawVal) -> RawVal;
         #[cfg_attr(target_family = "wasm", link_name = "$3")]
-        pub fn len(m: Val) -> Val;
+        pub(crate) fn len(m: RawVal) -> RawVal;
         #[cfg_attr(target_family = "wasm", link_name = "$4")]
-        pub fn keys(m: Val) -> Val;
+        pub(crate) fn keys(m: RawVal) -> RawVal;
         #[cfg_attr(target_family = "wasm", link_name = "$5")]
-        pub fn has(m: Val, k: Val) -> Val;
+        pub(crate) fn has(m: RawVal, k: RawVal) -> RawVal;
     }
 }
 
 // Vec functions live in the wasm 'v' module
 mod vec {
-    use crate::Val;
+    use crate::RawVal;
     #[link(wasm_import_module = "v")]
     extern "C" {
         #[cfg_attr(target_family = "wasm", link_name = "$_")]
-        pub fn new() -> Val;
+        pub(crate) fn new() -> RawVal;
         #[cfg_attr(target_family = "wasm", link_name = "$0")]
-        pub fn put(v: Val, i: Val, x: Val) -> Val;
+        pub(crate) fn put(v: RawVal, i: RawVal, x: RawVal) -> RawVal;
         #[cfg_attr(target_family = "wasm", link_name = "$1")]
-        pub fn get(v: Val, i: Val) -> Val;
+        pub(crate) fn get(v: RawVal, i: RawVal) -> RawVal;
         #[cfg_attr(target_family = "wasm", link_name = "$2")]
-        pub fn del(v: Val, i: Val) -> Val;
+        pub(crate) fn del(v: RawVal, i: RawVal) -> RawVal;
         #[cfg_attr(target_family = "wasm", link_name = "$3")]
-        pub fn len(v: Val) -> Val;
+        pub(crate) fn len(v: RawVal) -> RawVal;
 
         #[cfg_attr(target_family = "wasm", link_name = "$4")]
-        pub fn push(v: Val, x: Val) -> Val;
+        pub(crate) fn push(v: RawVal, x: RawVal) -> RawVal;
         #[cfg_attr(target_family = "wasm", link_name = "$5")]
-        pub fn pop(v: Val) -> Val;
+        pub(crate) fn pop(v: RawVal) -> RawVal;
         #[cfg_attr(target_family = "wasm", link_name = "$6")]
-        pub fn take(v: Val, n: Val) -> Val;
+        pub(crate) fn take(v: RawVal, n: RawVal) -> RawVal;
         #[cfg_attr(target_family = "wasm", link_name = "$7")]
-        pub fn drop(v: Val, n: Val) -> Val;
+        pub(crate) fn drop(v: RawVal, n: RawVal) -> RawVal;
         #[cfg_attr(target_family = "wasm", link_name = "$8")]
-        pub fn front(v: Val) -> Val;
+        pub(crate) fn front(v: RawVal) -> RawVal;
         #[cfg_attr(target_family = "wasm", link_name = "$9")]
-        pub fn back(v: Val) -> Val;
+        pub(crate) fn back(v: RawVal) -> RawVal;
         #[cfg_attr(target_family = "wasm", link_name = "$A")]
-        pub fn insert(v: Val, i: Val, x: Val) -> Val;
+        pub(crate) fn insert(v: RawVal, i: RawVal, x: RawVal) -> RawVal;
         #[cfg_attr(target_family = "wasm", link_name = "$B")]
-        pub fn append(v1: Val, v2: Val) -> Val;
+        pub(crate) fn append(v1: RawVal, v2: RawVal) -> RawVal;
     }
 }
 
 // Ledger functions live in the wasm 'l' module
 mod ledger {
-    use crate::Val;
+    use crate::RawVal;
     #[link(wasm_import_module = "l")]
     extern "C" {
         #[cfg_attr(target_family = "wasm", link_name = "$_")]
-        pub fn get_current_ledger_num() -> Val;
+        pub(crate) fn get_current_ledger_num() -> RawVal;
 
         // NB: this returns a raw/unboxed u64, not a Val union.
         #[cfg_attr(target_family = "wasm", link_name = "$0")]
-        pub fn get_current_ledger_close_time() -> u64;
+        pub(crate) fn get_current_ledger_close_time() -> u64;
 
         // NB: returns a Status; details can be fetched with
         // get_last_operation_result.
         #[cfg_attr(target_family = "wasm", link_name = "$1")]
-        pub fn pay(src: Val, dst: Val, asset: Val, amount: Val) -> Val;
+        pub(crate) fn pay(src: RawVal, dst: RawVal, asset: RawVal, amount: RawVal) -> RawVal;
 
         #[cfg_attr(target_family = "wasm", link_name = "$2")]
-        pub fn put_contract_data(key: Val, val: Val) -> Val;
+        pub(crate) fn put_contract_data(key: RawVal, val: RawVal) -> RawVal;
         #[cfg_attr(target_family = "wasm", link_name = "$3")]
-        pub fn has_contract_data(key: Val) -> Val;
+        pub(crate) fn has_contract_data(key: RawVal) -> RawVal;
         #[cfg_attr(target_family = "wasm", link_name = "$4")]
-        pub fn get_contract_data(key: Val) -> Val;
+        pub(crate) fn get_contract_data(key: RawVal) -> RawVal;
         #[cfg_attr(target_family = "wasm", link_name = "$5")]
-        pub fn del_contract_data(key: Val) -> Val;
+        pub(crate) fn del_contract_data(key: RawVal) -> RawVal;
 
         #[cfg_attr(target_family = "wasm", link_name = "$6")]
-        pub fn account_balance(acc: Val) -> Val;
+        pub(crate) fn account_balance(acc: RawVal) -> RawVal;
 
         #[cfg_attr(target_family = "wasm", link_name = "$7")]
-        pub fn account_trust_line(acc: Val, asset: Val) -> Val;
+        pub(crate) fn account_trust_line(acc: RawVal, asset: RawVal) -> RawVal;
 
         #[cfg_attr(target_family = "wasm", link_name = "$8")]
-        pub fn trust_line_balance(tl: Val) -> Val;
+        pub(crate) fn trust_line_balance(tl: RawVal) -> RawVal;
     }
 }
 
 // Cross-contract functions live in the wasm 'c' module
 mod call {
-    use crate::Val;
+    use crate::RawVal;
     #[link(wasm_import_module = "c")]
     extern "C" {
         // NB: returns callee-return-value-or-Status; details can be fetched with
@@ -332,70 +332,83 @@ mod call {
         // successfully returned a status, or call failed and failure _generated_ a
         // status. Possibly this distinction is too fussy to disambiguate.
         #[cfg_attr(target_family = "wasm", link_name = "$_")]
-        pub fn call0(contract: Val, func: Val) -> Val;
+        pub(crate) fn call0(contract: RawVal, func: RawVal) -> RawVal;
         #[cfg_attr(target_family = "wasm", link_name = "$0")]
-        pub fn call1(contract: Val, func: Val, a: Val) -> Val;
+        pub(crate) fn call1(contract: RawVal, func: RawVal, a: RawVal) -> RawVal;
         #[cfg_attr(target_family = "wasm", link_name = "$1")]
-        pub fn call2(contract: Val, func: Val, a: Val, b: Val) -> Val;
+        pub(crate) fn call2(contract: RawVal, func: RawVal, a: RawVal, b: RawVal) -> RawVal;
         #[cfg_attr(target_family = "wasm", link_name = "$2")]
-        pub fn call3(contract: Val, func: Val, a: Val, b: Val, c: Val) -> Val;
+        pub(crate) fn call3(
+            contract: RawVal,
+            func: RawVal,
+            a: RawVal,
+            b: RawVal,
+            c: RawVal,
+        ) -> RawVal;
         #[cfg_attr(target_family = "wasm", link_name = "$3")]
-        pub fn call4(contract: Val, func: Val, a: Val, b: Val, c: Val, d: Val) -> Val;
+        pub(crate) fn call4(
+            contract: RawVal,
+            func: RawVal,
+            a: RawVal,
+            b: RawVal,
+            c: RawVal,
+            d: RawVal,
+        ) -> RawVal;
     }
 }
 
 // BigNum functions live in the wasm 'b' module
 mod bignum {
-    use crate::Val;
+    use crate::RawVal;
     #[link(wasm_import_module = "b")]
     extern "C" {
         #[cfg_attr(target_family = "wasm", link_name = "$_")]
-        pub fn from_u64(x: u64) -> Val;
+        pub(crate) fn from_u64(x: u64) -> RawVal;
         #[cfg_attr(target_family = "wasm", link_name = "$0")]
-        pub fn add(lhs: Val, rhs: Val) -> Val;
+        pub(crate) fn add(lhs: RawVal, rhs: RawVal) -> RawVal;
         #[cfg_attr(target_family = "wasm", link_name = "$1")]
-        pub fn sub(lhs: Val, rhs: Val) -> Val;
+        pub(crate) fn sub(lhs: RawVal, rhs: RawVal) -> RawVal;
         #[cfg_attr(target_family = "wasm", link_name = "$2")]
-        pub fn mul(lhs: Val, rhs: Val) -> Val;
+        pub(crate) fn mul(lhs: RawVal, rhs: RawVal) -> RawVal;
         #[cfg_attr(target_family = "wasm", link_name = "$3")]
-        pub fn div(lhs: Val, rhs: Val) -> Val;
+        pub(crate) fn div(lhs: RawVal, rhs: RawVal) -> RawVal;
         #[cfg_attr(target_family = "wasm", link_name = "$4")]
-        pub fn rem(lhs: Val, rhs: Val) -> Val;
+        pub(crate) fn rem(lhs: RawVal, rhs: RawVal) -> RawVal;
         #[cfg_attr(target_family = "wasm", link_name = "$5")]
-        pub fn and(lhs: Val, rhs: Val) -> Val;
+        pub(crate) fn and(lhs: RawVal, rhs: RawVal) -> RawVal;
         #[cfg_attr(target_family = "wasm", link_name = "$6")]
-        pub fn or(lhs: Val, rhs: Val) -> Val;
+        pub(crate) fn or(lhs: RawVal, rhs: RawVal) -> RawVal;
         #[cfg_attr(target_family = "wasm", link_name = "$7")]
-        pub fn xor(lhs: Val, rhs: Val) -> Val;
+        pub(crate) fn xor(lhs: RawVal, rhs: RawVal) -> RawVal;
         #[cfg_attr(target_family = "wasm", link_name = "$8")]
-        pub fn shl(lhs: Val, rhs: u64) -> Val;
+        pub(crate) fn shl(lhs: RawVal, rhs: u64) -> RawVal;
         #[cfg_attr(target_family = "wasm", link_name = "$9")]
-        pub fn shr(lhs: Val, rhs: u64) -> Val;
+        pub(crate) fn shr(lhs: RawVal, rhs: u64) -> RawVal;
         #[cfg_attr(target_family = "wasm", link_name = "$A")]
-        pub fn cmp(lhs: Val, rhs: Val) -> Val;
+        pub(crate) fn cmp(lhs: RawVal, rhs: RawVal) -> RawVal;
         #[cfg_attr(target_family = "wasm", link_name = "$B")]
-        pub fn is_zero(x: Val) -> Val;
+        pub(crate) fn is_zero(x: RawVal) -> RawVal;
         #[cfg_attr(target_family = "wasm", link_name = "$C")]
-        pub fn neg(x: Val) -> Val;
+        pub(crate) fn neg(x: RawVal) -> RawVal;
         #[cfg_attr(target_family = "wasm", link_name = "$D")]
-        pub fn not(x: Val) -> Val;
+        pub(crate) fn not(x: RawVal) -> RawVal;
         #[cfg_attr(target_family = "wasm", link_name = "$E")]
-        pub fn gcd(lhs: Val, rhs: Val) -> Val;
+        pub(crate) fn gcd(lhs: RawVal, rhs: RawVal) -> RawVal;
         #[cfg_attr(target_family = "wasm", link_name = "$F")]
-        pub fn lcm(lhs: Val, rhs: Val) -> Val;
+        pub(crate) fn lcm(lhs: RawVal, rhs: RawVal) -> RawVal;
         #[cfg_attr(target_family = "wasm", link_name = "$G")]
-        pub fn pow(lhs: Val, rhs: u64) -> Val;
+        pub(crate) fn pow(lhs: RawVal, rhs: u64) -> RawVal;
         #[cfg_attr(target_family = "wasm", link_name = "$H")]
-        pub fn pow_mod(p: Val, q: Val, m: Val) -> Val;
+        pub(crate) fn pow_mod(p: RawVal, q: RawVal, m: RawVal) -> RawVal;
         #[cfg_attr(target_family = "wasm", link_name = "$I")]
-        pub fn sqrt(x: Val) -> Val;
+        pub(crate) fn sqrt(x: RawVal) -> RawVal;
         #[cfg_attr(target_family = "wasm", link_name = "$J")]
-        pub fn bits(x: Val) -> u64;
+        pub(crate) fn bits(x: RawVal) -> u64;
         #[cfg_attr(target_family = "wasm", link_name = "$K")]
-        pub fn to_u64(x: Val) -> u64;
+        pub(crate) fn to_u64(x: RawVal) -> u64;
         #[cfg_attr(target_family = "wasm", link_name = "$L")]
-        pub fn to_i64(x: Val) -> i64;
+        pub(crate) fn to_i64(x: RawVal) -> i64;
         #[cfg_attr(target_family = "wasm", link_name = "$M")]
-        pub fn from_i64(x: i64) -> Val;
+        pub(crate) fn from_i64(x: i64) -> RawVal;
     }
 }

@@ -1,18 +1,22 @@
-use super::xdr::{
-    AccountId, Asset, LedgerKey, Operation, OperationResult, Price, ScObjectType, Transaction,
+use super::{
+    weak_host::WeakHost,
+    xdr::{
+        AccountId, Asset, LedgerKey, Operation, OperationResult, Price, ScObjectType, Transaction,
+    },
+    EnvObj, EnvVal,
 };
-use super::{EnvVal, WeakHost};
-use im_rc::{OrdMap, Vector};
 
+use im_rc::{OrdMap, Vector};
 use num_bigint::BigInt;
 use num_rational::BigRational;
 
-pub type HostVal = EnvVal<WeakHost>;
-pub type HostMap = OrdMap<HostVal, HostVal>;
-pub type HostVec = Vector<HostVal>;
+pub(crate) type HostObj = EnvObj<WeakHost>;
+pub(crate) type HostVal = EnvVal<WeakHost>;
+pub(crate) type HostMap = OrdMap<HostVal, HostVal>;
+pub(crate) type HostVec = Vector<HostVal>;
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub enum HostObject {
+pub(crate) enum HostObject {
     Box(HostVal),
     Vec(HostVec),
     Map(HostMap),
@@ -31,7 +35,7 @@ pub enum HostObject {
     AccountID(AccountId),
 }
 
-pub trait HostObjectType: Sized {
+pub(crate) trait HostObjectType: Sized {
     fn get_type() -> ScObjectType;
     fn inject(self) -> HostObject;
 }
