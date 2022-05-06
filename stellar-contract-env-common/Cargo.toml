@@ -9,3 +9,4 @@ stellar-xdr = { git = "https://github.com/stellar/rs-stellar-xdr", rev = "1fa7c3
 
 [features]
 std = ["stellar-xdr/std"]
+panic_handler = []
