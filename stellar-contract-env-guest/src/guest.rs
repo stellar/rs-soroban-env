@@ -1,5 +1,8 @@
 #![allow(dead_code)]
 #![allow(unused_variables)]
+
+use core::any::Any;
+
 use super::{Env, RawVal};
 
 // In guest code the environment is global/implicit, so is represented as a unit struct.
@@ -7,7 +10,7 @@ use super::{Env, RawVal};
 pub struct Guest;
 
 impl Env for Guest {
-    fn as_mut_any(&mut self) -> &mut dyn std::any::Any {
+    fn as_mut_any(&mut self) -> &mut dyn Any {
         self
     }
 
