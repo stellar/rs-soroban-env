@@ -19,6 +19,8 @@ sa::const_assert!(CODE_BITS * MAX_CHARS == BODY_BITS);
 #[derive(Copy, Clone)]
 pub struct Symbol(pub(crate) RawVal);
 
+pub type SymbolChars = [char; MAX_CHARS];
+
 impl From<Symbol> for RawVal {
     #[inline(always)]
     fn from(s: Symbol) -> Self {
@@ -65,9 +67,8 @@ impl Ord for Symbol {
 
 impl Debug for Symbol {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.debug_tuple("Symbol")
-            .field(&self.into_iter().collect::<String>())
-            .finish()
+        let s: SymbolChars = self.into();
+        f.debug_tuple("Symbol").field(&s).finish()
     }
 }
 
@@ -101,6 +102,22 @@ impl Symbol {
             Ok(sym) => sym,
             Err(_) => panic!(),
         }
+    }
+}
+
+impl From<&Symbol> for SymbolChars {
+    fn from(s: &Symbol) -> Self {
+        let mut chars = ['\x00'; MAX_CHARS];
+        for (i, ch) in s.into_iter().enumerate() {
+            chars[i] = ch
+        }
+        chars
+    }
+}
+
+impl From<Symbol> for SymbolChars {
+    fn from(s: Symbol) -> Self {
+        (&s).into()
     }
 }
 
@@ -159,7 +176,58 @@ impl FromIterator<char> for Symbol {
 }
 
 #[cfg(test)]
-mod test {
+mod test_without_std {
+    use super::{Symbol, SymbolChars, MAX_CHARS};
+
+    #[test]
+    fn test_roundtrip() {
+        let input = "stellar";
+        let sym = Symbol::from_str(input);
+        let s: SymbolChars = sym.into();
+        assert_eq!(
+            ['s', 't', 'e', 'l', 'l', 'a', 'r', '\x00', '\x00', '\x00'],
+            s
+        );
+    }
+
+    #[test]
+    fn test_roundtrip_zero() {
+        let input = "";
+        let sym = Symbol::from_str(input);
+        let s: SymbolChars = sym.into();
+        assert_eq!(
+            ['\x00'; MAX_CHARS],
+            s
+        );
+    }
+
+    #[test]
+    fn test_roundtrip_ten() {
+        let input = "0123456789";
+        let sym = Symbol::from_str(input);
+        let s: SymbolChars = sym.into();
+        assert_eq!(
+            ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'],
+            s
+        );
+    }
+
+    #[test]
+    fn test_ord() {
+        let a_in = "Hello";
+        let b_in = "hello";
+        let c_in = "hellos";
+        let a_sym = Symbol::from_str(a_in);
+        let b_sym = Symbol::from_str(b_in);
+        let c_sym = Symbol::from_str(c_in);
+        assert!(a_sym < b_sym);
+        assert!(b_sym < c_sym);
+        assert!(a_sym < c_sym);
+    }
+}
+
+#[cfg(test)]
+mod test_with_std {
     use super::Symbol;
     extern crate std;
     use std::string::String;
