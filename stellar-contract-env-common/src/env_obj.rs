@@ -17,18 +17,6 @@ impl<E: Env> HasEnv<E> for EnvObj<E> {
     }
 }
 
-// impl<E: Env> AsRef<EnvVal<E>> for EnvObj<E> {
-//     fn as_ref(&self) -> &EnvVal<E> {
-//         &self.0
-//     }
-// }
-
-// impl<E: Env> AsMut<EnvVal<E>> for EnvObj<E> {
-//     fn as_mut(&mut self) -> &mut EnvVal<E> {
-//         &mut self.0
-//     }
-// }
-
 impl<E: Env> TryFrom<EnvVal<E>> for EnvObj<E> {
     type Error = ();
 
