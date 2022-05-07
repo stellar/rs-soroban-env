@@ -361,13 +361,15 @@ impl Env for Host {
         let len = unsafe {
             self.unchecked_visit_val_obj(v, move |ho| {
                 if let Some(HostObject::Vec(vec)) = ho {
-                    u32::try_from(vec.len()).expect("vec length exceeds u32 max")
+                    vec.len()
                 } else {
                     panic!("bad or nonexistent host object ref")
                 }
             })
         };
-        len.into()
+        u32::try_from(len)
+            .expect("vec length exceeds u32 max")
+            .into()
     }
 
     fn vec_push(&mut self, v: RawVal, x: RawVal) -> RawVal {
