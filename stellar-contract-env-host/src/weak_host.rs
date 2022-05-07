@@ -47,42 +47,79 @@ impl EnvBase for WeakHost {
     }
 }
 
-macro_rules! host_function {
-    {$mod_name:ident, fn $func_id:ident(&self)() -> $ret:ty} =>
-    {fn $func_id(&self) -> $ret { self.get_host().$func_id() }};
+// This is a helper macro used only by impl_env_for_host below. It consumes a
+// token-tree of the form:
+//
+//  {fn $fn_id:ident $selfspec:tt $args:tt -> $ret:ty}
+//
+// in each of 4 valid forms (self vs. mut-self, empty vs. nonempty trailing
+// args) and produces the the corresponding method definition to be used in the
+// Host implementation of the Env trait (calling through to the corresponding
+// function on Host after upgrading the Weak ref to an Rc via get_host()).
+macro_rules! weakhost_function_helper {
+    {$mod_id:ident, fn $fn_id:ident(&self)() -> $ret:ty} =>
+    {fn $fn_id(&self) -> $ret { self.get_host().$fn_id() }};
 
-    {$mod_name:ident, fn $func_id:ident(&self)($($arg:ident:$type:ty),*) -> $ret:ty} =>
-    {fn $func_id(&self, $($arg:$type),*) -> $ret { self.get_host().$func_id($($arg),*) }};
+    {$mod_id:ident, fn $fn_id:ident(&self)($($arg:ident:$type:ty),*) -> $ret:ty} =>
+    {fn $fn_id(&self, $($arg:$type),*) -> $ret { self.get_host().$fn_id($($arg),*) }};
 
-    {$mod_name:ident, fn $func_id:ident(&mut self)() -> $ret:ty} =>
-    {fn $func_id(&mut self) -> $ret { self.get_host().$func_id() }};
+    {$mod_id:ident, fn $fn_id:ident(&mut self)() -> $ret:ty} =>
+    {fn $fn_id(&mut self) -> $ret { self.get_host().$fn_id() }};
 
-    {$mod_name:ident, fn $func_id:ident(&mut self)($($arg:ident:$type:ty),*) -> $ret:ty} =>
-    {fn $func_id(&mut self, $($arg:$type),*) -> $ret { self.get_host().$func_id($($arg),*) }};
+    {$mod_id:ident, fn $fn_id:ident(&mut self)($($arg:ident:$type:ty),*) -> $ret:ty} =>
+    {fn $fn_id(&mut self, $($arg:$type),*) -> $ret { self.get_host().$fn_id($($arg),*) }};
 }
 
+// This is a callback macro that pattern-matches the token-tree passed by the
+// x-macro (call_macro_with_all_host_functions) and produces a suite of
+// forwarding-method definitions, which it places in the body of the declaration
+// of the implementation of Env for WeakHost.
 macro_rules! impl_env_for_weakhost {
     {
         $(
-            mod $mod_name:ident $mod_str:literal
+            // This outer pattern matches a single 'mod' block of the token-tree
+            // passed from the x-macro to this macro. It is embedded in a `$()*`
+            // pattern-repetition matcher so that it will match all provided
+            // 'mod' blocks provided.
+            mod $mod_id:ident $mod_str:literal
             {
                 $(
-                    { $field_str:literal, fn $func_id:ident $selfspec:tt $args:tt -> $ret:ty }
+                    // This inner pattern matches a single function description
+                    // inside a 'mod' block in the token-tree passed from the
+                    // x-macro to this macro. It is embedded in a `$()*`
+                    // pattern-repetition matcher so that it will match all such
+                    // descriptions.
+                    { $fn_str:literal, fn $fn_id:ident $selfspec:tt $args:tt -> $ret:ty }
                 )*
             }
         )*
     }
-    =>
+
+    => // The part of the macro above this line is a matcher; below is its expansion.
+
     {
+        // This macro expands to a single item: the implementation of Env for
+        // the WeakHost struct used by EnvVals in Host objects to call back into
+        // the Host.
         impl Env for WeakHost
         {
             $(
                 $(
-                    host_function!{$mod_name, fn $func_id $selfspec $args -> $ret}
+                   // This invokes the weakhost_function_helper! macro above
+                    // passing only the relevant parts of the declaration
+                    // matched by the inner pattern above. It is embedded in two
+                    // nested `$()*` pattern-repetition expanders that
+                    // correspond to the pattern-repetition matchers in the
+                    // match section, but we ignore the structure of the 'mod'
+                    // block repetition-level from the outer pattern in the
+                    // expansion, flattening all functions from all 'mod' blocks
+                    // into the implementation of Env for WeakHost.
+                     weakhost_function_helper!{$mod_id, fn $fn_id $selfspec $args -> $ret}
                 )*
             )*
         }
     };
 }
 
+// Here we invoke the x-macro passing impl_env_for_weakhost as its callback macro.
 call_macro_with_all_host_functions! { impl_env_for_weakhost }
