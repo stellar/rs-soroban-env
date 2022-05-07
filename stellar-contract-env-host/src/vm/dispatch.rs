@@ -2,6 +2,10 @@ use crate::{Env, Host, RawVal};
 use stellar_contract_env_common::call_macro_with_all_host_functions;
 use wasmi::{RuntimeArgs, RuntimeValue};
 
+///////////////////////////////////////////////////////////////////////////////
+/// X-macro use: dispatch functions
+///////////////////////////////////////////////////////////////////////////////
+
 // This is a helper macro used only by generate_dispatch_functions below. It
 // consumes a token-tree of the form:
 //
