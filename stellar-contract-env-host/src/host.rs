@@ -1,11 +1,11 @@
 #![allow(unused_variables)]
 #![allow(dead_code)]
 
+use crate::weak_host::WeakHost;
 use core::cell::RefCell;
 use core::cmp::Ordering;
 use core::fmt::{Debug, Display};
 use im_rc::{OrdMap, Vector};
-use crate::weak_host::WeakHost;
 
 use super::xdr::{ScMap, ScMapEntry, ScObject, ScStatic, ScStatus, ScStatusType, ScVal, ScVec};
 use std::rc::Rc;
