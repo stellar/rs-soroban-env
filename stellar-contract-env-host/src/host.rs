@@ -295,7 +295,7 @@ impl Env for Host {
     }
 
     fn obj_from_u64(&mut self, u: u64) -> RawVal {
-        todo!()
+        self.add_host_object(u).expect("obj_from_u64").into()
     }
 
     fn obj_to_u64(&mut self, u: RawVal) -> u64 {
@@ -359,7 +359,18 @@ impl Env for Host {
     }
 
     fn vec_len(&mut self, v: RawVal) -> RawVal {
-        todo!()
+        let len = unsafe {
+            self.unchecked_visit_val_obj(v, move |ho| {
+                if let Some(HostObject::Vec(vec)) = ho {
+                    vec.len()
+                } else {
+                    panic!("bad or nonexistent host object ref")
+                }
+            })
+        };
+        u32::try_from(len)
+            .expect("vec length exceeds u32 max")
+            .into()
     }
 
     fn vec_push(&mut self, v: RawVal, x: RawVal) -> RawVal {
