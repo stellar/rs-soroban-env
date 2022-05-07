@@ -5,7 +5,6 @@ use core::cell::RefCell;
 use core::cmp::Ordering;
 use core::fmt::{Debug, Display};
 use im_rc::{OrdMap, Vector};
-
 use crate::weak_host::WeakHost;
 
 use super::xdr::{ScMap, ScMapEntry, ScObject, ScStatic, ScStatus, ScStatusType, ScVal, ScVec};
@@ -295,7 +294,7 @@ impl Env for Host {
     }
 
     fn obj_from_u64(&mut self, u: u64) -> RawVal {
-        todo!()
+        self.add_host_object(u).expect("obj_from_u64").into()
     }
 
     fn obj_to_u64(&mut self, u: RawVal) -> u64 {
@@ -359,7 +358,16 @@ impl Env for Host {
     }
 
     fn vec_len(&mut self, v: RawVal) -> RawVal {
-        todo!()
+        let len = unsafe {
+            self.unchecked_visit_val_obj(v, move |ho| {
+                if let Some(HostObject::Vec(vec)) = ho {
+                    u32::try_from(vec.len()).expect("vec length exceeds u32 max")
+                } else {
+                    panic!("bad or nonexistent host object ref")
+                }
+            })
+        };
+        len.into()
     }
 
     fn vec_push(&mut self, v: RawVal, x: RawVal) -> RawVal {
