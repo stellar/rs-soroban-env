@@ -1,7 +1,8 @@
 use super::{xdr::ScObjectType, Env, EnvVal, HasEnv, RawObj, RawVal, RawValType, Tag};
 
-// EnvObj is just an EnvVal that is statically guaranteed (by construction) to refer
-// to Tag::Object, so it's safe to call methods on it that are meaningful to objects.
+// EnvObj is just an EnvVal that is statically guaranteed (by construction) to
+// refer to a Tag::Object (RawObj), so it's safe to call methods on it that are
+// meaningful to objects.
 #[derive(Clone)]
 pub struct EnvObj<E: Env>(EnvVal<E>);
 
@@ -30,9 +31,10 @@ impl<E: Env> TryFrom<EnvVal<E>> for EnvObj<E> {
     type Error = ();
 
     fn try_from(ev: EnvVal<E>) -> Result<Self, Self::Error> {
-        match ev.val.get_tag() {
-            Tag::Object => Ok(EnvObj(ev)),
-            _ => Err(()),
+        if ev.val.is::<RawObj>() {
+            Ok(EnvObj(ev))
+        } else {
+            Err(())
         }
     }
 }
