@@ -51,7 +51,7 @@ pub enum Static {
 #[derive(Copy, Clone)]
 pub struct RawVal(u64);
 
-pub trait RawValType: Into<RawVal> {
+pub trait RawValType: Into<RawVal> + TryFrom<RawVal> {
     fn is_val_type(v: RawVal) -> bool;
     unsafe fn unchecked_from_val(v: RawVal) -> Self;
 
