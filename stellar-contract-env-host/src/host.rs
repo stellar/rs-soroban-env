@@ -12,7 +12,9 @@ use super::xdr::{ScMap, ScMapEntry, ScObject, ScStatic, ScStatus, ScStatusType, 
 use std::rc::Rc;
 
 use crate::host_object::{HostMap, HostObj, HostObject, HostObjectType, HostVal, HostVec};
-use crate::{BitSet, Env, EnvObj, EnvValType, RawObj, RawVal, RawValType, Status, Symbol, Tag};
+use crate::{
+    BitSet, Env, EnvBase, EnvObj, EnvValType, RawObj, RawVal, RawValType, Status, Symbol, Tag,
+};
 
 #[derive(Debug)]
 pub enum Error {
@@ -266,13 +268,23 @@ impl Host {
     }
 }
 
-impl Env for Host {
+impl EnvBase for Host {
     fn as_mut_any(&mut self) -> &mut dyn std::any::Any {
         todo!()
     }
 
     fn check_same_env(&self, other: &Self) {
         assert!(Rc::ptr_eq(&self.0, &other.0));
+    }
+}
+
+impl Env for Host {
+    fn log_value(&mut self, v: RawVal) -> RawVal {
+        todo!()
+    }
+
+    fn get_last_operation_result(&self) -> RawVal {
+        todo!()
     }
 
     fn obj_cmp(&self, a: RawVal, b: RawVal) -> i64 {
@@ -286,19 +298,11 @@ impl Env for Host {
         }
     }
 
-    fn log_value(&mut self, v: RawVal) -> RawVal {
-        todo!()
-    }
-
-    fn get_last_operation_result(&mut self) -> RawVal {
-        todo!()
-    }
-
     fn obj_from_u64(&mut self, u: u64) -> RawVal {
         self.add_host_object(u).expect("obj_from_u64").into()
     }
 
-    fn obj_to_u64(&mut self, u: RawVal) -> u64 {
+    fn obj_to_u64(&self, u: RawVal) -> u64 {
         todo!()
     }
 
@@ -306,7 +310,7 @@ impl Env for Host {
         self.add_host_object(i).expect("obj_from_i64").into()
     }
 
-    fn obj_to_i64(&mut self, i: RawVal) -> i64 {
+    fn obj_to_i64(&self, i: RawVal) -> i64 {
         todo!()
     }
 
@@ -421,6 +425,18 @@ impl Env for Host {
         todo!()
     }
 
+    fn put_contract_data(&mut self, k: RawVal, v: RawVal) -> RawVal {
+        todo!()
+    }
+
+    fn has_contract_data(&mut self, k: RawVal) -> RawVal {
+        todo!()
+    }
+
+    fn get_contract_data(&mut self, k: RawVal) -> RawVal {
+        todo!()
+    }
+
     fn account_balance(&mut self, acc: RawVal) -> RawVal {
         todo!()
     }
@@ -433,15 +449,139 @@ impl Env for Host {
         todo!()
     }
 
-    fn get_contract_data(&mut self, k: RawVal) -> RawVal {
+    fn get_current_ledger_num(&self) -> RawVal {
         todo!()
     }
 
-    fn put_contract_data(&mut self, k: RawVal, v: RawVal) -> RawVal {
+    fn get_current_ledger_close_time(&self) -> RawVal {
         todo!()
     }
 
-    fn has_contract_data(&mut self, k: RawVal) -> RawVal {
+    fn del_contract_data(&mut self, k: RawVal) -> RawVal {
+        todo!()
+    }
+
+    fn call0(&mut self, contract: RawVal, func: RawVal) -> RawVal {
+        todo!()
+    }
+
+    fn call1(&mut self, contract: RawVal, func: RawVal, a: RawVal) -> RawVal {
+        todo!()
+    }
+
+    fn call2(&mut self, contract: RawVal, func: RawVal, a: RawVal, b: RawVal) -> RawVal {
+        todo!()
+    }
+
+    fn call3(&mut self, contract: RawVal, func: RawVal, a: RawVal, b: RawVal, c: RawVal) -> RawVal {
+        todo!()
+    }
+
+    fn call4(
+        &mut self,
+        contract: RawVal,
+        func: RawVal,
+        a: RawVal,
+        b: RawVal,
+        c: RawVal,
+        d: RawVal,
+    ) -> RawVal {
+        todo!()
+    }
+
+    fn bigint_from_u64(&mut self, x: RawVal) -> RawVal {
+        todo!()
+    }
+
+    fn bigint_add(&mut self, x: RawVal, y: RawVal) -> RawVal {
+        todo!()
+    }
+
+    fn bigint_sub(&mut self, x: RawVal, y: RawVal) -> RawVal {
+        todo!()
+    }
+
+    fn bigint_mul(&mut self, x: RawVal, y: RawVal) -> RawVal {
+        todo!()
+    }
+
+    fn bigint_div(&mut self, x: RawVal, y: RawVal) -> RawVal {
+        todo!()
+    }
+
+    fn bigint_rem(&mut self, x: RawVal, y: RawVal) -> RawVal {
+        todo!()
+    }
+
+    fn bigint_and(&mut self, x: RawVal, y: RawVal) -> RawVal {
+        todo!()
+    }
+
+    fn bigint_or(&mut self, x: RawVal, y: RawVal) -> RawVal {
+        todo!()
+    }
+
+    fn bigint_xor(&mut self, x: RawVal, y: RawVal) -> RawVal {
+        todo!()
+    }
+
+    fn bigint_shl(&mut self, x: RawVal, y: RawVal) -> RawVal {
+        todo!()
+    }
+
+    fn bigint_shr(&mut self, x: RawVal, y: RawVal) -> RawVal {
+        todo!()
+    }
+
+    fn bigint_cmp(&mut self, x: RawVal, y: RawVal) -> RawVal {
+        todo!()
+    }
+
+    fn bigint_is_zero(&mut self, x: RawVal) -> RawVal {
+        todo!()
+    }
+
+    fn bigint_neg(&mut self, x: RawVal) -> RawVal {
+        todo!()
+    }
+
+    fn bigint_not(&mut self, x: RawVal) -> RawVal {
+        todo!()
+    }
+
+    fn bigint_gcd(&mut self, x: RawVal) -> RawVal {
+        todo!()
+    }
+
+    fn bigint_lcm(&mut self, x: RawVal, y: RawVal) -> RawVal {
+        todo!()
+    }
+
+    fn bigint_pow(&mut self, x: RawVal, y: RawVal) -> RawVal {
+        todo!()
+    }
+
+    fn bigint_pow_mod(&mut self, p: RawVal, q: RawVal, m: RawVal) -> RawVal {
+        todo!()
+    }
+
+    fn bigint_sqrt(&mut self, x: RawVal) -> RawVal {
+        todo!()
+    }
+
+    fn bigint_bits(&mut self, x: RawVal) -> RawVal {
+        todo!()
+    }
+
+    fn bigint_to_u64(&mut self, x: RawVal) -> u64 {
+        todo!()
+    }
+
+    fn bigint_to_i64(&mut self, x: RawVal) -> i64 {
+        todo!()
+    }
+
+    fn bigint_from_i64(&mut self, x: i64) -> RawVal {
         todo!()
     }
 }

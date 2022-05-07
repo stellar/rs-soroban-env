@@ -24,7 +24,7 @@ pub use raw_obj::RawObj;
 pub use raw_val::{RawVal, RawValType, Tag};
 
 // RawVal and EnvObj couple raw types to environments.
-pub use env::Env;
+pub use env::{Env, EnvBase};
 pub use env_obj::EnvObj;
 pub use env_val::{EnvVal, EnvValType};
 pub use has_env::HasEnv;

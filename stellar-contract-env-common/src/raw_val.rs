@@ -95,6 +95,21 @@ declare_tryfrom!(RawObj);
 declare_tryfrom!(BitSet);
 declare_tryfrom!(Status);
 
+#[cfg(feature = "vm")]
+impl wasmi::FromRuntimeValue for RawVal {
+    fn from_runtime_value(val: wasmi::RuntimeValue) -> Option<Self> {
+        let maybe: Option<u64> = val.try_into();
+        maybe.map(|x| Self(x))
+    }
+}
+
+#[cfg(feature = "vm")]
+impl From<RawVal> for wasmi::RuntimeValue {
+    fn from(v: RawVal) -> Self {
+        wasmi::RuntimeValue::I64(v.0 as i64)
+    }
+}
+
 impl RawValType for () {
     #[inline(always)]
     fn is_val_type(v: RawVal) -> bool {

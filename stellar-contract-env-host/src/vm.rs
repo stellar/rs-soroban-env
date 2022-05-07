@@ -1,30 +1,14 @@
+mod dispatch;
+mod func_info;
+
 use super::{host, Host, RawVal};
-use stellar_contract_env_common::Env;
+use func_info::HOST_FUNCTIONS;
 use wasmi::{
     Externals, FuncInstance, ImportResolver, Module, ModuleInstance, ModuleRef, RuntimeArgs,
     RuntimeValue, ValueType,
 };
 
 impl wasmi::HostError for host::Error {}
-
-struct HostFunctionInfo {
-    module: &'static str,
-    function: &'static str,
-    arity: usize,
-    glue: fn(&mut Host, RuntimeArgs) -> Result<RawVal, wasmi::Trap>,
-}
-
-fn glue_log_value(_host: &mut Host, _args: RuntimeArgs) -> Result<RawVal, wasmi::Trap> {
-    Ok(_host.log_value(RawVal::from_payload(_args.nth_checked(0)?)))
-}
-
-// TODO: macro this and the other side in guest -- it's going to get verbose.
-static HOST_FUNCTIONS: &[HostFunctionInfo] = &[HostFunctionInfo {
-    module: "x",
-    function: "$_",
-    arity: 1,
-    glue: glue_log_value,
-}];
 
 impl Externals for Host {
     fn invoke_index(
@@ -40,35 +24,35 @@ impl Externals for Host {
             return Err(wasmi::TrapKind::UnexpectedSignature.into());
         }
 
-        let raw_val = (hf.glue)(self, args)?;
-        Ok(Some(RuntimeValue::I64(raw_val.get_payload() as i64)))
+        let rv = (hf.dispatch)(self, args)?;
+        Ok(Some(rv))
     }
 }
 
 impl ImportResolver for Host {
     fn resolve_func(
         &self,
-        _module_name: &str,
+        module_name: &str,
         field_name: &str,
-        _signature: &wasmi::Signature,
+        signature: &wasmi::Signature,
     ) -> Result<wasmi::FuncRef, wasmi::Error> {
         for (i, hf) in HOST_FUNCTIONS.iter().enumerate() {
-            if _module_name == hf.module && field_name == hf.function {
-                if _signature.params().len() != hf.arity
-                    || !_signature.params().iter().all(|p| *p == ValueType::I64)
-                    || _signature.return_type() != Some(ValueType::I64)
+            if module_name == hf.mod_name && field_name == hf.field_name {
+                if signature.params().len() != hf.arity
+                    || !signature.params().iter().all(|p| *p == ValueType::I64)
+                    || signature.return_type() != Some(ValueType::I64)
                 {
                     return Err(wasmi::Error::Function(format!(
                         "Bad imported function signature on {}.{}",
-                        _module_name, field_name
+                        module_name, field_name
                     )));
                 }
-                return Ok(FuncInstance::alloc_host(_signature.clone(), i));
+                return Ok(FuncInstance::alloc_host(signature.clone(), i));
             }
         }
         Err(wasmi::Error::Function(format!(
             "No such function: {}.{}",
-            _module_name, field_name
+            module_name, field_name
         )))
     }
 

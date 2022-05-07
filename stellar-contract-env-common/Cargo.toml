@@ -7,6 +7,11 @@ edition = "2021"
 static_assertions = "1.1.0"
 stellar-xdr = { git = "https://github.com/stellar/rs-stellar-xdr", rev = "1fa7c3ebdefd6c78719ede6b294aa64e13077d2a", default-features = false }
 
+# wasmi is an optional dependency only to let us impl its type conversion
+# trait on RawVal locally in this crate; the VM itself is used in the host. 
+wasmi = { version = "0.11.0", optional = true }
+
 [features]
 std = ["stellar-xdr/std"]
 panic_handler = []
+vm = ["wasmi"]
