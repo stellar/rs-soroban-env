@@ -13,6 +13,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - if: ${{ github.event.check_suite.conclusion == 'success' }}
-      run: echo 'The triggering workflow succeeded'
+      run: echo 'The check suite for ${{ github.event.check_suite.head_branch }} (${{ github.event.check_suite.head_sha }}) succeeded'
     - if: ${{ github.event.check_suite.conclusion != 'success' }}
-      run: echo 'The triggering workflow ${{ github.event.check_suite.conclusion }}'; exit 1
+      run: echo 'The check suite ${{ github.event.check_suite.head_branch }} (${{ github.event.check_suite.head_sha }}) ${{ github.event.check_suite.conclusion }}'; exit 1
