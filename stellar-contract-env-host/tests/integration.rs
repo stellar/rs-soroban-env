@@ -2,7 +2,7 @@ use stellar_contract_env_host::{xdr::ScObjectType, Env, Host, RawObj};
 
 #[test]
 fn vec_as_seen_by_user() -> Result<(), ()> {
-    let mut host = Host::default();
+    let host = Host::default();
     let int1 = host.obj_from_i64(5).in_env(&host);
 
     let vec1a = host.vec_new().in_env(&host);
@@ -22,7 +22,7 @@ fn vec_as_seen_by_user() -> Result<(), ()> {
 
 #[test]
 fn vec_host_fn() {
-    let mut host = Host::default();
+    let host = Host::default();
     let m = host.map_new();
     assert!(RawObj::val_is_obj_type(m, ScObjectType::ScoMap));
 }

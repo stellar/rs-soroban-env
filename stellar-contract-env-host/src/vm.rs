@@ -37,7 +37,7 @@ impl ImportResolver for Host {
         signature: &wasmi::Signature,
     ) -> Result<wasmi::FuncRef, wasmi::Error> {
         for (i, hf) in HOST_FUNCTIONS.iter().enumerate() {
-            if module_name == hf.mod_name && field_name == hf.field_name {
+            if module_name == hf.mod_str && field_name == hf.fn_str {
                 if signature.params().len() != hf.arity
                     || !signature.params().iter().all(|p| *p == ValueType::I64)
                     || signature.return_type() != Some(ValueType::I64)

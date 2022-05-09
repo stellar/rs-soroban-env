@@ -4,9 +4,19 @@ use stellar_contract_env_common::call_macro_with_all_host_functions;
 use wasmi::{RuntimeArgs, RuntimeValue};
 
 pub(crate) struct HostFuncInfo {
-    pub(crate) mod_id: &'static str,
-    pub(crate) field_name: &'static str,
+    /// String name of the WASM module this host function is importable from.
+    pub(crate) mod_str: &'static str,
+
+    /// String name of the WASM function that the host function is importable
+    /// as.
+    pub(crate) fn_str: &'static str,
+
+    /// Number of u64 arguments the host function takes.
     pub(crate) arity: usize,
+
+    /// Dispatch function for this host function, that takes a Host and some
+    /// RuntimeArgs, unpacks and converts the appropriate set of arguments from
+    /// RuntimeArgs, and calls the corresponding method on Host.
     pub(crate) dispatch: fn(&mut Host, RuntimeArgs) -> Result<RuntimeValue, wasmi::Trap>,
 }
 
@@ -46,7 +56,7 @@ macro_rules! generate_host_function_infos {
                     // x-macro to this macro. It is embedded in a `$()*`
                     // pattern-repetition matcher so that it will match all such
                     // descriptions.
-                    { $fn_id:literal, fn $func_id:ident $selfspec:tt $args:tt -> $ret:ty }
+                    { $fn_id:literal, fn $func_id:ident $args:tt -> $ret:ty }
                 )*
             }
         )*
@@ -80,8 +90,8 @@ macro_rules! generate_host_function_infos {
                     // expansion, flattening all functions from all 'mod' blocks
                     // into the a single array of HostFuncInfo structs.
                     HostFuncInfo {
-                        mod_id: $mod_str,
-                        field_name: $fn_id,
+                        mod_str: $mod_str,
+                        fn_str: $fn_id,
                         arity: arity_helper!{$args},
                         dispatch: dispatch::$func_id,
                     },

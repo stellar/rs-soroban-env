@@ -89,7 +89,7 @@ macro_rules! generate_dispatch_functions {
                     // x-macro to this macro. It is embedded in a `$()*`
                     // pattern-repetition matcher so that it will match all such
                     // descriptions.
-                    { $fn_str:literal, fn $fn_id:ident $selfspec:tt $args:tt -> $ret:ty }
+                    { $fn_str:literal, fn $fn_id:ident $args:tt -> $ret:ty }
                 )*
             }
         )*
