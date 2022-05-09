@@ -68,7 +68,7 @@ impl<V: RawValType> EnvValType for V {
 }
 
 impl EnvValType for i64 {
-    fn into_env_val<E: Env>(self, mut env: E) -> EnvVal<E> {
+    fn into_env_val<E: Env>(self, env: E) -> EnvVal<E> {
         let val = if self >= 0 {
             unsafe { RawVal::unchecked_from_positive_i64(self) }
         } else {
@@ -77,7 +77,7 @@ impl EnvValType for i64 {
         EnvVal { env, val }
     }
 
-    fn try_from_env_val<E: Env>(mut ev: EnvVal<E>) -> Option<Self> {
+    fn try_from_env_val<E: Env>(ev: EnvVal<E>) -> Option<Self> {
         if ev.val.is_positive_i64() {
             Some(unsafe { ev.val.unchecked_as_positive_i64() })
         } else if RawObj::val_is_obj_type(ev.val, ScObjectType::ScoI64) {
@@ -89,7 +89,7 @@ impl EnvValType for i64 {
 }
 
 impl EnvValType for u64 {
-    fn into_env_val<E: Env>(self, mut env: E) -> EnvVal<E> {
+    fn into_env_val<E: Env>(self, env: E) -> EnvVal<E> {
         let val = if self <= (i64::MAX as u64) {
             unsafe { RawVal::unchecked_from_positive_i64(self as i64) }
         } else {
@@ -98,7 +98,7 @@ impl EnvValType for u64 {
         EnvVal { env, val }
     }
 
-    fn try_from_env_val<E: Env>(mut ev: EnvVal<E>) -> Option<Self> {
+    fn try_from_env_val<E: Env>(ev: EnvVal<E>) -> Option<Self> {
         if ev.val.is_positive_i64() {
             Some(unsafe { ev.val.unchecked_as_positive_i64() } as u64)
         } else if RawObj::val_is_obj_type(ev.val, ScObjectType::ScoU64) {

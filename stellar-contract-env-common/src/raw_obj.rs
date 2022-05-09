@@ -6,6 +6,24 @@ use super::{xdr::ScObjectType, RawVal, RawValType, Tag};
 #[derive(Copy, Clone)]
 pub struct RawObj(RawVal);
 
+#[cfg(feature = "vm")]
+impl wasmi::FromRuntimeValue for RawObj {
+    fn from_runtime_value(val: wasmi::RuntimeValue) -> Option<Self> {
+        if let Some(rv) = <RawVal as wasmi::FromRuntimeValue>::from_runtime_value(val) {
+            <RawObj as RawValType>::try_convert(rv)
+        } else {
+            None
+        }
+    }
+}
+
+#[cfg(feature = "vm")]
+impl From<RawObj> for wasmi::RuntimeValue {
+    fn from(v: RawObj) -> Self {
+        wasmi::RuntimeValue::I64(v.0.get_payload() as i64)
+    }
+}
+
 impl RawValType for RawObj {
     #[inline(always)]
     fn is_val_type(v: RawVal) -> bool {

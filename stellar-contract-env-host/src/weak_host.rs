@@ -1,4 +1,6 @@
-use crate::{host::HostImpl, Env, Host, RawVal};
+use stellar_contract_env_common::call_macro_with_all_host_functions;
+
+use crate::{host::HostImpl, Env, EnvBase, Host, RawVal};
 use core::fmt::Debug;
 use std::rc::Weak;
 
@@ -35,7 +37,7 @@ impl WeakHost {
     }
 }
 
-impl Env for WeakHost {
+impl EnvBase for WeakHost {
     fn as_mut_any(&mut self) -> &mut dyn std::any::Any {
         self as &mut dyn std::any::Any
     }
@@ -43,140 +45,76 @@ impl Env for WeakHost {
     fn check_same_env(&self, other: &Self) {
         self.get_host().check_same_env(&other.get_host())
     }
-
-    fn obj_cmp(&self, a: RawVal, b: RawVal) -> i64 {
-        self.get_host().obj_cmp(a, b)
-    }
-
-    fn log_value(&mut self, v: RawVal) -> RawVal {
-        self.get_host().log_value(v)
-    }
-
-    fn get_last_operation_result(&mut self) -> RawVal {
-        self.get_host().get_last_operation_result()
-    }
-
-    fn obj_from_u64(&mut self, u: u64) -> RawVal {
-        self.get_host().obj_from_u64(u)
-    }
-
-    fn obj_to_u64(&mut self, u: RawVal) -> u64 {
-        self.get_host().obj_to_u64(u)
-    }
-
-    fn obj_from_i64(&mut self, i: i64) -> RawVal {
-        self.get_host().obj_from_i64(i)
-    }
-
-    fn obj_to_i64(&mut self, i: RawVal) -> i64 {
-        self.get_host().obj_to_i64(i)
-    }
-
-    fn map_new(&mut self) -> RawVal {
-        self.get_host().map_new()
-    }
-
-    fn map_put(&mut self, m: RawVal, k: RawVal, v: RawVal) -> RawVal {
-        self.get_host().map_put(m, k, v)
-    }
-
-    fn map_get(&mut self, m: RawVal, k: RawVal) -> RawVal {
-        self.get_host().map_get(m, k)
-    }
-
-    fn map_del(&mut self, m: RawVal, k: RawVal) -> RawVal {
-        self.get_host().map_del(m, k)
-    }
-
-    fn map_len(&mut self, m: RawVal) -> RawVal {
-        self.get_host().map_len(m)
-    }
-
-    fn map_keys(&mut self, m: RawVal) -> RawVal {
-        self.get_host().map_keys(m)
-    }
-
-    fn map_has(&mut self, m: RawVal, k: RawVal) -> RawVal {
-        self.get_host().map_has(m, k)
-    }
-
-    fn vec_new(&mut self) -> RawVal {
-        self.get_host().vec_new()
-    }
-
-    fn vec_put(&mut self, v: RawVal, i: RawVal, x: RawVal) -> RawVal {
-        self.get_host().vec_put(v, i, x)
-    }
-
-    fn vec_get(&mut self, v: RawVal, i: RawVal) -> RawVal {
-        self.get_host().vec_get(v, i)
-    }
-
-    fn vec_del(&mut self, v: RawVal, i: RawVal) -> RawVal {
-        self.get_host().vec_del(v, i)
-    }
-
-    fn vec_len(&mut self, v: RawVal) -> RawVal {
-        self.get_host().vec_len(v)
-    }
-
-    fn vec_push(&mut self, v: RawVal, x: RawVal) -> RawVal {
-        self.get_host().vec_push(v, x)
-    }
-
-    fn vec_pop(&mut self, v: RawVal) -> RawVal {
-        self.get_host().vec_pop(v)
-    }
-
-    fn vec_take(&mut self, v: RawVal, n: RawVal) -> RawVal {
-        self.get_host().vec_take(v, n)
-    }
-
-    fn vec_drop(&mut self, v: RawVal, n: RawVal) -> RawVal {
-        self.get_host().vec_drop(v, n)
-    }
-
-    fn vec_front(&mut self, v: RawVal) -> RawVal {
-        self.get_host().vec_front(v)
-    }
-
-    fn vec_back(&mut self, v: RawVal) -> RawVal {
-        self.get_host().vec_back(v)
-    }
-
-    fn vec_insert(&mut self, v: RawVal, i: RawVal, n: RawVal) -> RawVal {
-        self.get_host().vec_insert(v, i, n)
-    }
-
-    fn vec_append(&mut self, v1: RawVal, v2: RawVal) -> RawVal {
-        self.get_host().vec_append(v1, v2)
-    }
-
-    fn pay(&mut self, src: RawVal, dst: RawVal, asset: RawVal, amount: RawVal) -> RawVal {
-        self.get_host().pay(src, dst, asset, amount)
-    }
-
-    fn account_balance(&mut self, acc: RawVal) -> RawVal {
-        self.get_host().account_balance(acc)
-    }
-
-    fn account_trust_line(&mut self, acc: RawVal, asset: RawVal) -> RawVal {
-        self.get_host().account_trust_line(acc, asset)
-    }
-
-    fn trust_line_balance(&mut self, tl: RawVal) -> RawVal {
-        self.get_host().trust_line_balance(tl)
-    }
-
-    fn get_contract_data(&mut self, k: RawVal) -> RawVal {
-        self.get_host().get_contract_data(k)
-    }
-
-    fn put_contract_data(&mut self, k: RawVal, v: RawVal) -> RawVal {
-        self.get_host().put_contract_data(k, v)
-    }
-
-    fn has_contract_data(&mut self, k: RawVal) -> RawVal {
-        self.get_host().has_contract_data(k)
-    }
 }
+
+// This is a helper macro used only by impl_env_for_host below. It consumes a
+// token-tree of the form:
+//
+//  {fn $fn_id:ident $args:tt -> $ret:ty}
+//
+// and produces the the corresponding method definition to be used in the
+// Host implementation of the Env trait (calling through to the corresponding
+// function on Host after upgrading the Weak ref to an Rc via get_host()).
+macro_rules! weakhost_function_helper {
+    {$mod_id:ident, fn $fn_id:ident($($arg:ident:$type:ty),*) -> $ret:ty}
+    =>
+    {
+        fn $fn_id(&self, $($arg:$type),*) -> $ret {
+            self.get_host().$fn_id($($arg),*)
+        }
+    };
+}
+
+// This is a callback macro that pattern-matches the token-tree passed by the
+// x-macro (call_macro_with_all_host_functions) and produces a suite of
+// forwarding-method definitions, which it places in the body of the declaration
+// of the implementation of Env for WeakHost.
+macro_rules! impl_env_for_weakhost {
+    {
+        $(
+            // This outer pattern matches a single 'mod' block of the token-tree
+            // passed from the x-macro to this macro. It is embedded in a `$()*`
+            // pattern-repetition matcher so that it will match all provided
+            // 'mod' blocks provided.
+            mod $mod_id:ident $mod_str:literal
+            {
+                $(
+                    // This inner pattern matches a single function description
+                    // inside a 'mod' block in the token-tree passed from the
+                    // x-macro to this macro. It is embedded in a `$()*`
+                    // pattern-repetition matcher so that it will match all such
+                    // descriptions.
+                    { $fn_str:literal, fn $fn_id:ident $args:tt -> $ret:ty }
+                )*
+            }
+        )*
+    }
+
+    => // The part of the macro above this line is a matcher; below is its expansion.
+
+    {
+        // This macro expands to a single item: the implementation of Env for
+        // the WeakHost struct used by EnvVals in Host objects to call back into
+        // the Host.
+        impl Env for WeakHost
+        {
+            $(
+                $(
+                   // This invokes the weakhost_function_helper! macro above
+                    // passing only the relevant parts of the declaration
+                    // matched by the inner pattern above. It is embedded in two
+                    // nested `$()*` pattern-repetition expanders that
+                    // correspond to the pattern-repetition matchers in the
+                    // match section, but we ignore the structure of the 'mod'
+                    // block repetition-level from the outer pattern in the
+                    // expansion, flattening all functions from all 'mod' blocks
+                    // into the implementation of Env for WeakHost.
+                     weakhost_function_helper!{$mod_id, fn $fn_id  $args -> $ret}
+                )*
+            )*
+        }
+    };
+}
+
+// Here we invoke the x-macro passing impl_env_for_weakhost as its callback macro.
+call_macro_with_all_host_functions! { impl_env_for_weakhost }
