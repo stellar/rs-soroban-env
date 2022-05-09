@@ -4,7 +4,6 @@ mod bitset;
 mod env;
 mod env_obj;
 mod env_val;
-mod has_env;
 mod or_abort;
 mod raw_obj;
 mod raw_val;
@@ -27,7 +26,6 @@ pub use raw_val::{RawVal, RawValType, Tag};
 pub use env::{Env, EnvBase};
 pub use env_obj::EnvObj;
 pub use env_val::{EnvVal, EnvValType};
-pub use has_env::HasEnv;
 
 // BitSet, Status and Symbol wrap RawVals.
 // TODO: maybe these should wrap EnvVals?

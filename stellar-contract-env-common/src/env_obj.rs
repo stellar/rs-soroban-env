@@ -1,4 +1,4 @@
-use super::{xdr::ScObjectType, Env, EnvVal, HasEnv, RawObj, RawVal, RawValType, Tag};
+use super::{xdr::ScObjectType, Env, EnvVal, RawObj, RawVal, RawValType, Tag};
 
 // EnvObj is just an EnvVal that is statically guaranteed (by construction) to
 // refer to a Tag::Object (RawObj), so it's safe to call methods on it that are
@@ -6,8 +6,8 @@ use super::{xdr::ScObjectType, Env, EnvVal, HasEnv, RawObj, RawVal, RawValType, 
 #[derive(Clone)]
 pub struct EnvObj<E: Env>(EnvVal<E>);
 
-impl<E: Env> HasEnv<E> for EnvObj<E> {
-    fn env(&self) -> &E {
+impl<E: Env> EnvObj<E> {
+    pub fn env(&self) -> &E {
         &self.0.env
     }
 }

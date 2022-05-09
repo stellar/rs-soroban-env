@@ -3,7 +3,7 @@ use crate::{BitSet, Status, Symbol, Tag};
 use super::{
     raw_val::{RawVal, RawValType},
     xdr::ScObjectType,
-    Env, HasEnv, RawObj,
+    Env, RawObj,
 };
 use core::{cmp::Ordering, fmt::Debug};
 
@@ -16,8 +16,8 @@ pub struct EnvVal<E: Env> {
     pub val: RawVal,
 }
 
-impl<E: Env> HasEnv<E> for EnvVal<E> {
-    fn env(&self) -> &E {
+impl<E: Env> EnvVal<E> {
+    pub fn env(&self) -> &E {
         &self.env
     }
 }
