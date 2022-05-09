@@ -10,9 +10,3 @@ pub fn trap() -> ! {
 pub fn trap() -> ! {
     panic!()
 }
-
-#[cfg(feature = "panic_handler")]
-#[panic_handler]
-fn handle_panic(_: &core::panic::PanicInfo) -> ! {
-    trap();
-}
