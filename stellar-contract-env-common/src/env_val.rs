@@ -33,25 +33,28 @@ impl<E: Env> From<EnvVal<E>> for RawVal {
 // that need an Env -- those that might require allocating an Object. ValType
 // covers types that can always be directly converted to Val with no Env.
 pub trait EnvValType: Sized {
-    fn into_env_val<E: Env>(self, env: E) -> EnvVal<E>;
-    fn into_raw_val<E: Env>(self, env: E) -> RawVal {
+    fn into_env_val<E: Env>(self, env: &E) -> EnvVal<E>;
+    fn into_raw_val<E: Env>(self, env: &E) -> RawVal {
         Self::into_env_val(self, env).val
     }
     fn try_from_env_val<E: Env>(ev: EnvVal<E>) -> Option<Self>;
-    fn try_from_raw_val<E: Env>(e: E, v: RawVal) -> Option<Self> {
-        Self::try_from_env_val(EnvVal { env: e, val: v })
+    fn try_from_raw_val<E: Env>(env: &E, v: RawVal) -> Option<Self> {
+        Self::try_from_env_val(EnvVal {
+            env: env.clone(),
+            val: v,
+        })
     }
 }
 
 impl<V: RawValType> EnvValType for V {
-    fn into_env_val<E: Env>(self, env: E) -> EnvVal<E> {
+    fn into_env_val<E: Env>(self, env: &E) -> EnvVal<E> {
         EnvVal {
-            env,
+            env: env.clone(),
             val: self.into(),
         }
     }
 
-    fn into_raw_val<E: Env>(self, _env: E) -> RawVal {
+    fn into_raw_val<E: Env>(self, _env: &E) -> RawVal {
         self.into()
     }
 
@@ -65,13 +68,16 @@ impl<V: RawValType> EnvValType for V {
 }
 
 impl EnvValType for i64 {
-    fn into_env_val<E: Env>(self, env: E) -> EnvVal<E> {
+    fn into_env_val<E: Env>(self, env: &E) -> EnvVal<E> {
         let val = if self >= 0 {
             unsafe { RawVal::unchecked_from_positive_i64(self) }
         } else {
             env.obj_from_i64(self)
         };
-        EnvVal { env, val }
+        EnvVal {
+            env: env.clone(),
+            val,
+        }
     }
 
     fn try_from_env_val<E: Env>(ev: EnvVal<E>) -> Option<Self> {
@@ -86,13 +92,16 @@ impl EnvValType for i64 {
 }
 
 impl EnvValType for u64 {
-    fn into_env_val<E: Env>(self, env: E) -> EnvVal<E> {
+    fn into_env_val<E: Env>(self, env: &E) -> EnvVal<E> {
         let val = if self <= (i64::MAX as u64) {
             unsafe { RawVal::unchecked_from_positive_i64(self as i64) }
         } else {
             env.obj_from_u64(self)
         };
-        EnvVal { env, val }
+        EnvVal {
+            env: env.clone(),
+            val,
+        }
     }
 
     fn try_from_env_val<E: Env>(ev: EnvVal<E>) -> Option<Self> {

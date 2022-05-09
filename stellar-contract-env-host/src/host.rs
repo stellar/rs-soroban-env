@@ -65,7 +65,7 @@ impl Host {
 
     pub(crate) fn associate_env_val_type<V: EnvValType>(&self, v: V) -> HostVal {
         let env = self.get_weak();
-        v.into_env_val(env)
+        v.into_env_val(&env)
     }
 
     pub(crate) fn from_host_val(&self, val: RawVal) -> Result<ScVal, ()> {
