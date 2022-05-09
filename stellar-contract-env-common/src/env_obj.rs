@@ -10,9 +10,6 @@ impl<E: Env> HasEnv<E> for EnvObj<E> {
     fn env(&self) -> &E {
         &self.0.env
     }
-    fn mut_env(&mut self) -> &mut E {
-        &mut self.0.env
-    }
 }
 
 impl<E: Env> AsRef<EnvVal<E>> for EnvObj<E> {

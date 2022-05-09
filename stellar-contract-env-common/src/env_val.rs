@@ -20,9 +20,6 @@ impl<E: Env> HasEnv<E> for EnvVal<E> {
     fn env(&self) -> &E {
         &self.env
     }
-    fn mut_env(&mut self) -> &mut E {
-        &mut self.env
-    }
 }
 
 impl<E: Env> From<EnvVal<E>> for RawVal {
