@@ -421,6 +421,14 @@ impl Env for Host {
         todo!()
     }
 
+    fn get_current_ledger_num(&self) -> RawVal {
+        todo!()
+    }
+
+    fn get_current_ledger_close_time(&self) -> RawVal {
+        todo!()
+    }
+
     fn pay(&mut self, src: RawVal, dst: RawVal, asset: RawVal, amount: RawVal) -> RawVal {
         todo!()
     }
@@ -437,6 +445,10 @@ impl Env for Host {
         todo!()
     }
 
+    fn del_contract_data(&mut self, k: RawVal) -> RawVal {
+        todo!()
+    }
+
     fn account_balance(&mut self, acc: RawVal) -> RawVal {
         todo!()
     }
@@ -446,18 +458,6 @@ impl Env for Host {
     }
 
     fn trust_line_balance(&mut self, tl: RawVal) -> RawVal {
-        todo!()
-    }
-
-    fn get_current_ledger_num(&self) -> RawVal {
-        todo!()
-    }
-
-    fn get_current_ledger_close_time(&self) -> RawVal {
-        todo!()
-    }
-
-    fn del_contract_data(&mut self, k: RawVal) -> RawVal {
         todo!()
     }
 
