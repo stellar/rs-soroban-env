@@ -298,7 +298,7 @@ impl Env for Host {
         }
     }
 
-    fn obj_from_u64(&self, u: u64) -> RawVal {
+    fn obj_from_u64(&self, u: u64) -> RawObj {
         self.add_host_object(u).expect("obj_from_u64").into()
     }
 
@@ -306,7 +306,7 @@ impl Env for Host {
         todo!()
     }
 
-    fn obj_from_i64(&self, i: i64) -> RawVal {
+    fn obj_from_i64(&self, i: i64) -> RawObj {
         self.add_host_object(i).expect("obj_from_i64").into()
     }
 
@@ -314,13 +314,13 @@ impl Env for Host {
         todo!()
     }
 
-    fn map_new(&self) -> RawVal {
+    fn map_new(&self) -> RawObj {
         self.add_host_object(HostMap::new())
             .expect("map_new")
             .into()
     }
 
-    fn map_put(&self, m: RawVal, k: RawVal, v: RawVal) -> RawVal {
+    fn map_put(&self, m: RawVal, k: RawVal, v: RawVal) -> RawObj {
         todo!()
     }
 
@@ -328,7 +328,7 @@ impl Env for Host {
         todo!()
     }
 
-    fn map_del(&self, m: RawVal, k: RawVal) -> RawVal {
+    fn map_del(&self, m: RawVal, k: RawVal) -> RawObj {
         todo!()
     }
 
@@ -336,7 +336,7 @@ impl Env for Host {
         todo!()
     }
 
-    fn map_keys(&self, m: RawVal) -> RawVal {
+    fn map_keys(&self, m: RawVal) -> RawObj {
         todo!()
     }
 
@@ -344,13 +344,13 @@ impl Env for Host {
         todo!()
     }
 
-    fn vec_new(&self) -> RawVal {
+    fn vec_new(&self) -> RawObj {
         self.add_host_object(HostVec::new())
             .expect("vec_new")
             .into()
     }
 
-    fn vec_put(&self, v: RawVal, i: RawVal, x: RawVal) -> RawVal {
+    fn vec_put(&self, v: RawVal, i: RawVal, x: RawVal) -> RawObj {
         todo!()
     }
 
@@ -358,7 +358,7 @@ impl Env for Host {
         todo!()
     }
 
-    fn vec_del(&self, v: RawVal, i: RawVal) -> RawVal {
+    fn vec_del(&self, v: RawVal, i: RawVal) -> RawObj {
         todo!()
     }
 
@@ -377,7 +377,7 @@ impl Env for Host {
             .into()
     }
 
-    fn vec_push(&self, v: RawVal, x: RawVal) -> RawVal {
+    fn vec_push(&self, v: RawVal, x: RawVal) -> RawObj {
         let x = self.associate_raw_val(x);
         let vnew = unsafe {
             self.unchecked_visit_val_obj(v, move |ho| {
@@ -393,15 +393,15 @@ impl Env for Host {
         self.add_host_object(vnew).expect("vec_push").into()
     }
 
-    fn vec_pop(&self, v: RawVal) -> RawVal {
+    fn vec_pop(&self, v: RawVal) -> RawObj {
         todo!()
     }
 
-    fn vec_take(&self, v: RawVal, n: RawVal) -> RawVal {
+    fn vec_take(&self, v: RawVal, n: RawVal) -> RawObj {
         todo!()
     }
 
-    fn vec_drop(&self, v: RawVal, n: RawVal) -> RawVal {
+    fn vec_drop(&self, v: RawVal, n: RawVal) -> RawObj {
         todo!()
     }
 
@@ -413,11 +413,11 @@ impl Env for Host {
         todo!()
     }
 
-    fn vec_insert(&self, v: RawVal, i: RawVal, n: RawVal) -> RawVal {
+    fn vec_insert(&self, v: RawVal, i: RawVal, n: RawVal) -> RawObj {
         todo!()
     }
 
-    fn vec_append(&self, v1: RawVal, v2: RawVal) -> RawVal {
+    fn vec_append(&self, v1: RawVal, v2: RawVal) -> RawObj {
         todo!()
     }
 
@@ -489,51 +489,51 @@ impl Env for Host {
         todo!()
     }
 
-    fn bigint_from_u64(&self, x: RawVal) -> RawVal {
+    fn bigint_from_u64(&self, x: RawVal) -> RawObj {
         todo!()
     }
 
-    fn bigint_add(&self, x: RawVal, y: RawVal) -> RawVal {
+    fn bigint_add(&self, x: RawVal, y: RawVal) -> RawObj {
         todo!()
     }
 
-    fn bigint_sub(&self, x: RawVal, y: RawVal) -> RawVal {
+    fn bigint_sub(&self, x: RawVal, y: RawVal) -> RawObj {
         todo!()
     }
 
-    fn bigint_mul(&self, x: RawVal, y: RawVal) -> RawVal {
+    fn bigint_mul(&self, x: RawVal, y: RawVal) -> RawObj {
         todo!()
     }
 
-    fn bigint_div(&self, x: RawVal, y: RawVal) -> RawVal {
+    fn bigint_div(&self, x: RawVal, y: RawVal) -> RawObj {
         todo!()
     }
 
-    fn bigint_rem(&self, x: RawVal, y: RawVal) -> RawVal {
+    fn bigint_rem(&self, x: RawVal, y: RawVal) -> RawObj {
         todo!()
     }
 
-    fn bigint_and(&self, x: RawVal, y: RawVal) -> RawVal {
+    fn bigint_and(&self, x: RawVal, y: RawVal) -> RawObj {
         todo!()
     }
 
-    fn bigint_or(&self, x: RawVal, y: RawVal) -> RawVal {
+    fn bigint_or(&self, x: RawVal, y: RawVal) -> RawObj {
         todo!()
     }
 
-    fn bigint_xor(&self, x: RawVal, y: RawVal) -> RawVal {
+    fn bigint_xor(&self, x: RawVal, y: RawVal) -> RawObj {
         todo!()
     }
 
-    fn bigint_shl(&self, x: RawVal, y: RawVal) -> RawVal {
+    fn bigint_shl(&self, x: RawVal, y: RawVal) -> RawObj {
         todo!()
     }
 
-    fn bigint_shr(&self, x: RawVal, y: RawVal) -> RawVal {
+    fn bigint_shr(&self, x: RawVal, y: RawVal) -> RawObj {
         todo!()
     }
 
-    fn bigint_cmp(&self, x: RawVal, y: RawVal) -> RawVal {
+    fn bigint_cmp(&self, x: RawVal, y: RawVal) -> RawObj {
         todo!()
     }
 
@@ -541,35 +541,35 @@ impl Env for Host {
         todo!()
     }
 
-    fn bigint_neg(&self, x: RawVal) -> RawVal {
+    fn bigint_neg(&self, x: RawVal) -> RawObj {
         todo!()
     }
 
-    fn bigint_not(&self, x: RawVal) -> RawVal {
+    fn bigint_not(&self, x: RawVal) -> RawObj {
         todo!()
     }
 
-    fn bigint_gcd(&self, x: RawVal) -> RawVal {
+    fn bigint_gcd(&self, x: RawVal) -> RawObj {
         todo!()
     }
 
-    fn bigint_lcm(&self, x: RawVal, y: RawVal) -> RawVal {
+    fn bigint_lcm(&self, x: RawVal, y: RawVal) -> RawObj {
         todo!()
     }
 
-    fn bigint_pow(&self, x: RawVal, y: RawVal) -> RawVal {
+    fn bigint_pow(&self, x: RawVal, y: RawVal) -> RawObj {
         todo!()
     }
 
-    fn bigint_pow_mod(&self, p: RawVal, q: RawVal, m: RawVal) -> RawVal {
+    fn bigint_pow_mod(&self, p: RawVal, q: RawVal, m: RawVal) -> RawObj {
         todo!()
     }
 
-    fn bigint_sqrt(&self, x: RawVal) -> RawVal {
+    fn bigint_sqrt(&self, x: RawVal) -> RawObj {
         todo!()
     }
 
-    fn bigint_bits(&self, x: RawVal) -> RawVal {
+    fn bigint_bits(&self, x: RawVal) -> RawObj {
         todo!()
     }
 
@@ -581,7 +581,7 @@ impl Env for Host {
         todo!()
     }
 
-    fn bigint_from_i64(&self, x: i64) -> RawVal {
+    fn bigint_from_i64(&self, x: i64) -> RawObj {
         todo!()
     }
 }

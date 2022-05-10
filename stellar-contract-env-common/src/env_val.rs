@@ -72,7 +72,7 @@ impl EnvValType for i64 {
         let val = if self >= 0 {
             unsafe { RawVal::unchecked_from_positive_i64(self) }
         } else {
-            env.obj_from_i64(self)
+            env.obj_from_i64(self).into()
         };
         EnvVal {
             env: env.clone(),
@@ -96,7 +96,7 @@ impl EnvValType for u64 {
         let val = if self <= (i64::MAX as u64) {
             unsafe { RawVal::unchecked_from_positive_i64(self as i64) }
         } else {
-            env.obj_from_u64(self)
+            env.obj_from_u64(self).into()
         };
         EnvVal {
             env: env.clone(),
