@@ -46,12 +46,6 @@ impl<E: Env> AsMut<EnvVal<E>> for EnvObj<E> {
     }
 }
 
-impl<E: Env> AsRef<RawVal> for EnvObj<E> {
-    fn as_ref(&self) -> &RawVal {
-        &self.0.val
-    }
-}
-
 impl<E: Env> TryFrom<EnvVal<E>> for EnvObj<E> {
     type Error = ();
 
@@ -78,7 +72,7 @@ impl<E: Env> Into<RawVal> for EnvObj<E> {
 
 impl<E: Env> Into<RawObj> for EnvObj<E> {
     fn into(self) -> RawObj {
-        unsafe { <RawObj as RawValType>::unchecked_from_val(self.0.val) }
+        self.as_obj()
     }
 }
 
@@ -92,6 +86,16 @@ impl<E: Env + Debug> Debug for EnvObj<E> {
 }
 
 impl<E: Env> EnvObj<E> {
+    #[inline(always)]
+    pub fn as_raw_val(&self) -> RawVal {
+        self.0.val
+    }
+
+    #[inline(always)]
+    pub fn as_raw_obj(&self) -> RawObj {
+        unsafe { <RawObj as RawValType>::unchecked_from_val(self.0.val) }
+    }
+
     #[inline(always)]
     pub fn get_handle(&self) -> u32 {
         self.0.val.get_major()
@@ -132,7 +136,7 @@ mod test {
         let ro = RawObj::from_type_and_code(ScObjectType::ScoI64, 1);
         let rv: RawVal = ro.into();
         let eo = EnvObj::from_raw_obj(&env, ro);
-        let rv_roundtrip: &RawVal = eo.as_ref();
+        let rv_roundtrip: RawVal = eo.as_raw_val();
         assert_eq!(rv.get_payload(), rv_roundtrip.get_payload());
     }
 }
