@@ -32,13 +32,13 @@ impl<E: Env> From<EnvVal<E>> for RawVal {
 // EnvValType is similar to RawValType but also covers types with conversions
 // that need an Env -- those that might require allocating an Object. ValType
 // covers types that can always be directly converted to Val with no Env.
-pub trait EnvValType: Sized {
-    fn into_env_val<E: Env>(self, env: &E) -> EnvVal<E>;
-    fn into_raw_val<E: Env>(self, env: &E) -> RawVal {
+pub trait EnvValType<E: Env>: Sized {
+    fn into_env_val(self, env: &E) -> EnvVal<E>;
+    fn into_raw_val(self, env: &E) -> RawVal {
         Self::into_env_val(self, env).val
     }
-    fn try_from_env_val<E: Env>(ev: EnvVal<E>) -> Option<Self>;
-    fn try_from_raw_val<E: Env>(env: &E, v: RawVal) -> Option<Self> {
+    fn try_from_env_val(ev: EnvVal<E>) -> Option<Self>;
+    fn try_from_raw_val(env: &E, v: RawVal) -> Option<Self> {
         Self::try_from_env_val(EnvVal {
             env: env.clone(),
             val: v,
@@ -46,19 +46,19 @@ pub trait EnvValType: Sized {
     }
 }
 
-impl<V: RawValType> EnvValType for V {
-    fn into_env_val<E: Env>(self, env: &E) -> EnvVal<E> {
+impl<E: Env, V: RawValType> EnvValType<E> for V {
+    fn into_env_val(self, env: &E) -> EnvVal<E> {
         EnvVal {
             env: env.clone(),
             val: self.into(),
         }
     }
 
-    fn into_raw_val<E: Env>(self, _env: &E) -> RawVal {
+    fn into_raw_val(self, _env: &E) -> RawVal {
         self.into()
     }
 
-    fn try_from_env_val<E: Env>(ev: EnvVal<E>) -> Option<Self> {
+    fn try_from_env_val(ev: EnvVal<E>) -> Option<Self> {
         if <V as RawValType>::is_val_type(ev.val) {
             Some(unsafe { <V as RawValType>::unchecked_from_val(ev.val) })
         } else {
@@ -67,8 +67,8 @@ impl<V: RawValType> EnvValType for V {
     }
 }
 
-impl EnvValType for i64 {
-    fn into_env_val<E: Env>(self, env: &E) -> EnvVal<E> {
+impl<E: Env> EnvValType<E> for i64 {
+    fn into_env_val(self, env: &E) -> EnvVal<E> {
         let val = if self >= 0 {
             unsafe { RawVal::unchecked_from_positive_i64(self) }
         } else {
@@ -80,7 +80,7 @@ impl EnvValType for i64 {
         }
     }
 
-    fn try_from_env_val<E: Env>(ev: EnvVal<E>) -> Option<Self> {
+    fn try_from_env_val(ev: EnvVal<E>) -> Option<Self> {
         if ev.val.is_positive_i64() {
             Some(unsafe { ev.val.unchecked_as_positive_i64() })
         } else if RawObj::val_is_obj_type(ev.val, ScObjectType::ScoI64) {
@@ -91,8 +91,8 @@ impl EnvValType for i64 {
     }
 }
 
-impl EnvValType for u64 {
-    fn into_env_val<E: Env>(self, env: &E) -> EnvVal<E> {
+impl<E: Env> EnvValType<E> for u64 {
+    fn into_env_val(self, env: &E) -> EnvVal<E> {
         let val = if self <= (i64::MAX as u64) {
             unsafe { RawVal::unchecked_from_positive_i64(self as i64) }
         } else {
@@ -104,7 +104,7 @@ impl EnvValType for u64 {
         }
     }
 
-    fn try_from_env_val<E: Env>(ev: EnvVal<E>) -> Option<Self> {
+    fn try_from_env_val(ev: EnvVal<E>) -> Option<Self> {
         if ev.val.is_positive_i64() {
             Some(unsafe { ev.val.unchecked_as_positive_i64() } as u64)
         } else if RawObj::val_is_obj_type(ev.val, ScObjectType::ScoU64) {

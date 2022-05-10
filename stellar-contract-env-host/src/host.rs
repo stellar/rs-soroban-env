@@ -105,7 +105,7 @@ impl Host {
         HostVal { env, val }
     }
 
-    pub(crate) fn associate_env_val_type<V: EnvValType>(&self, v: V) -> HostVal {
+    pub(crate) fn associate_env_val_type<V: EnvValType<WeakHost>>(&self, v: V) -> HostVal {
         let env = self.get_weak();
         v.into_env_val(&env)
     }

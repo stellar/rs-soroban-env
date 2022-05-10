@@ -8,7 +8,7 @@ fn i64_roundtrip() {
     let host = Host::default();
     let i = 12345_i64;
     let v = host.associate_env_val_type(i);
-    let j = <i64 as EnvValType>::try_from_env_val(v).unwrap();
+    let j = i64::try_from_env_val(v).unwrap();
     assert_eq!(i, j);
 }
 
