@@ -72,7 +72,7 @@ impl<E: Env> Into<RawVal> for EnvObj<E> {
 
 impl<E: Env> Into<RawObj> for EnvObj<E> {
     fn into(self) -> RawObj {
-        self.as_obj()
+        self.as_raw_obj()
     }
 }
 
