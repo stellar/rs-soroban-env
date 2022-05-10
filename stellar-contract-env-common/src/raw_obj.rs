@@ -1,4 +1,4 @@
-use super::{xdr::ScObjectType, RawVal, RawValType, Tag};
+use super::{xdr::ScObjectType, Env, EnvObj, RawVal, RawValType, Tag};
 
 // RawObj is just an RawVal that is statically guaranteed (by construction) to refer
 // to Tag::Object, so it's safe to call methods on it that are meaningful to objects.
@@ -58,6 +58,10 @@ impl AsMut<RawVal> for RawObj {
 }
 
 impl RawObj {
+    pub fn in_env<E: Env>(self, env: &E) -> EnvObj<E> {
+        EnvObj::from_raw_obj(env, self)
+    }
+
     // NB: we don't provide a "get_type" to avoid casting a bad bit-pattern into
     // an ScStatusType. Instead we provide an "is_type" to check any specific
     // bit-pattern.
