@@ -7,7 +7,7 @@ fn vec_as_seen_by_user() -> Result<(), ()> {
 
     let vec1a = host.vec_new().in_env(&host);
     let vec1b = host
-        .vec_push(vec1a.as_ref().val, int1.as_ref().val)
+        .vec_push(vec1a.clone().into(), int1.as_ref().val)
         .in_env(&host);
 
     assert_ne!(
@@ -17,7 +17,7 @@ fn vec_as_seen_by_user() -> Result<(), ()> {
 
     let vec2a = host.vec_new().in_env(&host);
     let vec2b = host
-        .vec_push(vec2a.as_ref().val, int1.as_ref().val)
+        .vec_push(vec2a.clone().into(), int1.as_ref().val)
         .in_env(&host);
 
     assert_ne!(

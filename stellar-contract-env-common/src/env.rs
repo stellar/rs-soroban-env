@@ -77,29 +77,29 @@ macro_rules! call_macro_with_all_host_functions {
 
             mod map "m" {
                 {"$_", fn map_new() -> RawObj }
-                {"$0", fn map_put(m:RawVal, k:RawVal, v:RawVal) -> RawObj}
-                {"$1", fn map_get(m:RawVal, k:RawVal) -> RawVal}
-                {"$2", fn map_del(m:RawVal, k:RawVal) -> RawObj}
-                {"$3", fn map_len(m:RawVal) -> RawVal}
-                {"$4", fn map_keys(m:RawVal) -> RawObj}
-                {"$5", fn map_has(m:RawVal,k:RawVal) -> RawVal}
+                {"$0", fn map_put(m:RawObj, k:RawVal, v:RawVal) -> RawObj}
+                {"$1", fn map_get(m:RawObj, k:RawVal) -> RawVal}
+                {"$2", fn map_del(m:RawObj, k:RawVal) -> RawObj}
+                {"$3", fn map_len(m:RawObj) -> RawVal}
+                {"$4", fn map_keys(m:RawObj) -> RawObj}
+                {"$5", fn map_has(m:RawObj,k:RawVal) -> RawVal}
             }
 
             mod vec "v" {
                 {"$_", fn vec_new() -> RawObj}
-                {"$0", fn vec_put(v:RawVal, i:RawVal, x:RawVal) -> RawObj}
-                {"$1", fn vec_get(v:RawVal, i:RawVal) -> RawVal}
-                {"$2", fn vec_del(v:RawVal, i:RawVal) -> RawObj}
-                {"$3", fn vec_len(v:RawVal) -> RawVal}
+                {"$0", fn vec_put(v:RawObj, i:RawVal, x:RawVal) -> RawObj}
+                {"$1", fn vec_get(v:RawObj, i:RawVal) -> RawVal}
+                {"$2", fn vec_del(v:RawObj, i:RawVal) -> RawObj}
+                {"$3", fn vec_len(v:RawObj) -> RawVal}
 
-                {"$4", fn vec_push(v:RawVal, x:RawVal) -> RawObj}
-                {"$5", fn vec_pop(v:RawVal) -> RawObj}
-                {"$6", fn vec_take(v:RawVal, n:RawVal) -> RawObj}
-                {"$7", fn vec_drop(v:RawVal, n:RawVal) -> RawObj}
-                {"$8", fn vec_front(v:RawVal) -> RawVal}
-                {"$9", fn vec_back(v:RawVal) -> RawVal}
-                {"$A", fn vec_insert(v:RawVal, i:RawVal, x:RawVal) -> RawObj}
-                {"$B", fn vec_append(v1:RawVal, v2:RawVal) -> RawObj}
+                {"$4", fn vec_push(v:RawObj, x:RawVal) -> RawObj}
+                {"$5", fn vec_pop(v:RawObj) -> RawObj}
+                {"$6", fn vec_take(v:RawObj, n:RawVal) -> RawObj}
+                {"$7", fn vec_drop(v:RawObj, n:RawVal) -> RawObj}
+                {"$8", fn vec_front(v:RawObj) -> RawVal}
+                {"$9", fn vec_back(v:RawObj) -> RawVal}
+                {"$A", fn vec_insert(v:RawObj, i:RawVal, x:RawVal) -> RawObj}
+                {"$B", fn vec_append(v1:RawObj, v2:RawObj) -> RawObj}
             }
 
             mod ledger "l" {
@@ -108,7 +108,7 @@ macro_rules! call_macro_with_all_host_functions {
 
                 {"$1", fn pay(src:RawVal, dst:RawVal, asset:RawVal, amt:RawVal) -> RawVal}
 
-                {"$2", fn put_contract_data(k:RawVal, v:RawVal) -> RawVal}
+                {"$2", fn put_contract_data(k:RawVal, v: RawVal) -> RawVal}
                 {"$3", fn has_contract_data(k:RawVal) -> RawVal}
                 {"$4", fn get_contract_data(k:RawVal) -> RawVal}
                 {"$5", fn del_contract_data(k:RawVal) -> RawVal}
@@ -127,29 +127,29 @@ macro_rules! call_macro_with_all_host_functions {
             }
 
             mod bigint "b" {
-                {"$_", fn bigint_from_u64(x:RawVal) -> RawObj}
-                {"$0", fn bigint_add(x:RawVal,y:RawVal) -> RawObj}
-                {"$1", fn bigint_sub(x:RawVal,y:RawVal) -> RawObj}
-                {"$2", fn bigint_mul(x:RawVal,y:RawVal) -> RawObj}
-                {"$3", fn bigint_div(x:RawVal,y:RawVal) -> RawObj}
-                {"$4", fn bigint_rem(x:RawVal,y:RawVal) -> RawObj}
-                {"$5", fn bigint_and(x:RawVal,y:RawVal) -> RawObj}
-                {"$6", fn bigint_or(x:RawVal,y:RawVal) -> RawObj}
-                {"$7", fn bigint_xor(x:RawVal,y:RawVal) -> RawObj}
-                {"$8", fn bigint_shl(x:RawVal,y:RawVal) -> RawObj}
-                {"$9", fn bigint_shr(x:RawVal,y:RawVal) -> RawObj}
-                {"$A", fn bigint_cmp(x:RawVal,y:RawVal) -> RawObj}
-                {"$B", fn bigint_is_zero(x:RawVal) -> RawVal}
-                {"$C", fn bigint_neg(x:RawVal) -> RawObj}
-                {"$D", fn bigint_not(x:RawVal) -> RawObj}
-                {"$E", fn bigint_gcd(x:RawVal) -> RawObj}
-                {"$F", fn bigint_lcm(x:RawVal,y:RawVal) -> RawObj}
-                {"$G", fn bigint_pow(x:RawVal,y:RawVal) -> RawObj}
-                {"$H", fn bigint_pow_mod(p:RawVal,q:RawVal,m:RawVal) -> RawObj}
-                {"$I", fn bigint_sqrt(x:RawVal) -> RawObj}
-                {"$J", fn bigint_bits(x:RawVal) -> RawObj}
-                {"$K", fn bigint_to_u64(x:RawVal) -> u64}
-                {"$L", fn bigint_to_i64(x:RawVal) -> i64}
+                {"$_", fn bigint_from_u64(x:RawObj) -> RawObj}
+                {"$0", fn bigint_add(x:RawObj,y:RawObj) -> RawObj}
+                {"$1", fn bigint_sub(x:RawObj,y:RawObj) -> RawObj}
+                {"$2", fn bigint_mul(x:RawObj,y:RawObj) -> RawObj}
+                {"$3", fn bigint_div(x:RawObj,y:RawObj) -> RawObj}
+                {"$4", fn bigint_rem(x:RawObj,y:RawObj) -> RawObj}
+                {"$5", fn bigint_and(x:RawObj,y:RawObj) -> RawObj}
+                {"$6", fn bigint_or(x:RawObj,y:RawObj) -> RawObj}
+                {"$7", fn bigint_xor(x:RawObj,y:RawObj) -> RawObj}
+                {"$8", fn bigint_shl(x:RawObj,y:RawObj) -> RawObj}
+                {"$9", fn bigint_shr(x:RawObj,y:RawObj) -> RawObj}
+                {"$A", fn bigint_cmp(x:RawObj,y:RawObj) -> RawObj}
+                {"$B", fn bigint_is_zero(x:RawObj) -> RawObj}
+                {"$C", fn bigint_neg(x:RawObj) -> RawObj}
+                {"$D", fn bigint_not(x:RawObj) -> RawObj}
+                {"$E", fn bigint_gcd(x:RawObj) -> RawObj}
+                {"$F", fn bigint_lcm(x:RawObj,y:RawObj) -> RawObj}
+                {"$G", fn bigint_pow(x:RawObj,y:RawObj) -> RawObj}
+                {"$H", fn bigint_pow_mod(p:RawObj,q:RawObj,m:RawObj) -> RawObj}
+                {"$I", fn bigint_sqrt(x:RawObj) -> RawObj}
+                {"$J", fn bigint_bits(x:RawObj) -> RawObj}
+                {"$K", fn bigint_to_u64(x:RawObj) -> u64}
+                {"$L", fn bigint_to_i64(x:RawObj) -> i64}
                 {"$M", fn bigint_from_i64(x:i64) -> RawObj}
             }
         }
