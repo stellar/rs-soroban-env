@@ -1,3 +1,5 @@
+use core::{cmp::Ordering, fmt::Debug};
+
 use super::{xdr::ScObjectType, Env, EnvVal, RawObj, RawVal, RawValType, Tag};
 
 // EnvObj is just an EnvVal that is statically guaranteed (by construction) to
@@ -5,6 +7,26 @@ use super::{xdr::ScObjectType, Env, EnvVal, RawObj, RawVal, RawValType, Tag};
 // meaningful to objects.
 #[derive(Clone)]
 pub struct EnvObj<E: Env>(EnvVal<E>);
+
+impl<E: Env> Ord for EnvObj<E> {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.0.cmp(&other.0)
+    }
+}
+
+impl<E: Env> PartialOrd for EnvObj<E> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        self.0.partial_cmp(&other.0)
+    }
+}
+
+impl<E: Env> Eq for EnvObj<E> {}
+
+impl<E: Env> PartialEq for EnvObj<E> {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+}
 
 impl<E: Env> EnvObj<E> {
     pub fn env(&self) -> &E {
@@ -54,6 +76,15 @@ impl<E: Env> Into<RawObj> for EnvObj<E> {
     }
 }
 
+impl<E: Env + Debug> Debug for EnvObj<E> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("EnvObj")
+            .field("env", &self.0.env)
+            .field("obj", &self.0.val) // TODO: Complete mapping for obj types.
+            .finish()
+    }
+}
+
 impl<E: Env> EnvObj<E> {
     #[inline(always)]
     pub fn get_handle(&self) -> u32 {
@@ -63,6 +94,14 @@ impl<E: Env> EnvObj<E> {
     // NB: we don't provide a "get_type" to avoid casting a bad bit-pattern
     // into an ScObjectType. Instead we provide an "is_obj_type" below to check
     // any specific bit-pattern.
+
+    #[inline(always)]
+    pub fn from_raw_obj(env: &E, ro: RawObj) -> EnvObj<E> {
+        EnvObj(EnvVal {
+            env: env.clone(),
+            val: ro.into(),
+        })
+    }
 
     #[inline(always)]
     pub fn from_type_and_handle(ty: ScObjectType, handle: u32, env: E) -> EnvObj<E> {
