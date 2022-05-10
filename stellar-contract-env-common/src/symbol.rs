@@ -6,6 +6,11 @@ use core::{
     str,
 };
 
+pub enum SymbolError {
+    TooLong(usize),
+    BadChar(char),
+}
+
 extern crate static_assertions as sa;
 
 use super::raw_val::{RawVal, RawValType, Tag, BODY_BITS};
@@ -72,14 +77,14 @@ impl Debug for Symbol {
 }
 
 impl Symbol {
-    pub const fn try_from_str(s: &str) -> Result<Symbol, ()> {
+    pub const fn try_from_str(s: &str) -> Result<Symbol, SymbolError> {
         let mut n = 0;
         let mut accum: u64 = 0;
         let b: &[u8] = s.as_bytes();
         while n < b.len() {
             let ch = b[n] as char;
             if n >= MAX_CHARS {
-                return Err(());
+                return Err(SymbolError::TooLong(b.len()));
             }
             n += 1;
             accum <<= CODE_BITS;
@@ -88,7 +93,7 @@ impl Symbol {
                 '0'..='9' => 2 + ((ch as u64) - ('0' as u64)),
                 'A'..='Z' => 12 + ((ch as u64) - ('A' as u64)),
                 'a'..='z' => 38 + ((ch as u64) - ('a' as u64)),
-                _ => return Err(()),
+                _ => return Err(SymbolError::BadChar(ch)),
             };
             accum |= v;
         }

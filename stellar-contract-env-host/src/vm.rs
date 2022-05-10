@@ -8,7 +8,7 @@ use wasmi::{
     RuntimeValue, ValueType,
 };
 
-impl wasmi::HostError for host::Error {}
+impl wasmi::HostError for host::HostError {}
 
 impl Externals for Host {
     fn invoke_index(

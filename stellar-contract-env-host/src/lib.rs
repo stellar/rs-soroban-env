@@ -8,5 +8,5 @@ pub mod vm;
 #[cfg(test)]
 mod test;
 
-pub use host::{Error, Host};
+pub use host::{Host, HostError};
 pub use stellar_contract_env_common::*;

@@ -7,6 +7,10 @@ use core::hash::{Hash, Hasher};
 #[derive(Copy, Clone)]
 pub struct BitSet(RawVal);
 
+pub enum BitSetError {
+    TooManyBits(u64),
+}
+
 impl RawValType for BitSet {
     fn is_val_type(v: RawVal) -> bool {
         v.has_tag(Tag::BitSet)
@@ -70,11 +74,11 @@ impl Ord for BitSet {
 
 impl BitSet {
     #[inline(always)]
-    pub const fn try_from_u64(u: u64) -> Result<BitSet, ()> {
+    pub const fn try_from_u64(u: u64) -> Result<BitSet, BitSetError> {
         if u & 0x0fff_ffff_ffff_ffff == u {
             Ok(BitSet(unsafe { RawVal::from_body_and_tag(u, Tag::BitSet) }))
         } else {
-            Err(())
+            Err(BitSetError::TooManyBits(u))
         }
     }
     #[inline(always)]

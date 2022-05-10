@@ -1,6 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 mod bitset;
+mod checked_env;
 mod env;
 mod env_obj;
 mod env_val;
@@ -23,15 +24,16 @@ pub use raw_obj::RawObj;
 pub use raw_val::{RawVal, RawValType, Tag};
 
 // RawVal and EnvObj couple raw types to environments.
+pub use checked_env::CheckedEnv;
 pub use env::{Env, EnvBase};
 pub use env_obj::EnvObj;
 pub use env_val::{EnvVal, EnvValType};
 
 // BitSet, Status and Symbol wrap RawVals.
 // TODO: maybe these should wrap EnvVals?
-pub use bitset::BitSet;
+pub use bitset::{BitSet, BitSetError};
 pub use status::{Status, OK, UNKNOWN_ERROR};
-pub use symbol::{Symbol, SymbolIter};
+pub use symbol::{Symbol, SymbolError, SymbolIter};
 
 #[inline(always)]
 // Awkward: this is a free function rather than a trait call because

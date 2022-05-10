@@ -38,6 +38,7 @@ pub(crate) enum HostObject {
 pub(crate) trait HostObjectType: Sized {
     fn get_type() -> ScObjectType;
     fn inject(self) -> HostObject;
+    fn try_extract(obj: &HostObject) -> Option<&Self>;
 }
 
 macro_rules! declare_host_object_type {
@@ -49,6 +50,13 @@ macro_rules! declare_host_object_type {
 
             fn inject(self) -> HostObject {
                 HostObject::$CTOR(self)
+            }
+
+            fn try_extract(obj: &HostObject) -> Option<&Self> {
+                match obj {
+                    HostObject::$CTOR(v) => Some(v),
+                    _ => None,
+                }
             }
         }
     };
