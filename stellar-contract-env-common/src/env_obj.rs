@@ -52,12 +52,6 @@ impl<E: Env> AsRef<RawVal> for EnvObj<E> {
     }
 }
 
-impl<E: Env> AsRef<RawObj> for EnvObj<E> {
-    fn as_ref(&self) -> &RawObj {
-        unsafe { &*(&self.0.val as *const RawVal as *const RawObj) }
-    }
-}
-
 impl<E: Env> TryFrom<EnvVal<E>> for EnvObj<E> {
     type Error = ();
 
@@ -137,17 +131,9 @@ mod test {
     fn as_ref_raw_val() {
         let env = UnimplementedEnv::default();
         let ro = RawObj::from_type_and_code(ScObjectType::ScoI64, 1);
-        let eo = EnvObj::from_raw_obj(&env, ro);
-        let ro_roundtrip: &RawObj = eo.as_ref();
-
-        assert!(ro.is_obj_type(ScObjectType::ScoI64));
-        assert_eq!(ro.get_handle(), 1);
-
-        assert!(ro_roundtrip.is_obj_type(ScObjectType::ScoI64));
-        assert_eq!(ro_roundtrip.get_handle(), 1);
-
         let rv: RawVal = ro.into();
-        let rv_roundtrip: RawVal = (*ro_roundtrip).into();
+        let eo = EnvObj::from_raw_obj(&env, ro);
+        let rv_roundtrip: &RawVal = eo.as_ref();
         assert_eq!(rv.get_payload(), rv_roundtrip.get_payload());
     }
 }
