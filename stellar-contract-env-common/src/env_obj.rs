@@ -123,9 +123,8 @@ impl<E: Env> EnvObj<E> {
 
 #[cfg(test)]
 mod test {
-    use crate::UnimplementedEnv;
-
     use super::*;
+    use crate::UnimplementedEnv;
 
     #[test]
     fn as_ref_raw_val() {
