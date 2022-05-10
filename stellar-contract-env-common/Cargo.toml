@@ -4,7 +4,6 @@ version = "0.0.0"
 edition = "2021"
 
 [dependencies]
-paste = "1.0.7"
 static_assertions = "1.1.0"
 stellar-xdr = { git = "https://github.com/stellar/rs-stellar-xdr", rev = "5f9c700", default-features = false }
 

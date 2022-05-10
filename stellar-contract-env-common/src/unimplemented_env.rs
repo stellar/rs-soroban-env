@@ -1,6 +1,5 @@
 use super::{call_macro_with_all_host_functions, Env, EnvBase, RawObj, RawVal};
 use core::any;
-use paste::paste;
 
 #[derive(Clone, Default)]
 pub struct UnimplementedEnv;
@@ -24,7 +23,7 @@ macro_rules! host_function_helper {
     {fn $fn_id:ident($($arg:ident:$type:ty),*) -> $ret:ty}
     =>
     {
-        fn $fn_id(&self, $(paste!{[<_ $arg>]}:$type),*) -> $ret {
+        fn $fn_id(&self, $(_:$type),*) -> $ret {
             unimplemented!()
         }
     };
