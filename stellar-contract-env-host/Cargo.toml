@@ -4,11 +4,14 @@ version = "0.0.0"
 edition = "2021"
 
 [dependencies]
-stellar-contract-env-common = { path = "../stellar-contract-env-common", features = ["std"] }
+stellar-contract-env-common = { path = "../stellar-contract-env-common", features = [
+    "std",
+] }
 static_assertions = "1.1.0"
 im-rc = "15.0.0"
 num-bigint = "0.4"
 num-rational = "0.4"
+thiserror = "1.0.31"
 wasmi = { version = "0.11.0", optional = true }
 
 [features]
