@@ -86,12 +86,14 @@ impl<E: Env, T: TagType> From<EnvVal<E, TaggedVal<T>>> for EnvVal<E, RawVal> {
 // EnvValConvertible is similar to RawValConvertible but also covers types with conversions
 // that need an Env to help with the conversion -- those that might require allocating an Object. ValType
 // covers types that can always be directly converted to Val with no Env.
-pub trait EnvValConvertible<E: Env, V: Val>: Sized {
+pub trait EnvValConvertible<E: Env, V: Val>: Sized + TryFrom<EnvVal<E, V>> {
     fn into_env_val(self, env: &E) -> EnvVal<E, V>;
     fn into_val(self, env: &E) -> V {
         Self::into_env_val(self, env).val
     }
-    fn try_from_env_val(ev: &EnvVal<E, V>) -> Option<Self>;
+    fn try_from_env_val(ev: &EnvVal<E, V>) -> Option<Self> {
+        ev.clone().try_into().ok()
+    }
     fn try_from_val(env: &E, v: &V) -> Option<Self> {
         Self::try_from_env_val(&EnvVal {
             env: env.clone(),
@@ -148,7 +150,7 @@ impl<E: Env, T: TagType> EnvValConvertible<E, TaggedVal<T>> for TaggedVal<T> {
     }
 }
 
-impl<E: Env, V: RawValConvertible> EnvValConvertible<E, RawVal> for V {
+impl<E: Env, V: RawValConvertible + TryFrom<EnvVal<E, RawVal>>> EnvValConvertible<E, RawVal> for V {
     fn into_env_val(self, env: &E) -> EnvVal<E, RawVal> {
         EnvVal {
             env: env.clone(),
@@ -169,6 +171,20 @@ impl<E: Env, V: RawValConvertible> EnvValConvertible<E, RawVal> for V {
     }
 }
 
+impl<E: Env> TryFrom<EnvVal<E, RawVal>> for i64 {
+    type Error = ();
+
+    fn try_from(ev: EnvVal<E, RawVal>) -> Result<Self, Self::Error> {
+        if ev.val.is_positive_i64() {
+            Ok(unsafe { ev.val.unchecked_as_positive_i64() })
+        } else if Object::val_is_obj_type(ev.val, ScObjectType::ScoI64) {
+            Ok(ev.env.obj_to_i64(ev.val))
+        } else {
+            Err(())
+        }
+    }
+}
+
 impl<E: Env> EnvValConvertible<E, RawVal> for i64 {
     fn into_env_val(self, env: &E) -> EnvVal<E, RawVal> {
         let val = if self >= 0 {
@@ -181,14 +197,18 @@ impl<E: Env> EnvValConvertible<E, RawVal> for i64 {
             val,
         }
     }
+}
 
-    fn try_from_env_val(ev: &EnvVal<E, RawVal>) -> Option<Self> {
+impl<E: Env> TryFrom<EnvVal<E, RawVal>> for u64 {
+    type Error = ();
+
+    fn try_from(ev: EnvVal<E, RawVal>) -> Result<Self, Self::Error> {
         if ev.val.is_positive_i64() {
-            Some(unsafe { ev.val.unchecked_as_positive_i64() })
-        } else if Object::val_is_obj_type(ev.val, ScObjectType::ScoI64) {
-            Some(ev.env.obj_to_i64(ev.val))
+            Ok(unsafe { ev.val.unchecked_as_positive_i64() } as u64)
+        } else if Object::val_is_obj_type(ev.val, ScObjectType::ScoU64) {
+            Ok(ev.env.obj_to_u64(ev.val))
         } else {
-            None
+            Err(())
         }
     }
 }
@@ -203,16 +223,6 @@ impl<E: Env> EnvValConvertible<E, RawVal> for u64 {
         EnvVal {
             env: env.clone(),
             val,
-        }
-    }
-
-    fn try_from_env_val(ev: &EnvVal<E, RawVal>) -> Option<Self> {
-        if ev.val.is_positive_i64() {
-            Some(unsafe { ev.val.unchecked_as_positive_i64() } as u64)
-        } else if Object::val_is_obj_type(ev.val, ScObjectType::ScoU64) {
-            Some(ev.env.obj_to_u64(ev.val))
-        } else {
-            None
         }
     }
 }

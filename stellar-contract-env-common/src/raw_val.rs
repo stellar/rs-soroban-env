@@ -95,6 +95,13 @@ macro_rules! declare_tryfrom {
                 }
             }
         }
+        impl<E: Env> TryFrom<EnvVal<E, RawVal>> for $T {
+            type Error = ();
+            #[inline(always)]
+            fn try_from(v: EnvVal<E, RawVal>) -> Result<Self, Self::Error> {
+                Self::try_from(v.to_raw())
+            }
+        }
     };
 }
 
