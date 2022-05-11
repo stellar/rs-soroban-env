@@ -70,21 +70,21 @@ impl Debug for Host {
 }
 
 impl Host {
-    unsafe fn unchecked_visit_val_obj<F, U>(&self, val: RawVal, f: F) -> U
+    unsafe fn unchecked_visit_val_obj<F, U>(&self, val: &RawVal, f: F) -> U
     where
         F: FnOnce(Option<&HostObject>) -> U,
     {
         let r = self.0.objects.borrow();
-        let index = <Object as RawValConvertible>::unchecked_from_val(val).get_handle() as usize;
+        let index = <Object as RawValConvertible>::unchecked_from_val(*val).get_handle() as usize;
         f(r.get(index))
     }
 
-    fn visit_obj<HOT: HostObjectType, F, U>(&self, obj: Object, f: F) -> Result<U, HostError>
+    fn visit_obj<HOT: HostObjectType, F, U>(&self, obj: &Object, f: F) -> Result<U, HostError>
     where
         F: FnOnce(&HOT) -> Result<U, HostError>,
     {
         unsafe {
-            self.unchecked_visit_val_obj(obj.into(), |hopt| match hopt {
+            self.unchecked_visit_val_obj(obj.as_ref(), |hopt| match hopt {
                 None => Err(HostError::General("unknown object reference")),
                 Some(hobj) => match HOT::try_extract(hobj) {
                     None => Err(HostError::General("unexpected host object type")),
@@ -208,7 +208,7 @@ impl Host {
 
     pub(crate) fn from_host_obj(&self, ob: Object) -> Result<ScObject, HostError> {
         unsafe {
-            self.unchecked_visit_val_obj(ob.into(), |ob| match ob {
+            self.unchecked_visit_val_obj(ob.as_ref(), |ob| match ob {
                 None => Err(HostError::General("object not found")),
                 Some(ho) => match ho {
                     HostObject::Box(v) => Ok(ScObject::ScoBox(self.from_host_val(v.val)?)),
@@ -247,17 +247,17 @@ impl Host {
     }
 
     pub(crate) fn to_host_obj(&mut self, ob: &ScObject) -> Result<HostObj, HostError> {
-        match ob {
+        match ob.clone() {
             ScObject::ScoBox(b) => {
-                let hv = self.to_host_val(b)?;
-                self.add_host_object(hv)
+                let hv = self.to_host_val(&b)?;
+                self.add_host_object(hv.clone())
             }
             ScObject::ScoVec(v) => {
                 let mut vv = Vector::new();
                 for e in v.0.iter() {
                     vv.push_back(self.to_host_val(e)?)
                 }
-                self.add_host_object(vv)
+                self.add_host_object(vv.clone())
             }
             ScObject::ScoMap(m) => {
                 let mut mm = OrdMap::new();
@@ -266,10 +266,10 @@ impl Host {
                     let v = self.to_host_val(&pair.val)?;
                     mm.insert(k, v);
                 }
-                self.add_host_object(mm)
+                self.add_host_object(mm.clone())
             }
-            ScObject::ScoU64(u) => self.add_host_object(*u),
-            ScObject::ScoI64(i) => self.add_host_object(*i),
+            ScObject::ScoU64(u) => self.add_host_object(u),
+            ScObject::ScoI64(i) => self.add_host_object(i),
             ScObject::ScoString(s) => {
                 let ss = match String::from_utf8(s.clone().into()) {
                     Ok(ss) => ss,
@@ -277,28 +277,28 @@ impl Host {
                 };
                 self.add_host_object(ss)
             }
-            ScObject::ScoBinary(b) => self.add_host_object::<Vec<u8>>(b.clone().into()),
+            ScObject::ScoBinary(b) => self.add_host_object::<Vec<u8>>(b.to_vec()),
 
             ScObject::ScoBigint(_) => todo!(),
             ScObject::ScoBigrat(_) => todo!(),
 
             ScObject::ScoLedgerkey(None) => Err(HostError::General("missing ScoLedgerKey")),
-            ScObject::ScoLedgerkey(Some(lk)) => self.add_host_object(lk.clone()),
+            ScObject::ScoLedgerkey(Some(lk)) => self.add_host_object(lk),
 
             ScObject::ScoOperation(None) => Err(HostError::General("missing ScoOperation")),
-            ScObject::ScoOperation(Some(op)) => self.add_host_object(op.clone()),
+            ScObject::ScoOperation(Some(op)) => self.add_host_object(op),
 
             ScObject::ScoOperationResult(None) => {
                 Err(HostError::General("missing ScoOperationResult"))
             }
-            ScObject::ScoOperationResult(Some(o)) => self.add_host_object(o.clone()),
+            ScObject::ScoOperationResult(Some(o)) => self.add_host_object(o),
 
             ScObject::ScoTransaction(None) => Err(HostError::General("missing ScoTransaction")),
-            ScObject::ScoTransaction(Some(t)) => self.add_host_object(t.clone()),
+            ScObject::ScoTransaction(Some(t)) => self.add_host_object(t),
 
-            ScObject::ScoAsset(a) => self.add_host_object(a.clone()),
-            ScObject::ScoPrice(p) => self.add_host_object(p.clone()),
-            ScObject::ScoAccountid(a) => self.add_host_object(a.clone()),
+            ScObject::ScoAsset(a) => self.add_host_object(a),
+            ScObject::ScoPrice(p) => self.add_host_object(p),
+            ScObject::ScoAccountid(a) => self.add_host_object(a),
         }
     }
 
@@ -330,7 +330,7 @@ impl EnvBase for Host {
 impl CheckedEnv for Host {
     type Error = HostError;
 
-    fn log_value(&self, v: RawVal) -> Result<RawVal, HostError> {
+    fn log_value(&self, v: &RawVal) -> Result<RawVal, HostError> {
         todo!()
     }
 
@@ -338,7 +338,7 @@ impl CheckedEnv for Host {
         todo!()
     }
 
-    fn obj_cmp(&self, a: RawVal, b: RawVal) -> Result<i64, HostError> {
+    fn obj_cmp(&self, a: &RawVal, b: &RawVal) -> Result<i64, HostError> {
         let res = unsafe {
             self.unchecked_visit_val_obj(a, |ao| self.unchecked_visit_val_obj(b, |bo| ao.cmp(&bo)))
         };
@@ -353,7 +353,7 @@ impl CheckedEnv for Host {
         Ok(self.add_host_object(u)?.into())
     }
 
-    fn obj_to_u64(&self, v: RawVal) -> Result<u64, HostError> {
+    fn obj_to_u64(&self, v: &RawVal) -> Result<u64, HostError> {
         todo!()
     }
 
@@ -361,7 +361,7 @@ impl CheckedEnv for Host {
         Ok(self.add_host_object(i)?.into())
     }
 
-    fn obj_to_i64(&self, v: RawVal) -> Result<i64, HostError> {
+    fn obj_to_i64(&self, v: &RawVal) -> Result<i64, HostError> {
         todo!()
     }
 
@@ -369,27 +369,27 @@ impl CheckedEnv for Host {
         Ok(self.add_host_object(HostMap::new())?.into())
     }
 
-    fn map_put(&self, m: Object, k: RawVal, v: RawVal) -> Result<Object, HostError> {
+    fn map_put(&self, m: &Object, k: &RawVal, v: &RawVal) -> Result<Object, HostError> {
         todo!()
     }
 
-    fn map_get(&self, m: Object, k: RawVal) -> Result<RawVal, HostError> {
+    fn map_get(&self, m: &Object, k: &RawVal) -> Result<RawVal, HostError> {
         todo!()
     }
 
-    fn map_del(&self, m: Object, k: RawVal) -> Result<Object, HostError> {
+    fn map_del(&self, m: &Object, k: &RawVal) -> Result<Object, HostError> {
         todo!()
     }
 
-    fn map_len(&self, m: Object) -> Result<RawVal, HostError> {
+    fn map_len(&self, m: &Object) -> Result<RawVal, HostError> {
         todo!()
     }
 
-    fn map_keys(&self, m: Object) -> Result<Object, HostError> {
+    fn map_keys(&self, m: &Object) -> Result<Object, HostError> {
         todo!()
     }
 
-    fn map_has(&self, m: Object, k: RawVal) -> Result<RawVal, HostError> {
+    fn map_has(&self, m: &Object, k: &RawVal) -> Result<RawVal, HostError> {
         todo!()
     }
 
@@ -397,25 +397,25 @@ impl CheckedEnv for Host {
         Ok(self.add_host_object(HostVec::new())?.into())
     }
 
-    fn vec_put(&self, v: Object, i: RawVal, x: RawVal) -> Result<Object, HostError> {
+    fn vec_put(&self, v: &Object, i: &RawVal, x: &RawVal) -> Result<Object, HostError> {
         todo!()
     }
 
-    fn vec_get(&self, v: Object, i: RawVal) -> Result<RawVal, HostError> {
+    fn vec_get(&self, v: &Object, i: &RawVal) -> Result<RawVal, HostError> {
         todo!()
     }
 
-    fn vec_del(&self, v: Object, i: RawVal) -> Result<Object, HostError> {
+    fn vec_del(&self, v: &Object, i: &RawVal) -> Result<Object, HostError> {
         todo!()
     }
 
-    fn vec_len(&self, v: Object) -> Result<RawVal, HostError> {
+    fn vec_len(&self, v: &Object) -> Result<RawVal, HostError> {
         let len = self.visit_obj(v, |hv: &HostVec| Ok(hv.len()))?;
         Ok(u32::try_from(len)?.into())
     }
 
-    fn vec_push(&self, v: Object, x: RawVal) -> Result<Object, HostError> {
-        let x = self.associate_raw_val(x);
+    fn vec_push(&self, v: &Object, x: &RawVal) -> Result<Object, HostError> {
+        let x = self.associate_raw_val(*x);
         let vnew = self.visit_obj(v, move |hv: &HostVec| {
             let mut vnew = hv.clone();
             vnew.push_back(x);
@@ -424,31 +424,31 @@ impl CheckedEnv for Host {
         Ok(self.add_host_object(vnew)?.into())
     }
 
-    fn vec_pop(&self, v: Object) -> Result<Object, HostError> {
+    fn vec_pop(&self, v: &Object) -> Result<Object, HostError> {
         todo!()
     }
 
-    fn vec_take(&self, v: Object, n: RawVal) -> Result<Object, HostError> {
+    fn vec_take(&self, v: &Object, n: &RawVal) -> Result<Object, HostError> {
         todo!()
     }
 
-    fn vec_drop(&self, v: Object, n: RawVal) -> Result<Object, HostError> {
+    fn vec_drop(&self, v: &Object, n: &RawVal) -> Result<Object, HostError> {
         todo!()
     }
 
-    fn vec_front(&self, v: Object) -> Result<RawVal, HostError> {
+    fn vec_front(&self, v: &Object) -> Result<RawVal, HostError> {
         todo!()
     }
 
-    fn vec_back(&self, v: Object) -> Result<RawVal, HostError> {
+    fn vec_back(&self, v: &Object) -> Result<RawVal, HostError> {
         todo!()
     }
 
-    fn vec_insert(&self, v: Object, i: RawVal, x: RawVal) -> Result<Object, HostError> {
+    fn vec_insert(&self, v: &Object, i: &RawVal, x: &RawVal) -> Result<Object, HostError> {
         todo!()
     }
 
-    fn vec_append(&self, v1: Object, v2: Object) -> Result<Object, HostError> {
+    fn vec_append(&self, v1: &Object, v2: &Object) -> Result<Object, HostError> {
         todo!()
     }
 
@@ -462,172 +462,172 @@ impl CheckedEnv for Host {
 
     fn pay(
         &self,
-        src: RawVal,
-        dst: RawVal,
-        asset: RawVal,
-        amt: RawVal,
+        src: &RawVal,
+        dst: &RawVal,
+        asset: &RawVal,
+        amt: &RawVal,
     ) -> Result<RawVal, HostError> {
         todo!()
     }
 
-    fn put_contract_data(&self, k: RawVal, v: RawVal) -> Result<RawVal, HostError> {
+    fn put_contract_data(&self, k: &RawVal, v: &RawVal) -> Result<RawVal, HostError> {
         todo!()
     }
 
-    fn has_contract_data(&self, k: RawVal) -> Result<RawVal, HostError> {
+    fn has_contract_data(&self, k: &RawVal) -> Result<RawVal, HostError> {
         todo!()
     }
 
-    fn get_contract_data(&self, k: RawVal) -> Result<RawVal, HostError> {
+    fn get_contract_data(&self, k: &RawVal) -> Result<RawVal, HostError> {
         todo!()
     }
 
-    fn del_contract_data(&self, k: RawVal) -> Result<RawVal, HostError> {
+    fn del_contract_data(&self, k: &RawVal) -> Result<RawVal, HostError> {
         todo!()
     }
 
-    fn account_balance(&self, acct: RawVal) -> Result<RawVal, HostError> {
+    fn account_balance(&self, acct: &RawVal) -> Result<RawVal, HostError> {
         todo!()
     }
 
-    fn account_trust_line(&self, acct: RawVal, asset: RawVal) -> Result<RawVal, HostError> {
+    fn account_trust_line(&self, acct: &RawVal, asset: &RawVal) -> Result<RawVal, HostError> {
         todo!()
     }
 
-    fn trust_line_balance(&self, tl: RawVal) -> Result<RawVal, HostError> {
+    fn trust_line_balance(&self, tl: &RawVal) -> Result<RawVal, HostError> {
         todo!()
     }
 
-    fn call0(&self, contract: RawVal, func: RawVal) -> Result<RawVal, HostError> {
+    fn call0(&self, contract: &RawVal, func: &RawVal) -> Result<RawVal, HostError> {
         todo!()
     }
 
-    fn call1(&self, contract: RawVal, func: RawVal, a: RawVal) -> Result<RawVal, HostError> {
+    fn call1(&self, contract: &RawVal, func: &RawVal, a: &RawVal) -> Result<RawVal, HostError> {
         todo!()
     }
 
     fn call2(
         &self,
-        contract: RawVal,
-        func: RawVal,
-        a: RawVal,
-        b: RawVal,
+        contract: &RawVal,
+        func: &RawVal,
+        a: &RawVal,
+        b: &RawVal,
     ) -> Result<RawVal, HostError> {
         todo!()
     }
 
     fn call3(
         &self,
-        contract: RawVal,
-        func: RawVal,
-        a: RawVal,
-        b: RawVal,
-        c: RawVal,
+        contract: &RawVal,
+        func: &RawVal,
+        a: &RawVal,
+        b: &RawVal,
+        c: &RawVal,
     ) -> Result<RawVal, HostError> {
         todo!()
     }
 
     fn call4(
         &self,
-        contract: RawVal,
-        func: RawVal,
-        a: RawVal,
-        b: RawVal,
-        c: RawVal,
-        d: RawVal,
+        contract: &RawVal,
+        func: &RawVal,
+        a: &RawVal,
+        b: &RawVal,
+        c: &RawVal,
+        d: &RawVal,
     ) -> Result<RawVal, HostError> {
         todo!()
     }
 
-    fn bigint_from_u64(&self, x: Object) -> Result<Object, HostError> {
+    fn bigint_from_u64(&self, x: &Object) -> Result<Object, HostError> {
         todo!()
     }
 
-    fn bigint_add(&self, x: Object, y: Object) -> Result<Object, HostError> {
+    fn bigint_add(&self, x: &Object, y: &Object) -> Result<Object, HostError> {
         todo!()
     }
 
-    fn bigint_sub(&self, x: Object, y: Object) -> Result<Object, HostError> {
+    fn bigint_sub(&self, x: &Object, y: &Object) -> Result<Object, HostError> {
         todo!()
     }
 
-    fn bigint_mul(&self, x: Object, y: Object) -> Result<Object, HostError> {
+    fn bigint_mul(&self, x: &Object, y: &Object) -> Result<Object, HostError> {
         todo!()
     }
 
-    fn bigint_div(&self, x: Object, y: Object) -> Result<Object, HostError> {
+    fn bigint_div(&self, x: &Object, y: &Object) -> Result<Object, HostError> {
         todo!()
     }
 
-    fn bigint_rem(&self, x: Object, y: Object) -> Result<Object, HostError> {
+    fn bigint_rem(&self, x: &Object, y: &Object) -> Result<Object, HostError> {
         todo!()
     }
 
-    fn bigint_and(&self, x: Object, y: Object) -> Result<Object, HostError> {
+    fn bigint_and(&self, x: &Object, y: &Object) -> Result<Object, HostError> {
         todo!()
     }
 
-    fn bigint_or(&self, x: Object, y: Object) -> Result<Object, HostError> {
+    fn bigint_or(&self, x: &Object, y: &Object) -> Result<Object, HostError> {
         todo!()
     }
 
-    fn bigint_xor(&self, x: Object, y: Object) -> Result<Object, HostError> {
+    fn bigint_xor(&self, x: &Object, y: &Object) -> Result<Object, HostError> {
         todo!()
     }
 
-    fn bigint_shl(&self, x: Object, y: Object) -> Result<Object, HostError> {
+    fn bigint_shl(&self, x: &Object, y: &Object) -> Result<Object, HostError> {
         todo!()
     }
 
-    fn bigint_shr(&self, x: Object, y: Object) -> Result<Object, HostError> {
+    fn bigint_shr(&self, x: &Object, y: &Object) -> Result<Object, HostError> {
         todo!()
     }
 
-    fn bigint_cmp(&self, x: Object, y: Object) -> Result<Object, HostError> {
+    fn bigint_cmp(&self, x: &Object, y: &Object) -> Result<Object, HostError> {
         todo!()
     }
 
-    fn bigint_is_zero(&self, x: Object) -> Result<Object, HostError> {
+    fn bigint_is_zero(&self, x: &Object) -> Result<Object, HostError> {
         todo!()
     }
 
-    fn bigint_neg(&self, x: Object) -> Result<Object, HostError> {
+    fn bigint_neg(&self, x: &Object) -> Result<Object, HostError> {
         todo!()
     }
 
-    fn bigint_not(&self, x: Object) -> Result<Object, HostError> {
+    fn bigint_not(&self, x: &Object) -> Result<Object, HostError> {
         todo!()
     }
 
-    fn bigint_gcd(&self, x: Object) -> Result<Object, HostError> {
+    fn bigint_gcd(&self, x: &Object) -> Result<Object, HostError> {
         todo!()
     }
 
-    fn bigint_lcm(&self, x: Object, y: Object) -> Result<Object, HostError> {
+    fn bigint_lcm(&self, x: &Object, y: &Object) -> Result<Object, HostError> {
         todo!()
     }
 
-    fn bigint_pow(&self, x: Object, y: Object) -> Result<Object, HostError> {
+    fn bigint_pow(&self, x: &Object, y: &Object) -> Result<Object, HostError> {
         todo!()
     }
 
-    fn bigint_pow_mod(&self, p: Object, q: Object, m: Object) -> Result<Object, HostError> {
+    fn bigint_pow_mod(&self, p: &Object, q: &Object, m: &Object) -> Result<Object, HostError> {
         todo!()
     }
 
-    fn bigint_sqrt(&self, x: Object) -> Result<Object, HostError> {
+    fn bigint_sqrt(&self, x: &Object) -> Result<Object, HostError> {
         todo!()
     }
 
-    fn bigint_bits(&self, x: Object) -> Result<Object, HostError> {
+    fn bigint_bits(&self, x: &Object) -> Result<Object, HostError> {
         todo!()
     }
 
-    fn bigint_to_u64(&self, x: Object) -> Result<u64, HostError> {
+    fn bigint_to_u64(&self, x: &Object) -> Result<u64, HostError> {
         todo!()
     }
 
-    fn bigint_to_i64(&self, x: Object) -> Result<i64, HostError> {
+    fn bigint_to_i64(&self, x: &Object) -> Result<i64, HostError> {
         todo!()
     }
 

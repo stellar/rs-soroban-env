@@ -6,7 +6,7 @@ fn vec_as_seen_by_user() -> Result<(), ()> {
     let int1 = host.obj_from_i64(5).in_env(&host);
 
     let vec1a = host.vec_new().in_env(&host);
-    let vec1b = host.vec_push(*vec1a.as_ref(), *int1.as_ref()).in_env(&host);
+    let vec1b = host.vec_push(vec1a.as_ref(), int1.as_ref()).in_env(&host);
 
     assert_ne!(
         vec1a.as_raw_ref().get_payload(),
@@ -14,7 +14,7 @@ fn vec_as_seen_by_user() -> Result<(), ()> {
     );
 
     let vec2a = host.vec_new().in_env(&host);
-    let vec2b = host.vec_push(*vec2a.as_ref(), *int1.as_ref()).in_env(&host);
+    let vec2b = host.vec_push(vec2a.as_ref(), int1.as_ref()).in_env(&host);
 
     assert_ne!(
         vec2a.as_raw_ref().get_payload(),

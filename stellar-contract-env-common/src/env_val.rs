@@ -150,7 +150,7 @@ impl<E: Env> EnvValConvertible<E, RawVal> for i64 {
         if ev.val.is_positive_i64() {
             Some(unsafe { ev.val.unchecked_as_positive_i64() })
         } else if Object::val_is_obj_type(ev.val, ScObjectType::ScoI64) {
-            Some(ev.env.obj_to_i64(ev.val))
+            Some(ev.env.obj_to_i64(&ev.val))
         } else {
             None
         }
@@ -174,7 +174,7 @@ impl<E: Env> EnvValConvertible<E, RawVal> for u64 {
         if ev.val.is_positive_i64() {
             Some(unsafe { ev.val.unchecked_as_positive_i64() } as u64)
         } else if Object::val_is_obj_type(ev.val, ScObjectType::ScoU64) {
-            Some(ev.env.obj_to_u64(ev.val))
+            Some(ev.env.obj_to_u64(&ev.val))
         } else {
             None
         }
@@ -204,7 +204,7 @@ impl<E: Env, V: Val> PartialEq for EnvVal<E, V> {
             false
         } else {
             // Slow path: deep object comparison via the environment.
-            let v = self.env.obj_cmp(*self.as_ref(), *other.as_ref());
+            let v = self.env.obj_cmp(self.as_ref(), other.as_ref());
             v == 0
         }
     }
@@ -252,7 +252,7 @@ impl<E: Env, V: Val> Ord for EnvVal<E, V> {
                     .get_body()
                     .cmp(&other.val.as_ref().get_body()),
                 Tag::Object => {
-                    let v = self.env.obj_cmp(*self.val.as_ref(), *other.val.as_ref());
+                    let v = self.env.obj_cmp(self.val.as_ref(), other.val.as_ref());
                     if v == 0 {
                         Ordering::Equal
                     } else if v < 0 {
