@@ -1,5 +1,5 @@
 use crate::call_macro_with_all_host_functions;
-use crate::{EnvBase, RawObj, RawVal};
+use crate::{EnvBase, Object, RawVal};
 use core::fmt::Debug;
 
 /// The CheckedEnv trait is similar to the Env trait -- it provides all the

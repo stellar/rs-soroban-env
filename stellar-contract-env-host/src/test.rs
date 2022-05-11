@@ -1,14 +1,14 @@
 use crate::{
     xdr::{ScObject, ScObjectType, ScVal, ScVec},
-    EnvValType, Host, OrAbort, RawObj,
+    EnvValConvertable, Host, Object, OrAbort,
 };
 
 #[test]
 fn i64_roundtrip() {
     let host = Host::default();
     let i = 12345_i64;
-    let v = host.associate_env_val_type(i);
-    let j = <i64 as EnvValType>::try_from_env_val(v).unwrap();
+    let v = i.into_env_val(&host);
+    let j = i64::try_from_env_val(&v).unwrap();
     assert_eq!(i, j);
 }
 
@@ -23,10 +23,10 @@ fn vec_as_seen_by_host() -> Result<(), ()> {
     let scval1 = ScVal::ScvObject(Some(Box::new(scobj1)));
     let val0 = host.to_host_val(&scval0).or_abort();
     let val1 = host.to_host_val(&scval1).or_abort();
-    assert!(val0.val.is::<RawObj>());
-    assert!(val1.val.is::<RawObj>());
-    let obj0: RawObj = val0.val.try_into().or_abort();
-    let obj1: RawObj = val1.val.try_into().or_abort();
+    assert!(val0.val.is::<Object>());
+    assert!(val1.val.is::<Object>());
+    let obj0: Object = val0.val.try_into().or_abort();
+    let obj1: Object = val1.val.try_into().or_abort();
     assert_eq!(obj0.get_handle(), 0);
     assert_eq!(obj1.get_handle(), 1);
     assert!(obj0.is_obj_type(ScObjectType::ScoVec));
