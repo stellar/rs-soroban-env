@@ -1,6 +1,6 @@
 use crate::{
     xdr::{ScObject, ScObjectType, ScVal, ScVec},
-    EnvValConvertable, Host, Object, OrAbort,
+    EnvValConvertible, Host, Object, OrAbort,
 };
 
 #[test]

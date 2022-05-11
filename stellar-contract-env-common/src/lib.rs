@@ -22,7 +22,7 @@ pub use or_abort::OrAbort;
 pub use rt::trap;
 
 // RawVal and RawObj are the 64-bit transparent type.
-pub use raw_val::{RawVal, RawValConvertable, Tag};
+pub use raw_val::{RawVal, RawValConvertible, Tag};
 
 pub use tagged_val::{
     TagBitSet, TagI32, TagObject, TagStatic, TagStatus, TagSymbol, TagType, TagU32, TaggedVal,
@@ -32,7 +32,7 @@ pub use val::Val;
 // RawVal and EnvObj couple raw types to environments.
 pub use checked_env::CheckedEnv;
 pub use env::{Env, EnvBase};
-pub use env_val::{EnvVal, EnvValConvertable};
+pub use env_val::{EnvVal, EnvValConvertible};
 pub use unimplemented_env::UnimplementedEnv;
 
 // BitSet, Status and Symbol wrap RawVals.
