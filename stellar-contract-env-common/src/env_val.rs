@@ -87,6 +87,12 @@ impl<E: Env> From<EnvVal<E, RawVal>> for RawVal {
     }
 }
 
+impl<E: Env, T: TagType> From<EnvVal<E, TaggedVal<T>>> for RawVal {
+    fn from(ev: EnvVal<E, TaggedVal<T>>) -> Self {
+        ev.val.0
+    }
+}
+
 impl<E: Env, T: TagType> From<EnvVal<E, TaggedVal<T>>> for TaggedVal<T> {
     fn from(ev: EnvVal<E, TaggedVal<T>>) -> Self {
         ev.val
