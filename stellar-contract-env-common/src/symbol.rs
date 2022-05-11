@@ -1,8 +1,9 @@
-use crate::{require, TagSymbol, TaggedVal};
+use crate::{require, RawVal, Tag, TagSymbol, TaggedVal};
 use core::{
     cmp::Ordering,
     fmt::Debug,
     hash::{Hash, Hasher},
+    marker::PhantomData,
     str,
 };
 
@@ -77,7 +78,10 @@ impl Symbol {
             };
             accum |= v;
         }
-        Ok(unsafe { TaggedVal::from_body_and_tag_type(accum) })
+        Ok(Self(
+            unsafe { RawVal::from_body_and_tag(accum, Tag::Symbol) },
+            PhantomData,
+        ))
     }
 
     pub const fn from_str(s: &str) -> Symbol {

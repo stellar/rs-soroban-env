@@ -50,7 +50,7 @@ impl TagType for TagStatus {
 }
 
 #[derive(Copy, Clone, Debug)]
-pub struct TaggedVal<T: TagType>(RawVal, PhantomData<T>);
+pub struct TaggedVal<T: TagType>(pub(crate) RawVal, pub(crate) PhantomData<T>);
 
 impl<T: TagType> AsRef<RawVal> for TaggedVal<T> {
     fn as_ref(&self) -> &RawVal {
@@ -72,24 +72,14 @@ impl<T: TagType> TaggedVal<T> {
         }
     }
 
-    // This is redundant with as_ref() in most contexts but sometimes
-    // we need a const fn.
     #[inline(always)]
-    pub(crate) const fn const_as_ref(&self) -> &RawVal {
-        &self.0
-    }
-
-    #[inline(always)]
-    pub(crate) const unsafe fn from_body_and_tag_type(body: u64) -> TaggedVal<T> {
+    pub(crate) unsafe fn from_body_and_tag_type(body: u64) -> TaggedVal<T> {
         let rv = RawVal::from_body_and_tag(body, T::TAG);
         Self(rv, PhantomData)
     }
 
     #[inline(always)]
-    pub(crate) const unsafe fn from_major_minor_and_tag_type(
-        major: u32,
-        minor: u32,
-    ) -> TaggedVal<T> {
+    pub(crate) unsafe fn from_major_minor_and_tag_type(major: u32, minor: u32) -> TaggedVal<T> {
         let rv = RawVal::from_major_minor_and_tag(major, minor, T::TAG);
         Self(rv, PhantomData)
     }

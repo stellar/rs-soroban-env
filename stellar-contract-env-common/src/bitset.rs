@@ -1,7 +1,8 @@
-use crate::{TagBitSet, TaggedVal};
+use crate::{RawVal, Tag, TagBitSet, TaggedVal};
 
 use core::cmp::Ordering;
 use core::hash::{Hash, Hasher};
+use core::marker::PhantomData;
 
 pub type BitSet = TaggedVal<TagBitSet>;
 
@@ -43,13 +44,16 @@ impl BitSet {
     #[inline(always)]
     pub const fn try_from_u64(u: u64) -> Result<BitSet, BitSetError> {
         if u & 0x0fff_ffff_ffff_ffff == u {
-            Ok(unsafe { TaggedVal::from_body_and_tag_type(u) })
+            Ok(Self(
+                unsafe { RawVal::from_body_and_tag(u, Tag::BitSet) },
+                PhantomData,
+            ))
         } else {
             Err(BitSetError::TooManyBits(u))
         }
     }
     #[inline(always)]
     pub const fn to_u64(&self) -> u64 {
-        self.const_as_ref().get_body()
+        self.0.get_body()
     }
 }

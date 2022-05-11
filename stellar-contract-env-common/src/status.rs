@@ -1,16 +1,23 @@
-use crate::{TagStatus, TaggedVal};
+use crate::{RawVal, Tag, TagStatus, TaggedVal};
 use core::{
     cmp::Ordering,
     hash::{Hash, Hasher},
+    marker::PhantomData,
 };
 use stellar_xdr::ScStatusType;
 
 pub type Status = TaggedVal<TagStatus>;
 
-pub const UNKNOWN_ERROR: Status =
-    unsafe { TaggedVal::from_major_minor_and_tag_type(0, ScStatusType::SstUnknownError as u32) };
-pub const OK: Status =
-    unsafe { TaggedVal::from_major_minor_and_tag_type(0, ScStatusType::SstOk as u32) };
+pub const UNKNOWN_ERROR: Status = TaggedVal(
+    unsafe {
+        RawVal::from_major_minor_and_tag(0, ScStatusType::SstUnknownError as u32, Tag::Status)
+    },
+    PhantomData,
+);
+pub const OK: Status = TaggedVal(
+    unsafe { RawVal::from_major_minor_and_tag(0, ScStatusType::SstOk as u32, Tag::Status) },
+    PhantomData,
+);
 
 impl Hash for Status {
     #[inline(always)]
@@ -50,12 +57,12 @@ impl Status {
     // bit-pattern.
     #[inline(always)]
     pub const fn is_type(&self, ty: ScStatusType) -> bool {
-        self.const_as_ref().has_minor(ty as u32)
+        self.0.has_minor(ty as u32)
     }
 
     #[inline(always)]
     pub const fn get_code(&self) -> u32 {
-        self.const_as_ref().get_major()
+        self.0.get_major()
     }
 
     #[inline(always)]
@@ -65,6 +72,13 @@ impl Status {
 
     #[inline(always)]
     pub const fn from_type_and_code(ty: ScStatusType, code: u32) -> Status {
-        unsafe { TaggedVal::from_major_minor_and_tag_type(code, ty as u32) }
+        // Unfortunately we can't use from_major_minor_and_tag_type here because
+        // it's not const, and making it const requires nightly.
+        unsafe {
+            Self(
+                RawVal::from_major_minor_and_tag(code, ty as u32, Tag::Status),
+                PhantomData,
+            )
+        }
     }
 }

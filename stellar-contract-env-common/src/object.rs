@@ -9,12 +9,12 @@ impl Object {
     // bit-pattern.
     #[inline(always)]
     pub const fn is_obj_type(&self, ty: ScObjectType) -> bool {
-        self.const_as_ref().has_minor(ty as u32)
+        self.0.has_minor(ty as u32)
     }
 
     #[inline(always)]
     pub const fn get_handle(&self) -> u32 {
-        self.const_as_ref().get_major()
+        self.0.get_major()
     }
 
     #[inline(always)]
@@ -23,7 +23,7 @@ impl Object {
     }
 
     #[inline(always)]
-    pub const fn from_type_and_handle(ty: ScObjectType, handle: u32) -> Self {
+    pub fn from_type_and_handle(ty: ScObjectType, handle: u32) -> Self {
         unsafe { TaggedVal::from_major_minor_and_tag_type(handle, ty as u32) }
     }
 }
