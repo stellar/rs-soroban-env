@@ -5,7 +5,7 @@
 /// in Rust.
 use crate::{RawVal, TagType, TaggedVal};
 
-pub trait Val: AsRef<RawVal> + AsMut<RawVal> + Clone {}
+pub trait Val: AsRef<RawVal> + AsMut<RawVal> + Into<RawVal> + Clone {}
 
 impl<T: TagType> Val for TaggedVal<T> {}
 impl Val for RawVal {}
