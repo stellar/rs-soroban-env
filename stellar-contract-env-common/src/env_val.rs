@@ -106,6 +106,23 @@ impl<E: Env> From<EnvVal<E, RawVal>> for RawVal {
     }
 }
 
+impl<E: Env, T: TagType> TryFrom<EnvVal<E, RawVal>> for TaggedVal<T> {
+    type Error = ();
+
+    fn try_from(ev: EnvVal<E, RawVal>) -> Result<Self, Self::Error> {
+        Ok(ev.to_raw().try_into()?)
+    }
+}
+
+impl<E: Env, T: TagType> TryFrom<EnvVal<E, RawVal>> for EnvVal<E, TaggedVal<T>> {
+    type Error = ();
+
+    fn try_from(ev: EnvVal<E, RawVal>) -> Result<Self, Self::Error> {
+        let tv: TaggedVal<T> = ev.to_raw().try_into()?;
+        Ok(tv.in_env(ev.env()))
+    }
+}
+
 impl<E: Env, T: TagType> From<EnvVal<E, TaggedVal<T>>> for RawVal {
     fn from(ev: EnvVal<E, TaggedVal<T>>) -> Self {
         ev.val.0
