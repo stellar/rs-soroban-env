@@ -16,8 +16,8 @@ use std::rc::Rc;
 use crate::host_object::{HostMap, HostObj, HostObject, HostObjectType, HostVal, HostVec};
 use crate::CheckedEnv;
 use crate::{
-    BitSet, BitSetError, EnvBase, EnvObj, EnvValType, RawObj, RawVal, RawValType, Status, Symbol,
-    SymbolError, Tag,
+    BitSet, BitSetError, EnvBase, EnvValConvertable, Object, RawVal, RawValConvertable, Status,
+    Symbol, SymbolError, Tag, Val,
 };
 
 use thiserror::Error;
@@ -75,11 +75,11 @@ impl Host {
         F: FnOnce(Option<&HostObject>) -> U,
     {
         let r = self.0.objects.borrow();
-        let index = <RawObj as RawValType>::unchecked_from_val(val).get_handle() as usize;
+        let index = <Object as RawValConvertable>::unchecked_from_val(val).get_handle() as usize;
         f(r.get(index))
     }
 
-    fn visit_obj<HOT: HostObjectType, F, U>(&self, obj: RawObj, f: F) -> Result<U, HostError>
+    fn visit_obj<HOT: HostObjectType, F, U>(&self, obj: Object, f: F) -> Result<U, HostError>
     where
         F: FnOnce(&HOT) -> Result<U, HostError>,
     {
@@ -105,7 +105,10 @@ impl Host {
         HostVal { env, val }
     }
 
-    pub(crate) fn associate_env_val_type<V: EnvValType>(&self, v: V) -> HostVal {
+    pub(crate) fn associate_env_val_type<V: Val, CVT: EnvValConvertable<WeakHost, RawVal>>(
+        &self,
+        v: CVT,
+    ) -> HostVal {
         let env = self.get_weak();
         v.into_env_val(&env)
     }
@@ -118,37 +121,39 @@ impl Host {
         } else {
             match val.get_tag() {
                 Tag::U32 => Ok(ScVal::ScvU32(unsafe {
-                    <u32 as RawValType>::unchecked_from_val(val)
+                    <u32 as RawValConvertable>::unchecked_from_val(val)
                 })),
                 Tag::I32 => Ok(ScVal::ScvI32(unsafe {
-                    <i32 as RawValType>::unchecked_from_val(val)
+                    <i32 as RawValConvertable>::unchecked_from_val(val)
                 })),
                 Tag::Static => {
-                    if let Some(b) = <bool as RawValType>::try_convert(val) {
+                    if let Some(b) = <bool as RawValConvertable>::try_convert(val) {
                         if b {
                             Ok(ScVal::ScvStatic(ScStatic::ScsTrue))
                         } else {
                             Ok(ScVal::ScvStatic(ScStatic::ScsFalse))
                         }
-                    } else if <() as RawValType>::is_val_type(val) {
+                    } else if <() as RawValConvertable>::is_val_type(val) {
                         Ok(ScVal::ScvStatic(ScStatic::ScsVoid))
                     } else {
                         Err(HostError::General("unknown Tag::Static case"))
                     }
                 }
                 Tag::Object => unsafe {
-                    let ob = <RawObj as RawValType>::unchecked_from_val(val);
+                    let ob = <Object as RawValConvertable>::unchecked_from_val(val);
                     let scob = self.from_host_obj(ob)?;
                     Ok(ScVal::ScvObject(Some(Box::new(scob))))
                 },
                 Tag::Symbol => {
-                    let sym: Symbol = unsafe { <Symbol as RawValType>::unchecked_from_val(val) };
+                    let sym: Symbol =
+                        unsafe { <Symbol as RawValConvertable>::unchecked_from_val(val) };
                     let str: String = sym.into_iter().collect();
                     Ok(ScVal::ScvSymbol(str.as_bytes().try_into()?))
                 }
                 Tag::BitSet => Ok(ScVal::ScvBitset(val.get_payload())),
                 Tag::Status => {
-                    let status: Status = unsafe { <Status as RawValType>::unchecked_from_val(val) };
+                    let status: Status =
+                        unsafe { <Status as RawValConvertable>::unchecked_from_val(val) };
                     if status.is_ok() {
                         Ok(ScVal::ScvStatus(ScStatus::SstOk))
                     } else if status.is_type(ScStatusType::SstUnknownError) {
@@ -201,7 +206,7 @@ impl Host {
         Ok(self.associate_raw_val(ok))
     }
 
-    pub(crate) fn from_host_obj(&self, ob: RawObj) -> Result<ScObject, HostError> {
+    pub(crate) fn from_host_obj(&self, ob: Object) -> Result<ScObject, HostError> {
         unsafe {
             self.unchecked_visit_val_obj(ob.into(), |ob| match ob {
                 None => Err(HostError::General("object not found")),
@@ -307,11 +312,8 @@ impl Host {
         }
         self.0.objects.borrow_mut().push(HOT::inject(hot));
         let env = WeakHost(Rc::downgrade(&self.0));
-        Ok(EnvObj::<WeakHost>::from_type_and_handle(
-            HOT::get_type(),
-            handle as u32,
-            env,
-        ))
+        let v = Object::from_type_and_handle(HOT::get_type(), handle as u32);
+        Ok(v.into_env_val(&env))
     }
 }
 
@@ -347,7 +349,7 @@ impl CheckedEnv for Host {
         })
     }
 
-    fn obj_from_u64(&self, u: u64) -> Result<RawObj, HostError> {
+    fn obj_from_u64(&self, u: u64) -> Result<Object, HostError> {
         Ok(self.add_host_object(u)?.into())
     }
 
@@ -355,7 +357,7 @@ impl CheckedEnv for Host {
         todo!()
     }
 
-    fn obj_from_i64(&self, i: i64) -> Result<RawObj, HostError> {
+    fn obj_from_i64(&self, i: i64) -> Result<Object, HostError> {
         Ok(self.add_host_object(i)?.into())
     }
 
@@ -363,56 +365,56 @@ impl CheckedEnv for Host {
         todo!()
     }
 
-    fn map_new(&self) -> Result<RawObj, HostError> {
+    fn map_new(&self) -> Result<Object, HostError> {
         Ok(self.add_host_object(HostMap::new())?.into())
     }
 
-    fn map_put(&self, m: RawObj, k: RawVal, v: RawVal) -> Result<RawObj, HostError> {
+    fn map_put(&self, m: Object, k: RawVal, v: RawVal) -> Result<Object, HostError> {
         todo!()
     }
 
-    fn map_get(&self, m: RawObj, k: RawVal) -> Result<RawVal, HostError> {
+    fn map_get(&self, m: Object, k: RawVal) -> Result<RawVal, HostError> {
         todo!()
     }
 
-    fn map_del(&self, m: RawObj, k: RawVal) -> Result<RawObj, HostError> {
+    fn map_del(&self, m: Object, k: RawVal) -> Result<Object, HostError> {
         todo!()
     }
 
-    fn map_len(&self, m: RawObj) -> Result<RawVal, HostError> {
+    fn map_len(&self, m: Object) -> Result<RawVal, HostError> {
         todo!()
     }
 
-    fn map_keys(&self, m: RawObj) -> Result<RawObj, HostError> {
+    fn map_keys(&self, m: Object) -> Result<Object, HostError> {
         todo!()
     }
 
-    fn map_has(&self, m: RawObj, k: RawVal) -> Result<RawVal, HostError> {
+    fn map_has(&self, m: Object, k: RawVal) -> Result<RawVal, HostError> {
         todo!()
     }
 
-    fn vec_new(&self) -> Result<RawObj, HostError> {
+    fn vec_new(&self) -> Result<Object, HostError> {
         Ok(self.add_host_object(HostVec::new())?.into())
     }
 
-    fn vec_put(&self, v: RawObj, i: RawVal, x: RawVal) -> Result<RawObj, HostError> {
+    fn vec_put(&self, v: Object, i: RawVal, x: RawVal) -> Result<Object, HostError> {
         todo!()
     }
 
-    fn vec_get(&self, v: RawObj, i: RawVal) -> Result<RawVal, HostError> {
+    fn vec_get(&self, v: Object, i: RawVal) -> Result<RawVal, HostError> {
         todo!()
     }
 
-    fn vec_del(&self, v: RawObj, i: RawVal) -> Result<RawObj, HostError> {
+    fn vec_del(&self, v: Object, i: RawVal) -> Result<Object, HostError> {
         todo!()
     }
 
-    fn vec_len(&self, v: RawObj) -> Result<RawVal, HostError> {
+    fn vec_len(&self, v: Object) -> Result<RawVal, HostError> {
         let len = self.visit_obj(v, |hv: &HostVec| Ok(hv.len()))?;
         Ok(u32::try_from(len)?.into())
     }
 
-    fn vec_push(&self, v: RawObj, x: RawVal) -> Result<RawObj, HostError> {
+    fn vec_push(&self, v: Object, x: RawVal) -> Result<Object, HostError> {
         let x = self.associate_raw_val(x);
         let vnew = self.visit_obj(v, move |hv: &HostVec| {
             let mut vnew = hv.clone();
@@ -422,31 +424,31 @@ impl CheckedEnv for Host {
         Ok(self.add_host_object(vnew)?.into())
     }
 
-    fn vec_pop(&self, v: RawObj) -> Result<RawObj, HostError> {
+    fn vec_pop(&self, v: Object) -> Result<Object, HostError> {
         todo!()
     }
 
-    fn vec_take(&self, v: RawObj, n: RawVal) -> Result<RawObj, HostError> {
+    fn vec_take(&self, v: Object, n: RawVal) -> Result<Object, HostError> {
         todo!()
     }
 
-    fn vec_drop(&self, v: RawObj, n: RawVal) -> Result<RawObj, HostError> {
+    fn vec_drop(&self, v: Object, n: RawVal) -> Result<Object, HostError> {
         todo!()
     }
 
-    fn vec_front(&self, v: RawObj) -> Result<RawVal, HostError> {
+    fn vec_front(&self, v: Object) -> Result<RawVal, HostError> {
         todo!()
     }
 
-    fn vec_back(&self, v: RawObj) -> Result<RawVal, HostError> {
+    fn vec_back(&self, v: Object) -> Result<RawVal, HostError> {
         todo!()
     }
 
-    fn vec_insert(&self, v: RawObj, i: RawVal, x: RawVal) -> Result<RawObj, HostError> {
+    fn vec_insert(&self, v: Object, i: RawVal, x: RawVal) -> Result<Object, HostError> {
         todo!()
     }
 
-    fn vec_append(&self, v1: RawObj, v2: RawObj) -> Result<RawObj, HostError> {
+    fn vec_append(&self, v1: Object, v2: Object) -> Result<Object, HostError> {
         todo!()
     }
 
@@ -537,99 +539,99 @@ impl CheckedEnv for Host {
         todo!()
     }
 
-    fn bigint_from_u64(&self, x: RawObj) -> Result<RawObj, HostError> {
+    fn bigint_from_u64(&self, x: Object) -> Result<Object, HostError> {
         todo!()
     }
 
-    fn bigint_add(&self, x: RawObj, y: RawObj) -> Result<RawObj, HostError> {
+    fn bigint_add(&self, x: Object, y: Object) -> Result<Object, HostError> {
         todo!()
     }
 
-    fn bigint_sub(&self, x: RawObj, y: RawObj) -> Result<RawObj, HostError> {
+    fn bigint_sub(&self, x: Object, y: Object) -> Result<Object, HostError> {
         todo!()
     }
 
-    fn bigint_mul(&self, x: RawObj, y: RawObj) -> Result<RawObj, HostError> {
+    fn bigint_mul(&self, x: Object, y: Object) -> Result<Object, HostError> {
         todo!()
     }
 
-    fn bigint_div(&self, x: RawObj, y: RawObj) -> Result<RawObj, HostError> {
+    fn bigint_div(&self, x: Object, y: Object) -> Result<Object, HostError> {
         todo!()
     }
 
-    fn bigint_rem(&self, x: RawObj, y: RawObj) -> Result<RawObj, HostError> {
+    fn bigint_rem(&self, x: Object, y: Object) -> Result<Object, HostError> {
         todo!()
     }
 
-    fn bigint_and(&self, x: RawObj, y: RawObj) -> Result<RawObj, HostError> {
+    fn bigint_and(&self, x: Object, y: Object) -> Result<Object, HostError> {
         todo!()
     }
 
-    fn bigint_or(&self, x: RawObj, y: RawObj) -> Result<RawObj, HostError> {
+    fn bigint_or(&self, x: Object, y: Object) -> Result<Object, HostError> {
         todo!()
     }
 
-    fn bigint_xor(&self, x: RawObj, y: RawObj) -> Result<RawObj, HostError> {
+    fn bigint_xor(&self, x: Object, y: Object) -> Result<Object, HostError> {
         todo!()
     }
 
-    fn bigint_shl(&self, x: RawObj, y: RawObj) -> Result<RawObj, HostError> {
+    fn bigint_shl(&self, x: Object, y: Object) -> Result<Object, HostError> {
         todo!()
     }
 
-    fn bigint_shr(&self, x: RawObj, y: RawObj) -> Result<RawObj, HostError> {
+    fn bigint_shr(&self, x: Object, y: Object) -> Result<Object, HostError> {
         todo!()
     }
 
-    fn bigint_cmp(&self, x: RawObj, y: RawObj) -> Result<RawObj, HostError> {
+    fn bigint_cmp(&self, x: Object, y: Object) -> Result<Object, HostError> {
         todo!()
     }
 
-    fn bigint_is_zero(&self, x: RawObj) -> Result<RawObj, HostError> {
+    fn bigint_is_zero(&self, x: Object) -> Result<Object, HostError> {
         todo!()
     }
 
-    fn bigint_neg(&self, x: RawObj) -> Result<RawObj, HostError> {
+    fn bigint_neg(&self, x: Object) -> Result<Object, HostError> {
         todo!()
     }
 
-    fn bigint_not(&self, x: RawObj) -> Result<RawObj, HostError> {
+    fn bigint_not(&self, x: Object) -> Result<Object, HostError> {
         todo!()
     }
 
-    fn bigint_gcd(&self, x: RawObj) -> Result<RawObj, HostError> {
+    fn bigint_gcd(&self, x: Object) -> Result<Object, HostError> {
         todo!()
     }
 
-    fn bigint_lcm(&self, x: RawObj, y: RawObj) -> Result<RawObj, HostError> {
+    fn bigint_lcm(&self, x: Object, y: Object) -> Result<Object, HostError> {
         todo!()
     }
 
-    fn bigint_pow(&self, x: RawObj, y: RawObj) -> Result<RawObj, HostError> {
+    fn bigint_pow(&self, x: Object, y: Object) -> Result<Object, HostError> {
         todo!()
     }
 
-    fn bigint_pow_mod(&self, p: RawObj, q: RawObj, m: RawObj) -> Result<RawObj, HostError> {
+    fn bigint_pow_mod(&self, p: Object, q: Object, m: Object) -> Result<Object, HostError> {
         todo!()
     }
 
-    fn bigint_sqrt(&self, x: RawObj) -> Result<RawObj, HostError> {
+    fn bigint_sqrt(&self, x: Object) -> Result<Object, HostError> {
         todo!()
     }
 
-    fn bigint_bits(&self, x: RawObj) -> Result<RawObj, HostError> {
+    fn bigint_bits(&self, x: Object) -> Result<Object, HostError> {
         todo!()
     }
 
-    fn bigint_to_u64(&self, x: RawObj) -> Result<u64, HostError> {
+    fn bigint_to_u64(&self, x: Object) -> Result<u64, HostError> {
         todo!()
     }
 
-    fn bigint_to_i64(&self, x: RawObj) -> Result<i64, HostError> {
+    fn bigint_to_i64(&self, x: Object) -> Result<i64, HostError> {
         todo!()
     }
 
-    fn bigint_from_i64(&self, x: i64) -> Result<RawObj, HostError> {
+    fn bigint_from_i64(&self, x: i64) -> Result<Object, HostError> {
         todo!()
     }
 }

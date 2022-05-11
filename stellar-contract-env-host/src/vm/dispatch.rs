@@ -1,4 +1,4 @@
-use crate::{CheckedEnv, Host, RawObj, RawVal};
+use crate::{CheckedEnv, Host, Object, RawVal};
 use stellar_contract_env_common::call_macro_with_all_host_functions;
 use wasmi::{RuntimeArgs, RuntimeValue};
 

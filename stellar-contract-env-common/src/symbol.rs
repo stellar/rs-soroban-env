@@ -1,8 +1,9 @@
-use crate::require;
+use crate::{require, RawVal, Tag, TagSymbol, TaggedVal};
 use core::{
     cmp::Ordering,
     fmt::Debug,
     hash::{Hash, Hasher},
+    marker::PhantomData,
     str,
 };
 
@@ -13,7 +14,7 @@ pub enum SymbolError {
 
 extern crate static_assertions as sa;
 
-use super::raw_val::{RawVal, RawValType, Tag, BODY_BITS};
+use super::raw_val::BODY_BITS;
 
 const MAX_CHARS: usize = 10;
 const CODE_BITS: usize = 6;
@@ -21,37 +22,17 @@ const CODE_MASK: u64 = (1u64 << CODE_BITS) - 1;
 sa::const_assert!(CODE_MASK == 0x3f);
 sa::const_assert!(CODE_BITS * MAX_CHARS == BODY_BITS);
 
-#[repr(transparent)]
-#[derive(Copy, Clone)]
-pub struct Symbol(pub(crate) RawVal);
-
-impl From<Symbol> for RawVal {
-    #[inline(always)]
-    fn from(s: Symbol) -> Self {
-        s.0
-    }
-}
-
-impl RawValType for Symbol {
-    #[inline(always)]
-    unsafe fn unchecked_from_val(v: RawVal) -> Self {
-        Symbol(v)
-    }
-
-    fn is_val_type(v: RawVal) -> bool {
-        v.has_tag(Tag::Symbol)
-    }
-}
+pub type Symbol = TaggedVal<TagSymbol>;
 
 impl Hash for Symbol {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.0.get_payload().hash(state);
+        self.as_ref().get_payload().hash(state);
     }
 }
 
 impl PartialEq for Symbol {
     fn eq(&self, other: &Self) -> bool {
-        self.0.get_payload() == other.0.get_payload()
+        self.as_ref().get_payload() == other.as_ref().get_payload()
     }
 }
 
@@ -97,8 +78,10 @@ impl Symbol {
             };
             accum |= v;
         }
-        let v = unsafe { RawVal::from_body_and_tag(accum, Tag::Symbol) };
-        Ok(Symbol(v))
+        Ok(Self(
+            unsafe { RawVal::from_body_and_tag(accum, Tag::Symbol) },
+            PhantomData,
+        ))
     }
 
     pub const fn from_str(s: &str) -> Symbol {
@@ -171,7 +154,7 @@ impl IntoIterator for Symbol {
     type Item = char;
     type IntoIter = SymbolIter;
     fn into_iter(self) -> Self::IntoIter {
-        SymbolIter(self.0.get_body())
+        SymbolIter(self.as_ref().get_body())
     }
 }
 
@@ -216,8 +199,7 @@ impl FromIterator<char> for Symbol {
             };
             accum |= v;
         }
-        let v = unsafe { RawVal::from_body_and_tag(accum, Tag::Symbol) };
-        Symbol(v)
+        unsafe { TaggedVal::from_body_and_tag_type(accum) }
     }
 }
 

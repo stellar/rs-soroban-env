@@ -3,15 +3,16 @@
 mod bitset;
 mod checked_env;
 mod env;
-mod env_obj;
 mod env_val;
+mod object;
 mod or_abort;
-mod raw_obj;
 mod raw_val;
 mod rt;
 mod status;
 mod symbol;
+mod tagged_val;
 mod unimplemented_env;
+mod val;
 
 // Re-export the XDR definitions
 pub use stellar_xdr as xdr;
@@ -21,19 +22,23 @@ pub use or_abort::OrAbort;
 pub use rt::trap;
 
 // RawVal and RawObj are the 64-bit transparent type.
-pub use raw_obj::RawObj;
-pub use raw_val::{RawVal, RawValType, Tag};
+pub use raw_val::{RawVal, RawValConvertable, Tag};
+
+pub use tagged_val::{
+    TagBitSet, TagI32, TagObject, TagStatic, TagStatus, TagSymbol, TagType, TagU32, TaggedVal,
+};
+pub use val::Val;
 
 // RawVal and EnvObj couple raw types to environments.
 pub use checked_env::CheckedEnv;
 pub use env::{Env, EnvBase};
-pub use env_obj::EnvObj;
-pub use env_val::{EnvVal, EnvValType};
+pub use env_val::{EnvVal, EnvValConvertable};
 pub use unimplemented_env::UnimplementedEnv;
 
 // BitSet, Status and Symbol wrap RawVals.
 // TODO: maybe these should wrap EnvVals?
 pub use bitset::{BitSet, BitSetError};
+pub use object::Object;
 pub use status::{Status, OK, UNKNOWN_ERROR};
 pub use symbol::{Symbol, SymbolError, SymbolIter};
 

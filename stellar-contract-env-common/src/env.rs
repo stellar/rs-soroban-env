@@ -1,4 +1,4 @@
-use super::{RawObj, RawVal};
+use super::{Object, RawVal};
 use core::any;
 
 pub trait EnvBase: Sized + Clone {
@@ -66,40 +66,40 @@ macro_rules! call_macro_with_all_host_functions {
             }
 
             mod u64 "u" {
-                {"$_", fn obj_from_u64(v:u64) -> RawObj }
+                {"$_", fn obj_from_u64(v:u64) -> Object }
                 {"$0", fn obj_to_u64(v:RawVal) -> u64 }
             }
 
             mod i64 "i" {
-                {"$_", fn obj_from_i64(v:i64) -> RawObj }
+                {"$_", fn obj_from_i64(v:i64) -> Object }
                 {"$0", fn obj_to_i64(v:RawVal) -> i64 }
             }
 
             mod map "m" {
-                {"$_", fn map_new() -> RawObj }
-                {"$0", fn map_put(m:RawObj, k:RawVal, v:RawVal) -> RawObj}
-                {"$1", fn map_get(m:RawObj, k:RawVal) -> RawVal}
-                {"$2", fn map_del(m:RawObj, k:RawVal) -> RawObj}
-                {"$3", fn map_len(m:RawObj) -> RawVal}
-                {"$4", fn map_keys(m:RawObj) -> RawObj}
-                {"$5", fn map_has(m:RawObj,k:RawVal) -> RawVal}
+                {"$_", fn map_new() -> Object }
+                {"$0", fn map_put(m:Object, k:RawVal, v:RawVal) -> Object}
+                {"$1", fn map_get(m:Object, k:RawVal) -> RawVal}
+                {"$2", fn map_del(m:Object, k:RawVal) -> Object}
+                {"$3", fn map_len(m:Object) -> RawVal}
+                {"$4", fn map_keys(m:Object) -> Object}
+                {"$5", fn map_has(m:Object,k:RawVal) -> RawVal}
             }
 
             mod vec "v" {
-                {"$_", fn vec_new() -> RawObj}
-                {"$0", fn vec_put(v:RawObj, i:RawVal, x:RawVal) -> RawObj}
-                {"$1", fn vec_get(v:RawObj, i:RawVal) -> RawVal}
-                {"$2", fn vec_del(v:RawObj, i:RawVal) -> RawObj}
-                {"$3", fn vec_len(v:RawObj) -> RawVal}
+                {"$_", fn vec_new() -> Object}
+                {"$0", fn vec_put(v:Object, i:RawVal, x:RawVal) -> Object}
+                {"$1", fn vec_get(v:Object, i:RawVal) -> RawVal}
+                {"$2", fn vec_del(v:Object, i:RawVal) -> Object}
+                {"$3", fn vec_len(v:Object) -> RawVal}
 
-                {"$4", fn vec_push(v:RawObj, x:RawVal) -> RawObj}
-                {"$5", fn vec_pop(v:RawObj) -> RawObj}
-                {"$6", fn vec_take(v:RawObj, n:RawVal) -> RawObj}
-                {"$7", fn vec_drop(v:RawObj, n:RawVal) -> RawObj}
-                {"$8", fn vec_front(v:RawObj) -> RawVal}
-                {"$9", fn vec_back(v:RawObj) -> RawVal}
-                {"$A", fn vec_insert(v:RawObj, i:RawVal, x:RawVal) -> RawObj}
-                {"$B", fn vec_append(v1:RawObj, v2:RawObj) -> RawObj}
+                {"$4", fn vec_push(v:Object, x:RawVal) -> Object}
+                {"$5", fn vec_pop(v:Object) -> Object}
+                {"$6", fn vec_take(v:Object, n:RawVal) -> Object}
+                {"$7", fn vec_drop(v:Object, n:RawVal) -> Object}
+                {"$8", fn vec_front(v:Object) -> RawVal}
+                {"$9", fn vec_back(v:Object) -> RawVal}
+                {"$A", fn vec_insert(v:Object, i:RawVal, x:RawVal) -> Object}
+                {"$B", fn vec_append(v1:Object, v2:Object) -> Object}
             }
 
             mod ledger "l" {
@@ -127,30 +127,30 @@ macro_rules! call_macro_with_all_host_functions {
             }
 
             mod bigint "b" {
-                {"$_", fn bigint_from_u64(x:RawObj) -> RawObj}
-                {"$0", fn bigint_add(x:RawObj,y:RawObj) -> RawObj}
-                {"$1", fn bigint_sub(x:RawObj,y:RawObj) -> RawObj}
-                {"$2", fn bigint_mul(x:RawObj,y:RawObj) -> RawObj}
-                {"$3", fn bigint_div(x:RawObj,y:RawObj) -> RawObj}
-                {"$4", fn bigint_rem(x:RawObj,y:RawObj) -> RawObj}
-                {"$5", fn bigint_and(x:RawObj,y:RawObj) -> RawObj}
-                {"$6", fn bigint_or(x:RawObj,y:RawObj) -> RawObj}
-                {"$7", fn bigint_xor(x:RawObj,y:RawObj) -> RawObj}
-                {"$8", fn bigint_shl(x:RawObj,y:RawObj) -> RawObj}
-                {"$9", fn bigint_shr(x:RawObj,y:RawObj) -> RawObj}
-                {"$A", fn bigint_cmp(x:RawObj,y:RawObj) -> RawObj}
-                {"$B", fn bigint_is_zero(x:RawObj) -> RawObj}
-                {"$C", fn bigint_neg(x:RawObj) -> RawObj}
-                {"$D", fn bigint_not(x:RawObj) -> RawObj}
-                {"$E", fn bigint_gcd(x:RawObj) -> RawObj}
-                {"$F", fn bigint_lcm(x:RawObj,y:RawObj) -> RawObj}
-                {"$G", fn bigint_pow(x:RawObj,y:RawObj) -> RawObj}
-                {"$H", fn bigint_pow_mod(p:RawObj,q:RawObj,m:RawObj) -> RawObj}
-                {"$I", fn bigint_sqrt(x:RawObj) -> RawObj}
-                {"$J", fn bigint_bits(x:RawObj) -> RawObj}
-                {"$K", fn bigint_to_u64(x:RawObj) -> u64}
-                {"$L", fn bigint_to_i64(x:RawObj) -> i64}
-                {"$M", fn bigint_from_i64(x:i64) -> RawObj}
+                {"$_", fn bigint_from_u64(x:Object) -> Object}
+                {"$0", fn bigint_add(x:Object,y:Object) -> Object}
+                {"$1", fn bigint_sub(x:Object,y:Object) -> Object}
+                {"$2", fn bigint_mul(x:Object,y:Object) -> Object}
+                {"$3", fn bigint_div(x:Object,y:Object) -> Object}
+                {"$4", fn bigint_rem(x:Object,y:Object) -> Object}
+                {"$5", fn bigint_and(x:Object,y:Object) -> Object}
+                {"$6", fn bigint_or(x:Object,y:Object) -> Object}
+                {"$7", fn bigint_xor(x:Object,y:Object) -> Object}
+                {"$8", fn bigint_shl(x:Object,y:Object) -> Object}
+                {"$9", fn bigint_shr(x:Object,y:Object) -> Object}
+                {"$A", fn bigint_cmp(x:Object,y:Object) -> Object}
+                {"$B", fn bigint_is_zero(x:Object) -> Object}
+                {"$C", fn bigint_neg(x:Object) -> Object}
+                {"$D", fn bigint_not(x:Object) -> Object}
+                {"$E", fn bigint_gcd(x:Object) -> Object}
+                {"$F", fn bigint_lcm(x:Object,y:Object) -> Object}
+                {"$G", fn bigint_pow(x:Object,y:Object) -> Object}
+                {"$H", fn bigint_pow_mod(p:Object,q:Object,m:Object) -> Object}
+                {"$I", fn bigint_sqrt(x:Object) -> Object}
+                {"$J", fn bigint_bits(x:Object) -> Object}
+                {"$K", fn bigint_to_u64(x:Object) -> u64}
+                {"$L", fn bigint_to_i64(x:Object) -> i64}
+                {"$M", fn bigint_from_i64(x:i64) -> Object}
             }
         }
     };

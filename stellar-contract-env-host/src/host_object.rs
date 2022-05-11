@@ -3,15 +3,15 @@ use super::{
     xdr::{
         AccountId, Asset, LedgerKey, Operation, OperationResult, Price, ScObjectType, Transaction,
     },
-    EnvObj, EnvVal,
+    EnvVal, Object, RawVal,
 };
 
 use im_rc::{OrdMap, Vector};
 use num_bigint::BigInt;
 use num_rational::BigRational;
 
-pub(crate) type HostObj = EnvObj<WeakHost>;
-pub(crate) type HostVal = EnvVal<WeakHost>;
+pub(crate) type HostObj = EnvVal<WeakHost, Object>;
+pub(crate) type HostVal = EnvVal<WeakHost, RawVal>;
 pub(crate) type HostMap = OrdMap<HostVal, HostVal>;
 pub(crate) type HostVec = Vector<HostVal>;
 
