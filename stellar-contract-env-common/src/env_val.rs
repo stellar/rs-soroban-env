@@ -22,12 +22,31 @@ impl<E: Env, V: Val> EnvVal<E, V> {
     }
 }
 
-impl<E: Env, T: TagType> EnvVal<E, TaggedVal<T>> {
-    // This just lets callers disambiguate by name when they call as_ref()
-    // in a context that might want &TaggedVal<T> or &RawRef; it saves
-    // them writing <_ as AsRef<RawVal>>::as_ref(foo)
-    pub fn as_raw_ref(&self) -> &RawVal {
+impl<E: Env> EnvVal<E, RawVal> {
+    pub fn as_raw(&self) -> &RawVal {
         self.val.as_ref()
+    }
+    pub fn to_raw(&self) -> RawVal {
+        self.val
+    }
+}
+
+impl<E: Env, T: TagType> EnvVal<E, TaggedVal<T>> {
+    // These fns let callers disambiguate by name when they call as_ref() in a
+    // context that might want &TaggedVal<T> or &RawRef; it saves them writing
+    // <_ as AsRef<RawVal>>::as_ref(foo)
+
+    pub fn as_raw(&self) -> &RawVal {
+        &self.val.0
+    }
+    pub fn to_raw(&self) -> RawVal {
+        self.val.0
+    }
+    pub fn as_tagged(&self) -> &TaggedVal<T> {
+        &self.val
+    }
+    pub fn to_tagged(&self) -> TaggedVal<T> {
+        self.val
     }
 }
 
