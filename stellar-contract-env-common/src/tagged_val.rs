@@ -4,7 +4,7 @@ use crate::EnvVal;
 /// Additional tag-case-specific methods can be hung off such a value, while still allowing access
 /// to its inner RawVal/EnvVal using AsRef/AsMut.
 use crate::RawVal;
-use crate::RawValConvertable;
+use crate::RawValConvertible;
 use crate::Tag;
 use core::marker::PhantomData;
 
@@ -118,7 +118,7 @@ impl<T: TagType> TryFrom<RawVal> for TaggedVal<T> {
     }
 }
 
-impl<T: TagType> RawValConvertable for TaggedVal<T> {
+impl<T: TagType> RawValConvertible for TaggedVal<T> {
     fn is_val_type(v: RawVal) -> bool {
         v.has_tag(T::TAG)
     }

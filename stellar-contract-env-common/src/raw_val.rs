@@ -63,7 +63,7 @@ impl AsMut<RawVal> for RawVal {
     }
 }
 
-pub trait RawValConvertable: Into<RawVal> + TryFrom<RawVal> {
+pub trait RawValConvertible: Into<RawVal> + TryFrom<RawVal> {
     fn is_val_type(v: RawVal) -> bool;
     unsafe fn unchecked_from_val(v: RawVal) -> Self;
 
@@ -88,7 +88,7 @@ macro_rules! declare_tryfrom {
             type Error = ();
             #[inline(always)]
             fn try_from(v: RawVal) -> Result<Self, Self::Error> {
-                if let Some(c) = <Self as RawValConvertable>::try_convert(v) {
+                if let Some(c) = <Self as RawValConvertible>::try_convert(v) {
                     Ok(c)
                 } else {
                     Err(())
@@ -118,7 +118,7 @@ impl From<RawVal> for wasmi::RuntimeValue {
     }
 }
 
-impl RawValConvertable for () {
+impl RawValConvertible for () {
     #[inline(always)]
     fn is_val_type(v: RawVal) -> bool {
         v.has_tag(Tag::Static) && v.get_body() == Static::Void as u64
@@ -129,7 +129,7 @@ impl RawValConvertable for () {
     }
 }
 
-impl RawValConvertable for bool {
+impl RawValConvertible for bool {
     #[inline(always)]
     fn is_val_type(v: RawVal) -> bool {
         v.has_tag(Tag::Static)
@@ -155,7 +155,7 @@ impl RawValConvertable for bool {
     }
 }
 
-impl RawValConvertable for u32 {
+impl RawValConvertible for u32 {
     #[inline(always)]
     fn is_val_type(v: RawVal) -> bool {
         v.has_tag(Tag::U32)
@@ -166,7 +166,7 @@ impl RawValConvertable for u32 {
     }
 }
 
-impl RawValConvertable for i32 {
+impl RawValConvertible for i32 {
     #[inline(always)]
     fn is_val_type(v: RawVal) -> bool {
         v.has_tag(Tag::I32)
@@ -259,7 +259,7 @@ impl RawVal {
     }
 
     #[inline(always)]
-    pub fn is<T: RawValConvertable>(self) -> bool {
+    pub fn is<T: RawValConvertible>(self) -> bool {
         T::is_val_type(self)
     }
 
@@ -339,7 +339,7 @@ impl Debug for RawVal {
         } else if self.has_tag(Tag::Symbol) {
             f.debug_struct("Val")
                 .field("symbol", &unsafe {
-                    <Symbol as RawValConvertable>::unchecked_from_val(*self)
+                    <Symbol as RawValConvertible>::unchecked_from_val(*self)
                 })
                 .finish()
         } else if self.is::<()>() {
@@ -347,19 +347,19 @@ impl Debug for RawVal {
         } else if self.is::<bool>() {
             f.debug_struct("Val")
                 .field("bool", &unsafe {
-                    <bool as RawValConvertable>::unchecked_from_val(*self)
+                    <bool as RawValConvertible>::unchecked_from_val(*self)
                 })
                 .finish()
         } else if self.has_tag(Tag::U32) {
             f.debug_struct("Val")
                 .field("u32", &unsafe {
-                    <u32 as RawValConvertable>::unchecked_from_val(*self)
+                    <u32 as RawValConvertible>::unchecked_from_val(*self)
                 })
                 .finish()
         } else if self.has_tag(Tag::I32) {
             f.debug_struct("Val")
                 .field("i32", &unsafe {
-                    <i32 as RawValConvertable>::unchecked_from_val(*self)
+                    <i32 as RawValConvertible>::unchecked_from_val(*self)
                 })
                 .finish()
         } else {

@@ -1,7 +1,7 @@
 use crate::{BitSet, Object, Status, Symbol, Tag, TagType, TaggedVal, Val};
 
 use super::{
-    raw_val::{RawVal, RawValConvertable},
+    raw_val::{RawVal, RawValConvertible},
     xdr::ScObjectType,
     Env,
 };
@@ -64,10 +64,10 @@ impl<E: Env, T: TagType> From<EnvVal<E, TaggedVal<T>>> for EnvVal<E, RawVal> {
     }
 }
 
-// EnvValConvertable is similar to RawValConvertable but also covers types with conversions
+// EnvValConvertible is similar to RawValConvertible but also covers types with conversions
 // that need an Env to help with the conversion -- those that might require allocating an Object. ValType
 // covers types that can always be directly converted to Val with no Env.
-pub trait EnvValConvertable<E: Env, V: Val>: Sized {
+pub trait EnvValConvertible<E: Env, V: Val>: Sized {
     fn into_env_val(self, env: &E) -> EnvVal<E, V>;
     fn into_val(self, env: &E) -> V {
         Self::into_env_val(self, env).val
@@ -93,7 +93,7 @@ impl<E: Env, T: TagType> From<EnvVal<E, TaggedVal<T>>> for TaggedVal<T> {
     }
 }
 
-impl<E: Env, T: TagType> EnvValConvertable<E, TaggedVal<T>> for TaggedVal<T> {
+impl<E: Env, T: TagType> EnvValConvertible<E, TaggedVal<T>> for TaggedVal<T> {
     fn into_env_val(self, env: &E) -> EnvVal<E, TaggedVal<T>> {
         EnvVal {
             env: env.clone(),
@@ -106,7 +106,7 @@ impl<E: Env, T: TagType> EnvValConvertable<E, TaggedVal<T>> for TaggedVal<T> {
     }
 }
 
-impl<E: Env, V: RawValConvertable> EnvValConvertable<E, RawVal> for V {
+impl<E: Env, V: RawValConvertible> EnvValConvertible<E, RawVal> for V {
     fn into_env_val(self, env: &E) -> EnvVal<E, RawVal> {
         EnvVal {
             env: env.clone(),
@@ -119,15 +119,15 @@ impl<E: Env, V: RawValConvertable> EnvValConvertable<E, RawVal> for V {
     }
 
     fn try_from_env_val(ev: &EnvVal<E, RawVal>) -> Option<Self> {
-        if <V as RawValConvertable>::is_val_type(ev.val) {
-            Some(unsafe { <V as RawValConvertable>::unchecked_from_val(ev.val) })
+        if <V as RawValConvertible>::is_val_type(ev.val) {
+            Some(unsafe { <V as RawValConvertible>::unchecked_from_val(ev.val) })
         } else {
             None
         }
     }
 }
 
-impl<E: Env> EnvValConvertable<E, RawVal> for i64 {
+impl<E: Env> EnvValConvertible<E, RawVal> for i64 {
     fn into_env_val(self, env: &E) -> EnvVal<E, RawVal> {
         let val = if self >= 0 {
             unsafe { RawVal::unchecked_from_positive_i64(self) }
@@ -151,7 +151,7 @@ impl<E: Env> EnvValConvertable<E, RawVal> for i64 {
     }
 }
 
-impl<E: Env> EnvValConvertable<E, RawVal> for u64 {
+impl<E: Env> EnvValConvertible<E, RawVal> for u64 {
     fn into_env_val(self, env: &E) -> EnvVal<E, RawVal> {
         let val = if self <= (i64::MAX as u64) {
             unsafe { RawVal::unchecked_from_positive_i64(self as i64) }
@@ -224,19 +224,19 @@ impl<E: Env, V: Val> Ord for EnvVal<E, V> {
             match self_tag {
                 Tag::U32 => {
                     let a = unsafe {
-                        <u32 as RawValConvertable>::unchecked_from_val(*self.val.as_ref())
+                        <u32 as RawValConvertible>::unchecked_from_val(*self.val.as_ref())
                     };
                     let b = unsafe {
-                        <u32 as RawValConvertable>::unchecked_from_val(*other.val.as_ref())
+                        <u32 as RawValConvertible>::unchecked_from_val(*other.val.as_ref())
                     };
                     a.cmp(&b)
                 }
                 Tag::I32 => {
                     let a = unsafe {
-                        <i32 as RawValConvertable>::unchecked_from_val(*self.val.as_ref())
+                        <i32 as RawValConvertible>::unchecked_from_val(*self.val.as_ref())
                     };
                     let b = unsafe {
-                        <i32 as RawValConvertable>::unchecked_from_val(*other.val.as_ref())
+                        <i32 as RawValConvertible>::unchecked_from_val(*other.val.as_ref())
                     };
                     a.cmp(&b)
                 }
@@ -257,28 +257,28 @@ impl<E: Env, V: Val> Ord for EnvVal<E, V> {
                 }
                 Tag::Symbol => {
                     let a = unsafe {
-                        <Symbol as RawValConvertable>::unchecked_from_val(*self.val.as_ref())
+                        <Symbol as RawValConvertible>::unchecked_from_val(*self.val.as_ref())
                     };
                     let b = unsafe {
-                        <Symbol as RawValConvertable>::unchecked_from_val(*other.val.as_ref())
+                        <Symbol as RawValConvertible>::unchecked_from_val(*other.val.as_ref())
                     };
                     a.cmp(&b)
                 }
                 Tag::BitSet => {
                     let a = unsafe {
-                        <BitSet as RawValConvertable>::unchecked_from_val(*self.val.as_ref())
+                        <BitSet as RawValConvertible>::unchecked_from_val(*self.val.as_ref())
                     };
                     let b = unsafe {
-                        <BitSet as RawValConvertable>::unchecked_from_val(*other.val.as_ref())
+                        <BitSet as RawValConvertible>::unchecked_from_val(*other.val.as_ref())
                     };
                     a.cmp(&b)
                 }
                 Tag::Status => {
                     let a = unsafe {
-                        <Status as RawValConvertable>::unchecked_from_val(*self.val.as_ref())
+                        <Status as RawValConvertible>::unchecked_from_val(*self.val.as_ref())
                     };
                     let b = unsafe {
-                        <Status as RawValConvertable>::unchecked_from_val(*other.val.as_ref())
+                        <Status as RawValConvertible>::unchecked_from_val(*other.val.as_ref())
                     };
                     a.cmp(&b)
                 }

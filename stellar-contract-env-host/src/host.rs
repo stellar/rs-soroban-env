@@ -16,7 +16,7 @@ use std::rc::Rc;
 use crate::host_object::{HostMap, HostObj, HostObject, HostObjectType, HostVal, HostVec};
 use crate::CheckedEnv;
 use crate::{
-    BitSet, BitSetError, EnvBase, EnvValConvertable, Object, RawVal, RawValConvertable, Status,
+    BitSet, BitSetError, EnvBase, EnvValConvertible, Object, RawVal, RawValConvertible, Status,
     Symbol, SymbolError, Tag, Val,
 };
 
@@ -75,7 +75,7 @@ impl Host {
         F: FnOnce(Option<&HostObject>) -> U,
     {
         let r = self.0.objects.borrow();
-        let index = <Object as RawValConvertable>::unchecked_from_val(val).get_handle() as usize;
+        let index = <Object as RawValConvertible>::unchecked_from_val(val).get_handle() as usize;
         f(r.get(index))
     }
 
@@ -105,7 +105,7 @@ impl Host {
         HostVal { env, val }
     }
 
-    pub(crate) fn associate_env_val_type<V: Val, CVT: EnvValConvertable<WeakHost, RawVal>>(
+    pub(crate) fn associate_env_val_type<V: Val, CVT: EnvValConvertible<WeakHost, RawVal>>(
         &self,
         v: CVT,
     ) -> HostVal {
@@ -121,39 +121,39 @@ impl Host {
         } else {
             match val.get_tag() {
                 Tag::U32 => Ok(ScVal::ScvU32(unsafe {
-                    <u32 as RawValConvertable>::unchecked_from_val(val)
+                    <u32 as RawValConvertible>::unchecked_from_val(val)
                 })),
                 Tag::I32 => Ok(ScVal::ScvI32(unsafe {
-                    <i32 as RawValConvertable>::unchecked_from_val(val)
+                    <i32 as RawValConvertible>::unchecked_from_val(val)
                 })),
                 Tag::Static => {
-                    if let Some(b) = <bool as RawValConvertable>::try_convert(val) {
+                    if let Some(b) = <bool as RawValConvertible>::try_convert(val) {
                         if b {
                             Ok(ScVal::ScvStatic(ScStatic::ScsTrue))
                         } else {
                             Ok(ScVal::ScvStatic(ScStatic::ScsFalse))
                         }
-                    } else if <() as RawValConvertable>::is_val_type(val) {
+                    } else if <() as RawValConvertible>::is_val_type(val) {
                         Ok(ScVal::ScvStatic(ScStatic::ScsVoid))
                     } else {
                         Err(HostError::General("unknown Tag::Static case"))
                     }
                 }
                 Tag::Object => unsafe {
-                    let ob = <Object as RawValConvertable>::unchecked_from_val(val);
+                    let ob = <Object as RawValConvertible>::unchecked_from_val(val);
                     let scob = self.from_host_obj(ob)?;
                     Ok(ScVal::ScvObject(Some(Box::new(scob))))
                 },
                 Tag::Symbol => {
                     let sym: Symbol =
-                        unsafe { <Symbol as RawValConvertable>::unchecked_from_val(val) };
+                        unsafe { <Symbol as RawValConvertible>::unchecked_from_val(val) };
                     let str: String = sym.into_iter().collect();
                     Ok(ScVal::ScvSymbol(str.as_bytes().try_into()?))
                 }
                 Tag::BitSet => Ok(ScVal::ScvBitset(val.get_payload())),
                 Tag::Status => {
                     let status: Status =
-                        unsafe { <Status as RawValConvertable>::unchecked_from_val(val) };
+                        unsafe { <Status as RawValConvertible>::unchecked_from_val(val) };
                     if status.is_ok() {
                         Ok(ScVal::ScvStatus(ScStatus::SstOk))
                     } else if status.is_type(ScStatusType::SstUnknownError) {
