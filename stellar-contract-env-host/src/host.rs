@@ -16,8 +16,8 @@ use std::rc::Rc;
 use crate::host_object::{HostMap, HostObj, HostObject, HostObjectType, HostVal, HostVec};
 use crate::CheckedEnv;
 use crate::{
-    BitSet, BitSetError, EnvBase, EnvValConvertible, Object, RawVal, RawValConvertible, Status,
-    Symbol, SymbolError, Tag, Val,
+    BitSet, BitSetError, EnvBase, EnvValConvertible, IntoEnvVal, Object, RawVal, RawValConvertible,
+    Status, Symbol, SymbolError, Tag, Val,
 };
 
 use thiserror::Error;

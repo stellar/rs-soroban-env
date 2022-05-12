@@ -1,4 +1,4 @@
-use super::{Env, EnvVal, Symbol};
+use super::{Env, EnvVal, IntoEnvVal, Symbol};
 use core::fmt::Debug;
 
 extern crate static_assertions as sa;
@@ -100,6 +100,14 @@ macro_rules! declare_tryfrom {
             #[inline(always)]
             fn try_from(v: EnvVal<E, RawVal>) -> Result<Self, Self::Error> {
                 Self::try_from(v.to_raw())
+            }
+        }
+        impl<E: Env> IntoEnvVal<E, RawVal> for $T {
+            fn into_env_val(self, env: &E) -> EnvVal<E, RawVal> {
+                EnvVal {
+                    env: env.clone(),
+                    val: self.into(),
+                }
             }
         }
     };
