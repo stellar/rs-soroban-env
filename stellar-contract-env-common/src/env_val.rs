@@ -96,12 +96,11 @@ pub trait EnvValConvertible<E: Env, V: Val>:
     fn into_val(self, env: &E) -> V {
         Self::into_env_val(self, env).val
     }
-    fn try_from_val(env: &E, v: V) -> Option<Self> {
+    fn try_from_val(env: &E, v: V) -> Result<Self, Self::Error> {
         Self::try_from(EnvVal {
             env: env.clone(),
             val: v,
         })
-        .ok()
     }
 }
 
