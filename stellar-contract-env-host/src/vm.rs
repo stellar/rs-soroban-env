@@ -1,7 +1,13 @@
 mod dispatch;
 mod func_info;
 
-use super::{host, Host, RawVal};
+use std::error::Error;
+
+use super::{
+    host,
+    xdr::{ScVal, ScVec},
+    Host, RawVal,
+};
 use func_info::HOST_FUNCTIONS;
 use wasmi::{
     Externals, FuncInstance, ImportResolver, Module, ModuleInstance, ModuleRef, RuntimeArgs,
@@ -108,20 +114,20 @@ pub struct VM {
 }
 
 impl VM {
-    pub fn new(host: &Host, module_wasm_code: &[u8]) -> Result<Self, wasmi::Error> {
+    pub fn new(host: &Host, module_wasm_code: &[u8]) -> Result<Self, Box<dyn Error>> {
         let module = Module::from_buffer(module_wasm_code)?;
         module.deny_floating_point()?;
         let not_started_instance = ModuleInstance::new(&module, host)?;
         if not_started_instance.has_start() {
-            return Err(wasmi::Error::Instantiation(
-                "Module has disallowed start function".into(),
-            ));
+            return Err(
+                wasmi::Error::Instantiation("Module has disallowed start function".into()).into(),
+            );
         }
         let instance = not_started_instance.assert_no_start();
         Ok(Self { instance })
     }
 
-    pub fn invoke_function(
+    pub(crate) fn invoke_function_raw(
         &self,
         host: &mut Host,
         func: &str,
@@ -141,5 +147,22 @@ impl VM {
                 wasmi::TrapKind::UnexpectedSignature.into(),
             ))
         }
+    }
+
+    /// Invoke a function in the VM's module, converting externally stable
+    /// XDR ScVal arguments into Host-specific RawVals and converting the
+    /// RawVal result back to an ScVal.
+    pub fn invoke_function(
+        &self,
+        host: &mut Host,
+        func: &str,
+        args: &ScVec,
+    ) -> Result<ScVal, Box<dyn Error>> {
+        let mut raw_args: Vec<RawVal> = Vec::new();
+        for scv in args.0.iter() {
+            raw_args.push(host.to_host_val(scv)?.val);
+        }
+        let raw_res = self.invoke_function_raw(host, func, raw_args.as_slice())?;
+        Ok(host.from_host_val(raw_res)?)
     }
 }

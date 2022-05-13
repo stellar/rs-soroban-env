@@ -42,19 +42,19 @@ pub(crate) trait HostObjectType: Sized {
 }
 
 macro_rules! declare_host_object_type {
-    ($TY:ty, $CODE:ident, $CTOR:ident) => {
+    ($TY:ty, $CODE:ident, $CASE:ident) => {
         impl HostObjectType for $TY {
             fn get_type() -> ScObjectType {
                 ScObjectType::$CODE
             }
 
             fn inject(self) -> HostObject {
-                HostObject::$CTOR(self)
+                HostObject::$CASE(self)
             }
 
             fn try_extract(obj: &HostObject) -> Option<&Self> {
                 match obj {
-                    HostObject::$CTOR(v) => Some(v),
+                    HostObject::$CASE(v) => Some(v),
                     _ => None,
                 }
             }
