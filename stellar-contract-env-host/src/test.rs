@@ -1,6 +1,6 @@
 use crate::{
     xdr::{ScObject, ScObjectType, ScVal, ScVec},
-    EnvValConvertible, Host, Object, OrAbort,
+    Host, IntoEnvVal, Object, OrAbort,
 };
 
 #[test]
@@ -8,7 +8,7 @@ fn i64_roundtrip() {
     let host = Host::default();
     let i = 12345_i64;
     let v = i.into_env_val(&host);
-    let j = i64::try_from_env_val(&v).unwrap();
+    let j = i64::try_from(v).unwrap();
     assert_eq!(i, j);
 }
 
