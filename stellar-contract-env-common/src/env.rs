@@ -136,8 +136,8 @@ macro_rules! call_macro_with_all_host_functions {
                 {"$5", fn bigint_and(x:Object,y:Object) -> Object}
                 {"$6", fn bigint_or(x:Object,y:Object) -> Object}
                 {"$7", fn bigint_xor(x:Object,y:Object) -> Object}
-                {"$8", fn bigint_shl(x:Object,y:Object) -> Object}
-                {"$9", fn bigint_shr(x:Object,y:Object) -> Object}
+                {"$8", fn bigint_shl(x:Object,y:RawVal) -> Object}
+                {"$9", fn bigint_shr(x:Object,y:RawVal) -> Object}
                 {"$A", fn bigint_cmp(x:Object,y:Object) -> Object}
                 {"$B", fn bigint_is_zero(x:Object) -> Object}
                 {"$C", fn bigint_neg(x:Object) -> Object}

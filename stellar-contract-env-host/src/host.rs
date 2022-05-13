@@ -575,11 +575,11 @@ impl CheckedEnv for Host {
         todo!()
     }
 
-    fn bigint_shl(&self, x: Object, y: Object) -> Result<Object, HostError> {
+    fn bigint_shl(&self, x: Object, y: RawVal) -> Result<Object, HostError> {
         todo!()
     }
 
-    fn bigint_shr(&self, x: Object, y: Object) -> Result<Object, HostError> {
+    fn bigint_shr(&self, x: Object, y: RawVal) -> Result<Object, HostError> {
         todo!()
     }
 
