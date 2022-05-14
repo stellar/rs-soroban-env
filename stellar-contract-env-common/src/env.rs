@@ -142,7 +142,7 @@ macro_rules! call_macro_with_all_host_functions {
                 {"$B", fn bigint_is_zero(x:Object) -> RawVal}
                 {"$C", fn bigint_neg(x:Object) -> Object}
                 {"$D", fn bigint_not(x:Object) -> Object}
-                {"$E", fn bigint_gcd(x:Object) -> Object}
+                {"$E", fn bigint_gcd(x:Object,y:Object) -> Object}
                 {"$F", fn bigint_lcm(x:Object,y:Object) -> Object}
                 {"$G", fn bigint_pow(x:Object,y:Object) -> Object}
                 {"$H", fn bigint_pow_mod(p:Object,q:Object,m:Object) -> Object}

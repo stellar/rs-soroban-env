@@ -599,7 +599,7 @@ impl CheckedEnv for Host {
         todo!()
     }
 
-    fn bigint_gcd(&self, x: Object) -> Result<Object, HostError> {
+    fn bigint_gcd(&self, x: Object, y: Object) -> Result<Object, HostError> {
         todo!()
     }
 
