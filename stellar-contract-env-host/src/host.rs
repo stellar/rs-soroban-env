@@ -539,7 +539,7 @@ impl CheckedEnv for Host {
         todo!()
     }
 
-    fn bigint_from_u64(&self, x: Object) -> Result<Object, HostError> {
+    fn bigint_from_u64(&self, x: u64) -> Result<Object, HostError> {
         todo!()
     }
 
@@ -583,11 +583,11 @@ impl CheckedEnv for Host {
         todo!()
     }
 
-    fn bigint_cmp(&self, x: Object, y: Object) -> Result<Object, HostError> {
+    fn bigint_cmp(&self, x: Object, y: Object) -> Result<RawVal, HostError> {
         todo!()
     }
 
-    fn bigint_is_zero(&self, x: Object) -> Result<Object, HostError> {
+    fn bigint_is_zero(&self, x: Object) -> Result<RawVal, HostError> {
         todo!()
     }
 
@@ -619,7 +619,7 @@ impl CheckedEnv for Host {
         todo!()
     }
 
-    fn bigint_bits(&self, x: Object) -> Result<Object, HostError> {
+    fn bigint_bits(&self, x: Object) -> Result<RawVal, HostError> {
         todo!()
     }
 
