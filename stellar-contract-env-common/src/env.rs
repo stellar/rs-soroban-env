@@ -127,7 +127,7 @@ macro_rules! call_macro_with_all_host_functions {
             }
 
             mod bigint "b" {
-                {"$_", fn bigint_from_u64(x:Object) -> Object}
+                {"$_", fn bigint_from_u64(x:u64) -> Object}
                 {"$0", fn bigint_add(x:Object,y:Object) -> Object}
                 {"$1", fn bigint_sub(x:Object,y:Object) -> Object}
                 {"$2", fn bigint_mul(x:Object,y:Object) -> Object}
@@ -138,8 +138,8 @@ macro_rules! call_macro_with_all_host_functions {
                 {"$7", fn bigint_xor(x:Object,y:Object) -> Object}
                 {"$8", fn bigint_shl(x:Object,y:RawVal) -> Object}
                 {"$9", fn bigint_shr(x:Object,y:RawVal) -> Object}
-                {"$A", fn bigint_cmp(x:Object,y:Object) -> Object}
-                {"$B", fn bigint_is_zero(x:Object) -> Object}
+                {"$A", fn bigint_cmp(x:Object,y:Object) -> RawVal}
+                {"$B", fn bigint_is_zero(x:Object) -> RawVal}
                 {"$C", fn bigint_neg(x:Object) -> Object}
                 {"$D", fn bigint_not(x:Object) -> Object}
                 {"$E", fn bigint_gcd(x:Object) -> Object}
@@ -147,7 +147,7 @@ macro_rules! call_macro_with_all_host_functions {
                 {"$G", fn bigint_pow(x:Object,y:Object) -> Object}
                 {"$H", fn bigint_pow_mod(p:Object,q:Object,m:Object) -> Object}
                 {"$I", fn bigint_sqrt(x:Object) -> Object}
-                {"$J", fn bigint_bits(x:Object) -> Object}
+                {"$J", fn bigint_bits(x:Object) -> RawVal}
                 {"$K", fn bigint_to_u64(x:Object) -> u64}
                 {"$L", fn bigint_to_i64(x:Object) -> i64}
                 {"$M", fn bigint_from_i64(x:i64) -> Object}
