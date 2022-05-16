@@ -109,11 +109,11 @@ impl ImportResolver for Host {
 //
 // Any lookups on any tables other than import functions will fail, and only
 // those import functions listed above will succeed.
-pub struct VM {
+pub struct Vm {
     instance: ModuleRef, // this is a cloneable Rc<ModuleInstance>
 }
 
-impl VM {
+impl Vm {
     pub fn new(host: &Host, module_wasm_code: &[u8]) -> Result<Self, Box<dyn Error>> {
         let module = Module::from_buffer(module_wasm_code)?;
         module.deny_floating_point()?;

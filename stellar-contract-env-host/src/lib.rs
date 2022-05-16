@@ -5,7 +5,7 @@ pub(crate) mod weak_host;
 #[cfg(feature = "vm")]
 pub mod vm;
 #[cfg(feature = "vm")]
-pub use vm::VM;
+pub use vm::Vm;
 #[cfg(test)]
 mod test;
 
