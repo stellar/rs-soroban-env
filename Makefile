@@ -1,15 +1,37 @@
+all: build test
+
 test:
-	cargo check -p stellar-contract-env-guest --target wasm32-unknown-unknown
-	cargo check -p stellar-contract-env-host
-	cargo test -p stellar-contract-env-common
-	cargo test -p stellar-contract-env-common --features std
-	cargo test -p stellar-contract-env-guest
-	cargo test -p stellar-contract-env-host
+	cargo test -p stellar-contract-env-common --no-default-features --features ''
+	cargo test -p stellar-contract-env-common --no-default-features --features 'std'
+	cargo test -p stellar-contract-env-common --no-default-features --features 'vm'
+	cargo test -p stellar-contract-env-common --no-default-features --features 'std,vm'
+
+	cargo test -p stellar-contract-env-guest --no-default-features --features ''
+
+	cargo test -p stellar-contract-env-host --no-default-features --features ''
+	cargo test -p stellar-contract-env-host --no-default-features --features 'vm'
+
+build:
+	cargo check --no-default-features --all-targets
+
+	cargo check -p stellar-contract-env-common --no-default-features --features ''
+	cargo check -p stellar-contract-env-common --no-default-features --features 'std'
+	cargo check -p stellar-contract-env-common --no-default-features --features 'panic_handler'
+	cargo check -p stellar-contract-env-common --no-default-features --features 'vm'
+	cargo check -p stellar-contract-env-common --no-default-features --features 'std,vm'
+	cargo check -p stellar-contract-env-common --no-default-features --features '' --target wasm32-unknown-unknown
+	cargo check -p stellar-contract-env-common --no-default-features --features 'panic_handler' --target wasm32-unknown-unknown
+	cargo check -p stellar-contract-env-common --no-default-features --features 'vm' --target wasm32-unknown-unknown
+
+	cargo check -p stellar-contract-env-guest --no-default-features --features ''
+	cargo check -p stellar-contract-env-guest --no-default-features --features 'panic_handler'
+	cargo check -p stellar-contract-env-guest --no-default-features --features '' --release --target wasm32-unknown-unknown
+	cargo check -p stellar-contract-env-guest --no-default-features --features 'panic_handler' --release --target wasm32-unknown-unknown
+
+	cargo check -p stellar-contract-env-host --no-default-features --features ''
+	cargo check -p stellar-contract-env-host --no-default-features --features 'vm'
+	cargo check -p stellar-contract-env-host --no-default-features --features '' --release --target wasm32-unknown-unknown
+	cargo check -p stellar-contract-env-host --no-default-features --features 'vm' --release --target wasm32-unknown-unknown
 
 watch:
-	cargo watch --clear \
-		-x 'check -p stellar-contract-env-guest --target wasm32-unknown-unknown' \
-		-x 'check -p stellar-contract-env-host' \
-		-x 'test -p stellar-contract-env-common' \
-		-x 'test -p stellar-contract-env-guest' \
-		-x 'test -p stellar-contract-env-host'
+	cargo watch --clear --watch-when-idle --shell '$(MAKE)'
