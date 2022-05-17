@@ -4,6 +4,7 @@
 use core::cell::RefCell;
 use core::cmp::Ordering;
 use core::fmt::Debug;
+use core::panic::RefUnwindSafe;
 use im_rc::{OrdMap, Vector};
 use std::num::TryFromIntError;
 
@@ -58,6 +59,8 @@ impl From<BitSetError> for HostError {
 pub(crate) struct HostImpl {
     objects: RefCell<Vec<HostObject>>,
 }
+
+impl RefUnwindSafe for HostImpl {}
 
 // Host is a newtype on Rc<HostImpl> so we can impl Env for it below.
 #[derive(Default, Clone)]
