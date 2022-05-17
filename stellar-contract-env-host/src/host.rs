@@ -115,9 +115,7 @@ impl Host {
 
     pub(crate) fn from_host_val(&self, val: RawVal) -> Result<ScVal, HostError> {
         if val.is_positive_i64() {
-            Ok(ScVal::U63(
-                unsafe { val.unchecked_as_positive_i64() } as u64
-            ))
+            Ok(ScVal::U63(unsafe { val.unchecked_as_positive_i64() } as u64))
         } else {
             match val.get_tag() {
                 Tag::U32 => Ok(ScVal::U32(unsafe {
@@ -157,9 +155,7 @@ impl Host {
                     if status.is_ok() {
                         Ok(ScVal::Status(ScStatus::Ok))
                     } else if status.is_type(ScStatusType::UnknownError) {
-                        Ok(ScVal::Status(ScStatus::UnknownError(
-                            status.get_code(),
-                        )))
+                        Ok(ScVal::Status(ScStatus::UnknownError(status.get_code())))
                     } else {
                         Err(HostError::General("unknown Tag::Status case"))
                     }

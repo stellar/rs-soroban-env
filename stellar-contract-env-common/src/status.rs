@@ -9,9 +9,7 @@ use stellar_xdr::ScStatusType;
 pub type Status = TaggedVal<TagStatus>;
 
 pub const UNKNOWN_ERROR: Status = TaggedVal(
-    unsafe {
-        RawVal::from_major_minor_and_tag(0, ScStatusType::UnknownError as u32, Tag::Status)
-    },
+    unsafe { RawVal::from_major_minor_and_tag(0, ScStatusType::UnknownError as u32, Tag::Status) },
     PhantomData,
 );
 pub const OK: Status = TaggedVal(
