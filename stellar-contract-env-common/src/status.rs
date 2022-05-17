@@ -10,12 +10,12 @@ pub type Status = TaggedVal<TagStatus>;
 
 pub const UNKNOWN_ERROR: Status = TaggedVal(
     unsafe {
-        RawVal::from_major_minor_and_tag(0, ScStatusType::SstUnknownError as u32, Tag::Status)
+        RawVal::from_major_minor_and_tag(0, ScStatusType::UnknownError as u32, Tag::Status)
     },
     PhantomData,
 );
 pub const OK: Status = TaggedVal(
-    unsafe { RawVal::from_major_minor_and_tag(0, ScStatusType::SstOk as u32, Tag::Status) },
+    unsafe { RawVal::from_major_minor_and_tag(0, ScStatusType::Ok as u32, Tag::Status) },
     PhantomData,
 );
 
@@ -67,7 +67,7 @@ impl Status {
 
     #[inline(always)]
     pub const fn is_ok(&self) -> bool {
-        self.is_type(ScStatusType::SstOk)
+        self.is_type(ScStatusType::Ok)
     }
 
     #[inline(always)]

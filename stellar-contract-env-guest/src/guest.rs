@@ -3,8 +3,9 @@
 
 use stellar_contract_env_common::call_macro_with_all_host_functions;
 
-use super::{Env, EnvBase, Object, RawVal};
+use super::{Env, EnvBase, Object};
 
+#[repr(transparent)]
 // In guest code the environment is global/implicit, so is represented as a unit struct.
 #[derive(Copy, Clone, Default)]
 pub struct Guest;

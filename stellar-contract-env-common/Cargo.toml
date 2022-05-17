@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 static_assertions = "1.1.0"
-stellar-xdr = { git = "https://github.com/stellar/rs-stellar-xdr", rev = "a714d4ad", default-features = false }
+stellar-xdr = { git = "https://github.com/stellar/rs-stellar-xdr", rev = "0bdd47f8e9ed32a83dcdb481e442baf016eb25f9", default-features = false }
 # stellar-xdr = { path = "../../rs-stellar-xdr", default-features = false }
 
 # wasmi is an optional dependency only to let us impl its type conversion

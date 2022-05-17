@@ -1,6 +1,6 @@
 use stellar_contract_env_common::call_macro_with_all_host_functions;
 
-use crate::{host::HostImpl, Env, EnvBase, Host, Object, RawVal};
+use crate::{host::HostImpl, Env, EnvBase, Host, Object};
 use core::fmt::Debug;
 use std::rc::Weak;
 

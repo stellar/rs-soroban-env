@@ -2,7 +2,6 @@ use crate::{BitSet, Object, Status, Symbol, Tag, TagType, TaggedVal, Val};
 
 use super::{
     raw_val::{RawVal, RawValConvertible},
-    xdr::ScObjectType,
     Env,
 };
 use core::{cmp::Ordering, fmt::Debug};
@@ -161,62 +160,6 @@ impl<E: Env, T: TagType> IntoEnvVal<E, TaggedVal<T>> for TaggedVal<T> {
     }
 }
 
-impl<E: Env> TryFrom<EnvVal<E, RawVal>> for i64 {
-    type Error = ();
-
-    fn try_from(ev: EnvVal<E, RawVal>) -> Result<Self, Self::Error> {
-        if ev.val.is_positive_i64() {
-            Ok(unsafe { ev.val.unchecked_as_positive_i64() })
-        } else if Object::val_is_obj_type(ev.val, ScObjectType::ScoI64) {
-            Ok(ev.env.obj_to_i64(ev.val))
-        } else {
-            Err(())
-        }
-    }
-}
-
-impl<E: Env> IntoEnvVal<E, RawVal> for i64 {
-    fn into_env_val(self, env: &E) -> EnvVal<E, RawVal> {
-        let val = if self >= 0 {
-            unsafe { RawVal::unchecked_from_positive_i64(self) }
-        } else {
-            env.obj_from_i64(self).as_ref().clone()
-        };
-        EnvVal {
-            env: env.clone(),
-            val,
-        }
-    }
-}
-
-impl<E: Env> TryFrom<EnvVal<E, RawVal>> for u64 {
-    type Error = ();
-
-    fn try_from(ev: EnvVal<E, RawVal>) -> Result<Self, Self::Error> {
-        if ev.val.is_positive_i64() {
-            Ok(unsafe { ev.val.unchecked_as_positive_i64() } as u64)
-        } else if Object::val_is_obj_type(ev.val, ScObjectType::ScoU64) {
-            Ok(ev.env.obj_to_u64(ev.val))
-        } else {
-            Err(())
-        }
-    }
-}
-
-impl<E: Env> IntoEnvVal<E, RawVal> for u64 {
-    fn into_env_val(self, env: &E) -> EnvVal<E, RawVal> {
-        let val = if self <= (i64::MAX as u64) {
-            unsafe { RawVal::unchecked_from_positive_i64(self as i64) }
-        } else {
-            env.obj_from_u64(self).as_ref().clone()
-        };
-        EnvVal {
-            env: env.clone(),
-            val,
-        }
-    }
-}
-
 impl<E: Env + Debug, V: Val> Debug for EnvVal<E, V> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("EnvVal")
@@ -240,7 +183,10 @@ impl<E: Env, V: Val> PartialEq for EnvVal<E, V> {
             false
         } else {
             // Slow path: deep object comparison via the environment.
-            let v = self.env.obj_cmp(*self.as_ref(), *other.as_ref());
+            let v = self.env.obj_cmp(
+                unsafe { Object::unchecked_from_val(*self.val.as_ref()) },
+                unsafe { Object::unchecked_from_val(*self.val.as_ref()) },
+            );
             v == 0
         }
     }
@@ -288,7 +234,10 @@ impl<E: Env, V: Val> Ord for EnvVal<E, V> {
                     .get_body()
                     .cmp(&other.val.as_ref().get_body()),
                 Tag::Object => {
-                    let v = self.env.obj_cmp(*self.val.as_ref(), *other.val.as_ref());
+                    let v = self.env.obj_cmp(
+                        unsafe { Object::unchecked_from_val(*self.val.as_ref()) },
+                        unsafe { Object::unchecked_from_val(*other.val.as_ref()) },
+                    );
                     if v == 0 {
                         Ordering::Equal
                     } else if v < 0 {
