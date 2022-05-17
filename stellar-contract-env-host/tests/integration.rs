@@ -24,5 +24,5 @@ fn vec_as_seen_by_user() -> Result<(), ()> {
 fn vec_host_fn() {
     let host = Host::default();
     let m = host.map_new();
-    assert!(Object::val_is_obj_type(m.into(), ScObjectType::ScoMap));
+    assert!(Object::val_is_obj_type(m.into(), ScObjectType::Map));
 }
