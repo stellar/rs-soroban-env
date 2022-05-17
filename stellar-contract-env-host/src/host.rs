@@ -115,26 +115,26 @@ impl Host {
 
     pub(crate) fn from_host_val(&self, val: RawVal) -> Result<ScVal, HostError> {
         if val.is_positive_i64() {
-            Ok(ScVal::ScvU63(
+            Ok(ScVal::U63(
                 unsafe { val.unchecked_as_positive_i64() } as u64
             ))
         } else {
             match val.get_tag() {
-                Tag::U32 => Ok(ScVal::ScvU32(unsafe {
+                Tag::U32 => Ok(ScVal::U32(unsafe {
                     <u32 as RawValConvertible>::unchecked_from_val(val)
                 })),
-                Tag::I32 => Ok(ScVal::ScvI32(unsafe {
+                Tag::I32 => Ok(ScVal::I32(unsafe {
                     <i32 as RawValConvertible>::unchecked_from_val(val)
                 })),
                 Tag::Static => {
                     if let Some(b) = <bool as RawValConvertible>::try_convert(val) {
                         if b {
-                            Ok(ScVal::ScvStatic(ScStatic::ScsTrue))
+                            Ok(ScVal::Static(ScStatic::True))
                         } else {
-                            Ok(ScVal::ScvStatic(ScStatic::ScsFalse))
+                            Ok(ScVal::Static(ScStatic::False))
                         }
                     } else if <() as RawValConvertible>::is_val_type(val) {
-                        Ok(ScVal::ScvStatic(ScStatic::ScsVoid))
+                        Ok(ScVal::Static(ScStatic::Void))
                     } else {
                         Err(HostError::General("unknown Tag::Static case"))
                     }
@@ -142,22 +142,22 @@ impl Host {
                 Tag::Object => unsafe {
                     let ob = <Object as RawValConvertible>::unchecked_from_val(val);
                     let scob = self.from_host_obj(ob)?;
-                    Ok(ScVal::ScvObject(Some(Box::new(scob))))
+                    Ok(ScVal::Object(Some(Box::new(scob))))
                 },
                 Tag::Symbol => {
                     let sym: Symbol =
                         unsafe { <Symbol as RawValConvertible>::unchecked_from_val(val) };
                     let str: String = sym.into_iter().collect();
-                    Ok(ScVal::ScvSymbol(str.as_bytes().try_into()?))
+                    Ok(ScVal::Symbol(str.as_bytes().try_into()?))
                 }
-                Tag::BitSet => Ok(ScVal::ScvBitset(val.get_payload())),
+                Tag::BitSet => Ok(ScVal::Bitset(val.get_payload())),
                 Tag::Status => {
                     let status: Status =
                         unsafe { <Status as RawValConvertible>::unchecked_from_val(val) };
                     if status.is_ok() {
-                        Ok(ScVal::ScvStatus(ScStatus::SstOk))
-                    } else if status.is_type(ScStatusType::SstUnknownError) {
-                        Ok(ScVal::ScvStatus(ScStatus::SstUnknownError(
+                        Ok(ScVal::Status(ScStatus::Ok))
+                    } else if status.is_type(ScStatusType::UnknownError) {
+                        Ok(ScVal::Status(ScStatus::UnknownError(
                             status.get_code(),
                         )))
                     } else {
@@ -171,33 +171,33 @@ impl Host {
 
     pub(crate) fn to_host_val(&mut self, v: &ScVal) -> Result<HostVal, HostError> {
         let ok = match v {
-            ScVal::ScvU63(u) => {
+            ScVal::U63(u) => {
                 if *u <= (i64::MAX as u64) {
                     unsafe { RawVal::unchecked_from_positive_i64(*u as i64) }
                 } else {
                     return Err(HostError::General("ScvU63 > i64::MAX"));
                 }
             }
-            ScVal::ScvU32(u) => (*u).into(),
-            ScVal::ScvI32(i) => (*i).into(),
-            ScVal::ScvStatic(ScStatic::ScsVoid) => RawVal::from_void(),
-            ScVal::ScvStatic(ScStatic::ScsTrue) => RawVal::from_bool(true),
-            ScVal::ScvStatic(ScStatic::ScsFalse) => RawVal::from_bool(false),
-            ScVal::ScvObject(None) => return Err(HostError::General("missing expected ScvObject")),
-            ScVal::ScvObject(Some(ob)) => return Ok(self.to_host_obj(&*ob)?.into()),
-            ScVal::ScvSymbol(bytes) => {
+            ScVal::U32(u) => (*u).into(),
+            ScVal::I32(i) => (*i).into(),
+            ScVal::Static(ScStatic::Void) => RawVal::from_void(),
+            ScVal::Static(ScStatic::True) => RawVal::from_bool(true),
+            ScVal::Static(ScStatic::False) => RawVal::from_bool(false),
+            ScVal::Object(None) => return Err(HostError::General("missing expected ScvObject")),
+            ScVal::Object(Some(ob)) => return Ok(self.to_host_obj(&*ob)?.into()),
+            ScVal::Symbol(bytes) => {
                 let ss = match std::str::from_utf8(bytes.as_slice()) {
                     Ok(ss) => ss,
                     Err(_) => return Err(HostError::General("non-UTF-8 in symbol")),
                 };
                 Symbol::try_from_str(ss)?.into()
             }
-            ScVal::ScvBitset(i) => BitSet::try_from_u64(*i)?.into(),
-            ScVal::ScvStatus(st) => {
+            ScVal::Bitset(i) => BitSet::try_from_u64(*i)?.into(),
+            ScVal::Status(st) => {
                 let status = match st {
-                    ScStatus::SstOk => Status::from_type_and_code(ScStatusType::SstOk, 0),
-                    ScStatus::SstUnknownError(e) => {
-                        Status::from_type_and_code(ScStatusType::SstUnknownError, *e)
+                    ScStatus::Ok => Status::from_type_and_code(ScStatusType::Ok, 0),
+                    ScStatus::UnknownError(e) => {
+                        Status::from_type_and_code(ScStatusType::UnknownError, *e)
                     }
                 };
                 status.into()
@@ -211,13 +211,13 @@ impl Host {
             self.unchecked_visit_val_obj(ob.into(), |ob| match ob {
                 None => Err(HostError::General("object not found")),
                 Some(ho) => match ho {
-                    HostObject::Box(v) => Ok(ScObject::ScoBox(self.from_host_val(v.val)?)),
+                    HostObject::Box(v) => Ok(ScObject::Box(self.from_host_val(v.val)?)),
                     HostObject::Vec(vv) => {
                         let mut sv = Vec::new();
                         for e in vv.iter() {
                             sv.push(self.from_host_val(e.val)?);
                         }
-                        Ok(ScObject::ScoVec(ScVec(sv.try_into()?)))
+                        Ok(ScObject::Vec(ScVec(sv.try_into()?)))
                     }
                     HostObject::Map(mm) => {
                         let mut mv = Vec::new();
@@ -226,12 +226,12 @@ impl Host {
                             let val = self.from_host_val(v.val)?;
                             mv.push(ScMapEntry { key, val });
                         }
-                        Ok(ScObject::ScoMap(ScMap(mv.try_into()?)))
+                        Ok(ScObject::Map(ScMap(mv.try_into()?)))
                     }
-                    HostObject::U64(u) => Ok(ScObject::ScoU64(*u)),
-                    HostObject::I64(i) => Ok(ScObject::ScoI64(*i)),
-                    HostObject::Str(s) => Ok(ScObject::ScoString(s.as_bytes().try_into()?)),
-                    HostObject::Bin(b) => Ok(ScObject::ScoBinary(b.clone().try_into()?)),
+                    HostObject::U64(u) => Ok(ScObject::U64(*u)),
+                    HostObject::I64(i) => Ok(ScObject::I64(*i)),
+                    HostObject::Str(s) => Ok(ScObject::String(s.as_bytes().try_into()?)),
+                    HostObject::Bin(b) => Ok(ScObject::Binary(b.clone().try_into()?)),
                     HostObject::BigInt(_) => todo!(),
                     HostObject::BigRat(_) => todo!(),
                     HostObject::LedgerKey(_) => todo!(),
@@ -248,18 +248,18 @@ impl Host {
 
     pub(crate) fn to_host_obj(&mut self, ob: &ScObject) -> Result<HostObj, HostError> {
         match ob {
-            ScObject::ScoBox(b) => {
+            ScObject::Box(b) => {
                 let hv = self.to_host_val(b)?;
                 self.add_host_object(hv)
             }
-            ScObject::ScoVec(v) => {
+            ScObject::Vec(v) => {
                 let mut vv = Vector::new();
                 for e in v.0.iter() {
                     vv.push_back(self.to_host_val(e)?)
                 }
                 self.add_host_object(vv)
             }
-            ScObject::ScoMap(m) => {
+            ScObject::Map(m) => {
                 let mut mm = OrdMap::new();
                 for pair in m.0.iter() {
                     let k = self.to_host_val(&pair.key)?;
@@ -268,37 +268,37 @@ impl Host {
                 }
                 self.add_host_object(mm)
             }
-            ScObject::ScoU64(u) => self.add_host_object(*u),
-            ScObject::ScoI64(i) => self.add_host_object(*i),
-            ScObject::ScoString(s) => {
+            ScObject::U64(u) => self.add_host_object(*u),
+            ScObject::I64(i) => self.add_host_object(*i),
+            ScObject::String(s) => {
                 let ss = match String::from_utf8(s.clone().into()) {
                     Ok(ss) => ss,
                     Err(_) => return Err(HostError::General("non-UTF-8 in ScoString")),
                 };
                 self.add_host_object(ss)
             }
-            ScObject::ScoBinary(b) => self.add_host_object::<Vec<u8>>(b.clone().into()),
+            ScObject::Binary(b) => self.add_host_object::<Vec<u8>>(b.clone().into()),
 
-            ScObject::ScoBigint(_) => todo!(),
-            ScObject::ScoBigrat(_) => todo!(),
+            ScObject::Bigint(_) => todo!(),
+            ScObject::Bigrat(_) => todo!(),
 
-            ScObject::ScoLedgerkey(None) => Err(HostError::General("missing ScoLedgerKey")),
-            ScObject::ScoLedgerkey(Some(lk)) => self.add_host_object(lk.clone()),
+            ScObject::Ledgerkey(None) => Err(HostError::General("missing ScoLedgerKey")),
+            ScObject::Ledgerkey(Some(lk)) => self.add_host_object(lk.clone()),
 
-            ScObject::ScoOperation(None) => Err(HostError::General("missing ScoOperation")),
-            ScObject::ScoOperation(Some(op)) => self.add_host_object(op.clone()),
+            ScObject::Operation(None) => Err(HostError::General("missing ScoOperation")),
+            ScObject::Operation(Some(op)) => self.add_host_object(op.clone()),
 
-            ScObject::ScoOperationResult(None) => {
+            ScObject::OperationResult(None) => {
                 Err(HostError::General("missing ScoOperationResult"))
             }
-            ScObject::ScoOperationResult(Some(o)) => self.add_host_object(o.clone()),
+            ScObject::OperationResult(Some(o)) => self.add_host_object(o.clone()),
 
-            ScObject::ScoTransaction(None) => Err(HostError::General("missing ScoTransaction")),
-            ScObject::ScoTransaction(Some(t)) => self.add_host_object(t.clone()),
+            ScObject::Transaction(None) => Err(HostError::General("missing ScoTransaction")),
+            ScObject::Transaction(Some(t)) => self.add_host_object(t.clone()),
 
-            ScObject::ScoAsset(a) => self.add_host_object(a.clone()),
-            ScObject::ScoPrice(p) => self.add_host_object(p.clone()),
-            ScObject::ScoAccountid(a) => self.add_host_object(a.clone()),
+            ScObject::Asset(a) => self.add_host_object(a.clone()),
+            ScObject::Price(p) => self.add_host_object(p.clone()),
+            ScObject::Accountid(a) => self.add_host_object(a.clone()),
         }
     }
 

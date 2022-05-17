@@ -62,20 +62,20 @@ macro_rules! declare_host_object_type {
     };
 }
 
-declare_host_object_type!(HostVal, ScoBox, Box);
-declare_host_object_type!(HostMap, ScoMap, Map);
-declare_host_object_type!(HostVec, ScoVec, Vec);
-declare_host_object_type!(u64, ScoU64, U64);
-declare_host_object_type!(i64, ScoI64, I64);
-declare_host_object_type!(String, ScoString, Str);
-declare_host_object_type!(Vec<u8>, ScoBinary, Bin);
-declare_host_object_type!(BigInt, ScoBigint, BigInt);
-declare_host_object_type!(BigRational, ScoBigrat, BigRat);
+declare_host_object_type!(HostVal, Box, Box);
+declare_host_object_type!(HostMap, Map, Map);
+declare_host_object_type!(HostVec, Vec, Vec);
+declare_host_object_type!(u64, U64, U64);
+declare_host_object_type!(i64, I64, I64);
+declare_host_object_type!(String, String, Str);
+declare_host_object_type!(Vec<u8>, Binary, Bin);
+declare_host_object_type!(BigInt, Bigint, BigInt);
+declare_host_object_type!(BigRational, Bigrat, BigRat);
 
-declare_host_object_type!(LedgerKey, ScoLedgerkey, LedgerKey);
-declare_host_object_type!(Operation, ScoOperation, Operation);
-declare_host_object_type!(OperationResult, ScoOperationResult, OperationResult);
-declare_host_object_type!(Transaction, ScoTransaction, Transaction);
-declare_host_object_type!(Asset, ScoAsset, Asset);
-declare_host_object_type!(Price, ScoPrice, Price);
-declare_host_object_type!(AccountId, ScoAccountid, AccountID);
+declare_host_object_type!(LedgerKey, Ledgerkey, LedgerKey);
+declare_host_object_type!(Operation, Operation, Operation);
+declare_host_object_type!(OperationResult, OperationResult, OperationResult);
+declare_host_object_type!(Transaction, Transaction, Transaction);
+declare_host_object_type!(Asset, Asset, Asset);
+declare_host_object_type!(Price, Price, Price);
+declare_host_object_type!(AccountId, Accountid, AccountID);
