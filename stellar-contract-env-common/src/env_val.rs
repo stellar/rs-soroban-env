@@ -85,6 +85,9 @@ impl<E: Env, T: TagType> From<EnvVal<E, TaggedVal<T>>> for EnvVal<E, RawVal> {
 
 pub trait IntoEnvVal<E: Env, V: Val>: Sized {
     fn into_env_val(self, env: &E) -> EnvVal<E, V>;
+    fn into_val(self, env: &E) -> V {
+        Self::into_env_val(self, env).val
+    }
 }
 
 // EnvValConvertible is similar to RawValConvertible but also covers types with conversions
@@ -93,9 +96,6 @@ pub trait IntoEnvVal<E: Env, V: Val>: Sized {
 pub trait EnvValConvertible<E: Env, V: Val>:
     Sized + IntoEnvVal<E, V> + TryFrom<EnvVal<E, V>>
 {
-    fn into_val(self, env: &E) -> V {
-        Self::into_env_val(self, env).val
-    }
     fn try_from_val(env: &E, v: V) -> Result<Self, Self::Error> {
         Self::try_from(EnvVal {
             env: env.clone(),
