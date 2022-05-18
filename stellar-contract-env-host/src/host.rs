@@ -349,16 +349,16 @@ impl CheckedEnv for Host {
         Ok(self.add_host_object(u)?.into())
     }
 
-    fn obj_to_u64(&self, v: RawVal) -> Result<u64, HostError> {
-        todo!()
+    fn obj_to_u64(&self, obj: Object) -> Result<u64, HostError> {
+        self.visit_obj(obj, |u: &u64| Ok(*u))
     }
 
     fn obj_from_i64(&self, i: i64) -> Result<Object, HostError> {
         Ok(self.add_host_object(i)?.into())
     }
 
-    fn obj_to_i64(&self, v: RawVal) -> Result<i64, HostError> {
-        todo!()
+    fn obj_to_i64(&self, obj: Object) -> Result<i64, HostError> {
+        self.visit_obj(obj, |i: &i64| Ok(*i))
     }
 
     fn map_new(&self) -> Result<Object, HostError> {

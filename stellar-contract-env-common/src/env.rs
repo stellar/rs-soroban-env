@@ -67,12 +67,12 @@ macro_rules! call_macro_with_all_host_functions {
 
             mod u64 "u" {
                 {"$_", fn obj_from_u64(v:u64) -> Object }
-                {"$0", fn obj_to_u64(v:RawVal) -> u64 }
+                {"$0", fn obj_to_u64(obj:Object) -> u64 }
             }
 
             mod i64 "i" {
                 {"$_", fn obj_from_i64(v:i64) -> Object }
-                {"$0", fn obj_to_i64(v:RawVal) -> i64 }
+                {"$0", fn obj_to_i64(obj:Object) -> i64 }
             }
 
             mod map "m" {
