@@ -2,7 +2,6 @@ use crate::{BitSet, Object, Status, Symbol, Tag, TagType, TaggedVal, Val};
 
 use super::{
     raw_val::{RawVal, RawValConvertible},
-    xdr::ScObjectType,
     Env,
 };
 use core::{cmp::Ordering, fmt::Debug};
@@ -167,10 +166,9 @@ impl<E: Env> TryFrom<EnvVal<E, RawVal>> for i64 {
     fn try_from(ev: EnvVal<E, RawVal>) -> Result<Self, Self::Error> {
         if ev.val.is_positive_i64() {
             Ok(unsafe { ev.val.unchecked_as_positive_i64() })
-        } else if Object::val_is_obj_type(ev.val, ScObjectType::I64) {
-            Ok(ev.env.obj_to_i64(ev.val))
         } else {
-            Err(())
+            let ev: EnvVal<E, Object> = ev.try_into()?;
+            Ok(ev.env.obj_to_i64(ev.val))
         }
     }
 }
@@ -195,10 +193,9 @@ impl<E: Env> TryFrom<EnvVal<E, RawVal>> for u64 {
     fn try_from(ev: EnvVal<E, RawVal>) -> Result<Self, Self::Error> {
         if ev.val.is_positive_i64() {
             Ok(unsafe { ev.val.unchecked_as_positive_i64() } as u64)
-        } else if Object::val_is_obj_type(ev.val, ScObjectType::U64) {
-            Ok(ev.env.obj_to_u64(ev.val))
         } else {
-            Err(())
+            let ev: EnvVal<E, Object> = ev.try_into()?;
+            Ok(ev.env.obj_to_u64(ev.val))
         }
     }
 }
