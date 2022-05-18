@@ -94,12 +94,7 @@ pub trait IntoVal<E: Env, V: Val>: IntoEnvVal<E, V> {
 
 impl<E: Env, V: Val, T> IntoVal<E, V> for T where T: IntoEnvVal<E, V> {}
 
-// EnvValConvertible is similar to RawValConvertible but also covers types with conversions
-// that need an Env to help with the conversion -- those that might require allocating an Object. ValType
-// covers types that can always be directly converted to Val with no Env.
-pub trait EnvValConvertible<E: Env, V: Val>:
-    Sized + IntoEnvVal<E, V> + IntoVal<E, V> + TryFrom<EnvVal<E, V>>
-{
+pub trait TryFromVal<E: Env, V: Val>: Sized + TryFrom<EnvVal<E, V>> {
     fn try_from_val(env: &E, v: V) -> Result<Self, Self::Error> {
         Self::try_from(EnvVal {
             env: env.clone(),
@@ -108,8 +103,18 @@ pub trait EnvValConvertible<E: Env, V: Val>:
     }
 }
 
+impl<E: Env, V: Val, T> TryFromVal<E, V> for T where T: Sized + TryFrom<EnvVal<E, V>> {}
+
+// EnvValConvertible is similar to RawValConvertible but also covers types with conversions
+// that need an Env to help with the conversion -- those that might require allocating an Object. ValType
+// covers types that can always be directly converted to Val with no Env.
+pub trait EnvValConvertible<E: Env, V: Val>:
+    Sized + IntoEnvVal<E, V> + IntoVal<E, V> + TryFromVal<E, V>
+{
+}
+
 impl<E: Env, V: Val, C> EnvValConvertible<E, V> for C where
-    C: Sized + IntoEnvVal<E, V> + TryFrom<EnvVal<E, V>>
+    C: Sized + IntoEnvVal<E, V> + TryFromVal<E, V>
 {
 }
 
