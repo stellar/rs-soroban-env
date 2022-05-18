@@ -99,6 +99,8 @@ pub trait TryFromVal<E: Env, V: Val>: TryFrom<EnvVal<E, V>> {
     }
 }
 
+impl<E: Env, V: Val, T> TryFromVal<E, V> for T where T: TryFromVal<E, V> {}
+
 // EnvValConvertible is similar to RawValConvertible but also covers types with conversions
 // that need an Env to help with the conversion -- those that might require allocating an Object. ValType
 // covers types that can always be directly converted to Val with no Env.
