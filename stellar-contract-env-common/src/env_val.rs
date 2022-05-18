@@ -2,7 +2,6 @@ use crate::{BitSet, Object, Status, Symbol, Tag, TagType, TaggedVal, Val};
 
 use super::{
     raw_val::{RawVal, RawValConvertible},
-    xdr::ScObjectType,
     Env,
 };
 use core::{cmp::Ordering, fmt::Debug};
