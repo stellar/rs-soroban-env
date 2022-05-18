@@ -26,7 +26,7 @@ pub use val::Val;
 // RawVal and EnvObj couple raw types to environments.
 pub use checked_env::CheckedEnv;
 pub use env::{Env, EnvBase};
-pub use env_val::{EnvVal, EnvValConvertible, IntoEnvVal, IntoVal, TryFromVal};
+pub use env_val::{EnvVal, IntoEnvVal, IntoVal, TryFromVal};
 pub use unimplemented_env::UnimplementedEnv;
 
 // BitSet, Status and Symbol wrap RawVals.
