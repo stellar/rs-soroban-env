@@ -16,8 +16,8 @@ use std::rc::Rc;
 use crate::host_object::{HostMap, HostObj, HostObject, HostObjectType, HostVal, HostVec};
 use crate::CheckedEnv;
 use crate::{
-    BitSet, BitSetError, EnvBase, EnvValConvertible, IntoEnvVal, Object, RawVal, RawValConvertible,
-    Status, Symbol, SymbolError, Tag, Val,
+    BitSet, BitSetError, EnvBase, IntoEnvVal, Object, RawVal, RawValConvertible, Status, Symbol,
+    SymbolError, Tag, Val,
 };
 
 use thiserror::Error;
@@ -105,7 +105,7 @@ impl Host {
         HostVal { env, val }
     }
 
-    pub(crate) fn associate_env_val_type<V: Val, CVT: EnvValConvertible<WeakHost, RawVal>>(
+    pub(crate) fn associate_env_val_type<V: Val, CVT: IntoEnvVal<WeakHost, RawVal>>(
         &self,
         v: CVT,
     ) -> HostVal {

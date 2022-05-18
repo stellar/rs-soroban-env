@@ -86,15 +86,20 @@ pub trait IntoEnvVal<E: Env, V: Val>: Sized {
     fn into_env_val(self, env: &E) -> EnvVal<E, V>;
 }
 
+pub trait IntoVal<E: Env, V: Val>: IntoEnvVal<E, V> {
+    fn into_val(self, env: &E) -> V {
+        Self::into_env_val(self, env).val
+    }
+}
+
+impl<E: Env, V: Val, T> IntoVal<E, V> for T where T: IntoEnvVal<E, V> {}
+
 // EnvValConvertible is similar to RawValConvertible but also covers types with conversions
 // that need an Env to help with the conversion -- those that might require allocating an Object. ValType
 // covers types that can always be directly converted to Val with no Env.
 pub trait EnvValConvertible<E: Env, V: Val>:
-    Sized + IntoEnvVal<E, V> + TryFrom<EnvVal<E, V>>
+    Sized + IntoEnvVal<E, V> + IntoVal<E, V> + TryFrom<EnvVal<E, V>>
 {
-    fn into_val(self, env: &E) -> V {
-        Self::into_env_val(self, env).val
-    }
     fn try_from_val(env: &E, v: V) -> Result<Self, Self::Error> {
         Self::try_from(EnvVal {
             env: env.clone(),
