@@ -5,9 +5,7 @@ mod checked_env;
 mod env;
 mod env_val;
 mod object;
-mod or_abort;
 mod raw_val;
-mod rt;
 mod status;
 mod symbol;
 mod tagged_val;
@@ -16,10 +14,6 @@ mod val;
 
 // Re-export the XDR definitions
 pub use stellar_xdr as xdr;
-
-// Export some runtime interfaces
-pub use or_abort::OrAbort;
-pub use rt::trap;
 
 // RawVal and RawObj are the 64-bit transparent type.
 pub use raw_val::{RawVal, RawValConvertible, Tag};
