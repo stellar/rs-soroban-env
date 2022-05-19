@@ -221,10 +221,10 @@ impl From<i32> for RawVal {
 }
 
 impl RawVal {
-    pub fn in_env<E: Env>(&self, env: &E) -> EnvVal<E, RawVal> {
+    pub fn in_env<E: Env>(self, env: &E) -> EnvVal<E, RawVal> {
         EnvVal {
             env: env.clone(),
-            val: *self,
+            val: self,
         }
     }
 
