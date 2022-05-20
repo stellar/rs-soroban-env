@@ -93,9 +93,11 @@ impl Host {
             })
         }
     }
-}
 
-impl Host {
+    fn reassociate_val(hv: &mut HostVal, weak: WeakHost) {
+        hv.env = weak;
+    }
+
     pub(crate) fn get_weak(&self) -> WeakHost {
         WeakHost(Rc::downgrade(&self.0))
     }
@@ -320,6 +322,34 @@ impl EnvBase for Host {
 
     fn check_same_env(&self, other: &Self) {
         assert!(Rc::ptr_eq(&self.0, &other.0));
+    }
+
+    fn deep_clone(&self) -> Self {
+        // Step 1: naive deep-clone the HostImpl. At this point some of the
+        // objects in new_host may have WeakHost refs to the old host.
+        let new_host = Host(Rc::new((*self.0).clone()));
+
+        // Step 2: adjust all the objects that have internal WeakHost refs
+        // to point to a weakhost associated with the new host. There are
+        // only a few of these.
+        let new_weak = new_host.get_weak();
+        for hobj in new_host.0.objects.borrow_mut().iter_mut() {
+            match hobj {
+                HostObject::Box(v) => v.env = new_weak.clone(),
+                HostObject::Vec(vs) => {
+                    vs.iter_mut().for_each(|v| v.env = new_weak.clone());
+                }
+                HostObject::Map(m) => {
+                    *m = HostMap::from_iter(m.clone().into_iter().map(|(mut k, mut v)| {
+                        k.env = new_weak.clone();
+                        v.env = new_weak.clone();
+                        (k, v)
+                    }))
+                }
+                _ => (),
+            }
+        }
+        new_host
     }
 }
 

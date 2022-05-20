@@ -45,6 +45,10 @@ impl EnvBase for WeakHost {
     fn check_same_env(&self, other: &Self) {
         self.get_host().check_same_env(&other.get_host())
     }
+
+    fn deep_clone(&self) -> Self {
+        self.get_host().deep_clone().get_weak()
+    }
 }
 
 ///////////////////////////////////////////////////////////////////////////////
