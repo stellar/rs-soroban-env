@@ -5,4 +5,5 @@ members = [
     "stellar-contract-env-host",
     "stellar-contract-env-guest",
     "stellar-contract-env-common",
+    "stellar-contract-env-panic-handler-wasm32-unreachable",
 ]

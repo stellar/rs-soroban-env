@@ -1,6 +1,6 @@
 use crate::{
     xdr::{ScObject, ScObjectType, ScVal, ScVec},
-    Host, IntoEnvVal, Object, OrAbort,
+    Host, IntoEnvVal, Object,
 };
 
 #[test]
@@ -21,12 +21,12 @@ fn vec_as_seen_by_host() -> Result<(), ()> {
     let scobj1: ScObject = ScObject::Vec(scvec1);
     let scval0 = ScVal::Object(Some(Box::new(scobj0)));
     let scval1 = ScVal::Object(Some(Box::new(scobj1)));
-    let val0 = host.to_host_val(&scval0).or_abort();
-    let val1 = host.to_host_val(&scval1).or_abort();
+    let val0 = host.to_host_val(&scval0).unwrap();
+    let val1 = host.to_host_val(&scval1).unwrap();
     assert!(val0.val.is::<Object>());
     assert!(val1.val.is::<Object>());
-    let obj0: Object = val0.val.try_into().or_abort();
-    let obj1: Object = val1.val.try_into().or_abort();
+    let obj0: Object = val0.val.try_into().unwrap();
+    let obj1: Object = val1.val.try_into().unwrap();
     assert_eq!(obj0.get_handle(), 0);
     assert_eq!(obj1.get_handle(), 1);
     assert!(obj0.is_obj_type(ScObjectType::Vec));

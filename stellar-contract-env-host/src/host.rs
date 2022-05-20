@@ -16,8 +16,8 @@ use std::rc::Rc;
 use crate::host_object::{HostMap, HostObj, HostObject, HostObjectType, HostVal, HostVec};
 use crate::CheckedEnv;
 use crate::{
-    BitSet, BitSetError, EnvBase, EnvValConvertible, IntoEnvVal, Object, RawVal, RawValConvertible,
-    Status, Symbol, SymbolError, Tag, Val,
+    BitSet, BitSetError, EnvBase, IntoEnvVal, Object, RawVal, RawValConvertible, Status, Symbol,
+    SymbolError, Tag, Val,
 };
 
 use thiserror::Error;
@@ -105,7 +105,7 @@ impl Host {
         HostVal { env, val }
     }
 
-    pub(crate) fn associate_env_val_type<V: Val, CVT: EnvValConvertible<WeakHost, RawVal>>(
+    pub(crate) fn associate_env_val_type<V: Val, CVT: IntoEnvVal<WeakHost, RawVal>>(
         &self,
         v: CVT,
     ) -> HostVal {
@@ -349,16 +349,16 @@ impl CheckedEnv for Host {
         Ok(self.add_host_object(u)?.into())
     }
 
-    fn obj_to_u64(&self, v: RawVal) -> Result<u64, HostError> {
-        todo!()
+    fn obj_to_u64(&self, obj: Object) -> Result<u64, HostError> {
+        self.visit_obj(obj, |u: &u64| Ok(*u))
     }
 
     fn obj_from_i64(&self, i: i64) -> Result<Object, HostError> {
         Ok(self.add_host_object(i)?.into())
     }
 
-    fn obj_to_i64(&self, v: RawVal) -> Result<i64, HostError> {
-        todo!()
+    fn obj_to_i64(&self, obj: Object) -> Result<i64, HostError> {
+        self.visit_obj(obj, |i: &i64| Ok(*i))
     }
 
     fn map_new(&self) -> Result<Object, HostError> {

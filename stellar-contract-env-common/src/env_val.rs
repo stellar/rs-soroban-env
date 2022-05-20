@@ -1,8 +1,9 @@
+use stellar_xdr::ScObjectType;
+
 use crate::{BitSet, Object, Status, Symbol, Tag, TagType, TaggedVal, Val};
 
 use super::{
     raw_val::{RawVal, RawValConvertible},
-    xdr::ScObjectType,
     Env,
 };
 use core::{cmp::Ordering, fmt::Debug};
@@ -87,15 +88,15 @@ pub trait IntoEnvVal<E: Env, V: Val>: Sized {
     fn into_env_val(self, env: &E) -> EnvVal<E, V>;
 }
 
-// EnvValConvertible is similar to RawValConvertible but also covers types with conversions
-// that need an Env to help with the conversion -- those that might require allocating an Object. ValType
-// covers types that can always be directly converted to Val with no Env.
-pub trait EnvValConvertible<E: Env, V: Val>:
-    Sized + IntoEnvVal<E, V> + TryFrom<EnvVal<E, V>>
-{
+pub trait IntoVal<E: Env, V: Val>: IntoEnvVal<E, V> {
     fn into_val(self, env: &E) -> V {
         Self::into_env_val(self, env).val
     }
+}
+
+impl<E: Env, V: Val, T> IntoVal<E, V> for T where T: IntoEnvVal<E, V> {}
+
+pub trait TryFromVal<E: Env, V: Val>: Sized + TryFrom<EnvVal<E, V>> {
     fn try_from_val(env: &E, v: V) -> Result<Self, Self::Error> {
         Self::try_from(EnvVal {
             env: env.clone(),
@@ -104,10 +105,7 @@ pub trait EnvValConvertible<E: Env, V: Val>:
     }
 }
 
-impl<E: Env, V: Val, C> EnvValConvertible<E, V> for C where
-    C: Sized + IntoEnvVal<E, V> + TryFrom<EnvVal<E, V>>
-{
-}
+impl<E: Env, V: Val, T> TryFromVal<E, V> for T where T: Sized + TryFrom<EnvVal<E, V>> {}
 
 impl<E: Env, V: Val, I: Into<EnvVal<E, V>>> IntoEnvVal<E, V> for I {
     fn into_env_val(self, env: &E) -> EnvVal<E, V> {
@@ -168,7 +166,8 @@ impl<E: Env> TryFrom<EnvVal<E, RawVal>> for i64 {
         if ev.val.is_positive_i64() {
             Ok(unsafe { ev.val.unchecked_as_positive_i64() })
         } else if Object::val_is_obj_type(ev.val, ScObjectType::I64) {
-            Ok(ev.env.obj_to_i64(ev.val))
+            let obj = unsafe { Object::unchecked_from_val(ev.val) };
+            Ok(ev.env.obj_to_i64(obj))
         } else {
             Err(())
         }
@@ -196,7 +195,8 @@ impl<E: Env> TryFrom<EnvVal<E, RawVal>> for u64 {
         if ev.val.is_positive_i64() {
             Ok(unsafe { ev.val.unchecked_as_positive_i64() } as u64)
         } else if Object::val_is_obj_type(ev.val, ScObjectType::U64) {
-            Ok(ev.env.obj_to_u64(ev.val))
+            let obj = unsafe { Object::unchecked_from_val(ev.val) };
+            Ok(ev.env.obj_to_u64(obj))
         } else {
             Err(())
         }

@@ -182,9 +182,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "stellar-contract-env-panic-handler-wasm32-unreachable"
+version = "0.0.0"
+
+[[package]]
 name = "stellar-xdr"
 version = "0.0.0"
-source = "git+https://github.com/stellar/rs-stellar-xdr?rev=a7505093#a750509373b857bb44e4d8d15e660370dc1c64a9"
+source = "git+https://github.com/stellar/rs-stellar-xdr?rev=378b1a5#378b1a5ace92e1dc5612a3556ae859f6d6b6de37"
 dependencies = [
  "base64",
 ]
