@@ -5,6 +5,3 @@ edition = "2021"
 
 [dependencies]
 stellar-contract-env-common = { path = "../stellar-contract-env-common" }
-
-[features]
-panic_handler = ["stellar-contract-env-common/panic_handler"]
