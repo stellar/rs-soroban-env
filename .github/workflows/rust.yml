@@ -49,7 +49,7 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - run: rustup update stable && rustup default stable
-    - run: rustup target add wasm32-unknown-unknown
+    - run: rustup target add ${{ matrix.sys.target }}
     - run: cargo install --locked --version 1.7.0 cargo-all-features
     - run: cargo check-all-features --profile ${{ matrix.profile }} --target ${{ matrix.sys.target }}
     - if: matrix.sys.test
