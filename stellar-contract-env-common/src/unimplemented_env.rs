@@ -10,6 +10,10 @@ impl EnvBase for UnimplementedEnv {
     }
 
     fn check_same_env(&self, _other: &Self) {}
+
+    fn deep_clone(&self) -> Self {
+        Self
+    }
 }
 
 // This is a helper macro used only by generate_env_unimplemented below. It

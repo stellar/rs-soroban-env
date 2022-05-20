@@ -17,6 +17,10 @@ impl EnvBase for Guest {
     fn check_same_env(&self, other: &Self) {
         ()
     }
+
+    fn deep_clone(&self) -> Self {
+        Self
+    }
 }
 
 ///////////////////////////////////////////////////////////////////////////////
