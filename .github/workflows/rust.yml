@@ -12,7 +12,7 @@ jobs:
 
   complete:
     if: always()
-    needs: [fmt, build, test]
+    needs: [fmt, common, guest, host]
     runs-on: ubuntu-latest
     steps:
     - if: contains(needs.*.result, 'failure')
@@ -25,21 +25,210 @@ jobs:
     - run: rustup update stable && rustup default stable
     - run: find . -type f -name '*.rs' -print0 | xargs -I {} -0 rustfmt --check "{}"
 
-  build:
-    runs-on: ubuntu-latest
+  common:
+    strategy:
+      matrix:
+        features: ['', 'vm', 'std', 'vm,std']
+        profile: [dev, release]
+        sys:
+        - os: ubuntu-latest
+          target: wasm32-unknown-unknown
+          test: false
+        - os: ubuntu-latest
+          target: x86_64-unknown-linux-gnu
+          test: true
+        - os: macos-latest
+          target: x86_64-apple-darwin
+          test: true
+        - os: macos-latest
+          target: aarch64-apple-darwin
+          test: false
+        - os: windows-latest
+          target: x86_64-pc-windows-msvc
+          test: true
+    runs-on: ${{ matrix.sys.os }}
     steps:
-    - uses: actions/checkout@v3
     - run: rustup update stable && rustup default stable
-    - run: rustup target add wasm32-unknown-unknown
-    - run: cargo install --locked --version 1.7.0 cargo-all-features
-    - run: make build
+    - run: rustup target add ${{ matrix.sys.target }}
+    - uses: actions/checkout@v3
+    - uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cargo/registry/index/
+          ~/.cargo/registry/cache/
+          ~/.cargo/git/db/
+        key: cargo-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: cargo-
+    - uses: actions/cache@v3
+      with:
+        path: target/
+        key: target-${{ strategy.job-index }}-${{ github.sha }}
+        restore-keys: |
+          target-${{ strategy.job-index }}
+          target-
+    - run: >
+        cargo check
+        -p stellar-env-common
+        --profile ${{ matrix.profile }}
+        --target ${{ matrix.sys.target }}
+        --no-default-features
+        --features='${{ matrix.features }}'
+    - if: matrix.sys.test
+      run: >
+        cargo test
+        -p stellar-env-common
+        --profile ${{ matrix.profile }}
+        --target ${{ matrix.sys.target }}
+        --no-default-features
+        --features='${{ matrix.features }}'
 
-  test:
-    runs-on: ubuntu-latest
+  guest:
+    strategy:
+      matrix:
+        features: ['']
+        profile: [dev, release]
+        sys:
+        - os: ubuntu-latest
+          target: wasm32-unknown-unknown
+          test: false
+        - os: ubuntu-latest
+          target: x86_64-unknown-linux-gnu
+          test: true
+        - os: macos-latest
+          target: x86_64-apple-darwin
+          test: true
+        - os: macos-latest
+          target: aarch64-apple-darwin
+          test: false
+        - os: windows-latest
+          target: x86_64-pc-windows-msvc
+          test: true
+    runs-on: ${{ matrix.sys.os }}
     steps:
-    - uses: actions/checkout@v3
     - run: rustup update stable && rustup default stable
-    - run: rustup target add wasm32-unknown-unknown
-    - run: cargo install --locked --version 1.7.0 cargo-all-features
-    - run: make test
+    - run: rustup target add ${{ matrix.sys.target }}
+    - uses: actions/checkout@v3
+    - uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cargo/registry/index/
+          ~/.cargo/registry/cache/
+          ~/.cargo/git/db/
+        key: cargo-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: cargo-
+    - uses: actions/cache@v3
+      with:
+        path: target/
+        key: target-${{ strategy.job-index }}-${{ github.sha }}
+        restore-keys: |
+          target-${{ strategy.job-index }}
+          target-
+    - run: >
+        cargo check
+        -p stellar-env-guest
+        --profile ${{ matrix.profile }}
+        --target ${{ matrix.sys.target }}
+        --no-default-features
+        --features='${{ matrix.features }}'
+    - if: matrix.sys.test
+      run: >
+        cargo test
+        -p stellar-env-guest
+        --profile ${{ matrix.profile }}
+        --target ${{ matrix.sys.target }}
+        --no-default-features
+        --features='${{ matrix.features }}'
 
+  host:
+    strategy:
+      matrix:
+        features: ['', 'vm']
+        profile: [dev, release]
+        sys:
+        - os: ubuntu-latest
+          target: wasm32-unknown-unknown
+          test: false
+        - os: ubuntu-latest
+          target: x86_64-unknown-linux-gnu
+          test: true
+        - os: macos-latest
+          target: x86_64-apple-darwin
+          test: true
+        - os: macos-latest
+          target: aarch64-apple-darwin
+          test: false
+        - os: windows-latest
+          target: x86_64-pc-windows-msvc
+          test: true
+    runs-on: ${{ matrix.sys.os }}
+    steps:
+    - run: rustup update stable && rustup default stable
+    - run: rustup target add ${{ matrix.sys.target }}
+    - uses: actions/checkout@v3
+    - uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cargo/registry/index/
+          ~/.cargo/registry/cache/
+          ~/.cargo/git/db/
+        key: cargo-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: cargo-
+    - uses: actions/cache@v3
+      with:
+        path: target/
+        key: target-${{ strategy.job-index }}-${{ github.sha }}
+        restore-keys: |
+          target-${{ strategy.job-index }}
+          target-
+    - run: >
+        cargo check
+        -p stellar-env-host
+        --profile ${{ matrix.profile }}
+        --target ${{ matrix.sys.target }}
+        --no-default-features
+        --features='${{ matrix.features }}'
+    - if: matrix.sys.test
+      run: >
+        cargo test
+        -p stellar-env-host
+        --profile ${{ matrix.profile }}
+        --target ${{ matrix.sys.target }}
+        --no-default-features
+        --features='${{ matrix.features }}'
+
+  panic-handler:
+    strategy:
+      matrix:
+        features: ['']
+        profile: [dev, release]
+        sys:
+        - os: ubuntu-latest
+          target: wasm32-unknown-unknown
+          test: false
+    runs-on: ${{ matrix.sys.os }}
+    steps:
+    - run: rustup update stable && rustup default stable
+    - run: rustup target add ${{ matrix.sys.target }}
+    - uses: actions/checkout@v3
+    - uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cargo/registry/index/
+          ~/.cargo/registry/cache/
+          ~/.cargo/git/db/
+        key: cargo-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: cargo-
+    - uses: actions/cache@v3
+      with:
+        path: target/
+        key: target-${{ strategy.job-index }}-${{ github.sha }}
+        restore-keys: |
+          target-${{ strategy.job-index }}
+          target-
+    - run: >
+        cargo check
+        -p stellar-env-panic-handler-wasm32-unreachable
+        --profile ${{ matrix.profile }}
+        --target ${{ matrix.sys.target }}
+        --no-default-features
+        --features='${{ matrix.features }}'
