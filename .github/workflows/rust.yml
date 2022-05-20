@@ -12,7 +12,7 @@ jobs:
 
   complete:
     if: always()
-    needs: [fmt, build, test]
+    needs: [fmt, build-and-test]
     runs-on: ubuntu-latest
     steps:
     - if: contains(needs.*.result, 'failure')
@@ -25,21 +25,32 @@ jobs:
     - run: rustup update stable && rustup default stable
     - run: find . -type f -name '*.rs' -print0 | xargs -I {} -0 rustfmt --check "{}"
 
-  build:
-    runs-on: ubuntu-latest
+  build-and-test:
+    strategy:
+      matrix:
+        profile: [dev, release]
+        sys:
+        - os: ubuntu-latest
+          target: wasm32-unknown-unknown
+          test: false
+        - os: ubuntu-latest
+          target: x86_64-unknown-linux-gnu
+          test: true
+        - os: macos-latest
+          target: x86_64-apple-darwin
+          test: true
+        - os: macos-latest
+          target: aarch64-apple-darwin
+          test: false
+        - os: windows-latest
+          target: x86_64-pc-windows-msvc
+          test: true
+    runs-on: ${{ matrix.sys.os }}
     steps:
     - uses: actions/checkout@v3
     - run: rustup update stable && rustup default stable
     - run: rustup target add wasm32-unknown-unknown
     - run: cargo install --locked --version 1.7.0 cargo-all-features
-    - run: make build
-
-  test:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v3
-    - run: rustup update stable && rustup default stable
-    - run: rustup target add wasm32-unknown-unknown
-    - run: cargo install --locked --version 1.7.0 cargo-all-features
-    - run: make test
-
+    - run: cargo check-all-features --profile ${{ matrix.profile }} --target ${{ matrix.sys.target }}
+    - if: matrix.sys.test
+      run: cargo test-all-features --profile ${{ matrix.profile }} --target ${{ matrix.sys.target }}
