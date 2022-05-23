@@ -1,15 +1,56 @@
+use stellar_contract_env_common::RawValConvertible;
+
 use crate::{
     xdr::{ScObject, ScObjectType, ScVal, ScVec},
-    Host, IntoEnvVal, Object,
+    Host, IntoEnvVal, Object, Tag,
 };
 
 #[test]
-fn i64_roundtrip() {
+fn u64_roundtrip() {
     let host = Host::default();
-    let i = 12345_i64;
+    let u: u64 = 38473_u64; // This will be treated as a ScVal::I64
+    let v = u.into_env_val(&host);
+    let j = u64::try_from(v).unwrap();
+    assert_eq!(u, j);
+
+    let u2: u64 = u64::MAX; // This will be treated as ScVal::Object::U64
+    let v2 = u2.into_env_val(&host);
+    let obj: Object = v2.val.try_into().unwrap();
+    assert!(obj.is_obj_type(ScObjectType::U64));
+    assert_eq!(obj.get_handle(), 0);
+    let k = u64::try_from(v2).unwrap();
+    assert_eq!(u2, k);
+}
+
+#[test]
+fn pos_i64_roundtrip() {
+    let host = Host::default();
+    let i: i64 = 12345_i64;
     let v = i.into_env_val(&host);
     let j = i64::try_from(v).unwrap();
     assert_eq!(i, j);
+}
+
+#[test]
+fn u32_as_seen_by_host() {
+    let mut host = Host::default();
+    let scval0 = ScVal::U32(12345);
+    let val0 = host.to_host_val(&scval0).unwrap();
+    assert!(val0.val.is::<u32>());
+    assert!(val0.val.get_tag() == Tag::U32);
+    let u = unsafe { <u32 as RawValConvertible>::unchecked_from_val(val0.val) };
+    assert_eq!(u, 12345);
+}
+
+#[test]
+fn i32_as_seen_by_host() {
+    let mut host = Host::default();
+    let scval0 = ScVal::I32(-12345);
+    let val0 = host.to_host_val(&scval0).unwrap();
+    assert!(val0.val.is::<i32>());
+    assert!(val0.val.get_tag() == Tag::I32);
+    let i = unsafe { <i32 as RawValConvertible>::unchecked_from_val(val0.val) };
+    assert_eq!(i, -12345);
 }
 
 #[test]
