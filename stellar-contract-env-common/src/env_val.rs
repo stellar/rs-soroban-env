@@ -6,7 +6,7 @@ use stellar_xdr::{ScStatic, ScStatus, ScStatusType, ScVal};
 use crate::{BitSet, Object, Status, Symbol, Tag, TagType, TaggedVal, Val};
 
 #[cfg(feature = "std")]
-use crate::{BitSetError, RawValXdrConverter, SymbolError};
+use crate::{BitSetError, ObjectXdrConverter, SymbolError};
 
 use super::{
     raw_val::{RawVal, RawValConvertible},
@@ -242,7 +242,7 @@ impl<E: Env> IntoEnvVal<E, RawVal> for u64 {
 }
 
 #[cfg(feature = "std")]
-impl<E: Env + RawValXdrConverter> TryFrom<EnvVal<E, RawVal>> for ScVal {
+impl<E: Env + ObjectXdrConverter> TryFrom<EnvVal<E, RawVal>> for ScVal {
     type Error = ();
 
     fn try_from(ev: EnvVal<E, RawVal>) -> Result<Self, Self::Error> {
@@ -329,7 +329,7 @@ impl From<SymbolError> for TryIntoEnvValScValError {
 }
 
 #[cfg(feature = "std")]
-impl<E: Env + RawValXdrConverter> TryIntoEnvVal<E, RawVal> for &ScVal {
+impl<E: Env + ObjectXdrConverter> TryIntoEnvVal<E, RawVal> for &ScVal {
     type Error = TryIntoEnvValScValError;
 
     fn try_into_env_val(self, env: &E) -> Result<EnvVal<E, RawVal>, Self::Error> {

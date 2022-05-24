@@ -5,9 +5,9 @@ use core::cell::RefCell;
 use core::cmp::Ordering;
 use core::fmt::Debug;
 use im_rc::{OrdMap, Vector};
-use stellar_contract_env_common::xdr::ScVal;
 use std::num::TryFromIntError;
-use stellar_contract_env_common::{RawValXdrConverter, TryFromVal, TryIntoVal};
+use stellar_contract_env_common::xdr::ScVal;
+use stellar_contract_env_common::{ObjectXdrConverter, TryFromVal, TryIntoVal};
 
 use crate::weak_host::WeakHost;
 
@@ -70,7 +70,7 @@ impl Debug for Host {
     }
 }
 
-impl RawValXdrConverter for Host {
+impl ObjectXdrConverter for Host {
     fn from_xdr_obj(&self, ob: Object) -> Result<ScObject, ()> {
         self.from_host_obj(ob).map_err(|_| ())
     }

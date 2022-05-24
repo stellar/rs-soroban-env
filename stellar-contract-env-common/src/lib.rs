@@ -29,7 +29,7 @@ pub use checked_env::CheckedEnv;
 pub use env::{Env, EnvBase};
 pub use env_val::{EnvVal, IntoEnvVal, IntoVal, TryFromVal, TryIntoEnvVal, TryIntoVal};
 pub use unimplemented_env::UnimplementedEnv;
-pub use xdr_converter::RawValXdrConverter;
+pub use xdr_converter::ObjectXdrConverter;
 
 // BitSet, Status and Symbol wrap RawVals.
 // TODO: maybe these should wrap EnvVals?
