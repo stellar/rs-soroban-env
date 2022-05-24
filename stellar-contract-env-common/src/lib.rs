@@ -4,6 +4,7 @@ mod bitset;
 mod checked_env;
 mod env;
 mod env_val;
+mod obj_xdr_converter;
 mod object;
 mod raw_val;
 mod status;
@@ -11,7 +12,6 @@ mod symbol;
 mod tagged_val;
 mod unimplemented_env;
 mod val;
-mod obj_xdr_converter;
 
 // Re-export the XDR definitions
 pub use stellar_xdr as xdr;
@@ -28,8 +28,8 @@ pub use val::Val;
 pub use checked_env::CheckedEnv;
 pub use env::{Env, EnvBase};
 pub use env_val::{EnvVal, IntoEnvVal, IntoVal, TryFromVal, TryIntoEnvVal, TryIntoVal};
-pub use unimplemented_env::UnimplementedEnv;
 pub use obj_xdr_converter::ObjectXdrConverter;
+pub use unimplemented_env::UnimplementedEnv;
 
 // BitSet, Status and Symbol wrap RawVals.
 // TODO: maybe these should wrap EnvVals?
