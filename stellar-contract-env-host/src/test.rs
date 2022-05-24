@@ -1,4 +1,4 @@
-use stellar_contract_env_common::RawValConvertible;
+use stellar_contract_env_common::{CheckedEnv, RawValConvertible};
 
 use crate::{
     xdr::{ScObject, ScObjectType, ScVal, ScVec},
@@ -64,6 +64,7 @@ fn i32_as_seen_by_host() {
     assert_eq!(i, -12345);
 }
 
+/// Vec
 #[test]
 fn vec_as_seen_by_host() -> Result<(), ()> {
     let mut host = Host::default();
@@ -88,4 +89,43 @@ fn vec_as_seen_by_host() -> Result<(), ()> {
     // But also that they compare deep-equal.
     assert_eq!(val0, val1);
     Ok(())
+}
+
+#[test]
+fn vec_front_and_back() -> Result<(), ()> {
+    let mut host = Host::default();
+    let scvec: ScVec = vec![ScVal::U32(1), ScVal::U32(2), ScVal::U32(3)]
+        .try_into()
+        .unwrap();
+    let scobj = ScObject::Vec(scvec);
+    let obj = host.to_host_obj(&scobj).unwrap();
+    let front = unsafe {
+        <i32 as RawValConvertible>::unchecked_from_val(host.vec_front(*obj.as_ref()).unwrap())
+    };
+    let back = unsafe {
+        <i32 as RawValConvertible>::unchecked_from_val(host.vec_back(*obj.as_ref()).unwrap())
+    };
+    assert_eq!(front, 1);
+    assert_eq!(back, 3);
+    Ok(())
+}
+
+#[test]
+#[should_panic(expected = "value does not exist")]
+fn empty_vec_front() {
+    let mut host = Host::default();
+    let scvec: ScVec = vec![].try_into().unwrap();
+    let scobj = ScObject::Vec(scvec);
+    let obj = host.to_host_obj(&scobj).unwrap();
+    host.vec_front(*obj.as_ref()).unwrap();
+}
+
+#[test]
+#[should_panic(expected = "value does not exist")]
+fn empty_vec_back() {
+    let mut host = Host::default();
+    let scvec: ScVec = vec![].try_into().unwrap();
+    let scobj = ScObject::Vec(scvec);
+    let obj = host.to_host_obj(&scobj).unwrap();
+    host.vec_back(*obj.as_ref()).unwrap();
 }

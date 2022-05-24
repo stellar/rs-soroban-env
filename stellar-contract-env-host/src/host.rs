@@ -451,7 +451,12 @@ impl CheckedEnv for Host {
     }
 
     fn vec_pop(&self, v: Object) -> Result<Object, HostError> {
-        todo!()
+        let vnew = self.visit_obj(v, move |hv: &HostVec| {
+            let mut vnew = hv.clone();
+            vnew.pop_back();
+            Ok(vnew)
+        })?;
+        Ok(self.add_host_object(vnew)?.into())
     }
 
     fn vec_take(&self, v: Object, n: RawVal) -> Result<Object, HostError> {
@@ -463,11 +468,19 @@ impl CheckedEnv for Host {
     }
 
     fn vec_front(&self, v: Object) -> Result<RawVal, HostError> {
-        todo!()
+        let front = self.visit_obj(v, |hv: &HostVec| match hv.front() {
+            None => Err(HostError::General("value does not exist")),
+            Some(front) => Ok(front.to_raw()),
+        });
+        front
     }
 
     fn vec_back(&self, v: Object) -> Result<RawVal, HostError> {
-        todo!()
+        let back = self.visit_obj(v, |hv: &HostVec| match hv.back() {
+            None => Err(HostError::General("value does not exist")),
+            Some(back) => Ok(back.to_raw()),
+        });
+        back
     }
 
     fn vec_insert(&self, v: Object, i: RawVal, x: RawVal) -> Result<Object, HostError> {
