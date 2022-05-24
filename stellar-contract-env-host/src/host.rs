@@ -5,19 +5,20 @@ use core::cell::RefCell;
 use core::cmp::Ordering;
 use core::fmt::Debug;
 use im_rc::{OrdMap, Vector};
+use stellar_contract_env_common::xdr::ScVal;
 use std::num::TryFromIntError;
+use stellar_contract_env_common::{RawValXdrConverter, TryFromVal, TryIntoVal};
 
 use crate::weak_host::WeakHost;
 
 use crate::xdr;
-use crate::xdr::{ScMap, ScMapEntry, ScObject, ScStatic, ScStatus, ScStatusType, ScVal, ScVec};
+use crate::xdr::{ScMap, ScMapEntry, ScObject, ScVec};
 use std::rc::Rc;
 
 use crate::host_object::{HostMap, HostObj, HostObject, HostObjectType, HostVal, HostVec};
 use crate::CheckedEnv;
 use crate::{
-    BitSet, BitSetError, EnvBase, IntoEnvVal, Object, RawVal, RawValConvertible, Status, Symbol,
-    SymbolError, Tag, Val,
+    BitSetError, EnvBase, IntoEnvVal, Object, RawVal, RawValConvertible, SymbolError, Val,
 };
 
 use thiserror::Error;
@@ -69,6 +70,16 @@ impl Debug for Host {
     }
 }
 
+impl RawValXdrConverter for Host {
+    fn from_xdr_obj(&self, ob: Object) -> Result<ScObject, ()> {
+        self.from_host_obj(ob).map_err(|_| ())
+    }
+
+    fn to_xdr_obj(&self, ob: &ScObject) -> Result<Object, ()> {
+        self.to_host_obj(ob).map_err(|_| ()).map(|ob| ob.val)
+    }
+}
+
 impl Host {
     unsafe fn unchecked_visit_val_obj<F, U>(&self, val: RawVal, f: F) -> U
     where
@@ -116,92 +127,15 @@ impl Host {
     }
 
     pub(crate) fn from_host_val(&self, val: RawVal) -> Result<ScVal, HostError> {
-        if val.is_positive_i64() {
-            Ok(ScVal::U63(unsafe { val.unchecked_as_positive_i64() } as u64))
-        } else {
-            match val.get_tag() {
-                Tag::U32 => Ok(ScVal::U32(unsafe {
-                    <u32 as RawValConvertible>::unchecked_from_val(val)
-                })),
-                Tag::I32 => Ok(ScVal::I32(unsafe {
-                    <i32 as RawValConvertible>::unchecked_from_val(val)
-                })),
-                Tag::Static => {
-                    if let Some(b) = <bool as RawValConvertible>::try_convert(val) {
-                        if b {
-                            Ok(ScVal::Static(ScStatic::True))
-                        } else {
-                            Ok(ScVal::Static(ScStatic::False))
-                        }
-                    } else if <() as RawValConvertible>::is_val_type(val) {
-                        Ok(ScVal::Static(ScStatic::Void))
-                    } else {
-                        Err(HostError::General("unknown Tag::Static case"))
-                    }
-                }
-                Tag::Object => unsafe {
-                    let ob = <Object as RawValConvertible>::unchecked_from_val(val);
-                    let scob = self.from_host_obj(ob)?;
-                    Ok(ScVal::Object(Some(Box::new(scob))))
-                },
-                Tag::Symbol => {
-                    let sym: Symbol =
-                        unsafe { <Symbol as RawValConvertible>::unchecked_from_val(val) };
-                    let str: String = sym.into_iter().collect();
-                    Ok(ScVal::Symbol(str.as_bytes().try_into()?))
-                }
-                Tag::BitSet => Ok(ScVal::Bitset(val.get_payload())),
-                Tag::Status => {
-                    let status: Status =
-                        unsafe { <Status as RawValConvertible>::unchecked_from_val(val) };
-                    if status.is_ok() {
-                        Ok(ScVal::Status(ScStatus::Ok))
-                    } else if status.is_type(ScStatusType::UnknownError) {
-                        Ok(ScVal::Status(ScStatus::UnknownError(status.get_code())))
-                    } else {
-                        Err(HostError::General("unknown Tag::Status case"))
-                    }
-                }
-                Tag::Reserved => Err(HostError::General("Tag::Reserved value")),
-            }
-        }
+        ScVal::try_from_val(self, val)
+            .map_err(|_| HostError::General("converting from RawVal to ScVal"))
     }
 
-    pub(crate) fn to_host_val(&mut self, v: &ScVal) -> Result<HostVal, HostError> {
-        let ok = match v {
-            ScVal::U63(u) => {
-                if *u <= (i64::MAX as u64) {
-                    unsafe { RawVal::unchecked_from_positive_i64(*u as i64) }
-                } else {
-                    return Err(HostError::General("ScvU63 > i64::MAX"));
-                }
-            }
-            ScVal::U32(u) => (*u).into(),
-            ScVal::I32(i) => (*i).into(),
-            ScVal::Static(ScStatic::Void) => RawVal::from_void(),
-            ScVal::Static(ScStatic::True) => RawVal::from_bool(true),
-            ScVal::Static(ScStatic::False) => RawVal::from_bool(false),
-            ScVal::Object(None) => return Err(HostError::General("missing expected ScvObject")),
-            ScVal::Object(Some(ob)) => return Ok(self.to_host_obj(&*ob)?.into()),
-            ScVal::Symbol(bytes) => {
-                let ss = match std::str::from_utf8(bytes.as_slice()) {
-                    Ok(ss) => ss,
-                    Err(_) => return Err(HostError::General("non-UTF-8 in symbol")),
-                };
-                Symbol::try_from_str(ss)?.into()
-            }
-            ScVal::Bitset(i) => BitSet::try_from_u64(*i)?.into(),
-            ScVal::Status(st) => {
-                let status = match st {
-                    ScStatus::Ok => Status::from_type_and_code(ScStatusType::Ok, 0),
-                    ScStatus::UnknownError(e) => {
-                        Status::from_type_and_code(ScStatusType::UnknownError, *e)
-                    }
-                };
-                status.into()
-            }
-        };
-        Ok(self.associate_raw_val(ok))
+    pub(crate) fn to_host_val(&self, v: &ScVal) -> Result<HostVal, HostError> {
+        let rv = v
+            .try_into_val(self)
+            .map_err(|_| HostError::General("converting from ScVal to RawVal"))?;
+        Ok(self.associate_raw_val(rv))
     }
 
     pub(crate) fn from_host_obj(&self, ob: Object) -> Result<ScObject, HostError> {
@@ -244,7 +178,7 @@ impl Host {
         }
     }
 
-    pub(crate) fn to_host_obj(&mut self, ob: &ScObject) -> Result<HostObj, HostError> {
+    pub(crate) fn to_host_obj(&self, ob: &ScObject) -> Result<HostObj, HostError> {
         match ob {
             ScObject::Box(b) => {
                 let hv = self.to_host_val(b)?;

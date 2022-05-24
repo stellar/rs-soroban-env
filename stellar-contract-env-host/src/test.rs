@@ -44,7 +44,7 @@ fn i64_roundtrip() {
 
 #[test]
 fn u32_as_seen_by_host() {
-    let mut host = Host::default();
+    let host = Host::default();
     let scval0 = ScVal::U32(12345);
     let val0 = host.to_host_val(&scval0).unwrap();
     assert!(val0.val.is::<u32>());
@@ -55,7 +55,7 @@ fn u32_as_seen_by_host() {
 
 #[test]
 fn i32_as_seen_by_host() {
-    let mut host = Host::default();
+    let host = Host::default();
     let scval0 = ScVal::I32(-12345);
     let val0 = host.to_host_val(&scval0).unwrap();
     assert!(val0.val.is::<i32>());
@@ -66,7 +66,7 @@ fn i32_as_seen_by_host() {
 
 #[test]
 fn vec_as_seen_by_host() -> Result<(), ()> {
-    let mut host = Host::default();
+    let host = Host::default();
     let scvec0: ScVec = ScVec(vec![ScVal::U32(1)].try_into()?);
     let scvec1: ScVec = ScVec(vec![ScVal::U32(1)].try_into()?);
     let scobj0: ScObject = ScObject::Vec(scvec0);

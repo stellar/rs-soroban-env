@@ -53,6 +53,15 @@ impl TagType for TagStatus {
 #[derive(Copy, Clone, Debug)]
 pub struct TaggedVal<T: TagType>(pub(crate) RawVal, pub(crate) PhantomData<T>);
 
+impl<T: TagType> TaggedVal<T> {
+    pub fn as_raw(&self) -> &RawVal {
+        &self.0
+    }
+    pub fn to_raw(&self) -> RawVal {
+        self.0
+    }
+}
+
 impl<T: TagType> AsRef<RawVal> for TaggedVal<T> {
     fn as_ref(&self) -> &RawVal {
         &self.0
