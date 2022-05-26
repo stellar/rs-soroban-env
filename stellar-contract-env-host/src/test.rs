@@ -100,10 +100,10 @@ fn vec_front_and_back() -> Result<(), ()> {
     let scobj = ScObject::Vec(scvec);
     let obj = host.to_host_obj(&scobj).unwrap();
     let front = unsafe {
-        <i32 as RawValConvertible>::unchecked_from_val(host.vec_front(*obj.as_ref()).unwrap())
+        <i32 as RawValConvertible>::unchecked_from_val(host.vec_front(obj.to_object()).unwrap())
     };
     let back = unsafe {
-        <i32 as RawValConvertible>::unchecked_from_val(host.vec_back(*obj.as_ref()).unwrap())
+        <i32 as RawValConvertible>::unchecked_from_val(host.vec_back(obj.to_object()).unwrap())
     };
     assert_eq!(front, 1);
     assert_eq!(back, 3);
@@ -117,7 +117,7 @@ fn empty_vec_front() {
     let scvec: ScVec = vec![].try_into().unwrap();
     let scobj = ScObject::Vec(scvec);
     let obj = host.to_host_obj(&scobj).unwrap();
-    host.vec_front(*obj.as_ref()).unwrap();
+    host.vec_front(obj.to_object()).unwrap();
 }
 
 #[test]
@@ -127,7 +127,7 @@ fn empty_vec_back() {
     let scvec: ScVec = vec![].try_into().unwrap();
     let scobj = ScObject::Vec(scvec);
     let obj = host.to_host_obj(&scobj).unwrap();
-    host.vec_back(*obj.as_ref()).unwrap();
+    host.vec_back(obj.to_object()).unwrap();
 }
 
 #[test]
@@ -139,7 +139,7 @@ fn vec_put_and_get() {
     let scobj = ScObject::Vec(scvec);
     let obj = host.to_host_obj(&scobj).unwrap();
     let i: RawVal = 1_u32.into();
-    let obj1 = host.vec_put(*obj.as_ref(), i, 9_u32.into()).unwrap();
+    let obj1 = host.vec_put(obj.to_object(), i, 9_u32.into()).unwrap();
     let rv = host.vec_get(obj1, i).unwrap();
     let v = unsafe { <u32 as RawValConvertible>::unchecked_from_val(rv) };
     assert_eq!(v, 9);
@@ -152,10 +152,10 @@ fn vec_push_pop_and_len() {
     let scobj = ScObject::Vec(scvec);
     let obj = host.to_host_obj(&scobj).unwrap();
     let l = unsafe {
-        <u32 as RawValConvertible>::unchecked_from_val(host.vec_len(*obj.as_ref()).unwrap())
+        <u32 as RawValConvertible>::unchecked_from_val(host.vec_len(obj.to_object()).unwrap())
     };
     assert_eq!(l, 0);
-    let obj1 = host.vec_push(*obj.as_ref(), 1u32.into()).unwrap();
+    let obj1 = host.vec_push(obj.to_object(), 1u32.into()).unwrap();
     let obj2 = host.vec_push(obj1, 2u32.into()).unwrap();
     let l = unsafe { <u32 as RawValConvertible>::unchecked_from_val(host.vec_len(obj2).unwrap()) };
     assert_eq!(l, 2);
@@ -174,7 +174,7 @@ fn vec_pop_empty_vec() {
     let scvec: ScVec = vec![].try_into().unwrap();
     let scobj = ScObject::Vec(scvec);
     let obj = host.to_host_obj(&scobj).unwrap();
-    host.vec_pop(*obj.as_ref()).unwrap();
+    host.vec_pop(obj.to_object()).unwrap();
 }
 
 #[test]
@@ -186,7 +186,7 @@ fn vec_get_out_of_bound() {
         .unwrap();
     let scobj = ScObject::Vec(scvec);
     let obj = host.to_host_obj(&scobj).unwrap();
-    host.vec_get(*obj.as_ref(), 3_u32.into()).unwrap();
+    host.vec_get(obj.to_object(), 3_u32.into()).unwrap();
 }
 
 #[test]
@@ -196,7 +196,7 @@ fn vec_get_wrong_index_type() {
     let scvec: ScVec = vec![].try_into().unwrap();
     let scobj = ScObject::Vec(scvec);
     let obj = host.to_host_obj(&scobj).unwrap();
-    host.vec_get(*obj.as_ref(), (-1_i32).into()).unwrap();
+    host.vec_get(obj.to_object(), (-1_i32).into()).unwrap();
 }
 
 #[test]
@@ -206,7 +206,7 @@ fn vec_del_and_cmp() {
         .try_into()
         .unwrap();
     let obj = host.to_host_obj(&ScObject::Vec(scvec)).unwrap();
-    let obj1 = host.vec_del(*obj.as_ref(), 1u32.into()).unwrap();
+    let obj1 = host.vec_del(obj.to_object(), 1u32.into()).unwrap();
     let scvec_ref: ScVec = vec![ScVal::U32(1), ScVal::U32(3)].try_into().unwrap();
     let obj_ref = host.to_host_obj(&ScObject::Vec(scvec_ref)).unwrap();
     assert_eq!(host.obj_cmp(obj1.into(), obj_ref.into()).unwrap(), 0);
@@ -221,7 +221,7 @@ fn vec_del_out_of_bound() {
         .unwrap();
     let scobj = ScObject::Vec(scvec);
     let obj = host.to_host_obj(&scobj).unwrap();
-    host.vec_del(*obj.as_ref(), 3_u32.into()).unwrap();
+    host.vec_del(obj.to_object(), 3_u32.into()).unwrap();
 }
 
 #[test]
@@ -231,7 +231,7 @@ fn vec_del_wrong_index_type() {
     let scvec: ScVec = vec![].try_into().unwrap();
     let scobj = ScObject::Vec(scvec);
     let obj = host.to_host_obj(&scobj).unwrap();
-    host.vec_del(*obj.as_ref(), (-1_i32).into()).unwrap();
+    host.vec_del(obj.to_object(), (-1_i32).into()).unwrap();
 }
 
 #[test]
@@ -241,12 +241,12 @@ fn vec_take_and_cmp() {
         .try_into()
         .unwrap();
     let obj = host.to_host_obj(&ScObject::Vec(scvec)).unwrap();
-    let obj1 = host.vec_take(*obj.as_ref(), 2u32.into()).unwrap();
+    let obj1 = host.vec_take(obj.to_object(), 2u32.into()).unwrap();
     let scvec_ref: ScVec = vec![ScVal::U32(1), ScVal::U32(2)].try_into().unwrap();
     let obj_ref = host.to_host_obj(&ScObject::Vec(scvec_ref)).unwrap();
     assert_eq!(host.obj_cmp(obj1.into(), obj_ref.into()).unwrap(), 0);
 
-    let obj2 = host.vec_take(*obj.as_ref(), 3u32.into()).unwrap();
+    let obj2 = host.vec_take(obj.to_object(), 3u32.into()).unwrap();
     assert_ne!(obj2.as_ref().get_payload(), obj.as_raw().get_payload());
     assert_eq!(host.obj_cmp(obj2.into(), obj.into()).unwrap(), 0);
 }
@@ -260,7 +260,7 @@ fn vec_take_out_of_bound() {
         .unwrap();
     let scobj = ScObject::Vec(scvec);
     let obj = host.to_host_obj(&scobj).unwrap();
-    host.vec_del(*obj.as_ref(), 4_u32.into()).unwrap();
+    host.vec_del(obj.to_object(), 4_u32.into()).unwrap();
 }
 
 #[test]
@@ -270,7 +270,7 @@ fn vec_take_wrong_index_type() {
     let scvec: ScVec = vec![].try_into().unwrap();
     let scobj = ScObject::Vec(scvec);
     let obj = host.to_host_obj(&scobj).unwrap();
-    host.vec_take(*obj.as_ref(), (-1_i32).into()).unwrap();
+    host.vec_take(obj.to_object(), (-1_i32).into()).unwrap();
 }
 
 #[test]
@@ -279,7 +279,7 @@ fn vec_insert_and_cmp() {
     let scvec: ScVec = vec![ScVal::U32(2)].try_into().unwrap();
     let obj = host.to_host_obj(&ScObject::Vec(scvec)).unwrap();
     let obj1 = host
-        .vec_insert(*obj.as_ref(), 0u32.into(), 1u32.into())
+        .vec_insert(obj.to_object(), 0u32.into(), 1u32.into())
         .unwrap();
     let scvec_ref: ScVec = vec![ScVal::U32(1), ScVal::U32(2)].try_into().unwrap();
     let obj_ref = host.to_host_obj(&ScObject::Vec(scvec_ref)).unwrap();
@@ -302,7 +302,7 @@ fn vec_insert_out_of_bound() {
         .unwrap();
     let scobj = ScObject::Vec(scvec);
     let obj = host.to_host_obj(&scobj).unwrap();
-    host.vec_insert(*obj.as_ref(), 4_u32.into(), 9u32.into())
+    host.vec_insert(obj.to_object(), 4_u32.into(), 9u32.into())
         .unwrap();
 }
 
@@ -313,7 +313,7 @@ fn vec_insert_wrong_index_type() {
     let scvec: ScVec = vec![].try_into().unwrap();
     let scobj = ScObject::Vec(scvec);
     let obj = host.to_host_obj(&scobj).unwrap();
-    host.vec_insert(*obj.as_ref(), (-1_i32).into(), 9u32.into())
+    host.vec_insert(obj.to_object(), (-1_i32).into(), 9u32.into())
         .unwrap();
 }
 
