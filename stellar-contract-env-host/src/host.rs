@@ -426,15 +426,42 @@ impl CheckedEnv for Host {
     }
 
     fn vec_put(&self, v: Object, i: RawVal, x: RawVal) -> Result<Object, HostError> {
-        todo!()
+        let i: u32 = i
+            .try_into()
+            .map_err(|_| HostError::General("i must be u32"))?;
+        let x = self.associate_raw_val(x);
+        let vnew = self.visit_obj(v, move |hv: &HostVec| {
+            let mut vnew = hv.clone();
+            vnew.set(i as usize, x);
+            Ok(vnew)
+        })?;
+        Ok(self.add_host_object(vnew)?.into())
     }
 
     fn vec_get(&self, v: Object, i: RawVal) -> Result<RawVal, HostError> {
-        todo!()
+        let i: u32 = i
+            .try_into()
+            .map_err(|_| HostError::General("i must be u32"))?;
+        let res = self.visit_obj(v, move |hv: &HostVec| match hv.get(i as usize) {
+            None => Err(HostError::General("index out of bound")),
+            Some(hval) => Ok(hval.to_raw()),
+        });
+        res
     }
 
     fn vec_del(&self, v: Object, i: RawVal) -> Result<Object, HostError> {
-        todo!()
+        let i: u32 = i
+            .try_into()
+            .map_err(|_| HostError::General("i must be u32"))?;
+        let vnew = self.visit_obj(v, move |hv: &HostVec| {
+            if i as usize >= hv.len() {
+                return Err(HostError::General("index out of bound"));
+            }
+            let mut vnew = hv.clone();
+            vnew.remove(i as usize);
+            Ok(vnew)
+        })?;
+        Ok(self.add_host_object(vnew)?.into())
     }
 
     fn vec_len(&self, v: Object) -> Result<RawVal, HostError> {
@@ -455,14 +482,25 @@ impl CheckedEnv for Host {
     fn vec_pop(&self, v: Object) -> Result<Object, HostError> {
         let vnew = self.visit_obj(v, move |hv: &HostVec| {
             let mut vnew = hv.clone();
-            vnew.pop_back();
-            Ok(vnew)
+            match vnew.pop_back() {
+                None => Err(HostError::General("value does not exist")),
+                Some(_) => Ok(vnew),
+            }
         })?;
         Ok(self.add_host_object(vnew)?.into())
     }
 
     fn vec_take(&self, v: Object, n: RawVal) -> Result<Object, HostError> {
-        todo!()
+        let n: u32 = n
+            .try_into()
+            .map_err(|_| HostError::General("n must be u32"))?;
+        let vnew = self.visit_obj(v, move |hv: &HostVec| {
+            if n as usize > hv.len() {
+                return Err(HostError::General("index out of bound"));
+            }
+            Ok(hv.take(n as usize))
+        })?;
+        Ok(self.add_host_object(vnew)?.into())
     }
 
     fn vec_drop(&self, v: Object, n: RawVal) -> Result<Object, HostError> {
@@ -486,11 +524,26 @@ impl CheckedEnv for Host {
     }
 
     fn vec_insert(&self, v: Object, i: RawVal, x: RawVal) -> Result<Object, HostError> {
-        todo!()
+        let i: u32 = i
+            .try_into()
+            .map_err(|_| HostError::General("i must be u32"))?;
+        let x = self.associate_raw_val(x);
+        let vnew = self.visit_obj(v, move |hv: &HostVec| {
+            if i as usize > hv.len() {
+                return Err(HostError::General("index out of bound"));
+            }
+            let mut vnew = hv.clone();
+            vnew.insert(i as usize, x);
+            Ok(vnew)
+        })?;
+        Ok(self.add_host_object(vnew)?.into())
     }
 
     fn vec_append(&self, v1: Object, v2: Object) -> Result<Object, HostError> {
-        todo!()
+        let mut vnew = self.visit_obj(v1, |hv: &HostVec| Ok(hv.clone()))?;
+        let v2 = self.visit_obj(v2, |hv: &HostVec| Ok(hv.clone()))?;
+        vnew.append(v2);
+        Ok(self.add_host_object(vnew)?.into())
     }
 
     fn get_current_ledger_num(&self) -> Result<RawVal, HostError> {
