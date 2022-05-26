@@ -51,6 +51,15 @@ impl<E: Env, T: TagType> EnvVal<E, TaggedVal<T>> {
     }
 }
 
+impl<E: Env> EnvVal<E, Object> {
+    pub fn as_object(&self) -> &Object {
+        &self.val
+    }
+    pub fn to_object(&self) -> Object {
+        self.val
+    }
+}
+
 impl<E: Env, V: Val> AsRef<RawVal> for EnvVal<E, V> {
     fn as_ref(&self) -> &RawVal {
         self.val.as_ref()
