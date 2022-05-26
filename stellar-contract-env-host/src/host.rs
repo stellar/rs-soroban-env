@@ -7,6 +7,7 @@ use core::fmt::Debug;
 use im_rc::{OrdMap, Vector};
 use std::num::TryFromIntError;
 
+use crate::storage::Storage;
 use crate::weak_host::WeakHost;
 
 use crate::xdr;
@@ -54,9 +55,10 @@ impl From<BitSetError> for HostError {
     }
 }
 
-#[derive(Default, Clone)]
+#[derive(Clone, Default)]
 pub(crate) struct HostImpl {
     objects: RefCell<Vec<HostObject>>,
+    storage: RefCell<Storage>,
 }
 
 // Host is a newtype on Rc<HostImpl> so we can impl Env for it below.
