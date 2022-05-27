@@ -77,10 +77,21 @@ pub struct Storage {
 }
 
 impl Storage {
-    pub fn new(footprint: Footprint, mode: FootprintMode) -> Self {
+    pub fn with_enforcing_footprint_and_map(
+        footprint: Footprint,
+        map: OrdMap<Key, Option<ScVal>>,
+    ) -> Self {
         Self {
-            mode,
+            mode: FootprintMode::Enforcing,
             footprint,
+            map,
+        }
+    }
+
+    pub fn with_recording_footprint(src: Rc<dyn SnapshotSource>) -> Self {
+        Self {
+            mode: FootprintMode::Recording(src),
+            footprint: Footprint::default(),
             map: Default::default(),
         }
     }
