@@ -14,5 +14,5 @@ pub use host::{Host, HostError};
 pub use stellar_contract_env_common::*;
 
 // TODO: this should become xdr::ContractID when that type arrives.
-#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
-pub struct ContractID(i64);
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
+pub struct ContractID(xdr::Hash);
