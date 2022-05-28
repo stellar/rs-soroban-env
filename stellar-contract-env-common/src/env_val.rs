@@ -88,7 +88,7 @@ impl<E: Env, T: TagType> From<EnvVal<E, TaggedVal<T>>> for EnvVal<E, RawVal> {
     fn from(ev: EnvVal<E, TaggedVal<T>>) -> Self {
         EnvVal {
             env: ev.env,
-            val: ev.val.as_ref().clone(),
+            val: ev.val.to_raw(),
         }
     }
 }
@@ -134,7 +134,7 @@ impl<E: Env, T: TagType> TryFrom<EnvVal<E, RawVal>> for TaggedVal<T> {
     type Error = ();
 
     fn try_from(ev: EnvVal<E, RawVal>) -> Result<Self, Self::Error> {
-        Ok(ev.to_raw().try_into()?)
+        ev.to_raw().try_into()
     }
 }
 
@@ -163,7 +163,7 @@ impl<E: Env, T: TagType> IntoEnvVal<E, TaggedVal<T>> for TaggedVal<T> {
     fn into_env_val(self, env: &E) -> EnvVal<E, TaggedVal<T>> {
         EnvVal {
             env: env.clone(),
-            val: self.clone(),
+            val: self,
         }
     }
 }
@@ -188,7 +188,7 @@ impl<E: Env> IntoEnvVal<E, RawVal> for i64 {
         let val = if self >= 0 {
             unsafe { RawVal::unchecked_from_positive_i64(self) }
         } else {
-            env.obj_from_i64(self).as_ref().clone()
+            env.obj_from_i64(self).to_raw()
         };
         EnvVal {
             env: env.clone(),
@@ -214,7 +214,7 @@ impl<E: Env> IntoEnvVal<E, RawVal> for u64 {
     fn into_env_val(self, env: &E) -> EnvVal<E, RawVal> {
         let env = env.clone();
         EnvVal {
-            val: env.obj_from_u64(self).as_ref().clone(),
+            val: env.obj_from_u64(self).to_raw(),
             env,
         }
     }

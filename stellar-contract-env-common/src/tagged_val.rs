@@ -66,6 +66,14 @@ impl<T: TagType> AsMut<RawVal> for TaggedVal<T> {
 }
 
 impl<T: TagType> TaggedVal<T> {
+    pub fn as_raw(&self) -> &RawVal {
+        self.0.as_ref()
+    }
+
+    pub fn to_raw(&self) -> RawVal {
+        self.0
+    }
+
     pub fn in_env<E: Env>(self, env: &E) -> EnvVal<E, Self> {
         EnvVal {
             env: env.clone(),
