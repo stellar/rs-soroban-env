@@ -1,4 +1,4 @@
-use stellar_contract_env_common::{CheckedEnv, RawValConvertible, EnvVal};
+use stellar_contract_env_common::{CheckedEnv, EnvVal, RawValConvertible};
 
 use crate::{
     xdr::{ScObject, ScObjectType, ScVal, ScVec},
