@@ -1,6 +1,6 @@
 use stellar_xdr::ScObjectType;
 
-use crate::{BitSet, Object, Status, Symbol, Tag, TagType, TaggedVal, Val};
+use crate::{BitSet, Object, Status, Symbol, Tag, TagObject, TagType, TaggedVal, Val};
 
 use super::{
     raw_val::{RawVal, RawValConvertible},
@@ -217,6 +217,43 @@ impl<E: Env> IntoEnvVal<E, RawVal> for u64 {
             val: env.obj_from_u64(self).to_raw(),
             env,
         }
+    }
+}
+
+impl<E: Env, T0, T1> TryFrom<EnvVal<E, RawVal>> for (T0, T1)
+where
+    T0: TryFrom<EnvVal<E, RawVal>>,
+    T1: TryFrom<EnvVal<E, RawVal>>,
+{
+    type Error = ();
+
+    fn try_from(ev: EnvVal<E, RawVal>) -> Result<Self, Self::Error> {
+        if !Object::val_is_obj_type(ev.val, ScObjectType::Vec) {
+            return Err(());
+        }
+        let env = ev.env.clone();
+        let vec = unsafe { Object::unchecked_from_val(ev.val) };
+        let len: u32 = env.vec_len(vec).try_into()?;
+        if len != 2 {
+            return Err(());
+        }
+        let t0 = T0::try_from_val(&env, env.vec_get(vec, 0u32.into())).map_err(|_| ())?;
+        let t1 = T1::try_from_val(&env, env.vec_get(vec, 1u32.into())).map_err(|_| ())?;
+        Ok((t0, t1))
+    }
+}
+
+impl<E: Env, T0, T1> IntoEnvVal<E, TaggedVal<TagObject>> for (T0, T1)
+where
+    T0: IntoEnvVal<E, RawVal>,
+    T1: IntoEnvVal<E, RawVal>,
+{
+    fn into_env_val(self, env: &E) -> EnvVal<E, TaggedVal<TagObject>> {
+        let env = env.clone();
+        let vec = env.vec_new();
+        env.vec_push(vec, self.0.into_val(&env));
+        env.vec_push(vec, self.1.into_val(&env));
+        EnvVal { env, val: vec }
     }
 }
 
