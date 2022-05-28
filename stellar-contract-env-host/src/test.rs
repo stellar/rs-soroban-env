@@ -1,15 +1,15 @@
-use stellar_contract_env_common::{CheckedEnv, RawValConvertible};
+use stellar_contract_env_common::{CheckedEnv, RawValConvertible, EnvVal};
 
 use crate::{
     xdr::{ScObject, ScObjectType, ScVal, ScVec},
-    Host, IntoEnvVal, Object, RawVal, Tag,
+    Host, IntoEnvVal, IntoVal, Object, RawVal, Tag,
 };
 
 #[test]
 fn u64_roundtrip() {
     let host = Host::default();
     let u: u64 = 38473_u64; // This will be treated as a ScVal::Object::U64
-    let v = u.into_env_val(&host);
+    let v: EnvVal<_, RawVal> = u.into_env_val(&host);
     let obj: Object = v.val.try_into().unwrap();
     assert!(obj.is_obj_type(ScObjectType::U64));
     assert_eq!(obj.get_handle(), 0);
@@ -17,7 +17,7 @@ fn u64_roundtrip() {
     assert_eq!(u, j);
 
     let u2: u64 = u64::MAX; // This will be treated as a ScVal::Object::U64
-    let v2 = u2.into_env_val(&host);
+    let v2: EnvVal<_, RawVal> = u2.into_env_val(&host);
     let obj: Object = v2.val.try_into().unwrap();
     assert!(obj.is_obj_type(ScObjectType::U64));
     assert_eq!(obj.get_handle(), 1);
