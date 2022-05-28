@@ -124,7 +124,7 @@ impl AsRef<[u8]> for SymbolStr {
 impl AsRef<str> for SymbolStr {
     fn as_ref(&self) -> &str {
         let s: &[u8] = self.as_ref();
-        unsafe { str::from_utf8_unchecked(&s) }
+        unsafe { str::from_utf8_unchecked(s) }
     }
 }
 
@@ -132,7 +132,7 @@ impl From<&Symbol> for SymbolStr {
     fn from(s: &Symbol) -> Self {
         let mut chars = [b'\x00'; MAX_CHARS];
         for (i, ch) in s.into_iter().enumerate() {
-            chars[i] = ch as u8
+            chars[i] = ch as u8;
         }
         SymbolStr(chars)
     }

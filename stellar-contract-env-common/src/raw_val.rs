@@ -122,7 +122,7 @@ declare_tryfrom!(i32);
 impl wasmi::FromRuntimeValue for RawVal {
     fn from_runtime_value(val: wasmi::RuntimeValue) -> Option<Self> {
         let maybe: Option<u64> = val.try_into();
-        maybe.map(|x| RawVal::from_payload(x))
+        maybe.map(RawVal::from_payload)
     }
 }
 
@@ -139,9 +139,7 @@ impl RawValConvertible for () {
         v.has_tag(Tag::Static) && v.get_body() == Static::Void as u64
     }
     #[inline(always)]
-    unsafe fn unchecked_from_val(_v: RawVal) -> Self {
-        ()
-    }
+    unsafe fn unchecked_from_val(_v: RawVal) -> Self {}
 }
 
 impl RawValConvertible for bool {
@@ -229,7 +227,7 @@ impl RawVal {
     }
 
     #[inline(always)]
-    pub const fn get_payload(&self) -> u64 {
+    pub const fn get_payload(self) -> u64 {
         self.0
     }
 
@@ -239,12 +237,12 @@ impl RawVal {
     }
 
     #[inline(always)]
-    pub const fn is_positive_i64(&self) -> bool {
+    pub const fn is_positive_i64(self) -> bool {
         (self.0 & 1) == 0
     }
 
     #[inline(always)]
-    pub const unsafe fn unchecked_as_positive_i64(&self) -> i64 {
+    pub const unsafe fn unchecked_as_positive_i64(self) -> i64 {
         (self.0 >> 1) as i64
     }
 
@@ -254,22 +252,22 @@ impl RawVal {
     }
 
     #[inline(always)]
-    const fn get_tag_u8(&self) -> u8 {
+    const fn get_tag_u8(self) -> u8 {
         ((self.0 >> 1) & TAG_MASK) as u8
     }
 
     #[inline(always)]
-    pub const fn get_tag(&self) -> Tag {
+    pub const fn get_tag(self) -> Tag {
         unsafe { ::core::mem::transmute(self.get_tag_u8()) }
     }
 
     #[inline(always)]
-    pub(crate) const fn get_body(&self) -> u64 {
+    pub(crate) const fn get_body(self) -> u64 {
         self.0 >> (TAG_BITS + 1)
     }
 
     #[inline(always)]
-    pub(crate) const fn has_tag(&self, tag: Tag) -> bool {
+    pub(crate) const fn has_tag(self, tag: Tag) -> bool {
         !self.is_positive_i64() && self.get_tag_u8() == tag as u8
     }
 
@@ -299,17 +297,17 @@ impl RawVal {
     }
 
     #[inline(always)]
-    pub(crate) const fn has_minor(&self, minor: u32) -> bool {
+    pub(crate) const fn has_minor(self, minor: u32) -> bool {
         self.get_minor() == minor
     }
 
     #[inline(always)]
-    pub(crate) const fn get_minor(&self) -> u32 {
+    pub(crate) const fn get_minor(self) -> u32 {
         (self.get_body() & MINOR_MASK) as u32
     }
 
     #[inline(always)]
-    pub(crate) const fn get_major(&self) -> u32 {
+    pub(crate) const fn get_major(self) -> u32 {
         (self.get_body() >> MINOR_BITS) as u32
     }
 
