@@ -122,11 +122,11 @@ macro_rules! call_macro_with_all_host_functions {
             }
 
             mod call "c" {
-                {"$_", fn call0(contract:RawVal,func:RawVal) -> RawVal}
-                {"$0", fn call1(contract:RawVal,func:RawVal,a:RawVal) -> RawVal}
-                {"$1", fn call2(contract:RawVal,func:RawVal,a:RawVal,b:RawVal) -> RawVal}
-                {"$2", fn call3(contract:RawVal,func:RawVal,a:RawVal,b:RawVal,c:RawVal) -> RawVal}
-                {"$3", fn call4(contract:RawVal,func:RawVal,a:RawVal,b:RawVal,c:RawVal,d:RawVal) -> RawVal}
+                {"$_", fn call0(contract:Object,func:RawVal) -> RawVal}
+                {"$0", fn call1(contract:Object,func:RawVal,a:RawVal) -> RawVal}
+                {"$1", fn call2(contract:Object,func:RawVal,a:RawVal,b:RawVal) -> RawVal}
+                {"$2", fn call3(contract:Object,func:RawVal,a:RawVal,b:RawVal,c:RawVal) -> RawVal}
+                {"$3", fn call4(contract:Object,func:RawVal,a:RawVal,b:RawVal,c:RawVal,d:RawVal) -> RawVal}
             }
 
             mod bigint "b" {

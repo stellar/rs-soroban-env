@@ -1,6 +1,8 @@
 mod dispatch;
 mod func_info;
 
+use std::cell::RefCell;
+
 use crate::{host::Frame, ContractID, HostError};
 
 use super::{
@@ -166,15 +168,16 @@ impl Vm {
     /// RawVal result back to an ScVal.
     pub fn invoke_function(
         &self,
-        host: &mut Host,
+        host: RefCell<Host>,
         func: &str,
         args: &ScVec,
     ) -> Result<ScVal, HostError> {
         let mut raw_args: Vec<RawVal> = Vec::new();
         for scv in args.0.iter() {
-            raw_args.push(host.to_host_val(scv)?.val);
+            raw_args.push(host.borrow_mut().to_host_val(scv)?.val);
         }
-        let raw_res = self.invoke_function_raw(host, func, raw_args.as_slice())?;
-        Ok(host.from_host_val(raw_res)?)
+        let raw_res =
+            self.invoke_function_raw(&mut host.borrow_mut(), func, raw_args.as_slice())?;
+        Ok(host.borrow().from_host_val(raw_res)?)
     }
 }

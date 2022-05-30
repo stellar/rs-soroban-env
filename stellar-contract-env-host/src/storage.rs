@@ -10,7 +10,7 @@ pub struct Key {
     pub key: ScVal,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum AccessType {
     ReadOnly,
     ReadWrite,
@@ -161,6 +161,81 @@ impl Storage {
                     None => Ok(false),
                 }
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod test_footprint {
+    use super::*;
+    #[test]
+    fn footprint_record_access() {
+        let mut fp = Footprint::default();
+        // record when key not exist
+        let contract_id = ContractID([0; 32].into());
+        let key = ScVal::I32(0);
+        let key = Key { contract_id, key };
+        fp.record_access(&key, AccessType::ReadOnly);
+        assert_eq!(fp.0.contains_key(&key), true);
+        assert_eq!(*fp.0.get(&key).unwrap(), AccessType::ReadOnly);
+        // record and change access
+        fp.record_access(&key, AccessType::ReadWrite);
+        assert_eq!(*fp.0.get(&key).unwrap(), AccessType::ReadWrite);
+        fp.record_access(&key, AccessType::ReadOnly);
+        assert_eq!(*fp.0.get(&key).unwrap(), AccessType::ReadWrite);
+    }
+
+    #[test]
+    fn footprint_enforce_access() {
+        let contract_id = ContractID([0; 32].into());
+        let key = ScVal::I32(0);
+        let key = Key { contract_id, key };
+        let om = OrdMap::unit(key.clone(), AccessType::ReadOnly);
+        let mut fp = Footprint(om);
+        fp.enforce_access(&key, AccessType::ReadOnly).unwrap();
+        *fp.0.get_mut(&key).unwrap() = AccessType::ReadWrite;
+        fp.enforce_access(&key, AccessType::ReadOnly).unwrap();
+        fp.enforce_access(&key, AccessType::ReadWrite).unwrap();
+    }
+
+    #[test]
+    #[should_panic(expected = "access to unknown footprint entry")]
+    fn footprint_enforce_access_not_exist() {
+        let mut fp = Footprint::default();
+        let contract_id = ContractID([0; 32].into());
+        let key = ScVal::I32(0);
+        let key = Key { contract_id, key };
+        fp.enforce_access(&key, AccessType::ReadOnly).unwrap();
+    }
+
+    #[test]
+    #[should_panic(expected = "read-write access to read-only footprint entry")]
+    fn footprint_attempt_to_write_readonly_entry() {
+        let contract_id = ContractID([0; 32].into());
+        let key = ScVal::I32(0);
+        let key = Key { contract_id, key };
+        let om = OrdMap::unit(key.clone(), AccessType::ReadOnly);
+        let mut fp = Footprint(om);
+        fp.enforce_access(&key, AccessType::ReadWrite).unwrap();
+    }
+}
+
+#[cfg(test)]
+mod test_storage {
+    use super::*;
+    #[allow(dead_code)]
+    struct MockSnapshotSource(OrdMap<Key, ScVal>);
+    #[allow(dead_code)]
+    impl MockSnapshotSource {
+        fn get(&self, key: &Key) -> Result<ScVal, HostError> {
+            if let Some(val) = self.0.get(key) {
+                Ok(val.clone())
+            } else {
+                Err(HostError::General("No entry"))
+            }
+        }
+        fn has(&self, key: &Key) -> Result<bool, HostError> {
+            Ok(self.0.contains_key(key))
         }
     }
 }
