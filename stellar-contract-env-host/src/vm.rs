@@ -3,7 +3,7 @@ mod func_info;
 
 use std::error::Error;
 
-use crate::ContractID;
+use crate::{host::Frame, ContractID};
 
 use super::{
     host,
@@ -111,6 +111,7 @@ impl ImportResolver for Host {
 //
 // Any lookups on any tables other than import functions will fail, and only
 // those import functions listed above will succeed.
+#[derive(Clone)]
 pub struct Vm {
     #[allow(dead_code)]
     contract_id: ContractID,
@@ -144,6 +145,9 @@ impl Vm {
         func: &str,
         args: &[RawVal],
     ) -> Result<RawVal, wasmi::Error> {
+        let _frame_guard = host.push_frame(Frame {
+            contract_id: self.contract_id.clone(),
+        });
         let wasm_args: Vec<_> = args
             .iter()
             .map(|i| RuntimeValue::I64(i.get_payload() as i64))

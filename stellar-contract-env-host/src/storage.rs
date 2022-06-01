@@ -6,8 +6,8 @@ use im_rc::OrdMap;
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Key {
-    contract_id: ContractID,
-    key: ScVal,
+    pub contract_id: ContractID,
+    pub key: ScVal,
 }
 
 #[derive(Clone, Debug)]

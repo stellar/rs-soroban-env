@@ -7,11 +7,11 @@ use core::fmt::Debug;
 use im_rc::{OrdMap, Vector};
 use std::num::TryFromIntError;
 
-use crate::storage::Storage;
+use crate::storage::{Key, Storage};
 use crate::weak_host::WeakHost;
 
-use crate::xdr;
 use crate::xdr::{ScMap, ScMapEntry, ScObject, ScStatic, ScStatus, ScStatusType, ScVal, ScVec};
+use crate::{xdr, ContractID};
 use std::rc::Rc;
 
 use crate::host_object::{HostMap, HostObj, HostObject, HostObjectType, HostVal, HostVec};
@@ -55,10 +55,37 @@ impl From<BitSetError> for HostError {
     }
 }
 
+/// Holds contextual information about a single contract invocation (or possibly
+/// other actions that alter the excution context).
+///
+/// Frames are arranged into a stack in [`HostImpl::context`], and are pushed
+/// with [`Host::push_frame`].
+#[derive(Clone)]
+pub(crate) struct Frame {
+    pub(crate) contract_id: ContractID,
+    // Other activation-frame / execution-context values here.
+}
+
 #[derive(Clone, Default)]
 pub(crate) struct HostImpl {
     objects: RefCell<Vec<HostObject>>,
     storage: RefCell<Storage>,
+    context: RefCell<Vec<Frame>>,
+}
+
+pub(crate) struct FrameGuard {
+    host: Host,
+}
+
+impl Drop for FrameGuard {
+    fn drop(&mut self) {
+        self.host
+            .0
+            .context
+            .borrow_mut()
+            .pop()
+            .expect("unmatched host frame push/pop");
+    }
 }
 
 // Host is a newtype on Rc<HostImpl> so we can impl Env for it below.
@@ -72,6 +99,45 @@ impl Debug for Host {
 }
 
 impl Host {
+    /// Constructs a new [`Host`] that will use the provided [`Storage`] for
+    /// contract-data access functions such as
+    /// [`CheckedEnv::get_contract_data`].
+    pub fn with_storage(storage: Storage) -> Self {
+        Self(Rc::new(HostImpl {
+            objects: Default::default(),
+            storage: RefCell::new(storage),
+            context: Default::default(),
+        }))
+    }
+
+    /// Pushes a new [`Frame`] on the context stack, returning a [`FrameGuard`]
+    /// that will pop the stack when it is dropped. This should be called at
+    /// least any time a new contract is invoked.
+    pub(crate) fn push_frame(&self, frame: Frame) -> FrameGuard {
+        self.0.context.borrow_mut().push(frame);
+        FrameGuard { host: self.clone() }
+    }
+
+    /// Applies a function to the top [`Frame`] of the context stack, panicking
+    /// if the stack is empty. Returns result of function call.
+    fn with_current_frame<F, U>(&self, f: F) -> U
+    where
+        F: FnOnce(&Frame) -> U,
+    {
+        f(self
+            .0
+            .context
+            .borrow()
+            .last()
+            .expect("missing current host frame"))
+    }
+
+    /// Returns [`ContractID`] from top of context stack, panicking if the stack
+    /// is empty.
+    fn get_current_contract_id(&self) -> ContractID {
+        self.with_current_frame(|frame| frame.contract_id.clone())
+    }
+
     unsafe fn unchecked_visit_val_obj<F, U>(&self, val: RawVal, f: F) -> U
     where
         F: FnOnce(Option<&HostObject>) -> U,
@@ -169,7 +235,7 @@ impl Host {
         }
     }
 
-    pub(crate) fn to_host_val(&mut self, v: &ScVal) -> Result<HostVal, HostError> {
+    pub(crate) fn to_host_val(&self, v: &ScVal) -> Result<HostVal, HostError> {
         let ok = match v {
             ScVal::U63(u) => {
                 if *u <= (i64::MAX as u64) {
@@ -246,7 +312,7 @@ impl Host {
         }
     }
 
-    pub(crate) fn to_host_obj(&mut self, ob: &ScObject) -> Result<HostObj, HostError> {
+    pub(crate) fn to_host_obj(&self, ob: &ScObject) -> Result<HostObj, HostError> {
         match ob {
             ScObject::Box(b) => {
                 let hv = self.to_host_val(b)?;
@@ -302,6 +368,10 @@ impl Host {
         }
     }
 
+    /// Moves a value of some type implementing [`HostObjectType`] into the host's
+    /// object array, returning a [`HostObj`] containing the new object's array
+    /// index, tagged with the [`xdr::ScObjectType`] and associated with the current
+    /// host via a weak reference.
     pub(crate) fn add_host_object<HOT: HostObjectType>(
         &self,
         hot: HOT,
@@ -314,6 +384,17 @@ impl Host {
         let env = WeakHost(Rc::downgrade(&self.0));
         let v = Object::from_type_and_handle(HOT::get_type(), handle as u32);
         Ok(v.into_env_val(&env))
+    }
+
+    /// Converts a [`RawVal`] to an [`ScVal`] and combines it with the currently-executing
+    /// [`ContractID`] to produce a [`Key`], that can be used to access ledger [`Storage`].
+    fn to_storage_key(&self, k: RawVal) -> Result<Key, HostError> {
+        let contract_id = self.get_current_contract_id();
+        let sckey = self.from_host_val(k)?;
+        Ok(Key {
+            contract_id,
+            key: sckey,
+        })
     }
 }
 
@@ -573,7 +654,9 @@ impl CheckedEnv for Host {
     }
 
     fn get_contract_data(&self, k: RawVal) -> Result<RawVal, HostError> {
-        todo!()
+        let key = self.to_storage_key(k)?;
+        let scval = self.0.storage.borrow_mut().get(&key)?;
+        Ok(self.to_host_val(&scval)?.into())
     }
 
     fn del_contract_data(&self, k: RawVal) -> Result<RawVal, HostError> {
