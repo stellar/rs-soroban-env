@@ -44,7 +44,7 @@ fn i64_roundtrip() {
 
 #[test]
 fn u32_as_seen_by_host() {
-    let mut host = Host::default();
+    let host = Host::default();
     let scval0 = ScVal::U32(12345);
     let val0 = host.to_host_val(&scval0).unwrap();
     assert!(val0.val.is::<u32>());
@@ -55,7 +55,7 @@ fn u32_as_seen_by_host() {
 
 #[test]
 fn i32_as_seen_by_host() {
-    let mut host = Host::default();
+    let host = Host::default();
     let scval0 = ScVal::I32(-12345);
     let val0 = host.to_host_val(&scval0).unwrap();
     assert!(val0.val.is::<i32>());
@@ -67,7 +67,7 @@ fn i32_as_seen_by_host() {
 /// Vec
 #[test]
 fn vec_as_seen_by_host() -> Result<(), ()> {
-    let mut host = Host::default();
+    let host = Host::default();
     let scvec0: ScVec = ScVec(vec![ScVal::U32(1)].try_into()?);
     let scvec1: ScVec = ScVec(vec![ScVal::U32(1)].try_into()?);
     let scobj0: ScObject = ScObject::Vec(scvec0);
@@ -93,7 +93,7 @@ fn vec_as_seen_by_host() -> Result<(), ()> {
 
 #[test]
 fn vec_front_and_back() -> Result<(), ()> {
-    let mut host = Host::default();
+    let host = Host::default();
     let scvec: ScVec = vec![ScVal::U32(1), ScVal::U32(2), ScVal::U32(3)]
         .try_into()
         .unwrap();
@@ -113,7 +113,7 @@ fn vec_front_and_back() -> Result<(), ()> {
 #[test]
 #[should_panic(expected = "value does not exist")]
 fn empty_vec_front() {
-    let mut host = Host::default();
+    let host = Host::default();
     let scvec: ScVec = vec![].try_into().unwrap();
     let scobj = ScObject::Vec(scvec);
     let obj = host.to_host_obj(&scobj).unwrap();
@@ -123,7 +123,7 @@ fn empty_vec_front() {
 #[test]
 #[should_panic(expected = "value does not exist")]
 fn empty_vec_back() {
-    let mut host = Host::default();
+    let host = Host::default();
     let scvec: ScVec = vec![].try_into().unwrap();
     let scobj = ScObject::Vec(scvec);
     let obj = host.to_host_obj(&scobj).unwrap();
@@ -132,7 +132,7 @@ fn empty_vec_back() {
 
 #[test]
 fn vec_put_and_get() {
-    let mut host = Host::default();
+    let host = Host::default();
     let scvec: ScVec = vec![ScVal::U32(1), ScVal::U32(2), ScVal::U32(3)]
         .try_into()
         .unwrap();
@@ -147,7 +147,7 @@ fn vec_put_and_get() {
 
 #[test]
 fn vec_push_pop_and_len() {
-    let mut host = Host::default();
+    let host = Host::default();
     let scvec: ScVec = vec![].try_into().unwrap();
     let scobj = ScObject::Vec(scvec);
     let obj = host.to_host_obj(&scobj).unwrap();
@@ -170,7 +170,7 @@ fn vec_push_pop_and_len() {
 #[test]
 #[should_panic(expected = "value does not exist")]
 fn vec_pop_empty_vec() {
-    let mut host = Host::default();
+    let host = Host::default();
     let scvec: ScVec = vec![].try_into().unwrap();
     let scobj = ScObject::Vec(scvec);
     let obj = host.to_host_obj(&scobj).unwrap();
@@ -180,7 +180,7 @@ fn vec_pop_empty_vec() {
 #[test]
 #[should_panic(expected = "index out of bound")]
 fn vec_get_out_of_bound() {
-    let mut host = Host::default();
+    let host = Host::default();
     let scvec: ScVec = vec![ScVal::U32(1), ScVal::U32(2), ScVal::U32(3)]
         .try_into()
         .unwrap();
@@ -192,7 +192,7 @@ fn vec_get_out_of_bound() {
 #[test]
 #[should_panic(expected = "i must be u32")]
 fn vec_get_wrong_index_type() {
-    let mut host = Host::default();
+    let host = Host::default();
     let scvec: ScVec = vec![].try_into().unwrap();
     let scobj = ScObject::Vec(scvec);
     let obj = host.to_host_obj(&scobj).unwrap();
@@ -201,7 +201,7 @@ fn vec_get_wrong_index_type() {
 
 #[test]
 fn vec_del_and_cmp() {
-    let mut host = Host::default();
+    let host = Host::default();
     let scvec: ScVec = vec![ScVal::U32(1), ScVal::U32(2), ScVal::U32(3)]
         .try_into()
         .unwrap();
@@ -215,7 +215,7 @@ fn vec_del_and_cmp() {
 #[test]
 #[should_panic(expected = "index out of bound")]
 fn vec_del_out_of_bound() {
-    let mut host = Host::default();
+    let host = Host::default();
     let scvec: ScVec = vec![ScVal::U32(1), ScVal::U32(2), ScVal::U32(3)]
         .try_into()
         .unwrap();
@@ -227,7 +227,7 @@ fn vec_del_out_of_bound() {
 #[test]
 #[should_panic(expected = "i must be u32")]
 fn vec_del_wrong_index_type() {
-    let mut host = Host::default();
+    let host = Host::default();
     let scvec: ScVec = vec![].try_into().unwrap();
     let scobj = ScObject::Vec(scvec);
     let obj = host.to_host_obj(&scobj).unwrap();
@@ -236,7 +236,7 @@ fn vec_del_wrong_index_type() {
 
 #[test]
 fn vec_take_and_cmp() {
-    let mut host = Host::default();
+    let host = Host::default();
     let scvec: ScVec = vec![ScVal::U32(1), ScVal::U32(2), ScVal::U32(3)]
         .try_into()
         .unwrap();
@@ -254,7 +254,7 @@ fn vec_take_and_cmp() {
 #[test]
 #[should_panic(expected = "index out of bound")]
 fn vec_take_out_of_bound() {
-    let mut host = Host::default();
+    let host = Host::default();
     let scvec: ScVec = vec![ScVal::U32(1), ScVal::U32(2), ScVal::U32(3)]
         .try_into()
         .unwrap();
@@ -266,7 +266,7 @@ fn vec_take_out_of_bound() {
 #[test]
 #[should_panic(expected = "n must be u32")]
 fn vec_take_wrong_index_type() {
-    let mut host = Host::default();
+    let host = Host::default();
     let scvec: ScVec = vec![].try_into().unwrap();
     let scobj = ScObject::Vec(scvec);
     let obj = host.to_host_obj(&scobj).unwrap();
@@ -275,7 +275,7 @@ fn vec_take_wrong_index_type() {
 
 #[test]
 fn vec_insert_and_cmp() {
-    let mut host = Host::default();
+    let host = Host::default();
     let scvec: ScVec = vec![ScVal::U32(2)].try_into().unwrap();
     let obj = host.to_host_obj(&ScObject::Vec(scvec)).unwrap();
     let obj1 = host
@@ -296,7 +296,7 @@ fn vec_insert_and_cmp() {
 #[test]
 #[should_panic(expected = "index out of bound")]
 fn vec_insert_out_of_bound() {
-    let mut host = Host::default();
+    let host = Host::default();
     let scvec: ScVec = vec![ScVal::U32(1), ScVal::U32(2), ScVal::U32(3)]
         .try_into()
         .unwrap();
@@ -309,7 +309,7 @@ fn vec_insert_out_of_bound() {
 #[test]
 #[should_panic(expected = "i must be u32")]
 fn vec_insert_wrong_index_type() {
-    let mut host = Host::default();
+    let host = Host::default();
     let scvec: ScVec = vec![].try_into().unwrap();
     let scobj = ScObject::Vec(scvec);
     let obj = host.to_host_obj(&scobj).unwrap();
@@ -319,7 +319,7 @@ fn vec_insert_wrong_index_type() {
 
 #[test]
 fn vec_append() {
-    let mut host = Host::default();
+    let host = Host::default();
     let scvec0: ScVec = vec![ScVal::U32(1), ScVal::U32(2), ScVal::U32(3)]
         .try_into()
         .unwrap();
@@ -345,7 +345,7 @@ fn vec_append() {
 
 #[test]
 fn vec_append_empty() {
-    let mut host = Host::default();
+    let host = Host::default();
     let scvec0: ScVec = vec![].try_into().unwrap();
     let obj0 = host.to_host_obj(&ScObject::Vec(scvec0)).unwrap();
     let obj1 = host.vec_append(*obj0.as_ref(), *obj0.as_ref()).unwrap();
