@@ -2,7 +2,7 @@ use stellar_contract_env_common::{CheckedEnv, EnvVal, RawValConvertible};
 
 use crate::{
     xdr::{ScObject, ScObjectType, ScVal, ScVec},
-    Host, IntoEnvVal, IntoVal, Object, RawVal, Tag,
+    Host, IntoEnvVal, Object, RawVal, Tag,
 };
 
 #[test]
