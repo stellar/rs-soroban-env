@@ -28,13 +28,10 @@ pub enum HostError {
     #[error("general host error: {0}")]
     General(&'static str),
     #[error("XDR error")]
-    XDRError(xdr::Error),
-}
-
-impl From<xdr::Error> for HostError {
-    fn from(x: xdr::Error) -> Self {
-        HostError::XDRError(x)
-    }
+    XDRError(#[from] xdr::Error),
+    #[cfg(feature = "vm")]
+    #[error("WASMI error")]
+    WASMIError(#[from] wasmi::Error),
 }
 
 impl From<TryFromIntError> for HostError {

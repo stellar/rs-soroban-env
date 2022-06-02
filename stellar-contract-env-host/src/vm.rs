@@ -1,12 +1,9 @@
 mod dispatch;
 mod func_info;
 
-use std::error::Error;
-
-use crate::{host::Frame, ContractID};
+use crate::{host::Frame, ContractID, HostError};
 
 use super::{
-    host,
     xdr::{ScVal, ScVec},
     Host, RawVal,
 };
@@ -16,7 +13,7 @@ use wasmi::{
     RuntimeValue, ValueType,
 };
 
-impl wasmi::HostError for host::HostError {}
+impl wasmi::HostError for HostError {}
 
 impl Externals for Host {
     fn invoke_index(
@@ -123,7 +120,7 @@ impl Vm {
         host: &Host,
         contract_id: ContractID,
         module_wasm_code: &[u8],
-    ) -> Result<Self, Box<dyn Error>> {
+    ) -> Result<Self, HostError> {
         let module = Module::from_buffer(module_wasm_code)?;
         module.deny_floating_point()?;
         let not_started_instance = ModuleInstance::new(&module, host)?;
@@ -172,7 +169,7 @@ impl Vm {
         host: &mut Host,
         func: &str,
         args: &ScVec,
-    ) -> Result<ScVal, Box<dyn Error>> {
+    ) -> Result<ScVal, HostError> {
         let mut raw_args: Vec<RawVal> = Vec::new();
         for scv in args.0.iter() {
             raw_args.push(host.to_host_val(scv)?.val);
