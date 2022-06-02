@@ -274,7 +274,7 @@ impl Host {
             self.unchecked_visit_val_obj(ob.into(), |ob| match ob {
                 None => Err(HostError::General("object not found")),
                 Some(ho) => match ho {
-                    HostObject::Box(v) => Ok(ScObject::Box(self.from_host_val(v.val)?)),
+                    HostObject::Box(v) => Ok(ScObject::Box(Box::new(self.from_host_val(v.val)?))),
                     HostObject::Vec(vv) => {
                         let mut sv = Vec::new();
                         for e in vv.iter() {
