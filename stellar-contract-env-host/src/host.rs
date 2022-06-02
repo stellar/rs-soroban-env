@@ -253,6 +253,7 @@ impl Host {
             ScVal::Static(ScStatic::Void) => RawVal::from_void(),
             ScVal::Static(ScStatic::True) => RawVal::from_bool(true),
             ScVal::Static(ScStatic::False) => RawVal::from_bool(false),
+            ScVal::Static(other) => RawVal::from_other_static(*other),
             ScVal::Object(None) => return Err(HostError::General("missing expected ScvObject")),
             ScVal::Object(Some(ob)) => return Ok(self.to_host_obj(&*ob)?.into()),
             ScVal::Symbol(bytes) => {

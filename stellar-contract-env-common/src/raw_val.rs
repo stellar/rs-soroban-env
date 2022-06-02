@@ -1,3 +1,5 @@
+use stellar_xdr::ScStatic;
+
 use super::{Env, EnvVal, IntoEnvVal, Symbol};
 use core::fmt::Debug;
 
@@ -37,14 +39,6 @@ pub enum Tag {
 
     #[allow(dead_code)]
     Reserved = 7,
-}
-
-#[repr(u32)]
-#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum Static {
-    Void = 0,
-    True = 1,
-    False = 2,
 }
 
 #[repr(transparent)]
@@ -136,7 +130,7 @@ impl From<RawVal> for wasmi::RuntimeValue {
 impl RawValConvertible for () {
     #[inline(always)]
     fn is_val_type(v: RawVal) -> bool {
-        v.has_tag(Tag::Static) && v.get_body() == Static::Void as u64
+        v.has_tag(Tag::Static) && v.get_body() == ScStatic::Void as u64
     }
     #[inline(always)]
     unsafe fn unchecked_from_val(_v: RawVal) -> Self {}
@@ -146,18 +140,18 @@ impl RawValConvertible for bool {
     #[inline(always)]
     fn is_val_type(v: RawVal) -> bool {
         v.has_tag(Tag::Static)
-            && (v.get_body() == Static::True as u64 || v.get_body() == Static::False as u64)
+            && (v.get_body() == ScStatic::True as u64 || v.get_body() == ScStatic::False as u64)
     }
     #[inline(always)]
     unsafe fn unchecked_from_val(v: RawVal) -> Self {
-        v.get_body() == Static::True as u64
+        v.get_body() == ScStatic::True as u64
     }
     #[inline(always)]
     fn try_convert(v: RawVal) -> Option<Self> {
         if v.has_tag(Tag::Static) {
-            if v.get_body() == Static::True as u64 {
+            if v.get_body() == ScStatic::True as u64 {
                 Some(true)
-            } else if v.get_body() == Static::False as u64 {
+            } else if v.get_body() == ScStatic::False as u64 {
                 Some(false)
             } else {
                 None
@@ -313,13 +307,18 @@ impl RawVal {
 
     #[inline(always)]
     pub const fn from_void() -> RawVal {
-        unsafe { RawVal::from_body_and_tag(Static::Void as u64, Tag::Static) }
+        unsafe { RawVal::from_body_and_tag(ScStatic::Void as u64, Tag::Static) }
     }
 
     #[inline(always)]
     pub const fn from_bool(b: bool) -> RawVal {
-        let body = if b { Static::True } else { Static::False };
+        let body = if b { ScStatic::True } else { ScStatic::False };
         unsafe { RawVal::from_body_and_tag(body as u64, Tag::Static) }
+    }
+
+    #[inline(always)]
+    pub const fn from_other_static(st: ScStatic) -> RawVal {
+        unsafe { RawVal::from_body_and_tag(st as u64, Tag::Static) }
     }
 
     #[inline(always)]
