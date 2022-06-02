@@ -29,12 +29,12 @@ fn u64_roundtrip() {
 fn i64_roundtrip() {
     let host = Host::default();
     let i: i64 = 12345_i64; // Will be treated as ScVal::I64
-    let v = i.into_env_val(&host);
+    let v: EnvVal<_, RawVal> = i.into_env_val(&host);
     let j = i64::try_from(v).unwrap();
     assert_eq!(i, j);
 
     let i2: i64 = -13234_i64; // WIll be treated as ScVal::Object::I64
-    let v2 = i2.into_env_val(&host);
+    let v2: EnvVal<_, RawVal> = i2.into_env_val(&host);
     let obj: Object = v2.val.try_into().unwrap();
     assert!(obj.is_obj_type(ScObjectType::I64));
     assert_eq!(obj.get_handle(), 0);

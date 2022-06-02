@@ -168,6 +168,17 @@ impl<E: Env, T: TagType> IntoEnvVal<E, TaggedVal<T>> for TaggedVal<T> {
     }
 }
 
+impl<E: Env> TryFrom<EnvVal<E, TaggedVal<TagObject>>> for i64 {
+    type Error = ();
+
+    fn try_from(ev: EnvVal<E, TaggedVal<TagObject>>) -> Result<Self, Self::Error> {
+        if ev.val.is_obj_type(ScObjectType::I64) {
+            Ok(ev.env.obj_to_i64(ev.val))
+        } else {
+            Err(())
+        }
+    }
+}
 impl<E: Env> TryFrom<EnvVal<E, RawVal>> for i64 {
     type Error = ();
 
@@ -190,6 +201,15 @@ impl<E: Env> IntoEnvVal<E, RawVal> for i64 {
         } else {
             env.obj_from_i64(self).to_raw()
         };
+        EnvVal {
+            env: env.clone(),
+            val,
+        }
+    }
+}
+impl<E: Env> IntoEnvVal<E, TaggedVal<TagObject>> for i64 {
+    fn into_env_val(self, env: &E) -> EnvVal<E, TaggedVal<TagObject>> {
+        let val = env.obj_from_i64(self);
         EnvVal {
             env: env.clone(),
             val,
