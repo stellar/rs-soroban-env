@@ -97,17 +97,6 @@ pub trait IntoEnvVal<E: Env, V: Val>: Sized {
     fn into_env_val(self, env: &E) -> EnvVal<E, V>;
 }
 
-macro_rules! declare_intoenvval_rawval {
-    ($T:ty, $V:ty) => {
-        impl<E: Env> IntoEnvVal<E, RawVal> for $T {
-            fn into_env_val(self, env: &E) -> EnvVal<E, RawVal> {
-                let ev: EnvVal<E, $V> = self.into_env_val(env);
-                ev.into()
-            }
-        }
-    };
-}
-
 pub trait IntoVal<E: Env, V: Val>: IntoEnvVal<E, V> {
     fn into_val(self, env: &E) -> V {
         Self::into_env_val(self, env).val
@@ -115,18 +104,6 @@ pub trait IntoVal<E: Env, V: Val>: IntoEnvVal<E, V> {
 }
 
 impl<E: Env, V: Val, T> IntoVal<E, V> for T where T: IntoEnvVal<E, V> {}
-
-macro_rules! declare_tryfrom_rawval {
-    ($T:ty, $V:ty) => {
-        impl<E: Env> TryFrom<EnvVal<E, RawVal>> for $T {
-            type Error = ();
-            fn try_from(ev: EnvVal<E, RawVal>) -> Result<Self, Self::Error> {
-                let val = <$V>::try_from(ev.val)?;
-                <$T>::try_from(EnvVal { env: ev.env, val })
-            }
-        }
-    };
-}
 
 pub trait TryFromVal<E: Env, V: Val>: Sized + TryFrom<EnvVal<E, V>> {
     fn try_from_val(env: &E, v: V) -> Result<Self, Self::Error> {
@@ -231,7 +208,16 @@ impl<E: Env> TryFrom<EnvVal<E, TaggedVal<TagObject>>> for u64 {
         }
     }
 }
-declare_tryfrom_rawval!(u64, TaggedVal<TagObject>);
+impl<E: Env> TryFrom<EnvVal<E, RawVal>> for u64 {
+    type Error = ();
+
+    fn try_from(ev: EnvVal<E, RawVal>) -> Result<Self, Self::Error> {
+        u64::try_from(EnvVal {
+            env: ev.env,
+            val: TaggedVal::<TagObject>::try_from(ev.val)?,
+        })
+    }
+}
 
 impl<E: Env> IntoEnvVal<E, TaggedVal<TagObject>> for u64 {
     fn into_env_val(self, env: &E) -> EnvVal<E, TaggedVal<TagObject>> {
@@ -242,7 +228,11 @@ impl<E: Env> IntoEnvVal<E, TaggedVal<TagObject>> for u64 {
         }
     }
 }
-declare_intoenvval_rawval!(u64, TaggedVal<TagObject>);
+impl<E: Env> IntoEnvVal<E, RawVal> for u64 {
+    fn into_env_val(self, env: &E) -> EnvVal<E, RawVal> {
+        <u64 as IntoEnvVal<E, TaggedVal<TagObject>>>::into_env_val(self, env).into()
+    }
+}
 
 impl<E: Env + Debug, V: Val> Debug for EnvVal<E, V> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
