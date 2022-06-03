@@ -402,9 +402,7 @@ fn invoke_single_contract_function() -> Result<(), ()> {
     let b = 7i32;
     let c = 0x7fffffff_i32;
     let scvec0: ScVec = ScVec(vec![ScVal::I32(a), ScVal::I32(b)].try_into()?);
-    let res = vm
-        .invoke_function(RefCell::new(host.clone()), "add", &scvec0)
-        .unwrap();
+    let res = vm.invoke_function(&host, "add", &scvec0).unwrap();
     match res {
         ScVal::I32(v) => assert_eq!(v, a + b),
         _ => panic!("Wrong result type"),
@@ -412,8 +410,7 @@ fn invoke_single_contract_function() -> Result<(), ()> {
     // overflow
     let scvec0: ScVec = ScVec(vec![ScVal::I32(a), ScVal::I32(c)].try_into()?);
     let res = catch_unwind(AssertUnwindSafe(|| {
-        vm.invoke_function(RefCell::new(host.clone()), "add", &scvec0)
-            .unwrap();
+        vm.invoke_function(&host, "add", &scvec0).unwrap();
     }));
     assert!(res.is_err());
     Ok(())

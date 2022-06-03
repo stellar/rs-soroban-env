@@ -140,7 +140,7 @@ impl Vm {
 
     pub(crate) fn invoke_function_raw(
         &self,
-        host: &mut Host,
+        host: &Host,
         func: &str,
         args: &[RawVal],
     ) -> Result<RawVal, wasmi::Error> {
@@ -151,9 +151,19 @@ impl Vm {
             .iter()
             .map(|i| RuntimeValue::I64(i.get_payload() as i64))
             .collect();
+
+        // Wasmi wants a mut& to an E:Externals value, which is reasonable but
+        // irrelevant (and awkward) in our case since our Host (which implements
+        // Externals) is a Rc<RefCell<...>> with interior mutability. So rather
+        // than propagate the irrelevant-and-awkward mut& requirement to our
+        // callers, we just clone Host (which is, again, just a refcounted
+        // pointer) into a mutable local variable here, and pass a &mut to that
+        // local.
+        let mut host = host.clone();
+
         let wasm_ret = self
             .instance
-            .invoke_export(func, wasm_args.as_slice(), host)?;
+            .invoke_export(func, wasm_args.as_slice(), &mut host)?;
         if let Some(RuntimeValue::I64(ret)) = wasm_ret {
             Ok(RawVal::from_payload(ret as u64))
         } else {
@@ -168,16 +178,15 @@ impl Vm {
     /// RawVal result back to an ScVal.
     pub fn invoke_function(
         &self,
-        host: RefCell<Host>,
+        host: &Host,
         func: &str,
         args: &ScVec,
     ) -> Result<ScVal, HostError> {
         let mut raw_args: Vec<RawVal> = Vec::new();
         for scv in args.0.iter() {
-            raw_args.push(host.borrow_mut().to_host_val(scv)?.val);
+            raw_args.push(host.to_host_val(scv)?.val);
         }
-        let raw_res =
-            self.invoke_function_raw(&mut host.borrow_mut(), func, raw_args.as_slice())?;
-        Ok(host.borrow().from_host_val(raw_res)?)
+        let raw_res = self.invoke_function_raw(host, func, raw_args.as_slice())?;
+        Ok(host.from_host_val(raw_res)?)
     }
 }
