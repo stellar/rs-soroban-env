@@ -172,8 +172,8 @@ impl<E: Env> TryFrom<EnvVal<E, RawVal>> for i64 {
     type Error = ();
 
     fn try_from(ev: EnvVal<E, RawVal>) -> Result<Self, Self::Error> {
-        if ev.val.is_positive_i64() {
-            Ok(unsafe { ev.val.unchecked_as_positive_i64() })
+        if ev.val.is_u63() {
+            Ok(unsafe { ev.val.unchecked_as_u63() })
         } else if Object::val_is_obj_type(ev.val, ScObjectType::I64) {
             let obj = unsafe { Object::unchecked_from_val(ev.val) };
             Ok(ev.env.obj_to_i64(obj))
@@ -186,7 +186,7 @@ impl<E: Env> TryFrom<EnvVal<E, RawVal>> for i64 {
 impl<E: Env> IntoEnvVal<E, RawVal> for i64 {
     fn into_env_val(self, env: &E) -> EnvVal<E, RawVal> {
         let val = if self >= 0 {
-            unsafe { RawVal::unchecked_from_positive_i64(self) }
+            unsafe { RawVal::unchecked_from_u63(self) }
         } else {
             env.obj_from_i64(self).to_raw()
         };
