@@ -22,7 +22,7 @@ pub trait SnapshotSource {
 }
 
 #[derive(Clone, Default)]
-pub struct Footprint(OrdMap<Key, AccessType>);
+pub struct Footprint(pub OrdMap<Key, AccessType>);
 
 impl Footprint {
     pub fn record_access(&mut self, key: &Key, ty: AccessType) {
