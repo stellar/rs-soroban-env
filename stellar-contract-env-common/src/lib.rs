@@ -9,6 +9,7 @@ mod raw_val;
 mod status;
 mod symbol;
 mod tagged_val;
+mod tuple;
 mod unimplemented_env;
 mod val;
 
