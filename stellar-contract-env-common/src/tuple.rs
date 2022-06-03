@@ -24,7 +24,10 @@ macro_rules! impl_for_tuple {
                     return Err(());
                 }
                 Ok((
-                    $($typ::try_from_val(&env, env.vec_get(vec, $idx.into())).map_err(|_| ())?),*
+                    $({
+                        let idx: u32 = $idx;
+                        $typ::try_from_val(&env, env.vec_get(vec, idx.into())).map_err(|_| ())?
+                    }),*
                 ))
             }
         }
