@@ -147,6 +147,15 @@ impl<E: Env, T: TagType> TryFrom<EnvVal<E, RawVal>> for EnvVal<E, TaggedVal<T>> 
     }
 }
 
+impl<E: Env, T: TagType> IntoEnvVal<E, RawVal> for TaggedVal<T> {
+    fn into_env_val(self, env: &E) -> EnvVal<E, RawVal> {
+        EnvVal {
+            env: env.clone(),
+            val: self.to_raw(),
+        }
+    }
+}
+
 impl<E: Env, T: TagType> From<EnvVal<E, TaggedVal<T>>> for RawVal {
     fn from(ev: EnvVal<E, TaggedVal<T>>) -> Self {
         ev.val.0
