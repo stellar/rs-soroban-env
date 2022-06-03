@@ -1,12 +1,12 @@
 use std::rc::Rc;
 
-use crate::xdr::ScVal;
-use crate::{ContractId, HostError};
+use crate::xdr::{Hash, ScVal};
+use crate::HostError;
 use im_rc::OrdMap;
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Key {
-    pub contract_id: ContractId,
+    pub contract_id: Hash,
     pub key: ScVal,
 }
 
@@ -172,7 +172,7 @@ mod test_footprint {
     fn footprint_record_access() {
         let mut fp = Footprint::default();
         // record when key not exist
-        let contract_id = ContractId([0; 32].into());
+        let contract_id = [0; 32].into();
         let key = ScVal::I32(0);
         let key = Key { contract_id, key };
         fp.record_access(&key, AccessType::ReadOnly);
@@ -187,7 +187,7 @@ mod test_footprint {
 
     #[test]
     fn footprint_enforce_access() {
-        let contract_id = ContractId([0; 32].into());
+        let contract_id = [0; 32].into();
         let key = ScVal::I32(0);
         let key = Key { contract_id, key };
         let om = OrdMap::unit(key.clone(), AccessType::ReadOnly);
@@ -202,7 +202,7 @@ mod test_footprint {
     #[should_panic(expected = "access to unknown footprint entry")]
     fn footprint_enforce_access_not_exist() {
         let mut fp = Footprint::default();
-        let contract_id = ContractId([0; 32].into());
+        let contract_id = [0; 32].into();
         let key = ScVal::I32(0);
         let key = Key { contract_id, key };
         fp.enforce_access(&key, AccessType::ReadOnly).unwrap();
@@ -211,7 +211,7 @@ mod test_footprint {
     #[test]
     #[should_panic(expected = "read-write access to read-only footprint entry")]
     fn footprint_attempt_to_write_readonly_entry() {
-        let contract_id = ContractId([0; 32].into());
+        let contract_id = [0; 32].into();
         let key = ScVal::I32(0);
         let key = Key { contract_id, key };
         let om = OrdMap::unit(key.clone(), AccessType::ReadOnly);

@@ -6,12 +6,13 @@ use core::cmp::Ordering;
 use core::fmt::Debug;
 use im_rc::{OrdMap, Vector};
 use std::num::TryFromIntError;
+use stellar_contract_env_common::xdr::Hash;
 
 use crate::storage::{Key, Storage};
 use crate::weak_host::WeakHost;
 
+use crate::xdr;
 use crate::xdr::{ScMap, ScMapEntry, ScObject, ScStatic, ScStatus, ScStatusType, ScVal, ScVec};
-use crate::{xdr, ContractId};
 use std::rc::Rc;
 
 use crate::host_object::{HostMap, HostObj, HostObject, HostObjectType, HostVal, HostVec};
@@ -66,7 +67,7 @@ impl From<BitSetError> for HostError {
 /// with [`Host::push_frame`].
 #[derive(Clone)]
 pub(crate) struct Frame {
-    pub(crate) contract_id: ContractId,
+    pub(crate) contract_id: Hash,
     // Other activation-frame / execution-context values here.
 }
 
@@ -136,9 +137,9 @@ impl Host {
             .expect("missing current host frame"))
     }
 
-    /// Returns [`ContractID`] from top of context stack, panicking if the stack
-    /// is empty.
-    fn get_current_contract_id(&self) -> ContractId {
+    /// Returns [`Hash`] contract ID from top of context stack, panicking if the
+    /// stack is empty.
+    fn get_current_contract_id(&self) -> Hash {
         self.with_current_frame(|frame| frame.contract_id.clone())
     }
 
@@ -367,7 +368,7 @@ impl Host {
                 .as_slice()
                 .try_into()
                 .map_err(|_| HostError::General("invalid contract hash"))?;
-            Ok(ContractId(xdr::Hash(arr)))
+            Ok(xdr::Hash(arr))
         })?;
         let key = ScVal::Static(ScStatic::LedgerKeyContractCodeWasm);
         let storage_key = Key {
