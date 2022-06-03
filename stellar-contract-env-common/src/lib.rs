@@ -35,7 +35,7 @@ pub use unimplemented_env::UnimplementedEnv;
 pub use bitset::{BitSet, BitSetError};
 pub use object::Object;
 pub use status::{Status, OK, UNKNOWN_ERROR};
-pub use symbol::{Symbol, SymbolError, SymbolIter};
+pub use symbol::{Symbol, SymbolError, SymbolIter, SymbolStr};
 
 #[inline(always)]
 // Awkward: this is a free function rather than a trait call because
