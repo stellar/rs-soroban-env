@@ -237,17 +237,17 @@ impl RawVal {
     }
 
     #[inline(always)]
-    pub const fn is_positive_i64(self) -> bool {
+    pub const fn is_u63(self) -> bool {
         (self.0 & 1) == 0
     }
 
     #[inline(always)]
-    pub const unsafe fn unchecked_as_positive_i64(self) -> i64 {
+    pub const unsafe fn unchecked_as_u63(self) -> i64 {
         (self.0 >> 1) as i64
     }
 
     #[inline(always)]
-    pub const unsafe fn unchecked_from_positive_i64(i: i64) -> Self {
+    pub const unsafe fn unchecked_from_u63(i: i64) -> Self {
         Self((i as u64) << 1)
     }
 
@@ -268,7 +268,7 @@ impl RawVal {
 
     #[inline(always)]
     pub(crate) const fn has_tag(self, tag: Tag) -> bool {
-        !self.is_positive_i64() && self.get_tag_u8() == tag as u8
+        !self.is_u63() && self.get_tag_u8() == tag as u8
     }
 
     #[inline(always)]
@@ -335,9 +335,9 @@ impl RawVal {
 
 impl Debug for RawVal {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        if self.is_positive_i64() {
+        if self.is_u63() {
             f.debug_struct("Val")
-                .field("pos64", &unsafe { self.unchecked_as_positive_i64() })
+                .field("pos64", &unsafe { self.unchecked_as_u63() })
                 .finish()
         } else if self.has_tag(Tag::Object) {
             f.debug_struct("Val")

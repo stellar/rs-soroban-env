@@ -181,8 +181,8 @@ impl Host {
     }
 
     pub(crate) fn from_host_val(&self, val: RawVal) -> Result<ScVal, HostError> {
-        if val.is_positive_i64() {
-            Ok(ScVal::U63(unsafe { val.unchecked_as_positive_i64() } as u64))
+        if val.is_u63() {
+            Ok(ScVal::U63(unsafe { val.unchecked_as_u63() } as u64))
         } else {
             match val.get_tag() {
                 Tag::U32 => Ok(ScVal::U32(unsafe {
@@ -236,7 +236,7 @@ impl Host {
         let ok = match v {
             ScVal::U63(u) => {
                 if *u <= (i64::MAX as u64) {
-                    unsafe { RawVal::unchecked_from_positive_i64(*u as i64) }
+                    unsafe { RawVal::unchecked_from_u63(*u as i64) }
                 } else {
                     return Err(HostError::General("ScvU63 > i64::MAX"));
                 }
