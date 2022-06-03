@@ -90,12 +90,23 @@ impl Symbol {
             Err(_) => panic!(),
         }
     }
+
+    pub fn to_str(&self) -> SymbolStr {
+        let mut chars = [b'\x00'; MAX_CHARS];
+        for (i, ch) in self.into_iter().enumerate() {
+            chars[i] = ch as u8;
+        }
+        SymbolStr(chars)
+    }
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct SymbolStr([u8; MAX_CHARS]);
 
 impl SymbolStr {
+    pub fn is_empty(&self) -> bool {
+        self.0[0] == 0
+    }
     pub fn len(&self) -> usize {
         let s: &[u8] = &self.0;
         for (i, x) in s.iter().enumerate() {
@@ -130,11 +141,7 @@ impl AsRef<str> for SymbolStr {
 
 impl From<&Symbol> for SymbolStr {
     fn from(s: &Symbol) -> Self {
-        let mut chars = [b'\x00'; MAX_CHARS];
-        for (i, ch) in s.into_iter().enumerate() {
-            chars[i] = ch as u8;
-        }
-        SymbolStr(chars)
+        s.to_str()
     }
 }
 
