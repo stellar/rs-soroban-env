@@ -2,7 +2,7 @@ use stellar_xdr::ScObjectType;
 
 use crate::{
     raw_val::{RawVal, RawValConvertible},
-    Env, EnvVal, IntoEnvVal, IntoVal, Object, TagObject, TaggedVal, TryFromVal,
+    Env, EnvVal, IntoEnvVal, IntoVal, Object, TryFromVal,
 };
 
 macro_rules! impl_for_tuple {
@@ -29,15 +29,15 @@ macro_rules! impl_for_tuple {
             }
         }
 
-        impl<E: Env, $($typ),*> IntoEnvVal<E, TaggedVal<TagObject>> for ($($typ),*)
+        impl<E: Env, $($typ),*> IntoEnvVal<E, RawVal> for ($($typ),*)
         where
             $($typ: IntoEnvVal<E, RawVal>),*
         {
-            fn into_env_val(self, env: &E) -> EnvVal<E, TaggedVal<TagObject>> {
+            fn into_env_val(self, env: &E) -> EnvVal<E, RawVal> {
                 let env = env.clone();
                 let vec = env.vec_new();
                 $(let vec = env.vec_push(vec, self.$idx.into_val(&env));)*
-                EnvVal { env, val: vec }
+                EnvVal { env, val: vec.to_raw() }
             }
         }
     };
