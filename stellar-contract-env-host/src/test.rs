@@ -380,8 +380,6 @@ fn vec_append_empty() {
 #[cfg(feature = "vm")]
 #[test]
 fn invoke_single_contract_function() -> Result<(), ()> {
-    use std::cell::RefCell;
-
     let host = Host::default();
     let code: [u8; 163] = [
         0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00, 0x01, 0x07, 0x01, 0x60, 0x02, 0x7e, 0x7e,
@@ -455,7 +453,7 @@ fn contract_invoke_another_contract() -> Result<(), ()> {
 
     assert!(res.is::<i32>());
     assert!(res.get_tag() == Tag::I32);
-    let i = unsafe { <i32 as RawValConvertible>::unchecked_from_val(res) };
+    let i: i32 = res.try_into()?;
     assert_eq!(i, 3);
     Ok(())
 }

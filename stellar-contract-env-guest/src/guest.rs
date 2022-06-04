@@ -3,7 +3,7 @@
 
 use stellar_contract_env_common::call_macro_with_all_host_functions;
 
-use super::{Env, EnvBase, Object, RawVal};
+use super::{Env, EnvBase, Object, RawVal, Symbol};
 
 // In guest code the environment is global/implicit, so is represented as a unit struct.
 #[derive(Copy, Clone, Default)]
@@ -158,7 +158,7 @@ macro_rules! generate_extern_modules {
             // outer and inner `$()*` pattern-repetition expanders.
             mod $mod_id {
                 #[allow(unused_imports)]
-                use crate::{RawVal,Object};
+                use crate::{RawVal,Object,Symbol};
                 #[link(wasm_import_module = $mod_str)]
                 extern "C" {
                     $(

@@ -1,8 +1,6 @@
 mod dispatch;
 mod func_info;
 
-use std::cell::RefCell;
-
 use crate::{host::Frame, ContractID, HostError};
 
 use super::{
@@ -143,7 +141,7 @@ impl Vm {
         host: &Host,
         func: &str,
         args: &[RawVal],
-    ) -> Result<RawVal, wasmi::Error> {
+    ) -> Result<RawVal, HostError> {
         let _frame_guard = host.push_frame(Frame {
             contract_id: self.contract_id.clone(),
         });
@@ -167,9 +165,9 @@ impl Vm {
         if let Some(RuntimeValue::I64(ret)) = wasm_ret {
             Ok(RawVal::from_payload(ret as u64))
         } else {
-            Err(wasmi::Error::Trap(
+            Err(HostError::WASMIError(wasmi::Error::Trap(
                 wasmi::TrapKind::UnexpectedSignature.into(),
-            ))
+            )))
         }
     }
 

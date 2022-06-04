@@ -399,7 +399,7 @@ impl Host {
     }
 
     #[cfg(feature = "vm")]
-    fn call_n(&self, contract: Object, func: RawVal, args: &[ScVal]) -> Result<RawVal, HostError> {
+    fn call_n(&self, contract: Object, func: Symbol, args: &[RawVal]) -> Result<RawVal, HostError> {
         // Create key for storage
         let id = self.visit_obj(contract, |bin: &Vec<u8>| {
             let arr: [u8; 32] = bin
@@ -425,13 +425,7 @@ impl Host {
         };
         let vm = Vm::new(&self, id, code.as_slice())?;
         // Resolve the function symbol and invoke contract call
-        let sym = unsafe { <Symbol as RawValConvertible>::unchecked_from_val(func) };
-        let res = vm.invoke_function(
-            RefCell::new(self.clone()),
-            SymbolStr::from(sym).as_ref(),
-            &ScVec(args.try_into()?),
-        )?;
-        Ok(self.to_host_val(&res)?.into())
+        vm.invoke_function_raw(self, SymbolStr::from(func).as_ref(), args)
     }
 }
 
@@ -719,41 +713,37 @@ impl CheckedEnv for Host {
         todo!()
     }
 
-    fn call0(&self, contract: Object, func: RawVal) -> Result<RawVal, HostError> {
+    fn call0(&self, contract: Object, func: Symbol) -> Result<RawVal, HostError> {
         #[cfg(not(feature = "vm"))]
         todo!();
         #[cfg(feature = "vm")]
         self.call_n(contract, func, &[])
     }
 
-    fn call1(&self, contract: Object, func: RawVal, a: RawVal) -> Result<RawVal, HostError> {
+    fn call1(&self, contract: Object, func: Symbol, a: RawVal) -> Result<RawVal, HostError> {
         #[cfg(not(feature = "vm"))]
         todo!();
         #[cfg(feature = "vm")]
-        self.call_n(contract, func, &[self.from_host_val(a)?])
+        self.call_n(contract, func, &[a])
     }
 
     fn call2(
         &self,
         contract: Object,
-        func: RawVal,
+        func: Symbol,
         a: RawVal,
         b: RawVal,
     ) -> Result<RawVal, HostError> {
         #[cfg(not(feature = "vm"))]
         todo!();
         #[cfg(feature = "vm")]
-        self.call_n(
-            contract,
-            func,
-            &[self.from_host_val(a)?, self.from_host_val(b)?],
-        )
+        self.call_n(contract, func, &[a, b])
     }
 
     fn call3(
         &self,
         contract: Object,
-        func: RawVal,
+        func: Symbol,
         a: RawVal,
         b: RawVal,
         c: RawVal,
@@ -761,21 +751,13 @@ impl CheckedEnv for Host {
         #[cfg(not(feature = "vm"))]
         todo!();
         #[cfg(feature = "vm")]
-        self.call_n(
-            contract,
-            func,
-            &[
-                self.from_host_val(a)?,
-                self.from_host_val(b)?,
-                self.from_host_val(c)?,
-            ],
-        )
+        self.call_n(contract, func, &[a, b, c])
     }
 
     fn call4(
         &self,
         contract: Object,
-        func: RawVal,
+        func: Symbol,
         a: RawVal,
         b: RawVal,
         c: RawVal,
@@ -784,16 +766,7 @@ impl CheckedEnv for Host {
         #[cfg(not(feature = "vm"))]
         todo!();
         #[cfg(feature = "vm")]
-        self.call_n(
-            contract,
-            func,
-            &[
-                self.from_host_val(a)?,
-                self.from_host_val(b)?,
-                self.from_host_val(c)?,
-                self.from_host_val(d)?,
-            ],
-        )
+        self.call_n(contract, func, &[a, b, c, d])
     }
 
     fn bigint_from_u64(&self, x: u64) -> Result<Object, HostError> {

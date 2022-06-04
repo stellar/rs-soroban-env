@@ -1,4 +1,4 @@
-use super::{call_macro_with_all_host_functions, Env, EnvBase, Object, RawVal};
+use super::{call_macro_with_all_host_functions, Env, EnvBase, Object, RawVal, Symbol};
 use core::any;
 
 #[derive(Clone, Default)]
