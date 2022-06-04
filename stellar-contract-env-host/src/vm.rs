@@ -138,10 +138,10 @@ impl Vm {
 
     pub(crate) fn invoke_function_raw(
         &self,
-        host: &mut Host,
+        host: &Host,
         func: &str,
         args: &[RawVal],
-    ) -> Result<RawVal, wasmi::Error> {
+    ) -> Result<RawVal, HostError> {
         let _frame_guard = host.push_frame(Frame {
             contract_id: self.contract_id.clone(),
         });
@@ -149,15 +149,25 @@ impl Vm {
             .iter()
             .map(|i| RuntimeValue::I64(i.get_payload() as i64))
             .collect();
+
+        // Wasmi wants a mut& to an E:Externals value, which is reasonable but
+        // irrelevant (and awkward) in our case since our Host (which implements
+        // Externals) is a Rc<RefCell<...>> with interior mutability. So rather
+        // than propagate the irrelevant-and-awkward mut& requirement to our
+        // callers, we just clone Host (which is, again, just a refcounted
+        // pointer) into a mutable local variable here, and pass a &mut to that
+        // local.
+        let mut host = host.clone();
+
         let wasm_ret = self
             .instance
-            .invoke_export(func, wasm_args.as_slice(), host)?;
+            .invoke_export(func, wasm_args.as_slice(), &mut host)?;
         if let Some(RuntimeValue::I64(ret)) = wasm_ret {
             Ok(RawVal::from_payload(ret as u64))
         } else {
-            Err(wasmi::Error::Trap(
+            Err(HostError::WASMIError(wasmi::Error::Trap(
                 wasmi::TrapKind::UnexpectedSignature.into(),
-            ))
+            )))
         }
     }
 
@@ -166,7 +176,7 @@ impl Vm {
     /// RawVal result back to an ScVal.
     pub fn invoke_function(
         &self,
-        host: &mut Host,
+        host: &Host,
         func: &str,
         args: &ScVec,
     ) -> Result<ScVal, HostError> {

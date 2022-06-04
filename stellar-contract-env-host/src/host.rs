@@ -16,6 +16,10 @@ use std::rc::Rc;
 
 use crate::host_object::{HostMap, HostObj, HostObject, HostObjectType, HostVal, HostVec};
 use crate::CheckedEnv;
+#[cfg(feature = "vm")]
+use crate::SymbolStr;
+#[cfg(feature = "vm")]
+use crate::Vm;
 use crate::{
     BitSet, BitSetError, EnvBase, IntoEnvVal, Object, RawVal, RawValConvertible, Status, Symbol,
     SymbolError, Tag, Val,
@@ -393,6 +397,36 @@ impl Host {
             key: sckey,
         })
     }
+
+    #[cfg(feature = "vm")]
+    fn call_n(&self, contract: Object, func: Symbol, args: &[RawVal]) -> Result<RawVal, HostError> {
+        // Create key for storage
+        let id = self.visit_obj(contract, |bin: &Vec<u8>| {
+            let arr: [u8; 32] = bin
+                .as_slice()
+                .try_into()
+                .map_err(|_| HostError::General("invalid contract hash"))?;
+            Ok(ContractID(xdr::Hash(arr)))
+        })?;
+        let key = ScVal::Static(ScStatic::Void); // TODO: replace with "SCS_LEDGER_KEY_CONTRACT_CODE_WASM"
+        let storage_key = Key {
+            contract_id: id.clone(),
+            key,
+        };
+        // Retrieve the contract code and create vm
+        let scval = self.0.storage.borrow_mut().get(&storage_key)?;
+        let scobj = match scval {
+            ScVal::Object(Some(ob)) => *ob,
+            _ => return Err(HostError::General("not an object")),
+        };
+        let code = match scobj {
+            ScObject::Binary(b) => b,
+            _ => return Err(HostError::General("not a binary object")),
+        };
+        let vm = Vm::new(&self, id, code.as_slice())?;
+        // Resolve the function symbol and invoke contract call
+        vm.invoke_function_raw(self, SymbolStr::from(func).as_ref(), args)
+    }
 }
 
 impl EnvBase for Host {
@@ -643,11 +677,16 @@ impl CheckedEnv for Host {
     }
 
     fn put_contract_data(&self, k: RawVal, v: RawVal) -> Result<RawVal, HostError> {
-        todo!()
+        let key = self.to_storage_key(k)?;
+        let val = self.from_host_val(v)?;
+        self.0.storage.borrow_mut().put(&key, &val)?;
+        Ok(().into())
     }
 
     fn has_contract_data(&self, k: RawVal) -> Result<RawVal, HostError> {
-        todo!()
+        let key = self.to_storage_key(k)?;
+        let res = self.0.storage.borrow_mut().has(&key)?;
+        Ok(RawVal::from_bool(res))
     }
 
     fn get_contract_data(&self, k: RawVal) -> Result<RawVal, HostError> {
@@ -657,7 +696,9 @@ impl CheckedEnv for Host {
     }
 
     fn del_contract_data(&self, k: RawVal) -> Result<RawVal, HostError> {
-        todo!()
+        let key = self.to_storage_key(k)?;
+        self.0.storage.borrow_mut().del(&key)?;
+        Ok(().into())
     }
 
     fn account_balance(&self, acct: RawVal) -> Result<RawVal, HostError> {
@@ -672,45 +713,60 @@ impl CheckedEnv for Host {
         todo!()
     }
 
-    fn call0(&self, contract: RawVal, func: RawVal) -> Result<RawVal, HostError> {
-        todo!()
+    fn call0(&self, contract: Object, func: Symbol) -> Result<RawVal, HostError> {
+        #[cfg(not(feature = "vm"))]
+        todo!();
+        #[cfg(feature = "vm")]
+        self.call_n(contract, func, &[])
     }
 
-    fn call1(&self, contract: RawVal, func: RawVal, a: RawVal) -> Result<RawVal, HostError> {
-        todo!()
+    fn call1(&self, contract: Object, func: Symbol, a: RawVal) -> Result<RawVal, HostError> {
+        #[cfg(not(feature = "vm"))]
+        todo!();
+        #[cfg(feature = "vm")]
+        self.call_n(contract, func, &[a])
     }
 
     fn call2(
         &self,
-        contract: RawVal,
-        func: RawVal,
+        contract: Object,
+        func: Symbol,
         a: RawVal,
         b: RawVal,
     ) -> Result<RawVal, HostError> {
-        todo!()
+        #[cfg(not(feature = "vm"))]
+        todo!();
+        #[cfg(feature = "vm")]
+        self.call_n(contract, func, &[a, b])
     }
 
     fn call3(
         &self,
-        contract: RawVal,
-        func: RawVal,
+        contract: Object,
+        func: Symbol,
         a: RawVal,
         b: RawVal,
         c: RawVal,
     ) -> Result<RawVal, HostError> {
-        todo!()
+        #[cfg(not(feature = "vm"))]
+        todo!();
+        #[cfg(feature = "vm")]
+        self.call_n(contract, func, &[a, b, c])
     }
 
     fn call4(
         &self,
-        contract: RawVal,
-        func: RawVal,
+        contract: Object,
+        func: Symbol,
         a: RawVal,
         b: RawVal,
         c: RawVal,
         d: RawVal,
     ) -> Result<RawVal, HostError> {
-        todo!()
+        #[cfg(not(feature = "vm"))]
+        todo!();
+        #[cfg(feature = "vm")]
+        self.call_n(contract, func, &[a, b, c, d])
     }
 
     fn bigint_from_u64(&self, x: u64) -> Result<Object, HostError> {
