@@ -8,7 +8,7 @@ use super::{
     Host, RawVal,
 };
 use func_info::HOST_FUNCTIONS;
-use parity_wasm::elements;
+use parity_wasm::elements::{self, Internal};
 use wasmi::{
     Externals, FuncInstance, ImportResolver, Module, ModuleInstance, ModuleRef, RuntimeArgs,
     RuntimeValue, ValueType,
@@ -117,6 +117,12 @@ pub struct Vm {
     instance: ModuleRef, // this is a cloneable Rc<ModuleInstance>
 }
 
+#[derive(Clone, Eq, PartialEq)]
+pub struct VmFunction {
+    pub name: String,
+    pub arity: usize,
+}
+
 impl Vm {
     pub fn new(
         host: &Host,
@@ -140,12 +146,18 @@ impl Vm {
         })
     }
 
-    pub fn exports(&self) -> Vec<String> {
+    pub fn functions(&self) -> Vec<VmFunction> {
         if let Some(export_section) = self.elements_module.export_section() {
             export_section
                 .entries()
                 .iter()
-                .map(|entry| entry.field().to_string())
+                .filter_map(|entry| match entry.internal() {
+                    Internal::Function(_) => Some(VmFunction {
+                        name: entry.field().to_string(),
+                        arity: 0,
+                    }),
+                    _ => None,
+                })
                 .collect()
         } else {
             vec![]
