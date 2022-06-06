@@ -9,7 +9,7 @@ use crate::storage::{AccessType, Footprint, Key, Storage};
 #[cfg(feature = "vm")]
 use crate::{xdr::ScStatic, Symbol};
 #[cfg(feature = "vm")]
-use crate::{ContractID, Vm};
+use crate::{ContractId, Vm};
 #[cfg(feature = "vm")]
 use std::panic::{catch_unwind, AssertUnwindSafe};
 
@@ -394,7 +394,7 @@ fn invoke_single_contract_function() -> Result<(), ()> {
         0x04, 0x88, 0xa7, 0x22, 0x03, 0x6a, 0x22, 0x02, 0x20, 0x03, 0x48, 0x73, 0x45, 0x0d, 0x01,
         0x0b, 0x00, 0x0b, 0x20, 0x02, 0xad, 0x42, 0x04, 0x86, 0x42, 0x03, 0x84, 0x0b,
     ];
-    let id = ContractID([0; 32].into());
+    let id = ContractId([0; 32].into());
     let vm = Vm::new(&host, id, &code).unwrap();
     let a = 4i32;
     let b = 7i32;
@@ -419,7 +419,7 @@ fn invoke_single_contract_function() -> Result<(), ()> {
 fn contract_invoke_another_contract() -> Result<(), ()> {
     use im_rc::OrdMap;
 
-    let contract_id = ContractID([0; 32].into());
+    let contract_id = ContractId([0; 32].into());
     let key = ScVal::Static(ScStatic::Void); // TODO: replace with "SCS_LEDGER_KEY_CONTRACT_CODE_WASM"
     let storage_key = Key { contract_id, key };
     let code: [u8; 163] = [
