@@ -13,6 +13,6 @@ mod test;
 pub use host::{Host, HostError};
 pub use stellar_contract_env_common::*;
 
-// TODO: this should become xdr::ContractID when that type arrives.
+// TODO: this should become xdr::ContractId when that type arrives.
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
-pub struct ContractID(xdr::Hash);
+pub struct ContractId(pub xdr::Hash);
