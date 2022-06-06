@@ -8,6 +8,7 @@ use super::{
     Host, RawVal,
 };
 use func_info::HOST_FUNCTIONS;
+use parity_wasm::elements;
 use wasmi::{
     Externals, FuncInstance, ImportResolver, Module, ModuleInstance, ModuleRef, RuntimeArgs,
     RuntimeValue, ValueType,
@@ -112,6 +113,7 @@ impl ImportResolver for Host {
 pub struct Vm {
     #[allow(dead_code)]
     contract_id: ContractId,
+    elements_module: elements::Module,
     instance: ModuleRef, // this is a cloneable Rc<ModuleInstance>
 }
 
@@ -121,7 +123,8 @@ impl Vm {
         contract_id: ContractId,
         module_wasm_code: &[u8],
     ) -> Result<Self, HostError> {
-        let module = Module::from_buffer(module_wasm_code)?;
+        let elements_module: elements::Module = elements::deserialize_buffer(module_wasm_code)?;
+        let module: Module = Module::from_parity_wasm_module(elements_module.clone())?;
         module.deny_floating_point()?;
         let not_started_instance = ModuleInstance::new(&module, host)?;
         if not_started_instance.has_start() {
@@ -132,8 +135,21 @@ impl Vm {
         let instance = not_started_instance.assert_no_start();
         Ok(Self {
             contract_id,
+            elements_module,
             instance,
         })
+    }
+
+    pub fn exports(&self) -> Vec<String> {
+        if let Some(export_section) = self.elements_module.export_section() {
+            export_section
+                .entries()
+                .iter()
+                .map(|entry| entry.field().to_string())
+                .collect()
+        } else {
+            vec![]
+        }
     }
 
     pub(crate) fn invoke_function_raw(
