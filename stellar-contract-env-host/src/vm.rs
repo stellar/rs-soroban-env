@@ -120,7 +120,8 @@ pub struct Vm {
 #[derive(Clone, Eq, PartialEq)]
 pub struct VmFunction {
     pub name: String,
-    pub arity: usize,
+    pub param_count: usize,
+    pub result_count: usize,
 }
 
 impl Vm {
@@ -159,34 +160,31 @@ impl Vm {
                 .entries()
                 .iter()
                 .filter_map(|entry| match entry.internal() {
-                    Internal::Function(idx) => Some(VmFunction {
-                        name: entry.field().to_string(),
-                        arity: {
-                            self.elements_module
-                                .function_section()
-                                .and_then(|fs| {
-                                    // Function index space includes imported
-                                    // functions. Imported functions are always
-                                    // indexed prior to other functions and so
-                                    // the index points into the space of the
-                                    // imported functions and the module's
-                                    // functions. To get the index of the
-                                    // function in the function section, the
-                                    // index is reduced by the import count.
-                                    let fs_idx = (*idx as usize) - fn_import_count;
-                                    fs.entries().get(fs_idx).and_then(|f| {
-                                        self.elements_module.type_section().and_then(|ts| {
-                                            ts.types().get(f.type_ref() as usize).and_then(|t| {
-                                                match t {
-                                                    Type::Function(ft) => Some(ft.params().len()),
-                                                }
-                                            })
-                                        })
+                    Internal::Function(idx) => {
+                        let fn_type = self.elements_module.function_section().and_then(|fs| {
+                            // Function index space includes imported
+                            // functions. Imported functions are always
+                            // indexed prior to other functions and so
+                            // the index points into the space of the
+                            // imported functions and the module's
+                            // functions. To get the index of the
+                            // function in the function section, the
+                            // index is reduced by the import count.
+                            let fs_idx = (*idx as usize) - fn_import_count;
+                            fs.entries().get(fs_idx).and_then(|f| {
+                                self.elements_module.type_section().and_then(|ts| {
+                                    ts.types().get(f.type_ref() as usize).and_then(|t| match t {
+                                        Type::Function(ft) => Some(ft),
                                     })
                                 })
-                                .unwrap_or(0)
-                        },
-                    }),
+                            })
+                        });
+                        Some(VmFunction {
+                            name: entry.field().to_string(),
+                            param_count: fn_type.map_or(0, |fn_type| fn_type.params().len()),
+                            result_count: fn_type.map_or(0, |fn_type| fn_type.results().len()),
+                        })
+                    }
                     _ => None,
                 })
                 .collect()
