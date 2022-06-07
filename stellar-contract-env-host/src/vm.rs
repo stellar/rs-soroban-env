@@ -244,4 +244,16 @@ impl Vm {
             vec![]
         }
     }
+
+    // Custom section returns the bytes within the named custom section of the
+    // loaded WASM file.
+    pub fn custom_section(&self, name: impl AsRef<str>) -> Option<&[u8]> {
+        self.elements_module.custom_sections().find_map(|s| {
+            if s.name() == name.as_ref() {
+                Some(s.payload())
+            } else {
+                None
+            }
+        })
+    }
 }
