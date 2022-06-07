@@ -157,6 +157,36 @@ impl From<&str> for SymbolStr {
     }
 }
 
+#[cfg(test)]
+extern crate std;
+#[cfg(any(test, feature = "std"))]
+use std::string::{String, ToString};
+#[cfg(any(test, feature = "std"))]
+impl From<Symbol> for String {
+    fn from(s: Symbol) -> Self {
+        s.to_string()
+    }
+}
+#[cfg(any(test, feature = "std"))]
+impl From<SymbolStr> for String {
+    fn from(s: SymbolStr) -> Self {
+        s.to_string()
+    }
+}
+#[cfg(any(test, feature = "std"))]
+impl ToString for Symbol {
+    fn to_string(&self) -> String {
+        self.into_iter().collect()
+    }
+}
+#[cfg(any(test, feature = "std"))]
+impl ToString for SymbolStr {
+    fn to_string(&self) -> String {
+        let s: &str = self.as_ref();
+        s.to_string()
+    }
+}
+
 impl IntoIterator for Symbol {
     type Item = char;
     type IntoIter = SymbolIter;
@@ -259,13 +289,13 @@ mod test_without_string {
 mod test_with_string {
     use super::Symbol;
     extern crate std;
-    use std::string::String;
+    use std::string::{String, ToString};
 
     #[test]
     fn test_roundtrip() {
         let input = "stellar";
         let sym = Symbol::from_str(input);
-        let s: String = sym.into_iter().collect();
+        let s: String = sym.to_string();
         assert_eq!(input, &s);
     }
 
@@ -273,7 +303,7 @@ mod test_with_string {
     fn test_roundtrip_zero() {
         let input = "";
         let sym = Symbol::from_str(input);
-        let s: String = sym.into_iter().collect();
+        let s: String = sym.to_string();
         assert_eq!(input, &s);
     }
 
@@ -281,7 +311,7 @@ mod test_with_string {
     fn test_roundtrip_ten() {
         let input = "0123456789";
         let sym = Symbol::from_str(input);
-        let s: String = sym.into_iter().collect();
+        let s: String = sym.to_string();
         assert_eq!(input, &s);
     }
 }
