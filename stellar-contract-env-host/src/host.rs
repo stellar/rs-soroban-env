@@ -36,6 +36,9 @@ pub enum HostError {
     #[cfg(feature = "vm")]
     #[error("WASMI error")]
     WASMIError(#[from] wasmi::Error),
+    #[cfg(feature = "vm")]
+    #[error("ParityWasmElements error")]
+    ParityWasmElementsError(#[from] parity_wasm::elements::Error),
 }
 
 impl From<TryFromIntError> for HostError {

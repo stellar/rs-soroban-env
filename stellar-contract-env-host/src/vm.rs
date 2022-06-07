@@ -8,6 +8,7 @@ use super::{
     Host, RawVal,
 };
 use func_info::HOST_FUNCTIONS;
+use parity_wasm::elements::{self, Internal, Type};
 use wasmi::{
     Externals, FuncInstance, ImportResolver, Module, ModuleInstance, ModuleRef, RuntimeArgs,
     RuntimeValue, ValueType,
@@ -112,7 +113,15 @@ impl ImportResolver for Host {
 pub struct Vm {
     #[allow(dead_code)]
     contract_id: ContractId,
+    elements_module: elements::Module,
     instance: ModuleRef, // this is a cloneable Rc<ModuleInstance>
+}
+
+#[derive(Clone, Eq, PartialEq)]
+pub struct VmFunction {
+    pub name: String,
+    pub param_count: usize,
+    pub result_count: usize,
 }
 
 impl Vm {
@@ -121,7 +130,8 @@ impl Vm {
         contract_id: ContractId,
         module_wasm_code: &[u8],
     ) -> Result<Self, HostError> {
-        let module = Module::from_buffer(module_wasm_code)?;
+        let elements_module: elements::Module = elements::deserialize_buffer(module_wasm_code)?;
+        let module: Module = Module::from_parity_wasm_module(elements_module.clone())?;
         module.deny_floating_point()?;
         let not_started_instance = ModuleInstance::new(&module, host)?;
         if not_started_instance.has_start() {
@@ -132,6 +142,7 @@ impl Vm {
         let instance = not_started_instance.assert_no_start();
         Ok(Self {
             contract_id,
+            elements_module,
             instance,
         })
     }
@@ -186,5 +197,51 @@ impl Vm {
         }
         let raw_res = self.invoke_function_raw(host, func, raw_args.as_slice())?;
         Ok(host.from_host_val(raw_res)?)
+    }
+
+    /// Functions returns a list of functions in the WASM loaded into the Vm.
+    pub fn functions(&self) -> Vec<VmFunction> {
+        if let Some(export_section) = self.elements_module.export_section() {
+            let fn_import_count = self
+                .elements_module
+                .import_count(elements::ImportCountType::Function);
+            // A function in the export section points to a function in the
+            // function section, which references a type in the type section.
+            // The type contains the list of parameters.
+            export_section
+                .entries()
+                .iter()
+                .filter_map(|entry| match entry.internal() {
+                    Internal::Function(idx) => {
+                        let fn_type = self.elements_module.function_section().and_then(|fs| {
+                            // Function index space includes imported
+                            // functions. Imported functions are always
+                            // indexed prior to other functions and so
+                            // the index points into the space of the
+                            // imported functions and the module's
+                            // functions. To get the index of the
+                            // function in the function section, the
+                            // index is reduced by the import count.
+                            let fs_idx = (*idx as usize) - fn_import_count;
+                            fs.entries().get(fs_idx).and_then(|f| {
+                                self.elements_module.type_section().and_then(|ts| {
+                                    ts.types().get(f.type_ref() as usize).and_then(|t| match t {
+                                        Type::Function(ft) => Some(ft),
+                                    })
+                                })
+                            })
+                        });
+                        Some(VmFunction {
+                            name: entry.field().to_string(),
+                            param_count: fn_type.map_or(0, |fn_type| fn_type.params().len()),
+                            result_count: fn_type.map_or(0, |fn_type| fn_type.results().len()),
+                        })
+                    }
+                    _ => None,
+                })
+                .collect()
+        } else {
+            vec![]
+        }
     }
 }

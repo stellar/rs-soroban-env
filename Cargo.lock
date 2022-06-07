@@ -175,6 +175,7 @@ dependencies = [
  "im-rc",
  "num-bigint",
  "num-rational",
+ "parity-wasm",
  "static_assertions",
  "stellar-contract-env-common",
  "thiserror",
