@@ -157,29 +157,27 @@ impl From<&str> for SymbolStr {
     }
 }
 
-#[cfg(test)]
-extern crate std;
-#[cfg(any(test, feature = "std"))]
+#[cfg(feature = "std")]
 use std::string::{String, ToString};
-#[cfg(any(test, feature = "std"))]
+#[cfg(feature = "std")]
 impl From<Symbol> for String {
     fn from(s: Symbol) -> Self {
         s.to_string()
     }
 }
-#[cfg(any(test, feature = "std"))]
+#[cfg(feature = "std")]
 impl From<SymbolStr> for String {
     fn from(s: SymbolStr) -> Self {
         s.to_string()
     }
 }
-#[cfg(any(test, feature = "std"))]
+#[cfg(feature = "std")]
 impl ToString for Symbol {
     fn to_string(&self) -> String {
         self.into_iter().collect()
     }
 }
-#[cfg(any(test, feature = "std"))]
+#[cfg(feature = "std")]
 impl ToString for SymbolStr {
     fn to_string(&self) -> String {
         let s: &str = self.as_ref();
@@ -285,10 +283,9 @@ mod test_without_string {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "std"))]
 mod test_with_string {
     use super::Symbol;
-    extern crate std;
     use std::string::{String, ToString};
 
     #[test]
