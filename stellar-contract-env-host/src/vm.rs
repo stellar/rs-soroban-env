@@ -147,52 +147,6 @@ impl Vm {
         })
     }
 
-    /// Functions returns a list of functions in the WASM loaded into the Vm.
-    pub fn functions(&self) -> Vec<VmFunction> {
-        if let Some(export_section) = self.elements_module.export_section() {
-            let fn_import_count = self
-                .elements_module
-                .import_count(elements::ImportCountType::Function);
-            // A function in the export section points to a function in the
-            // function section, which references a type in the type section.
-            // The type contains the list of parameters.
-            export_section
-                .entries()
-                .iter()
-                .filter_map(|entry| match entry.internal() {
-                    Internal::Function(idx) => {
-                        let fn_type = self.elements_module.function_section().and_then(|fs| {
-                            // Function index space includes imported
-                            // functions. Imported functions are always
-                            // indexed prior to other functions and so
-                            // the index points into the space of the
-                            // imported functions and the module's
-                            // functions. To get the index of the
-                            // function in the function section, the
-                            // index is reduced by the import count.
-                            let fs_idx = (*idx as usize) - fn_import_count;
-                            fs.entries().get(fs_idx).and_then(|f| {
-                                self.elements_module.type_section().and_then(|ts| {
-                                    ts.types().get(f.type_ref() as usize).and_then(|t| match t {
-                                        Type::Function(ft) => Some(ft),
-                                    })
-                                })
-                            })
-                        });
-                        Some(VmFunction {
-                            name: entry.field().to_string(),
-                            param_count: fn_type.map_or(0, |fn_type| fn_type.params().len()),
-                            result_count: fn_type.map_or(0, |fn_type| fn_type.results().len()),
-                        })
-                    }
-                    _ => None,
-                })
-                .collect()
-        } else {
-            vec![]
-        }
-    }
-
     pub(crate) fn invoke_function_raw(
         &self,
         host: &Host,
@@ -243,5 +197,51 @@ impl Vm {
         }
         let raw_res = self.invoke_function_raw(host, func, raw_args.as_slice())?;
         Ok(host.from_host_val(raw_res)?)
+    }
+
+    /// Functions returns a list of functions in the WASM loaded into the Vm.
+    pub fn functions(&self) -> Vec<VmFunction> {
+        if let Some(export_section) = self.elements_module.export_section() {
+            let fn_import_count = self
+                .elements_module
+                .import_count(elements::ImportCountType::Function);
+            // A function in the export section points to a function in the
+            // function section, which references a type in the type section.
+            // The type contains the list of parameters.
+            export_section
+                .entries()
+                .iter()
+                .filter_map(|entry| match entry.internal() {
+                    Internal::Function(idx) => {
+                        let fn_type = self.elements_module.function_section().and_then(|fs| {
+                            // Function index space includes imported
+                            // functions. Imported functions are always
+                            // indexed prior to other functions and so
+                            // the index points into the space of the
+                            // imported functions and the module's
+                            // functions. To get the index of the
+                            // function in the function section, the
+                            // index is reduced by the import count.
+                            let fs_idx = (*idx as usize) - fn_import_count;
+                            fs.entries().get(fs_idx).and_then(|f| {
+                                self.elements_module.type_section().and_then(|ts| {
+                                    ts.types().get(f.type_ref() as usize).and_then(|t| match t {
+                                        Type::Function(ft) => Some(ft),
+                                    })
+                                })
+                            })
+                        });
+                        Some(VmFunction {
+                            name: entry.field().to_string(),
+                            param_count: fn_type.map_or(0, |fn_type| fn_type.params().len()),
+                            result_count: fn_type.map_or(0, |fn_type| fn_type.results().len()),
+                        })
+                    }
+                    _ => None,
+                })
+                .collect()
+        } else {
+            vec![]
+        }
     }
 }
