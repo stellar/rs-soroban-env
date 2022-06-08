@@ -12,7 +12,9 @@ use crate::storage::{Key, Storage};
 use crate::weak_host::WeakHost;
 
 use crate::xdr;
-use crate::xdr::{ScMap, ScMapEntry, ScObject, ScStatic, ScStatus, ScStatusType, ScVal, ScVec};
+use crate::xdr::{
+    HostFunction, ScMap, ScMapEntry, ScObject, ScStatic, ScStatus, ScStatusType, ScVal, ScVec,
+};
 use std::rc::Rc;
 
 use crate::host_object::{HostMap, HostObj, HostObject, HostObjectType, HostVal, HostVec};
@@ -388,6 +390,38 @@ impl Host {
         let vm = Vm::new(&self, id, code.as_slice())?;
         // Resolve the function symbol and invoke contract call
         vm.invoke_function_raw(self, SymbolStr::from(func).as_ref(), args)
+    }
+
+    pub fn invoke_function(&mut self, hf: HostFunction, args: ScVec) -> Result<ScVal, HostError> {
+        let contract_id = match &args.as_vec()[0] {
+            ScVal::Object(Some(ob)) => self.to_host_obj(ob),
+            _ => Err(HostError::General("bad contract id")),
+        }?;
+
+        let symbol: Symbol = match &args.as_vec()[1] {
+            ScVal::Symbol(s) => s
+                .as_vec()
+                .as_slice()
+                .try_into()
+                .map_err(|e| HostError::General("bad symbol")),
+            _ => Err(HostError::General("bad symbol")),
+        }?;
+
+        let mut raw_args: Vec<RawVal> = Vec::new();
+        for scv in args.as_vec()[2..].iter() {
+            raw_args.push(self.to_host_val(scv)?.val);
+        }
+
+        let raw_res = match hf {
+            HostFunction::Call => {
+                #[cfg(not(feature = "vm"))]
+                unimplemented!();
+                #[cfg(feature = "vm")]
+                self.call_n(contract_id.to_object(), symbol, &raw_args[..])
+            }
+            _ => Err(HostError::General("bad host function")),
+        }?;
+        Ok(self.from_host_val(raw_res)?)
     }
 }
 
