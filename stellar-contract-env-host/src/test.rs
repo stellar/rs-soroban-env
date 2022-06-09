@@ -441,16 +441,18 @@ fn contract_invoke_another_contract() -> Result<(), ()> {
     let mut footprint = Footprint::default();
     footprint.record_access(&storage_key, AccessType::ReadOnly);
 
+    // initialize storage and host
     let storage = Storage::with_enforcing_footprint_and_map(footprint, map);
     let host = Host::with_storage(storage);
-
-    let sym = Symbol::from_str("add");
+    // create a dummy contract obj as the caller
     let scobj = ScObject::Binary([0; 32].try_into()?);
     let obj = host.to_host_obj(&scobj).unwrap();
-    let res = host
-        .call2(obj.to_object(), sym.into(), 1i32.into(), 2i32.into())
-        .unwrap();
+    // prepare arguments
+    let sym = Symbol::from_str("add");
+    let scvec0: ScVec = vec![ScVal::I32(1), ScVal::I32(2)].try_into().unwrap();
+    let args = host.to_host_obj(&ScObject::Vec(scvec0)).unwrap();
 
+    let res = host.call(obj.to_object(), sym.into(), args.into()).unwrap();
     assert!(res.is::<i32>());
     assert!(res.get_tag() == Tag::I32);
     let i: i32 = res.try_into()?;
