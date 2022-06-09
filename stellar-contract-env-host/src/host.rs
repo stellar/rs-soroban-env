@@ -716,60 +716,16 @@ impl CheckedEnv for Host {
         todo!()
     }
 
-    fn call0(&self, contract: Object, func: Symbol) -> Result<RawVal, HostError> {
+    fn call(&self, contract: Object, func: Symbol, args: Object) -> Result<RawVal, HostError> {
         #[cfg(not(feature = "vm"))]
         todo!();
         #[cfg(feature = "vm")]
-        self.call_n(contract, func, &[])
-    }
-
-    fn call1(&self, contract: Object, func: Symbol, a: RawVal) -> Result<RawVal, HostError> {
-        #[cfg(not(feature = "vm"))]
-        todo!();
-        #[cfg(feature = "vm")]
-        self.call_n(contract, func, &[a])
-    }
-
-    fn call2(
-        &self,
-        contract: Object,
-        func: Symbol,
-        a: RawVal,
-        b: RawVal,
-    ) -> Result<RawVal, HostError> {
-        #[cfg(not(feature = "vm"))]
-        todo!();
-        #[cfg(feature = "vm")]
-        self.call_n(contract, func, &[a, b])
-    }
-
-    fn call3(
-        &self,
-        contract: Object,
-        func: Symbol,
-        a: RawVal,
-        b: RawVal,
-        c: RawVal,
-    ) -> Result<RawVal, HostError> {
-        #[cfg(not(feature = "vm"))]
-        todo!();
-        #[cfg(feature = "vm")]
-        self.call_n(contract, func, &[a, b, c])
-    }
-
-    fn call4(
-        &self,
-        contract: Object,
-        func: Symbol,
-        a: RawVal,
-        b: RawVal,
-        c: RawVal,
-        d: RawVal,
-    ) -> Result<RawVal, HostError> {
-        #[cfg(not(feature = "vm"))]
-        todo!();
-        #[cfg(feature = "vm")]
-        self.call_n(contract, func, &[a, b, c, d])
+        {
+            let args: Vec<RawVal> = self.visit_obj(args, |hv: &HostVec| {
+                Ok(hv.iter().map(|a| a.to_raw()).collect())
+            })?;
+            self.call_n(contract, func, args.as_slice())
+        }
     }
 
     fn bigint_from_u64(&self, x: u64) -> Result<Object, HostError> {
