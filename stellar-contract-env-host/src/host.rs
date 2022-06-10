@@ -627,7 +627,7 @@ impl CheckedEnv for Host {
         Ok(self.add_host_object(vnew)?.into())
     }
 
-    fn vec_slice(&self, v: Object, i: RawVal) -> Result<Object, HostError> {
+    fn vec_slice(&self, v: Object, i: RawVal, l: RawVal) -> Result<Object, HostError> {
         todo!()
     }
 
