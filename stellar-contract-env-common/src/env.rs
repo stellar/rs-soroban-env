@@ -86,6 +86,8 @@ macro_rules! call_macro_with_all_host_functions {
                 {"$3", fn map_len(m:Object) -> RawVal}
                 {"$4", fn map_keys(m:Object) -> Object}
                 {"$5", fn map_has(m:Object,k:RawVal) -> RawVal}
+                {"$6", fn map_lower_bound(m:Object,k:RawVal) -> RawVal}
+                {"$7", fn map_upper_bound(m:Object,k:RawVal) -> RawVal}
             }
 
             mod vec "v" {
@@ -103,6 +105,7 @@ macro_rules! call_macro_with_all_host_functions {
                 {"$9", fn vec_back(v:Object) -> RawVal}
                 {"$A", fn vec_insert(v:Object, i:RawVal, x:RawVal) -> Object}
                 {"$B", fn vec_append(v1:Object, v2:Object) -> Object}
+                {"$C", fn vec_slice(v:Object, i:RawVal) -> Object}
             }
 
             mod ledger "l" {
@@ -150,6 +153,29 @@ macro_rules! call_macro_with_all_host_functions {
                 {"$K", fn bigint_to_u64(x:Object) -> u64}
                 {"$L", fn bigint_to_i64(x:Object) -> i64}
                 {"$M", fn bigint_from_i64(x:i64) -> Object}
+            }
+
+            mod binary "x" {
+                {"$_", fn serialize_to_binary(x:Object) -> Object}
+                {"$0", fn deserialize_from_binary(x:Object) -> Object}
+                {"$1", fn binary_new() -> Object}
+                {"$2", fn binary_get(x:Object,i:RawVal) -> Object}
+                {"$3", fn binary_pop(x:Object) -> Object}
+                {"$4", fn binary_push(x:Object,v:RawVal) -> Object}
+                {"$5", fn binary_insert(x:Object,i:RawVal,v:RawVal) -> Object}
+                {"$6", fn binary_remove(x:Object,i:RawVal) -> Object}
+                {"$7", fn binary_len(x:Object) -> RawVal}
+                {"$8", fn binary_copy_to_guest_mem(x:Object,i:RawVal,j:RawVal,l:RawVal) -> RawVal}
+                {"$9", fn binary_copy_from_guest_mem(x:Object,i:RawVal,j:RawVal,l:RawVal) -> RawVal}
+                {"$A", fn binary_to_hash(x:Object) -> Object}
+                {"$B", fn binary_from_hash(x:Object) -> Object}
+                {"$C", fn binary_to_public_key(x:Object) -> Object}
+                {"$D", fn binary_from_public_key(x:Object) -> Object}
+            }
+
+            mod crypto "y" {
+                {"$_", fn compute_hash_sha256(x:Object) -> Object}
+                {"$_", fn verify_sig_ed25519(x:Object,k:Object,s:Object) -> RawVal}
             }
         }
     };

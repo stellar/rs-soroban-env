@@ -494,6 +494,14 @@ impl CheckedEnv for Host {
         todo!()
     }
 
+    fn map_lower_bound(&self, m: Object, k: RawVal) -> Result<RawVal, HostError> {
+        todo!()
+    }
+
+    fn map_upper_bound(&self, m: Object, k: RawVal) -> Result<RawVal, HostError> {
+        todo!()
+    }
+
     fn vec_new(&self) -> Result<Object, HostError> {
         Ok(self.add_host_object(HostVec::new())?.into())
     }
@@ -617,6 +625,10 @@ impl CheckedEnv for Host {
         let v2 = self.visit_obj(v2, |hv: &HostVec| Ok(hv.clone()))?;
         vnew.append(v2);
         Ok(self.add_host_object(vnew)?.into())
+    }
+
+    fn vec_slice(&self, v: Object, i: RawVal) -> Result<Object, HostError> {
+        todo!()
     }
 
     fn get_current_ledger_num(&self) -> Result<RawVal, HostError> {
@@ -779,6 +791,86 @@ impl CheckedEnv for Host {
     }
 
     fn bigint_from_i64(&self, x: i64) -> Result<Object, HostError> {
+        todo!()
+    }
+
+    fn serialize_to_binary(&self, x: Object) -> Result<Object, HostError> {
+        todo!()
+    }
+
+    fn deserialize_from_binary(&self, x: Object) -> Result<Object, HostError> {
+        todo!()
+    }
+
+    fn binary_new(&self) -> Result<Object, HostError> {
+        todo!()
+    }
+
+    fn binary_get(&self, x: Object, i: RawVal) -> Result<Object, HostError> {
+        todo!()
+    }
+
+    fn binary_pop(&self, x: Object) -> Result<Object, HostError> {
+        todo!()
+    }
+
+    fn binary_push(&self, x: Object, v: RawVal) -> Result<Object, HostError> {
+        todo!()
+    }
+
+    fn binary_insert(&self, x: Object, i: RawVal, v: RawVal) -> Result<Object, HostError> {
+        todo!()
+    }
+
+    fn binary_remove(&self, x: Object, i: RawVal) -> Result<Object, HostError> {
+        todo!()
+    }
+
+    fn binary_len(&self, x: Object) -> Result<RawVal, HostError> {
+        todo!()
+    }
+
+    fn binary_copy_to_guest_mem(
+        &self,
+        x: Object,
+        i: RawVal,
+        j: RawVal,
+        l: RawVal,
+    ) -> Result<RawVal, HostError> {
+        todo!()
+    }
+
+    fn binary_copy_from_guest_mem(
+        &self,
+        x: Object,
+        i: RawVal,
+        j: RawVal,
+        l: RawVal,
+    ) -> Result<RawVal, HostError> {
+        todo!()
+    }
+
+    fn binary_to_hash(&self, x: Object) -> Result<Object, HostError> {
+        todo!()
+    }
+
+    fn binary_from_hash(&self, x: Object) -> Result<Object, HostError> {
+        todo!()
+    }
+
+    fn binary_to_public_key(&self, x: Object) -> Result<Object, HostError> {
+        todo!()
+    }
+
+    fn binary_from_public_key(&self, x: Object) -> Result<Object, HostError> {
+        todo!()
+    }
+
+    fn compute_hash_sha256(&self, x: Object) -> Result<Object, HostError> {
+        todo!()
+    }
+
+    fn verify_sig_ed25519(&self, x: Object, k: Object, s: Object) -> Result<RawVal, HostError> {
         todo!()
     }
 }
