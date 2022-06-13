@@ -118,6 +118,12 @@ impl Host {
         }))
     }
 
+    pub fn try_recover_storage(self) -> Result<Storage, Self> {
+        Rc::try_unwrap(self.0)
+            .map(|host_impl| host_impl.storage.into_inner())
+            .map_err(|rc_host_impl| Host(rc_host_impl))
+    }
+
     /// Pushes a new [`Frame`] on the context stack, returning a [`FrameGuard`]
     /// that will pop the stack when it is dropped. This should be called at
     /// least any time a new contract is invoked.
