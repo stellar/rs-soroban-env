@@ -1,14 +1,11 @@
 use std::rc::Rc;
 
-use crate::xdr::{Hash, ScVal};
+use crate::xdr::{LedgerEntry, LedgerKey};
 use crate::HostError;
 use im_rc::OrdMap;
 
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Key {
-    pub contract_id: Hash,
-    pub key: ScVal,
-}
+pub type Key = LedgerKey;
+pub type Value = LedgerEntry;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum AccessType {
@@ -17,7 +14,7 @@ pub enum AccessType {
 }
 
 pub trait SnapshotSource {
-    fn get(&self, key: &Key) -> Result<ScVal, HostError>;
+    fn get(&self, key: &Key) -> Result<Value, HostError>;
     fn has(&self, key: &Key) -> Result<bool, HostError>;
 }
 
@@ -41,6 +38,7 @@ impl Footprint {
             self.0.insert(key.clone(), ty);
         }
     }
+
     pub fn enforce_access(&mut self, key: &Key, ty: AccessType) -> Result<(), HostError> {
         if let Some(existing) = self.0.get(key) {
             match (existing, ty) {
@@ -73,13 +71,13 @@ impl Default for FootprintMode {
 pub struct Storage {
     pub footprint: Footprint,
     pub mode: FootprintMode,
-    pub map: OrdMap<Key, Option<ScVal>>,
+    pub map: OrdMap<Key, Option<Value>>,
 }
 
 impl Storage {
     pub fn with_enforcing_footprint_and_map(
         footprint: Footprint,
-        map: OrdMap<Key, Option<ScVal>>,
+        map: OrdMap<Key, Option<Value>>,
     ) -> Self {
         Self {
             mode: FootprintMode::Enforcing,
@@ -96,7 +94,7 @@ impl Storage {
         }
     }
 
-    pub fn get(&mut self, key: &Key) -> Result<ScVal, HostError> {
+    pub fn get(&mut self, key: &Key) -> Result<Value, HostError> {
         let ty = AccessType::ReadOnly;
         match self.mode {
             FootprintMode::Recording(ref src) => {
@@ -118,7 +116,7 @@ impl Storage {
         }
     }
 
-    fn put_opt(&mut self, key: &Key, val: Option<ScVal>) -> Result<(), HostError> {
+    fn put_opt(&mut self, key: &Key, val: Option<Value>) -> Result<(), HostError> {
         let ty = AccessType::ReadWrite;
         match self.mode {
             FootprintMode::Recording(_) => {
@@ -132,7 +130,7 @@ impl Storage {
         Ok(())
     }
 
-    pub fn put(&mut self, key: &Key, val: &ScVal) -> Result<(), HostError> {
+    pub fn put(&mut self, key: &Key, val: &Value) -> Result<(), HostError> {
         self.put_opt(key, Some(val.clone()))
     }
 
@@ -168,13 +166,17 @@ impl Storage {
 #[cfg(test)]
 mod test_footprint {
     use super::*;
+    use crate::xdr::{LedgerKeyContractData, ScVal};
+
     #[test]
     fn footprint_record_access() {
         let mut fp = Footprint::default();
         // record when key not exist
         let contract_id = [0; 32].into();
-        let key = ScVal::I32(0);
-        let key = Key { contract_id, key };
+        let key = LedgerKey::ContractData(LedgerKeyContractData {
+            contract_id,
+            key: ScVal::I32(0),
+        });
         fp.record_access(&key, AccessType::ReadOnly);
         assert_eq!(fp.0.contains_key(&key), true);
         assert_eq!(*fp.0.get(&key).unwrap(), AccessType::ReadOnly);
@@ -188,8 +190,10 @@ mod test_footprint {
     #[test]
     fn footprint_enforce_access() {
         let contract_id = [0; 32].into();
-        let key = ScVal::I32(0);
-        let key = Key { contract_id, key };
+        let key = LedgerKey::ContractData(LedgerKeyContractData {
+            contract_id,
+            key: ScVal::I32(0),
+        });
         let om = OrdMap::unit(key.clone(), AccessType::ReadOnly);
         let mut fp = Footprint(om);
         fp.enforce_access(&key, AccessType::ReadOnly).unwrap();
@@ -203,8 +207,10 @@ mod test_footprint {
     fn footprint_enforce_access_not_exist() {
         let mut fp = Footprint::default();
         let contract_id = [0; 32].into();
-        let key = ScVal::I32(0);
-        let key = Key { contract_id, key };
+        let key = LedgerKey::ContractData(LedgerKeyContractData {
+            contract_id,
+            key: ScVal::I32(0),
+        });
         fp.enforce_access(&key, AccessType::ReadOnly).unwrap();
     }
 
@@ -212,8 +218,10 @@ mod test_footprint {
     #[should_panic(expected = "read-write access to read-only footprint entry")]
     fn footprint_attempt_to_write_readonly_entry() {
         let contract_id = [0; 32].into();
-        let key = ScVal::I32(0);
-        let key = Key { contract_id, key };
+        let key = LedgerKey::ContractData(LedgerKeyContractData {
+            contract_id,
+            key: ScVal::I32(0),
+        });
         let om = OrdMap::unit(key.clone(), AccessType::ReadOnly);
         let mut fp = Footprint(om);
         fp.enforce_access(&key, AccessType::ReadWrite).unwrap();
@@ -224,16 +232,17 @@ mod test_footprint {
 mod test_storage {
     use super::*;
     #[allow(dead_code)]
-    struct MockSnapshotSource(OrdMap<Key, ScVal>);
+    struct MockSnapshotSource(OrdMap<Key, Value>);
     #[allow(dead_code)]
     impl MockSnapshotSource {
-        fn get(&self, key: &Key) -> Result<ScVal, HostError> {
+        fn get(&self, key: &Key) -> Result<Value, HostError> {
             if let Some(val) = self.0.get(key) {
                 Ok(val.clone())
             } else {
                 Err(HostError::General("No entry"))
             }
         }
+
         fn has(&self, key: &Key) -> Result<bool, HostError> {
             Ok(self.0.contains_key(key))
         }

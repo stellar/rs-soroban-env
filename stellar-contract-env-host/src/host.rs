@@ -6,14 +6,15 @@ use core::cmp::Ordering;
 use core::fmt::Debug;
 use im_rc::{OrdMap, Vector};
 use std::num::TryFromIntError;
-use stellar_contract_env_common::xdr::Hash;
 
 use crate::storage::{Key, Storage};
 use crate::weak_host::WeakHost;
 
 use crate::xdr;
 use crate::xdr::{
-    HostFunction, ScMap, ScMapEntry, ScObject, ScStatic, ScStatus, ScStatusType, ScVal, ScVec,
+    ContractDataEntry, Hash, HostFunction, LedgerEntry, LedgerEntryData, LedgerEntryExt, LedgerKey,
+    LedgerKeyContractData, ScMap, ScMapEntry, ScObject, ScStatic, ScStatus, ScStatusType, ScVal,
+    ScVec,
 };
 use std::rc::Rc;
 
@@ -354,12 +355,10 @@ impl Host {
     /// Converts a [`RawVal`] to an [`ScVal`] and combines it with the currently-executing
     /// [`ContractID`] to produce a [`Key`], that can be used to access ledger [`Storage`].
     fn to_storage_key(&self, k: RawVal) -> Result<Key, HostError> {
-        let contract_id = self.get_current_contract_id();
-        let sckey = self.from_host_val(k)?;
-        Ok(Key {
-            contract_id,
-            key: sckey,
-        })
+        Ok(LedgerKey::ContractData(LedgerKeyContractData {
+            contract_id: self.get_current_contract_id(),
+            key: self.from_host_val(k)?,
+        }))
     }
 
     #[cfg(feature = "vm")]
@@ -373,12 +372,15 @@ impl Host {
             Ok(xdr::Hash(arr))
         })?;
         let key = ScVal::Static(ScStatic::LedgerKeyContractCodeWasm);
-        let storage_key = Key {
+        let storage_key = LedgerKey::ContractData(LedgerKeyContractData {
             contract_id: id.clone(),
             key,
-        };
+        });
         // Retrieve the contract code and create vm
-        let scval = self.0.storage.borrow_mut().get(&storage_key)?;
+        let scval = match self.0.storage.borrow_mut().get(&storage_key)?.data {
+            LedgerEntryData::ContractData(ContractDataEntry { val, .. }) => Ok(val),
+            _ => Err(HostError::General("expected contract data")),
+        }?;
         let scobj = match scval {
             ScVal::Object(Some(ob)) => ob,
             _ => return Err(HostError::General("not an object")),
@@ -681,7 +683,16 @@ impl CheckedEnv for Host {
 
     fn put_contract_data(&self, k: RawVal, v: RawVal) -> Result<RawVal, HostError> {
         let key = self.to_storage_key(k)?;
-        let val = self.from_host_val(v)?;
+        let data = LedgerEntryData::ContractData(ContractDataEntry {
+            contract_id: self.get_current_contract_id(),
+            key: self.from_host_val(k)?,
+            val: self.from_host_val(v)?,
+        });
+        let val = LedgerEntry {
+            last_modified_ledger_seq: 0,
+            data,
+            ext: LedgerEntryExt::V0,
+        };
         self.0.storage.borrow_mut().put(&key, &val)?;
         Ok(().into())
     }
@@ -694,8 +705,14 @@ impl CheckedEnv for Host {
 
     fn get_contract_data(&self, k: RawVal) -> Result<RawVal, HostError> {
         let key = self.to_storage_key(k)?;
-        let scval = self.0.storage.borrow_mut().get(&key)?;
-        Ok(self.to_host_val(&scval)?.into())
+        match self.0.storage.borrow_mut().get(&key)?.data {
+            LedgerEntryData::ContractData(ContractDataEntry {
+                contract_id,
+                key,
+                val,
+            }) => Ok(self.to_host_val(&val)?.into()),
+            _ => Err(HostError::General("expected contract data")),
+        }
     }
 
     fn del_contract_data(&self, k: RawVal) -> Result<RawVal, HostError> {
