@@ -1,7 +1,8 @@
 use crate::{
-    xdr::{ScObject, ScObjectType, ScVal, ScVec},
+    xdr::{LedgerKey, LedgerKeyContractData, ScObject, ScObjectType, ScVal, ScVec},
     Host, IntoEnvVal, Object, RawVal, Tag,
 };
+use im_rc::OrdMap;
 use stellar_contract_env_common::{CheckedEnv, RawValConvertible};
 
 use hex::FromHex;
@@ -12,10 +13,7 @@ use crate::storage::{AccessType, Footprint, Storage};
 use crate::Vm;
 #[cfg(feature = "vm")]
 use crate::{
-    xdr::{
-        ContractDataEntry, Hash, LedgerEntry, LedgerEntryData, LedgerEntryExt, LedgerKey,
-        LedgerKeyContractData, ScStatic,
-    },
+    xdr::{ContractDataEntry, Hash, LedgerEntry, LedgerEntryData, LedgerEntryExt, ScStatic},
     Symbol,
 };
 #[cfg(feature = "vm")]
@@ -460,10 +458,7 @@ fn ed25519_verify_test() {
         obj_sig.to_object(),
     );
 
-    match res {
-        Ok(_) => (),
-        _ => panic!("verification test failed"),
-    };
+    res.expect("verification failed");
 
     // Now verify with wrong message
     let message2: &[u8] = b"73";
@@ -484,6 +479,103 @@ fn ed25519_verify_test() {
     };
 }
 
+/// create contract tests
+#[test]
+fn create_contract_test() {
+    use crate::storage::{AccessType, Footprint, Storage};
+    use crate::xdr;
+    use crate::xdr::{ScObject, ScStatic, ScVal};
+    use ed25519_dalek::{
+        Keypair, PublicKey, SecretKey, Signature, Signer, PUBLIC_KEY_LENGTH, SECRET_KEY_LENGTH,
+    };
+    use sha2::{Digest, Sha256};
+    use stellar_contract_env_common::xdr::WriteXdr;
+
+    let secret_key: &[u8] = b"9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60";
+    let public_key: &[u8] = b"d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a";
+    let salt: &[u8] = b"3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4660c";
+    let code: &[u8] = b"70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4";
+
+    let sec_bytes: Vec<u8> = FromHex::from_hex(secret_key).unwrap();
+    let pub_bytes: Vec<u8> = FromHex::from_hex(public_key).unwrap();
+    let salt_bytes: Vec<u8> = FromHex::from_hex(salt).unwrap();
+
+    let secret: SecretKey = SecretKey::from_bytes(&sec_bytes[..SECRET_KEY_LENGTH]).unwrap();
+    let public: PublicKey = PublicKey::from_bytes(&pub_bytes[..PUBLIC_KEY_LENGTH]).unwrap();
+    let keypair: Keypair = Keypair {
+        secret: secret,
+        public: public,
+    };
+
+    let separator =
+        "create_contract(nonce: u256, contract: Vec<u8>, salt: u256, key: u256, sig: Vec<u8>)";
+    let params = [separator.as_bytes(), salt_bytes.as_slice(), code].concat();
+
+    // Create signature
+    let signature: Signature = keypair.sign(Sha256::digest(params).as_slice());
+
+    // Make contractID so we can include it in the footprint
+    let pre_image = xdr::HashIdPreimage::ContractIdFromEd25519(xdr::HashIdPreimageContractId {
+        ed25519: xdr::Uint256(pub_bytes.as_slice().try_into().unwrap()),
+        salt: xdr::Uint256(salt_bytes.as_slice().try_into().unwrap()),
+    });
+    let mut buf = Vec::new();
+    pre_image
+        .write_xdr(&mut buf)
+        .expect("preimage write failed");
+
+    let hash = xdr::Hash(Sha256::digest(buf).try_into().expect("invalid hash"));
+    let hash_copy = hash.clone();
+    let key = ScVal::Static(ScStatic::LedgerKeyContractCodeWasm);
+    let storage_key = LedgerKey::ContractData(LedgerKeyContractData {
+        contract_id: hash,
+        key,
+    });
+
+    let mut footprint = Footprint::default();
+    footprint.record_access(&storage_key, AccessType::ReadWrite);
+
+    // Initialize storage and host
+    let storage = Storage::with_enforcing_footprint_and_map(footprint, OrdMap::new());
+    let host = Host::with_storage(storage);
+
+    // Create contract
+    let obj_code = host
+        .to_host_obj(&ScObject::Binary(code.try_into().unwrap()))
+        .unwrap();
+    let obj_pub = host
+        .to_host_obj(&ScObject::Binary(pub_bytes.try_into().unwrap()))
+        .unwrap();
+    let obj_salt = host
+        .to_host_obj(&ScObject::Binary(salt_bytes.try_into().unwrap()))
+        .unwrap();
+    let obj_sig = host
+        .to_host_obj(&ScObject::Binary(signature.to_bytes().try_into().unwrap()))
+        .unwrap();
+
+    let contract_id = host
+        .create_contract(
+            obj_code.to_object(),
+            obj_salt.to_object(),
+            obj_pub.to_object(),
+            obj_sig.to_object(),
+        )
+        .unwrap();
+
+    let v = host.from_host_val(contract_id.to_raw()).unwrap();
+    let bin = match v {
+        ScVal::Object(Some(scobj)) => match scobj {
+            ScObject::Binary(bin) => bin,
+            _ => panic!("Wrong type"),
+        },
+        _ => panic!("Wrong type"),
+    };
+    assert_eq!(bin.as_slice(), hash_copy.0.as_slice());
+}
+
+fn create_contract_using_parent_id_test() {
+    todo!();
+}
 /// VM test
 /**
  This is an example WASM from the SDK that unpacks two SCV_I32 arguments, adds
