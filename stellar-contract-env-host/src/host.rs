@@ -6,12 +6,13 @@ use core::cmp::Ordering;
 use core::fmt::Debug;
 use im_rc::{OrdMap, Vector};
 use std::num::TryFromIntError;
+use stellar_contract_env_common::xdr::Hash;
 
 use crate::storage::{Key, Storage};
 use crate::weak_host::WeakHost;
 
+use crate::xdr;
 use crate::xdr::{ScMap, ScMapEntry, ScObject, ScStatic, ScStatus, ScStatusType, ScVal, ScVec};
-use crate::{xdr, ContractId};
 use std::rc::Rc;
 
 use crate::host_object::{HostMap, HostObj, HostObject, HostObjectType, HostVal, HostVec};
@@ -66,7 +67,7 @@ impl From<BitSetError> for HostError {
 /// with [`Host::push_frame`].
 #[derive(Clone)]
 pub(crate) struct Frame {
-    pub(crate) contract_id: ContractId,
+    pub(crate) contract_id: Hash,
     // Other activation-frame / execution-context values here.
 }
 
@@ -136,9 +137,9 @@ impl Host {
             .expect("missing current host frame"))
     }
 
-    /// Returns [`ContractID`] from top of context stack, panicking if the stack
-    /// is empty.
-    fn get_current_contract_id(&self) -> ContractId {
+    /// Returns [`Hash`] contract ID from top of context stack, panicking if the
+    /// stack is empty.
+    fn get_current_contract_id(&self) -> Hash {
         self.with_current_frame(|frame| frame.contract_id.clone())
     }
 
@@ -189,7 +190,7 @@ impl Host {
 
     pub(crate) fn from_host_val(&self, val: RawVal) -> Result<ScVal, HostError> {
         if val.is_u63() {
-            Ok(ScVal::U63(unsafe { val.unchecked_as_u63() } as u64))
+            Ok(ScVal::U63(unsafe { val.unchecked_as_u63() }))
         } else {
             match val.get_tag() {
                 Tag::U32 => Ok(ScVal::U32(unsafe {
@@ -214,7 +215,7 @@ impl Host {
                 Tag::Object => unsafe {
                     let ob = <Object as RawValConvertible>::unchecked_from_val(val);
                     let scob = self.from_host_obj(ob)?;
-                    Ok(ScVal::Object(Some(Box::new(scob))))
+                    Ok(ScVal::Object(Some(scob)))
                 },
                 Tag::Symbol => {
                     let sym: Symbol =
@@ -241,9 +242,9 @@ impl Host {
 
     pub(crate) fn to_host_val(&self, v: &ScVal) -> Result<HostVal, HostError> {
         let ok = match v {
-            ScVal::U63(u) => {
-                if *u <= (i64::MAX as u64) {
-                    unsafe { RawVal::unchecked_from_u63(*u as i64) }
+            ScVal::U63(i) => {
+                if *i >= 0 {
+                    unsafe { RawVal::unchecked_from_u63(*i) }
                 } else {
                     return Err(HostError::General("ScvU63 > i64::MAX"));
                 }
@@ -253,6 +254,7 @@ impl Host {
             ScVal::Static(ScStatic::Void) => RawVal::from_void(),
             ScVal::Static(ScStatic::True) => RawVal::from_bool(true),
             ScVal::Static(ScStatic::False) => RawVal::from_bool(false),
+            ScVal::Static(other) => RawVal::from_other_static(*other),
             ScVal::Object(None) => return Err(HostError::General("missing expected ScvObject")),
             ScVal::Object(Some(ob)) => return Ok(self.to_host_obj(&*ob)?.into()),
             ScVal::Symbol(bytes) => {
@@ -281,7 +283,6 @@ impl Host {
             self.unchecked_visit_val_obj(ob.into(), |ob| match ob {
                 None => Err(HostError::General("object not found")),
                 Some(ho) => match ho {
-                    HostObject::Box(v) => Ok(ScObject::Box(Box::new(self.from_host_val(v.val)?))),
                     HostObject::Vec(vv) => {
                         let mut sv = Vec::new();
                         for e in vv.iter() {
@@ -300,17 +301,7 @@ impl Host {
                     }
                     HostObject::U64(u) => Ok(ScObject::U64(*u)),
                     HostObject::I64(i) => Ok(ScObject::I64(*i)),
-                    HostObject::Str(s) => Ok(ScObject::String(s.as_bytes().try_into()?)),
                     HostObject::Bin(b) => Ok(ScObject::Binary(b.clone().try_into()?)),
-                    HostObject::BigInt(_) => todo!(),
-                    HostObject::BigRat(_) => todo!(),
-                    HostObject::LedgerKey(_) => todo!(),
-                    HostObject::Operation(_) => todo!(),
-                    HostObject::OperationResult(_) => todo!(),
-                    HostObject::Transaction(_) => todo!(),
-                    HostObject::Asset(_) => todo!(),
-                    HostObject::Price(_) => todo!(),
-                    HostObject::AccountID(_) => todo!(),
                 },
             })
         }
@@ -318,10 +309,6 @@ impl Host {
 
     pub(crate) fn to_host_obj(&self, ob: &ScObject) -> Result<HostObj, HostError> {
         match ob {
-            ScObject::Box(b) => {
-                let hv = self.to_host_val(b)?;
-                self.add_host_object(hv)
-            }
             ScObject::Vec(v) => {
                 let mut vv = Vector::new();
                 for e in v.0.iter() {
@@ -340,35 +327,7 @@ impl Host {
             }
             ScObject::U64(u) => self.add_host_object(*u),
             ScObject::I64(i) => self.add_host_object(*i),
-            ScObject::String(s) => {
-                let ss = match String::from_utf8(s.clone().into()) {
-                    Ok(ss) => ss,
-                    Err(_) => return Err(HostError::General("non-UTF-8 in ScoString")),
-                };
-                self.add_host_object(ss)
-            }
             ScObject::Binary(b) => self.add_host_object::<Vec<u8>>(b.clone().into()),
-
-            ScObject::Bigint(_) => todo!(),
-            ScObject::Bigrat(_) => todo!(),
-
-            ScObject::Ledgerkey(None) => Err(HostError::General("missing ScoLedgerKey")),
-            ScObject::Ledgerkey(Some(lk)) => self.add_host_object(lk.clone()),
-
-            ScObject::Operation(None) => Err(HostError::General("missing ScoOperation")),
-            ScObject::Operation(Some(op)) => self.add_host_object(op.clone()),
-
-            ScObject::OperationResult(None) => {
-                Err(HostError::General("missing ScoOperationResult"))
-            }
-            ScObject::OperationResult(Some(o)) => self.add_host_object(o.clone()),
-
-            ScObject::Transaction(None) => Err(HostError::General("missing ScoTransaction")),
-            ScObject::Transaction(Some(t)) => self.add_host_object(t.clone()),
-
-            ScObject::Asset(a) => self.add_host_object(a.clone()),
-            ScObject::Price(p) => self.add_host_object(p.clone()),
-            ScObject::Accountid(a) => self.add_host_object(a.clone()),
         }
     }
 
@@ -409,9 +368,9 @@ impl Host {
                 .as_slice()
                 .try_into()
                 .map_err(|_| HostError::General("invalid contract hash"))?;
-            Ok(ContractId(xdr::Hash(arr)))
+            Ok(xdr::Hash(arr))
         })?;
-        let key = ScVal::Static(ScStatic::Void); // TODO: replace with "SCS_LEDGER_KEY_CONTRACT_CODE_WASM"
+        let key = ScVal::Static(ScStatic::LedgerKeyContractCodeWasm);
         let storage_key = Key {
             contract_id: id.clone(),
             key,
@@ -419,7 +378,7 @@ impl Host {
         // Retrieve the contract code and create vm
         let scval = self.0.storage.borrow_mut().get(&storage_key)?;
         let scobj = match scval {
-            ScVal::Object(Some(ob)) => *ob,
+            ScVal::Object(Some(ob)) => ob,
             _ => return Err(HostError::General("not an object")),
         };
         let code = match scobj {
@@ -452,7 +411,6 @@ impl EnvBase for Host {
         let new_weak = new_host.get_weak();
         for hobj in new_host.0.objects.borrow_mut().iter_mut() {
             match hobj {
-                HostObject::Box(v) => v.env = new_weak.clone(),
                 HostObject::Vec(vs) => {
                     vs.iter_mut().for_each(|v| v.env = new_weak.clone());
                 }

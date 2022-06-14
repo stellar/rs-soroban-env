@@ -7,9 +7,9 @@ use stellar_contract_env_common::{CheckedEnv, RawValConvertible};
 #[cfg(feature = "vm")]
 use crate::storage::{AccessType, Footprint, Key, Storage};
 #[cfg(feature = "vm")]
-use crate::{xdr::ScStatic, Symbol};
+use crate::Vm;
 #[cfg(feature = "vm")]
-use crate::{ContractId, Vm};
+use crate::{xdr::Hash, xdr::ScStatic, Symbol};
 #[cfg(feature = "vm")]
 use std::panic::{catch_unwind, AssertUnwindSafe};
 
@@ -81,8 +81,8 @@ fn vec_as_seen_by_host() -> Result<(), ()> {
     let scvec1: ScVec = ScVec(vec![ScVal::U32(1)].try_into()?);
     let scobj0: ScObject = ScObject::Vec(scvec0);
     let scobj1: ScObject = ScObject::Vec(scvec1);
-    let scval0 = ScVal::Object(Some(Box::new(scobj0)));
-    let scval1 = ScVal::Object(Some(Box::new(scobj1)));
+    let scval0 = ScVal::Object(Some(scobj0));
+    let scval1 = ScVal::Object(Some(scobj1));
     let val0 = host.to_host_val(&scval0).unwrap();
     let val1 = host.to_host_val(&scval1).unwrap();
     assert!(val0.val.is::<Object>());
@@ -394,7 +394,7 @@ fn invoke_single_contract_function() -> Result<(), ()> {
         0x04, 0x88, 0xa7, 0x22, 0x03, 0x6a, 0x22, 0x02, 0x20, 0x03, 0x48, 0x73, 0x45, 0x0d, 0x01,
         0x0b, 0x00, 0x0b, 0x20, 0x02, 0xad, 0x42, 0x04, 0x86, 0x42, 0x03, 0x84, 0x0b,
     ];
-    let id = ContractId([0; 32].into());
+    let id: Hash = [0; 32].into();
     let vm = Vm::new(&host, id, &code).unwrap();
     let a = 4i32;
     let b = 7i32;
@@ -419,8 +419,8 @@ fn invoke_single_contract_function() -> Result<(), ()> {
 fn contract_invoke_another_contract() -> Result<(), ()> {
     use im_rc::OrdMap;
 
-    let contract_id = ContractId([0; 32].into());
-    let key = ScVal::Static(ScStatic::Void); // TODO: replace with "SCS_LEDGER_KEY_CONTRACT_CODE_WASM"
+    let contract_id: Hash = [0; 32].into();
+    let key = ScVal::Static(ScStatic::LedgerKeyContractCodeWasm);
     let storage_key = Key { contract_id, key };
     let code: [u8; 163] = [
         0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00, 0x01, 0x07, 0x01, 0x60, 0x02, 0x7e, 0x7e,
@@ -436,7 +436,7 @@ fn contract_invoke_another_contract() -> Result<(), ()> {
         0x0b, 0x00, 0x0b, 0x20, 0x02, 0xad, 0x42, 0x04, 0x86, 0x42, 0x03, 0x84, 0x0b,
     ];
     let scob = ScObject::Binary(code.try_into()?);
-    let val = ScVal::Object(Some(Box::new(scob)));
+    let val = ScVal::Object(Some(scob));
     let map = OrdMap::unit(storage_key.clone(), Some(val));
     let mut footprint = Footprint::default();
     footprint.record_access(&storage_key, AccessType::ReadOnly);
