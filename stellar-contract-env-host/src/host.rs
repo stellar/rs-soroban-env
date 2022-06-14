@@ -494,11 +494,19 @@ impl CheckedEnv for Host {
         todo!()
     }
 
-    fn map_lower_bound(&self, m: Object, k: RawVal) -> Result<RawVal, HostError> {
+    fn map_prev_key(&self, m: Object, k: RawVal) -> Result<RawVal, HostError> {
         todo!()
     }
 
-    fn map_upper_bound(&self, m: Object, k: RawVal) -> Result<RawVal, HostError> {
+    fn map_next_key(&self, m: Object, k: RawVal) -> Result<RawVal, HostError> {
+        todo!()
+    }
+
+    fn map_min_key(&self, m: Object) -> Result<RawVal, HostError> {
+        todo!()
+    }
+
+    fn map_max_key(&self, m: Object) -> Result<RawVal, HostError> {
         todo!()
     }
 
