@@ -8,6 +8,7 @@ use im_rc::{OrdMap, Vector};
 use std::num::TryFromIntError;
 use stellar_contract_env_common::xdr::Hash;
 
+use crate::budget::Budget;
 use crate::storage::{Key, Storage};
 use crate::weak_host::WeakHost;
 
@@ -76,6 +77,7 @@ pub(crate) struct HostImpl {
     objects: RefCell<Vec<HostObject>>,
     storage: RefCell<Storage>,
     context: RefCell<Vec<Frame>>,
+    budget: RefCell<Budget>,
 }
 
 pub(crate) struct FrameGuard {
@@ -112,7 +114,18 @@ impl Host {
             objects: Default::default(),
             storage: RefCell::new(storage),
             context: Default::default(),
+            budget: Default::default(),
         }))
+    }
+
+    /// Helper for mutating the [`Budget`] held in this [`Host`], either to
+    /// allocate it on contract creation or to deplete it on callbacks from
+    /// the VM or host functions.
+    pub fn modify_budget<T, F>(&self, f: F) -> T
+    where
+        F: FnOnce(&mut Budget) -> T,
+    {
+        f(&mut *self.0.budget.borrow_mut())
     }
 
     /// Pushes a new [`Frame`] on the context stack, returning a [`FrameGuard`]
