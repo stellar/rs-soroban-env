@@ -106,19 +106,10 @@ macro_rules! call_macro_with_all_host_functions {
             }
 
             mod ledger "l" {
-                {"$_", fn get_current_ledger_num() -> RawVal }
-                {"$0", fn get_current_ledger_close_time() -> RawVal}
-
-                {"$1", fn pay(src:RawVal, dst:RawVal, asset:RawVal, amt:RawVal) -> RawVal}
-
-                {"$2", fn put_contract_data(k:RawVal, v: RawVal) -> RawVal}
-                {"$3", fn has_contract_data(k:RawVal) -> RawVal}
-                {"$4", fn get_contract_data(k:RawVal) -> RawVal}
-                {"$5", fn del_contract_data(k:RawVal) -> RawVal}
-
-                {"$6", fn account_balance(acct:RawVal) -> RawVal}
-                {"$7", fn account_trust_line(acct:RawVal, asset:RawVal) -> RawVal}
-                {"$8", fn trust_line_balance(tl:RawVal) -> RawVal}
+                {"$_", fn put_contract_data(k:RawVal, v: RawVal) -> RawVal}
+                {"$0", fn has_contract_data(k:RawVal) -> RawVal}
+                {"$1", fn get_contract_data(k:RawVal) -> RawVal}
+                {"$2", fn del_contract_data(k:RawVal) -> RawVal}
             }
 
             mod call "c" {
