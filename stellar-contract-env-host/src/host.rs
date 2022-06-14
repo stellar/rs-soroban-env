@@ -627,24 +627,6 @@ impl CheckedEnv for Host {
         todo!()
     }
 
-    fn get_current_ledger_num(&self) -> Result<RawVal, HostError> {
-        todo!()
-    }
-
-    fn get_current_ledger_close_time(&self) -> Result<RawVal, HostError> {
-        todo!()
-    }
-
-    fn pay(
-        &self,
-        src: RawVal,
-        dst: RawVal,
-        asset: RawVal,
-        amt: RawVal,
-    ) -> Result<RawVal, HostError> {
-        todo!()
-    }
-
     fn put_contract_data(&self, k: RawVal, v: RawVal) -> Result<RawVal, HostError> {
         let key = self.to_storage_key(k)?;
         let val = self.from_host_val(v)?;
@@ -668,18 +650,6 @@ impl CheckedEnv for Host {
         let key = self.to_storage_key(k)?;
         self.0.storage.borrow_mut().del(&key)?;
         Ok(().into())
-    }
-
-    fn account_balance(&self, acct: RawVal) -> Result<RawVal, HostError> {
-        todo!()
-    }
-
-    fn account_trust_line(&self, acct: RawVal, asset: RawVal) -> Result<RawVal, HostError> {
-        todo!()
-    }
-
-    fn trust_line_balance(&self, tl: RawVal) -> Result<RawVal, HostError> {
-        todo!()
     }
 
     fn call(&self, contract: Object, func: Symbol, args: Object) -> Result<RawVal, HostError> {
