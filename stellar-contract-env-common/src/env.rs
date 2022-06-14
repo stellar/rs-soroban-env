@@ -73,8 +73,11 @@ macro_rules! call_macro_with_all_host_functions {
                 {"$0", fn obj_to_u64(obj:Object) -> u64 }
             }
 
+            /// Functions concerned with the i64 type
             mod i64 "i" {
+                /// Convert an i64 to an object containing an i64.
                 {"$_", fn obj_from_i64(v:i64) -> Object }
+                /// Convert an object containing an i64 to an i64.
                 {"$0", fn obj_to_i64(obj:Object) -> i64 }
             }
 
@@ -197,9 +200,12 @@ macro_rules! call_macro_with_all_host_functions {
 // and produces the the corresponding method declaration to be used in the Env
 // trait.
 macro_rules! host_function_helper {
-    {fn $fn_id:ident($($arg:ident:$type:ty),*) -> $ret:ty}
+    {
+        $(#[$attr:meta])*
+        fn $fn_id:ident($($arg:ident:$type:ty),*) -> $ret:ty}
     =>
     {
+        $(#[$attr])*
         fn $fn_id(&self, $($arg:$type),*) -> $ret;
     };
 }
@@ -215,6 +221,7 @@ macro_rules! generate_env_trait {
             // passed from the x-macro to this macro. It is embedded in a `$()*`
             // pattern-repetition matcher so that it will match all provided
             // 'mod' blocks provided.
+            $(#[$mod_attr:meta])*
             mod $mod_id:ident $mod_str:literal
             {
                 $(
@@ -223,6 +230,7 @@ macro_rules! generate_env_trait {
                     // x-macro to this macro. It is embedded in a `$()*`
                     // pattern-repetition matcher so that it will match all such
                     // descriptions.
+                    $(#[$fn_attr:meta])*
                     { $fn_str:literal, fn $fn_id:ident $args:tt -> $ret:ty }
                 )*
             }
@@ -248,7 +256,7 @@ macro_rules! generate_env_trait {
                     // block repetition-level from the outer pattern in the
                     // expansion, flattening all functions from all 'mod' blocks
                     // into the Env trait.
-                    host_function_helper!{fn $fn_id $args -> $ret}
+                    host_function_helper!{$(#[$fn_attr])* fn $fn_id $args -> $ret}
                 )*
             )*
         }

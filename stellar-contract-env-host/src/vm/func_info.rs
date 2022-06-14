@@ -48,6 +48,7 @@ macro_rules! generate_host_function_infos {
             // passed from the x-macro to this macro. It is embedded in a `$()*`
             // pattern-repetition matcher so that it will match all provided
             // 'mod' blocks provided.
+            $(#[$mod_attr:meta])*
             mod $mod_id:ident $mod_str:literal
             {
                 $(
@@ -56,6 +57,7 @@ macro_rules! generate_host_function_infos {
                     // x-macro to this macro. It is embedded in a `$()*`
                     // pattern-repetition matcher so that it will match all such
                     // descriptions.
+                    $(#[$fn_attr:meta])*
                     { $fn_id:literal, fn $func_id:ident $args:tt -> $ret:ty }
                 )*
             }
