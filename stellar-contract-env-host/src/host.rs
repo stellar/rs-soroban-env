@@ -134,21 +134,18 @@ impl Host {
 
     /// Applies a function to the top [`Frame`] of the context stack, panicking
     /// if the stack is empty. Returns result of function call.
-    fn with_current_frame<F, U>(&self, f: F) -> U
+    fn with_current_frame<F, U>(&self, f: F) -> Result<U, HostError>
     where
         F: FnOnce(&Frame) -> U,
     {
-        f(self
-            .0
-            .context
-            .borrow()
-            .last()
-            .expect("missing current host frame"))
+        Ok(f(self.0.context.borrow().last().ok_or(
+            HostError::General("no contract currently running"),
+        )?))
     }
 
     /// Returns [`Hash`] contract ID from top of context stack, panicking if the
     /// stack is empty.
-    fn get_current_contract_id(&self) -> Hash {
+    fn get_current_contract_id(&self) -> Result<Hash, HostError> {
         self.with_current_frame(|frame| frame.contract_id.clone())
     }
 
@@ -362,7 +359,7 @@ impl Host {
     /// [`ContractID`] to produce a [`Key`], that can be used to access ledger [`Storage`].
     fn to_storage_key(&self, k: RawVal) -> Result<Key, HostError> {
         Ok(LedgerKey::ContractData(LedgerKeyContractData {
-            contract_id: self.get_current_contract_id(),
+            contract_id: self.get_current_contract_id()?,
             key: self.from_host_val(k)?,
         }))
     }
@@ -690,7 +687,7 @@ impl CheckedEnv for Host {
     fn put_contract_data(&self, k: RawVal, v: RawVal) -> Result<RawVal, HostError> {
         let key = self.to_storage_key(k)?;
         let data = LedgerEntryData::ContractData(ContractDataEntry {
-            contract_id: self.get_current_contract_id(),
+            contract_id: self.get_current_contract_id()?,
             key: self.from_host_val(k)?,
             val: self.from_host_val(v)?,
         });
