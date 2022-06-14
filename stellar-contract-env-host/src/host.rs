@@ -486,10 +486,6 @@ impl CheckedEnv for Host {
         todo!()
     }
 
-    fn map_keys(&self, m: Object) -> Result<Object, HostError> {
-        todo!()
-    }
-
     fn map_has(&self, m: Object, k: RawVal) -> Result<RawVal, HostError> {
         todo!()
     }
@@ -507,6 +503,14 @@ impl CheckedEnv for Host {
     }
 
     fn map_max_key(&self, m: Object) -> Result<RawVal, HostError> {
+        todo!()
+    }
+
+    fn map_keys(&self, m: Object) -> Result<Object, HostError> {
+        todo!()
+    }
+
+    fn map_values(&self, m: Object) -> Result<Object, HostError> {
         todo!()
     }
 
@@ -579,19 +583,6 @@ impl CheckedEnv for Host {
         Ok(self.add_host_object(vnew)?.into())
     }
 
-    fn vec_take(&self, v: Object, n: RawVal) -> Result<Object, HostError> {
-        let n: u32 = n
-            .try_into()
-            .map_err(|_| HostError::General("n must be u32"))?;
-        let vnew = self.visit_obj(v, move |hv: &HostVec| {
-            if n as usize > hv.len() {
-                return Err(HostError::General("index out of bound"));
-            }
-            Ok(hv.take(n as usize))
-        })?;
-        Ok(self.add_host_object(vnew)?.into())
-    }
-
     fn vec_front(&self, v: Object) -> Result<RawVal, HostError> {
         let front = self.visit_obj(v, |hv: &HostVec| match hv.front() {
             None => Err(HostError::General("value does not exist")),
@@ -632,7 +623,22 @@ impl CheckedEnv for Host {
     }
 
     fn vec_slice(&self, v: Object, i: RawVal, l: RawVal) -> Result<Object, HostError> {
-        todo!()
+        let i: u32 = i
+            .try_into()
+            .map_err(|_| HostError::General("i must be u32"))?;
+        let l: u32 = l
+            .try_into()
+            .map_err(|_| HostError::General("l must be u32"))?;
+        let vnew = self.visit_obj(v, move |hv: &HostVec| {
+            if i > u32::MAX - l {
+                return Err(HostError::General("u32 overflow"));
+            }
+            if (i + l) as usize > hv.len() {
+                return Err(HostError::General("index out of bound"));
+            }
+            Ok(hv.clone().slice(i as usize..(i + l) as usize))
+        })?;
+        Ok(self.add_host_object(vnew)?.into())
     }
 
     fn put_contract_data(&self, k: RawVal, v: RawVal) -> Result<RawVal, HostError> {
@@ -673,6 +679,18 @@ impl CheckedEnv for Host {
     }
 
     fn bigint_from_u64(&self, x: u64) -> Result<Object, HostError> {
+        todo!()
+    }
+
+    fn bigint_to_u64(&self, x: Object) -> Result<u64, HostError> {
+        todo!()
+    }
+
+    fn bigint_from_i64(&self, x: i64) -> Result<Object, HostError> {
+        todo!()
+    }
+
+    fn bigint_to_i64(&self, x: Object) -> Result<i64, HostError> {
         todo!()
     }
 
@@ -756,18 +774,6 @@ impl CheckedEnv for Host {
         todo!()
     }
 
-    fn bigint_to_u64(&self, x: Object) -> Result<u64, HostError> {
-        todo!()
-    }
-
-    fn bigint_to_i64(&self, x: Object) -> Result<i64, HostError> {
-        todo!()
-    }
-
-    fn bigint_from_i64(&self, x: i64) -> Result<Object, HostError> {
-        todo!()
-    }
-
     fn serialize_to_binary(&self, x: Object) -> Result<Object, HostError> {
         todo!()
     }
@@ -821,10 +827,6 @@ impl CheckedEnv for Host {
     }
 
     fn binary_pop(&self, x: Object) -> Result<Object, HostError> {
-        todo!()
-    }
-
-    fn binary_take(&self, v: Object, n: RawVal) -> Result<Object, HostError> {
         todo!()
     }
 
