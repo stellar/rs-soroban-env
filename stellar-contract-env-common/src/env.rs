@@ -86,8 +86,10 @@ macro_rules! call_macro_with_all_host_functions {
                 {"$3", fn map_len(m:Object) -> RawVal}
                 {"$4", fn map_keys(m:Object) -> Object}
                 {"$5", fn map_has(m:Object, k:RawVal) -> RawVal}
-                {"$6", fn map_lower_bound(m:Object, k:RawVal) -> RawVal}
-                {"$7", fn map_upper_bound(m:Object, k:RawVal) -> RawVal}
+                {"$6", fn map_prev_key(m:Object, k:RawVal) -> RawVal}
+                {"$7", fn map_next_key(m:Object, k:RawVal) -> RawVal}
+                {"$8", fn map_min_key(m:Object) -> RawVal}
+                {"$9", fn map_max_key(m:Object) -> RawVal}
             }
 
             mod vec "v" {
