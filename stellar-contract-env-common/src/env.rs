@@ -96,29 +96,24 @@ macro_rules! call_macro_with_all_host_functions {
                 {"$1", fn vec_get(v:Object, i:RawVal) -> RawVal}
                 {"$2", fn vec_del(v:Object, i:RawVal) -> Object}
                 {"$3", fn vec_len(v:Object) -> RawVal}
-
                 {"$4", fn vec_push(v:Object, x:RawVal) -> Object}
                 {"$5", fn vec_pop(v:Object) -> Object}
                 {"$6", fn vec_take(v:Object, n:RawVal) -> Object}
-                {"$7", fn vec_drop(v:Object, n:RawVal) -> Object}
-                {"$8", fn vec_front(v:Object) -> RawVal}
-                {"$9", fn vec_back(v:Object) -> RawVal}
-                {"$A", fn vec_insert(v:Object, i:RawVal, x:RawVal) -> Object}
-                {"$B", fn vec_append(v1:Object, v2:Object) -> Object}
-                {"$C", fn vec_slice(v:Object, i:RawVal, l:RawVal) -> Object}
+                {"$7", fn vec_front(v:Object) -> RawVal}
+                {"$8", fn vec_back(v:Object) -> RawVal}
+                {"$9", fn vec_insert(v:Object, i:RawVal, x:RawVal) -> Object}
+                {"$A", fn vec_append(v1:Object, v2:Object) -> Object}
+                {"$B", fn vec_slice(v:Object, i:RawVal, l:RawVal) -> Object}
             }
 
             mod ledger "l" {
                 {"$_", fn get_current_ledger_num() -> RawVal }
                 {"$0", fn get_current_ledger_close_time() -> RawVal}
-
                 {"$1", fn pay(src:RawVal, dst:RawVal, asset:RawVal, amt:RawVal) -> RawVal}
-
                 {"$2", fn put_contract_data(k:RawVal, v: RawVal) -> RawVal}
                 {"$3", fn has_contract_data(k:RawVal) -> RawVal}
                 {"$4", fn get_contract_data(k:RawVal) -> RawVal}
                 {"$5", fn del_contract_data(k:RawVal) -> RawVal}
-
                 {"$6", fn account_balance(acct:RawVal) -> RawVal}
                 {"$7", fn account_trust_line(acct:RawVal, asset:RawVal) -> RawVal}
                 {"$8", fn trust_line_balance(tl:RawVal) -> RawVal}
@@ -128,7 +123,7 @@ macro_rules! call_macro_with_all_host_functions {
                 {"$_", fn call(contract:Object, func:Symbol, args:Object) -> RawVal}
             }
 
-            mod bigint "b" {
+            mod bigint "g" {
                 {"$_", fn bigint_from_u64(x:u64) -> Object}
                 {"$0", fn bigint_add(x:Object, y:Object) -> Object}
                 {"$1", fn bigint_sub(x:Object, y:Object) -> Object}
@@ -155,25 +150,38 @@ macro_rules! call_macro_with_all_host_functions {
                 {"$M", fn bigint_from_i64(x:i64) -> Object}
             }
 
-            mod binary "x" {
+            mod binary "b" {
                 {"$_", fn serialize_to_binary(x:Object) -> Object}
                 {"$0", fn deserialize_from_binary(x:Object) -> Object}
-                {"$1", fn binary_new() -> Object}
-                {"$2", fn binary_get(x:Object, i:RawVal) -> Object}
-                {"$3", fn binary_pop(x:Object) -> Object}
-                {"$4", fn binary_push(x:Object, v:RawVal) -> Object}
-                {"$5", fn binary_insert(x:Object, i:RawVal, v:RawVal) -> Object}
-                {"$6", fn binary_remove(x:Object, i:RawVal) -> Object}
+                {"$1", fn binary_copy_to_guest_mem(x:Object, i:RawVal, j:RawVal, l:RawVal) -> RawVal}
+                {"$2", fn binary_copy_from_guest_mem(x:Object, i:RawVal, j:RawVal, l:RawVal) -> RawVal}
+                // These functions below ($3-$F) mirror vector operations
+                {"$3", fn binary_new() -> Object}
+                {"$4", fn binary_put(v:Object, i:RawVal, x:RawVal) -> Object}
+                {"$5", fn binary_get(x:Object, i:RawVal) -> Object}
+                {"$6", fn binary_del(v:Object, i:RawVal) -> Object}
                 {"$7", fn binary_len(x:Object) -> RawVal}
-                {"$8", fn binary_copy_to_guest_mem(x:Object, i:RawVal, j:RawVal, l:RawVal) -> RawVal}
-                {"$9", fn binary_copy_from_guest_mem(x:Object, i:RawVal, j:RawVal, l:RawVal) -> RawVal}
-                {"$A", fn binary_to_hash(x:Object) -> Object}
-                {"$B", fn binary_from_hash(x:Object) -> Object}
-                {"$C", fn binary_to_public_key(x:Object) -> Object}
-                {"$D", fn binary_from_public_key(x:Object) -> Object}
+                {"$8", fn binary_push(x:Object, v:RawVal) -> Object}
+                {"$9", fn binary_pop(x:Object) -> Object}
+                {"$A", fn binary_take(v:Object, n:RawVal) -> Object}
+                {"$B", fn binary_front(v:Object) -> RawVal}
+                {"$C", fn binary_back(v:Object) -> RawVal}
+                {"$D", fn binary_insert(x:Object, i:RawVal, v:RawVal) -> Object}
+                {"$E", fn binary_append(v1:Object, v2:Object) -> Object}
+                {"$F", fn binary_slice(v:Object, i:RawVal, l:RawVal) -> Object}
             }
 
-            mod crypto "y" {
+            mod hash "h" {
+                {"$_", fn hash_from_binary(x:Object) -> Object}
+                {"$0", fn hash_to_binary(x:Object) -> Object}
+            }
+
+            mod key "k" {
+                {"$_", fn public_key_from_binary(x:Object) -> Object}
+                {"$0", fn public_key_to_binary(x:Object) -> Object}
+            }
+
+            mod crypto "c" {
                 {"$_", fn compute_hash_sha256(x:Object) -> Object}
                 {"$_", fn verify_sig_ed25519(x:Object, k:Object, s:Object) -> RawVal}
             }

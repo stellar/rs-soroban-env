@@ -584,10 +584,6 @@ impl CheckedEnv for Host {
         Ok(self.add_host_object(vnew)?.into())
     }
 
-    fn vec_drop(&self, v: Object, n: RawVal) -> Result<Object, HostError> {
-        todo!()
-    }
-
     fn vec_front(&self, v: Object) -> Result<RawVal, HostError> {
         let front = self.visit_obj(v, |hv: &HostVec| match hv.front() {
             None => Err(HostError::General("value does not exist")),
@@ -802,34 +798,6 @@ impl CheckedEnv for Host {
         todo!()
     }
 
-    fn binary_new(&self) -> Result<Object, HostError> {
-        todo!()
-    }
-
-    fn binary_get(&self, x: Object, i: RawVal) -> Result<Object, HostError> {
-        todo!()
-    }
-
-    fn binary_pop(&self, x: Object) -> Result<Object, HostError> {
-        todo!()
-    }
-
-    fn binary_push(&self, x: Object, v: RawVal) -> Result<Object, HostError> {
-        todo!()
-    }
-
-    fn binary_insert(&self, x: Object, i: RawVal, v: RawVal) -> Result<Object, HostError> {
-        todo!()
-    }
-
-    fn binary_remove(&self, x: Object, i: RawVal) -> Result<Object, HostError> {
-        todo!()
-    }
-
-    fn binary_len(&self, x: Object) -> Result<RawVal, HostError> {
-        todo!()
-    }
-
     fn binary_copy_to_guest_mem(
         &self,
         x: Object,
@@ -850,19 +818,71 @@ impl CheckedEnv for Host {
         todo!()
     }
 
-    fn binary_to_hash(&self, x: Object) -> Result<Object, HostError> {
+    fn binary_new(&self) -> Result<Object, HostError> {
         todo!()
     }
 
-    fn binary_from_hash(&self, x: Object) -> Result<Object, HostError> {
+    fn binary_put(&self, v: Object, i: RawVal, x: RawVal) -> Result<Object, HostError> {
         todo!()
     }
 
-    fn binary_to_public_key(&self, x: Object) -> Result<Object, HostError> {
+    fn binary_get(&self, x: Object, i: RawVal) -> Result<Object, HostError> {
         todo!()
     }
 
-    fn binary_from_public_key(&self, x: Object) -> Result<Object, HostError> {
+    fn binary_del(&self, v: Object, i: RawVal) -> Result<Object, HostError> {
+        todo!()
+    }
+
+    fn binary_len(&self, x: Object) -> Result<RawVal, HostError> {
+        todo!()
+    }
+
+    fn binary_push(&self, x: Object, v: RawVal) -> Result<Object, HostError> {
+        todo!()
+    }
+
+    fn binary_pop(&self, x: Object) -> Result<Object, HostError> {
+        todo!()
+    }
+
+    fn binary_take(&self, v: Object, n: RawVal) -> Result<Object, HostError> {
+        todo!()
+    }
+
+    fn binary_front(&self, v: Object) -> Result<RawVal, HostError> {
+        todo!()
+    }
+
+    fn binary_back(&self, v: Object) -> Result<RawVal, HostError> {
+        todo!()
+    }
+
+    fn binary_insert(&self, x: Object, i: RawVal, v: RawVal) -> Result<Object, HostError> {
+        todo!()
+    }
+
+    fn binary_append(&self, v1: Object, v2: Object) -> Result<Object, HostError> {
+        todo!()
+    }
+
+    fn binary_slice(&self, v: Object, i: RawVal, l: RawVal) -> Result<Object, HostError> {
+        todo!()
+    }
+
+    fn hash_from_binary(&self, x: Object) -> Result<Object, HostError> {
+        todo!()
+    }
+
+    fn hash_to_binary(&self, x: Object) -> Result<Object, HostError> {
+        todo!()
+    }
+
+    fn public_key_from_binary(&self, x: Object) -> Result<Object, HostError> {
+        todo!()
+    }
+
+    fn public_key_to_binary(&self, x: Object) -> Result<Object, HostError> {
         todo!()
     }
 
