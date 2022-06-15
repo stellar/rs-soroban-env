@@ -7,7 +7,7 @@ use core::fmt::Debug;
 use im_rc::{OrdMap, Vector};
 use std::num::TryFromIntError;
 
-use crate::storage::{Key, Storage};
+use crate::storage::Storage;
 use crate::weak_host::WeakHost;
 
 use crate::xdr;
@@ -357,7 +357,7 @@ impl Host {
 
     /// Converts a [`RawVal`] to an [`ScVal`] and combines it with the currently-executing
     /// [`ContractID`] to produce a [`Key`], that can be used to access ledger [`Storage`].
-    fn to_storage_key(&self, k: RawVal) -> Result<Key, HostError> {
+    fn to_storage_key(&self, k: RawVal) -> Result<LedgerKey, HostError> {
         Ok(LedgerKey::ContractData(LedgerKeyContractData {
             contract_id: self.get_current_contract_id()?,
             key: self.from_host_val(k)?,

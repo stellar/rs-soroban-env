@@ -4,9 +4,6 @@ use crate::xdr::{LedgerEntry, LedgerKey};
 use crate::HostError;
 use im_rc::OrdMap;
 
-pub type Key = LedgerKey;
-pub type Value = LedgerEntry;
-
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum AccessType {
     ReadOnly,
@@ -14,15 +11,15 @@ pub enum AccessType {
 }
 
 pub trait SnapshotSource {
-    fn get(&self, key: &Key) -> Result<Value, HostError>;
-    fn has(&self, key: &Key) -> Result<bool, HostError>;
+    fn get(&self, key: &LedgerKey) -> Result<LedgerEntry, HostError>;
+    fn has(&self, key: &LedgerKey) -> Result<bool, HostError>;
 }
 
 #[derive(Clone, Default)]
-pub struct Footprint(pub OrdMap<Key, AccessType>);
+pub struct Footprint(pub OrdMap<LedgerKey, AccessType>);
 
 impl Footprint {
-    pub fn record_access(&mut self, key: &Key, ty: AccessType) {
+    pub fn record_access(&mut self, key: &LedgerKey, ty: AccessType) {
         if let Some(existing) = self.0.get(key) {
             match (existing, ty.clone()) {
                 (AccessType::ReadOnly, AccessType::ReadOnly) => (),
@@ -39,7 +36,7 @@ impl Footprint {
         }
     }
 
-    pub fn enforce_access(&mut self, key: &Key, ty: AccessType) -> Result<(), HostError> {
+    pub fn enforce_access(&mut self, key: &LedgerKey, ty: AccessType) -> Result<(), HostError> {
         if let Some(existing) = self.0.get(key) {
             match (existing, ty) {
                 (AccessType::ReadOnly, AccessType::ReadOnly) => Ok(()),
@@ -71,13 +68,13 @@ impl Default for FootprintMode {
 pub struct Storage {
     pub footprint: Footprint,
     pub mode: FootprintMode,
-    pub map: OrdMap<Key, Option<Value>>,
+    pub map: OrdMap<LedgerKey, Option<LedgerEntry>>,
 }
 
 impl Storage {
     pub fn with_enforcing_footprint_and_map(
         footprint: Footprint,
-        map: OrdMap<Key, Option<Value>>,
+        map: OrdMap<LedgerKey, Option<LedgerEntry>>,
     ) -> Self {
         Self {
             mode: FootprintMode::Enforcing,
@@ -94,7 +91,7 @@ impl Storage {
         }
     }
 
-    pub fn get(&mut self, key: &Key) -> Result<Value, HostError> {
+    pub fn get(&mut self, key: &LedgerKey) -> Result<LedgerEntry, HostError> {
         let ty = AccessType::ReadOnly;
         match self.mode {
             FootprintMode::Recording(ref src) => {
@@ -116,7 +113,7 @@ impl Storage {
         }
     }
 
-    fn put_opt(&mut self, key: &Key, val: Option<Value>) -> Result<(), HostError> {
+    fn put_opt(&mut self, key: &LedgerKey, val: Option<LedgerEntry>) -> Result<(), HostError> {
         let ty = AccessType::ReadWrite;
         match self.mode {
             FootprintMode::Recording(_) => {
@@ -130,15 +127,15 @@ impl Storage {
         Ok(())
     }
 
-    pub fn put(&mut self, key: &Key, val: &Value) -> Result<(), HostError> {
+    pub fn put(&mut self, key: &LedgerKey, val: &LedgerEntry) -> Result<(), HostError> {
         self.put_opt(key, Some(val.clone()))
     }
 
-    pub fn del(&mut self, key: &Key) -> Result<(), HostError> {
+    pub fn del(&mut self, key: &LedgerKey) -> Result<(), HostError> {
         self.put_opt(key, None)
     }
 
-    pub fn has(&mut self, key: &Key) -> Result<bool, HostError> {
+    pub fn has(&mut self, key: &LedgerKey) -> Result<bool, HostError> {
         let ty = AccessType::ReadOnly;
         match self.mode {
             FootprintMode::Recording(ref src) => {
@@ -232,10 +229,10 @@ mod test_footprint {
 mod test_storage {
     use super::*;
     #[allow(dead_code)]
-    struct MockSnapshotSource(OrdMap<Key, Value>);
+    struct MockSnapshotSource(OrdMap<LedgerKey, LedgerEntry>);
     #[allow(dead_code)]
     impl MockSnapshotSource {
-        fn get(&self, key: &Key) -> Result<Value, HostError> {
+        fn get(&self, key: &LedgerKey) -> Result<LedgerEntry, HostError> {
             if let Some(val) = self.0.get(key) {
                 Ok(val.clone())
             } else {
@@ -243,7 +240,7 @@ mod test_storage {
             }
         }
 
-        fn has(&self, key: &Key) -> Result<bool, HostError> {
+        fn has(&self, key: &LedgerKey) -> Result<bool, HostError> {
             Ok(self.0.contains_key(key))
         }
     }
