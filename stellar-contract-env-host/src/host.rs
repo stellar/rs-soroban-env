@@ -399,39 +399,27 @@ impl Host {
     }
 
     pub fn invoke_function(&mut self, hf: HostFunction, args: ScVec) -> Result<ScVal, HostError> {
-        let mut args_iter = args.to_vec().into_iter();
-
-        let contract_id = match args_iter.next() {
-            None => Err(HostError::General("no contract id")),
-            Some(ScVal::Object(Some(ob))) => self.to_host_obj(&ob),
-            _ => Err(HostError::General("bad contract id")),
-        }?;
-
-        let symbol: Symbol = match args_iter.next() {
-            None => Err(HostError::General("no symbol")),
-            Some(ScVal::Symbol(s)) => s
-                .as_vec()
-                .as_slice()
-                .try_into()
-                .map_err(|e| HostError::General("bad symbol")),
-            _ => Err(HostError::General("bad symbol")),
-        }?;
-
-        let mut raw_args: Vec<RawVal> = Vec::new();
-        for scv in args_iter {
-            raw_args.push(self.to_host_val(&scv)?.val);
-        }
-
-        let raw_res = match hf {
-            HostFunction::Call => {
-                #[cfg(not(feature = "vm"))]
-                unimplemented!();
-                #[cfg(feature = "vm")]
-                self.call_n(contract_id.to_object(), symbol, &raw_args[..])
+        if let [ScVal::Object(Some(scobj)), ScVal::Symbol(scsym), rest @ ..] = args.as_slice() {
+            let object: Object = self.to_host_obj(&scobj)?.to_object();
+            let symbol: Symbol = scsym.as_slice().try_into()?;
+            let mut raw_args: Vec<RawVal> = Vec::new();
+            for scv in rest.iter() {
+                raw_args.push(self.to_host_val(&scv)?.val);
             }
-            _ => Err(HostError::General("bad host function")),
-        }?;
-        Ok(self.from_host_val(raw_res)?)
+
+            let raw_res = match hf {
+                HostFunction::Call => {
+                    #[cfg(not(feature = "vm"))]
+                    unimplemented!();
+                    #[cfg(feature = "vm")]
+                    self.call_n(object, symbol, &raw_args[..])
+                }
+                _ => Err(HostError::General("bad host function")),
+            }?;
+            Ok(self.from_host_val(raw_res)?)
+        } else {
+            return Err(HostError::General("unexpected args"));
+        }
     }
 }
 
