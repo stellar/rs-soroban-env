@@ -398,13 +398,17 @@ impl Host {
     }
 
     pub fn invoke_function(&mut self, hf: HostFunction, args: ScVec) -> Result<ScVal, HostError> {
-        let contract_id = match &args.as_vec()[0] {
-            ScVal::Object(Some(ob)) => self.to_host_obj(ob),
+        let mut args_iter = args.to_vec().into_iter();
+
+        let contract_id = match args_iter.next() {
+            None => Err(HostError::General("no contract id")),
+            Some(ScVal::Object(Some(ob))) => self.to_host_obj(&ob),
             _ => Err(HostError::General("bad contract id")),
         }?;
 
-        let symbol: Symbol = match &args.as_vec()[1] {
-            ScVal::Symbol(s) => s
+        let symbol: Symbol = match args_iter.next() {
+            None => Err(HostError::General("no symbol")),
+            Some(ScVal::Symbol(s)) => s
                 .as_vec()
                 .as_slice()
                 .try_into()
@@ -413,8 +417,8 @@ impl Host {
         }?;
 
         let mut raw_args: Vec<RawVal> = Vec::new();
-        for scv in args.as_vec()[2..].iter() {
-            raw_args.push(self.to_host_val(scv)?.val);
+        for scv in args_iter {
+            raw_args.push(self.to_host_val(&scv)?.val);
         }
 
         let raw_res = match hf {
