@@ -244,42 +244,72 @@ fn vec_del_wrong_index_type() {
 }
 
 #[test]
-fn vec_take_and_cmp() {
+fn vec_slice_and_cmp() {
     let host = Host::default();
     let scvec: ScVec = vec![ScVal::U32(1), ScVal::U32(2), ScVal::U32(3)]
         .try_into()
         .unwrap();
     let obj = host.to_host_obj(&ScObject::Vec(scvec)).unwrap();
-    let obj1 = host.vec_take(obj.to_object(), 2u32.into()).unwrap();
-    let scvec_ref: ScVec = vec![ScVal::U32(1), ScVal::U32(2)].try_into().unwrap();
+    let obj1 = host
+        .vec_slice(obj.to_object(), 1u32.into(), 2u32.into())
+        .unwrap();
+    let scvec_ref: ScVec = vec![ScVal::U32(2), ScVal::U32(3)].try_into().unwrap();
     let obj_ref = host.to_host_obj(&ScObject::Vec(scvec_ref)).unwrap();
     assert_eq!(host.obj_cmp(obj1.into(), obj_ref.into()).unwrap(), 0);
 
-    let obj2 = host.vec_take(obj.to_object(), 3u32.into()).unwrap();
+    let obj2 = host
+        .vec_slice(obj.to_object(), 0u32.into(), 3u32.into())
+        .unwrap();
     assert_ne!(obj2.as_ref().get_payload(), obj.as_raw().get_payload());
     assert_eq!(host.obj_cmp(obj2.into(), obj.into()).unwrap(), 0);
 }
 
 #[test]
-#[should_panic(expected = "index out of bound")]
-fn vec_take_out_of_bound() {
+#[should_panic(expected = "u32 overflow")]
+fn vec_slice_index_overflow() {
     let host = Host::default();
     let scvec: ScVec = vec![ScVal::U32(1), ScVal::U32(2), ScVal::U32(3)]
         .try_into()
         .unwrap();
     let scobj = ScObject::Vec(scvec);
     let obj = host.to_host_obj(&scobj).unwrap();
-    host.vec_del(obj.to_object(), 4_u32.into()).unwrap();
+    host.vec_slice(obj.to_object(), u32::MAX.into(), 1_u32.into())
+        .unwrap();
 }
 
 #[test]
-#[should_panic(expected = "n must be u32")]
+#[should_panic(expected = "index out of bound")]
+fn vec_slice_out_of_bound() {
+    let host = Host::default();
+    let scvec: ScVec = vec![ScVal::U32(1), ScVal::U32(2), ScVal::U32(3)]
+        .try_into()
+        .unwrap();
+    let scobj = ScObject::Vec(scvec);
+    let obj = host.to_host_obj(&scobj).unwrap();
+    host.vec_slice(obj.to_object(), 0_u32.into(), 4_u32.into())
+        .unwrap();
+}
+
+#[test]
+#[should_panic(expected = "i must be u32")]
 fn vec_take_wrong_index_type() {
     let host = Host::default();
     let scvec: ScVec = vec![].try_into().unwrap();
     let scobj = ScObject::Vec(scvec);
     let obj = host.to_host_obj(&scobj).unwrap();
-    host.vec_take(obj.to_object(), (-1_i32).into()).unwrap();
+    host.vec_slice(obj.to_object(), (-1_i32).into(), 1_u32.into())
+        .unwrap();
+}
+
+#[test]
+#[should_panic(expected = "l must be u32")]
+fn vec_take_wrong_len_type() {
+    let host = Host::default();
+    let scvec: ScVec = vec![].try_into().unwrap();
+    let scobj = ScObject::Vec(scvec);
+    let obj = host.to_host_obj(&scobj).unwrap();
+    host.vec_slice(obj.to_object(), 1_u32.into(), (-1_i32).into())
+        .unwrap();
 }
 
 #[test]

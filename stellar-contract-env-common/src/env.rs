@@ -87,12 +87,13 @@ macro_rules! call_macro_with_all_host_functions {
                 {"$1", fn map_get(m:Object, k:RawVal) -> RawVal}
                 {"$2", fn map_del(m:Object, k:RawVal) -> Object}
                 {"$3", fn map_len(m:Object) -> RawVal}
-                {"$4", fn map_keys(m:Object) -> Object}
-                {"$5", fn map_has(m:Object, k:RawVal) -> RawVal}
-                {"$6", fn map_prev_key(m:Object, k:RawVal) -> RawVal}
-                {"$7", fn map_next_key(m:Object, k:RawVal) -> RawVal}
-                {"$8", fn map_min_key(m:Object) -> RawVal}
-                {"$9", fn map_max_key(m:Object) -> RawVal}
+                {"$4", fn map_has(m:Object, k:RawVal) -> RawVal}
+                {"$5", fn map_prev_key(m:Object, k:RawVal) -> RawVal}
+                {"$6", fn map_next_key(m:Object, k:RawVal) -> RawVal}
+                {"$7", fn map_min_key(m:Object) -> RawVal}
+                {"$8", fn map_max_key(m:Object) -> RawVal}
+                {"$9", fn map_keys(m:Object) -> Object}
+                {"$A", fn map_values(m:Object) -> Object}
             }
 
             mod vec "v" {
@@ -103,12 +104,11 @@ macro_rules! call_macro_with_all_host_functions {
                 {"$3", fn vec_len(v:Object) -> RawVal}
                 {"$4", fn vec_push(v:Object, x:RawVal) -> Object}
                 {"$5", fn vec_pop(v:Object) -> Object}
-                {"$6", fn vec_take(v:Object, n:RawVal) -> Object}
-                {"$7", fn vec_front(v:Object) -> RawVal}
-                {"$8", fn vec_back(v:Object) -> RawVal}
-                {"$9", fn vec_insert(v:Object, i:RawVal, x:RawVal) -> Object}
-                {"$A", fn vec_append(v1:Object, v2:Object) -> Object}
-                {"$B", fn vec_slice(v:Object, i:RawVal, l:RawVal) -> Object}
+                {"$6", fn vec_front(v:Object) -> RawVal}
+                {"$7", fn vec_back(v:Object) -> RawVal}
+                {"$8", fn vec_insert(v:Object, i:RawVal, x:RawVal) -> Object}
+                {"$9", fn vec_append(v1:Object, v2:Object) -> Object}
+                {"$A", fn vec_slice(v:Object, i:RawVal, l:RawVal) -> Object}
             }
 
             mod ledger "l" {
@@ -124,29 +124,29 @@ macro_rules! call_macro_with_all_host_functions {
 
             mod bigint "g" {
                 {"$_", fn bigint_from_u64(x:u64) -> Object}
-                {"$0", fn bigint_add(x:Object, y:Object) -> Object}
-                {"$1", fn bigint_sub(x:Object, y:Object) -> Object}
-                {"$2", fn bigint_mul(x:Object, y:Object) -> Object}
-                {"$3", fn bigint_div(x:Object, y:Object) -> Object}
-                {"$4", fn bigint_rem(x:Object, y:Object) -> Object}
-                {"$5", fn bigint_and(x:Object, y:Object) -> Object}
-                {"$6", fn bigint_or(x:Object, y:Object) -> Object}
-                {"$7", fn bigint_xor(x:Object, y:Object) -> Object}
-                {"$8", fn bigint_shl(x:Object, y:RawVal) -> Object}
-                {"$9", fn bigint_shr(x:Object, y:RawVal) -> Object}
-                {"$A", fn bigint_cmp(x:Object, y:Object) -> RawVal}
-                {"$B", fn bigint_is_zero(x:Object) -> RawVal}
-                {"$C", fn bigint_neg(x:Object) -> Object}
-                {"$D", fn bigint_not(x:Object) -> Object}
-                {"$E", fn bigint_gcd(x:Object, y:Object) -> Object}
-                {"$F", fn bigint_lcm(x:Object, y:Object) -> Object}
-                {"$G", fn bigint_pow(x:Object, y:Object) -> Object}
-                {"$H", fn bigint_pow_mod(p:Object, q:Object, m:Object) -> Object}
-                {"$I", fn bigint_sqrt(x:Object) -> Object}
-                {"$J", fn bigint_bits(x:Object) -> RawVal}
-                {"$K", fn bigint_to_u64(x:Object) -> u64}
-                {"$L", fn bigint_to_i64(x:Object) -> i64}
-                {"$M", fn bigint_from_i64(x:i64) -> Object}
+                {"$0", fn bigint_to_u64(x:Object) -> u64}
+                {"$1", fn bigint_from_i64(x:i64) -> Object}
+                {"$2", fn bigint_to_i64(x:Object) -> i64}
+                {"$3", fn bigint_add(x:Object, y:Object) -> Object}
+                {"$4", fn bigint_sub(x:Object, y:Object) -> Object}
+                {"$5", fn bigint_mul(x:Object, y:Object) -> Object}
+                {"$6", fn bigint_div(x:Object, y:Object) -> Object}
+                {"$7", fn bigint_rem(x:Object, y:Object) -> Object}
+                {"$8", fn bigint_and(x:Object, y:Object) -> Object}
+                {"$9", fn bigint_or(x:Object, y:Object) -> Object}
+                {"$A", fn bigint_xor(x:Object, y:Object) -> Object}
+                {"$B", fn bigint_shl(x:Object, y:RawVal) -> Object}
+                {"$C", fn bigint_shr(x:Object, y:RawVal) -> Object}
+                {"$D", fn bigint_cmp(x:Object, y:Object) -> RawVal}
+                {"$E", fn bigint_is_zero(x:Object) -> RawVal}
+                {"$F", fn bigint_neg(x:Object) -> Object}
+                {"$G", fn bigint_not(x:Object) -> Object}
+                {"$H", fn bigint_gcd(x:Object, y:Object) -> Object}
+                {"$I", fn bigint_lcm(x:Object, y:Object) -> Object}
+                {"$J", fn bigint_pow(x:Object, y:Object) -> Object}
+                {"$K", fn bigint_pow_mod(p:Object, q:Object, m:Object) -> Object}
+                {"$L", fn bigint_sqrt(x:Object) -> Object}
+                {"$M", fn bigint_bits(x:Object) -> RawVal}
             }
 
             mod binary "b" {
@@ -162,12 +162,11 @@ macro_rules! call_macro_with_all_host_functions {
                 {"$7", fn binary_len(x:Object) -> RawVal}
                 {"$8", fn binary_push(x:Object, v:RawVal) -> Object}
                 {"$9", fn binary_pop(x:Object) -> Object}
-                {"$A", fn binary_take(v:Object, n:RawVal) -> Object}
-                {"$B", fn binary_front(v:Object) -> RawVal}
-                {"$C", fn binary_back(v:Object) -> RawVal}
-                {"$D", fn binary_insert(x:Object, i:RawVal, v:RawVal) -> Object}
-                {"$E", fn binary_append(v1:Object, v2:Object) -> Object}
-                {"$F", fn binary_slice(v:Object, i:RawVal, l:RawVal) -> Object}
+                {"$A", fn binary_front(v:Object) -> RawVal}
+                {"$B", fn binary_back(v:Object) -> RawVal}
+                {"$C", fn binary_insert(x:Object, i:RawVal, v:RawVal) -> Object}
+                {"$D", fn binary_append(v1:Object, v2:Object) -> Object}
+                {"$E", fn binary_slice(v:Object, i:RawVal, l:RawVal) -> Object}
             }
 
             mod hash "h" {
