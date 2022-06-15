@@ -132,8 +132,9 @@ impl Host {
         FrameGuard { host: self.clone() }
     }
 
-    /// Applies a function to the top [`Frame`] of the context stack, panicking
-    /// if the stack is empty. Returns result of function call.
+    /// Applies a function to the top [`Frame`] of the context stack. Returns
+    /// [`HostError`] if the context stack is empty, otherwise returns result of
+    /// function call.
     fn with_current_frame<F, U>(&self, f: F) -> Result<U, HostError>
     where
         F: FnOnce(&Frame) -> U,
@@ -143,8 +144,8 @@ impl Host {
         )?))
     }
 
-    /// Returns [`Hash`] contract ID from top of context stack, panicking if the
-    /// stack is empty.
+    /// Returns [`Hash`] contract ID from top of context stack, or a
+    /// [`HostError`] if the context stack is empty.
     fn get_current_contract_id(&self) -> Result<Hash, HostError> {
         self.with_current_frame(|frame| frame.contract_id.clone())
     }
