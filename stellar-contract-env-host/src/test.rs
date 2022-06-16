@@ -1,5 +1,5 @@
 use crate::{
-    xdr::{ScObject, ScObjectType, ScVal, ScVec, ScStatic},
+    xdr::{ScObject, ScObjectType, ScStatic, ScVal, ScVec},
     Host, IntoEnvVal, Object, RawVal, Tag,
 };
 use stellar_contract_env_common::{CheckedEnv, RawValConvertible};
@@ -398,32 +398,32 @@ fn vec_append_empty() {
 #[test]
 fn sha256_test() {
     let host = Host::default();
-    let obj0 = host.to_host_obj(&ScObject::Binary(vec![1].try_into().unwrap())).unwrap();
+    let obj0 = host
+        .to_host_obj(&ScObject::Binary(vec![1].try_into().unwrap()))
+        .unwrap();
     let hash_obj = host.compute_hash_sha256(obj0.to_object()).unwrap();
 
     let v = host.from_host_val(hash_obj.to_raw()).unwrap();
     let bin = match v {
-        ScVal::Object(Some(scobj)) => {
-            match scobj {
-                ScObject::Binary(bin) => {
-                    bin
-                },
-                _ => panic!("Wrong type"),
-            }
+        ScVal::Object(Some(scobj)) => match scobj {
+            ScObject::Binary(bin) => bin,
+            _ => panic!("Wrong type"),
         },
         _ => panic!("Wrong type"),
     };
-    
+
     /*
     We took the sha256 of [1], which is 4bf5122f344554c53bde2ebb8cd2b7e3d1600ad631c385a5d7cce23c7785459a
     The exp array contains the decimal representation of each hex value
     */
-    let exp: Vec<u8> = vec![75, 245, 18, 47, 52, 69, 84, 197, 59, 222, 46, 187, 140, 210, 183, 227, 209,
-    96, 10, 214, 49, 195, 133, 165, 215, 204, 226, 60, 119, 133, 69, 154];
+    let exp: Vec<u8> = vec![
+        75, 245, 18, 47, 52, 69, 84, 197, 59, 222, 46, 187, 140, 210, 183, 227, 209, 96, 10, 214,
+        49, 195, 133, 165, 215, 204, 226, 60, 119, 133, 69, 154,
+    ];
     assert_eq!(bin.as_vec().clone(), exp);
 }
 
-fn is_true (val: ScVal) -> bool {
+fn is_true(val: ScVal) -> bool {
     let res = match val {
         ScVal::Static(ScStatic::True) => true,
         ScVal::Static(ScStatic::False) => false,
@@ -436,7 +436,7 @@ fn is_true (val: ScVal) -> bool {
 #[test]
 fn ed25519_verify_test() {
     let host = Host::default();
-    
+
     // From https://datatracker.ietf.org/doc/html/rfc8032#section-7.1
 
     // First verify successfully
@@ -448,11 +448,23 @@ fn ed25519_verify_test() {
     let msg_bytes: Vec<u8> = FromHex::from_hex(message).unwrap();
     let sig_bytes: Vec<u8> = FromHex::from_hex(signature).unwrap();
 
-    let obj_pub = host.to_host_obj(&ScObject::Binary(pub_bytes.try_into().unwrap())).unwrap();
-    let obj_msg = host.to_host_obj(&ScObject::Binary(msg_bytes.try_into().unwrap())).unwrap();
-    let obj_sig = host.to_host_obj(&ScObject::Binary(sig_bytes.try_into().unwrap())).unwrap();
+    let obj_pub = host
+        .to_host_obj(&ScObject::Binary(pub_bytes.try_into().unwrap()))
+        .unwrap();
+    let obj_msg = host
+        .to_host_obj(&ScObject::Binary(msg_bytes.try_into().unwrap()))
+        .unwrap();
+    let obj_sig = host
+        .to_host_obj(&ScObject::Binary(sig_bytes.try_into().unwrap()))
+        .unwrap();
 
-    let raw_res = host.verify_sig_ed25519(obj_msg.to_object(), obj_pub.to_object(), obj_sig.to_object()).unwrap();
+    let raw_res = host
+        .verify_sig_ed25519(
+            obj_msg.to_object(),
+            obj_pub.to_object(),
+            obj_sig.to_object(),
+        )
+        .unwrap();
     let res = host.from_host_val(raw_res).unwrap();
 
     assert_eq!(is_true(res), true);
@@ -460,9 +472,17 @@ fn ed25519_verify_test() {
     // Now verify with wrong message
     let message2: &[u8] = b"73";
     let msg_bytes2: Vec<u8> = FromHex::from_hex(message2).unwrap();
-    let obj_msg2 = host.to_host_obj(&ScObject::Binary(msg_bytes2.try_into().unwrap())).unwrap();
+    let obj_msg2 = host
+        .to_host_obj(&ScObject::Binary(msg_bytes2.try_into().unwrap()))
+        .unwrap();
 
-    let raw_res_false = host.verify_sig_ed25519(obj_msg2.to_object(), obj_pub.to_object(), obj_sig.to_object()).unwrap();
+    let raw_res_false = host
+        .verify_sig_ed25519(
+            obj_msg2.to_object(),
+            obj_pub.to_object(),
+            obj_sig.to_object(),
+        )
+        .unwrap();
     let res_false = host.from_host_val(raw_res_false).unwrap();
 
     assert_eq!(is_true(res_false), false);

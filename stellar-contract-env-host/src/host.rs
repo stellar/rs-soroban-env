@@ -26,8 +26,8 @@ use crate::{
     SymbolError, Tag, Val,
 };
 
-use sha2::{Sha256, Digest};
 use ed25519_dalek::{PublicKey, Signature, Verifier};
+use sha2::{Digest, Sha256};
 
 use thiserror::Error;
 
@@ -871,14 +871,16 @@ impl CheckedEnv for Host {
 
     fn compute_hash_sha256(&self, x: Object) -> Result<Object, HostError> {
         let binary = self.visit_obj(x, |bin: &Vec<u8>| {
-            Ok(bin.clone())//TODO:Why is this neccesary
+            Ok(bin.clone()) //TODO:Why is this neccesary
         })?;
 
         let mut hasher = Sha256::new();
         hasher.update(binary);
         let raw_hash = hasher.finalize();
-        
-        let hash: Vec<u8> = raw_hash[0..32].try_into().expect("slice with incorrect length");
+
+        let hash: Vec<u8> = raw_hash[0..32]
+            .try_into()
+            .expect("slice with incorrect length");
         Ok(self.add_host_object(hash)?.into())
     }
 
@@ -890,10 +892,8 @@ impl CheckedEnv for Host {
                 .map_err(|_| HostError::General("invalid raw key"))?;
             Ok(arr.clone())
         })?;
-        
-        let message_bytes = self.visit_obj(x, |bin: &Vec<u8>| {
-            Ok(bin.clone())
-        })?;
+
+        let message_bytes = self.visit_obj(x, |bin: &Vec<u8>| Ok(bin.clone()))?;
 
         let sig_bytes = self.visit_obj(s, |bin: &Vec<u8>| {
             let arr: [u8; 64] = bin
@@ -905,12 +905,12 @@ impl CheckedEnv for Host {
 
         let public_key: PublicKey = match PublicKey::from_bytes(&key_bytes) {
             Ok(public_key) => public_key,
-            Err(_) => return Err(HostError::General("invalid key"))
+            Err(_) => return Err(HostError::General("invalid key")),
         };
 
         let sig: Signature = match Signature::from_bytes(&sig_bytes) {
             Ok(sig) => sig,
-            Err(_) => return Err(HostError::General("invalid signature"))
+            Err(_) => return Err(HostError::General("invalid signature")),
         };
 
         let verified = public_key.verify(&message_bytes[..], &sig).is_ok();
