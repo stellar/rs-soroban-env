@@ -26,6 +26,8 @@ use crate::{
     SymbolError, Tag, Val,
 };
 
+use sha2::{Sha256, Digest};
+
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -867,7 +869,16 @@ impl CheckedEnv for Host {
     }
 
     fn compute_hash_sha256(&self, x: Object) -> Result<Object, HostError> {
-        todo!()
+        let binary = self.visit_obj(x, |bin: &Vec<u8>| {
+            Ok(bin.clone())//TODO:Why is this neccesary
+        })?;
+
+        let mut hasher = Sha256::new();
+        hasher.update(binary);
+        let raw_hash = hasher.finalize();
+        
+        let hash: Vec<u8> = raw_hash[0..32].try_into().expect("slice with incorrect length");
+        Ok(self.add_host_object(hash)?.into())
     }
 
     fn verify_sig_ed25519(&self, x: Object, k: Object, s: Object) -> Result<RawVal, HostError> {

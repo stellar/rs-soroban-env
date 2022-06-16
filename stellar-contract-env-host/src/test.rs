@@ -392,6 +392,35 @@ fn vec_append_empty() {
     assert_eq!(host.obj_cmp(obj0.into(), obj1.into()).unwrap(), 0);
 }
 
+/// crypto tests
+#[test]
+fn sha256_test() {
+    let host = Host::default();
+    let obj0 = host.to_host_obj(&ScObject::Binary(vec![1].try_into().unwrap())).unwrap();
+    let hash_obj = host.compute_hash_sha256(obj0.to_object()).unwrap();
+
+    let v = host.from_host_val(hash_obj.to_raw()).unwrap();
+    let bin = match v {
+        ScVal::Object(Some(scobj)) => {
+            match scobj {
+                ScObject::Binary(bin) => {
+                    bin
+                },
+                _ => panic!("Wrong type"),
+            }
+        },
+        _ => panic!("Wrong type"),
+    };
+    
+    /*
+    We took the sha256 of [1], which is 4bf5122f344554c53bde2ebb8cd2b7e3d1600ad631c385a5d7cce23c7785459a
+    The exp array contains the decimal representation of each hex value
+    */
+    let exp: Vec<u8> = vec![75, 245, 18, 47, 52, 69, 84, 197, 59, 222, 46, 187, 140, 210, 183, 227, 209,
+    96, 10, 214, 49, 195, 133, 165, 215, 204, 226, 60, 119, 133, 69, 154];
+    assert_eq!(bin.as_vec().clone(), exp);
+}
+
 /// VM test
 /**
  This is an example WASM from the SDK that unpacks two SCV_I32 arguments, adds
