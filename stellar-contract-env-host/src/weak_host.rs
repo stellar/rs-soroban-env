@@ -84,6 +84,7 @@ macro_rules! impl_env_for_weakhost {
             // passed from the x-macro to this macro. It is embedded in a `$()*`
             // pattern-repetition matcher so that it will match all provided
             // 'mod' blocks provided.
+            $(#[$mod_attr:meta])*
             mod $mod_id:ident $mod_str:literal
             {
                 $(
@@ -92,6 +93,7 @@ macro_rules! impl_env_for_weakhost {
                     // x-macro to this macro. It is embedded in a `$()*`
                     // pattern-repetition matcher so that it will match all such
                     // descriptions.
+                    $(#[$fn_attr:meta])*
                     { $fn_str:literal, fn $fn_id:ident $args:tt -> $ret:ty }
                 )*
             }

@@ -26,9 +26,13 @@ use core::fmt::Debug;
 // and produces the the corresponding method declaration to be used in the Env
 // trait.
 macro_rules! host_function_helper {
-    {fn $fn_id:ident($($arg:ident:$type:ty),*) -> $ret:ty}
+    {
+        $(#[$attr:meta])*
+        fn $fn_id:ident($($arg:ident:$type:ty),*) -> $ret:ty
+    }
     =>
     {
+        $(#[$attr])*
         fn $fn_id(&self, $($arg:$type),*) -> Result<$ret, Self::Error>;
     };
 }
@@ -44,6 +48,7 @@ macro_rules! generate_checked_env_trait {
             // passed from the x-macro to this macro. It is embedded in a `$()*`
             // pattern-repetition matcher so that it will match all provided
             // 'mod' blocks provided.
+            $(#[$mod_attr:meta])*
             mod $mod_id:ident $mod_str:literal
             {
                 $(
@@ -52,6 +57,7 @@ macro_rules! generate_checked_env_trait {
                     // x-macro to this macro. It is embedded in a `$()*`
                     // pattern-repetition matcher so that it will match all such
                     // descriptions.
+                    $(#[$fn_attr:meta])*
                     { $fn_str:literal, fn $fn_id:ident $args:tt -> $ret:ty }
                 )*
             }
@@ -78,7 +84,7 @@ macro_rules! generate_checked_env_trait {
                     // block repetition-level from the outer pattern in the
                     // expansion, flattening all functions from all 'mod' blocks
                     // into the CheckedEnv trait.
-                    host_function_helper!{fn $fn_id $args -> $ret}
+                    host_function_helper!{$(#[$fn_attr])* fn $fn_id $args -> $ret}
                 )*
             )*
         }
@@ -120,6 +126,7 @@ macro_rules! impl_env_for_checked_env {
             // passed from the x-macro to this macro. It is embedded in a `$()*`
             // pattern-repetition matcher so that it will match all provided
             // 'mod' blocks provided.
+            $(#[$mod_attr:meta])*
             mod $mod_id:ident $mod_str:literal
             {
                 $(
@@ -128,6 +135,7 @@ macro_rules! impl_env_for_checked_env {
                     // x-macro to this macro. It is embedded in a `$()*`
                     // pattern-repetition matcher so that it will match all such
                     // descriptions.
+                    $(#[$fn_attr:meta])*
                     { $fn_str:literal, fn $fn_id:ident $args:tt -> $ret:ty }
                 )*
             }

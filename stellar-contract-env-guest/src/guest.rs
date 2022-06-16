@@ -58,6 +58,7 @@ macro_rules! impl_env_for_guest {
             // passed from the x-macro to this macro. It is embedded in a `$()*`
             // pattern-repetition matcher so that it will match all provided
             // 'mod' blocks provided.
+            $(#[$mod_attr:meta])*
             mod $mod_id:ident $mod_str:literal
             {
                 $(
@@ -66,6 +67,7 @@ macro_rules! impl_env_for_guest {
                     // x-macro to this macro. It is embedded in a `$()*`
                     // pattern-repetition matcher so that it will match all such
                     // descriptions.
+                    $(#[$fn_attr:meta])*
                     { $fn_str:literal, fn $fn_id:ident $args:tt -> $ret:ty }
                 )*
             }
@@ -113,9 +115,13 @@ call_macro_with_all_host_functions! { impl_env_for_guest }
 // Guest implementation of the Env trait (calling through to the corresponding
 // unsafe extern function).
 macro_rules! extern_function_helper {
-    {$fn_str:literal, fn $fn_id:ident($($arg:ident:$type:ty),*) -> $ret:ty} =>
+    {
+        $fn_str:literal, $(#[$attr:meta])* fn $fn_id:ident($($arg:ident:$type:ty),*) -> $ret:ty
+    }
+    =>
     {
         #[cfg_attr(target_family = "wasm", link_name = $fn_str)]
+        $(#[$attr])*
         pub(crate) fn $fn_id($($arg:$type),*) -> $ret;
     };
 }
@@ -131,6 +137,7 @@ macro_rules! generate_extern_modules {
             // passed from the x-macro to this macro. It is embedded in a `$()*`
             // pattern-repetition matcher so that it will match all provided
             // 'mod' blocks provided.
+            $(#[$mod_attr:meta])*
             mod $mod_id:ident $mod_str:literal
             {
                 $(
@@ -139,6 +146,7 @@ macro_rules! generate_extern_modules {
                     // x-macro to this macro. It is embedded in a `$()*`
                     // pattern-repetition matcher so that it will match all such
                     // descriptions.
+                    $(#[$fn_attr:meta])*
                     { $fn_str:literal, fn $fn_id:ident $args:tt -> $ret:ty }
                 )*
             }
@@ -156,6 +164,7 @@ macro_rules! generate_extern_modules {
             // macro's expansion preserves the structure, creating a nested set
             // of mods and fns. There is therefore a mod declaration between the
             // outer and inner `$()*` pattern-repetition expanders.
+            $(#[$mod_attr])*
             mod $mod_id {
                 #[allow(unused_imports)]
                 use crate::{RawVal,Object,Symbol};
@@ -168,7 +177,7 @@ macro_rules! generate_extern_modules {
                         // one `$()*` pattern-repetition expander so that it
                         // repeats only for the part of each mod that the
                         // corresponding pattern-repetition matcher.
-                        extern_function_helper!{$fn_str, fn $fn_id $args -> $ret}
+                        extern_function_helper!{$fn_str, $(#[$fn_attr])* fn $fn_id $args -> $ret}
                     )*
                 }
             }
