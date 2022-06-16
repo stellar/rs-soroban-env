@@ -1115,7 +1115,7 @@ impl CheckedEnv for Host {
     }
 
     fn binary_new(&self) -> Result<Object, HostError> {
-        todo!()
+        Ok(self.add_host_object(Vec::<u8>::new())?.into())
     }
 
     fn binary_put(&self, v: Object, i: RawVal, x: RawVal) -> Result<Object, HostError> {
@@ -1135,7 +1135,19 @@ impl CheckedEnv for Host {
     }
 
     fn binary_push(&self, x: Object, v: RawVal) -> Result<Object, HostError> {
-        todo!()
+        let u: u32 = v
+            .try_into()
+            .map_err(|_| HostError::General("v must be u32"))?;
+
+        let vnew = self.visit_obj(x, move |hv: &Vec<u8>| {
+            let mut vnew = hv.clone();
+            vnew.push(
+                u.try_into()
+                    .map_err(|_| HostError::General("u must be u8"))?,
+            );
+            Ok(vnew)
+        })?;
+        Ok(self.add_host_object(vnew)?.into())
     }
 
     fn binary_pop(&self, x: Object) -> Result<Object, HostError> {
