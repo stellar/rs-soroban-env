@@ -26,9 +26,6 @@ use crate::{
     SymbolError, Tag, Val,
 };
 
-use ed25519_dalek::{PublicKey, Signature, Verifier};
-use sha2::{Digest, Sha256};
-
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -870,54 +867,25 @@ impl CheckedEnv for Host {
     }
 
     fn compute_hash_sha256(&self, x: Object) -> Result<Object, HostError> {
-        let binary = self.visit_obj(x, |bin: &Vec<u8>| {
-            Ok(bin.clone()) //TODO:Why is this neccesary
+        use sha2::{Digest, Sha256};
+        let hash = self.visit_obj(x, |bin: &Vec<u8>| {
+            Ok(Sha256::digest(bin).as_slice().to_vec())
         })?;
-
-        let mut hasher = Sha256::new();
-        hasher.update(binary);
-        let raw_hash = hasher.finalize();
-
-        let hash: Vec<u8> = raw_hash[0..32]
-            .try_into()
-            .expect("slice with incorrect length");
         Ok(self.add_host_object(hash)?.into())
     }
 
     fn verify_sig_ed25519(&self, x: Object, k: Object, s: Object) -> Result<RawVal, HostError> {
-        let key_bytes = self.visit_obj(k, |bin: &Vec<u8>| {
-            let arr: [u8; 32] = bin
-                .as_slice()
-                .try_into()
-                .map_err(|_| HostError::General("invalid raw key"))?;
-            Ok(arr.clone())
+        use ed25519_dalek::{PublicKey, Signature, Verifier};
+
+        let public_key: PublicKey = self.visit_obj(k, |bin: &Vec<u8>| {
+            Ok(PublicKey::from_bytes(bin).map_err(|_| HostError::General("Invalid PublicKey"))?)
         })?;
 
-        let message_bytes = self.visit_obj(x, |bin: &Vec<u8>| Ok(bin.clone()))?;
-
-        let sig_bytes = self.visit_obj(s, |bin: &Vec<u8>| {
-            let arr: [u8; 64] = bin
-                .as_slice()
-                .try_into()
-                .map_err(|_| HostError::General("invalid raw signature"))?;
-            Ok(arr.clone())
+        let sig: Signature = self.visit_obj(s, |bin: &Vec<u8>| {
+            Ok(Signature::from_bytes(bin).map_err(|_| HostError::General("Invalid Signature"))?)
         })?;
 
-        let public_key: PublicKey = match PublicKey::from_bytes(&key_bytes) {
-            Ok(public_key) => public_key,
-            Err(_) => return Err(HostError::General("invalid key")),
-        };
-
-        let sig: Signature = match Signature::from_bytes(&sig_bytes) {
-            Ok(sig) => sig,
-            Err(_) => return Err(HostError::General("invalid signature")),
-        };
-
-        let verified = public_key.verify(&message_bytes[..], &sig).is_ok();
-        if verified {
-            Ok(RawVal::from_bool(true))
-        } else {
-            Ok(RawVal::from_bool(false))
-        }
+        let res = self.visit_obj(x, |bin: &Vec<u8>| Ok(public_key.verify(bin, &sig).is_ok()))?;
+        Ok(res.into())
     }
 }

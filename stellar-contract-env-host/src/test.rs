@@ -423,16 +423,6 @@ fn sha256_test() {
     assert_eq!(bin.as_vec().clone(), exp);
 }
 
-fn is_true(val: ScVal) -> bool {
-    let res = match val {
-        ScVal::Static(ScStatic::True) => true,
-        ScVal::Static(ScStatic::False) => false,
-        _ => panic!("Wrong type"),
-    };
-
-    res
-}
-
 #[test]
 fn ed25519_verify_test() {
     let host = Host::default();
@@ -467,7 +457,7 @@ fn ed25519_verify_test() {
         .unwrap();
     let res = host.from_host_val(raw_res).unwrap();
 
-    assert_eq!(is_true(res), true);
+    assert_eq!(res, ScVal::Static(ScStatic::True));
 
     // Now verify with wrong message
     let message2: &[u8] = b"73";
@@ -485,7 +475,7 @@ fn ed25519_verify_test() {
         .unwrap();
     let res_false = host.from_host_val(raw_res_false).unwrap();
 
-    assert_eq!(is_true(res_false), false);
+    assert_eq!(res_false, ScVal::Static(ScStatic::False));
 }
 
 /// VM test
