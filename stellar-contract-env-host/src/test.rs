@@ -1,8 +1,10 @@
 use crate::{
-    xdr::{ScObject, ScObjectType, ScVal, ScVec},
+    xdr::{ScObject, ScObjectType, ScVal, ScVec, ScStatic},
     Host, IntoEnvVal, Object, RawVal, Tag,
 };
 use stellar_contract_env_common::{CheckedEnv, RawValConvertible};
+
+use hex::FromHex;
 
 #[cfg(feature = "vm")]
 use crate::storage::{AccessType, Footprint, Key, Storage};
@@ -419,6 +421,51 @@ fn sha256_test() {
     let exp: Vec<u8> = vec![75, 245, 18, 47, 52, 69, 84, 197, 59, 222, 46, 187, 140, 210, 183, 227, 209,
     96, 10, 214, 49, 195, 133, 165, 215, 204, 226, 60, 119, 133, 69, 154];
     assert_eq!(bin.as_vec().clone(), exp);
+}
+
+fn is_true (val: ScVal) -> bool {
+    let res = match val {
+        ScVal::Static(ScStatic::True) => true,
+        ScVal::Static(ScStatic::False) => false,
+        _ => panic!("Wrong type"),
+    };
+
+    res
+}
+
+#[test]
+fn ed25519_verify_test() {
+    let host = Host::default();
+    
+    // From https://datatracker.ietf.org/doc/html/rfc8032#section-7.1
+
+    // First verify successfully
+    let public_key: &[u8] = b"3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4660c";
+    let message: &[u8] = b"72";
+    let signature: &[u8] = b"92a009a9f0d4cab8720e820b5f642540a2b27b5416503f8fb3762223ebdb69da085ac1e43e15996e458f3613d0f11d8c387b2eaeb4302aeeb00d291612bb0c00";
+
+    let pub_bytes: Vec<u8> = FromHex::from_hex(public_key).unwrap();
+    let msg_bytes: Vec<u8> = FromHex::from_hex(message).unwrap();
+    let sig_bytes: Vec<u8> = FromHex::from_hex(signature).unwrap();
+
+    let obj_pub = host.to_host_obj(&ScObject::Binary(pub_bytes.try_into().unwrap())).unwrap();
+    let obj_msg = host.to_host_obj(&ScObject::Binary(msg_bytes.try_into().unwrap())).unwrap();
+    let obj_sig = host.to_host_obj(&ScObject::Binary(sig_bytes.try_into().unwrap())).unwrap();
+
+    let raw_res = host.verify_sig_ed25519(obj_msg.to_object(), obj_pub.to_object(), obj_sig.to_object()).unwrap();
+    let res = host.from_host_val(raw_res).unwrap();
+
+    assert_eq!(is_true(res), true);
+
+    // Now verify with wrong message
+    let message2: &[u8] = b"73";
+    let msg_bytes2: Vec<u8> = FromHex::from_hex(message2).unwrap();
+    let obj_msg2 = host.to_host_obj(&ScObject::Binary(msg_bytes2.try_into().unwrap())).unwrap();
+
+    let raw_res_false = host.verify_sig_ed25519(obj_msg2.to_object(), obj_pub.to_object(), obj_sig.to_object()).unwrap();
+    let res_false = host.from_host_val(raw_res_false).unwrap();
+
+    assert_eq!(is_true(res_false), false);
 }
 
 /// VM test

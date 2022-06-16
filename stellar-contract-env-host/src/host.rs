@@ -27,6 +27,7 @@ use crate::{
 };
 
 use sha2::{Sha256, Digest};
+use ed25519_dalek::{PublicKey, Signature, Verifier};
 
 use thiserror::Error;
 
@@ -882,6 +883,41 @@ impl CheckedEnv for Host {
     }
 
     fn verify_sig_ed25519(&self, x: Object, k: Object, s: Object) -> Result<RawVal, HostError> {
-        todo!()
+        let key_bytes = self.visit_obj(k, |bin: &Vec<u8>| {
+            let arr: [u8; 32] = bin
+                .as_slice()
+                .try_into()
+                .map_err(|_| HostError::General("invalid raw key"))?;
+            Ok(arr.clone())
+        })?;
+        
+        let message_bytes = self.visit_obj(x, |bin: &Vec<u8>| {
+            Ok(bin.clone())
+        })?;
+
+        let sig_bytes = self.visit_obj(s, |bin: &Vec<u8>| {
+            let arr: [u8; 64] = bin
+                .as_slice()
+                .try_into()
+                .map_err(|_| HostError::General("invalid raw signature"))?;
+            Ok(arr.clone())
+        })?;
+
+        let public_key: PublicKey = match PublicKey::from_bytes(&key_bytes) {
+            Ok(public_key) => public_key,
+            Err(_) => return Err(HostError::General("invalid key"))
+        };
+
+        let sig: Signature = match Signature::from_bytes(&sig_bytes) {
+            Ok(sig) => sig,
+            Err(_) => return Err(HostError::General("invalid signature"))
+        };
+
+        let verified = public_key.verify(&message_bytes[..], &sig).is_ok();
+        if verified {
+            Ok(RawVal::from_bool(true))
+        } else {
+            Ok(RawVal::from_bool(false))
+        }
     }
 }
