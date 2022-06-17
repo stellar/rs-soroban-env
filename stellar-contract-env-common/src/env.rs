@@ -63,125 +63,125 @@ macro_rules! call_macro_with_all_host_functions {
             // argument list of comma-separated arg:type pairs
 
             mod context "x" {
-                {"$_", fn log_value(v:RawVal) -> RawVal }
-                {"$0", fn get_last_operation_result() -> RawVal }
-                {"$1", fn obj_cmp(a:RawVal, b:RawVal) -> i64 }
+                {"_", fn log_value(v:RawVal) -> RawVal }
+                {"0", fn get_last_operation_result() -> RawVal }
+                {"1", fn obj_cmp(a:RawVal, b:RawVal) -> i64 }
             }
 
             mod u64 "u" {
-                {"$_", fn obj_from_u64(v:u64) -> Object }
-                {"$0", fn obj_to_u64(obj:Object) -> u64 }
+                {"_", fn obj_from_u64(v:u64) -> Object }
+                {"0", fn obj_to_u64(obj:Object) -> u64 }
             }
 
             /// Functions concerned with the i64 type
             mod i64 "i" {
                 /// Convert an i64 to an object containing an i64.
-                {"$_", fn obj_from_i64(v:i64) -> Object }
+                {"_", fn obj_from_i64(v:i64) -> Object }
                 /// Convert an object containing an i64 to an i64.
-                {"$0", fn obj_to_i64(obj:Object) -> i64 }
+                {"0", fn obj_to_i64(obj:Object) -> i64 }
             }
 
             mod map "m" {
-                {"$_", fn map_new() -> Object }
-                {"$0", fn map_put(m:Object, k:RawVal, v:RawVal) -> Object}
-                {"$1", fn map_get(m:Object, k:RawVal) -> RawVal}
-                {"$2", fn map_del(m:Object, k:RawVal) -> Object}
-                {"$3", fn map_len(m:Object) -> RawVal}
-                {"$4", fn map_has(m:Object, k:RawVal) -> RawVal}
-                {"$5", fn map_prev_key(m:Object, k:RawVal) -> RawVal}
-                {"$6", fn map_next_key(m:Object, k:RawVal) -> RawVal}
-                {"$7", fn map_min_key(m:Object) -> RawVal}
-                {"$8", fn map_max_key(m:Object) -> RawVal}
-                {"$9", fn map_keys(m:Object) -> Object}
-                {"$A", fn map_values(m:Object) -> Object}
+                {"_", fn map_new() -> Object }
+                {"0", fn map_put(m:Object, k:RawVal, v:RawVal) -> Object}
+                {"1", fn map_get(m:Object, k:RawVal) -> RawVal}
+                {"2", fn map_del(m:Object, k:RawVal) -> Object}
+                {"3", fn map_len(m:Object) -> RawVal}
+                {"4", fn map_has(m:Object, k:RawVal) -> RawVal}
+                {"5", fn map_prev_key(m:Object, k:RawVal) -> RawVal}
+                {"6", fn map_next_key(m:Object, k:RawVal) -> RawVal}
+                {"7", fn map_min_key(m:Object) -> RawVal}
+                {"8", fn map_max_key(m:Object) -> RawVal}
+                {"9", fn map_keys(m:Object) -> Object}
+                {"A", fn map_values(m:Object) -> Object}
             }
 
             mod vec "v" {
-                {"$_", fn vec_new() -> Object}
-                {"$0", fn vec_put(v:Object, i:RawVal, x:RawVal) -> Object}
-                {"$1", fn vec_get(v:Object, i:RawVal) -> RawVal}
-                {"$2", fn vec_del(v:Object, i:RawVal) -> Object}
-                {"$3", fn vec_len(v:Object) -> RawVal}
-                {"$4", fn vec_push(v:Object, x:RawVal) -> Object}
-                {"$5", fn vec_pop(v:Object) -> Object}
-                {"$6", fn vec_front(v:Object) -> RawVal}
-                {"$7", fn vec_back(v:Object) -> RawVal}
-                {"$8", fn vec_insert(v:Object, i:RawVal, x:RawVal) -> Object}
-                {"$9", fn vec_append(v1:Object, v2:Object) -> Object}
-                {"$A", fn vec_slice(v:Object, i:RawVal, l:RawVal) -> Object}
+                {"_", fn vec_new() -> Object}
+                {"0", fn vec_put(v:Object, i:RawVal, x:RawVal) -> Object}
+                {"1", fn vec_get(v:Object, i:RawVal) -> RawVal}
+                {"2", fn vec_del(v:Object, i:RawVal) -> Object}
+                {"3", fn vec_len(v:Object) -> RawVal}
+                {"4", fn vec_push(v:Object, x:RawVal) -> Object}
+                {"5", fn vec_pop(v:Object) -> Object}
+                {"6", fn vec_front(v:Object) -> RawVal}
+                {"7", fn vec_back(v:Object) -> RawVal}
+                {"8", fn vec_insert(v:Object, i:RawVal, x:RawVal) -> Object}
+                {"9", fn vec_append(v1:Object, v2:Object) -> Object}
+                {"A", fn vec_slice(v:Object, i:RawVal, l:RawVal) -> Object}
             }
 
             mod ledger "l" {
-                {"$_", fn put_contract_data(k:RawVal, v: RawVal) -> RawVal}
-                {"$0", fn has_contract_data(k:RawVal) -> RawVal}
-                {"$1", fn get_contract_data(k:RawVal) -> RawVal}
-                {"$2", fn del_contract_data(k:RawVal) -> RawVal}
+                {"_", fn put_contract_data(k:RawVal, v: RawVal) -> RawVal}
+                {"0", fn has_contract_data(k:RawVal) -> RawVal}
+                {"1", fn get_contract_data(k:RawVal) -> RawVal}
+                {"2", fn del_contract_data(k:RawVal) -> RawVal}
             }
 
             mod call "c" {
-                {"$_", fn call(contract:Object, func:Symbol, args:Object) -> RawVal}
+                {"_", fn call(contract:Object, func:Symbol, args:Object) -> RawVal}
             }
 
             mod bigint "g" {
-                {"$_", fn bigint_from_u64(x:u64) -> Object}
-                {"$0", fn bigint_to_u64(x:Object) -> u64}
-                {"$1", fn bigint_from_i64(x:i64) -> Object}
-                {"$2", fn bigint_to_i64(x:Object) -> i64}
-                {"$3", fn bigint_add(x:Object, y:Object) -> Object}
-                {"$4", fn bigint_sub(x:Object, y:Object) -> Object}
-                {"$5", fn bigint_mul(x:Object, y:Object) -> Object}
-                {"$6", fn bigint_div(x:Object, y:Object) -> Object}
-                {"$7", fn bigint_rem(x:Object, y:Object) -> Object}
-                {"$8", fn bigint_and(x:Object, y:Object) -> Object}
-                {"$9", fn bigint_or(x:Object, y:Object) -> Object}
-                {"$A", fn bigint_xor(x:Object, y:Object) -> Object}
-                {"$B", fn bigint_shl(x:Object, y:RawVal) -> Object}
-                {"$C", fn bigint_shr(x:Object, y:RawVal) -> Object}
-                {"$D", fn bigint_cmp(x:Object, y:Object) -> RawVal}
-                {"$E", fn bigint_is_zero(x:Object) -> RawVal}
-                {"$F", fn bigint_neg(x:Object) -> Object}
-                {"$G", fn bigint_not(x:Object) -> Object}
-                {"$H", fn bigint_gcd(x:Object, y:Object) -> Object}
-                {"$I", fn bigint_lcm(x:Object, y:Object) -> Object}
-                {"$J", fn bigint_pow(x:Object, y:Object) -> Object}
-                {"$K", fn bigint_pow_mod(p:Object, q:Object, m:Object) -> Object}
-                {"$L", fn bigint_sqrt(x:Object) -> Object}
-                {"$M", fn bigint_bits(x:Object) -> RawVal}
+                {"_", fn bigint_from_u64(x:u64) -> Object}
+                {"0", fn bigint_to_u64(x:Object) -> u64}
+                {"1", fn bigint_from_i64(x:i64) -> Object}
+                {"2", fn bigint_to_i64(x:Object) -> i64}
+                {"3", fn bigint_add(x:Object, y:Object) -> Object}
+                {"4", fn bigint_sub(x:Object, y:Object) -> Object}
+                {"5", fn bigint_mul(x:Object, y:Object) -> Object}
+                {"6", fn bigint_div(x:Object, y:Object) -> Object}
+                {"7", fn bigint_rem(x:Object, y:Object) -> Object}
+                {"8", fn bigint_and(x:Object, y:Object) -> Object}
+                {"9", fn bigint_or(x:Object, y:Object) -> Object}
+                {"A", fn bigint_xor(x:Object, y:Object) -> Object}
+                {"B", fn bigint_shl(x:Object, y:RawVal) -> Object}
+                {"C", fn bigint_shr(x:Object, y:RawVal) -> Object}
+                {"D", fn bigint_cmp(x:Object, y:Object) -> RawVal}
+                {"E", fn bigint_is_zero(x:Object) -> RawVal}
+                {"F", fn bigint_neg(x:Object) -> Object}
+                {"G", fn bigint_not(x:Object) -> Object}
+                {"H", fn bigint_gcd(x:Object, y:Object) -> Object}
+                {"I", fn bigint_lcm(x:Object, y:Object) -> Object}
+                {"J", fn bigint_pow(x:Object, y:Object) -> Object}
+                {"K", fn bigint_pow_mod(p:Object, q:Object, m:Object) -> Object}
+                {"L", fn bigint_sqrt(x:Object) -> Object}
+                {"M", fn bigint_bits(x:Object) -> RawVal}
             }
 
             mod binary "b" {
-                {"$_", fn serialize_to_binary(x:Object) -> Object}
-                {"$0", fn deserialize_from_binary(x:Object) -> Object}
-                {"$1", fn binary_copy_to_guest_mem(x:Object, i:RawVal, j:RawVal, l:RawVal) -> RawVal}
-                {"$2", fn binary_copy_from_guest_mem(x:Object, i:RawVal, j:RawVal, l:RawVal) -> RawVal}
+                {"_", fn serialize_to_binary(x:Object) -> Object}
+                {"0", fn deserialize_from_binary(x:Object) -> Object}
+                {"1", fn binary_copy_to_guest_mem(x:Object, i:RawVal, j:RawVal, l:RawVal) -> RawVal}
+                {"2", fn binary_copy_from_guest_mem(x:Object, i:RawVal, j:RawVal, l:RawVal) -> RawVal}
                 // These functions below ($3-$F) mirror vector operations
-                {"$3", fn binary_new() -> Object}
-                {"$4", fn binary_put(v:Object, i:RawVal, x:RawVal) -> Object}
-                {"$5", fn binary_get(x:Object, i:RawVal) -> Object}
-                {"$6", fn binary_del(v:Object, i:RawVal) -> Object}
-                {"$7", fn binary_len(x:Object) -> RawVal}
-                {"$8", fn binary_push(x:Object, v:RawVal) -> Object}
-                {"$9", fn binary_pop(x:Object) -> Object}
-                {"$A", fn binary_front(v:Object) -> RawVal}
-                {"$B", fn binary_back(v:Object) -> RawVal}
-                {"$C", fn binary_insert(x:Object, i:RawVal, v:RawVal) -> Object}
-                {"$D", fn binary_append(v1:Object, v2:Object) -> Object}
-                {"$E", fn binary_slice(v:Object, i:RawVal, l:RawVal) -> Object}
+                {"3", fn binary_new() -> Object}
+                {"4", fn binary_put(v:Object, i:RawVal, x:RawVal) -> Object}
+                {"5", fn binary_get(x:Object, i:RawVal) -> Object}
+                {"6", fn binary_del(v:Object, i:RawVal) -> Object}
+                {"7", fn binary_len(x:Object) -> RawVal}
+                {"8", fn binary_push(x:Object, v:RawVal) -> Object}
+                {"9", fn binary_pop(x:Object) -> Object}
+                {"A", fn binary_front(v:Object) -> RawVal}
+                {"B", fn binary_back(v:Object) -> RawVal}
+                {"C", fn binary_insert(x:Object, i:RawVal, v:RawVal) -> Object}
+                {"D", fn binary_append(v1:Object, v2:Object) -> Object}
+                {"E", fn binary_slice(v:Object, i:RawVal, l:RawVal) -> Object}
             }
 
             mod hash "h" {
-                {"$_", fn hash_from_binary(x:Object) -> Object}
-                {"$0", fn hash_to_binary(x:Object) -> Object}
+                {"_", fn hash_from_binary(x:Object) -> Object}
+                {"0", fn hash_to_binary(x:Object) -> Object}
             }
 
             mod key "k" {
-                {"$_", fn public_key_from_binary(x:Object) -> Object}
-                {"$0", fn public_key_to_binary(x:Object) -> Object}
+                {"_", fn public_key_from_binary(x:Object) -> Object}
+                {"0", fn public_key_to_binary(x:Object) -> Object}
             }
 
             mod crypto "c" {
-                {"$_", fn compute_hash_sha256(x:Object) -> Object}
-                {"$_", fn verify_sig_ed25519(x:Object, k:Object, s:Object) -> RawVal}
+                {"_", fn compute_hash_sha256(x:Object) -> Object}
+                {"_", fn verify_sig_ed25519(x:Object, k:Object, s:Object) -> RawVal}
             }
         }
     };
