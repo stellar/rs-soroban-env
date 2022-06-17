@@ -6,13 +6,16 @@ use core::cmp::Ordering;
 use core::fmt::Debug;
 use im_rc::{OrdMap, Vector};
 use std::num::TryFromIntError;
-use stellar_contract_env_common::xdr::Hash;
 
-use crate::storage::{Key, Storage};
+use crate::storage::Storage;
 use crate::weak_host::WeakHost;
 
 use crate::xdr;
-use crate::xdr::{ScMap, ScMapEntry, ScObject, ScStatic, ScStatus, ScStatusType, ScVal, ScVec};
+use crate::xdr::{
+    ContractDataEntry, Hash, HostFunction, LedgerEntry, LedgerEntryData, LedgerEntryExt, LedgerKey,
+    LedgerKeyContractData, ScMap, ScMapEntry, ScObject, ScStatic, ScStatus, ScStatusType, ScVal,
+    ScVec,
+};
 use std::rc::Rc;
 
 use crate::host_object::{HostMap, HostObj, HostObject, HostObjectType, HostVal, HostVec};
@@ -115,6 +118,12 @@ impl Host {
         }))
     }
 
+    pub fn try_recover_storage(self) -> Result<Storage, Self> {
+        Rc::try_unwrap(self.0)
+            .map(|host_impl| host_impl.storage.into_inner())
+            .map_err(|rc_host_impl| Host(rc_host_impl))
+    }
+
     /// Pushes a new [`Frame`] on the context stack, returning a [`FrameGuard`]
     /// that will pop the stack when it is dropped. This should be called at
     /// least any time a new contract is invoked.
@@ -123,23 +132,21 @@ impl Host {
         FrameGuard { host: self.clone() }
     }
 
-    /// Applies a function to the top [`Frame`] of the context stack, panicking
-    /// if the stack is empty. Returns result of function call.
-    fn with_current_frame<F, U>(&self, f: F) -> U
+    /// Applies a function to the top [`Frame`] of the context stack. Returns
+    /// [`HostError`] if the context stack is empty, otherwise returns result of
+    /// function call.
+    fn with_current_frame<F, U>(&self, f: F) -> Result<U, HostError>
     where
         F: FnOnce(&Frame) -> U,
     {
-        f(self
-            .0
-            .context
-            .borrow()
-            .last()
-            .expect("missing current host frame"))
+        Ok(f(self.0.context.borrow().last().ok_or(
+            HostError::General("no contract currently running"),
+        )?))
     }
 
-    /// Returns [`Hash`] contract ID from top of context stack, panicking if the
-    /// stack is empty.
-    fn get_current_contract_id(&self) -> Hash {
+    /// Returns [`Hash`] contract ID from top of context stack, or a
+    /// [`HostError`] if the context stack is empty.
+    fn get_current_contract_id(&self) -> Result<Hash, HostError> {
         self.with_current_frame(|frame| frame.contract_id.clone())
     }
 
@@ -351,13 +358,11 @@ impl Host {
 
     /// Converts a [`RawVal`] to an [`ScVal`] and combines it with the currently-executing
     /// [`ContractID`] to produce a [`Key`], that can be used to access ledger [`Storage`].
-    fn to_storage_key(&self, k: RawVal) -> Result<Key, HostError> {
-        let contract_id = self.get_current_contract_id();
-        let sckey = self.from_host_val(k)?;
-        Ok(Key {
-            contract_id,
-            key: sckey,
-        })
+    fn to_storage_key(&self, k: RawVal) -> Result<LedgerKey, HostError> {
+        Ok(LedgerKey::ContractData(LedgerKeyContractData {
+            contract_id: self.get_current_contract_id()?,
+            key: self.from_host_val(k)?,
+        }))
     }
 
     #[cfg(feature = "vm")]
@@ -371,12 +376,15 @@ impl Host {
             Ok(xdr::Hash(arr))
         })?;
         let key = ScVal::Static(ScStatic::LedgerKeyContractCodeWasm);
-        let storage_key = Key {
+        let storage_key = LedgerKey::ContractData(LedgerKeyContractData {
             contract_id: id.clone(),
             key,
-        };
+        });
         // Retrieve the contract code and create vm
-        let scval = self.0.storage.borrow_mut().get(&storage_key)?;
+        let scval = match self.0.storage.borrow_mut().get(&storage_key)?.data {
+            LedgerEntryData::ContractData(ContractDataEntry { val, .. }) => Ok(val),
+            _ => Err(HostError::General("expected contract data")),
+        }?;
         let scobj = match scval {
             ScVal::Object(Some(ob)) => ob,
             _ => return Err(HostError::General("not an object")),
@@ -388,6 +396,30 @@ impl Host {
         let vm = Vm::new(&self, id, code.as_slice())?;
         // Resolve the function symbol and invoke contract call
         vm.invoke_function_raw(self, SymbolStr::from(func).as_ref(), args)
+    }
+
+    pub fn invoke_function(&mut self, hf: HostFunction, args: ScVec) -> Result<ScVal, HostError> {
+        if let [ScVal::Object(Some(scobj)), ScVal::Symbol(scsym), rest @ ..] = args.as_slice() {
+            let object: Object = self.to_host_obj(&scobj)?.to_object();
+            let symbol: Symbol = scsym.as_slice().try_into()?;
+            let mut raw_args: Vec<RawVal> = Vec::new();
+            for scv in rest.iter() {
+                raw_args.push(self.to_host_val(&scv)?.val);
+            }
+
+            let raw_res = match hf {
+                HostFunction::Call => {
+                    #[cfg(not(feature = "vm"))]
+                    unimplemented!();
+                    #[cfg(feature = "vm")]
+                    self.call_n(object, symbol, &raw_args[..])
+                }
+                _ => Err(HostError::General("bad host function")),
+            }?;
+            Ok(self.from_host_val(raw_res)?)
+        } else {
+            return Err(HostError::General("unexpected args"));
+        }
     }
 }
 
@@ -643,7 +675,16 @@ impl CheckedEnv for Host {
 
     fn put_contract_data(&self, k: RawVal, v: RawVal) -> Result<RawVal, HostError> {
         let key = self.to_storage_key(k)?;
-        let val = self.from_host_val(v)?;
+        let data = LedgerEntryData::ContractData(ContractDataEntry {
+            contract_id: self.get_current_contract_id()?,
+            key: self.from_host_val(k)?,
+            val: self.from_host_val(v)?,
+        });
+        let val = LedgerEntry {
+            last_modified_ledger_seq: 0,
+            data,
+            ext: LedgerEntryExt::V0,
+        };
         self.0.storage.borrow_mut().put(&key, &val)?;
         Ok(().into())
     }
@@ -656,8 +697,14 @@ impl CheckedEnv for Host {
 
     fn get_contract_data(&self, k: RawVal) -> Result<RawVal, HostError> {
         let key = self.to_storage_key(k)?;
-        let scval = self.0.storage.borrow_mut().get(&key)?;
-        Ok(self.to_host_val(&scval)?.into())
+        match self.0.storage.borrow_mut().get(&key)?.data {
+            LedgerEntryData::ContractData(ContractDataEntry {
+                contract_id,
+                key,
+                val,
+            }) => Ok(self.to_host_val(&val)?.into()),
+            _ => Err(HostError::General("expected contract data")),
+        }
     }
 
     fn del_contract_data(&self, k: RawVal) -> Result<RawVal, HostError> {
