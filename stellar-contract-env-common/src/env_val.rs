@@ -6,7 +6,7 @@ use super::{
     raw_val::{RawVal, RawValConvertible},
     Env,
 };
-use core::{cmp::Ordering, fmt::Debug};
+use core::{cmp::Ordering, fmt::Debug, panic};
 
 // EnvVal is a RawVal or TaggedVal coupled to a specific instance of Env. In the
 // guest we will use this with a zero-sized Guest unit struct, but in the host
@@ -115,6 +115,18 @@ pub trait TryFromVal<E: Env, V: Val>: Sized + TryFrom<EnvVal<E, V>> {
 }
 
 impl<E: Env, V: Val, T> TryFromVal<E, V> for T where T: Sized + TryFrom<EnvVal<E, V>> {}
+
+pub trait ExpectFromVal<E: Env, V: Val>: Sized + TryFromVal<E, V> {
+    fn expect_from_val(env: &E, v: V) -> Self {
+        let res = Self::try_from_val(env, v);
+        match res {
+            Ok(v) => v,
+            Err(_) => panic!("expect_from_val"),
+        }
+    }
+}
+
+impl<E: Env, V: Val, T> ExpectFromVal<E, V> for T where T: Sized + TryFromVal<E, V> {}
 
 impl<E: Env, V: Val, I: Into<EnvVal<E, V>>> IntoEnvVal<E, V> for I {
     fn into_env_val(self, env: &E) -> EnvVal<E, V> {
