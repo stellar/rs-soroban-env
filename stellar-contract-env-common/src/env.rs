@@ -181,7 +181,7 @@ macro_rules! call_macro_with_all_host_functions {
 
             mod crypto "c" {
                 {"$_", fn compute_hash_sha256(x:Object) -> Object}
-                {"$0", fn verify_sig_ed25519(x:Object, k:Object, s:Object) -> RawVal}
+                {"$0", fn verify_sig_ed25519(x:Object, k:Object, s:Object) -> ()}
             }
         }
     };

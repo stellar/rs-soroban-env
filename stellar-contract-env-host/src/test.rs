@@ -1,5 +1,5 @@
 use crate::{
-    xdr::{ScObject, ScObjectType, ScStatic, ScVal, ScVec},
+    xdr::{ScObject, ScObjectType, ScVal, ScVec},
     Host, IntoEnvVal, Object, RawVal, Tag,
 };
 use stellar_contract_env_common::{CheckedEnv, RawValConvertible};
@@ -448,16 +448,16 @@ fn ed25519_verify_test() {
         .to_host_obj(&ScObject::Binary(sig_bytes.try_into().unwrap()))
         .unwrap();
 
-    let raw_res = host
-        .verify_sig_ed25519(
-            obj_msg.to_object(),
-            obj_pub.to_object(),
-            obj_sig.to_object(),
-        )
-        .unwrap();
-    let res = host.from_host_val(raw_res).unwrap();
+    let res = host.verify_sig_ed25519(
+        obj_msg.to_object(),
+        obj_pub.to_object(),
+        obj_sig.to_object(),
+    );
 
-    assert_eq!(res, ScVal::Static(ScStatic::True));
+    match res {
+        Ok(_) => (),
+        _ => panic!("verification test failed"),
+    };
 
     // Now verify with wrong message
     let message2: &[u8] = b"73";
@@ -466,16 +466,16 @@ fn ed25519_verify_test() {
         .to_host_obj(&ScObject::Binary(msg_bytes2.try_into().unwrap()))
         .unwrap();
 
-    let raw_res_false = host
-        .verify_sig_ed25519(
-            obj_msg2.to_object(),
-            obj_pub.to_object(),
-            obj_sig.to_object(),
-        )
-        .unwrap();
-    let res_false = host.from_host_val(raw_res_false).unwrap();
+    let res_failed = host.verify_sig_ed25519(
+        obj_msg2.to_object(),
+        obj_pub.to_object(),
+        obj_sig.to_object(),
+    );
 
-    assert_eq!(res_false, ScVal::Static(ScStatic::False));
+    match res_failed {
+        Ok(_) => panic!("verification test failed"),
+        _ => (),
+    };
 }
 
 /// VM test
