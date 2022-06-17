@@ -871,6 +871,11 @@ impl CheckedEnv for Host {
         let hash = self.visit_obj(x, |bin: &Vec<u8>| {
             Ok(Sha256::digest(bin).as_slice().to_vec())
         })?;
+
+        if hash.len() != 32 {
+            return Err(HostError::General("incorrect hash size"));
+        }
+
         Ok(self.add_host_object(hash)?.into())
     }
 
