@@ -189,7 +189,7 @@ version = "0.0.0"
 [[package]]
 name = "stellar-xdr"
 version = "0.0.0"
-source = "git+https://github.com/stellar/rs-stellar-xdr?rev=8e4baaf9#8e4baaf99038a78dbbe4ff2590446cf07e644fbd"
+source = "git+https://github.com/stellar/rs-stellar-xdr?rev=462efdd1#462efdd1a53dd244529bb99112cf2a33dc5d9e28"
 dependencies = [
  "base64",
 ]
