@@ -93,15 +93,15 @@ impl From<&HostError> for ScStatus {
     fn from(err: &HostError) -> Self {
         #[cfg(not(feature = "vm"))]
         match err {
-            HostError::General(_) => ScStatus::UnknownError(ScUnknownErrorCode::GeneralError),
+            HostError::General(_) => ScStatus::UnknownError(ScUnknownErrorCode::General),
             HostError::WithStatus(_, status) => status.to_owned(),
-            HostError::XDR(_) => ScStatus::UnknownError(ScUnknownErrorCode::XdrError),
+            HostError::XDR(_) => ScStatus::UnknownError(ScUnknownErrorCode::Xdr),
         }
         #[cfg(feature = "vm")]
         match err {
-            HostError::General(_) => ScStatus::UnknownError(ScUnknownErrorCode::GeneralError),
+            HostError::General(_) => ScStatus::UnknownError(ScUnknownErrorCode::General),
             HostError::WithStatus(_, status) => status.to_owned(),
-            HostError::XDR(_) => ScStatus::UnknownError(ScUnknownErrorCode::XdrError),
+            HostError::XDR(_) => ScStatus::UnknownError(ScUnknownErrorCode::Xdr),
             HostError::WASMI(err) => match err {
                 wasmi::Error::Trap(trap) => match trap.kind() {
                     wasmi::TrapKind::Unreachable => {
@@ -133,25 +133,25 @@ impl From<&HostError> for ScStatus {
                     }
                     wasmi::TrapKind::Host(err) => match err.downcast_ref::<HostError>() {
                         Some(e) => e.into(),
-                        None => ScStatus::VmError(ScVmErrorCode::UnknownError),
+                        None => ScStatus::VmError(ScVmErrorCode::ErrorUnknown),
                     },
                 },
                 wasmi::Error::Host(err) => match err.downcast_ref::<HostError>() {
                     Some(e) => e.into(),
-                    None => ScStatus::VmError(ScVmErrorCode::UnknownError),
+                    None => ScStatus::VmError(ScVmErrorCode::ErrorUnknown),
                 },
-                wasmi::Error::Validation(_) => ScStatus::VmError(ScVmErrorCode::ValidationError),
+                wasmi::Error::Validation(_) => ScStatus::VmError(ScVmErrorCode::ErrorValidation),
                 wasmi::Error::Instantiation(_) => {
-                    ScStatus::VmError(ScVmErrorCode::InstantiationError)
+                    ScStatus::VmError(ScVmErrorCode::ErrorInstantiation)
                 }
-                wasmi::Error::Function(_) => ScStatus::VmError(ScVmErrorCode::FunctionError),
-                wasmi::Error::Table(_) => ScStatus::VmError(ScVmErrorCode::TableError),
-                wasmi::Error::Memory(_) => ScStatus::VmError(ScVmErrorCode::MemoryError),
-                wasmi::Error::Global(_) => ScStatus::VmError(ScVmErrorCode::GlobalError),
-                wasmi::Error::Value(_) => ScStatus::VmError(ScVmErrorCode::ValueError),
+                wasmi::Error::Function(_) => ScStatus::VmError(ScVmErrorCode::ErrorFunction),
+                wasmi::Error::Table(_) => ScStatus::VmError(ScVmErrorCode::ErrorTable),
+                wasmi::Error::Memory(_) => ScStatus::VmError(ScVmErrorCode::ErrorMemory),
+                wasmi::Error::Global(_) => ScStatus::VmError(ScVmErrorCode::ErrorGlobal),
+                wasmi::Error::Value(_) => ScStatus::VmError(ScVmErrorCode::ErrorValue),
             },
             HostError::ParityWasmElements(_) => {
-                ScStatus::UnknownError(ScUnknownErrorCode::ParityWasmiElementsError)
+                ScStatus::UnknownError(ScUnknownErrorCode::ParityWasmiElements)
             }
         }
     }
@@ -374,12 +374,12 @@ impl Host {
             self.unchecked_visit_val_obj(obj.into(), |hopt| match hopt {
                 None => Err(HostError::WithStatus(
                     String::from("unknown object reference"),
-                    ScStatus::HostObjectError(ScHostObjErrorCode::UnknownHostObjectReference),
+                    ScStatus::HostObjectError(ScHostObjErrorCode::UnknownReference),
                 )),
                 Some(hobj) => match HOT::try_extract(hobj) {
                     None => Err(HostError::WithStatus(
                         String::from("unexpected host object type"),
-                        ScStatus::HostObjectError(ScHostObjErrorCode::UnexpectedHostObjectType),
+                        ScStatus::HostObjectError(ScHostObjErrorCode::UnexpectedType),
                     )),
                     Some(hot) => f(hot),
                 },
@@ -569,7 +569,7 @@ impl Host {
             self.unchecked_visit_val_obj(ob.into(), |ob| match ob {
                 None => Err(HostError::WithStatus(
                     String::from("unknown object reference"),
-                    ScStatus::HostObjectError(ScHostObjErrorCode::UnknownHostObjectReference),
+                    ScStatus::HostObjectError(ScHostObjErrorCode::UnknownReference),
                 )),
                 Some(ho) => match ho {
                     HostObject::Vec(vv) => {
@@ -635,7 +635,7 @@ impl Host {
         if handle > u32::MAX as usize {
             return Err(HostError::WithStatus(
                 String::from("object handle exceeds u32::MAX"),
-                ScStatus::HostObjectError(ScHostObjErrorCode::ObjectHandleExceedsU32Max),
+                ScStatus::HostObjectError(ScHostObjErrorCode::HandleExceedsU32Max),
             ));
         }
         self.0.objects.borrow_mut().push(HOT::inject(hot));
@@ -733,7 +733,7 @@ impl Host {
             _ => {
                 return Err(HostError::WithStatus(
                     String::from("not a binary object"),
-                    ScStatus::HostObjectError(ScHostObjErrorCode::UnexpectedHostObjectType),
+                    ScStatus::HostObjectError(ScHostObjErrorCode::UnexpectedType),
                 ))
             }
         };
@@ -973,7 +973,7 @@ impl CheckedEnv for Host {
         let res = self.visit_obj(v, move |hv: &HostVec| match hv.get(i as usize) {
             None => Err(HostError::WithStatus(
                 String::from("index out of bound"),
-                ScStatus::HostObjectError(ScHostObjErrorCode::AccessingHostObjectOutOfBound),
+                ScStatus::HostObjectError(ScHostObjErrorCode::AccessingOutOfBound),
             )),
             Some(hval) => Ok(hval.to_raw()),
         });
@@ -991,7 +991,7 @@ impl CheckedEnv for Host {
             if i as usize >= hv.len() {
                 return Err(HostError::WithStatus(
                     String::from("index out of bound"),
-                    ScStatus::HostObjectError(ScHostObjErrorCode::AccessingHostObjectOutOfBound),
+                    ScStatus::HostObjectError(ScHostObjErrorCode::AccessingOutOfBound),
                 ));
             }
             let mut vnew = hv.clone();
