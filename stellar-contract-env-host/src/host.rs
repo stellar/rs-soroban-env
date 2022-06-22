@@ -89,6 +89,13 @@ impl From<BitSetError> for HostError {
 
 impl From<HostError> for ScStatus {
     fn from(err: HostError) -> Self {
+        #[cfg(not(feature = "vm"))]
+        match err {
+            HostError::General(_) => ScStatus::UnknownError(ScUnknownErrorCode::GeneralError),
+            HostError::WithStatus(_, status) => status,
+            HostError::XDR(_) => ScStatus::UnknownError(ScUnknownErrorCode::XdrError),
+        }
+        #[cfg(feature = "vm")]
         match err {
             HostError::General(_) => ScStatus::UnknownError(ScUnknownErrorCode::GeneralError),
             HostError::WithStatus(_, status) => status,
