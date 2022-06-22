@@ -86,7 +86,7 @@ struct RollbackPoint {
 pub(crate) enum Frame {
     #[cfg(feature = "vm")]
     ContractVM(Rc<Vm>),
-    Hostfunction(HostFunction),
+    HostFunction(HostFunction),
 }
 
 #[derive(Clone, Default)]
