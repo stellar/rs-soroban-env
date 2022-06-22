@@ -11,7 +11,7 @@ use crate::storage::{AccessType, Footprint, Key, Storage};
 #[cfg(feature = "vm")]
 use crate::Vm;
 #[cfg(feature = "vm")]
-use crate::{xdr::Hash, Symbol};
+use crate::{xdr::Hash, xdr::ScStatic, Symbol};
 #[cfg(feature = "vm")]
 use std::panic::{catch_unwind, AssertUnwindSafe};
 
