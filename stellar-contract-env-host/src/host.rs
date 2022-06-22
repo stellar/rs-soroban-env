@@ -224,7 +224,7 @@ impl Host {
         self.with_current_frame(|frame| match frame {
             #[cfg(feature = "vm")]
             Frame::ContractVM(vm) => Ok(vm.contract_id.clone()),
-            Frame::Hostfunction(_) => Err(HostError::General(
+            Frame::HostFunction(_) => Err(HostError::General(
                 "Host function context has no contract ID",
             )),
         })
