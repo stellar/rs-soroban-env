@@ -534,27 +534,50 @@ impl Host {
     }
 
     pub fn invoke_function(&mut self, hf: HostFunction, args: ScVec) -> Result<ScVal, HostError> {
-        if let [ScVal::Object(Some(scobj)), ScVal::Symbol(scsym), rest @ ..] = args.as_slice() {
-            let object: Object = self.to_host_obj(&scobj)?.to_object();
-            let symbol: Symbol = scsym.as_slice().try_into()?;
-            let mut raw_args: Vec<RawVal> = Vec::new();
-            for scv in rest.iter() {
-                raw_args.push(self.to_host_val(&scv)?.val);
-            }
-            let mut frame_guard = self.push_host_function_frame(hf);
-            let raw_res = match hf {
-                HostFunction::Call => {
-                    #[cfg(not(feature = "vm"))]
-                    unimplemented!();
-                    #[cfg(feature = "vm")]
-                    self.call_n(object, symbol, &raw_args[..])
+        match hf {
+            HostFunction::Call => {
+                #[cfg(not(feature = "vm"))]
+                unimplemented!();
+
+                #[cfg(feature = "vm")]
+                if let [ScVal::Object(Some(scobj)), ScVal::Symbol(scsym), rest @ ..] =
+                    args.as_slice()
+                {
+                    let mut frame_guard = self.push_host_function_frame(hf);
+
+                    let object: Object = self.to_host_obj(&scobj)?.to_object();
+                    let symbol: Symbol = scsym.as_slice().try_into()?;
+                    let mut raw_args: Vec<RawVal> = Vec::new();
+                    for scv in rest.iter() {
+                        raw_args.push(self.to_host_val(&scv)?.val);
+                    }
+                    let res = self.call_n(object, symbol, &raw_args[..])?;
+                    frame_guard.commit();
+                    Ok(self.from_host_val(res)?)
+                } else {
+                    Err(HostError::General("unexpected Call args"))
                 }
-                _ => Err(HostError::General("bad host function")),
-            }?;
-            frame_guard.commit();
-            Ok(self.from_host_val(raw_res)?)
-        } else {
-            return Err(HostError::General("unexpected args"));
+            }
+            HostFunction::CreateContract => {
+                if let [ScVal::Object(Some(c_obj)), ScVal::Object(Some(s_obj)), ScVal::Object(Some(k_obj)), ScVal::Object(Some(sig_obj))] =
+                    args.as_slice()
+                {
+                    let mut frame_guard = self.push_host_function_frame(hf);
+
+                    let contract: Object = self.to_host_obj(&c_obj)?.to_object();
+                    let salt: Object = self.to_host_obj(&s_obj)?.to_object();
+                    let key: Object = self.to_host_obj(&k_obj)?.to_object();
+                    let signature: Object = self.to_host_obj(&sig_obj)?.to_object();
+
+                    //TODO: should create_contract return a RawVal instead of Object to avoid this conversion?
+                    let res = self.create_contract(contract, salt, key, signature)?;
+                    let sc_obj = self.from_host_obj(res)?;
+                    frame_guard.commit();
+                    Ok(ScVal::Object(Some(sc_obj)))
+                } else {
+                    Err(HostError::General("unexpected CreateContract args"))
+                }
+            }
         }
     }
 }
