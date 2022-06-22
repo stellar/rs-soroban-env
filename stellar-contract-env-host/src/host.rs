@@ -6,13 +6,17 @@ use core::cmp::Ordering;
 use core::fmt::Debug;
 use im_rc::{OrdMap, Vector};
 use std::num::TryFromIntError;
-use stellar_contract_env_common::xdr::Hash;
 
-use crate::storage::{Key, Storage};
+use crate::budget::Budget;
+use crate::storage::Storage;
 use crate::weak_host::WeakHost;
 
 use crate::xdr;
-use crate::xdr::{ScMap, ScMapEntry, ScObject, ScStatic, ScStatus, ScStatusType, ScVal, ScVec};
+use crate::xdr::{
+    ContractDataEntry, Hash, HostFunction, LedgerEntry, LedgerEntryData, LedgerEntryExt, LedgerKey,
+    LedgerKeyContractData, ScMap, ScMapEntry, ScObject, ScStatic, ScStatus, ScStatusType, ScVal,
+    ScVec,
+};
 use std::rc::Rc;
 
 use crate::host_object::{HostMap, HostObj, HostObject, HostObjectType, HostVal, HostVec};
@@ -60,15 +64,30 @@ impl From<BitSetError> for HostError {
     }
 }
 
-/// Holds contextual information about a single contract invocation (or possibly
-/// other actions that alter the excution context).
+/// Saves host state (storage and objects) for rolling back a (sub-)transaction
+/// on error. A helper type used by [`FrameGuard`].
+#[derive(Clone)]
+struct RollbackPoint {
+    storage: OrdMap<LedgerKey, Option<LedgerEntry>>,
+    objects: usize,
+}
+
+/// Holds contextual information about a single invocation, either
+/// a reference to a contract [`Vm`] or an enclosing [`HostFunction`]
+/// invocation.
 ///
 /// Frames are arranged into a stack in [`HostImpl::context`], and are pushed
-/// with [`Host::push_frame`].
+/// with [`Host::push_frame`], which returns a [`FrameGuard`] that will
+/// pop the frame on scope-exit.
+///
+/// Frames are also the units of (sub-)transactions: each frame captures
+/// the host state when it is pushed, and the [`FrameGuard`] will either
+/// commit or roll back that state when it pops the stack.
 #[derive(Clone)]
-pub(crate) struct Frame {
-    pub(crate) contract_id: Hash,
-    // Other activation-frame / execution-context values here.
+pub(crate) enum Frame {
+    #[cfg(feature = "vm")]
+    ContractVM(Rc<Vm>),
+    HostFunction(HostFunction),
 }
 
 #[derive(Clone, Default)]
@@ -76,20 +95,35 @@ pub(crate) struct HostImpl {
     objects: RefCell<Vec<HostObject>>,
     storage: RefCell<Storage>,
     context: RefCell<Vec<Frame>>,
+    budget: RefCell<Budget>,
 }
 
+/// A guard struct that exists to call [`Host::pop_frame`] when it is dropped,
+/// providing whatever rollback it is holding as an argument. By default, this
+/// means that when a [`FrameGuard`] drops, it will roll the [`Host`] back to
+/// the state it had before its associated [`Frame`] was pushed.
+///
+/// Users may call [`FrameGuard::commit`] to cause the rollback point to be set
+/// to `None`, which will cause the [`FrameGuard`] to commit changes to the host
+/// that occurred during its lifetime, rather than rollling them back.
 pub(crate) struct FrameGuard {
+    rollback: Option<RollbackPoint>,
     host: Host,
+}
+
+impl FrameGuard {
+    pub(crate) fn commit(&mut self) {
+        if self.rollback.is_none() {
+            panic!("committing on already-committed FrameGuard")
+        }
+        self.rollback = None
+    }
 }
 
 impl Drop for FrameGuard {
     fn drop(&mut self) {
-        self.host
-            .0
-            .context
-            .borrow_mut()
-            .pop()
-            .expect("unmatched host frame push/pop");
+        let rollback = self.rollback.take();
+        self.host.pop_frame(rollback)
     }
 }
 
@@ -112,35 +146,101 @@ impl Host {
             objects: Default::default(),
             storage: RefCell::new(storage),
             context: Default::default(),
+            budget: Default::default(),
         }))
     }
 
-    /// Pushes a new [`Frame`] on the context stack, returning a [`FrameGuard`]
-    /// that will pop the stack when it is dropped. This should be called at
-    /// least any time a new contract is invoked.
-    pub(crate) fn push_frame(&self, frame: Frame) -> FrameGuard {
-        self.0.context.borrow_mut().push(frame);
-        FrameGuard { host: self.clone() }
+    /// Helper for mutating the [`Budget`] held in this [`Host`], either to
+    /// allocate it on contract creation or to deplete it on callbacks from
+    /// the VM or host functions.
+    pub fn modify_budget<T, F>(&self, f: F) -> T
+    where
+        F: FnOnce(&mut Budget) -> T,
+    {
+        f(&mut *self.0.budget.borrow_mut())
     }
 
-    /// Applies a function to the top [`Frame`] of the context stack, panicking
-    /// if the stack is empty. Returns result of function call.
-    fn with_current_frame<F, U>(&self, f: F) -> U
+    pub(crate) fn visit_storage<F, U>(&self, f: F) -> Result<U, HostError>
     where
-        F: FnOnce(&Frame) -> U,
+        F: FnOnce(&mut Storage) -> Result<U, HostError>,
+    {
+        f(&mut *self.0.storage.borrow_mut())
+    }
+
+    pub fn recover_storage(self) -> Result<Storage, Self> {
+        Rc::try_unwrap(self.0)
+            .map(|host_impl| host_impl.storage.into_inner())
+            .map_err(|rc_host_impl| Host(rc_host_impl))
+    }
+
+    fn capture_rollback_point(&self) -> RollbackPoint {
+        RollbackPoint {
+            objects: self.0.objects.borrow().len(),
+            storage: self.0.storage.borrow().map.clone(),
+        }
+    }
+
+    fn pop_frame(&self, rollback: Option<RollbackPoint>) {
+        self.0
+            .context
+            .borrow_mut()
+            .pop()
+            .expect("unmatched host frame push/pop");
+        match rollback {
+            None => (),
+            Some(rp) => {
+                self.0.objects.borrow_mut().truncate(rp.objects);
+                self.0.storage.borrow_mut().map = rp.storage;
+            }
+        }
+    }
+
+    /// Pushes a new VM-related [`Frame`] on the context stack, returning a [`FrameGuard`]
+    /// that will pop the stack when it is dropped. This should be called at
+    /// least any time a new contract is invoked.
+    #[cfg(feature = "vm")]
+    pub(crate) fn push_vm_frame(&self, vm: Rc<Vm>) -> FrameGuard {
+        self.0.context.borrow_mut().push(Frame::ContractVM(vm));
+        FrameGuard {
+            rollback: Some(self.capture_rollback_point()),
+            host: self.clone(),
+        }
+    }
+
+    pub(crate) fn push_host_function_frame(&self, func: HostFunction) -> FrameGuard {
+        self.0.context.borrow_mut().push(Frame::HostFunction(func));
+        FrameGuard {
+            rollback: Some(self.capture_rollback_point()),
+            host: self.clone(),
+        }
+    }
+
+    /// Applies a function to the top [`Frame`] of the context stack. Returns
+    /// [`HostError`] if the context stack is empty, otherwise returns result of
+    /// function call.
+    fn with_current_frame<F, U>(&self, f: F) -> Result<U, HostError>
+    where
+        F: FnOnce(&Frame) -> Result<U, HostError>,
     {
         f(self
             .0
             .context
             .borrow()
             .last()
-            .expect("missing current host frame"))
+            .ok_or(HostError::General("no contract currently running"))?)
     }
 
-    /// Returns [`Hash`] contract ID from top of context stack, panicking if the
-    /// stack is empty.
-    fn get_current_contract_id(&self) -> Hash {
-        self.with_current_frame(|frame| frame.contract_id.clone())
+    /// Returns [`Hash`] contract ID from the VM frame at the top of the context
+    /// stack, or a [`HostError`] if the context stack is empty or has a non-VM
+    /// frame at its top.
+    fn get_current_contract_id(&self) -> Result<Hash, HostError> {
+        self.with_current_frame(|frame| match frame {
+            #[cfg(feature = "vm")]
+            Frame::ContractVM(vm) => Ok(vm.contract_id.clone()),
+            Frame::HostFunction(_) => Err(HostError::General(
+                "Host function context has no contract ID",
+            )),
+        })
     }
 
     unsafe fn unchecked_visit_val_obj<F, U>(&self, val: RawVal, f: F) -> U
@@ -351,13 +451,11 @@ impl Host {
 
     /// Converts a [`RawVal`] to an [`ScVal`] and combines it with the currently-executing
     /// [`ContractID`] to produce a [`Key`], that can be used to access ledger [`Storage`].
-    fn to_storage_key(&self, k: RawVal) -> Result<Key, HostError> {
-        let contract_id = self.get_current_contract_id();
-        let sckey = self.from_host_val(k)?;
-        Ok(Key {
-            contract_id,
-            key: sckey,
-        })
+    fn to_storage_key(&self, k: RawVal) -> Result<LedgerKey, HostError> {
+        Ok(LedgerKey::ContractData(LedgerKeyContractData {
+            contract_id: self.get_current_contract_id()?,
+            key: self.from_host_val(k)?,
+        }))
     }
 
     #[cfg(feature = "vm")]
@@ -371,12 +469,15 @@ impl Host {
             Ok(xdr::Hash(arr))
         })?;
         let key = ScVal::Static(ScStatic::LedgerKeyContractCodeWasm);
-        let storage_key = Key {
+        let storage_key = LedgerKey::ContractData(LedgerKeyContractData {
             contract_id: id.clone(),
             key,
-        };
+        });
         // Retrieve the contract code and create vm
-        let scval = self.0.storage.borrow_mut().get(&storage_key)?;
+        let scval = match self.0.storage.borrow_mut().get(&storage_key)?.data {
+            LedgerEntryData::ContractData(ContractDataEntry { val, .. }) => Ok(val),
+            _ => Err(HostError::General("expected contract data")),
+        }?;
         let scobj = match scval {
             ScVal::Object(Some(ob)) => ob,
             _ => return Err(HostError::General("not an object")),
@@ -388,6 +489,31 @@ impl Host {
         let vm = Vm::new(&self, id, code.as_slice())?;
         // Resolve the function symbol and invoke contract call
         vm.invoke_function_raw(self, SymbolStr::from(func).as_ref(), args)
+    }
+
+    pub fn invoke_function(&mut self, hf: HostFunction, args: ScVec) -> Result<ScVal, HostError> {
+        if let [ScVal::Object(Some(scobj)), ScVal::Symbol(scsym), rest @ ..] = args.as_slice() {
+            let object: Object = self.to_host_obj(&scobj)?.to_object();
+            let symbol: Symbol = scsym.as_slice().try_into()?;
+            let mut raw_args: Vec<RawVal> = Vec::new();
+            for scv in rest.iter() {
+                raw_args.push(self.to_host_val(&scv)?.val);
+            }
+            let mut frame_guard = self.push_host_function_frame(hf);
+            let raw_res = match hf {
+                HostFunction::Call => {
+                    #[cfg(not(feature = "vm"))]
+                    unimplemented!();
+                    #[cfg(feature = "vm")]
+                    self.call_n(object, symbol, &raw_args[..])
+                }
+                _ => Err(HostError::General("bad host function")),
+            }?;
+            frame_guard.commit();
+            Ok(self.from_host_val(raw_res)?)
+        } else {
+            return Err(HostError::General("unexpected args"));
+        }
     }
 }
 
@@ -643,7 +769,16 @@ impl CheckedEnv for Host {
 
     fn put_contract_data(&self, k: RawVal, v: RawVal) -> Result<RawVal, HostError> {
         let key = self.to_storage_key(k)?;
-        let val = self.from_host_val(v)?;
+        let data = LedgerEntryData::ContractData(ContractDataEntry {
+            contract_id: self.get_current_contract_id()?,
+            key: self.from_host_val(k)?,
+            val: self.from_host_val(v)?,
+        });
+        let val = LedgerEntry {
+            last_modified_ledger_seq: 0,
+            data,
+            ext: LedgerEntryExt::V0,
+        };
         self.0.storage.borrow_mut().put(&key, &val)?;
         Ok(().into())
     }
@@ -656,8 +791,14 @@ impl CheckedEnv for Host {
 
     fn get_contract_data(&self, k: RawVal) -> Result<RawVal, HostError> {
         let key = self.to_storage_key(k)?;
-        let scval = self.0.storage.borrow_mut().get(&key)?;
-        Ok(self.to_host_val(&scval)?.into())
+        match self.0.storage.borrow_mut().get(&key)?.data {
+            LedgerEntryData::ContractData(ContractDataEntry {
+                contract_id,
+                key,
+                val,
+            }) => Ok(self.to_host_val(&val)?.into()),
+            _ => Err(HostError::General("expected contract data")),
+        }
     }
 
     fn del_contract_data(&self, k: RawVal) -> Result<RawVal, HostError> {

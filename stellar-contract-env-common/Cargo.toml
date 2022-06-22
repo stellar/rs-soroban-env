@@ -5,12 +5,12 @@ edition = "2021"
 
 [dependencies]
 static_assertions = "1.1.0"
-stellar-xdr = { git = "https://github.com/stellar/rs-stellar-xdr", rev = "2a8b24c2978303612c49afcf005c1d35c592c97c", default-features = false, features = ["next"] }
-# stellar-xdr = { path = "../../rs-stellar-xdr", default-features = false }
+stellar-xdr = { git = "https://github.com/stellar/rs-stellar-xdr", rev = "8b36444", default-features = false, features = ["next"] }
+# stellar-xdr = { path = "../../rs-stellar-xdr", default-features = false, features = ["next"] }
 
 # wasmi is an optional dependency only to let us impl its type conversion
 # trait on RawVal locally in this crate; the VM itself is used in the host. 
-wasmi = { version = "0.11.0", optional = true }
+wasmi = { git = "https://github.com/stellar/wasmi", rev = "4f35508c1a2475ed5d33955023f073639e7ff7df", optional = true }
 
 [features]
 std = ["stellar-xdr/std"]

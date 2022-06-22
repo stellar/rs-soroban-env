@@ -1,7 +1,8 @@
 mod dispatch;
 mod func_info;
 
-use crate::{host::Frame, HostError};
+use crate::{budget::Budget, HostError};
+use std::rc::Rc;
 
 use super::{
     xdr::{Hash, ScVal, ScVec},
@@ -23,15 +24,41 @@ impl Externals for Host {
         args: RuntimeArgs,
     ) -> Result<Option<wasmi::RuntimeValue>, wasmi::Trap> {
         if index > HOST_FUNCTIONS.len() {
-            return Err(wasmi::TrapKind::TableAccessOutOfBounds.into());
+            return Err(wasmi::TrapCode::TableAccessOutOfBounds.into());
         }
         let hf = &HOST_FUNCTIONS[index];
         if hf.arity != args.len() {
-            return Err(wasmi::TrapKind::UnexpectedSignature.into());
+            return Err(wasmi::TrapCode::UnexpectedSignature.into());
         }
 
         let rv = (hf.dispatch)(self, args)?;
         Ok(Some(rv))
+    }
+
+    fn max_insn_step(&self) -> u64 {
+        256
+    }
+
+    fn charge_cpu(&mut self, insns: u64) -> Result<(), wasmi::TrapCode> {
+        self.modify_budget(|budget: &mut Budget| {
+            budget.event_counts.wasm_insns += insns;
+            if budget.cpu_limit_exceeded() {
+                Err(wasmi::TrapCode::CpuLimitExceeded)
+            } else {
+                Ok(())
+            }
+        })
+    }
+
+    fn charge_mem(&mut self, bytes: u64) -> Result<(), wasmi::TrapCode> {
+        self.modify_budget(|budget: &mut Budget| {
+            budget.event_counts.wasm_linear_memory_bytes += bytes;
+            if budget.mem_limit_exceeded() {
+                Err(wasmi::TrapCode::MemLimitExceeded)
+            } else {
+                Ok(())
+            }
+        })
     }
 }
 
@@ -109,10 +136,9 @@ impl ImportResolver for Host {
 //
 // Any lookups on any tables other than import functions will fail, and only
 // those import functions listed above will succeed.
-#[derive(Clone)]
 pub struct Vm {
     #[allow(dead_code)]
-    contract_id: Hash,
+    pub(crate) contract_id: Hash,
     elements_module: elements::Module,
     instance: ModuleRef, // this is a cloneable Rc<ModuleInstance>
 }
@@ -125,7 +151,11 @@ pub struct VmFunction {
 }
 
 impl Vm {
-    pub fn new(host: &Host, contract_id: Hash, module_wasm_code: &[u8]) -> Result<Self, HostError> {
+    pub fn new(
+        host: &Host,
+        contract_id: Hash,
+        module_wasm_code: &[u8],
+    ) -> Result<Rc<Self>, HostError> {
         let elements_module: elements::Module = elements::deserialize_buffer(module_wasm_code)?;
         let module: Module = Module::from_parity_wasm_module(elements_module.clone())?;
         module.deny_floating_point()?;
@@ -136,22 +166,20 @@ impl Vm {
             );
         }
         let instance = not_started_instance.assert_no_start();
-        Ok(Self {
+        Ok(Rc::new(Self {
             contract_id,
             elements_module,
             instance,
-        })
+        }))
     }
 
     pub(crate) fn invoke_function_raw(
-        &self,
+        self: &Rc<Self>,
         host: &Host,
         func: &str,
         args: &[RawVal],
     ) -> Result<RawVal, HostError> {
-        let _frame_guard = host.push_frame(Frame {
-            contract_id: self.contract_id.clone(),
-        });
+        let mut frame_guard = host.push_vm_frame(self.clone());
         let wasm_args: Vec<_> = args
             .iter()
             .map(|i| RuntimeValue::I64(i.get_payload() as i64))
@@ -170,10 +198,11 @@ impl Vm {
             .instance
             .invoke_export(func, wasm_args.as_slice(), &mut host)?;
         if let Some(RuntimeValue::I64(ret)) = wasm_ret {
+            frame_guard.commit();
             Ok(RawVal::from_payload(ret as u64))
         } else {
             Err(HostError::WASMIError(wasmi::Error::Trap(
-                wasmi::TrapKind::UnexpectedSignature.into(),
+                wasmi::TrapCode::UnexpectedSignature.into(),
             )))
         }
     }
@@ -181,8 +210,11 @@ impl Vm {
     /// Invoke a function in the VM's module, converting externally stable
     /// XDR ScVal arguments into Host-specific RawVals and converting the
     /// RawVal result back to an ScVal.
+    ///
+    /// This function has to take self by [`Rc`] because it stores self in
+    /// a new [`Frame`]
     pub fn invoke_function(
-        &self,
+        self: &Rc<Self>,
         host: &Host,
         func: &str,
         args: &ScVec,

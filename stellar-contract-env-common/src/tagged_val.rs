@@ -153,8 +153,8 @@ impl<T: TagType> RawValConvertible for TaggedVal<T> {
 }
 
 #[cfg(feature = "vm")]
-impl<T: TagType> wasmi::FromRuntimeValue for TaggedVal<T> {
-    fn from_runtime_value(val: wasmi::RuntimeValue) -> Option<Self> {
+impl<T: TagType> wasmi::FromValue for TaggedVal<T> {
+    fn from_value(val: wasmi::RuntimeValue) -> Option<Self> {
         let maybe: Option<RawVal> = val.try_into();
         maybe.map(|x| Self(x, PhantomData))
     }
