@@ -1,7 +1,7 @@
 mod dispatch;
 mod func_info;
 
-use crate::{budget::Budget, host::Frame, HostError};
+use crate::{budget::Budget, HostError};
 use std::rc::Rc;
 
 use super::{
