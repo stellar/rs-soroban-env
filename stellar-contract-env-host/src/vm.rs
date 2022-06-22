@@ -201,7 +201,7 @@ impl Vm {
             frame_guard.commit();
             Ok(RawVal::from_payload(ret as u64))
         } else {
-            Err(HostError::WASMIError(wasmi::Error::Trap(
+            Err(HostError::WASMI(wasmi::Error::Trap(
                 wasmi::TrapCode::UnexpectedSignature.into(),
             )))
         }

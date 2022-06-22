@@ -715,12 +715,16 @@ fn invoke_cross_contract() -> Result<(), ()> {
 
 #[cfg(feature = "vm")]
 #[test]
-fn invoke_cross_contract_with_err() -> Result<(), ()> {
+#[should_panic(expected = "index out of bound")]
+fn invoke_cross_contract_with_err() {
     use im_rc::OrdMap;
 
     let contract_id: Hash = [0; 32].into();
     let key = ScVal::Static(ScStatic::LedgerKeyContractCodeWasm);
-    let storage_key = Key { contract_id, key };
+    let storage_key = LedgerKey::ContractData(LedgerKeyContractData {
+        contract_id: contract_id.clone(),
+        key: key.clone(),
+    });
 
     let code: [u8; 172] = [
         0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00, 0x01, 0x11, 0x03, 0x60, 0x00, 0x01, 0x7e,
@@ -736,9 +740,19 @@ fn invoke_cross_contract_with_err() -> Result<(), ()> {
         0xd1, 0x00, 0x20, 0x00, 0x10, 0x01, 0x37, 0x03, 0x00, 0x20, 0x01, 0x29, 0x03, 0x00, 0x20,
         0x01, 0x41, 0x10, 0x6a, 0x24, 0x00, 0x0b,
     ];
-    let scob = ScObject::Binary(code.try_into()?);
+    let scob = ScObject::Binary(code.try_into().unwrap());
     let val = ScVal::Object(Some(scob));
-    let map = OrdMap::unit(storage_key.clone(), Some(val));
+    let le = LedgerEntry {
+        last_modified_ledger_seq: 0,
+        data: LedgerEntryData::ContractData(ContractDataEntry {
+            contract_id,
+            key,
+            val,
+        }),
+        ext: LedgerEntryExt::V0,
+    };
+    let map = OrdMap::unit(storage_key.clone(), Some(le));
+
     let mut footprint = Footprint::default();
     footprint.record_access(&storage_key, AccessType::ReadOnly);
 
@@ -746,29 +760,28 @@ fn invoke_cross_contract_with_err() -> Result<(), ()> {
     let storage = Storage::with_enforcing_footprint_and_map(footprint, map);
     let host = Host::with_storage(storage);
     // create a dummy contract obj as the caller
-    let scobj = ScObject::Binary([0; 32].try_into()?);
+    let scobj = ScObject::Binary([0; 32].try_into().unwrap());
     let obj = host.to_host_obj(&scobj).unwrap();
     // prepare arguments
     let sym = Symbol::from_str("vec_err");
     let scvec0: ScVec = vec![ScVal::I32(1)].try_into().unwrap();
     let args = host.to_host_obj(&ScObject::Vec(scvec0)).unwrap();
 
-    let res = host.call(obj.to_object(), sym.into(), args.into()).unwrap();
-
-    Ok(())
+    host.call(obj.to_object(), sym.into(), args.into()).unwrap();
 }
 
 #[cfg(feature = "vm")]
 #[test]
-fn invoke_cross_contract_lvl2_nested_with_err() -> Result<(), ()> {
+#[should_panic(expected = "index out of bound")]
+fn invoke_cross_contract_lvl2_nested_with_err() {
     use im_rc::OrdMap;
     // 1st level, the calling contract
     let id0: Hash = [0; 32].into();
     let key = ScVal::Static(ScStatic::LedgerKeyContractCodeWasm);
-    let storage_key0 = Key {
-        contract_id: id0,
+    let storage_key0 = LedgerKey::ContractData(LedgerKeyContractData {
+        contract_id: id0.clone(),
         key: key.clone(),
-    };
+    });
     let code0: [u8; 502] = [
         0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00, 0x01, 0x17, 0x04, 0x60, 0x00, 0x01, 0x7e,
         0x60, 0x02, 0x7e, 0x7e, 0x01, 0x7e, 0x60, 0x03, 0x7e, 0x7e, 0x7e, 0x01, 0x7e, 0x60, 0x01,
@@ -805,15 +818,24 @@ fn invoke_cross_contract_lvl2_nested_with_err() -> Result<(), ()> {
         0x00, 0x0b, 0x0b, 0x0b, 0x0b, 0x10, 0x01, 0x00, 0x41, 0x80, 0x80, 0xc0, 0x00, 0x0b, 0x07,
         0x76, 0x65, 0x63, 0x5f, 0x65, 0x72, 0x72,
     ];
-    let scob0 = ScObject::Binary(code0.try_into()?);
+    let scob0 = ScObject::Binary(code0.try_into().unwrap());
     let val0 = ScVal::Object(Some(scob0));
+    let le0 = LedgerEntry {
+        last_modified_ledger_seq: 0,
+        data: LedgerEntryData::ContractData(ContractDataEntry {
+            contract_id: id0,
+            key: key.clone(),
+            val: val0,
+        }),
+        ext: LedgerEntryExt::V0,
+    };
 
     // 2nd level, the guest contract
     let id1: Hash = [1; 32].into();
-    let storage_key1 = Key {
-        contract_id: id1,
+    let storage_key1 = LedgerKey::ContractData(LedgerKeyContractData {
+        contract_id: id1.clone(),
         key: key.clone(),
-    };
+    });
     let code1: [u8; 172] = [
         0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00, 0x01, 0x11, 0x03, 0x60, 0x00, 0x01, 0x7e,
         0x60, 0x03, 0x7e, 0x7e, 0x7e, 0x01, 0x7e, 0x60, 0x01, 0x7e, 0x01, 0x7e, 0x02, 0x0f, 0x02,
@@ -828,11 +850,21 @@ fn invoke_cross_contract_lvl2_nested_with_err() -> Result<(), ()> {
         0xd1, 0x00, 0x20, 0x00, 0x10, 0x01, 0x37, 0x03, 0x00, 0x20, 0x01, 0x29, 0x03, 0x00, 0x20,
         0x01, 0x41, 0x10, 0x6a, 0x24, 0x00, 0x0b,
     ];
-    let scob1 = ScObject::Binary(code1.try_into()?);
+    let scob1 = ScObject::Binary(code1.try_into().unwrap());
     let val1 = ScVal::Object(Some(scob1));
+    let le1 = LedgerEntry {
+        last_modified_ledger_seq: 0,
+        data: LedgerEntryData::ContractData(ContractDataEntry {
+            contract_id: id1,
+            key,
+            val: val1,
+        }),
+        ext: LedgerEntryExt::V0,
+    };
+
     // create storage map and footprint
-    let mut map = OrdMap::unit(storage_key0.clone(), Some(val0));
-    map.insert(storage_key1.clone(), Some(val1));
+    let mut map = OrdMap::unit(storage_key0.clone(), Some(le0));
+    map.insert(storage_key1.clone(), Some(le1));
     let mut footprint = Footprint::default();
     footprint.record_access(&storage_key0, AccessType::ReadOnly);
     footprint.record_access(&storage_key1, AccessType::ReadOnly);
@@ -841,15 +873,13 @@ fn invoke_cross_contract_lvl2_nested_with_err() -> Result<(), ()> {
     let storage = Storage::with_enforcing_footprint_and_map(footprint, map);
     let host = Host::with_storage(storage);
     // prepare arguments
-    let scobj = ScObject::Binary([0; 32].try_into()?);
+    let scobj = ScObject::Binary([0; 32].try_into().unwrap());
     let obj = host.to_host_obj(&scobj).unwrap();
     let sym = Symbol::from_str("del_call");
     let scvec0: ScVec = vec![ScVal::I32(1)].try_into().unwrap();
     let args = host.to_host_obj(&ScObject::Vec(scvec0)).unwrap();
 
-    let res = host.call(obj.to_object(), sym.into(), args.into()).unwrap();
-
-    Ok(())
+    host.call(obj.to_object(), sym.into(), args.into()).unwrap();
 }
 
 #[test]
