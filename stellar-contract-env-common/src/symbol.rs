@@ -57,11 +57,18 @@ impl Debug for Symbol {
     }
 }
 
+impl TryFrom<&[u8]> for Symbol {
+    type Error = SymbolError;
+
+    fn try_from(b: &[u8]) -> Result<Symbol, SymbolError> {
+        Self::try_from_bytes(b)
+    }
+}
+
 impl Symbol {
-    pub const fn try_from_str(s: &str) -> Result<Symbol, SymbolError> {
+    pub const fn try_from_bytes(b: &[u8]) -> Result<Symbol, SymbolError> {
         let mut n = 0;
         let mut accum: u64 = 0;
-        let b: &[u8] = s.as_bytes();
         while n < b.len() {
             let ch = b[n] as char;
             if n >= MAX_CHARS {
@@ -82,6 +89,10 @@ impl Symbol {
             unsafe { RawVal::from_body_and_tag(accum, Tag::Symbol) },
             PhantomData,
         ))
+    }
+
+    pub const fn try_from_str(s: &str) -> Result<Symbol, SymbolError> {
+        Self::try_from_bytes(s.as_bytes())
     }
 
     pub const fn from_str(s: &str) -> Symbol {

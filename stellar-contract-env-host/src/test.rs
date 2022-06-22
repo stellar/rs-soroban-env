@@ -5,11 +5,17 @@ use crate::{
 use stellar_contract_env_common::{CheckedEnv, RawValConvertible};
 
 #[cfg(feature = "vm")]
-use crate::storage::{AccessType, Footprint, Key, Storage};
+use crate::storage::{AccessType, Footprint, Storage};
 #[cfg(feature = "vm")]
 use crate::Vm;
 #[cfg(feature = "vm")]
-use crate::{xdr::Hash, xdr::ScStatic, Symbol};
+use crate::{
+    xdr::{
+        ContractDataEntry, Hash, LedgerEntry, LedgerEntryData, LedgerEntryExt, LedgerKey,
+        LedgerKeyContractData, ScStatic,
+    },
+    Symbol,
+};
 #[cfg(feature = "vm")]
 use std::panic::{catch_unwind, AssertUnwindSafe};
 
@@ -451,7 +457,10 @@ fn contract_invoke_another_contract() -> Result<(), ()> {
 
     let contract_id: Hash = [0; 32].into();
     let key = ScVal::Static(ScStatic::LedgerKeyContractCodeWasm);
-    let storage_key = Key { contract_id, key };
+    let storage_key = LedgerKey::ContractData(LedgerKeyContractData {
+        contract_id: contract_id.clone(),
+        key: key.clone(),
+    });
     let code: [u8; 163] = [
         0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00, 0x01, 0x07, 0x01, 0x60, 0x02, 0x7e, 0x7e,
         0x01, 0x7e, 0x03, 0x02, 0x01, 0x00, 0x05, 0x03, 0x01, 0x00, 0x10, 0x06, 0x11, 0x02, 0x7f,
@@ -467,7 +476,16 @@ fn contract_invoke_another_contract() -> Result<(), ()> {
     ];
     let scob = ScObject::Binary(code.try_into()?);
     let val = ScVal::Object(Some(scob));
-    let map = OrdMap::unit(storage_key.clone(), Some(val));
+    let le = LedgerEntry {
+        last_modified_ledger_seq: 0,
+        data: LedgerEntryData::ContractData(ContractDataEntry {
+            contract_id,
+            key,
+            val,
+        }),
+        ext: LedgerEntryExt::V0,
+    };
+    let map = OrdMap::unit(storage_key.clone(), Some(le));
     let mut footprint = Footprint::default();
     footprint.record_access(&storage_key, AccessType::ReadOnly);
 
