@@ -64,7 +64,7 @@ macro_rules! call_macro_with_all_host_functions {
 
             mod context "x" {
                 {"_", fn log_value(v:RawVal) -> RawVal }
-                {"0", fn get_last_operation_result() -> RawVal }
+                {"0", fn get_invoking_contract() -> Object }
                 {"1", fn obj_cmp(a:RawVal, b:RawVal) -> i64 }
             }
 

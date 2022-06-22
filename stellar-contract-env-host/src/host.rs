@@ -561,10 +561,6 @@ impl CheckedEnv for Host {
         todo!()
     }
 
-    fn get_last_operation_result(&self) -> Result<RawVal, HostError> {
-        todo!()
-    }
-
     fn obj_cmp(&self, a: RawVal, b: RawVal) -> Result<i64, HostError> {
         let res = unsafe {
             self.unchecked_visit_val_obj(a, |ao| self.unchecked_visit_val_obj(b, |bo| ao.cmp(&bo)))
@@ -574,6 +570,10 @@ impl CheckedEnv for Host {
             Ordering::Equal => 0,
             Ordering::Greater => 1,
         })
+    }
+
+    fn get_invoking_contract(&self) -> Result<Object, HostError> {
+        todo!()
     }
 
     fn obj_from_u64(&self, u: u64) -> Result<Object, HostError> {
