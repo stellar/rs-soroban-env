@@ -879,7 +879,7 @@ impl CheckedEnv for Host {
         Ok(self.add_host_object(hash)?.into())
     }
 
-    fn verify_sig_ed25519(&self, x: Object, k: Object, s: Object) -> Result<(), HostError> {
+    fn verify_sig_ed25519(&self, x: Object, k: Object, s: Object) -> Result<RawVal, HostError> {
         use ed25519_dalek::{PublicKey, Signature, Verifier};
 
         let public_key: PublicKey = self.visit_obj(k, |bin: &Vec<u8>| {
@@ -895,6 +895,6 @@ impl CheckedEnv for Host {
                 .verify(bin, &sig)
                 .map_err(|_| HostError::General("Failed ED25519 verification"))?)
         });
-        Ok(res?)
+        Ok(res?.into())
     }
 }
