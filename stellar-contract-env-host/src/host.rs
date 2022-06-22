@@ -195,7 +195,7 @@ impl Host {
     }
 
     pub(crate) fn push_host_function_frame(&self, func: HostFunction) -> FrameGuard {
-        self.0.context.borrow_mut().push(Frame::Hostfunction(func));
+        self.0.context.borrow_mut().push(Frame::HostFunction(func));
         FrameGuard {
             rollback: Some(self.capture_rollback_point()),
             host: self.clone(),
