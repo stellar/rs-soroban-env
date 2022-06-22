@@ -6,6 +6,8 @@ use core::cmp::Ordering;
 use core::fmt::Debug;
 use im_rc::{OrdMap, Vector};
 use std::num::TryFromIntError;
+#[cfg(feature = "vm")]
+use stellar_contract_env_common::xdr::ScVmErrorCode;
 use stellar_contract_env_common::xdr::{Hash, Uint256, WriteXdr};
 
 use crate::budget::Budget;
@@ -87,23 +89,66 @@ impl From<BitSetError> for HostError {
     }
 }
 
-impl From<HostError> for ScStatus {
-    fn from(err: HostError) -> Self {
+impl From<&HostError> for ScStatus {
+    fn from(err: &HostError) -> Self {
         #[cfg(not(feature = "vm"))]
         match err {
             HostError::General(_) => ScStatus::UnknownError(ScUnknownErrorCode::GeneralError),
-            HostError::WithStatus(_, status) => status,
+            HostError::WithStatus(_, status) => status.to_owned(),
             HostError::XDR(_) => ScStatus::UnknownError(ScUnknownErrorCode::XdrError),
         }
         #[cfg(feature = "vm")]
         match err {
             HostError::General(_) => ScStatus::UnknownError(ScUnknownErrorCode::GeneralError),
-            HostError::WithStatus(_, status) => status,
+            HostError::WithStatus(_, status) => status.to_owned(),
             HostError::XDR(_) => ScStatus::UnknownError(ScUnknownErrorCode::XdrError),
             HostError::WASMI(err) => match err {
-                wasmi::Error::Trap(_) => todo!(),
-                wasmi::Error::Host(_) => todo!(),
-                _ => ScStatus::UnknownError(ScUnknownErrorCode::WasmiError),
+                wasmi::Error::Trap(trap) => match trap.kind() {
+                    wasmi::TrapKind::Unreachable => {
+                        ScStatus::VmError(ScVmErrorCode::TrapUnreachable)
+                    }
+                    wasmi::TrapKind::MemoryAccessOutOfBounds => {
+                        ScStatus::VmError(ScVmErrorCode::TrapMemoryAccessOutOfBounds)
+                    }
+                    wasmi::TrapKind::TableAccessOutOfBounds => {
+                        ScStatus::VmError(ScVmErrorCode::TrapTableAccessOutOfBounds)
+                    }
+                    wasmi::TrapKind::ElemUninitialized => {
+                        ScStatus::VmError(ScVmErrorCode::TrapElemUninitialized)
+                    }
+                    wasmi::TrapKind::DivisionByZero => {
+                        ScStatus::VmError(ScVmErrorCode::TrapDivisionByZero)
+                    }
+                    wasmi::TrapKind::IntegerOverflow => {
+                        ScStatus::VmError(ScVmErrorCode::TrapIntegerOverflow)
+                    }
+                    wasmi::TrapKind::InvalidConversionToInt => {
+                        ScStatus::VmError(ScVmErrorCode::TrapInvalidConversionToInt)
+                    }
+                    wasmi::TrapKind::StackOverflow => {
+                        ScStatus::VmError(ScVmErrorCode::TrapStackOverflow)
+                    }
+                    wasmi::TrapKind::UnexpectedSignature => {
+                        ScStatus::VmError(ScVmErrorCode::TrapUnexpectedSignature)
+                    }
+                    wasmi::TrapKind::Host(err) => match err.downcast_ref::<HostError>() {
+                        Some(e) => e.into(),
+                        None => ScStatus::VmError(ScVmErrorCode::UnknownError),
+                    },
+                },
+                wasmi::Error::Host(err) => match err.downcast_ref::<HostError>() {
+                    Some(e) => e.into(),
+                    None => ScStatus::VmError(ScVmErrorCode::UnknownError),
+                },
+                wasmi::Error::Validation(_) => ScStatus::VmError(ScVmErrorCode::ValidationError),
+                wasmi::Error::Instantiation(_) => {
+                    ScStatus::VmError(ScVmErrorCode::InstantiationError)
+                }
+                wasmi::Error::Function(_) => ScStatus::VmError(ScVmErrorCode::FunctionError),
+                wasmi::Error::Table(_) => ScStatus::VmError(ScVmErrorCode::TableError),
+                wasmi::Error::Memory(_) => ScStatus::VmError(ScVmErrorCode::MemoryError),
+                wasmi::Error::Global(_) => ScStatus::VmError(ScVmErrorCode::GlobalError),
+                wasmi::Error::Value(_) => ScStatus::VmError(ScVmErrorCode::ValueError),
             },
             HostError::ParityWasmElements(_) => {
                 ScStatus::UnknownError(ScUnknownErrorCode::ParityWasmiElementsError)
@@ -757,7 +802,13 @@ impl Host {
 
     #[cfg(feature = "vm")]
     pub fn try_call(&self, contract: Object, func: Symbol, args: Object) -> RawVal {
-        todo!()
+        match self.call(contract, func, args) {
+            Ok(rv) => rv,
+            Err(e) => {
+                let st: ScStatus = (&e).into();
+                st.into()
+            }
+        }
     }
 }
 

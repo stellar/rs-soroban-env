@@ -16,11 +16,16 @@ use crate::storage::{AccessType, Footprint, Storage};
 use crate::Vm;
 #[cfg(feature = "vm")]
 use crate::{
-    xdr::{ContractDataEntry, Hash, LedgerEntry, LedgerEntryData, LedgerEntryExt, ScStatic},
+    xdr::{
+        ContractDataEntry, Hash, LedgerEntry, LedgerEntryData, LedgerEntryExt, LedgerKey,
+        LedgerKeyContractData, ScHostObjErrorCode, ScStatic, ScStatusType,
+    },
     Symbol,
 };
 #[cfg(feature = "vm")]
 use std::panic::{catch_unwind, AssertUnwindSafe};
+#[cfg(feature = "vm")]
+use stellar_contract_env_common::Status;
 
 /// numbers test
 #[test]
@@ -766,7 +771,13 @@ fn invoke_cross_contract_with_err() {
     let sym = Symbol::from_str("vec_err");
     let scvec0: ScVec = vec![ScVal::I32(1)].try_into().unwrap();
     let args = host.to_host_obj(&ScObject::Vec(scvec0)).unwrap();
-
+    // call
+    let sv = host.try_call(obj.to_object(), sym.into(), args.clone().into());
+    let exp_st = Status::from_type_and_code(
+        ScStatusType::HostObjectError,
+        ScHostObjErrorCode::VecIndexOutOfBound as u32,
+    );
+    assert_eq!(sv.get_payload(), exp_st.to_raw().get_payload());
     host.call(obj.to_object(), sym.into(), args.into()).unwrap();
 }
 
@@ -878,7 +889,13 @@ fn invoke_cross_contract_lvl2_nested_with_err() {
     let sym = Symbol::from_str("del_call");
     let scvec0: ScVec = vec![ScVal::I32(1)].try_into().unwrap();
     let args = host.to_host_obj(&ScObject::Vec(scvec0)).unwrap();
-
+    // call
+    let sv = host.try_call(obj.to_object(), sym.into(), args.clone().into());
+    let exp_st = Status::from_type_and_code(
+        ScStatusType::HostObjectError,
+        ScHostObjErrorCode::VecIndexOutOfBound as u32,
+    );
+    assert_eq!(sv.get_payload(), exp_st.to_raw().get_payload());
     host.call(obj.to_object(), sym.into(), args.into()).unwrap();
 }
 
