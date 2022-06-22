@@ -7,6 +7,7 @@ use core::fmt::Debug;
 use im_rc::{OrdMap, Vector};
 use std::num::TryFromIntError;
 
+use crate::budget::Budget;
 use crate::storage::Storage;
 use crate::weak_host::WeakHost;
 
@@ -94,6 +95,7 @@ pub(crate) struct HostImpl {
     objects: RefCell<Vec<HostObject>>,
     storage: RefCell<Storage>,
     context: RefCell<Vec<Frame>>,
+    budget: RefCell<Budget>,
 }
 
 /// A guard struct that exists to call [`Host::pop_frame`] when it is dropped,
@@ -144,7 +146,18 @@ impl Host {
             objects: Default::default(),
             storage: RefCell::new(storage),
             context: Default::default(),
+            budget: Default::default(),
         }))
+    }
+
+    /// Helper for mutating the [`Budget`] held in this [`Host`], either to
+    /// allocate it on contract creation or to deplete it on callbacks from
+    /// the VM or host functions.
+    pub fn modify_budget<T, F>(&self, f: F) -> T
+    where
+        F: FnOnce(&mut Budget) -> T,
+    {
+        f(&mut *self.0.budget.borrow_mut())
     }
 
     pub(crate) fn visit_storage<F, U>(&self, f: F) -> Result<U, HostError>

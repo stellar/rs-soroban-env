@@ -12,8 +12,19 @@ im-rc = "15.0.0"
 num-bigint = "0.4"
 num-rational = "0.4"
 thiserror = "1.0.31"
-wasmi = { version = "0.11.0", optional = true }
+wasmi = { git = "https://github.com/stellar/wasmi", rev = "4f35508c1a2475ed5d33955023f073639e7ff7df", optional = true }
 parity-wasm = { version = "0.42.0", optional = true }
 
 [features]
 vm = ["wasmi", "parity-wasm", "stellar-contract-env-common/vm"]
+
+[target.'cfg(target_os = "linux")'.dev-dependencies]
+perf-event = "0.4.7"
+tabwriter = "1.2.1"
+
+[[bench]]
+required-features = ["vm"]
+harness = false
+bench = true
+name = "calibrate_wasm_insns"
+path = "benches/calibrate_wasm_insns.rs"

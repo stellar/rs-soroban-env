@@ -113,8 +113,8 @@ declare_tryfrom!(u32);
 declare_tryfrom!(i32);
 
 #[cfg(feature = "vm")]
-impl wasmi::FromRuntimeValue for RawVal {
-    fn from_runtime_value(val: wasmi::RuntimeValue) -> Option<Self> {
+impl wasmi::FromValue for RawVal {
+    fn from_value(val: wasmi::RuntimeValue) -> Option<Self> {
         let maybe: Option<u64> = val.try_into();
         maybe.map(RawVal::from_payload)
     }

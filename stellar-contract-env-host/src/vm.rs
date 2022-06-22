@@ -1,9 +1,8 @@
 mod dispatch;
 mod func_info;
 
+use crate::{budget::Budget, HostError};
 use std::rc::Rc;
-
-use crate::HostError;
 
 use super::{
     xdr::{Hash, ScVal, ScVec},
@@ -25,15 +24,41 @@ impl Externals for Host {
         args: RuntimeArgs,
     ) -> Result<Option<wasmi::RuntimeValue>, wasmi::Trap> {
         if index > HOST_FUNCTIONS.len() {
-            return Err(wasmi::TrapKind::TableAccessOutOfBounds.into());
+            return Err(wasmi::TrapCode::TableAccessOutOfBounds.into());
         }
         let hf = &HOST_FUNCTIONS[index];
         if hf.arity != args.len() {
-            return Err(wasmi::TrapKind::UnexpectedSignature.into());
+            return Err(wasmi::TrapCode::UnexpectedSignature.into());
         }
 
         let rv = (hf.dispatch)(self, args)?;
         Ok(Some(rv))
+    }
+
+    fn max_insn_step(&self) -> u64 {
+        256
+    }
+
+    fn charge_cpu(&mut self, insns: u64) -> Result<(), wasmi::TrapCode> {
+        self.modify_budget(|budget: &mut Budget| {
+            budget.event_counts.wasm_insns += insns;
+            if budget.cpu_limit_exceeded() {
+                Err(wasmi::TrapCode::CpuLimitExceeded)
+            } else {
+                Ok(())
+            }
+        })
+    }
+
+    fn charge_mem(&mut self, bytes: u64) -> Result<(), wasmi::TrapCode> {
+        self.modify_budget(|budget: &mut Budget| {
+            budget.event_counts.wasm_linear_memory_bytes += bytes;
+            if budget.mem_limit_exceeded() {
+                Err(wasmi::TrapCode::MemLimitExceeded)
+            } else {
+                Ok(())
+            }
+        })
     }
 }
 
@@ -177,7 +202,7 @@ impl Vm {
             Ok(RawVal::from_payload(ret as u64))
         } else {
             Err(HostError::WASMIError(wasmi::Error::Trap(
-                wasmi::TrapKind::UnexpectedSignature.into(),
+                wasmi::TrapCode::UnexpectedSignature.into(),
             )))
         }
     }
