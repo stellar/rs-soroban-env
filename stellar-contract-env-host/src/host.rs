@@ -1014,4 +1014,20 @@ impl CheckedEnv for Host {
     fn verify_sig_ed25519(&self, x: Object, k: Object, s: Object) -> Result<RawVal, HostError> {
         todo!()
     }
+
+    fn get_low_threshold(&self, a: Object) -> Result<RawVal, Self::Error> {
+        todo!()
+    }
+
+    fn get_medium_threshold(&self, a: Object) -> Result<RawVal, Self::Error> {
+        todo!()
+    }
+
+    fn get_high_threshold(&self, a: Object) -> Result<RawVal, Self::Error> {
+        todo!()
+    }
+
+    fn get_signer_weight(&self, a: Object) -> Result<RawVal, Self::Error> {
+        todo!()
+    }
 }

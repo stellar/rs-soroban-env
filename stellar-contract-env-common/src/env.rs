@@ -183,6 +183,13 @@ macro_rules! call_macro_with_all_host_functions {
                 {"_", fn compute_hash_sha256(x:Object) -> Object}
                 {"0", fn verify_sig_ed25519(x:Object, k:Object, s:Object) -> RawVal}
             }
+
+            mod account "a" {
+                {"_", fn get_low_threshold(a:Object) -> RawVal}
+                {"0", fn get_medium_threshold(a:Object) -> RawVal}
+                {"1", fn get_high_threshold(a:Object) -> RawVal}
+                {"2", fn get_signer_weight(a:Object) -> RawVal}
+            }
         }
     };
 }
