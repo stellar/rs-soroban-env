@@ -133,22 +133,20 @@ impl From<&HostError> for ScStatus {
                     }
                     wasmi::TrapKind::Host(err) => match err.downcast_ref::<HostError>() {
                         Some(e) => e.into(),
-                        None => ScStatus::VmError(ScVmErrorCode::ErrorUnknown),
+                        None => ScStatus::VmError(ScVmErrorCode::Unknown),
                     },
                 },
                 wasmi::Error::Host(err) => match err.downcast_ref::<HostError>() {
                     Some(e) => e.into(),
-                    None => ScStatus::VmError(ScVmErrorCode::ErrorUnknown),
+                    None => ScStatus::VmError(ScVmErrorCode::Unknown),
                 },
-                wasmi::Error::Validation(_) => ScStatus::VmError(ScVmErrorCode::ErrorValidation),
-                wasmi::Error::Instantiation(_) => {
-                    ScStatus::VmError(ScVmErrorCode::ErrorInstantiation)
-                }
-                wasmi::Error::Function(_) => ScStatus::VmError(ScVmErrorCode::ErrorFunction),
-                wasmi::Error::Table(_) => ScStatus::VmError(ScVmErrorCode::ErrorTable),
-                wasmi::Error::Memory(_) => ScStatus::VmError(ScVmErrorCode::ErrorMemory),
-                wasmi::Error::Global(_) => ScStatus::VmError(ScVmErrorCode::ErrorGlobal),
-                wasmi::Error::Value(_) => ScStatus::VmError(ScVmErrorCode::ErrorValue),
+                wasmi::Error::Validation(_) => ScStatus::VmError(ScVmErrorCode::Validation),
+                wasmi::Error::Instantiation(_) => ScStatus::VmError(ScVmErrorCode::Instantiation),
+                wasmi::Error::Function(_) => ScStatus::VmError(ScVmErrorCode::Function),
+                wasmi::Error::Table(_) => ScStatus::VmError(ScVmErrorCode::Table),
+                wasmi::Error::Memory(_) => ScStatus::VmError(ScVmErrorCode::Memory),
+                wasmi::Error::Global(_) => ScStatus::VmError(ScVmErrorCode::Global),
+                wasmi::Error::Value(_) => ScStatus::VmError(ScVmErrorCode::Value),
             },
             HostError::ParityWasmElements(_) => {
                 ScStatus::UnknownError(ScUnknownErrorCode::ParityWasmiElements)
