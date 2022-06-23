@@ -14,6 +14,9 @@ num-rational = "0.4"
 thiserror = "1.0.31"
 wasmi = { git = "https://github.com/stellar/wasmi", rev = "4f35508c1a2475ed5d33955023f073639e7ff7df", optional = true }
 parity-wasm = { version = "0.42.0", optional = true }
+sha2 = "0.10.2"
+ed25519-dalek = "1.0.1"
+hex = "0.4.3"
 
 [features]
 vm = ["wasmi", "parity-wasm", "stellar-contract-env-common/vm"]
