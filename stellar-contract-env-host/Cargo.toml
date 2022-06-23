@@ -20,6 +20,7 @@ hex = "0.4.3"
 
 [features]
 vm = ["wasmi", "parity-wasm", "stellar-contract-env-common/vm"]
+testutils = []
 
 [target.'cfg(target_os = "linux")'.dev-dependencies]
 perf-event = "0.4.7"

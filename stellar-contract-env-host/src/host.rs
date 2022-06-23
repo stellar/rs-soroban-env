@@ -88,6 +88,8 @@ pub(crate) enum Frame {
     #[cfg(feature = "vm")]
     ContractVM(Rc<Vm>),
     HostFunction(HostFunction),
+    #[cfg(feature = "testutils")]
+    TestContract(Hash),
 }
 
 #[derive(Clone, Default)]
@@ -106,7 +108,7 @@ pub(crate) struct HostImpl {
 /// Users may call [`FrameGuard::commit`] to cause the rollback point to be set
 /// to `None`, which will cause the [`FrameGuard`] to commit changes to the host
 /// that occurred during its lifetime, rather than rollling them back.
-pub(crate) struct FrameGuard {
+pub struct FrameGuard {
     rollback: Option<RollbackPoint>,
     host: Host,
 }
@@ -215,6 +217,18 @@ impl Host {
         }
     }
 
+    #[cfg(feature = "testutils")]
+    pub fn push_test_frame(&self, id: Object) -> Result<FrameGuard, HostError> {
+        let contract_id = self.visit_obj(id, |b: &Vec<u8>| {
+            Ok(Hash(b.clone().try_into().map_err(|_| HostError::General("not binary"))?))
+        })?;
+        self.0.context.borrow_mut().push(Frame::TestContract(contract_id));
+        Ok(FrameGuard {
+            rollback: Some(self.capture_rollback_point()),
+            host: self.clone(),
+        })
+    }
+
     /// Applies a function to the top [`Frame`] of the context stack. Returns
     /// [`HostError`] if the context stack is empty, otherwise returns result of
     /// function call.
@@ -240,6 +254,8 @@ impl Host {
             Frame::HostFunction(_) => Err(HostError::General(
                 "Host function context has no contract ID",
             )),
+            #[cfg(feature = "testutils")]
+            Frame::TestContract(id) => Ok(id.clone()),
         })
     }
 
