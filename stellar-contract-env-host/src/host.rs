@@ -634,8 +634,8 @@ impl Host {
         let handle = self.0.objects.borrow().len();
         if handle > u32::MAX as usize {
             return Err(HostError::WithStatus(
-                String::from("object handle exceeds u32::MAX"),
-                ScStatus::HostObjectError(ScHostObjErrorCode::HandleExceedsU32Max),
+                String::from("object count exceeds u32::MAX"),
+                ScStatus::HostObjectError(ScHostObjErrorCode::ObjectCountExceedsU32Max),
             ));
         }
         self.0.objects.borrow_mut().push(HOT::inject(hot));
@@ -701,7 +701,7 @@ impl Host {
             let arr: [u8; 32] = bin.as_slice().try_into().map_err(|_| {
                 HostError::WithStatus(
                     String::from("invalid contract hash"),
-                    ScStatus::HostObjectError(ScHostObjErrorCode::InvalidContractHash),
+                    ScStatus::HostObjectError(ScHostObjErrorCode::ContractHashWrongLength),
                 )
             })?;
             Ok(xdr::Hash(arr))
@@ -766,7 +766,7 @@ impl Host {
                 } else {
                     Err(HostError::WithStatus(
                         String::from("unexpected Call args"),
-                        ScStatus::HostFunctionError(ScHostFnErrorCode::UnexpectedArgs),
+                        ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsWrongLength),
                     ))
                 }
             }
@@ -789,7 +789,7 @@ impl Host {
                 } else {
                     Err(HostError::WithStatus(
                         String::from("unexpected CreateContract args"),
-                        ScStatus::HostFunctionError(ScHostFnErrorCode::UnexpectedArgs),
+                        ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsWrongLength),
                     ))
                 }
             }
@@ -951,7 +951,7 @@ impl CheckedEnv for Host {
         let i: u32 = i.try_into().map_err(|_| {
             HostError::WithStatus(
                 String::from("i must be u32"),
-                ScStatus::HostFunctionError(ScHostFnErrorCode::WrongInputArgType),
+                ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsWrongType),
             )
         })?;
         let x = self.associate_raw_val(x);
@@ -967,13 +967,13 @@ impl CheckedEnv for Host {
         let i: u32 = i.try_into().map_err(|_| {
             HostError::WithStatus(
                 String::from("i must be u32"),
-                ScStatus::HostFunctionError(ScHostFnErrorCode::WrongInputArgType),
+                ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsWrongType),
             )
         })?;
         let res = self.visit_obj(v, move |hv: &HostVec| match hv.get(i as usize) {
             None => Err(HostError::WithStatus(
                 String::from("index out of bound"),
-                ScStatus::HostObjectError(ScHostObjErrorCode::AccessingOutOfBound),
+                ScStatus::HostObjectError(ScHostObjErrorCode::ObjectNotExist),
             )),
             Some(hval) => Ok(hval.to_raw()),
         });
@@ -984,14 +984,14 @@ impl CheckedEnv for Host {
         let i: u32 = i.try_into().map_err(|_| {
             HostError::WithStatus(
                 String::from("i must be u32"),
-                ScStatus::HostFunctionError(ScHostFnErrorCode::WrongInputArgType),
+                ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsWrongType),
             )
         })?;
         let vnew = self.visit_obj(v, move |hv: &HostVec| {
             if i as usize >= hv.len() {
                 return Err(HostError::WithStatus(
                     String::from("index out of bound"),
-                    ScStatus::HostObjectError(ScHostObjErrorCode::AccessingOutOfBound),
+                    ScStatus::HostObjectError(ScHostObjErrorCode::ObjectNotExist),
                 ));
             }
             let mut vnew = hv.clone();
@@ -1022,7 +1022,7 @@ impl CheckedEnv for Host {
             match vnew.pop_back() {
                 None => Err(HostError::WithStatus(
                     String::from("value does not exist"),
-                    ScStatus::HostObjectError(ScHostObjErrorCode::VecValueNotExist),
+                    ScStatus::HostObjectError(ScHostObjErrorCode::VecElementNotExist),
                 )),
                 Some(_) => Ok(vnew),
             }
@@ -1034,7 +1034,7 @@ impl CheckedEnv for Host {
         let front = self.visit_obj(v, |hv: &HostVec| match hv.front() {
             None => Err(HostError::WithStatus(
                 String::from("value does not exist"),
-                ScStatus::HostObjectError(ScHostObjErrorCode::VecValueNotExist),
+                ScStatus::HostObjectError(ScHostObjErrorCode::VecElementNotExist),
             )),
             Some(front) => Ok(front.to_raw()),
         });
@@ -1045,7 +1045,7 @@ impl CheckedEnv for Host {
         let back = self.visit_obj(v, |hv: &HostVec| match hv.back() {
             None => Err(HostError::WithStatus(
                 String::from("value does not exist"),
-                ScStatus::HostObjectError(ScHostObjErrorCode::VecValueNotExist),
+                ScStatus::HostObjectError(ScHostObjErrorCode::VecElementNotExist),
             )),
             Some(back) => Ok(back.to_raw()),
         });
@@ -1056,7 +1056,7 @@ impl CheckedEnv for Host {
         let i: u32 = i.try_into().map_err(|_| {
             HostError::WithStatus(
                 String::from("i must be u32"),
-                ScStatus::HostFunctionError(ScHostFnErrorCode::WrongInputArgType),
+                ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsWrongType),
             )
         })?;
         let x = self.associate_raw_val(x);
@@ -1085,20 +1085,20 @@ impl CheckedEnv for Host {
         let i: u32 = i.try_into().map_err(|_| {
             HostError::WithStatus(
                 String::from("i must be u32"),
-                ScStatus::HostFunctionError(ScHostFnErrorCode::WrongInputArgType),
+                ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsWrongType),
             )
         })?;
         let l: u32 = l.try_into().map_err(|_| {
             HostError::WithStatus(
                 String::from("l must be u32"),
-                ScStatus::HostFunctionError(ScHostFnErrorCode::WrongInputArgType),
+                ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsWrongType),
             )
         })?;
         let vnew = self.visit_obj(v, move |hv: &HostVec| {
             if i > u32::MAX - l {
                 return Err(HostError::WithStatus(
                     String::from("u32 overflow"),
-                    ScStatus::HostFunctionError(ScHostFnErrorCode::InvalidArgs),
+                    ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsInvalid),
                 ));
             }
             if (i + l) as usize > hv.len() {
@@ -1387,7 +1387,7 @@ impl CheckedEnv for Host {
         let u: u32 = v.try_into().map_err(|_| {
             HostError::WithStatus(
                 String::from("i must be u32"),
-                ScStatus::HostFunctionError(ScHostFnErrorCode::WrongInputArgType),
+                ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsWrongType),
             )
         })?;
 
@@ -1396,7 +1396,7 @@ impl CheckedEnv for Host {
             vnew.push(u.try_into().map_err(|_| {
                 HostError::WithStatus(
                     String::from("u must be u8"),
-                    ScStatus::HostFunctionError(ScHostFnErrorCode::WrongInputArgType),
+                    ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsWrongType),
                 )
             })?);
             Ok(vnew)
