@@ -64,6 +64,9 @@ macro_rules! call_macro_with_all_host_functions {
 
             mod context "x" {
                 {"_", fn log_value(v:RawVal) -> RawVal }
+                /// Get the binary contractID of the contract which invoked the
+                /// running contract. Traps if the running contract was not
+                /// invoked by a contract.
                 {"0", fn get_invoking_contract() -> Object }
                 {"1", fn obj_cmp(a:RawVal, b:RawVal) -> i64 }
             }
@@ -185,10 +188,21 @@ macro_rules! call_macro_with_all_host_functions {
             }
 
             mod account "a" {
+                /// Get the low threshold for the account with ed25519 public
+                /// key a (a is binary). Traps if no such account exists.
                 {"_", fn account_get_low_threshold(a:Object) -> RawVal}
+                /// Get the medium threshold for the account with ed25519 public
+                /// key a (a is binary). Traps if no such account exists.
                 {"0", fn account_get_medium_threshold(a:Object) -> RawVal}
+                /// Get the high threshold for the account with ed25519 public
+                /// key a (a is binary). Traps if no such account exists.
                 {"1", fn account_get_high_threshold(a:Object) -> RawVal}
-                {"2", fn account_get_signer_weight(a:Object) -> RawVal}
+                /// Get the signer weight for the signer with ed25519 public key
+                /// s (s is binary) on the account with ed25519 public key a (a
+                /// is binary). Returns the master weight if the signer is the
+                /// master, and returns 0 if no such signer exists. Traps if no
+                /// such account exists.
+                {"2", fn account_get_signer_weight(a:Object, s:Object) -> RawVal}
             }
         }
     };

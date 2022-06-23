@@ -1051,7 +1051,7 @@ impl CheckedEnv for Host {
         todo!()
     }
 
-    fn account_get_signer_weight(&self, a: Object) -> Result<RawVal, Self::Error> {
+    fn account_get_signer_weight(&self, a: Object, s: Object) -> Result<RawVal, Self::Error> {
         todo!()
     }
 }
