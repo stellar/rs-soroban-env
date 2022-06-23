@@ -220,9 +220,16 @@ impl Host {
     #[cfg(feature = "testutils")]
     pub fn push_test_frame(&self, id: Object) -> Result<FrameGuard, HostError> {
         let contract_id = self.visit_obj(id, |b: &Vec<u8>| {
-            Ok(Hash(b.clone().try_into().map_err(|_| HostError::General("not binary"))?))
+            Ok(Hash(
+                b.clone()
+                    .try_into()
+                    .map_err(|_| HostError::General("not binary"))?,
+            ))
         })?;
-        self.0.context.borrow_mut().push(Frame::TestContract(contract_id));
+        self.0
+            .context
+            .borrow_mut()
+            .push(Frame::TestContract(contract_id));
         Ok(FrameGuard {
             rollback: Some(self.capture_rollback_point()),
             host: self.clone(),
