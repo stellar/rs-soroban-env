@@ -573,9 +573,6 @@ fn create_contract_test() {
     assert_eq!(bin.as_slice(), hash_copy.0.as_slice());
 }
 
-fn create_contract_using_parent_id_test() {
-    todo!();
-}
 /// VM test
 /**
  This is an example WASM from the SDK that unpacks two SCV_I32 arguments, adds
