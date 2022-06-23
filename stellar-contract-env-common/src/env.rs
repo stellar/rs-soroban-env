@@ -86,16 +86,34 @@ macro_rules! call_macro_with_all_host_functions {
 
             mod map "m" {
                 {"_", fn map_new() -> Object }
+                /// Insert a key/value mapping into an existing map, and return the map object handle.
+                /// If the map already has a mapping for the given key, the previous value is overwritten.
                 {"0", fn map_put(m:Object, k:RawVal, v:RawVal) -> Object}
+                /// Get the value for a key from a map. Traps if key is not found.
                 {"1", fn map_get(m:Object, k:RawVal) -> RawVal}
+                /// Remove a key/value mapping from a map if it exists, traps if doesn't.
                 {"2", fn map_del(m:Object, k:RawVal) -> Object}
+                /// Get the size of a map.
                 {"3", fn map_len(m:Object) -> RawVal}
+                /// Test for the presence of a key in a map. Returns (SCStatic) TRUE/FALSE.
                 {"4", fn map_has(m:Object, k:RawVal) -> RawVal}
+                /// Given a key, find the first key less than itself in the map's sorted order.
+                /// If such a key does not exist, return an SCStatus containing the error code (TBD).
                 {"5", fn map_prev_key(m:Object, k:RawVal) -> RawVal}
+                /// Given a key, find the first key greater than itself in the map's sorted order.
+                /// If such a key does not exist, return an SCStatus containing the error code (TBD).
                 {"6", fn map_next_key(m:Object, k:RawVal) -> RawVal}
+                /// Find the minimum key from a map.
+                /// If the map is empty, return an SCStatus containing the error code (TBD).
                 {"7", fn map_min_key(m:Object) -> RawVal}
+                /// Find the maximum key from a map.
+                /// If the map is empty, return an SCStatus containing the error code (TBD).
                 {"8", fn map_max_key(m:Object) -> RawVal}
+                /// Return a new vector containing all the keys in a map.
+                /// The new vector is ordered in the original map's key-sorted order.
                 {"9", fn map_keys(m:Object) -> Object}
+                /// Return a new vector containing all the values in a map.
+                /// The new vector is ordered in the original map's key-sorted order.
                 {"A", fn map_values(m:Object) -> Object}
             }
 

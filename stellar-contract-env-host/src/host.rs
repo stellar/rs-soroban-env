@@ -31,7 +31,7 @@ use crate::SymbolStr;
 use crate::Vm;
 use crate::{
     BitSet, BitSetError, EnvBase, IntoEnvVal, Object, RawVal, RawValConvertible, Status, Symbol,
-    SymbolError, Tag, Val,
+    SymbolError, Tag, Val, UNKNOWN_ERROR,
 };
 
 use thiserror::Error;
@@ -898,24 +898,38 @@ impl CheckedEnv for Host {
     fn map_put(&self, m: Object, k: RawVal, v: RawVal) -> Result<Object, HostError> {
         let k = self.associate_raw_val(k);
         let v = self.associate_raw_val(v);
-        let mnew = self.visit_obj(m, |hm: &HostMap| Ok(hm.update(k, v)))?;
+        let mnew = self.visit_obj(m, move |hm: &HostMap| {
+            let mut mnew = hm.clone();
+            mnew.insert(k, v);
+            Ok(mnew)
+        })?;
         Ok(self.add_host_object(mnew)?.into())
     }
 
     fn map_get(&self, m: Object, k: RawVal) -> Result<RawVal, HostError> {
         let k = self.associate_raw_val(k);
-        self.visit_obj(m, move |hm: &HostMap| match hm.get(&k) {
-            None => Err(HostError::General("key not found in map")),
+        let res = self.visit_obj(m, move |hm: &HostMap| match hm.get(&k) {
             Some(v) => Ok(v.to_raw()),
-        })
+            None => Err(HostError::General("map key not found")),
+        });
+        res
     }
 
     fn map_del(&self, m: Object, k: RawVal) -> Result<Object, HostError> {
-        todo!()
+        let k = self.associate_raw_val(k);
+        let mnew = self.visit_obj(m, |hm: &HostMap| {
+            let mut mnew = hm.clone();
+            match mnew.remove(&k) {
+                Some(v) => Ok(mnew),
+                None => Err(HostError::General("map key not found")),
+            }
+        })?;
+        Ok(self.add_host_object(mnew)?.into())
     }
 
     fn map_len(&self, m: Object) -> Result<RawVal, HostError> {
-        todo!()
+        let len = self.visit_obj(m, |hm: &HostMap| Ok(hm.len()))?;
+        Ok(u32::try_from(len)?.into())
     }
 
     fn map_has(&self, m: Object, k: RawVal) -> Result<RawVal, HostError> {
@@ -924,27 +938,59 @@ impl CheckedEnv for Host {
     }
 
     fn map_prev_key(&self, m: Object, k: RawVal) -> Result<RawVal, HostError> {
-        todo!()
+        let k = self.associate_raw_val(k);
+        let res = self.visit_obj(m, |hm: &HostMap| match hm.get_prev(&k) {
+            Some((pk, pv)) => Ok(pk.to_raw()),
+            None => Ok(UNKNOWN_ERROR.to_raw()), //FIXME: replace with the actual status code
+        });
+        res
     }
 
     fn map_next_key(&self, m: Object, k: RawVal) -> Result<RawVal, HostError> {
-        todo!()
+        let k = self.associate_raw_val(k);
+        let res = self.visit_obj(m, |hm: &HostMap| match hm.get_next(&k) {
+            Some((pk, pv)) => Ok(pk.to_raw()),
+            None => Ok(UNKNOWN_ERROR.to_raw()), //FIXME: replace with the actual status code
+        });
+        res
     }
 
     fn map_min_key(&self, m: Object) -> Result<RawVal, HostError> {
-        todo!()
+        let res = self.visit_obj(m, |hm: &HostMap| match hm.get_min() {
+            Some((pk, pv)) => Ok(pk.to_raw()),
+            None => Ok(UNKNOWN_ERROR.to_raw()), //FIXME: replace with the actual status code
+        });
+        res
     }
 
     fn map_max_key(&self, m: Object) -> Result<RawVal, HostError> {
-        todo!()
+        let res = self.visit_obj(m, |hm: &HostMap| match hm.get_max() {
+            Some((pk, pv)) => Ok(pk.to_raw()),
+            None => Ok(UNKNOWN_ERROR.to_raw()), //FIXME: replace with the actual status code
+        });
+        res
     }
 
     fn map_keys(&self, m: Object) -> Result<Object, HostError> {
-        todo!()
+        let obj = self.visit_obj(m, |hm: &HostMap| {
+            let mut vec = self.vec_new()?;
+            for k in hm.keys() {
+                vec = self.vec_push(vec, k.to_raw())?;
+            }
+            Ok(vec)
+        });
+        obj
     }
 
     fn map_values(&self, m: Object) -> Result<Object, HostError> {
-        todo!()
+        let obj = self.visit_obj(m, |hm: &HostMap| {
+            let mut vec = self.vec_new()?;
+            for k in hm.values() {
+                vec = self.vec_push(vec, k.to_raw())?;
+            }
+            Ok(vec)
+        });
+        obj
     }
 
     fn vec_new(&self) -> Result<Object, HostError> {
