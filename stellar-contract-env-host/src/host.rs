@@ -1,6 +1,7 @@
 #![allow(unused_variables)]
 #![allow(dead_code)]
 
+use bs::Bs;
 use core::cell::RefCell;
 use core::cmp::Ordering;
 use core::fmt::Debug;
@@ -19,7 +20,9 @@ use crate::xdr::{
 };
 use std::rc::Rc;
 
-use crate::host_object::{HostMap, HostObj, HostObject, HostObjectType, HostVal, HostVec};
+use crate::host_object::{
+    HostMap, HostObj, HostObject, HostObjectBody, HostObjectType, HostVal, HostVec,
+};
 use crate::CheckedEnv;
 #[cfg(feature = "vm")]
 use crate::SymbolStr;
@@ -72,6 +75,68 @@ struct RollbackPoint {
     objects: usize,
 }
 
+/// A ticket is a number that represents permission to read a set of host
+/// objects: all those created with the ticket, or readable transitively through
+/// other objects readable with the ticket.
+///
+/// Every object holds a compact (typically 1-word) [`Tickets`] bitset
+/// containing all the tickets that are allowed to read it. These are updated
+/// lazily on access: whenever an object reference X is read out of an object Y,
+/// the ticket T(Y) of Y is unioned into the ticket of X, propagating the fact
+/// that "since Y is reachable from T(Y), X is also reachable from T(Y)".
+///
+/// The [`Host`] maintains a "current" ticket, which is incremented every time a
+/// new frame is pushed, and is used for the initial ticket-set of new objects,
+/// as well as the ticket checked for read access to objects.
+///
+/// By default this means that an object created in a frame is inaccessible from
+/// other frames. The exception is when a user explicitly grants access to an
+/// object by _passing_ a reference to it from one frame to another. This sets
+/// the ticket of the object to include the callee frame's ticket, which in turn
+/// makes all objects transitively reachable through that object readable by the
+/// callee.
+#[derive(Copy, Clone, Default, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) struct Ticket(usize);
+impl Ticket {
+    // Increments the ticket and returns its previous value.
+    fn bump(&mut self) -> Result<Ticket, HostError> {
+        let ret = self.0;
+        match self.0.checked_add(1) {
+            Some(t) => {
+                self.0 = t;
+                Ok(Ticket(ret))
+            }
+            None => Err(HostError::General("ticket overflow")),
+        }
+    }
+}
+
+#[derive(Clone, Default, Debug, PartialEq, Eq)]
+pub(crate) struct Tickets(Bs);
+impl Tickets {
+    fn from_ticket(ticket: Ticket) -> Tickets {
+        let mut tickets = Self::default();
+        tickets.allow_ticket(ticket);
+        tickets
+    }
+    fn allow_ticket(&mut self, ticket: Ticket) {
+        self.0.insert(ticket.0);
+    }
+    fn allow_tickets(&mut self, tickets: &Tickets) {
+        self.0.union_with(&tickets.0)
+    }
+    fn is_allowed(&self, ticket: Ticket) -> bool {
+        self.0.contains(ticket.0)
+    }
+    fn check_allowed(&self, ticket: Ticket) -> Result<(), HostError> {
+        if self.is_allowed(ticket) {
+            Ok(())
+        } else {
+            Err(HostError::General("ticket check failed"))
+        }
+    }
+}
+
 /// Holds contextual information about a single invocation, either
 /// a reference to a contract [`Vm`] or an enclosing [`HostFunction`]
 /// invocation.
@@ -86,8 +151,9 @@ struct RollbackPoint {
 #[derive(Clone)]
 pub(crate) enum Frame {
     #[cfg(feature = "vm")]
-    ContractVM(Rc<Vm>),
-    HostFunction(HostFunction),
+    ContractVM(Rc<Vm>, Ticket),
+    HostFunction(HostFunction, Ticket),
+    Initial(Ticket),
 }
 
 #[derive(Clone, Default)]
@@ -96,6 +162,7 @@ pub(crate) struct HostImpl {
     storage: RefCell<Storage>,
     context: RefCell<Vec<Frame>>,
     budget: RefCell<Budget>,
+    ticket: RefCell<Ticket>,
 }
 
 /// A guard struct that exists to call [`Host::pop_frame`] when it is dropped,
@@ -128,7 +195,7 @@ impl Drop for FrameGuard {
 }
 
 // Host is a newtype on Rc<HostImpl> so we can impl Env for it below.
-#[derive(Default, Clone)]
+#[derive(Clone)]
 pub struct Host(pub(crate) Rc<HostImpl>);
 
 impl Debug for Host {
@@ -137,17 +204,35 @@ impl Debug for Host {
     }
 }
 
+impl Default for Host {
+    fn default() -> Self {
+        Host::with_storage(Storage::default())
+    }
+}
+
 impl Host {
     /// Constructs a new [`Host`] that will use the provided [`Storage`] for
     /// contract-data access functions such as
     /// [`CheckedEnv::get_contract_data`].
     pub fn with_storage(storage: Storage) -> Self {
-        Self(Rc::new(HostImpl {
+        let host = Self(Rc::new(HostImpl {
             objects: Default::default(),
             storage: RefCell::new(storage),
             context: Default::default(),
             budget: Default::default(),
-        }))
+            ticket: Default::default(),
+        }));
+        let tkt = host.bump_ticket().unwrap();
+        host.0.context.borrow_mut().push(Frame::Initial(tkt));
+        host
+    }
+
+    /// Increments the host's current (cross-context, global,
+    /// monotonically-increasing) ticket and returns its previous value. This
+    /// should be used for assigning tickets to new frames; objects should be
+    /// assigned the context's ticket returned from [`current_context_ticket`].
+    fn bump_ticket(&self) -> Result<Ticket, HostError> {
+        self.0.ticket.borrow_mut().bump()
     }
 
     /// Helper for mutating the [`Budget`] held in this [`Host`], either to
@@ -199,26 +284,35 @@ impl Host {
     /// that will pop the stack when it is dropped. This should be called at
     /// least any time a new contract is invoked.
     #[cfg(feature = "vm")]
-    pub(crate) fn push_vm_frame(&self, vm: Rc<Vm>) -> FrameGuard {
-        self.0.context.borrow_mut().push(Frame::ContractVM(vm));
-        FrameGuard {
+    pub(crate) fn push_vm_frame(&self, vm: Rc<Vm>) -> Result<FrameGuard, HostError> {
+        self.0
+            .context
+            .borrow_mut()
+            .push(Frame::ContractVM(vm, self.bump_ticket()?));
+        Ok(FrameGuard {
             rollback: Some(self.capture_rollback_point()),
             host: self.clone(),
-        }
+        })
     }
 
-    pub(crate) fn push_host_function_frame(&self, func: HostFunction) -> FrameGuard {
-        self.0.context.borrow_mut().push(Frame::HostFunction(func));
-        FrameGuard {
+    pub(crate) fn push_host_function_frame(
+        &self,
+        func: HostFunction,
+    ) -> Result<FrameGuard, HostError> {
+        self.0
+            .context
+            .borrow_mut()
+            .push(Frame::HostFunction(func, self.bump_ticket()?));
+        Ok(FrameGuard {
             rollback: Some(self.capture_rollback_point()),
             host: self.clone(),
-        }
+        })
     }
 
     /// Applies a function to the top [`Frame`] of the context stack. Returns
     /// [`HostError`] if the context stack is empty, otherwise returns result of
     /// function call.
-    fn with_current_frame<F, U>(&self, f: F) -> Result<U, HostError>
+    fn with_current_context_frame<F, U>(&self, f: F) -> Result<U, HostError>
     where
         F: FnOnce(&Frame) -> Result<U, HostError>,
     {
@@ -227,29 +321,46 @@ impl Host {
             .context
             .borrow()
             .last()
-            .ok_or(HostError::General("no contract currently running"))?)
+            .ok_or(HostError::General("host has no current frame"))?)
     }
 
     /// Returns [`Hash`] contract ID from the VM frame at the top of the context
     /// stack, or a [`HostError`] if the context stack is empty or has a non-VM
     /// frame at its top.
-    fn get_current_contract_id(&self) -> Result<Hash, HostError> {
-        self.with_current_frame(|frame| match frame {
+    fn current_context_contract_id(&self) -> Result<Hash, HostError> {
+        self.with_current_context_frame(|frame| match frame {
             #[cfg(feature = "vm")]
-            Frame::ContractVM(vm) => Ok(vm.contract_id.clone()),
-            Frame::HostFunction(_) => Err(HostError::General(
+            Frame::ContractVM(vm, _) => Ok(vm.contract_id.clone()),
+            _ => Err(HostError::General(
                 "Host function context has no contract ID",
             )),
         })
     }
 
-    unsafe fn unchecked_visit_val_obj<F, U>(&self, val: RawVal, f: F) -> U
+    fn current_context_ticket(&self) -> Result<Ticket, HostError> {
+        self.with_current_context_frame(|frame| match frame {
+            #[cfg(feature = "vm")]
+            Frame::ContractVM(_, tkt) => Ok(*tkt),
+            Frame::HostFunction(_, tkt) => Ok(*tkt),
+            Frame::Initial(tkt) => Ok(*tkt),
+        })
+    }
+
+    unsafe fn unchecked_visit_val_obj<F, U>(&self, val: RawVal, f: F) -> Result<U, HostError>
     where
-        F: FnOnce(Option<&HostObject>) -> U,
+        F: FnOnce(Option<&HostObjectBody>) -> Result<U, HostError>,
     {
         let r = self.0.objects.borrow();
         let index = <Object as RawValConvertible>::unchecked_from_val(val).get_handle() as usize;
-        f(r.get(index))
+        let tkt = self.current_context_ticket()?;
+        let obj = r.get(index);
+        match obj {
+            Some(obj) => {
+                obj.tickets.check_allowed(tkt)?;
+                f(Some(&obj.body))
+            }
+            _ => f(None),
+        }
     }
 
     fn visit_obj<HOT: HostObjectType, F, U>(&self, obj: Object, f: F) -> Result<U, HostError>
@@ -379,18 +490,19 @@ impl Host {
     }
 
     pub(crate) fn from_host_obj(&self, ob: Object) -> Result<ScObject, HostError> {
+        let owner = self.current_context_contract_id();
         unsafe {
             self.unchecked_visit_val_obj(ob.into(), |ob| match ob {
                 None => Err(HostError::General("object not found")),
-                Some(ho) => match ho {
-                    HostObject::Vec(vv) => {
+                Some(hob) => match hob {
+                    HostObjectBody::Vec(vv) => {
                         let mut sv = Vec::new();
                         for e in vv.iter() {
                             sv.push(self.from_host_val(e.val)?);
                         }
                         Ok(ScObject::Vec(ScVec(sv.try_into()?)))
                     }
-                    HostObject::Map(mm) => {
+                    HostObjectBody::Map(mm) => {
                         let mut mv = Vec::new();
                         for (k, v) in mm.iter() {
                             let key = self.from_host_val(k.val)?;
@@ -399,9 +511,9 @@ impl Host {
                         }
                         Ok(ScObject::Map(ScMap(mv.try_into()?)))
                     }
-                    HostObject::U64(u) => Ok(ScObject::U64(*u)),
-                    HostObject::I64(i) => Ok(ScObject::I64(*i)),
-                    HostObject::Bin(b) => Ok(ScObject::Binary(b.clone().try_into()?)),
+                    HostObjectBody::U64(u) => Ok(ScObject::U64(*u)),
+                    HostObjectBody::I64(i) => Ok(ScObject::I64(*i)),
+                    HostObjectBody::Bin(b) => Ok(ScObject::Binary(b.clone().try_into()?)),
                 },
             })
         }
@@ -443,7 +555,12 @@ impl Host {
         if handle > u32::MAX as usize {
             return Err(HostError::General("object handle exceeds u32::MAX"));
         }
-        self.0.objects.borrow_mut().push(HOT::inject(hot));
+        let hob = HOT::inject(hot);
+        let ho = HostObject {
+            tickets: Tickets::from_ticket(self.current_context_ticket()?),
+            body: hob,
+        };
+        self.0.objects.borrow_mut().push(ho);
         let env = WeakHost(Rc::downgrade(&self.0));
         let v = Object::from_type_and_handle(HOT::get_type(), handle as u32);
         Ok(v.into_env_val(&env))
@@ -453,7 +570,7 @@ impl Host {
     /// [`ContractID`] to produce a [`Key`], that can be used to access ledger [`Storage`].
     fn to_storage_key(&self, k: RawVal) -> Result<LedgerKey, HostError> {
         Ok(LedgerKey::ContractData(LedgerKeyContractData {
-            contract_id: self.get_current_contract_id()?,
+            contract_id: self.current_context_contract_id()?,
             key: self.from_host_val(k)?,
         }))
     }
@@ -493,13 +610,13 @@ impl Host {
 
     pub fn invoke_function(&mut self, hf: HostFunction, args: ScVec) -> Result<ScVal, HostError> {
         if let [ScVal::Object(Some(scobj)), ScVal::Symbol(scsym), rest @ ..] = args.as_slice() {
+            let mut frame_guard = self.push_host_function_frame(hf)?;
             let object: Object = self.to_host_obj(&scobj)?.to_object();
             let symbol: Symbol = scsym.as_slice().try_into()?;
             let mut raw_args: Vec<RawVal> = Vec::new();
             for scv in rest.iter() {
                 raw_args.push(self.to_host_val(&scv)?.val);
             }
-            let mut frame_guard = self.push_host_function_frame(hf);
             let raw_res = match hf {
                 HostFunction::Call => {
                     #[cfg(not(feature = "vm"))]
@@ -536,11 +653,11 @@ impl EnvBase for Host {
         // only a few of these.
         let new_weak = new_host.get_weak();
         for hobj in new_host.0.objects.borrow_mut().iter_mut() {
-            match hobj {
-                HostObject::Vec(vs) => {
+            match &mut hobj.body {
+                HostObjectBody::Vec(vs) => {
                     vs.iter_mut().for_each(|v| v.env = new_weak.clone());
                 }
-                HostObject::Map(m) => {
+                HostObjectBody::Map(m) => {
                     *m = HostMap::from_iter(m.clone().into_iter().map(|(mut k, mut v)| {
                         k.env = new_weak.clone();
                         v.env = new_weak.clone();
@@ -567,7 +684,9 @@ impl CheckedEnv for Host {
 
     fn obj_cmp(&self, a: RawVal, b: RawVal) -> Result<i64, HostError> {
         let res = unsafe {
-            self.unchecked_visit_val_obj(a, |ao| self.unchecked_visit_val_obj(b, |bo| ao.cmp(&bo)))
+            self.unchecked_visit_val_obj(a, |ao: Option<&HostObjectBody>| {
+                self.unchecked_visit_val_obj(b, |bo: Option<&HostObjectBody>| Ok(ao.cmp(&bo)))
+            })?
         };
         Ok(match res {
             Ordering::Less => -1,
@@ -770,7 +889,7 @@ impl CheckedEnv for Host {
     fn put_contract_data(&self, k: RawVal, v: RawVal) -> Result<RawVal, HostError> {
         let key = self.to_storage_key(k)?;
         let data = LedgerEntryData::ContractData(ContractDataEntry {
-            contract_id: self.get_current_contract_id()?,
+            contract_id: self.current_context_contract_id()?,
             key: self.from_host_val(k)?,
             val: self.from_host_val(v)?,
         });

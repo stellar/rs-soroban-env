@@ -1,3 +1,5 @@
+use crate::host::Tickets;
+
 use super::{weak_host::WeakHost, xdr::ScObjectType, EnvVal, Object, RawVal};
 
 use im_rc::{OrdMap, Vector};
@@ -7,8 +9,14 @@ pub(crate) type HostVal = EnvVal<WeakHost, RawVal>;
 pub(crate) type HostMap = OrdMap<HostVal, HostVal>;
 pub(crate) type HostVec = Vector<HostVal>;
 
+#[derive(Clone)]
+pub(crate) struct HostObject {
+    pub(crate) tickets: Tickets,
+    pub(crate) body: HostObjectBody,
+}
+
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub(crate) enum HostObject {
+pub(crate) enum HostObjectBody {
     Vec(HostVec),
     Map(HostMap),
     U64(u64),
@@ -18,8 +26,8 @@ pub(crate) enum HostObject {
 
 pub(crate) trait HostObjectType: Sized {
     fn get_type() -> ScObjectType;
-    fn inject(self) -> HostObject;
-    fn try_extract(obj: &HostObject) -> Option<&Self>;
+    fn inject(self) -> HostObjectBody;
+    fn try_extract(obj: &HostObjectBody) -> Option<&Self>;
 }
 
 macro_rules! declare_host_object_type {
@@ -29,13 +37,13 @@ macro_rules! declare_host_object_type {
                 ScObjectType::$CODE
             }
 
-            fn inject(self) -> HostObject {
-                HostObject::$CASE(self)
+            fn inject(self) -> HostObjectBody {
+                HostObjectBody::$CASE(self)
             }
 
-            fn try_extract(obj: &HostObject) -> Option<&Self> {
+            fn try_extract(obj: &HostObjectBody) -> Option<&Self> {
                 match obj {
-                    HostObject::$CASE(v) => Some(v),
+                    HostObjectBody::$CASE(ref v) => Some(v),
                     _ => None,
                 }
             }

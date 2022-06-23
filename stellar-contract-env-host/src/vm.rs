@@ -179,7 +179,7 @@ impl Vm {
         func: &str,
         args: &[RawVal],
     ) -> Result<RawVal, HostError> {
-        let mut frame_guard = host.push_vm_frame(self.clone());
+        let mut frame_guard = host.push_vm_frame(self.clone())?;
         let wasm_args: Vec<_> = args
             .iter()
             .map(|i| RuntimeValue::I64(i.get_payload() as i64))
