@@ -596,6 +596,9 @@ impl Host {
                     HostObject::U64(u) => Ok(ScObject::U64(*u)),
                     HostObject::I64(i) => Ok(ScObject::I64(*i)),
                     HostObject::Bin(b) => Ok(ScObject::Binary(b.clone().try_into()?)),
+                    HostObject::BigInt(_) => todo!(),
+                    HostObject::Hash(_) => todo!(),
+                    HostObject::PublicKey(_) => todo!(),
                 },
             })
         }
