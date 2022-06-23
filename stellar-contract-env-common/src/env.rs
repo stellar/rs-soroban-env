@@ -160,7 +160,7 @@ macro_rules! call_macro_with_all_host_functions {
                 // These functions below ($3-$F) mirror vector operations
                 {"3", fn binary_new() -> Object}
                 {"4", fn binary_put(v:Object, i:RawVal, x:RawVal) -> Object}
-                {"5", fn binary_get(x:Object, i:RawVal) -> Object}
+                {"5", fn binary_get(x:Object, i:RawVal) -> RawVal}
                 {"6", fn binary_del(v:Object, i:RawVal) -> Object}
                 {"7", fn binary_len(x:Object) -> RawVal}
                 {"8", fn binary_push(x:Object, v:RawVal) -> Object}

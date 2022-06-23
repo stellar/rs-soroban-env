@@ -951,7 +951,7 @@ impl CheckedEnv for Host {
         todo!()
     }
 
-    fn binary_get(&self, x: Object, i: RawVal) -> Result<Object, HostError> {
+    fn binary_get(&self, x: Object, i: RawVal) -> Result<RawVal, HostError> {
         todo!()
     }
 
