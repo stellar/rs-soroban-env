@@ -1020,7 +1020,7 @@ impl CheckedEnv for Host {
             match vnew.pop_back() {
                 None => Err(HostError::WithStatus(
                     String::from("value does not exist"),
-                    ScStatus::HostObjectError(ScHostObjErrorCode::VecElementNotExist),
+                    ScStatus::HostObjectError(ScHostObjErrorCode::VecIndexOutOfBound),
                 )),
                 Some(_) => Ok(vnew),
             }
@@ -1032,7 +1032,7 @@ impl CheckedEnv for Host {
         let front = self.visit_obj(v, |hv: &HostVec| match hv.front() {
             None => Err(HostError::WithStatus(
                 String::from("value does not exist"),
-                ScStatus::HostObjectError(ScHostObjErrorCode::VecElementNotExist),
+                ScStatus::HostObjectError(ScHostObjErrorCode::VecIndexOutOfBound),
             )),
             Some(front) => Ok(front.to_raw()),
         });
@@ -1043,7 +1043,7 @@ impl CheckedEnv for Host {
         let back = self.visit_obj(v, |hv: &HostVec| match hv.back() {
             None => Err(HostError::WithStatus(
                 String::from("value does not exist"),
-                ScStatus::HostObjectError(ScHostObjErrorCode::VecElementNotExist),
+                ScStatus::HostObjectError(ScHostObjErrorCode::VecIndexOutOfBound),
             )),
             Some(back) => Ok(back.to_raw()),
         });
