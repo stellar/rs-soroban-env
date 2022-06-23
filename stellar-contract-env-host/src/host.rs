@@ -1015,19 +1015,19 @@ impl CheckedEnv for Host {
         todo!()
     }
 
-    fn get_low_threshold(&self, a: Object) -> Result<RawVal, Self::Error> {
+    fn account_get_low_threshold(&self, a: Object) -> Result<RawVal, Self::Error> {
         todo!()
     }
 
-    fn get_medium_threshold(&self, a: Object) -> Result<RawVal, Self::Error> {
+    fn account_get_medium_threshold(&self, a: Object) -> Result<RawVal, Self::Error> {
         todo!()
     }
 
-    fn get_high_threshold(&self, a: Object) -> Result<RawVal, Self::Error> {
+    fn account_get_high_threshold(&self, a: Object) -> Result<RawVal, Self::Error> {
         todo!()
     }
 
-    fn get_signer_weight(&self, a: Object) -> Result<RawVal, Self::Error> {
+    fn account_get_signer_weight(&self, a: Object) -> Result<RawVal, Self::Error> {
         todo!()
     }
 }

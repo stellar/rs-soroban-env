@@ -185,10 +185,10 @@ macro_rules! call_macro_with_all_host_functions {
             }
 
             mod account "a" {
-                {"_", fn get_low_threshold(a:Object) -> RawVal}
-                {"0", fn get_medium_threshold(a:Object) -> RawVal}
-                {"1", fn get_high_threshold(a:Object) -> RawVal}
-                {"2", fn get_signer_weight(a:Object) -> RawVal}
+                {"_", fn account_get_low_threshold(a:Object) -> RawVal}
+                {"0", fn account_get_medium_threshold(a:Object) -> RawVal}
+                {"1", fn account_get_high_threshold(a:Object) -> RawVal}
+                {"2", fn account_get_signer_weight(a:Object) -> RawVal}
             }
         }
     };
