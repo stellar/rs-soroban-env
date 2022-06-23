@@ -1008,11 +1008,35 @@ impl CheckedEnv for Host {
     }
 
     fn compute_hash_sha256(&self, x: Object) -> Result<Object, HostError> {
-        todo!()
+        use sha2::{Digest, Sha256};
+        let hash = self.visit_obj(x, |bin: &Vec<u8>| {
+            Ok(Sha256::digest(bin).as_slice().to_vec())
+        })?;
+
+        if hash.len() != 32 {
+            return Err(HostError::General("incorrect hash size"));
+        }
+
+        Ok(self.add_host_object(hash)?.into())
     }
 
     fn verify_sig_ed25519(&self, x: Object, k: Object, s: Object) -> Result<RawVal, HostError> {
-        todo!()
+        use ed25519_dalek::{PublicKey, Signature, Verifier};
+
+        let public_key: PublicKey = self.visit_obj(k, |bin: &Vec<u8>| {
+            PublicKey::from_bytes(bin).map_err(|_| HostError::General("Invalid PublicKey"))
+        })?;
+
+        let sig: Signature = self.visit_obj(s, |bin: &Vec<u8>| {
+            Signature::from_bytes(bin).map_err(|_| HostError::General("Invalid Signature"))
+        })?;
+
+        let res = self.visit_obj(x, |bin: &Vec<u8>| {
+            public_key
+                .verify(bin, &sig)
+                .map_err(|_| HostError::General("Failed ED25519 verification"))
+        });
+        Ok(res?.into())
     }
 
     fn account_get_low_threshold(&self, a: Object) -> Result<RawVal, Self::Error> {

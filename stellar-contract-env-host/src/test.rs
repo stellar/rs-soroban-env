@@ -4,6 +4,8 @@ use crate::{
 };
 use stellar_contract_env_common::{CheckedEnv, RawValConvertible};
 
+use hex::FromHex;
+
 #[cfg(feature = "vm")]
 use crate::storage::{AccessType, Footprint, Storage};
 #[cfg(feature = "vm")]
@@ -396,6 +398,90 @@ fn vec_append_empty() {
     let obj1 = host.vec_append(*obj0.as_ref(), *obj0.as_ref()).unwrap();
     assert_ne!(obj0.as_raw().get_payload(), obj1.as_ref().get_payload());
     assert_eq!(host.obj_cmp(obj0.into(), obj1.into()).unwrap(), 0);
+}
+
+/// crypto tests
+#[test]
+fn sha256_test() {
+    let host = Host::default();
+    let obj0 = host
+        .to_host_obj(&ScObject::Binary(vec![1].try_into().unwrap()))
+        .unwrap();
+    let hash_obj = host.compute_hash_sha256(obj0.to_object()).unwrap();
+
+    let v = host.from_host_val(hash_obj.to_raw()).unwrap();
+    let bin = match v {
+        ScVal::Object(Some(scobj)) => match scobj {
+            ScObject::Binary(bin) => bin,
+            _ => panic!("Wrong type"),
+        },
+        _ => panic!("Wrong type"),
+    };
+
+    /*
+    We took the sha256 of [1], which is 4bf5122f344554c53bde2ebb8cd2b7e3d1600ad631c385a5d7cce23c7785459a
+    The exp array contains the decimal representation of each hex value
+    */
+    let exp: Vec<u8> = vec![
+        75, 245, 18, 47, 52, 69, 84, 197, 59, 222, 46, 187, 140, 210, 183, 227, 209, 96, 10, 214,
+        49, 195, 133, 165, 215, 204, 226, 60, 119, 133, 69, 154,
+    ];
+    assert_eq!(bin.as_vec().clone(), exp);
+}
+
+#[test]
+fn ed25519_verify_test() {
+    let host = Host::default();
+
+    // From https://datatracker.ietf.org/doc/html/rfc8032#section-7.1
+
+    // First verify successfully
+    let public_key: &[u8] = b"3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4660c";
+    let message: &[u8] = b"72";
+    let signature: &[u8] = b"92a009a9f0d4cab8720e820b5f642540a2b27b5416503f8fb3762223ebdb69da085ac1e43e15996e458f3613d0f11d8c387b2eaeb4302aeeb00d291612bb0c00";
+
+    let pub_bytes: Vec<u8> = FromHex::from_hex(public_key).unwrap();
+    let msg_bytes: Vec<u8> = FromHex::from_hex(message).unwrap();
+    let sig_bytes: Vec<u8> = FromHex::from_hex(signature).unwrap();
+
+    let obj_pub = host
+        .to_host_obj(&ScObject::Binary(pub_bytes.try_into().unwrap()))
+        .unwrap();
+    let obj_msg = host
+        .to_host_obj(&ScObject::Binary(msg_bytes.try_into().unwrap()))
+        .unwrap();
+    let obj_sig = host
+        .to_host_obj(&ScObject::Binary(sig_bytes.try_into().unwrap()))
+        .unwrap();
+
+    let res = host.verify_sig_ed25519(
+        obj_msg.to_object(),
+        obj_pub.to_object(),
+        obj_sig.to_object(),
+    );
+
+    match res {
+        Ok(_) => (),
+        _ => panic!("verification test failed"),
+    };
+
+    // Now verify with wrong message
+    let message2: &[u8] = b"73";
+    let msg_bytes2: Vec<u8> = FromHex::from_hex(message2).unwrap();
+    let obj_msg2 = host
+        .to_host_obj(&ScObject::Binary(msg_bytes2.try_into().unwrap()))
+        .unwrap();
+
+    let res_failed = host.verify_sig_ed25519(
+        obj_msg2.to_object(),
+        obj_pub.to_object(),
+        obj_sig.to_object(),
+    );
+
+    match res_failed {
+        Ok(_) => panic!("verification test failed"),
+        _ => (),
+    };
 }
 
 /// VM test
