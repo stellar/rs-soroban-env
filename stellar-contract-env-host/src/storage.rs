@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use crate::xdr::{LedgerEntry, LedgerKey};
+use crate::xdr::{LedgerEntry, LedgerKey, ScHostStorageErrorCode, ScStatus};
 use crate::HostError;
 use im_rc::OrdMap;
 
@@ -40,14 +40,20 @@ impl Footprint {
         if let Some(existing) = self.0.get(key) {
             match (existing, ty) {
                 (AccessType::ReadOnly, AccessType::ReadOnly) => Ok(()),
-                (AccessType::ReadOnly, AccessType::ReadWrite) => Err(HostError::General(
-                    "read-write access to read-only footprint entry",
+                (AccessType::ReadOnly, AccessType::ReadWrite) => Err(HostError::WithStatus(
+                    String::from("read-write access to read-only footprint entry"),
+                    ScStatus::HostStorageError(
+                        ScHostStorageErrorCode::ReadwriteAccessToReadonlyEntry,
+                    ),
                 )),
                 (AccessType::ReadWrite, AccessType::ReadOnly) => Ok(()),
                 (AccessType::ReadWrite, AccessType::ReadWrite) => Ok(()),
             }
         } else {
-            Err(HostError::General("access to unknown footprint entry"))
+            Err(HostError::WithStatus(
+                String::from("access to unknown footprint entry"),
+                ScStatus::HostStorageError(ScHostStorageErrorCode::AccessToUnknownEntry),
+            ))
         }
     }
 }
@@ -107,8 +113,14 @@ impl Storage {
             }
         };
         match self.map.get(key) {
-            None => Err(HostError::General("missing key in get")),
-            Some(None) => Err(HostError::General("get on deleted key")),
+            None => Err(HostError::WithStatus(
+                String::from("missing key in get"),
+                ScStatus::HostStorageError(ScHostStorageErrorCode::MissingKeyInGet),
+            )),
+            Some(None) => Err(HostError::WithStatus(
+                String::from("get on deleted key"),
+                ScStatus::HostStorageError(ScHostStorageErrorCode::GetOnDeletedKey),
+            )),
             Some(Some(val)) => Ok(val.clone()),
         }
     }

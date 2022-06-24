@@ -1,6 +1,6 @@
-use stellar_xdr::ScStatic;
+use stellar_xdr::{ScStatic, ScStatus, ScStatusType};
 
-use super::{Env, EnvVal, IntoEnvVal, Symbol};
+use super::{Env, EnvVal, IntoEnvVal, Status, Symbol};
 use core::fmt::Debug;
 
 extern crate static_assertions as sa;
@@ -209,6 +209,23 @@ impl From<i32> for RawVal {
     #[inline(always)]
     fn from(i: i32) -> Self {
         RawVal::from_i32(i)
+    }
+}
+
+impl From<ScStatus> for RawVal {
+    fn from(st: ScStatus) -> Self {
+        let ty = st.discriminant();
+        let code = match st {
+            ScStatus::Ok => ScStatusType::Ok as u32,
+            ScStatus::UnknownError(e) => e as u32,
+            ScStatus::HostValueError(e) => e as u32,
+            ScStatus::HostObjectError(e) => e as u32,
+            ScStatus::HostFunctionError(e) => e as u32,
+            ScStatus::HostStorageError(e) => e as u32,
+            ScStatus::HostContextError(e) => e as u32,
+            ScStatus::VmError(e) => e as u32,
+        };
+        Status::from_type_and_code(ty, code).to_raw()
     }
 }
 
