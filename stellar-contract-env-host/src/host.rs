@@ -597,11 +597,18 @@ impl CheckedEnv for Host {
     }
 
     fn map_put(&self, m: Object, k: RawVal, v: RawVal) -> Result<Object, HostError> {
-        todo!()
+        let k = self.associate_raw_val(k);
+        let v = self.associate_raw_val(v);
+        let mnew = self.visit_obj(m, |hm: &HostMap| Ok(hm.update(k, v)))?;
+        Ok(self.add_host_object(mnew)?.into())
     }
 
     fn map_get(&self, m: Object, k: RawVal) -> Result<RawVal, HostError> {
-        todo!()
+        let k = self.associate_raw_val(k);
+        self.visit_obj(m, move |hm: &HostMap| match hm.get(&k) {
+            None => Err(HostError::General("key not found in map")),
+            Some(v) => Ok(v.to_raw()),
+        })
     }
 
     fn map_del(&self, m: Object, k: RawVal) -> Result<Object, HostError> {
@@ -613,7 +620,8 @@ impl CheckedEnv for Host {
     }
 
     fn map_has(&self, m: Object, k: RawVal) -> Result<RawVal, HostError> {
-        todo!()
+        let k = self.associate_raw_val(k);
+        self.visit_obj(m, move |hm: &HostMap| Ok(hm.contains_key(&k).into()))
     }
 
     fn map_prev_key(&self, m: Object, k: RawVal) -> Result<RawVal, HostError> {
