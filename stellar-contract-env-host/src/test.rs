@@ -17,8 +17,8 @@ use crate::Vm;
 #[cfg(feature = "vm")]
 use crate::{
     xdr::{
-        ContractDataEntry, Hash, LedgerEntry, LedgerEntryData, LedgerEntryExt, LedgerKey,
-        LedgerKeyContractData, ScHostObjErrorCode, ScStatic, ScStatusType,
+        ContractDataEntry, Hash, LedgerEntry, LedgerEntryData, LedgerEntryExt, ScHostObjErrorCode,
+        ScStatic, ScStatusType,
     },
     Symbol,
 };
