@@ -452,6 +452,9 @@ impl Host {
             ScObject::U64(u) => self.add_host_object(*u),
             ScObject::I64(i) => self.add_host_object(*i),
             ScObject::Binary(b) => self.add_host_object::<Vec<u8>>(b.clone().into()),
+            ScObject::BigInt(_) => todo!(),
+            ScObject::Hash(_) => todo!(),
+            ScObject::PublicKey(_) => todo!(),
         }
     }
 
