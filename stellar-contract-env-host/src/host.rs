@@ -103,48 +103,47 @@ impl From<&HostError> for ScStatus {
             HostError::WithStatus(_, status) => status.to_owned(),
             HostError::XDR(_) => ScStatus::UnknownError(ScUnknownErrorCode::Xdr),
             HostError::WASMI(err) => match err {
-                wasmi::Error::Trap(trap) => {
-                    if let Some(code) = trap.code() {
-                        return match code {
-                            wasmi::TrapCode::Unreachable => {
-                                ScStatus::VmError(ScVmErrorCode::TrapUnreachable)
-                            }
-                            wasmi::TrapCode::MemoryAccessOutOfBounds => {
-                                ScStatus::VmError(ScVmErrorCode::TrapMemoryAccessOutOfBounds)
-                            }
-                            wasmi::TrapCode::TableAccessOutOfBounds => {
-                                ScStatus::VmError(ScVmErrorCode::TrapTableAccessOutOfBounds)
-                            }
-                            wasmi::TrapCode::ElemUninitialized => {
-                                ScStatus::VmError(ScVmErrorCode::TrapElemUninitialized)
-                            }
-                            wasmi::TrapCode::DivisionByZero => {
-                                ScStatus::VmError(ScVmErrorCode::TrapDivisionByZero)
-                            }
-                            wasmi::TrapCode::IntegerOverflow => {
-                                ScStatus::VmError(ScVmErrorCode::TrapIntegerOverflow)
-                            }
-                            wasmi::TrapCode::InvalidConversionToInt => {
-                                ScStatus::VmError(ScVmErrorCode::TrapInvalidConversionToInt)
-                            }
-                            wasmi::TrapCode::StackOverflow => {
-                                ScStatus::VmError(ScVmErrorCode::TrapStackOverflow)
-                            }
-                            wasmi::TrapCode::UnexpectedSignature => {
-                                ScStatus::VmError(ScVmErrorCode::TrapUnexpectedSignature)
-                            }
-                            wasmi::TrapCode::MemLimitExceeded => {
-                                ScStatus::VmError(ScVmErrorCode::TrapMemLimitExceeded)
-                            }
-                            wasmi::TrapCode::CpuLimitExceeded => {
-                                ScStatus::VmError(ScVmErrorCode::TrapCpuLimitExceeded)
-                            }
-                        };
-                    } else {
-                        return ScStatus::VmError(ScVmErrorCode::Unknown);
-                    }
-                }
-
+                wasmi::Error::Trap(trap) => match trap {
+                    wasmi::Trap::Code(code) => match code {
+                        wasmi::TrapCode::Unreachable => {
+                            ScStatus::VmError(ScVmErrorCode::TrapUnreachable)
+                        }
+                        wasmi::TrapCode::MemoryAccessOutOfBounds => {
+                            ScStatus::VmError(ScVmErrorCode::TrapMemoryAccessOutOfBounds)
+                        }
+                        wasmi::TrapCode::TableAccessOutOfBounds => {
+                            ScStatus::VmError(ScVmErrorCode::TrapTableAccessOutOfBounds)
+                        }
+                        wasmi::TrapCode::ElemUninitialized => {
+                            ScStatus::VmError(ScVmErrorCode::TrapElemUninitialized)
+                        }
+                        wasmi::TrapCode::DivisionByZero => {
+                            ScStatus::VmError(ScVmErrorCode::TrapDivisionByZero)
+                        }
+                        wasmi::TrapCode::IntegerOverflow => {
+                            ScStatus::VmError(ScVmErrorCode::TrapIntegerOverflow)
+                        }
+                        wasmi::TrapCode::InvalidConversionToInt => {
+                            ScStatus::VmError(ScVmErrorCode::TrapInvalidConversionToInt)
+                        }
+                        wasmi::TrapCode::StackOverflow => {
+                            ScStatus::VmError(ScVmErrorCode::TrapStackOverflow)
+                        }
+                        wasmi::TrapCode::UnexpectedSignature => {
+                            ScStatus::VmError(ScVmErrorCode::TrapUnexpectedSignature)
+                        }
+                        wasmi::TrapCode::MemLimitExceeded => {
+                            ScStatus::VmError(ScVmErrorCode::TrapMemLimitExceeded)
+                        }
+                        wasmi::TrapCode::CpuLimitExceeded => {
+                            ScStatus::VmError(ScVmErrorCode::TrapCpuLimitExceeded)
+                        }
+                    },
+                    wasmi::Trap::Host(err) => match err.downcast_ref::<HostError>() {
+                        Some(e) => e.into(),
+                        None => ScStatus::VmError(ScVmErrorCode::Unknown),
+                    },
+                },
                 wasmi::Error::Host(err) => match err.downcast_ref::<HostError>() {
                     Some(e) => e.into(),
                     None => ScStatus::VmError(ScVmErrorCode::Unknown),
@@ -808,6 +807,7 @@ impl Host {
         match self.call(contract, func, args) {
             Ok(rv) => rv,
             Err(e) => {
+                println!("{:?}", e);
                 let st: ScStatus = (&e).into();
                 st.into()
             }
