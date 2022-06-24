@@ -6,6 +6,7 @@ use core::cmp::Ordering;
 use core::fmt::Debug;
 use im_rc::{OrdMap, Vector};
 use std::num::TryFromIntError;
+use stellar_contract_env_common::xdr::{Hash, Uint256, WriteXdr};
 
 use crate::budget::Budget;
 use crate::storage::Storage;
@@ -13,7 +14,7 @@ use crate::weak_host::WeakHost;
 
 use crate::xdr;
 use crate::xdr::{
-    ContractDataEntry, Hash, HostFunction, LedgerEntry, LedgerEntryData, LedgerEntryExt, LedgerKey,
+    ContractDataEntry, HostFunction, LedgerEntry, LedgerEntryData, LedgerEntryExt, LedgerKey,
     LedgerKeyContractData, ScMap, ScMapEntry, ScObject, ScStatic, ScStatus, ScStatusType, ScVal,
     ScVec,
 };
@@ -481,6 +482,47 @@ impl Host {
         }))
     }
 
+    fn create_contract_helper(
+        &self,
+        contract: Object,
+        id_preimage: Vec<u8>,
+    ) -> Result<Object, HostError> {
+        let id_obj = self.compute_hash_sha256(self.add_host_object(id_preimage)?.into())?;
+
+        let new_contract_id = self.visit_obj(id_obj, |bin: &Vec<u8>| {
+            let arr: [u8; 32] = bin
+                .as_slice()
+                .try_into()
+                .map_err(|_| HostError::General("invalid hash"))?;
+            Ok(xdr::Hash(arr))
+        })?;
+
+        let storage_key = LedgerKey::ContractData(LedgerKeyContractData {
+            contract_id: new_contract_id.clone(),
+            key: ScVal::Static(ScStatic::LedgerKeyContractCodeWasm),
+        });
+
+        if self.0.storage.borrow_mut().has(&storage_key)? {
+            return Err(HostError::General("Contract already exists"));
+        }
+
+        let val = self.from_host_obj(contract)?;
+
+        let data = LedgerEntryData::ContractData(ContractDataEntry {
+            contract_id: new_contract_id,
+            key: ScVal::Static(ScStatic::LedgerKeyContractCodeWasm),
+            val: ScVal::Object(Some(val)),
+        });
+        let val = LedgerEntry {
+            last_modified_ledger_seq: 0,
+            data,
+            ext: LedgerEntryExt::V0,
+        };
+        self.0.storage.borrow_mut().put(&storage_key, &val)?;
+
+        Ok(id_obj)
+    }
+
     #[cfg(feature = "vm")]
     fn call_n(&self, contract: Object, func: Symbol, args: &[RawVal]) -> Result<RawVal, HostError> {
         // Create key for storage
@@ -515,27 +557,50 @@ impl Host {
     }
 
     pub fn invoke_function(&mut self, hf: HostFunction, args: ScVec) -> Result<ScVal, HostError> {
-        if let [ScVal::Object(Some(scobj)), ScVal::Symbol(scsym), rest @ ..] = args.as_slice() {
-            let object: Object = self.to_host_obj(&scobj)?.to_object();
-            let symbol: Symbol = scsym.as_slice().try_into()?;
-            let mut raw_args: Vec<RawVal> = Vec::new();
-            for scv in rest.iter() {
-                raw_args.push(self.to_host_val(&scv)?.val);
-            }
-            let mut frame_guard = self.push_host_function_frame(hf);
-            let raw_res = match hf {
-                HostFunction::Call => {
-                    #[cfg(not(feature = "vm"))]
-                    unimplemented!();
-                    #[cfg(feature = "vm")]
-                    self.call_n(object, symbol, &raw_args[..])
+        match hf {
+            HostFunction::Call => {
+                #[cfg(not(feature = "vm"))]
+                unimplemented!();
+
+                #[cfg(feature = "vm")]
+                if let [ScVal::Object(Some(scobj)), ScVal::Symbol(scsym), rest @ ..] =
+                    args.as_slice()
+                {
+                    let mut frame_guard = self.push_host_function_frame(hf);
+
+                    let object: Object = self.to_host_obj(&scobj)?.to_object();
+                    let symbol: Symbol = scsym.as_slice().try_into()?;
+                    let mut raw_args: Vec<RawVal> = Vec::new();
+                    for scv in rest.iter() {
+                        raw_args.push(self.to_host_val(&scv)?.val);
+                    }
+                    let res = self.call_n(object, symbol, &raw_args[..])?;
+                    frame_guard.commit();
+                    Ok(self.from_host_val(res)?)
+                } else {
+                    Err(HostError::General("unexpected Call args"))
                 }
-                _ => Err(HostError::General("bad host function")),
-            }?;
-            frame_guard.commit();
-            Ok(self.from_host_val(raw_res)?)
-        } else {
-            return Err(HostError::General("unexpected args"));
+            }
+            HostFunction::CreateContract => {
+                if let [ScVal::Object(Some(c_obj)), ScVal::Object(Some(s_obj)), ScVal::Object(Some(k_obj)), ScVal::Object(Some(sig_obj))] =
+                    args.as_slice()
+                {
+                    let mut frame_guard = self.push_host_function_frame(hf);
+
+                    let contract: Object = self.to_host_obj(&c_obj)?.to_object();
+                    let salt: Object = self.to_host_obj(&s_obj)?.to_object();
+                    let key: Object = self.to_host_obj(&k_obj)?.to_object();
+                    let signature: Object = self.to_host_obj(&sig_obj)?.to_object();
+
+                    //TODO: should create_contract return a RawVal instead of Object to avoid this conversion?
+                    let res = self.create_contract(contract, salt, key, signature)?;
+                    let sc_obj = self.from_host_obj(res)?;
+                    frame_guard.commit();
+                    Ok(ScVal::Object(Some(sc_obj)))
+                } else {
+                    Err(HostError::General("unexpected CreateContract args"))
+                }
+            }
         }
     }
 }
@@ -836,6 +901,78 @@ impl CheckedEnv for Host {
         let key = self.to_storage_key(k)?;
         self.0.storage.borrow_mut().del(&key)?;
         Ok(().into())
+    }
+
+    fn create_contract(
+        &self,
+        v: Object,
+        salt: Object,
+        key: Object,
+        sig: Object,
+    ) -> Result<Object, HostError> {
+        let salt_val = self.visit_obj(salt, |bin: &Vec<u8>| {
+            let arr: [u8; 32] = bin
+                .as_slice()
+                .try_into()
+                .map_err(|_| HostError::General("invalid salt"))?;
+            Ok(Uint256(arr))
+        })?;
+
+        let key_val = self.visit_obj(key, |bin: &Vec<u8>| {
+            let arr: [u8; 32] = bin
+                .as_slice()
+                .try_into()
+                .map_err(|_| HostError::General("invalid key"))?;
+            Ok(Uint256(arr))
+        })?;
+
+        // Verify parameters
+        let params = self.visit_obj(v, |bin: &Vec<u8>| {
+            let separator = "create_contract(nonce: u256, contract: Vec<u8>, salt: u256, key: u256, sig: Vec<u8>)";
+            let params = [separator.as_bytes(), salt_val.0.as_slice(), bin].concat();
+            Ok(params)
+        })?;
+        let hash = self.compute_hash_sha256(self.add_host_object(params)?.into())?;
+        self.verify_sig_ed25519(hash, key, sig)?;
+
+        //Create contract and contractID
+        let pre_image = xdr::HashIdPreimage::ContractIdFromEd25519(xdr::HashIdPreimageContractId {
+            ed25519: key_val,
+            salt: salt_val,
+        });
+        let mut buf = Vec::new();
+        pre_image
+            .write_xdr(&mut buf)
+            .map_err(|_| HostError::General("invalid hash"))?;
+        Ok(self.create_contract_helper(v, buf)?)
+    }
+
+    fn create_contract_using_parent_id(
+        &self,
+        v: Object,
+        salt: Object,
+    ) -> Result<Object, HostError> {
+        let contract_id = self.get_current_contract_id()?;
+
+        let salt_val = self.visit_obj(salt, |bin: &Vec<u8>| {
+            let arr: [u8; 32] = bin
+                .as_slice()
+                .try_into()
+                .map_err(|_| HostError::General("invalid salt"))?;
+            Ok(Uint256(arr))
+        })?;
+
+        let pre_image =
+            xdr::HashIdPreimage::ContractIdFromContract(xdr::HashIdPreimageChildContractId {
+                contract_id: contract_id,
+                salt: salt_val,
+            });
+        let mut buf = Vec::new();
+        pre_image
+            .write_xdr(&mut buf)
+            .map_err(|_| HostError::General("invalid hash"))?;
+
+        Ok(self.create_contract_helper(v, buf)?)
     }
 
     fn call(&self, contract: Object, func: Symbol, args: Object) -> Result<RawVal, HostError> {
