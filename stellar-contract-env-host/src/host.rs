@@ -1001,54 +1001,36 @@ impl CheckedEnv for Host {
     }
 
     fn vec_put(&self, v: Object, i: RawVal, x: RawVal) -> Result<Object, HostError> {
-        let i: u32 = i.try_into().map_err(|_| {
-            HostError::WithStatus(
-                String::from("i must be u32"),
-                ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsWrongType),
-            )
-        })?;
+        let i: usize = u32::try_from(i).map_err(|_| HostError::General("i must be u32"))? as usize;
         let x = self.associate_raw_val(x);
         let vnew = self.visit_obj(v, move |hv: &HostVec| {
+            if i >= hv.len() {
+                return Err(HostError::General("index out of bound"));
+            }
             let mut vnew = hv.clone();
-            vnew.set(i as usize, x);
+            vnew.set(i, x);
             Ok(vnew)
         })?;
         Ok(self.add_host_object(vnew)?.into())
     }
 
     fn vec_get(&self, v: Object, i: RawVal) -> Result<RawVal, HostError> {
-        let i: u32 = i.try_into().map_err(|_| {
-            HostError::WithStatus(
-                String::from("i must be u32"),
-                ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsWrongType),
-            )
-        })?;
-        let res = self.visit_obj(v, move |hv: &HostVec| match hv.get(i as usize) {
-            None => Err(HostError::WithStatus(
-                String::from("index out of bound"),
-                ScStatus::HostObjectError(ScHostObjErrorCode::ObjectNotExist),
-            )),
+        let i: usize = u32::try_from(i).map_err(|_| HostError::General("i must be u32"))? as usize;
+        let res = self.visit_obj(v, move |hv: &HostVec| match hv.get(i) {
+            None => Err(HostError::General("index out of bound")),
             Some(hval) => Ok(hval.to_raw()),
         });
         res
     }
 
     fn vec_del(&self, v: Object, i: RawVal) -> Result<Object, HostError> {
-        let i: u32 = i.try_into().map_err(|_| {
-            HostError::WithStatus(
-                String::from("i must be u32"),
-                ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsWrongType),
-            )
-        })?;
+        let i: usize = u32::try_from(i).map_err(|_| HostError::General("i must be u32"))? as usize;
         let vnew = self.visit_obj(v, move |hv: &HostVec| {
-            if i as usize >= hv.len() {
-                return Err(HostError::WithStatus(
-                    String::from("index out of bound"),
-                    ScStatus::HostObjectError(ScHostObjErrorCode::ObjectNotExist),
-                ));
+            if i >= hv.len() {
+                return Err(HostError::General("index out of bound"));
             }
             let mut vnew = hv.clone();
-            vnew.remove(i as usize);
+            vnew.remove(i);
             Ok(vnew)
         })?;
         Ok(self.add_host_object(vnew)?.into())
@@ -1106,22 +1088,14 @@ impl CheckedEnv for Host {
     }
 
     fn vec_insert(&self, v: Object, i: RawVal, x: RawVal) -> Result<Object, HostError> {
-        let i: u32 = i.try_into().map_err(|_| {
-            HostError::WithStatus(
-                String::from("i must be u32"),
-                ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsWrongType),
-            )
-        })?;
+        let i: usize = u32::try_from(i).map_err(|_| HostError::General("i must be u32"))? as usize;
         let x = self.associate_raw_val(x);
         let vnew = self.visit_obj(v, move |hv: &HostVec| {
-            if i as usize > hv.len() {
-                return Err(HostError::WithStatus(
-                    String::from("index out of bound"),
-                    ScStatus::HostObjectError(ScHostObjErrorCode::VecIndexOutOfBound),
-                ));
+            if i > hv.len() {
+                return Err(HostError::General("index out of bound"));
             }
             let mut vnew = hv.clone();
-            vnew.insert(i as usize, x);
+            vnew.insert(i, x);
             Ok(vnew)
         })?;
         Ok(self.add_host_object(vnew)?.into())
@@ -1130,37 +1104,24 @@ impl CheckedEnv for Host {
     fn vec_append(&self, v1: Object, v2: Object) -> Result<Object, HostError> {
         let mut vnew = self.visit_obj(v1, |hv: &HostVec| Ok(hv.clone()))?;
         let v2 = self.visit_obj(v2, |hv: &HostVec| Ok(hv.clone()))?;
+        if v2.len() > u32::MAX as usize - vnew.len() {
+            return Err(HostError::General("u32 overflow"));
+        }
         vnew.append(v2);
         Ok(self.add_host_object(vnew)?.into())
     }
 
     fn vec_slice(&self, v: Object, i: RawVal, l: RawVal) -> Result<Object, HostError> {
-        let i: u32 = i.try_into().map_err(|_| {
-            HostError::WithStatus(
-                String::from("i must be u32"),
-                ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsWrongType),
-            )
-        })?;
-        let l: u32 = l.try_into().map_err(|_| {
-            HostError::WithStatus(
-                String::from("l must be u32"),
-                ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsWrongType),
-            )
-        })?;
+        let i: usize = u32::try_from(i).map_err(|_| HostError::General("i must be u32"))? as usize;
+        let l: usize = u32::try_from(l).map_err(|_| HostError::General("l must be u32"))? as usize;
         let vnew = self.visit_obj(v, move |hv: &HostVec| {
-            if i > u32::MAX - l {
-                return Err(HostError::WithStatus(
-                    String::from("u32 overflow"),
-                    ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsInvalid),
-                ));
+            if i > u32::MAX as usize - l {
+                return Err(HostError::General("u32 overflow"));
             }
-            if (i + l) as usize > hv.len() {
-                return Err(HostError::WithStatus(
-                    String::from("index out of bound"),
-                    ScStatus::HostObjectError(ScHostObjErrorCode::VecIndexOutOfBound),
-                ));
+            if (i + l) > hv.len() {
+                return Err(HostError::General("index out of bound"));
             }
-            Ok(hv.clone().slice(i as usize..(i + l) as usize))
+            Ok(hv.clone().slice(i..(i + l)))
         })?;
         Ok(self.add_host_object(vnew)?.into())
     }
@@ -1394,17 +1355,17 @@ impl CheckedEnv for Host {
         todo!()
     }
 
-    fn serialize_to_binary(&self, x: Object) -> Result<Object, HostError> {
+    fn serialize_to_binary(&self, b: Object) -> Result<Object, HostError> {
         todo!()
     }
 
-    fn deserialize_from_binary(&self, x: Object) -> Result<Object, HostError> {
+    fn deserialize_from_binary(&self, b: Object) -> Result<Object, HostError> {
         todo!()
     }
 
     fn binary_copy_to_guest_mem(
         &self,
-        x: Object,
+        b: Object,
         i: RawVal,
         j: RawVal,
         l: RawVal,
@@ -1414,7 +1375,7 @@ impl CheckedEnv for Host {
 
     fn binary_copy_from_guest_mem(
         &self,
-        x: Object,
+        b: Object,
         i: RawVal,
         j: RawVal,
         l: RawVal,
@@ -1426,65 +1387,131 @@ impl CheckedEnv for Host {
         Ok(self.add_host_object(Vec::<u8>::new())?.into())
     }
 
-    fn binary_put(&self, v: Object, i: RawVal, x: RawVal) -> Result<Object, HostError> {
-        todo!()
-    }
-
-    fn binary_get(&self, x: Object, i: RawVal) -> Result<RawVal, HostError> {
-        todo!()
-    }
-
-    fn binary_del(&self, v: Object, i: RawVal) -> Result<Object, HostError> {
-        todo!()
-    }
-
-    fn binary_len(&self, x: Object) -> Result<RawVal, HostError> {
-        todo!()
-    }
-
-    fn binary_push(&self, x: Object, v: RawVal) -> Result<Object, HostError> {
-        let u: u32 = v.try_into().map_err(|_| {
-            HostError::WithStatus(
-                String::from("i must be u32"),
-                ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsWrongType),
-            )
-        })?;
-
-        let vnew = self.visit_obj(x, move |hv: &Vec<u8>| {
+    fn binary_put(&self, b: Object, i: RawVal, u: RawVal) -> Result<Object, HostError> {
+        let i: usize = u32::try_from(i).map_err(|_| HostError::General("i must be u32"))? as usize;
+        let u: u8 = u
+            .try_into()
+            .map_err(|_| HostError::General("u must be u8"))?;
+        let vnew = self.visit_obj(b, move |hv: &Vec<u8>| {
             let mut vnew = hv.clone();
-            vnew.push(u.try_into().map_err(|_| {
-                HostError::WithStatus(
-                    String::from("u must be u8"),
-                    ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsWrongType),
-                )
-            })?);
+            if i >= hv.len() {
+                return Err(HostError::General("index out of bound"));
+            }
+            let _old_val = std::mem::replace(&mut vnew[i], u);
             Ok(vnew)
         })?;
         Ok(self.add_host_object(vnew)?.into())
     }
 
-    fn binary_pop(&self, x: Object) -> Result<Object, HostError> {
-        todo!()
+    fn binary_get(&self, b: Object, i: RawVal) -> Result<RawVal, HostError> {
+        let i: usize = u32::try_from(i).map_err(|_| HostError::General("i must be u32"))? as usize;
+        let res = self.visit_obj(b, move |hv: &Vec<u8>| match hv.get(i) {
+            None => Err(HostError::General("index out of bound")),
+            Some(u) => Ok((*u).into()),
+        });
+        res
     }
 
-    fn binary_front(&self, v: Object) -> Result<RawVal, HostError> {
-        todo!()
+    fn binary_del(&self, b: Object, i: RawVal) -> Result<Object, HostError> {
+        let i: usize = u32::try_from(i).map_err(|_| HostError::General("i must be u32"))? as usize;
+        let vnew = self.visit_obj(b, move |hv: &Vec<u8>| {
+            if i >= hv.len() {
+                return Err(HostError::General("index out of bound"));
+            }
+            let mut vnew = hv.clone();
+            vnew.remove(i);
+            Ok(vnew)
+        })?;
+        Ok(self.add_host_object(vnew)?.into())
     }
 
-    fn binary_back(&self, v: Object) -> Result<RawVal, HostError> {
-        todo!()
+    fn binary_len(&self, b: Object) -> Result<RawVal, HostError> {
+        let len = self.visit_obj(b, |hv: &Vec<u8>| Ok(hv.len()))?;
+        Ok(u32::try_from(len)?.into())
     }
 
-    fn binary_insert(&self, x: Object, i: RawVal, v: RawVal) -> Result<Object, HostError> {
-        todo!()
+    fn binary_push(&self, b: Object, u: RawVal) -> Result<Object, HostError> {
+        let u: u8 = u
+            .try_into()
+            .map_err(|_| HostError::General("x must be u8"))?;
+        let vnew = self.visit_obj(b, move |hv: &Vec<u8>| {
+            let mut vnew = hv.clone();
+            vnew.push(u);
+            Ok(vnew)
+        })?;
+        Ok(self.add_host_object(vnew)?.into())
     }
 
-    fn binary_append(&self, v1: Object, v2: Object) -> Result<Object, HostError> {
-        todo!()
+    fn binary_pop(&self, b: Object) -> Result<Object, HostError> {
+        let vnew = self.visit_obj(b, move |hv: &Vec<u8>| {
+            let mut vnew = hv.clone();
+            match vnew.pop() {
+                None => Err(HostError::General("value does not exist")),
+                Some(_) => Ok(vnew),
+            }
+        })?;
+        Ok(self.add_host_object(vnew)?.into())
     }
 
-    fn binary_slice(&self, v: Object, i: RawVal, l: RawVal) -> Result<Object, HostError> {
-        todo!()
+    fn binary_front(&self, b: Object) -> Result<RawVal, HostError> {
+        let front = self.visit_obj(b, |hv: &Vec<u8>| {
+            if hv.is_empty() {
+                return Err(HostError::General("value does not exist"));
+            }
+            Ok(hv[0].into())
+        });
+        front
+    }
+
+    fn binary_back(&self, b: Object) -> Result<RawVal, HostError> {
+        let back = self.visit_obj(b, |hv: &Vec<u8>| {
+            if hv.is_empty() {
+                return Err(HostError::General("value does not exist"));
+            }
+            Ok(hv[hv.len() - 1].into())
+        });
+        back
+    }
+
+    fn binary_insert(&self, b: Object, i: RawVal, u: RawVal) -> Result<Object, HostError> {
+        let i: usize = u32::try_from(i).map_err(|_| HostError::General("i must be u32"))? as usize;
+        let u: u8 = u
+            .try_into()
+            .map_err(|_| HostError::General("x must be u8"))?;
+        let vnew = self.visit_obj(b, move |hv: &Vec<u8>| {
+            if i > hv.len() {
+                return Err(HostError::General("index out of bound"));
+            }
+            let mut vnew = hv.clone();
+            vnew.insert(i, u);
+            Ok(vnew)
+        })?;
+        Ok(self.add_host_object(vnew)?.into())
+    }
+
+    fn binary_append(&self, b1: Object, b2: Object) -> Result<Object, HostError> {
+        let mut vnew = self.visit_obj(b1, |hv: &Vec<u8>| Ok(hv.clone()))?;
+        let mut b2 = self.visit_obj(b2, |hv: &Vec<u8>| Ok(hv.clone()))?;
+        if b2.len() > u32::MAX as usize - vnew.len() {
+            return Err(HostError::General("u32 overflow"));
+        }
+        vnew.append(&mut b2);
+        Ok(self.add_host_object(vnew)?.into())
+    }
+
+    fn binary_slice(&self, b: Object, i: RawVal, l: RawVal) -> Result<Object, HostError> {
+        let i: usize = u32::try_from(i).map_err(|_| HostError::General("i must be u32"))? as usize;
+        let l: usize = u32::try_from(l).map_err(|_| HostError::General("l must be u32"))? as usize;
+        let vnew = self.visit_obj(b, move |hv: &Vec<u8>| {
+            if i > u32::MAX as usize - l {
+                return Err(HostError::General("u32 overflow"));
+            }
+            if (i + l) > hv.len() {
+                return Err(HostError::General("index out of bound"));
+            }
+            Ok(hv.as_slice()[i..(i + l)].to_vec())
+        })?;
+        Ok(self.add_host_object(vnew)?.into())
     }
 
     fn hash_from_binary(&self, x: Object) -> Result<Object, HostError> {
