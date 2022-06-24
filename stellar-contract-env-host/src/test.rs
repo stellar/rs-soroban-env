@@ -2,7 +2,10 @@ use crate::{
     xdr::{ScObject, ScObjectType, ScVal, ScVec},
     Host, IntoEnvVal, Object, RawVal, Tag,
 };
-use stellar_contract_env_common::{CheckedEnv, RawValConvertible};
+use stellar_contract_env_common::{
+    xdr::{ScMap, ScMapEntry},
+    CheckedEnv, RawValConvertible,
+};
 
 use hex::FromHex;
 
@@ -79,6 +82,33 @@ fn i32_as_seen_by_host() {
     assert!(val0.val.get_tag() == Tag::I32);
     let i = unsafe { <i32 as RawValConvertible>::unchecked_from_val(val0.val) };
     assert_eq!(i, -12345);
+}
+
+#[test]
+fn map_put_has_and_get() {
+    let host = Host::default();
+    let scmap: ScMap = vec![
+        ScMapEntry {
+            key: ScVal::U32(1),
+            val: ScVal::U32(2),
+        },
+        ScMapEntry {
+            key: ScVal::U32(2),
+            val: ScVal::U32(4),
+        },
+    ]
+    .try_into()
+    .unwrap();
+    let scobj = ScObject::Map(scmap);
+    let obj = host.to_host_obj(&scobj).unwrap();
+    let k: RawVal = 3_u32.into();
+    let v: RawVal = 6_u32.into();
+    assert!(!bool::try_from(host.map_has(obj.to_object(), k).unwrap()).unwrap());
+    let obj1 = host.map_put(obj.to_object(), k, v).unwrap();
+    assert!(bool::try_from(host.map_has(obj1, k).unwrap()).unwrap());
+    let rv = host.map_get(obj1, k).unwrap();
+    let v = unsafe { <u32 as RawValConvertible>::unchecked_from_val(rv) };
+    assert_eq!(v, 6);
 }
 
 /// Vec test
