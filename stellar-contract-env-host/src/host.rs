@@ -584,10 +584,6 @@ impl CheckedEnv for Host {
         todo!()
     }
 
-    fn get_last_operation_result(&self) -> Result<RawVal, HostError> {
-        todo!()
-    }
-
     fn obj_cmp(&self, a: RawVal, b: RawVal) -> Result<i64, HostError> {
         let res = unsafe {
             self.unchecked_visit_val_obj(a, |ao| self.unchecked_visit_val_obj(b, |bo| ao.cmp(&bo)))
@@ -597,6 +593,10 @@ impl CheckedEnv for Host {
             Ordering::Equal => 0,
             Ordering::Greater => 1,
         })
+    }
+
+    fn get_invoking_contract(&self) -> Result<Object, HostError> {
+        todo!()
     }
 
     fn obj_from_u64(&self, u: u64) -> Result<Object, HostError> {
@@ -620,11 +620,18 @@ impl CheckedEnv for Host {
     }
 
     fn map_put(&self, m: Object, k: RawVal, v: RawVal) -> Result<Object, HostError> {
-        todo!()
+        let k = self.associate_raw_val(k);
+        let v = self.associate_raw_val(v);
+        let mnew = self.visit_obj(m, |hm: &HostMap| Ok(hm.update(k, v)))?;
+        Ok(self.add_host_object(mnew)?.into())
     }
 
     fn map_get(&self, m: Object, k: RawVal) -> Result<RawVal, HostError> {
-        todo!()
+        let k = self.associate_raw_val(k);
+        self.visit_obj(m, move |hm: &HostMap| match hm.get(&k) {
+            None => Err(HostError::General("key not found in map")),
+            Some(v) => Ok(v.to_raw()),
+        })
     }
 
     fn map_del(&self, m: Object, k: RawVal) -> Result<Object, HostError> {
@@ -636,7 +643,8 @@ impl CheckedEnv for Host {
     }
 
     fn map_has(&self, m: Object, k: RawVal) -> Result<RawVal, HostError> {
-        todo!()
+        let k = self.associate_raw_val(k);
+        self.visit_obj(m, move |hm: &HostMap| Ok(hm.contains_key(&k).into()))
     }
 
     fn map_prev_key(&self, m: Object, k: RawVal) -> Result<RawVal, HostError> {
@@ -974,7 +982,7 @@ impl CheckedEnv for Host {
         todo!()
     }
 
-    fn binary_get(&self, x: Object, i: RawVal) -> Result<Object, HostError> {
+    fn binary_get(&self, x: Object, i: RawVal) -> Result<RawVal, HostError> {
         todo!()
     }
 
@@ -1060,5 +1068,21 @@ impl CheckedEnv for Host {
                 .map_err(|_| HostError::General("Failed ED25519 verification"))
         });
         Ok(res?.into())
+    }
+
+    fn account_get_low_threshold(&self, a: Object) -> Result<RawVal, Self::Error> {
+        todo!()
+    }
+
+    fn account_get_medium_threshold(&self, a: Object) -> Result<RawVal, Self::Error> {
+        todo!()
+    }
+
+    fn account_get_high_threshold(&self, a: Object) -> Result<RawVal, Self::Error> {
+        todo!()
+    }
+
+    fn account_get_signer_weight(&self, a: Object, s: Object) -> Result<RawVal, Self::Error> {
+        todo!()
     }
 }
