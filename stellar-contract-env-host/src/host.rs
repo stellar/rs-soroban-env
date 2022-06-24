@@ -156,9 +156,7 @@ impl From<&HostError> for ScStatus {
                 wasmi::Error::Global(_) => ScStatus::VmError(ScVmErrorCode::Global),
                 wasmi::Error::Value(_) => ScStatus::VmError(ScVmErrorCode::Value),
             },
-            HostError::ParityWasmElements(_) => {
-                ScStatus::UnknownError(ScUnknownErrorCode::ParityWasmiElements)
-            }
+            HostError::ParityWasmElements(_) => ScStatus::VmError(ScVmErrorCode::Unknown),
         }
     }
 }
