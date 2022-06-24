@@ -89,6 +89,8 @@ pub(crate) enum Frame {
     #[cfg(feature = "vm")]
     ContractVM(Rc<Vm>),
     HostFunction(HostFunction),
+    #[cfg(feature = "testutils")]
+    TestContract(Hash),
 }
 
 #[derive(Clone, Default)]
@@ -107,7 +109,7 @@ pub(crate) struct HostImpl {
 /// Users may call [`FrameGuard::commit`] to cause the rollback point to be set
 /// to `None`, which will cause the [`FrameGuard`] to commit changes to the host
 /// that occurred during its lifetime, rather than rollling them back.
-pub(crate) struct FrameGuard {
+pub struct FrameGuard {
     rollback: Option<RollbackPoint>,
     host: Host,
 }
@@ -216,6 +218,25 @@ impl Host {
         }
     }
 
+    #[cfg(feature = "testutils")]
+    pub fn push_test_frame(&self, id: Object) -> Result<FrameGuard, HostError> {
+        let contract_id = self.visit_obj(id, |b: &Vec<u8>| {
+            Ok(Hash(
+                b.clone()
+                    .try_into()
+                    .map_err(|_| HostError::General("not binary"))?,
+            ))
+        })?;
+        self.0
+            .context
+            .borrow_mut()
+            .push(Frame::TestContract(contract_id));
+        Ok(FrameGuard {
+            rollback: Some(self.capture_rollback_point()),
+            host: self.clone(),
+        })
+    }
+
     /// Applies a function to the top [`Frame`] of the context stack. Returns
     /// [`HostError`] if the context stack is empty, otherwise returns result of
     /// function call.
@@ -241,6 +262,8 @@ impl Host {
             Frame::HostFunction(_) => Err(HostError::General(
                 "Host function context has no contract ID",
             )),
+            #[cfg(feature = "testutils")]
+            Frame::TestContract(id) => Ok(id.clone()),
         })
     }
 
@@ -662,11 +685,18 @@ impl CheckedEnv for Host {
     }
 
     fn map_put(&self, m: Object, k: RawVal, v: RawVal) -> Result<Object, HostError> {
-        todo!()
+        let k = self.associate_raw_val(k);
+        let v = self.associate_raw_val(v);
+        let mnew = self.visit_obj(m, |hm: &HostMap| Ok(hm.update(k, v)))?;
+        Ok(self.add_host_object(mnew)?.into())
     }
 
     fn map_get(&self, m: Object, k: RawVal) -> Result<RawVal, HostError> {
-        todo!()
+        let k = self.associate_raw_val(k);
+        self.visit_obj(m, move |hm: &HostMap| match hm.get(&k) {
+            None => Err(HostError::General("key not found in map")),
+            Some(v) => Ok(v.to_raw()),
+        })
     }
 
     fn map_del(&self, m: Object, k: RawVal) -> Result<Object, HostError> {
@@ -678,7 +708,8 @@ impl CheckedEnv for Host {
     }
 
     fn map_has(&self, m: Object, k: RawVal) -> Result<RawVal, HostError> {
-        todo!()
+        let k = self.associate_raw_val(k);
+        self.visit_obj(m, move |hm: &HostMap| Ok(hm.contains_key(&k).into()))
     }
 
     fn map_prev_key(&self, m: Object, k: RawVal) -> Result<RawVal, HostError> {
