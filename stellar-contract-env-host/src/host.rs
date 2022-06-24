@@ -38,9 +38,6 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum HostError {
-    /// General error.
-    #[error("general host error: {0}")]
-    General(&'static str),
     /// An error with specific status code.
     #[error("host error: {0}, status: {:?}")]
     WithStatus(String, ScStatus),
@@ -55,6 +52,9 @@ pub enum HostError {
     #[cfg(feature = "vm")]
     #[error("ParityWasmElements error: {0}")]
     ParityWasmElements(#[from] parity_wasm::elements::Error),
+    /// General error.
+    #[error("general host error: {0}")]
+    General(&'static str),
 }
 
 impl From<TryFromIntError> for HostError {
@@ -319,11 +319,12 @@ impl Host {
     #[cfg(feature = "testutils")]
     pub fn push_test_frame(&self, id: Object) -> Result<FrameGuard, HostError> {
         let contract_id = self.visit_obj(id, |b: &Vec<u8>| {
-            Ok(Hash(
-                b.clone()
-                    .try_into()
-                    .map_err(|_| HostError::General("not binary"))?,
-            ))
+            Ok(Hash(b.clone().try_into().map_err(|_| {
+                HostError::WithStatus(
+                    String::from("not a binary object"),
+                    ScStatus::HostObjectError(ScHostObjErrorCode::UnexpectedType),
+                )
+            })?))
         })?;
         self.0
             .context
@@ -667,10 +668,12 @@ impl Host {
         let id_obj = self.compute_hash_sha256(self.add_host_object(id_preimage)?.into())?;
 
         let new_contract_id = self.visit_obj(id_obj, |bin: &Vec<u8>| {
-            let arr: [u8; 32] = bin
-                .as_slice()
-                .try_into()
-                .map_err(|_| HostError::General("invalid hash"))?;
+            let arr: [u8; 32] = bin.as_slice().try_into().map_err(|_| {
+                HostError::WithStatus(
+                    String::from("invalid contract hash"),
+                    ScStatus::HostObjectError(ScHostObjErrorCode::ContractHashWrongLength),
+                )
+            })?;
             Ok(xdr::Hash(arr))
         })?;
 
@@ -1166,18 +1169,22 @@ impl CheckedEnv for Host {
         sig: Object,
     ) -> Result<Object, HostError> {
         let salt_val = self.visit_obj(salt, |bin: &Vec<u8>| {
-            let arr: [u8; 32] = bin
-                .as_slice()
-                .try_into()
-                .map_err(|_| HostError::General("invalid salt"))?;
+            let arr: [u8; 32] = bin.as_slice().try_into().map_err(|_| {
+                HostError::WithStatus(
+                    String::from("invalid salt"),
+                    ScStatus::HostObjectError(ScHostObjErrorCode::UnexpectedType),
+                )
+            })?;
             Ok(Uint256(arr))
         })?;
 
         let key_val = self.visit_obj(key, |bin: &Vec<u8>| {
-            let arr: [u8; 32] = bin
-                .as_slice()
-                .try_into()
-                .map_err(|_| HostError::General("invalid key"))?;
+            let arr: [u8; 32] = bin.as_slice().try_into().map_err(|_| {
+                HostError::WithStatus(
+                    String::from("invalid key"),
+                    ScStatus::HostObjectError(ScHostObjErrorCode::UnexpectedType),
+                )
+            })?;
             Ok(Uint256(arr))
         })?;
 
@@ -1210,10 +1217,12 @@ impl CheckedEnv for Host {
         let contract_id = self.get_current_contract_id()?;
 
         let salt_val = self.visit_obj(salt, |bin: &Vec<u8>| {
-            let arr: [u8; 32] = bin
-                .as_slice()
-                .try_into()
-                .map_err(|_| HostError::General("invalid salt"))?;
+            let arr: [u8; 32] = bin.as_slice().try_into().map_err(|_| {
+                HostError::WithStatus(
+                    String::from("invalid salt"),
+                    ScStatus::HostObjectError(ScHostObjErrorCode::UnexpectedType),
+                )
+            })?;
             Ok(Uint256(arr))
         })?;
 
@@ -1464,11 +1473,21 @@ impl CheckedEnv for Host {
         use ed25519_dalek::{PublicKey, Signature, Verifier};
 
         let public_key: PublicKey = self.visit_obj(k, |bin: &Vec<u8>| {
-            PublicKey::from_bytes(bin).map_err(|_| HostError::General("Invalid PublicKey"))
+            PublicKey::from_bytes(bin).map_err(|_| {
+                HostError::WithStatus(
+                    String::from("invalid public key"),
+                    ScStatus::HostObjectError(ScHostObjErrorCode::UnexpectedType),
+                )
+            })
         })?;
 
         let sig: Signature = self.visit_obj(s, |bin: &Vec<u8>| {
-            Signature::from_bytes(bin).map_err(|_| HostError::General("Invalid Signature"))
+            Signature::from_bytes(bin).map_err(|_| {
+                HostError::WithStatus(
+                    String::from("invalid signature"),
+                    ScStatus::HostObjectError(ScHostObjErrorCode::UnexpectedType),
+                )
+            })
         })?;
 
         let res = self.visit_obj(x, |bin: &Vec<u8>| {
