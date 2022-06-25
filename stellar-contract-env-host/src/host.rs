@@ -30,8 +30,8 @@ use crate::SymbolStr;
 #[cfg(feature = "vm")]
 use crate::Vm;
 use crate::{
-    BitSet, BitSetError, EnvBase, IntoEnvVal, Object, RawVal, RawValConvertible, Status, Symbol,
-    SymbolError, Tag, Val, UNKNOWN_ERROR,
+    BitSet, BitSetError, ConversionError, EnvBase, IntoEnvVal, Object, RawVal, RawValConvertible,
+    Status, Symbol, SymbolError, Tag, Val, UNKNOWN_ERROR,
 };
 
 use thiserror::Error;
@@ -1001,7 +1001,7 @@ impl CheckedEnv for Host {
             if i >= hv.len() {
                 return Err(HostError::WithStatus(
                     String::from("index out of bound"),
-                    ScStatus::HostObjectError(ScHostObjErrorCode::ObjectNotExist),
+                    ScStatus::HostObjectError(ScHostObjErrorCode::VecIndexOutOfBound),
                 ));
             }
             let mut vnew = hv.clone();
@@ -1021,7 +1021,7 @@ impl CheckedEnv for Host {
         let res = self.visit_obj(v, move |hv: &HostVec| match hv.get(i) {
             None => Err(HostError::WithStatus(
                 String::from("index out of bound"),
-                ScStatus::HostObjectError(ScHostObjErrorCode::ObjectNotExist),
+                ScStatus::HostObjectError(ScHostObjErrorCode::VecIndexOutOfBound),
             )),
             Some(hval) => Ok(hval.to_raw()),
         });
