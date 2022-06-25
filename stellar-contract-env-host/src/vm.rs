@@ -41,7 +41,7 @@ impl Externals for Host {
 
     fn charge_cpu(&mut self, insns: u64) -> Result<(), wasmi::TrapCode> {
         self.modify_budget(|budget: &mut Budget| {
-            budget.event_counts.wasm_insns += insns;
+            budget.increment_wasm_insns(insns);
             if budget.cpu_limit_exceeded() {
                 Err(wasmi::TrapCode::CpuLimitExceeded)
             } else {

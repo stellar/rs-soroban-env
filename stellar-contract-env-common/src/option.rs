@@ -9,7 +9,7 @@ impl<E: Env, T> TryFrom<EnvVal<E, RawVal>> for Option<T>
 where
     T: TryFrom<EnvVal<E, RawVal>>,
 {
-    type Error = ();
+    type Error = ConversionError;
 
     fn try_from(ev: EnvVal<E, RawVal>) -> Result<Self, Self::Error> {
         if !Object::val_is_obj_type(ev.val, ScObjectType::Vec) {
@@ -24,7 +24,7 @@ where
                 let val = env.vec_get(vec, 0u32.into());
                 T::try_from_val(&env, val).map_err(|_| ())?
             }),
-            _ => Err(()),
+            _ => Err(ConversionError),
         }
     }
 }

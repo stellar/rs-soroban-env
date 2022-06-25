@@ -1,10 +1,14 @@
 use crate::{RawVal, Tag, TagStatus, TaggedVal};
 use core::{
     cmp::Ordering,
+    fmt::Debug,
     hash::{Hash, Hasher},
     marker::PhantomData,
 };
-use stellar_xdr::ScStatusType;
+use stellar_xdr::{
+    ScHostContextErrorCode, ScHostFnErrorCode, ScHostObjErrorCode, ScHostStorageErrorCode,
+    ScHostValErrorCode, ScStatus, ScStatusType, ScVmErrorCode,
+};
 
 pub type Status = TaggedVal<TagStatus>;
 
@@ -49,6 +53,85 @@ impl Ord for Status {
     }
 }
 
+// This trait just lets us write `enum_name_or_unknown` below in a generic
+// fashion. Ideally there'd be a trait for "codes that can have .name() called
+// on them and return a &'static str" in the XDR crate, but that's not available
+// yet: there's no trait and the method that does exist returns a non-static
+// &str. See https://github.com/stellar/xdrgen/issues/107 and
+// https://github.com/stellar/xdrgen/issues/108
+trait NamedCode {
+    fn fmt_code_name(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result;
+}
+
+impl NamedCode for ScHostContextErrorCode {
+    fn fmt_code_name(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "{}", self.name())
+    }
+}
+
+impl NamedCode for ScHostFnErrorCode {
+    fn fmt_code_name(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "{}", self.name())
+    }
+}
+
+impl NamedCode for ScHostObjErrorCode {
+    fn fmt_code_name(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "{}", self.name())
+    }
+}
+
+impl NamedCode for ScHostStorageErrorCode {
+    fn fmt_code_name(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "{}", self.name())
+    }
+}
+
+impl NamedCode for ScHostValErrorCode {
+    fn fmt_code_name(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "{}", self.name())
+    }
+}
+
+impl NamedCode for ScVmErrorCode {
+    fn fmt_code_name(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "{}", self.name())
+    }
+}
+
+fn fmt_named_code<C: NamedCode>(code: u32, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+where
+    C: TryFrom<i32>,
+{
+    match C::try_from(code as i32) {
+        Ok(c) => c.fmt_code_name(f),
+        Err(_) => write!(f, "UnknownCode"),
+    }
+}
+
+impl Debug for Status {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let st_res: Result<ScStatusType, _> = (self.0.get_minor() as i32).try_into();
+        let code = self.0.get_major();
+        let st = match st_res {
+            Ok(t) => t,
+            Err(_) => return write!(f, "Status(UnknownType)"),
+        };
+        write!(f, "Status({}(", st.name())?;
+        match st {
+            ScStatusType::HostContextError => fmt_named_code::<ScHostContextErrorCode>(code, f),
+            ScStatusType::Ok => write!(f, "{}", code),
+            ScStatusType::UnknownError => write!(f, "{}", code),
+            ScStatusType::HostValueError => fmt_named_code::<ScHostValErrorCode>(code, f),
+            ScStatusType::HostObjectError => fmt_named_code::<ScHostObjErrorCode>(code, f),
+            ScStatusType::HostFunctionError => fmt_named_code::<ScHostFnErrorCode>(code, f),
+            ScStatusType::HostStorageError => fmt_named_code::<ScHostStorageErrorCode>(code, f),
+            ScStatusType::VmError => fmt_named_code::<ScVmErrorCode>(code, f),
+        }?;
+        write!(f, "))")
+    }
+}
+
 impl Status {
     // NB: we don't provide a "get_type" to avoid casting a bad bit-pattern into
     // an ScStatusType. Instead we provide an "is_type" to check any specific
@@ -78,5 +161,23 @@ impl Status {
                 PhantomData,
             )
         }
+    }
+
+    // TODO: this should be a const fn, waiting on
+    // https://github.com/stellar/xdrgen/issues/106 for the discriminant
+    // function call to be const.
+    #[inline(always)]
+    pub fn from_status(sc: ScStatus) -> Status {
+        let code: i32 = match sc {
+            ScStatus::Ok => 0,
+            ScStatus::HostContextError(code) => code as i32,
+            ScStatus::HostValueError(code) => code as i32,
+            ScStatus::HostObjectError(code) => code as i32,
+            ScStatus::HostFunctionError(code) => code as i32,
+            ScStatus::HostStorageError(code) => code as i32,
+            ScStatus::VmError(code) => code as i32,
+            ScStatus::UnknownError(code) => code as i32,
+        };
+        Self::from_type_and_code(sc.discriminant(), code as u32)
     }
 }
