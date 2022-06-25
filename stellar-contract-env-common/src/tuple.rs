@@ -1,8 +1,8 @@
 use stellar_xdr::ScObjectType;
 
 use crate::{
-    raw_val::{RawVal, RawValConvertible},
-    Env, EnvVal, IntoEnvVal, IntoVal, Object, TryFromVal,
+    ConversionError, Env, EnvVal, IntoEnvVal, IntoVal, Object, RawVal, RawValConvertible,
+    TryFromVal,
 };
 
 macro_rules! impl_for_tuple {
@@ -11,23 +11,23 @@ macro_rules! impl_for_tuple {
         where
             $($typ: TryFrom<EnvVal<E, RawVal>>),*
         {
-            type Error = ();
+            type Error = ConversionError;
 
             fn try_from(ev: EnvVal<E, RawVal>) -> Result<Self, Self::Error> {
                 if !Object::val_is_obj_type(ev.val, ScObjectType::Vec) {
-                    return Err(());
+                    return Err(ConversionError);
                 }
                 let env = ev.env.clone();
                 let vec = unsafe { Object::unchecked_from_val(ev.val) };
                 let len: u32 = env.vec_len(vec).try_into()?;
                 if len != $count {
-                    return Err(());
+                    return Err(ConversionError);
                 }
                 Ok((
                     $({
                         let idx: u32 = $idx;
                         let val = env.vec_get(vec, idx.into());
-                        $typ::try_from_val(&env, val).map_err(|_| ())?
+                        $typ::try_from_val(&env, val).map_err(|_| ConversionError)?
                     }),*
                 ))
             }

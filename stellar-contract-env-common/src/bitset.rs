@@ -1,11 +1,12 @@
 use crate::{RawVal, Tag, TagBitSet, TaggedVal};
-
 use core::cmp::Ordering;
+use core::fmt::Debug;
 use core::hash::{Hash, Hasher};
 use core::marker::PhantomData;
 
 pub type BitSet = TaggedVal<TagBitSet>;
 
+#[derive(Debug)]
 pub enum BitSetError {
     TooManyBits(u64),
 }
@@ -37,6 +38,12 @@ impl Ord for BitSet {
     #[inline(always)]
     fn cmp(&self, other: &Self) -> Ordering {
         self.as_ref().get_body().cmp(&other.as_ref().get_body())
+    }
+}
+
+impl Debug for BitSet {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "BitSet({:#b})", self.as_ref().get_body())
     }
 }
 

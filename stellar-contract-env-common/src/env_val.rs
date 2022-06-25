@@ -1,6 +1,8 @@
 use stellar_xdr::ScObjectType;
 
-use crate::{BitSet, Object, Status, Symbol, Tag, TagType, TaggedVal, Val};
+use crate::{
+    raw_val::ConversionError, BitSet, Object, Status, Symbol, Tag, TagType, TaggedVal, Val,
+};
 
 use super::{
     raw_val::{RawVal, RawValConvertible},
@@ -131,7 +133,7 @@ impl<E: Env> From<EnvVal<E, RawVal>> for RawVal {
 }
 
 impl<E: Env, T: TagType> TryFrom<EnvVal<E, RawVal>> for TaggedVal<T> {
-    type Error = ();
+    type Error = ConversionError;
 
     fn try_from(ev: EnvVal<E, RawVal>) -> Result<Self, Self::Error> {
         ev.to_raw().try_into()
@@ -139,7 +141,7 @@ impl<E: Env, T: TagType> TryFrom<EnvVal<E, RawVal>> for TaggedVal<T> {
 }
 
 impl<E: Env, T: TagType> TryFrom<EnvVal<E, RawVal>> for EnvVal<E, TaggedVal<T>> {
-    type Error = ();
+    type Error = ConversionError;
 
     fn try_from(ev: EnvVal<E, RawVal>) -> Result<Self, Self::Error> {
         let tv: TaggedVal<T> = ev.to_raw().try_into()?;
@@ -178,7 +180,7 @@ impl<E: Env, T: TagType> IntoEnvVal<E, TaggedVal<T>> for TaggedVal<T> {
 }
 
 impl<E: Env> TryFrom<EnvVal<E, RawVal>> for i64 {
-    type Error = ();
+    type Error = ConversionError;
 
     fn try_from(ev: EnvVal<E, RawVal>) -> Result<Self, Self::Error> {
         if ev.val.is_u63() {
@@ -187,7 +189,7 @@ impl<E: Env> TryFrom<EnvVal<E, RawVal>> for i64 {
             let obj = unsafe { Object::unchecked_from_val(ev.val) };
             Ok(ev.env.obj_to_i64(obj))
         } else {
-            Err(())
+            Err(ConversionError)
         }
     }
 }
@@ -207,14 +209,14 @@ impl<E: Env> IntoEnvVal<E, RawVal> for i64 {
 }
 
 impl<E: Env> TryFrom<EnvVal<E, RawVal>> for u64 {
-    type Error = ();
+    type Error = ConversionError;
 
     fn try_from(ev: EnvVal<E, RawVal>) -> Result<Self, Self::Error> {
         if Object::val_is_obj_type(ev.val, ScObjectType::U64) {
             let obj = unsafe { Object::unchecked_from_val(ev.val) };
             Ok(ev.env.obj_to_u64(obj))
         } else {
-            Err(())
+            Err(ConversionError)
         }
     }
 }

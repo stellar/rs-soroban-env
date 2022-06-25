@@ -156,6 +156,12 @@ impl From<&HostError> for ScStatus {
     }
 }
 
+impl From<ConversionError> for HostError {
+    fn from(_: ConversionError) -> Self {
+        HostError::General("conversion error")
+    }
+}
+
 /// Saves host state (storage and objects) for rolling back a (sub-)transaction
 /// on error. A helper type used by [`FrameGuard`].
 #[derive(Clone)]

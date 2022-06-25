@@ -57,6 +57,12 @@ impl AsMut<RawVal> for RawVal {
     }
 }
 
+// This is a 0-arg struct rather than an enum to ensure it completely compiles
+// away, the same way `()` would, while remaining a separate type to allow
+// conversion to a more-structured error code at a higher level.
+#[derive(Debug)]
+pub struct ConversionError;
+
 pub trait RawValConvertible: Into<RawVal> + TryFrom<RawVal> {
     fn is_val_type(v: RawVal) -> bool;
     unsafe fn unchecked_from_val(v: RawVal) -> Self;
@@ -79,18 +85,18 @@ pub trait RawValConvertible: Into<RawVal> + TryFrom<RawVal> {
 macro_rules! declare_tryfrom {
     ($T:ty) => {
         impl TryFrom<RawVal> for $T {
-            type Error = ();
+            type Error = ConversionError;
             #[inline(always)]
             fn try_from(v: RawVal) -> Result<Self, Self::Error> {
                 if let Some(c) = <Self as RawValConvertible>::try_convert(v) {
                     Ok(c)
                 } else {
-                    Err(())
+                    Err(ConversionError)
                 }
             }
         }
         impl<E: Env> TryFrom<EnvVal<E, RawVal>> for $T {
-            type Error = ();
+            type Error = ConversionError;
             #[inline(always)]
             fn try_from(v: EnvVal<E, RawVal>) -> Result<Self, Self::Error> {
                 Self::try_from(v.to_raw())
