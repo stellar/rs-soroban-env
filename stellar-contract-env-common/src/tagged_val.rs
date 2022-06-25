@@ -1,3 +1,4 @@
+use crate::raw_val::ConversionError;
 use crate::Env;
 use crate::EnvVal;
 use crate::IntoEnvVal;
@@ -7,25 +8,26 @@ use crate::IntoEnvVal;
 use crate::RawVal;
 use crate::RawValConvertible;
 use crate::Tag;
+use core::fmt::Debug;
 use core::marker::PhantomData;
 
-pub trait TagType: Copy + Clone {
+pub trait TagType: Copy + Clone + Debug {
     const TAG: Tag;
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct TagU32;
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct TagI32;
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct TagStatic;
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct TagObject;
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct TagSymbol;
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct TagBitSet;
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct TagStatus;
 
 impl TagType for TagU32 {
@@ -50,8 +52,28 @@ impl TagType for TagStatus {
     const TAG: Tag = Tag::Status;
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone)]
 pub struct TaggedVal<T: TagType>(pub(crate) RawVal, pub(crate) PhantomData<T>);
+
+// Debug impls for Symbol, Status and Object are in their respective files;
+// for others we delegate to the Debug impls for RawVal.
+impl Debug for TaggedVal<TagU32> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+impl Debug for TaggedVal<TagI32> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+impl Debug for TaggedVal<TagStatic> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        self.0.fmt(f)
+    }
+}
 
 impl<T: TagType> AsRef<RawVal> for TaggedVal<T> {
     fn as_ref(&self) -> &RawVal {

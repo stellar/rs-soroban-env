@@ -1,6 +1,6 @@
 use stellar_xdr::{ScStatic, ScStatus, ScStatusType};
 
-use super::{Env, EnvVal, IntoEnvVal, Status, Symbol};
+use super::{BitSet, Env, EnvVal, IntoEnvVal, Object, Status, Symbol};
 use core::fmt::Debug;
 
 extern crate static_assertions as sa;
@@ -377,49 +377,69 @@ impl RawVal {
 impl Debug for RawVal {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         if self.is_u63() {
-            f.debug_struct("Val")
-                .field("pos64", &unsafe { self.unchecked_as_u63() })
-                .finish()
-        } else if self.has_tag(Tag::Object) {
-            f.debug_struct("Val")
-                .field("obj", &self.get_major())
-                .field("ty", &self.get_minor())
-                .finish()
-        } else if self.has_tag(Tag::Status) {
-            f.debug_struct("Val")
-                .field("code", &self.get_major())
-                .field("ty", &self.get_minor())
-                .finish()
-        } else if self.has_tag(Tag::Symbol) {
-            f.debug_struct("Val")
-                .field("symbol", &unsafe {
-                    <Symbol as RawValConvertible>::unchecked_from_val(*self)
-                })
-                .finish()
-        } else if self.is::<()>() {
-            f.debug_struct("Val").field("void", &()).finish()
-        } else if self.is::<bool>() {
-            f.debug_struct("Val")
-                .field("bool", &unsafe {
-                    <bool as RawValConvertible>::unchecked_from_val(*self)
-                })
-                .finish()
-        } else if self.has_tag(Tag::U32) {
-            f.debug_struct("Val")
-                .field("u32", &unsafe {
-                    <u32 as RawValConvertible>::unchecked_from_val(*self)
-                })
-                .finish()
-        } else if self.has_tag(Tag::I32) {
-            f.debug_struct("Val")
-                .field("i32", &unsafe {
-                    <i32 as RawValConvertible>::unchecked_from_val(*self)
-                })
-                .finish()
+            write!(f, "U63({})", unsafe { self.unchecked_as_u63() })
         } else {
-            f.debug_struct("Val")
-                .field("payload", &self.get_payload())
-                .finish()
+            match self.get_tag() {
+                Tag::U32 => write!(f, "U32({})", self.get_body() as u32),
+                Tag::I32 => write!(f, "I32({})", self.get_body() as i32),
+                Tag::Static => {
+                    let scs = ScStatic::try_from(self.get_body() as i32);
+                    if let Ok(scs) = scs {
+                        write!(f, "{}", scs.name())
+                    } else {
+                        write!(f, "Static({})", self.get_body())
+                    }
+                }
+                Tag::Object => {
+                    unsafe { <Object as RawValConvertible>::unchecked_from_val(*self) }.fmt(f)
+                }
+                Tag::Symbol => {
+                    unsafe { <Symbol as RawValConvertible>::unchecked_from_val(*self) }.fmt(f)
+                }
+                Tag::BitSet => {
+                    unsafe { <BitSet as RawValConvertible>::unchecked_from_val(*self) }.fmt(f)
+                }
+                Tag::Status => {
+                    unsafe { <Status as RawValConvertible>::unchecked_from_val(*self) }.fmt(f)
+                }
+                Tag::Reserved => {
+                    write!(f, "Reserved({})", self.get_body())
+                }
+            }
         }
     }
+}
+
+#[test]
+#[cfg(feature = "std")]
+fn test_debug() {
+    use super::{BitSet, Object, Status, Symbol};
+    use crate::xdr::{ScHostValErrorCode, ScObjectType, ScStatus};
+    assert_eq!(format!("{:?}", RawVal::from_void()), "Void");
+    assert_eq!(format!("{:?}", RawVal::from_bool(true)), "True");
+    assert_eq!(format!("{:?}", RawVal::from_bool(false)), "False");
+    assert_eq!(format!("{:?}", RawVal::from_i32(10)), "I32(10)");
+    assert_eq!(format!("{:?}", RawVal::from_u32(10)), "U32(10)");
+    assert_eq!(
+        format!("{:?}", unsafe { RawVal::unchecked_from_u63(10) }),
+        "U63(10)"
+    );
+    assert_eq!(
+        format!("{:?}", BitSet::try_from_u64(0xf7).unwrap().as_raw()),
+        "BitSet(0b11110111)"
+    );
+    assert_eq!(format!("{:?}", Symbol::from_str("hello")), "Symbol(hello)");
+    assert_eq!(
+        format!("{:?}", Object::from_type_and_handle(ScObjectType::Vec, 7)),
+        "Object(Vec(7))"
+    );
+    assert_eq!(
+        format!(
+            "{:?}",
+            Status::from_status(ScStatus::HostValueError(
+                ScHostValErrorCode::ReservedTagValue
+            ),)
+        ),
+        "Status(HostValueError(ReservedTagValue))"
+    );
 }

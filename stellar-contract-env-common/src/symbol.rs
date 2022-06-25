@@ -7,6 +7,7 @@ use core::{
     str,
 };
 
+#[derive(Debug)]
 pub enum SymbolError {
     TooLong(usize),
     BadChar(char),
@@ -53,7 +54,14 @@ impl Ord for Symbol {
 impl Debug for Symbol {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         let s: SymbolStr = self.into();
-        f.debug_tuple("Symbol").field(&s).finish()
+        write!(f, "Symbol(")?;
+        for c in s.0.iter() {
+            if *c == 0 {
+                break;
+            }
+            write!(f, "{}", unsafe { char::from_u32_unchecked(*c as u32) })?;
+        }
+        write!(f, ")")
     }
 }
 
