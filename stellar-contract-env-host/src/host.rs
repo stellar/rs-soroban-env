@@ -91,17 +91,11 @@ impl From<BitSetError> for HostError {
 
 impl From<&HostError> for ScStatus {
     fn from(err: &HostError) -> Self {
-        #[cfg(not(feature = "vm"))]
         match err {
             HostError::General(_) => ScStatus::UnknownError(ScUnknownErrorCode::General),
             HostError::WithStatus(_, status) => status.to_owned(),
             HostError::XDR(_) => ScStatus::UnknownError(ScUnknownErrorCode::Xdr),
-        }
-        #[cfg(feature = "vm")]
-        match err {
-            HostError::General(_) => ScStatus::UnknownError(ScUnknownErrorCode::General),
-            HostError::WithStatus(_, status) => status.to_owned(),
-            HostError::XDR(_) => ScStatus::UnknownError(ScUnknownErrorCode::Xdr),
+            #[cfg(feature = "vm")]
             HostError::WASMI(err) => match err {
                 wasmi::Error::Trap(trap) => match trap {
                     wasmi::Trap::Code(code) => match code {
@@ -156,6 +150,7 @@ impl From<&HostError> for ScStatus {
                 wasmi::Error::Global(_) => ScStatus::VmError(ScVmErrorCode::Global),
                 wasmi::Error::Value(_) => ScStatus::VmError(ScVmErrorCode::Value),
             },
+            #[cfg(feature = "vm")]
             HostError::ParityWasmElements(_) => ScStatus::VmError(ScVmErrorCode::Unknown),
         }
     }
@@ -805,18 +800,6 @@ impl Host {
             }
         }
     }
-
-    #[cfg(feature = "vm")]
-    pub fn try_call(&self, contract: Object, func: Symbol, args: Object) -> RawVal {
-        match self.call(contract, func, args) {
-            Ok(rv) => rv,
-            Err(e) => {
-                println!("{:?}", e);
-                let st: ScStatus = (&e).into();
-                st.into()
-            }
-        }
-    }
 }
 
 impl EnvBase for Host {
@@ -1307,6 +1290,19 @@ impl CheckedEnv for Host {
                 Ok(hv.iter().map(|a| a.to_raw()).collect())
             })?;
             self.call_n(contract, func, args.as_slice())
+        }
+    }
+
+    fn try_call(&self, contract: Object, func: Symbol, args: Object) -> Result<RawVal, HostError> {
+        #[cfg(not(feature = "vm"))]
+        todo!();
+        #[cfg(feature = "vm")]
+        match self.call(contract, func, args) {
+            Ok(rv) => Ok(rv),
+            Err(e) => {
+                let st: ScStatus = (&e).into();
+                Ok(st.into())
+            }
         }
     }
 

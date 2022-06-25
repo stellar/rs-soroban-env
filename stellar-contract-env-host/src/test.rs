@@ -772,7 +772,9 @@ fn invoke_cross_contract_with_err() {
     let scvec0: ScVec = vec![ScVal::I32(1)].try_into().unwrap();
     let args = host.to_host_obj(&ScObject::Vec(scvec0)).unwrap();
     // call
-    let sv = host.try_call(obj.to_object(), sym.into(), args.clone().into());
+    let sv = host
+        .try_call(obj.to_object(), sym.into(), args.clone().into())
+        .unwrap();
     let exp_st = Status::from_type_and_code(
         ScStatusType::HostObjectError,
         ScHostObjErrorCode::VecIndexOutOfBound as u32,
@@ -890,7 +892,9 @@ fn invoke_cross_contract_lvl2_nested_with_err() {
     let scvec0: ScVec = vec![ScVal::I32(1)].try_into().unwrap();
     let args = host.to_host_obj(&ScObject::Vec(scvec0)).unwrap();
     // try call
-    let sv = host.try_call(obj.to_object(), sym.into(), args.clone().into());
+    let sv = host
+        .try_call(obj.to_object(), sym.into(), args.clone().into())
+        .unwrap();
     let exp_st = Status::from_type_and_code(
         ScStatusType::HostObjectError,
         ScHostObjErrorCode::VecIndexOutOfBound as u32,

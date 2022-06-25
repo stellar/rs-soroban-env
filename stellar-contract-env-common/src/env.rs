@@ -162,6 +162,7 @@ macro_rules! call_macro_with_all_host_functions {
 
             mod call "c" {
                 {"_", fn call(contract:Object, func:Symbol, args:Object) -> RawVal}
+                {"0", fn try_call(contract:Object, func:Symbol, args:Object) -> RawVal}
             }
 
             mod bigint "g" {
