@@ -8,7 +8,7 @@ use im_rc::{OrdMap, Vector};
 use std::num::TryFromIntError;
 #[cfg(feature = "vm")]
 use stellar_contract_env_common::xdr::ScVmErrorCode;
-use stellar_contract_env_common::xdr::{Hash, Uint256, WriteXdr};
+use stellar_contract_env_common::xdr::{Hash, ReadXdr, Uint256, WriteXdr};
 
 use crate::budget::Budget;
 use crate::storage::Storage;
@@ -1409,11 +1409,20 @@ impl CheckedEnv for Host {
     }
 
     fn serialize_to_binary(&self, b: Object) -> Result<Object, HostError> {
-        todo!()
+        let sco = self.from_host_obj(b)?;
+        let mut buf = Vec::<u8>::new();
+        let _ = sco
+            .write_xdr(&mut buf)
+            .map_err(|_| HostError::General("failed to serialize object"));
+        Ok(self.add_host_object(buf)?.into())
     }
 
     fn deserialize_from_binary(&self, b: Object) -> Result<Object, HostError> {
-        todo!()
+        let sco = self.visit_obj(b, |hv: &Vec<u8>| {
+            ScObject::read_xdr(&mut hv.as_slice())
+                .map_err(|_| HostError::General("failed to de-serialize object"))
+        })?;
+        Ok(self.to_host_obj(&sco)?.into())
     }
 
     fn binary_copy_to_guest_mem(
