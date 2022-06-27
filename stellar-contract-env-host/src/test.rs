@@ -940,19 +940,28 @@ fn invoke_cross_contract_lvl2_nested_with_err() -> Result<(), HostError> {
 #[test]
 fn binary_new_and_push() -> Result<(), HostError> {
     let host = Host::default();
-
     let mut obj = host.binary_new()?;
     for _i in 0..32 {
         obj = host.binary_push(obj, 1_u32.into())?;
     }
-
     let scobj = host.from_host_obj(obj)?;
     let b = match scobj {
         ScObject::Binary(b) => b,
         _ => unreachable!(),
     };
-
     let res = [1; 32];
     assert_eq!(&res, b.as_slice());
+    Ok(())
+}
+
+#[test]
+fn binary_roundtrip() -> Result<(), HostError> {
+    let host = Host::default();
+    let scv: ScVec = vec![ScVal::U32(1), ScVal::U32(2)].try_into()?;
+    let sco = ScObject::Vec(scv);
+    let obj = host.to_host_obj(&sco)?;
+    let bo = host.serialize_to_binary(obj.clone().into())?;
+    let obj_back = host.deserialize_from_binary(bo)?;
+    assert_eq!(host.obj_cmp(obj.into(), obj_back.into())?, 0);
     Ok(())
 }
