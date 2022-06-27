@@ -161,7 +161,12 @@ macro_rules! call_macro_with_all_host_functions {
             }
 
             mod call "c" {
+                /// Calls a function in another contract with arguments contained in vector `args`.
+                /// If the call is successful, forwards the result of the called function. Traps otherwise.
                 {"_", fn call(contract:Object, func:Symbol, args:Object) -> RawVal}
+                /// Calls a function in another contract with arguments contained in vector `args`. Returns:
+                /// - if successful, result of the called function.
+                /// - otherwise, an `SCStatus` containing the error status code.
                 {"0", fn try_call(contract:Object, func:Symbol, args:Object) -> RawVal}
             }
 
@@ -193,7 +198,9 @@ macro_rules! call_macro_with_all_host_functions {
             }
 
             mod binary "b" {
+                /// Serializes an (SC)Object into XDR opaque binary array.
                 {"_", fn serialize_to_binary(b:Object) -> Object}
+                /// Deserialize a binary array to get back the XDR (SC)Object.
                 {"0", fn deserialize_from_binary(b:Object) -> Object}
                 {"1", fn binary_copy_to_guest_mem(b:Object, i:RawVal, j:RawVal, l:RawVal) -> RawVal}
                 {"2", fn binary_copy_from_guest_mem(b:Object, i:RawVal, j:RawVal, l:RawVal) -> RawVal}
