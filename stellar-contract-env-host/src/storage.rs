@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use crate::xdr::{LedgerEntry, LedgerKey};
+use crate::xdr::{LedgerEntry, LedgerKey, ScHostStorageErrorCode, ScStatus};
 use crate::HostError;
 use im_rc::OrdMap;
 
@@ -40,14 +40,20 @@ impl Footprint {
         if let Some(existing) = self.0.get(key) {
             match (existing, ty) {
                 (AccessType::ReadOnly, AccessType::ReadOnly) => Ok(()),
-                (AccessType::ReadOnly, AccessType::ReadWrite) => Err(HostError::General(
-                    "read-write access to read-only footprint entry",
+                (AccessType::ReadOnly, AccessType::ReadWrite) => Err(HostError::WithStatus(
+                    String::from("read-write access to read-only footprint entry"),
+                    ScStatus::HostStorageError(
+                        ScHostStorageErrorCode::ReadwriteAccessToReadonlyEntry,
+                    ),
                 )),
                 (AccessType::ReadWrite, AccessType::ReadOnly) => Ok(()),
                 (AccessType::ReadWrite, AccessType::ReadWrite) => Ok(()),
             }
         } else {
-            Err(HostError::General("access to unknown footprint entry"))
+            Err(HostError::WithStatus(
+                String::from("access to unknown footprint entry"),
+                ScStatus::HostStorageError(ScHostStorageErrorCode::AccessToUnknownEntry),
+            ))
         }
     }
 }
@@ -107,8 +113,14 @@ impl Storage {
             }
         };
         match self.map.get(key) {
-            None => Err(HostError::General("missing key in get")),
-            Some(None) => Err(HostError::General("get on deleted key")),
+            None => Err(HostError::WithStatus(
+                String::from("missing key in get"),
+                ScStatus::HostStorageError(ScHostStorageErrorCode::MissingKeyInGet),
+            )),
+            Some(None) => Err(HostError::WithStatus(
+                String::from("get on deleted key"),
+                ScStatus::HostStorageError(ScHostStorageErrorCode::GetOnDeletedKey),
+            )),
             Some(Some(val)) => Ok(val.clone()),
         }
     }
@@ -162,6 +174,9 @@ impl Storage {
 
 #[cfg(test)]
 mod test_footprint {
+
+    use assert_matches::assert_matches;
+
     use super::*;
     use crate::xdr::{LedgerKeyContractData, ScVal};
 
@@ -176,16 +191,16 @@ mod test_footprint {
         });
         fp.record_access(&key, AccessType::ReadOnly);
         assert_eq!(fp.0.contains_key(&key), true);
-        assert_eq!(*fp.0.get(&key).unwrap(), AccessType::ReadOnly);
+        assert_eq!(fp.0.get(&key), Some(&AccessType::ReadOnly));
         // record and change access
         fp.record_access(&key, AccessType::ReadWrite);
-        assert_eq!(*fp.0.get(&key).unwrap(), AccessType::ReadWrite);
+        assert_eq!(fp.0.get(&key), Some(&AccessType::ReadWrite));
         fp.record_access(&key, AccessType::ReadOnly);
-        assert_eq!(*fp.0.get(&key).unwrap(), AccessType::ReadWrite);
+        assert_eq!(fp.0.get(&key), Some(&AccessType::ReadWrite));
     }
 
     #[test]
-    fn footprint_enforce_access() {
+    fn footprint_enforce_access() -> Result<(), HostError> {
         let contract_id = [0; 32].into();
         let key = LedgerKey::ContractData(LedgerKeyContractData {
             contract_id,
@@ -193,14 +208,14 @@ mod test_footprint {
         });
         let om = OrdMap::unit(key.clone(), AccessType::ReadOnly);
         let mut fp = Footprint(om);
-        fp.enforce_access(&key, AccessType::ReadOnly).unwrap();
-        *fp.0.get_mut(&key).unwrap() = AccessType::ReadWrite;
-        fp.enforce_access(&key, AccessType::ReadOnly).unwrap();
-        fp.enforce_access(&key, AccessType::ReadWrite).unwrap();
+        fp.enforce_access(&key, AccessType::ReadOnly)?;
+        fp.0.insert(key.clone(), AccessType::ReadWrite);
+        fp.enforce_access(&key, AccessType::ReadOnly)?;
+        fp.enforce_access(&key, AccessType::ReadWrite)?;
+        Ok(())
     }
 
     #[test]
-    #[should_panic(expected = "access to unknown footprint entry")]
     fn footprint_enforce_access_not_exist() {
         let mut fp = Footprint::default();
         let contract_id = [0; 32].into();
@@ -208,11 +223,16 @@ mod test_footprint {
             contract_id,
             key: ScVal::I32(0),
         });
-        fp.enforce_access(&key, AccessType::ReadOnly).unwrap();
+        assert_matches!(
+            fp.enforce_access(&key, AccessType::ReadOnly),
+            Err(HostError::WithStatus(
+                _,
+                ScStatus::HostStorageError(ScHostStorageErrorCode::AccessToUnknownEntry)
+            ))
+        );
     }
 
     #[test]
-    #[should_panic(expected = "read-write access to read-only footprint entry")]
     fn footprint_attempt_to_write_readonly_entry() {
         let contract_id = [0; 32].into();
         let key = LedgerKey::ContractData(LedgerKeyContractData {
@@ -221,7 +241,13 @@ mod test_footprint {
         });
         let om = OrdMap::unit(key.clone(), AccessType::ReadOnly);
         let mut fp = Footprint(om);
-        fp.enforce_access(&key, AccessType::ReadWrite).unwrap();
+        assert_matches!(
+            fp.enforce_access(&key, AccessType::ReadWrite),
+            Err(HostError::WithStatus(
+                _,
+                ScStatus::HostStorageError(ScHostStorageErrorCode::ReadwriteAccessToReadonlyEntry)
+            ))
+        );
     }
 }
 

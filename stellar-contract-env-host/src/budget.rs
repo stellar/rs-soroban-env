@@ -1,7 +1,7 @@
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct CostLimits {
-    pub mem_byte_limit: u64,
-    pub cpu_insn_limit: u64,
+#[derive(Default, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct ResourceCosts {
+    pub mem_bytes: u64,
+    pub cpu_insns: u64,
 }
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -15,22 +15,39 @@ pub struct EventCounts {
     pub wasm_linear_memory_bytes: u64,
 }
 
-#[derive(Default, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Budget {
-    pub cost_limits: CostLimits,
+    pub cost_limits: ResourceCosts,
+    pub cost_incurred: ResourceCosts,
     pub cost_factors: CostFactors,
     pub event_counts: EventCounts,
 }
 
+impl Default for Budget {
+    fn default() -> Self {
+        Self {
+            cost_limits: ResourceCosts::default_limits(),
+            cost_incurred: Default::default(),
+            cost_factors: Default::default(),
+            event_counts: Default::default(),
+        }
+    }
+}
+
 impl Budget {
+    pub fn increment_wasm_insns(&mut self, insns: u64) {
+        self.event_counts.wasm_insns += insns;
+        self.cost_incurred.cpu_insns = self
+            .cost_incurred
+            .cpu_insns
+            .saturating_add(insns.saturating_mul(self.cost_factors.cpu_insn_per_wasm_insn));
+    }
+
     pub fn cpu_limit_exceeded(&self) -> bool {
-        self.event_counts
-            .wasm_insns
-            .saturating_mul(self.cost_factors.cpu_insn_per_wasm_insn)
-            > self.cost_limits.cpu_insn_limit
+        self.cost_incurred.cpu_insns > self.cost_limits.cpu_insns
     }
     pub fn mem_limit_exceeded(&self) -> bool {
-        self.event_counts.wasm_linear_memory_bytes > self.cost_limits.mem_byte_limit
+        self.event_counts.wasm_linear_memory_bytes > self.cost_limits.mem_bytes
     }
 }
 
@@ -49,8 +66,8 @@ impl Default for CostFactors {
     }
 }
 
-impl Default for CostLimits {
-    fn default() -> Self {
+impl ResourceCosts {
+    fn default_limits() -> Self {
         // Some "reasonable defaults": 640k of RAM and 100usec.
         //
         // We don't run for a time unit thought, we run for an estimated
@@ -61,8 +78,8 @@ impl Default for CostLimits {
         // instructions in a 100usec time budget, or about 5479 wasm instructions
         // using the calibration above. Very roughly!
         Self {
-            mem_byte_limit: 0xa_0000,
-            cpu_insn_limit: 400_000,
+            mem_bytes: 0xa_0000,
+            cpu_insns: 400_000,
         }
     }
 }

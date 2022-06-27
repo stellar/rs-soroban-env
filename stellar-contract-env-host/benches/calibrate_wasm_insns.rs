@@ -64,7 +64,7 @@ fn main() -> std::io::Result<()> {
         host.modify_budget(|budget| {
             budget.event_counts.wasm_insns = 0;
             budget.cost_factors.cpu_insn_per_wasm_insn = 1;
-            budget.cost_limits.cpu_insn_limit = 1000000000000;
+            budget.cost_limits.cpu_insns = 1000000000000;
         });
 
         let id: Hash = [0; 32].into();

@@ -85,32 +85,69 @@ macro_rules! call_macro_with_all_host_functions {
             }
 
             mod map "m" {
+                /// Create an empty new map.
                 {"_", fn map_new() -> Object }
+                /// Insert a key/value mapping into an existing map, and return the map object handle.
+                /// If the map already has a mapping for the given key, the previous value is overwritten.
                 {"0", fn map_put(m:Object, k:RawVal, v:RawVal) -> Object}
+                /// Get the value for a key from a map. Traps if key is not found.
                 {"1", fn map_get(m:Object, k:RawVal) -> RawVal}
+                /// Remove a key/value mapping from a map if it exists, traps if doesn't.
                 {"2", fn map_del(m:Object, k:RawVal) -> Object}
+                /// Get the size of a map.
                 {"3", fn map_len(m:Object) -> RawVal}
+                /// Test for the presence of a key in a map. Returns (SCStatic) TRUE/FALSE.
                 {"4", fn map_has(m:Object, k:RawVal) -> RawVal}
+                /// Given a key, find the first key less than itself in the map's sorted order.
+                /// If such a key does not exist, return an SCStatus containing the error code (TBD).
                 {"5", fn map_prev_key(m:Object, k:RawVal) -> RawVal}
+                /// Given a key, find the first key greater than itself in the map's sorted order.
+                /// If such a key does not exist, return an SCStatus containing the error code (TBD).
                 {"6", fn map_next_key(m:Object, k:RawVal) -> RawVal}
+                /// Find the minimum key from a map.
+                /// If the map is empty, return an SCStatus containing the error code (TBD).
                 {"7", fn map_min_key(m:Object) -> RawVal}
+                /// Find the maximum key from a map.
+                /// If the map is empty, return an SCStatus containing the error code (TBD).
                 {"8", fn map_max_key(m:Object) -> RawVal}
+                /// Return a new vector containing all the keys in a map.
+                /// The new vector is ordered in the original map's key-sorted order.
                 {"9", fn map_keys(m:Object) -> Object}
+                /// Return a new vector containing all the values in a map.
+                /// The new vector is ordered in the original map's key-sorted order.
                 {"A", fn map_values(m:Object) -> Object}
             }
 
             mod vec "v" {
+                /// Create an empty new vector.
                 {"_", fn vec_new() -> Object}
+                /// Update the value at index `i` in the vector. Return the new vector.
+                /// Trap if the index is out of bounds.
                 {"0", fn vec_put(v:Object, i:RawVal, x:RawVal) -> Object}
+                /// Returns the element at index `i` of the vector. Traps if the index is out of bound.
                 {"1", fn vec_get(v:Object, i:RawVal) -> RawVal}
+                /// Delete an element in a vector at index `i`, shifting all elements after it to the left.
+                /// Return the new vector. Traps if the index is out of bound.
                 {"2", fn vec_del(v:Object, i:RawVal) -> Object}
+                /// Returns length of the vector.
                 {"3", fn vec_len(v:Object) -> RawVal}
+                /// Appends an element to the back of the vector.
                 {"4", fn vec_push(v:Object, x:RawVal) -> Object}
+                /// Removes the last element from the vector and returns the new vector.
+                /// Traps if original vector is empty.
                 {"5", fn vec_pop(v:Object) -> Object}
+                /// Return the first element in the vector. Traps if the vector is empty
                 {"6", fn vec_front(v:Object) -> RawVal}
+                /// Return the last element in the vector. Traps if the vector is empty
                 {"7", fn vec_back(v:Object) -> RawVal}
+                /// Inserts an element at index `i` within the vector, shifting all elements after it to the right.
+                /// Traps if the index is out of bound
                 {"8", fn vec_insert(v:Object, i:RawVal, x:RawVal) -> Object}
+                /// Clone the vector `v1`, then moves all the elements of vector `v2` into it.
+                /// Return the new vector. Traps if number of elements in the vector overflows a u32.
                 {"9", fn vec_append(v1:Object, v2:Object) -> Object}
+                /// Copy the elements from `i` until length `l` in the vector and create a new vector from it.
+                /// Return the new vector. Traps if the index is out of bound.
                 {"A", fn vec_slice(v:Object, i:RawVal, l:RawVal) -> Object}
             }
 
@@ -125,6 +162,7 @@ macro_rules! call_macro_with_all_host_functions {
 
             mod call "c" {
                 {"_", fn call(contract:Object, func:Symbol, args:Object) -> RawVal}
+                {"0", fn try_call(contract:Object, func:Symbol, args:Object) -> RawVal}
             }
 
             mod bigint "g" {
@@ -155,23 +193,41 @@ macro_rules! call_macro_with_all_host_functions {
             }
 
             mod binary "b" {
-                {"_", fn serialize_to_binary(x:Object) -> Object}
-                {"0", fn deserialize_from_binary(x:Object) -> Object}
-                {"1", fn binary_copy_to_guest_mem(x:Object, i:RawVal, j:RawVal, l:RawVal) -> RawVal}
-                {"2", fn binary_copy_from_guest_mem(x:Object, i:RawVal, j:RawVal, l:RawVal) -> RawVal}
+                {"_", fn serialize_to_binary(b:Object) -> Object}
+                {"0", fn deserialize_from_binary(b:Object) -> Object}
+                {"1", fn binary_copy_to_guest_mem(b:Object, i:RawVal, j:RawVal, l:RawVal) -> RawVal}
+                {"2", fn binary_copy_from_guest_mem(b:Object, i:RawVal, j:RawVal, l:RawVal) -> RawVal}
                 // These functions below ($3-$F) mirror vector operations
+                /// Create an empty new binary.
                 {"3", fn binary_new() -> Object}
-                {"4", fn binary_put(v:Object, i:RawVal, x:RawVal) -> Object}
-                {"5", fn binary_get(x:Object, i:RawVal) -> RawVal}
-                {"6", fn binary_del(v:Object, i:RawVal) -> Object}
-                {"7", fn binary_len(x:Object) -> RawVal}
-                {"8", fn binary_push(x:Object, v:RawVal) -> Object}
-                {"9", fn binary_pop(x:Object) -> Object}
-                {"A", fn binary_front(v:Object) -> RawVal}
-                {"B", fn binary_back(v:Object) -> RawVal}
-                {"C", fn binary_insert(x:Object, i:RawVal, v:RawVal) -> Object}
-                {"D", fn binary_append(v1:Object, v2:Object) -> Object}
-                {"E", fn binary_slice(v:Object, i:RawVal, l:RawVal) -> Object}
+                /// Update the value at index `i` in the binary. Return the new binary.
+                /// Trap if the index is out of bounds.
+                {"4", fn binary_put(b:Object, i:RawVal, u:RawVal) -> Object}
+                /// Returns the element at index `i` of the binary. Traps if the index is out of bound.
+                {"5", fn binary_get(b:Object, i:RawVal) -> RawVal}
+                /// Delete an element in a binary at index `i`, shifting all elements after it to the left.
+                /// Return the new binary. Traps if the index is out of bound.
+                {"6", fn binary_del(b:Object, i:RawVal) -> Object}
+                /// Returns length of the binary.
+                {"7", fn binary_len(b:Object) -> RawVal}
+                /// Appends an element to the back of the binary.
+                {"8", fn binary_push(b:Object, u:RawVal) -> Object}
+                /// Removes the last element from the binary and returns the new binary.
+                /// Traps if original binary is empty.
+                {"9", fn binary_pop(b:Object) -> Object}
+                /// Return the first element in the binary. Traps if the binary is empty
+                {"A", fn binary_front(b:Object) -> RawVal}
+                /// Return the last element in the binary. Traps if the binary is empty
+                {"B", fn binary_back(b:Object) -> RawVal}
+                /// Inserts an element at index `i` within the binary, shifting all elements after it to the right.
+                /// Traps if the index is out of bound
+                {"C", fn binary_insert(b:Object, i:RawVal, u:RawVal) -> Object}
+                /// Clone the binary `b1`, then moves all the elements of binary `b2` into it.
+                /// Return the new binary. Traps if number of elements in the binary overflows a u32.
+                {"D", fn binary_append(b1:Object, b2:Object) -> Object}
+                /// Copy the elements from `i` until length `l` in the binary and create a new binary from it.
+                /// Return the new binary. Traps if the index is out of bound.
+                {"E", fn binary_slice(b:Object, i:RawVal, l:RawVal) -> Object}
             }
 
             mod hash "h" {
