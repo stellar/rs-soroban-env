@@ -898,6 +898,10 @@ impl CheckedEnv for Host {
         todo!()
     }
 
+    fn get_invoking_contract(&self) -> Result<Object, HostError> {
+        todo!()
+    }
+
     fn obj_cmp(&self, a: RawVal, b: RawVal) -> Result<i64, HostError> {
         let res = unsafe {
             self.unchecked_visit_val_obj(a, |ao| self.unchecked_visit_val_obj(b, |bo| ao.cmp(&bo)))
@@ -907,10 +911,6 @@ impl CheckedEnv for Host {
             Ordering::Equal => 0,
             Ordering::Greater => 1,
         })
-    }
-
-    fn get_invoking_contract(&self) -> Result<Object, HostError> {
-        todo!()
     }
 
     fn obj_from_u64(&self, u: u64) -> Result<Object, HostError> {
@@ -1372,6 +1372,51 @@ impl CheckedEnv for Host {
 
     fn bigint_to_i64(&self, x: Object) -> Result<i64, HostError> {
         self.visit_obj(x, |bi: &BigInt| bi.to_i64().ok_or(ConversionError.into()))
+    }
+
+    fn bigint_from_bytes_be(&self, x: Object, s: RawVal) -> Result<Object, HostError> {
+        let s: i32 = s.try_into().map_err(|_| {
+            HostError::WithStatus(
+                String::from("s must be i32"),
+                ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsWrongType),
+            )
+        })?;
+        let sign: Result<Sign, HostError> = match s {
+            -1 => Ok(Sign::Minus),
+            0 => Ok(Sign::NoSign),
+            1 => Ok(Sign::Plus),
+            _ => Err(ConversionError.into()),
+        };
+        let xnew = self.visit_obj(x, move |hv: &Vec<u8>| {
+            Ok(BigInt::from_bytes_be(sign?, hv.as_slice()))
+        })?;
+        Ok(self.add_host_object(xnew)?.into())
+    }
+
+    fn bigint_from_radix_be(&self, x: Object, s: RawVal, r: RawVal) -> Result<Object, HostError> {
+        let s: i32 = s.try_into().map_err(|_| {
+            HostError::WithStatus(
+                String::from("s must be i32"),
+                ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsWrongType),
+            )
+        })?;
+        let sign: Result<Sign, HostError> = match s {
+            -1 => Ok(Sign::Minus),
+            0 => Ok(Sign::NoSign),
+            1 => Ok(Sign::Plus),
+            _ => Err(ConversionError.into()),
+        };
+        let radix: u32 = r.try_into().map_err(|_| {
+            HostError::WithStatus(
+                String::from("r must be u32"),
+                ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsWrongType),
+            )
+        })?;
+        let xnew = self.visit_obj(x, move |hv: &Vec<u8>| {
+            BigInt::from_radix_be(sign?, hv.as_slice(), radix)
+                .ok_or(HostError::General("fail to initialize BigInt"))
+        })?;
+        Ok(self.add_host_object(xnew)?.into())
     }
 
     fn bigint_add(&self, x: Object, y: Object) -> Result<Object, HostError> {
