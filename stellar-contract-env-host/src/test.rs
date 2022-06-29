@@ -1109,24 +1109,75 @@ fn invoke_cross_contract_lvl2_nested_with_err() -> Result<(), HostError> {
 }
 
 #[test]
-fn binary_new_and_push() -> Result<(), HostError> {
+fn binary_suite_of_tests() -> Result<(), HostError> {
     let host = Host::default();
+    // new and push
     let mut obj = host.binary_new()?;
-    for _i in 0..32 {
-        obj = host.binary_push(obj, 1_u32.into())?;
+    for i in 0..32 {
+        obj = host.binary_push(obj, (i as u32).into())?;
     }
-    let scobj = host.from_host_obj(obj)?;
-    let b = match scobj {
-        ScObject::Binary(b) => b,
-        _ => unreachable!(),
-    };
-    let res = [1; 32];
-    assert_eq!(&res, b.as_slice());
+    if let ScObject::Binary(b) = host.from_host_obj(obj)? {
+        assert_eq!((0..32).collect::<Vec<u8>>().as_slice(), b.as_slice());
+    } else {
+        return Err(HostError::General("Type error"));
+    }
+    // pop and len
+    for _ in 0..24 {
+        obj = host.binary_pop(obj)?;
+    }
+    assert_eq!(
+        unsafe { <u32 as RawValConvertible>::unchecked_from_val(host.binary_len(obj)?) },
+        8
+    );
+    assert_eq!(
+        unsafe {
+            <u8 as RawValConvertible>::unchecked_from_val(host.binary_get(obj, 5_u32.into())?)
+        },
+        5
+    );
+    // put, del, get, front, back
+    obj = host.binary_put(obj, 5_u32.into(), 99_u32.into())?;
+    assert_eq!(
+        unsafe {
+            <u8 as RawValConvertible>::unchecked_from_val(host.binary_get(obj, 5_u32.into())?)
+        },
+        99
+    );
+    obj = host.binary_del(obj, 5_u32.into())?; // [0,1,2,3,4,6,7]
+    assert_eq!(
+        unsafe { <u32 as RawValConvertible>::unchecked_from_val(host.binary_len(obj)?) },
+        7
+    );
+    assert_eq!(
+        unsafe { <u32 as RawValConvertible>::unchecked_from_val(host.binary_front(obj)?) },
+        0
+    );
+    assert_eq!(
+        unsafe { <u32 as RawValConvertible>::unchecked_from_val(host.binary_back(obj)?) },
+        7
+    );
+    // insert, slice and append
+    obj = host.binary_insert(obj, 5_u32.into(), 5_u32.into())?; // [0,1,2,3,4,5,6,7]
+    let obj0 = host.binary_slice(obj, 0_u32.into(), 3_u32.into())?; // [0,1,2]
+    if let ScObject::Binary(b) = host.from_host_obj(obj0)? {
+        assert_eq!((0..3).collect::<Vec<u8>>().as_slice(), b.as_slice());
+    } else {
+        return Err(HostError::General("Type error"));
+    }
+    let obj1 = host.binary_slice(obj, 3_u32.into(), 5_u32.into())?; // [3,4,5,6,7]
+    if let ScObject::Binary(b) = host.from_host_obj(obj1)? {
+        assert_eq!((3..8).collect::<Vec<u8>>().as_slice(), b.as_slice());
+    } else {
+        return Err(HostError::General("Type error"));
+    }
+    let obj_back = host.binary_append(obj0, obj1)?;
+    assert_eq!(host.obj_cmp(obj.into(), obj_back.into())?, 0);
+
     Ok(())
 }
 
 #[test]
-fn binary_roundtrip() -> Result<(), HostError> {
+fn binary_xdr_roundtrip() -> Result<(), HostError> {
     let host = Host::default();
     let scv: ScVec = vec![ScVal::U32(1), ScVal::U32(2)].try_into()?;
     let sco = ScObject::Vec(scv);
