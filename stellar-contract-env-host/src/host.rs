@@ -6,7 +6,11 @@ use core::cmp::Ordering;
 use core::fmt::Debug;
 use im_rc::{OrdMap, Vector};
 use num_bigint::{BigInt, Sign};
+use num_integer::Integer;
+use num_traits::cast::ToPrimitive;
+use num_traits::Zero;
 use std::num::TryFromIntError;
+use std::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Not, Rem, Shl, Shr, Sub};
 #[cfg(feature = "vm")]
 use stellar_contract_env_common::xdr::ScVmErrorCode;
 use stellar_contract_env_common::xdr::{
@@ -1355,99 +1359,150 @@ impl CheckedEnv for Host {
     }
 
     fn bigint_from_u64(&self, x: u64) -> Result<Object, HostError> {
-        todo!()
+        Ok(self.add_host_object(Into::<BigInt>::into(x))?.into())
     }
 
     fn bigint_to_u64(&self, x: Object) -> Result<u64, HostError> {
-        todo!()
+        self.visit_obj(x, |bi: &BigInt| bi.to_u64().ok_or(ConversionError.into()))
     }
 
     fn bigint_from_i64(&self, x: i64) -> Result<Object, HostError> {
-        todo!()
+        Ok(self.add_host_object(Into::<BigInt>::into(x))?.into())
     }
 
     fn bigint_to_i64(&self, x: Object) -> Result<i64, HostError> {
-        todo!()
+        self.visit_obj(x, |bi: &BigInt| bi.to_i64().ok_or(ConversionError.into()))
     }
 
     fn bigint_add(&self, x: Object, y: Object) -> Result<Object, HostError> {
-        todo!()
+        let res = self.visit_obj(x, |a: &BigInt| {
+            Ok(self.visit_obj(y, |b: &BigInt| Ok(a.add(b)))?)
+        })?;
+        Ok(self.add_host_object(res)?.into())
     }
 
     fn bigint_sub(&self, x: Object, y: Object) -> Result<Object, HostError> {
-        todo!()
+        let res = self.visit_obj(x, |a: &BigInt| {
+            Ok(self.visit_obj(y, |b: &BigInt| Ok(a.sub(b)))?)
+        })?;
+        Ok(self.add_host_object(res)?.into())
     }
 
     fn bigint_mul(&self, x: Object, y: Object) -> Result<Object, HostError> {
-        todo!()
+        let res = self.visit_obj(x, |a: &BigInt| {
+            Ok(self.visit_obj(y, |b: &BigInt| Ok(a.mul(b)))?)
+        })?;
+        Ok(self.add_host_object(res)?.into())
     }
 
     fn bigint_div(&self, x: Object, y: Object) -> Result<Object, HostError> {
-        todo!()
+        let res = self.visit_obj(x, |a: &BigInt| {
+            Ok(self.visit_obj(y, |b: &BigInt| Ok(a.div(b)))?)
+        })?;
+        Ok(self.add_host_object(res)?.into())
     }
 
     fn bigint_rem(&self, x: Object, y: Object) -> Result<Object, HostError> {
-        todo!()
+        let res = self.visit_obj(x, |a: &BigInt| {
+            Ok(self.visit_obj(y, |b: &BigInt| Ok(a.rem(b)))?)
+        })?;
+        Ok(self.add_host_object(res)?.into())
     }
 
     fn bigint_and(&self, x: Object, y: Object) -> Result<Object, HostError> {
-        todo!()
+        let res = self.visit_obj(x, |a: &BigInt| {
+            Ok(self.visit_obj(y, |b: &BigInt| Ok(a.bitand(b)))?)
+        })?;
+        Ok(self.add_host_object(res)?.into())
     }
 
     fn bigint_or(&self, x: Object, y: Object) -> Result<Object, HostError> {
-        todo!()
+        let res = self.visit_obj(x, |a: &BigInt| {
+            Ok(self.visit_obj(y, |b: &BigInt| Ok(a.bitor(b)))?)
+        })?;
+        Ok(self.add_host_object(res)?.into())
     }
 
     fn bigint_xor(&self, x: Object, y: Object) -> Result<Object, HostError> {
-        todo!()
+        let res = self.visit_obj(x, |a: &BigInt| {
+            Ok(self.visit_obj(y, |b: &BigInt| Ok(a.bitxor(b)))?)
+        })?;
+        Ok(self.add_host_object(res)?.into())
     }
 
-    fn bigint_shl(&self, x: Object, y: RawVal) -> Result<Object, HostError> {
-        todo!()
+    fn bigint_shl(&self, x: Object, y: i64) -> Result<Object, HostError> {
+        let res = self.visit_obj(x, |a: &BigInt| Ok(a.shl(y)))?;
+        Ok(self.add_host_object(res)?.into())
     }
 
-    fn bigint_shr(&self, x: Object, y: RawVal) -> Result<Object, HostError> {
-        todo!()
+    fn bigint_shr(&self, x: Object, y: i64) -> Result<Object, HostError> {
+        let res = self.visit_obj(x, |a: &BigInt| Ok(a.shr(y)))?;
+        Ok(self.add_host_object(res)?.into())
     }
 
     fn bigint_cmp(&self, x: Object, y: Object) -> Result<RawVal, HostError> {
-        todo!()
+        let res: RawVal = self.visit_obj(x, |a: &BigInt| {
+            Ok(self.visit_obj(y, |b: &BigInt| Ok((a.cmp(b) as i32).into()))?)
+        })?;
+        Ok(res)
     }
 
     fn bigint_is_zero(&self, x: Object) -> Result<RawVal, HostError> {
-        todo!()
+        let res: RawVal = self.visit_obj(x, |a: &BigInt| Ok(a.is_zero().into()))?;
+        Ok(res)
     }
 
     fn bigint_neg(&self, x: Object) -> Result<Object, HostError> {
-        todo!()
+        let res = self.visit_obj(x, |a: &BigInt| Ok(a.neg()))?;
+        Ok(self.add_host_object(res)?.into())
     }
 
     fn bigint_not(&self, x: Object) -> Result<Object, HostError> {
-        todo!()
+        let res = self.visit_obj(x, |a: &BigInt| Ok(a.not()))?;
+        Ok(self.add_host_object(res)?.into())
     }
 
     fn bigint_gcd(&self, x: Object, y: Object) -> Result<Object, HostError> {
-        todo!()
+        let res = self.visit_obj(x, |a: &BigInt| {
+            Ok(self.visit_obj(y, |b: &BigInt| Ok(a.gcd(b)))?)
+        })?;
+        Ok(self.add_host_object(res)?.into())
     }
 
     fn bigint_lcm(&self, x: Object, y: Object) -> Result<Object, HostError> {
-        todo!()
+        let res = self.visit_obj(x, |a: &BigInt| {
+            Ok(self.visit_obj(y, |b: &BigInt| Ok(a.lcm(b)))?)
+        })?;
+        Ok(self.add_host_object(res)?.into())
     }
 
-    fn bigint_pow(&self, x: Object, y: Object) -> Result<Object, HostError> {
-        todo!()
+    fn bigint_pow(&self, x: Object, y: RawVal) -> Result<Object, HostError> {
+        let e: u32 = y.try_into().map_err(|_| {
+            HostError::WithStatus(
+                String::from("y must be u32"),
+                ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsWrongType),
+            )
+        })?;
+        let res = self.visit_obj(x, |a: &BigInt| Ok(a.pow(e)))?;
+        Ok(self.add_host_object(res)?.into())
     }
 
     fn bigint_pow_mod(&self, p: Object, q: Object, m: Object) -> Result<Object, HostError> {
-        todo!()
+        let res = self.visit_obj(p, |a: &BigInt| {
+            Ok(self.visit_obj(q, |exponent: &BigInt| {
+                Ok(self.visit_obj(m, |modulus: &BigInt| Ok(a.modpow(exponent, modulus)))?)
+            })?)
+        })?;
+        Ok(self.add_host_object(res)?.into())
     }
 
     fn bigint_sqrt(&self, x: Object) -> Result<Object, HostError> {
-        todo!()
+        let res = self.visit_obj(x, |a: &BigInt| Ok(a.sqrt()))?;
+        Ok(self.add_host_object(res)?.into())
     }
 
-    fn bigint_bits(&self, x: Object) -> Result<RawVal, HostError> {
-        todo!()
+    fn bigint_bits(&self, x: Object) -> Result<u64, HostError> {
+        self.visit_obj(x, |a: &BigInt| Ok(a.bits()))
     }
 
     fn serialize_to_binary(&self, b: Object) -> Result<Object, HostError> {
