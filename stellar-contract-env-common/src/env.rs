@@ -229,7 +229,7 @@ macro_rules! call_macro_with_all_host_functions {
                 /// Deserialize a binary array to get back the XDR (SC)Object.
                 {"0", fn deserialize_from_binary(b:Object) -> Object}
                 {"1", fn binary_copy_to_guest_mem(b:Object, i:RawVal, j:RawVal, l:RawVal) -> RawVal}
-                {"2", fn binary_copy_from_guest_mem(b:Object, i:RawVal, j:RawVal, l:RawVal) -> RawVal}
+                {"2", fn binary_copy_from_guest_mem(b:Object, i:RawVal, j:RawVal, l:RawVal) -> Object}
                 // These functions below ($3-$F) mirror vector operations
                 /// Create an empty new binary.
                 {"3", fn binary_new() -> Object}
