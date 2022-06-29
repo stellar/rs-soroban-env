@@ -5,6 +5,7 @@ use core::cell::RefCell;
 use core::cmp::Ordering;
 use core::fmt::Debug;
 use im_rc::{OrdMap, Vector};
+use num_bigint::{BigInt, Sign};
 use std::num::TryFromIntError;
 #[cfg(feature = "vm")]
 use stellar_contract_env_common::xdr::ScVmErrorCode;
@@ -19,7 +20,7 @@ use crate::weak_host::WeakHost;
 use crate::xdr;
 use crate::xdr::{
     ContractDataEntry, HostFunction, LedgerEntry, LedgerEntryData, LedgerEntryExt, LedgerKey,
-    LedgerKeyContractData, ScHostContextErrorCode, ScHostFnErrorCode, ScHostObjErrorCode,
+    LedgerKeyContractData, ScBigInt, ScHostContextErrorCode, ScHostFnErrorCode, ScHostObjErrorCode,
     ScHostStorageErrorCode, ScHostValErrorCode, ScMap, ScMapEntry, ScObject, ScStatic, ScStatus,
     ScStatusType, ScUnknownErrorCode, ScVal, ScVec,
 };
@@ -599,7 +600,18 @@ impl Host {
                     HostObject::U64(u) => Ok(ScObject::U64(*u)),
                     HostObject::I64(i) => Ok(ScObject::I64(*i)),
                     HostObject::Bin(b) => Ok(ScObject::Binary(b.clone().try_into()?)),
-                    HostObject::BigInt(_) => todo!(),
+                    HostObject::BigInt(bi) => {
+                        let (sign, data) = bi.to_bytes_be();
+                        match sign {
+                            Sign::Minus => {
+                                Ok(ScObject::BigInt(ScBigInt::Negative(data.try_into()?)))
+                            }
+                            Sign::NoSign => Ok(ScObject::BigInt(ScBigInt::Zero)),
+                            Sign::Plus => {
+                                Ok(ScObject::BigInt(ScBigInt::Positive(data.try_into()?)))
+                            }
+                        }
+                    }
                     HostObject::Hash(_) => todo!(),
                     HostObject::PublicKey(_) => todo!(),
                 },
@@ -628,7 +640,14 @@ impl Host {
             ScObject::U64(u) => self.add_host_object(*u),
             ScObject::I64(i) => self.add_host_object(*i),
             ScObject::Binary(b) => self.add_host_object::<Vec<u8>>(b.clone().into()),
-            ScObject::BigInt(_) => todo!(),
+            ScObject::BigInt(sbi) => {
+                let bi = match sbi {
+                    ScBigInt::Zero => BigInt::default(),
+                    ScBigInt::Positive(bytes) => BigInt::from_bytes_be(Sign::Minus, bytes.as_ref()),
+                    ScBigInt::Negative(bytes) => BigInt::from_bytes_be(Sign::Minus, bytes.as_ref()),
+                };
+                self.add_host_object(bi)
+            }
             ScObject::Hash(_) => todo!(),
             ScObject::PublicKey(_) => todo!(),
         }
