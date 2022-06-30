@@ -9,7 +9,7 @@ use std::num::TryFromIntError;
 #[cfg(feature = "vm")]
 use stellar_contract_env_common::xdr::ScVmErrorCode;
 use stellar_contract_env_common::xdr::{
-    AccountEntry, Hash, ReadXdr, ThresholdIndexes, Uint256, WriteXdr,
+    AccountEntry, AccountId, Hash, ReadXdr, ThresholdIndexes, Uint256, WriteXdr,
 };
 
 use crate::budget::Budget;
@@ -809,21 +809,26 @@ impl Host {
         }
     }
 
-    fn load_account(&self, a: Object) -> Result<AccountEntry, HostError> {
-        use xdr::{AccountId, LedgerKeyAccount, PublicKey};
+    fn to_account_id(&self, a: Object) -> Result<AccountId, HostError> {
+        use xdr::PublicKey;
         self.visit_obj(a, |bin: &Vec<u8>| {
             let u256 = Uint256(
                 bin.as_slice()
                     .try_into()
                     .map_err(|_| HostError::General("bad key length"))?,
             );
-            let acc = xdr::LedgerKey::Account(LedgerKeyAccount {
-                account_id: AccountId(PublicKey::PublicKeyTypeEd25519(u256)),
-            });
-            self.visit_storage(|storage| match storage.get(&acc)?.data {
-                LedgerEntryData::Account(ae) => Ok(ae),
-                _ => Err(HostError::General("not account")),
-            })
+            Ok(AccountId(PublicKey::PublicKeyTypeEd25519(u256)))
+        })
+    }
+
+    fn load_account(&self, a: Object) -> Result<AccountEntry, HostError> {
+        use xdr::LedgerKeyAccount;
+        let acc = xdr::LedgerKey::Account(LedgerKeyAccount {
+            account_id: self.to_account_id(a)?,
+        });
+        self.visit_storage(|storage| match storage.get(&acc)?.data {
+            LedgerEntryData::Account(ae) => Ok(ae),
+            _ => Err(HostError::General("not account")),
         })
     }
 }
@@ -1738,12 +1743,18 @@ impl CheckedEnv for Host {
     fn account_get_signer_weight(&self, a: Object, s: Object) -> Result<RawVal, Self::Error> {
         use xdr::{Signer, SignerKey};
         let ae = self.load_account(a)?;
-        let signers: &Vec<Signer> = ae.signers.as_ref();
-        for signer in signers {
-            if let SignerKey::Ed25519(ref u256) = signer.key {
-                return Ok(signer.weight.into());
+        if ae.account_id == self.to_account_id(s)? {
+            // Signer is the master key, so return the master weight
+            Ok(ae.thresholds.0[ThresholdIndexes::MasterWeight as usize].into())
+        } else {
+            // Signer is not the master key, so return the signer weight
+            let signers: &Vec<Signer> = ae.signers.as_ref();
+            for signer in signers {
+                if let SignerKey::Ed25519(ref u256) = signer.key {
+                    return Ok(signer.weight.into());
+                }
             }
+            Ok(0u32.into())
         }
-        Ok(0u32.into())
     }
 }
