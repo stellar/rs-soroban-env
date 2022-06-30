@@ -1,7 +1,7 @@
 use crate::{
     xdr::{
-        ContractDataEntry, LedgerEntryData, LedgerKey, LedgerKeyContractData, ScHostFnErrorCode,
-        ScHostObjErrorCode, ScObject, ScObjectType, ScStatic, ScStatus, ScVal, ScVec,
+        LedgerEntryData, LedgerKey, LedgerKeyContractData, ScHostFnErrorCode, ScHostObjErrorCode,
+        ScObject, ScObjectType, ScStatic, ScStatus, ScVal, ScVec,
     },
     Host, HostError, IntoEnvVal, Object, RawVal, Tag,
 };
@@ -21,7 +21,7 @@ use hex::FromHex;
 use crate::Vm;
 #[cfg(feature = "vm")]
 use crate::{
-    xdr::{Hash, LedgerEntry, LedgerEntryExt, ScStatusType},
+    xdr::{ContractDataEntry, Hash, LedgerEntry, LedgerEntryExt, ScStatusType},
     Symbol,
 };
 use assert_matches::assert_matches;
@@ -572,13 +572,7 @@ fn check_new_code(host: &Host, storage_key: LedgerKey, code: ScVal) {
         assert!(s.has(&storage_key)?);
 
         match s.get(&storage_key)?.data {
-            LedgerEntryData::ContractData(ContractDataEntry {
-                contract_id: _,
-                key: _,
-                val,
-            }) => {
-                assert_eq!(val, code);
-            }
+            LedgerEntryData::ContractData(cde) => assert_eq!(cde.val, code),
             _ => panic!("expected contract data"),
         };
         Ok(())
