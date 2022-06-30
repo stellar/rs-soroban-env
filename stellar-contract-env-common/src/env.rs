@@ -175,35 +175,26 @@ macro_rules! call_macro_with_all_host_functions {
                 {"0", fn bigint_to_u64(x:Object) -> u64}
                 {"1", fn bigint_from_i64(x:i64) -> Object}
                 {"2", fn bigint_to_i64(x:Object) -> i64}
-                /// Creates a BigInt from a binary array `x` and i32 sign `s`.
-                /// Bytes in big-endian order. Sign is interpreted: -1 as negative, 0 as zero, 1 as positive
-                /// If sign is 0, then the input bytes are ignored and will return a BigInt of 0.
-                {"3", fn bigint_from_bytes_be(x:Object, s:RawVal) -> Object}
-                /// Creates a BigInt from a binary array `x`, an i32 sign `s` and an u32 radix `y`.
-                /// Each u8 of the binary array is interpreted as one digit of the number and
-                /// must therefore be less than the radix. The bytes are in big-endian byte order.
-                /// Radix must be in the range 2...256. Sign follows same rule as in `bigint_from_bytes_be`.
-                {"4", fn bigint_from_radix_be(x:Object, s:RawVal, r:RawVal) -> Object}
-                {"5", fn bigint_add(x:Object, y:Object) -> Object}
-                {"6", fn bigint_sub(x:Object, y:Object) -> Object}
-                {"7", fn bigint_mul(x:Object, y:Object) -> Object}
-                {"8", fn bigint_div(x:Object, y:Object) -> Object}
-                {"9", fn bigint_rem(x:Object, y:Object) -> Object}
-                {"A", fn bigint_and(x:Object, y:Object) -> Object}
-                {"B", fn bigint_or(x:Object, y:Object) -> Object}
-                {"C", fn bigint_xor(x:Object, y:Object) -> Object}
-                {"D", fn bigint_shl(x:Object, y:i64) -> Object}
-                {"E", fn bigint_shr(x:Object, y:i64) -> Object}
-                {"F", fn bigint_cmp(x:Object, y:Object) -> RawVal}
-                {"G", fn bigint_is_zero(x:Object) -> RawVal}
-                {"H", fn bigint_neg(x:Object) -> Object}
-                {"I", fn bigint_not(x:Object) -> Object}
-                {"J", fn bigint_gcd(x:Object, y:Object) -> Object}
-                {"K", fn bigint_lcm(x:Object, y:Object) -> Object}
-                {"L", fn bigint_pow(x:Object, y:RawVal) -> Object}
-                {"M", fn bigint_pow_mod(p:Object, q:Object, m:Object) -> Object}
-                {"N", fn bigint_sqrt(x:Object) -> Object}
-                {"O", fn bigint_bits(x:Object) -> u64}
+                {"3", fn bigint_add(x:Object, y:Object) -> Object}
+                {"4", fn bigint_sub(x:Object, y:Object) -> Object}
+                {"5", fn bigint_mul(x:Object, y:Object) -> Object}
+                {"6", fn bigint_div(x:Object, y:Object) -> Object}
+                {"7", fn bigint_rem(x:Object, y:Object) -> Object}
+                {"8", fn bigint_and(x:Object, y:Object) -> Object}
+                {"9", fn bigint_or(x:Object, y:Object) -> Object}
+                {"A", fn bigint_xor(x:Object, y:Object) -> Object}
+                {"B", fn bigint_shl(x:Object, y:i64) -> Object}
+                {"C", fn bigint_shr(x:Object, y:i64) -> Object}
+                {"D", fn bigint_cmp(x:Object, y:Object) -> RawVal}
+                {"E", fn bigint_is_zero(x:Object) -> RawVal}
+                {"F", fn bigint_neg(x:Object) -> Object}
+                {"G", fn bigint_not(x:Object) -> Object}
+                {"H", fn bigint_gcd(x:Object, y:Object) -> Object}
+                {"I", fn bigint_lcm(x:Object, y:Object) -> Object}
+                {"J", fn bigint_pow(x:Object, y:RawVal) -> Object}
+                {"K", fn bigint_pow_mod(p:Object, q:Object, m:Object) -> Object}
+                {"L", fn bigint_sqrt(x:Object) -> Object}
+                {"M", fn bigint_bits(x:Object) -> u64}
             }
 
             mod binary "b" {

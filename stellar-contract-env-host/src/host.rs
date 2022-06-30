@@ -1364,51 +1364,6 @@ impl CheckedEnv for Host {
         self.visit_obj(x, |bi: &BigInt| bi.to_i64().ok_or(ConversionError.into()))
     }
 
-    fn bigint_from_bytes_be(&self, x: Object, s: RawVal) -> Result<Object, HostError> {
-        let s: i32 = s.try_into().map_err(|_| {
-            HostError::WithStatus(
-                String::from("s must be i32"),
-                ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsWrongType),
-            )
-        })?;
-        let sign: Result<Sign, HostError> = match s {
-            -1 => Ok(Sign::Minus),
-            0 => Ok(Sign::NoSign),
-            1 => Ok(Sign::Plus),
-            _ => Err(ConversionError.into()),
-        };
-        let xnew = self.visit_obj(x, move |hv: &Vec<u8>| {
-            Ok(BigInt::from_bytes_be(sign?, hv.as_slice()))
-        })?;
-        Ok(self.add_host_object(xnew)?.into())
-    }
-
-    fn bigint_from_radix_be(&self, x: Object, s: RawVal, r: RawVal) -> Result<Object, HostError> {
-        let s: i32 = s.try_into().map_err(|_| {
-            HostError::WithStatus(
-                String::from("s must be i32"),
-                ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsWrongType),
-            )
-        })?;
-        let sign: Result<Sign, HostError> = match s {
-            -1 => Ok(Sign::Minus),
-            0 => Ok(Sign::NoSign),
-            1 => Ok(Sign::Plus),
-            _ => Err(ConversionError.into()),
-        };
-        let radix: u32 = r.try_into().map_err(|_| {
-            HostError::WithStatus(
-                String::from("r must be u32"),
-                ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsWrongType),
-            )
-        })?;
-        let xnew = self.visit_obj(x, move |hv: &Vec<u8>| {
-            BigInt::from_radix_be(sign?, hv.as_slice(), radix)
-                .ok_or(HostError::General("fail to initialize BigInt"))
-        })?;
-        Ok(self.add_host_object(xnew)?.into())
-    }
-
     fn bigint_add(&self, x: Object, y: Object) -> Result<Object, HostError> {
         let res = self.visit_obj(x, |a: &BigInt| self.visit_obj(y, |b: &BigInt| Ok(a.add(b))))?;
         Ok(self.add_host_object(res)?.into())
