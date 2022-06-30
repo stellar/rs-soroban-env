@@ -556,6 +556,36 @@ fn ed25519_verify_test() -> Result<(), HostError> {
     Ok(())
 }
 
+fn sha256_hash_id_preimage(pre_image: xdr::HashIdPreimage) -> xdr::Hash {
+    use sha2::{Digest, Sha256};
+
+    let mut buf = Vec::new();
+    pre_image
+        .write_xdr(&mut buf)
+        .expect("preimage write failed");
+
+    xdr::Hash(Sha256::digest(buf).try_into().expect("invalid hash"))
+}
+
+fn check_new_code(host: &Host, storage_key: LedgerKey, code: ScVal) {
+    host.visit_storage(|s: &mut Storage| {
+        assert!(s.has(&storage_key)?);
+
+        match s.get(&storage_key)?.data {
+            LedgerEntryData::ContractData(ContractDataEntry {
+                contract_id: _,
+                key: _,
+                val,
+            }) => {
+                assert_eq!(val, code);
+            }
+            _ => panic!("expected contract data"),
+        };
+        Ok(())
+    })
+    .unwrap();
+}
+
 /// create contract tests
 fn create_contract_test_helper(
     secret: &[u8],
@@ -588,12 +618,9 @@ fn create_contract_test_helper(
         ed25519: xdr::Uint256(pub_bytes.as_slice().try_into().unwrap()),
         salt: xdr::Uint256(salt_bytes.as_slice().try_into().unwrap()),
     });
-    let mut buf = Vec::new();
-    pre_image
-        .write_xdr(&mut buf)
-        .expect("preimage write failed");
 
-    let hash = xdr::Hash(Sha256::digest(buf).try_into().expect("invalid hash"));
+    let hash = sha256_hash_id_preimage(pre_image);
+
     let hash_copy = hash.clone();
     let key = ScVal::Static(ScStatic::LedgerKeyContractCodeWasm);
     let storage_key = LedgerKey::ContractData(LedgerKeyContractData {
@@ -634,23 +661,11 @@ fn create_contract_test_helper(
         panic!("return value doesn't match")
     }
 
-    host.visit_storage(|s: &mut Storage| {
-        assert!(s.has(&storage_key)?);
-
-        match s.get(&storage_key)?.data {
-            LedgerEntryData::ContractData(ContractDataEntry {
-                contract_id: _,
-                key: _,
-                val,
-            }) => {
-                assert_eq!(val, ScVal::Object(Some(ScObject::Binary(code.try_into()?))));
-            }
-            _ => panic!("expected contract data"),
-        };
-
-        Ok(())
-    })
-    .unwrap();
+    check_new_code(
+        &host,
+        storage_key,
+        ScVal::Object(Some(ScObject::Binary(code.try_into()?))),
+    );
 
     Ok(host)
 }
@@ -684,27 +699,23 @@ fn create_contract_test() -> Result<(), HostError> {
     Ok(())
 }
 
-/// VM test
-/**
- This is an example WASM from the SDK that unpacks two SCV_I32 arguments, adds
-them with an overflow check, and re-packs them as an SCV_I32 if successful.
+/// VM tests
 
-To regenerate, check out the SDK, install a nightly toolchain with
-the rust-src component (to enable the 'tiny' build) using the following:
+/* Example: rs-stellar-contract-sdk/examples/create_contract/src/lib.rs
+This is an example WASM from the SDK that creates another contract using the
+create_contract_using_parent_id host function.
 
-$ rustup component add rust-src --toolchain nightly
-
-then do:
-
-$ make build
-$ xxd -i target-tiny/wasm32-unknown-unknown/release/example_create_contract.wasm
+To regenerate:
+- Nightly toolchain is a prerequisite - 'rustup component add rust-src --toolchain nightly'
+- `make build` in rs-stellar-contract-sdk
+- `wasm-strip rs-stellar-contract-sdk/target-tiny/wasm32-unknown-unknown/release/example_create_contract.wasm`
+- `xxd -i rs-stellar-contract-sdk/target-tiny/wasm32-unknown-unknown/release/example_create_contract.wasm`
 */
 #[cfg(feature = "vm")]
 #[test]
 fn create_contract_using_parent_id_test() {
-    use sha2::{Digest, Sha256};
     //This contract creates another contract
-    let code: [u8; 322] = [
+    let code: [u8; 269] = [
         0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00, 0x01, 0x0c, 0x02, 0x60, 0x02, 0x7e, 0x7e,
         0x01, 0x7e, 0x60, 0x02, 0x7f, 0x7e, 0x00, 0x02, 0x07, 0x01, 0x01, 0x6c, 0x01, 0x34, 0x00,
         0x00, 0x03, 0x03, 0x02, 0x00, 0x01, 0x05, 0x03, 0x01, 0x00, 0x10, 0x06, 0x19, 0x03, 0x7f,
@@ -722,11 +733,7 @@ fn create_contract_using_parent_id_test() {
         0x72, 0x45, 0x04, 0x40, 0x20, 0x00, 0x20, 0x01, 0x10, 0x00, 0x1a, 0x0c, 0x01, 0x0b, 0x00,
         0x0b, 0x20, 0x03, 0x41, 0x10, 0x6a, 0x24, 0x00, 0x20, 0x02, 0x41, 0x30, 0x6a, 0x24, 0x00,
         0x42, 0x05, 0x0f, 0x0b, 0x00, 0x0b, 0x16, 0x00, 0x20, 0x00, 0x20, 0x01, 0x37, 0x03, 0x08,
-        0x20, 0x00, 0x20, 0x01, 0xa7, 0x41, 0xc7, 0x00, 0x47, 0xad, 0x37, 0x03, 0x00, 0x0b, 0x00,
-        0x33, 0x0e, 0x63, 0x6f, 0x6e, 0x74, 0x72, 0x61, 0x63, 0x74, 0x73, 0x70, 0x65, 0x63, 0x76,
-        0x30, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x06, 0x63, 0x72,
-        0x65, 0x61, 0x74, 0x65, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x09, 0x00,
-        0x00, 0x00, 0x09, 0x00, 0x00, 0x00, 0x00,
+        0x20, 0x00, 0x20, 0x01, 0xa7, 0x41, 0xc7, 0x00, 0x47, 0xad, 0x37, 0x03, 0x00, 0x0b,
     ];
 
     let secret_key: &[u8] = b"9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60";
@@ -754,12 +761,8 @@ fn create_contract_using_parent_id_test() {
         ed25519: xdr::Uint256(pub_bytes.as_slice().try_into().unwrap()),
         salt: xdr::Uint256(salt_bytes.as_slice().try_into().unwrap()),
     });
-    let mut buf = Vec::new();
-    pre_image
-        .write_xdr(&mut buf)
-        .expect("preimage write failed");
 
-    let parent_id = xdr::Hash(Sha256::digest(buf).try_into().expect("invalid hash"));
+    let parent_id = sha256_hash_id_preimage(pre_image);
 
     //Put child contract that will be created into the footprint
     //Use the same salt
@@ -769,12 +772,7 @@ fn create_contract_using_parent_id_test() {
             salt: xdr::Uint256(salt_bytes.as_slice().try_into().unwrap()),
         });
 
-    let mut child_buf = Vec::new();
-    child_pre_image
-        .write_xdr(&mut child_buf)
-        .expect("preimage write failed");
-
-    let child_id = xdr::Hash(Sha256::digest(child_buf).try_into().expect("invalid hash"));
+    let child_id = sha256_hash_id_preimage(child_pre_image);
 
     let child_storage_key = LedgerKey::ContractData(LedgerKeyContractData {
         contract_id: child_id,
@@ -808,25 +806,20 @@ fn create_contract_using_parent_id_test() {
         .unwrap();
 
     //Validate child contract exists and code is what we expected
-    host.visit_storage(|s: &mut Storage| {
-        assert!(s.has(&child_storage_key)?);
-
-        match s.get(&child_storage_key)?.data {
-            LedgerEntryData::ContractData(ContractDataEntry {
-                contract_id: _,
-                key: _,
-                val,
-            }) => {
-                assert_eq!(val, code_val);
-            }
-            _ => panic!("expected contract data"),
-        };
-        Ok(())
-    })
-    .unwrap();
+    check_new_code(&host, child_storage_key, code_val);
 }
 
-//xxd -i target-tiny/wasm32-unknown-unknown/release/example_add_i32.wasm
+/* Example: rs-stellar-contract-sdk/examples/add_i32/src/lib.rs
+This is an example WASM from the SDK that unpacks two SCV_I32 arguments, adds
+them with an overflow check, and re-packs them as an SCV_I32 if successful.
+
+To regenerate:
+- Nightly toolchain is a prerequisite - 'rustup component add rust-src --toolchain nightly'
+- `make build` in rs-stellar-contract-sdk
+- `wasm-strip rs-stellar-contract-sdk/target-tiny/wasm32-unknown-unknown/release/example_add_i32.wasm`
+- `xxd -i rs-stellar-contract-sdk/target-tiny/wasm32-unknown-unknown/release/example_add_i32.wasm`
+*/
+
 #[cfg(feature = "vm")]
 #[test]
 fn invoke_single_contract_function() -> Result<(), HostError> {
