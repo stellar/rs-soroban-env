@@ -1167,6 +1167,14 @@ impl CheckedEnv for Host {
     }
 
     fn put_contract_data(&self, k: RawVal, v: RawVal) -> Result<RawVal, HostError> {
+        let data_key = self.from_host_val(k)?;
+        if data_key == ScVal::Static(ScStatic::LedgerKeyContractCodeWasm) {
+            return Err(HostError::WithStatus(
+                String::from("Cannot update contract code"),
+                ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsInvalid),
+            ));
+        }
+
         let key = self.to_storage_key(k)?;
         let data = LedgerEntryData::ContractData(ContractDataEntry {
             contract_id: self.get_current_contract_id()?,
@@ -1204,6 +1212,13 @@ impl CheckedEnv for Host {
     }
 
     fn del_contract_data(&self, k: RawVal) -> Result<RawVal, HostError> {
+        if self.from_host_val(k)? == ScVal::Static(ScStatic::LedgerKeyContractCodeWasm) {
+            return Err(HostError::WithStatus(
+                String::from("Cannot delete contract code"),
+                ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsInvalid),
+            ));
+        }
+
         let key = self.to_storage_key(k)?;
         self.0.storage.borrow_mut().del(&key)?;
         Ok(().into())
