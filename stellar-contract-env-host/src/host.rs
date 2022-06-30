@@ -647,7 +647,7 @@ impl Host {
             ScObject::BigInt(sbi) => {
                 let bi = match sbi {
                     ScBigInt::Zero => BigInt::default(),
-                    ScBigInt::Positive(bytes) => BigInt::from_bytes_be(Sign::Minus, bytes.as_ref()),
+                    ScBigInt::Positive(bytes) => BigInt::from_bytes_be(Sign::Plus, bytes.as_ref()),
                     ScBigInt::Negative(bytes) => BigInt::from_bytes_be(Sign::Minus, bytes.as_ref()),
                 };
                 self.add_host_object(bi)
@@ -946,11 +946,10 @@ impl CheckedEnv for Host {
 
     fn map_get(&self, m: Object, k: RawVal) -> Result<RawVal, HostError> {
         let k = self.associate_raw_val(k);
-        let res = self.visit_obj(m, move |hm: &HostMap| match hm.get(&k) {
+        self.visit_obj(m, move |hm: &HostMap| match hm.get(&k) {
             Some(v) => Ok(v.to_raw()),
             None => Err(HostError::General("map key not found")),
-        });
-        res
+        })
     }
 
     fn map_del(&self, m: Object, k: RawVal) -> Result<Object, HostError> {
@@ -977,58 +976,52 @@ impl CheckedEnv for Host {
 
     fn map_prev_key(&self, m: Object, k: RawVal) -> Result<RawVal, HostError> {
         let k = self.associate_raw_val(k);
-        let res = self.visit_obj(m, |hm: &HostMap| match hm.get_prev(&k) {
+        self.visit_obj(m, |hm: &HostMap| match hm.get_prev(&k) {
             Some((pk, pv)) => Ok(pk.to_raw()),
             None => Ok(UNKNOWN_ERROR.to_raw()), //FIXME: replace with the actual status code
-        });
-        res
+        })
     }
 
     fn map_next_key(&self, m: Object, k: RawVal) -> Result<RawVal, HostError> {
         let k = self.associate_raw_val(k);
-        let res = self.visit_obj(m, |hm: &HostMap| match hm.get_next(&k) {
+        self.visit_obj(m, |hm: &HostMap| match hm.get_next(&k) {
             Some((pk, pv)) => Ok(pk.to_raw()),
             None => Ok(UNKNOWN_ERROR.to_raw()), //FIXME: replace with the actual status code
-        });
-        res
+        })
     }
 
     fn map_min_key(&self, m: Object) -> Result<RawVal, HostError> {
-        let res = self.visit_obj(m, |hm: &HostMap| match hm.get_min() {
+        self.visit_obj(m, |hm: &HostMap| match hm.get_min() {
             Some((pk, pv)) => Ok(pk.to_raw()),
             None => Ok(UNKNOWN_ERROR.to_raw()), //FIXME: replace with the actual status code
-        });
-        res
+        })
     }
 
     fn map_max_key(&self, m: Object) -> Result<RawVal, HostError> {
-        let res = self.visit_obj(m, |hm: &HostMap| match hm.get_max() {
+        self.visit_obj(m, |hm: &HostMap| match hm.get_max() {
             Some((pk, pv)) => Ok(pk.to_raw()),
             None => Ok(UNKNOWN_ERROR.to_raw()), //FIXME: replace with the actual status code
-        });
-        res
+        })
     }
 
     fn map_keys(&self, m: Object) -> Result<Object, HostError> {
-        let obj = self.visit_obj(m, |hm: &HostMap| {
+        self.visit_obj(m, |hm: &HostMap| {
             let mut vec = self.vec_new()?;
             for k in hm.keys() {
                 vec = self.vec_push(vec, k.to_raw())?;
             }
             Ok(vec)
-        });
-        obj
+        })
     }
 
     fn map_values(&self, m: Object) -> Result<Object, HostError> {
-        let obj = self.visit_obj(m, |hm: &HostMap| {
+        self.visit_obj(m, |hm: &HostMap| {
             let mut vec = self.vec_new()?;
             for k in hm.values() {
                 vec = self.vec_push(vec, k.to_raw())?;
             }
             Ok(vec)
-        });
-        obj
+        })
     }
 
     fn vec_new(&self) -> Result<Object, HostError> {
@@ -1064,14 +1057,13 @@ impl CheckedEnv for Host {
                 ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsWrongType),
             )
         })? as usize;
-        let res = self.visit_obj(v, move |hv: &HostVec| match hv.get(i) {
+        self.visit_obj(v, move |hv: &HostVec| match hv.get(i) {
             None => Err(HostError::WithStatus(
                 String::from("index out of bound"),
                 ScStatus::HostObjectError(ScHostObjErrorCode::VecIndexOutOfBound),
             )),
             Some(hval) => Ok(hval.to_raw()),
-        });
-        res
+        })
     }
 
     fn vec_del(&self, v: Object, i: RawVal) -> Result<Object, HostError> {
@@ -1125,25 +1117,23 @@ impl CheckedEnv for Host {
     }
 
     fn vec_front(&self, v: Object) -> Result<RawVal, HostError> {
-        let front = self.visit_obj(v, |hv: &HostVec| match hv.front() {
+        self.visit_obj(v, |hv: &HostVec| match hv.front() {
             None => Err(HostError::WithStatus(
                 String::from("value does not exist"),
                 ScStatus::HostObjectError(ScHostObjErrorCode::VecIndexOutOfBound),
             )),
             Some(front) => Ok(front.to_raw()),
-        });
-        front
+        })
     }
 
     fn vec_back(&self, v: Object) -> Result<RawVal, HostError> {
-        let back = self.visit_obj(v, |hv: &HostVec| match hv.back() {
+        self.visit_obj(v, |hv: &HostVec| match hv.back() {
             None => Err(HostError::WithStatus(
                 String::from("value does not exist"),
                 ScStatus::HostObjectError(ScHostObjErrorCode::VecIndexOutOfBound),
             )),
             Some(back) => Ok(back.to_raw()),
-        });
-        back
+        })
     }
 
     fn vec_insert(&self, v: Object, i: RawVal, x: RawVal) -> Result<Object, HostError> {
@@ -1420,57 +1410,47 @@ impl CheckedEnv for Host {
     }
 
     fn bigint_add(&self, x: Object, y: Object) -> Result<Object, HostError> {
-        let res = self.visit_obj(x, |a: &BigInt| {
-            Ok(self.visit_obj(y, |b: &BigInt| Ok(a.add(b)))?)
-        })?;
+        let res = self.visit_obj(x, |a: &BigInt| self.visit_obj(y, |b: &BigInt| Ok(a.add(b))))?;
         Ok(self.add_host_object(res)?.into())
     }
 
     fn bigint_sub(&self, x: Object, y: Object) -> Result<Object, HostError> {
-        let res = self.visit_obj(x, |a: &BigInt| {
-            Ok(self.visit_obj(y, |b: &BigInt| Ok(a.sub(b)))?)
-        })?;
+        let res = self.visit_obj(x, |a: &BigInt| self.visit_obj(y, |b: &BigInt| Ok(a.sub(b))))?;
         Ok(self.add_host_object(res)?.into())
     }
 
     fn bigint_mul(&self, x: Object, y: Object) -> Result<Object, HostError> {
-        let res = self.visit_obj(x, |a: &BigInt| {
-            Ok(self.visit_obj(y, |b: &BigInt| Ok(a.mul(b)))?)
-        })?;
+        let res = self.visit_obj(x, |a: &BigInt| self.visit_obj(y, |b: &BigInt| Ok(a.mul(b))))?;
         Ok(self.add_host_object(res)?.into())
     }
 
     fn bigint_div(&self, x: Object, y: Object) -> Result<Object, HostError> {
-        let res = self.visit_obj(x, |a: &BigInt| {
-            Ok(self.visit_obj(y, |b: &BigInt| Ok(a.div(b)))?)
-        })?;
+        let res = self.visit_obj(x, |a: &BigInt| self.visit_obj(y, |b: &BigInt| Ok(a.div(b))))?;
         Ok(self.add_host_object(res)?.into())
     }
 
     fn bigint_rem(&self, x: Object, y: Object) -> Result<Object, HostError> {
-        let res = self.visit_obj(x, |a: &BigInt| {
-            Ok(self.visit_obj(y, |b: &BigInt| Ok(a.rem(b)))?)
-        })?;
+        let res = self.visit_obj(x, |a: &BigInt| self.visit_obj(y, |b: &BigInt| Ok(a.rem(b))))?;
         Ok(self.add_host_object(res)?.into())
     }
 
     fn bigint_and(&self, x: Object, y: Object) -> Result<Object, HostError> {
         let res = self.visit_obj(x, |a: &BigInt| {
-            Ok(self.visit_obj(y, |b: &BigInt| Ok(a.bitand(b)))?)
+            self.visit_obj(y, |b: &BigInt| Ok(a.bitand(b)))
         })?;
         Ok(self.add_host_object(res)?.into())
     }
 
     fn bigint_or(&self, x: Object, y: Object) -> Result<Object, HostError> {
         let res = self.visit_obj(x, |a: &BigInt| {
-            Ok(self.visit_obj(y, |b: &BigInt| Ok(a.bitor(b)))?)
+            self.visit_obj(y, |b: &BigInt| Ok(a.bitor(b)))
         })?;
         Ok(self.add_host_object(res)?.into())
     }
 
     fn bigint_xor(&self, x: Object, y: Object) -> Result<Object, HostError> {
         let res = self.visit_obj(x, |a: &BigInt| {
-            Ok(self.visit_obj(y, |b: &BigInt| Ok(a.bitxor(b)))?)
+            self.visit_obj(y, |b: &BigInt| Ok(a.bitxor(b)))
         })?;
         Ok(self.add_host_object(res)?.into())
     }
@@ -1486,15 +1466,13 @@ impl CheckedEnv for Host {
     }
 
     fn bigint_cmp(&self, x: Object, y: Object) -> Result<RawVal, HostError> {
-        let res: RawVal = self.visit_obj(x, |a: &BigInt| {
-            Ok(self.visit_obj(y, |b: &BigInt| Ok((a.cmp(b) as i32).into()))?)
-        })?;
-        Ok(res)
+        Ok(self.visit_obj(x, |a: &BigInt| {
+            self.visit_obj(y, |b: &BigInt| Ok((a.cmp(b) as i32).into()))
+        })?)
     }
 
     fn bigint_is_zero(&self, x: Object) -> Result<RawVal, HostError> {
-        let res: RawVal = self.visit_obj(x, |a: &BigInt| Ok(a.is_zero().into()))?;
-        Ok(res)
+        Ok(self.visit_obj(x, |a: &BigInt| Ok(a.is_zero().into()))?)
     }
 
     fn bigint_neg(&self, x: Object) -> Result<Object, HostError> {
@@ -1508,16 +1486,12 @@ impl CheckedEnv for Host {
     }
 
     fn bigint_gcd(&self, x: Object, y: Object) -> Result<Object, HostError> {
-        let res = self.visit_obj(x, |a: &BigInt| {
-            Ok(self.visit_obj(y, |b: &BigInt| Ok(a.gcd(b)))?)
-        })?;
+        let res = self.visit_obj(x, |a: &BigInt| self.visit_obj(y, |b: &BigInt| Ok(a.gcd(b))))?;
         Ok(self.add_host_object(res)?.into())
     }
 
     fn bigint_lcm(&self, x: Object, y: Object) -> Result<Object, HostError> {
-        let res = self.visit_obj(x, |a: &BigInt| {
-            Ok(self.visit_obj(y, |b: &BigInt| Ok(a.lcm(b)))?)
-        })?;
+        let res = self.visit_obj(x, |a: &BigInt| self.visit_obj(y, |b: &BigInt| Ok(a.lcm(b))))?;
         Ok(self.add_host_object(res)?.into())
     }
 
@@ -1534,9 +1508,9 @@ impl CheckedEnv for Host {
 
     fn bigint_pow_mod(&self, p: Object, q: Object, m: Object) -> Result<Object, HostError> {
         let res = self.visit_obj(p, |a: &BigInt| {
-            Ok(self.visit_obj(q, |exponent: &BigInt| {
-                Ok(self.visit_obj(m, |modulus: &BigInt| Ok(a.modpow(exponent, modulus)))?)
-            })?)
+            self.visit_obj(q, |exponent: &BigInt| {
+                self.visit_obj(m, |modulus: &BigInt| Ok(a.modpow(exponent, modulus)))
+            })
         })?;
         Ok(self.add_host_object(res)?.into())
     }
@@ -1553,9 +1527,8 @@ impl CheckedEnv for Host {
     fn serialize_to_binary(&self, b: Object) -> Result<Object, HostError> {
         let sco = self.from_host_obj(b)?;
         let mut buf = Vec::<u8>::new();
-        let _ = sco
-            .write_xdr(&mut buf)
-            .map_err(|_| HostError::General("failed to serialize object"));
+        sco.write_xdr(&mut buf)
+            .map_err(|_| HostError::General("failed to serialize object"))?;
         Ok(self.add_host_object(buf)?.into())
     }
 
@@ -1625,14 +1598,13 @@ impl CheckedEnv for Host {
                 ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsWrongType),
             )
         })? as usize;
-        let res = self.visit_obj(b, move |hv: &Vec<u8>| match hv.get(i) {
+        self.visit_obj(b, move |hv: &Vec<u8>| match hv.get(i) {
             None => Err(HostError::WithStatus(
                 String::from("index out of bound"),
                 ScStatus::HostObjectError(ScHostObjErrorCode::VecIndexOutOfBound),
             )),
             Some(u) => Ok((*u).into()),
-        });
-        res
+        })
     }
 
     fn binary_del(&self, b: Object, i: RawVal) -> Result<Object, HostError> {
@@ -1691,7 +1663,7 @@ impl CheckedEnv for Host {
     }
 
     fn binary_front(&self, b: Object) -> Result<RawVal, HostError> {
-        let front = self.visit_obj(b, |hv: &Vec<u8>| {
+        self.visit_obj(b, |hv: &Vec<u8>| {
             if hv.is_empty() {
                 return Err(HostError::WithStatus(
                     String::from("u32 overflow"),
@@ -1699,12 +1671,11 @@ impl CheckedEnv for Host {
                 ));
             }
             Ok(hv[0].into())
-        });
-        front
+        })
     }
 
     fn binary_back(&self, b: Object) -> Result<RawVal, HostError> {
-        let back = self.visit_obj(b, |hv: &Vec<u8>| {
+        self.visit_obj(b, |hv: &Vec<u8>| {
             if hv.is_empty() {
                 return Err(HostError::WithStatus(
                     String::from("u32 overflow"),
@@ -1712,8 +1683,7 @@ impl CheckedEnv for Host {
                 ));
             }
             Ok(hv[hv.len() - 1].into())
-        });
-        back
+        })
     }
 
     fn binary_insert(&self, b: Object, i: RawVal, u: RawVal) -> Result<Object, HostError> {
