@@ -9,7 +9,7 @@ use std::num::TryFromIntError;
 #[cfg(feature = "vm")]
 use stellar_contract_env_common::xdr::ScVmErrorCode;
 use stellar_contract_env_common::xdr::{
-    AccountEntry, AccountId, Hash, ReadXdr, ThresholdIndexes, Uint256, WriteXdr,
+    AccountEntry, AccountId, Hash, PublicKey, ReadXdr, ThresholdIndexes, Uint256, WriteXdr,
 };
 
 use crate::budget::Budget;
@@ -809,22 +809,20 @@ impl Host {
         }
     }
 
-    fn to_account_id(&self, a: Object) -> Result<AccountId, HostError> {
-        use xdr::PublicKey;
+    fn to_u256(&self, a: Object) -> Result<Uint256, HostError> {
         self.visit_obj(a, |bin: &Vec<u8>| {
-            let u256 = Uint256(
+            Ok(Uint256(
                 bin.as_slice()
                     .try_into()
-                    .map_err(|_| HostError::General("bad key length"))?,
-            );
-            Ok(AccountId(PublicKey::PublicKeyTypeEd25519(u256)))
+                    .map_err(|_| HostError::General("bad u256 length"))?,
+            ))
         })
     }
 
     fn load_account(&self, a: Object) -> Result<AccountEntry, HostError> {
         use xdr::LedgerKeyAccount;
         let acc = xdr::LedgerKey::Account(LedgerKeyAccount {
-            account_id: self.to_account_id(a)?,
+            account_id: AccountId(PublicKey::PublicKeyTypeEd25519(self.to_u256(a)?)),
         });
         self.visit_storage(|storage| match storage.get(&acc)?.data {
             LedgerEntryData::Account(ae) => Ok(ae),
@@ -1733,27 +1731,34 @@ impl CheckedEnv for Host {
     }
 
     fn account_get_medium_threshold(&self, a: Object) -> Result<RawVal, Self::Error> {
-        Ok(self.load_account(a)?.thresholds.0[ThresholdIndexes::Low as usize].into())
+        Ok(self.load_account(a)?.thresholds.0[ThresholdIndexes::Med as usize].into())
     }
 
     fn account_get_high_threshold(&self, a: Object) -> Result<RawVal, Self::Error> {
-        Ok(self.load_account(a)?.thresholds.0[ThresholdIndexes::Low as usize].into())
+        Ok(self.load_account(a)?.thresholds.0[ThresholdIndexes::High as usize].into())
     }
 
     fn account_get_signer_weight(&self, a: Object, s: Object) -> Result<RawVal, Self::Error> {
         use xdr::{Signer, SignerKey};
+
+        let target_signer = self.to_u256(s)?;
+
         let ae = self.load_account(a)?;
-        if ae.account_id == self.to_account_id(s)? {
-            // Signer is the master key, so return the master weight
+        if ae.account_id == AccountId(PublicKey::PublicKeyTypeEd25519(target_signer.clone())) {
+            // Target signer is the master key, so return the master weight
             Ok(ae.thresholds.0[ThresholdIndexes::MasterWeight as usize].into())
         } else {
-            // Signer is not the master key, so return the signer weight
+            // Target signer is not the master key, so search the account signers
             let signers: &Vec<Signer> = ae.signers.as_ref();
             for signer in signers {
-                if let SignerKey::Ed25519(ref u256) = signer.key {
-                    return Ok(signer.weight.into());
+                if let SignerKey::Ed25519(ref this_signer) = signer.key {
+                    if &target_signer == this_signer {
+                        // We've found the target signer in the account signers, so return the weight
+                        return Ok(signer.weight.into());
+                    }
                 }
             }
+            // We didn't find the target signer, so it must have no weight
             Ok(0u32.into())
         }
     }
