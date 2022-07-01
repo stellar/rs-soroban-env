@@ -426,14 +426,8 @@ impl Host {
                     <i32 as RawValConvertible>::unchecked_from_val(val)
                 })),
                 Tag::Static => {
-                    if let Some(b) = <bool as RawValConvertible>::try_convert(val) {
-                        if b {
-                            Ok(ScVal::Static(ScStatic::True))
-                        } else {
-                            Ok(ScVal::Static(ScStatic::False))
-                        }
-                    } else if <() as RawValConvertible>::is_val_type(val) {
-                        Ok(ScVal::Static(ScStatic::Void))
+                    if let Some(a) = <ScStatic as RawValConvertible>::try_convert(val) {
+                        Ok(ScVal::Static(a))
                     } else {
                         Err(HostError::WithStatus(
                             String::from("unknown Tag::Static case"),
