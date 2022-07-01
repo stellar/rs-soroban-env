@@ -1297,6 +1297,9 @@ fn bigint_tests() -> Result<(), HostError> {
         // gcd by 0 is self
         let obj_res = host.bigint_gcd(obj_a, obj_0)?;
         assert_eq!(host.obj_cmp(obj_res.into(), obj_a.into())?, 0);
+        // gcd of (0, 0) is 0
+        let obj_res = host.bigint_gcd(obj_0, obj_0)?;
+        assert_eq!(host.obj_cmp(obj_res.into(), obj_0.into())?, 0);
     }
     // lcm
     {
@@ -1307,6 +1310,9 @@ fn bigint_tests() -> Result<(), HostError> {
         assert_eq!(host.obj_cmp(obj_res.into(), obj_ref.into())?, 0);
         // lcm by 0 is 0
         let obj_res = host.bigint_lcm(obj_a, obj_0)?;
+        assert_eq!(host.obj_cmp(obj_res.into(), obj_0.into())?, 0);
+        // lcm of (0, 0) is 0
+        let obj_res = host.bigint_lcm(obj_0, obj_0)?;
         assert_eq!(host.obj_cmp(obj_res.into(), obj_0.into())?, 0);
     }
     // pow
