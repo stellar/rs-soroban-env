@@ -1174,9 +1174,6 @@ fn bigint_tests() -> Result<(), HostError> {
     let host = Host::default();
     let a: u64 = 2374340;
     let b: i64 = -438730;
-    // let bi_0: BigInt = 0_u32.into();
-    // let bi_a: BigInt = a.into();
-    // let bi_b: BigInt = b.into();
     let obj_0 = host.bigint_from_i64(0)?;
     let obj_a = host.bigint_from_u64(a)?;
     let obj_b = host.bigint_from_i64(b)?;
@@ -1303,8 +1300,6 @@ fn bigint_tests() -> Result<(), HostError> {
     }
     // lcm
     {
-        // let bi_c = bi_a.lcm(&bi_b);
-        // println!("{:?}", bi_c) // 104169418820
         let obj_res = host.bigint_lcm(obj_a, obj_b)?;
         let obj_ref = host.bigint_from_i64(104169418820)?;
         assert_eq!(host.obj_cmp(obj_res.into(), obj_ref.into())?, 0);
@@ -1317,8 +1312,6 @@ fn bigint_tests() -> Result<(), HostError> {
     }
     // pow
     {
-        // let bi_c = bi_b.pow(2);
-        // println!("{:?}", bi_c) // 192484012900
         let obj_res = host.bigint_pow(obj_b, 2_u32.into())?;
         let obj_ref = host.bigint_from_i64(192484012900)?;
         assert_eq!(host.obj_cmp(obj_res.into(), obj_ref.into())?, 0);
@@ -1328,9 +1321,6 @@ fn bigint_tests() -> Result<(), HostError> {
     }
     // pow_mod
     {
-        // let bi_c: BigInt = 2_u32.into();
-        // let bi_d: BigInt = bi_a.modpow(&bi_c, &bi_b);
-        // println!("{:?}", bi_d); // -94310
         let obj_2 = host.bigint_from_i64(2)?;
         let obj_res = host.bigint_pow_mod(obj_a, obj_2, obj_b)?;
         let obj_ref = host.bigint_from_i64(-94310)?;
@@ -1347,7 +1337,6 @@ fn bigint_tests() -> Result<(), HostError> {
     }
     // sqrt
     {
-        // println!("{:?}", bi_a.sqrt()) // 1540
         let obj_res = host.bigint_sqrt(obj_a)?;
         let obj_ref = host.bigint_from_i64(1540)?;
         assert_eq!(host.obj_cmp(obj_res.into(), obj_ref.into())?, 0);
@@ -1358,9 +1347,6 @@ fn bigint_tests() -> Result<(), HostError> {
     }
     // bits
     {
-        // println!("{:?}", bi_a.bits()); // 22
-        // println!("{:?}", bi_b.bits()); // 19
-        // println!("{:?}", bi_0.bits()); // 0
         assert_eq!(host.bigint_bits(obj_a)?, 22);
         assert_eq!(host.bigint_bits(obj_b)?, 19);
         assert_eq!(host.bigint_bits(obj_0)?, 0);

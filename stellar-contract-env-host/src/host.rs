@@ -10,7 +10,7 @@ use num_integer::Integer;
 use num_traits::cast::ToPrimitive;
 use num_traits::{Signed, Zero};
 use std::num::TryFromIntError;
-use std::ops::{BitAnd, BitOr, BitXor, Neg, Not, Rem, Shl, Shr};
+use std::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Not, Rem, Shl, Shr, Sub};
 #[cfg(feature = "vm")]
 use stellar_contract_env_common::xdr::ScVmErrorCode;
 use stellar_contract_env_common::xdr::{
@@ -1365,32 +1365,17 @@ impl CheckedEnv for Host {
     }
 
     fn bigint_add(&self, x: Object, y: Object) -> Result<Object, HostError> {
-        let res = self.visit_obj(x, |a: &BigInt| {
-            self.visit_obj(y, |b: &BigInt| {
-                a.checked_add(b)
-                    .ok_or(HostError::General("bigint addition failed"))
-            })
-        })?;
+        let res = self.visit_obj(x, |a: &BigInt| self.visit_obj(y, |b: &BigInt| Ok(a.add(b))))?;
         Ok(self.add_host_object(res)?.into())
     }
 
     fn bigint_sub(&self, x: Object, y: Object) -> Result<Object, HostError> {
-        let res = self.visit_obj(x, |a: &BigInt| {
-            self.visit_obj(y, |b: &BigInt| {
-                a.checked_sub(b)
-                    .ok_or(HostError::General("bigint subtraction failed"))
-            })
-        })?;
+        let res = self.visit_obj(x, |a: &BigInt| self.visit_obj(y, |b: &BigInt| Ok(a.sub(b))))?;
         Ok(self.add_host_object(res)?.into())
     }
 
     fn bigint_mul(&self, x: Object, y: Object) -> Result<Object, HostError> {
-        let res = self.visit_obj(x, |a: &BigInt| {
-            self.visit_obj(y, |b: &BigInt| {
-                a.checked_mul(b)
-                    .ok_or(HostError::General("bigint multiplication failed"))
-            })
-        })?;
+        let res = self.visit_obj(x, |a: &BigInt| self.visit_obj(y, |b: &BigInt| Ok(a.mul(b))))?;
         Ok(self.add_host_object(res)?.into())
     }
 
@@ -1400,8 +1385,7 @@ impl CheckedEnv for Host {
                 if b.is_zero() {
                     return Err(HostError::General("bigint division by zero"));
                 }
-                a.checked_div(b)
-                    .ok_or(HostError::General("bigint division failed"))
+                Ok(a.div(b))
             })
         })?;
         Ok(self.add_host_object(res)?.into())
