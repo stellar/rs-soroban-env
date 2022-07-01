@@ -183,18 +183,18 @@ macro_rules! call_macro_with_all_host_functions {
                 {"8", fn bigint_and(x:Object, y:Object) -> Object}
                 {"9", fn bigint_or(x:Object, y:Object) -> Object}
                 {"A", fn bigint_xor(x:Object, y:Object) -> Object}
-                {"B", fn bigint_shl(x:Object, y:RawVal) -> Object}
-                {"C", fn bigint_shr(x:Object, y:RawVal) -> Object}
+                {"B", fn bigint_shl(x:Object, y:u64) -> Object}
+                {"C", fn bigint_shr(x:Object, y:u64) -> Object}
                 {"D", fn bigint_cmp(x:Object, y:Object) -> RawVal}
                 {"E", fn bigint_is_zero(x:Object) -> RawVal}
                 {"F", fn bigint_neg(x:Object) -> Object}
                 {"G", fn bigint_not(x:Object) -> Object}
                 {"H", fn bigint_gcd(x:Object, y:Object) -> Object}
                 {"I", fn bigint_lcm(x:Object, y:Object) -> Object}
-                {"J", fn bigint_pow(x:Object, y:Object) -> Object}
+                {"J", fn bigint_pow(x:Object, y:RawVal) -> Object}
                 {"K", fn bigint_pow_mod(p:Object, q:Object, m:Object) -> Object}
                 {"L", fn bigint_sqrt(x:Object) -> Object}
-                {"M", fn bigint_bits(x:Object) -> RawVal}
+                {"M", fn bigint_bits(x:Object) -> u64}
             }
 
             mod binary "b" {
