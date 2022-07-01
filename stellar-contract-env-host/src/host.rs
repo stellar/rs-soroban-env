@@ -8,9 +8,9 @@ use im_rc::{OrdMap, Vector};
 use num_bigint::{BigInt, Sign};
 use num_integer::Integer;
 use num_traits::cast::ToPrimitive;
-use num_traits::Zero;
+use num_traits::{Signed, Zero};
 use std::num::TryFromIntError;
-use std::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Not, Rem, Shl, Shr, Sub};
+use std::ops::{BitAnd, BitOr, BitXor, Neg, Not, Rem, Shl, Shr};
 #[cfg(feature = "vm")]
 use stellar_contract_env_common::xdr::ScVmErrorCode;
 use stellar_contract_env_common::xdr::{
@@ -1365,27 +1365,57 @@ impl CheckedEnv for Host {
     }
 
     fn bigint_add(&self, x: Object, y: Object) -> Result<Object, HostError> {
-        let res = self.visit_obj(x, |a: &BigInt| self.visit_obj(y, |b: &BigInt| Ok(a.add(b))))?;
+        let res = self.visit_obj(x, |a: &BigInt| {
+            self.visit_obj(y, |b: &BigInt| {
+                a.checked_add(b)
+                    .ok_or(HostError::General("bigint addition failed"))
+            })
+        })?;
         Ok(self.add_host_object(res)?.into())
     }
 
     fn bigint_sub(&self, x: Object, y: Object) -> Result<Object, HostError> {
-        let res = self.visit_obj(x, |a: &BigInt| self.visit_obj(y, |b: &BigInt| Ok(a.sub(b))))?;
+        let res = self.visit_obj(x, |a: &BigInt| {
+            self.visit_obj(y, |b: &BigInt| {
+                a.checked_sub(b)
+                    .ok_or(HostError::General("bigint subtraction failed"))
+            })
+        })?;
         Ok(self.add_host_object(res)?.into())
     }
 
     fn bigint_mul(&self, x: Object, y: Object) -> Result<Object, HostError> {
-        let res = self.visit_obj(x, |a: &BigInt| self.visit_obj(y, |b: &BigInt| Ok(a.mul(b))))?;
+        let res = self.visit_obj(x, |a: &BigInt| {
+            self.visit_obj(y, |b: &BigInt| {
+                a.checked_mul(b)
+                    .ok_or(HostError::General("bigint multiplication failed"))
+            })
+        })?;
         Ok(self.add_host_object(res)?.into())
     }
 
     fn bigint_div(&self, x: Object, y: Object) -> Result<Object, HostError> {
-        let res = self.visit_obj(x, |a: &BigInt| self.visit_obj(y, |b: &BigInt| Ok(a.div(b))))?;
+        let res = self.visit_obj(x, |a: &BigInt| {
+            self.visit_obj(y, |b: &BigInt| {
+                if b.is_zero() {
+                    return Err(HostError::General("bigint division by zero"));
+                }
+                a.checked_div(b)
+                    .ok_or(HostError::General("bigint division failed"))
+            })
+        })?;
         Ok(self.add_host_object(res)?.into())
     }
 
     fn bigint_rem(&self, x: Object, y: Object) -> Result<Object, HostError> {
-        let res = self.visit_obj(x, |a: &BigInt| self.visit_obj(y, |b: &BigInt| Ok(a.rem(b))))?;
+        let res = self.visit_obj(x, |a: &BigInt| {
+            self.visit_obj(y, |b: &BigInt| {
+                if b.is_zero() {
+                    return Err(HostError::General("bigint division by zero"));
+                }
+                Ok(a.rem(b))
+            })
+        })?;
         Ok(self.add_host_object(res)?.into())
     }
 
@@ -1410,12 +1440,12 @@ impl CheckedEnv for Host {
         Ok(self.add_host_object(res)?.into())
     }
 
-    fn bigint_shl(&self, x: Object, y: i64) -> Result<Object, HostError> {
+    fn bigint_shl(&self, x: Object, y: u64) -> Result<Object, HostError> {
         let res = self.visit_obj(x, |a: &BigInt| Ok(a.shl(y)))?;
         Ok(self.add_host_object(res)?.into())
     }
 
-    fn bigint_shr(&self, x: Object, y: i64) -> Result<Object, HostError> {
+    fn bigint_shr(&self, x: Object, y: u64) -> Result<Object, HostError> {
         let res = self.visit_obj(x, |a: &BigInt| Ok(a.shr(y)))?;
         Ok(self.add_host_object(res)?.into())
     }
@@ -1464,14 +1494,27 @@ impl CheckedEnv for Host {
     fn bigint_pow_mod(&self, p: Object, q: Object, m: Object) -> Result<Object, HostError> {
         let res = self.visit_obj(p, |a: &BigInt| {
             self.visit_obj(q, |exponent: &BigInt| {
-                self.visit_obj(m, |modulus: &BigInt| Ok(a.modpow(exponent, modulus)))
+                if exponent.is_negative() {
+                    return Err(HostError::General("negative exponentiation not supported"));
+                }
+                self.visit_obj(m, |modulus: &BigInt| {
+                    if modulus.is_zero() {
+                        return Err(HostError::General("zero modulus not supported"));
+                    }
+                    Ok(a.modpow(exponent, modulus))
+                })
             })
         })?;
         Ok(self.add_host_object(res)?.into())
     }
 
     fn bigint_sqrt(&self, x: Object) -> Result<Object, HostError> {
-        let res = self.visit_obj(x, |a: &BigInt| Ok(a.sqrt()))?;
+        let res = self.visit_obj(x, |a: &BigInt| {
+            if a.is_negative() {
+                return Err(HostError::General("sqrt is imaginary"));
+            }
+            Ok(a.sqrt())
+        })?;
         Ok(self.add_host_object(res)?.into())
     }
 
