@@ -31,7 +31,7 @@ use crate::SymbolStr;
 use crate::Vm;
 use crate::{
     BitSet, BitSetError, ConversionError, EnvBase, IntoEnvVal, Object, RawVal, RawValConvertible,
-    Status, Symbol, SymbolError, Tag, Val, UNKNOWN_ERROR,
+    Static, Status, Symbol, SymbolError, Tag, Val, UNKNOWN_ERROR,
 };
 
 use thiserror::Error;
@@ -426,8 +426,16 @@ impl Host {
                     <i32 as RawValConvertible>::unchecked_from_val(val)
                 })),
                 Tag::Static => {
-                    if let Some(a) = <ScStatic as RawValConvertible>::try_convert(val) {
-                        Ok(ScVal::Static(a))
+                    let tag_static =
+                        unsafe { <Static as RawValConvertible>::unchecked_from_val(val) };
+                    if tag_static.is_type(ScStatic::True) {
+                        Ok(ScVal::Static(ScStatic::True))
+                    } else if tag_static.is_type(ScStatic::False) {
+                        Ok(ScVal::Static(ScStatic::False))
+                    } else if tag_static.is_type(ScStatic::Void) {
+                        Ok(ScVal::Static(ScStatic::Void))
+                    } else if tag_static.is_type(ScStatic::LedgerKeyContractCodeWasm) {
+                        Ok(ScVal::Static(ScStatic::LedgerKeyContractCodeWasm))
                     } else {
                         Err(HostError::WithStatus(
                             String::from("unknown Tag::Static case"),

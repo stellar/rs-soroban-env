@@ -118,7 +118,6 @@ declare_tryfrom!(bool);
 declare_tryfrom!(u32);
 declare_tryfrom!(i32);
 declare_tryfrom!(u8);
-declare_tryfrom!(ScStatic);
 
 #[cfg(feature = "vm")]
 impl wasmi::FromValue for RawVal {
@@ -142,40 +141,6 @@ impl RawValConvertible for () {
     }
     #[inline(always)]
     unsafe fn unchecked_from_val(_v: RawVal) -> Self {}
-}
-
-impl RawValConvertible for ScStatic {
-    #[inline(always)]
-    fn is_val_type(v: RawVal) -> bool {
-        v.has_tag(Tag::Static)
-            && (v.get_body() == ScStatic::True as u64
-                || v.get_body() == ScStatic::False as u64
-                || v.get_body() == ScStatic::Void as u64
-                || v.get_body() == ScStatic::LedgerKeyContractCodeWasm as u64)
-    }
-    #[inline(always)]
-    fn try_convert(v: RawVal) -> Option<Self> {
-        if v.has_tag(Tag::Static) {
-            if v.get_body() == ScStatic::True as u64 {
-                Some(ScStatic::True)
-            } else if v.get_body() == ScStatic::False as u64 {
-                Some(ScStatic::False)
-            } else if v.get_body() == ScStatic::Void as u64 {
-                Some(ScStatic::Void)
-            } else if v.get_body() == ScStatic::LedgerKeyContractCodeWasm as u64 {
-                Some(ScStatic::LedgerKeyContractCodeWasm)
-            } else {
-                None
-            }
-        } else {
-            None
-        }
-    }
-    #[inline(always)]
-    unsafe fn unchecked_from_val(_v: RawVal) -> Self {
-        //TODO: THIS IS INCORRECT!!!
-        panic!("remove this")
-    }
 }
 
 impl RawValConvertible for bool {
@@ -279,12 +244,6 @@ impl From<ScStatus> for RawVal {
             ScStatus::VmError(e) => e as u32,
         };
         Status::from_type_and_code(ty, code).to_raw()
-    }
-}
-
-impl From<ScStatic> for RawVal {
-    fn from(st: ScStatic) -> Self {
-        RawVal::from_other_static(st)
     }
 }
 
