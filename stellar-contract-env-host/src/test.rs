@@ -556,6 +556,7 @@ fn ed25519_verify_test() -> Result<(), HostError> {
     Ok(())
 }
 
+#[cfg(any(feature = "vm", feature = "testutils"))]
 fn sha256_hash_id_preimage(pre_image: xdr::HashIdPreimage) -> xdr::Hash {
     use sha2::{Digest, Sha256};
 
@@ -567,6 +568,7 @@ fn sha256_hash_id_preimage(pre_image: xdr::HashIdPreimage) -> xdr::Hash {
     xdr::Hash(Sha256::digest(buf).try_into().expect("invalid hash"))
 }
 
+#[cfg(any(feature = "vm", feature = "testutils"))]
 fn check_new_code(host: &Host, storage_key: LedgerKey, code: ScVal) {
     host.visit_storage(|s: &mut Storage| {
         assert!(s.has(&storage_key)?);
@@ -580,6 +582,7 @@ fn check_new_code(host: &Host, storage_key: LedgerKey, code: ScVal) {
     .unwrap();
 }
 
+#[cfg(any(feature = "vm", feature = "testutils"))]
 /// create contract tests
 fn create_contract_test_helper(
     secret: &[u8],
