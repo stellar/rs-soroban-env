@@ -921,6 +921,12 @@ impl CheckedEnv for Host {
         })
     }
 
+    fn get_current_contract(&self) -> Result<Object, HostError> {
+        let hash = self.get_current_contract_id()?;
+        let bin: Vec<u8> = hash.0.try_into().map_err(|_| ConversionError {})?;
+        Ok(self.add_host_object(bin)?.into())
+    }
+
     fn obj_from_u64(&self, u: u64) -> Result<Object, HostError> {
         Ok(self.add_host_object(u)?.into())
     }
