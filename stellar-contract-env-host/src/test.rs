@@ -1,21 +1,25 @@
 use crate::{
-    xdr::{
-        LedgerEntryData, LedgerKey, LedgerKeyContractData, ScHostFnErrorCode, ScHostObjErrorCode,
-        ScObject, ScObjectType, ScStatic, ScStatus, ScVal, ScVec,
-    },
+    xdr::{ScHostFnErrorCode, ScHostObjErrorCode, ScObject, ScObjectType, ScStatus, ScVal, ScVec},
     Host, HostError, IntoEnvVal, Object, RawVal, Tag,
 };
 
-use crate::xdr;
-
-use im_rc::OrdMap;
 use stellar_contract_env_common::{
-    xdr::{ScMap, ScMapEntry, WriteXdr},
+    xdr::{ScMap, ScMapEntry},
     CheckedEnv, RawValConvertible,
 };
 
-use crate::storage::{AccessType, Footprint, Storage};
 use hex::FromHex;
+
+#[cfg(any(feature = "vm", feature = "testutils"))]
+use crate::storage::{AccessType, Footprint, Storage};
+#[cfg(any(feature = "vm", feature = "testutils"))]
+use crate::xdr;
+#[cfg(any(feature = "vm", feature = "testutils"))]
+use crate::xdr::{LedgerEntryData, LedgerKey, LedgerKeyContractData, ScStatic};
+#[cfg(any(feature = "vm", feature = "testutils"))]
+use im_rc::OrdMap;
+#[cfg(any(feature = "vm", feature = "testutils"))]
+use stellar_contract_env_common::xdr::WriteXdr;
 
 #[cfg(feature = "vm")]
 use crate::Vm;
