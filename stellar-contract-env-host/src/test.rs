@@ -1237,15 +1237,35 @@ fn bigint_tests() -> Result<(), HostError> {
     }
     // shl
     {
-        let obj_res = host.bigint_shl(obj_a, 5)?;
+        let obj_res = host.bigint_shl(obj_a, host.bigint_from_i64(5)?)?;
         let obj_ref = host.bigint_from_u64(a << 5)?;
         assert_eq!(host.obj_cmp(obj_res.into(), obj_ref.into())?, 0);
+        assert_matches!(
+            host.bigint_shl(obj_a, host.bigint_from_i64(-5)?),
+            Err(HostError::General("attempt to shift left with negative"))
+        );
+        // a 65-bit integer
+        let obj_c = host.bigint_shl(host.bigint_from_u64(u64::MAX)?, host.bigint_from_i64(1)?)?;
+        assert_matches!(
+            host.bigint_shl(obj_a, obj_c),
+            Err(HostError::General("left-shift overflow"))
+        );
     }
     // shr
     {
-        let obj_res = host.bigint_shr(obj_a, 5)?;
+        let obj_res = host.bigint_shr(obj_a, host.bigint_from_i64(5)?)?;
         let obj_ref = host.bigint_from_u64(a >> 5)?;
         assert_eq!(host.obj_cmp(obj_res.into(), obj_ref.into())?, 0);
+        assert_matches!(
+            host.bigint_shr(obj_a, host.bigint_from_i64(-5)?),
+            Err(HostError::General("attempt to shift right with negative"))
+        );
+        // a 65-bit integer
+        let obj_c = host.bigint_shl(host.bigint_from_u64(u64::MAX)?, host.bigint_from_i64(1)?)?;
+        assert_matches!(
+            host.bigint_shr(obj_a, obj_c),
+            Err(HostError::General("right-shift overflow"))
+        );
     }
     // cmp
     {
@@ -1312,12 +1332,22 @@ fn bigint_tests() -> Result<(), HostError> {
     }
     // pow
     {
-        let obj_res = host.bigint_pow(obj_b, 2_u32.into())?;
+        let obj_res = host.bigint_pow(obj_b, host.bigint_from_u64(2_u32.into())?)?;
         let obj_ref = host.bigint_from_i64(192484012900)?;
         assert_eq!(host.obj_cmp(obj_res.into(), obj_ref.into())?, 0);
-        let obj_res = host.bigint_pow(obj_b, 0_u32.into())?;
+        let obj_res = host.bigint_pow(obj_b, host.bigint_from_u64(0_u32.into())?)?;
         let obj_ref = host.bigint_from_i64(1)?;
         assert_eq!(host.obj_cmp(obj_res.into(), obj_ref.into())?, 0);
+        assert_matches!(
+            host.bigint_pow(obj_b, host.bigint_from_i64(-1)?),
+            Err(HostError::General("negative exponentiation not supported"))
+        );
+        // a 65-bit integer
+        let obj_c = host.bigint_shl(host.bigint_from_u64(u64::MAX)?, host.bigint_from_i64(1)?)?;
+        assert_matches!(
+            host.bigint_pow(obj_b, obj_c),
+            Err(HostError::General("pow overflow"))
+        );
     }
     // pow_mod
     {

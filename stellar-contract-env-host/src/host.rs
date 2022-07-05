@@ -8,7 +8,7 @@ use im_rc::{OrdMap, Vector};
 use num_bigint::{BigInt, Sign};
 use num_integer::Integer;
 use num_traits::cast::ToPrimitive;
-use num_traits::{Signed, Zero};
+use num_traits::{Pow, Signed, Zero};
 use std::num::TryFromIntError;
 use std::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Not, Rem, Shl, Shr, Sub};
 #[cfg(feature = "vm")]
@@ -1424,13 +1424,35 @@ impl CheckedEnv for Host {
         Ok(self.add_host_object(res)?.into())
     }
 
-    fn bigint_shl(&self, x: Object, y: u64) -> Result<Object, HostError> {
-        let res = self.visit_obj(x, |a: &BigInt| Ok(a.shl(y)))?;
+    fn bigint_shl(&self, x: Object, y: Object) -> Result<Object, HostError> {
+        let res = self.visit_obj(x, |a: &BigInt| {
+            self.visit_obj(y, |b: &BigInt| {
+                if b.is_negative() {
+                    return Err(HostError::General("attempt to shift left with negative"));
+                }
+                if let Some(u) = b.to_usize() {
+                    Ok(a.shl(u))
+                } else {
+                    return Err(HostError::General("left-shift overflow"));
+                }
+            })
+        })?;
         Ok(self.add_host_object(res)?.into())
     }
 
-    fn bigint_shr(&self, x: Object, y: u64) -> Result<Object, HostError> {
-        let res = self.visit_obj(x, |a: &BigInt| Ok(a.shr(y)))?;
+    fn bigint_shr(&self, x: Object, y: Object) -> Result<Object, HostError> {
+        let res = self.visit_obj(x, |a: &BigInt| {
+            self.visit_obj(y, |b: &BigInt| {
+                if b.is_negative() {
+                    return Err(HostError::General("attempt to shift right with negative"));
+                }
+                if let Some(u) = b.to_usize() {
+                    Ok(a.shr(u))
+                } else {
+                    return Err(HostError::General("right-shift overflow"));
+                }
+            })
+        })?;
         Ok(self.add_host_object(res)?.into())
     }
 
@@ -1464,14 +1486,19 @@ impl CheckedEnv for Host {
         Ok(self.add_host_object(res)?.into())
     }
 
-    fn bigint_pow(&self, x: Object, y: RawVal) -> Result<Object, HostError> {
-        let e: u32 = y.try_into().map_err(|_| {
-            HostError::WithStatus(
-                String::from("y must be u32"),
-                ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsWrongType),
-            )
+    fn bigint_pow(&self, x: Object, y: Object) -> Result<Object, HostError> {
+        let res = self.visit_obj(x, |a: &BigInt| {
+            self.visit_obj(y, |e: &BigInt| {
+                if e.is_negative() {
+                    return Err(HostError::General("negative exponentiation not supported"));
+                }
+                if let Some(u) = e.to_usize() {
+                    Ok(Pow::pow(a, u))
+                } else {
+                    return Err(HostError::General("pow overflow"));
+                }
+            })
         })?;
-        let res = self.visit_obj(x, |a: &BigInt| Ok(a.pow(e)))?;
         Ok(self.add_host_object(res)?.into())
     }
 
