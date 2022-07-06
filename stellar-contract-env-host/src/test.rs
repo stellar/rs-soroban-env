@@ -1003,6 +1003,7 @@ fn invoke_cross_contract_with_err() -> Result<(), HostError> {
 }
 
 #[cfg(feature = "vm")]
+#[ignore]
 #[test]
 fn invoke_cross_contract_lvl2_nested_with_err() -> Result<(), HostError> {
     // 1st level, the calling contract
