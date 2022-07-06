@@ -51,6 +51,6 @@ jobs:
     - run: rustup update stable && rustup default stable
     - run: rustup target add ${{ matrix.sys.target }}
     - run: cargo install --locked --version 0.5.14 cargo-hack
-    - run: cargo hack --feature-powerset check -- --profile ${{ matrix.profile }} --target ${{ matrix.sys.target }}
+    - run: cargo hack --feature-powerset check --profile ${{ matrix.profile }} --target ${{ matrix.sys.target }}
     - if: matrix.sys.test
-      run: cargo hack --feature-powerset test -- --profile ${{ matrix.profile }} --target ${{ matrix.sys.target }}
+      run: cargo hack --feature-powerset test --profile ${{ matrix.profile }} --target ${{ matrix.sys.target }}
