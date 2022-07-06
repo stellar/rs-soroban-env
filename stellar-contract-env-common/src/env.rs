@@ -234,37 +234,39 @@ macro_rules! call_macro_with_all_host_functions {
                 /// Copies a segment of the linear memory specified at position `j` with length `l`, into a binary array at offset `i`. The binary array may grow in size to accommodate the new bytes.
                 /// Traps if the linear memory doesn't have enough bytes.
                 {"2", fn binary_copy_from_linear_memory(b:Object, i:RawVal, j:RawVal, l:RawVal) -> Object}
+                /// Constructs a new binary array initialized with bytes copied from a linear memory slice specified at position `j` with length `l`.
+                {"3", fn binary_new_from_linear_memory(j:RawVal, l:RawVal) -> Object}
                 // These functions below ($3-$F) mirror vector operations
                 /// Create an empty new binary.
-                {"3", fn binary_new() -> Object}
+                {"4", fn binary_new() -> Object}
                 /// Update the value at index `i` in the binary. Return the new binary.
                 /// Trap if the index is out of bounds.
-                {"4", fn binary_put(b:Object, i:RawVal, u:RawVal) -> Object}
+                {"5", fn binary_put(b:Object, i:RawVal, u:RawVal) -> Object}
                 /// Returns the element at index `i` of the binary. Traps if the index is out of bound.
-                {"5", fn binary_get(b:Object, i:RawVal) -> RawVal}
+                {"6", fn binary_get(b:Object, i:RawVal) -> RawVal}
                 /// Delete an element in a binary at index `i`, shifting all elements after it to the left.
                 /// Return the new binary. Traps if the index is out of bound.
-                {"6", fn binary_del(b:Object, i:RawVal) -> Object}
+                {"7", fn binary_del(b:Object, i:RawVal) -> Object}
                 /// Returns length of the binary.
-                {"7", fn binary_len(b:Object) -> RawVal}
+                {"8", fn binary_len(b:Object) -> RawVal}
                 /// Appends an element to the back of the binary.
-                {"8", fn binary_push(b:Object, u:RawVal) -> Object}
+                {"9", fn binary_push(b:Object, u:RawVal) -> Object}
                 /// Removes the last element from the binary and returns the new binary.
                 /// Traps if original binary is empty.
-                {"9", fn binary_pop(b:Object) -> Object}
+                {"A", fn binary_pop(b:Object) -> Object}
                 /// Return the first element in the binary. Traps if the binary is empty
-                {"A", fn binary_front(b:Object) -> RawVal}
+                {"B", fn binary_front(b:Object) -> RawVal}
                 /// Return the last element in the binary. Traps if the binary is empty
-                {"B", fn binary_back(b:Object) -> RawVal}
+                {"C", fn binary_back(b:Object) -> RawVal}
                 /// Inserts an element at index `i` within the binary, shifting all elements after it to the right.
                 /// Traps if the index is out of bound
-                {"C", fn binary_insert(b:Object, i:RawVal, u:RawVal) -> Object}
+                {"D", fn binary_insert(b:Object, i:RawVal, u:RawVal) -> Object}
                 /// Clone the binary `b1`, then moves all the elements of binary `b2` into it.
                 /// Return the new binary. Traps if number of elements in the binary overflows a u32.
-                {"D", fn binary_append(b1:Object, b2:Object) -> Object}
+                {"E", fn binary_append(b1:Object, b2:Object) -> Object}
                 /// Copy the elements from `i` until length `l` in the binary and create a new binary from it.
                 /// Return the new binary. Traps if the index is out of bound.
-                {"E", fn binary_slice(b:Object, i:RawVal, l:RawVal) -> Object}
+                {"F", fn binary_slice(b:Object, i:RawVal, l:RawVal) -> Object}
             }
 
             mod hash "h" {

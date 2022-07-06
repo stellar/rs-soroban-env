@@ -1631,8 +1631,8 @@ impl CheckedEnv for Host {
         {
             let mut vnew = self.visit_obj(b, |hv: &Vec<u8>| Ok(hv.clone()))?;
             let end_idx = i.checked_add(*l).ok_or(HostError::WithStatus(
-                    String::from("u32 overflow"),
-                    ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsInvalid),
+                String::from("u32 overflow"),
+                ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsInvalid),
             ))? as usize;
             self.with_current_frame(|frame| match frame {
                 Frame::ContractVM(vm) => vm.with_memory_access(|mem| {
@@ -1657,6 +1657,34 @@ impl CheckedEnv for Host {
 
     fn binary_new(&self) -> Result<Object, HostError> {
         Ok(self.add_host_object(Vec::<u8>::new())?.into())
+    }
+
+    fn binary_new_from_linear_memory(&self, j: RawVal, l: RawVal) -> Result<Object, HostError> {
+        #[cfg(not(feature = "vm"))]
+        todo!();
+        #[cfg(feature = "vm")]
+        if let [j, l] = [j, l]
+            .iter()
+            .map(|v| u32::try_from(*v))
+            .collect::<Result<Vec<u32>, ConversionError>>()?
+            .as_slice()
+        {
+            return self.with_current_frame(|frame| match frame {
+                Frame::ContractVM(vm) => vm.with_memory_access(|mem| {
+                    let mut vnew: Vec<u8> = vec![0; *l as usize];
+                    mem.get_into(*j, vnew.as_mut_slice())?;
+                    Ok(self.add_host_object(vnew)?.into())
+                }),
+                Frame::HostFunction(_) => Err(HostError::General("linear memory not supported")),
+                #[cfg(feature = "testutils")]
+                Frame::TestContract(id) => Err(HostError::General("linear memory not supported")),
+            });
+        } else {
+            return Err(HostError::WithStatus(
+                String::from("failed conversion to u32"),
+                ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsWrongType),
+            ));
+        }
     }
 
     fn binary_put(&self, b: Object, i: RawVal, u: RawVal) -> Result<Object, HostError> {
