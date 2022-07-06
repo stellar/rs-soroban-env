@@ -228,14 +228,14 @@ macro_rules! call_macro_with_all_host_functions {
                 {"_", fn serialize_to_binary(b:Object) -> Object}
                 /// Deserializes a binary array to get back the XDR (SC)Object.
                 {"0", fn deserialize_from_binary(b:Object) -> Object}
-                /// Copies a slice of bytes from a binary array specified at offset `i` with length `l` into the linear memory at position `j`.
+                /// Copies a slice of bytes from a binary array specified at offset `b_pos` with length `len` into the linear memory at position `lm_pos`.
                 /// Traps if either the binary array or the linear memory doesn't have enough bytes.
-                {"1", fn binary_copy_to_linear_memory(b:Object, i:RawVal, j:RawVal, l:RawVal) -> RawVal}
-                /// Copies a segment of the linear memory specified at position `j` with length `l`, into a binary array at offset `i`. The binary array may grow in size to accommodate the new bytes.
+                {"1", fn binary_copy_to_linear_memory(b:Object, b_pos:RawVal, lm_pos:RawVal, len:RawVal) -> RawVal}
+                /// Copies a segment of the linear memory specified at position `lm_pos` with length `len`, into a binary array at offset `b_pos`. The binary array may grow in size to accommodate the new bytes.
                 /// Traps if the linear memory doesn't have enough bytes.
-                {"2", fn binary_copy_from_linear_memory(b:Object, i:RawVal, j:RawVal, l:RawVal) -> Object}
-                /// Constructs a new binary array initialized with bytes copied from a linear memory slice specified at position `j` with length `l`.
-                {"3", fn binary_new_from_linear_memory(j:RawVal, l:RawVal) -> Object}
+                {"2", fn binary_copy_from_linear_memory(b:Object, b_pos:RawVal, lm_pos:RawVal, len:RawVal) -> Object}
+                /// Constructs a new binary array initialized with bytes copied from a linear memory slice specified at position `lm_pos` with length `len`.
+                {"3", fn binary_new_from_linear_memory(lm_pos:RawVal, len:RawVal) -> Object}
                 // These functions below ($3-$F) mirror vector operations
                 /// Create an empty new binary.
                 {"4", fn binary_new() -> Object}
