@@ -13,9 +13,7 @@ use hex::FromHex;
 #[cfg(any(feature = "vm", feature = "testutils"))]
 use crate::storage::{AccessType, Footprint, Storage};
 #[cfg(any(feature = "vm", feature = "testutils"))]
-use crate::xdr;
-#[cfg(any(feature = "vm", feature = "testutils"))]
-use crate::xdr::{LedgerEntryData, LedgerKey, LedgerKeyContractData, ScStatic};
+use crate::xdr::{self, LedgerEntryData, LedgerKey, LedgerKeyContractData, ScStatic};
 #[cfg(any(feature = "vm", feature = "testutils"))]
 use im_rc::OrdMap;
 #[cfg(any(feature = "vm", feature = "testutils"))]
