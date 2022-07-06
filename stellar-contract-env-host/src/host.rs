@@ -1562,117 +1562,97 @@ impl CheckedEnv for Host {
         Ok(self.to_host_obj(&sco)?.into())
     }
 
-    fn binary_copy_to_guest_mem(
+    fn binary_copy_to_linear_memory(
         &self,
         b: Object,
         i: RawVal,
         j: RawVal,
         l: RawVal,
     ) -> Result<RawVal, HostError> {
-        // offset in the host binary
-        let i: usize = u32::try_from(i).map_err(|_| {
-            HostError::WithStatus(
-                String::from("i must be u32"),
-                ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsWrongType),
-            )
-        })? as usize;
-        // offset in the guest memory
-        let j: u32 = j.try_into().map_err(|_| {
-            HostError::WithStatus(
-                String::from("j must be u32"),
-                ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsWrongType),
-            )
-        })?;
-        // length of the slice to copy
-        let l: usize = u32::try_from(l).map_err(|_| {
-            HostError::WithStatus(
-                String::from("l must be u32"),
-                ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsWrongType),
-            )
-        })? as usize;
-
-        self.visit_obj(b, move |hv: &Vec<u8>| {
-            if i > u32::MAX as usize - l {
-                return Err(HostError::WithStatus(
+        //[offset in the host binary, pos in the linear memory, length of the slice to copy]
+        #[cfg(not(feature = "vm"))]
+        todo!();
+        #[cfg(feature = "vm")]
+        if let [i, j, l] = [i, j, l]
+            .iter()
+            .map(|v| u32::try_from(*v))
+            .collect::<Result<Vec<u32>, ConversionError>>()?
+            .as_slice()
+        {
+            self.visit_obj(b, move |hv: &Vec<u8>| {
+                let end_idx = i.checked_add(*l).ok_or(HostError::WithStatus(
                     String::from("u32 overflow"),
                     ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsInvalid),
-                ));
-            }
-            if (i + l) > hv.len() {
-                return Err(HostError::WithStatus(
-                    String::from("index out of bound"),
-                    ScStatus::HostObjectError(ScHostObjErrorCode::VecIndexOutOfBound),
-                ));
-            }
-
-            self.with_current_frame(|frame| match frame {
-                #[cfg(feature = "vm")]
-                Frame::ContractVM(vm) => vm.with_memory_access(|mem| {
-                    let _ = mem.set(j, &hv.as_slice()[i..(i + l)])?;
-                    Ok(())
-                }),
-                Frame::HostFunction(_) => Err(HostError::General("linear memory not supported")),
-                #[cfg(feature = "testutils")]
-                Frame::TestContract(id) => Err(HostError::General("linear memory not supported")),
-            })
-        })?;
-        Ok(().into())
+                ))? as usize;
+                if end_idx > hv.len() {
+                    return Err(HostError::WithStatus(
+                        String::from("index out of bound"),
+                        ScStatus::HostObjectError(ScHostObjErrorCode::VecIndexOutOfBound),
+                    ));
+                }
+                self.with_current_frame(|frame| match frame {
+                    Frame::ContractVM(vm) => vm.with_memory_access(|mem| {
+                        Ok(mem.set(*j, &hv.as_slice()[*i as usize..end_idx])?)
+                    }),
+                    Frame::HostFunction(_) => {
+                        Err(HostError::General("linear memory not supported"))
+                    }
+                    #[cfg(feature = "testutils")]
+                    Frame::TestContract(id) => {
+                        Err(HostError::General("linear memory not supported"))
+                    }
+                })
+            })?;
+            Ok(().into())
+        } else {
+            return Err(HostError::WithStatus(
+                String::from("failed conversion to u32"),
+                ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsWrongType),
+            ));
+        }
     }
 
-    fn binary_copy_from_guest_mem(
+    fn binary_copy_from_linear_memory(
         &self,
         b: Object,
         i: RawVal,
         j: RawVal,
         l: RawVal,
     ) -> Result<Object, HostError> {
-        // offset in the host binary
-        let i: usize = u32::try_from(i).map_err(|_| {
-            HostError::WithStatus(
-                String::from("i must be u32"),
-                ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsWrongType),
-            )
-        })? as usize;
-        // offset in the guest memory
-        let j: u32 = j.try_into().map_err(|_| {
-            HostError::WithStatus(
-                String::from("j must be u32"),
-                ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsWrongType),
-            )
-        })?;
-        // length of the slice to copy
-        let l: usize = u32::try_from(l).map_err(|_| {
-            HostError::WithStatus(
-                String::from("l must be u32"),
-                ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsWrongType),
-            )
-        })? as usize;
-
-        let res = self.visit_obj(b, move |hv: &Vec<u8>| {
-            if i > u32::MAX as usize - l {
-                return Err(HostError::WithStatus(
+        //[offset in the host binary, pos in the linear memory, length of the slice to copy]
+        #[cfg(not(feature = "vm"))]
+        todo!();
+        #[cfg(feature = "vm")]
+        if let [i, j, l] = [i, j, l]
+            .iter()
+            .map(|v| u32::try_from(*v))
+            .collect::<Result<Vec<u32>, ConversionError>>()?
+            .as_slice()
+        {
+            let mut vnew = self.visit_obj(b, |hv: &Vec<u8>| Ok(hv.clone()))?;
+            let end_idx = i.checked_add(*l).ok_or(HostError::WithStatus(
                     String::from("u32 overflow"),
                     ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsInvalid),
-                ));
-            }
-            let vnew: Vec<u8> = self.with_current_frame(|frame| match frame {
-                #[cfg(feature = "vm")]
+            ))? as usize;
+            self.with_current_frame(|frame| match frame {
                 Frame::ContractVM(vm) => vm.with_memory_access(|mem| {
-                    let mut vnew = hv.clone();
                     /* we would potentially let the vec grow */
-                    if (i + l) > vnew.len() {
-                        vnew.resize(i + l, 0);
+                    if end_idx > vnew.len() {
+                        vnew.resize(end_idx, 0);
                     }
-                    let _ = mem.get_into(j, &mut vnew.as_mut_slice()[i..(i + l)])?;
-                    Ok(vnew)
+                    Ok(mem.get_into(*j, &mut vnew.as_mut_slice()[*i as usize..end_idx])?)
                 }),
                 Frame::HostFunction(_) => Err(HostError::General("linear memory not supported")),
                 #[cfg(feature = "testutils")]
                 Frame::TestContract(id) => Err(HostError::General("linear memory not supported")),
             })?;
-            self.add_host_object(vnew)
-        })?;
-        Ok(res.into())
+            Ok(self.add_host_object(vnew)?.into())
+        } else {
+            return Err(HostError::WithStatus(
+                String::from("failed conversion to u32"),
+                ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsWrongType),
+            ));
+        }
     }
 
     fn binary_new(&self) -> Result<Object, HostError> {

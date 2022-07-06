@@ -226,10 +226,14 @@ macro_rules! call_macro_with_all_host_functions {
             mod binary "b" {
                 /// Serializes an (SC)Object into XDR opaque binary array.
                 {"_", fn serialize_to_binary(b:Object) -> Object}
-                /// Deserialize a binary array to get back the XDR (SC)Object.
+                /// Deserializes a binary array to get back the XDR (SC)Object.
                 {"0", fn deserialize_from_binary(b:Object) -> Object}
-                {"1", fn binary_copy_to_guest_mem(b:Object, i:RawVal, j:RawVal, l:RawVal) -> RawVal}
-                {"2", fn binary_copy_from_guest_mem(b:Object, i:RawVal, j:RawVal, l:RawVal) -> Object}
+                /// Copies a slice of bytes from a binary array specified at offset `i` with length `l` into the linear memory at position `j`.
+                /// Traps if either the binary array or the linear memory doesn't have enough bytes.
+                {"1", fn binary_copy_to_linear_memory(b:Object, i:RawVal, j:RawVal, l:RawVal) -> RawVal}
+                /// Copies a segment of the linear memory specified at position `j` with length `l`, into a binary array at offset `i`. The binary array may grow in size to accommodate the new bytes.
+                /// Traps if the linear memory doesn't have enough bytes.
+                {"2", fn binary_copy_from_linear_memory(b:Object, i:RawVal, j:RawVal, l:RawVal) -> Object}
                 // These functions below ($3-$F) mirror vector operations
                 /// Create an empty new binary.
                 {"3", fn binary_new() -> Object}
