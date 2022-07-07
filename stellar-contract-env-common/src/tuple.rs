@@ -7,7 +7,7 @@ use crate::{
 
 macro_rules! impl_for_tuple {
     ( $count:literal $($typ:ident $idx:tt)+ ) => {
-        impl<E: Env, $($typ),*> TryFrom<EnvVal<E, RawVal>> for ($($typ),*)
+        impl<E: Env, $($typ),*> TryFrom<EnvVal<E, RawVal>> for ($($typ,)*)
         where
             $($typ: TryFrom<EnvVal<E, RawVal>>),*
         {
@@ -28,12 +28,12 @@ macro_rules! impl_for_tuple {
                         let idx: u32 = $idx;
                         let val = env.vec_get(vec, idx.into());
                         $typ::try_from_val(&env, val).map_err(|_| ConversionError)?
-                    }),*
+                    },)*
                 ))
             }
         }
 
-        impl<E: Env, $($typ),*> IntoEnvVal<E, RawVal> for ($($typ),*)
+        impl<E: Env, $($typ),*> IntoEnvVal<E, RawVal> for ($($typ,)*)
         where
             $($typ: IntoEnvVal<E, RawVal>),*
         {
@@ -46,6 +46,8 @@ macro_rules! impl_for_tuple {
         }
     };
 }
+
+impl_for_tuple! {  1 T0 0 }
 impl_for_tuple! {  2 T0 0 T1 1 }
 impl_for_tuple! {  3 T0 0 T1 1 T2 2 }
 impl_for_tuple! {  4 T0 0 T1 1 T2 2 T3 3 }
