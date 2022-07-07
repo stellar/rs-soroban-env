@@ -326,7 +326,7 @@ fn vec_slice_and_cmp() -> Result<(), HostError> {
     let host = Host::default();
     let scvec: ScVec = vec![ScVal::U32(1), ScVal::U32(2), ScVal::U32(3)].try_into()?;
     let obj = host.to_host_obj(&ScObject::Vec(scvec))?;
-    let obj1 = host.vec_slice(obj.to_object(), 1u32.into(), 2u32.into())?;
+    let obj1 = host.vec_slice(obj.to_object(), 1u32.into(), 3u32.into())?;
     let scvec_ref: ScVec = vec![ScVal::U32(2), ScVal::U32(3)].try_into()?;
     let obj_ref = host.to_host_obj(&ScObject::Vec(scvec_ref))?;
     assert_eq!(host.obj_cmp(obj1.into(), obj_ref.into())?, 0);
@@ -338,13 +338,30 @@ fn vec_slice_and_cmp() -> Result<(), HostError> {
 }
 
 #[test]
-fn vec_slice_index_overflow() -> Result<(), HostError> {
+fn vec_slice_start_equal_to_end() -> Result<(), HostError> {
     let host = Host::default();
-    let scvec: ScVec = vec![ScVal::U32(1), ScVal::U32(2), ScVal::U32(3)].try_into()?;
-    let scobj = ScObject::Vec(scvec);
-    let obj = host.to_host_obj(&scobj)?;
+    let vec = ScObject::Vec(vec![ScVal::U32(1), ScVal::U32(2), ScVal::U32(3)].try_into()?);
+    let slice = host.from_host_obj(host.vec_slice(
+        host.to_host_obj(&vec)?.to_object(),
+        1_u32.into(),
+        1_u32.into(),
+    )?)?;
+    let want = ScObject::Vec(vec![].try_into()?);
+    assert_eq!(slice, want);
+    Ok(())
+}
+
+#[test]
+fn vec_slice_start_greater_than_end() -> Result<(), HostError> {
+    let host = Host::default();
+    let vec = ScObject::Vec(vec![ScVal::U32(1), ScVal::U32(2), ScVal::U32(3)].try_into()?);
+    let slice_result = host.vec_slice(
+        host.to_host_obj(&vec)?.to_object(),
+        2_u32.into(),
+        1_u32.into(),
+    );
     assert_matches!(
-        host.vec_slice(obj.to_object(), u32::MAX.into(), 1_u32.into()),
+        slice_result,
         Err(HostError::WithStatus(
             _,
             ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsInvalid)
@@ -354,7 +371,23 @@ fn vec_slice_index_overflow() -> Result<(), HostError> {
 }
 
 #[test]
-fn vec_slice_out_of_bound() -> Result<(), HostError> {
+fn vec_slice_start_out_of_bound() -> Result<(), HostError> {
+    let host = Host::default();
+    let scvec: ScVec = vec![ScVal::U32(1), ScVal::U32(2), ScVal::U32(3)].try_into()?;
+    let scobj = ScObject::Vec(scvec);
+    let obj = host.to_host_obj(&scobj)?;
+    assert_matches!(
+        host.vec_slice(obj.to_object(), 0_u32.into(), 4_u32.into()),
+        Err(HostError::WithStatus(
+            _,
+            ScStatus::HostObjectError(ScHostObjErrorCode::VecIndexOutOfBound)
+        ))
+    );
+    Ok(())
+}
+
+#[test]
+fn vec_slice_end_out_of_bound() -> Result<(), HostError> {
     let host = Host::default();
     let scvec: ScVec = vec![ScVal::U32(1), ScVal::U32(2), ScVal::U32(3)].try_into()?;
     let scobj = ScObject::Vec(scvec);
