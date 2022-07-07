@@ -1193,12 +1193,38 @@ fn binary_suite_of_tests() -> Result<(), HostError> {
 #[test]
 fn binary_xdr_roundtrip() -> Result<(), HostError> {
     let host = Host::default();
-    let scv: ScVec = vec![ScVal::U32(1), ScVal::U32(2)].try_into()?;
-    let sco = ScObject::Vec(scv);
-    let obj = host.to_host_obj(&sco)?;
-    let bo = host.serialize_to_binary(obj.clone().into())?;
-    let obj_back = host.deserialize_from_binary(bo)?;
-    assert_eq!(host.obj_cmp(obj.into(), obj_back.into())?, 0);
+    let roundtrip = |v: ScVal| -> Result<(), HostError> {
+        let rv: RawVal = host.to_host_val(&v)?.into();
+        let bo = host.serialize_to_binary(rv.clone())?;
+        let rv_back = host.deserialize_from_binary(bo)?;
+        assert_eq!(host.obj_cmp(rv, rv_back)?, 0);
+        Ok(())
+    };
+    // u63
+    roundtrip(ScVal::U63(5_i64))?;
+    // u32
+    roundtrip(ScVal::U32(23_u32))?;
+    // i32
+    roundtrip(ScVal::I32(-3_i32))?;
+    // static
+    roundtrip(ScVal::Static(ScStatic::True))?;
+    // object
+    {
+        // vec
+        let vec: ScVec = vec![ScVal::U32(1), ScVal::U32(2)].try_into()?;
+        let scval = ScVal::Object(Some(ScObject::Vec(vec)));
+        roundtrip(scval)?
+        // TODO: add other types
+    }
+    // Symbol
+    roundtrip(ScVal::Symbol("stellar".to_string().try_into()?))?;
+    // bitset
+    roundtrip(ScVal::Bitset(0xffffffff_u64))?;
+    // status
+    roundtrip(ScVal::Status(ScStatus::HostObjectError(
+        ScHostObjErrorCode::UnknownError,
+    )))?;
+
     Ok(())
 }
 
