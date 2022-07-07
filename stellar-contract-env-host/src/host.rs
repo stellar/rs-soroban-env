@@ -223,14 +223,14 @@ impl FrameGuard {
         if self.rollback.is_none() {
             panic!("committing on already-committed FrameGuard")
         }
-        self.rollback = None
+        self.rollback = None;
     }
 }
 
 impl Drop for FrameGuard {
     fn drop(&mut self) {
         let rollback = self.rollback.take();
-        self.host.pop_frame(rollback)
+        self.host.pop_frame(rollback);
     }
 }
 
@@ -277,7 +277,7 @@ impl Host {
     pub fn recover_storage(self) -> Result<Storage, Self> {
         Rc::try_unwrap(self.0)
             .map(|host_impl| host_impl.storage.into_inner())
-            .map_err(|rc_host_impl| Host(rc_host_impl))
+            .map_err(Host)
     }
 
     fn capture_rollback_point(&self) -> RollbackPoint {
@@ -349,10 +349,12 @@ impl Host {
     where
         F: FnOnce(&Frame) -> Result<U, HostError>,
     {
-        f(self.0.context.borrow().last().ok_or(HostError::WithStatus(
-            String::from("no contract currently running"),
-            ScStatus::HostContextError(ScHostContextErrorCode::NoContractRunning),
-        ))?)
+        f(self.0.context.borrow().last().ok_or_else(|| {
+            HostError::WithStatus(
+                String::from("no contract currently running"),
+                ScStatus::HostContextError(ScHostContextErrorCode::NoContractRunning),
+            )
+        })?)
     }
 
     /// Returns [`Hash`] contract ID from the VM frame at the top of the context
@@ -628,7 +630,7 @@ impl Host {
             ScObject::Vec(v) => {
                 let mut vv = Vector::new();
                 for e in v.0.iter() {
-                    vv.push_back(self.to_host_val(e)?)
+                    vv.push_back(self.to_host_val(e)?);
                 }
                 self.add_host_object(vv)
             }
@@ -773,7 +775,7 @@ impl Host {
                 ))
             }
         };
-        let vm = Vm::new(&self, id, code.as_slice())?;
+        let vm = Vm::new(self, id, code.as_slice())?;
         // Resolve the function symbol and invoke contract call
         vm.invoke_function_raw(self, SymbolStr::from(func).as_ref(), args)
     }
@@ -790,11 +792,11 @@ impl Host {
                 {
                     let mut frame_guard = self.push_host_function_frame(hf);
 
-                    let object: Object = self.to_host_obj(&scobj)?.to_object();
-                    let symbol: Symbol = scsym.as_slice().try_into()?;
+                    let object: Object = self.to_host_obj(scobj)?.to_object();
+                    let symbol: Symbol = scsym.try_into()?;
                     let mut raw_args: Vec<RawVal> = Vec::new();
                     for scv in rest.iter() {
-                        raw_args.push(self.to_host_val(&scv)?.val);
+                        raw_args.push(self.to_host_val(scv)?.val);
                     }
                     let res = self.call_n(object, symbol, &raw_args[..])?;
                     frame_guard.commit();
@@ -812,10 +814,10 @@ impl Host {
                 {
                     let mut frame_guard = self.push_host_function_frame(hf);
 
-                    let contract: Object = self.to_host_obj(&c_obj)?.to_object();
-                    let salt: Object = self.to_host_obj(&s_obj)?.to_object();
-                    let key: Object = self.to_host_obj(&k_obj)?.to_object();
-                    let signature: Object = self.to_host_obj(&sig_obj)?.to_object();
+                    let contract: Object = self.to_host_obj(c_obj)?.to_object();
+                    let salt: Object = self.to_host_obj(s_obj)?.to_object();
+                    let key: Object = self.to_host_obj(k_obj)?.to_object();
+                    let signature: Object = self.to_host_obj(sig_obj)?.to_object();
 
                     //TODO: should create_contract return a RawVal instead of Object to avoid this conversion?
                     let res = self.create_contract(contract, salt, key, signature)?;
@@ -834,11 +836,8 @@ impl Host {
 
     fn to_u256(&self, a: Object) -> Result<Uint256, HostError> {
         self.visit_obj(a, |bin: &Vec<u8>| {
-            Ok(Uint256(
-                bin.as_slice()
-                    .try_into()
-                    .map_err(|_| HostError::General("bad u256 length"))?,
-            ))
+            bin.try_into()
+                .map_err(|_| HostError::General("bad u256 length"))
         })
     }
 
@@ -878,11 +877,15 @@ impl EnvBase for Host {
                     vs.iter_mut().for_each(|v| v.env = new_weak.clone());
                 }
                 HostObject::Map(m) => {
-                    *m = HostMap::from_iter(m.clone().into_iter().map(|(mut k, mut v)| {
-                        k.env = new_weak.clone();
-                        v.env = new_weak.clone();
-                        (k, v)
-                    }))
+                    *m = m
+                        .clone()
+                        .into_iter()
+                        .map(|(mut k, mut v)| {
+                            k.env = new_weak.clone();
+                            v.env = new_weak.clone();
+                            (k, v)
+                        })
+                        .collect();
                 }
                 _ => (),
             }
@@ -1275,7 +1278,7 @@ impl CheckedEnv for Host {
         // Verify parameters
         let params = self.visit_obj(v, |bin: &Vec<u8>| {
             let separator = "create_contract(nonce: u256, contract: Vec<u8>, salt: u256, key: u256, sig: Vec<u8>)";
-            let params = [separator.as_bytes(), salt_val.0.as_slice(), bin].concat();
+            let params = [separator.as_bytes(), salt_val.as_ref(), bin].concat();
             Ok(params)
         })?;
         let hash = self.compute_hash_sha256(self.add_host_object(params)?.into())?;
@@ -1290,7 +1293,7 @@ impl CheckedEnv for Host {
         pre_image
             .write_xdr(&mut buf)
             .map_err(|_| HostError::General("invalid hash"))?;
-        Ok(self.create_contract_helper(v, buf)?)
+        self.create_contract_helper(v, buf)
     }
 
     fn create_contract_using_parent_id(
@@ -1312,7 +1315,7 @@ impl CheckedEnv for Host {
 
         let pre_image =
             xdr::HashIdPreimage::ContractIdFromContract(xdr::HashIdPreimageChildContractId {
-                contract_id: contract_id,
+                contract_id,
                 salt: salt_val,
             });
         let mut buf = Vec::new();
@@ -1320,7 +1323,7 @@ impl CheckedEnv for Host {
             .write_xdr(&mut buf)
             .map_err(|_| HostError::General("invalid hash"))?;
 
-        Ok(self.create_contract_helper(v, buf)?)
+        self.create_contract_helper(v, buf)
     }
 
     fn call(&self, contract: Object, func: Symbol, args: Object) -> Result<RawVal, HostError> {
@@ -1353,7 +1356,9 @@ impl CheckedEnv for Host {
     }
 
     fn bigint_to_u64(&self, x: Object) -> Result<u64, HostError> {
-        self.visit_obj(x, |bi: &BigInt| bi.to_u64().ok_or(ConversionError.into()))
+        self.visit_obj(x, |bi: &BigInt| {
+            bi.to_u64().ok_or_else(|| ConversionError.into())
+        })
     }
 
     fn bigint_from_i64(&self, x: i64) -> Result<Object, HostError> {
@@ -1361,7 +1366,9 @@ impl CheckedEnv for Host {
     }
 
     fn bigint_to_i64(&self, x: Object) -> Result<i64, HostError> {
-        self.visit_obj(x, |bi: &BigInt| bi.to_i64().ok_or(ConversionError.into()))
+        self.visit_obj(x, |bi: &BigInt| {
+            bi.to_i64().ok_or_else(|| ConversionError.into())
+        })
     }
 
     fn bigint_add(&self, x: Object, y: Object) -> Result<Object, HostError> {
@@ -1433,7 +1440,7 @@ impl CheckedEnv for Host {
                 if let Some(u) = b.to_usize() {
                     Ok(a.shl(u))
                 } else {
-                    return Err(HostError::General("left-shift overflow"));
+                    Err(HostError::General("left-shift overflow"))
                 }
             })
         })?;
@@ -1449,7 +1456,7 @@ impl CheckedEnv for Host {
                 if let Some(u) = b.to_usize() {
                     Ok(a.shr(u))
                 } else {
-                    return Err(HostError::General("right-shift overflow"));
+                    Err(HostError::General("right-shift overflow"))
                 }
             })
         })?;
@@ -1457,13 +1464,13 @@ impl CheckedEnv for Host {
     }
 
     fn bigint_cmp(&self, x: Object, y: Object) -> Result<RawVal, HostError> {
-        Ok(self.visit_obj(x, |a: &BigInt| {
+        self.visit_obj(x, |a: &BigInt| {
             self.visit_obj(y, |b: &BigInt| Ok((a.cmp(b) as i32).into()))
-        })?)
+        })
     }
 
     fn bigint_is_zero(&self, x: Object) -> Result<RawVal, HostError> {
-        Ok(self.visit_obj(x, |a: &BigInt| Ok(a.is_zero().into()))?)
+        self.visit_obj(x, |a: &BigInt| Ok(a.is_zero().into()))
     }
 
     fn bigint_neg(&self, x: Object) -> Result<Object, HostError> {
@@ -1495,7 +1502,7 @@ impl CheckedEnv for Host {
                 if let Some(u) = e.to_usize() {
                     Ok(Pow::pow(a, u))
                 } else {
-                    return Err(HostError::General("pow overflow"));
+                    Err(HostError::General("pow overflow"))
                 }
             })
         })?;
