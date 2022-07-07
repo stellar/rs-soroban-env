@@ -428,7 +428,9 @@ dependencies = [
  "hex",
  "im-rc",
  "num-bigint",
+ "num-integer",
  "num-rational",
+ "num-traits",
  "parity-wasm",
  "perf-event",
  "sha2 0.10.2",
@@ -446,7 +448,7 @@ version = "0.0.0"
 [[package]]
 name = "stellar-xdr"
 version = "0.0.0"
-source = "git+https://github.com/stellar/rs-stellar-xdr?rev=0b8fe26#0b8fe269f5468625294e110d496e7a24804bb9b8"
+source = "git+https://github.com/stellar/rs-stellar-xdr?rev=db2ca71#db2ca7176740fbd66f9684a1d6a55dfb53a225a5"
 dependencies = [
  "base64",
 ]

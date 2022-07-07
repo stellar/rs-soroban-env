@@ -328,7 +328,7 @@ fn vec_slice_and_cmp() -> Result<(), HostError> {
     let host = Host::default();
     let scvec: ScVec = vec![ScVal::U32(1), ScVal::U32(2), ScVal::U32(3)].try_into()?;
     let obj = host.to_host_obj(&ScObject::Vec(scvec))?;
-    let obj1 = host.vec_slice(obj.to_object(), 1u32.into(), 2u32.into())?;
+    let obj1 = host.vec_slice(obj.to_object(), 1u32.into(), 3u32.into())?;
     let scvec_ref: ScVec = vec![ScVal::U32(2), ScVal::U32(3)].try_into()?;
     let obj_ref = host.to_host_obj(&ScObject::Vec(scvec_ref))?;
     assert_eq!(host.obj_cmp(obj1.into(), obj_ref.into())?, 0);
@@ -340,13 +340,30 @@ fn vec_slice_and_cmp() -> Result<(), HostError> {
 }
 
 #[test]
-fn vec_slice_index_overflow() -> Result<(), HostError> {
+fn vec_slice_start_equal_to_end() -> Result<(), HostError> {
     let host = Host::default();
-    let scvec: ScVec = vec![ScVal::U32(1), ScVal::U32(2), ScVal::U32(3)].try_into()?;
-    let scobj = ScObject::Vec(scvec);
-    let obj = host.to_host_obj(&scobj)?;
+    let vec = ScObject::Vec(vec![ScVal::U32(1), ScVal::U32(2), ScVal::U32(3)].try_into()?);
+    let slice = host.from_host_obj(host.vec_slice(
+        host.to_host_obj(&vec)?.to_object(),
+        1_u32.into(),
+        1_u32.into(),
+    )?)?;
+    let want = ScObject::Vec(vec![].try_into()?);
+    assert_eq!(slice, want);
+    Ok(())
+}
+
+#[test]
+fn vec_slice_start_greater_than_end() -> Result<(), HostError> {
+    let host = Host::default();
+    let vec = ScObject::Vec(vec![ScVal::U32(1), ScVal::U32(2), ScVal::U32(3)].try_into()?);
+    let slice_result = host.vec_slice(
+        host.to_host_obj(&vec)?.to_object(),
+        2_u32.into(),
+        1_u32.into(),
+    );
     assert_matches!(
-        host.vec_slice(obj.to_object(), u32::MAX.into(), 1_u32.into()),
+        slice_result,
         Err(HostError::WithStatus(
             _,
             ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsInvalid)
@@ -356,7 +373,23 @@ fn vec_slice_index_overflow() -> Result<(), HostError> {
 }
 
 #[test]
-fn vec_slice_out_of_bound() -> Result<(), HostError> {
+fn vec_slice_start_out_of_bound() -> Result<(), HostError> {
+    let host = Host::default();
+    let scvec: ScVec = vec![ScVal::U32(1), ScVal::U32(2), ScVal::U32(3)].try_into()?;
+    let scobj = ScObject::Vec(scvec);
+    let obj = host.to_host_obj(&scobj)?;
+    assert_matches!(
+        host.vec_slice(obj.to_object(), 0_u32.into(), 4_u32.into()),
+        Err(HostError::WithStatus(
+            _,
+            ScStatus::HostObjectError(ScHostObjErrorCode::VecIndexOutOfBound)
+        ))
+    );
+    Ok(())
+}
+
+#[test]
+fn vec_slice_end_out_of_bound() -> Result<(), HostError> {
     let host = Host::default();
     let scvec: ScVec = vec![ScVal::U32(1), ScVal::U32(2), ScVal::U32(3)].try_into()?;
     let scobj = ScObject::Vec(scvec);
@@ -884,8 +917,6 @@ fn invoke_single_contract_function() -> Result<(), HostError> {
 #[cfg(feature = "vm")]
 #[test]
 fn invoke_cross_contract() -> Result<(), HostError> {
-    use im_rc::OrdMap;
-
     let contract_id: Hash = [0; 32].into();
     let key = ScVal::Static(ScStatic::LedgerKeyContractCodeWasm);
     let storage_key = LedgerKey::ContractData(LedgerKeyContractData {
@@ -942,8 +973,6 @@ fn invoke_cross_contract() -> Result<(), HostError> {
 #[cfg(feature = "vm")]
 #[test]
 fn invoke_cross_contract_with_err() -> Result<(), HostError> {
-    use im_rc::OrdMap;
-
     let contract_id: Hash = [0; 32].into();
     let key = ScVal::Static(ScStatic::LedgerKeyContractCodeWasm);
     let storage_key = LedgerKey::ContractData(LedgerKeyContractData {
@@ -1008,7 +1037,6 @@ fn invoke_cross_contract_with_err() -> Result<(), HostError> {
 #[cfg(feature = "vm")]
 #[test]
 fn invoke_cross_contract_lvl2_nested_with_err() -> Result<(), HostError> {
-    use im_rc::OrdMap;
     // 1st level, the calling contract
     let id0: Hash = [0; 32].into();
     let key = ScVal::Static(ScStatic::LedgerKeyContractCodeWasm);
@@ -1197,11 +1225,253 @@ fn binary_suite_of_tests() -> Result<(), HostError> {
 #[test]
 fn binary_xdr_roundtrip() -> Result<(), HostError> {
     let host = Host::default();
-    let scv: ScVec = vec![ScVal::U32(1), ScVal::U32(2)].try_into()?;
-    let sco = ScObject::Vec(scv);
-    let obj = host.to_host_obj(&sco)?;
-    let bo = host.serialize_to_binary(obj.clone().into())?;
-    let obj_back = host.deserialize_from_binary(bo)?;
-    assert_eq!(host.obj_cmp(obj.into(), obj_back.into())?, 0);
+    let roundtrip = |v: ScVal| -> Result<(), HostError> {
+        let rv: RawVal = host.to_host_val(&v)?.into();
+        let bo = host.serialize_to_binary(rv.clone())?;
+        let rv_back = host.deserialize_from_binary(bo)?;
+        assert_eq!(host.obj_cmp(rv, rv_back)?, 0);
+        Ok(())
+    };
+    // u63
+    roundtrip(ScVal::U63(5_i64))?;
+    // u32
+    roundtrip(ScVal::U32(23_u32))?;
+    // i32
+    roundtrip(ScVal::I32(-3_i32))?;
+    // static
+    roundtrip(ScVal::Static(ScStatic::True))?;
+    // object
+    {
+        // vec
+        let vec: ScVec = vec![ScVal::U32(1), ScVal::U32(2)].try_into()?;
+        let scval = ScVal::Object(Some(ScObject::Vec(vec)));
+        roundtrip(scval)?
+        // TODO: add other types
+    }
+    // Symbol
+    roundtrip(ScVal::Symbol("stellar".to_string().try_into()?))?;
+    // bitset
+    roundtrip(ScVal::Bitset(0xffffffff_u64))?;
+    // status
+    roundtrip(ScVal::Status(ScStatus::HostObjectError(
+        ScHostObjErrorCode::UnknownError,
+    )))?;
+
+    Ok(())
+}
+
+#[test]
+fn bigint_tests() -> Result<(), HostError> {
+    let host = Host::default();
+    let a: u64 = 2374340;
+    let b: i64 = -438730;
+    let obj_0 = host.bigint_from_i64(0)?;
+    let obj_a = host.bigint_from_u64(a)?;
+    let obj_b = host.bigint_from_i64(b)?;
+    // add
+    {
+        let obj_res = host.bigint_add(obj_a, obj_b)?;
+        let obj_ref = host.bigint_from_i64(a as i64 + b)?;
+        assert_eq!(host.obj_cmp(obj_res.into(), obj_ref.into())?, 0);
+    }
+    // sub
+    {
+        let obj_res = host.bigint_sub(obj_a, obj_b)?;
+        let obj_ref = host.bigint_from_i64(a as i64 - b)?;
+        assert_eq!(host.obj_cmp(obj_res.into(), obj_ref.into())?, 0);
+    }
+    // mul
+    {
+        let obj_res = host.bigint_mul(obj_a, obj_b)?;
+        let obj_ref = host.bigint_from_i64(a as i64 * b)?;
+        assert_eq!(host.obj_cmp(obj_res.into(), obj_ref.into())?, 0);
+    }
+    // div
+    {
+        let obj_res = host.bigint_div(obj_a, obj_b)?;
+        let obj_ref = host.bigint_from_i64(a as i64 / b)?;
+        assert_eq!(host.obj_cmp(obj_res.into(), obj_ref.into())?, 0);
+        // div by 0
+        assert_matches!(
+            host.bigint_div(obj_a, obj_0),
+            Err(HostError::General("bigint division by zero"))
+        );
+    }
+    // rem
+    {
+        let obj_res = host.bigint_rem(obj_a, obj_b)?;
+        let obj_ref = host.bigint_from_i64(a as i64 % b)?;
+        assert_eq!(host.obj_cmp(obj_res.into(), obj_ref.into())?, 0);
+        // div by 0
+        assert_matches!(
+            host.bigint_rem(obj_a, obj_0),
+            Err(HostError::General("bigint division by zero"))
+        );
+    }
+    // and
+    {
+        let obj_res = host.bigint_and(obj_a, obj_b)?;
+        let obj_ref = host.bigint_from_i64(a as i64 & b)?;
+        assert_eq!(host.obj_cmp(obj_res.into(), obj_ref.into())?, 0);
+    }
+    // or
+    {
+        let obj_res = host.bigint_or(obj_a, obj_b)?;
+        let obj_ref = host.bigint_from_i64(a as i64 | b)?;
+        assert_eq!(host.obj_cmp(obj_res.into(), obj_ref.into())?, 0);
+    }
+    // xor
+    {
+        let obj_res = host.bigint_xor(obj_a, obj_b)?;
+        let obj_ref = host.bigint_from_i64(a as i64 ^ b)?;
+        assert_eq!(host.obj_cmp(obj_res.into(), obj_ref.into())?, 0);
+    }
+    // shl
+    {
+        let obj_res = host.bigint_shl(obj_a, host.bigint_from_i64(5)?)?;
+        let obj_ref = host.bigint_from_u64(a << 5)?;
+        assert_eq!(host.obj_cmp(obj_res.into(), obj_ref.into())?, 0);
+        assert_matches!(
+            host.bigint_shl(obj_a, host.bigint_from_i64(-5)?),
+            Err(HostError::General("attempt to shift left with negative"))
+        );
+        // a 65-bit integer
+        let obj_c = host.bigint_shl(host.bigint_from_u64(u64::MAX)?, host.bigint_from_i64(1)?)?;
+        assert_matches!(
+            host.bigint_shl(obj_a, obj_c),
+            Err(HostError::General("left-shift overflow"))
+        );
+    }
+    // shr
+    {
+        let obj_res = host.bigint_shr(obj_a, host.bigint_from_i64(5)?)?;
+        let obj_ref = host.bigint_from_u64(a >> 5)?;
+        assert_eq!(host.obj_cmp(obj_res.into(), obj_ref.into())?, 0);
+        assert_matches!(
+            host.bigint_shr(obj_a, host.bigint_from_i64(-5)?),
+            Err(HostError::General("attempt to shift right with negative"))
+        );
+        // a 65-bit integer
+        let obj_c = host.bigint_shl(host.bigint_from_u64(u64::MAX)?, host.bigint_from_i64(1)?)?;
+        assert_matches!(
+            host.bigint_shr(obj_a, obj_c),
+            Err(HostError::General("right-shift overflow"))
+        );
+    }
+    // cmp
+    {
+        use std::cmp::Ordering;
+        let ord_greater: i32 = host.bigint_cmp(obj_a, obj_b)?.try_into()?;
+        let ord_less: i32 = host.bigint_cmp(obj_b, obj_a)?.try_into()?;
+        let obj3 = host.bigint_from_u64(a)?;
+        let ord_equal: i32 = host.bigint_cmp(obj_a, obj3)?.try_into()?;
+        assert_eq!(ord_greater, Ordering::Greater as i32);
+        assert_eq!(ord_less, Ordering::Less as i32);
+        assert_eq!(ord_equal, Ordering::Equal as i32);
+    }
+    // is zero
+    {
+        let f = RawVal::from_bool(false);
+        let t = RawVal::from_bool(true);
+        assert_eq!(host.bigint_is_zero(obj_a)?.get_payload(), f.get_payload());
+        assert_eq!(host.bigint_is_zero(obj_b)?.get_payload(), f.get_payload());
+        assert_eq!(host.bigint_is_zero(obj_0)?.get_payload(), t.get_payload());
+    }
+    // neg
+    {
+        let obj_res = host.bigint_neg(obj_b)?;
+        let obj_ref = host.bigint_from_i64(-b)?;
+        assert_eq!(host.obj_cmp(obj_res.into(), obj_ref.into())?, 0);
+        assert_eq!(
+            host.obj_cmp(host.bigint_neg(obj_res)?.into(), obj_b.into())?,
+            0
+        );
+    }
+    // not
+    {
+        let obj_res = host.bigint_not(obj_b)?;
+        let obj_ref = host.bigint_from_i64(!b)?;
+        assert_eq!(host.obj_cmp(obj_res.into(), obj_ref.into())?, 0);
+        assert_eq!(
+            host.obj_cmp(host.bigint_not(obj_res)?.into(), obj_b.into())?,
+            0
+        );
+    }
+    // gcd
+    {
+        let obj_res = host.bigint_gcd(obj_a, obj_b)?;
+        let obj_ref = host.bigint_from_i64(10)?;
+        assert_eq!(host.obj_cmp(obj_res.into(), obj_ref.into())?, 0);
+        // gcd by 0 is self
+        let obj_res = host.bigint_gcd(obj_a, obj_0)?;
+        assert_eq!(host.obj_cmp(obj_res.into(), obj_a.into())?, 0);
+        // gcd of (0, 0) is 0
+        let obj_res = host.bigint_gcd(obj_0, obj_0)?;
+        assert_eq!(host.obj_cmp(obj_res.into(), obj_0.into())?, 0);
+    }
+    // lcm
+    {
+        let obj_res = host.bigint_lcm(obj_a, obj_b)?;
+        let obj_ref = host.bigint_from_i64(104169418820)?;
+        assert_eq!(host.obj_cmp(obj_res.into(), obj_ref.into())?, 0);
+        // lcm by 0 is 0
+        let obj_res = host.bigint_lcm(obj_a, obj_0)?;
+        assert_eq!(host.obj_cmp(obj_res.into(), obj_0.into())?, 0);
+        // lcm of (0, 0) is 0
+        let obj_res = host.bigint_lcm(obj_0, obj_0)?;
+        assert_eq!(host.obj_cmp(obj_res.into(), obj_0.into())?, 0);
+    }
+    // pow
+    {
+        let obj_res = host.bigint_pow(obj_b, host.bigint_from_u64(2_u32.into())?)?;
+        let obj_ref = host.bigint_from_i64(192484012900)?;
+        assert_eq!(host.obj_cmp(obj_res.into(), obj_ref.into())?, 0);
+        let obj_res = host.bigint_pow(obj_b, host.bigint_from_u64(0_u32.into())?)?;
+        let obj_ref = host.bigint_from_i64(1)?;
+        assert_eq!(host.obj_cmp(obj_res.into(), obj_ref.into())?, 0);
+        assert_matches!(
+            host.bigint_pow(obj_b, host.bigint_from_i64(-1)?),
+            Err(HostError::General("negative exponentiation not supported"))
+        );
+        // a 65-bit integer
+        let obj_c = host.bigint_shl(host.bigint_from_u64(u64::MAX)?, host.bigint_from_i64(1)?)?;
+        assert_matches!(
+            host.bigint_pow(obj_b, obj_c),
+            Err(HostError::General("pow overflow"))
+        );
+    }
+    // pow_mod
+    {
+        let obj_2 = host.bigint_from_i64(2)?;
+        let obj_res = host.bigint_pow_mod(obj_a, obj_2, obj_b)?;
+        let obj_ref = host.bigint_from_i64(-94310)?;
+        assert_eq!(host.obj_cmp(obj_res.into(), obj_ref.into())?, 0);
+
+        assert_matches!(
+            host.bigint_pow_mod(obj_a, obj_b, obj_2),
+            Err(HostError::General("negative exponentiation not supported"))
+        );
+        assert_matches!(
+            host.bigint_pow_mod(obj_a, obj_2, obj_0),
+            Err(HostError::General("zero modulus not supported"))
+        );
+    }
+    // sqrt
+    {
+        let obj_res = host.bigint_sqrt(obj_a)?;
+        let obj_ref = host.bigint_from_i64(1540)?;
+        assert_eq!(host.obj_cmp(obj_res.into(), obj_ref.into())?, 0);
+        assert_matches!(
+            host.bigint_sqrt(obj_b),
+            Err(HostError::General("sqrt is imaginary"))
+        );
+    }
+    // bits
+    {
+        assert_eq!(host.bigint_bits(obj_a)?, 22);
+        assert_eq!(host.bigint_bits(obj_b)?, 19);
+        assert_eq!(host.bigint_bits(obj_0)?, 0);
+    }
+
     Ok(())
 }

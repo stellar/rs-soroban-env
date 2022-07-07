@@ -146,9 +146,9 @@ macro_rules! call_macro_with_all_host_functions {
                 /// Clone the vector `v1`, then moves all the elements of vector `v2` into it.
                 /// Return the new vector. Traps if number of elements in the vector overflows a u32.
                 {"9", fn vec_append(v1:Object, v2:Object) -> Object}
-                /// Copy the elements from `i` until length `l` in the vector and create a new vector from it.
+                /// Copy the elements from `start` index until `end` index, exclusive, in the vector and create a new vector from it.
                 /// Return the new vector. Traps if the index is out of bound.
-                {"A", fn vec_slice(v:Object, i:RawVal, l:RawVal) -> Object}
+                {"A", fn vec_slice(v:Object, start:RawVal, end:RawVal) -> Object}
             }
 
             mod ledger "l" {
@@ -171,37 +171,63 @@ macro_rules! call_macro_with_all_host_functions {
             }
 
             mod bigint "g" {
+                /// Constructs a BigInt from an u64.
                 {"_", fn bigint_from_u64(x:u64) -> Object}
+                /// Converts a BigInt to an u64. Traps if the value cannot fit into u64.
                 {"0", fn bigint_to_u64(x:Object) -> u64}
+                /// Constructs a BigInt from an i64.
                 {"1", fn bigint_from_i64(x:i64) -> Object}
+                /// Converts a BigInt to an i64. Traps if the value cannot fit into i64.
                 {"2", fn bigint_to_i64(x:Object) -> i64}
+                /// Performs the `+` operation.
                 {"3", fn bigint_add(x:Object, y:Object) -> Object}
+                /// Performs the `-` operation.
                 {"4", fn bigint_sub(x:Object, y:Object) -> Object}
+                /// Performs the `*` operation.
                 {"5", fn bigint_mul(x:Object, y:Object) -> Object}
+                /// Performs the `/` operation. Traps if `y` is zero.
                 {"6", fn bigint_div(x:Object, y:Object) -> Object}
+                /// Performs the `%` operation. Traps if `y` is zero.
                 {"7", fn bigint_rem(x:Object, y:Object) -> Object}
+                /// Performs the `&` operation.
                 {"8", fn bigint_and(x:Object, y:Object) -> Object}
+                /// Performs the `|` operation.
                 {"9", fn bigint_or(x:Object, y:Object) -> Object}
+                /// Performs the `^` operation.
                 {"A", fn bigint_xor(x:Object, y:Object) -> Object}
-                {"B", fn bigint_shl(x:Object, y:RawVal) -> Object}
-                {"C", fn bigint_shr(x:Object, y:RawVal) -> Object}
+                /// Performs the `<<` operation. Traps if `y` is negative or larger than the size of u64.
+                {"B", fn bigint_shl(x:Object, y:Object) -> Object}
+                /// Performs the `>>` operation. Traps if `y` is negative or larger than the size of u64.
+                {"C", fn bigint_shr(x:Object, y:Object) -> Object}
+                /// Returns an ordering between `x` and `y`: -1 (less), 0 (equal) or 1 (greater).
                 {"D", fn bigint_cmp(x:Object, y:Object) -> RawVal}
+                /// Returns true if `x` is equal to the additive identity.
                 {"E", fn bigint_is_zero(x:Object) -> RawVal}
+                /// Performs the unary `-` operation.
                 {"F", fn bigint_neg(x:Object) -> Object}
+                /// Performs the unary `!` operation.
                 {"G", fn bigint_not(x:Object) -> Object}
+                /// Calculates the Greatest Common Divisor (GCD) of `x` and `y`.
                 {"H", fn bigint_gcd(x:Object, y:Object) -> Object}
+                /// Calculates the Lowest Common Multiple (LCM) of `x` and `y`.
                 {"I", fn bigint_lcm(x:Object, y:Object) -> Object}
+                /// Calculates `x` to the power `y`. Traps if `y` is negative or larger than the size of u64.
                 {"J", fn bigint_pow(x:Object, y:Object) -> Object}
+                /// Calculates `(p ^ q) mod m`. Note that this rounds like `mod_floor`, not like the `%` operator, which makes a difference when given a negative `p` or `m`.
+                /// The result will be in the interval `[0, m)` for `m > 0`, or in the interval `(m, 0]` for `m < 0`.
+                /// Traps if the `q` is negative or the `m` is zero.
                 {"K", fn bigint_pow_mod(p:Object, q:Object, m:Object) -> Object}
+                /// Calculates the truncated principal square root of `x`. Traps if `x` is negative.
                 {"L", fn bigint_sqrt(x:Object) -> Object}
-                {"M", fn bigint_bits(x:Object) -> RawVal}
+                /// Determines the fewest bits necessary to express `x`, not including the sign.
+                {"M", fn bigint_bits(x:Object) -> u64}
             }
 
             mod binary "b" {
-                /// Serializes an (SC)Object into XDR opaque binary array.
-                {"_", fn serialize_to_binary(b:Object) -> Object}
-                /// Deserialize a binary array to get back the XDR (SC)Object.
-                {"0", fn deserialize_from_binary(b:Object) -> Object}
+                /// Serializes an (SC)Val into XDR opaque binary array.
+                {"_", fn serialize_to_binary(v:RawVal) -> Object}
+                /// Deserialize a binary array to get back the (SC)Val.
+                {"0", fn deserialize_from_binary(b:Object) -> RawVal}
                 {"1", fn binary_copy_to_guest_mem(b:Object, i:RawVal, j:RawVal, l:RawVal) -> RawVal}
                 {"2", fn binary_copy_from_guest_mem(b:Object, i:RawVal, j:RawVal, l:RawVal) -> RawVal}
                 // These functions below ($3-$F) mirror vector operations
