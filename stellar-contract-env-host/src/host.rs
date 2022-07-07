@@ -1546,20 +1546,20 @@ impl CheckedEnv for Host {
         self.visit_obj(x, |a: &BigInt| Ok(a.bits()))
     }
 
-    fn serialize_to_binary(&self, b: Object) -> Result<Object, HostError> {
-        let sco = self.from_host_obj(b)?;
+    fn serialize_to_binary(&self, v: RawVal) -> Result<Object, HostError> {
+        let scv = self.from_host_val(v)?;
         let mut buf = Vec::<u8>::new();
-        sco.write_xdr(&mut buf)
-            .map_err(|_| HostError::General("failed to serialize object"))?;
+        scv.write_xdr(&mut buf)
+            .map_err(|_| HostError::General("failed to serialize ScVal"))?;
         Ok(self.add_host_object(buf)?.into())
     }
 
-    fn deserialize_from_binary(&self, b: Object) -> Result<Object, HostError> {
-        let sco = self.visit_obj(b, |hv: &Vec<u8>| {
-            ScObject::read_xdr(&mut hv.as_slice())
-                .map_err(|_| HostError::General("failed to de-serialize object"))
+    fn deserialize_from_binary(&self, b: Object) -> Result<RawVal, HostError> {
+        let scv = self.visit_obj(b, |hv: &Vec<u8>| {
+            ScVal::read_xdr(&mut hv.as_slice())
+                .map_err(|_| HostError::General("failed to de-serialize ScVal"))
         })?;
-        Ok(self.to_host_obj(&sco)?.into())
+        Ok(self.to_host_val(&scv)?.into())
     }
 
     fn binary_copy_to_linear_memory(

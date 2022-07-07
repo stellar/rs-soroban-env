@@ -224,10 +224,10 @@ macro_rules! call_macro_with_all_host_functions {
             }
 
             mod binary "b" {
-                /// Serializes an (SC)Object into XDR opaque binary array.
-                {"_", fn serialize_to_binary(b:Object) -> Object}
-                /// Deserializes a binary array to get back the XDR (SC)Object.
-                {"0", fn deserialize_from_binary(b:Object) -> Object}
+                /// Serializes an (SC)Val into XDR opaque binary array.
+                {"_", fn serialize_to_binary(v:RawVal) -> Object}
+                /// Deserialize a binary array to get back the (SC)Val.
+                {"0", fn deserialize_from_binary(b:Object) -> RawVal}
                 /// Copies a slice of bytes from a binary array specified at offset `b_pos` with length `len` into the linear memory at position `lm_pos`.
                 /// Traps if either the binary array or the linear memory doesn't have enough bytes.
                 {"1", fn binary_copy_to_linear_memory(b:Object, b_pos:RawVal, lm_pos:RawVal, len:RawVal) -> RawVal}
