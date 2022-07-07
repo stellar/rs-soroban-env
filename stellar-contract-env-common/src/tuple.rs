@@ -46,6 +46,7 @@ macro_rules! impl_for_tuple {
         }
     };
 }
+
 impl_for_tuple! {  1 T0 0 }
 impl_for_tuple! {  2 T0 0 T1 1 }
 impl_for_tuple! {  3 T0 0 T1 1 T2 2 }
