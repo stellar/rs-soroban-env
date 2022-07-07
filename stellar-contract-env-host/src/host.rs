@@ -38,7 +38,7 @@ use crate::SymbolStr;
 use crate::Vm;
 use crate::{
     BitSet, BitSetError, ConversionError, EnvBase, IntoEnvVal, Object, RawVal, RawValConvertible,
-    Status, Symbol, SymbolError, Tag, Val, UNKNOWN_ERROR,
+    Static, Status, Symbol, SymbolError, Tag, Val, UNKNOWN_ERROR,
 };
 
 use thiserror::Error;
@@ -435,14 +435,16 @@ impl Host {
                     <i32 as RawValConvertible>::unchecked_from_val(val)
                 })),
                 Tag::Static => {
-                    if let Some(b) = <bool as RawValConvertible>::try_convert(val) {
-                        if b {
-                            Ok(ScVal::Static(ScStatic::True))
-                        } else {
-                            Ok(ScVal::Static(ScStatic::False))
-                        }
-                    } else if <() as RawValConvertible>::is_val_type(val) {
+                    let tag_static =
+                        unsafe { <Static as RawValConvertible>::unchecked_from_val(val) };
+                    if tag_static.is_type(ScStatic::True) {
+                        Ok(ScVal::Static(ScStatic::True))
+                    } else if tag_static.is_type(ScStatic::False) {
+                        Ok(ScVal::Static(ScStatic::False))
+                    } else if tag_static.is_type(ScStatic::Void) {
                         Ok(ScVal::Static(ScStatic::Void))
+                    } else if tag_static.is_type(ScStatic::LedgerKeyContractCodeWasm) {
+                        Ok(ScVal::Static(ScStatic::LedgerKeyContractCodeWasm))
                     } else {
                         Err(HostError::WithStatus(
                             String::from("unknown Tag::Static case"),
@@ -1212,6 +1214,14 @@ impl CheckedEnv for Host {
     }
 
     fn put_contract_data(&self, k: RawVal, v: RawVal) -> Result<RawVal, HostError> {
+        let data_key = self.from_host_val(k)?;
+        if data_key == ScVal::Static(ScStatic::LedgerKeyContractCodeWasm) {
+            return Err(HostError::WithStatus(
+                String::from("cannot update contract code"),
+                ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsInvalid),
+            ));
+        }
+
         let key = self.to_storage_key(k)?;
         let data = LedgerEntryData::ContractData(ContractDataEntry {
             contract_id: self.get_current_contract_id()?,
@@ -1249,6 +1259,13 @@ impl CheckedEnv for Host {
     }
 
     fn del_contract_data(&self, k: RawVal) -> Result<RawVal, HostError> {
+        if self.from_host_val(k)? == ScVal::Static(ScStatic::LedgerKeyContractCodeWasm) {
+            return Err(HostError::WithStatus(
+                String::from("cannot delete contract code"),
+                ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsInvalid),
+            ));
+        }
+
         let key = self.to_storage_key(k)?;
         self.0.storage.borrow_mut().del(&key)?;
         Ok(().into())

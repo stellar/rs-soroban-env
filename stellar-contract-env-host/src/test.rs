@@ -1,21 +1,26 @@
 use crate::{
     xdr::{
-        LedgerEntryData, LedgerKey, LedgerKeyContractData, ScHostFnErrorCode, ScHostObjErrorCode,
-        ScObject, ScObjectType, ScStatic, ScStatus, ScVal, ScVec,
+        ScHostFnErrorCode, ScHostObjErrorCode, ScObject, ScObjectType, ScStatic, ScStatus, ScVal,
+        ScVec,
     },
     Host, HostError, IntoEnvVal, Object, RawVal, Tag,
 };
 
-use crate::xdr;
-
-use im_rc::OrdMap;
 use stellar_contract_env_common::{
-    xdr::{ScMap, ScMapEntry, WriteXdr},
+    xdr::{ScMap, ScMapEntry},
     CheckedEnv, RawValConvertible,
 };
 
-use crate::storage::{AccessType, Footprint, Storage};
 use hex::FromHex;
+
+#[cfg(any(feature = "vm", feature = "testutils"))]
+use crate::storage::{AccessType, Footprint, Storage};
+#[cfg(any(feature = "vm", feature = "testutils"))]
+use crate::xdr::{self, LedgerEntryData, LedgerKey, LedgerKeyContractData};
+#[cfg(any(feature = "vm", feature = "testutils"))]
+use im_rc::OrdMap;
+#[cfg(any(feature = "vm", feature = "testutils"))]
+use stellar_contract_env_common::xdr::WriteXdr;
 
 #[cfg(feature = "vm")]
 use crate::Vm;
@@ -589,6 +594,7 @@ fn ed25519_verify_test() -> Result<(), HostError> {
     Ok(())
 }
 
+#[cfg(any(feature = "vm", feature = "testutils"))]
 fn sha256_hash_id_preimage(pre_image: xdr::HashIdPreimage) -> xdr::Hash {
     use sha2::{Digest, Sha256};
 
@@ -600,6 +606,7 @@ fn sha256_hash_id_preimage(pre_image: xdr::HashIdPreimage) -> xdr::Hash {
     xdr::Hash(Sha256::digest(buf).try_into().expect("invalid hash"))
 }
 
+#[cfg(any(feature = "vm", feature = "testutils"))]
 fn check_new_code(host: &Host, storage_key: LedgerKey, code: ScVal) {
     host.visit_storage(|s: &mut Storage| {
         assert!(s.has(&storage_key)?);
@@ -613,13 +620,14 @@ fn check_new_code(host: &Host, storage_key: LedgerKey, code: ScVal) {
     .unwrap();
 }
 
+#[cfg(any(feature = "vm", feature = "testutils"))]
 /// create contract tests
 fn create_contract_test_helper(
     secret: &[u8],
     public: &[u8],
     salt: &[u8],
     code: &[u8],
-    sig_preimage: Vec<u8>,
+    sig_preimage: &Vec<u8>,
 ) -> Result<Host, HostError> {
     use ed25519_dalek::{
         Keypair, PublicKey, SecretKey, Signature, Signer, PUBLIC_KEY_LENGTH, SECRET_KEY_LENGTH,
@@ -697,6 +705,7 @@ fn create_contract_test_helper(
     Ok(host)
 }
 
+#[cfg(feature = "testutils")]
 #[test]
 fn create_contract_test() -> Result<(), HostError> {
     let secret_key: &[u8] = b"9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60";
@@ -710,19 +719,50 @@ fn create_contract_test() -> Result<(), HostError> {
     let salt_bytes: Vec<u8> = FromHex::from_hex(salt).unwrap();
     let sig_preimage = [separator.as_bytes(), salt_bytes.as_slice(), code].concat();
 
-    // valid signature
-    assert!(
-        create_contract_test_helper(secret_key, public_key, salt, code, sig_preimage.clone())
-            .is_ok()
-    );
-
-    //Incorrect separator
+    // Incorrect separator
     let bad_sep = ["d".as_bytes(), salt_bytes.as_slice(), code].concat();
-    assert!(create_contract_test_helper(secret_key, public_key, salt, code, bad_sep).is_err());
+    assert!(create_contract_test_helper(secret_key, public_key, salt, code, &bad_sep).is_err());
 
     // wrong public key
     let bad_pub: &[u8] = b"3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4660c";
-    assert!(create_contract_test_helper(secret_key, bad_pub, salt, code, sig_preimage).is_err());
+    assert!(create_contract_test_helper(secret_key, bad_pub, salt, code, &sig_preimage).is_err());
+
+    // Create a valid contract, and then try to update and remove it
+    let host = create_contract_test_helper(secret_key, public_key, salt, code, &sig_preimage)?;
+
+    let pub_bytes: Vec<u8> = FromHex::from_hex(public_key).unwrap();
+    let id_pre_image = xdr::HashIdPreimage::ContractIdFromEd25519(xdr::HashIdPreimageContractId {
+        ed25519: xdr::Uint256(pub_bytes.as_slice().try_into().unwrap()),
+        salt: xdr::Uint256(salt_bytes.as_slice().try_into().unwrap()),
+    });
+
+    let hash = sha256_hash_id_preimage(id_pre_image);
+    let hash_obj: Object = host.add_host_object(hash.0.to_vec())?.into();
+
+    //Push the contract id onto the stack to simulate a contract call
+    let _frame_guard = host.push_test_frame(hash_obj)?;
+
+    let key = ScVal::Static(ScStatic::LedgerKeyContractCodeWasm);
+
+    // update
+    let put_res = host.put_contract_data(host.to_host_val(&key)?.to_raw(), ().into());
+    assert_matches!(
+        put_res,
+        Err(HostError::WithStatus(
+            _,
+            ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsInvalid)
+        ))
+    );
+
+    // delete
+    let del_res = host.del_contract_data(host.to_host_val(&key)?.to_raw());
+    assert_matches!(
+        del_res,
+        Err(HostError::WithStatus(
+            _,
+            ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsInvalid)
+        ))
+    );
     Ok(())
 }
 
@@ -773,14 +813,9 @@ fn create_contract_using_parent_id_test() {
     let salt_bytes: Vec<u8> = FromHex::from_hex(salt).unwrap();
     let sig_preimage = [separator.as_bytes(), salt_bytes.as_slice(), code.as_slice()].concat();
 
-    let host = create_contract_test_helper(
-        secret_key,
-        public_key,
-        salt,
-        code.as_slice(),
-        sig_preimage.clone(),
-    )
-    .unwrap();
+    let host =
+        create_contract_test_helper(secret_key, public_key, salt, code.as_slice(), &sig_preimage)
+            .unwrap();
 
     // Get parent contractID
     let pub_bytes: Vec<u8> = FromHex::from_hex(public_key).unwrap();
