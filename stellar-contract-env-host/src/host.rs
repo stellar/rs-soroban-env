@@ -1174,33 +1174,39 @@ impl CheckedEnv for Host {
         Ok(self.add_host_object(vnew)?.into())
     }
 
-    fn vec_slice(&self, v: Object, i: RawVal, l: RawVal) -> Result<Object, HostError> {
-        let i: usize = u32::try_from(i).map_err(|_| {
+    fn vec_slice(&self, v: Object, start: RawVal, end: RawVal) -> Result<Object, HostError> {
+        let start: usize = u32::try_from(start).map_err(|_| {
             HostError::WithStatus(
-                String::from("i must be u32"),
+                String::from("start must be u32"),
                 ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsWrongType),
             )
         })? as usize;
-        let l: usize = u32::try_from(l).map_err(|_| {
+        let end: usize = u32::try_from(end).map_err(|_| {
             HostError::WithStatus(
-                String::from("l must be u32"),
+                String::from("end must be u32"),
                 ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsWrongType),
             )
         })? as usize;
+        if start > end {
+            return Err(HostError::WithStatus(
+                String::from("start greater than end"),
+                ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsInvalid),
+            ));
+        }
         let vnew = self.visit_obj(v, move |hv: &HostVec| {
-            if i > u32::MAX as usize - l {
+            if start > hv.len() {
                 return Err(HostError::WithStatus(
-                    String::from("u32 overflow"),
-                    ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsInvalid),
-                ));
-            }
-            if (i + l) > hv.len() {
-                return Err(HostError::WithStatus(
-                    String::from("index out of bound"),
+                    String::from("start out of bounds"),
                     ScStatus::HostObjectError(ScHostObjErrorCode::VecIndexOutOfBound),
                 ));
             }
-            Ok(hv.clone().slice(i..(i + l)))
+            if end > hv.len() {
+                return Err(HostError::WithStatus(
+                    String::from("end out of bounds"),
+                    ScStatus::HostObjectError(ScHostObjErrorCode::VecIndexOutOfBound),
+                ));
+            }
+            Ok(hv.clone().slice(start..end))
         })?;
         Ok(self.add_host_object(vnew)?.into())
     }
