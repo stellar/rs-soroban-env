@@ -1,5 +1,8 @@
 use crate::{
-    xdr::{ScHostFnErrorCode, ScHostObjErrorCode, ScObject, ScObjectType, ScStatus, ScVal, ScVec},
+    xdr::{
+        ScHostFnErrorCode, ScHostObjErrorCode, ScObject, ScObjectType, ScStatic, ScStatus, ScVal,
+        ScVec,
+    },
     Host, HostError, IntoEnvVal, Object, RawVal, Tag,
 };
 
@@ -13,7 +16,7 @@ use hex::FromHex;
 #[cfg(any(feature = "vm", feature = "testutils"))]
 use crate::storage::{AccessType, Footprint, Storage};
 #[cfg(any(feature = "vm", feature = "testutils"))]
-use crate::xdr::{self, LedgerEntryData, LedgerKey, LedgerKeyContractData, ScStatic};
+use crate::xdr::{self, LedgerEntryData, LedgerKey, LedgerKeyContractData};
 #[cfg(any(feature = "vm", feature = "testutils"))]
 use im_rc::OrdMap;
 #[cfg(any(feature = "vm", feature = "testutils"))]
