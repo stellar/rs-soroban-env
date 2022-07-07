@@ -1217,7 +1217,7 @@ impl CheckedEnv for Host {
         let data_key = self.from_host_val(k)?;
         if data_key == ScVal::Static(ScStatic::LedgerKeyContractCodeWasm) {
             return Err(HostError::WithStatus(
-                String::from("Cannot update contract code"),
+                String::from("cannot update contract code"),
                 ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsInvalid),
             ));
         }
