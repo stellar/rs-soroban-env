@@ -224,10 +224,10 @@ macro_rules! call_macro_with_all_host_functions {
             }
 
             mod binary "b" {
-                /// Serializes an (SC)Object into XDR opaque binary array.
-                {"_", fn serialize_to_binary(b:Object) -> Object}
-                /// Deserialize a binary array to get back the XDR (SC)Object.
-                {"0", fn deserialize_from_binary(b:Object) -> Object}
+                /// Serializes an (SC)Val into XDR opaque binary array.
+                {"_", fn serialize_to_binary(v:RawVal) -> Object}
+                /// Deserialize a binary array to get back the (SC)Val.
+                {"0", fn deserialize_from_binary(b:Object) -> RawVal}
                 {"1", fn binary_copy_to_guest_mem(b:Object, i:RawVal, j:RawVal, l:RawVal) -> RawVal}
                 {"2", fn binary_copy_from_guest_mem(b:Object, i:RawVal, j:RawVal, l:RawVal) -> RawVal}
                 // These functions below ($3-$F) mirror vector operations
