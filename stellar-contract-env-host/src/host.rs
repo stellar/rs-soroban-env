@@ -1570,7 +1570,7 @@ impl CheckedEnv for Host {
         len: RawVal,
     ) -> Result<RawVal, HostError> {
         #[cfg(not(feature = "vm"))]
-        todo!();
+        unimplemented!();
         #[cfg(feature = "vm")]
         if let [b_pos, lm_pos, len] = [b_pos, lm_pos, len]
             .iter()
@@ -1621,7 +1621,7 @@ impl CheckedEnv for Host {
         len: RawVal,
     ) -> Result<Object, HostError> {
         #[cfg(not(feature = "vm"))]
-        todo!();
+        unimplemented!();
         #[cfg(feature = "vm")]
         if let [b_pos, lm_pos, len] = [b_pos, lm_pos, len]
             .iter()
@@ -1638,7 +1638,7 @@ impl CheckedEnv for Host {
             })? as usize;
             self.with_current_frame(|frame| match frame {
                 Frame::ContractVM(vm) => vm.with_memory_access(|mem| {
-                    /* we would potentially let the vec grow */
+                    // we would potentially let the vec grow
                     if end_idx > vnew.len() {
                         vnew.resize(end_idx, 0);
                     }
@@ -1667,7 +1667,7 @@ impl CheckedEnv for Host {
         len: RawVal,
     ) -> Result<Object, HostError> {
         #[cfg(not(feature = "vm"))]
-        todo!();
+        unimplemented!();
         #[cfg(feature = "vm")]
         if let [lm_pos, len] = [lm_pos, len]
             .iter()
