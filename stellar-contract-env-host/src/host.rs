@@ -1261,7 +1261,7 @@ impl CheckedEnv for Host {
     fn del_contract_data(&self, k: RawVal) -> Result<RawVal, HostError> {
         if self.from_host_val(k)? == ScVal::Static(ScStatic::LedgerKeyContractCodeWasm) {
             return Err(HostError::WithStatus(
-                String::from("Cannot delete contract code"),
+                String::from("cannot delete contract code"),
                 ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsInvalid),
             ));
         }
