@@ -146,9 +146,9 @@ macro_rules! call_macro_with_all_host_functions {
                 /// Clone the vector `v1`, then moves all the elements of vector `v2` into it.
                 /// Return the new vector. Traps if number of elements in the vector overflows a u32.
                 {"9", fn vec_append(v1:Object, v2:Object) -> Object}
-                /// Copy the elements from `i` until length `l` in the vector and create a new vector from it.
+                /// Copy the elements from `start` index until `end` index, exclusive, in the vector and create a new vector from it.
                 /// Return the new vector. Traps if the index is out of bound.
-                {"A", fn vec_slice(v:Object, i:RawVal, l:RawVal) -> Object}
+                {"A", fn vec_slice(v:Object, start:RawVal, end:RawVal) -> Object}
             }
 
             mod ledger "l" {
