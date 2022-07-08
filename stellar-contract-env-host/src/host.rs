@@ -39,7 +39,7 @@ use crate::SymbolStr;
 use crate::Vm;
 use crate::{
     BitSet, BitSetError, ConversionError, EnvBase, IntoEnvVal, Object, RawVal, RawValConvertible,
-    Status, Symbol, SymbolError, Tag, Val, UNKNOWN_ERROR,
+    Static, Status, Symbol, SymbolError, Tag, Val, UNKNOWN_ERROR,
 };
 
 use thiserror::Error;
@@ -441,14 +441,16 @@ impl Host {
                     <i32 as RawValConvertible>::unchecked_from_val(val)
                 })),
                 Tag::Static => {
-                    if let Some(b) = <bool as RawValConvertible>::try_convert(val) {
-                        if b {
-                            Ok(ScVal::Static(ScStatic::True))
-                        } else {
-                            Ok(ScVal::Static(ScStatic::False))
-                        }
-                    } else if <() as RawValConvertible>::is_val_type(val) {
+                    let tag_static =
+                        unsafe { <Static as RawValConvertible>::unchecked_from_val(val) };
+                    if tag_static.is_type(ScStatic::True) {
+                        Ok(ScVal::Static(ScStatic::True))
+                    } else if tag_static.is_type(ScStatic::False) {
+                        Ok(ScVal::Static(ScStatic::False))
+                    } else if tag_static.is_type(ScStatic::Void) {
                         Ok(ScVal::Static(ScStatic::Void))
+                    } else if tag_static.is_type(ScStatic::LedgerKeyContractCodeWasm) {
+                        Ok(ScVal::Static(ScStatic::LedgerKeyContractCodeWasm))
                     } else {
                         Err(HostError::WithStatus(
                             String::from("unknown Tag::Static case"),
@@ -1218,6 +1220,14 @@ impl CheckedEnv for Host {
     }
 
     fn put_contract_data(&self, k: RawVal, v: RawVal) -> Result<RawVal, HostError> {
+        let data_key = self.from_host_val(k)?;
+        if data_key == ScVal::Static(ScStatic::LedgerKeyContractCodeWasm) {
+            return Err(HostError::WithStatus(
+                String::from("cannot update contract code"),
+                ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsInvalid),
+            ));
+        }
+
         let key = self.to_storage_key(k)?;
         let data = LedgerEntryData::ContractData(ContractDataEntry {
             contract_id: self.get_current_contract_id()?,
@@ -1255,6 +1265,13 @@ impl CheckedEnv for Host {
     }
 
     fn del_contract_data(&self, k: RawVal) -> Result<RawVal, HostError> {
+        if self.from_host_val(k)? == ScVal::Static(ScStatic::LedgerKeyContractCodeWasm) {
+            return Err(HostError::WithStatus(
+                String::from("cannot delete contract code"),
+                ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsInvalid),
+            ));
+        }
+
         let key = self.to_storage_key(k)?;
         self.0.storage.borrow_mut().del(&key)?;
         Ok(().into())
@@ -1371,8 +1388,8 @@ impl CheckedEnv for Host {
         self.visit_obj(x, |bi: &BigInt| {
             bi.to_u64().ok_or_else(|| {
                 ConversionError::<i64> {
-                    f: x.to_raw(),
-                    t: PhantomData,
+                    from: x.to_raw(),
+                    to: PhantomData,
                 }
                 .into()
             })
@@ -1387,8 +1404,8 @@ impl CheckedEnv for Host {
         self.visit_obj(x, |bi: &BigInt| {
             bi.to_i64().ok_or_else(|| {
                 ConversionError::<i64> {
-                    f: x.to_raw(),
-                    t: PhantomData,
+                    from: x.to_raw(),
+                    to: PhantomData,
                 }
                 .into()
             })
@@ -1564,44 +1581,153 @@ impl CheckedEnv for Host {
         self.visit_obj(x, |a: &BigInt| Ok(a.bits()))
     }
 
-    fn serialize_to_binary(&self, b: Object) -> Result<Object, HostError> {
-        let sco = self.from_host_obj(b)?;
+    fn serialize_to_binary(&self, v: RawVal) -> Result<Object, HostError> {
+        let scv = self.from_host_val(v)?;
         let mut buf = Vec::<u8>::new();
-        sco.write_xdr(&mut buf)
-            .map_err(|_| HostError::General("failed to serialize object"))?;
+        scv.write_xdr(&mut buf)
+            .map_err(|_| HostError::General("failed to serialize ScVal"))?;
         Ok(self.add_host_object(buf)?.into())
     }
 
-    fn deserialize_from_binary(&self, b: Object) -> Result<Object, HostError> {
-        let sco = self.visit_obj(b, |hv: &Vec<u8>| {
-            ScObject::read_xdr(&mut hv.as_slice())
-                .map_err(|_| HostError::General("failed to de-serialize object"))
+    fn deserialize_from_binary(&self, b: Object) -> Result<RawVal, HostError> {
+        let scv = self.visit_obj(b, |hv: &Vec<u8>| {
+            ScVal::read_xdr(&mut hv.as_slice())
+                .map_err(|_| HostError::General("failed to de-serialize ScVal"))
         })?;
-        Ok(self.to_host_obj(&sco)?.into())
+        Ok(self.to_host_val(&scv)?.into())
     }
 
-    fn binary_copy_to_guest_mem(
+    fn binary_copy_to_linear_memory(
         &self,
         b: Object,
-        i: RawVal,
-        j: RawVal,
-        l: RawVal,
+        b_pos: RawVal,
+        lm_pos: RawVal,
+        len: RawVal,
     ) -> Result<RawVal, HostError> {
-        todo!()
+        #[cfg(not(feature = "vm"))]
+        unimplemented!();
+        #[cfg(feature = "vm")]
+        {
+            let b_pos = TryInto::<u32>::try_into(b_pos).map_err(|_| ConversionError::<u32> {
+                from: b_pos,
+                to: PhantomData,
+            })?;
+            let lm_pos = TryInto::<u32>::try_into(lm_pos).map_err(|_| ConversionError::<u32> {
+                from: lm_pos,
+                to: PhantomData,
+            })?;
+            let len = TryInto::<u32>::try_into(len).map_err(|_| ConversionError::<u32> {
+                from: len,
+                to: PhantomData,
+            })?;
+            self.visit_obj(b, move |hv: &Vec<u8>| {
+                let end_idx = b_pos.checked_add(len).ok_or_else(|| {
+                    HostError::WithStatus(
+                        String::from("u32 overflow"),
+                        ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsInvalid),
+                    )
+                })? as usize;
+                if end_idx > hv.len() {
+                    return Err(HostError::WithStatus(
+                        String::from("index out of bound"),
+                        ScStatus::HostObjectError(ScHostObjErrorCode::VecIndexOutOfBound),
+                    ));
+                }
+                self.with_current_frame(|frame| match frame {
+                    Frame::ContractVM(vm) => vm.with_memory_access(|mem| {
+                        Ok(mem.set(lm_pos, &hv.as_slice()[b_pos as usize..end_idx])?)
+                    }),
+                    Frame::HostFunction(_) => {
+                        Err(HostError::General("linear memory not supported"))
+                    }
+                    #[cfg(feature = "testutils")]
+                    Frame::TestContract(id) => {
+                        Err(HostError::General("linear memory not supported"))
+                    }
+                })
+            })?;
+            Ok(().into())
+        }
     }
 
-    fn binary_copy_from_guest_mem(
+    fn binary_copy_from_linear_memory(
         &self,
         b: Object,
-        i: RawVal,
-        j: RawVal,
-        l: RawVal,
-    ) -> Result<RawVal, HostError> {
-        todo!()
+        b_pos: RawVal,
+        lm_pos: RawVal,
+        len: RawVal,
+    ) -> Result<Object, HostError> {
+        #[cfg(not(feature = "vm"))]
+        unimplemented!();
+        #[cfg(feature = "vm")]
+        {
+            let b_pos = TryInto::<u32>::try_into(b_pos).map_err(|_| ConversionError::<u32> {
+                from: b_pos,
+                to: PhantomData,
+            })?;
+            let lm_pos = TryInto::<u32>::try_into(lm_pos).map_err(|_| ConversionError::<u32> {
+                from: lm_pos,
+                to: PhantomData,
+            })?;
+            let len = TryInto::<u32>::try_into(len).map_err(|_| ConversionError::<u32> {
+                from: len,
+                to: PhantomData,
+            })?;
+            let mut vnew = self.visit_obj(b, |hv: &Vec<u8>| Ok(hv.clone()))?;
+            let end_idx = b_pos.checked_add(len).ok_or_else(|| {
+                HostError::WithStatus(
+                    String::from("u32 overflow"),
+                    ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsInvalid),
+                )
+            })? as usize;
+            self.with_current_frame(|frame| match frame {
+                Frame::ContractVM(vm) => vm.with_memory_access(|mem| {
+                    // we would potentially let the vec grow
+                    if end_idx > vnew.len() {
+                        vnew.resize(end_idx, 0);
+                    }
+                    Ok(mem.get_into(lm_pos, &mut vnew.as_mut_slice()[b_pos as usize..end_idx])?)
+                }),
+                Frame::HostFunction(_) => Err(HostError::General("linear memory not supported")),
+                #[cfg(feature = "testutils")]
+                Frame::TestContract(id) => Err(HostError::General("linear memory not supported")),
+            })?;
+            Ok(self.add_host_object(vnew)?.into())
+        }
     }
 
     fn binary_new(&self) -> Result<Object, HostError> {
         Ok(self.add_host_object(Vec::<u8>::new())?.into())
+    }
+
+    fn binary_new_from_linear_memory(
+        &self,
+        lm_pos: RawVal,
+        len: RawVal,
+    ) -> Result<Object, HostError> {
+        #[cfg(not(feature = "vm"))]
+        unimplemented!();
+        #[cfg(feature = "vm")]
+        {
+            let lm_pos = TryInto::<u32>::try_into(lm_pos).map_err(|_| ConversionError::<u32> {
+                from: lm_pos,
+                to: PhantomData,
+            })?;
+            let len = TryInto::<u32>::try_into(len).map_err(|_| ConversionError::<u32> {
+                from: len,
+                to: PhantomData,
+            })?;
+            return self.with_current_frame(|frame| match frame {
+                Frame::ContractVM(vm) => vm.with_memory_access(|mem| {
+                    let mut vnew: Vec<u8> = vec![0; len as usize];
+                    mem.get_into(lm_pos, vnew.as_mut_slice())?;
+                    Ok(self.add_host_object(vnew)?.into())
+                }),
+                Frame::HostFunction(_) => Err(HostError::General("linear memory not supported")),
+                #[cfg(feature = "testutils")]
+                Frame::TestContract(id) => Err(HostError::General("linear memory not supported")),
+            });
+        }
     }
 
     fn binary_put(&self, b: Object, i: RawVal, u: RawVal) -> Result<Object, HostError> {

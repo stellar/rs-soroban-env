@@ -160,8 +160,8 @@ impl<T: TagType> TryFrom<RawVal> for TaggedVal<T> {
             Ok(Self(rv, PhantomData))
         } else {
             Err(ConversionError {
-                f: rv,
-                t: PhantomData,
+                from: rv,
+                to: PhantomData,
             })
         }
     }

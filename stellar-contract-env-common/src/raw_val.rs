@@ -62,16 +62,18 @@ impl AsMut<RawVal> for RawVal {
 // conversion to a more-structured error code at a higher level.
 #[derive(Debug)]
 pub struct ConversionError<T> {
-    pub f: RawVal,
-    pub t: PhantomData<T>,
+    #[cfg(not(target_family = "wasm"))]
+    pub from: RawVal,
+    pub to: PhantomData<T>,
 }
 
+#[cfg(feature = "std")]
 impl<T> core::fmt::Display for ConversionError<T> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(
             f,
             "Conversion from {:?} to {} failed",
-            self.f,
+            self.from,
             std::any::type_name::<T>()
         )
     }
@@ -106,8 +108,8 @@ macro_rules! declare_tryfrom {
                     Ok(c)
                 } else {
                     Err(ConversionError {
-                        f: v,
-                        t: PhantomData,
+                        from: v,
+                        to: PhantomData,
                     })
                 }
             }

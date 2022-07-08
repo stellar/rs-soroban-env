@@ -173,6 +173,22 @@ impl Vm {
         }))
     }
 
+    pub(crate) fn with_memory_access<F, U>(&self, f: F) -> Result<U, HostError>
+    where
+        F: FnOnce(&wasmi::MemoryRef) -> Result<U, HostError>,
+    {
+        match self.instance.export_by_name("memory") {
+            Some(ev) => match ev.as_memory() {
+                Some(mem) => f(mem),
+                None => Err(wasmi::Error::Memory(
+                    "export name `memory` is not of memory type".into(),
+                )
+                .into()),
+            },
+            None => Err(wasmi::Error::Memory("`memory` export not found".into()).into()),
+        }
+    }
+
     pub(crate) fn invoke_function_raw(
         self: &Rc<Self>,
         host: &Host,

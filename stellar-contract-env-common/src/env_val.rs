@@ -190,8 +190,8 @@ impl<E: Env> TryFrom<EnvVal<E, RawVal>> for i64 {
             Ok(ev.env.obj_to_i64(obj))
         } else {
             Err(ConversionError {
-                f: ev.to_raw(),
-                t: PhantomData,
+                from: ev.to_raw(),
+                to: PhantomData,
             })
         }
     }
@@ -220,8 +220,8 @@ impl<E: Env> TryFrom<EnvVal<E, RawVal>> for u64 {
             Ok(ev.env.obj_to_u64(obj))
         } else {
             Err(ConversionError {
-                f: ev.to_raw(),
-                t: PhantomData,
+                from: ev.to_raw(),
+                to: PhantomData,
             })
         }
     }
