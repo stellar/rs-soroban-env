@@ -66,14 +66,13 @@ pub struct ConversionError<T> {
     pub to: PhantomData<T>,
 }
 
-#[cfg(feature = "std")]
 impl<T> core::fmt::Display for ConversionError<T> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(
             f,
             "Conversion from {:?} to {} failed",
             self.from,
-            std::any::type_name::<T>()
+            core::any::type_name::<T>()
         )
     }
 }
