@@ -1,4 +1,4 @@
-use crate::{RawVal, Tag, TagStatus, TaggedVal};
+use crate::{ConversionError, Env, EnvVal, RawVal, Tag, TagStatus, TaggedVal, Val};
 use core::{
     cmp::Ordering,
     fmt::Debug,
@@ -11,6 +11,30 @@ use stellar_xdr::{
 };
 
 pub type Status = TaggedVal<TagStatus>;
+
+impl From<RawVal> for Result<RawVal, Status> {
+    fn from(v: RawVal) -> Self {
+        match Status::try_from(v) {
+            Ok(status) => Err(status),
+            Err(ConversionError) => Ok(v),
+        }
+    }
+}
+
+impl<E: Env, V: Val, T: TryFrom<EnvVal<E, V>>> TryFrom<EnvVal<E, V>> for Result<T, Status>
+where
+    Status: TryFrom<EnvVal<E, V>>,
+{
+    type Error = T::Error;
+
+    fn try_from(v: EnvVal<E, V>) -> Result<Self, Self::Error> {
+        let result: Result<Status, _> = Status::try_from(v.clone());
+        match result {
+            Ok(status) => Ok(Err(status)),
+            Err(_) => Ok(Ok(T::try_from(v)?)),
+        }
+    }
+}
 
 pub const UNKNOWN_ERROR: Status = TaggedVal(
     unsafe { RawVal::from_major_minor_and_tag(0, ScStatusType::UnknownError as u32, Tag::Status) },
