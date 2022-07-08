@@ -8,7 +8,7 @@ use super::{
     raw_val::{RawVal, RawValConvertible},
     Env,
 };
-use core::{cmp::Ordering, fmt::Debug};
+use core::{cmp::Ordering, fmt::Debug, marker::PhantomData};
 
 // EnvVal is a RawVal or TaggedVal coupled to a specific instance of Env. In the
 // guest we will use this with a zero-sized Guest unit struct, but in the host
@@ -133,7 +133,7 @@ impl<E: Env> From<EnvVal<E, RawVal>> for RawVal {
 }
 
 impl<E: Env, T: TagType> TryFrom<EnvVal<E, RawVal>> for TaggedVal<T> {
-    type Error = ConversionError<EnvVal<E, RawVal>, TaggedVal<T>>;
+    type Error = ConversionError<TaggedVal<T>>;
 
     fn try_from(ev: EnvVal<E, RawVal>) -> Result<Self, Self::Error> {
         ev.to_raw().try_into()
@@ -141,7 +141,7 @@ impl<E: Env, T: TagType> TryFrom<EnvVal<E, RawVal>> for TaggedVal<T> {
 }
 
 impl<E: Env, T: TagType> TryFrom<EnvVal<E, RawVal>> for EnvVal<E, TaggedVal<T>> {
-    type Error = ConversionError<EnvVal<E, RawVal>, EnvVal<E, TaggedVal<T>>>;
+    type Error = ConversionError<TaggedVal<T>>;
 
     fn try_from(ev: EnvVal<E, RawVal>) -> Result<Self, Self::Error> {
         let tv: TaggedVal<T> = ev.to_raw().try_into()?;
@@ -180,7 +180,7 @@ impl<E: Env, T: TagType> IntoEnvVal<E, TaggedVal<T>> for TaggedVal<T> {
 }
 
 impl<E: Env> TryFrom<EnvVal<E, RawVal>> for i64 {
-    type Error = ConversionError<EnvVal<E, RawVal>, i64>;
+    type Error = ConversionError<i64>;
 
     fn try_from(ev: EnvVal<E, RawVal>) -> Result<Self, Self::Error> {
         if ev.val.is_u63() {
@@ -189,7 +189,10 @@ impl<E: Env> TryFrom<EnvVal<E, RawVal>> for i64 {
             let obj = unsafe { Object::unchecked_from_val(ev.val) };
             Ok(ev.env.obj_to_i64(obj))
         } else {
-            Err(ConversionError)
+            Err(ConversionError {
+                f: ev.to_raw(),
+                t: PhantomData,
+            })
         }
     }
 }
@@ -209,14 +212,17 @@ impl<E: Env> IntoEnvVal<E, RawVal> for i64 {
 }
 
 impl<E: Env> TryFrom<EnvVal<E, RawVal>> for u64 {
-    type Error = ConversionError<EnvVal<E, RawVal>, u64>;
+    type Error = ConversionError<u64>;
 
     fn try_from(ev: EnvVal<E, RawVal>) -> Result<Self, Self::Error> {
         if Object::val_is_obj_type(ev.val, ScObjectType::U64) {
             let obj = unsafe { Object::unchecked_from_val(ev.val) };
             Ok(ev.env.obj_to_u64(obj))
         } else {
-            Err(ConversionError)
+            Err(ConversionError {
+                f: ev.to_raw(),
+                t: PhantomData,
+            })
         }
     }
 }

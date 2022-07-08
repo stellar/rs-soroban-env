@@ -61,14 +61,17 @@ impl AsMut<RawVal> for RawVal {
 // away, the same way `()` would, while remaining a separate type to allow
 // conversion to a more-structured error code at a higher level.
 #[derive(Debug)]
-pub struct ConversionError<F, T>;
+pub struct ConversionError<T> {
+    pub f: RawVal,
+    pub t: PhantomData<T>,
+}
 
-impl<F, T> core::fmt::Display for ConversionError<F, T> {
+impl<T> core::fmt::Display for ConversionError<T> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(
             f,
-            "Conversion from {} to {} failed",
-            std::any::type_name::<F>(),
+            "Conversion from {:?} to {} failed",
+            self.f,
             std::any::type_name::<T>()
         )
     }
@@ -96,18 +99,21 @@ pub trait RawValConvertible: Into<RawVal> + TryFrom<RawVal> {
 macro_rules! declare_tryfrom {
     ($T:ty) => {
         impl TryFrom<RawVal> for $T {
-            type Error = ConversionError<RawVal, $T>;
+            type Error = ConversionError<$T>;
             #[inline(always)]
             fn try_from(v: RawVal) -> Result<Self, Self::Error> {
                 if let Some(c) = <Self as RawValConvertible>::try_convert(v) {
                     Ok(c)
                 } else {
-                    Err(ConversionError)
+                    Err(ConversionError {
+                        f: v,
+                        t: PhantomData,
+                    })
                 }
             }
         }
         impl<E: Env> TryFrom<EnvVal<E, RawVal>> for $T {
-            type Error = ConversionError<EnvVal<E, RawVal>, $T>;
+            type Error = ConversionError<$T>;
             #[inline(always)]
             fn try_from(v: EnvVal<E, RawVal>) -> Result<Self, Self::Error> {
                 Self::try_from(v.to_raw())

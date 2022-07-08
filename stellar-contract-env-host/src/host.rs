@@ -9,6 +9,7 @@ use num_bigint::{BigInt, Sign};
 use num_integer::Integer;
 use num_traits::cast::ToPrimitive;
 use num_traits::{Pow, Signed, Zero};
+use std::marker::PhantomData;
 use std::num::TryFromIntError;
 use std::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Not, Rem, Shl, Shr, Sub};
 #[cfg(feature = "vm")]
@@ -48,6 +49,8 @@ pub enum HostError {
     /// An error with specific status code.
     #[error("host error: {0}, status: {:?}")]
     WithStatus(String, ScStatus),
+    #[error("{0}")]
+    ConversionError(String),
     /// XDR error.
     #[error("XDR error: {0}")]
     XDR(#[from] xdr::Error),
@@ -101,6 +104,9 @@ impl From<&HostError> for ScStatus {
         match err {
             HostError::General(_) => ScStatus::UnknownError(ScUnknownErrorCode::General),
             HostError::WithStatus(_, status) => status.to_owned(),
+            HostError::ConversionError(err_str) => {
+                ScStatus::UnknownError(ScUnknownErrorCode::General)
+            } // FIXME: replace with actual error code
             HostError::XDR(_) => ScStatus::UnknownError(ScUnknownErrorCode::Xdr),
             #[cfg(feature = "vm")]
             HostError::WASMI(err) => match err {
@@ -163,9 +169,9 @@ impl From<&HostError> for ScStatus {
     }
 }
 
-impl From<ConversionError<T, F>> for HostError {
-    fn from(_: ConversionError<T, F>) -> Self {
-        HostError::General("conversion error")
+impl<T> From<ConversionError<T>> for HostError {
+    fn from(c: ConversionError<T>) -> Self {
+        HostError::ConversionError(format!("{}", c))
     }
 }
 
@@ -1363,8 +1369,13 @@ impl CheckedEnv for Host {
 
     fn bigint_to_u64(&self, x: Object) -> Result<u64, HostError> {
         self.visit_obj(x, |bi: &BigInt| {
-            bi.to_u64()
-                .ok_or_else(|| ConversionError::<BigInt, i64>.into())
+            bi.to_u64().ok_or_else(|| {
+                ConversionError::<i64> {
+                    f: x.to_raw(),
+                    t: PhantomData,
+                }
+                .into()
+            })
         })
     }
 
@@ -1374,8 +1385,13 @@ impl CheckedEnv for Host {
 
     fn bigint_to_i64(&self, x: Object) -> Result<i64, HostError> {
         self.visit_obj(x, |bi: &BigInt| {
-            bi.to_i64()
-                .ok_or_else(|| ConversionError::<BigInt, i64>.into())
+            bi.to_i64().ok_or_else(|| {
+                ConversionError::<i64> {
+                    f: x.to_raw(),
+                    t: PhantomData,
+                }
+                .into()
+            })
         })
     }
 

@@ -5,29 +5,31 @@ use crate::{
     TryFromVal,
 };
 
+use core::marker::PhantomData;
+
 macro_rules! impl_for_tuple {
     ( $count:literal $($typ:ident $idx:tt)+ ) => {
         impl<E: Env, $($typ),*> TryFrom<EnvVal<E, RawVal>> for ($($typ),*)
         where
             $($typ: TryFrom<EnvVal<E, RawVal>>),*
         {
-            type Error = ConversionError<EnvVal<E, RawVal>, ($($typ),*)>;
+            type Error = ConversionError<($($typ),*)>;
 
             fn try_from(ev: EnvVal<E, RawVal>) -> Result<Self, Self::Error> {
                 if !Object::val_is_obj_type(ev.val, ScObjectType::Vec) {
-                    return Err(ConversionError);
+                    return Err(ConversionError{f: ev.to_raw(), t: PhantomData});
                 }
                 let env = ev.env.clone();
                 let vec = unsafe { Object::unchecked_from_val(ev.val) };
-                let len: u32 = env.vec_len(vec).try_into()?;
+                let len = unsafe { <u32 as RawValConvertible>::unchecked_from_val(env.vec_len(vec)) };
                 if len != $count {
-                    return Err(ConversionError);
+                    return Err(ConversionError{f: ev.to_raw(), t: PhantomData});
                 }
                 Ok((
                     $({
                         let idx: u32 = $idx;
                         let val = env.vec_get(vec, idx.into());
-                        $typ::try_from_val(&env, val).map_err(|_| ConversionError)?
+                        $typ::try_from_val(&env, val).map_err(|_| ConversionError{f: val, t: PhantomData})?
                     }),*
                 ))
             }
