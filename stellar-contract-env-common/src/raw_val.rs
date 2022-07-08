@@ -62,7 +62,6 @@ impl AsMut<RawVal> for RawVal {
 // conversion to a more-structured error code at a higher level.
 #[derive(Debug)]
 pub struct ConversionError<T> {
-    #[cfg(not(target_family = "wasm"))]
     pub from: RawVal,
     pub to: PhantomData<T>,
 }
