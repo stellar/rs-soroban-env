@@ -124,7 +124,7 @@ macro_rules! impl_tagged_from {
             }
         }
         impl<E: Env> TryFrom<EnvVal<E, TaggedVal<$tagty>>> for $fromty {
-            type Error = ConversionError;
+            type Error = ConversionError<EnvVal<E, TaggedVal<$tagty>>, $fromty>;
             #[inline(always)]
             fn try_from(v: EnvVal<E, TaggedVal<$tagty>>) -> Result<Self, Self::Error> {
                 Self::try_from(v.to_raw())
@@ -153,7 +153,7 @@ impl<T: TagType> From<TaggedVal<T>> for RawVal {
 }
 
 impl<T: TagType> TryFrom<RawVal> for TaggedVal<T> {
-    type Error = ConversionError;
+    type Error = ConversionError<RawVal, TaggedVal<T>>;
 
     fn try_from(rv: RawVal) -> Result<Self, Self::Error> {
         if rv.has_tag(T::TAG) {

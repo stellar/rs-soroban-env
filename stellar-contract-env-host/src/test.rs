@@ -1417,3 +1417,42 @@ fn bigint_tests() -> Result<(), HostError> {
 
     Ok(())
 }
+
+#[test]
+fn test_name() -> Result<(), HostError> {
+    // fn print_type_of<T>() {
+    //     println!("type is: {}", std::any::type_name::<T>())
+    // }
+    // let host = Host::default();
+    // let obj_0 = host.bigint_from_i64(0)?;
+    // print_type_of();
+
+    // let scvec0: ScVec = ScVec(vec![ScVal::I32(1_i32), ScVal::I32(2_i32)].try_into()?);
+    // print_type_of();
+
+    // use std::fmt;
+
+    // struct Position {
+    //     longitude: f32,
+    //     latitude: f32,
+    // }
+
+    impl fmt::Display for Position {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            write!(f, "({}, {})", self.longitude, self.latitude)
+        }
+    }
+
+    assert_eq!(
+        "(1.987, 2.983)",
+        format!(
+            "{}",
+            Position {
+                longitude: 1.987,
+                latitude: 2.983,
+            }
+        )
+    );
+
+    Ok(())
+}

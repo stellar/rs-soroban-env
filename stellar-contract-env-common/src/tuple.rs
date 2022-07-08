@@ -11,7 +11,7 @@ macro_rules! impl_for_tuple {
         where
             $($typ: TryFrom<EnvVal<E, RawVal>>),*
         {
-            type Error = ConversionError;
+            type Error = ConversionError<EnvVal<E, RawVal>, ($($typ),*)>;
 
             fn try_from(ev: EnvVal<E, RawVal>) -> Result<Self, Self::Error> {
                 if !Object::val_is_obj_type(ev.val, ScObjectType::Vec) {

@@ -163,8 +163,8 @@ impl From<&HostError> for ScStatus {
     }
 }
 
-impl From<ConversionError> for HostError {
-    fn from(_: ConversionError) -> Self {
+impl From<ConversionError<T, F>> for HostError {
+    fn from(_: ConversionError<T, F>) -> Self {
         HostError::General("conversion error")
     }
 }
@@ -1363,7 +1363,8 @@ impl CheckedEnv for Host {
 
     fn bigint_to_u64(&self, x: Object) -> Result<u64, HostError> {
         self.visit_obj(x, |bi: &BigInt| {
-            bi.to_u64().ok_or_else(|| ConversionError.into())
+            bi.to_u64()
+                .ok_or_else(|| ConversionError::<BigInt, i64>.into())
         })
     }
 
@@ -1373,7 +1374,8 @@ impl CheckedEnv for Host {
 
     fn bigint_to_i64(&self, x: Object) -> Result<i64, HostError> {
         self.visit_obj(x, |bi: &BigInt| {
-            bi.to_i64().ok_or_else(|| ConversionError.into())
+            bi.to_i64()
+                .ok_or_else(|| ConversionError::<BigInt, i64>.into())
         })
     }
 

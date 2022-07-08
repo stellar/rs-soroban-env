@@ -133,7 +133,7 @@ impl<E: Env> From<EnvVal<E, RawVal>> for RawVal {
 }
 
 impl<E: Env, T: TagType> TryFrom<EnvVal<E, RawVal>> for TaggedVal<T> {
-    type Error = ConversionError;
+    type Error = ConversionError<EnvVal<E, RawVal>, TaggedVal<T>>;
 
     fn try_from(ev: EnvVal<E, RawVal>) -> Result<Self, Self::Error> {
         ev.to_raw().try_into()
@@ -141,7 +141,7 @@ impl<E: Env, T: TagType> TryFrom<EnvVal<E, RawVal>> for TaggedVal<T> {
 }
 
 impl<E: Env, T: TagType> TryFrom<EnvVal<E, RawVal>> for EnvVal<E, TaggedVal<T>> {
-    type Error = ConversionError;
+    type Error = ConversionError<EnvVal<E, RawVal>, EnvVal<E, TaggedVal<T>>>;
 
     fn try_from(ev: EnvVal<E, RawVal>) -> Result<Self, Self::Error> {
         let tv: TaggedVal<T> = ev.to_raw().try_into()?;
@@ -180,7 +180,7 @@ impl<E: Env, T: TagType> IntoEnvVal<E, TaggedVal<T>> for TaggedVal<T> {
 }
 
 impl<E: Env> TryFrom<EnvVal<E, RawVal>> for i64 {
-    type Error = ConversionError;
+    type Error = ConversionError<EnvVal<E, RawVal>, i64>;
 
     fn try_from(ev: EnvVal<E, RawVal>) -> Result<Self, Self::Error> {
         if ev.val.is_u63() {
@@ -209,7 +209,7 @@ impl<E: Env> IntoEnvVal<E, RawVal> for i64 {
 }
 
 impl<E: Env> TryFrom<EnvVal<E, RawVal>> for u64 {
-    type Error = ConversionError;
+    type Error = ConversionError<EnvVal<E, RawVal>, u64>;
 
     fn try_from(ev: EnvVal<E, RawVal>) -> Result<Self, Self::Error> {
         if Object::val_is_obj_type(ev.val, ScObjectType::U64) {

@@ -9,7 +9,7 @@ impl<E: Env, T> TryFrom<EnvVal<E, RawVal>> for Option<T>
 where
     T: TryFrom<EnvVal<E, RawVal>>,
 {
-    type Error = ConversionError;
+    type Error = ConversionError<EnvVal<E, RawVal>, Option<T>>;
 
     fn try_from(ev: EnvVal<E, RawVal>) -> Result<Self, Self::Error> {
         if !Object::val_is_obj_type(ev.val, ScObjectType::Vec) {

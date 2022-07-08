@@ -1,7 +1,7 @@
 use stellar_xdr::{ScStatic, ScStatus, ScStatusType};
 
 use super::{BitSet, Env, EnvVal, IntoEnvVal, Object, Status, Symbol};
-use core::fmt::Debug;
+use core::{fmt::Debug, marker::PhantomData};
 
 extern crate static_assertions as sa;
 
@@ -61,7 +61,18 @@ impl AsMut<RawVal> for RawVal {
 // away, the same way `()` would, while remaining a separate type to allow
 // conversion to a more-structured error code at a higher level.
 #[derive(Debug)]
-pub struct ConversionError;
+pub struct ConversionError<F, T>;
+
+impl<F, T> core::fmt::Display for ConversionError<F, T> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(
+            f,
+            "Conversion from {} to {} failed",
+            std::any::type_name::<F>(),
+            std::any::type_name::<T>()
+        )
+    }
+}
 
 pub trait RawValConvertible: Into<RawVal> + TryFrom<RawVal> {
     fn is_val_type(v: RawVal) -> bool;
@@ -85,7 +96,7 @@ pub trait RawValConvertible: Into<RawVal> + TryFrom<RawVal> {
 macro_rules! declare_tryfrom {
     ($T:ty) => {
         impl TryFrom<RawVal> for $T {
-            type Error = ConversionError;
+            type Error = ConversionError<RawVal, $T>;
             #[inline(always)]
             fn try_from(v: RawVal) -> Result<Self, Self::Error> {
                 if let Some(c) = <Self as RawValConvertible>::try_convert(v) {
@@ -96,7 +107,7 @@ macro_rules! declare_tryfrom {
             }
         }
         impl<E: Env> TryFrom<EnvVal<E, RawVal>> for $T {
-            type Error = ConversionError;
+            type Error = ConversionError<EnvVal<E, RawVal>, $T>;
             #[inline(always)]
             fn try_from(v: EnvVal<E, RawVal>) -> Result<Self, Self::Error> {
                 Self::try_from(v.to_raw())
