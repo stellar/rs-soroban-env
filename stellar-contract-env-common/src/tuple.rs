@@ -13,23 +13,23 @@ macro_rules! impl_for_tuple {
         where
             $($typ: TryFrom<EnvVal<E, RawVal>>),*
         {
-            type Error = ConversionError<($($typ,)*)>;
+            type Error = ConversionError<EnvVal<E, RawVal>, ($($typ,)*)>;
 
             fn try_from(ev: EnvVal<E, RawVal>) -> Result<Self, Self::Error> {
                 if !Object::val_is_obj_type(ev.val, ScObjectType::Vec) {
-                    return Err(ConversionError{from: ev.to_raw(), to: PhantomData});
+                    return Err(ConversionError{from: PhantomData, to: PhantomData});
                 }
                 let env = ev.env.clone();
                 let vec = unsafe { Object::unchecked_from_val(ev.val) };
                 let len = unsafe { <u32 as RawValConvertible>::unchecked_from_val(env.vec_len(vec)) };
                 if len != $count {
-                    return Err(ConversionError{from: ev.to_raw(), to: PhantomData});
+                    return Err(ConversionError{from: PhantomData, to: PhantomData});
                 }
                 Ok((
                     $({
                         let idx: u32 = $idx;
                         let val = env.vec_get(vec, idx.into());
-                        $typ::try_from_val(&env, val).map_err(|_| ConversionError{from: val, to: PhantomData})?
+                        $typ::try_from_val(&env, val).map_err(|_| ConversionError{from: PhantomData, to: PhantomData})?
                     },)*
                 ))
             }
