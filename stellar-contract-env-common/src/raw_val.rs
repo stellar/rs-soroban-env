@@ -60,18 +60,18 @@ impl AsMut<RawVal> for RawVal {
 // This is a 0-arg struct rather than an enum to ensure it completely compiles
 // away, the same way `()` would, while remaining a separate type to allow
 // conversion to a more-structured error code at a higher level.
-#[derive(Debug, PartialEq, Eq)]
-pub struct ConversionError<F, T> {
-    pub from: PhantomData<F>,
+#[derive(Eq, PartialEq, Debug)]
+pub struct ConversionError<T> {
+    pub from: RawVal,
     pub to: PhantomData<T>,
 }
 
-impl<F, T> core::fmt::Display for ConversionError<F, T> {
+impl<T> core::fmt::Display for ConversionError<T> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(
             f,
-            "Conversion from {} to {} failed",
-            core::any::type_name::<T>(),
+            "Conversion from {:?} to {} failed",
+            self.from,
             core::any::type_name::<T>()
         )
     }
@@ -99,27 +99,24 @@ pub trait RawValConvertible: Into<RawVal> + TryFrom<RawVal> {
 macro_rules! declare_tryfrom {
     ($T:ty) => {
         impl TryFrom<RawVal> for $T {
-            type Error = ConversionError<RawVal, $T>;
+            type Error = ConversionError<$T>;
             #[inline(always)]
             fn try_from(v: RawVal) -> Result<Self, Self::Error> {
                 if let Some(c) = <Self as RawValConvertible>::try_convert(v) {
                     Ok(c)
                 } else {
                     Err(ConversionError {
-                        from: PhantomData,
+                        from: v,
                         to: PhantomData,
                     })
                 }
             }
         }
         impl<E: Env> TryFrom<EnvVal<E, RawVal>> for $T {
-            type Error = ConversionError<EnvVal<E, RawVal>, $T>;
+            type Error = ConversionError<$T>;
             #[inline(always)]
             fn try_from(v: EnvVal<E, RawVal>) -> Result<Self, Self::Error> {
-                Self::try_from(v.to_raw()).map_err(|_| Self::Error {
-                    from: PhantomData,
-                    to: PhantomData,
-                })
+                Self::try_from(v.to_raw())
             }
         }
         impl<E: Env> IntoEnvVal<E, RawVal> for $T {

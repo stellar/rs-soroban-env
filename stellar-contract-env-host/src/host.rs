@@ -169,8 +169,8 @@ impl From<&HostError> for ScStatus {
     }
 }
 
-impl<F, T> From<ConversionError<F, T>> for HostError {
-    fn from(c: ConversionError<F, T>) -> Self {
+impl<T> From<ConversionError<T>> for HostError {
+    fn from(c: ConversionError<T>) -> Self {
         HostError::ConversionError(format!("{}", c))
     }
 }
@@ -1387,8 +1387,8 @@ impl CheckedEnv for Host {
     fn bigint_to_u64(&self, x: Object) -> Result<u64, HostError> {
         self.visit_obj(x, |bi: &BigInt| {
             bi.to_u64().ok_or_else(|| {
-                ConversionError::<BigInt, u64> {
-                    from: PhantomData,
+                ConversionError::<i64> {
+                    from: x.to_raw(),
                     to: PhantomData,
                 }
                 .into()
@@ -1403,8 +1403,8 @@ impl CheckedEnv for Host {
     fn bigint_to_i64(&self, x: Object) -> Result<i64, HostError> {
         self.visit_obj(x, |bi: &BigInt| {
             bi.to_i64().ok_or_else(|| {
-                ConversionError::<BigInt, i64> {
-                    from: PhantomData,
+                ConversionError::<i64> {
+                    from: x.to_raw(),
                     to: PhantomData,
                 }
                 .into()
@@ -1608,21 +1608,18 @@ impl CheckedEnv for Host {
         unimplemented!();
         #[cfg(feature = "vm")]
         {
-            let b_pos =
-                TryInto::<u32>::try_into(b_pos).map_err(|_| ConversionError::<RawVal, u32> {
-                    from: PhantomData,
-                    to: PhantomData,
-                })?;
-            let lm_pos =
-                TryInto::<u32>::try_into(lm_pos).map_err(|_| ConversionError::<RawVal, u32> {
-                    from: PhantomData,
-                    to: PhantomData,
-                })?;
-            let len =
-                TryInto::<u32>::try_into(len).map_err(|_| ConversionError::<RawVal, u32> {
-                    from: PhantomData,
-                    to: PhantomData,
-                })?;
+            let b_pos = TryInto::<u32>::try_into(b_pos).map_err(|_| ConversionError::<u32> {
+                from: b_pos,
+                to: PhantomData,
+            })?;
+            let lm_pos = TryInto::<u32>::try_into(lm_pos).map_err(|_| ConversionError::<u32> {
+                from: lm_pos,
+                to: PhantomData,
+            })?;
+            let len = TryInto::<u32>::try_into(len).map_err(|_| ConversionError::<u32> {
+                from: len,
+                to: PhantomData,
+            })?;
             self.visit_obj(b, move |hv: &Vec<u8>| {
                 let end_idx = b_pos.checked_add(len).ok_or_else(|| {
                     HostError::WithStatus(
@@ -1664,21 +1661,18 @@ impl CheckedEnv for Host {
         unimplemented!();
         #[cfg(feature = "vm")]
         {
-            let b_pos =
-                TryInto::<u32>::try_into(b_pos).map_err(|_| ConversionError::<RawVal, u32> {
-                    from: PhantomData,
-                    to: PhantomData,
-                })?;
-            let lm_pos =
-                TryInto::<u32>::try_into(lm_pos).map_err(|_| ConversionError::<RawVal, u32> {
-                    from: PhantomData,
-                    to: PhantomData,
-                })?;
-            let len =
-                TryInto::<u32>::try_into(len).map_err(|_| ConversionError::<RawVal, u32> {
-                    from: PhantomData,
-                    to: PhantomData,
-                })?;
+            let b_pos = TryInto::<u32>::try_into(b_pos).map_err(|_| ConversionError::<u32> {
+                from: b_pos,
+                to: PhantomData,
+            })?;
+            let lm_pos = TryInto::<u32>::try_into(lm_pos).map_err(|_| ConversionError::<u32> {
+                from: lm_pos,
+                to: PhantomData,
+            })?;
+            let len = TryInto::<u32>::try_into(len).map_err(|_| ConversionError::<u32> {
+                from: len,
+                to: PhantomData,
+            })?;
             let mut vnew = self.visit_obj(b, |hv: &Vec<u8>| Ok(hv.clone()))?;
             let end_idx = b_pos.checked_add(len).ok_or_else(|| {
                 HostError::WithStatus(
@@ -1715,16 +1709,14 @@ impl CheckedEnv for Host {
         unimplemented!();
         #[cfg(feature = "vm")]
         {
-            let lm_pos =
-                TryInto::<u32>::try_into(lm_pos).map_err(|_| ConversionError::<RawVal, u32> {
-                    from: PhantomData,
-                    to: PhantomData,
-                })?;
-            let len =
-                TryInto::<u32>::try_into(len).map_err(|_| ConversionError::<RawVal, u32> {
-                    from: PhantomData,
-                    to: PhantomData,
-                })?;
+            let lm_pos = TryInto::<u32>::try_into(lm_pos).map_err(|_| ConversionError::<u32> {
+                from: lm_pos,
+                to: PhantomData,
+            })?;
+            let len = TryInto::<u32>::try_into(len).map_err(|_| ConversionError::<u32> {
+                from: len,
+                to: PhantomData,
+            })?;
             return self.with_current_frame(|frame| match frame {
                 Frame::ContractVM(vm) => vm.with_memory_access(|mem| {
                     let mut vnew: Vec<u8> = vec![0; len as usize];
