@@ -57,9 +57,9 @@ impl AsMut<RawVal> for RawVal {
     }
 }
 
-// This is a 0-arg struct rather than an enum to ensure it completely compiles
-// away, the same way `()` would, while remaining a separate type to allow
-// conversion to a more-structured error code at a higher level.
+// FIXME: the `from` should take a reference `&'a &RawVal` instead. However,
+// this would require `type <'a> = ConversionError<'a, T>` in numerious places
+// which would require unstable feature "generic associated types (GAT)" enabled.
 #[derive(Eq, PartialEq, Debug)]
 pub struct ConversionError<T> {
     pub from: RawVal,
