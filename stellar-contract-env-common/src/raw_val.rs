@@ -42,7 +42,7 @@ pub enum Tag {
 }
 
 #[repr(transparent)]
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Eq, PartialEq)]
 pub struct RawVal(u64);
 
 impl AsRef<RawVal> for RawVal {
