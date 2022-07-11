@@ -160,7 +160,7 @@ macro_rules! call_macro_with_all_host_functions {
                 {"4", fn create_contract_from_contract(v: Object, salt: Object) -> Object}
             }
 
-            mod call "c" {
+            mod call "d" {
                 /// Calls a function in another contract with arguments contained in vector `args`.
                 /// If the call is successful, forwards the result of the called function. Traps otherwise.
                 {"_", fn call(contract:Object, func:Symbol, args:Object) -> RawVal}

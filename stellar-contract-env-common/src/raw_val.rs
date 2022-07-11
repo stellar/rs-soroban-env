@@ -60,7 +60,7 @@ impl AsMut<RawVal> for RawVal {
 // This is a 0-arg struct rather than an enum to ensure it completely compiles
 // away, the same way `()` would, while remaining a separate type to allow
 // conversion to a more-structured error code at a higher level.
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct ConversionError;
 
 pub trait RawValConvertible: Into<RawVal> + TryFrom<RawVal> {
