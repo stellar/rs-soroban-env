@@ -374,25 +374,25 @@ impl RawVal {
     }
 
     #[inline(always)]
-    pub const fn is_u32_zero(&self) -> bool {
+    pub const fn is_u32_zero(self) -> bool {
         const ZERO: RawVal = RawVal::from_u32(0);
         self.0 == ZERO.0
     }
 
     #[inline(always)]
-    pub const fn is_void(&self) -> bool {
+    pub const fn is_void(self) -> bool {
         const VOID: RawVal = RawVal::from_other_static(ScStatic::Void);
         self.0 == VOID.0
     }
 
     #[inline(always)]
-    pub const fn is_true(&self) -> bool {
+    pub const fn is_true(self) -> bool {
         const TRUE: RawVal = RawVal::from_bool(true);
         self.0 == TRUE.0
     }
 
     #[inline(always)]
-    pub const fn is_false(&self) -> bool {
+    pub const fn is_false(self) -> bool {
         const FALSE: RawVal = RawVal::from_bool(false);
         self.0 == FALSE.0
     }
