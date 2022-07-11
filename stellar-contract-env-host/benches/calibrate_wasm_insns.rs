@@ -1,6 +1,13 @@
 // Run this with
 // $ cargo bench --features vm calibrate_wasm_insns -- --nocapture
 
+mod common;
+use common::*;
+use std::rc::Rc;
+use stellar_contract_env_host::budget::CostType;
+use stellar_contract_env_host::xdr::{Hash, ScVal, ScVec};
+use stellar_contract_env_host::{Host, Vm};
+
 #[cfg(all(test, feature = "vm"))]
 fn wasm_module_with_4n_insns(n: usize) -> Vec<u8> {
     use parity_wasm::builder;
@@ -35,67 +42,36 @@ fn wasm_module_with_4n_insns(n: usize) -> Vec<u8> {
     module.to_bytes().unwrap()
 }
 
+struct SyntheticWASMRun {
+    args: ScVec,
+    vm: Rc<Vm>,
+}
+
+impl HostCostMeasurement for SyntheticWASMRun {
+    const COST_TYPE: CostType = CostType::WasmInsnExec;
+
+    fn new(host: &Host, step: u64) -> Self {
+        let args = ScVec(vec![ScVal::U63(5)].try_into().unwrap());
+        let id: Hash = [0; 32].into();
+        let code = wasm_module_with_4n_insns((step as usize) * 10000);
+        let vm = Vm::new(&host, id, &code).unwrap();
+        Self { args, vm }
+    }
+
+    fn run(&mut self, host: &Host) {
+        self.vm.invoke_function(host, "test", &self.args).unwrap();
+    }
+}
+
 #[cfg(all(test, feature = "vm", target_os = "linux"))]
 fn main() -> std::io::Result<()> {
-    use std::io::Write;
-    use std::time::Instant;
-    use stellar_contract_env_host::xdr::{Hash, ScVal, ScVec};
-    use stellar_contract_env_host::{Host, Vm};
-    use tabwriter::{Alignment, TabWriter};
-
-    let mut counter = perf_event::Builder::new().build()?;
-
-    let host = Host::default();
-    let scvec0: ScVec = ScVec(vec![ScVal::U63(5)].try_into().unwrap());
-
-    let mut baseline = 0;
-
-    let mut tw = TabWriter::new(vec![])
-        .padding(5)
-        .alignment(Alignment::Right);
-
-    write!(
-        &mut tw,
-        "CPU insns\tusec\tCPU / usec\tCPU - baseline\twasm insns\tCPU / wasm\n"
-    )
-    .unwrap();
-
-    for i in 0..20 {
-        host.modify_budget(|budget| {
-            budget.event_counts.wasm_insns = 0;
-            budget.cost_factors.cpu_insn_per_wasm_insn = 1;
-            budget.cost_limits.cpu_insns = 1000000000000;
-        });
-
-        let id: Hash = [0; 32].into();
-        let code = wasm_module_with_4n_insns(i * 1000);
-        let vm = Vm::new(&host, id, &code).unwrap();
-        let start = Instant::now();
-        counter.reset()?;
-        counter.enable()?;
-        vm.invoke_function(&host, "test", &scvec0).unwrap();
-        counter.disable()?;
-        let stop = Instant::now();
-        let insns_total = counter.read()?;
-        let usec = stop.duration_since(start).as_micros() as u64;
-        if baseline == 0 {
-            baseline = insns_total;
-        }
-        let wasms_total = host.modify_budget(|b| b.event_counts.wasm_insns);
-        let wasm_per_insn = (insns_total - baseline) / wasms_total;
-        write!(
-            &mut tw,
-            "{}\t{}us\t{}\t{}\t{}\t{}\n",
-            insns_total,
-            usec,
-            insns_total / usec,
-            (insns_total - baseline),
-            wasms_total,
-            wasm_per_insn
-        )
-        .unwrap();
+    env_logger::init();
+    let mut measurements = measure_costs::<SyntheticWASMRun>(0..20)?;
+    measurements.subtract_baseline();
+    measurements.report();
+    if std::env::var("FIT_MODELS").is_ok() {
+        measurements.fit_model_to_cpu();
+        measurements.fit_model_to_mem();
     }
-    tw.flush().unwrap();
-    eprintln!("{}", String::from_utf8(tw.into_inner().unwrap()).unwrap());
     Ok(())
 }

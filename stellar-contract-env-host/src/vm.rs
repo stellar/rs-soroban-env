@@ -1,7 +1,7 @@
 mod dispatch;
 mod func_info;
 
-use crate::{budget::Budget, HostError};
+use crate::{budget::CostType, HostError};
 use std::rc::Rc;
 
 use super::{
@@ -40,25 +40,14 @@ impl Externals for Host {
     }
 
     fn charge_cpu(&mut self, insns: u64) -> Result<(), wasmi::TrapCode> {
-        self.modify_budget(|budget: &mut Budget| {
-            budget.increment_wasm_insns(insns);
-            if budget.cpu_limit_exceeded() {
-                Err(wasmi::TrapCode::CpuLimitExceeded)
-            } else {
-                Ok(())
-            }
-        })
+        // TODO reconcile TrapCode with HostError better.
+        self.charge_budget(CostType::WasmInsnExec, insns)
+            .map_err(|_| wasmi::TrapCode::CpuLimitExceeded)
     }
 
     fn charge_mem(&mut self, bytes: u64) -> Result<(), wasmi::TrapCode> {
-        self.modify_budget(|budget: &mut Budget| {
-            budget.event_counts.wasm_linear_memory_bytes += bytes;
-            if budget.mem_limit_exceeded() {
-                Err(wasmi::TrapCode::MemLimitExceeded)
-            } else {
-                Ok(())
-            }
-        })
+        self.charge_budget(CostType::WasmInsnExec, bytes)
+            .map_err(|_| wasmi::TrapCode::MemLimitExceeded)
     }
 }
 

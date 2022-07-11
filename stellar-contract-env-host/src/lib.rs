@@ -1,4 +1,4 @@
-mod budget;
+pub mod budget;
 mod host;
 pub(crate) mod host_object;
 pub(crate) mod weak_host;
