@@ -254,6 +254,11 @@ impl From<u8> for RawVal {
     }
 }
 
+pub const RAW_VAL_U32_ZERO: RawVal = RawVal::from_u32(0);
+pub const RAW_VAL_STATIC_VOID: RawVal = RawVal::from_other_static(ScStatic::Void);
+pub const RAW_VAL_STATIC_TRUE: RawVal = RawVal::from_bool(true);
+pub const RAW_VAL_STATIC_FALSE: RawVal = RawVal::from_bool(false);
+
 impl RawVal {
     pub fn in_env<E: Env>(self, env: &E) -> EnvVal<E, RawVal> {
         EnvVal {

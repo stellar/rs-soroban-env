@@ -19,6 +19,9 @@ pub use stellar_xdr as xdr;
 
 // RawVal and RawObj are the 64-bit transparent type.
 pub use raw_val::{ConversionError, RawVal, RawValConvertible, Tag};
+pub use raw_val::{
+    RAW_VAL_STATIC_FALSE, RAW_VAL_STATIC_TRUE, RAW_VAL_STATIC_VOID, RAW_VAL_U32_ZERO,
+};
 
 pub use tagged_val::{
     TagBitSet, TagI32, TagObject, TagStatic, TagStatus, TagSymbol, TagType, TagU32, TaggedVal,
