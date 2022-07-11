@@ -156,8 +156,8 @@ macro_rules! call_macro_with_all_host_functions {
                 {"0", fn has_contract_data(k:RawVal) -> RawVal}
                 {"1", fn get_contract_data(k:RawVal) -> RawVal}
                 {"2", fn del_contract_data(k:RawVal) -> RawVal}
-                {"3", fn create_contract(v: Object, salt: Object, key: Object, sig: Object) -> Object}
-                {"4", fn create_contract_using_parent_id(v: Object, salt: Object) -> Object}
+                {"3", fn create_contract_from_ed25519(v: Object, salt: Object, key: Object, sig: Object) -> Object}
+                {"4", fn create_contract_from_contract(v: Object, salt: Object) -> Object}
             }
 
             mod call "c" {

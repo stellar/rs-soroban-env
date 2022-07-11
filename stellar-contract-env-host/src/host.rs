@@ -821,8 +821,8 @@ impl Host {
                     let key: Object = self.to_host_obj(k_obj)?.to_object();
                     let signature: Object = self.to_host_obj(sig_obj)?.to_object();
 
-                    //TODO: should create_contract return a RawVal instead of Object to avoid this conversion?
-                    let res = self.create_contract(contract, salt, key, signature)?;
+                    //TODO: should create_contract_from_ed25519 return a RawVal instead of Object to avoid this conversion?
+                    let res = self.create_contract_from_ed25519(contract, salt, key, signature)?;
                     let sc_obj = self.from_host_obj(res)?;
                     frame_guard.commit();
                     Ok(ScVal::Object(Some(sc_obj)))
@@ -1271,7 +1271,7 @@ impl CheckedEnv for Host {
         Ok(().into())
     }
 
-    fn create_contract(
+    fn create_contract_from_ed25519(
         &self,
         v: Object,
         salt: Object,
@@ -1300,7 +1300,7 @@ impl CheckedEnv for Host {
 
         // Verify parameters
         let params = self.visit_obj(v, |bin: &Vec<u8>| {
-            let separator = "create_contract(nonce: u256, contract: Vec<u8>, salt: u256, key: u256, sig: Vec<u8>)";
+            let separator = "create_contract_from_ed25519(nonce: u256, contract: Vec<u8>, salt: u256, key: u256, sig: Vec<u8>)";
             let params = [separator.as_bytes(), salt_val.as_ref(), bin].concat();
             Ok(params)
         })?;
@@ -1319,11 +1319,7 @@ impl CheckedEnv for Host {
         self.create_contract_helper(v, buf)
     }
 
-    fn create_contract_using_parent_id(
-        &self,
-        v: Object,
-        salt: Object,
-    ) -> Result<Object, HostError> {
+    fn create_contract_from_contract(&self, v: Object, salt: Object) -> Result<Object, HostError> {
         let contract_id = self.get_current_contract_id()?;
 
         let salt_val = self.visit_obj(salt, |bin: &Vec<u8>| {

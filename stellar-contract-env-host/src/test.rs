@@ -676,7 +676,7 @@ fn create_contract_test_helper(
     let obj_salt = host.to_host_obj(&ScObject::Binary(salt_bytes.try_into()?))?;
     let obj_sig = host.to_host_obj(&ScObject::Binary(signature.to_bytes().try_into()?))?;
 
-    let contract_id = host.create_contract(
+    let contract_id = host.create_contract_from_ed25519(
         obj_code.to_object(),
         obj_salt.to_object(),
         obj_pub.to_object(),
@@ -714,7 +714,7 @@ fn create_contract_test() -> Result<(), HostError> {
     let code: &[u8] = b"70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4";
 
     let separator =
-        "create_contract(nonce: u256, contract: Vec<u8>, salt: u256, key: u256, sig: Vec<u8>)";
+        "create_contract_from_ed25519(nonce: u256, contract: Vec<u8>, salt: u256, key: u256, sig: Vec<u8>)";
 
     let salt_bytes: Vec<u8> = FromHex::from_hex(salt).unwrap();
     let sig_preimage = [separator.as_bytes(), salt_bytes.as_slice(), code].concat();
@@ -808,7 +808,7 @@ fn create_contract_using_parent_id_test() {
     let salt: &[u8] = b"3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4660c";
 
     let separator =
-        "create_contract(nonce: u256, contract: Vec<u8>, salt: u256, key: u256, sig: Vec<u8>)";
+        "create_contract_from_ed25519(nonce: u256, contract: Vec<u8>, salt: u256, key: u256, sig: Vec<u8>)";
 
     let salt_bytes: Vec<u8> = FromHex::from_hex(salt).unwrap();
     let sig_preimage = [separator.as_bytes(), salt_bytes.as_slice(), code.as_slice()].concat();
