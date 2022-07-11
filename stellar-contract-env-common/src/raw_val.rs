@@ -1,5 +1,7 @@
 use stellar_xdr::{ScStatic, ScStatus, ScStatusType};
 
+use crate::ShallowEq;
+
 use super::{BitSet, Env, EnvVal, IntoEnvVal, Object, Status, Symbol};
 use core::fmt::Debug;
 
@@ -42,8 +44,14 @@ pub enum Tag {
 }
 
 #[repr(transparent)]
-#[derive(Copy, Clone, Eq, PartialEq)]
+#[derive(Copy, Clone)]
 pub struct RawVal(u64);
+
+impl ShallowEq for RawVal {
+    fn shallow_eq(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+}
 
 impl AsRef<RawVal> for RawVal {
     fn as_ref(&self) -> &RawVal {
