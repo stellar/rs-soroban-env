@@ -41,6 +41,8 @@ pub enum Tag {
     Reserved = 7,
 }
 
+// The PartialEq/Eq is a simple comparison of the enclosed u64 value and does
+// not involve the host. Two equal objects may be referenced by inequal RawVals.
 #[repr(transparent)]
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub struct RawVal(u64);
