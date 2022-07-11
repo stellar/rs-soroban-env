@@ -22,6 +22,9 @@ num-integer = "0.1.45"
 
 [dev-dependencies]
 assert_matches = "1.5.0"
+optimization = "0.2.0"
+env_logger = "0.9.0"
+log = "0.4.17"
 
 [features]
 vm = ["wasmi", "parity-wasm", "stellar-contract-env-common/vm"]
@@ -29,7 +32,9 @@ testutils = []
 
 [target.'cfg(target_os = "linux")'.dev-dependencies]
 perf-event = "0.4.7"
+tracking-allocator = "0.4.0"
 tabwriter = "1.2.1"
+thousands = "0.2.0"
 
 [[bench]]
 required-features = ["vm"]
@@ -37,3 +42,9 @@ harness = false
 bench = true
 name = "calibrate_wasm_insns"
 path = "benches/calibrate_wasm_insns.rs"
+
+[[bench]]
+harness = false
+bench = true
+name = "calibrate_host_ops"
+path = "benches/calibrate_host_ops.rs"

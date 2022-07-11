@@ -17,7 +17,7 @@ use stellar_contract_env_common::xdr::{
     AccountEntry, AccountId, Hash, PublicKey, ReadXdr, ThresholdIndexes, Uint256, WriteXdr,
 };
 
-use crate::budget::Budget;
+use crate::budget::{Budget, CostType};
 use crate::storage::Storage;
 use crate::weak_host::WeakHost;
 
@@ -260,11 +260,22 @@ impl Host {
     /// Helper for mutating the [`Budget`] held in this [`Host`], either to
     /// allocate it on contract creation or to deplete it on callbacks from
     /// the VM or host functions.
-    pub fn modify_budget<T, F>(&self, f: F) -> T
+    pub fn get_budget_mut<T, F>(&self, f: F) -> T
     where
         F: FnOnce(&mut Budget) -> T,
     {
         f(&mut *self.0.budget.borrow_mut())
+    }
+
+    pub fn get_budget<T, F>(&self, f: F) -> T
+    where
+        F: FnOnce(&Budget) -> T,
+    {
+        f(&*self.0.budget.borrow())
+    }
+
+    pub fn charge_budget(&self, ty: CostType, input: u64) -> Result<(), HostError> {
+        self.get_budget_mut(|budget| budget.charge(ty, input))
     }
 
     pub(crate) fn visit_storage<F, U>(&self, f: F) -> Result<U, HostError>
@@ -512,6 +523,11 @@ impl Host {
         }
     }
 
+    // Testing interface to create values directly for later use via Env functions.
+    pub fn intern(&self, v: &ScVal) -> Result<RawVal, HostError> {
+        self.to_host_val(v).map(|hv| hv.into())
+    }
+
     pub(crate) fn to_host_val(&self, v: &ScVal) -> Result<HostVal, HostError> {
         let ok = match v {
             ScVal::U63(i) => {
@@ -630,6 +646,7 @@ impl Host {
     pub(crate) fn to_host_obj(&self, ob: &ScObject) -> Result<HostObj, HostError> {
         match ob {
             ScObject::Vec(v) => {
+                self.charge_budget(CostType::HostVecAlloc, v.0.len() as u64)?;
                 let mut vv = Vector::new();
                 for e in v.0.iter() {
                     vv.push_back(self.to_host_val(e)?);
