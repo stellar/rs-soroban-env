@@ -115,7 +115,10 @@ impl<T: TagType> TaggedVal<T> {
     }
 
     #[inline(always)]
-    pub(crate) const unsafe fn from_major_minor_and_tag_type(major: u32, minor: u32) -> TaggedVal<T> {
+    pub(crate) const unsafe fn from_major_minor_and_tag_type(
+        major: u32,
+        minor: u32,
+    ) -> TaggedVal<T> {
         let rv = RawVal::from_major_minor_and_tag(major, minor, T::TAG);
         Self(rv, PhantomData)
     }
