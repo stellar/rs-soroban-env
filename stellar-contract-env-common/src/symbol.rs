@@ -95,7 +95,7 @@ impl wasmi::FromValue for Symbol {
 
 impl Hash for Symbol {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        RawVal::from_payload(self.0).get_payload().hash(state);
+        self.0.hash(state);
     }
 }
 
