@@ -49,6 +49,7 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - run: rustup update
+    - run: rustup target add ${{ matrix.sys.target }}
     - run: cargo install --locked --version 0.5.14 cargo-hack
     - run: cargo hack --feature-powerset check --profile ${{ matrix.profile }} --target ${{ matrix.sys.target }}
     - if: matrix.sys.test
