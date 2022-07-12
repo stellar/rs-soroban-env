@@ -79,6 +79,15 @@ impl<E: Env> IntoEnvVal<E, TaggedVal<TagSymbol>> for Symbol {
     }
 }
 
+impl<E: Env> TryFrom<EnvVal<E, RawVal>> for Symbol {
+    type Error = ConversionError;
+
+    #[inline(always)]
+    fn try_from(v: EnvVal<E, RawVal>) -> Result<Self, Self::Error> {
+        Ok(Self(v.try_into()?))
+    }
+}
+
 impl<E: Env> IntoEnvVal<E, RawVal> for Symbol {
     fn into_env_val(self, env: &E) -> EnvVal<E, RawVal> {
         EnvVal {
