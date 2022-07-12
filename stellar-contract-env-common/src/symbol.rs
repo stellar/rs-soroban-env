@@ -1,4 +1,7 @@
-use crate::{require, RawVal, Tag, TagSymbol, TaggedVal};
+use crate::{
+    require, ConversionError, Env, EnvVal, IntoEnvVal, RawVal, RawValConvertible, TagSymbol,
+    TaggedVal,
+};
 use core::{
     cmp::Ordering,
     fmt::Debug,
@@ -23,17 +26,82 @@ const CODE_MASK: u64 = (1u64 << CODE_BITS) - 1;
 sa::const_assert!(CODE_MASK == 0x3f);
 sa::const_assert!(CODE_BITS * MAX_CHARS == BODY_BITS);
 
-pub type Symbol = TaggedVal<TagSymbol>;
+#[repr(transparent)]
+#[derive(Copy, Clone)]
+pub struct Symbol(u64); //TaggedVal<TagSymbol>;
+
+impl RawValConvertible for Symbol {
+    fn is_val_type(v: RawVal) -> bool {
+        <TaggedVal<TagSymbol> as RawValConvertible>::is_val_type(v)
+    }
+
+    unsafe fn unchecked_from_val(v: RawVal) -> Self {
+        Symbol(<TaggedVal<TagSymbol> as RawValConvertible>::unchecked_from_val(v).get_payload())
+    }
+}
+
+impl From<TaggedVal<TagSymbol>> for Symbol {
+    #[inline(always)]
+    fn from(v: TaggedVal<TagSymbol>) -> Self {
+        Self(v.get_payload())
+    }
+}
+
+impl From<Symbol> for TaggedVal<TagSymbol> {
+    fn from(s: Symbol) -> Self {
+        Self(RawVal::from_payload(s.0), PhantomData)
+    }
+}
+
+impl TryFrom<RawVal> for Symbol {
+    type Error = ConversionError;
+
+    fn try_from(v: RawVal) -> Result<Self, Self::Error> {
+        Ok(Symbol(
+            <TaggedVal<TagSymbol> as TryFrom<RawVal>>::try_from(v)?.get_payload(),
+        ))
+    }
+}
+
+impl From<Symbol> for RawVal {
+    fn from(v: Symbol) -> Self {
+        RawVal::from_payload(v.0)
+    }
+}
+
+impl<E: Env> From<EnvVal<E, TaggedVal<TagSymbol>>> for Symbol {
+    #[inline(always)]
+    fn from(v: EnvVal<E, TaggedVal<TagSymbol>>) -> Self {
+        Self(v.val.get_payload())
+    }
+}
+
+impl<E: Env> IntoEnvVal<E, TaggedVal<TagSymbol>> for Symbol {
+    fn into_env_val(self, env: &E) -> EnvVal<E, TaggedVal<TagSymbol>> {
+        EnvVal {
+            env: env.clone(),
+            val: self.into(),
+        }
+    }
+}
+
+#[cfg(feature = "vm")]
+impl wasmi::FromValue for Symbol {
+    fn from_value(val: wasmi::RuntimeValue) -> Option<Self> {
+        let maybe: Option<u64> = val.try_into();
+        maybe.map(Symbol)
+    }
+}
 
 impl Hash for Symbol {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.as_ref().get_payload().hash(state);
+        RawVal::from_payload(self.0).get_payload().hash(state);
     }
 }
 
 impl PartialEq for Symbol {
     fn eq(&self, other: &Self) -> bool {
-        self.as_ref().get_payload() == other.as_ref().get_payload()
+        self.0 == other.0
     }
 }
 
@@ -113,8 +181,7 @@ impl Symbol {
             accum |= v;
         }
         Ok(Self(
-            unsafe { RawVal::from_body_and_tag(accum, Tag::Symbol) },
-            PhantomData,
+            unsafe { TaggedVal::<TagSymbol>::from_body_and_tag_type(accum) }.get_payload(),
         ))
     }
 
@@ -227,7 +294,7 @@ impl IntoIterator for Symbol {
     type Item = char;
     type IntoIter = SymbolIter;
     fn into_iter(self) -> Self::IntoIter {
-        SymbolIter(self.as_ref().get_body())
+        SymbolIter(RawVal::from_payload(self.0).get_body())
     }
 }
 
@@ -272,7 +339,7 @@ impl FromIterator<char> for Symbol {
             };
             accum |= v;
         }
-        unsafe { TaggedVal::from_body_and_tag_type(accum) }
+        unsafe { TaggedVal::<TagSymbol>::from_body_and_tag_type(accum) }.into()
     }
 }
 

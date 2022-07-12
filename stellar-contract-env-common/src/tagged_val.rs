@@ -88,6 +88,11 @@ impl<T: TagType> AsMut<RawVal> for TaggedVal<T> {
 }
 
 impl<T: TagType> TaggedVal<T> {
+    #[inline(always)]
+    pub const fn get_payload(self) -> u64 {
+        self.0.get_payload()
+    }
+
     pub fn as_raw(&self) -> &RawVal {
         self.0.as_ref()
     }
@@ -104,13 +109,13 @@ impl<T: TagType> TaggedVal<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn from_body_and_tag_type(body: u64) -> TaggedVal<T> {
+    pub(crate) const unsafe fn from_body_and_tag_type(body: u64) -> TaggedVal<T> {
         let rv = RawVal::from_body_and_tag(body, T::TAG);
         Self(rv, PhantomData)
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn from_major_minor_and_tag_type(major: u32, minor: u32) -> TaggedVal<T> {
+    pub(crate) const unsafe fn from_major_minor_and_tag_type(major: u32, minor: u32) -> TaggedVal<T> {
         let rv = RawVal::from_major_minor_and_tag(major, minor, T::TAG);
         Self(rv, PhantomData)
     }
