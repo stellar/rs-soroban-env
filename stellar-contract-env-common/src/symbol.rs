@@ -27,8 +27,8 @@ sa::const_assert!(CODE_MASK == 0x3f);
 sa::const_assert!(CODE_BITS * MAX_CHARS == BODY_BITS);
 
 #[repr(transparent)]
-#[derive(Copy, Clone)]
-pub struct Symbol(u64); //TaggedVal<TagSymbol>;
+#[derive(Copy, Clone, Eq, PartialEq)]
+pub struct Symbol(u64);
 
 impl RawValConvertible for Symbol {
     fn is_val_type(v: RawVal) -> bool {
@@ -92,20 +92,6 @@ impl wasmi::FromValue for Symbol {
         maybe.map(Symbol)
     }
 }
-
-impl Hash for Symbol {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.0.hash(state);
-    }
-}
-
-impl PartialEq for Symbol {
-    fn eq(&self, other: &Self) -> bool {
-        self.0 == other.0
-    }
-}
-
-impl Eq for Symbol {}
 
 impl PartialOrd for Symbol {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
