@@ -6,7 +6,7 @@ mod env;
 mod env_val;
 mod object;
 mod raw_val;
-mod static_val;
+mod r#static;
 mod status;
 mod symbol;
 mod tagged_val;
@@ -35,7 +35,7 @@ pub use unimplemented_env::UnimplementedEnv;
 // TODO: maybe these should wrap EnvVals?
 pub use bitset::{BitSet, BitSetError};
 pub use object::Object;
-pub use static_val::Static;
+pub use r#static::Static;
 pub use status::{Status, OK, UNKNOWN_ERROR};
 pub use symbol::{Symbol, SymbolError, SymbolIter, SymbolStr};
 
