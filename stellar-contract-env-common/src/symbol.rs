@@ -2,13 +2,7 @@ use crate::{
     require, ConversionError, Env, EnvVal, IntoEnvVal, RawVal, RawValConvertible, TagSymbol,
     TaggedVal,
 };
-use core::{
-    cmp::Ordering,
-    fmt::Debug,
-    hash::{Hash, Hasher},
-    marker::PhantomData,
-    str,
-};
+use core::{cmp::Ordering, fmt::Debug, hash::Hash, marker::PhantomData, str};
 
 #[derive(Debug)]
 pub enum SymbolError {
@@ -27,7 +21,7 @@ sa::const_assert!(CODE_MASK == 0x3f);
 sa::const_assert!(CODE_BITS * MAX_CHARS == BODY_BITS);
 
 #[repr(transparent)]
-#[derive(Copy, Clone, Eq, PartialEq)]
+#[derive(Copy, Clone, Eq, PartialEq, Hash)]
 pub struct Symbol(u64);
 
 impl RawValConvertible for Symbol {
