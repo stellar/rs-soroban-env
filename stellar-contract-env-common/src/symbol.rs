@@ -1,5 +1,5 @@
 use crate::{
-    require, ConversionError, Env, EnvVal, IntoEnvVal, RawVal, RawValConvertible, TagSymbol,
+    require, ConversionError, Env, EnvVal, IntoEnvVal, RawVal, RawValConvertible, Tag, TagSymbol,
     TaggedVal,
 };
 use core::{cmp::Ordering, fmt::Debug, hash::Hash, marker::PhantomData, str};
@@ -51,9 +51,11 @@ impl TryFrom<RawVal> for Symbol {
     type Error = ConversionError;
 
     fn try_from(v: RawVal) -> Result<Self, Self::Error> {
-        Ok(Symbol(
-            <TaggedVal<TagSymbol> as TryFrom<RawVal>>::try_from(v)?.get_payload(),
-        ))
+        if v.has_tag(Tag::Symbol) {
+            Ok(Self(v.get_payload()))
+        } else {
+            Err(ConversionError)
+        }
     }
 }
 
