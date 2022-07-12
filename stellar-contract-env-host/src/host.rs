@@ -1342,7 +1342,7 @@ impl CheckedEnv for Host {
 
         // Verify parameters
         let params = self.visit_obj(v, |bin: &Vec<u8>| {
-            let separator = "create_contract_from_ed25519(nonce: u256, contract: Vec<u8>, salt: u256, key: u256, sig: Vec<u8>)";
+            let separator = "create_contract_from_ed25519(contract: Vec<u8>, salt: u256, key: u256, sig: Vec<u8>)";
             let params = [separator.as_bytes(), salt_val.as_ref(), bin].concat();
             Ok(params)
         })?;
