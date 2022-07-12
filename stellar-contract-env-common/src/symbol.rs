@@ -79,6 +79,15 @@ impl<E: Env> IntoEnvVal<E, TaggedVal<TagSymbol>> for Symbol {
     }
 }
 
+impl<E: Env> IntoEnvVal<E, RawVal> for Symbol {
+    fn into_env_val(self, env: &E) -> EnvVal<E, RawVal> {
+        EnvVal {
+            env: env.clone(),
+            val: self.into(),
+        }
+    }
+}
+
 #[cfg(feature = "vm")]
 impl wasmi::FromValue for Symbol {
     fn from_value(val: wasmi::RuntimeValue) -> Option<Self> {
