@@ -163,6 +163,7 @@ pub fn measure_costs<HCM: HostCostMeasurement>(
     let mut alloc_group_token =
         AllocationGroupToken::register().expect("failed to register allocation group");
     let mut ret = Vec::new();
+    eprintln!("\nMeasuring costs for CostType::{:?}\n", HCM::COST_TYPE);
     for input_hint in step_range {
         let host = Host::default();
         host.get_budget_mut(|budget| budget.reset_unlimited());
@@ -186,6 +187,10 @@ pub fn measure_costs<HCM: HostCostMeasurement>(
             mem_bytes,
             time_nsecs,
         })
+    }
+    AllocationRegistry::disable_tracking();
+    unsafe {
+        AllocationRegistry::clear_global_tracker();
     }
     Ok(Measurements(ret))
 }

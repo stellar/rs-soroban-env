@@ -4,19 +4,24 @@ use crate::HostError;
 #[repr(i32)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum CostType {
-    HostVecAlloc = 0,
-    HostMapAlloc = 1,
-    WasmInsnExec = 2,
-    WasmMemAlloc = 3,
+    HostVecAllocVec = 0,
+    HostVecAllocCell = 1,
+    HostMapAllocMap = 2,
+    HostMapAllocCell = 3,
+    WasmInsnExec = 4,
+    WasmMemAlloc = 5,
 }
 
 // TODO: add XDR support for iterating over all the elements of an enum
 impl CostType {
     fn variants() -> std::slice::Iter<'static, CostType> {
         static VARIANTS: &'static [CostType] = &[
-            CostType::HostMapAlloc,
-            CostType::HostVecAlloc,
+            CostType::HostMapAllocMap,
+            CostType::HostMapAllocCell,
+            CostType::HostVecAllocVec,
+            CostType::HostVecAllocCell,
             CostType::WasmInsnExec,
+            CostType::WasmMemAlloc,
         ];
         VARIANTS.iter()
     }
