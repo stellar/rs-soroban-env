@@ -30,23 +30,21 @@ jobs:
       matrix:
         profile: [dev, release]
         sys:
-        - os: ubuntu-latest
-          target: wasm32-unknown-unknown
-          test: false
-        - os: ubuntu-latest
-          target: x86_64-unknown-linux-gnu
+        #- os: ubuntu-latest
+        #  target: wasm32-unknown-unknown
+        #  test: false
+        #- os: ubuntu-latest
+        #  target: x86_64-unknown-linux-gnu
+        #  test: true
+        #- os: macos-latest
+        #  target: x86_64-apple-darwin
+        #  test: true
+        #- os: macos-latest
+        #  target: aarch64-apple-darwin
+        #  test: false
+        - os: windows-latest
+          target: x86_64-pc-windows-msvc
           test: true
-        - os: macos-latest
-          target: x86_64-apple-darwin
-          test: true
-        - os: macos-latest
-          target: aarch64-apple-darwin
-          test: false
-        # Temporarily disable windows testing, because GitHub's runners are
-        # failing to upgrade rust for some reason.
-        # - os: windows-latest
-        #   target: x86_64-pc-windows-msvc
-        #   test: true
     runs-on: ${{ matrix.sys.os }}
     steps:
     - uses: actions/checkout@v3
