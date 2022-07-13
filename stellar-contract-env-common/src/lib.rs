@@ -4,6 +4,7 @@ mod bitset;
 mod checked_env;
 mod env;
 mod env_val;
+mod meta;
 mod object;
 mod raw_val;
 mod r#static;
@@ -13,7 +14,6 @@ mod tagged_val;
 mod tuple;
 mod unimplemented_env;
 mod val;
-mod meta;
 
 pub const META: [u8; 12] = meta::META;
 
