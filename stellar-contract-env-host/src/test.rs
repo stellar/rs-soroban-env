@@ -737,10 +737,9 @@ fn create_contract_test() -> Result<(), HostError> {
     });
 
     let hash = sha256_hash_id_preimage(id_pre_image);
-    let hash_obj: Object = host.add_host_object(hash.0.to_vec())?.into();
 
     //Push the contract id onto the stack to simulate a contract call
-    let _frame_guard = host.push_test_frame(hash_obj)?;
+    let _frame_guard = host.push_test_frame(hash);
 
     let key = ScVal::Static(ScStatic::LedgerKeyContractCodeWasm);
 
