@@ -753,32 +753,8 @@ impl Host {
         Ok(id_obj)
     }
 
-    fn try_call_vtable(
-        &self,
-        id: &Hash,
-        func: &Symbol,
-        args: &[RawVal],
-    ) -> Option<Result<RawVal, HostError>> {
-        #[cfg(feature = "testutils")]
-        if let Some(vtable) = self.0.vtables.borrow().get(&id) {
-            if let Some(f) = vtable.0.get(&func) {
-                let mut frame_guard = self.push_test_frame(id.clone());
-                let res = Some(Ok(f(self.clone(), args)));
-                frame_guard.commit();
-                res
-            } else {
-                Some(Err(HostError::General("function not in vtable")))
-            }
-        } else {
-            None
-        }
-
-        #[cfg(not(feature = "testutils"))]
-        None
-    }
-
     #[cfg(feature = "vm")]
-    fn call_vm(&self, id: &Hash, func: &Symbol, args: &[RawVal]) -> Result<RawVal, HostError> {
+    fn call_wasm_fn(&self, id: &Hash, func: &Symbol, args: &[RawVal]) -> Result<RawVal, HostError> {
         // Create key for storage
         let key = ScVal::Static(ScStatic::LedgerKeyContractCodeWasm);
         let storage_key = LedgerKey::ContractData(LedgerKeyContractData {
@@ -816,18 +792,6 @@ impl Host {
         vm.invoke_function_raw(self, SymbolStr::from(func).as_ref(), args)
     }
 
-    fn try_call_vm(
-        &self,
-        id: &Hash,
-        func: &Symbol,
-        args: &[RawVal],
-    ) -> Option<Result<RawVal, HostError>> {
-        #[cfg(feature = "vm")]
-        return Some(self.call_vm(id, func, args));
-        #[cfg(not(feature = "vm"))]
-        return None;
-    }
-
     fn call_n(&self, contract: Object, func: Symbol, args: &[RawVal]) -> Result<RawVal, HostError> {
         // Get contract ID
         let id = self.visit_obj(contract, |bin: &Vec<u8>| {
@@ -840,9 +804,22 @@ impl Host {
             Ok(xdr::Hash(arr))
         })?;
 
-        self.try_call_vtable(&id, &func, args)
-            .or_else(|| self.try_call_vm(&id, &func, args))
-            .unwrap_or_else(|| unimplemented!())
+        #[cfg(feature = "testutils")]
+        if let Some(vtable) = self.0.vtables.borrow().get(&id) {
+            if let Some(f) = vtable.0.get(&func) {
+                let mut frame_guard = self.push_test_frame(id.clone());
+                let res = Ok(f(self.clone(), args));
+                frame_guard.commit();
+                return res;
+            } else {
+                return Err(HostError::General("function not in vtable"));
+            }
+        }
+
+        #[cfg(feature = "vm")]
+        return self.call_wasm_fn(&id, &func, args);
+        #[cfg(not(feature = "vm"))]
+        return Err(HostError::General("could not dispatch"));
     }
 
     pub fn invoke_function(&mut self, hf: HostFunction, args: ScVec) -> Result<ScVal, HostError> {
