@@ -64,11 +64,15 @@ macro_rules! call_macro_with_all_host_functions {
 
             mod context "x" {
                 {"_", fn log_value(v:RawVal) -> RawVal }
+
                 /// Get the binary contractID of the contract which invoked the
                 /// running contract. Traps if the running contract was not
                 /// invoked by a contract.
                 {"0", fn get_invoking_contract() -> Object }
                 {"1", fn obj_cmp(a:RawVal, b:RawVal) -> i64 }
+
+                {"2", fn contract_event(v:RawVal) -> RawVal }
+                {"3", fn system_event(v:RawVal) -> RawVal }
             }
 
             mod u64 "u" {

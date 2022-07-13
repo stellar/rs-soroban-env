@@ -18,6 +18,7 @@ use stellar_contract_env_common::xdr::{
 };
 
 use crate::budget::{Budget, CostType};
+use crate::events::Events;
 use crate::storage::Storage;
 use crate::weak_host::WeakHost;
 
@@ -203,6 +204,7 @@ pub(crate) struct HostImpl {
     storage: RefCell<Storage>,
     context: RefCell<Vec<Frame>>,
     budget: RefCell<Budget>,
+    events: RefCell<Events>,
 }
 
 /// A guard struct that exists to call [`Host::pop_frame`] when it is dropped,
@@ -254,6 +256,7 @@ impl Host {
             storage: RefCell::new(storage),
             context: Default::default(),
             budget: Default::default(),
+            events: Default::default(),
         }))
     }
 
@@ -276,6 +279,22 @@ impl Host {
 
     pub fn charge_budget(&self, ty: CostType, input: u64) -> Result<(), HostError> {
         self.get_budget_mut(|budget| budget.charge(ty, input))
+    }
+
+    pub(crate) fn get_events_mut<F, U>(&self, f: F) -> Result<U, HostError>
+    where
+        F: FnOnce(&mut Events) -> Result<U, HostError>,
+    {
+        f(&mut *self.0.events.borrow_mut())
+    }
+
+    pub(crate) fn add_debug_event(
+        &self,
+        msg: &'static str,
+        args: &[RawVal],
+    ) -> Result<(), HostError> {
+        self.charge_budget(CostType::HostEventDebug, args.len() as u64)?;
+        self.get_events_mut(|events| Ok(events.add_debug_event(msg, args)))
     }
 
     pub(crate) fn visit_storage<F, U>(&self, f: F) -> Result<U, HostError>
@@ -942,6 +961,15 @@ impl CheckedEnv for Host {
     type Error = HostError;
 
     fn log_value(&self, v: RawVal) -> Result<RawVal, HostError> {
+        self.add_debug_event("log", &[v])?;
+        Ok(RawVal::from_void())
+    }
+
+    fn contract_event(&self, v: RawVal) -> Result<RawVal, HostError> {
+        todo!()
+    }
+
+    fn system_event(&self, v: RawVal) -> Result<RawVal, HostError> {
         todo!()
     }
 

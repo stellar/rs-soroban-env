@@ -10,6 +10,7 @@ pub enum CostType {
     HostMapAllocCell = 3,
     WasmInsnExec = 4,
     WasmMemAlloc = 5,
+    HostEventDebug = 6,
 }
 
 // TODO: add XDR support for iterating over all the elements of an enum
