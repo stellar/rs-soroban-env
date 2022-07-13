@@ -551,7 +551,7 @@ version = "0.0.0"
 dependencies = [
  "static_assertions",
  "stellar-contract-env-macros",
- "stellar-xdr 0.0.0 (git+https://github.com/stellar/rs-stellar-xdr?rev=0edf9326)",
+ "stellar-xdr 0.0.0 (git+https://github.com/stellar/rs-stellar-xdr?rev=540ed24)",
  "wasmi",
 ]
 
