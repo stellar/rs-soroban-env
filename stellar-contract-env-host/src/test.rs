@@ -649,10 +649,11 @@ fn create_contract_test_helper(
     let signature: Signature = keypair.sign(Sha256::digest(sig_preimage).as_slice());
 
     // Make contractID so we can include it in the footprint
-    let pre_image = xdr::HashIdPreimage::ContractIdFromEd25519(xdr::HashIdPreimageContractId {
-        ed25519: xdr::Uint256(pub_bytes.as_slice().try_into().unwrap()),
-        salt: xdr::Uint256(salt_bytes.as_slice().try_into().unwrap()),
-    });
+    let pre_image =
+        xdr::HashIdPreimage::ContractIdFromEd25519(xdr::HashIdPreimageEd25519ContractId {
+            ed25519: xdr::Uint256(pub_bytes.as_slice().try_into().unwrap()),
+            salt: xdr::Uint256(salt_bytes.as_slice().try_into().unwrap()),
+        });
 
     let hash = sha256_hash_id_preimage(pre_image);
 
@@ -731,10 +732,11 @@ fn create_contract_test() -> Result<(), HostError> {
     let host = create_contract_test_helper(secret_key, public_key, salt, code, &sig_preimage)?;
 
     let pub_bytes: Vec<u8> = FromHex::from_hex(public_key).unwrap();
-    let id_pre_image = xdr::HashIdPreimage::ContractIdFromEd25519(xdr::HashIdPreimageContractId {
-        ed25519: xdr::Uint256(pub_bytes.as_slice().try_into().unwrap()),
-        salt: xdr::Uint256(salt_bytes.as_slice().try_into().unwrap()),
-    });
+    let id_pre_image =
+        xdr::HashIdPreimage::ContractIdFromEd25519(xdr::HashIdPreimageEd25519ContractId {
+            ed25519: xdr::Uint256(pub_bytes.as_slice().try_into().unwrap()),
+            salt: xdr::Uint256(salt_bytes.as_slice().try_into().unwrap()),
+        });
 
     let hash = sha256_hash_id_preimage(id_pre_image);
 
@@ -818,17 +820,18 @@ fn create_contract_using_parent_id_test() {
 
     // Get parent contractID
     let pub_bytes: Vec<u8> = FromHex::from_hex(public_key).unwrap();
-    let pre_image = xdr::HashIdPreimage::ContractIdFromEd25519(xdr::HashIdPreimageContractId {
-        ed25519: xdr::Uint256(pub_bytes.as_slice().try_into().unwrap()),
-        salt: xdr::Uint256(salt_bytes.as_slice().try_into().unwrap()),
-    });
+    let pre_image =
+        xdr::HashIdPreimage::ContractIdFromEd25519(xdr::HashIdPreimageEd25519ContractId {
+            ed25519: xdr::Uint256(pub_bytes.as_slice().try_into().unwrap()),
+            salt: xdr::Uint256(salt_bytes.as_slice().try_into().unwrap()),
+        });
 
     let parent_id = sha256_hash_id_preimage(pre_image);
 
     //Put child contract that will be created into the footprint
     //Use the same salt
     let child_pre_image =
-        xdr::HashIdPreimage::ContractIdFromContract(xdr::HashIdPreimageChildContractId {
+        xdr::HashIdPreimage::ContractIdFromContract(xdr::HashIdPreimageContractId {
             contract_id: parent_id.clone(),
             salt: xdr::Uint256(salt_bytes.as_slice().try_into().unwrap()),
         });
