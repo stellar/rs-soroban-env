@@ -15,7 +15,7 @@ mod unimplemented_env;
 mod val;
 mod meta;
 
-pub const META: [u8; _] = meta::META;
+pub const META: [u8; 12] = meta::META;
 
 // Re-export the XDR definitions
 pub use stellar_xdr as xdr;
