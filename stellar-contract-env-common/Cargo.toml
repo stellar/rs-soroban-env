@@ -4,6 +4,7 @@ version = "0.0.0"
 edition = "2021"
 
 [dependencies]
+stellar-contract-env-macros = { path = "../stellar-contract-env-macros" }
 static_assertions = "1.1.0"
 stellar-xdr = { git = "https://github.com/stellar/rs-stellar-xdr", rev = "0edf9326", default-features = false, features = [ "next" ] }
 # stellar-xdr = { path = "../../rs-stellar-xdr", default-features = false, features = ["next"] }

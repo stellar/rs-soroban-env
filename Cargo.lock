@@ -478,6 +478,20 @@ name = "serde"
 version = "1.0.137"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "61ea8d54c77f8315140a05f4c7237403bf38b72704d031543aa1d16abbf517d1"
+dependencies = [
+ "serde_derive",
+]
+
+[[package]]
+name = "serde_derive"
+version = "1.0.137"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1f26faba0c3959972377d3b2d306ee9f71faee9714294e41bb777f83f88578be"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
 
 [[package]]
 name = "sha2"
@@ -530,7 +544,8 @@ name = "stellar-contract-env-common"
 version = "0.0.0"
 dependencies = [
  "static_assertions",
- "stellar-xdr",
+ "stellar-contract-env-macros",
+ "stellar-xdr 0.0.0 (git+https://github.com/stellar/rs-stellar-xdr?rev=0edf9326)",
  "wasmi",
 ]
 
@@ -569,6 +584,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "stellar-contract-env-macros"
+version = "0.0.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "stellar-xdr 0.0.0 (git+https://github.com/stellar/rs-stellar-xdr?rev=540ed24e)",
+ "syn",
+]
+
+[[package]]
 name = "stellar-contract-env-panic-handler-wasm32-unreachable"
 version = "0.0.0"
 
@@ -578,6 +603,15 @@ version = "0.0.0"
 source = "git+https://github.com/stellar/rs-stellar-xdr?rev=0edf9326#0edf932688f672be03b1a06ebaed0304bf964485"
 dependencies = [
  "base64",
+]
+
+[[package]]
+name = "stellar-xdr"
+version = "0.0.0"
+source = "git+https://github.com/stellar/rs-stellar-xdr?rev=540ed24e#540ed24edc66b5301459ed3269129670160e51e0"
+dependencies = [
+ "base64",
+ "serde",
 ]
 
 [[package]]

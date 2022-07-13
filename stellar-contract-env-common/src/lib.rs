@@ -13,9 +13,9 @@ mod tagged_val;
 mod tuple;
 mod unimplemented_env;
 mod val;
-mod version;
+mod meta;
 
-pub use version::INTERFACE_VERSION;
+pub const META: [u8; _] = meta::META;
 
 // Re-export the XDR definitions
 pub use stellar_xdr as xdr;

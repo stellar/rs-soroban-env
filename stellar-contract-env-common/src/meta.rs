@@ -33,4 +33,7 @@
 /// _not_ compiled into a contract, since the same contract will be expected to
 /// run against multliple implementations over a long period of time.
 
-pub const INTERFACE_VERSION: u64 = 1;
+pub const META: [u8; 1] = stellar_contract_env_macros::contract_env_meta!(
+    // Interface Version
+    1
+);
