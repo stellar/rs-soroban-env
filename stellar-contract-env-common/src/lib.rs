@@ -15,7 +15,7 @@ mod tuple;
 mod unimplemented_env;
 mod val;
 
-pub use meta::META;
+pub use meta::{META_INTERFACE_VERSION, META};
 
 // Re-export the XDR definitions
 pub use stellar_xdr as xdr;
