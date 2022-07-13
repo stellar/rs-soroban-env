@@ -1419,10 +1419,11 @@ impl CheckedEnv for Host {
         self.verify_sig_ed25519(hash, key, sig)?;
 
         //Create contract and contractID
-        let pre_image = xdr::HashIdPreimage::ContractIdFromEd25519(xdr::HashIdPreimageContractId {
-            ed25519: key_val,
-            salt: salt_val,
-        });
+        let pre_image =
+            xdr::HashIdPreimage::ContractIdFromEd25519(xdr::HashIdPreimageEd25519ContractId {
+                ed25519: key_val,
+                salt: salt_val,
+            });
         let mut buf = Vec::new();
         pre_image
             .write_xdr(&mut buf)
@@ -1444,7 +1445,7 @@ impl CheckedEnv for Host {
         })?;
 
         let pre_image =
-            xdr::HashIdPreimage::ContractIdFromContract(xdr::HashIdPreimageChildContractId {
+            xdr::HashIdPreimage::ContractIdFromContract(xdr::HashIdPreimageContractId {
                 contract_id,
                 salt: salt_val,
             });

@@ -29,6 +29,7 @@ log = "0.4.17"
 
 [features]
 vm = ["wasmi", "parity-wasm", "stellar-contract-env-common/vm"]
+serde = ["stellar-contract-env-common/serde"]
 testutils = []
 
 [target.'cfg(target_os = "linux")'.dev-dependencies]
