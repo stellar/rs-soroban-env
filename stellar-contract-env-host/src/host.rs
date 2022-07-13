@@ -177,6 +177,27 @@ struct RollbackPoint {
     objects: usize,
 }
 
+#[cfg(feature = "testutils")]
+pub trait ContractVTableFnTrait {
+    fn call(&self, args: &[RawVal]) -> RawVal;
+
+    fn duplicate(&self) -> ContractVTableFn;
+}
+
+#[cfg(feature = "testutils")]
+pub struct ContractVTableFn(pub Box<dyn ContractVTableFnTrait>);
+
+#[cfg(feature = "testutils")]
+impl Clone for ContractVTableFn {
+    fn clone(&self) -> Self {
+        self.0.duplicate()
+    }
+}
+
+#[cfg(feature = "testutils")]
+#[derive(Clone)]
+pub struct ContractVTable(pub std::collections::HashMap<Symbol, ContractVTableFn>);
+
 /// Holds contextual information about a single invocation, either
 /// a reference to a contract [`Vm`] or an enclosing [`HostFunction`]
 /// invocation.
@@ -203,6 +224,8 @@ pub(crate) struct HostImpl {
     storage: RefCell<Storage>,
     context: RefCell<Vec<Frame>>,
     budget: RefCell<Budget>,
+    #[cfg(feature = "testutils")]
+    vtables: RefCell<std::collections::HashMap<Hash, ContractVTable>>,
 }
 
 /// A guard struct that exists to call [`Host::pop_frame`] when it is dropped,
@@ -254,6 +277,8 @@ impl Host {
             storage: RefCell::new(storage),
             context: Default::default(),
             budget: Default::default(),
+            #[cfg(feature = "testutils")]
+            vtables: Default::default(),
         }))
     }
 
@@ -868,6 +893,28 @@ impl Host {
         self.visit_storage(|storage| match storage.get(&acc)?.data {
             LedgerEntryData::Account(ae) => Ok(ae),
             _ => Err(HostError::General("not account")),
+        })
+    }
+
+    #[cfg(feature = "testutils")]
+    pub fn register_test_contract(
+        &self,
+        contract_id: Object,
+        vtable: ContractVTable,
+    ) -> Result<(), HostError> {
+        self.visit_obj(contract_id, |bin: &Vec<u8>| {
+            let mut vtables = self.0.vtables.borrow_mut();
+            let hash = Hash(
+                bin.clone()
+                    .try_into()
+                    .map_err(|_| HostError::General("bad contract id"))?,
+            );
+            if !vtables.contains_key(&hash) {
+                vtables.insert(hash, vtable);
+                Ok(())
+            } else {
+                Err(HostError::General("vtable already exists"))
+            }
         })
     }
 }
