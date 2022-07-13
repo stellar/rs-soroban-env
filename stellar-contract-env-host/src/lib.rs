@@ -1,4 +1,5 @@
 pub mod budget;
+pub mod events;
 mod host;
 pub(crate) mod host_object;
 pub(crate) mod weak_host;

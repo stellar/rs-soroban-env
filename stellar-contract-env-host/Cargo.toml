@@ -19,6 +19,7 @@ ed25519-dalek = "1.0.1"
 hex = "0.4.3"
 num-traits = "0.2.15"
 num-integer = "0.1.45"
+arrayvec = "0.7.2"
 
 [dev-dependencies]
 assert_matches = "1.5.0"

@@ -12,6 +12,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "arrayvec"
+version = "0.7.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8da52d66c7071e2e3fa2a1e5c6d088fec47b593032b254f5e980de8ea54454d6"
+
+[[package]]
 name = "assert_matches"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -545,6 +551,7 @@ dependencies = [
 name = "stellar-contract-env-host"
 version = "0.0.0"
 dependencies = [
+ "arrayvec",
  "assert_matches",
  "ed25519-dalek",
  "env_logger",
