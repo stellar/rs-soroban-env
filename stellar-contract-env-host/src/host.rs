@@ -178,6 +178,12 @@ struct RollbackPoint {
     objects: usize,
 }
 
+#[cfg(feature = "testutils")]
+#[derive(Clone)]
+pub struct ContractFunctionSet(
+    pub std::collections::HashMap<Symbol, &'static dyn Fn(Host, &[RawVal]) -> RawVal>,
+);
+
 /// Holds contextual information about a single invocation, either
 /// a reference to a contract [`Vm`] or an enclosing [`HostFunction`]
 /// invocation.
@@ -205,6 +211,8 @@ pub(crate) struct HostImpl {
     context: RefCell<Vec<Frame>>,
     budget: RefCell<Budget>,
     events: RefCell<Events>,
+    #[cfg(feature = "testutils")]
+    contracts: RefCell<std::collections::HashMap<Hash, ContractFunctionSet>>,
 }
 
 /// A guard struct that exists to call [`Host::pop_frame`] when it is dropped,
@@ -257,6 +265,8 @@ impl Host {
             context: Default::default(),
             budget: Default::default(),
             events: Default::default(),
+            #[cfg(feature = "testutils")]
+            contracts: Default::default(),
         }))
     }
 
@@ -353,23 +363,15 @@ impl Host {
     }
 
     #[cfg(feature = "testutils")]
-    pub fn push_test_frame(&self, id: Object) -> Result<FrameGuard, HostError> {
-        let contract_id = self.visit_obj(id, |b: &Vec<u8>| {
-            Ok(Hash(b.clone().try_into().map_err(|_| {
-                HostError::WithStatus(
-                    String::from("not a binary object"),
-                    ScStatus::HostObjectError(ScHostObjErrorCode::UnexpectedType),
-                )
-            })?))
-        })?;
+    pub(crate) fn push_test_frame(&self, contract_id: Hash) -> FrameGuard {
         self.0
             .context
             .borrow_mut()
             .push(Frame::TestContract(contract_id));
-        Ok(FrameGuard {
+        FrameGuard {
             rollback: Some(self.capture_rollback_point()),
             host: self.clone(),
-        })
+        }
     }
 
     /// Applies a function to the top [`Frame`] of the context stack. Returns
@@ -796,17 +798,8 @@ impl Host {
     }
 
     #[cfg(feature = "vm")]
-    fn call_n(&self, contract: Object, func: Symbol, args: &[RawVal]) -> Result<RawVal, HostError> {
+    fn call_wasm_fn(&self, id: &Hash, func: &Symbol, args: &[RawVal]) -> Result<RawVal, HostError> {
         // Create key for storage
-        let id = self.visit_obj(contract, |bin: &Vec<u8>| {
-            let arr: [u8; 32] = bin.as_slice().try_into().map_err(|_| {
-                HostError::WithStatus(
-                    String::from("invalid contract hash"),
-                    ScStatus::HostObjectError(ScHostObjErrorCode::ContractHashWrongLength),
-                )
-            })?;
-            Ok(xdr::Hash(arr))
-        })?;
         let key = ScVal::Static(ScStatic::LedgerKeyContractCodeWasm);
         let storage_key = LedgerKey::ContractData(LedgerKeyContractData {
             contract_id: id.clone(),
@@ -838,18 +831,44 @@ impl Host {
                 ))
             }
         };
-        let vm = Vm::new(self, id, code.as_slice())?;
+        let vm = Vm::new(self, id.clone(), code.as_slice())?;
         // Resolve the function symbol and invoke contract call
         vm.invoke_function_raw(self, SymbolStr::from(func).as_ref(), args)
+    }
+
+    fn call_n(&self, contract: Object, func: Symbol, args: &[RawVal]) -> Result<RawVal, HostError> {
+        // Get contract ID
+        let id = self.visit_obj(contract, |bin: &Vec<u8>| {
+            let arr: [u8; 32] = bin.as_slice().try_into().map_err(|_| {
+                HostError::WithStatus(
+                    String::from("invalid contract hash"),
+                    ScStatus::HostObjectError(ScHostObjErrorCode::ContractHashWrongLength),
+                )
+            })?;
+            Ok(xdr::Hash(arr))
+        })?;
+
+        #[cfg(feature = "testutils")]
+        if let Some(vtable) = self.0.contracts.borrow().get(&id) {
+            if let Some(f) = vtable.0.get(&func) {
+                let mut frame_guard = self.push_test_frame(id.clone());
+                let res = Ok(f(self.clone(), args));
+                frame_guard.commit();
+                return res;
+            } else {
+                return Err(HostError::General("function not in vtable"));
+            }
+        }
+
+        #[cfg(feature = "vm")]
+        return self.call_wasm_fn(&id, &func, args);
+        #[cfg(not(feature = "vm"))]
+        return Err(HostError::General("could not dispatch"));
     }
 
     pub fn invoke_function(&mut self, hf: HostFunction, args: ScVec) -> Result<ScVal, HostError> {
         match hf {
             HostFunction::Call => {
-                #[cfg(not(feature = "vm"))]
-                unimplemented!();
-
-                #[cfg(feature = "vm")]
                 if let [ScVal::Object(Some(scobj)), ScVal::Symbol(scsym), rest @ ..] =
                     args.as_slice()
                 {
@@ -912,6 +931,28 @@ impl Host {
         self.visit_storage(|storage| match storage.get(&acc)?.data {
             LedgerEntryData::Account(ae) => Ok(ae),
             _ => Err(HostError::General("not account")),
+        })
+    }
+
+    #[cfg(feature = "testutils")]
+    pub fn register_test_contract(
+        &self,
+        contract_id: Object,
+        contract_fns: ContractFunctionSet,
+    ) -> Result<(), HostError> {
+        self.visit_obj(contract_id, |bin: &Vec<u8>| {
+            let mut contracts = self.0.contracts.borrow_mut();
+            let hash = Hash(
+                bin.clone()
+                    .try_into()
+                    .map_err(|_| HostError::General("bad contract id"))?,
+            );
+            if !contracts.contains_key(&hash) {
+                contracts.insert(hash, contract_fns);
+                Ok(())
+            } else {
+                Err(HostError::General("vtable already exists"))
+            }
         })
     }
 }
@@ -1416,21 +1457,13 @@ impl CheckedEnv for Host {
     }
 
     fn call(&self, contract: Object, func: Symbol, args: Object) -> Result<RawVal, HostError> {
-        #[cfg(not(feature = "vm"))]
-        todo!();
-        #[cfg(feature = "vm")]
-        {
-            let args: Vec<RawVal> = self.visit_obj(args, |hv: &HostVec| {
-                Ok(hv.iter().map(|a| a.to_raw()).collect())
-            })?;
-            self.call_n(contract, func, args.as_slice())
-        }
+        let args: Vec<RawVal> = self.visit_obj(args, |hv: &HostVec| {
+            Ok(hv.iter().map(|a| a.to_raw()).collect())
+        })?;
+        self.call_n(contract, func, args.as_slice())
     }
 
     fn try_call(&self, contract: Object, func: Symbol, args: Object) -> Result<RawVal, HostError> {
-        #[cfg(not(feature = "vm"))]
-        todo!();
-        #[cfg(feature = "vm")]
         match self.call(contract, func, args) {
             Ok(rv) => Ok(rv),
             Err(e) => {
