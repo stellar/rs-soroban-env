@@ -13,6 +13,9 @@ mod tagged_val;
 mod tuple;
 mod unimplemented_env;
 mod val;
+mod version;
+
+pub use version::INTERFACE_VERSION;
 
 // Re-export the XDR definitions
 pub use stellar_xdr as xdr;

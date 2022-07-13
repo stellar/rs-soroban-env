@@ -18,6 +18,7 @@ use stellar_contract_env_common::xdr::{
 };
 
 use crate::budget::{Budget, CostType};
+use crate::events::Events;
 use crate::storage::Storage;
 use crate::weak_host::WeakHost;
 
@@ -209,6 +210,7 @@ pub(crate) struct HostImpl {
     storage: RefCell<Storage>,
     context: RefCell<Vec<Frame>>,
     budget: RefCell<Budget>,
+    events: RefCell<Events>,
     #[cfg(feature = "testutils")]
     contracts: RefCell<std::collections::HashMap<Hash, ContractFunctionSet>>,
 }
@@ -262,6 +264,7 @@ impl Host {
             storage: RefCell::new(storage),
             context: Default::default(),
             budget: Default::default(),
+            events: Default::default(),
             #[cfg(feature = "testutils")]
             contracts: Default::default(),
         }))
@@ -286,6 +289,22 @@ impl Host {
 
     pub fn charge_budget(&self, ty: CostType, input: u64) -> Result<(), HostError> {
         self.get_budget_mut(|budget| budget.charge(ty, input))
+    }
+
+    pub(crate) fn get_events_mut<F, U>(&self, f: F) -> Result<U, HostError>
+    where
+        F: FnOnce(&mut Events) -> Result<U, HostError>,
+    {
+        f(&mut *self.0.events.borrow_mut())
+    }
+
+    pub(crate) fn add_debug_event(
+        &self,
+        msg: &'static str,
+        args: &[RawVal],
+    ) -> Result<(), HostError> {
+        self.charge_budget(CostType::HostEventDebug, args.len() as u64)?;
+        self.get_events_mut(|events| Ok(events.add_debug_event(msg, args)))
     }
 
     pub(crate) fn visit_storage<F, U>(&self, f: F) -> Result<U, HostError>
@@ -526,7 +545,7 @@ impl Host {
     }
 
     // Testing interface to create values directly for later use via Env functions.
-    pub fn intern(&self, v: &ScVal) -> Result<RawVal, HostError> {
+    pub fn inject_val(&self, v: &ScVal) -> Result<RawVal, HostError> {
         self.to_host_val(v).map(|hv| hv.into())
     }
 
@@ -648,7 +667,6 @@ impl Host {
     pub(crate) fn to_host_obj(&self, ob: &ScObject) -> Result<HostObj, HostError> {
         match ob {
             ScObject::Vec(v) => {
-                self.charge_budget(CostType::HostVecAlloc, v.0.len() as u64)?;
                 let mut vv = Vector::new();
                 for e in v.0.iter() {
                     vv.push_back(self.to_host_val(e)?);
@@ -680,6 +698,29 @@ impl Host {
         }
     }
 
+    pub(crate) fn charge_for_new_host_object(
+        &self,
+        ho: HostObject,
+    ) -> Result<HostObject, HostError> {
+        match &ho {
+            HostObject::Vec(v) => {
+                self.charge_budget(CostType::HostVecAllocVec, 1)?;
+                self.charge_budget(CostType::HostVecAllocCell, v.len() as u64)?;
+            }
+            HostObject::Map(m) => {
+                self.charge_budget(CostType::HostMapAllocMap, 1)?;
+                self.charge_budget(CostType::HostMapAllocCell, m.len() as u64)?;
+            }
+            HostObject::U64(_) => {}
+            HostObject::I64(_) => {}
+            HostObject::Bin(_) => {}
+            HostObject::BigInt(_) => {}
+            HostObject::Hash(_) => {}
+            HostObject::PublicKey(_) => {}
+        }
+        Ok(ho)
+    }
+
     /// Moves a value of some type implementing [`HostObjectType`] into the host's
     /// object array, returning a [`HostObj`] containing the new object's array
     /// index, tagged with the [`xdr::ScObjectType`] and associated with the current
@@ -695,7 +736,10 @@ impl Host {
                 ScStatus::HostObjectError(ScHostObjErrorCode::ObjectCountExceedsU32Max),
             ));
         }
-        self.0.objects.borrow_mut().push(HOT::inject(hot));
+        self.0
+            .objects
+            .borrow_mut()
+            .push(self.charge_for_new_host_object(HOT::inject(hot))?);
         let env = WeakHost(Rc::downgrade(&self.0));
         let v = Object::from_type_and_handle(HOT::get_type(), handle as u32);
         Ok(v.into_env_val(&env))
@@ -958,6 +1002,15 @@ impl CheckedEnv for Host {
     type Error = HostError;
 
     fn log_value(&self, v: RawVal) -> Result<RawVal, HostError> {
+        self.add_debug_event("log", &[v])?;
+        Ok(RawVal::from_void())
+    }
+
+    fn contract_event(&self, v: RawVal) -> Result<RawVal, HostError> {
+        todo!()
+    }
+
+    fn system_event(&self, v: RawVal) -> Result<RawVal, HostError> {
         todo!()
     }
 
@@ -1358,7 +1411,7 @@ impl CheckedEnv for Host {
 
         // Verify parameters
         let params = self.visit_obj(v, |bin: &Vec<u8>| {
-            let separator = "create_contract_from_ed25519(nonce: u256, contract: Vec<u8>, salt: u256, key: u256, sig: Vec<u8>)";
+            let separator = "create_contract_from_ed25519(contract: Vec<u8>, salt: u256, key: u256, sig: Vec<u8>)";
             let params = [separator.as_bytes(), salt_val.as_ref(), bin].concat();
             Ok(params)
         })?;

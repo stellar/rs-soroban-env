@@ -12,6 +12,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "arrayvec"
+version = "0.7.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8da52d66c7071e2e3fa2a1e5c6d088fec47b593032b254f5e980de8ea54454d6"
+
+[[package]]
 name = "assert_matches"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -545,6 +551,7 @@ dependencies = [
 name = "stellar-contract-env-host"
 version = "0.0.0"
 dependencies = [
+ "arrayvec",
  "assert_matches",
  "ed25519-dalek",
  "env_logger",
@@ -575,7 +582,7 @@ version = "0.0.0"
 [[package]]
 name = "stellar-xdr"
 version = "0.0.0"
-source = "git+https://github.com/stellar/rs-stellar-xdr?rev=db2ca71#db2ca7176740fbd66f9684a1d6a55dfb53a225a5"
+source = "git+https://github.com/stellar/rs-stellar-xdr?rev=0edf9326#0edf932688f672be03b1a06ebaed0304bf964485"
 dependencies = [
  "base64",
 ]
