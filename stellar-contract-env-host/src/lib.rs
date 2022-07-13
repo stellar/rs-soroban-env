@@ -12,7 +12,7 @@ pub mod storage;
 mod test;
 
 #[cfg(feature = "testutils")]
-pub use host::{ContractVTable, ContractVTableFn, ContractVTableFnTrait};
+pub use host::ContractVTable;
 pub use host::{Host, HostError};
 pub use im_rc;
 pub use stellar_contract_env_common::*;

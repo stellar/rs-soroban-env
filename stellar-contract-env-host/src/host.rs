@@ -178,25 +178,10 @@ struct RollbackPoint {
 }
 
 #[cfg(feature = "testutils")]
-pub trait ContractVTableFnTrait {
-    fn call(&self, args: &[RawVal]) -> RawVal;
-
-    fn duplicate(&self) -> ContractVTableFn;
-}
-
-#[cfg(feature = "testutils")]
-pub struct ContractVTableFn(pub Box<dyn ContractVTableFnTrait>);
-
-#[cfg(feature = "testutils")]
-impl Clone for ContractVTableFn {
-    fn clone(&self) -> Self {
-        self.0.duplicate()
-    }
-}
-
-#[cfg(feature = "testutils")]
 #[derive(Clone)]
-pub struct ContractVTable(pub std::collections::HashMap<Symbol, ContractVTableFn>);
+pub struct ContractVTable(
+    pub std::collections::HashMap<Symbol, &'static dyn Fn(Host, &[RawVal]) -> RawVal>,
+);
 
 /// Holds contextual information about a single invocation, either
 /// a reference to a contract [`Vm`] or an enclosing [`HostFunction`]
@@ -778,7 +763,7 @@ impl Host {
         if let Some(vtable) = self.0.vtables.borrow().get(&id) {
             if let Some(f) = vtable.0.get(&func) {
                 let mut frame_guard = self.push_test_frame(id.clone());
-                let res = Some(Ok(f.0.call(args)));
+                let res = Some(Ok(f(self.clone(), args)));
                 frame_guard.commit();
                 res
             } else {
