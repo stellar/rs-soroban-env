@@ -179,7 +179,7 @@ struct RollbackPoint {
 
 #[cfg(feature = "testutils")]
 #[derive(Clone)]
-pub struct ContractVTable(
+pub struct ContractFunctionSet(
     pub std::collections::HashMap<Symbol, &'static dyn Fn(Host, &[RawVal]) -> RawVal>,
 );
 
@@ -210,7 +210,7 @@ pub(crate) struct HostImpl {
     context: RefCell<Vec<Frame>>,
     budget: RefCell<Budget>,
     #[cfg(feature = "testutils")]
-    vtables: RefCell<std::collections::HashMap<Hash, ContractVTable>>,
+    contracts: RefCell<std::collections::HashMap<Hash, ContractFunctionSet>>,
 }
 
 /// A guard struct that exists to call [`Host::pop_frame`] when it is dropped,
@@ -263,7 +263,7 @@ impl Host {
             context: Default::default(),
             budget: Default::default(),
             #[cfg(feature = "testutils")]
-            vtables: Default::default(),
+            contracts: Default::default(),
         }))
     }
 
@@ -805,7 +805,7 @@ impl Host {
         })?;
 
         #[cfg(feature = "testutils")]
-        if let Some(vtable) = self.0.vtables.borrow().get(&id) {
+        if let Some(vtable) = self.0.contracts.borrow().get(&id) {
             if let Some(f) = vtable.0.get(&func) {
                 let mut frame_guard = self.push_test_frame(id.clone());
                 let res = Ok(f(self.clone(), args));
@@ -894,17 +894,17 @@ impl Host {
     pub fn register_test_contract(
         &self,
         contract_id: Object,
-        vtable: ContractVTable,
+        contract_fns: ContractFunctionSet,
     ) -> Result<(), HostError> {
         self.visit_obj(contract_id, |bin: &Vec<u8>| {
-            let mut vtables = self.0.vtables.borrow_mut();
+            let mut contracts = self.0.contracts.borrow_mut();
             let hash = Hash(
                 bin.clone()
                     .try_into()
                     .map_err(|_| HostError::General("bad contract id"))?,
             );
-            if !vtables.contains_key(&hash) {
-                vtables.insert(hash, vtable);
+            if !contracts.contains_key(&hash) {
+                contracts.insert(hash, contract_fns);
                 Ok(())
             } else {
                 Err(HostError::General("vtable already exists"))
