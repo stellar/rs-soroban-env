@@ -12,5 +12,5 @@ pub fn contract_env_meta(input: TokenStream) -> TokenStream {
     let meta = ScEnvMetaEntry::ScEnvMetaKindInterfaceVersion(version.base10_parse().unwrap());
     let meta_xdr = meta.to_xdr().unwrap();
     let meta_xdr_lit = proc_macro2::Literal::byte_string(meta_xdr.as_slice());
-    quote! { #meta_xdr_lit }.into()
+    quote! { *#meta_xdr_lit }.into()
 }
