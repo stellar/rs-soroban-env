@@ -7,7 +7,7 @@ use syn::{parse_macro_input, LitInt};
 use stellar_xdr::{ScEnvMetaEntry, WriteXdr};
 
 #[proc_macro]
-pub fn contract_env_meta(input: TokenStream) -> TokenStream {
+pub fn build_env_meta_xdr(input: TokenStream) -> TokenStream {
     let version = parse_macro_input!(input as LitInt);
     let meta = ScEnvMetaEntry::ScEnvMetaKindInterfaceVersion(version.base10_parse().unwrap());
     let meta_xdr = meta.to_xdr().unwrap();

@@ -35,7 +35,7 @@
 
 pub const META_INTERFACE_VERSION: u64 = 1;
 
-pub const META: [u8; 12] = stellar_contract_env_macros::contract_env_meta!(
+pub const META: [u8; 12] = stellar_contract_env_macros::build_env_meta_xdr!(
     // Interface Version
     1
 );
