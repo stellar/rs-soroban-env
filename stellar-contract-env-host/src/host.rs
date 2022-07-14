@@ -1089,17 +1089,51 @@ impl CheckedEnv for Host {
 
     fn map_prev_key(&self, m: Object, k: RawVal) -> Result<RawVal, HostError> {
         let k = self.associate_raw_val(k);
-        self.visit_obj(m, |hm: &HostMap| match hm.get_prev(&k) {
-            Some((pk, pv)) => Ok(pk.to_raw()),
-            None => Ok(UNKNOWN_ERROR.to_raw()), //FIXME: replace with the actual status code
+        self.visit_obj(m, |hm: &HostMap| {
+            if let Some((pk, pv)) = hm.get_prev(&k) {
+                if *pk != k {
+                    Ok(pk.to_raw())
+                } else {
+                    if let Some((pk2, pv2)) = hm
+                        .clone()
+                        .extract(pk) // removes (pk, pv) and returns an Option<(pv, updated_map)>
+                        .ok_or_else(|| HostError::General("key not exist"))?
+                        .1
+                        .get_prev(pk)
+                    {
+                        Ok(pk2.to_raw())
+                    } else {
+                        Ok(UNKNOWN_ERROR.to_raw()) //FIXME: replace with the actual status code
+                    }
+                }
+            } else {
+                Ok(UNKNOWN_ERROR.to_raw()) //FIXME: replace with the actual status code
+            }
         })
     }
 
     fn map_next_key(&self, m: Object, k: RawVal) -> Result<RawVal, HostError> {
         let k = self.associate_raw_val(k);
-        self.visit_obj(m, |hm: &HostMap| match hm.get_next(&k) {
-            Some((pk, pv)) => Ok(pk.to_raw()),
-            None => Ok(UNKNOWN_ERROR.to_raw()), //FIXME: replace with the actual status code
+        self.visit_obj(m, |hm: &HostMap| {
+            if let Some((pk, pv)) = hm.get_next(&k) {
+                if *pk != k {
+                    Ok(pk.to_raw())
+                } else {
+                    if let Some((pk2, pv2)) = hm
+                        .clone()
+                        .extract(pk) // removes (pk, pv) and returns an Option<(pv, updated_map)>
+                        .ok_or_else(|| HostError::General("key not exist"))?
+                        .1
+                        .get_next(pk)
+                    {
+                        Ok(pk2.to_raw())
+                    } else {
+                        Ok(UNKNOWN_ERROR.to_raw()) //FIXME: replace with the actual status code
+                    }
+                }
+            } else {
+                Ok(UNKNOWN_ERROR.to_raw()) //FIXME: replace with the actual status code
+            }
         })
     }
 
