@@ -1122,7 +1122,7 @@ impl CheckedEnv for Host {
 
     fn map_keys(&self, m: Object) -> Result<Object, HostError> {
         self.visit_obj(m, |hm: &HostMap| {
-            let mut vec = self.vec_new()?;
+            let mut vec = self.vec_new(RawVal::from_void())?;
             for k in hm.keys() {
                 vec = self.vec_push(vec, k.to_raw())?;
             }
@@ -1132,7 +1132,7 @@ impl CheckedEnv for Host {
 
     fn map_values(&self, m: Object) -> Result<Object, HostError> {
         self.visit_obj(m, |hm: &HostMap| {
-            let mut vec = self.vec_new()?;
+            let mut vec = self.vec_new(RawVal::from_void())?;
             for k in hm.values() {
                 vec = self.vec_push(vec, k.to_raw())?;
             }
@@ -1140,7 +1140,17 @@ impl CheckedEnv for Host {
         })
     }
 
-    fn vec_new(&self) -> Result<Object, HostError> {
+    fn vec_new(&self, c: RawVal) -> Result<Object, HostError> {
+        let capacity: usize = if c.is_void() {
+            0
+        } else {
+            u32::try_from(c).map_err(|_| {
+                HostError::WithStatus(
+                    String::from("c must be either `ScStatic::Void` or an `u32`"),
+                    ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsWrongType),
+                )
+            })? as usize
+        };
         Ok(self.add_host_object(HostVec::new())?.into())
     }
 

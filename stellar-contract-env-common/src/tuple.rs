@@ -39,7 +39,7 @@ macro_rules! impl_for_tuple {
         {
             fn into_env_val(self, env: &E) -> EnvVal<E, RawVal> {
                 let env = env.clone();
-                let vec = env.vec_new();
+                let vec = env.vec_new(RawVal::from_void());
                 $(let vec = env.vec_push(vec, self.$idx.into_val(&env));)*
                 EnvVal { env, val: vec.to_raw() }
             }
