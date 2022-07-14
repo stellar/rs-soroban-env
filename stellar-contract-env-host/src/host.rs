@@ -849,9 +849,12 @@ impl Host {
 
         #[cfg(feature = "testutils")]
         if let Some(cfs) = self.0.contracts.borrow().get(&id) {
-            return cfs
+            let mut fg = self.push_test_frame(id.clone());
+            let res = cfs
                 .call(&func, self, args)
-                .ok_or_else(|| HostError::General("function not found"));
+                .ok_or_else(|| HostError::General("function not found"))?;
+            fg.commit();
+            return Ok(res);
         }
 
         #[cfg(feature = "vm")]
