@@ -1099,7 +1099,7 @@ impl CheckedEnv for Host {
                 } else {
                     if let Some((pk2, pv2)) = hm
                         .clone()
-                        .extract(pk)
+                        .extract(pk) // removes (pk, pv) and returns an Option<(pv, updated_map)>
                         .ok_or_else(|| HostError::General("key not exist"))?
                         .1
                         .get_prev(pk)
@@ -1124,7 +1124,7 @@ impl CheckedEnv for Host {
                 } else {
                     if let Some((pk2, pv2)) = hm
                         .clone()
-                        .extract(pk)
+                        .extract(pk) // removes (pk, pv) and returns an Option<(pv, updated_map)>
                         .ok_or_else(|| HostError::General("key not exist"))?
                         .1
                         .get_next(pk)
