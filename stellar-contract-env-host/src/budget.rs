@@ -1,8 +1,10 @@
+use strum::EnumIter;
+
 use crate::HostError;
 
 // TODO: move this to an XDR enum
 #[repr(i32)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, EnumIter)]
 pub enum CostType {
     HostVecAllocVec = 0,
     HostVecAllocCell = 1,

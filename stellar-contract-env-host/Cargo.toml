@@ -20,6 +20,7 @@ hex = "0.4.3"
 num-traits = "0.2.15"
 num-integer = "0.1.45"
 arrayvec = "0.7.2"
+strum = { version = "0.24.1", features = ["derive"] }
 
 [dev-dependencies]
 assert_matches = "1.5.0"
