@@ -1122,7 +1122,8 @@ impl CheckedEnv for Host {
 
     fn map_keys(&self, m: Object) -> Result<Object, HostError> {
         self.visit_obj(m, |hm: &HostMap| {
-            let mut vec = self.vec_new(self.map_len(m)?)?;
+            let cap: u32 = hm.len().try_into()?;
+            let mut vec = self.vec_new(cap.into())?;
             for k in hm.keys() {
                 vec = self.vec_push(vec, k.to_raw())?;
             }
@@ -1132,7 +1133,8 @@ impl CheckedEnv for Host {
 
     fn map_values(&self, m: Object) -> Result<Object, HostError> {
         self.visit_obj(m, |hm: &HostMap| {
-            let mut vec = self.vec_new(self.map_len(m)?)?;
+            let cap: u32 = hm.len().try_into()?;
+            let mut vec = self.vec_new(cap.into())?;
             for k in hm.values() {
                 vec = self.vec_push(vec, k.to_raw())?;
             }
