@@ -4,6 +4,7 @@ mod bitset;
 mod checked_env;
 mod env;
 mod env_val;
+mod meta;
 mod object;
 mod raw_val;
 mod r#static;
@@ -13,9 +14,8 @@ mod tagged_val;
 mod tuple;
 mod unimplemented_env;
 mod val;
-mod version;
 
-pub use version::INTERFACE_VERSION;
+pub use meta::{META, META_INTERFACE_VERSION};
 
 // Re-export the XDR definitions
 pub use stellar_xdr as xdr;
