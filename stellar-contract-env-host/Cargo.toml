@@ -19,7 +19,9 @@ ed25519-dalek = "1.0.1"
 hex = "0.4.3"
 num-traits = "0.2.15"
 num-integer = "0.1.45"
-arrayvec = "0.7.2"
+tinyvec = {version = "1.6.0", features = ["alloc"] }
+log = "0.4.17"
+backtrace = "0.3"
 
 [dev-dependencies]
 assert_matches = "1.5.0"

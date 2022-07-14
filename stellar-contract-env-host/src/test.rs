@@ -1,4 +1,5 @@
 use crate::{
+    host_object::{HostObj, HostVal},
     xdr::{
         ScHostFnErrorCode, ScHostObjErrorCode, ScObject, ScObjectType, ScStatic, ScStatus, ScVal,
         ScVec,
@@ -7,7 +8,7 @@ use crate::{
 };
 
 use stellar_contract_env_common::{
-    xdr::{ScMap, ScMapEntry},
+    xdr::{ScMap, ScMapEntry, ScUnknownErrorCode},
     CheckedEnv, RawValConvertible, UNKNOWN_ERROR,
 };
 
@@ -23,12 +24,53 @@ use im_rc::OrdMap;
 use stellar_contract_env_common::xdr::WriteXdr;
 
 #[cfg(feature = "vm")]
-use crate::xdr::{ContractDataEntry, Hash, LedgerEntry, LedgerEntryExt, ScStatusType};
+use crate::xdr::{ContractDataEntry, Hash, LedgerEntry, LedgerEntryExt};
 #[cfg(feature = "vm")]
 use crate::Vm;
-use assert_matches::assert_matches;
 #[cfg(feature = "vm")]
 use stellar_contract_env_common::Status;
+
+// Test utilities for the host.
+trait AsScVal {
+    fn as_scval(&self) -> ScVal;
+}
+
+impl AsScVal for u32 {
+    fn as_scval(&self) -> ScVal {
+        ScVal::U32(*self)
+    }
+}
+
+impl AsScVal for i32 {
+    fn as_scval(&self) -> ScVal {
+        ScVal::I32(*self)
+    }
+}
+
+impl Host {
+    fn test_scvec<T: AsScVal>(&self, vals: &[T]) -> Result<ScVec, HostError> {
+        let v: Vec<ScVal> = vals.iter().map(|x| x.as_scval()).collect();
+        self.map_err(v.try_into())
+    }
+
+    fn test_vec_obj<T: AsScVal>(&self, vals: &[T]) -> Result<HostObj, HostError> {
+        let v = self.test_scvec(vals)?;
+        self.to_host_obj(&ScObject::Vec(v))
+    }
+
+    fn test_vec_val<T: AsScVal>(&self, vals: &[T]) -> Result<HostVal, HostError> {
+        let v = self.test_scvec(vals)?;
+        self.to_host_val(&ScVal::Object(Some(ScObject::Vec(v))))
+    }
+
+    fn test_bin_scobj(&self, vals: &[u8]) -> Result<ScObject, HostError> {
+        Ok(ScObject::Binary(self.map_err(vals.try_into())?))
+    }
+
+    fn test_bin_obj(&self, vals: &[u8]) -> Result<HostObj, HostError> {
+        self.to_host_obj(&self.test_bin_scobj(vals)?)
+    }
+}
 
 /// numbers test
 #[test]
@@ -97,17 +139,19 @@ fn i32_as_seen_by_host() -> Result<(), HostError> {
 #[test]
 fn map_put_has_and_get() -> Result<(), HostError> {
     let host = Host::default();
-    let scmap: ScMap = vec![
-        ScMapEntry {
-            key: ScVal::U32(1),
-            val: ScVal::U32(2),
-        },
-        ScMapEntry {
-            key: ScVal::U32(2),
-            val: ScVal::U32(4),
-        },
-    ]
-    .try_into()?;
+    let scmap: ScMap = host.map_err(
+        vec![
+            ScMapEntry {
+                key: ScVal::U32(1),
+                val: ScVal::U32(2),
+            },
+            ScMapEntry {
+                key: ScVal::U32(2),
+                val: ScVal::U32(4),
+            },
+        ]
+        .try_into(),
+    )?;
     let scobj = ScObject::Map(scmap);
     let obj = host.to_host_obj(&scobj)?;
     let k: RawVal = 3_u32.into();
@@ -125,17 +169,19 @@ fn map_put_has_and_get() -> Result<(), HostError> {
 #[test]
 fn map_prev_and_next() -> Result<(), HostError> {
     let host = Host::default();
-    let scmap: ScMap = vec![
-        ScMapEntry {
-            key: ScVal::U32(1),
-            val: ScVal::U32(2),
-        },
-        ScMapEntry {
-            key: ScVal::U32(4),
-            val: ScVal::U32(8),
-        },
-    ]
-    .try_into()?;
+    let scmap: ScMap = host.map_err(
+        vec![
+            ScMapEntry {
+                key: ScVal::U32(1),
+                val: ScVal::U32(2),
+            },
+            ScMapEntry {
+                key: ScVal::U32(4),
+                val: ScVal::U32(8),
+            },
+        ]
+        .try_into(),
+    )?;
     let scobj = ScObject::Map(scmap);
     let obj = host.to_host_obj(&scobj)?;
     // prev
@@ -200,12 +246,14 @@ fn map_prev_and_next() -> Result<(), HostError> {
 #[test]
 fn map_prev_and_next_heterogeneous() -> Result<(), HostError> {
     let host = Host::default();
-    let scmap: ScMap = vec![ScMapEntry {
-        key: ScVal::U32(1),
-        val: ScVal::U32(2),
-    }]
-    .try_into()?;
-    let scvec: ScVec = ScVec(vec![ScVal::U32(1)].try_into()?);
+    let scmap: ScMap = host.map_err(
+        vec![ScMapEntry {
+            key: ScVal::U32(1),
+            val: ScVal::U32(2),
+        }]
+        .try_into(),
+    )?;
+    let scvec: ScVec = host.test_scvec::<u32>(&[1])?;
 
     let scobj_map = ScObject::Map(scmap);
     let scobj_vec = ScObject::Vec(scvec);
@@ -280,14 +328,8 @@ fn map_prev_and_next_heterogeneous() -> Result<(), HostError> {
 #[test]
 fn vec_as_seen_by_host() -> Result<(), HostError> {
     let host = Host::default();
-    let scvec0: ScVec = ScVec(vec![ScVal::U32(1)].try_into()?);
-    let scvec1: ScVec = ScVec(vec![ScVal::U32(1)].try_into()?);
-    let scobj0: ScObject = ScObject::Vec(scvec0);
-    let scobj1: ScObject = ScObject::Vec(scvec1);
-    let scval0 = ScVal::Object(Some(scobj0));
-    let scval1 = ScVal::Object(Some(scobj1));
-    let val0 = host.to_host_val(&scval0)?;
-    let val1 = host.to_host_val(&scval1)?;
+    let val0 = host.test_vec_val(&[1u32])?;
+    let val1 = host.test_vec_val(&[1u32])?;
     assert!(val0.val.is::<Object>());
     assert!(val1.val.is::<Object>());
     let obj0: Object = val0.val.try_into()?;
@@ -308,29 +350,18 @@ fn vec_new_with_capacity() -> Result<(), HostError> {
     let host = Host::default();
     host.vec_new(RawVal::from_void())?;
     host.vec_new(5_u32.into())?;
-    assert_matches!(
-        host.vec_new(5_i32.into()),
-        Err(HostError::WithStatus(
-            _,
-            ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsWrongType)
-        ))
-    );
-    assert_matches!(
-        host.vec_new(RawVal::from_bool(true)),
-        Err(HostError::WithStatus(
-            _,
-            ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsWrongType)
-        ))
-    );
+    let code = ScHostFnErrorCode::InputArgsWrongType;
+    let res = host.vec_new(5_i32.into());
+    assert!(HostError::result_is_err_status(res, code));
+    let res = host.vec_new(RawVal::from_bool(true));
+    assert!(HostError::result_is_err_status(res, code));
     Ok(())
 }
 
 #[test]
 fn vec_front_and_back() -> Result<(), HostError> {
     let host = Host::default();
-    let scvec: ScVec = vec![ScVal::U32(1), ScVal::U32(2), ScVal::U32(3)].try_into()?;
-    let scobj = ScObject::Vec(scvec);
-    let obj = host.to_host_obj(&scobj)?;
+    let obj = host.test_vec_obj::<u32>(&[1, 2, 3])?;
     let front =
         unsafe { <i32 as RawValConvertible>::unchecked_from_val(host.vec_front(obj.to_object())?) };
     let back =
@@ -343,41 +374,27 @@ fn vec_front_and_back() -> Result<(), HostError> {
 #[test]
 fn empty_vec_front() -> Result<(), HostError> {
     let host = Host::default();
-    let scvec: ScVec = vec![].try_into()?;
-    let scobj = ScObject::Vec(scvec);
-    let obj = host.to_host_obj(&scobj)?;
-    assert_matches!(
-        host.vec_front(obj.to_object()),
-        Err(HostError::WithStatus(
-            _,
-            ScStatus::HostObjectError(ScHostObjErrorCode::VecIndexOutOfBound)
-        ))
-    );
+    let obj = host.test_vec_obj::<u32>(&[])?;
+    let res = host.vec_front(obj.to_object());
+    let code = ScHostObjErrorCode::VecIndexOutOfBound;
+    assert!(HostError::result_is_err_status(res, code));
     Ok(())
 }
 
 #[test]
 fn empty_vec_back() -> Result<(), HostError> {
     let host = Host::default();
-    let scvec: ScVec = vec![].try_into()?;
-    let scobj = ScObject::Vec(scvec);
-    let obj = host.to_host_obj(&scobj)?;
-    assert_matches!(
-        host.vec_back(obj.to_object()),
-        Err(HostError::WithStatus(
-            _,
-            ScStatus::HostObjectError(ScHostObjErrorCode::VecIndexOutOfBound)
-        ))
-    );
+    let obj = host.test_vec_obj::<u32>(&[])?;
+    let res = host.vec_back(obj.to_object());
+    let code = ScHostObjErrorCode::VecIndexOutOfBound;
+    assert!(HostError::result_is_err_status(res, code));
     Ok(())
 }
 
 #[test]
 fn vec_put_and_get() -> Result<(), HostError> {
     let host = Host::default();
-    let scvec: ScVec = vec![ScVal::U32(1), ScVal::U32(2), ScVal::U32(3)].try_into()?;
-    let scobj = ScObject::Vec(scvec);
-    let obj = host.to_host_obj(&scobj)?;
+    let obj = host.test_vec_obj::<u32>(&[1, 2, 3])?;
     let i: RawVal = 1_u32.into();
     let obj1 = host.vec_put(obj.to_object(), i, 9_u32.into())?;
     let rv = host.vec_get(obj1, i)?;
@@ -389,9 +406,7 @@ fn vec_put_and_get() -> Result<(), HostError> {
 #[test]
 fn vec_push_pop_and_len() -> Result<(), HostError> {
     let host = Host::default();
-    let scvec: ScVec = vec![].try_into()?;
-    let scobj = ScObject::Vec(scvec);
-    let obj = host.to_host_obj(&scobj)?;
+    let obj = host.test_vec_obj::<u32>(&[])?;
     let l =
         unsafe { <u32 as RawValConvertible>::unchecked_from_val(host.vec_len(obj.to_object())?) };
     assert_eq!(l, 0);
@@ -411,59 +426,39 @@ fn vec_push_pop_and_len() -> Result<(), HostError> {
 #[test]
 fn vec_pop_empty_vec() -> Result<(), HostError> {
     let host = Host::default();
-    let scvec: ScVec = vec![].try_into()?;
-    let scobj = ScObject::Vec(scvec);
-    let obj = host.to_host_obj(&scobj)?;
-    assert_matches!(
-        host.vec_pop(obj.to_object()),
-        Err(HostError::WithStatus(
-            _,
-            ScStatus::HostObjectError(ScHostObjErrorCode::VecIndexOutOfBound)
-        ))
-    );
+    let obj = host.test_vec_obj::<u32>(&[])?;
+    let res = host.vec_pop(obj.to_object());
+    let code = ScHostObjErrorCode::VecIndexOutOfBound;
+    assert!(HostError::result_is_err_status(res, code));
     Ok(())
 }
 
 #[test]
 fn vec_get_out_of_bound() -> Result<(), HostError> {
     let host = Host::default();
-    let scvec: ScVec = vec![ScVal::U32(1), ScVal::U32(2), ScVal::U32(3)].try_into()?;
-    let scobj = ScObject::Vec(scvec);
-    let obj = host.to_host_obj(&scobj)?;
-    assert_matches!(
-        host.vec_get(obj.to_object(), 3_u32.into()),
-        Err(HostError::WithStatus(
-            _,
-            ScStatus::HostObjectError(ScHostObjErrorCode::VecIndexOutOfBound)
-        ))
-    );
+    let obj = host.test_vec_obj::<u32>(&[1, 2, 3])?;
+    let res = host.vec_get(obj.to_object(), 3_u32.into());
+    let code = ScHostObjErrorCode::VecIndexOutOfBound;
+    assert!(HostError::result_is_err_status(res, code));
     Ok(())
 }
 
 #[test]
 fn vec_get_wrong_index_type() -> Result<(), HostError> {
     let host = Host::default();
-    let scvec: ScVec = vec![].try_into()?;
-    let scobj = ScObject::Vec(scvec);
-    let obj = host.to_host_obj(&scobj)?;
-    assert_matches!(
-        host.vec_get(obj.to_object(), (-1_i32).into()),
-        Err(HostError::WithStatus(
-            _,
-            ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsWrongType)
-        ))
-    );
+    let obj = host.test_vec_obj::<u32>(&[])?;
+    let res = host.vec_get(obj.to_object(), (-1_i32).into());
+    let code = ScHostFnErrorCode::InputArgsWrongType;
+    assert!(HostError::result_is_err_status(res, code));
     Ok(())
 }
 
 #[test]
 fn vec_del_and_cmp() -> Result<(), HostError> {
     let host = Host::default();
-    let scvec: ScVec = vec![ScVal::U32(1), ScVal::U32(2), ScVal::U32(3)].try_into()?;
-    let obj = host.to_host_obj(&ScObject::Vec(scvec))?;
+    let obj = host.test_vec_obj::<u32>(&[1, 2, 3])?;
     let obj1 = host.vec_del(obj.to_object(), 1u32.into())?;
-    let scvec_ref: ScVec = vec![ScVal::U32(1), ScVal::U32(3)].try_into()?;
-    let obj_ref = host.to_host_obj(&ScObject::Vec(scvec_ref))?;
+    let obj_ref = host.test_vec_obj::<u32>(&[1, 3])?;
     assert_eq!(host.obj_cmp(obj1.into(), obj_ref.into())?, 0);
     Ok(())
 }
@@ -471,43 +466,29 @@ fn vec_del_and_cmp() -> Result<(), HostError> {
 #[test]
 fn vec_del_out_of_bound() -> Result<(), HostError> {
     let host = Host::default();
-    let scvec: ScVec = vec![ScVal::U32(1), ScVal::U32(2), ScVal::U32(3)].try_into()?;
-    let scobj = ScObject::Vec(scvec);
-    let obj = host.to_host_obj(&scobj)?;
-    assert_matches!(
-        host.vec_del(obj.to_object(), 3_u32.into()),
-        Err(HostError::WithStatus(
-            _,
-            ScStatus::HostObjectError(ScHostObjErrorCode::VecIndexOutOfBound)
-        ))
-    );
+    let obj = host.test_vec_obj::<u32>(&[1, 2, 3])?;
+    let res = host.vec_del(obj.to_object(), 3_u32.into());
+    let code = ScHostObjErrorCode::VecIndexOutOfBound;
+    assert!(HostError::result_is_err_status(res, code));
     Ok(())
 }
 
 #[test]
 fn vec_del_wrong_index_type() -> Result<(), HostError> {
     let host = Host::default();
-    let scvec: ScVec = vec![].try_into()?;
-    let scobj = ScObject::Vec(scvec);
-    let obj = host.to_host_obj(&scobj)?;
-    assert_matches!(
-        host.vec_del(obj.to_object(), (-1_i32).into()),
-        Err(HostError::WithStatus(
-            _,
-            ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsWrongType)
-        ))
-    );
+    let obj = host.test_vec_obj::<u32>(&[])?;
+    let res = host.vec_del(obj.to_object(), (-1_i32).into());
+    let code = ScHostFnErrorCode::InputArgsWrongType;
+    assert!(HostError::result_is_err_status(res, code));
     Ok(())
 }
 
 #[test]
 fn vec_slice_and_cmp() -> Result<(), HostError> {
     let host = Host::default();
-    let scvec: ScVec = vec![ScVal::U32(1), ScVal::U32(2), ScVal::U32(3)].try_into()?;
-    let obj = host.to_host_obj(&ScObject::Vec(scvec))?;
+    let obj = host.test_vec_obj::<u32>(&[1, 2, 3])?;
     let obj1 = host.vec_slice(obj.to_object(), 1u32.into(), 3u32.into())?;
-    let scvec_ref: ScVec = vec![ScVal::U32(2), ScVal::U32(3)].try_into()?;
-    let obj_ref = host.to_host_obj(&ScObject::Vec(scvec_ref))?;
+    let obj_ref = host.test_vec_obj::<u32>(&[2, 3])?;
     assert_eq!(host.obj_cmp(obj1.into(), obj_ref.into())?, 0);
 
     let obj2 = host.vec_slice(obj.to_object(), 0u32.into(), 3u32.into())?;
@@ -519,13 +500,10 @@ fn vec_slice_and_cmp() -> Result<(), HostError> {
 #[test]
 fn vec_slice_start_equal_to_end() -> Result<(), HostError> {
     let host = Host::default();
-    let vec = ScObject::Vec(vec![ScVal::U32(1), ScVal::U32(2), ScVal::U32(3)].try_into()?);
-    let slice = host.from_host_obj(host.vec_slice(
-        host.to_host_obj(&vec)?.to_object(),
-        1_u32.into(),
-        1_u32.into(),
-    )?)?;
-    let want = ScObject::Vec(vec![].try_into()?);
+    let obj = host.test_vec_obj::<u32>(&[1, 2, 3])?;
+    let slice =
+        host.from_host_obj(host.vec_slice(obj.to_object(), 1_u32.into(), 1_u32.into())?)?;
+    let want = ScObject::Vec(host.map_err(vec![].try_into())?);
     assert_eq!(slice, want);
     Ok(())
 }
@@ -533,99 +511,63 @@ fn vec_slice_start_equal_to_end() -> Result<(), HostError> {
 #[test]
 fn vec_slice_start_greater_than_end() -> Result<(), HostError> {
     let host = Host::default();
-    let vec = ScObject::Vec(vec![ScVal::U32(1), ScVal::U32(2), ScVal::U32(3)].try_into()?);
-    let slice_result = host.vec_slice(
-        host.to_host_obj(&vec)?.to_object(),
-        2_u32.into(),
-        1_u32.into(),
-    );
-    assert_matches!(
-        slice_result,
-        Err(HostError::WithStatus(
-            _,
-            ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsInvalid)
-        ))
-    );
+    let obj = host.test_vec_obj::<u32>(&[1, 2, 3])?;
+    let res = host.vec_slice(obj.to_object(), 2_u32.into(), 1_u32.into());
+    let code = ScHostFnErrorCode::InputArgsInvalid;
+    assert!(HostError::result_is_err_status(res, code));
     Ok(())
 }
 
 #[test]
 fn vec_slice_start_out_of_bound() -> Result<(), HostError> {
     let host = Host::default();
-    let scvec: ScVec = vec![ScVal::U32(1), ScVal::U32(2), ScVal::U32(3)].try_into()?;
-    let scobj = ScObject::Vec(scvec);
-    let obj = host.to_host_obj(&scobj)?;
-    assert_matches!(
-        host.vec_slice(obj.to_object(), 0_u32.into(), 4_u32.into()),
-        Err(HostError::WithStatus(
-            _,
-            ScStatus::HostObjectError(ScHostObjErrorCode::VecIndexOutOfBound)
-        ))
-    );
+    let obj = host.test_vec_obj::<u32>(&[1, 2, 3])?;
+    let res = host.vec_slice(obj.to_object(), 0_u32.into(), 4_u32.into());
+    let code = ScHostObjErrorCode::VecIndexOutOfBound;
+    assert!(HostError::result_is_err_status(res, code));
     Ok(())
 }
 
 #[test]
 fn vec_slice_end_out_of_bound() -> Result<(), HostError> {
     let host = Host::default();
-    let scvec: ScVec = vec![ScVal::U32(1), ScVal::U32(2), ScVal::U32(3)].try_into()?;
-    let scobj = ScObject::Vec(scvec);
-    let obj = host.to_host_obj(&scobj)?;
-    assert_matches!(
-        host.vec_slice(obj.to_object(), 0_u32.into(), 4_u32.into()),
-        Err(HostError::WithStatus(
-            _,
-            ScStatus::HostObjectError(ScHostObjErrorCode::VecIndexOutOfBound)
-        ))
-    );
+    let obj = host.test_vec_obj::<u32>(&[1, 2, 3])?;
+    let res = host.vec_slice(obj.to_object(), 0_u32.into(), 4_u32.into());
+    let code = ScHostObjErrorCode::VecIndexOutOfBound;
+    assert!(HostError::result_is_err_status(res, code));
     Ok(())
 }
 
 #[test]
 fn vec_take_wrong_index_type() -> Result<(), HostError> {
     let host = Host::default();
-    let scvec: ScVec = vec![].try_into()?;
-    let scobj = ScObject::Vec(scvec);
-    let obj = host.to_host_obj(&scobj)?;
-    assert_matches!(
-        host.vec_slice(obj.to_object(), (-1_i32).into(), 1_u32.into()),
-        Err(HostError::WithStatus(
-            _,
-            ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsWrongType)
-        ))
-    );
+    let obj = host.test_vec_obj::<u32>(&[])?;
+    let res = host.vec_slice(obj.to_object(), (-1_i32).into(), 1_u32.into());
+    let code = ScHostFnErrorCode::InputArgsWrongType;
+    assert!(HostError::result_is_err_status(res, code));
     Ok(())
 }
 
 #[test]
 fn vec_take_wrong_len_type() -> Result<(), HostError> {
     let host = Host::default();
-    let scvec: ScVec = vec![].try_into()?;
-    let scobj = ScObject::Vec(scvec);
-    let obj = host.to_host_obj(&scobj)?;
-    assert_matches!(
-        host.vec_slice(obj.to_object(), 1_u32.into(), (-1_i32).into()),
-        Err(HostError::WithStatus(
-            _,
-            ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsWrongType)
-        ))
-    );
+    let obj = host.test_vec_obj::<u32>(&[])?;
+    let res = host.vec_slice(obj.to_object(), 1_u32.into(), (-1_i32).into());
+    let code = ScHostFnErrorCode::InputArgsWrongType;
+    assert!(HostError::result_is_err_status(res, code));
     Ok(())
 }
 
 #[test]
 fn vec_insert_and_cmp() -> Result<(), HostError> {
     let host = Host::default();
-    let scvec: ScVec = vec![ScVal::U32(2)].try_into()?;
-    let obj = host.to_host_obj(&ScObject::Vec(scvec))?;
+    let obj = host.test_vec_obj::<u32>(&[2])?;
     let obj1 = host.vec_insert(obj.to_object(), 0u32.into(), 1u32.into())?;
-    let scvec_ref: ScVec = vec![ScVal::U32(1), ScVal::U32(2)].try_into()?;
-    let obj_ref = host.to_host_obj(&ScObject::Vec(scvec_ref))?;
+    let obj_ref = host.test_vec_obj::<u32>(&[1, 2])?;
     assert_eq!(host.obj_cmp(obj1.into(), obj_ref.into())?, 0);
 
     let obj2 = host.vec_insert(obj1, 2u32.into(), 3u32.into())?;
-    let scvec_ref: ScVec = vec![ScVal::U32(1), ScVal::U32(2), ScVal::U32(3)].try_into()?;
-    let obj_ref = host.to_host_obj(&ScObject::Vec(scvec_ref))?;
+    let obj_ref = host.test_vec_obj::<u32>(&[1, 2, 3])?;
     assert_eq!(host.obj_cmp(obj2.into(), obj_ref.into())?, 0);
     Ok(())
 }
@@ -633,53 +575,30 @@ fn vec_insert_and_cmp() -> Result<(), HostError> {
 #[test]
 fn vec_insert_out_of_bound() -> Result<(), HostError> {
     let host = Host::default();
-    let scvec: ScVec = vec![ScVal::U32(1), ScVal::U32(2), ScVal::U32(3)].try_into()?;
-    let scobj = ScObject::Vec(scvec);
-    let obj = host.to_host_obj(&scobj)?;
-    assert_matches!(
-        host.vec_insert(obj.to_object(), 4_u32.into(), 9u32.into()),
-        Err(HostError::WithStatus(
-            _,
-            ScStatus::HostObjectError(ScHostObjErrorCode::VecIndexOutOfBound)
-        ))
-    );
+    let obj = host.test_vec_obj::<u32>(&[1, 2, 3])?;
+    let res = host.vec_insert(obj.to_object(), 4_u32.into(), 9u32.into());
+    let code = ScHostObjErrorCode::VecIndexOutOfBound;
+    assert!(HostError::result_is_err_status(res, code));
     Ok(())
 }
 
 #[test]
 fn vec_insert_wrong_index_type() -> Result<(), HostError> {
     let host = Host::default();
-    let scvec: ScVec = vec![].try_into()?;
-    let scobj = ScObject::Vec(scvec);
-    let obj = host.to_host_obj(&scobj)?;
-    assert_matches!(
-        host.vec_insert(obj.to_object(), (-1_i32).into(), 9u32.into()),
-        Err(HostError::WithStatus(
-            _,
-            ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsWrongType)
-        ))
-    );
+    let obj = host.test_vec_obj::<u32>(&[])?;
+    let res = host.vec_insert(obj.to_object(), (-1_i32).into(), 9u32.into());
+    let code = ScHostFnErrorCode::InputArgsWrongType;
+    assert!(HostError::result_is_err_status(res, code));
     Ok(())
 }
 
 #[test]
 fn vec_append() -> Result<(), HostError> {
     let host = Host::default();
-    let scvec0: ScVec = vec![ScVal::U32(1), ScVal::U32(2), ScVal::U32(3)].try_into()?;
-    let obj0 = host.to_host_obj(&ScObject::Vec(scvec0))?;
-    let scvec1: ScVec = vec![ScVal::U32(4), ScVal::U32(5), ScVal::U32(6)].try_into()?;
-    let obj1 = host.to_host_obj(&ScObject::Vec(scvec1))?;
+    let obj0 = host.test_vec_obj::<u32>(&[1, 2, 3])?;
+    let obj1 = host.test_vec_obj::<u32>(&[4, 5, 6])?;
     let obj2 = host.vec_append(*obj0.as_ref(), *obj1.as_ref())?;
-    let scvec_ref: ScVec = vec![
-        ScVal::U32(1),
-        ScVal::U32(2),
-        ScVal::U32(3),
-        ScVal::U32(4),
-        ScVal::U32(5),
-        ScVal::U32(6),
-    ]
-    .try_into()?;
-    let obj_ref = host.to_host_obj(&ScObject::Vec(scvec_ref))?;
+    let obj_ref = host.test_vec_obj::<u32>(&[1, 2, 3, 4, 5, 6])?;
     assert_eq!(host.obj_cmp(obj2.into(), obj_ref.into())?, 0);
     Ok(())
 }
@@ -687,8 +606,7 @@ fn vec_append() -> Result<(), HostError> {
 #[test]
 fn vec_append_empty() -> Result<(), HostError> {
     let host = Host::default();
-    let scvec0: ScVec = vec![].try_into()?;
-    let obj0 = host.to_host_obj(&ScObject::Vec(scvec0))?;
+    let obj0 = host.test_vec_obj::<u32>(&[])?;
     let obj1 = host.vec_append(*obj0.as_ref(), *obj0.as_ref())?;
     assert_ne!(obj0.as_raw().get_payload(), obj1.as_ref().get_payload());
     assert_eq!(host.obj_cmp(obj0.into(), obj1.into())?, 0);
@@ -699,7 +617,7 @@ fn vec_append_empty() -> Result<(), HostError> {
 #[test]
 fn sha256_test() -> Result<(), HostError> {
     let host = Host::default();
-    let obj0 = host.to_host_obj(&ScObject::Binary(vec![1].try_into()?))?;
+    let obj0 = host.test_bin_obj(&[1])?;
     let hash_obj = host.compute_hash_sha256(obj0.to_object())?;
 
     let v = host.from_host_val(hash_obj.to_raw())?;
@@ -738,9 +656,9 @@ fn ed25519_verify_test() -> Result<(), HostError> {
     let msg_bytes: Vec<u8> = FromHex::from_hex(message).unwrap();
     let sig_bytes: Vec<u8> = FromHex::from_hex(signature).unwrap();
 
-    let obj_pub = host.to_host_obj(&ScObject::Binary(pub_bytes.try_into()?))?;
-    let obj_msg = host.to_host_obj(&ScObject::Binary(msg_bytes.try_into()?))?;
-    let obj_sig = host.to_host_obj(&ScObject::Binary(sig_bytes.try_into()?))?;
+    let obj_pub = host.test_bin_obj(&pub_bytes)?;
+    let obj_msg = host.test_bin_obj(&msg_bytes)?;
+    let obj_sig = host.test_bin_obj(&sig_bytes)?;
 
     let res = host.verify_sig_ed25519(
         obj_msg.to_object(),
@@ -753,7 +671,7 @@ fn ed25519_verify_test() -> Result<(), HostError> {
     // Now verify with wrong message
     let message2: &[u8] = b"73";
     let msg_bytes2: Vec<u8> = FromHex::from_hex(message2).unwrap();
-    let obj_msg2 = host.to_host_obj(&ScObject::Binary(msg_bytes2.try_into()?))?;
+    let obj_msg2 = host.test_bin_obj(&msg_bytes2)?;
 
     let res_failed = host.verify_sig_ed25519(
         obj_msg2.to_object(),
@@ -846,10 +764,10 @@ fn create_contract_test_helper(
     let host = Host::with_storage(storage);
 
     // Create contract
-    let obj_code = host.to_host_obj(&ScObject::Binary(code.try_into()?))?;
-    let obj_pub = host.to_host_obj(&ScObject::Binary(pub_bytes.try_into()?))?;
-    let obj_salt = host.to_host_obj(&ScObject::Binary(salt_bytes.try_into()?))?;
-    let obj_sig = host.to_host_obj(&ScObject::Binary(signature.to_bytes().try_into()?))?;
+    let obj_code = host.test_bin_obj(&code)?;
+    let obj_pub = host.test_bin_obj(&pub_bytes)?;
+    let obj_salt = host.test_bin_obj(&salt_bytes)?;
+    let obj_sig = host.test_bin_obj(&signature.to_bytes())?;
 
     let contract_id = host.create_contract_from_ed25519(
         obj_code.to_object(),
@@ -874,7 +792,7 @@ fn create_contract_test_helper(
     check_new_code(
         &host,
         storage_key,
-        ScVal::Object(Some(ScObject::Binary(code.try_into()?))),
+        ScVal::Object(Some(host.test_bin_scobj(&code)?)),
     );
 
     Ok(host)
@@ -921,23 +839,13 @@ fn create_contract_test() -> Result<(), HostError> {
 
     // update
     let put_res = host.put_contract_data(host.to_host_val(&key)?.to_raw(), ().into());
-    assert_matches!(
-        put_res,
-        Err(HostError::WithStatus(
-            _,
-            ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsInvalid)
-        ))
-    );
+    let code = ScHostFnErrorCode::InputArgsInvalid;
+    assert!(HostError::result_is_err_status(put_res, code));
 
     // delete
     let del_res = host.del_contract_data(host.to_host_val(&key)?.to_raw());
-    assert_matches!(
-        del_res,
-        Err(HostError::WithStatus(
-            _,
-            ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsInvalid)
-        ))
-    );
+    let code = ScHostFnErrorCode::InputArgsInvalid;
+    assert!(HostError::result_is_err_status(del_res, code));
     Ok(())
 }
 
@@ -1061,6 +969,8 @@ To regenerate:
 #[cfg(feature = "vm")]
 #[test]
 fn invoke_single_contract_function() -> Result<(), HostError> {
+    use stellar_contract_env_common::xdr::ScVmErrorCode;
+
     let host = Host::default();
     let code: [u8; 163] = [
         0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00, 0x01, 0x07, 0x01, 0x60, 0x02, 0x7e, 0x7e,
@@ -1080,16 +990,17 @@ fn invoke_single_contract_function() -> Result<(), HostError> {
     let a = 4i32;
     let b = 7i32;
     let c = 0x7fffffff_i32;
-    let scvec0: ScVec = ScVec(vec![ScVal::I32(a), ScVal::I32(b)].try_into()?);
+    let scvec0: ScVec = host.test_scvec::<i32>(&[a, b])?;
     let res = vm.invoke_function(&host, "add", &scvec0)?;
     match res {
         ScVal::I32(v) => assert_eq!(v, a + b),
         _ => panic!("Wrong result type"),
     }
     // overflow
-    let scvec0: ScVec = ScVec(vec![ScVal::I32(a), ScVal::I32(c)].try_into()?);
+    let scvec0: ScVec = host.test_scvec::<i32>(&[a, c])?;
     let res = vm.invoke_function(&host, "add", &scvec0);
-    assert_matches!(res, Err(HostError::WASMI(wasmi::Error::Trap(_))));
+    let code = ScVmErrorCode::TrapUnreachable;
+    assert!(HostError::result_is_err_status(res, code));
     Ok(())
 }
 
@@ -1115,7 +1026,8 @@ fn invoke_cross_contract() -> Result<(), HostError> {
         0x04, 0x88, 0xa7, 0x22, 0x03, 0x6a, 0x22, 0x02, 0x20, 0x03, 0x48, 0x73, 0x45, 0x0d, 0x01,
         0x0b, 0x00, 0x0b, 0x20, 0x02, 0xad, 0x42, 0x04, 0x86, 0x42, 0x03, 0x84, 0x0b,
     ];
-    let scob = ScObject::Binary(code.try_into()?);
+    // We unwrap here rather than host.map_err because the host doesn't exist yet.
+    let scob = ScObject::Binary(code.try_into().unwrap());
     let val = ScVal::Object(Some(scob));
     let le = LedgerEntry {
         last_modified_ledger_seq: 0,
@@ -1134,12 +1046,10 @@ fn invoke_cross_contract() -> Result<(), HostError> {
     let storage = Storage::with_enforcing_footprint_and_map(footprint, map);
     let host = Host::with_storage(storage);
     // create a dummy contract obj as the caller
-    let scobj = ScObject::Binary([0; 32].try_into()?);
-    let obj = host.to_host_obj(&scobj)?;
+    let obj = host.test_bin_obj(&[0; 32])?;
     // prepare arguments
     let sym = Symbol::from_str("add");
-    let scvec0: ScVec = vec![ScVal::I32(1), ScVal::I32(2)].try_into()?;
-    let args = host.to_host_obj(&ScObject::Vec(scvec0))?;
+    let args = host.test_vec_obj::<i32>(&[1, 2])?;
 
     let res = host.call(obj.to_object(), sym.into(), args.into())?;
     assert!(res.is::<i32>());
@@ -1174,7 +1084,8 @@ fn invoke_cross_contract_with_err() -> Result<(), HostError> {
         0x20, 0x00, 0x10, 0x01, 0x37, 0x03, 0x00, 0x20, 0x01, 0x29, 0x03, 0x00, 0x20, 0x01, 0x41,
         0x10, 0x6a, 0x24, 0x00, 0x0b,
     ];
-    let scob = ScObject::Binary(code.try_into()?);
+    // We unwrap here rather than host.map_err because the host doesn't exist yet.
+    let scob = ScObject::Binary(code.try_into().unwrap());
     let val = ScVal::Object(Some(scob));
     let le = LedgerEntry {
         last_modified_ledger_seq: 0,
@@ -1194,24 +1105,21 @@ fn invoke_cross_contract_with_err() -> Result<(), HostError> {
     let storage = Storage::with_enforcing_footprint_and_map(footprint, map);
     let host = Host::with_storage(storage);
     // create a dummy contract obj as the caller
-    let scobj = ScObject::Binary([0; 32].try_into()?);
-    let obj = host.to_host_obj(&scobj)?;
+    let obj = host.test_bin_obj(&[0; 32])?;
     // prepare arguments
     let sym = Symbol::from_str("vec_err");
-    let scvec0: ScVec = vec![ScVal::I32(1)].try_into()?;
-    let args = host.to_host_obj(&ScObject::Vec(scvec0))?;
-    // call
+    let args = host.test_vec_obj::<i32>(&[1])?;
+
+    // try_call
     let sv = host.try_call(obj.to_object(), sym.into(), args.clone().into())?;
-    let exp_st = Status::from_type_and_code(
-        ScStatusType::HostObjectError,
-        ScHostObjErrorCode::VecIndexOutOfBound as u32,
-    );
-    println!("{:?}", sv);
+    let code = ScHostObjErrorCode::VecIndexOutOfBound;
+    let exp_st: Status = code.into();
     assert_eq!(sv.get_payload(), exp_st.to_raw().get_payload());
-    assert_matches!(
-        host.call(obj.to_object(), sym.into(), args.into()),
-        Err(HostError::WASMI(wasmi::Error::Trap(wasmi::Trap::Host(_))))
-    );
+
+    // call
+    let res = host.call(obj.to_object(), sym.into(), args.into());
+    assert!(HostError::result_is_err_status(res, code));
+
     Ok(())
 }
 
@@ -1262,7 +1170,7 @@ fn invoke_cross_contract_lvl2_nested_with_err() -> Result<(), HostError> {
         0x10, 0x01, 0x00, 0x41, 0x80, 0x80, 0xc0, 0x00, 0x0b, 0x07, 0x76, 0x65, 0x63, 0x5f, 0x65,
         0x72, 0x72,
     ];
-    let scob0 = ScObject::Binary(code0.try_into()?);
+    let scob0 = ScObject::Binary(code0.try_into().unwrap());
     let val0 = ScVal::Object(Some(scob0));
     let le0 = LedgerEntry {
         last_modified_ledger_seq: 0,
@@ -1294,7 +1202,7 @@ fn invoke_cross_contract_lvl2_nested_with_err() -> Result<(), HostError> {
         0x20, 0x00, 0x10, 0x01, 0x37, 0x03, 0x00, 0x20, 0x01, 0x29, 0x03, 0x00, 0x20, 0x01, 0x41,
         0x10, 0x6a, 0x24, 0x00, 0x0b,
     ];
-    let scob1 = ScObject::Binary(code1.try_into()?);
+    let scob1 = ScObject::Binary(code1.try_into().unwrap());
     let val1 = ScVal::Object(Some(scob1));
     let le1 = LedgerEntry {
         last_modified_ledger_seq: 0,
@@ -1317,22 +1225,17 @@ fn invoke_cross_contract_lvl2_nested_with_err() -> Result<(), HostError> {
     let storage = Storage::with_enforcing_footprint_and_map(footprint, map);
     let host = Host::with_storage(storage);
     // prepare arguments
-    let scobj = ScObject::Binary([0; 32].try_into()?);
-    let obj = host.to_host_obj(&scobj)?;
+    let obj = host.test_bin_obj(&[0; 32])?;
     let sym = Symbol::from_str("del_call");
-    let scvec0: ScVec = vec![ScVal::I32(1)].try_into()?;
-    let args = host.to_host_obj(&ScObject::Vec(scvec0))?;
+    let args = host.test_vec_obj::<i32>(&[1])?;
     // try call
     let sv = host.try_call(obj.to_object(), sym.into(), args.clone().into())?;
-    let exp_st = Status::from_status(ScStatus::HostObjectError(
-        ScHostObjErrorCode::VecIndexOutOfBound,
-    ));
+    let code = ScHostObjErrorCode::VecIndexOutOfBound;
+    let exp_st: Status = code.into();
     assert_eq!(sv.get_payload(), exp_st.as_ref().get_payload());
     // call
-    assert_matches!(
-        host.call(obj.to_object(), sym.into(), args.into()),
-        Err(HostError::WASMI(wasmi::Error::Trap(wasmi::Trap::Host(_))))
-    );
+    let res = host.call(obj.to_object(), sym.into(), args.into());
+    assert!(HostError::result_is_err_status(res, code));
     Ok(())
 }
 
@@ -1347,7 +1250,7 @@ fn binary_suite_of_tests() -> Result<(), HostError> {
     if let ScObject::Binary(b) = host.from_host_obj(obj)? {
         assert_eq!((0..32).collect::<Vec<u8>>().as_slice(), b.as_slice());
     } else {
-        return Err(HostError::General("Type error"));
+        return Err(host.err_general("Type error"));
     }
     // pop and len
     for _ in 0..24 {
@@ -1390,13 +1293,13 @@ fn binary_suite_of_tests() -> Result<(), HostError> {
     if let ScObject::Binary(b) = host.from_host_obj(obj0)? {
         assert_eq!((0..3).collect::<Vec<u8>>().as_slice(), b.as_slice());
     } else {
-        return Err(HostError::General("Type error"));
+        return Err(host.err_general("Type error"));
     }
     let obj1 = host.binary_slice(obj, 3_u32.into(), 5_u32.into())?; // [3,4,5,6,7]
     if let ScObject::Binary(b) = host.from_host_obj(obj1)? {
         assert_eq!((3..8).collect::<Vec<u8>>().as_slice(), b.as_slice());
     } else {
-        return Err(HostError::General("Type error"));
+        return Err(host.err_general("Type error"));
     }
     let obj_back = host.binary_append(obj0, obj1)?;
     assert_eq!(host.obj_cmp(obj.into(), obj_back.into())?, 0);
@@ -1425,13 +1328,14 @@ fn binary_xdr_roundtrip() -> Result<(), HostError> {
     // object
     {
         // vec
-        let vec: ScVec = vec![ScVal::U32(1), ScVal::U32(2)].try_into()?;
-        let scval = ScVal::Object(Some(ScObject::Vec(vec)));
+        let scval = ScVal::Object(Some(ScObject::Vec(host.test_scvec::<u32>(&[1, 2])?)));
         roundtrip(scval)?
         // TODO: add other types
     }
     // Symbol
-    roundtrip(ScVal::Symbol("stellar".to_string().try_into()?))?;
+    roundtrip(ScVal::Symbol(
+        host.map_err("stellar".to_string().try_into())?,
+    ))?;
     // bitset
     roundtrip(ScVal::Bitset(0xffffffff_u64))?;
     // status
@@ -1474,10 +1378,9 @@ fn bigint_tests() -> Result<(), HostError> {
         let obj_ref = host.bigint_from_i64(a as i64 / b)?;
         assert_eq!(host.obj_cmp(obj_res.into(), obj_ref.into())?, 0);
         // div by 0
-        assert_matches!(
-            host.bigint_div(obj_a, obj_0),
-            Err(HostError::General("bigint division by zero"))
-        );
+        let res = host.bigint_div(obj_a, obj_0);
+        let code = ScUnknownErrorCode::General;
+        assert!(HostError::result_is_err_status(res, code));
     }
     // rem
     {
@@ -1485,10 +1388,9 @@ fn bigint_tests() -> Result<(), HostError> {
         let obj_ref = host.bigint_from_i64(a as i64 % b)?;
         assert_eq!(host.obj_cmp(obj_res.into(), obj_ref.into())?, 0);
         // div by 0
-        assert_matches!(
-            host.bigint_rem(obj_a, obj_0),
-            Err(HostError::General("bigint division by zero"))
-        );
+        let res = host.bigint_rem(obj_a, obj_0);
+        let code = ScUnknownErrorCode::General;
+        assert!(HostError::result_is_err_status(res, code));
     }
     // and
     {
@@ -1513,32 +1415,28 @@ fn bigint_tests() -> Result<(), HostError> {
         let obj_res = host.bigint_shl(obj_a, host.bigint_from_i64(5)?)?;
         let obj_ref = host.bigint_from_u64(a << 5)?;
         assert_eq!(host.obj_cmp(obj_res.into(), obj_ref.into())?, 0);
-        assert_matches!(
-            host.bigint_shl(obj_a, host.bigint_from_i64(-5)?),
-            Err(HostError::General("attempt to shift left with negative"))
-        );
+        let res = host.bigint_shl(obj_a, host.bigint_from_i64(-5)?);
+        let code = ScUnknownErrorCode::General;
+        assert!(HostError::result_is_err_status(res, code));
         // a 65-bit integer
         let obj_c = host.bigint_shl(host.bigint_from_u64(u64::MAX)?, host.bigint_from_i64(1)?)?;
-        assert_matches!(
-            host.bigint_shl(obj_a, obj_c),
-            Err(HostError::General("left-shift overflow"))
-        );
+        let res = host.bigint_shl(obj_a, obj_c);
+        let code = ScUnknownErrorCode::General;
+        assert!(HostError::result_is_err_status(res, code));
     }
     // shr
     {
         let obj_res = host.bigint_shr(obj_a, host.bigint_from_i64(5)?)?;
         let obj_ref = host.bigint_from_u64(a >> 5)?;
         assert_eq!(host.obj_cmp(obj_res.into(), obj_ref.into())?, 0);
-        assert_matches!(
-            host.bigint_shr(obj_a, host.bigint_from_i64(-5)?),
-            Err(HostError::General("attempt to shift right with negative"))
-        );
+        let res = host.bigint_shr(obj_a, host.bigint_from_i64(-5)?);
+        let code = ScUnknownErrorCode::General;
+        assert!(HostError::result_is_err_status(res, code));
         // a 65-bit integer
         let obj_c = host.bigint_shl(host.bigint_from_u64(u64::MAX)?, host.bigint_from_i64(1)?)?;
-        assert_matches!(
-            host.bigint_shr(obj_a, obj_c),
-            Err(HostError::General("right-shift overflow"))
-        );
+        let res = host.bigint_shr(obj_a, obj_c);
+        let code = ScUnknownErrorCode::General;
+        assert!(HostError::result_is_err_status(res, code));
     }
     // cmp
     {
@@ -1611,16 +1509,15 @@ fn bigint_tests() -> Result<(), HostError> {
         let obj_res = host.bigint_pow(obj_b, host.bigint_from_u64(0_u32.into())?)?;
         let obj_ref = host.bigint_from_i64(1)?;
         assert_eq!(host.obj_cmp(obj_res.into(), obj_ref.into())?, 0);
-        assert_matches!(
-            host.bigint_pow(obj_b, host.bigint_from_i64(-1)?),
-            Err(HostError::General("negative exponentiation not supported"))
-        );
+        let res = host.bigint_pow(obj_b, host.bigint_from_i64(-1)?);
+        let code = ScUnknownErrorCode::General;
+        assert!(HostError::result_is_err_status(res, code));
+
         // a 65-bit integer
         let obj_c = host.bigint_shl(host.bigint_from_u64(u64::MAX)?, host.bigint_from_i64(1)?)?;
-        assert_matches!(
-            host.bigint_pow(obj_b, obj_c),
-            Err(HostError::General("pow overflow"))
-        );
+        let res = host.bigint_pow(obj_b, obj_c);
+        let code = ScUnknownErrorCode::General;
+        assert!(HostError::result_is_err_status(res, code));
     }
     // pow_mod
     {
@@ -1628,25 +1525,21 @@ fn bigint_tests() -> Result<(), HostError> {
         let obj_res = host.bigint_pow_mod(obj_a, obj_2, obj_b)?;
         let obj_ref = host.bigint_from_i64(-94310)?;
         assert_eq!(host.obj_cmp(obj_res.into(), obj_ref.into())?, 0);
-
-        assert_matches!(
-            host.bigint_pow_mod(obj_a, obj_b, obj_2),
-            Err(HostError::General("negative exponentiation not supported"))
-        );
-        assert_matches!(
-            host.bigint_pow_mod(obj_a, obj_2, obj_0),
-            Err(HostError::General("zero modulus not supported"))
-        );
+        let res = host.bigint_pow_mod(obj_a, obj_b, obj_2);
+        let code = ScUnknownErrorCode::General;
+        assert!(HostError::result_is_err_status(res, code));
+        let res = host.bigint_pow_mod(obj_a, obj_2, obj_0);
+        let code = ScUnknownErrorCode::General;
+        assert!(HostError::result_is_err_status(res, code));
     }
     // sqrt
     {
         let obj_res = host.bigint_sqrt(obj_a)?;
         let obj_ref = host.bigint_from_i64(1540)?;
         assert_eq!(host.obj_cmp(obj_res.into(), obj_ref.into())?, 0);
-        assert_matches!(
-            host.bigint_sqrt(obj_b),
-            Err(HostError::General("sqrt is imaginary"))
-        );
+        let res = host.bigint_sqrt(obj_b);
+        let code = ScUnknownErrorCode::General;
+        assert!(HostError::result_is_err_status(res, code));
     }
     // bits
     {
@@ -2012,7 +1905,7 @@ fn invoke_memcpy() -> Result<(), HostError> {
         0x00, 0x04, 0x00, 0x00, 0x00, 0x09, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00,
         0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00,
     ];
-    let scob = ScObject::Binary(code.try_into()?);
+    let scob = ScObject::Binary(code.try_into().unwrap());
     let val = ScVal::Object(Some(scob));
     let le = LedgerEntry {
         last_modified_ledger_seq: 0,
@@ -2031,17 +1924,16 @@ fn invoke_memcpy() -> Result<(), HostError> {
     let storage = Storage::with_enforcing_footprint_and_map(footprint, map);
     let host = Host::with_storage(storage);
     // create a dummy contract obj as the caller
-    let id_obj = host.to_host_obj(&ScObject::Binary([0; 32].try_into()?))?;
+    let id_obj = host.test_bin_obj(&[0; 32])?;
     // binary_new_from_linear_memory
     {
-        let scvec0: ScVec = vec![ScVal::U32(4)].try_into()?;
-        let args = host.to_host_obj(&ScObject::Vec(scvec0))?;
+        let args = host.test_vec_obj::<u32>(&[4])?;
         let obj = host.call(
             id_obj.to_object(),
             Symbol::from_str("bin_new").into(),
             args.into(),
         )?;
-        let obj_ref = host.to_host_obj(&ScObject::Binary([0, 1, 2, 3].try_into()?))?;
+        let obj_ref = host.test_bin_obj(&[0, 1, 2, 3])?;
         assert_eq!(host.obj_cmp(obj.into(), obj_ref.into())?, 0);
     }
     // binary_copy_from_linear_memory
@@ -2059,12 +1951,12 @@ fn invoke_memcpy() -> Result<(), HostError> {
                 args.into(),
             )?
             .try_into()?;
-        let obj_ref = host.to_host_obj(&ScObject::Binary([1, 2, 3].try_into()?))?;
+        let obj_ref = host.test_bin_obj(&[1, 2, 3])?;
         assert_eq!(host.obj_cmp(obj.into(), obj_ref.into())?, 0);
     }
     // binary_copy_to_linear_memory
     {
-        let obj0 = host.to_host_obj(&ScObject::Binary([0, 1, 2, 3].try_into()?))?;
+        let obj0 = host.test_bin_obj(&[0, 1, 2, 3])?;
         let mut args = host.vec_new(RawVal::from_void())?;
         args = host.vec_push(args, obj0.to_raw())?;
         args = host.vec_push(args, 0_u32.into())?;
