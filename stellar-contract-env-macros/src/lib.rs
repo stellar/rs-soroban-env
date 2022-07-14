@@ -54,8 +54,8 @@ impl ToTokens for MetaConstsOutput {
 
         // Output.
         tokens.extend(quote! {
-            pub const META_INTERFACE_VERSION: u64 = #interface_version;
-            pub const META: [u8; #meta_xdr_len] = *#meta_xdr_lit;
+            pub const INTERFACE_VERSION: u64 = #interface_version;
+            pub const XDR: [u8; #meta_xdr_len] = *#meta_xdr_lit;
         });
     }
 }
