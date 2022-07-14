@@ -1,4 +1,4 @@
-use strum::EnumIter;
+use strum::{EnumIter, IntoEnumIterator};
 
 use crate::HostError;
 
@@ -160,7 +160,7 @@ impl Default for BudgetDimension {
             limit: Default::default(),
             count: Default::default(),
         };
-        for _ct in CostType::variants() {
+        for _ct in CostType::iter() {
             // TODO: load cost model for i from the chain.
             bd.cost_models.push(CostModel::default());
         }
