@@ -1,16 +1,66 @@
 extern crate proc_macro;
 
 use proc_macro::TokenStream;
-use quote::quote;
-use syn::{parse_macro_input, LitInt};
+use quote::{quote, ToTokens};
+use syn::{parse::Parse, parse_macro_input, Ident, LitInt, Token};
 
-use stellar_xdr::{ScEnvMetaEntry, WriteXdr};
+use stellar_xdr::{Error, ScEnvMetaEntry, WriteXdr};
+
+struct MetaInput {
+    pub interface_version: u64,
+}
+
+impl Parse for MetaInput {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        Ok(MetaInput {
+            interface_version: {
+                assert_eq!(input.parse::<Ident>()?, "META_INTERFACE_VERSION");
+                input.parse::<Token![:]>()?;
+                input.parse::<LitInt>()?.base10_parse()?
+            },
+        })
+    }
+}
+
+struct MetaConstsOutput {
+    pub input: MetaInput,
+}
+
+impl MetaConstsOutput {
+    pub fn to_meta_entries(&self) -> Vec<ScEnvMetaEntry> {
+        vec![ScEnvMetaEntry::ScEnvMetaKindInterfaceVersion(
+            self.input.interface_version,
+        )]
+    }
+}
+
+impl ToTokens for MetaConstsOutput {
+    fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
+        // Build params for expressing the interface version.
+        let interface_version = self.input.interface_version;
+
+        // Build params for expressing the meta xdr.
+        let meta_xdr = self
+            .to_meta_entries()
+            .into_iter()
+            .map(|entry| entry.to_xdr())
+            .collect::<Result<Vec<Vec<u8>>, Error>>()
+            .unwrap()
+            .concat();
+        let meta_xdr_len = meta_xdr.len();
+        let meta_xdr_lit = proc_macro2::Literal::byte_string(meta_xdr.as_slice());
+
+        // Output.
+        tokens.extend(quote! {
+            pub const META_INTERFACE_VERSION: u64 = #interface_version;
+            pub const META: [u8; #meta_xdr_len] = *#meta_xdr_lit;
+        });
+    }
+}
 
 #[proc_macro]
-pub fn build_env_meta_xdr(input: TokenStream) -> TokenStream {
-    let version = parse_macro_input!(input as LitInt);
-    let meta = ScEnvMetaEntry::ScEnvMetaKindInterfaceVersion(version.base10_parse().unwrap());
-    let meta_xdr = meta.to_xdr().unwrap();
-    let meta_xdr_lit = proc_macro2::Literal::byte_string(meta_xdr.as_slice());
-    quote! { *#meta_xdr_lit }.into()
+pub fn generate_env_meta_consts(input: TokenStream) -> TokenStream {
+    let meta_input = parse_macro_input!(input as MetaInput);
+    let meta_consts_output = MetaConstsOutput { input: meta_input };
+    quote! { #meta_consts_output }.into()
 }
