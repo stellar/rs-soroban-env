@@ -14,9 +14,11 @@ impl Parse for MetaInput {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         Ok(MetaInput {
             interface_version: {
-                assert_eq!(input.parse::<Ident>()?, "META_INTERFACE_VERSION");
+                assert_eq!(input.parse::<Ident>()?, "interface_version");
                 input.parse::<Token![:]>()?;
-                input.parse::<LitInt>()?.base10_parse()?
+                let v = input.parse::<LitInt>()?.base10_parse()?;
+                input.parse::<Token![,]>()?;
+                v
             },
         })
     }

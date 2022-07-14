@@ -34,5 +34,5 @@
 // run against multliple implementations over a long period of time.
 
 stellar_contract_env_macros::generate_env_meta_consts!(
-    META_INTERFACE_VERSION: 1
+    interface_version: 1,
 );
