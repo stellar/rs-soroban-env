@@ -123,8 +123,10 @@ macro_rules! call_macro_with_all_host_functions {
             }
 
             mod vec "v" {
-                /// Create an empty new vector.
-                {"_", fn vec_new() -> Object}
+                /// Creates a new vector with an optional capacity hint `c`.
+                /// If `c` is `ScStatic::Void`, no hint is assumed and the new vector is empty.
+                /// Otherwise, `c` is parsed as an `u32` that represents the initial capacity of the new vector.
+                {"_", fn vec_new(c:RawVal) -> Object}
                 /// Update the value at index `i` in the vector. Return the new vector.
                 /// Trap if the index is out of bounds.
                 {"0", fn vec_put(v:Object, i:RawVal, x:RawVal) -> Object}
