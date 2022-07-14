@@ -45,6 +45,12 @@ pub enum Tag {
 #[derive(Copy, Clone)]
 pub struct RawVal(u64);
 
+impl Default for RawVal {
+    fn default() -> Self {
+        Self::from_void()
+    }
+}
+
 impl AsRef<RawVal> for RawVal {
     fn as_ref(&self) -> &RawVal {
         self

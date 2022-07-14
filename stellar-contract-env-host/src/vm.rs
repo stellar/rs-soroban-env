@@ -10,6 +10,7 @@ use super::{
 };
 use func_info::HOST_FUNCTIONS;
 use parity_wasm::elements::{self, Internal, Type};
+use stellar_contract_env_common::xdr::ScVmErrorCode;
 use wasmi::{
     Externals, FuncInstance, ImportResolver, Module, ModuleInstance, ModuleRef, RuntimeArgs,
     RuntimeValue, ValueType,
@@ -145,14 +146,17 @@ impl Vm {
         contract_id: Hash,
         module_wasm_code: &[u8],
     ) -> Result<Rc<Self>, HostError> {
-        let elements_module: elements::Module = elements::deserialize_buffer(module_wasm_code)?;
-        let module: Module = Module::from_parity_wasm_module(elements_module.clone())?;
-        module.deny_floating_point()?;
-        let not_started_instance = ModuleInstance::new(&module, host)?;
+        let elements_module: elements::Module =
+            host.map_err(elements::deserialize_buffer(module_wasm_code))?;
+        let module: Module =
+            host.map_err(Module::from_parity_wasm_module(elements_module.clone()))?;
+        host.map_err(module.deny_floating_point())?;
+        let not_started_instance = host.map_err(ModuleInstance::new(&module, host))?;
         if not_started_instance.has_start() {
-            return Err(
-                wasmi::Error::Instantiation("Module has disallowed start function".into()).into(),
-            );
+            return Err(host.err_status_msg(
+                ScVmErrorCode::Instantiation,
+                "Module has disallowed start function",
+            ));
         }
         let instance = not_started_instance.assert_no_start();
         Ok(Rc::new(Self {
@@ -162,19 +166,19 @@ impl Vm {
         }))
     }
 
-    pub(crate) fn with_memory_access<F, U>(&self, f: F) -> Result<U, HostError>
+    pub(crate) fn with_memory_access<F, U>(&self, host: &Host, f: F) -> Result<U, HostError>
     where
         F: FnOnce(&wasmi::MemoryRef) -> Result<U, HostError>,
     {
         match self.instance.export_by_name("memory") {
             Some(ev) => match ev.as_memory() {
                 Some(mem) => f(mem),
-                None => Err(wasmi::Error::Memory(
-                    "export name `memory` is not of memory type".into(),
-                )
-                .into()),
+                None => Err(host.err_status_msg(
+                    ScVmErrorCode::Memory,
+                    "export name `memory` is not of memory type",
+                )),
             },
-            None => Err(wasmi::Error::Memory("`memory` export not found".into()).into()),
+            None => Err(host.err_status_msg(ScVmErrorCode::Memory, "`memory` export not found")),
         }
     }
 
@@ -199,16 +203,18 @@ impl Vm {
         // local.
         let mut host = host.clone();
 
-        let wasm_ret = self
+        let wasm_res = self
             .instance
-            .invoke_export(func, wasm_args.as_slice(), &mut host)?;
+            .invoke_export(func, wasm_args.as_slice(), &mut host);
+        let wasm_ret = host.map_err(wasm_res)?;
         if let Some(RuntimeValue::I64(ret)) = wasm_ret {
             frame_guard.commit();
             Ok(RawVal::from_payload(ret as u64))
         } else {
-            Err(HostError::WASMI(wasmi::Error::Trap(
-                wasmi::TrapCode::UnexpectedSignature.into(),
-            )))
+            Err(host.err_status_msg(
+                ScVmErrorCode::TrapUnexpectedSignature,
+                "contract function did not return an i64",
+            ))
         }
     }
 
