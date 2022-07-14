@@ -179,10 +179,9 @@ struct RollbackPoint {
 }
 
 #[cfg(feature = "testutils")]
-#[derive(Clone)]
-pub struct ContractFunctionSet(
-    pub std::collections::HashMap<Symbol, &'static dyn Fn(Host, &[RawVal]) -> RawVal>,
-);
+pub trait ContractFunctionSet {
+    fn call(&self, func: &Symbol, host: &Host, args: &[RawVal]) -> Option<RawVal>;
+}
 
 /// Holds contextual information about a single invocation, either
 /// a reference to a contract [`Vm`] or an enclosing [`HostFunction`]
@@ -212,7 +211,7 @@ pub(crate) struct HostImpl {
     budget: RefCell<Budget>,
     events: RefCell<Events>,
     #[cfg(feature = "testutils")]
-    contracts: RefCell<std::collections::HashMap<Hash, ContractFunctionSet>>,
+    contracts: RefCell<std::collections::HashMap<Hash, Rc<dyn ContractFunctionSet>>>,
 }
 
 /// A guard struct that exists to call [`Host::pop_frame`] when it is dropped,
@@ -849,15 +848,10 @@ impl Host {
         })?;
 
         #[cfg(feature = "testutils")]
-        if let Some(vtable) = self.0.contracts.borrow().get(&id) {
-            if let Some(f) = vtable.0.get(&func) {
-                let mut frame_guard = self.push_test_frame(id.clone());
-                let res = Ok(f(self.clone(), args));
-                frame_guard.commit();
-                return res;
-            } else {
-                return Err(HostError::General("function not in vtable"));
-            }
+        if let Some(cfs) = self.0.contracts.borrow().get(&id) {
+            return cfs
+                .call(&func, self, args)
+                .ok_or_else(|| HostError::General("function not found"));
         }
 
         #[cfg(feature = "vm")]
@@ -938,7 +932,7 @@ impl Host {
     pub fn register_test_contract(
         &self,
         contract_id: Object,
-        contract_fns: ContractFunctionSet,
+        contract_fns: Rc<dyn ContractFunctionSet>,
     ) -> Result<(), HostError> {
         self.visit_obj(contract_id, |bin: &Vec<u8>| {
             let mut contracts = self.0.contracts.borrow_mut();
@@ -1156,7 +1150,8 @@ impl CheckedEnv for Host {
 
     fn map_keys(&self, m: Object) -> Result<Object, HostError> {
         self.visit_obj(m, |hm: &HostMap| {
-            let mut vec = self.vec_new()?;
+            let cap: u32 = hm.len().try_into()?;
+            let mut vec = self.vec_new(cap.into())?;
             for k in hm.keys() {
                 vec = self.vec_push(vec, k.to_raw())?;
             }
@@ -1166,7 +1161,8 @@ impl CheckedEnv for Host {
 
     fn map_values(&self, m: Object) -> Result<Object, HostError> {
         self.visit_obj(m, |hm: &HostMap| {
-            let mut vec = self.vec_new()?;
+            let cap: u32 = hm.len().try_into()?;
+            let mut vec = self.vec_new(cap.into())?;
             for k in hm.values() {
                 vec = self.vec_push(vec, k.to_raw())?;
             }
@@ -1174,7 +1170,18 @@ impl CheckedEnv for Host {
         })
     }
 
-    fn vec_new(&self) -> Result<Object, HostError> {
+    fn vec_new(&self, c: RawVal) -> Result<Object, HostError> {
+        let capacity: usize = if c.is_void() {
+            0
+        } else {
+            u32::try_from(c).map_err(|_| {
+                HostError::WithStatus(
+                    String::from("c must be either `ScStatic::Void` or an `u32`"),
+                    ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsWrongType),
+                )
+            })? as usize
+        };
+        // TODO: optimize the vector based on capacity
         Ok(self.add_host_object(HostVec::new())?.into())
     }
 

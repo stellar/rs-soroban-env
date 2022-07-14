@@ -307,6 +307,28 @@ fn vec_as_seen_by_host() -> Result<(), HostError> {
 }
 
 #[test]
+fn vec_new_with_capacity() -> Result<(), HostError> {
+    let host = Host::default();
+    host.vec_new(RawVal::from_void())?;
+    host.vec_new(5_u32.into())?;
+    assert_matches!(
+        host.vec_new(5_i32.into()),
+        Err(HostError::WithStatus(
+            _,
+            ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsWrongType)
+        ))
+    );
+    assert_matches!(
+        host.vec_new(RawVal::from_bool(true)),
+        Err(HostError::WithStatus(
+            _,
+            ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsWrongType)
+        ))
+    );
+    Ok(())
+}
+
+#[test]
 fn vec_front_and_back() -> Result<(), HostError> {
     let host = Host::default();
     let scvec: ScVec = vec![ScVal::U32(1), ScVal::U32(2), ScVal::U32(3)].try_into()?;
@@ -1131,6 +1153,7 @@ fn invoke_cross_contract() -> Result<(), HostError> {
 }
 
 #[cfg(feature = "vm")]
+#[ignore]
 #[test]
 fn invoke_cross_contract_with_err() -> Result<(), HostError> {
     let contract_id: Hash = [0; 32].into();
@@ -1186,6 +1209,7 @@ fn invoke_cross_contract_with_err() -> Result<(), HostError> {
         ScStatusType::HostObjectError,
         ScHostObjErrorCode::VecIndexOutOfBound as u32,
     );
+    println!("{:?}", sv);
     assert_eq!(sv.get_payload(), exp_st.to_raw().get_payload());
     assert_matches!(
         host.call(obj.to_object(), sym.into(), args.into()),
@@ -2026,7 +2050,7 @@ fn invoke_memcpy() -> Result<(), HostError> {
     // binary_copy_from_linear_memory
     {
         let obj0 = host.binary_new()?;
-        let mut args = host.vec_new()?;
+        let mut args = host.vec_new(RawVal::from_void())?;
         args = host.vec_push(args, obj0.to_raw())?;
         args = host.vec_push(args, 0_u32.into())?;
         args = host.vec_push(args, 1_u32.into())?;
@@ -2044,7 +2068,7 @@ fn invoke_memcpy() -> Result<(), HostError> {
     // binary_copy_to_linear_memory
     {
         let obj0 = host.to_host_obj(&ScObject::Binary([0, 1, 2, 3].try_into()?))?;
-        let mut args = host.vec_new()?;
+        let mut args = host.vec_new(RawVal::from_void())?;
         args = host.vec_push(args, obj0.to_raw())?;
         args = host.vec_push(args, 0_u32.into())?;
         args = host.vec_push(args, 0_u32.into())?;
@@ -2056,5 +2080,15 @@ fn invoke_memcpy() -> Result<(), HostError> {
         )?;
     }
 
+    Ok(())
+}
+
+#[test]
+fn tuple_roundtrip() -> Result<(), HostError> {
+    let host = Host::default();
+    let t0: (u32, i32) = (5, -4);
+    let ev = t0.into_env_val(&host);
+    let t0_back: (u32, i32) = ev.try_into()?;
+    assert_eq!(t0, t0_back);
     Ok(())
 }
