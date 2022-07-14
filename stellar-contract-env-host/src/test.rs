@@ -8,7 +8,7 @@ use crate::{
 
 use stellar_contract_env_common::{
     xdr::{ScMap, ScMapEntry},
-    CheckedEnv, RawValConvertible,
+    CheckedEnv, RawValConvertible, UNKNOWN_ERROR,
 };
 
 use hex::FromHex;
@@ -121,6 +121,82 @@ fn map_put_has_and_get() -> Result<(), HostError> {
     let rv = host.map_get(obj1, k)?;
     let v = unsafe { <u32 as RawValConvertible>::unchecked_from_val(rv) };
     assert_eq!(v, 6);
+    Ok(())
+}
+
+/// map test
+#[test]
+fn map_prev_and_next() -> Result<(), HostError> {
+    let host = Host::default();
+    let scmap: ScMap = vec![
+        ScMapEntry {
+            key: ScVal::U32(1),
+            val: ScVal::U32(2),
+        },
+        ScMapEntry {
+            key: ScVal::U32(4),
+            val: ScVal::U32(8),
+        },
+    ]
+    .try_into()?;
+    let scobj = ScObject::Map(scmap);
+    let obj = host.to_host_obj(&scobj)?;
+    // prev
+    {
+        assert_eq!(
+            host.map_prev_key(obj.to_object(), 0_u32.into())?
+                .get_payload(),
+            UNKNOWN_ERROR.to_raw().get_payload()
+        );
+        assert_eq!(
+            host.map_prev_key(obj.to_object(), 1_u32.into())?
+                .get_payload(),
+            UNKNOWN_ERROR.to_raw().get_payload()
+        );
+        assert_eq!(
+            host.map_prev_key(obj.to_object(), 2_u32.into())?
+                .get_payload(),
+            RawVal::from_u32(1).get_payload()
+        );
+        assert_eq!(
+            host.map_prev_key(obj.to_object(), 4_u32.into())?
+                .get_payload(),
+            RawVal::from_u32(1).get_payload()
+        );
+        assert_eq!(
+            host.map_prev_key(obj.to_object(), 5_u32.into())?
+                .get_payload(),
+            RawVal::from_u32(4).get_payload()
+        );
+    }
+    // next
+    {
+        assert_eq!(
+            host.map_next_key(obj.to_object(), 5_u32.into())?
+                .get_payload(),
+            UNKNOWN_ERROR.to_raw().get_payload()
+        );
+        assert_eq!(
+            host.map_next_key(obj.to_object(), 4_u32.into())?
+                .get_payload(),
+            UNKNOWN_ERROR.to_raw().get_payload()
+        );
+        assert_eq!(
+            host.map_next_key(obj.to_object(), 3_u32.into())?
+                .get_payload(),
+            RawVal::from_u32(4).get_payload()
+        );
+        assert_eq!(
+            host.map_next_key(obj.to_object(), 1_u32.into())?
+                .get_payload(),
+            RawVal::from_u32(4).get_payload()
+        );
+        assert_eq!(
+            host.map_next_key(obj.to_object(), 0_u32.into())?
+                .get_payload(),
+            RawVal::from_u32(1).get_payload()
+        );
+    }
     Ok(())
 }
 
