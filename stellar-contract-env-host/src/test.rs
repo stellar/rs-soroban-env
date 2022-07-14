@@ -1927,3 +1927,13 @@ fn invoke_memcpy() -> Result<(), HostError> {
 
     Ok(())
 }
+
+#[test]
+fn tuple_roundtrip() -> Result<(), HostError> {
+    let host = Host::default();
+    let t0: (u32, i32) = (5, -4);
+    let ev = t0.into_env_val(&host);
+    let t0_back: (u32, i32) = ev.try_into()?;
+    assert_eq!(t0, t0_back);
+    Ok(())
+}

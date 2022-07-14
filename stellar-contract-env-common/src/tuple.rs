@@ -39,7 +39,7 @@ macro_rules! impl_for_tuple {
         {
             fn into_env_val(self, env: &E) -> EnvVal<E, RawVal> {
                 let env = env.clone();
-                let vec = env.vec_new(RawVal::from_void());
+                let vec = env.vec_new($count.into());
                 $(let vec = env.vec_push(vec, self.$idx.into_val(&env));)*
                 EnvVal { env, val: vec.to_raw() }
             }
@@ -47,15 +47,15 @@ macro_rules! impl_for_tuple {
     };
 }
 
-impl_for_tuple! {  1 T0 0 }
-impl_for_tuple! {  2 T0 0 T1 1 }
-impl_for_tuple! {  3 T0 0 T1 1 T2 2 }
-impl_for_tuple! {  4 T0 0 T1 1 T2 2 T3 3 }
-impl_for_tuple! {  5 T0 0 T1 1 T2 2 T3 3 T4 4 }
-impl_for_tuple! {  6 T0 0 T1 1 T2 2 T3 3 T4 4 T5 5 }
-impl_for_tuple! {  7 T0 0 T1 1 T2 2 T3 3 T4 4 T5 5 T6 6 }
-impl_for_tuple! {  8 T0 0 T1 1 T2 2 T3 3 T4 4 T5 5 T6 6 T7 7 }
-impl_for_tuple! {  9 T0 0 T1 1 T2 2 T3 3 T4 4 T5 5 T6 6 T7 7 T8 8 }
-impl_for_tuple! { 10 T0 0 T1 1 T2 2 T3 3 T4 4 T5 5 T6 6 T7 7 T8 8 T9 9 }
-impl_for_tuple! { 11 T0 0 T1 1 T2 2 T3 3 T4 4 T5 5 T6 6 T7 7 T8 8 T9 9 T10 10 }
-impl_for_tuple! { 12 T0 0 T1 1 T2 2 T3 3 T4 4 T5 5 T6 6 T7 7 T8 8 T9 9 T10 10 T11 11 }
+impl_for_tuple! {  1_u32 T0 0 }
+impl_for_tuple! {  2_u32 T0 0 T1 1 }
+impl_for_tuple! {  3_u32 T0 0 T1 1 T2 2 }
+impl_for_tuple! {  4_u32 T0 0 T1 1 T2 2 T3 3 }
+impl_for_tuple! {  5_u32 T0 0 T1 1 T2 2 T3 3 T4 4 }
+impl_for_tuple! {  6_u32 T0 0 T1 1 T2 2 T3 3 T4 4 T5 5 }
+impl_for_tuple! {  7_u32 T0 0 T1 1 T2 2 T3 3 T4 4 T5 5 T6 6 }
+impl_for_tuple! {  8_u32 T0 0 T1 1 T2 2 T3 3 T4 4 T5 5 T6 6 T7 7 }
+impl_for_tuple! {  9_u32 T0 0 T1 1 T2 2 T3 3 T4 4 T5 5 T6 6 T7 7 T8 8 }
+impl_for_tuple! { 10_u32 T0 0 T1 1 T2 2 T3 3 T4 4 T5 5 T6 6 T7 7 T8 8 T9 9 }
+impl_for_tuple! { 11_u32 T0 0 T1 1 T2 2 T3 3 T4 4 T5 5 T6 6 T7 7 T8 8 T9 9 T10 10 }
+impl_for_tuple! { 12_u32 T0 0 T1 1 T2 2 T3 3 T4 4 T5 5 T6 6 T7 7 T8 8 T9 9 T10 10 T11 11 }

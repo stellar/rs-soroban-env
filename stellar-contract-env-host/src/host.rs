@@ -1122,7 +1122,7 @@ impl CheckedEnv for Host {
 
     fn map_keys(&self, m: Object) -> Result<Object, HostError> {
         self.visit_obj(m, |hm: &HostMap| {
-            let mut vec = self.vec_new(RawVal::from_void())?;
+            let mut vec = self.vec_new(self.map_len(m)?)?;
             for k in hm.keys() {
                 vec = self.vec_push(vec, k.to_raw())?;
             }
@@ -1132,7 +1132,7 @@ impl CheckedEnv for Host {
 
     fn map_values(&self, m: Object) -> Result<Object, HostError> {
         self.visit_obj(m, |hm: &HostMap| {
-            let mut vec = self.vec_new(RawVal::from_void())?;
+            let mut vec = self.vec_new(self.map_len(m)?)?;
             for k in hm.values() {
                 vec = self.vec_push(vec, k.to_raw())?;
             }
@@ -1151,6 +1151,7 @@ impl CheckedEnv for Host {
                 )
             })? as usize
         };
+        // TODO: optimize the vector based on capacity
         Ok(self.add_host_object(HostVec::new())?.into())
     }
 
