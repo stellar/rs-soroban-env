@@ -3,7 +3,7 @@ use crate::{
         ScHostFnErrorCode, ScHostObjErrorCode, ScObject, ScObjectType, ScStatic, ScStatus, ScVal,
         ScVec,
     },
-    Host, HostError, IntoEnvVal, Object, RawVal, Tag, Symbol
+    Host, HostError, IntoEnvVal, Object, RawVal, Symbol, Tag,
 };
 
 use stellar_contract_env_common::{
@@ -23,11 +23,9 @@ use im_rc::OrdMap;
 use stellar_contract_env_common::xdr::WriteXdr;
 
 #[cfg(feature = "vm")]
-use crate::Vm;
+use crate::xdr::{ContractDataEntry, Hash, LedgerEntry, LedgerEntryExt, ScStatusType};
 #[cfg(feature = "vm")]
-use crate::{
-    xdr::{ContractDataEntry, Hash, LedgerEntry, LedgerEntryExt, ScStatusType},
-};
+use crate::Vm;
 use assert_matches::assert_matches;
 #[cfg(feature = "vm")]
 use stellar_contract_env_common::Status;
