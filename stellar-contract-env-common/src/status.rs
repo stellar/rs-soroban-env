@@ -1,4 +1,4 @@
-use crate::{RawVal, Tag, TagStatus, TaggedVal};
+use crate::{BitSetError, ConversionError, RawVal, SymbolError, Tag, TagStatus, TaggedVal};
 use core::{
     cmp::Ordering,
     fmt::Debug,
@@ -7,7 +7,7 @@ use core::{
 };
 use stellar_xdr::{
     ScHostContextErrorCode, ScHostFnErrorCode, ScHostObjErrorCode, ScHostStorageErrorCode,
-    ScHostValErrorCode, ScStatus, ScStatusType, ScVmErrorCode,
+    ScHostValErrorCode, ScStatus, ScStatusType, ScUnknownErrorCode, ScVmErrorCode,
 };
 
 pub type Status = TaggedVal<TagStatus>;
@@ -119,16 +119,119 @@ impl Debug for Status {
         };
         write!(f, "Status({}(", st.name())?;
         match st {
-            ScStatusType::HostContextError => fmt_named_code::<ScHostContextErrorCode>(code, f),
             ScStatusType::Ok => write!(f, "{}", code),
             ScStatusType::UnknownError => write!(f, "{}", code),
             ScStatusType::HostValueError => fmt_named_code::<ScHostValErrorCode>(code, f),
             ScStatusType::HostObjectError => fmt_named_code::<ScHostObjErrorCode>(code, f),
             ScStatusType::HostFunctionError => fmt_named_code::<ScHostFnErrorCode>(code, f),
             ScStatusType::HostStorageError => fmt_named_code::<ScHostStorageErrorCode>(code, f),
+            ScStatusType::HostContextError => fmt_named_code::<ScHostContextErrorCode>(code, f),
             ScStatusType::VmError => fmt_named_code::<ScVmErrorCode>(code, f),
         }?;
         write!(f, "))")
+    }
+}
+
+impl TryFrom<Status> for ScStatus {
+    fn try_from(st: Status) -> Result<Self, Self::Error> {
+        let ok = {
+            if st.is_type(ScStatusType::Ok) {
+                ScStatus::Ok
+            } else if st.is_type(ScStatusType::UnknownError) {
+                ScStatus::UnknownError((st.get_code() as i32).try_into()?)
+            } else if st.is_type(ScStatusType::HostValueError) {
+                ScStatus::HostValueError((st.get_code() as i32).try_into()?)
+            } else if st.is_type(ScStatusType::HostObjectError) {
+                ScStatus::HostObjectError((st.get_code() as i32).try_into()?)
+            } else if st.is_type(ScStatusType::HostFunctionError) {
+                ScStatus::HostFunctionError((st.get_code() as i32).try_into()?)
+            } else if st.is_type(ScStatusType::HostStorageError) {
+                ScStatus::HostStorageError((st.get_code() as i32).try_into()?)
+            } else if st.is_type(ScStatusType::HostContextError) {
+                ScStatus::HostContextError((st.get_code() as i32).try_into()?)
+            } else if st.is_type(ScStatusType::VmError) {
+                ScStatus::VmError((st.get_code() as i32).try_into()?)
+            } else {
+                return Err(stellar_xdr::Error::Invalid);
+            }
+        };
+        Ok(ok)
+    }
+
+    type Error = stellar_xdr::Error;
+}
+
+impl From<ScStatus> for Status {
+    fn from(st: ScStatus) -> Self {
+        Status::from_status(st)
+    }
+}
+
+impl From<ScUnknownErrorCode> for Status {
+    fn from(code: ScUnknownErrorCode) -> Self {
+        ScStatus::UnknownError(code).into()
+    }
+}
+
+impl From<ScHostValErrorCode> for Status {
+    fn from(code: ScHostValErrorCode) -> Self {
+        ScStatus::HostValueError(code).into()
+    }
+}
+
+impl From<ScHostObjErrorCode> for Status {
+    fn from(code: ScHostObjErrorCode) -> Self {
+        ScStatus::HostObjectError(code).into()
+    }
+}
+
+impl From<ScHostFnErrorCode> for Status {
+    fn from(code: ScHostFnErrorCode) -> Self {
+        ScStatus::HostFunctionError(code).into()
+    }
+}
+
+impl From<ScHostStorageErrorCode> for Status {
+    fn from(code: ScHostStorageErrorCode) -> Self {
+        ScStatus::HostStorageError(code).into()
+    }
+}
+
+impl From<ScHostContextErrorCode> for Status {
+    fn from(code: ScHostContextErrorCode) -> Self {
+        ScStatus::HostContextError(code).into()
+    }
+}
+
+impl From<ScVmErrorCode> for Status {
+    fn from(code: ScVmErrorCode) -> Self {
+        ScStatus::VmError(code).into()
+    }
+}
+
+impl From<BitSetError> for Status {
+    fn from(bse: BitSetError) -> Self {
+        let s = match bse {
+            BitSetError::TooManyBits(_) => ScHostValErrorCode::BitsetTooManyBits,
+        };
+        ScStatus::HostValueError(s).into()
+    }
+}
+
+impl From<SymbolError> for Status {
+    fn from(se: SymbolError) -> Self {
+        let s = match se {
+            SymbolError::TooLong(_) => ScHostValErrorCode::SymbolTooLong,
+            SymbolError::BadChar(_) => ScHostValErrorCode::SymbolBadChar,
+        };
+        ScStatus::HostValueError(s).into()
+    }
+}
+
+impl From<ConversionError> for Status {
+    fn from(_: ConversionError) -> Self {
+        let s = ScHostValErrorCode::UnexpectedValType;
+        ScStatus::HostValueError(s).into()
     }
 }
 

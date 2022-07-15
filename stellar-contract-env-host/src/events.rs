@@ -1,39 +1,227 @@
-#![allow(dead_code)]
+use log::debug;
+use stellar_contract_env_common::{
+    xdr::{self},
+    RawVal, Status,
+};
 
-use arrayvec::ArrayVec;
-use stellar_contract_env_common::RawVal;
+use tinyvec::TinyVec;
+
+#[cfg(feature = "vm")]
+use crate::HostError;
+#[cfg(feature = "vm")]
+use stellar_contract_env_common::xdr::{ScUnknownErrorCode, ScVmErrorCode};
 
 // TODO: update this when ContractEvent shows up in the XDR defns.
 // TODO: optimize storage on this to use pools / bumpalo / etc.
 #[derive(Clone, Debug)]
-pub(crate) enum HostEvent {
+pub enum HostEvent {
+    #[allow(dead_code)]
     Contract(/*ContractEvent*/),
-    // Same size as LargeDebug but doesn't chew up a heap allocation.
-    SmallDebug {
-        msg: &'static str,
-        // ArrayVec<RawVal, 2> is 3 words: RawVal, RawVal, len.
-        args: ArrayVec<RawVal, 2>,
-    },
-    // Arbitrary set of k/v arguments.
-    LargeDebug {
-        msg: &'static str,
-        // Vec is 3 words: ptr, len, capacity.
-        args: Vec<RawVal>,
-    },
+    Debug(DebugEvent),
 }
 
 #[derive(Clone, Debug, Default)]
 pub struct Events(Vec<HostEvent>);
 
 impl Events {
-    pub(crate) fn add_debug_event(&mut self, msg: &'static str, in_args: &[RawVal]) {
-        let debug = if in_args.len() <= 2 {
-            let args: ArrayVec<RawVal, 2> = ArrayVec::from_iter(in_args.iter().cloned());
-            HostEvent::SmallDebug { msg, args }
-        } else {
-            let args = in_args.into();
-            HostEvent::LargeDebug { msg, args }
+    // Records the smallest variant of a debug HostEvent it can, returning the size of the
+    // in_args slice (for charging to a budget).
+    pub fn record_debug_event(&mut self, de: DebugEvent) -> u64 {
+        let len = de.args.len();
+        self.0.push(HostEvent::Debug(de));
+        len as u64
+    }
+
+    pub fn dump_to_debug_log(&self) {
+        for e in self.0.iter() {
+            match e {
+                HostEvent::Contract() => debug!("Contract event: <TBD>"),
+                HostEvent::Debug(e) => debug!("Debug event: {:?}", e),
+            }
+        }
+    }
+}
+
+/// A cheap record type to store in the events buffer for diagnostic reporting
+/// when something goes wrong. Should cost very little even when enabled. See
+/// [host::debug_event] for normal use.
+#[derive(Clone, Debug)]
+pub struct DebugEvent {
+    pub msg: &'static str,
+    pub args: TinyVec<[RawVal; 2]>,
+}
+
+impl DebugEvent {
+    pub fn new() -> Self {
+        Self {
+            msg: "",
+            args: Default::default(),
+        }
+    }
+
+    pub fn msg(mut self, msg: &'static str) -> Self {
+        self.msg = msg;
+        self
+    }
+
+    pub fn arg<T>(mut self, arg: T) -> Self
+    where
+        RawVal: From<T>,
+    {
+        self.args.push(arg.into());
+        self
+    }
+}
+
+/// Combines a [DebugEvent] with a [Status] that created it, typically
+/// used as a transient type when recording a (possibly enriched)
+/// debug event for a status and then converting the status to a
+/// HostError. See [host::err] for normal use.
+#[derive(Clone, Debug)]
+pub struct DebugError {
+    pub event: DebugEvent,
+    pub status: Status,
+}
+
+impl DebugError {
+    pub fn new<T>(status: T) -> Self
+    where
+        Status: From<T>,
+    {
+        let status: Status = status.into();
+        Self {
+            event: DebugEvent::new().msg("status").arg::<Status>(status.into()),
+            status: status,
+        }
+    }
+
+    pub fn general() -> Self {
+        Self::new(xdr::ScUnknownErrorCode::General)
+    }
+
+    pub fn msg(mut self, msg: &'static str) -> Self {
+        self.event = self.event.msg(msg);
+        self
+    }
+
+    pub fn arg<T>(mut self, arg: T) -> Self
+    where
+        RawVal: From<T>,
+    {
+        self.event.args.push(arg.into());
+        self
+    }
+}
+
+impl From<xdr::Error> for DebugError {
+    fn from(err: xdr::Error) -> Self {
+        let msg = match err {
+            xdr::Error::Invalid => "XDR error: invalid",
+            xdr::Error::LengthExceedsMax => "XDR error: length exceeds max",
+            xdr::Error::LengthMismatch => "XDR error: length mismatch",
+            xdr::Error::NonZeroPadding => "XDR error: nonzero padding",
+            xdr::Error::Utf8Error(_) => "XDR error: UTF-8 error",
+            xdr::Error::Io(_) => "XDR error: IO error",
         };
-        self.0.push(debug);
+        Self::new(xdr::ScUnknownErrorCode::Xdr).msg(msg)
+    }
+}
+
+#[cfg(feature = "vm")]
+impl From<wasmi::Error> for DebugError {
+    fn from(err: wasmi::Error) -> Self {
+        // At the moment we have a status code for each of the wasmi error types,
+        // but we mighit reduce this to something coarser in the future, split
+        // the name-reporting out from the code we return
+        //
+        // The errors from wasmi actually have much _more_ content (in the form
+        // of Strings) that we're already eliding at this level, that we might
+        // want to report for diagnostic purposes if we ever get dynamic strings
+        // in the diagnostic buffer.
+        use wasmi::Error::*;
+        use wasmi::TrapCode::*;
+        let code = match err {
+            Validation(_) => ScVmErrorCode::Validation,
+            Instantiation(_) => ScVmErrorCode::Instantiation,
+            Function(_) => ScVmErrorCode::Function,
+            Table(_) => ScVmErrorCode::Table,
+            Memory(_) => ScVmErrorCode::Memory,
+            Global(_) => ScVmErrorCode::Global,
+            Value(_) => ScVmErrorCode::Value,
+            Trap(wasmi::Trap::Host(err)) => {
+                let status: Status = match err.downcast_ref::<HostError>() {
+                    Some(he) => he.status,
+                    None => ScUnknownErrorCode::General.into(),
+                };
+                return DebugError::new(status).msg("VM trapped with from host error");
+            }
+            Trap(wasmi::Trap::Code(c)) => match c {
+                Unreachable => ScVmErrorCode::TrapUnreachable,
+                MemoryAccessOutOfBounds => ScVmErrorCode::TrapMemoryAccessOutOfBounds,
+                TableAccessOutOfBounds => ScVmErrorCode::TrapTableAccessOutOfBounds,
+                ElemUninitialized => ScVmErrorCode::TrapElemUninitialized,
+                DivisionByZero => ScVmErrorCode::TrapDivisionByZero,
+                IntegerOverflow => ScVmErrorCode::TrapIntegerOverflow,
+                InvalidConversionToInt => ScVmErrorCode::TrapInvalidConversionToInt,
+                StackOverflow => ScVmErrorCode::TrapStackOverflow,
+                UnexpectedSignature => ScVmErrorCode::TrapUnexpectedSignature,
+                MemLimitExceeded => ScVmErrorCode::TrapMemLimitExceeded,
+                CpuLimitExceeded => ScVmErrorCode::TrapCpuLimitExceeded,
+            },
+            Host(err) => {
+                let status: Status = match err.downcast_ref::<HostError>() {
+                    Some(he) => he.status,
+                    None => ScUnknownErrorCode::General.into(),
+                };
+                return DebugError::new(status).msg("VM returned host error");
+            }
+        };
+        Self::new(code).msg(code.name())
+    }
+}
+
+#[cfg(feature = "vm")]
+impl From<parity_wasm::elements::Error> for DebugError {
+    fn from(err: parity_wasm::elements::Error) -> Self {
+        use parity_wasm::SerializationError::*;
+        let msg = match err {
+            UnexpectedEof => "WASM deserialization error: unexpected EOF",
+            InvalidMagic => "WASM deserialization error: invalid magic number",
+            UnsupportedVersion(_) => "WASM deserialization error: unsupported version",
+            InconsistentLength { .. } => "WASM deserialization error: inconsistent length",
+            Other(_) => "WASM deserialization error: other",
+            HeapOther(_) => "WASM deserialization error: heap, other",
+            UnknownValueType(_) => "WASM deserialization error: unknown value type",
+            UnknownTableElementType(_) => "WASM deserialization error: unknown table element type",
+            NonUtf8String => "WASM deserialization error: non-UTF-8 string",
+            UnknownExternalKind(_) => "WASM deserialization error: unknown external kind",
+            UnknownInternalKind(_) => "WASM deserialization error: unknown internal kind",
+            UnknownOpcode(_) => "WASM deserialization error: unknown opcode",
+            InvalidVarUint1(_) => "WASM deserialization error: not an unsigned 1-bit number",
+            InvalidVarInt32 => "WASM deserialization error: not a signed 32-bit number",
+            InvalidVarInt64 => "WASM deserialization error: not a signed 64-bit number",
+            InvalidVarUint32 => "WASM deserialization error: not an unsigned 32-bit number",
+            InvalidVarUint64 => "WASM deserialization error: not an unsigned 64-bit number",
+            InconsistentMetadata => "WASM deserialization error: inconsistent metadata",
+            InvalidSectionId(_) => "WASM deserialization error: invalid section ID",
+            SectionsOutOfOrder => "WASM deserialization error: sections out of order",
+            DuplicatedSections(_) => "WASM deserialization error: duplicated sections",
+            InvalidMemoryReference(_) => "WASM deserialization error: invalid memory reference",
+            InvalidTableReference(_) => "WASM deserialization error: invalid table reference",
+            InvalidLimitsFlags(_) => "WASM deserialization error: invalid limits flags",
+            UnknownFunctionForm(_) => "WASM deserialization error: unknown function form",
+            InvalidVarInt7(_) => "WASM deserialization error: not a signed 7-bit number",
+            InconsistentCode => "WASM deserialization error: inconsistent code",
+            InvalidSegmentFlags(_) => "WASM deserialization error: invalid segment flags",
+            TooManyLocals => "WASM deserialization error: too many locals",
+            DuplicatedNameSubsections(_) => {
+                "WASM deserialization error: duplicated name subsections"
+            }
+            UnknownNameSubsectionType(_) => {
+                "WASM deserialization error: unknown name subsection type"
+            }
+        };
+        let code = ScVmErrorCode::Unknown;
+        Self::new(code).msg(msg)
     }
 }

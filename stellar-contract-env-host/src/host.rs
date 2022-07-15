@@ -9,16 +9,14 @@ use num_bigint::{BigInt, Sign};
 use num_integer::Integer;
 use num_traits::cast::ToPrimitive;
 use num_traits::{Pow, Signed, Zero};
-use std::num::TryFromIntError;
 use std::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Not, Rem, Shl, Shr, Sub};
-#[cfg(feature = "vm")]
-use stellar_contract_env_common::xdr::ScVmErrorCode;
+
 use stellar_contract_env_common::xdr::{
     AccountEntry, AccountId, Hash, PublicKey, ReadXdr, ThresholdIndexes, Uint256, WriteXdr,
 };
 
 use crate::budget::{Budget, CostType};
-use crate::events::Events;
+use crate::events::{DebugError, DebugEvent, Events};
 use crate::storage::Storage;
 use crate::weak_host::WeakHost;
 
@@ -27,7 +25,7 @@ use crate::xdr::{
     ContractDataEntry, HostFunction, LedgerEntry, LedgerEntryData, LedgerEntryExt, LedgerKey,
     LedgerKeyContractData, ScBigInt, ScHostContextErrorCode, ScHostFnErrorCode, ScHostObjErrorCode,
     ScHostStorageErrorCode, ScHostValErrorCode, ScMap, ScMapEntry, ScObject, ScStatic, ScStatus,
-    ScStatusType, ScUnknownErrorCode, ScVal, ScVec,
+    ScStatusType, ScVal, ScVec,
 };
 use std::rc::Rc;
 
@@ -38,135 +36,55 @@ use crate::SymbolStr;
 #[cfg(feature = "vm")]
 use crate::Vm;
 use crate::{
-    BitSet, BitSetError, ConversionError, EnvBase, IntoEnvVal, Object, RawVal, RawValConvertible,
-    Static, Status, Symbol, SymbolError, Tag, Val, UNKNOWN_ERROR,
+    BitSet, ConversionError, EnvBase, IntoEnvVal, Object, RawVal, RawValConvertible, Static,
+    Status, Symbol, Tag, Val, UNKNOWN_ERROR,
 };
 
-use thiserror::Error;
-
-#[derive(Error, Debug)]
-pub enum HostError {
-    /// An error with specific status code.
-    #[error("host error: {0}, status: {:?}")]
-    WithStatus(String, ScStatus),
-    /// XDR error.
-    #[error("XDR error: {0}")]
-    XDR(#[from] xdr::Error),
-    /// WASMI error.
-    #[cfg(feature = "vm")]
-    #[error("WASMI error: {0}")]
-    WASMI(#[from] wasmi::Error),
-    /// ParityWasmElements error.
-    #[cfg(feature = "vm")]
-    #[error("ParityWasmElements error: {0}")]
-    ParityWasmElements(#[from] parity_wasm::elements::Error),
-    /// General error.
-    #[error("general host error: {0}")]
-    General(&'static str),
+#[derive(Debug)]
+pub struct HostError {
+    pub(crate) status: Status,
+    pub(crate) backtrace: backtrace::Backtrace,
 }
 
-impl From<TryFromIntError> for HostError {
-    fn from(_: TryFromIntError) -> Self {
-        HostError::WithStatus(
-            String::from("number out of range of u32"),
-            ScStatus::HostValueError(ScHostValErrorCode::U32OutOfRange),
-        )
-    }
-}
-
-impl From<SymbolError> for HostError {
-    fn from(err: SymbolError) -> Self {
-        HostError::WithStatus(
-            String::from("symbol error"),
-            ScStatus::HostValueError(match err {
-                SymbolError::TooLong(_) => ScHostValErrorCode::SymbolTooLong,
-                SymbolError::BadChar(_) => ScHostValErrorCode::SymbolBadChar,
-            }),
-        )
-    }
-}
-
-impl From<BitSetError> for HostError {
-    fn from(err: BitSetError) -> Self {
-        HostError::WithStatus(
-            String::from("bitset error"),
-            ScStatus::HostValueError(match err {
-                BitSetError::TooManyBits(_) => ScHostValErrorCode::BitsetTooManyBits,
-            }),
-        )
-    }
-}
-
-impl From<&HostError> for ScStatus {
-    fn from(err: &HostError) -> Self {
-        match err {
-            HostError::General(_) => ScStatus::UnknownError(ScUnknownErrorCode::General),
-            HostError::WithStatus(_, status) => status.to_owned(),
-            HostError::XDR(_) => ScStatus::UnknownError(ScUnknownErrorCode::Xdr),
-            #[cfg(feature = "vm")]
-            HostError::WASMI(err) => match err {
-                wasmi::Error::Trap(trap) => match trap {
-                    wasmi::Trap::Code(code) => match code {
-                        wasmi::TrapCode::Unreachable => {
-                            ScStatus::VmError(ScVmErrorCode::TrapUnreachable)
-                        }
-                        wasmi::TrapCode::MemoryAccessOutOfBounds => {
-                            ScStatus::VmError(ScVmErrorCode::TrapMemoryAccessOutOfBounds)
-                        }
-                        wasmi::TrapCode::TableAccessOutOfBounds => {
-                            ScStatus::VmError(ScVmErrorCode::TrapTableAccessOutOfBounds)
-                        }
-                        wasmi::TrapCode::ElemUninitialized => {
-                            ScStatus::VmError(ScVmErrorCode::TrapElemUninitialized)
-                        }
-                        wasmi::TrapCode::DivisionByZero => {
-                            ScStatus::VmError(ScVmErrorCode::TrapDivisionByZero)
-                        }
-                        wasmi::TrapCode::IntegerOverflow => {
-                            ScStatus::VmError(ScVmErrorCode::TrapIntegerOverflow)
-                        }
-                        wasmi::TrapCode::InvalidConversionToInt => {
-                            ScStatus::VmError(ScVmErrorCode::TrapInvalidConversionToInt)
-                        }
-                        wasmi::TrapCode::StackOverflow => {
-                            ScStatus::VmError(ScVmErrorCode::TrapStackOverflow)
-                        }
-                        wasmi::TrapCode::UnexpectedSignature => {
-                            ScStatus::VmError(ScVmErrorCode::TrapUnexpectedSignature)
-                        }
-                        wasmi::TrapCode::MemLimitExceeded => {
-                            ScStatus::VmError(ScVmErrorCode::TrapMemLimitExceeded)
-                        }
-                        wasmi::TrapCode::CpuLimitExceeded => {
-                            ScStatus::VmError(ScVmErrorCode::TrapCpuLimitExceeded)
-                        }
-                    },
-                    wasmi::Trap::Host(err) => match err.downcast_ref::<HostError>() {
-                        Some(e) => e.into(),
-                        None => ScStatus::VmError(ScVmErrorCode::Unknown),
-                    },
-                },
-                wasmi::Error::Host(err) => match err.downcast_ref::<HostError>() {
-                    Some(e) => e.into(),
-                    None => ScStatus::VmError(ScVmErrorCode::Unknown),
-                },
-                wasmi::Error::Validation(_) => ScStatus::VmError(ScVmErrorCode::Validation),
-                wasmi::Error::Instantiation(_) => ScStatus::VmError(ScVmErrorCode::Instantiation),
-                wasmi::Error::Function(_) => ScStatus::VmError(ScVmErrorCode::Function),
-                wasmi::Error::Table(_) => ScStatus::VmError(ScVmErrorCode::Table),
-                wasmi::Error::Memory(_) => ScStatus::VmError(ScVmErrorCode::Memory),
-                wasmi::Error::Global(_) => ScStatus::VmError(ScVmErrorCode::Global),
-                wasmi::Error::Value(_) => ScStatus::VmError(ScVmErrorCode::Value),
-            },
-            #[cfg(feature = "vm")]
-            HostError::ParityWasmElements(_) => ScStatus::VmError(ScVmErrorCode::Unknown),
+impl HostError {
+    #[cfg(test)]
+    pub fn result_matches_err_status<T, C>(res: Result<T, HostError>, code: C) -> bool
+    where
+        Status: From<C>,
+    {
+        match res {
+            Ok(_) => false,
+            Err(he) => {
+                let status: Status = code.into();
+                he.status == status
+            }
         }
     }
 }
 
-impl From<ConversionError> for HostError {
-    fn from(_: ConversionError) -> Self {
-        HostError::General("conversion error")
+impl<T> From<T> for HostError
+where
+    Status: From<T>,
+{
+    fn from(status: T) -> Self {
+        let backtrace = backtrace::Backtrace::new();
+        let status: Status = status.into();
+        Self { status, backtrace }
+    }
+}
+
+impl std::fmt::Display for HostError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "Status code: {:#?}", self.status)?;
+        writeln!(f, "Error context:")?;
+        writeln!(f, "{:#?}", self.backtrace)
+    }
+}
+
+impl TryFrom<&HostError> for ScStatus {
+    type Error = xdr::Error;
+    fn try_from(err: &HostError) -> Result<Self, Self::Error> {
+        err.status.try_into()
     }
 }
 
@@ -297,13 +215,88 @@ impl Host {
         f(&mut *self.0.events.borrow_mut())
     }
 
-    pub(crate) fn add_debug_event(
-        &self,
-        msg: &'static str,
-        args: &[RawVal],
-    ) -> Result<(), HostError> {
-        self.charge_budget(CostType::HostEventDebug, args.len() as u64)?;
-        self.get_events_mut(|events| Ok(events.add_debug_event(msg, args)))
+    /// Records a debug event. This in itself is not necessarily an error; it
+    /// might just be some contextual event we want to put in a debug log for
+    /// diagnostic purpopses. The return value from this is therefore () when
+    /// the event is recorded successfully, even if the event itself
+    /// _represented_ some other error. This function only returns Err(...) when
+    /// there was a failure to record the event, such as when budget is
+    /// exceeded.
+    pub(crate) fn debug_event<T>(&self, src: T) -> Result<(), HostError>
+    where
+        DebugEvent: From<T>,
+    {
+        // We want to record an event _before_ we charge the budget, to maximize
+        // the chance we return "what the contract was doing when it ran out of
+        // gas" in cases it does. This does mean in that one case we'll exceed
+        // the gas limit a tiny amount (one event-worth) but it's not something
+        // users can harm us with nor does it observably effect the order the
+        // contract runs out of gas in; this is an atomic action from the
+        // contract's perspective.
+        let event: DebugEvent = src.into();
+        let len = event.args.len() as u64;
+        self.get_events_mut(|events| Ok(events.record_debug_event(event)))?;
+        self.charge_budget(CostType::HostEventDebug, len)
+    }
+
+    /// Records a debug-event from its input in as much detail as possible, then
+    /// converts its input to a (often coarser-granularity) [Status] code, and then
+    /// forms a [HostError] with it (which also captures a [backtrace::Backtrace]).
+    /// This is the method you want to call any time there's a finer-granularity error
+    /// type that you want to log the details of and then downgrade fail with.
+    pub(crate) fn err<T>(&self, src: T) -> HostError
+    where
+        DebugError: From<T>,
+    {
+        let ds: DebugError = src.into();
+        if let Err(e) = self.debug_event(ds.event) {
+            e
+        } else {
+            ds.status.into()
+        }
+    }
+
+    /// Helper for the simplest status-only error path.
+    pub(crate) fn err_status<T>(&self, status: T) -> HostError
+    where
+        Status: From<T>,
+    {
+        self.err(DebugError::new(status))
+    }
+
+    /// Helper for the simplest string + general-error path.
+    pub(crate) fn err_general(&self, msg: &'static str) -> HostError {
+        self.err(DebugError::general().msg(msg))
+    }
+
+    /// Helper for the next-simplest status-and-extended-debug-message error path.
+    pub(crate) fn err_status_msg<T>(&self, status: T, msg: &'static str) -> HostError
+    where
+        Status: From<T>,
+    {
+        self.err(DebugError::new(status).msg(msg))
+    }
+
+    /// Given a result carrying some error type that can be converted to a
+    /// DebugStatus, calls self.err with it when there's an error. Returns a
+    /// result over HostError.
+    ///
+    /// If you have an error type T you want to record as a detailed debug event
+    /// and a less-detailed Status code embedded in a HostError, add an `impl
+    /// From<T> for DebugStatus` over in the [events] module and call this where
+    /// the error is generated.
+    ///
+    /// Note: we do _not_ want to `impl From<T> for HostError` for such types,
+    /// as doing so will avoid routing them through the host in order to record
+    /// their extended diagnostic information into the debug buffer. This means
+    /// you will wind up writing `host.map_err(...)?` a bunch in code that you used
+    /// to be able to get away with just writing `...?`, there's no way around
+    /// this if we want to record the diagnostic information.
+    pub(crate) fn map_err<T, E>(&self, res: Result<T, E>) -> Result<T, HostError>
+    where
+        DebugError: From<E>,
+    {
+        res.map_err(|e| self.err(e.into()))
     }
 
     pub(crate) fn visit_storage<F, U>(&self, f: F) -> Result<U, HostError>
@@ -380,12 +373,12 @@ impl Host {
     where
         F: FnOnce(&Frame) -> Result<U, HostError>,
     {
-        f(self.0.context.borrow().last().ok_or_else(|| {
-            HostError::WithStatus(
-                String::from("no contract currently running"),
-                ScStatus::HostContextError(ScHostContextErrorCode::NoContractRunning),
-            )
-        })?)
+        f(self
+            .0
+            .context
+            .borrow()
+            .last()
+            .ok_or_else(|| self.err(DebugError::new(ScHostContextErrorCode::NoContractRunning)))?)
     }
 
     /// Returns [`Hash`] contract ID from the VM frame at the top of the context
@@ -395,18 +388,19 @@ impl Host {
         self.with_current_frame(|frame| match frame {
             #[cfg(feature = "vm")]
             Frame::ContractVM(vm) => Ok(vm.contract_id.clone()),
-            Frame::HostFunction(_) => Err(HostError::General(
-                "Host function context has no contract ID",
-            )),
+            Frame::HostFunction(_) => {
+                Err(self.err_general("Host function context has no contract ID"))
+            }
             #[cfg(feature = "testutils")]
             Frame::TestContract(id) => Ok(id.clone()),
         })
     }
 
-    unsafe fn unchecked_visit_val_obj<F, U>(&self, val: RawVal, f: F) -> U
+    unsafe fn unchecked_visit_val_obj<F, U>(&self, val: RawVal, f: F) -> Result<U, HostError>
     where
-        F: FnOnce(Option<&HostObject>) -> U,
+        F: FnOnce(Option<&HostObject>) -> Result<U, HostError>,
     {
+        self.charge_budget(CostType::VisitObject, 1)?;
         let r = self.0.objects.borrow();
         let index = <Object as RawValConvertible>::unchecked_from_val(val).get_handle() as usize;
         f(r.get(index))
@@ -418,15 +412,9 @@ impl Host {
     {
         unsafe {
             self.unchecked_visit_val_obj(obj.into(), |hopt| match hopt {
-                None => Err(HostError::WithStatus(
-                    String::from("unknown object reference"),
-                    ScStatus::HostObjectError(ScHostObjErrorCode::UnknownReference),
-                )),
+                None => Err(self.err_status(ScHostObjErrorCode::UnknownReference)),
                 Some(hobj) => match HOT::try_extract(hobj) {
-                    None => Err(HostError::WithStatus(
-                        String::from("unexpected host object type"),
-                        ScStatus::HostObjectError(ScHostObjErrorCode::UnexpectedType),
-                    )),
+                    None => Err(self.err_status(ScHostObjErrorCode::UnexpectedType)),
                     Some(hot) => f(hot),
                 },
             })
@@ -477,10 +465,7 @@ impl Host {
                     } else if tag_static.is_type(ScStatic::LedgerKeyContractCodeWasm) {
                         Ok(ScVal::Static(ScStatic::LedgerKeyContractCodeWasm))
                     } else {
-                        Err(HostError::WithStatus(
-                            String::from("unknown Tag::Static case"),
-                            ScStatus::HostValueError(ScHostValErrorCode::StaticUnknown),
-                        ))
+                        Err(self.err_status(ScHostValErrorCode::StaticUnknown))
                     }
                 }
                 Tag::Object => unsafe {
@@ -492,53 +477,16 @@ impl Host {
                     let sym: Symbol =
                         unsafe { <Symbol as RawValConvertible>::unchecked_from_val(val) };
                     let str: String = sym.into_iter().collect();
-                    Ok(ScVal::Symbol(str.as_bytes().try_into()?))
+                    Ok(ScVal::Symbol(self.map_err(str.as_bytes().try_into())?))
                 }
                 Tag::BitSet => Ok(ScVal::Bitset(val.get_payload())),
                 Tag::Status => {
                     let status: Status =
                         unsafe { <Status as RawValConvertible>::unchecked_from_val(val) };
-                    if status.is_ok() {
-                        Ok(ScVal::Status(ScStatus::Ok))
-                    } else if status.is_type(ScStatusType::UnknownError) {
-                        Ok(ScVal::Status(ScStatus::UnknownError(
-                            (status.get_code() as i32).try_into()?,
-                        )))
-                    } else if status.is_type(ScStatusType::HostValueError) {
-                        Ok(ScVal::Status(ScStatus::HostValueError(
-                            (status.get_code() as i32).try_into()?,
-                        )))
-                    } else if status.is_type(ScStatusType::HostObjectError) {
-                        Ok(ScVal::Status(ScStatus::HostObjectError(
-                            (status.get_code() as i32).try_into()?,
-                        )))
-                    } else if status.is_type(ScStatusType::HostFunctionError) {
-                        Ok(ScVal::Status(ScStatus::HostFunctionError(
-                            (status.get_code() as i32).try_into()?,
-                        )))
-                    } else if status.is_type(ScStatusType::HostStorageError) {
-                        Ok(ScVal::Status(ScStatus::HostStorageError(
-                            (status.get_code() as i32).try_into()?,
-                        )))
-                    } else if status.is_type(ScStatusType::HostContextError) {
-                        Ok(ScVal::Status(ScStatus::HostContextError(
-                            (status.get_code() as i32).try_into()?,
-                        )))
-                    } else if status.is_type(ScStatusType::VmError) {
-                        Ok(ScVal::Status(ScStatus::VmError(
-                            (status.get_code() as i32).try_into()?,
-                        )))
-                    } else {
-                        Err(HostError::WithStatus(
-                            String::from("unknown Tag::Status case"),
-                            ScStatus::HostValueError(ScHostValErrorCode::StatusUnknown),
-                        ))
-                    }
+                    let scstatus: ScStatus = self.map_err(status.try_into())?;
+                    Ok(ScVal::Status(scstatus))
                 }
-                Tag::Reserved => Err(HostError::WithStatus(
-                    String::from("Tag::Reserved value"),
-                    ScStatus::HostValueError(ScHostValErrorCode::ReservedTagValue),
-                )),
+                Tag::Reserved => Err(self.err_status(ScHostValErrorCode::ReservedTagValue)),
             }
         }
     }
@@ -554,10 +502,7 @@ impl Host {
                 if *i >= 0 {
                     unsafe { RawVal::unchecked_from_u63(*i) }
                 } else {
-                    return Err(HostError::WithStatus(
-                        String::from("ScvU63 > i64::MAX"),
-                        ScStatus::HostValueError(ScHostValErrorCode::U63OutOfRange),
-                    ));
+                    return Err(self.err_status(ScHostValErrorCode::U63OutOfRange));
                 }
             }
             ScVal::U32(u) => (*u).into(),
@@ -567,20 +512,14 @@ impl Host {
             ScVal::Static(ScStatic::False) => RawVal::from_bool(false),
             ScVal::Static(other) => RawVal::from_other_static(*other),
             ScVal::Object(None) => {
-                return Err(HostError::WithStatus(
-                    String::from("missing expected ScvObject"),
-                    ScStatus::HostValueError(ScHostValErrorCode::MissingObject),
-                ))
+                return Err(self.err_status(ScHostValErrorCode::MissingObject));
             }
             ScVal::Object(Some(ob)) => return Ok(self.to_host_obj(&*ob)?.into()),
             ScVal::Symbol(bytes) => {
                 let ss = match std::str::from_utf8(bytes.as_slice()) {
                     Ok(ss) => ss,
                     Err(_) => {
-                        return Err(HostError::WithStatus(
-                            String::from("non-UTF-8 in symbol"),
-                            ScStatus::HostValueError(ScHostValErrorCode::SymbolContainsNonUtf8),
-                        ))
+                        return Err(self.err_status(ScHostValErrorCode::SymbolContainsNonUtf8));
                     }
                 };
                 Symbol::try_from_str(ss)?.into()
@@ -620,17 +559,14 @@ impl Host {
     pub(crate) fn from_host_obj(&self, ob: Object) -> Result<ScObject, HostError> {
         unsafe {
             self.unchecked_visit_val_obj(ob.into(), |ob| match ob {
-                None => Err(HostError::WithStatus(
-                    String::from("unknown object reference"),
-                    ScStatus::HostObjectError(ScHostObjErrorCode::UnknownReference),
-                )),
+                None => Err(self.err_status(ScHostObjErrorCode::UnknownReference)),
                 Some(ho) => match ho {
                     HostObject::Vec(vv) => {
                         let mut sv = Vec::new();
                         for e in vv.iter() {
                             sv.push(self.from_host_val(e.val)?);
                         }
-                        Ok(ScObject::Vec(ScVec(sv.try_into()?)))
+                        Ok(ScObject::Vec(ScVec(self.map_err(sv.try_into())?)))
                     }
                     HostObject::Map(mm) => {
                         let mut mv = Vec::new();
@@ -639,21 +575,21 @@ impl Host {
                             let val = self.from_host_val(v.val)?;
                             mv.push(ScMapEntry { key, val });
                         }
-                        Ok(ScObject::Map(ScMap(mv.try_into()?)))
+                        Ok(ScObject::Map(ScMap(self.map_err(mv.try_into())?)))
                     }
                     HostObject::U64(u) => Ok(ScObject::U64(*u)),
                     HostObject::I64(i) => Ok(ScObject::I64(*i)),
-                    HostObject::Bin(b) => Ok(ScObject::Binary(b.clone().try_into()?)),
+                    HostObject::Bin(b) => Ok(ScObject::Binary(self.map_err(b.clone().try_into())?)),
                     HostObject::BigInt(bi) => {
                         let (sign, data) = bi.to_bytes_be();
                         match sign {
-                            Sign::Minus => {
-                                Ok(ScObject::BigInt(ScBigInt::Negative(data.try_into()?)))
-                            }
+                            Sign::Minus => Ok(ScObject::BigInt(ScBigInt::Negative(
+                                self.map_err(data.try_into())?,
+                            ))),
                             Sign::NoSign => Ok(ScObject::BigInt(ScBigInt::Zero)),
-                            Sign::Plus => {
-                                Ok(ScObject::BigInt(ScBigInt::Positive(data.try_into()?)))
-                            }
+                            Sign::Plus => Ok(ScObject::BigInt(ScBigInt::Positive(
+                                self.map_err(data.try_into())?,
+                            ))),
                         }
                     }
                     HostObject::Hash(_) => todo!(),
@@ -730,10 +666,7 @@ impl Host {
     ) -> Result<HostObj, HostError> {
         let handle = self.0.objects.borrow().len();
         if handle > u32::MAX as usize {
-            return Err(HostError::WithStatus(
-                String::from("object count exceeds u32::MAX"),
-                ScStatus::HostObjectError(ScHostObjErrorCode::ObjectCountExceedsU32Max),
-            ));
+            return Err(self.err_status(ScHostObjErrorCode::ObjectCountExceedsU32Max));
         }
         self.0
             .objects
@@ -761,12 +694,10 @@ impl Host {
         let id_obj = self.compute_hash_sha256(self.add_host_object(id_preimage)?.into())?;
 
         let new_contract_id = self.visit_obj(id_obj, |bin: &Vec<u8>| {
-            let arr: [u8; 32] = bin.as_slice().try_into().map_err(|_| {
-                HostError::WithStatus(
-                    String::from("invalid contract hash"),
-                    ScStatus::HostObjectError(ScHostObjErrorCode::ContractHashWrongLength),
-                )
-            })?;
+            let arr: [u8; 32] = bin
+                .as_slice()
+                .try_into()
+                .map_err(|_| self.err_status(ScHostObjErrorCode::ContractHashWrongLength))?;
             Ok(xdr::Hash(arr))
         })?;
 
@@ -776,7 +707,7 @@ impl Host {
         });
 
         if self.0.storage.borrow_mut().has(&storage_key)? {
-            return Err(HostError::General("Contract already exists"));
+            return Err(self.err_general("Contract already exists"));
         }
 
         let val = self.from_host_obj(contract)?;
@@ -807,26 +738,14 @@ impl Host {
         // Retrieve the contract code and create vm
         let scval = match self.0.storage.borrow_mut().get(&storage_key)?.data {
             LedgerEntryData::ContractData(ContractDataEntry { val, .. }) => Ok(val),
-            _ => Err(HostError::WithStatus(
-                String::from("expected contract data"),
-                ScStatus::HostStorageError(ScHostStorageErrorCode::ExpectContractData),
-            )),
+            _ => Err(self.err_status(ScHostStorageErrorCode::ExpectContractData)),
         }?;
-        let scobj = match scval {
-            ScVal::Object(Some(ob)) => ob,
+        let code = match scval {
+            ScVal::Object(Some(ScObject::Binary(b))) => b,
             _ => {
-                return Err(HostError::WithStatus(
-                    String::from("not an object"),
-                    ScStatus::HostValueError(ScHostValErrorCode::UnexpectedValType),
-                ))
-            }
-        };
-        let code = match scobj {
-            ScObject::Binary(b) => b,
-            _ => {
-                return Err(HostError::WithStatus(
-                    String::from("not a binary object"),
-                    ScStatus::HostObjectError(ScHostObjErrorCode::UnexpectedType),
+                return Err(self.err_status_msg(
+                    ScHostValErrorCode::UnexpectedValType,
+                    "ledger entry for contract code is not a binary object",
                 ))
             }
         };
@@ -839,9 +758,9 @@ impl Host {
         // Get contract ID
         let id = self.visit_obj(contract, |bin: &Vec<u8>| {
             let arr: [u8; 32] = bin.as_slice().try_into().map_err(|_| {
-                HostError::WithStatus(
-                    String::from("invalid contract hash"),
-                    ScStatus::HostObjectError(ScHostObjErrorCode::ContractHashWrongLength),
+                self.err_status_msg(
+                    ScHostObjErrorCode::ContractHashWrongLength,
+                    "invalid contract hash",
                 )
             })?;
             Ok(xdr::Hash(arr))
@@ -852,7 +771,7 @@ impl Host {
             let mut fg = self.push_test_frame(id.clone());
             let res = cfs
                 .call(&func, self, args)
-                .ok_or_else(|| HostError::General("function not found"))?;
+                .ok_or_else(|| self.err_general("function not found"))?;
             fg.commit();
             return Ok(res);
         }
@@ -860,7 +779,7 @@ impl Host {
         #[cfg(feature = "vm")]
         return self.call_wasm_fn(&id, &func, args);
         #[cfg(not(feature = "vm"))]
-        return Err(HostError::General("could not dispatch"));
+        return Err(self.err_general("could not dispatch"));
     }
 
     pub fn invoke_function(&mut self, hf: HostFunction, args: ScVec) -> Result<ScVal, HostError> {
@@ -881,9 +800,9 @@ impl Host {
                     frame_guard.commit();
                     Ok(self.from_host_val(res)?)
                 } else {
-                    Err(HostError::WithStatus(
-                        String::from("unexpected Call args"),
-                        ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsWrongLength),
+                    Err(self.err_status_msg(
+                        ScHostFnErrorCode::InputArgsWrongLength,
+                        "unexpected arguments to 'call' host function",
                     ))
                 }
             }
@@ -904,19 +823,26 @@ impl Host {
                     frame_guard.commit();
                     Ok(ScVal::Object(Some(sc_obj)))
                 } else {
-                    Err(HostError::WithStatus(
-                        String::from("unexpected CreateContract args"),
-                        ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsWrongLength),
+                    Err(self.err_status_msg(
+                        ScHostFnErrorCode::InputArgsWrongLength,
+                        "unexpected arguments to 'CreateContract' host function",
                     ))
                 }
             }
         }
     }
 
+    fn usize_to_rawval_u32(&self, u: usize) -> Result<RawVal, HostError> {
+        match u32::try_from(u) {
+            Ok(v) => Ok(v.into()),
+            Err(_) => Err(self.err_status(ScHostValErrorCode::U32OutOfRange)),
+        }
+    }
+
     fn to_u256(&self, a: Object) -> Result<Uint256, HostError> {
         self.visit_obj(a, |bin: &Vec<u8>| {
             bin.try_into()
-                .map_err(|_| HostError::General("bad u256 length"))
+                .map_err(|_| self.err_general("bad u256 length"))
         })
     }
 
@@ -927,7 +853,7 @@ impl Host {
         });
         self.visit_storage(|storage| match storage.get(&acc)?.data {
             LedgerEntryData::Account(ae) => Ok(ae),
-            _ => Err(HostError::General("not account")),
+            _ => Err(self.err_general("not account")),
         })
     }
 
@@ -942,13 +868,13 @@ impl Host {
             let hash = Hash(
                 bin.clone()
                     .try_into()
-                    .map_err(|_| HostError::General("bad contract id"))?,
+                    .map_err(|_| self.err_general("bad contract id"))?,
             );
             if !contracts.contains_key(&hash) {
                 contracts.insert(hash, contract_fns);
                 Ok(())
             } else {
-                Err(HostError::General("vtable already exists"))
+                Err(self.err_general("vtable already exists"))
             }
         })
     }
@@ -999,7 +925,7 @@ impl CheckedEnv for Host {
     type Error = HostError;
 
     fn log_value(&self, v: RawVal) -> Result<RawVal, HostError> {
-        self.add_debug_event("log", &[v])?;
+        self.debug_event(DebugEvent::new().msg("log").arg(v))?;
         Ok(RawVal::from_void())
     }
 
@@ -1016,8 +942,11 @@ impl CheckedEnv for Host {
     }
 
     fn obj_cmp(&self, a: RawVal, b: RawVal) -> Result<i64, HostError> {
+        self.charge_budget(CostType::HostFunction, 2)?;
         let res = unsafe {
-            self.unchecked_visit_val_obj(a, |ao| self.unchecked_visit_val_obj(b, |bo| ao.cmp(&bo)))
+            self.unchecked_visit_val_obj(a, |ao| {
+                self.unchecked_visit_val_obj(b, |bo| Ok(ao.cmp(&bo)))
+            })?
         };
         Ok(match res {
             Ordering::Less => -1,
@@ -1061,7 +990,7 @@ impl CheckedEnv for Host {
         let k = self.associate_raw_val(k);
         self.visit_obj(m, move |hm: &HostMap| match hm.get(&k) {
             Some(v) => Ok(v.to_raw()),
-            None => Err(HostError::General("map key not found")),
+            None => Err(self.err_general("map key not found")),
         })
     }
 
@@ -1071,7 +1000,7 @@ impl CheckedEnv for Host {
             let mut mnew = hm.clone();
             match mnew.remove(&k) {
                 Some(v) => Ok(mnew),
-                None => Err(HostError::General("map key not found")),
+                None => Err(self.err_general("map key not found")),
             }
         })?;
         Ok(self.add_host_object(mnew)?.into())
@@ -1079,7 +1008,9 @@ impl CheckedEnv for Host {
 
     fn map_len(&self, m: Object) -> Result<RawVal, HostError> {
         let len = self.visit_obj(m, |hm: &HostMap| Ok(hm.len()))?;
-        Ok(u32::try_from(len)?.into())
+        Ok(u32::try_from(len)
+            .map_err(|_| ScHostValErrorCode::U32OutOfRange)?
+            .into())
     }
 
     fn map_has(&self, m: Object, k: RawVal) -> Result<RawVal, HostError> {
@@ -1103,7 +1034,7 @@ impl CheckedEnv for Host {
                     if let Some((pk2, pv2)) = hm
                         .clone()
                         .extract(pk) // removes (pk, pv) and returns an Option<(pv, updated_map)>
-                        .ok_or_else(|| HostError::General("key not exist"))?
+                        .ok_or_else(|| self.err_general("key not exist"))?
                         .1
                         .get_prev(pk)
                     {
@@ -1128,7 +1059,7 @@ impl CheckedEnv for Host {
                     if let Some((pk2, pv2)) = hm
                         .clone()
                         .extract(pk) // removes (pk, pv) and returns an Option<(pv, updated_map)>
-                        .ok_or_else(|| HostError::General("key not exist"))?
+                        .ok_or_else(|| self.err_general("key not exist"))?
                         .1
                         .get_next(pk)
                     {
@@ -1159,7 +1090,10 @@ impl CheckedEnv for Host {
 
     fn map_keys(&self, m: Object) -> Result<Object, HostError> {
         self.visit_obj(m, |hm: &HostMap| {
-            let cap: u32 = hm.len().try_into()?;
+            let cap: u32 = hm
+                .len()
+                .try_into()
+                .map_err(|_| self.err_general("host map too large"))?;
             let mut vec = self.vec_new(cap.into())?;
             for k in hm.keys() {
                 vec = self.vec_push(vec, k.to_raw())?;
@@ -1170,7 +1104,10 @@ impl CheckedEnv for Host {
 
     fn map_values(&self, m: Object) -> Result<Object, HostError> {
         self.visit_obj(m, |hm: &HostMap| {
-            let cap: u32 = hm.len().try_into()?;
+            let cap: u32 = hm
+                .len()
+                .try_into()
+                .map_err(|_| self.err_general("host map too large"))?;
             let mut vec = self.vec_new(cap.into())?;
             for k in hm.values() {
                 vec = self.vec_push(vec, k.to_raw())?;
@@ -1184,9 +1121,9 @@ impl CheckedEnv for Host {
             0
         } else {
             u32::try_from(c).map_err(|_| {
-                HostError::WithStatus(
-                    String::from("c must be either `ScStatic::Void` or an `u32`"),
-                    ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsWrongType),
+                self.err_status_msg(
+                    ScHostFnErrorCode::InputArgsWrongType,
+                    "c must be either `ScStatic::Void` or an `u32`",
                 )
             })? as usize
         };
@@ -1196,18 +1133,13 @@ impl CheckedEnv for Host {
 
     fn vec_put(&self, v: Object, i: RawVal, x: RawVal) -> Result<Object, HostError> {
         let i: usize = u32::try_from(i).map_err(|_| {
-            HostError::WithStatus(
-                String::from("i must be u32"),
-                ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsWrongType),
-            )
+            self.err_status_msg(ScHostFnErrorCode::InputArgsWrongType, "i must be u32")
         })? as usize;
         let x = self.associate_raw_val(x);
         let vnew = self.visit_obj(v, move |hv: &HostVec| {
             if i >= hv.len() {
-                return Err(HostError::WithStatus(
-                    String::from("index out of bound"),
-                    ScStatus::HostObjectError(ScHostObjErrorCode::VecIndexOutOfBound),
-                ));
+                return Err(self
+                    .err_status_msg(ScHostObjErrorCode::VecIndexOutOfBound, "index out of bound"));
             }
             let mut vnew = hv.clone();
             vnew.set(i, x);
@@ -1218,33 +1150,25 @@ impl CheckedEnv for Host {
 
     fn vec_get(&self, v: Object, i: RawVal) -> Result<RawVal, HostError> {
         let i: usize = u32::try_from(i).map_err(|_| {
-            HostError::WithStatus(
-                String::from("i must be u32"),
-                ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsWrongType),
-            )
+            self.err_status_msg(ScHostFnErrorCode::InputArgsWrongType, "i must be u32")
         })? as usize;
         self.visit_obj(v, move |hv: &HostVec| match hv.get(i) {
-            None => Err(HostError::WithStatus(
-                String::from("index out of bound"),
-                ScStatus::HostObjectError(ScHostObjErrorCode::VecIndexOutOfBound),
-            )),
+            None => {
+                Err(self
+                    .err_status_msg(ScHostObjErrorCode::VecIndexOutOfBound, "index out of bound"))
+            }
             Some(hval) => Ok(hval.to_raw()),
         })
     }
 
     fn vec_del(&self, v: Object, i: RawVal) -> Result<Object, HostError> {
         let i: usize = u32::try_from(i).map_err(|_| {
-            HostError::WithStatus(
-                String::from("i must be u32"),
-                ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsWrongType),
-            )
+            self.err_status_msg(ScHostFnErrorCode::InputArgsWrongType, "i must be u32")
         })? as usize;
         let vnew = self.visit_obj(v, move |hv: &HostVec| {
             if i >= hv.len() {
-                return Err(HostError::WithStatus(
-                    String::from("index out of bound"),
-                    ScStatus::HostObjectError(ScHostObjErrorCode::VecIndexOutOfBound),
-                ));
+                return Err(self
+                    .err_status_msg(ScHostObjErrorCode::VecIndexOutOfBound, "index out of bound"));
             }
             let mut vnew = hv.clone();
             vnew.remove(i);
@@ -1255,7 +1179,7 @@ impl CheckedEnv for Host {
 
     fn vec_len(&self, v: Object) -> Result<RawVal, HostError> {
         let len = self.visit_obj(v, |hv: &HostVec| Ok(hv.len()))?;
-        Ok(u32::try_from(len)?.into())
+        self.usize_to_rawval_u32(len)
     }
 
     fn vec_push(&self, v: Object, x: RawVal) -> Result<Object, HostError> {
@@ -1272,9 +1196,9 @@ impl CheckedEnv for Host {
         let vnew = self.visit_obj(v, move |hv: &HostVec| {
             let mut vnew = hv.clone();
             match vnew.pop_back() {
-                None => Err(HostError::WithStatus(
-                    String::from("value does not exist"),
-                    ScStatus::HostObjectError(ScHostObjErrorCode::VecIndexOutOfBound),
+                None => Err(self.err_status_msg(
+                    ScHostObjErrorCode::VecIndexOutOfBound,
+                    "value does not exist",
                 )),
                 Some(_) => Ok(vnew),
             }
@@ -1284,9 +1208,9 @@ impl CheckedEnv for Host {
 
     fn vec_front(&self, v: Object) -> Result<RawVal, HostError> {
         self.visit_obj(v, |hv: &HostVec| match hv.front() {
-            None => Err(HostError::WithStatus(
-                String::from("value does not exist"),
-                ScStatus::HostObjectError(ScHostObjErrorCode::VecIndexOutOfBound),
+            None => Err(self.err_status_msg(
+                ScHostObjErrorCode::VecIndexOutOfBound,
+                "value does not exist",
             )),
             Some(front) => Ok(front.to_raw()),
         })
@@ -1294,9 +1218,9 @@ impl CheckedEnv for Host {
 
     fn vec_back(&self, v: Object) -> Result<RawVal, HostError> {
         self.visit_obj(v, |hv: &HostVec| match hv.back() {
-            None => Err(HostError::WithStatus(
-                String::from("value does not exist"),
-                ScStatus::HostObjectError(ScHostObjErrorCode::VecIndexOutOfBound),
+            None => Err(self.err_status_msg(
+                ScHostObjErrorCode::VecIndexOutOfBound,
+                "value does not exist",
             )),
             Some(back) => Ok(back.to_raw()),
         })
@@ -1304,18 +1228,13 @@ impl CheckedEnv for Host {
 
     fn vec_insert(&self, v: Object, i: RawVal, x: RawVal) -> Result<Object, HostError> {
         let i: usize = u32::try_from(i).map_err(|_| {
-            HostError::WithStatus(
-                String::from("i must be u32"),
-                ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsWrongType),
-            )
+            self.err_status_msg(ScHostFnErrorCode::InputArgsWrongType, "i must be u32")
         })? as usize;
         let x = self.associate_raw_val(x);
         let vnew = self.visit_obj(v, move |hv: &HostVec| {
             if i > hv.len() {
-                return Err(HostError::WithStatus(
-                    String::from("index out of bound"),
-                    ScStatus::HostObjectError(ScHostObjErrorCode::VecIndexOutOfBound),
-                ));
+                return Err(self
+                    .err_status_msg(ScHostObjErrorCode::VecIndexOutOfBound, "index out of bound"));
             }
             let mut vnew = hv.clone();
             vnew.insert(i, x);
@@ -1328,10 +1247,7 @@ impl CheckedEnv for Host {
         let mut vnew = self.visit_obj(v1, |hv: &HostVec| Ok(hv.clone()))?;
         let v2 = self.visit_obj(v2, |hv: &HostVec| Ok(hv.clone()))?;
         if v2.len() > u32::MAX as usize - vnew.len() {
-            return Err(HostError::WithStatus(
-                String::from("u32 overflow"),
-                ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsInvalid),
-            ));
+            return Err(self.err_status_msg(ScHostFnErrorCode::InputArgsInvalid, "u32 overflow"));
         }
         vnew.append(v2);
         Ok(self.add_host_object(vnew)?.into())
@@ -1339,35 +1255,27 @@ impl CheckedEnv for Host {
 
     fn vec_slice(&self, v: Object, start: RawVal, end: RawVal) -> Result<Object, HostError> {
         let start: usize = u32::try_from(start).map_err(|_| {
-            HostError::WithStatus(
-                String::from("start must be u32"),
-                ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsWrongType),
-            )
+            self.err_status_msg(ScHostFnErrorCode::InputArgsWrongType, "start must be u32")
         })? as usize;
         let end: usize = u32::try_from(end).map_err(|_| {
-            HostError::WithStatus(
-                String::from("end must be u32"),
-                ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsWrongType),
-            )
+            self.err_status_msg(ScHostFnErrorCode::InputArgsWrongType, "end must be u32")
         })? as usize;
         if start > end {
-            return Err(HostError::WithStatus(
-                String::from("start greater than end"),
-                ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsInvalid),
+            return Err(self.err_status_msg(
+                ScHostFnErrorCode::InputArgsInvalid,
+                "start greater than end",
             ));
         }
         let vnew = self.visit_obj(v, move |hv: &HostVec| {
             if start > hv.len() {
-                return Err(HostError::WithStatus(
-                    String::from("start out of bounds"),
-                    ScStatus::HostObjectError(ScHostObjErrorCode::VecIndexOutOfBound),
+                return Err(self.err_status_msg(
+                    ScHostObjErrorCode::VecIndexOutOfBound,
+                    "start out of bounds",
                 ));
             }
             if end > hv.len() {
-                return Err(HostError::WithStatus(
-                    String::from("end out of bounds"),
-                    ScStatus::HostObjectError(ScHostObjErrorCode::VecIndexOutOfBound),
-                ));
+                return Err(self
+                    .err_status_msg(ScHostObjErrorCode::VecIndexOutOfBound, "end out of bounds"));
             }
             Ok(hv.clone().slice(start..end))
         })?;
@@ -1377,9 +1285,9 @@ impl CheckedEnv for Host {
     fn put_contract_data(&self, k: RawVal, v: RawVal) -> Result<RawVal, HostError> {
         let data_key = self.from_host_val(k)?;
         if data_key == ScVal::Static(ScStatic::LedgerKeyContractCodeWasm) {
-            return Err(HostError::WithStatus(
-                String::from("cannot update contract code"),
-                ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsInvalid),
+            return Err(self.err_status_msg(
+                ScHostFnErrorCode::InputArgsInvalid,
+                "cannot update contract code",
             ));
         }
 
@@ -1412,18 +1320,18 @@ impl CheckedEnv for Host {
                 key,
                 val,
             }) => Ok(self.to_host_val(&val)?.into()),
-            _ => Err(HostError::WithStatus(
-                String::from("expected contract data"),
-                ScStatus::HostStorageError(ScHostStorageErrorCode::ExpectContractData),
+            _ => Err(self.err_status_msg(
+                ScHostStorageErrorCode::ExpectContractData,
+                "expected contract data",
             )),
         }
     }
 
     fn del_contract_data(&self, k: RawVal) -> Result<RawVal, HostError> {
         if self.from_host_val(k)? == ScVal::Static(ScStatic::LedgerKeyContractCodeWasm) {
-            return Err(HostError::WithStatus(
-                String::from("cannot delete contract code"),
-                ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsInvalid),
+            return Err(self.err_status_msg(
+                ScHostFnErrorCode::InputArgsInvalid,
+                "cannot delete contract code",
             ));
         }
 
@@ -1441,20 +1349,14 @@ impl CheckedEnv for Host {
     ) -> Result<Object, HostError> {
         let salt_val = self.visit_obj(salt, |bin: &Vec<u8>| {
             let arr: [u8; 32] = bin.as_slice().try_into().map_err(|_| {
-                HostError::WithStatus(
-                    String::from("invalid salt"),
-                    ScStatus::HostObjectError(ScHostObjErrorCode::UnexpectedType),
-                )
+                self.err_status_msg(ScHostObjErrorCode::UnexpectedType, "invalid salt")
             })?;
             Ok(Uint256(arr))
         })?;
 
         let key_val = self.visit_obj(key, |bin: &Vec<u8>| {
             let arr: [u8; 32] = bin.as_slice().try_into().map_err(|_| {
-                HostError::WithStatus(
-                    String::from("invalid key"),
-                    ScStatus::HostObjectError(ScHostObjErrorCode::UnexpectedType),
-                )
+                self.err_status_msg(ScHostObjErrorCode::UnexpectedType, "invalid key")
             })?;
             Ok(Uint256(arr))
         })?;
@@ -1477,7 +1379,7 @@ impl CheckedEnv for Host {
         let mut buf = Vec::new();
         pre_image
             .write_xdr(&mut buf)
-            .map_err(|_| HostError::General("invalid hash"))?;
+            .map_err(|_| self.err_general("invalid hash"))?;
         self.create_contract_helper(v, buf)
     }
 
@@ -1486,10 +1388,7 @@ impl CheckedEnv for Host {
 
         let salt_val = self.visit_obj(salt, |bin: &Vec<u8>| {
             let arr: [u8; 32] = bin.as_slice().try_into().map_err(|_| {
-                HostError::WithStatus(
-                    String::from("invalid salt"),
-                    ScStatus::HostObjectError(ScHostObjErrorCode::UnexpectedType),
-                )
+                self.err_status_msg(ScHostObjErrorCode::UnexpectedType, "invalid salt")
             })?;
             Ok(Uint256(arr))
         })?;
@@ -1502,7 +1401,7 @@ impl CheckedEnv for Host {
         let mut buf = Vec::new();
         pre_image
             .write_xdr(&mut buf)
-            .map_err(|_| HostError::General("invalid hash"))?;
+            .map_err(|_| self.err_general("invalid hash"))?;
 
         self.create_contract_helper(v, buf)
     }
@@ -1518,8 +1417,11 @@ impl CheckedEnv for Host {
         match self.call(contract, func, args) {
             Ok(rv) => Ok(rv),
             Err(e) => {
-                let st: ScStatus = (&e).into();
-                Ok(st.into())
+                let evt = DebugEvent::new()
+                    .msg("try_call got error from callee contract")
+                    .arg(e.status.clone());
+                self.debug_event(evt)?;
+                Ok(e.status.into())
             }
         }
     }
@@ -1563,7 +1465,7 @@ impl CheckedEnv for Host {
         let res = self.visit_obj(x, |a: &BigInt| {
             self.visit_obj(y, |b: &BigInt| {
                 if b.is_zero() {
-                    return Err(HostError::General("bigint division by zero"));
+                    return Err(self.err_general("bigint division by zero"));
                 }
                 Ok(a.div(b))
             })
@@ -1575,7 +1477,7 @@ impl CheckedEnv for Host {
         let res = self.visit_obj(x, |a: &BigInt| {
             self.visit_obj(y, |b: &BigInt| {
                 if b.is_zero() {
-                    return Err(HostError::General("bigint division by zero"));
+                    return Err(self.err_general("bigint division by zero"));
                 }
                 Ok(a.rem(b))
             })
@@ -1608,12 +1510,12 @@ impl CheckedEnv for Host {
         let res = self.visit_obj(x, |a: &BigInt| {
             self.visit_obj(y, |b: &BigInt| {
                 if b.is_negative() {
-                    return Err(HostError::General("attempt to shift left with negative"));
+                    return Err(self.err_general("attempt to shift left with negative"));
                 }
                 if let Some(u) = b.to_usize() {
                     Ok(a.shl(u))
                 } else {
-                    Err(HostError::General("left-shift overflow"))
+                    Err(self.err_general("left-shift overflow"))
                 }
             })
         })?;
@@ -1624,12 +1526,12 @@ impl CheckedEnv for Host {
         let res = self.visit_obj(x, |a: &BigInt| {
             self.visit_obj(y, |b: &BigInt| {
                 if b.is_negative() {
-                    return Err(HostError::General("attempt to shift right with negative"));
+                    return Err(self.err_general("attempt to shift right with negative"));
                 }
                 if let Some(u) = b.to_usize() {
                     Ok(a.shr(u))
                 } else {
-                    Err(HostError::General("right-shift overflow"))
+                    Err(self.err_general("right-shift overflow"))
                 }
             })
         })?;
@@ -1670,12 +1572,12 @@ impl CheckedEnv for Host {
         let res = self.visit_obj(x, |a: &BigInt| {
             self.visit_obj(y, |e: &BigInt| {
                 if e.is_negative() {
-                    return Err(HostError::General("negative exponentiation not supported"));
+                    return Err(self.err_general("negative exponentiation not supported"));
                 }
                 if let Some(u) = e.to_usize() {
                     Ok(Pow::pow(a, u))
                 } else {
-                    Err(HostError::General("pow overflow"))
+                    Err(self.err_general("pow overflow"))
                 }
             })
         })?;
@@ -1686,11 +1588,11 @@ impl CheckedEnv for Host {
         let res = self.visit_obj(p, |a: &BigInt| {
             self.visit_obj(q, |exponent: &BigInt| {
                 if exponent.is_negative() {
-                    return Err(HostError::General("negative exponentiation not supported"));
+                    return Err(self.err_general("negative exponentiation not supported"));
                 }
                 self.visit_obj(m, |modulus: &BigInt| {
                     if modulus.is_zero() {
-                        return Err(HostError::General("zero modulus not supported"));
+                        return Err(self.err_general("zero modulus not supported"));
                     }
                     Ok(a.modpow(exponent, modulus))
                 })
@@ -1702,7 +1604,7 @@ impl CheckedEnv for Host {
     fn bigint_sqrt(&self, x: Object) -> Result<Object, HostError> {
         let res = self.visit_obj(x, |a: &BigInt| {
             if a.is_negative() {
-                return Err(HostError::General("sqrt is imaginary"));
+                return Err(self.err_general("sqrt is imaginary"));
             }
             Ok(a.sqrt())
         })?;
@@ -1717,14 +1619,14 @@ impl CheckedEnv for Host {
         let scv = self.from_host_val(v)?;
         let mut buf = Vec::<u8>::new();
         scv.write_xdr(&mut buf)
-            .map_err(|_| HostError::General("failed to serialize ScVal"))?;
+            .map_err(|_| self.err_general("failed to serialize ScVal"))?;
         Ok(self.add_host_object(buf)?.into())
     }
 
     fn deserialize_from_binary(&self, b: Object) -> Result<RawVal, HostError> {
         let scv = self.visit_obj(b, |hv: &Vec<u8>| {
             ScVal::read_xdr(&mut hv.as_slice())
-                .map_err(|_| HostError::General("failed to de-serialize ScVal"))
+                .map_err(|_| self.err_general("failed to de-serialize ScVal"))
         })?;
         Ok(self.to_host_val(&scv)?.into())
     }
@@ -1747,35 +1649,29 @@ impl CheckedEnv for Host {
         {
             self.visit_obj(b, move |hv: &Vec<u8>| {
                 let end_idx = b_pos.checked_add(*len).ok_or_else(|| {
-                    HostError::WithStatus(
-                        String::from("u32 overflow"),
-                        ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsInvalid),
-                    )
+                    self.err_status_msg(ScHostFnErrorCode::InputArgsInvalid, "u32 overflow")
                 })? as usize;
                 if end_idx > hv.len() {
-                    return Err(HostError::WithStatus(
-                        String::from("index out of bound"),
-                        ScStatus::HostObjectError(ScHostObjErrorCode::VecIndexOutOfBound),
+                    return Err(self.err_status_msg(
+                        ScHostObjErrorCode::VecIndexOutOfBound,
+                        "index out of bound",
                     ));
                 }
                 self.with_current_frame(|frame| match frame {
-                    Frame::ContractVM(vm) => vm.with_memory_access(|mem| {
-                        Ok(mem.set(*lm_pos, &hv.as_slice()[*b_pos as usize..end_idx])?)
+                    Frame::ContractVM(vm) => vm.with_memory_access(self, |mem| {
+                        Ok(self
+                            .map_err(mem.set(*lm_pos, &hv.as_slice()[*b_pos as usize..end_idx]))?)
                     }),
-                    Frame::HostFunction(_) => {
-                        Err(HostError::General("linear memory not supported"))
-                    }
+                    Frame::HostFunction(_) => Err(self.err_general("linear memory not supported")),
                     #[cfg(feature = "testutils")]
-                    Frame::TestContract(id) => {
-                        Err(HostError::General("linear memory not supported"))
-                    }
+                    Frame::TestContract(id) => Err(self.err_general("linear memory not supported")),
                 })
             })?;
             Ok(().into())
         } else {
-            return Err(HostError::WithStatus(
-                String::from("failed conversion to u32"),
-                ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsWrongType),
+            return Err(self.err_status_msg(
+                ScHostFnErrorCode::InputArgsWrongType,
+                "failed conversion to u32",
             ));
         }
     }
@@ -1798,28 +1694,27 @@ impl CheckedEnv for Host {
         {
             let mut vnew = self.visit_obj(b, |hv: &Vec<u8>| Ok(hv.clone()))?;
             let end_idx = b_pos.checked_add(*len).ok_or_else(|| {
-                HostError::WithStatus(
-                    String::from("u32 overflow"),
-                    ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsInvalid),
-                )
+                self.err_status_msg(ScHostFnErrorCode::InputArgsInvalid, "u32 overflow")
             })? as usize;
             self.with_current_frame(|frame| match frame {
-                Frame::ContractVM(vm) => vm.with_memory_access(|mem| {
+                Frame::ContractVM(vm) => vm.with_memory_access(self, |mem| {
                     // we would potentially let the vec grow
                     if end_idx > vnew.len() {
                         vnew.resize(end_idx, 0);
                     }
-                    Ok(mem.get_into(*lm_pos, &mut vnew.as_mut_slice()[*b_pos as usize..end_idx])?)
+                    Ok(self.map_err(
+                        mem.get_into(*lm_pos, &mut vnew.as_mut_slice()[*b_pos as usize..end_idx]),
+                    )?)
                 }),
-                Frame::HostFunction(_) => Err(HostError::General("linear memory not supported")),
+                Frame::HostFunction(_) => Err(self.err_general("linear memory not supported")),
                 #[cfg(feature = "testutils")]
-                Frame::TestContract(id) => Err(HostError::General("linear memory not supported")),
+                Frame::TestContract(id) => Err(self.err_general("linear memory not supported")),
             })?;
             Ok(self.add_host_object(vnew)?.into())
         } else {
-            return Err(HostError::WithStatus(
-                String::from("failed conversion to u32"),
-                ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsWrongType),
+            return Err(self.err_status_msg(
+                ScHostFnErrorCode::InputArgsWrongType,
+                "failed conversion to u32",
             ));
         }
     }
@@ -1843,43 +1738,35 @@ impl CheckedEnv for Host {
             .as_slice()
         {
             return self.with_current_frame(|frame| match frame {
-                Frame::ContractVM(vm) => vm.with_memory_access(|mem| {
+                Frame::ContractVM(vm) => vm.with_memory_access(self, |mem| {
                     let mut vnew: Vec<u8> = vec![0; *len as usize];
-                    mem.get_into(*lm_pos, vnew.as_mut_slice())?;
+                    self.map_err(mem.get_into(*lm_pos, vnew.as_mut_slice()))?;
                     Ok(self.add_host_object(vnew)?.into())
                 }),
-                Frame::HostFunction(_) => Err(HostError::General("linear memory not supported")),
+                Frame::HostFunction(_) => Err(self.err_general("linear memory not supported")),
                 #[cfg(feature = "testutils")]
-                Frame::TestContract(id) => Err(HostError::General("linear memory not supported")),
+                Frame::TestContract(id) => Err(self.err_general("linear memory not supported")),
             });
         } else {
-            return Err(HostError::WithStatus(
-                String::from("failed conversion to u32"),
-                ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsWrongType),
+            return Err(self.err_status_msg(
+                ScHostFnErrorCode::InputArgsWrongType,
+                "failed conversion to u32",
             ));
         }
     }
 
     fn binary_put(&self, b: Object, i: RawVal, u: RawVal) -> Result<Object, HostError> {
         let i: usize = u32::try_from(i).map_err(|_| {
-            HostError::WithStatus(
-                String::from("i must be u32"),
-                ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsWrongType),
-            )
+            self.err_status_msg(ScHostFnErrorCode::InputArgsWrongType, "i must be u32")
         })? as usize;
         let u: u8 = u.try_into().map_err(|_| {
-            HostError::WithStatus(
-                String::from("u must be u8"),
-                ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsWrongType),
-            )
+            self.err_status_msg(ScHostFnErrorCode::InputArgsWrongType, "u must be u8")
         })?;
         let vnew = self.visit_obj(b, move |hv: &Vec<u8>| {
             let mut vnew = hv.clone();
             if i >= hv.len() {
-                return Err(HostError::WithStatus(
-                    String::from("index out of bound"),
-                    ScStatus::HostObjectError(ScHostObjErrorCode::VecIndexOutOfBound),
-                ));
+                return Err(self
+                    .err_status_msg(ScHostObjErrorCode::VecIndexOutOfBound, "index out of bound"));
             }
             let _old_val = std::mem::replace(&mut vnew[i], u);
             Ok(vnew)
@@ -1889,33 +1776,25 @@ impl CheckedEnv for Host {
 
     fn binary_get(&self, b: Object, i: RawVal) -> Result<RawVal, HostError> {
         let i: usize = u32::try_from(i).map_err(|_| {
-            HostError::WithStatus(
-                String::from("i must be u32"),
-                ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsWrongType),
-            )
+            self.err_status_msg(ScHostFnErrorCode::InputArgsWrongType, "i must be u32")
         })? as usize;
         self.visit_obj(b, move |hv: &Vec<u8>| match hv.get(i) {
-            None => Err(HostError::WithStatus(
-                String::from("index out of bound"),
-                ScStatus::HostObjectError(ScHostObjErrorCode::VecIndexOutOfBound),
-            )),
+            None => {
+                Err(self
+                    .err_status_msg(ScHostObjErrorCode::VecIndexOutOfBound, "index out of bound"))
+            }
             Some(u) => Ok((*u).into()),
         })
     }
 
     fn binary_del(&self, b: Object, i: RawVal) -> Result<Object, HostError> {
         let i: usize = u32::try_from(i).map_err(|_| {
-            HostError::WithStatus(
-                String::from("i must be u32"),
-                ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsWrongType),
-            )
+            self.err_status_msg(ScHostFnErrorCode::InputArgsWrongType, "i must be u32")
         })? as usize;
         let vnew = self.visit_obj(b, move |hv: &Vec<u8>| {
             if i >= hv.len() {
-                return Err(HostError::WithStatus(
-                    String::from("index out of bound"),
-                    ScStatus::HostObjectError(ScHostObjErrorCode::VecIndexOutOfBound),
-                ));
+                return Err(self
+                    .err_status_msg(ScHostObjErrorCode::VecIndexOutOfBound, "index out of bound"));
             }
             let mut vnew = hv.clone();
             vnew.remove(i);
@@ -1926,15 +1805,12 @@ impl CheckedEnv for Host {
 
     fn binary_len(&self, b: Object) -> Result<RawVal, HostError> {
         let len = self.visit_obj(b, |hv: &Vec<u8>| Ok(hv.len()))?;
-        Ok(u32::try_from(len)?.into())
+        self.usize_to_rawval_u32(len)
     }
 
     fn binary_push(&self, b: Object, u: RawVal) -> Result<Object, HostError> {
         let u: u8 = u.try_into().map_err(|_| {
-            HostError::WithStatus(
-                String::from("x must be u8"),
-                ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsWrongType),
-            )
+            self.err_status_msg(ScHostFnErrorCode::InputArgsWrongType, "x must be u8")
         })?;
         let vnew = self.visit_obj(b, move |hv: &Vec<u8>| {
             let mut vnew = hv.clone();
@@ -1948,10 +1824,9 @@ impl CheckedEnv for Host {
         let vnew = self.visit_obj(b, move |hv: &Vec<u8>| {
             let mut vnew = hv.clone();
             match vnew.pop() {
-                None => Err(HostError::WithStatus(
-                    String::from("u32 overflow"),
-                    ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsInvalid),
-                )),
+                None => {
+                    Err(self.err_status_msg(ScHostFnErrorCode::InputArgsInvalid, "u32 overflow"))
+                }
                 Some(_) => Ok(vnew),
             }
         })?;
@@ -1961,10 +1836,9 @@ impl CheckedEnv for Host {
     fn binary_front(&self, b: Object) -> Result<RawVal, HostError> {
         self.visit_obj(b, |hv: &Vec<u8>| {
             if hv.is_empty() {
-                return Err(HostError::WithStatus(
-                    String::from("u32 overflow"),
-                    ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsInvalid),
-                ));
+                return Err(
+                    self.err_status_msg(ScHostFnErrorCode::InputArgsInvalid, "u32 overflow")
+                );
             }
             Ok(hv[0].into())
         })
@@ -1973,10 +1847,9 @@ impl CheckedEnv for Host {
     fn binary_back(&self, b: Object) -> Result<RawVal, HostError> {
         self.visit_obj(b, |hv: &Vec<u8>| {
             if hv.is_empty() {
-                return Err(HostError::WithStatus(
-                    String::from("u32 overflow"),
-                    ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsInvalid),
-                ));
+                return Err(
+                    self.err_status_msg(ScHostFnErrorCode::InputArgsInvalid, "u32 overflow")
+                );
             }
             Ok(hv[hv.len() - 1].into())
         })
@@ -1984,23 +1857,15 @@ impl CheckedEnv for Host {
 
     fn binary_insert(&self, b: Object, i: RawVal, u: RawVal) -> Result<Object, HostError> {
         let i: usize = u32::try_from(i).map_err(|_| {
-            HostError::WithStatus(
-                String::from("i must be u32"),
-                ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsWrongType),
-            )
+            self.err_status_msg(ScHostFnErrorCode::InputArgsWrongType, "i must be u32")
         })? as usize;
         let u: u8 = u.try_into().map_err(|_| {
-            HostError::WithStatus(
-                String::from("x must be u8"),
-                ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsWrongType),
-            )
+            self.err_status_msg(ScHostFnErrorCode::InputArgsWrongType, "x must be u8")
         })?;
         let vnew = self.visit_obj(b, move |hv: &Vec<u8>| {
             if i > hv.len() {
-                return Err(HostError::WithStatus(
-                    String::from("index out of bound"),
-                    ScStatus::HostObjectError(ScHostObjErrorCode::VecIndexOutOfBound),
-                ));
+                return Err(self
+                    .err_status_msg(ScHostObjErrorCode::VecIndexOutOfBound, "index out of bound"));
             }
             let mut vnew = hv.clone();
             vnew.insert(i, u);
@@ -2013,10 +1878,7 @@ impl CheckedEnv for Host {
         let mut vnew = self.visit_obj(b1, |hv: &Vec<u8>| Ok(hv.clone()))?;
         let mut b2 = self.visit_obj(b2, |hv: &Vec<u8>| Ok(hv.clone()))?;
         if b2.len() > u32::MAX as usize - vnew.len() {
-            return Err(HostError::WithStatus(
-                String::from("u32 overflow"),
-                ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsInvalid),
-            ));
+            return Err(self.err_status_msg(ScHostFnErrorCode::InputArgsInvalid, "u32 overflow"));
         }
         vnew.append(&mut b2);
         Ok(self.add_host_object(vnew)?.into())
@@ -2024,29 +1886,20 @@ impl CheckedEnv for Host {
 
     fn binary_slice(&self, b: Object, i: RawVal, l: RawVal) -> Result<Object, HostError> {
         let i: usize = u32::try_from(i).map_err(|_| {
-            HostError::WithStatus(
-                String::from("i must be u32"),
-                ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsWrongType),
-            )
+            self.err_status_msg(ScHostFnErrorCode::InputArgsWrongType, "i must be u32")
         })? as usize;
         let l: usize = u32::try_from(l).map_err(|_| {
-            HostError::WithStatus(
-                String::from("l must be u32"),
-                ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsWrongType),
-            )
+            self.err_status_msg(ScHostFnErrorCode::InputArgsWrongType, "l must be u32")
         })? as usize;
         let vnew = self.visit_obj(b, move |hv: &Vec<u8>| {
             if i > u32::MAX as usize - l {
-                return Err(HostError::WithStatus(
-                    String::from("u32 overflow"),
-                    ScStatus::HostFunctionError(ScHostFnErrorCode::InputArgsInvalid),
-                ));
+                return Err(
+                    self.err_status_msg(ScHostFnErrorCode::InputArgsInvalid, "u32 overflow")
+                );
             }
             if (i + l) > hv.len() {
-                return Err(HostError::WithStatus(
-                    String::from("index out of bound"),
-                    ScStatus::HostObjectError(ScHostObjErrorCode::VecIndexOutOfBound),
-                ));
+                return Err(self
+                    .err_status_msg(ScHostObjErrorCode::VecIndexOutOfBound, "index out of bound"));
             }
             Ok(hv.as_slice()[i..(i + l)].to_vec())
         })?;
@@ -2076,7 +1929,7 @@ impl CheckedEnv for Host {
         })?;
 
         if hash.len() != 32 {
-            return Err(HostError::General("incorrect hash size"));
+            return Err(self.err_general("incorrect hash size"));
         }
 
         Ok(self.add_host_object(hash)?.into())
@@ -2087,18 +1940,15 @@ impl CheckedEnv for Host {
 
         let public_key: PublicKey = self.visit_obj(k, |bin: &Vec<u8>| {
             PublicKey::from_bytes(bin).map_err(|_| {
-                HostError::WithStatus(
-                    String::from("invalid public key"),
-                    ScStatus::HostObjectError(ScHostObjErrorCode::UnexpectedType),
-                )
+                self.err_status_msg(ScHostObjErrorCode::UnexpectedType, "invalid public key")
             })
         })?;
 
         let sig: Signature = self.visit_obj(s, |bin: &Vec<u8>| {
             Signature::from_bytes(bin).map_err(|_| {
-                HostError::WithStatus(
-                    String::from("invalid signature"),
-                    ScStatus::HostObjectError(ScHostObjErrorCode::UnexpectedType),
+                self.err_status_msg(
+                    ScHostObjErrorCode::UnexpectedType,
+                    "unable to decode signature",
                 )
             })
         })?;
@@ -2106,7 +1956,7 @@ impl CheckedEnv for Host {
         let res = self.visit_obj(x, |bin: &Vec<u8>| {
             public_key
                 .verify(bin, &sig)
-                .map_err(|_| HostError::General("Failed ED25519 verification"))
+                .map_err(|_| self.err_general("Failed ED25519 verification"))
         });
         Ok(res?.into())
     }

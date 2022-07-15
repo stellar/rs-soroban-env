@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use crate::xdr::{LedgerEntry, LedgerKey, ScHostStorageErrorCode, ScStatus};
+use crate::xdr::{LedgerEntry, LedgerKey, ScHostStorageErrorCode};
 use crate::HostError;
 use im_rc::OrdMap;
 
@@ -40,20 +40,14 @@ impl Footprint {
         if let Some(existing) = self.0.get(key) {
             match (existing, ty) {
                 (AccessType::ReadOnly, AccessType::ReadOnly) => Ok(()),
-                (AccessType::ReadOnly, AccessType::ReadWrite) => Err(HostError::WithStatus(
-                    String::from("read-write access to read-only footprint entry"),
-                    ScStatus::HostStorageError(
-                        ScHostStorageErrorCode::ReadwriteAccessToReadonlyEntry,
-                    ),
-                )),
+                (AccessType::ReadOnly, AccessType::ReadWrite) => {
+                    Err(ScHostStorageErrorCode::ReadwriteAccessToReadonlyEntry.into())
+                }
                 (AccessType::ReadWrite, AccessType::ReadOnly) => Ok(()),
                 (AccessType::ReadWrite, AccessType::ReadWrite) => Ok(()),
             }
         } else {
-            Err(HostError::WithStatus(
-                String::from("access to unknown footprint entry"),
-                ScStatus::HostStorageError(ScHostStorageErrorCode::AccessToUnknownEntry),
-            ))
+            Err(ScHostStorageErrorCode::AccessToUnknownEntry.into())
         }
     }
 }
@@ -113,14 +107,8 @@ impl Storage {
             }
         };
         match self.map.get(key) {
-            None => Err(HostError::WithStatus(
-                String::from("missing key in get"),
-                ScStatus::HostStorageError(ScHostStorageErrorCode::MissingKeyInGet),
-            )),
-            Some(None) => Err(HostError::WithStatus(
-                String::from("get on deleted key"),
-                ScStatus::HostStorageError(ScHostStorageErrorCode::GetOnDeletedKey),
-            )),
+            None => Err(ScHostStorageErrorCode::MissingKeyInGet.into()),
+            Some(None) => Err(ScHostStorageErrorCode::GetOnDeletedKey.into()),
             Some(Some(val)) => Ok(val.clone()),
         }
     }
@@ -175,8 +163,6 @@ impl Storage {
 #[cfg(test)]
 mod test_footprint {
 
-    use assert_matches::assert_matches;
-
     use super::*;
     use crate::xdr::{LedgerKeyContractData, ScVal};
 
@@ -223,13 +209,11 @@ mod test_footprint {
             contract_id,
             key: ScVal::I32(0),
         });
-        assert_matches!(
-            fp.enforce_access(&key, AccessType::ReadOnly),
-            Err(HostError::WithStatus(
-                _,
-                ScStatus::HostStorageError(ScHostStorageErrorCode::AccessToUnknownEntry)
-            ))
-        );
+        let res = fp.enforce_access(&key, AccessType::ReadOnly);
+        assert!(HostError::result_matches_err_status(
+            res,
+            ScHostStorageErrorCode::AccessToUnknownEntry
+        ));
     }
 
     #[test]
@@ -241,18 +225,18 @@ mod test_footprint {
         });
         let om = OrdMap::unit(key.clone(), AccessType::ReadOnly);
         let mut fp = Footprint(om);
-        assert_matches!(
-            fp.enforce_access(&key, AccessType::ReadWrite),
-            Err(HostError::WithStatus(
-                _,
-                ScStatus::HostStorageError(ScHostStorageErrorCode::ReadwriteAccessToReadonlyEntry)
-            ))
-        );
+        let res = fp.enforce_access(&key, AccessType::ReadWrite);
+        assert!(HostError::result_matches_err_status(
+            res,
+            ScHostStorageErrorCode::ReadwriteAccessToReadonlyEntry
+        ));
     }
 }
 
 #[cfg(test)]
 mod test_storage {
+    use stellar_contract_env_common::xdr::ScUnknownErrorCode;
+
     use super::*;
     #[allow(dead_code)]
     struct MockSnapshotSource(OrdMap<LedgerKey, LedgerEntry>);
@@ -262,7 +246,7 @@ mod test_storage {
             if let Some(val) = self.0.get(key) {
                 Ok(val.clone())
             } else {
-                Err(HostError::General("No entry"))
+                Err(ScUnknownErrorCode::General.into())
             }
         }
 
