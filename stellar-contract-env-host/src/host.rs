@@ -222,7 +222,7 @@ impl Host {
     /// _represented_ some other error. This function only returns Err(...) when
     /// there was a failure to record the event, such as when budget is
     /// exceeded.
-    pub(crate) fn debug_event<T>(&self, src: T) -> Result<(), HostError>
+    pub(crate) fn record_debug_event<T>(&self, src: T) -> Result<(), HostError>
     where
         DebugEvent: From<T>,
     {
@@ -249,7 +249,7 @@ impl Host {
         DebugError: From<T>,
     {
         let ds: DebugError = src.into();
-        if let Err(e) = self.debug_event(ds.event) {
+        if let Err(e) = self.record_debug_event(ds.event) {
             e
         } else {
             ds.status.into()
@@ -925,7 +925,7 @@ impl CheckedEnv for Host {
     type Error = HostError;
 
     fn log_value(&self, v: RawVal) -> Result<RawVal, HostError> {
-        self.debug_event(DebugEvent::new().msg("log").arg(v))?;
+        self.record_debug_event(DebugEvent::new().msg("log").arg(v))?;
         Ok(RawVal::from_void())
     }
 
@@ -1420,7 +1420,7 @@ impl CheckedEnv for Host {
                 let evt = DebugEvent::new()
                     .msg("try_call got error from callee contract")
                     .arg(e.status.clone());
-                self.debug_event(evt)?;
+                self.record_debug_event(evt)?;
                 Ok(e.status.into())
             }
         }
