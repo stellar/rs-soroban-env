@@ -210,7 +210,7 @@ mod test_footprint {
             key: ScVal::I32(0),
         });
         let res = fp.enforce_access(&key, AccessType::ReadOnly);
-        assert!(HostError::result_is_err_status(
+        assert!(HostError::result_matches_err_status(
             res,
             ScHostStorageErrorCode::AccessToUnknownEntry
         ));
@@ -226,7 +226,7 @@ mod test_footprint {
         let om = OrdMap::unit(key.clone(), AccessType::ReadOnly);
         let mut fp = Footprint(om);
         let res = fp.enforce_access(&key, AccessType::ReadWrite);
-        assert!(HostError::result_is_err_status(
+        assert!(HostError::result_matches_err_status(
             res,
             ScHostStorageErrorCode::ReadwriteAccessToReadonlyEntry
         ));

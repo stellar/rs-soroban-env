@@ -47,7 +47,8 @@ pub struct HostError {
 }
 
 impl HostError {
-    pub fn result_is_err_status<T, C>(res: Result<T, HostError>, code: C) -> bool
+    #[cfg(test)]
+    pub fn result_matches_err_status<T, C>(res: Result<T, HostError>, code: C) -> bool
     where
         Status: From<C>,
     {

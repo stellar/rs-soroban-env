@@ -352,9 +352,9 @@ fn vec_new_with_capacity() -> Result<(), HostError> {
     host.vec_new(5_u32.into())?;
     let code = ScHostFnErrorCode::InputArgsWrongType;
     let res = host.vec_new(5_i32.into());
-    assert!(HostError::result_is_err_status(res, code));
+    assert!(HostError::result_matches_err_status(res, code));
     let res = host.vec_new(RawVal::from_bool(true));
-    assert!(HostError::result_is_err_status(res, code));
+    assert!(HostError::result_matches_err_status(res, code));
     Ok(())
 }
 
@@ -377,7 +377,7 @@ fn empty_vec_front() -> Result<(), HostError> {
     let obj = host.test_vec_obj::<u32>(&[])?;
     let res = host.vec_front(obj.to_object());
     let code = ScHostObjErrorCode::VecIndexOutOfBound;
-    assert!(HostError::result_is_err_status(res, code));
+    assert!(HostError::result_matches_err_status(res, code));
     Ok(())
 }
 
@@ -387,7 +387,7 @@ fn empty_vec_back() -> Result<(), HostError> {
     let obj = host.test_vec_obj::<u32>(&[])?;
     let res = host.vec_back(obj.to_object());
     let code = ScHostObjErrorCode::VecIndexOutOfBound;
-    assert!(HostError::result_is_err_status(res, code));
+    assert!(HostError::result_matches_err_status(res, code));
     Ok(())
 }
 
@@ -429,7 +429,7 @@ fn vec_pop_empty_vec() -> Result<(), HostError> {
     let obj = host.test_vec_obj::<u32>(&[])?;
     let res = host.vec_pop(obj.to_object());
     let code = ScHostObjErrorCode::VecIndexOutOfBound;
-    assert!(HostError::result_is_err_status(res, code));
+    assert!(HostError::result_matches_err_status(res, code));
     Ok(())
 }
 
@@ -439,7 +439,7 @@ fn vec_get_out_of_bound() -> Result<(), HostError> {
     let obj = host.test_vec_obj::<u32>(&[1, 2, 3])?;
     let res = host.vec_get(obj.to_object(), 3_u32.into());
     let code = ScHostObjErrorCode::VecIndexOutOfBound;
-    assert!(HostError::result_is_err_status(res, code));
+    assert!(HostError::result_matches_err_status(res, code));
     Ok(())
 }
 
@@ -449,7 +449,7 @@ fn vec_get_wrong_index_type() -> Result<(), HostError> {
     let obj = host.test_vec_obj::<u32>(&[])?;
     let res = host.vec_get(obj.to_object(), (-1_i32).into());
     let code = ScHostFnErrorCode::InputArgsWrongType;
-    assert!(HostError::result_is_err_status(res, code));
+    assert!(HostError::result_matches_err_status(res, code));
     Ok(())
 }
 
@@ -469,7 +469,7 @@ fn vec_del_out_of_bound() -> Result<(), HostError> {
     let obj = host.test_vec_obj::<u32>(&[1, 2, 3])?;
     let res = host.vec_del(obj.to_object(), 3_u32.into());
     let code = ScHostObjErrorCode::VecIndexOutOfBound;
-    assert!(HostError::result_is_err_status(res, code));
+    assert!(HostError::result_matches_err_status(res, code));
     Ok(())
 }
 
@@ -479,7 +479,7 @@ fn vec_del_wrong_index_type() -> Result<(), HostError> {
     let obj = host.test_vec_obj::<u32>(&[])?;
     let res = host.vec_del(obj.to_object(), (-1_i32).into());
     let code = ScHostFnErrorCode::InputArgsWrongType;
-    assert!(HostError::result_is_err_status(res, code));
+    assert!(HostError::result_matches_err_status(res, code));
     Ok(())
 }
 
@@ -514,7 +514,7 @@ fn vec_slice_start_greater_than_end() -> Result<(), HostError> {
     let obj = host.test_vec_obj::<u32>(&[1, 2, 3])?;
     let res = host.vec_slice(obj.to_object(), 2_u32.into(), 1_u32.into());
     let code = ScHostFnErrorCode::InputArgsInvalid;
-    assert!(HostError::result_is_err_status(res, code));
+    assert!(HostError::result_matches_err_status(res, code));
     Ok(())
 }
 
@@ -524,7 +524,7 @@ fn vec_slice_start_out_of_bound() -> Result<(), HostError> {
     let obj = host.test_vec_obj::<u32>(&[1, 2, 3])?;
     let res = host.vec_slice(obj.to_object(), 0_u32.into(), 4_u32.into());
     let code = ScHostObjErrorCode::VecIndexOutOfBound;
-    assert!(HostError::result_is_err_status(res, code));
+    assert!(HostError::result_matches_err_status(res, code));
     Ok(())
 }
 
@@ -534,7 +534,7 @@ fn vec_slice_end_out_of_bound() -> Result<(), HostError> {
     let obj = host.test_vec_obj::<u32>(&[1, 2, 3])?;
     let res = host.vec_slice(obj.to_object(), 0_u32.into(), 4_u32.into());
     let code = ScHostObjErrorCode::VecIndexOutOfBound;
-    assert!(HostError::result_is_err_status(res, code));
+    assert!(HostError::result_matches_err_status(res, code));
     Ok(())
 }
 
@@ -544,7 +544,7 @@ fn vec_take_wrong_index_type() -> Result<(), HostError> {
     let obj = host.test_vec_obj::<u32>(&[])?;
     let res = host.vec_slice(obj.to_object(), (-1_i32).into(), 1_u32.into());
     let code = ScHostFnErrorCode::InputArgsWrongType;
-    assert!(HostError::result_is_err_status(res, code));
+    assert!(HostError::result_matches_err_status(res, code));
     Ok(())
 }
 
@@ -554,7 +554,7 @@ fn vec_take_wrong_len_type() -> Result<(), HostError> {
     let obj = host.test_vec_obj::<u32>(&[])?;
     let res = host.vec_slice(obj.to_object(), 1_u32.into(), (-1_i32).into());
     let code = ScHostFnErrorCode::InputArgsWrongType;
-    assert!(HostError::result_is_err_status(res, code));
+    assert!(HostError::result_matches_err_status(res, code));
     Ok(())
 }
 
@@ -578,7 +578,7 @@ fn vec_insert_out_of_bound() -> Result<(), HostError> {
     let obj = host.test_vec_obj::<u32>(&[1, 2, 3])?;
     let res = host.vec_insert(obj.to_object(), 4_u32.into(), 9u32.into());
     let code = ScHostObjErrorCode::VecIndexOutOfBound;
-    assert!(HostError::result_is_err_status(res, code));
+    assert!(HostError::result_matches_err_status(res, code));
     Ok(())
 }
 
@@ -588,7 +588,7 @@ fn vec_insert_wrong_index_type() -> Result<(), HostError> {
     let obj = host.test_vec_obj::<u32>(&[])?;
     let res = host.vec_insert(obj.to_object(), (-1_i32).into(), 9u32.into());
     let code = ScHostFnErrorCode::InputArgsWrongType;
-    assert!(HostError::result_is_err_status(res, code));
+    assert!(HostError::result_matches_err_status(res, code));
     Ok(())
 }
 
@@ -840,12 +840,12 @@ fn create_contract_test() -> Result<(), HostError> {
     // update
     let put_res = host.put_contract_data(host.to_host_val(&key)?.to_raw(), ().into());
     let code = ScHostFnErrorCode::InputArgsInvalid;
-    assert!(HostError::result_is_err_status(put_res, code));
+    assert!(HostError::result_matches_err_status(put_res, code));
 
     // delete
     let del_res = host.del_contract_data(host.to_host_val(&key)?.to_raw());
     let code = ScHostFnErrorCode::InputArgsInvalid;
-    assert!(HostError::result_is_err_status(del_res, code));
+    assert!(HostError::result_matches_err_status(del_res, code));
     Ok(())
 }
 
@@ -1000,7 +1000,7 @@ fn invoke_single_contract_function() -> Result<(), HostError> {
     let scvec0: ScVec = host.test_scvec::<i32>(&[a, c])?;
     let res = vm.invoke_function(&host, "add", &scvec0);
     let code = ScVmErrorCode::TrapUnreachable;
-    assert!(HostError::result_is_err_status(res, code));
+    assert!(HostError::result_matches_err_status(res, code));
     Ok(())
 }
 
@@ -1118,7 +1118,7 @@ fn invoke_cross_contract_with_err() -> Result<(), HostError> {
 
     // call
     let res = host.call(obj.to_object(), sym.into(), args.into());
-    assert!(HostError::result_is_err_status(res, code));
+    assert!(HostError::result_matches_err_status(res, code));
 
     Ok(())
 }
@@ -1235,7 +1235,7 @@ fn invoke_cross_contract_lvl2_nested_with_err() -> Result<(), HostError> {
     assert_eq!(sv.get_payload(), exp_st.as_ref().get_payload());
     // call
     let res = host.call(obj.to_object(), sym.into(), args.into());
-    assert!(HostError::result_is_err_status(res, code));
+    assert!(HostError::result_matches_err_status(res, code));
     Ok(())
 }
 
@@ -1380,7 +1380,7 @@ fn bigint_tests() -> Result<(), HostError> {
         // div by 0
         let res = host.bigint_div(obj_a, obj_0);
         let code = ScUnknownErrorCode::General;
-        assert!(HostError::result_is_err_status(res, code));
+        assert!(HostError::result_matches_err_status(res, code));
     }
     // rem
     {
@@ -1390,7 +1390,7 @@ fn bigint_tests() -> Result<(), HostError> {
         // div by 0
         let res = host.bigint_rem(obj_a, obj_0);
         let code = ScUnknownErrorCode::General;
-        assert!(HostError::result_is_err_status(res, code));
+        assert!(HostError::result_matches_err_status(res, code));
     }
     // and
     {
@@ -1417,12 +1417,12 @@ fn bigint_tests() -> Result<(), HostError> {
         assert_eq!(host.obj_cmp(obj_res.into(), obj_ref.into())?, 0);
         let res = host.bigint_shl(obj_a, host.bigint_from_i64(-5)?);
         let code = ScUnknownErrorCode::General;
-        assert!(HostError::result_is_err_status(res, code));
+        assert!(HostError::result_matches_err_status(res, code));
         // a 65-bit integer
         let obj_c = host.bigint_shl(host.bigint_from_u64(u64::MAX)?, host.bigint_from_i64(1)?)?;
         let res = host.bigint_shl(obj_a, obj_c);
         let code = ScUnknownErrorCode::General;
-        assert!(HostError::result_is_err_status(res, code));
+        assert!(HostError::result_matches_err_status(res, code));
     }
     // shr
     {
@@ -1431,12 +1431,12 @@ fn bigint_tests() -> Result<(), HostError> {
         assert_eq!(host.obj_cmp(obj_res.into(), obj_ref.into())?, 0);
         let res = host.bigint_shr(obj_a, host.bigint_from_i64(-5)?);
         let code = ScUnknownErrorCode::General;
-        assert!(HostError::result_is_err_status(res, code));
+        assert!(HostError::result_matches_err_status(res, code));
         // a 65-bit integer
         let obj_c = host.bigint_shl(host.bigint_from_u64(u64::MAX)?, host.bigint_from_i64(1)?)?;
         let res = host.bigint_shr(obj_a, obj_c);
         let code = ScUnknownErrorCode::General;
-        assert!(HostError::result_is_err_status(res, code));
+        assert!(HostError::result_matches_err_status(res, code));
     }
     // cmp
     {
@@ -1511,13 +1511,13 @@ fn bigint_tests() -> Result<(), HostError> {
         assert_eq!(host.obj_cmp(obj_res.into(), obj_ref.into())?, 0);
         let res = host.bigint_pow(obj_b, host.bigint_from_i64(-1)?);
         let code = ScUnknownErrorCode::General;
-        assert!(HostError::result_is_err_status(res, code));
+        assert!(HostError::result_matches_err_status(res, code));
 
         // a 65-bit integer
         let obj_c = host.bigint_shl(host.bigint_from_u64(u64::MAX)?, host.bigint_from_i64(1)?)?;
         let res = host.bigint_pow(obj_b, obj_c);
         let code = ScUnknownErrorCode::General;
-        assert!(HostError::result_is_err_status(res, code));
+        assert!(HostError::result_matches_err_status(res, code));
     }
     // pow_mod
     {
@@ -1527,10 +1527,10 @@ fn bigint_tests() -> Result<(), HostError> {
         assert_eq!(host.obj_cmp(obj_res.into(), obj_ref.into())?, 0);
         let res = host.bigint_pow_mod(obj_a, obj_b, obj_2);
         let code = ScUnknownErrorCode::General;
-        assert!(HostError::result_is_err_status(res, code));
+        assert!(HostError::result_matches_err_status(res, code));
         let res = host.bigint_pow_mod(obj_a, obj_2, obj_0);
         let code = ScUnknownErrorCode::General;
-        assert!(HostError::result_is_err_status(res, code));
+        assert!(HostError::result_matches_err_status(res, code));
     }
     // sqrt
     {
@@ -1539,7 +1539,7 @@ fn bigint_tests() -> Result<(), HostError> {
         assert_eq!(host.obj_cmp(obj_res.into(), obj_ref.into())?, 0);
         let res = host.bigint_sqrt(obj_b);
         let code = ScUnknownErrorCode::General;
-        assert!(HostError::result_is_err_status(res, code));
+        assert!(HostError::result_matches_err_status(res, code));
     }
     // bits
     {
