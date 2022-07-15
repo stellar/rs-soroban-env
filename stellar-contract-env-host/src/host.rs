@@ -278,12 +278,12 @@ impl Host {
     }
 
     /// Given a result carrying some error type that can be converted to a
-    /// DebugStatus, calls self.err with it when there's an error. Returns a
+    /// DebugError, calls self.err with it when there's an error. Returns a
     /// result over HostError.
     ///
     /// If you have an error type T you want to record as a detailed debug event
     /// and a less-detailed Status code embedded in a HostError, add an `impl
-    /// From<T> for DebugStatus` over in the [events] module and call this where
+    /// From<T> for DebugError` over in the [events] module and call this where
     /// the error is generated.
     ///
     /// Note: we do _not_ want to `impl From<T> for HostError` for such types,
