@@ -2,7 +2,7 @@ mod dispatch;
 mod func_info;
 
 use crate::{budget::CostType, HostError};
-use std::rc::Rc;
+use std::{io::Cursor, rc::Rc};
 
 use super::{
     xdr::{Hash, ScVal, ScVec},
@@ -10,7 +10,10 @@ use super::{
 };
 use func_info::HOST_FUNCTIONS;
 use parity_wasm::elements::{self, Internal, Type};
-use stellar_contract_env_common::xdr::ScVmErrorCode;
+use stellar_contract_env_common::{
+    meta,
+    xdr::{ReadXdr, ScEnvMetaEntry, ScHostFnErrorCode, ScVmErrorCode},
+};
 use wasmi::{
     Externals, FuncInstance, ImportResolver, Module, ModuleInstance, ModuleRef, RuntimeArgs,
     RuntimeValue, ValueType,
@@ -141,6 +144,37 @@ pub struct VmFunction {
 }
 
 impl Vm {
+    fn check_meta_section(host: &Host, m: &elements::Module) -> Result<(), HostError> {
+        if let Some(env_meta) = Self::module_custom_section(m, "contractenvmetav0") {
+            let mut cursor = Cursor::new(env_meta);
+            for env_meta_entry in ScEnvMetaEntry::read_xdr_iter(&mut cursor) {
+                match host.map_err(env_meta_entry)? {
+                    ScEnvMetaEntry::ScEnvMetaKindInterfaceVersion(v) => {
+                        if v == meta::INTERFACE_VERSION {
+                            return Ok(());
+                        } else {
+                            return Err(host.err_status_msg(
+                                ScHostFnErrorCode::InputArgsInvalid,
+                                "unexpected environment interface version",
+                            ));
+                        }
+                    }
+                    #[allow(unreachable_patterns)]
+                    _ => (),
+                }
+            }
+            Err(host.err_status_msg(
+                ScHostFnErrorCode::InputArgsInvalid,
+                "missing environment interface version",
+            ))
+        } else {
+            Err(host.err_status_msg(
+                ScHostFnErrorCode::InputArgsInvalid,
+                "input contract missing `contractenvmetav0` section",
+            ))
+        }
+    }
+
     pub fn new(
         host: &Host,
         contract_id: Hash,
@@ -148,14 +182,18 @@ impl Vm {
     ) -> Result<Rc<Self>, HostError> {
         let elements_module: elements::Module =
             host.map_err(elements::deserialize_buffer(module_wasm_code))?;
+
+        Self::check_meta_section(host, &elements_module)?;
+
         let module: Module =
             host.map_err(Module::from_parity_wasm_module(elements_module.clone()))?;
         host.map_err(module.deny_floating_point())?;
+
         let not_started_instance = host.map_err(ModuleInstance::new(&module, host))?;
         if not_started_instance.has_start() {
             return Err(host.err_status_msg(
                 ScVmErrorCode::Instantiation,
-                "Module has disallowed start function",
+                "module contains disallowed start function",
             ));
         }
         let instance = not_started_instance.assert_no_start();
@@ -284,15 +322,19 @@ impl Vm {
         }
     }
 
-    // Custom section returns the bytes within the named custom section of the
-    // loaded WASM file.
-    pub fn custom_section(&self, name: impl AsRef<str>) -> Option<&[u8]> {
-        self.elements_module.custom_sections().find_map(|s| {
+    fn module_custom_section(m: &elements::Module, name: impl AsRef<str>) -> Option<&[u8]> {
+        m.custom_sections().find_map(|s| {
             if s.name() == name.as_ref() {
                 Some(s.payload())
             } else {
                 None
             }
         })
+    }
+
+    // Custom section returns the bytes within the named custom section of the
+    // loaded WASM file.
+    pub fn custom_section(&self, name: impl AsRef<str>) -> Option<&[u8]> {
+        Self::module_custom_section(&self.elements_module, name)
     }
 }
