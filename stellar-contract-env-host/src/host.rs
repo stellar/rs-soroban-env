@@ -1090,6 +1090,12 @@ impl CheckedEnv for Host {
     fn map_prev_key(&self, m: Object, k: RawVal) -> Result<RawVal, HostError> {
         let k = self.associate_raw_val(k);
         self.visit_obj(m, |hm: &HostMap| {
+            // OrdMap's `get_prev`/`get_next` return the previous/next key if the input key is not found. 
+            // Otherwise it returns the input key. Therefore, if `get_prev`/`get_next` returns the same
+            // key, we will clone the map, delete the input key, and call `get_prev`/`get_next` again. 
+            // Note on performance: OrdMap does "lazy cloning", which only happens if data is modified, 
+            // and we are only modifying one entry. The cloned object will be thrown away in the end
+            // so there is no cost associated with host object creation and allocation. 
             if let Some((pk, pv)) = hm.get_prev(&k) {
                 if *pk != k {
                     Ok(pk.to_raw())
