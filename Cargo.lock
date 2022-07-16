@@ -635,7 +635,6 @@ dependencies = [
  "log",
  "num-bigint",
  "num-integer",
- "num-rational",
  "num-traits",
  "optimization",
  "parity-wasm",
