@@ -38,6 +38,7 @@ impl Debug for HostError {
             frame_name_matches(frame, "::from")
                 || frame_name_matches(frame, "::into")
                 || frame_name_matches(frame, "Host::err")
+                || frame_name_matches(frame, "::map_err")
         }
 
         let mut bt = self.backtrace.clone();
