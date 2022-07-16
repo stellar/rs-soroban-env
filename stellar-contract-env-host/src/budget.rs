@@ -1,6 +1,4 @@
-use stellar_contract_env_common::xdr::ScVmErrorCode;
-
-use crate::HostError;
+use crate::{xdr::ScVmErrorCode, HostError};
 
 // TODO: move this to an XDR enum
 #[repr(i32)]

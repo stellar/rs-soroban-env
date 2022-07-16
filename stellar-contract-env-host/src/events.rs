@@ -1,15 +1,11 @@
-use log::debug;
-use stellar_contract_env_common::{
-    xdr::{self},
-    RawVal, Status,
+use crate::{xdr, RawVal, Status};
+#[cfg(feature = "vm")]
+use crate::{
+    xdr::{ScUnknownErrorCode, ScVmErrorCode},
+    HostError,
 };
-
+use log::debug;
 use tinyvec::TinyVec;
-
-#[cfg(feature = "vm")]
-use crate::HostError;
-#[cfg(feature = "vm")]
-use stellar_contract_env_common::xdr::{ScUnknownErrorCode, ScVmErrorCode};
 
 // TODO: update this when ContractEvent shows up in the XDR defns.
 // TODO: optimize storage on this to use pools / bumpalo / etc.
@@ -21,7 +17,7 @@ pub enum HostEvent {
 }
 
 #[derive(Clone, Debug, Default)]
-pub struct Events(Vec<HostEvent>);
+pub struct Events(pub Vec<HostEvent>);
 
 impl Events {
     // Records the smallest variant of a debug HostEvent it can, returning the size of the
@@ -49,6 +45,24 @@ impl Events {
 pub struct DebugEvent {
     pub msg: &'static str,
     pub args: TinyVec<[RawVal; 2]>,
+}
+
+impl core::fmt::Display for DebugEvent {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:}", self.msg)?;
+        if !self.args.is_empty() {
+            write!(f, ": ")?;
+            let mut first = true;
+            for rv in self.args.iter() {
+                if !first {
+                    write!(f, ", ")?;
+                }
+                first = false;
+                write!(f, "{:?}", rv)?;
+            }
+        }
+        Ok(())
+    }
 }
 
 impl DebugEvent {
