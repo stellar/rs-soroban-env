@@ -19,3 +19,7 @@ pub(crate) const CREATE_CONTRACT: &'static [u8] =
     include_bytes!("../../wasm-examples/example_create_contract.wasm").as_slice();
 pub(crate) const LINEAR_MEMORY: &'static [u8] =
     include_bytes!("../../wasm-examples/example_linear_memory.wasm").as_slice();
+pub(crate) const VEC: &'static [u8] =
+    include_bytes!("../../wasm-examples/example_vec.wasm").as_slice();
+pub(crate) const CALL: &'static [u8] =
+    include_bytes!("../../wasm-examples/example_call.wasm").as_slice();
