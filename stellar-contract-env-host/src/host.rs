@@ -40,53 +40,8 @@ use crate::{
     Status, Symbol, Tag, Val, UNKNOWN_ERROR,
 };
 
-#[derive(Debug)]
-pub struct HostError {
-    pub(crate) status: Status,
-    pub(crate) backtrace: backtrace::Backtrace,
-}
-
-impl HostError {
-    #[cfg(test)]
-    pub fn result_matches_err_status<T, C>(res: Result<T, HostError>, code: C) -> bool
-    where
-        Status: From<C>,
-    {
-        match res {
-            Ok(_) => false,
-            Err(he) => {
-                let status: Status = code.into();
-                he.status == status
-            }
-        }
-    }
-}
-
-impl<T> From<T> for HostError
-where
-    Status: From<T>,
-{
-    fn from(status: T) -> Self {
-        let backtrace = backtrace::Backtrace::new();
-        let status: Status = status.into();
-        Self { status, backtrace }
-    }
-}
-
-impl std::fmt::Display for HostError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "Status code: {:#?}", self.status)?;
-        writeln!(f, "Error context:")?;
-        writeln!(f, "{:#?}", self.backtrace)
-    }
-}
-
-impl TryFrom<&HostError> for ScStatus {
-    type Error = xdr::Error;
-    fn try_from(err: &HostError) -> Result<Self, Self::Error> {
-        err.status.try_into()
-    }
-}
+mod error;
+pub use error::HostError;
 
 /// Saves host state (storage and objects) for rolling back a (sub-)transaction
 /// on error. A helper type used by [`FrameGuard`].
@@ -252,7 +207,9 @@ impl Host {
         if let Err(e) = self.debug_event(ds.event) {
             e
         } else {
-            ds.status.into()
+            let mut he: HostError = ds.status.into();
+            he.events = Some(self.0.events.borrow().clone());
+            he
         }
     }
 
