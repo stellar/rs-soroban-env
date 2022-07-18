@@ -904,7 +904,22 @@ impl CheckedEnv for Host {
     }
 
     fn get_invoking_contract(&self) -> Result<Object, HostError> {
-        todo!()
+        let frames = self.0.context.borrow();
+        let hash: Hash = if frames.len() > 2 {
+            match &frames[frames.len() - 2] {
+                #[cfg(feature = "vm")]
+                Frame::ContractVM(vm) => Ok(vm.contract_id.clone()),
+                Frame::HostFunction(_) => {
+                    Err(self.err_general("Host function context has no contract ID"))
+                }
+                #[cfg(feature = "testutils")]
+                Frame::TestContract(id) => Ok(id.clone()),
+            }
+        } else {
+            Err(self.err_general("no invoking contract"))
+        }?;
+        let bin: Vec<u8> = hash.0.try_into().map_err(|_| ConversionError {})?;
+        Ok(self.add_host_object(bin)?.into())
     }
 
     fn obj_cmp(&self, a: RawVal, b: RawVal) -> Result<i64, HostError> {
