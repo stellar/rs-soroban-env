@@ -724,13 +724,22 @@ impl Host {
         })?;
 
         #[cfg(feature = "testutils")]
-        if let Some(cfs) = self.0.contracts.borrow().get(&id) {
-            let mut fg = self.push_test_frame(id.clone());
-            let res = cfs
-                .call(&func, self, args)
-                .ok_or_else(|| self.err_general("function not found"))?;
-            fg.commit();
-            return Ok(res);
+        {
+            // This looks a little un-idiomatic, but this avoids maintaining a borrow of
+            // self.0.contracts. Implementing it as
+            //
+            //     if let Some(cfs) = self.0.contracts.borrow().get(&id).cloned() { ... }
+            //
+            // maintains a borrow of self.0.contracts, which can cause borrow errors.
+            let cfs_option = self.0.contracts.borrow().get(&id).cloned();
+            if let Some(cfs) = cfs_option {
+                let mut fg = self.push_test_frame(id.clone());
+                let res = cfs
+                    .call(&func, self, args)
+                    .ok_or_else(|| self.err_general("function not found"))?;
+                fg.commit();
+                return Ok(res);
+            }
         }
 
         #[cfg(feature = "vm")]
