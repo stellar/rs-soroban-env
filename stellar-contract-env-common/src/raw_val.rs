@@ -101,6 +101,17 @@ macro_rules! declare_tryfrom {
                 }
             }
         }
+        impl TryFrom<&RawVal> for $T {
+            type Error = ConversionError;
+            #[inline(always)]
+            fn try_from(v: &RawVal) -> Result<Self, Self::Error> {
+                if let Some(c) = <Self as RawValConvertible>::try_convert(*v) {
+                    Ok(c)
+                } else {
+                    Err(ConversionError)
+                }
+            }
+        }
         impl<E: Env> TryFrom<EnvVal<E, RawVal>> for $T {
             type Error = ConversionError;
             #[inline(always)]
@@ -222,10 +233,24 @@ impl From<()> for RawVal {
     }
 }
 
+impl From<&()> for RawVal {
+    #[inline(always)]
+    fn from(_: &()) -> Self {
+        RawVal::from_void()
+    }
+}
+
 impl From<u32> for RawVal {
     #[inline(always)]
     fn from(u: u32) -> Self {
         RawVal::from_u32(u)
+    }
+}
+
+impl From<&u32> for RawVal {
+    #[inline(always)]
+    fn from(u: &u32) -> Self {
+        RawVal::from_u32(*u)
     }
 }
 
@@ -236,10 +261,34 @@ impl From<i32> for RawVal {
     }
 }
 
+impl From<&i32> for RawVal {
+    #[inline(always)]
+    fn from(i: &i32) -> Self {
+        RawVal::from_i32(*i)
+    }
+}
+
 impl From<ScStatus> for RawVal {
     fn from(st: ScStatus) -> Self {
         let ty = st.discriminant();
         let code = match st {
+            ScStatus::Ok => ScStatusType::Ok as u32,
+            ScStatus::UnknownError(e) => e as u32,
+            ScStatus::HostValueError(e) => e as u32,
+            ScStatus::HostObjectError(e) => e as u32,
+            ScStatus::HostFunctionError(e) => e as u32,
+            ScStatus::HostStorageError(e) => e as u32,
+            ScStatus::HostContextError(e) => e as u32,
+            ScStatus::VmError(e) => e as u32,
+        };
+        Status::from_type_and_code(ty, code).to_raw()
+    }
+}
+
+impl From<&ScStatus> for RawVal {
+    fn from(st: &ScStatus) -> Self {
+        let ty = st.discriminant();
+        let code = match *st {
             ScStatus::Ok => ScStatusType::Ok as u32,
             ScStatus::UnknownError(e) => e as u32,
             ScStatus::HostValueError(e) => e as u32,
