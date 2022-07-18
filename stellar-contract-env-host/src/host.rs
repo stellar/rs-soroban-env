@@ -724,13 +724,22 @@ impl Host {
         })?;
 
         #[cfg(feature = "testutils")]
-        if let Some(cfs) = self.0.contracts.borrow().get(&id) {
-            let mut fg = self.push_test_frame(id.clone());
-            let res = cfs
-                .call(&func, self, args)
-                .ok_or_else(|| self.err_general("function not found"))?;
-            fg.commit();
-            return Ok(res);
+        {
+            // This looks a little un-idiomatic, but this avoids maintaining a borrow of
+            // self.0.contracts. Implementing it as
+            //
+            //     if let Some(cfs) = self.0.contracts.borrow().get(&id).cloned() { ... }
+            //
+            // maintains a borrow of self.0.contracts, which can cause borrow errors.
+            let cfs_option = self.0.contracts.borrow().get(&id).cloned();
+            if let Some(cfs) = cfs_option {
+                let mut fg = self.push_test_frame(id.clone());
+                let res = cfs
+                    .call(&func, self, args)
+                    .ok_or_else(|| self.err_general("function not found"))?;
+                fg.commit();
+                return Ok(res);
+            }
         }
 
         #[cfg(feature = "vm")]
@@ -895,7 +904,22 @@ impl CheckedEnv for Host {
     }
 
     fn get_invoking_contract(&self) -> Result<Object, HostError> {
-        todo!()
+        let frames = self.0.context.borrow();
+        let hash: Hash = if frames.len() > 2 {
+            match &frames[frames.len() - 2] {
+                #[cfg(feature = "vm")]
+                Frame::ContractVM(vm) => Ok(vm.contract_id.clone()),
+                Frame::HostFunction(_) => {
+                    Err(self.err_general("Host function context has no contract ID"))
+                }
+                #[cfg(feature = "testutils")]
+                Frame::TestContract(id) => Ok(id.clone()),
+            }
+        } else {
+            Err(self.err_general("no invoking contract"))
+        }?;
+        let bin: Vec<u8> = hash.0.try_into().map_err(|_| ConversionError {})?;
+        Ok(self.add_host_object(bin)?.into())
     }
 
     fn obj_cmp(&self, a: RawVal, b: RawVal) -> Result<i64, HostError> {
@@ -910,6 +934,12 @@ impl CheckedEnv for Host {
             Ordering::Equal => 0,
             Ordering::Greater => 1,
         })
+    }
+
+    fn get_current_contract(&self) -> Result<Object, HostError> {
+        let hash = self.get_current_contract_id()?;
+        let bin: Vec<u8> = hash.0.try_into().map_err(|_| ConversionError {})?;
+        Ok(self.add_host_object(bin)?.into())
     }
 
     fn obj_from_u64(&self, u: u64) -> Result<Object, HostError> {
