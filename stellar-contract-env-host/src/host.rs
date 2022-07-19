@@ -234,6 +234,17 @@ impl Host {
         self.err(DebugError::new(status).msg(msg))
     }
 
+    pub(crate) fn err_convert<T>(&self, v: RawVal) -> HostError {
+        if let Err(e) = self.debug_event(DebugEvent::new().msg("type conversion failed")) {
+            return e;
+        }
+        if let Err(e) = self.debug_event(DebugEvent::new().msg(core::any::type_name::<T>()).arg(v))
+        {
+            return e;
+        }
+        ConversionError {}.into()
+    }
+
     /// Given a result carrying some error type that can be converted to a
     /// DebugStatus, calls self.err with it when there's an error. Returns a
     /// result over HostError.
@@ -937,8 +948,15 @@ impl CheckedEnv for Host {
     }
 
     fn get_current_contract(&self) -> Result<Object, HostError> {
-        let hash = self.get_current_contract_id()?;
-        let bin: Vec<u8> = hash.0.try_into().map_err(|_| ConversionError {})?;
+        let hash: Hash = self.get_current_contract_id()?;
+        let cvt_res = hash.0.try_into();
+        let bin: Vec<u8> = match cvt_res {
+            Ok(ok) => ok,
+            Err(_) => {
+                self.debug_event(DebugEvent::new().msg("Hash has wrong size"))?;
+                return Err(ConversionError {}.into());
+            }
+        };
         Ok(self.add_host_object(bin)?.into())
     }
 
@@ -1419,7 +1437,7 @@ impl CheckedEnv for Host {
 
     fn bigint_to_u64(&self, x: Object) -> Result<u64, HostError> {
         self.visit_obj(x, |bi: &BigInt| {
-            bi.to_u64().ok_or_else(|| ConversionError.into())
+            bi.to_u64().ok_or_else(|| self.err_convert::<u64>(x.into()))
         })
     }
 
