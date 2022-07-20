@@ -234,6 +234,24 @@ impl Host {
         self.err(DebugError::new(status).msg(msg))
     }
 
+    pub(crate) fn err_convert<T>(&self, v: RawVal) -> HostError {
+        if let Err(e) = self.debug_event(DebugEvent::new().msg("type conversion failed")) {
+            return e;
+        }
+        if let Err(e) = self.debug_event(DebugEvent::new().msg(core::any::type_name::<T>()).arg(v))
+        {
+            return e;
+        }
+        ConversionError {}.into()
+    }
+
+    pub(crate) fn err_convert_general(&self, msg: &'static str) -> HostError {
+        if let Err(e) = self.debug_event(DebugEvent::new().msg(msg)) {
+            return e;
+        }
+        ConversionError {}.into()
+    }
+
     /// Given a result carrying some error type that can be converted to a
     /// DebugStatus, calls self.err with it when there's an error. Returns a
     /// result over HostError.
@@ -918,7 +936,10 @@ impl CheckedEnv for Host {
         } else {
             Err(self.err_general("no invoking contract"))
         }?;
-        let bin: Vec<u8> = hash.0.try_into().map_err(|_| ConversionError {})?;
+        let bin: Vec<u8> = hash
+            .0
+            .try_into()
+            .map_err(|_| self.err_convert_general("Hash has wrong size"))?;
         Ok(self.add_host_object(bin)?.into())
     }
 
@@ -937,8 +958,11 @@ impl CheckedEnv for Host {
     }
 
     fn get_current_contract(&self) -> Result<Object, HostError> {
-        let hash = self.get_current_contract_id()?;
-        let bin: Vec<u8> = hash.0.try_into().map_err(|_| ConversionError {})?;
+        let hash: Hash = self.get_current_contract_id()?;
+        let bin: Vec<u8> = hash
+            .0
+            .try_into()
+            .map_err(|_| self.err_convert_general("Hash has wrong size"))?;
         Ok(self.add_host_object(bin)?.into())
     }
 
@@ -1419,7 +1443,7 @@ impl CheckedEnv for Host {
 
     fn bigint_to_u64(&self, x: Object) -> Result<u64, HostError> {
         self.visit_obj(x, |bi: &BigInt| {
-            bi.to_u64().ok_or_else(|| ConversionError.into())
+            bi.to_u64().ok_or_else(|| self.err_convert::<u64>(x.into()))
         })
     }
 
@@ -1429,7 +1453,7 @@ impl CheckedEnv for Host {
 
     fn bigint_to_i64(&self, x: Object) -> Result<i64, HostError> {
         self.visit_obj(x, |bi: &BigInt| {
-            bi.to_i64().ok_or_else(|| ConversionError.into())
+            bi.to_i64().ok_or_else(|| self.err_convert::<i64>(x.into()))
         })
     }
 
@@ -1628,39 +1652,32 @@ impl CheckedEnv for Host {
         #[cfg(not(feature = "vm"))]
         unimplemented!();
         #[cfg(feature = "vm")]
-        if let [b_pos, lm_pos, len] = [b_pos, lm_pos, len]
-            .iter()
-            .map(|v| u32::try_from(*v))
-            .collect::<Result<Vec<u32>, ConversionError>>()?
-            .as_slice()
-        {
-            self.visit_obj(b, move |hv: &Vec<u8>| {
-                let end_idx = b_pos.checked_add(*len).ok_or_else(|| {
-                    self.err_status_msg(ScHostFnErrorCode::InputArgsInvalid, "u32 overflow")
-                })? as usize;
-                if end_idx > hv.len() {
-                    return Err(self.err_status_msg(
-                        ScHostObjErrorCode::VecIndexOutOfBound,
-                        "index out of bound",
-                    ));
-                }
-                self.with_current_frame(|frame| match frame {
-                    Frame::ContractVM(vm) => vm.with_memory_access(self, |mem| {
-                        Ok(self
-                            .map_err(mem.set(*lm_pos, &hv.as_slice()[*b_pos as usize..end_idx]))?)
-                    }),
-                    Frame::HostFunction(_) => Err(self.err_general("linear memory not supported")),
-                    #[cfg(feature = "testutils")]
-                    Frame::TestContract(id) => Err(self.err_general("linear memory not supported")),
-                })
-            })?;
-            Ok(().into())
-        } else {
-            return Err(self.err_status_msg(
-                ScHostFnErrorCode::InputArgsWrongType,
-                "failed conversion to u32",
-            ));
-        }
+        let b_pos: u32 = b_pos
+            .try_into()
+            .map_err(|_| self.err_convert::<u32>(b_pos))?;
+        let lm_pos: u32 = lm_pos
+            .try_into()
+            .map_err(|_| self.err_convert::<u32>(lm_pos))?;
+        let len: u32 = len.try_into().map_err(|_| self.err_convert::<u32>(len))?;
+
+        self.visit_obj(b, move |hv: &Vec<u8>| {
+            let end_idx = b_pos.checked_add(len).ok_or_else(|| {
+                self.err_status_msg(ScHostFnErrorCode::InputArgsInvalid, "u32 overflow")
+            })? as usize;
+            if end_idx > hv.len() {
+                return Err(self
+                    .err_status_msg(ScHostObjErrorCode::VecIndexOutOfBound, "index out of bound"));
+            }
+            self.with_current_frame(|frame| match frame {
+                Frame::ContractVM(vm) => vm.with_memory_access(self, |mem| {
+                    Ok(self.map_err(mem.set(lm_pos, &hv.as_slice()[b_pos as usize..end_idx]))?)
+                }),
+                Frame::HostFunction(_) => Err(self.err_general("linear memory not supported")),
+                #[cfg(feature = "testutils")]
+                Frame::TestContract(id) => Err(self.err_general("linear memory not supported")),
+            })
+        })?;
+        Ok(().into())
     }
 
     fn binary_copy_from_linear_memory(
@@ -1673,37 +1690,33 @@ impl CheckedEnv for Host {
         #[cfg(not(feature = "vm"))]
         unimplemented!();
         #[cfg(feature = "vm")]
-        if let [b_pos, lm_pos, len] = [b_pos, lm_pos, len]
-            .iter()
-            .map(|v| u32::try_from(*v))
-            .collect::<Result<Vec<u32>, ConversionError>>()?
-            .as_slice()
-        {
-            let mut vnew = self.visit_obj(b, |hv: &Vec<u8>| Ok(hv.clone()))?;
-            let end_idx = b_pos.checked_add(*len).ok_or_else(|| {
-                self.err_status_msg(ScHostFnErrorCode::InputArgsInvalid, "u32 overflow")
-            })? as usize;
-            self.with_current_frame(|frame| match frame {
-                Frame::ContractVM(vm) => vm.with_memory_access(self, |mem| {
-                    // we would potentially let the vec grow
-                    if end_idx > vnew.len() {
-                        vnew.resize(end_idx, 0);
-                    }
-                    Ok(self.map_err(
-                        mem.get_into(*lm_pos, &mut vnew.as_mut_slice()[*b_pos as usize..end_idx]),
-                    )?)
-                }),
-                Frame::HostFunction(_) => Err(self.err_general("linear memory not supported")),
-                #[cfg(feature = "testutils")]
-                Frame::TestContract(id) => Err(self.err_general("linear memory not supported")),
-            })?;
-            Ok(self.add_host_object(vnew)?.into())
-        } else {
-            return Err(self.err_status_msg(
-                ScHostFnErrorCode::InputArgsWrongType,
-                "failed conversion to u32",
-            ));
-        }
+        let b_pos: u32 = b_pos
+            .try_into()
+            .map_err(|_| self.err_convert::<u32>(b_pos))?;
+        let lm_pos: u32 = lm_pos
+            .try_into()
+            .map_err(|_| self.err_convert::<u32>(lm_pos))?;
+        let len: u32 = len.try_into().map_err(|_| self.err_convert::<u32>(len))?;
+
+        let mut vnew = self.visit_obj(b, |hv: &Vec<u8>| Ok(hv.clone()))?;
+        let end_idx = b_pos.checked_add(len).ok_or_else(|| {
+            self.err_status_msg(ScHostFnErrorCode::InputArgsInvalid, "u32 overflow")
+        })? as usize;
+        self.with_current_frame(|frame| match frame {
+            Frame::ContractVM(vm) => vm.with_memory_access(self, |mem| {
+                // we would potentially let the vec grow
+                if end_idx > vnew.len() {
+                    vnew.resize(end_idx, 0);
+                }
+                Ok(self.map_err(
+                    mem.get_into(lm_pos, &mut vnew.as_mut_slice()[b_pos as usize..end_idx]),
+                )?)
+            }),
+            Frame::HostFunction(_) => Err(self.err_general("linear memory not supported")),
+            #[cfg(feature = "testutils")]
+            Frame::TestContract(id) => Err(self.err_general("linear memory not supported")),
+        })?;
+        Ok(self.add_host_object(vnew)?.into())
     }
 
     fn binary_new(&self) -> Result<Object, HostError> {
@@ -1718,28 +1731,21 @@ impl CheckedEnv for Host {
         #[cfg(not(feature = "vm"))]
         unimplemented!();
         #[cfg(feature = "vm")]
-        if let [lm_pos, len] = [lm_pos, len]
-            .iter()
-            .map(|v| u32::try_from(*v))
-            .collect::<Result<Vec<u32>, ConversionError>>()?
-            .as_slice()
-        {
-            return self.with_current_frame(|frame| match frame {
-                Frame::ContractVM(vm) => vm.with_memory_access(self, |mem| {
-                    let mut vnew: Vec<u8> = vec![0; *len as usize];
-                    self.map_err(mem.get_into(*lm_pos, vnew.as_mut_slice()))?;
-                    Ok(self.add_host_object(vnew)?.into())
-                }),
-                Frame::HostFunction(_) => Err(self.err_general("linear memory not supported")),
-                #[cfg(feature = "testutils")]
-                Frame::TestContract(id) => Err(self.err_general("linear memory not supported")),
-            });
-        } else {
-            return Err(self.err_status_msg(
-                ScHostFnErrorCode::InputArgsWrongType,
-                "failed conversion to u32",
-            ));
-        }
+        let lm_pos: u32 = lm_pos
+            .try_into()
+            .map_err(|_| self.err_convert::<u32>(lm_pos))?;
+        let len: u32 = len.try_into().map_err(|_| self.err_convert::<u32>(len))?;
+
+        return self.with_current_frame(|frame| match frame {
+            Frame::ContractVM(vm) => vm.with_memory_access(self, |mem| {
+                let mut vnew: Vec<u8> = vec![0; len as usize];
+                self.map_err(mem.get_into(lm_pos, vnew.as_mut_slice()))?;
+                Ok(self.add_host_object(vnew)?.into())
+            }),
+            Frame::HostFunction(_) => Err(self.err_general("linear memory not supported")),
+            #[cfg(feature = "testutils")]
+            Frame::TestContract(id) => Err(self.err_general("linear memory not supported")),
+        });
     }
 
     fn binary_put(&self, b: Object, i: RawVal, u: RawVal) -> Result<Object, HostError> {
