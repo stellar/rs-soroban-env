@@ -4,11 +4,60 @@
 use stellar_contract_env_common::call_macro_with_all_host_functions;
 
 use super::{Env, EnvBase, Object, RawVal, Symbol};
+#[cfg(target_family = "wasm")]
+use static_assertions as sa;
 
 // In guest code the environment is global/implicit, so is represented as a unit struct.
 #[derive(Copy, Clone, Default)]
 pub struct Guest;
 
+// The Guest struct is only meaningful when compiling for the WASM target. All
+// these fns should not be called at all because the SDK's choice of Env should be
+// Host for a non-WASM build.
+#[cfg(not(target_family = "wasm"))]
+impl EnvBase for Guest {
+    fn as_mut_any(&mut self) -> &mut dyn core::any::Any {
+        unimplemented!()
+    }
+
+    fn check_same_env(&self, other: &Self) {
+        unimplemented!()
+    }
+
+    fn deep_clone(&self) -> Self {
+        unimplemented!()
+    }
+
+    fn binary_copy_from_slice(&self, b: Object, b_pos: RawVal, mem: &[u8]) -> Object {
+        unimplemented!()
+    }
+
+    fn binary_copy_to_slice(&self, b: Object, b_pos: RawVal, mem: &mut [u8]) {
+        unimplemented!()
+    }
+
+    fn binary_new_from_slice(&self, mem: &[u8]) -> Object {
+        unimplemented!()
+    }
+
+    fn log_static_fmt_val(&self, fmt: &'static str, v: RawVal) {
+        unimplemented!()
+    }
+
+    fn log_static_fmt_static_str(&self, fmt: &'static str, s: &'static str) {
+        unimplemented!()
+    }
+
+    fn log_static_fmt_val_static_str(&self, fmt: &'static str, v: RawVal, s: &'static str) {
+        unimplemented!()
+    }
+
+    fn log_static_fmt_general(&self, fmt: &'static str, vals: &[RawVal], strs: &[&'static str]) {
+        unimplemented!()
+    }
+}
+
+#[cfg(target_family = "wasm")]
 impl EnvBase for Guest {
     fn as_mut_any(&mut self) -> &mut dyn core::any::Any {
         return self;
@@ -20,6 +69,56 @@ impl EnvBase for Guest {
 
     fn deep_clone(&self) -> Self {
         Self
+    }
+
+    fn binary_copy_from_slice(&self, b: Object, b_pos: RawVal, mem: &[u8]) -> Object {
+        sa::assert_eq_size!(u32, *const u8);
+        sa::assert_eq_size!(u32, usize);
+        let lm_pos: RawVal = RawVal::from_u32(mem.as_ptr() as u32);
+        let len: RawVal = RawVal::from_u32(mem.len() as u32);
+        self.binary_copy_from_linear_memory(b, b_pos, lm_pos, len)
+    }
+
+    fn binary_copy_to_slice(&self, b: Object, b_pos: RawVal, mem: &mut [u8]) {
+        sa::assert_eq_size!(u32, *const u8);
+        sa::assert_eq_size!(u32, usize);
+        let lm_pos: RawVal = RawVal::from_u32(mem.as_ptr() as u32);
+        let len: RawVal = RawVal::from_u32(mem.len() as u32);
+        self.binary_copy_to_linear_memory(b, b_pos, lm_pos, len);
+    }
+
+    fn binary_new_from_slice(&self, mem: &[u8]) -> Object {
+        sa::assert_eq_size!(u32, *const u8);
+        sa::assert_eq_size!(u32, usize);
+        let lm_pos: RawVal = RawVal::from_u32(mem.as_ptr() as u32);
+        let len: RawVal = RawVal::from_u32(mem.len() as u32);
+        self.binary_new_from_linear_memory(lm_pos, len)
+    }
+
+    fn log_static_fmt_val(&self, fmt: &'static str, v: RawVal) {
+        // TODO: It's possible we might want to do something in the wasm
+        // case with static strings similar to the binary functions above,
+        // eg. decay the strings to u32 values and pass them to the host as linear
+        // memory locations for capture into the debug-events buffer,
+        // but for the time being we're going to _not_ do that because
+        // we assume users building for wasm want their static strings
+        // _removed_ from the binary statically (it's also somewhat annoying
+        // to implement the capture of static strings into the debug buffer,
+        // it makes the debug buffer into non-Send+Sync and then we need
+        // to remove it from the HostError, report separately from HostError's
+        // Debug impl)
+    }
+
+    fn log_static_fmt_static_str(&self, fmt: &'static str, s: &'static str) {
+        // Intentionally a no-op in this cfg. See above.
+    }
+
+    fn log_static_fmt_val_static_str(&self, fmt: &'static str, v: RawVal, s: &'static str) {
+        // Intentionally a no-op in this cfg. See above.
+    }
+
+    fn log_static_fmt_general(&self, fmt: &'static str, vals: &[RawVal], strs: &[&'static str]) {
+        // Intentionally a no-op in this cfg. See above.
     }
 }
 

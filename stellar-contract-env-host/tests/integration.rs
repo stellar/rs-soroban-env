@@ -1,4 +1,6 @@
-use stellar_contract_env_host::{xdr::ScObjectType, Env, Host, Object, RawVal};
+use stellar_contract_env_host::{
+    events::HostEvent, xdr::ScObjectType, Env, EnvBase, Host, Object, RawVal,
+};
 
 #[test]
 fn vec_as_seen_by_user() -> Result<(), ()> {
@@ -25,4 +27,31 @@ fn vec_host_fn() {
     let host = Host::default();
     let m = host.map_new();
     assert!(Object::val_is_obj_type(m.into(), ScObjectType::Map));
+}
+
+#[test]
+fn debug_fmt() {
+    let host = Host::default();
+
+    // Call a "native formatting-style" debug helper.
+    host.log_static_fmt_val_static_str(
+        "can't convert {} to {}",
+        RawVal::from_i32(1),
+        std::any::type_name::<Vec<u8>>(),
+    );
+
+    // Fish out the last debug event and check that it is
+    // correct, and formats as expected.
+    let events = host.get_events();
+    match events.0.last() {
+        Some(HostEvent::Debug(de)) => {
+            assert_eq!(
+                format!("{}", de),
+                "can't convert I32(1) to alloc::vec::Vec<u8>"
+            )
+        }
+        _ => {
+            panic!("missing debug event")
+        }
+    }
 }

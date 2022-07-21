@@ -10,6 +10,49 @@ pub trait EnvBase: Sized + Clone {
 
     // Used to clone an environment deeply, not just a handle to it.
     fn deep_clone(&self) -> Self;
+
+    // Helpers for methods that wish to pass Rust lifetime-qualified _slices_
+    // into the environment. These are _not_ done via Env trait methods to avoid
+    // the need to convert, and thus trust (or validate) "raw numbers" coming
+    // through that interface as "potentially pointers in the same address space
+    // as the host". This is a bit of a defense-in-depth approach as we _could_
+    // just accept "numbers as pointers in our address space" on a codepath that
+    // is sure its input is coming from a "trusted" contract, and arrange enough
+    // other static safety checks elsewhere in the calling path (eg. in the SDK)
+    // to ensure that "all callers are trusted" .. but we want to minimize the
+    // chance of future maintainers accidentally violating such an invariant,
+    // since getting it wrong would let guest code violate memory safety. So the
+    // _only_ interface to passing contract pointers to the host is going to be
+    // in EnvBase, not Env, and as a bonus we get lifetime checking for free.
+    fn binary_copy_from_slice(&self, b: Object, b_pos: RawVal, mem: &[u8]) -> Object;
+    fn binary_copy_to_slice(&self, b: Object, b_pos: RawVal, mem: &mut [u8]);
+    fn binary_new_from_slice(&self, mem: &[u8]) -> Object;
+
+    // As with the binary functions above, these take _slices_ with definite
+    // lifetimes. The first slice is interpreted as a (very restricted)
+    // format-string -- containing literal text interspersed with some number of
+    // `{}` markers which must match the number of other args passed -- with
+    // actual formatting delayed until someone asks to see the event (which may
+    // never happen). Other args may be static strings, [RawVal]s, or a mix.
+    //
+    // When the SDK is built with Env = Host, both the format string slice and
+    // all static string slice args (and any [RawVal] args) will be passed
+    // through into the debug-event subsystem of the host and _stored_
+    // unformatted in the debug buffer, until/unless someone dumps some portion
+    // of that buffer out. They are therefore quite cheap -- just pushing static
+    // pointers and numbers into the debug buffer -- and can be called fairly
+    // ubiquitously to provide details on any interesting diagnostic events
+    // and/or errors that occur in either SDK or contract code.
+    //
+    // When Env = Guest, these currently compile as no-ops. We may change this
+    // to record a VM-relative guest static string pointer (similar to how the
+    // binary functions above work) into the debug buffer in the future, but it
+    // is a little involved to do so and we assume that VM code probably does
+    // not want to be carrying static strings at all.
+    fn log_static_fmt_val(&self, fmt: &'static str, v: RawVal);
+    fn log_static_fmt_static_str(&self, fmt: &'static str, s: &'static str);
+    fn log_static_fmt_val_static_str(&self, fmt: &'static str, v: RawVal, s: &'static str);
+    fn log_static_fmt_general(&self, fmt: &'static str, vals: &[RawVal], strs: &[&'static str]);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -63,6 +106,8 @@ macro_rules! call_macro_with_all_host_functions {
             // argument list of comma-separated arg:type pairs
 
             mod context "x" {
+                // This one variant of logging does not take a format string and
+                // is live in both Env=Guest and Env=Host configurations.
                 {"_", fn log_value(v:RawVal) -> RawVal }
 
                 /// Get the binary contractID of the contract which invoked the

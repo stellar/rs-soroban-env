@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use crate::{xdr, RawVal, Status};
 #[cfg(feature = "vm")]
 use crate::{
@@ -32,8 +34,41 @@ impl Events {
         for e in self.0.iter() {
             match e {
                 HostEvent::Contract() => debug!("Contract event: <TBD>"),
-                HostEvent::Debug(e) => debug!("Debug event: {:?}", e),
+                HostEvent::Debug(e) => debug!("Debug event: {}", e),
             }
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub enum DebugArg {
+    Str(&'static str),
+    Val(RawVal),
+}
+
+impl From<RawVal> for DebugArg {
+    fn from(rv: RawVal) -> Self {
+        DebugArg::Val(rv)
+    }
+}
+
+impl From<&'static str> for DebugArg {
+    fn from(s: &'static str) -> Self {
+        DebugArg::Str(s)
+    }
+}
+
+impl Default for DebugArg {
+    fn default() -> Self {
+        DebugArg::Str("")
+    }
+}
+
+impl Display for DebugArg {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            DebugArg::Str(s) => write!(f, "{}", s),
+            DebugArg::Val(rv) => write!(f, "{:?}", rv),
         }
     }
 }
@@ -43,45 +78,41 @@ impl Events {
 /// [host::debug_event] for normal use.
 #[derive(Clone, Debug)]
 pub struct DebugEvent {
-    pub msg: &'static str,
-    pub args: TinyVec<[RawVal; 2]>,
+    pub msg: Option<&'static str>,
+    pub args: TinyVec<[DebugArg; 2]>,
 }
 
 impl core::fmt::Display for DebugEvent {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:}", self.msg)?;
-        if !self.args.is_empty() {
-            write!(f, ": ")?;
-            let mut first = true;
-            for rv in self.args.iter() {
-                if !first {
-                    write!(f, ", ")?;
+        match self.msg {
+            None => {
+                for arg in self.args.iter() {
+                    write!(f, "{}", arg)?;
                 }
-                first = false;
-                write!(f, "{:?}", rv)?;
+                Ok(())
+            }
+            Some(fmt) => {
+                let args = dyn_fmt::Arguments::new(fmt, self.args.as_slice());
+                write!(f, "{}", args)
             }
         }
-        Ok(())
     }
 }
 
 impl DebugEvent {
     pub fn new() -> Self {
         Self {
-            msg: "",
+            msg: None,
             args: Default::default(),
         }
     }
 
     pub fn msg(mut self, msg: &'static str) -> Self {
-        self.msg = msg;
+        self.msg = Some(msg);
         self
     }
 
-    pub fn arg<T>(mut self, arg: T) -> Self
-    where
-        RawVal: From<T>,
-    {
+    pub fn arg<T: Into<DebugArg>>(mut self, arg: T) -> Self {
         self.args.push(arg.into());
         self
     }
@@ -104,7 +135,7 @@ impl DebugError {
     {
         let status: Status = status.into();
         Self {
-            event: DebugEvent::new().msg("status").arg::<Status>(status.into()),
+            event: DebugEvent::new().msg("status").arg::<RawVal>(status.into()),
             status: status,
         }
     }
@@ -118,11 +149,8 @@ impl DebugError {
         self
     }
 
-    pub fn arg<T>(mut self, arg: T) -> Self
-    where
-        RawVal: From<T>,
-    {
-        self.event.args.push(arg.into());
+    pub fn arg<T: Into<DebugArg>>(mut self, arg: T) -> Self {
+        self.event = self.event.arg(arg);
         self
     }
 }

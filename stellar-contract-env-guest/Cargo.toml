@@ -5,3 +5,4 @@ edition = "2021"
 
 [dependencies]
 stellar-contract-env-common = { path = "../stellar-contract-env-common" }
+static_assertions = "1.1.0"
