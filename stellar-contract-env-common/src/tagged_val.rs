@@ -1,3 +1,4 @@
+use crate::raw_val::ConversionError;
 use crate::Env;
 use crate::EnvVal;
 use crate::IntoEnvVal;
@@ -7,25 +8,26 @@ use crate::IntoEnvVal;
 use crate::RawVal;
 use crate::RawValConvertible;
 use crate::Tag;
+use core::fmt::Debug;
 use core::marker::PhantomData;
 
-pub trait TagType: Copy + Clone {
+pub trait TagType: Copy + Clone + Debug {
     const TAG: Tag;
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct TagU32;
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct TagI32;
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct TagStatic;
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct TagObject;
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct TagSymbol;
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct TagBitSet;
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct TagStatus;
 
 impl TagType for TagU32 {
@@ -50,15 +52,26 @@ impl TagType for TagStatus {
     const TAG: Tag = Tag::Status;
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone)]
 pub struct TaggedVal<T: TagType>(pub(crate) RawVal, pub(crate) PhantomData<T>);
 
-impl<T: TagType> TaggedVal<T> {
-    pub fn as_raw(&self) -> &RawVal {
-        &self.0
+// Debug impls for Symbol, Status and Object are in their respective files;
+// for others we delegate to the Debug impls for RawVal.
+impl Debug for TaggedVal<TagU32> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        self.0.fmt(f)
     }
-    pub fn to_raw(&self) -> RawVal {
-        self.0
+}
+
+impl Debug for TaggedVal<TagI32> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+impl Debug for TaggedVal<TagStatic> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        self.0.fmt(f)
     }
 }
 
@@ -75,6 +88,14 @@ impl<T: TagType> AsMut<RawVal> for TaggedVal<T> {
 }
 
 impl<T: TagType> TaggedVal<T> {
+    pub const fn as_raw(&self) -> &RawVal {
+        &self.0
+    }
+
+    pub const fn to_raw(&self) -> RawVal {
+        self.0
+    }
+
     pub fn in_env<E: Env>(self, env: &E) -> EnvVal<E, Self> {
         EnvVal {
             env: env.clone(),
@@ -83,13 +104,16 @@ impl<T: TagType> TaggedVal<T> {
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn from_body_and_tag_type(body: u64) -> TaggedVal<T> {
+    pub(crate) const unsafe fn from_body_and_tag_type(body: u64) -> TaggedVal<T> {
         let rv = RawVal::from_body_and_tag(body, T::TAG);
         Self(rv, PhantomData)
     }
 
     #[inline(always)]
-    pub(crate) unsafe fn from_major_minor_and_tag_type(major: u32, minor: u32) -> TaggedVal<T> {
+    pub(crate) const unsafe fn from_major_minor_and_tag_type(
+        major: u32,
+        minor: u32,
+    ) -> TaggedVal<T> {
         let rv = RawVal::from_major_minor_and_tag(major, minor, T::TAG);
         Self(rv, PhantomData)
     }
@@ -103,7 +127,7 @@ macro_rules! impl_tagged_from {
             }
         }
         impl<E: Env> TryFrom<EnvVal<E, TaggedVal<$tagty>>> for $fromty {
-            type Error = ();
+            type Error = ConversionError;
             #[inline(always)]
             fn try_from(v: EnvVal<E, TaggedVal<$tagty>>) -> Result<Self, Self::Error> {
                 Self::try_from(v.to_raw())
@@ -132,13 +156,13 @@ impl<T: TagType> From<TaggedVal<T>> for RawVal {
 }
 
 impl<T: TagType> TryFrom<RawVal> for TaggedVal<T> {
-    type Error = ();
+    type Error = ConversionError;
 
     fn try_from(rv: RawVal) -> Result<Self, Self::Error> {
         if rv.has_tag(T::TAG) {
             Ok(Self(rv, PhantomData))
         } else {
-            Err(())
+            Err(ConversionError)
         }
     }
 }
@@ -154,8 +178,8 @@ impl<T: TagType> RawValConvertible for TaggedVal<T> {
 }
 
 #[cfg(feature = "vm")]
-impl<T: TagType> wasmi::FromRuntimeValue for TaggedVal<T> {
-    fn from_runtime_value(val: wasmi::RuntimeValue) -> Option<Self> {
+impl<T: TagType> wasmi::FromValue for TaggedVal<T> {
+    fn from_value(val: wasmi::RuntimeValue) -> Option<Self> {
         let maybe: Option<RawVal> = val.try_into();
         maybe.map(|x| Self(x, PhantomData))
     }

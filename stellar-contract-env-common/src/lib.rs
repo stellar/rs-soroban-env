@@ -4,12 +4,15 @@ mod bitset;
 mod checked_env;
 mod env;
 mod env_val;
+pub mod meta;
 mod obj_xdr_converter;
 mod object;
 mod raw_val;
+mod r#static;
 mod status;
 mod symbol;
 mod tagged_val;
+mod tuple;
 mod unimplemented_env;
 mod val;
 
@@ -17,7 +20,7 @@ mod val;
 pub use stellar_xdr as xdr;
 
 // RawVal and RawObj are the 64-bit transparent type.
-pub use raw_val::{RawVal, RawValConvertible, Tag};
+pub use raw_val::{ConversionError, RawVal, RawValConvertible, Tag};
 
 pub use tagged_val::{
     TagBitSet, TagI32, TagObject, TagStatic, TagStatus, TagSymbol, TagType, TagU32, TaggedVal,
@@ -35,8 +38,9 @@ pub use unimplemented_env::UnimplementedEnv;
 // TODO: maybe these should wrap EnvVals?
 pub use bitset::{BitSet, BitSetError};
 pub use object::Object;
+pub use r#static::Static;
 pub use status::{Status, OK, UNKNOWN_ERROR};
-pub use symbol::{Symbol, SymbolError, SymbolIter};
+pub use symbol::{Symbol, SymbolError, SymbolIter, SymbolStr};
 
 #[inline(always)]
 // Awkward: this is a free function rather than a trait call because

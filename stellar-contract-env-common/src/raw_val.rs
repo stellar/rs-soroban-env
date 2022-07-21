@@ -1,4 +1,6 @@
-use super::{Env, EnvVal, IntoEnvVal, Symbol};
+use stellar_xdr::{ScStatic, ScStatus, ScStatusType};
+
+use super::{BitSet, BitSetError, Env, EnvVal, IntoEnvVal, Object, Status, Symbol, SymbolError};
 use core::fmt::Debug;
 
 extern crate static_assertions as sa;
@@ -39,17 +41,15 @@ pub enum Tag {
     Reserved = 7,
 }
 
-#[repr(u32)]
-#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum Static {
-    Void = 0,
-    True = 1,
-    False = 2,
-}
-
 #[repr(transparent)]
 #[derive(Copy, Clone)]
 pub struct RawVal(u64);
+
+impl Default for RawVal {
+    fn default() -> Self {
+        Self::from_void()
+    }
+}
 
 impl AsRef<RawVal> for RawVal {
     fn as_ref(&self) -> &RawVal {
@@ -60,6 +60,30 @@ impl AsRef<RawVal> for RawVal {
 impl AsMut<RawVal> for RawVal {
     fn as_mut(&mut self) -> &mut RawVal {
         self
+    }
+}
+
+// This is a 0-arg struct rather than an enum to ensure it completely compiles
+// away, the same way `()` would, while remaining a separate type to allow
+// conversion to a more-structured error code at a higher level.
+#[derive(Debug, Eq, PartialEq)]
+pub struct ConversionError;
+
+impl From<stellar_xdr::Error> for ConversionError {
+    fn from(_: stellar_xdr::Error) -> Self {
+        ConversionError
+    }
+}
+
+impl From<SymbolError> for ConversionError {
+    fn from(_: SymbolError) -> Self {
+        ConversionError
+    }
+}
+
+impl From<BitSetError> for ConversionError {
+    fn from(_: BitSetError) -> Self {
+        ConversionError
     }
 }
 
@@ -85,18 +109,29 @@ pub trait RawValConvertible: Into<RawVal> + TryFrom<RawVal> {
 macro_rules! declare_tryfrom {
     ($T:ty) => {
         impl TryFrom<RawVal> for $T {
-            type Error = ();
+            type Error = ConversionError;
             #[inline(always)]
             fn try_from(v: RawVal) -> Result<Self, Self::Error> {
                 if let Some(c) = <Self as RawValConvertible>::try_convert(v) {
                     Ok(c)
                 } else {
-                    Err(())
+                    Err(ConversionError)
+                }
+            }
+        }
+        impl TryFrom<&RawVal> for $T {
+            type Error = ConversionError;
+            #[inline(always)]
+            fn try_from(v: &RawVal) -> Result<Self, Self::Error> {
+                if let Some(c) = <Self as RawValConvertible>::try_convert(*v) {
+                    Ok(c)
+                } else {
+                    Err(ConversionError)
                 }
             }
         }
         impl<E: Env> TryFrom<EnvVal<E, RawVal>> for $T {
-            type Error = ();
+            type Error = ConversionError;
             #[inline(always)]
             fn try_from(v: EnvVal<E, RawVal>) -> Result<Self, Self::Error> {
                 Self::try_from(v.to_raw())
@@ -117,12 +152,13 @@ declare_tryfrom!(());
 declare_tryfrom!(bool);
 declare_tryfrom!(u32);
 declare_tryfrom!(i32);
+declare_tryfrom!(u8);
 
 #[cfg(feature = "vm")]
-impl wasmi::FromRuntimeValue for RawVal {
-    fn from_runtime_value(val: wasmi::RuntimeValue) -> Option<Self> {
+impl wasmi::FromValue for RawVal {
+    fn from_value(val: wasmi::RuntimeValue) -> Option<Self> {
         let maybe: Option<u64> = val.try_into();
-        maybe.map(|x| RawVal::from_payload(x))
+        maybe.map(RawVal::from_payload)
     }
 }
 
@@ -136,30 +172,28 @@ impl From<RawVal> for wasmi::RuntimeValue {
 impl RawValConvertible for () {
     #[inline(always)]
     fn is_val_type(v: RawVal) -> bool {
-        v.has_tag(Tag::Static) && v.get_body() == Static::Void as u64
+        v.has_tag(Tag::Static) && v.get_body() == ScStatic::Void as u64
     }
     #[inline(always)]
-    unsafe fn unchecked_from_val(_v: RawVal) -> Self {
-        ()
-    }
+    unsafe fn unchecked_from_val(_v: RawVal) -> Self {}
 }
 
 impl RawValConvertible for bool {
     #[inline(always)]
     fn is_val_type(v: RawVal) -> bool {
         v.has_tag(Tag::Static)
-            && (v.get_body() == Static::True as u64 || v.get_body() == Static::False as u64)
+            && (v.get_body() == ScStatic::True as u64 || v.get_body() == ScStatic::False as u64)
     }
     #[inline(always)]
     unsafe fn unchecked_from_val(v: RawVal) -> Self {
-        v.get_body() == Static::True as u64
+        v.get_body() == ScStatic::True as u64
     }
     #[inline(always)]
     fn try_convert(v: RawVal) -> Option<Self> {
         if v.has_tag(Tag::Static) {
-            if v.get_body() == Static::True as u64 {
+            if v.get_body() == ScStatic::True as u64 {
                 Some(true)
-            } else if v.get_body() == Static::False as u64 {
+            } else if v.get_body() == ScStatic::False as u64 {
                 Some(false)
             } else {
                 None
@@ -192,6 +226,17 @@ impl RawValConvertible for i32 {
     }
 }
 
+impl RawValConvertible for u8 {
+    #[inline(always)]
+    fn is_val_type(v: RawVal) -> bool {
+        v.has_tag(Tag::U32)
+    }
+    #[inline(always)]
+    unsafe fn unchecked_from_val(v: RawVal) -> Self {
+        v.get_body() as u8
+    }
+}
+
 impl From<bool> for RawVal {
     #[inline(always)]
     fn from(b: bool) -> Self {
@@ -206,6 +251,13 @@ impl From<()> for RawVal {
     }
 }
 
+impl From<&()> for RawVal {
+    #[inline(always)]
+    fn from(_: &()) -> Self {
+        RawVal::from_void()
+    }
+}
+
 impl From<u32> for RawVal {
     #[inline(always)]
     fn from(u: u32) -> Self {
@@ -213,10 +265,65 @@ impl From<u32> for RawVal {
     }
 }
 
+impl From<&u32> for RawVal {
+    #[inline(always)]
+    fn from(u: &u32) -> Self {
+        RawVal::from_u32(*u)
+    }
+}
+
 impl From<i32> for RawVal {
     #[inline(always)]
     fn from(i: i32) -> Self {
         RawVal::from_i32(i)
+    }
+}
+
+impl From<&i32> for RawVal {
+    #[inline(always)]
+    fn from(i: &i32) -> Self {
+        RawVal::from_i32(*i)
+    }
+}
+
+impl From<ScStatus> for RawVal {
+    fn from(st: ScStatus) -> Self {
+        let ty = st.discriminant();
+        let code = match st {
+            ScStatus::Ok => ScStatusType::Ok as u32,
+            ScStatus::UnknownError(e) => e as u32,
+            ScStatus::HostValueError(e) => e as u32,
+            ScStatus::HostObjectError(e) => e as u32,
+            ScStatus::HostFunctionError(e) => e as u32,
+            ScStatus::HostStorageError(e) => e as u32,
+            ScStatus::HostContextError(e) => e as u32,
+            ScStatus::VmError(e) => e as u32,
+        };
+        Status::from_type_and_code(ty, code).to_raw()
+    }
+}
+
+impl From<&ScStatus> for RawVal {
+    fn from(st: &ScStatus) -> Self {
+        let ty = st.discriminant();
+        let code = match *st {
+            ScStatus::Ok => ScStatusType::Ok as u32,
+            ScStatus::UnknownError(e) => e as u32,
+            ScStatus::HostValueError(e) => e as u32,
+            ScStatus::HostObjectError(e) => e as u32,
+            ScStatus::HostFunctionError(e) => e as u32,
+            ScStatus::HostStorageError(e) => e as u32,
+            ScStatus::HostContextError(e) => e as u32,
+            ScStatus::VmError(e) => e as u32,
+        };
+        Status::from_type_and_code(ty, code).to_raw()
+    }
+}
+
+impl From<u8> for RawVal {
+    #[inline(always)]
+    fn from(u: u8) -> Self {
+        RawVal::from_u32(u.into())
     }
 }
 
@@ -229,7 +336,7 @@ impl RawVal {
     }
 
     #[inline(always)]
-    pub const fn get_payload(&self) -> u64 {
+    pub const fn get_payload(self) -> u64 {
         self.0
     }
 
@@ -239,38 +346,38 @@ impl RawVal {
     }
 
     #[inline(always)]
-    pub const fn is_positive_i64(&self) -> bool {
+    pub const fn is_u63(self) -> bool {
         (self.0 & 1) == 0
     }
 
     #[inline(always)]
-    pub const unsafe fn unchecked_as_positive_i64(&self) -> i64 {
+    pub const unsafe fn unchecked_as_u63(self) -> i64 {
         (self.0 >> 1) as i64
     }
 
     #[inline(always)]
-    pub const unsafe fn unchecked_from_positive_i64(i: i64) -> Self {
+    pub const unsafe fn unchecked_from_u63(i: i64) -> Self {
         Self((i as u64) << 1)
     }
 
     #[inline(always)]
-    const fn get_tag_u8(&self) -> u8 {
+    const fn get_tag_u8(self) -> u8 {
         ((self.0 >> 1) & TAG_MASK) as u8
     }
 
     #[inline(always)]
-    pub const fn get_tag(&self) -> Tag {
+    pub const fn get_tag(self) -> Tag {
         unsafe { ::core::mem::transmute(self.get_tag_u8()) }
     }
 
     #[inline(always)]
-    pub(crate) const fn get_body(&self) -> u64 {
+    pub(crate) const fn get_body(self) -> u64 {
         self.0 >> (TAG_BITS + 1)
     }
 
     #[inline(always)]
-    pub(crate) const fn has_tag(&self, tag: Tag) -> bool {
-        !self.is_positive_i64() && self.get_tag_u8() == tag as u8
+    pub(crate) const fn has_tag(self, tag: Tag) -> bool {
+        !self.is_u63() && self.get_tag_u8() == tag as u8
     }
 
     #[inline(always)]
@@ -299,29 +406,34 @@ impl RawVal {
     }
 
     #[inline(always)]
-    pub(crate) const fn has_minor(&self, minor: u32) -> bool {
+    pub(crate) const fn has_minor(self, minor: u32) -> bool {
         self.get_minor() == minor
     }
 
     #[inline(always)]
-    pub(crate) const fn get_minor(&self) -> u32 {
+    pub(crate) const fn get_minor(self) -> u32 {
         (self.get_body() & MINOR_MASK) as u32
     }
 
     #[inline(always)]
-    pub(crate) const fn get_major(&self) -> u32 {
+    pub(crate) const fn get_major(self) -> u32 {
         (self.get_body() >> MINOR_BITS) as u32
     }
 
     #[inline(always)]
     pub const fn from_void() -> RawVal {
-        unsafe { RawVal::from_body_and_tag(Static::Void as u64, Tag::Static) }
+        unsafe { RawVal::from_body_and_tag(ScStatic::Void as u64, Tag::Static) }
     }
 
     #[inline(always)]
     pub const fn from_bool(b: bool) -> RawVal {
-        let body = if b { Static::True } else { Static::False };
+        let body = if b { ScStatic::True } else { ScStatic::False };
         unsafe { RawVal::from_body_and_tag(body as u64, Tag::Static) }
+    }
+
+    #[inline(always)]
+    pub const fn from_other_static(st: ScStatic) -> RawVal {
+        unsafe { RawVal::from_body_and_tag(st as u64, Tag::Static) }
     }
 
     #[inline(always)]
@@ -333,54 +445,98 @@ impl RawVal {
     pub const fn from_i32(i: i32) -> RawVal {
         unsafe { RawVal::from_body_and_tag((i as u32) as u64, Tag::I32) }
     }
+
+    #[inline(always)]
+    pub const fn is_u32_zero(self) -> bool {
+        const ZERO: RawVal = RawVal::from_u32(0);
+        self.0 == ZERO.0
+    }
+
+    #[inline(always)]
+    pub const fn is_void(self) -> bool {
+        const VOID: RawVal = RawVal::from_other_static(ScStatic::Void);
+        self.0 == VOID.0
+    }
+
+    #[inline(always)]
+    pub const fn is_true(self) -> bool {
+        const TRUE: RawVal = RawVal::from_bool(true);
+        self.0 == TRUE.0
+    }
+
+    #[inline(always)]
+    pub const fn is_false(self) -> bool {
+        const FALSE: RawVal = RawVal::from_bool(false);
+        self.0 == FALSE.0
+    }
 }
 
 impl Debug for RawVal {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        if self.is_positive_i64() {
-            f.debug_struct("Val")
-                .field("pos64", &unsafe { self.unchecked_as_positive_i64() })
-                .finish()
-        } else if self.has_tag(Tag::Object) {
-            f.debug_struct("Val")
-                .field("obj", &self.get_major())
-                .field("ty", &self.get_minor())
-                .finish()
-        } else if self.has_tag(Tag::Status) {
-            f.debug_struct("Val")
-                .field("code", &self.get_major())
-                .field("ty", &self.get_minor())
-                .finish()
-        } else if self.has_tag(Tag::Symbol) {
-            f.debug_struct("Val")
-                .field("symbol", &unsafe {
-                    <Symbol as RawValConvertible>::unchecked_from_val(*self)
-                })
-                .finish()
-        } else if self.is::<()>() {
-            f.debug_struct("Val").field("void", &()).finish()
-        } else if self.is::<bool>() {
-            f.debug_struct("Val")
-                .field("bool", &unsafe {
-                    <bool as RawValConvertible>::unchecked_from_val(*self)
-                })
-                .finish()
-        } else if self.has_tag(Tag::U32) {
-            f.debug_struct("Val")
-                .field("u32", &unsafe {
-                    <u32 as RawValConvertible>::unchecked_from_val(*self)
-                })
-                .finish()
-        } else if self.has_tag(Tag::I32) {
-            f.debug_struct("Val")
-                .field("i32", &unsafe {
-                    <i32 as RawValConvertible>::unchecked_from_val(*self)
-                })
-                .finish()
+        if self.is_u63() {
+            write!(f, "U63({})", unsafe { self.unchecked_as_u63() })
         } else {
-            f.debug_struct("Val")
-                .field("payload", &self.get_payload())
-                .finish()
+            match self.get_tag() {
+                Tag::U32 => write!(f, "U32({})", self.get_body() as u32),
+                Tag::I32 => write!(f, "I32({})", self.get_body() as i32),
+                Tag::Static => {
+                    let scs = ScStatic::try_from(self.get_body() as i32);
+                    if let Ok(scs) = scs {
+                        write!(f, "{}", scs.name())
+                    } else {
+                        write!(f, "Static({})", self.get_body())
+                    }
+                }
+                Tag::Object => {
+                    unsafe { <Object as RawValConvertible>::unchecked_from_val(*self) }.fmt(f)
+                }
+                Tag::Symbol => {
+                    unsafe { <Symbol as RawValConvertible>::unchecked_from_val(*self) }.fmt(f)
+                }
+                Tag::BitSet => {
+                    unsafe { <BitSet as RawValConvertible>::unchecked_from_val(*self) }.fmt(f)
+                }
+                Tag::Status => {
+                    unsafe { <Status as RawValConvertible>::unchecked_from_val(*self) }.fmt(f)
+                }
+                Tag::Reserved => {
+                    write!(f, "Reserved({})", self.get_body())
+                }
+            }
         }
     }
+}
+
+#[test]
+#[cfg(feature = "std")]
+fn test_debug() {
+    use super::{BitSet, Object, Status, Symbol};
+    use crate::xdr::{ScHostValErrorCode, ScObjectType, ScStatus};
+    assert_eq!(format!("{:?}", RawVal::from_void()), "Void");
+    assert_eq!(format!("{:?}", RawVal::from_bool(true)), "True");
+    assert_eq!(format!("{:?}", RawVal::from_bool(false)), "False");
+    assert_eq!(format!("{:?}", RawVal::from_i32(10)), "I32(10)");
+    assert_eq!(format!("{:?}", RawVal::from_u32(10)), "U32(10)");
+    assert_eq!(
+        format!("{:?}", unsafe { RawVal::unchecked_from_u63(10) }),
+        "U63(10)"
+    );
+    assert_eq!(
+        format!("{:?}", BitSet::try_from_u64(0xf7).unwrap().as_raw()),
+        "BitSet(0b11110111)"
+    );
+    assert_eq!(format!("{:?}", Symbol::from_str("hello")), "Symbol(hello)");
+    assert_eq!(
+        format!("{:?}", Object::from_type_and_handle(ScObjectType::Vec, 7)),
+        "Object(Vec(7))"
+    );
+    assert_eq!(
+        format!(
+            "{:?}",
+            Status::from_status(ScStatus::HostValueError(
+                ScHostValErrorCode::ReservedTagValue
+            ),)
+        ),
+        "Status(HostValueError(ReservedTagValue))"
+    );
 }

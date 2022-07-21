@@ -1,4 +1,4 @@
-use crate::{CheckedEnv, Host, Object, RawVal};
+use crate::{CheckedEnv, Host, Object, RawVal, Symbol};
 use stellar_contract_env_common::call_macro_with_all_host_functions;
 use wasmi::{RuntimeArgs, RuntimeValue};
 
@@ -81,6 +81,7 @@ macro_rules! generate_dispatch_functions {
             // passed from the x-macro to this macro. It is embedded in a `$()*`
             // pattern-repetition matcher so that it will match all provided
             // 'mod' blocks provided.
+            $(#[$mod_attr:meta])*
             mod $mod_name:ident $mod_str:literal
             {
                 $(
@@ -89,6 +90,7 @@ macro_rules! generate_dispatch_functions {
                     // x-macro to this macro. It is embedded in a `$()*`
                     // pattern-repetition matcher so that it will match all such
                     // descriptions.
+                    $(#[$fn_attr:meta])*
                     { $fn_str:literal, fn $fn_id:ident $args:tt -> $ret:ty }
                 )*
             }
@@ -114,6 +116,7 @@ macro_rules! generate_dispatch_functions {
                 // ignore the structure of the 'mod' block repetition-level from
                 // the outer pattern in the expansion, flattening all functions
                 // from all 'mod' blocks into a set of functions.
+                $(#[$fn_attr])*
                 pub(crate) fn $fn_id(host: &mut Host, _vmargs: RuntimeArgs) ->
                     Result<RuntimeValue, wasmi::Trap>
                 {

@@ -7,6 +7,7 @@ use core::{
     str,
 };
 
+#[derive(Debug)]
 pub enum SymbolError {
     TooLong(usize),
     BadChar(char),
@@ -53,15 +54,48 @@ impl Ord for Symbol {
 impl Debug for Symbol {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         let s: SymbolStr = self.into();
-        f.debug_tuple("Symbol").field(&s).finish()
+        write!(f, "Symbol(")?;
+        for c in s.0.iter() {
+            if *c == 0 {
+                break;
+            }
+            write!(f, "{}", unsafe { char::from_u32_unchecked(*c as u32) })?;
+        }
+        write!(f, ")")
+    }
+}
+
+impl TryFrom<&[u8]> for Symbol {
+    type Error = SymbolError;
+
+    fn try_from(b: &[u8]) -> Result<Symbol, SymbolError> {
+        Self::try_from_bytes(b)
+    }
+}
+
+#[cfg(feature = "std")]
+use stellar_xdr::VecM;
+#[cfg(feature = "std")]
+impl<const N: u32> TryFrom<VecM<u8, N>> for Symbol {
+    type Error = SymbolError;
+
+    fn try_from(v: VecM<u8, N>) -> Result<Self, Self::Error> {
+        v.as_slice().try_into()
+    }
+}
+#[cfg(feature = "std")]
+impl<const N: u32> TryFrom<&VecM<u8, N>> for Symbol {
+    type Error = SymbolError;
+
+    fn try_from(v: &VecM<u8, N>) -> Result<Self, Self::Error> {
+        v.as_slice().try_into()
     }
 }
 
 impl Symbol {
-    pub const fn try_from_str(s: &str) -> Result<Symbol, SymbolError> {
+    pub const fn try_from_bytes(b: &[u8]) -> Result<Symbol, SymbolError> {
         let mut n = 0;
         let mut accum: u64 = 0;
-        let b: &[u8] = s.as_bytes();
         while n < b.len() {
             let ch = b[n] as char;
             if n >= MAX_CHARS {
@@ -84,11 +118,23 @@ impl Symbol {
         ))
     }
 
+    pub const fn try_from_str(s: &str) -> Result<Symbol, SymbolError> {
+        Self::try_from_bytes(s.as_bytes())
+    }
+
     pub const fn from_str(s: &str) -> Symbol {
         match Self::try_from_str(s) {
             Ok(sym) => sym,
             Err(_) => panic!(),
         }
+    }
+
+    pub fn to_str(&self) -> SymbolStr {
+        let mut chars = [b'\x00'; MAX_CHARS];
+        for (i, ch) in self.into_iter().enumerate() {
+            chars[i] = ch as u8;
+        }
+        SymbolStr(chars)
     }
 }
 
@@ -96,6 +142,9 @@ impl Symbol {
 pub struct SymbolStr([u8; MAX_CHARS]);
 
 impl SymbolStr {
+    pub fn is_empty(&self) -> bool {
+        self.0[0] == 0
+    }
     pub fn len(&self) -> usize {
         let s: &[u8] = &self.0;
         for (i, x) in s.iter().enumerate() {
@@ -124,17 +173,13 @@ impl AsRef<[u8]> for SymbolStr {
 impl AsRef<str> for SymbolStr {
     fn as_ref(&self) -> &str {
         let s: &[u8] = self.as_ref();
-        unsafe { str::from_utf8_unchecked(&s) }
+        unsafe { str::from_utf8_unchecked(s) }
     }
 }
 
 impl From<&Symbol> for SymbolStr {
     fn from(s: &Symbol) -> Self {
-        let mut chars = [b'\x00'; MAX_CHARS];
-        for (i, ch) in s.into_iter().enumerate() {
-            chars[i] = ch as u8
-        }
-        SymbolStr(chars)
+        s.to_str()
     }
 }
 
@@ -150,6 +195,34 @@ impl From<&str> for SymbolStr {
     }
 }
 
+#[cfg(feature = "std")]
+use std::string::{String, ToString};
+#[cfg(feature = "std")]
+impl From<Symbol> for String {
+    fn from(s: Symbol) -> Self {
+        s.to_string()
+    }
+}
+#[cfg(feature = "std")]
+impl From<SymbolStr> for String {
+    fn from(s: SymbolStr) -> Self {
+        s.to_string()
+    }
+}
+#[cfg(feature = "std")]
+impl ToString for Symbol {
+    fn to_string(&self) -> String {
+        self.into_iter().collect()
+    }
+}
+#[cfg(feature = "std")]
+impl ToString for SymbolStr {
+    fn to_string(&self) -> String {
+        let s: &str = self.as_ref();
+        s.to_string()
+    }
+}
+
 impl IntoIterator for Symbol {
     type Item = char;
     type IntoIter = SymbolIter;
@@ -158,7 +231,7 @@ impl IntoIterator for Symbol {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub struct SymbolIter(u64);
 
 impl Iterator for SymbolIter {
@@ -248,17 +321,16 @@ mod test_without_string {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "std"))]
 mod test_with_string {
     use super::Symbol;
-    extern crate std;
-    use std::string::String;
+    use std::string::{String, ToString};
 
     #[test]
     fn test_roundtrip() {
         let input = "stellar";
         let sym = Symbol::from_str(input);
-        let s: String = sym.into_iter().collect();
+        let s: String = sym.to_string();
         assert_eq!(input, &s);
     }
 
@@ -266,7 +338,7 @@ mod test_with_string {
     fn test_roundtrip_zero() {
         let input = "";
         let sym = Symbol::from_str(input);
-        let s: String = sym.into_iter().collect();
+        let s: String = sym.to_string();
         assert_eq!(input, &s);
     }
 
@@ -274,7 +346,7 @@ mod test_with_string {
     fn test_roundtrip_ten() {
         let input = "0123456789";
         let sym = Symbol::from_str(input);
-        let s: String = sym.into_iter().collect();
+        let s: String = sym.to_string();
         assert_eq!(input, &s);
     }
 }
