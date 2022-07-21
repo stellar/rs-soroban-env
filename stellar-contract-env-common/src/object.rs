@@ -1,5 +1,10 @@
+use stellar_xdr::ScObject;
+
 use super::{xdr::ScObjectType, RawVal, Tag};
-use crate::tagged_val::{TagObject, TaggedVal};
+use crate::{
+    tagged_val::{TagObject, TaggedVal},
+    ConversionError,
+};
 use core::fmt::Debug;
 
 pub type Object = TaggedVal<TagObject>;
@@ -39,4 +44,11 @@ impl Object {
     pub fn from_type_and_handle(ty: ScObjectType, handle: u32) -> Self {
         unsafe { TaggedVal::from_major_minor_and_tag_type(handle, ty as u32) }
     }
+}
+
+// Trait FromToXdrObj is implemented by types that can convert XDR ScObject
+// types to and from Objects.
+pub trait FromToXdrObj: Sized + Clone {
+    fn from_xdr_obj(&self, ob: Object) -> Result<ScObject, ConversionError>;
+    fn to_xdr_obj(&self, ob: &ScObject) -> Result<Object, ConversionError>;
 }

@@ -3,12 +3,14 @@ use stellar_xdr::ScObjectType;
 #[cfg(feature = "std")]
 use stellar_xdr::{ScStatic, ScVal};
 
+#[cfg(feature = "std")]
+use crate::Static;
 use crate::{
     raw_val::ConversionError, BitSet, Object, Status, Symbol, Tag, TagType, TaggedVal, Val,
 };
 
 #[cfg(feature = "std")]
-use crate::ObjectXdrConverter;
+use crate::FromToXdrObj;
 
 use super::{
     raw_val::{RawVal, RawValConvertible},
@@ -251,7 +253,7 @@ impl<E: Env> IntoEnvVal<E, RawVal> for u64 {
 }
 
 #[cfg(feature = "std")]
-impl<E: Env + ObjectXdrConverter> TryFrom<EnvVal<E, RawVal>> for ScVal {
+impl<E: Env + FromToXdrObj> TryFrom<EnvVal<E, RawVal>> for ScVal {
     type Error = ConversionError;
 
     fn try_from(ev: EnvVal<E, RawVal>) -> Result<Self, Self::Error> {
@@ -268,14 +270,16 @@ impl<E: Env + ObjectXdrConverter> TryFrom<EnvVal<E, RawVal>> for ScVal {
                     <i32 as RawValConvertible>::unchecked_from_val(val)
                 })),
                 Tag::Static => {
-                    if let Some(b) = <bool as RawValConvertible>::try_convert(val) {
-                        if b {
-                            Ok(ScVal::Static(ScStatic::True))
-                        } else {
-                            Ok(ScVal::Static(ScStatic::False))
-                        }
-                    } else if <() as RawValConvertible>::is_val_type(val) {
+                    let tag_static =
+                        unsafe { <Static as RawValConvertible>::unchecked_from_val(val) };
+                    if tag_static.is_type(ScStatic::True) {
+                        Ok(ScVal::Static(ScStatic::True))
+                    } else if tag_static.is_type(ScStatic::False) {
+                        Ok(ScVal::Static(ScStatic::False))
+                    } else if tag_static.is_type(ScStatic::Void) {
                         Ok(ScVal::Static(ScStatic::Void))
+                    } else if tag_static.is_type(ScStatic::LedgerKeyContractCodeWasm) {
+                        Ok(ScVal::Static(ScStatic::LedgerKeyContractCodeWasm))
                     } else {
                         Err(ConversionError)
                     }
@@ -304,13 +308,13 @@ impl<E: Env + ObjectXdrConverter> TryFrom<EnvVal<E, RawVal>> for ScVal {
 }
 
 #[cfg(feature = "std")]
-impl<E: Env + ObjectXdrConverter> TryIntoEnvVal<E, RawVal> for &ScVal {
+impl<E: Env + FromToXdrObj> TryIntoEnvVal<E, RawVal> for &ScVal {
     type Error = ConversionError;
     fn try_into_env_val(self, env: &E) -> Result<EnvVal<E, RawVal>, Self::Error> {
         let val = match self {
-            ScVal::U63(u) => {
-                if *u >= 0 {
-                    unsafe { RawVal::unchecked_from_u63(*u) }
+            ScVal::U63(i) => {
+                if *i >= 0 {
+                    unsafe { RawVal::unchecked_from_u63(*i) }
                 } else {
                     return Err(ConversionError);
                 }
@@ -320,7 +324,7 @@ impl<E: Env + ObjectXdrConverter> TryIntoEnvVal<E, RawVal> for &ScVal {
             ScVal::Static(ScStatic::Void) => RawVal::from_void(),
             ScVal::Static(ScStatic::True) => RawVal::from_bool(true),
             ScVal::Static(ScStatic::False) => RawVal::from_bool(false),
-            ScVal::Static(st) => RawVal::from_other_static(*st),
+            ScVal::Static(other) => RawVal::from_other_static(*other),
             ScVal::Object(None) => return Err(ConversionError),
             ScVal::Object(Some(ob)) => env.to_xdr_obj(&*ob)?.to_raw(),
             ScVal::Symbol(bytes) => {

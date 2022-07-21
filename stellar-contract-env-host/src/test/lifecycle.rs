@@ -1,7 +1,7 @@
 use super::wasm_examples::CREATE_CONTRACT;
 use crate::{
     storage::{AccessType, Footprint, Storage},
-    xdr::{self, LedgerKeyContractData, ScHostFnErrorCode, ScHostValErrorCode, ScStatic},
+    xdr::{self, LedgerKeyContractData, ScHostFnErrorCode, ScStatic},
     xdr::{LedgerEntryData, LedgerKey, ScObject, ScVal, ScVec},
     CheckedEnv, Host, HostError, Symbol,
 };
@@ -146,12 +146,12 @@ fn create_contract_test() -> Result<(), HostError> {
 
     // update
     let put_res = host.put_contract_data(host.to_host_val(&key)?.to_raw(), ().into());
-    let code = ScHostValErrorCode::UnknownError; // TODO: ScHostFnErrorCode::InputArgsInvalid;
+    let code = ScHostFnErrorCode::InputArgsInvalid;
     assert!(HostError::result_matches_err_status(put_res, code));
 
     // delete
     let del_res = host.del_contract_data(host.to_host_val(&key)?.to_raw());
-    let code = ScHostValErrorCode::UnknownError; // TODO: ScHostFnErrorCode::InputArgsInvalid;
+    let code = ScHostFnErrorCode::InputArgsInvalid;
     assert!(HostError::result_matches_err_status(del_res, code));
     Ok(())
 }
