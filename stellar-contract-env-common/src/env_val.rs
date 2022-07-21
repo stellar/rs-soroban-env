@@ -286,7 +286,7 @@ impl<E: Env + FromObject> TryFrom<EnvVal<E, RawVal>> for ScVal {
                 }
                 Tag::Object => unsafe {
                     let ob = <Object as RawValConvertible>::unchecked_from_val(val);
-                    let scob = env.from_xdr_obj(ob)?;
+                    let scob = env.from_xdr_obj(ob).map_err(|_| ConversionError)?;
                     Ok(ScVal::Object(Some(scob)))
                 },
                 Tag::Symbol => {
@@ -326,7 +326,7 @@ impl<E: Env + ToObject> TryIntoEnvVal<E, RawVal> for &ScVal {
             ScVal::Static(ScStatic::False) => RawVal::from_bool(false),
             ScVal::Static(other) => RawVal::from_other_static(*other),
             ScVal::Object(None) => return Err(ConversionError),
-            ScVal::Object(Some(ob)) => env.to_xdr_obj(&*ob)?.to_raw(),
+            ScVal::Object(Some(ob)) => env.to_xdr_obj(&*ob).map_err(|_| ConversionError)?.to_raw(),
             ScVal::Symbol(bytes) => {
                 let ss = match std::str::from_utf8(bytes.as_slice()) {
                     Ok(ss) => ss,

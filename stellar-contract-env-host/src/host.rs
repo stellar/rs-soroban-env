@@ -128,16 +128,16 @@ impl Debug for Host {
 }
 
 impl FromObject for Host {
-    fn from_xdr_obj(&self, ob: Object) -> Result<ScObject, ConversionError> {
-        self.from_host_obj(ob).map_err(|_| ConversionError)
+    type Error = HostError;
+    fn from_xdr_obj(&self, ob: Object) -> Result<ScObject, Self::Error> {
+        self.from_host_obj(ob)
     }
 }
 
 impl ToObject for Host {
-    fn to_xdr_obj(&self, ob: &ScObject) -> Result<Object, ConversionError> {
-        self.to_host_obj(ob)
-            .map_err(|_| ConversionError)
-            .map(|ob| ob.val)
+    type Error = HostError;
+    fn to_xdr_obj(&self, ob: &ScObject) -> Result<Object, Self::Error> {
+        self.to_host_obj(ob).map(|ob| ob.val)
     }
 }
 

@@ -1,10 +1,7 @@
 use stellar_xdr::ScObject;
 
 use super::{xdr::ScObjectType, RawVal, Tag};
-use crate::{
-    tagged_val::{TagObject, TaggedVal},
-    ConversionError,
-};
+use crate::tagged_val::{TagObject, TaggedVal};
 use core::fmt::Debug;
 
 pub type Object = TaggedVal<TagObject>;
@@ -47,9 +44,11 @@ impl Object {
 }
 
 pub trait ToObject {
-    fn to_xdr_obj(&self, ob: &ScObject) -> Result<Object, ConversionError>;
+    type Error;
+    fn to_xdr_obj(&self, ob: &ScObject) -> Result<Object, Self::Error>;
 }
 
 pub trait FromObject {
-    fn from_xdr_obj(&self, ob: Object) -> Result<ScObject, ConversionError>;
+    type Error;
+    fn from_xdr_obj(&self, ob: Object) -> Result<ScObject, Self::Error>;
 }
