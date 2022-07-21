@@ -129,14 +129,14 @@ impl Debug for Host {
 
 impl FromObject for Host {
     type Error = HostError;
-    fn from_xdr_obj(&self, ob: Object) -> Result<ScObject, Self::Error> {
+    fn from_object(&self, ob: Object) -> Result<ScObject, Self::Error> {
         self.from_host_obj(ob)
     }
 }
 
 impl ToObject for Host {
     type Error = HostError;
-    fn to_xdr_obj(&self, ob: &ScObject) -> Result<Object, Self::Error> {
+    fn to_object(&self, ob: &ScObject) -> Result<Object, Self::Error> {
         self.to_host_obj(ob).map(|ob| ob.val)
     }
 }

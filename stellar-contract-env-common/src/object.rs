@@ -45,10 +45,10 @@ impl Object {
 
 pub trait ToObject {
     type Error;
-    fn to_xdr_obj(&self, ob: &ScObject) -> Result<Object, Self::Error>;
+    fn to_object(&self, ob: &ScObject) -> Result<Object, Self::Error>;
 }
 
 pub trait FromObject {
     type Error;
-    fn from_xdr_obj(&self, ob: Object) -> Result<ScObject, Self::Error>;
+    fn from_object(&self, ob: Object) -> Result<ScObject, Self::Error>;
 }
