@@ -10,7 +10,7 @@ use crate::{
 };
 
 #[cfg(feature = "std")]
-use crate::FromToXdrObj;
+use crate::{FromObject, ToObject};
 
 use super::{
     raw_val::{RawVal, RawValConvertible},
@@ -253,7 +253,7 @@ impl<E: Env> IntoEnvVal<E, RawVal> for u64 {
 }
 
 #[cfg(feature = "std")]
-impl<E: Env + FromToXdrObj> TryFrom<EnvVal<E, RawVal>> for ScVal {
+impl<E: Env + FromObject> TryFrom<EnvVal<E, RawVal>> for ScVal {
     type Error = ConversionError;
 
     fn try_from(ev: EnvVal<E, RawVal>) -> Result<Self, Self::Error> {
@@ -308,7 +308,7 @@ impl<E: Env + FromToXdrObj> TryFrom<EnvVal<E, RawVal>> for ScVal {
 }
 
 #[cfg(feature = "std")]
-impl<E: Env + FromToXdrObj> TryIntoEnvVal<E, RawVal> for &ScVal {
+impl<E: Env + ToObject> TryIntoEnvVal<E, RawVal> for &ScVal {
     type Error = ConversionError;
     fn try_into_env_val(self, env: &E) -> Result<EnvVal<E, RawVal>, Self::Error> {
         let val = match self {

@@ -10,7 +10,7 @@ use num_integer::Integer;
 use num_traits::cast::ToPrimitive;
 use num_traits::{Pow, Signed, Zero};
 use std::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Not, Rem, Shl, Shr, Sub};
-use stellar_contract_env_common::{FromToXdrObj, TryFromVal, TryIntoVal};
+use stellar_contract_env_common::{FromObject, ToObject, TryFromVal, TryIntoVal};
 
 use stellar_contract_env_common::xdr::{
     AccountEntry, AccountId, Hash, PublicKey, ReadXdr, ThresholdIndexes, Uint256, WriteXdr,
@@ -127,11 +127,13 @@ impl Debug for Host {
     }
 }
 
-impl FromToXdrObj for Host {
+impl FromObject for Host {
     fn from_xdr_obj(&self, ob: Object) -> Result<ScObject, ConversionError> {
         self.from_host_obj(ob).map_err(|_| ConversionError)
     }
+}
 
+impl ToObject for Host {
     fn to_xdr_obj(&self, ob: &ScObject) -> Result<Object, ConversionError> {
         self.to_host_obj(ob)
             .map_err(|_| ConversionError)

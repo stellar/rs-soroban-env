@@ -46,9 +46,10 @@ impl Object {
     }
 }
 
-// Trait FromToXdrObj is implemented by types that can convert XDR ScObject
-// types to and from Objects.
-pub trait FromToXdrObj: Sized + Clone {
-    fn from_xdr_obj(&self, ob: Object) -> Result<ScObject, ConversionError>;
+pub trait ToObject: Sized + Clone {
     fn to_xdr_obj(&self, ob: &ScObject) -> Result<Object, ConversionError>;
+}
+
+pub trait FromObject: Sized + Clone {
+    fn from_xdr_obj(&self, ob: Object) -> Result<ScObject, ConversionError>;
 }

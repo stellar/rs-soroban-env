@@ -35,7 +35,7 @@ pub use unimplemented_env::UnimplementedEnv;
 // BitSet, Status and Symbol wrap RawVals.
 // TODO: maybe these should wrap EnvVals?
 pub use bitset::{BitSet, BitSetError};
-pub use object::{FromToXdrObj, Object};
+pub use object::{FromObject, Object, ToObject};
 pub use r#static::Static;
 pub use status::{Status, OK, UNKNOWN_ERROR};
 pub use symbol::{Symbol, SymbolError, SymbolIter, SymbolStr};
