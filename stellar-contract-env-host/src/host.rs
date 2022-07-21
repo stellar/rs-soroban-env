@@ -905,7 +905,8 @@ impl CheckedEnv for Host {
 
     fn get_invoking_contract(&self) -> Result<Object, HostError> {
         let frames = self.0.context.borrow();
-        let hash: Hash = if frames.len() > 2 {
+        // the previous frame must exist and must be a contract
+        let hash: Hash = if frames.len() >= 2 {
             match &frames[frames.len() - 2] {
                 #[cfg(feature = "vm")]
                 Frame::ContractVM(vm) => Ok(vm.contract_id.clone()),
