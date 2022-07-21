@@ -273,9 +273,9 @@ macro_rules! call_macro_with_all_host_functions {
                 /// Clone the binary `b1`, then moves all the elements of binary `b2` into it.
                 /// Return the new binary. Traps if number of elements in the binary overflows a u32.
                 {"E", fn binary_append(b1:Object, b2:Object) -> Object}
-                /// Copy the elements from `i` until length `l` in the binary and create a new binary from it.
-                /// Return the new binary. Traps if the index is out of bound.
-                {"F", fn binary_slice(b:Object, i:RawVal, l:RawVal) -> Object}
+                /// Copies the elements from `start` index until `end` index, exclusive, in the binary and creates a new binary from it.
+                /// Returns the new binary. Traps if the index is out of bound.
+                {"F", fn binary_slice(b:Object, start:RawVal, end:RawVal) -> Object}
             }
 
             mod hash "h" {
