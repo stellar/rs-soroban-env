@@ -4,12 +4,14 @@
 use core::cell::RefCell;
 use core::cmp::Ordering;
 use core::fmt::Debug;
+use core::slice::SlicePattern;
 use im_rc::{OrdMap, Vector};
 use num_bigint::{BigInt, Sign};
 use num_integer::Integer;
 use num_traits::cast::ToPrimitive;
 use num_traits::{Pow, Signed, Zero};
 use std::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Not, Rem, Shl, Shr, Sub};
+use std::str::from_utf8;
 
 use stellar_contract_env_common::xdr::{
     AccountEntry, AccountId, Hash, PublicKey, ReadXdr, ThresholdIndexes, Uint256, WriteXdr,
@@ -913,6 +915,40 @@ impl CheckedEnv for Host {
         Ok(RawVal::from_void())
     }
 
+    fn log_err_convert(
+        &self,
+        v: RawVal,
+        ts_start: RawVal,
+        ts_len: RawVal,
+    ) -> Result<RawVal, HostError> {
+        #[cfg(not(feature = "vm"))]
+        unimplemented!();
+        #[cfg(feature = "vm")]
+        let ts_start: u32 = ts_start
+            .try_into()
+            .map_err(|_| self.err_convert::<u32>(ts_start))?;
+        let ts_len: u32 = ts_len
+            .try_into()
+            .map_err(|_| self.err_convert::<u32>(ts_len))?;
+
+        self.with_current_frame(|frame| match frame {
+            Frame::ContractVM(vm) => vm.with_memory_access(self, |mem| {
+                let mut type_info = vec![0; ts_len as usize];
+                self.map_err(mem.get_into(ts_start, type_info.as_mut_slice()))?;
+                self.debug_event(DebugEvent::new().msg("type conversion failed"))?;
+                self.debug_event(
+                    DebugEvent::new().msg(
+                        from_utf8(type_info.as_slice())
+                            .map_err(|_| self.err_convert_general("utf8 error"))?,
+                    ),
+                )?;
+                Ok(())
+            }),
+            _ => Err(self.err_general("linear memory not supported")),
+        })?;
+        Ok(().into())
+    }
+
     fn contract_event(&self, v: RawVal) -> Result<RawVal, HostError> {
         todo!()
     }
@@ -1672,9 +1708,7 @@ impl CheckedEnv for Host {
                 Frame::ContractVM(vm) => vm.with_memory_access(self, |mem| {
                     Ok(self.map_err(mem.set(lm_pos, &hv.as_slice()[b_pos as usize..end_idx]))?)
                 }),
-                Frame::HostFunction(_) => Err(self.err_general("linear memory not supported")),
-                #[cfg(feature = "testutils")]
-                Frame::TestContract(id) => Err(self.err_general("linear memory not supported")),
+                _ => Err(self.err_general("linear memory not supported")),
             })
         })?;
         Ok(().into())
@@ -1712,9 +1746,7 @@ impl CheckedEnv for Host {
                     mem.get_into(lm_pos, &mut vnew.as_mut_slice()[b_pos as usize..end_idx]),
                 )?)
             }),
-            Frame::HostFunction(_) => Err(self.err_general("linear memory not supported")),
-            #[cfg(feature = "testutils")]
-            Frame::TestContract(id) => Err(self.err_general("linear memory not supported")),
+            _ => Err(self.err_general("linear memory not supported")),
         })?;
         Ok(self.add_host_object(vnew)?.into())
     }
@@ -1742,9 +1774,7 @@ impl CheckedEnv for Host {
                 self.map_err(mem.get_into(lm_pos, vnew.as_mut_slice()))?;
                 Ok(self.add_host_object(vnew)?.into())
             }),
-            Frame::HostFunction(_) => Err(self.err_general("linear memory not supported")),
-            #[cfg(feature = "testutils")]
-            Frame::TestContract(id) => Err(self.err_general("linear memory not supported")),
+            _ => Err(self.err_general("linear memory not supported")),
         });
     }
 
