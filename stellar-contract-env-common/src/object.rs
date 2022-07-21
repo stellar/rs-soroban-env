@@ -46,10 +46,10 @@ impl Object {
     }
 }
 
-pub trait ToObject: Sized + Clone {
+pub trait ToObject {
     fn to_xdr_obj(&self, ob: &ScObject) -> Result<Object, ConversionError>;
 }
 
-pub trait FromObject: Sized + Clone {
+pub trait FromObject {
     fn from_xdr_obj(&self, ob: Object) -> Result<ScObject, ConversionError>;
 }
