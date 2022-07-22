@@ -69,6 +69,12 @@ impl AsMut<RawVal> for RawVal {
 #[derive(Debug, Eq, PartialEq)]
 pub struct ConversionError;
 
+impl From<stellar_xdr::Error> for ConversionError {
+    fn from(_: stellar_xdr::Error) -> Self {
+        ConversionError
+    }
+}
+
 pub trait RawValConvertible: Into<RawVal> + TryFrom<RawVal> {
     fn is_val_type(v: RawVal) -> bool;
     unsafe fn unchecked_from_val(v: RawVal) -> Self;

@@ -10,6 +10,7 @@ use num_integer::Integer;
 use num_traits::cast::ToPrimitive;
 use num_traits::{Pow, Signed, Zero};
 use std::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Not, Rem, Shl, Shr, Sub};
+use stellar_contract_env_common::{TryConvert, TryFromVal, TryIntoVal};
 
 use stellar_contract_env_common::xdr::{
     AccountEntry, AccountId, Hash, PublicKey, ReadXdr, ThresholdIndexes, Uint256, WriteXdr,
@@ -24,8 +25,8 @@ use crate::xdr;
 use crate::xdr::{
     ContractDataEntry, HostFunction, LedgerEntry, LedgerEntryData, LedgerEntryExt, LedgerKey,
     LedgerKeyContractData, ScBigInt, ScHostContextErrorCode, ScHostFnErrorCode, ScHostObjErrorCode,
-    ScHostStorageErrorCode, ScHostValErrorCode, ScMap, ScMapEntry, ScObject, ScStatic, ScStatus,
-    ScStatusType, ScVal, ScVec,
+    ScHostStorageErrorCode, ScHostValErrorCode, ScMap, ScMapEntry, ScObject, ScStatic, ScVal,
+    ScVec,
 };
 use std::rc::Rc;
 
@@ -36,8 +37,8 @@ use crate::SymbolStr;
 #[cfg(feature = "vm")]
 use crate::Vm;
 use crate::{
-    BitSet, ConversionError, EnvBase, IntoEnvVal, Object, RawVal, RawValConvertible, Static,
-    Status, Symbol, Tag, Val, UNKNOWN_ERROR,
+    ConversionError, EnvBase, IntoEnvVal, Object, RawVal, RawValConvertible, Status, Symbol, Val,
+    UNKNOWN_ERROR,
 };
 
 mod error;
@@ -123,6 +124,27 @@ pub struct Host(pub(crate) Rc<HostImpl>);
 impl Debug for Host {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Host({:x})", Rc::<HostImpl>::as_ptr(&self.0) as usize)
+    }
+}
+
+impl TryConvert<Object, ScObject> for Host {
+    type Error = HostError;
+    fn convert(&self, ob: Object) -> Result<ScObject, Self::Error> {
+        self.from_host_obj(ob)
+    }
+}
+
+impl TryConvert<&ScObject, Object> for Host {
+    type Error = HostError;
+    fn convert(&self, ob: &ScObject) -> Result<Object, Self::Error> {
+        self.to_host_obj(ob).map(|ob| ob.val)
+    }
+}
+
+impl TryConvert<ScObject, Object> for Host {
+    type Error = HostError;
+    fn convert(&self, ob: ScObject) -> Result<Object, Self::Error> {
+        self.to_host_obj(&ob).map(|ob| ob.val)
     }
 }
 
@@ -400,117 +422,20 @@ impl Host {
     }
 
     pub(crate) fn from_host_val(&self, val: RawVal) -> Result<ScVal, HostError> {
-        if val.is_u63() {
-            Ok(ScVal::U63(unsafe { val.unchecked_as_u63() }))
-        } else {
-            match val.get_tag() {
-                Tag::U32 => Ok(ScVal::U32(unsafe {
-                    <u32 as RawValConvertible>::unchecked_from_val(val)
-                })),
-                Tag::I32 => Ok(ScVal::I32(unsafe {
-                    <i32 as RawValConvertible>::unchecked_from_val(val)
-                })),
-                Tag::Static => {
-                    let tag_static =
-                        unsafe { <Static as RawValConvertible>::unchecked_from_val(val) };
-                    if tag_static.is_type(ScStatic::True) {
-                        Ok(ScVal::Static(ScStatic::True))
-                    } else if tag_static.is_type(ScStatic::False) {
-                        Ok(ScVal::Static(ScStatic::False))
-                    } else if tag_static.is_type(ScStatic::Void) {
-                        Ok(ScVal::Static(ScStatic::Void))
-                    } else if tag_static.is_type(ScStatic::LedgerKeyContractCodeWasm) {
-                        Ok(ScVal::Static(ScStatic::LedgerKeyContractCodeWasm))
-                    } else {
-                        Err(self.err_status(ScHostValErrorCode::StaticUnknown))
-                    }
-                }
-                Tag::Object => unsafe {
-                    let ob = <Object as RawValConvertible>::unchecked_from_val(val);
-                    let scob = self.from_host_obj(ob)?;
-                    Ok(ScVal::Object(Some(scob)))
-                },
-                Tag::Symbol => {
-                    let sym: Symbol =
-                        unsafe { <Symbol as RawValConvertible>::unchecked_from_val(val) };
-                    let str: String = sym.into_iter().collect();
-                    Ok(ScVal::Symbol(self.map_err(str.as_bytes().try_into())?))
-                }
-                Tag::BitSet => Ok(ScVal::Bitset(val.get_payload())),
-                Tag::Status => {
-                    let status: Status =
-                        unsafe { <Status as RawValConvertible>::unchecked_from_val(val) };
-                    let scstatus: ScStatus = self.map_err(status.try_into())?;
-                    Ok(ScVal::Status(scstatus))
-                }
-                Tag::Reserved => Err(self.err_status(ScHostValErrorCode::ReservedTagValue)),
-            }
-        }
+        ScVal::try_from_val(self, val)
+            .map_err(|_| self.err_status(ScHostValErrorCode::UnknownError))
     }
 
     // Testing interface to create values directly for later use via Env functions.
     pub fn inject_val(&self, v: &ScVal) -> Result<RawVal, HostError> {
-        self.to_host_val(v).map(|hv| hv.into())
+        self.to_host_val(v).map(Into::into)
     }
 
     pub(crate) fn to_host_val(&self, v: &ScVal) -> Result<HostVal, HostError> {
-        let ok = match v {
-            ScVal::U63(i) => {
-                if *i >= 0 {
-                    unsafe { RawVal::unchecked_from_u63(*i) }
-                } else {
-                    return Err(self.err_status(ScHostValErrorCode::U63OutOfRange));
-                }
-            }
-            ScVal::U32(u) => (*u).into(),
-            ScVal::I32(i) => (*i).into(),
-            ScVal::Static(ScStatic::Void) => RawVal::from_void(),
-            ScVal::Static(ScStatic::True) => RawVal::from_bool(true),
-            ScVal::Static(ScStatic::False) => RawVal::from_bool(false),
-            ScVal::Static(other) => RawVal::from_other_static(*other),
-            ScVal::Object(None) => {
-                return Err(self.err_status(ScHostValErrorCode::MissingObject));
-            }
-            ScVal::Object(Some(ob)) => return Ok(self.to_host_obj(&*ob)?.into()),
-            ScVal::Symbol(bytes) => {
-                let ss = match std::str::from_utf8(bytes.as_slice()) {
-                    Ok(ss) => ss,
-                    Err(_) => {
-                        return Err(self.err_status(ScHostValErrorCode::SymbolContainsNonUtf8));
-                    }
-                };
-                Symbol::try_from_str(ss)?.into()
-            }
-            ScVal::Bitset(i) => BitSet::try_from_u64(*i)?.into(),
-            ScVal::Status(st) => {
-                let status = match st {
-                    ScStatus::Ok => Status::from_type_and_code(ScStatusType::Ok, 0),
-                    ScStatus::UnknownError(e) => {
-                        Status::from_type_and_code(ScStatusType::UnknownError, *e as u32)
-                    }
-                    ScStatus::HostValueError(e) => {
-                        Status::from_type_and_code(ScStatusType::HostValueError, *e as u32)
-                    }
-                    ScStatus::HostObjectError(e) => {
-                        Status::from_type_and_code(ScStatusType::HostObjectError, *e as u32)
-                    }
-                    ScStatus::HostFunctionError(e) => {
-                        Status::from_type_and_code(ScStatusType::HostFunctionError, *e as u32)
-                    }
-                    ScStatus::HostStorageError(e) => {
-                        Status::from_type_and_code(ScStatusType::HostStorageError, *e as u32)
-                    }
-                    ScStatus::HostContextError(e) => {
-                        Status::from_type_and_code(ScStatusType::HostContextError, *e as u32)
-                    }
-                    ScStatus::VmError(e) => {
-                        Status::from_type_and_code(ScStatusType::VmError, *e as u32)
-                    }
-                };
-                status.into()
-            }
-        };
-        Ok(self.associate_raw_val(ok))
+        let rv = v
+            .try_into_val(self)
+            .map_err(|_| self.err_status(ScHostValErrorCode::UnknownError))?;
+        Ok(self.associate_raw_val(rv))
     }
 
     pub(crate) fn from_host_obj(&self, ob: Object) -> Result<ScObject, HostError> {

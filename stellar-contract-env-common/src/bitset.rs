@@ -1,4 +1,4 @@
-use crate::{RawVal, Tag, TagBitSet, TaggedVal};
+use crate::{ConversionError, RawVal, Tag, TagBitSet, TaggedVal};
 use core::cmp::Ordering;
 use core::fmt::Debug;
 use core::hash::{Hash, Hasher};
@@ -9,6 +9,12 @@ pub type BitSet = TaggedVal<TagBitSet>;
 #[derive(Debug)]
 pub enum BitSetError {
     TooManyBits(u64),
+}
+
+impl From<BitSetError> for ConversionError {
+    fn from(_: BitSetError) -> Self {
+        ConversionError
+    }
 }
 
 impl Hash for BitSet {
