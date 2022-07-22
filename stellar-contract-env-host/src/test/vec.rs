@@ -1,5 +1,3 @@
-use stellar_contract_env_common::ConversionError;
-
 use crate::{
     xdr::{ScHostFnErrorCode, ScHostObjErrorCode, ScObject, ScObjectType},
     CheckedEnv, Host, HostError, Object, RawVal, RawValConvertible,
@@ -290,13 +288,5 @@ fn vec_append_empty() -> Result<(), HostError> {
     let obj1 = host.vec_append(*obj0.as_ref(), *obj0.as_ref())?;
     assert_ne!(obj0.as_raw().get_payload(), obj1.as_ref().get_payload());
     assert_eq!(host.obj_cmp(obj0.into(), obj1.into())?, 0);
-    Ok(())
-}
-
-#[test]
-fn conversion_error() -> Result<(), HostError> {
-    let a = ConversionError;
-    let _b: HostError = a.into();
-
     Ok(())
 }

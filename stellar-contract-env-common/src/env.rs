@@ -121,9 +121,6 @@ macro_rules! call_macro_with_all_host_functions {
                 /// running contract. Traps if the running contract was not
                 /// invoked by a contract.
                 {"4", fn get_current_contract() -> Object }
-                /// Logs the conversion error from the value `v` that caused the conversion failure
-                /// and a static str in linear memory that contains the destination type information.
-                {"5", fn log_err_convert(v:RawVal, ts_start: RawVal, ts_len: RawVal) -> RawVal}
             }
 
             mod u64 "u" {
