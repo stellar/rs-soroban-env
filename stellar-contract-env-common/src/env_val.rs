@@ -250,7 +250,7 @@ impl<E: Env> IntoEnvVal<E, RawVal> for u64 {
 }
 
 #[cfg(feature = "std")]
-impl<E: Env + TryTransform<ScObject, Object>> TryFrom<EnvVal<E, RawVal>> for ScVal
+impl<E: Env> TryFrom<EnvVal<E, RawVal>> for ScVal
 where
     ScObject: TryFrom<EnvVal<E, Object>>,
 {
