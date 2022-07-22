@@ -15,11 +15,12 @@ use super::{
 };
 use core::{cmp::Ordering, fmt::Debug};
 
-// EnvVal is a RawVal or TaggedVal coupled to a specific instance of Env. In the
-// guest we will use this with a zero-sized Guest unit struct, but in the host
-// we provide a Host and Weak<Host> for Env.
+// EnvVal is a value coupled to a specific instance of Env. In the guest we will
+// use this with a zero-sized Guest unit struct, but in the host we provide a
+// Host and Weak<Host> for Env. Typically the value is an RawVal or TaggedVal,
+// however it can be any type.
 #[derive(Clone)]
-pub struct EnvVal<E: Env, V: Val> {
+pub struct EnvVal<E: Env, V> {
     pub env: E,
     pub val: V,
 }
@@ -100,32 +101,32 @@ impl<E: Env, T: TagType> From<EnvVal<E, TaggedVal<T>>> for EnvVal<E, RawVal> {
     }
 }
 
-pub trait IntoEnvVal<E: Env, V: Val>: Sized {
+pub trait IntoEnvVal<E: Env, V>: Sized {
     fn into_env_val(self, env: &E) -> EnvVal<E, V>;
 }
 
-pub trait IntoVal<E: Env, V: Val>: IntoEnvVal<E, V> {
+pub trait IntoVal<E: Env, V>: IntoEnvVal<E, V> {
     fn into_val(self, env: &E) -> V {
         Self::into_env_val(self, env).val
     }
 }
 
-impl<E: Env, V: Val, T> IntoVal<E, V> for T where T: IntoEnvVal<E, V> {}
+impl<E: Env, V, T> IntoVal<E, V> for T where T: IntoEnvVal<E, V> {}
 
-pub trait TryIntoEnvVal<E: Env, V: Val>: Sized {
+pub trait TryIntoEnvVal<E: Env, V>: Sized {
     type Error;
     fn try_into_env_val(self, env: &E) -> Result<EnvVal<E, V>, Self::Error>;
 }
 
-pub trait TryIntoVal<E: Env, V: Val>: TryIntoEnvVal<E, V> {
+pub trait TryIntoVal<E: Env, V>: TryIntoEnvVal<E, V> {
     fn try_into_val(self, env: &E) -> Result<V, Self::Error> {
         Ok(Self::try_into_env_val(self, env)?.val)
     }
 }
 
-impl<E: Env, V: Val, T> TryIntoVal<E, V> for T where T: TryIntoEnvVal<E, V> {}
+impl<E: Env, V, T> TryIntoVal<E, V> for T where T: TryIntoEnvVal<E, V> {}
 
-pub trait TryFromVal<E: Env, V: Val>: Sized + TryFrom<EnvVal<E, V>> {
+pub trait TryFromVal<E: Env, V>: Sized + TryFrom<EnvVal<E, V>> {
     fn try_from_val(env: &E, v: V) -> Result<Self, Self::Error> {
         Self::try_from(EnvVal {
             env: env.clone(),
@@ -134,9 +135,9 @@ pub trait TryFromVal<E: Env, V: Val>: Sized + TryFrom<EnvVal<E, V>> {
     }
 }
 
-impl<E: Env, V: Val, T> TryFromVal<E, V> for T where T: Sized + TryFrom<EnvVal<E, V>> {}
+impl<E: Env, V, T> TryFromVal<E, V> for T where T: Sized + TryFrom<EnvVal<E, V>> {}
 
-impl<E: Env, V: Val, I: Into<EnvVal<E, V>>> IntoEnvVal<E, V> for I {
+impl<E: Env, V, I: Into<EnvVal<E, V>>> IntoEnvVal<E, V> for I {
     fn into_env_val(self, env: &E) -> EnvVal<E, V> {
         let ev = self.into();
         ev.env.check_same_env(env);
@@ -367,11 +368,11 @@ where
     }
 }
 
-impl<E: Env + Debug, V: Val> Debug for EnvVal<E, V> {
+impl<E: Env + Debug, V> Debug for EnvVal<E, V> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("EnvVal")
             .field("env", &self.env)
-            .field("val", &self.as_ref())
+            .field("val", &self)
             .finish()
     }
 }
