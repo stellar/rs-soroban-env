@@ -15,11 +15,12 @@ use super::{
 };
 use core::{cmp::Ordering, fmt::Debug};
 
-// EnvVal is a RawVal or TaggedVal coupled to a specific instance of Env. In the
-// guest we will use this with a zero-sized Guest unit struct, but in the host
-// we provide a Host and Weak<Host> for Env.
+// EnvVal is a value coupled to a specific instance of Env. In the guest we will
+// use this with a zero-sized Guest unit struct, but in the host we provide a
+// Host and Weak<Host> for Env. Typically the value is an RawVal or TaggedVal,
+// however it can be any type.
 #[derive(Clone)]
-pub struct EnvVal<E: Env, V: Val> {
+pub struct EnvVal<E: Env, V> {
     pub env: E,
     pub val: V,
 }
