@@ -12,6 +12,8 @@ pub struct HostError {
     pub(crate) backtrace: backtrace::Backtrace,
 }
 
+impl std::error::Error for HostError {}
+
 impl Debug for HostError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // We do a little trimming here, skipping the first two frames (which
