@@ -3,11 +3,11 @@ use stellar_xdr::ScObjectType;
 #[cfg(feature = "std")]
 use stellar_xdr::{ScObject, ScStatic, ScVal};
 
+#[cfg(feature = "std")]
+use crate::Static;
 use crate::{
     raw_val::ConversionError, BitSet, Object, Status, Symbol, Tag, TagType, TaggedVal, Val,
 };
-#[cfg(feature = "std")]
-use crate::{Static, TryTransform};
 
 use super::{
     raw_val::{RawVal, RawValConvertible},
@@ -308,9 +308,9 @@ where
 }
 
 #[cfg(feature = "std")]
-impl<E> TryIntoEnvVal<E, RawVal> for &ScVal
+impl<E: Env> TryIntoEnvVal<E, RawVal> for &ScVal
 where
-    for<'a> E: Env + TryTransform<&'a ScObject, Object>,
+    for<'a> &'a ScObject: TryIntoVal<E, Object>,
 {
     type Error = ConversionError;
     fn try_into_env_val(self, env: &E) -> Result<EnvVal<E, RawVal>, Self::Error> {
