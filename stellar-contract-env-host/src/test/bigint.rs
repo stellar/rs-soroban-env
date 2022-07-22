@@ -201,6 +201,15 @@ fn bigint_tests() -> Result<(), HostError> {
         assert_eq!(host.bigint_bits(obj_b)?, 19);
         assert_eq!(host.bigint_bits(obj_0)?, 0);
     }
+    // convert to array
+    {
+        let bin = host.bigint_to_radix_be(obj_a, 10_u32.into())?;
+        let digits = host.test_bin_obj(&[2, 3, 7, 4, 3, 4, 0])?;
+        assert_eq!(host.obj_cmp(bin.into(), digits.into())?, 0);
 
+        let bin2 = host.bigint_to_radix_be(obj_b, 10_u32.into())?;
+        let digits2 = host.test_bin_obj(&[4, 3, 8, 7, 3, 0])?;
+        assert_eq!(host.obj_cmp(bin2.into(), digits2.into())?, 0);
+    }
     Ok(())
 }
