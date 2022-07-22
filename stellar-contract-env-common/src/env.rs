@@ -279,7 +279,7 @@ macro_rules! call_macro_with_all_host_functions {
                 {"N", fn bigint_to_bytes_be(x:Object) -> Object}
                 /// Outputs the BigInt's magnitude in the requested base in big-endian digit order into a binary array.
                 /// The sign is dropped. Radix must be in the range 2...256.
-                {"N", fn bigint_to_radix_be(x:Object, radix:RawVal) -> Object}
+                {"O", fn bigint_to_radix_be(x:Object, radix:RawVal) -> Object}
             }
 
             mod binary "b" {
