@@ -1,5 +1,10 @@
 use stellar_xdr::ScObjectType;
 
+#[cfg(feature = "std")]
+use stellar_xdr::{ScObject, ScStatic, ScVal};
+
+#[cfg(feature = "std")]
+use crate::Static;
 use crate::{
     raw_val::ConversionError, BitSet, Object, Status, Symbol, Tag, TagType, TaggedVal, Val,
 };
@@ -106,6 +111,19 @@ pub trait IntoVal<E: Env, V: Val>: IntoEnvVal<E, V> {
 }
 
 impl<E: Env, V: Val, T> IntoVal<E, V> for T where T: IntoEnvVal<E, V> {}
+
+pub trait TryIntoEnvVal<E: Env, V: Val>: Sized {
+    type Error;
+    fn try_into_env_val(self, env: &E) -> Result<EnvVal<E, V>, Self::Error>;
+}
+
+pub trait TryIntoVal<E: Env, V: Val>: TryIntoEnvVal<E, V> {
+    fn try_into_val(self, env: &E) -> Result<V, Self::Error> {
+        Ok(Self::try_into_env_val(self, env)?.val)
+    }
+}
+
+impl<E: Env, V: Val, T> TryIntoVal<E, V> for T where T: TryIntoEnvVal<E, V> {}
 
 pub trait TryFromVal<E: Env, V: Val>: Sized + TryFrom<EnvVal<E, V>> {
     fn try_from_val(env: &E, v: V) -> Result<Self, Self::Error> {
@@ -228,6 +246,104 @@ impl<E: Env> IntoEnvVal<E, RawVal> for u64 {
             val: env.obj_from_u64(self).to_raw(),
             env,
         }
+    }
+}
+
+#[cfg(feature = "std")]
+impl<E: Env> TryFrom<EnvVal<E, RawVal>> for ScVal
+where
+    ScObject: TryFrom<EnvVal<E, Object>>,
+{
+    type Error = ConversionError;
+
+    fn try_from(ev: EnvVal<E, RawVal>) -> Result<Self, Self::Error> {
+        let env = ev.env;
+        let val = ev.val;
+        if val.is_u63() {
+            Ok(ScVal::U63(unsafe { val.unchecked_as_u63() }))
+        } else {
+            match val.get_tag() {
+                Tag::U32 => Ok(ScVal::U32(unsafe {
+                    <u32 as RawValConvertible>::unchecked_from_val(val)
+                })),
+                Tag::I32 => Ok(ScVal::I32(unsafe {
+                    <i32 as RawValConvertible>::unchecked_from_val(val)
+                })),
+                Tag::Static => {
+                    let tag_static =
+                        unsafe { <Static as RawValConvertible>::unchecked_from_val(val) };
+                    if tag_static.is_type(ScStatic::True) {
+                        Ok(ScVal::Static(ScStatic::True))
+                    } else if tag_static.is_type(ScStatic::False) {
+                        Ok(ScVal::Static(ScStatic::False))
+                    } else if tag_static.is_type(ScStatic::Void) {
+                        Ok(ScVal::Static(ScStatic::Void))
+                    } else if tag_static.is_type(ScStatic::LedgerKeyContractCodeWasm) {
+                        Ok(ScVal::Static(ScStatic::LedgerKeyContractCodeWasm))
+                    } else {
+                        Err(ConversionError)
+                    }
+                }
+                Tag::Object => unsafe {
+                    let ob = <Object as RawValConvertible>::unchecked_from_val(val);
+                    let scob = ScObject::try_from_val(&env, ob).map_err(|_| ConversionError)?;
+                    Ok(ScVal::Object(Some(scob)))
+                },
+                Tag::Symbol => {
+                    let sym: Symbol =
+                        unsafe { <Symbol as RawValConvertible>::unchecked_from_val(val) };
+                    let str: String = sym.into_iter().collect();
+                    Ok(ScVal::Symbol(str.as_bytes().try_into()?))
+                }
+                Tag::BitSet => Ok(ScVal::Bitset(val.get_payload())),
+                Tag::Status => {
+                    let status: Status =
+                        unsafe { <Status as RawValConvertible>::unchecked_from_val(val) };
+                    Ok(status.try_into()?)
+                }
+                Tag::Reserved => Err(ConversionError),
+            }
+        }
+    }
+}
+
+#[cfg(feature = "std")]
+impl<E: Env> TryIntoEnvVal<E, RawVal> for &ScVal
+where
+    for<'a> &'a ScObject: TryIntoVal<E, Object>,
+{
+    type Error = ConversionError;
+    fn try_into_env_val(self, env: &E) -> Result<EnvVal<E, RawVal>, Self::Error> {
+        let val = match self {
+            ScVal::U63(i) => {
+                if *i >= 0 {
+                    unsafe { RawVal::unchecked_from_u63(*i) }
+                } else {
+                    return Err(ConversionError);
+                }
+            }
+            ScVal::U32(u) => (*u).into(),
+            ScVal::I32(i) => (*i).into(),
+            ScVal::Static(ScStatic::Void) => RawVal::from_void(),
+            ScVal::Static(ScStatic::True) => RawVal::from_bool(true),
+            ScVal::Static(ScStatic::False) => RawVal::from_bool(false),
+            ScVal::Static(other) => RawVal::from_other_static(*other),
+            ScVal::Object(None) => return Err(ConversionError),
+            ScVal::Object(Some(ob)) => ob.try_into_val(env).map_err(|_| ConversionError)?.to_raw(),
+            ScVal::Symbol(bytes) => {
+                let ss = match std::str::from_utf8(bytes.as_slice()) {
+                    Ok(ss) => ss,
+                    Err(_) => return Err(ConversionError),
+                };
+                Symbol::try_from_str(ss)?.into()
+            }
+            ScVal::Bitset(i) => BitSet::try_from_u64(*i)?.into(),
+            ScVal::Status(st) => st.into(),
+        };
+        Ok(EnvVal {
+            env: env.clone(),
+            val,
+        })
     }
 }
 

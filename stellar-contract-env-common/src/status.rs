@@ -7,7 +7,7 @@ use core::{
 };
 use stellar_xdr::{
     ScHostContextErrorCode, ScHostFnErrorCode, ScHostObjErrorCode, ScHostStorageErrorCode,
-    ScHostValErrorCode, ScStatus, ScStatusType, ScUnknownErrorCode, ScVmErrorCode,
+    ScHostValErrorCode, ScStatus, ScStatusType, ScUnknownErrorCode, ScVal, ScVmErrorCode,
 };
 
 pub type Status = TaggedVal<TagStatus>;
@@ -133,6 +133,7 @@ impl Debug for Status {
 }
 
 impl TryFrom<Status> for ScStatus {
+    type Error = stellar_xdr::Error;
     fn try_from(st: Status) -> Result<Self, Self::Error> {
         let ok = {
             if st.is_type(ScStatusType::Ok) {
@@ -157,8 +158,13 @@ impl TryFrom<Status> for ScStatus {
         };
         Ok(ok)
     }
+}
 
+impl TryFrom<Status> for ScVal {
     type Error = stellar_xdr::Error;
+    fn try_from(st: Status) -> Result<Self, Self::Error> {
+        Ok(ScVal::Status(<_ as TryInto<ScStatus>>::try_into(st)?))
+    }
 }
 
 impl From<ScStatus> for Status {

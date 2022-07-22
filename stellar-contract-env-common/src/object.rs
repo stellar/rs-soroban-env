@@ -1,5 +1,10 @@
-use super::{xdr::ScObjectType, RawVal, Tag};
-use crate::tagged_val::{TagObject, TaggedVal};
+use stellar_xdr::ScObject;
+
+use crate::{
+    tagged_val::{TagObject, TaggedVal},
+    xdr::ScObjectType,
+    Env, EnvVal, RawVal, Tag, TryConvert, TryIntoEnvVal,
+};
 use core::fmt::Debug;
 
 pub type Object = TaggedVal<TagObject>;
@@ -38,5 +43,51 @@ impl Object {
     #[inline(always)]
     pub fn from_type_and_handle(ty: ScObjectType, handle: u32) -> Self {
         unsafe { TaggedVal::from_major_minor_and_tag_type(handle, ty as u32) }
+    }
+}
+
+impl<E> TryFrom<EnvVal<E, Object>> for ScObject
+where
+    E: Env + TryConvert<Object, ScObject>,
+{
+    type Error = E::Error;
+    fn try_from(ev: EnvVal<E, Object>) -> Result<Self, Self::Error> {
+        ev.env.convert(ev.val)
+    }
+}
+
+impl<E> TryFrom<&EnvVal<E, Object>> for ScObject
+where
+    E: Env + TryConvert<Object, ScObject>,
+{
+    type Error = E::Error;
+    fn try_from(ev: &EnvVal<E, Object>) -> Result<Self, Self::Error> {
+        ev.env.convert(ev.val)
+    }
+}
+
+impl<'a, E> TryIntoEnvVal<E, Object> for &'a ScObject
+where
+    E: Env + TryConvert<&'a ScObject, Object>,
+{
+    type Error = E::Error;
+    fn try_into_env_val(self, env: &E) -> Result<EnvVal<E, Object>, Self::Error> {
+        Ok(EnvVal {
+            val: env.convert(self)?,
+            env: env.clone(),
+        })
+    }
+}
+
+impl<E> TryIntoEnvVal<E, Object> for ScObject
+where
+    E: Env + TryConvert<ScObject, Object>,
+{
+    type Error = E::Error;
+    fn try_into_env_val(self, env: &E) -> Result<EnvVal<E, Object>, Self::Error> {
+        Ok(EnvVal {
+            val: env.convert(self)?,
+            env: env.clone(),
+        })
     }
 }
