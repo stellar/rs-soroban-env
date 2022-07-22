@@ -3,7 +3,7 @@ use stellar_xdr::ScObject;
 use crate::{
     tagged_val::{TagObject, TaggedVal},
     xdr::ScObjectType,
-    Env, EnvVal, RawVal, Tag, TryIntoEnvVal,
+    Env, EnvVal, RawVal, Tag, TryIntoEnvVal, TryTransform,
 };
 use core::fmt::Debug;
 
@@ -46,43 +46,48 @@ impl Object {
     }
 }
 
-impl<E: Env + FromObject> TryFrom<EnvVal<E, Object>> for ScObject {
+impl<E> TryFrom<EnvVal<E, Object>> for ScObject
+where
+    E: Env + TryTransform<Object, ScObject>,
+{
     type Error = E::Error;
     fn try_from(ev: EnvVal<E, Object>) -> Result<Self, Self::Error> {
-        ev.env.from_object(ev.val)
+        ev.env.transform(ev.val)
     }
 }
 
-impl<E: Env + FromObject> TryFrom<&EnvVal<E, Object>> for ScObject {
+impl<E> TryFrom<&EnvVal<E, Object>> for ScObject
+where
+    E: Env + TryTransform<Object, ScObject>,
+{
     type Error = E::Error;
     fn try_from(ev: &EnvVal<E, Object>) -> Result<Self, Self::Error> {
-        ev.env.from_object(ev.val)
+        ev.env.transform(ev.val)
     }
 }
 
-impl<E: Env + ToObject> TryIntoEnvVal<E, Object> for &ScObject {
+impl<'a, E> TryIntoEnvVal<E, Object> for &'a ScObject
+where
+    E: Env + TryTransform<&'a ScObject, Object>,
+{
     type Error = E::Error;
     fn try_into_env_val(self, env: &E) -> Result<EnvVal<E, Object>, Self::Error> {
         Ok(EnvVal {
-            val: env.to_object(self)?,
+            val: env.transform(self)?,
             env: env.clone(),
         })
     }
 }
 
-impl<E: Env + ToObject> TryIntoEnvVal<E, Object> for ScObject {
+impl<E> TryIntoEnvVal<E, Object> for ScObject
+where
+    E: Env + TryTransform<ScObject, Object>,
+{
     type Error = E::Error;
     fn try_into_env_val(self, env: &E) -> Result<EnvVal<E, Object>, Self::Error> {
-        (&self).try_into_env_val(env)
+        Ok(EnvVal {
+            val: env.transform(self)?,
+            env: env.clone(),
+        })
     }
-}
-
-pub trait ToObject {
-    type Error;
-    fn to_object(&self, ob: &ScObject) -> Result<Object, Self::Error>;
-}
-
-pub trait FromObject {
-    type Error;
-    fn from_object(&self, ob: Object) -> Result<ScObject, Self::Error>;
 }

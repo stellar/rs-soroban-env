@@ -10,7 +10,7 @@ use num_integer::Integer;
 use num_traits::cast::ToPrimitive;
 use num_traits::{Pow, Signed, Zero};
 use std::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Not, Rem, Shl, Shr, Sub};
-use stellar_contract_env_common::{FromObject, ToObject, TryFromVal, TryIntoVal};
+use stellar_contract_env_common::{TryFromVal, TryIntoVal, TryTransform};
 
 use stellar_contract_env_common::xdr::{
     AccountEntry, AccountId, Hash, PublicKey, ReadXdr, ThresholdIndexes, Uint256, WriteXdr,
@@ -127,17 +127,24 @@ impl Debug for Host {
     }
 }
 
-impl FromObject for Host {
+impl TryTransform<Object, ScObject> for Host {
     type Error = HostError;
-    fn from_object(&self, ob: Object) -> Result<ScObject, Self::Error> {
+    fn transform(&self, ob: Object) -> Result<ScObject, Self::Error> {
         self.from_host_obj(ob)
     }
 }
 
-impl ToObject for Host {
+impl TryTransform<&ScObject, Object> for Host {
     type Error = HostError;
-    fn to_object(&self, ob: &ScObject) -> Result<Object, Self::Error> {
+    fn transform(&self, ob: &ScObject) -> Result<Object, Self::Error> {
         self.to_host_obj(ob).map(|ob| ob.val)
+    }
+}
+
+impl TryTransform<ScObject, Object> for Host {
+    type Error = HostError;
+    fn transform(&self, ob: ScObject) -> Result<Object, Self::Error> {
+        self.to_host_obj(&ob).map(|ob| ob.val)
     }
 }
 

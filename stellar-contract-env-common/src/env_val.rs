@@ -3,14 +3,11 @@ use stellar_xdr::ScObjectType;
 #[cfg(feature = "std")]
 use stellar_xdr::{ScObject, ScStatic, ScVal};
 
-#[cfg(feature = "std")]
-use crate::Static;
 use crate::{
     raw_val::ConversionError, BitSet, Object, Status, Symbol, Tag, TagType, TaggedVal, Val,
 };
-
 #[cfg(feature = "std")]
-use crate::{FromObject, ToObject};
+use crate::{Static, TryTransform};
 
 use super::{
     raw_val::{RawVal, RawValConvertible},
@@ -253,7 +250,10 @@ impl<E: Env> IntoEnvVal<E, RawVal> for u64 {
 }
 
 #[cfg(feature = "std")]
-impl<E: Env + FromObject> TryFrom<EnvVal<E, RawVal>> for ScVal {
+impl<E: Env + TryTransform<ScObject, Object>> TryFrom<EnvVal<E, RawVal>> for ScVal
+where
+    ScObject: TryFrom<EnvVal<E, Object>>,
+{
     type Error = ConversionError;
 
     fn try_from(ev: EnvVal<E, RawVal>) -> Result<Self, Self::Error> {
@@ -308,7 +308,10 @@ impl<E: Env + FromObject> TryFrom<EnvVal<E, RawVal>> for ScVal {
 }
 
 #[cfg(feature = "std")]
-impl<E: Env + ToObject> TryIntoEnvVal<E, RawVal> for &ScVal {
+impl<E> TryIntoEnvVal<E, RawVal> for &ScVal
+where
+    for<'a> E: Env + TryTransform<&'a ScObject, Object>,
+{
     type Error = ConversionError;
     fn try_into_env_val(self, env: &E) -> Result<EnvVal<E, RawVal>, Self::Error> {
         let val = match self {

@@ -11,6 +11,7 @@ mod r#static;
 mod status;
 mod symbol;
 mod tagged_val;
+mod transform;
 mod tuple;
 mod unimplemented_env;
 mod val;
@@ -30,12 +31,13 @@ pub use val::Val;
 pub use checked_env::CheckedEnv;
 pub use env::{Env, EnvBase};
 pub use env_val::{EnvVal, IntoEnvVal, IntoVal, TryFromVal, TryIntoEnvVal, TryIntoVal};
+pub use transform::TryTransform;
 pub use unimplemented_env::UnimplementedEnv;
 
 // BitSet, Status and Symbol wrap RawVals.
 // TODO: maybe these should wrap EnvVals?
 pub use bitset::{BitSet, BitSetError};
-pub use object::{FromObject, Object, ToObject};
+pub use object::Object;
 pub use r#static::Static;
 pub use status::{Status, OK, UNKNOWN_ERROR};
 pub use symbol::{Symbol, SymbolError, SymbolIter, SymbolStr};
