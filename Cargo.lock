@@ -173,6 +173,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9ea835d29036a4087793836fa931b08837ad5e957da9e23886b29586fb9b6650"
 
 [[package]]
+name = "dyn-fmt"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c2a0836c9bd73a9d3ca55b0effc5b1eedf96dd13ef994389bcac6d4d33c46188"
+
+[[package]]
 name = "ed25519"
 version = "1.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -611,7 +617,7 @@ version = "0.0.0"
 dependencies = [
  "static_assertions",
  "stellar-contract-env-macros",
- "stellar-xdr 0.0.0 (git+https://github.com/stellar/rs-stellar-xdr?rev=a79301db)",
+ "stellar-xdr 0.0.0 (git+https://github.com/stellar/rs-stellar-xdr?rev=94e01c7b)",
  "wasmi",
 ]
 
@@ -619,6 +625,7 @@ dependencies = [
 name = "stellar-contract-env-guest"
 version = "0.0.0"
 dependencies = [
+ "static_assertions",
  "stellar-contract-env-common",
 ]
 
@@ -628,6 +635,7 @@ version = "0.0.0"
 dependencies = [
  "assert_matches",
  "backtrace",
+ "dyn-fmt",
  "ed25519-dalek",
  "env_logger",
  "hex",
@@ -676,7 +684,7 @@ dependencies = [
 [[package]]
 name = "stellar-xdr"
 version = "0.0.0"
-source = "git+https://github.com/stellar/rs-stellar-xdr?rev=a79301db#a79301db2be52118ad23ea30056fd665843ef3a9"
+source = "git+https://github.com/stellar/rs-stellar-xdr?rev=94e01c7b#94e01c7bbb3622e12907e1ceb95ab85f4e55e085"
 dependencies = [
  "serde",
 ]

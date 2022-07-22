@@ -12,6 +12,7 @@ use num_traits::cast::ToPrimitive;
 use num_traits::{Pow, Signed, Zero};
 use std::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Not, Rem, Shl, Shr, Sub};
 use std::str::from_utf8;
+use stellar_contract_env_common::{TryConvert, TryFromVal, TryIntoVal};
 
 use stellar_contract_env_common::xdr::{
     AccountEntry, AccountId, Hash, PublicKey, ReadXdr, ThresholdIndexes, Uint256, WriteXdr,
@@ -26,8 +27,8 @@ use crate::xdr;
 use crate::xdr::{
     ContractDataEntry, HostFunction, LedgerEntry, LedgerEntryData, LedgerEntryExt, LedgerKey,
     LedgerKeyContractData, ScBigInt, ScHostContextErrorCode, ScHostFnErrorCode, ScHostObjErrorCode,
-    ScHostStorageErrorCode, ScHostValErrorCode, ScMap, ScMapEntry, ScObject, ScStatic, ScStatus,
-    ScStatusType, ScVal, ScVec,
+    ScHostStorageErrorCode, ScHostValErrorCode, ScMap, ScMapEntry, ScObject, ScStatic, ScVal,
+    ScVec,
 };
 use std::rc::Rc;
 
@@ -38,8 +39,8 @@ use crate::SymbolStr;
 #[cfg(feature = "vm")]
 use crate::Vm;
 use crate::{
-    BitSet, ConversionError, EnvBase, IntoEnvVal, Object, RawVal, RawValConvertible, Static,
-    Status, Symbol, Tag, Val, UNKNOWN_ERROR,
+    ConversionError, EnvBase, IntoEnvVal, Object, RawVal, RawValConvertible, Status, Symbol, Val,
+    UNKNOWN_ERROR,
 };
 
 mod error;
@@ -76,6 +77,15 @@ pub(crate) enum Frame {
     HostFunction(HostFunction),
     #[cfg(feature = "testutils")]
     TestContract(Hash),
+}
+
+/// Temporary helper for denoting a slice of guest memory, as formed by
+/// various binary operations.
+#[cfg(feature = "vm")]
+struct VmSlice {
+    vm: Rc<Vm>,
+    pos: u32,
+    len: u32,
 }
 
 #[derive(Clone, Default)]
@@ -125,6 +135,27 @@ pub struct Host(pub(crate) Rc<HostImpl>);
 impl Debug for Host {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Host({:x})", Rc::<HostImpl>::as_ptr(&self.0) as usize)
+    }
+}
+
+impl TryConvert<Object, ScObject> for Host {
+    type Error = HostError;
+    fn convert(&self, ob: Object) -> Result<ScObject, Self::Error> {
+        self.from_host_obj(ob)
+    }
+}
+
+impl TryConvert<&ScObject, Object> for Host {
+    type Error = HostError;
+    fn convert(&self, ob: &ScObject) -> Result<Object, Self::Error> {
+        self.to_host_obj(ob).map(|ob| ob.val)
+    }
+}
+
+impl TryConvert<ScObject, Object> for Host {
+    type Error = HostError;
+    fn convert(&self, ob: ScObject) -> Result<Object, Self::Error> {
+        self.to_host_obj(&ob).map(|ob| ob.val)
     }
 }
 
@@ -420,117 +451,47 @@ impl Host {
     }
 
     pub(crate) fn from_host_val(&self, val: RawVal) -> Result<ScVal, HostError> {
-        if val.is_u63() {
-            Ok(ScVal::U63(unsafe { val.unchecked_as_u63() }))
-        } else {
-            match val.get_tag() {
-                Tag::U32 => Ok(ScVal::U32(unsafe {
-                    <u32 as RawValConvertible>::unchecked_from_val(val)
-                })),
-                Tag::I32 => Ok(ScVal::I32(unsafe {
-                    <i32 as RawValConvertible>::unchecked_from_val(val)
-                })),
-                Tag::Static => {
-                    let tag_static =
-                        unsafe { <Static as RawValConvertible>::unchecked_from_val(val) };
-                    if tag_static.is_type(ScStatic::True) {
-                        Ok(ScVal::Static(ScStatic::True))
-                    } else if tag_static.is_type(ScStatic::False) {
-                        Ok(ScVal::Static(ScStatic::False))
-                    } else if tag_static.is_type(ScStatic::Void) {
-                        Ok(ScVal::Static(ScStatic::Void))
-                    } else if tag_static.is_type(ScStatic::LedgerKeyContractCodeWasm) {
-                        Ok(ScVal::Static(ScStatic::LedgerKeyContractCodeWasm))
-                    } else {
-                        Err(self.err_status(ScHostValErrorCode::StaticUnknown))
-                    }
-                }
-                Tag::Object => unsafe {
-                    let ob = <Object as RawValConvertible>::unchecked_from_val(val);
-                    let scob = self.from_host_obj(ob)?;
-                    Ok(ScVal::Object(Some(scob)))
-                },
-                Tag::Symbol => {
-                    let sym: Symbol =
-                        unsafe { <Symbol as RawValConvertible>::unchecked_from_val(val) };
-                    let str: String = sym.into_iter().collect();
-                    Ok(ScVal::Symbol(self.map_err(str.as_bytes().try_into())?))
-                }
-                Tag::BitSet => Ok(ScVal::Bitset(val.get_payload())),
-                Tag::Status => {
-                    let status: Status =
-                        unsafe { <Status as RawValConvertible>::unchecked_from_val(val) };
-                    let scstatus: ScStatus = self.map_err(status.try_into())?;
-                    Ok(ScVal::Status(scstatus))
-                }
-                Tag::Reserved => Err(self.err_status(ScHostValErrorCode::ReservedTagValue)),
-            }
-        }
+        ScVal::try_from_val(self, val)
+            .map_err(|_| self.err_status(ScHostValErrorCode::UnknownError))
     }
 
     // Testing interface to create values directly for later use via Env functions.
     pub fn inject_val(&self, v: &ScVal) -> Result<RawVal, HostError> {
-        self.to_host_val(v).map(|hv| hv.into())
+        self.to_host_val(v).map(Into::into)
+    }
+
+    pub fn get_events(&self) -> Events {
+        self.0.events.borrow().clone()
+    }
+
+    #[cfg(feature = "vm")]
+    fn decode_vmslice(&self, pos: RawVal, len: RawVal) -> Result<VmSlice, HostError> {
+        let pos: u32 = u32::try_from(pos).map_err(|_| {
+            self.err_status_msg(
+                ScHostFnErrorCode::InputArgsWrongType,
+                "guest binary pos must be u32",
+            )
+        })?;
+        let len: u32 = u32::try_from(len).map_err(|_| {
+            self.err_status_msg(
+                ScHostFnErrorCode::InputArgsWrongType,
+                "guest binary len must be u32",
+            )
+        })?;
+        self.with_current_frame(|frame| match frame {
+            Frame::ContractVM(vm) => {
+                let vm = vm.clone();
+                Ok(VmSlice { vm, pos, len })
+            }
+            _ => Err(self.err_general("attempt to access guest binary in non-VM frame")),
+        })
     }
 
     pub(crate) fn to_host_val(&self, v: &ScVal) -> Result<HostVal, HostError> {
-        let ok = match v {
-            ScVal::U63(i) => {
-                if *i >= 0 {
-                    unsafe { RawVal::unchecked_from_u63(*i) }
-                } else {
-                    return Err(self.err_status(ScHostValErrorCode::U63OutOfRange));
-                }
-            }
-            ScVal::U32(u) => (*u).into(),
-            ScVal::I32(i) => (*i).into(),
-            ScVal::Static(ScStatic::Void) => RawVal::from_void(),
-            ScVal::Static(ScStatic::True) => RawVal::from_bool(true),
-            ScVal::Static(ScStatic::False) => RawVal::from_bool(false),
-            ScVal::Static(other) => RawVal::from_other_static(*other),
-            ScVal::Object(None) => {
-                return Err(self.err_status(ScHostValErrorCode::MissingObject));
-            }
-            ScVal::Object(Some(ob)) => return Ok(self.to_host_obj(&*ob)?.into()),
-            ScVal::Symbol(bytes) => {
-                let ss = match std::str::from_utf8(bytes.as_slice()) {
-                    Ok(ss) => ss,
-                    Err(_) => {
-                        return Err(self.err_status(ScHostValErrorCode::SymbolContainsNonUtf8));
-                    }
-                };
-                Symbol::try_from_str(ss)?.into()
-            }
-            ScVal::Bitset(i) => BitSet::try_from_u64(*i)?.into(),
-            ScVal::Status(st) => {
-                let status = match st {
-                    ScStatus::Ok => Status::from_type_and_code(ScStatusType::Ok, 0),
-                    ScStatus::UnknownError(e) => {
-                        Status::from_type_and_code(ScStatusType::UnknownError, *e as u32)
-                    }
-                    ScStatus::HostValueError(e) => {
-                        Status::from_type_and_code(ScStatusType::HostValueError, *e as u32)
-                    }
-                    ScStatus::HostObjectError(e) => {
-                        Status::from_type_and_code(ScStatusType::HostObjectError, *e as u32)
-                    }
-                    ScStatus::HostFunctionError(e) => {
-                        Status::from_type_and_code(ScStatusType::HostFunctionError, *e as u32)
-                    }
-                    ScStatus::HostStorageError(e) => {
-                        Status::from_type_and_code(ScStatusType::HostStorageError, *e as u32)
-                    }
-                    ScStatus::HostContextError(e) => {
-                        Status::from_type_and_code(ScStatusType::HostContextError, *e as u32)
-                    }
-                    ScStatus::VmError(e) => {
-                        Status::from_type_and_code(ScStatusType::VmError, *e as u32)
-                    }
-                };
-                status.into()
-            }
-        };
-        Ok(self.associate_raw_val(ok))
+        let rv = v
+            .try_into_val(self)
+            .map_err(|_| self.err_status(ScHostValErrorCode::UnknownError))?;
+        Ok(self.associate_raw_val(rv))
     }
 
     pub(crate) fn from_host_obj(&self, ob: Object) -> Result<ScObject, HostError> {
@@ -905,6 +866,81 @@ impl EnvBase for Host {
         }
         new_host
     }
+
+    fn binary_copy_from_slice(&self, b: Object, b_pos: RawVal, mem: &[u8]) -> Object {
+        // This is only called from native contracts, either when testing or
+        // when the contract is otherwise linked into the same address space as
+        // us. We therefore access the memory we were passed directly.
+        //
+        // This is also why we _panic_ on errors in here, rather than attempting
+        // to return a recoverable error code: native contracts that call this
+        // function do so through APIs that _should_ never pass bad data.
+        //
+        // TODO: we may revisit this choice of panicing in the future, depending
+        // on how we choose to try to contain panics-caused-by-native-contracts.
+        let b_pos = u32::try_from(b_pos).expect("pos input is not u32");
+        let len = u32::try_from(mem.len()).expect("slice len exceeds u32");
+        let mut vnew = self
+            .visit_obj(b, |hv: &Vec<u8>| Ok(hv.clone()))
+            .expect("access to unknown host binary object");
+        let end_idx = b_pos.checked_add(len).expect("u32 overflow") as usize;
+        // TODO: we currently grow the destination vec if it's not big enough,
+        // make sure this is desirable behaviour.
+        if end_idx > vnew.len() {
+            vnew.resize(end_idx, 0);
+        }
+        let write_slice = &mut vnew[b_pos as usize..end_idx];
+        write_slice.copy_from_slice(mem);
+        self.add_host_object(vnew)
+            .expect("unable to add host object")
+            .into()
+    }
+
+    fn binary_copy_to_slice(&self, b: Object, b_pos: RawVal, mem: &mut [u8]) {
+        let b_pos = u32::try_from(b_pos).expect("pos input is not u32");
+        let len = u32::try_from(mem.len()).expect("slice len exceeds u32");
+        self.visit_obj(b, move |hv: &Vec<u8>| {
+            let end_idx = b_pos.checked_add(len).expect("u32 overflow") as usize;
+            if end_idx > hv.len() {
+                panic!("index out of bounds");
+            }
+            mem.copy_from_slice(&hv.as_slice()[b_pos as usize..end_idx]);
+            Ok(())
+        })
+        .expect("access to unknown host object");
+    }
+
+    fn binary_new_from_slice(&self, mem: &[u8]) -> Object {
+        self.add_host_object::<Vec<u8>>(mem.into())
+            .expect("unable to add host binary object")
+            .into()
+    }
+
+    fn log_static_fmt_val(&self, fmt: &'static str, v: RawVal) {
+        self.debug_event(DebugEvent::new().msg(fmt).arg(v))
+            .expect("unable to record debug event")
+    }
+
+    fn log_static_fmt_static_str(&self, fmt: &'static str, s: &'static str) {
+        self.debug_event(DebugEvent::new().msg(fmt).arg(s))
+            .expect("unable to record debug event")
+    }
+
+    fn log_static_fmt_val_static_str(&self, fmt: &'static str, v: RawVal, s: &'static str) {
+        self.debug_event(DebugEvent::new().msg(fmt).arg(v).arg(s))
+            .expect("unable to record debug event")
+    }
+
+    fn log_static_fmt_general(&self, fmt: &'static str, vals: &[RawVal], strs: &[&'static str]) {
+        let mut evt = DebugEvent::new().msg(fmt);
+        for v in vals {
+            evt = evt.arg(*v)
+        }
+        for s in strs {
+            evt = evt.arg(*s)
+        }
+        self.debug_event(evt).expect("unable to record debug event")
+    }
 }
 
 impl CheckedEnv for Host {
@@ -959,7 +995,8 @@ impl CheckedEnv for Host {
 
     fn get_invoking_contract(&self) -> Result<Object, HostError> {
         let frames = self.0.context.borrow();
-        let hash: Hash = if frames.len() > 2 {
+        // the previous frame must exist and must be a contract
+        let hash: Hash = if frames.len() >= 2 {
             match &frames[frames.len() - 2] {
                 #[cfg(feature = "vm")]
                 Frame::ContractVM(vm) => Ok(vm.contract_id.clone()),
@@ -1466,7 +1503,7 @@ impl CheckedEnv for Host {
             Err(e) => {
                 let evt = DebugEvent::new()
                     .msg("try_call got error from callee contract")
-                    .arg(e.status.clone());
+                    .arg::<RawVal>(e.status.clone().into());
                 self.debug_event(evt)?;
                 Ok(e.status.into())
             }
@@ -1688,30 +1725,25 @@ impl CheckedEnv for Host {
         #[cfg(not(feature = "vm"))]
         unimplemented!();
         #[cfg(feature = "vm")]
-        let b_pos: u32 = b_pos
-            .try_into()
-            .map_err(|_| self.err_convert::<u32>(b_pos))?;
-        let lm_pos: u32 = lm_pos
-            .try_into()
-            .map_err(|_| self.err_convert::<u32>(lm_pos))?;
-        let len: u32 = len.try_into().map_err(|_| self.err_convert::<u32>(len))?;
-
-        self.visit_obj(b, move |hv: &Vec<u8>| {
-            let end_idx = b_pos.checked_add(len).ok_or_else(|| {
-                self.err_status_msg(ScHostFnErrorCode::InputArgsInvalid, "u32 overflow")
-            })? as usize;
-            if end_idx > hv.len() {
-                return Err(self
-                    .err_status_msg(ScHostObjErrorCode::VecIndexOutOfBound, "index out of bound"));
-            }
-            self.with_current_frame(|frame| match frame {
-                Frame::ContractVM(vm) => vm.with_memory_access(self, |mem| {
-                    Ok(self.map_err(mem.set(lm_pos, &hv.as_slice()[b_pos as usize..end_idx]))?)
-                }),
-                _ => Err(self.err_general("linear memory not supported")),
+        {
+            let VmSlice { vm, pos, len } = self.decode_vmslice(lm_pos, len)?;
+            let b_pos = u32::try_from(b_pos)?;
+            self.visit_obj(b, move |hv: &Vec<u8>| {
+                let end_idx = b_pos.checked_add(len).ok_or_else(|| {
+                    self.err_status_msg(ScHostFnErrorCode::InputArgsInvalid, "u32 overflow")
+                })? as usize;
+                if end_idx > hv.len() {
+                    return Err(self.err_status_msg(
+                        ScHostObjErrorCode::VecIndexOutOfBound,
+                        "index out of bound",
+                    ));
+                }
+                vm.with_memory_access(self, |mem| {
+                    self.map_err(mem.set(pos, &hv.as_slice()[b_pos as usize..end_idx]))
+                })?;
+                Ok(().into())
             })
-        })?;
-        Ok(().into())
+        }
     }
 
     fn binary_copy_from_linear_memory(
@@ -1724,31 +1756,25 @@ impl CheckedEnv for Host {
         #[cfg(not(feature = "vm"))]
         unimplemented!();
         #[cfg(feature = "vm")]
-        let b_pos: u32 = b_pos
-            .try_into()
-            .map_err(|_| self.err_convert::<u32>(b_pos))?;
-        let lm_pos: u32 = lm_pos
-            .try_into()
-            .map_err(|_| self.err_convert::<u32>(lm_pos))?;
-        let len: u32 = len.try_into().map_err(|_| self.err_convert::<u32>(len))?;
-
-        let mut vnew = self.visit_obj(b, |hv: &Vec<u8>| Ok(hv.clone()))?;
-        let end_idx = b_pos.checked_add(len).ok_or_else(|| {
-            self.err_status_msg(ScHostFnErrorCode::InputArgsInvalid, "u32 overflow")
-        })? as usize;
-        self.with_current_frame(|frame| match frame {
-            Frame::ContractVM(vm) => vm.with_memory_access(self, |mem| {
-                // we would potentially let the vec grow
-                if end_idx > vnew.len() {
-                    vnew.resize(end_idx, 0);
-                }
+        {
+            let VmSlice { vm, pos, len } = self.decode_vmslice(lm_pos, len)?;
+            let b_pos = u32::try_from(b_pos)?;
+            let mut vnew = self.visit_obj(b, |hv: &Vec<u8>| Ok(hv.clone()))?;
+            let end_idx = b_pos.checked_add(len).ok_or_else(|| {
+                self.err_status_msg(ScHostFnErrorCode::InputArgsInvalid, "u32 overflow")
+            })? as usize;
+            // TODO: we currently grow the destination vec if it's not big enough,
+            // make sure this is desirable behaviour.
+            if end_idx > vnew.len() {
+                vnew.resize(end_idx, 0);
+            }
+            vm.with_memory_access(self, |mem| {
                 Ok(self.map_err(
-                    mem.get_into(lm_pos, &mut vnew.as_mut_slice()[b_pos as usize..end_idx]),
+                    mem.get_into(pos, &mut vnew.as_mut_slice()[b_pos as usize..end_idx]),
                 )?)
-            }),
-            _ => Err(self.err_general("linear memory not supported")),
-        })?;
-        Ok(self.add_host_object(vnew)?.into())
+            })?;
+            Ok(self.add_host_object(vnew)?.into())
+        }
     }
 
     fn binary_new(&self) -> Result<Object, HostError> {
@@ -1763,19 +1789,14 @@ impl CheckedEnv for Host {
         #[cfg(not(feature = "vm"))]
         unimplemented!();
         #[cfg(feature = "vm")]
-        let lm_pos: u32 = lm_pos
-            .try_into()
-            .map_err(|_| self.err_convert::<u32>(lm_pos))?;
-        let len: u32 = len.try_into().map_err(|_| self.err_convert::<u32>(len))?;
-
-        return self.with_current_frame(|frame| match frame {
-            Frame::ContractVM(vm) => vm.with_memory_access(self, |mem| {
-                let mut vnew: Vec<u8> = vec![0; len as usize];
-                self.map_err(mem.get_into(lm_pos, vnew.as_mut_slice()))?;
-                Ok(self.add_host_object(vnew)?.into())
-            }),
-            _ => Err(self.err_general("linear memory not supported")),
-        });
+        {
+            let VmSlice { vm, pos, len } = self.decode_vmslice(lm_pos, len)?;
+            let mut vnew: Vec<u8> = vec![0; len as usize];
+            vm.with_memory_access(self, |mem| {
+                self.map_err(mem.get_into(pos, vnew.as_mut_slice()))
+            })?;
+            Ok(self.add_host_object(vnew)?.into())
+        }
     }
 
     fn binary_put(&self, b: Object, i: RawVal, u: RawVal) -> Result<Object, HostError> {
@@ -1907,24 +1928,25 @@ impl CheckedEnv for Host {
         Ok(self.add_host_object(vnew)?.into())
     }
 
-    fn binary_slice(&self, b: Object, i: RawVal, l: RawVal) -> Result<Object, HostError> {
-        let i: usize = u32::try_from(i).map_err(|_| {
-            self.err_status_msg(ScHostFnErrorCode::InputArgsWrongType, "i must be u32")
+    fn binary_slice(&self, b: Object, start: RawVal, end: RawVal) -> Result<Object, HostError> {
+        let start: usize = u32::try_from(start).map_err(|_| {
+            self.err_status_msg(ScHostFnErrorCode::InputArgsWrongType, "start must be u32")
         })? as usize;
-        let l: usize = u32::try_from(l).map_err(|_| {
-            self.err_status_msg(ScHostFnErrorCode::InputArgsWrongType, "l must be u32")
+        let end: usize = u32::try_from(end).map_err(|_| {
+            self.err_status_msg(ScHostFnErrorCode::InputArgsWrongType, "end must be u32")
         })? as usize;
         let vnew = self.visit_obj(b, move |hv: &Vec<u8>| {
-            if i > u32::MAX as usize - l {
-                return Err(
-                    self.err_status_msg(ScHostFnErrorCode::InputArgsInvalid, "u32 overflow")
-                );
+            if start > hv.len() {
+                return Err(self.err_status_msg(
+                    ScHostObjErrorCode::VecIndexOutOfBound,
+                    "start out of bounds",
+                ));
             }
-            if (i + l) > hv.len() {
+            if end > hv.len() {
                 return Err(self
-                    .err_status_msg(ScHostObjErrorCode::VecIndexOutOfBound, "index out of bound"));
+                    .err_status_msg(ScHostObjErrorCode::VecIndexOutOfBound, "end out of bounds"));
             }
-            Ok(hv.as_slice()[i..(i + l)].to_vec())
+            Ok(hv.as_slice()[start..end].to_vec())
         })?;
         Ok(self.add_host_object(vnew)?.into())
     }

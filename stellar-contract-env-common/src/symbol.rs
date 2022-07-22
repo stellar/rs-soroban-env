@@ -1,4 +1,4 @@
-use crate::{require, RawVal, Tag, TagSymbol, TaggedVal};
+use crate::{require, ConversionError, RawVal, Tag, TagSymbol, TaggedVal};
 use core::{
     cmp::Ordering,
     fmt::Debug,
@@ -11,6 +11,12 @@ use core::{
 pub enum SymbolError {
     TooLong(usize),
     BadChar(char),
+}
+
+impl From<SymbolError> for ConversionError {
+    fn from(_: SymbolError) -> Self {
+        ConversionError
+    }
 }
 
 extern crate static_assertions as sa;

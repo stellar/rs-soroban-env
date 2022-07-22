@@ -72,7 +72,7 @@ fn binary_suite_of_tests() -> Result<(), HostError> {
     } else {
         return Err(host.err_general("Type error"));
     }
-    let obj1 = host.binary_slice(obj, 3_u32.into(), 5_u32.into())?; // [3,4,5,6,7]
+    let obj1 = host.binary_slice(obj, 3_u32.into(), 8_u32.into())?; // [3,4,5,6,7]
     if let ScObject::Binary(b) = host.from_host_obj(obj1)? {
         assert_eq!((3..8).collect::<Vec<u8>>().as_slice(), b.as_slice());
     } else {

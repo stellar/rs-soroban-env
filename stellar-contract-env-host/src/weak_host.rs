@@ -49,6 +49,34 @@ impl EnvBase for WeakHost {
     fn deep_clone(&self) -> Self {
         self.get_host().deep_clone().get_weak()
     }
+
+    fn binary_copy_from_slice(&self, b: Object, b_pos: RawVal, mem: &[u8]) -> Object {
+        self.get_host().binary_copy_from_slice(b, b_pos, mem)
+    }
+
+    fn binary_copy_to_slice(&self, b: Object, b_pos: RawVal, mem: &mut [u8]) {
+        self.get_host().binary_copy_to_slice(b, b_pos, mem)
+    }
+
+    fn binary_new_from_slice(&self, mem: &[u8]) -> Object {
+        self.get_host().binary_new_from_slice(mem)
+    }
+
+    fn log_static_fmt_val(&self, fmt: &'static str, v: RawVal) {
+        self.get_host().log_static_fmt_val(fmt, v)
+    }
+
+    fn log_static_fmt_static_str(&self, fmt: &'static str, s: &'static str) {
+        self.get_host().log_static_fmt_static_str(fmt, s)
+    }
+
+    fn log_static_fmt_val_static_str(&self, fmt: &'static str, v: RawVal, s: &'static str) {
+        self.get_host().log_static_fmt_val_static_str(fmt, v, s)
+    }
+
+    fn log_static_fmt_general(&self, fmt: &'static str, vals: &[RawVal], strs: &[&'static str]) {
+        self.get_host().log_static_fmt_general(fmt, vals, strs)
+    }
 }
 
 ///////////////////////////////////////////////////////////////////////////////
