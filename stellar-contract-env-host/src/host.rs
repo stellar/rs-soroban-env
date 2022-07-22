@@ -257,6 +257,15 @@ impl Host {
         self.err(DebugError::general().msg(msg))
     }
 
+    pub(crate) fn err_conversion_raw_val_to<T>(&self, rv: RawVal) -> HostError {
+        self.err(
+            DebugError::new(ConversionError)
+                .msg("error converting {} into {}")
+                .arg(rv)
+                .arg(std::any::type_name::<T>()),
+        )
+    }
+
     /// Helper for the next-simplest status-and-extended-debug-message error path.
     pub(crate) fn err_status_msg<T>(&self, status: T, msg: &'static str) -> HostError
     where
@@ -785,6 +794,22 @@ impl Host {
         }
     }
 
+    fn usize_from_rawval_u32_input(
+        &self,
+        name: &'static str,
+        r: RawVal,
+    ) -> Result<usize, HostError> {
+        match u32::try_from(r) {
+            Ok(v) => Ok(v as usize),
+            Err(cvt) => Err(self.err(
+                DebugError::new(ScHostFnErrorCode::InputArgsWrongType)
+                    .msg("unexpected RawVal {} for input '{}', need U32")
+                    .arg(r)
+                    .arg(name),
+            )),
+        }
+    }
+
     fn to_u256(&self, a: Object) -> Result<Uint256, HostError> {
         self.visit_obj(a, |bin: &Vec<u8>| {
             bin.try_into()
@@ -1181,9 +1206,7 @@ impl CheckedEnv for Host {
     }
 
     fn vec_put(&self, v: Object, i: RawVal, x: RawVal) -> Result<Object, HostError> {
-        let i: usize = u32::try_from(i).map_err(|_| {
-            self.err_status_msg(ScHostFnErrorCode::InputArgsWrongType, "i must be u32")
-        })? as usize;
+        let i: usize = self.usize_from_rawval_u32_input("i", i)?;
         let x = self.associate_raw_val(x);
         let vnew = self.visit_obj(v, move |hv: &HostVec| {
             if i >= hv.len() {
@@ -1198,9 +1221,7 @@ impl CheckedEnv for Host {
     }
 
     fn vec_get(&self, v: Object, i: RawVal) -> Result<RawVal, HostError> {
-        let i: usize = u32::try_from(i).map_err(|_| {
-            self.err_status_msg(ScHostFnErrorCode::InputArgsWrongType, "i must be u32")
-        })? as usize;
+        let i: usize = self.usize_from_rawval_u32_input("i", i)?;
         self.visit_obj(v, move |hv: &HostVec| match hv.get(i) {
             None => {
                 Err(self
@@ -1211,9 +1232,7 @@ impl CheckedEnv for Host {
     }
 
     fn vec_del(&self, v: Object, i: RawVal) -> Result<Object, HostError> {
-        let i: usize = u32::try_from(i).map_err(|_| {
-            self.err_status_msg(ScHostFnErrorCode::InputArgsWrongType, "i must be u32")
-        })? as usize;
+        let i: usize = self.usize_from_rawval_u32_input("i", i)?;
         let vnew = self.visit_obj(v, move |hv: &HostVec| {
             if i >= hv.len() {
                 return Err(self

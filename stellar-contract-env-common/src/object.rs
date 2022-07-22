@@ -1,4 +1,4 @@
-use stellar_xdr::ScObject;
+use stellar_xdr::{ScObject, ScVal};
 
 use crate::{
     tagged_val::{TagObject, TaggedVal},
@@ -89,5 +89,53 @@ where
             val: env.convert(self)?,
             env: env.clone(),
         })
+    }
+}
+
+impl<E> TryFrom<EnvVal<E, Object>> for ScVal
+where
+    E: Env + TryConvert<Object, ScObject>,
+{
+    type Error = E::Error;
+    fn try_from(ev: EnvVal<E, Object>) -> Result<Self, Self::Error> {
+        (&ev).try_into()
+    }
+}
+
+impl<E> TryFrom<&EnvVal<E, Object>> for ScVal
+where
+    E: Env + TryConvert<Object, ScObject>,
+{
+    type Error = E::Error;
+    fn try_from(ev: &EnvVal<E, Object>) -> Result<Self, Self::Error> {
+        Ok(ScVal::Object(Some(ev.env.convert(ev.val)?)))
+    }
+}
+
+impl<'a, E> TryIntoEnvVal<E, Object> for &'a ScVal
+where
+    E: Env + TryConvert<&'a ScObject, Object>,
+{
+    type Error = E::Error;
+    fn try_into_env_val(self, env: &E) -> Result<EnvVal<E, Object>, Self::Error> {
+        if let ScVal::Object(Some(o)) = self {
+            o.try_into_env_val(env)
+        } else {
+            todo!()
+        }
+    }
+}
+
+impl<E> TryIntoEnvVal<E, Object> for ScVal
+where
+    E: Env + TryConvert<ScObject, Object>,
+{
+    type Error = E::Error;
+    fn try_into_env_val(self, env: &E) -> Result<EnvVal<E, Object>, Self::Error> {
+        if let ScVal::Object(Some(o)) = self {
+            o.try_into_env_val(env)
+        } else {
+            todo!()
+        }
     }
 }
