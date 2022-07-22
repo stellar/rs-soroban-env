@@ -1,4 +1,4 @@
-use crate::{require, RawVal, Tag, TagSymbol, TaggedVal, ConversionError};
+use crate::{require, ConversionError, RawVal, Tag, TagSymbol, TaggedVal};
 use core::{
     cmp::Ordering,
     fmt::Debug,

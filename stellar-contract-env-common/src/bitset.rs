@@ -1,4 +1,4 @@
-use crate::{RawVal, Tag, TagBitSet, TaggedVal, ConversionError};
+use crate::{ConversionError, RawVal, Tag, TagBitSet, TaggedVal};
 use core::cmp::Ordering;
 use core::fmt::Debug;
 use core::hash::{Hash, Hasher};

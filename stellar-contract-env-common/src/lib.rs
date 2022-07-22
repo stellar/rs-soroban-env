@@ -2,6 +2,7 @@
 
 mod bitset;
 mod checked_env;
+mod convert;
 mod env;
 mod env_val;
 pub mod meta;
@@ -11,7 +12,6 @@ mod r#static;
 mod status;
 mod symbol;
 mod tagged_val;
-mod transform;
 mod tuple;
 mod unimplemented_env;
 mod val;
@@ -29,9 +29,9 @@ pub use val::Val;
 
 // RawVal and EnvObj couple raw types to environments.
 pub use checked_env::CheckedEnv;
+pub use convert::TryConvert;
 pub use env::{Env, EnvBase};
 pub use env_val::{EnvVal, IntoEnvVal, IntoVal, TryFromVal, TryIntoEnvVal, TryIntoVal};
-pub use transform::TryTransform;
 pub use unimplemented_env::UnimplementedEnv;
 
 // BitSet, Status and Symbol wrap RawVals.
