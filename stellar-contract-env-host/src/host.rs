@@ -257,7 +257,7 @@ impl Host {
         self.err(DebugError::general().msg(msg))
     }
 
-    pub(crate) fn err_conversion_rawval_to<T>(&self, rv: RawVal) -> HostError {
+    pub(crate) fn err_conversion_raw_val_to<T>(&self, rv: RawVal) -> HostError {
         self.err(
             DebugError::new(ConversionError)
                 .msg("error converting {} into {}")
