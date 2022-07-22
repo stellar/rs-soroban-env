@@ -14,6 +14,34 @@ impl EnvBase for UnimplementedEnv {
     fn deep_clone(&self) -> Self {
         Self
     }
+
+    fn binary_copy_from_slice(&self, _b: Object, _b_pos: RawVal, _mem: &[u8]) -> Object {
+        unimplemented!()
+    }
+
+    fn binary_copy_to_slice(&self, _b: Object, _b_pos: RawVal, _mem: &mut [u8]) {
+        unimplemented!()
+    }
+
+    fn binary_new_from_slice(&self, _mem: &[u8]) -> Object {
+        unimplemented!()
+    }
+
+    fn log_static_fmt_val(&self, _fmt: &'static str, _v: RawVal) {
+        unimplemented!()
+    }
+
+    fn log_static_fmt_static_str(&self, _fmt: &'static str, _s: &'static str) {
+        unimplemented!()
+    }
+
+    fn log_static_fmt_val_static_str(&self, _fmt: &'static str, _v: RawVal, _s: &'static str) {
+        unimplemented!()
+    }
+
+    fn log_static_fmt_general(&self, _fmt: &'static str, _vals: &[RawVal], _strs: &[&'static str]) {
+        unimplemented!()
+    }
 }
 
 // This is a helper macro used only by generate_env_unimplemented below. It

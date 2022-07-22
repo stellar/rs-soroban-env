@@ -77,6 +77,15 @@ pub(crate) enum Frame {
     TestContract(Hash),
 }
 
+/// Temporary helper for denoting a slice of guest memory, as formed by
+/// various binary operations.
+#[cfg(feature = "vm")]
+struct VmSlice {
+    vm: Rc<Vm>,
+    pos: u32,
+    len: u32,
+}
+
 #[derive(Clone, Default)]
 pub(crate) struct HostImpl {
     objects: RefCell<Vec<HostObject>>,
@@ -429,6 +438,33 @@ impl Host {
     // Testing interface to create values directly for later use via Env functions.
     pub fn inject_val(&self, v: &ScVal) -> Result<RawVal, HostError> {
         self.to_host_val(v).map(Into::into)
+    }
+
+    pub fn get_events(&self) -> Events {
+        self.0.events.borrow().clone()
+    }
+
+    #[cfg(feature = "vm")]
+    fn decode_vmslice(&self, pos: RawVal, len: RawVal) -> Result<VmSlice, HostError> {
+        let pos: u32 = u32::try_from(pos).map_err(|_| {
+            self.err_status_msg(
+                ScHostFnErrorCode::InputArgsWrongType,
+                "guest binary pos must be u32",
+            )
+        })?;
+        let len: u32 = u32::try_from(len).map_err(|_| {
+            self.err_status_msg(
+                ScHostFnErrorCode::InputArgsWrongType,
+                "guest binary len must be u32",
+            )
+        })?;
+        self.with_current_frame(|frame| match frame {
+            Frame::ContractVM(vm) => {
+                let vm = vm.clone();
+                Ok(VmSlice { vm, pos, len })
+            }
+            _ => Err(self.err_general("attempt to access guest binary in non-VM frame")),
+        })
     }
 
     pub(crate) fn to_host_val(&self, v: &ScVal) -> Result<HostVal, HostError> {
@@ -809,6 +845,81 @@ impl EnvBase for Host {
             }
         }
         new_host
+    }
+
+    fn binary_copy_from_slice(&self, b: Object, b_pos: RawVal, mem: &[u8]) -> Object {
+        // This is only called from native contracts, either when testing or
+        // when the contract is otherwise linked into the same address space as
+        // us. We therefore access the memory we were passed directly.
+        //
+        // This is also why we _panic_ on errors in here, rather than attempting
+        // to return a recoverable error code: native contracts that call this
+        // function do so through APIs that _should_ never pass bad data.
+        //
+        // TODO: we may revisit this choice of panicing in the future, depending
+        // on how we choose to try to contain panics-caused-by-native-contracts.
+        let b_pos = u32::try_from(b_pos).expect("pos input is not u32");
+        let len = u32::try_from(mem.len()).expect("slice len exceeds u32");
+        let mut vnew = self
+            .visit_obj(b, |hv: &Vec<u8>| Ok(hv.clone()))
+            .expect("access to unknown host binary object");
+        let end_idx = b_pos.checked_add(len).expect("u32 overflow") as usize;
+        // TODO: we currently grow the destination vec if it's not big enough,
+        // make sure this is desirable behaviour.
+        if end_idx > vnew.len() {
+            vnew.resize(end_idx, 0);
+        }
+        let write_slice = &mut vnew[b_pos as usize..end_idx];
+        write_slice.copy_from_slice(mem);
+        self.add_host_object(vnew)
+            .expect("unable to add host object")
+            .into()
+    }
+
+    fn binary_copy_to_slice(&self, b: Object, b_pos: RawVal, mem: &mut [u8]) {
+        let b_pos = u32::try_from(b_pos).expect("pos input is not u32");
+        let len = u32::try_from(mem.len()).expect("slice len exceeds u32");
+        self.visit_obj(b, move |hv: &Vec<u8>| {
+            let end_idx = b_pos.checked_add(len).expect("u32 overflow") as usize;
+            if end_idx > hv.len() {
+                panic!("index out of bounds");
+            }
+            mem.copy_from_slice(&hv.as_slice()[b_pos as usize..end_idx]);
+            Ok(())
+        })
+        .expect("access to unknown host object");
+    }
+
+    fn binary_new_from_slice(&self, mem: &[u8]) -> Object {
+        self.add_host_object::<Vec<u8>>(mem.into())
+            .expect("unable to add host binary object")
+            .into()
+    }
+
+    fn log_static_fmt_val(&self, fmt: &'static str, v: RawVal) {
+        self.debug_event(DebugEvent::new().msg(fmt).arg(v))
+            .expect("unable to record debug event")
+    }
+
+    fn log_static_fmt_static_str(&self, fmt: &'static str, s: &'static str) {
+        self.debug_event(DebugEvent::new().msg(fmt).arg(s))
+            .expect("unable to record debug event")
+    }
+
+    fn log_static_fmt_val_static_str(&self, fmt: &'static str, v: RawVal, s: &'static str) {
+        self.debug_event(DebugEvent::new().msg(fmt).arg(v).arg(s))
+            .expect("unable to record debug event")
+    }
+
+    fn log_static_fmt_general(&self, fmt: &'static str, vals: &[RawVal], strs: &[&'static str]) {
+        let mut evt = DebugEvent::new().msg(fmt);
+        for v in vals {
+            evt = evt.arg(*v)
+        }
+        for s in strs {
+            evt = evt.arg(*s)
+        }
+        self.debug_event(evt).expect("unable to record debug event")
     }
 }
 
@@ -1332,7 +1443,7 @@ impl CheckedEnv for Host {
             Err(e) => {
                 let evt = DebugEvent::new()
                     .msg("try_call got error from callee contract")
-                    .arg(e.status.clone());
+                    .arg::<RawVal>(e.status.clone().into());
                 self.debug_event(evt)?;
                 Ok(e.status.into())
             }
@@ -1554,14 +1665,11 @@ impl CheckedEnv for Host {
         #[cfg(not(feature = "vm"))]
         unimplemented!();
         #[cfg(feature = "vm")]
-        if let [b_pos, lm_pos, len] = [b_pos, lm_pos, len]
-            .iter()
-            .map(|v| u32::try_from(*v))
-            .collect::<Result<Vec<u32>, ConversionError>>()?
-            .as_slice()
         {
+            let VmSlice { vm, pos, len } = self.decode_vmslice(lm_pos, len)?;
+            let b_pos = u32::try_from(b_pos)?;
             self.visit_obj(b, move |hv: &Vec<u8>| {
-                let end_idx = b_pos.checked_add(*len).ok_or_else(|| {
+                let end_idx = b_pos.checked_add(len).ok_or_else(|| {
                     self.err_status_msg(ScHostFnErrorCode::InputArgsInvalid, "u32 overflow")
                 })? as usize;
                 if end_idx > hv.len() {
@@ -1570,22 +1678,11 @@ impl CheckedEnv for Host {
                         "index out of bound",
                     ));
                 }
-                self.with_current_frame(|frame| match frame {
-                    Frame::ContractVM(vm) => vm.with_memory_access(self, |mem| {
-                        Ok(self
-                            .map_err(mem.set(*lm_pos, &hv.as_slice()[*b_pos as usize..end_idx]))?)
-                    }),
-                    Frame::HostFunction(_) => Err(self.err_general("linear memory not supported")),
-                    #[cfg(feature = "testutils")]
-                    Frame::TestContract(id) => Err(self.err_general("linear memory not supported")),
-                })
-            })?;
-            Ok(().into())
-        } else {
-            return Err(self.err_status_msg(
-                ScHostFnErrorCode::InputArgsWrongType,
-                "failed conversion to u32",
-            ));
+                vm.with_memory_access(self, |mem| {
+                    self.map_err(mem.set(pos, &hv.as_slice()[b_pos as usize..end_idx]))
+                })?;
+                Ok(().into())
+            })
         }
     }
 
@@ -1599,36 +1696,24 @@ impl CheckedEnv for Host {
         #[cfg(not(feature = "vm"))]
         unimplemented!();
         #[cfg(feature = "vm")]
-        if let [b_pos, lm_pos, len] = [b_pos, lm_pos, len]
-            .iter()
-            .map(|v| u32::try_from(*v))
-            .collect::<Result<Vec<u32>, ConversionError>>()?
-            .as_slice()
         {
+            let VmSlice { vm, pos, len } = self.decode_vmslice(lm_pos, len)?;
+            let b_pos = u32::try_from(b_pos)?;
             let mut vnew = self.visit_obj(b, |hv: &Vec<u8>| Ok(hv.clone()))?;
-            let end_idx = b_pos.checked_add(*len).ok_or_else(|| {
+            let end_idx = b_pos.checked_add(len).ok_or_else(|| {
                 self.err_status_msg(ScHostFnErrorCode::InputArgsInvalid, "u32 overflow")
             })? as usize;
-            self.with_current_frame(|frame| match frame {
-                Frame::ContractVM(vm) => vm.with_memory_access(self, |mem| {
-                    // we would potentially let the vec grow
-                    if end_idx > vnew.len() {
-                        vnew.resize(end_idx, 0);
-                    }
-                    Ok(self.map_err(
-                        mem.get_into(*lm_pos, &mut vnew.as_mut_slice()[*b_pos as usize..end_idx]),
-                    )?)
-                }),
-                Frame::HostFunction(_) => Err(self.err_general("linear memory not supported")),
-                #[cfg(feature = "testutils")]
-                Frame::TestContract(id) => Err(self.err_general("linear memory not supported")),
+            // TODO: we currently grow the destination vec if it's not big enough,
+            // make sure this is desirable behaviour.
+            if end_idx > vnew.len() {
+                vnew.resize(end_idx, 0);
+            }
+            vm.with_memory_access(self, |mem| {
+                Ok(self.map_err(
+                    mem.get_into(pos, &mut vnew.as_mut_slice()[b_pos as usize..end_idx]),
+                )?)
             })?;
             Ok(self.add_host_object(vnew)?.into())
-        } else {
-            return Err(self.err_status_msg(
-                ScHostFnErrorCode::InputArgsWrongType,
-                "failed conversion to u32",
-            ));
         }
     }
 
@@ -1644,27 +1729,13 @@ impl CheckedEnv for Host {
         #[cfg(not(feature = "vm"))]
         unimplemented!();
         #[cfg(feature = "vm")]
-        if let [lm_pos, len] = [lm_pos, len]
-            .iter()
-            .map(|v| u32::try_from(*v))
-            .collect::<Result<Vec<u32>, ConversionError>>()?
-            .as_slice()
         {
-            return self.with_current_frame(|frame| match frame {
-                Frame::ContractVM(vm) => vm.with_memory_access(self, |mem| {
-                    let mut vnew: Vec<u8> = vec![0; *len as usize];
-                    self.map_err(mem.get_into(*lm_pos, vnew.as_mut_slice()))?;
-                    Ok(self.add_host_object(vnew)?.into())
-                }),
-                Frame::HostFunction(_) => Err(self.err_general("linear memory not supported")),
-                #[cfg(feature = "testutils")]
-                Frame::TestContract(id) => Err(self.err_general("linear memory not supported")),
-            });
-        } else {
-            return Err(self.err_status_msg(
-                ScHostFnErrorCode::InputArgsWrongType,
-                "failed conversion to u32",
-            ));
+            let VmSlice { vm, pos, len } = self.decode_vmslice(lm_pos, len)?;
+            let mut vnew: Vec<u8> = vec![0; len as usize];
+            vm.with_memory_access(self, |mem| {
+                self.map_err(mem.get_into(pos, vnew.as_mut_slice()))
+            })?;
+            Ok(self.add_host_object(vnew)?.into())
         }
     }
 
