@@ -1797,24 +1797,25 @@ impl CheckedEnv for Host {
         Ok(self.add_host_object(vnew)?.into())
     }
 
-    fn binary_slice(&self, b: Object, i: RawVal, l: RawVal) -> Result<Object, HostError> {
-        let i: usize = u32::try_from(i).map_err(|_| {
-            self.err_status_msg(ScHostFnErrorCode::InputArgsWrongType, "i must be u32")
+    fn binary_slice(&self, b: Object, start: RawVal, end: RawVal) -> Result<Object, HostError> {
+        let start: usize = u32::try_from(start).map_err(|_| {
+            self.err_status_msg(ScHostFnErrorCode::InputArgsWrongType, "start must be u32")
         })? as usize;
-        let l: usize = u32::try_from(l).map_err(|_| {
-            self.err_status_msg(ScHostFnErrorCode::InputArgsWrongType, "l must be u32")
+        let end: usize = u32::try_from(end).map_err(|_| {
+            self.err_status_msg(ScHostFnErrorCode::InputArgsWrongType, "end must be u32")
         })? as usize;
         let vnew = self.visit_obj(b, move |hv: &Vec<u8>| {
-            if i > u32::MAX as usize - l {
-                return Err(
-                    self.err_status_msg(ScHostFnErrorCode::InputArgsInvalid, "u32 overflow")
-                );
+            if start > hv.len() {
+                return Err(self.err_status_msg(
+                    ScHostObjErrorCode::VecIndexOutOfBound,
+                    "start out of bounds",
+                ));
             }
-            if (i + l) > hv.len() {
+            if end > hv.len() {
                 return Err(self
-                    .err_status_msg(ScHostObjErrorCode::VecIndexOutOfBound, "index out of bound"));
+                    .err_status_msg(ScHostObjErrorCode::VecIndexOutOfBound, "end out of bounds"));
             }
-            Ok(hv.as_slice()[i..(i + l)].to_vec())
+            Ok(hv.as_slice()[start..end].to_vec())
         })?;
         Ok(self.add_host_object(vnew)?.into())
     }
