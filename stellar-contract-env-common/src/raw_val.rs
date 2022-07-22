@@ -1,6 +1,6 @@
 use stellar_xdr::{ScStatic, ScStatus, ScStatusType};
 
-use super::{BitSet, BitSetError, Env, EnvVal, IntoEnvVal, Object, Status, Symbol, SymbolError};
+use super::{BitSet, Env, EnvVal, IntoEnvVal, Object, Status, Symbol};
 use core::fmt::Debug;
 
 extern crate static_assertions as sa;
@@ -71,18 +71,6 @@ pub struct ConversionError;
 
 impl From<stellar_xdr::Error> for ConversionError {
     fn from(_: stellar_xdr::Error) -> Self {
-        ConversionError
-    }
-}
-
-impl From<SymbolError> for ConversionError {
-    fn from(_: SymbolError) -> Self {
-        ConversionError
-    }
-}
-
-impl From<BitSetError> for ConversionError {
-    fn from(_: BitSetError) -> Self {
         ConversionError
     }
 }
