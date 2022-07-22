@@ -151,11 +151,24 @@ impl<E: Env> From<EnvVal<E, RawVal>> for RawVal {
     }
 }
 
+impl<E: Env> EnvVal<E, RawVal> {
+    fn log_err_convert<T>(self) {
+        self.env().log_static_fmt_val_static_str(
+            "can't convert {} to {}",
+            self.to_raw(),
+            core::any::type_name::<T>(),
+        );
+    }
+}
+
 impl<E: Env, T: TagType> TryFrom<EnvVal<E, RawVal>> for TaggedVal<T> {
     type Error = ConversionError;
 
     fn try_from(ev: EnvVal<E, RawVal>) -> Result<Self, Self::Error> {
-        ev.to_raw().try_into()
+        ev.to_raw().try_into().map_err(|err| {
+            ev.log_err_convert::<Self>();
+            err
+        })
     }
 }
 
@@ -163,7 +176,10 @@ impl<E: Env, T: TagType> TryFrom<EnvVal<E, RawVal>> for EnvVal<E, TaggedVal<T>> 
     type Error = ConversionError;
 
     fn try_from(ev: EnvVal<E, RawVal>) -> Result<Self, Self::Error> {
-        let tv: TaggedVal<T> = ev.to_raw().try_into()?;
+        let tv: TaggedVal<T> = ev.to_raw().try_into().map_err(|err| {
+            ev.clone().log_err_convert::<Self>();
+            err
+        })?;
         Ok(tv.in_env(ev.env()))
     }
 }
@@ -208,6 +224,7 @@ impl<E: Env> TryFrom<EnvVal<E, RawVal>> for i64 {
             let obj = unsafe { Object::unchecked_from_val(ev.val) };
             Ok(ev.env.obj_to_i64(obj))
         } else {
+            ev.log_err_convert::<i64>();
             Err(ConversionError)
         }
     }
@@ -235,6 +252,7 @@ impl<E: Env> TryFrom<EnvVal<E, RawVal>> for u64 {
             let obj = unsafe { Object::unchecked_from_val(ev.val) };
             Ok(ev.env.obj_to_u64(obj))
         } else {
+            ev.log_err_convert::<u64>();
             Err(ConversionError)
         }
     }
@@ -258,8 +276,9 @@ where
     type Error = ConversionError;
 
     fn try_from(ev: EnvVal<E, RawVal>) -> Result<Self, Self::Error> {
-        let env = ev.env;
-        let val = ev.val;
+        let ev_clone = ev.clone();
+        let env = ev_clone.env;
+        let val = ev_clone.val;
         if val.is_u63() {
             Ok(ScVal::U63(unsafe { val.unchecked_as_u63() }))
         } else {
@@ -282,6 +301,7 @@ where
                     } else if tag_static.is_type(ScStatic::LedgerKeyContractCodeWasm) {
                         Ok(ScVal::Static(ScStatic::LedgerKeyContractCodeWasm))
                     } else {
+                        ev.log_err_convert::<Self>();
                         Err(ConversionError)
                     }
                 }
