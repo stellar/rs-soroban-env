@@ -157,6 +157,31 @@ impl TryConvert<ScObject, Object> for Host {
     }
 }
 
+impl TryConvert<Object, ScVal> for Host {
+    type Error = HostError;
+    fn convert(&self, ob: Object) -> Result<ScVal, Self::Error> {
+        Ok(ScVal::Object(Some(self.convert(ob)?)))
+    }
+}
+
+impl TryConvert<&ScVal, Object> for Host {
+    type Error = HostError;
+    fn convert(&self, v: &ScVal) -> Result<Object, Self::Error> {
+        if let ScVal::Object(Some(o)) = v {
+            self.convert(o)
+        } else {
+            Err(self.err_status(ScHostValErrorCode::UnexpectedValType))
+        }
+    }
+}
+
+impl TryConvert<ScVal, Object> for Host {
+    type Error = HostError;
+    fn convert(&self, v: ScVal) -> Result<Object, Self::Error> {
+        self.convert(&v)
+    }
+}
+
 impl Host {
     /// Constructs a new [`Host`] that will use the provided [`Storage`] for
     /// contract-data access functions such as
