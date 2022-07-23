@@ -799,8 +799,12 @@ impl Host {
         name: &'static str,
         r: RawVal,
     ) -> Result<usize, HostError> {
+        self.u32_from_rawval_input(name, r).map(|u| u as usize)
+    }
+
+    fn u32_from_rawval_input(&self, name: &'static str, r: RawVal) -> Result<u32, HostError> {
         match u32::try_from(r) {
-            Ok(v) => Ok(v as usize),
+            Ok(v) => Ok(v),
             Err(cvt) => Err(self.err(
                 DebugError::new(ScHostFnErrorCode::InputArgsWrongType)
                     .msg("unexpected RawVal {} for input '{}', need U32")
@@ -975,14 +979,6 @@ impl CheckedEnv for Host {
         Ok(RawVal::from_void())
     }
 
-    fn contract_event(&self, v: RawVal) -> Result<RawVal, HostError> {
-        todo!()
-    }
-
-    fn system_event(&self, v: RawVal) -> Result<RawVal, HostError> {
-        todo!()
-    }
-
     fn get_invoking_contract(&self) -> Result<Object, HostError> {
         let frames = self.0.context.borrow();
         // the previous frame must exist and must be a contract
@@ -1018,6 +1014,14 @@ impl CheckedEnv for Host {
             Ordering::Equal => 0,
             Ordering::Greater => 1,
         })
+    }
+
+    fn contract_event(&self, v: RawVal) -> Result<RawVal, HostError> {
+        todo!()
+    }
+
+    fn system_event(&self, v: RawVal) -> Result<RawVal, HostError> {
+        todo!()
     }
 
     fn get_current_contract(&self) -> Result<Object, HostError> {
@@ -1683,6 +1687,17 @@ impl CheckedEnv for Host {
         self.visit_obj(x, |a: &BigInt| Ok(a.bits()))
     }
 
+    fn bigint_to_bytes_be(&self, x: Object) -> Result<Object, Self::Error> {
+        let bytes: Vec<u8> = self.visit_obj(x, |a: &BigInt| Ok(a.to_bytes_be().1))?;
+        Ok(self.add_host_object(bytes)?.into())
+    }
+
+    fn bigint_to_radix_be(&self, x: Object, radix: RawVal) -> Result<Object, Self::Error> {
+        let r: u32 = self.u32_from_rawval_input("radix", radix)?;
+        let bytes: Vec<u8> = self.visit_obj(x, |a: &BigInt| Ok(a.to_radix_be(r).1))?;
+        Ok(self.add_host_object(bytes)?.into())
+    }
+
     fn serialize_to_binary(&self, v: RawVal) -> Result<Object, HostError> {
         let scv = self.from_host_val(v)?;
         let mut buf = Vec::<u8>::new();
@@ -1761,10 +1776,6 @@ impl CheckedEnv for Host {
         }
     }
 
-    fn binary_new(&self) -> Result<Object, HostError> {
-        Ok(self.add_host_object(Vec::<u8>::new())?.into())
-    }
-
     fn binary_new_from_linear_memory(
         &self,
         lm_pos: RawVal,
@@ -1781,6 +1792,10 @@ impl CheckedEnv for Host {
             })?;
             Ok(self.add_host_object(vnew)?.into())
         }
+    }
+
+    fn binary_new(&self) -> Result<Object, HostError> {
+        Ok(self.add_host_object(Vec::<u8>::new())?.into())
     }
 
     fn binary_put(&self, b: Object, i: RawVal, u: RawVal) -> Result<Object, HostError> {

@@ -275,6 +275,11 @@ macro_rules! call_macro_with_all_host_functions {
                 {"L", fn bigint_sqrt(x:Object) -> Object}
                 /// Determines the fewest bits necessary to express `x`, not including the sign.
                 {"M", fn bigint_bits(x:Object) -> u64}
+                /// Outputs the BigInt's magnitude in big-endian byte order into a binary array. The sign is dropped.
+                {"N", fn bigint_to_bytes_be(x:Object) -> Object}
+                /// Outputs the BigInt's magnitude in the requested base in big-endian digit order into a binary array.
+                /// The sign is dropped. Radix must be in the range 2...256.
+                {"O", fn bigint_to_radix_be(x:Object, radix:RawVal) -> Object}
             }
 
             mod binary "b" {
