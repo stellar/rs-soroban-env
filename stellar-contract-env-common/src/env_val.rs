@@ -109,8 +109,10 @@ pub trait IntoVal<E: Env, V> {
     fn into_val(self, env: &E) -> V;
 }
 
-impl<E: Env, V, T> IntoVal<E, V> for T where
-T: IntoEnvVal<E, V> {
+impl<E: Env, V, T> IntoVal<E, V> for T
+where
+    T: IntoEnvVal<E, V>,
+{
     fn into_val(self, env: &E) -> V {
         Self::into_env_val(self, env).val
     }
