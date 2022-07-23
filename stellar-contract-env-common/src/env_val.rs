@@ -105,26 +105,36 @@ pub trait IntoEnvVal<E: Env, V>: Sized {
     fn into_env_val(self, env: &E) -> EnvVal<E, V>;
 }
 
-pub trait IntoVal<E: Env, V>: IntoEnvVal<E, V> {
+pub trait IntoVal<E: Env, V> {
+    fn into_val(self, env: &E) -> V;
+}
+
+impl<E: Env, V, T> IntoVal<E, V> for T where
+T: IntoEnvVal<E, V> {
     fn into_val(self, env: &E) -> V {
         Self::into_env_val(self, env).val
     }
 }
-
-impl<E: Env, V, T> IntoVal<E, V> for T where T: IntoEnvVal<E, V> {}
 
 pub trait TryIntoEnvVal<E: Env, V>: Sized {
     type Error;
     fn try_into_env_val(self, env: &E) -> Result<EnvVal<E, V>, Self::Error>;
 }
 
-pub trait TryIntoVal<E: Env, V>: TryIntoEnvVal<E, V> {
+pub trait TryIntoVal<E: Env, V> {
+    type Error;
+    fn try_into_val(self, env: &E) -> Result<V, Self::Error>;
+}
+
+impl<E: Env, V, T> TryIntoVal<E, V> for T
+where
+    T: TryIntoEnvVal<E, V>,
+{
+    type Error = T::Error;
     fn try_into_val(self, env: &E) -> Result<V, Self::Error> {
         Ok(Self::try_into_env_val(self, env)?.val)
     }
 }
-
-impl<E: Env, V, T> TryIntoVal<E, V> for T where T: TryIntoEnvVal<E, V> {}
 
 pub trait TryFromVal<E: Env, V>: Sized + TryFrom<EnvVal<E, V>> {
     fn try_from_val(env: &E, v: V) -> Result<Self, Self::Error> {
