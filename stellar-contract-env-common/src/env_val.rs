@@ -130,14 +130,14 @@ where
     type Error = <EnvVal<E, F> as TryInto<T>>::Error;
 
     fn try_into_env_val(self, env: &E) -> Result<EnvVal<E, T>, Self::Error> {
-        let ab: T = EnvVal {
+        let ev: T = EnvVal {
             env: env.clone(),
             val: self,
         }
         .try_into()?;
         Ok(EnvVal {
             env: env.clone(),
-            val: ab,
+            val: ev,
         })
     }
 }
