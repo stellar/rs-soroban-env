@@ -475,18 +475,8 @@ impl Host {
 
     #[cfg(feature = "vm")]
     fn decode_vmslice(&self, pos: RawVal, len: RawVal) -> Result<VmSlice, HostError> {
-        let pos: u32 = u32::try_from(pos).map_err(|_| {
-            self.err_status_msg(
-                ScHostFnErrorCode::InputArgsWrongType,
-                "guest binary pos must be u32",
-            )
-        })?;
-        let len: u32 = u32::try_from(len).map_err(|_| {
-            self.err_status_msg(
-                ScHostFnErrorCode::InputArgsWrongType,
-                "guest binary len must be u32",
-            )
-        })?;
+        let pos: u32 = self.u32_from_rawval_input("pos", pos)?;
+        let len: u32 = self.u32_from_rawval_input("len", len)?;
         self.with_current_frame(|frame| match frame {
             Frame::ContractVM(vm) => {
                 let vm = vm.clone();
@@ -1165,12 +1155,7 @@ impl CheckedEnv for Host {
         let capacity: usize = if c.is_void() {
             0
         } else {
-            u32::try_from(c).map_err(|_| {
-                self.err_status_msg(
-                    ScHostFnErrorCode::InputArgsWrongType,
-                    "c must be either `ScStatic::Void` or an `u32`",
-                )
-            })? as usize
+            self.usize_from_rawval_u32_input("c", c)?
         };
         // TODO: optimize the vector based on capacity
         Ok(self.add_host_object(HostVec::new())?.into())
@@ -1291,12 +1276,8 @@ impl CheckedEnv for Host {
     }
 
     fn vec_slice(&self, v: Object, start: RawVal, end: RawVal) -> Result<Object, HostError> {
-        let start: usize = u32::try_from(start).map_err(|_| {
-            self.err_status_msg(ScHostFnErrorCode::InputArgsWrongType, "start must be u32")
-        })? as usize;
-        let end: usize = u32::try_from(end).map_err(|_| {
-            self.err_status_msg(ScHostFnErrorCode::InputArgsWrongType, "end must be u32")
-        })? as usize;
+        let start = self.usize_from_rawval_u32_input("start", start)?;
+        let end = self.usize_from_rawval_u32_input("end", end)?;
         if start > end {
             return Err(self.err_status_msg(
                 ScHostFnErrorCode::InputArgsInvalid,
