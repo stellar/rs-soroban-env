@@ -1806,7 +1806,10 @@ impl CheckedEnv for Host {
             self.err_status_msg(ScHostFnErrorCode::InputArgsWrongType, "u must be u32")
         })?;
         let u: u8 = u.try_into().map_err(|_| {
-            self.err_status_msg(ScHostFnErrorCode::InputArgsWrongType, "u must be no greater than 255")
+            self.err_status_msg(
+                ScHostFnErrorCode::InputArgsWrongType,
+                "u must be no greater than 255",
+            )
         })?;
         let vnew = self.visit_obj(b, move |hv: &Vec<u8>| {
             let mut vnew = hv.clone();
@@ -1859,7 +1862,10 @@ impl CheckedEnv for Host {
             self.err_status_msg(ScHostFnErrorCode::InputArgsWrongType, "x must be u32")
         })?;
         let u: u8 = u.try_into().map_err(|_| {
-            self.err_status_msg(ScHostFnErrorCode::InputArgsWrongType, "x must be no greater than 255")
+            self.err_status_msg(
+                ScHostFnErrorCode::InputArgsWrongType,
+                "x must be no greater than 255",
+            )
         })?;
         let vnew = self.visit_obj(b, move |hv: &Vec<u8>| {
             let mut vnew = hv.clone();
@@ -1912,7 +1918,10 @@ impl CheckedEnv for Host {
             self.err_status_msg(ScHostFnErrorCode::InputArgsWrongType, "x must be u32")
         })?;
         let u: u8 = u.try_into().map_err(|_| {
-            self.err_status_msg(ScHostFnErrorCode::InputArgsWrongType, "x must be no greater than 255")
+            self.err_status_msg(
+                ScHostFnErrorCode::InputArgsWrongType,
+                "x must be no greater than 255",
+            )
         })?;
         let vnew = self.visit_obj(b, move |hv: &Vec<u8>| {
             if i > hv.len() {
