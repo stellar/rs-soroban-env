@@ -1802,6 +1802,9 @@ impl CheckedEnv for Host {
         let i: usize = u32::try_from(i).map_err(|_| {
             self.err_status_msg(ScHostFnErrorCode::InputArgsWrongType, "i must be u32")
         })? as usize;
+        let u: u32 = u.try_into().map_err(|_| {
+            self.err_status_msg(ScHostFnErrorCode::InputArgsWrongType, "u must be u8")
+        })?;
         let u: u8 = u.try_into().map_err(|_| {
             self.err_status_msg(ScHostFnErrorCode::InputArgsWrongType, "u must be u8")
         })?;
@@ -1852,6 +1855,9 @@ impl CheckedEnv for Host {
     }
 
     fn binary_push(&self, b: Object, u: RawVal) -> Result<Object, HostError> {
+        let u: u32 = u.try_into().map_err(|_| {
+            self.err_status_msg(ScHostFnErrorCode::InputArgsWrongType, "x must be u8")
+        })?;
         let u: u8 = u.try_into().map_err(|_| {
             self.err_status_msg(ScHostFnErrorCode::InputArgsWrongType, "x must be u8")
         })?;
@@ -1902,6 +1908,9 @@ impl CheckedEnv for Host {
         let i: usize = u32::try_from(i).map_err(|_| {
             self.err_status_msg(ScHostFnErrorCode::InputArgsWrongType, "i must be u32")
         })? as usize;
+        let u: u32 = u.try_into().map_err(|_| {
+            self.err_status_msg(ScHostFnErrorCode::InputArgsWrongType, "x must be u8")
+        })?;
         let u: u8 = u.try_into().map_err(|_| {
             self.err_status_msg(ScHostFnErrorCode::InputArgsWrongType, "x must be u8")
         })?;
