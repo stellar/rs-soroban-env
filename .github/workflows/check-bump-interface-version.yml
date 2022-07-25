@@ -12,7 +12,7 @@ jobs:
     runs-on: 'ubuntu-20.04'
     steps:
     - name: "check stellar-contract-env-common/src/meta.rs was modified"
-      uses: brettcannon/check-for-changed-files@v1
+      uses: brettcannon/check-for-changed-files@ 551263a821fde32615499b71f9283a7e98fcc657 # v1.0.1
       with:
         file-pattern: "stellar-contract-env-common/src/meta.rs"
     - name: "check 'interface_version:' changed in the diff"
