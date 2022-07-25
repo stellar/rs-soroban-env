@@ -15,12 +15,12 @@ jobs:
       uses: brettcannon/check-for-changed-files@v1
       with:
         file-pattern: "stellar-contract-env-common/src/meta.rs"
-    - name: "check stellar-contract-env-host/wasm-examples/*.wasm were modified"
-      uses: brettcannon/check-for-changed-files@v1
-      with:
-        file-pattern: "stellar-contract-env-host/wasm-examples/*.wasm"
     - name: "check 'interface_version:' changed in the diff"
       uses: JJ/github-pr-contains-action@releases/v1
       with:
         github-token: ${{github.token}}
         diffContains: "interface_version:"
+    - name: "check stellar-contract-env-host/wasm-examples/*.wasm were modified"
+      uses: brettcannon/check-for-changed-files@v1
+      with:
+        file-pattern: "stellar-contract-env-host/wasm-examples/*.wasm"
