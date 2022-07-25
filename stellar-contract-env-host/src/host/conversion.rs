@@ -1,7 +1,7 @@
 use crate::events::DebugError;
-use crate::xdr::{ScHostFnErrorCode, ScHostValErrorCode};
+use crate::xdr::{ScHostFnErrorCode, ScHostObjErrorCode, ScHostValErrorCode};
 use crate::{Host, HostError, Object, RawVal};
-use stellar_contract_env_common::xdr::Uint256;
+use stellar_contract_env_common::xdr::{Hash, Uint256};
 
 impl Host {
     pub(crate) fn usize_to_rawval_u32(&self, u: usize) -> Result<RawVal, HostError> {
@@ -56,5 +56,23 @@ impl Host {
                     .arg(name),
             )),
         }
+    }
+
+    pub(crate) fn hash_from_rawval_input(
+        &self,
+        name: &'static str,
+        hash: Object,
+    ) -> Result<Hash, HostError> {
+        self.visit_obj(hash, |bin: &Vec<u8>| {
+            match <[u8; 32]>::try_from(bin.as_slice()) {
+                Ok(arr) => Ok(Hash(arr)),
+                Err(cvt) => Err(self.err(
+                    DebugError::new(ScHostObjErrorCode::ContractHashWrongLength)
+                        .msg("hash {} has wrong length for input {}")
+                        .arg(hash.to_raw())
+                        .arg(name),
+                )),
+            }
+        })
     }
 }

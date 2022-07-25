@@ -629,14 +629,7 @@ impl Host {
         id_preimage: Vec<u8>,
     ) -> Result<Object, HostError> {
         let id_obj = self.compute_hash_sha256(self.add_host_object(id_preimage)?.into())?;
-
-        let new_contract_id = self.visit_obj(id_obj, |bin: &Vec<u8>| {
-            let arr: [u8; 32] = bin
-                .as_slice()
-                .try_into()
-                .map_err(|_| self.err_status(ScHostObjErrorCode::ContractHashWrongLength))?;
-            Ok(xdr::Hash(arr))
-        })?;
+        let new_contract_id = self.hash_from_rawval_input("id_obj", id_obj)?;
 
         let storage_key = LedgerKey::ContractData(LedgerKeyContractData {
             contract_id: new_contract_id.clone(),
@@ -693,15 +686,7 @@ impl Host {
 
     fn call_n(&self, contract: Object, func: Symbol, args: &[RawVal]) -> Result<RawVal, HostError> {
         // Get contract ID
-        let id = self.visit_obj(contract, |bin: &Vec<u8>| {
-            let arr: [u8; 32] = bin.as_slice().try_into().map_err(|_| {
-                self.err_status_msg(
-                    ScHostObjErrorCode::ContractHashWrongLength,
-                    "invalid contract hash",
-                )
-            })?;
-            Ok(xdr::Hash(arr))
-        })?;
+        let id = self.hash_from_rawval_input("contract", contract)?;
 
         #[cfg(feature = "testutils")]
         {
