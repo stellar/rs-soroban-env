@@ -1043,9 +1043,7 @@ impl CheckedEnv for Host {
 
     fn map_len(&self, m: Object) -> Result<RawVal, HostError> {
         let len = self.visit_obj(m, |hm: &HostMap| Ok(hm.len()))?;
-        Ok(u32::try_from(len)
-            .map_err(|_| ScHostValErrorCode::U32OutOfRange)?
-            .into())
+        self.usize_to_rawval_u32(len)
     }
 
     fn map_has(&self, m: Object, k: RawVal) -> Result<RawVal, HostError> {
