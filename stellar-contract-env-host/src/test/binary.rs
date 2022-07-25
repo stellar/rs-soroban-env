@@ -198,3 +198,40 @@ fn invoke_memcpy() -> Result<(), HostError> {
 
     Ok(())
 }
+
+#[cfg(not(feature = "vm"))]
+#[test]
+fn native_memcpy() -> Result<(), HostError> {
+    let host = Host::default();
+    // binary_new_from_linear_memory
+    {
+        let mem: [u8; 4] = [0, 1, 2, 3];
+        let lm_pos: RawVal = unsafe { RawVal::unchecked_from_u63(mem.as_ptr() as i64) };
+        let len: RawVal = unsafe { RawVal::unchecked_from_u63(4) };
+
+        let obj = host.binary_new_from_linear_memory(lm_pos, len)?;
+        let obj_ref = host.test_bin_obj(&[0, 1, 2, 3])?;
+        assert_eq!(host.obj_cmp(obj.into(), obj_ref.into())?, 0);
+    }
+    // binary_copy_from_linear_memory
+    {
+        let mem: [u8; 4] = [0, 1, 2, 3];
+        let lm_pos: RawVal = unsafe { RawVal::unchecked_from_u63(mem.as_ptr() as i64) };
+        let len: RawVal = unsafe { RawVal::unchecked_from_u63(4) };
+        let obj0 = host.binary_new()?;
+        let obj = host.binary_copy_from_linear_memory(obj0, 0u32.into(), lm_pos, len)?;
+        let obj_ref = host.test_bin_obj(&[0, 1, 2, 3])?;
+        assert_eq!(host.obj_cmp(obj.into(), obj_ref.into())?, 0);
+    }
+    // binary_copy_to_linear_memory
+    {
+        let mem: [u8; 4] = [0; 4];
+        let lm_pos: RawVal = unsafe { RawVal::unchecked_from_u63(mem.as_ptr() as i64) };
+        let len: RawVal = unsafe { RawVal::unchecked_from_u63(4) };
+        let obj0 = host.test_bin_obj(&[0, 1, 2, 3])?;
+        let rv = host.binary_copy_to_linear_memory(obj0.into(), 0u32.into(), lm_pos, len)?;
+        assert_eq!(rv.get_payload(), RawVal::from_void().get_payload());
+        assert_eq!(mem, [0, 1, 2, 3])
+    }
+    Ok(())
+}

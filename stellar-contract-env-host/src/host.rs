@@ -40,6 +40,8 @@ use crate::{
     ConversionError, EnvBase, IntoEnvVal, Object, RawVal, RawValConvertible, Status, Symbol, Val,
     UNKNOWN_ERROR,
 };
+#[cfg(not(feature = "vm"))]
+use std::ptr::{slice_from_raw_parts, slice_from_raw_parts_mut};
 
 mod error;
 pub use error::HostError;
@@ -493,6 +495,43 @@ impl Host {
             }
             _ => Err(self.err_general("attempt to access guest binary in non-VM frame")),
         })
+    }
+
+    #[cfg(not(feature = "vm"))]
+    fn decode_native_slice(&self, pos: RawVal, len: RawVal) -> Result<*const [u8], HostError> {
+        // This is to convert a pair of RawVals (position, length) to a memory slice in the native mode.
+        // The RawVals passed in must either be u32, if the host is running in a 32-bit machine, or u63,
+        // if the host is running in a 64-bit machine. For x86_64, the first 1-2 bytes of the user space
+        // in the virtual address are zeros, which makes it safe to convert a raw pointer to a u63.
+        // TODO: verify this is safe for all archs.
+        if let Ok(pos) = u32::try_from(pos) {
+            let len: u32 = u32::try_from(len).map_err(|_| {
+                self.err_status_msg(ScHostFnErrorCode::InputArgsWrongType, "len must be u32")
+            })?;
+            Ok(slice_from_raw_parts(pos as *const u8, len as usize))
+        } else {
+            unsafe {
+                let pos = pos.unchecked_as_u63() as *const u8;
+                let len = len.unchecked_as_u63();
+                Ok(slice_from_raw_parts(pos as *const u8, len as usize))
+            }
+        }
+    }
+
+    #[cfg(not(feature = "vm"))]
+    fn decode_native_slice_mut(&self, pos: RawVal, len: RawVal) -> Result<*mut [u8], HostError> {
+        if let Ok(pos) = u32::try_from(pos) {
+            let len: u32 = u32::try_from(len).map_err(|_| {
+                self.err_status_msg(ScHostFnErrorCode::InputArgsWrongType, "len must be u32")
+            })?;
+            Ok(slice_from_raw_parts_mut(pos as *mut u8, len as usize))
+        } else {
+            unsafe {
+                let pos = pos.unchecked_as_u63() as *const u8;
+                let len = len.unchecked_as_u63();
+                Ok(slice_from_raw_parts_mut(pos as *mut u8, len as usize))
+            }
+        }
     }
 
     pub(crate) fn to_host_val(&self, v: &ScVal) -> Result<HostVal, HostError> {
@@ -1722,7 +1761,11 @@ impl CheckedEnv for Host {
         len: RawVal,
     ) -> Result<RawVal, HostError> {
         #[cfg(not(feature = "vm"))]
-        unimplemented!();
+        {
+            let mem = self.decode_native_slice_mut(lm_pos, len)?;
+            self.binary_copy_to_slice(b, b_pos, unsafe { &mut *mem });
+            Ok(().into())
+        }
         #[cfg(feature = "vm")]
         {
             let VmSlice { vm, pos, len } = self.decode_vmslice(lm_pos, len)?;
@@ -1753,7 +1796,10 @@ impl CheckedEnv for Host {
         len: RawVal,
     ) -> Result<Object, HostError> {
         #[cfg(not(feature = "vm"))]
-        unimplemented!();
+        {
+            let mem = self.decode_native_slice(lm_pos, len)?;
+            Ok(self.binary_copy_from_slice(b, b_pos, unsafe { &*mem }))
+        }
         #[cfg(feature = "vm")]
         {
             let VmSlice { vm, pos, len } = self.decode_vmslice(lm_pos, len)?;
@@ -1782,7 +1828,10 @@ impl CheckedEnv for Host {
         len: RawVal,
     ) -> Result<Object, HostError> {
         #[cfg(not(feature = "vm"))]
-        unimplemented!();
+        {
+            let mem = self.decode_native_slice(lm_pos, len)?;
+            Ok(self.binary_new_from_slice(unsafe { &*mem }))
+        }
         #[cfg(feature = "vm")]
         {
             let VmSlice { vm, pos, len } = self.decode_vmslice(lm_pos, len)?;
