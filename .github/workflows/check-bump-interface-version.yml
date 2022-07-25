@@ -16,7 +16,7 @@ jobs:
       uses: pablo-statsig/gh-pr-content-checker@c5b547fff05b0617977daa9e622f1a9e0c7be89a
       with:
         github-token: ${{github.token}}
-        diffContainsRegex: "interface_version: \d+,"
+        diffContainsRegex: "interface_version: \\d+,"
     - name: "check stellar-contract-env-host/wasm-examples/*.wasm were modified"
       uses: brettcannon/check-for-changed-files@36aaa76474fc979db4e19e44c05e8e978759ac01
       with:
