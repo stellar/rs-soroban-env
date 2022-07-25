@@ -9,15 +9,15 @@ jobs:
     runs-on: 'ubuntu-20.04'
     steps:
     - name: "check stellar-contract-env-common/src/meta.rs was modified"
-      uses: brettcannon/check-for-changed-files@551263a821fde32615499b71f9283a7e98fcc657 # v1.1.0
+      uses: brettcannon/check-for-changed-files@36aaa76474fc979db4e19e44c05e8e978759ac01
       with:
         file-pattern: "stellar-contract-env-common/src/meta.rs"
     - name: "check 'interface_version:' changed in the diff"
-      uses: JJ/github-pr-contains-action@16f7c6a0b3d6642067296c06baffc130549e960b #v1
+      uses: JJ/github-pr-contains-action@7a5169fb400c41f6083c053497192406ecbd4d7c
       with:
         github-token: ${{github.token}}
         diffContains: "interface_version:"
     - name: "check stellar-contract-env-host/wasm-examples/*.wasm were modified"
-      uses: brettcannon/check-for-changed-files@551263a821fde32615499b71f9283a7e98fcc657 # v1.1.0
+      uses: brettcannon/check-for-changed-files@36aaa76474fc979db4e19e44c05e8e978759ac01
       with:
         file-pattern: "stellar-contract-env-host/wasm-examples/*.wasm"
