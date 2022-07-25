@@ -1,9 +1,6 @@
 name: check-bump-interface-version
 
 on:
-  push:
-    branches: [main]
-    paths: 'stellar-contract-env-common/src/env.rs'
   pull_request:
     paths: 'stellar-contract-env-common/src/env.rs'
 
@@ -12,15 +9,15 @@ jobs:
     runs-on: 'ubuntu-20.04'
     steps:
     - name: "check stellar-contract-env-common/src/meta.rs was modified"
-      uses: brettcannon/check-for-changed-files@ 551263a821fde32615499b71f9283a7e98fcc657 # v1.0.1
+      uses: brettcannon/check-for-changed-files@551263a821fde32615499b71f9283a7e98fcc657 # v1.1.0
       with:
         file-pattern: "stellar-contract-env-common/src/meta.rs"
     - name: "check 'interface_version:' changed in the diff"
-      uses: JJ/github-pr-contains-action@releases/v1
+      uses: JJ/github-pr-contains-action@16f7c6a0b3d6642067296c06baffc130549e960b #v1
       with:
         github-token: ${{github.token}}
         diffContains: "interface_version:"
     - name: "check stellar-contract-env-host/wasm-examples/*.wasm were modified"
-      uses: brettcannon/check-for-changed-files@v1
+      uses: brettcannon/check-for-changed-files@551263a821fde32615499b71f9283a7e98fcc657 # v1.1.0
       with:
         file-pattern: "stellar-contract-env-host/wasm-examples/*.wasm"
