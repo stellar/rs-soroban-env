@@ -2,6 +2,7 @@ name: check-bump-interface-version
 
 on:
   push:
+    branches: [main]
     paths: 'stellar-contract-env-common/src/env.rs'
   pull_request:
     paths: 'stellar-contract-env-common/src/env.rs'
