@@ -125,20 +125,13 @@ pub trait TryIntoEnvVal<E: Env, V>: Sized {
 
 impl<E: Env, F, T> TryIntoEnvVal<E, T> for F
 where
-    EnvVal<E, F>: TryInto<T>,
+    F: TryInto<EnvVal<E, T>>,
 {
-    type Error = <EnvVal<E, F> as TryInto<T>>::Error;
-
+    type Error = F::Error;
     fn try_into_env_val(self, env: &E) -> Result<EnvVal<E, T>, Self::Error> {
-        let ev: T = EnvVal {
-            env: env.clone(),
-            val: self,
-        }
-        .try_into()?;
-        Ok(EnvVal {
-            env: env.clone(),
-            val: ev,
-        })
+        let ev = self.try_into()?;
+        ev.env.check_same_env(env);
+        Ok(ev)
     }
 }
 
@@ -154,6 +147,45 @@ where
     type Error = T::Error;
     fn try_into_val(self, env: &E) -> Result<V, Self::Error> {
         Ok(Self::try_into_env_val(self, env)?.val)
+    }
+}
+
+pub trait TryIntoEnvVal2<E: Env, V>: Sized {
+    type Error;
+    fn try_into_env_val_2(self, env: &E) -> Result<EnvVal<E, V>, Self::Error>;
+}
+
+impl<E: Env, F, T> TryIntoEnvVal2<E, T> for F
+where
+    EnvVal<E, F>: TryInto<T>,
+{
+    type Error = <EnvVal<E, F> as TryInto<T>>::Error;
+
+    fn try_into_env_val_2(self, env: &E) -> Result<EnvVal<E, T>, Self::Error> {
+        let ev: T = EnvVal {
+            env: env.clone(),
+            val: self,
+        }
+        .try_into()?;
+        Ok(EnvVal {
+            env: env.clone(),
+            val: ev,
+        })
+    }
+}
+
+pub trait TryIntoVal2<E: Env, V> {
+    type Error;
+    fn try_into_val_2(self, env: &E) -> Result<V, Self::Error>;
+}
+
+impl<E: Env, V, T> TryIntoVal2<E, V> for T
+where
+    T: TryIntoEnvVal2<E, V>,
+{
+    type Error = T::Error;
+    fn try_into_val_2(self, env: &E) -> Result<V, Self::Error> {
+        Ok(Self::try_into_env_val_2(self, env)?.val)
     }
 }
 
