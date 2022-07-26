@@ -107,14 +107,10 @@ pub trait IntoVal<E: Env, V> {
 
 impl<E: Env, F, T> IntoVal<E, T> for F
 where
-    EnvVal<E, F>: Into<T>,
+    F: Into<T>,
 {
-    fn into_val(self, env: &E) -> T {
-        EnvVal {
-            env: env.clone(),
-            val: self,
-        }
-        .into()
+    fn into_val(self, _: &E) -> T {
+        self.into()
     }
 }
 
@@ -125,16 +121,12 @@ pub trait TryIntoVal<E: Env, V> {
 
 impl<E: Env, F, T> TryIntoVal<E, T> for F
 where
-    EnvVal<E, F>: TryInto<T>,
+    F: TryInto<T>,
 {
-    type Error = <EnvVal<E, F> as TryInto<T>>::Error;
+    type Error = F::Error;
 
-    fn try_into_val(self, env: &E) -> Result<T, Self::Error> {
-        EnvVal {
-            env: env.clone(),
-            val: self,
-        }
-        .try_into()
+    fn try_into_val(self, _: &E) -> Result<T, Self::Error> {
+        self.try_into()
     }
 }
 

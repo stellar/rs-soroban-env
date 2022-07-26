@@ -1,7 +1,6 @@
 use crate::raw_val::ConversionError;
 use crate::Env;
 use crate::EnvVal;
-use crate::IntoVal;
 /// TaggedVal and TaggedEnvVal are a RawVal and EnvVal wrappers that are statically known to be of a specific tag-case.
 /// Additional tag-case-specific methods can be hung off such a value, while still allowing access
 /// to its inner RawVal/EnvVal using AsRef/AsMut.
@@ -131,11 +130,6 @@ macro_rules! impl_tagged_from {
             #[inline(always)]
             fn try_from(v: EnvVal<E, TaggedVal<$tagty>>) -> Result<Self, Self::Error> {
                 Self::try_from(v.to_raw())
-            }
-        }
-        impl<E: Env> IntoVal<E, TaggedVal<$tagty>> for $fromty {
-            fn into_val(self, _: &E) -> TaggedVal<$tagty> {
-                self.into()
             }
         }
     };
