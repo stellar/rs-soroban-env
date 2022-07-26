@@ -150,9 +150,9 @@ where
     }
 }
 
-pub trait TryIntoEnvVal2<E: Env, V>: Sized {
+pub trait TryIntoEnvVal2<E: Env, T>: Sized {
     type Error;
-    fn try_into_env_val_2(self, env: &E) -> Result<EnvVal<E, V>, Self::Error>;
+    fn try_into_env_val_2(self, env: &E) -> Result<EnvVal<E, T>, Self::Error>;
 }
 
 impl<E: Env, F, T> TryIntoEnvVal2<E, T> for F
@@ -174,17 +174,17 @@ where
     }
 }
 
-pub trait TryIntoVal2<E: Env, V> {
+pub trait TryIntoVal2<E: Env, T> {
     type Error;
-    fn try_into_val_2(self, env: &E) -> Result<V, Self::Error>;
+    fn try_into_val_2(self, env: &E) -> Result<T, Self::Error>;
 }
 
-impl<E: Env, V, T> TryIntoVal2<E, V> for T
+impl<E: Env, F, T> TryIntoVal2<E, T> for F
 where
-    T: TryIntoEnvVal2<E, V>,
+    F: TryIntoEnvVal2<E, T>,
 {
-    type Error = T::Error;
-    fn try_into_val_2(self, env: &E) -> Result<V, Self::Error> {
+    type Error = F::Error;
+    fn try_into_val_2(self, env: &E) -> Result<T, Self::Error> {
         Ok(Self::try_into_env_val_2(self, env)?.val)
     }
 }
