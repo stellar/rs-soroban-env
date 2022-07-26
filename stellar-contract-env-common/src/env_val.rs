@@ -101,45 +101,8 @@ impl<E: Env, T: TagType> From<EnvVal<E, TaggedVal<T>>> for EnvVal<E, RawVal> {
     }
 }
 
-pub trait IntoEnvVal<E: Env, V>: Sized {
-    fn into_env_val(self, env: &E) -> EnvVal<E, V>;
-}
-
 pub trait IntoVal<E: Env, V> {
     fn into_val(self, env: &E) -> V;
-}
-
-impl<E: Env, V, T> IntoVal<E, V> for T
-where
-    T: IntoEnvVal<E, V>,
-{
-    fn into_val(self, env: &E) -> V {
-        Self::into_env_val(self, env).val
-    }
-}
-
-pub trait TryIntoEnvVal<E: Env, V>: Sized {
-    type Error;
-    fn try_into_env_val(self, env: &E) -> Result<EnvVal<E, V>, Self::Error>;
-}
-
-impl<E: Env, F, T> TryIntoEnvVal<E, T> for F
-where
-    EnvVal<E, F>: TryInto<T>,
-{
-    type Error = <EnvVal<E, F> as TryInto<T>>::Error;
-
-    fn try_into_env_val(self, env: &E) -> Result<EnvVal<E, T>, Self::Error> {
-        let ev: T = EnvVal {
-            env: env.clone(),
-            val: self,
-        }
-        .try_into()?;
-        Ok(EnvVal {
-            env: env.clone(),
-            val: ev,
-        })
-    }
 }
 
 pub trait TryIntoVal<E: Env, V> {
@@ -147,13 +110,18 @@ pub trait TryIntoVal<E: Env, V> {
     fn try_into_val(self, env: &E) -> Result<V, Self::Error>;
 }
 
-impl<E: Env, V, T> TryIntoVal<E, V> for T
+impl<E: Env, F, T> TryIntoVal<E, T> for F
 where
-    T: TryIntoEnvVal<E, V>,
+    EnvVal<E, F>: TryInto<T>,
 {
-    type Error = T::Error;
-    fn try_into_val(self, env: &E) -> Result<V, Self::Error> {
-        Ok(Self::try_into_env_val(self, env)?.val)
+    type Error = <EnvVal<E, F> as TryInto<T>>::Error;
+
+    fn try_into_val(self, env: &E) -> Result<T, Self::Error> {
+        EnvVal {
+            env: env.clone(),
+            val: self,
+        }
+        .try_into()
     }
 }
 
@@ -172,14 +140,6 @@ where
             env: env.clone(),
             val: v,
         })
-    }
-}
-
-impl<E: Env, V, I: Into<EnvVal<E, V>>> IntoEnvVal<E, V> for I {
-    fn into_env_val(self, env: &E) -> EnvVal<E, V> {
-        let ev = self.into();
-        ev.env.check_same_env(env);
-        ev
     }
 }
 
@@ -222,12 +182,9 @@ impl<E: Env, T: TagType> TryFrom<EnvVal<E, RawVal>> for EnvVal<E, TaggedVal<T>> 
     }
 }
 
-impl<E: Env, T: TagType> IntoEnvVal<E, RawVal> for TaggedVal<T> {
-    fn into_env_val(self, env: &E) -> EnvVal<E, RawVal> {
-        EnvVal {
-            env: env.clone(),
-            val: self.to_raw(),
-        }
+impl<E: Env, T: TagType> IntoVal<E, RawVal> for TaggedVal<T> {
+    fn into_val(self, _env: &E) -> RawVal {
+        self.to_raw()
     }
 }
 
@@ -240,15 +197,6 @@ impl<E: Env, T: TagType> From<EnvVal<E, TaggedVal<T>>> for RawVal {
 impl<E: Env, T: TagType> From<EnvVal<E, TaggedVal<T>>> for TaggedVal<T> {
     fn from(ev: EnvVal<E, TaggedVal<T>>) -> Self {
         ev.val
-    }
-}
-
-impl<E: Env, T: TagType> IntoEnvVal<E, TaggedVal<T>> for TaggedVal<T> {
-    fn into_env_val(self, env: &E) -> EnvVal<E, TaggedVal<T>> {
-        EnvVal {
-            env: env.clone(),
-            val: self,
-        }
     }
 }
 
@@ -268,16 +216,12 @@ impl<E: Env> TryFrom<EnvVal<E, RawVal>> for i64 {
     }
 }
 
-impl<E: Env> IntoEnvVal<E, RawVal> for i64 {
-    fn into_env_val(self, env: &E) -> EnvVal<E, RawVal> {
-        let val = if self >= 0 {
+impl<E: Env> IntoVal<E, RawVal> for i64 {
+    fn into_val(self, env: &E) -> RawVal {
+        if self >= 0 {
             unsafe { RawVal::unchecked_from_u63(self) }
         } else {
             env.obj_from_i64(self).to_raw()
-        };
-        EnvVal {
-            env: env.clone(),
-            val,
         }
     }
 }
@@ -296,13 +240,9 @@ impl<E: Env> TryFrom<EnvVal<E, RawVal>> for u64 {
     }
 }
 
-impl<E: Env> IntoEnvVal<E, RawVal> for u64 {
-    fn into_env_val(self, env: &E) -> EnvVal<E, RawVal> {
-        let env = env.clone();
-        EnvVal {
-            val: env.obj_from_u64(self).to_raw(),
-            env,
-        }
+impl<E: Env> IntoVal<E, RawVal> for u64 {
+    fn into_val(self, env: &E) -> RawVal {
+        env.obj_from_u64(self).to_raw()
     }
 }
 
@@ -367,13 +307,13 @@ where
 }
 
 #[cfg(feature = "std")]
-impl<E: Env> TryIntoEnvVal<E, RawVal> for &ScVal
+impl<E: Env> TryIntoVal<E, RawVal> for &ScVal
 where
     for<'a> &'a ScObject: TryIntoVal<E, Object>,
 {
     type Error = ConversionError;
-    fn try_into_env_val(self, env: &E) -> Result<EnvVal<E, RawVal>, Self::Error> {
-        let val = match self {
+    fn try_into_val(self, env: &E) -> Result<RawVal, Self::Error> {
+        Ok(match self {
             ScVal::U63(i) => {
                 if *i >= 0 {
                     unsafe { RawVal::unchecked_from_u63(*i) }
@@ -398,10 +338,6 @@ where
             }
             ScVal::Bitset(i) => BitSet::try_from_u64(*i)?.into(),
             ScVal::Status(st) => st.into(),
-        };
-        Ok(EnvVal {
-            env: env.clone(),
-            val,
         })
     }
 }

@@ -10,7 +10,7 @@ use num_integer::Integer;
 use num_traits::cast::ToPrimitive;
 use num_traits::{Pow, Signed, Zero};
 use std::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Not, Rem, Shl, Shr, Sub};
-use stellar_contract_env_common::{TryConvert, TryFromVal, TryIntoVal};
+use stellar_contract_env_common::{EnvVal, TryConvert, TryFromVal, TryIntoVal};
 
 use stellar_contract_env_common::xdr::{
     AccountEntry, AccountId, Hash, PublicKey, ReadXdr, ThresholdIndexes, WriteXdr,
@@ -37,7 +37,7 @@ use crate::SymbolStr;
 #[cfg(feature = "vm")]
 use crate::Vm;
 use crate::{
-    ConversionError, EnvBase, IntoEnvVal, Object, RawVal, RawValConvertible, Status, Symbol, Val,
+    ConversionError, EnvBase, IntoVal, Object, RawVal, RawValConvertible, Status, Symbol, Val,
     UNKNOWN_ERROR,
 };
 
@@ -451,12 +451,15 @@ impl Host {
         HostVal { env, val }
     }
 
-    pub(crate) fn associate_env_val_type<V: Val, CVT: IntoEnvVal<WeakHost, RawVal>>(
+    pub(crate) fn associate_env_val_type<V: Val, CVT: IntoVal<WeakHost, RawVal>>(
         &self,
         v: CVT,
     ) -> HostVal {
         let env = self.get_weak();
-        v.into_env_val(&env)
+        EnvVal {
+            val: v.into_val(&env),
+            env,
+        }
     }
 
     pub(crate) fn from_host_val(&self, val: RawVal) -> Result<ScVal, HostError> {
@@ -611,7 +614,7 @@ impl Host {
             .push(self.charge_for_new_host_object(HOT::inject(hot))?);
         let env = WeakHost(Rc::downgrade(&self.0));
         let v = Object::from_type_and_handle(HOT::get_type(), handle as u32);
-        Ok(v.into_env_val(&env))
+        Ok(EnvVal { env, val: v })
     }
 
     /// Converts a [`RawVal`] to an [`ScVal`] and combines it with the currently-executing

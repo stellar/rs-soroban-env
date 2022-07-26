@@ -3,7 +3,7 @@ use stellar_xdr::{ScObject, ScVal};
 use crate::{
     tagged_val::{TagObject, TaggedVal},
     xdr::ScObjectType,
-    Env, EnvVal, RawVal, Tag, TryConvert, TryIntoEnvVal,
+    Env, EnvVal, RawVal, Tag, TryConvert, TryIntoVal,
 };
 use core::fmt::Debug;
 
@@ -66,29 +66,23 @@ where
     }
 }
 
-impl<'a, E> TryIntoEnvVal<E, Object> for &'a ScObject
+impl<'a, E> TryIntoVal<E, Object> for &'a ScObject
 where
     E: Env + TryConvert<&'a ScObject, Object>,
 {
     type Error = E::Error;
-    fn try_into_env_val(self, env: &E) -> Result<EnvVal<E, Object>, Self::Error> {
-        Ok(EnvVal {
-            val: env.convert(self)?,
-            env: env.clone(),
-        })
+    fn try_into_val(self, env: &E) -> Result<Object, Self::Error> {
+        env.convert(self)
     }
 }
 
-impl<E> TryIntoEnvVal<E, Object> for ScObject
+impl<E> TryIntoVal<E, Object> for ScObject
 where
     E: Env + TryConvert<ScObject, Object>,
 {
     type Error = E::Error;
-    fn try_into_env_val(self, env: &E) -> Result<EnvVal<E, Object>, Self::Error> {
-        Ok(EnvVal {
-            val: env.convert(self)?,
-            env: env.clone(),
-        })
+    fn try_into_val(self, env: &E) -> Result<Object, Self::Error> {
+        env.convert(self)
     }
 }
 
@@ -112,28 +106,28 @@ where
     }
 }
 
-impl<'a, E> TryIntoEnvVal<E, Object> for &'a ScVal
+impl<'a, E> TryIntoVal<E, Object> for &'a ScVal
 where
     E: Env + TryConvert<&'a ScObject, Object>,
 {
     type Error = E::Error;
-    fn try_into_env_val(self, env: &E) -> Result<EnvVal<E, Object>, Self::Error> {
+    fn try_into_val(self, env: &E) -> Result<Object, Self::Error> {
         if let ScVal::Object(Some(o)) = self {
-            o.try_into_env_val(env)
+            o.try_into_val(env)
         } else {
             todo!()
         }
     }
 }
 
-impl<E> TryIntoEnvVal<E, Object> for ScVal
+impl<E> TryIntoVal<E, Object> for ScVal
 where
     E: Env + TryConvert<ScObject, Object>,
 {
     type Error = E::Error;
-    fn try_into_env_val(self, env: &E) -> Result<EnvVal<E, Object>, Self::Error> {
+    fn try_into_val(self, env: &E) -> Result<Object, Self::Error> {
         if let ScVal::Object(Some(o)) = self {
-            o.try_into_env_val(env)
+            o.try_into_val(env)
         } else {
             todo!()
         }
