@@ -1,4 +1,4 @@
-use crate::{require, ConversionError, RawVal, Tag, TagSymbol, TaggedVal};
+use crate::{require, ConversionError, RawVal, RawValConvertible, Tag, TagSymbol, TaggedVal};
 use core::{
     cmp::Ordering,
     fmt::Debug,
@@ -29,17 +29,18 @@ const CODE_MASK: u64 = (1u64 << CODE_BITS) - 1;
 sa::const_assert!(CODE_MASK == 0x3f);
 sa::const_assert!(CODE_BITS * MAX_CHARS == BODY_BITS);
 
-pub type Symbol = TaggedVal<TagSymbol>;
+#[derive(Copy, Clone)]
+pub struct Symbol(TaggedVal<TagSymbol>);
 
 impl Hash for Symbol {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.as_ref().get_payload().hash(state);
+        self.as_raw().get_payload().hash(state);
     }
 }
 
 impl PartialEq for Symbol {
     fn eq(&self, other: &Self) -> bool {
-        self.as_ref().get_payload() == other.as_ref().get_payload()
+        self.as_raw().get_payload() == other.as_raw().get_payload()
     }
 }
 
@@ -98,7 +99,79 @@ impl<const N: u32> TryFrom<&VecM<u8, N>> for Symbol {
     }
 }
 
+impl AsRef<TaggedVal<TagSymbol>> for Symbol {
+    fn as_ref(&self) -> &TaggedVal<TagSymbol> {
+        self.as_tagged()
+    }
+}
+
+impl AsRef<RawVal> for Symbol {
+    fn as_ref(&self) -> &RawVal {
+        self.as_raw()
+    }
+}
+
+impl From<TaggedVal<TagSymbol>> for Symbol {
+    fn from(tv: TaggedVal<TagSymbol>) -> Self {
+        Symbol(tv)
+    }
+}
+
+impl From<Symbol> for TaggedVal<TagSymbol> {
+    fn from(b: Symbol) -> Self {
+        b.to_tagged()
+    }
+}
+
+impl From<Symbol> for RawVal {
+    fn from(b: Symbol) -> Self {
+        b.to_raw()
+    }
+}
+
+impl RawValConvertible for Symbol {
+    #[inline(always)]
+    fn is_val_type(v: RawVal) -> bool {
+        <TaggedVal<TagSymbol> as RawValConvertible>::is_val_type(v)
+    }
+    #[inline(always)]
+    unsafe fn unchecked_from_val(v: RawVal) -> Self {
+        Symbol(<TaggedVal<TagSymbol> as RawValConvertible>::unchecked_from_val(v))
+    }
+}
+
+#[cfg(feature = "vm")]
+impl wasmi::FromValue for Symbol {
+    fn from_value(val: wasmi::RuntimeValue) -> Option<Self> {
+        let maybe: Option<TaggedVal<TagSymbol>> = val.try_into();
+        maybe.map(|x| Self(x))
+    }
+}
+
+#[cfg(feature = "vm")]
+impl From<Symbol> for wasmi::RuntimeValue {
+    fn from(v: Symbol) -> Self {
+        wasmi::RuntimeValue::I64(v.as_raw().get_payload() as i64)
+    }
+}
+
 impl Symbol {
+    pub const fn as_raw(&self) -> &RawVal {
+        &self.0 .0
+    }
+
+    pub const fn to_raw(&self) -> RawVal {
+        self.0 .0
+    }
+
+    pub const fn as_tagged(&self) -> &TaggedVal<TagSymbol> {
+        &self.0
+    }
+
+    pub const fn to_tagged(&self) -> TaggedVal<TagSymbol> {
+        self.0
+    }
+
     pub const fn try_from_bytes(b: &[u8]) -> Result<Symbol, SymbolError> {
         let mut n = 0;
         let mut accum: u64 = 0;
@@ -118,10 +191,10 @@ impl Symbol {
             };
             accum |= v;
         }
-        Ok(Self(
+        Ok(Self(TaggedVal(
             unsafe { RawVal::from_body_and_tag(accum, Tag::Symbol) },
             PhantomData,
-        ))
+        )))
     }
 
     pub const fn try_from_str(s: &str) -> Result<Symbol, SymbolError> {
@@ -233,7 +306,7 @@ impl IntoIterator for Symbol {
     type Item = char;
     type IntoIter = SymbolIter;
     fn into_iter(self) -> Self::IntoIter {
-        SymbolIter(self.as_ref().get_body())
+        SymbolIter(self.as_raw().get_body())
     }
 }
 
@@ -278,7 +351,7 @@ impl FromIterator<char> for Symbol {
             };
             accum |= v;
         }
-        unsafe { TaggedVal::from_body_and_tag_type(accum) }
+        unsafe { Self(TaggedVal::from_body_and_tag_type(accum)) }
     }
 }
 

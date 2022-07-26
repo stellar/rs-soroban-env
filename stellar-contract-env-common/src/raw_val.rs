@@ -142,6 +142,7 @@ declare_tryfrom!(u32);
 declare_tryfrom!(i32);
 declare_tryfrom!(BitSet);
 declare_tryfrom!(Status);
+declare_tryfrom!(Symbol);
 
 #[cfg(feature = "vm")]
 impl wasmi::FromValue for RawVal {
