@@ -140,7 +140,7 @@ declare_tryfrom!(());
 declare_tryfrom!(bool);
 declare_tryfrom!(u32);
 declare_tryfrom!(i32);
-declare_tryfrom!(u8);
+declare_tryfrom!(BitSet);
 
 #[cfg(feature = "vm")]
 impl wasmi::FromValue for RawVal {
@@ -211,17 +211,6 @@ impl RawValConvertible for i32 {
     #[inline(always)]
     unsafe fn unchecked_from_val(v: RawVal) -> Self {
         v.get_body() as i32
-    }
-}
-
-impl RawValConvertible for u8 {
-    #[inline(always)]
-    fn is_val_type(v: RawVal) -> bool {
-        v.has_tag(Tag::U32)
-    }
-    #[inline(always)]
-    unsafe fn unchecked_from_val(v: RawVal) -> Self {
-        v.get_body() as u8
     }
 }
 

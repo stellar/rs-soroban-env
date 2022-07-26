@@ -47,11 +47,12 @@ impl Host {
         name: &'static str,
         r: RawVal,
     ) -> Result<u8, HostError> {
-        match u8::try_from(r) {
+        let u = self.u32_from_rawval_input(name, r)?;
+        match u8::try_from(u) {
             Ok(v) => Ok(v),
             Err(cvt) => Err(self.err(
                 DebugError::new(ScHostFnErrorCode::InputArgsWrongType)
-                    .msg("unexpected RawVal {} for input '{}', need U8")
+                    .msg("unexpected RawVal {} for input '{}', need u32 no greater than 255")
                     .arg(r)
                     .arg(name),
             )),

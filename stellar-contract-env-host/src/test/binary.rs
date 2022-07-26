@@ -39,7 +39,7 @@ fn binary_suite_of_tests() -> Result<(), HostError> {
     );
     assert_eq!(
         unsafe {
-            <u8 as RawValConvertible>::unchecked_from_val(host.binary_get(obj, 5_u32.into())?)
+            <u32 as RawValConvertible>::unchecked_from_val(host.binary_get(obj, 5_u32.into())?)
         },
         5
     );
@@ -47,7 +47,7 @@ fn binary_suite_of_tests() -> Result<(), HostError> {
     obj = host.binary_put(obj, 5_u32.into(), 99_u32.into())?;
     assert_eq!(
         unsafe {
-            <u8 as RawValConvertible>::unchecked_from_val(host.binary_get(obj, 5_u32.into())?)
+            <u32 as RawValConvertible>::unchecked_from_val(host.binary_get(obj, 5_u32.into())?)
         },
         99
     );

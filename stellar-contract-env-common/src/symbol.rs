@@ -282,6 +282,47 @@ impl FromIterator<char> for Symbol {
     }
 }
 
+#[cfg(feature = "std")]
+use crate::xdr::ScVal;
+
+#[cfg(feature = "std")]
+impl TryFrom<ScVal> for Symbol {
+    type Error = ();
+    fn try_from(v: ScVal) -> Result<Self, Self::Error> {
+        (&v).try_into()
+    }
+}
+#[cfg(feature = "std")]
+impl TryFrom<&ScVal> for Symbol {
+    type Error = ();
+    fn try_from(v: &ScVal) -> Result<Self, Self::Error> {
+        if let ScVal::Symbol(vec) = v {
+            vec.try_into().map_err(|_| ())
+        } else {
+            Err(())
+        }
+    }
+}
+
+#[cfg(feature = "std")]
+impl TryFrom<Symbol> for ScVal {
+    type Error = ();
+    fn try_from(s: Symbol) -> Result<Self, Self::Error> {
+        let res: Result<Vec<u8>, _> = s.into_iter().map(<u8 as TryFrom<char>>::try_from).collect();
+        Ok(ScVal::Symbol(
+            res.map_err(|_| ())?.try_into().map_err(|_| ())?,
+        ))
+    }
+}
+
+#[cfg(feature = "std")]
+impl TryFrom<&Symbol> for ScVal {
+    type Error = ();
+    fn try_from(s: &Symbol) -> Result<Self, Self::Error> {
+        s.clone().try_into()
+    }
+}
+
 #[cfg(test)]
 mod test_without_string {
     use super::{Symbol, SymbolStr};
