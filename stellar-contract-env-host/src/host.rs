@@ -137,6 +137,13 @@ impl Debug for Host {
     }
 }
 
+impl TryConvert<&Object, ScObject> for Host {
+    type Error = HostError;
+    fn convert(&self, ob: &Object) -> Result<ScObject, Self::Error> {
+        self.from_host_obj(*ob)
+    }
+}
+
 impl TryConvert<Object, ScObject> for Host {
     type Error = HostError;
     fn convert(&self, ob: Object) -> Result<ScObject, Self::Error> {

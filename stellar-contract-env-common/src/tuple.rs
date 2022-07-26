@@ -1,8 +1,6 @@
 use stellar_xdr::ScObjectType;
 
-use crate::{
-    ConversionError, Env, EnvVal, IntoVal, Object, RawVal, RawValConvertible, TryFromVal,
-};
+use crate::{ConversionError, Env, EnvVal, IntoVal, Object, RawVal, RawValConvertible, TryFromVal};
 
 macro_rules! impl_for_tuple {
     ( $count:literal $($typ:ident $idx:tt)+ ) => {

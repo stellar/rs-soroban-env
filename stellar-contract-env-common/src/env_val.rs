@@ -105,6 +105,19 @@ pub trait IntoVal<E: Env, V> {
     fn into_val(self, env: &E) -> V;
 }
 
+impl<E: Env, F, T> IntoVal<E, T> for F
+where
+    EnvVal<E, F>: Into<T>,
+{
+    fn into_val(self, env: &E) -> T {
+        EnvVal {
+            env: env.clone(),
+            val: self,
+        }
+        .into()
+    }
+}
+
 pub trait TryIntoVal<E: Env, V> {
     type Error;
     fn try_into_val(self, env: &E) -> Result<V, Self::Error>;
@@ -179,12 +192,6 @@ impl<E: Env, T: TagType> TryFrom<EnvVal<E, RawVal>> for EnvVal<E, TaggedVal<T>> 
             err
         })?;
         Ok(tv.in_env(ev.env()))
-    }
-}
-
-impl<E: Env, T: TagType> IntoVal<E, RawVal> for TaggedVal<T> {
-    fn into_val(self, _env: &E) -> RawVal {
-        self.to_raw()
     }
 }
 
