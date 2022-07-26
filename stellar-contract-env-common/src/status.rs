@@ -1,4 +1,6 @@
-use crate::{BitSetError, ConversionError, RawVal, SymbolError, Tag, TagStatus, TaggedVal};
+use crate::{
+    BitSetError, ConversionError, RawVal, RawValConvertible, SymbolError, Tag, TagStatus, TaggedVal,
+};
 use core::{
     cmp::Ordering,
     fmt::Debug,
@@ -10,28 +12,29 @@ use stellar_xdr::{
     ScHostValErrorCode, ScStatus, ScStatusType, ScUnknownErrorCode, ScVal, ScVmErrorCode,
 };
 
-pub type Status = TaggedVal<TagStatus>;
+#[derive(Copy, Clone)]
+pub struct Status(TaggedVal<TagStatus>);
 
-pub const UNKNOWN_ERROR: Status = TaggedVal(
+pub const UNKNOWN_ERROR: Status = Status(TaggedVal(
     unsafe { RawVal::from_major_minor_and_tag(0, ScStatusType::UnknownError as u32, Tag::Status) },
     PhantomData,
-);
-pub const OK: Status = TaggedVal(
+));
+pub const OK: Status = Status(TaggedVal(
     unsafe { RawVal::from_major_minor_and_tag(0, ScStatusType::Ok as u32, Tag::Status) },
     PhantomData,
-);
+));
 
 impl Hash for Status {
     #[inline(always)]
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.as_ref().get_payload().hash(state);
+        self.as_raw().get_payload().hash(state);
     }
 }
 
 impl PartialEq for Status {
     #[inline(always)]
     fn eq(&self, other: &Self) -> bool {
-        self.as_ref().get_payload() == other.as_ref().get_payload()
+        self.as_raw().get_payload() == other.as_raw().get_payload()
     }
 }
 
@@ -47,8 +50,8 @@ impl PartialOrd for Status {
 impl Ord for Status {
     #[inline(always)]
     fn cmp(&self, other: &Self) -> Ordering {
-        let self_tup = (self.as_ref().get_minor(), self.as_ref().get_major());
-        let other_tup = (other.as_ref().get_minor(), other.as_ref().get_major());
+        let self_tup = (self.as_raw().get_minor(), self.as_raw().get_major());
+        let other_tup = (other.as_raw().get_minor(), other.as_raw().get_major());
         self_tup.cmp(&other_tup)
     }
 }
@@ -111,8 +114,8 @@ where
 
 impl Debug for Status {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        let st_res: Result<ScStatusType, _> = (self.0.get_minor() as i32).try_into();
-        let code = self.0.get_major();
+        let st_res: Result<ScStatusType, _> = (self.as_raw().get_minor() as i32).try_into();
+        let code = self.as_raw().get_major();
         let st = match st_res {
             Ok(t) => t,
             Err(_) => return write!(f, "Status(UnknownType)"),
@@ -241,18 +244,75 @@ impl From<ConversionError> for Status {
     }
 }
 
+impl AsRef<TaggedVal<TagStatus>> for Status {
+    fn as_ref(&self) -> &TaggedVal<TagStatus> {
+        self.as_tagged()
+    }
+}
+
+impl AsRef<RawVal> for Status {
+    fn as_ref(&self) -> &RawVal {
+        self.as_raw()
+    }
+}
+
+impl From<TaggedVal<TagStatus>> for Status {
+    fn from(tv: TaggedVal<TagStatus>) -> Self {
+        Status(tv)
+    }
+}
+
+impl From<Status> for TaggedVal<TagStatus> {
+    fn from(b: Status) -> Self {
+        b.to_tagged()
+    }
+}
+
+impl From<Status> for RawVal {
+    fn from(b: Status) -> Self {
+        b.to_raw()
+    }
+}
+
+impl RawValConvertible for Status {
+    #[inline(always)]
+    fn is_val_type(v: RawVal) -> bool {
+        <TaggedVal<TagStatus> as RawValConvertible>::is_val_type(v)
+    }
+    #[inline(always)]
+    unsafe fn unchecked_from_val(v: RawVal) -> Self {
+        Status(<TaggedVal<TagStatus> as RawValConvertible>::unchecked_from_val(v))
+    }
+}
+
 impl Status {
+    pub const fn as_raw(&self) -> &RawVal {
+        &self.0 .0
+    }
+
+    pub const fn to_raw(&self) -> RawVal {
+        self.0 .0
+    }
+
+    pub const fn as_tagged(&self) -> &TaggedVal<TagStatus> {
+        &self.0
+    }
+
+    pub const fn to_tagged(&self) -> TaggedVal<TagStatus> {
+        self.0
+    }
+
     // NB: we don't provide a "get_type" to avoid casting a bad bit-pattern into
     // an ScStatusType. Instead we provide an "is_type" to check any specific
     // bit-pattern.
     #[inline(always)]
     pub const fn is_type(&self, ty: ScStatusType) -> bool {
-        self.0.has_minor(ty as u32)
+        self.as_raw().has_minor(ty as u32)
     }
 
     #[inline(always)]
     pub const fn get_code(&self) -> u32 {
-        self.0.get_major()
+        self.as_raw().get_major()
     }
 
     #[inline(always)]
@@ -265,10 +325,10 @@ impl Status {
         // Unfortunately we can't use from_major_minor_and_tag_type here because
         // it's not const, and making it const requires nightly.
         unsafe {
-            Self(
+            Self(TaggedVal(
                 RawVal::from_major_minor_and_tag(code, ty as u32, Tag::Status),
                 PhantomData,
-            )
+            ))
         }
     }
 

@@ -179,7 +179,7 @@ fn invoke_cross_contract_lvl2_nested_with_err() -> Result<(), HostError> {
     let sv = host.try_call(obj.to_object(), sym.into(), args.clone().into())?;
     let code = ScHostObjErrorCode::VecIndexOutOfBound;
     let exp_st: Status = code.into();
-    assert_eq!(sv.get_payload(), exp_st.as_ref().get_payload());
+    assert_eq!(sv.get_payload(), exp_st.as_raw().get_payload());
     // call
     let res = host.call(obj.to_object(), sym.into(), args.into());
     assert!(HostError::result_matches_err_status(res, code));
