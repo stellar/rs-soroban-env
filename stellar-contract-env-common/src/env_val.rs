@@ -157,7 +157,16 @@ where
     }
 }
 
-pub trait TryFromVal<E: Env, V>: Sized + TryFrom<EnvVal<E, V>> {
+pub trait TryFromVal<E: Env, V>: Sized {
+    type Error;
+    fn try_from_val(env: &E, v: V) -> Result<Self, Self::Error>;
+}
+
+impl<E: Env, V, T> TryFromVal<E, V> for T
+where
+    T: Sized + TryFrom<EnvVal<E, V>>,
+{
+    type Error = T::Error;
     fn try_from_val(env: &E, v: V) -> Result<Self, Self::Error> {
         Self::try_from(EnvVal {
             env: env.clone(),
@@ -165,8 +174,6 @@ pub trait TryFromVal<E: Env, V>: Sized + TryFrom<EnvVal<E, V>> {
         })
     }
 }
-
-impl<E: Env, V, T> TryFromVal<E, V> for T where T: Sized + TryFrom<EnvVal<E, V>> {}
 
 impl<E: Env, V, I: Into<EnvVal<E, V>>> IntoEnvVal<E, V> for I {
     fn into_env_val(self, env: &E) -> EnvVal<E, V> {
