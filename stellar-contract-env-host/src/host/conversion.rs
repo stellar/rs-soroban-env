@@ -64,13 +64,33 @@ impl Host {
         name: &'static str,
         hash: Object,
     ) -> Result<Hash, HostError> {
-        self.visit_obj(hash, |bin: &Vec<u8>| {
-            match <[u8; 32]>::try_from(bin.as_slice()) {
-                Ok(arr) => Ok(Hash(arr)),
+        self.fixed_length_binary_from_obj_input::<Hash, 32>(name, hash)
+    }
+
+    pub(crate) fn uint256_from_rawval_input(
+        &self,
+        name: &'static str,
+        u256: Object,
+    ) -> Result<Uint256, HostError> {
+        self.fixed_length_binary_from_obj_input::<Uint256, 32>(name, u256)
+    }
+
+    fn fixed_length_binary_from_obj_input<T, const N: usize>(
+        &self,
+        name: &'static str,
+        obj: Object,
+    ) -> Result<T, HostError>
+    where
+        T: From<[u8; N]>,
+    {
+        self.visit_obj(obj, |bin: &Vec<u8>| {
+            match <[u8; N]>::try_from(bin.as_slice()) {
+                Ok(arr) => Ok(arr.into()),
                 Err(cvt) => Err(self.err(
-                    DebugError::new(ScHostObjErrorCode::ContractHashWrongLength)
-                        .msg("hash {} has wrong length for input {}")
-                        .arg(hash.to_raw())
+                    DebugError::new(ScHostObjErrorCode::ContractHashWrongLength) // TODO: this should be renamed to be more generic
+                        .msg("{} {} has wrong length for input {}")
+                        .arg(std::any::type_name::<T>())
+                        .arg(obj.to_raw())
                         .arg(name),
                 )),
             }
