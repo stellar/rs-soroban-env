@@ -3,36 +3,61 @@ use stellar_xdr::{ScObject, ScVal};
 use crate::{
     tagged_val::{TagObject, TaggedVal},
     xdr::ScObjectType,
-    Env, EnvVal, RawVal, Tag, TryConvert, TryIntoEnvVal,
+    Env, EnvVal, RawVal, RawValConvertible, Tag, TryConvert, TryIntoEnvVal,
 };
 use core::fmt::Debug;
 
-pub type Object = TaggedVal<TagObject>;
+#[derive(Copy, Clone)]
+pub struct Object(TaggedVal<TagObject>);
 
 impl Debug for Object {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        let object_type_res: Result<ScObjectType, _> = (self.0.get_minor() as i32).try_into();
+        let object_type_res: Result<ScObjectType, _> =
+            (self.as_raw().get_minor() as i32).try_into();
         let object_type_name: &str = match &object_type_res {
             Ok(ty) => ty.name(),
             Err(_) => &"Unknown",
         };
-        let index = self.0.get_major();
+        let index = self.as_raw().get_major();
         write!(f, "Object({}({}))", object_type_name, index)
     }
 }
 
 impl Object {
+    pub fn in_env<E: Env>(self, env: &E) -> EnvVal<E, Object> {
+        EnvVal {
+            env: env.clone(),
+            val: self,
+        }
+    }
+
+    pub const fn as_raw(&self) -> &RawVal {
+        &self.0 .0
+    }
+
+    pub const fn to_raw(&self) -> RawVal {
+        self.0 .0
+    }
+
+    pub const fn as_tagged(&self) -> &TaggedVal<TagObject> {
+        &self.0
+    }
+
+    pub const fn to_tagged(&self) -> TaggedVal<TagObject> {
+        self.0
+    }
+
     // NB: we don't provide a "get_type" to avoid casting a bad bit-pattern into
     // an ScStatusType. Instead we provide an "is_type" to check any specific
     // bit-pattern.
     #[inline(always)]
     pub const fn is_obj_type(&self, ty: ScObjectType) -> bool {
-        self.0.has_minor(ty as u32)
+        self.as_raw().has_minor(ty as u32)
     }
 
     #[inline(always)]
     pub const fn get_handle(&self) -> u32 {
-        self.0.get_major()
+        self.as_raw().get_major()
     }
 
     #[inline(always)]
@@ -42,7 +67,69 @@ impl Object {
 
     #[inline(always)]
     pub fn from_type_and_handle(ty: ScObjectType, handle: u32) -> Self {
-        unsafe { TaggedVal::from_major_minor_and_tag_type(handle, ty as u32) }
+        Self(unsafe { TaggedVal::from_major_minor_and_tag_type(handle, ty as u32) })
+    }
+}
+
+impl AsRef<TaggedVal<TagObject>> for Object {
+    fn as_ref(&self) -> &TaggedVal<TagObject> {
+        self.as_tagged()
+    }
+}
+
+impl AsRef<RawVal> for Object {
+    fn as_ref(&self) -> &RawVal {
+        self.as_raw()
+    }
+}
+
+impl AsMut<RawVal> for Object {
+    fn as_mut(&mut self) -> &mut RawVal {
+        self.0.as_mut()
+    }
+}
+
+impl From<TaggedVal<TagObject>> for Object {
+    fn from(tv: TaggedVal<TagObject>) -> Self {
+        Object(tv)
+    }
+}
+
+impl From<Object> for TaggedVal<TagObject> {
+    fn from(b: Object) -> Self {
+        b.to_tagged()
+    }
+}
+
+impl From<Object> for RawVal {
+    fn from(b: Object) -> Self {
+        b.to_raw()
+    }
+}
+
+impl RawValConvertible for Object {
+    #[inline(always)]
+    fn is_val_type(v: RawVal) -> bool {
+        <TaggedVal<TagObject> as RawValConvertible>::is_val_type(v)
+    }
+    #[inline(always)]
+    unsafe fn unchecked_from_val(v: RawVal) -> Self {
+        Object(<TaggedVal<TagObject> as RawValConvertible>::unchecked_from_val(v))
+    }
+}
+
+#[cfg(feature = "vm")]
+impl wasmi::FromValue for Object {
+    fn from_value(val: wasmi::RuntimeValue) -> Option<Self> {
+        let maybe: Option<TaggedVal<TagObject>> = val.try_into();
+        maybe.map(|x| Self(x))
+    }
+}
+
+#[cfg(feature = "vm")]
+impl From<Object> for wasmi::RuntimeValue {
+    fn from(v: Object) -> Self {
+        wasmi::RuntimeValue::I64(v.as_raw().get_payload() as i64)
     }
 }
 

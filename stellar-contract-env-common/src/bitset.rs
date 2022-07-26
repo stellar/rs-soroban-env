@@ -1,4 +1,4 @@
-use crate::{ConversionError, RawVal, RawValConvertible, Tag, TagBitSet, TaggedVal};
+use crate::{ConversionError, Env, EnvVal, RawVal, RawValConvertible, Tag, TagBitSet, TaggedVal};
 use core::cmp::Ordering;
 use core::fmt::Debug;
 use core::hash::{Hash, Hasher};
@@ -66,6 +66,12 @@ impl AsRef<RawVal> for BitSet {
     }
 }
 
+impl AsMut<RawVal> for BitSet {
+    fn as_mut(&mut self) -> &mut RawVal {
+        self.0.as_mut()
+    }
+}
+
 impl From<TaggedVal<TagBitSet>> for BitSet {
     fn from(tv: TaggedVal<TagBitSet>) -> Self {
         BitSet(tv)
@@ -111,6 +117,12 @@ impl From<BitSet> for wasmi::RuntimeValue {
 }
 
 impl BitSet {
+    pub fn in_env<E: Env>(self, env: &E) -> EnvVal<E, BitSet> {
+        EnvVal {
+            env: env.clone(),
+            val: self,
+        }
+    }
     pub const fn as_raw(&self) -> &RawVal {
         &self.0 .0
     }

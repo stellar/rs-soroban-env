@@ -1,5 +1,6 @@
 use crate::{
-    BitSetError, ConversionError, RawVal, RawValConvertible, SymbolError, Tag, TagStatus, TaggedVal,
+    BitSetError, ConversionError, Env, EnvVal, RawVal, RawValConvertible, SymbolError, Tag,
+    TagStatus, TaggedVal,
 };
 use core::{
     cmp::Ordering,
@@ -256,6 +257,12 @@ impl AsRef<RawVal> for Status {
     }
 }
 
+impl AsMut<RawVal> for Status {
+    fn as_mut(&mut self) -> &mut RawVal {
+        self.0.as_mut()
+    }
+}
+
 impl From<TaggedVal<TagStatus>> for Status {
     fn from(tv: TaggedVal<TagStatus>) -> Self {
         Status(tv)
@@ -301,6 +308,13 @@ impl From<Status> for wasmi::RuntimeValue {
 }
 
 impl Status {
+    pub fn in_env<E: Env>(self, env: &E) -> EnvVal<E, Status> {
+        EnvVal {
+            env: env.clone(),
+            val: self,
+        }
+    }
+
     pub const fn as_raw(&self) -> &RawVal {
         &self.0 .0
     }

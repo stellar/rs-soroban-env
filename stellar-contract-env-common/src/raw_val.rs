@@ -1,6 +1,6 @@
 use stellar_xdr::{ScStatic, ScStatus, ScStatusType};
 
-use super::{BitSet, Env, EnvVal, IntoEnvVal, Object, Status, Symbol};
+use super::{BitSet, Env, EnvVal, IntoEnvVal, Object, Static, Status, Symbol};
 use core::fmt::Debug;
 
 extern crate static_assertions as sa;
@@ -133,6 +133,36 @@ macro_rules! declare_tryfrom {
                 }
             }
         }
+        impl<E: Env> IntoEnvVal<E, $T> for $T {
+            fn into_env_val(self, env: &E) -> EnvVal<E, $T> {
+                EnvVal {
+                    env: env.clone(),
+                    val: self,
+                }
+            }
+        }
+    };
+}
+macro_rules! declare_envval_interop {
+    ($T:ty) => {
+        impl<E: Env> From<EnvVal<E, $T>> for RawVal {
+            fn from(ev: EnvVal<E, $T>) -> Self {
+                ev.val.into()
+            }
+        }
+        impl<E: Env> From<EnvVal<E, $T>> for $T {
+            fn from(ev: EnvVal<E, $T>) -> Self {
+                ev.val
+            }
+        }
+        impl<E: Env> EnvVal<E, $T> {
+            pub fn as_raw(&self) -> &RawVal {
+                self.val.as_ref()
+            }
+            pub fn to_raw(&self) -> RawVal {
+                self.val.to_raw()
+            }
+        }
     };
 }
 
@@ -143,6 +173,14 @@ declare_tryfrom!(i32);
 declare_tryfrom!(BitSet);
 declare_tryfrom!(Status);
 declare_tryfrom!(Symbol);
+declare_tryfrom!(Static);
+declare_tryfrom!(Object);
+
+declare_envval_interop!(BitSet);
+declare_envval_interop!(Status);
+declare_envval_interop!(Symbol);
+declare_envval_interop!(Static);
+declare_envval_interop!(Object);
 
 #[cfg(feature = "vm")]
 impl wasmi::FromValue for RawVal {
