@@ -4,6 +4,7 @@ use core::fmt::Debug;
 use core::hash::{Hash, Hasher};
 use core::marker::PhantomData;
 
+#[derive(Copy, Clone)]
 pub struct BitSet(TaggedVal<TagBitSet>);
 
 #[derive(Debug)]
