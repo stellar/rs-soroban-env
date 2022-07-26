@@ -1,6 +1,7 @@
 use crate::events::DebugError;
 use crate::xdr::{ScHostFnErrorCode, ScHostObjErrorCode, ScHostValErrorCode};
 use crate::{Host, HostError, Object, RawVal};
+use ed25519_dalek::{Signature, SIGNATURE_LENGTH};
 use stellar_contract_env_common::xdr::{Hash, Uint256};
 
 impl Host {
@@ -59,7 +60,7 @@ impl Host {
         }
     }
 
-    pub(crate) fn hash_from_rawval_input(
+    pub(crate) fn hash_from_obj_input(
         &self,
         name: &'static str,
         hash: Object,
@@ -67,12 +68,20 @@ impl Host {
         self.fixed_length_binary_from_obj_input::<Hash, 32>(name, hash)
     }
 
-    pub(crate) fn uint256_from_rawval_input(
+    pub(crate) fn uint256_from_obj_input(
         &self,
         name: &'static str,
         u256: Object,
     ) -> Result<Uint256, HostError> {
         self.fixed_length_binary_from_obj_input::<Uint256, 32>(name, u256)
+    }
+
+    pub(crate) fn signature_from_obj_input(
+        &self,
+        name: &'static str,
+        sig: Object,
+    ) -> Result<Signature, HostError> {
+        self.fixed_length_binary_from_obj_input::<Signature, SIGNATURE_LENGTH>(name, sig)
     }
 
     fn fixed_length_binary_from_obj_input<T, const N: usize>(
