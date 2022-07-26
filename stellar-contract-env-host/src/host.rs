@@ -41,6 +41,7 @@ use crate::{
     UNKNOWN_ERROR,
 };
 
+mod conversion;
 mod error;
 pub use error::HostError;
 
@@ -474,18 +475,8 @@ impl Host {
 
     #[cfg(feature = "vm")]
     fn decode_vmslice(&self, pos: RawVal, len: RawVal) -> Result<VmSlice, HostError> {
-        let pos: u32 = u32::try_from(pos).map_err(|_| {
-            self.err_status_msg(
-                ScHostFnErrorCode::InputArgsWrongType,
-                "guest binary pos must be u32",
-            )
-        })?;
-        let len: u32 = u32::try_from(len).map_err(|_| {
-            self.err_status_msg(
-                ScHostFnErrorCode::InputArgsWrongType,
-                "guest binary len must be u32",
-            )
-        })?;
+        let pos: u32 = self.u32_from_rawval_input("pos", pos)?;
+        let len: u32 = self.u32_from_rawval_input("len", len)?;
         self.with_current_frame(|frame| match frame {
             Frame::ContractVM(vm) => {
                 let vm = vm.clone();
@@ -638,14 +629,7 @@ impl Host {
         id_preimage: Vec<u8>,
     ) -> Result<Object, HostError> {
         let id_obj = self.compute_hash_sha256(self.add_host_object(id_preimage)?.into())?;
-
-        let new_contract_id = self.visit_obj(id_obj, |bin: &Vec<u8>| {
-            let arr: [u8; 32] = bin
-                .as_slice()
-                .try_into()
-                .map_err(|_| self.err_status(ScHostObjErrorCode::ContractHashWrongLength))?;
-            Ok(xdr::Hash(arr))
-        })?;
+        let new_contract_id = self.hash_from_rawval_input("id_obj", id_obj)?;
 
         let storage_key = LedgerKey::ContractData(LedgerKeyContractData {
             contract_id: new_contract_id.clone(),
@@ -702,15 +686,7 @@ impl Host {
 
     fn call_n(&self, contract: Object, func: Symbol, args: &[RawVal]) -> Result<RawVal, HostError> {
         // Get contract ID
-        let id = self.visit_obj(contract, |bin: &Vec<u8>| {
-            let arr: [u8; 32] = bin.as_slice().try_into().map_err(|_| {
-                self.err_status_msg(
-                    ScHostObjErrorCode::ContractHashWrongLength,
-                    "invalid contract hash",
-                )
-            })?;
-            Ok(xdr::Hash(arr))
-        })?;
+        let id = self.hash_from_rawval_input("contract", contract)?;
 
         #[cfg(feature = "testutils")]
         {
@@ -785,40 +761,6 @@ impl Host {
                 }
             }
         }
-    }
-
-    fn usize_to_rawval_u32(&self, u: usize) -> Result<RawVal, HostError> {
-        match u32::try_from(u) {
-            Ok(v) => Ok(v.into()),
-            Err(_) => Err(self.err_status(ScHostValErrorCode::U32OutOfRange)),
-        }
-    }
-
-    fn usize_from_rawval_u32_input(
-        &self,
-        name: &'static str,
-        r: RawVal,
-    ) -> Result<usize, HostError> {
-        self.u32_from_rawval_input(name, r).map(|u| u as usize)
-    }
-
-    fn u32_from_rawval_input(&self, name: &'static str, r: RawVal) -> Result<u32, HostError> {
-        match u32::try_from(r) {
-            Ok(v) => Ok(v),
-            Err(cvt) => Err(self.err(
-                DebugError::new(ScHostFnErrorCode::InputArgsWrongType)
-                    .msg("unexpected RawVal {} for input '{}', need U32")
-                    .arg(r)
-                    .arg(name),
-            )),
-        }
-    }
-
-    fn to_u256(&self, a: Object) -> Result<Uint256, HostError> {
-        self.visit_obj(a, |bin: &Vec<u8>| {
-            bin.try_into()
-                .map_err(|_| self.err_general("bad u256 length"))
-        })
     }
 
     fn load_account(&self, a: Object) -> Result<AccountEntry, HostError> {
@@ -1086,9 +1028,7 @@ impl CheckedEnv for Host {
 
     fn map_len(&self, m: Object) -> Result<RawVal, HostError> {
         let len = self.visit_obj(m, |hm: &HostMap| Ok(hm.len()))?;
-        Ok(u32::try_from(len)
-            .map_err(|_| ScHostValErrorCode::U32OutOfRange)?
-            .into())
+        self.usize_to_rawval_u32(len)
     }
 
     fn map_has(&self, m: Object, k: RawVal) -> Result<RawVal, HostError> {
@@ -1198,12 +1138,7 @@ impl CheckedEnv for Host {
         let capacity: usize = if c.is_void() {
             0
         } else {
-            u32::try_from(c).map_err(|_| {
-                self.err_status_msg(
-                    ScHostFnErrorCode::InputArgsWrongType,
-                    "c must be either `ScStatic::Void` or an `u32`",
-                )
-            })? as usize
+            self.usize_from_rawval_u32_input("c", c)?
         };
         // TODO: optimize the vector based on capacity
         Ok(self.add_host_object(HostVec::new())?.into())
@@ -1299,9 +1234,7 @@ impl CheckedEnv for Host {
     }
 
     fn vec_insert(&self, v: Object, i: RawVal, x: RawVal) -> Result<Object, HostError> {
-        let i: usize = u32::try_from(i).map_err(|_| {
-            self.err_status_msg(ScHostFnErrorCode::InputArgsWrongType, "i must be u32")
-        })? as usize;
+        let i = self.usize_from_rawval_u32_input("i", i)?;
         let x = self.associate_raw_val(x);
         let vnew = self.visit_obj(v, move |hv: &HostVec| {
             if i > hv.len() {
@@ -1326,12 +1259,8 @@ impl CheckedEnv for Host {
     }
 
     fn vec_slice(&self, v: Object, start: RawVal, end: RawVal) -> Result<Object, HostError> {
-        let start: usize = u32::try_from(start).map_err(|_| {
-            self.err_status_msg(ScHostFnErrorCode::InputArgsWrongType, "start must be u32")
-        })? as usize;
-        let end: usize = u32::try_from(end).map_err(|_| {
-            self.err_status_msg(ScHostFnErrorCode::InputArgsWrongType, "end must be u32")
-        })? as usize;
+        let start = self.usize_from_rawval_u32_input("start", start)?;
+        let end = self.usize_from_rawval_u32_input("end", end)?;
         if start > end {
             return Err(self.err_status_msg(
                 ScHostFnErrorCode::InputArgsInvalid,
@@ -1799,18 +1728,8 @@ impl CheckedEnv for Host {
     }
 
     fn binary_put(&self, b: Object, i: RawVal, u: RawVal) -> Result<Object, HostError> {
-        let i: usize = u32::try_from(i).map_err(|_| {
-            self.err_status_msg(ScHostFnErrorCode::InputArgsWrongType, "i must be u32")
-        })? as usize;
-        let u: u32 = u.try_into().map_err(|_| {
-            self.err_status_msg(ScHostFnErrorCode::InputArgsWrongType, "u must be u32")
-        })?;
-        let u: u8 = u.try_into().map_err(|_| {
-            self.err_status_msg(
-                ScHostFnErrorCode::InputArgsWrongType,
-                "u must be no greater than 255",
-            )
-        })?;
+        let i = self.usize_from_rawval_u32_input("i", i)?;
+        let u = self.u8_from_rawval_input("u", u)?;
         let vnew = self.visit_obj(b, move |hv: &Vec<u8>| {
             let mut vnew = hv.clone();
             if i >= hv.len() {
@@ -1824,9 +1743,7 @@ impl CheckedEnv for Host {
     }
 
     fn binary_get(&self, b: Object, i: RawVal) -> Result<RawVal, HostError> {
-        let i: usize = u32::try_from(i).map_err(|_| {
-            self.err_status_msg(ScHostFnErrorCode::InputArgsWrongType, "i must be u32")
-        })? as usize;
+        let i = self.usize_from_rawval_u32_input("i", i)?;
         self.visit_obj(b, move |hv: &Vec<u8>| match hv.get(i) {
             None => {
                 Err(self
@@ -1837,9 +1754,7 @@ impl CheckedEnv for Host {
     }
 
     fn binary_del(&self, b: Object, i: RawVal) -> Result<Object, HostError> {
-        let i: usize = u32::try_from(i).map_err(|_| {
-            self.err_status_msg(ScHostFnErrorCode::InputArgsWrongType, "i must be u32")
-        })? as usize;
+        let i = self.usize_from_rawval_u32_input("i", i)?;
         let vnew = self.visit_obj(b, move |hv: &Vec<u8>| {
             if i >= hv.len() {
                 return Err(self
@@ -1858,15 +1773,7 @@ impl CheckedEnv for Host {
     }
 
     fn binary_push(&self, b: Object, u: RawVal) -> Result<Object, HostError> {
-        let u: u32 = u.try_into().map_err(|_| {
-            self.err_status_msg(ScHostFnErrorCode::InputArgsWrongType, "x must be u32")
-        })?;
-        let u: u8 = u.try_into().map_err(|_| {
-            self.err_status_msg(
-                ScHostFnErrorCode::InputArgsWrongType,
-                "x must be no greater than 255",
-            )
-        })?;
+        let u = self.u8_from_rawval_input("u", u)?;
         let vnew = self.visit_obj(b, move |hv: &Vec<u8>| {
             let mut vnew = hv.clone();
             vnew.push(u);
@@ -1911,18 +1818,8 @@ impl CheckedEnv for Host {
     }
 
     fn binary_insert(&self, b: Object, i: RawVal, u: RawVal) -> Result<Object, HostError> {
-        let i: usize = u32::try_from(i).map_err(|_| {
-            self.err_status_msg(ScHostFnErrorCode::InputArgsWrongType, "i must be u32")
-        })? as usize;
-        let u: u32 = u.try_into().map_err(|_| {
-            self.err_status_msg(ScHostFnErrorCode::InputArgsWrongType, "x must be u32")
-        })?;
-        let u: u8 = u.try_into().map_err(|_| {
-            self.err_status_msg(
-                ScHostFnErrorCode::InputArgsWrongType,
-                "x must be no greater than 255",
-            )
-        })?;
+        let i = self.usize_from_rawval_u32_input("i", i)?;
+        let u = self.u8_from_rawval_input("u", u)?;
         let vnew = self.visit_obj(b, move |hv: &Vec<u8>| {
             if i > hv.len() {
                 return Err(self
@@ -1946,12 +1843,8 @@ impl CheckedEnv for Host {
     }
 
     fn binary_slice(&self, b: Object, start: RawVal, end: RawVal) -> Result<Object, HostError> {
-        let start: usize = u32::try_from(start).map_err(|_| {
-            self.err_status_msg(ScHostFnErrorCode::InputArgsWrongType, "start must be u32")
-        })? as usize;
-        let end: usize = u32::try_from(end).map_err(|_| {
-            self.err_status_msg(ScHostFnErrorCode::InputArgsWrongType, "end must be u32")
-        })? as usize;
+        let start = self.usize_from_rawval_u32_input("start", start)?;
+        let end = self.usize_from_rawval_u32_input("end", end)?;
         let vnew = self.visit_obj(b, move |hv: &Vec<u8>| {
             if start > hv.len() {
                 return Err(self.err_status_msg(
