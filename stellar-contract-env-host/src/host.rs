@@ -39,7 +39,7 @@ use crate::Vm;
 use crate::{EnvBase, IntoEnvVal, Object, RawVal, RawValConvertible, Symbol, Val, UNKNOWN_ERROR};
 
 mod conversion;
-mod err_handle;
+mod err_helper;
 mod error;
 pub use error::HostError;
 
