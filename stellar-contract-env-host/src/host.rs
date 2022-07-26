@@ -537,7 +537,7 @@ impl Host {
         id_preimage: Vec<u8>,
     ) -> Result<Object, HostError> {
         let id_obj = self.compute_hash_sha256(self.add_host_object(id_preimage)?.into())?;
-        let new_contract_id = self.hash_from_rawval_input("id_obj", id_obj)?;
+        let new_contract_id = self.hash_from_obj_input("id_obj", id_obj)?;
 
         let storage_key = LedgerKey::ContractData(LedgerKeyContractData {
             contract_id: new_contract_id.clone(),
@@ -594,7 +594,7 @@ impl Host {
 
     fn call_n(&self, contract: Object, func: Symbol, args: &[RawVal]) -> Result<RawVal, HostError> {
         // Get contract ID
-        let id = self.hash_from_rawval_input("contract", contract)?;
+        let id = self.hash_from_obj_input("contract", contract)?;
 
         #[cfg(feature = "testutils")]
         {
@@ -1256,8 +1256,8 @@ impl CheckedEnv for Host {
         key: Object,
         sig: Object,
     ) -> Result<Object, HostError> {
-        let salt_val = self.uint256_from_rawval_input("salt", salt)?;
-        let key_val = self.uint256_from_rawval_input("key", key)?;
+        let salt_val = self.uint256_from_obj_input("salt", salt)?;
+        let key_val = self.uint256_from_obj_input("key", key)?;
 
         // Verify parameters
         let params = self.visit_obj(v, |bin: &Vec<u8>| {
@@ -1283,7 +1283,7 @@ impl CheckedEnv for Host {
 
     fn create_contract_from_contract(&self, v: Object, salt: Object) -> Result<Object, HostError> {
         let contract_id = self.get_current_contract_id()?;
-        let salt_val = self.uint256_from_rawval_input("salt", salt)?;
+        let salt_val = self.uint256_from_obj_input("salt", salt)?;
 
         let pre_image =
             xdr::HashIdPreimage::ContractIdFromContract(xdr::HashIdPreimageContractId {
@@ -1784,23 +1784,13 @@ impl CheckedEnv for Host {
     }
 
     fn verify_sig_ed25519(&self, x: Object, k: Object, s: Object) -> Result<RawVal, HostError> {
-        use ed25519_dalek::{PublicKey, Signature, Verifier};
-
+        use ed25519_dalek::{PublicKey, Verifier};
         let public_key: PublicKey = self.visit_obj(k, |bin: &Vec<u8>| {
             PublicKey::from_bytes(bin).map_err(|_| {
                 self.err_status_msg(ScHostObjErrorCode::UnexpectedType, "invalid public key")
             })
         })?;
-
-        let sig: Signature = self.visit_obj(s, |bin: &Vec<u8>| {
-            Signature::from_bytes(bin).map_err(|_| {
-                self.err_status_msg(
-                    ScHostObjErrorCode::UnexpectedType,
-                    "unable to decode signature",
-                )
-            })
-        })?;
-
+        let sig = self.signature_from_obj_input("sig", s)?;
         let res = self.visit_obj(x, |bin: &Vec<u8>| {
             public_key
                 .verify(bin, &sig)
