@@ -13,7 +13,7 @@ use std::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Not, Rem, Shl, Shr, Su
 use stellar_contract_env_common::{TryConvert, TryFromVal, TryIntoVal};
 
 use stellar_contract_env_common::xdr::{
-    AccountEntry, AccountId, Hash, PublicKey, ReadXdr, ThresholdIndexes, Uint256, WriteXdr,
+    AccountEntry, AccountId, Hash, PublicKey, ReadXdr, ThresholdIndexes, WriteXdr,
 };
 
 use crate::budget::{Budget, CostType};
@@ -1348,19 +1348,8 @@ impl CheckedEnv for Host {
         key: Object,
         sig: Object,
     ) -> Result<Object, HostError> {
-        let salt_val = self.visit_obj(salt, |bin: &Vec<u8>| {
-            let arr: [u8; 32] = bin.as_slice().try_into().map_err(|_| {
-                self.err_status_msg(ScHostObjErrorCode::UnexpectedType, "invalid salt")
-            })?;
-            Ok(Uint256(arr))
-        })?;
-
-        let key_val = self.visit_obj(key, |bin: &Vec<u8>| {
-            let arr: [u8; 32] = bin.as_slice().try_into().map_err(|_| {
-                self.err_status_msg(ScHostObjErrorCode::UnexpectedType, "invalid key")
-            })?;
-            Ok(Uint256(arr))
-        })?;
+        let salt_val = self.uint256_from_rawval_input("salt", salt)?;
+        let key_val = self.uint256_from_rawval_input("key", key)?;
 
         // Verify parameters
         let params = self.visit_obj(v, |bin: &Vec<u8>| {
@@ -1386,13 +1375,7 @@ impl CheckedEnv for Host {
 
     fn create_contract_from_contract(&self, v: Object, salt: Object) -> Result<Object, HostError> {
         let contract_id = self.get_current_contract_id()?;
-
-        let salt_val = self.visit_obj(salt, |bin: &Vec<u8>| {
-            let arr: [u8; 32] = bin.as_slice().try_into().map_err(|_| {
-                self.err_status_msg(ScHostObjErrorCode::UnexpectedType, "invalid salt")
-            })?;
-            Ok(Uint256(arr))
-        })?;
+        let salt_val = self.uint256_from_rawval_input("salt", salt)?;
 
         let pre_image =
             xdr::HashIdPreimage::ContractIdFromContract(xdr::HashIdPreimageContractId {
