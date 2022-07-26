@@ -164,7 +164,7 @@ pub trait TryFromVal<E: Env, V>: Sized {
 
 impl<E: Env, V, T> TryFromVal<E, V> for T
 where
-    T: Sized + TryFrom<EnvVal<E, V>>,
+    T: TryFrom<EnvVal<E, V>>,
 {
     type Error = T::Error;
     fn try_from_val(env: &E, v: V) -> Result<Self, Self::Error> {
