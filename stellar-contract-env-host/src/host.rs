@@ -621,7 +621,11 @@ impl Host {
         return Err(self.err_general("could not dispatch"));
     }
 
-    pub fn invoke_function(&mut self, hf: HostFunction, args: ScVec) -> Result<ScVal, HostError> {
+    pub fn invoke_function_raw(
+        &mut self,
+        hf: HostFunction,
+        args: ScVec,
+    ) -> Result<RawVal, HostError> {
         match hf {
             HostFunction::Call => {
                 if let [ScVal::Object(Some(scobj)), ScVal::Symbol(scsym), rest @ ..] =
@@ -637,7 +641,7 @@ impl Host {
                     }
                     let res = self.call_n(object, symbol, &raw_args[..])?;
                     frame_guard.commit();
-                    Ok(self.from_host_val(res)?)
+                    Ok(res)
                 } else {
                     Err(self.err_status_msg(
                         ScHostFnErrorCode::InputArgsWrongLength,
@@ -657,10 +661,11 @@ impl Host {
                     let signature: Object = self.to_host_obj(sig_obj)?.to_object();
 
                     //TODO: should create_contract_from_ed25519 return a RawVal instead of Object to avoid this conversion?
-                    let res = self.create_contract_from_ed25519(contract, salt, key, signature)?;
-                    let sc_obj = self.from_host_obj(res)?;
+                    let res: RawVal = self
+                        .create_contract_from_ed25519(contract, salt, key, signature)?
+                        .into();
                     frame_guard.commit();
-                    Ok(ScVal::Object(Some(sc_obj)))
+                    Ok(res)
                 } else {
                     Err(self.err_status_msg(
                         ScHostFnErrorCode::InputArgsWrongLength,
@@ -669,6 +674,11 @@ impl Host {
                 }
             }
         }
+    }
+
+    pub fn invoke_function(&mut self, hf: HostFunction, args: ScVec) -> Result<ScVal, HostError> {
+        let rv = self.invoke_function_raw(hf, args)?;
+        self.from_host_val(rv)
     }
 
     fn load_account(&self, a: Object) -> Result<AccountEntry, HostError> {
