@@ -282,6 +282,7 @@ impl FromIterator<char> for Symbol {
     }
 }
 
+#[cfg(feature = "std")]
 use crate::xdr::ScVal;
 
 #[cfg(feature = "std")]
