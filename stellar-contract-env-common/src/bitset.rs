@@ -20,14 +20,14 @@ impl From<BitSetError> for ConversionError {
 impl Hash for BitSet {
     #[inline(always)]
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.0 .0.get_payload().hash(state);
+        self.as_raw().get_payload().hash(state);
     }
 }
 
 impl PartialEq for BitSet {
     #[inline(always)]
     fn eq(&self, other: &Self) -> bool {
-        self.0 .0.get_payload() == other.0 .0.get_payload()
+        self.as_raw().get_payload() == other.as_raw().get_payload()
     }
 }
 
@@ -43,13 +43,13 @@ impl PartialOrd for BitSet {
 impl Ord for BitSet {
     #[inline(always)]
     fn cmp(&self, other: &Self) -> Ordering {
-        self.0 .0.get_body().cmp(&other.0 .0.get_body())
+        self.as_raw().get_body().cmp(&other.as_raw().get_body())
     }
 }
 
 impl Debug for BitSet {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "BitSet({:#b})", self.0 .0.get_body())
+        write!(f, "BitSet({:#b})", self.as_raw().get_body())
     }
 }
 
