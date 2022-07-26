@@ -713,7 +713,11 @@ impl Host {
         return Err(self.err_general("could not dispatch"));
     }
 
-    pub fn invoke_function_raw(&mut self, hf: HostFunction, args: ScVec) -> Result<RawVal, HostError> {
+    pub fn invoke_function_raw(
+        &mut self,
+        hf: HostFunction,
+        args: ScVec,
+    ) -> Result<RawVal, HostError> {
         match hf {
             HostFunction::Call => {
                 if let [ScVal::Object(Some(scobj)), ScVal::Symbol(scsym), rest @ ..] =
@@ -749,7 +753,9 @@ impl Host {
                     let signature: Object = self.to_host_obj(sig_obj)?.to_object();
 
                     //TODO: should create_contract_from_ed25519 return a RawVal instead of Object to avoid this conversion?
-                    let res: RawVal = self.create_contract_from_ed25519(contract, salt, key, signature)?.into();
+                    let res: RawVal = self
+                        .create_contract_from_ed25519(contract, salt, key, signature)?
+                        .into();
                     frame_guard.commit();
                     Ok(res)
                 } else {
