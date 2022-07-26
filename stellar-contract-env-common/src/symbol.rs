@@ -1,4 +1,6 @@
-use crate::{require, ConversionError, RawVal, RawValConvertible, Tag, TagSymbol, TaggedVal};
+use crate::{
+    require, ConversionError, Env, EnvVal, RawVal, RawValConvertible, Tag, TagSymbol, TaggedVal,
+};
 use core::{
     cmp::Ordering,
     fmt::Debug,
@@ -111,6 +113,12 @@ impl AsRef<RawVal> for Symbol {
     }
 }
 
+impl AsMut<RawVal> for Symbol {
+    fn as_mut(&mut self) -> &mut RawVal {
+        self.0.as_mut()
+    }
+}
+
 impl From<TaggedVal<TagSymbol>> for Symbol {
     fn from(tv: TaggedVal<TagSymbol>) -> Self {
         Symbol(tv)
@@ -156,6 +164,13 @@ impl From<Symbol> for wasmi::RuntimeValue {
 }
 
 impl Symbol {
+    pub fn in_env<E: Env>(self, env: &E) -> EnvVal<E, Symbol> {
+        EnvVal {
+            env: env.clone(),
+            val: self,
+        }
+    }
+
     pub const fn as_raw(&self) -> &RawVal {
         &self.0 .0
     }
