@@ -95,6 +95,21 @@ impl RawValConvertible for BitSet {
     }
 }
 
+#[cfg(feature = "vm")]
+impl wasmi::FromValue for BitSet {
+    fn from_value(val: wasmi::RuntimeValue) -> Option<Self> {
+        let maybe: Option<TaggedVal<TagBitSet>> = val.try_into();
+        maybe.map(|x| Self(x))
+    }
+}
+
+#[cfg(feature = "vm")]
+impl From<BitSet> for wasmi::RuntimeValue {
+    fn from(v: BitSet) -> Self {
+        wasmi::RuntimeValue::I64(v.as_raw().get_payload() as i64)
+    }
+}
+
 impl BitSet {
     pub const fn as_raw(&self) -> &RawVal {
         &self.0 .0

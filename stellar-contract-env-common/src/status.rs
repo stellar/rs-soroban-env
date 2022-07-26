@@ -285,6 +285,21 @@ impl RawValConvertible for Status {
     }
 }
 
+#[cfg(feature = "vm")]
+impl wasmi::FromValue for Status {
+    fn from_value(val: wasmi::RuntimeValue) -> Option<Self> {
+        let maybe: Option<TaggedVal<TagStatus>> = val.try_into();
+        maybe.map(|x| Self(x))
+    }
+}
+
+#[cfg(feature = "vm")]
+impl From<Status> for wasmi::RuntimeValue {
+    fn from(v: Status) -> Self {
+        wasmi::RuntimeValue::I64(v.as_raw().get_payload() as i64)
+    }
+}
+
 impl Status {
     pub const fn as_raw(&self) -> &RawVal {
         &self.0 .0
