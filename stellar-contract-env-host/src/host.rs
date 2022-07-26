@@ -36,12 +36,10 @@ use crate::CheckedEnv;
 use crate::SymbolStr;
 #[cfg(feature = "vm")]
 use crate::Vm;
-use crate::{
-    ConversionError, EnvBase, IntoEnvVal, Object, RawVal, RawValConvertible, Status, Symbol, Val,
-    UNKNOWN_ERROR,
-};
+use crate::{EnvBase, IntoEnvVal, Object, RawVal, RawValConvertible, Symbol, Val, UNKNOWN_ERROR};
 
 mod conversion;
+mod err_helper;
 mod error;
 pub use error::HostError;
 
@@ -224,96 +222,6 @@ impl Host {
         let len = event.args.len() as u64;
         self.get_events_mut(|events| Ok(events.record_debug_event(event)))?;
         self.charge_budget(CostType::HostEventDebug, len)
-    }
-
-    /// Records a debug-event from its input in as much detail as possible, then
-    /// converts its input to a (often coarser-granularity) [Status] code, and then
-    /// forms a [HostError] with it (which also captures a [backtrace::Backtrace]).
-    /// This is the method you want to call any time there's a finer-granularity error
-    /// type that you want to log the details of and then downgrade fail with.
-    pub(crate) fn err<T>(&self, src: T) -> HostError
-    where
-        DebugError: From<T>,
-    {
-        let ds: DebugError = src.into();
-        if let Err(e) = self.debug_event(ds.event) {
-            e
-        } else {
-            let mut he: HostError = ds.status.into();
-            he.events = Some(self.0.events.borrow().clone());
-            he
-        }
-    }
-
-    /// Helper for the simplest status-only error path.
-    pub(crate) fn err_status<T>(&self, status: T) -> HostError
-    where
-        Status: From<T>,
-    {
-        self.err(DebugError::new(status))
-    }
-
-    /// Helper for the simplest string + general-error path.
-    pub(crate) fn err_general(&self, msg: &'static str) -> HostError {
-        self.err(DebugError::general().msg(msg))
-    }
-
-    pub(crate) fn err_conversion_raw_val_to<T>(&self, rv: RawVal) -> HostError {
-        self.err(
-            DebugError::new(ConversionError)
-                .msg("error converting {} into {}")
-                .arg(rv)
-                .arg(std::any::type_name::<T>()),
-        )
-    }
-
-    /// Helper for the next-simplest status-and-extended-debug-message error path.
-    pub(crate) fn err_status_msg<T>(&self, status: T, msg: &'static str) -> HostError
-    where
-        Status: From<T>,
-    {
-        self.err(DebugError::new(status).msg(msg))
-    }
-
-    pub(crate) fn err_convert<T>(&self, v: RawVal) -> HostError {
-        if let Err(e) = self.debug_event(
-            DebugEvent::new()
-                .msg("can't convert {} to {}")
-                .arg(v)
-                .arg(core::any::type_name::<T>()),
-        ) {
-            return e;
-        }
-        ConversionError {}.into()
-    }
-
-    pub(crate) fn err_convert_general(&self, msg: &'static str) -> HostError {
-        if let Err(e) = self.debug_event(DebugEvent::new().msg(msg)) {
-            return e;
-        }
-        ConversionError {}.into()
-    }
-
-    /// Given a result carrying some error type that can be converted to a
-    /// DebugStatus, calls self.err with it when there's an error. Returns a
-    /// result over HostError.
-    ///
-    /// If you have an error type T you want to record as a detailed debug event
-    /// and a less-detailed Status code embedded in a HostError, add an `impl
-    /// From<T> for DebugStatus` over in the [events] module and call this where
-    /// the error is generated.
-    ///
-    /// Note: we do _not_ want to `impl From<T> for HostError` for such types,
-    /// as doing so will avoid routing them through the host in order to record
-    /// their extended diagnostic information into the debug buffer. This means
-    /// you will wind up writing `host.map_err(...)?` a bunch in code that you used
-    /// to be able to get away with just writing `...?`, there's no way around
-    /// this if we want to record the diagnostic information.
-    pub(crate) fn map_err<T, E>(&self, res: Result<T, E>) -> Result<T, HostError>
-    where
-        DebugError: From<E>,
-    {
-        res.map_err(|e| self.err(e.into()))
     }
 
     pub(crate) fn visit_storage<F, U>(&self, f: F) -> Result<U, HostError>
@@ -629,7 +537,7 @@ impl Host {
         id_preimage: Vec<u8>,
     ) -> Result<Object, HostError> {
         let id_obj = self.compute_hash_sha256(self.add_host_object(id_preimage)?.into())?;
-        let new_contract_id = self.hash_from_rawval_input("id_obj", id_obj)?;
+        let new_contract_id = self.hash_from_obj_input("id_obj", id_obj)?;
 
         let storage_key = LedgerKey::ContractData(LedgerKeyContractData {
             contract_id: new_contract_id.clone(),
@@ -686,7 +594,7 @@ impl Host {
 
     fn call_n(&self, contract: Object, func: Symbol, args: &[RawVal]) -> Result<RawVal, HostError> {
         // Get contract ID
-        let id = self.hash_from_rawval_input("contract", contract)?;
+        let id = self.hash_from_obj_input("contract", contract)?;
 
         #[cfg(feature = "testutils")]
         {
@@ -950,7 +858,7 @@ impl CheckedEnv for Host {
         let bin: Vec<u8> = hash
             .0
             .try_into()
-            .map_err(|_| self.err_convert_general("Hash has wrong size"))?;
+            .map_err(|_| self.err_conversion_general("Hash has wrong size"))?;
         Ok(self.add_host_object(bin)?.into())
     }
 
@@ -981,7 +889,7 @@ impl CheckedEnv for Host {
         let bin: Vec<u8> = hash
             .0
             .try_into()
-            .map_err(|_| self.err_convert_general("Hash has wrong size"))?;
+            .map_err(|_| self.err_conversion_general("Hash has wrong size"))?;
         Ok(self.add_host_object(bin)?.into())
     }
 
@@ -1358,8 +1266,8 @@ impl CheckedEnv for Host {
         key: Object,
         sig: Object,
     ) -> Result<Object, HostError> {
-        let salt_val = self.uint256_from_rawval_input("salt", salt)?;
-        let key_val = self.uint256_from_rawval_input("key", key)?;
+        let salt_val = self.uint256_from_obj_input("salt", salt)?;
+        let key_val = self.uint256_from_obj_input("key", key)?;
 
         // Verify parameters
         let params = self.visit_obj(v, |bin: &Vec<u8>| {
@@ -1385,7 +1293,7 @@ impl CheckedEnv for Host {
 
     fn create_contract_from_contract(&self, v: Object, salt: Object) -> Result<Object, HostError> {
         let contract_id = self.get_current_contract_id()?;
-        let salt_val = self.uint256_from_rawval_input("salt", salt)?;
+        let salt_val = self.uint256_from_obj_input("salt", salt)?;
 
         let pre_image =
             xdr::HashIdPreimage::ContractIdFromContract(xdr::HashIdPreimageContractId {
@@ -1426,7 +1334,8 @@ impl CheckedEnv for Host {
 
     fn bigint_to_u64(&self, x: Object) -> Result<u64, HostError> {
         self.visit_obj(x, |bi: &BigInt| {
-            bi.to_u64().ok_or_else(|| self.err_convert::<u64>(x.into()))
+            bi.to_u64()
+                .ok_or_else(|| self.err_conversion_into_rawval::<u64>(x.into()))
         })
     }
 
@@ -1436,7 +1345,8 @@ impl CheckedEnv for Host {
 
     fn bigint_to_i64(&self, x: Object) -> Result<i64, HostError> {
         self.visit_obj(x, |bi: &BigInt| {
-            bi.to_i64().ok_or_else(|| self.err_convert::<i64>(x.into()))
+            bi.to_i64()
+                .ok_or_else(|| self.err_conversion_into_rawval::<i64>(x.into()))
         })
     }
 
@@ -1884,23 +1794,13 @@ impl CheckedEnv for Host {
     }
 
     fn verify_sig_ed25519(&self, x: Object, k: Object, s: Object) -> Result<RawVal, HostError> {
-        use ed25519_dalek::{PublicKey, Signature, Verifier};
-
+        use ed25519_dalek::{PublicKey, Verifier};
         let public_key: PublicKey = self.visit_obj(k, |bin: &Vec<u8>| {
             PublicKey::from_bytes(bin).map_err(|_| {
                 self.err_status_msg(ScHostObjErrorCode::UnexpectedType, "invalid public key")
             })
         })?;
-
-        let sig: Signature = self.visit_obj(s, |bin: &Vec<u8>| {
-            Signature::from_bytes(bin).map_err(|_| {
-                self.err_status_msg(
-                    ScHostObjErrorCode::UnexpectedType,
-                    "unable to decode signature",
-                )
-            })
-        })?;
-
+        let sig = self.signature_from_obj_input("sig", s)?;
         let res = self.visit_obj(x, |bin: &Vec<u8>| {
             public_key
                 .verify(bin, &sig)
