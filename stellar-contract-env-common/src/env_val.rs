@@ -522,39 +522,3 @@ impl<E: Env, V: Val> Ord for EnvVal<E, V> {
         }
     }
 }
-
-#[cfg(feature = "std")]
-impl<E: Env> TryFrom<EnvVal<E, ScVal>> for () {
-    type Error = ();
-    fn try_from(ev: EnvVal<E, ScVal>) -> Result<Self, Self::Error> {
-        if let ScVal::Static(ScStatic::Void) = ev.val {
-            Ok(())
-        } else {
-            Err(())
-        }
-    }
-}
-
-#[cfg(feature = "std")]
-impl<E: Env> TryFrom<EnvVal<E, ScVal>> for bool {
-    type Error = ();
-    fn try_from(ev: EnvVal<E, ScVal>) -> Result<Self, Self::Error> {
-        match ev.val {
-            ScVal::Static(ScStatic::True) => Ok(true),
-            ScVal::Static(ScStatic::False) => Ok(false),
-            _ => Err(()),
-        }
-    }
-}
-
-#[cfg(feature = "std")]
-impl<E: Env> TryFrom<EnvVal<E, ScVal>> for u32 {
-    type Error = ();
-    fn try_from(ev: EnvVal<E, ScVal>) -> Result<Self, Self::Error> {
-        if let ScVal::U32(x) = ev.val {
-            Ok(x)
-        } else {
-            Err(())
-        }
-    }
-}
