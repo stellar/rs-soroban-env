@@ -523,6 +523,7 @@ impl<E: Env, V: Val> Ord for EnvVal<E, V> {
     }
 }
 
+#[cfg(feature = "std")]
 impl<E: Env> TryFrom<EnvVal<E, ScVal>> for () {
     type Error = ();
     fn try_from(ev: EnvVal<E, ScVal>) -> Result<Self, Self::Error> {
@@ -534,6 +535,7 @@ impl<E: Env> TryFrom<EnvVal<E, ScVal>> for () {
     }
 }
 
+#[cfg(feature = "std")]
 impl<E: Env> TryFrom<EnvVal<E, ScVal>> for bool {
     type Error = ();
     fn try_from(ev: EnvVal<E, ScVal>) -> Result<Self, Self::Error> {
@@ -545,6 +547,7 @@ impl<E: Env> TryFrom<EnvVal<E, ScVal>> for bool {
     }
 }
 
+#[cfg(feature = "std")]
 impl<E: Env> TryFrom<EnvVal<E, ScVal>> for u32 {
     type Error = ();
     fn try_from(ev: EnvVal<E, ScVal>) -> Result<Self, Self::Error> {
