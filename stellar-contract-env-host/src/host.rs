@@ -848,7 +848,7 @@ impl CheckedEnv for Host {
         let bin: Vec<u8> = hash
             .0
             .try_into()
-            .map_err(|_| self.err_convert_general("Hash has wrong size"))?;
+            .map_err(|_| self.err_conversion_general("Hash has wrong size"))?;
         Ok(self.add_host_object(bin)?.into())
     }
 
@@ -879,7 +879,7 @@ impl CheckedEnv for Host {
         let bin: Vec<u8> = hash
             .0
             .try_into()
-            .map_err(|_| self.err_convert_general("Hash has wrong size"))?;
+            .map_err(|_| self.err_conversion_general("Hash has wrong size"))?;
         Ok(self.add_host_object(bin)?.into())
     }
 
@@ -1324,7 +1324,8 @@ impl CheckedEnv for Host {
 
     fn bigint_to_u64(&self, x: Object) -> Result<u64, HostError> {
         self.visit_obj(x, |bi: &BigInt| {
-            bi.to_u64().ok_or_else(|| self.err_convert::<u64>(x.into()))
+            bi.to_u64()
+                .ok_or_else(|| self.err_conversion_into_rawval::<u64>(x.into()))
         })
     }
 
@@ -1334,7 +1335,8 @@ impl CheckedEnv for Host {
 
     fn bigint_to_i64(&self, x: Object) -> Result<i64, HostError> {
         self.visit_obj(x, |bi: &BigInt| {
-            bi.to_i64().ok_or_else(|| self.err_convert::<i64>(x.into()))
+            bi.to_i64()
+                .ok_or_else(|| self.err_conversion_into_rawval::<i64>(x.into()))
         })
     }
 

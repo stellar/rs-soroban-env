@@ -1,4 +1,4 @@
-use crate::events::{DebugError, DebugEvent};
+use crate::events::DebugError;
 use crate::{ConversionError, Host, HostError, RawVal, Status};
 
 impl Host {
@@ -34,15 +34,6 @@ impl Host {
         self.err(DebugError::general().msg(msg))
     }
 
-    pub(crate) fn err_conversion_raw_val_to<T>(&self, rv: RawVal) -> HostError {
-        self.err(
-            DebugError::new(ConversionError)
-                .msg("error converting {} into {}")
-                .arg(rv)
-                .arg(std::any::type_name::<T>()),
-        )
-    }
-
     /// Helper for the next-simplest status-and-extended-debug-message error path.
     pub(crate) fn err_status_msg<T>(&self, status: T, msg: &'static str) -> HostError
     where
@@ -51,32 +42,28 @@ impl Host {
         self.err(DebugError::new(status).msg(msg))
     }
 
-    pub(crate) fn err_convert<T>(&self, v: RawVal) -> HostError {
-        if let Err(e) = self.debug_event(
-            DebugEvent::new()
-                .msg("can't convert {} to {}")
-                .arg(v)
-                .arg(core::any::type_name::<T>()),
-        ) {
-            return e;
-        }
-        ConversionError {}.into()
+    // Helper for a conversion error from any type into a rawval
+    pub(crate) fn err_conversion_into_rawval<T>(&self, rv: RawVal) -> HostError {
+        self.err(
+            DebugError::new(ConversionError)
+                .msg("error converting {} into {}")
+                .arg(rv)
+                .arg(std::any::type_name::<T>()),
+        )
     }
 
-    pub(crate) fn err_convert_general(&self, msg: &'static str) -> HostError {
-        if let Err(e) = self.debug_event(DebugEvent::new().msg(msg)) {
-            return e;
-        }
-        ConversionError {}.into()
+    // Helper for a simplest conversion error with a provided msg
+    pub(crate) fn err_conversion_general(&self, msg: &'static str) -> HostError {
+        self.err(DebugError::new(ConversionError).msg(msg))
     }
 
     /// Given a result carrying some error type that can be converted to a
-    /// DebugStatus, calls self.err with it when there's an error. Returns a
+    /// DebugError, calls self.err with it when there's an error. Returns a
     /// result over HostError.
     ///
     /// If you have an error type T you want to record as a detailed debug event
     /// and a less-detailed Status code embedded in a HostError, add an `impl
-    /// From<T> for DebugStatus` over in the [events] module and call this where
+    /// From<T> for DebugError` over in the [events] module and call this where
     /// the error is generated.
     ///
     /// Note: we do _not_ want to `impl From<T> for HostError` for such types,
