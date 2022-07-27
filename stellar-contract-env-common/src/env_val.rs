@@ -121,9 +121,16 @@ where
     }
 }
 
-pub trait TryIntoVal<E: Env, V> {
+pub trait TryIntoVal<E: Env, V>: Sized {
     type Error;
     fn try_into_val(self, env: &E) -> Result<V, Self::Error>;
+
+    fn try_into_env_val(self, env: &E) -> Result<EnvVal<E, V>, Self::Error> {
+        Ok(EnvVal {
+            env: env.clone(),
+            val: self.try_into_val(env)?,
+        })
+    }
 }
 
 impl<E: Env, F, T> TryIntoVal<E, T> for F
