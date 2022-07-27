@@ -1,6 +1,9 @@
 use stellar_xdr::ScObjectType;
 
-use crate::{ConversionError, Env, EnvVal, IntoVal, Object, RawVal, RawValConvertible, TryFromVal};
+use crate::{
+    ConversionError, Env, EnvVal, IntoVal, Object, RawVal, RawValConvertible, TryFromVal,
+    TryIntoVal,
+};
 
 macro_rules! impl_for_tuple {
     ( $count:literal $($typ:ident $idx:tt)+ ) => {
@@ -52,6 +55,17 @@ macro_rules! impl_for_tuple {
                     env: env.clone(),
                     val: rv,
                 }
+            }
+        }
+
+        impl<E: Env, $($typ),*> TryIntoVal<E,  ($($typ,)*)> for RawVal
+        where
+            $($typ: TryFrom<EnvVal<E, RawVal>>),*
+        {
+            type Error = ConversionError;
+            #[inline(always)]
+            fn try_into_val(self, env: &E) -> Result< ($($typ,)*), Self::Error> {
+                EnvVal{ env: env.clone(), val: self }.try_into()
             }
         }
     };
