@@ -143,28 +143,6 @@ macro_rules! declare_tryfrom {
         }
     };
 }
-macro_rules! declare_envval_interop {
-    ($T:ty) => {
-        impl<E: Env> From<EnvVal<E, $T>> for RawVal {
-            fn from(ev: EnvVal<E, $T>) -> Self {
-                ev.val.into()
-            }
-        }
-        impl<E: Env> From<EnvVal<E, $T>> for $T {
-            fn from(ev: EnvVal<E, $T>) -> Self {
-                ev.val
-            }
-        }
-        impl<E: Env> EnvVal<E, $T> {
-            pub fn as_raw(&self) -> &RawVal {
-                self.val.as_ref()
-            }
-            pub fn to_raw(&self) -> RawVal {
-                self.val.to_raw()
-            }
-        }
-    };
-}
 
 declare_tryfrom!(());
 declare_tryfrom!(bool);
@@ -175,12 +153,6 @@ declare_tryfrom!(Status);
 declare_tryfrom!(Symbol);
 declare_tryfrom!(Static);
 declare_tryfrom!(Object);
-
-declare_envval_interop!(BitSet);
-declare_envval_interop!(Status);
-declare_envval_interop!(Symbol);
-declare_envval_interop!(Static);
-declare_envval_interop!(Object);
 
 #[cfg(feature = "vm")]
 impl wasmi::FromValue for RawVal {

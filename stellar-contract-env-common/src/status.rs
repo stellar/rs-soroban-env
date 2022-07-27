@@ -1,29 +1,22 @@
 use crate::{
-    BitSetError, ConversionError, Env, EnvVal, RawVal, RawValConvertible, SymbolError, Tag,
-    TagStatus, TaggedVal,
+    decl_tagged_val_wrapper, BitSetError, ConversionError, Env, EnvVal, RawVal, RawValConvertible,
+    SymbolError, Tag,
 };
 use core::{
     cmp::Ordering,
     fmt::Debug,
     hash::{Hash, Hasher},
-    marker::PhantomData,
 };
 use stellar_xdr::{
     ScHostContextErrorCode, ScHostFnErrorCode, ScHostObjErrorCode, ScHostStorageErrorCode,
     ScHostValErrorCode, ScStatus, ScStatusType, ScUnknownErrorCode, ScVal, ScVmErrorCode,
 };
 
-#[derive(Copy, Clone)]
-pub struct Status(TaggedVal<TagStatus>);
+decl_tagged_val_wrapper!(Status);
 
-pub const UNKNOWN_ERROR: Status = Status(TaggedVal(
-    unsafe { RawVal::from_major_minor_and_tag(0, ScStatusType::UnknownError as u32, Tag::Status) },
-    PhantomData,
-));
-pub const OK: Status = Status(TaggedVal(
-    unsafe { RawVal::from_major_minor_and_tag(0, ScStatusType::Ok as u32, Tag::Status) },
-    PhantomData,
-));
+pub const UNKNOWN_ERROR: Status =
+    unsafe { Status::from_major_minor(0, ScStatusType::UnknownError as u32) };
+pub const OK: Status = unsafe { Status::from_major_minor(0, ScStatusType::Ok as u32) };
 
 impl Hash for Status {
     #[inline(always)]
@@ -245,92 +238,7 @@ impl From<ConversionError> for Status {
     }
 }
 
-impl AsRef<TaggedVal<TagStatus>> for Status {
-    fn as_ref(&self) -> &TaggedVal<TagStatus> {
-        self.as_tagged()
-    }
-}
-
-impl AsRef<RawVal> for Status {
-    fn as_ref(&self) -> &RawVal {
-        self.as_raw()
-    }
-}
-
-impl AsMut<RawVal> for Status {
-    fn as_mut(&mut self) -> &mut RawVal {
-        self.0.as_mut()
-    }
-}
-
-impl From<TaggedVal<TagStatus>> for Status {
-    fn from(tv: TaggedVal<TagStatus>) -> Self {
-        Status(tv)
-    }
-}
-
-impl From<Status> for TaggedVal<TagStatus> {
-    fn from(b: Status) -> Self {
-        b.to_tagged()
-    }
-}
-
-impl From<Status> for RawVal {
-    fn from(b: Status) -> Self {
-        b.to_raw()
-    }
-}
-
-impl RawValConvertible for Status {
-    #[inline(always)]
-    fn is_val_type(v: RawVal) -> bool {
-        <TaggedVal<TagStatus> as RawValConvertible>::is_val_type(v)
-    }
-    #[inline(always)]
-    unsafe fn unchecked_from_val(v: RawVal) -> Self {
-        Status(<TaggedVal<TagStatus> as RawValConvertible>::unchecked_from_val(v))
-    }
-}
-
-#[cfg(feature = "vm")]
-impl wasmi::FromValue for Status {
-    fn from_value(val: wasmi::RuntimeValue) -> Option<Self> {
-        let maybe: Option<TaggedVal<TagStatus>> = val.try_into();
-        maybe.map(|x| Self(x))
-    }
-}
-
-#[cfg(feature = "vm")]
-impl From<Status> for wasmi::RuntimeValue {
-    fn from(v: Status) -> Self {
-        wasmi::RuntimeValue::I64(v.as_raw().get_payload() as i64)
-    }
-}
-
 impl Status {
-    pub fn in_env<E: Env>(self, env: &E) -> EnvVal<E, Status> {
-        EnvVal {
-            env: env.clone(),
-            val: self,
-        }
-    }
-
-    pub const fn as_raw(&self) -> &RawVal {
-        &self.0 .0
-    }
-
-    pub const fn to_raw(&self) -> RawVal {
-        self.0 .0
-    }
-
-    pub const fn as_tagged(&self) -> &TaggedVal<TagStatus> {
-        &self.0
-    }
-
-    pub const fn to_tagged(&self) -> TaggedVal<TagStatus> {
-        self.0
-    }
-
     // NB: we don't provide a "get_type" to avoid casting a bad bit-pattern into
     // an ScStatusType. Instead we provide an "is_type" to check any specific
     // bit-pattern.
@@ -351,14 +259,9 @@ impl Status {
 
     #[inline(always)]
     pub const fn from_type_and_code(ty: ScStatusType, code: u32) -> Status {
-        // Unfortunately we can't use from_major_minor_and_tag_type here because
+        // Unfortunately we can't use from_major_minor here because
         // it's not const, and making it const requires nightly.
-        unsafe {
-            Self(TaggedVal(
-                RawVal::from_major_minor_and_tag(code, ty as u32, Tag::Status),
-                PhantomData,
-            ))
-        }
+        unsafe { Self::from_major_minor(code, ty as u32) }
     }
 
     // TODO: this should be a const fn, waiting on
