@@ -187,16 +187,6 @@ fn vec_slice_start_equal_to_end() -> Result<(), HostError> {
 }
 
 #[test]
-fn vec_slice_start_greater_than_end() -> Result<(), HostError> {
-    let host = Host::default();
-    let obj = host.test_vec_obj::<u32>(&[1, 2, 3])?;
-    let res = host.vec_slice(obj.to_object(), 2_u32.into(), 1_u32.into());
-    let code = ScHostFnErrorCode::InputArgsInvalid;
-    assert!(HostError::result_matches_err_status(res, code));
-    Ok(())
-}
-
-#[test]
 fn vec_slice_start_out_of_bound() -> Result<(), HostError> {
     let host = Host::default();
     let obj = host.test_vec_obj::<u32>(&[1, 2, 3])?;
