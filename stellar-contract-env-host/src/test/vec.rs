@@ -170,7 +170,7 @@ fn vec_slice_and_cmp() -> Result<(), HostError> {
     assert_eq!(host.obj_cmp(obj1.into(), obj_ref.into())?, 0);
 
     let obj2 = host.vec_slice(obj.to_object(), 0u32.into(), 3u32.into())?;
-    assert_ne!(obj2.as_ref().get_payload(), obj.as_raw().get_payload());
+    assert_ne!(obj2.as_raw().get_payload(), obj.as_raw().get_payload());
     assert_eq!(host.obj_cmp(obj2.into(), obj.into())?, 0);
     Ok(())
 }
@@ -265,7 +265,7 @@ fn vec_append() -> Result<(), HostError> {
     let host = Host::default();
     let obj0 = host.test_vec_obj::<u32>(&[1, 2, 3])?;
     let obj1 = host.test_vec_obj::<u32>(&[4, 5, 6])?;
-    let obj2 = host.vec_append(*obj0.as_ref(), *obj1.as_ref())?;
+    let obj2 = host.vec_append(obj0.val, obj1.val)?;
     let obj_ref = host.test_vec_obj::<u32>(&[1, 2, 3, 4, 5, 6])?;
     assert_eq!(host.obj_cmp(obj2.into(), obj_ref.into())?, 0);
     Ok(())
@@ -275,8 +275,8 @@ fn vec_append() -> Result<(), HostError> {
 fn vec_append_empty() -> Result<(), HostError> {
     let host = Host::default();
     let obj0 = host.test_vec_obj::<u32>(&[])?;
-    let obj1 = host.vec_append(*obj0.as_ref(), *obj0.as_ref())?;
-    assert_ne!(obj0.as_raw().get_payload(), obj1.as_ref().get_payload());
+    let obj1 = host.vec_append(obj0.val, obj0.val)?;
+    assert_ne!(obj0.as_raw().get_payload(), obj1.as_raw().get_payload());
     assert_eq!(host.obj_cmp(obj0.into(), obj1.into())?, 0);
     Ok(())
 }
