@@ -708,20 +708,14 @@ impl Host {
         contract_id: Object,
         contract_fns: Rc<dyn ContractFunctionSet>,
     ) -> Result<(), HostError> {
-        self.visit_obj(contract_id, |bin: &Vec<u8>| {
-            let mut contracts = self.0.contracts.borrow_mut();
-            let hash = Hash(
-                bin.clone()
-                    .try_into()
-                    .map_err(|_| self.err_general("bad contract id"))?,
-            );
-            if !contracts.contains_key(&hash) {
-                contracts.insert(hash, contract_fns);
-                Ok(())
-            } else {
-                Err(self.err_general("vtable already exists"))
-            }
-        })
+        let hash = self.hash_from_obj_input("contract_id", contract_id)?;
+        let mut contracts = self.0.contracts.borrow_mut();
+        if !contracts.contains_key(&hash) {
+            contracts.insert(hash, contract_fns);
+            Ok(())
+        } else {
+            Err(self.err_general("vtable already exists"))
+        }
     }
 }
 
