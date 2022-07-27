@@ -85,6 +85,16 @@ fn binary_suite_of_tests() -> Result<(), HostError> {
 }
 
 #[test]
+fn binary_put_out_of_bound() -> Result<(), HostError> {
+    let host = Host::default();
+    let obj = host.binary_new()?;
+    let res = host.binary_put(obj, 0u32.into(), 1u32.into());
+    let code = ScHostObjErrorCode::VecIndexOutOfBound;
+    assert!(HostError::result_matches_err_status(res, code));
+    Ok(())
+}
+
+#[test]
 fn binary_xdr_roundtrip() -> Result<(), HostError> {
     let host = Host::default();
     let roundtrip = |v: ScVal| -> Result<(), HostError> {
