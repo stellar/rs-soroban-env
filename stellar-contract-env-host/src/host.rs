@@ -1079,12 +1079,10 @@ impl CheckedEnv for Host {
 
     fn vec_get(&self, v: Object, i: RawVal) -> Result<RawVal, HostError> {
         let i: usize = self.usize_from_rawval_u32_input("i", i)?;
-        self.visit_obj(v, move |hv: &HostVec| match hv.get(i) {
-            None => {
-                Err(self
-                    .err_status_msg(ScHostObjErrorCode::VecIndexOutOfBound, "index out of bound"))
-            }
-            Some(hval) => Ok(hval.to_raw()),
+        self.visit_obj(v, move |hv: &HostVec| {
+            hv.get(i)
+                .map(|hval| hval.to_raw())
+                .ok_or_else(|| self.err_status(ScHostObjErrorCode::VecIndexOutOfBound))
         })
     }
 
@@ -1132,22 +1130,18 @@ impl CheckedEnv for Host {
     }
 
     fn vec_front(&self, v: Object) -> Result<RawVal, HostError> {
-        self.visit_obj(v, |hv: &HostVec| match hv.front() {
-            None => Err(self.err_status_msg(
-                ScHostObjErrorCode::VecIndexOutOfBound,
-                "value does not exist",
-            )),
-            Some(front) => Ok(front.to_raw()),
+        self.visit_obj(v, |hv: &HostVec| {
+            hv.front()
+                .map(|hval| hval.to_raw())
+                .ok_or_else(|| self.err_status(ScHostObjErrorCode::VecIndexOutOfBound))
         })
     }
 
     fn vec_back(&self, v: Object) -> Result<RawVal, HostError> {
-        self.visit_obj(v, |hv: &HostVec| match hv.back() {
-            None => Err(self.err_status_msg(
-                ScHostObjErrorCode::VecIndexOutOfBound,
-                "value does not exist",
-            )),
-            Some(back) => Ok(back.to_raw()),
+        self.visit_obj(v, |hv: &HostVec| {
+            hv.back()
+                .map(|hval| hval.to_raw())
+                .ok_or_else(|| self.err_status(ScHostObjErrorCode::VecIndexOutOfBound))
         })
     }
 
@@ -1647,12 +1641,10 @@ impl CheckedEnv for Host {
 
     fn binary_get(&self, b: Object, i: RawVal) -> Result<RawVal, HostError> {
         let i = self.usize_from_rawval_u32_input("i", i)?;
-        self.visit_obj(b, move |hv: &Vec<u8>| match hv.get(i) {
-            None => {
-                Err(self
-                    .err_status_msg(ScHostObjErrorCode::VecIndexOutOfBound, "index out of bound"))
-            }
-            Some(u) => Ok((*u).into()),
+        self.visit_obj(b, |hv: &Vec<u8>| {
+            hv.get(i)
+                .map(|u| Into::<RawVal>::into(*u))
+                .ok_or_else(|| self.err_status(ScHostObjErrorCode::VecIndexOutOfBound))
         })
     }
 
