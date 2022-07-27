@@ -5,6 +5,13 @@ use ed25519_dalek::{Signature, SIGNATURE_LENGTH};
 use stellar_contract_env_common::xdr::{Hash, Uint256};
 
 impl Host {
+    pub(crate) fn usize_to_u32(&self, u: usize, msg: &'static str) -> Result<u32, HostError> {
+        match u32::try_from(u) {
+            Ok(v) => Ok(v),
+            Err(_) => Err(self.err_general(msg)), // FIXME: need error status
+        }
+    }
+
     pub(crate) fn usize_to_rawval_u32(&self, u: usize) -> Result<RawVal, HostError> {
         match u32::try_from(u) {
             Ok(v) => Ok(v.into()),
