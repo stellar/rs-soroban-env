@@ -246,6 +246,16 @@ impl<E: Env> TryIntoVal<E, RawVal> for i64 {
     }
 }
 
+impl<E: Env> TryIntoVal<E, i64> for RawVal {
+    type Error = ConversionError;
+    fn try_into_val(self, env: &E) -> Result<i64, Self::Error> {
+        TryFrom::try_from(EnvVal {
+            env: env.clone(),
+            val: self,
+        })
+    }
+}
+
 impl<E: Env> TryFrom<EnvVal<E, RawVal>> for u64 {
     type Error = ConversionError;
 
@@ -270,6 +280,16 @@ impl<E: Env> TryIntoVal<E, RawVal> for u64 {
     type Error = ConversionError;
     fn try_into_val(self, env: &E) -> Result<RawVal, Self::Error> {
         Ok(IntoVal::into_val(self, env))
+    }
+}
+
+impl<E: Env> TryIntoVal<E, u64> for RawVal {
+    type Error = ConversionError;
+    fn try_into_val(self, env: &E) -> Result<u64, Self::Error> {
+        TryFrom::try_from(EnvVal {
+            env: env.clone(),
+            val: self,
+        })
     }
 }
 
