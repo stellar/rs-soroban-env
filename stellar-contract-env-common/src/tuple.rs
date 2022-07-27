@@ -41,6 +41,19 @@ macro_rules! impl_for_tuple {
                 vec.to_raw()
             }
         }
+
+        impl<E: Env, $($typ),*> IntoVal<E, EnvVal<E, RawVal>> for ($($typ,)*)
+        where
+            $($typ: IntoVal<E, RawVal>),*
+        {
+            fn into_val(self, env: &E) -> EnvVal<E, RawVal> {
+                let rv: RawVal = self.into_val(env);
+                EnvVal{
+                    env: env.clone(),
+                    val: rv,
+                }
+            }
+        }
     };
 }
 
