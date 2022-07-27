@@ -632,7 +632,7 @@ impl Host {
     }
 
     pub fn invoke_function_raw(
-        &mut self,
+        &self,
         hf: HostFunction,
         args: ScVec,
     ) -> Result<RawVal, HostError> {
@@ -686,7 +686,7 @@ impl Host {
         }
     }
 
-    pub fn invoke_function(&mut self, hf: HostFunction, args: ScVec) -> Result<ScVal, HostError> {
+    pub fn invoke_function(&self, hf: HostFunction, args: ScVec) -> Result<ScVal, HostError> {
         let rv = self.invoke_function_raw(hf, args)?;
         self.from_host_val(rv)
     }
