@@ -10,7 +10,7 @@ use num_integer::Integer;
 use num_traits::cast::ToPrimitive;
 use num_traits::{Pow, Signed, Zero};
 use std::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Not, Rem, Shl, Shr, Sub};
-use stellar_contract_env_common::{TryConvert, TryFromVal, TryIntoVal};
+use stellar_contract_env_common::{EnvVal, TryConvert, TryFromVal, TryIntoVal};
 
 use stellar_contract_env_common::xdr::{
     AccountEntry, AccountId, Hash, PublicKey, ReadXdr, ThresholdIndexes, WriteXdr,
@@ -36,7 +36,7 @@ use crate::CheckedEnv;
 use crate::SymbolStr;
 #[cfg(feature = "vm")]
 use crate::Vm;
-use crate::{EnvBase, IntoEnvVal, Object, RawVal, RawValConvertible, Symbol, Val, UNKNOWN_ERROR};
+use crate::{EnvBase, IntoVal, Object, RawVal, RawValConvertible, Symbol, Val, UNKNOWN_ERROR};
 
 mod conversion;
 mod err_helper;
@@ -132,6 +132,13 @@ pub struct Host(pub(crate) Rc<HostImpl>);
 impl Debug for Host {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Host({:x})", Rc::<HostImpl>::as_ptr(&self.0) as usize)
+    }
+}
+
+impl TryConvert<&Object, ScObject> for Host {
+    type Error = HostError;
+    fn convert(&self, ob: &Object) -> Result<ScObject, Self::Error> {
+        self.from_host_obj(*ob)
     }
 }
 
@@ -359,12 +366,15 @@ impl Host {
         HostVal { env, val }
     }
 
-    pub(crate) fn associate_env_val_type<V: Val, CVT: IntoEnvVal<WeakHost, RawVal>>(
+    pub(crate) fn associate_env_val_type<V: Val, CVT: IntoVal<WeakHost, RawVal>>(
         &self,
         v: CVT,
     ) -> HostVal {
         let env = self.get_weak();
-        v.into_env_val(&env)
+        EnvVal {
+            val: v.into_val(&env),
+            env,
+        }
     }
 
     pub(crate) fn from_host_val(&self, val: RawVal) -> Result<ScVal, HostError> {
@@ -519,7 +529,7 @@ impl Host {
             .push(self.charge_for_new_host_object(HOT::inject(hot))?);
         let env = WeakHost(Rc::downgrade(&self.0));
         let v = Object::from_type_and_handle(HOT::get_type(), handle as u32);
-        Ok(v.into_env_val(&env))
+        Ok(EnvVal { env, val: v })
     }
 
     /// Converts a [`RawVal`] to an [`ScVal`] and combines it with the currently-executing
@@ -1079,12 +1089,10 @@ impl CheckedEnv for Host {
 
     fn vec_get(&self, v: Object, i: RawVal) -> Result<RawVal, HostError> {
         let i: usize = self.usize_from_rawval_u32_input("i", i)?;
-        self.visit_obj(v, move |hv: &HostVec| match hv.get(i) {
-            None => {
-                Err(self
-                    .err_status_msg(ScHostObjErrorCode::VecIndexOutOfBound, "index out of bound"))
-            }
-            Some(hval) => Ok(hval.to_raw()),
+        self.visit_obj(v, move |hv: &HostVec| {
+            hv.get(i)
+                .map(|hval| hval.to_raw())
+                .ok_or_else(|| self.err_status(ScHostObjErrorCode::VecIndexOutOfBound))
         })
     }
 
@@ -1120,34 +1128,26 @@ impl CheckedEnv for Host {
     fn vec_pop(&self, v: Object) -> Result<Object, HostError> {
         let vnew = self.visit_obj(v, move |hv: &HostVec| {
             let mut vnew = hv.clone();
-            match vnew.pop_back() {
-                None => Err(self.err_status_msg(
-                    ScHostObjErrorCode::VecIndexOutOfBound,
-                    "value does not exist",
-                )),
-                Some(_) => Ok(vnew),
-            }
+            vnew.pop_back()
+                .map(|_| vnew)
+                .ok_or_else(|| self.err_status(ScHostObjErrorCode::VecIndexOutOfBound))
         })?;
         Ok(self.add_host_object(vnew)?.into())
     }
 
     fn vec_front(&self, v: Object) -> Result<RawVal, HostError> {
-        self.visit_obj(v, |hv: &HostVec| match hv.front() {
-            None => Err(self.err_status_msg(
-                ScHostObjErrorCode::VecIndexOutOfBound,
-                "value does not exist",
-            )),
-            Some(front) => Ok(front.to_raw()),
+        self.visit_obj(v, |hv: &HostVec| {
+            hv.front()
+                .map(|hval| hval.to_raw())
+                .ok_or_else(|| self.err_status(ScHostObjErrorCode::VecIndexOutOfBound))
         })
     }
 
     fn vec_back(&self, v: Object) -> Result<RawVal, HostError> {
-        self.visit_obj(v, |hv: &HostVec| match hv.back() {
-            None => Err(self.err_status_msg(
-                ScHostObjErrorCode::VecIndexOutOfBound,
-                "value does not exist",
-            )),
-            Some(back) => Ok(back.to_raw()),
+        self.visit_obj(v, |hv: &HostVec| {
+            hv.back()
+                .map(|hval| hval.to_raw())
+                .ok_or_else(|| self.err_status(ScHostObjErrorCode::VecIndexOutOfBound))
         })
     }
 
@@ -1647,12 +1647,10 @@ impl CheckedEnv for Host {
 
     fn binary_get(&self, b: Object, i: RawVal) -> Result<RawVal, HostError> {
         let i = self.usize_from_rawval_u32_input("i", i)?;
-        self.visit_obj(b, move |hv: &Vec<u8>| match hv.get(i) {
-            None => {
-                Err(self
-                    .err_status_msg(ScHostObjErrorCode::VecIndexOutOfBound, "index out of bound"))
-            }
-            Some(u) => Ok((*u).into()),
+        self.visit_obj(b, |hv: &Vec<u8>| {
+            hv.get(i)
+                .map(|u| Into::<RawVal>::into(*u))
+                .ok_or_else(|| self.err_status(ScHostObjErrorCode::VecIndexOutOfBound))
         })
     }
 
@@ -1688,35 +1686,26 @@ impl CheckedEnv for Host {
     fn binary_pop(&self, b: Object) -> Result<Object, HostError> {
         let vnew = self.visit_obj(b, move |hv: &Vec<u8>| {
             let mut vnew = hv.clone();
-            match vnew.pop() {
-                None => {
-                    Err(self.err_status_msg(ScHostFnErrorCode::InputArgsInvalid, "u32 overflow"))
-                }
-                Some(_) => Ok(vnew),
-            }
+            vnew.pop()
+                .map(|_| vnew)
+                .ok_or_else(|| self.err_status(ScHostObjErrorCode::VecIndexOutOfBound))
         })?;
         Ok(self.add_host_object(vnew)?.into())
     }
 
     fn binary_front(&self, b: Object) -> Result<RawVal, HostError> {
         self.visit_obj(b, |hv: &Vec<u8>| {
-            if hv.is_empty() {
-                return Err(
-                    self.err_status_msg(ScHostFnErrorCode::InputArgsInvalid, "u32 overflow")
-                );
-            }
-            Ok(hv[0].into())
+            hv.first()
+                .map(|u| Into::<RawVal>::into(*u))
+                .ok_or_else(|| self.err_status(ScHostObjErrorCode::VecIndexOutOfBound))
         })
     }
 
     fn binary_back(&self, b: Object) -> Result<RawVal, HostError> {
         self.visit_obj(b, |hv: &Vec<u8>| {
-            if hv.is_empty() {
-                return Err(
-                    self.err_status_msg(ScHostFnErrorCode::InputArgsInvalid, "u32 overflow")
-                );
-            }
-            Ok(hv[hv.len() - 1].into())
+            hv.last()
+                .map(|u| Into::<RawVal>::into(*u))
+                .ok_or_else(|| self.err_status(ScHostObjErrorCode::VecIndexOutOfBound))
         })
     }
 

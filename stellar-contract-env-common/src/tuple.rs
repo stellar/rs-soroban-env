@@ -1,8 +1,8 @@
 use stellar_xdr::ScObjectType;
 
 use crate::{
-    ConversionError, Env, EnvVal, IntoEnvVal, IntoVal, Object, RawVal, RawValConvertible,
-    TryFromVal,
+    ConversionError, Env, EnvVal, IntoVal, Object, RawVal, RawValConvertible, TryFromVal,
+    TryIntoVal,
 };
 
 macro_rules! impl_for_tuple {
@@ -33,15 +33,39 @@ macro_rules! impl_for_tuple {
             }
         }
 
-        impl<E: Env, $($typ),*> IntoEnvVal<E, RawVal> for ($($typ,)*)
+        impl<E: Env, $($typ),*> IntoVal<E, RawVal> for ($($typ,)*)
         where
-            $($typ: IntoEnvVal<E, RawVal>),*
+            $($typ: IntoVal<E, RawVal>),*
         {
-            fn into_env_val(self, env: &E) -> EnvVal<E, RawVal> {
+            fn into_val(self, env: &E) -> RawVal {
                 let env = env.clone();
                 let vec = env.vec_new($count.into());
                 $(let vec = env.vec_push(vec, self.$idx.into_val(&env));)*
-                EnvVal { env, val: vec.to_raw() }
+                vec.to_raw()
+            }
+        }
+
+        impl<E: Env, $($typ),*> IntoVal<E, EnvVal<E, RawVal>> for ($($typ,)*)
+        where
+            $($typ: IntoVal<E, RawVal>),*
+        {
+            fn into_val(self, env: &E) -> EnvVal<E, RawVal> {
+                let rv: RawVal = self.into_val(env);
+                EnvVal{
+                    env: env.clone(),
+                    val: rv,
+                }
+            }
+        }
+
+        impl<E: Env, $($typ),*> TryIntoVal<E,  ($($typ,)*)> for RawVal
+        where
+            $($typ: TryFrom<EnvVal<E, RawVal>>),*
+        {
+            type Error = ConversionError;
+            #[inline(always)]
+            fn try_into_val(self, env: &E) -> Result< ($($typ,)*), Self::Error> {
+                EnvVal{ env: env.clone(), val: self }.try_into()
             }
         }
     };
