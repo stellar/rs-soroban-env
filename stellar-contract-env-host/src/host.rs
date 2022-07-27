@@ -1635,12 +1635,13 @@ impl CheckedEnv for Host {
         let u = self.u8_from_rawval_input("u", u)?;
         let vnew = self.visit_obj(b, move |hv: &Vec<u8>| {
             let mut vnew = hv.clone();
-            if i >= hv.len() {
-                return Err(self
-                    .err_status_msg(ScHostObjErrorCode::VecIndexOutOfBound, "index out of bound"));
+            match vnew.get_mut(i) {
+                None => Err(self.err_status(ScHostObjErrorCode::VecIndexOutOfBound)),
+                Some(v) => {
+                    *v = u;
+                    Ok(vnew)
+                }
             }
-            let _old_val = std::mem::replace(&mut vnew[i], u);
-            Ok(vnew)
         })?;
         Ok(self.add_host_object(vnew)?.into())
     }
