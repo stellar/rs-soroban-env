@@ -22,4 +22,4 @@ pub(crate) const LINEAR_MEMORY: &'static [u8] =
 pub(crate) const VEC: &'static [u8] =
     include_bytes!("../../wasm-examples/example_vec.wasm").as_slice();
 pub(crate) const CALL: &'static [u8] =
-    include_bytes!("../../wasm-examples/example_call.wasm").as_slice();
+    include_bytes!("../../wasm-examples/example_invoke_contract.wasm").as_slice();
