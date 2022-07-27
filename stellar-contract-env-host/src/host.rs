@@ -632,11 +632,7 @@ impl Host {
         return Err(self.err_general("could not dispatch"));
     }
 
-    pub fn invoke_function_raw(
-        &mut self,
-        hf: HostFunction,
-        args: ScVec,
-    ) -> Result<RawVal, HostError> {
+    pub fn invoke_function_raw(&self, hf: HostFunction, args: ScVec) -> Result<RawVal, HostError> {
         match hf {
             HostFunction::Call => {
                 if let [ScVal::Object(Some(scobj)), ScVal::Symbol(scsym), rest @ ..] =
@@ -687,7 +683,7 @@ impl Host {
         }
     }
 
-    pub fn invoke_function(&mut self, hf: HostFunction, args: ScVec) -> Result<ScVal, HostError> {
+    pub fn invoke_function(&self, hf: HostFunction, args: ScVec) -> Result<ScVal, HostError> {
         let rv = self.invoke_function_raw(hf, args)?;
         self.from_host_val(rv)
     }
