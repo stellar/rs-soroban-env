@@ -101,8 +101,15 @@ impl<E: Env, T: TagType> From<EnvVal<E, TaggedVal<T>>> for EnvVal<E, RawVal> {
     }
 }
 
-pub trait IntoVal<E: Env, V> {
+pub trait IntoVal<E: Env, V>: Sized {
     fn into_val(self, env: &E) -> V;
+
+    fn into_env_val(self, env: &E) -> EnvVal<E, V> {
+        EnvVal {
+            env: env.clone(),
+            val: self.into_val(env),
+        }
+    }
 }
 
 impl<E: Env, F, T> IntoVal<E, T> for F
