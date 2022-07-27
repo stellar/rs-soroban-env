@@ -1,6 +1,6 @@
 use stellar_xdr::{ScStatic, ScStatus, ScStatusType};
 
-use super::{BitSet, Env, EnvVal, Object, Status, Symbol};
+use super::{BitSet, Env, EnvVal, Object, Static, Status, Symbol};
 use core::fmt::Debug;
 
 extern crate static_assertions as sa;
@@ -125,6 +125,17 @@ macro_rules! declare_tryfrom {
                 Self::try_from(v.to_raw())
             }
         }
+        impl<E: Env> TryFrom<EnvVal<E, RawVal>> for EnvVal<E, $T> {
+            type Error = crate::ConversionError;
+            fn try_from(ev: EnvVal<E, RawVal>) -> Result<Self, Self::Error> {
+                let val: $T = ev.to_raw().try_into().map_err(|err| {
+                    ev.clone().log_err_convert::<Self>();
+                    err
+                })?;
+                let env = ev.env;
+                Ok(Self { env, val })
+            }
+        }
     };
 }
 
@@ -133,6 +144,10 @@ declare_tryfrom!(bool);
 declare_tryfrom!(u32);
 declare_tryfrom!(i32);
 declare_tryfrom!(BitSet);
+declare_tryfrom!(Status);
+declare_tryfrom!(Symbol);
+declare_tryfrom!(Static);
+declare_tryfrom!(Object);
 
 #[cfg(feature = "vm")]
 impl wasmi::FromValue for RawVal {

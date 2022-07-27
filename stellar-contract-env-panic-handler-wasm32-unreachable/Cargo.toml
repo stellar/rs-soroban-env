@@ -1,4 +1,0 @@
-[package]
-name = "stellar-contract-env-panic-handler-wasm32-unreachable"
-version = "0.0.0"
-edition = "2021"

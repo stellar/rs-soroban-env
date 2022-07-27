@@ -5,9 +5,7 @@ use stellar_xdr::{ScObject, ScStatic, ScVal};
 
 #[cfg(feature = "std")]
 use crate::Static;
-use crate::{
-    raw_val::ConversionError, BitSet, Object, Status, Symbol, Tag, TagType, TaggedVal, Val,
-};
+use crate::{raw_val::ConversionError, BitSet, Object, Status, Symbol, Tag, Val};
 
 use super::{
     raw_val::{RawVal, RawValConvertible},
@@ -17,7 +15,7 @@ use core::{cmp::Ordering, fmt::Debug};
 
 // EnvVal is a value coupled to a specific instance of Env. In the guest we will
 // use this with a zero-sized Guest unit struct, but in the host we provide a
-// Host and Weak<Host> for Env. Typically the value is an RawVal or TaggedVal,
+// Host and Weak<Host> for Env. Typically the value is an RawVal or a Wrapper,
 // however it can be any type.
 #[derive(Clone)]
 pub struct EnvVal<E: Env, V> {
@@ -40,25 +38,6 @@ impl<E: Env> EnvVal<E, RawVal> {
     }
 }
 
-impl<E: Env, T: TagType> EnvVal<E, TaggedVal<T>> {
-    // These fns let callers disambiguate by name when they call as_ref() in a
-    // context that might want &TaggedVal<T> or &RawRef; it saves them writing
-    // <_ as AsRef<RawVal>>::as_ref(foo)
-
-    pub fn as_raw(&self) -> &RawVal {
-        &self.val.0
-    }
-    pub fn to_raw(&self) -> RawVal {
-        self.val.0
-    }
-    pub fn as_tagged(&self) -> &TaggedVal<T> {
-        &self.val
-    }
-    pub fn to_tagged(&self) -> TaggedVal<T> {
-        self.val
-    }
-}
-
 impl<E: Env> EnvVal<E, Object> {
     pub fn as_object(&self) -> &Object {
         &self.val
@@ -77,27 +56,6 @@ impl<E: Env, V: Val> AsRef<RawVal> for EnvVal<E, V> {
 impl<E: Env, V: Val> AsMut<RawVal> for EnvVal<E, V> {
     fn as_mut(&mut self) -> &mut RawVal {
         self.val.as_mut()
-    }
-}
-
-impl<E: Env, T: TagType> AsRef<TaggedVal<T>> for EnvVal<E, TaggedVal<T>> {
-    fn as_ref(&self) -> &TaggedVal<T> {
-        &self.val
-    }
-}
-
-impl<E: Env, T: TagType> AsMut<TaggedVal<T>> for EnvVal<E, TaggedVal<T>> {
-    fn as_mut(&mut self) -> &mut TaggedVal<T> {
-        &mut self.val
-    }
-}
-
-impl<E: Env, T: TagType> From<EnvVal<E, TaggedVal<T>>> for EnvVal<E, RawVal> {
-    fn from(ev: EnvVal<E, TaggedVal<T>>) -> Self {
-        EnvVal {
-            env: ev.env,
-            val: ev.val.to_raw(),
-        }
     }
 }
 
@@ -169,47 +127,12 @@ impl<E: Env> From<EnvVal<E, RawVal>> for RawVal {
 }
 
 impl<E: Env> EnvVal<E, RawVal> {
-    fn log_err_convert<T>(self) {
+    pub(crate) fn log_err_convert<T>(self) {
         self.env().log_static_fmt_val_static_str(
             "can't convert {} to {}",
             self.to_raw(),
             core::any::type_name::<T>(),
         );
-    }
-}
-
-impl<E: Env, T: TagType> TryFrom<EnvVal<E, RawVal>> for TaggedVal<T> {
-    type Error = ConversionError;
-
-    fn try_from(ev: EnvVal<E, RawVal>) -> Result<Self, Self::Error> {
-        ev.to_raw().try_into().map_err(|err| {
-            ev.log_err_convert::<Self>();
-            err
-        })
-    }
-}
-
-impl<E: Env, T: TagType> TryFrom<EnvVal<E, RawVal>> for EnvVal<E, TaggedVal<T>> {
-    type Error = ConversionError;
-
-    fn try_from(ev: EnvVal<E, RawVal>) -> Result<Self, Self::Error> {
-        let tv: TaggedVal<T> = ev.to_raw().try_into().map_err(|err| {
-            ev.clone().log_err_convert::<Self>();
-            err
-        })?;
-        Ok(tv.in_env(ev.env()))
-    }
-}
-
-impl<E: Env, T: TagType> From<EnvVal<E, TaggedVal<T>>> for RawVal {
-    fn from(ev: EnvVal<E, TaggedVal<T>>) -> Self {
-        ev.val.0
-    }
-}
-
-impl<E: Env, T: TagType> From<EnvVal<E, TaggedVal<T>>> for TaggedVal<T> {
-    fn from(ev: EnvVal<E, TaggedVal<T>>) -> Self {
-        ev.val
     }
 }
 
