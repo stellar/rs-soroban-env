@@ -1700,23 +1700,17 @@ impl CheckedEnv for Host {
 
     fn binary_front(&self, b: Object) -> Result<RawVal, HostError> {
         self.visit_obj(b, |hv: &Vec<u8>| {
-            if hv.is_empty() {
-                return Err(
-                    self.err_status_msg(ScHostFnErrorCode::InputArgsInvalid, "u32 overflow")
-                );
-            }
-            Ok(hv[0].into())
+            hv.first()
+                .map(|u| Into::<RawVal>::into(*u))
+                .ok_or_else(|| self.err_status(ScHostObjErrorCode::VecIndexOutOfBound))
         })
     }
 
     fn binary_back(&self, b: Object) -> Result<RawVal, HostError> {
         self.visit_obj(b, |hv: &Vec<u8>| {
-            if hv.is_empty() {
-                return Err(
-                    self.err_status_msg(ScHostFnErrorCode::InputArgsInvalid, "u32 overflow")
-                );
-            }
-            Ok(hv[hv.len() - 1].into())
+            hv.last()
+                .map(|u| Into::<RawVal>::into(*u))
+                .ok_or_else(|| self.err_status(ScHostObjErrorCode::VecIndexOutOfBound))
         })
     }
 
