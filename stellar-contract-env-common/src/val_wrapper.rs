@@ -80,7 +80,9 @@ macro_rules! decl_tagged_val_wrapper {
                     Some(u) => {
                         let raw = RawVal::from_payload(u);
                         if <Self as crate::RawValConvertible>::is_val_type(raw) {
-                            Some(unsafe { <Self as crate::RawValConvertible>::unchecked_from_val(raw) })
+                            Some(unsafe {
+                                <Self as crate::RawValConvertible>::unchecked_from_val(raw)
+                            })
                         } else {
                             None
                         }
