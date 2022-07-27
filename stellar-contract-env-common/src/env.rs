@@ -1,4 +1,5 @@
-use super::{Object, RawVal, Symbol};
+use super::Symbol;
+use super::{Object, RawVal};
 use core::any;
 
 pub trait EnvBase: Sized + Clone {
