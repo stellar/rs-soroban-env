@@ -705,20 +705,14 @@ impl Host {
         contract_id: Object,
         contract_fns: Rc<dyn ContractFunctionSet>,
     ) -> Result<(), HostError> {
-        self.visit_obj(contract_id, |bin: &Vec<u8>| {
-            let mut contracts = self.0.contracts.borrow_mut();
-            let hash = Hash(
-                bin.clone()
-                    .try_into()
-                    .map_err(|_| self.err_general("bad contract id"))?,
-            );
-            if !contracts.contains_key(&hash) {
-                contracts.insert(hash, contract_fns);
-                Ok(())
-            } else {
-                Err(self.err_general("vtable already exists"))
-            }
-        })
+        let hash = self.hash_from_obj_input("contract_id", contract_id)?;
+        let mut contracts = self.0.contracts.borrow_mut();
+        if !contracts.contains_key(&hash) {
+            contracts.insert(hash, contract_fns);
+            Ok(())
+        } else {
+            Err(self.err_general("vtable already exists"))
+        }
     }
 }
 
@@ -933,9 +927,10 @@ impl CheckedEnv for Host {
 
     fn map_get(&self, m: Object, k: RawVal) -> Result<RawVal, HostError> {
         let k = self.associate_raw_val(k);
-        self.visit_obj(m, move |hm: &HostMap| match hm.get(&k) {
-            Some(v) => Ok(v.to_raw()),
-            None => Err(self.err_general("map key not found")),
+        self.visit_obj(m, move |hm: &HostMap| {
+            hm.get(&k)
+                .map(|v| v.to_raw())
+                .ok_or_else(|| self.err_general("map key not found")) // FIXME: need error code
         })
     }
 
@@ -943,10 +938,9 @@ impl CheckedEnv for Host {
         let k = self.associate_raw_val(k);
         let mnew = self.visit_obj(m, |hm: &HostMap| {
             let mut mnew = hm.clone();
-            match mnew.remove(&k) {
-                Some(v) => Ok(mnew),
-                None => Err(self.err_general("map key not found")),
-            }
+            mnew.remove(&k)
+                .map(|_| mnew)
+                .ok_or_else(|| self.err_general("map key not found")) // FIXME: error code
         })?;
         Ok(self.add_host_object(mnew)?.into())
     }
@@ -1033,10 +1027,7 @@ impl CheckedEnv for Host {
 
     fn map_keys(&self, m: Object) -> Result<Object, HostError> {
         self.visit_obj(m, |hm: &HostMap| {
-            let cap: u32 = hm
-                .len()
-                .try_into()
-                .map_err(|_| self.err_general("host map too large"))?;
+            let cap = self.usize_to_u32(hm.len(), "host map too large")?;
             let mut vec = self.vec_new(cap.into())?;
             for k in hm.keys() {
                 vec = self.vec_push(vec, k.to_raw())?;
@@ -1047,10 +1038,7 @@ impl CheckedEnv for Host {
 
     fn map_values(&self, m: Object) -> Result<Object, HostError> {
         self.visit_obj(m, |hm: &HostMap| {
-            let cap: u32 = hm
-                .len()
-                .try_into()
-                .map_err(|_| self.err_general("host map too large"))?;
+            let cap = self.usize_to_u32(hm.len(), "host map too large")?;
             let mut vec = self.vec_new(cap.into())?;
             for k in hm.values() {
                 vec = self.vec_push(vec, k.to_raw())?;
