@@ -67,9 +67,19 @@ macro_rules! generate_checked_env_trait {
     => // The part of the macro above this line is a matcher; below is its expansion.
 
     {
-        // This macro expands to a single item: the CheckedEnv trait used to define the
-        // interface implemented by Host, used by VM dispatch functions and by the
-        // blanket impl of Env for T:CheckedEnv below.
+        // This macro expands to a single item: the CheckedEnv trait
+
+        /// This trait is a variant of the [crate::Env] trait used to define the
+        /// interface implemented by Host. The WASM VM dispatch functions call
+        /// methods on `CheckedEnv` and convert any `Result::Err(...)` return
+        /// value into a VM trap, halting VM execution.
+        ///
+        /// There is also a blanket `impl<T:CheckedEnv> Env for T` that
+        /// implements the `Env` interface directly for `CheckedEnv` by
+        /// unwrapping all results, in other words "panicking on error". This is
+        /// used in local testing mode to adapt the `Host` to mimic the
+        /// (non-`Result`, halt-on-error) interface and behavior of `Guest`
+        /// when linking a contract to `Host` natively, for local testing.
         pub trait CheckedEnv
         {
             type Error: Debug;

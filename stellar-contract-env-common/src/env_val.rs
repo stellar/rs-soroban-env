@@ -13,13 +13,26 @@ use super::{
 };
 use core::{cmp::Ordering, fmt::Debug};
 
-// EnvVal is a value coupled to a specific instance of Env. In the guest we will
-// use this with a zero-sized Guest unit struct, but in the host we provide a
-// Host and Weak<Host> for Env. Typically the value is an RawVal or a Wrapper,
-// however it can be any type.
+/// Some type of value coupled to a specific instance of [Env], which some of
+/// the value's methods may call into to support some conversion and comparison
+/// functions.
+///
+/// The value and `Env` instance used in an `EnvVal` will vary by context:
+///
+///   - In contract code compiled for WASM, the `Env` is a zero-sized `Guest`
+///     struct
+///   - In contract code compiled natively for local testing, the `Env` is a
+///     reference-counted `Host`
+///   - Inside the `Host`, the `Env` is either a `Host` or a weak reference to a
+///     `Host`
+///
+/// The value will typically either be [RawVal] or one of its tag-specific
+/// wrapper types.
 #[derive(Clone)]
 pub struct EnvVal<E: Env, V> {
+    /// The environment to call into for comparison and conversion assistance.
     pub env: E,
+    /// The value that will call into the environment as needed.
     pub val: V,
 }
 

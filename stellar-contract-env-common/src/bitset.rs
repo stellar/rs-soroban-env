@@ -1,12 +1,20 @@
-use crate::{decl_tagged_val_wrapper, ConversionError, Env, EnvVal, RawVal, Tag};
+use crate::{decl_tagged_val_wrapper_methods, ConversionError, Env, EnvVal, RawVal, Tag};
 use core::cmp::Ordering;
 use core::fmt::Debug;
 use core::hash::{Hash, Hasher};
 
-decl_tagged_val_wrapper!(BitSet);
+/// Wrapper for a [RawVal] that is tagged with [Tag::BitSet], interpreting the
+/// [RawVal]'s body as a small bitset (60-bits or fewer).
+#[derive(Copy, Clone)]
+pub struct BitSet(RawVal);
 
+decl_tagged_val_wrapper_methods!(BitSet);
+
+/// Errors related to operations on the [BitSet] type.
 #[derive(Debug)]
 pub enum BitSetError {
+    /// Returned when attempting to form a [BitSet] from a [u64] with more than
+    /// 60 bits set.
     TooManyBits(u64),
 }
 
@@ -53,6 +61,9 @@ impl Debug for BitSet {
 }
 
 impl BitSet {
+    /// Attempt to construct a [BitSet] from a u64, succeeding only if
+    /// the most significant 4 bits of the u64 are clear. In other words,
+    /// this function accepts only "small" bitsets of 60 or fewer bits.
     #[inline(always)]
     pub const fn try_from_u64(u: u64) -> Result<BitSet, BitSetError> {
         if u & 0x0fff_ffff_ffff_ffff == u {
@@ -63,6 +74,7 @@ impl BitSet {
     }
 
     #[inline(always)]
+    // Returns the 60-bit "body" of the contained [RawVal] as a [u64].
     pub const fn to_u64(&self) -> u64 {
         self.0.get_body()
     }

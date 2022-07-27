@@ -26,20 +26,63 @@ sa::const_assert!(MAJOR_MASK == 0xffff_ffff);
 sa::const_assert!(MINOR_MASK == 0x0fff_ffff);
 sa::const_assert!(MAJOR_BITS + MINOR_BITS == BODY_BITS);
 
+/// Code values for the 3 "tag" bits in the bit-packed representation
+/// of [RawVal].
 #[repr(u8)]
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Tag {
+    /// Tag for a [RawVal] that contains a [u32] number.
     U32 = 0,
+
+    /// Tag for a [RawVal] that contains an [i32] number.
     I32 = 1,
+
+    /// Tag for a [RawVal] that contains a "static" value like `true`, `false`, `void`; see [crate::Static].
     Static = 2,
+
+    /// Tag for a [RawVal] that contains a host object handle; see [crate::Object].
     Object = 3,
+
+    /// Tag for a [RawVal] that contains a symbol; see [crate::Symbol].
     Symbol = 4,
+
+    /// Tag for a [RawVal] that contains a small bitset; see [crate::BitSet].
     BitSet = 5,
+
+    /// Tag for a [RawVal] that contains a status code; see [crate::Status].
     Status = 6,
 
+    /// Reserved tag for future use.
     #[allow(dead_code)]
     Reserved = 7,
 }
+
+/// A 64-bit value encoding a bit-packed disjoint union between several
+/// different types (numbers, booleans, symbols, object handles, etc.)
+///
+/// RawVals divide up the space of 64 bits according to a 2-level tagging
+/// scheme. The first tag is a bit in the least-significant position, indicating
+/// whether the `RawVal` is a plain "u63" 63-bit unsigned integer, or some
+/// more-structured value with a second-level tag in the next most significant 3
+/// bits. The 63-bit unsigned integer case can also be thought of as handling
+/// the complete range of non-negative signed 64-bit integers.
+///
+/// The remaining 3 bit tags are assigned to cases enumerated in [Tag], of
+/// which 7 are defined and one is currently reserved.
+///
+/// Schematically, the bit-assignment for `RawVal` looks like this:
+///
+/// ```text
+///    0x_NNNN_NNNN_NNNN_NNNX  - u63, for any even X
+///    0x_0000_000N_NNNN_NNN1  - u32
+///    0x_0000_000N_NNNN_NNN3  - i32
+///    0x_NNNN_NNNN_NNNN_NNN5  - static: void, true, false, ...
+///    0x_IIII_IIII_TTTT_TTT7  - object: 32-bit index I, 28-bit type code T
+///    0x_NNNN_NNNN_NNNN_NNN9  - symbol: up to 10 6-bit identifier characters
+///    0x_NNNN_NNNN_NNNN_NNNb  - bitset: up to 60 bits
+///    0x_CCCC_CCCC_TTTT_TTTd  - status: 32-bit code C, 28-bit type code T
+///    0x_NNNN_NNNN_NNNN_NNNf  - reserved
+/// ```
 
 #[repr(transparent)]
 #[derive(Copy, Clone)]
@@ -66,6 +109,9 @@ impl AsMut<RawVal> for RawVal {
 // This is a 0-arg struct rather than an enum to ensure it completely compiles
 // away, the same way `()` would, while remaining a separate type to allow
 // conversion to a more-structured error code at a higher level.
+
+/// Error type indicating a failure to convert some type to another; details
+/// of the failed conversion will typically be written to the debug log.
 #[derive(Debug, Eq, PartialEq)]
 pub struct ConversionError;
 
@@ -75,14 +121,28 @@ impl From<stellar_xdr::Error> for ConversionError {
     }
 }
 
+/// Trait abstracting over types that can be converted into [RawVal], similar to
+/// [TryFrom] but with a different signature that enables generating slightly
+/// more efficient conversion code. An implementation of `TryFrom<RawVal>` is also
+/// provided for any type that implements `RawValConvertible`.
 pub trait RawValConvertible: Into<RawVal> + TryFrom<RawVal> {
+    /// Returns `true` if `v` is in a union state compatible with `Self`.
     fn is_val_type(v: RawVal) -> bool;
+
+    /// Converts the bits making up a `RawVal` into `Self` _without_ checking
+    /// that the `RawVal` is tagged correctly, assuming that such a check has
+    /// been performed elsewhere. It is the caller's responsibility to arrange
+    /// that such checks have occurred before calling `unchecked_from_val`,
+    /// which is why it is marked as `unsafe` (it does not represent a risk of
+    /// memory-unsafety, merely "serious logic errors").
     unsafe fn unchecked_from_val(v: RawVal) -> Self;
 
-    // Try_convert has a default implementation that is
-    // test-and-unchecked-convert, but also allows us to customize its
-    // implementation for types in which that would produce an undesirable
-    // replication of tests.
+    /// Attempt a conversion from `RawVal` to `Self`, returning `None` if the
+    /// provided `RawVal` is not tagged correctly. By default this calls
+    /// `Self::is_val_type` and `Self::unchecked_from_val`, but it can be
+    /// customized on a type-by-type basis to avoid redundant tag tests and
+    /// produce more efficient code, as it is done for `Static` values like
+    /// `bool`.
     #[inline(always)]
     fn try_convert(v: RawVal) -> Option<Self> {
         if Self::is_val_type(v) {

@@ -1,6 +1,8 @@
 use super::{call_macro_with_all_host_functions, Env, EnvBase, Object, RawVal, Symbol};
 use core::any;
 
+/// A dummy implementation of the [Env] trait that fails with `unimplemented!()` in
+/// all functions. Useful for certain testing scenarios.
 #[derive(Clone, Default)]
 pub struct UnimplementedEnv;
 

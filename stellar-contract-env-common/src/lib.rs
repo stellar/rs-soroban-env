@@ -1,4 +1,24 @@
 #![cfg_attr(not(feature = "std"), no_std)]
+//! The environment-common crate contains three families of types:
+//!
+//!   - The [RawVal] type, a 64-bit value type that is a union between several
+//!     different types (numbers, booleans, symbols, object references), encoded
+//!     via careful bit-packing.
+//!   - Wrapper types ([Object], [Symbol], [Status], [Static], [BitSet]) that
+//!     contain [RawVal] in a specific, known union state. These are also 64-bit
+//!     values, but offer methods specific to the union state (eg. [Symbol] will
+//!     interconvert with Rust strings).
+//!   - The [Env] trait, which describes the _interface_ between guest and host
+//!     code. In other words, `Env` describes a set of _host functions_ that
+//!     must be implemented in a contract host, and can be called from a guest
+//!     (or by the SDK). Methods on the [Env] trait can only pass 64-bit values,
+//!     which are usually [RawVal] or one of the wrapper types.
+//!
+//! The crate additionally contains functions for interconversion between the
+//! [RawVal] type and XDR types, and re-exports the XDR definitions from
+//! [stellar_xdr] under the module [xdr].
+
+mod val_wrapper;
 
 mod bitset;
 mod checked_env;
@@ -17,8 +37,6 @@ mod val;
 
 // Re-export the XDR definitions
 pub use stellar_xdr as xdr;
-
-mod val_wrapper;
 
 // RawVal and RawObj are the 64-bit transparent type.
 pub use raw_val::{ConversionError, RawVal, RawValConvertible, Tag};
