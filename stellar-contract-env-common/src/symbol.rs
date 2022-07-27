@@ -1,9 +1,8 @@
-use crate::{require, ConversionError, RawVal, Tag, TagSymbol, TaggedVal};
+use crate::{decl_tagged_val_wrapper, require, ConversionError, Env, EnvVal, RawVal, Tag};
 use core::{
     cmp::Ordering,
     fmt::Debug,
     hash::{Hash, Hasher},
-    marker::PhantomData,
     str,
 };
 
@@ -29,17 +28,17 @@ const CODE_MASK: u64 = (1u64 << CODE_BITS) - 1;
 sa::const_assert!(CODE_MASK == 0x3f);
 sa::const_assert!(CODE_BITS * MAX_CHARS == BODY_BITS);
 
-pub type Symbol = TaggedVal<TagSymbol>;
+decl_tagged_val_wrapper!(Symbol);
 
 impl Hash for Symbol {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.as_ref().get_payload().hash(state);
+        self.as_raw().get_payload().hash(state);
     }
 }
 
 impl PartialEq for Symbol {
     fn eq(&self, other: &Self) -> bool {
-        self.as_ref().get_payload() == other.as_ref().get_payload()
+        self.as_raw().get_payload() == other.as_raw().get_payload()
     }
 }
 
@@ -118,10 +117,7 @@ impl Symbol {
             };
             accum |= v;
         }
-        Ok(Self(
-            unsafe { RawVal::from_body_and_tag(accum, Tag::Symbol) },
-            PhantomData,
-        ))
+        Ok(unsafe { Self::from_body(accum) })
     }
 
     pub const fn try_from_str(s: &str) -> Result<Symbol, SymbolError> {
@@ -233,7 +229,7 @@ impl IntoIterator for Symbol {
     type Item = char;
     type IntoIter = SymbolIter;
     fn into_iter(self) -> Self::IntoIter {
-        SymbolIter(self.as_ref().get_body())
+        SymbolIter(self.as_raw().get_body())
     }
 }
 
@@ -278,7 +274,7 @@ impl FromIterator<char> for Symbol {
             };
             accum |= v;
         }
-        unsafe { TaggedVal::from_body_and_tag_type(accum) }
+        unsafe { Self::from_body(accum) }
     }
 }
 

@@ -1,8 +1,12 @@
 use stellar_xdr::ScStatic;
 
-use crate::{TagStatic, TaggedVal};
+use crate::{decl_tagged_val_wrapper, impl_wrapper_from, Env, EnvVal, RawVal, Tag};
 
-pub type Static = TaggedVal<TagStatic>;
+decl_tagged_val_wrapper!(Static);
+
+impl_wrapper_from!((), Static);
+impl_wrapper_from!(bool, Static);
+
 impl Static {
     // NB: we don't provide a "get_type" to avoid casting a bad bit-pattern into
     // an ScStatic. Instead we provide an "is_type" to check any specific
@@ -10,6 +14,6 @@ impl Static {
 
     #[inline(always)]
     pub const fn is_type(&self, ty: ScStatic) -> bool {
-        self.0.has_minor(ty as u32)
+        self.as_raw().has_minor(ty as u32)
     }
 }

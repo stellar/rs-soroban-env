@@ -1,22 +1,20 @@
-use stellar_xdr::{ScObject, ScVal};
-
 use crate::{
-    tagged_val::{TagObject, TaggedVal},
-    xdr::ScObjectType,
-    Env, EnvVal, RawVal, Tag, TryConvert, TryIntoVal,
+    decl_tagged_val_wrapper, xdr::ScObjectType, Env, EnvVal, RawVal, Tag, TryConvert, TryIntoVal,
 };
 use core::fmt::Debug;
+use stellar_xdr::{ScObject, ScVal};
 
-pub type Object = TaggedVal<TagObject>;
+decl_tagged_val_wrapper!(Object);
 
 impl Debug for Object {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        let object_type_res: Result<ScObjectType, _> = (self.0.get_minor() as i32).try_into();
+        let object_type_res: Result<ScObjectType, _> =
+            (self.as_raw().get_minor() as i32).try_into();
         let object_type_name: &str = match &object_type_res {
             Ok(ty) => ty.name(),
             Err(_) => &"Unknown",
         };
-        let index = self.0.get_major();
+        let index = self.as_raw().get_major();
         write!(f, "Object({}({}))", object_type_name, index)
     }
 }
@@ -27,12 +25,12 @@ impl Object {
     // bit-pattern.
     #[inline(always)]
     pub const fn is_obj_type(&self, ty: ScObjectType) -> bool {
-        self.0.has_minor(ty as u32)
+        self.as_raw().has_minor(ty as u32)
     }
 
     #[inline(always)]
     pub const fn get_handle(&self) -> u32 {
-        self.0.get_major()
+        self.as_raw().get_major()
     }
 
     #[inline(always)]
@@ -42,7 +40,7 @@ impl Object {
 
     #[inline(always)]
     pub fn from_type_and_handle(ty: ScObjectType, handle: u32) -> Self {
-        unsafe { TaggedVal::from_major_minor_and_tag_type(handle, ty as u32) }
+        unsafe { Self::from_major_minor(handle, ty as u32) }
     }
 }
 
