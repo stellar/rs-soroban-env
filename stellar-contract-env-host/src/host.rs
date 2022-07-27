@@ -1118,13 +1118,9 @@ impl CheckedEnv for Host {
     fn vec_pop(&self, v: Object) -> Result<Object, HostError> {
         let vnew = self.visit_obj(v, move |hv: &HostVec| {
             let mut vnew = hv.clone();
-            match vnew.pop_back() {
-                None => Err(self.err_status_msg(
-                    ScHostObjErrorCode::VecIndexOutOfBound,
-                    "value does not exist",
-                )),
-                Some(_) => Ok(vnew),
-            }
+            vnew.pop_back()
+                .map(|_| vnew)
+                .ok_or_else(|| self.err_status(ScHostObjErrorCode::VecIndexOutOfBound))
         })?;
         Ok(self.add_host_object(vnew)?.into())
     }
@@ -1680,12 +1676,9 @@ impl CheckedEnv for Host {
     fn binary_pop(&self, b: Object) -> Result<Object, HostError> {
         let vnew = self.visit_obj(b, move |hv: &Vec<u8>| {
             let mut vnew = hv.clone();
-            match vnew.pop() {
-                None => {
-                    Err(self.err_status_msg(ScHostFnErrorCode::InputArgsInvalid, "u32 overflow"))
-                }
-                Some(_) => Ok(vnew),
-            }
+            vnew.pop()
+                .map(|_| vnew)
+                .ok_or_else(|| self.err_status(ScHostObjErrorCode::VecIndexOutOfBound))
         })?;
         Ok(self.add_host_object(vnew)?.into())
     }
