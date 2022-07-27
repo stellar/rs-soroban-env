@@ -75,7 +75,7 @@ impl Display for DebugArg {
 
 /// A cheap record type to store in the events buffer for diagnostic reporting
 /// when something goes wrong. Should cost very little even when enabled. See
-/// [host::debug_event] for normal use.
+/// [crate::host::Host::debug_event] for normal use.
 #[derive(Clone, Debug)]
 pub struct DebugEvent {
     pub msg: Option<&'static str>,
@@ -121,7 +121,7 @@ impl DebugEvent {
 /// Combines a [DebugEvent] with a [Status] that created it, typically
 /// used as a transient type when recording a (possibly enriched)
 /// debug event for a status and then converting the status to a
-/// HostError. See [host::err] for normal use.
+/// HostError. See [crate::host::Host::err] for normal use.
 #[derive(Clone, Debug)]
 pub struct DebugError {
     pub event: DebugEvent,

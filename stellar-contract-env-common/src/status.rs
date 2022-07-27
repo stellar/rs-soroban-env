@@ -1,5 +1,6 @@
 use crate::{
-    decl_tagged_val_wrapper, BitSetError, ConversionError, Env, EnvVal, RawVal, SymbolError, Tag,
+    decl_tagged_val_wrapper_methods, BitSetError, ConversionError, Env, EnvVal, RawVal,
+    SymbolError, Tag,
 };
 use core::{
     cmp::Ordering,
@@ -11,7 +12,15 @@ use stellar_xdr::{
     ScHostValErrorCode, ScStatus, ScStatusType, ScUnknownErrorCode, ScVal, ScVmErrorCode,
 };
 
-decl_tagged_val_wrapper!(Status);
+/// Wrapper for a [RawVal] that is tagged with [Tag::Status], interpreting the
+/// [RawVal]'s body as a pair of a 28-bit status-type code and a 32-bit status
+/// code. The status-type codes correspond to the enumerated cases of
+/// [ScStatusType], and the status codes correspond to the code values stored in
+/// each variant of the [ScStatus] union.
+#[derive(Copy, Clone)]
+pub struct Status(RawVal);
+
+decl_tagged_val_wrapper_methods!(Status);
 
 pub const UNKNOWN_ERROR: Status =
     unsafe { Status::from_major_minor(0, ScStatusType::UnknownError as u32) };

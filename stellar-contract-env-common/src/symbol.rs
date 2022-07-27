@@ -1,4 +1,4 @@
-use crate::{decl_tagged_val_wrapper, require, ConversionError, Env, EnvVal, RawVal, Tag};
+use crate::{decl_tagged_val_wrapper_methods, require, ConversionError, Env, EnvVal, RawVal, Tag};
 use core::{
     cmp::Ordering,
     fmt::Debug,
@@ -6,9 +6,14 @@ use core::{
     str,
 };
 
+/// Errors related to operations on the [Symbol] type.
 #[derive(Debug)]
 pub enum SymbolError {
+    /// Returned when attempting to form a [Symbol] from a string with more than
+    /// 10 characters.
     TooLong(usize),
+    /// Returned when attempting to form a [Symbol] from a string with
+    /// characters outside the range `[a-zA-Z0-9_]`.
     BadChar(char),
 }
 
@@ -28,7 +33,14 @@ const CODE_MASK: u64 = (1u64 << CODE_BITS) - 1;
 sa::const_assert!(CODE_MASK == 0x3f);
 sa::const_assert!(CODE_BITS * MAX_CHARS == BODY_BITS);
 
-decl_tagged_val_wrapper!(Symbol);
+/// Wrapper for a [RawVal] that is tagged with [Tag::Symbol], interpreting the
+/// [RawVal]'s body as a 60-bit small "string-like" object, 10 characters or
+/// less and with characters drawn from the 64-character repertoire
+/// `a-zA-Z0-9_`.
+#[derive(Copy, Clone)]
+pub struct Symbol(RawVal);
+
+decl_tagged_val_wrapper_methods!(Symbol);
 
 impl Hash for Symbol {
     fn hash<H: Hasher>(&self, state: &mut H) {
@@ -140,6 +152,10 @@ impl Symbol {
     }
 }
 
+/// An expanded form of a [Symbol] that stores its characters as
+/// ASCII-range bytes in a [u8] array, rather than as packed 6-bit
+/// codes within a [u64]. Useful for interoperation with standard
+/// Rust string types.
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct SymbolStr([u8; MAX_CHARS]);
 
@@ -233,6 +249,8 @@ impl IntoIterator for Symbol {
     }
 }
 
+/// An iterator that decodes the individual bit-packed characters from a
+/// symbol and yields them as regular Rust [char] values.
 #[derive(Clone)]
 pub struct SymbolIter(u64);
 

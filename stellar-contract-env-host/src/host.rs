@@ -214,7 +214,7 @@ impl Host {
     /// _represented_ some other error. This function only returns Err(...) when
     /// there was a failure to record the event, such as when budget is
     /// exceeded.
-    pub(crate) fn debug_event<T>(&self, src: T) -> Result<(), HostError>
+    pub fn debug_event<T>(&self, src: T) -> Result<(), HostError>
     where
         DebugEvent: From<T>,
     {

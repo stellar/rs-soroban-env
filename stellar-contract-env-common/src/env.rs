@@ -2,14 +2,16 @@ use super::Symbol;
 use super::{Object, RawVal};
 use core::any;
 
+/// Base trait extended by the [crate::Env] trait, providing various special-case
+/// functions that do _not_ simply call across cross the guest/host interface.
 pub trait EnvBase: Sized + Clone {
-    // Used for recovering the concrete type of the Host.
+    /// Used for recovering the concrete type of the Host.
     fn as_mut_any(&mut self) -> &mut dyn any::Any;
 
-    // Used to check two environments are the same, trapping if not.
+    /// Used to check two environments are the same, trapping if not.
     fn check_same_env(&self, other: &Self);
 
-    // Used to clone an environment deeply, not just a handle to it.
+    /// Used to clone an environment deeply, not just a handle to it.
     fn deep_clone(&self) -> Self;
 
     // Helpers for methods that wish to pass Rust lifetime-qualified _slices_
@@ -25,8 +27,15 @@ pub trait EnvBase: Sized + Clone {
     // since getting it wrong would let guest code violate memory safety. So the
     // _only_ interface to passing contract pointers to the host is going to be
     // in EnvBase, not Env, and as a bonus we get lifetime checking for free.
+
+    /// Copy a slice of bytes from the caller's memory into an existing `Binary`
+    /// object the host, returning a new `Binary`.
     fn binary_copy_from_slice(&self, b: Object, b_pos: RawVal, mem: &[u8]) -> Object;
+
+    /// Copy a slice of bytes from a `Binary` in the host into the caller's memory.
     fn binary_copy_to_slice(&self, b: Object, b_pos: RawVal, mem: &mut [u8]);
+
+    /// For a new `Binary` in the host from a slice of memory in the caller.
     fn binary_new_from_slice(&self, mem: &[u8]) -> Object;
 
     // As with the binary functions above, these take _slices_ with definite
@@ -50,9 +59,29 @@ pub trait EnvBase: Sized + Clone {
     // binary functions above work) into the debug buffer in the future, but it
     // is a little involved to do so and we assume that VM code probably does
     // not want to be carrying static strings at all.
+
+    /// Log a formatted debugging message to the debug log (if present), passing
+    /// a simplified format string (supporting only positional `{}` markers) and
+    /// a single [RawVal] argument that will be inserted at the marker in the
+    /// format string.
     fn log_static_fmt_val(&self, fmt: &'static str, v: RawVal);
+
+    /// Log a formatted debugging message to the debug log (if present), passing
+    /// a simplified format string (supporting only positional `{}` markers) and
+    /// a single string-slice argument that will be inserted at the marker in
+    /// the format string.
     fn log_static_fmt_static_str(&self, fmt: &'static str, s: &'static str);
+
+    /// Log a formatted debugging message to the debug log (if present), passing
+    /// a simplified format string (supporting only positional `{}` markers) and
+    /// both a [RawVal] and a string-slice argument, that will each be inserted
+    /// at markers in the format string.
     fn log_static_fmt_val_static_str(&self, fmt: &'static str, v: RawVal, s: &'static str);
+
+    /// Log a formatted debugging message to the debug log (if present), passing
+    /// a simplified format string (supporting only positional `{}` markers) and
+    /// both a slice of [RawVal]s and a slice of string-slice argument, that
+    /// will be sequentially inserted at markers in the format string.
     fn log_static_fmt_general(&self, fmt: &'static str, vals: &[RawVal], strs: &[&'static str]);
 }
 
@@ -85,6 +114,7 @@ pub trait EnvBase: Sized + Clone {
 // All callback macros have essentially the same token-tree matcher part,
 // only their expansion parts differ.
 
+#[doc(hidden)]
 #[macro_export]
 macro_rules! call_macro_with_all_host_functions {
 
@@ -417,9 +447,12 @@ macro_rules! generate_env_trait {
     => // The part of the macro above this line is a matcher; below is its expansion.
 
     {
-        // This macro expands to a single item: the Env trait used to define the
-        // interface implemented by Host and Guest, and used by client contract
-        // code.
+        // This macro expands to a single item: the Env trait.
+
+        /// This trait represents the interface between Host and Guest, used by
+        /// client contract code and implemented (via [crate::CheckedEnv]) by the host.
+        /// It consists of functions that take or return only 64-bit values such
+        /// as [RawVal] or [u64].
         pub trait Env: EnvBase
         {
             $(

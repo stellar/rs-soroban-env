@@ -1,10 +1,19 @@
 use crate::{
-    decl_tagged_val_wrapper, xdr::ScObjectType, Env, EnvVal, RawVal, Tag, TryConvert, TryIntoVal,
+    decl_tagged_val_wrapper_methods, xdr::ScObjectType, Env, EnvVal, RawVal, Tag, TryConvert,
+    TryIntoVal,
 };
 use core::fmt::Debug;
 use stellar_xdr::{ScObject, ScVal};
 
-decl_tagged_val_wrapper!(Object);
+/// Wrapper for a [RawVal] that is tagged with [Tag::Object], interpreting the
+/// [RawVal]'s body as a pair of a 28-bit object-type code and a 32-bit handle
+/// to a host object of the object-type. The object-type codes correspond to the
+/// enumerated cases of [ScObject], and the handle values are dynamically
+/// assigned by the host as new objects are allocated during execution.
+#[derive(Copy, Clone)]
+pub struct Object(RawVal);
+
+decl_tagged_val_wrapper_methods!(Object);
 
 impl Debug for Object {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
