@@ -1089,12 +1089,10 @@ impl CheckedEnv for Host {
 
     fn vec_get(&self, v: Object, i: RawVal) -> Result<RawVal, HostError> {
         let i: usize = self.usize_from_rawval_u32_input("i", i)?;
-        self.visit_obj(v, move |hv: &HostVec| match hv.get(i) {
-            None => {
-                Err(self
-                    .err_status_msg(ScHostObjErrorCode::VecIndexOutOfBound, "index out of bound"))
-            }
-            Some(hval) => Ok(hval.to_raw()),
+        self.visit_obj(v, move |hv: &HostVec| {
+            hv.get(i)
+                .map(|hval| hval.to_raw())
+                .ok_or_else(|| self.err_status(ScHostObjErrorCode::VecIndexOutOfBound))
         })
     }
 
@@ -1130,34 +1128,26 @@ impl CheckedEnv for Host {
     fn vec_pop(&self, v: Object) -> Result<Object, HostError> {
         let vnew = self.visit_obj(v, move |hv: &HostVec| {
             let mut vnew = hv.clone();
-            match vnew.pop_back() {
-                None => Err(self.err_status_msg(
-                    ScHostObjErrorCode::VecIndexOutOfBound,
-                    "value does not exist",
-                )),
-                Some(_) => Ok(vnew),
-            }
+            vnew.pop_back()
+                .map(|_| vnew)
+                .ok_or_else(|| self.err_status(ScHostObjErrorCode::VecIndexOutOfBound))
         })?;
         Ok(self.add_host_object(vnew)?.into())
     }
 
     fn vec_front(&self, v: Object) -> Result<RawVal, HostError> {
-        self.visit_obj(v, |hv: &HostVec| match hv.front() {
-            None => Err(self.err_status_msg(
-                ScHostObjErrorCode::VecIndexOutOfBound,
-                "value does not exist",
-            )),
-            Some(front) => Ok(front.to_raw()),
+        self.visit_obj(v, |hv: &HostVec| {
+            hv.front()
+                .map(|hval| hval.to_raw())
+                .ok_or_else(|| self.err_status(ScHostObjErrorCode::VecIndexOutOfBound))
         })
     }
 
     fn vec_back(&self, v: Object) -> Result<RawVal, HostError> {
-        self.visit_obj(v, |hv: &HostVec| match hv.back() {
-            None => Err(self.err_status_msg(
-                ScHostObjErrorCode::VecIndexOutOfBound,
-                "value does not exist",
-            )),
-            Some(back) => Ok(back.to_raw()),
+        self.visit_obj(v, |hv: &HostVec| {
+            hv.back()
+                .map(|hval| hval.to_raw())
+                .ok_or_else(|| self.err_status(ScHostObjErrorCode::VecIndexOutOfBound))
         })
     }
 
@@ -1657,12 +1647,10 @@ impl CheckedEnv for Host {
 
     fn binary_get(&self, b: Object, i: RawVal) -> Result<RawVal, HostError> {
         let i = self.usize_from_rawval_u32_input("i", i)?;
-        self.visit_obj(b, move |hv: &Vec<u8>| match hv.get(i) {
-            None => {
-                Err(self
-                    .err_status_msg(ScHostObjErrorCode::VecIndexOutOfBound, "index out of bound"))
-            }
-            Some(u) => Ok((*u).into()),
+        self.visit_obj(b, |hv: &Vec<u8>| {
+            hv.get(i)
+                .map(|u| Into::<RawVal>::into(*u))
+                .ok_or_else(|| self.err_status(ScHostObjErrorCode::VecIndexOutOfBound))
         })
     }
 
@@ -1698,35 +1686,26 @@ impl CheckedEnv for Host {
     fn binary_pop(&self, b: Object) -> Result<Object, HostError> {
         let vnew = self.visit_obj(b, move |hv: &Vec<u8>| {
             let mut vnew = hv.clone();
-            match vnew.pop() {
-                None => {
-                    Err(self.err_status_msg(ScHostFnErrorCode::InputArgsInvalid, "u32 overflow"))
-                }
-                Some(_) => Ok(vnew),
-            }
+            vnew.pop()
+                .map(|_| vnew)
+                .ok_or_else(|| self.err_status(ScHostObjErrorCode::VecIndexOutOfBound))
         })?;
         Ok(self.add_host_object(vnew)?.into())
     }
 
     fn binary_front(&self, b: Object) -> Result<RawVal, HostError> {
         self.visit_obj(b, |hv: &Vec<u8>| {
-            if hv.is_empty() {
-                return Err(
-                    self.err_status_msg(ScHostFnErrorCode::InputArgsInvalid, "u32 overflow")
-                );
-            }
-            Ok(hv[0].into())
+            hv.first()
+                .map(|u| Into::<RawVal>::into(*u))
+                .ok_or_else(|| self.err_status(ScHostObjErrorCode::VecIndexOutOfBound))
         })
     }
 
     fn binary_back(&self, b: Object) -> Result<RawVal, HostError> {
         self.visit_obj(b, |hv: &Vec<u8>| {
-            if hv.is_empty() {
-                return Err(
-                    self.err_status_msg(ScHostFnErrorCode::InputArgsInvalid, "u32 overflow")
-                );
-            }
-            Ok(hv[hv.len() - 1].into())
+            hv.last()
+                .map(|u| Into::<RawVal>::into(*u))
+                .ok_or_else(|| self.err_status(ScHostObjErrorCode::VecIndexOutOfBound))
         })
     }
 
