@@ -1,6 +1,4 @@
-use crate::{
-    decl_tagged_val_wrapper, ConversionError, Env, EnvVal, RawVal, RawValConvertible, Tag,
-};
+use crate::{decl_tagged_val_wrapper, ConversionError, Env, EnvVal, RawVal, Tag};
 use core::cmp::Ordering;
 use core::fmt::Debug;
 use core::hash::{Hash, Hasher};

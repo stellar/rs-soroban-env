@@ -1,8 +1,6 @@
 use stellar_xdr::ScStatic;
 
-use crate::{
-    decl_tagged_val_wrapper, impl_wrapper_from, Env, EnvVal, RawVal, RawValConvertible, Tag,
-};
+use crate::{decl_tagged_val_wrapper, impl_wrapper_from, Env, EnvVal, RawVal, Tag};
 
 decl_tagged_val_wrapper!(Static);
 

@@ -125,6 +125,17 @@ macro_rules! declare_tryfrom {
                 Self::try_from(v.to_raw())
             }
         }
+        impl<E: Env> TryFrom<EnvVal<E, RawVal>> for EnvVal<E, $T> {
+            type Error = crate::ConversionError;
+            fn try_from(ev: EnvVal<E, RawVal>) -> Result<Self, Self::Error> {
+                let val: $T = ev.to_raw().try_into().map_err(|err| {
+                    ev.clone().log_err_convert::<Self>();
+                    err
+                })?;
+                let env = ev.env;
+                Ok(Self { env, val })
+            }
+        }
     };
 }
 

@@ -22,7 +22,7 @@ macro_rules! decl_tagged_val_wrapper {
                 b.0
             }
         }
-        impl RawValConvertible for $tagname {
+        impl crate::RawValConvertible for $tagname {
             #[inline(always)]
             fn is_val_type(v: RawVal) -> bool {
                 v.has_tag(Tag::$tagname)
@@ -33,7 +33,7 @@ macro_rules! decl_tagged_val_wrapper {
             }
         }
 
-        // EnvVal ref/mut/conversion support
+        // EnvVal ref/mut/from support
         impl<E: Env> AsRef<$tagname> for EnvVal<E, $tagname> {
             fn as_ref(&self) -> &$tagname {
                 &self.val
@@ -62,16 +62,6 @@ macro_rules! decl_tagged_val_wrapper {
                 ev.val
             }
         }
-        impl<E: Env> TryFrom<EnvVal<E, RawVal>> for EnvVal<E, $tagname> {
-            type Error = crate::ConversionError;
-            fn try_from(ev: EnvVal<E, RawVal>) -> Result<Self, Self::Error> {
-                let tv: $tagname = ev.to_raw().try_into().map_err(|err| {
-                    ev.clone().log_err_convert::<Self>();
-                    err
-                })?;
-                Ok(tv.in_env(ev.env()))
-            }
-        }
         impl<E: Env> EnvVal<E, $tagname> {
             pub fn as_raw(&self) -> &RawVal {
                 self.val.as_ref()
@@ -89,8 +79,8 @@ macro_rules! decl_tagged_val_wrapper {
                 match maybe {
                     Some(u) => {
                         let raw = RawVal::from_payload(u);
-                        if Self::is_val_type(raw) {
-                            Some(unsafe { Self::unchecked_from_val(raw) })
+                        if <Self as crate::RawValConvertible>::is_val_type(raw) {
+                            Some(unsafe { <Self as crate::RawValConvertible>::unchecked_from_val(raw) })
                         } else {
                             None
                         }
@@ -153,14 +143,6 @@ macro_rules! impl_wrapper_from {
             #[inline(always)]
             fn try_from(v: EnvVal<E, $tagname>) -> Result<Self, Self::Error> {
                 Self::try_from(v.to_raw())
-            }
-        }
-        impl<E: Env> crate::IntoEnvVal<E, $tagname> for $fromty {
-            fn into_env_val(self, env: &E) -> EnvVal<E, $tagname> {
-                EnvVal {
-                    env: env.clone(),
-                    val: self.into(),
-                }
             }
         }
     };
