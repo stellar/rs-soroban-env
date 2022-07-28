@@ -33,6 +33,9 @@ const CODE_MASK: u64 = (1u64 << CODE_BITS) - 1;
 sa::const_assert!(CODE_MASK == 0x3f);
 sa::const_assert!(CODE_BITS * MAX_CHARS == BODY_BITS);
 
+/// [Symbol] reprents strings up to 10 characters long with a `a-zA-Z0-9_`
+/// alphabet encoded into a 60-bit space between 10 characters long.
+///
 /// Wrapper for a [RawVal] that is tagged with [Tag::Symbol], interpreting the
 /// [RawVal]'s body as a 60-bit small "string-like" object, 10 characters or
 /// less and with characters drawn from the 64-character repertoire
