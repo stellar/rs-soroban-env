@@ -2,8 +2,10 @@ name: Rust
 
 on:
   push:
-    branches: [main]
+    branches: [main, "release-dry-run*"]
   pull_request:
+  release:
+    types: [published]
 
 env:
   RUSTFLAGS: -D warnings
@@ -54,3 +56,29 @@ jobs:
     - run: cargo hack --feature-powerset check --target ${{ matrix.sys.target }}
     - if: matrix.sys.test
       run: cargo hack --feature-powerset test --target ${{ matrix.sys.target }}
+
+  cargo-publish:
+    if: github.event_name == 'release'
+    needs: [complete]
+    runs-on: ubuntu-latest
+    steps:
+    - if: contains(needs.*.result, 'failure')
+      run: exit 1
+    - uses: actions/checkout@v3
+    - run: rustup update
+    - run: cargo publish
+    env:
+    - CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+  cargo-publish-dry-run:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/heads/release-dry-run')
+    needs: [complete]
+    runs-on: ubuntu-latest
+    steps:
+    - if: contains(needs.*.result, 'failure')
+      run: exit 1
+    - uses: actions/checkout@v3
+    - run: rustup update
+    - run: cargo publish --dry-run
+    env:
+    - CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
