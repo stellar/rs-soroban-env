@@ -3,7 +3,7 @@ use crate::{
     xdr::{ScHostObjErrorCode, ScObject, ScStatic, ScStatus, ScVal},
     CheckedEnv, Host, HostError, RawVal, RawValConvertible,
 };
-use stellar_contract_env_common::EnvBase;
+use soroban_env_common::EnvBase;
 
 #[cfg(feature = "vm")]
 use super::wasm_examples::LINEAR_MEMORY;
