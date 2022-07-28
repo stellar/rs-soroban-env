@@ -48,7 +48,12 @@ impl Host {
                 "end index out of bound",
             ));
         }
-        // we don't check start <= end, as [start..end] is ok in that case
+        if start > end {
+            return Err(self.err_status_msg(
+                ScHostFnErrorCode::InputArgsInvalid,
+                "start greater than end",
+            ));
+        }
         Ok(())
     }
 

@@ -1,7 +1,9 @@
+use crate::xdr::ScHostFnErrorCode;
 use crate::{
     xdr::{ScHostObjErrorCode, ScObject, ScStatic, ScStatus, ScVal},
     CheckedEnv, Host, HostError, RawVal, RawValConvertible,
 };
+use stellar_contract_env_common::EnvBase;
 
 #[cfg(feature = "vm")]
 use super::wasm_examples::LINEAR_MEMORY;
@@ -90,6 +92,16 @@ fn binary_put_out_of_bound() -> Result<(), HostError> {
     let obj = host.binary_new()?;
     let res = host.binary_put(obj, 0u32.into(), 1u32.into());
     let code = ScHostObjErrorCode::VecIndexOutOfBound;
+    assert!(HostError::result_matches_err_status(res, code));
+    Ok(())
+}
+
+#[test]
+fn binary_slice_start_greater_than_end() -> Result<(), HostError> {
+    let host = Host::default();
+    let obj = host.binary_new_from_slice(&[1, 2, 3, 4]);
+    let res = host.binary_slice(obj, 2_u32.into(), 1_u32.into());
+    let code = ScHostFnErrorCode::InputArgsInvalid;
     assert!(HostError::result_matches_err_status(res, code));
     Ok(())
 }
