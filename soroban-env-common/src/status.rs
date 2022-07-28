@@ -1,6 +1,5 @@
 use crate::{
-    decl_tagged_val_wrapper_methods, ConversionError, Env, EnvVal, RawVal,
-    SymbolError, Tag,
+    decl_tagged_val_wrapper_methods, ConversionError, Env, EnvVal, RawVal, SymbolError, Tag,
 };
 use core::{
     cmp::Ordering,
