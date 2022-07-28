@@ -9,7 +9,7 @@ use num_bigint::{BigInt, Sign};
 use num_integer::Integer;
 use num_traits::cast::ToPrimitive;
 use num_traits::{Pow, Signed, Zero};
-use std::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Not, Rem, Shl, Shr, Sub};
+use std::ops::{Add, BitAnd, BitOr, BitXor, Mul, Neg, Not, Rem, Shl, Shr, Sub};
 use stellar_contract_env_common::{EnvVal, TryConvert, TryFromVal, TryIntoVal};
 
 use stellar_contract_env_common::xdr::{
@@ -1329,10 +1329,8 @@ impl CheckedEnv for Host {
     fn bigint_div(&self, x: Object, y: Object) -> Result<Object, HostError> {
         let res = self.visit_obj(x, |a: &BigInt| {
             self.visit_obj(y, |b: &BigInt| {
-                if b.is_zero() {
-                    return Err(self.err_general("bigint division by zero"));
-                }
-                Ok(a.div(b))
+                a.checked_div(b)
+                    .ok_or_else(|| self.err_general("bigint division by zero"))
             })
         })?;
         Ok(self.add_host_object(res)?.into())
