@@ -277,13 +277,13 @@ where
                     let str: String = sym.into_iter().collect();
                     Ok(ScVal::Symbol(str.as_bytes().try_into()?))
                 }
-                Tag::Reserved1 => Err(ConversionError),
+                Tag::Reserved5 => Err(ConversionError),
                 Tag::Status => {
                     let status: Status =
                         unsafe { <Status as RawValConvertible>::unchecked_from_val(val) };
                     Ok(status.try_into()?)
                 }
-                Tag::Reserved => Err(ConversionError),
+                Tag::Reserved7 => Err(ConversionError),
             }
         }
     }
@@ -414,7 +414,7 @@ impl<E: Env, V: Val> Ord for EnvVal<E, V> {
                     };
                     a.cmp(&b)
                 }
-                Tag::Reserved1 => self
+                Tag::Reserved5 => self
                     .val
                     .as_ref()
                     .get_payload()
@@ -428,7 +428,7 @@ impl<E: Env, V: Val> Ord for EnvVal<E, V> {
                     };
                     a.cmp(&b)
                 }
-                Tag::Reserved => self
+                Tag::Reserved7 => self
                     .val
                     .as_ref()
                     .get_payload()

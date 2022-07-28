@@ -48,14 +48,14 @@ pub enum Tag {
 
     /// Reserved tag for future use.
     #[allow(dead_code)]
-    Reserved1 = 5,
+    Reserved5 = 5,
 
     /// Tag for a [RawVal] that contains a status code; see [crate::Status].
     Status = 6,
 
     /// Reserved tag for future use.
     #[allow(dead_code)]
-    Reserved = 7,
+    Reserved7 = 7,
 }
 
 /// A 64-bit value encoding a bit-packed disjoint union between several
@@ -537,14 +537,14 @@ impl Debug for RawVal {
                 Tag::Symbol => {
                     unsafe { <Symbol as RawValConvertible>::unchecked_from_val(*self) }.fmt(f)
                 }
-                Tag::Reserved1 => {
-                    write!(f, "Reserved1({})", self.get_body())
+                Tag::Reserved5 => {
+                    write!(f, "Reserved5({})", self.get_body())
                 }
                 Tag::Status => {
                     unsafe { <Status as RawValConvertible>::unchecked_from_val(*self) }.fmt(f)
                 }
-                Tag::Reserved => {
-                    write!(f, "Reserved({})", self.get_body())
+                Tag::Reserved7 => {
+                    write!(f, "Reserved7({})", self.get_body())
                 }
             }
         }
