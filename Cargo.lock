@@ -606,31 +606,25 @@ dependencies = [
 ]
 
 [[package]]
-name = "static_assertions"
-version = "1.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
-
-[[package]]
-name = "stellar-contract-env-common"
+name = "soroban-env-common"
 version = "0.0.0"
 dependencies = [
+ "soroban-env-macros",
  "static_assertions",
- "stellar-contract-env-macros",
  "stellar-xdr 0.0.0 (git+https://github.com/stellar/rs-stellar-xdr?rev=94e01c7b)",
  "wasmi",
 ]
 
 [[package]]
-name = "stellar-contract-env-guest"
+name = "soroban-env-guest"
 version = "0.0.0"
 dependencies = [
+ "soroban-env-common",
  "static_assertions",
- "stellar-contract-env-common",
 ]
 
 [[package]]
-name = "stellar-contract-env-host"
+name = "soroban-env-host"
 version = "0.0.0"
 dependencies = [
  "assert_matches",
@@ -648,8 +642,8 @@ dependencies = [
  "parity-wasm",
  "perf-event",
  "sha2 0.10.2",
+ "soroban-env-common",
  "static_assertions",
- "stellar-contract-env-common",
  "tabwriter",
  "thiserror",
  "thousands",
@@ -659,7 +653,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "stellar-contract-env-macros"
+name = "soroban-env-macros"
 version = "0.0.0"
 dependencies = [
  "proc-macro2",
@@ -667,6 +661,12 @@ dependencies = [
  "stellar-xdr 0.0.0 (git+https://github.com/stellar/rs-stellar-xdr?rev=540ed24e)",
  "syn",
 ]
+
+[[package]]
+name = "static_assertions"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 
 [[package]]
 name = "stellar-xdr"

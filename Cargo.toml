@@ -2,7 +2,7 @@
 resolver = "2"
 
 members = [
-    "stellar-contract-env-host",
-    "stellar-contract-env-guest",
-    "stellar-contract-env-common",
+    "soroban-env-host",
+    "soroban-env-guest",
+    "soroban-env-common",
 ]

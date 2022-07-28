@@ -1,9 +1,9 @@
-# rs-stellar-contract-env
+# rs-soroban-env
 
-Rust contract-environment interface and (optional) host implementation for Stellar Jump Cannon.
+Rust contract-environment interface and (optional) host implementation for Soroban.
 
-This crate contains elements of the shared environment-interface between smart contract guest and host: the `Env` trait that defines the set of available environment functions as well as the `Val` type that can pass back and forth through the WASM calling convention. Additionally small wrappers around subtypes of `Val` are included: `Object`, `Symbol`, `Status`, `Bitset`, etc.
+The `soroban-env-common` crate contains elements of the shared environment-interface between smart contract guest and host: the `Env` trait that defines the set of available environment functions as well as the `RawVal` type that can pass back and forth through the WASM calling convention. Additionally small wrappers around subtypes of `RawVal` are included: `Object`, `Symbol`, `Status`, `Bitset`, etc.
 
-If configured with `cfg(feature = "guest")`, this crate contains the guest-side _implementation_ of the environment interface dependent on extern fns provided by the host implementation. This can be used in a WASM runtime that provides the extern fns.
+The `soroban-env-guest` crate contains the guest-side _stub implementation_ of the environment interface called `Guest` dependent on extern fns provided by the host implementation. This can be used in a WASM runtime that provides the extern fns.
 
-If configured with `cfg(feature = "host")`, this crate contains the host-side _implementation_ of the environment interface. This can be used either in the real stellar-core host or for testing in the SDK.
+The `soroban-env-host` crate contains the host-side _full implementation_ of the environment interface called `Host`. This can be used either in the real blockchain host or for local testing in the SDK.
