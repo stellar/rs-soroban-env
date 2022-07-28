@@ -71,7 +71,7 @@ jobs:
     - CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
   cargo-publish-dry-run:
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/heads/release-dry-run')
+    if: github.event_name == 'push' && startsWith(github.ref_name, 'release-dry-run')
     needs: [complete]
     runs-on: ubuntu-latest
     steps:
