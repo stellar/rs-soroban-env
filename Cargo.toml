@@ -1,4 +1,8 @@
 [workspace]
 resolver = "2"
 
-members = ["soroban-env-host", "soroban-env-guest", "soroban-env-common"]
+members = [
+    "soroban-env-host",
+    "soroban-env-guest",
+    "soroban-env-common",
+]

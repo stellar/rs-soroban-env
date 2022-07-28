@@ -38,8 +38,6 @@ mod val;
 // Re-export the XDR definitions
 pub use stellar_xdr as xdr;
 
-mod val_wrapper;
-
 // RawVal and RawObj are the 64-bit transparent type.
 pub use raw_val::{ConversionError, RawVal, RawValConvertible, Tag};
 pub use val::Val;

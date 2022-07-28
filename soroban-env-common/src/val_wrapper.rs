@@ -1,10 +1,7 @@
+#[doc(hidden)]
 #[macro_export]
-macro_rules! decl_tagged_val_wrapper {
+macro_rules! decl_tagged_val_wrapper_methods {
     ($tagname:ident) => {
-        // Declare the wrapper type.
-        #[derive(Copy, Clone)]
-        pub struct $tagname(RawVal);
-
         // AsRef / AsMut to RawVal.
         impl AsRef<RawVal> for $tagname {
             fn as_ref(&self) -> &RawVal {
@@ -132,6 +129,7 @@ macro_rules! decl_tagged_val_wrapper {
     };
 }
 
+#[doc(hidden)]
 #[macro_export]
 macro_rules! impl_wrapper_from {
     ($fromty:ty, $tagname:ident) => {
