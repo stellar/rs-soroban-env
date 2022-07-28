@@ -1,6 +1,6 @@
 use stellar_xdr::{ScStatic, ScStatus, ScStatusType};
 
-use super::{BitSet, Env, EnvVal, Object, Static, Status, Symbol};
+use super::{Env, EnvVal, Object, Static, Status, Symbol};
 use core::fmt::Debug;
 
 extern crate static_assertions as sa;
@@ -46,8 +46,9 @@ pub enum Tag {
     /// Tag for a [RawVal] that contains a symbol; see [crate::Symbol].
     Symbol = 4,
 
-    /// Tag for a [RawVal] that contains a small bitset; see [crate::BitSet].
-    BitSet = 5,
+    /// Reserved tag for future use.
+    #[allow(dead_code)]
+    Reserved1 = 5,
 
     /// Tag for a [RawVal] that contains a status code; see [crate::Status].
     Status = 6,
@@ -79,7 +80,7 @@ pub enum Tag {
 ///    0x_NNNN_NNNN_NNNN_NNN5  - static: void, true, false, ...
 ///    0x_IIII_IIII_TTTT_TTT7  - object: 32-bit index I, 28-bit type code T
 ///    0x_NNNN_NNNN_NNNN_NNN9  - symbol: up to 10 6-bit identifier characters
-///    0x_NNNN_NNNN_NNNN_NNNb  - bitset: up to 60 bits
+///    0x_NNNN_NNNN_NNNN_NNNb  - reserved
 ///    0x_CCCC_CCCC_TTTT_TTTd  - status: 32-bit code C, 28-bit type code T
 ///    0x_NNNN_NNNN_NNNN_NNNf  - reserved
 /// ```
@@ -203,7 +204,6 @@ declare_tryfrom!(());
 declare_tryfrom!(bool);
 declare_tryfrom!(u32);
 declare_tryfrom!(i32);
-declare_tryfrom!(BitSet);
 declare_tryfrom!(Status);
 declare_tryfrom!(Symbol);
 declare_tryfrom!(Static);
@@ -537,8 +537,8 @@ impl Debug for RawVal {
                 Tag::Symbol => {
                     unsafe { <Symbol as RawValConvertible>::unchecked_from_val(*self) }.fmt(f)
                 }
-                Tag::BitSet => {
-                    unsafe { <BitSet as RawValConvertible>::unchecked_from_val(*self) }.fmt(f)
+                Tag::Reserved1 => {
+                    write!(f, "Reserved1({})", self.get_body())
                 }
                 Tag::Status => {
                     unsafe { <Status as RawValConvertible>::unchecked_from_val(*self) }.fmt(f)
@@ -554,7 +554,7 @@ impl Debug for RawVal {
 #[test]
 #[cfg(feature = "std")]
 fn test_debug() {
-    use super::{BitSet, Object, Status, Symbol};
+    use super::{Object, Status, Symbol};
     use crate::xdr::{ScHostValErrorCode, ScObjectType, ScStatus};
     assert_eq!(format!("{:?}", RawVal::from_void()), "Void");
     assert_eq!(format!("{:?}", RawVal::from_bool(true)), "True");
@@ -564,10 +564,6 @@ fn test_debug() {
     assert_eq!(
         format!("{:?}", unsafe { RawVal::unchecked_from_u63(10) }),
         "U63(10)"
-    );
-    assert_eq!(
-        format!("{:?}", BitSet::try_from_u64(0xf7).unwrap().as_raw()),
-        "BitSet(0b11110111)"
     );
     assert_eq!(format!("{:?}", Symbol::from_str("hello")), "Symbol(hello)");
     assert_eq!(

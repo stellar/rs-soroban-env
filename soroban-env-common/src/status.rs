@@ -1,5 +1,5 @@
 use crate::{
-    decl_tagged_val_wrapper_methods, BitSetError, ConversionError, Env, EnvVal, RawVal,
+    decl_tagged_val_wrapper_methods, ConversionError, Env, EnvVal, RawVal,
     SymbolError, Tag,
 };
 use core::{
@@ -217,15 +217,6 @@ impl From<ScHostContextErrorCode> for Status {
 impl From<ScVmErrorCode> for Status {
     fn from(code: ScVmErrorCode) -> Self {
         ScStatus::VmError(code).into()
-    }
-}
-
-impl From<BitSetError> for Status {
-    fn from(bse: BitSetError) -> Self {
-        let s = match bse {
-            BitSetError::TooManyBits(_) => ScHostValErrorCode::BitsetTooManyBits,
-        };
-        ScStatus::HostValueError(s).into()
     }
 }
 

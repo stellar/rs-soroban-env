@@ -1,4 +1,4 @@
-use crate::{BitSet, Object, RawVal, Static, Status, Symbol};
+use crate::{Object, RawVal, Static, Status, Symbol};
 
 /// Val is either [RawVal] or one of the wrapper types, all of which
 /// can be `AsRef`/`AsMut`'ed to `RawVal`.
@@ -11,4 +11,3 @@ impl Val for Object {}
 impl Val for Status {}
 impl Val for Static {}
 impl Val for Symbol {}
-impl Val for BitSet {}

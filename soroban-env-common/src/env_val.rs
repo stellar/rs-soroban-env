@@ -5,7 +5,7 @@ use stellar_xdr::{ScObject, ScStatic, ScVal};
 
 #[cfg(feature = "std")]
 use crate::Static;
-use crate::{raw_val::ConversionError, BitSet, Object, Status, Symbol, Tag, Val};
+use crate::{raw_val::ConversionError, Object, Status, Symbol, Tag, Val};
 
 use super::{
     raw_val::{RawVal, RawValConvertible},
@@ -277,7 +277,7 @@ where
                     let str: String = sym.into_iter().collect();
                     Ok(ScVal::Symbol(str.as_bytes().try_into()?))
                 }
-                Tag::BitSet => Ok(ScVal::Bitset(val.get_payload())),
+                Tag::Reserved1 => Err(ConversionError),
                 Tag::Status => {
                     let status: Status =
                         unsafe { <Status as RawValConvertible>::unchecked_from_val(val) };
@@ -319,7 +319,7 @@ where
                 };
                 Symbol::try_from_str(ss)?.into()
             }
-            ScVal::Bitset(i) => BitSet::try_from_u64(*i)?.into(),
+            ScVal::Bitset(_) => return Err(ConversionError),
             ScVal::Status(st) => st.into(),
         })
     }
@@ -414,15 +414,11 @@ impl<E: Env, V: Val> Ord for EnvVal<E, V> {
                     };
                     a.cmp(&b)
                 }
-                Tag::BitSet => {
-                    let a = unsafe {
-                        <BitSet as RawValConvertible>::unchecked_from_val(*self.val.as_ref())
-                    };
-                    let b = unsafe {
-                        <BitSet as RawValConvertible>::unchecked_from_val(*other.val.as_ref())
-                    };
-                    a.cmp(&b)
-                }
+                Tag::Reserved1 => self
+                    .val
+                    .as_ref()
+                    .get_payload()
+                    .cmp(&other.val.as_ref().get_payload()),
                 Tag::Status => {
                     let a = unsafe {
                         <Status as RawValConvertible>::unchecked_from_val(*self.val.as_ref())

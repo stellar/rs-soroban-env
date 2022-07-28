@@ -135,8 +135,6 @@ fn binary_xdr_roundtrip() -> Result<(), HostError> {
     roundtrip(ScVal::Symbol(
         host.map_err("stellar".to_string().try_into())?,
     ))?;
-    // bitset
-    roundtrip(ScVal::Bitset(0xffffffff_u64))?;
     // status
     roundtrip(ScVal::Status(ScStatus::HostObjectError(
         ScHostObjErrorCode::UnknownError,

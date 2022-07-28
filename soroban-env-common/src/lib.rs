@@ -20,7 +20,6 @@
 
 mod val_wrapper;
 
-mod bitset;
 mod checked_env;
 mod convert;
 mod env;
@@ -49,9 +48,8 @@ pub use env::{Env, EnvBase};
 pub use env_val::{EnvVal, IntoVal, TryFromVal, TryIntoVal};
 pub use unimplemented_env::UnimplementedEnv;
 
-// BitSet, Status and Symbol wrap RawVals.
+// Status and Symbol wrap RawVals.
 // TODO: maybe these should wrap EnvVals?
-pub use bitset::{BitSet, BitSetError};
 pub use object::Object;
 pub use r#static::Static;
 pub use status::{Status, OK, UNKNOWN_ERROR};
