@@ -65,12 +65,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "base64"
-version = "0.13.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "904dfeac50f3cdaba28fc6f57fdcddb75f49ed61346676a78c4ffe55877802fd"
-
-[[package]]
 name = "bitmaps"
 version = "2.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -607,17 +601,17 @@ dependencies = [
 
 [[package]]
 name = "soroban-env-common"
-version = "0.0.0"
+version = "0.0.1"
 dependencies = [
  "soroban-env-macros",
  "static_assertions",
- "stellar-xdr 0.0.0 (git+https://github.com/stellar/rs-stellar-xdr?rev=94e01c7b)",
+ "stellar-xdr",
  "wasmi",
 ]
 
 [[package]]
 name = "soroban-env-guest"
-version = "0.0.0"
+version = "0.0.1"
 dependencies = [
  "soroban-env-common",
  "static_assertions",
@@ -658,7 +652,7 @@ version = "0.0.1"
 dependencies = [
  "proc-macro2",
  "quote",
- "stellar-xdr 0.0.0 (git+https://github.com/stellar/rs-stellar-xdr?rev=540ed24e)",
+ "stellar-xdr",
  "syn",
 ]
 
@@ -670,17 +664,9 @@ checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 
 [[package]]
 name = "stellar-xdr"
-version = "0.0.0"
-source = "git+https://github.com/stellar/rs-stellar-xdr?rev=540ed24e#540ed24edc66b5301459ed3269129670160e51e0"
-dependencies = [
- "base64",
- "serde",
-]
-
-[[package]]
-name = "stellar-xdr"
-version = "0.0.0"
-source = "git+https://github.com/stellar/rs-stellar-xdr?rev=94e01c7b#94e01c7bbb3622e12907e1ceb95ab85f4e55e085"
+version = "0.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "015594b09942b9f9cbe6972ba8c7de3a05a25c4994bbc7282f5f2fa6d28a81c4"
 dependencies = [
  "serde",
 ]
@@ -930,3 +916,8 @@ dependencies = [
  "syn",
  "synstructure",
 ]
+
+[[patch.unused]]
+name = "stellar-xdr"
+version = "0.0.0"
+source = "git+https://github.com/stellar/rs-stellar-xdr?rev=94e01c7b#94e01c7bbb3622e12907e1ceb95ab85f4e55e085"
