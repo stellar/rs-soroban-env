@@ -3,10 +3,6 @@ name = "soroban-env-common"
 version = "0.0.0"
 edition = "2021"
 
-[patch.crates-io]
-soroban-env-macros = { path = "../soroban-env-macros" }
-stellar-xdr = { git = "https://github.com/stellar/rs-stellar-xdr", rev = "94e01c7b", default-features = false, features = [ "next" ] }
-
 [dependencies]
 soroban-env-macros = { version = "0.0.1" }
 stellar-xdr = { version = "0.0.1", default-features = false, features = [ "next" ] }

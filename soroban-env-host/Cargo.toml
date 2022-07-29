@@ -8,9 +8,6 @@ license = "Apache-2.0"
 version = "0.0.1"
 edition = "2021"
 
-[patch.crates-io]
-soroban-env-common = { path = "../soroban-env-common", features = [ "std" ] }
-
 [dependencies]
 soroban-env-common = { version = "0.0.1", features = [ "std" ] }
 wasmi = { git = "https://github.com/stellar/wasmi", rev = "4f35508c1a2475ed5d33955023f073639e7ff7df", optional = true }
