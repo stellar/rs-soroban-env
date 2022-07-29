@@ -37,14 +37,14 @@ publish-dry-run-guest:
 
 # Publish publishes the crate to crates.io. The dry-run is a dependency because
 # the dry-run target will verify all feature set combinations.
-publish-common: publish-dry-run
+publish-common: publish-dry-run-common
 	cargo +stable publish --package soroban-env-common --locked
 
-publish-macros: publish-dry-run
+publish-macros: publish-dry-run-macros
 	cargo +stable publish --package soroban-env-macros --locked
 
-publish-host: publish-dry-run
+publish-host: publish-dry-run-host
 	cargo +stable publish --package soroban-env-host --locked
 
-publish-guest: publish-dry-run
+publish-guest: publish-dry-run-guest
 	cargo +stable publish --package soroban-env-guest --locked
