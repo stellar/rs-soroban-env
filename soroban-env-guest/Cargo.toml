@@ -1,8 +1,16 @@
 [package]
 name = "soroban-env-guest"
-version = "0.0.0"
+description = "Soroban contract guest environment."
+homepage = "https://github.com/stellar/rs-soroban-env"
+repository = "https://github.com/stellar/rs-soroban-env"
+authors = ["Stellar Development Foundation <info@stellar.org>"]
+license = "Apache-2.0"
+version = "0.0.2"
 edition = "2021"
 
 [dependencies]
-soroban-env-common = { path = "../soroban-env-common" }
+soroban-env-common = { version = "0.0.2" }
 static_assertions = "1.1.0"
+
+[package.metadata.docs.rs]
+all-features = true

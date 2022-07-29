@@ -2,8 +2,10 @@ name: Rust
 
 on:
   push:
-    branches: [main]
+    branches: [main, "release/**"]
   pull_request:
+  release:
+    types: [published]
 
 env:
   RUSTFLAGS: -D warnings
@@ -51,6 +53,28 @@ jobs:
     - run: rustup update
     - run: rustup target add ${{ matrix.sys.target }}
     - run: cargo install --locked --version 0.5.14 cargo-hack
-    - run: cargo hack --feature-powerset check --target ${{ matrix.sys.target }}
+    - run: cargo hack --feature-powerset check --locked --target ${{ matrix.sys.target }}
     - if: matrix.sys.test
-      run: cargo hack --feature-powerset test --target ${{ matrix.sys.target }}
+      run: cargo hack --feature-powerset test --locked --target ${{ matrix.sys.target }}
+
+  cargo-publish-dry-run:
+    if: github.event_name == 'push' && startsWith(github.ref_name, 'release/')
+    needs: [complete]
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - run: rustup update
+    - run: rustup target add wasm32-unknown-unknown
+    - run: make publish-dry-run
+
+  cargo-publish:
+    if: github.event_name == 'release'
+    needs: [complete]
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - run: rustup update
+    - run: rustup target add wasm32-unknown-unknown
+    - run: make publish
+      env:
+        CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
