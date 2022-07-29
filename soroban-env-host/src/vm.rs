@@ -1,3 +1,13 @@
+//! This module primarily provides the [Vm] type and the necessary name-lookup
+//! and runtime-dispatch mechanisms needed to allow WASM modules to call into
+//! the [Env](crate::Env) interface implemented by [Host].
+//!
+//! It also contains helper methods to look up and call into contract functions
+//! in terms of [ScVal] and [RawVal] arguments.
+//!
+//! The implementation of WASM types and the WASM bytecode interpreter come from
+//! the [wasmi](https://github.com/paritytech/wasmi) project.
+
 mod dispatch;
 mod func_info;
 
@@ -119,16 +129,17 @@ impl ImportResolver for Host {
     }
 }
 
-// A VM is held in a Host and contains a single WASM module instantiation.
-//
-// It denies modules with either floating point or start functions.
-//
-// In order to call construct or it, one must provide a reference to the Host,
-// which will be used for looking up function references and invoking them.
-// The code to do the lookups and invocation is above.
-//
-// Any lookups on any tables other than import functions will fail, and only
-// those import functions listed above will succeed.
+/// A [Vm] is a thin wrapper around an instance of [wasmi::ModuleRef]. Multiple
+/// [Vm]s may be held in a single [Host], and each contains a single WASM module
+/// instantiation.
+///
+/// [Vm] rejects modules with either floating point or start functions.
+///
+/// [Vm] is configured to use its [Host] as a source of WASM imports.
+/// Specifically [Host] implements [wasmi::ImportResolver] by resolving all and
+/// only the functions declared in [Env](crate::Env) as imports, if requested by the
+/// WASM module. Any other lookups on any tables other than import functions
+/// will fail.
 pub struct Vm {
     #[allow(dead_code)]
     pub(crate) contract_id: Hash,
@@ -136,6 +147,7 @@ pub struct Vm {
     instance: ModuleRef, // this is a cloneable Rc<ModuleInstance>
 }
 
+/// Minimal description of a single function defined in a WASM module.
 #[derive(Clone, Eq, PartialEq)]
 pub struct VmFunction {
     pub name: String,
@@ -175,6 +187,22 @@ impl Vm {
         }
     }
 
+    /// Constructs a new instance of a [Vm] within the provided [Host],
+    /// establishing a new execution context for a contract identified by
+    /// `contract_id` with WASM bytecode provided in `module_wasm_code`.
+    ///
+    /// This function performs several steps:
+    ///
+    ///   - Parses and performs WASM validation on the module.
+    ///   - Checks that the module contains an [meta::INTERFACE_VERSION] that
+    ///     matches the host.
+    ///   - Checks that the module has no floating point code or `start`
+    ///     function.
+    ///   - Instantiates the module, leaving it ready to accept function
+    ///     invocations.
+    ///
+    /// This method is called automatically as part of [Host::invoke_function]
+    /// and does not usually need to be called from outside the crate.
     pub fn new(
         host: &Host,
         contract_id: Hash,
@@ -256,12 +284,16 @@ impl Vm {
         }
     }
 
-    /// Invoke a function in the VM's module, converting externally stable
-    /// XDR ScVal arguments into Host-specific RawVals and converting the
-    /// RawVal result back to an ScVal.
+    /// Invokes a function in the VM's module, converting externally stable XDR
+    /// [ScVal] arguments into [Host]-specific [RawVal]s and converting the
+    /// [RawVal] returned from the invocation back to an [ScVal].
     ///
-    /// This function has to take self by [`Rc`] because it stores self in
-    /// a new [`Frame`]
+    /// This function, like [Vm::new], is called as part of
+    /// [Host::invoke_function], and does not usually need to be called manually
+    /// from outside the crate.
+    //
+    // NB: This function has to take self by [Rc] because it stores self in
+    // a new Frame
     pub fn invoke_function(
         self: &Rc<Self>,
         host: &Host,
@@ -276,7 +308,7 @@ impl Vm {
         Ok(host.from_host_val(raw_res)?)
     }
 
-    /// Functions returns a list of functions in the WASM loaded into the Vm.
+    /// Returns a list of functions in the WASM module loaded into the [Vm].
     pub fn functions(&self) -> Vec<VmFunction> {
         if let Some(export_section) = self.elements_module.export_section() {
             let fn_import_count = self
@@ -332,8 +364,8 @@ impl Vm {
         })
     }
 
-    // Custom section returns the bytes within the named custom section of the
-    // loaded WASM file.
+    /// Returns the raw binary content of a named custom section from the WASM
+    /// module loaded into the [Vm], or `None` if no such custom section exists.
     pub fn custom_section(&self, name: impl AsRef<str>) -> Option<&[u8]> {
         Self::module_custom_section(&self.elements_module, name)
     }

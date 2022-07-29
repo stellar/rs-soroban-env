@@ -52,3 +52,6 @@ harness = false
 bench = true
 name = "calibrate_host_ops"
 path = "benches/calibrate_host_ops.rs"
+
+[package.metadata.docs.rs]
+all-features = true

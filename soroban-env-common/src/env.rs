@@ -2,7 +2,7 @@ use super::Symbol;
 use super::{Object, RawVal};
 use core::any;
 
-/// Base trait extended by the [crate::Env] trait, providing various special-case
+/// Base trait extended by the [Env](crate::Env) trait, providing various special-case
 /// functions that do _not_ simply call across cross the guest/host interface.
 pub trait EnvBase: Sized + Clone {
     /// Used for recovering the concrete type of the Host.
@@ -450,7 +450,7 @@ macro_rules! generate_env_trait {
         // This macro expands to a single item: the Env trait.
 
         /// This trait represents the interface between Host and Guest, used by
-        /// client contract code and implemented (via [crate::CheckedEnv]) by the host.
+        /// client contract code and implemented (via [CheckedEnv](crate::CheckedEnv)) by the host.
         /// It consists of functions that take or return only 64-bit values such
         /// as [RawVal] or [u64].
         pub trait Env: EnvBase

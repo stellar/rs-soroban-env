@@ -37,19 +37,19 @@ pub enum Tag {
     /// Tag for a [RawVal] that contains an [i32] number.
     I32 = 1,
 
-    /// Tag for a [RawVal] that contains a "static" value like `true`, `false`, `void`; see [crate::Static].
+    /// Tag for a [RawVal] that contains a "static" value like `true`, `false`, `void`; see [Static](crate::Static).
     Static = 2,
 
-    /// Tag for a [RawVal] that contains a host object handle; see [crate::Object].
+    /// Tag for a [RawVal] that contains a host object handle; see [Object](crate::Object).
     Object = 3,
 
-    /// Tag for a [RawVal] that contains a symbol; see [crate::Symbol].
+    /// Tag for a [RawVal] that contains a symbol; see [Symbol](crate::Symbol).
     Symbol = 4,
 
-    /// Tag for a [RawVal] that contains a small bitset; see [crate::BitSet].
+    /// Tag for a [RawVal] that contains a small bitset; see [BitSet](crate::BitSet).
     BitSet = 5,
 
-    /// Tag for a [RawVal] that contains a status code; see [crate::Status].
+    /// Tag for a [RawVal] that contains a status code; see [Status](crate::Status).
     Status = 6,
 
     /// Reserved tag for future use.
