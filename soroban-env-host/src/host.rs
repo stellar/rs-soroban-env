@@ -10,7 +10,7 @@ use num_integer::Integer;
 use num_traits::cast::ToPrimitive;
 use num_traits::{Pow, Signed, Zero};
 use soroban_env_common::{EnvVal, TryConvert, TryFromVal, TryIntoVal};
-use std::ops::{Add, BitAnd, BitOr, BitXor, Mul, Neg, Not, Rem, Shl, Shr, Sub};
+use std::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Not, Rem, Shl, Shr, Sub};
 
 use soroban_env_common::xdr::{
     AccountEntry, AccountId, Hash, PublicKey, ReadXdr, ThresholdIndexes, WriteXdr,
@@ -41,7 +41,6 @@ use crate::{EnvBase, IntoVal, Object, RawVal, RawValConvertible, Symbol, Val, UN
 mod conversion;
 mod err_helper;
 mod error;
-mod validity;
 pub use error::HostError;
 
 /// Saves host state (storage and objects) for rolling back a (sub-)transaction
@@ -1058,12 +1057,15 @@ impl CheckedEnv for Host {
     }
 
     fn vec_put(&self, v: Object, i: RawVal, x: RawVal) -> Result<Object, HostError> {
-        let i = self.u32_from_rawval_input("i", i)?;
+        let i: usize = self.usize_from_rawval_u32_input("i", i)?;
         let x = self.associate_raw_val(x);
         let vnew = self.visit_obj(v, move |hv: &HostVec| {
-            self.validate_index_lt_bound(i, hv.len())?;
+            if i >= hv.len() {
+                return Err(self
+                    .err_status_msg(ScHostObjErrorCode::VecIndexOutOfBound, "index out of bound"));
+            }
             let mut vnew = hv.clone();
-            vnew.set(i as usize, x);
+            vnew.set(i, x);
             Ok(vnew)
         })?;
         Ok(self.add_host_object(vnew)?.into())
@@ -1079,11 +1081,14 @@ impl CheckedEnv for Host {
     }
 
     fn vec_del(&self, v: Object, i: RawVal) -> Result<Object, HostError> {
-        let i = self.u32_from_rawval_input("i", i)?;
+        let i: usize = self.usize_from_rawval_u32_input("i", i)?;
         let vnew = self.visit_obj(v, move |hv: &HostVec| {
-            self.validate_index_lt_bound(i, hv.len())?;
+            if i >= hv.len() {
+                return Err(self
+                    .err_status_msg(ScHostObjErrorCode::VecIndexOutOfBound, "index out of bound"));
+            }
             let mut vnew = hv.clone();
-            vnew.remove(i as usize);
+            vnew.remove(i);
             Ok(vnew)
         })?;
         Ok(self.add_host_object(vnew)?.into())
@@ -1131,12 +1136,15 @@ impl CheckedEnv for Host {
     }
 
     fn vec_insert(&self, v: Object, i: RawVal, x: RawVal) -> Result<Object, HostError> {
-        let i = self.u32_from_rawval_input("i", i)?;
+        let i = self.usize_from_rawval_u32_input("i", i)?;
         let x = self.associate_raw_val(x);
         let vnew = self.visit_obj(v, move |hv: &HostVec| {
-            self.validate_index_le_bound(i, hv.len())?;
+            if i > hv.len() {
+                return Err(self
+                    .err_status_msg(ScHostObjErrorCode::VecIndexOutOfBound, "index out of bound"));
+            }
             let mut vnew = hv.clone();
-            vnew.insert(i as usize, x);
+            vnew.insert(i, x);
             Ok(vnew)
         })?;
         Ok(self.add_host_object(vnew)?.into())
@@ -1153,11 +1161,26 @@ impl CheckedEnv for Host {
     }
 
     fn vec_slice(&self, v: Object, start: RawVal, end: RawVal) -> Result<Object, HostError> {
-        let start = self.u32_from_rawval_input("start", start)?;
-        let end = self.u32_from_rawval_input("end", end)?;
+        let start = self.usize_from_rawval_u32_input("start", start)?;
+        let end = self.usize_from_rawval_u32_input("end", end)?;
+        if start > end {
+            return Err(self.err_status_msg(
+                ScHostFnErrorCode::InputArgsInvalid,
+                "start greater than end",
+            ));
+        }
         let vnew = self.visit_obj(v, move |hv: &HostVec| {
-            self.validate_start_end_bound(start, end, hv.len())?;
-            Ok(hv.clone().slice(start as usize..end as usize))
+            if start > hv.len() {
+                return Err(self.err_status_msg(
+                    ScHostObjErrorCode::VecIndexOutOfBound,
+                    "start out of bounds",
+                ));
+            }
+            if end > hv.len() {
+                return Err(self
+                    .err_status_msg(ScHostObjErrorCode::VecIndexOutOfBound, "end out of bounds"));
+            }
+            Ok(hv.clone().slice(start..end))
         })?;
         Ok(self.add_host_object(vnew)?.into())
     }
@@ -1329,8 +1352,10 @@ impl CheckedEnv for Host {
     fn bigint_div(&self, x: Object, y: Object) -> Result<Object, HostError> {
         let res = self.visit_obj(x, |a: &BigInt| {
             self.visit_obj(y, |b: &BigInt| {
-                a.checked_div(b)
-                    .ok_or_else(|| self.err_general("bigint division by zero"))
+                if b.is_zero() {
+                    return Err(self.err_general("bigint division by zero"));
+                }
+                Ok(a.div(b))
             })
         })?;
         Ok(self.add_host_object(res)?.into())
@@ -1519,7 +1544,15 @@ impl CheckedEnv for Host {
             let VmSlice { vm, pos, len } = self.decode_vmslice(lm_pos, len)?;
             let b_pos = u32::try_from(b_pos)?;
             self.visit_obj(b, move |hv: &Vec<u8>| {
-                let end_idx = self.validate_start_span_bound(b_pos, len, hv.len())? as usize;
+                let end_idx = b_pos.checked_add(len).ok_or_else(|| {
+                    self.err_status_msg(ScHostFnErrorCode::InputArgsInvalid, "u32 overflow")
+                })? as usize;
+                if end_idx > hv.len() {
+                    return Err(self.err_status_msg(
+                        ScHostObjErrorCode::VecIndexOutOfBound,
+                        "index out of bound",
+                    ));
+                }
                 vm.with_memory_access(self, |mem| {
                     self.map_err(mem.set(pos, &hv.as_slice()[b_pos as usize..end_idx]))
                 })?;
@@ -1586,13 +1619,12 @@ impl CheckedEnv for Host {
         let u = self.u8_from_rawval_input("u", u)?;
         let vnew = self.visit_obj(b, move |hv: &Vec<u8>| {
             let mut vnew = hv.clone();
-            match vnew.get_mut(i) {
-                None => Err(self.err_status(ScHostObjErrorCode::VecIndexOutOfBound)),
-                Some(v) => {
-                    *v = u;
-                    Ok(vnew)
-                }
+            if i >= hv.len() {
+                return Err(self
+                    .err_status_msg(ScHostObjErrorCode::VecIndexOutOfBound, "index out of bound"));
             }
+            let _old_val = std::mem::replace(&mut vnew[i], u);
+            Ok(vnew)
         })?;
         Ok(self.add_host_object(vnew)?.into())
     }
@@ -1607,11 +1639,14 @@ impl CheckedEnv for Host {
     }
 
     fn binary_del(&self, b: Object, i: RawVal) -> Result<Object, HostError> {
-        let i = self.u32_from_rawval_input("i", i)?;
+        let i = self.usize_from_rawval_u32_input("i", i)?;
         let vnew = self.visit_obj(b, move |hv: &Vec<u8>| {
-            self.validate_index_lt_bound(i, hv.len())?;
+            if i >= hv.len() {
+                return Err(self
+                    .err_status_msg(ScHostObjErrorCode::VecIndexOutOfBound, "index out of bound"));
+            }
             let mut vnew = hv.clone();
-            vnew.remove(i as usize);
+            vnew.remove(i);
             Ok(vnew)
         })?;
         Ok(self.add_host_object(vnew)?.into())
@@ -1659,12 +1694,15 @@ impl CheckedEnv for Host {
     }
 
     fn binary_insert(&self, b: Object, i: RawVal, u: RawVal) -> Result<Object, HostError> {
-        let i = self.u32_from_rawval_input("i", i)?;
+        let i = self.usize_from_rawval_u32_input("i", i)?;
         let u = self.u8_from_rawval_input("u", u)?;
         let vnew = self.visit_obj(b, move |hv: &Vec<u8>| {
-            self.validate_index_le_bound(i, hv.len())?;
+            if i > hv.len() {
+                return Err(self
+                    .err_status_msg(ScHostObjErrorCode::VecIndexOutOfBound, "index out of bound"));
+            }
             let mut vnew = hv.clone();
-            vnew.insert(i as usize, u);
+            vnew.insert(i, u);
             Ok(vnew)
         })?;
         Ok(self.add_host_object(vnew)?.into())
@@ -1681,11 +1719,20 @@ impl CheckedEnv for Host {
     }
 
     fn binary_slice(&self, b: Object, start: RawVal, end: RawVal) -> Result<Object, HostError> {
-        let start = self.u32_from_rawval_input("start", start)?;
-        let end = self.u32_from_rawval_input("end", end)?;
+        let start = self.usize_from_rawval_u32_input("start", start)?;
+        let end = self.usize_from_rawval_u32_input("end", end)?;
         let vnew = self.visit_obj(b, move |hv: &Vec<u8>| {
-            self.validate_start_end_bound(start, end, hv.len())?;
-            Ok(hv.as_slice()[start as usize..end as usize].to_vec())
+            if start > hv.len() {
+                return Err(self.err_status_msg(
+                    ScHostObjErrorCode::VecIndexOutOfBound,
+                    "start out of bounds",
+                ));
+            }
+            if end > hv.len() {
+                return Err(self
+                    .err_status_msg(ScHostObjErrorCode::VecIndexOutOfBound, "end out of bounds"));
+            }
+            Ok(hv.as_slice()[start..end].to_vec())
         })?;
         Ok(self.add_host_object(vnew)?.into())
     }
