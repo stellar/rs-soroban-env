@@ -637,13 +637,13 @@ dependencies = [
  "perf-event",
  "sha2 0.10.2",
  "soroban-env-common",
+ "soroban-wasmi",
  "static_assertions",
  "tabwriter",
  "thiserror",
  "thousands",
  "tinyvec",
  "tracking-allocator",
- "wasmi",
 ]
 
 [[package]]
@@ -696,8 +696,7 @@ checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 [[package]]
 name = "stellar-xdr"
 version = "0.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "015594b09942b9f9cbe6972ba8c7de3a05a25c4994bbc7282f5f2fa6d28a81c4"
+source = "git+https://github.com/stellar/rs-stellar-xdr?rev=28a28dc0#28a28dc04056027a8814872932e84a71261e389a"
 dependencies = [
  "serde",
 ]
@@ -866,37 +865,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cccddf32554fecc6acb585f82a32a72e28b48f8c4c1883ddfeeeaa96f7d8e519"
 
 [[package]]
-name = "wasmi"
-version = "0.11.0"
-source = "git+https://github.com/stellar/wasmi?rev=4f35508c1a2475ed5d33955023f073639e7ff7df#4f35508c1a2475ed5d33955023f073639e7ff7df"
-dependencies = [
- "parity-wasm",
- "wasmi-validation",
- "wasmi_core",
-]
-
-[[package]]
-name = "wasmi-validation"
-version = "0.4.1"
-source = "git+https://github.com/stellar/wasmi?rev=4f35508c1a2475ed5d33955023f073639e7ff7df#4f35508c1a2475ed5d33955023f073639e7ff7df"
-dependencies = [
- "parity-wasm",
-]
-
-[[package]]
-name = "wasmi_core"
-version = "0.1.0"
-source = "git+https://github.com/stellar/wasmi?rev=4f35508c1a2475ed5d33955023f073639e7ff7df#4f35508c1a2475ed5d33955023f073639e7ff7df"
-dependencies = [
- "downcast-rs",
- "libm",
- "memory_units",
- "num-rational",
- "num-traits",
- "parity-wasm",
-]
-
-[[package]]
 name = "winapi"
 version = "0.3.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -947,8 +915,3 @@ dependencies = [
  "syn",
  "synstructure",
 ]
-
-[[patch.unused]]
-name = "stellar-xdr"
-version = "0.0.0"
-source = "git+https://github.com/stellar/rs-stellar-xdr?rev=94e01c7b#94e01c7bbb3622e12907e1ceb95ab85f4e55e085"
