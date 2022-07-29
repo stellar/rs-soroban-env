@@ -11,7 +11,7 @@ edition = "2021"
 [lib]
 proc-macro = true
 
-[patch]
+[patch.crates-io]
 stellar-xdr = { git = "https://github.com/stellar/rs-stellar-xdr", rev = "540ed24e", features = ["next", "std"] }
 
 [dependencies]

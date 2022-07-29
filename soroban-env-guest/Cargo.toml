@@ -3,7 +3,7 @@ name = "soroban-env-guest"
 version = "0.0.0"
 edition = "2021"
 
-[patch]
+[patch.crates-io]
 soroban-env-common = { path = "../soroban-env-common" }
 
 [dependencies]
