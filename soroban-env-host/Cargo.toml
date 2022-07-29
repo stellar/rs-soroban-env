@@ -10,7 +10,7 @@ edition = "2021"
 
 [dependencies]
 soroban-env-common = { version = "0.0.1", features = [ "std" ] }
-wasmi = { git = "https://github.com/stellar/wasmi", rev = "4f35508c1a2475ed5d33955023f073639e7ff7df", optional = true }
+wasmi = { package = "soroban-wasmi", version = "0.11.0", optional = true }
 static_assertions = "1.1.0"
 im-rc = "15.0.0"
 num-bigint = "0.4"
