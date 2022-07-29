@@ -7,7 +7,11 @@ use super::{Env, EnvBase, Object, RawVal, Symbol};
 #[cfg(target_family = "wasm")]
 use static_assertions as sa;
 
-// In guest code the environment is global/implicit, so is represented as a unit struct.
+/// The [Guest] is the implementation of the [Env] interface seen and used by
+/// contracts built into WASM for execution within a WASM VM. It is a 0-sized
+/// "stub" type implementation of the [Env] interface that forwards each [Env]
+/// method to an external function, imported from its runtime environment. This
+/// implementation is automatically generated and has no interesting content.
 #[derive(Copy, Clone, Default)]
 pub struct Guest;
 

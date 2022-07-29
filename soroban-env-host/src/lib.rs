@@ -2,6 +2,10 @@
 //! _implementation_ of the [Env] interface between guest contract code and the
 //! host it runs within.
 //!
+//! This crate also re-exports all of the content of the [soroban_env_common]
+//! crate for use by host (or contract local-testing) code. Most of the type and
+//! module definitions visible here are actually defined in the common crate.
+//!
 //! The `Host` can be configured with or without support for a [vm::Vm],
 //! depending on the `"vm"` cargo feature. When enabled, the VM is currently a
 //! thin wrapper around the [wasmi](https://github.com/paritytech/wasmi)
