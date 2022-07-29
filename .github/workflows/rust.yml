@@ -62,8 +62,6 @@ jobs:
     needs: [complete]
     runs-on: ubuntu-latest
     steps:
-    - if: contains(needs.*.result, 'failure')
-      run: exit 1
     - uses: actions/checkout@v3
     - run: rustup update
     - run: cargo publish --locked
@@ -75,8 +73,6 @@ jobs:
     needs: [complete]
     runs-on: ubuntu-latest
     steps:
-    - if: contains(needs.*.result, 'failure')
-      run: exit 1
     - uses: actions/checkout@v3
     - run: rustup update
     - run: cargo publish --locked --dry-run
