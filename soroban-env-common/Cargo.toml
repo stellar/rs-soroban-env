@@ -1,6 +1,11 @@
 [package]
 name = "soroban-env-common"
-version = "0.0.0"
+description = "Soroban contract environment common types and functionality."
+homepage = "https://github.com/stellar/rs-soroban-env"
+repository = "https://github.com/stellar/rs-soroban-env"
+authors = ["Stellar Development Foundation <info@stellar.org>"]
+license = "Apache-2.0"
+version = "0.0.1"
 edition = "2021"
 
 [dependencies]
