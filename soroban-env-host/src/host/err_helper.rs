@@ -63,7 +63,7 @@ impl Host {
     ///
     /// If you have an error type T you want to record as a detailed debug event
     /// and a less-detailed Status code embedded in a HostError, add an `impl
-    /// From<T> for DebugError` over in the [crate::events] module and call this
+    /// From<T> for DebugError` over in the [events](crate::events) module and call this
     /// where the error is generated.
     ///
     /// Note: we do _not_ want to `impl From<T> for HostError` for such types,
