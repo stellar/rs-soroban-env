@@ -77,4 +77,4 @@ jobs:
     - run: rustup target add wasm32-unknown-unknown
     - run: make publish
       env:
-      - CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+      CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
