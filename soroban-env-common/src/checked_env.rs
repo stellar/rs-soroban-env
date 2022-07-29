@@ -69,7 +69,7 @@ macro_rules! generate_checked_env_trait {
     {
         // This macro expands to a single item: the CheckedEnv trait
 
-        /// This trait is a variant of the [crate::Env] trait used to define the
+        /// This trait is a variant of the [Env](crate::Env) trait used to define the
         /// interface implemented by Host. The WASM VM dispatch functions call
         /// methods on `CheckedEnv` and convert any `Result::Err(...)` return
         /// value into a VM trap, halting VM execution.

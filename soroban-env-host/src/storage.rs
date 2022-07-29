@@ -1,20 +1,46 @@
+//! This module contains the [Storage] type and its supporting types, which
+//! provide the [Host](crate::Host) with access to durable ledger entries.
+//!
+//! For more details, see the [Env](crate::Env) data access functions:
+//!   - [Env::has_contract_data](crate::Env::has_contract_data)
+//!   - [Env::get_contract_data](crate::Env::get_contract_data)
+//!   - [Env::put_contract_data](crate::Env::put_contract_data)
+//!   - [Env::del_contract_data](crate::Env::del_contract_data)
+
 use std::rc::Rc;
 
 use crate::xdr::{LedgerEntry, LedgerKey, ScHostStorageErrorCode};
 use crate::HostError;
 use im_rc::OrdMap;
 
+/// A helper type used by [Footprint] to designate which ways
+/// a given [LedgerKey] is accessed, or is allowed to be accessed,
+/// in a given transaction.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum AccessType {
+    /// When in [FootprintMode::Recording], indicates that the [LedgerKey] is only read.
+    /// When in [FootprintMode::Enforcing], indicates that the [LedgerKey] is only _allowed_ to be read.
     ReadOnly,
+    /// When in [FootprintMode::Recording], indicates that the [LedgerKey] is written (and also possibly read)
+    /// When in [FootprintMode::Enforcing], indicates that the [LedgerKey] is _allowed_ to be written (and also allowed to be read).
     ReadWrite,
 }
 
+/// A helper type used by [FootprintMode::Recording] to provide access
+/// to a stable read-snapshot of a ledger.
 pub trait SnapshotSource {
     fn get(&self, key: &LedgerKey) -> Result<LedgerEntry, HostError>;
     fn has(&self, key: &LedgerKey) -> Result<bool, HostError>;
 }
 
+/// Describes the total set of [LedgerKey]s that a given transaction
+/// will access, as well as the [AccessType] governing each key.
+///
+/// A [Footprint] must be provided in order to run a transaction that
+/// accesses any [LedgerKey]s in [FootprintMode::Enforcing]. If a
+/// transaction has an unknown [Footprint] it can be calculated by
+/// running a "preflight" execution in [FootprintMode::Recording],
+/// against a suitably fresh [SnapshotSource].
 #[derive(Clone, Default)]
 pub struct Footprint(pub OrdMap<LedgerKey, AccessType>);
 
@@ -64,6 +90,19 @@ impl Default for FootprintMode {
     }
 }
 
+/// A special-purpose map from [LedgerKey]s to [LedgerEntry]s. Represents a
+/// transactional batch of contract IO from and to durable storage, while
+/// partitioning that IO between concurrently executing groups of contracts
+/// through the use of IO [Footprint]s.
+///
+/// Specifically: access to each [LedgerKey] is mediated by the [Footprint],
+/// which may be in either [FootprintMode::Recording] or
+/// [FootprintMode::Enforcing] mode.
+///
+/// [FootprintMode::Recording] mode is used to calculate [Footprint]s during
+/// "preflight" execution of a contract. Once calculated, a recorded [Footprint]
+/// can be provided to "real" execution, which always runs in
+/// [FootprintMode::Enforcing] mode and enforces partitioned access.
 #[derive(Clone, Default)]
 pub struct Storage {
     pub footprint: Footprint,
@@ -72,6 +111,9 @@ pub struct Storage {
 }
 
 impl Storage {
+    /// Constructs a new [Storage] in [FootprintMode::Enforcing] using a
+    /// given [Footprint] and a storage map populated with all the keys
+    /// listed in the [Footprint].
     pub fn with_enforcing_footprint_and_map(
         footprint: Footprint,
         map: OrdMap<LedgerKey, Option<LedgerEntry>>,
@@ -83,6 +125,8 @@ impl Storage {
         }
     }
 
+    /// Constructs a new [Storage] in [FootprintMode::Recording] using a
+    /// given [SnapshotSource].
     pub fn with_recording_footprint(src: Rc<dyn SnapshotSource>) -> Self {
         Self {
             mode: FootprintMode::Recording(src),
@@ -91,6 +135,17 @@ impl Storage {
         }
     }
 
+    /// Attempts to retrieve the [LedgerEntry] associated with a given
+    /// [LedgerKey] in the [Storage], returning an error if the key is not
+    /// found.
+    ///
+    /// In [FootprintMode::Recording] mode, records the read [LedgerKey] in the
+    /// [Footprint] as [AccessType::ReadOnly] (unless already recorded as
+    /// [AccessType::ReadWrite]) and reads through to the underlying
+    /// [SnapshotSource], if the [LedgerKey] has not yet been loaded.
+    ///
+    /// In [FootprintMode::Enforcing] mode, succeeds only if the read
+    /// [LedgerKey] has been declared in the [Footprint].
     pub fn get(&mut self, key: &LedgerKey) -> Result<LedgerEntry, HostError> {
         let ty = AccessType::ReadOnly;
         match self.mode {
@@ -127,14 +182,41 @@ impl Storage {
         Ok(())
     }
 
+    /// Attempts to write to the [LedgerEntry] associated with a given
+    /// [LedgerKey] in the [Storage].
+    ///
+    /// In [FootprintMode::Recording] mode, records the written [LedgerKey] in
+    /// the [Footprint] as [AccessType::ReadWrite].
+    ///
+    /// In [FootprintMode::Enforcing] mode, succeeds only if the written
+    /// [LedgerKey] has been declared in the [Footprint] as
+    /// [AccessType::ReadWrite].
     pub fn put(&mut self, key: &LedgerKey, val: &LedgerEntry) -> Result<(), HostError> {
         self.put_opt(key, Some(val.clone()))
     }
 
+    /// Attempts to delete the [LedgerEntry] associated with a given [LedgerKey]
+    /// in the [Storage].
+    ///
+    /// In [FootprintMode::Recording] mode, records the deleted [LedgerKey] in
+    /// the [Footprint] as [AccessType::ReadWrite].
+    ///
+    /// In [FootprintMode::Enforcing] mode, succeeds only if the deleted
+    /// [LedgerKey] has been declared in the [Footprint] as
+    /// [AccessType::ReadWrite].
     pub fn del(&mut self, key: &LedgerKey) -> Result<(), HostError> {
         self.put_opt(key, None)
     }
 
+    /// Attempts to determine the presence of a [LedgerEntry] associated with a
+    /// given [LedgerKey] in the [Storage], returning `Ok(true)` if an entry
+    /// with the key exists and `Ok(false)` if it does not.
+    ///
+    /// In [FootprintMode::Recording] mode, records the access and reads-through
+    /// to the underlying [SnapshotSource].
+    ///
+    /// In [FootprintMode::Enforcing] mode, succeeds only if the access has been
+    /// declared in the [Footprint].
     pub fn has(&mut self, key: &LedgerKey) -> Result<bool, HostError> {
         let ty = AccessType::ReadOnly;
         match self.mode {
