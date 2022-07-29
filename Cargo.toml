@@ -5,6 +5,7 @@ members = [
     "soroban-env-host",
     "soroban-env-guest",
     "soroban-env-common",
+    "soroban-env-macros",
 ]
 
 [patch.crates-io]
