@@ -625,7 +625,7 @@ dependencies = [
 
 [[package]]
 name = "soroban-env-host"
-version = "0.0.0"
+version = "0.0.1"
 dependencies = [
  "assert_matches",
  "backtrace",
@@ -654,7 +654,7 @@ dependencies = [
 
 [[package]]
 name = "soroban-env-macros"
-version = "0.0.0"
+version = "0.0.1"
 dependencies = [
  "proc-macro2",
  "quote",

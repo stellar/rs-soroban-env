@@ -3,6 +3,12 @@ name = "soroban-env-guest"
 version = "0.0.0"
 edition = "2021"
 
-[dependencies]
+[patch]
 soroban-env-common = { path = "../soroban-env-common" }
+
+[dependencies]
+soroban-env-common = { version = "0.0.1" }
 static_assertions = "1.1.0"
+
+[package.metadata.docs.rs]
+all-features = true
