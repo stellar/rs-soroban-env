@@ -604,9 +604,9 @@ name = "soroban-env-common"
 version = "0.0.1"
 dependencies = [
  "soroban-env-macros",
+ "soroban-wasmi",
  "static_assertions",
  "stellar-xdr",
- "wasmi",
 ]
 
 [[package]]
@@ -654,6 +654,37 @@ dependencies = [
  "quote",
  "stellar-xdr",
  "syn",
+]
+
+[[package]]
+name = "soroban-wasmi"
+version = "0.11.0"
+source = "git+https://github.com/stellar/wasmi?rev=7b1f2355#7b1f2355ba26d09daf0241f953eb16f7afe16057"
+dependencies = [
+ "parity-wasm",
+ "soroban-wasmi-validation",
+ "soroban-wasmi_core",
+]
+
+[[package]]
+name = "soroban-wasmi-validation"
+version = "0.4.1"
+source = "git+https://github.com/stellar/wasmi?rev=7b1f2355#7b1f2355ba26d09daf0241f953eb16f7afe16057"
+dependencies = [
+ "parity-wasm",
+]
+
+[[package]]
+name = "soroban-wasmi_core"
+version = "0.1.0"
+source = "git+https://github.com/stellar/wasmi?rev=7b1f2355#7b1f2355ba26d09daf0241f953eb16f7afe16057"
+dependencies = [
+ "downcast-rs",
+ "libm",
+ "memory_units",
+ "num-rational",
+ "num-traits",
+ "parity-wasm",
 ]
 
 [[package]]
