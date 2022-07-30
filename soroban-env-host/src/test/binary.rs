@@ -107,6 +107,25 @@ fn binary_slice_start_greater_than_end() -> Result<(), HostError> {
 }
 
 #[test]
+fn binary_slice_start_equal_len() -> Result<(), HostError> {
+    let host = Host::default();
+    let obj = host.binary_new_from_slice(&[1, 2, 3, 4]);
+    let res = host.binary_slice(obj, 4_u32.into(), 4_u32.into())?;
+    assert_eq!(host.obj_cmp(res.into(), host.binary_new()?.into())?, 0);
+    Ok(())
+}
+
+#[test]
+fn binary_slice_start_greater_than_len() -> Result<(), HostError> {
+    let host = Host::default();
+    let obj = host.binary_new_from_slice(&[1, 2, 3, 4]);
+    let res = host.binary_slice(obj, 5_u32.into(), 10_u32.into());
+    let code = ScHostObjErrorCode::VecIndexOutOfBound;
+    assert!(HostError::result_matches_err_status(res, code));
+    Ok(())
+}
+
+#[test]
 fn binary_xdr_roundtrip() -> Result<(), HostError> {
     let host = Host::default();
     let roundtrip = |v: ScVal| -> Result<(), HostError> {

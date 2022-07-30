@@ -1156,8 +1156,8 @@ impl CheckedEnv for Host {
         let start = self.u32_from_rawval_input("start", start)?;
         let end = self.u32_from_rawval_input("end", end)?;
         let vnew = self.visit_obj(v, move |hv: &HostVec| {
-            self.validate_start_end_bound(start, end, hv.len())?;
-            Ok(hv.clone().slice(start as usize..end as usize))
+            let range = self.valid_range_from_start_end_bound(start, end, hv.len())?;
+            Ok(hv.clone().slice(range))
         })?;
         Ok(self.add_host_object(vnew)?.into())
     }
@@ -1519,9 +1519,9 @@ impl CheckedEnv for Host {
             let VmSlice { vm, pos, len } = self.decode_vmslice(lm_pos, len)?;
             let b_pos = u32::try_from(b_pos)?;
             self.visit_obj(b, move |hv: &Vec<u8>| {
-                let end_idx = self.validate_start_span_bound(b_pos, len, hv.len())? as usize;
+                let range = self.valid_range_from_start_span_bound(b_pos, len, hv.len())?;
                 vm.with_memory_access(self, |mem| {
-                    self.map_err(mem.set(pos, &hv.as_slice()[b_pos as usize..end_idx]))
+                    self.map_err(mem.set(pos, &hv.as_slice()[range]))
                 })?;
                 Ok(().into())
             })
@@ -1684,8 +1684,8 @@ impl CheckedEnv for Host {
         let start = self.u32_from_rawval_input("start", start)?;
         let end = self.u32_from_rawval_input("end", end)?;
         let vnew = self.visit_obj(b, move |hv: &Vec<u8>| {
-            self.validate_start_end_bound(start, end, hv.len())?;
-            Ok(hv.as_slice()[start as usize..end as usize].to_vec())
+            let range = self.valid_range_from_start_end_bound(start, end, hv.len())?;
+            Ok(hv.as_slice()[range].to_vec())
         })?;
         Ok(self.add_host_object(vnew)?.into())
     }
