@@ -5,11 +5,12 @@ homepage = "https://github.com/stellar/rs-soroban-env"
 repository = "https://github.com/stellar/rs-soroban-env"
 authors = ["Stellar Development Foundation <info@stellar.org>"]
 license = "Apache-2.0"
-version = "0.0.2"
+version = "0.0.3"
+readme = "../README.md"
 edition = "2021"
 
 [dependencies]
-soroban-env-common = { version = "0.0.2" }
+soroban-env-common = { version = "0.0.3" }
 static_assertions = "1.1.0"
 
 [package.metadata.docs.rs]
