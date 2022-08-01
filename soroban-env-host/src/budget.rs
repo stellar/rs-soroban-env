@@ -256,8 +256,11 @@ impl Default for Budget {
         // 4bn instructions / sec. So about 4000 instructions per usec, or 400k
         // instructions in a 100usec time budget, or about 5479 wasm instructions
         // using the calibration above. Very roughly!
-        b.mem_bytes.limit = 0xa_0000;
-        b.cpu_insns.limit = 400_000;
+        // b.mem_bytes.limit = 0xa_0000;
+        // b.cpu_insns.limit = 400_000;
+        // TODO: Set proper limits once all the machinary (including in SDK tests) is in place and models are calibrated.
+        b.cpu_insns.reset(u64::MAX);
+        b.mem_bytes.reset(u64::MAX);
         b
     }
 }
