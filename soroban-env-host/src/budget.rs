@@ -258,7 +258,7 @@ impl Default for Budget {
         // using the calibration above. Very roughly!
         // b.mem_bytes.limit = 0xa_0000;
         // b.cpu_insns.limit = 400_000;
-        // TODO: come up with proper limits once all the machinary is in place and models are calibrated.
+        // TODO: Set proper limits once all the machinary (including in SDK tests) is in place and models are calibrated.
         b.cpu_insns.reset(u64::MAX);
         b.mem_bytes.reset(u64::MAX);
         b
