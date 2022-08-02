@@ -12,9 +12,7 @@ use num_traits::{Pow, Signed, Zero};
 use soroban_env_common::{EnvVal, TryConvert, TryFromVal, TryIntoVal};
 use std::ops::{Add, BitAnd, BitOr, BitXor, Mul, Neg, Not, Rem, Shl, Shr, Sub};
 
-use soroban_env_common::xdr::{
-    AccountEntry, AccountId, Hash, PublicKey, ReadXdr, ThresholdIndexes, WriteXdr,
-};
+use soroban_env_common::xdr::{AccountId, Hash, PublicKey, ReadXdr, ThresholdIndexes, WriteXdr};
 
 use crate::budget::{Budget, CostType};
 use crate::events::{DebugError, DebugEvent, Events};
@@ -24,7 +22,7 @@ use crate::weak_host::WeakHost;
 use crate::xdr;
 use crate::xdr::{
     ContractDataEntry, HostFunction, LedgerEntry, LedgerEntryData, LedgerEntryExt, LedgerKey,
-    LedgerKeyContractData, ScBigInt, ScHostContextErrorCode, ScHostFnErrorCode, ScHostObjErrorCode,
+    ScBigInt, ScHostContextErrorCode, ScHostFnErrorCode, ScHostObjErrorCode,
     ScHostStorageErrorCode, ScHostValErrorCode, ScMap, ScMapEntry, ScObject, ScStatic, ScVal,
     ScVec,
 };
@@ -39,6 +37,7 @@ use crate::Vm;
 use crate::{EnvBase, IntoVal, Object, RawVal, RawValConvertible, Symbol, Val, UNKNOWN_ERROR};
 
 mod conversion;
+mod data_helper;
 mod err_helper;
 mod error;
 mod validity;
@@ -533,71 +532,27 @@ impl Host {
         Ok(EnvVal { env, val: v })
     }
 
-    /// Converts a [`RawVal`] to an [`ScVal`] and combines it with the currently-executing
-    /// [`ContractID`] to produce a [`Key`], that can be used to access ledger [`Storage`].
-    fn to_storage_key(&self, k: RawVal) -> Result<LedgerKey, HostError> {
-        Ok(LedgerKey::ContractData(LedgerKeyContractData {
-            contract_id: self.get_current_contract_id()?,
-            key: self.from_host_val(k)?,
-        }))
-    }
-
-    fn create_contract_helper(
+    pub fn create_contract_helper(
         &self,
         contract: Object,
         id_preimage: Vec<u8>,
     ) -> Result<Object, HostError> {
         let id_obj = self.compute_hash_sha256(self.add_host_object(id_preimage)?.into())?;
         let new_contract_id = self.hash_from_obj_input("id_obj", id_obj)?;
-
-        let storage_key = LedgerKey::ContractData(LedgerKeyContractData {
-            contract_id: new_contract_id.clone(),
-            key: ScVal::Static(ScStatic::LedgerKeyContractCodeWasm),
-        });
-
+        let storage_key = self.contract_code_ledger_key(new_contract_id.clone());
         if self.0.storage.borrow_mut().has(&storage_key)? {
             return Err(self.err_general("Contract already exists"));
         }
-
-        let val = self.from_host_obj(contract)?;
-
-        let data = LedgerEntryData::ContractData(ContractDataEntry {
-            contract_id: new_contract_id,
-            key: ScVal::Static(ScStatic::LedgerKeyContractCodeWasm),
-            val: ScVal::Object(Some(val)),
-        });
-        let val = LedgerEntry {
-            last_modified_ledger_seq: 0,
-            data,
-            ext: LedgerEntryExt::V0,
-        };
-        self.0.storage.borrow_mut().put(&storage_key, &val)?;
-
+        self.store_contract_code(contract, new_contract_id, &storage_key)?;
         Ok(id_obj)
     }
 
     #[cfg(feature = "vm")]
     fn call_wasm_fn(&self, id: &Hash, func: &Symbol, args: &[RawVal]) -> Result<RawVal, HostError> {
         // Create key for storage
-        let key = ScVal::Static(ScStatic::LedgerKeyContractCodeWasm);
-        let storage_key = LedgerKey::ContractData(LedgerKeyContractData {
-            contract_id: id.clone(),
-            key,
-        });
+        let storage_key = self.contract_code_ledger_key(id.clone());
         // Retrieve the contract code and create vm
-        let scval = match self.0.storage.borrow_mut().get(&storage_key)?.data {
-            LedgerEntryData::ContractData(ContractDataEntry { val, .. }) => Ok(val),
-            _ => Err(self.err_status(ScHostStorageErrorCode::ExpectContractData)),
-        }?;
-        let code = match scval {
-            ScVal::Object(Some(ScObject::Binary(b))) => b,
-            _ => {
-                return Err(self.err_status_msg(
-                    ScHostValErrorCode::UnexpectedValType,
-                    "ledger entry for contract code is not a binary object",
-                ))
-            }
-        };
+        let code = self.retrieve_contract_code_from_storage(&storage_key)?;
         let vm = Vm::new(self, id.clone(), code.as_slice())?;
         // Resolve the function symbol and invoke contract call
         vm.invoke_function_raw(self, SymbolStr::from(func).as_ref(), args)
@@ -686,17 +641,6 @@ impl Host {
     pub fn invoke_function(&self, hf: HostFunction, args: ScVec) -> Result<ScVal, HostError> {
         let rv = self.invoke_function_raw(hf, args)?;
         self.from_host_val(rv)
-    }
-
-    fn load_account(&self, a: Object) -> Result<AccountEntry, HostError> {
-        use xdr::LedgerKeyAccount;
-        let acc = xdr::LedgerKey::Account(LedgerKeyAccount {
-            account_id: AccountId(PublicKey::PublicKeyTypeEd25519(self.to_u256(a)?)),
-        });
-        self.visit_storage(|storage| match storage.get(&acc)?.data {
-            LedgerEntryData::Account(ae) => Ok(ae),
-            _ => Err(self.err_general("not account")),
-        })
     }
 
     #[cfg(feature = "testutils")]
@@ -1237,35 +1181,17 @@ impl CheckedEnv for Host {
             Ok(params)
         })?;
         let hash = self.compute_hash_sha256(self.add_host_object(params)?.into())?;
+
         self.verify_sig_ed25519(hash, key, sig)?;
 
-        //Create contract and contractID
-        let pre_image =
-            xdr::HashIdPreimage::ContractIdFromEd25519(xdr::HashIdPreimageEd25519ContractId {
-                ed25519: key_val,
-                salt: salt_val,
-            });
-        let mut buf = Vec::new();
-        pre_image
-            .write_xdr(&mut buf)
-            .map_err(|_| self.err_general("invalid hash"))?;
+        let buf = self.id_preimage_from_ed25519(key_val, salt_val)?;
         self.create_contract_helper(v, buf)
     }
 
     fn create_contract_from_contract(&self, v: Object, salt: Object) -> Result<Object, HostError> {
         let contract_id = self.get_current_contract_id()?;
-        let salt_val = self.uint256_from_obj_input("salt", salt)?;
-
-        let pre_image =
-            xdr::HashIdPreimage::ContractIdFromContract(xdr::HashIdPreimageContractId {
-                contract_id,
-                salt: salt_val,
-            });
-        let mut buf = Vec::new();
-        pre_image
-            .write_xdr(&mut buf)
-            .map_err(|_| self.err_general("invalid hash"))?;
-
+        let salt = self.uint256_from_obj_input("salt", salt)?;
+        let buf = self.id_preimage_from_contract(contract_id, salt)?;
         self.create_contract_helper(v, buf)
     }
 
@@ -1707,25 +1633,13 @@ impl CheckedEnv for Host {
     }
 
     fn compute_hash_sha256(&self, x: Object) -> Result<Object, HostError> {
-        use sha2::{Digest, Sha256};
-        let hash = self.visit_obj(x, |bin: &Vec<u8>| {
-            Ok(Sha256::digest(bin).as_slice().to_vec())
-        })?;
-
-        if hash.len() != 32 {
-            return Err(self.err_general("incorrect hash size"));
-        }
-
+        let hash = self.sha256_hash_from_binary_input(x)?;
         Ok(self.add_host_object(hash)?.into())
     }
 
     fn verify_sig_ed25519(&self, x: Object, k: Object, s: Object) -> Result<RawVal, HostError> {
-        use ed25519_dalek::{PublicKey, Verifier};
-        let public_key: PublicKey = self.visit_obj(k, |bin: &Vec<u8>| {
-            PublicKey::from_bytes(bin).map_err(|_| {
-                self.err_status_msg(ScHostObjErrorCode::UnexpectedType, "invalid public key")
-            })
-        })?;
+        use ed25519_dalek::Verifier;
+        let public_key = self.ed25519_pub_key_from_obj_input(k)?;
         let sig = self.signature_from_obj_input("sig", s)?;
         let res = self.visit_obj(x, |bin: &Vec<u8>| {
             public_key

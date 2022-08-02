@@ -1,7 +1,8 @@
 use crate::events::DebugError;
 use crate::xdr::{ScHostFnErrorCode, ScHostObjErrorCode, ScHostValErrorCode};
 use crate::{Host, HostError, Object, RawVal};
-use ed25519_dalek::{Signature, SIGNATURE_LENGTH};
+use ed25519_dalek::{PublicKey, Signature, SIGNATURE_LENGTH};
+use sha2::{Digest, Sha256};
 use soroban_env_common::xdr::{Hash, Uint256};
 
 impl Host {
@@ -110,6 +111,24 @@ impl Host {
                         .arg(name),
                 )),
             }
+        })
+    }
+
+    pub fn ed25519_pub_key_from_obj_input(&self, k: Object) -> Result<PublicKey, HostError> {
+        self.visit_obj(k, |bin: &Vec<u8>| {
+            PublicKey::from_bytes(bin).map_err(|_| {
+                self.err_status_msg(ScHostObjErrorCode::UnexpectedType, "invalid public key")
+            })
+        })
+    }
+
+    pub fn sha256_hash_from_binary_input(&self, x: Object) -> Result<Vec<u8>, HostError> {
+        self.visit_obj(x, |bin: &Vec<u8>| {
+            let hash = Sha256::digest(bin).as_slice().to_vec();
+            if hash.len() != 32 {
+                return Err(self.err_general("incorrect hash size"));
+            }
+            Ok(hash)
         })
     }
 }
