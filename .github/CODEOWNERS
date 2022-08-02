@@ -1,0 +1,6 @@
+# Contract committers owns the repo as a whole.
+*                             @stellar/contract-committers
+
+# Members of contract committers who are on the core team own the host
+# implementation.
+/soroban-env-host/            @graydon @jonjove @sisuresh
