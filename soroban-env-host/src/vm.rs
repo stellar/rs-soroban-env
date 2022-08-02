@@ -60,7 +60,7 @@ impl Externals for Host {
     }
 
     fn charge_mem(&mut self, bytes: u64) -> Result<(), wasmi::TrapCode> {
-        self.charge_budget(CostType::WasmInsnExec, bytes)
+        self.charge_budget(CostType::WasmMemAlloc, bytes)
             .map_err(|_| wasmi::TrapCode::MemLimitExceeded)
     }
 }
