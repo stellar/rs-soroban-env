@@ -254,34 +254,34 @@ impl Vm {
         func: &str,
         args: &[RawVal],
     ) -> Result<RawVal, HostError> {
-        let mut frame_guard = host.push_vm_frame(self.clone());
-        let wasm_args: Vec<_> = args
-            .iter()
-            .map(|i| RuntimeValue::I64(i.get_payload() as i64))
-            .collect();
+        host.with_frame_guard(host.push_vm_frame(self.clone())?, || {
+            let wasm_args: Vec<_> = args
+                .iter()
+                .map(|i| RuntimeValue::I64(i.get_payload() as i64))
+                .collect();
 
-        // Wasmi wants a mut& to an E:Externals value, which is reasonable but
-        // irrelevant (and awkward) in our case since our Host (which implements
-        // Externals) is a Rc<RefCell<...>> with interior mutability. So rather
-        // than propagate the irrelevant-and-awkward mut& requirement to our
-        // callers, we just clone Host (which is, again, just a refcounted
-        // pointer) into a mutable local variable here, and pass a &mut to that
-        // local.
-        let mut host = host.clone();
+            // Wasmi wants a mut& to an E:Externals value, which is reasonable but
+            // irrelevant (and awkward) in our case since our Host (which implements
+            // Externals) is a Rc<RefCell<...>> with interior mutability. So rather
+            // than propagate the irrelevant-and-awkward mut& requirement to our
+            // callers, we just clone Host (which is, again, just a refcounted
+            // pointer) into a mutable local variable here, and pass a &mut to that
+            // local.
+            let mut host = host.clone();
 
-        let wasm_res = self
-            .instance
-            .invoke_export(func, wasm_args.as_slice(), &mut host);
-        let wasm_ret = host.map_err(wasm_res)?;
-        if let Some(RuntimeValue::I64(ret)) = wasm_ret {
-            frame_guard.commit();
-            Ok(RawVal::from_payload(ret as u64))
-        } else {
-            Err(host.err_status_msg(
-                ScVmErrorCode::TrapUnexpectedSignature,
-                "contract function did not return an i64",
-            ))
-        }
+            let wasm_res = self
+                .instance
+                .invoke_export(func, wasm_args.as_slice(), &mut host);
+            let wasm_ret = host.map_err(wasm_res)?;
+            if let Some(RuntimeValue::I64(ret)) = wasm_ret {
+                Ok(RawVal::from_payload(ret as u64))
+            } else {
+                Err(host.err_status_msg(
+                    ScVmErrorCode::TrapUnexpectedSignature,
+                    "contract function did not return an i64",
+                ))
+            }
+        })
     }
 
     /// Invokes a function in the VM's module, converting externally stable XDR

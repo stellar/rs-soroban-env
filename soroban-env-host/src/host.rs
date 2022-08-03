@@ -115,10 +115,8 @@ impl FrameGuard {
         }
         self.rollback = None;
     }
-}
 
-impl Drop for FrameGuard {
-    fn drop(&mut self) {
+    pub(crate) fn roll_back(&mut self) {
         let rollback = self.rollback.take();
         self.host.pop_frame(rollback);
     }
@@ -269,32 +267,35 @@ impl Host {
     /// that will pop the stack when it is dropped. This should be called at
     /// least any time a new contract is invoked.
     #[cfg(feature = "vm")]
-    pub(crate) fn push_vm_frame(&self, vm: Rc<Vm>) -> FrameGuard {
+    pub(crate) fn push_vm_frame(&self, vm: Rc<Vm>) -> Result<FrameGuard, HostError> {
         self.0.context.borrow_mut().push(Frame::ContractVM(vm));
-        FrameGuard {
+        Ok(FrameGuard {
             rollback: Some(self.capture_rollback_point()),
             host: self.clone(),
-        }
+        })
     }
 
-    pub(crate) fn push_host_function_frame(&self, func: HostFunction) -> FrameGuard {
+    pub(crate) fn push_host_function_frame(
+        &self,
+        func: HostFunction,
+    ) -> Result<FrameGuard, HostError> {
         self.0.context.borrow_mut().push(Frame::HostFunction(func));
-        FrameGuard {
+        Ok(FrameGuard {
             rollback: Some(self.capture_rollback_point()),
             host: self.clone(),
-        }
+        })
     }
 
     #[cfg(feature = "testutils")]
-    pub(crate) fn push_test_frame(&self, contract_id: Hash) -> FrameGuard {
+    pub(crate) fn push_test_frame(&self, contract_id: Hash) -> Result<FrameGuard, HostError> {
         self.0
             .context
             .borrow_mut()
             .push(Frame::TestContract(contract_id));
-        FrameGuard {
+        Ok(FrameGuard {
             rollback: Some(self.capture_rollback_point()),
             host: self.clone(),
-        }
+        })
     }
 
     /// Applies a function to the top [`Frame`] of the context stack. Returns
@@ -310,6 +311,18 @@ impl Host {
             .borrow()
             .last()
             .ok_or_else(|| self.err(DebugError::new(ScHostContextErrorCode::NoContractRunning)))?)
+    }
+
+    pub(crate) fn with_frame_guard<F, U>(&self, mut frame: FrameGuard, f: F) -> Result<U, HostError>
+    where
+        F: FnOnce() -> Result<U, HostError>,
+    {
+        let res = f().map_err(|e| {
+            frame.roll_back();
+            e
+        })?;
+        frame.commit();
+        Ok(res)
     }
 
     /// Returns [`Hash`] contract ID from the VM frame at the top of the context
@@ -571,12 +584,10 @@ impl Host {
             // maintains a borrow of self.0.contracts, which can cause borrow errors.
             let cfs_option = self.0.contracts.borrow().get(&id).cloned();
             if let Some(cfs) = cfs_option {
-                let mut fg = self.push_test_frame(id.clone());
-                let res = cfs
-                    .call(&func, self, args)
-                    .ok_or_else(|| self.err_general("function not found"))?;
-                fg.commit();
-                return Ok(res);
+                return self.with_frame_guard(self.push_test_frame(id.clone())?, || {
+                    cfs.call(&func, self, args)
+                        .ok_or_else(|| self.err_general("function not found"))
+                });
             }
         }
 
@@ -592,17 +603,15 @@ impl Host {
                 if let [ScVal::Object(Some(scobj)), ScVal::Symbol(scsym), rest @ ..] =
                     args.as_slice()
                 {
-                    let mut frame_guard = self.push_host_function_frame(hf);
-
-                    let object: Object = self.to_host_obj(scobj)?.to_object();
-                    let symbol: Symbol = scsym.try_into()?;
-                    let mut raw_args: Vec<RawVal> = Vec::new();
-                    for scv in rest.iter() {
-                        raw_args.push(self.to_host_val(scv)?.val);
-                    }
-                    let res = self.call_n(object, symbol, &raw_args[..])?;
-                    frame_guard.commit();
-                    Ok(res)
+                    self.with_frame_guard(self.push_host_function_frame(hf)?, || {
+                        let object = self.to_host_obj(scobj)?.to_object();
+                        let symbol = <Symbol>::try_from(scsym)?;
+                        let args = rest
+                            .iter()
+                            .map(|scv| self.to_host_val(scv).map(|hv| hv.val))
+                            .collect::<Result<Vec<RawVal>, HostError>>()?;
+                        self.call_n(object, symbol, &args[..])
+                    })
                 } else {
                     Err(self.err_status_msg(
                         ScHostFnErrorCode::InputArgsWrongLength,
@@ -614,19 +623,15 @@ impl Host {
                 if let [ScVal::Object(Some(c_obj)), ScVal::Object(Some(s_obj)), ScVal::Object(Some(k_obj)), ScVal::Object(Some(sig_obj))] =
                     args.as_slice()
                 {
-                    let mut frame_guard = self.push_host_function_frame(hf);
-
-                    let contract: Object = self.to_host_obj(c_obj)?.to_object();
-                    let salt: Object = self.to_host_obj(s_obj)?.to_object();
-                    let key: Object = self.to_host_obj(k_obj)?.to_object();
-                    let signature: Object = self.to_host_obj(sig_obj)?.to_object();
-
-                    //TODO: should create_contract_from_ed25519 return a RawVal instead of Object to avoid this conversion?
-                    let res: RawVal = self
-                        .create_contract_from_ed25519(contract, salt, key, signature)?
-                        .into();
-                    frame_guard.commit();
-                    Ok(res)
+                    self.with_frame_guard(self.push_host_function_frame(hf)?, || {
+                        let contract = self.to_host_obj(c_obj)?.to_object();
+                        let salt = self.to_host_obj(s_obj)?.to_object();
+                        let key = self.to_host_obj(k_obj)?.to_object();
+                        let signature = self.to_host_obj(sig_obj)?.to_object();
+                        //TODO: should create_contract_from_ed25519 return a RawVal instead of Object to avoid this conversion?
+                        self.create_contract_from_ed25519(contract, salt, key, signature)
+                            .map(|obj| <RawVal>::from(obj))
+                    })
                 } else {
                     Err(self.err_status_msg(
                         ScHostFnErrorCode::InputArgsWrongLength,
