@@ -3,7 +3,7 @@ use crate::xdr::{ScHostFnErrorCode, ScHostObjErrorCode, ScHostValErrorCode};
 use crate::{Host, HostError, Object, RawVal};
 use ed25519_dalek::{PublicKey, Signature, SIGNATURE_LENGTH};
 use sha2::{Digest, Sha256};
-use soroban_env_common::xdr::{Hash, Uint256};
+use soroban_env_common::xdr::{Hash, LedgerKey, LedgerKeyContractData, ScStatic, ScVal, Uint256};
 
 impl Host {
     pub(crate) fn usize_to_u32(&self, u: usize, msg: &'static str) -> Result<u32, HostError> {
@@ -130,5 +130,24 @@ impl Host {
             }
             Ok(hash)
         })
+    }
+
+    /// Converts a [`RawVal`] to an [`ScVal`] and combines it with the currently-executing
+    /// [`ContractID`] to produce a [`Key`], that can be used to access ledger [`Storage`].
+    pub fn storage_key_from_rawval(&self, k: RawVal) -> Result<LedgerKey, HostError> {
+        Ok(LedgerKey::ContractData(LedgerKeyContractData {
+            contract_id: self.get_current_contract_id()?,
+            key: self.from_host_val(k)?,
+        }))
+    }
+
+    pub fn contract_data_key_from_rawval(&self, k: RawVal) -> Result<LedgerKey, HostError> {
+        if self.from_host_val(k)? == ScVal::Static(ScStatic::LedgerKeyContractCodeWasm) {
+            return Err(self.err_status_msg(
+                ScHostFnErrorCode::InputArgsInvalid,
+                "cannot update contract code",
+            ));
+        }
+        self.storage_key_from_rawval(k)
     }
 }

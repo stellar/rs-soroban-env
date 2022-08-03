@@ -6,7 +6,6 @@ use crate::xdr::{
 };
 use crate::{Host, HostError, Object};
 use soroban_env_common::xdr::{AccountEntry, AccountId, Hash, PublicKey, Uint256, WriteXdr};
-use soroban_env_common::RawVal;
 
 impl Host {
     pub fn contract_code_ledger_key(&self, contract_id: Hash) -> LedgerKey {
@@ -95,14 +94,5 @@ impl Host {
             LedgerEntryData::Account(ae) => Ok(ae),
             _ => Err(self.err_general("not account")),
         })
-    }
-
-    /// Converts a [`RawVal`] to an [`ScVal`] and combines it with the currently-executing
-    /// [`ContractID`] to produce a [`Key`], that can be used to access ledger [`Storage`].
-    pub fn to_storage_key(&self, k: RawVal) -> Result<LedgerKey, HostError> {
-        Ok(LedgerKey::ContractData(LedgerKeyContractData {
-            contract_id: self.get_current_contract_id()?,
-            key: self.from_host_val(k)?,
-        }))
     }
 }
