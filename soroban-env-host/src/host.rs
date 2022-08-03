@@ -23,8 +23,7 @@ use crate::xdr;
 use crate::xdr::{
     ContractDataEntry, HostFunction, LedgerEntry, LedgerEntryData, LedgerEntryExt, LedgerKey,
     ScBigInt, ScHostContextErrorCode, ScHostFnErrorCode, ScHostObjErrorCode,
-    ScHostStorageErrorCode, ScHostValErrorCode, ScMap, ScMapEntry, ScObject, ScStatic, ScVal,
-    ScVec,
+    ScHostStorageErrorCode, ScHostValErrorCode, ScMap, ScMapEntry, ScObject, ScVal, ScVec,
 };
 use std::rc::Rc;
 
@@ -800,11 +799,7 @@ impl CheckedEnv for Host {
         } else {
             Err(self.err_general("no invoking contract"))
         }?;
-        let bin: Vec<u8> = hash
-            .0
-            .try_into()
-            .map_err(|_| self.err_conversion_general("Hash has wrong size"))?;
-        Ok(self.add_host_object(bin)?.into())
+        Ok(self.add_host_object(<Vec<u8>>::from(hash.0))?.into())
     }
 
     fn obj_cmp(&self, a: RawVal, b: RawVal) -> Result<i64, HostError> {
@@ -831,11 +826,7 @@ impl CheckedEnv for Host {
 
     fn get_current_contract(&self) -> Result<Object, HostError> {
         let hash: Hash = self.get_current_contract_id()?;
-        let bin: Vec<u8> = hash
-            .0
-            .try_into()
-            .map_err(|_| self.err_conversion_general("Hash has wrong size"))?;
-        Ok(self.add_host_object(bin)?.into())
+        Ok(self.add_host_object(<Vec<u8>>::from(hash.0))?.into())
     }
 
     fn obj_from_u64(&self, u: u64) -> Result<Object, HostError> {
@@ -1107,15 +1098,7 @@ impl CheckedEnv for Host {
     }
 
     fn put_contract_data(&self, k: RawVal, v: RawVal) -> Result<RawVal, HostError> {
-        let data_key = self.from_host_val(k)?;
-        if data_key == ScVal::Static(ScStatic::LedgerKeyContractCodeWasm) {
-            return Err(self.err_status_msg(
-                ScHostFnErrorCode::InputArgsInvalid,
-                "cannot update contract code",
-            ));
-        }
-
-        let key = self.to_storage_key(k)?;
+        let key = self.contract_data_key_from_rawval(k)?;
         let data = LedgerEntryData::ContractData(ContractDataEntry {
             contract_id: self.get_current_contract_id()?,
             key: self.from_host_val(k)?,
@@ -1131,13 +1114,13 @@ impl CheckedEnv for Host {
     }
 
     fn has_contract_data(&self, k: RawVal) -> Result<RawVal, HostError> {
-        let key = self.to_storage_key(k)?;
+        let key = self.storage_key_from_rawval(k)?;
         let res = self.0.storage.borrow_mut().has(&key)?;
         Ok(RawVal::from_bool(res))
     }
 
     fn get_contract_data(&self, k: RawVal) -> Result<RawVal, HostError> {
-        let key = self.to_storage_key(k)?;
+        let key = self.storage_key_from_rawval(k)?;
         match self.0.storage.borrow_mut().get(&key)?.data {
             LedgerEntryData::ContractData(ContractDataEntry {
                 contract_id,
@@ -1152,14 +1135,7 @@ impl CheckedEnv for Host {
     }
 
     fn del_contract_data(&self, k: RawVal) -> Result<RawVal, HostError> {
-        if self.from_host_val(k)? == ScVal::Static(ScStatic::LedgerKeyContractCodeWasm) {
-            return Err(self.err_status_msg(
-                ScHostFnErrorCode::InputArgsInvalid,
-                "cannot delete contract code",
-            ));
-        }
-
-        let key = self.to_storage_key(k)?;
+        let key = self.contract_data_key_from_rawval(k)?;
         self.0.storage.borrow_mut().del(&key)?;
         Ok(().into())
     }
