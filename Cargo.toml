@@ -6,10 +6,53 @@ members = [
     "soroban-env-guest",
     "soroban-env-common",
     "soroban-env-macros",
+
+    "soroban-sdk",
+
+    "tests/add_i32",
+    "tests/add_i64",
+    "tests/vec",
+    "tests/invoke_contract",
+    "tests/udt",
+    "tests/contract_data",
+    "tests/create_contract",
+    "tests/linear_memory",
 ]
+
+# Exclude proc-macro crates from the workspace so that when building the
+# workspace their dependencies do not pollute the feature selection of other
+# crates. Ordinarily when you build a proc-macro crate as a dependency of
+# another crate, the proc-macro crate's dependencies are decoupled from the
+# dependencies of other crates. This has an important side-effect of not
+# unifiying the features selected in shared dependencies. When a proc-macro
+# crate is part of a workspace and the workspace as a whole is built the
+# proc-macro is seen as a first-class crate and its dependencies, including
+# their feature selection, affects the overall dependency graph used to build
+# all crates. This has an unfortunate side-effect for proc-macro crates, like
+# 'macros', that depend on std features when other crates, like 'sdk',
+# explicitly must not depend on std. Hopefully one day this will be fixed in:
+# https://github.com/rust-lang/cargo/issues/10827
+exclude = ["soroban-sdk-macros"]
 
 [patch.crates-io]
 soroban-env-common = { path = "soroban-env-common" }
 soroban-env-macros = { path = "soroban-env-macros" }
+soroban-env-guest = { path = "soroban-env-guest" }
+soroban-env-host = { path = "soroban-env-host" }
+soroban-sdk = { path = "soroban-sdk" }
+soroban-sdk-macros = { path = "soroban-sdk-macros" }
 stellar-xdr = { git = "https://github.com/stellar/rs-stellar-xdr", rev = "28a28dc0" }
 wasmi = { package = "soroban-wasmi", git = "https://github.com/stellar/wasmi", rev = "7b1f2355" }
+
+# TODO: We probably want different profiles for building the host for use in
+# stellar-core, as we do for the SDK. The below profile should become the
+# profile used for the SDK.
+[profile.release]
+opt-level = "z"
+overflow-checks = true
+debug = 0
+strip = "symbols"
+debug-assertions = false
+panic = "abort"
+codegen-units = 1
+lto = true

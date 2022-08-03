@@ -13,7 +13,7 @@ env:
 jobs:
 
   complete:
-    needs: [fmt, build-and-test]
+    needs: [fmt, build-and-test, docs]
     runs-on: ubuntu-latest
     steps:
     - run: exit 0
@@ -31,19 +31,24 @@ jobs:
         sys:
         - os: ubuntu-latest
           target: wasm32-unknown-unknown
+          profile: release
           test: false
         - os: ubuntu-latest
           target: x86_64-unknown-linux-gnu
+          profile: test
           test: true
-        # TODO: Re-enable these builds if we see value in doing so.
+        # TODO: Re-enable if we see value in doing so.
         # - os: macos-latest
         #   target: x86_64-apple-darwin
+        #   profile: test
         #   test: true
         # - os: macos-latest
         #   target: aarch64-apple-darwin
+        #   profile: test
         #   test: false
         # - os: windows-latest
         #   target: x86_64-pc-windows-msvc
+        #   profile: test
         #   test: true
     runs-on: ${{ matrix.sys.os }}
     steps:
@@ -68,9 +73,36 @@ jobs:
     - if: github.ref_protected
       run: rm -fr target
     - run: cargo install --locked --version 0.5.16 cargo-hack
-    - run: cargo hack --feature-powerset check --locked --target ${{ matrix.sys.target }}
+    - run: cargo hack check --profile ${{ matrix.sys.profile }} --target ${{ matrix.sys.target }} --lib
+    - run: cargo hack build --profile ${{ matrix.sys.profile }} --target ${{ matrix.sys.target }}
     - if: matrix.sys.test
-      run: cargo hack --feature-powerset test --locked --target ${{ matrix.sys.target }}
+      run: cargo hack --feature-powerset check --exclude-features docs --profile ${{ matrix.sys.profile }} --target ${{ matrix.sys.target }} --bins --tests --examples
+    - if: matrix.sys.test
+      run: cargo hack --feature-powerset test --exclude-features docs --profile ${{ matrix.sys.profile }} --target ${{ matrix.sys.target }}
+
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - run: rustup install nightly
+    - uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cargo/registry/index/
+          ~/.cargo/registry/cache/
+          ~/.cargo/git/db/
+        key: cargo-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: cargo-
+    - uses: actions/cache@v3
+      with:
+        path: target/
+        key: ${{ github.job }}-target-${{ github.sha }}
+        restore-keys: |
+          ${{ github.job }}-target
+          ${{ github.job }}-target-
+    - if: github.ref_protected
+      run: rm -fr target
+    - run: make doc
 
   cargo-publish-dry-run:
     if: github.event_name == 'push' && startsWith(github.ref_name, 'release/')
