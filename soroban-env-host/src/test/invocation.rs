@@ -79,7 +79,6 @@ fn invoke_cross_contract_lvl2_nested_with_err() -> Result<(), HostError> {
         vec![CALL, VEC],
     );
     let host = Host::with_storage(storage);
-
     // prepare arguments
     let obj = host.test_bin_obj(&dummy_id0)?;
     let sym = Symbol::from_str("delegate");

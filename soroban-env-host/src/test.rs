@@ -7,7 +7,7 @@ mod crypto;
 mod map;
 mod vec;
 
-#[cfg(all(feature = "vm", feature = "testutils"))]
+#[cfg(feature = "vm")]
 mod budget_metering;
 #[cfg(feature = "vm")]
 mod invocation;

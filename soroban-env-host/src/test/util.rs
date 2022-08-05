@@ -54,10 +54,8 @@ impl Host {
         codes: Vec<&'static [u8]>,
     ) -> Storage {
         let it = ids.iter().zip(codes.iter());
-
         let mut footprint = Footprint::default();
         let mut map = OrdMap::default();
-
         for (_, (id, contract)) in it.enumerate() {
             // We unwrap here rather than host.map_err because the host doesn't exist yet.
             let contract = ScObject::Binary((*contract).try_into().unwrap());
