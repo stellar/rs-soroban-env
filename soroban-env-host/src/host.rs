@@ -45,7 +45,7 @@ pub use error::HostError;
 /// Saves host state (storage and objects) for rolling back a (sub-)transaction
 /// on error. A helper type used by [`FrameGuard`].
 #[derive(Clone)]
-struct RollbackPoint {
+pub(crate) struct RollbackPoint {
     storage: OrdMap<LedgerKey, Option<LedgerEntry>>,
     objects: usize,
 }
@@ -94,34 +94,6 @@ pub(crate) struct HostImpl {
     #[cfg(feature = "testutils")]
     contracts: RefCell<std::collections::HashMap<Hash, Rc<dyn ContractFunctionSet>>>,
 }
-
-/// A guard struct that exists to call [`Host::pop_frame`] when it is dropped,
-/// providing whatever rollback it is holding as an argument. By default, this
-/// means that when a [`FrameGuard`] drops, it will roll the [`Host`] back to
-/// the state it had before its associated [`Frame`] was pushed.
-///
-/// Users may call [`FrameGuard::commit`] to cause the rollback point to be set
-/// to `None`, which will cause the [`FrameGuard`] to commit changes to the host
-/// that occurred during its lifetime, rather than rollling them back.
-pub struct FrameGuard {
-    rollback: Option<RollbackPoint>,
-    host: Host,
-}
-
-impl FrameGuard {
-    pub(crate) fn commit(&mut self) {
-        if self.rollback.is_none() {
-            panic!("committing on already-committed FrameGuard")
-        }
-        self.rollback = None;
-    }
-
-    pub(crate) fn roll_back(&mut self) {
-        let rollback = self.rollback.take();
-        self.host.pop_frame(rollback);
-    }
-}
-
 // Host is a newtype on Rc<HostImpl> so we can impl Env for it below.
 #[derive(Default, Clone)]
 pub struct Host(pub(crate) Rc<HostImpl>);
@@ -248,54 +220,41 @@ impl Host {
         }
     }
 
-    fn pop_frame(&self, rollback: Option<RollbackPoint>) {
+    fn pop_frame(&self, rp: RollbackPoint) {
         self.0
             .context
             .borrow_mut()
             .pop()
             .expect("unmatched host frame push/pop");
-        match rollback {
-            None => (),
-            Some(rp) => {
-                self.0.objects.borrow_mut().truncate(rp.objects);
-                self.0.storage.borrow_mut().map = rp.storage;
-            }
-        }
+        self.0.objects.borrow_mut().truncate(rp.objects);
+        self.0.storage.borrow_mut().map = rp.storage;
     }
 
-    /// Pushes a new VM-related [`Frame`] on the context stack, returning a [`FrameGuard`]
-    /// that will pop the stack when it is dropped. This should be called at
-    /// least any time a new contract is invoked.
+    /// Pushes a new VM-related [`Frame`] on the context stack, returning a
+    /// [`RollbackPoint`] such that if operation fails, it can be used to roll
+    /// the [`Host`] back to the state it had before its associated [`Frame`]
+    /// was pushed. This should be called at least any time a new contract is invoked.
     #[cfg(feature = "vm")]
-    pub(crate) fn push_vm_frame(&self, vm: Rc<Vm>) -> Result<FrameGuard, HostError> {
+    pub(crate) fn push_vm_frame(&self, vm: Rc<Vm>) -> Result<RollbackPoint, HostError> {
         self.0.context.borrow_mut().push(Frame::ContractVM(vm));
-        Ok(FrameGuard {
-            rollback: Some(self.capture_rollback_point()),
-            host: self.clone(),
-        })
+        Ok(self.capture_rollback_point())
     }
 
     pub(crate) fn push_host_function_frame(
         &self,
         func: HostFunction,
-    ) -> Result<FrameGuard, HostError> {
+    ) -> Result<RollbackPoint, HostError> {
         self.0.context.borrow_mut().push(Frame::HostFunction(func));
-        Ok(FrameGuard {
-            rollback: Some(self.capture_rollback_point()),
-            host: self.clone(),
-        })
+        Ok(self.capture_rollback_point())
     }
 
     #[cfg(feature = "testutils")]
-    pub(crate) fn push_test_frame(&self, contract_id: Hash) -> Result<FrameGuard, HostError> {
+    pub(crate) fn push_test_frame(&self, contract_id: Hash) -> Result<RollbackPoint, HostError> {
         self.0
             .context
             .borrow_mut()
             .push(Frame::TestContract(contract_id));
-        Ok(FrameGuard {
-            rollback: Some(self.capture_rollback_point()),
-            host: self.clone(),
-        })
+        Ok(self.capture_rollback_point())
     }
 
     /// Applies a function to the top [`Frame`] of the context stack. Returns
@@ -313,15 +272,18 @@ impl Host {
             .ok_or_else(|| self.err(DebugError::new(ScHostContextErrorCode::NoContractRunning)))?)
     }
 
-    pub(crate) fn with_frame_guard<F, U>(&self, mut frame: FrameGuard, f: F) -> Result<U, HostError>
+    /// This function serves like a frame guard which takes a [`RollBackPoint`]
+    /// and applies a function which on error, pops the frame and rolls the
+    /// [`Host`] back to the state it had before its associated [`Frame`] was
+    /// pushed, and on success drops the [`RollBackPoint`].
+    pub(crate) fn with_frame_guard<F, U>(&self, rp: RollbackPoint, f: F) -> Result<U, HostError>
     where
         F: FnOnce() -> Result<U, HostError>,
     {
         let res = f().map_err(|e| {
-            frame.roll_back();
+            self.pop_frame(rp);
             e
         })?;
-        frame.commit();
         Ok(res)
     }
 
