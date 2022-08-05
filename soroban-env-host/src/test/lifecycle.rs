@@ -1,5 +1,6 @@
 use super::wasm_examples::CREATE_CONTRACT;
 use crate::{
+    host::Frame,
     storage::{AccessType, Footprint, Storage},
     xdr::{self, LedgerKeyContractData, ScHostFnErrorCode, ScStatic},
     xdr::{LedgerEntryData, LedgerKey, ScObject, ScVal, ScVec},
@@ -140,7 +141,7 @@ fn create_contract_test() -> Result<(), HostError> {
     let hash = sha256_hash_id_preimage(id_pre_image);
 
     //Push the contract id onto the stack to simulate a contract call
-    let _frame_guard = host.push_test_frame(hash);
+    let _frame_guard = host.push_frame(Frame::TestContract(hash));
 
     let key = ScVal::Static(ScStatic::LedgerKeyContractCodeWasm);
 

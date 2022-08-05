@@ -13,6 +13,8 @@ pub enum CostType {
     HostEventDebug = 6,
     HostFunction = 7,
     VisitObject = 8,
+    PushFrame = 9,
+    PopFrame = 10,
 }
 
 // TODO: add XDR support for iterating over all the elements of an enum
@@ -28,6 +30,8 @@ impl CostType {
             CostType::HostEventDebug,
             CostType::HostFunction,
             CostType::VisitObject,
+            CostType::PushFrame,
+            CostType::PopFrame,
         ];
         VARIANTS.iter()
     }
@@ -246,6 +250,7 @@ impl Default for Budget {
         b.cpu_insns
             .get_cost_model_mut(CostType::WasmInsnExec)
             .lin_param = 73;
+        // TODO: set cpu, mem model parameters for other CostTypes
 
         // Some "reasonable defaults": 640k of RAM and 100usec.
         //
