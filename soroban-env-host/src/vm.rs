@@ -254,7 +254,7 @@ impl Vm {
         func: &str,
         args: &[RawVal],
     ) -> Result<RawVal, HostError> {
-        host.with_frame_guard(host.push_frame(Frame::ContractVM(self.clone()))?, || {
+        host.with_frame(Frame::ContractVM(self.clone()), || {
             let wasm_args: Vec<_> = args
                 .iter()
                 .map(|i| RuntimeValue::I64(i.get_payload() as i64))

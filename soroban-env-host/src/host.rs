@@ -213,11 +213,11 @@ impl Host {
             .map_err(Host)
     }
 
-    /// Pushes a new [`Frame`] on the context stack, returning a [`RollbackPoint`]
-    /// such that if operation fails, it can be used to roll the [`Host`] back
-    /// to the state it had before its associated [`Frame`] was pushed.
-    /// This should be called at least any time a new contract is invoked.
-    pub(crate) fn push_frame(&self, frame: Frame) -> Result<RollbackPoint, HostError> {
+    /// Helper function for [`Host::with_frame`] below. Pushes a new [`Frame`]
+    /// on the context stack, returning a [`RollbackPoint`] such that if
+    /// operation fails, it can be used to roll the [`Host`] back to the state
+    /// it had before its associated [`Frame`] was pushed.
+    fn push_frame(&self, frame: Frame) -> Result<RollbackPoint, HostError> {
         // Charges 1 unit instead of `map.len()` units because of OrdMap's
         // sub-structure sharing that makes cloning cheap.
         self.charge_budget(CostType::PushFrame, 1)?;
@@ -228,15 +228,20 @@ impl Host {
         })
     }
 
-    fn pop_frame(&self, rp: RollbackPoint) -> Result<(), HostError> {
+    /// Helper function for [`Host::with_frame`] below. Pops a [`Frame`] off
+    /// the current context and optionally rolls back the [`Host`]'s objects
+    /// and storage map to the state in the provided [`RollbackPoint`].
+    fn pop_frame(&self, orp: Option<RollbackPoint>) -> Result<(), HostError> {
         self.charge_budget(CostType::PopFrame, 1)?;
         self.0
             .context
             .borrow_mut()
             .pop()
             .expect("unmatched host frame push/pop");
-        self.0.objects.borrow_mut().truncate(rp.objects);
-        self.0.storage.borrow_mut().map = rp.storage;
+        if let Some(rp) = orp {
+            self.0.objects.borrow_mut().truncate(rp.objects);
+            self.0.storage.borrow_mut().map = rp.storage;
+        }
         Ok(())
     }
 
@@ -255,21 +260,27 @@ impl Host {
             .ok_or_else(|| self.err(DebugError::new(ScHostContextErrorCode::NoContractRunning)))?)
     }
 
-    /// This function serves like a frame guard which takes a [`RollBackPoint`]
-    /// and applies a function which on error, pops the frame and rolls the
-    /// [`Host`] back to the state it had before its associated [`Frame`] was
-    /// pushed, and on success drops the [`RollBackPoint`].
-    pub(crate) fn with_frame_guard<F, U>(&self, rp: RollbackPoint, f: F) -> Result<U, HostError>
+    /// Pushes a [`Frame`], runs a closure, and then pops the frame, rolling back
+    /// if the closure returned an error. Returns the result that the closure
+    /// returned (or any error caused during the frame push/pop).
+    pub(crate) fn with_frame<F, U>(&self, frame: Frame, f: F) -> Result<U, HostError>
     where
         F: FnOnce() -> Result<U, HostError>,
     {
-        let res = f().map_err(|e| {
-            if let Err(be) = self.pop_frame(rp) {
-                return be;
-            }
-            e
-        })?;
-        Ok(res)
+        let start_depth = self.0.context.borrow().len();
+        let rp = self.push_frame(frame)?;
+        let res = f();
+        if res.is_err() {
+            // Pop and rollback on error.
+            self.pop_frame(Some(rp))?;
+        } else {
+            // Just pop on success.
+            self.pop_frame(None)?;
+        }
+        // Every push and pop should be matched; if not there is a bug.
+        let end_depth = self.0.context.borrow().len();
+        assert_eq!(start_depth, end_depth);
+        res
     }
 
     /// Returns [`Hash`] contract ID from the VM frame at the top of the context
@@ -531,13 +542,10 @@ impl Host {
             // maintains a borrow of self.0.contracts, which can cause borrow errors.
             let cfs_option = self.0.contracts.borrow().get(&id).cloned();
             if let Some(cfs) = cfs_option {
-                return self.with_frame_guard(
-                    self.push_frame(Frame::TestContract(id.clone()))?,
-                    || {
-                        cfs.call(&func, self, args)
-                            .ok_or_else(|| self.err_general("function not found"))
-                    },
-                );
+                return self.with_frame(Frame::TestContract(id.clone()), || {
+                    cfs.call(&func, self, args)
+                        .ok_or_else(|| self.err_general("function not found"))
+                });
             }
         }
 
@@ -553,7 +561,7 @@ impl Host {
                 if let [ScVal::Object(Some(scobj)), ScVal::Symbol(scsym), rest @ ..] =
                     args.as_slice()
                 {
-                    self.with_frame_guard(self.push_frame(Frame::HostFunction(hf))?, || {
+                    self.with_frame(Frame::HostFunction(hf), || {
                         let object = self.to_host_obj(scobj)?.to_object();
                         let symbol = <Symbol>::try_from(scsym)?;
                         let args = rest
@@ -573,7 +581,7 @@ impl Host {
                 if let [ScVal::Object(Some(c_obj)), ScVal::Object(Some(s_obj)), ScVal::Object(Some(k_obj)), ScVal::Object(Some(sig_obj))] =
                     args.as_slice()
                 {
-                    self.with_frame_guard(self.push_frame(Frame::HostFunction(hf))?, || {
+                    self.with_frame(Frame::HostFunction(hf), || {
                         let contract = self.to_host_obj(c_obj)?.to_object();
                         let salt = self.to_host_obj(s_obj)?.to_object();
                         let key = self.to_host_obj(k_obj)?.to_object();
