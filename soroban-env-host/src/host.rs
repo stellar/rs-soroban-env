@@ -820,7 +820,6 @@ impl CheckedEnv for Host {
     }
 
     fn obj_cmp(&self, a: RawVal, b: RawVal) -> Result<i64, HostError> {
-        self.charge_budget(CostType::HostFunction, 2)?;
         let res = unsafe {
             self.unchecked_visit_val_obj(a, |ao| {
                 self.unchecked_visit_val_obj(b, |bo| Ok(ao.cmp(&bo)))

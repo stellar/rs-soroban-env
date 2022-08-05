@@ -1,4 +1,4 @@
-use crate::{CheckedEnv, Host, Object, RawVal, Symbol};
+use crate::{budget::CostType, CheckedEnv, Host, Object, RawVal, Symbol};
 use soroban_env_common::call_macro_with_all_host_functions;
 use wasmi::{RuntimeArgs, RuntimeValue};
 
@@ -120,6 +120,7 @@ macro_rules! generate_dispatch_functions {
                 pub(crate) fn $fn_id(host: &mut Host, _vmargs: RuntimeArgs) ->
                     Result<RuntimeValue, wasmi::Trap>
                 {
+                    host.charge_budget(CostType::HostFunction, _vmargs.len() as u64)?;
                     Ok(dispatch_function_helper!{host, _vmargs, fn $fn_id $args }?.into())
                 }
             )*

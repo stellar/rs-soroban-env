@@ -281,13 +281,19 @@ impl Default for Budget {
         b.cpu_insns
             .get_cost_model_mut(CostType::WasmInsnExec)
             .lin_param = 73;
-
-        b.mem_bytes
-            .get_cost_model_mut(CostType::ValXdrConv)
-            .const_param = 10; // A wild guess
+        // TODO: to be calibrated
         b.cpu_insns
             .get_cost_model_mut(CostType::ValXdrConv)
-            .const_param = 100; // A wild guess
+            .lin_param = 1;
+        b.mem_bytes
+            .get_cost_model_mut(CostType::ValXdrConv)
+            .lin_param = 1;
+        b.cpu_insns
+            .get_cost_model_mut(CostType::ValXdrConv)
+            .const_param = 100;
+        b.mem_bytes
+            .get_cost_model_mut(CostType::ValXdrConv)
+            .const_param = 10;
 
         // Some "reasonable defaults": 640k of RAM and 100usec.
         //
