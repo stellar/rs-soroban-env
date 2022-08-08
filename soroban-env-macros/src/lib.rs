@@ -1,10 +1,15 @@
+mod derive_type;
+
 extern crate proc_macro;
 
+use crate::derive_type::{derive_type_enum, derive_type_struct};
 use proc_macro::TokenStream;
 use quote::{quote, ToTokens};
-use syn::{parse::Parse, parse_macro_input, Ident, LitInt, Token};
+use syn::{
+    parse::Parse, parse_macro_input, spanned::Spanned, DeriveInput, Error, Ident, LitInt, Token,
+};
 
-use stellar_xdr::{Error, ScEnvMetaEntry, WriteXdr};
+use stellar_xdr::{ScEnvMetaEntry, WriteXdr};
 
 struct MetaInput {
     pub interface_version: u64,
@@ -46,7 +51,7 @@ impl ToTokens for MetaConstsOutput {
             .to_meta_entries()
             .into_iter()
             .map(|entry| entry.to_xdr())
-            .collect::<Result<Vec<Vec<u8>>, Error>>()
+            .collect::<Result<Vec<Vec<u8>>, stellar_xdr::Error>>()
             .unwrap()
             .concat();
         let meta_xdr_len = meta_xdr.len();
@@ -65,4 +70,31 @@ pub fn generate_env_meta_consts(input: TokenStream) -> TokenStream {
     let meta_input = parse_macro_input!(input as MetaInput);
     let meta_consts_output = MetaConstsOutput { input: meta_input };
     quote! { #meta_consts_output }.into()
+}
+
+#[proc_macro_attribute]
+pub fn contracttype(_metadata: TokenStream, input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+    quote! {
+        #[derive(soroban_env_macros::ContractType)]
+        #input
+    }
+    .into()
+}
+
+#[doc(hidden)]
+#[proc_macro_derive(ContractType)]
+pub fn derive_contract_type(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+    let ident = &input.ident;
+    let derived = match &input.data {
+        syn::Data::Struct(s) => derive_type_struct(ident, s),
+        syn::Data::Enum(e) => derive_type_enum(ident, e),
+        syn::Data::Union(u) => Error::new(
+            u.union_token.span(),
+            "unions are unsupported as contract types",
+        )
+        .to_compile_error(),
+    };
+    quote! { #derived }.into()
 }
