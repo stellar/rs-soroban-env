@@ -167,9 +167,6 @@ impl BudgetDimension {
     }
 
     pub fn is_over_budget(&self) -> bool {
-        if self.limit == u64::MAX {
-            return false;
-        }
         self.count > self.limit
     }
 
