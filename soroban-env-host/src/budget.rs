@@ -13,10 +13,12 @@ pub enum CostType {
     HostEventDebug = 6,
     HostFunction = 7,
     VisitObject = 8,
+    PushFrame = 9,
+    PopFrame = 10,
     // Tracks a single Val (RawVal or primative Object like U64) <=> ScVal
     // conversion cost. Most of these Val counterparts in ScVal (except e.g.
     // Symbol) consumes a single int64 and therefore is a constant overhead.
-    ValXdrConv = 9,
+    ValXdrConv = 11,
 }
 
 // TODO: add XDR support for iterating over all the elements of an enum
@@ -32,6 +34,8 @@ impl CostType {
             CostType::HostEventDebug,
             CostType::HostFunction,
             CostType::VisitObject,
+            CostType::PushFrame,
+            CostType::PopFrame,
             CostType::ValXdrConv,
         ];
         VARIANTS.iter()

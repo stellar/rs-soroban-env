@@ -45,7 +45,7 @@ pub use error::HostError;
 /// Saves host state (storage and objects) for rolling back a (sub-)transaction
 /// on error. A helper type used by [`FrameGuard`].
 #[derive(Clone)]
-struct RollbackPoint {
+pub(crate) struct RollbackPoint {
     storage: OrdMap<LedgerKey, Option<LedgerEntry>>,
     objects: usize,
 }
@@ -94,36 +94,6 @@ pub(crate) struct HostImpl {
     #[cfg(feature = "testutils")]
     contracts: RefCell<std::collections::HashMap<Hash, Rc<dyn ContractFunctionSet>>>,
 }
-
-/// A guard struct that exists to call [`Host::pop_frame`] when it is dropped,
-/// providing whatever rollback it is holding as an argument. By default, this
-/// means that when a [`FrameGuard`] drops, it will roll the [`Host`] back to
-/// the state it had before its associated [`Frame`] was pushed.
-///
-/// Users may call [`FrameGuard::commit`] to cause the rollback point to be set
-/// to `None`, which will cause the [`FrameGuard`] to commit changes to the host
-/// that occurred during its lifetime, rather than rollling them back.
-pub struct FrameGuard {
-    rollback: Option<RollbackPoint>,
-    host: Host,
-}
-
-impl FrameGuard {
-    pub(crate) fn commit(&mut self) {
-        if self.rollback.is_none() {
-            panic!("committing on already-committed FrameGuard")
-        }
-        self.rollback = None;
-    }
-}
-
-impl Drop for FrameGuard {
-    fn drop(&mut self) {
-        let rollback = self.rollback.take();
-        self.host.pop_frame(rollback);
-    }
-}
-
 // Host is a newtype on Rc<HostImpl> so we can impl Env for it below.
 #[derive(Default, Clone)]
 pub struct Host(pub(crate) Rc<HostImpl>);
@@ -243,58 +213,36 @@ impl Host {
             .map_err(Host)
     }
 
-    fn capture_rollback_point(&self) -> RollbackPoint {
-        RollbackPoint {
+    /// Helper function for [`Host::with_frame`] below. Pushes a new [`Frame`]
+    /// on the context stack, returning a [`RollbackPoint`] such that if
+    /// operation fails, it can be used to roll the [`Host`] back to the state
+    /// it had before its associated [`Frame`] was pushed.
+    fn push_frame(&self, frame: Frame) -> Result<RollbackPoint, HostError> {
+        // Charges 1 unit instead of `map.len()` units because of OrdMap's
+        // sub-structure sharing that makes cloning cheap.
+        self.charge_budget(CostType::PushFrame, 1)?;
+        self.0.context.borrow_mut().push(frame);
+        Ok(RollbackPoint {
             objects: self.0.objects.borrow().len(),
             storage: self.0.storage.borrow().map.clone(),
-        }
+        })
     }
 
-    fn pop_frame(&self, rollback: Option<RollbackPoint>) {
+    /// Helper function for [`Host::with_frame`] below. Pops a [`Frame`] off
+    /// the current context and optionally rolls back the [`Host`]'s objects
+    /// and storage map to the state in the provided [`RollbackPoint`].
+    fn pop_frame(&self, orp: Option<RollbackPoint>) -> Result<(), HostError> {
+        self.charge_budget(CostType::PopFrame, 1)?;
         self.0
             .context
             .borrow_mut()
             .pop()
             .expect("unmatched host frame push/pop");
-        match rollback {
-            None => (),
-            Some(rp) => {
-                self.0.objects.borrow_mut().truncate(rp.objects);
-                self.0.storage.borrow_mut().map = rp.storage;
-            }
+        if let Some(rp) = orp {
+            self.0.objects.borrow_mut().truncate(rp.objects);
+            self.0.storage.borrow_mut().map = rp.storage;
         }
-    }
-
-    /// Pushes a new VM-related [`Frame`] on the context stack, returning a [`FrameGuard`]
-    /// that will pop the stack when it is dropped. This should be called at
-    /// least any time a new contract is invoked.
-    #[cfg(feature = "vm")]
-    pub(crate) fn push_vm_frame(&self, vm: Rc<Vm>) -> FrameGuard {
-        self.0.context.borrow_mut().push(Frame::ContractVM(vm));
-        FrameGuard {
-            rollback: Some(self.capture_rollback_point()),
-            host: self.clone(),
-        }
-    }
-
-    pub(crate) fn push_host_function_frame(&self, func: HostFunction) -> FrameGuard {
-        self.0.context.borrow_mut().push(Frame::HostFunction(func));
-        FrameGuard {
-            rollback: Some(self.capture_rollback_point()),
-            host: self.clone(),
-        }
-    }
-
-    #[cfg(feature = "testutils")]
-    pub(crate) fn push_test_frame(&self, contract_id: Hash) -> FrameGuard {
-        self.0
-            .context
-            .borrow_mut()
-            .push(Frame::TestContract(contract_id));
-        FrameGuard {
-            rollback: Some(self.capture_rollback_point()),
-            host: self.clone(),
-        }
+        Ok(())
     }
 
     /// Applies a function to the top [`Frame`] of the context stack. Returns
@@ -310,6 +258,29 @@ impl Host {
             .borrow()
             .last()
             .ok_or_else(|| self.err(DebugError::new(ScHostContextErrorCode::NoContractRunning)))?)
+    }
+
+    /// Pushes a [`Frame`], runs a closure, and then pops the frame, rolling back
+    /// if the closure returned an error. Returns the result that the closure
+    /// returned (or any error caused during the frame push/pop).
+    pub(crate) fn with_frame<F, U>(&self, frame: Frame, f: F) -> Result<U, HostError>
+    where
+        F: FnOnce() -> Result<U, HostError>,
+    {
+        let start_depth = self.0.context.borrow().len();
+        let rp = self.push_frame(frame)?;
+        let res = f();
+        if res.is_err() {
+            // Pop and rollback on error.
+            self.pop_frame(Some(rp))?;
+        } else {
+            // Just pop on success.
+            self.pop_frame(None)?;
+        }
+        // Every push and pop should be matched; if not there is a bug.
+        let end_depth = self.0.context.borrow().len();
+        assert_eq!(start_depth, end_depth);
+        res
     }
 
     /// Returns [`Hash`] contract ID from the VM frame at the top of the context
@@ -588,12 +559,10 @@ impl Host {
             // maintains a borrow of self.0.contracts, which can cause borrow errors.
             let cfs_option = self.0.contracts.borrow().get(&id).cloned();
             if let Some(cfs) = cfs_option {
-                let mut fg = self.push_test_frame(id.clone());
-                let res = cfs
-                    .call(&func, self, args)
-                    .ok_or_else(|| self.err_general("function not found"))?;
-                fg.commit();
-                return Ok(res);
+                return self.with_frame(Frame::TestContract(id.clone()), || {
+                    cfs.call(&func, self, args)
+                        .ok_or_else(|| self.err_general("function not found"))
+                });
             }
         }
 
@@ -609,17 +578,15 @@ impl Host {
                 if let [ScVal::Object(Some(scobj)), ScVal::Symbol(scsym), rest @ ..] =
                     args.as_slice()
                 {
-                    let mut frame_guard = self.push_host_function_frame(hf);
-
-                    let object: Object = self.to_host_obj(scobj)?.to_object();
-                    let symbol: Symbol = scsym.try_into()?;
-                    let mut raw_args: Vec<RawVal> = Vec::new();
-                    for scv in rest.iter() {
-                        raw_args.push(self.to_host_val(scv)?.val);
-                    }
-                    let res = self.call_n(object, symbol, &raw_args[..])?;
-                    frame_guard.commit();
-                    Ok(res)
+                    self.with_frame(Frame::HostFunction(hf), || {
+                        let object = self.to_host_obj(scobj)?.to_object();
+                        let symbol = <Symbol>::try_from(scsym)?;
+                        let args = rest
+                            .iter()
+                            .map(|scv| self.to_host_val(scv).map(|hv| hv.val))
+                            .collect::<Result<Vec<RawVal>, HostError>>()?;
+                        self.call_n(object, symbol, &args[..])
+                    })
                 } else {
                     Err(self.err_status_msg(
                         ScHostFnErrorCode::InputArgsWrongLength,
@@ -631,19 +598,15 @@ impl Host {
                 if let [ScVal::Object(Some(c_obj)), ScVal::Object(Some(s_obj)), ScVal::Object(Some(k_obj)), ScVal::Object(Some(sig_obj))] =
                     args.as_slice()
                 {
-                    let mut frame_guard = self.push_host_function_frame(hf);
-
-                    let contract: Object = self.to_host_obj(c_obj)?.to_object();
-                    let salt: Object = self.to_host_obj(s_obj)?.to_object();
-                    let key: Object = self.to_host_obj(k_obj)?.to_object();
-                    let signature: Object = self.to_host_obj(sig_obj)?.to_object();
-
-                    //TODO: should create_contract_from_ed25519 return a RawVal instead of Object to avoid this conversion?
-                    let res: RawVal = self
-                        .create_contract_from_ed25519(contract, salt, key, signature)?
-                        .into();
-                    frame_guard.commit();
-                    Ok(res)
+                    self.with_frame(Frame::HostFunction(hf), || {
+                        let contract = self.to_host_obj(c_obj)?.to_object();
+                        let salt = self.to_host_obj(s_obj)?.to_object();
+                        let key = self.to_host_obj(k_obj)?.to_object();
+                        let signature = self.to_host_obj(sig_obj)?.to_object();
+                        //TODO: should create_contract_from_ed25519 return a RawVal instead of Object to avoid this conversion?
+                        self.create_contract_from_ed25519(contract, salt, key, signature)
+                            .map(|obj| <RawVal>::from(obj))
+                    })
                 } else {
                     Err(self.err_status_msg(
                         ScHostFnErrorCode::InputArgsWrongLength,

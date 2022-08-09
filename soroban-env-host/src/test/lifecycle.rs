@@ -1,5 +1,6 @@
 use super::wasm_examples::CREATE_CONTRACT;
 use crate::{
+    host::Frame,
     storage::{AccessType, Footprint, Storage},
     xdr::{self, LedgerKeyContractData, ScHostFnErrorCode, ScStatic},
     xdr::{LedgerEntryData, LedgerKey, ScObject, ScVal, ScVec},
@@ -140,20 +141,20 @@ fn create_contract_test() -> Result<(), HostError> {
     let hash = sha256_hash_id_preimage(id_pre_image);
 
     //Push the contract id onto the stack to simulate a contract call
-    let _frame_guard = host.push_test_frame(hash);
+    host.with_frame(Frame::TestContract(hash), || {
+        let key = ScVal::Static(ScStatic::LedgerKeyContractCodeWasm);
 
-    let key = ScVal::Static(ScStatic::LedgerKeyContractCodeWasm);
+        // update
+        let put_res = host.put_contract_data(host.to_host_val(&key)?.to_raw(), ().into());
+        let code = ScHostFnErrorCode::InputArgsInvalid;
+        assert!(HostError::result_matches_err_status(put_res, code));
 
-    // update
-    let put_res = host.put_contract_data(host.to_host_val(&key)?.to_raw(), ().into());
-    let code = ScHostFnErrorCode::InputArgsInvalid;
-    assert!(HostError::result_matches_err_status(put_res, code));
-
-    // delete
-    let del_res = host.del_contract_data(host.to_host_val(&key)?.to_raw());
-    let code = ScHostFnErrorCode::InputArgsInvalid;
-    assert!(HostError::result_matches_err_status(del_res, code));
-    Ok(())
+        // delete
+        let del_res = host.del_contract_data(host.to_host_val(&key)?.to_raw());
+        let code = ScHostFnErrorCode::InputArgsInvalid;
+        assert!(HostError::result_matches_err_status(del_res, code));
+        Ok(())
+    })
 }
 
 /// VM tests
