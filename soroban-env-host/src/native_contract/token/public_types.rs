@@ -1,5 +1,6 @@
 use crate::host::Host;
 use crate::native_contract::base_types::{BigInt, BytesN, Map, Vec};
+use crate::native_contract::token::error::Error;
 use soroban_env_common::{CheckedEnv, TryIntoVal};
 use soroban_env_macros::contracttype;
 
@@ -37,14 +38,11 @@ pub enum KeyedAuthorization {
 }
 
 impl KeyedAuthorization {
-    pub fn get_identifier(&self, env: &Host) -> Result<Identifier, ()> {
+    pub fn get_identifier(&self, env: &Host) -> Result<Identifier, Error> {
         Ok(match self {
-            KeyedAuthorization::Contract => Identifier::Contract(
-                env.get_invoking_contract()
-                    .map_err(|_| ())?
-                    .in_env(env)
-                    .try_into()?,
-            ),
+            KeyedAuthorization::Contract => {
+                Identifier::Contract(env.get_invoking_contract()?.in_env(env).try_into()?)
+            }
             KeyedAuthorization::Ed25519(kea) => Identifier::Ed25519(kea.public_key.clone()),
             KeyedAuthorization::Account(kaa) => Identifier::Account(kaa.public_key.clone()),
         })

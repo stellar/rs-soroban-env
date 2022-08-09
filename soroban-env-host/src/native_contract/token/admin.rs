@@ -1,5 +1,6 @@
 use crate::host::Host;
 use crate::native_contract::base_types::BytesN;
+use crate::native_contract::token::error::Error;
 use crate::native_contract::token::public_types::{
     Authorization, Identifier, KeyedAccountAuthorization, KeyedAuthorization, KeyedEd25519Signature,
 };
@@ -7,32 +8,28 @@ use crate::native_contract::token::storage_types::DataKey;
 use core::cmp::Ordering;
 use soroban_env_common::{CheckedEnv, TryIntoVal};
 
-pub fn has_administrator(e: &Host) -> Result<bool, ()> {
+pub fn has_administrator(e: &Host) -> Result<bool, Error> {
     let key = DataKey::Admin;
-    let rv = e.has_contract_data(key.try_into_val(e)?).map_err(|_| ())?;
-    rv.try_into().map_err(|_| ())
+    let rv = e.has_contract_data(key.try_into_val(e)?)?;
+    Ok(rv.try_into()?)
 }
 
-fn read_administrator(e: &Host) -> Result<Identifier, ()> {
+fn read_administrator(e: &Host) -> Result<Identifier, Error> {
     let key = DataKey::Admin;
-    let rv = e.get_contract_data(key.try_into_val(e)?).map_err(|_| ())?;
-    rv.in_env(e).try_into()
+    let rv = e.get_contract_data(key.try_into_val(e)?)?;
+    Ok(rv.in_env(e).try_into()?)
 }
 
 pub fn to_administrator_authorization(
     e: &Host,
     auth: Authorization,
-) -> Result<KeyedAuthorization, ()> {
+) -> Result<KeyedAuthorization, Error> {
     let admin = read_administrator(e)?;
     match (admin, auth) {
         (Identifier::Contract(admin_id), Authorization::Contract) => {
-            let invoker_id: BytesN<32> = e
-                .get_invoking_contract()
-                .map_err(|_| ())?
-                .in_env(e)
-                .try_into()?;
+            let invoker_id: BytesN<32> = e.get_invoking_contract()?.in_env(e).try_into()?;
             if admin_id.compare(&invoker_id)? != Ordering::Equal {
-                Err(())
+                Err(Error::ContractError)
             } else {
                 Ok(KeyedAuthorization::Contract)
             }
@@ -49,13 +46,12 @@ pub fn to_administrator_authorization(
                 signatures,
             }))
         }
-        _ => Err(()),
+        _ => Err(Error::ContractError),
     }
 }
 
-pub fn write_administrator(e: &Host, id: Identifier) -> Result<(), ()> {
+pub fn write_administrator(e: &Host, id: Identifier) -> Result<(), Error> {
     let key = DataKey::Admin;
-    e.put_contract_data(key.try_into_val(e)?, id.try_into_val(e)?)
-        .map_err(|_| ())?;
+    e.put_contract_data(key.try_into_val(e)?, id.try_into_val(e)?)?;
     Ok(())
 }

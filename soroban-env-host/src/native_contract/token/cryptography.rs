@@ -1,5 +1,6 @@
 use crate::host::Host;
 use crate::native_contract::base_types::Vec;
+use crate::native_contract::token::error::Error;
 use crate::native_contract::token::nonce::read_and_increment_nonce;
 use crate::native_contract::token::public_types::{
     Identifier, KeyedAccountAuthorization, KeyedAuthorization, KeyedEd25519Signature, Message,
@@ -25,18 +26,15 @@ fn check_ed25519_auth(
     auth: KeyedEd25519Signature,
     domain: Domain,
     parameters: Vec,
-) -> Result<(), ()> {
+) -> Result<(), Error> {
     let msg = MessageV0 {
         nonce: read_and_increment_nonce(&e, Identifier::Ed25519(auth.public_key.clone()))?,
         domain: domain as u32,
         parameters: parameters.try_into().unwrap(),
     };
-    let msg_bin = e
-        .serialize_to_binary(Message::V0(msg).try_into_val(e)?)
-        .map_err(|_| ())?;
+    let msg_bin = e.serialize_to_binary(Message::V0(msg).try_into_val(e)?)?;
 
-    e.verify_sig_ed25519(auth.public_key.into(), msg_bin, auth.signature.into())
-        .map_err(|_| ())?;
+    e.verify_sig_ed25519(auth.public_key.into(), msg_bin, auth.signature.into())?;
     Ok(())
 }
 
@@ -45,15 +43,13 @@ fn check_account_auth(
     auth: KeyedAccountAuthorization,
     domain: Domain,
     parameters: Vec,
-) -> Result<(), ()> {
+) -> Result<(), Error> {
     let msg = MessageV0 {
         nonce: read_and_increment_nonce(&e, Identifier::Account(auth.public_key.clone()))?,
         domain: domain as u32,
         parameters: parameters.try_into().unwrap(),
     };
-    let msg_bin = e
-        .serialize_to_binary(Message::V0(msg).try_into_val(e)?)
-        .map_err(|_| ())?;
+    let msg_bin = e.serialize_to_binary(Message::V0(msg).try_into_val(e)?)?;
 
     let mut weight = 0u32;
     let sigs = &auth.signatures;
@@ -72,26 +68,21 @@ fn check_account_auth(
             sig.public_key.clone().into(),
             msg_bin.clone(),
             sig.signature.into(),
-        )
-        .map_err(|_| ())?;
-        let signer_weight_rv = e
-            .account_get_signer_weight(
-                auth.public_key.clone().into(),
-                sig.public_key.clone().into(),
-            )
-            .map_err(|_| ())?;
-        let signer_weight: u32 = signer_weight_rv.try_into().map_err(|_| ())?;
+        )?;
+        let signer_weight_rv = e.account_get_signer_weight(
+            auth.public_key.clone().into(),
+            sig.public_key.clone().into(),
+        )?;
+        let signer_weight: u32 = signer_weight_rv.try_into()?;
         // TODO: Check for overflow
         weight += signer_weight;
 
         prev_pk = Some(sig.public_key);
     }
 
-    let threshold_rv = e
-        .account_get_medium_threshold(auth.public_key.into())
-        .map_err(|_| ())?;
-    if weight < threshold_rv.try_into().map_err(|_| ())? {
-        Err(())
+    let threshold_rv = e.account_get_medium_threshold(auth.public_key.into())?;
+    if weight < threshold_rv.try_into()? {
+        Err(Error::ContractError)
     } else {
         Ok(())
     }
@@ -102,10 +93,10 @@ pub fn check_auth(
     auth: KeyedAuthorization,
     domain: Domain,
     parameters: Vec,
-) -> Result<(), ()> {
+) -> Result<(), Error> {
     match auth {
         KeyedAuthorization::Contract => {
-            e.get_invoking_contract().map_err(|_| ())?;
+            e.get_invoking_contract()?;
             Ok(())
         }
         KeyedAuthorization::Ed25519(kea) => check_ed25519_auth(e, kea, domain, parameters),

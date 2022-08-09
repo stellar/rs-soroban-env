@@ -26,10 +26,10 @@ pub fn derive_contract_function_set<'a>(
             let func_call = quote! {
                 #discriminant_ident => {
                     if args.len() == #num_args {
-                        #(let #args: #arg_types = args.get(#arg_indices).cloned().ok_or(())?.in_env(host).try_into().map_err(|_| ())?;)*
-                        Self::#ident(host, #(#args,)*)?.try_into_val(host).map_err(|_| ())
+                        #(let #args: #arg_types = args.get(#arg_indices).cloned().ok_or(soroban_env_common::ConversionError)?.in_env(host).try_into()?;)*
+                        Ok(Self::#ident(host, #(#args,)*)?.try_into_val(host)?)
                     } else {
-                        Err(())
+                        Err(host.err_general("wrong number of args"))
                     }
                 }
             };
@@ -43,12 +43,12 @@ pub fn derive_contract_function_set<'a>(
                 func: &soroban_env_common::Symbol,
                 host: &crate::Host,
                 args: &[soroban_env_common::RawVal],
-            ) -> Result<soroban_env_common::RawVal, ()> {
+            ) -> Result<soroban_env_common::RawVal, crate::HostError> {
                 use super::*;
                 #(#discriminant_consts;)*
                 match func.to_raw().get_payload() {
                     #(#func_calls)*
-                    _ => panic!(),
+                    _ => Err(host.err_general("function doesn't exist"))
                 }
             }
         }

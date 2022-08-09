@@ -3,6 +3,7 @@ mod allowance;
 mod balance;
 mod contract;
 mod cryptography;
+mod error;
 mod metadata;
 mod nonce;
 mod public_types;

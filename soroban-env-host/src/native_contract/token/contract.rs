@@ -8,6 +8,7 @@ use crate::native_contract::token::balance::{
     read_balance, read_state, receive_balance, spend_balance, write_state,
 };
 use crate::native_contract::token::cryptography::{check_auth, Domain};
+use crate::native_contract::token::error::Error;
 use crate::native_contract::token::metadata::{
     read_decimal, read_name, read_symbol, write_decimal, write_name, write_symbol,
 };
@@ -23,24 +24,29 @@ pub trait TokenTrait {
         decimal: u32,
         name: Bytes,
         symbol: Bytes,
-    ) -> Result<(), ()>;
+    ) -> Result<(), Error>;
 
-    fn nonce(e: &Host, id: Identifier) -> Result<BigInt, ()>;
+    fn nonce(e: &Host, id: Identifier) -> Result<BigInt, Error>;
 
-    fn allowance(e: &Host, from: Identifier, spender: Identifier) -> Result<BigInt, ()>;
+    fn allowance(e: &Host, from: Identifier, spender: Identifier) -> Result<BigInt, Error>;
 
     fn approve(
         e: &Host,
         from: KeyedAuthorization,
         spender: Identifier,
         amount: BigInt,
-    ) -> Result<(), ()>;
+    ) -> Result<(), Error>;
 
-    fn balance(e: &Host, id: Identifier) -> Result<BigInt, ()>;
+    fn balance(e: &Host, id: Identifier) -> Result<BigInt, Error>;
 
-    fn is_frozen(e: &Host, id: Identifier) -> Result<bool, ()>;
+    fn is_frozen(e: &Host, id: Identifier) -> Result<bool, Error>;
 
-    fn xfer(e: &Host, from: KeyedAuthorization, to: Identifier, amount: BigInt) -> Result<(), ()>;
+    fn xfer(
+        e: &Host,
+        from: KeyedAuthorization,
+        to: Identifier,
+        amount: BigInt,
+    ) -> Result<(), Error>;
 
     fn xfer_from(
         e: &Host,
@@ -48,23 +54,23 @@ pub trait TokenTrait {
         from: Identifier,
         to: Identifier,
         amount: BigInt,
-    ) -> Result<(), ()>;
+    ) -> Result<(), Error>;
 
-    fn burn(e: &Host, admin: Authorization, from: Identifier, amount: BigInt) -> Result<(), ()>;
+    fn burn(e: &Host, admin: Authorization, from: Identifier, amount: BigInt) -> Result<(), Error>;
 
-    fn freeze(e: &Host, admin: Authorization, id: Identifier) -> Result<(), ()>;
+    fn freeze(e: &Host, admin: Authorization, id: Identifier) -> Result<(), Error>;
 
-    fn mint(e: &Host, admin: Authorization, to: Identifier, amount: BigInt) -> Result<(), ()>;
+    fn mint(e: &Host, admin: Authorization, to: Identifier, amount: BigInt) -> Result<(), Error>;
 
-    fn set_admin(e: &Host, admin: Authorization, new_admin: Identifier) -> Result<(), ()>;
+    fn set_admin(e: &Host, admin: Authorization, new_admin: Identifier) -> Result<(), Error>;
 
-    fn unfreeze(e: &Host, admin: Authorization, id: Identifier) -> Result<(), ()>;
+    fn unfreeze(e: &Host, admin: Authorization, id: Identifier) -> Result<(), Error>;
 
-    fn decimals(e: &Host) -> Result<u32, ()>;
+    fn decimals(e: &Host) -> Result<u32, Error>;
 
-    fn name(e: &Host) -> Result<Bytes, ()>;
+    fn name(e: &Host) -> Result<Bytes, Error>;
 
-    fn symbol(e: &Host) -> Result<Bytes, ()>;
+    fn symbol(e: &Host) -> Result<Bytes, Error>;
 }
 
 pub struct Token;
@@ -77,7 +83,7 @@ impl TokenTrait for Token {
         decimal: u32,
         name: Bytes,
         symbol: Bytes,
-    ) -> Result<(), ()> {
+    ) -> Result<(), Error> {
         if has_administrator(&e)? {
             panic!("already initialized")
         }
@@ -89,11 +95,11 @@ impl TokenTrait for Token {
         Ok(())
     }
 
-    fn nonce(e: &Host, id: Identifier) -> Result<BigInt, ()> {
+    fn nonce(e: &Host, id: Identifier) -> Result<BigInt, Error> {
         read_nonce(e, id)
     }
 
-    fn allowance(e: &Host, from: Identifier, spender: Identifier) -> Result<BigInt, ()> {
+    fn allowance(e: &Host, from: Identifier, spender: Identifier) -> Result<BigInt, Error> {
         read_allowance(&e, from, spender)
     }
 
@@ -102,7 +108,7 @@ impl TokenTrait for Token {
         from: KeyedAuthorization,
         spender: Identifier,
         amount: BigInt,
-    ) -> Result<(), ()> {
+    ) -> Result<(), Error> {
         let from_id = from.get_identifier(&e)?;
         let mut args = Vec::new(e)?;
         args.push(spender.clone())?;
@@ -112,15 +118,20 @@ impl TokenTrait for Token {
         Ok(())
     }
 
-    fn balance(e: &Host, id: Identifier) -> Result<BigInt, ()> {
+    fn balance(e: &Host, id: Identifier) -> Result<BigInt, Error> {
         read_balance(e, id)
     }
 
-    fn is_frozen(e: &Host, id: Identifier) -> Result<bool, ()> {
+    fn is_frozen(e: &Host, id: Identifier) -> Result<bool, Error> {
         read_state(&e, id)
     }
 
-    fn xfer(e: &Host, from: KeyedAuthorization, to: Identifier, amount: BigInt) -> Result<(), ()> {
+    fn xfer(
+        e: &Host,
+        from: KeyedAuthorization,
+        to: Identifier,
+        amount: BigInt,
+    ) -> Result<(), Error> {
         let from_id = from.get_identifier(&e)?;
         let mut args = Vec::new(e)?;
         args.push(to.clone())?;
@@ -137,7 +148,7 @@ impl TokenTrait for Token {
         from: Identifier,
         to: Identifier,
         amount: BigInt,
-    ) -> Result<(), ()> {
+    ) -> Result<(), Error> {
         let spender_id = spender.get_identifier(&e)?;
         let mut args = Vec::new(e)?;
         args.push(from.clone())?;
@@ -150,7 +161,7 @@ impl TokenTrait for Token {
         Ok(())
     }
 
-    fn burn(e: &Host, admin: Authorization, from: Identifier, amount: BigInt) -> Result<(), ()> {
+    fn burn(e: &Host, admin: Authorization, from: Identifier, amount: BigInt) -> Result<(), Error> {
         let auth = to_administrator_authorization(&e, admin)?;
         let mut args = Vec::new(e)?;
         args.push(from.clone())?;
@@ -160,7 +171,7 @@ impl TokenTrait for Token {
         Ok(())
     }
 
-    fn freeze(e: &Host, admin: Authorization, id: Identifier) -> Result<(), ()> {
+    fn freeze(e: &Host, admin: Authorization, id: Identifier) -> Result<(), Error> {
         let auth = to_administrator_authorization(&e, admin)?;
         let mut args = Vec::new(e)?;
         args.push(id.clone())?;
@@ -169,7 +180,7 @@ impl TokenTrait for Token {
         Ok(())
     }
 
-    fn mint(e: &Host, admin: Authorization, to: Identifier, amount: BigInt) -> Result<(), ()> {
+    fn mint(e: &Host, admin: Authorization, to: Identifier, amount: BigInt) -> Result<(), Error> {
         let auth = to_administrator_authorization(&e, admin)?;
         let mut args = Vec::new(e)?;
         args.push(to.clone())?;
@@ -179,7 +190,7 @@ impl TokenTrait for Token {
         Ok(())
     }
 
-    fn set_admin(e: &Host, admin: Authorization, new_admin: Identifier) -> Result<(), ()> {
+    fn set_admin(e: &Host, admin: Authorization, new_admin: Identifier) -> Result<(), Error> {
         let auth = to_administrator_authorization(&e, admin)?;
         let mut args = Vec::new(e)?;
         args.push(new_admin.clone())?;
@@ -188,7 +199,7 @@ impl TokenTrait for Token {
         Ok(())
     }
 
-    fn unfreeze(e: &Host, admin: Authorization, id: Identifier) -> Result<(), ()> {
+    fn unfreeze(e: &Host, admin: Authorization, id: Identifier) -> Result<(), Error> {
         let auth = to_administrator_authorization(&e, admin)?;
         let mut args = Vec::new(e)?;
         args.push(id.clone())?;
@@ -197,15 +208,15 @@ impl TokenTrait for Token {
         Ok(())
     }
 
-    fn decimals(e: &Host) -> Result<u32, ()> {
+    fn decimals(e: &Host) -> Result<u32, Error> {
         read_decimal(&e)
     }
 
-    fn name(e: &Host) -> Result<Bytes, ()> {
+    fn name(e: &Host) -> Result<Bytes, Error> {
         read_name(&e)
     }
 
-    fn symbol(e: &Host) -> Result<Bytes, ()> {
+    fn symbol(e: &Host) -> Result<Bytes, Error> {
         read_symbol(&e)
     }
 }
