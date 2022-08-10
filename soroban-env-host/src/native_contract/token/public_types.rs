@@ -2,7 +2,7 @@ use crate::host::Host;
 use crate::native_contract::base_types::{BigInt, BytesN, Map, Vec};
 use crate::native_contract::token::error::Error;
 use soroban_env_common::{CheckedEnv, TryIntoVal};
-use soroban_env_macros::contracttype;
+use soroban_native_sdk_macros::contracttype;
 
 pub type U256 = BytesN<32>;
 pub type U512 = BytesN<64>;

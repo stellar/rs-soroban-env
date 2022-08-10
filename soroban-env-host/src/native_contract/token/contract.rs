@@ -15,7 +15,7 @@ use crate::native_contract::token::metadata::{
 use crate::native_contract::token::nonce::read_nonce;
 use crate::native_contract::token::public_types::{Authorization, Identifier, KeyedAuthorization};
 use soroban_env_common::TryIntoVal;
-use soroban_env_macros::contractimpl;
+use soroban_native_sdk_macros::contractimpl;
 
 pub trait TokenTrait {
     fn initialize(

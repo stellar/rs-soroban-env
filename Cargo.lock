@@ -652,7 +652,7 @@ dependencies = [
  "perf-event",
  "sha2 0.10.2",
  "soroban-env-common",
- "soroban-env-macros",
+ "soroban-native-sdk-macros",
  "soroban-wasmi",
  "static_assertions",
  "tabwriter",
@@ -670,6 +670,16 @@ dependencies = [
  "proc-macro2",
  "quote",
  "stellar-xdr",
+ "syn",
+]
+
+[[package]]
+name = "soroban-native-sdk-macros"
+version = "0.0.1"
+dependencies = [
+ "itertools",
+ "proc-macro2",
+ "quote",
  "syn",
 ]
 
