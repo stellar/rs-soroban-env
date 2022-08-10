@@ -85,11 +85,11 @@ impl TokenTrait for Token {
         symbol: Bytes,
     ) -> Result<(), Error> {
         if has_administrator(&e)? {
-            panic!("already initialized")
+            return Err(Error::ContractError);
         }
         write_administrator(&e, admin)?;
 
-        write_decimal(&e, u8::try_from(decimal).expect("Decimal must fit in a u8"))?;
+        write_decimal(&e, u8::try_from(decimal).map_err(|_| Error::ContractError)?)?;
         write_name(&e, name)?;
         write_symbol(&e, symbol)?;
         Ok(())

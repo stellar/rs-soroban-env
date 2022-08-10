@@ -30,7 +30,7 @@ fn check_ed25519_auth(
     let msg = MessageV0 {
         nonce: read_and_increment_nonce(&e, Identifier::Ed25519(auth.public_key.clone()))?,
         domain: domain as u32,
-        parameters: parameters.try_into().unwrap(),
+        parameters,
     };
     let msg_bin = e.serialize_to_binary(Message::V0(msg).try_into_val(e)?)?;
 
@@ -47,7 +47,7 @@ fn check_account_auth(
     let msg = MessageV0 {
         nonce: read_and_increment_nonce(&e, Identifier::Account(auth.public_key.clone()))?,
         domain: domain as u32,
-        parameters: parameters.try_into().unwrap(),
+        parameters,
     };
     let msg_bin = e.serialize_to_binary(Message::V0(msg).try_into_val(e)?)?;
 
@@ -60,7 +60,7 @@ fn check_account_auth(
         // Cannot take multiple signatures from the same key
         if let Some(prev) = prev_pk {
             if prev.compare(&sig.public_key)? != Ordering::Less {
-                panic!("signature out of order")
+                return Err(Error::ContractError);
             }
         }
 
