@@ -347,11 +347,6 @@ impl Host {
         }
     }
 
-    pub(crate) fn from_host_val(&self, val: RawVal) -> Result<ScVal, HostError> {
-        ScVal::try_from_val(self, val)
-            .map_err(|_| self.err_status(ScHostValErrorCode::UnknownError))
-    }
-
     // Testing interface to create values directly for later use via Env functions.
     pub fn inject_val(&self, v: &ScVal) -> Result<RawVal, HostError> {
         self.to_host_val(v).map(Into::into)
@@ -374,7 +369,19 @@ impl Host {
         })
     }
 
+    pub(crate) fn from_host_val(&self, val: RawVal) -> Result<ScVal, HostError> {
+        // Charges a single unit to for the RawVal -> ScVal conversion.
+        // The actual conversion logic occurs in the `common` crate, which
+        // translates a u64 into another form defined by the xdr.
+        // For an `Object`, the actual structural conversion (such as byte
+        // cloning) occurs in `from_host_obj` and is metered there.
+        self.charge_budget(CostType::ValXdrConv, 1)?;
+        ScVal::try_from_val(self, val)
+            .map_err(|_| self.err_status(ScHostValErrorCode::UnknownError))
+    }
+
     pub(crate) fn to_host_val(&self, v: &ScVal) -> Result<HostVal, HostError> {
+        self.charge_budget(CostType::ValXdrConv, 1)?;
         let rv = v
             .try_into_val(self)
             .map_err(|_| self.err_status(ScHostValErrorCode::UnknownError))?;
@@ -383,48 +390,58 @@ impl Host {
 
     pub(crate) fn from_host_obj(&self, ob: Object) -> Result<ScObject, HostError> {
         unsafe {
-            self.unchecked_visit_val_obj(ob.into(), |ob| match ob {
-                None => Err(self.err_status(ScHostObjErrorCode::UnknownReference)),
-                Some(ho) => match ho {
-                    HostObject::Vec(vv) => {
-                        let mut sv = Vec::new();
-                        for e in vv.iter() {
-                            sv.push(self.from_host_val(e.val)?);
+            self.unchecked_visit_val_obj(ob.into(), |ob| {
+                // This accounts for conversion of "primitive" objects (e.g U64)
+                // and the "shell" of a complex object (ScMap). Any non-trivial
+                // work such as byte cloning, has to be accounted for and
+                // metered in indivial match arms.
+                self.charge_budget(CostType::ValXdrConv, 1)?;
+                match ob {
+                    None => Err(self.err_status(ScHostObjErrorCode::UnknownReference)),
+                    Some(ho) => match ho {
+                        HostObject::Vec(vv) => {
+                            let mut sv = Vec::new();
+                            for e in vv.iter() {
+                                sv.push(self.from_host_val(e.val)?);
+                            }
+                            Ok(ScObject::Vec(ScVec(self.map_err(sv.try_into())?)))
                         }
-                        Ok(ScObject::Vec(ScVec(self.map_err(sv.try_into())?)))
-                    }
-                    HostObject::Map(mm) => {
-                        let mut mv = Vec::new();
-                        for (k, v) in mm.iter() {
-                            let key = self.from_host_val(k.val)?;
-                            let val = self.from_host_val(v.val)?;
-                            mv.push(ScMapEntry { key, val });
+                        HostObject::Map(mm) => {
+                            let mut mv = Vec::new();
+                            for (k, v) in mm.iter() {
+                                let key = self.from_host_val(k.val)?;
+                                let val = self.from_host_val(v.val)?;
+                                mv.push(ScMapEntry { key, val });
+                            }
+                            Ok(ScObject::Map(ScMap(self.map_err(mv.try_into())?)))
                         }
-                        Ok(ScObject::Map(ScMap(self.map_err(mv.try_into())?)))
-                    }
-                    HostObject::U64(u) => Ok(ScObject::U64(*u)),
-                    HostObject::I64(i) => Ok(ScObject::I64(*i)),
-                    HostObject::Bin(b) => Ok(ScObject::Binary(self.map_err(b.clone().try_into())?)),
-                    HostObject::BigInt(bi) => {
-                        let (sign, data) = bi.to_bytes_be();
-                        match sign {
-                            Sign::Minus => Ok(ScObject::BigInt(ScBigInt::Negative(
-                                self.map_err(data.try_into())?,
-                            ))),
-                            Sign::NoSign => Ok(ScObject::BigInt(ScBigInt::Zero)),
-                            Sign::Plus => Ok(ScObject::BigInt(ScBigInt::Positive(
-                                self.map_err(data.try_into())?,
-                            ))),
+                        HostObject::U64(u) => Ok(ScObject::U64(*u)),
+                        HostObject::I64(i) => Ok(ScObject::I64(*i)),
+                        HostObject::Bin(b) => {
+                            Ok(ScObject::Binary(self.map_err(b.clone().try_into())?))
                         }
-                    }
-                    HostObject::Hash(_) => todo!(),
-                    HostObject::PublicKey(_) => todo!(),
-                },
+                        HostObject::BigInt(bi) => {
+                            let (sign, data) = bi.to_bytes_be();
+                            match sign {
+                                Sign::Minus => Ok(ScObject::BigInt(ScBigInt::Negative(
+                                    self.map_err(data.try_into())?,
+                                ))),
+                                Sign::NoSign => Ok(ScObject::BigInt(ScBigInt::Zero)),
+                                Sign::Plus => Ok(ScObject::BigInt(ScBigInt::Positive(
+                                    self.map_err(data.try_into())?,
+                                ))),
+                            }
+                        }
+                        HostObject::Hash(_) => todo!(),
+                        HostObject::PublicKey(_) => todo!(),
+                    },
+                }
             })
         }
     }
 
     pub(crate) fn to_host_obj(&self, ob: &ScObject) -> Result<HostObj, HostError> {
+        self.charge_budget(CostType::ValXdrConv, 1)?;
         match ob {
             ScObject::Vec(v) => {
                 let mut vv = Vector::new();
@@ -766,7 +783,6 @@ impl CheckedEnv for Host {
     }
 
     fn obj_cmp(&self, a: RawVal, b: RawVal) -> Result<i64, HostError> {
-        self.charge_budget(CostType::HostFunction, 2)?;
         let res = unsafe {
             self.unchecked_visit_val_obj(a, |ao| {
                 self.unchecked_visit_val_obj(b, |bo| Ok(ao.cmp(&bo)))

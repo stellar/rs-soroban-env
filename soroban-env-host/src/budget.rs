@@ -15,6 +15,10 @@ pub enum CostType {
     VisitObject = 8,
     PushFrame = 9,
     PopFrame = 10,
+    // Tracks a single Val (RawVal or primative Object like U64) <=> ScVal
+    // conversion cost. Most of these Val counterparts in ScVal (except e.g.
+    // Symbol) consumes a single int64 and therefore is a constant overhead.
+    ValXdrConv = 11,
 }
 
 // TODO: add XDR support for iterating over all the elements of an enum
@@ -32,6 +36,7 @@ impl CostType {
             CostType::VisitObject,
             CostType::PushFrame,
             CostType::PopFrame,
+            CostType::ValXdrConv,
         ];
         VARIANTS.iter()
     }
@@ -82,6 +87,15 @@ impl CostModel {
             res = res.saturating_add(self.quad_param.saturating_mul(input.saturating_mul(input)));
         }
         res
+    }
+
+    #[cfg(test)]
+    pub fn reset(&mut self) {
+        self.const_param = 0;
+        self.log_param = 0;
+        self.log_base_param = 0;
+        self.lin_param = 0;
+        self.quad_param = 0;
     }
 }
 
@@ -161,9 +175,6 @@ impl BudgetDimension {
     }
 
     pub fn charge(&mut self, ty: CostType, input: u64) -> Result<(), HostError> {
-        if self.limit == u64::MAX {
-            return Ok(());
-        }
         let cm = self.get_cost_model(ty);
         self.count = self.count.saturating_add(cm.evaluate(input));
         if self.is_over_budget() {
@@ -171,6 +182,14 @@ impl BudgetDimension {
             Err(ScVmErrorCode::TrapMemLimitExceeded.into())
         } else {
             Ok(())
+        }
+    }
+
+    // Resets all model parameters to zero (so that we can override and test individual ones later).
+    #[cfg(test)]
+    pub fn reset_models(&mut self) {
+        for model in &mut self.cost_models {
+            model.reset()
         }
     }
 }
@@ -228,6 +247,19 @@ impl Budget {
             *i = 0;
         }
     }
+
+    #[cfg(test)]
+    pub fn reset_limits(&mut self, cpu: u64, mem: u64) {
+        self.cpu_insns.reset(cpu);
+        self.mem_bytes.reset(mem);
+        self.reset_inputs()
+    }
+
+    #[cfg(test)]
+    pub fn reset_models(&mut self) {
+        self.cpu_insns.reset_models();
+        self.mem_bytes.reset_models();
+    }
 }
 
 impl Default for Budget {
@@ -250,7 +282,19 @@ impl Default for Budget {
         b.cpu_insns
             .get_cost_model_mut(CostType::WasmInsnExec)
             .lin_param = 73;
-        // TODO: set cpu, mem model parameters for other CostTypes
+        // TODO: to be calibrated
+        b.cpu_insns
+            .get_cost_model_mut(CostType::ValXdrConv)
+            .lin_param = 1;
+        b.mem_bytes
+            .get_cost_model_mut(CostType::ValXdrConv)
+            .lin_param = 1;
+        b.cpu_insns
+            .get_cost_model_mut(CostType::ValXdrConv)
+            .const_param = 100;
+        b.mem_bytes
+            .get_cost_model_mut(CostType::ValXdrConv)
+            .const_param = 10;
 
         // Some "reasonable defaults": 640k of RAM and 100usec.
         //
