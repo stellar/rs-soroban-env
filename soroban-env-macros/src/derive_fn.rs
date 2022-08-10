@@ -1,12 +1,14 @@
 use itertools::MultiUnzip;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
-use syn::{FnArg, Type};
+use syn::{spanned::Spanned, Error, FnArg, Type};
 
 pub fn derive_contract_function_set<'a>(
     ty: &Box<Type>,
     methods: impl Iterator<Item = &'a syn::ImplItemMethod>,
 ) -> TokenStream2 {
+    let mut errors = Vec::<Error>::new();
+
     let (discriminant_consts, func_calls): (Vec<_>, Vec<_>) = methods
         .map(|m| {
             let ident = &m.sig.ident;
@@ -19,7 +21,10 @@ pub fn derive_contract_function_set<'a>(
                 let arg = format_ident!("arg{}", i);
                 match a {
                     FnArg::Typed(t) => (i, arg, t.ty),
-                    _ => panic!(),
+                    _ => {
+                        errors.push(Error::new(a.span(), "invalid argument type"));
+                        (i, arg, syn::parse_quote! { () })
+                    }
                 }
             }).multiunzip();
             let num_args = args.len();
@@ -36,19 +41,25 @@ pub fn derive_contract_function_set<'a>(
             (discriminant_const, func_call)
         })
         .multiunzip();
-    quote! {
-        impl crate::native_contract::NativeContract for #ty {
-            fn call(
-                &self,
-                func: &soroban_env_common::Symbol,
-                host: &crate::Host,
-                args: &[soroban_env_common::RawVal],
-            ) -> Result<soroban_env_common::RawVal, crate::HostError> {
-                use super::*;
-                #(#discriminant_consts;)*
-                match func.to_raw().get_payload() {
-                    #(#func_calls)*
-                    _ => Err(host.err_general("function doesn't exist"))
+
+    if !errors.is_empty() {
+        let compile_errors = errors.iter().map(Error::to_compile_error);
+        quote! { #(#compile_errors)* }
+    } else {
+        quote! {
+            impl crate::native_contract::NativeContract for #ty {
+                fn call(
+                    &self,
+                    func: &soroban_env_common::Symbol,
+                    host: &crate::Host,
+                    args: &[soroban_env_common::RawVal],
+                ) -> Result<soroban_env_common::RawVal, crate::HostError> {
+                    use super::*;
+                    #(#discriminant_consts;)*
+                    match func.to_raw().get_payload() {
+                        #(#func_calls)*
+                        _ => Err(host.err_general("function doesn't exist"))
+                    }
                 }
             }
         }
