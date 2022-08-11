@@ -152,10 +152,59 @@ pub trait HostCostMeasurement {
     }
 }
 
+#[cfg(target_os = "linux")]
+mod cpu {
+    pub struct InstructionCounter(perf_event::Counter);
+    impl InstructionCounter {
+        pub fn new() -> Self {
+            InstructionCounter(
+                perf_event::Builder::new()
+                    .build()
+                    .expect("perf_event::Builder::new().build()"),
+            )
+        }
+        pub fn begin(&mut self) {
+            self.0.reset().expect("perf_event::Counter::reset");
+            self.0.enable().expect("perf_event::Counter::enable");
+        }
+        pub fn end_and_count(&mut self) -> u64 {
+            self.0.disable().expect("perf_event::Counter::disable");
+            self.0.read().expect("perf_event::Counter::read")
+        }
+    }
+}
+
+#[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+mod cpu {
+    pub struct InstructionCounter(macos_perf::PerformanceCounters);
+    impl InstructionCounter {
+        fn get() -> macos_perf::PerformanceCounters {
+            macos_perf::get_counters().expect("get_counters")
+        }
+        pub fn new() -> Self {
+            let has_sudo = sudo::check();
+            if has_sudo != sudo::RunningAs::Root {
+                panic!("measurement on macos requires sudo");
+            }
+            macos_perf::init().expect("macos_perf::init()");
+            InstructionCounter(Self::get())
+        }
+        pub fn begin(&mut self) {
+            self.0 = Self::get();
+        }
+
+        pub fn end_and_count(&mut self) -> u64 {
+            let curr = Self::get();
+            let diff = curr - self.0.clone();
+            diff.instructions as u64
+        }
+    }
+}
+
 pub fn measure_costs<HCM: HostCostMeasurement>(
     step_range: Range<u64>,
 ) -> Result<Measurements, std::io::Error> {
-    let mut cpu_counter = perf_event::Builder::new().build()?;
+    let mut cpu_insn_counter = cpu::InstructionCounter::new();
     let mem_tracker = MemTracker(Arc::new(AtomicU64::new(0)));
     let _ = AllocationRegistry::set_global_tracker(mem_tracker.clone())
         .expect("no other global tracker should be set yet");
@@ -171,14 +220,12 @@ pub fn measure_costs<HCM: HostCostMeasurement>(
         let start = Instant::now();
         mem_tracker.0.store(0, Ordering::SeqCst);
         let alloc_guard = alloc_group_token.enter();
-        cpu_counter.reset()?;
-        cpu_counter.enable()?;
+        cpu_insn_counter.begin();
         m.run(&host);
-        cpu_counter.disable()?;
+        let cpu_insns = cpu_insn_counter.end_and_count();
         drop(alloc_guard);
         let stop = Instant::now();
         let input = m.get_input(&host);
-        let cpu_insns = cpu_counter.read()?;
         let mem_bytes = mem_tracker.0.load(Ordering::SeqCst);
         let time_nsecs = stop.duration_since(start).as_nanos() as u64;
         ret.push(Measurement {
