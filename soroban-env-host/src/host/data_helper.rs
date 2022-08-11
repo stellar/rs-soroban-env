@@ -11,7 +11,7 @@ impl Host {
     pub fn contract_code_ledger_key(&self, contract_id: Hash) -> LedgerKey {
         LedgerKey::ContractData(LedgerKeyContractData {
             contract_id,
-            key: ScVal::Static(ScStatic::LedgerKeyContractCodeWasm),
+            key: ScVal::Static(ScStatic::LedgerKeyContractCode),
         })
     }
 
@@ -24,7 +24,7 @@ impl Host {
             _ => Err(self.err_status(ScHostStorageErrorCode::ExpectContractData)),
         }?;
         match scval {
-            ScVal::Object(Some(ScObject::Binary(b))) => Ok(b),
+            ScVal::Object(Some(ScObject::Bytes(b))) => Ok(b),
             _ => {
                 return Err(self.err_status_msg(
                     ScHostValErrorCode::UnexpectedValType,
@@ -43,7 +43,7 @@ impl Host {
         let val = self.from_host_obj(contract)?;
         let data = LedgerEntryData::ContractData(ContractDataEntry {
             contract_id,
-            key: ScVal::Static(ScStatic::LedgerKeyContractCodeWasm),
+            key: ScVal::Static(ScStatic::LedgerKeyContractCode),
             val: ScVal::Object(Some(val)),
         });
         let val = LedgerEntry {

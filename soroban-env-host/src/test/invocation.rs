@@ -37,13 +37,13 @@ fn invoke_single_contract_function() -> Result<(), HostError> {
 #[test]
 fn invoke_cross_contract() -> Result<(), HostError> {
     let contract_id: Hash = [0; 32].into();
-    let key = ScVal::Static(ScStatic::LedgerKeyContractCodeWasm);
+    let key = ScVal::Static(ScStatic::LedgerKeyContractCode);
     let storage_key = LedgerKey::ContractData(LedgerKeyContractData {
         contract_id: contract_id.clone(),
         key: key.clone(),
     });
     // We unwrap here rather than host.map_err because the host doesn't exist yet.
-    let scob = ScObject::Binary(ADD_I32.try_into().unwrap());
+    let scob = ScObject::Bytes(ADD_I32.try_into().unwrap());
     let val = ScVal::Object(Some(scob));
     let le = LedgerEntry {
         last_modified_ledger_seq: 0,
@@ -78,13 +78,13 @@ fn invoke_cross_contract() -> Result<(), HostError> {
 #[test]
 fn invoke_cross_contract_with_err() -> Result<(), HostError> {
     let contract_id: Hash = [0; 32].into();
-    let key = ScVal::Static(ScStatic::LedgerKeyContractCodeWasm);
+    let key = ScVal::Static(ScStatic::LedgerKeyContractCode);
     let storage_key = LedgerKey::ContractData(LedgerKeyContractData {
         contract_id: contract_id.clone(),
         key: key.clone(),
     });
     // We unwrap here rather than host.map_err because the host doesn't exist yet.
-    let scob = ScObject::Binary(VEC.try_into().unwrap());
+    let scob = ScObject::Bytes(VEC.try_into().unwrap());
     let val = ScVal::Object(Some(scob));
     let le = LedgerEntry {
         last_modified_ledger_seq: 0,
@@ -126,12 +126,12 @@ fn invoke_cross_contract_with_err() -> Result<(), HostError> {
 fn invoke_cross_contract_lvl2_nested_with_err() -> Result<(), HostError> {
     // 1st level, the calling contract
     let id0: Hash = [0; 32].into();
-    let key = ScVal::Static(ScStatic::LedgerKeyContractCodeWasm);
+    let key = ScVal::Static(ScStatic::LedgerKeyContractCode);
     let storage_key0 = LedgerKey::ContractData(LedgerKeyContractData {
         contract_id: id0.clone(),
         key: key.clone(),
     });
-    let scob0 = ScObject::Binary(CALL.try_into().unwrap());
+    let scob0 = ScObject::Bytes(CALL.try_into().unwrap());
     let val0 = ScVal::Object(Some(scob0));
     let le0 = LedgerEntry {
         last_modified_ledger_seq: 0,
@@ -149,7 +149,7 @@ fn invoke_cross_contract_lvl2_nested_with_err() -> Result<(), HostError> {
         contract_id: id1.clone(),
         key: key.clone(),
     });
-    let scob1 = ScObject::Binary(VEC.try_into().unwrap());
+    let scob1 = ScObject::Bytes(VEC.try_into().unwrap());
     let val1 = ScVal::Object(Some(scob1));
     let le1 = LedgerEntry {
         last_modified_ledger_seq: 0,

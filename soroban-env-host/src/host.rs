@@ -433,7 +433,7 @@ impl Host {
                     }
                     HostObject::U64(u) => Ok(ScObject::U64(*u)),
                     HostObject::I64(i) => Ok(ScObject::I64(*i)),
-                    HostObject::Bin(b) => Ok(ScObject::Binary(self.map_err(b.clone().try_into())?)),
+                    HostObject::Bin(b) => Ok(ScObject::Bytes(self.map_err(b.clone().try_into())?)),
                     HostObject::BigInt(bi) => {
                         let (sign, data) = bi.to_bytes_be();
                         match sign {
@@ -473,7 +473,7 @@ impl Host {
             }
             ScObject::U64(u) => self.add_host_object(*u),
             ScObject::I64(i) => self.add_host_object(*i),
-            ScObject::Binary(b) => self.add_host_object::<Vec<u8>>(b.clone().into()),
+            ScObject::Bytes(b) => self.add_host_object::<Vec<u8>>(b.clone().into()),
             ScObject::BigInt(sbi) => {
                 let bi = match sbi {
                     ScBigInt::Zero => BigInt::default(),
@@ -484,6 +484,7 @@ impl Host {
             }
             ScObject::Hash(_) => todo!(),
             ScObject::PublicKey(_) => todo!(),
+            ScObject::ContractCode(_) => todo!(),
         }
     }
 

@@ -38,7 +38,7 @@ impl Host {
     }
 
     pub(crate) fn test_bin_scobj(&self, vals: &[u8]) -> Result<ScObject, HostError> {
-        Ok(ScObject::Binary(self.map_err(vals.try_into())?))
+        Ok(ScObject::Bytes(self.map_err(vals.try_into())?))
     }
 
     pub(crate) fn test_bin_obj(&self, vals: &[u8]) -> Result<HostObj, HostError> {

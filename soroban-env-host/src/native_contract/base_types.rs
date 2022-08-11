@@ -79,7 +79,7 @@ impl TryFrom<EnvVal<Host, Object>> for Bytes {
     type Error = HostError;
 
     fn try_from(value: EnvVal<Host, Object>) -> Result<Self, Self::Error> {
-        if value.val.is_obj_type(ScObjectType::Binary) {
+        if value.val.is_obj_type(ScObjectType::Bytes) {
             Ok(Bytes(value))
         } else {
             Err(ConversionError.into())

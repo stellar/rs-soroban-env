@@ -14,7 +14,7 @@ fn sha256_test() -> Result<(), HostError> {
     let v = host.from_host_val(hash_obj.to_raw())?;
     let bin = match v {
         ScVal::Object(Some(scobj)) => match scobj {
-            ScObject::Binary(bin) => bin,
+            ScObject::Bytes(bin) => bin,
             _ => panic!("Wrong type"),
         },
         _ => panic!("Wrong type"),

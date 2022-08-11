@@ -26,7 +26,7 @@ fn binary_suite_of_tests() -> Result<(), HostError> {
     for i in 0..32 {
         obj = host.binary_push(obj, (i as u32).into())?;
     }
-    if let ScObject::Binary(b) = host.from_host_obj(obj)? {
+    if let ScObject::Bytes(b) = host.from_host_obj(obj)? {
         assert_eq!((0..32).collect::<Vec<u8>>().as_slice(), b.as_slice());
     } else {
         return Err(host.err_general("Type error"));
@@ -69,13 +69,13 @@ fn binary_suite_of_tests() -> Result<(), HostError> {
     // insert, slice and append
     obj = host.binary_insert(obj, 5_u32.into(), 5_u32.into())?; // [0,1,2,3,4,5,6,7]
     let obj0 = host.binary_slice(obj, 0_u32.into(), 3_u32.into())?; // [0,1,2]
-    if let ScObject::Binary(b) = host.from_host_obj(obj0)? {
+    if let ScObject::Bytes(b) = host.from_host_obj(obj0)? {
         assert_eq!((0..3).collect::<Vec<u8>>().as_slice(), b.as_slice());
     } else {
         return Err(host.err_general("Type error"));
     }
     let obj1 = host.binary_slice(obj, 3_u32.into(), 8_u32.into())?; // [3,4,5,6,7]
-    if let ScObject::Binary(b) = host.from_host_obj(obj1)? {
+    if let ScObject::Bytes(b) = host.from_host_obj(obj1)? {
         assert_eq!((3..8).collect::<Vec<u8>>().as_slice(), b.as_slice());
     } else {
         return Err(host.err_general("Type error"));
@@ -168,12 +168,12 @@ fn binary_xdr_roundtrip() -> Result<(), HostError> {
 #[test]
 fn invoke_memcpy() -> Result<(), HostError> {
     let contract_id: Hash = [0; 32].into();
-    let key = ScVal::Static(ScStatic::LedgerKeyContractCodeWasm);
+    let key = ScVal::Static(ScStatic::LedgerKeyContractCode);
     let storage_key = LedgerKey::ContractData(LedgerKeyContractData {
         contract_id: contract_id.clone(),
         key: key.clone(),
     });
-    let scob = ScObject::Binary(LINEAR_MEMORY.try_into().unwrap());
+    let scob = ScObject::Bytes(LINEAR_MEMORY.try_into().unwrap());
     let val = ScVal::Object(Some(scob));
     let le = LedgerEntry {
         last_modified_ledger_seq: 0,
