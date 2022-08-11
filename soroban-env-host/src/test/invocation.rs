@@ -5,7 +5,8 @@ use crate::{
     vm::Vm,
     xdr::{
         ContractDataEntry, Hash, LedgerEntry, LedgerEntryData, LedgerEntryExt, LedgerKey,
-        LedgerKeyContractData, ScHostObjErrorCode, ScObject, ScStatic, ScVal, ScVec,
+        LedgerKeyContractData, ScContractCode, ScHostObjErrorCode, ScObject, ScStatic, ScVal,
+        ScVec,
     },
     CheckedEnv, Host, HostError, Status, Symbol, Tag,
 };
@@ -43,8 +44,9 @@ fn invoke_cross_contract() -> Result<(), HostError> {
         key: key.clone(),
     });
     // We unwrap here rather than host.map_err because the host doesn't exist yet.
-    let scob = ScObject::Bytes(ADD_I32.try_into().unwrap());
-    let val = ScVal::Object(Some(scob));
+    let val = ScVal::Object(Some(ScObject::ContractCode(ScContractCode::Wasm(
+        ADD_I32.try_into().unwrap(),
+    ))));
     let le = LedgerEntry {
         last_modified_ledger_seq: 0,
         data: LedgerEntryData::ContractData(ContractDataEntry {
@@ -84,8 +86,9 @@ fn invoke_cross_contract_with_err() -> Result<(), HostError> {
         key: key.clone(),
     });
     // We unwrap here rather than host.map_err because the host doesn't exist yet.
-    let scob = ScObject::Bytes(VEC.try_into().unwrap());
-    let val = ScVal::Object(Some(scob));
+    let val = ScVal::Object(Some(ScObject::ContractCode(ScContractCode::Wasm(
+        VEC.try_into().unwrap(),
+    ))));
     let le = LedgerEntry {
         last_modified_ledger_seq: 0,
         data: LedgerEntryData::ContractData(ContractDataEntry {
@@ -131,8 +134,9 @@ fn invoke_cross_contract_lvl2_nested_with_err() -> Result<(), HostError> {
         contract_id: id0.clone(),
         key: key.clone(),
     });
-    let scob0 = ScObject::Bytes(CALL.try_into().unwrap());
-    let val0 = ScVal::Object(Some(scob0));
+    let val0 = ScVal::Object(Some(ScObject::ContractCode(ScContractCode::Wasm(
+        CALL.try_into().unwrap(),
+    ))));
     let le0 = LedgerEntry {
         last_modified_ledger_seq: 0,
         data: LedgerEntryData::ContractData(ContractDataEntry {
@@ -149,8 +153,9 @@ fn invoke_cross_contract_lvl2_nested_with_err() -> Result<(), HostError> {
         contract_id: id1.clone(),
         key: key.clone(),
     });
-    let scob1 = ScObject::Bytes(VEC.try_into().unwrap());
-    let val1 = ScVal::Object(Some(scob1));
+    let val1 = ScVal::Object(Some(ScObject::ContractCode(ScContractCode::Wasm(
+        VEC.try_into().unwrap(),
+    ))));
     let le1 = LedgerEntry {
         last_modified_ledger_seq: 0,
         data: LedgerEntryData::ContractData(ContractDataEntry {

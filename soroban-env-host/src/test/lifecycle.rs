@@ -1,8 +1,10 @@
 use super::wasm_examples::CREATE_CONTRACT;
 use crate::{
     storage::{AccessType, Footprint, Storage},
-    xdr::{self, LedgerKeyContractData, ScHostFnErrorCode, ScStatic},
-    xdr::{LedgerEntryData, LedgerKey, ScObject, ScVal, ScVec},
+    xdr::{
+        self, LedgerEntryData, LedgerKey, LedgerKeyContractData, ScContractCode, ScHostFnErrorCode,
+        ScObject, ScStatic, ScVal, ScVec,
+    },
     CheckedEnv, Host, HostError, Symbol,
 };
 use hex::FromHex;
@@ -100,7 +102,9 @@ fn create_contract_test_helper(
     check_new_code(
         &host,
         storage_key,
-        ScVal::Object(Some(host.test_bin_scobj(&code)?)),
+        ScVal::Object(Some(ScObject::ContractCode(ScContractCode::Wasm(
+            code.try_into().unwrap(),
+        )))),
     );
 
     Ok(host)
@@ -225,7 +229,13 @@ fn create_contract_using_parent_id_test() {
         .unwrap();
 
     //Validate child contract exists and code is what we expected
-    check_new_code(&host, child_storage_key, code_val);
+    check_new_code(
+        &host,
+        child_storage_key,
+        ScVal::Object(Some(ScObject::ContractCode(ScContractCode::Wasm(
+            child_code.try_into().unwrap(),
+        )))),
+    );
 }
 
 pub(crate) fn sha256_hash_id_preimage(pre_image: xdr::HashIdPreimage) -> xdr::Hash {

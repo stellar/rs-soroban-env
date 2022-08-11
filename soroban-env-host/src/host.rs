@@ -22,7 +22,7 @@ use crate::weak_host::WeakHost;
 use crate::xdr;
 use crate::xdr::{
     ContractDataEntry, HostFunction, LedgerEntry, LedgerEntryData, LedgerEntryExt, LedgerKey,
-    ScBigInt, ScHostContextErrorCode, ScHostFnErrorCode, ScHostObjErrorCode,
+    ScBigInt, ScContractCode, ScHostContextErrorCode, ScHostFnErrorCode, ScHostObjErrorCode,
     ScHostStorageErrorCode, ScHostValErrorCode, ScMap, ScMapEntry, ScObject, ScVal, ScVec,
 };
 use std::rc::Rc;
@@ -71,6 +71,7 @@ pub(crate) enum Frame {
     #[cfg(feature = "vm")]
     ContractVM(Rc<Vm>),
     HostFunction(HostFunction),
+    Token(Hash),
     #[cfg(feature = "testutils")]
     TestContract(Hash),
 }
@@ -277,6 +278,22 @@ impl Host {
         }
     }
 
+    pub(crate) fn push_token_frame(&self, contract_id: Hash) -> FrameGuard {
+        self.0.context.borrow_mut().push(Frame::Token(contract_id));
+        FrameGuard {
+            rollback: Some(self.capture_rollback_point()),
+            host: self.clone(),
+        }
+    }
+
+    pub(crate) fn push_native_frame(&self, func: HostFunction) -> FrameGuard {
+        self.0.context.borrow_mut().push(Frame::HostFunction(func));
+        FrameGuard {
+            rollback: Some(self.capture_rollback_point()),
+            host: self.clone(),
+        }
+    }
+
     pub(crate) fn push_host_function_frame(&self, func: HostFunction) -> FrameGuard {
         self.0.context.borrow_mut().push(Frame::HostFunction(func));
         FrameGuard {
@@ -322,6 +339,7 @@ impl Host {
             Frame::HostFunction(_) => {
                 Err(self.err_general("Host function context has no contract ID"))
             }
+            Frame::Token(id) => Ok(id.clone()),
             #[cfg(feature = "testutils")]
             Frame::TestContract(id) => Ok(id.clone()),
         })
@@ -532,30 +550,53 @@ impl Host {
         Ok(EnvVal { env, val: v })
     }
 
-    pub fn create_contract_helper(
+    pub fn create_wasm_contract_helper(
         &self,
         contract: Object,
         id_preimage: Vec<u8>,
     ) -> Result<Object, HostError> {
+        let wasm = self.visit_obj(contract, |b: &Vec<u8>| {
+            Ok(ScContractCode::Wasm(
+                b.try_into()
+                    .map_err(|_| self.err_general("code too large"))?,
+            ))
+        })?;
         let id_obj = self.compute_hash_sha256(self.add_host_object(id_preimage)?.into())?;
         let new_contract_id = self.hash_from_obj_input("id_obj", id_obj)?;
         let storage_key = self.contract_code_ledger_key(new_contract_id.clone());
         if self.0.storage.borrow_mut().has(&storage_key)? {
             return Err(self.err_general("Contract already exists"));
         }
-        self.store_contract_code(contract, new_contract_id, &storage_key)?;
+        self.store_contract_code(wasm, new_contract_id, &storage_key)?;
         Ok(id_obj)
     }
 
-    #[cfg(feature = "vm")]
-    fn call_wasm_fn(&self, id: &Hash, func: &Symbol, args: &[RawVal]) -> Result<RawVal, HostError> {
+    fn call_contract_fn(
+        &self,
+        id: &Hash,
+        func: &Symbol,
+        args: &[RawVal],
+    ) -> Result<RawVal, HostError> {
         // Create key for storage
         let storage_key = self.contract_code_ledger_key(id.clone());
-        // Retrieve the contract code and create vm
-        let code = self.retrieve_contract_code_from_storage(&storage_key)?;
-        let vm = Vm::new(self, id.clone(), code.as_slice())?;
-        // Resolve the function symbol and invoke contract call
-        vm.invoke_function_raw(self, SymbolStr::from(func).as_ref(), args)
+        match self.retrieve_contract_code_from_storage(&storage_key)? {
+            #[cfg(feature = "vm")]
+            ScContractCode::Wasm(wasm) => {
+                let vm = Vm::new(self, id.clone(), wasm.as_slice())?;
+                vm.invoke_function_raw(self, SymbolStr::from(func).as_ref(), args)
+            }
+            #[cfg(not(feature = "vm"))]
+            ScContractCode::Wasm(_) => Err(self.err_general("could not dispatch")),
+            ScContractCode::Token => {
+                let mut frame_guard = self.push_token_frame(id.clone());
+                use crate::native_contract::NativeContract;
+                let res = crate::native_contract::Token.call(func, self, args);
+                if res.is_ok() {
+                    frame_guard.commit();
+                }
+                res
+            }
+        }
     }
 
     fn call_n(&self, contract: Object, func: Symbol, args: &[RawVal]) -> Result<RawVal, HostError> {
@@ -581,10 +622,7 @@ impl Host {
             }
         }
 
-        #[cfg(feature = "vm")]
-        return self.call_wasm_fn(&id, &func, args);
-        #[cfg(not(feature = "vm"))]
-        return Err(self.err_general("could not dispatch"));
+        return self.call_contract_fn(&id, &func, args);
     }
 
     pub fn invoke_function_raw(&self, hf: HostFunction, args: ScVec) -> Result<RawVal, HostError> {
@@ -794,6 +832,7 @@ impl CheckedEnv for Host {
                 Frame::HostFunction(_) => {
                     Err(self.err_general("Host function context has no contract ID"))
                 }
+                Frame::Token(id) => Ok(id.clone()),
                 #[cfg(feature = "testutils")]
                 Frame::TestContract(id) => Ok(id.clone()),
             }
@@ -1162,14 +1201,14 @@ impl CheckedEnv for Host {
         self.verify_sig_ed25519(hash, key, sig)?;
 
         let buf = self.id_preimage_from_ed25519(key_val, salt_val)?;
-        self.create_contract_helper(v, buf)
+        self.create_wasm_contract_helper(v, buf)
     }
 
     fn create_contract_from_contract(&self, v: Object, salt: Object) -> Result<Object, HostError> {
         let contract_id = self.get_current_contract_id()?;
         let salt = self.uint256_from_obj_input("salt", salt)?;
         let buf = self.id_preimage_from_contract(contract_id, salt)?;
-        self.create_contract_helper(v, buf)
+        self.create_wasm_contract_helper(v, buf)
     }
 
     fn call(&self, contract: Object, func: Symbol, args: Object) -> Result<RawVal, HostError> {

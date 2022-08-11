@@ -167,14 +167,16 @@ fn binary_xdr_roundtrip() -> Result<(), HostError> {
 #[cfg(feature = "vm")]
 #[test]
 fn invoke_memcpy() -> Result<(), HostError> {
+    use crate::xdr::ScContractCode;
     let contract_id: Hash = [0; 32].into();
     let key = ScVal::Static(ScStatic::LedgerKeyContractCode);
     let storage_key = LedgerKey::ContractData(LedgerKeyContractData {
         contract_id: contract_id.clone(),
         key: key.clone(),
     });
-    let scob = ScObject::Bytes(LINEAR_MEMORY.try_into().unwrap());
-    let val = ScVal::Object(Some(scob));
+    let val = ScVal::Object(Some(ScObject::ContractCode(ScContractCode::Wasm(
+        LINEAR_MEMORY.try_into().unwrap(),
+    ))));
     let le = LedgerEntry {
         last_modified_ledger_seq: 0,
         data: LedgerEntryData::ContractData(ContractDataEntry {
