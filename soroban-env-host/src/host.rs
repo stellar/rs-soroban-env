@@ -550,24 +550,18 @@ impl Host {
         Ok(EnvVal { env, val: v })
     }
 
-    pub fn create_wasm_contract_helper(
+    pub fn create_contract_helper(
         &self,
-        contract: Object,
+        contract: ScContractCode,
         id_preimage: Vec<u8>,
     ) -> Result<Object, HostError> {
-        let wasm = self.visit_obj(contract, |b: &Vec<u8>| {
-            Ok(ScContractCode::Wasm(
-                b.try_into()
-                    .map_err(|_| self.err_general("code too large"))?,
-            ))
-        })?;
         let id_obj = self.compute_hash_sha256(self.add_host_object(id_preimage)?.into())?;
         let new_contract_id = self.hash_from_obj_input("id_obj", id_obj)?;
         let storage_key = self.contract_code_ledger_key(new_contract_id.clone());
         if self.0.storage.borrow_mut().has(&storage_key)? {
             return Err(self.err_general("Contract already exists"));
         }
-        self.store_contract_code(wasm, new_contract_id, &storage_key)?;
+        self.store_contract_code(contract, new_contract_id, &storage_key)?;
         Ok(id_obj)
     }
 
@@ -1200,15 +1194,57 @@ impl CheckedEnv for Host {
 
         self.verify_sig_ed25519(hash, key, sig)?;
 
+        let wasm = self.visit_obj(v, |b: &Vec<u8>| {
+            Ok(ScContractCode::Wasm(
+                b.try_into()
+                    .map_err(|_| self.err_general("code too large"))?,
+            ))
+        })?;
         let buf = self.id_preimage_from_ed25519(key_val, salt_val)?;
-        self.create_wasm_contract_helper(v, buf)
+        self.create_contract_helper(wasm, buf)
     }
 
     fn create_contract_from_contract(&self, v: Object, salt: Object) -> Result<Object, HostError> {
         let contract_id = self.get_current_contract_id()?;
         let salt = self.uint256_from_obj_input("salt", salt)?;
+
+        let wasm = self.visit_obj(v, |b: &Vec<u8>| {
+            Ok(ScContractCode::Wasm(
+                b.try_into()
+                    .map_err(|_| self.err_general("code too large"))?,
+            ))
+        })?;
         let buf = self.id_preimage_from_contract(contract_id, salt)?;
-        self.create_wasm_contract_helper(v, buf)
+        self.create_contract_helper(wasm, buf)
+    }
+
+    fn create_token_from_ed25519(
+        &self,
+        salt: Object,
+        key: Object,
+        sig: Object,
+    ) -> Result<Object, HostError> {
+        let salt_val = self.uint256_from_obj_input("salt", salt)?;
+        let key_val = self.uint256_from_obj_input("key", key)?;
+
+        // Verify parameters
+        let params = {
+            let separator = "create_token_from_ed25519(salt: u256, key: u256, sig: Vec<u8>)";
+            [separator.as_bytes(), salt_val.as_ref()].concat()
+        };
+        let hash = self.compute_hash_sha256(self.add_host_object(params)?.into())?;
+
+        self.verify_sig_ed25519(hash, key, sig)?;
+
+        let buf = self.id_preimage_from_ed25519(key_val, salt_val)?;
+        self.create_contract_helper(ScContractCode::Token, buf)
+    }
+
+    fn create_token_from_contract(&self, salt: Object) -> Result<Object, HostError> {
+        let contract_id = self.get_current_contract_id()?;
+        let salt = self.uint256_from_obj_input("salt", salt)?;
+        let buf = self.id_preimage_from_contract(contract_id, salt)?;
+        self.create_contract_helper(ScContractCode::Token, buf)
     }
 
     fn call(&self, contract: Object, func: Symbol, args: Object) -> Result<RawVal, HostError> {
