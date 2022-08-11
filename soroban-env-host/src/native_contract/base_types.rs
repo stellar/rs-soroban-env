@@ -119,7 +119,7 @@ impl<const N: u32> TryFrom<EnvVal<Host, Object>> for BytesN<N> {
     fn try_from(value: EnvVal<Host, Object>) -> Result<Self, Self::Error> {
         let bin = value.val;
         let len: u32 = value.env.binary_len(bin)?.try_into()?;
-        if len != N {
+        if len == N {
             Ok(Self(bin.in_env(&value.env)))
         } else {
             Err(ConversionError.into())
