@@ -63,7 +63,11 @@ impl HostCostMeasurement for SyntheticWASMRun {
     }
 }
 
-#[cfg(all(test, feature = "vm", target_os = "linux"))]
+#[cfg(all(
+    test,
+    feature = "vm",
+    any(target_os = "linux", all(target_os = "macos", target_arch = "aarch64"))
+))]
 fn main() -> std::io::Result<()> {
     env_logger::init();
     let mut measurements = measure_costs::<SyntheticWASMRun>(0..20)?;

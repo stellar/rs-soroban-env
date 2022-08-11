@@ -32,6 +32,9 @@ assert_matches = "1.5.0"
 optimization = "0.2.0"
 env_logger = "0.9.0"
 log = "0.4.17"
+tracking-allocator = "0.4.0"
+tabwriter = "1.2.1"
+thousands = "0.2.0"
 
 [features]
 vm = ["wasmi", "parity-wasm", "soroban-env-common/vm"]
@@ -40,9 +43,10 @@ testutils = []
 
 [target.'cfg(target_os = "linux")'.dev-dependencies]
 perf-event = "0.4.7"
-tracking-allocator = "0.4.0"
-tabwriter = "1.2.1"
-thousands = "0.2.0"
+
+[target.'cfg(all(target_os = "macos", target_arch = "aarch64"))'.dev-dependencies]
+macos-perf = "0.1.1"
+sudo = "0.6.0"
 
 [[bench]]
 required-features = ["vm"]
