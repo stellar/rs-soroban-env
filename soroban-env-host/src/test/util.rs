@@ -5,7 +5,7 @@ use crate::{
     storage::{AccessType, Footprint, Storage},
     xdr::{
         ContractDataEntry, Hash, LedgerEntry, LedgerEntryData, LedgerEntryExt, LedgerKey,
-        LedgerKeyContractData, ScObject, ScStatic, ScVal, ScVec,
+        LedgerKeyContractData, ScContractCode, ScObject, ScStatic, ScVal, ScVec,
     },
     Host, HostError,
 };
@@ -56,15 +56,16 @@ impl Host {
         let it = ids.iter().zip(codes.iter());
         let mut footprint = Footprint::default();
         let mut map = OrdMap::default();
-        for (_, (id, contract)) in it.enumerate() {
-            // We unwrap here rather than host.map_err because the host doesn't exist yet.
-            let contract = ScObject::Binary((*contract).try_into().unwrap());
-            let key = ScVal::Static(ScStatic::LedgerKeyContractCodeWasm);
+        for (id, contract) in it {
+            let key = ScVal::Static(ScStatic::LedgerKeyContractCode);
             let storage_key = LedgerKey::ContractData(LedgerKeyContractData {
                 contract_id: id.clone(),
                 key: key.clone(),
             });
-            let val = ScVal::Object(Some(contract));
+            // We unwrap here rather than host.map_err because the host doesn't exist yet.
+            let val = ScVal::Object(Some(ScObject::ContractCode(ScContractCode::Wasm(
+                (*contract).try_into().unwrap(),
+            ))));
             let le = LedgerEntry {
                 last_modified_ledger_seq: 0,
                 data: LedgerEntryData::ContractData(ContractDataEntry {
@@ -96,7 +97,7 @@ impl Host {
     }
 
     pub(crate) fn test_bin_scobj(&self, vals: &[u8]) -> Result<ScObject, HostError> {
-        Ok(ScObject::Binary(self.map_err(vals.try_into())?))
+        Ok(ScObject::Bytes(self.map_err(vals.try_into())?))
     }
 
     pub(crate) fn test_bin_obj(&self, vals: &[u8]) -> Result<HostObj, HostError> {

@@ -22,7 +22,7 @@ use crate::weak_host::WeakHost;
 use crate::xdr;
 use crate::xdr::{
     ContractDataEntry, HostFunction, LedgerEntry, LedgerEntryData, LedgerEntryExt, LedgerKey,
-    ScBigInt, ScHostContextErrorCode, ScHostFnErrorCode, ScHostObjErrorCode,
+    ScBigInt, ScContractCode, ScHostContextErrorCode, ScHostFnErrorCode, ScHostObjErrorCode,
     ScHostStorageErrorCode, ScHostValErrorCode, ScMap, ScMapEntry, ScObject, ScVal, ScVec,
 };
 use std::rc::Rc;
@@ -71,6 +71,7 @@ pub(crate) enum Frame {
     #[cfg(feature = "vm")]
     ContractVM(Rc<Vm>),
     HostFunction(HostFunction),
+    Token(Hash),
     #[cfg(feature = "testutils")]
     TestContract(Hash),
 }
@@ -317,6 +318,7 @@ impl Host {
             Frame::HostFunction(_) => {
                 Err(self.err_general("Host function context has no contract ID"))
             }
+            Frame::Token(id) => Ok(id.clone()),
             #[cfg(feature = "testutils")]
             Frame::TestContract(id) => Ok(id.clone()),
         })
@@ -442,7 +444,7 @@ impl Host {
                         HostObject::U64(u) => Ok(ScObject::U64(*u)),
                         HostObject::I64(i) => Ok(ScObject::I64(*i)),
                         HostObject::Bin(b) => {
-                            Ok(ScObject::Binary(self.map_err(b.clone().try_into())?))
+                            Ok(ScObject::Bytes(self.map_err(b.clone().try_into())?))
                         }
                         HostObject::BigInt(bi) => {
                             let (sign, data) = bi.to_bytes_be();
@@ -485,7 +487,7 @@ impl Host {
             }
             ScObject::U64(u) => self.add_host_object(*u),
             ScObject::I64(i) => self.add_host_object(*i),
-            ScObject::Binary(b) => self.add_host_object::<Vec<u8>>(b.clone().into()),
+            ScObject::Bytes(b) => self.add_host_object::<Vec<u8>>(b.clone().into()),
             ScObject::BigInt(sbi) => {
                 let bi = match sbi {
                     ScBigInt::Zero => BigInt::default(),
@@ -496,6 +498,7 @@ impl Host {
             }
             ScObject::Hash(_) => todo!(),
             ScObject::PublicKey(_) => todo!(),
+            ScObject::ContractCode(_) => todo!(),
         }
     }
 
@@ -545,7 +548,7 @@ impl Host {
 
     pub fn create_contract_helper(
         &self,
-        contract: Object,
+        contract: ScContractCode,
         id_preimage: Vec<u8>,
     ) -> Result<Object, HostError> {
         let id_obj = self.compute_hash_sha256(self.add_host_object(id_preimage)?.into())?;
@@ -558,15 +561,27 @@ impl Host {
         Ok(id_obj)
     }
 
-    #[cfg(feature = "vm")]
-    fn call_wasm_fn(&self, id: &Hash, func: &Symbol, args: &[RawVal]) -> Result<RawVal, HostError> {
+    fn call_contract_fn(
+        &self,
+        id: &Hash,
+        func: &Symbol,
+        args: &[RawVal],
+    ) -> Result<RawVal, HostError> {
         // Create key for storage
         let storage_key = self.contract_code_ledger_key(id.clone());
-        // Retrieve the contract code and create vm
-        let code = self.retrieve_contract_code_from_storage(&storage_key)?;
-        let vm = Vm::new(self, id.clone(), code.as_slice())?;
-        // Resolve the function symbol and invoke contract call
-        vm.invoke_function_raw(self, SymbolStr::from(func).as_ref(), args)
+        match self.retrieve_contract_code_from_storage(&storage_key)? {
+            #[cfg(feature = "vm")]
+            ScContractCode::Wasm(wasm) => {
+                let vm = Vm::new(self, id.clone(), wasm.as_slice())?;
+                vm.invoke_function_raw(self, SymbolStr::from(func).as_ref(), args)
+            }
+            #[cfg(not(feature = "vm"))]
+            ScContractCode::Wasm(_) => Err(self.err_general("could not dispatch")),
+            ScContractCode::Token => self.with_frame(Frame::Token(id.clone()), || {
+                use crate::native_contract::{NativeContract, Token};
+                Token.call(func, self, args)
+            }),
+        }
     }
 
     fn call_n(&self, contract: Object, func: Symbol, args: &[RawVal]) -> Result<RawVal, HostError> {
@@ -590,10 +605,7 @@ impl Host {
             }
         }
 
-        #[cfg(feature = "vm")]
-        return self.call_wasm_fn(&id, &func, args);
-        #[cfg(not(feature = "vm"))]
-        return Err(self.err_general("could not dispatch"));
+        return self.call_contract_fn(&id, &func, args);
     }
 
     pub fn invoke_function_raw(&self, hf: HostFunction, args: ScVec) -> Result<RawVal, HostError> {
@@ -797,6 +809,7 @@ impl CheckedEnv for Host {
                 Frame::HostFunction(_) => {
                     Err(self.err_general("Host function context has no contract ID"))
                 }
+                Frame::Token(id) => Ok(id.clone()),
                 #[cfg(feature = "testutils")]
                 Frame::TestContract(id) => Ok(id.clone()),
             }
@@ -1163,15 +1176,57 @@ impl CheckedEnv for Host {
 
         self.verify_sig_ed25519(hash, key, sig)?;
 
+        let wasm = self.visit_obj(v, |b: &Vec<u8>| {
+            Ok(ScContractCode::Wasm(
+                b.try_into()
+                    .map_err(|_| self.err_general("code too large"))?,
+            ))
+        })?;
         let buf = self.id_preimage_from_ed25519(key_val, salt_val)?;
-        self.create_contract_helper(v, buf)
+        self.create_contract_helper(wasm, buf)
     }
 
     fn create_contract_from_contract(&self, v: Object, salt: Object) -> Result<Object, HostError> {
         let contract_id = self.get_current_contract_id()?;
         let salt = self.uint256_from_obj_input("salt", salt)?;
+
+        let wasm = self.visit_obj(v, |b: &Vec<u8>| {
+            Ok(ScContractCode::Wasm(
+                b.try_into()
+                    .map_err(|_| self.err_general("code too large"))?,
+            ))
+        })?;
         let buf = self.id_preimage_from_contract(contract_id, salt)?;
-        self.create_contract_helper(v, buf)
+        self.create_contract_helper(wasm, buf)
+    }
+
+    fn create_token_from_ed25519(
+        &self,
+        salt: Object,
+        key: Object,
+        sig: Object,
+    ) -> Result<Object, HostError> {
+        let salt_val = self.uint256_from_obj_input("salt", salt)?;
+        let key_val = self.uint256_from_obj_input("key", key)?;
+
+        // Verify parameters
+        let params = {
+            let separator = "create_token_from_ed25519(salt: u256, key: u256, sig: Vec<u8>)";
+            [separator.as_bytes(), salt_val.as_ref()].concat()
+        };
+        let hash = self.compute_hash_sha256(self.add_host_object(params)?.into())?;
+
+        self.verify_sig_ed25519(hash, key, sig)?;
+
+        let buf = self.id_preimage_from_ed25519(key_val, salt_val)?;
+        self.create_contract_helper(ScContractCode::Token, buf)
+    }
+
+    fn create_token_from_contract(&self, salt: Object) -> Result<Object, HostError> {
+        let contract_id = self.get_current_contract_id()?;
+        let salt = self.uint256_from_obj_input("salt", salt)?;
+        let buf = self.id_preimage_from_contract(contract_id, salt)?;
+        self.create_contract_helper(ScContractCode::Token, buf)
     }
 
     fn call(&self, contract: Object, func: Symbol, args: Object) -> Result<RawVal, HostError> {
