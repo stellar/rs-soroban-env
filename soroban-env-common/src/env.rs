@@ -160,7 +160,7 @@ macro_rules! call_macro_with_all_host_functions {
                 /// Return the timestamp number of the current ledger as a u64.
                 {"7", fn get_ledger_timestamp() -> Object }
                 /// Return the network identity of the current ledger as bytes.
-                {"8", fn get_ledger_network_id() -> RawVal }
+                {"8", fn get_ledger_network_id() -> Object }
             }
 
             mod u64 "u" {

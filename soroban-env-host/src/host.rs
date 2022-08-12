@@ -1673,11 +1673,11 @@ impl CheckedEnv for Host {
         self.with_ledger_info(|li| Ok(li.sequence_number.into()))
     }
 
-    fn get_ledger_timestamp(&self) -> Result<RawVal, Self::Error> {
-        self.with_ledger_info(|li| Ok(li.timestamp.try_into_val(self)?))
+    fn get_ledger_timestamp(&self) -> Result<Object, Self::Error> {
+        self.with_ledger_info(|li| Ok(self.add_host_object(li.timestamp)?.into()))
     }
 
-    fn get_ledger_network_id(&self) -> Result<RawVal, Self::Error> {
+    fn get_ledger_network_id(&self) -> Result<Object, Self::Error> {
         Ok(self
             .with_ledger_info(|li| self.add_host_object(li.network_id.clone()))?
             .into())
