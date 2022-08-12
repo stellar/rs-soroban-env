@@ -45,7 +45,7 @@ pub use error::HostError;
 /// Saves host state (storage and objects) for rolling back a (sub-)transaction
 /// on error. A helper type used by [`FrameGuard`].
 #[derive(Clone)]
-struct RollbackPoint {
+pub(crate) struct RollbackPoint {
     storage: OrdMap<LedgerKey, Option<LedgerEntry>>,
     objects: usize,
 }
@@ -95,36 +95,6 @@ pub(crate) struct HostImpl {
     #[cfg(feature = "testutils")]
     contracts: RefCell<std::collections::HashMap<Hash, Rc<dyn ContractFunctionSet>>>,
 }
-
-/// A guard struct that exists to call [`Host::pop_frame`] when it is dropped,
-/// providing whatever rollback it is holding as an argument. By default, this
-/// means that when a [`FrameGuard`] drops, it will roll the [`Host`] back to
-/// the state it had before its associated [`Frame`] was pushed.
-///
-/// Users may call [`FrameGuard::commit`] to cause the rollback point to be set
-/// to `None`, which will cause the [`FrameGuard`] to commit changes to the host
-/// that occurred during its lifetime, rather than rollling them back.
-pub struct FrameGuard {
-    rollback: Option<RollbackPoint>,
-    host: Host,
-}
-
-impl FrameGuard {
-    pub(crate) fn commit(&mut self) {
-        if self.rollback.is_none() {
-            panic!("committing on already-committed FrameGuard")
-        }
-        self.rollback = None;
-    }
-}
-
-impl Drop for FrameGuard {
-    fn drop(&mut self) {
-        let rollback = self.rollback.take();
-        self.host.pop_frame(rollback);
-    }
-}
-
 // Host is a newtype on Rc<HostImpl> so we can impl Env for it below.
 #[derive(Default, Clone)]
 pub struct Host(pub(crate) Rc<HostImpl>);
@@ -244,74 +214,36 @@ impl Host {
             .map_err(Host)
     }
 
-    fn capture_rollback_point(&self) -> RollbackPoint {
-        RollbackPoint {
+    /// Helper function for [`Host::with_frame`] below. Pushes a new [`Frame`]
+    /// on the context stack, returning a [`RollbackPoint`] such that if
+    /// operation fails, it can be used to roll the [`Host`] back to the state
+    /// it had before its associated [`Frame`] was pushed.
+    fn push_frame(&self, frame: Frame) -> Result<RollbackPoint, HostError> {
+        // Charges 1 unit instead of `map.len()` units because of OrdMap's
+        // sub-structure sharing that makes cloning cheap.
+        self.charge_budget(CostType::PushFrame, 1)?;
+        self.0.context.borrow_mut().push(frame);
+        Ok(RollbackPoint {
             objects: self.0.objects.borrow().len(),
             storage: self.0.storage.borrow().map.clone(),
-        }
+        })
     }
 
-    fn pop_frame(&self, rollback: Option<RollbackPoint>) {
+    /// Helper function for [`Host::with_frame`] below. Pops a [`Frame`] off
+    /// the current context and optionally rolls back the [`Host`]'s objects
+    /// and storage map to the state in the provided [`RollbackPoint`].
+    fn pop_frame(&self, orp: Option<RollbackPoint>) -> Result<(), HostError> {
+        self.charge_budget(CostType::PopFrame, 1)?;
         self.0
             .context
             .borrow_mut()
             .pop()
             .expect("unmatched host frame push/pop");
-        match rollback {
-            None => (),
-            Some(rp) => {
-                self.0.objects.borrow_mut().truncate(rp.objects);
-                self.0.storage.borrow_mut().map = rp.storage;
-            }
+        if let Some(rp) = orp {
+            self.0.objects.borrow_mut().truncate(rp.objects);
+            self.0.storage.borrow_mut().map = rp.storage;
         }
-    }
-
-    /// Pushes a new VM-related [`Frame`] on the context stack, returning a [`FrameGuard`]
-    /// that will pop the stack when it is dropped. This should be called at
-    /// least any time a new contract is invoked.
-    #[cfg(feature = "vm")]
-    pub(crate) fn push_vm_frame(&self, vm: Rc<Vm>) -> FrameGuard {
-        self.0.context.borrow_mut().push(Frame::ContractVM(vm));
-        FrameGuard {
-            rollback: Some(self.capture_rollback_point()),
-            host: self.clone(),
-        }
-    }
-
-    pub(crate) fn push_token_frame(&self, contract_id: Hash) -> FrameGuard {
-        self.0.context.borrow_mut().push(Frame::Token(contract_id));
-        FrameGuard {
-            rollback: Some(self.capture_rollback_point()),
-            host: self.clone(),
-        }
-    }
-
-    pub(crate) fn push_native_frame(&self, func: HostFunction) -> FrameGuard {
-        self.0.context.borrow_mut().push(Frame::HostFunction(func));
-        FrameGuard {
-            rollback: Some(self.capture_rollback_point()),
-            host: self.clone(),
-        }
-    }
-
-    pub(crate) fn push_host_function_frame(&self, func: HostFunction) -> FrameGuard {
-        self.0.context.borrow_mut().push(Frame::HostFunction(func));
-        FrameGuard {
-            rollback: Some(self.capture_rollback_point()),
-            host: self.clone(),
-        }
-    }
-
-    #[cfg(feature = "testutils")]
-    pub(crate) fn push_test_frame(&self, contract_id: Hash) -> FrameGuard {
-        self.0
-            .context
-            .borrow_mut()
-            .push(Frame::TestContract(contract_id));
-        FrameGuard {
-            rollback: Some(self.capture_rollback_point()),
-            host: self.clone(),
-        }
+        Ok(())
     }
 
     /// Applies a function to the top [`Frame`] of the context stack. Returns
@@ -327,6 +259,29 @@ impl Host {
             .borrow()
             .last()
             .ok_or_else(|| self.err(DebugError::new(ScHostContextErrorCode::NoContractRunning)))?)
+    }
+
+    /// Pushes a [`Frame`], runs a closure, and then pops the frame, rolling back
+    /// if the closure returned an error. Returns the result that the closure
+    /// returned (or any error caused during the frame push/pop).
+    pub(crate) fn with_frame<F, U>(&self, frame: Frame, f: F) -> Result<U, HostError>
+    where
+        F: FnOnce() -> Result<U, HostError>,
+    {
+        let start_depth = self.0.context.borrow().len();
+        let rp = self.push_frame(frame)?;
+        let res = f();
+        if res.is_err() {
+            // Pop and rollback on error.
+            self.pop_frame(Some(rp))?;
+        } else {
+            // Just pop on success.
+            self.pop_frame(None)?;
+        }
+        // Every push and pop should be matched; if not there is a bug.
+        let end_depth = self.0.context.borrow().len();
+        assert_eq!(start_depth, end_depth);
+        res
     }
 
     /// Returns [`Hash`] contract ID from the VM frame at the top of the context
@@ -394,11 +349,6 @@ impl Host {
         }
     }
 
-    pub(crate) fn from_host_val(&self, val: RawVal) -> Result<ScVal, HostError> {
-        ScVal::try_from_val(self, val)
-            .map_err(|_| self.err_status(ScHostValErrorCode::UnknownError))
-    }
-
     // Testing interface to create values directly for later use via Env functions.
     pub fn inject_val(&self, v: &ScVal) -> Result<RawVal, HostError> {
         self.to_host_val(v).map(Into::into)
@@ -421,7 +371,19 @@ impl Host {
         })
     }
 
+    pub(crate) fn from_host_val(&self, val: RawVal) -> Result<ScVal, HostError> {
+        // Charges a single unit to for the RawVal -> ScVal conversion.
+        // The actual conversion logic occurs in the `common` crate, which
+        // translates a u64 into another form defined by the xdr.
+        // For an `Object`, the actual structural conversion (such as byte
+        // cloning) occurs in `from_host_obj` and is metered there.
+        self.charge_budget(CostType::ValXdrConv, 1)?;
+        ScVal::try_from_val(self, val)
+            .map_err(|_| self.err_status(ScHostValErrorCode::UnknownError))
+    }
+
     pub(crate) fn to_host_val(&self, v: &ScVal) -> Result<HostVal, HostError> {
+        self.charge_budget(CostType::ValXdrConv, 1)?;
         let rv = v
             .try_into_val(self)
             .map_err(|_| self.err_status(ScHostValErrorCode::UnknownError))?;
@@ -430,48 +392,58 @@ impl Host {
 
     pub(crate) fn from_host_obj(&self, ob: Object) -> Result<ScObject, HostError> {
         unsafe {
-            self.unchecked_visit_val_obj(ob.into(), |ob| match ob {
-                None => Err(self.err_status(ScHostObjErrorCode::UnknownReference)),
-                Some(ho) => match ho {
-                    HostObject::Vec(vv) => {
-                        let mut sv = Vec::new();
-                        for e in vv.iter() {
-                            sv.push(self.from_host_val(e.val)?);
+            self.unchecked_visit_val_obj(ob.into(), |ob| {
+                // This accounts for conversion of "primitive" objects (e.g U64)
+                // and the "shell" of a complex object (ScMap). Any non-trivial
+                // work such as byte cloning, has to be accounted for and
+                // metered in indivial match arms.
+                self.charge_budget(CostType::ValXdrConv, 1)?;
+                match ob {
+                    None => Err(self.err_status(ScHostObjErrorCode::UnknownReference)),
+                    Some(ho) => match ho {
+                        HostObject::Vec(vv) => {
+                            let mut sv = Vec::new();
+                            for e in vv.iter() {
+                                sv.push(self.from_host_val(e.val)?);
+                            }
+                            Ok(ScObject::Vec(ScVec(self.map_err(sv.try_into())?)))
                         }
-                        Ok(ScObject::Vec(ScVec(self.map_err(sv.try_into())?)))
-                    }
-                    HostObject::Map(mm) => {
-                        let mut mv = Vec::new();
-                        for (k, v) in mm.iter() {
-                            let key = self.from_host_val(k.val)?;
-                            let val = self.from_host_val(v.val)?;
-                            mv.push(ScMapEntry { key, val });
+                        HostObject::Map(mm) => {
+                            let mut mv = Vec::new();
+                            for (k, v) in mm.iter() {
+                                let key = self.from_host_val(k.val)?;
+                                let val = self.from_host_val(v.val)?;
+                                mv.push(ScMapEntry { key, val });
+                            }
+                            Ok(ScObject::Map(ScMap(self.map_err(mv.try_into())?)))
                         }
-                        Ok(ScObject::Map(ScMap(self.map_err(mv.try_into())?)))
-                    }
-                    HostObject::U64(u) => Ok(ScObject::U64(*u)),
-                    HostObject::I64(i) => Ok(ScObject::I64(*i)),
-                    HostObject::Bin(b) => Ok(ScObject::Bytes(self.map_err(b.clone().try_into())?)),
-                    HostObject::BigInt(bi) => {
-                        let (sign, data) = bi.to_bytes_be();
-                        match sign {
-                            Sign::Minus => Ok(ScObject::BigInt(ScBigInt::Negative(
-                                self.map_err(data.try_into())?,
-                            ))),
-                            Sign::NoSign => Ok(ScObject::BigInt(ScBigInt::Zero)),
-                            Sign::Plus => Ok(ScObject::BigInt(ScBigInt::Positive(
-                                self.map_err(data.try_into())?,
-                            ))),
+                        HostObject::U64(u) => Ok(ScObject::U64(*u)),
+                        HostObject::I64(i) => Ok(ScObject::I64(*i)),
+                        HostObject::Bin(b) => {
+                            Ok(ScObject::Bytes(self.map_err(b.clone().try_into())?))
                         }
-                    }
-                    HostObject::Hash(_) => todo!(),
-                    HostObject::PublicKey(_) => todo!(),
-                },
+                        HostObject::BigInt(bi) => {
+                            let (sign, data) = bi.to_bytes_be();
+                            match sign {
+                                Sign::Minus => Ok(ScObject::BigInt(ScBigInt::Negative(
+                                    self.map_err(data.try_into())?,
+                                ))),
+                                Sign::NoSign => Ok(ScObject::BigInt(ScBigInt::Zero)),
+                                Sign::Plus => Ok(ScObject::BigInt(ScBigInt::Positive(
+                                    self.map_err(data.try_into())?,
+                                ))),
+                            }
+                        }
+                        HostObject::Hash(_) => todo!(),
+                        HostObject::PublicKey(_) => todo!(),
+                    },
+                }
             })
         }
     }
 
     pub(crate) fn to_host_obj(&self, ob: &ScObject) -> Result<HostObj, HostError> {
+        self.charge_budget(CostType::ValXdrConv, 1)?;
         match ob {
             ScObject::Vec(v) => {
                 let mut vv = Vector::new();
@@ -582,13 +554,10 @@ impl Host {
             #[cfg(not(feature = "vm"))]
             ScContractCode::Wasm(_) => Err(self.err_general("could not dispatch")),
             ScContractCode::Token => {
-                let mut frame_guard = self.push_token_frame(id.clone());
-                use crate::native_contract::NativeContract;
-                let res = crate::native_contract::Token.call(func, self, args);
-                if res.is_ok() {
-                    frame_guard.commit();
-                }
-                res
+                self.with_frame(Frame::Token(id.clone()), || {
+                    use crate::native_contract::{NativeContract, Token};
+                    Token.call(func, self, args)
+                })
             }
         }
     }
@@ -607,12 +576,10 @@ impl Host {
             // maintains a borrow of self.0.contracts, which can cause borrow errors.
             let cfs_option = self.0.contracts.borrow().get(&id).cloned();
             if let Some(cfs) = cfs_option {
-                let mut fg = self.push_test_frame(id.clone());
-                let res = cfs
-                    .call(&func, self, args)
-                    .ok_or_else(|| self.err_general("function not found"))?;
-                fg.commit();
-                return Ok(res);
+                return self.with_frame(Frame::TestContract(id.clone()), || {
+                    cfs.call(&func, self, args)
+                        .ok_or_else(|| self.err_general("function not found"))
+                });
             }
         }
 
@@ -625,17 +592,15 @@ impl Host {
                 if let [ScVal::Object(Some(scobj)), ScVal::Symbol(scsym), rest @ ..] =
                     args.as_slice()
                 {
-                    let mut frame_guard = self.push_host_function_frame(hf);
-
-                    let object: Object = self.to_host_obj(scobj)?.to_object();
-                    let symbol: Symbol = scsym.try_into()?;
-                    let mut raw_args: Vec<RawVal> = Vec::new();
-                    for scv in rest.iter() {
-                        raw_args.push(self.to_host_val(scv)?.val);
-                    }
-                    let res = self.call_n(object, symbol, &raw_args[..])?;
-                    frame_guard.commit();
-                    Ok(res)
+                    self.with_frame(Frame::HostFunction(hf), || {
+                        let object = self.to_host_obj(scobj)?.to_object();
+                        let symbol = <Symbol>::try_from(scsym)?;
+                        let args = rest
+                            .iter()
+                            .map(|scv| self.to_host_val(scv).map(|hv| hv.val))
+                            .collect::<Result<Vec<RawVal>, HostError>>()?;
+                        self.call_n(object, symbol, &args[..])
+                    })
                 } else {
                     Err(self.err_status_msg(
                         ScHostFnErrorCode::InputArgsWrongLength,
@@ -647,19 +612,15 @@ impl Host {
                 if let [ScVal::Object(Some(c_obj)), ScVal::Object(Some(s_obj)), ScVal::Object(Some(k_obj)), ScVal::Object(Some(sig_obj))] =
                     args.as_slice()
                 {
-                    let mut frame_guard = self.push_host_function_frame(hf);
-
-                    let contract: Object = self.to_host_obj(c_obj)?.to_object();
-                    let salt: Object = self.to_host_obj(s_obj)?.to_object();
-                    let key: Object = self.to_host_obj(k_obj)?.to_object();
-                    let signature: Object = self.to_host_obj(sig_obj)?.to_object();
-
-                    //TODO: should create_contract_from_ed25519 return a RawVal instead of Object to avoid this conversion?
-                    let res: RawVal = self
-                        .create_contract_from_ed25519(contract, salt, key, signature)?
-                        .into();
-                    frame_guard.commit();
-                    Ok(res)
+                    self.with_frame(Frame::HostFunction(hf), || {
+                        let contract = self.to_host_obj(c_obj)?.to_object();
+                        let salt = self.to_host_obj(s_obj)?.to_object();
+                        let key = self.to_host_obj(k_obj)?.to_object();
+                        let signature = self.to_host_obj(sig_obj)?.to_object();
+                        //TODO: should create_contract_from_ed25519 return a RawVal instead of Object to avoid this conversion?
+                        self.create_contract_from_ed25519(contract, salt, key, signature)
+                            .map(|obj| <RawVal>::from(obj))
+                    })
                 } else {
                     Err(self.err_status_msg(
                         ScHostFnErrorCode::InputArgsWrongLength,
@@ -837,7 +798,6 @@ impl CheckedEnv for Host {
     }
 
     fn obj_cmp(&self, a: RawVal, b: RawVal) -> Result<i64, HostError> {
-        self.charge_budget(CostType::HostFunction, 2)?;
         let res = unsafe {
             self.unchecked_visit_val_obj(a, |ao| {
                 self.unchecked_visit_val_obj(b, |bo| Ok(ao.cmp(&bo)))

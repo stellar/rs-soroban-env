@@ -122,7 +122,7 @@ fn measure_one<M: HostCostMeasurement>() -> std::io::Result<()> {
     Ok(())
 }
 
-#[cfg(all(test, target_os = "linux"))]
+#[cfg(all(test, any(target_os = "linux", target_os = "macos")))]
 fn main() -> std::io::Result<()> {
     env_logger::init();
     measure_one::<VecAllocVariableSizeRun>()?;

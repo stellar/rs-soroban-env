@@ -8,6 +8,8 @@ mod map;
 mod vec;
 
 #[cfg(feature = "vm")]
+mod budget_metering;
+#[cfg(feature = "vm")]
 mod invocation;
 #[cfg(all(feature = "vm", feature = "testutils"))]
 mod lifecycle;

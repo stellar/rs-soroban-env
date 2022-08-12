@@ -152,10 +152,65 @@ pub trait HostCostMeasurement {
     }
 }
 
+#[cfg(target_os = "linux")]
+mod cpu {
+    pub struct InstructionCounter(perf_event::Counter);
+    impl InstructionCounter {
+        pub fn new() -> Self {
+            InstructionCounter(
+                perf_event::Builder::new()
+                    .build()
+                    .expect("perf_event::Builder::new().build()"),
+            )
+        }
+        pub fn begin(&mut self) {
+            self.0.reset().expect("perf_event::Counter::reset");
+            self.0.enable().expect("perf_event::Counter::enable");
+        }
+        pub fn end_and_count(&mut self) -> u64 {
+            self.0.disable().expect("perf_event::Counter::disable");
+            self.0.read().expect("perf_event::Counter::read")
+        }
+    }
+}
+
+#[cfg(target_os = "macos")]
+#[path = "."]
+mod cpu {
+
+    #[path = "rusagev4.rs"]
+    mod rusagev4;
+
+    pub struct InstructionCounter(u64);
+    impl InstructionCounter {
+        fn get() -> u64 {
+            use rusagev4::*;
+            use std::os::raw::c_int;
+            let mut ri = rusage_info_v4::default();
+            let pid: c_int = std::process::id() as c_int;
+            let ptr: *mut rusage_info_v4 = &mut ri;
+            let ret: c_int = unsafe { proc_pid_rusage(pid, RUSAGE_INFO_V4 as c_int, ptr.cast()) };
+            assert!(ret == 0, "proc_pid_rusage failed");
+            ri.ri_instructions
+        }
+        pub fn new() -> Self {
+            InstructionCounter(Self::get())
+        }
+        pub fn begin(&mut self) {
+            self.0 = Self::get();
+        }
+
+        pub fn end_and_count(&mut self) -> u64 {
+            let curr = Self::get();
+            curr - self.0
+        }
+    }
+}
+
 pub fn measure_costs<HCM: HostCostMeasurement>(
     step_range: Range<u64>,
 ) -> Result<Measurements, std::io::Error> {
-    let mut cpu_counter = perf_event::Builder::new().build()?;
+    let mut cpu_insn_counter = cpu::InstructionCounter::new();
     let mem_tracker = MemTracker(Arc::new(AtomicU64::new(0)));
     let _ = AllocationRegistry::set_global_tracker(mem_tracker.clone())
         .expect("no other global tracker should be set yet");
@@ -171,14 +226,12 @@ pub fn measure_costs<HCM: HostCostMeasurement>(
         let start = Instant::now();
         mem_tracker.0.store(0, Ordering::SeqCst);
         let alloc_guard = alloc_group_token.enter();
-        cpu_counter.reset()?;
-        cpu_counter.enable()?;
+        cpu_insn_counter.begin();
         m.run(&host);
-        cpu_counter.disable()?;
+        let cpu_insns = cpu_insn_counter.end_and_count();
         drop(alloc_guard);
         let stop = Instant::now();
         let input = m.get_input(&host);
-        let cpu_insns = cpu_counter.read()?;
         let mem_bytes = mem_tracker.0.load(Ordering::SeqCst);
         let time_nsecs = stop.duration_since(start).as_nanos() as u64;
         ret.push(Measurement {
