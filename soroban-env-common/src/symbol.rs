@@ -264,9 +264,9 @@ impl Iterator for SymbolIter {
         while self.0 != 0 {
             let res = match ((self.0 >> ((MAX_CHARS - 1) * CODE_BITS)) & CODE_MASK) as u8 {
                 1 => b'_',
-                n @ (2..=11) => (b'0' + n - 2),
-                n @ (12..=37) => (b'A' + n - 12),
-                n @ (38..=63) => (b'a' + n - 38),
+                n @ (2..=11) => b'0' + n - 2,
+                n @ (12..=37) => b'A' + n - 12,
+                n @ (38..=63) => b'a' + n - 38,
                 _ => b'\0',
             };
             self.0 <<= CODE_BITS;
