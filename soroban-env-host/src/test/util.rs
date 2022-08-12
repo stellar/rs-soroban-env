@@ -56,7 +56,7 @@ impl Host {
         let it = ids.iter().zip(codes.iter());
         let mut footprint = Footprint::default();
         let mut map = OrdMap::default();
-        for (_, (id, contract)) in it.enumerate() {
+        for (id, contract) in it {
             let key = ScVal::Static(ScStatic::LedgerKeyContractCode);
             let storage_key = LedgerKey::ContractData(LedgerKeyContractData {
                 contract_id: id.clone(),
