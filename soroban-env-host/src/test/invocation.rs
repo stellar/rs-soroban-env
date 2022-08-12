@@ -1,4 +1,6 @@
-use super::wasm_examples::{ADD_I32, VEC};
+use soroban_env_common::{xdr::ScVmErrorCode, RawVal};
+
+use super::wasm_examples::{ADD_I32, CALL, VEC};
 use crate::{
     vm::Vm,
     xdr::{Hash, ScHostObjErrorCode, ScVal, ScVec},
@@ -70,32 +72,46 @@ fn invoke_cross_contract_with_err() -> Result<(), HostError> {
     Ok(())
 }
 
-/*
-TODO: This test was broken by
-https://github.com/stellar/rs-soroban-sdk/commit/38ff4678dabb8c739c2f25d5c5dff8886851f04d
-and needs to be repaired
+#[test]
+fn invoke_cross_contract_indirect() -> Result<(), HostError> {
+    let dummy_id0 = [0; 32]; // the calling contract
+    let dummy_id1 = [1; 32]; // the called contract
+    let storage = Host::test_storage_with_contracts(
+        vec![dummy_id0.into(), dummy_id1.into()],
+        vec![CALL, ADD_I32],
+    );
+    let host = Host::with_storage(storage);
+    // prepare arguments
+    let id0_obj = host.test_bin_obj(&dummy_id0)?;
+    let id1_obj = host.test_bin_obj(&dummy_id1)?;
+    let sym = Symbol::from_str("add_with");
+    let args = host.test_vec_obj::<i32>(&[5, 6])?;
+    let args = host.vec_push(args.val, id1_obj.into())?;
+    // try call
+    let val = host.call(id0_obj.to_object(), sym.into(), args.clone().into())?;
+    let exp: RawVal = 11i32.into();
+    assert_eq!(val.get_payload(), exp.get_payload());
+    Ok(())
+}
 
 #[test]
-fn invoke_cross_contract_lvl2_nested_with_err() -> Result<(), HostError> {
+fn invoke_cross_contract_indirect_err() -> Result<(), HostError> {
     let dummy_id0 = [0; 32]; // the calling contract
     let dummy_id1 = [1; 32]; // the called (failing) contract
     let storage = Host::test_storage_with_contracts(
         vec![dummy_id0.into(), dummy_id1.into()],
-        vec![CALL, VEC],
+        vec![CALL, ADD_I32],
     );
     let host = Host::with_storage(storage);
     // prepare arguments
-    let obj = host.test_bin_obj(&dummy_id0)?;
-    let sym = Symbol::from_str("delegate");
-    let args = host.test_vec_obj::<u32>(&[1])?;
-    // try call
-    let sv = host.try_call(obj.to_object(), sym.into(), args.clone().into())?;
-    let code = ScHostObjErrorCode::VecIndexOutOfBound;
-    let exp_st: Status = code.into();
-    assert_eq!(sv.get_payload(), exp_st.as_raw().get_payload());
-    // call
-    let res = host.call(obj.to_object(), sym.into(), args.into());
-    assert!(HostError::result_matches_err_status(res, code));
+    let id0_obj = host.test_bin_obj(&dummy_id0)?;
+    let id1_obj = host.test_bin_obj(&dummy_id1)?;
+    let sym = Symbol::from_str("add_with");
+    let args = host.test_vec_obj::<i32>(&[i32::MAX, 1])?;
+    let args = host.vec_push(args.val, id1_obj.into())?;
+    // try call -- add will trap, and add_with will trap, but we will get a status
+    let status = host.try_call(id0_obj.to_object(), sym.into(), args.clone().into())?;
+    let exp: Status = ScVmErrorCode::TrapUnreachable.into();
+    assert_eq!(status.get_payload(), exp.to_raw().get_payload());
     Ok(())
 }
-*/
