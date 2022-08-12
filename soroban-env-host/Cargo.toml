@@ -44,10 +44,6 @@ testutils = []
 [target.'cfg(target_os = "linux")'.dev-dependencies]
 perf-event = "0.4.7"
 
-[target.'cfg(all(target_os = "macos", target_arch = "aarch64"))'.dev-dependencies]
-macos-perf = "0.1.1"
-sudo = "0.6.0"
-
 [[bench]]
 required-features = ["vm"]
 harness = false

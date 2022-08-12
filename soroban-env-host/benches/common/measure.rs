@@ -174,19 +174,26 @@ mod cpu {
     }
 }
 
-#[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+#[cfg(target_os = "macos")]
+#[path = "."]
 mod cpu {
-    pub struct InstructionCounter(macos_perf::PerformanceCounters);
+
+    #[path = "rusagev4.rs"]
+    mod rusagev4;
+
+    pub struct InstructionCounter(u64);
     impl InstructionCounter {
-        fn get() -> macos_perf::PerformanceCounters {
-            macos_perf::get_counters().expect("get_counters")
+        fn get() -> u64 {
+            use rusagev4::*;
+            use std::os::raw::c_int;
+            let mut ri = rusage_info_v4::default();
+            let pid: c_int = std::process::id() as c_int;
+            let ptr: *mut rusage_info_v4 = &mut ri;
+            let ret: c_int = unsafe { proc_pid_rusage(pid, RUSAGE_INFO_V4 as c_int, ptr.cast()) };
+            assert!(ret == 0, "proc_pid_rusage failed");
+            ri.ri_instructions
         }
         pub fn new() -> Self {
-            let has_sudo = sudo::check();
-            if has_sudo != sudo::RunningAs::Root {
-                panic!("measurement on macos requires sudo");
-            }
-            macos_perf::init().expect("macos_perf::init()");
             InstructionCounter(Self::get())
         }
         pub fn begin(&mut self) {
@@ -195,8 +202,7 @@ mod cpu {
 
         pub fn end_and_count(&mut self) -> u64 {
             let curr = Self::get();
-            let diff = curr - self.0.clone();
-            diff.instructions as u64
+            curr - self.0
         }
     }
 }
