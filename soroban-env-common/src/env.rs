@@ -152,6 +152,15 @@ macro_rules! call_macro_with_all_host_functions {
                 /// running contract. Traps if the running contract was not
                 /// invoked by a contract.
                 {"4", fn get_current_contract() -> Object }
+
+                /// Return the protocol version of the current ledger as a u32.
+                {"5", fn get_ledger_version() -> RawVal }
+                /// Return the sequence number of the current ledger as a u32.
+                {"6", fn get_ledger_sequence() -> RawVal }
+                /// Return the timestamp number of the current ledger as a u64.
+                {"7", fn get_ledger_timestamp() -> RawVal }
+                /// Return the network identity of the current ledger as bytes.
+                {"8", fn get_ledger_network_id() -> RawVal }
             }
 
             mod u64 "u" {

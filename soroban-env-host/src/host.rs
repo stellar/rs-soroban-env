@@ -84,8 +84,17 @@ struct VmSlice {
     len: u32,
 }
 
+#[derive(Debug, Clone)]
+pub struct LedgerInfo {
+    protocol_version: u32,
+    sequence_number: u32,
+    timestamp: u64,
+    network_id: Vec<u8>,
+}
+
 #[derive(Clone, Default)]
 pub(crate) struct HostImpl {
+    ledger: RefCell<Option<LedgerInfo>>,
     objects: RefCell<Vec<HostObject>>,
     storage: RefCell<Storage>,
     context: RefCell<Vec<Frame>>,
@@ -138,6 +147,7 @@ impl Host {
     /// [`CheckedEnv::get_contract_data`].
     pub fn with_storage(storage: Storage) -> Self {
         Self(Rc::new(HostImpl {
+            ledger: RefCell::new(None),
             objects: Default::default(),
             storage: RefCell::new(storage),
             context: Default::default(),
@@ -146,6 +156,20 @@ impl Host {
             #[cfg(feature = "testutils")]
             contracts: Default::default(),
         }))
+    }
+
+    pub fn set_ledger_info(&self, info: LedgerInfo) {
+        *self.0.ledger.borrow_mut() = Some(info)
+    }
+
+    fn with_ledger_info<F, T>(&self, f: F) -> Result<T, HostError>
+    where
+        F: FnOnce(&LedgerInfo) -> Result<T, HostError>,
+    {
+        match self.0.ledger.borrow().as_ref() {
+            None => Err(self.err_general("midding ledger info")),
+            Some(li) => f(li),
+        }
     }
 
     /// Helper for mutating the [`Budget`] held in this [`Host`], either to
@@ -1639,5 +1663,23 @@ impl CheckedEnv for Host {
             // We didn't find the target signer, so it must have no weight
             Ok(0u32.into())
         }
+    }
+
+    fn get_ledger_version(&self) -> Result<RawVal, Self::Error> {
+        self.with_ledger_info(|li| Ok(li.protocol_version.into()))
+    }
+
+    fn get_ledger_sequence(&self) -> Result<RawVal, Self::Error> {
+        self.with_ledger_info(|li| Ok(li.sequence_number.into()))
+    }
+
+    fn get_ledger_timestamp(&self) -> Result<RawVal, Self::Error> {
+        self.with_ledger_info(|li| Ok(li.timestamp.try_into_val(self)?))
+    }
+
+    fn get_ledger_network_id(&self) -> Result<RawVal, Self::Error> {
+        Ok(self
+            .with_ledger_info(|li| self.add_host_object(li.network_id.clone()))?
+            .into())
     }
 }
