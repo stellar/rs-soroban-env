@@ -158,7 +158,7 @@ macro_rules! call_macro_with_all_host_functions {
                 /// Return the sequence number of the current ledger as a u32.
                 {"6", fn get_ledger_sequence() -> RawVal }
                 /// Return the timestamp number of the current ledger as a u64.
-                {"7", fn get_ledger_timestamp() -> RawVal }
+                {"7", fn get_ledger_timestamp() -> Object }
                 /// Return the network identity of the current ledger as bytes.
                 {"8", fn get_ledger_network_id() -> RawVal }
             }
