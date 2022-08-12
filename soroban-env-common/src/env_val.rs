@@ -259,8 +259,8 @@ where
                         Ok(ScVal::Static(ScStatic::False))
                     } else if tag_static.is_type(ScStatic::Void) {
                         Ok(ScVal::Static(ScStatic::Void))
-                    } else if tag_static.is_type(ScStatic::LedgerKeyContractCodeWasm) {
-                        Ok(ScVal::Static(ScStatic::LedgerKeyContractCodeWasm))
+                    } else if tag_static.is_type(ScStatic::LedgerKeyContractCode) {
+                        Ok(ScVal::Static(ScStatic::LedgerKeyContractCode))
                     } else {
                         ev.log_err_convert::<Self>();
                         Err(ConversionError)

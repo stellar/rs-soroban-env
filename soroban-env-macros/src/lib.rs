@@ -4,7 +4,7 @@ use proc_macro::TokenStream;
 use quote::{quote, ToTokens};
 use syn::{parse::Parse, parse_macro_input, Ident, LitInt, Token};
 
-use stellar_xdr::{Error, ScEnvMetaEntry, WriteXdr};
+use stellar_xdr::{ScEnvMetaEntry, WriteXdr};
 
 struct MetaInput {
     pub interface_version: u64,
@@ -46,7 +46,7 @@ impl ToTokens for MetaConstsOutput {
             .to_meta_entries()
             .into_iter()
             .map(|entry| entry.to_xdr())
-            .collect::<Result<Vec<Vec<u8>>, Error>>()
+            .collect::<Result<Vec<Vec<u8>>, stellar_xdr::Error>>()
             .unwrap()
             .concat();
         let meta_xdr_len = meta_xdr.len();

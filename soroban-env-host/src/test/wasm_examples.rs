@@ -21,5 +21,8 @@ pub(crate) const LINEAR_MEMORY: &'static [u8] =
     include_bytes!("../../wasm-examples/example_linear_memory.wasm").as_slice();
 pub(crate) const VEC: &'static [u8] =
     include_bytes!("../../wasm-examples/example_vec.wasm").as_slice();
-pub(crate) const CALL: &'static [u8] =
-    include_bytes!("../../wasm-examples/example_invoke_contract.wasm").as_slice();
+
+// TODO: This is not currently used because invoke_cross_contract_lvl2_nested_with_err
+// is commented out because it's broken
+//pub(crate) const CALL: &'static [u8] =
+//    include_bytes!("../../wasm-examples/example_invoke_contract.wasm").as_slice();
