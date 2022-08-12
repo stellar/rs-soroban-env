@@ -142,7 +142,7 @@ impl Host {
     }
 
     pub fn contract_data_key_from_rawval(&self, k: RawVal) -> Result<LedgerKey, HostError> {
-        if self.from_host_val(k)? == ScVal::Static(ScStatic::LedgerKeyContractCodeWasm) {
+        if self.from_host_val(k)? == ScVal::Static(ScStatic::LedgerKeyContractCode) {
             return Err(self.err_status_msg(
                 ScHostFnErrorCode::InputArgsInvalid,
                 "cannot update contract code",

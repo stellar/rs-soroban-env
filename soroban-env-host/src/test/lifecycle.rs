@@ -2,8 +2,10 @@ use super::wasm_examples::CREATE_CONTRACT;
 use crate::{
     host::Frame,
     storage::{AccessType, Footprint, Storage},
-    xdr::{self, LedgerKeyContractData, ScHostFnErrorCode, ScStatic},
-    xdr::{LedgerEntryData, LedgerKey, ScObject, ScVal, ScVec},
+    xdr::{
+        self, LedgerEntryData, LedgerKey, LedgerKeyContractData, ScContractCode, ScHostFnErrorCode,
+        ScObject, ScStatic, ScVal, ScVec,
+    },
     CheckedEnv, Host, HostError, Symbol,
 };
 use hex::FromHex;
@@ -59,7 +61,7 @@ fn create_contract_test_helper(
     let hash = sha256_hash_id_preimage(pre_image);
 
     let hash_copy = hash.clone();
-    let key = ScVal::Static(ScStatic::LedgerKeyContractCodeWasm);
+    let key = ScVal::Static(ScStatic::LedgerKeyContractCode);
     let storage_key = LedgerKey::ContractData(LedgerKeyContractData {
         contract_id: hash,
         key,
@@ -88,7 +90,7 @@ fn create_contract_test_helper(
     let v = host.from_host_val(contract_id.to_raw())?;
     let bin = match v {
         ScVal::Object(Some(scobj)) => match scobj {
-            ScObject::Binary(bin) => bin,
+            ScObject::Bytes(bin) => bin,
             _ => panic!("Wrong type"),
         },
         _ => panic!("Wrong type"),
@@ -101,7 +103,9 @@ fn create_contract_test_helper(
     check_new_code(
         &host,
         storage_key,
-        ScVal::Object(Some(host.test_bin_scobj(&code)?)),
+        ScVal::Object(Some(ScObject::ContractCode(ScContractCode::Wasm(
+            code.try_into().unwrap(),
+        )))),
     );
 
     Ok(host)
@@ -142,7 +146,7 @@ fn create_contract_test() -> Result<(), HostError> {
 
     //Push the contract id onto the stack to simulate a contract call
     host.with_frame(Frame::TestContract(hash), || {
-        let key = ScVal::Static(ScStatic::LedgerKeyContractCodeWasm);
+        let key = ScVal::Static(ScStatic::LedgerKeyContractCode);
 
         // update
         let put_res = host.put_contract_data(host.to_host_val(&key)?.to_raw(), ().into());
@@ -196,7 +200,7 @@ fn create_contract_using_parent_id_test() {
 
     let child_storage_key = LedgerKey::ContractData(LedgerKeyContractData {
         contract_id: child_id,
-        key: ScVal::Static(ScStatic::LedgerKeyContractCodeWasm),
+        key: ScVal::Static(ScStatic::LedgerKeyContractCode),
     });
 
     host.visit_storage(|s: &mut Storage| {
@@ -208,25 +212,31 @@ fn create_contract_using_parent_id_test() {
 
     // prepare arguments
     let child_code: &[u8] = b"70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4";
-    let code_val = ScVal::Object(Some(ScObject::Binary(child_code.try_into().unwrap())));
+    let code_val = ScVal::Object(Some(ScObject::Bytes(child_code.try_into().unwrap())));
 
     let sym = Symbol::from_str("create");
     let salt_bytes: Vec<u8> = FromHex::from_hex(salt).unwrap();
     let scvec0: ScVec = vec![
         code_val.clone(),
-        ScVal::Object(Some(ScObject::Binary(salt_bytes.try_into().unwrap()))),
+        ScVal::Object(Some(ScObject::Bytes(salt_bytes.try_into().unwrap()))),
     ]
     .try_into()
     .unwrap();
     let args = host.to_host_obj(&ScObject::Vec(scvec0)).unwrap();
 
-    let p_id_sobj = ScObject::Binary(parent_id.0.try_into().unwrap());
+    let p_id_sobj = ScObject::Bytes(parent_id.0.try_into().unwrap());
     let p_id_obj = host.to_host_obj(&p_id_sobj).unwrap();
     host.call(p_id_obj.to_object(), sym.into(), args.into())
         .unwrap();
 
     //Validate child contract exists and code is what we expected
-    check_new_code(&host, child_storage_key, code_val);
+    check_new_code(
+        &host,
+        child_storage_key,
+        ScVal::Object(Some(ScObject::ContractCode(ScContractCode::Wasm(
+            child_code.try_into().unwrap(),
+        )))),
+    );
 }
 
 pub(crate) fn sha256_hash_id_preimage(pre_image: xdr::HashIdPreimage) -> xdr::Hash {
