@@ -689,8 +689,9 @@ impl Host {
         contract_id: Object,
         contract_wasm: &[u8],
     ) -> Result<(), HostError> {
-        let contract_wasm = contract_wasm.try_into().map_err(|_| self.err_general(""))?;
-        self.create_contract_with_id(ScContractCode::Wasm(contract_wasm), contract_id)
+        let contract_code =
+            ScContractCode::Wasm(contract_wasm.try_into().map_err(|_| self.err_general(""))?);
+        self.create_contract_with_id(contract_code, contract_id)
     }
 }
 
