@@ -39,7 +39,6 @@ tabwriter = "1.2.1"
 thousands = "0.2.0"
 
 [features]
-default = ["vm"]
 vm = ["wasmi", "parity-wasm", "soroban-env-common/vm"]
 serde = ["soroban-env-common/serde"]
 testutils = []
