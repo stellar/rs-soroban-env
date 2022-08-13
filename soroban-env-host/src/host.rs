@@ -551,12 +551,12 @@ impl Host {
         contract: ScContractCode,
         contract_id: Object,
     ) -> Result<(), HostError> {
-        let contract_id = self.hash_from_obj_input("contract_id", contract_id)?;
-        let storage_key = self.contract_code_ledger_key(contract_id.clone());
+        let new_contract_id = self.hash_from_obj_input("contract_id", contract_id)?;
+        let storage_key = self.contract_code_ledger_key(new_contract_id.clone());
         if self.0.storage.borrow_mut().has(&storage_key)? {
             return Err(self.err_general("Contract already exists"));
         }
-        self.store_contract_code(contract, contract_id, &storage_key)?;
+        self.store_contract_code(contract, new_contract_id, &storage_key)?;
         Ok(())
     }
 
