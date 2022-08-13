@@ -549,9 +549,9 @@ impl Host {
     pub fn create_contract_with_id(
         &self,
         contract: ScContractCode,
-        id: Object,
+        id_obj: Object,
     ) -> Result<(), HostError> {
-        let new_contract_id = self.hash_from_obj_input("contract_id", id)?;
+        let new_contract_id = self.hash_from_obj_input("id_obj", id_obj)?;
         let storage_key = self.contract_code_ledger_key(new_contract_id.clone());
         if self.0.storage.borrow_mut().has(&storage_key)? {
             return Err(self.err_general("Contract already exists"));
