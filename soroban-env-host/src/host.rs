@@ -702,6 +702,11 @@ impl Host {
     ) -> Result<(), HostError> {
         use xdr::{AccountEntryExt, AccountEntryExtensionV1Ext, LedgerKeyAccount};
 
+        self.with_current_frame(|frame| match frame {
+            Frame::Token(id) => Ok(()),
+            _ => Err(self.err_general("only native token can transfer classic balance")),
+        })?;
+
         let lk = LedgerKey::Account(LedgerKeyAccount {
             account_id: AccountId(PublicKey::PublicKeyTypeEd25519(self.to_u256(account_id)?)),
         });
@@ -757,6 +762,11 @@ impl Host {
         amount: i64,
     ) -> Result<(), HostError> {
         use xdr::TrustLineEntryExt;
+
+        self.with_current_frame(|frame| match frame {
+            Frame::Token(id) => Ok(()),
+            _ => Err(self.err_general("only native token can transfer classic balance")),
+        })?;
 
         let lk = self.to_trustline_key(account_id, asset_code, issuer)?;
         self.visit_storage(|storage| {
