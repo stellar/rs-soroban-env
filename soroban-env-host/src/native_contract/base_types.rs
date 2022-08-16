@@ -105,8 +105,35 @@ impl TryIntoVal<Host, RawVal> for Bytes {
 }
 
 impl From<Bytes> for Object {
-    fn from(vec: Bytes) -> Self {
-        vec.0.val
+    fn from(b: Bytes) -> Self {
+        b.0.val
+    }
+}
+
+impl<const N: u32> From<BytesN<N>> for Bytes {
+    fn from(b: BytesN<N>) -> Self {
+        Self(b.0)
+    }
+}
+
+impl Bytes {
+    pub fn push(&mut self, x: u8) -> Result<(), HostError> {
+        let x32: u32 = x.into();
+        self.0 = self
+            .0
+            .env
+            .binary_push(self.0.val, x32.into())?
+            .in_env(&self.0.env);
+        Ok(())
+    }
+
+    pub fn append(&mut self, other: Bytes) -> Result<(), HostError> {
+        self.0 = self
+            .0
+            .env
+            .binary_append(self.0.val, other.0.val)?
+            .in_env(&self.0.env);
+        Ok(())
     }
 }
 
