@@ -1,5 +1,5 @@
 use crate::host::Host;
-use crate::native_contract::base_types::{BigInt, BytesN, Map, Vec};
+use crate::native_contract::base_types::{BigInt, Bytes, BytesN, Map, Vec};
 use crate::native_contract::token::error::Error;
 use soroban_env_common::{CheckedEnv, TryIntoVal};
 use soroban_native_sdk_macros::contracttype;
@@ -69,4 +69,35 @@ pub struct MessageV0 {
 #[contracttype]
 pub enum Message {
     V0(MessageV0),
+}
+
+#[derive(Clone)]
+#[contracttype]
+pub struct TokenMetadata {
+    pub name: Bytes,
+    pub symbol: Bytes,
+    pub decimals: u32,
+}
+
+#[derive(Clone)]
+#[contracttype]
+pub struct AlphaNum4Metadata {
+    pub asset_code: BytesN<4>,
+    pub issuer: BytesN<32>,
+}
+
+#[derive(Clone)]
+#[contracttype]
+pub struct AlphaNum12Metadata {
+    pub asset_code: BytesN<12>,
+    pub issuer: BytesN<32>,
+}
+
+#[derive(Clone)]
+#[contracttype]
+pub enum Metadata {
+    Token(TokenMetadata),
+    Native,
+    AlphaNum4(AlphaNum4Metadata),
+    AlphaNum12(AlphaNum12Metadata),
 }

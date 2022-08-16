@@ -10,21 +10,17 @@ use crate::native_contract::token::balance::{
 use crate::native_contract::token::cryptography::{check_auth, Domain};
 use crate::native_contract::token::error::Error;
 use crate::native_contract::token::metadata::{
-    read_decimal, read_name, read_symbol, write_decimal, write_name, write_symbol,
+    read_decimal, read_name, read_symbol, write_metadata,
 };
 use crate::native_contract::token::nonce::read_nonce;
-use crate::native_contract::token::public_types::{Authorization, Identifier, KeyedAuthorization};
+use crate::native_contract::token::public_types::{
+    Authorization, Identifier, KeyedAuthorization, Metadata,
+};
 use soroban_env_common::TryIntoVal;
 use soroban_native_sdk_macros::contractimpl;
 
 pub trait TokenTrait {
-    fn initialize(
-        e: &Host,
-        admin: Identifier,
-        decimal: u32,
-        name: Bytes,
-        symbol: Bytes,
-    ) -> Result<(), Error>;
+    fn initialize(e: &Host, admin: Identifier, metadata: Metadata) -> Result<(), Error>;
 
     fn nonce(e: &Host, id: Identifier) -> Result<BigInt, Error>;
 
@@ -77,21 +73,12 @@ pub struct Token;
 
 #[contractimpl]
 impl TokenTrait for Token {
-    fn initialize(
-        e: &Host,
-        admin: Identifier,
-        decimal: u32,
-        name: Bytes,
-        symbol: Bytes,
-    ) -> Result<(), Error> {
+    fn initialize(e: &Host, admin: Identifier, metadata: Metadata) -> Result<(), Error> {
         if has_administrator(&e)? {
             return Err(Error::ContractError);
         }
         write_administrator(&e, admin)?;
-
-        write_decimal(&e, u8::try_from(decimal).map_err(|_| Error::ContractError)?)?;
-        write_name(&e, name)?;
-        write_symbol(&e, symbol)?;
+        write_metadata(&e, metadata)?;
         Ok(())
     }
 
