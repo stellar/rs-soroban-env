@@ -19,6 +19,8 @@ pub enum Domain {
     Mint = 5,
     SetAdministrator = 6,
     Unfreeze = 7,
+    ToSmart = 8,
+    ToClassic = 9,
 }
 
 fn check_ed25519_auth(

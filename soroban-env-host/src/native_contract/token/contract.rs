@@ -5,7 +5,7 @@ use crate::native_contract::token::admin::{
 };
 use crate::native_contract::token::allowance::{read_allowance, spend_allowance, write_allowance};
 use crate::native_contract::token::balance::{
-    read_balance, read_state, receive_balance, spend_balance, write_state,
+    read_balance, read_state, receive_balance, spend_balance, transfer_classic_balance, write_state,
 };
 use crate::native_contract::token::cryptography::{check_auth, Domain};
 use crate::native_contract::token::error::Error;
@@ -67,6 +67,10 @@ pub trait TokenTrait {
     fn name(e: &Host) -> Result<Bytes, Error>;
 
     fn symbol(e: &Host) -> Result<Bytes, Error>;
+
+    fn to_smart(e: &Host, id: KeyedAuthorization, amount: i64) -> Result<(), Error>;
+
+    fn to_classic(e: &Host, id: KeyedAuthorization, amount: i64) -> Result<(), Error>;
 }
 
 pub struct Token;
@@ -205,5 +209,49 @@ impl TokenTrait for Token {
 
     fn symbol(e: &Host) -> Result<Bytes, Error> {
         read_symbol(&e)
+    }
+
+    fn to_smart(e: &Host, id: KeyedAuthorization, amount: i64) -> Result<(), Error> {
+        if amount < 0 {
+            return Err(Error::ContractError);
+        }
+
+        let id_key = match &id {
+            KeyedAuthorization::Account(acc) => Ok(acc.public_key.clone()),
+            _ => Err(Error::ContractError),
+        }?;
+        let mut args = Vec::new(e)?;
+        args.push(amount.clone())?;
+        check_auth(&e, id, Domain::ToSmart, args)?;
+
+        transfer_classic_balance(e, id_key.clone(), amount)?;
+        receive_balance(
+            &e,
+            Identifier::Account(id_key),
+            BigInt::from_u64(&e, amount.try_into().map_err(|_| Error::ContractError)?)?,
+        )?;
+        Ok(())
+    }
+
+    fn to_classic(e: &Host, id: KeyedAuthorization, amount: i64) -> Result<(), Error> {
+        if amount < 0 {
+            return Err(Error::ContractError);
+        }
+
+        let id_key = match &id {
+            KeyedAuthorization::Account(acc) => Ok(acc.public_key.clone()),
+            _ => Err(Error::ContractError),
+        }?;
+        let mut args = Vec::new(e)?;
+        args.push(amount.clone())?;
+        check_auth(&e, id, Domain::ToClassic, args)?;
+
+        transfer_classic_balance(e, id_key.clone(), -amount)?;
+        spend_balance(
+            &e,
+            Identifier::Account(id_key),
+            BigInt::from_u64(&e, amount.try_into().map_err(|_| Error::ContractError)?)?,
+        )?;
+        Ok(())
     }
 }

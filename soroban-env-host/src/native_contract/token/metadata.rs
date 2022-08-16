@@ -11,11 +11,14 @@ pub fn write_metadata(e: &Host, metadata: Metadata) -> Result<(), Error> {
     Ok(())
 }
 
-pub fn read_name(e: &Host) -> Result<Bytes, Error> {
+pub fn read_metadata(e: &Host) -> Result<Metadata, Error> {
     let key = DataKey::Metadata;
     let rv = e.get_contract_data(key.try_into_val(e)?)?;
-    let metadata: Metadata = rv.in_env(e).try_into()?;
-    match metadata {
+    Ok(rv.in_env(e).try_into()?)
+}
+
+pub fn read_name(e: &Host) -> Result<Bytes, Error> {
+    match read_metadata(e)? {
         Metadata::Token(token) => Ok(token.name),
         Metadata::Native => Ok(e.binary_new_from_slice(b"native").in_env(e).try_into()?),
         Metadata::AlphaNum4(asset) => {
@@ -34,10 +37,7 @@ pub fn read_name(e: &Host) -> Result<Bytes, Error> {
 }
 
 pub fn read_symbol(e: &Host) -> Result<Bytes, Error> {
-    let key = DataKey::Metadata;
-    let rv = e.get_contract_data(key.try_into_val(e)?)?;
-    let metadata: Metadata = rv.in_env(e).try_into()?;
-    match metadata {
+    match read_metadata(e)? {
         Metadata::Token(token) => Ok(token.symbol),
         Metadata::Native => Ok(e.binary_new_from_slice(b"native").in_env(e).try_into()?),
         Metadata::AlphaNum4(asset) => Ok(asset.asset_code.into()),
@@ -46,10 +46,7 @@ pub fn read_symbol(e: &Host) -> Result<Bytes, Error> {
 }
 
 pub fn read_decimal(e: &Host) -> Result<u32, Error> {
-    let key = DataKey::Metadata;
-    let rv = e.get_contract_data(key.try_into_val(e)?)?;
-    let metadata: Metadata = rv.in_env(e).try_into()?;
-    match metadata {
+    match read_metadata(e)? {
         Metadata::Token(token) => Ok(token.decimals),
         Metadata::Native | Metadata::AlphaNum4(_) | Metadata::AlphaNum12(_) => Ok(7),
     }

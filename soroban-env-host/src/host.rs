@@ -695,7 +695,11 @@ impl Host {
         self.create_contract_with_id(contract_code, contract_id)
     }
 
-    fn transfer_account_balance(&self, account_id: Object, amount: i64) -> Result<(), HostError> {
+    pub(crate) fn transfer_account_balance(
+        &self,
+        account_id: Object,
+        amount: i64,
+    ) -> Result<(), HostError> {
         use xdr::{AccountEntryExt, AccountEntryExtensionV1Ext, LedgerKeyAccount};
 
         let lk = LedgerKey::Account(LedgerKeyAccount {
@@ -745,7 +749,7 @@ impl Host {
         })
     }
 
-    fn transfer_trustline_balance(
+    pub(crate) fn transfer_trustline_balance(
         &self,
         account_id: Object,
         asset_code: Object,
