@@ -13,5 +13,5 @@ members = [
 soroban-env-common = { path = "soroban-env-common" }
 soroban-env-macros = { path = "soroban-env-macros" }
 soroban-native-sdk-macros = { path = "soroban-native-sdk-macros" }
-stellar-xdr = { git = "https://github.com/stellar/rs-stellar-xdr", rev = "3eca5ce" }
+stellar-xdr = { git = "https://github.com/stellar/rs-stellar-xdr", rev = "66436840" }
 wasmi = { package = "soroban-wasmi", git = "https://github.com/stellar/wasmi", rev = "7b1f2355" }
