@@ -91,6 +91,7 @@ pub struct LedgerInfo {
     sequence_number: u32,
     timestamp: u64,
     network_id: Vec<u8>,
+    base_reserve: u32,
 }
 
 #[derive(Clone, Default)]
@@ -692,6 +693,103 @@ impl Host {
         let contract_code =
             ScContractCode::Wasm(contract_wasm.try_into().map_err(|_| self.err_general(""))?);
         self.create_contract_with_id(contract_code, contract_id)
+    }
+
+    fn transfer_account_balance(&self, account_id: Object, amount: i64) -> Result<(), HostError> {
+        use xdr::{AccountEntryExt, AccountEntryExtensionV1Ext, LedgerKeyAccount};
+
+        let lk = LedgerKey::Account(LedgerKeyAccount {
+            account_id: AccountId(PublicKey::PublicKeyTypeEd25519(self.to_u256(account_id)?)),
+        });
+        self.visit_storage(|storage| {
+            let mut le = storage.get(&lk)?;
+            let ae = match &mut le.data {
+                LedgerEntryData::Account(ae) => Ok(ae),
+                _ => Err(self.err_general("not account")),
+            }?;
+            if ae.balance < 0 {
+                return Err(self.err_general("balance is negative"));
+            }
+
+            let base_reserve = self.with_ledger_info(|li| Ok(li.base_reserve))? as i64;
+            let (min_balance, max_balance) = if let AccountEntryExt::V1(ext1) = &ae.ext {
+                let net_entries = if let AccountEntryExtensionV1Ext::V2(ext2) = &ext1.ext {
+                    2i64 + (ae.num_sub_entries as i64) + (ext2.num_sponsored as i64)
+                        - (ext2.num_sponsoring as i64)
+                } else {
+                    2i64 + ae.num_sub_entries as i64
+                };
+                let min_balance = net_entries * base_reserve + ext1.liabilities.selling;
+                let max_balance = i64::MAX - ext1.liabilities.buying;
+                (min_balance, max_balance)
+            } else {
+                let net_entries = 2i64 + (ae.num_sub_entries as i64);
+                let min_balance = net_entries * base_reserve;
+                let max_balance = i64::MAX;
+                (min_balance, max_balance)
+            };
+
+            let new_balance = if amount <= 0 {
+                ae.balance + amount
+            } else if ae.balance <= i64::MAX - amount {
+                ae.balance + amount
+            } else {
+                return Err(self.err_general("balance overflowed"));
+            };
+            if new_balance >= min_balance && new_balance <= max_balance {
+                ae.balance = new_balance;
+                storage.put(&lk, &le)
+            } else {
+                Err(self.err_general("invalid balance"))
+            }
+        })
+    }
+
+    fn transfer_trustline_balance(
+        &self,
+        account_id: Object,
+        asset_code: Object,
+        issuer: Object,
+        amount: i64,
+    ) -> Result<(), HostError> {
+        use xdr::TrustLineEntryExt;
+
+        let lk = self.to_trustline_key(account_id, asset_code, issuer)?;
+        self.visit_storage(|storage| {
+            let mut le = storage.get(&lk)?;
+            let tl = match &mut le.data {
+                LedgerEntryData::Trustline(tl) => Ok(tl),
+                _ => Err(self.err_general("not trustline")),
+            }?;
+            if tl.balance < 0 {
+                return Err(self.err_general("balance is negative"));
+            }
+
+            let base_reserve = self.with_ledger_info(|li| Ok(li.base_reserve))? as i64;
+            let (min_balance, max_balance) = if let TrustLineEntryExt::V1(ext1) = &tl.ext {
+                let min_balance = ext1.liabilities.selling;
+                let max_balance = i64::MAX - ext1.liabilities.buying;
+                (min_balance, max_balance)
+            } else {
+                let min_balance = 0;
+                let max_balance = i64::MAX;
+                (min_balance, max_balance)
+            };
+
+            let new_balance = if amount <= 0 {
+                tl.balance + amount
+            } else if tl.balance <= i64::MAX - amount {
+                tl.balance + amount
+            } else {
+                return Err(self.err_general("balance overflowed"));
+            };
+            if new_balance >= min_balance && new_balance <= max_balance {
+                tl.balance = new_balance;
+                storage.put(&lk, &le)
+            } else {
+                Err(self.err_general("invalid balance"))
+            }
+        })
     }
 }
 
