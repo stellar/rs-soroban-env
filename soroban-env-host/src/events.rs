@@ -3,7 +3,7 @@ use std::fmt::Display;
 use crate::{xdr, RawVal, Status};
 #[cfg(feature = "vm")]
 use crate::{
-    xdr::{ScUnknownErrorCode, ScVmErrorCode},
+    xdr::{ContractEvent, ScUnknownErrorCode, ScVmErrorCode},
     HostError,
 };
 use log::debug;
@@ -14,7 +14,7 @@ use tinyvec::TinyVec;
 #[derive(Clone, Debug)]
 pub enum HostEvent {
     #[allow(dead_code)]
-    Contract(/*ContractEvent*/),
+    Contract(ContractEvent),
     Debug(DebugEvent),
 }
 
@@ -30,10 +30,12 @@ impl Events {
         len as u64
     }
 
+    // TODO: record_contract_event
+
     pub fn dump_to_debug_log(&self) {
         for e in self.0.iter() {
             match e {
-                HostEvent::Contract() => debug!("Contract event: <TBD>"),
+                HostEvent::Contract(_) => debug!("Contract event: <TBD>"),
                 HostEvent::Debug(e) => debug!("Debug event: {}", e),
             }
         }

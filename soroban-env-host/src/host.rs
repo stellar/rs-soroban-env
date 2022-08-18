@@ -238,6 +238,8 @@ impl Host {
             .map_err(Host)
     }
 
+    // TODO: recover_events
+
     /// Helper function for [`Host::with_frame`] below. Pushes a new [`Frame`]
     /// on the context stack, returning a [`RollbackPoint`] such that if
     /// operation fails, it can be used to roll the [`Host`] back to the state
@@ -446,18 +448,7 @@ impl Host {
                         HostObject::Bin(b) => {
                             Ok(ScObject::Bytes(self.map_err(b.clone().try_into())?))
                         }
-                        HostObject::BigInt(bi) => {
-                            let (sign, data) = bi.to_bytes_be();
-                            match sign {
-                                Sign::Minus => Ok(ScObject::BigInt(ScBigInt::Negative(
-                                    self.map_err(data.try_into())?,
-                                ))),
-                                Sign::NoSign => Ok(ScObject::BigInt(ScBigInt::Zero)),
-                                Sign::Plus => Ok(ScObject::BigInt(ScBigInt::Positive(
-                                    self.map_err(data.try_into())?,
-                                ))),
-                            }
-                        }
+                        HostObject::BigInt(bi) => self.scobj_from_bigint(bi),
                         HostObject::Hash(_) => todo!(),
                         HostObject::PublicKey(_) => todo!(),
                     },
