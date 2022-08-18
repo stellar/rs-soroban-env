@@ -761,7 +761,7 @@ impl Host {
         issuer: Object,
         amount: i64,
     ) -> Result<(), HostError> {
-        use xdr::TrustLineEntryExt;
+        use xdr::{TrustLineEntryExt, TrustLineFlags};
 
         self.with_current_frame(|frame| match frame {
             Frame::Token(id) => Ok(()),
@@ -777,6 +777,9 @@ impl Host {
             }?;
             if tl.balance < 0 {
                 return Err(self.err_general("balance is negative"));
+            }
+            if tl.flags & (TrustLineFlags::AuthorizedFlag as u32) == 0 {
+                return Err(self.err_general("not authorized"));
             }
 
             let base_reserve = self.with_ledger_info(|li| Ok(li.base_reserve))? as i64;
