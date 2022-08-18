@@ -20,6 +20,7 @@
 
 mod val_wrapper;
 
+mod array;
 mod bitset;
 mod checked_env;
 mod convert;
