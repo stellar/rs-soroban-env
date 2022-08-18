@@ -1,19 +1,17 @@
 use std::fmt::Display;
 
-use crate::{xdr, RawVal, Status};
+use crate::{xdr, xdr::ContractEvent, RawVal, Status};
 #[cfg(feature = "vm")]
 use crate::{
-    xdr::{ContractEvent, ScUnknownErrorCode, ScVmErrorCode},
+    xdr::{ScUnknownErrorCode, ScVmErrorCode},
     HostError,
 };
 use log::debug;
 use tinyvec::TinyVec;
 
-// TODO: update this when ContractEvent shows up in the XDR defns.
 // TODO: optimize storage on this to use pools / bumpalo / etc.
 #[derive(Clone, Debug)]
 pub enum HostEvent {
-    #[allow(dead_code)]
     Contract(ContractEvent),
     Debug(DebugEvent),
 }
@@ -30,12 +28,15 @@ impl Events {
         len as u64
     }
 
-    // TODO: record_contract_event
+    // Records a contract HostEvent.
+    pub fn record_contract_event(&mut self, ce: ContractEvent) {
+        self.0.push(HostEvent::Contract(ce))
+    }
 
     pub fn dump_to_debug_log(&self) {
         for e in self.0.iter() {
             match e {
-                HostEvent::Contract(_) => debug!("Contract event: <TBD>"),
+                HostEvent::Contract(e) => debug!("Contract event: {:?}", e),
                 HostEvent::Debug(e) => debug!("Debug event: {}", e),
             }
         }

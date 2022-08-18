@@ -9,10 +9,13 @@ use num_bigint::{BigInt, Sign};
 use num_integer::Integer;
 use num_traits::cast::ToPrimitive;
 use num_traits::{Pow, Signed, Zero};
-use soroban_env_common::{EnvVal, TryConvert, TryFromVal, TryIntoVal};
+use soroban_env_common::{EnvVal, TryConvert, TryFromVal, TryIntoVal, OK};
 use std::ops::{Add, BitAnd, BitOr, BitXor, Mul, Neg, Not, Rem, Shl, Shr, Sub};
 
-use soroban_env_common::xdr::{AccountId, Hash, PublicKey, ReadXdr, ThresholdIndexes, WriteXdr};
+use soroban_env_common::xdr::{
+    AccountId, ContractEvent, ContractEventBody, ContractEventType, ContractEventV0,
+    ExtensionPoint, Hash, PublicKey, ReadXdr, ThresholdIndexes, WriteXdr,
+};
 
 use crate::budget::{Budget, CostType};
 use crate::events::{DebugError, DebugEvent, Events};
@@ -208,7 +211,7 @@ impl Host {
     /// _represented_ some other error. This function only returns Err(...) when
     /// there was a failure to record the event, such as when budget is
     /// exceeded.
-    pub fn debug_event<T>(&self, src: T) -> Result<(), HostError>
+    pub fn record_debug_event<T>(&self, src: T) -> Result<(), HostError>
     where
         DebugEvent: From<T>,
     {
@@ -220,9 +223,28 @@ impl Host {
         // contract runs out of gas in; this is an atomic action from the
         // contract's perspective.
         let event: DebugEvent = src.into();
-        let len = event.args.len() as u64;
-        self.get_events_mut(|events| Ok(events.record_debug_event(event)))?;
+        let len = self.get_events_mut(|events| Ok(events.record_debug_event(event)))?;
         self.charge_budget(CostType::HostEventDebug, len)
+    }
+
+    // Records a contract event.
+    pub fn record_contract_event(
+        &self,
+        type_: ContractEventType,
+        topics: ScVec,
+        data: ScVal,
+    ) -> Result<(), HostError> {
+        let ce = ContractEvent {
+            ext: ExtensionPoint::V0,
+            contract_id: self.get_current_contract_id()?,
+            type_,
+            body: ContractEventBody::V0(ContractEventV0 { topics, data }),
+        };
+        self.get_events_mut(|events| Ok(events.record_contract_event(ce)))?;
+        // Notes on metering: the length of topics and the complexity of data
+        // have been covered by various `ValXdrConv` charges. Here we charge 1
+        // unit just for recording this event.
+        self.charge_budget(CostType::HostEventDebug, 1)
     }
 
     pub(crate) fn visit_storage<F, U>(&self, f: F) -> Result<U, HostError>
@@ -238,7 +260,11 @@ impl Host {
             .map_err(Host)
     }
 
-    // TODO: recover_events
+    pub fn recover_events(self) -> Result<Events, Self> {
+        Rc::try_unwrap(self.0)
+            .map(|host_impl| host_impl.events.into_inner())
+            .map_err(Host)
+    }
 
     /// Helper function for [`Host::with_frame`] below. Pushes a new [`Frame`]
     /// on the context stack, returning a [`RollbackPoint`] such that if
@@ -776,17 +802,17 @@ impl EnvBase for Host {
     }
 
     fn log_static_fmt_val(&self, fmt: &'static str, v: RawVal) {
-        self.debug_event(DebugEvent::new().msg(fmt).arg(v))
+        self.record_debug_event(DebugEvent::new().msg(fmt).arg(v))
             .expect("unable to record debug event")
     }
 
     fn log_static_fmt_static_str(&self, fmt: &'static str, s: &'static str) {
-        self.debug_event(DebugEvent::new().msg(fmt).arg(s))
+        self.record_debug_event(DebugEvent::new().msg(fmt).arg(s))
             .expect("unable to record debug event")
     }
 
     fn log_static_fmt_val_static_str(&self, fmt: &'static str, v: RawVal, s: &'static str) {
-        self.debug_event(DebugEvent::new().msg(fmt).arg(v).arg(s))
+        self.record_debug_event(DebugEvent::new().msg(fmt).arg(v).arg(s))
             .expect("unable to record debug event")
     }
 
@@ -798,7 +824,8 @@ impl EnvBase for Host {
         for s in strs {
             evt = evt.arg(*s)
         }
-        self.debug_event(evt).expect("unable to record debug event")
+        self.record_debug_event(evt)
+            .expect("unable to record debug event")
     }
 }
 
@@ -806,7 +833,7 @@ impl CheckedEnv for Host {
     type Error = HostError;
 
     fn log_value(&self, v: RawVal) -> Result<RawVal, HostError> {
-        self.debug_event(DebugEvent::new().msg("log").arg(v))?;
+        self.record_debug_event(DebugEvent::new().msg("log").arg(v))?;
         Ok(RawVal::from_void())
     }
 
@@ -844,11 +871,17 @@ impl CheckedEnv for Host {
     }
 
     fn contract_event(&self, topics: Object, data: RawVal) -> Result<RawVal, HostError> {
-        todo!()
+        let topics = self.event_topics_from_host_obj(topics)?;
+        let data = self.from_host_val(data)?;
+        self.record_contract_event(ContractEventType::Contract, topics, data)?;
+        Ok(OK.into())
     }
 
     fn system_event(&self, topics: Object, data: RawVal) -> Result<RawVal, HostError> {
-        todo!()
+        let topics = self.event_topics_from_host_obj(topics)?;
+        let data = self.from_host_val(data)?;
+        self.record_contract_event(ContractEventType::System, topics, data)?;
+        Ok(OK.into())
     }
 
     fn get_current_contract(&self) -> Result<Object, HostError> {
@@ -1254,7 +1287,7 @@ impl CheckedEnv for Host {
                 let evt = DebugEvent::new()
                     .msg("try_call got error from callee contract")
                     .arg::<RawVal>(e.status.clone().into());
-                self.debug_event(evt)?;
+                self.record_debug_event(evt)?;
                 Ok(e.status.into())
             }
         }

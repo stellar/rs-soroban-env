@@ -11,14 +11,15 @@ pub enum CostType {
     WasmInsnExec = 4,
     WasmMemAlloc = 5,
     HostEventDebug = 6,
-    HostFunction = 7,
-    VisitObject = 8,
-    PushFrame = 9,
-    PopFrame = 10,
+    HostEventContract = 7,
+    HostFunction = 8,
+    VisitObject = 9,
+    PushFrame = 10,
+    PopFrame = 11,
     // Tracks a single Val (RawVal or primative Object like U64) <=> ScVal
     // conversion cost. Most of these Val counterparts in ScVal (except e.g.
     // Symbol) consumes a single int64 and therefore is a constant overhead.
-    ValXdrConv = 11,
+    ValXdrConv = 12,
 }
 
 // TODO: add XDR support for iterating over all the elements of an enum
@@ -32,6 +33,7 @@ impl CostType {
             CostType::WasmInsnExec,
             CostType::WasmMemAlloc,
             CostType::HostEventDebug,
+            CostType::HostEventContract,
             CostType::HostFunction,
             CostType::VisitObject,
             CostType::PushFrame,

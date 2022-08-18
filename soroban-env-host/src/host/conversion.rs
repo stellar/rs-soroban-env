@@ -2,7 +2,10 @@ use crate::xdr::{
     Hash, LedgerKey, LedgerKeyContractData, ScBigInt, ScHostFnErrorCode, ScHostObjErrorCode,
     ScHostValErrorCode, ScObject, ScStatic, ScVal, ScVec, Uint256,
 };
-use crate::{events::DebugError, host_object::HostObject, Host, HostError, Object, RawVal, Tag};
+use crate::{
+    budget::CostType, events::DebugError, host_object::HostObject, Host, HostError, Object, RawVal,
+    Tag,
+};
 use ed25519_dalek::{PublicKey, Signature, SIGNATURE_LENGTH};
 use num_bigint::{BigInt, Sign};
 use sha2::{Digest, Sha256};
@@ -153,7 +156,8 @@ impl Host {
         self.storage_key_from_rawval(k)
     }
 
-    pub fn scobj_from_bigint(&self, bi: &BigInt) -> Result<ScObject, HostError> {
+    // TODO: impl a `TryFrom` trait once the "metered_" class is ready
+    pub(crate) fn scobj_from_bigint(&self, bi: &BigInt) -> Result<ScObject, HostError> {
         let (sign, data) = bi.to_bytes_be();
         match sign {
             Sign::Minus => Ok(ScObject::BigInt(ScBigInt::Negative(
@@ -166,8 +170,8 @@ impl Host {
         }
     }
 
-    pub fn event_topic_from_rawval(&self, topic: RawVal) -> Result<ScVal, HostError> {
-        // TODO: charge budget
+    fn event_topic_from_rawval(&self, topic: RawVal) -> Result<ScVal, HostError> {
+        self.charge_budget(CostType::ValXdrConv, 1)?;
         if topic.is_u63() {
             Ok(ScVal::U63(unsafe { topic.unchecked_as_u63() }))
         } else {
@@ -179,6 +183,7 @@ impl Host {
                             let sco = match ob {
                                 None => Err(self.err_status(ScHostObjErrorCode::UnknownReference)),
                                 Some(ho) => match ho {
+                                    // TODO: use more event-specific error codes than `UnexpectedType`
                                     HostObject::Vec(_) => {
                                         Err(self.err_status(ScHostObjErrorCode::UnexpectedType))
                                     }
@@ -209,10 +214,10 @@ impl Host {
         }
     }
 
-    pub fn event_topics_from_host_obj(&self, topics: Object) -> Result<ScVec, HostError> {
+    pub(crate) fn event_topics_from_host_obj(&self, topics: Object) -> Result<ScVec, HostError> {
         unsafe {
             self.unchecked_visit_val_obj(topics.into(), |ob| {
-                // TODO: self.charge_budget(CostType::ValXdrConv, 1)?;
+                self.charge_budget(CostType::ValXdrConv, 1)?;
                 match ob {
                     None => Err(self.err_status(ScHostObjErrorCode::UnknownReference)),
                     Some(ho) => match ho {
