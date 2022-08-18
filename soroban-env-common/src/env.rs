@@ -146,8 +146,14 @@ macro_rules! call_macro_with_all_host_functions {
                 /// invoked by a contract.
                 {"0", fn get_invoking_contract() -> Object }
                 {"1", fn obj_cmp(a:RawVal, b:RawVal) -> i64 }
-                {"2", fn contract_event(v:RawVal) -> RawVal }
-                {"3", fn system_event(v:RawVal) -> RawVal }
+                /// Records a contract event. `topics` is expected to be a `SCVec` with
+                /// length <= 4 that cannot contain Vecs, Maps, or Binaries > 32 bytes
+                /// On succes, returns an `SCStatus::Ok`.
+                {"2", fn contract_event(topics:Object, data:RawVal) -> RawVal }
+                /// Records a system event. `topics` is expected to be a `SCVec` with
+                /// length <= 4 that cannot contain Vecs, Maps, or Binaries > 32 bytes
+                /// On succes, returns an `SCStatus::Ok`.
+                {"3", fn system_event(topics:Object, data:RawVal) -> RawVal }
                 /// Get the binary contractID of the contract which invoked the
                 /// running contract. Traps if the running contract was not
                 /// invoked by a contract.

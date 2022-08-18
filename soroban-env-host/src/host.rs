@@ -852,11 +852,11 @@ impl CheckedEnv for Host {
         })
     }
 
-    fn contract_event(&self, v: RawVal) -> Result<RawVal, HostError> {
+    fn contract_event(&self, topics: Object, data: RawVal) -> Result<RawVal, HostError> {
         todo!()
     }
 
-    fn system_event(&self, v: RawVal) -> Result<RawVal, HostError> {
+    fn system_event(&self, topics: Object, data: RawVal) -> Result<RawVal, HostError> {
         todo!()
     }
 
