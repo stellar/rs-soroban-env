@@ -4,7 +4,7 @@ use crate::{
         ContractEvent, ContractEventBody, ContractEventType, ContractEventV0, ExtensionPoint, Hash,
         ScMap, ScMapEntry, ScObject::Map, ScVal,
     },
-    ContractFunctionSet, Env, EnvBase, Host, HostError, RawVal, Symbol,
+    ContractFunctionSet, Env, EnvBase, Host, HostError, RawVal, Symbol, OK,
 };
 use std::rc::Rc;
 
@@ -32,7 +32,10 @@ fn contract_event() -> Result<(), HostError> {
     let sym = Symbol::from_str("add");
     let args = host.test_vec_obj::<i32>(&[1, 2])?;
     host.register_test_contract(id, test_contract)?;
-    host.call(id, sym.into(), args.into());
+    assert_eq!(
+        host.call(id, sym.into(), args.into()).get_payload(),
+        OK.to_raw().get_payload()
+    );
 
     let event_ref = ContractEvent {
         ext: ExtensionPoint::V0,
