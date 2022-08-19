@@ -54,7 +54,6 @@ fn contract_event() -> Result<(), HostError> {
     let events = host.get_events();
     match events.0.last() {
         Some(HostEvent::Contract(ce)) => {
-            //println!("{:?}", ce);
             assert_eq!(*ce, event_ref)
         }
         _ => {
