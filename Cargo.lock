@@ -555,12 +555,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7ef03e0a2b150c7a90d01faf6254c9c48a41e95fb2a8c2ac1c6f0d2b9aefc342"
 
 [[package]]
-name = "seq-macro"
-version = "0.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0772c5c30e1a0d91f6834f8e545c69281c099dfa9a3ac58d96a9fd629c8d4898"
-
-[[package]]
 name = "serde"
 version = "1.0.143"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -624,7 +618,6 @@ dependencies = [
 name = "soroban-env-common"
 version = "0.0.3"
 dependencies = [
- "seq-macro",
  "soroban-env-host",
  "soroban-env-macros",
  "soroban-wasmi",
