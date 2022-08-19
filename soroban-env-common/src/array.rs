@@ -23,25 +23,6 @@ impl<E: Env, const N: usize> TryFrom<EnvVal<E, RawVal>> for [u8; N] {
     }
 }
 
-impl<E: Env, const N: usize> IntoVal<E, RawVal> for [u8; N] {
-    fn into_val(self, env: &E) -> RawVal {
-        let env = env.clone();
-        let mut bin = env.binary_new();
-        bin = env.binary_copy_from_slice(bin, U32_ZERO, &self);
-        bin.to_raw()
-    }
-}
-
-impl<E: Env, const N: usize> IntoVal<E, EnvVal<E, RawVal>> for [u8; N] {
-    fn into_val(self, env: &E) -> EnvVal<E, RawVal> {
-        let rv: RawVal = self.into_val(env);
-        EnvVal {
-            env: env.clone(),
-            val: rv,
-        }
-    }
-}
-
 impl<E: Env, const N: usize> TryIntoVal<E, [u8; N]> for RawVal {
     type Error = ConversionError;
     #[inline(always)]
@@ -51,5 +32,50 @@ impl<E: Env, const N: usize> TryIntoVal<E, [u8; N]> for RawVal {
             val: self,
         }
         .try_into()
+    }
+}
+
+impl<E: Env> IntoVal<E, RawVal> for &[u8] {
+    fn into_val(self, env: &E) -> RawVal {
+        let env = env.clone();
+        let mut bin = env.binary_new();
+        bin = env.binary_copy_from_slice(bin, U32_ZERO, self);
+        bin.to_raw()
+    }
+}
+
+impl<E: Env> IntoVal<E, EnvVal<E, RawVal>> for &[u8] {
+    fn into_val(self, env: &E) -> EnvVal<E, RawVal> {
+        let rv: RawVal = self.into_val(env);
+        EnvVal {
+            env: env.clone(),
+            val: rv,
+        }
+    }
+}
+
+impl<E: Env, const N: usize> IntoVal<E, RawVal> for &[u8; N] {
+    fn into_val(self, env: &E) -> RawVal {
+        let slice: &[u8] = self;
+        slice.into_val(env)
+    }
+}
+
+impl<E: Env, const N: usize> IntoVal<E, EnvVal<E, RawVal>> for &[u8; N] {
+    fn into_val(self, env: &E) -> EnvVal<E, RawVal> {
+        let slice: &[u8] = self;
+        slice.into_val(env)
+    }
+}
+
+impl<E: Env, const N: usize> IntoVal<E, RawVal> for [u8; N] {
+    fn into_val(self, env: &E) -> RawVal {
+        (&self).into_val(env)
+    }
+}
+
+impl<E: Env, const N: usize> IntoVal<E, EnvVal<E, RawVal>> for [u8; N] {
+    fn into_val(self, env: &E) -> EnvVal<E, RawVal> {
+        (&self).into_val(env)
     }
 }
