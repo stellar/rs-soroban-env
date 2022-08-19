@@ -19,6 +19,12 @@ pub enum HostEvent {
 #[derive(Clone, Debug, Default)]
 pub struct Events(pub Vec<HostEvent>);
 
+// Maximum number of topics in a `ContractEvent`. This applies to both
+// `Contract` and `System` types of contract events.
+pub(crate) const CONTRACT_EVENT_TOPICS_LIMIT: usize = 4;
+// Maximum number of bytes in a topic binary.
+pub(crate) const TOPIC_BYTES_LENGTH_LIMIT: usize = 32;
+
 impl Events {
     // Records the smallest variant of a debug HostEvent it can, returning the size of the
     // in_args slice (for charging to a budget).

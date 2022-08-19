@@ -3,8 +3,10 @@ use crate::xdr::{
     ScHostValErrorCode, ScObject, ScStatic, ScVal, ScVec, Uint256,
 };
 use crate::{
-    budget::CostType, events::DebugError, host_object::HostObject, Host, HostError, Object, RawVal,
-    Tag,
+    budget::CostType,
+    events::{DebugError, CONTRACT_EVENT_TOPICS_LIMIT, TOPIC_BYTES_LENGTH_LIMIT},
+    host_object::HostObject,
+    Host, HostError, Object, RawVal, Tag,
 };
 use ed25519_dalek::{PublicKey, Signature, SIGNATURE_LENGTH};
 use num_bigint::{BigInt, Sign};
@@ -187,11 +189,14 @@ impl Host {
                                     HostObject::Vec(_) => {
                                         Err(self.err_status(ScHostObjErrorCode::UnexpectedType))
                                     }
+                                    // TODO: use more event-specific error codes than `UnexpectedType`
                                     HostObject::Map(_) => {
                                         Err(self.err_status(ScHostObjErrorCode::UnexpectedType))
                                     }
                                     HostObject::Bin(b) => {
-                                        if b.len() > 32 {
+                                        if b.len() > TOPIC_BYTES_LENGTH_LIMIT {
+                                            // TODO: use more event-specific error codes than `UnexpectedType`.
+                                            // Something like "topic binary exceeds length limit"
                                             return Err(
                                                 self.err_status(ScHostObjErrorCode::UnexpectedType)
                                             );
@@ -222,7 +227,7 @@ impl Host {
                     None => Err(self.err_status(ScHostObjErrorCode::UnknownReference)),
                     Some(ho) => match ho {
                         HostObject::Vec(vv) => {
-                            if vv.len() > 4 {
+                            if vv.len() > CONTRACT_EVENT_TOPICS_LIMIT {
                                 // TODO: proper error code "event topics exceeds count limit"
                                 return Err(self.err_status(ScHostObjErrorCode::UnknownError));
                             }
