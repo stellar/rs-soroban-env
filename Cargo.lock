@@ -623,6 +623,7 @@ dependencies = [
  "soroban-wasmi",
  "static_assertions",
  "stellar-xdr",
+ "thiserror",
 ]
 
 [[package]]

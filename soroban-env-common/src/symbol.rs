@@ -7,13 +7,15 @@ use core::{
 };
 
 /// Errors related to operations on the [Symbol] type.
-#[derive(Debug)]
+#[derive(thiserror::Error, Debug)]
 pub enum SymbolError {
     /// Returned when attempting to form a [Symbol] from a string with more than
     /// 10 characters.
+    #[error("symbol too long: length {0}, max {MAX_CHARS}")]
     TooLong(usize),
     /// Returned when attempting to form a [Symbol] from a string with
     /// characters outside the range `[a-zA-Z0-9_]`.
+    #[error("symbol bad char: encountered {0}, supported range [a-zA-Z0-9_]")]
     BadChar(char),
 }
 
