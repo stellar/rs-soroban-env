@@ -364,6 +364,13 @@ impl From<&ScStatus> for RawVal {
     }
 }
 
+impl From<u8> for RawVal {
+    #[inline(always)]
+    fn from(u: u8) -> Self {
+        RawVal::from_u32(u.into())
+    }
+}
+
 impl RawVal {
     pub fn in_env<E: Env>(self, env: &E) -> EnvVal<E, RawVal> {
         EnvVal {

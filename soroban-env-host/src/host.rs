@@ -1581,7 +1581,7 @@ impl CheckedEnv for Host {
         let i = self.usize_from_rawval_u32_input("i", i)?;
         self.visit_obj(b, |hv: &Vec<u8>| {
             hv.get(i)
-                .map(|u| Into::<RawVal>::into(Into::<u32>::into(*u)))
+                .map(|u| Into::<RawVal>::into(*u))
                 .ok_or_else(|| self.err_status(ScHostObjErrorCode::VecIndexOutOfBound))
         })
     }
@@ -1625,7 +1625,7 @@ impl CheckedEnv for Host {
     fn binary_front(&self, b: Object) -> Result<RawVal, HostError> {
         self.visit_obj(b, |hv: &Vec<u8>| {
             hv.first()
-                .map(|u| Into::<RawVal>::into(Into::<u32>::into(*u)))
+                .map(|u| Into::<RawVal>::into(*u))
                 .ok_or_else(|| self.err_status(ScHostObjErrorCode::VecIndexOutOfBound))
         })
     }
@@ -1633,7 +1633,7 @@ impl CheckedEnv for Host {
     fn binary_back(&self, b: Object) -> Result<RawVal, HostError> {
         self.visit_obj(b, |hv: &Vec<u8>| {
             hv.last()
-                .map(|u| Into::<RawVal>::into(Into::<u32>::into(*u)))
+                .map(|u| Into::<RawVal>::into(*u))
                 .ok_or_else(|| self.err_status(ScHostObjErrorCode::VecIndexOutOfBound))
         })
     }
@@ -1704,21 +1704,15 @@ impl CheckedEnv for Host {
     }
 
     fn account_get_low_threshold(&self, a: Object) -> Result<RawVal, Self::Error> {
-        let threshold = self.load_account(a)?.thresholds.0[ThresholdIndexes::Low as usize];
-        let threshold = Into::<u32>::into(threshold);
-        Ok(threshold.into())
+        Ok(self.load_account(a)?.thresholds.0[ThresholdIndexes::Low as usize].into())
     }
 
     fn account_get_medium_threshold(&self, a: Object) -> Result<RawVal, Self::Error> {
-        let threshold = self.load_account(a)?.thresholds.0[ThresholdIndexes::Med as usize];
-        let threshold = Into::<u32>::into(threshold);
-        Ok(threshold.into())
+        Ok(self.load_account(a)?.thresholds.0[ThresholdIndexes::Med as usize].into())
     }
 
     fn account_get_high_threshold(&self, a: Object) -> Result<RawVal, Self::Error> {
-        let threshold = self.load_account(a)?.thresholds.0[ThresholdIndexes::High as usize];
-        let threshold = Into::<u32>::into(threshold);
-        Ok(threshold.into())
+        Ok(self.load_account(a)?.thresholds.0[ThresholdIndexes::High as usize].into())
     }
 
     fn account_get_signer_weight(&self, a: Object, s: Object) -> Result<RawVal, Self::Error> {
@@ -1729,9 +1723,7 @@ impl CheckedEnv for Host {
         let ae = self.load_account(a)?;
         if ae.account_id == AccountId(PublicKey::PublicKeyTypeEd25519(target_signer.clone())) {
             // Target signer is the master key, so return the master weight
-            let threshold = ae.thresholds.0[ThresholdIndexes::MasterWeight as usize];
-            let threshold = Into::<u32>::into(threshold);
-            Ok(threshold.into())
+            Ok(ae.thresholds.0[ThresholdIndexes::MasterWeight as usize].into())
         } else {
             // Target signer is not the master key, so search the account signers
             let signers: &Vec<Signer> = ae.signers.as_ref();
