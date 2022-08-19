@@ -87,10 +87,10 @@ struct VmSlice {
 
 #[derive(Debug, Clone)]
 pub struct LedgerInfo {
-    protocol_version: u32,
-    sequence_number: u32,
-    timestamp: u64,
-    network_id: Vec<u8>,
+    pub protocol_version: u32,
+    pub sequence_number: u32,
+    pub timestamp: u64,
+    pub network_id: Vec<u8>,
 }
 
 #[derive(Clone, Default)]
@@ -168,7 +168,7 @@ impl Host {
         F: FnOnce(&LedgerInfo) -> Result<T, HostError>,
     {
         match self.0.ledger.borrow().as_ref() {
-            None => Err(self.err_general("midding ledger info")),
+            None => Err(self.err_general("missing ledger info")),
             Some(li) => f(li),
         }
     }
