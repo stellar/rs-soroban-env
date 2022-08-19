@@ -140,7 +140,6 @@ macro_rules! call_macro_with_all_host_functions {
                 // This one variant of logging does not take a format string and
                 // is live in both Env=Guest and Env=Host configurations.
                 {"_", fn log_value(v:RawVal) -> RawVal }
-
                 /// Get the binary contractID of the contract which invoked the
                 /// running contract. Traps if the running contract was not
                 /// invoked by a contract.
@@ -150,23 +149,18 @@ macro_rules! call_macro_with_all_host_functions {
                 /// length <= 4 that cannot contain Vecs, Maps, or Binaries > 32 bytes
                 /// On succes, returns an `SCStatus::Ok`.
                 {"2", fn contract_event(topics:Object, data:RawVal) -> RawVal }
-                /// Records a system event. `topics` is expected to be a `SCVec` with
-                /// length <= 4 that cannot contain Vecs, Maps, or Binaries > 32 bytes
-                /// On succes, returns an `SCStatus::Ok`.
-                {"3", fn system_event(topics:Object, data:RawVal) -> RawVal }
                 /// Get the binary contractID of the contract which invoked the
                 /// running contract. Traps if the running contract was not
                 /// invoked by a contract.
-                {"4", fn get_current_contract() -> Object }
-
+                {"3", fn get_current_contract() -> Object }
                 /// Return the protocol version of the current ledger as a u32.
-                {"5", fn get_ledger_version() -> RawVal }
+                {"4", fn get_ledger_version() -> RawVal }
                 /// Return the sequence number of the current ledger as a u32.
-                {"6", fn get_ledger_sequence() -> RawVal }
+                {"5", fn get_ledger_sequence() -> RawVal }
                 /// Return the timestamp number of the current ledger as a u64.
-                {"7", fn get_ledger_timestamp() -> Object }
+                {"6", fn get_ledger_timestamp() -> Object }
                 /// Return the network identity of the current ledger as bytes.
-                {"8", fn get_ledger_network_id() -> Object }
+                {"7", fn get_ledger_network_id() -> Object }
             }
 
             mod u64 "u" {

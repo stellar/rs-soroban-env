@@ -710,6 +710,18 @@ impl Host {
             ScContractCode::Wasm(contract_wasm.try_into().map_err(|_| self.err_general(""))?);
         self.create_contract_with_id(contract_code, contract_id)
     }
+
+    /// Records a `System` contract event. `topics` is expected to be a `SCVec`
+    /// with length <= 4 that cannot contain Vecs, Maps, or Binaries > 32 bytes
+    /// On succes, returns an `SCStatus::Ok`.
+    /// Note: this function is intended to be used within the context of a `Contract`.
+    /// If invoked within a `HostFunction` frame, it will fail due to lack of a `ContractId`
+    pub fn system_event(&self, topics: Object, data: RawVal) -> Result<RawVal, HostError> {
+        let topics = self.event_topics_from_host_obj(topics)?;
+        let data = self.from_host_val(data)?;
+        self.record_contract_event(ContractEventType::System, topics, data)?;
+        Ok(OK.into())
+    }
 }
 
 impl EnvBase for Host {
@@ -874,13 +886,6 @@ impl CheckedEnv for Host {
         let topics = self.event_topics_from_host_obj(topics)?;
         let data = self.from_host_val(data)?;
         self.record_contract_event(ContractEventType::Contract, topics, data)?;
-        Ok(OK.into())
-    }
-
-    fn system_event(&self, topics: Object, data: RawVal) -> Result<RawVal, HostError> {
-        let topics = self.event_topics_from_host_obj(topics)?;
-        let data = self.from_host_val(data)?;
-        self.record_contract_event(ContractEventType::System, topics, data)?;
         Ok(OK.into())
     }
 
