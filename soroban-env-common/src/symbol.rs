@@ -17,6 +17,21 @@ pub enum SymbolError {
     BadChar(char),
 }
 
+impl core::fmt::Display for SymbolError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            SymbolError::TooLong(len) => f.write_fmt(format_args!(
+                "symbol too long: length {}, max {}",
+                len, MAX_CHARS
+            )),
+            SymbolError::BadChar(char) => f.write_fmt(format_args!(
+                "symbol bad char: encountered {}, supported range [a-zA-Z0-9_]",
+                char
+            )),
+        }
+    }
+}
+
 impl From<SymbolError> for ConversionError {
     fn from(_: SymbolError) -> Self {
         ConversionError
