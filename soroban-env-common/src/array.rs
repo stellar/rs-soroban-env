@@ -2,8 +2,6 @@ use stellar_xdr::ScObjectType;
 
 use crate::{ConversionError, Env, EnvVal, IntoVal, Object, RawVal, RawValConvertible, TryIntoVal};
 
-const U32_ZERO: RawVal = RawVal::from_u32(0);
-
 impl<E: Env, const N: usize> TryFrom<EnvVal<E, RawVal>> for [u8; N] {
     type Error = ConversionError;
 
@@ -18,7 +16,7 @@ impl<E: Env, const N: usize> TryFrom<EnvVal<E, RawVal>> for [u8; N] {
             return Err(ConversionError);
         }
         let mut arr = [0u8; N];
-        env.binary_copy_to_slice(bin, U32_ZERO, &mut arr);
+        env.binary_copy_to_slice(bin, RawVal::U32_ZERO, &mut arr);
         Ok(arr)
     }
 }
@@ -39,7 +37,7 @@ impl<E: Env> IntoVal<E, RawVal> for &[u8] {
     fn into_val(self, env: &E) -> RawVal {
         let env = env.clone();
         let mut bin = env.binary_new();
-        bin = env.binary_copy_from_slice(bin, U32_ZERO, self);
+        bin = env.binary_copy_from_slice(bin, RawVal::U32_ZERO, self);
         bin.to_raw()
     }
 }
