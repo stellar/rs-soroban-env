@@ -90,10 +90,10 @@ struct VmSlice {
 
 #[derive(Debug, Clone)]
 pub struct LedgerInfo {
-    protocol_version: u32,
-    sequence_number: u32,
-    timestamp: u64,
-    network_id: Vec<u8>,
+    pub protocol_version: u32,
+    pub sequence_number: u32,
+    pub timestamp: u64,
+    pub network_id: Vec<u8>,
 }
 
 #[derive(Clone, Default)]
@@ -171,7 +171,7 @@ impl Host {
         F: FnOnce(&LedgerInfo) -> Result<T, HostError>,
     {
         match self.0.ledger.borrow().as_ref() {
-            None => Err(self.err_general("midding ledger info")),
+            None => Err(self.err_general("missing ledger info")),
             Some(li) => f(li),
         }
     }
@@ -1610,7 +1610,7 @@ impl CheckedEnv for Host {
         let i = self.usize_from_rawval_u32_input("i", i)?;
         self.visit_obj(b, |hv: &Vec<u8>| {
             hv.get(i)
-                .map(|u| Into::<RawVal>::into(*u))
+                .map(|u| Into::<RawVal>::into(Into::<u32>::into(*u)))
                 .ok_or_else(|| self.err_status(ScHostObjErrorCode::VecIndexOutOfBound))
         })
     }
@@ -1654,7 +1654,7 @@ impl CheckedEnv for Host {
     fn binary_front(&self, b: Object) -> Result<RawVal, HostError> {
         self.visit_obj(b, |hv: &Vec<u8>| {
             hv.first()
-                .map(|u| Into::<RawVal>::into(*u))
+                .map(|u| Into::<RawVal>::into(Into::<u32>::into(*u)))
                 .ok_or_else(|| self.err_status(ScHostObjErrorCode::VecIndexOutOfBound))
         })
     }
@@ -1662,7 +1662,7 @@ impl CheckedEnv for Host {
     fn binary_back(&self, b: Object) -> Result<RawVal, HostError> {
         self.visit_obj(b, |hv: &Vec<u8>| {
             hv.last()
-                .map(|u| Into::<RawVal>::into(*u))
+                .map(|u| Into::<RawVal>::into(Into::<u32>::into(*u)))
                 .ok_or_else(|| self.err_status(ScHostObjErrorCode::VecIndexOutOfBound))
         })
     }
@@ -1733,15 +1733,21 @@ impl CheckedEnv for Host {
     }
 
     fn account_get_low_threshold(&self, a: Object) -> Result<RawVal, Self::Error> {
-        Ok(self.load_account(a)?.thresholds.0[ThresholdIndexes::Low as usize].into())
+        let threshold = self.load_account(a)?.thresholds.0[ThresholdIndexes::Low as usize];
+        let threshold = Into::<u32>::into(threshold);
+        Ok(threshold.into())
     }
 
     fn account_get_medium_threshold(&self, a: Object) -> Result<RawVal, Self::Error> {
-        Ok(self.load_account(a)?.thresholds.0[ThresholdIndexes::Med as usize].into())
+        let threshold = self.load_account(a)?.thresholds.0[ThresholdIndexes::Med as usize];
+        let threshold = Into::<u32>::into(threshold);
+        Ok(threshold.into())
     }
 
     fn account_get_high_threshold(&self, a: Object) -> Result<RawVal, Self::Error> {
-        Ok(self.load_account(a)?.thresholds.0[ThresholdIndexes::High as usize].into())
+        let threshold = self.load_account(a)?.thresholds.0[ThresholdIndexes::High as usize];
+        let threshold = Into::<u32>::into(threshold);
+        Ok(threshold.into())
     }
 
     fn account_get_signer_weight(&self, a: Object, s: Object) -> Result<RawVal, Self::Error> {
@@ -1752,7 +1758,9 @@ impl CheckedEnv for Host {
         let ae = self.load_account(a)?;
         if ae.account_id == AccountId(PublicKey::PublicKeyTypeEd25519(target_signer.clone())) {
             // Target signer is the master key, so return the master weight
-            Ok(ae.thresholds.0[ThresholdIndexes::MasterWeight as usize].into())
+            let threshold = ae.thresholds.0[ThresholdIndexes::MasterWeight as usize];
+            let threshold = Into::<u32>::into(threshold);
+            Ok(threshold.into())
         } else {
             // Target signer is not the master key, so search the account signers
             let signers: &Vec<Signer> = ae.signers.as_ref();

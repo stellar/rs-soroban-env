@@ -364,13 +364,6 @@ impl From<&ScStatus> for RawVal {
     }
 }
 
-impl From<u8> for RawVal {
-    #[inline(always)]
-    fn from(u: u8) -> Self {
-        RawVal::from_u32(u.into())
-    }
-}
-
 impl RawVal {
     pub fn in_env<E: Env>(self, env: &E) -> EnvVal<E, RawVal> {
         EnvVal {
@@ -491,28 +484,37 @@ impl RawVal {
     }
 
     #[inline(always)]
+    pub const fn is_i32_zero(self) -> bool {
+        self.0 == Self::I32_ZERO.0
+    }
+
+    #[inline(always)]
     pub const fn is_u32_zero(self) -> bool {
-        const ZERO: RawVal = RawVal::from_u32(0);
-        self.0 == ZERO.0
+        self.0 == Self::U32_ZERO.0
     }
 
     #[inline(always)]
     pub const fn is_void(self) -> bool {
-        const VOID: RawVal = RawVal::from_other_static(ScStatic::Void);
-        self.0 == VOID.0
+        self.0 == Self::VOID.0
     }
 
     #[inline(always)]
     pub const fn is_true(self) -> bool {
-        const TRUE: RawVal = RawVal::from_bool(true);
-        self.0 == TRUE.0
+        self.0 == Self::TRUE.0
     }
 
     #[inline(always)]
     pub const fn is_false(self) -> bool {
-        const FALSE: RawVal = RawVal::from_bool(false);
-        self.0 == FALSE.0
+        self.0 == Self::FALSE.0
     }
+}
+
+impl RawVal {
+    pub const I32_ZERO: RawVal = RawVal::from_i32(0);
+    pub const U32_ZERO: RawVal = RawVal::from_u32(0);
+    pub const VOID: RawVal = RawVal::from_other_static(ScStatic::Void);
+    pub const TRUE: RawVal = RawVal::from_bool(true);
+    pub const FALSE: RawVal = RawVal::from_bool(false);
 }
 
 impl Debug for RawVal {
