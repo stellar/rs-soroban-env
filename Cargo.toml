@@ -11,6 +11,7 @@ members = [
 
 [patch.crates-io]
 soroban-env-common = { path = "soroban-env-common" }
+soroban-env-host = { path = "soroban-env-host" }
 soroban-env-macros = { path = "soroban-env-macros" }
 soroban-native-sdk-macros = { path = "soroban-native-sdk-macros" }
 stellar-xdr = { git = "https://github.com/stellar/rs-stellar-xdr", rev = "f4fe3091" }
