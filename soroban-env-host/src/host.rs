@@ -16,6 +16,7 @@ use soroban_env_common::xdr::{AccountId, Hash, PublicKey, ReadXdr, ThresholdInde
 
 use crate::budget::{Budget, CostType};
 use crate::events::{DebugError, DebugEvent, Events};
+use crate::ledger_info::LedgerInfo;
 use crate::storage::Storage;
 use crate::weak_host::WeakHost;
 
@@ -83,14 +84,6 @@ struct VmSlice {
     vm: Rc<Vm>,
     pos: u32,
     len: u32,
-}
-
-#[derive(Debug, Clone)]
-pub struct LedgerInfo {
-    protocol_version: u32,
-    sequence_number: u32,
-    timestamp: u64,
-    network_id: Vec<u8>,
 }
 
 #[derive(Clone, Default)]
@@ -168,7 +161,7 @@ impl Host {
         F: FnOnce(&LedgerInfo) -> Result<T, HostError>,
     {
         match self.0.ledger.borrow().as_ref() {
-            None => Err(self.err_general("midding ledger info")),
+            None => Err(self.err_general("missing ledger info")),
             Some(li) => f(li),
         }
     }
