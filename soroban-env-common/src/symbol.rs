@@ -7,16 +7,29 @@ use core::{
 };
 
 /// Errors related to operations on the [Symbol] type.
-#[derive(thiserror::Error, Debug)]
+#[derive(Debug)]
 pub enum SymbolError {
     /// Returned when attempting to form a [Symbol] from a string with more than
     /// 10 characters.
-    #[error("symbol too long: length {0}, max {MAX_CHARS}")]
     TooLong(usize),
     /// Returned when attempting to form a [Symbol] from a string with
     /// characters outside the range `[a-zA-Z0-9_]`.
-    #[error("symbol bad char: encountered {0}, supported range [a-zA-Z0-9_]")]
     BadChar(char),
+}
+
+impl core::fmt::Display for SymbolError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            SymbolError::TooLong(len) => f.write_fmt(format_args!(
+                "symbol too long: length {}, max {}",
+                len, MAX_CHARS
+            )),
+            SymbolError::BadChar(char) => f.write_fmt(format_args!(
+                "symbol bad char: encountered {}, supported range [a-zA-Z0-9_]",
+                char
+            )),
+        }
+    }
 }
 
 impl From<SymbolError> for ConversionError {
