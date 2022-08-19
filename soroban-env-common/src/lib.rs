@@ -28,6 +28,7 @@ mod env;
 mod env_val;
 pub mod meta;
 mod object;
+mod option;
 mod raw_val;
 mod r#static;
 mod status;
