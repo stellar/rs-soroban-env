@@ -236,7 +236,7 @@ impl Host {
     ) -> Result<(), HostError> {
         let ce = ContractEvent {
             ext: ExtensionPoint::V0,
-            contract_id: self.get_current_contract_id()?,
+            contract_id: self.get_current_contract_id().ok(),
             type_,
             body: ContractEventBody::V0(ContractEventV0 { topics, data }),
         };
@@ -717,8 +717,6 @@ impl Host {
     /// Records a `System` contract event. `topics` is expected to be a `SCVec`
     /// with length <= 4 that cannot contain Vecs, Maps, or Binaries > 32 bytes
     /// On succes, returns an `SCStatus::Ok`.
-    /// Note: this function is intended to be used within the context of a `Contract`.
-    /// If invoked within a `HostFunction` frame, it will fail due to lack of a `ContractId`
     pub fn system_event(&self, topics: Object, data: RawVal) -> Result<RawVal, HostError> {
         let topics = self.event_topics_from_host_obj(topics)?;
         let data = self.from_host_val(data)?;

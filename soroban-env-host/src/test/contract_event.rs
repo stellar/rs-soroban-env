@@ -39,7 +39,7 @@ fn contract_event() -> Result<(), HostError> {
 
     let event_ref = ContractEvent {
         ext: ExtensionPoint::V0,
-        contract_id: Hash(dummy_id),
+        contract_id: Some(Hash(dummy_id)),
         type_: ContractEventType::Contract,
         body: ContractEventBody::V0(ContractEventV0 {
             topics: host.map_err(vec![ScVal::U32(0), ScVal::U32(1)].try_into())?,
