@@ -49,3 +49,4 @@ pub use host::ContractFunctionSet;
 pub use host::{Host, HostError};
 pub use im_rc;
 pub use soroban_env_common::*;
+pub mod ledger_info;
