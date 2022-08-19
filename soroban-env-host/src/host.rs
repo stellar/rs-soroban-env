@@ -254,15 +254,18 @@ impl Host {
         f(&mut *self.0.storage.borrow_mut())
     }
 
-    pub fn recover_storage(self) -> Result<Storage, Self> {
+    /// Accept a _unique_ (refcount = 1) host reference and destroy the
+    /// underlying [`HostImpl`], returning its constituent components to the
+    /// caller as a tuple wrapped in `Ok(...)`. If the provided host reference
+    /// is not unique, returns `Err(self)`.
+    pub fn try_finish(self) -> Result<(Storage, Budget, Events), Self> {
         Rc::try_unwrap(self.0)
-            .map(|host_impl| host_impl.storage.into_inner())
-            .map_err(Host)
-    }
-
-    pub fn recover_events(self) -> Result<Events, Self> {
-        Rc::try_unwrap(self.0)
-            .map(|host_impl| host_impl.events.into_inner())
+            .map(|host_impl| {
+                let storage = host_impl.storage.into_inner();
+                let budget = host_impl.budget.into_inner();
+                let events = host_impl.events.into_inner();
+                (storage, budget, events)
+            })
             .map_err(Host)
     }
 
