@@ -157,7 +157,8 @@ impl Symbol {
     pub const fn from_str(s: &str) -> Symbol {
         match Self::try_from_str(s) {
             Ok(sym) => sym,
-            Err(_) => panic!(),
+            Err(SymbolError::TooLong(_)) => panic!("symbol too long"),
+            Err(SymbolError::BadChar(_)) => panic!("symbol bad char"),
         }
     }
 
