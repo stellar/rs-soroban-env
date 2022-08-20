@@ -1,9 +1,16 @@
-use crate::events::DebugError;
-use crate::xdr::{ScHostFnErrorCode, ScHostObjErrorCode, ScHostValErrorCode};
-use crate::{Host, HostError, Object, RawVal};
+use crate::xdr::{
+    Hash, LedgerKey, LedgerKeyContractData, ScBigInt, ScHostFnErrorCode, ScHostObjErrorCode,
+    ScHostValErrorCode, ScObject, ScStatic, ScVal, ScVec, Uint256,
+};
+use crate::{
+    budget::CostType,
+    events::{DebugError, CONTRACT_EVENT_TOPICS_LIMIT, TOPIC_BYTES_LENGTH_LIMIT},
+    host_object::HostObject,
+    Host, HostError, Object, RawVal, Tag,
+};
 use ed25519_dalek::{PublicKey, Signature, SIGNATURE_LENGTH};
+use num_bigint::{BigInt, Sign};
 use sha2::{Digest, Sha256};
-use soroban_env_common::xdr::{Hash, LedgerKey, LedgerKeyContractData, ScStatic, ScVal, Uint256};
 
 impl Host {
     pub(crate) fn usize_to_u32(&self, u: usize, msg: &'static str) -> Result<u32, HostError> {
@@ -149,5 +156,91 @@ impl Host {
             ));
         }
         self.storage_key_from_rawval(k)
+    }
+
+    // TODO: impl a `TryFrom` trait once the "metered_" class is ready
+    pub(crate) fn scobj_from_bigint(&self, bi: &BigInt) -> Result<ScObject, HostError> {
+        let (sign, data) = bi.to_bytes_be();
+        match sign {
+            Sign::Minus => Ok(ScObject::BigInt(ScBigInt::Negative(
+                self.map_err(data.try_into())?,
+            ))),
+            Sign::NoSign => Ok(ScObject::BigInt(ScBigInt::Zero)),
+            Sign::Plus => Ok(ScObject::BigInt(ScBigInt::Positive(
+                self.map_err(data.try_into())?,
+            ))),
+        }
+    }
+
+    fn event_topic_from_rawval(&self, topic: RawVal) -> Result<ScVal, HostError> {
+        self.charge_budget(CostType::ValXdrConv, 1)?;
+        if topic.is_u63() {
+            Ok(ScVal::U63(unsafe { topic.unchecked_as_u63() }))
+        } else {
+            match topic.get_tag() {
+                Tag::Object => {
+                    unsafe {
+                        self.unchecked_visit_val_obj(topic, |ob| {
+                            // charge budget
+                            let sco = match ob {
+                                None => Err(self.err_status(ScHostObjErrorCode::UnknownReference)),
+                                Some(ho) => match ho {
+                                    // TODO: use more event-specific error codes than `UnexpectedType`
+                                    HostObject::Vec(_) => {
+                                        Err(self.err_status(ScHostObjErrorCode::UnexpectedType))
+                                    }
+                                    // TODO: use more event-specific error codes than `UnexpectedType`
+                                    HostObject::Map(_) => {
+                                        Err(self.err_status(ScHostObjErrorCode::UnexpectedType))
+                                    }
+                                    HostObject::Bin(b) => {
+                                        if b.len() > TOPIC_BYTES_LENGTH_LIMIT {
+                                            // TODO: use more event-specific error codes than `UnexpectedType`.
+                                            // Something like "topic binary exceeds length limit"
+                                            return Err(
+                                                self.err_status(ScHostObjErrorCode::UnexpectedType)
+                                            );
+                                        }
+                                        Ok(ScObject::Bytes(self.map_err(b.clone().try_into())?))
+                                    }
+                                    HostObject::U64(u) => Ok(ScObject::U64(*u)),
+                                    HostObject::I64(i) => Ok(ScObject::I64(*i)),
+                                    HostObject::BigInt(bi) => self.scobj_from_bigint(bi),
+                                    HostObject::Hash(_) => todo!(),
+                                    HostObject::PublicKey(_) => todo!(),
+                                },
+                            }?;
+                            Ok(ScVal::Object(Some(sco)))
+                        })
+                    }
+                }
+                _ => self.from_host_val(topic),
+            }
+        }
+    }
+
+    pub(crate) fn event_topics_from_host_obj(&self, topics: Object) -> Result<ScVec, HostError> {
+        unsafe {
+            self.unchecked_visit_val_obj(topics.into(), |ob| {
+                self.charge_budget(CostType::ValXdrConv, 1)?;
+                match ob {
+                    None => Err(self.err_status(ScHostObjErrorCode::UnknownReference)),
+                    Some(ho) => match ho {
+                        HostObject::Vec(vv) => {
+                            if vv.len() > CONTRACT_EVENT_TOPICS_LIMIT {
+                                // TODO: proper error code "event topics exceeds count limit"
+                                return Err(self.err_status(ScHostObjErrorCode::UnknownError));
+                            }
+                            let mut sv = Vec::new();
+                            for e in vv.iter() {
+                                sv.push(self.event_topic_from_rawval(e.val)?);
+                            }
+                            Ok(ScVec(self.map_err(sv.try_into())?))
+                        }
+                        _ => Err(self.err_status(ScHostObjErrorCode::UnexpectedType)),
+                    },
+                }
+            })
+        }
     }
 }
