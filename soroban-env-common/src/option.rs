@@ -83,18 +83,25 @@ where
 
 impl<E: Env, T> IntoVal<E, RawVal> for Option<T>
 where
-    for<'a> &'a Option<T>: IntoVal<E, RawVal>,
+    T: IntoVal<E, RawVal>,
 {
     fn into_val(self, env: &E) -> RawVal {
-        (&self).into_val(env)
+        match self {
+            Some(t) => t.into_val(env),
+            None => RawVal::from_void(),
+        }
     }
 }
 
 impl<E: Env, T> IntoVal<E, EnvVal<E, RawVal>> for Option<T>
 where
-    for<'a> &'a Option<T>: IntoVal<E, EnvVal<E, RawVal>>,
+    T: IntoVal<E, RawVal>,
 {
     fn into_val(self, env: &E) -> EnvVal<E, RawVal> {
-        (&self).into_val(env)
+        let rv: RawVal = self.into_val(env);
+        EnvVal {
+            env: env.clone(),
+            val: rv,
+        }
     }
 }
