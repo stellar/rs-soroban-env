@@ -12,6 +12,8 @@ fn some() {
     assert!(val.is::<u32>());
     let u32: u32 = val.try_into_val(&host).unwrap();
     assert_eq!(u32, 1);
+
+    assert_eq!(some, val.try_into_val(&host).unwrap());
 }
 
 #[test]
@@ -23,4 +25,6 @@ fn none() {
     assert!(val.is::<Static>());
     let r#static: Static = val.try_into_val(&host).unwrap();
     assert!(r#static.is_type(ScStatic::Void));
+
+    assert_eq!(none, val.try_into_val(&host).unwrap());
 }
