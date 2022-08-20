@@ -52,10 +52,6 @@ macro_rules! impl_try_from_option {
     };
 }
 
-// TODO: Move this to the appropriate place. It is just here as an example for
-// the moment.
-impl_try_from_option!(u32);
-
 impl<E: Env, T> IntoVal<E, RawVal> for &Option<T>
 where
     for<'a> &'a T: IntoVal<E, RawVal>,
