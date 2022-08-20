@@ -1,24 +1,30 @@
-use crate::{Env, EnvVal, IntoVal, RawVal};
+use crate::{Env, EnvVal, IntoVal, RawVal, TryFromVal, TryIntoVal};
 
-// impl<E: Env, T: TryFrom<EnvVal<E, RawVal>>> TryFrom<EnvVal<E, RawVal>> for Option<T> {
-//     type Error = ConversionError;
+impl<E: Env, T> TryFromVal<E, RawVal> for Option<T>
+where
+    T: TryFromVal<E, RawVal>,
+{
+    type Error = T::Error;
 
-//     fn try_from(ev: EnvVal<E, RawVal>) -> Result<Self, Self::Error> {
-//         todo!()
-//     }
-// }
+    fn try_from_val(env: &E, v: RawVal) -> Result<Self, Self::Error> {
+        if v.is_void() {
+            Ok(None)
+        } else {
+            Ok(Some(T::try_from_val(env, v)?))
+        }
+    }
+}
 
-// impl<E: Env, T: TryFrom<EnvVal<E, RawVal>>> TryIntoVal<E, Option<T>> for RawVal {
-//     type Error = ConversionError;
-//     #[inline(always)]
-//     fn try_into_val(self, env: &E) -> Result<Option<T>, Self::Error> {
-//         EnvVal {
-//             env: env.clone(),
-//             val: self,
-//         }
-//         .try_into()
-//     }
-// }
+impl<E: Env, T> TryIntoVal<E, Option<T>> for RawVal
+where
+    T: TryFromVal<E, RawVal>,
+{
+    type Error = T::Error;
+    #[inline(always)]
+    fn try_into_val(self, env: &E) -> Result<Option<T>, Self::Error> {
+        <_ as TryFromVal<E, RawVal>>::try_from_val(env, self)
+    }
+}
 
 impl<E: Env, T> IntoVal<E, RawVal> for &Option<T>
 where
