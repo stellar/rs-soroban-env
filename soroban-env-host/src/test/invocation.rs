@@ -1,11 +1,11 @@
 use soroban_env_common::{xdr::ScVmErrorCode, RawVal};
 
-use super::wasm_examples::{ADD_I32, CALL, VEC};
 use crate::{
     vm::Vm,
     xdr::{Hash, ScHostObjErrorCode, ScVal, ScVec},
     CheckedEnv, Host, HostError, Status, Symbol, Tag,
 };
+use soroban_test_wasms::{ADD_I32, INVOKE_CONTRACT, VEC};
 
 #[test]
 fn invoke_single_contract_function() -> Result<(), HostError> {
@@ -78,7 +78,7 @@ fn invoke_cross_contract_indirect() -> Result<(), HostError> {
     let dummy_id1 = [1; 32]; // the called contract
     let storage = Host::test_storage_with_contracts(
         vec![dummy_id0.into(), dummy_id1.into()],
-        vec![CALL, ADD_I32],
+        vec![INVOKE_CONTRACT, ADD_I32],
     );
     let host = Host::with_storage(storage);
     // prepare arguments
@@ -100,7 +100,7 @@ fn invoke_cross_contract_indirect_err() -> Result<(), HostError> {
     let dummy_id1 = [1; 32]; // the called (failing) contract
     let storage = Host::test_storage_with_contracts(
         vec![dummy_id0.into(), dummy_id1.into()],
-        vec![CALL, ADD_I32],
+        vec![INVOKE_CONTRACT, ADD_I32],
     );
     let host = Host::with_storage(storage);
     // prepare arguments

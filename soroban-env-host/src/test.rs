@@ -15,5 +15,3 @@ mod contract_event;
 mod invocation;
 #[cfg(all(feature = "vm", feature = "testutils"))]
 mod lifecycle;
-#[cfg(feature = "vm")]
-mod wasm_examples;

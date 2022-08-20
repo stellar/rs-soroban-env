@@ -17,6 +17,9 @@ fmt:
 clean:
 	cargo clean
 
+regenerate-test-wasms:
+	make -C soroban-test-wasms regenerate-test-wasms
+
 # Build all projects as if they are being published to crates.io, and do so for
 # all feature and target combinations.
 publish-dry-run-common:

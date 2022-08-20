@@ -1,4 +1,3 @@
-use super::wasm_examples::CREATE_CONTRACT;
 use crate::{
     host::Frame,
     storage::{AccessType, Footprint, Storage},
@@ -9,6 +8,7 @@ use crate::{
     CheckedEnv, Host, HostError, Symbol,
 };
 use hex::FromHex;
+use soroban_test_wasms::CREATE_CONTRACT;
 
 use ed25519_dalek::{
     Keypair, PublicKey, SecretKey, Signature, Signer, PUBLIC_KEY_LENGTH, SECRET_KEY_LENGTH,
