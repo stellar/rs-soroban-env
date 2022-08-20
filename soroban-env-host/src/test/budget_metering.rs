@@ -1,9 +1,9 @@
-use super::wasm_examples::VEC;
 use crate::{
     budget::CostType,
     xdr::{ScMap, ScMapEntry, ScObject, ScVal},
     CheckedEnv, Host, HostError, Symbol,
 };
+use soroban_test_wasms::VEC;
 
 #[test]
 fn xdr_object_conversion() -> Result<(), HostError> {

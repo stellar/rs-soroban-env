@@ -6,8 +6,6 @@ use crate::{
 use soroban_env_common::EnvBase;
 
 #[cfg(feature = "vm")]
-use super::wasm_examples::LINEAR_MEMORY;
-#[cfg(feature = "vm")]
 use crate::{
     im_rc::OrdMap,
     storage::{AccessType, Footprint, Storage},
@@ -17,6 +15,8 @@ use crate::{
     },
     Object, Symbol,
 };
+#[cfg(feature = "vm")]
+use soroban_test_wasms::LINEAR_MEMORY;
 
 #[test]
 fn binary_suite_of_tests() -> Result<(), HostError> {

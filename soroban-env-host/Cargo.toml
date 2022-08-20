@@ -37,6 +37,7 @@ log = "0.4.17"
 tracking-allocator = "0.4.0"
 tabwriter = "1.2.1"
 thousands = "0.2.0"
+soroban-test-wasms = { package = "soroban-test-wasms", path = "../soroban-test-wasms" }
 
 [features]
 vm = ["wasmi", "parity-wasm", "soroban-env-common/vm"]

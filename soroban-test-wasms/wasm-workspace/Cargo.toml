@@ -1,0 +1,64 @@
+# This file defines a workspace that is _periodically_ recompiled as part of
+# updating the WASM files that are then embedded as as binary constants in the
+# surrounding crate `soroban-test-wasms`.
+#
+# Neither the rust crates in this workspace, nor the workspace itself, are (in
+# cargo's mind) part of the outer workspace containing
+# soroban-env-{host,guest,macros,wasm-tests} etc. The inner workspace is
+# excluded from the outer workspace, and the crates within it must be manually
+# built (and should only be built as WASM). See the adjacent `Makefile` for
+# invocation.
+#
+# The dependency graph here is complex and subtle and needs to be understood if
+# you're going to use it correctly. There is further explanation in
+# https://rs-soroban-env/soroban-test-wasms/README.md
+
+[workspace]
+resolver = "2"
+
+members = ["add_i32", "create_contract", "invoke_contract", "linear_memory", "vec"]
+
+[patch.crates-io]
+soroban-env-common = { path = "../../soroban-env-common" }
+soroban-env-guest = { path = "../../soroban-env-guest" }
+soroban-env-host = { path = "../../soroban-env-host" }
+soroban-env-macros = { path = "../../soroban-env-macros" }
+soroban-native-sdk-macros = { path = "../../soroban-native-sdk-macros" }
+
+# You should update this rev to the XDR rev used by the outer workspace
+# anytime you're going to recompile this workspace.
+stellar-xdr = { git = "https://github.com/stellar/rs-stellar-xdr", rev = "f4fe3091" }
+
+# You should actually be able to set this to be any existing version of wasmi because we are
+# not building the SDK in host mode, so the "vm" feature is off.
+wasmi = { package = "soroban-wasmi", git = "https://github.com/stellar/wasmi", rev = "7b1f2355" }
+
+# The following SDK patch lines must denote an SDK version that is _compatible_
+# with the adjacent version of soroban-env-guest, selected above. If you are
+# making a change to soroban-env-common and/or soroban-env-guest, and are lucky,
+# you can modify soroban-env-common and/or soroban-env-guest _without_ having to
+# bump this rev, and can just recompile the WASMs here and embed them in your
+# change to the env repo.
+#
+# The SDK typically refers to things in the env-guest crate by name and the
+# names of things don't change that often, so you will usually be lucky.
+#
+# If you are unlucky and your changes to env-common and/or env-guest require
+# changes to the SDK as well, not just a recompile, then you need to redirect
+# the following patch lines to point to a local checkout of the SDK that you've
+# modified to be compatible with the env-common and/or env-guest changes you're
+# making, then rebuild, embed the rebuilt wasms in your PR against the env repo,
+# merge it, and then open a PR against the SDK repo with the SDK changes.
+
+soroban-sdk = {git = "https://github.com/stellar/rs-soroban-sdk", rev = "8c0aa48"}
+soroban-sdk-macros = {git = "https://github.com/stellar/rs-soroban-sdk", rev = "8c0aa48"}
+
+[profile.release]
+opt-level = "z"
+overflow-checks = true
+debug = 0
+strip = "symbols"
+debug-assertions = false
+panic = "abort"
+codegen-units = 1
+lto = true
