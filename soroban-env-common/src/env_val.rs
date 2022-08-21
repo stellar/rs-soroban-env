@@ -139,27 +139,25 @@ impl<E: Env> From<EnvVal<E, RawVal>> for RawVal {
     }
 }
 
-impl<E: Env> EnvVal<E, RawVal> {
-    pub(crate) fn log_err_convert<T>(self) {
-        self.env().log_static_fmt_val_static_str(
-            "can't convert {} to {}",
-            self.to_raw(),
-            core::any::type_name::<T>(),
-        );
-    }
+pub(crate) fn log_err_convert<T>(env: &impl Env, val: &impl AsRef<RawVal>) {
+    env.log_static_fmt_val_static_str(
+        "can't convert {} to {}",
+        *val.as_ref(),
+        core::any::type_name::<T>(),
+    );
 }
 
-impl<E: Env> TryFrom<EnvVal<E, RawVal>> for i64 {
+impl<E: Env> TryFromVal<E, RawVal> for i64 {
     type Error = ConversionError;
 
-    fn try_from(ev: EnvVal<E, RawVal>) -> Result<Self, Self::Error> {
-        if ev.val.is_u63() {
-            Ok(unsafe { ev.val.unchecked_as_u63() })
-        } else if Object::val_is_obj_type(ev.val, ScObjectType::I64) {
-            let obj = unsafe { Object::unchecked_from_val(ev.val) };
-            Ok(ev.env.obj_to_i64(obj))
+    fn try_from_val(env: &E, val: RawVal) -> Result<Self, Self::Error> {
+        if val.is_u63() {
+            Ok(unsafe { val.unchecked_as_u63() })
+        } else if Object::val_is_obj_type(val, ScObjectType::I64) {
+            let obj = unsafe { Object::unchecked_from_val(val) };
+            Ok(env.obj_to_i64(obj))
         } else {
-            ev.log_err_convert::<i64>();
+            log_err_convert::<i64>(env, &val);
             Err(ConversionError)
         }
     }
@@ -183,24 +181,21 @@ impl<E: Env> TryIntoVal<E, RawVal> for i64 {
 }
 
 impl<E: Env> TryIntoVal<E, i64> for RawVal {
-    type Error = ConversionError;
+    type Error = <i64 as TryFromVal<E, RawVal>>::Error;
     fn try_into_val(self, env: &E) -> Result<i64, Self::Error> {
-        TryFrom::try_from(EnvVal {
-            env: env.clone(),
-            val: self,
-        })
+        <_ as TryFromVal<_, _>>::try_from_val(env, self)
     }
 }
 
-impl<E: Env> TryFrom<EnvVal<E, RawVal>> for u64 {
+impl<E: Env> TryFromVal<E, RawVal> for u64 {
     type Error = ConversionError;
 
-    fn try_from(ev: EnvVal<E, RawVal>) -> Result<Self, Self::Error> {
-        if Object::val_is_obj_type(ev.val, ScObjectType::U64) {
-            let obj = unsafe { Object::unchecked_from_val(ev.val) };
-            Ok(ev.env.obj_to_u64(obj))
+    fn try_from_val(env: &E, val: RawVal) -> Result<Self, Self::Error> {
+        if Object::val_is_obj_type(val, ScObjectType::U64) {
+            let obj = unsafe { Object::unchecked_from_val(val) };
+            Ok(env.obj_to_u64(obj))
         } else {
-            ev.log_err_convert::<u64>();
+            log_err_convert::<u64>(env, &val);
             Err(ConversionError)
         }
     }
@@ -220,26 +215,20 @@ impl<E: Env> TryIntoVal<E, RawVal> for u64 {
 }
 
 impl<E: Env> TryIntoVal<E, u64> for RawVal {
-    type Error = ConversionError;
+    type Error = <u64 as TryFromVal<E, RawVal>>::Error;
     fn try_into_val(self, env: &E) -> Result<u64, Self::Error> {
-        TryFrom::try_from(EnvVal {
-            env: env.clone(),
-            val: self,
-        })
+        <_ as TryFromVal<_, _>>::try_from_val(env, self)
     }
 }
 
 #[cfg(feature = "std")]
-impl<E: Env> TryFrom<EnvVal<E, RawVal>> for ScVal
+impl<E: Env> TryFromVal<E, RawVal> for ScVal
 where
-    ScObject: TryFrom<EnvVal<E, Object>>,
+    ScObject: TryFromVal<E, Object>,
 {
     type Error = ConversionError;
 
-    fn try_from(ev: EnvVal<E, RawVal>) -> Result<Self, Self::Error> {
-        let ev_clone = ev.clone();
-        let env = ev_clone.env;
-        let val = ev_clone.val;
+    fn try_from_val(env: &E, val: RawVal) -> Result<Self, Self::Error> {
         if val.is_u63() {
             Ok(ScVal::U63(unsafe { val.unchecked_as_u63() }))
         } else {
@@ -262,7 +251,7 @@ where
                     } else if tag_static.is_type(ScStatic::LedgerKeyContractCode) {
                         Ok(ScVal::Static(ScStatic::LedgerKeyContractCode))
                     } else {
-                        ev.log_err_convert::<Self>();
+                        log_err_convert::<Self>(env, &val);
                         Err(ConversionError)
                     }
                 }

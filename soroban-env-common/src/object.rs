@@ -1,6 +1,6 @@
 use crate::{
     decl_tagged_val_wrapper_methods, xdr::ScObjectType, Env, EnvVal, RawVal, Tag, TryConvert,
-    TryIntoVal,
+    TryFromVal, TryIntoVal,
 };
 use core::fmt::Debug;
 use stellar_xdr::{ScObject, ScVal};
@@ -53,23 +53,13 @@ impl Object {
     }
 }
 
-impl<E> TryFrom<EnvVal<E, Object>> for ScObject
+impl<E> TryFromVal<E, Object> for ScObject
 where
     E: Env + TryConvert<Object, ScObject>,
 {
     type Error = E::Error;
-    fn try_from(ev: EnvVal<E, Object>) -> Result<Self, Self::Error> {
-        ev.env.convert(ev.val)
-    }
-}
-
-impl<E> TryFrom<&EnvVal<E, Object>> for ScObject
-where
-    E: Env + TryConvert<Object, ScObject>,
-{
-    type Error = E::Error;
-    fn try_from(ev: &EnvVal<E, Object>) -> Result<Self, Self::Error> {
-        ev.env.convert(ev.val)
+    fn try_from_val(env: &E, val: Object) -> Result<Self, Self::Error> {
+        env.convert(val)
     }
 }
 
@@ -90,26 +80,6 @@ where
     type Error = E::Error;
     fn try_into_val(self, env: &E) -> Result<Object, Self::Error> {
         env.convert(self)
-    }
-}
-
-impl<E> TryFrom<EnvVal<E, Object>> for ScVal
-where
-    E: Env + TryConvert<Object, ScObject>,
-{
-    type Error = E::Error;
-    fn try_from(ev: EnvVal<E, Object>) -> Result<Self, Self::Error> {
-        (&ev).try_into()
-    }
-}
-
-impl<E> TryFrom<&EnvVal<E, Object>> for ScVal
-where
-    E: Env + TryConvert<Object, ScObject>,
-{
-    type Error = E::Error;
-    fn try_from(ev: &EnvVal<E, Object>) -> Result<Self, Self::Error> {
-        Ok(ScVal::Object(Some(ev.env.convert(ev.val)?)))
     }
 }
 

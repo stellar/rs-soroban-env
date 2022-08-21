@@ -19,7 +19,7 @@ macro_rules! decl_tagged_val_wrapper_methods {
                 b.0
             }
         }
-        impl crate::RawValConvertible for $tagname {
+        impl $crate::RawValConvertible for $tagname {
             #[inline(always)]
             fn is_val_type(v: RawVal) -> bool {
                 v.has_tag(Tag::$tagname)
@@ -138,11 +138,11 @@ macro_rules! impl_wrapper_from {
                 Self(x.into())
             }
         }
-        impl<E: Env> TryFrom<EnvVal<E, $tagname>> for $fromty {
-            type Error = crate::ConversionError;
+        impl<E: Env> $crate::TryFromVal<E, $tagname> for $fromty {
+            type Error = $crate::ConversionError;
             #[inline(always)]
-            fn try_from(v: EnvVal<E, $tagname>) -> Result<Self, Self::Error> {
-                Self::try_from(v.to_raw())
+            fn try_from_val(_env: &E, val: $tagname) -> Result<Self, Self::Error> {
+                Self::try_from(val.to_raw())
             }
         }
     };
