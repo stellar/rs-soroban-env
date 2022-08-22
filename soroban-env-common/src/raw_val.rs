@@ -1,7 +1,7 @@
 use stellar_xdr::{ScStatic, ScStatus, ScStatusType};
 
 use super::{BitSet, Env, EnvVal, IntoVal, Object, Static, Status, Symbol, TryFromVal, TryIntoVal};
-use core::fmt::Debug;
+use core::{convert::Infallible, fmt::Debug};
 
 extern crate static_assertions as sa;
 
@@ -114,6 +114,12 @@ impl AsMut<RawVal> for RawVal {
 /// of the failed conversion will typically be written to the debug log.
 #[derive(Debug, Eq, PartialEq)]
 pub struct ConversionError;
+
+impl From<Infallible> for ConversionError {
+    fn from(_: Infallible) -> Self {
+        unreachable!()
+    }
+}
 
 impl From<stellar_xdr::Error> for ConversionError {
     fn from(_: stellar_xdr::Error) -> Self {
