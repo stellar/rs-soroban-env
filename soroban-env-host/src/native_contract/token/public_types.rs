@@ -41,7 +41,7 @@ impl KeyedAuthorization {
     pub fn get_identifier(&self, env: &Host) -> Result<Identifier, Error> {
         Ok(match self {
             KeyedAuthorization::Contract => {
-                Identifier::Contract(env.get_invoking_contract()?.in_env(env).try_into()?)
+                Identifier::Contract(env.get_invoking_contract()?.to_raw().try_into_val(env)?)
             }
             KeyedAuthorization::Ed25519(kea) => Identifier::Ed25519(kea.public_key.clone()),
             KeyedAuthorization::Account(kaa) => Identifier::Account(kaa.public_key.clone()),

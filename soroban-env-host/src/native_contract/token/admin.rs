@@ -6,7 +6,7 @@ use crate::native_contract::token::public_types::{
 };
 use crate::native_contract::token::storage_types::DataKey;
 use core::cmp::Ordering;
-use soroban_env_common::{CheckedEnv, TryIntoVal};
+use soroban_env_common::{CheckedEnv, TryFromVal, TryIntoVal};
 
 pub fn has_administrator(e: &Host) -> Result<bool, Error> {
     let key = DataKey::Admin;
@@ -17,7 +17,7 @@ pub fn has_administrator(e: &Host) -> Result<bool, Error> {
 fn read_administrator(e: &Host) -> Result<Identifier, Error> {
     let key = DataKey::Admin;
     let rv = e.get_contract_data(key.try_into_val(e)?)?;
-    Ok(rv.in_env(e).try_into()?)
+    Ok(Identifier::try_from_val(e, rv)?)
 }
 
 pub fn to_administrator_authorization(
@@ -27,7 +27,7 @@ pub fn to_administrator_authorization(
     let admin = read_administrator(e)?;
     match (admin, auth) {
         (Identifier::Contract(admin_id), Authorization::Contract) => {
-            let invoker_id: BytesN<32> = e.get_invoking_contract()?.in_env(e).try_into()?;
+            let invoker_id: BytesN<32> = e.get_invoking_contract()?.to_raw().try_into_val(e)?;
             if admin_id.compare(&invoker_id)? != Ordering::Equal {
                 Err(Error::ContractError)
             } else {
