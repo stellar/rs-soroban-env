@@ -12,7 +12,7 @@ mod dispatch;
 mod func_info;
 
 use crate::{budget::CostType, host::Frame, HostError};
-use std::{io::Cursor, rc::Rc};
+use std::{io::Cursor, ops::RangeInclusive, rc::Rc};
 
 use super::{
     xdr::{Hash, ScVal, ScVec},
@@ -157,12 +157,30 @@ pub struct VmFunction {
 
 impl Vm {
     fn check_meta_section(host: &Host, m: &elements::Module) -> Result<(), HostError> {
+        // At present the supported interface-version range is always just a single
+        // point, and it is hard-wired into the host as the current
+        // `soroban_env_common` value [`meta::INTERFACE_VERSION`]. In the future when
+        // we commit to API stability two things will change:
+        //
+        //   1. The value will stop being hard-wired; it will change based on the
+        //      current ledger, as a config value that varies over time based on
+        //      consensus.
+        //
+        //   2. It will (mostly) have a fixed lower bound and only ever have its upper
+        //      bound expand, since that is what "API stability" means: old code still
+        //      runs on new hosts. The "mostly" qualifier here covers the case where we
+        //      have to reset the lower bound to expire old APIs (used by old
+        //      contracts) if they prove to be a security risk; this will only happen
+        //      in extreme cases, hopefully never.
+        const SUPPORTED_INTERFACE_VERSION_RANGE: RangeInclusive<u64> =
+            meta::INTERFACE_VERSION..=meta::INTERFACE_VERSION;
+
         if let Some(env_meta) = Self::module_custom_section(m, "contractenvmetav0") {
             let mut cursor = Cursor::new(env_meta);
             for env_meta_entry in ScEnvMetaEntry::read_xdr_iter(&mut cursor) {
                 match host.map_err(env_meta_entry)? {
                     ScEnvMetaEntry::ScEnvMetaKindInterfaceVersion(v) => {
-                        if v == meta::INTERFACE_VERSION {
+                        if SUPPORTED_INTERFACE_VERSION_RANGE.contains(&v) {
                             return Ok(());
                         } else {
                             return Err(host.err_status_msg(
