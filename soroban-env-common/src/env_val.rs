@@ -11,7 +11,7 @@ use super::{
     raw_val::{RawVal, RawValConvertible},
     Env,
 };
-use core::{cmp::Ordering, fmt::Debug};
+use core::{cmp::Ordering, convert::Infallible, fmt::Debug};
 
 /// Some type of value coupled to a specific instance of [Env], which some of
 /// the value's methods may call into to support some conversion and comparison
@@ -103,6 +103,22 @@ pub trait TryFromVal<E: Env, V>: Sized {
 impl<E: Env> From<EnvVal<E, RawVal>> for RawVal {
     fn from(ev: EnvVal<E, RawVal>) -> Self {
         ev.val
+    }
+}
+
+impl<E: Env, V> IntoVal<E, V> for EnvVal<E, V> {
+    fn into_val(self, _env: &E) -> V {
+        self.val
+    }
+}
+
+impl<E: Env, V> TryFromVal<E, V> for EnvVal<E, V> {
+    type Error = Infallible;
+    fn try_from_val(env: &E, val: V) -> Result<Self, Self::Error> {
+        Ok(EnvVal {
+            env: env.clone(),
+            val,
+        })
     }
 }
 
