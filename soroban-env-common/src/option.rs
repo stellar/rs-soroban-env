@@ -1,29 +1,5 @@
 use crate::{Env, EnvVal, IntoVal, RawVal, TryFromVal, TryIntoVal};
 
-// We can't add conversions from RawVal to Option<T> because Option<T>
-// has a blanket implementation for converting any T to Option<T>.
-//
-// We drive TryFromVal impls from a TryFrom<EnvVal<>>, and so there is a
-// conflict for TryFrom<EnvVal<>> for Option<T> since T could be EnvVal<>.
-//
-// What to do? There are two options:
-//
-//   1) Stop driving TryFromVal from TryFrom<EnvVal<>> and impl TryFromVal
-//   manually. This is probably fine, just tedious to go and rewrite all the
-//   impls. But, the oddity remains that you still can't convert from an
-//   EnvVal<> to an Option<T>.
-//
-//   2) Or, manually impl TryFrom<EnvVal<>> for every type, including user
-//   defined types. (See example below of doing u32.) The good news is this can
-//   be macrod.
-//
-// An oddity remains in both cases that converting RawVal => Option<RawVal> will
-// simply wrap it, it won't actually unwrap a RawVal/EnvVal Void to None. So
-// there's two types that will behave differently to all other types.
-//
-// Here we go with option (2), and provide a macro that does the impl for any
-// type.
-
 impl<E: Env, T> TryFromVal<E, RawVal> for Option<T>
 where
     T: TryFromVal<E, RawVal>,
