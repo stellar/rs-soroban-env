@@ -1,6 +1,6 @@
 use stellar_xdr::{ScStatic, ScStatus, ScStatusType};
 
-use super::{BitSet, Env, EnvVal, Object, Static, Status, Symbol, TryFromVal, TryIntoVal};
+use super::{BitSet, Env, EnvVal, IntoVal, Object, Static, Status, Symbol, TryFromVal, TryIntoVal};
 use core::fmt::Debug;
 
 extern crate static_assertions as sa;
@@ -176,6 +176,11 @@ macro_rules! declare_tryfrom {
                 } else {
                     Err(ConversionError)
                 }
+            }
+        }
+        impl<E: Env> IntoVal<E, RawVal> for $T {
+            fn into_val(self, _env: &E) -> RawVal {
+                self.into()
             }
         }
         impl<E: Env> TryFromVal<E, RawVal> for $T {
