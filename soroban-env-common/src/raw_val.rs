@@ -1,6 +1,6 @@
 use stellar_xdr::{ScStatic, ScStatus, ScStatusType};
 
-use super::{BitSet, Env, EnvVal, Object, Static, Status, Symbol, TryFromVal};
+use super::{TryIntoVal, BitSet, Env, EnvVal, Object, Static, Status, Symbol, TryFromVal};
 use core::fmt::Debug;
 
 extern crate static_assertions as sa;
@@ -183,6 +183,12 @@ macro_rules! declare_tryfrom {
             #[inline(always)]
             fn try_from_val(_env: &E, val: RawVal) -> Result<Self, Self::Error> {
                 Self::try_from(val)
+            }
+        }
+        impl<E: Env> TryIntoVal<E, $T> for RawVal {
+            type Error = ConversionError;
+            fn try_into_val(self, env: &E) -> Result<$T, Self::Error> {
+                <_ as TryFromVal<E, RawVal>>::try_from_val(&env, self)
             }
         }
     };
