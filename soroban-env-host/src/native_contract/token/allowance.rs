@@ -9,7 +9,7 @@ use soroban_env_common::{CheckedEnv, TryIntoVal};
 pub fn read_allowance(e: &Host, from: Identifier, spender: Identifier) -> Result<BigInt, Error> {
     let key = DataKey::Allowance(AllowanceDataKey { from, spender });
     if let Ok(allowance) = e.get_contract_data(key.try_into_val(e)?) {
-        Ok(allowance.in_env(e).try_into()?)
+        Ok(allowance.try_into_val(e)?)
     } else {
         Ok(BigInt::from_u64(e, 0)?)
     }

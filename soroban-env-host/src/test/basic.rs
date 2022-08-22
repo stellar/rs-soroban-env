@@ -15,7 +15,7 @@ fn u64_roundtrip() -> Result<(), HostError> {
     let obj: Object = v.try_into()?;
     assert!(obj.is_obj_type(ScObjectType::U64));
     assert_eq!(obj.get_handle(), 0);
-    let j = u64::try_from(v.in_env(&host))?;
+    let j = u64::try_from_val(&host, v)?;
     assert_eq!(u, j);
 
     let u2: u64 = u64::MAX; // This will be treated as a ScVal::Object::U64
@@ -23,7 +23,7 @@ fn u64_roundtrip() -> Result<(), HostError> {
     let obj: Object = v2.try_into()?;
     assert!(obj.is_obj_type(ScObjectType::U64));
     assert_eq!(obj.get_handle(), 1);
-    let k = u64::try_from(v2.in_env(&host))?;
+    let k = u64::try_from_val(&host, v2)?;
     assert_eq!(u2, k);
     Ok(())
 }
@@ -33,7 +33,7 @@ fn i64_roundtrip() -> Result<(), HostError> {
     let host = Host::default();
     let i: i64 = 12345_i64; // Will be treated as ScVal::I64
     let v: RawVal = i.into_val(&host);
-    let j = i64::try_from(v.in_env(&host))?;
+    let j = i64::try_from_val(&host, v)?;
     assert_eq!(i, j);
 
     let i2: i64 = -13234_i64; // WIll be treated as ScVal::Object::I64
@@ -41,7 +41,7 @@ fn i64_roundtrip() -> Result<(), HostError> {
     let obj: Object = v2.try_into()?;
     assert!(obj.is_obj_type(ScObjectType::I64));
     assert_eq!(obj.get_handle(), 0);
-    let k = i64::try_from(v2.in_env(&host))?;
+    let k = i64::try_from_val(&host, v2)?;
     assert_eq!(i2, k);
     Ok(())
 }

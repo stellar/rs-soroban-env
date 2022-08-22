@@ -7,18 +7,17 @@ use crate::{
 
 macro_rules! impl_for_tuple {
     ( $count:literal $($typ:ident $idx:tt)+ ) => {
-        impl<E: Env, $($typ),*> TryFrom<EnvVal<E, RawVal>> for ($($typ,)*)
+        impl<E: Env, $($typ),*> TryFromVal<E, RawVal> for ($($typ,)*)
         where
-            $($typ: TryFrom<EnvVal<E, RawVal>>),*
+            $($typ: TryFromVal<E, RawVal>),*
         {
             type Error = ConversionError;
 
-            fn try_from(ev: EnvVal<E, RawVal>) -> Result<Self, Self::Error> {
-                if !Object::val_is_obj_type(ev.val, ScObjectType::Vec) {
+            fn try_from_val(env: &E, val: RawVal) -> Result<Self, Self::Error> {
+                if !Object::val_is_obj_type(val, ScObjectType::Vec) {
                     return Err(ConversionError);
                 }
-                let env = ev.env.clone();
-                let vec = unsafe { Object::unchecked_from_val(ev.val) };
+                let vec = unsafe { Object::unchecked_from_val(val) };
                 let len: u32 = env.vec_len(vec).try_into()?;
                 if len != $count {
                     return Err(ConversionError);
@@ -58,14 +57,14 @@ macro_rules! impl_for_tuple {
             }
         }
 
-        impl<E: Env, $($typ),*> TryIntoVal<E,  ($($typ,)*)> for RawVal
+        impl<E: Env, $($typ),*> TryIntoVal<E, ($($typ,)*)> for RawVal
         where
-            $($typ: TryFrom<EnvVal<E, RawVal>>),*
+            $($typ: TryFromVal<E, RawVal>),*
         {
             type Error = ConversionError;
             #[inline(always)]
-            fn try_into_val(self, env: &E) -> Result< ($($typ,)*), Self::Error> {
-                EnvVal{ env: env.clone(), val: self }.try_into()
+            fn try_into_val(self, env: &E) -> Result<($($typ,)*), Self::Error> {
+                <_ as TryFromVal<_, _>>::try_from_val(env, self)
             }
         }
     };

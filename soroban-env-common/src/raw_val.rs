@@ -1,6 +1,6 @@
 use stellar_xdr::{ScStatic, ScStatus, ScStatusType};
 
-use super::{BitSet, Env, EnvVal, Object, Static, Status, Symbol};
+use super::{BitSet, Env, EnvVal, IntoVal, Object, Static, Status, Symbol, TryFromVal, TryIntoVal};
 use core::{convert::Infallible, fmt::Debug};
 
 extern crate static_assertions as sa;
@@ -106,6 +106,19 @@ impl AsMut<RawVal> for RawVal {
     }
 }
 
+impl<E: Env> TryFromVal<E, RawVal> for RawVal {
+    type Error = Infallible;
+    fn try_from_val(_env: &E, val: RawVal) -> Result<Self, Self::Error> {
+        Ok(val)
+    }
+}
+
+impl<E: Env> IntoVal<E, RawVal> for RawVal {
+    fn into_val(self, _env: &E) -> RawVal {
+        self
+    }
+}
+
 // This is a 0-arg struct rather than an enum to ensure it completely compiles
 // away, the same way `()` would, while remaining a separate type to allow
 // conversion to a more-structured error code at a higher level.
@@ -184,22 +197,28 @@ macro_rules! declare_tryfrom {
                 }
             }
         }
-        impl<E: Env> TryFrom<EnvVal<E, RawVal>> for $T {
-            type Error = ConversionError;
-            #[inline(always)]
-            fn try_from(v: EnvVal<E, RawVal>) -> Result<Self, Self::Error> {
-                Self::try_from(v.to_raw())
+        impl<E: Env> IntoVal<E, RawVal> for $T {
+            fn into_val(self, _env: &E) -> RawVal {
+                self.into()
             }
         }
-        impl<E: Env> TryFrom<EnvVal<E, RawVal>> for EnvVal<E, $T> {
-            type Error = crate::ConversionError;
-            fn try_from(ev: EnvVal<E, RawVal>) -> Result<Self, Self::Error> {
-                let val: $T = ev.to_raw().try_into().map_err(|err| {
-                    ev.clone().log_err_convert::<Self>();
-                    err
-                })?;
-                let env = ev.env;
-                Ok(Self { env, val })
+        impl<E: Env> TryFromVal<E, RawVal> for $T {
+            type Error = ConversionError;
+            #[inline(always)]
+            fn try_from_val(_env: &E, val: RawVal) -> Result<Self, Self::Error> {
+                Self::try_from(val)
+            }
+        }
+        impl<E: Env> TryIntoVal<E, RawVal> for $T {
+            type Error = ConversionError;
+            fn try_into_val(self, _env: &E) -> Result<RawVal, Self::Error> {
+                Ok(self.into())
+            }
+        }
+        impl<E: Env> TryIntoVal<E, $T> for RawVal {
+            type Error = ConversionError;
+            fn try_into_val(self, env: &E) -> Result<$T, Self::Error> {
+                <_ as TryFromVal<E, RawVal>>::try_from_val(&env, self)
             }
         }
     };

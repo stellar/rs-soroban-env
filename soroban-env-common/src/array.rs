@@ -1,16 +1,19 @@
 use stellar_xdr::ScObjectType;
 
-use crate::{ConversionError, Env, EnvVal, IntoVal, Object, RawVal, RawValConvertible, TryIntoVal};
+use crate::{
+    ConversionError, Env, EnvVal, IntoVal, Object, RawVal, RawValConvertible, TryFromVal,
+    TryIntoVal,
+};
 
-impl<E: Env, const N: usize> TryFrom<EnvVal<E, RawVal>> for [u8; N] {
+impl<E: Env, const N: usize> TryFromVal<E, RawVal> for [u8; N] {
     type Error = ConversionError;
 
-    fn try_from(ev: EnvVal<E, RawVal>) -> Result<Self, Self::Error> {
-        if !Object::val_is_obj_type(ev.val, ScObjectType::Bytes) {
+    fn try_from_val(env: &E, val: RawVal) -> Result<Self, Self::Error> {
+        if !Object::val_is_obj_type(val, ScObjectType::Bytes) {
             return Err(ConversionError);
         }
-        let env = ev.env.clone();
-        let bin = unsafe { Object::unchecked_from_val(ev.val) };
+        let env = env.clone();
+        let bin = unsafe { Object::unchecked_from_val(val) };
         let len = unsafe { u32::unchecked_from_val(env.binary_len(bin)) };
         if len as usize != N {
             return Err(ConversionError);
@@ -22,14 +25,10 @@ impl<E: Env, const N: usize> TryFrom<EnvVal<E, RawVal>> for [u8; N] {
 }
 
 impl<E: Env, const N: usize> TryIntoVal<E, [u8; N]> for RawVal {
-    type Error = ConversionError;
+    type Error = <[u8; N] as TryFromVal<E, RawVal>>::Error;
     #[inline(always)]
     fn try_into_val(self, env: &E) -> Result<[u8; N], Self::Error> {
-        EnvVal {
-            env: env.clone(),
-            val: self,
-        }
-        .try_into()
+        <_ as TryFromVal<_, _>>::try_from_val(env, self)
     }
 }
 

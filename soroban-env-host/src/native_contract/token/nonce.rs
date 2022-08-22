@@ -8,7 +8,7 @@ use soroban_env_common::{CheckedEnv, TryIntoVal};
 pub fn read_nonce(e: &Host, id: Identifier) -> Result<BigInt, Error> {
     let key = DataKey::Nonce(id);
     if let Ok(nonce) = e.get_contract_data(key.try_into_val(e)?) {
-        Ok(nonce.in_env(e).try_into()?)
+        Ok(nonce.try_into_val(e)?)
     } else {
         Ok(BigInt::from_u64(e, 0)?)
     }

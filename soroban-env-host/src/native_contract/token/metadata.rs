@@ -19,7 +19,7 @@ pub fn write_decimal(e: &Host, d: u8) -> Result<(), Error> {
 pub fn read_name(e: &Host) -> Result<Bytes, Error> {
     let key = DataKey::Name;
     let rv = e.get_contract_data(key.try_into_val(e)?)?;
-    Ok(rv.in_env(e).try_into()?)
+    Ok(rv.try_into_val(e)?)
 }
 
 pub fn write_name(e: &Host, d: Bytes) -> Result<(), Error> {
@@ -31,7 +31,7 @@ pub fn write_name(e: &Host, d: Bytes) -> Result<(), Error> {
 pub fn read_symbol(e: &Host) -> Result<Bytes, Error> {
     let key = DataKey::Symbol;
     let rv = e.get_contract_data(key.try_into_val(e)?)?;
-    Ok(rv.in_env(e).try_into()?)
+    Ok(rv.try_into_val(e)?)
 }
 
 pub fn write_symbol(e: &Host, d: Bytes) -> Result<(), Error> {
