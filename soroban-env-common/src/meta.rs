@@ -18,14 +18,27 @@
 // error rather than an inscrutable misbehaviour (link error, data corruption,
 // etc.) during execution.
 //
-// During development of the system this number will increase frequently in
-// order to notify users of the need to recompile their contracts against
-// new-and-incompatible versions of the system-in-development
-// system-in-development. Once we declare a commitment to network-wide backwards
-// compatibility for contracts, the supported interface version range will
-// likely only ever expand to cover newer interfaces, and that range will be
-// stored on-chain so that the transactions and contracts accepted-or-rejected
-// are identical across all validators.
+// At present the supported interface-version range is always just a single
+// point, and it is hard-wired into the host (in
+// `soroban_env_host::vm::check_meta_section`) as a comparison against the
+// current [`meta::INTERFACE_VERSION`] declared by the macro below. Every time
+// this declaration changes, the host compiled with it implicitly drops support
+// for old contracts compiled against the old version number; this is due to us
+// existing in a "pre-API-stability" development regime, where every change
+// is a compatibility break.
+//
+//  In the future when we commit to API stability two things will change:
+//
+//   1. The value will stop being hard-wired; it will change based on the
+//      current ledger, as a config value that varies over time based on
+//      consensus.
+//
+//   2. It will (mostly) have a fixed lower bound and only ever have its upper
+//      bound expand, since that is what "API stability" means: old code still
+//      runs on new hosts. The "mostly" qualifier here covers the case where we
+//      have to reset the lower bound to expire old APIs (used by old contracts)
+//      if they prove to be a security risk; this will only happen in extreme
+//      cases, hopefully never.
 //
 // Implementation versioning is different, and has more to do with ensuring that
 // all validators that _do_ decide to execute a transaction -- whether new _or
