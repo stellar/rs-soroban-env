@@ -1,4 +1,4 @@
-use crate::{Env, EnvVal, IntoVal, RawVal, TryFromVal, TryIntoVal};
+use crate::{Env, IntoVal, RawVal, TryFromVal, TryIntoVal};
 
 impl<E: Env, T> TryFromVal<E, RawVal> for Option<T>
 where
@@ -38,19 +38,6 @@ where
     }
 }
 
-impl<E: Env, T> IntoVal<E, EnvVal<E, RawVal>> for &Option<T>
-where
-    for<'a> &'a Option<T>: IntoVal<E, RawVal>,
-{
-    fn into_val(self, env: &E) -> EnvVal<E, RawVal> {
-        let rv: RawVal = self.into_val(env);
-        EnvVal {
-            env: env.clone(),
-            val: rv,
-        }
-    }
-}
-
 impl<E: Env, T> IntoVal<E, RawVal> for Option<T>
 where
     T: IntoVal<E, RawVal>,
@@ -59,19 +46,6 @@ where
         match self {
             Some(t) => t.into_val(env),
             None => RawVal::from_void(),
-        }
-    }
-}
-
-impl<E: Env, T> IntoVal<E, EnvVal<E, RawVal>> for Option<T>
-where
-    T: IntoVal<E, RawVal>,
-{
-    fn into_val(self, env: &E) -> EnvVal<E, RawVal> {
-        let rv: RawVal = self.into_val(env);
-        EnvVal {
-            env: env.clone(),
-            val: rv,
         }
     }
 }
