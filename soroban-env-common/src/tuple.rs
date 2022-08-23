@@ -32,15 +32,25 @@ macro_rules! impl_for_tuple {
             }
         }
 
+        impl<E: Env, $($typ),*> IntoVal<E, Object> for ($($typ,)*)
+        where
+            $($typ: IntoVal<E, RawVal>),*
+        {
+            fn into_val(self, env: &E) -> Object {
+                let env = env.clone();
+                let vec = env.vec_new($count.into());
+                $(let vec = env.vec_push(vec, self.$idx.into_val(&env));)*
+                vec
+            }
+        }
+
         impl<E: Env, $($typ),*> IntoVal<E, RawVal> for ($($typ,)*)
         where
             $($typ: IntoVal<E, RawVal>),*
         {
             fn into_val(self, env: &E) -> RawVal {
-                let env = env.clone();
-                let vec = env.vec_new($count.into());
-                $(let vec = env.vec_push(vec, self.$idx.into_val(&env));)*
-                vec.to_raw()
+                let obj: Object = self.into_val(env);
+                obj.to_raw()
             }
         }
 
@@ -50,6 +60,19 @@ macro_rules! impl_for_tuple {
         {
             fn into_val(self, env: &E) -> EnvVal<E, RawVal> {
                 let rv: RawVal = self.into_val(env);
+                EnvVal{
+                    env: env.clone(),
+                    val: rv,
+                }
+            }
+        }
+
+        impl<E: Env, $($typ),*> IntoVal<E, EnvVal<E, Object>> for ($($typ,)*)
+        where
+            $($typ: IntoVal<E, RawVal>),*
+        {
+            fn into_val(self, env: &E) -> EnvVal<E, Object> {
+                let rv: Object = self.into_val(env);
                 EnvVal{
                     env: env.clone(),
                     val: rv,
