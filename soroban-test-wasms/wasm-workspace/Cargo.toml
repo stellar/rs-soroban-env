@@ -16,7 +16,7 @@
 [workspace]
 resolver = "2"
 
-members = ["add_i32", "create_contract", "invoke_contract", "linear_memory", "vec"]
+members = ["add_i32", "contract_data", "create_contract", "invoke_contract", "linear_memory", "vec"]
 
 [patch.crates-io]
 soroban-env-common = { path = "../../soroban-env-common" }

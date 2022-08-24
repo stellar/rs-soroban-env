@@ -224,6 +224,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "example_contract_data"
+version = "0.0.0"
+dependencies = [
+ "soroban-sdk",
+]
+
+[[package]]
 name = "example_create_contract"
 version = "0.0.0"
 dependencies = [
@@ -609,7 +616,6 @@ dependencies = [
  "soroban-native-sdk-macros",
  "soroban-wasmi",
  "static_assertions",
- "thiserror",
  "tinyvec",
 ]
 
@@ -639,6 +645,7 @@ name = "soroban-sdk"
 version = "0.0.3"
 source = "git+https://github.com/stellar/rs-soroban-sdk?rev=8c0aa48#8c0aa48464a18cb78ed58f1975673358c8f2e52b"
 dependencies = [
+ "ed25519-dalek",
  "soroban-env-guest",
  "soroban-env-host",
  "soroban-sdk-macros",
