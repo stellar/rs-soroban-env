@@ -5,25 +5,25 @@ pub struct Contract;
 
 #[contractimpl]
 impl Contract {
-    pub fn bin_new(e: Env, len: u32) -> Bytes {
-        let buf: [u8; 4] = [0, 1, 2, 3];
-        e.binary_new_from_linear_memory(buf.as_ptr() as u32, len)
+    // Produce a bin with 1 byte from each 8 bits of a 32-bit word.
+    pub fn bin_word(e: Env, word: u32) -> Bytes {
+        let buf: [u8; 4] = [
+            (word >> 24) as u8,
+            (word >> 16) as u8,
+            (word >> 8) as u8,
+            word as u8,
+        ];
+        Bytes::from_slice(&e, &buf)
     }
 
-    pub fn from_guest(e: Env, b: Bytes, b_pos: u32, buf_off: u32, len: u32) -> Bytes {
-        let buf: [u8; 4] = [0, 1, 2, 3];
-        assert!(buf_off + len <= buf.len() as u32);
-        let lm_pos: u32 = unsafe { buf.as_ptr().add(buf_off as usize) as u32 };
-        e.binary_copy_from_linear_memory(b, b_pos, lm_pos, len)
-    }
-
-    pub fn to_guest(e: Env, b: Bytes, b_pos: u32, buf_off: u32, len: u32) {
-        let buf: [u8; 4] = [0; 4];
-        assert!(buf_off + len <= buf.len() as u32);
-        let lm_pos: u32 = unsafe { buf.as_ptr().add(buf_off as usize) as u32 };
-        e.binary_copy_to_linear_memory(b.clone(), b_pos, lm_pos, len);
-        for idx in lm_pos..buf.len() as u32 {
-            assert!(buf[idx as usize] == b.get_unchecked(b_pos + idx));
+    // Transform a 4-byte bin into a new one with each byte incremented,
+    // via a temporary guest memory buffer.
+    pub fn bin_inc(e: Env, bin: Bytes) -> Bytes {
+        let mut buf: [u8; 4] = [0; 4];
+        bin.copy_into_slice(&mut buf);
+        for i in buf.iter_mut() {
+            *i += 1;
         }
+        Bytes::from_slice(&e, &buf)
     }
 }

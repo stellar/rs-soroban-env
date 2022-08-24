@@ -195,48 +195,31 @@ fn invoke_memcpy() -> Result<(), HostError> {
     let host = Host::with_storage(storage);
     // create a dummy contract obj as the caller
     let id_obj = host.test_bin_obj(&[0; 32])?;
-    // binary_new_from_linear_memory
+    // tests binary_new_from_linear_memory
     {
-        let args = host.test_vec_obj::<u32>(&[4])?;
+        let args = host.test_vec_obj::<u32>(&[0xaabbccdd])?;
         let obj = host.call(
             id_obj.to_object(),
-            Symbol::from_str("bin_new").into(),
+            Symbol::from_str("bin_word").into(),
             args.into(),
         )?;
-        let obj_ref = host.test_bin_obj(&[0, 1, 2, 3])?;
+        let obj_ref = host.test_bin_obj(&[0xaa, 0xbb, 0xcc, 0xdd])?;
         assert_eq!(host.obj_cmp(obj.into(), obj_ref.into())?, 0);
     }
-    // binary_copy_from_linear_memory
+    // tests binary_copy_{to,from}_linear_memory
     {
-        let obj0 = host.binary_new()?;
+        let obj0 = host.test_bin_obj(&[1, 2, 3, 4])?;
         let mut args = host.vec_new(RawVal::from_void())?;
         args = host.vec_push(args, obj0.to_raw())?;
-        args = host.vec_push(args, 0_u32.into())?;
-        args = host.vec_push(args, 1_u32.into())?;
-        args = host.vec_push(args, 3_u32.into())?;
         let obj: Object = host
             .call(
                 id_obj.to_object(),
-                Symbol::from_str("from_guest").into(),
+                Symbol::from_str("bin_inc").into(),
                 args.into(),
             )?
             .try_into()?;
-        let obj_ref = host.test_bin_obj(&[1, 2, 3])?;
+        let obj_ref = host.test_bin_obj(&[2, 3, 4, 5])?;
         assert_eq!(host.obj_cmp(obj.into(), obj_ref.into())?, 0);
-    }
-    // binary_copy_to_linear_memory
-    {
-        let obj0 = host.test_bin_obj(&[0, 1, 2, 3])?;
-        let mut args = host.vec_new(RawVal::from_void())?;
-        args = host.vec_push(args, obj0.to_raw())?;
-        args = host.vec_push(args, 0_u32.into())?;
-        args = host.vec_push(args, 0_u32.into())?;
-        args = host.vec_push(args, 4_u32.into())?;
-        host.call(
-            id_obj.to_object(),
-            Symbol::from_str("to_guest").into(),
-            args.into(),
-        )?;
     }
 
     Ok(())
