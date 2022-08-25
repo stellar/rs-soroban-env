@@ -1,7 +1,5 @@
+use soroban_env_common::{xdr::ScStatic, IntoVal, RawVal, Static, TryIntoVal};
 use soroban_env_host::Host;
-
-use soroban_env_common::{IntoVal, RawVal, Static, TryIntoVal};
-use stellar_xdr::ScStatic;
 
 #[test]
 fn some() {

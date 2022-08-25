@@ -1,4 +1,8 @@
-use super::{weak_host::WeakHost, xdr::ScObjectType, EnvVal, Object, RawVal};
+use super::{
+    weak_host::WeakHost,
+    xdr::{self, ScObjectType},
+    EnvVal, Object, RawVal,
+};
 
 use im_rc::{OrdMap, Vector};
 use num_bigint::BigInt;
@@ -9,12 +13,6 @@ pub(crate) type HostMap = OrdMap<HostVal, HostVal>;
 pub(crate) type HostVec = Vector<HostVal>;
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub(crate) struct Sha256Hash([u8; 32]);
-
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub(crate) struct Ed25519PK([u8; 32]);
-
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum HostObject {
     Vec(HostVec),
     Map(HostMap),
@@ -22,8 +20,9 @@ pub(crate) enum HostObject {
     I64(i64),
     Bin(Vec<u8>),
     BigInt(BigInt),
-    Hash(Sha256Hash),
-    PublicKey(Ed25519PK),
+    Hash(xdr::ScHash),
+    PublicKey(xdr::PublicKey),
+    ContractCode(xdr::ScContractCode),
 }
 
 pub(crate) trait HostObjectType: Sized {
@@ -60,5 +59,6 @@ declare_host_object_type!(u64, U64, U64);
 declare_host_object_type!(i64, I64, I64);
 declare_host_object_type!(Vec<u8>, Bytes, Bin);
 declare_host_object_type!(BigInt, BigInt, BigInt);
-declare_host_object_type!(Sha256Hash, Hash, Hash);
-declare_host_object_type!(Ed25519PK, PublicKey, PublicKey);
+declare_host_object_type!(xdr::ScHash, Hash, Hash);
+declare_host_object_type!(xdr::PublicKey, PublicKey, PublicKey);
+declare_host_object_type!(xdr::ScContractCode, ContractCode, ContractCode);

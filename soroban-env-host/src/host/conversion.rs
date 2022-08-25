@@ -186,11 +186,9 @@ impl Host {
                                 None => Err(self.err_status(ScHostObjErrorCode::UnknownReference)),
                                 Some(ho) => match ho {
                                     // TODO: use more event-specific error codes than `UnexpectedType`
-                                    HostObject::Vec(_) => {
-                                        Err(self.err_status(ScHostObjErrorCode::UnexpectedType))
-                                    }
-                                    // TODO: use more event-specific error codes than `UnexpectedType`
-                                    HostObject::Map(_) => {
+                                    HostObject::Vec(_)
+                                    | HostObject::Map(_)
+                                    | HostObject::ContractCode(_) => {
                                         Err(self.err_status(ScHostObjErrorCode::UnexpectedType))
                                     }
                                     HostObject::Bin(b) => {
@@ -206,8 +204,10 @@ impl Host {
                                     HostObject::U64(u) => Ok(ScObject::U64(*u)),
                                     HostObject::I64(i) => Ok(ScObject::I64(*i)),
                                     HostObject::BigInt(bi) => self.scobj_from_bigint(bi),
-                                    HostObject::Hash(_) => todo!(),
-                                    HostObject::PublicKey(_) => todo!(),
+                                    HostObject::Hash(h) => Ok(ScObject::Hash(h.clone())),
+                                    HostObject::PublicKey(pk) => {
+                                        Ok(ScObject::PublicKey(pk.clone()))
+                                    }
                                 },
                             }?;
                             Ok(ScVal::Object(Some(sco)))
