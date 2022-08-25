@@ -5,12 +5,8 @@ use core::cell::RefCell;
 use core::cmp::Ordering;
 use core::fmt::Debug;
 use im_rc::{OrdMap, Vector};
-use num_bigint::{BigInt, Sign};
-use num_integer::Integer;
-use num_traits::cast::ToPrimitive;
-use num_traits::{Pow, Signed, Zero};
-use soroban_env_common::{EnvVal, TryConvert, TryFromVal, TryIntoVal, OK};
-use std::ops::{Add, BitAnd, BitOr, BitXor, Mul, Neg, Not, Rem, Shl, Shr, Sub};
+use num_bigint::Sign;
+use soroban_env_common::{EnvVal, TryConvert, TryFromVal, TryIntoVal, OK, UNKNOWN_ERROR};
 
 use soroban_env_common::xdr::{
     AccountId, ContractEvent, ContractEventBody, ContractEventType, ContractEventV0,
@@ -36,18 +32,20 @@ use crate::CheckedEnv;
 use crate::SymbolStr;
 #[cfg(feature = "vm")]
 use crate::Vm;
-use crate::{EnvBase, IntoVal, Object, RawVal, RawValConvertible, Symbol, Val, UNKNOWN_ERROR};
+use crate::{EnvBase, IntoVal, Object, RawVal, RawValConvertible, Symbol, Val};
 
 mod conversion;
 mod data_helper;
 mod err_helper;
 mod error;
+pub(crate) mod metered_bigint;
 pub(crate) mod metered_clone;
 pub(crate) mod metered_map;
 pub(crate) mod metered_vector;
 mod validity;
 pub use error::HostError;
 
+use self::metered_bigint::MeteredBigInt;
 use self::metered_clone::MeteredClone;
 use self::metered_map::MeteredOrdMap;
 use self::metered_vector::MeteredVector;
@@ -519,9 +517,17 @@ impl Host {
             }
             ScObject::BigInt(sbi) => {
                 let bi = match sbi {
-                    ScBigInt::Zero => BigInt::default(),
-                    ScBigInt::Positive(bytes) => BigInt::from_bytes_be(Sign::Plus, bytes.as_ref()),
-                    ScBigInt::Negative(bytes) => BigInt::from_bytes_be(Sign::Minus, bytes.as_ref()),
+                    ScBigInt::Zero => MeteredBigInt::new(self.0.budget.clone())?,
+                    ScBigInt::Positive(bytes) => MeteredBigInt::from_bytes_be(
+                        Sign::Plus,
+                        bytes.as_ref(),
+                        self.0.budget.clone(),
+                    )?,
+                    ScBigInt::Negative(bytes) => MeteredBigInt::from_bytes_be(
+                        Sign::Minus,
+                        bytes.as_ref(),
+                        self.0.budget.clone(),
+                    )?,
                 };
                 self.add_host_object(bi)
             }
@@ -1329,203 +1335,203 @@ impl CheckedEnv for Host {
     }
 
     fn bigint_from_u64(&self, x: u64) -> Result<Object, HostError> {
-        Ok(self.add_host_object(Into::<BigInt>::into(x))?.into())
+        Ok(self
+            .add_host_object(MeteredBigInt::from_u64(self.0.budget.clone(), x)?)?
+            .into())
     }
 
+    // Notes on metering: visiting object is covered. Conversion from BigInt to u64 is free.
     fn bigint_to_u64(&self, x: Object) -> Result<u64, HostError> {
-        self.visit_obj(x, |bi: &BigInt| {
+        self.visit_obj(x, |bi: &MeteredBigInt| {
             bi.to_u64()
                 .ok_or_else(|| self.err_conversion_into_rawval::<u64>(x.into()))
         })
     }
 
+    // Notes on metering: new object adding is covered. Conversion from i64 to BigInt is free.
     fn bigint_from_i64(&self, x: i64) -> Result<Object, HostError> {
-        Ok(self.add_host_object(Into::<BigInt>::into(x))?.into())
+        Ok(self
+            .add_host_object(MeteredBigInt::from_i64(self.0.budget.clone(), x)?)?
+            .into())
     }
 
+    // Notes on metering: visiting object is covered. Conversion from BigInt to i64 is free.
     fn bigint_to_i64(&self, x: Object) -> Result<i64, HostError> {
-        self.visit_obj(x, |bi: &BigInt| {
+        self.visit_obj(x, |bi: &MeteredBigInt| {
             bi.to_i64()
                 .ok_or_else(|| self.err_conversion_into_rawval::<i64>(x.into()))
         })
     }
 
+    // Notes on metering: fully covered.
+    // Notes on calibration: use equal length objects to get the result upper bound.
     fn bigint_add(&self, x: Object, y: Object) -> Result<Object, HostError> {
-        let res = self.visit_obj(x, |a: &BigInt| self.visit_obj(y, |b: &BigInt| Ok(a.add(b))))?;
+        let res = self.visit_obj(x, |a: &MeteredBigInt| {
+            self.visit_obj(y, |b: &MeteredBigInt| a.add(b))
+        })?;
         Ok(self.add_host_object(res)?.into())
     }
 
+    // Notes on metering and calibration: see `bigint_add`
     fn bigint_sub(&self, x: Object, y: Object) -> Result<Object, HostError> {
-        let res = self.visit_obj(x, |a: &BigInt| self.visit_obj(y, |b: &BigInt| Ok(a.sub(b))))?;
+        let res = self.visit_obj(x, |a: &MeteredBigInt| {
+            self.visit_obj(y, |b: &MeteredBigInt| a.sub(b))
+        })?;
         Ok(self.add_host_object(res)?.into())
     }
 
+    // Notes on metering and model calibration:
+    // Use equal length objects for the upper bound measurement.
+    // Make sure to measure three length ranges (in terms of no. u64 digits):
+    // - [0, 32]
+    // - (32, 256]
+    // - [256, )
+    // As they use different algorithms that have different performance and involves different complexity of intermediate objects.
     fn bigint_mul(&self, x: Object, y: Object) -> Result<Object, HostError> {
-        let res = self.visit_obj(x, |a: &BigInt| self.visit_obj(y, |b: &BigInt| Ok(a.mul(b))))?;
+        let res = self.visit_obj(x, |a: &MeteredBigInt| {
+            self.visit_obj(y, |b: &MeteredBigInt| a.mul(b))
+        })?;
         Ok(self.add_host_object(res)?.into())
     }
 
+    // Notes on metering and model calibration:
+    // Use uneven length numbers for the upper bound measurement.
     fn bigint_div(&self, x: Object, y: Object) -> Result<Object, HostError> {
-        let res = self.visit_obj(x, |a: &BigInt| {
-            self.visit_obj(y, |b: &BigInt| {
-                a.checked_div(b)
-                    .ok_or_else(|| self.err_general("bigint division by zero"))
+        let res = self.visit_obj(x, |a: &MeteredBigInt| {
+            self.visit_obj(y, |b: &MeteredBigInt| {
+                if b.is_zero() {
+                    return Err(self.err_general("bigint division by zero"));
+                }
+                a.div(b)
             })
         })?;
         Ok(self.add_host_object(res)?.into())
     }
 
     fn bigint_rem(&self, x: Object, y: Object) -> Result<Object, HostError> {
-        let res = self.visit_obj(x, |a: &BigInt| {
-            self.visit_obj(y, |b: &BigInt| {
+        let res = self.visit_obj(x, |a: &MeteredBigInt| {
+            self.visit_obj(y, |b: &MeteredBigInt| {
                 if b.is_zero() {
                     return Err(self.err_general("bigint division by zero"));
                 }
-                Ok(a.rem(b))
+                a.rem(b)
             })
         })?;
         Ok(self.add_host_object(res)?.into())
     }
 
+    // Notes on metering and model calibration:
+    // Use equal length numbers for the upper bound measurement.
     fn bigint_and(&self, x: Object, y: Object) -> Result<Object, HostError> {
-        let res = self.visit_obj(x, |a: &BigInt| {
-            self.visit_obj(y, |b: &BigInt| Ok(a.bitand(b)))
+        let res = self.visit_obj(x, |a: &MeteredBigInt| {
+            self.visit_obj(y, |b: &MeteredBigInt| a.bitand(b))
         })?;
         Ok(self.add_host_object(res)?.into())
     }
 
     fn bigint_or(&self, x: Object, y: Object) -> Result<Object, HostError> {
-        let res = self.visit_obj(x, |a: &BigInt| {
-            self.visit_obj(y, |b: &BigInt| Ok(a.bitor(b)))
+        let res = self.visit_obj(x, |a: &MeteredBigInt| {
+            self.visit_obj(y, |b: &MeteredBigInt| a.bitor(b))
         })?;
         Ok(self.add_host_object(res)?.into())
     }
 
     fn bigint_xor(&self, x: Object, y: Object) -> Result<Object, HostError> {
-        let res = self.visit_obj(x, |a: &BigInt| {
-            self.visit_obj(y, |b: &BigInt| Ok(a.bitxor(b)))
+        let res = self.visit_obj(x, |a: &MeteredBigInt| {
+            self.visit_obj(y, |b: &MeteredBigInt| a.bitxor(b))
         })?;
         Ok(self.add_host_object(res)?.into())
     }
 
     fn bigint_shl(&self, x: Object, y: Object) -> Result<Object, HostError> {
-        let res = self.visit_obj(x, |a: &BigInt| {
-            self.visit_obj(y, |b: &BigInt| {
-                if b.is_negative() {
-                    return Err(self.err_general("attempt to shift left with negative"));
-                }
-                if let Some(u) = b.to_usize() {
-                    Ok(a.shl(u))
-                } else {
-                    Err(self.err_general("left-shift overflow"))
-                }
-            })
+        let res = self.visit_obj(x, |a: &MeteredBigInt| {
+            self.visit_obj(y, |b: &MeteredBigInt| a.shl(b))
         })?;
         Ok(self.add_host_object(res)?.into())
     }
 
+    // Notes on calibration: choose small y for the upper bound.
     fn bigint_shr(&self, x: Object, y: Object) -> Result<Object, HostError> {
-        let res = self.visit_obj(x, |a: &BigInt| {
-            self.visit_obj(y, |b: &BigInt| {
-                if b.is_negative() {
-                    return Err(self.err_general("attempt to shift right with negative"));
-                }
-                if let Some(u) = b.to_usize() {
-                    Ok(a.shr(u))
-                } else {
-                    Err(self.err_general("right-shift overflow"))
-                }
-            })
+        let res = self.visit_obj(x, |a: &MeteredBigInt| {
+            self.visit_obj(y, |b: &MeteredBigInt| a.shr(b))
         })?;
         Ok(self.add_host_object(res)?.into())
     }
 
+    // Notes on calibration: choose x == y for upper bound.
+    // TODO: this function will be removed
     fn bigint_cmp(&self, x: Object, y: Object) -> Result<RawVal, HostError> {
-        self.visit_obj(x, |a: &BigInt| {
-            self.visit_obj(y, |b: &BigInt| Ok((a.cmp(b) as i32).into()))
+        self.visit_obj(x, |a: &MeteredBigInt| {
+            self.visit_obj(y, |b: &MeteredBigInt| Ok((a.cmp(b) as i32).into()))
         })
     }
 
+    // Notes on metering: covered by `visit_obj`. `is_zero` call is free.
     fn bigint_is_zero(&self, x: Object) -> Result<RawVal, HostError> {
-        self.visit_obj(x, |a: &BigInt| Ok(a.is_zero().into()))
+        self.visit_obj(x, |a: &MeteredBigInt| Ok(a.is_zero().into()))
     }
 
+    // Notes on metering: covered by `visit_obj`. `neg` call is free.
     fn bigint_neg(&self, x: Object) -> Result<Object, HostError> {
-        let res = self.visit_obj(x, |a: &BigInt| Ok(a.neg()))?;
+        let res = self.visit_obj(x, |a: &MeteredBigInt| Ok(a.neg()))?;
         Ok(self.add_host_object(res)?.into())
     }
 
+    // Notes on metering: covered by `visit_obj`. `not` call is free.
     fn bigint_not(&self, x: Object) -> Result<Object, HostError> {
-        let res = self.visit_obj(x, |a: &BigInt| Ok(a.not()))?;
+        let res = self.visit_obj(x, |a: &MeteredBigInt| Ok(a.not()))?;
         Ok(self.add_host_object(res)?.into())
     }
 
     fn bigint_gcd(&self, x: Object, y: Object) -> Result<Object, HostError> {
-        let res = self.visit_obj(x, |a: &BigInt| self.visit_obj(y, |b: &BigInt| Ok(a.gcd(b))))?;
+        let res = self.visit_obj(x, |a: &MeteredBigInt| {
+            self.visit_obj(y, |b: &MeteredBigInt| a.gcd(b))
+        })?;
         Ok(self.add_host_object(res)?.into())
     }
 
     fn bigint_lcm(&self, x: Object, y: Object) -> Result<Object, HostError> {
-        let res = self.visit_obj(x, |a: &BigInt| self.visit_obj(y, |b: &BigInt| Ok(a.lcm(b))))?;
+        let res = self.visit_obj(x, |a: &MeteredBigInt| {
+            self.visit_obj(y, |b: &MeteredBigInt| a.lcm(b))
+        })?;
         Ok(self.add_host_object(res)?.into())
     }
 
+    // Note on calibration: pick y with all 1-bits to get the upper bound.
     fn bigint_pow(&self, x: Object, y: Object) -> Result<Object, HostError> {
-        let res = self.visit_obj(x, |a: &BigInt| {
-            self.visit_obj(y, |e: &BigInt| {
-                if e.is_negative() {
-                    return Err(self.err_general("negative exponentiation not supported"));
-                }
-                if let Some(u) = e.to_usize() {
-                    Ok(Pow::pow(a, u))
-                } else {
-                    Err(self.err_general("pow overflow"))
-                }
-            })
+        let res = self.visit_obj(x, |a: &MeteredBigInt| {
+            self.visit_obj(y, |e: &MeteredBigInt| a.pow(e))
         })?;
         Ok(self.add_host_object(res)?.into())
     }
 
     fn bigint_pow_mod(&self, p: Object, q: Object, m: Object) -> Result<Object, HostError> {
-        let res = self.visit_obj(p, |a: &BigInt| {
-            self.visit_obj(q, |exponent: &BigInt| {
-                if exponent.is_negative() {
-                    return Err(self.err_general("negative exponentiation not supported"));
-                }
-                self.visit_obj(m, |modulus: &BigInt| {
-                    if modulus.is_zero() {
-                        return Err(self.err_general("zero modulus not supported"));
-                    }
-                    Ok(a.modpow(exponent, modulus))
-                })
+        let res = self.visit_obj(p, |a: &MeteredBigInt| {
+            self.visit_obj(q, |exponent: &MeteredBigInt| {
+                self.visit_obj(m, |modulus: &MeteredBigInt| a.modpow(exponent, modulus))
             })
         })?;
         Ok(self.add_host_object(res)?.into())
     }
 
     fn bigint_sqrt(&self, x: Object) -> Result<Object, HostError> {
-        let res = self.visit_obj(x, |a: &BigInt| {
-            if a.is_negative() {
-                return Err(self.err_general("sqrt is imaginary"));
-            }
-            Ok(a.sqrt())
-        })?;
+        let res = self.visit_obj(x, |a: &MeteredBigInt| a.sqrt())?;
         Ok(self.add_host_object(res)?.into())
     }
 
     fn bigint_bits(&self, x: Object) -> Result<u64, HostError> {
-        self.visit_obj(x, |a: &BigInt| Ok(a.bits()))
+        self.visit_obj(x, |a: &MeteredBigInt| Ok(a.bits()))
     }
 
     fn bigint_to_bytes_be(&self, x: Object) -> Result<Object, Self::Error> {
-        let bytes: Vec<u8> = self.visit_obj(x, |a: &BigInt| Ok(a.to_bytes_be().1))?;
-        Ok(self.add_host_object(bytes)?.into())
+        let sign_bytes = self.visit_obj(x, |a: &MeteredBigInt| a.to_bytes_be())?;
+        Ok(self.add_host_object(sign_bytes.1)?.into())
     }
 
     fn bigint_to_radix_be(&self, x: Object, radix: RawVal) -> Result<Object, Self::Error> {
         let r: u32 = self.u32_from_rawval_input("radix", radix)?;
-        let bytes: Vec<u8> = self.visit_obj(x, |a: &BigInt| Ok(a.to_radix_be(r).1))?;
-        Ok(self.add_host_object(bytes)?.into())
+        let sign_bytes = self.visit_obj(x, |a: &MeteredBigInt| a.to_radix_be(r))?;
+        Ok(self.add_host_object(sign_bytes.1)?.into())
     }
 
     fn serialize_to_binary(&self, v: RawVal) -> Result<Object, HostError> {

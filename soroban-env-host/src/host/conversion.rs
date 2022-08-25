@@ -9,8 +9,10 @@ use crate::{
     Host, HostError, Object, RawVal, Tag,
 };
 use ed25519_dalek::{PublicKey, Signature, SIGNATURE_LENGTH};
-use num_bigint::{BigInt, Sign};
+use num_bigint::Sign;
 use sha2::{Digest, Sha256};
+
+use super::metered_bigint::MeteredBigInt;
 
 impl Host {
     // Notes on metering: free
@@ -171,9 +173,8 @@ impl Host {
         self.storage_key_from_rawval(k)
     }
 
-    // TODO: impl a `TryFrom` trait once the "metered_" class is ready
-    pub(crate) fn scobj_from_bigint(&self, bi: &BigInt) -> Result<ScObject, HostError> {
-        let (sign, data) = bi.to_bytes_be();
+    pub(crate) fn scobj_from_bigint(&self, bi: &MeteredBigInt) -> Result<ScObject, HostError> {
+        let (sign, data) = bi.to_bytes_be()?;
         match sign {
             Sign::Minus => Ok(ScObject::BigInt(ScBigInt::Negative(
                 self.map_err(data.try_into())?,

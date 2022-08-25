@@ -1,12 +1,11 @@
 use super::{
+    host::metered_bigint::MeteredBigInt,
     host::metered_map::MeteredOrdMap,
     host::metered_vector::MeteredVector,
     weak_host::WeakHost,
     xdr::{self, ScObjectType},
     EnvVal, Object, RawVal,
 };
-
-use num_bigint::BigInt;
 
 pub(crate) type HostObj = EnvVal<WeakHost, Object>;
 pub(crate) type HostVal = EnvVal<WeakHost, RawVal>;
@@ -26,7 +25,7 @@ pub(crate) enum HostObject {
     U64(u64),
     I64(i64),
     Bin(Vec<u8>),
-    BigInt(BigInt),
+    BigInt(MeteredBigInt),
     Hash(xdr::ScHash),
     PublicKey(xdr::PublicKey),
     ContractCode(xdr::ScContractCode),
@@ -65,7 +64,7 @@ declare_host_object_type!(HostVec, Vec, Vec);
 declare_host_object_type!(u64, U64, U64);
 declare_host_object_type!(i64, I64, I64);
 declare_host_object_type!(Vec<u8>, Bytes, Bin);
-declare_host_object_type!(BigInt, BigInt, BigInt);
+declare_host_object_type!(MeteredBigInt, BigInt, BigInt);
 declare_host_object_type!(xdr::ScHash, Hash, Hash);
 declare_host_object_type!(xdr::PublicKey, PublicKey, PublicKey);
 declare_host_object_type!(xdr::ScContractCode, ContractCode, ContractCode);
