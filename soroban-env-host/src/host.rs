@@ -527,19 +527,27 @@ impl Host {
         &self,
         ho: HostObject,
     ) -> Result<HostObject, HostError> {
+        self.charge_budget(CostType::HostObjAllocSlot, 1)?;
         match &ho {
             HostObject::Vec(v) => {
-                self.charge_budget(CostType::HostVecAllocVec, 1)?;
                 self.charge_budget(CostType::HostVecAllocCell, v.len() as u64)?;
             }
             HostObject::Map(m) => {
-                self.charge_budget(CostType::HostMapAllocMap, 1)?;
                 self.charge_budget(CostType::HostMapAllocCell, m.len() as u64)?;
             }
-            HostObject::U64(_) => {}
-            HostObject::I64(_) => {}
-            HostObject::Bin(_) => {}
-            HostObject::BigInt(_) => {}
+            HostObject::U64(_) => {
+                self.charge_budget(CostType::HostU64AllocCell, 1)?;
+            }
+            HostObject::I64(_) => {
+                self.charge_budget(CostType::HostI64AllocCell, 1)?;
+            }
+            HostObject::Bin(b) => {
+                self.charge_budget(CostType::HostBinAllocCell, b.len() as u64)?;
+            }
+            HostObject::BigInt(bi) => {
+                self.charge_budget(CostType::HostBigIntAllocCell, bi.bits() as u64)?;
+                // TODO: are we double counting by charging bi.bits()?
+            }
             HostObject::Hash(_) => {}
             HostObject::PublicKey(_) => {}
             HostObject::ContractCode(_) => {}
@@ -1281,8 +1289,10 @@ impl CheckedEnv for Host {
         self.create_contract_with_id_preimage(ScContractCode::Token, buf)
     }
 
+    // Notes on metering: here covers the args unpacking. The actual VM work is changed at lower layers.
     fn call(&self, contract: Object, func: Symbol, args: Object) -> Result<RawVal, HostError> {
         let args: Vec<RawVal> = self.visit_obj(args, |hv: &HostVec| {
+            self.charge_budget(CostType::CallArgsUnpack, hv.len() as u64)?;
             Ok(hv.iter().map(|a| a.to_raw()).collect())
         })?;
         self.call_n(contract, func, args.as_slice())
@@ -1506,11 +1516,15 @@ impl CheckedEnv for Host {
         let mut buf = Vec::<u8>::new();
         scv.write_xdr(&mut buf)
             .map_err(|_| self.err_general("failed to serialize ScVal"))?;
+        // TODO: `charge` should go before `write_xdr`. How can we know the size of
+        // object beforehand?
+        self.charge_budget(CostType::ValSer, buf.len() as u64)?;
         Ok(self.add_host_object(buf)?.into())
     }
 
     fn deserialize_from_binary(&self, b: Object) -> Result<RawVal, HostError> {
         let scv = self.visit_obj(b, |hv: &Vec<u8>| {
+            self.charge_budget(CostType::ValDeser, hv.len() as u64)?;
             ScVal::read_xdr(&mut hv.as_slice())
                 .map_err(|_| self.err_general("failed to de-serialize ScVal"))
         })?;

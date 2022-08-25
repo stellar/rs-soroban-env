@@ -8,6 +8,7 @@ use crate::{Host, HostError, Object};
 use soroban_env_common::xdr::{AccountEntry, AccountId, Hash, PublicKey, Uint256, WriteXdr};
 
 impl Host {
+    // Notes on metering: free
     pub fn contract_code_ledger_key(&self, contract_id: Hash) -> LedgerKey {
         LedgerKey::ContractData(LedgerKeyContractData {
             contract_id,

@@ -13,6 +13,7 @@ use num_bigint::{BigInt, Sign};
 use sha2::{Digest, Sha256};
 
 impl Host {
+    // Notes on metering: free
     pub(crate) fn usize_to_u32(&self, u: usize, msg: &'static str) -> Result<u32, HostError> {
         match u32::try_from(u) {
             Ok(v) => Ok(v),
@@ -20,6 +21,7 @@ impl Host {
         }
     }
 
+    // Notes on metering: free
     pub(crate) fn usize_to_rawval_u32(&self, u: usize) -> Result<RawVal, HostError> {
         match u32::try_from(u) {
             Ok(v) => Ok(v.into()),
@@ -27,6 +29,7 @@ impl Host {
         }
     }
 
+    // Notes on metering: free
     pub(crate) fn usize_from_rawval_u32_input(
         &self,
         name: &'static str,
@@ -35,6 +38,7 @@ impl Host {
         self.u32_from_rawval_input(name, r).map(|u| u as usize)
     }
 
+    // Notes on metering: free
     pub(crate) fn u32_from_rawval_input(
         &self,
         name: &'static str,
@@ -58,6 +62,7 @@ impl Host {
         })
     }
 
+    // Notes on metering: free
     pub(crate) fn u8_from_rawval_input(
         &self,
         name: &'static str,
