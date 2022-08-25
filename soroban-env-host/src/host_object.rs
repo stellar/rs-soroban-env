@@ -1,17 +1,23 @@
 use super::{
     host::metered_map::MeteredOrdMap,
+    host::metered_vector::MeteredVector,
     weak_host::WeakHost,
     xdr::{self, ScObjectType},
     EnvVal, Object, RawVal,
 };
 
-use im_rc::Vector;
 use num_bigint::BigInt;
 
 pub(crate) type HostObj = EnvVal<WeakHost, Object>;
 pub(crate) type HostVal = EnvVal<WeakHost, RawVal>;
 pub(crate) type HostMap = MeteredOrdMap<HostVal, HostVal>;
-pub(crate) type HostVec = Vector<HostVal>;
+pub(crate) type HostVec = MeteredVector<HostVal>;
+
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) struct Sha256Hash([u8; 32]);
+
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) struct Ed25519PK([u8; 32]);
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum HostObject {

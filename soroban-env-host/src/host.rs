@@ -44,11 +44,14 @@ mod err_helper;
 mod error;
 pub(crate) mod metered_clone;
 pub(crate) mod metered_map;
+pub(crate) mod metered_vector;
 mod validity;
 pub use error::HostError;
 
 use self::metered_clone::MeteredClone;
 use self::metered_map::MeteredOrdMap;
+use self::metered_vector::MeteredVector;
+
 /// Saves host state (storage and objects) for rolling back a (sub-)transaction
 /// on error. A helper type used by [`FrameGuard`].
 // Notes on metering: `RollbackPoint` are metered under Frame operations
@@ -456,10 +459,11 @@ impl Host {
                     None => Err(self.err_status(ScHostObjErrorCode::UnknownReference)),
                     Some(ho) => match ho {
                         HostObject::Vec(vv) => {
-                            let mut sv = Vec::new();
-                            for e in vv.iter() {
-                                sv.push(self.from_host_val(e.val)?);
-                            }
+                            self.charge_budget(CostType::ScVecFromHostVec, vv.len() as u64)?;
+                            let sv = vv
+                                .iter()
+                                .map(|e| self.from_host_val(e.val))
+                                .collect::<Result<Vec<ScVal>, HostError>>()?;
                             Ok(ScObject::Vec(ScVec(self.map_err(sv.try_into())?)))
                         }
                         HostObject::Map(mm) => {
@@ -491,11 +495,12 @@ impl Host {
         self.charge_budget(CostType::ValXdrConv, 1)?;
         match ob {
             ScObject::Vec(v) => {
-                let mut vv = Vector::new();
-                for e in v.0.iter() {
-                    vv.push_back(self.to_host_val(e)?);
-                }
-                self.add_host_object(vv)
+                self.charge_budget(CostType::ScVecToHostVec, v.len() as u64)?;
+                let vv =
+                    v.0.iter()
+                        .map(|e| self.to_host_val(e))
+                        .collect::<Result<Vector<HostVal>, HostError>>()?;
+                self.add_host_object(MeteredVector::from_vec(self.0.budget.clone(), vv)?)
             }
             ScObject::Map(m) => {
                 self.charge_budget(CostType::ScMapToHostMap, m.len() as u64)?;
@@ -1085,7 +1090,9 @@ impl CheckedEnv for Host {
             self.usize_from_rawval_u32_input("c", c)?
         };
         // TODO: optimize the vector based on capacity
-        Ok(self.add_host_object(HostVec::new())?.into())
+        Ok(self
+            .add_host_object(HostVec::new(self.0.budget.clone())?)?
+            .into())
     }
 
     fn vec_put(&self, v: Object, i: RawVal, x: RawVal) -> Result<Object, HostError> {
@@ -1093,8 +1100,8 @@ impl CheckedEnv for Host {
         let x = self.associate_raw_val(x);
         let vnew = self.visit_obj(v, move |hv: &HostVec| {
             self.validate_index_lt_bound(i, hv.len())?;
-            let mut vnew = hv.clone();
-            vnew.set(i as usize, x);
+            let mut vnew = hv.metered_clone(&self.0.budget)?;
+            vnew.set(i as usize, x)?;
             Ok(vnew)
         })?;
         Ok(self.add_host_object(vnew)?.into())
@@ -1102,19 +1109,15 @@ impl CheckedEnv for Host {
 
     fn vec_get(&self, v: Object, i: RawVal) -> Result<RawVal, HostError> {
         let i: usize = self.usize_from_rawval_u32_input("i", i)?;
-        self.visit_obj(v, move |hv: &HostVec| {
-            hv.get(i)
-                .map(|hval| hval.to_raw())
-                .ok_or_else(|| self.err_status(ScHostObjErrorCode::VecIndexOutOfBound))
-        })
+        self.visit_obj(v, move |hv: &HostVec| hv.get(i).map(|hval| hval.to_raw()))
     }
 
     fn vec_del(&self, v: Object, i: RawVal) -> Result<Object, HostError> {
         let i = self.u32_from_rawval_input("i", i)?;
         let vnew = self.visit_obj(v, move |hv: &HostVec| {
             self.validate_index_lt_bound(i, hv.len())?;
-            let mut vnew = hv.clone();
-            vnew.remove(i as usize);
+            let mut vnew = hv.metered_clone(&self.0.budget)?;
+            vnew.remove(i as usize)?;
             Ok(vnew)
         })?;
         Ok(self.add_host_object(vnew)?.into())
@@ -1128,8 +1131,8 @@ impl CheckedEnv for Host {
     fn vec_push(&self, v: Object, x: RawVal) -> Result<Object, HostError> {
         let x = self.associate_raw_val(x);
         let vnew = self.visit_obj(v, move |hv: &HostVec| {
-            let mut vnew = hv.clone();
-            vnew.push_back(x);
+            let mut vnew = hv.metered_clone(&self.0.budget)?;
+            vnew.push_back(x)?;
             Ok(vnew)
         })?;
         Ok(self.add_host_object(vnew)?.into())
@@ -1137,28 +1140,18 @@ impl CheckedEnv for Host {
 
     fn vec_pop(&self, v: Object) -> Result<Object, HostError> {
         let vnew = self.visit_obj(v, move |hv: &HostVec| {
-            let mut vnew = hv.clone();
-            vnew.pop_back()
-                .map(|_| vnew)
-                .ok_or_else(|| self.err_status(ScHostObjErrorCode::VecIndexOutOfBound))
+            let mut vnew = hv.metered_clone(&self.0.budget)?;
+            vnew.pop_back().map(|_| vnew)
         })?;
         Ok(self.add_host_object(vnew)?.into())
     }
 
     fn vec_front(&self, v: Object) -> Result<RawVal, HostError> {
-        self.visit_obj(v, |hv: &HostVec| {
-            hv.front()
-                .map(|hval| hval.to_raw())
-                .ok_or_else(|| self.err_status(ScHostObjErrorCode::VecIndexOutOfBound))
-        })
+        self.visit_obj(v, |hv: &HostVec| hv.front().map(|hval| hval.to_raw()))
     }
 
     fn vec_back(&self, v: Object) -> Result<RawVal, HostError> {
-        self.visit_obj(v, |hv: &HostVec| {
-            hv.back()
-                .map(|hval| hval.to_raw())
-                .ok_or_else(|| self.err_status(ScHostObjErrorCode::VecIndexOutOfBound))
-        })
+        self.visit_obj(v, |hv: &HostVec| hv.back().map(|hval| hval.to_raw()))
     }
 
     fn vec_insert(&self, v: Object, i: RawVal, x: RawVal) -> Result<Object, HostError> {
@@ -1166,20 +1159,20 @@ impl CheckedEnv for Host {
         let x = self.associate_raw_val(x);
         let vnew = self.visit_obj(v, move |hv: &HostVec| {
             self.validate_index_le_bound(i, hv.len())?;
-            let mut vnew = hv.clone();
-            vnew.insert(i as usize, x);
+            let mut vnew = hv.metered_clone(&self.0.budget)?;
+            vnew.insert(i as usize, x)?;
             Ok(vnew)
         })?;
         Ok(self.add_host_object(vnew)?.into())
     }
 
     fn vec_append(&self, v1: Object, v2: Object) -> Result<Object, HostError> {
-        let mut vnew = self.visit_obj(v1, |hv: &HostVec| Ok(hv.clone()))?;
-        let v2 = self.visit_obj(v2, |hv: &HostVec| Ok(hv.clone()))?;
+        let mut vnew = self.visit_obj(v1, |hv: &HostVec| Ok(hv.metered_clone(&self.0.budget)?))?;
+        let v2 = self.visit_obj(v2, |hv: &HostVec| Ok(hv.metered_clone(&self.0.budget)?))?;
         if v2.len() > u32::MAX as usize - vnew.len() {
             return Err(self.err_status_msg(ScHostFnErrorCode::InputArgsInvalid, "u32 overflow"));
         }
-        vnew.append(v2);
+        vnew.append(v2)?;
         Ok(self.add_host_object(vnew)?.into())
     }
 
@@ -1188,7 +1181,7 @@ impl CheckedEnv for Host {
         let end = self.u32_from_rawval_input("end", end)?;
         let vnew = self.visit_obj(v, move |hv: &HostVec| {
             let range = self.valid_range_from_start_end_bound(start, end, hv.len())?;
-            Ok(hv.clone().slice(range))
+            hv.metered_clone(&self.0.budget)?.slice(range)
         })?;
         Ok(self.add_host_object(vnew)?.into())
     }
