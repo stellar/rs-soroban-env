@@ -304,6 +304,8 @@ impl Host {
     /// Applies a function to the top [`Frame`] of the context stack. Returns
     /// [`HostError`] if the context stack is empty, otherwise returns result of
     /// function call.
+    // Notes on metering: aquiring the current frame is cheap and not charged.
+    /// Metering happens in the passed-in closure where actual work is being done.
     fn with_current_frame<F, U>(&self, f: F) -> Result<U, HostError>
     where
         F: FnOnce(&Frame) -> Result<U, HostError>,
@@ -319,10 +321,14 @@ impl Host {
     /// Pushes a [`Frame`], runs a closure, and then pops the frame, rolling back
     /// if the closure returned an error. Returns the result that the closure
     /// returned (or any error caused during the frame push/pop).
+    // Notes on metering: `GuardFrame` charges on the work done on protecting the `context`.
+    /// It does not cover the cost of the actual closure call. The closure needs to be
+    /// metered separately.
     pub(crate) fn with_frame<F, U>(&self, frame: Frame, f: F) -> Result<U, HostError>
     where
         F: FnOnce() -> Result<U, HostError>,
     {
+        self.charge_budget(CostType::GuardFrame, 1)?;
         let start_depth = self.0.context.borrow().len();
         let rp = self.push_frame(frame)?;
         let res = f();
@@ -355,6 +361,8 @@ impl Host {
         })
     }
 
+    // Notes on metering: closure call needs to be metered separatedly. `VisitObject` only covers
+    /// the cost of visiting an object.
     unsafe fn unchecked_visit_val_obj<F, U>(&self, val: RawVal, f: F) -> Result<U, HostError>
     where
         F: FnOnce(Option<&HostObject>) -> Result<U, HostError>,
@@ -365,6 +373,8 @@ impl Host {
         f(r.get(index))
     }
 
+    // Notes on metering: object visiting part is covered by unchecked_visit_val_obj. Closure function
+    /// needs to be metered separately.
     fn visit_obj<HOT: HostObjectType, F, U>(&self, obj: Object, f: F) -> Result<U, HostError>
     where
         F: FnOnce(&HOT) -> Result<U, HostError>,
@@ -380,19 +390,23 @@ impl Host {
         }
     }
 
+    // Notes on metering: free
     fn reassociate_val(hv: &mut HostVal, weak: WeakHost) {
         hv.env = weak;
     }
 
+    // Notes on metering: free
     pub(crate) fn get_weak(&self) -> WeakHost {
         WeakHost(Rc::downgrade(&self.0))
     }
 
+    // Notes on metering: free
     pub(crate) fn associate_raw_val(&self, val: RawVal) -> HostVal {
         let env = self.get_weak();
         HostVal { env, val }
     }
 
+    // Notes on metering: free. But we might want to charge these. Maybe in bulk.
     pub(crate) fn associate_env_val_type<V: Val, CVT: IntoVal<WeakHost, RawVal>>(
         &self,
         v: CVT,
@@ -405,6 +419,7 @@ impl Host {
     }
 
     // Testing interface to create values directly for later use via Env functions.
+    // Notes on metering: covered by `to_host_val`
     pub fn inject_val(&self, v: &ScVal) -> Result<RawVal, HostError> {
         self.to_host_val(v).map(Into::into)
     }
@@ -413,6 +428,7 @@ impl Host {
         self.0.events.borrow().metered_clone(&self.0.budget)
     }
 
+    // Notes on metering: free
     #[cfg(feature = "vm")]
     fn decode_vmslice(&self, pos: RawVal, len: RawVal) -> Result<VmSlice, HostError> {
         let pos: u32 = self.u32_from_rawval_input("pos", pos)?;
@@ -457,6 +473,9 @@ impl Host {
                     None => Err(self.err_status(ScHostObjErrorCode::UnknownReference)),
                     Some(ho) => match ho {
                         HostObject::Vec(vv) => {
+                            // Here covers the cost of space allocating and maneuvering needed to go
+                            // from one structure to the other. The actual conversion work (heavy lifting)
+                            // is covered by `from_host_val`, which is recursive.
                             self.charge_budget(CostType::ScVecFromHostVec, vv.len() as u64)?;
                             let sv = vv
                                 .iter()
@@ -465,6 +484,9 @@ impl Host {
                             Ok(ScObject::Vec(ScVec(self.map_err(sv.try_into())?)))
                         }
                         HostObject::Map(mm) => {
+                            // Here covers the cost of space allocating and maneuvering needed to go
+                            // from one structure to the other. The actual conversion work (heavy lifting)
+                            // is covered by `from_host_val`, which is recursive.
                             self.charge_budget(CostType::ScMapFromHostMap, mm.len() as u64)?;
                             let mut mv = Vec::new();
                             for (k, v) in mm.iter() {
@@ -573,6 +595,8 @@ impl Host {
     /// object array, returning a [`HostObj`] containing the new object's array
     /// index, tagged with the [`xdr::ScObjectType`] and associated with the current
     /// host via a weak reference.
+    // Notes on metering: new object is charged by `charge_for_new_host_object`. The
+    // rest is free.
     pub(crate) fn add_host_object<HOT: HostObjectType>(
         &self,
         hot: HOT,
@@ -621,6 +645,7 @@ impl Host {
         Ok(id_obj)
     }
 
+    // Notes on metering: this is covered by the called components.
     fn call_contract_fn(
         &self,
         id: &Hash,
@@ -644,6 +669,7 @@ impl Host {
         }
     }
 
+    // Notes on metering: this is covered by the called components.
     fn call_n(&self, contract: Object, func: Symbol, args: &[RawVal]) -> Result<RawVal, HostError> {
         // Get contract ID
         let id = self.hash_from_obj_input("contract", contract)?;
@@ -668,6 +694,7 @@ impl Host {
         return self.call_contract_fn(&id, &func, args);
     }
 
+    // Notes on metering: covered by the called components.
     pub fn invoke_function_raw(&self, hf: HostFunction, args: ScVec) -> Result<RawVal, HostError> {
         match hf {
             HostFunction::Call => {
@@ -713,11 +740,13 @@ impl Host {
         }
     }
 
+    // Notes on metering: covered by the called components.
     pub fn invoke_function(&self, hf: HostFunction, args: ScVec) -> Result<ScVal, HostError> {
         let rv = self.invoke_function_raw(hf, args)?;
         self.from_host_val(rv)
     }
 
+    // TODO: should we charge budget for testutils?
     #[cfg(feature = "testutils")]
     pub fn register_test_contract(
         &self,
@@ -756,6 +785,7 @@ impl Host {
     }
 }
 
+// Notes on metering: these are called from the guest and thus charged on the VM instructions.
 impl EnvBase for Host {
     fn as_mut_any(&mut self) -> &mut dyn std::any::Any {
         todo!()
@@ -880,6 +910,7 @@ impl EnvBase for Host {
 impl CheckedEnv for Host {
     type Error = HostError;
 
+    // Notes on metering: covered by the components
     fn log_value(&self, v: RawVal) -> Result<RawVal, HostError> {
         self.record_debug_event(DebugEvent::new().msg("log").arg(v))?;
         Ok(RawVal::from_void())
@@ -906,6 +937,7 @@ impl CheckedEnv for Host {
         Ok(self.add_host_object(<Vec<u8>>::from(hash.0))?.into())
     }
 
+    // Notes on metering: covered by `unchecked_visit_val_obj`.
     fn obj_cmp(&self, a: RawVal, b: RawVal) -> Result<i64, HostError> {
         let res = unsafe {
             self.unchecked_visit_val_obj(a, |ao| {
@@ -926,23 +958,28 @@ impl CheckedEnv for Host {
         Ok(OK.into())
     }
 
+    // Notes on metering: covered by the components.
     fn get_current_contract(&self) -> Result<Object, HostError> {
         let hash: Hash = self.get_current_contract_id()?;
         Ok(self.add_host_object(<Vec<u8>>::from(hash.0))?.into())
     }
 
+    // Notes on metering: covered by `add_host_object`.
     fn obj_from_u64(&self, u: u64) -> Result<Object, HostError> {
         Ok(self.add_host_object(u)?.into())
     }
 
+    // Notes on metering: covered by `visit_obj`.
     fn obj_to_u64(&self, obj: Object) -> Result<u64, HostError> {
         self.visit_obj(obj, |u: &u64| Ok(*u))
     }
 
+    // Notes on metering: covered by `add_host_object`.
     fn obj_from_i64(&self, i: i64) -> Result<Object, HostError> {
         Ok(self.add_host_object(i)?.into())
     }
 
+    // Notes on metering: covered by `visit_obj`.
     fn obj_to_i64(&self, obj: Object) -> Result<i64, HostError> {
         self.visit_obj(obj, |i: &i64| Ok(*i))
     }
@@ -1239,6 +1276,7 @@ impl CheckedEnv for Host {
         Ok(().into())
     }
 
+    // Notes on metering: covered by the components.
     fn create_contract_from_ed25519(
         &self,
         v: Object,
@@ -1269,6 +1307,7 @@ impl CheckedEnv for Host {
         self.create_contract_with_id_preimage(wasm, buf)
     }
 
+    // Notes on metering: covered by the components.
     fn create_contract_from_contract(&self, v: Object, salt: Object) -> Result<Object, HostError> {
         let contract_id = self.get_current_contract_id()?;
         let salt = self.uint256_from_obj_input("salt", salt)?;
@@ -1321,6 +1360,7 @@ impl CheckedEnv for Host {
         self.call_n(contract, func, args.as_slice())
     }
 
+    // Notes on metering: covered by the components.
     fn try_call(&self, contract: Object, func: Symbol, args: Object) -> Result<RawVal, HostError> {
         match self.call(contract, func, args) {
             Ok(rv) => Ok(rv),
@@ -1534,6 +1574,7 @@ impl CheckedEnv for Host {
         Ok(self.add_host_object(sign_bytes.1)?.into())
     }
 
+    // Notes on metering: covered by components
     fn serialize_to_binary(&self, v: RawVal) -> Result<Object, HostError> {
         let scv = self.from_host_val(v)?;
         let mut buf = Vec::<u8>::new();
@@ -1545,6 +1586,7 @@ impl CheckedEnv for Host {
         Ok(self.add_host_object(buf)?.into())
     }
 
+    // Notes on metering: covered by components
     fn deserialize_from_binary(&self, b: Object) -> Result<RawVal, HostError> {
         let scv = self.visit_obj(b, |hv: &Vec<u8>| {
             self.charge_budget(CostType::ValDeser, hv.len() as u64)?;
@@ -1775,16 +1817,19 @@ impl CheckedEnv for Host {
         todo!()
     }
 
+    // Notes on metering: covered by components.
     fn compute_hash_sha256(&self, x: Object) -> Result<Object, HostError> {
         let hash = self.sha256_hash_from_binary_input(x)?;
         Ok(self.add_host_object(hash)?.into())
     }
 
+    // Notes on metering: covered by components.
     fn verify_sig_ed25519(&self, x: Object, k: Object, s: Object) -> Result<RawVal, HostError> {
         use ed25519_dalek::Verifier;
         let public_key = self.ed25519_pub_key_from_obj_input(k)?;
         let sig = self.signature_from_obj_input("sig", s)?;
         let res = self.visit_obj(x, |bin: &Vec<u8>| {
+            self.charge_budget(CostType::VerifyEd25519Sig, bin.len() as u64)?;
             public_key
                 .verify(bin, &sig)
                 .map_err(|_| self.err_general("Failed ED25519 verification"))
@@ -1792,24 +1837,28 @@ impl CheckedEnv for Host {
         Ok(res?.into())
     }
 
+    // Notes on metering: covered by components.
     fn account_get_low_threshold(&self, a: Object) -> Result<RawVal, Self::Error> {
         let threshold = self.load_account(a)?.thresholds.0[ThresholdIndexes::Low as usize];
         let threshold = Into::<u32>::into(threshold);
         Ok(threshold.into())
     }
 
+    // Notes on metering: covered by components.
     fn account_get_medium_threshold(&self, a: Object) -> Result<RawVal, Self::Error> {
         let threshold = self.load_account(a)?.thresholds.0[ThresholdIndexes::Med as usize];
         let threshold = Into::<u32>::into(threshold);
         Ok(threshold.into())
     }
 
+    // Notes on metering: covered by components.
     fn account_get_high_threshold(&self, a: Object) -> Result<RawVal, Self::Error> {
         let threshold = self.load_account(a)?.thresholds.0[ThresholdIndexes::High as usize];
         let threshold = Into::<u32>::into(threshold);
         Ok(threshold.into())
     }
 
+    // Notes on metering: some covered. The for loop and comparisons are free (for now).
     fn account_get_signer_weight(&self, a: Object, s: Object) -> Result<RawVal, Self::Error> {
         use xdr::{Signer, SignerKey};
 
