@@ -57,6 +57,7 @@ impl Host {
 
     pub(crate) fn to_u256(&self, a: Object) -> Result<Uint256, HostError> {
         self.visit_obj(a, |bin: &Vec<u8>| {
+            self.charge_budget(CostType::BytesClone, 32)?;
             bin.try_into()
                 .map_err(|_| self.err_general("bad u256 length"))
         })
@@ -114,7 +115,10 @@ impl Host {
     {
         self.visit_obj(obj, |bin: &Vec<u8>| {
             match <[u8; N]>::try_from(bin.as_slice()) {
-                Ok(arr) => Ok(arr.into()),
+                Ok(arr) => {
+                    self.charge_budget(CostType::BytesClone, N as u64)?;
+                    Ok(arr.into())
+                }
                 Err(cvt) => Err(self.err(
                     DebugError::new(ScHostObjErrorCode::ContractHashWrongLength) // TODO: this should be renamed to be more generic
                         .msg("{} {} has wrong length for input {}")
@@ -128,6 +132,7 @@ impl Host {
 
     pub fn ed25519_pub_key_from_obj_input(&self, k: Object) -> Result<PublicKey, HostError> {
         self.visit_obj(k, |bin: &Vec<u8>| {
+            self.charge_budget(CostType::ComputeEd25519PubKey, bin.len() as u64)?;
             PublicKey::from_bytes(bin).map_err(|_| {
                 self.err_status_msg(ScHostObjErrorCode::UnexpectedType, "invalid public key")
             })
@@ -136,6 +141,7 @@ impl Host {
 
     pub fn sha256_hash_from_binary_input(&self, x: Object) -> Result<Vec<u8>, HostError> {
         self.visit_obj(x, |bin: &Vec<u8>| {
+            self.charge_budget(CostType::ComputeSha256Hash, bin.len() as u64)?;
             let hash = Sha256::digest(bin).as_slice().to_vec();
             if hash.len() != 32 {
                 return Err(self.err_general("incorrect hash size"));
@@ -146,6 +152,7 @@ impl Host {
 
     /// Converts a [`RawVal`] to an [`ScVal`] and combines it with the currently-executing
     /// [`ContractID`] to produce a [`Key`], that can be used to access ledger [`Storage`].
+    // Notes on metering: covered by components.
     pub fn storage_key_from_rawval(&self, k: RawVal) -> Result<LedgerKey, HostError> {
         Ok(LedgerKey::ContractData(LedgerKeyContractData {
             contract_id: self.get_current_contract_id()?,
@@ -153,6 +160,7 @@ impl Host {
         }))
     }
 
+    // Notes on metering: covered by components.
     pub fn contract_data_key_from_rawval(&self, k: RawVal) -> Result<LedgerKey, HostError> {
         if self.from_host_val(k)? == ScVal::Static(ScStatic::LedgerKeyContractCode) {
             return Err(self.err_status_msg(

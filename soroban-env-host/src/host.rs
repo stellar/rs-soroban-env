@@ -470,9 +470,9 @@ impl Host {
                         }
                         HostObject::U64(u) => Ok(ScObject::U64(*u)),
                         HostObject::I64(i) => Ok(ScObject::I64(*i)),
-                        HostObject::Bin(b) => {
-                            Ok(ScObject::Bytes(self.map_err(b.clone().try_into())?))
-                        }
+                        HostObject::Bin(b) => Ok(ScObject::Bytes(
+                            self.map_err(b.metered_clone(&self.0.budget)?.try_into())?,
+                        )),
                         HostObject::BigInt(bi) => self.scobj_from_bigint(bi),
                         HostObject::Hash(h) => Ok(ScObject::Hash(h.clone())),
                         HostObject::PublicKey(pk) => Ok(ScObject::PublicKey(pk.clone())),
@@ -858,23 +858,20 @@ impl CheckedEnv for Host {
         Ok(RawVal::from_void())
     }
 
+    // Notes on metering: covered by the components
     fn get_invoking_contract(&self) -> Result<Object, HostError> {
         let frames = self.0.context.borrow();
         // the previous frame must exist and must be a contract
         let hash: Hash = if frames.len() >= 2 {
             match &frames[frames.len() - 2] {
                 #[cfg(feature = "vm")]
-                Frame::ContractVM(vm) => {
-                    Ok(vm.contract_id.metered_clone(&self.0.budget)?)
-                }
+                Frame::ContractVM(vm) => Ok(vm.contract_id.metered_clone(&self.0.budget)?),
                 Frame::HostFunction(_) => {
                     Err(self.err_general("Host function context has no contract ID"))
                 }
                 Frame::Token(id) => Ok(id.clone()),
                 #[cfg(feature = "testutils")]
-                Frame::TestContract(id) => {
-                    Ok(id.metered_clone(&self.0.budget)?)
-                }
+                Frame::TestContract(id) => Ok(id.metered_clone(&self.0.budget)?),
             }
         } else {
             Err(self.err_general("no invoking contract"))
@@ -1549,6 +1546,7 @@ impl CheckedEnv for Host {
             self.visit_obj(b, move |hv: &Vec<u8>| {
                 let range = self.valid_range_from_start_span_bound(b_pos, len, hv.len())?;
                 vm.with_memory_access(self, |mem| {
+                    self.charge_budget(CostType::VmMemCpy, hv.len() as u64)?;
                     self.map_err(mem.set(pos, &hv.as_slice()[range]))
                 })?;
                 Ok(().into())
@@ -1580,6 +1578,7 @@ impl CheckedEnv for Host {
                 vnew.resize(end_idx, 0);
             }
             vm.with_memory_access(self, |mem| {
+                self.charge_budget(CostType::VmMemCpy, len as u64)?;
                 Ok(self.map_err(
                     mem.get_into(pos, &mut vnew.as_mut_slice()[b_pos as usize..end_idx]),
                 )?)
@@ -1600,16 +1599,19 @@ impl CheckedEnv for Host {
             let VmSlice { vm, pos, len } = self.decode_vmslice(lm_pos, len)?;
             let mut vnew: Vec<u8> = vec![0; len as usize];
             vm.with_memory_access(self, |mem| {
+                self.charge_budget(CostType::VmMemCpy, len as u64)?;
                 self.map_err(mem.get_into(pos, vnew.as_mut_slice()))
             })?;
             Ok(self.add_host_object(vnew)?.into())
         }
     }
 
+    // Notes on metering: covered by `add_host_object`
     fn binary_new(&self) -> Result<Object, HostError> {
         Ok(self.add_host_object(Vec::<u8>::new())?.into())
     }
 
+    // Notes on metering: `get_mut` is free
     fn binary_put(&self, b: Object, i: RawVal, u: RawVal) -> Result<Object, HostError> {
         let i = self.usize_from_rawval_u32_input("i", i)?;
         let u = self.u8_from_rawval_input("u", u)?;
@@ -1626,6 +1628,7 @@ impl CheckedEnv for Host {
         Ok(self.add_host_object(vnew)?.into())
     }
 
+    // Notes on metering: `get` is free
     fn binary_get(&self, b: Object, i: RawVal) -> Result<RawVal, HostError> {
         let i = self.usize_from_rawval_u32_input("i", i)?;
         self.visit_obj(b, |hv: &Vec<u8>| {
@@ -1640,30 +1643,38 @@ impl CheckedEnv for Host {
         let vnew = self.visit_obj(b, move |hv: &Vec<u8>| {
             self.validate_index_lt_bound(i, hv.len())?;
             let mut vnew = hv.metered_clone(&self.0.budget)?;
+            self.charge_budget(CostType::BytesDel, hv.len() as u64)?; // O(n) worst case
             vnew.remove(i as usize);
             Ok(vnew)
         })?;
         Ok(self.add_host_object(vnew)?.into())
     }
 
+    // Notes on metering: `len` is free
     fn binary_len(&self, b: Object) -> Result<RawVal, HostError> {
         let len = self.visit_obj(b, |hv: &Vec<u8>| Ok(hv.len()))?;
         self.usize_to_rawval_u32(len)
     }
 
+    // Notes on metering: `push` is free
     fn binary_push(&self, b: Object, u: RawVal) -> Result<Object, HostError> {
         let u = self.u8_from_rawval_input("u", u)?;
         let vnew = self.visit_obj(b, move |hv: &Vec<u8>| {
             let mut vnew = hv.metered_clone(&self.0.budget)?;
+            // Passing `len()` since worse case can cause reallocation.
+            self.charge_budget(CostType::BytesPush, hv.len() as u64)?;
             vnew.push(u);
             Ok(vnew)
         })?;
         Ok(self.add_host_object(vnew)?.into())
     }
 
+    // Notes on metering: `pop` is free
     fn binary_pop(&self, b: Object) -> Result<Object, HostError> {
         let vnew = self.visit_obj(b, move |hv: &Vec<u8>| {
             let mut vnew = hv.metered_clone(&self.0.budget)?;
+            // Passing `len()` since worse case can cause reallocation.
+            self.charge_budget(CostType::BytesPop, hv.len() as u64)?;
             vnew.pop()
                 .map(|_| vnew)
                 .ok_or_else(|| self.err_status(ScHostObjErrorCode::VecIndexOutOfBound))
@@ -1671,6 +1682,7 @@ impl CheckedEnv for Host {
         Ok(self.add_host_object(vnew)?.into())
     }
 
+    // Notes on metering: `first` is free
     fn binary_front(&self, b: Object) -> Result<RawVal, HostError> {
         self.visit_obj(b, |hv: &Vec<u8>| {
             hv.first()
@@ -1679,6 +1691,7 @@ impl CheckedEnv for Host {
         })
     }
 
+    // Notes on metering: `last` is free
     fn binary_back(&self, b: Object) -> Result<RawVal, HostError> {
         self.visit_obj(b, |hv: &Vec<u8>| {
             hv.last()
@@ -1693,6 +1706,7 @@ impl CheckedEnv for Host {
         let vnew = self.visit_obj(b, move |hv: &Vec<u8>| {
             self.validate_index_le_bound(i, hv.len())?;
             let mut vnew = hv.metered_clone(&self.0.budget)?;
+            self.charge_budget(CostType::BytesInsert, hv.len() as u64)?; // insert is O(n) worst case
             vnew.insert(i as usize, u);
             Ok(vnew)
         })?;
@@ -1705,6 +1719,7 @@ impl CheckedEnv for Host {
         if b2.len() > u32::MAX as usize - vnew.len() {
             return Err(self.err_status_msg(ScHostFnErrorCode::InputArgsInvalid, "u32 overflow"));
         }
+        self.charge_budget(CostType::BytesAppend, (vnew.len() + b2.len()) as u64)?; // worst case can cause rellocation
         vnew.append(&mut b2);
         Ok(self.add_host_object(vnew)?.into())
     }
@@ -1714,6 +1729,7 @@ impl CheckedEnv for Host {
         let end = self.u32_from_rawval_input("end", end)?;
         let vnew = self.visit_obj(b, move |hv: &Vec<u8>| {
             let range = self.valid_range_from_start_end_bound(start, end, hv.len())?;
+            self.charge_budget(CostType::BytesSlice, hv.len() as u64)?;
             Ok(hv.as_slice()[range].to_vec())
         })?;
         Ok(self.add_host_object(vnew)?.into())

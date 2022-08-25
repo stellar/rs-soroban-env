@@ -1,3 +1,4 @@
+use crate::budget::CostType;
 use crate::xdr::{
     ContractDataEntry, HashIdPreimage, HashIdPreimageContractId, HashIdPreimageEd25519ContractId,
     LedgerEntry, LedgerEntryData, LedgerEntryExt, LedgerKey, LedgerKeyAccount,
@@ -55,23 +56,25 @@ impl Host {
         Ok(())
     }
 
+    // notes on metering: covers the key and salt. Rest are free.
     pub fn id_preimage_from_ed25519(
         &self,
         key: Uint256,
         salt: Uint256,
     ) -> Result<Vec<u8>, HostError> {
-        //Create contract and contractID
         let pre_image = HashIdPreimage::ContractIdFromEd25519(HashIdPreimageEd25519ContractId {
             ed25519: key,
             salt,
         });
         let mut buf = Vec::new();
+        self.charge_budget(CostType::BytesClone, 64)?; // key + salt
         pre_image
             .write_xdr(&mut buf)
             .map_err(|_| self.err_general("invalid hash"))?;
         Ok(buf)
     }
 
+    // notes on metering: covers the key and salt. Rest are free.
     pub fn id_preimage_from_contract(
         &self,
         contract_id: Hash,
@@ -80,6 +83,7 @@ impl Host {
         let pre_image =
             HashIdPreimage::ContractIdFromContract(HashIdPreimageContractId { contract_id, salt });
         let mut buf = Vec::new();
+        self.charge_budget(CostType::BytesClone, 64)?; // key + salt
         pre_image
             .write_xdr(&mut buf)
             .map_err(|_| self.err_general("invalid hash"))?;
