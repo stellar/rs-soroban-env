@@ -1,5 +1,5 @@
 use crate::{
-    budget::CostType,
+    budget::{Budget, CostType},
     xdr::{ScMap, ScMapEntry, ScObject, ScVal},
     CheckedEnv, Host, HostError, Symbol,
 };
@@ -37,8 +37,10 @@ fn xdr_object_conversion() -> Result<(), HostError> {
 #[test]
 fn vm_hostfn_invocation() -> Result<(), HostError> {
     let dummy_id = [0; 32];
-    let storage = Host::test_storage_with_contracts(vec![dummy_id.into()], vec![VEC]);
-    let host = Host::with_storage(storage)
+    let budget = Budget::default();
+    let storage =
+        Host::test_storage_with_contracts(vec![dummy_id.into()], vec![VEC], budget.clone());
+    let host = Host::with_storage_and_budget(storage, budget)
         .test_budget()
         .enable_model(CostType::HostFunction);
 

@@ -1,4 +1,6 @@
 use crate::{
+    budget::Budget,
+    host::metered_map::MeteredOrdMap,
     host::Frame,
     storage::{AccessType, Footprint, Storage},
     xdr::{
@@ -68,11 +70,18 @@ fn create_contract_test_helper(
     });
 
     let mut footprint = Footprint::default();
-    footprint.record_access(&storage_key, AccessType::ReadWrite);
+    footprint.record_access(&storage_key, AccessType::ReadWrite)?;
 
     // Initialize storage and host
-    let storage = Storage::with_enforcing_footprint_and_map(footprint, OrdMap::new());
-    let host = Host::with_storage(storage);
+    let budget = Budget::default();
+    let storage = Storage::with_enforcing_footprint_and_map(
+        footprint,
+        MeteredOrdMap {
+            map: OrdMap::new(),
+            budget: budget.clone(),
+        },
+    );
+    let host = Host::with_storage_and_budget(storage, budget);
 
     // Create contract
     let obj_code = host.test_bin_obj(&code)?;
@@ -205,7 +214,8 @@ fn create_contract_using_parent_id_test() {
 
     host.visit_storage(|s: &mut Storage| {
         s.footprint
-            .record_access(&child_storage_key, AccessType::ReadWrite);
+            .record_access(&child_storage_key, AccessType::ReadWrite)
+            .unwrap();
         Ok(())
     })
     .unwrap();

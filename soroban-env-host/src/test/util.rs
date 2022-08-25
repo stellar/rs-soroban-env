@@ -1,5 +1,6 @@
 use crate::{
-    budget::CostType,
+    budget::{Budget, CostType},
+    host::metered_map::MeteredOrdMap,
     host_object::{HostObj, HostVal},
     im_rc::OrdMap,
     storage::{AccessType, Footprint, Storage},
@@ -62,6 +63,7 @@ impl Host {
     pub(crate) fn test_storage_with_contracts(
         ids: Vec<Hash>,
         codes: Vec<&'static [u8]>,
+        budget: Budget,
     ) -> Storage {
         let it = ids.iter().zip(codes.iter());
         let mut footprint = Footprint::default();
@@ -86,9 +88,11 @@ impl Host {
                 ext: LedgerEntryExt::V0,
             };
             map.insert(storage_key.clone(), Some(le));
-            footprint.record_access(&storage_key, AccessType::ReadOnly);
+            footprint
+                .record_access(&storage_key, AccessType::ReadOnly)
+                .unwrap();
         }
-        Storage::with_enforcing_footprint_and_map(footprint, map)
+        Storage::with_enforcing_footprint_and_map(footprint, MeteredOrdMap { budget, map })
     }
 
     pub(crate) fn test_scvec<T: AsScVal>(&self, vals: &[T]) -> Result<ScVec, HostError> {
