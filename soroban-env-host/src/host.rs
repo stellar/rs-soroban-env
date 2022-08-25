@@ -42,9 +42,11 @@ mod conversion;
 mod data_helper;
 mod err_helper;
 mod error;
+pub(crate) mod metered_clone;
 mod validity;
 pub use error::HostError;
 
+use self::metered_clone::MeteredClone;
 /// Saves host state (storage and objects) for rolling back a (sub-)transaction
 /// on error. A helper type used by [`FrameGuard`].
 #[derive(Clone)]
@@ -339,13 +341,13 @@ impl Host {
     fn get_current_contract_id(&self) -> Result<Hash, HostError> {
         self.with_current_frame(|frame| match frame {
             #[cfg(feature = "vm")]
-            Frame::ContractVM(vm) => Ok(vm.contract_id.clone()),
+            Frame::ContractVM(vm) => vm.contract_id.metered_clone(&self.0.budget),
             Frame::HostFunction(_) => {
                 Err(self.err_general("Host function context has no contract ID"))
             }
             Frame::Token(id) => Ok(id.clone()),
             #[cfg(feature = "testutils")]
-            Frame::TestContract(id) => Ok(id.clone()),
+            Frame::TestContract(id) => id.metered_clone(&self.0.budget),
         })
     }
 
@@ -403,8 +405,8 @@ impl Host {
         self.to_host_val(v).map(Into::into)
     }
 
-    pub fn get_events(&self) -> Events {
-        self.0.events.borrow().clone()
+    pub fn get_events(&self) -> Result<Events, HostError> {
+        self.0.events.borrow().metered_clone(&self.0.budget)
     }
 
     #[cfg(feature = "vm")]
@@ -502,7 +504,9 @@ impl Host {
             }
             ScObject::U64(u) => self.add_host_object(*u),
             ScObject::I64(i) => self.add_host_object(*i),
-            ScObject::Bytes(b) => self.add_host_object::<Vec<u8>>(b.clone().into()),
+            ScObject::Bytes(b) => {
+                self.add_host_object::<Vec<u8>>(b.as_vec().metered_clone(&self.0.budget)?.into())
+            }
             ScObject::BigInt(sbi) => {
                 let bi = match sbi {
                     ScBigInt::Zero => BigInt::default(),
@@ -576,8 +580,8 @@ impl Host {
         id_obj: Object,
     ) -> Result<(), HostError> {
         let new_contract_id = self.hash_from_obj_input("id_obj", id_obj)?;
-        let storage_key = self.contract_code_ledger_key(new_contract_id.clone());
-        if self.0.storage.borrow_mut().has(&storage_key)? {
+        let storage_key =
+            self.contract_code_ledger_key(new_contract_id.metered_clone(&self.0.budget)?);
             return Err(self.err_general("Contract already exists"));
         }
         self.store_contract_code(contract, new_contract_id, &storage_key)?;
@@ -601,11 +605,11 @@ impl Host {
         args: &[RawVal],
     ) -> Result<RawVal, HostError> {
         // Create key for storage
-        let storage_key = self.contract_code_ledger_key(id.clone());
+        let storage_key = self.contract_code_ledger_key(id.metered_clone(&self.0.budget)?);
         match self.retrieve_contract_code_from_storage(&storage_key)? {
             #[cfg(feature = "vm")]
             ScContractCode::Wasm(wasm) => {
-                let vm = Vm::new(self, id.clone(), wasm.as_slice())?;
+                let vm = Vm::new(self, id.metered_clone(&self.0.budget)?, wasm.as_slice())?;
                 vm.invoke_function_raw(self, SymbolStr::from(func).as_ref(), args)
             }
             #[cfg(not(feature = "vm"))]
@@ -860,13 +864,17 @@ impl CheckedEnv for Host {
         let hash: Hash = if frames.len() >= 2 {
             match &frames[frames.len() - 2] {
                 #[cfg(feature = "vm")]
-                Frame::ContractVM(vm) => Ok(vm.contract_id.clone()),
+                Frame::ContractVM(vm) => {
+                    Ok(vm.contract_id.metered_clone(&self.0.budget)?)
+                }
                 Frame::HostFunction(_) => {
                     Err(self.err_general("Host function context has no contract ID"))
                 }
                 Frame::Token(id) => Ok(id.clone()),
                 #[cfg(feature = "testutils")]
-                Frame::TestContract(id) => Ok(id.clone()),
+                Frame::TestContract(id) => {
+                    Ok(id.metered_clone(&self.0.budget)?)
+                }
             }
         } else {
             Err(self.err_general("no invoking contract"))
@@ -1561,7 +1569,8 @@ impl CheckedEnv for Host {
         {
             let VmSlice { vm, pos, len } = self.decode_vmslice(lm_pos, len)?;
             let b_pos = u32::try_from(b_pos)?;
-            let mut vnew = self.visit_obj(b, |hv: &Vec<u8>| Ok(hv.clone()))?;
+            let mut vnew =
+                self.visit_obj(b, |hv: &Vec<u8>| Ok(hv.metered_clone(&self.0.budget)?))?;
             let end_idx = b_pos.checked_add(len).ok_or_else(|| {
                 self.err_status_msg(ScHostFnErrorCode::InputArgsInvalid, "u32 overflow")
             })? as usize;
@@ -1605,7 +1614,7 @@ impl CheckedEnv for Host {
         let i = self.usize_from_rawval_u32_input("i", i)?;
         let u = self.u8_from_rawval_input("u", u)?;
         let vnew = self.visit_obj(b, move |hv: &Vec<u8>| {
-            let mut vnew = hv.clone();
+            let mut vnew = hv.metered_clone(&self.0.budget)?;
             match vnew.get_mut(i) {
                 None => Err(self.err_status(ScHostObjErrorCode::VecIndexOutOfBound)),
                 Some(v) => {
@@ -1630,7 +1639,7 @@ impl CheckedEnv for Host {
         let i = self.u32_from_rawval_input("i", i)?;
         let vnew = self.visit_obj(b, move |hv: &Vec<u8>| {
             self.validate_index_lt_bound(i, hv.len())?;
-            let mut vnew = hv.clone();
+            let mut vnew = hv.metered_clone(&self.0.budget)?;
             vnew.remove(i as usize);
             Ok(vnew)
         })?;
@@ -1645,7 +1654,7 @@ impl CheckedEnv for Host {
     fn binary_push(&self, b: Object, u: RawVal) -> Result<Object, HostError> {
         let u = self.u8_from_rawval_input("u", u)?;
         let vnew = self.visit_obj(b, move |hv: &Vec<u8>| {
-            let mut vnew = hv.clone();
+            let mut vnew = hv.metered_clone(&self.0.budget)?;
             vnew.push(u);
             Ok(vnew)
         })?;
@@ -1654,7 +1663,7 @@ impl CheckedEnv for Host {
 
     fn binary_pop(&self, b: Object) -> Result<Object, HostError> {
         let vnew = self.visit_obj(b, move |hv: &Vec<u8>| {
-            let mut vnew = hv.clone();
+            let mut vnew = hv.metered_clone(&self.0.budget)?;
             vnew.pop()
                 .map(|_| vnew)
                 .ok_or_else(|| self.err_status(ScHostObjErrorCode::VecIndexOutOfBound))
@@ -1683,7 +1692,7 @@ impl CheckedEnv for Host {
         let u = self.u8_from_rawval_input("u", u)?;
         let vnew = self.visit_obj(b, move |hv: &Vec<u8>| {
             self.validate_index_le_bound(i, hv.len())?;
-            let mut vnew = hv.clone();
+            let mut vnew = hv.metered_clone(&self.0.budget)?;
             vnew.insert(i as usize, u);
             Ok(vnew)
         })?;
@@ -1691,8 +1700,8 @@ impl CheckedEnv for Host {
     }
 
     fn binary_append(&self, b1: Object, b2: Object) -> Result<Object, HostError> {
-        let mut vnew = self.visit_obj(b1, |hv: &Vec<u8>| Ok(hv.clone()))?;
-        let mut b2 = self.visit_obj(b2, |hv: &Vec<u8>| Ok(hv.clone()))?;
+        let mut vnew = self.visit_obj(b1, |hv: &Vec<u8>| Ok(hv.metered_clone(&self.0.budget)?))?;
+        let mut b2 = self.visit_obj(b2, |hv: &Vec<u8>| Ok(hv.metered_clone(&self.0.budget)?))?;
         if b2.len() > u32::MAX as usize - vnew.len() {
             return Err(self.err_status_msg(ScHostFnErrorCode::InputArgsInvalid, "u32 overflow"));
         }
@@ -1767,7 +1776,11 @@ impl CheckedEnv for Host {
         let target_signer = self.to_u256(s)?;
 
         let ae = self.load_account(a)?;
-        if ae.account_id == AccountId(PublicKey::PublicKeyTypeEd25519(target_signer.clone())) {
+        if ae.account_id
+            == AccountId(PublicKey::PublicKeyTypeEd25519(
+                target_signer.metered_clone(&self.0.budget)?,
+            ))
+        {
             // Target signer is the master key, so return the master weight
             let threshold = ae.thresholds.0[ThresholdIndexes::MasterWeight as usize];
             let threshold = Into::<u32>::into(threshold);
