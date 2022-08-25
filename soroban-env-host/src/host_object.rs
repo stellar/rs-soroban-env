@@ -1,15 +1,16 @@
 use super::{
+    host::metered_map::MeteredOrdMap,
     weak_host::WeakHost,
     xdr::{self, ScObjectType},
     EnvVal, Object, RawVal,
 };
 
-use im_rc::{OrdMap, Vector};
+use im_rc::Vector;
 use num_bigint::BigInt;
 
 pub(crate) type HostObj = EnvVal<WeakHost, Object>;
 pub(crate) type HostVal = EnvVal<WeakHost, RawVal>;
-pub(crate) type HostMap = OrdMap<HostVal, HostVal>;
+pub(crate) type HostMap = MeteredOrdMap<HostVal, HostVal>;
 pub(crate) type HostVec = Vector<HostVal>;
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]

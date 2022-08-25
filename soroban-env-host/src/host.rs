@@ -43,10 +43,12 @@ mod data_helper;
 mod err_helper;
 mod error;
 pub(crate) mod metered_clone;
+pub(crate) mod metered_map;
 mod validity;
 pub use error::HostError;
 
 use self::metered_clone::MeteredClone;
+use self::metered_map::MeteredOrdMap;
 /// Saves host state (storage and objects) for rolling back a (sub-)transaction
 /// on error. A helper type used by [`FrameGuard`].
 #[derive(Clone)]
@@ -460,6 +462,7 @@ impl Host {
                             Ok(ScObject::Vec(ScVec(self.map_err(sv.try_into())?)))
                         }
                         HostObject::Map(mm) => {
+                            self.charge_budget(CostType::ScMapFromHostMap, mm.len() as u64)?;
                             let mut mv = Vec::new();
                             for (k, v) in mm.iter() {
                                 let key = self.from_host_val(k.val)?;
@@ -494,13 +497,14 @@ impl Host {
                 self.add_host_object(vv)
             }
             ScObject::Map(m) => {
+                self.charge_budget(CostType::ScMapToHostMap, m.len() as u64)?;
                 let mut mm = OrdMap::new();
                 for pair in m.0.iter() {
                     let k = self.to_host_val(&pair.key)?;
                     let v = self.to_host_val(&pair.val)?;
                     mm.insert(k, v);
                 }
-                self.add_host_object(mm)
+                self.add_host_object(HostMap::from_map(self.0.budget.clone(), mm)?)
             }
             ScObject::U64(u) => self.add_host_object(*u),
             ScObject::I64(i) => self.add_host_object(*i),
@@ -582,6 +586,7 @@ impl Host {
         let new_contract_id = self.hash_from_obj_input("id_obj", id_obj)?;
         let storage_key =
             self.contract_code_ledger_key(new_contract_id.metered_clone(&self.0.budget)?);
+        if self.0.storage.borrow_mut().has(&storage_key)? {
             return Err(self.err_general("Contract already exists"));
         }
         self.store_contract_code(contract, new_contract_id, &storage_key)?;
@@ -757,7 +762,7 @@ impl EnvBase for Host {
                     vs.iter_mut().for_each(|v| v.env = new_weak.clone());
                 }
                 HostObject::Map(m) => {
-                    *m = m
+                    let mnew = m
                         .clone()
                         .into_iter()
                         .map(|(mut k, mut v)| {
@@ -765,7 +770,11 @@ impl EnvBase for Host {
                             v.env = new_weak.clone();
                             (k, v)
                         })
-                        .collect();
+                        .collect::<OrdMap<HostVal, HostVal>>();
+                    *m = HostMap {
+                        budget: self.0.budget.clone(),
+                        map: mnew,
+                    }
                 }
                 _ => (),
             }
@@ -921,15 +930,17 @@ impl CheckedEnv for Host {
     }
 
     fn map_new(&self) -> Result<Object, HostError> {
-        Ok(self.add_host_object(HostMap::new())?.into())
+        Ok(self
+            .add_host_object(HostMap::new(self.0.budget.clone())?)?
+            .into())
     }
 
     fn map_put(&self, m: Object, k: RawVal, v: RawVal) -> Result<Object, HostError> {
         let k = self.associate_raw_val(k);
         let v = self.associate_raw_val(v);
         let mnew = self.visit_obj(m, move |hm: &HostMap| {
-            let mut mnew = hm.clone();
-            mnew.insert(k, v);
+            let mut mnew = hm.metered_clone(&self.0.budget)?;
+            mnew.insert(k, v)?;
             Ok(mnew)
         })?;
         Ok(self.add_host_object(mnew)?.into())
@@ -938,7 +949,8 @@ impl CheckedEnv for Host {
     fn map_get(&self, m: Object, k: RawVal) -> Result<RawVal, HostError> {
         let k = self.associate_raw_val(k);
         self.visit_obj(m, move |hm: &HostMap| {
-            hm.get(&k)
+            self.charge_budget(CostType::ImMapImmutEntry, 1)?;
+            hm.get(&k)?
                 .map(|v| v.to_raw())
                 .ok_or_else(|| self.err_general("map key not found")) // FIXME: need error code
         })
@@ -947,10 +959,8 @@ impl CheckedEnv for Host {
     fn map_del(&self, m: Object, k: RawVal) -> Result<Object, HostError> {
         let k = self.associate_raw_val(k);
         let mnew = self.visit_obj(m, |hm: &HostMap| {
-            let mut mnew = hm.clone();
-            mnew.remove(&k)
-                .map(|_| mnew)
-                .ok_or_else(|| self.err_general("map key not found")) // FIXME: error code
+            let mut mnew = hm.metered_clone(&self.0.budget)?;
+            mnew.remove(&k).map(|_| mnew)
         })?;
         Ok(self.add_host_object(mnew)?.into())
     }
@@ -962,7 +972,7 @@ impl CheckedEnv for Host {
 
     fn map_has(&self, m: Object, k: RawVal) -> Result<RawVal, HostError> {
         let k = self.associate_raw_val(k);
-        self.visit_obj(m, move |hm: &HostMap| Ok(hm.contains_key(&k).into()))
+        self.visit_obj(m, move |hm: &HostMap| Ok(hm.contains_key(&k)?.into()))
     }
 
     fn map_prev_key(&self, m: Object, k: RawVal) -> Result<RawVal, HostError> {
@@ -974,16 +984,16 @@ impl CheckedEnv for Host {
             // Note on performance: OrdMap does "lazy cloning", which only happens if data is modified,
             // and we are only modifying one entry. The cloned object will be thrown away in the end
             // so there is no cost associated with host object creation and allocation.
-            if let Some((pk, pv)) = hm.get_prev(&k) {
+            if let Some((pk, _)) = hm.get_prev(&k)? {
                 if *pk != k {
                     Ok(pk.to_raw())
                 } else {
-                    if let Some((pk2, pv2)) = hm
-                        .clone()
-                        .extract(pk) // removes (pk, pv) and returns an Option<(pv, updated_map)>
+                    if let Some((pk2, _)) = hm
+                        .metered_clone(&self.0.budget)?
+                        .extract(pk)? // removes (pk, pv) and returns an Option<(pv, updated_map)>
                         .ok_or_else(|| self.err_general("key not exist"))?
                         .1
-                        .get_prev(pk)
+                        .get_prev(pk)?
                     {
                         Ok(pk2.to_raw())
                     } else {
@@ -999,16 +1009,16 @@ impl CheckedEnv for Host {
     fn map_next_key(&self, m: Object, k: RawVal) -> Result<RawVal, HostError> {
         let k = self.associate_raw_val(k);
         self.visit_obj(m, |hm: &HostMap| {
-            if let Some((pk, pv)) = hm.get_next(&k) {
+            if let Some((pk, _)) = hm.get_next(&k)? {
                 if *pk != k {
                     Ok(pk.to_raw())
                 } else {
-                    if let Some((pk2, pv2)) = hm
-                        .clone()
-                        .extract(pk) // removes (pk, pv) and returns an Option<(pv, updated_map)>
+                    if let Some((pk2, _)) = hm
+                        .metered_clone(&self.0.budget)?
+                        .extract(pk)? // removes (pk, pv) and returns an Option<(pv, updated_map)>
                         .ok_or_else(|| self.err_general("key not exist"))?
                         .1
-                        .get_next(pk)
+                        .get_next(pk)?
                     {
                         Ok(pk2.to_raw())
                     } else {
@@ -1022,16 +1032,20 @@ impl CheckedEnv for Host {
     }
 
     fn map_min_key(&self, m: Object) -> Result<RawVal, HostError> {
-        self.visit_obj(m, |hm: &HostMap| match hm.get_min() {
-            Some((pk, pv)) => Ok(pk.to_raw()),
-            None => Ok(UNKNOWN_ERROR.to_raw()), //FIXME: replace with the actual status code
+        self.visit_obj(m, |hm: &HostMap| {
+            match hm.get_min()? {
+                Some((pk, pv)) => Ok(pk.to_raw()),
+                None => Ok(UNKNOWN_ERROR.to_raw()), //FIXME: replace with the actual status code
+            }
         })
     }
 
     fn map_max_key(&self, m: Object) -> Result<RawVal, HostError> {
-        self.visit_obj(m, |hm: &HostMap| match hm.get_max() {
-            Some((pk, pv)) => Ok(pk.to_raw()),
-            None => Ok(UNKNOWN_ERROR.to_raw()), //FIXME: replace with the actual status code
+        self.visit_obj(m, |hm: &HostMap| {
+            match hm.get_max()? {
+                Some((pk, pv)) => Ok(pk.to_raw()),
+                None => Ok(UNKNOWN_ERROR.to_raw()), //FIXME: replace with the actual status code
+            }
         })
     }
 
@@ -1039,7 +1053,7 @@ impl CheckedEnv for Host {
         self.visit_obj(m, |hm: &HostMap| {
             let cap = self.usize_to_u32(hm.len(), "host map too large")?;
             let mut vec = self.vec_new(cap.into())?;
-            for k in hm.keys() {
+            for k in hm.keys()? {
                 vec = self.vec_push(vec, k.to_raw())?;
             }
             Ok(vec)
@@ -1050,7 +1064,7 @@ impl CheckedEnv for Host {
         self.visit_obj(m, |hm: &HostMap| {
             let cap = self.usize_to_u32(hm.len(), "host map too large")?;
             let mut vec = self.vec_new(cap.into())?;
-            for k in hm.values() {
+            for k in hm.values()? {
                 vec = self.vec_push(vec, k.to_raw())?;
             }
             Ok(vec)
