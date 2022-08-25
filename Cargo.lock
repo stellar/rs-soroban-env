@@ -612,6 +612,7 @@ dependencies = [
 name = "soroban-env-common"
 version = "0.0.3"
 dependencies = [
+ "soroban-env-host",
  "soroban-env-macros",
  "soroban-wasmi",
  "static_assertions",
