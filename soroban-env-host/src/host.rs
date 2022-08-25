@@ -478,8 +478,9 @@ impl Host {
                             Ok(ScObject::Bytes(self.map_err(b.clone().try_into())?))
                         }
                         HostObject::BigInt(bi) => self.scobj_from_bigint(bi),
-                        HostObject::Hash(_) => todo!(),
-                        HostObject::PublicKey(_) => todo!(),
+                        HostObject::Hash(h) => Ok(ScObject::Hash(h.clone())),
+                        HostObject::PublicKey(pk) => Ok(ScObject::PublicKey(pk.clone())),
+                        HostObject::ContractCode(cc) => Ok(ScObject::ContractCode(cc.clone())),
                     },
                 }
             })
@@ -516,9 +517,9 @@ impl Host {
                 };
                 self.add_host_object(bi)
             }
-            ScObject::Hash(_) => todo!(),
-            ScObject::PublicKey(_) => todo!(),
-            ScObject::ContractCode(_) => todo!(),
+            ScObject::Hash(h) => self.add_host_object(h.clone()),
+            ScObject::PublicKey(pk) => self.add_host_object(pk.clone()),
+            ScObject::ContractCode(cc) => self.add_host_object(cc.clone()),
         }
     }
 
@@ -541,6 +542,7 @@ impl Host {
             HostObject::BigInt(_) => {}
             HostObject::Hash(_) => {}
             HostObject::PublicKey(_) => {}
+            HostObject::ContractCode(_) => {}
         }
         Ok(ho)
     }
