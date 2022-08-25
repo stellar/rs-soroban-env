@@ -1,3 +1,5 @@
+use std::{cell::RefCell, rc::Rc};
+
 use crate::{xdr::ScVmErrorCode, HostError};
 
 // TODO: move this to an XDR enum
@@ -304,7 +306,7 @@ impl Default for BudgetDimension {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Budget {
+pub(crate) struct BudgetImpl {
     pub cpu_insns: BudgetDimension,
     pub mem_bytes: BudgetDimension,
     /// Tracks the sums of _input_ values to the cost models, for purposes of
@@ -312,51 +314,63 @@ pub struct Budget {
     inputs: Vec<u64>,
 }
 
-impl Budget {
-    pub fn charge(&mut self, ty: CostType, input: u64) -> Result<(), HostError> {
-        let i = self.get_input_mut(ty);
-        *i = i.saturating_add(input);
+#[derive(Default, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Budget(pub(crate) Rc<RefCell<BudgetImpl>>);
 
-        self.cpu_insns.charge(ty, input)?;
-        self.mem_bytes.charge(ty, input)?;
+impl Budget {
+    pub fn charge(&self, ty: CostType, input: u64) -> Result<(), HostError> {
+        self.get_input_mut(ty, |i| *i = i.saturating_add(input));
+        self.0.borrow_mut().cpu_insns.charge(ty, input)?;
+        self.0.borrow_mut().mem_bytes.charge(ty, input)?;
         Ok(())
     }
 
     pub fn get_input(&self, ty: CostType) -> u64 {
-        self.inputs[ty as usize]
+        self.0.borrow().inputs[ty as usize]
     }
 
-    pub fn get_input_mut(&mut self, ty: CostType) -> &mut u64 {
-        &mut self.inputs[ty as usize]
+    fn get_input_mut<F>(&self, ty: CostType, f: F)
+    where
+        F: FnOnce(&mut u64),
+    {
+        f(&mut self.0.borrow_mut().inputs[ty as usize])
     }
 
-    pub fn reset_unlimited(&mut self) {
-        self.cpu_insns.reset(u64::MAX);
-        self.mem_bytes.reset(u64::MAX);
+    pub fn get_cpu_insns_count(&self) -> u64 {
+        self.0.borrow().cpu_insns.get_count()
+    }
+
+    pub fn get_mem_bytes_count(&self) -> u64 {
+        self.0.borrow().mem_bytes.get_count()
+    }
+
+    pub fn reset_unlimited(&self) {
+        self.0.borrow_mut().cpu_insns.reset(u64::MAX);
+        self.0.borrow_mut().mem_bytes.reset(u64::MAX);
         self.reset_inputs()
     }
 
-    pub fn reset_inputs(&mut self) {
-        for i in self.inputs.iter_mut() {
+    pub fn reset_inputs(&self) {
+        for i in self.0.borrow_mut().inputs.iter_mut() {
             *i = 0;
         }
     }
 
     #[cfg(test)]
-    pub fn reset_limits(&mut self, cpu: u64, mem: u64) {
-        self.cpu_insns.reset(cpu);
-        self.mem_bytes.reset(mem);
+    pub fn reset_limits(&self, cpu: u64, mem: u64) {
+        self.0.borrow_mut().cpu_insns.reset(cpu);
+        self.0.borrow_mut().mem_bytes.reset(mem);
         self.reset_inputs()
     }
 
     #[cfg(test)]
-    pub fn reset_models(&mut self) {
-        self.cpu_insns.reset_models();
-        self.mem_bytes.reset_models();
+    pub fn reset_models(&self) {
+        self.0.borrow_mut().cpu_insns.reset_models();
+        self.0.borrow_mut().mem_bytes.reset_models();
     }
 }
 
-impl Default for Budget {
+impl Default for BudgetImpl {
     fn default() -> Self {
         let mut b = Self {
             cpu_insns: Default::default(),

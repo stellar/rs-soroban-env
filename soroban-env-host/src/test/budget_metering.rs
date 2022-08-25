@@ -28,8 +28,8 @@ fn xdr_object_conversion() -> Result<(), HostError> {
 
     host.get_budget(|budget| {
         assert_eq!(budget.get_input(CostType::ValXdrConv), 5);
-        assert_eq!(budget.cpu_insns.get_count(), 50);
-        assert_eq!(budget.mem_bytes.get_count(), 5);
+        assert_eq!(budget.get_cpu_insns_count(), 50);
+        assert_eq!(budget.get_mem_bytes_count(), 5);
     });
     Ok(())
 }
@@ -52,8 +52,8 @@ fn vm_hostfn_invocation() -> Result<(), HostError> {
     host.try_call(obj.to_object(), sym.into(), args.clone().into())?;
     host.get_budget(|budget| {
         assert_eq!(budget.get_input(CostType::HostFunction), 4);
-        assert_eq!(budget.cpu_insns.get_count(), 40);
-        assert_eq!(budget.mem_bytes.get_count(), 4);
+        assert_eq!(budget.get_cpu_insns_count(), 40);
+        assert_eq!(budget.get_mem_bytes_count(), 4);
     });
 
     Ok(())

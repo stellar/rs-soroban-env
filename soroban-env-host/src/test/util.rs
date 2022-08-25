@@ -34,7 +34,7 @@ impl Host {
     }
 
     pub(crate) fn test_budget(self) -> Self {
-        self.get_budget_mut(|budget| {
+        self.get_budget(|budget| {
             budget.reset_limits(100_000, 100_000); // something big but finite that we may exceed
             budget.reset_models();
         });
@@ -42,9 +42,19 @@ impl Host {
     }
 
     pub(crate) fn enable_model(self, ty: CostType) -> Self {
-        self.get_budget_mut(|budget| {
-            budget.cpu_insns.get_cost_model_mut(ty).lin_param = 10;
-            budget.mem_bytes.get_cost_model_mut(ty).lin_param = 1;
+        self.get_budget(|budget| {
+            budget
+                .0
+                .borrow_mut()
+                .cpu_insns
+                .get_cost_model_mut(ty)
+                .lin_param = 10;
+            budget
+                .0
+                .borrow_mut()
+                .mem_bytes
+                .get_cost_model_mut(ty)
+                .lin_param = 1;
         });
         self
     }

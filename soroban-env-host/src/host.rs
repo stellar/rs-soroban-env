@@ -102,7 +102,7 @@ pub(crate) struct HostImpl {
     objects: RefCell<Vec<HostObject>>,
     storage: RefCell<Storage>,
     context: RefCell<Vec<Frame>>,
-    budget: RefCell<Budget>,
+    budget: Budget,
     events: RefCell<Events>,
     #[cfg(feature = "testutils")]
     contracts: RefCell<std::collections::HashMap<Hash, Rc<dyn ContractFunctionSet>>>,
@@ -149,13 +149,13 @@ impl Host {
     /// Constructs a new [`Host`] that will use the provided [`Storage`] for
     /// contract-data access functions such as
     /// [`CheckedEnv::get_contract_data`].
-    pub fn with_storage(storage: Storage) -> Self {
+    pub fn with_storage_and_budget(storage: Storage, budget: Budget) -> Self {
         Self(Rc::new(HostImpl {
             ledger: RefCell::new(None),
             objects: Default::default(),
             storage: RefCell::new(storage),
             context: Default::default(),
-            budget: Default::default(),
+            budget,
             events: Default::default(),
             #[cfg(feature = "testutils")]
             contracts: Default::default(),
@@ -179,22 +179,15 @@ impl Host {
     /// Helper for mutating the [`Budget`] held in this [`Host`], either to
     /// allocate it on contract creation or to deplete it on callbacks from
     /// the VM or host functions.
-    pub fn get_budget_mut<T, F>(&self, f: F) -> T
-    where
-        F: FnOnce(&mut Budget) -> T,
-    {
-        f(&mut *self.0.budget.borrow_mut())
-    }
-
     pub fn get_budget<T, F>(&self, f: F) -> T
     where
-        F: FnOnce(&Budget) -> T,
+        F: FnOnce(Budget) -> T,
     {
-        f(&*self.0.budget.borrow())
+        f(self.0.budget.clone())
     }
 
     pub fn charge_budget(&self, ty: CostType, input: u64) -> Result<(), HostError> {
-        self.get_budget_mut(|budget| budget.charge(ty, input))
+        self.0.budget.clone().charge(ty, input)
     }
 
     pub(crate) fn get_events_mut<F, U>(&self, f: F) -> Result<U, HostError>
@@ -262,7 +255,8 @@ impl Host {
         Rc::try_unwrap(self.0)
             .map(|host_impl| {
                 let storage = host_impl.storage.into_inner();
-                let budget = host_impl.budget.into_inner();
+                // FIXME: need to return the unique budget impl rather than Rc
+                let budget = host_impl.budget;
                 let events = host_impl.events.into_inner();
                 (storage, budget, events)
             })
