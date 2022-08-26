@@ -1925,4 +1925,8 @@ impl CheckedEnv for Host {
             .with_ledger_info(|li| self.add_host_object(li.network_id.clone()))?
             .into())
     }
+
+    fn bigint_from_bytes_be(&self, x: Object, sign: RawVal) -> Result<Object, Self::Error> {
+        todo!()
+    }
 }
