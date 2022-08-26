@@ -59,6 +59,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "base64"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "904dfeac50f3cdaba28fc6f57fdcddb75f49ed61346676a78c4ffe55877802fd"
+
+[[package]]
 name = "bitmaps"
 version = "2.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -722,6 +728,7 @@ name = "stellar-xdr"
 version = "0.0.1"
 source = "git+https://github.com/stellar/rs-stellar-xdr?rev=925dcea0#925dcea0b48ff78168085a8137c0b7d029b5ba74"
 dependencies = [
+ "base64",
  "serde",
 ]
 

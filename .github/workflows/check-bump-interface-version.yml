@@ -18,7 +18,7 @@ jobs:
       with:
         github-token: ${{github.token}}
         diffContainsRegex: " interface_version: [0-9]+,"
-    - name: "check soroban-env-host/wasm-examples/*.wasm were modified"
+    - name: "check soroban-test-wasms/wasm-workspace/opt/*.wasm were modified"
       uses: brettcannon/check-for-changed-files@36aaa76474fc979db4e19e44c05e8e978759ac01
       with:
-        file-pattern: "soroban-env-host/wasm-examples/*.wasm"
+        file-pattern: "soroban-test-wasms/wasm-workspace/opt/*.wasm"
