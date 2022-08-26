@@ -1,4 +1,7 @@
-use std::{cell::RefCell, rc::Rc};
+use std::{
+    cell::{RefCell, RefMut},
+    rc::Rc,
+};
 
 use crate::{xdr::ScVmErrorCode, HostError};
 
@@ -318,11 +321,20 @@ pub(crate) struct BudgetImpl {
 pub struct Budget(pub(crate) Rc<RefCell<BudgetImpl>>);
 
 impl Budget {
+    // Helper function to avoid multiple borrow_mut
+    fn mut_budget<T, F>(&self, f: F) -> Result<T, HostError>
+    where
+        F: FnOnce(RefMut<BudgetImpl>) -> Result<T, HostError>,
+    {
+        f(self.0.borrow_mut())
+    }
+
     pub fn charge(&self, ty: CostType, input: u64) -> Result<(), HostError> {
         self.get_input_mut(ty, |i| *i = i.saturating_add(input));
-        self.0.borrow_mut().cpu_insns.charge(ty, input)?;
-        self.0.borrow_mut().mem_bytes.charge(ty, input)?;
-        Ok(())
+        self.mut_budget(|mut b| {
+            b.cpu_insns.charge(ty, input)?;
+            b.mem_bytes.charge(ty, input)
+        })
     }
 
     pub fn get_input(&self, ty: CostType) -> u64 {
@@ -345,8 +357,12 @@ impl Budget {
     }
 
     pub fn reset_unlimited(&self) {
-        self.0.borrow_mut().cpu_insns.reset(u64::MAX);
-        self.0.borrow_mut().mem_bytes.reset(u64::MAX);
+        self.mut_budget(|mut b| {
+            b.cpu_insns.reset(u64::MAX);
+            b.mem_bytes.reset(u64::MAX);
+            Ok(())
+        })
+        .unwrap(); // impossible to panic
         self.reset_inputs()
     }
 
@@ -358,15 +374,24 @@ impl Budget {
 
     #[cfg(test)]
     pub fn reset_limits(&self, cpu: u64, mem: u64) {
-        self.0.borrow_mut().cpu_insns.reset(cpu);
-        self.0.borrow_mut().mem_bytes.reset(mem);
+        self.mut_budget(|mut b| {
+            b.cpu_insns.reset(cpu);
+            b.mem_bytes.reset(mem);
+            Ok(())
+        })
+        .unwrap(); // impossible to panic
+
         self.reset_inputs()
     }
 
     #[cfg(test)]
     pub fn reset_models(&self) {
-        self.0.borrow_mut().cpu_insns.reset_models();
-        self.0.borrow_mut().mem_bytes.reset_models();
+        self.mut_budget(|mut b| {
+            b.cpu_insns.reset_models();
+            b.mem_bytes.reset_models();
+            Ok(())
+        })
+        .unwrap(); // impossible to panic
     }
 }
 

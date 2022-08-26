@@ -261,7 +261,6 @@ impl Host {
         Rc::try_unwrap(self.0)
             .map(|host_impl| {
                 let storage = host_impl.storage.into_inner();
-                // FIXME: need to return the unique budget impl rather than Rc
                 let budget = host_impl.budget;
                 let events = host_impl.events.into_inner();
                 (storage, budget, events)
@@ -355,9 +354,9 @@ impl Host {
             Frame::HostFunction(_) => {
                 Err(self.err_general("Host function context has no contract ID"))
             }
-            Frame::Token(id) => Ok(id.clone()),
+            Frame::Token(id) => id.metered_clone(&self.0.budget),
             #[cfg(feature = "testutils")]
-            Frame::TestContract(id) => id.metered_clone(&self.0.budget),
+            Frame::TestContract(id) => Ok(id.clone()),
         })
     }
 
@@ -406,7 +405,9 @@ impl Host {
         HostVal { env, val }
     }
 
-    // Notes on metering: free. But we might want to charge these. Maybe in bulk.
+    // Notes on metering: free. Any non-trivial work involved in converting from CVT to RawVal
+    // needs to go through host functions and involves host objects, which are all covered by
+    // the components' metering.
     pub(crate) fn associate_env_val_type<V: Val, CVT: IntoVal<WeakHost, RawVal>>(
         &self,
         v: CVT,
@@ -674,6 +675,7 @@ impl Host {
         // Get contract ID
         let id = self.hash_from_obj_input("contract", contract)?;
 
+        // "testutils" is not covered by budget metering.
         #[cfg(feature = "testutils")]
         {
             // This looks a little un-idiomatic, but this avoids maintaining a borrow of
@@ -746,7 +748,7 @@ impl Host {
         self.from_host_val(rv)
     }
 
-    // TODO: should we charge budget for testutils?
+    // "testutils" is not covered by budget metering.
     #[cfg(feature = "testutils")]
     pub fn register_test_contract(
         &self,
@@ -763,6 +765,7 @@ impl Host {
         }
     }
 
+    // "testutils" is not covered by budget metering.
     #[cfg(feature = "testutils")]
     pub fn register_test_contract_wasm(
         &self,
@@ -929,7 +932,7 @@ impl CheckedEnv for Host {
                 }
                 Frame::Token(id) => Ok(id.clone()),
                 #[cfg(feature = "testutils")]
-                Frame::TestContract(id) => Ok(id.metered_clone(&self.0.budget)?),
+                Frame::TestContract(id) => Ok(id.clone()), // no metering
             }
         } else {
             Err(self.err_general("no invoking contract"))
@@ -1580,8 +1583,12 @@ impl CheckedEnv for Host {
         let mut buf = Vec::<u8>::new();
         scv.write_xdr(&mut buf)
             .map_err(|_| self.err_general("failed to serialize ScVal"))?;
-        // TODO: `charge` should go before `write_xdr`. How can we know the size of
-        // object beforehand?
+        // Notes on metering": "write first charge later" means we could potentially underestimate
+        // the cost by the largest sized host object. Since we are bounding the memory limit of a
+        // host object, it is probably fine.
+        // Ideally, `charge` should go before `write_xdr`, which would require us to either 1.
+        // make serialization an iterative / chunked operation. Or 2. have a XDR method to
+        // calculate the serialized size. Both would require non-trivial XDR changes.
         self.charge_budget(CostType::ValSer, buf.len() as u64)?;
         Ok(self.add_host_object(buf)?.into())
     }
