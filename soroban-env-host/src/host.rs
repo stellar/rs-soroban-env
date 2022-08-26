@@ -944,7 +944,8 @@ impl CheckedEnv for Host {
         Ok(self.add_host_object(<Vec<u8>>::from(hash.0))?.into())
     }
 
-    // Notes on metering: covered by `unchecked_visit_val_obj`.
+    // FIXME: the `cmp` method is not metered. Need a "metered" version (similar to metered_clone)
+    // and use that.
     fn obj_cmp(&self, a: RawVal, b: RawVal) -> Result<i64, HostError> {
         let res = unsafe {
             self.unchecked_visit_val_obj(a, |ao| {
