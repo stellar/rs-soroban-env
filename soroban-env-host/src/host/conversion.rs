@@ -9,10 +9,13 @@ use crate::{
     Host, HostError, Object, RawVal, Tag,
 };
 use ed25519_dalek::{PublicKey, Signature, SIGNATURE_LENGTH};
-use num_bigint::{BigInt, Sign};
+use num_bigint::Sign;
 use sha2::{Digest, Sha256};
 
+use super::metered_bigint::MeteredBigInt;
+
 impl Host {
+    // Notes on metering: free
     pub(crate) fn usize_to_u32(&self, u: usize, msg: &'static str) -> Result<u32, HostError> {
         match u32::try_from(u) {
             Ok(v) => Ok(v),
@@ -20,6 +23,7 @@ impl Host {
         }
     }
 
+    // Notes on metering: free
     pub(crate) fn usize_to_rawval_u32(&self, u: usize) -> Result<RawVal, HostError> {
         match u32::try_from(u) {
             Ok(v) => Ok(v.into()),
@@ -27,6 +31,7 @@ impl Host {
         }
     }
 
+    // Notes on metering: free
     pub(crate) fn usize_from_rawval_u32_input(
         &self,
         name: &'static str,
@@ -35,6 +40,7 @@ impl Host {
         self.u32_from_rawval_input(name, r).map(|u| u as usize)
     }
 
+    // Notes on metering: free
     pub(crate) fn u32_from_rawval_input(
         &self,
         name: &'static str,
@@ -53,11 +59,13 @@ impl Host {
 
     pub(crate) fn to_u256(&self, a: Object) -> Result<Uint256, HostError> {
         self.visit_obj(a, |bin: &Vec<u8>| {
+            self.charge_budget(CostType::BytesClone, 32)?;
             bin.try_into()
                 .map_err(|_| self.err_general("bad u256 length"))
         })
     }
 
+    // Notes on metering: free
     pub(crate) fn u8_from_rawval_input(
         &self,
         name: &'static str,
@@ -109,7 +117,10 @@ impl Host {
     {
         self.visit_obj(obj, |bin: &Vec<u8>| {
             match <[u8; N]>::try_from(bin.as_slice()) {
-                Ok(arr) => Ok(arr.into()),
+                Ok(arr) => {
+                    self.charge_budget(CostType::BytesClone, N as u64)?;
+                    Ok(arr.into())
+                }
                 Err(cvt) => Err(self.err(
                     DebugError::new(ScHostObjErrorCode::ContractHashWrongLength) // TODO: this should be renamed to be more generic
                         .msg("{} {} has wrong length for input {}")
@@ -123,6 +134,7 @@ impl Host {
 
     pub fn ed25519_pub_key_from_obj_input(&self, k: Object) -> Result<PublicKey, HostError> {
         self.visit_obj(k, |bin: &Vec<u8>| {
+            self.charge_budget(CostType::ComputeEd25519PubKey, bin.len() as u64)?;
             PublicKey::from_bytes(bin).map_err(|_| {
                 self.err_status_msg(ScHostObjErrorCode::UnexpectedType, "invalid public key")
             })
@@ -131,6 +143,7 @@ impl Host {
 
     pub fn sha256_hash_from_binary_input(&self, x: Object) -> Result<Vec<u8>, HostError> {
         self.visit_obj(x, |bin: &Vec<u8>| {
+            self.charge_budget(CostType::ComputeSha256Hash, bin.len() as u64)?;
             let hash = Sha256::digest(bin).as_slice().to_vec();
             if hash.len() != 32 {
                 return Err(self.err_general("incorrect hash size"));
@@ -141,6 +154,7 @@ impl Host {
 
     /// Converts a [`RawVal`] to an [`ScVal`] and combines it with the currently-executing
     /// [`ContractID`] to produce a [`Key`], that can be used to access ledger [`Storage`].
+    // Notes on metering: covered by components.
     pub fn storage_key_from_rawval(&self, k: RawVal) -> Result<LedgerKey, HostError> {
         Ok(LedgerKey::ContractData(LedgerKeyContractData {
             contract_id: self.get_current_contract_id()?,
@@ -148,6 +162,7 @@ impl Host {
         }))
     }
 
+    // Notes on metering: covered by components.
     pub fn contract_data_key_from_rawval(&self, k: RawVal) -> Result<LedgerKey, HostError> {
         if self.from_host_val(k)? == ScVal::Static(ScStatic::LedgerKeyContractCode) {
             return Err(self.err_status_msg(
@@ -158,9 +173,8 @@ impl Host {
         self.storage_key_from_rawval(k)
     }
 
-    // TODO: impl a `TryFrom` trait once the "metered_" class is ready
-    pub(crate) fn scobj_from_bigint(&self, bi: &BigInt) -> Result<ScObject, HostError> {
-        let (sign, data) = bi.to_bytes_be();
+    pub(crate) fn scobj_from_bigint(&self, bi: &MeteredBigInt) -> Result<ScObject, HostError> {
+        let (sign, data) = bi.to_bytes_be()?;
         match sign {
             Sign::Minus => Ok(ScObject::BigInt(ScBigInt::Negative(
                 self.map_err(data.try_into())?,

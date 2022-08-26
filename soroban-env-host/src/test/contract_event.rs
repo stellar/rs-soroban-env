@@ -54,7 +54,7 @@ fn contract_event() -> Result<(), HostError> {
 
     // Fish out the last contract event and check that it is
     // correct, and formats as expected.
-    let events = host.get_events();
+    let events = host.get_events()?;
     match events.0.last() {
         Some(HostEvent::Contract(ce)) => {
             assert_eq!(*ce, event_ref)

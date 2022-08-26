@@ -5,6 +5,7 @@ use crate::xdr::{ScHostFnErrorCode, ScHostObjErrorCode};
 use crate::{Host, HostError, RawVal};
 
 impl Host {
+    // Notes on metering: free
     pub(crate) fn validate_index_lt_bound(
         &self,
         index: u32,
@@ -19,6 +20,7 @@ impl Host {
         Ok(())
     }
 
+    // Notes on metering: free
     pub(crate) fn validate_index_le_bound(
         &self,
         index: u32,
@@ -33,6 +35,7 @@ impl Host {
         Ok(())
     }
 
+    // Notes on metering: free
     pub(crate) fn valid_range_from_start_end_bound(
         &self,
         start: u32,
@@ -65,6 +68,7 @@ impl Host {
         })
     }
 
+    // Notes on metering: free
     pub(crate) fn valid_range_from_start_span_bound(
         &self,
         start: u32,

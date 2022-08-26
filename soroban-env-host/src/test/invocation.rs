@@ -1,6 +1,7 @@
 use soroban_env_common::{xdr::ScVmErrorCode, RawVal};
 
 use crate::{
+    budget::Budget,
     vm::Vm,
     xdr::{Hash, ScHostObjErrorCode, ScVal, ScVec},
     CheckedEnv, Host, HostError, Status, Symbol, Tag,
@@ -34,8 +35,10 @@ fn invoke_single_contract_function() -> Result<(), HostError> {
 #[test]
 fn invoke_cross_contract() -> Result<(), HostError> {
     let dummy_id = [0; 32];
-    let storage = Host::test_storage_with_contracts(vec![dummy_id.into()], vec![ADD_I32]);
-    let host = Host::with_storage(storage);
+    let budget = Budget::default();
+    let storage =
+        Host::test_storage_with_contracts(vec![dummy_id.into()], vec![ADD_I32], budget.clone());
+    let host = Host::with_storage_and_budget(storage, budget);
     let obj = host.test_bin_obj(&dummy_id)?;
     // prepare arguments
     let sym = Symbol::from_str("add");
@@ -51,8 +54,10 @@ fn invoke_cross_contract() -> Result<(), HostError> {
 #[test]
 fn invoke_cross_contract_with_err() -> Result<(), HostError> {
     let dummy_id = [0; 32];
-    let storage = Host::test_storage_with_contracts(vec![dummy_id.into()], vec![VEC]);
-    let host = Host::with_storage(storage);
+    let budget = Budget::default();
+    let storage =
+        Host::test_storage_with_contracts(vec![dummy_id.into()], vec![VEC], budget.clone());
+    let host = Host::with_storage_and_budget(storage, budget);
 
     let obj = host.test_bin_obj(&dummy_id)?;
     // prepare arguments
@@ -76,11 +81,13 @@ fn invoke_cross_contract_with_err() -> Result<(), HostError> {
 fn invoke_cross_contract_indirect() -> Result<(), HostError> {
     let dummy_id0 = [0; 32]; // the calling contract
     let dummy_id1 = [1; 32]; // the called contract
+    let budget = Budget::default();
     let storage = Host::test_storage_with_contracts(
         vec![dummy_id0.into(), dummy_id1.into()],
         vec![INVOKE_CONTRACT, ADD_I32],
+        budget.clone(),
     );
-    let host = Host::with_storage(storage);
+    let host = Host::with_storage_and_budget(storage, budget);
     // prepare arguments
     let id0_obj = host.test_bin_obj(&dummy_id0)?;
     let id1_obj = host.test_bin_obj(&dummy_id1)?;
@@ -97,12 +104,14 @@ fn invoke_cross_contract_indirect() -> Result<(), HostError> {
 #[test]
 fn invoke_cross_contract_indirect_err() -> Result<(), HostError> {
     let dummy_id0 = [0; 32]; // the calling contract
-    let dummy_id1 = [1; 32]; // the called (failing) contract
+    let dummy_id1 = [1; 32]; // the called contract
+    let budget = Budget::default();
     let storage = Host::test_storage_with_contracts(
         vec![dummy_id0.into(), dummy_id1.into()],
         vec![INVOKE_CONTRACT, ADD_I32],
+        budget.clone(),
     );
-    let host = Host::with_storage(storage);
+    let host = Host::with_storage_and_budget(storage, budget);
     // prepare arguments
     let id0_obj = host.test_bin_obj(&dummy_id0)?;
     let id1_obj = host.test_bin_obj(&dummy_id1)?;

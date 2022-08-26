@@ -1,5 +1,5 @@
 use crate::{
-    budget::CostType,
+    budget::{Budget, CostType},
     xdr::{ScMap, ScMapEntry, ScObject, ScVal},
     CheckedEnv, Host, HostError, Symbol,
 };
@@ -28,8 +28,8 @@ fn xdr_object_conversion() -> Result<(), HostError> {
 
     host.get_budget(|budget| {
         assert_eq!(budget.get_input(CostType::ValXdrConv), 5);
-        assert_eq!(budget.cpu_insns.get_count(), 50);
-        assert_eq!(budget.mem_bytes.get_count(), 5);
+        assert_eq!(budget.get_cpu_insns_count(), 50);
+        assert_eq!(budget.get_mem_bytes_count(), 5);
     });
     Ok(())
 }
@@ -37,8 +37,10 @@ fn xdr_object_conversion() -> Result<(), HostError> {
 #[test]
 fn vm_hostfn_invocation() -> Result<(), HostError> {
     let dummy_id = [0; 32];
-    let storage = Host::test_storage_with_contracts(vec![dummy_id.into()], vec![VEC]);
-    let host = Host::with_storage(storage)
+    let budget = Budget::default();
+    let storage =
+        Host::test_storage_with_contracts(vec![dummy_id.into()], vec![VEC], budget.clone());
+    let host = Host::with_storage_and_budget(storage, budget)
         .test_budget()
         .enable_model(CostType::HostFunction);
 
@@ -52,8 +54,8 @@ fn vm_hostfn_invocation() -> Result<(), HostError> {
     host.try_call(obj.to_object(), sym.into(), args.clone().into())?;
     host.get_budget(|budget| {
         assert_eq!(budget.get_input(CostType::HostFunction), 4);
-        assert_eq!(budget.cpu_insns.get_count(), 40);
-        assert_eq!(budget.mem_bytes.get_count(), 4);
+        assert_eq!(budget.get_cpu_insns_count(), 40);
+        assert_eq!(budget.get_mem_bytes_count(), 4);
     });
 
     Ok(())
