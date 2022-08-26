@@ -161,6 +161,11 @@ macro_rules! call_macro_with_all_host_functions {
                 {"6", fn get_ledger_timestamp() -> Object }
                 /// Return the network identity of the current ledger as bytes.
                 {"7", fn get_ledger_network_id() -> Object }
+                /// Returns the full call stack from the first contract call
+                /// to the current one as a vector of vectors, where the inside
+                /// vector contains the contract id as Hash, and a function as
+                /// a Symbol.
+                {"8", fn get_current_call_stack() -> Object }
             }
 
             mod u64 "u" {
