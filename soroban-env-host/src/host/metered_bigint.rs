@@ -140,7 +140,7 @@ impl MeteredBigInt {
     }
 
     pub(crate) fn div(&self, other: &Self) -> Result<Self, HostError> {
-        assert!(!other.is_zero());
+        debug_assert!(!other.is_zero());
         self.charge_div_rem(cmp::max(self.bits(), other.bits()))?;
         Ok(Self {
             budget: self.budget.clone(),
@@ -149,7 +149,7 @@ impl MeteredBigInt {
     }
 
     pub(crate) fn rem(&self, other: &Self) -> Result<Self, HostError> {
-        assert!(!other.is_zero());
+        debug_assert!(!other.is_zero());
         self.charge_div_rem(cmp::max(self.bits(), other.bits()))?;
         Ok(Self {
             budget: self.budget.clone(),
@@ -301,9 +301,9 @@ impl MeteredBigInt {
     }
 
     pub(crate) fn from_bytes_be(
+        budget: Budget,
         sign: Sign,
         bytes: &[u8],
-        budget: Budget,
     ) -> Result<Self, HostError> {
         budget.charge(CostType::BigIntFromBytes, bytes.len() as u64)?;
         Ok(Self {
@@ -315,6 +315,20 @@ impl MeteredBigInt {
     pub(crate) fn to_bytes_be(&self) -> Result<(Sign, Vec<u8>), HostError> {
         self.charge_to_bytes(self.bits())?;
         Ok((&self.num).to_bytes_be())
+    }
+
+    pub(crate) fn from_radix_be(
+        budget: Budget,
+        sign: Sign,
+        buf: &[u8],
+        radix: u32,
+    ) -> Result<Self, HostError> {
+        debug_assert!(2 <= radix && radix <= 256);
+        budget.charge(CostType::BigIntFromBytes, buf.len() as u64)?;
+        // TODO: proper error code "digit cannot be >= radix"
+        let num = BigInt::from_radix_be(sign, buf, radix)
+            .ok_or(Into::<HostError>::into(ScUnknownErrorCode::General))?;
+        Ok(Self { budget, num })
     }
 
     pub(crate) fn to_radix_be(&self, r: u32) -> Result<(Sign, Vec<u8>), HostError> {
@@ -334,7 +348,7 @@ impl Clone for MeteredBigInt {
 
 impl MeteredClone for MeteredBigInt {
     fn metered_clone(&self, budget: &Budget) -> Result<Self, HostError> {
-        assert!(Rc::ptr_eq(&self.budget.0, &budget.0));
+        debug_assert!(Rc::ptr_eq(&self.budget.0, &budget.0));
         self.charge_new()?;
         Ok(self.clone())
     }
@@ -350,14 +364,14 @@ impl Eq for MeteredBigInt {}
 
 impl PartialOrd for MeteredBigInt {
     fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
-        assert!(Rc::ptr_eq(&self.budget.0, &other.budget.0));
+        debug_assert!(Rc::ptr_eq(&self.budget.0, &other.budget.0));
         self.num.partial_cmp(&other.num)
     }
 }
 
 impl Ord for MeteredBigInt {
     fn cmp(&self, other: &Self) -> cmp::Ordering {
-        assert!(Rc::ptr_eq(&self.budget.0, &other.budget.0));
+        debug_assert!(Rc::ptr_eq(&self.budget.0, &other.budget.0));
         self.num.cmp(&other.num)
     }
 }

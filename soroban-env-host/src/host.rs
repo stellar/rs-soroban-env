@@ -550,14 +550,14 @@ impl Host {
                 let bi = match sbi {
                     ScBigInt::Zero => MeteredBigInt::new(self.0.budget.clone())?,
                     ScBigInt::Positive(bytes) => MeteredBigInt::from_bytes_be(
+                        self.0.budget.clone(),
                         Sign::Plus,
                         bytes.as_ref(),
-                        self.0.budget.clone(),
                     )?,
                     ScBigInt::Negative(bytes) => MeteredBigInt::from_bytes_be(
+                        self.0.budget.clone(),
                         Sign::Minus,
                         bytes.as_ref(),
-                        self.0.budget.clone(),
                     )?,
                 };
                 self.add_host_object(bi)
@@ -1586,6 +1586,35 @@ impl CheckedEnv for Host {
         let r: u32 = self.u32_from_rawval_input("radix", radix)?;
         let sign_bytes = self.visit_obj(x, |a: &MeteredBigInt| a.to_radix_be(r))?;
         Ok(self.add_host_object(sign_bytes.1)?.into())
+    }
+
+    fn bigint_from_bytes_be(&self, sign: RawVal, bytes: Object) -> Result<Object, Self::Error> {
+        let s = self.bigint_sign_from_rawval(sign)?;
+        let res = self.visit_obj(bytes, |b: &Vec<u8>| {
+            MeteredBigInt::from_bytes_be(self.0.budget.clone(), s, b)
+        })?;
+        Ok(self.add_host_object(res)?.into())
+    }
+
+    fn bigint_from_radix_be(
+        &self,
+        sign: RawVal,
+        buf: Object,
+        radix: RawVal,
+    ) -> Result<Object, Self::Error> {
+        let s = self.bigint_sign_from_rawval(sign)?;
+        let r = self.bigint_radix_from_rawval(radix)?;
+        let res = self.visit_obj(buf, |b: &Vec<u8>| {
+            if r != 256 && b.iter().any(|&b| b >= r as u8) {
+                return Err(self.err(
+                    DebugError::new(ScHostFnErrorCode::InputArgsInvalid)
+                        .msg("{} contains invalid digit, must be < radix")
+                        .arg(buf.to_raw()),
+                ));
+            }
+            MeteredBigInt::from_radix_be(self.0.budget.clone(), s, b, r)
+        })?;
+        Ok(self.add_host_object(res)?.into())
     }
 
     // Notes on metering: covered by components
