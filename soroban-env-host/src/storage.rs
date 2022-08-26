@@ -9,9 +9,8 @@
 
 use std::rc::Rc;
 
-use crate::budget::CostType;
 use crate::xdr::{LedgerEntry, LedgerKey, ScHostStorageErrorCode};
-use crate::{host::metered_map::MeteredOrdMap, Host, HostError};
+use crate::{host::metered_map::MeteredOrdMap, HostError};
 
 /// A helper type used by [Footprint] to designate which ways
 /// a given [LedgerKey] is accessed, or is allowed to be accessed,
@@ -41,11 +40,11 @@ pub trait SnapshotSource {
 /// transaction has an unknown [Footprint] it can be calculated by
 /// running a "preflight" execution in [FootprintMode::Recording],
 /// against a suitably fresh [SnapshotSource].
+// Notes on metering: covered by the underneath `MeteredOrdMap`.
 #[derive(Clone, Default)]
 pub struct Footprint(pub MeteredOrdMap<LedgerKey, AccessType>);
 
 impl Footprint {
-    // notes on metering: covered by the map
     pub fn record_access(&mut self, key: &LedgerKey, ty: AccessType) -> Result<(), HostError> {
         if let Some(existing) = self.0.get(key)? {
             match (existing, ty.clone()) {
@@ -65,7 +64,6 @@ impl Footprint {
         }
     }
 
-    // notes on metering: covered by the map
     pub fn enforce_access(&mut self, key: &LedgerKey, ty: AccessType) -> Result<(), HostError> {
         if let Some(existing) = self.0.get(key)? {
             match (existing, ty) {
@@ -114,6 +112,8 @@ pub struct Storage {
     pub map: MeteredOrdMap<LedgerKey, Option<LedgerEntry>>,
 }
 
+// Notes on metering: all storage operations: `put`, `get`, `del`, `has` are
+// covered by the underneath `MeteredOrdMap` and the `Footprint`'s own map.
 impl Storage {
     /// Constructs a new [Storage] in [FootprintMode::Enforcing] using a
     /// given [Footprint] and a storage map populated with all the keys
@@ -172,11 +172,6 @@ impl Storage {
         }
     }
 
-    pub fn metered_get(&mut self, host: &Host, key: &LedgerKey) -> Result<LedgerEntry, HostError> {
-        host.charge_budget(CostType::ImMapImmutEntry, 2)?; // 1 storage map entry + 1 access map entry
-        self.get(key)
-    }
-
     fn put_opt(&mut self, key: &LedgerKey, val: Option<LedgerEntry>) -> Result<(), HostError> {
         let ty = AccessType::ReadWrite;
         match self.mode {
@@ -204,17 +199,6 @@ impl Storage {
         self.put_opt(key, Some(val.clone()))
     }
 
-    pub fn metered_put(
-        &mut self,
-        host: &Host,
-        key: &LedgerKey,
-        val: &LedgerEntry,
-    ) -> Result<(), HostError> {
-        host.charge_budget(CostType::ImMapMutEntry, 1)?; // storage map
-        host.charge_budget(CostType::ImMapImmutEntry, 1)?; // access map
-        self.put(key, val)
-    }
-
     /// Attempts to delete the [LedgerEntry] associated with a given [LedgerKey]
     /// in the [Storage].
     ///
@@ -226,12 +210,6 @@ impl Storage {
     /// [AccessType::ReadWrite].
     pub fn del(&mut self, key: &LedgerKey) -> Result<(), HostError> {
         self.put_opt(key, None)
-    }
-
-    pub fn metered_del(&mut self, host: &Host, key: &LedgerKey) -> Result<(), HostError> {
-        host.charge_budget(CostType::ImMapMutEntry, 1)?; // storage map
-        host.charge_budget(CostType::ImMapImmutEntry, 1)?; // access map
-        self.del(key)
     }
 
     /// Attempts to determine the presence of a [LedgerEntry] associated with a
@@ -265,11 +243,6 @@ impl Storage {
                 }
             }
         }
-    }
-
-    pub fn metered_has(&mut self, host: &Host, key: &LedgerKey) -> Result<bool, HostError> {
-        host.charge_budget(CostType::ImMapImmutEntry, 2)?; // 1 storage map entry + 1 access map entry
-        self.has(key)
     }
 }
 

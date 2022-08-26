@@ -624,12 +624,7 @@ impl Host {
         let new_contract_id = self.hash_from_obj_input("id_obj", id_obj)?;
         let storage_key =
             self.contract_code_ledger_key(new_contract_id.metered_clone(&self.0.budget)?);
-        if self
-            .0
-            .storage
-            .borrow_mut()
-            .metered_has(self, &storage_key)?
-        {
+        if self.0.storage.borrow_mut().has(&storage_key)? {
             return Err(self.err_general("Contract already exists"));
         }
         self.store_contract_code(contract, new_contract_id, &storage_key)?;
@@ -1245,21 +1240,21 @@ impl CheckedEnv for Host {
             data,
             ext: LedgerEntryExt::V0,
         };
-        self.0.storage.borrow_mut().metered_put(self, &key, &val)?;
+        self.0.storage.borrow_mut().put(&key, &val)?;
         Ok(().into())
     }
 
     // Notes on metering: covered by components
     fn has_contract_data(&self, k: RawVal) -> Result<RawVal, HostError> {
         let key = self.storage_key_from_rawval(k)?;
-        let res = self.0.storage.borrow_mut().metered_has(self, &key)?;
+        let res = self.0.storage.borrow_mut().has(&key)?;
         Ok(RawVal::from_bool(res))
     }
 
     // Notes on metering: covered by components
     fn get_contract_data(&self, k: RawVal) -> Result<RawVal, HostError> {
         let key = self.storage_key_from_rawval(k)?;
-        match self.0.storage.borrow_mut().metered_get(self, &key)?.data {
+        match self.0.storage.borrow_mut().get(&key)?.data {
             LedgerEntryData::ContractData(ContractDataEntry {
                 contract_id,
                 key,
@@ -1275,7 +1270,7 @@ impl CheckedEnv for Host {
     // Notes on metering: covered by components
     fn del_contract_data(&self, k: RawVal) -> Result<RawVal, HostError> {
         let key = self.contract_data_key_from_rawval(k)?;
-        self.0.storage.borrow_mut().metered_del(self, &key)?;
+        self.0.storage.borrow_mut().del(&key)?;
         Ok(().into())
     }
 

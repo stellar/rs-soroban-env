@@ -22,7 +22,7 @@ impl Host {
         &self,
         key: &LedgerKey,
     ) -> Result<ScContractCode, HostError> {
-        let scval = match self.0.storage.borrow_mut().metered_get(self, key)?.data {
+        let scval = match self.0.storage.borrow_mut().get(key)?.data {
             LedgerEntryData::ContractData(ContractDataEntry { val, .. }) => Ok(val),
             _ => Err(self.err_status(ScHostStorageErrorCode::ExpectContractData)),
         }?;
@@ -54,7 +54,7 @@ impl Host {
             data,
             ext: LedgerEntryExt::V0,
         };
-        self.0.storage.borrow_mut().metered_put(self, &key, &val)?;
+        self.0.storage.borrow_mut().put(&key, &val)?;
         Ok(())
     }
 
@@ -97,7 +97,7 @@ impl Host {
         let acc = LedgerKey::Account(LedgerKeyAccount {
             account_id: AccountId(PublicKey::PublicKeyTypeEd25519(self.to_u256(a)?)),
         });
-        self.visit_storage(|storage| match storage.metered_get(self, &acc)?.data {
+        self.visit_storage(|storage| match storage.get(&acc)?.data {
             LedgerEntryData::Account(ae) => Ok(ae),
             _ => Err(self.err_general("not account")),
         })
