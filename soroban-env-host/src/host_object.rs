@@ -13,12 +13,6 @@ pub(crate) type HostMap = MeteredOrdMap<HostVal, HostVal>;
 pub(crate) type HostVec = MeteredVector<HostVal>;
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub(crate) struct Sha256Hash([u8; 32]);
-
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub(crate) struct Ed25519PK([u8; 32]);
-
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum HostObject {
     Vec(HostVec),
     Map(HostMap),

@@ -70,7 +70,8 @@ pub enum CostType {
     BytesInsert = 55,
     BytesAppend = 56,
     BytesSlice = 57,
-    CallArgsUnpack = 58,
+    BytesConcat = 58,
+    CallArgsUnpack = 59,
 }
 
 // TODO: add XDR support for iterating over all the elements of an enum
@@ -135,6 +136,7 @@ impl CostType {
             CostType::BytesInsert,
             CostType::BytesAppend,
             CostType::BytesSlice,
+            CostType::BytesConcat,
             CostType::CallArgsUnpack,
         ];
         VARIANTS.iter()

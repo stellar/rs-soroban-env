@@ -108,8 +108,16 @@ pub(crate) struct HostImpl {
     objects: RefCell<Vec<HostObject>>,
     storage: RefCell<Storage>,
     context: RefCell<Vec<Frame>>,
+    // Note: budget is refcounted and is _not_ deep-cloned when you call HostImpl::deep_clone,
+    // mainly because it's not really possible to achieve (the same budget is connected to many
+    // metered sub-objects) but also because it's plausible that the person calling deep_clone
+    // actually wants their clones to be metered by "the same" total budget
     budget: Budget,
     events: RefCell<Events>,
+    // Note: we're not going to charge metering for testutils because it's out of the scope
+    // of what users will be charged for in production -- it's scaffolding for testing a contract,
+    // but shouldn't be charged to the contract itself (and will never be compiled-in to
+    // production hosts)
     #[cfg(feature = "testutils")]
     contracts: RefCell<std::collections::HashMap<Hash, Rc<dyn ContractFunctionSet>>>,
 }
@@ -701,6 +709,7 @@ impl Host {
                     self.with_frame(Frame::HostFunction(hf), || {
                         let object = self.to_host_obj(scobj)?.to_object();
                         let symbol = <Symbol>::try_from(scsym)?;
+                        self.charge_budget(CostType::CallArgsUnpack, rest.len() as u64)?;
                         let args = rest
                             .iter()
                             .map(|scv| self.to_host_val(scv).map(|hv| hv.val))
@@ -1002,7 +1011,6 @@ impl CheckedEnv for Host {
     fn map_get(&self, m: Object, k: RawVal) -> Result<RawVal, HostError> {
         let k = self.associate_raw_val(k);
         self.visit_obj(m, move |hm: &HostMap| {
-            self.charge_budget(CostType::ImMapImmutEntry, 1)?;
             hm.get(&k)?
                 .map(|v| v.to_raw())
                 .ok_or_else(|| self.err_general("map key not found")) // FIXME: need error code
@@ -1289,6 +1297,11 @@ impl CheckedEnv for Host {
         let params = self.visit_obj(v, |bin: &Vec<u8>| {
             let separator = "create_contract_from_ed25519(contract: Vec<u8>, salt: u256, key: u256, sig: Vec<u8>)";
             let params = [separator.as_bytes(), salt_val.as_ref(), bin].concat();
+            // Another charge-after-work. Easier to get the num bytes this way.
+            // TODO: 1. pre calcualte the bytes and charge before concat. 
+            // 2. Might be overkill to have a separate type for this. Maybe can consolidate
+            // with `BytesClone` or `BytesAppend`.
+            self.charge_budget(CostType::BytesConcat, params.len() as u64)?;
             Ok(params)
         })?;
         let hash = self.compute_hash_sha256(self.add_host_object(params)?.into())?;
@@ -1334,6 +1347,8 @@ impl CheckedEnv for Host {
             let separator = "create_token_from_ed25519(salt: u256, key: u256, sig: Vec<u8>)";
             [separator.as_bytes(), salt_val.as_ref()].concat()
         };
+        // Another charge-after-work. Easier to get the num bytes this way.
+        self.charge_budget(CostType::BytesConcat, params.len() as u64)?;
         let hash = self.compute_hash_sha256(self.add_host_object(params)?.into())?;
 
         self.verify_sig_ed25519(hash, key, sig)?;
