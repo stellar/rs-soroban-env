@@ -317,11 +317,21 @@ macro_rules! call_macro_with_all_host_functions {
                 {"L", fn bigint_sqrt(x:Object) -> Object}
                 /// Determines the fewest bits necessary to express `x`, not including the sign.
                 {"M", fn bigint_bits(x:Object) -> u64}
-                /// Outputs the BigInt's magnitude in big-endian byte order into a binary array. The sign is dropped.
+                /// Outputs the BigInt's magnitude in big-endian byte order into a byte array. The sign is dropped.
                 {"N", fn bigint_to_bytes_be(x:Object) -> Object}
-                /// Outputs the BigInt's magnitude in the requested base in big-endian digit order into a binary array.
+                /// Outputs the BigInt's magnitude in the requested base in big-endian digit order into a byte array.
                 /// The sign is dropped. Radix must be in the range 2...256.
                 {"O", fn bigint_to_radix_be(x:Object, radix:RawVal) -> Object}
+                /// Creates a BigInt from a byte array and i32 sign.
+                /// Bytes are in big-endian order. Sign is interpreted: -1 as negative, 0 as zero, 1 as positive
+                /// If sign is 0, then the input bytes are ignored and will return a BigInt of 0.
+                {"P", fn bigint_from_bytes_be(sign:RawVal, bytes:Object) -> Object}
+                /// Creates a BigInt from a byte array `buf`, an i32 sign and an u32 radix.
+                /// Each u8 of the byte array is interpreted as one digit of the number and
+                /// must therefore be less than the radix. The bytes are in big-endian byte order.
+                /// Radix must be in the range 2..=256. Sign follows same rule as in `bigint_from_bytes_be`.
+                {"Q", fn bigint_from_radix_be(sign:RawVal, buf:Object, radix:RawVal) -> Object}
+
             }
 
             mod binary "b" {

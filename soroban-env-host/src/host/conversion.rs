@@ -1,3 +1,4 @@
+use super::metered_bigint::MeteredBigInt;
 use crate::xdr::{
     Hash, LedgerKey, LedgerKeyContractData, ScBigInt, ScHostFnErrorCode, ScHostObjErrorCode,
     ScHostValErrorCode, ScObject, ScStatic, ScVal, ScVec, Uint256,
@@ -11,8 +12,6 @@ use crate::{
 use ed25519_dalek::{PublicKey, Signature, SIGNATURE_LENGTH};
 use num_bigint::Sign;
 use sha2::{Digest, Sha256};
-
-use super::metered_bigint::MeteredBigInt;
 
 impl Host {
     // Notes on metering: free
@@ -255,6 +254,44 @@ impl Host {
                     },
                 }
             })
+        }
+    }
+
+    pub(crate) fn bigint_sign_from_rawval(&self, sign: RawVal) -> Result<Sign, HostError> {
+        match i32::try_from(sign) {
+            Ok(s) => match s {
+                -1 => Ok(Sign::Minus),
+                0 => Ok(Sign::NoSign),
+                1 => Ok(Sign::Plus),
+                _ => Err(self.err(
+                    DebugError::new(ScHostFnErrorCode::InputArgsInvalid)
+                        .msg("invalid sign {}, expect -1, 0 or 1")
+                        .arg(sign),
+                )),
+            },
+            Err(cvt) => Err(self.err(
+                DebugError::new(ScHostFnErrorCode::InputArgsWrongType)
+                    .msg("unexpected RawVal {} for sign, need I32")
+                    .arg(sign),
+            )),
+        }
+    }
+
+    pub(crate) fn bigint_radix_from_rawval(&self, radix: RawVal) -> Result<u32, HostError> {
+        match u32::try_from(radix) {
+            Ok(r) => match r {
+                2..=256 => Ok(r),
+                _ => Err(self.err(
+                    DebugError::new(ScHostFnErrorCode::InputArgsInvalid)
+                        .msg("invalid radix {}, expected range 2..=256")
+                        .arg(radix),
+                )),
+            },
+            Err(cvt) => Err(self.err(
+                DebugError::new(ScHostFnErrorCode::InputArgsWrongType)
+                    .msg("unexpected RawVal {} for radix, need U32")
+                    .arg(radix),
+            )),
         }
     }
 }
