@@ -12,12 +12,12 @@ rust-version = "1.63"
 
 [dependencies]
 soroban-env-macros = { version = "0.0.3" }
-stellar-xdr = { version = "0.0.1", default-features = false, features = [ "next", "base64" ] }
+stellar-xdr = { version = "0.0.1", default-features = false, features = [ "next" ] }
 wasmi = { package = "soroban-wasmi", version = "0.11.0", optional = true }
 static_assertions = "1.1.0"
 
 [features]
-std = ["stellar-xdr/std"]
+std = ["stellar-xdr/std", "stellar-xdr/base64"]
 serde = ["stellar-xdr/serde"]
 vm = ["wasmi"]
 
