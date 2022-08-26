@@ -226,6 +226,7 @@ impl Vm {
         contract_id: Hash,
         module_wasm_code: &[u8],
     ) -> Result<Rc<Self>, HostError> {
+        host.charge_budget(CostType::VmInstantiation, module_wasm_code.len() as u64)?;
         let elements_module: elements::Module =
             host.map_err(elements::deserialize_buffer(module_wasm_code))?;
 
@@ -272,6 +273,7 @@ impl Vm {
         func: &str,
         args: &[RawVal],
     ) -> Result<RawVal, HostError> {
+        host.charge_budget(CostType::VmInvokeFunction, args.len() as u64)?;
         host.with_frame(
             Frame::ContractVM(self.clone(), Symbol::from_str(func)),
             || {

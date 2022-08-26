@@ -1,5 +1,6 @@
 use crate::{
-    budget::CostType,
+    budget::{Budget, CostType},
+    host::metered_map::MeteredOrdMap,
     host_object::{HostObj, HostVal},
     im_rc::OrdMap,
     storage::{AccessType, Footprint, Storage},
@@ -34,7 +35,7 @@ impl Host {
     }
 
     pub(crate) fn test_budget(self) -> Self {
-        self.get_budget_mut(|budget| {
+        self.get_budget(|budget| {
             budget.reset_limits(100_000, 100_000); // something big but finite that we may exceed
             budget.reset_models();
         });
@@ -42,9 +43,19 @@ impl Host {
     }
 
     pub(crate) fn enable_model(self, ty: CostType) -> Self {
-        self.get_budget_mut(|budget| {
-            budget.cpu_insns.get_cost_model_mut(ty).lin_param = 10;
-            budget.mem_bytes.get_cost_model_mut(ty).lin_param = 1;
+        self.get_budget(|budget| {
+            budget
+                .0
+                .borrow_mut()
+                .cpu_insns
+                .get_cost_model_mut(ty)
+                .lin_param = 10;
+            budget
+                .0
+                .borrow_mut()
+                .mem_bytes
+                .get_cost_model_mut(ty)
+                .lin_param = 1;
         });
         self
     }
@@ -52,6 +63,7 @@ impl Host {
     pub(crate) fn test_storage_with_contracts(
         ids: Vec<Hash>,
         codes: Vec<&'static [u8]>,
+        budget: Budget,
     ) -> Storage {
         let it = ids.iter().zip(codes.iter());
         let mut footprint = Footprint::default();
@@ -76,9 +88,11 @@ impl Host {
                 ext: LedgerEntryExt::V0,
             };
             map.insert(storage_key.clone(), Some(le));
-            footprint.record_access(&storage_key, AccessType::ReadOnly);
+            footprint
+                .record_access(&storage_key, AccessType::ReadOnly)
+                .unwrap();
         }
-        Storage::with_enforcing_footprint_and_map(footprint, map)
+        Storage::with_enforcing_footprint_and_map(footprint, MeteredOrdMap { budget, map })
     }
 
     pub(crate) fn test_scvec<T: AsScVal>(&self, vals: &[T]) -> Result<ScVec, HostError> {

@@ -168,6 +168,8 @@ fn binary_xdr_roundtrip() -> Result<(), HostError> {
 #[test]
 fn invoke_memcpy() -> Result<(), HostError> {
     use crate::xdr::ScContractCode;
+    use crate::{budget::Budget, host::metered_map::MeteredOrdMap};
+
     let contract_id: Hash = [0; 32].into();
     let key = ScVal::Static(ScStatic::LedgerKeyContractCode);
     let storage_key = LedgerKey::ContractData(LedgerKeyContractData {
@@ -188,11 +190,17 @@ fn invoke_memcpy() -> Result<(), HostError> {
     };
     let map = OrdMap::unit(storage_key.clone(), Some(le));
     let mut footprint = Footprint::default();
-    footprint.record_access(&storage_key, AccessType::ReadOnly);
+    footprint.record_access(&storage_key, AccessType::ReadOnly)?;
 
     // initialize storage and host
-    let storage = Storage::with_enforcing_footprint_and_map(footprint, map);
-    let host = Host::with_storage(storage);
+    let storage = Storage::with_enforcing_footprint_and_map(
+        footprint,
+        MeteredOrdMap {
+            map,
+            budget: Budget::default(),
+        },
+    );
+    let host = Host::with_storage_and_budget(storage, Budget::default());
     // create a dummy contract obj as the caller
     let id_obj = host.test_bin_obj(&[0; 32])?;
     // tests binary_new_from_linear_memory

@@ -1,3 +1,4 @@
+use crate::budget::CostType;
 use crate::xdr::{
     ContractDataEntry, HashIdPreimage, HashIdPreimageContractId, HashIdPreimageEd25519ContractId,
     LedgerEntry, LedgerEntryData, LedgerEntryExt, LedgerKey, LedgerKeyAccount,
@@ -8,6 +9,7 @@ use crate::{Host, HostError, Object};
 use soroban_env_common::xdr::{AccountEntry, AccountId, Hash, PublicKey, Uint256, WriteXdr};
 
 impl Host {
+    // Notes on metering: free
     pub fn contract_code_ledger_key(&self, contract_id: Hash) -> LedgerKey {
         LedgerKey::ContractData(LedgerKeyContractData {
             contract_id,
@@ -15,6 +17,7 @@ impl Host {
         })
     }
 
+    // Notes on metering: retrieving from storage covered. Rest are free.
     pub fn retrieve_contract_code_from_storage(
         &self,
         key: &LedgerKey,
@@ -34,6 +37,7 @@ impl Host {
         }
     }
 
+    // Notes on metering: `from_host_obj` and `put` to storage covered, rest are free.
     pub fn store_contract_code(
         &self,
         contract: ScContractCode,
@@ -54,23 +58,25 @@ impl Host {
         Ok(())
     }
 
+    // notes on metering: covers the key and salt. Rest are free.
     pub fn id_preimage_from_ed25519(
         &self,
         key: Uint256,
         salt: Uint256,
     ) -> Result<Vec<u8>, HostError> {
-        //Create contract and contractID
         let pre_image = HashIdPreimage::ContractIdFromEd25519(HashIdPreimageEd25519ContractId {
             ed25519: key,
             salt,
         });
         let mut buf = Vec::new();
+        self.charge_budget(CostType::BytesClone, 64)?; // key + salt
         pre_image
             .write_xdr(&mut buf)
             .map_err(|_| self.err_general("invalid hash"))?;
         Ok(buf)
     }
 
+    // notes on metering: covers the key and salt. Rest are free.
     pub fn id_preimage_from_contract(
         &self,
         contract_id: Hash,
@@ -79,12 +85,14 @@ impl Host {
         let pre_image =
             HashIdPreimage::ContractIdFromContract(HashIdPreimageContractId { contract_id, salt });
         let mut buf = Vec::new();
+        self.charge_budget(CostType::BytesClone, 64)?; // key + salt
         pre_image
             .write_xdr(&mut buf)
             .map_err(|_| self.err_general("invalid hash"))?;
         Ok(buf)
     }
 
+    // notes on metering: `get` from storage and `to_u256` covered. Rest are free.
     pub fn load_account(&self, a: Object) -> Result<AccountEntry, HostError> {
         let acc = LedgerKey::Account(LedgerKeyAccount {
             account_id: AccountId(PublicKey::PublicKeyTypeEd25519(self.to_u256(a)?)),

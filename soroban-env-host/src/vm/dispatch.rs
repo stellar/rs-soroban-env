@@ -120,6 +120,11 @@ macro_rules! generate_dispatch_functions {
                 pub(crate) fn $fn_id(host: &mut Host, _vmargs: RuntimeArgs) ->
                     Result<RuntimeValue, wasmi::Trap>
                 {
+                    // Notes on metering: a flat charge per host function invocation.
+                    // This does not account for the actual work being done in those functions,
+                    // which are accounted for individually at the operation level.
+                    // This is analogous to a flat toll charge for getting on the highway,
+                    // whereas the actual work are the tickets to the attractions.
                     host.charge_budget(CostType::HostFunction, _vmargs.len() as u64)?;
                     Ok(dispatch_function_helper!{host, _vmargs, fn $fn_id $args }?.into())
                 }
