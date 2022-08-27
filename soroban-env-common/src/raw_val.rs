@@ -536,8 +536,18 @@ impl RawVal {
 
 impl RawVal {
     pub const I32_ZERO: RawVal = RawVal::from_i32(0);
+    pub const I32_POSITIVE_ONE: RawVal = RawVal::from_i32(1);
+    pub const I32_NEGATIVE_ONE: RawVal = RawVal::from_i32(-1);
+    pub const I32_MIN: RawVal = RawVal::from_i32(i32::MIN);
+    pub const I32_MAX: RawVal = RawVal::from_i32(i32::MAX);
+
     pub const U32_ZERO: RawVal = RawVal::from_u32(0);
+    pub const U32_ONE: RawVal = RawVal::from_u32(1);
+    pub const U32_MIN: RawVal = RawVal::from_u32(u32::MIN);
+    pub const U32_MAX: RawVal = RawVal::from_u32(u32::MAX);
+
     pub const VOID: RawVal = RawVal::from_other_static(ScStatic::Void);
+
     pub const TRUE: RawVal = RawVal::from_bool(true);
     pub const FALSE: RawVal = RawVal::from_bool(false);
 }
