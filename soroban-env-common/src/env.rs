@@ -411,6 +411,9 @@ macro_rules! call_macro_with_all_host_functions {
                 /// master, and returns 0 if no such signer exists. Traps if no
                 /// such account exists.
                 {"2", fn account_get_signer_weight(a:Object, s:Object) -> RawVal}
+                /// Given an ed25519 public key `a` (`a` is binary) of an account,
+                /// check if it exists. Returns (SCStatic) TRUE/FALSE.
+                {"3", fn account_exists(a:Object) -> RawVal}
             }
         }
     };

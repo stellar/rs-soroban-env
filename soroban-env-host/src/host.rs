@@ -1905,6 +1905,11 @@ impl CheckedEnv for Host {
         Ok(threshold.into())
     }
 
+    // Notes on metering: covered by components.
+    fn account_exists(&self, a: Object) -> Result<RawVal, Self::Error> {
+        Ok(self.has_account(a)?.into())
+    }
+
     // Notes on metering: some covered. The for loop and comparisons are free (for now).
     fn account_get_signer_weight(&self, a: Object, s: Object) -> Result<RawVal, Self::Error> {
         use xdr::{Signer, SignerKey};
