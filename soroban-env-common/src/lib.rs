@@ -48,7 +48,7 @@ pub use val::Val;
 pub use checked_env::CheckedEnv;
 pub use convert::TryConvert;
 pub use env::{Env, EnvBase};
-pub use env_val::{EnvVal, IntoVal, TryFromVal, TryIntoVal};
+pub use env_val::{EnvVal, FromVal, IntoVal, TryFromVal, TryIntoVal};
 pub use unimplemented_env::UnimplementedEnv;
 
 // BitSet, Status and Symbol wrap RawVals.

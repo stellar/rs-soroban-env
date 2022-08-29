@@ -1,6 +1,8 @@
 use stellar_xdr::{ScStatic, ScStatus, ScStatusType};
 
-use super::{BitSet, Env, EnvVal, IntoVal, Object, Static, Status, Symbol, TryFromVal, TryIntoVal};
+use super::{
+    BitSet, Env, EnvVal, FromVal, IntoVal, Object, Static, Status, Symbol, TryFromVal, TryIntoVal,
+};
 use core::{convert::Infallible, fmt::Debug};
 
 extern crate static_assertions as sa;
@@ -103,6 +105,12 @@ impl AsRef<RawVal> for RawVal {
 impl AsMut<RawVal> for RawVal {
     fn as_mut(&mut self) -> &mut RawVal {
         self
+    }
+}
+
+impl<E: Env> FromVal<E, RawVal> for RawVal {
+    fn from_val(_env: &E, val: RawVal) -> Self {
+        val
     }
 }
 
