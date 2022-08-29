@@ -5,7 +5,7 @@ pub struct Contract;
 
 #[contractimpl]
 impl Contract {
-    // Produce a bin with 1 byte from each 8 bits of a 32-bit word.
+    // Produce a bytes with 1 byte from each 8 bits of a 32-bit word.
     pub fn bin_word(e: Env, word: u32) -> Bytes {
         let buf: [u8; 4] = [
             (word >> 24) as u8,
@@ -16,11 +16,11 @@ impl Contract {
         Bytes::from_slice(&e, &buf)
     }
 
-    // Transform a 4-byte bin into a new one with each byte incremented,
+    // Transform a 4-byte bytes into a new one with each byte incremented,
     // via a temporary guest memory buffer.
-    pub fn bin_inc(e: Env, bin: Bytes) -> Bytes {
+    pub fn bin_inc(e: Env, bytes: Bytes) -> Bytes {
         let mut buf: [u8; 4] = [0; 4];
-        bin.copy_into_slice(&mut buf);
+        bytes.copy_into_slice(&mut buf);
         for i in buf.iter_mut() {
             *i += 1;
         }

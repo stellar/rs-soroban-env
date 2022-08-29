@@ -86,7 +86,7 @@ pub(crate) enum Frame {
 }
 
 /// Temporary helper for denoting a slice of guest memory, as formed by
-/// various binary operations.
+/// various bytes operations.
 #[cfg(feature = "vm")]
 struct VmSlice {
     vm: Rc<Vm>,
@@ -447,7 +447,7 @@ impl Host {
                 let vm = vm.clone();
                 Ok(VmSlice { vm, pos, len })
             }
-            _ => Err(self.err_general("attempt to access guest binary in non-VM frame")),
+            _ => Err(self.err_general("attempt to access guest bytes in non-VM frame")),
         })
     }
 
@@ -507,7 +507,7 @@ impl Host {
                         }
                         HostObject::U64(u) => Ok(ScObject::U64(*u)),
                         HostObject::I64(i) => Ok(ScObject::I64(*i)),
-                        HostObject::Bin(b) => Ok(ScObject::Bytes(
+                        HostObject::Bytes(b) => Ok(ScObject::Bytes(
                             self.map_err(b.metered_clone(&self.0.budget)?.try_into())?,
                         )),
                         HostObject::BigInt(bi) => self.scobj_from_bigint(bi),
@@ -586,7 +586,7 @@ impl Host {
             HostObject::I64(_) => {
                 self.charge_budget(CostType::HostI64AllocCell, 1)?;
             }
-            HostObject::Bin(b) => {
+            HostObject::Bytes(b) => {
                 self.charge_budget(CostType::HostBinAllocCell, b.len() as u64)?;
             }
             HostObject::BigInt(bi) => {
@@ -782,8 +782,8 @@ impl Host {
     }
 
     /// Records a `System` contract event. `topics` is expected to be a `SCVec`
-    /// with length <= 4 that cannot contain Vecs, Maps, or Binaries > 32 bytes
-    /// On succes, returns an `SCStatus::Ok`.
+    /// length <= 4 that cannot contain `Vec`, `Map`, or `Bytes` with length > 32
+    /// On success, returns an `SCStatus::Ok`.
     pub fn system_event(&self, topics: Object, data: RawVal) -> Result<RawVal, HostError> {
         let topics = self.event_topics_from_host_obj(topics)?;
         let data = self.from_host_val(data)?;
@@ -837,7 +837,7 @@ impl EnvBase for Host {
         new_host
     }
 
-    fn binary_copy_from_slice(&self, b: Object, b_pos: RawVal, mem: &[u8]) -> Object {
+    fn bytes_copy_from_slice(&self, b: Object, b_pos: RawVal, mem: &[u8]) -> Object {
         // This is only called from native contracts, either when testing or
         // when the contract is otherwise linked into the same address space as
         // us. We therefore access the memory we were passed directly.
@@ -852,7 +852,7 @@ impl EnvBase for Host {
         let len = u32::try_from(mem.len()).expect("slice len exceeds u32");
         let mut vnew = self
             .visit_obj(b, |hv: &Vec<u8>| Ok(hv.clone()))
-            .expect("access to unknown host binary object");
+            .expect("access to unknown host bytes object");
         let end_idx = b_pos.checked_add(len).expect("u32 overflow") as usize;
         // TODO: we currently grow the destination vec if it's not big enough,
         // make sure this is desirable behaviour.
@@ -866,7 +866,7 @@ impl EnvBase for Host {
             .into()
     }
 
-    fn binary_copy_to_slice(&self, b: Object, b_pos: RawVal, mem: &mut [u8]) {
+    fn bytes_copy_to_slice(&self, b: Object, b_pos: RawVal, mem: &mut [u8]) {
         let b_pos = u32::try_from(b_pos).expect("pos input is not u32");
         let len = u32::try_from(mem.len()).expect("slice len exceeds u32");
         self.visit_obj(b, move |hv: &Vec<u8>| {
@@ -880,9 +880,9 @@ impl EnvBase for Host {
         .expect("access to unknown host object");
     }
 
-    fn binary_new_from_slice(&self, mem: &[u8]) -> Object {
+    fn bytes_new_from_slice(&self, mem: &[u8]) -> Object {
         self.add_host_object::<Vec<u8>>(mem.into())
-            .expect("unable to add host binary object")
+            .expect("unable to add host bytes object")
             .into()
     }
 
@@ -1341,9 +1341,9 @@ impl CheckedEnv for Host {
         let key_val = self.uint256_from_obj_input("key", key)?;
 
         // Verify parameters
-        let params = self.visit_obj(v, |bin: &Vec<u8>| {
+        let params = self.visit_obj(v, |bytes: &Vec<u8>| {
             let separator = "create_contract_from_ed25519(contract: Vec<u8>, salt: u256, key: u256, sig: Vec<u8>)";
-            let params = [separator.as_bytes(), salt_val.as_ref(), bin].concat();
+            let params = [separator.as_bytes(), salt_val.as_ref(), bytes].concat();
             // Another charge-after-work. Easier to get the num bytes this way.
             // TODO: 1. pre calcualte the bytes and charge before concat. 
             // 2. Might be overkill to have a separate type for this. Maybe can consolidate
@@ -1664,7 +1664,7 @@ impl CheckedEnv for Host {
     }
 
     // Notes on metering: covered by components
-    fn serialize_to_binary(&self, v: RawVal) -> Result<Object, HostError> {
+    fn serialize_to_bytes(&self, v: RawVal) -> Result<Object, HostError> {
         let scv = self.from_host_val(v)?;
         let mut buf = Vec::<u8>::new();
         scv.write_xdr(&mut buf)
@@ -1680,7 +1680,7 @@ impl CheckedEnv for Host {
     }
 
     // Notes on metering: covered by components
-    fn deserialize_from_binary(&self, b: Object) -> Result<RawVal, HostError> {
+    fn deserialize_from_bytes(&self, b: Object) -> Result<RawVal, HostError> {
         let scv = self.visit_obj(b, |hv: &Vec<u8>| {
             self.charge_budget(CostType::ValDeser, hv.len() as u64)?;
             ScVal::read_xdr(&mut hv.as_slice())
@@ -1689,7 +1689,7 @@ impl CheckedEnv for Host {
         Ok(self.to_host_val(&scv)?.into())
     }
 
-    fn binary_copy_to_linear_memory(
+    fn bytes_copy_to_linear_memory(
         &self,
         b: Object,
         b_pos: RawVal,
@@ -1713,7 +1713,7 @@ impl CheckedEnv for Host {
         }
     }
 
-    fn binary_copy_from_linear_memory(
+    fn bytes_copy_from_linear_memory(
         &self,
         b: Object,
         b_pos: RawVal,
@@ -1746,7 +1746,7 @@ impl CheckedEnv for Host {
         }
     }
 
-    fn binary_new_from_linear_memory(
+    fn bytes_new_from_linear_memory(
         &self,
         lm_pos: RawVal,
         len: RawVal,
@@ -1766,12 +1766,12 @@ impl CheckedEnv for Host {
     }
 
     // Notes on metering: covered by `add_host_object`
-    fn binary_new(&self) -> Result<Object, HostError> {
+    fn bytes_new(&self) -> Result<Object, HostError> {
         Ok(self.add_host_object(Vec::<u8>::new())?.into())
     }
 
     // Notes on metering: `get_mut` is free
-    fn binary_put(&self, b: Object, i: RawVal, u: RawVal) -> Result<Object, HostError> {
+    fn bytes_put(&self, b: Object, i: RawVal, u: RawVal) -> Result<Object, HostError> {
         let i = self.usize_from_rawval_u32_input("i", i)?;
         let u = self.u8_from_rawval_input("u", u)?;
         let vnew = self.visit_obj(b, move |hv: &Vec<u8>| {
@@ -1788,7 +1788,7 @@ impl CheckedEnv for Host {
     }
 
     // Notes on metering: `get` is free
-    fn binary_get(&self, b: Object, i: RawVal) -> Result<RawVal, HostError> {
+    fn bytes_get(&self, b: Object, i: RawVal) -> Result<RawVal, HostError> {
         let i = self.usize_from_rawval_u32_input("i", i)?;
         self.visit_obj(b, |hv: &Vec<u8>| {
             hv.get(i)
@@ -1797,7 +1797,7 @@ impl CheckedEnv for Host {
         })
     }
 
-    fn binary_del(&self, b: Object, i: RawVal) -> Result<Object, HostError> {
+    fn bytes_del(&self, b: Object, i: RawVal) -> Result<Object, HostError> {
         let i = self.u32_from_rawval_input("i", i)?;
         let vnew = self.visit_obj(b, move |hv: &Vec<u8>| {
             self.validate_index_lt_bound(i, hv.len())?;
@@ -1810,13 +1810,13 @@ impl CheckedEnv for Host {
     }
 
     // Notes on metering: `len` is free
-    fn binary_len(&self, b: Object) -> Result<RawVal, HostError> {
+    fn bytes_len(&self, b: Object) -> Result<RawVal, HostError> {
         let len = self.visit_obj(b, |hv: &Vec<u8>| Ok(hv.len()))?;
         self.usize_to_rawval_u32(len)
     }
 
     // Notes on metering: `push` is free
-    fn binary_push(&self, b: Object, u: RawVal) -> Result<Object, HostError> {
+    fn bytes_push(&self, b: Object, u: RawVal) -> Result<Object, HostError> {
         let u = self.u8_from_rawval_input("u", u)?;
         let vnew = self.visit_obj(b, move |hv: &Vec<u8>| {
             let mut vnew = hv.metered_clone(&self.0.budget)?;
@@ -1829,7 +1829,7 @@ impl CheckedEnv for Host {
     }
 
     // Notes on metering: `pop` is free
-    fn binary_pop(&self, b: Object) -> Result<Object, HostError> {
+    fn bytes_pop(&self, b: Object) -> Result<Object, HostError> {
         let vnew = self.visit_obj(b, move |hv: &Vec<u8>| {
             let mut vnew = hv.metered_clone(&self.0.budget)?;
             // Passing `len()` since worse case can cause reallocation.
@@ -1842,7 +1842,7 @@ impl CheckedEnv for Host {
     }
 
     // Notes on metering: `first` is free
-    fn binary_front(&self, b: Object) -> Result<RawVal, HostError> {
+    fn bytes_front(&self, b: Object) -> Result<RawVal, HostError> {
         self.visit_obj(b, |hv: &Vec<u8>| {
             hv.first()
                 .map(|u| Into::<RawVal>::into(Into::<u32>::into(*u)))
@@ -1851,7 +1851,7 @@ impl CheckedEnv for Host {
     }
 
     // Notes on metering: `last` is free
-    fn binary_back(&self, b: Object) -> Result<RawVal, HostError> {
+    fn bytes_back(&self, b: Object) -> Result<RawVal, HostError> {
         self.visit_obj(b, |hv: &Vec<u8>| {
             hv.last()
                 .map(|u| Into::<RawVal>::into(Into::<u32>::into(*u)))
@@ -1859,7 +1859,7 @@ impl CheckedEnv for Host {
         })
     }
 
-    fn binary_insert(&self, b: Object, i: RawVal, u: RawVal) -> Result<Object, HostError> {
+    fn bytes_insert(&self, b: Object, i: RawVal, u: RawVal) -> Result<Object, HostError> {
         let i = self.u32_from_rawval_input("i", i)?;
         let u = self.u8_from_rawval_input("u", u)?;
         let vnew = self.visit_obj(b, move |hv: &Vec<u8>| {
@@ -1872,7 +1872,7 @@ impl CheckedEnv for Host {
         Ok(self.add_host_object(vnew)?.into())
     }
 
-    fn binary_append(&self, b1: Object, b2: Object) -> Result<Object, HostError> {
+    fn bytes_append(&self, b1: Object, b2: Object) -> Result<Object, HostError> {
         let mut vnew = self.visit_obj(b1, |hv: &Vec<u8>| Ok(hv.metered_clone(&self.0.budget)?))?;
         let mut b2 = self.visit_obj(b2, |hv: &Vec<u8>| Ok(hv.metered_clone(&self.0.budget)?))?;
         if b2.len() > u32::MAX as usize - vnew.len() {
@@ -1883,7 +1883,7 @@ impl CheckedEnv for Host {
         Ok(self.add_host_object(vnew)?.into())
     }
 
-    fn binary_slice(&self, b: Object, start: RawVal, end: RawVal) -> Result<Object, HostError> {
+    fn bytes_slice(&self, b: Object, start: RawVal, end: RawVal) -> Result<Object, HostError> {
         let start = self.u32_from_rawval_input("start", start)?;
         let end = self.u32_from_rawval_input("end", end)?;
         let vnew = self.visit_obj(b, move |hv: &Vec<u8>| {
@@ -1894,25 +1894,25 @@ impl CheckedEnv for Host {
         Ok(self.add_host_object(vnew)?.into())
     }
 
-    fn hash_from_binary(&self, x: Object) -> Result<Object, HostError> {
+    fn hash_from_bytes(&self, x: Object) -> Result<Object, HostError> {
         todo!()
     }
 
-    fn hash_to_binary(&self, x: Object) -> Result<Object, HostError> {
+    fn hash_to_bytes(&self, x: Object) -> Result<Object, HostError> {
         todo!()
     }
 
-    fn public_key_from_binary(&self, x: Object) -> Result<Object, HostError> {
+    fn public_key_from_bytes(&self, x: Object) -> Result<Object, HostError> {
         todo!()
     }
 
-    fn public_key_to_binary(&self, x: Object) -> Result<Object, HostError> {
+    fn public_key_to_bytes(&self, x: Object) -> Result<Object, HostError> {
         todo!()
     }
 
     // Notes on metering: covered by components.
     fn compute_hash_sha256(&self, x: Object) -> Result<Object, HostError> {
-        let hash = self.sha256_hash_from_binary_input(x)?;
+        let hash = self.sha256_hash_from_bytes_input(x)?;
         Ok(self.add_host_object(hash)?.into())
     }
 
@@ -1921,10 +1921,10 @@ impl CheckedEnv for Host {
         use ed25519_dalek::Verifier;
         let public_key = self.ed25519_pub_key_from_obj_input(k)?;
         let sig = self.signature_from_obj_input("sig", s)?;
-        let res = self.visit_obj(x, |bin: &Vec<u8>| {
-            self.charge_budget(CostType::VerifyEd25519Sig, bin.len() as u64)?;
+        let res = self.visit_obj(x, |bytes: &Vec<u8>| {
+            self.charge_budget(CostType::VerifyEd25519Sig, bytes.len() as u64)?;
             public_key
-                .verify(bin, &sig)
+                .verify(bytes, &sig)
                 .map_err(|_| self.err_general("Failed ED25519 verification"))
         });
         Ok(res?.into())
