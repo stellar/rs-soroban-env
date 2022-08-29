@@ -102,4 +102,12 @@ impl Host {
             _ => Err(self.err_general("not account")),
         })
     }
+
+    // notes on metering: covered by `has` and `to_u256`.
+    pub fn has_account(&self, a: Object) -> Result<bool, HostError> {
+        let acc = LedgerKey::Account(LedgerKeyAccount {
+            account_id: AccountId(PublicKey::PublicKeyTypeEd25519(self.to_u256(a)?)),
+        });
+        self.visit_storage(|storage| storage.has(&acc))
+    }
 }

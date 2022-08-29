@@ -201,7 +201,7 @@ fn bigint_tests() -> Result<(), HostError> {
         assert_eq!(host.bigint_bits(obj_b)?, 19);
         assert_eq!(host.bigint_bits(obj_0)?, 0);
     }
-    // convert to array
+    // convert to digits
     {
         let bin = host.bigint_to_radix_be(obj_a, 10_u32.into())?;
         let digits = host.test_bin_obj(&[2, 3, 7, 4, 3, 4, 0])?;
@@ -210,6 +210,28 @@ fn bigint_tests() -> Result<(), HostError> {
         let bin2 = host.bigint_to_radix_be(obj_b, 10_u32.into())?;
         let digits2 = host.test_bin_obj(&[4, 3, 8, 7, 3, 0])?;
         assert_eq!(host.obj_cmp(bin2.into(), digits2.into())?, 0);
+    }
+    // convert from digits
+    {
+        let digits = host.test_bin_obj(&[2, 3, 7, 4, 3, 4, 0])?;
+        let bi_a = host.bigint_from_radix_be(1i32.into(), digits.into(), 10u32.into())?;
+        assert_eq!(host.obj_cmp(bi_a.into(), obj_a.into())?, 0);
+
+        let digits2 = host.test_bin_obj(&[4, 3, 8, 7, 3, 0])?;
+        let sign: i32 = -1;
+        let bi_b = host.bigint_from_radix_be(sign.into(), digits2.into(), 10u32.into())?;
+        assert_eq!(host.obj_cmp(bi_b.into(), obj_b.into())?, 0);
+    }
+    // convert to and from bytes roundtrip
+    {
+        let bytes = host.bigint_to_bytes_be(obj_a)?;
+        let a_back = host.bigint_from_bytes_be(1i32.into(), bytes)?;
+        assert_eq!(host.obj_cmp(a_back.into(), obj_a.into())?, 0);
+
+        let bytes2 = host.bigint_to_bytes_be(obj_b)?;
+        let sign: i32 = -1;
+        let b_back = host.bigint_from_bytes_be(sign.into(), bytes2)?;
+        assert_eq!(host.obj_cmp(b_back.into(), obj_b.into())?, 0);
     }
     Ok(())
 }

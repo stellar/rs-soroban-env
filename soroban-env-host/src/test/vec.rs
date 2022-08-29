@@ -290,3 +290,35 @@ fn vec_append_empty() -> Result<(), HostError> {
     assert_eq!(host.obj_cmp(obj0.into(), obj1.into())?, 0);
     Ok(())
 }
+
+#[test]
+fn vec_index_of() -> Result<(), HostError> {
+    let host = Host::default();
+    let obj0 = host.test_vec_obj::<u32>(&[3, 4, 2, 2, 2, 5])?;
+    let mut idx = host.vec_first_index_of(obj0.val, 2u32.into())?;
+    assert_eq!(idx.get_payload(), RawVal::from(2u32).get_payload());
+    idx = host.vec_last_index_of(obj0.val, 2u32.into())?;
+    assert_eq!(idx.get_payload(), RawVal::from(4u32).get_payload());
+    idx = host.vec_first_index_of(obj0.val, 1u32.into())?;
+    assert_eq!(idx.get_payload(), RawVal::from_void().get_payload());
+    idx = host.vec_last_index_of(obj0.val, 1u32.into())?;
+    assert_eq!(idx.get_payload(), RawVal::from_void().get_payload());
+    Ok(())
+}
+
+#[test]
+fn vec_binary_search() -> Result<(), HostError> {
+    let host = Host::default();
+    let obj0 = host.test_vec_obj::<u32>(&[1, 2, 4, 5, 7, 9])?;
+    let mut res = host.vec_binary_search(obj0.val, 7u32.into())?;
+    let exp: u64 = 4 | (1 << 32);
+    assert_eq!(res, exp);
+    res = host.vec_binary_search(obj0.val, 4u32.into())?;
+    let exp: u64 = 2 | (1 << 32);
+    assert_eq!(res, exp);
+    res = host.vec_binary_search(obj0.val, 3u32.into())?;
+    assert_eq!(u64::from(2u32), res);
+    res = host.vec_binary_search(obj0.val, 6u32.into())?;
+    assert_eq!(u64::from(4u32), res);
+    Ok(())
+}

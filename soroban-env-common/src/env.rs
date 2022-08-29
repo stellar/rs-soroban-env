@@ -248,6 +248,19 @@ macro_rules! call_macro_with_all_host_functions {
                 /// Copy the elements from `start` index until `end` index, exclusive, in the vector and create a new vector from it.
                 /// Return the new vector. Traps if the index is out of bound.
                 {"A", fn vec_slice(v:Object, start:RawVal, end:RawVal) -> Object}
+                /// Get the index of the first occurrence of a given element in the vector.
+                /// Returns the u32 index of the value if it's there. Otherwise, it returns `ScStatic::Void`.
+                {"B", fn vec_first_index_of(v:Object, x:RawVal) -> RawVal}
+                /// Get the index of the last occurrence of a given element in the vector.
+                /// Returns the u32 index of the value if it's there. Otherwise, it returns `ScStatic::Void`.
+                {"C", fn vec_last_index_of(v:Object, x:RawVal) -> RawVal}
+                /// Binary search a sorted vector for a given element.
+                /// If it exists, the high-32 bits of the return value is 0x0001 and the low-32 bits
+                /// contain the u32 index of the element.
+                /// If it does not exist, the high-32 bits of the return value is 0x0000 and the low-32 bits
+                /// contain the u32 index at which the element would need to be inserted into the vector to
+                /// maintain sorted order.
+                {"D", fn vec_binary_search(v:Object, x:RawVal) -> u64}
             }
 
             mod ledger "l" {
@@ -322,11 +335,21 @@ macro_rules! call_macro_with_all_host_functions {
                 {"L", fn bigint_sqrt(x:Object) -> Object}
                 /// Determines the fewest bits necessary to express `x`, not including the sign.
                 {"M", fn bigint_bits(x:Object) -> u64}
-                /// Outputs the BigInt's magnitude in big-endian byte order into a binary array. The sign is dropped.
+                /// Outputs the BigInt's magnitude in big-endian byte order into a byte array. The sign is dropped.
                 {"N", fn bigint_to_bytes_be(x:Object) -> Object}
-                /// Outputs the BigInt's magnitude in the requested base in big-endian digit order into a binary array.
+                /// Outputs the BigInt's magnitude in the requested base in big-endian digit order into a byte array.
                 /// The sign is dropped. Radix must be in the range 2...256.
                 {"O", fn bigint_to_radix_be(x:Object, radix:RawVal) -> Object}
+                /// Creates a BigInt from a byte array and i32 sign.
+                /// Bytes are in big-endian order. Sign is interpreted: -1 as negative, 0 as zero, 1 as positive
+                /// If sign is 0, then the input bytes are ignored and will return a BigInt of 0.
+                {"P", fn bigint_from_bytes_be(sign:RawVal, bytes:Object) -> Object}
+                /// Creates a BigInt from a byte array `buf`, an i32 sign and an u32 radix.
+                /// Each u8 of the byte array is interpreted as one digit of the number and
+                /// must therefore be less than the radix. The bytes are in big-endian byte order.
+                /// Radix must be in the range 2..=256. Sign follows same rule as in `bigint_from_bytes_be`.
+                {"Q", fn bigint_from_radix_be(sign:RawVal, buf:Object, radix:RawVal) -> Object}
+
             }
 
             mod binary "b" {
@@ -406,6 +429,9 @@ macro_rules! call_macro_with_all_host_functions {
                 /// master, and returns 0 if no such signer exists. Traps if no
                 /// such account exists.
                 {"2", fn account_get_signer_weight(a:Object, s:Object) -> RawVal}
+                /// Given an ed25519 public key `a` (`a` is binary) of an account,
+                /// check if it exists. Returns (SCStatic) TRUE/FALSE.
+                {"3", fn account_exists(a:Object) -> RawVal}
             }
         }
     };

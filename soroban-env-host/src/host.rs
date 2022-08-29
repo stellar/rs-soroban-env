@@ -550,14 +550,14 @@ impl Host {
                 let bi = match sbi {
                     ScBigInt::Zero => MeteredBigInt::new(self.0.budget.clone())?,
                     ScBigInt::Positive(bytes) => MeteredBigInt::from_bytes_be(
+                        self.0.budget.clone(),
                         Sign::Plus,
                         bytes.as_ref(),
-                        self.0.budget.clone(),
                     )?,
                     ScBigInt::Negative(bytes) => MeteredBigInt::from_bytes_be(
+                        self.0.budget.clone(),
                         Sign::Minus,
                         bytes.as_ref(),
-                        self.0.budget.clone(),
                     )?,
                 };
                 self.add_host_object(bi)
@@ -1238,6 +1238,34 @@ impl CheckedEnv for Host {
         Ok(self.add_host_object(vnew)?.into())
     }
 
+    fn vec_first_index_of(&self, v: Object, x: RawVal) -> Result<RawVal, Self::Error> {
+        let x = self.associate_raw_val(x);
+        self.visit_obj(v, |hv: &HostVec| {
+            Ok(match hv.first_index_of(&x)? {
+                Some(u) => self.usize_to_rawval_u32(u)?,
+                None => RawVal::from_void(),
+            })
+        })
+    }
+
+    fn vec_last_index_of(&self, v: Object, x: RawVal) -> Result<RawVal, Self::Error> {
+        let x = self.associate_raw_val(x);
+        self.visit_obj(v, |hv: &HostVec| {
+            Ok(match hv.last_index_of(&x)? {
+                Some(u) => self.usize_to_rawval_u32(u)?,
+                None => RawVal::from_void(),
+            })
+        })
+    }
+
+    fn vec_binary_search(&self, v: Object, x: RawVal) -> Result<u64, Self::Error> {
+        let x = self.associate_raw_val(x);
+        self.visit_obj(v, |hv: &HostVec| {
+            let res = hv.binary_search(&x)?;
+            self.u64_from_binary_search_result(res)
+        })
+    }
+
     // Notes on metering: covered by components
     fn put_contract_data(&self, k: RawVal, v: RawVal) -> Result<RawVal, HostError> {
         let key = self.contract_data_key_from_rawval(k)?;
@@ -1590,6 +1618,35 @@ impl CheckedEnv for Host {
         Ok(self.add_host_object(sign_bytes.1)?.into())
     }
 
+    fn bigint_from_bytes_be(&self, sign: RawVal, bytes: Object) -> Result<Object, Self::Error> {
+        let s = self.bigint_sign_from_rawval(sign)?;
+        let res = self.visit_obj(bytes, |b: &Vec<u8>| {
+            MeteredBigInt::from_bytes_be(self.0.budget.clone(), s, b)
+        })?;
+        Ok(self.add_host_object(res)?.into())
+    }
+
+    fn bigint_from_radix_be(
+        &self,
+        sign: RawVal,
+        buf: Object,
+        radix: RawVal,
+    ) -> Result<Object, Self::Error> {
+        let s = self.bigint_sign_from_rawval(sign)?;
+        let r = self.bigint_radix_from_rawval(radix)?;
+        let res = self.visit_obj(buf, |b: &Vec<u8>| {
+            if r != 256 && b.iter().any(|&b| b >= r as u8) {
+                return Err(self.err(
+                    DebugError::new(ScHostFnErrorCode::InputArgsInvalid)
+                        .msg("{} contains invalid digit, must be < radix")
+                        .arg(buf.to_raw()),
+                ));
+            }
+            MeteredBigInt::from_radix_be(self.0.budget.clone(), s, b, r)
+        })?;
+        Ok(self.add_host_object(res)?.into())
+    }
+
     // Notes on metering: covered by components
     fn serialize_to_binary(&self, v: RawVal) -> Result<Object, HostError> {
         let scv = self.from_host_val(v)?;
@@ -1876,6 +1933,11 @@ impl CheckedEnv for Host {
         let threshold = self.load_account(a)?.thresholds.0[ThresholdIndexes::High as usize];
         let threshold = Into::<u32>::into(threshold);
         Ok(threshold.into())
+    }
+
+    // Notes on metering: covered by components.
+    fn account_exists(&self, a: Object) -> Result<RawVal, Self::Error> {
+        Ok(self.has_account(a)?.into())
     }
 
     // Notes on metering: some covered. The for loop and comparisons are free (for now).

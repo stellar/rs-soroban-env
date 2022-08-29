@@ -1,3 +1,4 @@
+use super::metered_bigint::MeteredBigInt;
 use crate::xdr::{
     Hash, LedgerKey, LedgerKeyContractData, ScBigInt, ScHostFnErrorCode, ScHostObjErrorCode,
     ScHostValErrorCode, ScObject, ScStatic, ScVal, ScVec, Uint256,
@@ -11,8 +12,6 @@ use crate::{
 use ed25519_dalek::{PublicKey, Signature, SIGNATURE_LENGTH};
 use num_bigint::Sign;
 use sha2::{Digest, Sha256};
-
-use super::metered_bigint::MeteredBigInt;
 
 impl Host {
     // Notes on metering: free
@@ -255,6 +254,67 @@ impl Host {
                     },
                 }
             })
+        }
+    }
+
+    pub(crate) fn bigint_sign_from_rawval(&self, sign: RawVal) -> Result<Sign, HostError> {
+        match i32::try_from(sign) {
+            Ok(s) => match s {
+                -1 => Ok(Sign::Minus),
+                0 => Ok(Sign::NoSign),
+                1 => Ok(Sign::Plus),
+                _ => Err(self.err(
+                    DebugError::new(ScHostFnErrorCode::InputArgsInvalid)
+                        .msg("invalid sign {}, expect -1, 0 or 1")
+                        .arg(sign),
+                )),
+            },
+            Err(cvt) => Err(self.err(
+                DebugError::new(ScHostFnErrorCode::InputArgsWrongType)
+                    .msg("unexpected RawVal {} for sign, need I32")
+                    .arg(sign),
+            )),
+        }
+    }
+
+    pub(crate) fn bigint_radix_from_rawval(&self, radix: RawVal) -> Result<u32, HostError> {
+        match u32::try_from(radix) {
+            Ok(r) => match r {
+                2..=256 => Ok(r),
+                _ => Err(self.err(
+                    DebugError::new(ScHostFnErrorCode::InputArgsInvalid)
+                        .msg("invalid radix {}, expected range 2..=256")
+                        .arg(radix),
+                )),
+            },
+            Err(cvt) => Err(self.err(
+                DebugError::new(ScHostFnErrorCode::InputArgsWrongType)
+                    .msg("unexpected RawVal {} for radix, need U32")
+                    .arg(radix),
+            )),
+        }
+    }
+
+    /// Converts a binary search result into a u64. `res` is `Some(index)`
+    /// if the value was found at `index`, or `Err(index)` if the value was not found
+    /// and would've needed to be inserted at `index`.
+    /// Returns a Some(res_u64) where :
+    /// - the high-32 bits is 0x0001 if element existed or 0x0000 if it didn't
+    /// - the low-32 bits contains the u32 representation of the `index`
+    /// Err(_) if the `index` fails to be converted to an u32.
+    pub(crate) fn u64_from_binary_search_result(
+        &self,
+        res: Result<usize, usize>,
+    ) -> Result<u64, HostError> {
+        match res {
+            Ok(u) => {
+                let v = self.usize_to_u32(u, "outside range")?;
+                Ok(u64::from(v) | (1 << u32::BITS))
+            }
+            Err(u) => {
+                let v = self.usize_to_u32(u, "outside range")?;
+                Ok(u64::from(v))
+            }
         }
     }
 }

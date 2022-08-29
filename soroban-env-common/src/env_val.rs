@@ -95,6 +95,10 @@ pub trait TryIntoVal<E: Env, V>: Sized {
     }
 }
 
+pub trait FromVal<E: Env, V>: Sized {
+    fn from_val(env: &E, v: V) -> Self;
+}
+
 pub trait TryFromVal<E: Env, V>: Sized {
     type Error;
     fn try_from_val(env: &E, v: V) -> Result<Self, Self::Error>;
@@ -156,6 +160,12 @@ impl<E: Env> IntoVal<E, RawVal> for i64 {
     }
 }
 
+impl<E: Env> IntoVal<E, RawVal> for &i64 {
+    fn into_val(self, env: &E) -> RawVal {
+        (*self).into_val(env)
+    }
+}
+
 impl<E: Env> TryIntoVal<E, RawVal> for i64 {
     type Error = ConversionError;
     fn try_into_val(self, env: &E) -> Result<RawVal, Self::Error> {
@@ -187,6 +197,12 @@ impl<E: Env> TryFromVal<E, RawVal> for u64 {
 impl<E: Env> IntoVal<E, RawVal> for u64 {
     fn into_val(self, env: &E) -> RawVal {
         env.obj_from_u64(self).to_raw()
+    }
+}
+
+impl<E: Env> IntoVal<E, RawVal> for &u64 {
+    fn into_val(self, env: &E) -> RawVal {
+        (*self).into_val(env)
     }
 }
 
