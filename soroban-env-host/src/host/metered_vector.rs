@@ -122,6 +122,38 @@ impl<A: Clone> MeteredVector<A> {
         })
     }
 
+    /// Time: O(n)
+    pub fn first_index_of(&self, value: &A) -> Result<Option<usize>, HostError>
+    where
+        A: PartialEq,
+    {
+        self.charge_immut_access(self.len() as u64)?;
+        Ok(self.vec.index_of(value))
+    }
+
+    /// Time: O(n)
+    pub fn last_index_of(&self, value: &A) -> Result<Option<usize>, HostError>
+    where
+        A: PartialEq,
+    {
+        self.charge_immut_access(self.len() as u64)?;
+        for (index, item) in self.vec.iter().rev().enumerate() {
+            if value == item {
+                return Ok(Some(self.len() - 1 - index));
+            }
+        }
+        Ok(None)
+    }
+
+    /// Time: O(log n)
+    pub fn binary_search(&self, value: &A) -> Result<Result<usize, usize>, HostError>
+    where
+        A: Ord,
+    {
+        self.charge_immut_access(self.len() as u64)?;
+        Ok(self.vec.binary_search(value))
+    }
+
     /// Time: O(1)
     #[inline]
     pub fn iter(&self) -> Iter<'_, A> {

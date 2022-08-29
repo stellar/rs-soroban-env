@@ -294,4 +294,27 @@ impl Host {
             )),
         }
     }
+
+    /// Converts a binary search result into a u64. `res` is `Some(index)`
+    /// if the value was found at `index`, or `Err(index)` if the value was not found
+    /// and would've needed to be inserted at `index`.
+    /// Returns a Some(res_u64) where :
+    /// - the high-32 bits is 0x0001 if element existed or 0x0000 if it didn't
+    /// - the low-32 bits contains the u32 representation of the `index`
+    /// Err(_) if the `index` fails to be converted to an u32.
+    pub(crate) fn u64_from_binary_search_result(
+        &self,
+        res: Result<usize, usize>,
+    ) -> Result<u64, HostError> {
+        match res {
+            Ok(u) => {
+                let v = self.usize_to_u32(u, "outside range")?;
+                Ok(u64::from(v) | (1 << u32::BITS))
+            }
+            Err(u) => {
+                let v = self.usize_to_u32(u, "outside range")?;
+                Ok(u64::from(v))
+            }
+        }
+    }
 }

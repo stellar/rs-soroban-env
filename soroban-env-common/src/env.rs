@@ -243,6 +243,19 @@ macro_rules! call_macro_with_all_host_functions {
                 /// Copy the elements from `start` index until `end` index, exclusive, in the vector and create a new vector from it.
                 /// Return the new vector. Traps if the index is out of bound.
                 {"A", fn vec_slice(v:Object, start:RawVal, end:RawVal) -> Object}
+                /// Get the index of the first occurrence of a given element in the vector.
+                /// Returns the u32 index of the value if it's there. Otherwise, it returns `ScStatic::Void`.
+                {"B", fn vec_first_index_of(v:Object, x:RawVal) -> RawVal}
+                /// Get the index of the last occurrence of a given element in the vector.
+                /// Returns the u32 index of the value if it's there. Otherwise, it returns `ScStatic::Void`.
+                {"C", fn vec_last_index_of(v:Object, x:RawVal) -> RawVal}
+                /// Binary search a sorted vector for a given element.
+                /// If it exists, the high-32 bits of the return value is 0x0001 and the low-32 bits
+                /// contain the u32 index of the element.
+                /// If it does not exist, the high-32 bits of the return value is 0x0000 and the low-32 bits
+                /// contain the u32 index at which the element would need to be inserted into the vector to
+                /// maintain sorted order.
+                {"D", fn vec_binary_search(v:Object, x:RawVal) -> u64}
             }
 
             mod ledger "l" {

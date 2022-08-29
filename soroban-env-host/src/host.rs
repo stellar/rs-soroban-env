@@ -1236,6 +1236,34 @@ impl CheckedEnv for Host {
         Ok(self.add_host_object(vnew)?.into())
     }
 
+    fn vec_first_index_of(&self, v: Object, x: RawVal) -> Result<RawVal, Self::Error> {
+        let x = self.associate_raw_val(x);
+        self.visit_obj(v, |hv: &HostVec| {
+            Ok(match hv.first_index_of(&x)? {
+                Some(u) => self.usize_to_rawval_u32(u)?,
+                None => RawVal::from_void(),
+            })
+        })
+    }
+
+    fn vec_last_index_of(&self, v: Object, x: RawVal) -> Result<RawVal, Self::Error> {
+        let x = self.associate_raw_val(x);
+        self.visit_obj(v, |hv: &HostVec| {
+            Ok(match hv.last_index_of(&x)? {
+                Some(u) => self.usize_to_rawval_u32(u)?,
+                None => RawVal::from_void(),
+            })
+        })
+    }
+
+    fn vec_binary_search(&self, v: Object, x: RawVal) -> Result<u64, Self::Error> {
+        let x = self.associate_raw_val(x);
+        self.visit_obj(v, |hv: &HostVec| {
+            let res = hv.binary_search(&x)?;
+            self.u64_from_binary_search_result(res)
+        })
+    }
+
     // Notes on metering: covered by components
     fn put_contract_data(&self, k: RawVal, v: RawVal) -> Result<RawVal, HostError> {
         let key = self.contract_data_key_from_rawval(k)?;
