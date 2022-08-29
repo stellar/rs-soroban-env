@@ -95,6 +95,10 @@ pub trait TryIntoVal<E: Env, V>: Sized {
     }
 }
 
+pub trait FromVal<E: Env, V>: Sized {
+    fn from_val(env: &E, v: V) -> Self;
+}
+
 pub trait TryFromVal<E: Env, V>: Sized {
     type Error;
     fn try_from_val(env: &E, v: V) -> Result<Self, Self::Error>;
