@@ -88,14 +88,14 @@ fn vec_push_pop_and_len() -> Result<(), HostError> {
     let l =
         unsafe { <u32 as RawValConvertible>::unchecked_from_val(host.vec_len(obj.to_object())?) };
     assert_eq!(l, 0);
-    let obj1 = host.vec_push(obj.to_object(), 1u32.into())?;
-    let obj2 = host.vec_push(obj1, 2u32.into())?;
+    let obj1 = host.vec_push_back(obj.to_object(), 1u32.into())?;
+    let obj2 = host.vec_push_back(obj1, 2u32.into())?;
     let l = unsafe { <u32 as RawValConvertible>::unchecked_from_val(host.vec_len(obj2)?) };
     assert_eq!(l, 2);
-    let obj3 = host.vec_pop(obj2)?;
+    let obj3 = host.vec_pop_back(obj2)?;
     let l = unsafe { <u32 as RawValConvertible>::unchecked_from_val(host.vec_len(obj3)?) };
     assert_eq!(l, 1);
-    let obj4 = host.vec_pop(obj3)?;
+    let obj4 = host.vec_pop_back(obj3)?;
     let l = unsafe { <u32 as RawValConvertible>::unchecked_from_val(host.vec_len(obj4)?) };
     assert_eq!(l, 0);
     Ok(())
@@ -105,7 +105,7 @@ fn vec_push_pop_and_len() -> Result<(), HostError> {
 fn vec_pop_empty_vec() -> Result<(), HostError> {
     let host = Host::default();
     let obj = host.test_vec_obj::<u32>(&[])?;
-    let res = host.vec_pop(obj.to_object());
+    let res = host.vec_pop_back(obj.to_object());
     let code = ScHostObjErrorCode::VecIndexOutOfBound;
     assert!(HostError::result_matches_err_status(res, code));
     Ok(())

@@ -1116,7 +1116,7 @@ impl CheckedEnv for Host {
             let cap = self.usize_to_u32(hm.len(), "host map too large")?;
             let mut vec = self.vec_new(cap.into())?;
             for k in hm.keys()? {
-                vec = self.vec_push(vec, k.to_raw())?;
+                vec = self.vec_push_back(vec, k.to_raw())?;
             }
             Ok(vec)
         })
@@ -1127,7 +1127,7 @@ impl CheckedEnv for Host {
             let cap = self.usize_to_u32(hm.len(), "host map too large")?;
             let mut vec = self.vec_new(cap.into())?;
             for k in hm.values()? {
-                vec = self.vec_push(vec, k.to_raw())?;
+                vec = self.vec_push_back(vec, k.to_raw())?;
             }
             Ok(vec)
         })
@@ -1196,7 +1196,7 @@ impl CheckedEnv for Host {
         Ok(self.add_host_object(vnew)?.into())
     }
 
-    fn vec_push(&self, v: Object, x: RawVal) -> Result<Object, HostError> {
+    fn vec_push_back(&self, v: Object, x: RawVal) -> Result<Object, HostError> {
         let x = self.associate_raw_val(x);
         let vnew = self.visit_obj(v, move |hv: &HostVec| {
             let mut vnew = hv.metered_clone(&self.0.budget)?;
@@ -1206,7 +1206,7 @@ impl CheckedEnv for Host {
         Ok(self.add_host_object(vnew)?.into())
     }
 
-    fn vec_pop(&self, v: Object) -> Result<Object, HostError> {
+    fn vec_pop_back(&self, v: Object) -> Result<Object, HostError> {
         let vnew = self.visit_obj(v, move |hv: &HostVec| {
             let mut vnew = hv.metered_clone(&self.0.budget)?;
             vnew.pop_back().map(|_| vnew)

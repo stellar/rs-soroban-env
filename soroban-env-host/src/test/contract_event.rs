@@ -16,8 +16,8 @@ impl ContractFunctionSet for EmptyContractWithEvents {
         let mut data = host.map_new();
         data = host.map_put(data, 1_u32.into(), 2_u32.into());
         let mut topics = host.vec_new(().into());
-        topics = host.vec_push(topics, 0u32.into());
-        topics = host.vec_push(topics, 1u32.into());
+        topics = host.vec_push_back(topics, 0u32.into());
+        topics = host.vec_push_back(topics, 1u32.into());
         Some(host.contract_event(topics, data.to_raw()))
     }
 }

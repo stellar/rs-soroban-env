@@ -328,7 +328,7 @@ impl Vec {
         HostError: From<<T as TryIntoVal<Host, RawVal>>::Error>,
     {
         let rv = x.try_into_val(&self.0.env)?;
-        self.0.val = self.0.env.vec_push(self.0.val, rv)?;
+        self.0.val = self.0.env.vec_push_back(self.0.val, rv)?;
         Ok(())
     }
 }

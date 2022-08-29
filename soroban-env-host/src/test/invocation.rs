@@ -93,7 +93,7 @@ fn invoke_cross_contract_indirect() -> Result<(), HostError> {
     let id1_obj = host.test_bin_obj(&dummy_id1)?;
     let sym = Symbol::from_str("add_with");
     let args = host.test_vec_obj::<i32>(&[5, 6])?;
-    let args = host.vec_push(args.val, id1_obj.into())?;
+    let args = host.vec_push_back(args.val, id1_obj.into())?;
     // try call
     let val = host.call(id0_obj.to_object(), sym.into(), args.clone().into())?;
     let exp: RawVal = 11i32.into();
@@ -117,7 +117,7 @@ fn invoke_cross_contract_indirect_err() -> Result<(), HostError> {
     let id1_obj = host.test_bin_obj(&dummy_id1)?;
     let sym = Symbol::from_str("add_with");
     let args = host.test_vec_obj::<i32>(&[i32::MAX, 1])?;
-    let args = host.vec_push(args.val, id1_obj.into())?;
+    let args = host.vec_push_back(args.val, id1_obj.into())?;
     // try call -- add will trap, and add_with will trap, but we will get a status
     let status = host.try_call(id0_obj.to_object(), sym.into(), args.clone().into())?;
     let exp: Status = ScVmErrorCode::TrapUnreachable.into();
