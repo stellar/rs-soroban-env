@@ -112,6 +112,26 @@ fn vec_pop_empty_vec() -> Result<(), HostError> {
 }
 
 #[test]
+fn vec_push_pop_front() -> Result<(), HostError> {
+    let host = Host::default();
+    let obj = host.test_vec_obj::<u32>(&[])?;
+    let mut vec = host.vec_push_front(obj.to_object(), 1u32.into())?;
+    vec = host.vec_push_front(vec, 2u32.into())?;
+    vec = host.vec_push_front(vec, 3u32.into())?;
+    let mut vec_ref = host.test_vec_obj::<u32>(&[3, 2, 1])?;
+    assert_eq!(host.obj_cmp(vec.to_raw(), vec_ref.val.to_raw())?, 0);
+    vec = host.vec_pop_front(vec)?;
+    vec_ref = host.test_vec_obj::<u32>(&[2, 1])?;
+    assert_eq!(host.obj_cmp(vec.to_raw(), vec_ref.val.to_raw())?, 0);
+    vec = host.vec_pop_front(vec)?;
+    vec = host.vec_pop_front(vec)?;
+    let res = host.vec_pop_front(vec);
+    let code = ScHostObjErrorCode::VecIndexOutOfBound;
+    assert!(HostError::result_matches_err_status(res, code));
+    Ok(())
+}
+
+#[test]
 fn vec_get_out_of_bound() -> Result<(), HostError> {
     let host = Host::default();
     let obj = host.test_vec_obj::<u32>(&[1, 2, 3])?;

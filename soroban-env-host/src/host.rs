@@ -1178,6 +1178,24 @@ impl CheckedEnv for Host {
         self.usize_to_rawval_u32(len)
     }
 
+    fn vec_push_front(&self, v: Object, x: RawVal) -> Result<Object, HostError> {
+        let x = self.associate_raw_val(x);
+        let vnew = self.visit_obj(v, move |hv: &HostVec| {
+            let mut vnew = hv.metered_clone(&self.0.budget)?;
+            vnew.push_front(x)?;
+            Ok(vnew)
+        })?;
+        Ok(self.add_host_object(vnew)?.into())
+    }
+
+    fn vec_pop_front(&self, v: Object) -> Result<Object, HostError> {
+        let vnew = self.visit_obj(v, move |hv: &HostVec| {
+            let mut vnew = hv.metered_clone(&self.0.budget)?;
+            vnew.pop_front().map(|_| vnew)
+        })?;
+        Ok(self.add_host_object(vnew)?.into())
+    }
+
     fn vec_push(&self, v: Object, x: RawVal) -> Result<Object, HostError> {
         let x = self.associate_raw_val(x);
         let vnew = self.visit_obj(v, move |hv: &HostVec| {

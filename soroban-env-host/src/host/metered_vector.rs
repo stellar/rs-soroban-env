@@ -69,12 +69,26 @@ impl<A: Clone> MeteredVector<A> {
     }
 
     // Time: O(log n) worst case, O(1) ammortized
+    pub fn push_front(&mut self, value: A) -> Result<(), HostError> {
+        self.charge_immut_access(self.len() as u64)?;
+        Ok(self.vec.push_front(value))
+    }
+
+    // Time: O(log n) worst case, O(1) ammortized
+    pub fn pop_front(&mut self) -> Result<A, HostError> {
+        self.charge_immut_access(self.len() as u64)?;
+        self.vec
+            .pop_front()
+            .ok_or_else(|| ScHostObjErrorCode::VecIndexOutOfBound.into())
+    }
+
+    // Time: O(log n) worst case, O(1) ammortized
     pub fn push_back(&mut self, value: A) -> Result<(), HostError> {
         self.charge_immut_access(self.len() as u64)?;
         Ok(self.vec.push_back(value))
     }
 
-    // Time: O(1)
+    // Time: O(log n) worst case, O(1) ammortized
     pub fn pop_back(&mut self) -> Result<A, HostError> {
         self.charge_immut_access(self.len() as u64)?;
         self.vec

@@ -256,6 +256,11 @@ macro_rules! call_macro_with_all_host_functions {
                 /// contain the u32 index at which the element would need to be inserted into the vector to
                 /// maintain sorted order.
                 {"D", fn vec_binary_search(v:Object, x:RawVal) -> u64}
+                /// Push a value to the front of a vector.
+                {"E", fn vec_push_front(v:Object, x:RawVal) -> Object}
+                /// Removes the first element from the vector and returns the new vector.
+                /// Traps if original vector is empty.
+                {"F", fn vec_pop_front(v:Object) -> Object}
             }
 
             mod ledger "l" {
