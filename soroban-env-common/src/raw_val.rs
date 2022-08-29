@@ -202,6 +202,11 @@ macro_rules! declare_tryfrom {
                 self.into()
             }
         }
+        impl<E: Env> IntoVal<E, RawVal> for &$T {
+            fn into_val(self, _env: &E) -> RawVal {
+                (*self).into()
+            }
+        }
         impl<E: Env> TryFromVal<E, RawVal> for $T {
             type Error = ConversionError;
             #[inline(always)]
