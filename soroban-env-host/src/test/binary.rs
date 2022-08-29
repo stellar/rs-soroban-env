@@ -218,7 +218,7 @@ fn invoke_memcpy() -> Result<(), HostError> {
     {
         let obj0 = host.test_bin_obj(&[1, 2, 3, 4])?;
         let mut args = host.vec_new(RawVal::from_void())?;
-        args = host.vec_push(args, obj0.to_raw())?;
+        args = host.vec_push_back(args, obj0.to_raw())?;
         let obj: Object = host
             .call(
                 id_obj.to_object(),

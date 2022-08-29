@@ -225,37 +225,42 @@ macro_rules! call_macro_with_all_host_functions {
                 {"2", fn vec_del(v:Object, i:RawVal) -> Object}
                 /// Returns length of the vector.
                 {"3", fn vec_len(v:Object) -> RawVal}
+                /// Push a value to the front of a vector.
+                {"4", fn vec_push_front(v:Object, x:RawVal) -> Object}
+                /// Removes the first element from the vector and returns the new vector.
+                /// Traps if original vector is empty.
+                {"5", fn vec_pop_front(v:Object) -> Object}
                 /// Appends an element to the back of the vector.
-                {"4", fn vec_push(v:Object, x:RawVal) -> Object}
+                {"6", fn vec_push_back(v:Object, x:RawVal) -> Object}
                 /// Removes the last element from the vector and returns the new vector.
                 /// Traps if original vector is empty.
-                {"5", fn vec_pop(v:Object) -> Object}
+                {"7", fn vec_pop_back(v:Object) -> Object}
                 /// Return the first element in the vector. Traps if the vector is empty
-                {"6", fn vec_front(v:Object) -> RawVal}
+                {"8", fn vec_front(v:Object) -> RawVal}
                 /// Return the last element in the vector. Traps if the vector is empty
-                {"7", fn vec_back(v:Object) -> RawVal}
+                {"9", fn vec_back(v:Object) -> RawVal}
                 /// Inserts an element at index `i` within the vector, shifting all elements after it to the right.
                 /// Traps if the index is out of bound
-                {"8", fn vec_insert(v:Object, i:RawVal, x:RawVal) -> Object}
+                {"A", fn vec_insert(v:Object, i:RawVal, x:RawVal) -> Object}
                 /// Clone the vector `v1`, then moves all the elements of vector `v2` into it.
                 /// Return the new vector. Traps if number of elements in the vector overflows a u32.
-                {"9", fn vec_append(v1:Object, v2:Object) -> Object}
+                {"B", fn vec_append(v1:Object, v2:Object) -> Object}
                 /// Copy the elements from `start` index until `end` index, exclusive, in the vector and create a new vector from it.
                 /// Return the new vector. Traps if the index is out of bound.
-                {"A", fn vec_slice(v:Object, start:RawVal, end:RawVal) -> Object}
+                {"C", fn vec_slice(v:Object, start:RawVal, end:RawVal) -> Object}
                 /// Get the index of the first occurrence of a given element in the vector.
                 /// Returns the u32 index of the value if it's there. Otherwise, it returns `ScStatic::Void`.
-                {"B", fn vec_first_index_of(v:Object, x:RawVal) -> RawVal}
+                {"D", fn vec_first_index_of(v:Object, x:RawVal) -> RawVal}
                 /// Get the index of the last occurrence of a given element in the vector.
                 /// Returns the u32 index of the value if it's there. Otherwise, it returns `ScStatic::Void`.
-                {"C", fn vec_last_index_of(v:Object, x:RawVal) -> RawVal}
+                {"E", fn vec_last_index_of(v:Object, x:RawVal) -> RawVal}
                 /// Binary search a sorted vector for a given element.
                 /// If it exists, the high-32 bits of the return value is 0x0001 and the low-32 bits
                 /// contain the u32 index of the element.
                 /// If it does not exist, the high-32 bits of the return value is 0x0000 and the low-32 bits
                 /// contain the u32 index at which the element would need to be inserted into the vector to
                 /// maintain sorted order.
-                {"D", fn vec_binary_search(v:Object, x:RawVal) -> u64}
+                {"F", fn vec_binary_search(v:Object, x:RawVal) -> u64}
             }
 
             mod ledger "l" {
