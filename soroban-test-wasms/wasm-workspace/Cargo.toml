@@ -1,5 +1,5 @@
 # This file defines a workspace that is _periodically_ recompiled as part of
-# updating the WASM files that are then embedded as as binary constants in the
+# updating the WASM files that are then embedded as as bytes constants in the
 # surrounding crate `soroban-test-wasms`.
 #
 # Neither the rust crates in this workspace, nor the workspace itself, are (in
@@ -16,7 +16,14 @@
 [workspace]
 resolver = "2"
 
-members = ["add_i32", "contract_data", "create_contract", "invoke_contract", "linear_memory", "vec"]
+members = [
+    "add_i32",
+    "contract_data",
+    "create_contract",
+    "invoke_contract",
+    "linear_memory",
+    "vec",
+]
 
 [patch.crates-io]
 soroban-env-common = { path = "../../soroban-env-common" }
@@ -86,8 +93,8 @@ wasmi = { package = "soroban-wasmi", git = "https://github.com/stellar/wasmi", r
 # when you change the Env trait itself, and whatever change you make to Env may
 # well cause recompilation to fail. Again, you will know if it doesn't compile!
 
-soroban-sdk = {git = "https://github.com/stellar/rs-soroban-sdk", rev = "44f6711a"}
-soroban-sdk-macros = {git = "https://github.com/stellar/rs-soroban-sdk", rev = "44f6711a"}
+soroban-sdk = { git = "https://github.com/stellar/rs-soroban-sdk", rev = "44f6711a" }
+soroban-sdk-macros = { git = "https://github.com/stellar/rs-soroban-sdk", rev = "44f6711a" }
 
 [profile.release]
 opt-level = "z"

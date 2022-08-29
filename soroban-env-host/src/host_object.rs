@@ -18,7 +18,7 @@ pub(crate) enum HostObject {
     Map(HostMap),
     U64(u64),
     I64(i64),
-    Bin(Vec<u8>),
+    Bytes(Vec<u8>),
     BigInt(MeteredBigInt),
     Hash(xdr::ScHash),
     PublicKey(xdr::PublicKey),
@@ -57,7 +57,7 @@ declare_host_object_type!(HostMap, Map, Map);
 declare_host_object_type!(HostVec, Vec, Vec);
 declare_host_object_type!(u64, U64, U64);
 declare_host_object_type!(i64, I64, I64);
-declare_host_object_type!(Vec<u8>, Bytes, Bin);
+declare_host_object_type!(Vec<u8>, Bytes, Bytes);
 declare_host_object_type!(MeteredBigInt, BigInt, BigInt);
 declare_host_object_type!(xdr::ScHash, Hash, Hash);
 declare_host_object_type!(xdr::PublicKey, PublicKey, PublicKey);

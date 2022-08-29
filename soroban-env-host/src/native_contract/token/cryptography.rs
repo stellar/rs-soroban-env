@@ -32,7 +32,7 @@ fn check_ed25519_auth(
         domain: domain as u32,
         parameters,
     };
-    let msg_bin = e.serialize_to_binary(Message::V0(msg).try_into_val(e)?)?;
+    let msg_bin = e.serialize_to_bytes(Message::V0(msg).try_into_val(e)?)?;
 
     e.verify_sig_ed25519(msg_bin, auth.public_key.into(), auth.signature.into())?;
     Ok(())
@@ -49,7 +49,7 @@ fn check_account_auth(
         domain: domain as u32,
         parameters,
     };
-    let msg_bin = e.serialize_to_binary(Message::V0(msg).try_into_val(e)?)?;
+    let msg_bin = e.serialize_to_bytes(Message::V0(msg).try_into_val(e)?)?;
 
     let mut weight = 0u32;
     let sigs = &auth.signatures;

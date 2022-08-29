@@ -35,9 +35,9 @@ fn check_account_exists() -> Result<(), HostError> {
     );
 
     let host = Host::with_storage_and_budget(storage, budget.clone());
-    let obj0 = host.binary_new_from_slice(&id0);
-    let obj1 = host.binary_new_from_slice(&id1);
-    let obj2 = host.binary_new_from_slice(&id2);
+    let obj0 = host.bytes_new_from_slice(&id0);
+    let obj1 = host.bytes_new_from_slice(&id1);
+    let obj2 = host.bytes_new_from_slice(&id2);
     // declared and exists
     assert_eq!(
         host.account_exists(obj0)?.get_payload(),

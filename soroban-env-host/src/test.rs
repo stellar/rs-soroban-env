@@ -3,7 +3,7 @@ mod util;
 mod account;
 mod basic;
 mod bigint;
-mod binary;
+mod bytes;
 mod crypto;
 mod map;
 mod vec;

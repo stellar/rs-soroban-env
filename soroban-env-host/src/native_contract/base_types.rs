@@ -133,7 +133,7 @@ impl<const N: u32> TryFromVal<Host, Object> for BytesN<N> {
     type Error = HostError;
 
     fn try_from_val(env: &Host, val: Object) -> Result<Self, Self::Error> {
-        let len: u32 = env.binary_len(val)?.try_into()?;
+        let len: u32 = env.bytes_len(val)?.try_into()?;
         if len == N {
             Ok(Self(val.in_env(env)))
         } else {

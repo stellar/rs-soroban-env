@@ -26,8 +26,8 @@ impl ContractFunctionSet for EmptyContractWithEvents {
 fn contract_event() -> Result<(), HostError> {
     let host = Host::default();
     let dummy_id = [0; 32];
-    let mut id = host.binary_new();
-    id = host.binary_copy_from_slice(id, 0u32.into(), &dummy_id);
+    let mut id = host.bytes_new();
+    id = host.bytes_copy_from_slice(id, 0u32.into(), &dummy_id);
     let test_contract = Rc::new(EmptyContractWithEvents {});
     let sym = Symbol::from_str("add");
     let args = host.test_vec_obj::<i32>(&[1, 2])?;
