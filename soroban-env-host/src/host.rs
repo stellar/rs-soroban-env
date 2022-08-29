@@ -1940,33 +1940,34 @@ impl CheckedEnv for Host {
                 Ok((id_val, function_val))
             };
 
-        let mut res = HostVec::new(self.0.budget.clone())?;
+        //TODO: The from_vec calls below are not metered yet
+        let mut outer = Vector::new();
         for frame in frames.iter() {
-            let mut inner = HostVec::new(self.0.budget.clone())?;
-
             match frame {
                 #[cfg(feature = "vm")]
                 Frame::ContractVM(vm, function) => {
                     let vals = get_host_val_tuple(&vm.contract_id, &function)?;
-                    inner.push_back(vals.0)?;
-                    inner.push_back(vals.1)?;
+                    let inner =
+                        HostVec::from_vec(self.0.budget.clone(), im_rc::vector![vals.0, vals.1])?;
+                    outer.push_back(self.add_host_object(inner)?.into());
                 }
                 Frame::HostFunction(_) => (),
                 Frame::Token(id, function) => {
                     let vals = get_host_val_tuple(&id, &function)?;
-                    inner.push_back(vals.0)?;
-                    inner.push_back(vals.1)?;
+                    let inner =
+                        HostVec::from_vec(self.0.budget.clone(), im_rc::vector![vals.0, vals.1])?;
+                    outer.push_back(self.add_host_object(inner)?.into());
                 }
                 #[cfg(feature = "testutils")]
                 Frame::TestContract(id, function) => {
                     let vals = get_host_val_tuple(&id, &function)?;
-                    inner.push_back(vals.0)?;
-                    inner.push_back(vals.1)?;
+                    let inner =
+                        HostVec::from_vec(self.0.budget.clone(), im_rc::vector![vals.0, vals.1])?;
+                    outer.push_back(self.add_host_object(inner)?.into());
                 }
             }
-            res.push_back(self.add_host_object(inner)?.into())?;
         }
-
+        let res = HostVec::from_vec(self.0.budget.clone(), outer)?;
         Ok(self.add_host_object(res)?.into())
     }
 }
