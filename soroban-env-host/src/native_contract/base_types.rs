@@ -75,8 +75,10 @@ impl BigInt {
     }
 
     pub fn compare(&self, other: &BigInt) -> Result<Ordering, HostError> {
-        let res = self.0.env.bigint_cmp(self.0.val, other.0.val)?;
-        let i = i32::try_from(res)?;
+        let i = self
+            .0
+            .env
+            .obj_cmp(self.0.val.to_raw(), other.0.val.to_raw())?;
         Ok(i.cmp(&0))
     }
 }

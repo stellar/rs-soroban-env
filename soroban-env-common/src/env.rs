@@ -315,42 +315,40 @@ macro_rules! call_macro_with_all_host_functions {
                 {"B", fn bigint_shl(x:Object, y:Object) -> Object}
                 /// Performs the `>>` operation. Traps if `y` is negative or larger than the size of u64.
                 {"C", fn bigint_shr(x:Object, y:Object) -> Object}
-                /// Returns an ordering between `x` and `y`: -1 (less), 0 (equal) or 1 (greater).
-                {"D", fn bigint_cmp(x:Object, y:Object) -> RawVal}
                 /// Returns true if `x` is equal to the additive identity.
-                {"E", fn bigint_is_zero(x:Object) -> RawVal}
+                {"D", fn bigint_is_zero(x:Object) -> RawVal}
                 /// Performs the unary `-` operation.
-                {"F", fn bigint_neg(x:Object) -> Object}
+                {"E", fn bigint_neg(x:Object) -> Object}
                 /// Performs the unary `!` operation.
-                {"G", fn bigint_not(x:Object) -> Object}
+                {"F", fn bigint_not(x:Object) -> Object}
                 /// Calculates the Greatest Common Divisor (GCD) of `x` and `y`.
-                {"H", fn bigint_gcd(x:Object, y:Object) -> Object}
+                {"G", fn bigint_gcd(x:Object, y:Object) -> Object}
                 /// Calculates the Lowest Common Multiple (LCM) of `x` and `y`.
-                {"I", fn bigint_lcm(x:Object, y:Object) -> Object}
+                {"H", fn bigint_lcm(x:Object, y:Object) -> Object}
                 /// Calculates `x` to the power `y`. Traps if `y` is negative or larger than the size of u64.
-                {"J", fn bigint_pow(x:Object, y:Object) -> Object}
+                {"I", fn bigint_pow(x:Object, y:Object) -> Object}
                 /// Calculates `(p ^ q) mod m`. Note that this rounds like `mod_floor`, not like the `%` operator, which makes a difference when given a negative `p` or `m`.
                 /// The result will be in the interval `[0, m)` for `m > 0`, or in the interval `(m, 0]` for `m < 0`.
                 /// Traps if the `q` is negative or the `m` is zero.
-                {"K", fn bigint_pow_mod(p:Object, q:Object, m:Object) -> Object}
+                {"J", fn bigint_pow_mod(p:Object, q:Object, m:Object) -> Object}
                 /// Calculates the truncated principal square root of `x`. Traps if `x` is negative.
-                {"L", fn bigint_sqrt(x:Object) -> Object}
+                {"K", fn bigint_sqrt(x:Object) -> Object}
                 /// Determines the fewest bits necessary to express `x`, not including the sign.
-                {"M", fn bigint_bits(x:Object) -> u64}
+                {"L", fn bigint_bits(x:Object) -> u64}
                 /// Outputs the BigInt's magnitude in big-endian byte order into a byte array. The sign is dropped.
-                {"N", fn bigint_to_bytes_be(x:Object) -> Object}
+                {"M", fn bigint_to_bytes_be(x:Object) -> Object}
                 /// Outputs the BigInt's magnitude in the requested base in big-endian digit order into a byte array.
                 /// The sign is dropped. Radix must be in the range 2...256.
-                {"O", fn bigint_to_radix_be(x:Object, radix:RawVal) -> Object}
+                {"N", fn bigint_to_radix_be(x:Object, radix:RawVal) -> Object}
                 /// Creates a BigInt from a byte array and i32 sign.
                 /// Bytes are in big-endian order. Sign is interpreted: -1 as negative, 0 as zero, 1 as positive
                 /// If sign is 0, then the input bytes are ignored and will return a BigInt of 0.
-                {"P", fn bigint_from_bytes_be(sign:RawVal, bytes:Object) -> Object}
+                {"O", fn bigint_from_bytes_be(sign:RawVal, bytes:Object) -> Object}
                 /// Creates a BigInt from a byte array `buf`, an i32 sign and an u32 radix.
                 /// Each u8 of the byte array is interpreted as one digit of the number and
                 /// must therefore be less than the radix. The bytes are in big-endian byte order.
                 /// Radix must be in the range 2..=256. Sign follows same rule as in `bigint_from_bytes_be`.
-                {"Q", fn bigint_from_radix_be(sign:RawVal, buf:Object, radix:RawVal) -> Object}
+                {"P", fn bigint_from_radix_be(sign:RawVal, buf:Object, radix:RawVal) -> Object}
 
             }
 
