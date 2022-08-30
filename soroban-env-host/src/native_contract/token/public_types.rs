@@ -1,72 +1,62 @@
 use crate::host::Host;
-use crate::native_contract::base_types::{BigInt, BytesN, Map, Vec};
+use crate::native_contract::base_types::{Bytes, BytesN, Map, Vec};
 use crate::native_contract::token::error::Error;
-use soroban_env_common::{CheckedEnv, TryIntoVal};
+use soroban_env_common::{CheckedEnv, Symbol, TryIntoVal};
 use soroban_native_sdk_macros::contracttype;
 
-pub type U256 = BytesN<32>;
-pub type U512 = BytesN<64>;
-
 #[derive(Clone)]
-#[contracttype]
-pub struct KeyedEd25519Signature {
-    pub public_key: U256,
-    pub signature: U512,
+#[contracttype(lib = "soroban_sdk_auth")]
+pub struct Ed25519Signature {
+    pub public_key: BytesN<32>,
+    pub signature: BytesN<64>,
 }
 
 #[derive(Clone)]
-#[contracttype]
-pub struct KeyedAccountAuthorization {
-    pub public_key: U256,
+#[contracttype(lib = "soroban_sdk_auth")]
+pub struct AccountSignatures {
+    pub account_id: BytesN<32>,
     pub signatures: Vec,
 }
 
 #[derive(Clone)]
-#[contracttype]
-pub enum Authorization {
+#[contracttype(lib = "soroban_sdk_auth")]
+pub enum Signature {
     Contract,
-    Ed25519(U512),
-    Account(Vec),
+    Ed25519(Ed25519Signature),
+    Account(AccountSignatures),
 }
 
-#[derive(Clone)]
-#[contracttype]
-pub enum KeyedAuthorization {
-    Contract,
-    Ed25519(KeyedEd25519Signature),
-    Account(KeyedAccountAuthorization),
-}
-
-impl KeyedAuthorization {
+impl Signature {
     pub fn get_identifier(&self, env: &Host) -> Result<Identifier, Error> {
         Ok(match self {
-            KeyedAuthorization::Contract => {
+            Signature::Contract => {
                 Identifier::Contract(env.get_invoking_contract()?.to_raw().try_into_val(env)?)
             }
-            KeyedAuthorization::Ed25519(kea) => Identifier::Ed25519(kea.public_key.clone()),
-            KeyedAuthorization::Account(kaa) => Identifier::Account(kaa.public_key.clone()),
+            Signature::Ed25519(kea) => Identifier::Ed25519(kea.public_key.clone()),
+            Signature::Account(kaa) => Identifier::Account(kaa.account_id.clone()),
         })
     }
 }
 
 #[derive(Clone)]
-#[contracttype]
+#[contracttype(lib = "soroban_sdk_auth")]
 pub enum Identifier {
-    Contract(U256),
-    Ed25519(U256),
-    Account(U256),
+    Contract(BytesN<32>),
+    Ed25519(BytesN<32>),
+    Account(BytesN<32>),
 }
 
 #[derive(Clone)]
-#[contracttype]
-pub struct MessageV0 {
-    pub nonce: BigInt,
-    pub domain: u32,
-    pub parameters: Vec,
+#[contracttype(lib = "soroban_sdk_auth")]
+pub struct SignaturePayloadV0 {
+    pub function: Symbol,
+    pub contract: BytesN<32>,
+    pub network: Bytes,
+    pub args: Vec,
 }
 
 #[derive(Clone)]
-#[contracttype]
-pub enum Message {
-    V0(MessageV0),
+#[contracttype(lib = "soroban_sdk_auth")]
+pub enum SignaturePayload {
+    V0(SignaturePayloadV0),
 }
