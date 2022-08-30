@@ -1,38 +1,27 @@
 use crate::host::Host;
-use crate::native_contract::base_types::Vec;
+use crate::native_contract::base_types::{BigInt, Bytes, BytesN, Vec};
 use crate::native_contract::token::error::Error;
 use crate::native_contract::token::nonce::read_and_increment_nonce;
 use crate::native_contract::token::public_types::{
-    Identifier, KeyedAccountAuthorization, KeyedAuthorization, KeyedEd25519Signature, Message,
-    MessageV0, U256,
+    AccountSignatures, Ed25519Signature, Identifier, Signature, SignaturePayload,
+    SignaturePayloadV0,
 };
 use core::cmp::Ordering;
-use soroban_env_common::{CheckedEnv, TryIntoVal};
-
-#[repr(u32)]
-pub enum Domain {
-    Approve = 0,
-    Transfer = 1,
-    TransferFrom = 2,
-    Burn = 3,
-    Freeze = 4,
-    Mint = 5,
-    SetAdministrator = 6,
-    Unfreeze = 7,
-}
+use soroban_env_common::{CheckedEnv, Symbol, TryFromVal, TryIntoVal};
 
 fn check_ed25519_auth(
     e: &Host,
-    auth: KeyedEd25519Signature,
-    domain: Domain,
-    parameters: Vec,
+    auth: Ed25519Signature,
+    function: Symbol,
+    args: Vec,
 ) -> Result<(), Error> {
-    let msg = MessageV0 {
-        nonce: read_and_increment_nonce(&e, Identifier::Ed25519(auth.public_key.clone()))?,
-        domain: domain as u32,
-        parameters,
+    let msg = SignaturePayloadV0 {
+        function,
+        contract: BytesN::<32>::try_from_val(e, e.get_current_contract()?)?,
+        network: Bytes::try_from_val(e, e.get_ledger_network_id()?)?,
+        args,
     };
-    let msg_bin = e.serialize_to_bytes(Message::V0(msg).try_into_val(e)?)?;
+    let msg_bin = e.serialize_to_bytes(SignaturePayload::V0(msg).try_into_val(e)?)?;
 
     e.verify_sig_ed25519(msg_bin, auth.public_key.into(), auth.signature.into())?;
     Ok(())
@@ -40,22 +29,23 @@ fn check_ed25519_auth(
 
 fn check_account_auth(
     e: &Host,
-    auth: KeyedAccountAuthorization,
-    domain: Domain,
-    parameters: Vec,
+    auth: AccountSignatures,
+    function: Symbol,
+    args: Vec,
 ) -> Result<(), Error> {
-    let msg = MessageV0 {
-        nonce: read_and_increment_nonce(&e, Identifier::Account(auth.public_key.clone()))?,
-        domain: domain as u32,
-        parameters,
+    let msg = SignaturePayloadV0 {
+        function,
+        contract: BytesN::<32>::try_from_val(e, e.get_current_contract()?)?,
+        network: Bytes::try_from_val(e, e.get_ledger_network_id()?)?,
+        args,
     };
-    let msg_bin = e.serialize_to_bytes(Message::V0(msg).try_into_val(e)?)?;
+    let msg_bin = e.serialize_to_bytes(SignaturePayload::V0(msg).try_into_val(e)?)?;
 
     let mut weight = 0u32;
     let sigs = &auth.signatures;
-    let mut prev_pk: Option<U256> = None;
+    let mut prev_pk: Option<BytesN<32>> = None;
     for i in 0..sigs.len()? {
-        let sig: KeyedEd25519Signature = sigs.get(i)?;
+        let sig: Ed25519Signature = sigs.get(i)?;
 
         // Cannot take multiple signatures from the same key
         if let Some(prev) = prev_pk {
@@ -70,7 +60,7 @@ fn check_account_auth(
             sig.signature.into(),
         )?;
         let signer_weight_rv = e.account_get_signer_weight(
-            auth.public_key.clone().into(),
+            auth.account_id.clone().into(),
             sig.public_key.clone().into(),
         )?;
         let signer_weight: u32 = signer_weight_rv.try_into()?;
@@ -80,7 +70,7 @@ fn check_account_auth(
         prev_pk = Some(sig.public_key);
     }
 
-    let threshold_rv = e.account_get_medium_threshold(auth.public_key.into())?;
+    let threshold_rv = e.account_get_medium_threshold(auth.account_id.into())?;
     if weight < threshold_rv.try_into()? {
         Err(Error::ContractError)
     } else {
@@ -90,16 +80,36 @@ fn check_account_auth(
 
 pub fn check_auth(
     e: &Host,
-    auth: KeyedAuthorization,
-    domain: Domain,
-    parameters: Vec,
+    auth: Signature,
+    nonce: BigInt,
+    function: Symbol,
+    args: Vec,
 ) -> Result<(), Error> {
     match auth {
-        KeyedAuthorization::Contract => {
+        Signature::Contract => {
+            if nonce.compare(&BigInt::from_u64(e, 0)?)? != Ordering::Equal {
+                panic!("nonce should be zero for Contract")
+            }
             e.get_invoking_contract()?;
             Ok(())
         }
-        KeyedAuthorization::Ed25519(kea) => check_ed25519_auth(e, kea, domain, parameters),
-        KeyedAuthorization::Account(kaa) => check_account_auth(e, kaa, domain, parameters),
+        Signature::Ed25519(kea) => {
+            let stored_nonce =
+                read_and_increment_nonce(e, Identifier::Ed25519(kea.public_key.clone()))?;
+            if nonce.compare(&stored_nonce)? != Ordering::Equal {
+                panic!("incorrect nonce")
+            }
+            check_ed25519_auth(e, kea, function, args)?;
+            Ok(())
+        }
+        Signature::Account(kaa) => {
+            let stored_nonce =
+                read_and_increment_nonce(e, Identifier::Ed25519(kaa.account_id.clone()))?;
+            if nonce.compare(&stored_nonce)? != Ordering::Equal {
+                panic!("incorrect nonce")
+            }
+            check_account_auth(e, kaa, function, args)?;
+            Ok(())
+        }
     }
 }
