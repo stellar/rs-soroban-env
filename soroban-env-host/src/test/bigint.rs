@@ -95,13 +95,13 @@ fn bigint_tests() -> Result<(), HostError> {
     // cmp
     {
         use std::cmp::Ordering;
-        let ord_greater: i32 = host.bigint_cmp(obj_a, obj_b)?.try_into()?;
-        let ord_less: i32 = host.bigint_cmp(obj_b, obj_a)?.try_into()?;
+        let ord_greater = host.obj_cmp(obj_a.to_raw(), obj_b.to_raw())?;
+        let ord_less = host.obj_cmp(obj_b.to_raw(), obj_a.to_raw())?;
         let obj3 = host.bigint_from_u64(a)?;
-        let ord_equal: i32 = host.bigint_cmp(obj_a, obj3)?.try_into()?;
-        assert_eq!(ord_greater, Ordering::Greater as i32);
-        assert_eq!(ord_less, Ordering::Less as i32);
-        assert_eq!(ord_equal, Ordering::Equal as i32);
+        let ord_equal = host.obj_cmp(obj_a.to_raw(), obj3.to_raw())?;
+        assert_eq!(ord_greater, Ordering::Greater as i64);
+        assert_eq!(ord_less, Ordering::Less as i64);
+        assert_eq!(ord_equal, Ordering::Equal as i64);
     }
     // is zero
     {

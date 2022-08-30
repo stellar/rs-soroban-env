@@ -1558,14 +1558,6 @@ impl CheckedEnv for Host {
         Ok(self.add_host_object(res)?.into())
     }
 
-    // Notes on calibration: choose x == y for upper bound.
-    // TODO: this function will be removed
-    fn bigint_cmp(&self, x: Object, y: Object) -> Result<RawVal, HostError> {
-        self.visit_obj(x, |a: &MeteredBigInt| {
-            self.visit_obj(y, |b: &MeteredBigInt| Ok((a.cmp(b) as i32).into()))
-        })
-    }
-
     // Notes on metering: covered by `visit_obj`. `is_zero` call is free.
     fn bigint_is_zero(&self, x: Object) -> Result<RawVal, HostError> {
         self.visit_obj(x, |a: &MeteredBigInt| Ok(a.is_zero().into()))
