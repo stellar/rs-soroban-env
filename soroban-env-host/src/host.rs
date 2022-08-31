@@ -781,6 +781,12 @@ impl Host {
         self.create_contract_with_id(contract_code, contract_id)
     }
 
+    // "testutils" is not covered by budget metering.
+    #[cfg(feature = "testutils")]
+    pub fn register_test_contract_token(&self, contract_id: Object) -> Result<(), HostError> {
+        self.create_contract_with_id(ScContractCode::Token, contract_id)
+    }
+
     /// Records a `System` contract event. `topics` is expected to be a `SCVec`
     /// length <= 4 that cannot contain `Vec`, `Map`, or `Bytes` with length > 32
     /// On success, returns an `SCStatus::Ok`.

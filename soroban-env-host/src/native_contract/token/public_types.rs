@@ -5,21 +5,21 @@ use soroban_env_common::{CheckedEnv, Symbol, TryIntoVal};
 use soroban_native_sdk_macros::contracttype;
 
 #[derive(Clone)]
-#[contracttype(lib = "soroban_sdk_auth")]
+#[contracttype]
 pub struct Ed25519Signature {
     pub public_key: BytesN<32>,
     pub signature: BytesN<64>,
 }
 
 #[derive(Clone)]
-#[contracttype(lib = "soroban_sdk_auth")]
+#[contracttype]
 pub struct AccountSignatures {
     pub account_id: BytesN<32>,
     pub signatures: Vec,
 }
 
 #[derive(Clone)]
-#[contracttype(lib = "soroban_sdk_auth")]
+#[contracttype]
 pub enum Signature {
     Contract,
     Ed25519(Ed25519Signature),
@@ -39,7 +39,7 @@ impl Signature {
 }
 
 #[derive(Clone)]
-#[contracttype(lib = "soroban_sdk_auth")]
+#[contracttype]
 pub enum Identifier {
     Contract(BytesN<32>),
     Ed25519(BytesN<32>),
@@ -47,7 +47,7 @@ pub enum Identifier {
 }
 
 #[derive(Clone)]
-#[contracttype(lib = "soroban_sdk_auth")]
+#[contracttype]
 pub struct SignaturePayloadV0 {
     pub function: Symbol,
     pub contract: BytesN<32>,
@@ -56,7 +56,7 @@ pub struct SignaturePayloadV0 {
 }
 
 #[derive(Clone)]
-#[contracttype(lib = "soroban_sdk_auth")]
+#[contracttype]
 pub enum SignaturePayload {
     V0(SignaturePayloadV0),
 }
