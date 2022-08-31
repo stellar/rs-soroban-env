@@ -13,7 +13,7 @@ rust-version = "1.63"
 proc-macro = true
 
 [dependencies]
-stellar-xdr = { version = "0.0.1", features = ["next", "std"] }
+stellar-xdr = { version = "0.0.2", features = ["next", "std"] }
 syn = {version="1.0",features=["full"]}
 quote = "1.0"
 proc-macro2 = "1.0"
