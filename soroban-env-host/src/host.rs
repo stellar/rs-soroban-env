@@ -783,11 +783,7 @@ impl Host {
 
     // "testutils" is not covered by budget metering.
     #[cfg(feature = "testutils")]
-    pub fn register_test_contract_token(
-        &self,
-        contract_id: Object,
-        contract_wasm: &[u8],
-    ) -> Result<(), HostError> {
+    pub fn register_test_contract_token(&self, contract_id: Object) -> Result<(), HostError> {
         self.create_contract_with_id(ScContractCode::Token, contract_id)
     }
 
