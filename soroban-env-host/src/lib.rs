@@ -46,8 +46,6 @@ mod test;
 
 #[cfg(feature = "testutils")]
 pub use host::ContractFunctionSet;
-#[cfg(feature = "testutils")]
-pub use host::LedgerInfo;
-pub use host::{Host, HostError};
+pub use host::{metered_map::MeteredOrdMap, Host, HostError, LedgerInfo};
 pub use im_rc;
 pub use soroban_env_common::*;
