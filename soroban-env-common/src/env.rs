@@ -28,17 +28,19 @@ pub trait EnvBase: Sized + Clone {
     // _only_ interface to passing contract pointers to the host is going to be
     // in EnvBase, not Env, and as a bonus we get lifetime checking for free.
 
-    /// Copy a slice of bytes from the caller's memory into an existing `Binary`
-    /// object the host, returning a new `Binary`.
-    fn binary_copy_from_slice(&self, b: Object, b_pos: RawVal, mem: &[u8]) -> Object;
+    /// Copy a slice of bytes from the caller's memory into an existing `Bytes`
+    /// object the host, returning a new `Bytes`.
+    fn bytes_copy_from_slice(&self, b: Object, b_pos: RawVal, mem: &[u8]) -> Object;
 
-    /// Copy a slice of bytes from a `Binary` in the host into the caller's memory.
-    fn binary_copy_to_slice(&self, b: Object, b_pos: RawVal, mem: &mut [u8]);
+    /// Copy a slice of bytes from a `Bytes` object in the host into the
+    /// caller's memory.
+    fn bytes_copy_to_slice(&self, b: Object, b_pos: RawVal, mem: &mut [u8]);
 
-    /// For a new `Binary` in the host from a slice of memory in the caller.
-    fn binary_new_from_slice(&self, mem: &[u8]) -> Object;
+    /// Form a new `Bytes` object in the host from a slice of memory in the
+    /// caller.
+    fn bytes_new_from_slice(&self, mem: &[u8]) -> Object;
 
-    // As with the binary functions above, these take _slices_ with definite
+    // As with the bytes functions above, these take _slices_ with definite
     // lifetimes. The first slice is interpreted as a (very restricted)
     // format-string -- containing literal text interspersed with some number of
     // `{}` markers which must match the number of other args passed -- with
@@ -56,7 +58,7 @@ pub trait EnvBase: Sized + Clone {
     //
     // When Env = Guest, these currently compile as no-ops. We may change this
     // to record a VM-relative guest static string pointer (similar to how the
-    // binary functions above work) into the debug buffer in the future, but it
+    // bytes functions above work) into the debug buffer in the future, but it
     // is a little involved to do so and we assume that VM code probably does
     // not want to be carrying static strings at all.
 
@@ -140,16 +142,16 @@ macro_rules! call_macro_with_all_host_functions {
                 // This one variant of logging does not take a format string and
                 // is live in both Env=Guest and Env=Host configurations.
                 {"_", fn log_value(v:RawVal) -> RawVal }
-                /// Get the binary contractID of the contract which invoked the
+                /// Get the contractID `Bytes` of the contract which invoked the
                 /// running contract. Traps if the running contract was not
                 /// invoked by a contract.
                 {"0", fn get_invoking_contract() -> Object }
                 {"1", fn obj_cmp(a:RawVal, b:RawVal) -> i64 }
                 /// Records a contract event. `topics` is expected to be a `SCVec` with
-                /// length <= 4 that cannot contain Vecs, Maps, or Binaries > 32 bytes
-                /// On succes, returns an `SCStatus::Ok`.
+                /// length <= 4 that cannot contain `Vec`, `Map`, or `Bytes` with length > 32
+                /// On success, returns an `SCStatus::Ok`.
                 {"2", fn contract_event(topics:Object, data:RawVal) -> RawVal }
-                /// Get the binary contractID of the contract which invoked the
+                /// Get the contractID `Bytes` of the contract which invoked the
                 /// running contract. Traps if the running contract was not
                 /// invoked by a contract.
                 {"3", fn get_current_contract() -> Object }
@@ -159,7 +161,7 @@ macro_rules! call_macro_with_all_host_functions {
                 {"5", fn get_ledger_sequence() -> RawVal }
                 /// Return the timestamp number of the current ledger as a u64.
                 {"6", fn get_ledger_timestamp() -> Object }
-                /// Return the network identity of the current ledger as bytes.
+                /// Return the network identity of the current ledger as `Bytes`.
                 {"7", fn get_ledger_network_id() -> Object }
                 /// Returns the full call stack from the first contract call
                 /// to the current one as a vector of vectors, where the inside
@@ -230,37 +232,42 @@ macro_rules! call_macro_with_all_host_functions {
                 {"2", fn vec_del(v:Object, i:RawVal) -> Object}
                 /// Returns length of the vector.
                 {"3", fn vec_len(v:Object) -> RawVal}
+                /// Push a value to the front of a vector.
+                {"4", fn vec_push_front(v:Object, x:RawVal) -> Object}
+                /// Removes the first element from the vector and returns the new vector.
+                /// Traps if original vector is empty.
+                {"5", fn vec_pop_front(v:Object) -> Object}
                 /// Appends an element to the back of the vector.
-                {"4", fn vec_push(v:Object, x:RawVal) -> Object}
+                {"6", fn vec_push_back(v:Object, x:RawVal) -> Object}
                 /// Removes the last element from the vector and returns the new vector.
                 /// Traps if original vector is empty.
-                {"5", fn vec_pop(v:Object) -> Object}
+                {"7", fn vec_pop_back(v:Object) -> Object}
                 /// Return the first element in the vector. Traps if the vector is empty
-                {"6", fn vec_front(v:Object) -> RawVal}
+                {"8", fn vec_front(v:Object) -> RawVal}
                 /// Return the last element in the vector. Traps if the vector is empty
-                {"7", fn vec_back(v:Object) -> RawVal}
+                {"9", fn vec_back(v:Object) -> RawVal}
                 /// Inserts an element at index `i` within the vector, shifting all elements after it to the right.
                 /// Traps if the index is out of bound
-                {"8", fn vec_insert(v:Object, i:RawVal, x:RawVal) -> Object}
+                {"A", fn vec_insert(v:Object, i:RawVal, x:RawVal) -> Object}
                 /// Clone the vector `v1`, then moves all the elements of vector `v2` into it.
                 /// Return the new vector. Traps if number of elements in the vector overflows a u32.
-                {"9", fn vec_append(v1:Object, v2:Object) -> Object}
+                {"B", fn vec_append(v1:Object, v2:Object) -> Object}
                 /// Copy the elements from `start` index until `end` index, exclusive, in the vector and create a new vector from it.
                 /// Return the new vector. Traps if the index is out of bound.
-                {"A", fn vec_slice(v:Object, start:RawVal, end:RawVal) -> Object}
+                {"C", fn vec_slice(v:Object, start:RawVal, end:RawVal) -> Object}
                 /// Get the index of the first occurrence of a given element in the vector.
                 /// Returns the u32 index of the value if it's there. Otherwise, it returns `ScStatic::Void`.
-                {"B", fn vec_first_index_of(v:Object, x:RawVal) -> RawVal}
+                {"D", fn vec_first_index_of(v:Object, x:RawVal) -> RawVal}
                 /// Get the index of the last occurrence of a given element in the vector.
                 /// Returns the u32 index of the value if it's there. Otherwise, it returns `ScStatic::Void`.
-                {"C", fn vec_last_index_of(v:Object, x:RawVal) -> RawVal}
+                {"E", fn vec_last_index_of(v:Object, x:RawVal) -> RawVal}
                 /// Binary search a sorted vector for a given element.
                 /// If it exists, the high-32 bits of the return value is 0x0001 and the low-32 bits
                 /// contain the u32 index of the element.
                 /// If it does not exist, the high-32 bits of the return value is 0x0000 and the low-32 bits
                 /// contain the u32 index at which the element would need to be inserted into the vector to
                 /// maintain sorted order.
-                {"D", fn vec_binary_search(v:Object, x:RawVal) -> u64}
+                {"F", fn vec_binary_search(v:Object, x:RawVal) -> u64}
             }
 
             mod ledger "l" {
@@ -313,99 +320,100 @@ macro_rules! call_macro_with_all_host_functions {
                 {"B", fn bigint_shl(x:Object, y:Object) -> Object}
                 /// Performs the `>>` operation. Traps if `y` is negative or larger than the size of u64.
                 {"C", fn bigint_shr(x:Object, y:Object) -> Object}
-                /// Returns an ordering between `x` and `y`: -1 (less), 0 (equal) or 1 (greater).
-                {"D", fn bigint_cmp(x:Object, y:Object) -> RawVal}
                 /// Returns true if `x` is equal to the additive identity.
-                {"E", fn bigint_is_zero(x:Object) -> RawVal}
+                {"D", fn bigint_is_zero(x:Object) -> RawVal}
                 /// Performs the unary `-` operation.
-                {"F", fn bigint_neg(x:Object) -> Object}
+                {"E", fn bigint_neg(x:Object) -> Object}
                 /// Performs the unary `!` operation.
-                {"G", fn bigint_not(x:Object) -> Object}
+                {"F", fn bigint_not(x:Object) -> Object}
                 /// Calculates the Greatest Common Divisor (GCD) of `x` and `y`.
-                {"H", fn bigint_gcd(x:Object, y:Object) -> Object}
+                {"G", fn bigint_gcd(x:Object, y:Object) -> Object}
                 /// Calculates the Lowest Common Multiple (LCM) of `x` and `y`.
-                {"I", fn bigint_lcm(x:Object, y:Object) -> Object}
+                {"H", fn bigint_lcm(x:Object, y:Object) -> Object}
                 /// Calculates `x` to the power `y`. Traps if `y` is negative or larger than the size of u64.
-                {"J", fn bigint_pow(x:Object, y:Object) -> Object}
+                {"I", fn bigint_pow(x:Object, y:Object) -> Object}
                 /// Calculates `(p ^ q) mod m`. Note that this rounds like `mod_floor`, not like the `%` operator, which makes a difference when given a negative `p` or `m`.
                 /// The result will be in the interval `[0, m)` for `m > 0`, or in the interval `(m, 0]` for `m < 0`.
                 /// Traps if the `q` is negative or the `m` is zero.
-                {"K", fn bigint_pow_mod(p:Object, q:Object, m:Object) -> Object}
+                {"J", fn bigint_pow_mod(p:Object, q:Object, m:Object) -> Object}
                 /// Calculates the truncated principal square root of `x`. Traps if `x` is negative.
-                {"L", fn bigint_sqrt(x:Object) -> Object}
+                {"K", fn bigint_sqrt(x:Object) -> Object}
                 /// Determines the fewest bits necessary to express `x`, not including the sign.
-                {"M", fn bigint_bits(x:Object) -> u64}
+                {"L", fn bigint_bits(x:Object) -> u64}
                 /// Outputs the BigInt's magnitude in big-endian byte order into a byte array. The sign is dropped.
-                {"N", fn bigint_to_bytes_be(x:Object) -> Object}
+                {"M", fn bigint_to_bytes_be(x:Object) -> Object}
                 /// Outputs the BigInt's magnitude in the requested base in big-endian digit order into a byte array.
                 /// The sign is dropped. Radix must be in the range 2...256.
-                {"O", fn bigint_to_radix_be(x:Object, radix:RawVal) -> Object}
+                {"N", fn bigint_to_radix_be(x:Object, radix:RawVal) -> Object}
                 /// Creates a BigInt from a byte array and i32 sign.
                 /// Bytes are in big-endian order. Sign is interpreted: -1 as negative, 0 as zero, 1 as positive
                 /// If sign is 0, then the input bytes are ignored and will return a BigInt of 0.
-                {"P", fn bigint_from_bytes_be(sign:RawVal, bytes:Object) -> Object}
+                {"O", fn bigint_from_bytes_be(sign:RawVal, bytes:Object) -> Object}
                 /// Creates a BigInt from a byte array `buf`, an i32 sign and an u32 radix.
                 /// Each u8 of the byte array is interpreted as one digit of the number and
                 /// must therefore be less than the radix. The bytes are in big-endian byte order.
                 /// Radix must be in the range 2..=256. Sign follows same rule as in `bigint_from_bytes_be`.
-                {"Q", fn bigint_from_radix_be(sign:RawVal, buf:Object, radix:RawVal) -> Object}
+                {"P", fn bigint_from_radix_be(sign:RawVal, buf:Object, radix:RawVal) -> Object}
 
             }
 
-            mod binary "b" {
-                /// Serializes an (SC)Val into XDR opaque binary array.
-                {"_", fn serialize_to_binary(v:RawVal) -> Object}
-                /// Deserialize a binary array to get back the (SC)Val.
-                {"0", fn deserialize_from_binary(b:Object) -> RawVal}
-                /// Copies a slice of bytes from a binary array specified at offset `b_pos` with length `len` into the linear memory at position `lm_pos`.
-                /// Traps if either the binary array or the linear memory doesn't have enough bytes.
-                {"1", fn binary_copy_to_linear_memory(b:Object, b_pos:RawVal, lm_pos:RawVal, len:RawVal) -> RawVal}
-                /// Copies a segment of the linear memory specified at position `lm_pos` with length `len`, into a binary array at offset `b_pos`. The binary array may grow in size to accommodate the new bytes.
+            mod bytes "b" {
+                /// Serializes an (SC)Val into XDR opaque `Bytes` object.
+                {"_", fn serialize_to_bytes(v:RawVal) -> Object}
+                /// Deserialize a `Bytes` object to get back the (SC)Val.
+                {"0", fn deserialize_from_bytes(b:Object) -> RawVal}
+                /// Copies a slice of bytes from a `Bytes` object specified at offset `b_pos` with
+                /// length `len` into the linear memory at position `lm_pos`.
+                /// Traps if either the `Bytes` object or the linear memory doesn't have enough bytes.
+                {"1", fn bytes_copy_to_linear_memory(b:Object, b_pos:RawVal, lm_pos:RawVal, len:RawVal) -> RawVal}
+                /// Copies a segment of the linear memory specified at position `lm_pos` with
+                /// length `len`, into a `Bytes` object at offset `b_pos`. The `Bytes` object may
+                /// grow in size to accommodate the new bytes.
                 /// Traps if the linear memory doesn't have enough bytes.
-                {"2", fn binary_copy_from_linear_memory(b:Object, b_pos:RawVal, lm_pos:RawVal, len:RawVal) -> Object}
-                /// Constructs a new binary array initialized with bytes copied from a linear memory slice specified at position `lm_pos` with length `len`.
-                {"3", fn binary_new_from_linear_memory(lm_pos:RawVal, len:RawVal) -> Object}
+                {"2", fn bytes_copy_from_linear_memory(b:Object, b_pos:RawVal, lm_pos:RawVal, len:RawVal) -> Object}
+                /// Constructs a new `Bytes` object initialized with bytes copied from a linear memory slice specified at position `lm_pos` with length `len`.
+                {"3", fn bytes_new_from_linear_memory(lm_pos:RawVal, len:RawVal) -> Object}
                 // These functions below ($3-$F) mirror vector operations
-                /// Create an empty new binary.
-                {"4", fn binary_new() -> Object}
-                /// Update the value at index `i` in the binary. Return the new binary.
+                /// Create an empty new `Bytes` object.
+                {"4", fn bytes_new() -> Object}
+                /// Update the value at index `i` in the `Bytes` object. Return the new `Bytes`.
                 /// Trap if the index is out of bounds.
-                {"5", fn binary_put(b:Object, i:RawVal, u:RawVal) -> Object}
-                /// Returns the element at index `i` of the binary. Traps if the index is out of bound.
-                {"6", fn binary_get(b:Object, i:RawVal) -> RawVal}
-                /// Delete an element in a binary at index `i`, shifting all elements after it to the left.
-                /// Return the new binary. Traps if the index is out of bound.
-                {"7", fn binary_del(b:Object, i:RawVal) -> Object}
-                /// Returns length of the binary.
-                {"8", fn binary_len(b:Object) -> RawVal}
-                /// Appends an element to the back of the binary.
-                {"9", fn binary_push(b:Object, u:RawVal) -> Object}
-                /// Removes the last element from the binary and returns the new binary.
-                /// Traps if original binary is empty.
-                {"A", fn binary_pop(b:Object) -> Object}
-                /// Return the first element in the binary. Traps if the binary is empty
-                {"B", fn binary_front(b:Object) -> RawVal}
-                /// Return the last element in the binary. Traps if the binary is empty
-                {"C", fn binary_back(b:Object) -> RawVal}
-                /// Inserts an element at index `i` within the binary, shifting all elements after it to the right.
+                {"5", fn bytes_put(b:Object, i:RawVal, u:RawVal) -> Object}
+                /// Returns the element at index `i` of the `Bytes` object. Traps if the index is out of bound.
+                {"6", fn bytes_get(b:Object, i:RawVal) -> RawVal}
+                /// Delete an element in a `Bytes` object at index `i`, shifting all elements after it to the left.
+                /// Return the new `Bytes`. Traps if the index is out of bound.
+                {"7", fn bytes_del(b:Object, i:RawVal) -> Object}
+                /// Returns length of the `Bytes` object.
+                {"8", fn bytes_len(b:Object) -> RawVal}
+                /// Appends an element to the back of the `Bytes` object.
+                {"9", fn bytes_push(b:Object, u:RawVal) -> Object}
+                /// Removes the last element from the `Bytes` object and returns the new `Bytes`.
+                /// Traps if original `Bytes` is empty.
+                {"A", fn bytes_pop(b:Object) -> Object}
+                /// Return the first element in the `Bytes` object. Traps if the `Bytes` is empty
+                {"B", fn bytes_front(b:Object) -> RawVal}
+                /// Return the last element in the `Bytes` object. Traps if the `Bytes` is empty
+                {"C", fn bytes_back(b:Object) -> RawVal}
+                /// Inserts an element at index `i` within the `Bytes` object, shifting all elements after it to the right.
                 /// Traps if the index is out of bound
-                {"D", fn binary_insert(b:Object, i:RawVal, u:RawVal) -> Object}
-                /// Clone the binary `b1`, then moves all the elements of binary `b2` into it.
-                /// Return the new binary. Traps if number of elements in the binary overflows a u32.
-                {"E", fn binary_append(b1:Object, b2:Object) -> Object}
-                /// Copies the elements from `start` index until `end` index, exclusive, in the binary and creates a new binary from it.
-                /// Returns the new binary. Traps if the index is out of bound.
-                {"F", fn binary_slice(b:Object, start:RawVal, end:RawVal) -> Object}
+                {"D", fn bytes_insert(b:Object, i:RawVal, u:RawVal) -> Object}
+                /// Clone the `Bytes` object `b1`, then moves all the elements of `Bytes` object `b2` into it.
+                /// Return the new `Bytes`. Traps if its length overflows a u32.
+                {"E", fn bytes_append(b1:Object, b2:Object) -> Object}
+                /// Copies the elements from `start` index until `end` index, exclusive, in the `Bytes` object and creates a new `Bytes` from it.
+                /// Returns the new `Bytes`. Traps if the index is out of bound.
+                {"F", fn bytes_slice(b:Object, start:RawVal, end:RawVal) -> Object}
             }
 
             mod hash "h" {
-                {"_", fn hash_from_binary(x:Object) -> Object}
-                {"0", fn hash_to_binary(x:Object) -> Object}
+                {"_", fn hash_from_bytes(x:Object) -> Object}
+                {"0", fn hash_to_bytes(x:Object) -> Object}
             }
 
             mod key "k" {
-                {"_", fn public_key_from_binary(x:Object) -> Object}
-                {"0", fn public_key_to_binary(x:Object) -> Object}
+                {"_", fn public_key_from_bytes(x:Object) -> Object}
+                {"0", fn public_key_to_bytes(x:Object) -> Object}
             }
 
             mod crypto "c" {
@@ -415,21 +423,21 @@ macro_rules! call_macro_with_all_host_functions {
 
             mod account "a" {
                 /// Get the low threshold for the account with ed25519 public
-                /// key a (a is binary). Traps if no such account exists.
+                /// key `a` (`a` is `Bytes`). Traps if no such account exists.
                 {"_", fn account_get_low_threshold(a:Object) -> RawVal}
                 /// Get the medium threshold for the account with ed25519 public
-                /// key a (a is binary). Traps if no such account exists.
+                /// key `a` (`a` is `Bytes`). Traps if no such account exists.
                 {"0", fn account_get_medium_threshold(a:Object) -> RawVal}
                 /// Get the high threshold for the account with ed25519 public
-                /// key a (a is binary). Traps if no such account exists.
+                /// key `a` (`a` is `Bytes`). Traps if no such account exists.
                 {"1", fn account_get_high_threshold(a:Object) -> RawVal}
                 /// Get the signer weight for the signer with ed25519 public key
-                /// s (s is binary) on the account with ed25519 public key a (a
-                /// is binary). Returns the master weight if the signer is the
+                /// `s` (`s` is `Bytes`) on the account with ed25519 public key `a` (`a`
+                /// is `Bytes`). Returns the master weight if the signer is the
                 /// master, and returns 0 if no such signer exists. Traps if no
                 /// such account exists.
                 {"2", fn account_get_signer_weight(a:Object, s:Object) -> RawVal}
-                /// Given an ed25519 public key `a` (`a` is binary) of an account,
+                /// Given an ed25519 public key `a` (`a` is `Bytes`) of an account,
                 /// check if it exists. Returns (SCStatic) TRUE/FALSE.
                 {"3", fn account_exists(a:Object) -> RawVal}
             }

@@ -13,13 +13,13 @@ impl<E: Env, const N: usize> TryFromVal<E, RawVal> for [u8; N] {
             return Err(ConversionError);
         }
         let env = env.clone();
-        let bin = unsafe { Object::unchecked_from_val(val) };
-        let len = unsafe { u32::unchecked_from_val(env.binary_len(bin)) };
+        let bytes = unsafe { Object::unchecked_from_val(val) };
+        let len = unsafe { u32::unchecked_from_val(env.bytes_len(bytes)) };
         if len as usize != N {
             return Err(ConversionError);
         }
         let mut arr = [0u8; N];
-        env.binary_copy_to_slice(bin, RawVal::U32_ZERO, &mut arr);
+        env.bytes_copy_to_slice(bytes, RawVal::U32_ZERO, &mut arr);
         Ok(arr)
     }
 }
@@ -35,9 +35,9 @@ impl<E: Env, const N: usize> TryIntoVal<E, [u8; N]> for RawVal {
 impl<E: Env> IntoVal<E, RawVal> for &[u8] {
     fn into_val(self, env: &E) -> RawVal {
         let env = env.clone();
-        let mut bin = env.binary_new();
-        bin = env.binary_copy_from_slice(bin, RawVal::U32_ZERO, self);
-        bin.to_raw()
+        let mut bytes = env.bytes_new();
+        bytes = env.bytes_copy_from_slice(bytes, RawVal::U32_ZERO, self);
+        bytes.to_raw()
     }
 }
 

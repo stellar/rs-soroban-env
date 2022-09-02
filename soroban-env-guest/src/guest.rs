@@ -32,15 +32,15 @@ impl EnvBase for Guest {
         unimplemented!()
     }
 
-    fn binary_copy_from_slice(&self, b: Object, b_pos: RawVal, mem: &[u8]) -> Object {
+    fn bytes_copy_from_slice(&self, b: Object, b_pos: RawVal, mem: &[u8]) -> Object {
         unimplemented!()
     }
 
-    fn binary_copy_to_slice(&self, b: Object, b_pos: RawVal, mem: &mut [u8]) {
+    fn bytes_copy_to_slice(&self, b: Object, b_pos: RawVal, mem: &mut [u8]) {
         unimplemented!()
     }
 
-    fn binary_new_from_slice(&self, mem: &[u8]) -> Object {
+    fn bytes_new_from_slice(&self, mem: &[u8]) -> Object {
         unimplemented!()
     }
 
@@ -75,38 +75,38 @@ impl EnvBase for Guest {
         Self
     }
 
-    fn binary_copy_from_slice(&self, b: Object, b_pos: RawVal, mem: &[u8]) -> Object {
+    fn bytes_copy_from_slice(&self, b: Object, b_pos: RawVal, mem: &[u8]) -> Object {
         sa::assert_eq_size!(u32, *const u8);
         sa::assert_eq_size!(u32, usize);
         let lm_pos: RawVal = RawVal::from_u32(mem.as_ptr() as u32);
         let len: RawVal = RawVal::from_u32(mem.len() as u32);
-        self.binary_copy_from_linear_memory(b, b_pos, lm_pos, len)
+        self.bytes_copy_from_linear_memory(b, b_pos, lm_pos, len)
     }
 
-    fn binary_copy_to_slice(&self, b: Object, b_pos: RawVal, mem: &mut [u8]) {
+    fn bytes_copy_to_slice(&self, b: Object, b_pos: RawVal, mem: &mut [u8]) {
         sa::assert_eq_size!(u32, *const u8);
         sa::assert_eq_size!(u32, usize);
         let lm_pos: RawVal = RawVal::from_u32(mem.as_ptr() as u32);
         let len: RawVal = RawVal::from_u32(mem.len() as u32);
-        self.binary_copy_to_linear_memory(b, b_pos, lm_pos, len);
+        self.bytes_copy_to_linear_memory(b, b_pos, lm_pos, len);
     }
 
-    fn binary_new_from_slice(&self, mem: &[u8]) -> Object {
+    fn bytes_new_from_slice(&self, mem: &[u8]) -> Object {
         sa::assert_eq_size!(u32, *const u8);
         sa::assert_eq_size!(u32, usize);
         let lm_pos: RawVal = RawVal::from_u32(mem.as_ptr() as u32);
         let len: RawVal = RawVal::from_u32(mem.len() as u32);
-        self.binary_new_from_linear_memory(lm_pos, len)
+        self.bytes_new_from_linear_memory(lm_pos, len)
     }
 
     fn log_static_fmt_val(&self, fmt: &'static str, v: RawVal) {
         // TODO: It's possible we might want to do something in the wasm
-        // case with static strings similar to the binary functions above,
+        // case with static strings similar to the bytes functions above,
         // eg. decay the strings to u32 values and pass them to the host as linear
         // memory locations for capture into the debug-events buffer,
         // but for the time being we're going to _not_ do that because
         // we assume users building for wasm want their static strings
-        // _removed_ from the binary statically (it's also somewhat annoying
+        // _removed_ from the bytes statically (it's also somewhat annoying
         // to implement the capture of static strings into the debug buffer,
         // it makes the debug buffer into non-Send+Sync and then we need
         // to remove it from the HostError, report separately from HostError's

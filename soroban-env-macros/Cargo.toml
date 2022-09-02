@@ -5,7 +5,7 @@ homepage = "https://github.com/stellar/rs-soroban-env"
 repository = "https://github.com/stellar/rs-soroban-env"
 authors = ["Stellar Development Foundation <info@stellar.org>"]
 license = "Apache-2.0"
-version = "0.0.3"
+version = "0.0.4"
 edition = "2021"
 rust-version = "1.63"
 
@@ -13,7 +13,7 @@ rust-version = "1.63"
 proc-macro = true
 
 [dependencies]
-stellar-xdr = { version = "0.0.1", features = ["next", "std"] }
+stellar-xdr = { version = "0.0.2", features = ["next", "std"] }
 syn = {version="1.0",features=["full"]}
 quote = "1.0"
 proc-macro2 = "1.0"

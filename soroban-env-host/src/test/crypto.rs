@@ -12,9 +12,9 @@ fn sha256_test() -> Result<(), HostError> {
     let hash_obj = host.compute_hash_sha256(obj0.to_object())?;
 
     let v = host.from_host_val(hash_obj.to_raw())?;
-    let bin = match v {
+    let bytes = match v {
         ScVal::Object(Some(scobj)) => match scobj {
-            ScObject::Bytes(bin) => bin,
+            ScObject::Bytes(bytes) => bytes,
             _ => panic!("Wrong type"),
         },
         _ => panic!("Wrong type"),
@@ -28,7 +28,7 @@ fn sha256_test() -> Result<(), HostError> {
         75, 245, 18, 47, 52, 69, 84, 197, 59, 222, 46, 187, 140, 210, 183, 227, 209, 96, 10, 214,
         49, 195, 133, 165, 215, 204, 226, 60, 119, 133, 69, 154,
     ];
-    assert_eq!(bin.as_vec().clone(), exp);
+    assert_eq!(bytes.as_vec().clone(), exp);
     Ok(())
 }
 

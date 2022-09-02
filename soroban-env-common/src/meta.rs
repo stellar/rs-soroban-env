@@ -56,5 +56,5 @@
 // implementations over a long period of time.
 
 soroban_env_macros::generate_env_meta_consts!(
-    interface_version: 9,
+    interface_version: 11,
 );

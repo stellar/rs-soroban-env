@@ -57,9 +57,10 @@ impl Host {
     }
 
     pub(crate) fn to_u256(&self, a: Object) -> Result<Uint256, HostError> {
-        self.visit_obj(a, |bin: &Vec<u8>| {
+        self.visit_obj(a, |bytes: &Vec<u8>| {
             self.charge_budget(CostType::BytesClone, 32)?;
-            bin.try_into()
+            bytes
+                .try_into()
                 .map_err(|_| self.err_general("bad u256 length"))
         })
     }
@@ -87,7 +88,7 @@ impl Host {
         name: &'static str,
         hash: Object,
     ) -> Result<Hash, HostError> {
-        self.fixed_length_binary_from_obj_input::<Hash, 32>(name, hash)
+        self.fixed_length_bytes_from_obj_input::<Hash, 32>(name, hash)
     }
 
     pub(crate) fn uint256_from_obj_input(
@@ -95,7 +96,7 @@ impl Host {
         name: &'static str,
         u256: Object,
     ) -> Result<Uint256, HostError> {
-        self.fixed_length_binary_from_obj_input::<Uint256, 32>(name, u256)
+        self.fixed_length_bytes_from_obj_input::<Uint256, 32>(name, u256)
     }
 
     pub(crate) fn signature_from_obj_input(
@@ -103,10 +104,10 @@ impl Host {
         name: &'static str,
         sig: Object,
     ) -> Result<Signature, HostError> {
-        self.fixed_length_binary_from_obj_input::<Signature, SIGNATURE_LENGTH>(name, sig)
+        self.fixed_length_bytes_from_obj_input::<Signature, SIGNATURE_LENGTH>(name, sig)
     }
 
-    fn fixed_length_binary_from_obj_input<T, const N: usize>(
+    fn fixed_length_bytes_from_obj_input<T, const N: usize>(
         &self,
         name: &'static str,
         obj: Object,
@@ -114,8 +115,8 @@ impl Host {
     where
         T: From<[u8; N]>,
     {
-        self.visit_obj(obj, |bin: &Vec<u8>| {
-            match <[u8; N]>::try_from(bin.as_slice()) {
+        self.visit_obj(obj, |bytes: &Vec<u8>| {
+            match <[u8; N]>::try_from(bytes.as_slice()) {
                 Ok(arr) => {
                     self.charge_budget(CostType::BytesClone, N as u64)?;
                     Ok(arr.into())
@@ -132,18 +133,18 @@ impl Host {
     }
 
     pub fn ed25519_pub_key_from_obj_input(&self, k: Object) -> Result<PublicKey, HostError> {
-        self.visit_obj(k, |bin: &Vec<u8>| {
-            self.charge_budget(CostType::ComputeEd25519PubKey, bin.len() as u64)?;
-            PublicKey::from_bytes(bin).map_err(|_| {
+        self.visit_obj(k, |bytes: &Vec<u8>| {
+            self.charge_budget(CostType::ComputeEd25519PubKey, bytes.len() as u64)?;
+            PublicKey::from_bytes(bytes).map_err(|_| {
                 self.err_status_msg(ScHostObjErrorCode::UnexpectedType, "invalid public key")
             })
         })
     }
 
-    pub fn sha256_hash_from_binary_input(&self, x: Object) -> Result<Vec<u8>, HostError> {
-        self.visit_obj(x, |bin: &Vec<u8>| {
-            self.charge_budget(CostType::ComputeSha256Hash, bin.len() as u64)?;
-            let hash = Sha256::digest(bin).as_slice().to_vec();
+    pub fn sha256_hash_from_bytes_input(&self, x: Object) -> Result<Vec<u8>, HostError> {
+        self.visit_obj(x, |bytes: &Vec<u8>| {
+            self.charge_budget(CostType::ComputeSha256Hash, bytes.len() as u64)?;
+            let hash = Sha256::digest(bytes).as_slice().to_vec();
             if hash.len() != 32 {
                 return Err(self.err_general("incorrect hash size"));
             }
@@ -204,10 +205,10 @@ impl Host {
                                     | HostObject::ContractCode(_) => {
                                         Err(self.err_status(ScHostObjErrorCode::UnexpectedType))
                                     }
-                                    HostObject::Bin(b) => {
+                                    HostObject::Bytes(b) => {
                                         if b.len() > TOPIC_BYTES_LENGTH_LIMIT {
                                             // TODO: use more event-specific error codes than `UnexpectedType`.
-                                            // Something like "topic binary exceeds length limit"
+                                            // Something like "topic bytes exceeds length limit"
                                             return Err(
                                                 self.err_status(ScHostObjErrorCode::UnexpectedType)
                                             );

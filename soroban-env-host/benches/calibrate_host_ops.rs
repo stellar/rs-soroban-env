@@ -51,7 +51,7 @@ impl HostCostMeasurement for VecAllocVariableSizeRun {
 
 /// Measures the costs of allocating large numbers of 0-sized vectors.
 impl HostCostMeasurement for EmptyVecAllocVariableCountRun {
-    const COST_TYPE: CostType = CostType::HostVecAllocVec;
+    const COST_TYPE: CostType = CostType::ImVecNew;
 
     fn new(_host: &Host, size_hint: u64) -> Self {
         let size = size_hint * 1000;
@@ -94,7 +94,7 @@ impl HostCostMeasurement for MapAllocVariableSizeRun {
 
 /// Measures the costs of allocating large numbers of 0-sized maps.
 impl HostCostMeasurement for EmptyMapAllocVariableCountRun {
-    const COST_TYPE: CostType = CostType::HostMapAllocMap;
+    const COST_TYPE: CostType = CostType::ImMapNew;
 
     fn new(_host: &Host, size_hint: u64) -> Self {
         let size = size_hint * 1000;

@@ -39,7 +39,7 @@ macro_rules! impl_for_tuple {
             fn into_val(self, env: &E) -> RawVal {
                 let env = env.clone();
                 let vec = env.vec_new($count.into());
-                $(let vec = env.vec_push(vec, self.$idx.into_val(&env));)*
+                $(let vec = env.vec_push_back(vec, self.$idx.into_val(&env));)*
                 vec.to_raw()
             }
         }
@@ -51,7 +51,7 @@ macro_rules! impl_for_tuple {
             fn into_val(self, env: &E) -> RawVal {
                 let env = env.clone();
                 let vec = env.vec_new($count.into());
-                $(let vec = env.vec_push(vec, (&self.$idx).into_val(&env));)*
+                $(let vec = env.vec_push_back(vec, (&self.$idx).into_val(&env));)*
                 vec.to_raw()
             }
         }

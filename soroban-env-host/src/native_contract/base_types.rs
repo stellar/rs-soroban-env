@@ -75,8 +75,10 @@ impl BigInt {
     }
 
     pub fn compare(&self, other: &BigInt) -> Result<Ordering, HostError> {
-        let res = self.0.env.bigint_cmp(self.0.val, other.0.val)?;
-        let i = i32::try_from(res)?;
+        let i = self
+            .0
+            .env
+            .obj_cmp(self.0.val.to_raw(), other.0.val.to_raw())?;
         Ok(i.cmp(&0))
     }
 }
@@ -133,7 +135,7 @@ impl<const N: u32> TryFromVal<Host, Object> for BytesN<N> {
     type Error = HostError;
 
     fn try_from_val(env: &Host, val: Object) -> Result<Self, Self::Error> {
-        let len: u32 = env.binary_len(val)?.try_into()?;
+        let len: u32 = env.bytes_len(val)?.try_into()?;
         if len == N {
             Ok(Self(val.in_env(env)))
         } else {
@@ -328,7 +330,7 @@ impl Vec {
         HostError: From<<T as TryIntoVal<Host, RawVal>>::Error>,
     {
         let rv = x.try_into_val(&self.0.env)?;
-        self.0.val = self.0.env.vec_push(self.0.val, rv)?;
+        self.0.val = self.0.env.vec_push_back(self.0.val, rv)?;
         Ok(())
     }
 }

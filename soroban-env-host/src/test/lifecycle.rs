@@ -97,15 +97,15 @@ fn create_contract_test_helper(
     )?;
 
     let v = host.from_host_val(contract_id.to_raw())?;
-    let bin = match v {
+    let bytes = match v {
         ScVal::Object(Some(scobj)) => match scobj {
-            ScObject::Bytes(bin) => bin,
+            ScObject::Bytes(bytes) => bytes,
             _ => panic!("Wrong type"),
         },
         _ => panic!("Wrong type"),
     };
 
-    if bin.as_slice() != hash_copy.0.as_slice() {
+    if bytes.as_slice() != hash_copy.0.as_slice() {
         panic!("return value doesn't match")
     }
 

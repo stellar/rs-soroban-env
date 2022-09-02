@@ -10,10 +10,10 @@ fn u8_array() {
     let val: RawVal = arr.into_val(&host);
     let obj: Object = val.try_into().unwrap();
     assert!(obj.is_obj_type(ScObjectType::Bytes));
-    assert_eq!(3u32, host.binary_len(obj).try_into().unwrap());
-    assert_eq!(1u32, host.binary_get(obj, 0u32.into()).try_into().unwrap());
-    assert_eq!(2u32, host.binary_get(obj, 1u32.into()).try_into().unwrap());
-    assert_eq!(3u32, host.binary_get(obj, 2u32.into()).try_into().unwrap());
+    assert_eq!(3u32, host.bytes_len(obj).try_into().unwrap());
+    assert_eq!(1u32, host.bytes_get(obj, 0u32.into()).try_into().unwrap());
+    assert_eq!(2u32, host.bytes_get(obj, 1u32.into()).try_into().unwrap());
+    assert_eq!(3u32, host.bytes_get(obj, 2u32.into()).try_into().unwrap());
 
     let arr: [u8; 3] = val.try_into_val(&host).unwrap();
     assert_eq!(arr, [1, 2, 3]);
@@ -27,10 +27,10 @@ fn u8_slice() {
     let val: RawVal = slice.into_val(&host);
     let obj: Object = val.try_into().unwrap();
     assert!(obj.is_obj_type(ScObjectType::Bytes));
-    assert_eq!(3u32, host.binary_len(obj).try_into().unwrap());
-    assert_eq!(1u32, host.binary_get(obj, 0u32.into()).try_into().unwrap());
-    assert_eq!(2u32, host.binary_get(obj, 1u32.into()).try_into().unwrap());
-    assert_eq!(3u32, host.binary_get(obj, 2u32.into()).try_into().unwrap());
+    assert_eq!(3u32, host.bytes_len(obj).try_into().unwrap());
+    assert_eq!(1u32, host.bytes_get(obj, 0u32.into()).try_into().unwrap());
+    assert_eq!(2u32, host.bytes_get(obj, 1u32.into()).try_into().unwrap());
+    assert_eq!(3u32, host.bytes_get(obj, 2u32.into()).try_into().unwrap());
 
     let arr: [u8; 3] = val.try_into_val(&host).unwrap();
     assert_eq!(arr, [1, 2, 3]);

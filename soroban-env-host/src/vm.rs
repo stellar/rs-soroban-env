@@ -387,7 +387,7 @@ impl Vm {
         })
     }
 
-    /// Returns the raw binary content of a named custom section from the WASM
+    /// Returns the raw bytes content of a named custom section from the WASM
     /// module loaded into the [Vm], or `None` if no such custom section exists.
     pub fn custom_section(&self, name: impl AsRef<str>) -> Option<&[u8]> {
         Self::module_custom_section(&self.elements_module, name)
