@@ -34,7 +34,7 @@ soroban-native-sdk-macros = { path = "../../soroban-native-sdk-macros" }
 
 # You should update this rev to the XDR rev used by the outer workspace
 # anytime you're going to recompile this workspace.
-stellar-xdr = { git = "https://github.com/stellar/rs-stellar-xdr", rev = "8c8d334" }
+stellar-xdr = { git = "https://github.com/stellar/rs-stellar-xdr", rev = "fee9a436" }
 
 # You should actually be able to set this to be any existing version of wasmi because we are
 # not building the SDK in host mode, so the "vm" feature is off.
@@ -93,8 +93,8 @@ wasmi = { package = "soroban-wasmi", git = "https://github.com/stellar/wasmi", r
 # when you change the Env trait itself, and whatever change you make to Env may
 # well cause recompilation to fail. Again, you will know if it doesn't compile!
 
-soroban-sdk = { git = "https://github.com/stellar/rs-soroban-sdk", rev = "0cf5257" }
-soroban-sdk-macros = { git = "https://github.com/stellar/rs-soroban-sdk", rev = "0cf5257" }
+soroban-sdk = { git = "https://github.com/stellar/rs-soroban-sdk", rev = "6d129bf6a9250d54d67ee851ea027d4a4f892673" }
+soroban-sdk-macros = { git = "https://github.com/stellar/rs-soroban-sdk", rev = "6d129bf6a9250d54d67ee851ea027d4a4f892673" }
 
 [profile.release]
 opt-level = "z"
