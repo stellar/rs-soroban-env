@@ -59,8 +59,6 @@ jobs:
     runs-on: ${{ matrix.sys.os }}
     steps:
     - uses: actions/checkout@v3
-    - run: rustup update
-    - run: rustup target add ${{ matrix.sys.target }}
     - uses: actions/cache@v3
       with:
         path: |
@@ -79,6 +77,8 @@ jobs:
           ${{ github.job }}-target-
     - if: github.ref_protected
       run: rm -fr target
+    - run: rustup update
+    - run: rustup target add ${{ matrix.sys.target }}
     - run: cargo install --locked --version 0.5.16 cargo-hack
     - run: cargo hack --feature-powerset check --locked --target ${{ matrix.sys.target }}
     - if: matrix.sys.test
