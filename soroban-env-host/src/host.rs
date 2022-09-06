@@ -78,11 +78,11 @@ pub trait ContractFunctionSet {
 #[derive(Clone)]
 pub(crate) enum Frame {
     #[cfg(feature = "vm")]
-    ContractVM(Rc<Vm>),
+    ContractVM(Rc<Vm>, Symbol),
     HostFunction(HostFunction),
-    Token(Hash),
+    Token(Hash, Symbol),
     #[cfg(feature = "testutils")]
-    TestContract(Hash),
+    TestContract(Hash, Symbol),
 }
 
 /// Temporary helper for denoting a slice of guest memory, as formed by
@@ -358,13 +358,13 @@ impl Host {
     fn get_current_contract_id(&self) -> Result<Hash, HostError> {
         self.with_current_frame(|frame| match frame {
             #[cfg(feature = "vm")]
-            Frame::ContractVM(vm) => vm.contract_id.metered_clone(&self.0.budget),
+            Frame::ContractVM(vm, _) => vm.contract_id.metered_clone(&self.0.budget),
             Frame::HostFunction(_) => {
                 Err(self.err_general("Host function context has no contract ID"))
             }
-            Frame::Token(id) => id.metered_clone(&self.0.budget),
+            Frame::Token(id, _) => id.metered_clone(&self.0.budget),
             #[cfg(feature = "testutils")]
-            Frame::TestContract(id) => Ok(id.clone()),
+            Frame::TestContract(id, _) => Ok(id.clone()),
         })
     }
 
@@ -443,7 +443,7 @@ impl Host {
         let pos: u32 = self.u32_from_rawval_input("pos", pos)?;
         let len: u32 = self.u32_from_rawval_input("len", len)?;
         self.with_current_frame(|frame| match frame {
-            Frame::ContractVM(vm) => {
+            Frame::ContractVM(vm, _) => {
                 let vm = vm.clone();
                 Ok(VmSlice { vm, pos, len })
             }
@@ -666,10 +666,12 @@ impl Host {
             }
             #[cfg(not(feature = "vm"))]
             ScContractCode::Wasm(_) => Err(self.err_general("could not dispatch")),
-            ScContractCode::Token => self.with_frame(Frame::Token(id.clone()), || {
-                use crate::native_contract::{NativeContract, Token};
-                Token.call(func, self, args)
-            }),
+            ScContractCode::Token => {
+                self.with_frame(Frame::Token(id.clone(), func.clone()), || {
+                    use crate::native_contract::{NativeContract, Token};
+                    Token.call(func, self, args)
+                })
+            }
         }
     }
 
@@ -689,7 +691,7 @@ impl Host {
             // maintains a borrow of self.0.contracts, which can cause borrow errors.
             let cfs_option = self.0.contracts.borrow().get(&id).cloned();
             if let Some(cfs) = cfs_option {
-                return self.with_frame(Frame::TestContract(id.clone()), || {
+                return self.with_frame(Frame::TestContract(id.clone(), func.clone()), || {
                     cfs.call(&func, self, args)
                         .ok_or_else(|| self.err_general("function not found"))
                 });
@@ -936,13 +938,13 @@ impl CheckedEnv for Host {
         let hash: Hash = if frames.len() >= 2 {
             match &frames[frames.len() - 2] {
                 #[cfg(feature = "vm")]
-                Frame::ContractVM(vm) => Ok(vm.contract_id.metered_clone(&self.0.budget)?),
+                Frame::ContractVM(vm, _) => Ok(vm.contract_id.metered_clone(&self.0.budget)?),
                 Frame::HostFunction(_) => {
                     Err(self.err_general("Host function context has no contract ID"))
                 }
-                Frame::Token(id) => Ok(id.clone()),
+                Frame::Token(id, _) => Ok(id.clone()),
                 #[cfg(feature = "testutils")]
-                Frame::TestContract(id) => Ok(id.clone()), // no metering
+                Frame::TestContract(id, _) => Ok(id.clone()), // no metering
             }
         } else {
             Err(self.err_general("no invoking contract"))
@@ -2002,5 +2004,48 @@ impl CheckedEnv for Host {
         Ok(self
             .with_ledger_info(|li| self.add_host_object(li.network_id.clone()))?
             .into())
+    }
+
+    fn get_current_call_stack(&self) -> Result<Object, HostError> {
+        let frames = self.0.context.borrow();
+
+        let get_host_val_tuple =
+            |id: &Hash, function: &Symbol| -> Result<(HostVal, HostVal), HostError> {
+                let id_val =
+                    self.associate_raw_val(self.add_host_object(<Vec<u8>>::from(id.0))?.into());
+
+                let function_val = self.associate_raw_val(function.clone().into());
+                Ok((id_val, function_val))
+            };
+
+        //TODO: The from_vec calls below are not metered yet
+        let mut outer = Vector::new();
+        for frame in frames.iter() {
+            match frame {
+                #[cfg(feature = "vm")]
+                Frame::ContractVM(vm, function) => {
+                    let vals = get_host_val_tuple(&vm.contract_id, &function)?;
+                    let inner =
+                        HostVec::from_vec(self.0.budget.clone(), im_rc::vector![vals.0, vals.1])?;
+                    outer.push_back(self.add_host_object(inner)?.into());
+                }
+                Frame::HostFunction(_) => (),
+                Frame::Token(id, function) => {
+                    let vals = get_host_val_tuple(&id, &function)?;
+                    let inner =
+                        HostVec::from_vec(self.0.budget.clone(), im_rc::vector![vals.0, vals.1])?;
+                    outer.push_back(self.add_host_object(inner)?.into());
+                }
+                #[cfg(feature = "testutils")]
+                Frame::TestContract(id, function) => {
+                    let vals = get_host_val_tuple(&id, &function)?;
+                    let inner =
+                        HostVec::from_vec(self.0.budget.clone(), im_rc::vector![vals.0, vals.1])?;
+                    outer.push_back(self.add_host_object(inner)?.into());
+                }
+            }
+        }
+        let res = HostVec::from_vec(self.0.budget.clone(), outer)?;
+        Ok(self.add_host_object(res)?.into())
     }
 }

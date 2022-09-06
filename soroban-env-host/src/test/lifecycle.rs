@@ -154,7 +154,7 @@ fn create_contract_test() -> Result<(), HostError> {
     let hash = sha256_hash_id_preimage(id_pre_image);
 
     //Push the contract id onto the stack to simulate a contract call
-    host.with_frame(Frame::TestContract(hash), || {
+    host.with_frame(Frame::TestContract(hash, Symbol::from_str("fn")), || {
         let key = ScVal::Static(ScStatic::LedgerKeyContractCode);
 
         // update
