@@ -59,24 +59,7 @@ jobs:
     runs-on: ${{ matrix.sys.os }}
     steps:
     - uses: actions/checkout@v3
-    - uses: actions/cache@v3
-      with:
-        path: |
-          ~/.cargo/registry/index/
-          ~/.cargo/registry/cache/
-          ~/.cargo/git/db/
-          ~/.cargo/target
-        key: cargo-${{ hashFiles('**/Cargo.lock') }}
-        restore-keys: cargo-
-    - uses: actions/cache@v3
-      with:
-        path: target/
-        key: ${{ github.job }}-target-${{ strategy.job-index }}-${{ github.sha }}
-        restore-keys: |
-          ${{ github.job }}-target-${{ strategy.job-index }}
-          ${{ github.job }}-target-
-    - if: github.ref_protected
-      run: rm -fr target
+    - uses: leighmcculloch/actions@main/rust-cache.yml
     - run: rustup update
     - run: rustup target add ${{ matrix.sys.target }}
     - run: cargo install --locked --version 0.5.16 cargo-hack --target-dir ~/.cargo/target
