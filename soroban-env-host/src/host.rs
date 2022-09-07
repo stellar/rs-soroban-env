@@ -99,7 +99,7 @@ pub struct LedgerInfo {
     pub protocol_version: u32,
     pub sequence_number: u32,
     pub timestamp: u64,
-    pub network_id: Vec<u8>,
+    pub network_passphrase: Vec<u8>,
 }
 
 #[derive(Clone, Default)]
@@ -2000,9 +2000,9 @@ impl CheckedEnv for Host {
         self.with_ledger_info(|li| Ok(self.add_host_object(li.timestamp)?.into()))
     }
 
-    fn get_ledger_network_id(&self) -> Result<Object, Self::Error> {
+    fn get_ledger_network_passphrase(&self) -> Result<Object, Self::Error> {
         Ok(self
-            .with_ledger_info(|li| self.add_host_object(li.network_id.clone()))?
+            .with_ledger_info(|li| self.add_host_object(li.network_passphrase.clone()))?
             .into())
     }
 

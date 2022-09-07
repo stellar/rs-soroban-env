@@ -18,7 +18,7 @@ fn check_ed25519_auth(
     let msg = SignaturePayloadV0 {
         function,
         contract: BytesN::<32>::try_from_val(e, e.get_current_contract()?)?,
-        network: Bytes::try_from_val(e, e.get_ledger_network_id()?)?,
+        network: Bytes::try_from_val(e, e.get_ledger_network_passphrase()?)?,
         args,
     };
     let msg_bin = e.serialize_to_bytes(SignaturePayload::V0(msg).try_into_val(e)?)?;
@@ -36,7 +36,7 @@ fn check_account_auth(
     let msg = SignaturePayloadV0 {
         function,
         contract: BytesN::<32>::try_from_val(e, e.get_current_contract()?)?,
-        network: Bytes::try_from_val(e, e.get_ledger_network_id()?)?,
+        network: Bytes::try_from_val(e, e.get_ledger_network_passphrase()?)?,
         args,
     };
     let msg_bin = e.serialize_to_bytes(SignaturePayload::V0(msg).try_into_val(e)?)?;
