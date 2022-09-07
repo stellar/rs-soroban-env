@@ -5,6 +5,7 @@ on:
     inputs:
       version:
         description: 'Version to bump to'
+        type: 'string'
         required: true
 
 jobs:
