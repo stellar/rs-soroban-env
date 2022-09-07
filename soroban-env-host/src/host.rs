@@ -1120,14 +1120,15 @@ impl CheckedEnv for Host {
     }
 
     fn map_keys(&self, m: Object) -> Result<Object, HostError> {
-        self.visit_obj(m, |hm: &HostMap| {
+        let keys = self.visit_obj(m, |hm: &HostMap| {
             let cap = self.usize_to_u32(hm.len(), "host map too large")?;
-            let mut vec = self.vec_new(cap.into())?;
-            for k in hm.keys()? {
-                vec = self.vec_push_back(vec, k.to_raw())?;
-            }
-            Ok(vec)
-        })
+            Ok(hm.keys()?.cloned().collect::<Vec<_>>())
+        })?;
+        let mut vec = HostVec::new(self.0.budget.clone())?;
+        for k in keys {
+            vec.push_back(k)?;
+        }
+        Ok(self.add_host_object(vec)?.into())
     }
 
     fn map_values(&self, m: Object) -> Result<Object, HostError> {
