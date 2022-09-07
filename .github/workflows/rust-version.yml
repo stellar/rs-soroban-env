@@ -8,4 +8,4 @@ on:
 jobs:
 
   set-rust-version:
-    uses: stellar/actions/.github/workflows/rust-set-rust-version.yml
+    uses: stellar/actions/.github/workflows/rust-set-rust-version.yml@main
