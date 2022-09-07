@@ -20,8 +20,5 @@ clean:
 regenerate-test-wasms:
 	make -C soroban-test-wasms regenerate-test-wasms
 
-bump-version:
-	cargo workspaces version --all --force '*' --no-git-commit --yes custom $(VERSION)
-
 publish:
 	cargo workspaces publish --all --force '*' --from-git --yes
