@@ -66,8 +66,8 @@ jobs:
     - run: cargo hack --feature-powerset check --locked --target ${{ matrix.sys.target }}
     - if: matrix.sys.test
       run: cargo hack --feature-powerset test --locked --target ${{ matrix.sys.target }}
-    - if: startsWith(github.ref_name, 'release/v')
-      uses: stellar/actions/rust-workspace-publish-dry-run@workspacedryrunpublish
+    - if: startsWith(github.ref_name, 'release/')
+      uses: stellar/actions/rust-workspace-publish-dry-run@main
 
   publish:
     if: github.event_name == 'release'
