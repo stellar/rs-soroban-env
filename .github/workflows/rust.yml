@@ -2,7 +2,7 @@ name: Rust
 
 on:
   push:
-    branches: [main, "release/**"]
+    branches: [main]
   pull_request:
   release:
     types: [published]
