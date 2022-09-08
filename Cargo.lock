@@ -277,6 +277,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "indexmap-nostd"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8e04e2fd2b8188ea827b32ef11de88377086d690286ab35747ef7f9bf3ccb590"
+
+[[package]]
 name = "itertools"
 version = "0.10.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -688,34 +694,31 @@ version = "0.0.5"
 
 [[package]]
 name = "soroban-wasmi"
-version = "0.11.0"
-source = "git+https://github.com/stellar/wasmi?rev=7b1f2355#7b1f2355ba26d09daf0241f953eb16f7afe16057"
+version = "0.16.0"
+source = "git+https://github.com/stellar/wasmi?rev=a61b6df#a61b6dffa0a13aca70b046fc11e379a3fde31147"
 dependencies = [
- "parity-wasm",
- "soroban-wasmi-validation",
  "soroban-wasmi_core",
-]
-
-[[package]]
-name = "soroban-wasmi-validation"
-version = "0.4.1"
-source = "git+https://github.com/stellar/wasmi?rev=7b1f2355#7b1f2355ba26d09daf0241f953eb16f7afe16057"
-dependencies = [
- "parity-wasm",
+ "spin",
+ "wasmparser-nostd",
 ]
 
 [[package]]
 name = "soroban-wasmi_core"
-version = "0.1.0"
-source = "git+https://github.com/stellar/wasmi?rev=7b1f2355#7b1f2355ba26d09daf0241f953eb16f7afe16057"
+version = "0.2.0"
+source = "git+https://github.com/stellar/wasmi?rev=a61b6df#a61b6dffa0a13aca70b046fc11e379a3fde31147"
 dependencies = [
  "downcast-rs",
  "libm",
  "memory_units",
  "num-rational",
  "num-traits",
- "parity-wasm",
 ]
+
+[[package]]
+name = "spin"
+version = "0.9.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7f6002a767bff9e83f8eeecf883ecb8011875a21ae8da43bffb817a57e78cc09"
 
 [[package]]
 name = "static_assertions"
@@ -874,6 +877,15 @@ name = "wasi"
 version = "0.9.0+wasi-snapshot-preview1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cccddf32554fecc6acb585f82a32a72e28b48f8c4c1883ddfeeeaa96f7d8e519"
+
+[[package]]
+name = "wasmparser-nostd"
+version = "0.90.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "92a94fbf4c521b038f41382df2056cf47099d3b7a0faa5a6e46f7771fd7c84a6"
+dependencies = [
+ "indexmap-nostd",
+]
 
 [[package]]
 name = "winapi"

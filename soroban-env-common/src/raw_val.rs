@@ -248,17 +248,20 @@ declare_tryfrom!(Static);
 declare_tryfrom!(Object);
 
 #[cfg(feature = "vm")]
-impl wasmi::FromValue for RawVal {
-    fn from_value(val: wasmi::RuntimeValue) -> Option<Self> {
-        let maybe: Option<u64> = val.try_into();
-        maybe.map(RawVal::from_payload)
+impl wasmi::core::FromValue for RawVal {
+    fn from_value(val: wasmi::core::Value) -> Option<Self> {
+        if let wasmi::core::Value::I64(i) = val {
+            Some(RawVal::from_payload(i as u64))
+        } else {
+            None
+        }
     }
 }
 
 #[cfg(feature = "vm")]
-impl From<RawVal> for wasmi::RuntimeValue {
+impl From<RawVal> for wasmi::core::Value {
     fn from(v: RawVal) -> Self {
-        wasmi::RuntimeValue::I64(v.get_payload() as i64)
+        wasmi::core::Value::I64(v.get_payload() as i64)
     }
 }
 

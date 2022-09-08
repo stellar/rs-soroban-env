@@ -166,7 +166,7 @@ fn bytes_xdr_roundtrip() -> Result<(), HostError> {
 
 #[cfg(feature = "vm")]
 #[test]
-fn invoke_memcpy() -> Result<(), HostError> {
+fn linear_memory_operations() -> Result<(), HostError> {
     use crate::xdr::ScContractCode;
     use crate::{budget::Budget, host::metered_map::MeteredOrdMap};
 

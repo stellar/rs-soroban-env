@@ -38,7 +38,7 @@ stellar-xdr = { git = "https://github.com/stellar/rs-stellar-xdr", rev = "fee9a4
 
 # You should actually be able to set this to be any existing version of wasmi because we are
 # not building the SDK in host mode, so the "vm" feature is off.
-wasmi = { package = "soroban-wasmi", git = "https://github.com/stellar/wasmi", rev = "7b1f2355" }
+wasmi = { package = "soroban-wasmi", git = "https://github.com/stellar/wasmi", rev = "3bda8032" }
 
 # The following SDK patch lines must denote an SDK version that is _compatible_
 # with the current version of soroban-env-guest and soroban-env-common, as found

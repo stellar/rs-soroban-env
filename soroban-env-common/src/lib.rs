@@ -36,6 +36,7 @@ mod symbol;
 mod tuple;
 mod unimplemented_env;
 mod val;
+mod vmcaller_checked_env;
 
 // Re-export the XDR definitions
 pub use stellar_xdr as xdr;
@@ -50,6 +51,7 @@ pub use convert::TryConvert;
 pub use env::{Env, EnvBase};
 pub use env_val::{EnvVal, FromVal, IntoVal, TryFromVal, TryIntoVal};
 pub use unimplemented_env::UnimplementedEnv;
+pub use vmcaller_checked_env::{VmCaller, VmCallerCheckedEnv};
 
 // BitSet, Status and Symbol wrap RawVals.
 // TODO: maybe these should wrap EnvVals?

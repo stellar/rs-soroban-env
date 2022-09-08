@@ -12,124 +12,42 @@ mod dispatch;
 mod func_info;
 
 use crate::{budget::CostType, host::Frame, HostError};
-use std::{io::Cursor, ops::RangeInclusive, rc::Rc};
+use std::{cell::RefCell, io::Cursor, ops::RangeInclusive, rc::Rc};
 
 use super::{
     xdr::{Hash, ScVal, ScVec},
     Host, RawVal, Symbol,
 };
 use func_info::HOST_FUNCTIONS;
-use parity_wasm::elements::{self, Internal, Type};
 use soroban_env_common::{
     meta,
     xdr::{ReadXdr, ScEnvMetaEntry, ScHostFnErrorCode, ScVmErrorCode},
-};
-use wasmi::{
-    Externals, FuncInstance, ImportResolver, Module, ModuleInstance, ModuleRef, RuntimeArgs,
-    RuntimeValue, ValueType,
+    ConversionError,
 };
 
-impl wasmi::HostError for HostError {}
+use wasmi::{core::Value, Memory};
+use wasmi::{Engine, Instance, Linker, Module, StepMeter, Store};
 
-impl Externals for Host {
-    fn invoke_index(
-        &mut self,
-        index: usize,
-        args: RuntimeArgs,
-    ) -> Result<Option<wasmi::RuntimeValue>, wasmi::Trap> {
-        if index > HOST_FUNCTIONS.len() {
-            return Err(wasmi::TrapCode::TableAccessOutOfBounds.into());
-        }
-        let hf = &HOST_FUNCTIONS[index];
-        if hf.arity != args.len() {
-            return Err(wasmi::TrapCode::UnexpectedSignature.into());
-        }
+impl wasmi::core::HostError for HostError {}
 
-        let rv = (hf.dispatch)(self, args)?;
-        Ok(Some(rv))
-    }
-
+impl StepMeter for Host {
     fn max_insn_step(&self) -> u64 {
         256
     }
 
-    fn charge_cpu(&mut self, insns: u64) -> Result<(), wasmi::TrapCode> {
+    fn charge_cpu(&self, insns: u64) -> Result<(), wasmi::core::TrapCode> {
         // TODO reconcile TrapCode with HostError better.
         self.charge_budget(CostType::WasmInsnExec, insns)
-            .map_err(|_| wasmi::TrapCode::CpuLimitExceeded)
+            .map_err(|_| wasmi::core::TrapCode::CpuLimitExceeded)
     }
 
-    fn charge_mem(&mut self, bytes: u64) -> Result<(), wasmi::TrapCode> {
+    fn charge_mem(&self, bytes: u64) -> Result<(), wasmi::core::TrapCode> {
         self.charge_budget(CostType::WasmMemAlloc, bytes)
-            .map_err(|_| wasmi::TrapCode::MemLimitExceeded)
+            .map_err(|_| wasmi::core::TrapCode::MemLimitExceeded)
     }
 }
 
-impl ImportResolver for Host {
-    fn resolve_func(
-        &self,
-        module_name: &str,
-        field_name: &str,
-        signature: &wasmi::Signature,
-    ) -> Result<wasmi::FuncRef, wasmi::Error> {
-        for (i, hf) in HOST_FUNCTIONS.iter().enumerate() {
-            if module_name == hf.mod_str && field_name == hf.fn_str {
-                if signature.params().len() != hf.arity
-                    || !signature.params().iter().all(|p| *p == ValueType::I64)
-                    || signature.return_type() != Some(ValueType::I64)
-                {
-                    return Err(wasmi::Error::Function(format!(
-                        "Bad imported function signature on {}.{}",
-                        module_name, field_name
-                    )));
-                }
-                return Ok(FuncInstance::alloc_host(signature.clone(), i));
-            }
-        }
-        Err(wasmi::Error::Function(format!(
-            "No such function: {}.{}",
-            module_name, field_name
-        )))
-    }
-
-    fn resolve_global(
-        &self,
-        module_name: &str,
-        field_name: &str,
-        _descriptor: &wasmi::GlobalDescriptor,
-    ) -> Result<wasmi::GlobalRef, wasmi::Error> {
-        Err(wasmi::Error::Global(format!(
-            "No such global: {}.{}",
-            module_name, field_name
-        )))
-    }
-
-    fn resolve_memory(
-        &self,
-        module_name: &str,
-        field_name: &str,
-        _descriptor: &wasmi::MemoryDescriptor,
-    ) -> Result<wasmi::MemoryRef, wasmi::Error> {
-        Err(wasmi::Error::Memory(format!(
-            "No such memory: {}.{}",
-            module_name, field_name
-        )))
-    }
-
-    fn resolve_table(
-        &self,
-        module_name: &str,
-        field_name: &str,
-        _descriptor: &wasmi::TableDescriptor,
-    ) -> Result<wasmi::TableRef, wasmi::Error> {
-        Err(wasmi::Error::Table(format!(
-            "No such table: {}.{}",
-            module_name, field_name
-        )))
-    }
-}
-
-/// A [Vm] is a thin wrapper around an instance of [wasmi::ModuleRef]. Multiple
+/// A [Vm] is a thin wrapper around an instance of [wasmi::Module]. Multiple
 /// [Vm]s may be held in a single [Host], and each contains a single WASM module
 /// instantiation.
 ///
@@ -143,8 +61,12 @@ impl ImportResolver for Host {
 pub struct Vm {
     #[allow(dead_code)]
     pub(crate) contract_id: Hash,
-    elements_module: elements::Module,
-    instance: ModuleRef, // this is a cloneable Rc<ModuleInstance>
+    // TODO: consider moving store and possibly module to Host so they can be
+    // recycled across calls. Or possibly beyond, to be recycled across txs.
+    module: Module,
+    store: RefCell<Store<Host>>,
+    instance: Instance,
+    memory: Option<Memory>,
 }
 
 /// Minimal description of a single function defined in a WASM module.
@@ -156,7 +78,7 @@ pub struct VmFunction {
 }
 
 impl Vm {
-    fn check_meta_section(host: &Host, m: &elements::Module) -> Result<(), HostError> {
+    fn check_meta_section(host: &Host, m: &Module) -> Result<(), HostError> {
         // At present the supported interface-version range is always just a single
         // point, and it is hard-wired into the host as the current
         // `soroban_env_common` value [`meta::INTERFACE_VERSION`]. In the future when
@@ -215,9 +137,11 @@ impl Vm {
     ///   - Checks that the module contains an [meta::INTERFACE_VERSION] that
     ///     matches the host.
     ///   - Checks that the module has no floating point code or `start`
-    ///     function.
+    ///     function, or post-MVP wasm extensions.
     ///   - Instantiates the module, leaving it ready to accept function
     ///     invocations.
+    ///   - Looks up and caches its linear memory export named `memory`
+    ///     if it exists.
     ///
     /// This method is called automatically as part of [Host::invoke_function]
     /// and does not usually need to be called from outside the crate.
@@ -227,43 +151,67 @@ impl Vm {
         module_wasm_code: &[u8],
     ) -> Result<Rc<Self>, HostError> {
         host.charge_budget(CostType::VmInstantiation, module_wasm_code.len() as u64)?;
-        let elements_module: elements::Module =
-            host.map_err(elements::deserialize_buffer(module_wasm_code))?;
 
-        Self::check_meta_section(host, &elements_module)?;
+        let mut config = wasmi::Config::default();
 
-        let module: Module =
-            host.map_err(Module::from_parity_wasm_module(elements_module.clone()))?;
-        host.map_err(module.deny_floating_point())?;
+        // Turn off all optional wasm features.
+        config.wasm_multi_value(false);
+        config.wasm_mutable_global(false);
+        config.wasm_saturating_float_to_int(false);
+        config.wasm_sign_extension(false);
 
-        let not_started_instance = host.map_err(ModuleInstance::new(&module, host))?;
-        if not_started_instance.has_start() {
-            return Err(host.err_status_msg(
-                ScVmErrorCode::Instantiation,
-                "module contains disallowed start function",
-            ));
+        // This should always be true, and it enforces wasmi's notion of "deterministic only"
+        // execution, which excludes all floating point ops. Double check to be sure.
+        assert!(config.wasm_features().deterministic_only);
+
+        let engine = Engine::new(&config);
+        let module = host.map_err(Module::new(&engine, module_wasm_code))?;
+
+        Self::check_meta_section(host, &module)?;
+
+        let mut store = Store::new(&engine, host.clone());
+        let mut linker = <Linker<Host>>::new();
+
+        for hf in HOST_FUNCTIONS {
+            let func = (hf.wrap)(&mut store);
+            linker.define(hf.mod_str, hf.fn_str, func).map_err(|_| {
+                host.err_status_msg(ScVmErrorCode::Instantiation, "error defining host function")
+            })?;
         }
-        let instance = not_started_instance.assert_no_start();
+
+        let not_started_instance = host.map_err(linker.instantiate(&mut store, &module))?;
+
+        let instance = not_started_instance
+            .ensure_no_start(&mut store)
+            .map_err(|_| {
+                host.err_status_msg(
+                    ScVmErrorCode::Instantiation,
+                    "module contains disallowed start function",
+                )
+            })?;
+
+        let memory = if let Some(ext) = instance.get_export(&mut store, "memory") {
+            ext.into_memory()
+        } else {
+            None
+        };
+
+        let store = RefCell::new(store);
         Ok(Rc::new(Self {
             contract_id,
-            elements_module,
+            module,
+            store,
             instance,
+            memory,
         }))
     }
 
-    pub(crate) fn with_memory_access<F, U>(&self, host: &Host, f: F) -> Result<U, HostError>
-    where
-        F: FnOnce(&wasmi::MemoryRef) -> Result<U, HostError>,
-    {
-        match self.instance.export_by_name("memory") {
-            Some(ev) => match ev.as_memory() {
-                Some(mem) => f(mem),
-                None => Err(host.err_status_msg(
-                    ScVmErrorCode::Memory,
-                    "export name `memory` is not of memory type",
-                )),
-            },
-            None => Err(host.err_status_msg(ScVmErrorCode::Memory, "`memory` export not found")),
+    pub(crate) fn get_memory(&self, host: &Host) -> Result<Memory, HostError> {
+        match self.memory {
+            Some(mem) => Ok(mem),
+            None => {
+                Err(host.err_status_msg(ScVmErrorCode::Memory, "no linear memory named `memory`"))
+            }
         }
     }
 
@@ -277,32 +225,34 @@ impl Vm {
         host.with_frame(
             Frame::ContractVM(self.clone(), Symbol::from_str(func)),
             || {
-                let wasm_args: Vec<_> = args
+                let wasm_args: Vec<Value> = args
                     .iter()
-                    .map(|i| RuntimeValue::I64(i.get_payload() as i64))
+                    .map(|i| Value::I64(i.get_payload() as i64))
                     .collect();
+                let mut wasm_ret: [Value; 1] = [Value::I64(0)];
 
-                // Wasmi wants a mut& to an E:Externals value, which is reasonable but
-                // irrelevant (and awkward) in our case since our Host (which implements
-                // Externals) is a Rc<RefCell<...>> with interior mutability. So rather
-                // than propagate the irrelevant-and-awkward mut& requirement to our
-                // callers, we just clone Host (which is, again, just a refcounted
-                // pointer) into a mutable local variable here, and pass a &mut to that
-                // local.
-                let mut host = host.clone();
-
-                let wasm_res = self
-                    .instance
-                    .invoke_export(func, wasm_args.as_slice(), &mut host);
-                let wasm_ret = host.map_err(wasm_res)?;
-                if let Some(RuntimeValue::I64(ret)) = wasm_ret {
-                    Ok(RawVal::from_payload(ret as u64))
-                } else {
-                    Err(host.err_status_msg(
-                        ScVmErrorCode::TrapUnexpectedSignature,
-                        "contract function did not return an i64",
-                    ))
-                }
+                let ext = match self.instance.get_export(&*self.store.borrow(), func) {
+                    None => {
+                        return Err(
+                            host.err_status_msg(ScVmErrorCode::Unknown, "invoking unknown export")
+                        )
+                    }
+                    Some(e) => e,
+                };
+                let func = match ext.into_func() {
+                    None => {
+                        return Err(
+                            host.err_status_msg(ScVmErrorCode::Unknown, "export is not a function")
+                        )
+                    }
+                    Some(e) => e,
+                };
+                host.map_err(func.call(
+                    &mut *self.store.borrow_mut(),
+                    wasm_args.as_slice(),
+                    &mut wasm_ret,
+                ))?;
+                Ok(wasm_ret[0].try_into().ok_or(ConversionError)?)
             },
         )
     }
@@ -333,54 +283,23 @@ impl Vm {
 
     /// Returns a list of functions in the WASM module loaded into the [Vm].
     pub fn functions(&self) -> Vec<VmFunction> {
-        if let Some(export_section) = self.elements_module.export_section() {
-            let fn_import_count = self
-                .elements_module
-                .import_count(elements::ImportCountType::Function);
-            // A function in the export section points to a function in the
-            // function section, which references a type in the type section.
-            // The type contains the list of parameters.
-            export_section
-                .entries()
-                .iter()
-                .filter_map(|entry| match entry.internal() {
-                    Internal::Function(idx) => {
-                        let fn_type = self.elements_module.function_section().and_then(|fs| {
-                            // Function index space includes imported
-                            // functions. Imported functions are always
-                            // indexed prior to other functions and so
-                            // the index points into the space of the
-                            // imported functions and the module's
-                            // functions. To get the index of the
-                            // function in the function section, the
-                            // index is reduced by the import count.
-                            let fs_idx = (*idx as usize) - fn_import_count;
-                            fs.entries().get(fs_idx).and_then(|f| {
-                                self.elements_module.type_section().and_then(|ts| {
-                                    ts.types().get(f.type_ref() as usize).and_then(|t| match t {
-                                        Type::Function(ft) => Some(ft),
-                                    })
-                                })
-                            })
-                        });
-                        Some(VmFunction {
-                            name: entry.field().to_string(),
-                            param_count: fn_type.map_or(0, |fn_type| fn_type.params().len()),
-                            result_count: fn_type.map_or(0, |fn_type| fn_type.results().len()),
-                        })
-                    }
-                    _ => None,
+        let mut res = Vec::new();
+        for e in self.module.exports() {
+            if let wasmi::ExportItemKind::Func(f) = e.kind() {
+                res.push(VmFunction {
+                    name: e.name().to_string(),
+                    param_count: f.params().len(),
+                    result_count: f.results().len(),
                 })
-                .collect()
-        } else {
-            vec![]
+            }
         }
+        res
     }
 
-    fn module_custom_section(m: &elements::Module, name: impl AsRef<str>) -> Option<&[u8]> {
-        m.custom_sections().find_map(|s| {
-            if s.name() == name.as_ref() {
-                Some(s.payload())
+    fn module_custom_section(m: &Module, name: impl AsRef<str>) -> Option<&[u8]> {
+        m.custom_sections().iter().find_map(|s| {
+            if &*s.name == name.as_ref() {
+                Some(&*s.data)
             } else {
                 None
             }
@@ -390,6 +309,6 @@ impl Vm {
     /// Returns the raw bytes content of a named custom section from the WASM
     /// module loaded into the [Vm], or `None` if no such custom section exists.
     pub fn custom_section(&self, name: impl AsRef<str>) -> Option<&[u8]> {
-        Self::module_custom_section(&self.elements_module, name)
+        Self::module_custom_section(&self.module, name)
     }
 }
