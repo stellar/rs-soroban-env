@@ -68,6 +68,8 @@ jobs:
       run: cargo hack --feature-powerset test --locked --target ${{ matrix.sys.target }}
     - if: startsWith(github.head_ref, 'release/')
       uses: stellar/actions/rust-workspace-publish-dry-run@dryrun
+      with:
+        cargo-package-options: --target ${{ matrix.sys.target }}
 
   publish:
     if: github.event_name == 'release'
