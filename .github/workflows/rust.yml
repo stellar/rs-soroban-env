@@ -57,7 +57,7 @@ jobs:
     runs-on: ${{ matrix.sys.os }}
     steps:
     - uses: actions/checkout@v3
-    - uses: stellar/actions/rust-cache@main
+    - uses: stellar/actions/rust-cache@sccache
     - run: rustup update
     - run: rustup target add ${{ matrix.sys.target }}
     - run: cargo install --target-dir ~/.cargo/target --locked --version 0.5.16 cargo-hack
