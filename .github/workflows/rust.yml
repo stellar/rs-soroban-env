@@ -2,11 +2,12 @@ name: Rust
 
 on:
   push:
-    branches: [main]
+    # branches: [main]
   pull_request:
 
 env:
   RUSTFLAGS: -D warnings
+  CARGO_PROFILE_DEV_DEBUG: false
 
 jobs:
 
