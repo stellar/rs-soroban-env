@@ -76,13 +76,13 @@ jobs:
           target: wasm32-unknown-unknown
         - os: ubuntu-latest
           target: x86_64-unknown-linux-gnu
-    uses: stellar/actions/.github/workflows/rust-publish-dry-run.yml@tidy
+    uses: stellar/actions/.github/workflows/rust-publish-dry-run.yml@main
     with:
       runs-on: ${{ matrix.sys.os }}
       cargo-package-options: --target ${{ matrix.sys.target }}
 
   publish:
     if: github.event_name == 'release'
-    uses: stellar/actions/.github/workflows/rust-publish.yml@tidy
+    uses: stellar/actions/.github/workflows/rust-publish.yml@main
     secrets:
       CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
