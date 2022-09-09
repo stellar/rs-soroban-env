@@ -4,8 +4,6 @@ on:
   push:
     branches: [main]
   pull_request:
-  release:
-    types: [published]
 
 env:
   RUSTFLAGS: -D warnings
@@ -80,9 +78,3 @@ jobs:
     with:
       runs-on: ${{ matrix.sys.os }}
       cargo-package-options: --target ${{ matrix.sys.target }}
-
-  publish:
-    if: github.event_name == 'release'
-    uses: stellar/actions/.github/workflows/rust-publish.yml@main
-    secrets:
-      CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
