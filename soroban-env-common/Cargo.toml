@@ -17,8 +17,7 @@ wasmi = { package = "soroban-wasmi", version = "0.11.0", optional = true }
 static_assertions = "1.1.0"
 
 [features]
-std = ["stellar-xdr/std", "stellar-xdr/base64"]
-serde = ["stellar-xdr/serde"]
+std = ["stellar-xdr/std", "stellar-xdr/base64", "stellar-xdr/serde"]
 vm = ["wasmi"]
 
 [package.metadata.docs.rs]
