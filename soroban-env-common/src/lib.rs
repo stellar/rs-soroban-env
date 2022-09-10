@@ -58,7 +58,7 @@ pub use vmcaller_checked_env::{VmCaller, VmCallerCheckedEnv};
 pub use bitset::{BitSet, BitSetError};
 pub use object::Object;
 pub use r#static::Static;
-pub use status::{Status, OK, UNKNOWN_ERROR};
+pub use status::Status;
 pub use symbol::{Symbol, SymbolError, SymbolIter, SymbolStr};
 
 #[inline(always)]
