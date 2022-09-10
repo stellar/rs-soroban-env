@@ -70,9 +70,9 @@ macro_rules! decl_tagged_val_wrapper_methods {
 
         // wasmi / VM argument support
         #[cfg(feature = "vm")]
-        impl wasmi::FromValue for $tagname {
-            fn from_value(val: wasmi::RuntimeValue) -> Option<Self> {
-                let maybe: Option<u64> = val.try_into();
+        impl wasmi::core::FromValue for $tagname {
+            fn from_value(val: wasmi::core::Value) -> Option<Self> {
+                let maybe: Option<u64> = <u64 as wasmi::core::FromValue>::from_value(val);
                 match maybe {
                     Some(u) => {
                         let raw = RawVal::from_payload(u);
@@ -89,9 +89,9 @@ macro_rules! decl_tagged_val_wrapper_methods {
             }
         }
         #[cfg(feature = "vm")]
-        impl From<$tagname> for wasmi::RuntimeValue {
+        impl From<$tagname> for wasmi::core::Value {
             fn from(v: $tagname) -> Self {
-                wasmi::RuntimeValue::I64(v.as_raw().get_payload() as i64)
+                wasmi::core::Value::I64(v.as_raw().get_payload() as i64)
             }
         }
 

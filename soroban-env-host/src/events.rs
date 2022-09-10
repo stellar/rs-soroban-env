@@ -189,24 +189,25 @@ impl From<wasmi::Error> for DebugError {
         // of Strings) that we're already eliding at this level, that we might
         // want to report for diagnostic purposes if we ever get dynamic strings
         // in the diagnostic buffer.
+        use wasmi::core::TrapCode::*;
         use wasmi::Error::*;
-        use wasmi::TrapCode::*;
         let code = match err {
-            Validation(_) => ScVmErrorCode::Validation,
-            Instantiation(_) => ScVmErrorCode::Instantiation,
-            Function(_) => ScVmErrorCode::Function,
+            // TODO: re-reconcile these cases with ScVmErrorCode cases
+            Module(_) => ScVmErrorCode::Validation,
+            Linker(_) | Instantiation(_) => ScVmErrorCode::Instantiation,
+            Func(_) => ScVmErrorCode::Function,
             Table(_) => ScVmErrorCode::Table,
             Memory(_) => ScVmErrorCode::Memory,
             Global(_) => ScVmErrorCode::Global,
-            Value(_) => ScVmErrorCode::Value,
-            Trap(wasmi::Trap::Host(err)) => {
+            Trap(trap) if trap.is_host() => {
+                let err = trap.into_host().expect("trapped HostError");
                 let status: Status = match err.downcast_ref::<HostError>() {
                     Some(he) => he.status,
                     None => ScUnknownErrorCode::General.into(),
                 };
                 return DebugError::new(status).msg("VM trapped with from host error");
             }
-            Trap(wasmi::Trap::Code(c)) => match c {
+            Trap(trap) => match trap.as_code().expect("trap code") {
                 Unreachable => ScVmErrorCode::TrapUnreachable,
                 MemoryAccessOutOfBounds => ScVmErrorCode::TrapMemoryAccessOutOfBounds,
                 TableAccessOutOfBounds => ScVmErrorCode::TrapTableAccessOutOfBounds,
@@ -219,13 +220,7 @@ impl From<wasmi::Error> for DebugError {
                 MemLimitExceeded => ScVmErrorCode::TrapMemLimitExceeded,
                 CpuLimitExceeded => ScVmErrorCode::TrapCpuLimitExceeded,
             },
-            Host(err) => {
-                let status: Status = match err.downcast_ref::<HostError>() {
-                    Some(he) => he.status,
-                    None => ScUnknownErrorCode::General.into(),
-                };
-                return DebugError::new(status).msg("VM returned host error");
-            }
+            _ => ScVmErrorCode::Unknown,
         };
         Self::new(code).msg(code.name())
     }

@@ -1,25 +1,66 @@
+#[cfg(feature = "vm")]
+use crate::xdr::ScHostContextErrorCode;
+
 use crate::call_macro_with_all_host_functions;
-use crate::{EnvBase, Object, RawVal, Symbol};
+use crate::{Object, RawVal, Symbol};
 use core::fmt::Debug;
+#[cfg(not(feature = "vm"))]
+use core::marker::PhantomData;
 
-/// The CheckedEnv trait is similar to the Env trait -- it provides all the
-/// same-named methods -- but they have a form that returns Result<T,
-/// Self::Error> for the trait's associated `Error:Debug` type.
+/// The VmCallerCheckedEnv trait is similar to the CheckedEnv trait -- it
+/// provides all the same-named methods -- but they have a form that takes an
+/// initial [`VmCaller`] argument by `&mut` that may or may-not wrap a
+/// `wasmi::Caller` structure, depending on whether it was invoked from a wasmi
+/// host-function wrapper.
 ///
-/// There is a blanket `impl<T:CheckedEnv+EnvBase> Env for T` so that any type
-/// that implements `CheckedEnv` and `EnvBase` automatically also implements
-/// `Env`, just by calling the corresponding `CheckedEnv` method and unwrapping
-/// it. This allows the host crate to convert errors into WASM traps on the VM
-/// causing the host call, while keeping the actual `Env` interface exposed to
-/// users simple: any `Env` call that has any sort of error simply doesn't
-/// return (panics when run locally, traps when running in a VM).
+/// There is a blanket `impl<T:VmCallerCheckedEnv> CheckedEnv for T` so that any
+/// type (eg. `Host`) that implements `VmCallerCheckedEnv` automatically also
+/// implements `CheckedEnv`, just by calling the corresponding
+/// `VmCallerCheckedEnv` method with the [`VmCaller::none()`] argument. This
+/// allows code to import and use `CheckedEnv` directly (such as the native
+/// contract) to call host methods without having to write `VmCaller::none()`
+/// everywhere.
+
+#[cfg(feature = "vm")]
+pub struct VmCaller<'a, T>(pub Option<wasmi::Caller<'a, T>>);
+#[cfg(feature = "vm")]
+impl<'a, T> VmCaller<'a, T> {
+    pub fn none() -> Self {
+        VmCaller(None)
+    }
+    pub fn try_ref(&self) -> Result<&wasmi::Caller<'a, T>, ScHostContextErrorCode> {
+        match &self.0 {
+            Some(caller) => Ok(caller),
+            None => Err(ScHostContextErrorCode::NoContractRunning),
+        }
+    }
+    pub fn try_mut(&mut self) -> Result<&mut wasmi::Caller<'a, T>, ScHostContextErrorCode> {
+        match &mut self.0 {
+            Some(caller) => Ok(caller),
+            None => Err(ScHostContextErrorCode::NoContractRunning),
+        }
+    }
+}
+
+#[cfg(not(feature = "vm"))]
+pub struct VmCaller<'a, T> {
+    _nothing: PhantomData<&'a T>,
+}
+#[cfg(not(feature = "vm"))]
+impl<'a, T> VmCaller<'a, T> {
+    pub fn none() -> Self {
+        VmCaller {
+            _nothing: PhantomData,
+        }
+    }
+}
 
 ///////////////////////////////////////////////////////////////////////////////
-/// X-macro use: defining trait CheckedEnv
+/// X-macro use: defining trait VmCallerCheckedEnv
 ///////////////////////////////////////////////////////////////////////////////
 
-// This is a helper macro used only by generate_checked_env_trait below. It consumes
-// a token-tree of the form:
+// This is a helper macro used only by generate_vmcaller_checked_env_trait
+// below. It consumes a token-tree of the form:
 //
 //  {fn $fn_id:ident $args:tt -> $ret:ty}
 //
@@ -33,15 +74,15 @@ macro_rules! host_function_helper {
     =>
     {
         $(#[$attr])*
-        fn $fn_id(&self, $($arg:$type),*) -> Result<$ret, Self::Error>;
+        fn $fn_id(&self, vmcaller: &mut VmCaller<Self::VmUserState>, $($arg:$type),*) -> Result<$ret, Self::Error>;
     };
 }
 
 // This is a callback macro that pattern-matches the token-tree passed by the
 // x-macro (call_macro_with_all_host_functions) and produces a suite of method
-// declarations, which it places in the body of the declaration of the CheckedEnv
-// trait.
-macro_rules! generate_checked_env_trait {
+// declarations, which it places in the body of the declaration of the
+// VmCallerCheckedEnv trait.
+macro_rules! generate_vmcaller_checked_env_trait {
     {
         $(
             // This outer pattern matches a single 'mod' block of the token-tree
@@ -67,21 +108,23 @@ macro_rules! generate_checked_env_trait {
     => // The part of the macro above this line is a matcher; below is its expansion.
 
     {
-        // This macro expands to a single item: the CheckedEnv trait
+        // This macro expands to a single item: the VmCallerCheckedEnv trait
 
-        /// This trait is a variant of the [Env](crate::Env) trait used to define the
-        /// interface implemented by Host. The WASM VM dispatch functions call
-        /// methods on `CheckedEnv` and convert any `Result::Err(...)` return
-        /// value into a VM trap, halting VM execution.
+        /// This trait is a variant of the [Env](crate::Env) trait used to
+        /// define the interface implemented by Host. The wasmi VM dispatch
+        /// functions call methods on `VmCallerCheckedEnv`, passing a
+        /// [`VmCaller`] that wraps the wasmi Caller context, and then convert
+        /// any `Result::Err(...)` return value into a VM trap, halting VM
+        /// execution.
         ///
-        /// There is also a blanket `impl<T:CheckedEnv> Env for T` that
-        /// implements the `Env` interface directly for `CheckedEnv` by
-        /// unwrapping all results, in other words "panicking on error". This is
-        /// used in local testing mode to adapt the `Host` to mimic the
-        /// (non-`Result`, halt-on-error) interface and behavior of `Guest`
-        /// when linking a contract to `Host` natively, for local testing.
-        pub trait CheckedEnv
+        /// There is also a blanket `impl<T:VmCallerCheckedEnv> CheckedEnv for
+        /// T` that implements the `CheckedEnv` for any `VmCallerCheckedEnv` by
+        /// passing [`VmCaller::none()`] for the first argument, allowing user
+        /// code such as the native contract to avoid writing `VmCaller::none()`
+        /// everywhere.
+        pub trait VmCallerCheckedEnv
         {
+            type VmUserState;
             type Error: Debug;
             $(
                 $(
@@ -93,7 +136,7 @@ macro_rules! generate_checked_env_trait {
                     // match section, but we ignore the structure of the 'mod'
                     // block repetition-level from the outer pattern in the
                     // expansion, flattening all functions from all 'mod' blocks
-                    // into the CheckedEnv trait.
+                    // into the VmCallerCheckedEnv trait.
                     host_function_helper!{$(#[$fn_attr])* fn $fn_id $args -> $ret}
                 )*
             )*
@@ -102,25 +145,26 @@ macro_rules! generate_checked_env_trait {
 }
 
 // Here we invoke the x-macro passing generate_env_trait as its callback macro.
-call_macro_with_all_host_functions! { generate_checked_env_trait }
+call_macro_with_all_host_functions! { generate_vmcaller_checked_env_trait }
 
 ///////////////////////////////////////////////////////////////////////////////
-/// X-macro use: impl<E> Env for CheckedEnv<E>
+/// X-macro use: impl<E> CheckedEnv for VmCallerCheckedEnv<E>
 ///////////////////////////////////////////////////////////////////////////////
 
-// This is a helper macro used only by generate_impl_env_for_checked_env below.
-// It consumes a token-tree of the form:
+// This is a helper macro used only by
+// generate_impl_checked_env_for_vmcaller_checked_env below. It consumes a
+// token-tree of the form:
 //
 //  {fn $fn_id:ident $args:tt -> $ret:ty}
 //
 // and produces the the corresponding method declaration to be used in the Env
 // trait.
-macro_rules! unwrap_function_helper {
+macro_rules! vmcaller_none_function_helper {
     {fn $fn_id:ident($($arg:ident:$type:ty),*) -> $ret:ty}
     =>
     {
-        fn $fn_id(&self, $($arg:$type),*) -> $ret {
-            <Self as CheckedEnv>::$fn_id(self, $($arg),*).unwrap()
+        fn $fn_id(&self, $($arg:$type),*) -> Result<$ret, Self::Error> {
+            <Self as VmCallerCheckedEnv>::$fn_id(self, &mut VmCaller::none(), $($arg),*)
         }
     };
 }
@@ -129,7 +173,7 @@ macro_rules! unwrap_function_helper {
 // x-macro (call_macro_with_all_host_functions) and produces a suite of method
 // declarations, which it places in the body of the blanket impl of Env for
 // T:CheckedEnv
-macro_rules! impl_env_for_checked_env {
+macro_rules! impl_checked_env_for_vmcaller_checked_env {
     {
         $(
             // This outer pattern matches a single 'mod' block of the token-tree
@@ -156,13 +200,14 @@ macro_rules! impl_env_for_checked_env {
 
     {
         // This macro expands to a single item: a blanket impl that makes all
-        // `CheckedEnv+EnvBase` types automatically `Env` types, just unwrapping
-        // their results.
-        impl<T:CheckedEnv+EnvBase> $crate::Env for T
+        // `VmCallerCheckedEnv` types automatically `CheckedEnv` types, just
+        // passing [`VmCaller::none()`] as their first argument.
+        impl<T:VmCallerCheckedEnv> $crate::CheckedEnv for T
         {
+            type Error = <Self as VmCallerCheckedEnv>::Error;
             $(
                 $(
-                    // This invokes the unwrap_function_helper! macro above
+                    // This invokes the vmcaller_none_function_helper! macro above
                     // passing only the relevant parts of the declaration
                     // matched by the inner pattern above. It is embedded in two
                     // nested `$()*` pattern-repetition expanders that
@@ -171,12 +216,13 @@ macro_rules! impl_env_for_checked_env {
                     // block repetition-level from the outer pattern in the
                     // expansion, flattening all functions from all 'mod' blocks
                     // into the impl.
-                    unwrap_function_helper!{fn $fn_id $args -> $ret}
+                    vmcaller_none_function_helper!{fn $fn_id $args -> $ret}
                 )*
             )*
         }
     };
 }
 
-// Here we invoke the x-macro passing impl_env_for_checked_env as its callback macro.
-call_macro_with_all_host_functions! { impl_env_for_checked_env }
+// Here we invoke the x-macro passing
+// generate_checked_env_for_vmcaller_checked_env as its callback macro.
+call_macro_with_all_host_functions! { impl_checked_env_for_vmcaller_checked_env }

@@ -4,9 +4,12 @@
 use core::cell::RefCell;
 use core::cmp::Ordering;
 use core::fmt::Debug;
+
 use im_rc::{OrdMap, Vector};
 use num_bigint::Sign;
-use soroban_env_common::{EnvVal, TryConvert, TryFromVal, TryIntoVal, OK, UNKNOWN_ERROR};
+use soroban_env_common::{
+    EnvVal, TryConvert, TryFromVal, TryIntoVal, VmCaller, VmCallerCheckedEnv, OK, UNKNOWN_ERROR,
+};
 
 use soroban_env_common::xdr::{
     AccountId, ContractEvent, ContractEventBody, ContractEventType, ContractEventV0,
@@ -27,7 +30,6 @@ use crate::xdr::{
 use std::rc::Rc;
 
 use crate::host_object::{HostMap, HostObj, HostObject, HostObjectType, HostVal, HostVec};
-use crate::CheckedEnv;
 #[cfg(feature = "vm")]
 use crate::SymbolStr;
 #[cfg(feature = "vm")]
@@ -644,7 +646,10 @@ impl Host {
         contract: ScContractCode,
         id_preimage: Vec<u8>,
     ) -> Result<Object, HostError> {
-        let id_obj = self.compute_hash_sha256(self.add_host_object(id_preimage)?.into())?;
+        let id_obj = self.compute_hash_sha256(
+            &mut VmCaller::none(),
+            self.add_host_object(id_preimage)?.into(),
+        )?;
         self.create_contract_with_id(contract, id_obj)?;
         Ok(id_obj)
     }
@@ -735,8 +740,14 @@ impl Host {
                         let key = self.to_host_obj(k_obj)?.to_object();
                         let signature = self.to_host_obj(sig_obj)?.to_object();
                         //TODO: should create_contract_from_ed25519 return a RawVal instead of Object to avoid this conversion?
-                        self.create_contract_from_ed25519(contract, salt, key, signature)
-                            .map(|obj| <RawVal>::from(obj))
+                        self.create_contract_from_ed25519(
+                            &mut VmCaller::none(),
+                            contract,
+                            salt,
+                            key,
+                            signature,
+                        )
+                        .map(|obj| <RawVal>::from(obj))
                     })
                 } else {
                     Err(self.err_status_msg(
@@ -922,17 +933,18 @@ impl EnvBase for Host {
     }
 }
 
-impl CheckedEnv for Host {
+impl VmCallerCheckedEnv for Host {
+    type VmUserState = Host;
     type Error = HostError;
 
     // Notes on metering: covered by the components
-    fn log_value(&self, v: RawVal) -> Result<RawVal, HostError> {
+    fn log_value(&self, _vmcaller: &mut VmCaller<Host>, v: RawVal) -> Result<RawVal, HostError> {
         self.record_debug_event(DebugEvent::new().msg("log").arg(v))?;
         Ok(RawVal::from_void())
     }
 
     // Notes on metering: covered by the components
-    fn get_invoking_contract(&self) -> Result<Object, HostError> {
+    fn get_invoking_contract(&self, _vmcaller: &mut VmCaller<Host>) -> Result<Object, HostError> {
         let frames = self.0.context.borrow();
         // the previous frame must exist and must be a contract
         let hash: Hash = if frames.len() >= 2 {
@@ -954,7 +966,12 @@ impl CheckedEnv for Host {
 
     // FIXME: the `cmp` method is not metered. Need a "metered" version (similar to metered_clone)
     // and use that.
-    fn obj_cmp(&self, a: RawVal, b: RawVal) -> Result<i64, HostError> {
+    fn obj_cmp(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        a: RawVal,
+        b: RawVal,
+    ) -> Result<i64, HostError> {
         let res = unsafe {
             self.unchecked_visit_val_obj(a, |ao| {
                 self.unchecked_visit_val_obj(b, |bo| Ok(ao.cmp(&bo)))
@@ -967,7 +984,12 @@ impl CheckedEnv for Host {
         })
     }
 
-    fn contract_event(&self, topics: Object, data: RawVal) -> Result<RawVal, HostError> {
+    fn contract_event(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        topics: Object,
+        data: RawVal,
+    ) -> Result<RawVal, HostError> {
         let topics = self.event_topics_from_host_obj(topics)?;
         let data = self.from_host_val(data)?;
         self.record_contract_event(ContractEventType::Contract, topics, data)?;
@@ -975,38 +997,44 @@ impl CheckedEnv for Host {
     }
 
     // Notes on metering: covered by the components.
-    fn get_current_contract(&self) -> Result<Object, HostError> {
+    fn get_current_contract(&self, _vmcaller: &mut VmCaller<Host>) -> Result<Object, HostError> {
         let hash: Hash = self.get_current_contract_id()?;
         Ok(self.add_host_object(<Vec<u8>>::from(hash.0))?.into())
     }
 
     // Notes on metering: covered by `add_host_object`.
-    fn obj_from_u64(&self, u: u64) -> Result<Object, HostError> {
+    fn obj_from_u64(&self, _vmcaller: &mut VmCaller<Host>, u: u64) -> Result<Object, HostError> {
         Ok(self.add_host_object(u)?.into())
     }
 
     // Notes on metering: covered by `visit_obj`.
-    fn obj_to_u64(&self, obj: Object) -> Result<u64, HostError> {
+    fn obj_to_u64(&self, _vmcaller: &mut VmCaller<Host>, obj: Object) -> Result<u64, HostError> {
         self.visit_obj(obj, |u: &u64| Ok(*u))
     }
 
     // Notes on metering: covered by `add_host_object`.
-    fn obj_from_i64(&self, i: i64) -> Result<Object, HostError> {
+    fn obj_from_i64(&self, _vmcaller: &mut VmCaller<Host>, i: i64) -> Result<Object, HostError> {
         Ok(self.add_host_object(i)?.into())
     }
 
     // Notes on metering: covered by `visit_obj`.
-    fn obj_to_i64(&self, obj: Object) -> Result<i64, HostError> {
+    fn obj_to_i64(&self, _vmcaller: &mut VmCaller<Host>, obj: Object) -> Result<i64, HostError> {
         self.visit_obj(obj, |i: &i64| Ok(*i))
     }
 
-    fn map_new(&self) -> Result<Object, HostError> {
+    fn map_new(&self, _vmcaller: &mut VmCaller<Host>) -> Result<Object, HostError> {
         Ok(self
             .add_host_object(HostMap::new(self.0.budget.clone())?)?
             .into())
     }
 
-    fn map_put(&self, m: Object, k: RawVal, v: RawVal) -> Result<Object, HostError> {
+    fn map_put(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        m: Object,
+        k: RawVal,
+        v: RawVal,
+    ) -> Result<Object, HostError> {
         let k = self.associate_raw_val(k);
         let v = self.associate_raw_val(v);
         let mnew = self.visit_obj(m, move |hm: &HostMap| {
@@ -1017,7 +1045,12 @@ impl CheckedEnv for Host {
         Ok(self.add_host_object(mnew)?.into())
     }
 
-    fn map_get(&self, m: Object, k: RawVal) -> Result<RawVal, HostError> {
+    fn map_get(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        m: Object,
+        k: RawVal,
+    ) -> Result<RawVal, HostError> {
         let k = self.associate_raw_val(k);
         self.visit_obj(m, move |hm: &HostMap| {
             hm.get(&k)?
@@ -1026,7 +1059,12 @@ impl CheckedEnv for Host {
         })
     }
 
-    fn map_del(&self, m: Object, k: RawVal) -> Result<Object, HostError> {
+    fn map_del(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        m: Object,
+        k: RawVal,
+    ) -> Result<Object, HostError> {
         let k = self.associate_raw_val(k);
         let mnew = self.visit_obj(m, |hm: &HostMap| {
             let mut mnew = hm.metered_clone(&self.0.budget)?;
@@ -1035,17 +1073,27 @@ impl CheckedEnv for Host {
         Ok(self.add_host_object(mnew)?.into())
     }
 
-    fn map_len(&self, m: Object) -> Result<RawVal, HostError> {
+    fn map_len(&self, _vmcaller: &mut VmCaller<Host>, m: Object) -> Result<RawVal, HostError> {
         let len = self.visit_obj(m, |hm: &HostMap| Ok(hm.len()))?;
         self.usize_to_rawval_u32(len)
     }
 
-    fn map_has(&self, m: Object, k: RawVal) -> Result<RawVal, HostError> {
+    fn map_has(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        m: Object,
+        k: RawVal,
+    ) -> Result<RawVal, HostError> {
         let k = self.associate_raw_val(k);
         self.visit_obj(m, move |hm: &HostMap| Ok(hm.contains_key(&k)?.into()))
     }
 
-    fn map_prev_key(&self, m: Object, k: RawVal) -> Result<RawVal, HostError> {
+    fn map_prev_key(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        m: Object,
+        k: RawVal,
+    ) -> Result<RawVal, HostError> {
         let k = self.associate_raw_val(k);
         self.visit_obj(m, |hm: &HostMap| {
             // OrdMap's `get_prev`/`get_next` return the previous/next key if the input key is not found.
@@ -1076,7 +1124,12 @@ impl CheckedEnv for Host {
         })
     }
 
-    fn map_next_key(&self, m: Object, k: RawVal) -> Result<RawVal, HostError> {
+    fn map_next_key(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        m: Object,
+        k: RawVal,
+    ) -> Result<RawVal, HostError> {
         let k = self.associate_raw_val(k);
         self.visit_obj(m, |hm: &HostMap| {
             if let Some((pk, _)) = hm.get_next(&k)? {
@@ -1101,7 +1154,7 @@ impl CheckedEnv for Host {
         })
     }
 
-    fn map_min_key(&self, m: Object) -> Result<RawVal, HostError> {
+    fn map_min_key(&self, _vmcaller: &mut VmCaller<Host>, m: Object) -> Result<RawVal, HostError> {
         self.visit_obj(m, |hm: &HostMap| {
             match hm.get_min()? {
                 Some((pk, pv)) => Ok(pk.to_raw()),
@@ -1110,7 +1163,7 @@ impl CheckedEnv for Host {
         })
     }
 
-    fn map_max_key(&self, m: Object) -> Result<RawVal, HostError> {
+    fn map_max_key(&self, _vmcaller: &mut VmCaller<Host>, m: Object) -> Result<RawVal, HostError> {
         self.visit_obj(m, |hm: &HostMap| {
             match hm.get_max()? {
                 Some((pk, pv)) => Ok(pk.to_raw()),
@@ -1119,7 +1172,7 @@ impl CheckedEnv for Host {
         })
     }
 
-    fn map_keys(&self, m: Object) -> Result<Object, HostError> {
+    fn map_keys(&self, _vmcaller: &mut VmCaller<Host>, m: Object) -> Result<Object, HostError> {
         let vec = self.visit_obj(m, |hm: &HostMap| {
             let mut vec = HostVec::new(self.0.budget.clone())?;
             for k in hm.keys()?.cloned() {
@@ -1130,7 +1183,7 @@ impl CheckedEnv for Host {
         Ok(self.add_host_object(vec)?.into())
     }
 
-    fn map_values(&self, m: Object) -> Result<Object, HostError> {
+    fn map_values(&self, _vmcaller: &mut VmCaller<Host>, m: Object) -> Result<Object, HostError> {
         let vec = self.visit_obj(m, |hm: &HostMap| {
             let mut vec = HostVec::new(self.0.budget.clone())?;
             for k in hm.values()?.cloned() {
@@ -1141,7 +1194,7 @@ impl CheckedEnv for Host {
         Ok(self.add_host_object(vec)?.into())
     }
 
-    fn vec_new(&self, c: RawVal) -> Result<Object, HostError> {
+    fn vec_new(&self, _vmcaller: &mut VmCaller<Host>, c: RawVal) -> Result<Object, HostError> {
         let capacity: usize = if c.is_void() {
             0
         } else {
@@ -1153,7 +1206,13 @@ impl CheckedEnv for Host {
             .into())
     }
 
-    fn vec_put(&self, v: Object, i: RawVal, x: RawVal) -> Result<Object, HostError> {
+    fn vec_put(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        v: Object,
+        i: RawVal,
+        x: RawVal,
+    ) -> Result<Object, HostError> {
         let i = self.u32_from_rawval_input("i", i)?;
         let x = self.associate_raw_val(x);
         let vnew = self.visit_obj(v, move |hv: &HostVec| {
@@ -1165,12 +1224,22 @@ impl CheckedEnv for Host {
         Ok(self.add_host_object(vnew)?.into())
     }
 
-    fn vec_get(&self, v: Object, i: RawVal) -> Result<RawVal, HostError> {
+    fn vec_get(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        v: Object,
+        i: RawVal,
+    ) -> Result<RawVal, HostError> {
         let i: usize = self.usize_from_rawval_u32_input("i", i)?;
         self.visit_obj(v, move |hv: &HostVec| hv.get(i).map(|hval| hval.to_raw()))
     }
 
-    fn vec_del(&self, v: Object, i: RawVal) -> Result<Object, HostError> {
+    fn vec_del(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        v: Object,
+        i: RawVal,
+    ) -> Result<Object, HostError> {
         let i = self.u32_from_rawval_input("i", i)?;
         let vnew = self.visit_obj(v, move |hv: &HostVec| {
             self.validate_index_lt_bound(i, hv.len())?;
@@ -1181,12 +1250,17 @@ impl CheckedEnv for Host {
         Ok(self.add_host_object(vnew)?.into())
     }
 
-    fn vec_len(&self, v: Object) -> Result<RawVal, HostError> {
+    fn vec_len(&self, _vmcaller: &mut VmCaller<Host>, v: Object) -> Result<RawVal, HostError> {
         let len = self.visit_obj(v, |hv: &HostVec| Ok(hv.len()))?;
         self.usize_to_rawval_u32(len)
     }
 
-    fn vec_push_front(&self, v: Object, x: RawVal) -> Result<Object, HostError> {
+    fn vec_push_front(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        v: Object,
+        x: RawVal,
+    ) -> Result<Object, HostError> {
         let x = self.associate_raw_val(x);
         let vnew = self.visit_obj(v, move |hv: &HostVec| {
             let mut vnew = hv.metered_clone(&self.0.budget)?;
@@ -1196,7 +1270,11 @@ impl CheckedEnv for Host {
         Ok(self.add_host_object(vnew)?.into())
     }
 
-    fn vec_pop_front(&self, v: Object) -> Result<Object, HostError> {
+    fn vec_pop_front(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        v: Object,
+    ) -> Result<Object, HostError> {
         let vnew = self.visit_obj(v, move |hv: &HostVec| {
             let mut vnew = hv.metered_clone(&self.0.budget)?;
             vnew.pop_front().map(|_| vnew)
@@ -1204,7 +1282,12 @@ impl CheckedEnv for Host {
         Ok(self.add_host_object(vnew)?.into())
     }
 
-    fn vec_push_back(&self, v: Object, x: RawVal) -> Result<Object, HostError> {
+    fn vec_push_back(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        v: Object,
+        x: RawVal,
+    ) -> Result<Object, HostError> {
         let x = self.associate_raw_val(x);
         let vnew = self.visit_obj(v, move |hv: &HostVec| {
             let mut vnew = hv.metered_clone(&self.0.budget)?;
@@ -1214,7 +1297,7 @@ impl CheckedEnv for Host {
         Ok(self.add_host_object(vnew)?.into())
     }
 
-    fn vec_pop_back(&self, v: Object) -> Result<Object, HostError> {
+    fn vec_pop_back(&self, _vmcaller: &mut VmCaller<Host>, v: Object) -> Result<Object, HostError> {
         let vnew = self.visit_obj(v, move |hv: &HostVec| {
             let mut vnew = hv.metered_clone(&self.0.budget)?;
             vnew.pop_back().map(|_| vnew)
@@ -1222,15 +1305,21 @@ impl CheckedEnv for Host {
         Ok(self.add_host_object(vnew)?.into())
     }
 
-    fn vec_front(&self, v: Object) -> Result<RawVal, HostError> {
+    fn vec_front(&self, _vmcaller: &mut VmCaller<Host>, v: Object) -> Result<RawVal, HostError> {
         self.visit_obj(v, |hv: &HostVec| hv.front().map(|hval| hval.to_raw()))
     }
 
-    fn vec_back(&self, v: Object) -> Result<RawVal, HostError> {
+    fn vec_back(&self, _vmcaller: &mut VmCaller<Host>, v: Object) -> Result<RawVal, HostError> {
         self.visit_obj(v, |hv: &HostVec| hv.back().map(|hval| hval.to_raw()))
     }
 
-    fn vec_insert(&self, v: Object, i: RawVal, x: RawVal) -> Result<Object, HostError> {
+    fn vec_insert(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        v: Object,
+        i: RawVal,
+        x: RawVal,
+    ) -> Result<Object, HostError> {
         let i = self.u32_from_rawval_input("i", i)?;
         let x = self.associate_raw_val(x);
         let vnew = self.visit_obj(v, move |hv: &HostVec| {
@@ -1242,7 +1331,12 @@ impl CheckedEnv for Host {
         Ok(self.add_host_object(vnew)?.into())
     }
 
-    fn vec_append(&self, v1: Object, v2: Object) -> Result<Object, HostError> {
+    fn vec_append(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        v1: Object,
+        v2: Object,
+    ) -> Result<Object, HostError> {
         let mut vnew = self.visit_obj(v1, |hv: &HostVec| Ok(hv.metered_clone(&self.0.budget)?))?;
         let v2 = self.visit_obj(v2, |hv: &HostVec| Ok(hv.metered_clone(&self.0.budget)?))?;
         if v2.len() > u32::MAX as usize - vnew.len() {
@@ -1252,7 +1346,13 @@ impl CheckedEnv for Host {
         Ok(self.add_host_object(vnew)?.into())
     }
 
-    fn vec_slice(&self, v: Object, start: RawVal, end: RawVal) -> Result<Object, HostError> {
+    fn vec_slice(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        v: Object,
+        start: RawVal,
+        end: RawVal,
+    ) -> Result<Object, HostError> {
         let start = self.u32_from_rawval_input("start", start)?;
         let end = self.u32_from_rawval_input("end", end)?;
         let vnew = self.visit_obj(v, move |hv: &HostVec| {
@@ -1262,7 +1362,12 @@ impl CheckedEnv for Host {
         Ok(self.add_host_object(vnew)?.into())
     }
 
-    fn vec_first_index_of(&self, v: Object, x: RawVal) -> Result<RawVal, Self::Error> {
+    fn vec_first_index_of(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        v: Object,
+        x: RawVal,
+    ) -> Result<RawVal, Self::Error> {
         let x = self.associate_raw_val(x);
         self.visit_obj(v, |hv: &HostVec| {
             Ok(match hv.first_index_of(&x)? {
@@ -1272,7 +1377,12 @@ impl CheckedEnv for Host {
         })
     }
 
-    fn vec_last_index_of(&self, v: Object, x: RawVal) -> Result<RawVal, Self::Error> {
+    fn vec_last_index_of(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        v: Object,
+        x: RawVal,
+    ) -> Result<RawVal, Self::Error> {
         let x = self.associate_raw_val(x);
         self.visit_obj(v, |hv: &HostVec| {
             Ok(match hv.last_index_of(&x)? {
@@ -1282,7 +1392,12 @@ impl CheckedEnv for Host {
         })
     }
 
-    fn vec_binary_search(&self, v: Object, x: RawVal) -> Result<u64, Self::Error> {
+    fn vec_binary_search(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        v: Object,
+        x: RawVal,
+    ) -> Result<u64, Self::Error> {
         let x = self.associate_raw_val(x);
         self.visit_obj(v, |hv: &HostVec| {
             let res = hv.binary_search(&x)?;
@@ -1291,7 +1406,12 @@ impl CheckedEnv for Host {
     }
 
     // Notes on metering: covered by components
-    fn put_contract_data(&self, k: RawVal, v: RawVal) -> Result<RawVal, HostError> {
+    fn put_contract_data(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        k: RawVal,
+        v: RawVal,
+    ) -> Result<RawVal, HostError> {
         let key = self.contract_data_key_from_rawval(k)?;
         let data = LedgerEntryData::ContractData(ContractDataEntry {
             contract_id: self.get_current_contract_id()?,
@@ -1308,14 +1428,22 @@ impl CheckedEnv for Host {
     }
 
     // Notes on metering: covered by components
-    fn has_contract_data(&self, k: RawVal) -> Result<RawVal, HostError> {
+    fn has_contract_data(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        k: RawVal,
+    ) -> Result<RawVal, HostError> {
         let key = self.storage_key_from_rawval(k)?;
         let res = self.0.storage.borrow_mut().has(&key)?;
         Ok(RawVal::from_bool(res))
     }
 
     // Notes on metering: covered by components
-    fn get_contract_data(&self, k: RawVal) -> Result<RawVal, HostError> {
+    fn get_contract_data(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        k: RawVal,
+    ) -> Result<RawVal, HostError> {
         let key = self.storage_key_from_rawval(k)?;
         match self.0.storage.borrow_mut().get(&key)?.data {
             LedgerEntryData::ContractData(ContractDataEntry {
@@ -1331,7 +1459,11 @@ impl CheckedEnv for Host {
     }
 
     // Notes on metering: covered by components
-    fn del_contract_data(&self, k: RawVal) -> Result<RawVal, HostError> {
+    fn del_contract_data(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        k: RawVal,
+    ) -> Result<RawVal, HostError> {
         let key = self.contract_data_key_from_rawval(k)?;
         self.0.storage.borrow_mut().del(&key)?;
         Ok(().into())
@@ -1340,6 +1472,7 @@ impl CheckedEnv for Host {
     // Notes on metering: covered by the components.
     fn create_contract_from_ed25519(
         &self,
+        vmcaller: &mut VmCaller<Host>,
         v: Object,
         salt: Object,
         key: Object,
@@ -1359,9 +1492,9 @@ impl CheckedEnv for Host {
             self.charge_budget(CostType::BytesConcat, params.len() as u64)?;
             Ok(params)
         })?;
-        let hash = self.compute_hash_sha256(self.add_host_object(params)?.into())?;
+        let hash = self.compute_hash_sha256(vmcaller, self.add_host_object(params)?.into())?;
 
-        self.verify_sig_ed25519(hash, key, sig)?;
+        self.verify_sig_ed25519(vmcaller, hash, key, sig)?;
 
         let wasm = self.visit_obj(v, |b: &Vec<u8>| {
             Ok(ScContractCode::Wasm(
@@ -1374,7 +1507,12 @@ impl CheckedEnv for Host {
     }
 
     // Notes on metering: covered by the components.
-    fn create_contract_from_contract(&self, v: Object, salt: Object) -> Result<Object, HostError> {
+    fn create_contract_from_contract(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        v: Object,
+        salt: Object,
+    ) -> Result<Object, HostError> {
         let contract_id = self.get_current_contract_id()?;
         let salt = self.uint256_from_obj_input("salt", salt)?;
 
@@ -1390,6 +1528,7 @@ impl CheckedEnv for Host {
 
     fn create_token_from_ed25519(
         &self,
+        vmcaller: &mut VmCaller<Host>,
         salt: Object,
         key: Object,
         sig: Object,
@@ -1404,15 +1543,19 @@ impl CheckedEnv for Host {
         };
         // Another charge-after-work. Easier to get the num bytes this way.
         self.charge_budget(CostType::BytesConcat, params.len() as u64)?;
-        let hash = self.compute_hash_sha256(self.add_host_object(params)?.into())?;
+        let hash = self.compute_hash_sha256(vmcaller, self.add_host_object(params)?.into())?;
 
-        self.verify_sig_ed25519(hash, key, sig)?;
+        self.verify_sig_ed25519(vmcaller, hash, key, sig)?;
 
         let buf = self.id_preimage_from_ed25519(key_val, salt_val)?;
         self.create_contract_with_id_preimage(ScContractCode::Token, buf)
     }
 
-    fn create_token_from_contract(&self, salt: Object) -> Result<Object, HostError> {
+    fn create_token_from_contract(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        salt: Object,
+    ) -> Result<Object, HostError> {
         let contract_id = self.get_current_contract_id()?;
         let salt = self.uint256_from_obj_input("salt", salt)?;
         let buf = self.id_preimage_from_contract(contract_id, salt)?;
@@ -1420,7 +1563,13 @@ impl CheckedEnv for Host {
     }
 
     // Notes on metering: here covers the args unpacking. The actual VM work is changed at lower layers.
-    fn call(&self, contract: Object, func: Symbol, args: Object) -> Result<RawVal, HostError> {
+    fn call(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        contract: Object,
+        func: Symbol,
+        args: Object,
+    ) -> Result<RawVal, HostError> {
         let args: Vec<RawVal> = self.visit_obj(args, |hv: &HostVec| {
             self.charge_budget(CostType::CallArgsUnpack, hv.len() as u64)?;
             Ok(hv.iter().map(|a| a.to_raw()).collect())
@@ -1429,8 +1578,14 @@ impl CheckedEnv for Host {
     }
 
     // Notes on metering: covered by the components.
-    fn try_call(&self, contract: Object, func: Symbol, args: Object) -> Result<RawVal, HostError> {
-        match self.call(contract, func, args) {
+    fn try_call(
+        &self,
+        vmcaller: &mut VmCaller<Host>,
+        contract: Object,
+        func: Symbol,
+        args: Object,
+    ) -> Result<RawVal, HostError> {
+        match self.call(vmcaller, contract, func, args) {
             Ok(rv) => Ok(rv),
             Err(e) => {
                 let evt = DebugEvent::new()
@@ -1442,14 +1597,14 @@ impl CheckedEnv for Host {
         }
     }
 
-    fn bigint_from_u64(&self, x: u64) -> Result<Object, HostError> {
+    fn bigint_from_u64(&self, _vmcaller: &mut VmCaller<Host>, x: u64) -> Result<Object, HostError> {
         Ok(self
             .add_host_object(MeteredBigInt::from_u64(self.0.budget.clone(), x)?)?
             .into())
     }
 
     // Notes on metering: visiting object is covered. Conversion from BigInt to u64 is free.
-    fn bigint_to_u64(&self, x: Object) -> Result<u64, HostError> {
+    fn bigint_to_u64(&self, _vmcaller: &mut VmCaller<Host>, x: Object) -> Result<u64, HostError> {
         self.visit_obj(x, |bi: &MeteredBigInt| {
             bi.to_u64()
                 .ok_or_else(|| self.err_conversion_into_rawval::<u64>(x.into()))
@@ -1457,14 +1612,14 @@ impl CheckedEnv for Host {
     }
 
     // Notes on metering: new object adding is covered. Conversion from i64 to BigInt is free.
-    fn bigint_from_i64(&self, x: i64) -> Result<Object, HostError> {
+    fn bigint_from_i64(&self, _vmcaller: &mut VmCaller<Host>, x: i64) -> Result<Object, HostError> {
         Ok(self
             .add_host_object(MeteredBigInt::from_i64(self.0.budget.clone(), x)?)?
             .into())
     }
 
     // Notes on metering: visiting object is covered. Conversion from BigInt to i64 is free.
-    fn bigint_to_i64(&self, x: Object) -> Result<i64, HostError> {
+    fn bigint_to_i64(&self, _vmcaller: &mut VmCaller<Host>, x: Object) -> Result<i64, HostError> {
         self.visit_obj(x, |bi: &MeteredBigInt| {
             bi.to_i64()
                 .ok_or_else(|| self.err_conversion_into_rawval::<i64>(x.into()))
@@ -1473,7 +1628,12 @@ impl CheckedEnv for Host {
 
     // Notes on metering: fully covered.
     // Notes on calibration: use equal length objects to get the result upper bound.
-    fn bigint_add(&self, x: Object, y: Object) -> Result<Object, HostError> {
+    fn bigint_add(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        x: Object,
+        y: Object,
+    ) -> Result<Object, HostError> {
         let res = self.visit_obj(x, |a: &MeteredBigInt| {
             self.visit_obj(y, |b: &MeteredBigInt| a.add(b))
         })?;
@@ -1481,7 +1641,12 @@ impl CheckedEnv for Host {
     }
 
     // Notes on metering and calibration: see `bigint_add`
-    fn bigint_sub(&self, x: Object, y: Object) -> Result<Object, HostError> {
+    fn bigint_sub(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        x: Object,
+        y: Object,
+    ) -> Result<Object, HostError> {
         let res = self.visit_obj(x, |a: &MeteredBigInt| {
             self.visit_obj(y, |b: &MeteredBigInt| a.sub(b))
         })?;
@@ -1495,7 +1660,12 @@ impl CheckedEnv for Host {
     // - (32, 256]
     // - [256, )
     // As they use different algorithms that have different performance and involves different complexity of intermediate objects.
-    fn bigint_mul(&self, x: Object, y: Object) -> Result<Object, HostError> {
+    fn bigint_mul(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        x: Object,
+        y: Object,
+    ) -> Result<Object, HostError> {
         let res = self.visit_obj(x, |a: &MeteredBigInt| {
             self.visit_obj(y, |b: &MeteredBigInt| a.mul(b))
         })?;
@@ -1504,7 +1674,12 @@ impl CheckedEnv for Host {
 
     // Notes on metering and model calibration:
     // Use uneven length numbers for the upper bound measurement.
-    fn bigint_div(&self, x: Object, y: Object) -> Result<Object, HostError> {
+    fn bigint_div(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        x: Object,
+        y: Object,
+    ) -> Result<Object, HostError> {
         let res = self.visit_obj(x, |a: &MeteredBigInt| {
             self.visit_obj(y, |b: &MeteredBigInt| {
                 if b.is_zero() {
@@ -1516,7 +1691,12 @@ impl CheckedEnv for Host {
         Ok(self.add_host_object(res)?.into())
     }
 
-    fn bigint_rem(&self, x: Object, y: Object) -> Result<Object, HostError> {
+    fn bigint_rem(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        x: Object,
+        y: Object,
+    ) -> Result<Object, HostError> {
         let res = self.visit_obj(x, |a: &MeteredBigInt| {
             self.visit_obj(y, |b: &MeteredBigInt| {
                 if b.is_zero() {
@@ -1530,28 +1710,48 @@ impl CheckedEnv for Host {
 
     // Notes on metering and model calibration:
     // Use equal length numbers for the upper bound measurement.
-    fn bigint_and(&self, x: Object, y: Object) -> Result<Object, HostError> {
+    fn bigint_and(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        x: Object,
+        y: Object,
+    ) -> Result<Object, HostError> {
         let res = self.visit_obj(x, |a: &MeteredBigInt| {
             self.visit_obj(y, |b: &MeteredBigInt| a.bitand(b))
         })?;
         Ok(self.add_host_object(res)?.into())
     }
 
-    fn bigint_or(&self, x: Object, y: Object) -> Result<Object, HostError> {
+    fn bigint_or(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        x: Object,
+        y: Object,
+    ) -> Result<Object, HostError> {
         let res = self.visit_obj(x, |a: &MeteredBigInt| {
             self.visit_obj(y, |b: &MeteredBigInt| a.bitor(b))
         })?;
         Ok(self.add_host_object(res)?.into())
     }
 
-    fn bigint_xor(&self, x: Object, y: Object) -> Result<Object, HostError> {
+    fn bigint_xor(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        x: Object,
+        y: Object,
+    ) -> Result<Object, HostError> {
         let res = self.visit_obj(x, |a: &MeteredBigInt| {
             self.visit_obj(y, |b: &MeteredBigInt| a.bitxor(b))
         })?;
         Ok(self.add_host_object(res)?.into())
     }
 
-    fn bigint_shl(&self, x: Object, y: Object) -> Result<Object, HostError> {
+    fn bigint_shl(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        x: Object,
+        y: Object,
+    ) -> Result<Object, HostError> {
         let res = self.visit_obj(x, |a: &MeteredBigInt| {
             self.visit_obj(y, |b: &MeteredBigInt| a.shl(b))
         })?;
@@ -1559,7 +1759,12 @@ impl CheckedEnv for Host {
     }
 
     // Notes on calibration: choose small y for the upper bound.
-    fn bigint_shr(&self, x: Object, y: Object) -> Result<Object, HostError> {
+    fn bigint_shr(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        x: Object,
+        y: Object,
+    ) -> Result<Object, HostError> {
         let res = self.visit_obj(x, |a: &MeteredBigInt| {
             self.visit_obj(y, |b: &MeteredBigInt| a.shr(b))
         })?;
@@ -1567,30 +1772,44 @@ impl CheckedEnv for Host {
     }
 
     // Notes on metering: covered by `visit_obj`. `is_zero` call is free.
-    fn bigint_is_zero(&self, x: Object) -> Result<RawVal, HostError> {
+    fn bigint_is_zero(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        x: Object,
+    ) -> Result<RawVal, HostError> {
         self.visit_obj(x, |a: &MeteredBigInt| Ok(a.is_zero().into()))
     }
 
     // Notes on metering: covered by `visit_obj`. `neg` call is free.
-    fn bigint_neg(&self, x: Object) -> Result<Object, HostError> {
+    fn bigint_neg(&self, _vmcaller: &mut VmCaller<Host>, x: Object) -> Result<Object, HostError> {
         let res = self.visit_obj(x, |a: &MeteredBigInt| Ok(a.neg()))?;
         Ok(self.add_host_object(res)?.into())
     }
 
     // Notes on metering: covered by `visit_obj`. `not` call is free.
-    fn bigint_not(&self, x: Object) -> Result<Object, HostError> {
+    fn bigint_not(&self, _vmcaller: &mut VmCaller<Host>, x: Object) -> Result<Object, HostError> {
         let res = self.visit_obj(x, |a: &MeteredBigInt| Ok(a.not()))?;
         Ok(self.add_host_object(res)?.into())
     }
 
-    fn bigint_gcd(&self, x: Object, y: Object) -> Result<Object, HostError> {
+    fn bigint_gcd(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        x: Object,
+        y: Object,
+    ) -> Result<Object, HostError> {
         let res = self.visit_obj(x, |a: &MeteredBigInt| {
             self.visit_obj(y, |b: &MeteredBigInt| a.gcd(b))
         })?;
         Ok(self.add_host_object(res)?.into())
     }
 
-    fn bigint_lcm(&self, x: Object, y: Object) -> Result<Object, HostError> {
+    fn bigint_lcm(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        x: Object,
+        y: Object,
+    ) -> Result<Object, HostError> {
         let res = self.visit_obj(x, |a: &MeteredBigInt| {
             self.visit_obj(y, |b: &MeteredBigInt| a.lcm(b))
         })?;
@@ -1598,14 +1817,25 @@ impl CheckedEnv for Host {
     }
 
     // Note on calibration: pick y with all 1-bits to get the upper bound.
-    fn bigint_pow(&self, x: Object, y: Object) -> Result<Object, HostError> {
+    fn bigint_pow(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        x: Object,
+        y: Object,
+    ) -> Result<Object, HostError> {
         let res = self.visit_obj(x, |a: &MeteredBigInt| {
             self.visit_obj(y, |e: &MeteredBigInt| a.pow(e))
         })?;
         Ok(self.add_host_object(res)?.into())
     }
 
-    fn bigint_pow_mod(&self, p: Object, q: Object, m: Object) -> Result<Object, HostError> {
+    fn bigint_pow_mod(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        p: Object,
+        q: Object,
+        m: Object,
+    ) -> Result<Object, HostError> {
         let res = self.visit_obj(p, |a: &MeteredBigInt| {
             self.visit_obj(q, |exponent: &MeteredBigInt| {
                 self.visit_obj(m, |modulus: &MeteredBigInt| a.modpow(exponent, modulus))
@@ -1614,27 +1844,41 @@ impl CheckedEnv for Host {
         Ok(self.add_host_object(res)?.into())
     }
 
-    fn bigint_sqrt(&self, x: Object) -> Result<Object, HostError> {
+    fn bigint_sqrt(&self, _vmcaller: &mut VmCaller<Host>, x: Object) -> Result<Object, HostError> {
         let res = self.visit_obj(x, |a: &MeteredBigInt| a.sqrt())?;
         Ok(self.add_host_object(res)?.into())
     }
 
-    fn bigint_bits(&self, x: Object) -> Result<u64, HostError> {
+    fn bigint_bits(&self, _vmcaller: &mut VmCaller<Host>, x: Object) -> Result<u64, HostError> {
         self.visit_obj(x, |a: &MeteredBigInt| Ok(a.bits()))
     }
 
-    fn bigint_to_bytes_be(&self, x: Object) -> Result<Object, Self::Error> {
+    fn bigint_to_bytes_be(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        x: Object,
+    ) -> Result<Object, Self::Error> {
         let sign_bytes = self.visit_obj(x, |a: &MeteredBigInt| a.to_bytes_be())?;
         Ok(self.add_host_object(sign_bytes.1)?.into())
     }
 
-    fn bigint_to_radix_be(&self, x: Object, radix: RawVal) -> Result<Object, Self::Error> {
+    fn bigint_to_radix_be(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        x: Object,
+        radix: RawVal,
+    ) -> Result<Object, Self::Error> {
         let r: u32 = self.u32_from_rawval_input("radix", radix)?;
         let sign_bytes = self.visit_obj(x, |a: &MeteredBigInt| a.to_radix_be(r))?;
         Ok(self.add_host_object(sign_bytes.1)?.into())
     }
 
-    fn bigint_from_bytes_be(&self, sign: RawVal, bytes: Object) -> Result<Object, Self::Error> {
+    fn bigint_from_bytes_be(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        sign: RawVal,
+        bytes: Object,
+    ) -> Result<Object, Self::Error> {
         let s = self.bigint_sign_from_rawval(sign)?;
         let res = self.visit_obj(bytes, |b: &Vec<u8>| {
             MeteredBigInt::from_bytes_be(self.0.budget.clone(), s, b)
@@ -1644,6 +1888,7 @@ impl CheckedEnv for Host {
 
     fn bigint_from_radix_be(
         &self,
+        _vmcaller: &mut VmCaller<Host>,
         sign: RawVal,
         buf: Object,
         radix: RawVal,
@@ -1664,7 +1909,11 @@ impl CheckedEnv for Host {
     }
 
     // Notes on metering: covered by components
-    fn serialize_to_bytes(&self, v: RawVal) -> Result<Object, HostError> {
+    fn serialize_to_bytes(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        v: RawVal,
+    ) -> Result<Object, HostError> {
         let scv = self.from_host_val(v)?;
         let mut buf = Vec::<u8>::new();
         scv.write_xdr(&mut buf)
@@ -1680,7 +1929,11 @@ impl CheckedEnv for Host {
     }
 
     // Notes on metering: covered by components
-    fn deserialize_from_bytes(&self, b: Object) -> Result<RawVal, HostError> {
+    fn deserialize_from_bytes(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        b: Object,
+    ) -> Result<RawVal, HostError> {
         let scv = self.visit_obj(b, |hv: &Vec<u8>| {
             self.charge_budget(CostType::ValDeser, hv.len() as u64)?;
             ScVal::read_xdr(&mut hv.as_slice())
@@ -1691,6 +1944,7 @@ impl CheckedEnv for Host {
 
     fn bytes_copy_to_linear_memory(
         &self,
+        vmcaller: &mut VmCaller<Host>,
         b: Object,
         b_pos: RawVal,
         lm_pos: RawVal,
@@ -1704,10 +1958,12 @@ impl CheckedEnv for Host {
             let b_pos = u32::try_from(b_pos)?;
             self.visit_obj(b, move |hv: &Vec<u8>| {
                 let range = self.valid_range_from_start_span_bound(b_pos, len, hv.len())?;
-                vm.with_memory_access(self, |mem| {
-                    self.charge_budget(CostType::VmMemCpy, hv.len() as u64)?;
-                    self.map_err(mem.set(pos, &hv.as_slice()[range]))
-                })?;
+                let mem = vm.get_memory(self)?;
+                self.charge_budget(CostType::VmMemCpy, hv.len() as u64)?;
+                self.map_err(
+                    mem.write(vmcaller.try_mut()?, pos as usize, &hv.as_slice()[range])
+                        .map_err(|me| wasmi::Error::Memory(me)),
+                )?;
                 Ok(().into())
             })
         }
@@ -1715,6 +1971,7 @@ impl CheckedEnv for Host {
 
     fn bytes_copy_from_linear_memory(
         &self,
+        vmcaller: &mut VmCaller<Host>,
         b: Object,
         b_pos: RawVal,
         lm_pos: RawVal,
@@ -1736,18 +1993,23 @@ impl CheckedEnv for Host {
             if end_idx > vnew.len() {
                 vnew.resize(end_idx, 0);
             }
-            vm.with_memory_access(self, |mem| {
-                self.charge_budget(CostType::VmMemCpy, len as u64)?;
-                Ok(self.map_err(
-                    mem.get_into(pos, &mut vnew.as_mut_slice()[b_pos as usize..end_idx]),
-                )?)
-            })?;
+            let mem = vm.get_memory(self)?;
+            self.charge_budget(CostType::VmMemCpy, len as u64)?;
+            self.map_err(
+                mem.read(
+                    vmcaller.try_mut()?,
+                    pos as usize,
+                    &mut vnew.as_mut_slice()[b_pos as usize..end_idx],
+                )
+                .map_err(|me| wasmi::Error::Memory(me)),
+            )?;
             Ok(self.add_host_object(vnew)?.into())
         }
     }
 
     fn bytes_new_from_linear_memory(
         &self,
+        vmcaller: &mut VmCaller<Host>,
         lm_pos: RawVal,
         len: RawVal,
     ) -> Result<Object, HostError> {
@@ -1757,21 +2019,29 @@ impl CheckedEnv for Host {
         {
             let VmSlice { vm, pos, len } = self.decode_vmslice(lm_pos, len)?;
             let mut vnew: Vec<u8> = vec![0; len as usize];
-            vm.with_memory_access(self, |mem| {
-                self.charge_budget(CostType::VmMemCpy, len as u64)?;
-                self.map_err(mem.get_into(pos, vnew.as_mut_slice()))
-            })?;
+            let mem = vm.get_memory(self)?;
+            self.charge_budget(CostType::VmMemCpy, len as u64)?;
+            self.map_err(
+                mem.read(vmcaller.try_ref()?, pos as usize, vnew.as_mut_slice())
+                    .map_err(|me| wasmi::Error::Memory(me)),
+            )?;
             Ok(self.add_host_object(vnew)?.into())
         }
     }
 
     // Notes on metering: covered by `add_host_object`
-    fn bytes_new(&self) -> Result<Object, HostError> {
+    fn bytes_new(&self, _vmcaller: &mut VmCaller<Host>) -> Result<Object, HostError> {
         Ok(self.add_host_object(Vec::<u8>::new())?.into())
     }
 
     // Notes on metering: `get_mut` is free
-    fn bytes_put(&self, b: Object, i: RawVal, u: RawVal) -> Result<Object, HostError> {
+    fn bytes_put(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        b: Object,
+        i: RawVal,
+        u: RawVal,
+    ) -> Result<Object, HostError> {
         let i = self.usize_from_rawval_u32_input("i", i)?;
         let u = self.u8_from_rawval_input("u", u)?;
         let vnew = self.visit_obj(b, move |hv: &Vec<u8>| {
@@ -1788,7 +2058,12 @@ impl CheckedEnv for Host {
     }
 
     // Notes on metering: `get` is free
-    fn bytes_get(&self, b: Object, i: RawVal) -> Result<RawVal, HostError> {
+    fn bytes_get(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        b: Object,
+        i: RawVal,
+    ) -> Result<RawVal, HostError> {
         let i = self.usize_from_rawval_u32_input("i", i)?;
         self.visit_obj(b, |hv: &Vec<u8>| {
             hv.get(i)
@@ -1797,7 +2072,12 @@ impl CheckedEnv for Host {
         })
     }
 
-    fn bytes_del(&self, b: Object, i: RawVal) -> Result<Object, HostError> {
+    fn bytes_del(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        b: Object,
+        i: RawVal,
+    ) -> Result<Object, HostError> {
         let i = self.u32_from_rawval_input("i", i)?;
         let vnew = self.visit_obj(b, move |hv: &Vec<u8>| {
             self.validate_index_lt_bound(i, hv.len())?;
@@ -1810,13 +2090,18 @@ impl CheckedEnv for Host {
     }
 
     // Notes on metering: `len` is free
-    fn bytes_len(&self, b: Object) -> Result<RawVal, HostError> {
+    fn bytes_len(&self, _vmcaller: &mut VmCaller<Host>, b: Object) -> Result<RawVal, HostError> {
         let len = self.visit_obj(b, |hv: &Vec<u8>| Ok(hv.len()))?;
         self.usize_to_rawval_u32(len)
     }
 
     // Notes on metering: `push` is free
-    fn bytes_push(&self, b: Object, u: RawVal) -> Result<Object, HostError> {
+    fn bytes_push(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        b: Object,
+        u: RawVal,
+    ) -> Result<Object, HostError> {
         let u = self.u8_from_rawval_input("u", u)?;
         let vnew = self.visit_obj(b, move |hv: &Vec<u8>| {
             let mut vnew = hv.metered_clone(&self.0.budget)?;
@@ -1829,7 +2114,7 @@ impl CheckedEnv for Host {
     }
 
     // Notes on metering: `pop` is free
-    fn bytes_pop(&self, b: Object) -> Result<Object, HostError> {
+    fn bytes_pop(&self, _vmcaller: &mut VmCaller<Host>, b: Object) -> Result<Object, HostError> {
         let vnew = self.visit_obj(b, move |hv: &Vec<u8>| {
             let mut vnew = hv.metered_clone(&self.0.budget)?;
             // Passing `len()` since worse case can cause reallocation.
@@ -1842,7 +2127,7 @@ impl CheckedEnv for Host {
     }
 
     // Notes on metering: `first` is free
-    fn bytes_front(&self, b: Object) -> Result<RawVal, HostError> {
+    fn bytes_front(&self, _vmcaller: &mut VmCaller<Host>, b: Object) -> Result<RawVal, HostError> {
         self.visit_obj(b, |hv: &Vec<u8>| {
             hv.first()
                 .map(|u| Into::<RawVal>::into(Into::<u32>::into(*u)))
@@ -1851,7 +2136,7 @@ impl CheckedEnv for Host {
     }
 
     // Notes on metering: `last` is free
-    fn bytes_back(&self, b: Object) -> Result<RawVal, HostError> {
+    fn bytes_back(&self, _vmcaller: &mut VmCaller<Host>, b: Object) -> Result<RawVal, HostError> {
         self.visit_obj(b, |hv: &Vec<u8>| {
             hv.last()
                 .map(|u| Into::<RawVal>::into(Into::<u32>::into(*u)))
@@ -1859,7 +2144,13 @@ impl CheckedEnv for Host {
         })
     }
 
-    fn bytes_insert(&self, b: Object, i: RawVal, u: RawVal) -> Result<Object, HostError> {
+    fn bytes_insert(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        b: Object,
+        i: RawVal,
+        u: RawVal,
+    ) -> Result<Object, HostError> {
         let i = self.u32_from_rawval_input("i", i)?;
         let u = self.u8_from_rawval_input("u", u)?;
         let vnew = self.visit_obj(b, move |hv: &Vec<u8>| {
@@ -1872,7 +2163,12 @@ impl CheckedEnv for Host {
         Ok(self.add_host_object(vnew)?.into())
     }
 
-    fn bytes_append(&self, b1: Object, b2: Object) -> Result<Object, HostError> {
+    fn bytes_append(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        b1: Object,
+        b2: Object,
+    ) -> Result<Object, HostError> {
         let mut vnew = self.visit_obj(b1, |hv: &Vec<u8>| Ok(hv.metered_clone(&self.0.budget)?))?;
         let mut b2 = self.visit_obj(b2, |hv: &Vec<u8>| Ok(hv.metered_clone(&self.0.budget)?))?;
         if b2.len() > u32::MAX as usize - vnew.len() {
@@ -1883,7 +2179,13 @@ impl CheckedEnv for Host {
         Ok(self.add_host_object(vnew)?.into())
     }
 
-    fn bytes_slice(&self, b: Object, start: RawVal, end: RawVal) -> Result<Object, HostError> {
+    fn bytes_slice(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        b: Object,
+        start: RawVal,
+        end: RawVal,
+    ) -> Result<Object, HostError> {
         let start = self.u32_from_rawval_input("start", start)?;
         let end = self.u32_from_rawval_input("end", end)?;
         let vnew = self.visit_obj(b, move |hv: &Vec<u8>| {
@@ -1894,30 +2196,56 @@ impl CheckedEnv for Host {
         Ok(self.add_host_object(vnew)?.into())
     }
 
-    fn hash_from_bytes(&self, x: Object) -> Result<Object, HostError> {
+    fn hash_from_bytes(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        x: Object,
+    ) -> Result<Object, HostError> {
         todo!()
     }
 
-    fn hash_to_bytes(&self, x: Object) -> Result<Object, HostError> {
+    fn hash_to_bytes(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        x: Object,
+    ) -> Result<Object, HostError> {
         todo!()
     }
 
-    fn public_key_from_bytes(&self, x: Object) -> Result<Object, HostError> {
+    fn public_key_from_bytes(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        x: Object,
+    ) -> Result<Object, HostError> {
         todo!()
     }
 
-    fn public_key_to_bytes(&self, x: Object) -> Result<Object, HostError> {
+    fn public_key_to_bytes(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        x: Object,
+    ) -> Result<Object, HostError> {
         todo!()
     }
 
     // Notes on metering: covered by components.
-    fn compute_hash_sha256(&self, x: Object) -> Result<Object, HostError> {
+    fn compute_hash_sha256(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        x: Object,
+    ) -> Result<Object, HostError> {
         let hash = self.sha256_hash_from_bytes_input(x)?;
         Ok(self.add_host_object(hash)?.into())
     }
 
     // Notes on metering: covered by components.
-    fn verify_sig_ed25519(&self, x: Object, k: Object, s: Object) -> Result<RawVal, HostError> {
+    fn verify_sig_ed25519(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        x: Object,
+        k: Object,
+        s: Object,
+    ) -> Result<RawVal, HostError> {
         use ed25519_dalek::Verifier;
         let public_key = self.ed25519_pub_key_from_obj_input(k)?;
         let sig = self.signature_from_obj_input("sig", s)?;
@@ -1931,33 +2259,54 @@ impl CheckedEnv for Host {
     }
 
     // Notes on metering: covered by components.
-    fn account_get_low_threshold(&self, a: Object) -> Result<RawVal, Self::Error> {
+    fn account_get_low_threshold(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        a: Object,
+    ) -> Result<RawVal, Self::Error> {
         let threshold = self.load_account(a)?.thresholds.0[ThresholdIndexes::Low as usize];
         let threshold = Into::<u32>::into(threshold);
         Ok(threshold.into())
     }
 
     // Notes on metering: covered by components.
-    fn account_get_medium_threshold(&self, a: Object) -> Result<RawVal, Self::Error> {
+    fn account_get_medium_threshold(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        a: Object,
+    ) -> Result<RawVal, Self::Error> {
         let threshold = self.load_account(a)?.thresholds.0[ThresholdIndexes::Med as usize];
         let threshold = Into::<u32>::into(threshold);
         Ok(threshold.into())
     }
 
     // Notes on metering: covered by components.
-    fn account_get_high_threshold(&self, a: Object) -> Result<RawVal, Self::Error> {
+    fn account_get_high_threshold(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        a: Object,
+    ) -> Result<RawVal, Self::Error> {
         let threshold = self.load_account(a)?.thresholds.0[ThresholdIndexes::High as usize];
         let threshold = Into::<u32>::into(threshold);
         Ok(threshold.into())
     }
 
     // Notes on metering: covered by components.
-    fn account_exists(&self, a: Object) -> Result<RawVal, Self::Error> {
+    fn account_exists(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        a: Object,
+    ) -> Result<RawVal, Self::Error> {
         Ok(self.has_account(a)?.into())
     }
 
     // Notes on metering: some covered. The for loop and comparisons are free (for now).
-    fn account_get_signer_weight(&self, a: Object, s: Object) -> Result<RawVal, Self::Error> {
+    fn account_get_signer_weight(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        a: Object,
+        s: Object,
+    ) -> Result<RawVal, Self::Error> {
         use xdr::{Signer, SignerKey};
 
         let target_signer = self.to_u256(s)?;
@@ -1988,25 +2337,28 @@ impl CheckedEnv for Host {
         }
     }
 
-    fn get_ledger_version(&self) -> Result<RawVal, Self::Error> {
+    fn get_ledger_version(&self, _vmcaller: &mut VmCaller<Host>) -> Result<RawVal, Self::Error> {
         self.with_ledger_info(|li| Ok(li.protocol_version.into()))
     }
 
-    fn get_ledger_sequence(&self) -> Result<RawVal, Self::Error> {
+    fn get_ledger_sequence(&self, _vmcaller: &mut VmCaller<Host>) -> Result<RawVal, Self::Error> {
         self.with_ledger_info(|li| Ok(li.sequence_number.into()))
     }
 
-    fn get_ledger_timestamp(&self) -> Result<Object, Self::Error> {
+    fn get_ledger_timestamp(&self, _vmcaller: &mut VmCaller<Host>) -> Result<Object, Self::Error> {
         self.with_ledger_info(|li| Ok(self.add_host_object(li.timestamp)?.into()))
     }
 
-    fn get_ledger_network_passphrase(&self) -> Result<Object, Self::Error> {
+    fn get_ledger_network_passphrase(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+    ) -> Result<Object, Self::Error> {
         Ok(self
             .with_ledger_info(|li| self.add_host_object(li.network_passphrase.clone()))?
             .into())
     }
 
-    fn get_current_call_stack(&self) -> Result<Object, HostError> {
+    fn get_current_call_stack(&self, _vmcaller: &mut VmCaller<Host>) -> Result<Object, HostError> {
         let frames = self.0.context.borrow();
 
         let get_host_val_tuple =
