@@ -8,7 +8,7 @@ use core::fmt::Debug;
 use im_rc::{OrdMap, Vector};
 use num_bigint::Sign;
 use soroban_env_common::{
-    EnvVal, TryConvert, TryFromVal, TryIntoVal, VmCaller, VmCallerCheckedEnv, OK, UNKNOWN_ERROR,
+    EnvVal, Status, TryConvert, TryFromVal, TryIntoVal, VmCaller, VmCallerCheckedEnv,
 };
 
 use soroban_env_common::xdr::{
@@ -807,7 +807,7 @@ impl Host {
         let topics = self.event_topics_from_host_obj(topics)?;
         let data = self.from_host_val(data)?;
         self.record_contract_event(ContractEventType::System, topics, data)?;
-        Ok(OK.into())
+        Ok(Status::OK.into())
     }
 }
 
@@ -993,7 +993,7 @@ impl VmCallerCheckedEnv for Host {
         let topics = self.event_topics_from_host_obj(topics)?;
         let data = self.from_host_val(data)?;
         self.record_contract_event(ContractEventType::Contract, topics, data)?;
-        Ok(OK.into())
+        Ok(Status::OK.into())
     }
 
     // Notes on metering: covered by the components.
@@ -1115,11 +1115,11 @@ impl VmCallerCheckedEnv for Host {
                     {
                         Ok(pk2.to_raw())
                     } else {
-                        Ok(UNKNOWN_ERROR.to_raw()) //FIXME: replace with the actual status code
+                        Ok(Status::UNKNOWN_ERROR.to_raw()) //FIXME: replace with the actual status code
                     }
                 }
             } else {
-                Ok(UNKNOWN_ERROR.to_raw()) //FIXME: replace with the actual status code
+                Ok(Status::UNKNOWN_ERROR.to_raw()) //FIXME: replace with the actual status code
             }
         })
     }
@@ -1145,11 +1145,11 @@ impl VmCallerCheckedEnv for Host {
                     {
                         Ok(pk2.to_raw())
                     } else {
-                        Ok(UNKNOWN_ERROR.to_raw()) //FIXME: replace with the actual status code
+                        Ok(Status::UNKNOWN_ERROR.to_raw()) //FIXME: replace with the actual status code
                     }
                 }
             } else {
-                Ok(UNKNOWN_ERROR.to_raw()) //FIXME: replace with the actual status code
+                Ok(Status::UNKNOWN_ERROR.to_raw()) //FIXME: replace with the actual status code
             }
         })
     }
@@ -1158,7 +1158,7 @@ impl VmCallerCheckedEnv for Host {
         self.visit_obj(m, |hm: &HostMap| {
             match hm.get_min()? {
                 Some((pk, pv)) => Ok(pk.to_raw()),
-                None => Ok(UNKNOWN_ERROR.to_raw()), //FIXME: replace with the actual status code
+                None => Ok(Status::UNKNOWN_ERROR.to_raw()), //FIXME: replace with the actual status code
             }
         })
     }
@@ -1167,7 +1167,7 @@ impl VmCallerCheckedEnv for Host {
         self.visit_obj(m, |hm: &HostMap| {
             match hm.get_max()? {
                 Some((pk, pv)) => Ok(pk.to_raw()),
-                None => Ok(UNKNOWN_ERROR.to_raw()), //FIXME: replace with the actual status code
+                None => Ok(Status::UNKNOWN_ERROR.to_raw()), //FIXME: replace with the actual status code
             }
         })
     }
