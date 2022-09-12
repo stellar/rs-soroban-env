@@ -3,7 +3,7 @@
 
 use soroban_env_common::call_macro_with_all_host_functions;
 
-use super::{Env, EnvBase, Object, RawVal, Symbol};
+use super::{Env, EnvBase, Object, RawVal, Status, Symbol};
 #[cfg(target_family = "wasm")]
 use static_assertions as sa;
 
@@ -270,7 +270,7 @@ macro_rules! generate_extern_modules {
             $(#[$mod_attr])*
             mod $mod_id {
                 #[allow(unused_imports)]
-                use crate::{RawVal,Object,Symbol};
+                use crate::{RawVal,Object,Symbol,Status};
                 #[link(wasm_import_module = $mod_str)]
                 extern "C" {
                     $(

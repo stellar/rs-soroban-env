@@ -1,5 +1,5 @@
 use super::Symbol;
-use super::{Object, RawVal};
+use super::{Object, RawVal, Status};
 use core::any;
 
 /// Base trait extended by the [Env](crate::Env) trait, providing various special-case
@@ -168,6 +168,10 @@ macro_rules! call_macro_with_all_host_functions {
                 /// vector contains the contract id as Hash, and a function as
                 /// a Symbol.
                 {"8", fn get_current_call_stack() -> Object }
+                /// Causes the currently executing contract to fail immediately
+                /// with a provided status code, which must be of error-type
+                /// `ScStatusType::ContractError`. Does not actually return.
+                {"9", fn fail_with_status(status:Status) -> RawVal }
             }
 
             mod u64 "u" {
