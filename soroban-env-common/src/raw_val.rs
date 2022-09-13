@@ -383,6 +383,7 @@ impl From<ScStatus> for RawVal {
             ScStatus::HostStorageError(e) => e as u32,
             ScStatus::HostContextError(e) => e as u32,
             ScStatus::VmError(e) => e as u32,
+            ScStatus::ContractError(e) => e,
         };
         Status::from_type_and_code(ty, code).to_raw()
     }
@@ -400,6 +401,7 @@ impl From<&ScStatus> for RawVal {
             ScStatus::HostStorageError(e) => e as u32,
             ScStatus::HostContextError(e) => e as u32,
             ScStatus::VmError(e) => e as u32,
+            ScStatus::ContractError(e) => e,
         };
         Status::from_type_and_code(ty, code).to_raw()
     }
