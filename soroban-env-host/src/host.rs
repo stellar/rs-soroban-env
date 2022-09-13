@@ -102,6 +102,7 @@ pub struct LedgerInfo {
     pub sequence_number: u32,
     pub timestamp: u64,
     pub network_passphrase: Vec<u8>,
+    pub base_reserve: u32,
 }
 
 #[derive(Clone, Default)]
@@ -818,7 +819,7 @@ impl Host {
         use xdr::{AccountEntryExt, AccountEntryExtensionV1Ext, LedgerKeyAccount};
 
         self.with_current_frame(|frame| match frame {
-            Frame::Token(id) => Ok(()),
+            Frame::Token(id, _) => Ok(()),
             _ => Err(self.err_general("only native token can transfer classic balance")),
         })?;
 
@@ -879,7 +880,7 @@ impl Host {
         use xdr::{TrustLineEntryExt, TrustLineFlags};
 
         self.with_current_frame(|frame| match frame {
-            Frame::Token(id) => Ok(()),
+            Frame::Token(id, _) => Ok(()),
             _ => Err(self.err_general("only native token can transfer classic balance")),
         })?;
 

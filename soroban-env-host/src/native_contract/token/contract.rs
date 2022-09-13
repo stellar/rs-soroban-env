@@ -11,7 +11,7 @@ use crate::native_contract::token::metadata::{
     read_decimal, read_name, read_symbol, write_metadata,
 };
 use crate::native_contract::token::nonce::read_nonce;
-use crate::native_contract::token::public_types::{Identifier, Signature};
+use crate::native_contract::token::public_types::{Identifier, Metadata, Signature};
 use soroban_env_common::{Symbol, TryIntoVal};
 use soroban_native_sdk_macros::contractimpl;
 
@@ -84,9 +84,9 @@ pub trait TokenTrait {
 
     fn symbol(e: &Host) -> Result<Bytes, Error>;
 
-    fn to_smart(e: &Host, id: KeyedAuthorization, amount: i64) -> Result<(), Error>;
+    fn to_smart(e: &Host, id: Signature, nonce: BigInt, amount: i64) -> Result<(), Error>;
 
-    fn to_classic(e: &Host, id: KeyedAuthorization, amount: i64) -> Result<(), Error>;
+    fn to_classic(e: &Host, id: Signature, nonce: BigInt, amount: i64) -> Result<(), Error>;
 }
 
 pub struct Token;
@@ -263,18 +263,18 @@ impl TokenTrait for Token {
         read_symbol(&e)
     }
 
-    fn to_smart(e: &Host, id: KeyedAuthorization, amount: i64) -> Result<(), Error> {
+    fn to_smart(e: &Host, id: Signature, nonce: BigInt, amount: i64) -> Result<(), Error> {
         if amount < 0 {
             return Err(Error::ContractError);
         }
 
         let id_key = match &id {
-            KeyedAuthorization::Account(acc) => Ok(acc.public_key.clone()),
+            Signature::Account(acc) => Ok(acc.account_id.clone()),
             _ => Err(Error::ContractError),
         }?;
         let mut args = Vec::new(e)?;
         args.push(amount.clone())?;
-        check_auth(&e, id, Domain::ToSmart, args)?;
+        check_auth(&e, id, nonce, Symbol::from_str("to_smart"), args)?;
 
         transfer_classic_balance(e, id_key.clone(), amount)?;
         receive_balance(
@@ -285,18 +285,18 @@ impl TokenTrait for Token {
         Ok(())
     }
 
-    fn to_classic(e: &Host, id: KeyedAuthorization, amount: i64) -> Result<(), Error> {
+    fn to_classic(e: &Host, id: Signature, nonce: BigInt, amount: i64) -> Result<(), Error> {
         if amount < 0 {
             return Err(Error::ContractError);
         }
 
         let id_key = match &id {
-            KeyedAuthorization::Account(acc) => Ok(acc.public_key.clone()),
+            Signature::Account(acc) => Ok(acc.account_id.clone()),
             _ => Err(Error::ContractError),
         }?;
         let mut args = Vec::new(e)?;
         args.push(amount.clone())?;
-        check_auth(&e, id, Domain::ToClassic, args)?;
+        check_auth(&e, id, nonce, Symbol::from_str("to_classic"), args)?;
 
         transfer_classic_balance(e, id_key.clone(), -amount)?;
         spend_balance(

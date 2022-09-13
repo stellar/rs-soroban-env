@@ -3,7 +3,7 @@ use crate::native_contract::base_types::Bytes;
 use crate::native_contract::token::error::Error;
 use crate::native_contract::token::public_types::Metadata;
 use crate::native_contract::token::storage_types::DataKey;
-use soroban_env_common::{CheckedEnv, EnvBase, TryIntoVal};
+use soroban_env_common::{CheckedEnv, EnvBase, TryFromVal, TryIntoVal};
 
 pub fn write_metadata(e: &Host, metadata: Metadata) -> Result<(), Error> {
     let key = DataKey::Metadata;
@@ -20,7 +20,7 @@ pub fn read_metadata(e: &Host) -> Result<Metadata, Error> {
 pub fn read_name(e: &Host) -> Result<Bytes, Error> {
     match read_metadata(e)? {
         Metadata::Token(token) => Ok(token.name),
-        Metadata::Native => Ok(e.binary_new_from_slice(b"native").in_env(e).try_into()?),
+        Metadata::Native => Ok(Bytes::try_from_val(e, e.bytes_new_from_slice(b"native"))?),
         Metadata::AlphaNum4(asset) => {
             let mut res: Bytes = asset.asset_code.into();
             res.push(b':')?;
@@ -37,9 +37,12 @@ pub fn read_name(e: &Host) -> Result<Bytes, Error> {
 }
 
 pub fn read_symbol(e: &Host) -> Result<Bytes, Error> {
-    let key = DataKey::Symbol;
-    let rv = e.get_contract_data(key.try_into_val(e)?)?;
-    Ok(rv.try_into_val(e)?)
+    match read_metadata(e)? {
+        Metadata::Token(token) => Ok(token.symbol),
+        Metadata::Native => Ok(Bytes::try_from_val(e, e.bytes_new_from_slice(b"native"))?),
+        Metadata::AlphaNum4(asset) => Ok(asset.asset_code.into()),
+        Metadata::AlphaNum12(asset) => Ok(asset.asset_code.into()),
+    }
 }
 
 pub fn read_decimal(e: &Host) -> Result<u32, Error> {

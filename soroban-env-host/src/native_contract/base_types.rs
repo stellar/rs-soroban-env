@@ -140,7 +140,7 @@ impl Bytes {
         self.0 = self
             .0
             .env
-            .binary_push(self.0.val, x32.into())?
+            .bytes_push(self.0.val, x32.into())?
             .in_env(&self.0.env);
         Ok(())
     }
@@ -149,7 +149,7 @@ impl Bytes {
         self.0 = self
             .0
             .env
-            .binary_append(self.0.val, other.0.val)?
+            .bytes_append(self.0.val, other.0.val)?
             .in_env(&self.0.env);
         Ok(())
     }
