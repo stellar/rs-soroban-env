@@ -1,7 +1,9 @@
 use stellar_xdr::{ScStatic, ScStatus, ScStatusType};
 
-use super::{BitSet, Env, EnvVal, Object, Static, Status, Symbol};
-use core::fmt::Debug;
+use super::{
+    BitSet, Env, EnvVal, FromVal, IntoVal, Object, Static, Status, Symbol, TryFromVal, TryIntoVal,
+};
+use core::{convert::Infallible, fmt::Debug};
 
 extern crate static_assertions as sa;
 
@@ -106,6 +108,25 @@ impl AsMut<RawVal> for RawVal {
     }
 }
 
+impl<E: Env> FromVal<E, RawVal> for RawVal {
+    fn from_val(_env: &E, val: RawVal) -> Self {
+        val
+    }
+}
+
+impl<E: Env> TryFromVal<E, RawVal> for RawVal {
+    type Error = Infallible;
+    fn try_from_val(_env: &E, val: RawVal) -> Result<Self, Self::Error> {
+        Ok(val)
+    }
+}
+
+impl<E: Env> IntoVal<E, RawVal> for RawVal {
+    fn into_val(self, _env: &E) -> RawVal {
+        self
+    }
+}
+
 // This is a 0-arg struct rather than an enum to ensure it completely compiles
 // away, the same way `()` would, while remaining a separate type to allow
 // conversion to a more-structured error code at a higher level.
@@ -114,6 +135,12 @@ impl AsMut<RawVal> for RawVal {
 /// of the failed conversion will typically be written to the debug log.
 #[derive(Debug, Eq, PartialEq)]
 pub struct ConversionError;
+
+impl From<Infallible> for ConversionError {
+    fn from(_: Infallible) -> Self {
+        unreachable!()
+    }
+}
 
 impl From<stellar_xdr::Error> for ConversionError {
     fn from(_: stellar_xdr::Error) -> Self {
@@ -178,22 +205,33 @@ macro_rules! declare_tryfrom {
                 }
             }
         }
-        impl<E: Env> TryFrom<EnvVal<E, RawVal>> for $T {
-            type Error = ConversionError;
-            #[inline(always)]
-            fn try_from(v: EnvVal<E, RawVal>) -> Result<Self, Self::Error> {
-                Self::try_from(v.to_raw())
+        impl<E: Env> IntoVal<E, RawVal> for $T {
+            fn into_val(self, _env: &E) -> RawVal {
+                self.into()
             }
         }
-        impl<E: Env> TryFrom<EnvVal<E, RawVal>> for EnvVal<E, $T> {
-            type Error = crate::ConversionError;
-            fn try_from(ev: EnvVal<E, RawVal>) -> Result<Self, Self::Error> {
-                let val: $T = ev.to_raw().try_into().map_err(|err| {
-                    ev.clone().log_err_convert::<Self>();
-                    err
-                })?;
-                let env = ev.env;
-                Ok(Self { env, val })
+        impl<E: Env> IntoVal<E, RawVal> for &$T {
+            fn into_val(self, _env: &E) -> RawVal {
+                (*self).into()
+            }
+        }
+        impl<E: Env> TryFromVal<E, RawVal> for $T {
+            type Error = ConversionError;
+            #[inline(always)]
+            fn try_from_val(_env: &E, val: RawVal) -> Result<Self, Self::Error> {
+                Self::try_from(val)
+            }
+        }
+        impl<E: Env> TryIntoVal<E, RawVal> for $T {
+            type Error = ConversionError;
+            fn try_into_val(self, _env: &E) -> Result<RawVal, Self::Error> {
+                Ok(self.into())
+            }
+        }
+        impl<E: Env> TryIntoVal<E, $T> for RawVal {
+            type Error = ConversionError;
+            fn try_into_val(self, env: &E) -> Result<$T, Self::Error> {
+                <_ as TryFromVal<E, RawVal>>::try_from_val(&env, self)
             }
         }
     };
@@ -210,17 +248,20 @@ declare_tryfrom!(Static);
 declare_tryfrom!(Object);
 
 #[cfg(feature = "vm")]
-impl wasmi::FromValue for RawVal {
-    fn from_value(val: wasmi::RuntimeValue) -> Option<Self> {
-        let maybe: Option<u64> = val.try_into();
-        maybe.map(RawVal::from_payload)
+impl wasmi::core::FromValue for RawVal {
+    fn from_value(val: wasmi::core::Value) -> Option<Self> {
+        if let wasmi::core::Value::I64(i) = val {
+            Some(RawVal::from_payload(i as u64))
+        } else {
+            None
+        }
     }
 }
 
 #[cfg(feature = "vm")]
-impl From<RawVal> for wasmi::RuntimeValue {
+impl From<RawVal> for wasmi::core::Value {
     fn from(v: RawVal) -> Self {
-        wasmi::RuntimeValue::I64(v.get_payload() as i64)
+        wasmi::core::Value::I64(v.get_payload() as i64)
     }
 }
 
@@ -364,13 +405,6 @@ impl From<&ScStatus> for RawVal {
     }
 }
 
-impl From<u8> for RawVal {
-    #[inline(always)]
-    fn from(u: u8) -> Self {
-        RawVal::from_u32(u.into())
-    }
-}
-
 impl RawVal {
     pub fn in_env<E: Env>(self, env: &E) -> EnvVal<E, RawVal> {
         EnvVal {
@@ -491,28 +525,47 @@ impl RawVal {
     }
 
     #[inline(always)]
+    pub const fn is_i32_zero(self) -> bool {
+        self.0 == Self::I32_ZERO.0
+    }
+
+    #[inline(always)]
     pub const fn is_u32_zero(self) -> bool {
-        const ZERO: RawVal = RawVal::from_u32(0);
-        self.0 == ZERO.0
+        self.0 == Self::U32_ZERO.0
     }
 
     #[inline(always)]
     pub const fn is_void(self) -> bool {
-        const VOID: RawVal = RawVal::from_other_static(ScStatic::Void);
-        self.0 == VOID.0
+        self.0 == Self::VOID.0
     }
 
     #[inline(always)]
     pub const fn is_true(self) -> bool {
-        const TRUE: RawVal = RawVal::from_bool(true);
-        self.0 == TRUE.0
+        self.0 == Self::TRUE.0
     }
 
     #[inline(always)]
     pub const fn is_false(self) -> bool {
-        const FALSE: RawVal = RawVal::from_bool(false);
-        self.0 == FALSE.0
+        self.0 == Self::FALSE.0
     }
+}
+
+impl RawVal {
+    pub const I32_ZERO: RawVal = RawVal::from_i32(0);
+    pub const I32_POSITIVE_ONE: RawVal = RawVal::from_i32(1);
+    pub const I32_NEGATIVE_ONE: RawVal = RawVal::from_i32(-1);
+    pub const I32_MIN: RawVal = RawVal::from_i32(i32::MIN);
+    pub const I32_MAX: RawVal = RawVal::from_i32(i32::MAX);
+
+    pub const U32_ZERO: RawVal = RawVal::from_u32(0);
+    pub const U32_ONE: RawVal = RawVal::from_u32(1);
+    pub const U32_MIN: RawVal = RawVal::from_u32(u32::MIN);
+    pub const U32_MAX: RawVal = RawVal::from_u32(u32::MAX);
+
+    pub const VOID: RawVal = RawVal::from_other_static(ScStatic::Void);
+
+    pub const TRUE: RawVal = RawVal::from_bool(true);
+    pub const FALSE: RawVal = RawVal::from_bool(false);
 }
 
 impl Debug for RawVal {

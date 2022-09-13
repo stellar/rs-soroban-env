@@ -10,7 +10,7 @@ use soroban_env_common::{CheckedEnv, TryIntoVal};
 pub fn read_balance(e: &Host, id: Identifier) -> Result<BigInt, Error> {
     let key = DataKey::Balance(id);
     if let Ok(balance) = e.get_contract_data(key.try_into_val(e)?) {
-        Ok(balance.in_env(e).try_into()?)
+        Ok(balance.try_into_val(e)?)
     } else {
         Ok(BigInt::from_u64(e, 0)?)
     }

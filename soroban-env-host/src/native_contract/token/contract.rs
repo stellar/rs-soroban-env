@@ -1,22 +1,18 @@
 use crate::host::Host;
 use crate::native_contract::base_types::{BigInt, Bytes, Vec};
-use crate::native_contract::token::admin::{
-    has_administrator, to_administrator_authorization, write_administrator,
-};
+use crate::native_contract::token::admin::{check_admin, has_administrator, write_administrator};
 use crate::native_contract::token::allowance::{read_allowance, spend_allowance, write_allowance};
 use crate::native_contract::token::balance::{
     read_balance, read_state, receive_balance, spend_balance, transfer_classic_balance, write_state,
 };
-use crate::native_contract::token::cryptography::{check_auth, Domain};
+use crate::native_contract::token::cryptography::check_auth;
 use crate::native_contract::token::error::Error;
 use crate::native_contract::token::metadata::{
     read_decimal, read_name, read_symbol, write_metadata,
 };
 use crate::native_contract::token::nonce::read_nonce;
-use crate::native_contract::token::public_types::{
-    Authorization, Identifier, KeyedAuthorization, Metadata,
-};
-use soroban_env_common::TryIntoVal;
+use crate::native_contract::token::public_types::{Identifier, Signature};
+use soroban_env_common::{Symbol, TryIntoVal};
 use soroban_native_sdk_macros::contractimpl;
 
 pub trait TokenTrait {
@@ -28,7 +24,8 @@ pub trait TokenTrait {
 
     fn approve(
         e: &Host,
-        from: KeyedAuthorization,
+        from: Signature,
+        nonce: BigInt,
         spender: Identifier,
         amount: BigInt,
     ) -> Result<(), Error>;
@@ -39,28 +36,47 @@ pub trait TokenTrait {
 
     fn xfer(
         e: &Host,
-        from: KeyedAuthorization,
+        from: Signature,
+        nonce: BigInt,
         to: Identifier,
         amount: BigInt,
     ) -> Result<(), Error>;
 
     fn xfer_from(
         e: &Host,
-        spender: KeyedAuthorization,
+        spender: Signature,
+        nonce: BigInt,
         from: Identifier,
         to: Identifier,
         amount: BigInt,
     ) -> Result<(), Error>;
 
-    fn burn(e: &Host, admin: Authorization, from: Identifier, amount: BigInt) -> Result<(), Error>;
+    fn burn(
+        e: &Host,
+        admin: Signature,
+        nonce: BigInt,
+        from: Identifier,
+        amount: BigInt,
+    ) -> Result<(), Error>;
 
-    fn freeze(e: &Host, admin: Authorization, id: Identifier) -> Result<(), Error>;
+    fn freeze(e: &Host, admin: Signature, nonce: BigInt, id: Identifier) -> Result<(), Error>;
 
-    fn mint(e: &Host, admin: Authorization, to: Identifier, amount: BigInt) -> Result<(), Error>;
+    fn mint(
+        e: &Host,
+        admin: Signature,
+        nonce: BigInt,
+        to: Identifier,
+        amount: BigInt,
+    ) -> Result<(), Error>;
 
-    fn set_admin(e: &Host, admin: Authorization, new_admin: Identifier) -> Result<(), Error>;
+    fn set_admin(
+        e: &Host,
+        admin: Signature,
+        nonce: BigInt,
+        new_admin: Identifier,
+    ) -> Result<(), Error>;
 
-    fn unfreeze(e: &Host, admin: Authorization, id: Identifier) -> Result<(), Error>;
+    fn unfreeze(e: &Host, admin: Signature, nonce: BigInt, id: Identifier) -> Result<(), Error>;
 
     fn decimals(e: &Host) -> Result<u32, Error>;
 
@@ -96,15 +112,18 @@ impl TokenTrait for Token {
 
     fn approve(
         e: &Host,
-        from: KeyedAuthorization,
+        from: Signature,
+        nonce: BigInt,
         spender: Identifier,
         amount: BigInt,
     ) -> Result<(), Error> {
         let from_id = from.get_identifier(&e)?;
         let mut args = Vec::new(e)?;
+        args.push(from.get_identifier(&e)?)?;
+        args.push(nonce.clone())?;
         args.push(spender.clone())?;
         args.push(amount.clone())?;
-        check_auth(&e, from, Domain::Approve, args)?;
+        check_auth(&e, from, nonce, Symbol::from_str("approve"), args)?;
         write_allowance(&e, from_id, spender, amount)?;
         Ok(())
     }
@@ -119,15 +138,18 @@ impl TokenTrait for Token {
 
     fn xfer(
         e: &Host,
-        from: KeyedAuthorization,
+        from: Signature,
+        nonce: BigInt,
         to: Identifier,
         amount: BigInt,
     ) -> Result<(), Error> {
         let from_id = from.get_identifier(&e)?;
         let mut args = Vec::new(e)?;
+        args.push(from.get_identifier(&e)?)?;
+        args.push(nonce.clone())?;
         args.push(to.clone())?;
         args.push(amount.clone())?;
-        check_auth(&e, from, Domain::Transfer, args)?;
+        check_auth(&e, from, nonce, Symbol::from_str("xfer"), args)?;
         spend_balance(&e, from_id, amount.clone())?;
         receive_balance(&e, to, amount)?;
         Ok(())
@@ -135,66 +157,96 @@ impl TokenTrait for Token {
 
     fn xfer_from(
         e: &Host,
-        spender: KeyedAuthorization,
+        spender: Signature,
+        nonce: BigInt,
         from: Identifier,
         to: Identifier,
         amount: BigInt,
     ) -> Result<(), Error> {
         let spender_id = spender.get_identifier(&e)?;
         let mut args = Vec::new(e)?;
+        args.push(spender.get_identifier(&e)?)?;
+        args.push(nonce.clone())?;
         args.push(from.clone())?;
         args.push(to.clone())?;
         args.push(amount.clone())?;
-        check_auth(&e, spender, Domain::TransferFrom, args)?;
+        check_auth(&e, spender, nonce, Symbol::from_str("xfer_from"), args)?;
         spend_allowance(&e, from.clone(), spender_id, amount.clone())?;
         spend_balance(&e, from, amount.clone())?;
         receive_balance(&e, to, amount)?;
         Ok(())
     }
 
-    fn burn(e: &Host, admin: Authorization, from: Identifier, amount: BigInt) -> Result<(), Error> {
-        let auth = to_administrator_authorization(&e, admin)?;
+    fn burn(
+        e: &Host,
+        admin: Signature,
+        nonce: BigInt,
+        from: Identifier,
+        amount: BigInt,
+    ) -> Result<(), Error> {
+        check_admin(&e, &admin)?;
         let mut args = Vec::new(e)?;
+        args.push(admin.get_identifier(&e)?)?;
+        args.push(nonce.clone())?;
         args.push(from.clone())?;
         args.push(amount.clone())?;
-        check_auth(&e, auth, Domain::Burn, args)?;
+        check_auth(&e, admin, nonce, Symbol::from_str("burn"), args)?;
         spend_balance(&e, from, amount)?;
         Ok(())
     }
 
-    fn freeze(e: &Host, admin: Authorization, id: Identifier) -> Result<(), Error> {
-        let auth = to_administrator_authorization(&e, admin)?;
+    fn freeze(e: &Host, admin: Signature, nonce: BigInt, id: Identifier) -> Result<(), Error> {
+        check_admin(&e, &admin)?;
         let mut args = Vec::new(e)?;
+        args.push(admin.get_identifier(&e)?)?;
+        args.push(nonce.clone())?;
         args.push(id.clone())?;
-        check_auth(&e, auth, Domain::Freeze, args)?;
+        check_auth(&e, admin, nonce, Symbol::from_str("freeze"), args)?;
         write_state(&e, id, true)?;
         Ok(())
     }
 
-    fn mint(e: &Host, admin: Authorization, to: Identifier, amount: BigInt) -> Result<(), Error> {
-        let auth = to_administrator_authorization(&e, admin)?;
+    fn mint(
+        e: &Host,
+        admin: Signature,
+        nonce: BigInt,
+        to: Identifier,
+        amount: BigInt,
+    ) -> Result<(), Error> {
+        check_admin(&e, &admin)?;
         let mut args = Vec::new(e)?;
+        args.push(admin.get_identifier(&e)?)?;
+        args.push(nonce.clone())?;
         args.push(to.clone())?;
         args.push(amount.clone())?;
-        check_auth(&e, auth, Domain::Mint, args)?;
+        check_auth(&e, admin, nonce, Symbol::from_str("mint"), args)?;
         receive_balance(&e, to, amount)?;
         Ok(())
     }
 
-    fn set_admin(e: &Host, admin: Authorization, new_admin: Identifier) -> Result<(), Error> {
-        let auth = to_administrator_authorization(&e, admin)?;
+    fn set_admin(
+        e: &Host,
+        admin: Signature,
+        nonce: BigInt,
+        new_admin: Identifier,
+    ) -> Result<(), Error> {
+        check_admin(&e, &admin)?;
         let mut args = Vec::new(e)?;
+        args.push(admin.get_identifier(&e)?)?;
+        args.push(nonce.clone())?;
         args.push(new_admin.clone())?;
-        check_auth(&e, auth, Domain::SetAdministrator, args)?;
+        check_auth(&e, admin, nonce, Symbol::from_str("set_admin"), args)?;
         write_administrator(&e, new_admin)?;
         Ok(())
     }
 
-    fn unfreeze(e: &Host, admin: Authorization, id: Identifier) -> Result<(), Error> {
-        let auth = to_administrator_authorization(&e, admin)?;
+    fn unfreeze(e: &Host, admin: Signature, nonce: BigInt, id: Identifier) -> Result<(), Error> {
+        check_admin(&e, &admin)?;
         let mut args = Vec::new(e)?;
+        args.push(admin.get_identifier(&e)?)?;
+        args.push(nonce.clone())?;
         args.push(id.clone())?;
-        check_auth(&e, auth, Domain::Unfreeze, args)?;
+        check_auth(&e, admin, nonce, Symbol::from_str("unfreeze"), args)?;
         write_state(&e, id, false)?;
         Ok(())
     }

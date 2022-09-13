@@ -88,14 +88,14 @@ fn vec_push_pop_and_len() -> Result<(), HostError> {
     let l =
         unsafe { <u32 as RawValConvertible>::unchecked_from_val(host.vec_len(obj.to_object())?) };
     assert_eq!(l, 0);
-    let obj1 = host.vec_push(obj.to_object(), 1u32.into())?;
-    let obj2 = host.vec_push(obj1, 2u32.into())?;
+    let obj1 = host.vec_push_back(obj.to_object(), 1u32.into())?;
+    let obj2 = host.vec_push_back(obj1, 2u32.into())?;
     let l = unsafe { <u32 as RawValConvertible>::unchecked_from_val(host.vec_len(obj2)?) };
     assert_eq!(l, 2);
-    let obj3 = host.vec_pop(obj2)?;
+    let obj3 = host.vec_pop_back(obj2)?;
     let l = unsafe { <u32 as RawValConvertible>::unchecked_from_val(host.vec_len(obj3)?) };
     assert_eq!(l, 1);
-    let obj4 = host.vec_pop(obj3)?;
+    let obj4 = host.vec_pop_back(obj3)?;
     let l = unsafe { <u32 as RawValConvertible>::unchecked_from_val(host.vec_len(obj4)?) };
     assert_eq!(l, 0);
     Ok(())
@@ -105,7 +105,27 @@ fn vec_push_pop_and_len() -> Result<(), HostError> {
 fn vec_pop_empty_vec() -> Result<(), HostError> {
     let host = Host::default();
     let obj = host.test_vec_obj::<u32>(&[])?;
-    let res = host.vec_pop(obj.to_object());
+    let res = host.vec_pop_back(obj.to_object());
+    let code = ScHostObjErrorCode::VecIndexOutOfBound;
+    assert!(HostError::result_matches_err_status(res, code));
+    Ok(())
+}
+
+#[test]
+fn vec_push_pop_front() -> Result<(), HostError> {
+    let host = Host::default();
+    let obj = host.test_vec_obj::<u32>(&[])?;
+    let mut vec = host.vec_push_front(obj.to_object(), 1u32.into())?;
+    vec = host.vec_push_front(vec, 2u32.into())?;
+    vec = host.vec_push_front(vec, 3u32.into())?;
+    let mut vec_ref = host.test_vec_obj::<u32>(&[3, 2, 1])?;
+    assert_eq!(host.obj_cmp(vec.to_raw(), vec_ref.val.to_raw())?, 0);
+    vec = host.vec_pop_front(vec)?;
+    vec_ref = host.test_vec_obj::<u32>(&[2, 1])?;
+    assert_eq!(host.obj_cmp(vec.to_raw(), vec_ref.val.to_raw())?, 0);
+    vec = host.vec_pop_front(vec)?;
+    vec = host.vec_pop_front(vec)?;
+    let res = host.vec_pop_front(vec);
     let code = ScHostObjErrorCode::VecIndexOutOfBound;
     assert!(HostError::result_matches_err_status(res, code));
     Ok(())
@@ -288,5 +308,37 @@ fn vec_append_empty() -> Result<(), HostError> {
     let obj1 = host.vec_append(obj0.val, obj0.val)?;
     assert_ne!(obj0.as_raw().get_payload(), obj1.as_raw().get_payload());
     assert_eq!(host.obj_cmp(obj0.into(), obj1.into())?, 0);
+    Ok(())
+}
+
+#[test]
+fn vec_index_of() -> Result<(), HostError> {
+    let host = Host::default();
+    let obj0 = host.test_vec_obj::<u32>(&[3, 4, 2, 2, 2, 5])?;
+    let mut idx = host.vec_first_index_of(obj0.val, 2u32.into())?;
+    assert_eq!(idx.get_payload(), RawVal::from(2u32).get_payload());
+    idx = host.vec_last_index_of(obj0.val, 2u32.into())?;
+    assert_eq!(idx.get_payload(), RawVal::from(4u32).get_payload());
+    idx = host.vec_first_index_of(obj0.val, 1u32.into())?;
+    assert_eq!(idx.get_payload(), RawVal::from_void().get_payload());
+    idx = host.vec_last_index_of(obj0.val, 1u32.into())?;
+    assert_eq!(idx.get_payload(), RawVal::from_void().get_payload());
+    Ok(())
+}
+
+#[test]
+fn vec_binary_search() -> Result<(), HostError> {
+    let host = Host::default();
+    let obj0 = host.test_vec_obj::<u32>(&[1, 2, 4, 5, 7, 9])?;
+    let mut res = host.vec_binary_search(obj0.val, 7u32.into())?;
+    let exp: u64 = 4 | (1 << 32);
+    assert_eq!(res, exp);
+    res = host.vec_binary_search(obj0.val, 4u32.into())?;
+    let exp: u64 = 2 | (1 << 32);
+    assert_eq!(res, exp);
+    res = host.vec_binary_search(obj0.val, 3u32.into())?;
+    assert_eq!(u64::from(2u32), res);
+    res = host.vec_binary_search(obj0.val, 6u32.into())?;
+    assert_eq!(u64::from(4u32), res);
     Ok(())
 }

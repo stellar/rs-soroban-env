@@ -1,6 +1,6 @@
 use crate::{
     xdr::{ScMap, ScMapEntry, ScObject, ScVal, ScVec},
-    CheckedEnv, Host, HostError, RawVal, RawValConvertible, Symbol, UNKNOWN_ERROR,
+    CheckedEnv, Host, HostError, RawVal, RawValConvertible, Status, Symbol,
 };
 
 #[test]
@@ -55,12 +55,12 @@ fn map_prev_and_next() -> Result<(), HostError> {
         assert_eq!(
             host.map_prev_key(obj.to_object(), 0_u32.into())?
                 .get_payload(),
-            UNKNOWN_ERROR.to_raw().get_payload()
+            Status::UNKNOWN_ERROR.to_raw().get_payload()
         );
         assert_eq!(
             host.map_prev_key(obj.to_object(), 1_u32.into())?
                 .get_payload(),
-            UNKNOWN_ERROR.to_raw().get_payload()
+            Status::UNKNOWN_ERROR.to_raw().get_payload()
         );
         assert_eq!(
             host.map_prev_key(obj.to_object(), 2_u32.into())?
@@ -83,12 +83,12 @@ fn map_prev_and_next() -> Result<(), HostError> {
         assert_eq!(
             host.map_next_key(obj.to_object(), 5_u32.into())?
                 .get_payload(),
-            UNKNOWN_ERROR.to_raw().get_payload()
+            Status::UNKNOWN_ERROR.to_raw().get_payload()
         );
         assert_eq!(
             host.map_next_key(obj.to_object(), 4_u32.into())?
                 .get_payload(),
-            UNKNOWN_ERROR.to_raw().get_payload()
+            Status::UNKNOWN_ERROR.to_raw().get_payload()
         );
         assert_eq!(
             host.map_next_key(obj.to_object(), 3_u32.into())?
@@ -138,7 +138,7 @@ fn map_prev_and_next_heterogeneous() -> Result<(), HostError> {
     {
         assert_eq!(
             host.map_prev_key(test_map, 0_u32.into())?.get_payload(),
-            UNKNOWN_ERROR.to_raw().get_payload()
+            Status::UNKNOWN_ERROR.to_raw().get_payload()
         );
         assert_eq!(
             host.map_prev_key(test_map, 4_u32.into())?.get_payload(),
@@ -183,9 +183,41 @@ fn map_prev_and_next_heterogeneous() -> Result<(), HostError> {
         assert_eq!(
             host.map_next_key(test_map, sym.clone().into())?
                 .get_payload(),
-            UNKNOWN_ERROR.to_raw().get_payload()
+            Status::UNKNOWN_ERROR.to_raw().get_payload()
         );
     }
+
+    Ok(())
+}
+
+#[test]
+fn map_keys() -> Result<(), HostError> {
+    let host = Host::default();
+
+    let mut map = host.map_new()?;
+    map = host.map_put(map, 2u32.into(), 20u32.into())?;
+    map = host.map_put(map, 1u32.into(), 10u32.into())?;
+    let keys = host.map_keys(map)?;
+
+    let expected_keys = host.test_vec_obj::<u32>(&[1, 2])?.to_raw();
+
+    assert_eq!(host.obj_cmp(keys.to_raw(), expected_keys)?, 0);
+
+    Ok(())
+}
+
+#[test]
+fn map_values() -> Result<(), HostError> {
+    let host = Host::default();
+
+    let mut map = host.map_new()?;
+    map = host.map_put(map, 2u32.into(), 20u32.into())?;
+    map = host.map_put(map, 1u32.into(), 10u32.into())?;
+    let values = host.map_values(map)?;
+
+    let expected_values = host.test_vec_obj::<u32>(&[10, 20])?.to_raw();
+
+    assert_eq!(host.obj_cmp(values.to_raw(), expected_values)?, 0);
 
     Ok(())
 }

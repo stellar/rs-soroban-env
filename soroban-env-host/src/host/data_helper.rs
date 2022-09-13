@@ -1,3 +1,4 @@
+use crate::budget::CostType;
 use crate::xdr::{
     AccountEntry, AccountId, ContractDataEntry, Hash, HashIdPreimage, HashIdPreimageContractId,
     HashIdPreimageEd25519ContractId, LedgerEntry, LedgerEntryData, LedgerEntryExt, LedgerKey,
@@ -7,6 +8,7 @@ use crate::xdr::{
 use crate::{Host, HostError, Object};
 
 impl Host {
+    // Notes on metering: free
     pub fn contract_code_ledger_key(&self, contract_id: Hash) -> LedgerKey {
         LedgerKey::ContractData(LedgerKeyContractData {
             contract_id,
@@ -14,6 +16,7 @@ impl Host {
         })
     }
 
+    // Notes on metering: retrieving from storage covered. Rest are free.
     pub fn retrieve_contract_code_from_storage(
         &self,
         key: &LedgerKey,
@@ -33,6 +36,7 @@ impl Host {
         }
     }
 
+    // Notes on metering: `from_host_obj` and `put` to storage covered, rest are free.
     pub fn store_contract_code(
         &self,
         contract: ScContractCode,
@@ -53,23 +57,25 @@ impl Host {
         Ok(())
     }
 
+    // notes on metering: covers the key and salt. Rest are free.
     pub fn id_preimage_from_ed25519(
         &self,
         key: Uint256,
         salt: Uint256,
     ) -> Result<Vec<u8>, HostError> {
-        //Create contract and contractID
         let pre_image = HashIdPreimage::ContractIdFromEd25519(HashIdPreimageEd25519ContractId {
             ed25519: key,
             salt,
         });
         let mut buf = Vec::new();
+        self.charge_budget(CostType::BytesClone, 64)?; // key + salt
         pre_image
             .write_xdr(&mut buf)
             .map_err(|_| self.err_general("invalid hash"))?;
         Ok(buf)
     }
 
+    // notes on metering: covers the key and salt. Rest are free.
     pub fn id_preimage_from_contract(
         &self,
         contract_id: Hash,
@@ -78,20 +84,30 @@ impl Host {
         let pre_image =
             HashIdPreimage::ContractIdFromContract(HashIdPreimageContractId { contract_id, salt });
         let mut buf = Vec::new();
+        self.charge_budget(CostType::BytesClone, 64)?; // key + salt
         pre_image
             .write_xdr(&mut buf)
             .map_err(|_| self.err_general("invalid hash"))?;
         Ok(buf)
     }
 
-    pub fn load_account(&self, account_id: Object) -> Result<AccountEntry, HostError> {
-        let lk = LedgerKey::Account(LedgerKeyAccount {
-            account_id: AccountId(PublicKey::PublicKeyTypeEd25519(self.to_u256(account_id)?)),
+    // notes on metering: `get` from storage and `to_u256` covered. Rest are free.
+    pub fn load_account(&self, a: Object) -> Result<AccountEntry, HostError> {
+        let acc = LedgerKey::Account(LedgerKeyAccount {
+            account_id: AccountId(PublicKey::PublicKeyTypeEd25519(self.to_u256(a)?)),
         });
-        self.visit_storage(|storage| match storage.get(&lk)?.data {
+        self.visit_storage(|storage| match storage.get(&acc)?.data {
             LedgerEntryData::Account(ae) => Ok(ae),
             _ => Err(self.err_general("not account")),
         })
+    }
+
+    // notes on metering: covered by `has` and `to_u256`.
+    pub fn has_account(&self, a: Object) -> Result<bool, HostError> {
+        let acc = LedgerKey::Account(LedgerKeyAccount {
+            account_id: AccountId(PublicKey::PublicKeyTypeEd25519(self.to_u256(a)?)),
+        });
+        self.visit_storage(|storage| storage.has(&acc))
     }
 
     pub fn to_trustline_key(

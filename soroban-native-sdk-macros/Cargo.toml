@@ -5,7 +5,7 @@ homepage = "https://github.com/stellar/rs-soroban-env"
 repository = "https://github.com/stellar/rs-soroban-env"
 authors = ["Stellar Development Foundation <info@stellar.org>"]
 license = "Apache-2.0"
-version = "0.0.1"
+version = "0.0.5"
 edition = "2021"
 rust-version = "1.63"
 

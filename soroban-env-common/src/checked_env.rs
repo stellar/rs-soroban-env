@@ -178,5 +178,5 @@ macro_rules! impl_env_for_checked_env {
     };
 }
 
-// Here we invoke the x-macro passing generate_env_trait as its callback macro.
+// Here we invoke the x-macro passing impl_env_for_checked_env as its callback macro.
 call_macro_with_all_host_functions! { impl_env_for_checked_env }

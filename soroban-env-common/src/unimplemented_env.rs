@@ -17,15 +17,15 @@ impl EnvBase for UnimplementedEnv {
         Self
     }
 
-    fn binary_copy_from_slice(&self, _b: Object, _b_pos: RawVal, _mem: &[u8]) -> Object {
+    fn bytes_copy_from_slice(&self, _b: Object, _b_pos: RawVal, _mem: &[u8]) -> Object {
         unimplemented!()
     }
 
-    fn binary_copy_to_slice(&self, _b: Object, _b_pos: RawVal, _mem: &mut [u8]) {
+    fn bytes_copy_to_slice(&self, _b: Object, _b_pos: RawVal, _mem: &mut [u8]) {
         unimplemented!()
     }
 
-    fn binary_new_from_slice(&self, _mem: &[u8]) -> Object {
+    fn bytes_new_from_slice(&self, _mem: &[u8]) -> Object {
         unimplemented!()
     }
 

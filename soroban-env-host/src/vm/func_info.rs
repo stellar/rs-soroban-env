@@ -1,7 +1,7 @@
 use super::dispatch;
 use crate::Host;
 use soroban_env_common::call_macro_with_all_host_functions;
-use wasmi::{RuntimeArgs, RuntimeValue};
+use wasmi::{Func, Store};
 
 pub(crate) struct HostFuncInfo {
     /// String name of the WASM module this host function is importable from.
@@ -11,32 +11,15 @@ pub(crate) struct HostFuncInfo {
     /// as.
     pub(crate) fn_str: &'static str,
 
-    /// Number of u64 arguments the host function takes.
-    pub(crate) arity: usize,
-
-    /// Dispatch function for this host function, that takes a Host and some
-    /// RuntimeArgs, unpacks and converts the appropriate set of arguments from
-    /// RuntimeArgs, and calls the corresponding method on Host.
-    pub(crate) dispatch: fn(&mut Host, RuntimeArgs) -> Result<RuntimeValue, wasmi::Trap>,
+    /// Function that takes a wasmi::Store and _wraps_ a dispatch function
+    /// for this host function, with the specific type of the dispatch function,
+    /// into a Func in the Store.
+    pub(crate) wrap: fn(&mut Store<Host>) -> Func,
 }
 
 ///////////////////////////////////////////////////////////////////////////////
 /// X-macro use: static HOST_FUNCTIONS array of HostFuncInfo
 ///////////////////////////////////////////////////////////////////////////////
-
-// This is a helper macro that matches simple ident:ty argument list token-trees
-// and returns a literal token that is the arity (number of arguments) in the
-// list. It is used to convert the supplied token-tree pattern to an arity number
-// stored in the HostFuncInfo.
-macro_rules! arity_helper {
-    { () } => { 0 };
-    { ($a0:ident:$t0:ty) } => { 1 };
-    { ($a0:ident:$t0:ty, $a1:ident:$t1:ty) } => { 2 };
-    { ($a0:ident:$t0:ty, $a1:ident:$t1:ty, $a2:ident:$t2:ty) } => { 3 };
-    { ($a0:ident:$t0:ty, $a1:ident:$t1:ty, $a2:ident:$t2:ty, $a3:ident:$t3:ty) } => { 4 };
-    { ($a0:ident:$t0:ty, $a1:ident:$t1:ty, $a2:ident:$t2:ty, $a3:ident:$t3:ty, $a4:ident:$t4:ty) } => { 5 };
-    { ($a0:ident:$t0:ty, $a1:ident:$t1:ty, $a2:ident:$t2:ty, $a3:ident:$t3:ty, $a4:ident:$t4:ty, $a5:ident:$t5:ty) } => { 6 };
-}
 
 // This is a callback macro that pattern-matches the token-tree passed by the
 // x-macro (call_macro_with_all_host_functions) and produces a suite of
@@ -94,8 +77,7 @@ macro_rules! generate_host_function_infos {
                     HostFuncInfo {
                         mod_str: $mod_str,
                         fn_str: $fn_id,
-                        arity: arity_helper!{$args},
-                        dispatch: dispatch::$func_id,
+                        wrap: |store| Func::wrap(store, dispatch::$func_id),
                     },
                 )*
             )*

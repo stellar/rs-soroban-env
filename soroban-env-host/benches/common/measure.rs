@@ -221,7 +221,7 @@ pub fn measure_costs<HCM: HostCostMeasurement>(
     eprintln!("\nMeasuring costs for CostType::{:?}\n", HCM::COST_TYPE);
     for input_hint in step_range {
         let host = Host::default();
-        host.get_budget_mut(|budget| budget.reset_unlimited());
+        host.get_budget(|budget| budget.reset_unlimited());
         let mut m = HCM::new(&host, input_hint);
         let start = Instant::now();
         mem_tracker.0.store(0, Ordering::SeqCst);

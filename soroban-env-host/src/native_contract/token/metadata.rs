@@ -14,7 +14,7 @@ pub fn write_metadata(e: &Host, metadata: Metadata) -> Result<(), Error> {
 pub fn read_metadata(e: &Host) -> Result<Metadata, Error> {
     let key = DataKey::Metadata;
     let rv = e.get_contract_data(key.try_into_val(e)?)?;
-    Ok(rv.in_env(e).try_into()?)
+    Ok(rv.try_into_val(e)?)
 }
 
 pub fn read_name(e: &Host) -> Result<Bytes, Error> {
@@ -37,12 +37,9 @@ pub fn read_name(e: &Host) -> Result<Bytes, Error> {
 }
 
 pub fn read_symbol(e: &Host) -> Result<Bytes, Error> {
-    match read_metadata(e)? {
-        Metadata::Token(token) => Ok(token.symbol),
-        Metadata::Native => Ok(e.binary_new_from_slice(b"native").in_env(e).try_into()?),
-        Metadata::AlphaNum4(asset) => Ok(asset.asset_code.into()),
-        Metadata::AlphaNum12(asset) => Ok(asset.asset_code.into()),
-    }
+    let key = DataKey::Symbol;
+    let rv = e.get_contract_data(key.try_into_val(e)?)?;
+    Ok(rv.try_into_val(e)?)
 }
 
 pub fn read_decimal(e: &Host) -> Result<u32, Error> {

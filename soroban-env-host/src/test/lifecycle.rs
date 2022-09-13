@@ -1,5 +1,6 @@
-use super::wasm_examples::CREATE_CONTRACT;
 use crate::{
+    budget::Budget,
+    host::metered_map::MeteredOrdMap,
     host::Frame,
     storage::{AccessType, Footprint, Storage},
     xdr::{
@@ -9,6 +10,7 @@ use crate::{
     CheckedEnv, Host, HostError, Symbol,
 };
 use hex::FromHex;
+use soroban_test_wasms::CREATE_CONTRACT;
 
 use ed25519_dalek::{
     Keypair, PublicKey, SecretKey, Signature, Signer, PUBLIC_KEY_LENGTH, SECRET_KEY_LENGTH,
@@ -68,11 +70,18 @@ fn create_contract_test_helper(
     });
 
     let mut footprint = Footprint::default();
-    footprint.record_access(&storage_key, AccessType::ReadWrite);
+    footprint.record_access(&storage_key, AccessType::ReadWrite)?;
 
     // Initialize storage and host
-    let storage = Storage::with_enforcing_footprint_and_map(footprint, OrdMap::new());
-    let host = Host::with_storage(storage);
+    let budget = Budget::default();
+    let storage = Storage::with_enforcing_footprint_and_map(
+        footprint,
+        MeteredOrdMap {
+            map: OrdMap::new(),
+            budget: budget.clone(),
+        },
+    );
+    let host = Host::with_storage_and_budget(storage, budget);
 
     // Create contract
     let obj_code = host.test_bin_obj(&code)?;
@@ -88,15 +97,15 @@ fn create_contract_test_helper(
     )?;
 
     let v = host.from_host_val(contract_id.to_raw())?;
-    let bin = match v {
+    let bytes = match v {
         ScVal::Object(Some(scobj)) => match scobj {
-            ScObject::Bytes(bin) => bin,
+            ScObject::Bytes(bytes) => bytes,
             _ => panic!("Wrong type"),
         },
         _ => panic!("Wrong type"),
     };
 
-    if bin.as_slice() != hash_copy.0.as_slice() {
+    if bytes.as_slice() != hash_copy.0.as_slice() {
         panic!("return value doesn't match")
     }
 
@@ -145,7 +154,7 @@ fn create_contract_test() -> Result<(), HostError> {
     let hash = sha256_hash_id_preimage(id_pre_image);
 
     //Push the contract id onto the stack to simulate a contract call
-    host.with_frame(Frame::TestContract(hash), || {
+    host.with_frame(Frame::TestContract(hash, Symbol::from_str("fn")), || {
         let key = ScVal::Static(ScStatic::LedgerKeyContractCode);
 
         // update
@@ -205,7 +214,8 @@ fn create_contract_using_parent_id_test() {
 
     host.visit_storage(|s: &mut Storage| {
         s.footprint
-            .record_access(&child_storage_key, AccessType::ReadWrite);
+            .record_access(&child_storage_key, AccessType::ReadWrite)
+            .unwrap();
         Ok(())
     })
     .unwrap();

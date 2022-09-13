@@ -1,75 +1,10 @@
-use crate::{budget::CostType, CheckedEnv, Host, Object, RawVal, Symbol};
+use crate::{budget::CostType, Host, Object, RawVal, Symbol, VmCaller, VmCallerCheckedEnv};
 use soroban_env_common::call_macro_with_all_host_functions;
-use wasmi::{RuntimeArgs, RuntimeValue};
+use wasmi::core::{FromValue, Trap, TrapCode::UnexpectedSignature, Value};
 
 ///////////////////////////////////////////////////////////////////////////////
 /// X-macro use: dispatch functions
 ///////////////////////////////////////////////////////////////////////////////
-
-// This is a helper macro used only by generate_dispatch_functions below. It
-// consumes a token-tree of the form:
-//
-//  {$host:expr, $vmargs:expr, fn $fn_id:ident $args:tt }
-//
-// in each of 6 valid forms (with 0, 1, ... 6 possible arguments) and produces a
-// function-call expression that extracts and converts the correct number of
-// arguments from the $vmargs argument (a wasmi::RuntimeArgs structure) and
-// forwards them to the corresponding $host.$fn_id function (a method on Host).
-macro_rules! dispatch_function_helper {
-
-    {$host:expr, $vmargs:expr, fn $fn_id:ident()} =>
-    {$host.$fn_id()};
-
-    {$host:expr, $vmargs:expr, fn $fn_id:ident($a0:ident:$t0:ty)} =>
-    {$host.$fn_id($vmargs.nth_checked::<$t0>(0)?)};
-
-    {$host:expr, $vmargs:expr, fn $fn_id:ident($a0:ident:$t0:ty,
-                                                 $a1:ident:$t1:ty)} =>
-    {$host.$fn_id($vmargs.nth_checked::<$t0>(0)?,
-                  $vmargs.nth_checked::<$t1>(1)?)};
-
-    {$host:expr, $vmargs:expr, fn $fn_id:ident($a0:ident:$t0:ty,
-                                                 $a1:ident:$t1:ty,
-                                                 $a2:ident:$t2:ty)} =>
-    {$host.$fn_id($vmargs.nth_checked::<$t0>(0)?,
-                  $vmargs.nth_checked::<$t1>(1)?,
-                  $vmargs.nth_checked::<$t2>(2)?)};
-
-
-    {$host:expr, $vmargs:expr, fn $fn_id:ident($a0:ident:$t0:ty,
-                                                 $a1:ident:$t1:ty,
-                                                 $a2:ident:$t2:ty,
-                                                 $a3:ident:$t3:ty)} =>
-    {$host.$fn_id($vmargs.nth_checked::<$t0>(0)?,
-                  $vmargs.nth_checked::<$t1>(1)?,
-                  $vmargs.nth_checked::<$t2>(2)?,
-                  $vmargs.nth_checked::<$t3>(3)?)};
-
-    {$host:expr, $vmargs:expr, fn $fn_id:ident($a0:ident:$t0:ty,
-                                                 $a1:ident:$t1:ty,
-                                                 $a2:ident:$t2:ty,
-                                                 $a3:ident:$t3:ty,
-                                                 $a4:ident:$t4:ty)} =>
-    {$host.$fn_id($vmargs.nth_checked::<$t0>(0)?,
-                  $vmargs.nth_checked::<$t1>(1)?,
-                  $vmargs.nth_checked::<$t2>(2)?,
-                  $vmargs.nth_checked::<$t3>(3)?,
-                  $vmargs.nth_checked::<$t4>(4)?)};
-
-
-    {$host:expr, $vmargs:expr, fn $fn_id:ident($a0:ident:$t0:ty,
-                                                 $a1:ident:$t1:ty,
-                                                 $a2:ident:$t2:ty,
-                                                 $a3:ident:$t3:ty,
-                                                 $a4:ident:$t4:ty,
-                                                 $a5:ident:$t5:ty)} =>
-    {$host.$fn_id($vmargs.nth_checked::<$t0>(0)?,
-                  $vmargs.nth_checked::<$t1>(1)?,
-                  $vmargs.nth_checked::<$t2>(2)?,
-                  $vmargs.nth_checked::<$t3>(3)?,
-                  $vmargs.nth_checked::<$t4>(4)?,
-                  $vmargs.nth_checked::<$t5>(5)?)};
-}
 
 // This is a callback macro that pattern-matches the token-tree passed by the
 // x-macro (call_macro_with_all_host_functions) and produces a suite of
@@ -91,7 +26,7 @@ macro_rules! generate_dispatch_functions {
                     // pattern-repetition matcher so that it will match all such
                     // descriptions.
                     $(#[$fn_attr:meta])*
-                    { $fn_str:literal, fn $fn_id:ident $args:tt -> $ret:ty }
+                    { $fn_str:literal, fn $fn_id:ident ($($arg:ident:$type:ty),*) -> $ret:ty }
                 )*
             }
         )*
@@ -105,23 +40,47 @@ macro_rules! generate_dispatch_functions {
         // to forward calls to the host.
         $(
             $(
-                // This defines a function containing a body that includes the
-                // expansion of a macro call to the dispatch_function_helper!
-                // macro above, called with some expressions from the enclosing
-                // function (host and vmargs) as well as the relevant parts of
-                // the token-tree function declaration matched by the inner
-                // pattern above. It is embedded in two nested `$()*`
-                // pattern-repetition expanders that correspond to the
-                // pattern-repetition matchers in the match section, but we
-                // ignore the structure of the 'mod' block repetition-level from
-                // the outer pattern in the expansion, flattening all functions
-                // from all 'mod' blocks into a set of functions.
+                // This defines a "dispatch function" that does several things:
+                //
+                //  1. charges the budget for the call, failing if over budget.
+                //  2. attempts to convert incoming wasmi i64 args to RawVals or
+                //     RawVal-wrappers expected by host functions, failing if
+                //     any conversions fail.
+                //  3. calls the host function
+                //  4. checks the result is Ok, or traps the VM on Err
+                //  5. converts the result back to an i64 for wasmi
+                //
+                // It is embedded in two nested `$()*` pattern-repetition
+                // expanders that correspond to the pattern-repetition matchers
+                // in the match section, but we ignore the structure of the
+                // 'mod' block repetition-level from the outer pattern in the
+                // expansion, flattening all functions from all 'mod' blocks
+                // into a set of functions.
                 $(#[$fn_attr])*
-                pub(crate) fn $fn_id(host: &mut Host, _vmargs: RuntimeArgs) ->
-                    Result<RuntimeValue, wasmi::Trap>
+                pub(crate) fn $fn_id(caller: wasmi::Caller<Host>, $($arg:i64),*) ->
+                    Result<(i64,), Trap>
                 {
-                    host.charge_budget(CostType::HostFunction, _vmargs.len() as u64)?;
-                    Ok(dispatch_function_helper!{host, _vmargs, fn $fn_id $args }?.into())
+                    // Notes on metering: a flat charge per host function invocation.
+                    // This does not account for the actual work being done in those functions,
+                    // which are accounted for individually at the operation level.
+                    let host = caller.host_data().clone();
+                    host.charge_budget(CostType::HostFunction, 1)?;
+                    let mut vmcaller = VmCaller(Some(caller));
+                    // The odd / seemingly-redundant use of `wasmi::Value` here
+                    // as intermediates -- rather than just passing RawVals --
+                    // has to do with the fact that some host functions are
+                    // typed as receiving or returning plain _non-Rawval_ i64 or
+                    // u64 values. So the call here has to be able to massage
+                    // both types into and out of i64, and `wasmi::Value`
+                    // happens to be a natural switching point for that: we have
+                    // conversions to and from both RawVal and i64 / u64 for
+                    // wasmi::Value.
+                    let res: Value = host.$fn_id(&mut vmcaller, $(<$type as FromValue>::from_value(Value::I64($arg)).ok_or(UnexpectedSignature)?),*)?.into();
+                    if let Value::I64(v) = res {
+                        Ok((v,))
+                    } else {
+                        Err(UnexpectedSignature.into())
+                    }
                 }
             )*
         )*

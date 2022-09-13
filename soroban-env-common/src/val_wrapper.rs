@@ -19,7 +19,7 @@ macro_rules! decl_tagged_val_wrapper_methods {
                 b.0
             }
         }
-        impl crate::RawValConvertible for $tagname {
+        impl $crate::RawValConvertible for $tagname {
             #[inline(always)]
             fn is_val_type(v: RawVal) -> bool {
                 v.has_tag(Tag::$tagname)
@@ -70,9 +70,9 @@ macro_rules! decl_tagged_val_wrapper_methods {
 
         // wasmi / VM argument support
         #[cfg(feature = "vm")]
-        impl wasmi::FromValue for $tagname {
-            fn from_value(val: wasmi::RuntimeValue) -> Option<Self> {
-                let maybe: Option<u64> = val.try_into();
+        impl wasmi::core::FromValue for $tagname {
+            fn from_value(val: wasmi::core::Value) -> Option<Self> {
+                let maybe: Option<u64> = <u64 as wasmi::core::FromValue>::from_value(val);
                 match maybe {
                     Some(u) => {
                         let raw = RawVal::from_payload(u);
@@ -89,9 +89,9 @@ macro_rules! decl_tagged_val_wrapper_methods {
             }
         }
         #[cfg(feature = "vm")]
-        impl From<$tagname> for wasmi::RuntimeValue {
+        impl From<$tagname> for wasmi::core::Value {
             fn from(v: $tagname) -> Self {
-                wasmi::RuntimeValue::I64(v.as_raw().get_payload() as i64)
+                wasmi::core::Value::I64(v.as_raw().get_payload() as i64)
             }
         }
 
@@ -138,11 +138,11 @@ macro_rules! impl_wrapper_from {
                 Self(x.into())
             }
         }
-        impl<E: Env> TryFrom<EnvVal<E, $tagname>> for $fromty {
-            type Error = crate::ConversionError;
+        impl<E: Env> $crate::TryFromVal<E, $tagname> for $fromty {
+            type Error = $crate::ConversionError;
             #[inline(always)]
-            fn try_from(v: EnvVal<E, $tagname>) -> Result<Self, Self::Error> {
-                Self::try_from(v.to_raw())
+            fn try_from_val(_env: &E, val: $tagname) -> Result<Self, Self::Error> {
+                Self::try_from(val.to_raw())
             }
         }
     };

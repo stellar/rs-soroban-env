@@ -20,6 +20,7 @@
 
 mod val_wrapper;
 
+mod array;
 mod bitset;
 mod checked_env;
 mod convert;
@@ -27,6 +28,7 @@ mod env;
 mod env_val;
 pub mod meta;
 mod object;
+mod option;
 mod raw_val;
 mod r#static;
 mod status;
@@ -34,6 +36,7 @@ mod symbol;
 mod tuple;
 mod unimplemented_env;
 mod val;
+mod vmcaller_checked_env;
 
 // Re-export the XDR definitions
 pub use stellar_xdr as xdr;
@@ -46,15 +49,16 @@ pub use val::Val;
 pub use checked_env::CheckedEnv;
 pub use convert::TryConvert;
 pub use env::{Env, EnvBase};
-pub use env_val::{EnvVal, IntoVal, TryFromVal, TryIntoVal};
+pub use env_val::{EnvVal, FromVal, IntoVal, TryFromVal, TryIntoVal};
 pub use unimplemented_env::UnimplementedEnv;
+pub use vmcaller_checked_env::{VmCaller, VmCallerCheckedEnv};
 
 // BitSet, Status and Symbol wrap RawVals.
 // TODO: maybe these should wrap EnvVals?
 pub use bitset::{BitSet, BitSetError};
 pub use object::Object;
 pub use r#static::Static;
-pub use status::{Status, OK, UNKNOWN_ERROR};
+pub use status::Status;
 pub use symbol::{Symbol, SymbolError, SymbolIter, SymbolStr};
 
 #[inline(always)]

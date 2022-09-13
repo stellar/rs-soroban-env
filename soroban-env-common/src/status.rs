@@ -22,9 +22,11 @@ pub struct Status(RawVal);
 
 decl_tagged_val_wrapper_methods!(Status);
 
-pub const UNKNOWN_ERROR: Status =
-    unsafe { Status::from_major_minor(0, ScStatusType::UnknownError as u32) };
-pub const OK: Status = unsafe { Status::from_major_minor(0, ScStatusType::Ok as u32) };
+impl Status {
+    pub const UNKNOWN_ERROR: Status =
+        unsafe { Status::from_major_minor(0, ScStatusType::UnknownError as u32) };
+    pub const OK: Status = unsafe { Status::from_major_minor(0, ScStatusType::Ok as u32) };
+}
 
 impl Hash for Status {
     #[inline(always)]

@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use crate::{xdr, RawVal, Status};
+use crate::{xdr, xdr::ContractEvent, RawVal, Status};
 #[cfg(feature = "vm")]
 use crate::{
     xdr::{ScUnknownErrorCode, ScVmErrorCode},
@@ -9,17 +9,21 @@ use crate::{
 use log::debug;
 use tinyvec::TinyVec;
 
-// TODO: update this when ContractEvent shows up in the XDR defns.
 // TODO: optimize storage on this to use pools / bumpalo / etc.
 #[derive(Clone, Debug)]
 pub enum HostEvent {
-    #[allow(dead_code)]
-    Contract(/*ContractEvent*/),
+    Contract(ContractEvent),
     Debug(DebugEvent),
 }
 
 #[derive(Clone, Debug, Default)]
 pub struct Events(pub Vec<HostEvent>);
+
+// Maximum number of topics in a `ContractEvent`. This applies to both
+// `Contract` and `System` types of contract events.
+pub(crate) const CONTRACT_EVENT_TOPICS_LIMIT: usize = 4;
+// Maximum number of bytes in a topic `Bytes`.
+pub(crate) const TOPIC_BYTES_LENGTH_LIMIT: usize = 32;
 
 impl Events {
     // Records the smallest variant of a debug HostEvent it can, returning the size of the
@@ -30,10 +34,15 @@ impl Events {
         len as u64
     }
 
+    // Records a contract HostEvent.
+    pub fn record_contract_event(&mut self, ce: ContractEvent) {
+        self.0.push(HostEvent::Contract(ce))
+    }
+
     pub fn dump_to_debug_log(&self) {
         for e in self.0.iter() {
             match e {
-                HostEvent::Contract() => debug!("Contract event: <TBD>"),
+                HostEvent::Contract(e) => debug!("Contract event: {:?}", e),
                 HostEvent::Debug(e) => debug!("Debug event: {}", e),
             }
         }
@@ -136,7 +145,7 @@ impl DebugError {
         let status: Status = status.into();
         Self {
             event: DebugEvent::new().msg("status").arg::<RawVal>(status.into()),
-            status: status,
+            status,
         }
     }
 
@@ -180,24 +189,25 @@ impl From<wasmi::Error> for DebugError {
         // of Strings) that we're already eliding at this level, that we might
         // want to report for diagnostic purposes if we ever get dynamic strings
         // in the diagnostic buffer.
+        use wasmi::core::TrapCode::*;
         use wasmi::Error::*;
-        use wasmi::TrapCode::*;
         let code = match err {
-            Validation(_) => ScVmErrorCode::Validation,
-            Instantiation(_) => ScVmErrorCode::Instantiation,
-            Function(_) => ScVmErrorCode::Function,
+            // TODO: re-reconcile these cases with ScVmErrorCode cases
+            Module(_) => ScVmErrorCode::Validation,
+            Linker(_) | Instantiation(_) => ScVmErrorCode::Instantiation,
+            Func(_) => ScVmErrorCode::Function,
             Table(_) => ScVmErrorCode::Table,
             Memory(_) => ScVmErrorCode::Memory,
             Global(_) => ScVmErrorCode::Global,
-            Value(_) => ScVmErrorCode::Value,
-            Trap(wasmi::Trap::Host(err)) => {
+            Trap(trap) if trap.is_host() => {
+                let err = trap.into_host().expect("trapped HostError");
                 let status: Status = match err.downcast_ref::<HostError>() {
                     Some(he) => he.status,
                     None => ScUnknownErrorCode::General.into(),
                 };
                 return DebugError::new(status).msg("VM trapped with from host error");
             }
-            Trap(wasmi::Trap::Code(c)) => match c {
+            Trap(trap) => match trap.as_code().expect("trap code") {
                 Unreachable => ScVmErrorCode::TrapUnreachable,
                 MemoryAccessOutOfBounds => ScVmErrorCode::TrapMemoryAccessOutOfBounds,
                 TableAccessOutOfBounds => ScVmErrorCode::TrapTableAccessOutOfBounds,
@@ -210,13 +220,7 @@ impl From<wasmi::Error> for DebugError {
                 MemLimitExceeded => ScVmErrorCode::TrapMemLimitExceeded,
                 CpuLimitExceeded => ScVmErrorCode::TrapCpuLimitExceeded,
             },
-            Host(err) => {
-                let status: Status = match err.downcast_ref::<HostError>() {
-                    Some(he) => he.status,
-                    None => ScUnknownErrorCode::General.into(),
-                };
-                return DebugError::new(status).msg("VM returned host error");
-            }
+            _ => ScVmErrorCode::Unknown,
         };
         Self::new(code).msg(code.name())
     }

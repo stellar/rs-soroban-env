@@ -1,42 +1,143 @@
+use std::{
+    cell::{RefCell, RefMut},
+    rc::Rc,
+};
+
 use crate::{xdr::ScVmErrorCode, HostError};
 
 // TODO: move this to an XDR enum
 #[repr(i32)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum CostType {
-    HostVecAllocVec = 0,
-    HostVecAllocCell = 1,
-    HostMapAllocMap = 2,
-    HostMapAllocCell = 3,
-    WasmInsnExec = 4,
-    WasmMemAlloc = 5,
-    HostEventDebug = 6,
-    HostFunction = 7,
-    VisitObject = 8,
-    PushFrame = 9,
-    PopFrame = 10,
+    WasmInsnExec = 0,
+    WasmMemAlloc = 1,
+    HostEventDebug = 2,
+    HostEventContract = 3,
+    HostFunction = 4,
+    VisitObject = 5,
+    PushFrame = 6,
+    PopFrame = 7,
     // Tracks a single Val (RawVal or primative Object like U64) <=> ScVal
     // conversion cost. Most of these Val counterparts in ScVal (except e.g.
     // Symbol) consumes a single int64 and therefore is a constant overhead.
-    ValXdrConv = 11,
+    ValXdrConv = 8,
+    ValSer = 9,
+    ValDeser = 10,
+    CloneEvents = 11,
+    HostObjAllocSlot = 12,
+    HostVecAllocCell = 13,
+    HostMapAllocCell = 14,
+    HostU64AllocCell = 15,
+    HostI64AllocCell = 16,
+    HostBinAllocCell = 17,
+    HostBigIntAllocCell = 18,
+    ComputeSha256Hash = 19,
+    ComputeEd25519PubKey = 20,
+    ImMapNew = 21,
+    ImMapMutEntry = 22,
+    ImMapImmutEntry = 23,
+    ImVecNew = 24,
+    ImVecMutEntry = 25,
+    ImVecImmutEntry = 26,
+    ScVecFromHostVec = 27,
+    ScMapFromHostMap = 28,
+    ScVecToHostVec = 29,
+    ScMapToHostMap = 30,
+    GuardFrame = 31,
+    CloneVm = 32,
+    VerifyEd25519Sig = 33,
+    BigIntNew = 34,
+    BigIntAddSub = 35,
+    BigIntMul = 36,
+    BigIntDivRem = 37,
+    BigIntBitwiseOp = 38,
+    BigIntShift = 39,
+    BigIntCmp = 40,
+    BigIntGcdLcm = 41,
+    BigIntPow = 42,
+    BigIntPowMod = 43,
+    BigIntSqrt = 44,
+    BigIntFromBytes = 45,
+    BigIntToBytes = 46,
+    BigIntToRadix = 47,
+    VmMemCpy = 48,
+    VmInstantiation = 49,
+    VmInvokeFunction = 50,
+    BytesClone = 51,
+    BytesDel = 52,
+    BytesPush = 53,
+    BytesPop = 54,
+    BytesInsert = 55,
+    BytesAppend = 56,
+    BytesSlice = 57,
+    BytesConcat = 58,
+    CallArgsUnpack = 59,
 }
 
 // TODO: add XDR support for iterating over all the elements of an enum
 impl CostType {
     pub fn variants() -> std::slice::Iter<'static, CostType> {
         static VARIANTS: &'static [CostType] = &[
-            CostType::HostMapAllocMap,
-            CostType::HostMapAllocCell,
-            CostType::HostVecAllocVec,
-            CostType::HostVecAllocCell,
             CostType::WasmInsnExec,
             CostType::WasmMemAlloc,
             CostType::HostEventDebug,
+            CostType::HostEventContract,
             CostType::HostFunction,
             CostType::VisitObject,
             CostType::PushFrame,
             CostType::PopFrame,
             CostType::ValXdrConv,
+            CostType::ValSer,
+            CostType::ValDeser,
+            CostType::CloneEvents,
+            CostType::HostObjAllocSlot,
+            CostType::HostVecAllocCell,
+            CostType::HostMapAllocCell,
+            CostType::HostU64AllocCell,
+            CostType::HostI64AllocCell,
+            CostType::HostBinAllocCell,
+            CostType::HostBigIntAllocCell,
+            CostType::ComputeSha256Hash,
+            CostType::ComputeEd25519PubKey,
+            CostType::ImMapNew,
+            CostType::ImMapMutEntry,
+            CostType::ImMapImmutEntry,
+            CostType::ImVecNew,
+            CostType::ImVecMutEntry,
+            CostType::ImVecImmutEntry,
+            CostType::ScVecFromHostVec,
+            CostType::ScMapFromHostMap,
+            CostType::ScVecToHostVec,
+            CostType::ScMapToHostMap,
+            CostType::GuardFrame,
+            CostType::CloneVm,
+            CostType::VerifyEd25519Sig,
+            CostType::BigIntNew,
+            CostType::BigIntAddSub,
+            CostType::BigIntMul,
+            CostType::BigIntDivRem,
+            CostType::BigIntBitwiseOp,
+            CostType::BigIntShift,
+            CostType::BigIntCmp,
+            CostType::BigIntGcdLcm,
+            CostType::BigIntPow,
+            CostType::BigIntPowMod,
+            CostType::BigIntSqrt,
+            CostType::BigIntFromBytes,
+            CostType::BigIntToBytes,
+            CostType::BigIntToRadix,
+            CostType::VmMemCpy,
+            CostType::VmInstantiation,
+            CostType::VmInvokeFunction,
+            CostType::BytesClone,
+            CostType::BytesDel,
+            CostType::BytesPush,
+            CostType::BytesPop,
+            CostType::BytesInsert,
+            CostType::BytesAppend,
+            CostType::BytesSlice,
+            CostType::BytesConcat,
+            CostType::CallArgsUnpack,
         ];
         VARIANTS.iter()
     }
@@ -210,7 +311,7 @@ impl Default for BudgetDimension {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Budget {
+pub(crate) struct BudgetImpl {
     pub cpu_insns: BudgetDimension,
     pub mem_bytes: BudgetDimension,
     /// Tracks the sums of _input_ values to the cost models, for purposes of
@@ -218,51 +319,85 @@ pub struct Budget {
     inputs: Vec<u64>,
 }
 
-impl Budget {
-    pub fn charge(&mut self, ty: CostType, input: u64) -> Result<(), HostError> {
-        let i = self.get_input_mut(ty);
-        *i = i.saturating_add(input);
+#[derive(Default, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Budget(pub(crate) Rc<RefCell<BudgetImpl>>);
 
-        self.cpu_insns.charge(ty, input)?;
-        self.mem_bytes.charge(ty, input)?;
-        Ok(())
+impl Budget {
+    // Helper function to avoid multiple borrow_mut
+    fn mut_budget<T, F>(&self, f: F) -> Result<T, HostError>
+    where
+        F: FnOnce(RefMut<BudgetImpl>) -> Result<T, HostError>,
+    {
+        f(self.0.borrow_mut())
+    }
+
+    pub fn charge(&self, ty: CostType, input: u64) -> Result<(), HostError> {
+        self.get_input_mut(ty, |i| *i = i.saturating_add(input));
+        self.mut_budget(|mut b| {
+            b.cpu_insns.charge(ty, input)?;
+            b.mem_bytes.charge(ty, input)
+        })
     }
 
     pub fn get_input(&self, ty: CostType) -> u64 {
-        self.inputs[ty as usize]
+        self.0.borrow().inputs[ty as usize]
     }
 
-    pub fn get_input_mut(&mut self, ty: CostType) -> &mut u64 {
-        &mut self.inputs[ty as usize]
+    fn get_input_mut<F>(&self, ty: CostType, f: F)
+    where
+        F: FnOnce(&mut u64),
+    {
+        f(&mut self.0.borrow_mut().inputs[ty as usize])
     }
 
-    pub fn reset_unlimited(&mut self) {
-        self.cpu_insns.reset(u64::MAX);
-        self.mem_bytes.reset(u64::MAX);
+    pub fn get_cpu_insns_count(&self) -> u64 {
+        self.0.borrow().cpu_insns.get_count()
+    }
+
+    pub fn get_mem_bytes_count(&self) -> u64 {
+        self.0.borrow().mem_bytes.get_count()
+    }
+
+    pub fn reset_unlimited(&self) {
+        self.mut_budget(|mut b| {
+            b.cpu_insns.reset(u64::MAX);
+            b.mem_bytes.reset(u64::MAX);
+            Ok(())
+        })
+        .unwrap(); // impossible to panic
         self.reset_inputs()
     }
 
-    pub fn reset_inputs(&mut self) {
-        for i in self.inputs.iter_mut() {
+    pub fn reset_inputs(&self) {
+        for i in self.0.borrow_mut().inputs.iter_mut() {
             *i = 0;
         }
     }
 
     #[cfg(test)]
-    pub fn reset_limits(&mut self, cpu: u64, mem: u64) {
-        self.cpu_insns.reset(cpu);
-        self.mem_bytes.reset(mem);
+    pub fn reset_limits(&self, cpu: u64, mem: u64) {
+        self.mut_budget(|mut b| {
+            b.cpu_insns.reset(cpu);
+            b.mem_bytes.reset(mem);
+            Ok(())
+        })
+        .unwrap(); // impossible to panic
+
         self.reset_inputs()
     }
 
     #[cfg(test)]
-    pub fn reset_models(&mut self) {
-        self.cpu_insns.reset_models();
-        self.mem_bytes.reset_models();
+    pub fn reset_models(&self) {
+        self.mut_budget(|mut b| {
+            b.cpu_insns.reset_models();
+            b.mem_bytes.reset_models();
+            Ok(())
+        })
+        .unwrap(); // impossible to panic
     }
 }
 
-impl Default for Budget {
+impl Default for BudgetImpl {
     fn default() -> Self {
         let mut b = Self {
             cpu_insns: Default::default(),
