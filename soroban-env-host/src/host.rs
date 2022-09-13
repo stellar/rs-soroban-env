@@ -1574,7 +1574,14 @@ impl VmCallerCheckedEnv for Host {
             self.charge_budget(CostType::CallArgsUnpack, hv.len() as u64)?;
             Ok(hv.iter().map(|a| a.to_raw()).collect())
         })?;
-        self.call_n(contract, func, args.as_slice())
+        let res = self.call_n(contract, func, args.as_slice());
+        if let Err(e) = &res {
+            let evt = DebugEvent::new()
+                .msg("contract call invocation resulted in error")
+                .arg::<RawVal>(e.status.into());
+            self.record_debug_event(evt)?;
+        }
+        res
     }
 
     // Notes on metering: covered by the components.
@@ -1587,13 +1594,7 @@ impl VmCallerCheckedEnv for Host {
     ) -> Result<RawVal, HostError> {
         match self.call(vmcaller, contract, func, args) {
             Ok(rv) => Ok(rv),
-            Err(e) => {
-                let evt = DebugEvent::new()
-                    .msg("try_call got error from callee contract")
-                    .arg::<RawVal>(e.status.clone().into());
-                self.record_debug_event(evt)?;
-                Ok(e.status.into())
-            }
+            Err(e) => Ok(e.status.into()),
         }
     }
 
