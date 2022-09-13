@@ -1,12 +1,11 @@
 use crate::budget::CostType;
 use crate::xdr::{
-    ContractDataEntry, HashIdPreimage, HashIdPreimageContractId, HashIdPreimageEd25519ContractId,
-    LedgerEntry, LedgerEntryData, LedgerEntryExt, LedgerKey, LedgerKeyAccount,
-    LedgerKeyContractData, ScContractCode, ScHostStorageErrorCode, ScHostValErrorCode, ScObject,
-    ScStatic, ScVal,
+    AccountEntry, AccountId, ContractDataEntry, Hash, HashIdPreimage, HashIdPreimageContractId,
+    HashIdPreimageEd25519ContractId, LedgerEntry, LedgerEntryData, LedgerEntryExt, LedgerKey,
+    LedgerKeyAccount, LedgerKeyContractData, LedgerKeyTrustLine, PublicKey, ScContractCode,
+    ScHostStorageErrorCode, ScHostValErrorCode, ScObject, ScStatic, ScVal, Uint256, WriteXdr,
 };
 use crate::{Host, HostError, Object};
-use soroban_env_common::xdr::{AccountEntry, AccountId, Hash, PublicKey, Uint256, WriteXdr};
 
 impl Host {
     // Notes on metering: free
@@ -109,5 +108,33 @@ impl Host {
             account_id: AccountId(PublicKey::PublicKeyTypeEd25519(self.to_u256(a)?)),
         });
         self.visit_storage(|storage| storage.has(&acc))
+    }
+
+    pub fn to_trustline_key(
+        &self,
+        account_id: Object,
+        asset_code: Object,
+        issuer: Object,
+    ) -> Result<LedgerKey, HostError> {
+        use crate::xdr::{AlphaNum12, AlphaNum4, AssetCode12, AssetCode4, TrustLineAsset};
+        let asset = self.visit_obj(asset_code, |b: &Vec<u8>| {
+            if b.len() > 0 && b.len() <= 4 {
+                Ok(TrustLineAsset::CreditAlphanum4(AlphaNum4 {
+                    asset_code: AssetCode4(b.as_slice().try_into().unwrap()),
+                    issuer: AccountId(PublicKey::PublicKeyTypeEd25519(self.to_u256(issuer)?)),
+                }))
+            } else if b.len() > 0 && b.len() <= 12 {
+                Ok(TrustLineAsset::CreditAlphanum12(AlphaNum12 {
+                    asset_code: AssetCode12(b.as_slice().try_into().unwrap()),
+                    issuer: AccountId(PublicKey::PublicKeyTypeEd25519(self.to_u256(issuer)?)),
+                }))
+            } else {
+                Err(self.err_general("invalid asset code"))
+            }
+        })?;
+        Ok(LedgerKey::Trustline(LedgerKeyTrustLine {
+            account_id: AccountId(PublicKey::PublicKeyTypeEd25519(self.to_u256(account_id)?)),
+            asset,
+        }))
     }
 }

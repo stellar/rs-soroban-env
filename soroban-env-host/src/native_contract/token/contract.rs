@@ -3,26 +3,20 @@ use crate::native_contract::base_types::{BigInt, Bytes, Vec};
 use crate::native_contract::token::admin::{check_admin, has_administrator, write_administrator};
 use crate::native_contract::token::allowance::{read_allowance, spend_allowance, write_allowance};
 use crate::native_contract::token::balance::{
-    read_balance, read_state, receive_balance, spend_balance, write_state,
+    read_balance, read_state, receive_balance, spend_balance, transfer_classic_balance, write_state,
 };
 use crate::native_contract::token::cryptography::check_auth;
 use crate::native_contract::token::error::Error;
 use crate::native_contract::token::metadata::{
-    read_decimal, read_name, read_symbol, write_decimal, write_name, write_symbol,
+    read_decimal, read_name, read_symbol, write_metadata,
 };
 use crate::native_contract::token::nonce::read_nonce;
-use crate::native_contract::token::public_types::{Identifier, Signature};
+use crate::native_contract::token::public_types::{Identifier, Metadata, Signature};
 use soroban_env_common::{Symbol, TryIntoVal};
 use soroban_native_sdk_macros::contractimpl;
 
 pub trait TokenTrait {
-    fn initialize(
-        e: &Host,
-        admin: Identifier,
-        decimal: u32,
-        name: Bytes,
-        symbol: Bytes,
-    ) -> Result<(), Error>;
+    fn initialize(e: &Host, admin: Identifier, metadata: Metadata) -> Result<(), Error>;
 
     fn nonce(e: &Host, id: Identifier) -> Result<BigInt, Error>;
 
@@ -89,27 +83,22 @@ pub trait TokenTrait {
     fn name(e: &Host) -> Result<Bytes, Error>;
 
     fn symbol(e: &Host) -> Result<Bytes, Error>;
+
+    fn to_smart(e: &Host, id: Signature, nonce: BigInt, amount: i64) -> Result<(), Error>;
+
+    fn to_classic(e: &Host, id: Signature, nonce: BigInt, amount: i64) -> Result<(), Error>;
 }
 
 pub struct Token;
 
 #[contractimpl]
 impl TokenTrait for Token {
-    fn initialize(
-        e: &Host,
-        admin: Identifier,
-        decimal: u32,
-        name: Bytes,
-        symbol: Bytes,
-    ) -> Result<(), Error> {
+    fn initialize(e: &Host, admin: Identifier, metadata: Metadata) -> Result<(), Error> {
         if has_administrator(&e)? {
             return Err(Error::ContractError);
         }
         write_administrator(&e, admin)?;
-
-        write_decimal(&e, u8::try_from(decimal).map_err(|_| Error::ContractError)?)?;
-        write_name(&e, name)?;
-        write_symbol(&e, symbol)?;
+        write_metadata(&e, metadata)?;
         Ok(())
     }
 
@@ -272,5 +261,49 @@ impl TokenTrait for Token {
 
     fn symbol(e: &Host) -> Result<Bytes, Error> {
         read_symbol(&e)
+    }
+
+    fn to_smart(e: &Host, id: Signature, nonce: BigInt, amount: i64) -> Result<(), Error> {
+        if amount < 0 {
+            return Err(Error::ContractError);
+        }
+
+        let id_key = match &id {
+            Signature::Account(acc) => Ok(acc.account_id.clone()),
+            _ => Err(Error::ContractError),
+        }?;
+        let mut args = Vec::new(e)?;
+        args.push(amount.clone())?;
+        check_auth(&e, id, nonce, Symbol::from_str("to_smart"), args)?;
+
+        transfer_classic_balance(e, id_key.clone(), amount)?;
+        receive_balance(
+            &e,
+            Identifier::Account(id_key),
+            BigInt::from_u64(&e, amount.try_into().map_err(|_| Error::ContractError)?)?,
+        )?;
+        Ok(())
+    }
+
+    fn to_classic(e: &Host, id: Signature, nonce: BigInt, amount: i64) -> Result<(), Error> {
+        if amount < 0 {
+            return Err(Error::ContractError);
+        }
+
+        let id_key = match &id {
+            Signature::Account(acc) => Ok(acc.account_id.clone()),
+            _ => Err(Error::ContractError),
+        }?;
+        let mut args = Vec::new(e)?;
+        args.push(amount.clone())?;
+        check_auth(&e, id, nonce, Symbol::from_str("to_classic"), args)?;
+
+        transfer_classic_balance(e, id_key.clone(), -amount)?;
+        spend_balance(
+            &e,
+            Identifier::Account(id_key),
+            BigInt::from_u64(&e, amount.try_into().map_err(|_| Error::ContractError)?)?,
+        )?;
+        Ok(())
     }
 }
