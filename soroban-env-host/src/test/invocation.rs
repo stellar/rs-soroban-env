@@ -2,8 +2,9 @@ use soroban_env_common::{xdr::ScVmErrorCode, RawVal};
 
 use crate::{
     budget::Budget,
+    events::{DebugArg, HostEvent},
     vm::Vm,
-    xdr::{Hash, ScHostObjErrorCode, ScVal, ScVec},
+    xdr::{Hash, ScHostObjErrorCode, ScStatusType, ScVal, ScVec},
     CheckedEnv, Host, HostError, Status, Symbol, Tag,
 };
 use soroban_test_wasms::{ADD_I32, INVOKE_CONTRACT, VEC};
@@ -70,9 +71,59 @@ fn invoke_cross_contract_with_err() -> Result<(), HostError> {
     let exp_st: Status = code.into();
     assert_eq!(sv.get_payload(), exp_st.to_raw().get_payload());
 
+    let events = host.get_events()?;
+    assert_eq!(events.0.len(), 3);
+    let last_event = events.0.last();
+    match last_event {
+        Some(HostEvent::Debug(de)) => {
+            assert_eq!(de.msg, Some("contract call invocation resulted in error"));
+            assert_eq!(de.args.len(), 1);
+            if let DebugArg::Val(rv) = de.args[0] {
+                let status: Status = rv.try_into()?;
+                assert_eq!(
+                    status,
+                    Status::from_type_and_code(
+                        ScStatusType::HostObjectError,
+                        ScHostObjErrorCode::VecIndexOutOfBound as u32,
+                    )
+                );
+            } else {
+                panic!("got: {:?}, want debug arg containing Val", de);
+            }
+        }
+        _ => {
+            panic!("got: {:?}, want debug event", last_event);
+        }
+    };
+
     // call
     let res = host.call(obj.to_object(), sym.into(), args.into());
     assert!(HostError::result_matches_err_status(res, code));
+
+    let events = host.get_events()?;
+    assert_eq!(events.0.len(), 6);
+    let last_event = events.0.last();
+    match last_event {
+        Some(HostEvent::Debug(de)) => {
+            assert_eq!(de.msg, Some("contract call invocation resulted in error"));
+            assert_eq!(de.args.len(), 1);
+            if let DebugArg::Val(rv) = de.args[0] {
+                let status: Status = rv.try_into()?;
+                assert_eq!(
+                    status,
+                    Status::from_type_and_code(
+                        ScStatusType::HostObjectError,
+                        ScHostObjErrorCode::VecIndexOutOfBound as u32,
+                    )
+                );
+            } else {
+                panic!("got: {:?}, want debug arg containing Val", de);
+            }
+        }
+        _ => {
+            panic!("got: {:?}, want debug event", last_event);
+        }
+    };
 
     Ok(())
 }
@@ -118,9 +169,66 @@ fn invoke_cross_contract_indirect_err() -> Result<(), HostError> {
     let sym = Symbol::from_str("add_with");
     let args = host.test_vec_obj::<i32>(&[i32::MAX, 1])?;
     let args = host.vec_push_back(args.val, id1_obj.into())?;
+
     // try call -- add will trap, and add_with will trap, but we will get a status
     let status = host.try_call(id0_obj.to_object(), sym.into(), args.clone().into())?;
-    let exp: Status = ScVmErrorCode::TrapUnreachable.into();
+    let code = ScVmErrorCode::TrapUnreachable;
+    let exp: Status = code.into();
     assert_eq!(status.get_payload(), exp.to_raw().get_payload());
+
+    let events = host.get_events()?;
+    assert_eq!(events.0.len(), 4);
+    let last_event = events.0.last();
+    match last_event {
+        Some(HostEvent::Debug(de)) => {
+            assert_eq!(de.msg, Some("contract call invocation resulted in error"));
+            assert_eq!(de.args.len(), 1);
+            if let DebugArg::Val(rv) = de.args[0] {
+                let status: Status = rv.try_into()?;
+                assert_eq!(
+                    status,
+                    Status::from_type_and_code(
+                        ScStatusType::VmError,
+                        ScVmErrorCode::TrapUnreachable as u32,
+                    )
+                );
+            } else {
+                panic!("got: {:?}, want debug arg containing Val", de);
+            }
+        }
+        _ => {
+            panic!("got: {:?}, want debug event", last_event);
+        }
+    };
+
+    // call
+    let res = host.call(id0_obj.to_object(), sym.into(), args.clone().into());
+    assert!(HostError::result_matches_err_status(res, code));
+
+    let events = host.get_events()?;
+    assert_eq!(events.0.len(), 8);
+    let last_event = events.0.last();
+    match last_event {
+        Some(HostEvent::Debug(de)) => {
+            assert_eq!(de.msg, Some("contract call invocation resulted in error"));
+            assert_eq!(de.args.len(), 1);
+            if let DebugArg::Val(rv) = de.args[0] {
+                let status: Status = rv.try_into()?;
+                assert_eq!(
+                    status,
+                    Status::from_type_and_code(
+                        ScStatusType::VmError,
+                        ScVmErrorCode::TrapUnreachable as u32,
+                    )
+                );
+            } else {
+                panic!("got: {:?}, want debug arg containing Val", de);
+            }
+        }
+        _ => {
+            panic!("got: {:?}, want debug event", last_event);
+        }
+    };
+
     Ok(())
 }
