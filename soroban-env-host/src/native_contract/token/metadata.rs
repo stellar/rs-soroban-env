@@ -1,41 +1,53 @@
 use crate::host::Host;
 use crate::native_contract::base_types::Bytes;
 use crate::native_contract::token::error::Error;
+use crate::native_contract::token::public_types::Metadata;
 use crate::native_contract::token::storage_types::DataKey;
-use soroban_env_common::{CheckedEnv, TryIntoVal};
+use soroban_env_common::{CheckedEnv, EnvBase, TryFromVal, TryIntoVal};
 
-pub fn read_decimal(e: &Host) -> Result<u32, Error> {
-    let key = DataKey::Decimals;
-    let rv = e.get_contract_data(key.try_into_val(e)?)?;
-    Ok(rv.try_into()?)
+pub fn write_metadata(e: &Host, metadata: Metadata) -> Result<(), Error> {
+    let key = DataKey::Metadata;
+    e.put_contract_data(key.try_into_val(e)?, metadata.try_into_val(e)?)?;
+    Ok(())
 }
 
-pub fn write_decimal(e: &Host, d: u8) -> Result<(), Error> {
-    let key = DataKey::Decimals;
-    e.put_contract_data(key.try_into_val(e)?, u32::from(d).into())?;
-    Ok(())
+pub fn read_metadata(e: &Host) -> Result<Metadata, Error> {
+    let key = DataKey::Metadata;
+    let rv = e.get_contract_data(key.try_into_val(e)?)?;
+    Ok(rv.try_into_val(e)?)
 }
 
 pub fn read_name(e: &Host) -> Result<Bytes, Error> {
-    let key = DataKey::Name;
-    let rv = e.get_contract_data(key.try_into_val(e)?)?;
-    Ok(rv.try_into_val(e)?)
-}
-
-pub fn write_name(e: &Host, d: Bytes) -> Result<(), Error> {
-    let key = DataKey::Name;
-    e.put_contract_data(key.try_into_val(e)?, d.try_into_val(e)?)?;
-    Ok(())
+    match read_metadata(e)? {
+        Metadata::Token(token) => Ok(token.name),
+        Metadata::Native => Ok(Bytes::try_from_val(e, e.bytes_new_from_slice(b"native"))?),
+        Metadata::AlphaNum4(asset) => {
+            let mut res: Bytes = asset.asset_code.into();
+            res.push(b':')?;
+            res.append(asset.issuer.into())?;
+            Ok(res)
+        }
+        Metadata::AlphaNum12(asset) => {
+            let mut res: Bytes = asset.asset_code.into();
+            res.push(b':')?;
+            res.append(asset.issuer.into())?;
+            Ok(res)
+        }
+    }
 }
 
 pub fn read_symbol(e: &Host) -> Result<Bytes, Error> {
-    let key = DataKey::Symbol;
-    let rv = e.get_contract_data(key.try_into_val(e)?)?;
-    Ok(rv.try_into_val(e)?)
+    match read_metadata(e)? {
+        Metadata::Token(token) => Ok(token.symbol),
+        Metadata::Native => Ok(Bytes::try_from_val(e, e.bytes_new_from_slice(b"native"))?),
+        Metadata::AlphaNum4(asset) => Ok(asset.asset_code.into()),
+        Metadata::AlphaNum12(asset) => Ok(asset.asset_code.into()),
+    }
 }
 
-pub fn write_symbol(e: &Host, d: Bytes) -> Result<(), Error> {
-    let key = DataKey::Symbol;
-    e.put_contract_data(key.try_into_val(e)?, d.try_into_val(e)?)?;
-    Ok(())
+pub fn read_decimal(e: &Host) -> Result<u32, Error> {
+    match read_metadata(e)? {
+        Metadata::Token(token) => Ok(token.decimals),
+        Metadata::Native | Metadata::AlphaNum4(_) | Metadata::AlphaNum12(_) => Ok(7),
+    }
 }

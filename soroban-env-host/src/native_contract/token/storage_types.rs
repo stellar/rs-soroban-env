@@ -16,7 +16,5 @@ pub enum DataKey {
     Nonce(Identifier),
     State(Identifier),
     Admin,
-    Decimals,
-    Name,
-    Symbol,
+    Metadata,
 }
