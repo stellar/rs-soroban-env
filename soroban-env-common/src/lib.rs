@@ -37,6 +37,7 @@ mod tuple;
 mod unimplemented_env;
 mod val;
 mod vmcaller_checked_env;
+mod result;
 
 // Re-export the XDR definitions
 pub use stellar_xdr as xdr;
