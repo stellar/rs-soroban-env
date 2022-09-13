@@ -13,6 +13,7 @@ where
 {
     type Error = ConversionError;
 
+    #[inline(always)]
     fn try_from_val(env: &E, val: RawVal) -> Result<Self, Self::Error> {
         let (discriminant, value): (RawVal, RawVal) = val.try_into_val(env)?;
         match discriminant.get_payload() {
@@ -41,6 +42,7 @@ where
     T: IntoVal<E, RawVal>,
     F: IntoVal<E, RawVal>,
 {
+    #[inline(always)]
     fn into_val(self, env: &E) -> RawVal {
         match self {
             Ok(t) => (SYMBOL_OK, t).into_val(env),
@@ -54,6 +56,7 @@ where
     for<'a> &'a T: IntoVal<E, RawVal>,
     for<'a> &'a F: IntoVal<E, RawVal>,
 {
+    #[inline(always)]
     fn into_val(self, env: &E) -> RawVal {
         match self {
             Ok(t) => (SYMBOL_OK, t).into_val(env),
