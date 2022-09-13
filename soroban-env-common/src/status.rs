@@ -134,6 +134,7 @@ impl Debug for Status {
             ScStatusType::HostStorageError => fmt_named_code::<ScHostStorageErrorCode>(code, f),
             ScStatusType::HostContextError => fmt_named_code::<ScHostContextErrorCode>(code, f),
             ScStatusType::VmError => fmt_named_code::<ScVmErrorCode>(code, f),
+            ScStatusType::ContractError => write!(f, "{}", code),
         }?;
         write!(f, "))")
     }
@@ -274,22 +275,20 @@ impl Status {
         unsafe { Self::from_major_minor(code, ty as u32) }
     }
 
-    // TODO: this should be a const fn, waiting on
-    // https://github.com/stellar/xdrgen/issues/106 for the discriminant
-    // function call to be const.
     #[inline(always)]
-    pub fn from_status(sc: ScStatus) -> Status {
-        let code: i32 = match sc {
+    pub const fn from_status(sc: ScStatus) -> Status {
+        let code = match sc {
             ScStatus::Ok => 0,
-            ScStatus::HostContextError(code) => code as i32,
-            ScStatus::HostValueError(code) => code as i32,
-            ScStatus::HostObjectError(code) => code as i32,
-            ScStatus::HostFunctionError(code) => code as i32,
-            ScStatus::HostStorageError(code) => code as i32,
-            ScStatus::VmError(code) => code as i32,
-            ScStatus::UnknownError(code) => code as i32,
+            ScStatus::HostContextError(code) => code as i32 as u32,
+            ScStatus::HostValueError(code) => code as i32 as u32,
+            ScStatus::HostObjectError(code) => code as i32 as u32,
+            ScStatus::HostFunctionError(code) => code as i32 as u32,
+            ScStatus::HostStorageError(code) => code as i32 as u32,
+            ScStatus::VmError(code) => code as i32 as u32,
+            ScStatus::UnknownError(code) => code as i32 as u32,
+            ScStatus::ContractError(code) => code as u32,
         };
-        Self::from_type_and_code(sc.discriminant(), code as u32)
+        Self::from_type_and_code(sc.discriminant(), code)
     }
 }
 
