@@ -30,6 +30,7 @@ pub mod meta;
 mod object;
 mod option;
 mod raw_val;
+mod result;
 mod r#static;
 mod status;
 mod symbol;
@@ -37,7 +38,6 @@ mod tuple;
 mod unimplemented_env;
 mod val;
 mod vmcaller_checked_env;
-mod result;
 
 // Re-export the XDR definitions
 pub use stellar_xdr as xdr;
