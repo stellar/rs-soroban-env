@@ -514,8 +514,6 @@ impl Host {
                             self.map_err(b.metered_clone(&self.0.budget)?.try_into())?,
                         )),
                         HostObject::BigInt(bi) => self.scobj_from_bigint(bi),
-                        HostObject::Hash(h) => Ok(ScObject::Hash(h.clone())),
-                        HostObject::PublicKey(pk) => Ok(ScObject::PublicKey(pk.clone())),
                         HostObject::ContractCode(cc) => Ok(ScObject::ContractCode(cc.clone())),
                     },
                 }
@@ -565,8 +563,6 @@ impl Host {
                 };
                 self.add_host_object(bi)
             }
-            ScObject::Hash(h) => self.add_host_object(h.clone()),
-            ScObject::PublicKey(pk) => self.add_host_object(pk.clone()),
             ScObject::ContractCode(cc) => self.add_host_object(cc.clone()),
         }
     }
@@ -596,8 +592,6 @@ impl Host {
                 self.charge_budget(CostType::HostBigIntAllocCell, bi.bits() as u64)?;
                 // TODO: are we double counting by charging bi.bits()?
             }
-            HostObject::Hash(_) => {}
-            HostObject::PublicKey(_) => {}
             HostObject::ContractCode(_) => {}
         }
         Ok(ho)
