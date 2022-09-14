@@ -313,6 +313,17 @@ where
     }
 }
 
+#[cfg(feature = "std")]
+impl<E: Env> TryIntoVal<E, RawVal> for ScVal
+where
+    for<'a> &'a ScObject: TryIntoVal<E, Object>,
+{
+    type Error = ConversionError;
+    fn try_into_val(self, env: &E) -> Result<RawVal, Self::Error> {
+        (&self).try_into_val(env)
+    }
+}
+
 impl<E: Env + Debug, V> Debug for EnvVal<E, V> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("EnvVal")
