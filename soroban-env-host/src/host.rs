@@ -2527,7 +2527,7 @@ impl VmCallerCheckedEnv for Host {
         status: Status,
     ) -> Result<RawVal, Self::Error> {
         if status.is_type(ScStatusType::ContractError) {
-            Err(self.err_status_msg(status, "failing with contract-provided status code"))
+            Err(self.err_status_msg(status, "failing with contract error status code"))
         } else {
             Err(self.err_status_msg(
                 ScHostValErrorCode::UnexpectedValType,
