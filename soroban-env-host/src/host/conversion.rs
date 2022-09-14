@@ -213,15 +213,12 @@ impl Host {
                                                 self.err_status(ScHostObjErrorCode::UnexpectedType)
                                             );
                                         }
+                                        // TODO: metered clone bytes
                                         Ok(ScObject::Bytes(self.map_err(b.clone().try_into())?))
                                     }
                                     HostObject::U64(u) => Ok(ScObject::U64(*u)),
                                     HostObject::I64(i) => Ok(ScObject::I64(*i)),
                                     HostObject::BigInt(bi) => self.scobj_from_bigint(bi),
-                                    HostObject::Hash(h) => Ok(ScObject::Hash(h.clone())),
-                                    HostObject::PublicKey(pk) => {
-                                        Ok(ScObject::PublicKey(pk.clone()))
-                                    }
                                 },
                             }?;
                             Ok(ScVal::Object(Some(sco)))

@@ -20,8 +20,6 @@ pub(crate) enum HostObject {
     I64(i64),
     Bytes(Vec<u8>),
     BigInt(MeteredBigInt),
-    Hash(xdr::ScHash),
-    PublicKey(xdr::PublicKey),
     ContractCode(xdr::ScContractCode),
 }
 
@@ -59,6 +57,4 @@ declare_host_object_type!(u64, U64, U64);
 declare_host_object_type!(i64, I64, I64);
 declare_host_object_type!(Vec<u8>, Bytes, Bytes);
 declare_host_object_type!(MeteredBigInt, BigInt, BigInt);
-declare_host_object_type!(xdr::ScHash, Hash, Hash);
-declare_host_object_type!(xdr::PublicKey, PublicKey, PublicKey);
 declare_host_object_type!(xdr::ScContractCode, ContractCode, ContractCode);
