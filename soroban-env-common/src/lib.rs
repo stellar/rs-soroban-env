@@ -30,6 +30,7 @@ pub mod meta;
 mod object;
 mod option;
 mod raw_val;
+mod result;
 mod r#static;
 mod status;
 mod symbol;
