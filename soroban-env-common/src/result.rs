@@ -1,9 +1,9 @@
 use crate::{ConversionError, Env, IntoVal, RawVal, Symbol, TryFromVal, TryIntoVal};
 
-const SYMBOL_OK: Symbol = Symbol::from_str("OK");
+const SYMBOL_OK: Symbol = Symbol::from_str("Ok");
 const SYMBOL_OK_PAYLOAD: u64 = SYMBOL_OK.to_raw().get_payload();
 
-const SYMBOL_ERROR: Symbol = Symbol::from_str("ERROR");
+const SYMBOL_ERROR: Symbol = Symbol::from_str("Err");
 const SYMBOL_ERROR_PAYLOAD: u64 = SYMBOL_ERROR.to_raw().get_payload();
 
 impl<E: Env, T, F> TryFromVal<E, RawVal> for Result<T, F>
