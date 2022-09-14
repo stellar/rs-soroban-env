@@ -320,37 +320,39 @@ use crate::xdr::ScVal;
 
 #[cfg(feature = "std")]
 impl TryFrom<ScVal> for Symbol {
-    type Error = ();
+    type Error = ConversionError;
     fn try_from(v: ScVal) -> Result<Self, Self::Error> {
         (&v).try_into()
     }
 }
 #[cfg(feature = "std")]
 impl TryFrom<&ScVal> for Symbol {
-    type Error = ();
+    type Error = ConversionError;
     fn try_from(v: &ScVal) -> Result<Self, Self::Error> {
         if let ScVal::Symbol(vec) = v {
-            vec.try_into().map_err(|_| ())
+            vec.try_into().map_err(|_| ConversionError)
         } else {
-            Err(())
+            Err(ConversionError)
         }
     }
 }
 
 #[cfg(feature = "std")]
 impl TryFrom<Symbol> for ScVal {
-    type Error = ();
+    type Error = ConversionError;
     fn try_from(s: Symbol) -> Result<Self, Self::Error> {
         let res: Result<Vec<u8>, _> = s.into_iter().map(<u8 as TryFrom<char>>::try_from).collect();
         Ok(ScVal::Symbol(
-            res.map_err(|_| ())?.try_into().map_err(|_| ())?,
+            res.map_err(|_| ConversionError)?
+                .try_into()
+                .map_err(|_| ConversionError)?,
         ))
     }
 }
 
 #[cfg(feature = "std")]
 impl TryFrom<&Symbol> for ScVal {
-    type Error = ();
+    type Error = ConversionError;
     fn try_from(s: &Symbol) -> Result<Self, Self::Error> {
         s.clone().try_into()
     }
