@@ -1,11 +1,14 @@
-#![cfg(feature = "std")]
+use core::convert::Infallible;
 
+use crate::{Env, IntoVal, RawVal, TryIntoVal};
+
+#[cfg(feature = "std")]
 use stellar_xdr::ScObjectType;
 
-use crate::{
-    ConversionError, Env, IntoVal, Object, RawVal, RawValConvertible, TryFromVal, TryIntoVal,
-};
+#[cfg(feature = "std")]
+use crate::{ConversionError, Object, RawValConvertible, TryFromVal};
 
+#[cfg(feature = "std")]
 impl<E: Env> TryFromVal<E, RawVal> for String {
     type Error = ConversionError;
 
@@ -23,6 +26,7 @@ impl<E: Env> TryFromVal<E, RawVal> for String {
     }
 }
 
+#[cfg(feature = "std")]
 impl<E: Env> TryIntoVal<E, String> for RawVal {
     type Error = ConversionError;
 
@@ -39,6 +43,7 @@ impl<E: Env> IntoVal<E, RawVal> for &str {
     }
 }
 
+#[cfg(feature = "std")]
 impl<E: Env> IntoVal<E, RawVal> for String {
     #[inline(always)]
     fn into_val(self, env: &E) -> RawVal {
@@ -46,9 +51,36 @@ impl<E: Env> IntoVal<E, RawVal> for String {
     }
 }
 
+#[cfg(feature = "std")]
 impl<E: Env> IntoVal<E, RawVal> for &String {
     #[inline(always)]
     fn into_val(self, env: &E) -> RawVal {
-        <&str as IntoVal<E, RawVal>>::into_val(&self, env)
+        <&str as IntoVal<E, RawVal>>::into_val(self, env)
+    }
+}
+
+impl<E: Env> TryIntoVal<E, RawVal> for &str {
+    type Error = Infallible;
+    #[inline(always)]
+    fn try_into_val(self, env: &E) -> Result<RawVal, Self::Error> {
+        Ok(<_ as IntoVal<E, RawVal>>::into_val(self, env))
+    }
+}
+
+#[cfg(feature = "std")]
+impl<E: Env> TryIntoVal<E, RawVal> for String {
+    type Error = Infallible;
+    #[inline(always)]
+    fn try_into_val(self, env: &E) -> Result<RawVal, Self::Error> {
+        Ok(<_ as IntoVal<E, RawVal>>::into_val(self, env))
+    }
+}
+
+#[cfg(feature = "std")]
+impl<E: Env> TryIntoVal<E, RawVal> for &String {
+    type Error = Infallible;
+    #[inline(always)]
+    fn try_into_val(self, env: &E) -> Result<RawVal, Self::Error> {
+        Ok(<_ as IntoVal<E, RawVal>>::into_val(self, env))
     }
 }
