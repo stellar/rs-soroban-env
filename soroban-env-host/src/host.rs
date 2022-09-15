@@ -254,7 +254,7 @@ impl Host {
         // Notes on metering: the length of topics and the complexity of data
         // have been covered by various `ValXdrConv` charges. Here we charge 1
         // unit just for recording this event.
-        self.charge_budget(CostType::HostEventDebug, 1)
+        self.charge_budget(CostType::HostEventContract, 1)
     }
 
     pub(crate) fn visit_storage<F, U>(&self, f: F) -> Result<U, HostError>
@@ -284,8 +284,6 @@ impl Host {
     /// operation fails, it can be used to roll the [`Host`] back to the state
     /// it had before its associated [`Frame`] was pushed.
     fn push_frame(&self, frame: Frame) -> Result<RollbackPoint, HostError> {
-        // Charges 1 unit instead of `map.len()` units because of OrdMap's
-        // sub-structure sharing that makes cloning cheap.
         self.charge_budget(CostType::PushFrame, 1)?;
         self.0.context.borrow_mut().push(frame);
         Ok(RollbackPoint {
@@ -590,7 +588,6 @@ impl Host {
             }
             HostObject::BigInt(bi) => {
                 self.charge_budget(CostType::HostBigIntAllocCell, bi.bits() as u64)?;
-                // TODO: are we double counting by charging bi.bits()?
             }
             HostObject::ContractCode(_) => {}
         }
