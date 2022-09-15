@@ -17,3 +17,4 @@ mod contract_event;
 mod invocation;
 #[cfg(all(feature = "vm", feature = "testutils"))]
 mod lifecycle;
+mod tuple;
