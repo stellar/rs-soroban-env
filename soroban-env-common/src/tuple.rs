@@ -83,7 +83,7 @@ macro_rules! impl_for_tuple {
             }
         }
 
-        // Conversions to and from Slice/Array of RawVal.
+        // Conversions to and from Array of RawVal.
 
         impl<E: Env, $($typ),*, const N: usize> TryFromVal<E, &[RawVal; N]> for ($($typ,)*)
         where
