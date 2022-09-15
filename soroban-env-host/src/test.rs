@@ -6,6 +6,7 @@ mod bigint;
 mod bytes;
 mod crypto;
 mod map;
+mod str;
 mod vec;
 
 #[cfg(feature = "vm")]
