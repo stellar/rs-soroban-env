@@ -33,6 +33,7 @@ mod raw_val;
 mod result;
 mod r#static;
 mod status;
+mod r#str;
 mod symbol;
 mod tuple;
 mod unimplemented_env;
