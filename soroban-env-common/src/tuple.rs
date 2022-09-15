@@ -35,6 +35,17 @@ macro_rules! impl_for_tuple {
             }
         }
 
+        impl<E: Env, $($typ),*> TryIntoVal<E, ($($typ,)*)> for RawVal
+        where
+            $($typ: TryFromVal<E, RawVal>),*
+        {
+            type Error = ConversionError;
+            #[inline(always)]
+            fn try_into_val(self, env: &E) -> Result<($($typ,)*), Self::Error> {
+                <_ as TryFromVal<_, _>>::try_from_val(env, self)
+            }
+        }
+
         impl<E: Env, $($typ),*> IntoVal<E, RawVal> for ($($typ,)*)
         where
             $($typ: IntoVal<E, RawVal>),*
@@ -69,17 +80,6 @@ macro_rules! impl_for_tuple {
                     env: env.clone(),
                     val: rv,
                 }
-            }
-        }
-
-        impl<E: Env, $($typ),*> TryIntoVal<E, ($($typ,)*)> for RawVal
-        where
-            $($typ: TryFromVal<E, RawVal>),*
-        {
-            type Error = ConversionError;
-            #[inline(always)]
-            fn try_into_val(self, env: &E) -> Result<($($typ,)*), Self::Error> {
-                <_ as TryFromVal<_, _>>::try_from_val(env, self)
             }
         }
 
@@ -147,3 +147,37 @@ impl_for_tuple! {  9_u32  9_usize T0 0 T1 1 T2 2 T3 3 T4 4 T5 5 T6 6 T7 7 T8 8 }
 impl_for_tuple! { 10_u32 10_usize T0 0 T1 1 T2 2 T3 3 T4 4 T5 5 T6 6 T7 7 T8 8 T9 9 }
 impl_for_tuple! { 11_u32 11_usize T0 0 T1 1 T2 2 T3 3 T4 4 T5 5 T6 6 T7 7 T8 8 T9 9 T10 10 }
 impl_for_tuple! { 12_u32 12_usize T0 0 T1 1 T2 2 T3 3 T4 4 T5 5 T6 6 T7 7 T8 8 T9 9 T10 10 T11 11 }
+
+// Unit types are not tuples, but when people write out what they think is an
+// empty tuple, it is a unit type. The following conversions have unit types
+// behave like tuples in some conversions that are safe to do so, like
+// conversions to and from arrays. Note that unit typles convert to
+// RawVal::VOID, see raw_val.rs for those conversions.
+
+impl<E: Env> TryFromVal<E, &[RawVal; 0]> for () {
+    type Error = ConversionError;
+
+    fn try_from_val(_env: &E, _val: &[RawVal; 0]) -> Result<Self, Self::Error> {
+        Ok(())
+    }
+}
+
+impl<E: Env> TryIntoVal<E, ()> for &[RawVal; 0] {
+    type Error = ConversionError;
+    #[inline(always)]
+    fn try_into_val(self, env: &E) -> Result<(), Self::Error> {
+        <_ as TryFromVal<_, _>>::try_from_val(env, self)
+    }
+}
+
+impl<E: Env> IntoVal<E, [RawVal; 0]> for &() {
+    fn into_val(self, _env: &E) -> [RawVal; 0] {
+        [RawVal::VOID; 0]
+    }
+}
+
+impl<E: Env> IntoVal<E, [RawVal; 0]> for () {
+    fn into_val(self, _env: &E) -> [RawVal; 0] {
+        [RawVal::VOID; 0]
+    }
+}

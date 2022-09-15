@@ -25,7 +25,8 @@ fn tuple_array_conversions() -> Result<(), HostError> {
     let host = Host::default();
 
     let raw: [RawVal; 0] = ().into_val(&host);
-    let _: () = raw.try_into_val(&host)?;
+    let unit: () = raw.try_into_val(&host)?;
+    assert_eq!(unit, ());
 
     let raw: [RawVal; 2] = (1u32, 1i32).into_val(&host);
     let roundtrip: (u32, i32) = raw.try_into_val(&host)?;
