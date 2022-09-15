@@ -2,7 +2,9 @@
 
 use stellar_xdr::ScObjectType;
 
-use crate::{ConversionError, Env, Object, RawVal, RawValConvertible, TryFromVal, TryIntoVal};
+use crate::{
+    ConversionError, Env, IntoVal, Object, RawVal, RawValConvertible, TryFromVal, TryIntoVal,
+};
 
 impl<E: Env> TryFromVal<E, RawVal> for String {
     type Error = ConversionError;
@@ -21,43 +23,32 @@ impl<E: Env> TryFromVal<E, RawVal> for String {
     }
 }
 
-// impl<E: Env, T, F> TryIntoVal<E, Result<T, F>> for RawVal
-// where
-//     T: TryFromVal<E, RawVal, Error = ConversionError>,
-//     F: TryFromVal<E, RawVal, Error = ConversionError>,
-// {
-//     type Error = ConversionError;
+impl<E: Env> TryIntoVal<E, String> for RawVal {
+    type Error = ConversionError;
 
-//     #[inline(always)]
-//     fn try_into_val(self, env: &E) -> Result<Result<T, F>, Self::Error> {
-//         <_ as TryFromVal<E, RawVal>>::try_from_val(env, self)
-//     }
-// }
+    #[inline(always)]
+    fn try_into_val(self, env: &E) -> Result<String, Self::Error> {
+        <_ as TryFromVal<E, RawVal>>::try_from_val(env, self)
+    }
+}
 
-// impl<E: Env, T, F> IntoVal<E, RawVal> for Result<T, F>
-// where
-//     T: IntoVal<E, RawVal>,
-//     F: IntoVal<E, RawVal>,
-// {
-//     #[inline(always)]
-//     fn into_val(self, env: &E) -> RawVal {
-//         match self {
-//             Ok(t) => (SYMBOL_OK, t).into_val(env),
-//             Err(f) => (SYMBOL_ERROR, f).into_val(env),
-//         }
-//     }
-// }
+impl<E: Env> IntoVal<E, RawVal> for &str {
+    #[inline(always)]
+    fn into_val(self, env: &E) -> RawVal {
+        env.bytes_new_from_slice(self.as_bytes()).to_raw()
+    }
+}
 
-// impl<E: Env, T, F> IntoVal<E, RawVal> for &Result<T, F>
-// where
-//     for<'a> &'a T: IntoVal<E, RawVal>,
-//     for<'a> &'a F: IntoVal<E, RawVal>,
-// {
-//     #[inline(always)]
-//     fn into_val(self, env: &E) -> RawVal {
-//         match self {
-//             Ok(t) => (SYMBOL_OK, t).into_val(env),
-//             Err(f) => (SYMBOL_ERROR, f).into_val(env),
-//         }
-//     }
-// }
+impl<E: Env> IntoVal<E, RawVal> for String {
+    #[inline(always)]
+    fn into_val(self, env: &E) -> RawVal {
+        <_ as IntoVal<E, RawVal>>::into_val(&self, env)
+    }
+}
+
+impl<E: Env> IntoVal<E, RawVal> for &String {
+    #[inline(always)]
+    fn into_val(self, env: &E) -> RawVal {
+        <&str as IntoVal<E, RawVal>>::into_val(&self, env)
+    }
+}
