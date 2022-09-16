@@ -269,6 +269,11 @@ impl Status {
     }
 
     #[inline(always)]
+    pub const fn from_contract_error(code: u32) -> Status {
+        Self::from_type_and_code(ScStatusType::ContractError, code)
+    }
+
+    #[inline(always)]
     pub const fn from_type_and_code(ty: ScStatusType, code: u32) -> Status {
         // Unfortunately we can't use from_major_minor here because
         // it's not const, and making it const requires nightly.
