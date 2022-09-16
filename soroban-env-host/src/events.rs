@@ -144,7 +144,7 @@ impl DebugError {
     {
         let status: Status = status.into();
         Self {
-            event: DebugEvent::new().msg("status").arg::<RawVal>(status.into()),
+            event: DebugEvent::new().arg::<RawVal>(status.into()),
             status,
         }
     }
