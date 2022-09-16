@@ -203,134 +203,6 @@ impl CostType {
     }
 }
 
-pub const PARAMS_CPU: &'static [[u64; 5]; 60] = &[
-    // const, log, log_base, lin, quad
-    [0, 0, 2, 73, 0],    // WasmInsnExec
-    [0, 0, 2, 1, 0],     // WasmMemAlloc
-    [0, 0, 2, 100, 0],   // HostEventDebug
-    [0, 0, 2, 100, 0],   // HostEventContract
-    [0, 0, 2, 100, 0],   // HostFunction
-    [0, 0, 2, 10, 0],    // VisitObject
-    [0, 0, 2, 10, 0],    // PushFrame
-    [0, 0, 2, 10, 0],    // PopFrame
-    [0, 0, 2, 10, 0],    // ValXdrConv
-    [0, 0, 2, 10, 0],    // ValSer
-    [0, 0, 2, 10, 0],    // ValDeser
-    [0, 0, 2, 10, 0],    // CloneEvents
-    [0, 0, 2, 10, 0],    // HostObjAllocSlot
-    [0, 0, 2, 10, 0],    // HostVecAllocCell
-    [0, 0, 2, 10, 0],    // HostMapAllocCell
-    [0, 0, 2, 10, 0],    // HostU64AllocCell
-    [0, 0, 2, 10, 0],    // HostI64AllocCell
-    [0, 0, 2, 10, 0],    // HostBinAllocCell
-    [0, 0, 2, 10, 0],    // HostBigIntAllocCell
-    [0, 0, 2, 0, 10],    // ComputeSha256Hash
-    [0, 0, 2, 0, 10],    // ComputeEd25519PubKey
-    [0, 0, 2, 10, 0],    // ImMapNew
-    [0, 10, 2, 0, 0],    // ImMapMutEntry
-    [0, 10, 2, 0, 0],    // ImMapImmutEntry
-    [0, 0, 2, 10, 0],    // ImVecNew
-    [0, 10, 2, 0, 0],    // ImVecMutEntry
-    [0, 10, 2, 0, 0],    // ImVecImmutEntry
-    [0, 0, 2, 10, 0],    // ScVecFromHostVec
-    [0, 0, 2, 10, 0],    // ScMapFromHostMap
-    [0, 0, 2, 10, 0],    // ScVecToHostVec
-    [0, 0, 2, 10, 0],    // ScMapToHostMap
-    [0, 0, 2, 10, 0],    // GuardFrame
-    [1000, 0, 2, 0, 0],  // CloneVm
-    [0, 0, 2, 0, 10],    // VerifyEd25519Sig
-    [0, 0, 2, 10, 0],    // BigIntNew
-    [0, 0, 2, 10, 0],    // BigIntAddSub
-    [0, 0, 2, 0, 10],    // BigIntMul
-    [0, 0, 2, 0, 10],    // BigIntDivRem
-    [0, 0, 2, 10, 0],    // BigIntBitwiseOp
-    [0, 0, 2, 10, 0],    // BigIntShift
-    [0, 0, 2, 10, 0],    // BigIntCmp
-    [0, 0, 2, 0, 10],    // BigIntGcdLcm
-    [0, 0, 2, 0, 10],    // BigIntPow
-    [0, 0, 2, 0, 10],    // BigIntPowMod
-    [0, 0, 2, 0, 10],    // BigIntSqrt
-    [0, 0, 2, 10, 0],    // BigIntFromBytes
-    [0, 0, 2, 10, 0],    // BigIntToBytes
-    [0, 0, 2, 10, 0],    // BigIntToRadix
-    [0, 0, 2, 10, 0],    // VmMemCpy
-    [1000, 0, 2, 10, 0], // VmInstantiation
-    [0, 0, 2, 10, 0],    // VmInvokeFunction
-    [0, 0, 2, 10, 0],    // BytesClone
-    [0, 0, 2, 10, 0],    // BytesDel
-    [0, 0, 2, 10, 0],    // BytesPush
-    [0, 0, 2, 10, 0],    // BytesPop
-    [0, 0, 2, 10, 0],    // BytesInsert
-    [0, 0, 2, 10, 0],    // BytesAppend
-    [0, 0, 2, 10, 0],    // BytesSlice
-    [0, 0, 2, 10, 0],    // BytesConcat
-    [0, 0, 2, 10, 0],    // CallArgsUnpack
-];
-
-pub const PARAMS_MEM: &'static [[u64; 5]; 60] = &[
-    // const, log, log_base, lin, quad
-    [0, 0, 2, 1, 0], // WasmInsnExec
-    [0, 0, 2, 1, 0], // WasmMemAlloc
-    [0, 0, 2, 1, 0], // HostEventDebug
-    [0, 0, 2, 1, 0], // HostEventContract
-    [0, 0, 2, 1, 0], // HostFunction
-    [0, 0, 2, 1, 0], // VisitObject
-    [0, 0, 2, 1, 0], // PushFrame
-    [0, 0, 2, 1, 0], // PopFrame
-    [0, 0, 2, 1, 0], // ValXdrConv
-    [0, 0, 2, 1, 0], // ValSer
-    [0, 0, 2, 1, 0], // ValDeser
-    [0, 0, 2, 1, 0], // CloneEvents
-    [0, 0, 2, 1, 0], // HostObjAllocSlot
-    [0, 0, 2, 1, 0], // HostVecAllocCell
-    [0, 0, 2, 1, 0], // HostMapAllocCell
-    [0, 0, 2, 1, 0], // HostU64AllocCell
-    [0, 0, 2, 1, 0], // HostI64AllocCell
-    [0, 0, 2, 1, 0], // HostBinAllocCell
-    [0, 0, 2, 1, 0], // HostBigIntAllocCell
-    [0, 0, 2, 1, 0], // ComputeSha256Hash
-    [0, 0, 2, 1, 0], // ComputeEd25519PubKey
-    [0, 0, 2, 1, 0], // ImMapNew
-    [0, 0, 2, 1, 0], // ImMapMutEntry
-    [0, 0, 2, 1, 0], // ImMapImmutEntry
-    [0, 0, 2, 1, 0], // ImVecNew
-    [0, 0, 2, 1, 0], // ImVecMutEntry
-    [0, 0, 2, 1, 0], // ImVecImmutEntry
-    [0, 0, 2, 1, 0], // ScVecFromHostVec
-    [0, 0, 2, 1, 0], // ScMapFromHostMap
-    [0, 0, 2, 1, 0], // ScVecToHostVec
-    [0, 0, 2, 1, 0], // ScMapToHostMap
-    [0, 0, 2, 1, 0], // GuardFrame
-    [0, 0, 2, 1, 0], // CloneVm
-    [0, 0, 2, 1, 0], // VerifyEd25519Sig
-    [0, 0, 2, 1, 0], // BigIntNew
-    [0, 0, 2, 1, 0], // BigIntAddSub
-    [0, 0, 2, 1, 0], // BigIntMul
-    [0, 0, 2, 1, 0], // BigIntDivRem
-    [0, 0, 2, 1, 0], // BigIntBitwiseOp
-    [0, 0, 2, 1, 0], // BigIntShift
-    [0, 0, 2, 1, 0], // BigIntCmp
-    [0, 0, 2, 1, 0], // BigIntGcdLcm
-    [0, 0, 2, 1, 0], // BigIntPow
-    [0, 0, 2, 1, 0], // BigIntPowMod
-    [0, 0, 2, 1, 0], // BigIntSqrt
-    [0, 0, 2, 1, 0], // BigIntFromBytes
-    [0, 0, 2, 1, 0], // BigIntToBytes
-    [0, 0, 2, 1, 0], // BigIntToRadix
-    [0, 0, 2, 1, 0], // VmMemCpy
-    [0, 0, 2, 1, 0], // VmInstantiation
-    [0, 0, 2, 1, 0], // VmInvokeFunction
-    [0, 0, 2, 1, 0], // BytesClone
-    [0, 0, 2, 1, 0], // BytesDel
-    [0, 0, 2, 1, 0], // BytesPush
-    [0, 0, 2, 1, 0], // BytesPop
-    [0, 0, 2, 1, 0], // BytesInsert
-    [0, 0, 2, 1, 0], // BytesAppend
-    [0, 0, 2, 1, 0], // BytesSlice
-    [0, 0, 2, 1, 0], // BytesConcat
-    [0, 0, 2, 1, 0], // CallArgsUnpack
-];
-
 /// We provide a general "cost model" object that evaluates a general
 /// expression:
 ///
@@ -376,6 +248,14 @@ impl CostModel {
             res = res.saturating_add(self.quad_param.saturating_mul(input.saturating_mul(input)));
         }
         res
+    }
+
+    pub fn set_params(&mut self, params: &[u64; 5]) {
+        self.const_param = params[0];
+        self.log_param = params[1];
+        self.log_base_param = params[2];
+        self.lin_param = params[3];
+        self.quad_param = params[4];
     }
 
     #[cfg(test)]
@@ -595,18 +475,259 @@ impl Default for BudgetImpl {
 
         for ct in CostType::variants() {
             b.inputs.push(0);
-            let cpu_model = b.cpu_insns.get_cost_model_mut(*ct);
-            cpu_model.const_param = PARAMS_CPU[*ct as usize][0];
-            cpu_model.log_param = PARAMS_CPU[*ct as usize][1];
-            cpu_model.log_base_param = PARAMS_CPU[*ct as usize][2];
-            cpu_model.lin_param = PARAMS_CPU[*ct as usize][3];
-            cpu_model.quad_param = PARAMS_CPU[*ct as usize][4];
-            let mem_model = b.mem_bytes.get_cost_model_mut(*ct);
-            mem_model.const_param = PARAMS_MEM[*ct as usize][0];
-            mem_model.log_param = PARAMS_MEM[*ct as usize][1];
-            mem_model.log_base_param = PARAMS_MEM[*ct as usize][2];
-            mem_model.lin_param = PARAMS_MEM[*ct as usize][3];
-            mem_model.quad_param = PARAMS_MEM[*ct as usize][4];
+            // set cpu params [const, log, log_base, lin, quad]
+            let cpu = &mut b.cpu_insns;
+            match ct {
+                CostType::WasmInsnExec => {
+                    // WASM instructions cost linear CPU instructions: 73 each.
+                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 73, 0]);
+                }
+                CostType::WasmMemAlloc => {
+                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 1, 0]);
+                }
+                CostType::HostEventDebug => {
+                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 100, 0]);
+                }
+                CostType::HostEventContract => {
+                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 100, 0]);
+                }
+                CostType::HostFunction => {
+                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 100, 0]);
+                }
+                CostType::VisitObject => {
+                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 10, 0]);
+                }
+                CostType::PushFrame => {
+                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 10, 0]);
+                }
+                CostType::PopFrame => {
+                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 10, 0]);
+                }
+                CostType::ValXdrConv => {
+                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 10, 0]);
+                }
+                CostType::ValSer => {
+                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 10, 0]);
+                }
+                CostType::ValDeser => {
+                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 10, 0]);
+                }
+                CostType::CloneEvents => {
+                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 10, 0]);
+                }
+                CostType::HostObjAllocSlot => {
+                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 10, 0]);
+                }
+                CostType::HostVecAllocCell => {
+                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 10, 0]);
+                }
+                CostType::HostMapAllocCell => {
+                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 10, 0]);
+                }
+                CostType::HostU64AllocCell => {
+                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 10, 0]);
+                }
+                CostType::HostI64AllocCell => {
+                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 10, 0]);
+                }
+                CostType::HostBinAllocCell => {
+                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 10, 0]);
+                }
+                CostType::HostBigIntAllocCell => {
+                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 10, 0]);
+                }
+                CostType::ComputeSha256Hash => {
+                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 0, 10]);
+                }
+                CostType::ComputeEd25519PubKey => {
+                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 0, 10]);
+                }
+                CostType::ImMapNew => {
+                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 10, 0]);
+                }
+                CostType::ImMapMutEntry => {
+                    cpu.get_cost_model_mut(*ct).set_params(&[0, 10, 2, 0, 0]);
+                }
+                CostType::ImMapImmutEntry => {
+                    cpu.get_cost_model_mut(*ct).set_params(&[0, 10, 2, 0, 0]);
+                }
+                CostType::ImVecNew => {
+                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 10, 0]);
+                }
+                CostType::ImVecMutEntry => {
+                    cpu.get_cost_model_mut(*ct).set_params(&[0, 10, 2, 0, 0]);
+                }
+                CostType::ImVecImmutEntry => {
+                    cpu.get_cost_model_mut(*ct).set_params(&[0, 10, 2, 0, 0]);
+                }
+                CostType::ScVecFromHostVec => {
+                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 10, 0]);
+                }
+                CostType::ScMapFromHostMap => {
+                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 10, 0]);
+                }
+                CostType::ScVecToHostVec => {
+                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 10, 0]);
+                }
+                CostType::ScMapToHostMap => {
+                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 10, 0]);
+                }
+                CostType::GuardFrame => {
+                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 10, 0]);
+                }
+                CostType::CloneVm => {
+                    cpu.get_cost_model_mut(*ct).set_params(&[1000, 0, 2, 0, 0]);
+                }
+                CostType::VerifyEd25519Sig => {
+                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 0, 10]);
+                }
+                CostType::BigIntNew => {
+                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 10, 0]);
+                }
+                CostType::BigIntAddSub => {
+                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 10, 0]);
+                }
+                CostType::BigIntMul => {
+                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 0, 10]);
+                }
+                CostType::BigIntDivRem => {
+                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 0, 10]);
+                }
+                CostType::BigIntBitwiseOp => {
+                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 10, 0]);
+                }
+                CostType::BigIntShift => {
+                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 10, 0]);
+                }
+                CostType::BigIntCmp => {
+                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 10, 0]);
+                }
+                CostType::BigIntGcdLcm => {
+                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 0, 10]);
+                }
+                CostType::BigIntPow => {
+                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 0, 10]);
+                }
+                CostType::BigIntPowMod => {
+                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 0, 10]);
+                }
+                CostType::BigIntSqrt => {
+                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 0, 10]);
+                }
+                CostType::BigIntFromBytes => {
+                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 10, 0]);
+                }
+                CostType::BigIntToBytes => {
+                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 10, 0]);
+                }
+                CostType::BigIntToRadix => {
+                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 10, 0]);
+                }
+                CostType::VmMemCpy => {
+                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 10, 0]);
+                }
+                CostType::VmInstantiation => {
+                    cpu.get_cost_model_mut(*ct).set_params(&[1000, 0, 2, 10, 0]);
+                }
+                CostType::VmInvokeFunction => {
+                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 10, 0]);
+                }
+                CostType::BytesClone => {
+                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 10, 0]);
+                }
+                CostType::BytesDel => {
+                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 10, 0]);
+                }
+                CostType::BytesPush => {
+                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 10, 0]);
+                }
+                CostType::BytesPop => {
+                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 10, 0]);
+                }
+                CostType::BytesInsert => {
+                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 10, 0]);
+                }
+                CostType::BytesAppend => {
+                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 10, 0]);
+                }
+                CostType::BytesSlice => {
+                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 10, 0]);
+                }
+                CostType::BytesConcat => {
+                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 10, 0]);
+                }
+                CostType::CallArgsUnpack => {
+                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 10, 0]);
+                }
+            }
+
+            // set mem params [const, log, log_base, lin, quad]
+            let mem = &mut b.mem_bytes;
+            match ct {
+                CostType::WasmInsnExec
+                | CostType::WasmMemAlloc
+                | CostType::HostEventDebug
+                | CostType::HostEventContract
+                | CostType::HostFunction
+                | CostType::VisitObject
+                | CostType::PushFrame
+                | CostType::PopFrame
+                | CostType::ValXdrConv
+                | CostType::ValSer
+                | CostType::ValDeser
+                | CostType::CloneEvents
+                | CostType::HostObjAllocSlot
+                | CostType::HostVecAllocCell
+                | CostType::HostMapAllocCell
+                | CostType::HostU64AllocCell
+                | CostType::HostI64AllocCell
+                | CostType::HostBinAllocCell
+                | CostType::HostBigIntAllocCell
+                | CostType::ComputeSha256Hash
+                | CostType::ComputeEd25519PubKey
+                | CostType::ImMapNew
+                | CostType::ImMapMutEntry
+                | CostType::ImMapImmutEntry
+                | CostType::ImVecNew
+                | CostType::ImVecMutEntry
+                | CostType::ImVecImmutEntry
+                | CostType::ScVecFromHostVec
+                | CostType::ScMapFromHostMap
+                | CostType::ScVecToHostVec
+                | CostType::ScMapToHostMap
+                | CostType::GuardFrame
+                | CostType::CloneVm
+                | CostType::VerifyEd25519Sig
+                | CostType::BigIntNew
+                | CostType::BigIntAddSub
+                | CostType::BigIntMul
+                | CostType::BigIntDivRem
+                | CostType::BigIntBitwiseOp
+                | CostType::BigIntShift
+                | CostType::BigIntCmp
+                | CostType::BigIntGcdLcm
+                | CostType::BigIntPow
+                | CostType::BigIntPowMod
+                | CostType::BigIntSqrt
+                | CostType::BigIntFromBytes
+                | CostType::BigIntToBytes
+                | CostType::BigIntToRadix
+                | CostType::VmMemCpy
+                | CostType::VmInstantiation
+                | CostType::VmInvokeFunction
+                | CostType::BytesClone
+                | CostType::BytesDel
+                | CostType::BytesPush
+                | CostType::BytesPop
+                | CostType::BytesInsert
+                | CostType::BytesAppend
+                | CostType::BytesSlice
+                | CostType::BytesConcat
+                | CostType::CallArgsUnpack => {
+                    // place holder of charging 1 byte for every input
+                    mem.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 1, 0]);
+                }
+            }
         }
 
         // For the time being we don't have "on chain" cost models
