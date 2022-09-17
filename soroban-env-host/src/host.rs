@@ -1048,7 +1048,7 @@ impl VmCallerCheckedEnv for Host {
 
     // Notes on metering: covered by the components
     fn log_value(&self, _vmcaller: &mut VmCaller<Host>, v: RawVal) -> Result<RawVal, HostError> {
-        self.record_debug_event(DebugEvent::new().msg("log").arg(v))?;
+        self.record_debug_event(DebugEvent::new().arg(v))?;
         Ok(RawVal::from_void())
     }
 
@@ -1686,7 +1686,7 @@ impl VmCallerCheckedEnv for Host {
         let res = self.call_n(contract, func, args.as_slice());
         if let Err(e) = &res {
             let evt = DebugEvent::new()
-                .msg("contract call invocation resulted in error")
+                .msg("contract call invocation resulted in error {}")
                 .arg::<RawVal>(e.status.into());
             self.record_debug_event(evt)?;
         }
