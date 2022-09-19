@@ -4,6 +4,7 @@ use crate::{
 };
 use core::{
     cmp::Ordering,
+    convert::TryFrom,
     fmt::Debug,
     hash::{Hash, Hasher},
 };
