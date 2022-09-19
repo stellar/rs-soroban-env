@@ -250,14 +250,6 @@ impl CostModel {
         res
     }
 
-    pub fn set_params(&mut self, params: &[u64; 5]) {
-        self.const_param = params[0];
-        self.log_param = params[1];
-        self.log_base_param = params[2];
-        self.lin_param = params[3];
-        self.quad_param = params[4];
-    }
-
     #[cfg(test)]
     pub fn reset(&mut self) {
         self.const_param = 0;
@@ -475,230 +467,118 @@ impl Default for BudgetImpl {
 
         for ct in CostType::variants() {
             b.inputs.push(0);
-            // set cpu params [const, log, log_base, lin, quad]
-            let cpu = &mut b.cpu_insns;
+
+            let cpu = &mut b.cpu_insns.get_cost_model_mut(*ct);
             match ct {
-                CostType::WasmInsnExec => {
-                    // WASM instructions cost linear CPU instructions: 73 each.
-                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 73, 0]);
+                CostType::WasmInsnExec => cpu.lin_param = 73,
+                CostType::WasmMemAlloc => cpu.lin_param = 1000,
+                CostType::HostEventDebug | CostType::HostEventContract | CostType::HostFunction => {
+                    cpu.const_param = 1000
                 }
-                CostType::WasmMemAlloc => {
-                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 1, 0]);
+                CostType::VisitObject | CostType::PushFrame | CostType::PopFrame => {
+                    cpu.const_param = 100
                 }
-                CostType::HostEventDebug => {
-                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 100, 0]);
-                }
-                CostType::HostEventContract => {
-                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 100, 0]);
-                }
-                CostType::HostFunction => {
-                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 100, 0]);
-                }
-                CostType::VisitObject => {
-                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 10, 0]);
-                }
-                CostType::PushFrame => {
-                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 10, 0]);
-                }
-                CostType::PopFrame => {
-                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 10, 0]);
-                }
-                CostType::ValXdrConv => {
-                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 10, 0]);
-                }
-                CostType::ValSer => {
-                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 10, 0]);
-                }
-                CostType::ValDeser => {
-                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 10, 0]);
-                }
-                CostType::CloneEvents => {
-                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 10, 0]);
-                }
-                CostType::HostObjAllocSlot => {
-                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 10, 0]);
-                }
-                CostType::HostVecAllocCell => {
-                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 10, 0]);
-                }
+                CostType::ValXdrConv | CostType::ValSer | CostType::ValDeser => cpu.lin_param = 10,
+                CostType::CloneEvents => cpu.lin_param = 10,
+                CostType::HostObjAllocSlot => cpu.lin_param = 1000,
+                CostType::HostVecAllocCell => cpu.lin_param = 300,
                 CostType::HostMapAllocCell => {
-                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 10, 0]);
+                    cpu.const_param = 2000;
+                    cpu.log_base_param = 64;
+                    cpu.log_param = 1;
                 }
-                CostType::HostU64AllocCell => {
-                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 10, 0]);
-                }
-                CostType::HostI64AllocCell => {
-                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 10, 0]);
-                }
-                CostType::HostBinAllocCell => {
-                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 10, 0]);
-                }
-                CostType::HostBigIntAllocCell => {
-                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 10, 0]);
-                }
+                CostType::HostU64AllocCell | CostType::HostI64AllocCell => (), // counted in HostObjAllocCell
+                CostType::HostBinAllocCell => cpu.lin_param = 10,
+                CostType::HostBigIntAllocCell => cpu.lin_param = 10,
+
                 CostType::ComputeSha256Hash => {
-                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 0, 10]);
+                    cpu.const_param = 3000;
+                    cpu.lin_param = 100;
                 }
-                CostType::ComputeEd25519PubKey => {
-                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 0, 10]);
-                }
-                CostType::ImMapNew => {
-                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 10, 0]);
-                }
-                CostType::ImMapMutEntry => {
-                    cpu.get_cost_model_mut(*ct).set_params(&[0, 10, 2, 0, 0]);
-                }
-                CostType::ImMapImmutEntry => {
-                    cpu.get_cost_model_mut(*ct).set_params(&[0, 10, 2, 0, 0]);
-                }
-                CostType::ImVecNew => {
-                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 10, 0]);
-                }
-                CostType::ImVecMutEntry => {
-                    cpu.get_cost_model_mut(*ct).set_params(&[0, 10, 2, 0, 0]);
-                }
-                CostType::ImVecImmutEntry => {
-                    cpu.get_cost_model_mut(*ct).set_params(&[0, 10, 2, 0, 0]);
-                }
-                CostType::ScVecFromHostVec => {
-                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 10, 0]);
-                }
-                CostType::ScMapFromHostMap => {
-                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 10, 0]);
-                }
-                CostType::ScVecToHostVec => {
-                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 10, 0]);
-                }
-                CostType::ScMapToHostMap => {
-                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 10, 0]);
-                }
-                CostType::GuardFrame => {
-                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 10, 0]);
-                }
-                CostType::CloneVm => {
-                    cpu.get_cost_model_mut(*ct).set_params(&[1000, 0, 2, 0, 0]);
-                }
+
+                CostType::ComputeEd25519PubKey => cpu.const_param = 40_000,
                 CostType::VerifyEd25519Sig => {
-                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 0, 10]);
+                    cpu.const_param = 1000;
+                    cpu.lin_param = 35;
                 }
-                CostType::BigIntNew => {
-                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 10, 0]);
+
+                CostType::ImMapNew => cpu.const_param = 2000,
+                CostType::ImMapMutEntry | CostType::ImMapImmutEntry => {
+                    cpu.const_param = 2000;
+                    cpu.log_base_param = 64;
+                    cpu.log_param = 10;
                 }
-                CostType::BigIntAddSub => {
-                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 10, 0]);
-                }
-                CostType::BigIntMul => {
-                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 0, 10]);
-                }
-                CostType::BigIntDivRem => {
-                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 0, 10]);
-                }
-                CostType::BigIntBitwiseOp => {
-                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 10, 0]);
-                }
-                CostType::BigIntShift => {
-                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 10, 0]);
-                }
-                CostType::BigIntCmp => {
-                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 10, 0]);
-                }
-                CostType::BigIntGcdLcm => {
-                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 0, 10]);
-                }
-                CostType::BigIntPow => {
-                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 0, 10]);
-                }
-                CostType::BigIntPowMod => {
-                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 0, 10]);
-                }
-                CostType::BigIntSqrt => {
-                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 0, 10]);
-                }
-                CostType::BigIntFromBytes => {
-                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 10, 0]);
-                }
-                CostType::BigIntToBytes => {
-                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 10, 0]);
-                }
-                CostType::BigIntToRadix => {
-                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 10, 0]);
-                }
-                CostType::VmMemCpy => {
-                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 10, 0]);
-                }
-                CostType::VmInstantiation => {
-                    cpu.get_cost_model_mut(*ct).set_params(&[1000, 0, 2, 10, 0]);
-                }
-                CostType::VmInvokeFunction => {
-                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 10, 0]);
-                }
-                CostType::BytesClone => {
-                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 10, 0]);
-                }
-                CostType::BytesDel => {
-                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 10, 0]);
-                }
-                CostType::BytesPush => {
-                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 10, 0]);
-                }
-                CostType::BytesPop => {
-                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 10, 0]);
-                }
-                CostType::BytesInsert => {
-                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 10, 0]);
-                }
-                CostType::BytesAppend => {
-                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 10, 0]);
-                }
-                CostType::BytesSlice => {
-                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 10, 0]);
-                }
-                CostType::BytesConcat => {
-                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 10, 0]);
-                }
-                CostType::CallArgsUnpack => {
-                    cpu.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 10, 0]);
-                }
+
+                CostType::ImVecNew => cpu.const_param = 1500,
+                CostType::ImVecMutEntry | CostType::ImVecImmutEntry => cpu.const_param = 300,
+                CostType::ScVecFromHostVec => cpu.lin_param = 10,
+                CostType::ScMapFromHostMap => cpu.lin_param = 10,
+                CostType::ScVecToHostVec => cpu.lin_param = 10,
+                CostType::ScMapToHostMap => cpu.lin_param = 10,
+                CostType::GuardFrame => cpu.lin_param = 10,
+                CostType::CloneVm => cpu.const_param = 1000,
+
+                CostType::BigIntNew
+                | CostType::BigIntAddSub
+                | CostType::BigIntBitwiseOp
+                | CostType::BigIntShift
+                | CostType::BigIntCmp => cpu.lin_param = 10,
+
+                CostType::BigIntGcdLcm
+                | CostType::BigIntPow
+                | CostType::BigIntPowMod
+                | CostType::BigIntMul
+                | CostType::BigIntDivRem
+                | CostType::BigIntSqrt => cpu.quad_param = 10,
+
+                CostType::BigIntFromBytes => cpu.lin_param = 10,
+                CostType::BigIntToBytes => cpu.lin_param = 10,
+                CostType::BigIntToRadix => cpu.lin_param = 10,
+
+                CostType::VmMemCpy => cpu.lin_param = 10,
+                CostType::VmInstantiation => cpu.const_param = 100_000,
+                CostType::VmInvokeFunction => cpu.const_param = 10_000,
+                CostType::BytesClone
+                | CostType::BytesDel
+                | CostType::BytesPush
+                | CostType::BytesPop
+                | CostType::BytesInsert
+                | CostType::BytesAppend
+                | CostType::BytesSlice
+                | CostType::BytesConcat => cpu.lin_param = 10,
+                CostType::CallArgsUnpack => cpu.lin_param = 10,
             }
 
-            // set mem params [const, log, log_base, lin, quad]
-            let mem = &mut b.mem_bytes;
+            let mem = b.mem_bytes.get_cost_model_mut(*ct);
             match ct {
-                CostType::WasmInsnExec
-                | CostType::WasmMemAlloc
-                | CostType::HostEventDebug
-                | CostType::HostEventContract
-                | CostType::HostFunction
+                CostType::WasmInsnExec => (),
+                CostType::WasmMemAlloc => mem.lin_param = 1,
+                CostType::HostEventDebug | CostType::HostEventContract => mem.const_param = 100,
+                CostType::HostFunction
                 | CostType::VisitObject
                 | CostType::PushFrame
-                | CostType::PopFrame
-                | CostType::ValXdrConv
-                | CostType::ValSer
-                | CostType::ValDeser
-                | CostType::CloneEvents
-                | CostType::HostObjAllocSlot
-                | CostType::HostVecAllocCell
+                | CostType::PopFrame => mem.const_param = 100,
+                CostType::ValXdrConv | CostType::ValSer | CostType::ValDeser => mem.lin_param = 1,
+                CostType::CloneEvents => mem.lin_param = 100,
+                CostType::HostObjAllocSlot => mem.const_param = 100,
+                CostType::HostVecAllocCell
                 | CostType::HostMapAllocCell
                 | CostType::HostU64AllocCell
-                | CostType::HostI64AllocCell
-                | CostType::HostBinAllocCell
-                | CostType::HostBigIntAllocCell
-                | CostType::ComputeSha256Hash
-                | CostType::ComputeEd25519PubKey
-                | CostType::ImMapNew
-                | CostType::ImMapMutEntry
-                | CostType::ImMapImmutEntry
-                | CostType::ImVecNew
-                | CostType::ImVecMutEntry
-                | CostType::ImVecImmutEntry
-                | CostType::ScVecFromHostVec
+                | CostType::HostI64AllocCell => (), // counted in ObjAllocSlot
+                CostType::HostBinAllocCell => mem.lin_param = 1,
+                CostType::HostBigIntAllocCell => mem.lin_param = 1,
+                CostType::ComputeSha256Hash | CostType::ComputeEd25519PubKey => (),
+                CostType::ImMapNew => mem.const_param = 3000,
+                CostType::ImMapMutEntry | CostType::ImMapImmutEntry => (),
+                CostType::ImVecNew => mem.const_param = 100,
+                CostType::ImVecMutEntry | CostType::ImVecImmutEntry => (),
+                CostType::ScVecFromHostVec
                 | CostType::ScMapFromHostMap
                 | CostType::ScVecToHostVec
-                | CostType::ScMapToHostMap
-                | CostType::GuardFrame
-                | CostType::CloneVm
-                | CostType::VerifyEd25519Sig
-                | CostType::BigIntNew
+                | CostType::ScMapToHostMap => mem.lin_param = 100,
+                CostType::GuardFrame | CostType::CloneVm => mem.const_param = 100,
+                CostType::VerifyEd25519Sig => (),
+                CostType::BigIntNew
                 | CostType::BigIntAddSub
                 | CostType::BigIntMul
                 | CostType::BigIntDivRem
@@ -711,8 +591,8 @@ impl Default for BudgetImpl {
                 | CostType::BigIntSqrt
                 | CostType::BigIntFromBytes
                 | CostType::BigIntToBytes
-                | CostType::BigIntToRadix
-                | CostType::VmMemCpy
+                | CostType::BigIntToRadix => mem.lin_param = 10,
+                CostType::VmMemCpy
                 | CostType::VmInstantiation
                 | CostType::VmInvokeFunction
                 | CostType::BytesClone
@@ -722,11 +602,8 @@ impl Default for BudgetImpl {
                 | CostType::BytesInsert
                 | CostType::BytesAppend
                 | CostType::BytesSlice
-                | CostType::BytesConcat
-                | CostType::CallArgsUnpack => {
-                    // place holder of charging 1 byte for every input
-                    mem.get_cost_model_mut(*ct).set_params(&[0, 0, 2, 1, 0]);
-                }
+                | CostType::BytesConcat => mem.lin_param = 1,
+                CostType::CallArgsUnpack => (),
             }
         }
 

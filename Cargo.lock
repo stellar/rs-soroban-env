@@ -655,6 +655,7 @@ dependencies = [
  "optimization",
  "parity-wasm",
  "perf-event",
+ "rand",
  "sha2 0.10.2",
  "soroban-env-common",
  "soroban-native-sdk-macros",
