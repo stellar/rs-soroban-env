@@ -4,6 +4,7 @@ use crate::{
 };
 use core::{
     cmp::Ordering,
+    convert::TryFrom,
     fmt::Debug,
     hash::{Hash, Hasher},
 };
@@ -266,6 +267,11 @@ impl Status {
     #[inline(always)]
     pub const fn is_ok(&self) -> bool {
         self.is_type(ScStatusType::Ok)
+    }
+
+    #[inline(always)]
+    pub const fn from_contract_error(code: u32) -> Status {
+        Self::from_type_and_code(ScStatusType::ContractError, code)
     }
 
     #[inline(always)]
