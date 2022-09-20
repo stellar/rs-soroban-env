@@ -7,7 +7,7 @@ use crate::{
         self, LedgerEntryData, LedgerKey, LedgerKeyContractData, ScContractCode, ScHostFnErrorCode,
         ScObject, ScStatic, ScVal, ScVec,
     },
-    CheckedEnv, Host, HostError, Symbol,
+    CheckedEnv, Host, HostError, RawVal, Symbol,
 };
 use hex::FromHex;
 use soroban_test_wasms::CREATE_CONTRACT;
@@ -166,8 +166,9 @@ fn create_contract_test() -> Result<(), HostError> {
         let del_res = host.del_contract_data(host.to_host_val(&key)?.to_raw());
         let code = ScHostFnErrorCode::InputArgsInvalid;
         assert!(HostError::result_matches_err_status(del_res, code));
-        Ok(())
-    })
+        Ok(RawVal::from_void())
+    })?;
+    Ok(())
 }
 
 /// VM tests
