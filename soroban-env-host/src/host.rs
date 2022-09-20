@@ -13,7 +13,7 @@ use soroban_env_common::{
 
 use soroban_env_common::xdr::{
     AccountId, ContractEvent, ContractEventBody, ContractEventType, ContractEventV0,
-    ExtensionPoint, Hash, PublicKey, ReadXdr, ThresholdIndexes, WriteXdr,
+    ExtensionPoint, Hash, PublicKey, ReadXdr, ScStatusType, ThresholdIndexes, WriteXdr,
 };
 
 use crate::budget::{Budget, CostType};
@@ -2519,5 +2519,20 @@ impl VmCallerCheckedEnv for Host {
         }
         let res = HostVec::from_vec(self.0.budget.clone(), outer)?;
         Ok(self.add_host_object(res)?.into())
+    }
+
+    fn fail_with_status(
+        &self,
+        vmcaller: &mut VmCaller<Self::VmUserState>,
+        status: Status,
+    ) -> Result<RawVal, Self::Error> {
+        if status.is_type(ScStatusType::ContractError) {
+            Err(self.err_status_msg(status, "failing with contract error status code"))
+        } else {
+            Err(self.err_status_msg(
+                ScHostValErrorCode::UnexpectedValType,
+                "contract attempted to fail with non-ContractError status code",
+            ))
+        }
     }
 }

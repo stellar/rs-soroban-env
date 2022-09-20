@@ -1,4 +1,4 @@
-use crate::{budget::CostType, Host, Object, RawVal, Symbol, VmCaller, VmCallerCheckedEnv};
+use crate::{budget::CostType, Host, Object, RawVal, Status, Symbol, VmCaller, VmCallerCheckedEnv};
 use soroban_env_common::call_macro_with_all_host_functions;
 use wasmi::core::{FromValue, Trap, TrapCode::UnexpectedSignature, Value};
 

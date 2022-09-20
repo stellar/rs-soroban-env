@@ -34,11 +34,11 @@ soroban-native-sdk-macros = { path = "../../soroban-native-sdk-macros" }
 
 # You should update this rev to the XDR rev used by the outer workspace
 # anytime you're going to recompile this workspace.
-stellar-xdr = { git = "https://github.com/stellar/rs-stellar-xdr", rev = "fee9a436" }
+stellar-xdr = { git = "https://github.com/stellar/rs-stellar-xdr", rev = "fb78a6b8" }
 
 # You should actually be able to set this to be any existing version of wasmi because we are
 # not building the SDK in host mode, so the "vm" feature is off.
-wasmi = { package = "soroban-wasmi", git = "https://github.com/stellar/wasmi", rev = "3bda8032" }
+wasmi = { package = "soroban-wasmi", git = "https://github.com/stellar/wasmi", rev = "a61b6df" }
 
 # The following SDK patch lines must denote an SDK version that is _compatible_
 # with the current version of soroban-env-guest and soroban-env-common, as found
@@ -93,8 +93,13 @@ wasmi = { package = "soroban-wasmi", git = "https://github.com/stellar/wasmi", r
 # when you change the Env trait itself, and whatever change you make to Env may
 # well cause recompilation to fail. Again, you will know if it doesn't compile!
 
-soroban-sdk = { git = "https://github.com/stellar/rs-soroban-sdk", rev = "e10f13cbe3c5c2dc3d7a3d0bc3616467352181b0" }
-soroban-sdk-macros = { git = "https://github.com/stellar/rs-soroban-sdk", rev = "e10f13cbe3c5c2dc3d7a3d0bc3616467352181b0" }
+soroban-sdk = { git = "https://github.com/stellar/rs-soroban-sdk", rev = "8c35444b52ce5b59edde69415ff4cb7f9127b983" }
+soroban-sdk-macros = { git = "https://github.com/stellar/rs-soroban-sdk", rev = "8c35444b52ce5b59edde69415ff4cb7f9127b983" }
+soroban-spec = { git = "https://github.com/stellar/rs-soroban-sdk", rev = "8c35444b52ce5b59edde69415ff4cb7f9127b983" }
+
+# soroban-auth is currently not-used by these examples, but is in the SDK repo
+# and must be patched in lock-step with the others if it's ever used here.
+# soroban-auth = { git = "https://github.com/stellar/rs-soroban-sdk", rev = "8c35444b52ce5b59edde69415ff4cb7f9127b983" }
 
 [profile.release]
 opt-level = "z"

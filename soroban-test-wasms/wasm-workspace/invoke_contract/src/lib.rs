@@ -9,7 +9,7 @@ impl Contract {
         env.invoke_contract(
             &contract_id,
             &Symbol::from_str("add"),
-            vec![&env, x.into_env_val(&env), y.into_env_val(&env)],
+            vec![&env, x.into_val(&env), y.into_val(&env)],
         )
     }
 }

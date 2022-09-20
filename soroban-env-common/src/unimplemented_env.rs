@@ -1,4 +1,4 @@
-use super::{call_macro_with_all_host_functions, Env, EnvBase, Object, RawVal, Symbol};
+use super::{call_macro_with_all_host_functions, Env, EnvBase, Object, RawVal, Status, Symbol};
 use core::any;
 
 /// A dummy implementation of the [Env] trait that fails with `unimplemented!()` in

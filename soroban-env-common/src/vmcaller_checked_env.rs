@@ -2,7 +2,7 @@
 use crate::xdr::ScHostContextErrorCode;
 
 use crate::call_macro_with_all_host_functions;
-use crate::{Object, RawVal, Symbol};
+use crate::{Object, RawVal, Status, Symbol};
 use core::fmt::Debug;
 #[cfg(not(feature = "vm"))]
 use core::marker::PhantomData;
