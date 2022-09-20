@@ -129,8 +129,8 @@ impl<E: Env> IntoVal<E, RawVal> for RawVal {
 
 impl<E: Env> TryIntoVal<E, RawVal> for RawVal {
     type Error = Infallible;
-    fn try_into_val(_env: &E, val: RawVal) -> Result<Self, Self::Error> {
-        Ok(val)
+    fn try_into_val(self, _env: &E) -> Result<RawVal, Self::Error> {
+        Ok(self)
     }
 }
 
