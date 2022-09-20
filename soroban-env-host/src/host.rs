@@ -254,7 +254,7 @@ impl Host {
         // Notes on metering: the length of topics and the complexity of data
         // have been covered by various `ValXdrConv` charges. Here we charge 1
         // unit just for recording this event.
-        self.charge_budget(CostType::HostEventDebug, 1)
+        self.charge_budget(CostType::HostEventContract, 1)
     }
 
     pub(crate) fn visit_storage<F, U>(&self, f: F) -> Result<U, HostError>
@@ -284,8 +284,6 @@ impl Host {
     /// operation fails, it can be used to roll the [`Host`] back to the state
     /// it had before its associated [`Frame`] was pushed.
     fn push_frame(&self, frame: Frame) -> Result<RollbackPoint, HostError> {
-        // Charges 1 unit instead of `map.len()` units because of OrdMap's
-        // sub-structure sharing that makes cloning cheap.
         self.charge_budget(CostType::PushFrame, 1)?;
         self.0.context.borrow_mut().push(frame);
         Ok(RollbackPoint {
@@ -590,7 +588,6 @@ impl Host {
             }
             HostObject::BigInt(bi) => {
                 self.charge_budget(CostType::HostBigIntAllocCell, bi.bits() as u64)?;
-                // TODO: are we double counting by charging bi.bits()?
             }
             HostObject::ContractCode(_) => {}
         }
@@ -1048,7 +1045,7 @@ impl VmCallerCheckedEnv for Host {
 
     // Notes on metering: covered by the components
     fn log_value(&self, _vmcaller: &mut VmCaller<Host>, v: RawVal) -> Result<RawVal, HostError> {
-        self.record_debug_event(DebugEvent::new().msg("log").arg(v))?;
+        self.record_debug_event(DebugEvent::new().arg(v))?;
         Ok(RawVal::from_void())
     }
 
@@ -1686,7 +1683,7 @@ impl VmCallerCheckedEnv for Host {
         let res = self.call_n(contract, func, args.as_slice());
         if let Err(e) = &res {
             let evt = DebugEvent::new()
-                .msg("contract call invocation resulted in error")
+                .msg("contract call invocation resulted in error {}")
                 .arg::<RawVal>(e.status.into());
             self.record_debug_event(evt)?;
         }
