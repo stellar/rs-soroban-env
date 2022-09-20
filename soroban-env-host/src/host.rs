@@ -332,14 +332,27 @@ impl Host {
     // Notes on metering: `GuardFrame` charges on the work done on protecting the `context`.
     /// It does not cover the cost of the actual closure call. The closure needs to be
     /// metered separately.
-    pub(crate) fn with_frame<F, U>(&self, frame: Frame, f: F) -> Result<U, HostError>
+    pub(crate) fn with_frame<F>(&self, frame: Frame, f: F) -> Result<RawVal, HostError>
     where
-        F: FnOnce() -> Result<U, HostError>,
+        F: FnOnce() -> Result<RawVal, HostError>,
     {
         self.charge_budget(CostType::GuardFrame, 1)?;
         let start_depth = self.0.context.borrow().len();
         let rp = self.push_frame(frame)?;
         let res = f();
+        let res = match res {
+            Ok(v) if v.is::<Status>() => {
+                let st: Status = v.try_into()?;
+                if st.is_ok() {
+                    // Transform Status::OK => Ok(())
+                    Ok(RawVal::from_void())
+                } else {
+                    // All other Status::N => Err(N)
+                    Err(self.err_status(st))
+                }
+            }
+            res => res,
+        };
         if res.is_err() {
             // Pop and rollback on error.
             self.pop_frame(Some(rp))?;

@@ -4,7 +4,7 @@ use crate::{
         ContractEvent, ContractEventBody, ContractEventType, ContractEventV0, ExtensionPoint, Hash,
         ScMap, ScMapEntry, ScObject::Map, ScVal,
     },
-    ContractFunctionSet, Env, EnvBase, Host, HostError, RawVal, Status, Symbol,
+    ContractFunctionSet, Env, EnvBase, Host, HostError, RawVal, Symbol,
 };
 use std::rc::Rc;
 
@@ -34,7 +34,7 @@ fn contract_event() -> Result<(), HostError> {
     host.register_test_contract(id, test_contract)?;
     assert_eq!(
         host.call(id, sym.into(), args.into()).get_payload(),
-        Status::OK.to_raw().get_payload()
+        RawVal::from_void().get_payload()
     );
 
     let event_ref = ContractEvent {
