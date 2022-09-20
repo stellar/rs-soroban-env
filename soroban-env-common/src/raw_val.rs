@@ -114,10 +114,23 @@ impl<E: Env> FromVal<E, RawVal> for RawVal {
     }
 }
 
+impl<E: Env> FromVal<E, &RawVal> for RawVal {
+    fn from_val(_env: &E, val: &RawVal) -> Self {
+        *val
+    }
+}
+
 impl<E: Env> TryFromVal<E, RawVal> for RawVal {
     type Error = Infallible;
     fn try_from_val(_env: &E, val: RawVal) -> Result<Self, Self::Error> {
         Ok(val)
+    }
+}
+
+impl<E: Env> TryFromVal<E, &RawVal> for RawVal {
+    type Error = Infallible;
+    fn try_from_val(_env: &E, val: &RawVal) -> Result<Self, Self::Error> {
+        Ok(*val)
     }
 }
 
@@ -127,10 +140,23 @@ impl<E: Env> IntoVal<E, RawVal> for RawVal {
     }
 }
 
+impl<E: Env> IntoVal<E, RawVal> for &RawVal {
+    fn into_val(self, _env: &E) -> RawVal {
+        *self
+    }
+}
+
 impl<E: Env> TryIntoVal<E, RawVal> for RawVal {
     type Error = Infallible;
     fn try_into_val(self, _env: &E) -> Result<RawVal, Self::Error> {
         Ok(self)
+    }
+}
+
+impl<E: Env> TryIntoVal<E, RawVal> for &RawVal {
+    type Error = Infallible;
+    fn try_into_val(self, _env: &E) -> Result<RawVal, Self::Error> {
+        Ok(*self)
     }
 }
 
