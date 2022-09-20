@@ -127,6 +127,13 @@ impl<E: Env> IntoVal<E, RawVal> for RawVal {
     }
 }
 
+impl<E: Env> TryIntoVal<E, RawVal> for RawVal {
+    type Error = Infallible;
+    fn try_into_val(_env: &E, val: RawVal) -> Result<Self, Self::Error> {
+        Ok(val)
+    }
+}
+
 // This is a 0-arg struct rather than an enum to ensure it completely compiles
 // away, the same way `()` would, while remaining a separate type to allow
 // conversion to a more-structured error code at a higher level.
