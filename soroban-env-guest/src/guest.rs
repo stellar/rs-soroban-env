@@ -32,31 +32,46 @@ impl EnvBase for Guest {
         unimplemented!()
     }
 
-    fn bytes_copy_from_slice(&self, b: Object, b_pos: RawVal, mem: &[u8]) -> Object {
+    fn bytes_copy_from_slice(
+        &self,
+        b: Object,
+        b_pos: RawVal,
+        mem: &[u8],
+    ) -> Result<Object, Status> {
         unimplemented!()
     }
 
-    fn bytes_copy_to_slice(&self, b: Object, b_pos: RawVal, mem: &mut [u8]) {
+    fn bytes_copy_to_slice(&self, b: Object, b_pos: RawVal, mem: &mut [u8]) -> Result<(), Status> {
         unimplemented!()
     }
 
-    fn bytes_new_from_slice(&self, mem: &[u8]) -> Object {
+    fn bytes_new_from_slice(&self, mem: &[u8]) -> Result<Object, Status> {
         unimplemented!()
     }
 
-    fn log_static_fmt_val(&self, fmt: &'static str, v: RawVal) {
+    fn log_static_fmt_val(&self, fmt: &'static str, v: RawVal) -> Result<(), Status> {
         unimplemented!()
     }
 
-    fn log_static_fmt_static_str(&self, fmt: &'static str, s: &'static str) {
+    fn log_static_fmt_static_str(&self, fmt: &'static str, s: &'static str) -> Result<(), Status> {
         unimplemented!()
     }
 
-    fn log_static_fmt_val_static_str(&self, fmt: &'static str, v: RawVal, s: &'static str) {
+    fn log_static_fmt_val_static_str(
+        &self,
+        fmt: &'static str,
+        v: RawVal,
+        s: &'static str,
+    ) -> Result<(), Status> {
         unimplemented!()
     }
 
-    fn log_static_fmt_general(&self, fmt: &'static str, vals: &[RawVal], strs: &[&'static str]) {
+    fn log_static_fmt_general(
+        &self,
+        fmt: &'static str,
+        vals: &[RawVal],
+        strs: &[&'static str],
+    ) -> Result<(), Status> {
         unimplemented!()
     }
 }
@@ -75,31 +90,39 @@ impl EnvBase for Guest {
         Self
     }
 
-    fn bytes_copy_from_slice(&self, b: Object, b_pos: RawVal, mem: &[u8]) -> Object {
+    fn bytes_copy_from_slice(
+        &self,
+        b: Object,
+        b_pos: RawVal,
+        mem: &[u8],
+    ) -> Result<Object, Status> {
         sa::assert_eq_size!(u32, *const u8);
         sa::assert_eq_size!(u32, usize);
         let lm_pos: RawVal = RawVal::from_u32(mem.as_ptr() as u32);
         let len: RawVal = RawVal::from_u32(mem.len() as u32);
-        self.bytes_copy_from_linear_memory(b, b_pos, lm_pos, len)
+        // NB: any failure in the host function here will trap the guest,
+        // not return, so we only have to code the happy path.
+        Ok(self.bytes_copy_from_linear_memory(b, b_pos, lm_pos, len))
     }
 
-    fn bytes_copy_to_slice(&self, b: Object, b_pos: RawVal, mem: &mut [u8]) {
+    fn bytes_copy_to_slice(&self, b: Object, b_pos: RawVal, mem: &mut [u8]) -> Result<(), Status> {
         sa::assert_eq_size!(u32, *const u8);
         sa::assert_eq_size!(u32, usize);
         let lm_pos: RawVal = RawVal::from_u32(mem.as_ptr() as u32);
         let len: RawVal = RawVal::from_u32(mem.len() as u32);
         self.bytes_copy_to_linear_memory(b, b_pos, lm_pos, len);
+        Ok(())
     }
 
-    fn bytes_new_from_slice(&self, mem: &[u8]) -> Object {
+    fn bytes_new_from_slice(&self, mem: &[u8]) -> Result<Object, Status> {
         sa::assert_eq_size!(u32, *const u8);
         sa::assert_eq_size!(u32, usize);
         let lm_pos: RawVal = RawVal::from_u32(mem.as_ptr() as u32);
         let len: RawVal = RawVal::from_u32(mem.len() as u32);
-        self.bytes_new_from_linear_memory(lm_pos, len)
+        Ok(self.bytes_new_from_linear_memory(lm_pos, len))
     }
 
-    fn log_static_fmt_val(&self, fmt: &'static str, v: RawVal) {
+    fn log_static_fmt_val(&self, fmt: &'static str, v: RawVal) -> Result<(), Status> {
         // TODO: It's possible we might want to do something in the wasm
         // case with static strings similar to the bytes functions above,
         // eg. decay the strings to u32 values and pass them to the host as linear
@@ -111,18 +134,32 @@ impl EnvBase for Guest {
         // it makes the debug buffer into non-Send+Sync and then we need
         // to remove it from the HostError, report separately from HostError's
         // Debug impl)
+        Ok(())
     }
 
-    fn log_static_fmt_static_str(&self, fmt: &'static str, s: &'static str) {
+    fn log_static_fmt_static_str(&self, fmt: &'static str, s: &'static str) -> Result<(), Status> {
         // Intentionally a no-op in this cfg. See above.
+        Ok(())
     }
 
-    fn log_static_fmt_val_static_str(&self, fmt: &'static str, v: RawVal, s: &'static str) {
+    fn log_static_fmt_val_static_str(
+        &self,
+        fmt: &'static str,
+        v: RawVal,
+        s: &'static str,
+    ) -> Result<(), Status> {
         // Intentionally a no-op in this cfg. See above.
+        Ok(())
     }
 
-    fn log_static_fmt_general(&self, fmt: &'static str, vals: &[RawVal], strs: &[&'static str]) {
+    fn log_static_fmt_general(
+        &self,
+        fmt: &'static str,
+        vals: &[RawVal],
+        strs: &[&'static str],
+    ) -> Result<(), Status> {
         // Intentionally a no-op in this cfg. See above.
+        Ok(())
     }
 }
 

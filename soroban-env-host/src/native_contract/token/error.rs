@@ -1,10 +1,16 @@
 use crate::host::HostError;
-use soroban_env_common::ConversionError;
+use soroban_env_common::{ConversionError, Status};
 
 #[derive(Debug)]
 pub enum Error {
     HostError(HostError),
     ContractError,
+}
+
+impl From<Status> for Error {
+    fn from(s: Status) -> Self {
+        Error::HostError(s.into())
+    }
 }
 
 impl From<ConversionError> for Error {

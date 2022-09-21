@@ -127,7 +127,9 @@ impl<E: Env, V> TryFromVal<E, V> for EnvVal<E, V> {
 }
 
 pub(crate) fn log_err_convert<T>(env: &impl Env, val: &impl AsRef<RawVal>) {
-    env.log_static_fmt_val_static_str(
+    // Logging here is best-effort; ignore failures (they only arise if we're
+    // out of gas or something otherwise-unrecoverable).
+    let _ = env.log_static_fmt_val_static_str(
         "can't convert {} to {}",
         *val.as_ref(),
         core::any::type_name::<T>(),

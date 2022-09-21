@@ -975,71 +975,84 @@ impl EnvBase for Host {
         new_host
     }
 
-    fn bytes_copy_from_slice(&self, b: Object, b_pos: RawVal, mem: &[u8]) -> Object {
+    fn bytes_copy_from_slice(
+        &self,
+        b: Object,
+        b_pos: RawVal,
+        mem: &[u8],
+    ) -> Result<Object, Status> {
         // This is only called from native contracts, either when testing or
         // when the contract is otherwise linked into the same address space as
         // us. We therefore access the memory we were passed directly.
-        //
-        // This is also why we _panic_ on errors in here, rather than attempting
-        // to return a recoverable error code: native contracts that call this
-        // function do so through APIs that _should_ never pass bad data.
-        //
-        // TODO: we may revisit this choice of panicing in the future, depending
-        // on how we choose to try to contain panics-caused-by-native-contracts.
-        let b_pos = u32::try_from(b_pos).expect("pos input is not u32");
-        let len = u32::try_from(mem.len()).expect("slice len exceeds u32");
+        let b_pos = u32::try_from(b_pos).map_err(|_| ScHostValErrorCode::UnexpectedValType)?;
+        let len = u32::try_from(mem.len()).map_err(|_| ScHostValErrorCode::U32OutOfRange)?;
         let mut vnew = self
             .visit_obj(b, |hv: &Vec<u8>| Ok(hv.clone()))
-            .expect("access to unknown host bytes object");
-        let end_idx = b_pos.checked_add(len).expect("u32 overflow") as usize;
+            .map_err(|he| he.status)?;
+        let end_idx = b_pos
+            .checked_add(len)
+            .ok_or(ScHostValErrorCode::U32OutOfRange)? as usize;
         // TODO: we currently grow the destination vec if it's not big enough,
         // make sure this is desirable behaviour.
         if end_idx > vnew.len() {
             vnew.resize(end_idx, 0);
         }
+        self.validate_index_lt_bound(b_pos, vnew.len())
+            .map_err(|he| he.status)?;
         let write_slice = &mut vnew[b_pos as usize..end_idx];
         write_slice.copy_from_slice(mem);
         self.add_host_object(vnew)
-            .expect("unable to add host object")
-            .into()
+            .map(|ev| ev.into())
+            .map_err(|he| he.status)
     }
 
-    fn bytes_copy_to_slice(&self, b: Object, b_pos: RawVal, mem: &mut [u8]) {
-        let b_pos = u32::try_from(b_pos).expect("pos input is not u32");
-        let len = u32::try_from(mem.len()).expect("slice len exceeds u32");
+    fn bytes_copy_to_slice(&self, b: Object, b_pos: RawVal, mem: &mut [u8]) -> Result<(), Status> {
+        let b_pos = u32::try_from(b_pos).map_err(|_| ScHostValErrorCode::UnexpectedValType)?;
+        let len = u32::try_from(mem.len()).map_err(|_| ScHostValErrorCode::U32OutOfRange)?;
         self.visit_obj(b, move |hv: &Vec<u8>| {
-            let end_idx = b_pos.checked_add(len).expect("u32 overflow") as usize;
-            if end_idx > hv.len() {
-                panic!("index out of bounds");
-            }
-            mem.copy_from_slice(&hv.as_slice()[b_pos as usize..end_idx]);
+            let end_idx = b_pos
+                .checked_add(len)
+                .ok_or(ScHostValErrorCode::U32OutOfRange)?;
+            self.validate_index_lt_bound(b_pos, mem.len())?;
+            self.validate_index_le_bound(end_idx, mem.len())?;
+            mem.copy_from_slice(&hv.as_slice()[b_pos as usize..end_idx as usize]);
             Ok(())
         })
-        .expect("access to unknown host object");
+        .map_err(|he| he.status)
     }
 
-    fn bytes_new_from_slice(&self, mem: &[u8]) -> Object {
+    fn bytes_new_from_slice(&self, mem: &[u8]) -> Result<Object, Status> {
         self.add_host_object::<Vec<u8>>(mem.into())
-            .expect("unable to add host bytes object")
-            .into()
+            .map(|ev| ev.val)
+            .map_err(|he| he.status)
     }
 
-    fn log_static_fmt_val(&self, fmt: &'static str, v: RawVal) {
+    fn log_static_fmt_val(&self, fmt: &'static str, v: RawVal) -> Result<(), Status> {
         self.record_debug_event(DebugEvent::new().msg(fmt).arg(v))
-            .expect("unable to record debug event")
+            .map_err(|he| he.status)
     }
 
-    fn log_static_fmt_static_str(&self, fmt: &'static str, s: &'static str) {
+    fn log_static_fmt_static_str(&self, fmt: &'static str, s: &'static str) -> Result<(), Status> {
         self.record_debug_event(DebugEvent::new().msg(fmt).arg(s))
-            .expect("unable to record debug event")
+            .map_err(|he| he.status)
     }
 
-    fn log_static_fmt_val_static_str(&self, fmt: &'static str, v: RawVal, s: &'static str) {
+    fn log_static_fmt_val_static_str(
+        &self,
+        fmt: &'static str,
+        v: RawVal,
+        s: &'static str,
+    ) -> Result<(), Status> {
         self.record_debug_event(DebugEvent::new().msg(fmt).arg(v).arg(s))
-            .expect("unable to record debug event")
+            .map_err(|he| he.status)
     }
 
-    fn log_static_fmt_general(&self, fmt: &'static str, vals: &[RawVal], strs: &[&'static str]) {
+    fn log_static_fmt_general(
+        &self,
+        fmt: &'static str,
+        vals: &[RawVal],
+        strs: &[&'static str],
+    ) -> Result<(), Status> {
         let mut evt = DebugEvent::new().msg(fmt);
         for v in vals {
             evt = evt.arg(*v)
@@ -1047,8 +1060,7 @@ impl EnvBase for Host {
         for s in strs {
             evt = evt.arg(*s)
         }
-        self.record_debug_event(evt)
-            .expect("unable to record debug event")
+        self.record_debug_event(evt).map_err(|he| he.status)
     }
 }
 

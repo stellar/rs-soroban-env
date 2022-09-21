@@ -99,7 +99,7 @@ fn bytes_put_out_of_bound() -> Result<(), HostError> {
 #[test]
 fn bytes_slice_start_greater_than_end() -> Result<(), HostError> {
     let host = Host::default();
-    let obj = host.bytes_new_from_slice(&[1, 2, 3, 4]);
+    let obj = host.bytes_new_from_slice(&[1, 2, 3, 4])?;
     let res = host.bytes_slice(obj, 2_u32.into(), 1_u32.into());
     let code = ScHostFnErrorCode::InputArgsInvalid;
     assert!(HostError::result_matches_err_status(res, code));
@@ -109,7 +109,7 @@ fn bytes_slice_start_greater_than_end() -> Result<(), HostError> {
 #[test]
 fn bytes_slice_start_equal_len() -> Result<(), HostError> {
     let host = Host::default();
-    let obj = host.bytes_new_from_slice(&[1, 2, 3, 4]);
+    let obj = host.bytes_new_from_slice(&[1, 2, 3, 4])?;
     let res = host.bytes_slice(obj, 4_u32.into(), 4_u32.into())?;
     assert_eq!(host.obj_cmp(res.into(), host.bytes_new()?.into())?, 0);
     Ok(())
@@ -118,7 +118,7 @@ fn bytes_slice_start_equal_len() -> Result<(), HostError> {
 #[test]
 fn bytes_slice_start_greater_than_len() -> Result<(), HostError> {
     let host = Host::default();
-    let obj = host.bytes_new_from_slice(&[1, 2, 3, 4]);
+    let obj = host.bytes_new_from_slice(&[1, 2, 3, 4])?;
     let res = host.bytes_slice(obj, 5_u32.into(), 10_u32.into());
     let code = ScHostObjErrorCode::VecIndexOutOfBound;
     assert!(HostError::result_matches_err_status(res, code));
