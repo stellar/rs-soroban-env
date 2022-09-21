@@ -50,31 +50,46 @@ impl EnvBase for WeakHost {
         self.get_host().deep_clone().get_weak()
     }
 
-    fn bytes_copy_from_slice(&self, b: Object, b_pos: RawVal, mem: &[u8]) -> Object {
+    fn bytes_copy_from_slice(
+        &self,
+        b: Object,
+        b_pos: RawVal,
+        mem: &[u8],
+    ) -> Result<Object, Status> {
         self.get_host().bytes_copy_from_slice(b, b_pos, mem)
     }
 
-    fn bytes_copy_to_slice(&self, b: Object, b_pos: RawVal, mem: &mut [u8]) {
+    fn bytes_copy_to_slice(&self, b: Object, b_pos: RawVal, mem: &mut [u8]) -> Result<(), Status> {
         self.get_host().bytes_copy_to_slice(b, b_pos, mem)
     }
 
-    fn bytes_new_from_slice(&self, mem: &[u8]) -> Object {
+    fn bytes_new_from_slice(&self, mem: &[u8]) -> Result<Object, Status> {
         self.get_host().bytes_new_from_slice(mem)
     }
 
-    fn log_static_fmt_val(&self, fmt: &'static str, v: RawVal) {
+    fn log_static_fmt_val(&self, fmt: &'static str, v: RawVal) -> Result<(), Status> {
         self.get_host().log_static_fmt_val(fmt, v)
     }
 
-    fn log_static_fmt_static_str(&self, fmt: &'static str, s: &'static str) {
+    fn log_static_fmt_static_str(&self, fmt: &'static str, s: &'static str) -> Result<(), Status> {
         self.get_host().log_static_fmt_static_str(fmt, s)
     }
 
-    fn log_static_fmt_val_static_str(&self, fmt: &'static str, v: RawVal, s: &'static str) {
+    fn log_static_fmt_val_static_str(
+        &self,
+        fmt: &'static str,
+        v: RawVal,
+        s: &'static str,
+    ) -> Result<(), Status> {
         self.get_host().log_static_fmt_val_static_str(fmt, v, s)
     }
 
-    fn log_static_fmt_general(&self, fmt: &'static str, vals: &[RawVal], strs: &[&'static str]) {
+    fn log_static_fmt_general(
+        &self,
+        fmt: &'static str,
+        vals: &[RawVal],
+        strs: &[&'static str],
+    ) -> Result<(), Status> {
         self.get_host().log_static_fmt_general(fmt, vals, strs)
     }
 }

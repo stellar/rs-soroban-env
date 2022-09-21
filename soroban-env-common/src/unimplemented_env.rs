@@ -17,31 +17,55 @@ impl EnvBase for UnimplementedEnv {
         Self
     }
 
-    fn bytes_copy_from_slice(&self, _b: Object, _b_pos: RawVal, _mem: &[u8]) -> Object {
+    fn bytes_copy_from_slice(
+        &self,
+        _b: Object,
+        _b_pos: RawVal,
+        _mem: &[u8],
+    ) -> Result<Object, Status> {
         unimplemented!()
     }
 
-    fn bytes_copy_to_slice(&self, _b: Object, _b_pos: RawVal, _mem: &mut [u8]) {
+    fn bytes_copy_to_slice(
+        &self,
+        _b: Object,
+        _b_pos: RawVal,
+        _mem: &mut [u8],
+    ) -> Result<(), Status> {
         unimplemented!()
     }
 
-    fn bytes_new_from_slice(&self, _mem: &[u8]) -> Object {
+    fn bytes_new_from_slice(&self, _mem: &[u8]) -> Result<Object, Status> {
         unimplemented!()
     }
 
-    fn log_static_fmt_val(&self, _fmt: &'static str, _v: RawVal) {
+    fn log_static_fmt_val(&self, _fmt: &'static str, _v: RawVal) -> Result<(), Status> {
         unimplemented!()
     }
 
-    fn log_static_fmt_static_str(&self, _fmt: &'static str, _s: &'static str) {
+    fn log_static_fmt_static_str(
+        &self,
+        _fmt: &'static str,
+        _s: &'static str,
+    ) -> Result<(), Status> {
         unimplemented!()
     }
 
-    fn log_static_fmt_val_static_str(&self, _fmt: &'static str, _v: RawVal, _s: &'static str) {
+    fn log_static_fmt_val_static_str(
+        &self,
+        _fmt: &'static str,
+        _v: RawVal,
+        _s: &'static str,
+    ) -> Result<(), Status> {
         unimplemented!()
     }
 
-    fn log_static_fmt_general(&self, _fmt: &'static str, _vals: &[RawVal], _strs: &[&'static str]) {
+    fn log_static_fmt_general(
+        &self,
+        _fmt: &'static str,
+        _vals: &[RawVal],
+        _strs: &[&'static str],
+    ) -> Result<(), Status> {
         unimplemented!()
     }
 }

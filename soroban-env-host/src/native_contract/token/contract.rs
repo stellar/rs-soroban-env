@@ -273,10 +273,12 @@ impl TokenTrait for Token {
             _ => Err(Error::ContractError),
         }?;
         let mut args = Vec::new(e)?;
+        args.push(id.get_identifier(&e)?)?;
+        args.push(nonce.clone())?;
         args.push(amount.clone())?;
         check_auth(&e, id, nonce, Symbol::from_str("to_smart"), args)?;
 
-        transfer_classic_balance(e, id_key.clone(), amount)?;
+        transfer_classic_balance(e, id_key.clone(), -amount)?;
         receive_balance(
             &e,
             Identifier::Account(id_key),
@@ -295,10 +297,12 @@ impl TokenTrait for Token {
             _ => Err(Error::ContractError),
         }?;
         let mut args = Vec::new(e)?;
+        args.push(id.get_identifier(&e)?)?;
+        args.push(nonce.clone())?;
         args.push(amount.clone())?;
         check_auth(&e, id, nonce, Symbol::from_str("to_classic"), args)?;
 
-        transfer_classic_balance(e, id_key.clone(), -amount)?;
+        transfer_classic_balance(e, id_key.clone(), amount)?;
         spend_balance(
             &e,
             Identifier::Account(id_key),

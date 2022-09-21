@@ -1,6 +1,6 @@
 use std::convert::TryInto;
 
-use soroban_env_common::{IntoVal, TryIntoVal};
+use soroban_env_common::TryIntoVal;
 
 use crate::{CheckedEnv, Host, HostError, Object, RawVal};
 
@@ -14,7 +14,7 @@ fn str_conversions() -> Result<(), HostError> {
     let raw = obj.to_raw();
     let s: String = raw.try_into_val(&host)?;
     assert_eq!(s, "abcdefghijklmnopqrstuvwxyz");
-    let raw: RawVal = s.into_val(&host);
+    let raw: RawVal = s.try_into_val(&host)?;
     let obj: Object = raw.try_into_val(&host)?;
     for (i, c) in ('a'..='z').enumerate() {
         let c_raw = host.bytes_get(obj, (i as u32).into())?;
