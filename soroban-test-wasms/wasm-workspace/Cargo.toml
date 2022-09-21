@@ -34,7 +34,7 @@ soroban-native-sdk-macros = { path = "../../soroban-native-sdk-macros" }
 
 # You should update this rev to the XDR rev used by the outer workspace
 # anytime you're going to recompile this workspace.
-stellar-xdr = { git = "https://github.com/stellar/rs-stellar-xdr", rev = "fb78a6b8" }
+stellar-xdr = { git = "https://github.com/stellar/rs-stellar-xdr", rev = "c026149" }
 
 # You should actually be able to set this to be any existing version of wasmi because we are
 # not building the SDK in host mode, so the "vm" feature is off.
