@@ -97,6 +97,10 @@ soroban-sdk = { git = "https://github.com/stellar/rs-soroban-sdk", rev = "8c3544
 soroban-sdk-macros = { git = "https://github.com/stellar/rs-soroban-sdk", rev = "8c35444b52ce5b59edde69415ff4cb7f9127b983" }
 soroban-spec = { git = "https://github.com/stellar/rs-soroban-sdk", rev = "8c35444b52ce5b59edde69415ff4cb7f9127b983" }
 
+# soroban-sdk = { path = "../../../rs-soroban-sdk/soroban-sdk" }
+# soroban-sdk-macros = { path = "../../../rs-soroban-sdk/soroban-sdk-macros"}
+# soroban-spec = { path = "../../../rs-soroban-sdk/soroban-spec" }
+
 # soroban-auth is currently not-used by these examples, but is in the SDK repo
 # and must be patched in lock-step with the others if it's ever used here.
 # soroban-auth = { git = "https://github.com/stellar/rs-soroban-sdk", rev = "8c35444b52ce5b59edde69415ff4cb7f9127b983" }
