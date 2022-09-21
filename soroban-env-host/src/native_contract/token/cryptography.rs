@@ -92,7 +92,7 @@ pub fn check_auth(
             } else {
                 e.get_invoking_contract()?;
                 Ok(())
-            }            
+            }
         }
         Signature::Ed25519(kea) => {
             let stored_nonce =
