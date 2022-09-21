@@ -34,7 +34,7 @@ soroban-native-sdk-macros = { path = "../../soroban-native-sdk-macros" }
 
 # You should update this rev to the XDR rev used by the outer workspace
 # anytime you're going to recompile this workspace.
-stellar-xdr = { git = "https://github.com/stellar/rs-stellar-xdr", rev = "fb78a6b8" }
+stellar-xdr = { git = "https://github.com/stellar/rs-stellar-xdr", rev = "c026149" }
 
 # You should actually be able to set this to be any existing version of wasmi because we are
 # not building the SDK in host mode, so the "vm" feature is off.
@@ -96,6 +96,10 @@ wasmi = { package = "soroban-wasmi", git = "https://github.com/stellar/wasmi", r
 soroban-sdk = { git = "https://github.com/stellar/rs-soroban-sdk", rev = "8c35444b52ce5b59edde69415ff4cb7f9127b983" }
 soroban-sdk-macros = { git = "https://github.com/stellar/rs-soroban-sdk", rev = "8c35444b52ce5b59edde69415ff4cb7f9127b983" }
 soroban-spec = { git = "https://github.com/stellar/rs-soroban-sdk", rev = "8c35444b52ce5b59edde69415ff4cb7f9127b983" }
+
+# soroban-sdk = { path = "../../../rs-soroban-sdk/soroban-sdk" }
+# soroban-sdk-macros = { path = "../../../rs-soroban-sdk/soroban-sdk-macros"}
+# soroban-spec = { path = "../../../rs-soroban-sdk/soroban-spec" }
 
 # soroban-auth is currently not-used by these examples, but is in the SDK repo
 # and must be patched in lock-step with the others if it's ever used here.
