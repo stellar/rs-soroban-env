@@ -30,15 +30,16 @@ pub trait EnvBase: Sized + Clone {
 
     /// Copy a slice of bytes from the caller's memory into an existing `Bytes`
     /// object the host, returning a new `Bytes`.
-    fn bytes_copy_from_slice(&self, b: Object, b_pos: RawVal, mem: &[u8]) -> Object;
+    fn bytes_copy_from_slice(&self, b: Object, b_pos: RawVal, mem: &[u8])
+        -> Result<Object, Status>;
 
     /// Copy a slice of bytes from a `Bytes` object in the host into the
     /// caller's memory.
-    fn bytes_copy_to_slice(&self, b: Object, b_pos: RawVal, mem: &mut [u8]);
+    fn bytes_copy_to_slice(&self, b: Object, b_pos: RawVal, mem: &mut [u8]) -> Result<(), Status>;
 
     /// Form a new `Bytes` object in the host from a slice of memory in the
     /// caller.
-    fn bytes_new_from_slice(&self, mem: &[u8]) -> Object;
+    fn bytes_new_from_slice(&self, mem: &[u8]) -> Result<Object, Status>;
 
     // As with the bytes functions above, these take _slices_ with definite
     // lifetimes. The first slice is interpreted as a (very restricted)
@@ -66,25 +67,35 @@ pub trait EnvBase: Sized + Clone {
     /// a simplified format string (supporting only positional `{}` markers) and
     /// a single [RawVal] argument that will be inserted at the marker in the
     /// format string.
-    fn log_static_fmt_val(&self, fmt: &'static str, v: RawVal);
+    fn log_static_fmt_val(&self, fmt: &'static str, v: RawVal) -> Result<(), Status>;
 
     /// Log a formatted debugging message to the debug log (if present), passing
     /// a simplified format string (supporting only positional `{}` markers) and
     /// a single string-slice argument that will be inserted at the marker in
     /// the format string.
-    fn log_static_fmt_static_str(&self, fmt: &'static str, s: &'static str);
+    fn log_static_fmt_static_str(&self, fmt: &'static str, s: &'static str) -> Result<(), Status>;
 
     /// Log a formatted debugging message to the debug log (if present), passing
     /// a simplified format string (supporting only positional `{}` markers) and
     /// both a [RawVal] and a string-slice argument, that will each be inserted
     /// at markers in the format string.
-    fn log_static_fmt_val_static_str(&self, fmt: &'static str, v: RawVal, s: &'static str);
+    fn log_static_fmt_val_static_str(
+        &self,
+        fmt: &'static str,
+        v: RawVal,
+        s: &'static str,
+    ) -> Result<(), Status>;
 
     /// Log a formatted debugging message to the debug log (if present), passing
     /// a simplified format string (supporting only positional `{}` markers) and
     /// both a slice of [RawVal]s and a slice of string-slice argument, that
     /// will be sequentially inserted at markers in the format string.
-    fn log_static_fmt_general(&self, fmt: &'static str, vals: &[RawVal], strs: &[&'static str]);
+    fn log_static_fmt_general(
+        &self,
+        fmt: &'static str,
+        vals: &[RawVal],
+        strs: &[&'static str],
+    ) -> Result<(), Status>;
 }
 
 ///////////////////////////////////////////////////////////////////////////////

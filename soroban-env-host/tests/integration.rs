@@ -36,7 +36,8 @@ fn debug_fmt() {
         "can't convert {} to {}",
         RawVal::from_i32(1),
         std::any::type_name::<Vec<u8>>(),
-    );
+    )
+    .unwrap();
 
     // Fish out the last debug event and check that it is
     // correct, and formats as expected.

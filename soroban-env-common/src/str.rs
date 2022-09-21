@@ -1,12 +1,13 @@
-use core::convert::Infallible;
-
-use crate::{Env, IntoVal, RawVal, TryIntoVal};
+use crate::{ConversionError, Env, RawVal, TryIntoVal};
 
 #[cfg(feature = "std")]
 use stellar_xdr::ScObjectType;
 
 #[cfg(feature = "std")]
-use crate::{ConversionError, Object, RawValConvertible, TryFromVal};
+use crate::{Object, RawValConvertible, TryFromVal};
+
+// TODO: these conversions happen as RawVal, but they actually take and produce
+// Objects; consider making the signatures tighter.
 
 #[cfg(feature = "std")]
 impl<E: Env> TryFromVal<E, RawVal> for String {
@@ -18,7 +19,8 @@ impl<E: Env> TryFromVal<E, RawVal> for String {
         if obj.is_obj_type(ScObjectType::Bytes) {
             let len = unsafe { <u32 as RawValConvertible>::unchecked_from_val(env.bytes_len(obj)) };
             let mut vec = std::vec![0; len as usize];
-            env.bytes_copy_to_slice(obj, RawVal::U32_ZERO, &mut vec);
+            env.bytes_copy_to_slice(obj, RawVal::U32_ZERO, &mut vec)
+                .map_err(|_| ConversionError)?;
             String::from_utf8(vec).map_err(|_| ConversionError)
         } else {
             Err(ConversionError)
@@ -36,51 +38,31 @@ impl<E: Env> TryIntoVal<E, String> for RawVal {
     }
 }
 
-impl<E: Env> IntoVal<E, RawVal> for &str {
-    #[inline(always)]
-    fn into_val(self, env: &E) -> RawVal {
-        env.bytes_new_from_slice(self.as_bytes()).to_raw()
-    }
-}
-
-#[cfg(feature = "std")]
-impl<E: Env> IntoVal<E, RawVal> for String {
-    #[inline(always)]
-    fn into_val(self, env: &E) -> RawVal {
-        <_ as IntoVal<E, RawVal>>::into_val(&self, env)
-    }
-}
-
-#[cfg(feature = "std")]
-impl<E: Env> IntoVal<E, RawVal> for &String {
-    #[inline(always)]
-    fn into_val(self, env: &E) -> RawVal {
-        <&str as IntoVal<E, RawVal>>::into_val(self, env)
-    }
-}
-
 impl<E: Env> TryIntoVal<E, RawVal> for &str {
-    type Error = Infallible;
+    type Error = ConversionError;
     #[inline(always)]
     fn try_into_val(self, env: &E) -> Result<RawVal, Self::Error> {
-        Ok(<_ as IntoVal<E, RawVal>>::into_val(self, env))
+        Ok(env
+            .bytes_new_from_slice(self.as_bytes())
+            .map_err(|_| ConversionError)?
+            .to_raw())
     }
 }
 
 #[cfg(feature = "std")]
 impl<E: Env> TryIntoVal<E, RawVal> for String {
-    type Error = Infallible;
+    type Error = ConversionError;
     #[inline(always)]
     fn try_into_val(self, env: &E) -> Result<RawVal, Self::Error> {
-        Ok(<_ as IntoVal<E, RawVal>>::into_val(self, env))
+        (&self).try_into_val(env)
     }
 }
 
 #[cfg(feature = "std")]
 impl<E: Env> TryIntoVal<E, RawVal> for &String {
-    type Error = Infallible;
+    type Error = ConversionError;
     #[inline(always)]
     fn try_into_val(self, env: &E) -> Result<RawVal, Self::Error> {
-        Ok(<_ as IntoVal<E, RawVal>>::into_val(self, env))
+        self.as_str().try_into_val(env)
     }
 }

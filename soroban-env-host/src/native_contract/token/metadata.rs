@@ -20,7 +20,7 @@ pub fn read_metadata(e: &Host) -> Result<Metadata, Error> {
 pub fn read_name(e: &Host) -> Result<Bytes, Error> {
     match read_metadata(e)? {
         Metadata::Token(token) => Ok(token.name),
-        Metadata::Native => Ok(Bytes::try_from_val(e, e.bytes_new_from_slice(b"native"))?),
+        Metadata::Native => Ok(Bytes::try_from_val(e, e.bytes_new_from_slice(b"native")?)?),
         Metadata::AlphaNum4(asset) => {
             let mut res: Bytes = asset.asset_code.into();
             res.push(b':')?;
@@ -39,7 +39,7 @@ pub fn read_name(e: &Host) -> Result<Bytes, Error> {
 pub fn read_symbol(e: &Host) -> Result<Bytes, Error> {
     match read_metadata(e)? {
         Metadata::Token(token) => Ok(token.symbol),
-        Metadata::Native => Ok(Bytes::try_from_val(e, e.bytes_new_from_slice(b"native"))?),
+        Metadata::Native => Ok(Bytes::try_from_val(e, e.bytes_new_from_slice(b"native")?)?),
         Metadata::AlphaNum4(asset) => Ok(asset.asset_code.into()),
         Metadata::AlphaNum12(asset) => Ok(asset.asset_code.into()),
     }
