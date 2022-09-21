@@ -88,28 +88,31 @@ pub fn check_auth(
     match auth {
         Signature::Contract => {
             if nonce.compare(&BigInt::from_u64(e, 0)?)? != Ordering::Equal {
-                panic!("nonce should be zero for Contract")
+                Err(Error::ContractError)
+            } else {
+                e.get_invoking_contract()?;
+                Ok(())
             }
-            e.get_invoking_contract()?;
-            Ok(())
         }
         Signature::Ed25519(kea) => {
             let stored_nonce =
                 read_and_increment_nonce(e, Identifier::Ed25519(kea.public_key.clone()))?;
             if nonce.compare(&stored_nonce)? != Ordering::Equal {
-                panic!("incorrect nonce")
+                Err(Error::ContractError)
+            } else {
+                check_ed25519_auth(e, kea, function, args)?;
+                Ok(())
             }
-            check_ed25519_auth(e, kea, function, args)?;
-            Ok(())
         }
         Signature::Account(kaa) => {
             let stored_nonce =
                 read_and_increment_nonce(e, Identifier::Ed25519(kaa.account_id.clone()))?;
             if nonce.compare(&stored_nonce)? != Ordering::Equal {
-                panic!("incorrect nonce")
+                Err(Error::ContractError)
+            } else {
+                check_account_auth(e, kaa, function, args)?;
+                Ok(())
             }
-            check_account_auth(e, kaa, function, args)?;
-            Ok(())
         }
     }
 }
