@@ -1080,6 +1080,28 @@ impl VmCallerCheckedEnv for Host {
         Ok(RawVal::from_void())
     }
 
+    fn log_fmt_values(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        fmt: Object,
+        args: Object,
+    ) -> Result<RawVal, HostError> {
+        if cfg!(feature = "hostfn_log_fmt_values") {
+            let fmt: String = self
+                .visit_obj(fmt, move |hv: &Vec<u8>| Ok(String::from_utf8(hv.clone())))?
+                .map_err(|_| {
+                    self.err_general("log_fmt_values fmt string contains is invalid utf8")
+                })?;
+            let args: HostVec = self.visit_obj(args, move |hv: &HostVec| Ok(hv.clone()))?;
+            self.record_debug_event(
+                DebugEvent::new()
+                    .msg(fmt)
+                    .args(args.iter().map(|arg| arg.to_raw())),
+            )?;
+        }
+        Ok(RawVal::from_void())
+    }
+
     // Notes on metering: covered by the components
     fn get_invoking_contract(&self, _vmcaller: &mut VmCaller<Host>) -> Result<Object, HostError> {
         let frames = self.0.context.borrow();

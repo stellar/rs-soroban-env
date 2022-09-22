@@ -1,4 +1,4 @@
-use std::fmt::Display;
+use std::{borrow::Cow, fmt::Display};
 
 use crate::{xdr, xdr::ContractEvent, RawVal, Status};
 #[cfg(feature = "vm")]
@@ -87,13 +87,13 @@ impl Display for DebugArg {
 /// [host::Host::debug_event](crate::host::Host::debug_event) for normal use.
 #[derive(Clone, Debug)]
 pub struct DebugEvent {
-    pub msg: Option<&'static str>,
+    pub msg: Option<Cow<'static, str>>,
     pub args: TinyVec<[DebugArg; 2]>,
 }
 
 impl core::fmt::Display for DebugEvent {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self.msg {
+        match &self.msg {
             None => {
                 for arg in self.args.iter() {
                     write!(f, "{}", arg)?;
@@ -116,13 +116,18 @@ impl DebugEvent {
         }
     }
 
-    pub fn msg(mut self, msg: &'static str) -> Self {
-        self.msg = Some(msg);
+    pub fn msg(mut self, msg: impl Into<Cow<'static, str>>) -> Self {
+        self.msg = Some(msg.into());
         self
     }
 
     pub fn arg<T: Into<DebugArg>>(mut self, arg: T) -> Self {
         self.args.push(arg.into());
+        self
+    }
+
+    pub fn args<T: Into<DebugArg>>(mut self, args: impl IntoIterator<Item = T>) -> Self {
+        self.args.extend(args.into_iter().map(|arg| arg.into()));
         self
     }
 }
