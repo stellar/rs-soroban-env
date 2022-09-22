@@ -125,6 +125,11 @@ impl DebugEvent {
         self.args.push(arg.into());
         self
     }
+
+    pub fn args<T: Into<DebugArg>>(mut self, args: impl IntoIterator<Item = T>) -> Self {
+        self.args.extend(args.into_iter().map(|arg| arg.into()));
+        self
+    }
 }
 
 /// Combines a [DebugEvent] with a [Status] that created it, typically
