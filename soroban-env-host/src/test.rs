@@ -15,6 +15,8 @@ mod budget_metering;
 #[cfg(feature = "testutils")]
 mod contract_event;
 #[cfg(feature = "vm")]
+mod hostile;
+#[cfg(feature = "vm")]
 mod invocation;
 #[cfg(all(feature = "vm", feature = "testutils"))]
 mod lifecycle;
