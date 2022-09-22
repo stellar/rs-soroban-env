@@ -1093,7 +1093,7 @@ impl VmCallerCheckedEnv for Host {
             )?;
             Ok(RawVal::from_void())
         } else {
-            Err(self.err_general("log_fmt_values unsupported outside debug builds"))
+            Err(self.err_general("log_fmt_values unsupported outside of debug-assertion builds of the host"))
         }
     }
 
