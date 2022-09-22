@@ -132,6 +132,8 @@ pub enum CostType {
     BytesConcat = 58,
     // Cost of unpacking args from a HostVec into a Vec<RawVal>
     CallArgsUnpack = 59,
+    // Cost of charging a value to the budgeting system.
+    ChargeBudget = 60,
 }
 
 // TODO: add XDR support for iterating over all the elements of an enum
@@ -198,6 +200,7 @@ impl CostType {
             CostType::BytesSlice,
             CostType::BytesConcat,
             CostType::CallArgsUnpack,
+            CostType::ChargeBudget,
         ];
         VARIANTS.iter()
     }
@@ -293,6 +296,8 @@ fn ceil_log_base(x_in: u64, base_in: u64) -> u64 {
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct BudgetDimension {
+    trapcode: ScVmErrorCode,
+
     /// A set of cost models that map input values (eg. event counts, object
     /// sizes) from some CostType to whatever concrete resource type is being
     /// tracked by this dimension (eg. cpu or memory). CostType enum values are
@@ -310,6 +315,20 @@ pub struct BudgetDimension {
 }
 
 impl BudgetDimension {
+    pub fn new(trapcode: ScVmErrorCode) -> Self {
+        let mut bd = Self {
+            trapcode,
+            cost_models: Default::default(),
+            limit: Default::default(),
+            count: Default::default(),
+        };
+        for _ct in CostType::variants() {
+            // TODO: load cost model for i from the chain.
+            bd.cost_models.push(CostModel::default());
+        }
+        bd
+    }
+
     pub fn get_cost_model(&self, ty: CostType) -> &CostModel {
         &self.cost_models[ty as usize]
     }
@@ -340,7 +359,7 @@ impl BudgetDimension {
         self.count = self.count.saturating_add(cm.evaluate(input));
         if self.is_over_budget() {
             // TODO: convert this to a proper error code type.
-            Err(ScVmErrorCode::TrapMemLimitExceeded.into())
+            Err(self.trapcode.into())
         } else {
             Ok(())
         }
@@ -352,21 +371,6 @@ impl BudgetDimension {
         for model in &mut self.cost_models {
             model.reset()
         }
-    }
-}
-
-impl Default for BudgetDimension {
-    fn default() -> Self {
-        let mut bd = Self {
-            cost_models: Default::default(),
-            limit: Default::default(),
-            count: Default::default(),
-        };
-        for _ct in CostType::variants() {
-            // TODO: load cost model for i from the chain.
-            bd.cost_models.push(CostModel::default());
-        }
-        bd
     }
 }
 
@@ -392,8 +396,17 @@ impl Budget {
     }
 
     pub fn charge(&self, ty: CostType, input: u64) -> Result<(), HostError> {
+        // println!("charging {} of {:?} (cpu budget: {}, mem budget: {})",
+        // input, ty, self.get_cpu_insns_count(), self.get_mem_bytes_count());
+        //
+        // NB: charging a cost-amount to the budgeting machinery itself seems to
+        // cost a similar amount as a single WASM instruction; so it's quite
+        // important to buffer WASM step counts before flushing to budgeting,
+        // and we add a constant charge here for "the cost of budget-counting"
+        // itself.
         self.get_input_mut(ty, |i| *i = i.saturating_add(input));
         self.mut_budget(|mut b| {
+            b.cpu_insns.charge(CostType::ChargeBudget, 1)?;
             b.cpu_insns.charge(ty, input)?;
             b.mem_bytes.charge(ty, input)
         })
@@ -460,8 +473,8 @@ impl Budget {
 impl Default for BudgetImpl {
     fn default() -> Self {
         let mut b = Self {
-            cpu_insns: Default::default(),
-            mem_bytes: Default::default(),
+            cpu_insns: BudgetDimension::new(ScVmErrorCode::TrapCpuLimitExceeded),
+            mem_bytes: BudgetDimension::new(ScVmErrorCode::TrapMemLimitExceeded),
             inputs: Default::default(),
         };
 
@@ -547,6 +560,7 @@ impl Default for BudgetImpl {
                 | CostType::BytesSlice
                 | CostType::BytesConcat => cpu.lin_param = 10,
                 CostType::CallArgsUnpack => cpu.lin_param = 10,
+                CostType::ChargeBudget => cpu.const_param = 50,
             }
 
             let mem = b.mem_bytes.get_cost_model_mut(*ct);
@@ -603,15 +617,13 @@ impl Default for BudgetImpl {
                 | CostType::BytesAppend
                 | CostType::BytesSlice
                 | CostType::BytesConcat => mem.lin_param = 1,
-                CostType::CallArgsUnpack => (),
+                CostType::CallArgsUnpack | CostType::ChargeBudget => (),
             }
         }
 
         // For the time being we don't have "on chain" cost models
         // so we just set some up here that we calibrated manually
         // in the adjacent benchmarks.
-        // WASM instructions cost linear CPU instructions: 73 each.
-        // Some "reasonable defaults": 640k of RAM and 100usec.
         //
         // We don't run for a time unit thought, we run for an estimated
         // (calibrated) number of CPU instructions.
@@ -619,14 +631,12 @@ impl Default for BudgetImpl {
         // Assuming 2ghz chips at 2 instructions per cycle, we can guess about
         // 4bn instructions / sec. So about 4000 instructions per usec, or 400k
         // instructions in a 100usec time budget, or about 5479 wasm instructions
-        // using the calibration above. Very roughly!
-        // b.mem_bytes.limit = 0xa_0000;
-        // b.cpu_insns.limit = 400_000;
-
+        // using the calibration above (73 CPU insns per wasm insn). Very roughly!
+        //
         // TODO: Set proper limits once all the machinary (including in SDK tests) is in place and models are calibrated.
         // For now we set a generous but finite limit for DOS prevention.
         b.cpu_insns.reset(40_000_000); // 100x the estimation above which corresponds to 10ms
-        b.mem_bytes.reset(0xa_0000);
+        b.mem_bytes.reset(0xa0_0000); // 10MB of memory
         b
     }
 }

@@ -18,6 +18,7 @@ resolver = "2"
 
 members = [
     "add_i32",
+    "fib",
     "contract_data",
     "create_contract",
     "invoke_contract",

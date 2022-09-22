@@ -115,7 +115,7 @@ pub(crate) struct HostImpl {
     // mainly because it's not really possible to achieve (the same budget is connected to many
     // metered sub-objects) but also because it's plausible that the person calling deep_clone
     // actually wants their clones to be metered by "the same" total budget
-    budget: Budget,
+    pub(crate) budget: Budget,
     events: RefCell<Events>,
     // Note: we're not going to charge metering for testutils because it's out of the scope
     // of what users will be charged for in production -- it's scaffolding for testing a contract,
@@ -127,6 +127,12 @@ pub(crate) struct HostImpl {
 // Host is a newtype on Rc<HostImpl> so we can impl Env for it below.
 #[derive(Default, Clone)]
 pub struct Host(pub(crate) Rc<HostImpl>);
+
+impl Debug for HostImpl {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "HostImpl(...)")
+    }
+}
 
 impl Debug for Host {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
