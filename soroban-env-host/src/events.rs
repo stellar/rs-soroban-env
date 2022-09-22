@@ -116,7 +116,7 @@ impl DebugEvent {
         }
     }
 
-    pub fn msg(mut self, msg: Cow<'static, str>) -> Self {
+    pub fn msg(mut self, msg: impl Into<Cow<'static, str>>) -> Self {
         self.msg = Some(msg.into());
         self
     }
@@ -154,7 +154,7 @@ impl DebugError {
     }
 
     pub fn msg(mut self, msg: &'static str) -> Self {
-        self.event = self.event.msg(msg.into());
+        self.event = self.event.msg(msg);
         self
     }
 
