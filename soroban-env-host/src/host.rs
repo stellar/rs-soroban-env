@@ -1098,10 +1098,8 @@ impl VmCallerCheckedEnv for Host {
                     .msg(fmt)
                     .args(args.iter().map(|arg| arg.to_raw())),
             )?;
-            Ok(RawVal::from_void())
-        } else {
-            Err(self.err_general("log_fmt_values not enabled in host"))
         }
+        Ok(RawVal::from_void())
     }
 
     // Notes on metering: covered by the components
