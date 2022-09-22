@@ -11,7 +11,11 @@
 mod dispatch;
 mod func_info;
 
-use crate::{budget::CostType, host::Frame, HostError};
+use crate::{
+    budget::CostType,
+    host::{Frame, HostImpl},
+    HostError,
+};
 use std::{cell::RefCell, io::Cursor, ops::RangeInclusive, rc::Rc};
 
 use super::{
@@ -30,19 +34,23 @@ use wasmi::{Engine, Instance, Linker, Module, StepMeter, Store};
 
 impl wasmi::core::HostError for HostError {}
 
-impl StepMeter for Host {
+impl StepMeter for HostImpl {
     fn max_insn_step(&self) -> u64 {
         256
     }
 
     fn charge_cpu(&self, insns: u64) -> Result<(), wasmi::core::TrapCode> {
         // TODO reconcile TrapCode with HostError better.
-        self.charge_budget(CostType::WasmInsnExec, insns)
+        self.budget
+            .clone()
+            .charge(CostType::WasmInsnExec, insns)
             .map_err(|_| wasmi::core::TrapCode::CpuLimitExceeded)
     }
 
     fn charge_mem(&self, bytes: u64) -> Result<(), wasmi::core::TrapCode> {
-        self.charge_budget(CostType::WasmMemAlloc, bytes)
+        self.budget
+            .clone()
+            .charge(CostType::WasmMemAlloc, bytes)
             .map_err(|_| wasmi::core::TrapCode::MemLimitExceeded)
     }
 }
@@ -170,6 +178,7 @@ impl Vm {
         Self::check_meta_section(host, &module)?;
 
         let mut store = Store::new(&engine, host.clone());
+        store.set_step_meter(host.0.clone());
         let mut linker = <Linker<Host>>::new();
 
         for hf in HOST_FUNCTIONS {
