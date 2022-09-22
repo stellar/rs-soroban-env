@@ -199,6 +199,17 @@ impl Host {
         }
     }
 
+    #[cfg(feature = "testutils")]
+    pub fn with_mut_ledger_info<F>(&self, mut f: F) -> Result<(), HostError>
+    where
+        F: FnMut(&mut LedgerInfo),
+    {
+        match self.0.ledger.borrow_mut().as_mut() {
+            None => Err(self.err_general("missing ledger info")),
+            Some(li) => Ok(f(li)),
+        }
+    }
+
     /// Helper for mutating the [`Budget`] held in this [`Host`], either to
     /// allocate it on contract creation or to deplete it on callbacks from
     /// the VM or host functions.
