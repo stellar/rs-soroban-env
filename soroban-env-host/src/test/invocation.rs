@@ -78,7 +78,7 @@ fn invoke_cross_contract_with_err() -> Result<(), HostError> {
         Some(HostEvent::Debug(de)) => {
             assert_eq!(
                 de.msg,
-                Some("contract call invocation resulted in error {}")
+                Some("contract call invocation resulted in error {}".into())
             );
             assert_eq!(de.args.len(), 1);
             if let DebugArg::Val(rv) = de.args[0] {
@@ -110,7 +110,7 @@ fn invoke_cross_contract_with_err() -> Result<(), HostError> {
         Some(HostEvent::Debug(de)) => {
             assert_eq!(
                 de.msg,
-                Some("contract call invocation resulted in error {}")
+                Some("contract call invocation resulted in error {}".into())
             );
             assert_eq!(de.args.len(), 1);
             if let DebugArg::Val(rv) = de.args[0] {
@@ -189,7 +189,7 @@ fn invoke_cross_contract_indirect_err() -> Result<(), HostError> {
         Some(HostEvent::Debug(de)) => {
             assert_eq!(
                 de.msg,
-                Some("contract call invocation resulted in error {}")
+                Some("contract call invocation resulted in error {}".into())
             );
             assert_eq!(de.args.len(), 1);
             if let DebugArg::Val(rv) = de.args[0] {
