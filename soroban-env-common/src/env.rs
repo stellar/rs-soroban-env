@@ -185,7 +185,7 @@ macro_rules! call_macro_with_all_host_functions {
                 {"9", fn fail_with_status(status:Status) -> RawVal }
                 // Record a debug event. Fmt must be a Bytes. Args must be a
                 // Vec. Void is returned.
-                {"a", fn log_fmt_general(fmt:Object, args:Object) -> RawVal }
+                {"a", fn log_fmt_values(fmt:Object, args:Object) -> RawVal }
             }
 
             mod u64 "u" {

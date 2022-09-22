@@ -1074,7 +1074,7 @@ impl VmCallerCheckedEnv for Host {
         Ok(RawVal::from_void())
     }
 
-    fn log_fmt_general(
+    fn log_fmt_values(
         &self,
         _vmcaller: &mut VmCaller<Host>,
         fmt: Object,
