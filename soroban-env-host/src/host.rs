@@ -200,7 +200,7 @@ impl Host {
     }
 
     #[cfg(feature = "testutils")]
-    pub fn with_mutable_ledger_info<F>(&self, mut f: F) -> Result<(), HostError>
+    pub fn with_mut_ledger_info<F>(&self, mut f: F) -> Result<(), HostError>
     where
         F: FnMut(&mut LedgerInfo),
     {
