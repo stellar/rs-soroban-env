@@ -1080,7 +1080,7 @@ impl VmCallerCheckedEnv for Host {
         fmt: Object,
         args: Object,
     ) -> Result<RawVal, HostError> {
-        if cfg!(debug_assertions) {
+        if cfg!(feature = "hostfn_log_fmt_values") {
             let fmt: String = self
                 .visit_obj(fmt, move |hv: &Vec<u8>| Ok(String::from_utf8(hv.clone())))?
                 .map_err(|_| {
@@ -1094,9 +1094,7 @@ impl VmCallerCheckedEnv for Host {
             )?;
             Ok(RawVal::from_void())
         } else {
-            Err(self.err_general(
-                "log_fmt_values unsupported outside of debug-assertion builds of the host",
-            ))
+            Err(self.err_general("log_fmt_values not enabled in host"))
         }
     }
 

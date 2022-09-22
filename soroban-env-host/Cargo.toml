@@ -41,6 +41,7 @@ soroban-test-wasms = { package = "soroban-test-wasms", path = "../soroban-test-w
 
 [features]
 vm = ["wasmi", "parity-wasm", "soroban-env-common/vm"]
+hostfn_log_fmt_values = []
 serde = ["soroban-env-common/serde"]
 testutils = []
 
