@@ -1132,7 +1132,7 @@ impl VmCallerCheckedEnv for Host {
     }
 
     // Notes on metering: covered by the components
-    /// TODO: Rename to get_source.
+    /// TODO: Rename to get_source. https://github.com/stellar/rs-soroban-env/issues/470
     fn get_invoking_contract(&self, _vmcaller: &mut VmCaller<Host>) -> Result<Object, HostError> {
         let frames = self.0.context.borrow();
         // the previous frame must exist and must be a contract

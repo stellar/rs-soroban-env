@@ -157,7 +157,7 @@ macro_rules! call_macro_with_all_host_functions {
                 /// Returns the account ID or contract ID invoking this
                 /// contract. Use get_source_type to determine the type of ID
                 /// returned.
-                /// TODO: Rename to get_source.
+                /// TODO: Rename to get_source. https://github.com/stellar/rs-soroban-env/issues/470
                 {"0", fn get_invoking_contract() -> Object }
                 {"1", fn obj_cmp(a:RawVal, b:RawVal) -> i64 }
                 /// Records a contract event. `topics` is expected to be a `SCVec` with
