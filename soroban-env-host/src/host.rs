@@ -1080,17 +1080,21 @@ impl VmCallerCheckedEnv for Host {
         fmt: Object,
         args: Object,
     ) -> Result<RawVal, HostError> {
-        let fmt: String = self
-            .visit_obj(fmt, move |hv: &Vec<u8>| Ok(String::from_utf8(hv.clone())))?
-            // TODO: Remove unwrap.
-            .unwrap();
-        let args: HostVec = self.visit_obj(args, move |hv: &HostVec| Ok(hv.clone()))?;
-        self.record_debug_event(
-            DebugEvent::new()
-                .msg(fmt)
-                .args(args.iter().map(|arg| arg.to_raw())),
-        )?;
-        Ok(RawVal::from_void())
+        if cfg!(debug_assertions) {
+            let fmt: String = self
+                .visit_obj(fmt, move |hv: &Vec<u8>| Ok(String::from_utf8(hv.clone())))?
+                // TODO: Remove unwrap.
+                .unwrap();
+            let args: HostVec = self.visit_obj(args, move |hv: &HostVec| Ok(hv.clone()))?;
+            self.record_debug_event(
+                DebugEvent::new()
+                    .msg(fmt)
+                    .args(args.iter().map(|arg| arg.to_raw())),
+            )?;
+            Ok(RawVal::from_void())
+        } else {
+            Err(self.err_general("log_fmt_values unsupported outside debug builds"))
+        }
     }
 
     // Notes on metering: covered by the components
