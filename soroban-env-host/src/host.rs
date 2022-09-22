@@ -1083,8 +1083,9 @@ impl VmCallerCheckedEnv for Host {
         if cfg!(debug_assertions) {
             let fmt: String = self
                 .visit_obj(fmt, move |hv: &Vec<u8>| Ok(String::from_utf8(hv.clone())))?
-                // TODO: Remove unwrap.
-                .unwrap();
+                .map_err(|_| {
+                    self.err_general("log_fmt_values fmt string contains is invalid utf8")
+                })?;
             let args: HostVec = self.visit_obj(args, move |hv: &HostVec| Ok(hv.clone()))?;
             self.record_debug_event(
                 DebugEvent::new()
