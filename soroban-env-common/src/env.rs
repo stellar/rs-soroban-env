@@ -153,11 +153,9 @@ macro_rules! call_macro_with_all_host_functions {
                 // This one variant of logging does not take a format string and
                 // is live in both Env=Guest and Env=Host configurations.
                 {"_", fn log_value(v:RawVal) -> RawVal }
-                /// Get the ID of the source invoking the contract as `Bytes`.
-                /// Returns the account ID or contract ID invoking this
-                /// contract. Use get_source_type to determine the type of ID
-                /// returned.
-                /// TODO: Rename to get_source. https://github.com/stellar/rs-soroban-env/issues/470
+                /// Get the contractID `Bytes` of the contract which invoked the
+                /// running contract. Traps if the running contract was not
+                /// invoked by a contract.
                 {"0", fn get_invoking_contract() -> Object }
                 {"1", fn obj_cmp(a:RawVal, b:RawVal) -> i64 }
                 /// Records a contract event. `topics` is expected to be a `SCVec` with
@@ -190,7 +188,11 @@ macro_rules! call_macro_with_all_host_functions {
                 {"a", fn log_fmt_values(fmt:Object, args:Object) -> RawVal }
                 /// Get whether the contract invocation is from an account or
                 /// another contract. Returns 0 for account, 1 for contract.
-                {"b", fn get_source_type() -> u32 }
+                {"b", fn get_invoker_type() -> u32 }
+                /// Get the accountID `Bytes` of the account which invoked the
+                /// running contract. Traps if the running contract was not
+                /// invoked by an account.
+                {"c", fn get_invoking_account() -> Object }
             }
 
             mod u64 "u" {

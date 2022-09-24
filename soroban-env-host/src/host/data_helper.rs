@@ -2,7 +2,7 @@ use soroban_env_common::xdr::HashIdPreimageSourceContractId;
 use soroban_env_common::CheckedEnv;
 
 use crate::budget::CostType;
-use crate::host::SourceType;
+use crate::host::InvokerType;
 use crate::xdr::{
     AccountEntry, AccountId, ContractDataEntry, Hash, HashIdPreimage, HashIdPreimageContractId,
     HashIdPreimageEd25519ContractId, LedgerEntry, LedgerEntryData, LedgerEntryExt, LedgerKey,
@@ -97,8 +97,8 @@ impl Host {
 
     // notes on metering: covers the key and salt. Rest are free.
     pub fn id_preimage_from_source_account(&self, salt: Uint256) -> Result<Vec<u8>, HostError> {
-        if self.get_source_type()? != SourceType::Account as u32 {
-            return Err(self.err_general("source is not an account"));
+        if self.get_invoker_type()? != InvokerType::Account as u32 {
+            return Err(self.err_general("invoker is not an account"));
         }
 
         let source_account = AccountId(PublicKey::PublicKeyTypeEd25519(

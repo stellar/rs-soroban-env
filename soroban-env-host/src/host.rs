@@ -98,7 +98,7 @@ struct VmSlice {
 
 #[derive(Debug, Clone, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(u32)]
-pub enum SourceType {
+pub enum InvokerType {
     Account = 0,
     Contract = 1,
 }
@@ -1146,53 +1146,59 @@ impl VmCallerCheckedEnv for Host {
         Ok(RawVal::from_void())
     }
 
-    // Notes on metering: covered by the components
-    /// TODO: Rename to get_source. https://github.com/stellar/rs-soroban-env/issues/470
-    fn get_invoking_contract(&self, _vmcaller: &mut VmCaller<Host>) -> Result<Object, HostError> {
-        let frames = self.0.context.borrow();
-        // the previous frame must exist and must be a contract
-        let contract_id: Option<Hash> = if frames.len() >= 2 {
-            match &frames[frames.len() - 2] {
-                #[cfg(feature = "vm")]
-                Frame::ContractVM(vm, _) => Some(vm.contract_id.metered_clone(&self.0.budget)?),
-                Frame::HostFunction(_) => None,
-                Frame::Token(id, _) => Some(id.clone()),
-                #[cfg(feature = "testutils")]
-                Frame::TestContract(id, _) => Some(id.clone()), // no metering
-            }
-        } else {
-            None
-        };
-        let id = if let Some(contract_id) = contract_id {
-            <Vec<u8>>::from(contract_id.0)
-        } else if let Some(AccountId(PublicKey::PublicKeyTypeEd25519(Uint256(account_id)))) =
-            &*self.0.source_account.borrow()
-        {
-            <Vec<u8>>::from(*account_id)
-        } else {
-            return Err(self.err_general("no invoking account or contract"));
-        };
-        Ok(self.add_host_object::<Vec<u8>>(id)?.into())
-    }
-
     // TODO: Assess metering.
-    fn get_source_type(&self, _vmcaller: &mut VmCaller<Host>) -> Result<u32, HostError> {
+    fn get_invoker_type(&self, _vmcaller: &mut VmCaller<Host>) -> Result<u32, HostError> {
         let frames = self.0.context.borrow();
         // If the previous frame exists and is a contract, return its ID, otherwise return
         // the account invoking.
         let st = if frames.len() >= 2 {
             match &frames[frames.len() - 2] {
                 #[cfg(feature = "vm")]
-                Frame::ContractVM(_, _) => Ok(SourceType::Contract),
-                Frame::HostFunction(_) => Ok(SourceType::Account),
-                Frame::Token(_, _) => Ok(SourceType::Contract),
+                Frame::ContractVM(_, _) => Ok(InvokerType::Contract),
+                Frame::HostFunction(_) => Ok(InvokerType::Account),
+                Frame::Token(_, _) => Ok(InvokerType::Contract),
                 #[cfg(feature = "testutils")]
-                Frame::TestContract(_, _) => Ok(SourceType::Contract), // no metering
+                Frame::TestContract(_, _) => Ok(InvokerType::Contract), // no metering
             }
         } else {
-            Err(self.err_general("no invoking contract"))
+            Err(self.err_general("no frames to derive the invoker from"))
         }?;
         Ok(st as u32)
+    }
+
+    // Notes on metering: covered by the components
+    fn get_invoking_account(&self, vmcaller: &mut VmCaller<Host>) -> Result<Object, HostError> {
+        if self.get_invoker_type(vmcaller)? != InvokerType::Account as u32 {
+            return Err(self.err_general("invoker is not an account"));
+        }
+        if let Some(AccountId(PublicKey::PublicKeyTypeEd25519(Uint256(account_id)))) =
+            &*self.0.source_account.borrow()
+        {
+            Ok(self
+                .add_host_object::<Vec<u8>>(<Vec<u8>>::from(*account_id))?
+                .into())
+        } else {
+            Err(self.err_general("invoker account is not configured"))
+        }
+    }
+
+    // Notes on metering: covered by the components
+    fn get_invoking_contract(&self, _vmcaller: &mut VmCaller<Host>) -> Result<Object, HostError> {
+        let frames = self.0.context.borrow();
+        // the previous frame must exist and must be a contract
+        let hash: Hash = if frames.len() >= 2 {
+            match &frames[frames.len() - 2] {
+                #[cfg(feature = "vm")]
+                Frame::ContractVM(vm, _) => Ok(vm.contract_id.metered_clone(&self.0.budget)?),
+                Frame::HostFunction(_) => Err(self.err_general("invoker is not a contract")),
+                Frame::Token(id, _) => Ok(id.clone()),
+                #[cfg(feature = "testutils")]
+                Frame::TestContract(id, _) => Ok(id.clone()), // no metering
+            }
+        } else {
+            Err(self.err_general("no frames to derive the invoker from"))
+        }?;
+        Ok(self.add_host_object(<Vec<u8>>::from(hash.0))?.into())
     }
 
     // FIXME: the `cmp` method is not metered. Need a "metered" version (similar to metered_clone)
