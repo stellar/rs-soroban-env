@@ -1,4 +1,8 @@
+use soroban_env_common::xdr::HashIdPreimageSourceContractId;
+use soroban_env_common::CheckedEnv;
+
 use crate::budget::CostType;
+use crate::host::SourceType;
 use crate::xdr::{
     AccountEntry, AccountId, ContractDataEntry, Hash, HashIdPreimage, HashIdPreimageContractId,
     HashIdPreimageEd25519ContractId, LedgerEntry, LedgerEntryData, LedgerEntryExt, LedgerKey,
@@ -83,6 +87,27 @@ impl Host {
     ) -> Result<Vec<u8>, HostError> {
         let pre_image =
             HashIdPreimage::ContractIdFromContract(HashIdPreimageContractId { contract_id, salt });
+        let mut buf = Vec::new();
+        self.charge_budget(CostType::BytesClone, 64)?; // key + salt
+        pre_image
+            .write_xdr(&mut buf)
+            .map_err(|_| self.err_general("invalid hash"))?;
+        Ok(buf)
+    }
+
+    // notes on metering: covers the key and salt. Rest are free.
+    pub fn id_preimage_from_source_account(&self, salt: Uint256) -> Result<Vec<u8>, HostError> {
+        if self.get_source_type()? != SourceType::Account as u32 {
+            return Err(self.err_general("source is not an account"));
+        }
+
+        let source_account = AccountId(PublicKey::PublicKeyTypeEd25519(
+            self.to_u256(self.get_invoking_contract()?)?,
+        ));
+        let pre_image = HashIdPreimage::ContractIdFromSource(HashIdPreimageSourceContractId {
+            source_account,
+            salt,
+        });
         let mut buf = Vec::new();
         self.charge_budget(CostType::BytesClone, 64)?; // key + salt
         pre_image

@@ -770,7 +770,7 @@ impl Host {
                     ))
                 }
             }
-            HostFunction::CreateContract => {
+            HostFunction::CreateContractWithEd25519 => {
                 if let [ScVal::Object(Some(c_obj)), ScVal::Object(Some(s_obj)), ScVal::Object(Some(k_obj)), ScVal::Object(Some(sig_obj))] =
                     args.as_slice()
                 {
@@ -786,6 +786,26 @@ impl Host {
                             salt,
                             key,
                             signature,
+                        )
+                        .map(|obj| <RawVal>::from(obj))
+                    })
+                } else {
+                    Err(self.err_status_msg(
+                        ScHostFnErrorCode::InputArgsWrongLength,
+                        "unexpected arguments to 'CreateContract' host function",
+                    ))
+                }
+            }
+            HostFunction::CreateContractWithSource => {
+                if let [ScVal::Object(Some(c_obj)), ScVal::Object(Some(s_obj))] = args.as_slice() {
+                    self.with_frame(Frame::HostFunction(hf), || {
+                        let contract = self.to_host_obj(c_obj)?.to_object();
+                        let salt = self.to_host_obj(s_obj)?.to_object();
+                        //TODO: should create_contract_from_source_account return a RawVal instead of Object to avoid this conversion?
+                        self.create_contract_from_source_account(
+                            &mut VmCaller::none(),
+                            contract,
+                            salt,
                         )
                         .map(|obj| <RawVal>::from(obj))
                     })
@@ -1777,6 +1797,24 @@ impl VmCallerCheckedEnv for Host {
         let salt = self.uint256_from_obj_input("salt", salt)?;
         let buf = self.id_preimage_from_contract(contract_id, salt)?;
         self.create_contract_with_id_preimage(ScContractCode::Token, buf)
+    }
+
+    fn create_contract_from_source_account(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        v: Object,
+        salt: Object,
+    ) -> Result<Object, HostError> {
+        let salt = self.uint256_from_obj_input("salt", salt)?;
+
+        let wasm = self.visit_obj(v, |b: &Vec<u8>| {
+            Ok(ScContractCode::Wasm(
+                b.try_into()
+                    .map_err(|_| self.err_general("code too large"))?,
+            ))
+        })?;
+        let buf = self.id_preimage_from_source_account(salt)?;
+        self.create_contract_with_id_preimage(wasm, buf)
     }
 
     // Notes on metering: here covers the args unpacking. The actual VM work is changed at lower layers.
