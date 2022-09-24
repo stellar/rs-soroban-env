@@ -97,11 +97,6 @@ struct VmSlice {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, PartialOrd, Ord)]
-pub enum Source {
-    Account(AccountId),
-}
-
-#[derive(Debug, Clone, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(u32)]
 pub enum SourceType {
     Account = 0,
@@ -119,7 +114,7 @@ pub struct LedgerInfo {
 
 #[derive(Clone, Default)]
 pub(crate) struct HostImpl {
-    source: RefCell<Option<Source>>,
+    source_account: RefCell<Option<AccountId>>,
     ledger: RefCell<Option<LedgerInfo>>,
     objects: RefCell<Vec<HostObject>>,
     storage: RefCell<Storage>,
@@ -187,7 +182,7 @@ impl Host {
     /// [`CheckedEnv::get_contract_data`].
     pub fn with_storage_and_budget(storage: Storage, budget: Budget) -> Self {
         Self(Rc::new(HostImpl {
-            source: RefCell::new(None),
+            source_account: RefCell::new(None),
             ledger: RefCell::new(None),
             objects: Default::default(),
             storage: RefCell::new(storage),
@@ -199,8 +194,8 @@ impl Host {
         }))
     }
 
-    pub fn set_source(&self, source: Source) {
-        *self.0.source.borrow_mut() = Some(source)
+    pub fn set_source_account(&self, source_account: Option<AccountId>) {
+        *self.0.source_account.borrow_mut() = source_account;
     }
 
     pub fn set_ledger_info(&self, info: LedgerInfo) {
@@ -1170,9 +1165,8 @@ impl VmCallerCheckedEnv for Host {
         };
         let id = if let Some(contract_id) = contract_id {
             <Vec<u8>>::from(contract_id.0)
-        } else if let Some(Source::Account(AccountId(PublicKey::PublicKeyTypeEd25519(Uint256(
-            account_id,
-        ))))) = &*self.0.source.borrow()
+        } else if let Some(AccountId(PublicKey::PublicKeyTypeEd25519(Uint256(account_id)))) =
+            &*self.0.source_account.borrow()
         {
             <Vec<u8>>::from(*account_id)
         } else {
