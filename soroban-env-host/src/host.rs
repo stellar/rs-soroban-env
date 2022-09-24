@@ -1805,6 +1805,11 @@ impl VmCallerCheckedEnv for Host {
         v: Object,
         salt: Object,
     ) -> Result<Object, HostError> {
+        let frames = self.0.context.borrow();
+        if frames.len() > 1 {
+            return Err(self.err_general("cannot be called from a contract"));
+        }
+
         let salt = self.uint256_from_obj_input("salt", salt)?;
 
         let wasm = self.visit_obj(v, |b: &Vec<u8>| {
