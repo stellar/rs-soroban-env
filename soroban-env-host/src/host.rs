@@ -787,7 +787,7 @@ impl Host {
                 } else {
                     Err(self.err_status_msg(
                         ScHostFnErrorCode::InputArgsWrongLength,
-                        "unexpected arguments to 'CreateContract' host function",
+                        "unexpected arguments to 'CreateContractWithEd25519' host function",
                     ))
                 }
             }
@@ -807,7 +807,7 @@ impl Host {
                 } else {
                     Err(self.err_status_msg(
                         ScHostFnErrorCode::InputArgsWrongLength,
-                        "unexpected arguments to 'CreateContract' host function",
+                        "unexpected arguments to 'CreateContractWithSource' host function",
                     ))
                 }
             }
@@ -1160,6 +1160,9 @@ impl VmCallerCheckedEnv for Host {
                 #[cfg(feature = "testutils")]
                 Frame::TestContract(_, _) => Ok(InvokerType::Contract), // no metering
             }
+        } else if frames.len() == 1 {
+            //The first frame should always be Frame::HostFunction
+            Ok(InvokerType::Account)
         } else {
             Err(self.err_general("no frames to derive the invoker from"))
         }?;

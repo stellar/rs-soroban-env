@@ -102,7 +102,7 @@ impl Host {
         }
 
         let source_account = AccountId(PublicKey::PublicKeyTypeEd25519(
-            self.to_u256(self.get_invoking_contract()?)?,
+            self.to_u256(self.get_invoking_account()?)?,
         ));
         let pre_image = HashIdPreimage::ContractIdFromSource(HashIdPreimageSourceContractId {
             source_account,
