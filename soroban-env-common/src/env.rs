@@ -304,7 +304,8 @@ macro_rules! call_macro_with_all_host_functions {
                 {"4", fn create_contract_from_contract(v: Object, salt: Object) -> Object}
                 {"5", fn create_token_from_ed25519(salt: Object, key: Object, sig: Object) -> Object}
                 {"6", fn create_token_from_contract(salt: Object) -> Object}
-                {"7", fn create_contract_from_source_account(v: Object, salt: Object) -> Object}
+                {"7", fn create_token_wrapper(asset: Object) -> Object}
+                {"8", fn create_contract_from_source_account(v: Object, salt: Object) -> Object}
             }
 
             mod call "d" {
