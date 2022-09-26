@@ -13,7 +13,7 @@ use soroban_env_common::{
 
 use soroban_env_common::xdr::{
     AccountId, ContractEvent, ContractEventBody, ContractEventType, ContractEventV0,
-    ExtensionPoint, Hash, PublicKey, ReadXdr, ScStatusType, ThresholdIndexes, Uint256, WriteXdr,
+    ExtensionPoint, Hash, PublicKey, ReadXdr, ScStatusType, ThresholdIndexes, WriteXdr,
 };
 
 use crate::budget::{Budget, CostType};
