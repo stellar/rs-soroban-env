@@ -801,7 +801,7 @@ impl Host {
                     ))
                 }
             }
-            HostFunction::CreateContractWithSource => {
+            HostFunction::CreateContractWithSourceAccount => {
                 if let [ScVal::Object(Some(c_obj)), ScVal::Object(Some(s_obj))] = args.as_slice() {
                     self.with_frame(Frame::HostFunction(hf), || {
                         let contract = self.to_host_obj(c_obj)?.to_object();
