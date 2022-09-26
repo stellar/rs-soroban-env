@@ -116,7 +116,7 @@ impl Host {
         let source_account = self.source_account()?;
         let pre_image =
             HashIdPreimage::ContractIdFromSourceAccount(HashIdPreimageSourceAccountContractId {
-                source_account: source_account.clone(),
+                source_account,
                 salt,
             });
         let mut buf = Vec::new();

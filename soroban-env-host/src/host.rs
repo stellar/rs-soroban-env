@@ -1198,7 +1198,7 @@ impl VmCallerCheckedEnv for Host {
         }
         Ok(self
             .source_account()
-            .map(|aid| self.add_host_object(aid.clone()))??
+            .map(|aid| self.add_host_object(aid))??
             .into())
     }
 
