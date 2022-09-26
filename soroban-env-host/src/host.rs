@@ -8,7 +8,7 @@ use core::fmt::Debug;
 use im_rc::{OrdMap, Vector};
 use num_bigint::Sign;
 use soroban_env_common::{
-    EnvVal, Status, TryConvert, TryFromVal, TryIntoVal, VmCaller, VmCallerCheckedEnv,
+    EnvVal, InvokerType, Status, TryConvert, TryFromVal, TryIntoVal, VmCaller, VmCallerCheckedEnv,
 };
 
 use soroban_env_common::xdr::{
