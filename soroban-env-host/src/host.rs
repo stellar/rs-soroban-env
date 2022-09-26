@@ -1160,7 +1160,7 @@ impl VmCallerCheckedEnv for Host {
                 #[cfg(feature = "testutils")]
                 Frame::TestContract(_, _) => Ok(InvokerType::Contract), // no metering
             }
-        } else if frames.len() == 1 {
+        } else if frames.len() == 1 && matches!(&frames[0], Frame::HostFunction(_)) {
             //The first frame should always be Frame::HostFunction
             Ok(InvokerType::Account)
         } else {
