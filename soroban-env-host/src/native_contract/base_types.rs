@@ -2,7 +2,7 @@ use crate::host::{Host, HostError};
 use core::cmp::Ordering;
 use soroban_env_common::xdr::ScObjectType;
 use soroban_env_common::{
-    CheckedEnv, ConversionError, EnvVal, Object, RawVal, TryFromVal, TryIntoVal,
+    CheckedEnv, ConversionError, EnvBase, EnvVal, Object, RawVal, TryFromVal, TryIntoVal,
 };
 
 #[derive(Clone)]
@@ -171,6 +171,26 @@ impl<const N: u32> TryFromVal<Host, Object> for BytesN<N> {
     }
 }
 
+impl<const N: u32> Eq for BytesN<N> {}
+
+impl<const N: u32> PartialEq for BytesN<N> {
+    fn eq(&self, other: &Self) -> bool {
+        self.partial_cmp(other) == Some(Ordering::Equal)
+    }
+}
+
+impl<const N: u32> PartialOrd for BytesN<N> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(Ord::cmp(self, other))
+    }
+}
+
+impl<const N: u32> Ord for BytesN<N> {
+    fn cmp(&self, other: &Self) -> core::cmp::Ordering {
+        self.0.cmp(&other.0)
+    }
+}
+
 impl<const N: u32> TryFromVal<Host, RawVal> for BytesN<N> {
     type Error = HostError;
 
@@ -205,6 +225,19 @@ impl<const N: u32> BytesN<N> {
     pub fn compare(&self, other: &BytesN<N>) -> Result<Ordering, HostError> {
         let res = self.0.env.obj_cmp(self.0.val.into(), other.0.val.into())?;
         Ok(res.cmp(&0))
+    }
+}
+
+impl<const N: u32> BytesN<N> {
+    /// Copy the bytes in [BytesN] into the given slice.
+    ///
+    /// The minimum number of bytes are copied to either exhaust [BytesN] or
+    /// fill slice.
+    #[inline(always)]
+    pub fn copy_into_slice(&self, slice: &mut [u8]) -> Result<(), HostError> {
+        let env = self.0.env();
+        env.bytes_copy_to_slice(self.0.to_object(), RawVal::U32_ZERO, slice)
+            .map_err(|status| status.into())
     }
 }
 
