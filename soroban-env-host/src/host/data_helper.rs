@@ -1,3 +1,5 @@
+use soroban_env_common::xdr::Asset;
+
 use crate::budget::CostType;
 use crate::xdr::{
     AccountEntry, AccountId, ContractDataEntry, Hash, HashIdPreimage, HashIdPreimageContractId,
@@ -71,7 +73,7 @@ impl Host {
         self.charge_budget(CostType::BytesClone, 64)?; // key + salt
         pre_image
             .write_xdr(&mut buf)
-            .map_err(|_| self.err_general("invalid hash"))?;
+            .map_err(|_| self.err_general("invalid preimage"))?;
         Ok(buf)
     }
 
@@ -87,7 +89,18 @@ impl Host {
         self.charge_budget(CostType::BytesClone, 64)?; // key + salt
         pre_image
             .write_xdr(&mut buf)
-            .map_err(|_| self.err_general("invalid hash"))?;
+            .map_err(|_| self.err_general("invalid preimage"))?;
+        Ok(buf)
+    }
+
+    //TODO: metering!
+    pub fn id_preimage_from_asset(&self, asset: Asset) -> Result<Vec<u8>, HostError> {
+        let pre_image = HashIdPreimage::ContractIdFromAsset(asset);
+        let mut buf = Vec::new();
+        //self.charge_budget(CostType::BytesClone, 64)?; // key + salt
+        pre_image
+            .write_xdr(&mut buf)
+            .map_err(|_| self.err_general("invalid preimage"))?;
         Ok(buf)
     }
 

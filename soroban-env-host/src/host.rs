@@ -12,7 +12,7 @@ use soroban_env_common::{
 };
 
 use soroban_env_common::xdr::{
-    AccountId, ContractEvent, ContractEventBody, ContractEventType, ContractEventV0,
+    AccountId, Asset, ContractEvent, ContractEventBody, ContractEventType, ContractEventV0,
     ExtensionPoint, Hash, PublicKey, ReadXdr, ScStatusType, ThresholdIndexes, WriteXdr,
 };
 
@@ -673,6 +673,15 @@ impl Host {
             self.add_host_object(id_preimage)?.into(),
         )?;
         self.create_contract_with_id(contract, id_obj)?;
+        Ok(id_obj)
+    }
+
+    pub fn get_contract_id_from_asset(&self, asset: Asset) -> Result<Object, HostError> {
+        let id_preimage = self.id_preimage_from_asset(asset)?;
+        let id_obj = self.compute_hash_sha256(
+            &mut VmCaller::none(),
+            self.add_host_object(id_preimage)?.into(),
+        )?;
         Ok(id_obj)
     }
 
