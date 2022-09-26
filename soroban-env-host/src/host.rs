@@ -1196,17 +1196,16 @@ impl VmCallerCheckedEnv for Host {
     fn get_invoking_contract(&self, _vmcaller: &mut VmCaller<Host>) -> Result<Object, HostError> {
         let frames = self.0.context.borrow();
         // the previous frame must exist and must be a contract
-        let hash: Hash = if frames.len() >= 2 {
-            match &frames[frames.len() - 2] {
+        let hash = match frames.as_slice() {
+            [.., f2, _] => match f2 {
                 #[cfg(feature = "vm")]
                 Frame::ContractVM(vm, _) => Ok(vm.contract_id.metered_clone(&self.0.budget)?),
                 Frame::HostFunction(_) => Err(self.err_general("invoker is not a contract")),
                 Frame::Token(id, _) => Ok(id.clone()),
                 #[cfg(feature = "testutils")]
                 Frame::TestContract(id, _) => Ok(id.clone()), // no metering
-            }
-        } else {
-            Err(self.err_general("no frames to derive the invoker from"))
+            },
+            _ => Err(self.err_general("no frames to derive the invoker from")),
         }?;
         Ok(self.add_host_object(<Vec<u8>>::from(hash.0))?.into())
     }
