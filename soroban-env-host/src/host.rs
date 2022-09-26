@@ -1167,14 +1167,14 @@ impl VmCallerCheckedEnv for Host {
             },
             [f1] => match f1 {
                 Frame::HostFunction(_) => Ok(InvokerType::Account),
-                #[cfg(feature = "testutils")]
-                Frame::TestContract(_, _) => Ok(InvokerType::Account),
                 Frame::ContractVM(_, _) => {
                     Err(self.err_general("contract vm found in last frame which is unexpected"))
                 }
                 Frame::Token(id, _) => {
                     Err(self.err_general("token found in last frame which is unexpected"))
                 }
+                #[cfg(feature = "testutils")]
+                Frame::TestContract(_, _) => Ok(InvokerType::Account),
             },
             _ => Err(self.err_general("no frames to derive the invoker from")),
         }?;
