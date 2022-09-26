@@ -198,6 +198,14 @@ impl Host {
         *self.0.source_account.borrow_mut() = Some(source_account);
     }
 
+    fn source_account(&self) -> Result<AccountId, HostError> {
+        if let Some(account_id) = self.0.source_account.borrow().as_ref() {
+            Ok(account_id.clone())
+        } else {
+            Err(self.err_general("invoker account is not configured"))
+        }
+    }
+
     pub fn set_ledger_info(&self, info: LedgerInfo) {
         *self.0.ledger.borrow_mut() = Some(info)
     }
@@ -1176,11 +1184,10 @@ impl VmCallerCheckedEnv for Host {
         if self.get_invoker_type(vmcaller)? != InvokerType::Account as u32 {
             return Err(self.err_general("invoker is not an account"));
         }
-        if let Some(account_id) = &*self.0.source_account.borrow() {
-            Ok(self.add_host_object(account_id.clone())?.into())
-        } else {
-            Err(self.err_general("invoker account is not configured"))
-        }
+        Ok(self
+            .source_account()
+            .map(|aid| self.add_host_object(aid.clone()))??
+            .into())
     }
 
     // Notes on metering: covered by the components

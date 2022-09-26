@@ -101,11 +101,9 @@ impl Host {
             return Err(self.err_general("invoker is not an account"));
         }
 
-        let source_account = AccountId(PublicKey::PublicKeyTypeEd25519(
-            self.to_u256(self.get_invoking_account()?)?,
-        ));
+        let source_account = self.source_account()?;
         let pre_image = HashIdPreimage::ContractIdFromSource(HashIdPreimageSourceContractId {
-            source_account,
+            source_account: source_account.clone(),
             salt,
         });
         let mut buf = Vec::new();
