@@ -1,8 +1,6 @@
-use soroban_env_common::xdr::HashIdPreimageSourceContractId;
-use soroban_env_common::CheckedEnv;
+use soroban_env_common::{xdr::HashIdPreimageSourceContractId, CheckedEnv, InvokerType};
 
 use crate::budget::CostType;
-use crate::host::InvokerType;
 use crate::xdr::{
     AccountEntry, AccountId, ContractDataEntry, Hash, HashIdPreimage, HashIdPreimageContractId,
     HashIdPreimageEd25519ContractId, LedgerEntry, LedgerEntryData, LedgerEntryExt, LedgerKey,

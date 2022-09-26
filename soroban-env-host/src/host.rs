@@ -96,13 +96,6 @@ struct VmSlice {
     len: u32,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, PartialOrd, Ord)]
-#[repr(u32)]
-pub enum InvokerType {
-    Account = 0,
-    Contract = 1,
-}
-
 #[derive(Debug, Clone)]
 pub struct LedgerInfo {
     pub protocol_version: u32,
