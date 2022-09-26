@@ -823,7 +823,6 @@ impl Host {
                     ))
                 }
             }
-            HostFunction::CreateContractWithSource => todo!(),
         }
     }
 
