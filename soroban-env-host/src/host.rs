@@ -194,8 +194,8 @@ impl Host {
         }))
     }
 
-    pub fn set_source_account(&self, source_account: Option<AccountId>) {
-        *self.0.source_account.borrow_mut() = source_account;
+    pub fn set_source_account(&self, source_account: AccountId) {
+        *self.0.source_account.borrow_mut() = Some(source_account);
     }
 
     pub fn set_ledger_info(&self, info: LedgerInfo) {
