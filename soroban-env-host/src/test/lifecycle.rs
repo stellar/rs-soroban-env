@@ -4,8 +4,8 @@ use crate::{
     host::Frame,
     storage::{AccessType, Footprint, Storage},
     xdr::{
-        self, LedgerEntryData, LedgerKey, LedgerKeyContractData, ScContractCode, ScHostFnErrorCode,
-        ScObject, ScStatic, ScVal, ScVec,
+        self, AccountId, HostFunction, LedgerEntryData, LedgerKey, LedgerKeyContractData,
+        ScContractCode, ScHostFnErrorCode, ScObject, ScStatic, ScVal, ScVec,
     },
     CheckedEnv, Host, HostError, RawVal, Symbol,
 };
@@ -248,6 +248,83 @@ fn create_contract_using_parent_id_test() {
             child_code.try_into().unwrap(),
         )))),
     );
+}
+
+#[test]
+fn create_contract_from_source_account() -> Result<(), HostError> {
+    let code: &[u8] = b"70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4";
+    let public_key: &[u8] = b"d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a";
+    let salt: &[u8] = b"3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4660c";
+    let pub_bytes: Vec<u8> = FromHex::from_hex(public_key).unwrap();
+    let salt_bytes: Vec<u8> = FromHex::from_hex(salt).unwrap();
+    let source_account = AccountId(xdr::PublicKey::PublicKeyTypeEd25519(xdr::Uint256(
+        pub_bytes.as_slice().try_into().unwrap(),
+    )));
+
+    let pre_image = xdr::HashIdPreimage::ContractIdFromSourceAccount(
+        xdr::HashIdPreimageSourceAccountContractId {
+            source_account: source_account.clone(),
+            salt: xdr::Uint256(salt_bytes.as_slice().try_into().unwrap()),
+        },
+    );
+
+    let hash = sha256_hash_id_preimage(pre_image);
+
+    let hash_copy = hash.clone();
+    let key = ScVal::Static(ScStatic::LedgerKeyContractCode);
+    let storage_key = LedgerKey::ContractData(LedgerKeyContractData {
+        contract_id: hash,
+        key,
+    });
+
+    let mut footprint = Footprint::default();
+    footprint.record_access(&storage_key, AccessType::ReadWrite)?;
+
+    // Initialize storage and host
+    let budget = Budget::default();
+    let storage = Storage::with_enforcing_footprint_and_map(
+        footprint,
+        MeteredOrdMap {
+            map: OrdMap::new(),
+            budget: budget.clone(),
+        },
+    );
+    let host = Host::with_storage_and_budget(storage, budget);
+    host.set_source_account(source_account);
+
+    let obj_code = host.test_bin_obj(&code)?;
+    let obj_salt = host.test_bin_obj(&salt_bytes)?;
+
+    host.with_frame(
+        Frame::HostFunction(HostFunction::CreateContractWithSourceAccount),
+        || {
+            let contract_id = host
+                .create_contract_from_source_account(obj_code.to_object(), obj_salt.to_object())?;
+
+            let v = host.from_host_val(contract_id.to_raw())?;
+            let bytes = match v {
+                ScVal::Object(Some(scobj)) => match scobj {
+                    ScObject::Bytes(bytes) => bytes,
+                    _ => panic!("Wrong type"),
+                },
+                _ => panic!("Wrong type"),
+            };
+
+            if bytes.as_slice() != hash_copy.0.as_slice() {
+                panic!("return value doesn't match")
+            }
+
+            check_new_code(
+                &host,
+                storage_key,
+                ScVal::Object(Some(ScObject::ContractCode(ScContractCode::Wasm(
+                    code.try_into().unwrap(),
+                )))),
+            );
+            Ok(RawVal::from_void())
+        },
+    )?;
+    Ok(())
 }
 
 pub(crate) fn sha256_hash_id_preimage(pre_image: xdr::HashIdPreimage) -> xdr::Hash {
