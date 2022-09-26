@@ -106,7 +106,7 @@ pub fn check_auth(
         }
         Signature::Account(kaa) => {
             let stored_nonce =
-                read_and_increment_nonce(e, Identifier::Ed25519(kaa.account_id.clone()))?;
+                read_and_increment_nonce(e, Identifier::Account(kaa.account_id.clone()))?;
             if nonce.compare(&stored_nonce)? != Ordering::Equal {
                 Err(Error::ContractError)
             } else {
