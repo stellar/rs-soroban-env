@@ -1154,20 +1154,29 @@ impl VmCallerCheckedEnv for Host {
         let frames = self.0.context.borrow();
         // If the previous frame exists and is a contract, return its ID, otherwise return
         // the account invoking.
-        let st = if frames.len() >= 2 {
-            match &frames[frames.len() - 2] {
+        let st = match frames.as_slice() {
+            [.., f2, _] => match f2 {
                 #[cfg(feature = "vm")]
                 Frame::ContractVM(_, _) => Ok(InvokerType::Contract),
-                Frame::HostFunction(_) => Ok(InvokerType::Account),
-                Frame::Token(_, _) => Ok(InvokerType::Contract),
+                Frame::HostFunction(_) => Err(self.err_general(
+                    "host function found in second to last frame which is unexpected",
+                )),
+                Frame::Token(id, _) => Ok(InvokerType::Contract),
                 #[cfg(feature = "testutils")]
-                Frame::TestContract(_, _) => Ok(InvokerType::Contract), // no metering
-            }
-        } else if frames.len() == 1 && matches!(&frames[0], Frame::HostFunction(_)) {
-            //The first frame should always be Frame::HostFunction
-            Ok(InvokerType::Account)
-        } else {
-            Err(self.err_general("no frames to derive the invoker from"))
+                Frame::TestContract(_, _) => Ok(InvokerType::Contract),
+            },
+            [f1] => match f1 {
+                Frame::HostFunction(_) => Ok(InvokerType::Account),
+                #[cfg(feature = "testutils")]
+                Frame::TestContract(_, _) => Ok(InvokerType::Account),
+                Frame::ContractVM(_, _) => {
+                    Err(self.err_general("contract vm found in last frame which is unexpected"))
+                }
+                Frame::Token(id, _) => {
+                    Err(self.err_general("token found in last frame which is unexpected"))
+                }
+            },
+            _ => Err(self.err_general("no frames to derive the invoker from")),
         }?;
         Ok(st as u32)
     }
