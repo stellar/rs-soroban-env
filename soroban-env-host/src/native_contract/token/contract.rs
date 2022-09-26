@@ -117,9 +117,10 @@ impl TokenTrait for Token {
             return Err(Error::ContractError);
         }
 
+        let contract_id = BytesN::<32>::try_from_val(e, e.get_current_contract()?)?;
+
         match metadata.clone() {
             ClassicMetadata::Native => {
-                let contract_id = BytesN::<32>::try_from_val(e, e.get_current_contract()?)?;
                 let xlm_contract_id =
                     BytesN::<32>::try_from_val(e, e.get_contract_id_from_asset(Asset::Native)?)?;
                 if contract_id != xlm_contract_id {
@@ -130,8 +131,6 @@ impl TokenTrait for Token {
                 //No admin for the Native token
             }
             ClassicMetadata::AlphaNum4(asset) => {
-                let contract_id = BytesN::<32>::try_from_val(e, e.get_current_contract()?)?;
-
                 //TODO: Better way to do this?
                 let mut code4 = [0u8; 4];
                 asset.asset_code.copy_into_slice(&mut code4)?;
@@ -159,8 +158,6 @@ impl TokenTrait for Token {
                 )?;
             }
             ClassicMetadata::AlphaNum12(asset) => {
-                let contract_id = BytesN::<32>::try_from_val(e, e.get_current_contract()?)?;
-
                 //TODO: Better way to do this?
                 let mut code12 = [0u8; 12];
                 asset.asset_code.copy_into_slice(&mut code12)?;
