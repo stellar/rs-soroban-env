@@ -262,7 +262,7 @@ fn create_contract_from_source_account() -> Result<(), HostError> {
     )));
 
     let pre_image =
-        xdr::HashIdPreimage::ContractIdFromSource(xdr::HashIdPreimageSourceContractId {
+        xdr::HashIdPreimage::ContractIdFromSourceAccount(xdr::HashIdPreimageSourceAccountContractId {
             source_account: source_account.clone(),
             salt: xdr::Uint256(salt_bytes.as_slice().try_into().unwrap()),
         });
