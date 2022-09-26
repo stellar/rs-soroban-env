@@ -6,12 +6,6 @@ use crate::native_contract::token::storage_types::DataKey;
 use soroban_env_common::{CheckedEnv, TryFromVal, TryIntoVal};
 use std::cmp::Ordering;
 
-pub fn has_administrator(e: &Host) -> Result<bool, Error> {
-    let key = DataKey::Admin;
-    let rv = e.has_contract_data(key.try_into_val(e)?)?;
-    Ok(rv.try_into()?)
-}
-
 fn read_administrator(e: &Host) -> Result<Identifier, Error> {
     let key = DataKey::Admin;
     let rv = e.get_contract_data(key.try_into_val(e)?)?;

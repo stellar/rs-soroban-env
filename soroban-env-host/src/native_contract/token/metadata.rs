@@ -17,6 +17,12 @@ pub fn read_metadata(e: &Host) -> Result<Metadata, Error> {
     Ok(rv.try_into_val(e)?)
 }
 
+pub fn has_metadata(e: &Host) -> Result<bool, Error> {
+    let key = DataKey::Metadata;
+    let rv = e.has_contract_data(key.try_into_val(e)?)?;
+    Ok(rv.try_into()?)
+}
+
 pub fn read_name(e: &Host) -> Result<Bytes, Error> {
     match read_metadata(e)? {
         Metadata::Token(token) => Ok(token.name),

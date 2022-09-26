@@ -1,6 +1,6 @@
 use crate::host::Host;
-use crate::native_contract::base_types::{BigInt, Bytes, Vec};
-use crate::native_contract::token::admin::{check_admin, has_administrator, write_administrator};
+use crate::native_contract::base_types::{BigInt, Bytes, BytesN, Vec};
+use crate::native_contract::token::admin::{check_admin, write_administrator};
 use crate::native_contract::token::allowance::{read_allowance, spend_allowance, write_allowance};
 use crate::native_contract::token::balance::{
     read_balance, read_state, receive_balance, spend_balance, transfer_classic_balance, write_state,
@@ -8,15 +8,34 @@ use crate::native_contract::token::balance::{
 use crate::native_contract::token::cryptography::check_auth;
 use crate::native_contract::token::error::Error;
 use crate::native_contract::token::metadata::{
-    read_decimal, read_name, read_symbol, write_metadata,
+    has_metadata, read_decimal, read_name, read_symbol, write_metadata,
 };
 use crate::native_contract::token::nonce::read_nonce;
-use crate::native_contract::token::public_types::{Identifier, Metadata, Signature};
-use soroban_env_common::{Symbol, TryIntoVal};
+use crate::native_contract::token::public_types::{
+    ClassicMetadata, Identifier, Metadata, Signature, TokenMetadata,
+};
+use soroban_env_common::xdr::{
+    AccountId, AlphaNum12, AlphaNum4, Asset, AssetCode12, AssetCode4, PublicKey, Uint256,
+};
+use soroban_env_common::{CheckedEnv, Symbol, TryFromVal, TryIntoVal};
 use soroban_native_sdk_macros::contractimpl;
 
+use super::public_types::{AlphaNum12Metadata, AlphaNum4Metadata};
+
 pub trait TokenTrait {
-    fn initialize(e: &Host, admin: Identifier, metadata: Metadata) -> Result<(), Error>;
+    /// init_wrap can create a contract for a wrapped classic asset
+    /// (Native, AlphaNum4, or AlphaNum12). It will fail if the contractID
+    /// of this contract does not match the expected contractID for this asset
+    /// returned by Host::get_contract_id_from_asset. This function should only be
+    /// called by the create_token_wrapper host function for this reason.
+    ///
+    /// No admin will be set for the Native token, so any function that checks the admin
+    /// (burn, freeze, unfreeze, mint, set_admin) will always fail
+    fn init_wrap(e: &Host, metadata: ClassicMetadata) -> Result<(), Error>;
+
+    /// init_token creates a token contract that does not wrap an asset on the classic side.
+    /// No checks are done on the contractID.
+    fn init_token(e: &Host, admin: Identifier, metadata: TokenMetadata) -> Result<(), Error>;
 
     fn nonce(e: &Host, id: Identifier) -> Result<BigInt, Error>;
 
@@ -93,12 +112,92 @@ pub struct Token;
 
 #[contractimpl]
 impl TokenTrait for Token {
-    fn initialize(e: &Host, admin: Identifier, metadata: Metadata) -> Result<(), Error> {
-        if has_administrator(&e)? {
+    fn init_wrap(e: &Host, metadata: ClassicMetadata) -> Result<(), Error> {
+        if has_metadata(&e)? {
             return Err(Error::ContractError);
         }
+
+        match metadata.clone() {
+            ClassicMetadata::Native => {
+                let contract_id = BytesN::<32>::try_from_val(e, e.get_current_contract()?)?;
+                let xlm_contract_id =
+                    BytesN::<32>::try_from_val(e, e.get_contract_id_from_asset(Asset::Native)?)?;
+                if contract_id != xlm_contract_id {
+                    return Err(Error::ContractError);
+                }
+
+                write_metadata(&e, Metadata::Native)?;
+                //No admin for the Native token
+            }
+            ClassicMetadata::AlphaNum4(asset) => {
+                let contract_id = BytesN::<32>::try_from_val(e, e.get_current_contract()?)?;
+
+                //TODO: Better way to do this?
+                let mut code4 = [0u8; 4];
+                asset.asset_code.copy_into_slice(&mut code4)?;
+
+                let mut issuer = [0u8; 32];
+                asset.issuer.copy_into_slice(&mut issuer)?;
+
+                let asset4 = Asset::CreditAlphanum4(AlphaNum4 {
+                    asset_code: AssetCode4(code4),
+                    issuer: AccountId(PublicKey::PublicKeyTypeEd25519(Uint256(issuer))),
+                });
+                let asset_contract_id =
+                    BytesN::<32>::try_from_val(e, e.get_contract_id_from_asset(asset4)?)?;
+                if contract_id != asset_contract_id {
+                    return Err(Error::ContractError);
+                }
+
+                write_administrator(&e, Identifier::Account(asset.issuer.clone()))?;
+                write_metadata(
+                    &e,
+                    Metadata::AlphaNum4(AlphaNum4Metadata {
+                        asset_code: asset.asset_code,
+                        issuer: asset.issuer,
+                    }),
+                )?;
+            }
+            ClassicMetadata::AlphaNum12(asset) => {
+                let contract_id = BytesN::<32>::try_from_val(e, e.get_current_contract()?)?;
+
+                //TODO: Better way to do this?
+                let mut code12 = [0u8; 12];
+                asset.asset_code.copy_into_slice(&mut code12)?;
+
+                let mut issuer = [0u8; 32];
+                asset.issuer.copy_into_slice(&mut issuer)?;
+
+                let asset12 = Asset::CreditAlphanum12(AlphaNum12 {
+                    asset_code: AssetCode12(code12),
+                    issuer: AccountId(PublicKey::PublicKeyTypeEd25519(Uint256(issuer))),
+                });
+                let asset_contract_id =
+                    BytesN::<32>::try_from_val(e, e.get_contract_id_from_asset(asset12)?)?;
+                if contract_id != asset_contract_id {
+                    return Err(Error::ContractError);
+                }
+
+                write_administrator(&e, Identifier::Account(asset.issuer.clone()))?;
+                write_metadata(
+                    &e,
+                    Metadata::AlphaNum12(AlphaNum12Metadata {
+                        asset_code: asset.asset_code,
+                        issuer: asset.issuer,
+                    }),
+                )?;
+            }
+        }
+        Ok(())
+    }
+
+    fn init_token(e: &Host, admin: Identifier, metadata: TokenMetadata) -> Result<(), Error> {
+        if has_metadata(&e)? {
+            return Err(Error::ContractError);
+        }
+
         write_administrator(&e, admin)?;
-        write_metadata(&e, metadata)?;
+        write_metadata(&e, Metadata::Token(metadata))?;
         Ok(())
     }
 
