@@ -189,8 +189,8 @@ macro_rules! call_macro_with_all_host_functions {
                 /// Get whether the contract invocation is from an account or
                 /// another contract. Returns 0 for account, 1 for contract.
                 {"b", fn get_invoker_type() -> u32 }
-                /// Get the accountID `Bytes` of the account which invoked the
-                /// running contract. Traps if the running contract was not
+                /// Get the AccountID object type of the account which invoked
+                /// the running contract. Traps if the running contract was not
                 /// invoked by an account.
                 {"c", fn get_invoking_account() -> Object }
             }
