@@ -1176,12 +1176,8 @@ impl VmCallerCheckedEnv for Host {
         if self.get_invoker_type(vmcaller)? != InvokerType::Account as u32 {
             return Err(self.err_general("invoker is not an account"));
         }
-        if let Some(AccountId(PublicKey::PublicKeyTypeEd25519(Uint256(account_id)))) =
-            &*self.0.source_account.borrow()
-        {
-            Ok(self
-                .add_host_object::<Vec<u8>>(<Vec<u8>>::from(*account_id))?
-                .into())
+        if let Some(account_id) = &*self.0.source_account.borrow() {
+            Ok(self.add_host_object(account_id.clone())?.into())
         } else {
             Err(self.err_general("invoker account is not configured"))
         }
