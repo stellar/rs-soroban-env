@@ -485,6 +485,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "eb9f9e6e233e5c4a35559a617bf40a4ec447db2e84c20b55a6f83167b7e57872"
 
 [[package]]
+name = "prettyplease"
+version = "0.1.19"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a49e86d2c26a24059894a3afa13fd17d063419b05dfb83f06d9c3566060c3f5a"
+dependencies = [
+ "proc-macro2",
+ "syn",
+]
+
+[[package]]
 name = "proc-macro2"
 version = "1.0.43"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -733,11 +743,12 @@ dependencies = [
 [[package]]
 name = "soroban-spec"
 version = "0.0.4"
-source = "git+https://github.com/stellar/rs-soroban-sdk?rev=1d1c866d#1d1c866da8c67c78e984ad550606af94f4b26986"
+source = "git+https://github.com/stellar/rs-soroban-sdk?rev=0f3fc6db#0f3fc6db210fbac583238509f73b8f005836550f"
 dependencies = [
  "base64",
  "darling",
  "itertools",
+ "prettyplease",
  "proc-macro2",
  "quote",
  "serde",
@@ -788,7 +799,7 @@ checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 [[package]]
 name = "stellar-xdr"
 version = "0.0.2"
-source = "git+https://github.com/stellar/rs-stellar-xdr?rev=9aae807#9aae807d14f2fb5427da8f5a22195a12c1e03fd1"
+source = "git+https://github.com/stellar/rs-stellar-xdr?rev=3c495a5a#3c495a5a7dfba1cdbe6dc170c533effe0cb2e2c3"
 dependencies = [
  "base64",
  "serde",
