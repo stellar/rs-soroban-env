@@ -8,7 +8,7 @@ use core::fmt::Debug;
 use im_rc::{OrdMap, Vector};
 use num_bigint::Sign;
 use soroban_env_common::{
-    EnvVal, Status, TryConvert, TryFromVal, TryIntoVal, VmCaller, VmCallerCheckedEnv,
+    EnvVal, InvokerType, Status, TryConvert, TryFromVal, TryIntoVal, VmCaller, VmCallerCheckedEnv,
 };
 
 use soroban_env_common::xdr::{
@@ -107,6 +107,7 @@ pub struct LedgerInfo {
 
 #[derive(Clone, Default)]
 pub(crate) struct HostImpl {
+    source_account: RefCell<Option<AccountId>>,
     ledger: RefCell<Option<LedgerInfo>>,
     objects: RefCell<Vec<HostObject>>,
     storage: RefCell<Storage>,
@@ -174,6 +175,7 @@ impl Host {
     /// [`CheckedEnv::get_contract_data`].
     pub fn with_storage_and_budget(storage: Storage, budget: Budget) -> Self {
         Self(Rc::new(HostImpl {
+            source_account: RefCell::new(None),
             ledger: RefCell::new(None),
             objects: Default::default(),
             storage: RefCell::new(storage),
@@ -183,6 +185,18 @@ impl Host {
             #[cfg(feature = "testutils")]
             contracts: Default::default(),
         }))
+    }
+
+    pub fn set_source_account(&self, source_account: AccountId) {
+        *self.0.source_account.borrow_mut() = Some(source_account);
+    }
+
+    fn source_account(&self) -> Result<AccountId, HostError> {
+        if let Some(account_id) = self.0.source_account.borrow().as_ref() {
+            Ok(account_id.clone())
+        } else {
+            Err(self.err_general("invoker account is not configured"))
+        }
     }
 
     pub fn set_ledger_info(&self, info: LedgerInfo) {
@@ -543,6 +557,7 @@ impl Host {
                         )),
                         HostObject::BigInt(bi) => self.scobj_from_bigint(bi),
                         HostObject::ContractCode(cc) => Ok(ScObject::ContractCode(cc.clone())),
+                        HostObject::AccountId(aid) => Ok(ScObject::AccountId(aid.clone())),
                     },
                 }
             })
@@ -592,6 +607,7 @@ impl Host {
                 self.add_host_object(bi)
             }
             ScObject::ContractCode(cc) => self.add_host_object(cc.clone()),
+            ScObject::AccountId(account_id) => self.add_host_object(account_id.clone()),
         }
     }
 
@@ -619,7 +635,7 @@ impl Host {
             HostObject::BigInt(bi) => {
                 self.charge_budget(CostType::HostBigIntAllocCell, bi.bits() as u64)?;
             }
-            HostObject::ContractCode(_) => {}
+            HostObject::ContractCode(_) | HostObject::AccountId(_) => {}
         }
         Ok(ho)
     }
@@ -783,11 +799,30 @@ impl Host {
                 } else {
                     Err(self.err_status_msg(
                         ScHostFnErrorCode::InputArgsWrongLength,
-                        "unexpected arguments to 'CreateContract' host function",
+                        "unexpected arguments to 'CreateContractWithEd25519' host function",
                     ))
                 }
             }
-            HostFunction::CreateContractWithSource => todo!(),
+            HostFunction::CreateContractWithSourceAccount => {
+                if let [ScVal::Object(Some(c_obj)), ScVal::Object(Some(s_obj))] = args.as_slice() {
+                    self.with_frame(Frame::HostFunction(hf), || {
+                        let contract = self.to_host_obj(c_obj)?.to_object();
+                        let salt = self.to_host_obj(s_obj)?.to_object();
+                        //TODO: should create_contract_from_source_account return a RawVal instead of Object to avoid this conversion?
+                        self.create_contract_from_source_account(
+                            &mut VmCaller::none(),
+                            contract,
+                            salt,
+                        )
+                        .map(|obj| <RawVal>::from(obj))
+                    })
+                } else {
+                    Err(self.err_status_msg(
+                        ScHostFnErrorCode::InputArgsWrongLength,
+                        "unexpected arguments to 'CreateContractWithSource' host function",
+                    ))
+                }
+            }
         }
     }
 
@@ -1123,23 +1158,64 @@ impl VmCallerCheckedEnv for Host {
         Ok(RawVal::from_void())
     }
 
+    // TODO: Assess metering.
+    fn get_invoker_type(&self, _vmcaller: &mut VmCaller<Host>) -> Result<u32, HostError> {
+        let frames = self.0.context.borrow();
+        // If the previous frame exists and is a contract, return its ID, otherwise return
+        // the account invoking.
+        let st = match frames.as_slice() {
+            [.., f2, _] => match f2 {
+                #[cfg(feature = "vm")]
+                Frame::ContractVM(_, _) => Ok(InvokerType::Contract),
+                Frame::HostFunction(_) => Err(self.err_general(
+                    "host function found in second to last frame which is unexpected",
+                )),
+                Frame::Token(id, _) => Ok(InvokerType::Contract),
+                #[cfg(feature = "testutils")]
+                Frame::TestContract(_, _) => Ok(InvokerType::Contract),
+            },
+            [f1] => match f1 {
+                #[cfg(feature = "vm")]
+                Frame::ContractVM(_, _) => {
+                    Err(self.err_general("contract vm found in last frame which is unexpected"))
+                }
+                Frame::HostFunction(_) => Ok(InvokerType::Account),
+                Frame::Token(id, _) => {
+                    Err(self.err_general("token found in last frame which is unexpected"))
+                }
+                #[cfg(feature = "testutils")]
+                Frame::TestContract(_, _) => Ok(InvokerType::Account),
+            },
+            _ => Err(self.err_general("no frames to derive the invoker from")),
+        }?;
+        Ok(st as u32)
+    }
+
+    // Notes on metering: covered by the components
+    fn get_invoking_account(&self, vmcaller: &mut VmCaller<Host>) -> Result<Object, HostError> {
+        if self.get_invoker_type(vmcaller)? != InvokerType::Account as u32 {
+            return Err(self.err_general("invoker is not an account"));
+        }
+        Ok(self
+            .source_account()
+            .map(|aid| self.add_host_object(aid))??
+            .into())
+    }
+
     // Notes on metering: covered by the components
     fn get_invoking_contract(&self, _vmcaller: &mut VmCaller<Host>) -> Result<Object, HostError> {
         let frames = self.0.context.borrow();
         // the previous frame must exist and must be a contract
-        let hash: Hash = if frames.len() >= 2 {
-            match &frames[frames.len() - 2] {
+        let hash = match frames.as_slice() {
+            [.., f2, _] => match f2 {
                 #[cfg(feature = "vm")]
                 Frame::ContractVM(vm, _) => Ok(vm.contract_id.metered_clone(&self.0.budget)?),
-                Frame::HostFunction(_) => {
-                    Err(self.err_general("Host function context has no contract ID"))
-                }
+                Frame::HostFunction(_) => Err(self.err_general("invoker is not a contract")),
                 Frame::Token(id, _) => Ok(id.clone()),
                 #[cfg(feature = "testutils")]
                 Frame::TestContract(id, _) => Ok(id.clone()), // no metering
-            }
-        } else {
-            Err(self.err_general("no invoking contract"))
+            },
+            _ => Err(self.err_general("no frames to derive the invoker from")),
         }?;
         Ok(self.add_host_object(<Vec<u8>>::from(hash.0))?.into())
     }
@@ -1703,6 +1779,29 @@ impl VmCallerCheckedEnv for Host {
             ))
         })?;
         let buf = self.id_preimage_from_contract(contract_id, salt)?;
+        self.create_contract_with_id_preimage(wasm, buf)
+    }
+
+    fn create_contract_from_source_account(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        v: Object,
+        salt: Object,
+    ) -> Result<Object, HostError> {
+        let frames = self.0.context.borrow();
+        if frames.len() > 1 {
+            return Err(self.err_general("cannot be called from a contract"));
+        }
+
+        let salt = self.uint256_from_obj_input("salt", salt)?;
+
+        let wasm = self.visit_obj(v, |b: &Vec<u8>| {
+            Ok(ScContractCode::Wasm(
+                b.try_into()
+                    .map_err(|_| self.err_general("code too large"))?,
+            ))
+        })?;
+        let buf = self.id_preimage_from_source_account(salt)?;
         self.create_contract_with_id_preimage(wasm, buf)
     }
 

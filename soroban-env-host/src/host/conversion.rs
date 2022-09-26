@@ -219,6 +219,9 @@ impl Host {
                                     HostObject::U64(u) => Ok(ScObject::U64(*u)),
                                     HostObject::I64(i) => Ok(ScObject::I64(*i)),
                                     HostObject::BigInt(bi) => self.scobj_from_bigint(bi),
+                                    HostObject::AccountId(aid) => {
+                                        Ok(ScObject::AccountId(aid.clone()))
+                                    }
                                 },
                             }?;
                             Ok(ScVal::Object(Some(sco)))

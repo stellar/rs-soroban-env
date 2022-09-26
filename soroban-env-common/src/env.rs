@@ -186,6 +186,13 @@ macro_rules! call_macro_with_all_host_functions {
                 // Record a debug event. Fmt must be a Bytes. Args must be a
                 // Vec. Void is returned.
                 {"a", fn log_fmt_values(fmt:Object, args:Object) -> RawVal }
+                /// Get whether the contract invocation is from an account or
+                /// another contract. Returns 0 for account, 1 for contract.
+                {"b", fn get_invoker_type() -> u32 }
+                /// Get the AccountID object type of the account which invoked
+                /// the running contract. Traps if the running contract was not
+                /// invoked by an account.
+                {"c", fn get_invoking_account() -> Object }
             }
 
             mod u64 "u" {
@@ -298,6 +305,7 @@ macro_rules! call_macro_with_all_host_functions {
                 {"5", fn create_token_from_ed25519(salt: Object, key: Object, sig: Object) -> Object}
                 {"6", fn create_token_from_contract(salt: Object) -> Object}
                 {"7", fn create_token_wrapper(asset: Object) -> Object}
+                {"8", fn create_contract_from_source_account(v: Object, salt: Object) -> Object}
             }
 
             mod call "d" {

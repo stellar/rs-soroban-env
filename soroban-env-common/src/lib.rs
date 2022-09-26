@@ -26,6 +26,7 @@ mod checked_env;
 mod convert;
 mod env;
 mod env_val;
+mod invoker;
 pub mod meta;
 mod object;
 mod option;
@@ -58,6 +59,7 @@ pub use vmcaller_checked_env::{VmCaller, VmCallerCheckedEnv};
 // BitSet, Status and Symbol wrap RawVals.
 // TODO: maybe these should wrap EnvVals?
 pub use bitset::{BitSet, BitSetError};
+pub use invoker::InvokerType;
 pub use object::Object;
 pub use r#static::Static;
 pub use status::Status;

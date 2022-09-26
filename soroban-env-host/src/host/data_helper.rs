@@ -1,4 +1,7 @@
-use soroban_env_common::xdr::Asset;
+use soroban_env_common::{
+    xdr::{Asset, HashIdPreimageSourceAccountContractId},
+    CheckedEnv, InvokerType,
+};
 
 use crate::budget::CostType;
 use crate::xdr::{
@@ -101,6 +104,26 @@ impl Host {
         pre_image
             .write_xdr(&mut buf)
             .map_err(|_| self.err_general("invalid preimage"))?;
+        Ok(buf)
+    }
+
+    // notes on metering: covers the key and salt. Rest are free.
+    pub fn id_preimage_from_source_account(&self, salt: Uint256) -> Result<Vec<u8>, HostError> {
+        if self.get_invoker_type()? != InvokerType::Account as u32 {
+            return Err(self.err_general("invoker is not an account"));
+        }
+
+        let source_account = self.source_account()?;
+        let pre_image =
+            HashIdPreimage::ContractIdFromSourceAccount(HashIdPreimageSourceAccountContractId {
+                source_account,
+                salt,
+            });
+        let mut buf = Vec::new();
+        self.charge_budget(CostType::BytesClone, 64)?; // key + salt
+        pre_image
+            .write_xdr(&mut buf)
+            .map_err(|_| self.err_general("invalid hash"))?;
         Ok(buf)
     }
 
