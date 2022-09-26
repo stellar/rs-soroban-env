@@ -761,7 +761,7 @@ impl Host {
                     ))
                 }
             }
-            HostFunction::CreateContract => {
+            HostFunction::CreateContractWithEd25519 => {
                 if let [ScVal::Object(Some(c_obj)), ScVal::Object(Some(s_obj)), ScVal::Object(Some(k_obj)), ScVal::Object(Some(sig_obj))] =
                     args.as_slice()
                 {
@@ -787,6 +787,7 @@ impl Host {
                     ))
                 }
             }
+            HostFunction::CreateContractWithSource => todo!(),
         }
     }
 
