@@ -38,7 +38,7 @@ impl Signature {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 #[contracttype]
 pub enum Identifier {
     Contract(BytesN<32>),
@@ -81,6 +81,14 @@ pub struct AlphaNum4Metadata {
 pub struct AlphaNum12Metadata {
     pub asset_code: BytesN<12>,
     pub issuer: BytesN<32>,
+}
+
+#[derive(Clone)]
+#[contracttype]
+pub enum ClassicMetadata {
+    Native,
+    AlphaNum4(AlphaNum4Metadata),
+    AlphaNum12(AlphaNum12Metadata),
 }
 
 #[derive(Clone)]

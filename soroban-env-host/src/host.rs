@@ -12,7 +12,7 @@ use soroban_env_common::{
 };
 
 use soroban_env_common::xdr::{
-    AccountId, ContractEvent, ContractEventBody, ContractEventType, ContractEventV0,
+    AccountId, Asset, ContractEvent, ContractEventBody, ContractEventType, ContractEventV0,
     ExtensionPoint, Hash, PublicKey, ReadXdr, ScStatusType, ThresholdIndexes, WriteXdr,
 };
 
@@ -676,6 +676,15 @@ impl Host {
         Ok(id_obj)
     }
 
+    pub fn get_contract_id_from_asset(&self, asset: Asset) -> Result<Object, HostError> {
+        let id_preimage = self.id_preimage_from_asset(asset)?;
+        let id_obj = self.compute_hash_sha256(
+            &mut VmCaller::none(),
+            self.add_host_object(id_preimage)?.into(),
+        )?;
+        Ok(id_obj)
+    }
+
     // Notes on metering: this is covered by the called components.
     fn call_contract_fn(
         &self,
@@ -752,7 +761,7 @@ impl Host {
                     ))
                 }
             }
-            HostFunction::CreateContract => {
+            HostFunction::CreateContractWithEd25519 => {
                 if let [ScVal::Object(Some(c_obj)), ScVal::Object(Some(s_obj)), ScVal::Object(Some(k_obj)), ScVal::Object(Some(sig_obj))] =
                     args.as_slice()
                 {
@@ -778,6 +787,7 @@ impl Host {
                     ))
                 }
             }
+            HostFunction::CreateContractWithSource => todo!(),
         }
     }
 
@@ -1730,6 +1740,135 @@ impl VmCallerCheckedEnv for Host {
         let salt = self.uint256_from_obj_input("salt", salt)?;
         let buf = self.id_preimage_from_contract(contract_id, salt)?;
         self.create_contract_with_id_preimage(ScContractCode::Token, buf)
+    }
+
+    //TODO: metering
+    fn create_token_wrapper(
+        &self,
+        vmcaller: &mut VmCaller<Host>,
+        asset: Object,
+    ) -> Result<Object, HostError> {
+        let a = self.visit_obj(asset, |hv: &Vec<u8>| {
+            //self.charge_budget(CostType::ValDeser, hv.len() as u64)?;
+            Asset::read_xdr(&mut hv.as_slice())
+                .map_err(|_| self.err_general("failed to de-serialize Asset"))
+        })?;
+
+        // TODO: Are these error msgs necessary? Should they be simplified?
+
+        // We want to convert xdr::Asset into an ScVal that matches the ClassicMetadata
+        // contracttype in the token contract
+        let arg =
+            match &a {
+                Asset::Native => ScVal::Object(Some(ScObject::Vec(ScVec(
+                    vec![ScVal::Symbol(
+                        "Native"
+                            .to_string()
+                            .try_into()
+                            .map_err(|_| self.err_general("invalid Native"))?,
+                    )]
+                    .try_into()
+                    .map_err(|_| self.err_general("invalid vec"))?,
+                )))),
+                Asset::CreditAlphanum4(a4) => {
+                    let PublicKey::PublicKeyTypeEd25519(issuer_key) = a4.issuer.0.clone();
+                    ScVal::Object(Some(ScObject::Vec(ScVec(
+                        vec![
+                            ScVal::Symbol(
+                                "AlphaNum4"
+                                    .to_string()
+                                    .try_into()
+                                    .map_err(|_| self.err_general("invalid AlphaNum4"))?,
+                            ),
+                            ScVal::Object(Some(ScObject::Map(
+                                ScMap::try_from(vec![
+                                    ScMapEntry {
+                                        key: ScVal::Symbol(
+                                            "asset_code".to_string().try_into().map_err(|_| {
+                                                self.err_general("invalid code4 key")
+                                            })?,
+                                        ),
+                                        val: ScVal::Object(Some(ScObject::Bytes(
+                                            a4.asset_code.0.try_into().map_err(|_| {
+                                                self.err_general("invalid code4 val")
+                                            })?,
+                                        ))),
+                                    },
+                                    ScMapEntry {
+                                        key: ScVal::Symbol(
+                                            "issuer".to_string().try_into().map_err(|_| {
+                                                self.err_general("invalid issuer4 key")
+                                            })?,
+                                        ),
+                                        val: ScVal::Object(Some(ScObject::Bytes(
+                                            issuer_key.0.try_into().map_err(|_| {
+                                                self.err_general("invalid issuer4 key")
+                                            })?,
+                                        ))),
+                                    },
+                                ])
+                                .map_err(|_| self.err_general("invalid map"))?,
+                            ))),
+                        ]
+                        .try_into()
+                        .map_err(|_| self.err_general("invalid vec"))?,
+                    ))))
+                }
+                Asset::CreditAlphanum12(a12) => {
+                    let PublicKey::PublicKeyTypeEd25519(issuer_key) = a12.issuer.0.clone();
+                    ScVal::Object(Some(ScObject::Vec(ScVec(
+                        vec![
+                            ScVal::Symbol(
+                                "AlphaNum12"
+                                    .to_string()
+                                    .try_into()
+                                    .map_err(|_| self.err_general("invalid AlphaNum12"))?,
+                            ),
+                            ScVal::Object(Some(ScObject::Map(
+                                ScMap::try_from(vec![
+                                    ScMapEntry {
+                                        key: ScVal::Symbol(
+                                            "asset_code".to_string().try_into().map_err(|_| {
+                                                self.err_general("invalid code12 key")
+                                            })?,
+                                        ),
+                                        val: ScVal::Object(Some(ScObject::Bytes(
+                                            a12.asset_code.0.try_into().map_err(|_| {
+                                                self.err_general("invalid code12 val")
+                                            })?,
+                                        ))),
+                                    },
+                                    ScMapEntry {
+                                        key: ScVal::Symbol(
+                                            "issuer".to_string().try_into().map_err(|_| {
+                                                self.err_general("invalid issuer12 key")
+                                            })?,
+                                        ),
+                                        val: ScVal::Object(Some(ScObject::Bytes(
+                                            issuer_key.0.try_into().map_err(|_| {
+                                                self.err_general("invalid issuer12 val")
+                                            })?,
+                                        ))),
+                                    },
+                                ])
+                                .map_err(|_| self.err_general("invalid map"))?,
+                            ))),
+                        ]
+                        .try_into()
+                        .map_err(|_| self.err_general("invalid vec"))?,
+                    ))))
+                }
+            };
+
+        let buf = self.id_preimage_from_asset(a)?;
+        let id = self.create_contract_with_id_preimage(ScContractCode::Token, buf)?;
+        self.call_n(
+            id,
+            Symbol::from_str("init_wrap"),
+            &[self.to_host_val(&arg)?.val],
+        )?;
+
+        Ok(id)
     }
 
     // Notes on metering: here covers the args unpacking. The actual VM work is changed at lower layers.
