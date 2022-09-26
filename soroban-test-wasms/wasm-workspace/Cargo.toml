@@ -94,9 +94,9 @@ wasmi = { package = "soroban-wasmi", git = "https://github.com/stellar/wasmi", r
 # when you change the Env trait itself, and whatever change you make to Env may
 # well cause recompilation to fail. Again, you will know if it doesn't compile!
 
-soroban-sdk = { git = "https://github.com/stellar/rs-soroban-sdk", rev = "1d1c866d" }
-soroban-sdk-macros = { git = "https://github.com/stellar/rs-soroban-sdk", rev = "1d1c866d" }
-soroban-spec = { git = "https://github.com/stellar/rs-soroban-sdk", rev = "ad95e20c" }
+soroban-sdk = { git = "https://github.com/stellar/rs-soroban-sdk", rev = "fcbcc1bf" }
+soroban-sdk-macros = { git = "https://github.com/stellar/rs-soroban-sdk", rev = "fcbcc1bf" }
+soroban-spec = { git = "https://github.com/stellar/rs-soroban-sdk", rev = "fcbcc1bf" }
 
 # soroban-sdk = { path = "../../../rs-soroban-sdk/soroban-sdk" }
 # soroban-sdk-macros = { path = "../../../rs-soroban-sdk/soroban-sdk-macros"}

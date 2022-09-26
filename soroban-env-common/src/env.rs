@@ -188,7 +188,7 @@ macro_rules! call_macro_with_all_host_functions {
                 {"a", fn log_fmt_values(fmt:Object, args:Object) -> RawVal }
                 /// Get whether the contract invocation is from an account or
                 /// another contract. Returns 0 for account, 1 for contract.
-                {"b", fn get_invoker_type() -> u32 }
+                {"b", fn get_invoker_type() -> u64 }
                 /// Get the AccountID object type of the account which invoked
                 /// the running contract. Traps if the running contract was not
                 /// invoked by an account.

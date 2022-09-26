@@ -715,7 +715,7 @@ dependencies = [
 [[package]]
 name = "soroban-sdk"
 version = "0.0.4"
-source = "git+https://github.com/stellar/rs-soroban-sdk?rev=1d1c866d#1d1c866da8c67c78e984ad550606af94f4b26986"
+source = "git+https://github.com/stellar/rs-soroban-sdk?rev=fcbcc1bf#fcbcc1bf45c7284800aabcaaf30c2907cfce0069"
 dependencies = [
  "bytes-lit",
  "ed25519-dalek",
@@ -727,7 +727,7 @@ dependencies = [
 [[package]]
 name = "soroban-sdk-macros"
 version = "0.0.4"
-source = "git+https://github.com/stellar/rs-soroban-sdk?rev=1d1c866d#1d1c866da8c67c78e984ad550606af94f4b26986"
+source = "git+https://github.com/stellar/rs-soroban-sdk?rev=fcbcc1bf#fcbcc1bf45c7284800aabcaaf30c2907cfce0069"
 dependencies = [
  "darling",
  "itertools",
@@ -743,7 +743,7 @@ dependencies = [
 [[package]]
 name = "soroban-spec"
 version = "0.0.4"
-source = "git+https://github.com/stellar/rs-soroban-sdk?rev=0f3fc6db#0f3fc6db210fbac583238509f73b8f005836550f"
+source = "git+https://github.com/stellar/rs-soroban-sdk?rev=fcbcc1bf#fcbcc1bf45c7284800aabcaaf30c2907cfce0069"
 dependencies = [
  "base64",
  "darling",
@@ -799,7 +799,7 @@ checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 [[package]]
 name = "stellar-xdr"
 version = "0.0.2"
-source = "git+https://github.com/stellar/rs-stellar-xdr?rev=3c495a5a#3c495a5a7dfba1cdbe6dc170c533effe0cb2e2c3"
+source = "git+https://github.com/stellar/rs-stellar-xdr?rev=a27b5aa#a27b5aae76292014c3b009aa0d9d95ce3e960c7d"
 dependencies = [
  "base64",
  "serde",

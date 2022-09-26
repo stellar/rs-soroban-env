@@ -1,24 +1,24 @@
 use crate::ConversionError;
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
-#[repr(u32)]
+#[repr(u64)]
 pub enum InvokerType {
     Account = 0,
     Contract = 1,
 }
 
-impl From<InvokerType> for u32 {
+impl From<InvokerType> for u64 {
     fn from(v: InvokerType) -> Self {
-        v as u32
+        v as u64
     }
 }
 
-impl TryFrom<u32> for InvokerType {
+impl TryFrom<u64> for InvokerType {
     type Error = ConversionError;
 
-    fn try_from(v: u32) -> Result<Self, Self::Error> {
-        const ACCOUNT: u32 = InvokerType::Account as u32;
-        const CONTRACT: u32 = InvokerType::Contract as u32;
+    fn try_from(v: u64) -> Result<Self, Self::Error> {
+        const ACCOUNT: u64 = InvokerType::Account as u64;
+        const CONTRACT: u64 = InvokerType::Contract as u64;
         match v {
             ACCOUNT => Ok(Self::Account),
             CONTRACT => Ok(Self::Contract),

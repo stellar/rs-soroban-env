@@ -109,7 +109,7 @@ impl Host {
 
     // notes on metering: covers the key and salt. Rest are free.
     pub fn id_preimage_from_source_account(&self, salt: Uint256) -> Result<Vec<u8>, HostError> {
-        if self.get_invoker_type()? != InvokerType::Account as u32 {
+        if self.get_invoker_type()? != InvokerType::Account as u64 {
             return Err(self.err_general("invoker is not an account"));
         }
 

@@ -1159,21 +1159,22 @@ impl VmCallerCheckedEnv for Host {
     }
 
     // TODO: Assess metering.
-    fn get_invoker_type(&self, _vmcaller: &mut VmCaller<Host>) -> Result<u32, HostError> {
+    fn get_invoker_type(&self, _vmcaller: &mut VmCaller<Host>) -> Result<u64, HostError> {
         let frames = self.0.context.borrow();
         // If the previous frame exists and is a contract, return its ID, otherwise return
         // the account invoking.
         let st = match frames.as_slice() {
+            // There are always two frames when WASM is executed in the VM.
             [.., f2, _] => match f2 {
                 #[cfg(feature = "vm")]
                 Frame::ContractVM(_, _) => Ok(InvokerType::Contract),
-                Frame::HostFunction(_) => Err(self.err_general(
-                    "host function found in second to last frame which is unexpected",
-                )),
+                Frame::HostFunction(_) => Ok(InvokerType::Account),
                 Frame::Token(id, _) => Ok(InvokerType::Contract),
                 #[cfg(feature = "testutils")]
                 Frame::TestContract(_, _) => Ok(InvokerType::Contract),
             },
+            // In tests contracts are executed with a single frame.
+            // TODO: Investigate this discrepancy: https://github.com/stellar/rs-soroban-env/issues/485.
             [f1] => match f1 {
                 #[cfg(feature = "vm")]
                 Frame::ContractVM(_, _) => {
@@ -1188,12 +1189,12 @@ impl VmCallerCheckedEnv for Host {
             },
             _ => Err(self.err_general("no frames to derive the invoker from")),
         }?;
-        Ok(st as u32)
+        Ok(st as u64)
     }
 
     // Notes on metering: covered by the components
     fn get_invoking_account(&self, vmcaller: &mut VmCaller<Host>) -> Result<Object, HostError> {
-        if self.get_invoker_type(vmcaller)? != InvokerType::Account as u32 {
+        if self.get_invoker_type(vmcaller)? != InvokerType::Account as u64 {
             return Err(self.err_general("invoker is not an account"));
         }
         Ok(self
