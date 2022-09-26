@@ -289,7 +289,7 @@ fn create_contract_from_source_account() -> Result<(), HostError> {
         },
     );
     let host = Host::with_storage_and_budget(storage, budget);
-    host.set_source_account(Some(source_account));
+    host.set_source_account(source_account);
 
     let obj_code = host.test_bin_obj(&code)?;
     let obj_salt = host.test_bin_obj(&salt_bytes)?;
