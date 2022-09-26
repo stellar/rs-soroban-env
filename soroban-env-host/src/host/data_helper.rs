@@ -1,4 +1,4 @@
-use soroban_env_common::{xdr::HashIdPreimageSourceContractId, CheckedEnv, InvokerType};
+use soroban_env_common::{xdr::HashIdPreimageSourceAccountContractId, CheckedEnv, InvokerType};
 
 use crate::budget::CostType;
 use crate::xdr::{
@@ -100,10 +100,11 @@ impl Host {
         }
 
         let source_account = self.source_account()?;
-        let pre_image = HashIdPreimage::ContractIdFromSource(HashIdPreimageSourceContractId {
-            source_account: source_account.clone(),
-            salt,
-        });
+        let pre_image =
+            HashIdPreimage::ContractIdFromSourceAccount(HashIdPreimageSourceAccountContractId {
+                source_account: source_account.clone(),
+                salt,
+            });
         let mut buf = Vec::new();
         self.charge_budget(CostType::BytesClone, 64)?; // key + salt
         pre_image
