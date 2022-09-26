@@ -295,7 +295,7 @@ fn create_contract_from_source_account() -> Result<(), HostError> {
     let obj_salt = host.test_bin_obj(&salt_bytes)?;
 
     host.with_frame(
-        Frame::HostFunction(HostFunction::CreateContractWithSource),
+        Frame::HostFunction(HostFunction::CreateContractWithSourceAccount),
         || {
             let contract_id = host
                 .create_contract_from_source_account(obj_code.to_object(), obj_salt.to_object())?;
