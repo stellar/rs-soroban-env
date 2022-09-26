@@ -21,6 +21,7 @@ pub(crate) enum HostObject {
     Bytes(Vec<u8>),
     BigInt(MeteredBigInt),
     ContractCode(xdr::ScContractCode),
+    AccountId(xdr::AccountId),
 }
 
 pub(crate) trait HostObjectType: Sized {
@@ -58,3 +59,4 @@ declare_host_object_type!(i64, I64, I64);
 declare_host_object_type!(Vec<u8>, Bytes, Bytes);
 declare_host_object_type!(MeteredBigInt, BigInt, BigInt);
 declare_host_object_type!(xdr::ScContractCode, ContractCode, ContractCode);
+declare_host_object_type!(xdr::AccountId, AccountId, AccountId);

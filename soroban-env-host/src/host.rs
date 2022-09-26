@@ -556,6 +556,7 @@ impl Host {
                         )),
                         HostObject::BigInt(bi) => self.scobj_from_bigint(bi),
                         HostObject::ContractCode(cc) => Ok(ScObject::ContractCode(cc.clone())),
+                        HostObject::AccountId(aid) => Ok(ScObject::AccountId(aid.clone())),
                     },
                 }
             })
@@ -605,6 +606,7 @@ impl Host {
                 self.add_host_object(bi)
             }
             ScObject::ContractCode(cc) => self.add_host_object(cc.clone()),
+            ScObject::AccountId(account_id) => self.add_host_object(account_id.clone()),
         }
     }
 
@@ -632,7 +634,7 @@ impl Host {
             HostObject::BigInt(bi) => {
                 self.charge_budget(CostType::HostBigIntAllocCell, bi.bits() as u64)?;
             }
-            HostObject::ContractCode(_) => {}
+            HostObject::ContractCode(_) | HostObject::AccountId(_) => {}
         }
         Ok(ho)
     }
