@@ -96,8 +96,7 @@ wasmi = { package = "soroban-wasmi", git = "https://github.com/stellar/wasmi", r
 
 soroban-sdk = { git = "https://github.com/stellar/rs-soroban-sdk", rev = "1d1c866d" }
 soroban-sdk-macros = { git = "https://github.com/stellar/rs-soroban-sdk", rev = "1d1c866d" }
-# TODO: Update this hash after the SDK PR merges: https://github.com/stellar/rs-soroban-sdk/pull/670.
-soroban-spec = { git = "https://github.com/stellar/rs-soroban-sdk", rev = "0f3fc6db" }
+soroban-spec = { git = "https://github.com/stellar/rs-soroban-sdk", rev = "ad95e20c" }
 
 # soroban-sdk = { path = "../../../rs-soroban-sdk/soroban-sdk" }
 # soroban-sdk-macros = { path = "../../../rs-soroban-sdk/soroban-sdk-macros"}
