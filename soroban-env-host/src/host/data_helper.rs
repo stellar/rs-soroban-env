@@ -130,7 +130,7 @@ impl Host {
     // notes on metering: `get` from storage and `to_u256` covered. Rest are free.
     pub fn load_account(&self, a: Object) -> Result<AccountEntry, HostError> {
         let acc = LedgerKey::Account(LedgerKeyAccount {
-            account_id: AccountId(PublicKey::PublicKeyTypeEd25519(self.to_u256(a)?)),
+            account_id: self.visit_obj(a, |id: &AccountId| Ok(id.clone()))?,
         });
         self.visit_storage(|storage| match storage.get(&acc)?.data {
             LedgerEntryData::Account(ae) => Ok(ae),
@@ -141,7 +141,7 @@ impl Host {
     // notes on metering: covered by `has` and `to_u256`.
     pub fn has_account(&self, a: Object) -> Result<bool, HostError> {
         let acc = LedgerKey::Account(LedgerKeyAccount {
-            account_id: AccountId(PublicKey::PublicKeyTypeEd25519(self.to_u256(a)?)),
+            account_id: self.visit_obj(a, |id: &AccountId| Ok(id.clone()))?,
         });
         self.visit_storage(|storage| storage.has(&acc))
     }
