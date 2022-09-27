@@ -305,6 +305,10 @@ macro_rules! call_macro_with_all_host_functions {
                 {"5", fn create_token_from_ed25519(salt: Object, key: Object, sig: Object) -> Object}
                 {"6", fn create_token_from_contract(salt: Object) -> Object}
                 {"7", fn create_token_wrapper(asset: Object) -> Object}
+                /// Create a contract using the source account and salt as input
+                /// to the contract ID that gets created. Pass as arguments a
+                /// Bytes for the wasm code and a Bytes for the salt. Returned
+                /// will be a Bytes or length 32 bytes.
                 {"8", fn create_contract_from_source_account(v: Object, salt: Object) -> Object}
             }
 
