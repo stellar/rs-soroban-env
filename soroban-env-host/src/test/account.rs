@@ -1,4 +1,4 @@
-use soroban_env_common::{CheckedEnv, EnvBase};
+use soroban_env_common::CheckedEnv;
 
 use crate::{
     budget::Budget,
@@ -9,15 +9,12 @@ use crate::{
 
 #[test]
 fn check_account_exists() -> Result<(), HostError> {
-    let id0 = [0; 32];
-    let id1 = [1; 32]; // declared, but not in storage
-    let id2 = [2; 32]; // not declared
-    let acc_id0 = xdr::Uint256(id0.clone());
-    let acc_id1 = xdr::Uint256(id1.clone());
-    let acc_id2 = xdr::Uint256(id2.clone());
-    let (lk0, le0) = Host::test_account_ledger_key_entry_pair(acc_id0);
-    let (lk1, _le1) = Host::test_account_ledger_key_entry_pair(acc_id1);
-    let (_lk2, _le2) = Host::test_account_ledger_key_entry_pair(acc_id2);
+    let acc_id0 = xdr::AccountId(xdr::PublicKey::PublicKeyTypeEd25519(xdr::Uint256([0; 32])));
+    let acc_id1 = xdr::AccountId(xdr::PublicKey::PublicKeyTypeEd25519(xdr::Uint256([1; 32]))); // declared, but not in storage
+    let acc_id2 = xdr::AccountId(xdr::PublicKey::PublicKeyTypeEd25519(xdr::Uint256([2; 32]))); // not declared
+    let (lk0, le0) = Host::test_account_ledger_key_entry_pair(acc_id0.clone());
+    let (lk1, _le1) = Host::test_account_ledger_key_entry_pair(acc_id1.clone());
+    let (_lk2, _le2) = Host::test_account_ledger_key_entry_pair(acc_id2.clone());
 
     let budget = Budget::default();
     let mut footprint = Footprint::default();
@@ -35,9 +32,9 @@ fn check_account_exists() -> Result<(), HostError> {
     );
 
     let host = Host::with_storage_and_budget(storage, budget.clone());
-    let obj0 = host.bytes_new_from_slice(&id0)?;
-    let obj1 = host.bytes_new_from_slice(&id1)?;
-    let obj2 = host.bytes_new_from_slice(&id2)?;
+    let obj0 = host.add_host_object(acc_id0).map(|ev| ev.val).unwrap();
+    let obj1 = host.add_host_object(acc_id1).map(|ev| ev.val).unwrap();
+    let obj2 = host.add_host_object(acc_id2).map(|ev| ev.val).unwrap();
     // declared and exists
     assert_eq!(
         host.account_exists(obj0)?.get_payload(),

@@ -7,8 +7,8 @@ use crate::{
     xdr,
     xdr::{
         AccountEntry, AccountId, ContractDataEntry, Hash, LedgerEntry, LedgerEntryData,
-        LedgerEntryExt, LedgerKey, LedgerKeyContractData, PublicKey, ScContractCode, ScObject,
-        ScStatic, ScVal, ScVec, Uint256,
+        LedgerEntryExt, LedgerKey, LedgerKeyContractData, ScContractCode, ScObject, ScStatic,
+        ScVal, ScVec,
     },
     Host, HostError,
 };
@@ -97,8 +97,9 @@ impl Host {
         Storage::with_enforcing_footprint_and_map(footprint, MeteredOrdMap { budget, map })
     }
 
-    pub(crate) fn test_account_ledger_key_entry_pair(id: Uint256) -> (LedgerKey, LedgerEntry) {
-        let account_id = AccountId(PublicKey::PublicKeyTypeEd25519(id));
+    pub(crate) fn test_account_ledger_key_entry_pair(
+        account_id: AccountId,
+    ) -> (LedgerKey, LedgerEntry) {
         let lk = LedgerKey::Account(xdr::LedgerKeyAccount {
             account_id: account_id.clone(),
         });
