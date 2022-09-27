@@ -34,7 +34,7 @@ pub fn read_name(e: &Host) -> Result<Bytes, Error> {
         Metadata::AlphaNum4(asset) => {
             let mut res: Bytes = asset.asset_code.into();
             res.push(b':')?;
-            let issuer_id = e.to_u256_from_account(asset.issuer.to_object())?;
+            let issuer_id = e.to_u256_from_account(&asset.issuer)?;
             res.append(Bytes::try_from_val(
                 e,
                 e.bytes_new_from_slice(&issuer_id.0)?,
@@ -44,7 +44,7 @@ pub fn read_name(e: &Host) -> Result<Bytes, Error> {
         Metadata::AlphaNum12(asset) => {
             let mut res: Bytes = asset.asset_code.into();
             res.push(b':')?;
-            let issuer_id = e.to_u256_from_account(asset.issuer.to_object())?;
+            let issuer_id = e.to_u256_from_account(&asset.issuer)?;
             res.append(Bytes::try_from_val(
                 e,
                 e.bytes_new_from_slice(&issuer_id.0)?,

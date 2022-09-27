@@ -13,7 +13,7 @@ use crate::{
 use ed25519_dalek::{PublicKey, Signature, SIGNATURE_LENGTH};
 use num_bigint::Sign;
 use sha2::{Digest, Sha256};
-use soroban_env_common::xdr::AccountId;
+use soroban_env_common::xdr::{AccountId, Asset, ReadXdr};
 
 impl Host {
     // Notes on metering: free
@@ -64,11 +64,13 @@ impl Host {
         })
     }
 
-    pub(crate) fn to_u256_from_account(&self, a: Object) -> Result<Uint256, HostError> {
-        self.visit_obj(a, |account_id: &AccountId| {
-            let crate::xdr::PublicKey::PublicKeyTypeEd25519(ed25519) = &account_id.0;
-            Ok(ed25519.metered_clone(&self.0.budget)?)
-        })
+    pub(crate) fn to_u256_from_account(
+        &self,
+        account_id: &AccountId,
+    ) -> Result<Uint256, HostError> {
+        let crate::xdr::PublicKey::PublicKeyTypeEd25519(ed25519) =
+            account_id.metered_clone(&self.0.budget)?.0;
+        Ok(ed25519)
     }
 
     pub(crate) fn to_u256(&self, a: Object) -> Result<Uint256, HostError> {
@@ -332,5 +334,13 @@ impl Host {
                 Ok(u64::from(v))
             }
         }
+    }
+
+    pub(crate) fn deserialize_asset(&self, asset: Object) -> Result<Asset, HostError> {
+        self.visit_obj(asset, |hv: &Vec<u8>| {
+            self.charge_budget(CostType::ValDeser, hv.len() as u64)?;
+            Asset::from_xdr(&mut hv.as_slice())
+                .map_err(|_| self.err_general("failed to de-serialize Asset"))
+        })
     }
 }

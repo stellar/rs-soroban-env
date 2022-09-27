@@ -7,7 +7,8 @@ use crate::native_contract::token::public_types::{
     SignaturePayloadV0,
 };
 use core::cmp::Ordering;
-use soroban_env_common::{CheckedEnv, IntoVal, InvokerType, Symbol, TryFromVal, TryIntoVal};
+use soroban_env_common::xdr::{ThresholdIndexes, Uint256};
+use soroban_env_common::{CheckedEnv, InvokerType, Symbol, TryFromVal, TryIntoVal};
 
 const MAX_ACCOUNT_SIGNATURES: u32 = 20;
 
@@ -52,6 +53,7 @@ fn check_account_auth(
     if sigs.len()? > MAX_ACCOUNT_SIGNATURES {
         return Err(Error::ContractError);
     }
+    let account = e.load_account(auth.account_id)?;
     let mut prev_pk: Option<BytesN<32>> = None;
     for i in 0..sigs.len()? {
         let sig: Ed25519Signature = sigs.get(i)?;
@@ -67,11 +69,9 @@ fn check_account_auth(
             sig.public_key.clone().into(),
             sig.signature.into(),
         )?;
-        let signer_weight_rv = e.account_get_signer_weight(
-            auth.account_id.clone().into_val(&e),
-            sig.public_key.clone().into(),
-        )?;
-        let signer_weight: u32 = signer_weight_rv.try_into()?;
+
+        let signer_weight =
+            e.get_signer_weight_from_account(Uint256(sig.public_key.to_array()?), &account)?;
         // 0 weight indicates that signer doesn't belong to this account. Treat
         // this as an error to indicate a bug in signatures, even if another
         // signers would have enough weight.
@@ -80,12 +80,11 @@ fn check_account_auth(
         }
         // Overflow isn't possible here as
         // 255 * MAX_ACCOUNT_SIGNATURES is < u32::MAX.
-        weight += signer_weight;
+        weight += signer_weight as u32;
         prev_pk = Some(sig.public_key);
     }
-
-    let threshold_rv = e.account_get_medium_threshold(auth.account_id.into_val(&e))?;
-    if weight < threshold_rv.try_into()? {
+    let threshold = account.thresholds.0[ThresholdIndexes::Med as usize];
+    if weight < threshold as u32 {
         Err(Error::ContractError)
     } else {
         Ok(())
