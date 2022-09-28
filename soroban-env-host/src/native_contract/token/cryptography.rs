@@ -8,6 +8,10 @@ use crate::native_contract::token::public_types::{
 };
 use core::cmp::Ordering;
 use soroban_env_common::{CheckedEnv, Symbol, TryFromVal, TryIntoVal};
+use std::cmp::min;
+
+const MAX_ACCOUNT_SIGNATURE_WEIGHT: u32 = u8::MAX as u32;
+const MAX_ACCOUNT_SIGNATURES: u32 = 20;
 
 fn check_ed25519_auth(
     e: &Host,
@@ -43,15 +47,17 @@ fn check_account_auth(
 
     let mut weight = 0u32;
     let sigs = &auth.signatures;
-    let mut prev_pk: Option<BytesN<32>> = None;
+    // Check if there is too many signatures: there shouldn't be more
+    // signatures then the amount of account signers.
+    if sigs.len()? > MAX_ACCOUNT_SIGNATURES {
+        return Err(Error::ContractError);
+    }
+    let mut used_pks = vec![];
     for i in 0..sigs.len()? {
         let sig: Ed25519Signature = sigs.get(i)?;
-
-        // Cannot take multiple signatures from the same key
-        if let Some(prev) = prev_pk {
-            if prev.compare(&sig.public_key)? != Ordering::Less {
-                return Err(Error::ContractError);
-            }
+        // Skip duplicate signatures.
+        if used_pks.contains(&sig.public_key) {
+            continue;
         }
 
         e.verify_sig_ed25519(
@@ -63,11 +69,11 @@ fn check_account_auth(
             auth.account_id.clone().into(),
             sig.public_key.clone().into(),
         )?;
-        let signer_weight: u32 = signer_weight_rv.try_into()?;
-        // TODO: Check for overflow
+        // Clamp signature weight to be at most 255. This is consistent with
+        // classic tx signature weight computations in Core.
+        let signer_weight: u32 = min(signer_weight_rv.try_into()?, MAX_ACCOUNT_SIGNATURE_WEIGHT);
+        used_pks.push(sig.public_key.clone());
         weight += signer_weight;
-
-        prev_pk = Some(sig.public_key);
     }
 
     let threshold_rv = e.account_get_medium_threshold(auth.account_id.into())?;
