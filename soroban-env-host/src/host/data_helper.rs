@@ -148,7 +148,7 @@ impl Host {
 
     pub fn to_trustline_key(
         &self,
-        account_id: Object,
+        account: Object,
         asset_code: Object,
         issuer: Object,
     ) -> Result<LedgerKey, HostError> {
@@ -157,19 +157,25 @@ impl Host {
             if b.len() > 0 && b.len() <= 4 {
                 Ok(TrustLineAsset::CreditAlphanum4(AlphaNum4 {
                     asset_code: AssetCode4(b.as_slice().try_into().unwrap()),
-                    issuer: AccountId(PublicKey::PublicKeyTypeEd25519(self.to_u256(issuer)?)),
+                    issuer: AccountId(PublicKey::PublicKeyTypeEd25519(
+                        self.to_u256_from_account(issuer)?,
+                    )),
                 }))
             } else if b.len() > 0 && b.len() <= 12 {
                 Ok(TrustLineAsset::CreditAlphanum12(AlphaNum12 {
                     asset_code: AssetCode12(b.as_slice().try_into().unwrap()),
-                    issuer: AccountId(PublicKey::PublicKeyTypeEd25519(self.to_u256(issuer)?)),
+                    issuer: AccountId(PublicKey::PublicKeyTypeEd25519(
+                        self.to_u256_from_account(issuer)?,
+                    )),
                 }))
             } else {
                 Err(self.err_general("invalid asset code"))
             }
         })?;
         Ok(LedgerKey::Trustline(LedgerKeyTrustLine {
-            account_id: AccountId(PublicKey::PublicKeyTypeEd25519(self.to_u256(account_id)?)),
+            account_id: AccountId(PublicKey::PublicKeyTypeEd25519(
+                self.to_u256_from_account(account)?,
+            )),
             asset,
         }))
     }

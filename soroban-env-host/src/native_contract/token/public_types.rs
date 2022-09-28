@@ -1,7 +1,8 @@
 use crate::host::Host;
-use crate::native_contract::base_types::{Bytes, BytesN, Map, Vec};
+use crate::native_contract::base_types::{AccountId, Bytes, BytesN, Map, Vec};
+use crate::native_contract::invoker::{invoker, Invoker};
 use crate::native_contract::token::error::Error;
-use soroban_env_common::{CheckedEnv, Symbol, TryIntoVal};
+use soroban_env_common::{Symbol, TryIntoVal};
 use soroban_native_sdk_macros::contracttype;
 
 #[derive(Clone)]
@@ -14,14 +15,14 @@ pub struct Ed25519Signature {
 #[derive(Clone)]
 #[contracttype]
 pub struct AccountSignatures {
-    pub account_id: BytesN<32>,
+    pub account_id: AccountId,
     pub signatures: Vec,
 }
 
 #[derive(Clone)]
 #[contracttype]
 pub enum Signature {
-    Contract,
+    Invoker,
     Ed25519(Ed25519Signature),
     Account(AccountSignatures),
 }
@@ -29,9 +30,10 @@ pub enum Signature {
 impl Signature {
     pub fn get_identifier(&self, env: &Host) -> Result<Identifier, Error> {
         Ok(match self {
-            Signature::Contract => {
-                Identifier::Contract(env.get_invoking_contract()?.to_raw().try_into_val(env)?)
-            }
+            Signature::Invoker => match invoker(env)? {
+                Invoker::Account(a) => Identifier::Account(a),
+                Invoker::Contract(c) => Identifier::Contract(c),
+            },
             Signature::Ed25519(kea) => Identifier::Ed25519(kea.public_key.clone()),
             Signature::Account(kaa) => Identifier::Account(kaa.account_id.clone()),
         })
@@ -43,7 +45,7 @@ impl Signature {
 pub enum Identifier {
     Contract(BytesN<32>),
     Ed25519(BytesN<32>),
-    Account(BytesN<32>),
+    Account(AccountId),
 }
 
 #[derive(Clone)]
@@ -73,14 +75,14 @@ pub struct TokenMetadata {
 #[contracttype]
 pub struct AlphaNum4Metadata {
     pub asset_code: BytesN<4>,
-    pub issuer: BytesN<32>,
+    pub issuer: AccountId,
 }
 
 #[derive(Clone)]
 #[contracttype]
 pub struct AlphaNum12Metadata {
     pub asset_code: BytesN<12>,
-    pub issuer: BytesN<32>,
+    pub issuer: AccountId,
 }
 
 #[derive(Clone)]
