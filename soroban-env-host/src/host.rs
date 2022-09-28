@@ -755,8 +755,9 @@ impl Host {
 
     // Notes on metering: covered by the called components.
     pub fn invoke_function_raw(&self, hf: HostFunction, args: ScVec) -> Result<RawVal, HostError> {
+        //TODO: should the create_* methods below return a RawVal instead of Object to avoid this conversion?
         match hf {
-            HostFunction::Call => {
+            HostFunction::InvokeContract => {
                 if let [ScVal::Object(Some(scobj)), ScVal::Symbol(scsym), rest @ ..] =
                     args.as_slice()
                 {
@@ -786,7 +787,6 @@ impl Host {
                         let salt = self.to_host_obj(s_obj)?.to_object();
                         let key = self.to_host_obj(k_obj)?.to_object();
                         let signature = self.to_host_obj(sig_obj)?.to_object();
-                        //TODO: should create_contract_from_ed25519 return a RawVal instead of Object to avoid this conversion?
                         self.create_contract_from_ed25519(
                             &mut VmCaller::none(),
                             contract,
@@ -808,7 +808,6 @@ impl Host {
                     self.with_frame(Frame::HostFunction(hf), || {
                         let contract = self.to_host_obj(c_obj)?.to_object();
                         let salt = self.to_host_obj(s_obj)?.to_object();
-                        //TODO: should create_contract_from_source_account return a RawVal instead of Object to avoid this conversion?
                         self.create_contract_from_source_account(
                             &mut VmCaller::none(),
                             contract,
@@ -819,7 +818,35 @@ impl Host {
                 } else {
                     Err(self.err_status_msg(
                         ScHostFnErrorCode::InputArgsWrongLength,
-                        "unexpected arguments to 'CreateContractWithSource' host function",
+                        "unexpected arguments to 'CreateContractWithSourceAccount' host function",
+                    ))
+                }
+            }
+            HostFunction::CreateTokenContractWithAsset => {
+                if let [ScVal::Object(Some(a_obj))] = args.as_slice() {
+                    self.with_frame(Frame::HostFunction(hf), || {
+                        let asset_bytes = self.to_host_obj(a_obj)?.to_object();
+                        self.create_token_wrapper(&mut VmCaller::none(), asset_bytes)
+                            .map(|obj| <RawVal>::from(obj))
+                    })
+                } else {
+                    Err(self.err_status_msg(
+                        ScHostFnErrorCode::InputArgsWrongLength,
+                        "unexpected arguments to 'CreateTokenContractWithAsset' host function",
+                    ))
+                }
+            }
+            HostFunction::CreateTokenContractWithSourceAccount => {
+                if let [ScVal::Object(Some(s_obj))] = args.as_slice() {
+                    self.with_frame(Frame::HostFunction(hf), || {
+                        let salt = self.to_host_obj(s_obj)?.to_object();
+                        self.create_token_from_source_account(&mut VmCaller::none(), salt)
+                            .map(|obj| <RawVal>::from(obj))
+                    })
+                } else {
+                    Err(self.err_status_msg(
+                        ScHostFnErrorCode::InputArgsWrongLength,
+                        "unexpected arguments to 'CreateTokenContractWithSourceAccount' host function",
                     ))
                 }
             }
@@ -1804,6 +1831,22 @@ impl VmCallerCheckedEnv for Host {
         })?;
         let buf = self.id_preimage_from_source_account(salt)?;
         self.create_contract_with_id_preimage(wasm, buf)
+    }
+
+    fn create_token_from_source_account(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        salt: Object,
+    ) -> Result<Object, HostError> {
+        let frames = self.0.context.borrow();
+        if frames.len() > 1 {
+            return Err(self.err_general("cannot be called from a contract"));
+        }
+
+        let salt = self.uint256_from_obj_input("salt", salt)?;
+
+        let buf = self.id_preimage_from_source_account(salt)?;
+        self.create_contract_with_id_preimage(ScContractCode::Token, buf)
     }
 
     fn create_token_from_ed25519(

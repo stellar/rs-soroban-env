@@ -308,8 +308,13 @@ macro_rules! call_macro_with_all_host_functions {
                 /// Create a contract using the source account and salt as input
                 /// to the contract ID that gets created. Pass as arguments a
                 /// Bytes for the wasm code and a Bytes for the salt. Returned
-                /// will be a Bytes or length 32 bytes.
+                /// will be a Bytes of length 32 bytes.
                 {"8", fn create_contract_from_source_account(v: Object, salt: Object) -> Object}
+                /// Create a token contract using the source account and salt
+                /// as input to the contract ID that gets created. Pass as
+                /// arguments a Bytes for the salt. Returned
+                /// will be a Bytes of length 32 bytes.
+                {"9", fn create_token_from_source_account(salt: Object) -> Object}
             }
 
             mod call "d" {
