@@ -98,6 +98,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "14c189c53d098945499cdfa7ecc63567cf3886b3332b312a5b4585d8d3a6a610"
 
 [[package]]
+name = "bytes-lit"
+version = "0.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1c181bca161a49348b90fa75f9a54fe11b7138098eed90d841a1055d574b4250"
+dependencies = [
+ "num-bigint",
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "cc"
 version = "1.0.73"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -643,6 +655,7 @@ name = "soroban-env-host"
 version = "0.0.5"
 dependencies = [
  "backtrace",
+ "bytes-lit",
  "dyn-fmt",
  "ed25519-dalek",
  "env_logger",
@@ -730,7 +743,7 @@ checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 [[package]]
 name = "stellar-xdr"
 version = "0.0.2"
-source = "git+https://github.com/stellar/rs-stellar-xdr?rev=f87409c#f87409c3baf87d7858f7f7b6c283ed0a9ca13387"
+source = "git+https://github.com/stellar/rs-stellar-xdr?rev=1bcc6fe3#1bcc6fe3a15cb4f7cd157b4f4a50a93b491c3d10"
 dependencies = [
  "base64",
  "serde",

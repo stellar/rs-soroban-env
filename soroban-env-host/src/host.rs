@@ -7,13 +7,14 @@ use core::fmt::Debug;
 
 use im_rc::{OrdMap, Vector};
 use num_bigint::Sign;
+use sha2::{Digest, Sha256};
 use soroban_env_common::{
     EnvVal, InvokerType, Status, TryConvert, TryFromVal, TryIntoVal, VmCaller, VmCallerCheckedEnv,
 };
 
 use soroban_env_common::xdr::{
     AccountId, Asset, ContractEvent, ContractEventBody, ContractEventType, ContractEventV0,
-    ExtensionPoint, Hash, PublicKey, ReadXdr, ScStatusType, ThresholdIndexes, WriteXdr,
+    ExtensionPoint, Hash, PublicKey, ReadXdr, ScStatus, ScStatusType, ThresholdIndexes, WriteXdr,
 };
 
 use crate::budget::{Budget, CostType};
@@ -191,7 +192,7 @@ impl Host {
         *self.0.source_account.borrow_mut() = Some(source_account);
     }
 
-    fn source_account(&self) -> Result<AccountId, HostError> {
+    pub fn source_account(&self) -> Result<AccountId, HostError> {
         if let Some(account_id) = self.0.source_account.borrow().as_ref() {
             Ok(account_id.clone())
         } else {
@@ -427,7 +428,11 @@ impl Host {
 
     // Notes on metering: object visiting part is covered by unchecked_visit_val_obj. Closure function
     /// needs to be metered separately.
-    fn visit_obj<HOT: HostObjectType, F, U>(&self, obj: Object, f: F) -> Result<U, HostError>
+    pub(crate) fn visit_obj<HOT: HostObjectType, F, U>(
+        &self,
+        obj: Object,
+        f: F,
+    ) -> Result<U, HostError>
     where
         F: FnOnce(&HOT) -> Result<U, HostError>,
     {
@@ -778,31 +783,10 @@ impl Host {
                     ))
                 }
             }
-            HostFunction::CreateContractWithEd25519 => {
-                if let [ScVal::Object(Some(c_obj)), ScVal::Object(Some(s_obj)), ScVal::Object(Some(k_obj)), ScVal::Object(Some(sig_obj))] =
-                    args.as_slice()
-                {
-                    self.with_frame(Frame::HostFunction(hf), || {
-                        let contract = self.to_host_obj(c_obj)?.to_object();
-                        let salt = self.to_host_obj(s_obj)?.to_object();
-                        let key = self.to_host_obj(k_obj)?.to_object();
-                        let signature = self.to_host_obj(sig_obj)?.to_object();
-                        self.create_contract_from_ed25519(
-                            &mut VmCaller::none(),
-                            contract,
-                            salt,
-                            key,
-                            signature,
-                        )
-                        .map(|obj| <RawVal>::from(obj))
-                    })
-                } else {
-                    Err(self.err_status_msg(
-                        ScHostFnErrorCode::InputArgsWrongLength,
-                        "unexpected arguments to 'CreateContractWithEd25519' host function",
-                    ))
-                }
-            }
+            HostFunction::CreateContractWithEd25519 => Err(self.err_status_msg(
+                ScHostFnErrorCode::UnknownError,
+                "CreateContractWithEd25519 is not yet implemented",
+            )),
             HostFunction::CreateContractWithSourceAccount => {
                 if let [ScVal::Object(Some(c_obj)), ScVal::Object(Some(s_obj))] = args.as_slice() {
                     self.with_frame(Frame::HostFunction(hf), || {
@@ -1763,32 +1747,10 @@ impl VmCallerCheckedEnv for Host {
         key: Object,
         sig: Object,
     ) -> Result<Object, HostError> {
-        let salt_val = self.uint256_from_obj_input("salt", salt)?;
-        let key_val = self.uint256_from_obj_input("key", key)?;
-
-        // Verify parameters
-        let params = self.visit_obj(v, |bytes: &Vec<u8>| {
-            let separator = "create_contract_from_ed25519(contract: Vec<u8>, salt: u256, key: u256, sig: Vec<u8>)";
-            let params = [separator.as_bytes(), salt_val.as_ref(), bytes].concat();
-            // Another charge-after-work. Easier to get the num bytes this way.
-            // TODO: 1. pre calcualte the bytes and charge before concat. 
-            // 2. Might be overkill to have a separate type for this. Maybe can consolidate
-            // with `BytesClone` or `BytesAppend`.
-            self.charge_budget(CostType::BytesConcat, params.len() as u64)?;
-            Ok(params)
-        })?;
-        let hash = self.compute_hash_sha256(vmcaller, self.add_host_object(params)?.into())?;
-
-        self.verify_sig_ed25519(vmcaller, hash, key, sig)?;
-
-        let wasm = self.visit_obj(v, |b: &Vec<u8>| {
-            Ok(ScContractCode::Wasm(
-                b.try_into()
-                    .map_err(|_| self.err_general("code too large"))?,
-            ))
-        })?;
-        let buf = self.id_preimage_from_ed25519(key_val, salt_val)?;
-        self.create_contract_with_id_preimage(wasm, buf)
+        Err(self.err_status_msg(
+            ScStatus::HostFunctionError(ScHostFnErrorCode::UnknownError),
+            "not yet implemented",
+        ))
     }
 
     // Notes on metering: covered by the components.
@@ -1894,7 +1856,7 @@ impl VmCallerCheckedEnv for Host {
     ) -> Result<Object, HostError> {
         let a = self.visit_obj(asset, |hv: &Vec<u8>| {
             //self.charge_budget(CostType::ValDeser, hv.len() as u64)?;
-            Asset::read_xdr(&mut hv.as_slice())
+            Asset::from_xdr(&mut hv.as_slice())
                 .map_err(|_| self.err_general("failed to de-serialize Asset"))
         })?;
 
@@ -2390,7 +2352,7 @@ impl VmCallerCheckedEnv for Host {
     ) -> Result<RawVal, HostError> {
         let scv = self.visit_obj(b, |hv: &Vec<u8>| {
             self.charge_budget(CostType::ValDeser, hv.len() as u64)?;
-            ScVal::read_xdr(&mut hv.as_slice())
+            ScVal::from_xdr(&mut hv.as_slice())
                 .map_err(|_| self.err_general("failed to de-serialize ScVal"))
         })?;
         Ok(self.to_host_val(&scv)?.into())
@@ -2809,6 +2771,20 @@ impl VmCallerCheckedEnv for Host {
     ) -> Result<Object, Self::Error> {
         Ok(self
             .with_ledger_info(|li| self.add_host_object(li.network_passphrase.clone()))?
+            .into())
+    }
+
+    fn get_ledger_network_id(&self, _vmcaller: &mut VmCaller<Host>) -> Result<Object, Self::Error> {
+        Ok(self
+            .with_ledger_info(|li| {
+                let hash = Sha256::digest(li.network_passphrase.clone())
+                    .as_slice()
+                    .to_vec();
+                if hash.len() != 32 {
+                    return Err(self.err_general("incorrect hash size"));
+                }
+                self.add_host_object(hash)
+            })?
             .into())
     }
 
