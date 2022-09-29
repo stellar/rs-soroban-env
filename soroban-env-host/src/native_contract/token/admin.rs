@@ -18,7 +18,7 @@ pub fn write_administrator(e: &Host, id: Identifier) -> Result<(), Error> {
 
 pub fn check_admin(e: &Host, auth: &Signature) -> Result<(), Error> {
     let admin = read_administrator(e)?;
-    let id = Signature::get_identifier(auth, e)?;
+    let id = auth.get_identifier(e)?;
 
     if id != admin {
         Err(Error::ContractError)
