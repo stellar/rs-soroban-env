@@ -7,6 +7,7 @@ use core::fmt::Debug;
 
 use im_rc::{OrdMap, Vector};
 use num_bigint::Sign;
+use sha2::{Digest, Sha256};
 use soroban_env_common::{
     EnvVal, InvokerType, Status, TryConvert, TryFromVal, TryIntoVal, VmCaller, VmCallerCheckedEnv,
 };
@@ -427,7 +428,11 @@ impl Host {
 
     // Notes on metering: object visiting part is covered by unchecked_visit_val_obj. Closure function
     /// needs to be metered separately.
-    fn visit_obj<HOT: HostObjectType, F, U>(&self, obj: Object, f: F) -> Result<U, HostError>
+    pub(crate) fn visit_obj<HOT: HostObjectType, F, U>(
+        &self,
+        obj: Object,
+        f: F,
+    ) -> Result<U, HostError>
     where
         F: FnOnce(&HOT) -> Result<U, HostError>,
     {
@@ -2808,6 +2813,20 @@ impl VmCallerCheckedEnv for Host {
     ) -> Result<Object, Self::Error> {
         Ok(self
             .with_ledger_info(|li| self.add_host_object(li.network_passphrase.clone()))?
+            .into())
+    }
+
+    fn get_ledger_network_id(&self, _vmcaller: &mut VmCaller<Host>) -> Result<Object, Self::Error> {
+        Ok(self
+            .with_ledger_info(|li| {
+                let hash = Sha256::digest(li.network_passphrase.clone())
+                    .as_slice()
+                    .to_vec();
+                if hash.len() != 32 {
+                    return Err(self.err_general("incorrect hash size"));
+                }
+                self.add_host_object(hash)
+            })?
             .into())
     }
 
