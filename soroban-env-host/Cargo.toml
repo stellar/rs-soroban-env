@@ -38,6 +38,7 @@ thousands = "0.2.0"
 # NB: this must match the same rand version used by ed25519-dalek above
 rand = "0.7.3"
 soroban-test-wasms = { package = "soroban-test-wasms", path = "../soroban-test-wasms" }
+bytes-lit = "0.0.4"
 
 [features]
 vm = ["wasmi", "parity-wasm", "soroban-env-common/vm"]
