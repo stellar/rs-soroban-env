@@ -1855,7 +1855,7 @@ impl VmCallerCheckedEnv for Host {
     ) -> Result<Object, HostError> {
         let a = self.visit_obj(asset, |hv: &Vec<u8>| {
             //self.charge_budget(CostType::ValDeser, hv.len() as u64)?;
-            Asset::read_xdr(&mut hv.as_slice())
+            Asset::from_xdr(&mut hv.as_slice())
                 .map_err(|_| self.err_general("failed to de-serialize Asset"))
         })?;
 
@@ -2351,7 +2351,7 @@ impl VmCallerCheckedEnv for Host {
     ) -> Result<RawVal, HostError> {
         let scv = self.visit_obj(b, |hv: &Vec<u8>| {
             self.charge_budget(CostType::ValDeser, hv.len() as u64)?;
-            ScVal::read_xdr(&mut hv.as_slice())
+            ScVal::from_xdr(&mut hv.as_slice())
                 .map_err(|_| self.err_general("failed to de-serialize ScVal"))
         })?;
         Ok(self.to_host_val(&scv)?.into())
