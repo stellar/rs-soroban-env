@@ -12,11 +12,11 @@ use soroban_env_common::{CheckedEnv, IntoVal, InvokerType, Symbol, TryFromVal, T
 fn check_ed25519_auth(
     e: &Host,
     auth: Ed25519Signature,
-    function: Symbol,
+    name: Symbol,
     args: Vec,
 ) -> Result<(), Error> {
     let msg = SignaturePayloadV0 {
-        function,
+        name,
         contract: BytesN::<32>::try_from_val(e, e.get_current_contract()?)?,
         network: Bytes::try_from_val(e, e.get_ledger_network_passphrase()?)?,
         args,
@@ -30,11 +30,11 @@ fn check_ed25519_auth(
 fn check_account_auth(
     e: &Host,
     auth: AccountSignatures,
-    function: Symbol,
+    name: Symbol,
     args: Vec,
 ) -> Result<(), Error> {
     let msg = SignaturePayloadV0 {
-        function,
+        name,
         contract: BytesN::<32>::try_from_val(e, e.get_current_contract()?)?,
         network: Bytes::try_from_val(e, e.get_ledger_network_passphrase()?)?,
         args,

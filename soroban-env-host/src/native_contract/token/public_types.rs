@@ -51,9 +51,9 @@ pub enum Identifier {
 #[derive(Clone)]
 #[contracttype]
 pub struct SignaturePayloadV0 {
-    pub function: Symbol,
-    pub contract: BytesN<32>,
     pub network: Bytes,
+    pub contract: BytesN<32>,
+    pub name: Symbol,
     pub args: Vec,
 }
 
