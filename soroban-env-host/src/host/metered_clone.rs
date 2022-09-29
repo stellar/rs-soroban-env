@@ -2,7 +2,7 @@ use crate::{
     budget::{Budget, CostType},
     host::Events,
     host::MeteredOrdMap,
-    xdr::{Hash, Uint256},
+    xdr::{AccountId, Hash, PublicKey, ScContractCode, Uint256},
     HostError,
 };
 use std::rc::Rc;
@@ -40,6 +40,24 @@ impl<K, V> MeteredClone for MeteredOrdMap<K, V> {
     fn metered_clone(&self, budget: &Budget) -> Result<Self, HostError> {
         assert!(Rc::ptr_eq(&self.budget.0, &budget.0));
         self.charge_new()?;
+        Ok(self.clone())
+    }
+}
+
+impl MeteredClone for ScContractCode {
+    fn metered_clone(&self, budget: &Budget) -> Result<Self, HostError> {
+        if let ScContractCode::Wasm(c) = self {
+            budget.charge(CostType::BytesClone, c.len() as u64)?;
+        }
+        Ok(self.clone())
+    }
+}
+
+impl MeteredClone for AccountId {
+    fn metered_clone(&self, budget: &Budget) -> Result<Self, HostError> {
+        match self.0 {
+            PublicKey::PublicKeyTypeEd25519(_) => budget.charge(CostType::BytesClone, 32 as u64)?,
+        }
         Ok(self.clone())
     }
 }
