@@ -917,8 +917,8 @@ impl Host {
             let base_reserve = self.with_ledger_info(|li| Ok(li.base_reserve))? as i64;
             let (min_balance, max_balance) = if let AccountEntryExt::V1(ext1) = &ae.ext {
                 let net_entries = if let AccountEntryExtensionV1Ext::V2(ext2) = &ext1.ext {
-                    2i64 + (ae.num_sub_entries as i64) + (ext2.num_sponsored as i64)
-                        - (ext2.num_sponsoring as i64)
+                    2i64 + (ae.num_sub_entries as i64) + (ext2.num_sponsoring as i64)
+                        - (ext2.num_sponsored as i64)
                 } else {
                     2i64 + ae.num_sub_entries as i64
                 };
