@@ -1,4 +1,5 @@
 use super::metered_bigint::MeteredBigInt;
+use super::metered_clone::MeteredClone;
 use crate::xdr::{
     Hash, LedgerKey, LedgerKeyContractData, ScBigInt, ScHostFnErrorCode, ScHostObjErrorCode,
     ScHostValErrorCode, ScObject, ScStatic, ScVal, ScVec, Uint256,
@@ -213,14 +214,14 @@ impl Host {
                                                 self.err_status(ScHostObjErrorCode::UnexpectedType)
                                             );
                                         }
-                                        // TODO: metered clone bytes
+                                        self.charge_budget(CostType::BytesClone, b.len() as u64)?;
                                         Ok(ScObject::Bytes(self.map_err(b.clone().try_into())?))
                                     }
                                     HostObject::U64(u) => Ok(ScObject::U64(*u)),
                                     HostObject::I64(i) => Ok(ScObject::I64(*i)),
                                     HostObject::BigInt(bi) => self.scobj_from_bigint(bi),
                                     HostObject::AccountId(aid) => {
-                                        Ok(ScObject::AccountId(aid.clone()))
+                                        Ok(ScObject::AccountId(aid.metered_clone(&self.0.budget)?))
                                     }
                                 },
                             }?;

@@ -36,14 +36,17 @@ pub enum CostType {
     CloneEvents = 11,
     // Cost of occupying a host object slot
     HostObjAllocSlot = 12,
-    // Cost specific to adding a new host object.
-    // TODO: there is probably double charging here (13-18), since object construction is charged separately,
-    // and the host object slot is charged by `HostObjAllocSlot` above.
+    // Cost of pushing a new `Vec` object to the object storage.
     HostVecAllocCell = 13,
+    // Cost of pushing a new `Map` object to the object storage.
     HostMapAllocCell = 14,
+    // Cost of pushing a new `U64` object to the object storage.
     HostU64AllocCell = 15,
+    // Cost of pushing a new `I64` object to the object storage.
     HostI64AllocCell = 16,
-    HostBinAllocCell = 17,
+    // Cost of pushing a new `Bytes` object to the object storage.
+    HostBytesAllocCell = 17,
+    // Cost of pushing a new `BigInt` object to the object storage.
     HostBigIntAllocCell = 18,
     // Cost of computing the sha256 hash from bytes
     ComputeSha256Hash = 19,
@@ -134,6 +137,11 @@ pub enum CostType {
     CallArgsUnpack = 59,
     // Cost of charging a value to the budgeting system.
     ChargeBudget = 60,
+    // TODO: reshuffle to bring the "AllocCell" types together
+    // Cost of pushing a new `ContractCode` object to the object storage.
+    HostContractCodeAllocCell = 61,
+    // Cost of pushing a new `AccountId` object to the object storage.
+    HostAccountIdAllocCell = 62,
 }
 
 // TODO: add XDR support for iterating over all the elements of an enum
@@ -157,7 +165,7 @@ impl CostType {
             CostType::HostMapAllocCell,
             CostType::HostU64AllocCell,
             CostType::HostI64AllocCell,
-            CostType::HostBinAllocCell,
+            CostType::HostBytesAllocCell,
             CostType::HostBigIntAllocCell,
             CostType::ComputeSha256Hash,
             CostType::ComputeEd25519PubKey,
@@ -201,6 +209,8 @@ impl CostType {
             CostType::BytesConcat,
             CostType::CallArgsUnpack,
             CostType::ChargeBudget,
+            CostType::HostContractCodeAllocCell,
+            CostType::HostAccountIdAllocCell,
         ];
         VARIANTS.iter()
     }
@@ -500,8 +510,8 @@ impl Default for BudgetImpl {
                     cpu.log_base_param = 64;
                     cpu.log_param = 1;
                 }
-                CostType::HostU64AllocCell | CostType::HostI64AllocCell => (), // counted in HostObjAllocCell
-                CostType::HostBinAllocCell => cpu.lin_param = 10,
+                CostType::HostU64AllocCell | CostType::HostI64AllocCell => (), // counted in HostObjAllocSlot
+                CostType::HostBytesAllocCell => cpu.lin_param = 10,
                 CostType::HostBigIntAllocCell => cpu.lin_param = 10,
 
                 CostType::ComputeSha256Hash => {
@@ -561,6 +571,8 @@ impl Default for BudgetImpl {
                 | CostType::BytesConcat => cpu.lin_param = 10,
                 CostType::CallArgsUnpack => cpu.lin_param = 10,
                 CostType::ChargeBudget => cpu.const_param = 50,
+                CostType::HostContractCodeAllocCell => cpu.lin_param = 10,
+                CostType::HostAccountIdAllocCell => cpu.lin_param = 320,
             }
 
             let mem = b.mem_bytes.get_cost_model_mut(*ct);
@@ -579,7 +591,7 @@ impl Default for BudgetImpl {
                 | CostType::HostMapAllocCell
                 | CostType::HostU64AllocCell
                 | CostType::HostI64AllocCell => (), // counted in ObjAllocSlot
-                CostType::HostBinAllocCell => mem.lin_param = 1,
+                CostType::HostBytesAllocCell => mem.lin_param = 1,
                 CostType::HostBigIntAllocCell => mem.lin_param = 1,
                 CostType::ComputeSha256Hash | CostType::ComputeEd25519PubKey => (),
                 CostType::ImMapNew => mem.const_param = 3000,
@@ -618,6 +630,8 @@ impl Default for BudgetImpl {
                 | CostType::BytesSlice
                 | CostType::BytesConcat => mem.lin_param = 1,
                 CostType::CallArgsUnpack | CostType::ChargeBudget => (),
+                CostType::HostContractCodeAllocCell => mem.lin_param = 1,
+                CostType::HostAccountIdAllocCell => mem.lin_param = 32,
             }
         }
 
