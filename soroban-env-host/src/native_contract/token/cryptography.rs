@@ -57,7 +57,7 @@ fn check_account_auth(
         let sig: Ed25519Signature = sigs.get(i)?;
         // Skip duplicate signatures.
         if used_pks.contains(&sig.public_key) {
-            continue;
+            return Err(Error::ContractError);
         }
 
         e.verify_sig_ed25519(
