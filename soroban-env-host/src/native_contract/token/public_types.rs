@@ -38,6 +38,17 @@ impl Signature {
             Signature::Account(kaa) => Identifier::Account(kaa.account_id.clone()),
         })
     }
+
+    pub fn get_account_id(&self, env: &Host) -> Result<AccountId, Error> {
+        match self {
+            Signature::Account(acc) => Ok(acc.account_id.clone()),
+            Signature::Invoker => match invoker(env)? {
+                Invoker::Account(a) => Ok(a),
+                Invoker::Contract(_) => Err(Error::ContractError),
+            },
+            _ => Err(Error::ContractError),
+        }
+    }
 }
 
 #[derive(Clone, PartialEq)]

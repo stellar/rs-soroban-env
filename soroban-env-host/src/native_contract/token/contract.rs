@@ -363,10 +363,8 @@ impl TokenTrait for Token {
             return Err(Error::ContractError);
         }
 
-        let account_id = match &id {
-            Signature::Account(acc) => Ok(acc.account_id.clone()),
-            _ => Err(Error::ContractError),
-        }?;
+        let account_id = id.get_account_id(e)?;
+
         let mut args = Vec::new(e)?;
         args.push(id.get_identifier(&e)?)?;
         args.push(nonce.clone())?;
@@ -387,10 +385,8 @@ impl TokenTrait for Token {
             return Err(Error::ContractError);
         }
 
-        let account_id = match &id {
-            Signature::Account(acc) => Ok(acc.account_id.clone()),
-            _ => Err(Error::ContractError),
-        }?;
+        let account_id = id.get_account_id(e)?;
+
         let mut args = Vec::new(e)?;
         args.push(id.get_identifier(&e)?)?;
         args.push(nonce.clone())?;
