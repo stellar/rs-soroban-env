@@ -8,9 +8,7 @@ use crate::native_contract::token::public_types::{
 };
 use core::cmp::Ordering;
 use soroban_env_common::{CheckedEnv, Symbol, TryFromVal, TryIntoVal};
-use std::cmp::min;
 
-const MAX_ACCOUNT_SIGNATURE_WEIGHT: u32 = u8::MAX as u32;
 const MAX_ACCOUNT_SIGNATURES: u32 = 20;
 
 fn check_ed25519_auth(
@@ -71,9 +69,9 @@ fn check_account_auth(
             auth.account_id.clone().into(),
             sig.public_key.clone().into(),
         )?;
-        // Clamp signature weight to be at most 255. This is consistent with
-        // classic tx signature weight computations in Core.
-        let signer_weight: u32 = min(signer_weight_rv.try_into()?, MAX_ACCOUNT_SIGNATURE_WEIGHT);
+        let signer_weight: u32 = signer_weight_rv.try_into()?;
+        // Overflow isn't possible here as
+        // 255 * MAX_ACCOUNT_SIGNATURES is < u32::MAX.
         weight += signer_weight;
         prev_pk = Some(sig.public_key);
     }
