@@ -7,7 +7,7 @@ use crate::budget::CostType;
 use crate::xdr::{
     AccountEntry, AccountId, ContractDataEntry, Hash, HashIdPreimage, HashIdPreimageContractId,
     HashIdPreimageEd25519ContractId, LedgerEntry, LedgerEntryData, LedgerEntryExt, LedgerKey,
-    LedgerKeyAccount, LedgerKeyContractData, LedgerKeyTrustLine, PublicKey, ScContractCode,
+    LedgerKeyAccount, LedgerKeyContractData, LedgerKeyTrustLine, ScContractCode,
     ScHostStorageErrorCode, ScHostValErrorCode, ScObject, ScStatic, ScVal, Uint256, WriteXdr,
 };
 use crate::{Host, HostError, Object};
@@ -157,25 +157,19 @@ impl Host {
             if b.len() > 0 && b.len() <= 4 {
                 Ok(TrustLineAsset::CreditAlphanum4(AlphaNum4 {
                     asset_code: AssetCode4(b.as_slice().try_into().unwrap()),
-                    issuer: AccountId(PublicKey::PublicKeyTypeEd25519(
-                        self.to_u256_from_account(issuer)?,
-                    )),
+                    issuer: self.to_account_id(issuer)?,
                 }))
             } else if b.len() > 0 && b.len() <= 12 {
                 Ok(TrustLineAsset::CreditAlphanum12(AlphaNum12 {
                     asset_code: AssetCode12(b.as_slice().try_into().unwrap()),
-                    issuer: AccountId(PublicKey::PublicKeyTypeEd25519(
-                        self.to_u256_from_account(issuer)?,
-                    )),
+                    issuer: self.to_account_id(issuer)?,
                 }))
             } else {
                 Err(self.err_general("invalid asset code"))
             }
         })?;
         Ok(LedgerKey::Trustline(LedgerKeyTrustLine {
-            account_id: AccountId(PublicKey::PublicKeyTypeEd25519(
-                self.to_u256_from_account(account)?,
-            )),
+            account_id: self.to_account_id(account)?,
             asset,
         }))
     }
