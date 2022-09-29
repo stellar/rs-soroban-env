@@ -459,22 +459,19 @@ macro_rules! call_macro_with_all_host_functions {
 
             mod account "a" {
                 /// Get the low threshold for the account with ID `a` (`a` is
-                /// `AccountId`). Traps if no such account exists. Output value
-                /// range is 0..255.
+                /// `AccountId`). Traps if no such account exists.
                 {"_", fn account_get_low_threshold(a:Object) -> RawVal}
                 /// Get the medium threshold for the account with ID `a` (`a` is
-                /// `AccountId`). Traps if no such account exists. Output value
-                /// range is 0..255.
+                /// `AccountId`). Traps if no such account exists.
                 {"0", fn account_get_medium_threshold(a:Object) -> RawVal}
                 /// Get the high threshold for the account with ID `a` (`a` is
-                /// `AccountId`). Traps if no such account exists. Output value
-                /// range is 0..255.
+                /// `AccountId`). Traps if no such account exists.
                 {"1", fn account_get_high_threshold(a:Object) -> RawVal}
                 /// Get the signer weight for the signer with ed25519 public key
                 /// `s` (`s` is `Bytes`) on the account with ID `a` (`a`
                 /// is `AccountId`). Returns the master weight if the signer is the
                 /// master, and returns 0 if no such signer exists. Traps if no
-                /// such account exists. Output value range is 0..255.
+                /// such account exists.
                 {"2", fn account_get_signer_weight(a:Object, s:Object) -> RawVal}
                 /// Given an ID `a` (`a` is `AccountId`) of an account, check if
                 /// it exists. Returns (SCStatic) TRUE/FALSE.
