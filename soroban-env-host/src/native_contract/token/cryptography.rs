@@ -52,12 +52,14 @@ fn check_account_auth(
     if sigs.len()? > MAX_ACCOUNT_SIGNATURES {
         return Err(Error::ContractError);
     }
-    let mut used_pks = vec![];
+    let mut prev_pk: Option<BytesN<32>> = None;
     for i in 0..sigs.len()? {
         let sig: Ed25519Signature = sigs.get(i)?;
-        // Skip duplicate signatures.
-        if used_pks.contains(&sig.public_key) {
-            return Err(Error::ContractError);
+        // Cannot take multiple signatures from the same key
+        if let Some(prev) = prev_pk {
+            if prev.compare(&sig.public_key)? != Ordering::Less {
+                return Err(Error::ContractError);
+            }
         }
 
         e.verify_sig_ed25519(
@@ -72,8 +74,8 @@ fn check_account_auth(
         // Clamp signature weight to be at most 255. This is consistent with
         // classic tx signature weight computations in Core.
         let signer_weight: u32 = min(signer_weight_rv.try_into()?, MAX_ACCOUNT_SIGNATURE_WEIGHT);
-        used_pks.push(sig.public_key.clone());
         weight += signer_weight;
+        prev_pk = Some(sig.public_key);
     }
 
     let threshold_rv = e.account_get_medium_threshold(auth.account_id.into())?;
