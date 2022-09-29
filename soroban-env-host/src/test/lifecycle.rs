@@ -5,16 +5,13 @@ use crate::{
     storage::{AccessType, Footprint, Storage},
     xdr::{
         self, AccountId, HostFunction, LedgerEntryData, LedgerKey, LedgerKeyContractData,
-        ScContractCode, ScHostFnErrorCode, ScObject, ScStatic, ScVal, ScVec,
+        ScContractCode, ScObject, ScStatic, ScVal, ScVec,
     },
     CheckedEnv, Host, HostError, RawVal, Symbol,
 };
 use hex::FromHex;
 use soroban_test_wasms::CREATE_CONTRACT;
 
-use ed25519_dalek::{
-    Keypair, PublicKey, SecretKey, Signature, Signer, PUBLIC_KEY_LENGTH, SECRET_KEY_LENGTH,
-};
 use im_rc::OrdMap;
 use sha2::{Digest, Sha256};
 
@@ -32,33 +29,17 @@ pub(crate) fn check_new_code(host: &Host, storage_key: LedgerKey, code: ScVal) {
 }
 
 /// create contract tests
-fn create_contract_test_helper(
-    secret: &[u8],
-    public: &[u8],
-    salt: &[u8],
-    code: &[u8],
-    sig_preimage: &Vec<u8>,
-) -> Result<Host, HostError> {
-    let sec_bytes: Vec<u8> = FromHex::from_hex(secret).unwrap();
-    let pub_bytes: Vec<u8> = FromHex::from_hex(public).unwrap();
+fn create_contract_test_helper(salt: &[u8], code: &[u8]) -> Result<Host, HostError> {
+    let source_account = AccountId(xdr::PublicKey::PublicKeyTypeEd25519(xdr::Uint256([0; 32])));
     let salt_bytes: Vec<u8> = FromHex::from_hex(salt).unwrap();
 
-    let secret: SecretKey = SecretKey::from_bytes(&sec_bytes[..SECRET_KEY_LENGTH]).unwrap();
-    let public: PublicKey = PublicKey::from_bytes(&pub_bytes[..PUBLIC_KEY_LENGTH]).unwrap();
-    let keypair: Keypair = Keypair {
-        secret: secret,
-        public: public,
-    };
-
-    // Create signature
-    let signature: Signature = keypair.sign(Sha256::digest(sig_preimage).as_slice());
-
     // Make contractID so we can include it in the footprint
-    let pre_image =
-        xdr::HashIdPreimage::ContractIdFromEd25519(xdr::HashIdPreimageEd25519ContractId {
-            ed25519: xdr::Uint256(pub_bytes.as_slice().try_into().unwrap()),
+    let pre_image = xdr::HashIdPreimage::ContractIdFromSourceAccount(
+        xdr::HashIdPreimageSourceAccountContractId {
+            source_account: source_account.clone(),
             salt: xdr::Uint256(salt_bytes.as_slice().try_into().unwrap()),
-        });
+        },
+    );
 
     let hash = sha256_hash_id_preimage(pre_image);
 
@@ -83,20 +64,22 @@ fn create_contract_test_helper(
     );
     let host = Host::with_storage_and_budget(storage, budget);
 
+    host.set_source_account(source_account);
+
     // Create contract
     let obj_code = host.test_bin_obj(&code)?;
-    let obj_pub = host.test_bin_obj(&pub_bytes)?;
     let obj_salt = host.test_bin_obj(&salt_bytes)?;
-    let obj_sig = host.test_bin_obj(&signature.to_bytes())?;
+    let contract_id = host
+        .with_frame(
+            Frame::HostFunction(HostFunction::CreateContractWithSourceAccount),
+            || {
+                host.create_contract_from_source_account(obj_code.to_object(), obj_salt.to_object())
+                    .map(|o| o.to_raw())
+            },
+        )
+        .unwrap();
 
-    let contract_id = host.create_contract_from_ed25519(
-        obj_code.to_object(),
-        obj_salt.to_object(),
-        obj_pub.to_object(),
-        obj_sig.to_object(),
-    )?;
-
-    let v = host.from_host_val(contract_id.to_raw())?;
+    let v = host.from_host_val(contract_id)?;
     let bytes = match v {
         ScVal::Object(Some(scobj)) => match scobj {
             ScObject::Bytes(bytes) => bytes,
@@ -120,81 +103,21 @@ fn create_contract_test_helper(
     Ok(host)
 }
 
-#[test]
-fn create_contract_test() -> Result<(), HostError> {
-    let secret_key: &[u8] = b"9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60";
-    let public_key: &[u8] = b"d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a";
-    let salt: &[u8] = b"3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4660c";
-    let code: &[u8] = b"70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4";
-
-    let separator =
-        "create_contract_from_ed25519(contract: Vec<u8>, salt: u256, key: u256, sig: Vec<u8>)";
-
-    let salt_bytes: Vec<u8> = FromHex::from_hex(salt).unwrap();
-    let sig_preimage = [separator.as_bytes(), salt_bytes.as_slice(), code].concat();
-
-    // Incorrect separator
-    let bad_sep = ["d".as_bytes(), salt_bytes.as_slice(), code].concat();
-    assert!(create_contract_test_helper(secret_key, public_key, salt, code, &bad_sep).is_err());
-
-    // wrong public key
-    let bad_pub: &[u8] = b"3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4660c";
-    assert!(create_contract_test_helper(secret_key, bad_pub, salt, code, &sig_preimage).is_err());
-
-    // Create a valid contract, and then try to update and remove it
-    let host = create_contract_test_helper(secret_key, public_key, salt, code, &sig_preimage)?;
-
-    let pub_bytes: Vec<u8> = FromHex::from_hex(public_key).unwrap();
-    let id_pre_image =
-        xdr::HashIdPreimage::ContractIdFromEd25519(xdr::HashIdPreimageEd25519ContractId {
-            ed25519: xdr::Uint256(pub_bytes.as_slice().try_into().unwrap()),
-            salt: xdr::Uint256(salt_bytes.as_slice().try_into().unwrap()),
-        });
-
-    let hash = sha256_hash_id_preimage(id_pre_image);
-
-    //Push the contract id onto the stack to simulate a contract call
-    host.with_frame(Frame::TestContract(hash, Symbol::from_str("fn")), || {
-        let key = ScVal::Static(ScStatic::LedgerKeyContractCode);
-
-        // update
-        let put_res = host.put_contract_data(host.to_host_val(&key)?.to_raw(), ().into());
-        let code = ScHostFnErrorCode::InputArgsInvalid;
-        assert!(HostError::result_matches_err_status(put_res, code));
-
-        // delete
-        let del_res = host.del_contract_data(host.to_host_val(&key)?.to_raw());
-        let code = ScHostFnErrorCode::InputArgsInvalid;
-        assert!(HostError::result_matches_err_status(del_res, code));
-        Ok(RawVal::from_void())
-    })?;
-    Ok(())
-}
-
 /// VM tests
 #[test]
 fn create_contract_using_parent_id_test() {
-    let secret_key: &[u8] = b"9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60";
-    let public_key: &[u8] = b"d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a";
     let salt: &[u8] = b"3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4660c";
-
-    let separator =
-        "create_contract_from_ed25519(contract: Vec<u8>, salt: u256, key: u256, sig: Vec<u8>)";
-
     let salt_bytes: Vec<u8> = FromHex::from_hex(salt).unwrap();
-    let sig_preimage = [separator.as_bytes(), salt_bytes.as_slice(), CREATE_CONTRACT].concat();
 
-    let host =
-        create_contract_test_helper(secret_key, public_key, salt, CREATE_CONTRACT, &sig_preimage)
-            .unwrap();
+    let host = create_contract_test_helper(salt, CREATE_CONTRACT).unwrap();
 
     // Get parent contractID
-    let pub_bytes: Vec<u8> = FromHex::from_hex(public_key).unwrap();
-    let pre_image =
-        xdr::HashIdPreimage::ContractIdFromEd25519(xdr::HashIdPreimageEd25519ContractId {
-            ed25519: xdr::Uint256(pub_bytes.as_slice().try_into().unwrap()),
+    let pre_image = xdr::HashIdPreimage::ContractIdFromSourceAccount(
+        xdr::HashIdPreimageSourceAccountContractId {
+            source_account: host.source_account().unwrap(),
             salt: xdr::Uint256(salt_bytes.as_slice().try_into().unwrap()),
-        });
+        },
+    );
 
     let parent_id = sha256_hash_id_preimage(pre_image);
 
