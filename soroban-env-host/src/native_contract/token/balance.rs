@@ -1,11 +1,11 @@
 use crate::host::Host;
-use crate::native_contract::base_types::{BigInt, BytesN};
+use crate::native_contract::base_types::{AccountId, BigInt};
 use crate::native_contract::token::error::Error;
 use crate::native_contract::token::metadata::read_metadata;
 use crate::native_contract::token::public_types::{Identifier, Metadata};
 use crate::native_contract::token::storage_types::DataKey;
 use core::cmp::Ordering;
-use soroban_env_common::{CheckedEnv, TryIntoVal};
+use soroban_env_common::{CheckedEnv, IntoVal, TryIntoVal};
 
 pub fn read_balance(e: &Host, id: Identifier) -> Result<BigInt, Error> {
     let key = DataKey::Balance(id);
@@ -59,20 +59,20 @@ pub fn write_state(e: &Host, id: Identifier, is_frozen: bool) -> Result<(), Erro
     Ok(())
 }
 
-pub fn transfer_classic_balance(e: &Host, to_key: BytesN<32>, amount: i64) -> Result<(), Error> {
+pub fn transfer_classic_balance(e: &Host, to_key: &AccountId, amount: i64) -> Result<(), Error> {
     match read_metadata(e)? {
         Metadata::Token(_) => return Err(Error::ContractError),
-        Metadata::Native => e.transfer_account_balance(to_key.into(), amount)?,
+        Metadata::Native => e.transfer_account_balance(to_key.clone().into_val(&e), amount)?,
         Metadata::AlphaNum4(asset) => e.transfer_trustline_balance(
-            to_key.into(),
+            to_key.clone().into_val(&e),
             asset.asset_code.into(),
-            asset.issuer.into(),
+            asset.issuer.into_val(&e),
             amount,
         )?,
         Metadata::AlphaNum12(asset) => e.transfer_trustline_balance(
-            to_key.into(),
+            to_key.clone().into_val(&e),
             asset.asset_code.into(),
-            asset.issuer.into(),
+            asset.issuer.into_val(&e),
             amount,
         )?,
     };

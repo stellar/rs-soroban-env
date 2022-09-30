@@ -2,7 +2,7 @@ use crate::host::{Host, HostError};
 use core::cmp::Ordering;
 use soroban_env_common::xdr::ScObjectType;
 use soroban_env_common::{
-    CheckedEnv, ConversionError, EnvBase, EnvVal, Object, RawVal, TryFromVal, TryIntoVal,
+    CheckedEnv, ConversionError, EnvBase, EnvVal, IntoVal, Object, RawVal, TryFromVal, TryIntoVal,
 };
 
 #[derive(Clone)]
@@ -239,6 +239,11 @@ impl<const N: u32> BytesN<N> {
         env.bytes_copy_to_slice(self.0.to_object(), RawVal::U32_ZERO, slice)
             .map_err(|status| status.into())
     }
+
+    #[inline(always)]
+    pub fn from_slice(env: &Host, items: &[u8]) -> Result<BytesN<N>, HostError> {
+        Ok(BytesN(env.bytes_new_from_slice(items)?.in_env(env)))
+    }
 }
 
 #[derive(Clone)]
@@ -392,5 +397,89 @@ impl Vec {
         let rv = x.try_into_val(&self.0.env)?;
         self.0.val = self.0.env.vec_push_back(self.0.val, rv)?;
         Ok(())
+    }
+}
+
+#[derive(Clone)]
+pub struct AccountId(EnvVal<Host, Object>);
+
+impl Eq for AccountId {}
+
+impl PartialEq for AccountId {
+    fn eq(&self, other: &Self) -> bool {
+        self.partial_cmp(other) == Some(Ordering::Equal)
+    }
+}
+
+impl PartialOrd for AccountId {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(Ord::cmp(self, other))
+    }
+}
+
+impl Ord for AccountId {
+    fn cmp(&self, other: &Self) -> core::cmp::Ordering {
+        self.0.cmp(&other.0)
+    }
+}
+
+impl TryFromVal<Host, Object> for AccountId {
+    type Error = HostError;
+
+    fn try_from_val(env: &Host, val: Object) -> Result<Self, Self::Error> {
+        if val.is_obj_type(ScObjectType::AccountId) {
+            Ok(AccountId(val.in_env(env)))
+        } else {
+            Err(ConversionError.into())
+        }
+    }
+}
+
+impl TryIntoVal<Host, AccountId> for Object {
+    type Error = HostError;
+
+    fn try_into_val(self, env: &Host) -> Result<AccountId, Self::Error> {
+        <_ as TryFromVal<_, Object>>::try_from_val(env, self)
+    }
+}
+
+impl TryFromVal<Host, RawVal> for AccountId {
+    type Error = HostError;
+
+    fn try_from_val(env: &Host, val: RawVal) -> Result<Self, Self::Error> {
+        <_ as TryFromVal<_, Object>>::try_from_val(env, val.try_into()?)
+    }
+}
+
+impl TryIntoVal<Host, AccountId> for RawVal {
+    type Error = HostError;
+
+    fn try_into_val(self, env: &Host) -> Result<AccountId, Self::Error> {
+        <_ as TryFromVal<_, RawVal>>::try_from_val(env, self)
+    }
+}
+
+impl TryIntoVal<Host, RawVal> for AccountId {
+    type Error = HostError;
+
+    fn try_into_val(self, _env: &Host) -> Result<RawVal, Self::Error> {
+        Ok(self.0.val.into())
+    }
+}
+
+impl IntoVal<Host, Object> for AccountId {
+    fn into_val(self, _env: &Host) -> Object {
+        self.to_object()
+    }
+}
+
+impl AccountId {
+    pub fn new(env: &Host) -> Result<Self, HostError> {
+        let map = env.map_new()?;
+        Ok(Self(map.in_env(env)))
+    }
+
+    pub fn to_object(&self) -> Object {
+        self.0.to_object()
     }
 }

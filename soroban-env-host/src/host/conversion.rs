@@ -1,4 +1,5 @@
 use super::metered_bigint::MeteredBigInt;
+use super::metered_clone::MeteredClone;
 use crate::xdr::{
     Hash, LedgerKey, LedgerKeyContractData, ScBigInt, ScHostFnErrorCode, ScHostObjErrorCode,
     ScHostValErrorCode, ScObject, ScStatic, ScVal, ScVec, Uint256,
@@ -12,6 +13,7 @@ use crate::{
 use ed25519_dalek::{PublicKey, Signature, SIGNATURE_LENGTH};
 use num_bigint::Sign;
 use sha2::{Digest, Sha256};
+use soroban_env_common::xdr::AccountId;
 
 impl Host {
     // Notes on metering: free
@@ -54,6 +56,21 @@ impl Host {
                     .arg(name),
             )),
         }
+    }
+
+    pub(crate) fn to_account_id(&self, a: Object) -> Result<AccountId, HostError> {
+        self.visit_obj(a, |account_id: &AccountId| {
+            self.charge_budget(CostType::BytesClone, 32)?;
+            Ok(account_id.clone())
+        })
+    }
+
+    pub(crate) fn to_u256_from_account(&self, a: Object) -> Result<Uint256, HostError> {
+        self.visit_obj(a, |account_id: &AccountId| {
+            self.charge_budget(CostType::BytesClone, 32)?;
+            let crate::xdr::PublicKey::PublicKeyTypeEd25519(ed25519) = &account_id.0;
+            Ok(ed25519.clone())
+        })
     }
 
     pub(crate) fn to_u256(&self, a: Object) -> Result<Uint256, HostError> {
@@ -213,14 +230,14 @@ impl Host {
                                                 self.err_status(ScHostObjErrorCode::UnexpectedType)
                                             );
                                         }
-                                        // TODO: metered clone bytes
+                                        self.charge_budget(CostType::BytesClone, b.len() as u64)?;
                                         Ok(ScObject::Bytes(self.map_err(b.clone().try_into())?))
                                     }
                                     HostObject::U64(u) => Ok(ScObject::U64(*u)),
                                     HostObject::I64(i) => Ok(ScObject::I64(*i)),
                                     HostObject::BigInt(bi) => self.scobj_from_bigint(bi),
                                     HostObject::AccountId(aid) => {
-                                        Ok(ScObject::AccountId(aid.clone()))
+                                        Ok(ScObject::AccountId(aid.metered_clone(&self.0.budget)?))
                                     }
                                 },
                             }?;
