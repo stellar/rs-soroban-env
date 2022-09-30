@@ -6,6 +6,7 @@ use crate::native_contract::token::storage_types::{AllowanceDataKey, DataKey};
 use core::cmp::Ordering;
 use soroban_env_common::{CheckedEnv, TryIntoVal};
 
+// Metering: covered by components
 pub fn read_allowance(e: &Host, from: Identifier, spender: Identifier) -> Result<BigInt, Error> {
     let key = DataKey::Allowance(AllowanceDataKey { from, spender });
     if let Ok(allowance) = e.get_contract_data(key.try_into_val(e)?) {
@@ -15,6 +16,7 @@ pub fn read_allowance(e: &Host, from: Identifier, spender: Identifier) -> Result
     }
 }
 
+// Metering: covered by components
 pub fn write_allowance(
     e: &Host,
     from: Identifier,
@@ -26,6 +28,7 @@ pub fn write_allowance(
     Ok(())
 }
 
+// Metering: covered by components
 pub fn spend_allowance(
     e: &Host,
     from: Identifier,
