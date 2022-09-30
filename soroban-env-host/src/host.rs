@@ -204,7 +204,7 @@ impl Host {
         *self.0.ledger.borrow_mut() = Some(info)
     }
 
-    fn with_ledger_info<F, T>(&self, f: F) -> Result<T, HostError>
+    pub fn with_ledger_info<F, T>(&self, f: F) -> Result<T, HostError>
     where
         F: FnOnce(&LedgerInfo) -> Result<T, HostError>,
     {
@@ -214,7 +214,6 @@ impl Host {
         }
     }
 
-    #[cfg(feature = "testutils")]
     pub fn with_mut_ledger_info<F>(&self, mut f: F) -> Result<(), HostError>
     where
         F: FnMut(&mut LedgerInfo),
@@ -289,7 +288,7 @@ impl Host {
         self.charge_budget(CostType::HostEventContract, 1)
     }
 
-    pub(crate) fn visit_storage<F, U>(&self, f: F) -> Result<U, HostError>
+    pub fn with_mut_storage<F, U>(&self, f: F) -> Result<U, HostError>
     where
         F: FnOnce(&mut Storage) -> Result<U, HostError>,
     {
@@ -903,7 +902,7 @@ impl Host {
 
     pub(crate) fn transfer_account_balance(
         &self,
-        account_id: Object,
+        account: Object,
         amount: i64,
     ) -> Result<(), HostError> {
         use xdr::{AccountEntryExt, AccountEntryExtensionV1Ext, LedgerKeyAccount};
@@ -914,9 +913,10 @@ impl Host {
         })?;
 
         let lk = LedgerKey::Account(LedgerKeyAccount {
-            account_id: AccountId(PublicKey::PublicKeyTypeEd25519(self.to_u256(account_id)?)),
+            account_id: self.to_account_id(account)?,
         });
-        self.visit_storage(|storage| {
+
+        self.with_mut_storage(|storage| {
             let mut le = storage.get(&lk)?;
             let ae = match &mut le.data {
                 LedgerEntryData::Account(ae) => Ok(ae),
@@ -962,7 +962,7 @@ impl Host {
 
     pub(crate) fn transfer_trustline_balance(
         &self,
-        account_id: Object,
+        account: Object,
         asset_code: Object,
         issuer: Object,
         amount: i64,
@@ -974,8 +974,8 @@ impl Host {
             _ => Err(self.err_general("only native token can transfer classic balance")),
         })?;
 
-        let lk = self.to_trustline_key(account_id, asset_code, issuer)?;
-        self.visit_storage(|storage| {
+        let lk = self.to_trustline_key(account, asset_code, issuer)?;
+        self.with_mut_storage(|storage| {
             let mut le = storage.get(&lk)?;
             let tl = match &mut le.data {
                 LedgerEntryData::Trustline(tl) => Ok(tl),
