@@ -1,3 +1,5 @@
+use crate::budget::{Budget, CostType};
+use crate::host::metered_clone::MeteredClone;
 use crate::host::{Host, HostError};
 use core::cmp::Ordering;
 use soroban_env_common::xdr::ScObjectType;
@@ -246,6 +248,13 @@ impl<const N: u32> BytesN<N> {
     }
 }
 
+impl<const N: u32> MeteredClone for BytesN<N> {
+    fn metered_clone(&self, budget: &Budget) -> Result<Self, HostError> {
+        budget.charge(CostType::BytesClone, N.into())?;
+        Ok(self.clone())
+    }
+}
+
 #[derive(Clone)]
 pub struct Map(EnvVal<Host, Object>);
 
@@ -481,5 +490,12 @@ impl AccountId {
 
     pub fn to_object(&self) -> Object {
         self.0.to_object()
+    }
+}
+
+impl MeteredClone for AccountId {
+    fn metered_clone(&self, budget: &Budget) -> Result<Self, HostError> {
+        budget.charge(CostType::BytesClone, 32)?;
+        Ok(self.clone())
     }
 }

@@ -1,3 +1,4 @@
+use crate::host::metered_clone::MeteredClone;
 use crate::host::Host;
 use crate::native_contract::base_types::{BigInt, Bytes, BytesN, Vec};
 use crate::native_contract::token::error::Error;
@@ -9,6 +10,7 @@ use crate::native_contract::token::public_types::{
 use core::cmp::Ordering;
 use soroban_env_common::{CheckedEnv, IntoVal, InvokerType, Symbol, TryFromVal, TryIntoVal};
 
+// Metering: covered by components
 fn check_ed25519_auth(
     e: &Host,
     auth: Ed25519Signature,
@@ -27,6 +29,7 @@ fn check_ed25519_auth(
     Ok(())
 }
 
+// Metering: *mostly* covered by components.
 fn check_account_auth(
     e: &Host,
     auth: AccountSignatures,
@@ -56,12 +59,12 @@ fn check_account_auth(
 
         e.verify_sig_ed25519(
             msg_bin.clone(),
-            sig.public_key.clone().into(),
+            sig.public_key.metered_clone(&e.0.budget)?.into(),
             sig.signature.into(),
         )?;
         let signer_weight_rv = e.account_get_signer_weight(
-            auth.account_id.clone().into_val(&e),
-            sig.public_key.clone().into(),
+            auth.account_id.metered_clone(&e.0.budget)?.into_val(&e),
+            sig.public_key.metered_clone(&e.0.budget)?.into(),
         )?;
         let signer_weight: u32 = signer_weight_rv.try_into()?;
         // TODO: Check for overflow
@@ -78,6 +81,7 @@ fn check_account_auth(
     }
 }
 
+// Metering: *mostly* covered by components.
 pub fn check_auth(
     e: &Host,
     auth: Signature,
@@ -99,8 +103,10 @@ pub fn check_auth(
             }
         }
         Signature::Ed25519(kea) => {
-            let stored_nonce =
-                read_and_increment_nonce(e, Identifier::Ed25519(kea.public_key.clone()))?;
+            let stored_nonce = read_and_increment_nonce(
+                e,
+                Identifier::Ed25519(kea.public_key.metered_clone(&e.0.budget)?),
+            )?;
             if nonce.compare(&stored_nonce)? != Ordering::Equal {
                 Err(Error::ContractError)
             } else {
@@ -109,8 +115,10 @@ pub fn check_auth(
             }
         }
         Signature::Account(kaa) => {
-            let stored_nonce =
-                read_and_increment_nonce(e, Identifier::Account(kaa.account_id.clone()))?;
+            let stored_nonce = read_and_increment_nonce(
+                e,
+                Identifier::Account(kaa.account_id.metered_clone(&e.0.budget)?),
+            )?;
             if nonce.compare(&stored_nonce)? != Ordering::Equal {
                 Err(Error::ContractError)
             } else {

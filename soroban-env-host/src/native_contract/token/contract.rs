@@ -1,3 +1,5 @@
+use crate::budget::CostType;
+use crate::host::metered_clone::MeteredClone;
 use crate::host::Host;
 use crate::native_contract::base_types::{BigInt, Bytes, BytesN, Vec};
 use crate::native_contract::token::admin::{check_admin, write_administrator};
@@ -110,6 +112,7 @@ pub trait TokenTrait {
 pub struct Token;
 
 #[contractimpl]
+// Metering: *mostly* covered by components.
 impl TokenTrait for Token {
     fn init_wrap(e: &Host, metadata: ClassicMetadata) -> Result<(), Error> {
         if has_metadata(&e)? {
@@ -118,7 +121,7 @@ impl TokenTrait for Token {
 
         let contract_id = BytesN::<32>::try_from_val(e, e.get_current_contract()?)?;
 
-        match metadata.clone() {
+        match metadata.metered_clone(&e.0.budget)? {
             ClassicMetadata::Native => {
                 let xlm_contract_id =
                     BytesN::<32>::try_from_val(e, e.get_contract_id_from_asset(Asset::Native)?)?;
@@ -132,6 +135,7 @@ impl TokenTrait for Token {
             ClassicMetadata::AlphaNum4(asset) => {
                 //TODO: Better way to do this?
                 let mut code4 = [0u8; 4];
+                e.charge_budget(CostType::BytesClone, 4)?;
                 asset.asset_code.copy_into_slice(&mut code4)?;
 
                 let issuer_id = e.to_account_id(asset.issuer.to_object())?;
@@ -147,7 +151,10 @@ impl TokenTrait for Token {
                     return Err(Error::ContractError);
                 }
 
-                write_administrator(&e, Identifier::Account(asset.issuer.clone()))?;
+                write_administrator(
+                    &e,
+                    Identifier::Account(asset.issuer.metered_clone(&e.0.budget)?),
+                )?;
                 write_metadata(
                     &e,
                     Metadata::AlphaNum4(AlphaNum4Metadata {
@@ -159,6 +166,7 @@ impl TokenTrait for Token {
             ClassicMetadata::AlphaNum12(asset) => {
                 //TODO: Better way to do this?
                 let mut code12 = [0u8; 12];
+                e.charge_budget(CostType::BytesClone, 12)?;
                 asset.asset_code.copy_into_slice(&mut code12)?;
 
                 let issuer_id = e.to_account_id(asset.issuer.to_object())?;
@@ -174,7 +182,10 @@ impl TokenTrait for Token {
                     return Err(Error::ContractError);
                 }
 
-                write_administrator(&e, Identifier::Account(asset.issuer.clone()))?;
+                write_administrator(
+                    &e,
+                    Identifier::Account(asset.issuer.metered_clone(&e.0.budget)?),
+                )?;
                 write_metadata(
                     &e,
                     Metadata::AlphaNum12(AlphaNum12Metadata {
@@ -205,6 +216,7 @@ impl TokenTrait for Token {
         read_allowance(&e, from, spender)
     }
 
+    // Metering: covered by components
     fn approve(
         e: &Host,
         from: Signature,
@@ -216,21 +228,24 @@ impl TokenTrait for Token {
         let mut args = Vec::new(e)?;
         args.push(from.get_identifier(&e)?)?;
         args.push(nonce.clone())?;
-        args.push(spender.clone())?;
+        args.push(spender.metered_clone(&e.0.budget)?)?;
         args.push(amount.clone())?;
         check_auth(&e, from, nonce, Symbol::from_str("approve"), args)?;
         write_allowance(&e, from_id, spender, amount)?;
         Ok(())
     }
 
+    // Metering: covered by components
     fn balance(e: &Host, id: Identifier) -> Result<BigInt, Error> {
         read_balance(e, id)
     }
 
+    // Metering: covered by components
     fn is_frozen(e: &Host, id: Identifier) -> Result<bool, Error> {
         read_state(&e, id)
     }
 
+    // Metering: covered by components
     fn xfer(
         e: &Host,
         from: Signature,
@@ -242,7 +257,7 @@ impl TokenTrait for Token {
         let mut args = Vec::new(e)?;
         args.push(from.get_identifier(&e)?)?;
         args.push(nonce.clone())?;
-        args.push(to.clone())?;
+        args.push(to.metered_clone(&e.0.budget)?)?;
         args.push(amount.clone())?;
         check_auth(&e, from, nonce, Symbol::from_str("xfer"), args)?;
         spend_balance(&e, from_id, amount.clone())?;
@@ -250,6 +265,7 @@ impl TokenTrait for Token {
         Ok(())
     }
 
+    // Metering: covered by components
     fn xfer_from(
         e: &Host,
         spender: Signature,
@@ -262,8 +278,8 @@ impl TokenTrait for Token {
         let mut args = Vec::new(e)?;
         args.push(spender.get_identifier(&e)?)?;
         args.push(nonce.clone())?;
-        args.push(from.clone())?;
-        args.push(to.clone())?;
+        args.push(from.metered_clone(&e.0.budget)?)?;
+        args.push(to.metered_clone(&e.0.budget)?)?;
         args.push(amount.clone())?;
         check_auth(&e, spender, nonce, Symbol::from_str("xfer_from"), args)?;
         spend_allowance(&e, from.clone(), spender_id, amount.clone())?;
@@ -272,6 +288,7 @@ impl TokenTrait for Token {
         Ok(())
     }
 
+    // Metering: covered by components
     fn burn(
         e: &Host,
         admin: Signature,
@@ -283,24 +300,26 @@ impl TokenTrait for Token {
         let mut args = Vec::new(e)?;
         args.push(admin.get_identifier(&e)?)?;
         args.push(nonce.clone())?;
-        args.push(from.clone())?;
+        args.push(from.metered_clone(&e.0.budget)?)?;
         args.push(amount.clone())?;
         check_auth(&e, admin, nonce, Symbol::from_str("burn"), args)?;
         spend_balance(&e, from, amount)?;
         Ok(())
     }
 
+    // Metering: covered by components
     fn freeze(e: &Host, admin: Signature, nonce: BigInt, id: Identifier) -> Result<(), Error> {
         check_admin(&e, &admin)?;
         let mut args = Vec::new(e)?;
         args.push(admin.get_identifier(&e)?)?;
         args.push(nonce.clone())?;
-        args.push(id.clone())?;
+        args.push(id.metered_clone(&e.0.budget)?)?;
         check_auth(&e, admin, nonce, Symbol::from_str("freeze"), args)?;
         write_state(&e, id, true)?;
         Ok(())
     }
 
+    // Metering: covered by components
     fn mint(
         e: &Host,
         admin: Signature,
@@ -312,13 +331,14 @@ impl TokenTrait for Token {
         let mut args = Vec::new(e)?;
         args.push(admin.get_identifier(&e)?)?;
         args.push(nonce.clone())?;
-        args.push(to.clone())?;
+        args.push(to.metered_clone(&e.0.budget)?)?;
         args.push(amount.clone())?;
         check_auth(&e, admin, nonce, Symbol::from_str("mint"), args)?;
         receive_balance(&e, to, amount)?;
         Ok(())
     }
 
+    // Metering: covered by components
     fn set_admin(
         e: &Host,
         admin: Signature,
@@ -329,18 +349,19 @@ impl TokenTrait for Token {
         let mut args = Vec::new(e)?;
         args.push(admin.get_identifier(&e)?)?;
         args.push(nonce.clone())?;
-        args.push(new_admin.clone())?;
+        args.push(new_admin.metered_clone(&e.0.budget)?)?;
         check_auth(&e, admin, nonce, Symbol::from_str("set_admin"), args)?;
         write_administrator(&e, new_admin)?;
         Ok(())
     }
 
+    // Metering: covered by components
     fn unfreeze(e: &Host, admin: Signature, nonce: BigInt, id: Identifier) -> Result<(), Error> {
         check_admin(&e, &admin)?;
         let mut args = Vec::new(e)?;
         args.push(admin.get_identifier(&e)?)?;
         args.push(nonce.clone())?;
-        args.push(id.clone())?;
+        args.push(id.metered_clone(&e.0.budget)?)?;
         check_auth(&e, admin, nonce, Symbol::from_str("unfreeze"), args)?;
         write_state(&e, id, false)?;
         Ok(())
@@ -358,6 +379,7 @@ impl TokenTrait for Token {
         read_symbol(&e)
     }
 
+    // Metering: covered by components
     fn to_smart(e: &Host, id: Signature, nonce: BigInt, amount: i64) -> Result<(), Error> {
         if amount < 0 {
             return Err(Error::ContractError);
@@ -380,6 +402,7 @@ impl TokenTrait for Token {
         Ok(())
     }
 
+    // Metering: covered by components
     fn to_classic(e: &Host, id: Signature, nonce: BigInt, amount: i64) -> Result<(), Error> {
         if amount < 0 {
             return Err(Error::ContractError);

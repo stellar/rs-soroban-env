@@ -98,11 +98,11 @@ impl Host {
         Ok(buf)
     }
 
-    //TODO: metering!
+    // notes on metering: covers the byte cloning (write_xdr) for AlphaNum12 (worst case)
     pub fn id_preimage_from_asset(&self, asset: Asset) -> Result<Vec<u8>, HostError> {
         let pre_image = HashIdPreimage::ContractIdFromAsset(asset);
         let mut buf = Vec::new();
-        //self.charge_budget(CostType::BytesClone, 64)?; // key + salt
+        self.charge_budget(CostType::BytesClone, 44)?; // CreditAlphanum12: 12 bytes asset code + 32 bytes accountId
         pre_image
             .write_xdr(&mut buf)
             .map_err(|_| self.err_general("invalid preimage"))?;

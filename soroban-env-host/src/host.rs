@@ -901,6 +901,7 @@ impl Host {
         Ok(Status::OK.into())
     }
 
+    // Metering: *mostly* covered by components. The arithmatics are free.
     pub(crate) fn transfer_account_balance(
         &self,
         account: Object,
@@ -961,6 +962,7 @@ impl Host {
         })
     }
 
+    // Metering: *mostly* covered by components. The arithmatics are free.
     pub(crate) fn transfer_trustline_balance(
         &self,
         account: Object,
