@@ -204,7 +204,7 @@ impl Host {
         *self.0.ledger.borrow_mut() = Some(info)
     }
 
-    fn with_ledger_info<F, T>(&self, f: F) -> Result<T, HostError>
+    pub fn with_ledger_info<F, T>(&self, f: F) -> Result<T, HostError>
     where
         F: FnOnce(&LedgerInfo) -> Result<T, HostError>,
     {
@@ -214,7 +214,6 @@ impl Host {
         }
     }
 
-    #[cfg(feature = "testutils")]
     pub fn with_mut_ledger_info<F>(&self, mut f: F) -> Result<(), HostError>
     where
         F: FnMut(&mut LedgerInfo),
@@ -289,7 +288,7 @@ impl Host {
         self.charge_budget(CostType::HostEventContract, 1)
     }
 
-    pub(crate) fn visit_storage<F, U>(&self, f: F) -> Result<U, HostError>
+    pub fn with_mut_storage<F, U>(&self, f: F) -> Result<U, HostError>
     where
         F: FnOnce(&mut Storage) -> Result<U, HostError>,
     {
@@ -917,7 +916,7 @@ impl Host {
             account_id: self.to_account_id(account)?,
         });
 
-        self.visit_storage(|storage| {
+        self.with_mut_storage(|storage| {
             let mut le = storage.get(&lk)?;
             let ae = match &mut le.data {
                 LedgerEntryData::Account(ae) => Ok(ae),
@@ -976,7 +975,7 @@ impl Host {
         })?;
 
         let lk = self.to_trustline_key(account, asset_code, issuer)?;
-        self.visit_storage(|storage| {
+        self.with_mut_storage(|storage| {
             let mut le = storage.get(&lk)?;
             let tl = match &mut le.data {
                 LedgerEntryData::Trustline(tl) => Ok(tl),
