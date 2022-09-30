@@ -1002,6 +1002,7 @@ impl Host {
                 let max_balance = i64::MAX;
                 (min_balance, max_balance)
             };
+            let max_balance = min(max_balance, tl.limit);
 
             let new_balance = if amount <= 0 {
                 tl.balance + amount
