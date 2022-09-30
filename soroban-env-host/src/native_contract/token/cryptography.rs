@@ -70,6 +70,12 @@ fn check_account_auth(
             sig.public_key.clone().into(),
         )?;
         let signer_weight: u32 = signer_weight_rv.try_into()?;
+        // 0 weight indicates that signer doesn't belong to this account. Treat
+        // this as an error to indicate a bug in signatures, even if another
+        // signers would have enough weight.
+        if signer_weight == 0 {
+            return Err(Error::ContractError);
+        }
         // Overflow isn't possible here as
         // 255 * MAX_ACCOUNT_SIGNATURES is < u32::MAX.
         weight += signer_weight;

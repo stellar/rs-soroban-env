@@ -2767,8 +2767,8 @@ impl VmCallerCheckedEnv for Host {
                     }
                 }
             }
-            // We didn't find the target signer, return an error
-            Err(self.err_status(ScHostObjErrorCode::ObjectNotExist))
+            // We didn't find the target signer, return 0 weight to indicate that.
+            Ok(0u32.into())
         }
     }
 
