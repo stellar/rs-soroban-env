@@ -1,3 +1,5 @@
+use std::cmp::Ordering;
+
 use crate::budget::CostType;
 use crate::host::Host;
 use crate::native_contract::base_types::{BigInt, Bytes, BytesN, Vec};
@@ -217,6 +219,9 @@ impl TokenTrait for Token {
         spender: Identifier,
         amount: BigInt,
     ) -> Result<(), Error> {
+        if amount.compare(&BigInt::from_u64(e, 0)?)? == Ordering::Less {
+            return Err(Error::ContractError);
+        }
         let from_id = from.get_identifier(&e)?;
         let mut args = Vec::new(e)?;
         args.push(from.get_identifier(&e)?)?;
@@ -246,6 +251,9 @@ impl TokenTrait for Token {
         to: Identifier,
         amount: BigInt,
     ) -> Result<(), Error> {
+        if amount.compare(&BigInt::from_u64(e, 0)?)? == Ordering::Less {
+            return Err(Error::ContractError);
+        }
         let from_id = from.get_identifier(&e)?;
         let mut args = Vec::new(e)?;
         args.push(from.get_identifier(&e)?)?;
@@ -267,6 +275,9 @@ impl TokenTrait for Token {
         to: Identifier,
         amount: BigInt,
     ) -> Result<(), Error> {
+        if amount.compare(&BigInt::from_u64(e, 0)?)? == Ordering::Less {
+            return Err(Error::ContractError);
+        }
         let spender_id = spender.get_identifier(&e)?;
         let mut args = Vec::new(e)?;
         args.push(spender.get_identifier(&e)?)?;
@@ -289,6 +300,9 @@ impl TokenTrait for Token {
         from: Identifier,
         amount: BigInt,
     ) -> Result<(), Error> {
+        if amount.compare(&BigInt::from_u64(e, 0)?)? == Ordering::Less {
+            return Err(Error::ContractError);
+        }
         check_admin(&e, &admin)?;
         let mut args = Vec::new(e)?;
         args.push(admin.get_identifier(&e)?)?;
@@ -320,6 +334,9 @@ impl TokenTrait for Token {
         to: Identifier,
         amount: BigInt,
     ) -> Result<(), Error> {
+        if amount.compare(&BigInt::from_u64(e, 0)?)? == Ordering::Less {
+            return Err(Error::ContractError);
+        }
         check_admin(&e, &admin)?;
         let mut args = Vec::new(e)?;
         args.push(admin.get_identifier(&e)?)?;

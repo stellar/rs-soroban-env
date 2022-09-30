@@ -135,7 +135,7 @@ impl Host {
             account_id: self
                 .visit_obj(a, |id: &AccountId| Ok(id.metered_clone(&self.0.budget)?))?,
         });
-        self.visit_storage(|storage| match storage.get(&acc)?.data {
+        self.with_mut_storage(|storage| match storage.get(&acc)?.data {
             LedgerEntryData::Account(ae) => Ok(ae),
             _ => Err(self.err_general("not account")),
         })
@@ -147,7 +147,7 @@ impl Host {
             account_id: self
                 .visit_obj(a, |id: &AccountId| Ok(id.metered_clone(&self.0.budget)?))?,
         });
-        self.visit_storage(|storage| storage.has(&acc))
+        self.with_mut_storage(|storage| storage.has(&acc))
     }
 
     pub fn to_trustline_key(
