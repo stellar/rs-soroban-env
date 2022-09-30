@@ -35,10 +35,7 @@ impl Signature {
                 Invoker::Account(a) => Identifier::Account(a),
                 Invoker::Contract(c) => Identifier::Contract(c),
             },
-            Signature::Ed25519(kea) => {
-                env.charge_budget(CostType::BytesClone, 32)?;
-                Identifier::Ed25519(kea.public_key.clone())
-            }
+            Signature::Ed25519(kea) => Identifier::Ed25519(kea.public_key.clone()),
             Signature::Account(kaa) => Identifier::Account(kaa.account_id.clone()),
         })
     }

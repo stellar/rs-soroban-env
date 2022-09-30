@@ -1,4 +1,3 @@
-use crate::budget::CostType;
 use crate::host::Host;
 use crate::native_contract::base_types::{AccountId, BigInt};
 use crate::native_contract::token::error::Error;
@@ -27,7 +26,6 @@ fn write_balance(e: &Host, id: Identifier, amount: BigInt) -> Result<(), Error> 
 
 // Metering: covered by components.
 pub fn receive_balance(e: &Host, id: Identifier, amount: BigInt) -> Result<(), Error> {
-    e.charge_budget(CostType::BytesClone, 64)?; // id is cloned twice
     let balance = read_balance(e, id.clone())?;
     let is_frozen = read_state(e, id.clone())?;
     if is_frozen {
