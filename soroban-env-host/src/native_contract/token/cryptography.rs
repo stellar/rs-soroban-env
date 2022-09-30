@@ -7,16 +7,16 @@ use crate::native_contract::token::public_types::{
     SignaturePayloadV0,
 };
 use core::cmp::Ordering;
-use soroban_env_common::{CheckedEnv, Symbol, TryFromVal, TryIntoVal};
+use soroban_env_common::{CheckedEnv, IntoVal, InvokerType, Symbol, TryFromVal, TryIntoVal};
 
 fn check_ed25519_auth(
     e: &Host,
     auth: Ed25519Signature,
-    function: Symbol,
+    name: Symbol,
     args: Vec,
 ) -> Result<(), Error> {
     let msg = SignaturePayloadV0 {
-        function,
+        name,
         contract: BytesN::<32>::try_from_val(e, e.get_current_contract()?)?,
         network: Bytes::try_from_val(e, e.get_ledger_network_passphrase()?)?,
         args,
@@ -30,11 +30,11 @@ fn check_ed25519_auth(
 fn check_account_auth(
     e: &Host,
     auth: AccountSignatures,
-    function: Symbol,
+    name: Symbol,
     args: Vec,
 ) -> Result<(), Error> {
     let msg = SignaturePayloadV0 {
-        function,
+        name,
         contract: BytesN::<32>::try_from_val(e, e.get_current_contract()?)?,
         network: Bytes::try_from_val(e, e.get_ledger_network_passphrase()?)?,
         args,
@@ -60,7 +60,7 @@ fn check_account_auth(
             sig.signature.into(),
         )?;
         let signer_weight_rv = e.account_get_signer_weight(
-            auth.account_id.clone().into(),
+            auth.account_id.clone().into_val(&e),
             sig.public_key.clone().into(),
         )?;
         let signer_weight: u32 = signer_weight_rv.try_into()?;
@@ -70,7 +70,7 @@ fn check_account_auth(
         prev_pk = Some(sig.public_key);
     }
 
-    let threshold_rv = e.account_get_medium_threshold(auth.account_id.into())?;
+    let threshold_rv = e.account_get_medium_threshold(auth.account_id.into_val(&e))?;
     if weight < threshold_rv.try_into()? {
         Err(Error::ContractError)
     } else {
@@ -86,11 +86,15 @@ pub fn check_auth(
     args: Vec,
 ) -> Result<(), Error> {
     match auth {
-        Signature::Contract => {
+        Signature::Invoker => {
             if nonce.compare(&BigInt::from_u64(e, 0)?)? != Ordering::Equal {
                 Err(Error::ContractError)
             } else {
-                e.get_invoking_contract()?;
+                let invoker_type: InvokerType = Host::get_invoker_type(&e)?.try_into()?;
+                match invoker_type {
+                    InvokerType::Account => e.get_invoking_account()?,
+                    InvokerType::Contract => e.get_invoking_contract()?,
+                };
                 Ok(())
             }
         }

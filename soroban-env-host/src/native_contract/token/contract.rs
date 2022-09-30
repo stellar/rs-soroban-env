@@ -14,9 +14,8 @@ use crate::native_contract::token::nonce::read_nonce;
 use crate::native_contract::token::public_types::{
     ClassicMetadata, Identifier, Metadata, Signature, TokenMetadata,
 };
-use soroban_env_common::xdr::{
-    AccountId, AlphaNum12, AlphaNum4, Asset, AssetCode12, AssetCode4, PublicKey, Uint256,
-};
+
+use soroban_env_common::xdr::{AlphaNum12, AlphaNum4, Asset, AssetCode12, AssetCode4};
 use soroban_env_common::{CheckedEnv, Symbol, TryFromVal, TryIntoVal};
 use soroban_native_sdk_macros::contractimpl;
 
@@ -135,15 +134,15 @@ impl TokenTrait for Token {
                 let mut code4 = [0u8; 4];
                 asset.asset_code.copy_into_slice(&mut code4)?;
 
-                let mut issuer = [0u8; 32];
-                asset.issuer.copy_into_slice(&mut issuer)?;
-
+                let issuer_id = e.to_account_id(asset.issuer.to_object())?;
                 let asset4 = Asset::CreditAlphanum4(AlphaNum4 {
                     asset_code: AssetCode4(code4),
-                    issuer: AccountId(PublicKey::PublicKeyTypeEd25519(Uint256(issuer))),
+                    issuer: issuer_id,
                 });
+
                 let asset_contract_id =
                     BytesN::<32>::try_from_val(e, e.get_contract_id_from_asset(asset4)?)?;
+
                 if contract_id != asset_contract_id {
                     return Err(Error::ContractError);
                 }
@@ -162,15 +161,15 @@ impl TokenTrait for Token {
                 let mut code12 = [0u8; 12];
                 asset.asset_code.copy_into_slice(&mut code12)?;
 
-                let mut issuer = [0u8; 32];
-                asset.issuer.copy_into_slice(&mut issuer)?;
-
+                let issuer_id = e.to_account_id(asset.issuer.to_object())?;
                 let asset12 = Asset::CreditAlphanum12(AlphaNum12 {
                     asset_code: AssetCode12(code12),
-                    issuer: AccountId(PublicKey::PublicKeyTypeEd25519(Uint256(issuer))),
+                    issuer: issuer_id,
                 });
+
                 let asset_contract_id =
                     BytesN::<32>::try_from_val(e, e.get_contract_id_from_asset(asset12)?)?;
+
                 if contract_id != asset_contract_id {
                     return Err(Error::ContractError);
                 }
@@ -364,20 +363,18 @@ impl TokenTrait for Token {
             return Err(Error::ContractError);
         }
 
-        let id_key = match &id {
-            Signature::Account(acc) => Ok(acc.account_id.clone()),
-            _ => Err(Error::ContractError),
-        }?;
+        let account_id = id.get_account_id(e)?;
+
         let mut args = Vec::new(e)?;
         args.push(id.get_identifier(&e)?)?;
         args.push(nonce.clone())?;
         args.push(amount.clone())?;
         check_auth(&e, id, nonce, Symbol::from_str("to_smart"), args)?;
 
-        transfer_classic_balance(e, id_key.clone(), -amount)?;
+        transfer_classic_balance(e, &account_id, -amount)?;
         receive_balance(
             &e,
-            Identifier::Account(id_key),
+            Identifier::Account(account_id),
             BigInt::from_u64(&e, amount.try_into().map_err(|_| Error::ContractError)?)?,
         )?;
         Ok(())
@@ -388,20 +385,18 @@ impl TokenTrait for Token {
             return Err(Error::ContractError);
         }
 
-        let id_key = match &id {
-            Signature::Account(acc) => Ok(acc.account_id.clone()),
-            _ => Err(Error::ContractError),
-        }?;
+        let account_id = id.get_account_id(e)?;
+
         let mut args = Vec::new(e)?;
         args.push(id.get_identifier(&e)?)?;
         args.push(nonce.clone())?;
         args.push(amount.clone())?;
         check_auth(&e, id, nonce, Symbol::from_str("to_classic"), args)?;
 
-        transfer_classic_balance(e, id_key.clone(), amount)?;
+        transfer_classic_balance(e, &account_id, amount)?;
         spend_balance(
             &e,
-            Identifier::Account(id_key),
+            Identifier::Account(account_id),
             BigInt::from_u64(&e, amount.try_into().map_err(|_| Error::ContractError)?)?,
         )?;
         Ok(())

@@ -13,6 +13,7 @@ use crate::{
 use ed25519_dalek::{PublicKey, Signature, SIGNATURE_LENGTH};
 use num_bigint::Sign;
 use sha2::{Digest, Sha256};
+use soroban_env_common::xdr::AccountId;
 
 impl Host {
     // Notes on metering: free
@@ -55,6 +56,21 @@ impl Host {
                     .arg(name),
             )),
         }
+    }
+
+    pub(crate) fn to_account_id(&self, a: Object) -> Result<AccountId, HostError> {
+        self.visit_obj(a, |account_id: &AccountId| {
+            self.charge_budget(CostType::BytesClone, 32)?;
+            Ok(account_id.clone())
+        })
+    }
+
+    pub(crate) fn to_u256_from_account(&self, a: Object) -> Result<Uint256, HostError> {
+        self.visit_obj(a, |account_id: &AccountId| {
+            self.charge_budget(CostType::BytesClone, 32)?;
+            let crate::xdr::PublicKey::PublicKeyTypeEd25519(ed25519) = &account_id.0;
+            Ok(ed25519.clone())
+        })
     }
 
     pub(crate) fn to_u256(&self, a: Object) -> Result<Uint256, HostError> {

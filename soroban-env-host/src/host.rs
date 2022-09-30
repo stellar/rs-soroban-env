@@ -903,7 +903,7 @@ impl Host {
 
     pub(crate) fn transfer_account_balance(
         &self,
-        account_id: Object,
+        account: Object,
         amount: i64,
     ) -> Result<(), HostError> {
         use xdr::{AccountEntryExt, AccountEntryExtensionV1Ext, LedgerKeyAccount};
@@ -914,8 +914,9 @@ impl Host {
         })?;
 
         let lk = LedgerKey::Account(LedgerKeyAccount {
-            account_id: AccountId(PublicKey::PublicKeyTypeEd25519(self.to_u256(account_id)?)),
+            account_id: self.to_account_id(account)?,
         });
+
         self.visit_storage(|storage| {
             let mut le = storage.get(&lk)?;
             let ae = match &mut le.data {
@@ -962,7 +963,7 @@ impl Host {
 
     pub(crate) fn transfer_trustline_balance(
         &self,
-        account_id: Object,
+        account: Object,
         asset_code: Object,
         issuer: Object,
         amount: i64,
@@ -974,7 +975,7 @@ impl Host {
             _ => Err(self.err_general("only native token can transfer classic balance")),
         })?;
 
-        let lk = self.to_trustline_key(account_id, asset_code, issuer)?;
+        let lk = self.to_trustline_key(account, asset_code, issuer)?;
         self.visit_storage(|storage| {
             let mut le = storage.get(&lk)?;
             let tl = match &mut le.data {
