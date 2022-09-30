@@ -4,6 +4,7 @@
 use core::cell::RefCell;
 use core::cmp::Ordering;
 use core::fmt::Debug;
+use std::cmp::min;
 
 use im_rc::{OrdMap, Vector};
 use num_bigint::Sign;
@@ -2757,12 +2758,17 @@ impl VmCallerCheckedEnv for Host {
             for signer in signers {
                 if let SignerKey::Ed25519(ref this_signer) = signer.key {
                     if &target_signer == this_signer {
+                        // Clamp the weight at 255. Stellar protocol before v10
+                        // allowed weights to exceed 255, but the max threshold
+                        // is 255, hence there is no point in having a larger
+                        // weight.
+                        let weight = min(signer.weight, u8::MAX as u32);
                         // We've found the target signer in the account signers, so return the weight
-                        return Ok(signer.weight.into());
+                        return Ok(weight.into());
                     }
                 }
             }
-            // We didn't find the target signer, so it must have no weight
+            // We didn't find the target signer, return 0 weight to indicate that.
             Ok(0u32.into())
         }
     }

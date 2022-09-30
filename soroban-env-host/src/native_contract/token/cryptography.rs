@@ -9,6 +9,8 @@ use crate::native_contract::token::public_types::{
 use core::cmp::Ordering;
 use soroban_env_common::{CheckedEnv, IntoVal, InvokerType, Symbol, TryFromVal, TryIntoVal};
 
+const MAX_ACCOUNT_SIGNATURES: u32 = 20;
+
 // Metering: covered by components
 fn check_ed25519_auth(
     e: &Host,
@@ -45,10 +47,14 @@ fn check_account_auth(
 
     let mut weight = 0u32;
     let sigs = &auth.signatures;
+    // Check if there is too many signatures: there shouldn't be more
+    // signatures then the amount of account signers.
+    if sigs.len()? > MAX_ACCOUNT_SIGNATURES {
+        return Err(Error::ContractError);
+    }
     let mut prev_pk: Option<BytesN<32>> = None;
     for i in 0..sigs.len()? {
         let sig: Ed25519Signature = sigs.get(i)?;
-
         // Cannot take multiple signatures from the same key
         if let Some(prev) = prev_pk {
             if prev.compare(&sig.public_key)? != Ordering::Less {
@@ -66,9 +72,15 @@ fn check_account_auth(
             sig.public_key.clone().into(),
         )?;
         let signer_weight: u32 = signer_weight_rv.try_into()?;
-        // TODO: Check for overflow
+        // 0 weight indicates that signer doesn't belong to this account. Treat
+        // this as an error to indicate a bug in signatures, even if another
+        // signers would have enough weight.
+        if signer_weight == 0 {
+            return Err(Error::ContractError);
+        }
+        // Overflow isn't possible here as
+        // 255 * MAX_ACCOUNT_SIGNATURES is < u32::MAX.
         weight += signer_weight;
-
         prev_pk = Some(sig.public_key);
     }
 
