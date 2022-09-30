@@ -288,13 +288,6 @@ impl Host {
         self.charge_budget(CostType::HostEventContract, 1)
     }
 
-    pub fn with_storage<F, U>(&self, f: F) -> Result<U, HostError>
-    where
-        F: FnOnce(&Storage) -> Result<U, HostError>,
-    {
-        f(&*self.0.storage.borrow())
-    }
-
     pub fn with_mut_storage<F, U>(&self, f: F) -> Result<U, HostError>
     where
         F: FnOnce(&mut Storage) -> Result<U, HostError>,
