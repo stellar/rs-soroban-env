@@ -1,4 +1,3 @@
-use crate::budget::CostType;
 use crate::host::Host;
 use crate::native_contract::base_types::{AccountId, Bytes, BytesN, Map, Vec};
 use crate::native_contract::invoker::{invoker, Invoker};
