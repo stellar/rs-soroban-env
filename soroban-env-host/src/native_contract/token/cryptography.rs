@@ -1,4 +1,3 @@
-use crate::host::metered_clone::MeteredClone;
 use crate::host::Host;
 use crate::native_contract::base_types::{BigInt, Bytes, BytesN, Vec};
 use crate::native_contract::token::error::Error;
@@ -59,12 +58,12 @@ fn check_account_auth(
 
         e.verify_sig_ed25519(
             msg_bin.clone(),
-            sig.public_key.metered_clone(&e.0.budget)?.into(),
+            sig.public_key.clone().into(),
             sig.signature.into(),
         )?;
         let signer_weight_rv = e.account_get_signer_weight(
-            auth.account_id.metered_clone(&e.0.budget)?.into_val(&e),
-            sig.public_key.metered_clone(&e.0.budget)?.into(),
+            auth.account_id.clone().into_val(&e),
+            sig.public_key.clone().into(),
         )?;
         let signer_weight: u32 = signer_weight_rv.try_into()?;
         // TODO: Check for overflow
@@ -103,10 +102,8 @@ pub fn check_auth(
             }
         }
         Signature::Ed25519(kea) => {
-            let stored_nonce = read_and_increment_nonce(
-                e,
-                Identifier::Ed25519(kea.public_key.metered_clone(&e.0.budget)?),
-            )?;
+            let stored_nonce =
+                read_and_increment_nonce(e, Identifier::Ed25519(kea.public_key.clone()))?;
             if nonce.compare(&stored_nonce)? != Ordering::Equal {
                 Err(Error::ContractError)
             } else {
@@ -115,10 +112,8 @@ pub fn check_auth(
             }
         }
         Signature::Account(kaa) => {
-            let stored_nonce = read_and_increment_nonce(
-                e,
-                Identifier::Account(kaa.account_id.metered_clone(&e.0.budget)?),
-            )?;
+            let stored_nonce =
+                read_and_increment_nonce(e, Identifier::Account(kaa.account_id.clone()))?;
             if nonce.compare(&stored_nonce)? != Ordering::Equal {
                 Err(Error::ContractError)
             } else {

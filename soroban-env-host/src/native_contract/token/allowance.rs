@@ -1,4 +1,3 @@
-use crate::host::metered_clone::MeteredClone;
 use crate::host::Host;
 use crate::native_contract::base_types::BigInt;
 use crate::native_contract::token::error::Error;
@@ -36,11 +35,7 @@ pub fn spend_allowance(
     spender: Identifier,
     amount: BigInt,
 ) -> Result<(), Error> {
-    let allowance = read_allowance(
-        e,
-        from.metered_clone(&e.0.budget)?,
-        spender.metered_clone(&e.0.budget)?,
-    )?;
+    let allowance = read_allowance(e, from.clone(), spender.clone())?;
     if allowance.compare(&amount)? == Ordering::Less {
         Err(Error::ContractError)
     } else {

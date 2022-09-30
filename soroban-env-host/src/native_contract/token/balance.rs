@@ -1,5 +1,4 @@
 use crate::budget::CostType;
-use crate::host::metered_clone::MeteredClone;
 use crate::host::Host;
 use crate::native_contract::base_types::{AccountId, BigInt};
 use crate::native_contract::token::error::Error;
@@ -29,8 +28,8 @@ fn write_balance(e: &Host, id: Identifier, amount: BigInt) -> Result<(), Error> 
 // Metering: covered by components.
 pub fn receive_balance(e: &Host, id: Identifier, amount: BigInt) -> Result<(), Error> {
     e.charge_budget(CostType::BytesClone, 64)?; // id is cloned twice
-    let balance = read_balance(e, id.metered_clone(&e.0.budget)?)?;
-    let is_frozen = read_state(e, id.metered_clone(&e.0.budget)?)?;
+    let balance = read_balance(e, id.clone())?;
+    let is_frozen = read_state(e, id.clone())?;
     if is_frozen {
         Err(Error::ContractError)
     } else {
@@ -40,8 +39,8 @@ pub fn receive_balance(e: &Host, id: Identifier, amount: BigInt) -> Result<(), E
 
 // Metering: covered by components.
 pub fn spend_balance(e: &Host, id: Identifier, amount: BigInt) -> Result<(), Error> {
-    let balance = read_balance(e, id.metered_clone(&e.0.budget)?)?;
-    let is_frozen = read_state(e, id.metered_clone(&e.0.budget)?)?;
+    let balance = read_balance(e, id.clone())?;
+    let is_frozen = read_state(e, id.clone())?;
     if is_frozen {
         Err(Error::ContractError)
     } else if balance.compare(&amount)? == Ordering::Less {
@@ -72,17 +71,15 @@ pub fn write_state(e: &Host, id: Identifier, is_frozen: bool) -> Result<(), Erro
 pub fn transfer_classic_balance(e: &Host, to_key: &AccountId, amount: i64) -> Result<(), Error> {
     match read_metadata(e)? {
         Metadata::Token(_) => return Err(Error::ContractError),
-        Metadata::Native => {
-            e.transfer_account_balance(to_key.metered_clone(&e.0.budget)?.into_val(&e), amount)?
-        }
+        Metadata::Native => e.transfer_account_balance(to_key.clone().into_val(&e), amount)?,
         Metadata::AlphaNum4(asset) => e.transfer_trustline_balance(
-            to_key.metered_clone(&e.0.budget)?.into_val(&e),
+            to_key.clone().into_val(&e),
             asset.asset_code.into(),
             asset.issuer.into_val(&e),
             amount,
         )?,
         Metadata::AlphaNum12(asset) => e.transfer_trustline_balance(
-            to_key.metered_clone(&e.0.budget)?.into_val(&e),
+            to_key.clone().into_val(&e),
             asset.asset_code.into(),
             asset.issuer.into_val(&e),
             amount,

@@ -1,6 +1,4 @@
-use crate::budget::Budget;
 use crate::budget::CostType;
-use crate::host::metered_clone::MeteredClone;
 use crate::host::Host;
 use crate::native_contract::base_types::{AccountId, Bytes, BytesN, Map, Vec};
 use crate::native_contract::invoker::{invoker, Invoker};
@@ -41,15 +39,13 @@ impl Signature {
                 env.charge_budget(CostType::BytesClone, 32)?;
                 Identifier::Ed25519(kea.public_key.clone())
             }
-            Signature::Account(kaa) => {
-                Identifier::Account(kaa.account_id.metered_clone(&env.0.budget)?)
-            }
+            Signature::Account(kaa) => Identifier::Account(kaa.account_id.clone()),
         })
     }
 
     pub fn get_account_id(&self, env: &Host) -> Result<AccountId, Error> {
         match self {
-            Signature::Account(acc) => Ok(acc.account_id.metered_clone(&env.0.budget)?),
+            Signature::Account(acc) => Ok(acc.account_id.clone()),
             Signature::Invoker => match invoker(env)? {
                 Invoker::Account(a) => Ok(a),
                 Invoker::Contract(_) => Err(Error::ContractError),
@@ -65,13 +61,6 @@ pub enum Identifier {
     Contract(BytesN<32>),
     Ed25519(BytesN<32>),
     Account(AccountId),
-}
-
-impl MeteredClone for Identifier {
-    fn metered_clone(&self, budget: &Budget) -> Result<Self, crate::HostError> {
-        budget.charge(CostType::BytesClone, 32)?;
-        Ok(self.clone())
-    }
 }
 
 #[derive(Clone)]
@@ -104,29 +93,11 @@ pub struct AlphaNum4Metadata {
     pub issuer: AccountId,
 }
 
-impl MeteredClone for AlphaNum4Metadata {
-    fn metered_clone(&self, budget: &Budget) -> Result<Self, crate::HostError> {
-        Ok(AlphaNum4Metadata {
-            asset_code: self.asset_code.metered_clone(budget)?,
-            issuer: self.issuer.metered_clone(budget)?,
-        })
-    }
-}
-
 #[derive(Clone)]
 #[contracttype]
 pub struct AlphaNum12Metadata {
     pub asset_code: BytesN<12>,
     pub issuer: AccountId,
-}
-
-impl MeteredClone for AlphaNum12Metadata {
-    fn metered_clone(&self, budget: &Budget) -> Result<Self, crate::HostError> {
-        Ok(AlphaNum12Metadata {
-            asset_code: self.asset_code.metered_clone(budget)?,
-            issuer: self.issuer.metered_clone(budget)?,
-        })
-    }
 }
 
 #[derive(Clone)]
@@ -135,17 +106,6 @@ pub enum ClassicMetadata {
     Native,
     AlphaNum4(AlphaNum4Metadata),
     AlphaNum12(AlphaNum12Metadata),
-}
-
-impl MeteredClone for ClassicMetadata {
-    fn metered_clone(&self, budget: &Budget) -> Result<Self, crate::HostError> {
-        match self {
-            ClassicMetadata::Native => Ok(self.clone()),
-            ClassicMetadata::AlphaNum4(_) | ClassicMetadata::AlphaNum12(_) => {
-                Ok(self.metered_clone(budget)?)
-            }
-        }
-    }
 }
 
 #[derive(Clone)]
