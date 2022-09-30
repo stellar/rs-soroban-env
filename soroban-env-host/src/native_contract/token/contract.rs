@@ -1,5 +1,6 @@
 use std::cmp::Ordering;
 
+use crate::budget::CostType;
 use crate::host::Host;
 use crate::native_contract::base_types::{BigInt, Bytes, BytesN, Vec};
 use crate::native_contract::token::admin::{check_admin, write_administrator};
@@ -112,6 +113,7 @@ pub trait TokenTrait {
 pub struct Token;
 
 #[contractimpl]
+// Metering: *mostly* covered by components.
 impl TokenTrait for Token {
     fn init_wrap(e: &Host, metadata: ClassicMetadata) -> Result<(), Error> {
         if has_metadata(&e)? {
@@ -134,6 +136,7 @@ impl TokenTrait for Token {
             ClassicMetadata::AlphaNum4(asset) => {
                 //TODO: Better way to do this?
                 let mut code4 = [0u8; 4];
+                e.charge_budget(CostType::BytesClone, 4)?;
                 asset.asset_code.copy_into_slice(&mut code4)?;
 
                 let issuer_id = e.to_account_id(asset.issuer.to_object())?;
@@ -161,6 +164,7 @@ impl TokenTrait for Token {
             ClassicMetadata::AlphaNum12(asset) => {
                 //TODO: Better way to do this?
                 let mut code12 = [0u8; 12];
+                e.charge_budget(CostType::BytesClone, 12)?;
                 asset.asset_code.copy_into_slice(&mut code12)?;
 
                 let issuer_id = e.to_account_id(asset.issuer.to_object())?;
@@ -207,6 +211,7 @@ impl TokenTrait for Token {
         read_allowance(&e, from, spender)
     }
 
+    // Metering: covered by components
     fn approve(
         e: &Host,
         from: Signature,
@@ -228,14 +233,17 @@ impl TokenTrait for Token {
         Ok(())
     }
 
+    // Metering: covered by components
     fn balance(e: &Host, id: Identifier) -> Result<BigInt, Error> {
         read_balance(e, id)
     }
 
+    // Metering: covered by components
     fn is_frozen(e: &Host, id: Identifier) -> Result<bool, Error> {
         read_state(&e, id)
     }
 
+    // Metering: covered by components
     fn xfer(
         e: &Host,
         from: Signature,
@@ -258,6 +266,7 @@ impl TokenTrait for Token {
         Ok(())
     }
 
+    // Metering: covered by components
     fn xfer_from(
         e: &Host,
         spender: Signature,
@@ -283,6 +292,7 @@ impl TokenTrait for Token {
         Ok(())
     }
 
+    // Metering: covered by components
     fn burn(
         e: &Host,
         admin: Signature,
@@ -304,6 +314,7 @@ impl TokenTrait for Token {
         Ok(())
     }
 
+    // Metering: covered by components
     fn freeze(e: &Host, admin: Signature, nonce: BigInt, id: Identifier) -> Result<(), Error> {
         check_admin(&e, &admin)?;
         let mut args = Vec::new(e)?;
@@ -315,6 +326,7 @@ impl TokenTrait for Token {
         Ok(())
     }
 
+    // Metering: covered by components
     fn mint(
         e: &Host,
         admin: Signature,
@@ -336,6 +348,7 @@ impl TokenTrait for Token {
         Ok(())
     }
 
+    // Metering: covered by components
     fn set_admin(
         e: &Host,
         admin: Signature,
@@ -352,6 +365,7 @@ impl TokenTrait for Token {
         Ok(())
     }
 
+    // Metering: covered by components
     fn unfreeze(e: &Host, admin: Signature, nonce: BigInt, id: Identifier) -> Result<(), Error> {
         check_admin(&e, &admin)?;
         let mut args = Vec::new(e)?;
@@ -375,6 +389,7 @@ impl TokenTrait for Token {
         read_symbol(&e)
     }
 
+    // Metering: covered by components
     fn to_smart(e: &Host, id: Signature, nonce: BigInt, amount: i64) -> Result<(), Error> {
         if amount < 0 {
             return Err(Error::ContractError);
@@ -397,6 +412,7 @@ impl TokenTrait for Token {
         Ok(())
     }
 
+    // Metering: covered by components
     fn to_classic(e: &Host, id: Signature, nonce: BigInt, amount: i64) -> Result<(), Error> {
         if amount < 0 {
             return Err(Error::ContractError);

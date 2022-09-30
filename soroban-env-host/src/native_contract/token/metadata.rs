@@ -5,24 +5,28 @@ use crate::native_contract::token::public_types::Metadata;
 use crate::native_contract::token::storage_types::DataKey;
 use soroban_env_common::{CheckedEnv, EnvBase, TryFromVal, TryIntoVal};
 
+// Metering: *mostly* covered by components.
 pub fn write_metadata(e: &Host, metadata: Metadata) -> Result<(), Error> {
     let key = DataKey::Metadata;
     e.put_contract_data(key.try_into_val(e)?, metadata.try_into_val(e)?)?;
     Ok(())
 }
 
+// Metering: *mostly* covered by components.
 pub fn read_metadata(e: &Host) -> Result<Metadata, Error> {
     let key = DataKey::Metadata;
     let rv = e.get_contract_data(key.try_into_val(e)?)?;
     Ok(rv.try_into_val(e)?)
 }
 
+// Metering: *mostly* covered by components.
 pub fn has_metadata(e: &Host) -> Result<bool, Error> {
     let key = DataKey::Metadata;
     let rv = e.has_contract_data(key.try_into_val(e)?)?;
     Ok(rv.try_into()?)
 }
 
+// Metering: *mostly* covered by components. `bytes_new_from_slice` and `Bytes` not covered.
 pub fn read_name(e: &Host) -> Result<Bytes, Error> {
     match read_metadata(e)? {
         Metadata::Token(token) => Ok(token.name),
@@ -50,6 +54,7 @@ pub fn read_name(e: &Host) -> Result<Bytes, Error> {
     }
 }
 
+// Metering: *mostly* covered by components.`bytes_new_from_slice` and `Bytes` not covered.
 pub fn read_symbol(e: &Host) -> Result<Bytes, Error> {
     match read_metadata(e)? {
         Metadata::Token(token) => Ok(token.symbol),
@@ -59,6 +64,7 @@ pub fn read_symbol(e: &Host) -> Result<Bytes, Error> {
     }
 }
 
+// Metering: covered by components
 pub fn read_decimal(e: &Host) -> Result<u32, Error> {
     match read_metadata(e)? {
         Metadata::Token(token) => Ok(token.decimals),

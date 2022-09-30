@@ -5,6 +5,7 @@ use crate::native_contract::token::public_types::Identifier;
 use crate::native_contract::token::storage_types::DataKey;
 use soroban_env_common::{CheckedEnv, TryIntoVal};
 
+// Metering: covered by components
 pub fn read_nonce(e: &Host, id: Identifier) -> Result<BigInt, Error> {
     let key = DataKey::Nonce(id);
     if let Ok(nonce) = e.get_contract_data(key.try_into_val(e)?) {
@@ -14,6 +15,7 @@ pub fn read_nonce(e: &Host, id: Identifier) -> Result<BigInt, Error> {
     }
 }
 
+// Metering: covered by components
 pub fn read_and_increment_nonce(e: &Host, id: Identifier) -> Result<BigInt, Error> {
     let key = DataKey::Nonce(id.clone());
     let nonce = read_nonce(e, id)?;

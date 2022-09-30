@@ -900,6 +900,7 @@ impl Host {
         Ok(Status::OK.into())
     }
 
+    // Metering: *mostly* covered by components. The arithmatics are free.
     pub(crate) fn transfer_account_balance(
         &self,
         account: Object,
@@ -960,6 +961,7 @@ impl Host {
         })
     }
 
+    // Metering: *mostly* covered by components. The arithmatics are free.
     pub(crate) fn transfer_trustline_balance(
         &self,
         account: Object,
@@ -1182,7 +1184,7 @@ impl VmCallerCheckedEnv for Host {
         Ok(RawVal::from_void())
     }
 
-    // TODO: Assess metering.
+    // Metering: mostly free or already covered by components (e.g. err_general)
     fn get_invoker_type(&self, _vmcaller: &mut VmCaller<Host>) -> Result<u64, HostError> {
         let frames = self.0.context.borrow();
         // If the previous frame exists and is a contract, return its ID, otherwise return

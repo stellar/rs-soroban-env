@@ -9,6 +9,7 @@ use crate::native_contract::token::public_types::{
 use core::cmp::Ordering;
 use soroban_env_common::{CheckedEnv, IntoVal, InvokerType, Symbol, TryFromVal, TryIntoVal};
 
+// Metering: covered by components
 fn check_ed25519_auth(
     e: &Host,
     auth: Ed25519Signature,
@@ -27,6 +28,7 @@ fn check_ed25519_auth(
     Ok(())
 }
 
+// Metering: *mostly* covered by components.
 fn check_account_auth(
     e: &Host,
     auth: AccountSignatures,
@@ -78,6 +80,7 @@ fn check_account_auth(
     }
 }
 
+// Metering: *mostly* covered by components.
 pub fn check_auth(
     e: &Host,
     auth: Signature,
