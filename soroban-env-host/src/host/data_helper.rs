@@ -3,12 +3,11 @@ use soroban_env_common::{
     CheckedEnv, InvokerType,
 };
 
-use crate::budget::CostType;
 use crate::xdr::{
     AccountEntry, AccountId, ContractDataEntry, Hash, HashIdPreimage, HashIdPreimageContractId,
     HashIdPreimageEd25519ContractId, LedgerEntry, LedgerEntryData, LedgerEntryExt, LedgerKey,
     LedgerKeyAccount, LedgerKeyContractData, LedgerKeyTrustLine, ScContractCode,
-    ScHostStorageErrorCode, ScHostValErrorCode, ScObject, ScStatic, ScVal, Uint256, WriteXdr,
+    ScHostStorageErrorCode, ScHostValErrorCode, ScObject, ScStatic, ScVal, Uint256,
 };
 use crate::{Host, HostError, Object};
 
@@ -75,14 +74,11 @@ impl Host {
             salt,
         });
         let mut buf = Vec::new();
-        self.charge_budget(CostType::BytesClone, 64)?; // key + salt
-        pre_image
-            .write_xdr(&mut buf)
-            .map_err(|_| self.err_general("invalid preimage"))?;
+        self.metered_write_xdr(&pre_image, &mut buf)?;
         Ok(buf)
     }
 
-    // notes on metering: covers the key and salt. Rest are free.
+    // metering: covered by components
     pub fn id_preimage_from_contract(
         &self,
         contract_id: Hash,
@@ -91,25 +87,19 @@ impl Host {
         let pre_image =
             HashIdPreimage::ContractIdFromContract(HashIdPreimageContractId { contract_id, salt });
         let mut buf = Vec::new();
-        self.charge_budget(CostType::BytesClone, 64)?; // key + salt
-        pre_image
-            .write_xdr(&mut buf)
-            .map_err(|_| self.err_general("invalid preimage"))?;
+        self.metered_write_xdr(&pre_image, &mut buf)?;
         Ok(buf)
     }
 
-    // notes on metering: covers the byte cloning (write_xdr) for AlphaNum12 (worst case)
+    // metering: covered by components
     pub fn id_preimage_from_asset(&self, asset: Asset) -> Result<Vec<u8>, HostError> {
         let pre_image = HashIdPreimage::ContractIdFromAsset(asset);
         let mut buf = Vec::new();
-        self.charge_budget(CostType::BytesClone, 44)?; // CreditAlphanum12: 12 bytes asset code + 32 bytes accountId
-        pre_image
-            .write_xdr(&mut buf)
-            .map_err(|_| self.err_general("invalid preimage"))?;
+        self.metered_write_xdr(&pre_image, &mut buf)?;
         Ok(buf)
     }
 
-    // notes on metering: covers the key and salt. Rest are free.
+    // metering: covered by components
     pub fn id_preimage_from_source_account(&self, salt: Uint256) -> Result<Vec<u8>, HostError> {
         if self.get_invoker_type()? != InvokerType::Account as u64 {
             return Err(self.err_general("invoker is not an account"));
@@ -122,10 +112,7 @@ impl Host {
                 salt,
             });
         let mut buf = Vec::new();
-        self.charge_budget(CostType::BytesClone, 64)?; // key + salt
-        pre_image
-            .write_xdr(&mut buf)
-            .map_err(|_| self.err_general("invalid hash"))?;
+        self.metered_write_xdr(&pre_image, &mut buf)?;
         Ok(buf)
     }
 

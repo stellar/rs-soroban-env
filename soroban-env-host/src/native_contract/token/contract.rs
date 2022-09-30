@@ -136,7 +136,7 @@ impl TokenTrait for Token {
             ClassicMetadata::AlphaNum4(asset) => {
                 //TODO: Better way to do this?
                 let mut code4 = [0u8; 4];
-                e.charge_budget(CostType::BytesClone, 4)?;
+                e.charge_budget(CostType::BytesClone, code4.len() as u64)?;
                 asset.asset_code.copy_into_slice(&mut code4)?;
 
                 let issuer_id = e.to_account_id(asset.issuer.to_object())?;
@@ -164,7 +164,7 @@ impl TokenTrait for Token {
             ClassicMetadata::AlphaNum12(asset) => {
                 //TODO: Better way to do this?
                 let mut code12 = [0u8; 12];
-                e.charge_budget(CostType::BytesClone, 12)?;
+                e.charge_budget(CostType::BytesClone, code12.len() as u64)?;
                 asset.asset_code.copy_into_slice(&mut code12)?;
 
                 let issuer_id = e.to_account_id(asset.issuer.to_object())?;
