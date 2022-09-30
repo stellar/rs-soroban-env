@@ -12,6 +12,8 @@ use crate::xdr::{
 };
 use crate::{Host, HostError, Object};
 
+use super::metered_clone::MeteredClone;
+
 impl Host {
     // Notes on metering: free
     pub fn contract_code_ledger_key(&self, contract_id: Hash) -> LedgerKey {
@@ -130,7 +132,8 @@ impl Host {
     // notes on metering: `get` from storage and `to_u256` covered. Rest are free.
     pub fn load_account(&self, a: Object) -> Result<AccountEntry, HostError> {
         let acc = LedgerKey::Account(LedgerKeyAccount {
-            account_id: self.visit_obj(a, |id: &AccountId| Ok(id.clone()))?,
+            account_id: self
+                .visit_obj(a, |id: &AccountId| Ok(id.metered_clone(&self.0.budget)?))?,
         });
         self.visit_storage(|storage| match storage.get(&acc)?.data {
             LedgerEntryData::Account(ae) => Ok(ae),
@@ -141,7 +144,8 @@ impl Host {
     // notes on metering: covered by `has` and `to_u256`.
     pub fn has_account(&self, a: Object) -> Result<bool, HostError> {
         let acc = LedgerKey::Account(LedgerKeyAccount {
-            account_id: self.visit_obj(a, |id: &AccountId| Ok(id.clone()))?,
+            account_id: self
+                .visit_obj(a, |id: &AccountId| Ok(id.metered_clone(&self.0.budget)?))?,
         });
         self.visit_storage(|storage| storage.has(&acc))
     }

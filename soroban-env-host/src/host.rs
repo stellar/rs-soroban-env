@@ -561,8 +561,12 @@ impl Host {
                             self.map_err(b.metered_clone(&self.0.budget)?.try_into())?,
                         )),
                         HostObject::BigInt(bi) => self.scobj_from_bigint(bi),
-                        HostObject::ContractCode(cc) => Ok(ScObject::ContractCode(cc.clone())),
-                        HostObject::AccountId(aid) => Ok(ScObject::AccountId(aid.clone())),
+                        HostObject::ContractCode(cc) => {
+                            Ok(ScObject::ContractCode(cc.metered_clone(&self.0.budget)?))
+                        }
+                        HostObject::AccountId(aid) => {
+                            Ok(ScObject::AccountId(aid.metered_clone(&self.0.budget)?))
+                        }
                     },
                 }
             })
@@ -611,8 +615,10 @@ impl Host {
                 };
                 self.add_host_object(bi)
             }
-            ScObject::ContractCode(cc) => self.add_host_object(cc.clone()),
-            ScObject::AccountId(account_id) => self.add_host_object(account_id.clone()),
+            ScObject::ContractCode(cc) => self.add_host_object(cc.metered_clone(&self.0.budget)?),
+            ScObject::AccountId(account_id) => {
+                self.add_host_object(account_id.metered_clone(&self.0.budget)?)
+            }
         }
     }
 
@@ -635,12 +641,19 @@ impl Host {
                 self.charge_budget(CostType::HostI64AllocCell, 1)?;
             }
             HostObject::Bytes(b) => {
-                self.charge_budget(CostType::HostBinAllocCell, b.len() as u64)?;
+                self.charge_budget(CostType::HostBytesAllocCell, b.len() as u64)?;
             }
             HostObject::BigInt(bi) => {
                 self.charge_budget(CostType::HostBigIntAllocCell, bi.bits() as u64)?;
             }
-            HostObject::ContractCode(_) | HostObject::AccountId(_) => {}
+            HostObject::ContractCode(cc) => {
+                if let ScContractCode::Wasm(c) = cc {
+                    self.charge_budget(CostType::HostContractCodeAllocCell, c.len() as u64)?;
+                }
+            }
+            HostObject::AccountId(_) => {
+                self.charge_budget(CostType::HostAccountIdAllocCell, 1)?;
+            }
         }
         Ok(ho)
     }
