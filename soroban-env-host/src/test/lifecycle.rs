@@ -16,7 +16,7 @@ use im_rc::OrdMap;
 use sha2::{Digest, Sha256};
 
 pub(crate) fn check_new_code(host: &Host, storage_key: LedgerKey, code: ScVal) {
-    host.visit_storage(|s: &mut Storage| {
+    host.with_mut_storage(|s: &mut Storage| {
         assert!(s.has(&storage_key)?);
 
         match s.get(&storage_key)?.data {
@@ -136,7 +136,7 @@ fn create_contract_using_parent_id_test() {
         key: ScVal::Static(ScStatic::LedgerKeyContractCode),
     });
 
-    host.visit_storage(|s: &mut Storage| {
+    host.with_mut_storage(|s: &mut Storage| {
         s.footprint
             .record_access(&child_storage_key, AccessType::ReadWrite)
             .unwrap();
