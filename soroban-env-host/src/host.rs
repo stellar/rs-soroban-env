@@ -823,7 +823,7 @@ impl Host {
                 if let [ScVal::Object(Some(a_obj))] = args.as_slice() {
                     self.with_frame(Frame::HostFunction(hf), || {
                         let asset_bytes = self.to_host_obj(a_obj)?.to_object();
-                        self.create_token_wrapper(&mut VmCaller::none(), asset_bytes)
+                        self.create_token_from_asset(&mut VmCaller::none(), asset_bytes)
                             .map(|obj| <RawVal>::from(obj))
                     })
                 } else {
@@ -1864,7 +1864,7 @@ impl VmCallerCheckedEnv for Host {
     }
 
     //TODO: metering
-    fn create_token_wrapper(
+    fn create_token_from_asset(
         &self,
         vmcaller: &mut VmCaller<Host>,
         asset: Object,
@@ -1985,7 +1985,7 @@ impl VmCallerCheckedEnv for Host {
         let id = self.create_contract_with_id_preimage(ScContractCode::Token, buf)?;
         self.call_n(
             id,
-            Symbol::from_str("init_wrap"),
+            Symbol::from_str("init_asset"),
             &[self.to_host_val(&arg)?.val],
         )?;
 

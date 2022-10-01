@@ -25,19 +25,18 @@ use soroban_native_sdk_macros::contractimpl;
 use super::public_types::{AlphaNum12Metadata, AlphaNum4Metadata};
 
 pub trait TokenTrait {
-    /// init_wrap can create a contract for a wrapped classic asset
+    /// init_asset can create a contract for a wrapped classic asset
     /// (Native, AlphaNum4, or AlphaNum12). It will fail if the contractID
     /// of this contract does not match the expected contractID for this asset
     /// returned by Host::get_contract_id_from_asset. This function should only be
-    /// called by the create_token_wrapper host function for this reason.
+    /// called by the create_token_from_asset host function for this reason.
     ///
     /// No admin will be set for the Native token, so any function that checks the admin
     /// (burn, freeze, unfreeze, mint, set_admin) will always fail
-    fn init_wrap(e: &Host, metadata: ClassicMetadata) -> Result<(), Error>;
+    fn init_asset(e: &Host, metadata: ClassicMetadata) -> Result<(), Error>;
 
-    /// init_token creates a token contract that does not wrap an asset on the classic side.
-    /// No checks are done on the contractID.
-    fn init_token(e: &Host, admin: Identifier, metadata: TokenMetadata) -> Result<(), Error>;
+    /// init creates a token contract that does not wrap an asset on the classic side.
+    fn init(e: &Host, admin: Identifier, metadata: TokenMetadata) -> Result<(), Error>;
 
     fn nonce(e: &Host, id: Identifier) -> Result<BigInt, Error>;
 
@@ -115,7 +114,7 @@ pub struct Token;
 #[contractimpl]
 // Metering: *mostly* covered by components.
 impl TokenTrait for Token {
-    fn init_wrap(e: &Host, metadata: ClassicMetadata) -> Result<(), Error> {
+    fn init_asset(e: &Host, metadata: ClassicMetadata) -> Result<(), Error> {
         if has_metadata(&e)? {
             return Err(Error::ContractError);
         }
@@ -193,7 +192,7 @@ impl TokenTrait for Token {
         Ok(())
     }
 
-    fn init_token(e: &Host, admin: Identifier, metadata: TokenMetadata) -> Result<(), Error> {
+    fn init(e: &Host, admin: Identifier, metadata: TokenMetadata) -> Result<(), Error> {
         if has_metadata(&e)? {
             return Err(Error::ContractError);
         }
