@@ -86,7 +86,7 @@ fn metered_xdr() -> Result<(), HostError> {
         assert_eq!(budget.get_input(CostType::ValSer), w.len() as u64);
     });
 
-    host.metered_read_xdr::<ScMap>(w.as_slice())?;
+    host.metered_from_xdr::<ScMap>(w.as_slice())?;
     host.get_budget(|budget| {
         assert_eq!(budget.get_input(CostType::ValDeser), w.len() as u64);
     });

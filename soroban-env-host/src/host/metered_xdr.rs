@@ -35,11 +35,12 @@ impl Host {
     ) -> Result<(), HostError> {
         let mut w = MeteredWrite { host: &self, w };
         obj.write_xdr(&mut w)
-            .map_err(|_| self.err_general("failed to write xdr"))
+            .map_err(|e| self.err_general("failed to write xdr"))
     }
 
-    pub(crate) fn metered_read_xdr<T: ReadXdr>(&self, bytes: &[u8]) -> Result<T, HostError> {
+    pub(crate) fn metered_from_xdr<T: ReadXdr>(&self, bytes: &[u8]) -> Result<T, HostError> {
         self.charge_budget(CostType::ValDeser, bytes.len() as u64)?;
+        // TODO: fish out `HostError` from `io::Error`
         T::from_xdr(bytes).map_err(|_| self.err_general("failed to read from xdr"))
     }
 }

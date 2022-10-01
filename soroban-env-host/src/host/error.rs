@@ -136,6 +136,6 @@ impl TryFrom<&HostError> for ScStatus {
 
 impl From<HostError> for std::io::Error {
     fn from(e: HostError) -> Self {
-        std::io::Error::new(std::io::ErrorKind::Other, "host error")
+        std::io::Error::new(std::io::ErrorKind::Other, e)
     }
 }
