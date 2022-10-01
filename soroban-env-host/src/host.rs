@@ -1871,7 +1871,7 @@ impl VmCallerCheckedEnv for Host {
         asset: Object,
     ) -> Result<Object, HostError> {
         let a = self.visit_obj(asset, |hv: &Vec<u8>| {
-            self.metered_from_xdr::<Asset>(hv.as_slice())
+            self.metered_read_xdr::<Asset>(hv.as_slice())
         })?;
 
         // TODO: Are these error msgs necessary? Should they be simplified?
@@ -2357,7 +2357,7 @@ impl VmCallerCheckedEnv for Host {
         b: Object,
     ) -> Result<RawVal, HostError> {
         let scv = self.visit_obj(b, |hv: &Vec<u8>| {
-            self.metered_from_xdr::<ScVal>(hv.as_slice())
+            self.metered_read_xdr::<ScVal>(hv.as_slice())
         })?;
         Ok(self.to_host_val(&scv)?.into())
     }

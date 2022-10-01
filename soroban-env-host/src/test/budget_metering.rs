@@ -60,3 +60,35 @@ fn vm_hostfn_invocation() -> Result<(), HostError> {
 
     Ok(())
 }
+
+#[test]
+fn metered_xdr() -> Result<(), HostError> {
+    let host = Host::test_host()
+        .test_budget()
+        .enable_model(CostType::ValSer)
+        .enable_model(CostType::ValDeser);
+    let scmap: ScMap = host.map_err(
+        vec![
+            ScMapEntry {
+                key: ScVal::U32(1),
+                val: ScVal::U32(2),
+            },
+            ScMapEntry {
+                key: ScVal::U32(2),
+                val: ScVal::U32(4),
+            },
+        ]
+        .try_into(),
+    )?;
+    let mut w = Vec::<u8>::new();
+    host.metered_write_xdr(&scmap, &mut w)?;
+    host.get_budget(|budget| {
+        assert_eq!(budget.get_input(CostType::ValSer), w.len() as u64);
+    });
+
+    host.metered_read_xdr::<ScMap>(w.as_slice())?;
+    host.get_budget(|budget| {
+        assert_eq!(budget.get_input(CostType::ValDeser), w.len() as u64);
+    });
+    Ok(())
+}
