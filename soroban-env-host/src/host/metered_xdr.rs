@@ -1,4 +1,4 @@
-use std::io::Write;
+use std::{error::Error, io::Write};
 
 use crate::{
     budget::CostType,
