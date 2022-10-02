@@ -34,21 +34,16 @@ impl Host {
         w: &mut Vec<u8>,
     ) -> Result<(), HostError> {
         let mut w = MeteredWrite { host: &self, w };
-        obj.write_xdr(&mut w).map_err(|e| match e {
-            // The `MeteredWrite` may result in a HostError stored in `io::Error`,
-            // which is wrapped in `xdr::Error`. Here we fish `HostError` back out.
-            soroban_env_common::xdr::Error::Io(e1) => {
-                if let Some(e2) = e1.into_inner() {
-                    if let Some(e3) = (*e2).downcast_ref::<HostError>() {
-                        e3.clone()
-                    } else {
-                        self.err_general("failed to write xdr")
-                    }
+        obj.write_xdr(&mut w).map_err(|e| {
+            if let Some(e2) = e.source() {
+                if let Some(e3) = (*e2).downcast_ref::<HostError>() {
+                    e3.clone()
                 } else {
                     self.err_general("failed to write xdr")
                 }
+            } else {
+                self.err_general("failed to write xdr")
             }
-            _ => self.err_general("failed to write xdr"),
         })
     }
 
