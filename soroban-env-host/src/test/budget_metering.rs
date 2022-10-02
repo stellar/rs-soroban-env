@@ -1,6 +1,6 @@
 use crate::{
     budget::{Budget, CostType},
-    xdr::{ScMap, ScMapEntry, ScObject, ScVal},
+    xdr::{ScMap, ScMapEntry, ScObject, ScVal, ScVmErrorCode},
     CheckedEnv, Host, HostError, Symbol,
 };
 use soroban_test_wasms::VEC;
@@ -8,7 +8,7 @@ use soroban_test_wasms::VEC;
 #[test]
 fn xdr_object_conversion() -> Result<(), HostError> {
     let host = Host::test_host()
-        .test_budget()
+        .test_budget(100_000, 100_000)
         .enable_model(CostType::ValXdrConv);
     let scmap: ScMap = host.map_err(
         vec![
@@ -41,7 +41,7 @@ fn vm_hostfn_invocation() -> Result<(), HostError> {
     let storage =
         Host::test_storage_with_contracts(vec![dummy_id.into()], vec![VEC], budget.clone());
     let host = Host::with_storage_and_budget(storage, budget)
-        .test_budget()
+        .test_budget(100_000, 100_000)
         .enable_model(CostType::HostFunction);
 
     let obj = host.test_bin_obj(&dummy_id)?;
@@ -58,5 +58,62 @@ fn vm_hostfn_invocation() -> Result<(), HostError> {
         assert_eq!(budget.get_mem_bytes_count(), 2);
     });
 
+    Ok(())
+}
+
+#[test]
+fn metered_xdr() -> Result<(), HostError> {
+    let host = Host::test_host()
+        .test_budget(100_000, 100_000)
+        .enable_model(CostType::ValSer)
+        .enable_model(CostType::ValDeser);
+    let scmap: ScMap = host.map_err(
+        vec![
+            ScMapEntry {
+                key: ScVal::U32(1),
+                val: ScVal::U32(2),
+            },
+            ScMapEntry {
+                key: ScVal::U32(2),
+                val: ScVal::U32(4),
+            },
+        ]
+        .try_into(),
+    )?;
+    let mut w = Vec::<u8>::new();
+    host.metered_write_xdr(&scmap, &mut w)?;
+    host.get_budget(|budget| {
+        assert_eq!(budget.get_input(CostType::ValSer), w.len() as u64);
+    });
+
+    host.metered_from_xdr::<ScMap>(w.as_slice())?;
+    host.get_budget(|budget| {
+        assert_eq!(budget.get_input(CostType::ValDeser), w.len() as u64);
+    });
+    Ok(())
+}
+
+#[test]
+fn metered_xdr_out_of_budget() -> Result<(), HostError> {
+    let host = Host::test_host()
+        .test_budget(10, 10)
+        .enable_model(CostType::ValSer);
+    let scmap: ScMap = host.map_err(
+        vec![
+            ScMapEntry {
+                key: ScVal::U32(1),
+                val: ScVal::U32(2),
+            },
+            ScMapEntry {
+                key: ScVal::U32(2),
+                val: ScVal::U32(4),
+            },
+        ]
+        .try_into(),
+    )?;
+    let mut w = Vec::<u8>::new();
+    let res = host.metered_write_xdr(&scmap, &mut w);
+    let code = ScVmErrorCode::TrapCpuLimitExceeded;
+    assert!(HostError::result_matches_err_status(res, code));
     Ok(())
 }

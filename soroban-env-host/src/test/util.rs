@@ -36,9 +36,9 @@ impl Host {
         Host::default()
     }
 
-    pub(crate) fn test_budget(self) -> Self {
+    pub(crate) fn test_budget(self, cpu: u64, mem: u64) -> Self {
         self.get_budget(|budget| {
-            budget.reset_limits(100_000, 100_000); // something big but finite that we may exceed
+            budget.reset_limits(cpu, mem); // something big but finite that we may exceed
             budget.reset_models();
         });
         self

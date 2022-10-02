@@ -6,6 +6,7 @@ use crate::{
 use backtrace::{Backtrace, BacktraceFrame};
 use core::fmt::Debug;
 
+#[derive(Clone)]
 pub struct HostError {
     pub(crate) status: Status,
     pub(crate) events: Option<Events>,
@@ -131,5 +132,11 @@ impl TryFrom<&HostError> for ScStatus {
     type Error = xdr::Error;
     fn try_from(err: &HostError) -> Result<Self, Self::Error> {
         err.status.try_into()
+    }
+}
+
+impl From<HostError> for std::io::Error {
+    fn from(e: HostError) -> Self {
+        std::io::Error::new(std::io::ErrorKind::Other, e)
     }
 }
