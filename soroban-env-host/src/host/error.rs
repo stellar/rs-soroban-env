@@ -6,6 +6,7 @@ use crate::{
 use backtrace::{Backtrace, BacktraceFrame};
 use core::fmt::Debug;
 
+#[derive(Clone)]
 pub struct HostError {
     pub(crate) status: Status,
     pub(crate) events: Option<Events>,
