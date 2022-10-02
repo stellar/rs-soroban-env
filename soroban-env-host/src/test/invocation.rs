@@ -66,7 +66,12 @@ fn invoke_cross_contract_with_err() -> Result<(), HostError> {
     let args = host.test_vec_obj::<u32>(&[1])?;
 
     // try_call
-    let sv = host.try_call(obj.to_object(), sym.into(), args.clone().into())?;
+    let sv = host.try_call(
+        obj.to_object(),
+        sym.into(),
+        args.clone().into(),
+        false.into(),
+    )?;
     let code = ScHostObjErrorCode::VecIndexOutOfBound;
     let exp_st: Status = code.into();
     assert_eq!(sv.get_payload(), exp_st.to_raw().get_payload());
@@ -177,7 +182,12 @@ fn invoke_cross_contract_indirect_err() -> Result<(), HostError> {
     let args = host.vec_push_back(args.val, id1_obj.into())?;
 
     // try call -- add will trap, and add_with will trap, but we will get a status
-    let status = host.try_call(id0_obj.to_object(), sym.into(), args.clone().into())?;
+    let status = host.try_call(
+        id0_obj.to_object(),
+        sym.into(),
+        args.clone().into(),
+        false.into(),
+    )?;
     let code = ScVmErrorCode::TrapUnreachable;
     let exp: Status = code.into();
     assert_eq!(status.get_payload(), exp.to_raw().get_payload());

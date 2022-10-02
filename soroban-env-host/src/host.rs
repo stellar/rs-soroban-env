@@ -746,9 +746,32 @@ impl Host {
     }
 
     // Notes on metering: this is covered by the called components.
-    fn call_n(&self, contract: Object, func: Symbol, args: &[RawVal]) -> Result<RawVal, HostError> {
+    fn call_n(
+        &self,
+        contract: Object,
+        func: Symbol,
+        args: &[RawVal],
+        allow_reentry: bool,
+    ) -> Result<RawVal, HostError> {
         // Get contract ID
         let id = self.hash_from_obj_input("contract", contract)?;
+
+        if !allow_reentry {
+            for f in self.0.context.borrow().iter() {
+                let exist_id = match f {
+                    #[cfg(feature = "vm")]
+                    Frame::ContractVM(vm, _) => &vm.contract_id,
+                    Frame::Token(id, _) => id,
+                    #[cfg(feature = "testutils")]
+                    Frame::TestContract(id, _) => id,
+                    Frame::HostFunction(_) => continue,
+                };
+                if id == *exist_id {
+                    // TODO: proper error code
+                    return Err(self.err_general("Contract re-entry is not allowed"));
+                }
+            }
+        }
 
         // "testutils" is not covered by budget metering.
         #[cfg(feature = "testutils")]
@@ -787,7 +810,8 @@ impl Host {
                             .iter()
                             .map(|scv| self.to_host_val(scv).map(|hv| hv.val))
                             .collect::<Result<Vec<RawVal>, HostError>>()?;
-                        self.call_n(object, symbol, &args[..])
+                        // doesn't matter what `reentry` flag is passed, `HostFunction` must be the first frame
+                        self.call_n(object, symbol, &args[..], false)
                     })
                 } else {
                     Err(self.err_status_msg(
@@ -1983,10 +2007,12 @@ impl VmCallerCheckedEnv for Host {
 
         let buf = self.id_preimage_from_asset(a)?;
         let id = self.create_contract_with_id_preimage(ScContractCode::Token, buf)?;
+        // reentry is irrelavent here since this token contract has just been created
         self.call_n(
             id,
             Symbol::from_str("init_asset"),
             &[self.to_host_val(&arg)?.val],
+            false,
         )?;
 
         Ok(id)
@@ -2000,11 +2026,9 @@ impl VmCallerCheckedEnv for Host {
         func: Symbol,
         args: Object,
     ) -> Result<RawVal, HostError> {
-        let args: Vec<RawVal> = self.visit_obj(args, |hv: &HostVec| {
-            self.charge_budget(CostType::CallArgsUnpack, hv.len() as u64)?;
-            Ok(hv.iter().map(|a| a.to_raw()).collect())
-        })?;
-        let res = self.call_n(contract, func, args.as_slice());
+        let args = self.call_args_from_obj(args)?;
+        // this is the recommanded path of calling a contract, with `reentry` always set `false`
+        let res = self.call_n(contract, func, args.as_slice(), false);
         if let Err(e) = &res {
             let evt = DebugEvent::new()
                 .msg("contract call invocation resulted in error {}")
@@ -2021,10 +2045,20 @@ impl VmCallerCheckedEnv for Host {
         contract: Object,
         func: Symbol,
         args: Object,
+        reentry: RawVal,
     ) -> Result<RawVal, HostError> {
-        match self.call(vmcaller, contract, func, args) {
+        let args = self.call_args_from_obj(args)?;
+        let res = self.call_n(contract, func, args.as_slice(), reentry.try_into()?);
+        match res {
             Ok(rv) => Ok(rv),
-            Err(e) => Ok(e.status.into()),
+            Err(e) => {
+                let status: RawVal = e.status.into();
+                let evt = DebugEvent::new()
+                    .msg("contract call invocation resulted in error {}")
+                    .arg(status);
+                self.record_debug_event(evt)?;
+                Ok(status)
+            }
         }
     }
 

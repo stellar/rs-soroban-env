@@ -7,7 +7,7 @@ use crate::xdr::{
 use crate::{
     budget::CostType,
     events::{DebugError, CONTRACT_EVENT_TOPICS_LIMIT, TOPIC_BYTES_LENGTH_LIMIT},
-    host_object::HostObject,
+    host_object::{HostObject, HostVec},
     Host, HostError, Object, RawVal, Tag,
 };
 use ed25519_dalek::{PublicKey, Signature, SIGNATURE_LENGTH};
@@ -332,5 +332,12 @@ impl Host {
                 Ok(u64::from(v))
             }
         }
+    }
+
+    pub(crate) fn call_args_from_obj(&self, args: Object) -> Result<Vec<RawVal>, HostError> {
+        self.visit_obj(args, |hv: &HostVec| {
+            self.charge_budget(CostType::CallArgsUnpack, hv.len() as u64)?;
+            Ok(hv.iter().map(|a| a.to_raw()).collect())
+        })
     }
 }
