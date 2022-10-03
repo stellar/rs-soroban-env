@@ -117,7 +117,7 @@ impl TokenTrait for Token {
             return Err(Error::ContractError);
         }
 
-        let asset = e.deserialize_asset(asset_bytes.into())?;
+        let asset: Asset = e.metered_from_xdr_obj(asset_bytes.into())?;
 
         let curr_contract_id = BytesN::<32>::try_from_val(e, e.get_current_contract()?)?;
         let expected_contract_id =

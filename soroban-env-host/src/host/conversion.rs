@@ -335,12 +335,4 @@ impl Host {
             }
         }
     }
-
-    pub(crate) fn deserialize_asset(&self, asset: Object) -> Result<Asset, HostError> {
-        self.visit_obj(asset, |hv: &Vec<u8>| {
-            self.charge_budget(CostType::ValDeser, hv.len() as u64)?;
-            Asset::from_xdr(&mut hv.as_slice())
-                .map_err(|_| self.err_general("failed to de-serialize Asset"))
-        })
-    }
 }

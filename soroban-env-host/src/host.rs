@@ -1870,7 +1870,7 @@ impl VmCallerCheckedEnv for Host {
         vmcaller: &mut VmCaller<Host>,
         asset_bytes: Object,
     ) -> Result<Object, HostError> {
-        let asset = self.deserialize_asset(asset_bytes)?;
+        let asset = self.metered_from_xdr_obj(asset_bytes)?;
         let id_preimage = self.id_preimage_from_asset(asset)?;
         let id = self.create_contract_with_id_preimage(ScContractCode::Token, id_preimage)?;
         self.call_n(
