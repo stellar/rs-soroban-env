@@ -104,9 +104,9 @@ pub trait TokenTrait {
 
     fn symbol(e: &Host) -> Result<Bytes, Error>;
 
-    fn to_smart(e: &Host, id: Signature, nonce: BigInt, amount: i64) -> Result<(), Error>;
+    fn import(e: &Host, id: Signature, nonce: BigInt, amount: i64) -> Result<(), Error>;
 
-    fn to_classic(e: &Host, id: Signature, nonce: BigInt, amount: i64) -> Result<(), Error>;
+    fn export(e: &Host, id: Signature, nonce: BigInt, amount: i64) -> Result<(), Error>;
 }
 
 pub struct Token;
@@ -389,7 +389,7 @@ impl TokenTrait for Token {
     }
 
     // Metering: covered by components
-    fn to_smart(e: &Host, id: Signature, nonce: BigInt, amount: i64) -> Result<(), Error> {
+    fn import(e: &Host, id: Signature, nonce: BigInt, amount: i64) -> Result<(), Error> {
         if amount < 0 {
             return Err(Error::ContractError);
         }
@@ -400,7 +400,7 @@ impl TokenTrait for Token {
         args.push(id.get_identifier(&e)?)?;
         args.push(nonce.clone())?;
         args.push(amount.clone())?;
-        check_auth(&e, id, nonce, Symbol::from_str("to_smart"), args)?;
+        check_auth(&e, id, nonce, Symbol::from_str("import"), args)?;
 
         transfer_classic_balance(e, &account_id, -amount)?;
         receive_balance(
@@ -412,7 +412,7 @@ impl TokenTrait for Token {
     }
 
     // Metering: covered by components
-    fn to_classic(e: &Host, id: Signature, nonce: BigInt, amount: i64) -> Result<(), Error> {
+    fn export(e: &Host, id: Signature, nonce: BigInt, amount: i64) -> Result<(), Error> {
         if amount < 0 {
             return Err(Error::ContractError);
         }
@@ -423,7 +423,7 @@ impl TokenTrait for Token {
         args.push(id.get_identifier(&e)?)?;
         args.push(nonce.clone())?;
         args.push(amount.clone())?;
-        check_auth(&e, id, nonce, Symbol::from_str("to_classic"), args)?;
+        check_auth(&e, id, nonce, Symbol::from_str("export"), args)?;
 
         transfer_classic_balance(e, &account_id, amount)?;
         spend_balance(
