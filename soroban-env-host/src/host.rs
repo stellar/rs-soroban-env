@@ -15,7 +15,7 @@ use soroban_env_common::{
 
 use soroban_env_common::xdr::{
     AccountId, Asset, ContractEvent, ContractEventBody, ContractEventType, ContractEventV0,
-    ExtensionPoint, Hash, PublicKey, ReadXdr, ScStatus, ScStatusType, ThresholdIndexes, WriteXdr,
+    ExtensionPoint, Hash, PublicKey, ScStatus, ScStatusType, ThresholdIndexes,
 };
 
 use crate::budget::{Budget, CostType};
@@ -46,6 +46,7 @@ pub(crate) mod metered_bigint;
 pub(crate) mod metered_clone;
 pub(crate) mod metered_map;
 pub(crate) mod metered_vector;
+pub(crate) mod metered_xdr;
 mod validity;
 pub use error::HostError;
 
@@ -1897,9 +1898,7 @@ impl VmCallerCheckedEnv for Host {
         asset: Object,
     ) -> Result<Object, HostError> {
         let a = self.visit_obj(asset, |hv: &Vec<u8>| {
-            //self.charge_budget(CostType::ValDeser, hv.len() as u64)?;
-            Asset::from_xdr(&mut hv.as_slice())
-                .map_err(|_| self.err_general("failed to de-serialize Asset"))
+            self.metered_from_xdr::<Asset>(hv.as_slice())
         })?;
 
         // TODO: Are these error msgs necessary? Should they be simplified?
@@ -2386,15 +2385,7 @@ impl VmCallerCheckedEnv for Host {
     ) -> Result<Object, HostError> {
         let scv = self.from_host_val(v)?;
         let mut buf = Vec::<u8>::new();
-        scv.write_xdr(&mut buf)
-            .map_err(|_| self.err_general("failed to serialize ScVal"))?;
-        // Notes on metering": "write first charge later" means we could potentially underestimate
-        // the cost by the largest sized host object. Since we are bounding the memory limit of a
-        // host object, it is probably fine.
-        // Ideally, `charge` should go before `write_xdr`, which would require us to either 1.
-        // make serialization an iterative / chunked operation. Or 2. have a XDR method to
-        // calculate the serialized size. Both would require non-trivial XDR changes.
-        self.charge_budget(CostType::ValSer, buf.len() as u64)?;
+        self.metered_write_xdr(&scv, &mut buf)?;
         Ok(self.add_host_object(buf)?.into())
     }
 
@@ -2405,9 +2396,7 @@ impl VmCallerCheckedEnv for Host {
         b: Object,
     ) -> Result<RawVal, HostError> {
         let scv = self.visit_obj(b, |hv: &Vec<u8>| {
-            self.charge_budget(CostType::ValDeser, hv.len() as u64)?;
-            ScVal::from_xdr(&mut hv.as_slice())
-                .map_err(|_| self.err_general("failed to de-serialize ScVal"))
+            self.metered_from_xdr::<ScVal>(hv.as_slice())
         })?;
         Ok(self.to_host_val(&scv)?.into())
     }
