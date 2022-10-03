@@ -126,6 +126,11 @@ pub(crate) struct HostImpl {
     // production hosts)
     #[cfg(feature = "testutils")]
     contracts: RefCell<std::collections::HashMap<Hash, Rc<dyn ContractFunctionSet>>>,
+    // Set this for mocking invoker in tests.
+    #[cfg(test)]
+    test_invoker_type: RefCell<Option<InvokerType>>,
+    #[cfg(test)]
+    test_invoker_contract: RefCell<Option<Vec<u8>>>,
 }
 // Host is a newtype on Rc<HostImpl> so we can impl Env for it below.
 #[derive(Default, Clone)]
@@ -186,11 +191,25 @@ impl Host {
             events: Default::default(),
             #[cfg(feature = "testutils")]
             contracts: Default::default(),
+            #[cfg(test)]
+            test_invoker_type: Default::default(),
+            #[cfg(test)]
+            test_invoker_contract: Default::default(),
         }))
     }
 
     pub fn set_source_account(&self, source_account: AccountId) {
         *self.0.source_account.borrow_mut() = Some(source_account);
+    }
+
+    #[cfg(test)]
+    pub(crate) fn set_invoker_type(&self, invoker: Option<InvokerType>) {
+        *self.0.test_invoker_type.borrow_mut() = invoker;
+    }
+
+    #[cfg(test)]
+    pub(crate) fn set_invoker_contract(&self, invoker_contract: Option<Vec<u8>>) {
+        *self.0.test_invoker_contract.borrow_mut() = invoker_contract;
     }
 
     pub fn source_account(&self) -> Result<AccountId, HostError> {
@@ -1225,6 +1244,12 @@ impl VmCallerCheckedEnv for Host {
 
     // Metering: mostly free or already covered by components (e.g. err_general)
     fn get_invoker_type(&self, _vmcaller: &mut VmCaller<Host>) -> Result<u64, HostError> {
+        #[cfg(test)]
+        {
+            if let Some(invoker) = *self.0.test_invoker_type.borrow() {
+                return Ok(invoker as u64);
+            }
+        }
         let frames = self.0.context.borrow();
         // If the previous frame exists and is a contract, return its ID, otherwise return
         // the account invoking.
@@ -1259,6 +1284,12 @@ impl VmCallerCheckedEnv for Host {
 
     // Notes on metering: covered by the components
     fn get_invoking_contract(&self, _vmcaller: &mut VmCaller<Host>) -> Result<Object, HostError> {
+        #[cfg(test)]
+        {
+            if let Some(ref invoker) = *self.0.test_invoker_contract.borrow() {
+                return Ok(self.add_host_object(invoker.clone())?.into());
+            }
+        }
         let frames = self.0.context.borrow();
         // the previous frame must exist and must be a contract
         let hash = match frames.as_slice() {
