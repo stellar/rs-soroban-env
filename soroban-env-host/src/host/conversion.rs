@@ -13,7 +13,7 @@ use crate::{
 use ed25519_dalek::{PublicKey, Signature, SIGNATURE_LENGTH};
 use num_bigint::Sign;
 use sha2::{Digest, Sha256};
-use soroban_env_common::xdr::{AccountId, Asset, ReadXdr};
+use soroban_env_common::xdr::AccountId;
 
 impl Host {
     // Notes on metering: free
