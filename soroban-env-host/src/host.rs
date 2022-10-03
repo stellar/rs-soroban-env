@@ -995,14 +995,16 @@ impl Host {
             let base_reserve = self.with_ledger_info(|li| Ok(li.base_reserve))? as i64;
             let (min_balance, max_balance) = if let TrustLineEntryExt::V1(ext1) = &tl.ext {
                 let min_balance = ext1.liabilities.selling;
-                let max_balance = i64::MAX - ext1.liabilities.buying;
+                if tl.limit < ext1.liabilities.buying {
+                    return Err(self.err_general("limit is lower than liabilities"));
+                }
+                let max_balance = tl.limit - ext1.liabilities.buying;
                 (min_balance, max_balance)
             } else {
                 let min_balance = 0;
-                let max_balance = i64::MAX;
+                let max_balance = tl.limit;
                 (min_balance, max_balance)
             };
-            let max_balance = min(max_balance, tl.limit);
 
             let new_balance = if amount <= 0 {
                 tl.balance + amount
