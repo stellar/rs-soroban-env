@@ -27,6 +27,8 @@ tinyvec = { version = "1.6.0", features = ["alloc"] }
 dyn-fmt = "0.3.0"
 log = "0.4.17"
 backtrace = "0.3"
+# NB: this must match the same rand version used by ed25519-dalek above
+rand = "0.7.3"
 
 [dev-dependencies]
 optimization = "0.2.0"
@@ -35,8 +37,6 @@ log = "0.4.17"
 tracking-allocator = "0.4.0"
 tabwriter = "1.2.1"
 thousands = "0.2.0"
-# NB: this must match the same rand version used by ed25519-dalek above
-rand = "0.7.3"
 soroban-test-wasms = { package = "soroban-test-wasms", path = "../soroban-test-wasms" }
 bytes-lit = "0.0.4"
 
