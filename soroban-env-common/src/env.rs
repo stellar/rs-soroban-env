@@ -328,7 +328,7 @@ macro_rules! call_macro_with_all_host_functions {
                 /// Calls a function in another contract with arguments contained in vector `args`. Returns:
                 /// - if successful, result of the called function.
                 /// - otherwise, an `SCStatus` containing the error status code.
-                {"0", fn try_call(contract:Object, func:Symbol, args:Object, reentry:RawVal) -> RawVal}
+                {"0", fn try_call(contract:Object, func:Symbol, args:Object) -> RawVal}
             }
 
             mod bigint "g" {

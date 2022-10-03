@@ -767,8 +767,11 @@ impl Host {
                     Frame::HostFunction(_) => continue,
                 };
                 if id == *exist_id {
-                    // TODO: proper error code
-                    return Err(self.err_general("Contract re-entry is not allowed"));
+                    return Err(self.err_status_msg(
+                        // TODO: proper error code
+                        ScHostContextErrorCode::UnknownError,
+                        "Contract re-entry is not allowed",
+                    ));
                 }
             }
         }
@@ -2045,10 +2048,12 @@ impl VmCallerCheckedEnv for Host {
         contract: Object,
         func: Symbol,
         args: Object,
-        reentry: RawVal,
     ) -> Result<RawVal, HostError> {
         let args = self.call_args_from_obj(args)?;
-        let res = self.call_n(contract, func, args.as_slice(), reentry.try_into()?);
+        // this is the "loosened" path of calling a contract.
+        // TODO: A `reentry` flag will be passed from `try_call` into here.
+        // For now, we are passing in `false` to disable reentry.
+        let res = self.call_n(contract, func, args.as_slice(), false);
         match res {
             Ok(rv) => Ok(rv),
             Err(e) => {
