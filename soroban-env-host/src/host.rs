@@ -1230,18 +1230,7 @@ impl VmCallerCheckedEnv for Host {
             },
             // In tests contracts are executed with a single frame.
             // TODO: Investigate this discrepancy: https://github.com/stellar/rs-soroban-env/issues/485.
-            [f1] => match f1 {
-                #[cfg(feature = "vm")]
-                Frame::ContractVM(_, _) => {
-                    Err(self.err_general("contract vm found in last frame which is unexpected"))
-                }
-                Frame::HostFunction(_) => Ok(InvokerType::Account),
-                Frame::Token(id, _) => {
-                    Err(self.err_general("token found in last frame which is unexpected"))
-                }
-                #[cfg(feature = "testutils")]
-                Frame::TestContract(_, _) => Ok(InvokerType::Account),
-            },
+            [f1] => Ok(InvokerType::Account),
             _ => Err(self.err_general("no frames to derive the invoker from")),
         }?;
         Ok(st as u64)
