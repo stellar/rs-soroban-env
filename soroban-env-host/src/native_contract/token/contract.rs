@@ -10,6 +10,7 @@ use crate::native_contract::token::balance::{
 };
 use crate::native_contract::token::cryptography::check_auth;
 use crate::native_contract::token::error::Error;
+use crate::native_contract::token::event;
 use crate::native_contract::token::metadata::{
     has_metadata, read_decimal, read_name, read_symbol, write_metadata,
 };
@@ -228,7 +229,8 @@ impl TokenTrait for Token {
         args.push(spender.clone())?;
         args.push(amount.clone())?;
         check_auth(&e, from, nonce, Symbol::from_str("approve"), args)?;
-        write_allowance(&e, from_id, spender, amount)?;
+        write_allowance(&e, from_id.clone(), spender.clone(), amount.clone())?;
+        event::approve(e, from_id, spender, amount)?;
         Ok(())
     }
 
@@ -260,8 +262,9 @@ impl TokenTrait for Token {
         args.push(to.clone())?;
         args.push(amount.clone())?;
         check_auth(&e, from, nonce, Symbol::from_str("xfer"), args)?;
-        spend_balance(&e, from_id, amount.clone())?;
-        receive_balance(&e, to, amount)?;
+        spend_balance(&e, from_id.clone(), amount.clone())?;
+        receive_balance(&e, to.clone(), amount.clone())?;
+        event::transfer(e, from_id, to, amount)?;
         Ok(())
     }
 
@@ -286,8 +289,9 @@ impl TokenTrait for Token {
         args.push(amount.clone())?;
         check_auth(&e, spender, nonce, Symbol::from_str("xfer_from"), args)?;
         spend_allowance(&e, from.clone(), spender_id, amount.clone())?;
-        spend_balance(&e, from, amount.clone())?;
-        receive_balance(&e, to, amount)?;
+        spend_balance(&e, from.clone(), amount.clone())?;
+        receive_balance(&e, to.clone(), amount.clone())?;
+        event::transfer(e, from, to, amount)?;
         Ok(())
     }
 
