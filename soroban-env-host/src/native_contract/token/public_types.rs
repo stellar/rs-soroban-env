@@ -1,7 +1,8 @@
 use crate::host::Host;
-use crate::native_contract::base_types::{AccountId, Bytes, BytesN, Map, Vec};
+use crate::native_contract::base_types::{Bytes, BytesN, Map, Vec};
 use crate::native_contract::invoker::{invoker, Invoker};
 use crate::native_contract::token::error::Error;
+use soroban_env_common::xdr::AccountId;
 use soroban_env_common::{Symbol, TryIntoVal};
 use soroban_native_sdk_macros::contracttype;
 
@@ -94,14 +95,6 @@ pub struct AlphaNum4Metadata {
 pub struct AlphaNum12Metadata {
     pub asset_code: BytesN<12>,
     pub issuer: AccountId,
-}
-
-#[derive(Clone)]
-#[contracttype]
-pub enum ClassicMetadata {
-    Native,
-    AlphaNum4(AlphaNum4Metadata),
-    AlphaNum12(AlphaNum12Metadata),
 }
 
 #[derive(Clone)]

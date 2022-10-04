@@ -1,4 +1,7 @@
-use soroban_env_common::{xdr::ScVmErrorCode, RawVal};
+use soroban_env_common::{
+    xdr::{ScHostContextErrorCode, ScVmErrorCode},
+    RawVal,
+};
 
 use crate::{
     budget::Budget,
@@ -241,6 +244,33 @@ fn invoke_cross_contract_indirect_err() -> Result<(), HostError> {
             panic!("got: {:?}, want debug event", last_event);
         }
     };
+
+    Ok(())
+}
+
+#[test]
+fn invoke_contract_with_reentry() -> Result<(), HostError> {
+    let dummy_id0 = [0; 32]; // the calling contract
+    let budget = Budget::default();
+    let storage = Host::test_storage_with_contracts(
+        vec![dummy_id0.into()],
+        vec![INVOKE_CONTRACT],
+        budget.clone(),
+    );
+    let host = Host::with_storage_and_budget(storage, budget);
+    // prepare arguments
+    let id0_obj = host.test_bin_obj(&dummy_id0)?;
+    let sym = Symbol::from_str("add_with");
+    let args = host.test_vec_obj::<i32>(&[i32::MAX, 1])?;
+    let args = host.vec_push_back(args.val, id0_obj.clone().into())?; // trying to call its own `add` function
+
+    // try call -- add will trap, and add_with will trap, but we will get a status
+    let res = host.call(id0_obj.clone().to_object(), sym.into(), args.clone().into());
+    let status = host.try_call(id0_obj.clone().to_object(), sym.into(), args.clone().into())?;
+    let code = ScHostContextErrorCode::UnknownError;
+    let exp: Status = code.into();
+    assert!(HostError::result_matches_err_status(res, code));
+    assert_eq!(status.get_payload(), exp.to_raw().get_payload());
 
     Ok(())
 }

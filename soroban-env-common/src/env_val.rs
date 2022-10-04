@@ -280,6 +280,18 @@ where
 }
 
 #[cfg(feature = "std")]
+impl<E: Env> TryIntoVal<E, ScVal> for RawVal
+where
+    ScObject: TryFromVal<E, Object>,
+{
+    type Error = <ScVal as TryFromVal<E, RawVal>>::Error;
+
+    fn try_into_val(self, env: &E) -> Result<ScVal, Self::Error> {
+        <_ as TryFromVal<E, RawVal>>::try_from_val(env, self)
+    }
+}
+
+#[cfg(feature = "std")]
 impl<E: Env> TryIntoVal<E, RawVal> for &ScVal
 where
     for<'a> &'a ScObject: TryIntoVal<E, Object>,

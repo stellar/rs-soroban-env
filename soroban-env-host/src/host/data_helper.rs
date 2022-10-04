@@ -1,5 +1,10 @@
+use std::cmp::min;
+
 use soroban_env_common::{
-    xdr::{Asset, HashIdPreimageSourceAccountContractId},
+    xdr::{
+        Asset, HashIdPreimageSourceAccountContractId, PublicKey, Signer, SignerKey,
+        ThresholdIndexes, TrustLineAsset,
+    },
     CheckedEnv, InvokerType,
 };
 
@@ -9,7 +14,7 @@ use crate::xdr::{
     LedgerKeyAccount, LedgerKeyContractData, LedgerKeyTrustLine, ScContractCode,
     ScHostStorageErrorCode, ScHostValErrorCode, ScObject, ScStatic, ScVal, Uint256,
 };
-use crate::{Host, HostError, Object};
+use crate::{Host, HostError};
 
 use super::metered_clone::MeteredClone;
 
@@ -116,60 +121,86 @@ impl Host {
         Ok(buf)
     }
 
-    // notes on metering: `get` from storage and `to_u256` covered. Rest are free.
-    pub fn load_account(&self, a: Object) -> Result<AccountEntry, HostError> {
-        let acc = LedgerKey::Account(LedgerKeyAccount {
-            account_id: self
-                .visit_obj(a, |id: &AccountId| Ok(id.metered_clone(&self.0.budget)?))?,
-        });
+    // notes on metering: `get` from storage is covered. Rest are free.
+    pub fn load_account(&self, account_id: AccountId) -> Result<AccountEntry, HostError> {
+        let acc = self.to_account_key(account_id);
         self.with_mut_storage(|storage| match storage.get(&acc)?.data {
             LedgerEntryData::Account(ae) => Ok(ae),
             _ => Err(self.err_general("not account")),
         })
     }
 
-    // notes on metering: covered by `has` and `to_u256`.
-    pub fn has_account(&self, a: Object) -> Result<bool, HostError> {
-        let acc = LedgerKey::Account(LedgerKeyAccount {
-            account_id: self
-                .visit_obj(a, |id: &AccountId| Ok(id.metered_clone(&self.0.budget)?))?,
-        });
+    // notes on metering: covered by `has`.
+    pub fn has_account(&self, account_id: AccountId) -> Result<bool, HostError> {
+        let acc = self.to_account_key(account_id);
         self.with_mut_storage(|storage| storage.has(&acc))
     }
 
-    pub fn to_trustline_key(
+    pub(crate) fn to_account_key(&self, account_id: AccountId) -> LedgerKey {
+        LedgerKey::Account(LedgerKeyAccount { account_id })
+    }
+
+    pub(crate) fn create_asset_4(&self, asset_code: [u8; 4], issuer: AccountId) -> TrustLineAsset {
+        use crate::xdr::{AlphaNum4, AssetCode4};
+        TrustLineAsset::CreditAlphanum4(AlphaNum4 {
+            asset_code: AssetCode4(asset_code),
+            issuer,
+        })
+    }
+
+    pub(crate) fn create_asset_12(
         &self,
-        account: Object,
-        asset_code: Object,
-        issuer: Object,
-    ) -> Result<LedgerKey, HostError> {
-        use crate::xdr::{AlphaNum12, AlphaNum4, AssetCode12, AssetCode4, TrustLineAsset};
-        let asset = self.visit_obj(asset_code, |b: &Vec<u8>| {
-            if b.len() > 0 && b.len() <= 4 {
-                Ok(TrustLineAsset::CreditAlphanum4(AlphaNum4 {
-                    asset_code: AssetCode4(
-                        b.as_slice()
+        asset_code: [u8; 12],
+        issuer: AccountId,
+    ) -> TrustLineAsset {
+        use crate::xdr::{AlphaNum12, AssetCode12};
+        TrustLineAsset::CreditAlphanum12(AlphaNum12 {
+            asset_code: AssetCode12(asset_code),
+            issuer,
+        })
+    }
+
+    pub(crate) fn to_trustline_key(
+        &self,
+        account_id: AccountId,
+        asset: TrustLineAsset,
+    ) -> LedgerKey {
+        LedgerKey::Trustline(LedgerKeyTrustLine { account_id, asset })
+    }
+
+    pub(crate) fn get_signer_weight_from_account(
+        &self,
+        target_signer: Uint256,
+        account: &AccountEntry,
+    ) -> Result<u8, HostError> {
+        if account.account_id
+            == AccountId(PublicKey::PublicKeyTypeEd25519(
+                target_signer.metered_clone(&self.0.budget)?,
+            ))
+        {
+            // Target signer is the master key, so return the master weight
+            let threshold = account.thresholds.0[ThresholdIndexes::MasterWeight as usize];
+            Ok(threshold)
+        } else {
+            // Target signer is not the master key, so search the account signers
+            let signers: &Vec<Signer> = account.signers.as_ref();
+            for signer in signers {
+                if let SignerKey::Ed25519(ref this_signer) = signer.key {
+                    if &target_signer == this_signer {
+                        // Clamp the weight at 255. Stellar protocol before v10
+                        // allowed weights to exceed 255, but the max threshold
+                        // is 255, hence there is no point in having a larger
+                        // weight.
+                        let weight = min(signer.weight, u8::MAX as u32);
+                        // We've found the target signer in the account signers, so return the weight
+                        return Ok(weight
                             .try_into()
-                            .map_err(|_| self.err_general("invalid AssetCode4"))?,
-                    ),
-                    issuer: self.to_account_id(issuer)?,
-                }))
-            } else if b.len() > 0 && b.len() <= 12 {
-                Ok(TrustLineAsset::CreditAlphanum12(AlphaNum12 {
-                    asset_code: AssetCode12(
-                        b.as_slice()
-                            .try_into()
-                            .map_err(|_| self.err_general("invalid AssetCode12"))?,
-                    ),
-                    issuer: self.to_account_id(issuer)?,
-                }))
-            } else {
-                Err(self.err_general("invalid asset code"))
+                            .map_err(|_| self.err_general("signer weight overflow"))?);
+                    }
+                }
             }
-        })?;
-        Ok(LedgerKey::Trustline(LedgerKeyTrustLine {
-            account_id: self.to_account_id(account)?,
-            asset,
-        }))
+            // We didn't find the target signer, return 0 weight to indicate that.
+            Ok(0u8)
+        }
     }
 }
