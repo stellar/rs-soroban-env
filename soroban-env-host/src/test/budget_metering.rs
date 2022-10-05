@@ -1,7 +1,7 @@
 use crate::{
     budget::{Budget, CostType},
     xdr::{ScMap, ScMapEntry, ScObject, ScVal, ScVmErrorCode},
-    CheckedEnv, Host, HostError, Symbol,
+    CheckedEnv, Host, HostError, RawVal, Symbol,
 };
 use soroban_test_wasms::VEC;
 
@@ -115,5 +115,32 @@ fn metered_xdr_out_of_budget() -> Result<(), HostError> {
     let res = host.metered_write_xdr(&scmap, &mut w);
     let code = ScVmErrorCode::TrapCpuLimitExceeded;
     assert!(HostError::result_matches_err_status(res, code));
+    Ok(())
+}
+
+#[test]
+fn map_insert_key_vec_obj() -> Result<(), HostError> {
+    let mut host = Host::test_host().test_budget(1000, 1000);
+    let mut m = host.map_new()?;
+    let k0 = host.test_vec_obj(&[2, 3])?;
+    let v0: RawVal = 6_u32.into();
+    let k1 = host.test_vec_obj(&[5, 6, 7])?;
+    let v1: RawVal = 8_u32.into();
+    m = host.map_put(m, k0.into(), v0)?;
+
+    // now we enable various cost models
+    host = host
+        .enable_model(CostType::VisitObject)
+        .enable_model(CostType::ImVecCmp)
+        .enable_model(CostType::ImMapMutEntry);
+    host.map_put(m, k1.into(), v1)?;
+
+    host.get_budget(|budget| {
+        // 4 = 1 visit map + 1 visit k1 + (obj_comp which needs to) 1 visit both k0 and k1
+        assert_eq!(budget.get_input(CostType::VisitObject), 4);
+        assert_eq!(budget.get_input(CostType::ImVecCmp), 2); // the shorter vec len
+        assert_eq!(budget.get_input(CostType::ImMapMutEntry), 1); // len of the map before put
+    });
+
     Ok(())
 }

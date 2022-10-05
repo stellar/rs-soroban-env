@@ -43,6 +43,7 @@ mod err_helper;
 mod error;
 pub(crate) mod metered_bigint;
 pub(crate) mod metered_clone;
+pub(crate) mod metered_cmp;
 pub(crate) mod metered_map;
 pub(crate) mod metered_vector;
 pub(crate) mod metered_xdr;
@@ -51,6 +52,7 @@ pub use error::HostError;
 
 use self::metered_bigint::MeteredBigInt;
 use self::metered_clone::MeteredClone;
+use self::metered_cmp::MeteredCmp;
 use self::metered_map::MeteredOrdMap;
 use self::metered_vector::MeteredVector;
 
@@ -1285,7 +1287,7 @@ impl VmCallerCheckedEnv for Host {
     ) -> Result<i64, HostError> {
         let res = unsafe {
             self.unchecked_visit_val_obj(a, |ao| {
-                self.unchecked_visit_val_obj(b, |bo| Ok(ao.cmp(&bo)))
+                self.unchecked_visit_val_obj(b, |bo| Ok(ao.metered_cmp(&bo, &self.0.budget)?))
             })?
         };
         Ok(match res {
