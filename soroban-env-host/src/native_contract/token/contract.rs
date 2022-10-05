@@ -282,12 +282,14 @@ impl TokenTrait for Token {
         }
         check_admin(&e, &admin)?;
         let mut args = Vec::new(e)?;
-        args.push(admin.get_identifier(&e)?)?;
+        let admin_id = admin.get_identifier(&e)?;
+        args.push(admin_id.clone())?;
         args.push(nonce.clone())?;
         args.push(from.clone())?;
         args.push(amount.clone())?;
         check_auth(&e, admin, nonce, Symbol::from_str("burn"), args)?;
-        spend_balance(&e, from, amount)?;
+        spend_balance(&e, from.clone(), amount.clone())?;
+        event::burn(e, admin_id, from, amount)?;
         Ok(())
     }
 
@@ -295,11 +297,13 @@ impl TokenTrait for Token {
     fn freeze(e: &Host, admin: Signature, nonce: BigInt, id: Identifier) -> Result<(), Error> {
         check_admin(&e, &admin)?;
         let mut args = Vec::new(e)?;
-        args.push(admin.get_identifier(&e)?)?;
+        let admin_id = admin.get_identifier(&e)?;
+        args.push(admin_id.clone())?;
         args.push(nonce.clone())?;
         args.push(id.clone())?;
         check_auth(&e, admin, nonce, Symbol::from_str("freeze"), args)?;
-        write_state(&e, id, true)?;
+        write_state(&e, id.clone(), true)?;
+        event::freeze(e, admin_id, id)?;
         Ok(())
     }
 
@@ -316,12 +320,14 @@ impl TokenTrait for Token {
         }
         check_admin(&e, &admin)?;
         let mut args = Vec::new(e)?;
-        args.push(admin.get_identifier(&e)?)?;
+        let admin_id = admin.get_identifier(&e)?;
+        args.push(admin_id.clone())?;
         args.push(nonce.clone())?;
         args.push(to.clone())?;
         args.push(amount.clone())?;
         check_auth(&e, admin, nonce, Symbol::from_str("mint"), args)?;
-        receive_balance(&e, to, amount)?;
+        receive_balance(&e, to.clone(), amount.clone())?;
+        event::mint(e, admin_id, to, amount)?;
         Ok(())
     }
 
@@ -334,11 +340,13 @@ impl TokenTrait for Token {
     ) -> Result<(), Error> {
         check_admin(&e, &admin)?;
         let mut args = Vec::new(e)?;
-        args.push(admin.get_identifier(&e)?)?;
+        let admin_id = admin.get_identifier(&e)?;
+        args.push(admin_id.clone())?;
         args.push(nonce.clone())?;
         args.push(new_admin.clone())?;
         check_auth(&e, admin, nonce, Symbol::from_str("set_admin"), args)?;
-        write_administrator(&e, new_admin)?;
+        write_administrator(&e, new_admin.clone())?;
+        event::set_admin(e, admin_id, new_admin)?;
         Ok(())
     }
 
@@ -346,11 +354,13 @@ impl TokenTrait for Token {
     fn unfreeze(e: &Host, admin: Signature, nonce: BigInt, id: Identifier) -> Result<(), Error> {
         check_admin(&e, &admin)?;
         let mut args = Vec::new(e)?;
-        args.push(admin.get_identifier(&e)?)?;
+        let admin_id = admin.get_identifier(&e)?;
+        args.push(admin_id.clone())?;
         args.push(nonce.clone())?;
         args.push(id.clone())?;
         check_auth(&e, admin, nonce, Symbol::from_str("unfreeze"), args)?;
-        write_state(&e, id, false)?;
+        write_state(&e, id.clone(), false)?;
+        event::unfreeze(e, admin_id, id)?;
         Ok(())
     }
 
@@ -375,7 +385,8 @@ impl TokenTrait for Token {
         let account_id = id.get_account_id(e)?;
 
         let mut args = Vec::new(e)?;
-        args.push(id.get_identifier(&e)?)?;
+        let ident = id.get_identifier(&e)?;
+        args.push(ident.clone())?;
         args.push(nonce.clone())?;
         args.push(amount.clone())?;
         check_auth(&e, id, nonce, Symbol::from_str("import"), args)?;
@@ -386,6 +397,7 @@ impl TokenTrait for Token {
             Identifier::Account(account_id),
             BigInt::from_u64(&e, amount.try_into().map_err(|_| Error::ContractError)?)?,
         )?;
+        event::import(e, ident, amount)?;
         Ok(())
     }
 
@@ -398,7 +410,8 @@ impl TokenTrait for Token {
         let account_id = id.get_account_id(e)?;
 
         let mut args = Vec::new(e)?;
-        args.push(id.get_identifier(&e)?)?;
+        let ident = id.get_identifier(&e)?;
+        args.push(ident.clone())?;
         args.push(nonce.clone())?;
         args.push(amount.clone())?;
         check_auth(&e, id, nonce, Symbol::from_str("export"), args)?;
@@ -409,6 +422,7 @@ impl TokenTrait for Token {
             Identifier::Account(account_id),
             BigInt::from_u64(&e, amount.try_into().map_err(|_| Error::ContractError)?)?,
         )?;
+        event::export(e, ident, amount)?;
         Ok(())
     }
 }
