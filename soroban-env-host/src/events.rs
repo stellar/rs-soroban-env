@@ -210,7 +210,7 @@ impl From<wasmi::Error> for DebugError {
                     Some(he) => he.status,
                     None => ScUnknownErrorCode::General.into(),
                 };
-                return DebugError::new(status).msg("VM trapped with from host error");
+                return DebugError::new(status).msg("VM trapped with host error");
             }
             Trap(trap) => match trap.as_code().expect("trap code") {
                 Unreachable => ScVmErrorCode::TrapUnreachable,
