@@ -12,6 +12,8 @@ mod vec;
 
 #[cfg(feature = "vm")]
 mod budget_metering;
+#[cfg(feature = "vm")]
+mod complex;
 #[cfg(feature = "testutils")]
 mod contract_event;
 #[cfg(feature = "vm")]

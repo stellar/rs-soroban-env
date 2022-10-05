@@ -24,7 +24,8 @@ members = [
     "invoke_contract",
     "linear_memory",
     "vec",
-    "hostile"
+    "hostile",
+    "complex",
 ]
 
 [patch.crates-io]
