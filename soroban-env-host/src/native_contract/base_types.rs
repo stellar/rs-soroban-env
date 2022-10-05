@@ -78,7 +78,7 @@ impl BigInt {
     pub fn from_i64(env: &Host, x: i64) -> Result<Self, HostError> {
         let res = env.bigint_from_i64(x)?;
         BigInt::try_from_val(env, res)
-    }    
+    }
 
     pub fn compare(&self, other: &BigInt) -> Result<Ordering, HostError> {
         let i = self
