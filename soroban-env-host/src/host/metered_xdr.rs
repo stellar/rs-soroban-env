@@ -1,5 +1,7 @@
 use std::{error::Error, io::Write};
 
+use soroban_env_common::Object;
+
 use crate::{
     budget::CostType,
     xdr::{ReadXdr, WriteXdr},
@@ -50,5 +52,9 @@ impl Host {
     pub(crate) fn metered_from_xdr<T: ReadXdr>(&self, bytes: &[u8]) -> Result<T, HostError> {
         self.charge_budget(CostType::ValDeser, bytes.len() as u64)?;
         T::from_xdr(bytes).map_err(|_| self.err_general("failed to read from xdr"))
+    }
+
+    pub(crate) fn metered_from_xdr_obj<T: ReadXdr>(&self, bytes: Object) -> Result<T, HostError> {
+        self.visit_obj(bytes, |hv: &Vec<u8>| self.metered_from_xdr(hv.as_slice()))
     }
 }
