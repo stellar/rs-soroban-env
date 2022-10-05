@@ -1,8 +1,9 @@
+use crate::budget::CostType;
 use crate::host::{Host, HostError};
 use core::cmp::Ordering;
-use soroban_env_common::xdr::ScObjectType;
+use soroban_env_common::xdr::{AccountId, ScObjectType};
 use soroban_env_common::{
-    CheckedEnv, ConversionError, EnvBase, EnvVal, IntoVal, Object, RawVal, TryFromVal, TryIntoVal,
+    CheckedEnv, ConversionError, EnvBase, EnvVal, Object, RawVal, TryFromVal, TryIntoVal,
 };
 
 #[derive(Clone)]
@@ -81,6 +82,11 @@ impl BigInt {
             .obj_cmp(self.0.val.to_raw(), other.0.val.to_raw())?;
         Ok(i.cmp(&0))
     }
+
+    #[cfg(test)]
+    pub(crate) fn to_i64(&self) -> i64 {
+        self.0.env.bigint_to_i64(self.0.val).unwrap()
+    }
 }
 
 #[derive(Clone)]
@@ -128,7 +134,7 @@ impl From<Bytes> for Object {
     }
 }
 
-impl<const N: u32> From<BytesN<N>> for Bytes {
+impl<const N: usize> From<BytesN<N>> for Bytes {
     fn from(b: BytesN<N>) -> Self {
         Self(b.0)
     }
@@ -153,17 +159,36 @@ impl Bytes {
             .in_env(&self.0.env);
         Ok(())
     }
+
+    #[cfg(test)]
+    pub(crate) fn to_vec(&self) -> std::vec::Vec<u8> {
+        use soroban_env_common::RawValConvertible;
+        let env = self.0.env();
+        let mut res = std::vec::Vec::<u8>::new();
+        let size = unsafe {
+            <u32 as RawValConvertible>::unchecked_from_val(
+                env.bytes_len(self.0.to_object()).unwrap(),
+            )
+        };
+        res.resize(size as usize, 0);
+        env.bytes_copy_to_slice(self.0.to_object(), RawVal::U32_ZERO, &mut res[..])
+            .unwrap();
+        res
+    }
 }
 
 #[derive(Clone)]
-pub struct BytesN<const N: u32>(EnvVal<Host, Object>);
+pub struct BytesN<const N: usize>(EnvVal<Host, Object>);
 
-impl<const N: u32> TryFromVal<Host, Object> for BytesN<N> {
+impl<const N: usize> TryFromVal<Host, Object> for BytesN<N> {
     type Error = HostError;
 
     fn try_from_val(env: &Host, val: Object) -> Result<Self, Self::Error> {
         let len: u32 = env.bytes_len(val)?.try_into()?;
-        if len == N {
+        if len
+            == N.try_into()
+                .map_err(|_| env.err_general("bytes buffer overflow"))?
+        {
             Ok(Self(val.in_env(env)))
         } else {
             Err(ConversionError.into())
@@ -171,27 +196,27 @@ impl<const N: u32> TryFromVal<Host, Object> for BytesN<N> {
     }
 }
 
-impl<const N: u32> Eq for BytesN<N> {}
+impl<const N: usize> Eq for BytesN<N> {}
 
-impl<const N: u32> PartialEq for BytesN<N> {
+impl<const N: usize> PartialEq for BytesN<N> {
     fn eq(&self, other: &Self) -> bool {
         self.partial_cmp(other) == Some(Ordering::Equal)
     }
 }
 
-impl<const N: u32> PartialOrd for BytesN<N> {
+impl<const N: usize> PartialOrd for BytesN<N> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(Ord::cmp(self, other))
     }
 }
 
-impl<const N: u32> Ord for BytesN<N> {
+impl<const N: usize> Ord for BytesN<N> {
     fn cmp(&self, other: &Self) -> core::cmp::Ordering {
         self.0.cmp(&other.0)
     }
 }
 
-impl<const N: u32> TryFromVal<Host, RawVal> for BytesN<N> {
+impl<const N: usize> TryFromVal<Host, RawVal> for BytesN<N> {
     type Error = HostError;
 
     fn try_from_val(env: &Host, val: RawVal) -> Result<Self, Self::Error> {
@@ -199,7 +224,7 @@ impl<const N: u32> TryFromVal<Host, RawVal> for BytesN<N> {
     }
 }
 
-impl<const N: u32> TryIntoVal<Host, BytesN<N>> for RawVal {
+impl<const N: usize> TryIntoVal<Host, BytesN<N>> for RawVal {
     type Error = HostError;
 
     fn try_into_val(self, env: &Host) -> Result<BytesN<N>, Self::Error> {
@@ -207,7 +232,7 @@ impl<const N: u32> TryIntoVal<Host, BytesN<N>> for RawVal {
     }
 }
 
-impl<const N: u32> TryIntoVal<Host, RawVal> for BytesN<N> {
+impl<const N: usize> TryIntoVal<Host, RawVal> for BytesN<N> {
     type Error = HostError;
 
     fn try_into_val(self, _env: &Host) -> Result<RawVal, Self::Error> {
@@ -215,34 +240,37 @@ impl<const N: u32> TryIntoVal<Host, RawVal> for BytesN<N> {
     }
 }
 
-impl<const N: u32> From<BytesN<N>> for Object {
+impl<const N: usize> From<BytesN<N>> for Object {
     fn from(bytes: BytesN<N>) -> Self {
         bytes.0.val
     }
 }
 
-impl<const N: u32> BytesN<N> {
+impl<const N: usize> BytesN<N> {
     pub fn compare(&self, other: &BytesN<N>) -> Result<Ordering, HostError> {
         let res = self.0.env.obj_cmp(self.0.val.into(), other.0.val.into())?;
         Ok(res.cmp(&0))
     }
 }
 
-impl<const N: u32> BytesN<N> {
-    /// Copy the bytes in [BytesN] into the given slice.
-    ///
-    /// The minimum number of bytes are copied to either exhaust [BytesN] or
-    /// fill slice.
+impl<const N: usize> BytesN<N> {
     #[inline(always)]
-    pub fn copy_into_slice(&self, slice: &mut [u8]) -> Result<(), HostError> {
+    pub fn to_array(&self) -> Result<[u8; N], HostError> {
         let env = self.0.env();
-        env.bytes_copy_to_slice(self.0.to_object(), RawVal::U32_ZERO, slice)
-            .map_err(|status| status.into())
+        let mut slice = [0_u8; N];
+        env.charge_budget(CostType::BytesClone, 4)?;
+        env.bytes_copy_to_slice(self.0.to_object(), RawVal::U32_ZERO, &mut slice)?;
+        Ok(slice)
     }
 
     #[inline(always)]
     pub fn from_slice(env: &Host, items: &[u8]) -> Result<BytesN<N>, HostError> {
         Ok(BytesN(env.bytes_new_from_slice(items)?.in_env(env)))
+    }
+
+    #[cfg(test)]
+    pub(crate) fn to_vec(&self) -> std::vec::Vec<u8> {
+        Bytes::from(self.clone()).to_vec()
     }
 }
 
@@ -395,31 +423,12 @@ impl Vec {
         HostError: From<<T as TryIntoVal<Host, RawVal>>::Error>,
     {
         let rv = x.try_into_val(&self.0.env)?;
-        self.0.val = self.0.env.vec_push_back(self.0.val, rv)?;
+        self.push_raw(rv)
+    }
+
+    pub fn push_raw(&mut self, x: RawVal) -> Result<(), HostError> {
+        self.0.val = self.0.env.vec_push_back(self.0.val, x)?;
         Ok(())
-    }
-}
-
-#[derive(Clone)]
-pub struct AccountId(EnvVal<Host, Object>);
-
-impl Eq for AccountId {}
-
-impl PartialEq for AccountId {
-    fn eq(&self, other: &Self) -> bool {
-        self.partial_cmp(other) == Some(Ordering::Equal)
-    }
-}
-
-impl PartialOrd for AccountId {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(Ord::cmp(self, other))
-    }
-}
-
-impl Ord for AccountId {
-    fn cmp(&self, other: &Self) -> core::cmp::Ordering {
-        self.0.cmp(&other.0)
     }
 }
 
@@ -427,19 +436,7 @@ impl TryFromVal<Host, Object> for AccountId {
     type Error = HostError;
 
     fn try_from_val(env: &Host, val: Object) -> Result<Self, Self::Error> {
-        if val.is_obj_type(ScObjectType::AccountId) {
-            Ok(AccountId(val.in_env(env)))
-        } else {
-            Err(ConversionError.into())
-        }
-    }
-}
-
-impl TryIntoVal<Host, AccountId> for Object {
-    type Error = HostError;
-
-    fn try_into_val(self, env: &Host) -> Result<AccountId, Self::Error> {
-        <_ as TryFromVal<_, Object>>::try_from_val(env, self)
+        env.visit_obj(val, |acc: &AccountId| Ok(acc.clone()))
     }
 }
 
@@ -451,35 +448,10 @@ impl TryFromVal<Host, RawVal> for AccountId {
     }
 }
 
-impl TryIntoVal<Host, AccountId> for RawVal {
-    type Error = HostError;
-
-    fn try_into_val(self, env: &Host) -> Result<AccountId, Self::Error> {
-        <_ as TryFromVal<_, RawVal>>::try_from_val(env, self)
-    }
-}
-
 impl TryIntoVal<Host, RawVal> for AccountId {
     type Error = HostError;
 
-    fn try_into_val(self, _env: &Host) -> Result<RawVal, Self::Error> {
-        Ok(self.0.val.into())
-    }
-}
-
-impl IntoVal<Host, Object> for AccountId {
-    fn into_val(self, _env: &Host) -> Object {
-        self.to_object()
-    }
-}
-
-impl AccountId {
-    pub fn new(env: &Host) -> Result<Self, HostError> {
-        let map = env.map_new()?;
-        Ok(Self(map.in_env(env)))
-    }
-
-    pub fn to_object(&self) -> Object {
-        self.0.to_object()
+    fn try_into_val(self, env: &Host) -> Result<RawVal, Self::Error> {
+        Ok(env.add_host_object(self.clone())?.to_raw())
     }
 }

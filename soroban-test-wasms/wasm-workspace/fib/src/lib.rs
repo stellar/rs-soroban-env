@@ -3,15 +3,12 @@ use soroban_sdk::contractimpl;
 
 pub struct Contract;
 
-fn fib(n: u32) -> u32
-{
-    if n < 2
-    {
+fn fib(n: u32) -> u32 {
+    if n < 2 {
         return n;
     }
-    return fib(n-1) + fib(n-2);
+    return fib(n - 1) + fib(n - 2);
 }
-
 
 #[contractimpl]
 impl Contract {

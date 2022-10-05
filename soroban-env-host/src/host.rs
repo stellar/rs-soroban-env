@@ -4,7 +4,6 @@
 use core::cell::RefCell;
 use core::cmp::Ordering;
 use core::fmt::Debug;
-use std::cmp::min;
 
 use im_rc::{OrdMap, Vector};
 use num_bigint::Sign;
@@ -15,7 +14,7 @@ use soroban_env_common::{
 
 use soroban_env_common::xdr::{
     AccountId, Asset, ContractEvent, ContractEventBody, ContractEventType, ContractEventV0,
-    ExtensionPoint, Hash, PublicKey, ScStatus, ScStatusType, ThresholdIndexes,
+    ExtensionPoint, Hash, ScStatus, ScStatusType, ThresholdIndexes, TrustLineAsset,
 };
 
 use crate::budget::{Budget, CostType};
@@ -234,6 +233,10 @@ impl Host {
         F: FnOnce(Budget) -> T,
     {
         f(self.0.budget.clone())
+    }
+
+    pub(crate) fn get_budget_ref(&self) -> &Budget {
+        &self.0.budget
     }
 
     pub fn charge_budget(&self, ty: CostType, input: u64) -> Result<(), HostError> {
@@ -919,6 +922,13 @@ impl Host {
         self.create_contract_with_id(ScContractCode::Token, contract_id)
     }
 
+    // Writes an arbitrary ledger entry to storage.
+    // "testutils" is not covered by budget metering.
+    #[cfg(any(test, feature = "testutils"))]
+    pub fn add_ledger_entry(&self, key: LedgerKey, val: LedgerEntry) -> Result<(), HostError> {
+        self.with_mut_storage(|storage| storage.put(&key, &val))
+    }
+
     /// Records a `System` contract event. `topics` is expected to be a `SCVec`
     /// length <= 4 that cannot contain `Vec`, `Map`, or `Bytes` with length > 32
     /// On success, returns an `SCStatus::Ok`.
@@ -929,22 +939,20 @@ impl Host {
         Ok(Status::OK.into())
     }
 
-    // Metering: *mostly* covered by components. The arithmatics are free.
+    // Metering: *mostly* covered by components. The arithmetics are free.
     pub(crate) fn transfer_account_balance(
         &self,
-        account: Object,
+        account_id: AccountId,
         amount: i64,
     ) -> Result<(), HostError> {
-        use xdr::{AccountEntryExt, AccountEntryExtensionV1Ext, LedgerKeyAccount};
+        use xdr::{AccountEntryExt, AccountEntryExtensionV1Ext};
 
         self.with_current_frame(|frame| match frame {
             Frame::Token(id, _) => Ok(()),
             _ => Err(self.err_general("only native token can transfer classic balance")),
         })?;
 
-        let lk = LedgerKey::Account(LedgerKeyAccount {
-            account_id: self.to_account_id(account)?,
-        });
+        let lk = self.to_account_key(account_id);
 
         self.with_mut_storage(|storage| {
             let mut le = storage.get(&lk)?;
@@ -993,9 +1001,8 @@ impl Host {
     // Metering: *mostly* covered by components. The arithmatics are free.
     pub(crate) fn transfer_trustline_balance(
         &self,
-        account: Object,
-        asset_code: Object,
-        issuer: Object,
+        account_id: AccountId,
+        asset: TrustLineAsset,
         amount: i64,
     ) -> Result<(), HostError> {
         use xdr::{TrustLineEntryExt, TrustLineFlags};
@@ -1005,7 +1012,7 @@ impl Host {
             _ => Err(self.err_general("only native token can transfer classic balance")),
         })?;
 
-        let lk = self.to_trustline_key(account, asset_code, issuer)?;
+        let lk = self.to_trustline_key(account_id, asset);
         self.with_mut_storage(|storage| {
             let mut le = storage.get(&lk)?;
             let tl = match &mut le.data {
@@ -1022,11 +1029,14 @@ impl Host {
             let base_reserve = self.with_ledger_info(|li| Ok(li.base_reserve))? as i64;
             let (min_balance, max_balance) = if let TrustLineEntryExt::V1(ext1) = &tl.ext {
                 let min_balance = ext1.liabilities.selling;
-                let max_balance = i64::MAX - ext1.liabilities.buying;
+                if tl.limit < ext1.liabilities.buying {
+                    return Err(self.err_general("limit is lower than liabilities"));
+                }
+                let max_balance = tl.limit - ext1.liabilities.buying;
                 (min_balance, max_balance)
             } else {
                 let min_balance = 0;
-                let max_balance = i64::MAX;
+                let max_balance = tl.limit;
                 (min_balance, max_balance)
             };
 
@@ -1884,125 +1894,15 @@ impl VmCallerCheckedEnv for Host {
     fn create_token_from_asset(
         &self,
         vmcaller: &mut VmCaller<Host>,
-        asset: Object,
+        asset_bytes: Object,
     ) -> Result<Object, HostError> {
-        let a = self.visit_obj(asset, |hv: &Vec<u8>| {
-            self.metered_from_xdr::<Asset>(hv.as_slice())
-        })?;
-
-        // TODO: Are these error msgs necessary? Should they be simplified?
-
-        // We want to convert xdr::Asset into an ScVal that matches the ClassicMetadata
-        // contracttype in the token contract
-        let arg =
-            match &a {
-                Asset::Native => ScVal::Object(Some(ScObject::Vec(ScVec(
-                    vec![ScVal::Symbol(
-                        "Native"
-                            .to_string()
-                            .try_into()
-                            .map_err(|_| self.err_general("invalid Native"))?,
-                    )]
-                    .try_into()
-                    .map_err(|_| self.err_general("invalid vec"))?,
-                )))),
-                Asset::CreditAlphanum4(a4) => {
-                    let PublicKey::PublicKeyTypeEd25519(issuer_key) = a4.issuer.0.clone();
-                    ScVal::Object(Some(ScObject::Vec(ScVec(
-                        vec![
-                            ScVal::Symbol(
-                                "AlphaNum4"
-                                    .to_string()
-                                    .try_into()
-                                    .map_err(|_| self.err_general("invalid AlphaNum4"))?,
-                            ),
-                            ScVal::Object(Some(ScObject::Map(
-                                ScMap::try_from(vec![
-                                    ScMapEntry {
-                                        key: ScVal::Symbol(
-                                            "asset_code".to_string().try_into().map_err(|_| {
-                                                self.err_general("invalid code4 key")
-                                            })?,
-                                        ),
-                                        val: ScVal::Object(Some(ScObject::Bytes(
-                                            a4.asset_code.0.try_into().map_err(|_| {
-                                                self.err_general("invalid code4 val")
-                                            })?,
-                                        ))),
-                                    },
-                                    ScMapEntry {
-                                        key: ScVal::Symbol(
-                                            "issuer".to_string().try_into().map_err(|_| {
-                                                self.err_general("invalid issuer4 key")
-                                            })?,
-                                        ),
-                                        val: ScVal::Object(Some(ScObject::Bytes(
-                                            issuer_key.0.try_into().map_err(|_| {
-                                                self.err_general("invalid issuer4 key")
-                                            })?,
-                                        ))),
-                                    },
-                                ])
-                                .map_err(|_| self.err_general("invalid map"))?,
-                            ))),
-                        ]
-                        .try_into()
-                        .map_err(|_| self.err_general("invalid vec"))?,
-                    ))))
-                }
-                Asset::CreditAlphanum12(a12) => {
-                    let PublicKey::PublicKeyTypeEd25519(issuer_key) = a12.issuer.0.clone();
-                    ScVal::Object(Some(ScObject::Vec(ScVec(
-                        vec![
-                            ScVal::Symbol(
-                                "AlphaNum12"
-                                    .to_string()
-                                    .try_into()
-                                    .map_err(|_| self.err_general("invalid AlphaNum12"))?,
-                            ),
-                            ScVal::Object(Some(ScObject::Map(
-                                ScMap::try_from(vec![
-                                    ScMapEntry {
-                                        key: ScVal::Symbol(
-                                            "asset_code".to_string().try_into().map_err(|_| {
-                                                self.err_general("invalid code12 key")
-                                            })?,
-                                        ),
-                                        val: ScVal::Object(Some(ScObject::Bytes(
-                                            a12.asset_code.0.try_into().map_err(|_| {
-                                                self.err_general("invalid code12 val")
-                                            })?,
-                                        ))),
-                                    },
-                                    ScMapEntry {
-                                        key: ScVal::Symbol(
-                                            "issuer".to_string().try_into().map_err(|_| {
-                                                self.err_general("invalid issuer12 key")
-                                            })?,
-                                        ),
-                                        val: ScVal::Object(Some(ScObject::Bytes(
-                                            issuer_key.0.try_into().map_err(|_| {
-                                                self.err_general("invalid issuer12 val")
-                                            })?,
-                                        ))),
-                                    },
-                                ])
-                                .map_err(|_| self.err_general("invalid map"))?,
-                            ))),
-                        ]
-                        .try_into()
-                        .map_err(|_| self.err_general("invalid vec"))?,
-                    ))))
-                }
-            };
-
-        let buf = self.id_preimage_from_asset(a)?;
-        let id = self.create_contract_with_id_preimage(ScContractCode::Token, buf)?;
-        // reentry is irrelavent here since this token contract has just been created
+        let asset = self.metered_from_xdr_obj(asset_bytes)?;
+        let id_preimage = self.id_preimage_from_asset(asset)?;
+        let id = self.create_contract_with_id_preimage(ScContractCode::Token, id_preimage)?;
         self.call_n(
             id,
             Symbol::from_str("init_asset"),
-            &[self.to_host_val(&arg)?.val],
+            &[asset_bytes.try_into()?],
             false,
         )?;
 
@@ -2712,7 +2612,8 @@ impl VmCallerCheckedEnv for Host {
         _vmcaller: &mut VmCaller<Host>,
         a: Object,
     ) -> Result<RawVal, Self::Error> {
-        let threshold = self.load_account(a)?.thresholds.0[ThresholdIndexes::Low as usize];
+        let threshold =
+            self.load_account(self.to_account_id(a)?)?.thresholds.0[ThresholdIndexes::Low as usize];
         let threshold = Into::<u32>::into(threshold);
         Ok(threshold.into())
     }
@@ -2723,7 +2624,8 @@ impl VmCallerCheckedEnv for Host {
         _vmcaller: &mut VmCaller<Host>,
         a: Object,
     ) -> Result<RawVal, Self::Error> {
-        let threshold = self.load_account(a)?.thresholds.0[ThresholdIndexes::Med as usize];
+        let threshold =
+            self.load_account(self.to_account_id(a)?)?.thresholds.0[ThresholdIndexes::Med as usize];
         let threshold = Into::<u32>::into(threshold);
         Ok(threshold.into())
     }
@@ -2734,7 +2636,8 @@ impl VmCallerCheckedEnv for Host {
         _vmcaller: &mut VmCaller<Host>,
         a: Object,
     ) -> Result<RawVal, Self::Error> {
-        let threshold = self.load_account(a)?.thresholds.0[ThresholdIndexes::High as usize];
+        let threshold = self.load_account(self.to_account_id(a)?)?.thresholds.0
+            [ThresholdIndexes::High as usize];
         let threshold = Into::<u32>::into(threshold);
         Ok(threshold.into())
     }
@@ -2745,7 +2648,7 @@ impl VmCallerCheckedEnv for Host {
         _vmcaller: &mut VmCaller<Host>,
         a: Object,
     ) -> Result<RawVal, Self::Error> {
-        Ok(self.has_account(a)?.into())
+        Ok(self.has_account(self.to_account_id(a)?)?.into())
     }
 
     // Notes on metering: some covered. The for loop and comparisons are free (for now).
@@ -2755,39 +2658,11 @@ impl VmCallerCheckedEnv for Host {
         a: Object,
         s: Object,
     ) -> Result<RawVal, Self::Error> {
-        use xdr::{Signer, SignerKey};
-
         let target_signer = self.to_u256(s)?;
 
-        let ae = self.load_account(a)?;
-        if ae.account_id
-            == AccountId(PublicKey::PublicKeyTypeEd25519(
-                target_signer.metered_clone(&self.0.budget)?,
-            ))
-        {
-            // Target signer is the master key, so return the master weight
-            let threshold = ae.thresholds.0[ThresholdIndexes::MasterWeight as usize];
-            let threshold = Into::<u32>::into(threshold);
-            Ok(threshold.into())
-        } else {
-            // Target signer is not the master key, so search the account signers
-            let signers: &Vec<Signer> = ae.signers.as_ref();
-            for signer in signers {
-                if let SignerKey::Ed25519(ref this_signer) = signer.key {
-                    if &target_signer == this_signer {
-                        // Clamp the weight at 255. Stellar protocol before v10
-                        // allowed weights to exceed 255, but the max threshold
-                        // is 255, hence there is no point in having a larger
-                        // weight.
-                        let weight = min(signer.weight, u8::MAX as u32);
-                        // We've found the target signer in the account signers, so return the weight
-                        return Ok(weight.into());
-                    }
-                }
-            }
-            // We didn't find the target signer, return 0 weight to indicate that.
-            Ok(0u32.into())
-        }
+        let ae = self.load_account(self.to_account_id(a)?)?;
+        let weight = self.get_signer_weight_from_account(target_signer, &ae)?;
+        Ok((weight as u32).into())
     }
 
     fn get_ledger_version(&self, _vmcaller: &mut VmCaller<Host>) -> Result<RawVal, Self::Error> {

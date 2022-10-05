@@ -1,4 +1,4 @@
-mod util;
+pub(crate) mod util;
 
 mod account;
 mod basic;
@@ -12,6 +12,8 @@ mod vec;
 
 #[cfg(feature = "vm")]
 mod budget_metering;
+#[cfg(feature = "vm")]
+mod complex;
 #[cfg(feature = "testutils")]
 mod contract_event;
 #[cfg(feature = "vm")]
@@ -19,3 +21,5 @@ mod invocation;
 #[cfg(all(feature = "vm", feature = "testutils"))]
 mod lifecycle;
 mod tuple;
+
+mod token;

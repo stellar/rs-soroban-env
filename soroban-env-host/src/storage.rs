@@ -329,15 +329,20 @@ mod test_footprint {
 }
 
 #[cfg(test)]
-mod test_storage {
+pub(crate) mod test_storage {
     use im_rc::OrdMap;
     use soroban_env_common::xdr::ScUnknownErrorCode;
 
     use super::*;
     #[allow(dead_code)]
-    struct MockSnapshotSource(OrdMap<LedgerKey, LedgerEntry>);
+    pub(crate) struct MockSnapshotSource(OrdMap<LedgerKey, LedgerEntry>);
     #[allow(dead_code)]
     impl MockSnapshotSource {
+        pub(crate) fn new() -> Self {
+            Self(OrdMap::<LedgerKey, LedgerEntry>::new())
+        }
+    }
+    impl SnapshotSource for MockSnapshotSource {
         fn get(&self, key: &LedgerKey) -> Result<LedgerEntry, HostError> {
             if let Some(val) = self.0.get(key) {
                 Ok(val.clone())
