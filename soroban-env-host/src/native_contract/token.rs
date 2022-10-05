@@ -6,7 +6,11 @@ mod cryptography;
 mod error;
 mod metadata;
 mod nonce;
-mod public_types;
+pub(crate) mod public_types;
 mod storage_types;
 
+#[cfg(test)]
+pub(crate) mod test_token;
+
 pub use contract::Token;
+pub use contract::TokenTrait;

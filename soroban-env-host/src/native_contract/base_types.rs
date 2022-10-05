@@ -82,6 +82,11 @@ impl BigInt {
             .obj_cmp(self.0.val.to_raw(), other.0.val.to_raw())?;
         Ok(i.cmp(&0))
     }
+
+    #[cfg(test)]
+    pub(crate) fn to_i64(&self) -> i64 {
+        self.0.env.bigint_to_i64(self.0.val).unwrap()
+    }
 }
 
 #[derive(Clone)]
@@ -153,6 +158,22 @@ impl Bytes {
             .bytes_append(self.0.val, other.0.val)?
             .in_env(&self.0.env);
         Ok(())
+    }
+
+    #[cfg(test)]
+    pub(crate) fn to_vec(&self) -> std::vec::Vec<u8> {
+        use soroban_env_common::RawValConvertible;
+        let env = self.0.env();
+        let mut res = std::vec::Vec::<u8>::new();
+        let size = unsafe {
+            <u32 as RawValConvertible>::unchecked_from_val(
+                env.bytes_len(self.0.to_object()).unwrap(),
+            )
+        };
+        res.resize(size as usize, 0);
+        env.bytes_copy_to_slice(self.0.to_object(), RawVal::U32_ZERO, &mut res[..])
+            .unwrap();
+        res
     }
 }
 
@@ -245,6 +266,11 @@ impl<const N: usize> BytesN<N> {
     #[inline(always)]
     pub fn from_slice(env: &Host, items: &[u8]) -> Result<BytesN<N>, HostError> {
         Ok(BytesN(env.bytes_new_from_slice(items)?.in_env(env)))
+    }
+
+    #[cfg(test)]
+    pub(crate) fn to_vec(&self) -> std::vec::Vec<u8> {
+        Bytes::from(self.clone()).to_vec()
     }
 }
 
@@ -397,7 +423,11 @@ impl Vec {
         HostError: From<<T as TryIntoVal<Host, RawVal>>::Error>,
     {
         let rv = x.try_into_val(&self.0.env)?;
-        self.0.val = self.0.env.vec_push_back(self.0.val, rv)?;
+        self.push_raw(rv)
+    }
+
+    pub fn push_raw(&mut self, x: RawVal) -> Result<(), HostError> {
+        self.0.val = self.0.env.vec_push_back(self.0.val, x)?;
         Ok(())
     }
 }
