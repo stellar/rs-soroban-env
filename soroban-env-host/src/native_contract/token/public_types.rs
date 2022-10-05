@@ -1,5 +1,5 @@
 use crate::host::Host;
-use crate::native_contract::base_types::{Bytes, BytesN, Map, Vec};
+pub(crate) use crate::native_contract::base_types::{Bytes, BytesN, Map, Vec};
 use crate::native_contract::invoker::{invoker, Invoker};
 use crate::native_contract::token::error::Error;
 use soroban_env_common::xdr::AccountId;
