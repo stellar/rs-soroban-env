@@ -5,14 +5,14 @@ homepage = "https://github.com/stellar/rs-soroban-env"
 repository = "https://github.com/stellar/rs-soroban-env"
 authors = ["Stellar Development Foundation <info@stellar.org>"]
 license = "Apache-2.0"
-version = "0.0.5"
+version = "0.0.6"
 readme = "../README.md"
 edition = "2021"
 rust-version = "1.64"
 
 [dependencies]
-soroban-native-sdk-macros = { version = "0.0.5" }
-soroban-env-common = { version = "0.0.5", features = [ "std" ] }
+soroban-native-sdk-macros = { version = "0.0.6" }
+soroban-env-common = { version = "0.0.6", features = [ "std" ] }
 wasmi = { package = "soroban-wasmi", version = "0.16.0", optional = true }
 static_assertions = "1.1.0"
 im-rc = "15.0.0"
