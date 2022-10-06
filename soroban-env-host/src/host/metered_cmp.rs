@@ -8,10 +8,16 @@ use crate::{
     HostError,
 };
 
+// `MeteredCmp` exists for charging the nontrivial / structural part of an object comparison.
+// It returns a `HostError` if the budget limit has been reached before the comparison.
+// MeteredCmp is a proxy for, and ultimately delegates to `Ord::cmp`. It just charges a budget
+// along the way.
 pub(crate) trait MeteredCmp: Ord {
     fn metered_cmp(&self, other: &Self, budget: &Budget) -> Result<Ordering, HostError>;
 }
 
+// `MeteredCmp` for host object, recursing through RawVal <-> Object ord-comparisons nested within.
+// (via EnvVal::cmp -> Host::obj_cmp -> HostObject::metered_cmp).
 impl MeteredCmp for &HostObject {
     fn metered_cmp(&self, other: &Self, budget: &Budget) -> Result<Ordering, HostError> {
         match (self, other) {
@@ -21,6 +27,7 @@ impl MeteredCmp for &HostObject {
             (HostObject::Bytes(a), HostObject::Bytes(b)) => a.metered_cmp(b, budget),
             (HostObject::ContractCode(a), HostObject::ContractCode(b)) => a.metered_cmp(b, budget),
             (HostObject::AccountId(a), HostObject::AccountId(b)) => a.metered_cmp(b, budget),
+            // if object types are different, the comparison is trivial, no metering.
             _ => Ok(self.cmp(other)),
         }
     }

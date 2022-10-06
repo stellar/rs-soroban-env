@@ -1281,8 +1281,7 @@ impl VmCallerCheckedEnv for Host {
         Ok(self.add_host_object(<Vec<u8>>::from(hash.0))?.into())
     }
 
-    // FIXME: the `cmp` method is not metered. Need a "metered" version (similar to metered_clone)
-    // and use that.
+    // Metered: covered by `visit` and `metered_cmp`.
     fn obj_cmp(
         &self,
         _vmcaller: &mut VmCaller<Host>,
