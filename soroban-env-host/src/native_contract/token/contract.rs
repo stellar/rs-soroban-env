@@ -9,17 +9,18 @@ use crate::native_contract::token::balance::{
     read_balance, read_state, receive_balance, spend_balance, transfer_classic_balance, write_state,
 };
 use crate::native_contract::token::cryptography::check_auth;
-use crate::native_contract::token::error::Error;
 use crate::native_contract::token::metadata::{
     has_metadata, read_decimal, read_name, read_symbol, write_metadata,
 };
 use crate::native_contract::token::nonce::read_nonce;
 use crate::native_contract::token::public_types::{Identifier, Metadata, Signature, TokenMetadata};
+use crate::HostError;
 
 use soroban_env_common::xdr::Asset;
 use soroban_env_common::{CheckedEnv, EnvBase, Symbol, TryFromVal, TryIntoVal};
 use soroban_native_sdk_macros::contractimpl;
 
+use super::error::{contract_err, ContractError};
 use super::public_types::{AlphaNum12Metadata, AlphaNum4Metadata};
 
 pub trait TokenTrait {
@@ -31,14 +32,14 @@ pub trait TokenTrait {
     ///
     /// No admin will be set for the Native token, so any function that checks the admin
     /// (burn, freeze, unfreeze, mint, set_admin) will always fail
-    fn init_asset(e: &Host, asset_bytes: Bytes) -> Result<(), Error>;
+    fn init_asset(e: &Host, asset_bytes: Bytes) -> Result<(), HostError>;
 
     /// init creates a token contract that does not wrap an asset on the classic side.
-    fn init(e: &Host, admin: Identifier, metadata: TokenMetadata) -> Result<(), Error>;
+    fn init(e: &Host, admin: Identifier, metadata: TokenMetadata) -> Result<(), HostError>;
 
-    fn nonce(e: &Host, id: Identifier) -> Result<BigInt, Error>;
+    fn nonce(e: &Host, id: Identifier) -> Result<BigInt, HostError>;
 
-    fn allowance(e: &Host, from: Identifier, spender: Identifier) -> Result<BigInt, Error>;
+    fn allowance(e: &Host, from: Identifier, spender: Identifier) -> Result<BigInt, HostError>;
 
     fn approve(
         e: &Host,
@@ -46,11 +47,11 @@ pub trait TokenTrait {
         nonce: BigInt,
         spender: Identifier,
         amount: BigInt,
-    ) -> Result<(), Error>;
+    ) -> Result<(), HostError>;
 
-    fn balance(e: &Host, id: Identifier) -> Result<BigInt, Error>;
+    fn balance(e: &Host, id: Identifier) -> Result<BigInt, HostError>;
 
-    fn is_frozen(e: &Host, id: Identifier) -> Result<bool, Error>;
+    fn is_frozen(e: &Host, id: Identifier) -> Result<bool, HostError>;
 
     fn xfer(
         e: &Host,
@@ -58,7 +59,7 @@ pub trait TokenTrait {
         nonce: BigInt,
         to: Identifier,
         amount: BigInt,
-    ) -> Result<(), Error>;
+    ) -> Result<(), HostError>;
 
     fn xfer_from(
         e: &Host,
@@ -67,11 +68,12 @@ pub trait TokenTrait {
         from: Identifier,
         to: Identifier,
         amount: BigInt,
-    ) -> Result<(), Error>;
+    ) -> Result<(), HostError>;
 
-    fn freeze(e: &Host, admin: Signature, nonce: BigInt, id: Identifier) -> Result<(), Error>;
+    fn freeze(e: &Host, admin: Signature, nonce: BigInt, id: Identifier) -> Result<(), HostError>;
 
-    fn unfreeze(e: &Host, admin: Signature, nonce: BigInt, id: Identifier) -> Result<(), Error>;
+    fn unfreeze(e: &Host, admin: Signature, nonce: BigInt, id: Identifier)
+        -> Result<(), HostError>;
 
     fn mint(
         e: &Host,
@@ -79,7 +81,7 @@ pub trait TokenTrait {
         nonce: BigInt,
         to: Identifier,
         amount: BigInt,
-    ) -> Result<(), Error>;
+    ) -> Result<(), HostError>;
 
     fn burn(
         e: &Host,
@@ -87,24 +89,24 @@ pub trait TokenTrait {
         nonce: BigInt,
         from: Identifier,
         amount: BigInt,
-    ) -> Result<(), Error>;
+    ) -> Result<(), HostError>;
 
     fn set_admin(
         e: &Host,
         admin: Signature,
         nonce: BigInt,
         new_admin: Identifier,
-    ) -> Result<(), Error>;
+    ) -> Result<(), HostError>;
 
-    fn decimals(e: &Host) -> Result<u32, Error>;
+    fn decimals(e: &Host) -> Result<u32, HostError>;
 
-    fn name(e: &Host) -> Result<Bytes, Error>;
+    fn name(e: &Host) -> Result<Bytes, HostError>;
 
-    fn symbol(e: &Host) -> Result<Bytes, Error>;
+    fn symbol(e: &Host) -> Result<Bytes, HostError>;
 
-    fn import(e: &Host, id: Signature, nonce: BigInt, amount: i64) -> Result<(), Error>;
+    fn import(e: &Host, id: Signature, nonce: BigInt, amount: i64) -> Result<(), HostError>;
 
-    fn export(e: &Host, id: Signature, nonce: BigInt, amount: i64) -> Result<(), Error>;
+    fn export(e: &Host, id: Signature, nonce: BigInt, amount: i64) -> Result<(), HostError>;
 }
 
 pub struct Token;
@@ -112,9 +114,13 @@ pub struct Token;
 #[contractimpl]
 // Metering: *mostly* covered by components.
 impl TokenTrait for Token {
-    fn init_asset(e: &Host, asset_bytes: Bytes) -> Result<(), Error> {
+    fn init_asset(e: &Host, asset_bytes: Bytes) -> Result<(), HostError> {
         if has_metadata(&e)? {
-            return Err(Error::ContractError);
+            return Err(contract_err(
+                e,
+                ContractError::AlreadyInitializedError,
+                "token has been already initialized",
+            ));
         }
 
         let asset: Asset = e.metered_from_xdr_obj(asset_bytes.into())?;
@@ -123,7 +129,11 @@ impl TokenTrait for Token {
         let expected_contract_id =
             BytesN::<32>::try_from_val(e, e.get_contract_id_from_asset(asset.clone())?)?;
         if curr_contract_id != expected_contract_id {
-            return Err(Error::ContractError);
+            return Err(contract_err(
+                e,
+                ContractError::InternalError,
+                "bad id for asset contract",
+            ));
         }
         match asset {
             Asset::Native => {
@@ -166,9 +176,13 @@ impl TokenTrait for Token {
         Ok(())
     }
 
-    fn init(e: &Host, admin: Identifier, metadata: TokenMetadata) -> Result<(), Error> {
+    fn init(e: &Host, admin: Identifier, metadata: TokenMetadata) -> Result<(), HostError> {
         if has_metadata(&e)? {
-            return Err(Error::ContractError);
+            return Err(contract_err(
+                e,
+                ContractError::AlreadyInitializedError,
+                "token has been already initialized",
+            ));
         }
 
         write_administrator(&e, admin)?;
@@ -176,11 +190,11 @@ impl TokenTrait for Token {
         Ok(())
     }
 
-    fn nonce(e: &Host, id: Identifier) -> Result<BigInt, Error> {
+    fn nonce(e: &Host, id: Identifier) -> Result<BigInt, HostError> {
         read_nonce(e, id)
     }
 
-    fn allowance(e: &Host, from: Identifier, spender: Identifier) -> Result<BigInt, Error> {
+    fn allowance(e: &Host, from: Identifier, spender: Identifier) -> Result<BigInt, HostError> {
         read_allowance(&e, from, spender)
     }
 
@@ -191,9 +205,13 @@ impl TokenTrait for Token {
         nonce: BigInt,
         spender: Identifier,
         amount: BigInt,
-    ) -> Result<(), Error> {
+    ) -> Result<(), HostError> {
         if amount.compare(&BigInt::from_u64(e, 0)?)? == Ordering::Less {
-            return Err(Error::ContractError);
+            return Err(contract_err(
+                e,
+                ContractError::NegativeAmountError,
+                "negative amount is not allowed",
+            ));
         }
         let from_id = from.get_identifier(&e)?;
         let mut args = Vec::new(e)?;
@@ -207,12 +225,12 @@ impl TokenTrait for Token {
     }
 
     // Metering: covered by components
-    fn balance(e: &Host, id: Identifier) -> Result<BigInt, Error> {
+    fn balance(e: &Host, id: Identifier) -> Result<BigInt, HostError> {
         read_balance(e, id)
     }
 
     // Metering: covered by components
-    fn is_frozen(e: &Host, id: Identifier) -> Result<bool, Error> {
+    fn is_frozen(e: &Host, id: Identifier) -> Result<bool, HostError> {
         read_state(&e, id)
     }
 
@@ -223,9 +241,13 @@ impl TokenTrait for Token {
         nonce: BigInt,
         to: Identifier,
         amount: BigInt,
-    ) -> Result<(), Error> {
+    ) -> Result<(), HostError> {
         if amount.compare(&BigInt::from_u64(e, 0)?)? == Ordering::Less {
-            return Err(Error::ContractError);
+            return Err(contract_err(
+                e,
+                ContractError::NegativeAmountError,
+                "negative amount is not allowed",
+            ));
         }
         let from_id = from.get_identifier(&e)?;
         let mut args = Vec::new(e)?;
@@ -247,9 +269,13 @@ impl TokenTrait for Token {
         from: Identifier,
         to: Identifier,
         amount: BigInt,
-    ) -> Result<(), Error> {
+    ) -> Result<(), HostError> {
         if amount.compare(&BigInt::from_u64(e, 0)?)? == Ordering::Less {
-            return Err(Error::ContractError);
+            return Err(contract_err(
+                e,
+                ContractError::NegativeAmountError,
+                "negative amount is not allowed",
+            ));
         }
         let spender_id = spender.get_identifier(&e)?;
         let mut args = Vec::new(e)?;
@@ -272,9 +298,13 @@ impl TokenTrait for Token {
         nonce: BigInt,
         from: Identifier,
         amount: BigInt,
-    ) -> Result<(), Error> {
+    ) -> Result<(), HostError> {
         if amount.compare(&BigInt::from_u64(e, 0)?)? == Ordering::Less {
-            return Err(Error::ContractError);
+            return Err(contract_err(
+                e,
+                ContractError::NegativeAmountError,
+                "negative amount is not allowed",
+            ));
         }
         check_admin(&e, &admin)?;
         let mut args = Vec::new(e)?;
@@ -288,7 +318,7 @@ impl TokenTrait for Token {
     }
 
     // Metering: covered by components
-    fn freeze(e: &Host, admin: Signature, nonce: BigInt, id: Identifier) -> Result<(), Error> {
+    fn freeze(e: &Host, admin: Signature, nonce: BigInt, id: Identifier) -> Result<(), HostError> {
         check_admin(&e, &admin)?;
         let mut args = Vec::new(e)?;
         args.push(admin.get_identifier(&e)?)?;
@@ -306,9 +336,13 @@ impl TokenTrait for Token {
         nonce: BigInt,
         to: Identifier,
         amount: BigInt,
-    ) -> Result<(), Error> {
+    ) -> Result<(), HostError> {
         if amount.compare(&BigInt::from_u64(e, 0)?)? == Ordering::Less {
-            return Err(Error::ContractError);
+            return Err(contract_err(
+                e,
+                ContractError::NegativeAmountError,
+                "negative amount is not allowed",
+            ));
         }
         check_admin(&e, &admin)?;
         let mut args = Vec::new(e)?;
@@ -327,7 +361,7 @@ impl TokenTrait for Token {
         admin: Signature,
         nonce: BigInt,
         new_admin: Identifier,
-    ) -> Result<(), Error> {
+    ) -> Result<(), HostError> {
         check_admin(&e, &admin)?;
         let mut args = Vec::new(e)?;
         args.push(admin.get_identifier(&e)?)?;
@@ -339,7 +373,12 @@ impl TokenTrait for Token {
     }
 
     // Metering: covered by components
-    fn unfreeze(e: &Host, admin: Signature, nonce: BigInt, id: Identifier) -> Result<(), Error> {
+    fn unfreeze(
+        e: &Host,
+        admin: Signature,
+        nonce: BigInt,
+        id: Identifier,
+    ) -> Result<(), HostError> {
         check_admin(&e, &admin)?;
         let mut args = Vec::new(e)?;
         args.push(admin.get_identifier(&e)?)?;
@@ -350,22 +389,26 @@ impl TokenTrait for Token {
         Ok(())
     }
 
-    fn decimals(e: &Host) -> Result<u32, Error> {
+    fn decimals(e: &Host) -> Result<u32, HostError> {
         read_decimal(&e)
     }
 
-    fn name(e: &Host) -> Result<Bytes, Error> {
+    fn name(e: &Host) -> Result<Bytes, HostError> {
         read_name(&e)
     }
 
-    fn symbol(e: &Host) -> Result<Bytes, Error> {
+    fn symbol(e: &Host) -> Result<Bytes, HostError> {
         read_symbol(&e)
     }
 
     // Metering: covered by components
-    fn import(e: &Host, id: Signature, nonce: BigInt, amount: i64) -> Result<(), Error> {
+    fn import(e: &Host, id: Signature, nonce: BigInt, amount: i64) -> Result<(), HostError> {
         if amount < 0 {
-            return Err(Error::ContractError);
+            return Err(contract_err(
+                e,
+                ContractError::NegativeAmountError,
+                "negative amount is not allowed",
+            ));
         }
 
         let account_id = id.get_account_id(e)?;
@@ -380,15 +423,24 @@ impl TokenTrait for Token {
         receive_balance(
             &e,
             Identifier::Account(account_id),
-            BigInt::from_u64(&e, amount.try_into().map_err(|_| Error::ContractError)?)?,
+            BigInt::from_u64(
+                &e,
+                amount.try_into().map_err(|_| {
+                    contract_err(e, ContractError::InternalError, "bad int conversion")
+                })?,
+            )?,
         )?;
         Ok(())
     }
 
     // Metering: covered by components
-    fn export(e: &Host, id: Signature, nonce: BigInt, amount: i64) -> Result<(), Error> {
+    fn export(e: &Host, id: Signature, nonce: BigInt, amount: i64) -> Result<(), HostError> {
         if amount < 0 {
-            return Err(Error::ContractError);
+            return Err(contract_err(
+                e,
+                ContractError::NegativeAmountError,
+                "negative amount is not allowed",
+            ));
         }
 
         let account_id = id.get_account_id(e)?;
@@ -403,7 +455,12 @@ impl TokenTrait for Token {
         spend_balance(
             &e,
             Identifier::Account(account_id),
-            BigInt::from_u64(&e, amount.try_into().map_err(|_| Error::ContractError)?)?,
+            BigInt::from_u64(
+                &e,
+                amount.try_into().map_err(|_| {
+                    contract_err(e, ContractError::InternalError, "bad int conversion")
+                })?,
+            )?,
         )?;
         Ok(())
     }

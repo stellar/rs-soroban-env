@@ -1,10 +1,12 @@
 use crate::host::Host;
 pub(crate) use crate::native_contract::base_types::{Bytes, BytesN, Map, Vec};
 use crate::native_contract::invoker::{invoker, Invoker};
-use crate::native_contract::token::error::Error;
+use crate::HostError;
 use soroban_env_common::xdr::AccountId;
 use soroban_env_common::{Symbol, TryIntoVal};
 use soroban_native_sdk_macros::contracttype;
+
+use super::error::{contract_err, ContractError};
 
 #[derive(Clone)]
 #[contracttype]
@@ -29,7 +31,7 @@ pub enum Signature {
 }
 
 impl Signature {
-    pub fn get_identifier(&self, env: &Host) -> Result<Identifier, Error> {
+    pub fn get_identifier(&self, env: &Host) -> Result<Identifier, HostError> {
         Ok(match self {
             Signature::Invoker => match invoker(env)? {
                 Invoker::Account(a) => Identifier::Account(a),
@@ -40,14 +42,22 @@ impl Signature {
         })
     }
 
-    pub fn get_account_id(&self, env: &Host) -> Result<AccountId, Error> {
+    pub fn get_account_id(&self, env: &Host) -> Result<AccountId, HostError> {
         match self {
             Signature::Account(acc) => Ok(acc.account_id.clone()),
             Signature::Invoker => match invoker(env)? {
                 Invoker::Account(a) => Ok(a),
-                Invoker::Contract(_) => Err(Error::ContractError),
+                Invoker::Contract(_) => Err(contract_err(
+                    env,
+                    ContractError::SignatureError,
+                    "signature doesn't belong to account",
+                )),
             },
-            _ => Err(Error::ContractError),
+            _ => Err(contract_err(
+                env,
+                ContractError::SignatureError,
+                "signature doesn't belong to account",
+            )),
         }
     }
 }

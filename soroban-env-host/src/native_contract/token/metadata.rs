@@ -1,33 +1,32 @@
-use crate::host::Host;
 use crate::native_contract::base_types::Bytes;
-use crate::native_contract::token::error::Error;
 use crate::native_contract::token::public_types::Metadata;
 use crate::native_contract::token::storage_types::DataKey;
+use crate::{host::Host, HostError};
 use soroban_env_common::{CheckedEnv, EnvBase, TryFromVal, TryIntoVal};
 
 // Metering: *mostly* covered by components.
-pub fn write_metadata(e: &Host, metadata: Metadata) -> Result<(), Error> {
+pub fn write_metadata(e: &Host, metadata: Metadata) -> Result<(), HostError> {
     let key = DataKey::Metadata;
     e.put_contract_data(key.try_into_val(e)?, metadata.try_into_val(e)?)?;
     Ok(())
 }
 
 // Metering: *mostly* covered by components.
-pub fn read_metadata(e: &Host) -> Result<Metadata, Error> {
+pub fn read_metadata(e: &Host) -> Result<Metadata, HostError> {
     let key = DataKey::Metadata;
     let rv = e.get_contract_data(key.try_into_val(e)?)?;
     Ok(rv.try_into_val(e)?)
 }
 
 // Metering: *mostly* covered by components.
-pub fn has_metadata(e: &Host) -> Result<bool, Error> {
+pub fn has_metadata(e: &Host) -> Result<bool, HostError> {
     let key = DataKey::Metadata;
     let rv = e.has_contract_data(key.try_into_val(e)?)?;
     Ok(rv.try_into()?)
 }
 
 // Metering: *mostly* covered by components. `bytes_new_from_slice` and `Bytes` not covered.
-pub fn read_name(e: &Host) -> Result<Bytes, Error> {
+pub fn read_name(e: &Host) -> Result<Bytes, HostError> {
     match read_metadata(e)? {
         Metadata::Token(token) => Ok(token.name),
         Metadata::Native => Ok(Bytes::try_from_val(e, e.bytes_new_from_slice(b"native")?)?),
@@ -55,7 +54,7 @@ pub fn read_name(e: &Host) -> Result<Bytes, Error> {
 }
 
 // Metering: *mostly* covered by components.`bytes_new_from_slice` and `Bytes` not covered.
-pub fn read_symbol(e: &Host) -> Result<Bytes, Error> {
+pub fn read_symbol(e: &Host) -> Result<Bytes, HostError> {
     match read_metadata(e)? {
         Metadata::Token(token) => Ok(token.symbol),
         Metadata::Native => Ok(Bytes::try_from_val(e, e.bytes_new_from_slice(b"native")?)?),
@@ -65,7 +64,7 @@ pub fn read_symbol(e: &Host) -> Result<Bytes, Error> {
 }
 
 // Metering: covered by components
-pub fn read_decimal(e: &Host) -> Result<u32, Error> {
+pub fn read_decimal(e: &Host) -> Result<u32, HostError> {
     match read_metadata(e)? {
         Metadata::Token(token) => Ok(token.decimals),
         Metadata::Native | Metadata::AlphaNum4(_) | Metadata::AlphaNum12(_) => Ok(7),
