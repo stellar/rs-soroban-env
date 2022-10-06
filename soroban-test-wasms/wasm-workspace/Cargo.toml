@@ -26,6 +26,7 @@ members = [
     "vec",
     "hostile",
     "complex",
+    "fannkuch"
 ]
 
 [patch.crates-io]
