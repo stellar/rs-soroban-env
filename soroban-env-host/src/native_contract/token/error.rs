@@ -1,4 +1,4 @@
-use crate::{events::DebugError, host::HostError, Host};
+use crate::{host::HostError, Host};
 use soroban_env_common::Status;
 
 #[derive(Debug)]
@@ -19,5 +19,5 @@ pub enum ContractError {
 }
 
 pub fn contract_err(host: &Host, err: ContractError, msg: &'static str) -> HostError {
-    host.err(DebugError::new(Status::from_contract_error(err as u32)).msg(msg))
+    host.err_status_msg(Status::from_contract_error(err as u32), msg)
 }
