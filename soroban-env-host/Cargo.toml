@@ -62,9 +62,5 @@ bench = true
 name = "calibrate_host_ops"
 path = "benches/calibrate_host_ops.rs"
 
-[[bin]]
-name = "run_contract"
-required-features = ["vm"]
-
 [package.metadata.docs.rs]
 all-features = true
