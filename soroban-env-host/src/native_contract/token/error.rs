@@ -10,11 +10,12 @@ pub enum ContractError {
     AuthenticationError = 5,
     NonceError = 6,
     SignatureError = 7,
+    AccountMissingError = 8,
 
-    NegativeAmountError = 8,
-    AllowanceError = 9,
-    BalanceError = 10,
-    BalanceFrozenError = 11,
+    NegativeAmountError = 9,
+    AllowanceError = 10,
+    BalanceError = 11,
+    BalanceFrozenError = 12,
 }
 
 impl From<ContractError> for Status {
