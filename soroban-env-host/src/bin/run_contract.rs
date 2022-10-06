@@ -8,7 +8,7 @@ pub fn main() {
     }
     println!("running function `main()` in contract {}", args[1]);
     let host = Host::default();
-    host.get_budget(|b| b.reset_unlimited());
+    host.with_budget(|b| b.reset_unlimited());
     let hash = xdr::Hash([0; 32]);
     let mut file = std::fs::File::open(args[1].as_str()).expect("file");
     let mut wasm_code: Vec<u8> = Vec::new();
@@ -24,14 +24,14 @@ pub fn main() {
     println!("function executed for {} usecs", dur_usecs);
     println!("budget measured inputs:");
     for i in budget::CostType::variants() {
-        let n = host.get_budget(|b| b.get_input(*i));
+        let n = host.with_budget(|b| b.get_input(*i));
         println!("    {:?}: {}", i, n);
     }
-    let cpu_insns = host.get_budget(|b| b.get_cpu_insns_count());
+    let cpu_insns = host.with_budget(|b| b.get_cpu_insns_count());
     println!("budget model calculated cpu insns: {}", cpu_insns);
     println!(
         "budget model calculated mem bytes: {}",
-        host.get_budget(|b| b.get_mem_bytes_count())
+        host.with_budget(|b| b.get_mem_bytes_count())
     );
     // a 1Ghz machine at 2 insns / cycle retires 2bn insns / sec, or 2000 insns / usec.
     let insn_per_usec = cpu_insns / dur_usecs;

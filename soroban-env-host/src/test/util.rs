@@ -37,7 +37,7 @@ impl Host {
     }
 
     pub(crate) fn test_budget(self, cpu: u64, mem: u64) -> Self {
-        self.get_budget(|budget| {
+        self.with_budget(|budget| {
             budget.reset_limits(cpu, mem); // something big but finite that we may exceed
             budget.reset_models();
         });
@@ -45,7 +45,7 @@ impl Host {
     }
 
     pub(crate) fn enable_model(self, ty: CostType) -> Self {
-        self.get_budget(|budget| {
+        self.with_budget(|budget| {
             budget
                 .0
                 .borrow_mut()

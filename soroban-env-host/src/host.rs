@@ -230,15 +230,19 @@ impl Host {
     /// Helper for mutating the [`Budget`] held in this [`Host`], either to
     /// allocate it on contract creation or to deplete it on callbacks from
     /// the VM or host functions.
-    pub fn get_budget<T, F>(&self, f: F) -> T
+    pub fn with_budget<T, F>(&self, f: F) -> T
     where
         F: FnOnce(Budget) -> T,
     {
         f(self.0.budget.clone())
     }
 
-    pub(crate) fn get_budget_ref(&self) -> &Budget {
+    pub(crate) fn budget_ref(&self) -> &Budget {
         &self.0.budget
+    }
+
+    pub(crate) fn budget_cloned(&self) -> Budget {
+        self.0.budget.clone()
     }
 
     pub fn charge_budget(&self, ty: CostType, input: u64) -> Result<(), HostError> {
@@ -2714,35 +2718,30 @@ impl VmCallerCheckedEnv for Host {
                 Ok((id_val, function_val))
             };
 
-        //TODO: The from_vec calls below are not metered yet
-        let mut outer = Vector::new();
+        let mut outer = MeteredVector::new(self.budget_cloned())?;
         for frame in frames.iter() {
             match frame {
                 #[cfg(feature = "vm")]
                 Frame::ContractVM(vm, function) => {
                     let vals = get_host_val_tuple(&vm.contract_id, &function)?;
-                    let inner =
-                        HostVec::from_vec(self.0.budget.clone(), im_rc::vector![vals.0, vals.1])?;
-                    outer.push_back(self.add_host_object(inner)?.into());
+                    let inner = MeteredVector::from_array(self.budget_cloned(), [vals.0, vals.1])?;
+                    outer.push_back(self.add_host_object(inner)?.into())?;
                 }
                 Frame::HostFunction(_) => (),
                 Frame::Token(id, function) => {
                     let vals = get_host_val_tuple(&id, &function)?;
-                    let inner =
-                        HostVec::from_vec(self.0.budget.clone(), im_rc::vector![vals.0, vals.1])?;
-                    outer.push_back(self.add_host_object(inner)?.into());
+                    let inner = MeteredVector::from_array(self.budget_cloned(), [vals.0, vals.1])?;
+                    outer.push_back(self.add_host_object(inner)?.into())?;
                 }
                 #[cfg(feature = "testutils")]
                 Frame::TestContract(id, function) => {
                     let vals = get_host_val_tuple(&id, &function)?;
-                    let inner =
-                        HostVec::from_vec(self.0.budget.clone(), im_rc::vector![vals.0, vals.1])?;
-                    outer.push_back(self.add_host_object(inner)?.into());
+                    let inner = MeteredVector::from_array(self.budget_cloned(), [vals.0, vals.1])?;
+                    outer.push_back(self.add_host_object(inner)?.into())?;
                 }
             }
         }
-        let res = HostVec::from_vec(self.0.budget.clone(), outer)?;
-        Ok(self.add_host_object(res)?.into())
+        Ok(self.add_host_object(outer)?.into())
     }
 
     fn fail_with_status(

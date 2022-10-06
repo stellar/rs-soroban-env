@@ -42,6 +42,14 @@ impl<A: Clone> MeteredVector<A> {
         })
     }
 
+    pub fn from_array<const N: usize>(budget: Budget, buf: [A; N]) -> Result<Self, HostError> {
+        let mut vec = Self::new(budget)?;
+        for v in buf {
+            vec.push_back(v)?;
+        }
+        Ok(vec)
+    }
+
     pub fn from_vec(budget: Budget, vec: Vector<A>) -> Result<Self, HostError> {
         budget.charge(CostType::ImVecNew, 1)?;
         Ok(MeteredVector { budget, vec })

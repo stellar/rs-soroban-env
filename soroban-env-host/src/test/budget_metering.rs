@@ -26,7 +26,7 @@ fn xdr_object_conversion() -> Result<(), HostError> {
     let scobj = ScObject::Map(scmap);
     host.to_host_obj(&scobj)?;
 
-    host.get_budget(|budget| {
+    host.with_budget(|budget| {
         assert_eq!(budget.get_input(CostType::ValXdrConv), 5);
         assert_eq!(budget.get_cpu_insns_count(), 50);
         assert_eq!(budget.get_mem_bytes_count(), 5);
@@ -52,7 +52,7 @@ fn vm_hostfn_invocation() -> Result<(), HostError> {
 
     // try_call
     host.try_call(obj.to_object(), sym.into(), args.clone().into())?;
-    host.get_budget(|budget| {
+    host.with_budget(|budget| {
         assert_eq!(budget.get_input(CostType::HostFunction), 2);
         assert_eq!(budget.get_cpu_insns_count(), 20);
         assert_eq!(budget.get_mem_bytes_count(), 2);
@@ -82,12 +82,12 @@ fn metered_xdr() -> Result<(), HostError> {
     )?;
     let mut w = Vec::<u8>::new();
     host.metered_write_xdr(&scmap, &mut w)?;
-    host.get_budget(|budget| {
+    host.with_budget(|budget| {
         assert_eq!(budget.get_input(CostType::ValSer), w.len() as u64);
     });
 
     host.metered_from_xdr::<ScMap>(w.as_slice())?;
-    host.get_budget(|budget| {
+    host.with_budget(|budget| {
         assert_eq!(budget.get_input(CostType::ValDeser), w.len() as u64);
     });
     Ok(())
@@ -135,7 +135,7 @@ fn map_insert_key_vec_obj() -> Result<(), HostError> {
         .enable_model(CostType::ImMapMutEntry);
     host.map_put(m, k1.into(), v1)?;
 
-    host.get_budget(|budget| {
+    host.with_budget(|budget| {
         // 4 = 1 visit map + 1 visit k1 + (obj_comp which needs to) 1 visit both k0 and k1
         assert_eq!(budget.get_input(CostType::VisitObject), 4);
         assert_eq!(budget.get_input(CostType::ImVecCmp), 2); // the shorter vec len
