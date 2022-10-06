@@ -1,6 +1,6 @@
 [package]
 name = "soroban-test-wasms"
-version = "0.0.5"
+version = "0.0.6"
 description = "crate full of precompiled test WASM binaries for soroban -- for use in other tests, do not publish"
 edition = "2021"
 publish = false
