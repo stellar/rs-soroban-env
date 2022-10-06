@@ -1,4 +1,3 @@
-use crate::{host::HostError, Host};
 use soroban_env_common::Status;
 
 #[derive(Debug)]
@@ -18,6 +17,8 @@ pub enum ContractError {
     BalanceFrozenError = 11,
 }
 
-pub fn contract_err(host: &Host, err: ContractError, msg: &'static str) -> HostError {
-    host.err_status_msg(Status::from_contract_error(err as u32), msg)
+impl From<ContractError> for Status {
+    fn from(err: ContractError) -> Self {
+        Status::from_contract_error(err as u32)
+    }
 }

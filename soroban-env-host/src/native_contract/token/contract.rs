@@ -20,7 +20,7 @@ use soroban_env_common::xdr::Asset;
 use soroban_env_common::{CheckedEnv, EnvBase, Symbol, TryFromVal, TryIntoVal};
 use soroban_native_sdk_macros::contractimpl;
 
-use super::error::{contract_err, ContractError};
+use super::error::ContractError;
 use super::public_types::{AlphaNum12Metadata, AlphaNum4Metadata};
 
 pub trait TokenTrait {
@@ -116,8 +116,7 @@ pub struct Token;
 impl TokenTrait for Token {
     fn init_asset(e: &Host, asset_bytes: Bytes) -> Result<(), HostError> {
         if has_metadata(&e)? {
-            return Err(contract_err(
-                e,
+            return Err(e.err_status_msg(
                 ContractError::AlreadyInitializedError,
                 "token has been already initialized",
             ));
@@ -129,11 +128,7 @@ impl TokenTrait for Token {
         let expected_contract_id =
             BytesN::<32>::try_from_val(e, e.get_contract_id_from_asset(asset.clone())?)?;
         if curr_contract_id != expected_contract_id {
-            return Err(contract_err(
-                e,
-                ContractError::InternalError,
-                "bad id for asset contract",
-            ));
+            return Err(e.err_status_msg(ContractError::InternalError, "bad id for asset contract"));
         }
         match asset {
             Asset::Native => {
@@ -178,8 +173,7 @@ impl TokenTrait for Token {
 
     fn init(e: &Host, admin: Identifier, metadata: TokenMetadata) -> Result<(), HostError> {
         if has_metadata(&e)? {
-            return Err(contract_err(
-                e,
+            return Err(e.err_status_msg(
                 ContractError::AlreadyInitializedError,
                 "token has been already initialized",
             ));
@@ -207,8 +201,7 @@ impl TokenTrait for Token {
         amount: BigInt,
     ) -> Result<(), HostError> {
         if amount.compare(&BigInt::from_u64(e, 0)?)? == Ordering::Less {
-            return Err(contract_err(
-                e,
+            return Err(e.err_status_msg(
                 ContractError::NegativeAmountError,
                 "negative amount is not allowed",
             ));
@@ -243,8 +236,7 @@ impl TokenTrait for Token {
         amount: BigInt,
     ) -> Result<(), HostError> {
         if amount.compare(&BigInt::from_u64(e, 0)?)? == Ordering::Less {
-            return Err(contract_err(
-                e,
+            return Err(e.err_status_msg(
                 ContractError::NegativeAmountError,
                 "negative amount is not allowed",
             ));
@@ -271,8 +263,7 @@ impl TokenTrait for Token {
         amount: BigInt,
     ) -> Result<(), HostError> {
         if amount.compare(&BigInt::from_u64(e, 0)?)? == Ordering::Less {
-            return Err(contract_err(
-                e,
+            return Err(e.err_status_msg(
                 ContractError::NegativeAmountError,
                 "negative amount is not allowed",
             ));
@@ -300,8 +291,7 @@ impl TokenTrait for Token {
         amount: BigInt,
     ) -> Result<(), HostError> {
         if amount.compare(&BigInt::from_u64(e, 0)?)? == Ordering::Less {
-            return Err(contract_err(
-                e,
+            return Err(e.err_status_msg(
                 ContractError::NegativeAmountError,
                 "negative amount is not allowed",
             ));
@@ -338,8 +328,7 @@ impl TokenTrait for Token {
         amount: BigInt,
     ) -> Result<(), HostError> {
         if amount.compare(&BigInt::from_u64(e, 0)?)? == Ordering::Less {
-            return Err(contract_err(
-                e,
+            return Err(e.err_status_msg(
                 ContractError::NegativeAmountError,
                 "negative amount is not allowed",
             ));
@@ -404,8 +393,7 @@ impl TokenTrait for Token {
     // Metering: covered by components
     fn import(e: &Host, id: Signature, nonce: BigInt, amount: i64) -> Result<(), HostError> {
         if amount < 0 {
-            return Err(contract_err(
-                e,
+            return Err(e.err_status_msg(
                 ContractError::NegativeAmountError,
                 "negative amount is not allowed",
             ));
@@ -426,7 +414,7 @@ impl TokenTrait for Token {
             BigInt::from_u64(
                 &e,
                 amount.try_into().map_err(|_| {
-                    contract_err(e, ContractError::InternalError, "bad int conversion")
+                    e.err_status_msg(ContractError::InternalError, "bad int conversion")
                 })?,
             )?,
         )?;
@@ -436,8 +424,7 @@ impl TokenTrait for Token {
     // Metering: covered by components
     fn export(e: &Host, id: Signature, nonce: BigInt, amount: i64) -> Result<(), HostError> {
         if amount < 0 {
-            return Err(contract_err(
-                e,
+            return Err(e.err_status_msg(
                 ContractError::NegativeAmountError,
                 "negative amount is not allowed",
             ));
@@ -458,7 +445,7 @@ impl TokenTrait for Token {
             BigInt::from_u64(
                 &e,
                 amount.try_into().map_err(|_| {
-                    contract_err(e, ContractError::InternalError, "bad int conversion")
+                    e.err_status_msg(ContractError::InternalError, "bad int conversion")
                 })?,
             )?,
         )?;

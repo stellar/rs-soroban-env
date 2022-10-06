@@ -6,7 +6,7 @@ use crate::HostError;
 use core::cmp::Ordering;
 use soroban_env_common::{CheckedEnv, TryIntoVal};
 
-use super::error::{contract_err, ContractError};
+use super::error::ContractError;
 
 // Metering: covered by components
 pub fn read_allowance(
@@ -43,8 +43,7 @@ pub fn spend_allowance(
 ) -> Result<(), HostError> {
     let allowance = read_allowance(e, from.clone(), spender.clone())?;
     if allowance.compare(&amount)? == Ordering::Less {
-        Err(contract_err(
-            e,
+        Err(e.err_status_msg(
             ContractError::AllowanceError,
             "not enough allowance to spend",
         ))

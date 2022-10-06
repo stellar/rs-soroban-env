@@ -6,7 +6,7 @@ use soroban_env_common::xdr::AccountId;
 use soroban_env_common::{Symbol, TryIntoVal};
 use soroban_native_sdk_macros::contracttype;
 
-use super::error::{contract_err, ContractError};
+use super::error::ContractError;
 
 #[derive(Clone)]
 #[contracttype]
@@ -47,14 +47,12 @@ impl Signature {
             Signature::Account(acc) => Ok(acc.account_id.clone()),
             Signature::Invoker => match invoker(env)? {
                 Invoker::Account(a) => Ok(a),
-                Invoker::Contract(_) => Err(contract_err(
-                    env,
+                Invoker::Contract(_) => Err(env.err_status_msg(
                     ContractError::SignatureError,
                     "signature doesn't belong to account",
                 )),
             },
-            _ => Err(contract_err(
-                env,
+            _ => Err(env.err_status_msg(
                 ContractError::SignatureError,
                 "signature doesn't belong to account",
             )),

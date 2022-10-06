@@ -4,7 +4,7 @@ use crate::native_contract::token::storage_types::DataKey;
 use crate::HostError;
 use soroban_env_common::{CheckedEnv, TryFromVal, TryIntoVal};
 
-use super::error::{contract_err, ContractError};
+use super::error::ContractError;
 
 // Metering: covered by components
 fn read_administrator(e: &Host) -> Result<Identifier, HostError> {
@@ -26,8 +26,7 @@ pub fn check_admin(e: &Host, auth: &Signature) -> Result<(), HostError> {
     let id = auth.get_identifier(e)?;
 
     if id != admin {
-        Err(contract_err(
-            e,
+        Err(e.err_status_msg(
             ContractError::UnauthorizedError,
             "identifer is not an admin",
         ))

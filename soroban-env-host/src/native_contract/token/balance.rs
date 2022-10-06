@@ -8,7 +8,7 @@ use core::cmp::Ordering;
 use soroban_env_common::xdr::AccountId;
 use soroban_env_common::{CheckedEnv, TryIntoVal};
 
-use super::error::{contract_err, ContractError};
+use super::error::ContractError;
 
 // Metering: *mostly* covered by components. Not sure about `try_into_val`.
 pub fn read_balance(e: &Host, id: Identifier) -> Result<BigInt, HostError> {
@@ -32,11 +32,7 @@ pub fn receive_balance(e: &Host, id: Identifier, amount: BigInt) -> Result<(), H
     let balance = read_balance(e, id.clone())?;
     let is_frozen = read_state(e, id.clone())?;
     if is_frozen {
-        Err(contract_err(
-            e,
-            ContractError::BalanceFrozenError,
-            "balance is frozen",
-        ))
+        Err(e.err_status_msg(ContractError::BalanceFrozenError, "balance is frozen"))
     } else {
         write_balance(e, id, (balance + amount)?)
     }
@@ -47,17 +43,9 @@ pub fn spend_balance(e: &Host, id: Identifier, amount: BigInt) -> Result<(), Hos
     let balance = read_balance(e, id.clone())?;
     let is_frozen = read_state(e, id.clone())?;
     if is_frozen {
-        Err(contract_err(
-            e,
-            ContractError::BalanceFrozenError,
-            "balance is frozen",
-        ))
+        Err(e.err_status_msg(ContractError::BalanceFrozenError, "balance is frozen"))
     } else if balance.compare(&amount)? == Ordering::Less {
-        Err(contract_err(
-            e,
-            ContractError::BalanceError,
-            "balance is not sufficient",
-        ))
+        Err(e.err_status_msg(ContractError::BalanceError, "balance is not sufficient"))
     } else {
         write_balance(e, id, (balance - amount)?)
     }
@@ -84,8 +72,7 @@ pub fn write_state(e: &Host, id: Identifier, is_frozen: bool) -> Result<(), Host
 pub fn transfer_classic_balance(e: &Host, to_key: AccountId, amount: i64) -> Result<(), HostError> {
     match read_metadata(e)? {
         Metadata::Token(_) => {
-            return Err(contract_err(
-                e,
+            return Err(e.err_status_msg(
                 ContractError::OperationNotSupportedError,
                 "smart tokens don't support conversions to/from classic",
             ))
