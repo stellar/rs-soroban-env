@@ -3,7 +3,7 @@ pub(crate) use crate::native_contract::base_types::{Bytes, BytesN, Map, Vec};
 use crate::native_contract::invoker::{invoker, Invoker};
 use crate::native_contract::token::error::Error;
 use soroban_env_common::xdr::AccountId;
-use soroban_env_common::{Symbol, TryIntoVal};
+use soroban_env_common::{RawVal, Symbol, TryIntoVal};
 use soroban_native_sdk_macros::contracttype;
 
 #[derive(Clone)]
@@ -58,6 +58,17 @@ pub enum Identifier {
     Contract(BytesN<32>),
     Ed25519(BytesN<32>),
     Account(AccountId),
+}
+
+impl Identifier {
+    pub(crate) fn to_val(self, env: &Host) -> Result<RawVal, Error> {
+        match self {
+            Identifier::Contract(c) => c.try_into_val(env),
+            Identifier::Ed25519(e) => e.try_into_val(env),
+            Identifier::Account(a) => a.try_into_val(env),
+        }
+        .map_err(|e| e.into())
+    }
 }
 
 #[derive(Clone)]
