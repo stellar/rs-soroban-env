@@ -85,7 +85,7 @@ pub(crate) enum Frame {
     ContractVM(Rc<Vm>, Symbol),
     HostFunction(HostFunction),
     Token(Hash, Symbol),
-    #[cfg(feature = "testutils")]
+    #[cfg(any(test, feature = "testutils"))]
     TestContract(Hash, Symbol),
 }
 
@@ -126,11 +126,6 @@ pub(crate) struct HostImpl {
     // production hosts)
     #[cfg(feature = "testutils")]
     contracts: RefCell<std::collections::HashMap<Hash, Rc<dyn ContractFunctionSet>>>,
-    // Set this for mocking invoker in tests.
-    #[cfg(test)]
-    test_invoker_type: RefCell<Option<InvokerType>>,
-    #[cfg(test)]
-    test_invoker_contract: RefCell<Option<Vec<u8>>>,
 }
 // Host is a newtype on Rc<HostImpl> so we can impl Env for it below.
 #[derive(Default, Clone)]
@@ -191,25 +186,11 @@ impl Host {
             events: Default::default(),
             #[cfg(feature = "testutils")]
             contracts: Default::default(),
-            #[cfg(test)]
-            test_invoker_type: Default::default(),
-            #[cfg(test)]
-            test_invoker_contract: Default::default(),
         }))
     }
 
     pub fn set_source_account(&self, source_account: AccountId) {
         *self.0.source_account.borrow_mut() = Some(source_account);
-    }
-
-    #[cfg(test)]
-    pub(crate) fn set_invoker_type(&self, invoker: Option<InvokerType>) {
-        *self.0.test_invoker_type.borrow_mut() = invoker;
-    }
-
-    #[cfg(test)]
-    pub(crate) fn set_invoker_contract(&self, invoker_contract: Option<Vec<u8>>) {
-        *self.0.test_invoker_contract.borrow_mut() = invoker_contract;
     }
 
     pub fn source_account(&self) -> Result<AccountId, HostError> {
@@ -432,7 +413,7 @@ impl Host {
                 Err(self.err_general("Host function context has no contract ID"))
             }
             Frame::Token(id, _) => id.metered_clone(&self.0.budget),
-            #[cfg(feature = "testutils")]
+            #[cfg(any(test, feature = "testutils"))]
             Frame::TestContract(id, _) => Ok(id.clone()),
         })
     }
@@ -785,7 +766,7 @@ impl Host {
                     #[cfg(feature = "vm")]
                     Frame::ContractVM(vm, _) => &vm.contract_id,
                     Frame::Token(id, _) => id,
-                    #[cfg(feature = "testutils")]
+                    #[cfg(any(test, feature = "testutils"))]
                     Frame::TestContract(id, _) => id,
                     Frame::HostFunction(_) => continue,
                 };
@@ -1244,12 +1225,6 @@ impl VmCallerCheckedEnv for Host {
 
     // Metering: mostly free or already covered by components (e.g. err_general)
     fn get_invoker_type(&self, _vmcaller: &mut VmCaller<Host>) -> Result<u64, HostError> {
-        #[cfg(test)]
-        {
-            if let Some(invoker) = *self.0.test_invoker_type.borrow() {
-                return Ok(invoker as u64);
-            }
-        }
         let frames = self.0.context.borrow();
         // If the previous frame exists and is a contract, return its ID, otherwise return
         // the account invoking.
@@ -1260,7 +1235,7 @@ impl VmCallerCheckedEnv for Host {
                 Frame::ContractVM(_, _) => Ok(InvokerType::Contract),
                 Frame::HostFunction(_) => Ok(InvokerType::Account),
                 Frame::Token(id, _) => Ok(InvokerType::Contract),
-                #[cfg(feature = "testutils")]
+                #[cfg(any(test, feature = "testutils"))]
                 Frame::TestContract(_, _) => Ok(InvokerType::Contract),
             },
             // In tests contracts are executed with a single frame.
@@ -1284,12 +1259,6 @@ impl VmCallerCheckedEnv for Host {
 
     // Notes on metering: covered by the components
     fn get_invoking_contract(&self, _vmcaller: &mut VmCaller<Host>) -> Result<Object, HostError> {
-        #[cfg(test)]
-        {
-            if let Some(ref invoker) = *self.0.test_invoker_contract.borrow() {
-                return Ok(self.add_host_object(invoker.clone())?.into());
-            }
-        }
         let frames = self.0.context.borrow();
         // the previous frame must exist and must be a contract
         let hash = match frames.as_slice() {
@@ -1298,7 +1267,7 @@ impl VmCallerCheckedEnv for Host {
                 Frame::ContractVM(vm, _) => Ok(vm.contract_id.metered_clone(&self.0.budget)?),
                 Frame::HostFunction(_) => Err(self.err_general("invoker is not a contract")),
                 Frame::Token(id, _) => Ok(id.clone()),
-                #[cfg(feature = "testutils")]
+                #[cfg(any(test, feature = "testutils"))]
                 Frame::TestContract(id, _) => Ok(id.clone()), // no metering
             },
             _ => Err(self.err_general("no frames to derive the invoker from")),
@@ -2761,7 +2730,7 @@ impl VmCallerCheckedEnv for Host {
                         HostVec::from_vec(self.0.budget.clone(), im_rc::vector![vals.0, vals.1])?;
                     outer.push_back(self.add_host_object(inner)?.into());
                 }
-                #[cfg(feature = "testutils")]
+                #[cfg(any(test, feature = "testutils"))]
                 Frame::TestContract(id, function) => {
                     let vals = get_host_val_tuple(&id, &function)?;
                     let inner =

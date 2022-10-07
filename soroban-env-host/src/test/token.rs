@@ -2,6 +2,7 @@ use std::{convert::TryInto, rc::Rc};
 
 use crate::{
     budget::Budget,
+    host::Frame,
     host_vec,
     native_contract::{
         base_types::BigInt,
@@ -15,18 +16,18 @@ use crate::{
         },
     },
     storage::{test_storage::MockSnapshotSource, Storage},
-    Host, LedgerInfo,
+    Host, HostError, LedgerInfo,
 };
 use ed25519_dalek::Keypair;
 use soroban_env_common::{
     xdr::{
         AccountEntry, AccountEntryExt, AccountEntryExtensionV1, AccountEntryExtensionV1Ext,
         AccountEntryExtensionV2, AccountEntryExtensionV2Ext, AccountId, AlphaNum12, AlphaNum4,
-        Asset, AssetCode12, AssetCode4, LedgerEntry, LedgerEntryData, LedgerEntryExt, LedgerKey,
-        Liabilities, PublicKey, SequenceNumber, SignerKey, Thresholds, TrustLineEntry,
-        TrustLineEntryExt, TrustLineEntryV1, TrustLineEntryV1Ext, TrustLineFlags,
+        Asset, AssetCode12, AssetCode4, Hash, HostFunction, LedgerEntry, LedgerEntryData,
+        LedgerEntryExt, LedgerKey, Liabilities, PublicKey, SequenceNumber, SignerKey, Thresholds,
+        TrustLineEntry, TrustLineEntryExt, TrustLineEntryV1, TrustLineEntryV1Ext, TrustLineFlags,
     },
-    InvokerType,
+    RawVal,
 };
 use soroban_env_common::{CheckedEnv, EnvBase, Status, Symbol, TryFromVal, TryIntoVal};
 
@@ -239,6 +240,46 @@ impl TokenTest {
 
     fn convert_bytes(&self, bytes: &[u8]) -> Bytes {
         Bytes::try_from_val(&self.host, self.host.bytes_new_from_slice(bytes).unwrap()).unwrap()
+    }
+
+    fn run_from_contract<T, F>(
+        &self,
+        contract_id_bytes: &BytesN<32>,
+        f: F,
+    ) -> Result<RawVal, HostError>
+    where
+        T: Into<RawVal>,
+        F: FnOnce() -> Result<T, HostError>,
+    {
+        self.host.with_frame(
+            Frame::TestContract(
+                Hash(contract_id_bytes.to_array().unwrap()),
+                Symbol::from_str("foo"),
+            ),
+            || {
+                let res = f();
+                match res {
+                    Ok(v) => Ok(v.into()),
+                    Err(e) => Err(e),
+                }
+            },
+        )
+    }
+
+    fn run_from_account<T, F>(&self, account_id: AccountId, f: F) -> Result<RawVal, HostError>
+    where
+        T: Into<RawVal>,
+        F: FnOnce() -> Result<T, HostError>,
+    {
+        self.host.set_source_account(account_id);
+        self.host
+            .with_frame(Frame::HostFunction(HostFunction::InvokeContract), || {
+                let res = f();
+                match res {
+                    Ok(v) => Ok(v.into()),
+                    Err(e) => Err(e),
+                }
+            })
     }
 }
 
@@ -1222,87 +1263,90 @@ fn test_account_invoker_auth() {
     let acc_invoker = TestSigner::AccountInvoker;
     let token = test.default_smart_token_with_admin_id(admin_id.clone());
 
-    test.host.set_invoker_type(Some(InvokerType::Account));
-
     // Admin invoker can perform admin operation.
-    test.host.set_source_account(admin_acc.clone());
-    token
-        .mint(
+    test.run_from_account(admin_acc.clone(), || {
+        token.mint(
             &acc_invoker,
             BigInt::from_u64(&test.host, 0).unwrap(),
             user_id.clone(),
             BigInt::from_u64(&test.host, 1000).unwrap(),
         )
-        .unwrap();
+    })
+    .unwrap();
 
     // Non-zero nonce is not allowed for invoker.
-    assert!(token
-        .mint(
-            &acc_invoker,
-            BigInt::from_u64(&test.host, 1).unwrap(),
-            user_id.clone(),
-            BigInt::from_u64(&test.host, 1000).unwrap(),
-        )
+    assert!(test
+        .run_from_account(admin_acc.clone(), || {
+            token.mint(
+                &acc_invoker,
+                BigInt::from_u64(&test.host, 1).unwrap(),
+                user_id.clone(),
+                BigInt::from_u64(&test.host, 1000).unwrap(),
+            )
+        })
         .is_err());
 
     // Make another succesful call with 0 nonce.
-    token
-        .mint(
+    test.run_from_account(admin_acc.clone(), || {
+        token.mint(
             &acc_invoker,
             BigInt::from_u64(&test.host, 0).unwrap(),
             admin_id.clone(),
             BigInt::from_u64(&test.host, 2000).unwrap(),
         )
-        .unwrap();
+    })
+    .unwrap();
 
     assert_eq!(token.balance(user_id.clone()).unwrap().to_i64(), 1000);
     assert_eq!(token.balance(admin_id.clone()).unwrap().to_i64(), 2000);
 
-    // User invoker can't perform admin operation.
-    test.host.set_source_account(user_acc.clone());
-    assert!(token
-        .mint(
-            &acc_invoker,
-            BigInt::from_u64(&test.host, 0).unwrap(),
-            user_id.clone(),
-            BigInt::from_u64(&test.host, 1000).unwrap(),
-        )
+    // // User invoker can't perform admin operation.
+    // test.host.set_source_account(user_acc.clone());
+    assert!(test
+        .run_from_account(user_acc.clone(), || {
+            token.mint(
+                &acc_invoker,
+                BigInt::from_u64(&test.host, 0).unwrap(),
+                user_id.clone(),
+                BigInt::from_u64(&test.host, 1000).unwrap(),
+            )
+        })
         .is_err());
 
     // Perform transfers based on the invoker id.
-    token
-        .xfer(
+    test.run_from_account(user_acc.clone(), || {
+        token.xfer(
             &acc_invoker,
             BigInt::from_u64(&test.host, 0).unwrap(),
             admin_id.clone(),
             BigInt::from_u64(&test.host, 500).unwrap(),
         )
-        .unwrap();
+    })
+    .unwrap();
 
-    test.host.set_source_account(admin_acc.clone());
-    token
-        .xfer(
+    test.run_from_account(admin_acc.clone(), || {
+        token.xfer(
             &acc_invoker,
             BigInt::from_u64(&test.host, 0).unwrap(),
             user_id.clone(),
             BigInt::from_u64(&test.host, 800).unwrap(),
         )
-        .unwrap();
+    })
+    .unwrap();
 
     assert_eq!(token.balance(user_id.clone()).unwrap().to_i64(), 1300);
     assert_eq!(token.balance(admin_id.clone()).unwrap().to_i64(), 1700);
 
     // Contract invoker can't perform unauthorized admin operation.
-    let contract_invoker = TestSigner::ContractInvoker;
-    test.host.set_invoker_type(Some(InvokerType::Contract));
-    test.host.set_invoker_contract(Some([0u8; 32].to_vec()));
-    assert!(token
-        .mint(
-            &contract_invoker,
-            BigInt::from_u64(&test.host, 0).unwrap(),
-            user_id.clone(),
-            BigInt::from_u64(&test.host, 1000).unwrap(),
-        )
+    assert!(test
+        .run_from_contract(&generate_bytes(&test.host), || {
+            token.mint(
+                &TestSigner::ContractInvoker,
+                BigInt::from_u64(&test.host, 0).unwrap(),
+                user_id.clone(),
+                BigInt::from_u64(&test.host, 1000).unwrap(),
+            )
+        })
         .is_err());
 }
 
@@ -1318,39 +1362,38 @@ fn test_contract_invoker_auth() {
 
     let token = test.default_smart_token_with_admin_id(admin_contract_id.clone());
 
-    test.host.set_invoker_type(Some(InvokerType::Contract));
-
-    // Admin invoker can perform admin operation.
-    test.host
-        .set_invoker_contract(Some(admin_contract_id_bytes.to_vec()));
-    token
-        .mint(
+    test.run_from_contract(&admin_contract_id_bytes, || {
+        token.mint(
             &contract_invoker,
             BigInt::from_u64(&test.host, 0).unwrap(),
             user_contract_id.clone(),
             BigInt::from_u64(&test.host, 1000).unwrap(),
         )
-        .unwrap();
+    })
+    .unwrap();
 
     // Non-zero nonce is not allowed for invoker.
-    assert!(token
-        .mint(
-            &contract_invoker,
-            BigInt::from_u64(&test.host, 1).unwrap(),
-            user_contract_id.clone(),
-            BigInt::from_u64(&test.host, 1000).unwrap(),
-        )
+    assert!(test
+        .run_from_contract(&admin_contract_id_bytes, || {
+            token.mint(
+                &contract_invoker,
+                BigInt::from_u64(&test.host, 1).unwrap(),
+                user_contract_id.clone(),
+                BigInt::from_u64(&test.host, 1000).unwrap(),
+            )
+        })
         .is_err());
 
     // Make another succesful call with 0 nonce.
-    token
-        .mint(
+    test.run_from_contract(&admin_contract_id_bytes, || {
+        token.mint(
             &contract_invoker,
             BigInt::from_u64(&test.host, 0).unwrap(),
             admin_contract_id.clone(),
             BigInt::from_u64(&test.host, 2000).unwrap(),
         )
-        .unwrap();
+    })
+    .unwrap();
 
     assert_eq!(
         token.balance(user_contract_id.clone()).unwrap().to_i64(),
@@ -1362,37 +1405,37 @@ fn test_contract_invoker_auth() {
     );
 
     // User contract invoker can't perform admin operation.
-    test.host
-        .set_invoker_contract(Some(user_contract_id_bytes.to_vec()));
-    assert!(token
-        .mint(
-            &contract_invoker,
-            BigInt::from_u64(&test.host, 0).unwrap(),
-            user_contract_id.clone(),
-            BigInt::from_u64(&test.host, 1000).unwrap(),
-        )
+    assert!(test
+        .run_from_contract(&user_contract_id_bytes, || {
+            token.mint(
+                &contract_invoker,
+                BigInt::from_u64(&test.host, 0).unwrap(),
+                user_contract_id.clone(),
+                BigInt::from_u64(&test.host, 1000).unwrap(),
+            )
+        })
         .is_err());
 
     // Perform transfers based on the invoker id.
-    token
-        .xfer(
+    test.run_from_contract(&user_contract_id_bytes, || {
+        token.xfer(
             &contract_invoker,
             BigInt::from_u64(&test.host, 0).unwrap(),
             admin_contract_id.clone(),
             BigInt::from_u64(&test.host, 500).unwrap(),
         )
-        .unwrap();
+    })
+    .unwrap();
 
-    test.host
-        .set_invoker_contract(Some(admin_contract_id_bytes.to_vec()));
-    token
-        .xfer(
+    test.run_from_contract(&admin_contract_id_bytes, || {
+        token.xfer(
             &contract_invoker,
             BigInt::from_u64(&test.host, 0).unwrap(),
             user_contract_id.clone(),
             BigInt::from_u64(&test.host, 800).unwrap(),
         )
-        .unwrap();
+    })
+    .unwrap();
 
     assert_eq!(
         token.balance(user_contract_id.clone()).unwrap().to_i64(),
@@ -1405,16 +1448,15 @@ fn test_contract_invoker_auth() {
 
     // Account invoker can't perform unauthorized admin operation.
     let acc_invoker = TestSigner::AccountInvoker;
-    test.host.set_invoker_type(Some(InvokerType::Account));
-    test.host
-        .set_source_account(signer_to_account_id(&test.host, &test.admin_key));
-    assert!(token
-        .mint(
-            &acc_invoker,
-            BigInt::from_u64(&test.host, 0).unwrap(),
-            user_contract_id.clone(),
-            BigInt::from_u64(&test.host, 1000).unwrap(),
-        )
+    assert!(test
+        .run_from_account(signer_to_account_id(&test.host, &test.admin_key), || {
+            token.mint(
+                &acc_invoker,
+                BigInt::from_u64(&test.host, 0).unwrap(),
+                user_contract_id.clone(),
+                BigInt::from_u64(&test.host, 1000).unwrap(),
+            )
+        })
         .is_err());
 }
 
