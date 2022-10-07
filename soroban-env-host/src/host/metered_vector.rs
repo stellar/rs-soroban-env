@@ -1,10 +1,11 @@
-use super::MeteredClone;
+use super::{MeteredClone, MeteredCmp};
 use crate::xdr::ScHostObjErrorCode;
 use crate::{
     budget::{Budget, CostType},
     HostError,
 };
 use im_rc::{vector::Iter, vector::IterMut, Vector};
+use std::cmp::{min, Ordering};
 use std::ops::RangeBounds;
 use std::rc::Rc;
 
@@ -25,6 +26,10 @@ impl<A> MeteredVector<A> {
     fn charge_immut_access(&self, x: u64) -> Result<(), HostError> {
         self.budget.charge(CostType::ImVecImmutEntry, x)
     }
+
+    fn charge_cmp(&self, x: u64) -> Result<(), HostError> {
+        self.budget.charge(CostType::ImVecCmp, x)
+    }
 }
 
 // TODO: this whole section can probably be done with macro
@@ -35,6 +40,14 @@ impl<A: Clone> MeteredVector<A> {
             budget,
             vec: Vector::new(),
         })
+    }
+
+    pub fn from_array<const N: usize>(budget: Budget, buf: [A; N]) -> Result<Self, HostError> {
+        let mut vec = Self::new(budget)?;
+        for v in buf {
+            vec.push_back(v)?;
+        }
+        Ok(vec)
     }
 
     pub fn from_vec(budget: Budget, vec: Vector<A>) -> Result<Self, HostError> {
@@ -207,15 +220,23 @@ impl<A: Clone + PartialEq> PartialEq for MeteredVector<A> {
 impl<A: Clone + Eq> Eq for MeteredVector<A> {}
 
 impl<A: Clone + PartialOrd> PartialOrd for MeteredVector<A> {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         assert!(Rc::ptr_eq(&self.budget.0, &other.budget.0));
         self.vec.partial_cmp(&other.vec)
     }
 }
 
 impl<A: Clone + Ord> Ord for MeteredVector<A> {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+    fn cmp(&self, other: &Self) -> Ordering {
         assert!(Rc::ptr_eq(&self.budget.0, &other.budget.0));
         self.vec.cmp(&other.vec)
+    }
+}
+
+impl<A: Clone + Ord> MeteredCmp for MeteredVector<A> {
+    fn metered_cmp(&self, other: &Self, budget: &Budget) -> Result<Ordering, HostError> {
+        assert!(Rc::ptr_eq(&self.budget.0, &other.budget.0));
+        self.charge_cmp(min(self.len(), other.len()) as u64)?;
+        Ok(self.vec.cmp(&other.vec))
     }
 }

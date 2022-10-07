@@ -1,4 +1,4 @@
-use super::MeteredClone;
+use super::{MeteredClone, MeteredCmp};
 use crate::{
     budget::{Budget, CostType},
     xdr::ScUnknownErrorCode,
@@ -9,7 +9,10 @@ use num_integer::Integer;
 use num_traits::{Pow, Zero};
 use num_traits::{Signed, ToPrimitive};
 use std::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Not, Rem, Shl, Shr, Sub};
-use std::{cmp, rc::Rc};
+use std::{
+    cmp::{max, min, Ordering},
+    rc::Rc,
+};
 
 pub(crate) struct MeteredBigInt {
     budget: Budget,
@@ -116,7 +119,7 @@ impl MeteredBigInt {
     }
 
     pub(crate) fn add(&self, other: &Self) -> Result<Self, HostError> {
-        self.charge_add_sub(cmp::max(self.bits(), other.bits()))?;
+        self.charge_add_sub(max(self.bits(), other.bits()))?;
         Ok(Self {
             budget: self.budget.clone(),
             num: (&self.num).add(&other.num),
@@ -124,7 +127,7 @@ impl MeteredBigInt {
     }
 
     pub(crate) fn sub(&self, other: &Self) -> Result<Self, HostError> {
-        self.charge_add_sub(cmp::max(self.bits(), other.bits()))?;
+        self.charge_add_sub(max(self.bits(), other.bits()))?;
         Ok(Self {
             budget: self.budget.clone(),
             num: (&self.num).sub(&other.num),
@@ -132,7 +135,7 @@ impl MeteredBigInt {
     }
 
     pub(crate) fn mul(&self, other: &Self) -> Result<Self, HostError> {
-        self.charge_mul(cmp::max(self.bits(), other.bits()))?;
+        self.charge_mul(max(self.bits(), other.bits()))?;
         Ok(Self {
             budget: self.budget.clone(),
             num: (&self.num).mul(&other.num),
@@ -141,7 +144,7 @@ impl MeteredBigInt {
 
     pub(crate) fn div(&self, other: &Self) -> Result<Self, HostError> {
         debug_assert!(!other.is_zero());
-        self.charge_div_rem(cmp::max(self.bits(), other.bits()))?;
+        self.charge_div_rem(max(self.bits(), other.bits()))?;
         Ok(Self {
             budget: self.budget.clone(),
             num: (&self.num).div(&other.num),
@@ -150,7 +153,7 @@ impl MeteredBigInt {
 
     pub(crate) fn rem(&self, other: &Self) -> Result<Self, HostError> {
         debug_assert!(!other.is_zero());
-        self.charge_div_rem(cmp::max(self.bits(), other.bits()))?;
+        self.charge_div_rem(max(self.bits(), other.bits()))?;
         Ok(Self {
             budget: self.budget.clone(),
             num: (&self.num).rem(&other.num),
@@ -158,7 +161,7 @@ impl MeteredBigInt {
     }
 
     pub(crate) fn bitand(&self, other: &Self) -> Result<Self, HostError> {
-        self.charge_bitwise_op(cmp::max(self.bits(), other.bits()))?;
+        self.charge_bitwise_op(max(self.bits(), other.bits()))?;
         Ok(Self {
             budget: self.budget.clone(),
             num: (&self.num).bitand(&other.num),
@@ -166,7 +169,7 @@ impl MeteredBigInt {
     }
 
     pub(crate) fn bitor(&self, other: &Self) -> Result<Self, HostError> {
-        self.charge_bitwise_op(cmp::max(self.bits(), other.bits()))?;
+        self.charge_bitwise_op(max(self.bits(), other.bits()))?;
         Ok(Self {
             budget: self.budget.clone(),
             num: (&self.num).bitor(&other.num),
@@ -174,7 +177,7 @@ impl MeteredBigInt {
     }
 
     pub(crate) fn bitxor(&self, other: &Self) -> Result<Self, HostError> {
-        self.charge_bitwise_op(cmp::max(self.bits(), other.bits()))?;
+        self.charge_bitwise_op(max(self.bits(), other.bits()))?;
         Ok(Self {
             budget: self.budget.clone(),
             num: (&self.num).bitxor(&other.num),
@@ -238,7 +241,7 @@ impl MeteredBigInt {
     }
 
     pub(crate) fn gcd(&self, other: &Self) -> Result<Self, HostError> {
-        self.charge_gcd_lcm(cmp::max((&self.num).bits(), other.num.bits()))?;
+        self.charge_gcd_lcm(max((&self.num).bits(), other.num.bits()))?;
         Ok(Self {
             budget: self.budget.clone(),
             num: (&self.num).gcd(&other.num),
@@ -246,7 +249,7 @@ impl MeteredBigInt {
     }
 
     pub(crate) fn lcm(&self, other: &Self) -> Result<Self, HostError> {
-        self.charge_gcd_lcm(cmp::max((&self.num).bits(), other.num.bits()))?;
+        self.charge_gcd_lcm(max((&self.num).bits(), other.num.bits()))?;
         Ok(Self {
             budget: self.budget.clone(),
             num: (&self.num).lcm(&other.num),
@@ -363,15 +366,23 @@ impl PartialEq for MeteredBigInt {
 impl Eq for MeteredBigInt {}
 
 impl PartialOrd for MeteredBigInt {
-    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         debug_assert!(Rc::ptr_eq(&self.budget.0, &other.budget.0));
         self.num.partial_cmp(&other.num)
     }
 }
 
 impl Ord for MeteredBigInt {
-    fn cmp(&self, other: &Self) -> cmp::Ordering {
+    fn cmp(&self, other: &Self) -> Ordering {
         debug_assert!(Rc::ptr_eq(&self.budget.0, &other.budget.0));
         self.num.cmp(&other.num)
+    }
+}
+
+impl MeteredCmp for MeteredBigInt {
+    fn metered_cmp(&self, other: &Self, budget: &Budget) -> Result<Ordering, HostError> {
+        assert!(Rc::ptr_eq(&self.budget.0, &other.budget.0));
+        self.charge_cmp(min(self.bits(), other.bits()))?;
+        Ok(self.num.cmp(&other.num))
     }
 }
