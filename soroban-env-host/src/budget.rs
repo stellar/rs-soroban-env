@@ -142,6 +142,9 @@ pub enum CostType {
     HostContractCodeAllocCell = 61,
     // Cost of pushing a new `AccountId` object to the object storage.
     HostAccountIdAllocCell = 62,
+    ImMapCmp = 63,
+    ImVecCmp = 64,
+    BytesCmp = 65,
 }
 
 // TODO: add XDR support for iterating over all the elements of an enum
@@ -211,6 +214,9 @@ impl CostType {
             CostType::ChargeBudget,
             CostType::HostContractCodeAllocCell,
             CostType::HostAccountIdAllocCell,
+            CostType::ImMapCmp,
+            CostType::ImVecCmp,
+            CostType::BytesCmp,
         ];
         VARIANTS.iter()
     }
@@ -590,6 +596,9 @@ impl Default for BudgetImpl {
                 CostType::ChargeBudget => cpu.const_param = 50,
                 CostType::HostContractCodeAllocCell => cpu.lin_param = 10,
                 CostType::HostAccountIdAllocCell => cpu.lin_param = 320,
+                CostType::ImMapCmp => cpu.lin_param = 10,
+                CostType::ImVecCmp => cpu.lin_param = 10,
+                CostType::BytesCmp => cpu.lin_param = 10,
             }
 
             let mem = b.mem_bytes.get_cost_model_mut(*ct);
@@ -649,6 +658,9 @@ impl Default for BudgetImpl {
                 CostType::CallArgsUnpack | CostType::ChargeBudget => (),
                 CostType::HostContractCodeAllocCell => mem.lin_param = 1,
                 CostType::HostAccountIdAllocCell => mem.lin_param = 32,
+                CostType::ImMapCmp => mem.lin_param = 1,
+                CostType::ImVecCmp => mem.lin_param = 1,
+                CostType::BytesCmp => mem.lin_param = 1,
             }
         }
 
