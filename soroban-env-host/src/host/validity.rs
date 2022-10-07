@@ -82,6 +82,7 @@ impl Host {
     }
 
     // Metering: covered by components
+    // TODO: the validation is incomplete. Need to further restrict Map, Vec sizes.
     pub(crate) fn validate_event_topic(&self, topic: RawVal) -> Result<(), HostError> {
         if topic.is_u63() {
             Ok(())
