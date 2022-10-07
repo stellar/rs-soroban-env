@@ -1,8 +1,8 @@
 use std::ops::Range;
 
-use crate::events::DebugError;
+use crate::events::{DebugError, TOPIC_BYTES_LENGTH_LIMIT};
 use crate::xdr::{ScHostFnErrorCode, ScHostObjErrorCode};
-use crate::{Host, HostError, RawVal};
+use crate::{host_object::HostObject, Host, HostError, RawVal, Tag};
 
 impl Host {
     // Notes on metering: free
@@ -79,5 +79,40 @@ impl Host {
             self.err_status_msg(ScHostFnErrorCode::InputArgsInvalid, "u32 overflow")
         })?;
         self.valid_range_from_start_end_bound(start, end, bound)
+    }
+
+    // Metering: covered by components
+    pub(crate) fn validate_event_topic(&self, topic: RawVal) -> Result<(), HostError> {
+        if topic.is_u63() {
+            Ok(())
+        } else {
+            match topic.get_tag() {
+                Tag::Object => {
+                    unsafe {
+                        self.unchecked_visit_val_obj(topic, |ob| {
+                            match ob {
+                                None => Err(self.err_status(ScHostObjErrorCode::UnknownReference)),
+                                Some(ho) => match ho {
+                                    HostObject::ContractCode(_) => {
+                                        Err(self.err_status(ScHostObjErrorCode::UnexpectedType))
+                                    }
+                                    HostObject::Bytes(b) => {
+                                        if b.len() > TOPIC_BYTES_LENGTH_LIMIT {
+                                            // TODO: use more event-specific error codes than `UnexpectedType`.
+                                            // Something like "topic bytes exceeds length limit"
+                                            Err(self.err_status(ScHostObjErrorCode::UnexpectedType))
+                                        } else {
+                                            Ok(())
+                                        }
+                                    }
+                                    _ => Ok(()),
+                                },
+                            }
+                        })
+                    }
+                }
+                _ => Ok(()),
+            }
+        }
     }
 }
