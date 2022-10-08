@@ -3,7 +3,7 @@ use crate::native_contract::base_types::BigInt;
 use crate::native_contract::token::metadata::read_metadata;
 use crate::native_contract::token::public_types::{Identifier, Metadata};
 use crate::native_contract::token::storage_types::DataKey;
-use crate::HostError;
+use crate::{err, HostError};
 use core::cmp::Ordering;
 use soroban_env_common::xdr::{
     AccountEntryExt, AccountEntryExtensionV1Ext, AccountId, LedgerEntryData, TrustLineAsset,
@@ -48,7 +48,13 @@ pub fn spend_balance(e: &Host, id: Identifier, amount: BigInt) -> Result<(), Hos
     if is_frozen {
         Err(e.err_status_msg(ContractError::BalanceFrozenError, "balance is frozen"))
     } else if balance.compare(&amount)? == Ordering::Less {
-        Err(e.err_status_msg(ContractError::BalanceError, "balance is not sufficient"))
+        Err(err!(
+            e,
+            ContractError::BalanceError,
+            "balance is not sufficient to spend: {} < {}",
+            balance,
+            amount
+        ))
     } else {
         write_balance(e, id, (balance - amount)?)
     }
@@ -99,13 +105,18 @@ pub fn transfer_classic_balance(e: &Host, to_key: AccountId, amount: i64) -> Res
 
 // Metering: *mostly* covered by components. The arithmetics are free.
 fn transfer_account_balance(e: &Host, account_id: AccountId, amount: i64) -> Result<(), HostError> {
-    let lk = e.to_account_key(account_id);
+    let lk = e.to_account_key(account_id.clone());
 
     e.with_mut_storage(|storage| {
         let mut le = storage.get(&lk)?;
         let ae = match &mut le.data {
             LedgerEntryData::Account(ae) => Ok(ae),
-            _ => Err(e.err_status_msg(ContractError::AccountMissingError, "account doesn't exist")),
+            _ => Err(err!(
+                e,
+                ContractError::AccountMissingError,
+                "account '{}' doesn't exist",
+                account_id
+            )),
         }?;
         if ae.balance < 0 {
             return Err(
@@ -142,9 +153,13 @@ fn transfer_account_balance(e: &Host, account_id: AccountId, amount: i64) -> Res
             ae.balance = new_balance;
             storage.put(&lk, &le)
         } else {
-            Err(e.err_status_msg(
+            Err(err!(
+                e,
                 ContractError::BalanceError,
-                "resulting balance is not within the allowed range",
+                "resulting balance is not within the allowed range: {} < {} < {} does not hold",
+                min_balance,
+                new_balance,
+                max_balance
             ))
         }
     })
@@ -173,10 +188,7 @@ fn transfer_trustline_balance(
             );
         }
         if tl.flags & (TrustLineFlags::AuthorizedFlag as u32) == 0 {
-            return Err(e.err_status_msg(
-                ContractError::BalanceError,
-                "classic trustline isn't authorized",
-            ));
+            return Err(e.err_status_msg(ContractError::BalanceError, "trustline isn't authorized"));
         }
 
         let (min_balance, max_balance) = if let TrustLineEntryExt::V1(ext1) = &tl.ext {
@@ -206,9 +218,13 @@ fn transfer_trustline_balance(
             tl.balance = new_balance;
             storage.put(&lk, &le)
         } else {
-            Err(e.err_status_msg(
+            Err(err!(
+                e,
                 ContractError::BalanceError,
-                "resulting balance is not within the allowed range",
+                "resulting balance is not within the allowed range: {} < {} < {} does not hold",
+                min_balance,
+                new_balance,
+                max_balance
             ))
         }
     })

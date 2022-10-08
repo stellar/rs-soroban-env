@@ -2,7 +2,7 @@ use crate::host::Host;
 use crate::native_contract::base_types::BigInt;
 use crate::native_contract::token::public_types::Identifier;
 use crate::native_contract::token::storage_types::{AllowanceDataKey, DataKey};
-use crate::HostError;
+use crate::{HostError, err};
 use core::cmp::Ordering;
 use soroban_env_common::{CheckedEnv, TryIntoVal};
 
@@ -43,9 +43,12 @@ pub fn spend_allowance(
 ) -> Result<(), HostError> {
     let allowance = read_allowance(e, from.clone(), spender.clone())?;
     if allowance.compare(&amount)? == Ordering::Less {
-        Err(e.err_status_msg(
+        Err(err!(
+            e,
             ContractError::AllowanceError,
-            "not enough allowance to spend",
+            "not enough allowance to spend: {} < {}",
+            allowance,
+            amount
         ))
     } else {
         write_allowance(e, from, spender, (allowance - amount)?)
