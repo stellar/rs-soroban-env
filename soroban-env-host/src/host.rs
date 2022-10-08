@@ -823,7 +823,8 @@ impl Host {
                             .iter()
                             .map(|scv| self.to_host_val(scv).map(|hv| hv.val))
                             .collect::<Result<Vec<RawVal>, HostError>>()?;
-                        // doesn't matter what `reentry` flag is passed, `HostFunction` must be the first frame
+                        // since the `HostFunction` frame must be the bottom of the call stack,
+                        // reentry is irrelevant, we always pass in `allow_reentry = false`.
                         self.call_n(object, symbol, &args[..], false)
                     })
                 } else {

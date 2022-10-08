@@ -447,13 +447,30 @@ impl Budget {
         self.0.borrow().mem_bytes.get_count()
     }
 
+    pub fn reset_default(&self) {
+        *self.0.borrow_mut() = BudgetImpl::default()
+    }
+
     pub fn reset_unlimited(&self) {
+        self.reset_unlimited_cpu();
+        self.reset_unlimited_mem();
+    }
+
+    pub fn reset_unlimited_cpu(&self) {
         self.mut_budget(|mut b| {
             b.cpu_insns.reset(u64::MAX);
-            b.mem_bytes.reset(u64::MAX);
             Ok(())
         })
-        .unwrap(); // impossible to panic
+        .unwrap(); // panic means multiple-mut-borrow bug
+        self.reset_inputs()
+    }
+
+    pub fn reset_unlimited_mem(&self) {
+        self.mut_budget(|mut b| {
+            b.cpu_insns.reset(u64::MAX);
+            Ok(())
+        })
+        .unwrap(); // panic means multiple-mut-borrow bug
         self.reset_inputs()
     }
 
