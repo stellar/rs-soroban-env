@@ -20,36 +20,36 @@ fn hostile_functions_all_trap() -> Result<(), HostError> {
         ScVmErrorCode::TrapCpuLimitExceeded
     ));
 
-    host.get_budget(|b| b.reset_default());
+    host.with_budget(|b| b.reset_default());
     let res = vm.invoke_function(&host, "badack", &args);
     assert!(HostError::result_matches_err_status(
         res,
         ScVmErrorCode::TrapCpuLimitExceeded
     ));
 
-    host.get_budget(|b| b.reset_default());
+    host.with_budget(|b| b.reset_default());
     let res = vm.invoke_function(&host, "ssmash", &args);
     assert!(HostError::result_matches_err_status(
         res,
         ScVmErrorCode::TrapUnreachable
     ));
 
-    host.get_budget(|b| b.reset_default());
+    host.with_budget(|b| b.reset_default());
     let res = vm.invoke_function(&host, "oob1", &args);
     assert!(HostError::result_matches_err_status(
         res,
         ScVmErrorCode::TrapUnreachable
     ));
 
-    host.get_budget(|b| b.reset_default());
+    host.with_budget(|b| b.reset_default());
     let res = vm.invoke_function(&host, "oob2", &args);
     assert!(HostError::result_matches_err_status(
         res,
         ScVmErrorCode::TrapUnreachable
     ));
 
-    host.get_budget(|b| b.reset_default());
-    host.get_budget(|b| b.reset_unlimited_cpu());
+    host.with_budget(|b| b.reset_default());
+    host.with_budget(|b| b.reset_unlimited_cpu());
     let res = vm.invoke_function(&host, "objs", &args);
     assert!(HostError::result_matches_err_status(
         res,
