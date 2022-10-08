@@ -467,7 +467,7 @@ impl Budget {
 
     pub fn reset_unlimited_mem(&self) {
         self.mut_budget(|mut b| {
-            b.cpu_insns.reset(u64::MAX);
+            b.mem_bytes.reset(u64::MAX);
             Ok(())
         })
         .unwrap(); // panic means multiple-mut-borrow bug
