@@ -87,7 +87,7 @@ pub(crate) enum Frame {
     ContractVM(Rc<Vm>, Symbol),
     HostFunction(HostFunction),
     Token(Hash, Symbol),
-    #[cfg(feature = "testutils")]
+    #[cfg(any(test, feature = "testutils"))]
     TestContract(Hash, Symbol),
 }
 
@@ -419,7 +419,7 @@ impl Host {
                 Err(self.err_general("Host function context has no contract ID"))
             }
             Frame::Token(id, _) => id.metered_clone(&self.0.budget),
-            #[cfg(feature = "testutils")]
+            #[cfg(any(test, feature = "testutils"))]
             Frame::TestContract(id, _) => Ok(id.clone()),
         })
     }
@@ -772,7 +772,7 @@ impl Host {
                     #[cfg(feature = "vm")]
                     Frame::ContractVM(vm, _) => &vm.contract_id,
                     Frame::Token(id, _) => id,
-                    #[cfg(feature = "testutils")]
+                    #[cfg(any(test, feature = "testutils"))]
                     Frame::TestContract(id, _) => id,
                     Frame::HostFunction(_) => continue,
                 };
@@ -1242,7 +1242,7 @@ impl VmCallerCheckedEnv for Host {
                 Frame::ContractVM(_, _) => Ok(InvokerType::Contract),
                 Frame::HostFunction(_) => Ok(InvokerType::Account),
                 Frame::Token(id, _) => Ok(InvokerType::Contract),
-                #[cfg(feature = "testutils")]
+                #[cfg(any(test, feature = "testutils"))]
                 Frame::TestContract(_, _) => Ok(InvokerType::Contract),
             },
             // In tests contracts are executed with a single frame.
@@ -1274,7 +1274,7 @@ impl VmCallerCheckedEnv for Host {
                 Frame::ContractVM(vm, _) => Ok(vm.contract_id.metered_clone(&self.0.budget)?),
                 Frame::HostFunction(_) => Err(self.err_general("invoker is not a contract")),
                 Frame::Token(id, _) => Ok(id.clone()),
-                #[cfg(feature = "testutils")]
+                #[cfg(any(test, feature = "testutils"))]
                 Frame::TestContract(id, _) => Ok(id.clone()), // no metering
             },
             _ => Err(self.err_general("no frames to derive the invoker from")),
@@ -2733,7 +2733,7 @@ impl VmCallerCheckedEnv for Host {
                     let inner = MeteredVector::from_array(self.budget_cloned(), [vals.0, vals.1])?;
                     outer.push_back(self.add_host_object(inner)?.into())?;
                 }
-                #[cfg(feature = "testutils")]
+                #[cfg(any(test, feature = "testutils"))]
                 Frame::TestContract(id, function) => {
                     let vals = get_host_val_tuple(&id, &function)?;
                     let inner = MeteredVector::from_array(self.budget_cloned(), [vals.0, vals.1])?;
