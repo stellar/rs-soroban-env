@@ -11,6 +11,7 @@ use std::rc::Rc;
 #[cfg(all(test, feature = "vm"))]
 fn wasm_module_with_4n_insns(n: usize) -> Vec<u8> {
     use parity_wasm::builder;
+    use parity_wasm::elements::{CustomSection, Section};
     use parity_wasm::elements::{
         ExportEntry, Instruction,
         Instruction::{GetLocal, I64Add, I64Const, I64Mul},
@@ -38,6 +39,10 @@ fn wasm_module_with_4n_insns(n: usize) -> Vec<u8> {
         .build()
         .build()
         .with_export(ExportEntry::new("test".into(), Internal::Function(0)))
+        .with_section(Section::Custom(CustomSection::new(
+            "contractenvmetav0".to_string(),
+            soroban_env_common::meta::XDR.to_vec(),
+        )))
         .build();
     module.to_bytes().unwrap()
 }

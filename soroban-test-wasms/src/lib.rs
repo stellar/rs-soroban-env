@@ -56,5 +56,7 @@ pub const INVOKE_CONTRACT: &'static [u8] =
 pub const HOSTILE: &'static [u8] =
     include_bytes!("../wasm-workspace/opt/example_hostile.wasm").as_slice();
 pub const FIB: &'static [u8] = include_bytes!("../wasm-workspace/opt/example_fib.wasm").as_slice();
+pub const FANNKUCH: &'static [u8] =
+    include_bytes!("../wasm-workspace/opt/example_fannkuch.wasm").as_slice();
 pub const COMPLEX: &'static [u8] =
     include_bytes!("../wasm-workspace/opt/example_complex.wasm").as_slice();
