@@ -109,20 +109,20 @@ impl TryFrom<&[u8]> for Symbol {
 }
 
 #[cfg(feature = "std")]
-use stellar_xdr::VecM;
+use stellar_xdr::StringM;
 #[cfg(feature = "std")]
-impl<const N: u32> TryFrom<VecM<u8, N>> for Symbol {
+impl<const N: u32> TryFrom<StringM<N>> for Symbol {
     type Error = SymbolError;
 
-    fn try_from(v: VecM<u8, N>) -> Result<Self, Self::Error> {
+    fn try_from(v: StringM<N>) -> Result<Self, Self::Error> {
         v.as_slice().try_into()
     }
 }
 #[cfg(feature = "std")]
-impl<const N: u32> TryFrom<&VecM<u8, N>> for Symbol {
+impl<const N: u32> TryFrom<&StringM<N>> for Symbol {
     type Error = SymbolError;
 
-    fn try_from(v: &VecM<u8, N>) -> Result<Self, Self::Error> {
+    fn try_from(v: &StringM<N>) -> Result<Self, Self::Error> {
         v.as_slice().try_into()
     }
 }
