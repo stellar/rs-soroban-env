@@ -142,6 +142,9 @@ pub enum CostType {
     HostContractCodeAllocCell = 61,
     // Cost of pushing a new `AccountId` object to the object storage.
     HostAccountIdAllocCell = 62,
+    ImMapCmp = 63,
+    ImVecCmp = 64,
+    BytesCmp = 65,
 }
 
 // TODO: add XDR support for iterating over all the elements of an enum
@@ -211,6 +214,9 @@ impl CostType {
             CostType::ChargeBudget,
             CostType::HostContractCodeAllocCell,
             CostType::HostAccountIdAllocCell,
+            CostType::ImMapCmp,
+            CostType::ImVecCmp,
+            CostType::BytesCmp,
         ];
         VARIANTS.iter()
     }
@@ -441,13 +447,30 @@ impl Budget {
         self.0.borrow().mem_bytes.get_count()
     }
 
+    pub fn reset_default(&self) {
+        *self.0.borrow_mut() = BudgetImpl::default()
+    }
+
     pub fn reset_unlimited(&self) {
+        self.reset_unlimited_cpu();
+        self.reset_unlimited_mem();
+    }
+
+    pub fn reset_unlimited_cpu(&self) {
         self.mut_budget(|mut b| {
             b.cpu_insns.reset(u64::MAX);
+            Ok(())
+        })
+        .unwrap(); // panic means multiple-mut-borrow bug
+        self.reset_inputs()
+    }
+
+    pub fn reset_unlimited_mem(&self) {
+        self.mut_budget(|mut b| {
             b.mem_bytes.reset(u64::MAX);
             Ok(())
         })
-        .unwrap(); // impossible to panic
+        .unwrap(); // panic means multiple-mut-borrow bug
         self.reset_inputs()
     }
 
@@ -493,7 +516,9 @@ impl Default for BudgetImpl {
 
             let cpu = &mut b.cpu_insns.get_cost_model_mut(*ct);
             match ct {
-                CostType::WasmInsnExec => cpu.lin_param = 73,
+                // We might want to split wasm insns into separate cases; some are much more than
+                // this and some are much less.
+                CostType::WasmInsnExec => cpu.lin_param = 32,
                 CostType::WasmMemAlloc => cpu.lin_param = 1000,
                 CostType::HostEventDebug | CostType::HostEventContract | CostType::HostFunction => {
                     cpu.const_param = 1000
@@ -516,7 +541,7 @@ impl Default for BudgetImpl {
 
                 CostType::ComputeSha256Hash => {
                     cpu.const_param = 3000;
-                    cpu.lin_param = 100;
+                    cpu.lin_param = 50;
                 }
 
                 CostType::ComputeEd25519PubKey => cpu.const_param = 40_000,
@@ -536,8 +561,8 @@ impl Default for BudgetImpl {
                 CostType::ImVecMutEntry | CostType::ImVecImmutEntry => cpu.const_param = 300,
                 CostType::ScVecFromHostVec => cpu.lin_param = 10,
                 CostType::ScMapFromHostMap => cpu.lin_param = 10,
-                CostType::ScVecToHostVec => cpu.lin_param = 10,
-                CostType::ScMapToHostMap => cpu.lin_param = 10,
+                CostType::ScVecToHostVec => cpu.lin_param = 300,
+                CostType::ScMapToHostMap => cpu.lin_param = 2500,
                 CostType::GuardFrame => cpu.lin_param = 10,
                 CostType::CloneVm => cpu.const_param = 1000,
 
@@ -573,6 +598,9 @@ impl Default for BudgetImpl {
                 CostType::ChargeBudget => cpu.const_param = 50,
                 CostType::HostContractCodeAllocCell => cpu.lin_param = 10,
                 CostType::HostAccountIdAllocCell => cpu.lin_param = 320,
+                CostType::ImMapCmp => cpu.lin_param = 10,
+                CostType::ImVecCmp => cpu.lin_param = 10,
+                CostType::BytesCmp => cpu.lin_param = 10,
             }
 
             let mem = b.mem_bytes.get_cost_model_mut(*ct);
@@ -632,6 +660,9 @@ impl Default for BudgetImpl {
                 CostType::CallArgsUnpack | CostType::ChargeBudget => (),
                 CostType::HostContractCodeAllocCell => mem.lin_param = 1,
                 CostType::HostAccountIdAllocCell => mem.lin_param = 32,
+                CostType::ImMapCmp => mem.lin_param = 1,
+                CostType::ImVecCmp => mem.lin_param = 1,
+                CostType::BytesCmp => mem.lin_param = 1,
             }
         }
 

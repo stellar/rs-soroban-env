@@ -148,7 +148,7 @@ pub trait HostCostMeasurement {
 
     /// Return the _actual_ input chosen, rather than the hint passed to `new`.
     fn get_input(&self, host: &Host) -> u64 {
-        host.get_budget(|budget| budget.get_input(Self::COST_TYPE))
+        host.with_budget(|budget| budget.get_input(Self::COST_TYPE))
     }
 }
 
@@ -221,7 +221,7 @@ pub fn measure_costs<HCM: HostCostMeasurement>(
     eprintln!("\nMeasuring costs for CostType::{:?}\n", HCM::COST_TYPE);
     for input_hint in step_range {
         let host = Host::default();
-        host.get_budget(|budget| budget.reset_unlimited());
+        host.with_budget(|budget| budget.reset_unlimited());
         let mut m = HCM::new(&host, input_hint);
         let start = Instant::now();
         mem_tracker.0.store(0, Ordering::SeqCst);

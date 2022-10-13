@@ -1,10 +1,15 @@
+use super::{MeteredClone, MeteredCmp};
 use crate::{
     budget::{Budget, CostType},
     HostError,
 };
 use im_rc::ordmap::{ConsumingIter, Iter, Keys, Values};
 use im_rc::OrdMap;
-use std::{borrow::Borrow, rc::Rc};
+use std::{
+    borrow::Borrow,
+    cmp::{min, Ordering},
+    rc::Rc,
+};
 
 pub struct MeteredOrdMap<K, V> {
     pub(crate) budget: Budget,
@@ -12,16 +17,20 @@ pub struct MeteredOrdMap<K, V> {
 }
 
 impl<K, V> MeteredOrdMap<K, V> {
-    pub(crate) fn charge_new(&self) -> Result<(), HostError> {
+    fn charge_new(&self) -> Result<(), HostError> {
         self.budget.charge(CostType::ImMapNew, 1)
     }
 
-    pub(crate) fn charge_mut_access(&self, x: u64) -> Result<(), HostError> {
+    fn charge_mut_access(&self, x: u64) -> Result<(), HostError> {
         self.budget.charge(CostType::ImMapMutEntry, x)
     }
 
-    pub(crate) fn charge_immut_access(&self, x: u64) -> Result<(), HostError> {
+    fn charge_immut_access(&self, x: u64) -> Result<(), HostError> {
         self.budget.charge(CostType::ImMapImmutEntry, x)
+    }
+
+    fn charge_cmp(&self, x: u64) -> Result<(), HostError> {
+        self.budget.charge(CostType::ImMapCmp, x)
     }
 }
 
@@ -163,6 +172,14 @@ impl<K, V> Clone for MeteredOrdMap<K, V> {
     }
 }
 
+impl<K, V> MeteredClone for MeteredOrdMap<K, V> {
+    fn metered_clone(&self, budget: &Budget) -> Result<Self, HostError> {
+        assert!(Rc::ptr_eq(&self.budget.0, &budget.0));
+        self.charge_new()?;
+        Ok(self.clone())
+    }
+}
+
 impl<K, V> PartialEq for MeteredOrdMap<K, V>
 where
     K: Ord + PartialEq,
@@ -179,7 +196,7 @@ where
     K: Ord,
     V: PartialOrd,
 {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         assert!(Rc::ptr_eq(&self.budget.0, &other.budget.0));
         self.map.partial_cmp(&other.map)
     }
@@ -190,9 +207,21 @@ where
     K: Ord,
     V: Ord,
 {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+    fn cmp(&self, other: &Self) -> Ordering {
         assert!(Rc::ptr_eq(&self.budget.0, &other.budget.0));
         self.map.cmp(&other.map)
+    }
+}
+
+impl<K, V> MeteredCmp for MeteredOrdMap<K, V>
+where
+    K: Ord + Clone,
+    V: Ord + Clone,
+{
+    fn metered_cmp(&self, other: &Self, budget: &Budget) -> Result<Ordering, HostError> {
+        assert!(Rc::ptr_eq(&self.budget.0, &other.budget.0));
+        self.charge_cmp(min(self.len(), other.len()) as u64)?;
+        Ok(self.map.cmp(&other.map))
     }
 }
 

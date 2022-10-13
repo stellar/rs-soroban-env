@@ -144,7 +144,7 @@ impl TokenTrait for Token {
             Asset::CreditAlphanum4(asset4) => {
                 write_administrator(
                     &e,
-                    Identifier::Account(asset4.issuer.metered_clone(e.get_budget_ref())?),
+                    Identifier::Account(asset4.issuer.metered_clone(e.budget_ref())?),
                 )?;
                 write_metadata(
                     &e,
@@ -160,7 +160,7 @@ impl TokenTrait for Token {
             Asset::CreditAlphanum12(asset12) => {
                 write_administrator(
                     &e,
-                    Identifier::Account(asset12.issuer.metered_clone(e.get_budget_ref())?),
+                    Identifier::Account(asset12.issuer.metered_clone(e.budget_ref())?),
                 )?;
                 write_metadata(
                     &e,
@@ -425,7 +425,7 @@ impl TokenTrait for Token {
         args.push(amount.clone())?;
         check_auth(&e, id, nonce, Symbol::from_str("import"), args)?;
 
-        transfer_classic_balance(e, account_id.metered_clone(e.get_budget_ref())?, -amount)?;
+        transfer_classic_balance(e, account_id.metered_clone(e.budget_ref())?, -amount)?;
         receive_balance(
             &e,
             Identifier::Account(account_id),
@@ -458,7 +458,7 @@ impl TokenTrait for Token {
         args.push(amount.clone())?;
         check_auth(&e, id, nonce, Symbol::from_str("export"), args)?;
 
-        transfer_classic_balance(e, account_id.metered_clone(e.get_budget_ref())?, amount)?;
+        transfer_classic_balance(e, account_id.metered_clone(e.budget_ref())?, amount)?;
         spend_balance(
             &e,
             Identifier::Account(account_id),

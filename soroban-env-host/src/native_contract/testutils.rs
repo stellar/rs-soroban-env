@@ -7,7 +7,7 @@ use crate::{
 use ed25519_dalek::{Keypair, Signer};
 use rand::{thread_rng, RngCore};
 use soroban_env_common::{
-    xdr::{AccountId, PublicKey},
+    xdr::{AccountId, PublicKey, Uint256},
     CheckedEnv,
 };
 use soroban_env_common::{EnvBase, RawVal, Symbol, TryFromVal, TryIntoVal};
@@ -30,10 +30,10 @@ impl HostVec {
 #[macro_export]
 macro_rules! host_vec {
     ($host:expr $(,)?) => {
-        HostVec::new($host)?
+        HostVec::new($host).unwrap()
     };
     ($host:expr, $($x:expr),+ $(,)?) => {
-        HostVec::from_array($host, &[$($x.try_into_val($host)?),+])?
+        HostVec::from_array($host, &[$($x.try_into_val($host).unwrap()),+]).unwrap()
     };
 }
 
@@ -63,17 +63,20 @@ pub(crate) fn signer_to_account_id(host: &Host, key: &Keypair) -> AccountId {
 }
 
 pub(crate) enum TestSigner<'a> {
+    ContractInvoker,
+    AccountInvoker,
     Ed25519(&'a Keypair),
     Account(AccountSigner<'a>),
 }
 
 pub(crate) struct AccountSigner<'a> {
-    account_id: AccountId,
-    signers: Vec<&'a Keypair>,
+    pub(crate) account_id: AccountId,
+    pub(crate) signers: Vec<&'a Keypair>,
 }
 
 impl<'a> TestSigner<'a> {
-    pub(crate) fn account(account_id: &AccountId, signers: Vec<&'a Keypair>) -> Self {
+    pub(crate) fn account(account_id: &AccountId, mut signers: Vec<&'a Keypair>) -> Self {
+        signers.sort_by_key(|k| k.public.as_bytes());
         TestSigner::Account(AccountSigner {
             account_id: account_id.clone(),
             signers,
@@ -82,6 +85,16 @@ impl<'a> TestSigner<'a> {
 
     pub(crate) fn get_identifier(&self, host: &Host) -> Identifier {
         match self {
+            TestSigner::ContractInvoker => {
+                // Use stub id to make this work in wrapped contract calls.
+                // The id shouldn't be used anywhere else.
+                Identifier::Contract(BytesN::<32>::from_slice(host, &[0; 32]).unwrap())
+            }
+            TestSigner::AccountInvoker => {
+                // Use stub id to make this work in wrapped contract calls.
+                // The id shouldn't be used anywhere else.
+                Identifier::Account(AccountId(PublicKey::PublicKeyTypeEd25519(Uint256([0; 32]))))
+            }
             TestSigner::Ed25519(key) => Identifier::Ed25519(signer_to_id_bytes(host, key)),
             TestSigner::Account(acc_signer) => Identifier::Account(acc_signer.account_id.clone()),
         }
@@ -108,6 +121,8 @@ pub(crate) fn sign_args(
     let payload = &msg_bytes[..];
 
     match signer {
+        TestSigner::ContractInvoker => Signature::Invoker,
+        TestSigner::AccountInvoker => Signature::Invoker,
         TestSigner::Ed25519(key) => Signature::Ed25519(sign_payload(host, key, payload)),
         TestSigner::Account(account_signer) => Signature::Account(AccountSignatures {
             account_id: account_signer.account_id.clone(),
