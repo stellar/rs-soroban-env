@@ -350,15 +350,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "escape8259"
-version = "0.5.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ba4f4911e3666fcd7826997b4745c8224295a6f3072f1418c3067b97a67557ee"
-dependencies = [
- "rustversion",
-]
-
-[[package]]
 name = "fnv"
 version = "1.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -794,12 +785,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7ef03e0a2b150c7a90d01faf6254c9c48a41e95fb2a8c2ac1c6f0d2b9aefc342"
 
 [[package]]
-name = "rustversion"
-version = "1.0.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "97477e48b4cf8603ad5f7aaf897467cf42ab4218a38ef76fb14c2d6773a6d6a8"
-
-[[package]]
 name = "ryu"
 version = "1.0.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1021,10 +1006,9 @@ checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 [[package]]
 name = "stellar-xdr"
 version = "0.0.6"
-source = "git+https://github.com/stellar/rs-stellar-xdr?rev=390f182a#390f182a283aa47e45c9b50f3de43bf0a6532cab"
+source = "git+https://github.com/stellar/rs-stellar-xdr?rev=3ba13687#3ba1368786bc222735b09b3f99c0c8e6a71c18ce"
 dependencies = [
  "base64",
- "escape8259",
  "hex",
  "serde",
  "serde_with",
