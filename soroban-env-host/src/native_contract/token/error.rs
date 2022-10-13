@@ -1,6 +1,7 @@
+use num_derive::FromPrimitive;
 use soroban_env_common::Status;
 
-#[derive(Debug)]
+#[derive(Debug, FromPrimitive, PartialEq, Eq)]
 pub enum ContractError {
     InternalError = 1,
     OperationNotSupportedError = 2,

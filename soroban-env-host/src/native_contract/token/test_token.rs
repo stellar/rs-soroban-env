@@ -47,7 +47,7 @@ impl<'a> TestToken<'a> {
     pub(crate) fn init(&self, admin: Identifier, metadata: TokenMetadata) -> Result<(), HostError> {
         Ok(self
             .host
-            .try_call(
+            .call(
                 self.id.clone().into(),
                 Symbol::from_str("init").into(),
                 host_vec![self.host, admin, metadata].into(),
@@ -58,7 +58,7 @@ impl<'a> TestToken<'a> {
     pub(crate) fn nonce(&self, id: Identifier) -> Result<BigInt, HostError> {
         Ok(self
             .host
-            .try_call(
+            .call(
                 self.id.clone().into(),
                 Symbol::from_str("nonce").into(),
                 host_vec![self.host, id].into(),
@@ -73,7 +73,7 @@ impl<'a> TestToken<'a> {
     ) -> Result<BigInt, HostError> {
         Ok(self
             .host
-            .try_call(
+            .call(
                 self.id.clone().into(),
                 Symbol::from_str("allowance").into(),
                 host_vec![self.host, from, spender].into(),
@@ -104,7 +104,7 @@ impl<'a> TestToken<'a> {
 
         Ok(self
             .host
-            .try_call(
+            .call(
                 self.id.clone().into(),
                 Symbol::from_str("approve").into(),
                 host_vec![self.host, signature, nonce, spender, amount].into(),
@@ -115,7 +115,7 @@ impl<'a> TestToken<'a> {
     pub(crate) fn balance(&self, id: Identifier) -> Result<BigInt, HostError> {
         Ok(self
             .host
-            .try_call(
+            .call(
                 self.id.clone().into(),
                 Symbol::from_str("balance").into(),
                 host_vec![self.host, id].into(),
@@ -146,7 +146,7 @@ impl<'a> TestToken<'a> {
 
         Ok(self
             .host
-            .try_call(
+            .call(
                 self.id.clone().into(),
                 Symbol::from_str("xfer").into(),
                 host_vec![self.host, signature, nonce, to, amount].into(),
@@ -179,7 +179,7 @@ impl<'a> TestToken<'a> {
 
         Ok(self
             .host
-            .try_call(
+            .call(
                 self.id.clone().into(),
                 Symbol::from_str("xfer_from").into(),
                 host_vec![self.host, signature, nonce, from, to, amount].into(),
@@ -208,7 +208,7 @@ impl<'a> TestToken<'a> {
 
         Ok(self
             .host
-            .try_call(
+            .call(
                 self.id.clone().into(),
                 Symbol::from_str("freeze").into(),
                 host_vec![self.host, signature, nonce, id].into(),
@@ -237,7 +237,7 @@ impl<'a> TestToken<'a> {
 
         Ok(self
             .host
-            .try_call(
+            .call(
                 self.id.clone().into(),
                 Symbol::from_str("unfreeze").into(),
                 host_vec![self.host, signature, nonce, id].into(),
@@ -248,7 +248,7 @@ impl<'a> TestToken<'a> {
     pub(crate) fn is_frozen(&self, id: Identifier) -> Result<bool, HostError> {
         Ok(self
             .host
-            .try_call(
+            .call(
                 self.id.clone().into(),
                 Symbol::from_str("is_frozen").into(),
                 host_vec![self.host, id].into(),
@@ -279,7 +279,7 @@ impl<'a> TestToken<'a> {
 
         Ok(self
             .host
-            .try_call(
+            .call(
                 self.id.clone().into(),
                 Symbol::from_str("mint").into(),
                 host_vec![self.host, signature, nonce, to, amount].into(),
@@ -310,7 +310,7 @@ impl<'a> TestToken<'a> {
 
         Ok(self
             .host
-            .try_call(
+            .call(
                 self.id.clone().into(),
                 Symbol::from_str("burn").into(),
                 host_vec![self.host, signature, nonce, from, amount].into(),
@@ -339,7 +339,7 @@ impl<'a> TestToken<'a> {
 
         Ok(self
             .host
-            .try_call(
+            .call(
                 self.id.clone().into(),
                 Symbol::from_str("set_admin").into(),
                 host_vec![self.host, signature, nonce, new_admin].into(),
@@ -350,7 +350,7 @@ impl<'a> TestToken<'a> {
     pub(crate) fn decimals(&self) -> Result<u32, HostError> {
         Ok(self
             .host
-            .try_call(
+            .call(
                 self.id.clone().into(),
                 Symbol::from_str("decimals").into(),
                 host_vec![self.host].into(),
@@ -361,7 +361,7 @@ impl<'a> TestToken<'a> {
     pub(crate) fn name(&self) -> Result<Bytes, HostError> {
         Ok(self
             .host
-            .try_call(
+            .call(
                 self.id.clone().into(),
                 Symbol::from_str("name").into(),
                 host_vec![self.host].into(),
@@ -372,7 +372,7 @@ impl<'a> TestToken<'a> {
     pub(crate) fn symbol(&self) -> Result<Bytes, HostError> {
         Ok(self
             .host
-            .try_call(
+            .call(
                 self.id.clone().into(),
                 Symbol::from_str("symbol").into(),
                 host_vec![self.host].into(),
@@ -401,7 +401,7 @@ impl<'a> TestToken<'a> {
 
         Ok(self
             .host
-            .try_call(
+            .call(
                 self.id.clone().into(),
                 Symbol::from_str("import").into(),
                 host_vec![self.host, signature, nonce, amount].into(),
@@ -430,7 +430,7 @@ impl<'a> TestToken<'a> {
 
         Ok(self
             .host
-            .try_call(
+            .call(
                 self.id.clone().into(),
                 Symbol::from_str("export").into(),
                 host_vec![self.host, signature, nonce, amount].into(),
