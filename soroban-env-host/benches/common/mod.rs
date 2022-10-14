@@ -1,10 +1,9 @@
 #![allow(dead_code)]
 
-#[path = "common/measure.rs"]
+mod cost_types;
 mod measure;
-
-#[path = "common/modelfit.rs"]
 mod modelfit;
 
+pub use cost_types::{for_each_host_cost_measurement, Benchmark};
 pub use measure::*;
 pub use modelfit::*;
