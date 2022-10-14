@@ -38,6 +38,6 @@ impl Contract {
         let vec_with_half_hash = Vec::from_slice(&e, &[Bytes::from_slice(&e, &buf[0..16])]);
         e.events().publish((data,), hash);
         e.log_value(vec_with_half_hash);
-        e.contract_data().set(data, my_ledger);
+        e.data().set(data, my_ledger);
     }
 }

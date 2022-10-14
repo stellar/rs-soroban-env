@@ -1,5 +1,5 @@
 use log::{info, trace};
-use optimization;
+
 use optimization::{Func, GradientDescent, Minimizer, NumericalDifferentiation};
 
 pub struct FPPoint {

@@ -177,6 +177,7 @@ impl From<xdr::Error> for DebugError {
             xdr::Error::LengthMismatch => "XDR error: length mismatch",
             xdr::Error::NonZeroPadding => "XDR error: nonzero padding",
             xdr::Error::Utf8Error(_) => "XDR error: UTF-8 error",
+            xdr::Error::InvalidHex => "XDR error: hex error",
             xdr::Error::Io(_) => "XDR error: IO error",
         };
         Self::new(xdr::ScUnknownErrorCode::Xdr).msg(msg)
