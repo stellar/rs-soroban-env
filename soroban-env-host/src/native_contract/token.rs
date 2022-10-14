@@ -4,6 +4,7 @@ mod balance;
 mod contract;
 mod cryptography;
 mod error;
+mod event;
 mod metadata;
 mod nonce;
 pub(crate) mod public_types;

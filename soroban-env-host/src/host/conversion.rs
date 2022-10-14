@@ -6,9 +6,9 @@ use crate::xdr::{
 };
 use crate::{
     budget::CostType,
-    events::{DebugError, CONTRACT_EVENT_TOPICS_LIMIT, TOPIC_BYTES_LENGTH_LIMIT},
+    events::{DebugError, CONTRACT_EVENT_TOPICS_LIMIT},
     host_object::{HostObject, HostVec},
-    Host, HostError, Object, RawVal, Tag,
+    Host, HostError, Object, RawVal,
 };
 use ed25519_dalek::{PublicKey, Signature, SIGNATURE_LENGTH};
 use num_bigint::Sign;
@@ -204,50 +204,8 @@ impl Host {
     }
 
     fn event_topic_from_rawval(&self, topic: RawVal) -> Result<ScVal, HostError> {
-        self.charge_budget(CostType::ValXdrConv, 1)?;
-        if topic.is_u63() {
-            Ok(ScVal::U63(unsafe { topic.unchecked_as_u63() }))
-        } else {
-            match topic.get_tag() {
-                Tag::Object => {
-                    unsafe {
-                        self.unchecked_visit_val_obj(topic, |ob| {
-                            // charge budget
-                            let sco = match ob {
-                                None => Err(self.err_status(ScHostObjErrorCode::UnknownReference)),
-                                Some(ho) => match ho {
-                                    // TODO: use more event-specific error codes than `UnexpectedType`
-                                    HostObject::Vec(_)
-                                    | HostObject::Map(_)
-                                    | HostObject::ContractCode(_) => {
-                                        Err(self.err_status(ScHostObjErrorCode::UnexpectedType))
-                                    }
-                                    HostObject::Bytes(b) => {
-                                        if b.len() > TOPIC_BYTES_LENGTH_LIMIT {
-                                            // TODO: use more event-specific error codes than `UnexpectedType`.
-                                            // Something like "topic bytes exceeds length limit"
-                                            return Err(
-                                                self.err_status(ScHostObjErrorCode::UnexpectedType)
-                                            );
-                                        }
-                                        self.charge_budget(CostType::BytesClone, b.len() as u64)?;
-                                        Ok(ScObject::Bytes(self.map_err(b.clone().try_into())?))
-                                    }
-                                    HostObject::U64(u) => Ok(ScObject::U64(*u)),
-                                    HostObject::I64(i) => Ok(ScObject::I64(*i)),
-                                    HostObject::BigInt(bi) => self.scobj_from_bigint(bi),
-                                    HostObject::AccountId(aid) => {
-                                        Ok(ScObject::AccountId(aid.metered_clone(&self.0.budget)?))
-                                    }
-                                },
-                            }?;
-                            Ok(ScVal::Object(Some(sco)))
-                        })
-                    }
-                }
-                _ => self.from_host_val(topic),
-            }
-        }
+        self.validate_event_topic(topic)?;
+        self.from_host_val(topic)
     }
 
     pub(crate) fn event_topics_from_host_obj(&self, topics: Object) -> Result<ScVec, HostError> {
