@@ -3,4 +3,4 @@
 
 # Members of contract committers who are on the core team own the host
 # implementation.
-/soroban-env-host/            @graydon @jonjove @sisuresh
+/soroban-env-host/            @graydon @sisuresh
