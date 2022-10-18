@@ -3,6 +3,11 @@ use curve25519_dalek::{constants, edwards, scalar};
 use rand::{rngs::StdRng, Rng, RngCore};
 use soroban_env_host::{budget::CostType, Host};
 
+// This measures the costs of doing an Ed25519 scalar multiply, which is a
+// component of signature verification and is the only part advertised as
+// variable time. The input value is ignored. The underlying operation is
+// nonlinear and the point of this measurement is to investigate how wide the
+// variation is in the histogram.
 #[allow(non_snake_case)]
 pub(crate) struct EdwardsPointCurve25519ScalarMulRun {
     a: scalar::Scalar,

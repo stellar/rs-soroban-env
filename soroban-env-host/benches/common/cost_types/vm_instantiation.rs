@@ -7,6 +7,10 @@ pub(crate) struct VmInstantiationRun {
     wasm: Vec<u8>,
 }
 
+// This measures the cost of instantiating a host::Vm on a variety of possible
+// wasm modules, of different sizes. The input value should be the size of the
+// module, though for now we're just selecting modules from the fixed example
+// repertoire. Costs should be linear.
 impl HostCostMeasurement for VmInstantiationRun {
     const COST_TYPE: CostType = CostType::VmInstantiation;
     const RUN_ITERATIONS: u64 = 10;
