@@ -1,69 +1,47 @@
 use crate::common::HostCostMeasurement;
-use rand::{rngs::StdRng, Rng};
+use rand::rngs::StdRng;
 use soroban_env_host::{budget::CostType, EnvVal, Host, RawVal};
 
+use super::im_map_immut_entry::ImMapImmutEntryRun;
+
 pub(crate) struct ImMapMutEntryRun {
-    map: im_rc::OrdMap<EnvVal<Host, RawVal>, EnvVal<Host, RawVal>>,
-    probes: Vec<EnvVal<Host, RawVal>>,
+    im: ImMapImmutEntryRun,
+    second_map_ref: im_rc::OrdMap<EnvVal<Host, RawVal>, EnvVal<Host, RawVal>>,
 }
 
-fn make_env_val(host: &Host, i: u32) -> EnvVal<Host, RawVal> {
-    EnvVal {
-        env: host.clone(),
-        val: RawVal::from_u32(i),
-    }
-}
-
+// This is just a variant of ImMapImmutEntryRun that calls the get_mut method on
+// a multiply-referenced map, causing a copy-on-write of some nodes. It should
+// cost a nearly-constant (perhaps very-slow-log) amount of memory and CPU.
 impl HostCostMeasurement for ImMapMutEntryRun {
     const COST_TYPE: CostType = CostType::ImMapMutEntry;
-    const RUN_ITERATIONS: u64 = 1000;
+    const RUN_ITERATIONS: u64 = ImMapImmutEntryRun::RUN_ITERATIONS;
 
-    fn new_best_case(host: &Host, _rng: &mut StdRng) -> Self {
-        let map: im_rc::OrdMap<_, _> = [{
-            let ev = make_env_val(host, 1);
-            (ev.clone(), ev)
-        }]
-        .into_iter()
-        .collect();
-        let probes = map.keys().cloned().collect();
-        Self { map, probes }
+    fn new_best_case(host: &Host, rng: &mut StdRng) -> Self {
+        let im = ImMapImmutEntryRun::new_best_case(host, rng);
+        let second_map_ref = im.map.clone();
+        Self { im, second_map_ref }
     }
 
-    fn new_worst_case(host: &Host, _rng: &mut StdRng, input: u64) -> Self {
-        let input = input * 10000;
-        let map: im_rc::OrdMap<_, _> = (0..input as u32)
-            .map(|k| {
-                let ev = make_env_val(host, k);
-                (ev.clone(), ev)
-            })
-            .collect();
-        let probes = [0, u32::MAX]
-            .into_iter()
-            .map(|k| make_env_val(host, k))
-            .collect();
-        Self { map, probes }
+    fn new_worst_case(host: &Host, rng: &mut StdRng, input: u64) -> Self {
+        let im = ImMapImmutEntryRun::new_worst_case(host, rng, input);
+        let second_map_ref = im.map.clone();
+        Self { im, second_map_ref }
     }
 
     fn new_random_case(host: &Host, rng: &mut StdRng, input: u64) -> Self {
-        let map: im_rc::OrdMap<_, _> = (0..input)
-            .map(|_| {
-                let ev = make_env_val(host, rng.gen::<u32>());
-                (ev.clone(), ev)
-            })
-            .collect();
-        let probes = (0..map.len())
-            .into_iter()
-            .map(|_| make_env_val(host, rng.gen::<u32>()))
-            .collect();
-        Self { map, probes }
+        let im = ImMapImmutEntryRun::new_random_case(host, rng, input);
+        let second_map_ref = im.map.clone();
+        Self { im, second_map_ref }
     }
 
     fn run(&mut self, iter: u64, _host: &Host) {
-        let key = &self.probes[iter as usize % self.probes.len()];
-        let _ = self.map.get_mut(key);
+        let _ = self
+            .im
+            .map
+            .get_mut(&self.im.keys[iter as usize % self.im.keys.len()]);
     }
 
-    fn get_input(&self, _host: &Host) -> u64 {
-        self.map.len() as u64
+    fn get_input(&self, host: &Host) -> u64 {
+        self.im.get_input(host)
     }
 }

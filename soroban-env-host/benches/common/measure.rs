@@ -303,6 +303,7 @@ where
         let start = Instant::now();
         mem_tracker.0.store(0, Ordering::SeqCst);
         let alloc_guard = alloc_group_token.enter();
+        host.with_budget(|budget| budget.reset_inputs());
         cpu_insn_counter.begin();
         for iter in 0..HCM::RUN_ITERATIONS {
             m.run(iter, &host);
@@ -310,7 +311,7 @@ where
         let cpu_insns = cpu_insn_counter.end_and_count() / HCM::RUN_ITERATIONS;
         drop(alloc_guard);
         let stop = Instant::now();
-        let input = m.get_input(&host);
+        let input = m.get_input(&host) / HCM::RUN_ITERATIONS;
         let mem_bytes = mem_tracker.0.load(Ordering::SeqCst) / HCM::RUN_ITERATIONS;
         let time_nsecs = stop.duration_since(start).as_nanos() as u64 / HCM::RUN_ITERATIONS;
         ret.push(Measurement {

@@ -12,9 +12,11 @@ pub(crate) struct ScVecToHostVecRun {
     val: ScVal,
 }
 
-/// Measures the costs of allocating vectors of varying sizes.
+// This measures the costs of converting vectors of varying sizes from XDR to
+// host format. The input is the size of the map, the costs should be linear.
 impl HostCostMeasurement for ScVecToHostVecRun {
     const COST_TYPE: CostType = CostType::ScVecToHostVec;
+    const RUN_ITERATIONS: u64 = 5;
 
     fn new_random_case(_host: &Host, _rng: &mut StdRng, input: u64) -> Self {
         let input = input * 100;

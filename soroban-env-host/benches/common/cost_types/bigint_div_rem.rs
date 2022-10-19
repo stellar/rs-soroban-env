@@ -10,6 +10,10 @@ pub(crate) struct BigIntDivRemRun {
     input: u64,
 }
 
+// This measures the costs of doing div_rem on the bigint type. The input value
+// is the number of bits. The underlying code is variable-time in the bit size,
+// but we expect that by bounding the bit size we can make a reasonably tight
+// constant or linear-function upper bound. Examine the table and histogram.
 impl HostCostMeasurement for BigIntDivRemRun {
     const COST_TYPE: CostType = CostType::BigIntDivRem;
     const RUN_ITERATIONS: u64 = 100;
@@ -28,6 +32,8 @@ impl HostCostMeasurement for BigIntDivRemRun {
             let one: BigInt = 1.into();
             a + one
         }
+        // TODO: unclear if this really represents "worst case", it's
+        // just a guess.
         let a: BigInt = repeating_byte_bigint(0xf7, input);
         let b: BigInt = repeating_byte_bigint(0xf6, 1 + (input / 2));
         Self { a, b, input }

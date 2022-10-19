@@ -14,10 +14,12 @@ pub(crate) struct ScMapToHostMapRun {
     input: u64,
 }
 
-/// Measures the costs of allocating maps of varying sizes.
+// This measures the costs of converting maps of varying sizes
+// from XDR to host format. The input is the size of the map,
+// the costs should be linear.
 impl HostCostMeasurement for ScMapToHostMapRun {
     const COST_TYPE: CostType = CostType::ScMapToHostMap;
-    const RUN_ITERATIONS: u64 = 100;
+    const RUN_ITERATIONS: u64 = 5;
 
     fn new_random_case(_host: &Host, rng: &mut StdRng, input: u64) -> Self {
         let input = input * 100;

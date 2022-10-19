@@ -50,6 +50,9 @@ pub(crate) struct WasmInsnExecRun {
     vm: Rc<Vm>,
 }
 
+// This measures the cost of executing a block of WASM instructions. The
+// input value is the length of the instruction block. The CPU cost should
+// be linear in the length and the memory should be zero.
 impl HostCostMeasurement for WasmInsnExecRun {
     const COST_TYPE: CostType = CostType::WasmInsnExec;
 

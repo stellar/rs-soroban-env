@@ -533,7 +533,7 @@ impl Default for BudgetImpl {
                 }
                 CostType::ValXdrConv | CostType::ValSer | CostType::ValDeser => cpu.lin_param = 10,
                 CostType::CloneEvents => cpu.lin_param = 10,
-                CostType::HostObjAllocSlot => cpu.lin_param = 1000,
+                CostType::HostObjAllocSlot => cpu.const_param = 1000,
                 CostType::HostVecAllocCell => cpu.lin_param = 300,
                 CostType::HostMapAllocCell => {
                     cpu.const_param = 2000;

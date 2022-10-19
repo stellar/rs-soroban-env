@@ -3,6 +3,9 @@ use rand::rngs::StdRng;
 use sha2::{Digest, Sha256};
 use soroban_env_host::{budget::CostType, Host};
 
+// This measures the costs of performing a sha256 hash on a variable-sized
+// byte buffer. The input value is the size of the buffer. It should be
+// linear time.
 pub(crate) struct ComputeSha256HashRun {
     buf: Vec<u8>,
 }
