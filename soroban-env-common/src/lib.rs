@@ -18,6 +18,8 @@
 //! [RawVal] type and XDR types, and re-exports the XDR definitions from
 //! [stellar_xdr] under the module [xdr].
 
+pub const VERSION: Option<&str> = option_env!("GIT_SHA");
+
 mod val_wrapper;
 
 mod array;

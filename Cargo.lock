@@ -1020,6 +1020,9 @@ dependencies = [
 name = "soroban-env-common"
 version = "0.0.6"
 dependencies = [
+ "serde",
+ "serde_derive",
+ "serde_json",
  "soroban-env-macros",
  "soroban-wasmi",
  "static_assertions",

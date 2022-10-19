@@ -10,6 +10,11 @@ readme = "../README.md"
 edition = "2021"
 rust-version = "1.64"
 
+[build-dependencies]
+serde = "1.0.82"
+serde_derive = "1.0.82"
+serde_json = "1.0.82"
+
 [dependencies]
 soroban-env-macros = { version = "0.0.6" }
 stellar-xdr = { version = "0.0.6", default-features = false, features = [ "next" ] }
