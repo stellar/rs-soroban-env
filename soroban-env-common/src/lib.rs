@@ -18,8 +18,8 @@
 //! [RawVal] type and XDR types, and re-exports the XDR definitions from
 //! [stellar_xdr] under the module [xdr].
 
-pub const VERSION: &str = env!("CARGO_PKG_VERSION");
-pub const VERSION_GIT_SHA: &str = env!("GIT_SHA");
+pub const VERSION: &str =
+    const_format::concatcp!(env!("CARGO_PKG_VERSION"), " (", env!("GIT_SHA"), ")");
 
 mod val_wrapper;
 
