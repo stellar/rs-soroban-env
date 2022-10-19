@@ -304,21 +304,13 @@ macro_rules! call_macro_with_all_host_functions {
                 {"0", fn has_contract_data(k:RawVal) -> RawVal}
                 {"1", fn get_contract_data(k:RawVal) -> RawVal}
                 {"2", fn del_contract_data(k:RawVal) -> RawVal}
-                {"3", fn create_contract_from_ed25519(v: Object, salt: Object, key: Object, sig: Object) -> Object}
-                {"4", fn create_contract_from_contract(v: Object, salt: Object) -> Object}
-                {"5", fn create_token_from_ed25519(salt: Object, key: Object, sig: Object) -> Object}
-                {"6", fn create_token_from_contract(salt: Object) -> Object}
-                {"7", fn create_token_from_asset(asset: Object) -> Object}
-                /// Create a contract using the source account and salt as input
-                /// to the contract ID that gets created. Pass as arguments a
-                /// Bytes for the wasm code and a Bytes for the salt. Returned
-                /// will be a Bytes of length 32 bytes.
-                {"8", fn create_contract_from_source_account(v: Object, salt: Object) -> Object}
-                /// Create a token contract using the source account and salt
-                /// as input to the contract ID that gets created. Pass as
-                /// arguments a Bytes for the salt. Returned
-                /// will be a Bytes of length 32 bytes.
-                {"9", fn create_token_from_source_account(salt: Object) -> Object}
+                // Deploys a contract from the current contract. `wasm_hash` must
+                // be a hash of the contract code that has already been installed
+                // on this network. `salt` is used to create a unique contract id.
+                {"3", fn create_contract_from_contract(wasm_hash: Object, salt: Object) -> Object}
+                // Deploys a built-in token contract from the current contract.
+                // `salt` is used to create a unique contract id for the token.
+                {"4", fn create_token_from_contract(salt: Object) -> Object}
             }
 
             mod call "d" {
