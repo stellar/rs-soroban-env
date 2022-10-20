@@ -167,7 +167,11 @@ impl EnvBase for Guest {
     }
 
     fn prng_fill_slice(&self, mem: &mut [u8], finalize: bool) -> Result<(), Status> {
-        // Intentionally a no-op in this cfg. See above.
+        sa::assert_eq_size!(u32, *const u8);
+        sa::assert_eq_size!(u32, usize);
+        let lm_pos: RawVal = RawVal::from_u32(mem.as_ptr() as u32);
+        let len: RawVal = RawVal::from_u32(mem.len() as u32);
+        self.prng_fill_linear_memory(lm_pos, len, RawVal::from_bool(finalize));
         Ok(())
     }
 }
