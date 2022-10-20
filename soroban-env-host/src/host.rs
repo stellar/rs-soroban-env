@@ -49,12 +49,14 @@ pub(crate) mod metered_vector;
 pub(crate) mod metered_xdr;
 mod validity;
 pub use error::HostError;
+mod prng;
 
 use self::metered_bigint::MeteredBigInt;
 use self::metered_clone::MeteredClone;
 use self::metered_cmp::MeteredCmp;
 use self::metered_map::MeteredOrdMap;
 use self::metered_vector::MeteredVector;
+use self::prng::PrngSet;
 
 /// Saves host state (storage and objects) for rolling back a (sub-)transaction
 /// on error. A helper type used by [`FrameGuard`].
@@ -116,6 +118,7 @@ pub(crate) struct HostImpl {
     objects: RefCell<Vec<HostObject>>,
     storage: RefCell<Storage>,
     context: RefCell<Vec<Frame>>,
+    prngs: RefCell<PrngSet>,
     // Note: budget is refcounted and is _not_ deep-cloned when you call HostImpl::deep_clone,
     // mainly because it's not really possible to achieve (the same budget is connected to many
     // metered sub-objects) but also because it's plausible that the person calling deep_clone
@@ -184,6 +187,7 @@ impl Host {
             objects: Default::default(),
             storage: RefCell::new(storage),
             context: Default::default(),
+            prngs: Default::default(),
             budget,
             events: Default::default(),
             #[cfg(feature = "testutils")]
@@ -412,20 +416,53 @@ impl Host {
     /// stack, or a [`HostError`] if the context stack is empty or has a non-VM
     /// frame at its top.
     fn get_current_contract_id(&self) -> Result<Hash, HostError> {
+        if let Some(hash) = self.get_current_contract_id_opt()? {
+            Ok(hash)
+        } else {
+            Err(self.err_general("Context has no contract ID"))
+        }
+    }
+
+    /// Returns [`Hash`] contract ID from the VM frame at the top of the context
+    /// stack, or a `None` if the context stack is empty or has a non-VM frame
+    /// at its top. Returns an error only if it runs out of resources.
+    fn get_current_contract_id_opt(&self) -> Result<Option<Hash>, HostError> {
         self.with_current_frame(|frame| match frame {
             #[cfg(feature = "vm")]
-            Frame::ContractVM(vm, _) => vm.contract_id.metered_clone(&self.0.budget),
-            Frame::HostFunction(_) => {
-                Err(self.err_general("Host function context has no contract ID"))
-            }
-            Frame::Token(id, _) => id.metered_clone(&self.0.budget),
+            Frame::ContractVM(vm, _) => Ok(Some(vm.contract_id.metered_clone(&self.0.budget)?)),
+            Frame::HostFunction(_) => Ok(None),
+            Frame::Token(id, _) => Ok(Some(id.metered_clone(&self.0.budget)?)),
             #[cfg(any(test, feature = "testutils"))]
-            Frame::TestContract(id, _) => Ok(id.clone()),
+            Frame::TestContract(id, _) => Ok(Some(id.clone())),
         })
     }
 
-    // Notes on metering: closure call needs to be metered separatedly. `VisitObject` only covers
-    /// the cost of visiting an object.
+    fn with_prng_context_and_finalize_flag<F>(
+        &self,
+        finalize: RawVal,
+        f: F,
+    ) -> Result<RawVal, HostError>
+    where
+        F: FnOnce(&mut PrngSet, Option<Hash>, bool) -> Result<RawVal, DebugError>,
+    {
+        if !finalize.is::<bool>() {
+            return Err(self.err_status(ScHostObjErrorCode::UnexpectedType));
+        }
+        let finalize = finalize.is_true();
+        let context: Option<Hash> = self.get_current_contract_id_opt()?;
+        let mut prngs = self.0.prngs.borrow_mut();
+        f(&mut *prngs, context, finalize).map_err(|e| self.err(e))
+    }
+
+    /// Reset all contextual PRNGs (removing any finalization) and set the
+    /// common PRNG seed for this host to the provided seed. Should usually
+    /// only be called at most once per lifecycle.
+    pub fn reset_prngs_from_seed(&self, seed: [u8; 32]) {
+        *self.0.prngs.borrow_mut() = PrngSet::from_seed(seed)
+    }
+
+    // Notes on metering: closure call needs to be metered separatedly.
+    // `VisitObject` only covers the cost of visiting an object.
     unsafe fn unchecked_visit_val_obj<F, U>(&self, val: RawVal, f: F) -> Result<U, HostError>
     where
         F: FnOnce(Option<&HostObject>) -> Result<U, HostError>,
@@ -436,8 +473,8 @@ impl Host {
         f(r.get(index))
     }
 
-    // Notes on metering: object visiting part is covered by unchecked_visit_val_obj. Closure function
-    /// needs to be metered separately.
+    // Notes on metering: object visiting part is covered by
+    // unchecked_visit_val_obj. Closure function needs to be metered separately.
     pub(crate) fn visit_obj<HOT: HostObjectType, F, U>(
         &self,
         obj: Object,
@@ -1197,6 +1234,15 @@ impl EnvBase for Host {
             evt = evt.arg(*s)
         }
         self.record_debug_event(evt).map_err(|he| he.status)
+    }
+
+    fn prng_fill_slice(&self, mem: &mut [u8], finalize: bool) -> Result<(), Status> {
+        let context: Option<Hash> = self.get_current_contract_id_opt().map_err(|he| he.status)?;
+        let mut prngs = self.0.prngs.borrow_mut();
+        prngs
+            .fill_bytes(context, mem, finalize)
+            .map_err(|de| de.status)?;
+        Ok(())
     }
 }
 
@@ -2697,7 +2743,7 @@ impl VmCallerCheckedEnv for Host {
     fn get_ledger_network_id(&self, _vmcaller: &mut VmCaller<Host>) -> Result<Object, Self::Error> {
         Ok(self
             .with_ledger_info(|li| {
-                let hash = Sha256::digest(li.network_passphrase.clone())
+                let hash = Sha256::digest(li.network_passphrase.as_slice())
                     .as_slice()
                     .to_vec();
                 if hash.len() != 32 {
@@ -2758,6 +2804,55 @@ impl VmCallerCheckedEnv for Host {
                 ScHostValErrorCode::UnexpectedValType,
                 "contract attempted to fail with non-ContractError status code",
             ))
+        }
+    }
+
+    fn prng_next_u32(
+        &self,
+        vmcaller: &mut VmCaller<Self::VmUserState>,
+        finalize: RawVal,
+    ) -> Result<RawVal, Self::Error> {
+        self.charge_budget(CostType::PrngGenerateBytes, 4)?;
+        self.with_prng_context_and_finalize_flag(finalize, |prngs, context, finalize| {
+            Ok(RawVal::from_u32(prngs.next_u32(context, finalize)?))
+        })
+    }
+
+    fn prng_next_u63(
+        &self,
+        vmcaller: &mut VmCaller<Self::VmUserState>,
+        finalize: RawVal,
+    ) -> Result<RawVal, Self::Error> {
+        self.charge_budget(CostType::PrngGenerateBytes, 8)?;
+        self.with_prng_context_and_finalize_flag(finalize, |prngs, context, finalize| {
+            let u = prngs.next_u64(context, finalize)?;
+            Ok(unsafe { RawVal::unchecked_from_u63(u as i64) })
+        })
+    }
+
+    fn prng_fill_linear_memory(
+        &self,
+        vmcaller: &mut VmCaller<Self::VmUserState>,
+        lm_pos: RawVal,
+        len: RawVal,
+        finalize: RawVal,
+    ) -> Result<RawVal, Self::Error> {
+        #[cfg(not(feature = "vm"))]
+        unimplemented!();
+        #[cfg(feature = "vm")]
+        {
+            let VmSlice { vm, pos, len } = self.decode_vmslice(lm_pos, len)?;
+            self.charge_budget(CostType::PrngGenerateBytes, len as u64)?;
+            let pos = pos as usize;
+            let end = pos.saturating_add(len as usize);
+            let mem = vm.get_memory(self)?;
+            let out = self.map_err(mem.data_mut(vmcaller.try_mut()?).get_mut(pos..end).ok_or(
+                wasmi::Error::Memory(wasmi::errors::MemoryError::OutOfBoundsAccess),
+            ))?;
+            self.with_prng_context_and_finalize_flag(finalize, |prngs, context, finalize| {
+                prngs.fill_bytes(context, out, finalize)?;
+                Ok(RawVal::from_void())
+            })
         }
     }
 }

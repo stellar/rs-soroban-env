@@ -96,6 +96,12 @@ pub trait EnvBase: Sized + Clone {
         vals: &[RawVal],
         strs: &[&'static str],
     ) -> Result<(), Status>;
+
+    /// Fill a byte slice from the host PRNG.
+    fn prng_fill_slice(&self, _mem: &mut [u8], _finalize: bool) -> Result<(), Status> {
+        // TODO: remove default impl when SDK env implements prng_fill_slice.
+        unimplemented!()
+    }
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -459,6 +465,23 @@ macro_rules! call_macro_with_all_host_functions {
             mod crypto "c" {
                 {"_", fn compute_hash_sha256(x:Object) -> Object}
                 {"0", fn verify_sig_ed25519(x:Object, k:Object, s:Object) -> RawVal}
+            }
+
+            mod prng "p" {
+                /// Return a u32 from the persistent, stateful PRNG associated
+                /// with the calling context, finalizing the PRNG if `finalize`
+                /// is set to `true`. Traps if PRNG is already finalized.
+                {"_", fn prng_next_u32(finalize:RawVal) -> RawVal}
+                /// Return a u63 from the persistent, stateful PRNG associated
+                /// with the calling context, finalizing the PRNG if `finalize`
+                /// is set to `true`. Traps if PRNG is already finalized.
+                {"0", fn prng_next_u63(finalize:RawVal) -> RawVal}
+                /// Fill the region of linear memory between `lm_pos` and
+                /// `lm_pos` + `len` with bytes drawn from from the persistent,
+                /// stateful PRNG associated with the calling context,
+                /// finalizing the PRNG if `finalize` is set to `true`. Traps if
+                /// PRNG is already finalized. Returns void.
+                {"1", fn prng_fill_linear_memory(lm_pos:RawVal, len:RawVal, finalize:RawVal) -> RawVal}
             }
 
             mod account "a" {

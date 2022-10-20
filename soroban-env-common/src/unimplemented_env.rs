@@ -68,6 +68,10 @@ impl EnvBase for UnimplementedEnv {
     ) -> Result<(), Status> {
         unimplemented!()
     }
+
+    fn prng_fill_slice(&self, _mem: &mut [u8], _finalize: bool) -> Result<(), Status> {
+        unimplemented!()
+    }
 }
 
 // This is a helper macro used only by generate_env_unimplemented below. It

@@ -92,6 +92,10 @@ impl EnvBase for WeakHost {
     ) -> Result<(), Status> {
         self.get_host().log_static_fmt_general(fmt, vals, strs)
     }
+
+    fn prng_fill_slice(&self, mem: &mut [u8], finalize: bool) -> Result<(), Status> {
+        self.get_host().prng_fill_slice(mem, finalize)
+    }
 }
 
 ///////////////////////////////////////////////////////////////////////////////

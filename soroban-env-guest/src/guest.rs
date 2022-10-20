@@ -74,6 +74,10 @@ impl EnvBase for Guest {
     ) -> Result<(), Status> {
         unimplemented!()
     }
+
+    fn prng_fill_slice(&self, mem: &mut [u8], finalize: bool) -> Result<(), Status> {
+        unimplemented!()
+    }
 }
 
 #[cfg(target_family = "wasm")]
@@ -158,6 +162,11 @@ impl EnvBase for Guest {
         vals: &[RawVal],
         strs: &[&'static str],
     ) -> Result<(), Status> {
+        // Intentionally a no-op in this cfg. See above.
+        Ok(())
+    }
+
+    fn prng_fill_slice(&self, mem: &mut [u8], finalize: bool) -> Result<(), Status> {
         // Intentionally a no-op in this cfg. See above.
         Ok(())
     }

@@ -11,4 +11,4 @@ crate-type = ["cdylib", "rlib"]
 doctest = false
 
 [dependencies]
-soroban-sdk = "0.0.6"
+soroban-sdk = "0.1.0"

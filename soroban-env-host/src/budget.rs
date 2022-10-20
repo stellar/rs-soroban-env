@@ -149,6 +149,7 @@ pub enum CostType {
     // here for exploring calibration, not a long-term cost we surface
     // separately from signature verification.
     EdwardsPointCurve25519ScalarMul = 66,
+    PrngGenerateBytes = 67,
 }
 
 // TODO: add XDR support for iterating over all the elements of an enum
@@ -222,6 +223,7 @@ impl CostType {
             CostType::ImVecCmp,
             CostType::BytesCmp,
             CostType::EdwardsPointCurve25519ScalarMul,
+            CostType::PrngGenerateBytes,
         ];
         VARIANTS.iter()
     }
@@ -607,6 +609,7 @@ impl Default for BudgetImpl {
                 CostType::ImVecCmp => cpu.lin_param = 10,
                 CostType::BytesCmp => cpu.lin_param = 10,
                 CostType::EdwardsPointCurve25519ScalarMul => cpu.const_param = 10,
+                CostType::PrngGenerateBytes => cpu.lin_param = 5000,
             }
 
             let mem = b.mem_bytes.get_cost_model_mut(*ct);
@@ -670,6 +673,7 @@ impl Default for BudgetImpl {
                 CostType::ImVecCmp => mem.lin_param = 1,
                 CostType::BytesCmp => mem.lin_param = 1,
                 CostType::EdwardsPointCurve25519ScalarMul => mem.const_param = 1,
+                CostType::PrngGenerateBytes => mem.const_param = 128,
             }
         }
 
