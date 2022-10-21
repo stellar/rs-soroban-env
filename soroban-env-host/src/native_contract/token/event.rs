@@ -1,7 +1,7 @@
-use crate::HostError;
 use crate::host::Host;
 use crate::native_contract::base_types::{BigInt, Vec};
 use crate::native_contract::token::public_types::Identifier;
+use crate::HostError;
 use soroban_env_common::{CheckedEnv, Symbol, TryIntoVal};
 
 pub(crate) fn approve(
