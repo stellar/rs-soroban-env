@@ -1,6 +1,6 @@
+use crate::HostError;
 use crate::host::Host;
 use crate::native_contract::base_types::{BigInt, Vec};
-use crate::native_contract::token::error::Error;
 use crate::native_contract::token::public_types::Identifier;
 use soroban_env_common::{CheckedEnv, Symbol, TryIntoVal};
 
@@ -9,7 +9,7 @@ pub(crate) fn approve(
     from: Identifier,
     to: Identifier,
     amount: BigInt,
-) -> Result<(), Error> {
+) -> Result<(), HostError> {
     let mut topics = Vec::new(e)?;
     topics.push(Symbol::from_str("approve"))?;
     topics.push(from)?;
@@ -23,7 +23,7 @@ pub(crate) fn transfer(
     from: Identifier,
     to: Identifier,
     amount: BigInt,
-) -> Result<(), Error> {
+) -> Result<(), HostError> {
     let mut topics = Vec::new(e)?;
     topics.push(Symbol::from_str("transfer"))?;
     topics.push(from)?;
@@ -37,7 +37,7 @@ pub(crate) fn mint(
     admin: Identifier,
     to: Identifier,
     amount: BigInt,
-) -> Result<(), Error> {
+) -> Result<(), HostError> {
     let mut topics = Vec::new(e)?;
     topics.push(Symbol::from_str("mint"))?;
     topics.push(admin)?;
@@ -51,7 +51,7 @@ pub(crate) fn burn(
     admin: Identifier,
     from: Identifier,
     amount: BigInt,
-) -> Result<(), Error> {
+) -> Result<(), HostError> {
     let mut topics = Vec::new(e)?;
     topics.push(Symbol::from_str("burn"))?;
     topics.push(admin)?;
@@ -60,7 +60,7 @@ pub(crate) fn burn(
     Ok(())
 }
 
-pub(crate) fn freeze(e: &Host, admin: Identifier, id: Identifier) -> Result<(), Error> {
+pub(crate) fn freeze(e: &Host, admin: Identifier, id: Identifier) -> Result<(), HostError> {
     let mut topics = Vec::new(e)?;
     topics.push(Symbol::from_str("freeze"))?;
     topics.push(admin)?;
@@ -68,7 +68,7 @@ pub(crate) fn freeze(e: &Host, admin: Identifier, id: Identifier) -> Result<(), 
     Ok(())
 }
 
-pub(crate) fn unfreeze(e: &Host, admin: Identifier, id: Identifier) -> Result<(), Error> {
+pub(crate) fn unfreeze(e: &Host, admin: Identifier, id: Identifier) -> Result<(), HostError> {
     let mut topics = Vec::new(e)?;
     topics.push(Symbol::from_str("unfreeze"))?;
     topics.push(admin)?;
@@ -76,7 +76,11 @@ pub(crate) fn unfreeze(e: &Host, admin: Identifier, id: Identifier) -> Result<()
     Ok(())
 }
 
-pub(crate) fn set_admin(e: &Host, admin: Identifier, new_admin: Identifier) -> Result<(), Error> {
+pub(crate) fn set_admin(
+    e: &Host,
+    admin: Identifier,
+    new_admin: Identifier,
+) -> Result<(), HostError> {
     let mut topics = Vec::new(e)?;
     topics.push(Symbol::from_str("set_admin"))?;
     topics.push(admin)?;
@@ -84,7 +88,7 @@ pub(crate) fn set_admin(e: &Host, admin: Identifier, new_admin: Identifier) -> R
     Ok(())
 }
 
-pub(crate) fn import(e: &Host, id: Identifier, amount: i64) -> Result<(), Error> {
+pub(crate) fn import(e: &Host, id: Identifier, amount: i64) -> Result<(), HostError> {
     let mut topics = Vec::new(e)?;
     topics.push(Symbol::from_str("import"))?;
     topics.push(id)?;
@@ -92,7 +96,7 @@ pub(crate) fn import(e: &Host, id: Identifier, amount: i64) -> Result<(), Error>
     Ok(())
 }
 
-pub(crate) fn export(e: &Host, id: Identifier, amount: i64) -> Result<(), Error> {
+pub(crate) fn export(e: &Host, id: Identifier, amount: i64) -> Result<(), HostError> {
     let mut topics = Vec::new(e)?;
     topics.push(Symbol::from_str("export"))?;
     topics.push(id)?;
