@@ -40,6 +40,8 @@ thousands = "0.2.0"
 rand = "0.7.3"
 soroban-test-wasms = { package = "soroban-test-wasms", path = "../soroban-test-wasms" }
 bytes-lit = "0.0.4"
+curve25519-dalek = "3.2.1"
+textplots = "0.8.0"
 
 [features]
 vm = ["wasmi", "parity-wasm", "soroban-env-common/vm"]
@@ -54,14 +56,15 @@ perf-event = "0.4.7"
 required-features = ["vm"]
 harness = false
 bench = true
-name = "calibrate_wasm_insns"
-path = "benches/calibrate_wasm_insns.rs"
+name = "worst_case_linear_models"
+path = "benches/worst_case_linear_models.rs"
 
 [[bench]]
+required-features = ["vm"]
 harness = false
 bench = true
-name = "calibrate_host_ops"
-path = "benches/calibrate_host_ops.rs"
+name = "variation_histograms"
+path = "benches/variation_histograms.rs"
 
 [package.metadata.docs.rs]
 all-features = true

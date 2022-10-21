@@ -1,8 +1,5 @@
-// Run this with
-// $ cargo bench --features vm calibrate_wasm_insns -- --nocapture
-
-mod common;
-use common::*;
+use crate::common::HostCostMeasurement;
+use rand::rngs::StdRng;
 use soroban_env_host::budget::CostType;
 use soroban_env_host::xdr::{Hash, ScVal, ScVec};
 use soroban_env_host::{Host, Vm};
@@ -47,36 +44,32 @@ fn wasm_module_with_4n_insns(n: usize) -> Vec<u8> {
     module.to_bytes().unwrap()
 }
 
-struct SyntheticWASMRun {
+pub(crate) struct WasmInsnExecRun {
+    insns: u64,
     args: ScVec,
     vm: Rc<Vm>,
 }
 
-impl HostCostMeasurement for SyntheticWASMRun {
+// This measures the cost of executing a block of WASM instructions. The
+// input value is the length of the instruction block. The CPU cost should
+// be linear in the length and the memory should be zero.
+impl HostCostMeasurement for WasmInsnExecRun {
     const COST_TYPE: CostType = CostType::WasmInsnExec;
 
-    fn new(host: &Host, step: u64) -> Self {
+    fn new_random_case(host: &Host, _rng: &mut StdRng, step: u64) -> Self {
+        let insns = step * 1000;
         let args = ScVec(vec![ScVal::U63(5)].try_into().unwrap());
         let id: Hash = [0; 32].into();
-        let code = wasm_module_with_4n_insns((step as usize) * 10000);
+        let code = wasm_module_with_4n_insns(insns as usize);
         let vm = Vm::new(&host, id, &code).unwrap();
-        Self { args, vm }
+        Self { insns, args, vm }
     }
 
-    fn run(&mut self, host: &Host) {
+    fn get_input(&self, _host: &Host) -> u64 {
+        self.insns
+    }
+
+    fn run(&mut self, _iter: u64, host: &Host) {
         self.vm.invoke_function(host, "test", &self.args).unwrap();
     }
-}
-
-#[cfg(all(test, feature = "vm", any(target_os = "linux", target_os = "macos")))]
-fn main() -> std::io::Result<()> {
-    env_logger::init();
-    let mut measurements = measure_costs::<SyntheticWASMRun>(0..20)?;
-    measurements.subtract_baseline();
-    measurements.report();
-    if std::env::var("FIT_MODELS").is_ok() {
-        measurements.fit_model_to_cpu();
-        measurements.fit_model_to_mem();
-    }
-    Ok(())
 }

@@ -633,9 +633,10 @@ impl Host {
 
     pub(crate) fn charge_for_new_host_object(
         &self,
+        prev_len: usize,
         ho: HostObject,
     ) -> Result<HostObject, HostError> {
-        self.charge_budget(CostType::HostObjAllocSlot, 1)?;
+        self.charge_budget(CostType::HostObjAllocSlot, prev_len as u64)?;
         match &ho {
             HostObject::Vec(v) => {
                 self.charge_budget(CostType::HostVecAllocCell, v.len() as u64)?;
@@ -677,16 +678,17 @@ impl Host {
         &self,
         hot: HOT,
     ) -> Result<HostObj, HostError> {
-        let handle = self.0.objects.borrow().len();
-        if handle > u32::MAX as usize {
+        let prev_len = self.0.objects.borrow().len();
+        if prev_len > u32::MAX as usize {
             return Err(self.err_status(ScHostObjErrorCode::ObjectCountExceedsU32Max));
         }
         self.0
             .objects
             .borrow_mut()
-            .push(self.charge_for_new_host_object(HOT::inject(hot))?);
+            .push(self.charge_for_new_host_object(prev_len, HOT::inject(hot))?);
         let env = WeakHost(Rc::downgrade(&self.0));
-        let v = Object::from_type_and_handle(HOT::get_type(), handle as u32);
+        let handle = prev_len as u32;
+        let v = Object::from_type_and_handle(HOT::get_type(), handle);
         Ok(EnvVal { env, val: v })
     }
 

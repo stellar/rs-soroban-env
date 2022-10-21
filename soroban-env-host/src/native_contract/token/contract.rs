@@ -9,6 +9,7 @@ use crate::native_contract::token::balance::{
     read_balance, read_state, receive_balance, spend_balance, transfer_classic_balance, write_state,
 };
 use crate::native_contract::token::cryptography::check_auth;
+use crate::native_contract::token::event;
 use crate::native_contract::token::metadata::{
     has_metadata, read_decimal, read_name, read_symbol, write_metadata,
 };
@@ -221,7 +222,8 @@ impl TokenTrait for Token {
         args.push(spender.clone())?;
         args.push(amount.clone())?;
         check_auth(&e, from, nonce, Symbol::from_str("approve"), args)?;
-        write_allowance(&e, from_id, spender, amount)?;
+        write_allowance(&e, from_id.clone(), spender.clone(), amount.clone())?;
+        event::approve(e, from_id, spender, amount)?;
         Ok(())
     }
 
@@ -258,8 +260,9 @@ impl TokenTrait for Token {
         args.push(to.clone())?;
         args.push(amount.clone())?;
         check_auth(&e, from, nonce, Symbol::from_str("xfer"), args)?;
-        spend_balance(&e, from_id, amount.clone())?;
-        receive_balance(&e, to, amount)?;
+        spend_balance(&e, from_id.clone(), amount.clone())?;
+        receive_balance(&e, to.clone(), amount.clone())?;
+        event::transfer(e, from_id, to, amount)?;
         Ok(())
     }
 
@@ -289,8 +292,9 @@ impl TokenTrait for Token {
         args.push(amount.clone())?;
         check_auth(&e, spender, nonce, Symbol::from_str("xfer_from"), args)?;
         spend_allowance(&e, from.clone(), spender_id, amount.clone())?;
-        spend_balance(&e, from, amount.clone())?;
-        receive_balance(&e, to, amount)?;
+        spend_balance(&e, from.clone(), amount.clone())?;
+        receive_balance(&e, to.clone(), amount.clone())?;
+        event::transfer(e, from, to, amount)?;
         Ok(())
     }
 
@@ -312,12 +316,14 @@ impl TokenTrait for Token {
         }
         check_admin(&e, &admin)?;
         let mut args = Vec::new(e)?;
-        args.push(admin.get_identifier(&e)?)?;
+        let admin_id = admin.get_identifier(&e)?;
+        args.push(admin_id.clone())?;
         args.push(nonce.clone())?;
         args.push(from.clone())?;
         args.push(amount.clone())?;
         check_auth(&e, admin, nonce, Symbol::from_str("burn"), args)?;
-        spend_balance(&e, from, amount)?;
+        spend_balance(&e, from.clone(), amount.clone())?;
+        event::burn(e, admin_id, from, amount)?;
         Ok(())
     }
 
@@ -325,11 +331,13 @@ impl TokenTrait for Token {
     fn freeze(e: &Host, admin: Signature, nonce: BigInt, id: Identifier) -> Result<(), HostError> {
         check_admin(&e, &admin)?;
         let mut args = Vec::new(e)?;
-        args.push(admin.get_identifier(&e)?)?;
+        let admin_id = admin.get_identifier(&e)?;
+        args.push(admin_id.clone())?;
         args.push(nonce.clone())?;
         args.push(id.clone())?;
         check_auth(&e, admin, nonce, Symbol::from_str("freeze"), args)?;
-        write_state(&e, id, true)?;
+        write_state(&e, id.clone(), true)?;
+        event::freeze(e, admin_id, id)?;
         Ok(())
     }
 
@@ -351,12 +359,14 @@ impl TokenTrait for Token {
         }
         check_admin(&e, &admin)?;
         let mut args = Vec::new(e)?;
-        args.push(admin.get_identifier(&e)?)?;
+        let admin_id = admin.get_identifier(&e)?;
+        args.push(admin_id.clone())?;
         args.push(nonce.clone())?;
         args.push(to.clone())?;
         args.push(amount.clone())?;
         check_auth(&e, admin, nonce, Symbol::from_str("mint"), args)?;
-        receive_balance(&e, to, amount)?;
+        receive_balance(&e, to.clone(), amount.clone())?;
+        event::mint(e, admin_id, to, amount)?;
         Ok(())
     }
 
@@ -369,11 +379,13 @@ impl TokenTrait for Token {
     ) -> Result<(), HostError> {
         check_admin(&e, &admin)?;
         let mut args = Vec::new(e)?;
-        args.push(admin.get_identifier(&e)?)?;
+        let admin_id = admin.get_identifier(&e)?;
+        args.push(admin_id.clone())?;
         args.push(nonce.clone())?;
         args.push(new_admin.clone())?;
         check_auth(&e, admin, nonce, Symbol::from_str("set_admin"), args)?;
-        write_administrator(&e, new_admin)?;
+        write_administrator(&e, new_admin.clone())?;
+        event::set_admin(e, admin_id, new_admin)?;
         Ok(())
     }
 
@@ -386,11 +398,13 @@ impl TokenTrait for Token {
     ) -> Result<(), HostError> {
         check_admin(&e, &admin)?;
         let mut args = Vec::new(e)?;
-        args.push(admin.get_identifier(&e)?)?;
+        let admin_id = admin.get_identifier(&e)?;
+        args.push(admin_id.clone())?;
         args.push(nonce.clone())?;
         args.push(id.clone())?;
         check_auth(&e, admin, nonce, Symbol::from_str("unfreeze"), args)?;
-        write_state(&e, id, false)?;
+        write_state(&e, id.clone(), false)?;
+        event::unfreeze(e, admin_id, id)?;
         Ok(())
     }
 
@@ -420,7 +434,8 @@ impl TokenTrait for Token {
         let account_id = id.get_account_id(e)?;
 
         let mut args = Vec::new(e)?;
-        args.push(id.get_identifier(&e)?)?;
+        let ident = id.get_identifier(&e)?;
+        args.push(ident.clone())?;
         args.push(nonce.clone())?;
         args.push(amount.clone())?;
         check_auth(&e, id, nonce, Symbol::from_str("import"), args)?;
@@ -436,6 +451,7 @@ impl TokenTrait for Token {
                 })?,
             )?,
         )?;
+        event::import(e, ident, amount)?;
         Ok(())
     }
 
@@ -453,7 +469,8 @@ impl TokenTrait for Token {
         let account_id = id.get_account_id(e)?;
 
         let mut args = Vec::new(e)?;
-        args.push(id.get_identifier(&e)?)?;
+        let ident = id.get_identifier(&e)?;
+        args.push(ident.clone())?;
         args.push(nonce.clone())?;
         args.push(amount.clone())?;
         check_auth(&e, id, nonce, Symbol::from_str("export"), args)?;
@@ -469,6 +486,7 @@ impl TokenTrait for Token {
                 })?,
             )?,
         )?;
+        event::export(e, ident, amount)?;
         Ok(())
     }
 }
