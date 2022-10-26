@@ -523,12 +523,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "624a8340c38c1b80fd549087862da4ba43e08858af025b236e509b6649fc13d5"
 
 [[package]]
-name = "parity-wasm"
-version = "0.42.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "be5e13c266502aadf83426d87d81a0f5d1ef45b8027f5a471c360abfe4bfae92"
-
-[[package]]
 name = "ppv-lite86"
 version = "0.2.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -780,7 +774,6 @@ dependencies = [
  "num-bigint",
  "num-integer",
  "num-traits",
- "parity-wasm",
  "sha2 0.10.2",
  "soroban-env-common 0.0.4",
  "soroban-native-sdk-macros 0.0.4",
@@ -802,7 +795,6 @@ dependencies = [
  "num-bigint",
  "num-integer",
  "num-traits",
- "parity-wasm",
  "sha2 0.10.2",
  "soroban-env-common 0.0.6",
  "soroban-native-sdk-macros 0.0.6",
@@ -966,7 +958,6 @@ version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2ba96c441aa5a924f5d59114b43b2f8eab4ebbf7041dbf1c38fbae04620cb518"
 dependencies = [
- "parity-wasm",
  "soroban-wasmi-validation",
  "soroban-wasmi_core 0.1.0",
 ]
@@ -987,7 +978,6 @@ version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8983fe9f704b4f4c171ac02de77fcc85cba9fd65ad951e381525a8d6b58c374b"
 dependencies = [
- "parity-wasm",
 ]
 
 [[package]]
@@ -1001,7 +991,6 @@ dependencies = [
  "memory_units",
  "num-rational",
  "num-traits",
- "parity-wasm",
 ]
 
 [[package]]
