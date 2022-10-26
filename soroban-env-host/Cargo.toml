@@ -17,7 +17,6 @@ wasmi = { package = "soroban-wasmi", version = "0.16.0-soroban1", optional = tru
 static_assertions = "1.1.0"
 im-rc = "15.0.0"
 num-bigint = "0.4"
-parity-wasm = { version = "0.42.0", optional = true }
 sha2 = "0.10.2"
 ed25519-dalek = "1.0.1"
 hex = "0.4.3"
@@ -38,12 +37,13 @@ thousands = "0.2.0"
 # NB: this must match the same rand version used by ed25519-dalek above
 rand = "0.7.3"
 soroban-test-wasms = { package = "soroban-test-wasms", path = "../soroban-test-wasms" }
+soroban-synth-wasm = { package = "soroban-synth-wasm", path = "../soroban-synth-wasm" }
 bytes-lit = "0.0.4"
 curve25519-dalek = "3.2.1"
 textplots = "0.8.0"
 
 [features]
-vm = ["wasmi", "parity-wasm", "soroban-env-common/vm"]
+vm = ["wasmi", "soroban-env-common/vm"]
 hostfn_log_fmt_values = []
 serde = ["soroban-env-common/serde"]
 testutils = []

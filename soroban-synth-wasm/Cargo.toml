@@ -1,0 +1,20 @@
+[package]
+name = "soroban-synth-wasm"
+description = "Utilities for synthesizing soroban contract wasm modules."
+homepage = "https://github.com/stellar/rs-soroban-env"
+repository = "https://github.com/stellar/rs-soroban-env"
+authors = ["Stellar Development Foundation <info@stellar.org>"]
+license = "Apache-2.0"
+version = "0.0.6"
+edition = "2021"
+rust-version = "1.64"
+publish = false
+
+[dependencies]
+wasm-encoder = "0.18.0"
+wasmparser = "0.92.0"
+soroban-env-common = "0.0.6"
+
+[dev-dependencies]
+expect-test = "1.4.0"
+wasmprinter = "0.2.41"

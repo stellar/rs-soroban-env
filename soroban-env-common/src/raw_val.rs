@@ -59,6 +59,18 @@ pub enum Tag {
     Reserved = 7,
 }
 
+impl Tag {
+    pub const fn rawval_const(&self) -> i64 {
+        ((*self as i64) << 1) | 1
+    }
+    pub const fn rawval_mask() -> i64 {
+        ((TAG_MASK as i64) << 1) | 1
+    }
+}
+
+sa::const_assert!(Tag::I32.rawval_const() == 3);
+sa::const_assert!(Tag::rawval_mask() == 0xf);
+
 /// A 64-bit value encoding a bit-packed disjoint union between several
 /// different types (numbers, booleans, symbols, object handles, etc.)
 ///
