@@ -8,6 +8,7 @@ members = [
     "soroban-env-macros",
     "soroban-native-sdk-macros",
     "soroban-test-wasms",
+    "soroban-synth-wasm"
 ]
 
 exclude = ["soroban-test-wasms/wasm-workspace"]
