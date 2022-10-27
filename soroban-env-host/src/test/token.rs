@@ -2,7 +2,7 @@ use std::{convert::TryInto, rc::Rc};
 
 use crate::{
     budget::Budget,
-    host::Frame,
+    host::{Frame, TestContractFrame},
     host_vec,
     native_contract::{
         base_types::BigInt,
@@ -252,10 +252,10 @@ impl TokenTest {
         F: FnOnce() -> Result<T, HostError>,
     {
         self.host.with_frame(
-            Frame::TestContract(
+            Frame::TestContract(TestContractFrame::new(
                 Hash(contract_id_bytes.to_array().unwrap()),
                 Symbol::from_str("foo"),
-            ),
+            )),
             || {
                 let res = f();
                 match res {
