@@ -1,6 +1,5 @@
 use crate::{
-    budget::CostType, events::DebugEvent, Host, HostError, Object, RawVal, Status, Symbol,
-    VmCaller, VmCallerCheckedEnv,
+    budget::CostType, Host, HostError, Object, RawVal, Status, Symbol, VmCaller, VmCallerCheckedEnv,
 };
 use soroban_env_common::call_macro_with_all_host_functions;
 use wasmi::core::{FromValue, Trap, TrapCode::UnexpectedSignature, Value};
@@ -82,9 +81,9 @@ macro_rules! generate_dispatch_functions {
                     let res: Value = match res {
                         Ok(ok) => ok.into(),
                         Err(hosterr) => {
-                            let ev = DebugEvent::new().msg("escalating error '{}' to VM trap").arg::<RawVal>(hosterr.status.into());
-                            let _ = host.record_debug_event(ev);
-                            let trap: Trap = hosterr.into();
+                            // We make a new HostError here to capture the escalation event itself.
+                            let escalation: HostError = host.err_status_msg(hosterr.status, "escalating error '{}' to VM trap");
+                            let trap: Trap = escalation.into();
                             return Err(trap)
                         }
                     };
