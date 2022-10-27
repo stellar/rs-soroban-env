@@ -1312,7 +1312,10 @@ impl VmCallerCheckedEnv for Host {
             }
             Ok(())
         });
-        self.err_status_msg(e.status, "escalating error '{}' to panic");
+        let ev = DebugEvent::new()
+            .msg("escalating error '{}' to panic")
+            .arg::<RawVal>(e.status.into());
+        let _ = self.record_debug_event(ev);
         panic!("{:?}", e)
     }
 

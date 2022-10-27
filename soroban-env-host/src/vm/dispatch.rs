@@ -1,4 +1,7 @@
-use crate::{budget::CostType, Host, Object, RawVal, Status, Symbol, VmCaller, VmCallerCheckedEnv};
+use crate::{
+    budget::CostType, events::DebugEvent, Host, HostError, Object, RawVal, Status, Symbol,
+    VmCaller, VmCallerCheckedEnv,
+};
 use soroban_env_common::call_macro_with_all_host_functions;
 use wasmi::core::{FromValue, Trap, TrapCode::UnexpectedSignature, Value};
 
@@ -75,7 +78,16 @@ macro_rules! generate_dispatch_functions {
                     // happens to be a natural switching point for that: we have
                     // conversions to and from both RawVal and i64 / u64 for
                     // wasmi::Value.
-                    let res: Value = host.$fn_id(&mut vmcaller, $(<$type as FromValue>::from_value(Value::I64($arg)).ok_or(UnexpectedSignature)?),*)?.into();
+                    let res: Result<_, HostError> = host.$fn_id(&mut vmcaller, $(<$type as FromValue>::from_value(Value::I64($arg)).ok_or(UnexpectedSignature)?),*);
+                    let res: Value = match res {
+                        Ok(ok) => ok.into(),
+                        Err(hosterr) => {
+                            let ev = DebugEvent::new().msg("escalating error '{}' to VM trap").arg::<RawVal>(hosterr.status.into());
+                            let _ = host.record_debug_event(ev);
+                            let trap: Trap = hosterr.into();
+                            return Err(trap)
+                        }
+                    };
                     if let Value::I64(v) = res {
                         Ok((v,))
                     } else {
