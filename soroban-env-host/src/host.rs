@@ -65,12 +65,12 @@ pub(crate) struct RollbackPoint {
     objects: usize,
 }
 
-#[cfg(feature = "testutils")]
+#[cfg(any(test, feature = "testutils"))]
 pub trait ContractFunctionSet {
     fn call(&self, func: &Symbol, host: &Host, args: &[RawVal]) -> Option<RawVal>;
 }
 
-#[cfg(feature = "testutils")]
+#[cfg(any(test, feature = "testutils"))]
 #[derive(Debug, Clone)]
 pub struct TestContractFrame {
     pub id: Hash,
@@ -78,7 +78,7 @@ pub struct TestContractFrame {
     panic: Rc<RefCell<Option<Status>>>,
 }
 
-#[cfg(feature = "testutils")]
+#[cfg(any(test, feature = "testutils"))]
 impl TestContractFrame {
     pub fn new(id: Hash, func: Symbol) -> Self {
         Self {
@@ -145,7 +145,7 @@ pub(crate) struct HostImpl {
     // of what users will be charged for in production -- it's scaffolding for testing a contract,
     // but shouldn't be charged to the contract itself (and will never be compiled-in to
     // production hosts)
-    #[cfg(feature = "testutils")]
+    #[cfg(any(test, feature = "testutils"))]
     contracts: RefCell<std::collections::HashMap<Hash, Rc<dyn ContractFunctionSet>>>,
 }
 // Host is a newtype on Rc<HostImpl> so we can impl Env for it below.
@@ -205,7 +205,7 @@ impl Host {
             context: Default::default(),
             budget,
             events: Default::default(),
-            #[cfg(feature = "testutils")]
+            #[cfg(any(test, feature = "testutils"))]
             contracts: Default::default(),
         }))
     }
@@ -808,7 +808,7 @@ impl Host {
         }
 
         // "testutils" is not covered by budget metering.
-        #[cfg(feature = "testutils")]
+        #[cfg(any(test, feature = "testutils"))]
         {
             // This looks a little un-idiomatic, but this avoids maintaining a borrow of
             // self.0.contracts. Implementing it as
@@ -966,7 +966,7 @@ impl Host {
     }
 
     // "testutils" is not covered by budget metering.
-    #[cfg(feature = "testutils")]
+    #[cfg(any(test, feature = "testutils"))]
     pub fn register_test_contract(
         &self,
         contract_id: Object,
@@ -983,7 +983,7 @@ impl Host {
     }
 
     // "testutils" is not covered by budget metering.
-    #[cfg(feature = "testutils")]
+    #[cfg(any(test, feature = "testutils"))]
     pub fn register_test_contract_wasm(
         &self,
         contract_id: Object,
@@ -995,7 +995,7 @@ impl Host {
     }
 
     // "testutils" is not covered by budget metering.
-    #[cfg(feature = "testutils")]
+    #[cfg(any(test, feature = "testutils"))]
     pub fn register_test_contract_token(&self, contract_id: Object) -> Result<(), HostError> {
         self.create_contract_with_id(ScContractCode::Token, contract_id)
     }
@@ -1305,7 +1305,7 @@ impl VmCallerCheckedEnv for Host {
     // Personally I think this is a glaring weakness of `panic_any` but we are
     // not in a position to improve it.
     fn escalate_error_to_panic(&self, e: Self::Error) -> ! {
-        #[cfg(feature = "testutils")]
+        #[cfg(any(test, feature = "testutils"))]
         let _ = self.with_current_frame(|f| {
             if let Frame::TestContract(frame) = f {
                 *frame.panic.borrow_mut() = Some(e.status);

@@ -14,7 +14,7 @@ mod vec;
 mod budget_metering;
 #[cfg(feature = "vm")]
 mod complex;
-#[cfg(feature = "testutils")]
+#[cfg(any(test, feature = "testutils"))]
 mod contract_event;
 #[cfg(feature = "vm")]
 mod hostile;
@@ -24,4 +24,5 @@ mod invocation;
 mod lifecycle;
 mod tuple;
 
+#[cfg(any(test, feature = "testutils"))]
 mod token;
