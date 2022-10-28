@@ -75,7 +75,7 @@ fn invoke_cross_contract_with_err() -> Result<(), HostError> {
     assert_eq!(sv.get_payload(), exp_st.to_raw().get_payload());
 
     let events = host.get_events()?;
-    assert_eq!(events.0.len(), 3);
+    assert_eq!(events.0.len(), 4);
     let last_event = events.0.last();
     match last_event {
         Some(HostEvent::Debug(de)) => {
@@ -107,7 +107,7 @@ fn invoke_cross_contract_with_err() -> Result<(), HostError> {
     assert!(HostError::result_matches_err_status(res, code));
 
     let events = host.get_events()?;
-    assert_eq!(events.0.len(), 6);
+    assert_eq!(events.0.len(), 8);
     let last_event = events.0.last();
     match last_event {
         Some(HostEvent::Debug(de)) => {
@@ -186,7 +186,7 @@ fn invoke_cross_contract_indirect_err() -> Result<(), HostError> {
     assert_eq!(status.get_payload(), exp.to_raw().get_payload());
 
     let events = host.get_events()?;
-    assert_eq!(events.0.len(), 4);
+    assert_eq!(events.0.len(), 5);
     let last_event = events.0.last();
     match last_event {
         Some(HostEvent::Debug(de)) => {
@@ -218,7 +218,7 @@ fn invoke_cross_contract_indirect_err() -> Result<(), HostError> {
     assert!(HostError::result_matches_err_status(res, code));
 
     let events = host.get_events()?;
-    assert_eq!(events.0.len(), 8);
+    assert_eq!(events.0.len(), 10);
     let last_event = events.0.last();
     match last_event {
         Some(HostEvent::Debug(de)) => {
