@@ -83,6 +83,7 @@ macro_rules! generate_checked_env_trait {
         pub trait CheckedEnv
         {
             type Error: Debug;
+            fn escalate_error_to_panic(&self,e:Self::Error) -> !;
             $(
                 $(
                     // This invokes the host_function_helper! macro above
@@ -115,12 +116,15 @@ call_macro_with_all_host_functions! { generate_checked_env_trait }
 //
 // and produces the the corresponding method declaration to be used in the Env
 // trait.
-macro_rules! unwrap_function_helper {
+macro_rules! panic_function_helper {
     {fn $fn_id:ident($($arg:ident:$type:ty),*) -> $ret:ty}
     =>
     {
         fn $fn_id(&self, $($arg:$type),*) -> $ret {
-            <Self as CheckedEnv>::$fn_id(self, $($arg),*).unwrap()
+            match <Self as CheckedEnv>::$fn_id(self, $($arg),*) {
+                Ok(x) => x,
+                Err(e) => self.escalate_error_to_panic(e)
+            }
         }
     };
 }
@@ -156,13 +160,13 @@ macro_rules! impl_env_for_checked_env {
 
     {
         // This macro expands to a single item: a blanket impl that makes all
-        // `CheckedEnv+EnvBase` types automatically `Env` types, just unwrapping
-        // their results.
+        // `CheckedEnv+EnvBase` types automatically `Env` types, panicking with
+        // any non-Ok() result.
         impl<T:CheckedEnv+EnvBase> $crate::Env for T
         {
             $(
                 $(
-                    // This invokes the unwrap_function_helper! macro above
+                    // This invokes the panic_function_helper! macro above
                     // passing only the relevant parts of the declaration
                     // matched by the inner pattern above. It is embedded in two
                     // nested `$()*` pattern-repetition expanders that
@@ -171,7 +175,7 @@ macro_rules! impl_env_for_checked_env {
                     // block repetition-level from the outer pattern in the
                     // expansion, flattening all functions from all 'mod' blocks
                     // into the impl.
-                    unwrap_function_helper!{fn $fn_id $args -> $ret}
+                    panic_function_helper!{fn $fn_id $args -> $ret}
                 )*
             )*
         }

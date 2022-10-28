@@ -126,6 +126,7 @@ macro_rules! generate_vmcaller_checked_env_trait {
         {
             type VmUserState;
             type Error: Debug;
+            fn escalate_error_to_panic(&self,e:Self::Error) -> !;
             $(
                 $(
                     // This invokes the host_function_helper! macro above
@@ -205,6 +206,9 @@ macro_rules! impl_checked_env_for_vmcaller_checked_env {
         impl<T:VmCallerCheckedEnv> $crate::CheckedEnv for T
         {
             type Error = <Self as VmCallerCheckedEnv>::Error;
+            fn escalate_error_to_panic(&self,e:Self::Error) -> ! {
+                <Self as VmCallerCheckedEnv>::escalate_error_to_panic(self,e)
+            }
             $(
                 $(
                     // This invokes the vmcaller_none_function_helper! macro above
