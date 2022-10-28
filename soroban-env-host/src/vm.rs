@@ -105,7 +105,7 @@ impl Vm {
         const SUPPORTED_INTERFACE_VERSION_RANGE: RangeInclusive<u64> =
             meta::INTERFACE_VERSION..=meta::INTERFACE_VERSION;
 
-        if let Some(env_meta) = Self::module_custom_section(m, "contractenvmetav0") {
+        if let Some(env_meta) = Self::module_custom_section(m, meta::ENV_META_V0_SECTION_NAME) {
             let mut cursor = Cursor::new(env_meta);
             for env_meta_entry in ScEnvMetaEntry::read_xdr_iter(&mut cursor) {
                 match host.map_err(env_meta_entry)? {
@@ -130,7 +130,7 @@ impl Vm {
         } else {
             Err(host.err_status_msg(
                 ScHostFnErrorCode::InputArgsInvalid,
-                "input contract missing `contractenvmetav0` section",
+                "input contract missing metadata section",
             ))
         }
     }

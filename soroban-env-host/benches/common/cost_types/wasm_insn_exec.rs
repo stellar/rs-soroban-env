@@ -2,46 +2,23 @@ use crate::common::HostCostMeasurement;
 use rand::rngs::StdRng;
 use soroban_env_host::budget::CostType;
 use soroban_env_host::xdr::{Hash, ScVal, ScVec};
-use soroban_env_host::{Host, Vm};
+use soroban_env_host::{Host, Symbol, Vm};
+use soroban_synth_wasm::{Arity, ModEmitter, Operand};
 use std::rc::Rc;
 
-#[cfg(all(test, feature = "vm"))]
 fn wasm_module_with_4n_insns(n: usize) -> Vec<u8> {
-    use parity_wasm::builder;
-    use parity_wasm::elements::{CustomSection, Section};
-    use parity_wasm::elements::{
-        ExportEntry, Instruction,
-        Instruction::{GetLocal, I64Add, I64Const, I64Mul},
-        Instructions, Internal, ValueType,
-    };
-    let mut insns: Vec<Instruction> = Vec::new();
-    insns.push(I64Const(1));
+    let mut fe = ModEmitter::new().func(Arity(1), 0);
+    let arg = fe.args[0];
+    fe.push(Operand::Const64(1));
     for i in 0..n {
-        insns.push(GetLocal(0));
-        insns.push(I64Const(i as i64));
-        insns.push(I64Mul);
-        insns.push(I64Add);
+        fe.push(arg);
+        fe.push(Operand::Const64(i as i64));
+        fe.mul64();
+        fe.add64();
     }
-    insns.push(Instruction::Drop);
-    insns.push(I64Const(0));
-    insns.push(Instruction::End);
-    let module = builder::module()
-        .function()
-        .signature()
-        .with_params(vec![ValueType::I64])
-        .with_result(ValueType::I64)
-        .build()
-        .body()
-        .with_instructions(Instructions::new(insns))
-        .build()
-        .build()
-        .with_export(ExportEntry::new("test".into(), Internal::Function(0)))
-        .with_section(Section::Custom(CustomSection::new(
-            "contractenvmetav0".to_string(),
-            soroban_env_common::meta::XDR.to_vec(),
-        )))
-        .build();
-    module.to_bytes().unwrap()
+    fe.drop();
+    fe.push(Symbol::from_str("pass"));
+    fe.finish_and_export("test").finish()
 }
 
 pub(crate) struct WasmInsnExecRun {
@@ -66,10 +43,11 @@ impl HostCostMeasurement for WasmInsnExecRun {
     }
 
     fn get_input(&self, _host: &Host) -> u64 {
-        self.insns
+        self.insns * 4
     }
 
     fn run(&mut self, _iter: u64, host: &Host) {
-        self.vm.invoke_function(host, "test", &self.args).unwrap();
+        let scval = self.vm.invoke_function(host, "test", &self.args).unwrap();
+        assert_eq!(scval, ScVal::Symbol("pass".try_into().unwrap()));
     }
 }
