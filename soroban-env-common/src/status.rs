@@ -161,6 +161,8 @@ impl TryFrom<Status> for ScStatus {
                 ScStatus::HostContextError((st.get_code() as i32).try_into()?)
             } else if st.is_type(ScStatusType::VmError) {
                 ScStatus::VmError((st.get_code() as i32).try_into()?)
+            } else if st.is_type(ScStatusType::ContractError) {
+                ScStatus::ContractError(st.get_code())
             } else {
                 return Err(stellar_xdr::Error::Invalid);
             }
