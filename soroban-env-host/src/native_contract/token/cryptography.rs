@@ -1,14 +1,16 @@
 use crate::host::Host;
 use crate::native_contract::base_types::{BigInt, Bytes, BytesN, Vec};
-use crate::native_contract::token::error::Error;
 use crate::native_contract::token::nonce::read_and_increment_nonce;
 use crate::native_contract::token::public_types::{
     AccountSignatures, Ed25519Signature, Identifier, Signature, SignaturePayload,
     SignaturePayloadV0,
 };
+use crate::{err, HostError};
 use core::cmp::Ordering;
 use soroban_env_common::xdr::{ThresholdIndexes, Uint256};
 use soroban_env_common::{CheckedEnv, InvokerType, Symbol, TryFromVal, TryIntoVal};
+
+use super::error::ContractError;
 
 const MAX_ACCOUNT_SIGNATURES: u32 = 20;
 
@@ -18,7 +20,7 @@ fn check_ed25519_auth(
     auth: Ed25519Signature,
     name: Symbol,
     args: Vec,
-) -> Result<(), Error> {
+) -> Result<(), HostError> {
     let msg = SignaturePayloadV0 {
         name,
         contract: BytesN::<32>::try_from_val(e, e.get_current_contract()?)?,
@@ -37,7 +39,7 @@ fn check_account_auth(
     auth: AccountSignatures,
     name: Symbol,
     args: Vec,
-) -> Result<(), Error> {
+) -> Result<(), HostError> {
     let msg = SignaturePayloadV0 {
         name,
         contract: BytesN::<32>::try_from_val(e, e.get_current_contract()?)?,
@@ -51,7 +53,13 @@ fn check_account_auth(
     // Check if there is too many signatures: there shouldn't be more
     // signatures then the amount of account signers.
     if sigs.len()? > MAX_ACCOUNT_SIGNATURES {
-        return Err(Error::ContractError);
+        return Err(err!(
+            e,
+            ContractError::AuthenticationError,
+            "too many account signers: {} > {}",
+            sigs.len()?,
+            MAX_ACCOUNT_SIGNATURES
+        ));
     }
     let account = e.load_account(auth.account_id)?;
     let mut prev_pk: Option<BytesN<32>> = None;
@@ -60,7 +68,13 @@ fn check_account_auth(
         // Cannot take multiple signatures from the same key
         if let Some(prev) = prev_pk {
             if prev.compare(&sig.public_key)? != Ordering::Less {
-                return Err(Error::ContractError);
+                return Err(err!(
+                    e,
+                    ContractError::AuthenticationError,
+                    "public keys are not ordered: {} > {}",
+                    prev,
+                    sig.public_key
+                ));
             }
         }
 
@@ -76,7 +90,12 @@ fn check_account_auth(
         // this as an error to indicate a bug in signatures, even if another
         // signers would have enough weight.
         if signer_weight == 0 {
-            return Err(Error::ContractError);
+            return Err(err!(
+                e,
+                ContractError::AuthenticationError,
+                "signer '{}' does not belong to account",
+                sig.public_key
+            ));
         }
         // Overflow isn't possible here as
         // 255 * MAX_ACCOUNT_SIGNATURES is < u32::MAX.
@@ -85,7 +104,13 @@ fn check_account_auth(
     }
     let threshold = account.thresholds.0[ThresholdIndexes::Med as usize];
     if weight < threshold as u32 {
-        Err(Error::ContractError)
+        Err(err!(
+            e,
+            ContractError::AuthenticationError,
+            "signature weight is lower than threshold: {} < {}",
+            weight,
+            threshold as u32
+        ))
     } else {
         Ok(())
     }
@@ -98,11 +123,16 @@ pub fn check_auth(
     nonce: BigInt,
     function: Symbol,
     args: Vec,
-) -> Result<(), Error> {
+) -> Result<(), HostError> {
     match auth {
         Signature::Invoker => {
             if nonce.compare(&BigInt::from_u64(e, 0)?)? != Ordering::Equal {
-                Err(Error::ContractError)
+                Err(err!(
+                    e,
+                    ContractError::NonceError,
+                    "non-zero invoker nonce: {}",
+                    nonce
+                ))
             } else {
                 let invoker_type: InvokerType = Host::get_invoker_type(&e)?.try_into()?;
                 match invoker_type {
@@ -116,7 +146,13 @@ pub fn check_auth(
             let stored_nonce =
                 read_and_increment_nonce(e, Identifier::Ed25519(kea.public_key.clone()))?;
             if nonce.compare(&stored_nonce)? != Ordering::Equal {
-                Err(Error::ContractError)
+                Err(err!(
+                    e,
+                    ContractError::NonceError,
+                    "incorrect nonce: expected {}, got {}",
+                    stored_nonce,
+                    nonce
+                ))
             } else {
                 check_ed25519_auth(e, kea, function, args)?;
                 Ok(())
@@ -126,7 +162,13 @@ pub fn check_auth(
             let stored_nonce =
                 read_and_increment_nonce(e, Identifier::Account(kaa.account_id.clone()))?;
             if nonce.compare(&stored_nonce)? != Ordering::Equal {
-                Err(Error::ContractError)
+                Err(err!(
+                    e,
+                    ContractError::NonceError,
+                    "incorrect nonce: expected {}, got {}",
+                    stored_nonce,
+                    nonce
+                ))
             } else {
                 check_account_auth(e, kaa, function, args)?;
                 Ok(())
