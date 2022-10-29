@@ -1,35 +1,26 @@
-use crate::host::HostError;
-use soroban_env_common::{ConversionError, Status};
+use num_derive::FromPrimitive;
+use soroban_env_common::Status;
 
-#[derive(Debug)]
-pub enum Error {
-    HostError(HostError),
-    ContractError,
+#[derive(Debug, FromPrimitive, PartialEq, Eq)]
+pub enum ContractError {
+    InternalError = 1,
+    OperationNotSupportedError = 2,
+    AlreadyInitializedError = 3,
+
+    UnauthorizedError = 4,
+    AuthenticationError = 5,
+    NonceError = 6,
+    SignatureError = 7,
+    AccountMissingError = 8,
+
+    NegativeAmountError = 9,
+    AllowanceError = 10,
+    BalanceError = 11,
+    BalanceFrozenError = 12,
 }
 
-impl From<Status> for Error {
-    fn from(s: Status) -> Self {
-        Error::HostError(s.into())
-    }
-}
-
-impl From<ConversionError> for Error {
-    fn from(e: ConversionError) -> Self {
-        Error::HostError(e.into())
-    }
-}
-
-impl From<HostError> for Error {
-    fn from(e: HostError) -> Self {
-        Error::HostError(e)
-    }
-}
-
-impl From<Error> for HostError {
-    fn from(e: Error) -> Self {
-        match e {
-            Error::HostError(he) => he,
-            Error::ContractError => crate::xdr::ScUnknownErrorCode::General.into(),
-        }
+impl From<ContractError> for Status {
+    fn from(err: ContractError) -> Self {
+        Status::from_contract_error(err as u32)
     }
 }

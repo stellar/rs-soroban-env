@@ -43,6 +43,23 @@ impl Host {
         self.err(DebugError::new(status).msg(msg))
     }
 
+    /// Helper for the error message with status and an arbitrary number of args.
+    pub fn err_status_msg_with_args<T>(
+        &self,
+        status: T,
+        msg: &'static str,
+        args: &[RawVal],
+    ) -> HostError
+    where
+        Status: From<T>,
+    {
+        let mut e = DebugError::new(status).msg(msg);
+        for arg in args {
+            e = e.arg(*arg)
+        }
+        self.err(e)
+    }
+
     // Helper for a conversion error from any type into a rawval
     pub fn err_conversion_into_rawval<T>(&self, rv: RawVal) -> HostError {
         self.err(
@@ -79,4 +96,20 @@ impl Host {
     {
         res.map_err(|e| self.err(e.into()))
     }
+}
+
+// Helper for building multi-argument errors.
+// For example:
+// ```
+// err!(host, status, "{}: foo {}", arg1, arg2);
+// ```
+// All arguments must be convertible to `RawVal` with `try_into_val`. This is
+// expected to be called from within a function that returns
+// `Result<_, HostError>`. If these requirements can't be fulfilled, use
+// `err_status_msg_with_args` function directly.
+#[macro_export]
+macro_rules! err {
+    ($host:expr, $status:expr, $msg:expr, $($args:expr),+) => {
+        $host.err_status_msg_with_args($status, $msg, &[$($args.try_into_val($host)?,)+])
+    };
 }

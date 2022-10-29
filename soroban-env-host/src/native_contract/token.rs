@@ -3,7 +3,7 @@ mod allowance;
 mod balance;
 mod contract;
 mod cryptography;
-mod error;
+pub(crate) mod error;
 mod event;
 mod metadata;
 mod nonce;

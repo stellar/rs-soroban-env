@@ -1,13 +1,19 @@
 use crate::host::Host;
 use crate::native_contract::base_types::BigInt;
-use crate::native_contract::token::error::Error;
 use crate::native_contract::token::public_types::Identifier;
 use crate::native_contract::token::storage_types::{AllowanceDataKey, DataKey};
+use crate::{err, HostError};
 use core::cmp::Ordering;
 use soroban_env_common::{CheckedEnv, TryIntoVal};
 
+use super::error::ContractError;
+
 // Metering: covered by components
-pub fn read_allowance(e: &Host, from: Identifier, spender: Identifier) -> Result<BigInt, Error> {
+pub fn read_allowance(
+    e: &Host,
+    from: Identifier,
+    spender: Identifier,
+) -> Result<BigInt, HostError> {
     let key = DataKey::Allowance(AllowanceDataKey { from, spender });
     if let Ok(allowance) = e.get_contract_data(key.try_into_val(e)?) {
         Ok(allowance.try_into_val(e)?)
@@ -22,7 +28,7 @@ pub fn write_allowance(
     from: Identifier,
     spender: Identifier,
     amount: BigInt,
-) -> Result<(), Error> {
+) -> Result<(), HostError> {
     let key = DataKey::Allowance(AllowanceDataKey { from, spender });
     e.put_contract_data(key.try_into_val(e)?, amount.try_into_val(e)?)?;
     Ok(())
@@ -34,10 +40,16 @@ pub fn spend_allowance(
     from: Identifier,
     spender: Identifier,
     amount: BigInt,
-) -> Result<(), Error> {
+) -> Result<(), HostError> {
     let allowance = read_allowance(e, from.clone(), spender.clone())?;
     if allowance.compare(&amount)? == Ordering::Less {
-        Err(Error::ContractError)
+        Err(err!(
+            e,
+            ContractError::AllowanceError,
+            "not enough allowance to spend: {} < {}",
+            allowance,
+            amount
+        ))
     } else {
         write_allowance(e, from, spender, (allowance - amount)?)
     }
