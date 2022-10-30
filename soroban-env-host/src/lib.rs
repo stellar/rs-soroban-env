@@ -44,6 +44,8 @@ pub mod storage;
 #[cfg(test)]
 mod test;
 
+pub mod cost_runner;
+
 #[cfg(any(test, feature = "testutils"))]
 pub use host::ContractFunctionSet;
 pub use host::{metered_map::MeteredOrdMap, Host, HostError, LedgerInfo};

@@ -28,6 +28,7 @@ pub(crate) const TOPIC_BYTES_LENGTH_LIMIT: usize = 32;
 impl Events {
     // Records the smallest variant of a debug HostEvent it can, returning the size of the
     // in_args slice (for charging to a budget).
+    // Notes on metering: this is covered by the host. See `Host::record_debug_event` for details.
     pub fn record_debug_event(&mut self, de: DebugEvent) -> u64 {
         let len = de.args.len();
         self.0.push(HostEvent::Debug(de));
@@ -35,6 +36,7 @@ impl Events {
     }
 
     // Records a contract HostEvent.
+    // Notes on metering: this is covered by the host. See `Host::record_contract_event` for details.
     pub fn record_contract_event(&mut self, ce: ContractEvent) {
         self.0.push(HostEvent::Contract(ce))
     }

@@ -1,7 +1,10 @@
 use crate::common::HostCostMeasurement;
 use curve25519_dalek::{constants, edwards, scalar};
 use rand::{rngs::StdRng, Rng, RngCore};
-use soroban_env_host::{budget::CostType, Host};
+use soroban_env_host::{
+    cost_runner::{Ed25519ScalarMulRun, Ed25519ScalarMulSample},
+    Host,
+};
 
 // This measures the costs of doing an Ed25519 scalar multiply, which is a
 // component of signature verification and is the only part advertised as
@@ -9,39 +12,34 @@ use soroban_env_host::{budget::CostType, Host};
 // nonlinear and the point of this measurement is to investigate how wide the
 // variation is in the histogram.
 #[allow(non_snake_case)]
-pub(crate) struct EdwardsPointCurve25519ScalarMulRun {
+pub(crate) struct Ed25519ScalarMulMeasure {
     a: scalar::Scalar,
     A: edwards::EdwardsPoint,
     b: scalar::Scalar,
 }
 #[allow(non_snake_case)]
-impl HostCostMeasurement for EdwardsPointCurve25519ScalarMulRun {
-    const COST_TYPE: CostType = CostType::EdwardsPointCurve25519ScalarMul;
-    const RUN_ITERATIONS: u64 = 100;
+impl HostCostMeasurement for Ed25519ScalarMulMeasure {
+    type Runner = Ed25519ScalarMulRun;
 
-    fn run(&mut self, _iter: u64, _host: &Host) {
-        edwards::EdwardsPoint::vartime_double_scalar_mul_basepoint(&self.a, &self.A, &self.b);
-    }
-
-    fn new_best_case(_host: &Host, _rng: &mut StdRng) -> Self {
+    fn new_best_case(_host: &Host, _rng: &mut StdRng) -> Ed25519ScalarMulSample {
         let a = scalar::Scalar::one();
         let b = scalar::Scalar::one();
         let A = constants::ED25519_BASEPOINT_COMPRESSED
             .decompress()
             .unwrap();
-        Self { a, b, A }
+        Ed25519ScalarMulSample { a, b, A }
     }
 
-    fn new_worst_case(_host: &Host, _rng: &mut StdRng, _input: u64) -> Self {
+    fn new_worst_case(_host: &Host, _rng: &mut StdRng, _input: u64) -> Ed25519ScalarMulSample {
         let a = scalar::Scalar::from_bytes_mod_order([0xff; 32]);
         let b = a.clone();
         let A = constants::ED25519_BASEPOINT_COMPRESSED
             .decompress()
             .unwrap();
-        Self { a, b, A }
+        Ed25519ScalarMulSample { a, b, A }
     }
 
-    fn new_random_case(_host: &Host, rng: &mut StdRng, _input: u64) -> Self {
+    fn new_random_case(_host: &Host, rng: &mut StdRng, _input: u64) -> Ed25519ScalarMulSample {
         fn random_scalar(rng: &mut StdRng) -> scalar::Scalar {
             let mut buf: [u8; 32] = [0; 32];
             rng.fill_bytes(&mut buf);
@@ -59,10 +57,6 @@ impl HostCostMeasurement for EdwardsPointCurve25519ScalarMulRun {
         let A = constants::ED25519_BASEPOINT_COMPRESSED
             .decompress()
             .unwrap();
-        Self { a, b, A }
-    }
-
-    fn get_input(&self, _host: &Host) -> u64 {
-        1
+        Ed25519ScalarMulSample { a, b, A }
     }
 }

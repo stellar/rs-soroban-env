@@ -456,12 +456,16 @@ impl Host {
 
     // Notes on metering: closure call needs to be metered separatedly. `VisitObject` only covers
     /// the cost of visiting an object.
-    unsafe fn unchecked_visit_val_obj<F, U>(&self, val: RawVal, f: F) -> Result<U, HostError>
+    pub(crate) unsafe fn unchecked_visit_val_obj<F, U>(
+        &self,
+        val: RawVal,
+        f: F,
+    ) -> Result<U, HostError>
     where
         F: FnOnce(Option<&HostObject>) -> Result<U, HostError>,
     {
-        self.charge_budget(CostType::VisitObject, 1)?;
         let r = self.0.objects.borrow();
+        self.charge_budget(CostType::VisitObject, r.len() as u64)?;
         let index = <Object as RawValConvertible>::unchecked_from_val(val).get_handle() as usize;
         f(r.get(index))
     }

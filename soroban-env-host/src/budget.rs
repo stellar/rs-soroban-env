@@ -14,11 +14,14 @@ pub enum CostType {
     WasmMemAlloc = 1,
     // Cost of forming a debug event and pushing it into the event storage
     HostEventDebug = 2,
-    // Cost of forming a contract event and pushing it into the event storage
+    // TODO: consider removing. This is just a `Vec::push`. Cost of pushing a contract event it into the event storage
+    // The average of cpu insns is around 300.
     HostEventContract = 3,
     // Cost of a host function invocation, not including the actual work done by the function
     HostFunction = 4,
     // Cost of visiting a host object from the host object storage
+    // TODO: consider removing. This is just indexing into an array. Fixed cost around 400 insns.
+    // Only thing to make sure is the guest can't visitObject repeatly without incurring some charges elsewhere.
     VisitObject = 5,
     // Cost of pushing a frame into the context
     PushFrame = 6,
