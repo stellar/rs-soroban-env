@@ -89,7 +89,7 @@ impl Host {
                 }),
                 ext: LedgerEntryExt::V0,
             };
-            map.insert(storage_key.clone(), Some(le));
+            map.insert(Box::new(storage_key.clone()), Some(Box::new(le)));
             footprint
                 .record_access(&storage_key, AccessType::ReadOnly)
                 .unwrap();

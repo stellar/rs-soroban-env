@@ -22,7 +22,7 @@ fn check_account_exists() -> Result<(), HostError> {
     footprint.record_access(&lk1, AccessType::ReadOnly).unwrap();
 
     let mut map = im_rc::OrdMap::default();
-    map.insert(lk0, Some(le0));
+    map.insert(Box::new(lk0), Some(Box::new(le0)));
     let storage = Storage::with_enforcing_footprint_and_map(
         footprint,
         MeteredOrdMap {
