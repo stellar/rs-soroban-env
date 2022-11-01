@@ -3,18 +3,18 @@ use soroban_env_host::{events::HostEvent, xdr::ScObjectType, Env, EnvBase, Host,
 #[test]
 fn vec_as_seen_by_user() -> Result<(), ()> {
     let host = Host::default();
-    let int1 = host.obj_from_i64(5).in_env(&host);
+    let int1 = RawVal::from_i64(5);
 
     let vec1a = host.vec_new(RawVal::from_void()).in_env(&host);
-    let vec1b = host.vec_push_back(vec1a.val, *int1.as_ref()).in_env(&host);
+    let vec1b = host.vec_push_back(vec1a.val, int1.clone()).in_env(&host);
 
-    assert_ne!(vec1a.as_raw().get_payload(), vec1b.as_raw().get_payload());
+    assert_ne!(vec1a, vec1b);
 
     let vec2a = host.vec_new(RawVal::from_void()).in_env(&host);
-    let vec2b = host.vec_push_back(vec2a.val, *int1.as_ref()).in_env(&host);
+    let vec2b = host.vec_push_back(vec2a.val, int1).in_env(&host);
 
-    assert_ne!(vec2a.as_raw().get_payload(), vec2b.as_raw().get_payload());
-    assert_ne!(vec1b.as_raw().get_payload(), vec2b.as_raw().get_payload());
+    assert_ne!(vec2a, vec2b);
+    assert!(!vec1b.to_raw().shallow_eq(&vec2b.to_raw()));
     assert_eq!(vec1a, vec2a);
     assert_eq!(vec1b, vec2b);
     Ok(())

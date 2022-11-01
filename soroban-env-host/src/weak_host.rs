@@ -50,16 +50,11 @@ impl EnvBase for WeakHost {
         self.get_host().deep_clone().get_weak()
     }
 
-    fn bytes_copy_from_slice(
-        &self,
-        b: Object,
-        b_pos: RawVal,
-        mem: &[u8],
-    ) -> Result<Object, Status> {
+    fn bytes_copy_from_slice(&self, b: Object, b_pos: u32, mem: &[u8]) -> Result<Object, Status> {
         self.get_host().bytes_copy_from_slice(b, b_pos, mem)
     }
 
-    fn bytes_copy_to_slice(&self, b: Object, b_pos: RawVal, mem: &mut [u8]) -> Result<(), Status> {
+    fn bytes_copy_to_slice(&self, b: Object, b_pos: u32, mem: &mut [u8]) -> Result<(), Status> {
         self.get_host().bytes_copy_to_slice(b, b_pos, mem)
     }
 

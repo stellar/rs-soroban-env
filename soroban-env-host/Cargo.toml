@@ -11,6 +11,7 @@ edition = "2021"
 rust-version = "1.65"
 
 [dependencies]
+soroban-env-macros = { version = "0.0.9" }
 soroban-native-sdk-macros = { version = "0.0.9" }
 soroban-env-common = { version = "0.0.9", features = [ "std" ] }
 wasmi = { package = "soroban-wasmi", version = "0.16.0-soroban1", optional = true }

@@ -1,8 +1,17 @@
+#[allow(unused_imports)]
 use crate::{
     budget::CostType, Host, HostError, Object, RawVal, Status, Symbol, VmCaller, VmCallerCheckedEnv,
 };
+use soroban_env_common::abi;
 use soroban_env_common::call_macro_with_all_host_functions;
+#[allow(unused_imports)]
 use wasmi::core::{FromValue, Trap, TrapCode::UnexpectedSignature, Value};
+
+fn escalate_status(host: Host, status: Status) -> Trap {
+    let escalation: HostError = host.err_status_msg(status, "escalating error '{}' to VM trap");
+    let trap: Trap = escalation.into();
+    trap
+}
 
 ///////////////////////////////////////////////////////////////////////////////
 /// X-macro use: dispatch functions
@@ -45,12 +54,12 @@ macro_rules! generate_dispatch_functions {
                 // This defines a "dispatch function" that does several things:
                 //
                 //  1. charges the budget for the call, failing if over budget.
-                //  2. attempts to convert incoming wasmi i64 args to RawVals or
+                //  2. implodes and attempts to convert incoming args to RawVals or
                 //     RawVal-wrappers expected by host functions, failing if
                 //     any conversions fail.
                 //  3. calls the host function
                 //  4. checks the result is Ok, or traps the VM on Err
-                //  5. converts the result back to an i64 for wasmi
+                //  5. writes the result back through any retptr, returns
                 //
                 // It is embedded in two nested `$()*` pattern-repetition
                 // expanders that correspond to the pattern-repetition matchers
@@ -58,41 +67,7 @@ macro_rules! generate_dispatch_functions {
                 // 'mod' block repetition-level from the outer pattern in the
                 // expansion, flattening all functions from all 'mod' blocks
                 // into a set of functions.
-                $(#[$fn_attr])*
-                pub(crate) fn $fn_id(caller: wasmi::Caller<Host>, $($arg:i64),*) ->
-                    Result<(i64,), Trap>
-                {
-                    // Notes on metering: a flat charge per host function invocation.
-                    // This does not account for the actual work being done in those functions,
-                    // which are accounted for individually at the operation level.
-                    let host = caller.host_data().clone();
-                    host.charge_budget(CostType::HostFunction, 1)?;
-                    let mut vmcaller = VmCaller(Some(caller));
-                    // The odd / seemingly-redundant use of `wasmi::Value` here
-                    // as intermediates -- rather than just passing RawVals --
-                    // has to do with the fact that some host functions are
-                    // typed as receiving or returning plain _non-Rawval_ i64 or
-                    // u64 values. So the call here has to be able to massage
-                    // both types into and out of i64, and `wasmi::Value`
-                    // happens to be a natural switching point for that: we have
-                    // conversions to and from both RawVal and i64 / u64 for
-                    // wasmi::Value.
-                    let res: Result<_, HostError> = host.$fn_id(&mut vmcaller, $(<$type as FromValue>::from_value(Value::I64($arg)).ok_or(UnexpectedSignature)?),*);
-                    let res: Value = match res {
-                        Ok(ok) => ok.into(),
-                        Err(hosterr) => {
-                            // We make a new HostError here to capture the escalation event itself.
-                            let escalation: HostError = host.err_status_msg(hosterr.status, "escalating error '{}' to VM trap");
-                            let trap: Trap = escalation.into();
-                            return Err(trap)
-                        }
-                    };
-                    if let Value::I64(v) = res {
-                        Ok((v,))
-                    } else {
-                        Err(UnexpectedSignature.into())
-                    }
-                }
+                soroban_env_macros::dispatch_function!{$mod_name, $fn_str, fn $fn_id($($arg:$type),*) -> $ret;}
             )*
         )*
     };

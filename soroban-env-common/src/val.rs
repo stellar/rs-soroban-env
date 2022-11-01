@@ -4,7 +4,7 @@ use crate::{BitSet, Object, RawVal, Static, Status, Symbol};
 /// can be `AsRef`/`AsMut`'ed to `RawVal`.
 ///
 /// This is a sort of workaround for Rust not having inheritance.
-pub trait Val: AsRef<RawVal> + AsMut<RawVal> + Into<RawVal> + Clone {}
+pub trait Val: Into<RawVal> + Clone {}
 
 impl Val for RawVal {}
 impl Val for Object {}

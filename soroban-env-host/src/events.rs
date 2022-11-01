@@ -7,6 +7,7 @@ use crate::{
     HostError,
 };
 use log::debug;
+use soroban_env_common::{Object, Symbol};
 use tinyvec::TinyVec;
 
 // TODO: optimize storage on this to use pools / bumpalo / etc.
@@ -58,6 +59,24 @@ pub enum DebugArg {
 impl From<RawVal> for DebugArg {
     fn from(rv: RawVal) -> Self {
         DebugArg::Val(rv)
+    }
+}
+
+impl From<Object> for DebugArg {
+    fn from(ob: Object) -> Self {
+        DebugArg::Val(ob.into())
+    }
+}
+
+impl From<Status> for DebugArg {
+    fn from(st: Status) -> Self {
+        DebugArg::Val(st.into())
+    }
+}
+
+impl From<Symbol> for DebugArg {
+    fn from(sym: Symbol) -> Self {
+        DebugArg::Val(sym.into())
     }
 }
 

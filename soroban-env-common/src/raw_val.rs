@@ -8,68 +8,42 @@ use core::{convert::Infallible, fmt::Debug};
 extern crate static_assertions as sa;
 
 #[allow(dead_code)]
-const WORD_BITS: usize = 64;
-const TAG_BITS: usize = 3;
-const TAG_MASK: u64 = (1u64 << TAG_BITS) - 1;
-sa::const_assert!(TAG_MASK == 0x7);
-
-#[allow(dead_code)]
-pub(crate) const BODY_BITS: usize = WORD_BITS - (TAG_BITS + 1);
-sa::const_assert!(BODY_BITS == 60);
-
-#[allow(dead_code)]
-const MAJOR_BITS: usize = 32;
-#[allow(dead_code)]
-const MINOR_BITS: usize = 28;
-#[allow(dead_code)]
-const MAJOR_MASK: u64 = (1u64 << MAJOR_BITS) - 1;
-const MINOR_MASK: u64 = (1u64 << MINOR_BITS) - 1;
-sa::const_assert!(MAJOR_MASK == 0xffff_ffff);
-sa::const_assert!(MINOR_MASK == 0x0fff_ffff);
-sa::const_assert!(MAJOR_BITS + MINOR_BITS == BODY_BITS);
+const TAG_MASK: u32 = 0xff_u32;
 
 /// Code values for the 3 "tag" bits in the bit-packed representation
 /// of [RawVal].
 #[repr(u8)]
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Tag {
+    // TODO v160: we have enough tag space now to put bool, void,
+    // {u,i}{8,16,128}, option and result in the control word.
     /// Tag for a [RawVal] that contains a [u32] number.
     U32 = 0,
 
     /// Tag for a [RawVal] that contains an [i32] number.
     I32 = 1,
 
+    /// Tag for a [RawVal] that contains a [u64] number.
+    U64 = 2,
+
+    /// Tag for a [RawVal] that contains an [i64] number.
+    I64 = 3,
+
     /// Tag for a [RawVal] that contains a "static" value like `true`, `false`, `void`; see [Static](crate::Static).
-    Static = 2,
+    Static = 4,
 
     /// Tag for a [RawVal] that contains a host object handle; see [Object](crate::Object).
-    Object = 3,
+    Object = 5,
 
     /// Tag for a [RawVal] that contains a symbol; see [Symbol](crate::Symbol).
-    Symbol = 4,
+    Symbol = 6,
 
     /// Tag for a [RawVal] that contains a small bitset; see [BitSet](crate::BitSet).
-    BitSet = 5,
+    BitSet = 7,
 
     /// Tag for a [RawVal] that contains a status code; see [Status](crate::Status).
-    Status = 6,
-
-    /// Reserved tag for future use.
-    #[allow(dead_code)]
-    Reserved = 7,
+    Status = 8,
 }
-
-impl Tag {
-    pub const fn rawval_const(&self) -> i64 {
-        ((*self as i64) << 1) | 1
-    }
-    pub const fn rawval_mask() -> i64 {
-        ((TAG_MASK as i64) << 1) | 1
-    }
-}
-
-sa::const_assert!(Tag::I32.rawval_const() == 3);
-sa::const_assert!(Tag::rawval_mask() == 0xf);
 
 /// A 64-bit value encoding a bit-packed disjoint union between several
 /// different types (numbers, booleans, symbols, object handles, etc.)
@@ -98,10 +72,124 @@ sa::const_assert!(Tag::rawval_mask() == 0xf);
 ///    0x_NNNN_NNNN_NNNN_NNNf  - reserved
 /// ```
 
-#[repr(transparent)]
-#[derive(Copy, Clone)]
-pub struct RawVal(u64);
+/// V2:
+///
+/// A RawVal is the "large" polymorphic type we're willing to exchange across
+/// the Host/Guest barrier, and which is stored in slots inside conainers.
+/// It can contain any scalar type, as well as small symbols and other small
+/// structured types.
+///
+/// RawVals are packed 160-bit / 20-byte structs consisting of a 32-bit control
+/// value and a 128-bit payload.
+///
+/// We use the "Basic C ABI" for passing and returning structs, as specified
+/// in https://github.com/WebAssembly/tool-conventions/blob/main/BasicCABI.md
+///
+/// Spelled out: RawVals are passed and returned by reference. References are
+/// 32-bit values that point into guest linear memory, usually just the guest's
+/// shadow stack (i.e. this does not require the guest to have a heap
+/// allocator). To accept a RawVal by reference, the host reads 20 bytes from
+/// guest linear memory at the address passed. To return a RawVal by reference,
+/// the host writes 20 bytes into the address passed.
+///
+/// To invoke a guest function with a RawVal argument, the host first increments
+/// the guest's stack pointer (which is the first mutable global in the guest)
+/// by 20 bytes, and then writes the RawVal into the newly-allocated stack area
+/// and passes its address to the guest.
+///
+/// Host functions do not need to accept _only_ RawVals: they can also accept
+/// direct u32 words representing 32-bit Rust numbers, chars or bools. Host
+/// functions that _return_ such values can also return them directly, rather
+/// than through a reference.
 
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct RawVal {
+    pub control: u32,
+    pub payload: u128,
+}
+
+impl crate::abi::BufReadWrite for RawVal {
+    type MemBuf = [u8; 20];
+    const ZERO_BUF: Self::MemBuf = [0;20];
+
+    fn buf_write(self, b: &mut Self::MemBuf) {
+        let cbuf = u32::to_le_bytes(self.control);
+        let pbuf = u128::to_le_bytes(self.payload);
+        unsafe {
+            let mut bp = b.as_mut_ptr();
+            cbuf.as_ptr().copy_to(bp, 4);
+            bp = bp.add(4);
+            pbuf.as_ptr().copy_to(bp, 16);
+        }
+    }
+
+    fn buf_read(b: &Self::MemBuf) -> Self {
+        let mut cbuf: [u8; 4] = [0; 4];
+        let mut pbuf: [u8; 16] = [0; 16];
+        unsafe {
+            let mut bp = b.as_ptr();
+            bp.copy_to(cbuf.as_mut_ptr(), 4);
+            bp = bp.add(4);
+            bp.copy_to(pbuf.as_mut_ptr(), 16);
+        }
+        let control = u32::from_le_bytes(cbuf);
+        let payload = u128::from_le_bytes(pbuf);
+        Self { control, payload }
+    }
+
+    fn buf_as_slice(b: &Self::MemBuf) -> &[u8] {
+        b.as_slice()
+    }
+
+    fn buf_as_mut_slice(b: &mut Self::MemBuf) -> &mut [u8] {
+        b.as_mut_slice()
+    }
+}
+
+impl crate::abi::V160 for RawVal {
+    fn v160_explode(self) -> (u32, u64, u64) {
+        (
+            self.control,
+            self.payload as u64,
+            (self.payload >> 64) as u64,
+        )
+    }
+
+    fn v160_implode(a: u32, b: u64, c: u64) -> Self {
+        Self {
+            control: a,
+            payload: b as u128 | ((c as u128) << 64),
+        }
+    }
+}
+
+impl RawVal {
+    #[allow(dead_code)]
+    pub const fn shallow_eq(&self, other: &RawVal) -> bool {
+        self.control == other.control && self.payload == other.payload
+    }
+}
+
+#[cfg(test)]
+#[test]
+fn test_rawval_roundtrip() {
+    use crate::abi::BufReadWrite;
+    let rv = RawVal {
+        control: 0x1234_5678,
+        payload: 0x1111_2222_3333_4444_5555_6666_7777_8888,
+    };
+    let mut buf = RawVal::ZERO_BUF;
+    rv.buf_write(&mut buf);
+    assert_eq!(buf[0], 0x78);
+    assert_eq!(buf[1], 0x56);
+    assert_eq!(buf[2], 0x34);
+    assert_eq!(buf[3], 0x12);
+    assert_eq![buf[4], 0x88];
+    assert_eq![buf[19], 0x11];
+    let bv: RawVal = RawVal::buf_read(&buf);
+    assert!(rv.shallow_eq(&bv));
+}
 impl Default for RawVal {
     fn default() -> Self {
         Self::from_void()
@@ -286,34 +374,18 @@ declare_tryfrom!(());
 declare_tryfrom!(bool);
 declare_tryfrom!(u32);
 declare_tryfrom!(i32);
+declare_tryfrom!(u64);
+declare_tryfrom!(i64);
 declare_tryfrom!(BitSet);
 declare_tryfrom!(Status);
 declare_tryfrom!(Symbol);
 declare_tryfrom!(Static);
 declare_tryfrom!(Object);
 
-#[cfg(feature = "vm")]
-impl wasmi::core::FromValue for RawVal {
-    fn from_value(val: wasmi::core::Value) -> Option<Self> {
-        if let wasmi::core::Value::I64(i) = val {
-            Some(RawVal::from_payload(i as u64))
-        } else {
-            None
-        }
-    }
-}
-
-#[cfg(feature = "vm")]
-impl From<RawVal> for wasmi::core::Value {
-    fn from(v: RawVal) -> Self {
-        wasmi::core::Value::I64(v.get_payload() as i64)
-    }
-}
-
 impl RawValConvertible for () {
     #[inline(always)]
     fn is_val_type(v: RawVal) -> bool {
-        v.has_tag(Tag::Static) && v.get_body() == ScStatic::Void as u64
+        v.has_tag(Tag::Static) && v.get_lo32() == ScStatic::Void as u32
     }
     #[inline(always)]
     unsafe fn unchecked_from_val(_v: RawVal) -> Self {}
@@ -323,18 +395,18 @@ impl RawValConvertible for bool {
     #[inline(always)]
     fn is_val_type(v: RawVal) -> bool {
         v.has_tag(Tag::Static)
-            && (v.get_body() == ScStatic::True as u64 || v.get_body() == ScStatic::False as u64)
+            && (v.get_lo32() == ScStatic::True as u32 || v.get_lo32() == ScStatic::False as u32)
     }
     #[inline(always)]
     unsafe fn unchecked_from_val(v: RawVal) -> Self {
-        v.get_body() == ScStatic::True as u64
+        v.get_lo32() == ScStatic::True as u32
     }
     #[inline(always)]
     fn try_convert(v: RawVal) -> Option<Self> {
         if v.has_tag(Tag::Static) {
-            if v.get_body() == ScStatic::True as u64 {
+            if v.get_lo32() == ScStatic::True as u32 {
                 Some(true)
-            } else if v.get_body() == ScStatic::False as u64 {
+            } else if v.get_lo32() == ScStatic::False as u32 {
                 Some(false)
             } else {
                 None
@@ -352,7 +424,7 @@ impl RawValConvertible for u32 {
     }
     #[inline(always)]
     unsafe fn unchecked_from_val(v: RawVal) -> Self {
-        v.get_body() as u32
+        v.get_lo32()
     }
 }
 
@@ -363,7 +435,29 @@ impl RawValConvertible for i32 {
     }
     #[inline(always)]
     unsafe fn unchecked_from_val(v: RawVal) -> Self {
-        v.get_body() as i32
+        v.get_lo32() as i32
+    }
+}
+
+impl RawValConvertible for u64 {
+    #[inline(always)]
+    fn is_val_type(v: RawVal) -> bool {
+        v.has_tag(Tag::U64)
+    }
+    #[inline(always)]
+    unsafe fn unchecked_from_val(v: RawVal) -> Self {
+        v.get_lo64() as u64
+    }
+}
+
+impl RawValConvertible for i64 {
+    #[inline(always)]
+    fn is_val_type(v: RawVal) -> bool {
+        v.has_tag(Tag::I64)
+    }
+    #[inline(always)]
+    unsafe fn unchecked_from_val(v: RawVal) -> Self {
+        v.get_lo64() as i64
     }
 }
 
@@ -416,6 +510,34 @@ impl From<&i32> for RawVal {
     }
 }
 
+impl From<u64> for RawVal {
+    #[inline(always)]
+    fn from(u: u64) -> Self {
+        RawVal::from_u64(u)
+    }
+}
+
+impl From<&u64> for RawVal {
+    #[inline(always)]
+    fn from(u: &u64) -> Self {
+        RawVal::from_u64(*u)
+    }
+}
+
+impl From<i64> for RawVal {
+    #[inline(always)]
+    fn from(i: i64) -> Self {
+        RawVal::from_i64(i)
+    }
+}
+
+impl From<&i64> for RawVal {
+    #[inline(always)]
+    fn from(i: &i64) -> Self {
+        RawVal::from_i64(*i)
+    }
+}
+
 impl From<ScStatus> for RawVal {
     fn from(st: ScStatus) -> Self {
         let ty = st.discriminant();
@@ -461,33 +583,8 @@ impl RawVal {
     }
 
     #[inline(always)]
-    pub const fn get_payload(self) -> u64 {
-        self.0
-    }
-
-    #[inline(always)]
-    pub const fn from_payload(x: u64) -> Self {
-        Self(x)
-    }
-
-    #[inline(always)]
-    pub const fn is_u63(self) -> bool {
-        (self.0 & 1) == 0
-    }
-
-    #[inline(always)]
-    pub const unsafe fn unchecked_as_u63(self) -> i64 {
-        (self.0 >> 1) as i64
-    }
-
-    #[inline(always)]
-    pub const unsafe fn unchecked_from_u63(i: i64) -> Self {
-        Self((i as u64) << 1)
-    }
-
-    #[inline(always)]
     const fn get_tag_u8(self) -> u8 {
-        ((self.0 >> 1) & TAG_MASK) as u8
+        (self.control & TAG_MASK) as u8
     }
 
     #[inline(always)]
@@ -496,13 +593,8 @@ impl RawVal {
     }
 
     #[inline(always)]
-    pub(crate) const fn get_body(self) -> u64 {
-        self.0 >> (TAG_BITS + 1)
-    }
-
-    #[inline(always)]
     pub(crate) const fn has_tag(self, tag: Tag) -> bool {
-        !self.is_u63() && self.get_tag_u8() == tag as u8
+        self.get_tag_u8() == tag as u8
     }
 
     #[inline(always)]
@@ -513,87 +605,90 @@ impl RawVal {
     #[inline(always)]
     // This does no checking, so it can be used in const fns
     // below; it should not be made public.
-    pub(crate) const unsafe fn from_body_and_tag(body: u64, tag: Tag) -> RawVal {
-        let body = (body << TAG_BITS) | (tag as u64);
-        RawVal((body << 1) | 1)
+    pub(crate) const unsafe fn from_payload_and_tag(payload: u128, tag: Tag) -> RawVal {
+        let control = tag as u32;
+        RawVal { control, payload }
     }
 
     #[inline(always)]
-    // This also does not checking, is a crate-local helper.
-    pub(crate) const unsafe fn from_major_minor_and_tag(
-        major: u32,
-        minor: u32,
-        tag: Tag,
-    ) -> RawVal {
-        let major = major as u64;
-        let minor = minor as u64;
-        Self::from_body_and_tag((major << MINOR_BITS) | minor, tag)
+    pub(crate) const unsafe fn from_lo32_and_tag(lo32: u32, tag: Tag) -> RawVal {
+        Self::from_payload_and_tag(lo32 as u128, tag)
     }
 
     #[inline(always)]
-    pub(crate) const fn has_minor(self, minor: u32) -> bool {
-        self.get_minor() == minor
+    pub(crate) const fn get_lo32(&self) -> u32 {
+        self.payload as u32
     }
 
     #[inline(always)]
-    pub(crate) const fn get_minor(self) -> u32 {
-        (self.get_body() & MINOR_MASK) as u32
+    pub(crate) const unsafe fn from_lo64_and_tag(lo64: u64, tag: Tag) -> RawVal {
+        Self::from_payload_and_tag(lo64 as u128, tag)
     }
 
     #[inline(always)]
-    pub(crate) const fn get_major(self) -> u32 {
-        (self.get_body() >> MINOR_BITS) as u32
+    pub(crate) const fn get_lo64(&self) -> u64 {
+        self.payload as u64
     }
 
     #[inline(always)]
     pub const fn from_void() -> RawVal {
-        unsafe { RawVal::from_body_and_tag(ScStatic::Void as u64, Tag::Static) }
+        unsafe { RawVal::from_lo32_and_tag(ScStatic::Void as u32, Tag::Static) }
     }
 
     #[inline(always)]
     pub const fn from_bool(b: bool) -> RawVal {
         let body = if b { ScStatic::True } else { ScStatic::False };
-        unsafe { RawVal::from_body_and_tag(body as u64, Tag::Static) }
+        unsafe { RawVal::from_lo32_and_tag(body as u32, Tag::Static) }
     }
 
     #[inline(always)]
     pub const fn from_other_static(st: ScStatic) -> RawVal {
-        unsafe { RawVal::from_body_and_tag(st as u64, Tag::Static) }
+        unsafe { RawVal::from_lo32_and_tag(st as u32, Tag::Static) }
     }
 
     #[inline(always)]
     pub const fn from_u32(u: u32) -> RawVal {
-        unsafe { RawVal::from_body_and_tag(u as u64, Tag::U32) }
+        unsafe { RawVal::from_lo32_and_tag(u, Tag::U32) }
     }
 
     #[inline(always)]
     pub const fn from_i32(i: i32) -> RawVal {
-        unsafe { RawVal::from_body_and_tag((i as u32) as u64, Tag::I32) }
+        unsafe { RawVal::from_lo32_and_tag(i as u32, Tag::I32) }
+    }
+
+    #[inline(always)]
+    pub const fn from_u64(u: u64) -> RawVal {
+        unsafe { RawVal::from_lo64_and_tag(u, Tag::U64) }
+    }
+
+    #[inline(always)]
+    pub const fn from_i64(i: i64) -> RawVal {
+        unsafe { RawVal::from_lo64_and_tag(i as u64, Tag::I64) }
     }
 
     #[inline(always)]
     pub const fn is_i32_zero(self) -> bool {
-        self.0 == Self::I32_ZERO.0
+        self.shallow_eq(&Self::I32_ZERO)
     }
 
     #[inline(always)]
     pub const fn is_u32_zero(self) -> bool {
-        self.0 == Self::U32_ZERO.0
+        self.shallow_eq(&Self::U32_ZERO)
     }
 
     #[inline(always)]
     pub const fn is_void(self) -> bool {
-        self.0 == Self::VOID.0
+        self.shallow_eq(&Self::VOID)
     }
 
     #[inline(always)]
     pub const fn is_true(self) -> bool {
-        self.0 == Self::TRUE.0
+        self.shallow_eq(&Self::TRUE)
     }
 
     #[inline(always)]
     pub const fn is_false(self) -> bool {
-        self.0 == Self::FALSE.0
+        self.shallow_eq(&Self::FALSE)
     }
 }
 
@@ -617,35 +712,30 @@ impl RawVal {
 
 impl Debug for RawVal {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        if self.is_u63() {
-            write!(f, "U63({})", unsafe { self.unchecked_as_u63() })
-        } else {
-            match self.get_tag() {
-                Tag::U32 => write!(f, "U32({})", self.get_body() as u32),
-                Tag::I32 => write!(f, "I32({})", self.get_body() as i32),
-                Tag::Static => {
-                    let scs = ScStatic::try_from(self.get_body() as i32);
-                    if let Ok(scs) = scs {
-                        write!(f, "{}", scs.name())
-                    } else {
-                        write!(f, "Static({})", self.get_body())
-                    }
+        match self.get_tag() {
+            Tag::U32 => write!(f, "U32({})", self.get_lo32()),
+            Tag::I32 => write!(f, "I32({})", self.get_lo32() as i32),
+            Tag::U64 => write!(f, "U64({})", self.get_lo64()),
+            Tag::I64 => write!(f, "I64({})", self.get_lo64() as i64),
+            Tag::Static => {
+                let scs = ScStatic::try_from(self.get_lo32() as i32);
+                if let Ok(scs) = scs {
+                    write!(f, "{}", scs.name())
+                } else {
+                    write!(f, "Static({})", self.get_lo32())
                 }
-                Tag::Object => {
-                    unsafe { <Object as RawValConvertible>::unchecked_from_val(*self) }.fmt(f)
-                }
-                Tag::Symbol => {
-                    unsafe { <Symbol as RawValConvertible>::unchecked_from_val(*self) }.fmt(f)
-                }
-                Tag::BitSet => {
-                    unsafe { <BitSet as RawValConvertible>::unchecked_from_val(*self) }.fmt(f)
-                }
-                Tag::Status => {
-                    unsafe { <Status as RawValConvertible>::unchecked_from_val(*self) }.fmt(f)
-                }
-                Tag::Reserved => {
-                    write!(f, "Reserved({})", self.get_body())
-                }
+            }
+            Tag::Object => {
+                unsafe { <Object as RawValConvertible>::unchecked_from_val(*self) }.fmt(f)
+            }
+            Tag::Symbol => {
+                unsafe { <Symbol as RawValConvertible>::unchecked_from_val(*self) }.fmt(f)
+            }
+            Tag::BitSet => {
+                unsafe { <BitSet as RawValConvertible>::unchecked_from_val(*self) }.fmt(f)
+            }
+            Tag::Status => {
+                unsafe { <Status as RawValConvertible>::unchecked_from_val(*self) }.fmt(f)
             }
         }
     }
@@ -654,26 +744,19 @@ impl Debug for RawVal {
 #[test]
 #[cfg(feature = "std")]
 fn test_debug() {
+    use stellar_xdr::ScObjectType;
+
     use super::{BitSet, Object, Status, Symbol};
-    use crate::xdr::{ScHostValErrorCode, ScObjectType, ScStatus};
+    use crate::xdr::{ScHostValErrorCode, ScStatus};
     assert_eq!(format!("{:?}", RawVal::from_void()), "Void");
     assert_eq!(format!("{:?}", RawVal::from_bool(true)), "True");
     assert_eq!(format!("{:?}", RawVal::from_bool(false)), "False");
     assert_eq!(format!("{:?}", RawVal::from_i32(10)), "I32(10)");
     assert_eq!(format!("{:?}", RawVal::from_u32(10)), "U32(10)");
-    assert_eq!(
-        format!("{:?}", unsafe { RawVal::unchecked_from_u63(10) }),
-        "U63(10)"
-    );
-    assert_eq!(
-        format!("{:?}", BitSet::try_from_u64(0xf7).unwrap().as_raw()),
-        "BitSet(0b11110111)"
-    );
+    let bs: BitSet = 0xf7.into();
+    assert_eq!(format!("{:?}", bs), "BitSet(0b11110111)");
     assert_eq!(format!("{:?}", Symbol::from_str("hello")), "Symbol(hello)");
-    assert_eq!(
-        format!("{:?}", Object::from_type_and_handle(ScObjectType::Vec, 7)),
-        "Object(Vec(7))"
-    );
+    assert_eq!(format!("{:?}", Object::from_type_and_handle(ScObjectType::Vec, 7)), "Object(Vec(#7))");
     assert_eq!(
         format!(
             "{:?}",

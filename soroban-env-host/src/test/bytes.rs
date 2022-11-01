@@ -1,9 +1,9 @@
 use crate::xdr::ScHostFnErrorCode;
 use crate::{
     xdr::{ScHostObjErrorCode, ScObject, ScStatic, ScStatus, ScVal},
-    CheckedEnv, Host, HostError, RawVal, RawValConvertible,
+    CheckedEnv, Host, HostError, RawVal,
 };
-use soroban_env_common::EnvBase;
+use soroban_env_common::{EnvBase, EnvVal, IntoVal};
 
 #[cfg(feature = "vm")]
 use crate::{
@@ -36,34 +36,31 @@ fn bytes_suite_of_tests() -> Result<(), HostError> {
         obj = host.bytes_pop(obj)?;
     }
     assert_eq!(
-        unsafe { <u32 as RawValConvertible>::unchecked_from_val(host.bytes_len(obj)?) },
+        host.bytes_len(obj)?,
         8
     );
     assert_eq!(
-        unsafe {
-            <u32 as RawValConvertible>::unchecked_from_val(host.bytes_get(obj, 5_u32.into())?)
-        },
+        host.bytes_get(obj, 5_u32.into())?,
         5
     );
     // put, del, get, front, back
     obj = host.bytes_put(obj, 5_u32.into(), 99_u32.into())?;
     assert_eq!(
-        unsafe {
-            <u32 as RawValConvertible>::unchecked_from_val(host.bytes_get(obj, 5_u32.into())?)
-        },
+        host.bytes_get(obj, 5_u32.into())?
+        ,
         99
     );
     obj = host.bytes_del(obj, 5_u32.into())?; // [0,1,2,3,4,6,7]
     assert_eq!(
-        unsafe { <u32 as RawValConvertible>::unchecked_from_val(host.bytes_len(obj)?) },
+        host.bytes_len(obj)?,
         7
     );
     assert_eq!(
-        unsafe { <u32 as RawValConvertible>::unchecked_from_val(host.bytes_front(obj)?) },
+        host.bytes_front(obj)?,
         0
     );
     assert_eq!(
-        unsafe { <u32 as RawValConvertible>::unchecked_from_val(host.bytes_back(obj)?) },
+        host.bytes_back(obj)?,
         7
     );
     // insert, slice and append
@@ -129,10 +126,12 @@ fn bytes_slice_start_greater_than_len() -> Result<(), HostError> {
 fn bytes_xdr_roundtrip() -> Result<(), HostError> {
     let host = Host::default();
     let roundtrip = |v: ScVal| -> Result<(), HostError> {
-        let rv: RawVal = host.to_host_val(&v)?.into();
+        let rv: RawVal = host.inject_val(&v)?;
         let bo = host.serialize_to_bytes(rv.clone())?;
         let rv_back = host.deserialize_from_bytes(bo)?;
-        assert_eq!(host.obj_cmp(rv, rv_back)?, 0);
+        let a: EnvVal<Host, RawVal> = rv.into_env_val(&host);
+        let b: EnvVal<Host, RawVal> = rv_back.into_env_val(&host);
+        assert_eq!(a, b);
         Ok(())
     };
     // u63
@@ -212,7 +211,7 @@ fn linear_memory_operations() -> Result<(), HostError> {
             args.into(),
         )?;
         let obj_ref = host.test_bin_obj(&[0xaa, 0xbb, 0xcc, 0xdd])?;
-        assert_eq!(host.obj_cmp(obj.into(), obj_ref.into())?, 0);
+        assert_eq!(host.obj_cmp(obj.try_into()?, obj_ref.to_object())?, 0);
     }
     // tests bytes_copy_{to,from}_linear_memory
     {
@@ -227,7 +226,7 @@ fn linear_memory_operations() -> Result<(), HostError> {
             )?
             .try_into()?;
         let obj_ref = host.test_bin_obj(&[2, 3, 4, 5])?;
-        assert_eq!(host.obj_cmp(obj.into(), obj_ref.into())?, 0);
+        assert_eq!(host.obj_cmp(obj.try_into()?, obj_ref.to_object())?, 0);
     }
 
     Ok(())

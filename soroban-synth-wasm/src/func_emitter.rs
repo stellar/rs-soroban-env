@@ -1,5 +1,5 @@
 use crate::{Arity, FuncRef, ModEmitter};
-use soroban_env_common::{xdr::ScStatus, RawVal, Status, Symbol, Tag};
+use soroban_env_common::{xdr::ScStatus, Status, abi::{Direct}, Static};
 use wasm_encoder::{BlockType, Function, Instruction, ValType};
 
 /// An index into the _locals_ for the current function, which may refer
@@ -10,7 +10,7 @@ pub struct LocalRef(pub u32);
 /// An abstraction over inputs to WASM operations: locals, constants, and/or the
 /// implicit value already on the top of the WASM stack machine. Primarily used
 /// as an [`Into`] target type for the [`FuncEmitter::push`] method, allowing
-/// various types such as [`RawVal`] or [`Symbol`] to be passed to host function
+/// various types such as [`Status`] or [`Static`] to be passed to host function
 /// call emitters, which in turn pass them to [`FuncEmitter::push`].
 ///
 /// The [`Operand::StackTop`] case can only be provided as the first argument to
@@ -29,29 +29,45 @@ impl From<LocalRef> for Operand {
     }
 }
 
-impl From<RawVal> for Operand {
-    fn from(r: RawVal) -> Self {
-        Operand::Const64(r.get_payload() as i64)
+impl From<u32> for Operand {
+    fn from(x: u32) -> Self {
+        Operand::Const32(x as i32)
     }
 }
 
-impl From<Symbol> for Operand {
-    fn from(s: Symbol) -> Self {
-        let r: RawVal = s.into();
-        r.into()
+impl From<i32> for Operand {
+    fn from(x: i32) -> Self {
+        Operand::Const32(x)
+    }
+}
+
+impl From<u64> for Operand {
+    fn from(x: u64) -> Self {
+        Operand::Const64(x as i64)
+    }
+}
+
+impl From<i64> for Operand {
+    fn from(x: i64) -> Self {
+        Operand::Const64(x)
     }
 }
 
 impl From<Status> for Operand {
-    fn from(s: Status) -> Self {
-        let r: RawVal = s.into();
-        r.into()
+    fn from(t: Status) -> Self {
+        t.to_repr().into()
+    }
+}
+
+impl From<Static> for Operand {
+    fn from(t: Static) -> Self {
+        t.to_repr().into()
     }
 }
 
 impl From<ScStatus> for Operand {
     fn from(s: ScStatus) -> Self {
-        let r: RawVal = s.into();
+        let r: Status = s.into();
         r.into()
     }
 }
@@ -223,17 +239,6 @@ impl FuncEmitter {
     /// Emit an if-then that traps.
     pub fn if_then_trap(&mut self) -> &mut Self {
         self.if_then(|fe| fe.trap())
-    }
-
-    /// Emit code to check that the top of stack value has a given [`Tag`],
-    /// trapping if not. Consumes the top of stack value, so you might need to
-    /// call [`FuncEmitter::dup_via`] first.
-    pub fn assert_val_tag(&mut self, tag: Tag) -> &mut Self {
-        self.const64(Tag::rawval_mask())
-            .and64()
-            .const64(tag.rawval_const())
-            .ne64()
-            .if_then_trap()
     }
 
     /// Emit an [`Instruction::LocalGet`]

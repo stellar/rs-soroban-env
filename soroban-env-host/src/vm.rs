@@ -24,6 +24,7 @@ use super::{
 };
 use func_info::HOST_FUNCTIONS;
 use soroban_env_common::{
+    abi::{BufReadWrite, V160},
     meta,
     xdr::{ReadXdr, ScEnvMetaEntry, ScHostFnErrorCode, ScVmErrorCode},
     ConversionError,
@@ -224,6 +225,17 @@ impl Vm {
         }
     }
 
+    // ABI:
+    //    passing a rawval: explode and pass as 3 args (u32,u64,u64)
+    //    returning rawval:
+    //        - from host to guest: guest allocates stack slot, passes initial u32 out-ptr
+    //          (rust should do this automatically)
+    //        - from guest to host: guest writes to a mutable static, returns u32 ptr
+    //          (we have to do this manually in the #[contractimpl]-emitted wrapper)
+    //
+    // Same deal for 128-bit values, but passing and returning as 2 u64 args.
+    // See soroban_env_common::abi and soroban_env_macros for horrid details.
+
     pub(crate) fn invoke_function_raw(
         self: &Rc<Self>,
         host: &Host,
@@ -236,9 +248,17 @@ impl Vm {
             || {
                 let wasm_args: Vec<Value> = args
                     .iter()
-                    .map(|i| Value::I64(i.get_payload() as i64))
+                    .map(|i| {
+                        let (c, lo, hi) = i.v160_explode();
+                        [
+                            Value::I32(c as i32),
+                            Value::I64(lo as i64),
+                            Value::I64(hi as i64),
+                        ]
+                    })
+                    .flatten()
                     .collect();
-                let mut wasm_ret: [Value; 1] = [Value::I64(0)];
+                let mut wasm_ret: [Value; 1] = [Value::I32(0)];
 
                 let ext = match self.instance.get_export(&*self.store.borrow(), func) {
                     None => {
@@ -261,7 +281,17 @@ impl Vm {
                     wasm_args.as_slice(),
                     &mut wasm_ret,
                 ))?;
-                Ok(wasm_ret[0].try_into().ok_or(ConversionError)?)
+                if let Value::I32(retptr) = wasm_ret[0] {
+                    if let Some(mem) = self.memory {
+                        let mut retbuf = RawVal::ZERO_BUF;
+                        host.map_err(
+                            mem.read(&*self.store.borrow(), retptr as usize, &mut retbuf)
+                                .map_err(|me| wasmi::Error::Memory(me)),
+                        )?;
+                        return Ok(RawVal::buf_read(&retbuf));
+                    }
+                }
+                return Err(ConversionError.into());
             },
         )
     }

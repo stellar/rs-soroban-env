@@ -40,13 +40,11 @@ impl From<SymbolError> for ConversionError {
 
 extern crate static_assertions as sa;
 
-use super::raw_val::BODY_BITS;
-
-const MAX_CHARS: usize = 10;
+const MAX_CHARS: usize = 21;
 const CODE_BITS: usize = 6;
-const CODE_MASK: u64 = (1u64 << CODE_BITS) - 1;
+const CODE_MASK: u128 = (1u128 << CODE_BITS) - 1;
 sa::const_assert!(CODE_MASK == 0x3f);
-sa::const_assert!(CODE_BITS * MAX_CHARS == BODY_BITS);
+sa::const_assert!(CODE_BITS * MAX_CHARS == 126);
 
 /// [Symbol] reprents strings up to 10 characters long with a `a-zA-Z0-9_`
 /// alphabet encoded into a 60-bit space between 10 characters long.
@@ -55,20 +53,78 @@ sa::const_assert!(CODE_BITS * MAX_CHARS == BODY_BITS);
 /// [RawVal]'s body as a 60-bit small "string-like" object, 10 characters or
 /// less and with characters drawn from the 64-character repertoire
 /// `a-zA-Z0-9_`.
+#[repr(C)]
 #[derive(Copy, Clone)]
-pub struct Symbol(RawVal);
+pub struct Symbol(u128);
+
+impl Symbol {
+    pub const fn to_u128(&self) -> u128 {
+        self.0
+    }
+    pub const fn to_raw(&self) -> RawVal {
+        unsafe { RawVal::from_payload_and_tag(self.0, Tag::Symbol) }
+    }
+}
+
+impl crate::abi::BufReadWrite for Symbol {
+    type MemBuf = <u128 as crate::abi::BufReadWrite>::MemBuf;
+    const ZERO_BUF: Self::MemBuf =  <u128 as crate::abi::BufReadWrite>::ZERO_BUF;
+
+    fn buf_write(self, b: &mut Self::MemBuf) {
+        self.0.buf_write(b)
+    }
+
+    fn buf_read(b: &Self::MemBuf) -> Self {
+        Self(<u128 as crate::abi::BufReadWrite>::buf_read(b))
+    }
+
+    fn buf_as_slice(b: &Self::MemBuf) -> &[u8] {
+        b.as_slice()
+    }
+
+    fn buf_as_mut_slice(b: &mut Self::MemBuf) -> &mut [u8] {
+        b.as_mut_slice()
+    }
+}
+
+impl crate::abi::V128 for Symbol {
+    fn v128_explode(self) -> (u64, u64) {
+        (self.0 as u64, (self.0 >> 64) as u64)
+    }
+
+    fn v128_implode(a: u64, b: u64) -> Self {
+        Self(a as u128 | ((b as u128) << 64))
+    }
+}
+
+impl From<Symbol> for RawVal {
+    fn from(obj: Symbol) -> Self {
+        unsafe { RawVal::from_payload_and_tag(obj.0, Tag::Symbol) }
+    }
+}
+
+impl crate::RawValConvertible for Symbol {
+    #[inline(always)]
+    fn is_val_type(v: RawVal) -> bool {
+        v.has_tag(Tag::Symbol)
+    }
+    #[inline(always)]
+    unsafe fn unchecked_from_val(v: RawVal) -> Self {
+        Symbol(v.payload)
+    }
+}
 
 decl_tagged_val_wrapper_methods!(Symbol);
 
 impl Hash for Symbol {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.as_raw().get_payload().hash(state);
+        self.0.hash(state);
     }
 }
 
 impl PartialEq for Symbol {
     fn eq(&self, other: &Self) -> bool {
-        self.as_raw().get_payload() == other.as_raw().get_payload()
+        self.0 == other.0
     }
 }
 
@@ -130,7 +186,7 @@ impl<const N: u32> TryFrom<&StringM<N>> for Symbol {
 impl Symbol {
     pub const fn try_from_bytes(b: &[u8]) -> Result<Symbol, SymbolError> {
         let mut n = 0;
-        let mut accum: u64 = 0;
+        let mut accum: u128 = 0;
         while n < b.len() {
             let ch = b[n] as char;
             if n >= MAX_CHARS {
@@ -145,9 +201,9 @@ impl Symbol {
                 'a'..='z' => 38 + ((ch as u64) - ('a' as u64)),
                 _ => return Err(SymbolError::BadChar(ch)),
             };
-            accum |= v;
+            accum |= v as u128;
         }
-        Ok(unsafe { Self::from_body(accum) })
+        Ok(Self(accum))
     }
 
     pub const fn try_from_str(s: &str) -> Result<Symbol, SymbolError> {
@@ -264,14 +320,14 @@ impl IntoIterator for Symbol {
     type Item = char;
     type IntoIter = SymbolIter;
     fn into_iter(self) -> Self::IntoIter {
-        SymbolIter(self.as_raw().get_body())
+        SymbolIter(self.0)
     }
 }
 
 /// An iterator that decodes the individual bit-packed characters from a
 /// symbol and yields them as regular Rust [char] values.
 #[derive(Clone)]
-pub struct SymbolIter(u64);
+pub struct SymbolIter(u128);
 
 impl Iterator for SymbolIter {
     type Item = char;
@@ -297,7 +353,7 @@ impl Iterator for SymbolIter {
 impl FromIterator<char> for Symbol {
     fn from_iter<T: IntoIterator<Item = char>>(iter: T) -> Self {
         let mut n = 0;
-        let mut accum: u64 = 0;
+        let mut accum: u128 = 0;
         for i in iter {
             require(n < MAX_CHARS);
             n += 1;
@@ -309,9 +365,9 @@ impl FromIterator<char> for Symbol {
                 'a'..='z' => 38 + ((i as u64) - ('a' as u64)),
                 _ => break,
             };
-            accum |= v;
+            accum |= v as u128;
         }
-        unsafe { Self::from_body(accum) }
+        Self(accum)
     }
 }
 

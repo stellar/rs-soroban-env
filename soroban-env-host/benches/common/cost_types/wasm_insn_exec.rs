@@ -2,7 +2,7 @@ use crate::common::HostCostMeasurement;
 use rand::rngs::StdRng;
 use soroban_env_host::budget::CostType;
 use soroban_env_host::xdr::{Hash, ScVal, ScVec};
-use soroban_env_host::{Host, Symbol, Vm};
+use soroban_env_host::{Host, Vm};
 use soroban_synth_wasm::{Arity, ModEmitter, Operand};
 use std::rc::Rc;
 
@@ -17,7 +17,7 @@ fn wasm_module_with_4n_insns(n: usize) -> Vec<u8> {
         fe.add64();
     }
     fe.drop();
-    fe.push(Symbol::from_str("pass"));
+    fe.push(1u32);
     fe.finish_and_export("test").finish()
 }
 

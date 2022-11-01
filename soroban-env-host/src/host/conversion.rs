@@ -142,7 +142,7 @@ impl Host {
                     DebugError::new(ScHostObjErrorCode::ContractHashWrongLength) // TODO: this should be renamed to be more generic
                         .msg("{} {} has wrong length for input {}")
                         .arg(std::any::type_name::<T>())
-                        .arg(obj.to_raw())
+                        .arg::<RawVal>(obj.into())
                         .arg(name),
                 )),
             }
@@ -210,7 +210,7 @@ impl Host {
 
     pub(crate) fn event_topics_from_host_obj(&self, topics: Object) -> Result<ScVec, HostError> {
         unsafe {
-            self.unchecked_visit_val_obj(topics.into(), |ob| {
+            self.unchecked_visit_obj(topics.into(), |ob| {
                 self.charge_budget(CostType::ValXdrConv, 1)?;
                 match ob {
                     None => Err(self.err_status(ScHostObjErrorCode::UnknownReference)),

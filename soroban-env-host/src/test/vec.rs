@@ -17,7 +17,7 @@ fn vec_as_seen_by_host() -> Result<(), HostError> {
     assert!(obj0.is_obj_type(ScObjectType::Vec));
     assert!(obj1.is_obj_type(ScObjectType::Vec));
     // Check that we got 2 distinct Vec objects
-    assert_ne!(val0.val.get_payload(), val1.val.get_payload());
+    assert_ne!(val0.val.payload, val1.val.payload);
     // But also that they compare deep-equal.
     assert_eq!(val0, val1);
     Ok(())
@@ -119,10 +119,10 @@ fn vec_push_pop_front() -> Result<(), HostError> {
     vec = host.vec_push_front(vec, 2u32.into())?;
     vec = host.vec_push_front(vec, 3u32.into())?;
     let mut vec_ref = host.test_vec_obj::<u32>(&[3, 2, 1])?;
-    assert_eq!(host.obj_cmp(vec.to_raw(), vec_ref.val.to_raw())?, 0);
+    assert_eq!(host.obj_cmp(vec, vec_ref.val)?, 0);
     vec = host.vec_pop_front(vec)?;
     vec_ref = host.test_vec_obj::<u32>(&[2, 1])?;
-    assert_eq!(host.obj_cmp(vec.to_raw(), vec_ref.val.to_raw())?, 0);
+    assert_eq!(host.obj_cmp(vec, vec_ref.val)?, 0);
     vec = host.vec_pop_front(vec)?;
     vec = host.vec_pop_front(vec)?;
     let res = host.vec_pop_front(vec);
@@ -190,7 +190,7 @@ fn vec_slice_and_cmp() -> Result<(), HostError> {
     assert_eq!(host.obj_cmp(obj1.into(), obj_ref.into())?, 0);
 
     let obj2 = host.vec_slice(obj.to_object(), 0u32.into(), 3u32.into())?;
-    assert_ne!(obj2.as_raw().get_payload(), obj.as_raw().get_payload());
+    assert_ne!(obj2.get_handle(), obj.val.get_handle());
     assert_eq!(host.obj_cmp(obj2.into(), obj.into())?, 0);
     Ok(())
 }
@@ -306,7 +306,7 @@ fn vec_append_empty() -> Result<(), HostError> {
     let host = Host::default();
     let obj0 = host.test_vec_obj::<u32>(&[])?;
     let obj1 = host.vec_append(obj0.val, obj0.val)?;
-    assert_ne!(obj0.as_raw().get_payload(), obj1.as_raw().get_payload());
+    assert_ne!(obj0.val.get_handle(), obj1.get_handle());
     assert_eq!(host.obj_cmp(obj0.into(), obj1.into())?, 0);
     Ok(())
 }
@@ -316,13 +316,13 @@ fn vec_index_of() -> Result<(), HostError> {
     let host = Host::default();
     let obj0 = host.test_vec_obj::<u32>(&[3, 4, 2, 2, 2, 5])?;
     let mut idx = host.vec_first_index_of(obj0.val, 2u32.into())?;
-    assert_eq!(idx.get_payload(), RawVal::from(2u32).get_payload());
+    assert!(idx.shallow_eq(&RawVal::from(2u32)));
     idx = host.vec_last_index_of(obj0.val, 2u32.into())?;
-    assert_eq!(idx.get_payload(), RawVal::from(4u32).get_payload());
+    assert!(idx.shallow_eq(&RawVal::from(4u32)));
     idx = host.vec_first_index_of(obj0.val, 1u32.into())?;
-    assert_eq!(idx.get_payload(), RawVal::from_void().get_payload());
+    assert!(idx.shallow_eq(&RawVal::from_void()));
     idx = host.vec_last_index_of(obj0.val, 1u32.into())?;
-    assert_eq!(idx.get_payload(), RawVal::from_void().get_payload());
+    assert!(idx.shallow_eq(&RawVal::from_void()));
     Ok(())
 }
 

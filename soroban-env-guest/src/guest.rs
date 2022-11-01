@@ -4,6 +4,8 @@
 use soroban_env_common::call_macro_with_all_host_functions;
 
 use super::{Env, EnvBase, Object, RawVal, Status, Symbol};
+#[allow(unused_imports)]
+use soroban_env_common::abi;
 #[cfg(target_family = "wasm")]
 use static_assertions as sa;
 
@@ -32,16 +34,11 @@ impl EnvBase for Guest {
         unimplemented!()
     }
 
-    fn bytes_copy_from_slice(
-        &self,
-        b: Object,
-        b_pos: RawVal,
-        mem: &[u8],
-    ) -> Result<Object, Status> {
+    fn bytes_copy_from_slice(&self, b: Object, b_pos: u32, mem: &[u8]) -> Result<Object, Status> {
         unimplemented!()
     }
 
-    fn bytes_copy_to_slice(&self, b: Object, b_pos: RawVal, mem: &mut [u8]) -> Result<(), Status> {
+    fn bytes_copy_to_slice(&self, b: Object, b_pos: u32, mem: &mut [u8]) -> Result<(), Status> {
         unimplemented!()
     }
 
@@ -90,26 +87,21 @@ impl EnvBase for Guest {
         Self
     }
 
-    fn bytes_copy_from_slice(
-        &self,
-        b: Object,
-        b_pos: RawVal,
-        mem: &[u8],
-    ) -> Result<Object, Status> {
+    fn bytes_copy_from_slice(&self, b: Object, b_pos: u32, mem: &[u8]) -> Result<Object, Status> {
         sa::assert_eq_size!(u32, *const u8);
         sa::assert_eq_size!(u32, usize);
-        let lm_pos: RawVal = RawVal::from_u32(mem.as_ptr() as u32);
-        let len: RawVal = RawVal::from_u32(mem.len() as u32);
+        let lm_pos: u32 = mem.as_ptr() as u32;
+        let len: u32 = mem.len() as u32;
         // NB: any failure in the host function here will trap the guest,
         // not return, so we only have to code the happy path.
         Ok(self.bytes_copy_from_linear_memory(b, b_pos, lm_pos, len))
     }
 
-    fn bytes_copy_to_slice(&self, b: Object, b_pos: RawVal, mem: &mut [u8]) -> Result<(), Status> {
+    fn bytes_copy_to_slice(&self, b: Object, b_pos: u32, mem: &mut [u8]) -> Result<(), Status> {
         sa::assert_eq_size!(u32, *const u8);
         sa::assert_eq_size!(u32, usize);
-        let lm_pos: RawVal = RawVal::from_u32(mem.as_ptr() as u32);
-        let len: RawVal = RawVal::from_u32(mem.len() as u32);
+        let lm_pos: u32 = mem.as_ptr() as u32;
+        let len: u32 = mem.len() as u32;
         self.bytes_copy_to_linear_memory(b, b_pos, lm_pos, len);
         Ok(())
     }
@@ -117,8 +109,8 @@ impl EnvBase for Guest {
     fn bytes_new_from_slice(&self, mem: &[u8]) -> Result<Object, Status> {
         sa::assert_eq_size!(u32, *const u8);
         sa::assert_eq_size!(u32, usize);
-        let lm_pos: RawVal = RawVal::from_u32(mem.as_ptr() as u32);
-        let len: RawVal = RawVal::from_u32(mem.len() as u32);
+        let lm_pos: u32 = mem.as_ptr() as u32;
+        let len: u32 = mem.len() as u32;
         Ok(self.bytes_new_from_linear_memory(lm_pos, len))
     }
 
@@ -176,12 +168,12 @@ impl EnvBase for Guest {
 // Guest implementation of the Env trait (calling through to the corresponding
 // unsafe extern function).
 macro_rules! guest_function_helper {
-    {$mod_id:ident, fn $fn_id:ident($($arg:ident:$type:ty),*) -> $ret:ty}
+    {$mod_id:ident, $fn_str:literal, fn $fn_id:ident($($arg:ident:$type:tt),*) -> $ret:ty}
     =>
     {
         fn $fn_id(&self, $($arg:$type),*) -> $ret {
             unsafe {
-                $mod_id::$fn_id($($arg),*)
+                soroban_env_macros::explode_args!{$mod_id, $fn_str, fn $fn_id($($arg:$type),*) -> $ret;}
             }
         }
     };
@@ -232,7 +224,7 @@ macro_rules! impl_env_for_guest {
                     // block repetition-level from the outer pattern in the
                     // expansion, flattening all functions from all 'mod' blocks
                     // into the implementation of Env for Guest.
-                    guest_function_helper!{$mod_id, fn $fn_id $args -> $ret}
+                    guest_function_helper!{$mod_id, $fn_str, fn $fn_id $args -> $ret}
                 )*
             )*
         }
@@ -245,26 +237,6 @@ call_macro_with_all_host_functions! { impl_env_for_guest }
 ///////////////////////////////////////////////////////////////////////////////
 /// X-macro use: extern mod blocks
 ///////////////////////////////////////////////////////////////////////////////
-
-// This is a helper macro used only by impl_env_for_guest below. It consumes a
-// token-tree of the form:
-//
-//  {fn $fn_id:ident $args:tt -> $ret:ty}
-//
-// and produces the the corresponding method definition to be used in the
-// Guest implementation of the Env trait (calling through to the corresponding
-// unsafe extern function).
-macro_rules! extern_function_helper {
-    {
-        $fn_str:literal, $(#[$attr:meta])* fn $fn_id:ident($($arg:ident:$type:ty),*) -> $ret:ty
-    }
-    =>
-    {
-        #[cfg_attr(target_family = "wasm", link_name = $fn_str)]
-        $(#[$attr])*
-        pub(crate) fn $fn_id($($arg:$type),*) -> $ret;
-    };
-}
 
 // This is a callback macro that pattern-matches the token-tree passed by the
 // x-macro (call_macro_with_all_host_functions) and produces a set of mod
@@ -308,6 +280,8 @@ macro_rules! generate_extern_modules {
             mod $mod_id {
                 #[allow(unused_imports)]
                 use crate::{RawVal,Object,Symbol,Status};
+                #[allow(unused_imports)]
+                use soroban_env_common::abi;
                 #[link(wasm_import_module = $mod_str)]
                 extern "C" {
                     $(
@@ -317,7 +291,7 @@ macro_rules! generate_extern_modules {
                         // one `$()*` pattern-repetition expander so that it
                         // repeats only for the part of each mod that the
                         // corresponding pattern-repetition matcher.
-                        extern_function_helper!{$fn_str, $(#[$fn_attr])* fn $fn_id $args -> $ret}
+                        soroban_env_macros::decl_exploded_extern_fn!{$mod_id, $fn_str, $(#[$fn_attr])* fn $fn_id $args -> $ret;}
                     )*
                 }
             }

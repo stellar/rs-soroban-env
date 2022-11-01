@@ -21,6 +21,6 @@ pub enum ContractError {
 
 impl From<ContractError> for Status {
     fn from(err: ContractError) -> Self {
-        Status::from_contract_error(err as u32)
+        Status::from_contract_error(err as u64)
     }
 }

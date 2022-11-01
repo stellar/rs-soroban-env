@@ -1064,6 +1064,7 @@ name = "soroban-env-guest"
 version = "0.0.9"
 dependencies = [
  "soroban-env-common",
+ "soroban-env-macros",
  "static_assertions",
 ]
 
@@ -1089,6 +1090,7 @@ dependencies = [
  "rand",
  "sha2 0.10.2",
  "soroban-env-common",
+ "soroban-env-macros",
  "soroban-native-sdk-macros",
  "soroban-synth-wasm",
  "soroban-test-wasms",

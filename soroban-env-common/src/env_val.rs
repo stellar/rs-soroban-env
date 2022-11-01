@@ -1,5 +1,3 @@
-use stellar_xdr::ScObjectType;
-
 #[cfg(feature = "std")]
 use stellar_xdr::{ScObject, ScStatic, ScVal};
 
@@ -57,18 +55,6 @@ impl<E: Env> EnvVal<E, Object> {
     }
     pub fn to_object(&self) -> Object {
         self.val
-    }
-}
-
-impl<E: Env, V: Val> AsRef<RawVal> for EnvVal<E, V> {
-    fn as_ref(&self) -> &RawVal {
-        self.val.as_ref()
-    }
-}
-
-impl<E: Env, V: Val> AsMut<RawVal> for EnvVal<E, V> {
-    fn as_mut(&mut self) -> &mut RawVal {
-        self.val.as_mut()
     }
 }
 
@@ -136,92 +122,6 @@ pub(crate) fn log_err_convert<T>(env: &impl Env, val: &impl AsRef<RawVal>) {
     );
 }
 
-impl<E: Env> TryFromVal<E, RawVal> for i64 {
-    type Error = ConversionError;
-
-    fn try_from_val(env: &E, val: RawVal) -> Result<Self, Self::Error> {
-        if val.is_u63() {
-            Ok(unsafe { val.unchecked_as_u63() })
-        } else if Object::val_is_obj_type(val, ScObjectType::I64) {
-            let obj = unsafe { Object::unchecked_from_val(val) };
-            Ok(env.obj_to_i64(obj))
-        } else {
-            log_err_convert::<i64>(env, &val);
-            Err(ConversionError)
-        }
-    }
-}
-
-impl<E: Env> IntoVal<E, RawVal> for i64 {
-    fn into_val(self, env: &E) -> RawVal {
-        if self >= 0 {
-            unsafe { RawVal::unchecked_from_u63(self) }
-        } else {
-            env.obj_from_i64(self).to_raw()
-        }
-    }
-}
-
-impl<E: Env> IntoVal<E, RawVal> for &i64 {
-    fn into_val(self, env: &E) -> RawVal {
-        (*self).into_val(env)
-    }
-}
-
-impl<E: Env> TryIntoVal<E, RawVal> for i64 {
-    type Error = ConversionError;
-    fn try_into_val(self, env: &E) -> Result<RawVal, Self::Error> {
-        Ok(IntoVal::into_val(self, env))
-    }
-}
-
-impl<E: Env> TryIntoVal<E, i64> for RawVal {
-    type Error = <i64 as TryFromVal<E, RawVal>>::Error;
-    fn try_into_val(self, env: &E) -> Result<i64, Self::Error> {
-        <_ as TryFromVal<_, _>>::try_from_val(env, self)
-    }
-}
-
-impl<E: Env> TryFromVal<E, RawVal> for u64 {
-    type Error = ConversionError;
-
-    fn try_from_val(env: &E, val: RawVal) -> Result<Self, Self::Error> {
-        if Object::val_is_obj_type(val, ScObjectType::U64) {
-            let obj = unsafe { Object::unchecked_from_val(val) };
-            Ok(env.obj_to_u64(obj))
-        } else {
-            log_err_convert::<u64>(env, &val);
-            Err(ConversionError)
-        }
-    }
-}
-
-impl<E: Env> IntoVal<E, RawVal> for u64 {
-    fn into_val(self, env: &E) -> RawVal {
-        env.obj_from_u64(self).to_raw()
-    }
-}
-
-impl<E: Env> IntoVal<E, RawVal> for &u64 {
-    fn into_val(self, env: &E) -> RawVal {
-        (*self).into_val(env)
-    }
-}
-
-impl<E: Env> TryIntoVal<E, RawVal> for u64 {
-    type Error = ConversionError;
-    fn try_into_val(self, env: &E) -> Result<RawVal, Self::Error> {
-        Ok(IntoVal::into_val(self, env))
-    }
-}
-
-impl<E: Env> TryIntoVal<E, u64> for RawVal {
-    type Error = <u64 as TryFromVal<E, RawVal>>::Error;
-    fn try_into_val(self, env: &E) -> Result<u64, Self::Error> {
-        <_ as TryFromVal<_, _>>::try_from_val(env, self)
-    }
-}
-
 #[cfg(feature = "std")]
 impl<E: Env> TryFromVal<E, RawVal> for ScVal
 where
@@ -230,50 +130,48 @@ where
     type Error = ConversionError;
 
     fn try_from_val(env: &E, val: RawVal) -> Result<Self, Self::Error> {
-        if val.is_u63() {
-            Ok(ScVal::U63(unsafe { val.unchecked_as_u63() }))
-        } else {
-            match val.get_tag() {
-                Tag::U32 => Ok(ScVal::U32(unsafe {
-                    <u32 as RawValConvertible>::unchecked_from_val(val)
-                })),
-                Tag::I32 => Ok(ScVal::I32(unsafe {
-                    <i32 as RawValConvertible>::unchecked_from_val(val)
-                })),
-                Tag::Static => {
-                    let tag_static =
-                        unsafe { <Static as RawValConvertible>::unchecked_from_val(val) };
-                    if tag_static.is_type(ScStatic::True) {
-                        Ok(ScVal::Static(ScStatic::True))
-                    } else if tag_static.is_type(ScStatic::False) {
-                        Ok(ScVal::Static(ScStatic::False))
-                    } else if tag_static.is_type(ScStatic::Void) {
-                        Ok(ScVal::Static(ScStatic::Void))
-                    } else if tag_static.is_type(ScStatic::LedgerKeyContractCode) {
-                        Ok(ScVal::Static(ScStatic::LedgerKeyContractCode))
-                    } else {
-                        log_err_convert::<Self>(env, &val);
-                        Err(ConversionError)
-                    }
+        match val.get_tag() {
+            Tag::U32 => Ok(ScVal::U32(unsafe {
+                <u32 as RawValConvertible>::unchecked_from_val(val)
+            })),
+            Tag::I32 => Ok(ScVal::I32(unsafe {
+                <i32 as RawValConvertible>::unchecked_from_val(val)
+            })),
+            // TODO v160: move u64 and i64 from SCObject to SCVal
+            Tag::U64 | Tag::I64 => todo!(),
+            Tag::Static => {
+                let tag_static = unsafe { <Static as RawValConvertible>::unchecked_from_val(val) };
+                if tag_static.is_type(ScStatic::True) {
+                    Ok(ScVal::Static(ScStatic::True))
+                } else if tag_static.is_type(ScStatic::False) {
+                    Ok(ScVal::Static(ScStatic::False))
+                } else if tag_static.is_type(ScStatic::Void) {
+                    Ok(ScVal::Static(ScStatic::Void))
+                } else if tag_static.is_type(ScStatic::LedgerKeyContractCode) {
+                    Ok(ScVal::Static(ScStatic::LedgerKeyContractCode))
+                } else {
+                    log_err_convert::<Self>(env, &val);
+                    Err(ConversionError)
                 }
-                Tag::Object => unsafe {
-                    let ob = <Object as RawValConvertible>::unchecked_from_val(val);
-                    let scob = ScObject::try_from_val(&env, ob).map_err(|_| ConversionError)?;
-                    Ok(ScVal::Object(Some(scob)))
-                },
-                Tag::Symbol => {
-                    let sym: Symbol =
-                        unsafe { <Symbol as RawValConvertible>::unchecked_from_val(val) };
-                    let str: String = sym.into_iter().collect();
-                    Ok(ScVal::Symbol(str.as_bytes().try_into()?))
-                }
-                Tag::BitSet => Ok(ScVal::Bitset(val.get_payload())),
-                Tag::Status => {
-                    let status: Status =
-                        unsafe { <Status as RawValConvertible>::unchecked_from_val(val) };
-                    Ok(status.try_into()?)
-                }
-                Tag::Reserved => Err(ConversionError),
+            }
+            Tag::Object => unsafe {
+                let ob = <Object as RawValConvertible>::unchecked_from_val(val);
+                let scob = ScObject::try_from_val(&env, ob).map_err(|_| ConversionError)?;
+                Ok(ScVal::Object(Some(scob)))
+            },
+            Tag::Symbol => {
+                let sym: Symbol = unsafe { <Symbol as RawValConvertible>::unchecked_from_val(val) };
+                let str: String = sym.into_iter().collect();
+                Ok(ScVal::Symbol(str.as_bytes().try_into()?))
+            }
+            Tag::BitSet => {
+                // FIXME v160: make ScVal::Bitset able to take 128 bits?
+                Ok(ScVal::Bitset(val.payload as u64))
+            }
+            Tag::Status => {
+                let status: Status =
+                    unsafe { <Status as RawValConvertible>::unchecked_from_val(val) };
+                Ok(status.try_into()?)
             }
         }
     }
@@ -299,13 +197,7 @@ where
     type Error = ConversionError;
     fn try_into_val(self, env: &E) -> Result<RawVal, Self::Error> {
         Ok(match self {
-            ScVal::U63(i) => {
-                if *i >= 0 {
-                    unsafe { RawVal::unchecked_from_u63(*i) }
-                } else {
-                    return Err(ConversionError);
-                }
-            }
+            ScVal::U63(i) => (*i).into(),
             ScVal::U32(u) => (*u).into(),
             ScVal::I32(i) => (*i).into(),
             ScVal::Static(ScStatic::Void) => RawVal::from_void(),
@@ -313,7 +205,7 @@ where
             ScVal::Static(ScStatic::False) => RawVal::from_bool(false),
             ScVal::Static(other) => RawVal::from_other_static(*other),
             ScVal::Object(None) => return Err(ConversionError),
-            ScVal::Object(Some(ob)) => ob.try_into_val(env).map_err(|_| ConversionError)?.to_raw(),
+            ScVal::Object(Some(ob)) => ob.try_into_val(env).map_err(|_| ConversionError)?.into(),
             ScVal::Symbol(bytes) => {
                 let ss = match std::str::from_utf8(bytes.as_slice()) {
                     Ok(ss) => ss,
@@ -321,7 +213,10 @@ where
                 };
                 Symbol::try_from_str(ss)?.into()
             }
-            ScVal::Bitset(i) => BitSet::try_from_u64(*i)?.into(),
+            ScVal::Bitset(i) => {
+                let bs: BitSet = (*i as u128).into();
+                bs.into()
+            }
             ScVal::Status(st) => st.into(),
         })
     }
@@ -338,46 +233,75 @@ where
     }
 }
 
-impl<E: Env + Debug, V> Debug for EnvVal<E, V> {
+impl<E: Env + Debug, V: Debug> Debug for EnvVal<E, V> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("EnvVal")
             .field("env", &self.env)
-            .field("val", &self)
+            .field("val", &self.val)
             .finish()
     }
 }
 
-impl<E: Env, V: Val> Eq for EnvVal<E, V> {}
-
-impl<E: Env, V: Val> PartialEq for EnvVal<E, V> {
+impl<E: Env> Eq for EnvVal<E, Object> {}
+impl<E: Env> PartialEq for EnvVal<E, Object> {
     fn eq(&self, other: &Self) -> bool {
         self.env.check_same_env(&other.env);
-        if self.as_ref().get_payload() == other.as_ref().get_payload() {
-            // Fast path: bit-identical vals.
+        if self.val.get_handle() == other.val.get_handle() {
             true
-        } else if self.as_ref().get_tag() != Tag::Object || other.as_ref().get_tag() != Tag::Object
-        {
-            // Other fast path: non-identical non-objects, must be non-equal.
-            false
         } else {
-            // Slow path: deep object comparison via the environment.
-            let v = self.env.obj_cmp(*self.as_ref(), *other.as_ref());
+            let v = self.env.obj_cmp(self.val, other.val);
             v == 0
         }
     }
 }
 
-impl<E: Env, V: Val> PartialOrd for EnvVal<E, V> {
+impl<E: Env, V: Val + Eq> Eq for EnvVal<E, V> {}
+impl<E: Env, V: Val + Eq> PartialEq for EnvVal<E, V> {
+    fn eq(&self, other: &Self) -> bool {
+        self.env.check_same_env(&other.env);
+        self.val.eq(&other.val)
+    }
+}
+
+impl<E: Env> Eq for EnvVal<E, RawVal> {}
+impl<E: Env> PartialEq for EnvVal<E, RawVal> {
+    fn eq(&self, other: &Self) -> bool {
+        self.env.check_same_env(&other.env);
+        if (self.val.control == other.val.control) && (self.val.payload == other.val.payload) {
+            // Fast path: bit-identical vals.
+            true
+        } else if self.val.get_tag() != Tag::Object || other.val.get_tag() != Tag::Object {
+            // Other fast path: non-identical non-objects, must be non-equal.
+            false
+        } else {
+            // Slow path: deep object comparison via the environment.
+            let obj1: Object = unsafe { Object::unchecked_from_val(self.val) };
+            let obj2: Object = unsafe { Object::unchecked_from_val(other.val) };
+            let v = self.env.obj_cmp(obj1, obj2);
+            v == 0
+        }
+    }
+}
+
+impl<E: Env, V: Val> PartialOrd for EnvVal<E, V>
+where
+    EnvVal<E, V>: Eq,
+{
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl<E: Env, V: Val> Ord for EnvVal<E, V> {
+impl<E: Env, V: Val> Ord for EnvVal<E, V>
+where
+    EnvVal<E, V>: Eq,
+{
     fn cmp(&self, other: &Self) -> Ordering {
         self.env.check_same_env(&other.env);
-        let self_tag = self.as_ref().get_tag();
-        let other_tag = other.as_ref().get_tag();
+        let rv1: RawVal = self.val.clone().into();
+        let rv2: RawVal = other.val.clone().into();
+        let self_tag = rv1.get_tag();
+        let other_tag = rv2.get_tag();
         if self_tag < other_tag {
             Ordering::Less
         } else if self_tag > other_tag {
@@ -386,30 +310,30 @@ impl<E: Env, V: Val> Ord for EnvVal<E, V> {
             // Tags are equal so we only have to switch on one.
             match self_tag {
                 Tag::U32 => {
-                    let a = unsafe {
-                        <u32 as RawValConvertible>::unchecked_from_val(*self.val.as_ref())
-                    };
-                    let b = unsafe {
-                        <u32 as RawValConvertible>::unchecked_from_val(*other.val.as_ref())
-                    };
+                    let a = unsafe { <u32 as RawValConvertible>::unchecked_from_val(rv1) };
+                    let b = unsafe { <u32 as RawValConvertible>::unchecked_from_val(rv2) };
                     a.cmp(&b)
                 }
                 Tag::I32 => {
-                    let a = unsafe {
-                        <i32 as RawValConvertible>::unchecked_from_val(*self.val.as_ref())
-                    };
-                    let b = unsafe {
-                        <i32 as RawValConvertible>::unchecked_from_val(*other.val.as_ref())
-                    };
+                    let a = unsafe { <i32 as RawValConvertible>::unchecked_from_val(rv1) };
+                    let b = unsafe { <i32 as RawValConvertible>::unchecked_from_val(rv2) };
                     a.cmp(&b)
                 }
-                Tag::Static => self
-                    .val
-                    .as_ref()
-                    .get_body()
-                    .cmp(&other.val.as_ref().get_body()),
+                Tag::U64 => {
+                    let a = unsafe { <u64 as RawValConvertible>::unchecked_from_val(rv1) };
+                    let b = unsafe { <u64 as RawValConvertible>::unchecked_from_val(rv2) };
+                    a.cmp(&b)
+                }
+                Tag::I64 => {
+                    let a = unsafe { <i64 as RawValConvertible>::unchecked_from_val(rv1) };
+                    let b = unsafe { <i64 as RawValConvertible>::unchecked_from_val(rv2) };
+                    a.cmp(&b)
+                }
+                Tag::Static => rv1.payload.cmp(&rv2.payload),
                 Tag::Object => {
-                    let v = self.env.obj_cmp(*self.val.as_ref(), *other.val.as_ref());
+                    let obj1: Object = unsafe { Object::unchecked_from_val(rv1) };
+                    let obj2: Object = unsafe { Object::unchecked_from_val(rv2) };
+                    let v = self.env.obj_cmp(obj1, obj2);
                     if v == 0 {
                         Ordering::Equal
                     } else if v < 0 {
@@ -419,37 +343,20 @@ impl<E: Env, V: Val> Ord for EnvVal<E, V> {
                     }
                 }
                 Tag::Symbol => {
-                    let a = unsafe {
-                        <Symbol as RawValConvertible>::unchecked_from_val(*self.val.as_ref())
-                    };
-                    let b = unsafe {
-                        <Symbol as RawValConvertible>::unchecked_from_val(*other.val.as_ref())
-                    };
+                    let a = unsafe { <Symbol as RawValConvertible>::unchecked_from_val(rv1) };
+                    let b = unsafe { <Symbol as RawValConvertible>::unchecked_from_val(rv2) };
                     a.cmp(&b)
                 }
                 Tag::BitSet => {
-                    let a = unsafe {
-                        <BitSet as RawValConvertible>::unchecked_from_val(*self.val.as_ref())
-                    };
-                    let b = unsafe {
-                        <BitSet as RawValConvertible>::unchecked_from_val(*other.val.as_ref())
-                    };
+                    let a = unsafe { <BitSet as RawValConvertible>::unchecked_from_val(rv1) };
+                    let b = unsafe { <BitSet as RawValConvertible>::unchecked_from_val(rv2) };
                     a.cmp(&b)
                 }
                 Tag::Status => {
-                    let a = unsafe {
-                        <Status as RawValConvertible>::unchecked_from_val(*self.val.as_ref())
-                    };
-                    let b = unsafe {
-                        <Status as RawValConvertible>::unchecked_from_val(*other.val.as_ref())
-                    };
+                    let a = unsafe { <Status as RawValConvertible>::unchecked_from_val(rv1) };
+                    let b = unsafe { <Status as RawValConvertible>::unchecked_from_val(rv2) };
                     a.cmp(&b)
                 }
-                Tag::Reserved => self
-                    .val
-                    .as_ref()
-                    .get_payload()
-                    .cmp(&other.val.as_ref().get_payload()),
             }
         }
     }

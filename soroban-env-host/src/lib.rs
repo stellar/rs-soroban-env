@@ -34,7 +34,8 @@ mod host;
 pub(crate) mod host_object;
 pub(crate) mod weak_host;
 
-mod native_contract;
+// TODO v160: repair native_contract
+// mod native_contract;
 
 #[cfg(feature = "vm")]
 pub mod vm;

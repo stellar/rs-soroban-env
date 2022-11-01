@@ -1,5 +1,7 @@
 use std::ops::Range;
 
+use soroban_env_common::{Object, RawValConvertible};
+
 use crate::events::{DebugError, TOPIC_BYTES_LENGTH_LIMIT};
 use crate::xdr::{ScHostFnErrorCode, ScHostObjErrorCode};
 use crate::{host_object::HostObject, Host, HostError, RawVal, Tag};
@@ -84,13 +86,12 @@ impl Host {
     // Metering: covered by components
     // TODO: the validation is incomplete. Need to further restrict Map, Vec sizes.
     pub(crate) fn validate_event_topic(&self, topic: RawVal) -> Result<(), HostError> {
-        if topic.is_u63() {
-            Ok(())
-        } else {
-            match topic.get_tag() {
-                Tag::Object => {
-                    unsafe {
-                        self.unchecked_visit_val_obj(topic, |ob| {
+        match topic.get_tag() {
+            Tag::Object => {
+                unsafe {
+                    self.unchecked_visit_obj(
+                        <Object as RawValConvertible>::unchecked_from_val(topic),
+                        |ob| {
                             match ob {
                                 None => Err(self.err_status(ScHostObjErrorCode::UnknownReference)),
                                 Some(ho) => match ho {
@@ -109,11 +110,11 @@ impl Host {
                                     _ => Ok(()),
                                 },
                             }
-                        })
-                    }
+                        },
+                    )
                 }
-                _ => Ok(()),
             }
+            _ => Ok(()),
         }
     }
 }

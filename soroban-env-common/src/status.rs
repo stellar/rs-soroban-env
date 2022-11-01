@@ -1,9 +1,8 @@
 use crate::{
-    decl_tagged_val_wrapper_methods, BitSetError, ConversionError, Env, EnvVal, RawVal,
-    SymbolError, Tag,
+    decl_tagged_val_wrapper_methods, decl_wrapper_direct_abi_support, ConversionError, Env, EnvVal,
+    RawVal, SymbolError, Tag,
 };
 use core::{
-    cmp::Ordering,
     convert::TryFrom,
     fmt::Debug,
     hash::{Hash, Hasher},
@@ -18,46 +17,39 @@ use stellar_xdr::{
 /// code. The status-type codes correspond to the enumerated cases of
 /// [ScStatusType], and the status codes correspond to the code values stored in
 /// each variant of the [ScStatus] union.
-#[derive(Copy, Clone)]
-pub struct Status(RawVal);
+#[repr(C)]
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Status(u64);
 
+decl_wrapper_direct_abi_support!(Status, u64, I64, i64);
 decl_tagged_val_wrapper_methods!(Status);
 
 impl Status {
-    pub const UNKNOWN_ERROR: Status =
-        unsafe { Status::from_major_minor(0, ScStatusType::UnknownError as u32) };
-    pub const OK: Status = unsafe { Status::from_major_minor(0, ScStatusType::Ok as u32) };
+    pub const UNKNOWN_ERROR: Status = Status::from_type_and_code(ScStatusType::UnknownError, 0);
+    pub const OK: Status = Status::from_type_and_code(ScStatusType::Ok, 0);
 }
 
 impl Hash for Status {
     #[inline(always)]
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.as_raw().get_payload().hash(state);
+        self.0.hash(state);
     }
 }
 
-impl PartialEq for Status {
-    #[inline(always)]
-    fn eq(&self, other: &Self) -> bool {
-        self.as_raw().get_payload() == other.as_raw().get_payload()
+impl From<Status> for RawVal {
+    fn from(obj: Status) -> Self {
+        unsafe { RawVal::from_lo64_and_tag(obj.0, Tag::Status) }
     }
 }
 
-impl Eq for Status {}
-
-impl PartialOrd for Status {
+impl crate::RawValConvertible for Status {
     #[inline(always)]
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
+    fn is_val_type(v: RawVal) -> bool {
+        v.has_tag(Tag::Status)
     }
-}
-
-impl Ord for Status {
     #[inline(always)]
-    fn cmp(&self, other: &Self) -> Ordering {
-        let self_tup = (self.as_raw().get_minor(), self.as_raw().get_major());
-        let other_tup = (other.as_raw().get_minor(), other.as_raw().get_major());
-        self_tup.cmp(&other_tup)
+    unsafe fn unchecked_from_val(v: RawVal) -> Self {
+        Status(v.get_lo64())
     }
 }
 
@@ -107,7 +99,7 @@ impl NamedCode for ScVmErrorCode {
     }
 }
 
-fn fmt_named_code<C: NamedCode>(code: u32, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+fn fmt_named_code<C: NamedCode>(code: i32, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 where
     C: TryFrom<i32>,
 {
@@ -119,8 +111,8 @@ where
 
 impl Debug for Status {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        let st_res: Result<ScStatusType, _> = (self.as_raw().get_minor() as i32).try_into();
-        let code = self.as_raw().get_major();
+        let st_res: Result<ScStatusType, _> = (self.0 as i32).try_into();
+        let code = self.get_code() as i32;
         let st = match st_res {
             Ok(t) => t,
             Err(_) => return write!(f, "Status(UnknownType)"),
@@ -162,7 +154,7 @@ impl TryFrom<Status> for ScStatus {
             } else if st.is_type(ScStatusType::VmError) {
                 ScStatus::VmError((st.get_code() as i32).try_into()?)
             } else if st.is_type(ScStatusType::ContractError) {
-                ScStatus::ContractError(st.get_code())
+                ScStatus::ContractError(st.get_code() as u32)
             } else {
                 return Err(stellar_xdr::Error::Invalid);
             }
@@ -226,15 +218,6 @@ impl From<ScVmErrorCode> for Status {
     }
 }
 
-impl From<BitSetError> for Status {
-    fn from(bse: BitSetError) -> Self {
-        let s = match bse {
-            BitSetError::TooManyBits(_) => ScHostValErrorCode::BitsetTooManyBits,
-        };
-        ScStatus::HostValueError(s).into()
-    }
-}
-
 impl From<SymbolError> for Status {
     fn from(se: SymbolError) -> Self {
         let s = match se {
@@ -258,12 +241,17 @@ impl Status {
     // bit-pattern.
     #[inline(always)]
     pub const fn is_type(&self, ty: ScStatusType) -> bool {
-        self.as_raw().has_minor(ty as u32)
+        (self.0 as u32) == (ty as u32)
     }
 
     #[inline(always)]
     pub const fn get_code(&self) -> u32 {
-        self.as_raw().get_major()
+        (self.0 >> 32) as u32
+    }
+
+    #[inline(always)]
+    pub const fn to_raw(&self) -> RawVal {
+        unsafe { RawVal::from_lo64_and_tag(self.0, Tag::Status) }
     }
 
     #[inline(always)]
@@ -278,9 +266,7 @@ impl Status {
 
     #[inline(always)]
     pub const fn from_type_and_code(ty: ScStatusType, code: u32) -> Status {
-        // Unfortunately we can't use from_major_minor here because
-        // it's not const, and making it const requires nightly.
-        unsafe { Self::from_major_minor(code, ty as u32) }
+        Self((code as u64) << 32 | (ty as u64))
     }
 
     #[inline(always)]

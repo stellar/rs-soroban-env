@@ -1,10 +1,9 @@
+use stellar_xdr::ScObjectType;
+
 use crate::{ConversionError, Env, RawVal, TryIntoVal};
 
 #[cfg(feature = "std")]
-use stellar_xdr::ScObjectType;
-
-#[cfg(feature = "std")]
-use crate::{Object, RawValConvertible, TryFromVal};
+use crate::{Object, TryFromVal};
 
 // TODO: these conversions happen as RawVal, but they actually take and produce
 // Objects; consider making the signatures tighter.
@@ -17,9 +16,9 @@ impl<E: Env> TryFromVal<E, RawVal> for String {
     fn try_from_val(env: &E, val: RawVal) -> Result<Self, Self::Error> {
         let obj: Object = val.try_into_val(env)?;
         if obj.is_obj_type(ScObjectType::Bytes) {
-            let len = unsafe { <u32 as RawValConvertible>::unchecked_from_val(env.bytes_len(obj)) };
+            let len = env.bytes_len(obj);
             let mut vec = std::vec![0; len as usize];
-            env.bytes_copy_to_slice(obj, RawVal::U32_ZERO, &mut vec)
+            env.bytes_copy_to_slice(obj, 0, &mut vec)
                 .map_err(|_| ConversionError)?;
             String::from_utf8(vec).map_err(|_| ConversionError)
         } else {

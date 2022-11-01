@@ -1,23 +1,18 @@
 use crate::{Arity, ModEmitter, Operand};
 use expect_test::expect;
-use soroban_env_common::{RawVal, Symbol, Tag};
 use wasmprinter::print_bytes;
 
 #[test]
 fn test_synth_wasm() {
     let mut fe = ModEmitter::new().func(Arity(0), 2);
     let s = fe.locals[0];
-    let tmp = fe.locals[1];
 
-    fe.push(Symbol::from_str("somekey"));
+    fe.push(10u32);
     fe.set(s);
 
     fe.map_new();
 
-    fe.dup_via(tmp);
-    fe.assert_val_tag(Tag::Object);
-
-    fe.map_put(Operand::StackTop, s, RawVal::from_u32(123));
+    fe.map_put(Operand::StackTop, s, 123);
     fe.map_get(Operand::StackTop, s);
 
     let bytes = fe.finish_and_export("test_map").finish();

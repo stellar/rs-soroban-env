@@ -72,7 +72,7 @@ fn invoke_cross_contract_with_err() -> Result<(), HostError> {
     let sv = host.try_call(obj.to_object(), sym.into(), args.clone().into())?;
     let code = ScHostObjErrorCode::VecIndexOutOfBound;
     let exp_st: Status = code.into();
-    assert_eq!(sv.get_payload(), exp_st.to_raw().get_payload());
+    assert!(sv.shallow_eq(&exp_st.to_raw()));
 
     let events = host.get_events()?;
     assert_eq!(events.0.len(), 4);
@@ -157,7 +157,7 @@ fn invoke_cross_contract_indirect() -> Result<(), HostError> {
     // try call
     let val = host.call(id0_obj.to_object(), sym.into(), args.clone().into())?;
     let exp: RawVal = 11i32.into();
-    assert_eq!(val.get_payload(), exp.get_payload());
+    assert!(val.shallow_eq(&exp));
     Ok(())
 }
 
@@ -183,7 +183,7 @@ fn invoke_cross_contract_indirect_err() -> Result<(), HostError> {
     let status = host.try_call(id0_obj.to_object(), sym.into(), args.clone().into())?;
     let code = ScVmErrorCode::TrapUnreachable;
     let exp: Status = code.into();
-    assert_eq!(status.get_payload(), exp.to_raw().get_payload());
+    assert!(status.shallow_eq(&exp.to_raw()));
 
     let events = host.get_events()?;
     assert_eq!(events.0.len(), 5);
@@ -270,7 +270,7 @@ fn invoke_contract_with_reentry() -> Result<(), HostError> {
     let code = ScHostContextErrorCode::UnknownError;
     let exp: Status = code.into();
     assert!(HostError::result_matches_err_status(res, code));
-    assert_eq!(status.get_payload(), exp.to_raw().get_payload());
+    assert!(status.shallow_eq(&exp.to_raw()));
 
     Ok(())
 }

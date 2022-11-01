@@ -44,7 +44,7 @@ mod vmcaller_checked_env;
 // Re-export the XDR definitions
 pub use stellar_xdr as xdr;
 
-// RawVal and RawObj are the 64-bit transparent type.
+pub mod abi;
 pub use raw_val::{ConversionError, RawVal, RawValConvertible, Tag};
 pub use val::Val;
 
@@ -58,7 +58,7 @@ pub use vmcaller_checked_env::{VmCaller, VmCallerCheckedEnv};
 
 // BitSet, Status and Symbol wrap RawVals.
 // TODO: maybe these should wrap EnvVals?
-pub use bitset::{BitSet, BitSetError};
+pub use bitset::BitSet;
 pub use invoker::InvokerType;
 pub use object::Object;
 pub use r#static::Static;

@@ -4,7 +4,7 @@ use crate::{
     budget::Budget,
     host::metered_map::MeteredOrdMap,
     storage::{AccessType, Footprint, Storage},
-    xdr, Host, HostError, RawVal,
+    xdr, Host, HostError,
 };
 
 #[test]
@@ -36,15 +36,9 @@ fn check_account_exists() -> Result<(), HostError> {
     let obj1 = host.add_host_object(acc_id1).map(|ev| ev.val).unwrap();
     let obj2 = host.add_host_object(acc_id2).map(|ev| ev.val).unwrap();
     // declared and exists
-    assert_eq!(
-        host.account_exists(obj0)?.get_payload(),
-        RawVal::from_bool(true).get_payload()
-    );
+    assert!(host.account_exists(obj0)?.is_true());
     // declared but does not exist
-    assert_eq!(
-        host.account_exists(obj1)?.get_payload(),
-        RawVal::from_bool(false).get_payload()
-    );
+    assert!(host.account_exists(obj1)?.is_false());
     // not declared
     assert!(HostError::result_matches_err_status(
         host.account_exists(obj2),

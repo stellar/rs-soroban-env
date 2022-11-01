@@ -31,10 +31,7 @@ fn contract_event() -> Result<(), HostError> {
     let sym = Symbol::from_str("add");
     let args = host.test_vec_obj::<i32>(&[1, 2])?;
     host.register_test_contract(id, test_contract)?;
-    assert_eq!(
-        host.call(id, sym.into(), args.into()).get_payload(),
-        RawVal::from_void().get_payload()
-    );
+    assert!(host.call(id, sym.into(), args.into()).is_void());
 
     let event_ref = ContractEvent {
         ext: ExtensionPoint::V0,

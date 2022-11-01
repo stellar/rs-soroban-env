@@ -57,59 +57,39 @@ fn map_prev_and_next() -> Result<(), HostError> {
     let obj = host.to_host_obj(&scobj)?;
     // prev
     {
-        assert_eq!(
-            host.map_prev_key(obj.to_object(), 0_u32.into())?
-                .get_payload(),
-            Status::UNKNOWN_ERROR.to_raw().get_payload()
-        );
-        assert_eq!(
-            host.map_prev_key(obj.to_object(), 1_u32.into())?
-                .get_payload(),
-            Status::UNKNOWN_ERROR.to_raw().get_payload()
-        );
-        assert_eq!(
-            host.map_prev_key(obj.to_object(), 2_u32.into())?
-                .get_payload(),
-            RawVal::from_u32(1).get_payload()
-        );
-        assert_eq!(
-            host.map_prev_key(obj.to_object(), 4_u32.into())?
-                .get_payload(),
-            RawVal::from_u32(1).get_payload()
-        );
-        assert_eq!(
-            host.map_prev_key(obj.to_object(), 5_u32.into())?
-                .get_payload(),
-            RawVal::from_u32(4).get_payload()
-        );
+        assert!(host
+            .map_prev_key(obj.to_object(), 0_u32.into())?
+            .shallow_eq(&Status::UNKNOWN_ERROR.to_raw()));
+        assert!(host
+            .map_prev_key(obj.to_object(), 1_u32.into())?
+            .shallow_eq(&Status::UNKNOWN_ERROR.to_raw()));
+        assert!(host
+            .map_prev_key(obj.to_object(), 2_u32.into())?
+            .shallow_eq(&RawVal::from_u32(1)));
+        assert!(host
+            .map_prev_key(obj.to_object(), 4_u32.into())?
+            .shallow_eq(&RawVal::from_u32(1)));
+        assert!(host
+            .map_prev_key(obj.to_object(), 5_u32.into())?
+            .shallow_eq(&RawVal::from_u32(4)));
     }
     // next
     {
-        assert_eq!(
-            host.map_next_key(obj.to_object(), 5_u32.into())?
-                .get_payload(),
-            Status::UNKNOWN_ERROR.to_raw().get_payload()
-        );
-        assert_eq!(
-            host.map_next_key(obj.to_object(), 4_u32.into())?
-                .get_payload(),
-            Status::UNKNOWN_ERROR.to_raw().get_payload()
-        );
-        assert_eq!(
-            host.map_next_key(obj.to_object(), 3_u32.into())?
-                .get_payload(),
-            RawVal::from_u32(4).get_payload()
-        );
-        assert_eq!(
-            host.map_next_key(obj.to_object(), 1_u32.into())?
-                .get_payload(),
-            RawVal::from_u32(4).get_payload()
-        );
-        assert_eq!(
-            host.map_next_key(obj.to_object(), 0_u32.into())?
-                .get_payload(),
-            RawVal::from_u32(1).get_payload()
-        );
+        assert!(host
+            .map_next_key(obj.to_object(), 5_u32.into())?
+            .shallow_eq(&Status::UNKNOWN_ERROR.to_raw()));
+        assert!(host
+            .map_next_key(obj.to_object(), 4_u32.into())?
+            .shallow_eq(&Status::UNKNOWN_ERROR.to_raw()));
+        assert!(host
+            .map_next_key(obj.to_object(), 3_u32.into())?
+            .shallow_eq(&RawVal::from_u32(4)));
+        assert!(host
+            .map_next_key(obj.to_object(), 1_u32.into())?
+            .shallow_eq(&RawVal::from_u32(4)));
+        assert!(host
+            .map_next_key(obj.to_object(), 0_u32.into())?
+            .shallow_eq(&RawVal::from_u32(1)));
     }
     Ok(())
 }
@@ -141,55 +121,39 @@ fn map_prev_and_next_heterogeneous() -> Result<(), HostError> {
     // The key ordering should be [u32, vec, map, symbol]
     // prev
     {
-        assert_eq!(
-            host.map_prev_key(test_map, 0_u32.into())?.get_payload(),
-            Status::UNKNOWN_ERROR.to_raw().get_payload()
-        );
-        assert_eq!(
-            host.map_prev_key(test_map, 4_u32.into())?.get_payload(),
-            RawVal::from_u32(2).get_payload()
-        );
-        assert_eq!(
-            host.map_prev_key(test_map, obj_vec.clone().into())?
-                .get_payload(),
-            RawVal::from_u32(2).get_payload()
-        );
-        assert_eq!(
-            host.map_prev_key(test_map, obj_map.clone().into())?
-                .get_payload(),
-            obj_vec.to_raw().get_payload()
-        );
-        assert_eq!(
-            host.map_prev_key(test_map, sym.clone().into())?
-                .get_payload(),
-            obj_map.to_raw().get_payload()
-        );
+        assert!(host
+            .map_prev_key(test_map, 0_u32.into())?
+            .shallow_eq(&Status::UNKNOWN_ERROR.to_raw()));
+        assert!(host
+            .map_prev_key(test_map, 4_u32.into())?
+            .shallow_eq(&RawVal::from_u32(2)));
+        assert!(host
+            .map_prev_key(test_map, obj_vec.clone().into())?
+            .shallow_eq(&RawVal::from_u32(2)));
+        assert!(host
+            .map_prev_key(test_map, obj_map.clone().into())?
+            .shallow_eq(&obj_vec.to_raw()));
+        assert!(host
+            .map_prev_key(test_map, sym.clone().into())?
+            .shallow_eq(&obj_map.to_raw()));
     }
     // next
     {
-        assert_eq!(
-            host.map_next_key(test_map, 0_u32.into())?.get_payload(),
-            RawVal::from_u32(2).get_payload()
-        );
-        assert_eq!(
-            host.map_next_key(test_map, 4_u32.into())?.get_payload(),
-            obj_vec.to_raw().get_payload()
-        );
-        assert_eq!(
-            host.map_next_key(test_map, obj_vec.clone().into())?
-                .get_payload(),
-            obj_map.to_raw().get_payload()
-        );
-        assert_eq!(
-            host.map_next_key(test_map, obj_map.clone().into())?
-                .get_payload(),
-            sym.to_raw().get_payload()
-        );
-        assert_eq!(
-            host.map_next_key(test_map, sym.clone().into())?
-                .get_payload(),
-            Status::UNKNOWN_ERROR.to_raw().get_payload()
-        );
+        assert!(host
+            .map_next_key(test_map, 0_u32.into())?
+            .shallow_eq(&RawVal::from_u32(2)));
+        assert!(host
+            .map_next_key(test_map, 4_u32.into())?
+            .shallow_eq(&obj_vec.to_raw()));
+        assert!(host
+            .map_next_key(test_map, obj_vec.clone().into())?
+            .shallow_eq(&obj_map.to_raw()));
+        assert!(host
+            .map_next_key(test_map, obj_map.clone().into())?
+            .shallow_eq(&sym.to_raw()));
+        assert!(host
+            .map_next_key(test_map, sym.clone().into())?
+            .shallow_eq(&Status::UNKNOWN_ERROR.to_raw()));
     }
 
     Ok(())
@@ -204,9 +168,9 @@ fn map_keys() -> Result<(), HostError> {
     map = host.map_put(map, 1u32.into(), 10u32.into())?;
     let keys = host.map_keys(map)?;
 
-    let expected_keys = host.test_vec_obj::<u32>(&[1, 2])?.to_raw();
+    let expected_keys = host.test_vec_obj::<u32>(&[1, 2])?;
 
-    assert_eq!(host.obj_cmp(keys.to_raw(), expected_keys)?, 0);
+    assert_eq!(host.obj_cmp(keys, expected_keys.to_object())?, 0);
 
     Ok(())
 }
@@ -220,9 +184,9 @@ fn map_values() -> Result<(), HostError> {
     map = host.map_put(map, 1u32.into(), 10u32.into())?;
     let values = host.map_values(map)?;
 
-    let expected_values = host.test_vec_obj::<u32>(&[10, 20])?.to_raw();
+    let expected_values = host.test_vec_obj::<u32>(&[10, 20])?;
 
-    assert_eq!(host.obj_cmp(values.to_raw(), expected_values)?, 0);
+    assert_eq!(host.obj_cmp(values, expected_values.to_object())?, 0);
 
     Ok(())
 }

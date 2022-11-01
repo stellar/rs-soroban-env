@@ -20,18 +20,13 @@ impl EnvBase for UnimplementedEnv {
     fn bytes_copy_from_slice(
         &self,
         _b: Object,
-        _b_pos: RawVal,
+        _b_pos: u32,
         _mem: &[u8],
     ) -> Result<Object, Status> {
         unimplemented!()
     }
 
-    fn bytes_copy_to_slice(
-        &self,
-        _b: Object,
-        _b_pos: RawVal,
-        _mem: &mut [u8],
-    ) -> Result<(), Status> {
+    fn bytes_copy_to_slice(&self, _b: Object, _b_pos: u32, _mem: &mut [u8]) -> Result<(), Status> {
         unimplemented!()
     }
 

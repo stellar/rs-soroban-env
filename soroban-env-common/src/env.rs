@@ -30,12 +30,11 @@ pub trait EnvBase: Sized + Clone {
 
     /// Copy a slice of bytes from the caller's memory into an existing `Bytes`
     /// object the host, returning a new `Bytes`.
-    fn bytes_copy_from_slice(&self, b: Object, b_pos: RawVal, mem: &[u8])
-        -> Result<Object, Status>;
+    fn bytes_copy_from_slice(&self, b: Object, b_pos: u32, mem: &[u8]) -> Result<Object, Status>;
 
     /// Copy a slice of bytes from a `Bytes` object in the host into the
     /// caller's memory.
-    fn bytes_copy_to_slice(&self, b: Object, b_pos: RawVal, mem: &mut [u8]) -> Result<(), Status>;
+    fn bytes_copy_to_slice(&self, b: Object, b_pos: u32, mem: &mut [u8]) -> Result<(), Status>;
 
     /// Form a new `Bytes` object in the host from a slice of memory in the
     /// caller.
@@ -157,7 +156,7 @@ macro_rules! call_macro_with_all_host_functions {
                 /// running contract. Traps if the running contract was not
                 /// invoked by a contract.
                 {"0", fn get_invoking_contract() -> Object }
-                {"1", fn obj_cmp(a:RawVal, b:RawVal) -> i64 }
+                {"1", fn obj_cmp(a:Object, b:Object) -> i64 }
                 /// Records a contract event. `topics` is expected to be a `SCVec` with
                 /// length <= 4 that cannot contain `Vec`, `Map`, or `Bytes` with length > 32
                 /// On success, returns an `SCStatus::Ok`.
@@ -405,45 +404,45 @@ macro_rules! call_macro_with_all_host_functions {
                 /// Copies a slice of bytes from a `Bytes` object specified at offset `b_pos` with
                 /// length `len` into the linear memory at position `lm_pos`.
                 /// Traps if either the `Bytes` object or the linear memory doesn't have enough bytes.
-                {"1", fn bytes_copy_to_linear_memory(b:Object, b_pos:RawVal, lm_pos:RawVal, len:RawVal) -> RawVal}
+                {"1", fn bytes_copy_to_linear_memory(b:Object, b_pos:u32, lm_pos:u32, len:u32) -> RawVal}
                 /// Copies a segment of the linear memory specified at position `lm_pos` with
                 /// length `len`, into a `Bytes` object at offset `b_pos`. The `Bytes` object may
                 /// grow in size to accommodate the new bytes.
                 /// Traps if the linear memory doesn't have enough bytes.
-                {"2", fn bytes_copy_from_linear_memory(b:Object, b_pos:RawVal, lm_pos:RawVal, len:RawVal) -> Object}
+                {"2", fn bytes_copy_from_linear_memory(b:Object, b_pos:u32, lm_pos:u32, len:u32) -> Object}
                 /// Constructs a new `Bytes` object initialized with bytes copied from a linear memory slice specified at position `lm_pos` with length `len`.
-                {"3", fn bytes_new_from_linear_memory(lm_pos:RawVal, len:RawVal) -> Object}
+                {"3", fn bytes_new_from_linear_memory(lm_pos:u32, len:u32) -> Object}
                 // These functions below ($3-$F) mirror vector operations
                 /// Create an empty new `Bytes` object.
                 {"4", fn bytes_new() -> Object}
                 /// Update the value at index `i` in the `Bytes` object. Return the new `Bytes`.
                 /// Trap if the index is out of bounds.
-                {"5", fn bytes_put(b:Object, i:RawVal, u:RawVal) -> Object}
+                {"5", fn bytes_put(b:Object, i:u32, u:u32) -> Object}
                 /// Returns the element at index `i` of the `Bytes` object. Traps if the index is out of bound.
-                {"6", fn bytes_get(b:Object, i:RawVal) -> RawVal}
+                {"6", fn bytes_get(b:Object, i:u32) -> u32}
                 /// Delete an element in a `Bytes` object at index `i`, shifting all elements after it to the left.
                 /// Return the new `Bytes`. Traps if the index is out of bound.
-                {"7", fn bytes_del(b:Object, i:RawVal) -> Object}
+                {"7", fn bytes_del(b:Object, i:u32) -> Object}
                 /// Returns length of the `Bytes` object.
-                {"8", fn bytes_len(b:Object) -> RawVal}
+                {"8", fn bytes_len(b:Object) -> u32}
                 /// Appends an element to the back of the `Bytes` object.
-                {"9", fn bytes_push(b:Object, u:RawVal) -> Object}
+                {"9", fn bytes_push(b:Object, u:u32) -> Object}
                 /// Removes the last element from the `Bytes` object and returns the new `Bytes`.
                 /// Traps if original `Bytes` is empty.
                 {"A", fn bytes_pop(b:Object) -> Object}
                 /// Return the first element in the `Bytes` object. Traps if the `Bytes` is empty
-                {"B", fn bytes_front(b:Object) -> RawVal}
+                {"B", fn bytes_front(b:Object) -> u32}
                 /// Return the last element in the `Bytes` object. Traps if the `Bytes` is empty
-                {"C", fn bytes_back(b:Object) -> RawVal}
+                {"C", fn bytes_back(b:Object) -> u32}
                 /// Inserts an element at index `i` within the `Bytes` object, shifting all elements after it to the right.
                 /// Traps if the index is out of bound
-                {"D", fn bytes_insert(b:Object, i:RawVal, u:RawVal) -> Object}
+                {"D", fn bytes_insert(b:Object, i:u32, u:u32) -> Object}
                 /// Clone the `Bytes` object `b1`, then moves all the elements of `Bytes` object `b2` into it.
                 /// Return the new `Bytes`. Traps if its length overflows a u32.
                 {"E", fn bytes_append(b1:Object, b2:Object) -> Object}
                 /// Copies the elements from `start` index until `end` index, exclusive, in the `Bytes` object and creates a new `Bytes` from it.
                 /// Returns the new `Bytes`. Traps if the index is out of bound.
-                {"F", fn bytes_slice(b:Object, start:RawVal, end:RawVal) -> Object}
+                {"F", fn bytes_slice(b:Object, start:u32, end:u32) -> Object}
             }
 
             mod hash "h" {

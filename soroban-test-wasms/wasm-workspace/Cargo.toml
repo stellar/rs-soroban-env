@@ -38,7 +38,7 @@ soroban-native-sdk-macros = { path = "../../soroban-native-sdk-macros" }
 
 # You should update this rev to the XDR rev used by the outer workspace
 # anytime you're going to recompile this workspace.
-stellar-xdr = { git = "https://github.com/stellar/rs-stellar-xdr", rev = "5cca712b" }
+stellar-xdr = { git = "https://github.com/stellar/rs-stellar-xdr", rev = "e88f9fa7" }
 
 # You should actually be able to set this to be any existing version of wasmi because we are
 # not building the SDK in host mode, so the "vm" feature is off.
@@ -97,13 +97,13 @@ wasmi = { package = "soroban-wasmi", git = "https://github.com/stellar/wasmi", r
 # when you change the Env trait itself, and whatever change you make to Env may
 # well cause recompilation to fail. Again, you will know if it doesn't compile!
 
-soroban-sdk = { git = "https://github.com/stellar/rs-soroban-sdk", rev = "4a3e4f1" }
-soroban-sdk-macros = { git = "https://github.com/stellar/rs-soroban-sdk", rev = "4a3e4f1" }
-soroban-spec = { git = "https://github.com/stellar/rs-soroban-sdk", rev = "4a3e4f1" }
+#soroban-sdk = { git = "https://github.com/stellar/rs-soroban-sdk", rev = "3ec51a3" }
+#soroban-sdk-macros = { git = "https://github.com/stellar/rs-soroban-sdk", rev = "3ec51a3" }
+#soroban-spec = { git = "https://github.com/stellar/rs-soroban-sdk", rev = "3ec51a3" }
 
-# soroban-sdk = { path = "../../../rs-soroban-sdk/soroban-sdk" }
-# soroban-sdk-macros = { path = "../../../rs-soroban-sdk/soroban-sdk-macros"}
-# soroban-spec = { path = "../../../rs-soroban-sdk/soroban-spec" }
+soroban-sdk = { path = "../../../rs-soroban-sdk/soroban-sdk" }
+soroban-sdk-macros = { path = "../../../rs-soroban-sdk/soroban-sdk-macros"}
+soroban-spec = { path = "../../../rs-soroban-sdk/soroban-spec" }
 
 # soroban-auth is currently not-used by these examples, but is in the SDK repo
 # and must be patched in lock-step with the others if it's ever used here.

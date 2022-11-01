@@ -37,7 +37,9 @@ use crate::host_object::{HostMap, HostObj, HostObject, HostObjectType, HostVal, 
 use crate::SymbolStr;
 #[cfg(feature = "vm")]
 use crate::Vm;
-use crate::{EnvBase, IntoVal, Object, RawVal, RawValConvertible, Symbol, Val};
+use crate::{EnvBase, IntoVal, Object, RawVal, Symbol, Val};
+#[cfg(feature = "vm")]
+use soroban_env_common::abi;
 
 mod conversion;
 mod data_helper;
@@ -473,13 +475,13 @@ impl Host {
 
     // Notes on metering: closure call needs to be metered separatedly. `VisitObject` only covers
     /// the cost of visiting an object.
-    unsafe fn unchecked_visit_val_obj<F, U>(&self, val: RawVal, f: F) -> Result<U, HostError>
+    unsafe fn unchecked_visit_obj<F, U>(&self, obj: Object, f: F) -> Result<U, HostError>
     where
         F: FnOnce(Option<&HostObject>) -> Result<U, HostError>,
     {
         self.charge_budget(CostType::VisitObject, 1)?;
         let r = self.0.objects.borrow();
-        let index = <Object as RawValConvertible>::unchecked_from_val(val).get_handle() as usize;
+        let index = obj.get_handle() as usize;
         f(r.get(index))
     }
 
@@ -494,7 +496,7 @@ impl Host {
         F: FnOnce(&HOT) -> Result<U, HostError>,
     {
         unsafe {
-            self.unchecked_visit_val_obj(obj.into(), |hopt| match hopt {
+            self.unchecked_visit_obj(obj, |hopt| match hopt {
                 None => Err(self.err_status(ScHostObjErrorCode::UnknownReference)),
                 Some(hobj) => match HOT::try_extract(hobj) {
                     None => Err(self.err_status(ScHostObjErrorCode::UnexpectedType)),
@@ -546,15 +548,62 @@ impl Host {
 
     // Notes on metering: free
     #[cfg(feature = "vm")]
-    fn decode_vmslice(&self, pos: RawVal, len: RawVal) -> Result<VmSlice, HostError> {
-        let pos: u32 = self.u32_from_rawval_input("pos", pos)?;
-        let len: u32 = self.u32_from_rawval_input("len", len)?;
+    fn decode_vmslice(&self, pos: u32, len: u32) -> Result<VmSlice, HostError> {
         self.with_current_frame(|frame| match frame {
             Frame::ContractVM(vm, _) => {
                 let vm = vm.clone();
                 Ok(VmSlice { vm, pos, len })
             }
             _ => Err(self.err_general("attempt to access guest bytes in non-VM frame")),
+        })
+    }
+
+    #[cfg(feature = "vm")]
+    pub(crate) fn read_abi_buf_at<T: abi::BufReadWrite>(
+        &self,
+        vmcaller: &VmCaller<Host>,
+        offset: u32,
+    ) -> Result<T, HostError> {
+        self.with_current_frame(|frame| match frame {
+            Frame::ContractVM(vm, _) => {
+                let mem = vm.get_memory(self)?;
+                let mut buf = T::ZERO_BUF;
+                // TODO v160: charge for rawval decode?
+                // host.charge_budget(CostType::VmMemCpy, buf.len() as u64)?;
+                self.map_err(
+                    mem.read(
+                        vmcaller.try_ref()?,
+                        offset as usize,
+                        T::buf_as_mut_slice(&mut buf),
+                    )
+                    .map_err(|me| wasmi::Error::Memory(me)),
+                )?;
+                Ok(T::buf_read(&buf))
+            }
+            _ => Err(self.err_general("reading rawval from VM memory in non-VM frame")),
+        })
+    }
+
+    #[cfg(feature = "vm")]
+    pub(crate) fn write_abi_buf_at<T: abi::BufReadWrite>(
+        &self,
+        v: T,
+        vmcaller: &mut VmCaller<Host>,
+        offset: u32,
+    ) -> Result<(), HostError> {
+        self.with_current_frame(|frame| match frame {
+            Frame::ContractVM(vm, _) => {
+                let mem = vm.get_memory(self)?;
+                let mut buf = T::ZERO_BUF;
+                T::buf_write(v, &mut buf);
+                //host.charge_budget(CostType::VmMemCpy, buf.len() as u64)?;
+                self.map_err(
+                    mem.write(vmcaller.try_mut()?, offset as usize, T::buf_as_slice(&buf))
+                        .map_err(|me| wasmi::Error::Memory(me)),
+                )?;
+                Ok(())
+            }
+            _ => Err(self.err_general("writing rawval to VM memory in non-VM frame")),
         })
     }
 
@@ -579,7 +628,7 @@ impl Host {
 
     pub(crate) fn from_host_obj(&self, ob: Object) -> Result<ScObject, HostError> {
         unsafe {
-            self.unchecked_visit_val_obj(ob.into(), |ob| {
+            self.unchecked_visit_obj(ob.into(), |ob| {
                 // This accounts for conversion of "primitive" objects (e.g U64)
                 // and the "shell" of a complex object (ScMap). Any non-trivial
                 // work such as byte cloning, has to be accounted for and
@@ -796,10 +845,13 @@ impl Host {
             #[cfg(not(feature = "vm"))]
             ScContractCode::Wasm(_) => Err(self.err_general("could not dispatch")),
             ScContractCode::Token => {
+                todo!()
+                /*
                 self.with_frame(Frame::Token(id.clone(), func.clone()), || {
                     use crate::native_contract::{NativeContract, Token};
                     Token.call(func, self, args)
                 })
+                */
             }
         }
     }
@@ -881,7 +933,7 @@ impl Host {
                         Ok(None) => Err(self.err(
                             DebugError::general()
                                 .msg("error '{}': calling unknown contract function '{}'")
-                                .arg::<RawVal>(func.into()),
+                                .arg(func),
                         )),
                         Err(panic_payload) => {
                             // Return an error indicating the contract function
@@ -896,7 +948,7 @@ impl Host {
 
                             if let Some(st) = *panic.borrow() {
                                 status = st;
-                                event = DebugEvent::new().msg("caught panic from contract function '{}', propagating escalated error '{}'").arg(func).arg(st.to_raw());
+                                event = DebugEvent::new().msg("caught panic from contract function '{}', propagating escalated error '{}'").arg(func).arg(st);
                             }
                             // If we're allowed to record dynamic strings (which happens in
                             // native test configurations), also log the panic payload into
@@ -1105,16 +1157,10 @@ impl EnvBase for Host {
         new_host
     }
 
-    fn bytes_copy_from_slice(
-        &self,
-        b: Object,
-        b_pos: RawVal,
-        mem: &[u8],
-    ) -> Result<Object, Status> {
+    fn bytes_copy_from_slice(&self, b: Object, b_pos: u32, mem: &[u8]) -> Result<Object, Status> {
         // This is only called from native contracts, either when testing or
         // when the contract is otherwise linked into the same address space as
         // us. We therefore access the memory we were passed directly.
-        let b_pos = u32::try_from(b_pos).map_err(|_| ScHostValErrorCode::UnexpectedValType)?;
         let len = u32::try_from(mem.len()).map_err(|_| ScHostValErrorCode::U32OutOfRange)?;
         let mut vnew = self
             .visit_obj(b, |hv: &Vec<u8>| Ok(hv.clone()))
@@ -1136,8 +1182,7 @@ impl EnvBase for Host {
             .map_err(|he| he.status)
     }
 
-    fn bytes_copy_to_slice(&self, b: Object, b_pos: RawVal, mem: &mut [u8]) -> Result<(), Status> {
-        let b_pos = u32::try_from(b_pos).map_err(|_| ScHostValErrorCode::UnexpectedValType)?;
+    fn bytes_copy_to_slice(&self, b: Object, b_pos: u32, mem: &mut [u8]) -> Result<(), Status> {
         let len = u32::try_from(mem.len()).map_err(|_| ScHostValErrorCode::U32OutOfRange)?;
         self.visit_obj(b, move |hv: &Vec<u8>| {
             let end_idx = b_pos
@@ -1325,12 +1370,12 @@ impl VmCallerCheckedEnv for Host {
     fn obj_cmp(
         &self,
         _vmcaller: &mut VmCaller<Host>,
-        a: RawVal,
-        b: RawVal,
+        a: Object,
+        b: Object,
     ) -> Result<i64, HostError> {
         let res = unsafe {
-            self.unchecked_visit_val_obj(a, |ao| {
-                self.unchecked_visit_val_obj(b, |bo| Ok(ao.metered_cmp(&bo, &self.0.budget)?))
+            self.unchecked_visit_obj(a, |ao| {
+                self.unchecked_visit_obj(b, |bo| Ok(ao.metered_cmp(&bo, &self.0.budget)?))
             })?
         };
         Ok(match res {
@@ -1968,7 +2013,7 @@ impl VmCallerCheckedEnv for Host {
         if let Err(e) = &res {
             let evt = DebugEvent::new()
                 .msg("contract call invocation resulted in error {}")
-                .arg::<RawVal>(e.status.into());
+                .arg(e.status);
             self.record_debug_event(evt)?;
         }
         res
@@ -2303,7 +2348,7 @@ impl VmCallerCheckedEnv for Host {
                 return Err(self.err(
                     DebugError::new(ScHostFnErrorCode::InputArgsInvalid)
                         .msg("{} contains invalid digit, must be < radix")
-                        .arg(buf.to_raw()),
+                        .arg(buf),
                 ));
             }
             MeteredBigInt::from_radix_be(self.0.budget.clone(), s, b, r)
@@ -2339,16 +2384,15 @@ impl VmCallerCheckedEnv for Host {
         &self,
         vmcaller: &mut VmCaller<Host>,
         b: Object,
-        b_pos: RawVal,
-        lm_pos: RawVal,
-        len: RawVal,
+        b_pos: u32,
+        lm_pos: u32,
+        len: u32,
     ) -> Result<RawVal, HostError> {
         #[cfg(not(feature = "vm"))]
         unimplemented!();
         #[cfg(feature = "vm")]
         {
             let VmSlice { vm, pos, len } = self.decode_vmslice(lm_pos, len)?;
-            let b_pos = u32::try_from(b_pos)?;
             self.visit_obj(b, move |hv: &Vec<u8>| {
                 let range = self.valid_range_from_start_span_bound(b_pos, len, hv.len())?;
                 let mem = vm.get_memory(self)?;
@@ -2366,16 +2410,15 @@ impl VmCallerCheckedEnv for Host {
         &self,
         vmcaller: &mut VmCaller<Host>,
         b: Object,
-        b_pos: RawVal,
-        lm_pos: RawVal,
-        len: RawVal,
+        b_pos: u32,
+        lm_pos: u32,
+        len: u32,
     ) -> Result<Object, HostError> {
         #[cfg(not(feature = "vm"))]
         unimplemented!();
         #[cfg(feature = "vm")]
         {
             let VmSlice { vm, pos, len } = self.decode_vmslice(lm_pos, len)?;
-            let b_pos = u32::try_from(b_pos)?;
             let mut vnew =
                 self.visit_obj(b, |hv: &Vec<u8>| Ok(hv.metered_clone(&self.0.budget)?))?;
             let end_idx = b_pos.checked_add(len).ok_or_else(|| {
@@ -2403,8 +2446,8 @@ impl VmCallerCheckedEnv for Host {
     fn bytes_new_from_linear_memory(
         &self,
         vmcaller: &mut VmCaller<Host>,
-        lm_pos: RawVal,
-        len: RawVal,
+        lm_pos: u32,
+        len: u32,
     ) -> Result<Object, HostError> {
         #[cfg(not(feature = "vm"))]
         unimplemented!();
@@ -2432,11 +2475,11 @@ impl VmCallerCheckedEnv for Host {
         &self,
         _vmcaller: &mut VmCaller<Host>,
         b: Object,
-        i: RawVal,
-        u: RawVal,
+        i: u32,
+        u: u32,
     ) -> Result<Object, HostError> {
-        let i = self.usize_from_rawval_u32_input("i", i)?;
-        let u = self.u8_from_rawval_input("u", u)?;
+        let i = i as usize;
+        let u = u as u8;
         let vnew = self.visit_obj(b, move |hv: &Vec<u8>| {
             let mut vnew = hv.metered_clone(&self.0.budget)?;
             match vnew.get_mut(i) {
@@ -2455,12 +2498,12 @@ impl VmCallerCheckedEnv for Host {
         &self,
         _vmcaller: &mut VmCaller<Host>,
         b: Object,
-        i: RawVal,
-    ) -> Result<RawVal, HostError> {
-        let i = self.usize_from_rawval_u32_input("i", i)?;
+        i: u32,
+    ) -> Result<u32, HostError> {
+        let i = i as usize;
         self.visit_obj(b, |hv: &Vec<u8>| {
             hv.get(i)
-                .map(|u| Into::<RawVal>::into(Into::<u32>::into(*u)))
+                .map(|u| *u as u32)
                 .ok_or_else(|| self.err_status(ScHostObjErrorCode::VecIndexOutOfBound))
         })
     }
@@ -2469,9 +2512,8 @@ impl VmCallerCheckedEnv for Host {
         &self,
         _vmcaller: &mut VmCaller<Host>,
         b: Object,
-        i: RawVal,
+        i: u32,
     ) -> Result<Object, HostError> {
-        let i = self.u32_from_rawval_input("i", i)?;
         let vnew = self.visit_obj(b, move |hv: &Vec<u8>| {
             self.validate_index_lt_bound(i, hv.len())?;
             let mut vnew = hv.metered_clone(&self.0.budget)?;
@@ -2483,9 +2525,9 @@ impl VmCallerCheckedEnv for Host {
     }
 
     // Notes on metering: `len` is free
-    fn bytes_len(&self, _vmcaller: &mut VmCaller<Host>, b: Object) -> Result<RawVal, HostError> {
+    fn bytes_len(&self, _vmcaller: &mut VmCaller<Host>, b: Object) -> Result<u32, HostError> {
         let len = self.visit_obj(b, |hv: &Vec<u8>| Ok(hv.len()))?;
-        self.usize_to_rawval_u32(len)
+        self.usize_to_u32(len, "len")
     }
 
     // Notes on metering: `push` is free
@@ -2493,9 +2535,9 @@ impl VmCallerCheckedEnv for Host {
         &self,
         _vmcaller: &mut VmCaller<Host>,
         b: Object,
-        u: RawVal,
+        u: u32,
     ) -> Result<Object, HostError> {
-        let u = self.u8_from_rawval_input("u", u)?;
+        let u = u as u8;
         let vnew = self.visit_obj(b, move |hv: &Vec<u8>| {
             let mut vnew = hv.metered_clone(&self.0.budget)?;
             // Passing `len()` since worse case can cause reallocation.
@@ -2520,19 +2562,19 @@ impl VmCallerCheckedEnv for Host {
     }
 
     // Notes on metering: `first` is free
-    fn bytes_front(&self, _vmcaller: &mut VmCaller<Host>, b: Object) -> Result<RawVal, HostError> {
+    fn bytes_front(&self, _vmcaller: &mut VmCaller<Host>, b: Object) -> Result<u32, HostError> {
         self.visit_obj(b, |hv: &Vec<u8>| {
             hv.first()
-                .map(|u| Into::<RawVal>::into(Into::<u32>::into(*u)))
+                .map(|u| *u as u32)
                 .ok_or_else(|| self.err_status(ScHostObjErrorCode::VecIndexOutOfBound))
         })
     }
 
     // Notes on metering: `last` is free
-    fn bytes_back(&self, _vmcaller: &mut VmCaller<Host>, b: Object) -> Result<RawVal, HostError> {
+    fn bytes_back(&self, _vmcaller: &mut VmCaller<Host>, b: Object) -> Result<u32, HostError> {
         self.visit_obj(b, |hv: &Vec<u8>| {
             hv.last()
-                .map(|u| Into::<RawVal>::into(Into::<u32>::into(*u)))
+                .map(|u| *u as u32)
                 .ok_or_else(|| self.err_status(ScHostObjErrorCode::VecIndexOutOfBound))
         })
     }
@@ -2541,11 +2583,10 @@ impl VmCallerCheckedEnv for Host {
         &self,
         _vmcaller: &mut VmCaller<Host>,
         b: Object,
-        i: RawVal,
-        u: RawVal,
+        i: u32,
+        u: u32,
     ) -> Result<Object, HostError> {
-        let i = self.u32_from_rawval_input("i", i)?;
-        let u = self.u8_from_rawval_input("u", u)?;
+        let u = u as u8;
         let vnew = self.visit_obj(b, move |hv: &Vec<u8>| {
             self.validate_index_le_bound(i, hv.len())?;
             let mut vnew = hv.metered_clone(&self.0.budget)?;
@@ -2576,11 +2617,9 @@ impl VmCallerCheckedEnv for Host {
         &self,
         _vmcaller: &mut VmCaller<Host>,
         b: Object,
-        start: RawVal,
-        end: RawVal,
+        start: u32,
+        end: u32,
     ) -> Result<Object, HostError> {
-        let start = self.u32_from_rawval_input("start", start)?;
-        let end = self.u32_from_rawval_input("end", end)?;
         let vnew = self.visit_obj(b, move |hv: &Vec<u8>| {
             let range = self.valid_range_from_start_end_bound(start, end, hv.len())?;
             self.charge_budget(CostType::BytesSlice, hv.len() as u64)?;

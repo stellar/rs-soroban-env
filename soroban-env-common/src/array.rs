@@ -1,5 +1,4 @@
-use crate::xdr::ScHostValErrorCode;
-use stellar_xdr::ScObjectType;
+use stellar_xdr::{ScObjectType, ScHostValErrorCode};
 
 use crate::{
     ConversionError, Env, Object, RawVal, RawValConvertible, Status, TryFromVal, TryIntoVal,
@@ -17,12 +16,12 @@ impl<E: Env, const N: usize> TryFromVal<E, RawVal> for [u8; N] {
         }
         let env = env.clone();
         let bytes = unsafe { Object::unchecked_from_val(val) };
-        let len = unsafe { u32::unchecked_from_val(env.bytes_len(bytes)) };
+        let len = env.bytes_len(bytes);
         if len as usize != N {
             return Err(ConversionError.into());
         }
         let mut arr = [0u8; N];
-        env.bytes_copy_to_slice(bytes, RawVal::U32_ZERO, &mut arr)?;
+        env.bytes_copy_to_slice(bytes, 0, &mut arr)?;
         Ok(arr)
     }
 }
@@ -39,7 +38,7 @@ impl<E: Env> TryIntoVal<E, RawVal> for &[u8] {
     type Error = Status;
     #[inline(always)]
     fn try_into_val(self, env: &E) -> Result<RawVal, Self::Error> {
-        Ok(env.bytes_new_from_slice(self)?.to_raw())
+        Ok(env.bytes_new_from_slice(self)?.into())
     }
 }
 

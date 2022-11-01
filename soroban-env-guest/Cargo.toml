@@ -12,6 +12,7 @@ rust-version = "1.65"
 
 [dependencies]
 soroban-env-common = { version = "0.0.9" }
+soroban-env-macros = { version = "0.0.9" }
 static_assertions = "1.1.0"
 
 [package.metadata.docs.rs]
