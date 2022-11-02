@@ -18,7 +18,7 @@ soroban-env-common = { path = "soroban-env-common" }
 soroban-env-host = { path = "soroban-env-host" }
 soroban-env-macros = { path = "soroban-env-macros" }
 soroban-native-sdk-macros = { path = "soroban-native-sdk-macros" }
-stellar-xdr = { git = "https://github.com/stellar/rs-stellar-xdr", rev = "3ba13687" }
+stellar-xdr = { git = "https://github.com/stellar/rs-stellar-xdr", rev = "e88f9fa7" }
 wasmi = { package = "soroban-wasmi", git = "https://github.com/stellar/wasmi", rev = "d1ec0036" }
 
 [profile.release]
