@@ -43,12 +43,21 @@ impl<K, V> Default for MeteredOrdMap<K, V> {
     }
 }
 
+fn check_size_is_small<T>(name: &str) {
+    let sz = core::mem::size_of::<T>();
+    if sz > 64 {
+        panic!("type '{}' is too big: {}", name, sz);
+    }
+}
+
 impl<K, V> MeteredOrdMap<K, V>
 where
     K: Ord + Clone,
     V: Clone,
 {
     pub fn new(budget: Budget) -> Result<Self, HostError> {
+        check_size_is_small::<K>("key");
+        check_size_is_small::<V>("val");
         budget.charge(CostType::ImMapNew, 1)?;
         Ok(MeteredOrdMap {
             budget,
@@ -57,6 +66,8 @@ where
     }
 
     pub fn from_map(budget: Budget, map: OrdMap<K, V>) -> Result<Self, HostError> {
+        check_size_is_small::<K>("key");
+        check_size_is_small::<V>("val");
         budget.charge(CostType::ImMapNew, 1)?;
         Ok(MeteredOrdMap { budget, map })
     }

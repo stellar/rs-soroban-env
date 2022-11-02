@@ -1,3 +1,8 @@
+use im_rc::OrdMap;
+use soroban_env_common::xdr::{
+    AccountId, LedgerEntry, LedgerKey, LedgerKeyAccount, PublicKey, Uint256,
+};
+
 use crate::{
     xdr::{ScMap, ScMapEntry, ScObject, ScVal, ScVec},
     CheckedEnv, Host, HostError, RawVal, RawValConvertible, Status, Symbol,
@@ -220,4 +225,60 @@ fn map_values() -> Result<(), HostError> {
     assert_eq!(host.obj_cmp(values.to_raw(), expected_values)?, 0);
 
     Ok(())
+}
+
+#[test]
+#[ignore = "aborts with a stack overflow"]
+fn map_stack_overflow_63356_big_keys_and_vals() {
+    let mut map: OrdMap<LedgerKey, Option<LedgerEntry>> = OrdMap::new();
+    for a in 0..=255 {
+        for b in 0..=255 {
+            let mut k: [u8; 32] = [0; 32];
+            k[0] = a;
+            k[1] = b;
+            let pk = PublicKey::PublicKeyTypeEd25519(Uint256(k));
+            let key = LedgerKey::Account(LedgerKeyAccount {
+                account_id: AccountId(pk),
+            });
+            map.insert(key, None);
+        }
+    }
+}
+
+#[test]
+fn map_stack_no_overflow_65536_boxed_keys_and_vals() {
+    let mut map: OrdMap<Box<LedgerKey>, Option<Box<LedgerEntry>>> = OrdMap::new();
+    for a in 0..=255 {
+        for b in 0..=255 {
+            let mut k: [u8; 32] = [0; 32];
+            k[0] = a;
+            k[1] = b;
+            let pk = PublicKey::PublicKeyTypeEd25519(Uint256(k));
+            let key = LedgerKey::Account(LedgerKeyAccount {
+                account_id: AccountId(pk),
+            });
+            map.insert(Box::new(key), None);
+        }
+    }
+}
+
+#[test]
+#[ignore = "runs for too long on debug builds"]
+fn map_stack_no_overflow_16777216_boxed_keys_and_vals() {
+    let mut map: OrdMap<Box<LedgerKey>, Option<Box<LedgerEntry>>> = OrdMap::new();
+    for a in 0..=255 {
+        for b in 0..=255 {
+            for c in 0..=255 {
+                let mut k: [u8; 32] = [0; 32];
+                k[0] = a;
+                k[1] = b;
+                k[2] = c;
+                let pk = PublicKey::PublicKeyTypeEd25519(Uint256(k));
+                let key = LedgerKey::Account(LedgerKeyAccount {
+                    account_id: AccountId(pk),
+                });
+                map.insert(Box::new(key), None);
+            }
+        }
+    }
 }

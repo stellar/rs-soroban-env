@@ -63,7 +63,7 @@ use self::metered_vector::MeteredVector;
 // Notes on metering: `RollbackPoint` are metered under Frame operations
 #[derive(Clone)]
 pub(crate) struct RollbackPoint {
-    storage: MeteredOrdMap<LedgerKey, Option<LedgerEntry>>,
+    storage: MeteredOrdMap<Box<LedgerKey>, Option<Box<LedgerEntry>>>,
     objects: usize,
 }
 

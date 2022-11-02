@@ -188,7 +188,7 @@ fn linear_memory_operations() -> Result<(), HostError> {
         }),
         ext: LedgerEntryExt::V0,
     };
-    let map = OrdMap::unit(storage_key.clone(), Some(le));
+    let map = OrdMap::unit(Box::new(storage_key.clone()), Some(Box::new(le)));
     let mut footprint = Footprint::default();
     footprint.record_access(&storage_key, AccessType::ReadOnly)?;
 

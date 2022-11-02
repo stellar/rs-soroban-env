@@ -42,7 +42,7 @@ pub trait SnapshotSource {
 /// against a suitably fresh [SnapshotSource].
 // Notes on metering: covered by the underneath `MeteredOrdMap`.
 #[derive(Clone, Default)]
-pub struct Footprint(pub MeteredOrdMap<LedgerKey, AccessType>);
+pub struct Footprint(pub MeteredOrdMap<Box<LedgerKey>, AccessType>);
 
 impl Footprint {
     pub fn record_access(&mut self, key: &LedgerKey, ty: AccessType) -> Result<(), HostError> {
@@ -52,14 +52,14 @@ impl Footprint {
                 (AccessType::ReadOnly, AccessType::ReadWrite) => {
                     // The only interesting case is an upgrade
                     // from previously-read-only to read-write.
-                    self.0.insert(key.clone(), ty)?;
+                    self.0.insert(Box::new(key.clone()), ty)?;
                     Ok(())
                 }
                 (AccessType::ReadWrite, AccessType::ReadOnly) => Ok(()),
                 (AccessType::ReadWrite, AccessType::ReadWrite) => Ok(()),
             }
         } else {
-            self.0.insert(key.clone(), ty)?;
+            self.0.insert(Box::new(key.clone()), ty)?;
             Ok(())
         }
     }
@@ -109,7 +109,7 @@ impl Default for FootprintMode {
 pub struct Storage {
     pub footprint: Footprint,
     pub mode: FootprintMode,
-    pub map: MeteredOrdMap<LedgerKey, Option<LedgerEntry>>,
+    pub map: MeteredOrdMap<Box<LedgerKey>, Option<Box<LedgerEntry>>>,
 }
 
 // Notes on metering: all storage operations: `put`, `get`, `del`, `has` are
@@ -120,7 +120,7 @@ impl Storage {
     /// listed in the [Footprint].
     pub fn with_enforcing_footprint_and_map(
         footprint: Footprint,
-        map: MeteredOrdMap<LedgerKey, Option<LedgerEntry>>,
+        map: MeteredOrdMap<Box<LedgerKey>, Option<Box<LedgerEntry>>>,
     ) -> Self {
         Self {
             mode: FootprintMode::Enforcing,
@@ -158,7 +158,8 @@ impl Storage {
                 // In recording mode we treat the map as a cache
                 // that misses read-through to the underlying src.
                 if !self.map.contains_key(key)? {
-                    self.map.insert(key.clone(), Some(src.get(key)?))?;
+                    self.map
+                        .insert(Box::new(key.clone()), Some(Box::new(src.get(key)?)))?;
                 }
             }
             FootprintMode::Enforcing => {
@@ -168,7 +169,7 @@ impl Storage {
         match self.map.get(key)? {
             None => Err(ScHostStorageErrorCode::MissingKeyInGet.into()),
             Some(None) => Err(ScHostStorageErrorCode::GetOnDeletedKey.into()),
-            Some(Some(val)) => Ok(val.clone()),
+            Some(Some(val)) => Ok((**val).clone()),
         }
     }
 
@@ -182,7 +183,8 @@ impl Storage {
                 self.footprint.enforce_access(key, ty)?;
             }
         };
-        self.map.insert(key.clone(), val)?;
+        self.map
+            .insert(Box::new(key.clone()), val.map(|v| Box::new(v)))?;
         Ok(())
     }
 
@@ -282,11 +284,11 @@ mod test_footprint {
             contract_id,
             key: ScVal::I32(0),
         });
-        let om = OrdMap::unit(key.clone(), AccessType::ReadOnly);
+        let om = OrdMap::unit(Box::new(key.clone()), AccessType::ReadOnly);
         let mom = MeteredOrdMap::from_map(budget, om)?;
         let mut fp = Footprint(mom);
         fp.enforce_access(&key, AccessType::ReadOnly)?;
-        fp.0.insert(key.clone(), AccessType::ReadWrite)?;
+        fp.0.insert(Box::new(key.clone()), AccessType::ReadWrite)?;
         fp.enforce_access(&key, AccessType::ReadOnly)?;
         fp.enforce_access(&key, AccessType::ReadWrite)?;
         Ok(())
@@ -316,7 +318,7 @@ mod test_footprint {
             contract_id,
             key: ScVal::I32(0),
         });
-        let om = OrdMap::unit(key.clone(), AccessType::ReadOnly);
+        let om = OrdMap::unit(Box::new(key.clone()), AccessType::ReadOnly);
         let mom = MeteredOrdMap::from_map(budget, om)?;
         let mut fp = Footprint(mom);
         let res = fp.enforce_access(&key, AccessType::ReadWrite);
