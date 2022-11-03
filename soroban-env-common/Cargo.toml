@@ -10,6 +10,11 @@ readme = "../README.md"
 edition = "2021"
 rust-version = "1.64"
 
+[[test]]
+name = "no_std"
+path = "tests/no_std.rs"
+harness = false
+
 [dependencies]
 soroban-env-macros = { version = "0.0.8" }
 stellar-xdr = { workspace = true, default-features = false, features = [ "next" ] }
