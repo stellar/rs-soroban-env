@@ -14,7 +14,7 @@ members = [
 exclude = ["soroban-test-wasms/wasm-workspace"]
 
 [workspace.dependencies]
-stellar-xdr = "0.0.7"
+stellar-xdr = { version = "0.0.7", default-features = false }
 wasmi = { package = "soroban-wasmi", version = "0.16.0-soroban1" }
 
 [patch.crates-io]
