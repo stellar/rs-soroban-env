@@ -12,8 +12,8 @@ rust-version = "1.64"
 
 [dependencies]
 soroban-env-macros = { version = "0.0.7" }
-stellar-xdr = { version = "0.0.7", default-features = false, features = [ "next" ] }
-wasmi = { package = "soroban-wasmi", version = "0.16.0-soroban1", optional = true }
+stellar-xdr = { workspace = true, default-features = false, features = [ "next" ] }
+wasmi = { workspace = true, optional = true }
 static_assertions = "1.1.0"
 
 [features]

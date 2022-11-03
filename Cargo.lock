@@ -1056,7 +1056,7 @@ dependencies = [
  "soroban-env-macros",
  "soroban-wasmi",
  "static_assertions",
- "stellar-xdr 0.0.7",
+ "stellar-xdr",
 ]
 
 [[package]]
@@ -1108,7 +1108,7 @@ dependencies = [
  "itertools",
  "proc-macro2",
  "quote",
- "stellar-xdr 0.0.6",
+ "stellar-xdr",
  "syn",
 ]
 
@@ -1170,12 +1170,6 @@ name = "static_assertions"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
-
-[[package]]
-name = "stellar-xdr"
-version = "0.0.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dcc8646f7ff2122e5d1f82ea754cedd883f30996056a5a92fd9d557db0d2a3b7"
 
 [[package]]
 name = "stellar-xdr"
