@@ -464,8 +464,8 @@ impl Host {
     where
         F: FnOnce(Option<&HostObject>) -> Result<U, HostError>,
     {
+        self.charge_budget(CostType::VisitObject, 1)?;
         let r = self.0.objects.borrow();
-        self.charge_budget(CostType::VisitObject, r.len() as u64)?;
         let index = <Object as RawValConvertible>::unchecked_from_val(val).get_handle() as usize;
         f(r.get(index))
     }
