@@ -13,6 +13,10 @@ members = [
 
 exclude = ["soroban-test-wasms/wasm-workspace"]
 
+[workspace.dependencies]
+stellar-xdr = "0.0.7"
+wasmi = { package = "soroban-wasmi", version = "0.16.0-soroban1" }
+
 [patch.crates-io]
 soroban-env-common = { path = "soroban-env-common" }
 soroban-env-host = { path = "soroban-env-host" }
