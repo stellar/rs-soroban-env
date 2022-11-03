@@ -8,10 +8,11 @@
 
 // Import a type from soroban_env_common so that the compiler includes it in the
 // build.
-
 #[allow(unused_imports)]
 use soroban_env_common::Env as _;
 
+// Import a panic handler to collide with any accidentally included libstd panic
+// handler.
 #[panic_handler]
 fn handle_panic(_: &core::panic::PanicInfo) -> ! {
     unreachable!()
