@@ -2,7 +2,7 @@ name: Rust
 
 on:
   push:
-    branches: [main]
+    branches: [main, release/**]
   pull_request:
 
 env:
@@ -69,7 +69,7 @@ jobs:
       run: cargo hack --feature-powerset test --locked --target ${{ matrix.sys.target }}
 
   publish-dry-run:
-    if: startsWith(github.head_ref, 'release/')
+    if: github.event_name == 'push' || startsWith(github.head_ref, 'release/')
     strategy:
       matrix:
         sys:
