@@ -5,19 +5,18 @@ use crate::{
         testutils::{sign_args, HostVec, TestSigner},
         token::public_types::TokenMetadata,
     },
+    test::util::{generate_account_id, generate_bytes_array},
     Host, HostError,
 };
 use soroban_env_common::{
-    xdr::{Asset, ScContractCode, WriteXdr},
-    CheckedEnv,
+    xdr::{Asset, ContractId, CreateContractArgs, HostFunction, ScContractCode, Uint256},
+    CheckedEnv, RawVal,
 };
-use soroban_env_common::{EnvBase, Symbol, TryFromVal, TryIntoVal};
+use soroban_env_common::{Symbol, TryFromVal, TryIntoVal};
 
 use crate::native_contract::base_types::{Bytes, BytesN};
 
 use crate::native_contract::token::public_types::Identifier;
-
-use crate::native_contract::testutils::generate_bytes;
 
 pub(crate) struct TestToken<'a> {
     pub(crate) id: BytesN<32>,
@@ -26,22 +25,35 @@ pub(crate) struct TestToken<'a> {
 
 impl<'a> TestToken<'a> {
     pub(crate) fn new(host: &'a Host) -> Self {
-        let id = generate_bytes(host);
-        host.create_contract_with_id(ScContractCode::Token, id.clone().into())
+        host.set_source_account(generate_account_id());
+        let id_obj: RawVal = host
+            .invoke_function(HostFunction::CreateContract(CreateContractArgs {
+                contract_id: ContractId::SourceAccount(Uint256(generate_bytes_array())),
+                source: ScContractCode::Token,
+            }))
+            .unwrap()
+            .try_into_val(host)
             .unwrap();
-        Self { id, host }
+        host.remove_source_account();
+        Self {
+            id: BytesN::<32>::try_from_val(host, id_obj).unwrap(),
+            host,
+        }
     }
 
     pub(crate) fn new_from_asset(host: &'a Host, asset: Asset) -> Self {
-        let id = BytesN::<32>::try_from_val(
+        let id_obj: RawVal = host
+            .invoke_function(HostFunction::CreateContract(CreateContractArgs {
+                contract_id: ContractId::Asset(asset),
+                source: ScContractCode::Token,
+            }))
+            .unwrap()
+            .try_into_val(host)
+            .unwrap();
+        Self {
+            id: BytesN::<32>::try_from_val(host, id_obj).unwrap(),
             host,
-            host.create_token_from_asset(
-                host.bytes_new_from_slice(&asset.to_xdr().unwrap()).unwrap(),
-            )
-            .unwrap(),
-        )
-        .unwrap();
-        Self { id, host }
+        }
     }
 
     pub(crate) fn init(&self, admin: Identifier, metadata: TokenMetadata) -> Result<(), HostError> {

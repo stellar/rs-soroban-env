@@ -2,10 +2,11 @@ use crate::{
     native_contract::token::public_types::{
         AccountSignatures, Ed25519Signature, Signature, SignaturePayload, SignaturePayloadV0,
     },
+    test::util::generate_bytes_array,
     Host, HostError,
 };
 use ed25519_dalek::{Keypair, Signer};
-use rand::{thread_rng, RngCore};
+use rand::thread_rng;
 use soroban_env_common::{
     xdr::{AccountId, PublicKey, Uint256},
     CheckedEnv,
@@ -42,9 +43,11 @@ pub(crate) fn generate_keypair() -> Keypair {
 }
 
 pub(crate) fn generate_bytes(host: &Host) -> BytesN<32> {
-    let mut bytes: [u8; 32] = Default::default();
-    thread_rng().fill_bytes(&mut bytes);
-    BytesN::<32>::try_from_val(host, host.bytes_new_from_slice(&bytes).unwrap()).unwrap()
+    BytesN::<32>::try_from_val(
+        host,
+        host.bytes_new_from_slice(&generate_bytes_array()).unwrap(),
+    )
+    .unwrap()
 }
 
 pub(crate) fn signer_to_id_bytes(host: &Host, key: &Keypair) -> BytesN<32> {
