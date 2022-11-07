@@ -1,18 +1,14 @@
 use std::cmp::min;
 
-use soroban_env_common::{
-    xdr::{
-        Asset, HashIdPreimageSourceAccountContractId, PublicKey, Signer, SignerKey,
-        ThresholdIndexes, TrustLineAsset,
-    },
-    CheckedEnv, InvokerType,
-};
+use soroban_env_common::{CheckedEnv, InvokerType};
 
 use crate::xdr::{
-    AccountEntry, AccountId, ContractDataEntry, Hash, HashIdPreimage, HashIdPreimageContractId,
-    HashIdPreimageEd25519ContractId, LedgerEntry, LedgerEntryData, LedgerEntryExt, LedgerKey,
-    LedgerKeyAccount, LedgerKeyContractData, LedgerKeyTrustLine, ScContractCode,
-    ScHostStorageErrorCode, ScHostValErrorCode, ScObject, ScStatic, ScVal, Uint256,
+    AccountEntry, AccountId, Asset, ContractCodeEntry, ContractDataEntry, Hash, HashIdPreimage,
+    HashIdPreimageContractId, HashIdPreimageCreateContractArgs, HashIdPreimageEd25519ContractId,
+    HashIdPreimageFromAsset, HashIdPreimageSourceAccountContractId, LedgerEntry, LedgerEntryData,
+    LedgerEntryExt, LedgerKey, LedgerKeyAccount, LedgerKeyContractCode, LedgerKeyContractData,
+    LedgerKeyTrustLine, PublicKey, ScContractCode, ScHostStorageErrorCode, ScHostValErrorCode,
+    ScObject, ScStatic, ScVal, Signer, SignerKey, ThresholdIndexes, TrustLineAsset, Uint256,
 };
 use crate::{Host, HostError};
 
@@ -20,7 +16,7 @@ use super::metered_clone::MeteredClone;
 
 impl Host {
     // Notes on metering: free
-    pub fn contract_code_ledger_key(&self, contract_id: Hash) -> LedgerKey {
+    pub fn contract_code_handle_ledger_key(&self, contract_id: Hash) -> LedgerKey {
         LedgerKey::ContractData(LedgerKeyContractData {
             contract_id,
             key: ScVal::Static(ScStatic::LedgerKeyContractCode),
@@ -28,7 +24,7 @@ impl Host {
     }
 
     // Notes on metering: retrieving from storage covered. Rest are free.
-    pub fn retrieve_contract_code_from_storage(
+    pub(crate) fn retrieve_contract_code_handle_from_storage(
         &self,
         key: &LedgerKey,
     ) -> Result<ScContractCode, HostError> {
@@ -47,17 +43,32 @@ impl Host {
         }
     }
 
-    // Notes on metering: `from_host_obj` and `put` to storage covered, rest are free.
-    pub fn store_contract_code(
+    pub(crate) fn contract_code_ledger_key(&self, wasm_hash: Hash) -> LedgerKey {
+        LedgerKey::ContractCode(LedgerKeyContractCode { hash: wasm_hash })
+    }
+
+    pub(crate) fn retrieve_contract_code_from_storage(
         &self,
-        contract: ScContractCode,
+        wasm_hash: Hash,
+    ) -> Result<ContractCodeEntry, HostError> {
+        let key = self.contract_code_ledger_key(wasm_hash);
+        match self.0.storage.borrow_mut().get(&key)?.data {
+            LedgerEntryData::ContractCode(e) => Ok(e),
+            _ => Err(self.err_status(ScHostStorageErrorCode::AccessToUnknownEntry)),
+        }
+    }
+
+    // Notes on metering: `from_host_obj` and `put` to storage covered, rest are free.
+    pub(crate) fn store_contract_code(
+        &self,
+        contract_code: ScContractCode,
         contract_id: Hash,
         key: &LedgerKey,
     ) -> Result<(), HostError> {
         let data = LedgerEntryData::ContractData(ContractDataEntry {
             contract_id,
             key: ScVal::Static(ScStatic::LedgerKeyContractCode),
-            val: ScVal::Object(Some(ScObject::ContractCode(contract))),
+            val: ScVal::Object(Some(ScObject::ContractCode(contract_code))),
         });
         let val = LedgerEntry {
             last_modified_ledger_seq: 0,
@@ -73,14 +84,15 @@ impl Host {
         &self,
         key: Uint256,
         salt: Uint256,
-    ) -> Result<Vec<u8>, HostError> {
-        let pre_image = HashIdPreimage::ContractIdFromEd25519(HashIdPreimageEd25519ContractId {
-            ed25519: key,
-            salt,
-        });
-        let mut buf = Vec::new();
-        self.metered_write_xdr(&pre_image, &mut buf)?;
-        Ok(buf)
+    ) -> Result<HashIdPreimage, HostError> {
+        Ok(HashIdPreimage::ContractIdFromEd25519(
+            HashIdPreimageEd25519ContractId {
+                network_id: self
+                    .hash_from_obj_input("network_id", self.get_ledger_network_id()?)?,
+                ed25519: key,
+                salt,
+            },
+        ))
     }
 
     // metering: covered by components
@@ -88,37 +100,62 @@ impl Host {
         &self,
         contract_id: Hash,
         salt: Uint256,
-    ) -> Result<Vec<u8>, HostError> {
-        let pre_image =
-            HashIdPreimage::ContractIdFromContract(HashIdPreimageContractId { contract_id, salt });
-        let mut buf = Vec::new();
-        self.metered_write_xdr(&pre_image, &mut buf)?;
-        Ok(buf)
+    ) -> Result<HashIdPreimage, HostError> {
+        Ok(HashIdPreimage::ContractIdFromContract(
+            HashIdPreimageContractId {
+                network_id: self
+                    .hash_from_obj_input("network_id", self.get_ledger_network_id()?)?,
+                contract_id,
+                salt,
+            },
+        ))
     }
 
     // metering: covered by components
-    pub fn id_preimage_from_asset(&self, asset: Asset) -> Result<Vec<u8>, HostError> {
-        let pre_image = HashIdPreimage::ContractIdFromAsset(asset);
-        let mut buf = Vec::new();
-        self.metered_write_xdr(&pre_image, &mut buf)?;
-        Ok(buf)
+    pub fn id_preimage_from_asset(&self, asset: Asset) -> Result<HashIdPreimage, HostError> {
+        Ok(HashIdPreimage::ContractIdFromAsset(
+            HashIdPreimageFromAsset {
+                network_id: self
+                    .hash_from_obj_input("network_id", self.get_ledger_network_id()?)?,
+                asset,
+            },
+        ))
     }
 
     // metering: covered by components
-    pub fn id_preimage_from_source_account(&self, salt: Uint256) -> Result<Vec<u8>, HostError> {
+    pub fn id_preimage_from_source_account(
+        &self,
+        salt: Uint256,
+    ) -> Result<HashIdPreimage, HostError> {
         if self.get_invoker_type()? != InvokerType::Account as u64 {
             return Err(self.err_general("invoker is not an account"));
         }
 
         let source_account = self.source_account()?;
-        let pre_image =
-            HashIdPreimage::ContractIdFromSourceAccount(HashIdPreimageSourceAccountContractId {
+        Ok(HashIdPreimage::ContractIdFromSourceAccount(
+            HashIdPreimageSourceAccountContractId {
+                network_id: self
+                    .hash_from_obj_input("network_id", self.get_ledger_network_id()?)?,
                 source_account,
                 salt,
-            });
-        let mut buf = Vec::new();
-        self.metered_write_xdr(&pre_image, &mut buf)?;
-        Ok(buf)
+            },
+        ))
+    }
+
+    // metering: covered by components
+    pub fn create_contract_hash_preimage(
+        &self,
+        source: ScContractCode,
+        salt: Uint256,
+    ) -> Result<HashIdPreimage, HostError> {
+        Ok(HashIdPreimage::CreateContractArgs(
+            HashIdPreimageCreateContractArgs {
+                network_id: self
+                    .hash_from_obj_input("network_id", self.get_ledger_network_id()?)?,
+                source,
+                salt,
+            },
+        ))
     }
 
     // notes on metering: `get` from storage is covered. Rest are free.
