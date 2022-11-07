@@ -8,6 +8,8 @@ use crate::{
     Host, HostError,
 };
 
+use sha2::{Digest, Sha256};
+
 struct MeteredWrite<'a, W: Write> {
     host: &'a Host,
     w: &'a mut W,
@@ -47,6 +49,13 @@ impl Host {
                 self.err_general("failed to write xdr")
             }
         })
+    }
+
+    pub(crate) fn metered_hash_xdr(&self, obj: &impl WriteXdr) -> Result<[u8; 32], HostError> {
+        let mut buf = vec![];
+        self.metered_write_xdr(obj, &mut buf)?;
+        self.charge_budget(CostType::ComputeSha256Hash, buf.len() as u64)?;
+        Ok(Sha256::digest(buf).try_into()?)
     }
 
     pub(crate) fn metered_from_xdr<T: ReadXdr>(&self, bytes: &[u8]) -> Result<T, HostError> {

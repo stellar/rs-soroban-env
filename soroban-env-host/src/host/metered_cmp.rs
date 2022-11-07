@@ -4,6 +4,7 @@ use soroban_env_common::xdr::{AccountId, PublicKey, ScContractCode, Uint256};
 
 use crate::{
     budget::{Budget, CostType},
+    host::Hash,
     host_object::HostObject,
     HostError,
 };
@@ -56,10 +57,17 @@ impl MeteredCmp for Uint256 {
     }
 }
 
+impl MeteredCmp for Hash {
+    fn metered_cmp(&self, other: &Self, budget: &Budget) -> Result<Ordering, HostError> {
+        budget.charge(CostType::BytesCmp, self.0.len() as u64)?;
+        Ok(self.cmp(other))
+    }
+}
+
 impl MeteredCmp for ScContractCode {
     fn metered_cmp(&self, other: &Self, budget: &Budget) -> Result<Ordering, HostError> {
         match (self, other) {
-            (ScContractCode::Wasm(a), ScContractCode::Wasm(b)) => a.metered_cmp(b, budget),
+            (ScContractCode::WasmRef(a), ScContractCode::WasmRef(b)) => a.metered_cmp(b, budget),
             _ => Ok(self.cmp(other)),
         }
     }

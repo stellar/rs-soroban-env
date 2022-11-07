@@ -300,4 +300,11 @@ impl Host {
             Ok(hv.iter().map(|a| a.to_raw()).collect())
         })
     }
+
+    pub(crate) fn scvals_to_rawvals(&self, sc_vals: &[ScVal]) -> Result<Vec<RawVal>, HostError> {
+        sc_vals
+            .iter()
+            .map(|scv| self.to_host_val(scv).map(|hv| hv.val))
+            .collect::<Result<Vec<RawVal>, HostError>>()
+    }
 }
