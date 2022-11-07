@@ -80,4 +80,4 @@ jobs:
     uses: stellar/actions/.github/workflows/rust-publish-dry-run.yml@main
     with:
       runs-on: ${{ matrix.sys.os }}
-      cargo-package-options: --target ${{ matrix.sys.target }}
+      target: ${{ matrix.sys.target }}
