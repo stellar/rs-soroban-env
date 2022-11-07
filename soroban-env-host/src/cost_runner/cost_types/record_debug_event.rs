@@ -11,12 +11,11 @@ impl CostRunner for CreateRecordDebugEventRun {
     const COST_TYPE: CostType = CostType::HostEventDebug;
     type SampleType = CreateRecordDebugEventSample;
 
-    fn run_iter(host: &Host, _iter: u64, sample: &mut Self::SampleType) -> Option<u64> {
+    fn run_iter(host: &Host, _iter: u64, sample: &mut Self::SampleType) {
         let mut de = DebugEvent::new().msg(sample.msg);
         for arg in &sample.args {
             de = de.arg(arg.clone().to_raw());
         }
         host.record_debug_event(de).unwrap();
-        None
     }
 }

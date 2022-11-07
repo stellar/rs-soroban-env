@@ -12,8 +12,7 @@ impl CostRunner for VmInstantiationRun {
     const RUN_ITERATIONS: u64 = 10;
     type SampleType = VmInstantiationSample;
 
-    fn run_iter(host: &crate::Host, _iter: u64, sample: &mut Self::SampleType) -> Option<u64> {
+    fn run_iter(host: &crate::Host, _iter: u64, sample: &mut Self::SampleType) {
         Vm::new(host, sample.id.clone(), &sample.wasm[..]).unwrap();
-        Some(sample.wasm.len() as u64)
     }
 }

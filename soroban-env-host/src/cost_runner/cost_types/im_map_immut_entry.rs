@@ -11,10 +11,13 @@ impl CostRunner for ImMapImmutEntryRun {
     const COST_TYPE: CostType = CostType::ImMapImmutEntry;
     type SampleType = ImMapImmutEntrySample;
 
-    fn run_iter(_host: &crate::Host, iter: u64, sample: &mut Self::SampleType) -> Option<u64> {
+    fn run_iter(_host: &crate::Host, iter: u64, sample: &mut Self::SampleType) {
         let _ = sample
             .map
             .get(&sample.keys[iter as usize % sample.keys.len()]);
-        Some(sample.map.len() as u64)
+    }
+
+    fn get_total_input(_host: &Host, sample: &Self::SampleType) -> u64 {
+        (sample.map.len() as u64) * Self::RUN_ITERATIONS
     }
 }

@@ -12,11 +12,14 @@ impl CostRunner for ImVecMutEntryRun {
     const COST_TYPE: CostType = CostType::ImVecMutEntry;
     type SampleType = ImVecMutEntrySample;
 
-    fn run_iter(_host: &Host, iter: u64, sample: &mut Self::SampleType) -> Option<u64> {
+    fn run_iter(_host: &Host, iter: u64, sample: &mut Self::SampleType) {
         let _ = sample
             .im
             .vec
             .get_mut(sample.im.idxs[iter as usize % sample.im.idxs.len()]);
-        Some(sample.im.vec.len() as u64)
+    }
+
+    fn get_total_input(_host: &Host, sample: &Self::SampleType) -> u64 {
+        (sample.im.vec.len() as u64) * Self::RUN_ITERATIONS
     }
 }

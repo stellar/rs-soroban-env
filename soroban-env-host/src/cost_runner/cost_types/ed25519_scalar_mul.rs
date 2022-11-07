@@ -14,8 +14,12 @@ impl CostRunner for Ed25519ScalarMulRun {
     const COST_TYPE: CostType = CostType::EdwardsPointCurve25519ScalarMul;
     type SampleType = Ed25519ScalarMulSample;
 
-    fn run_iter(_host: &crate::Host, _iter: u64, sample: &mut Self::SampleType) -> Option<u64> {
+    fn run_iter(_host: &crate::Host, _iter: u64, sample: &mut Self::SampleType) {
         edwards::EdwardsPoint::vartime_double_scalar_mul_basepoint(&sample.a, &sample.A, &sample.b);
-        Some(1)
+    }
+
+    fn get_total_input(_host: &crate::Host, _sample: &Self::SampleType) -> u64 {
+        // input is ignored
+        Self::RUN_ITERATIONS
     }
 }

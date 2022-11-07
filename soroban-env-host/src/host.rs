@@ -136,7 +136,7 @@ pub(crate) struct HostImpl {
     ledger: RefCell<Option<LedgerInfo>>,
     objects: RefCell<Vec<HostObject>>,
     storage: RefCell<Storage>,
-    context: RefCell<Vec<Frame>>,
+    pub(crate) context: RefCell<Vec<Frame>>,
     // Note: budget is refcounted and is _not_ deep-cloned when you call HostImpl::deep_clone,
     // mainly because it's not really possible to achieve (the same budget is connected to many
     // metered sub-objects) but also because it's plausible that the person calling deep_clone
@@ -402,8 +402,8 @@ impl Host {
     /// if the closure returned an error. Returns the result that the closure
     /// returned (or any error caused during the frame push/pop).
     // Notes on metering: `GuardFrame` charges on the work done on protecting the `context`.
-    /// It does not cover the cost of the actual closure call. The closure needs to be
-    /// metered separately.
+    // It does not cover the cost of the actual closure call. The closure needs to be
+    // metered separately.
     pub(crate) fn with_frame<F>(&self, frame: Frame, f: F) -> Result<RawVal, HostError>
     where
         F: FnOnce() -> Result<RawVal, HostError>,

@@ -11,11 +11,14 @@ impl CostRunner for RecordContractEventRun {
     const COST_TYPE: CostType = CostType::HostEventContract;
     type SampleType = RecordContractEventSample;
 
-    fn run_iter(_host: &crate::Host, _iter: u64, sample: &mut Self::SampleType) -> Option<u64> {
+    fn run_iter(_host: &crate::Host, _iter: u64, sample: &mut Self::SampleType) {
         // TODO: this may panic
         sample
             .storage
             .push(HostEvent::Contract(sample.events.pop().unwrap()));
-        Some(1)
+    }
+
+    fn get_total_input(_host: &crate::Host, _sample: &Self::SampleType) -> u64 {
+        Self::RUN_ITERATIONS
     }
 }

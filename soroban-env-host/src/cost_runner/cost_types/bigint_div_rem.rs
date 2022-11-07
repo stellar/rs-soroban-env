@@ -8,8 +8,11 @@ impl CostRunner for BigIntDivRemRun {
     const COST_TYPE: CostType = CostType::BigIntDivRem;
     type SampleType = (BigInt, BigInt);
 
-    fn run_iter(_host: &crate::Host, _iter: u64, sample: &mut Self::SampleType) -> Option<u64> {
+    fn run_iter(_host: &crate::Host, _iter: u64, sample: &mut Self::SampleType) {
         sample.0.div_rem(&sample.1);
-        Some(sample.0.bits())
+    }
+
+    fn get_total_input(_host: &crate::Host, sample: &Self::SampleType) -> u64 {
+        sample.0.bits() * Self::RUN_ITERATIONS
     }
 }

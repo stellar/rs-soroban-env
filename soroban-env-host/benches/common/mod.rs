@@ -75,6 +75,55 @@ pub(crate) fn for_each_host_cost_measurement<B: Benchmark>() -> std::io::Result<
                 eprintln!("warning: missing cost measurement for {:?}", cost);
             }
         }
+        // warning: missing cost measurement for WasmMemAlloc
+        // warning: missing cost measurement for HostFunction
+        // warning: missing cost measurement for PushFrame
+        // warning: missing cost measurement for PopFrame
+        // warning: missing cost measurement for ValXdrConv
+        // warning: missing cost measurement for ValSer
+        // warning: missing cost measurement for ValDeser
+        // warning: missing cost measurement for CloneEvents
+        // warning: missing cost measurement for HostVecAllocCell
+        // warning: missing cost measurement for HostMapAllocCell
+        // warning: missing cost measurement for HostU64AllocCell
+        // warning: missing cost measurement for HostI64AllocCell
+        // warning: missing cost measurement for HostBytesAllocCell
+        // warning: missing cost measurement for HostBigIntAllocCell
+        // warning: missing cost measurement for ImMapNew
+        // warning: missing cost measurement for ScVecFromHostVec
+        // warning: missing cost measurement for ScMapFromHostMap
+        // warning: missing cost measurement for GuardFrame
+        // warning: missing cost measurement for CloneVm
+        // warning: missing cost measurement for BigIntNew
+        // warning: missing cost measurement for BigIntAddSub
+        // warning: missing cost measurement for BigIntMul
+        // warning: missing cost measurement for BigIntBitwiseOp
+        // warning: missing cost measurement for BigIntShift
+        // warning: missing cost measurement for BigIntCmp
+        // warning: missing cost measurement for BigIntGcdLcm
+        // warning: missing cost measurement for BigIntPow
+        // warning: missing cost measurement for BigIntPowMod
+        // warning: missing cost measurement for BigIntSqrt
+        // warning: missing cost measurement for BigIntFromBytes
+        // warning: missing cost measurement for BigIntToBytes
+        // warning: missing cost measurement for BigIntToRadix
+        // warning: missing cost measurement for VmMemCpy
+        // warning: missing cost measurement for VmInvokeFunction
+        // warning: missing cost measurement for BytesClone
+        // warning: missing cost measurement for BytesDel
+        // warning: missing cost measurement for BytesPush
+        // warning: missing cost measurement for BytesPop
+        // warning: missing cost measurement for BytesInsert
+        // warning: missing cost measurement for BytesAppend
+        // warning: missing cost measurement for BytesSlice
+        // warning: missing cost measurement for BytesConcat
+        // warning: missing cost measurement for CallArgsUnpack
+        // warning: missing cost measurement for ChargeBudget
+        // warning: missing cost measurement for HostContractCodeAllocCell
+        // warning: missing cost measurement for HostAccountIdAllocCell
+        // warning: missing cost measurement for ImMapCmp
+        // warning: missing cost measurement for ImVecCmp
+        // warning: missing cost measurement for BytesCmp
     }
     Ok(())
 }

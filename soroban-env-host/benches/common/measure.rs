@@ -211,8 +211,12 @@ pub trait HostCostMeasurement: Sized {
         Self::new_random_case(host, rng, input)
     }
 
-    fn run(host: &Host, sample: &mut <Self::Runner as CostRunner>::SampleType) -> u64 {
+    fn run(host: &Host, sample: &mut <Self::Runner as CostRunner>::SampleType) {
         <Self::Runner as CostRunner>::run(host, sample)
+    }
+
+    fn get_total_input(host: &Host, sample: &<Self::Runner as CostRunner>::SampleType) -> u64 {
+        <Self::Runner as CostRunner>::get_total_input(host, sample)
     }
 }
 
@@ -303,13 +307,13 @@ where
         let alloc_guard = alloc_group_token.enter();
         host.with_budget(|budget| budget.reset_inputs());
         cpu_insn_counter.begin();
-        let input = HCM::run(&host, &mut m);
+        HCM::run(&host, &mut m);
         // collect the metrics
         let iterations = <HCM::Runner as CostRunner>::RUN_ITERATIONS;
         let cpu_insns = cpu_insn_counter.end_and_count() / iterations;
         drop(alloc_guard);
         let stop = Instant::now();
-        let input = input / iterations;
+        let input = HCM::get_total_input(&host, &m) / iterations;
         let mem_bytes = mem_tracker.0.load(Ordering::SeqCst) / iterations;
         let time_nsecs = stop.duration_since(start).as_nanos() as u64 / iterations;
         ret.push(Measurement {

@@ -13,11 +13,10 @@ impl CostRunner for VerifyEd25519SigRun {
     const COST_TYPE: CostType = CostType::VerifyEd25519Sig;
     type SampleType = VerifyEd25519SigSample;
 
-    fn run_iter(_host: &crate::Host, _iter: u64, sample: &mut Self::SampleType) -> Option<u64> {
+    fn run_iter(_host: &crate::Host, _iter: u64, sample: &mut Self::SampleType) {
         sample
             .key
             .verify(sample.msg.as_slice(), &sample.sig)
             .expect("verify");
-        None
     }
 }
