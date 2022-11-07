@@ -52,6 +52,6 @@ rev = "63bef69c"
 
 # Uncomment the following to build against local SDK. This is useful when env
 # changes are breaking for SDK and require the respective SDK change
-# [patch."https://github.com/stellar/rs-soroban-sdk"]
-# soroban-sdk = { path = "../../../rs-soroban-sdk/soroban-sdk" }
+[patch."https://github.com/stellar/rs-soroban-sdk"]
+soroban-sdk = { path = "../../../rs-soroban-sdk/soroban-sdk" }
 
