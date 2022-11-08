@@ -14,7 +14,7 @@ use std::{
     rc::Rc,
 };
 
-pub(crate) struct MeteredBigInt {
+pub struct MeteredBigInt {
     budget: Budget,
     num: BigInt,
 }
@@ -81,7 +81,7 @@ impl MeteredBigInt {
 }
 
 impl MeteredBigInt {
-    pub(crate) fn new(budget: Budget) -> Result<Self, HostError> {
+    pub fn new(budget: Budget) -> Result<Self, HostError> {
         budget.charge(CostType::BigIntNew, 1)?;
         Ok(Self {
             budget,
@@ -90,11 +90,11 @@ impl MeteredBigInt {
     }
 
     // Notes on mtering: free.
-    pub(crate) fn bits(&self) -> u64 {
+    pub fn bits(&self) -> u64 {
         self.num.bits()
     }
 
-    pub(crate) fn from_u64(budget: Budget, x: u64) -> Result<Self, HostError> {
+    pub fn from_u64(budget: Budget, x: u64) -> Result<Self, HostError> {
         budget.charge(CostType::BigIntNew, 1)?;
         Ok(Self {
             budget,
@@ -102,11 +102,11 @@ impl MeteredBigInt {
         })
     }
 
-    pub(crate) fn to_u64(&self) -> Option<u64> {
+    pub fn to_u64(&self) -> Option<u64> {
         self.num.to_u64()
     }
 
-    pub(crate) fn from_i64(budget: Budget, x: i64) -> Result<Self, HostError> {
+    pub fn from_i64(budget: Budget, x: i64) -> Result<Self, HostError> {
         budget.charge(CostType::BigIntNew, 1)?;
         Ok(Self {
             budget,
@@ -114,11 +114,15 @@ impl MeteredBigInt {
         })
     }
 
-    pub(crate) fn to_i64(&self) -> Option<i64> {
+    pub fn to_i64(&self) -> Option<i64> {
         self.num.to_i64()
     }
 
-    pub(crate) fn add(&self, other: &Self) -> Result<Self, HostError> {
+    pub fn from_bigint(budget: Budget, num: BigInt) -> Self {
+        Self { budget, num }
+    }
+
+    pub fn add(&self, other: &Self) -> Result<Self, HostError> {
         self.charge_add_sub(max(self.bits(), other.bits()))?;
         Ok(Self {
             budget: self.budget.clone(),
@@ -126,7 +130,7 @@ impl MeteredBigInt {
         })
     }
 
-    pub(crate) fn sub(&self, other: &Self) -> Result<Self, HostError> {
+    pub fn sub(&self, other: &Self) -> Result<Self, HostError> {
         self.charge_add_sub(max(self.bits(), other.bits()))?;
         Ok(Self {
             budget: self.budget.clone(),
@@ -134,7 +138,7 @@ impl MeteredBigInt {
         })
     }
 
-    pub(crate) fn mul(&self, other: &Self) -> Result<Self, HostError> {
+    pub fn mul(&self, other: &Self) -> Result<Self, HostError> {
         self.charge_mul(max(self.bits(), other.bits()))?;
         Ok(Self {
             budget: self.budget.clone(),
@@ -142,7 +146,7 @@ impl MeteredBigInt {
         })
     }
 
-    pub(crate) fn div(&self, other: &Self) -> Result<Self, HostError> {
+    pub fn div(&self, other: &Self) -> Result<Self, HostError> {
         debug_assert!(!other.is_zero());
         self.charge_div_rem(max(self.bits(), other.bits()))?;
         Ok(Self {
@@ -151,7 +155,7 @@ impl MeteredBigInt {
         })
     }
 
-    pub(crate) fn rem(&self, other: &Self) -> Result<Self, HostError> {
+    pub fn rem(&self, other: &Self) -> Result<Self, HostError> {
         debug_assert!(!other.is_zero());
         self.charge_div_rem(max(self.bits(), other.bits()))?;
         Ok(Self {
@@ -160,7 +164,7 @@ impl MeteredBigInt {
         })
     }
 
-    pub(crate) fn bitand(&self, other: &Self) -> Result<Self, HostError> {
+    pub fn bitand(&self, other: &Self) -> Result<Self, HostError> {
         self.charge_bitwise_op(max(self.bits(), other.bits()))?;
         Ok(Self {
             budget: self.budget.clone(),
@@ -168,7 +172,7 @@ impl MeteredBigInt {
         })
     }
 
-    pub(crate) fn bitor(&self, other: &Self) -> Result<Self, HostError> {
+    pub fn bitor(&self, other: &Self) -> Result<Self, HostError> {
         self.charge_bitwise_op(max(self.bits(), other.bits()))?;
         Ok(Self {
             budget: self.budget.clone(),
@@ -176,7 +180,7 @@ impl MeteredBigInt {
         })
     }
 
-    pub(crate) fn bitxor(&self, other: &Self) -> Result<Self, HostError> {
+    pub fn bitxor(&self, other: &Self) -> Result<Self, HostError> {
         self.charge_bitwise_op(max(self.bits(), other.bits()))?;
         Ok(Self {
             budget: self.budget.clone(),
@@ -184,7 +188,7 @@ impl MeteredBigInt {
         })
     }
 
-    pub(crate) fn shl(&self, rhs: &Self) -> Result<Self, HostError> {
+    pub fn shl(&self, rhs: &Self) -> Result<Self, HostError> {
         self.charge_shift(self.bits())?;
         if rhs.is_negative() {
             // TODO: Replace with proper err code "attempt to shift left with negative"
@@ -201,7 +205,7 @@ impl MeteredBigInt {
         }
     }
 
-    pub(crate) fn shr(&self, rhs: &Self) -> Result<Self, HostError> {
+    pub fn shr(&self, rhs: &Self) -> Result<Self, HostError> {
         self.charge_shift(self.bits())?;
         if rhs.is_negative() {
             // TODO: Replace with proper err code "attempt to shift right with negative"
@@ -218,29 +222,29 @@ impl MeteredBigInt {
         }
     }
 
-    pub(crate) fn is_zero(&self) -> bool {
+    pub fn is_zero(&self) -> bool {
         self.num.is_zero()
     }
 
-    pub(crate) fn is_negative(&self) -> bool {
+    pub fn is_negative(&self) -> bool {
         self.num.is_negative()
     }
 
-    pub(crate) fn neg(&self) -> Self {
+    pub fn neg(&self) -> Self {
         Self {
             budget: self.budget.clone(),
             num: (&self.num).neg(),
         }
     }
 
-    pub(crate) fn not(&self) -> Self {
+    pub fn not(&self) -> Self {
         Self {
             budget: self.budget.clone(),
             num: (&self.num).not(),
         }
     }
 
-    pub(crate) fn gcd(&self, other: &Self) -> Result<Self, HostError> {
+    pub fn gcd(&self, other: &Self) -> Result<Self, HostError> {
         self.charge_gcd_lcm(max((&self.num).bits(), other.num.bits()))?;
         Ok(Self {
             budget: self.budget.clone(),
@@ -248,7 +252,7 @@ impl MeteredBigInt {
         })
     }
 
-    pub(crate) fn lcm(&self, other: &Self) -> Result<Self, HostError> {
+    pub fn lcm(&self, other: &Self) -> Result<Self, HostError> {
         self.charge_gcd_lcm(max((&self.num).bits(), other.num.bits()))?;
         Ok(Self {
             budget: self.budget.clone(),
@@ -256,7 +260,7 @@ impl MeteredBigInt {
         })
     }
 
-    pub(crate) fn pow(&self, rhs: &Self) -> Result<Self, HostError> {
+    pub fn pow(&self, rhs: &Self) -> Result<Self, HostError> {
         if rhs.is_negative() {
             // TODO: Replace with proper err code "negative exponentiation not supported"
             return Err(ScUnknownErrorCode::General.into());
@@ -274,7 +278,7 @@ impl MeteredBigInt {
         }
     }
 
-    pub(crate) fn modpow(&self, exponent: &Self, modulus: &Self) -> Result<Self, HostError> {
+    pub fn modpow(&self, exponent: &Self, modulus: &Self) -> Result<Self, HostError> {
         // TODO: Replace with proper err code "negative exponentiation not supported"
         if exponent.is_negative() {
             return Err(ScUnknownErrorCode::General.into());
@@ -291,7 +295,7 @@ impl MeteredBigInt {
         })
     }
 
-    pub(crate) fn sqrt(&self) -> Result<Self, HostError> {
+    pub fn sqrt(&self) -> Result<Self, HostError> {
         // TODO: Replace with proper err code "sqrt is imaginary"
         if self.is_negative() {
             return Err(ScUnknownErrorCode::General.into());
@@ -303,11 +307,7 @@ impl MeteredBigInt {
         })
     }
 
-    pub(crate) fn from_bytes_be(
-        budget: Budget,
-        sign: Sign,
-        bytes: &[u8],
-    ) -> Result<Self, HostError> {
+    pub fn from_bytes_be(budget: Budget, sign: Sign, bytes: &[u8]) -> Result<Self, HostError> {
         budget.charge(CostType::BigIntFromBytes, bytes.len() as u64)?;
         Ok(Self {
             budget,
@@ -315,12 +315,12 @@ impl MeteredBigInt {
         })
     }
 
-    pub(crate) fn to_bytes_be(&self) -> Result<(Sign, Vec<u8>), HostError> {
+    pub fn to_bytes_be(&self) -> Result<(Sign, Vec<u8>), HostError> {
         self.charge_to_bytes(self.bits())?;
         Ok((&self.num).to_bytes_be())
     }
 
-    pub(crate) fn from_radix_be(
+    pub fn from_radix_be(
         budget: Budget,
         sign: Sign,
         buf: &[u8],
@@ -334,7 +334,7 @@ impl MeteredBigInt {
         Ok(Self { budget, num })
     }
 
-    pub(crate) fn to_radix_be(&self, r: u32) -> Result<(Sign, Vec<u8>), HostError> {
+    pub fn to_radix_be(&self, r: u32) -> Result<(Sign, Vec<u8>), HostError> {
         self.charge_to_radix(self.bits())?;
         Ok((&self.num).to_radix_be(r))
     }

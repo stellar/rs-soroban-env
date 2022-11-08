@@ -262,7 +262,7 @@ impl Host {
         &self.0.budget
     }
 
-    pub(crate) fn budget_cloned(&self) -> Budget {
+    pub fn budget_cloned(&self) -> Budget {
         self.0.budget.clone()
     }
 

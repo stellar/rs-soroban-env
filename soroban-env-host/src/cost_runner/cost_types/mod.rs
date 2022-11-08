@@ -1,4 +1,4 @@
-mod bigint_div_rem;
+mod bigint_ops;
 mod compute_ed25519_pubkey;
 mod compute_sha256_hash;
 mod ed25519_scalar_mul;
@@ -23,7 +23,7 @@ mod vm_instantiation;
 #[cfg(feature = "vm")]
 mod wasm_insn_exec;
 
-pub use bigint_div_rem::*;
+pub use bigint_ops::*;
 pub use compute_ed25519_pubkey::*;
 pub use compute_sha256_hash::*;
 pub use ed25519_scalar_mul::*;
