@@ -8,7 +8,7 @@ license = "Apache-2.0"
 version = "0.0.9"
 readme = "../README.md"
 edition = "2021"
-rust-version = "1.64"
+rust-version = "1.65"
 
 [dependencies]
 soroban-env-common = { version = "0.0.9" }
