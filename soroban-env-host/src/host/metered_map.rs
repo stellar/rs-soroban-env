@@ -89,6 +89,16 @@ where
     }
 
     // Time: O(log n)
+    pub fn get_mut<BK>(&mut self, key: &BK) -> Result<Option<&mut V>, HostError>
+    where
+        BK: Ord + ?Sized,
+        K: Borrow<BK>,
+    {
+        self.charge_mut_access(self.map.len() as u64)?;
+        Ok(self.map.get_mut(key))
+    }
+
+    // Time: O(log n)
     pub fn remove<BK>(&mut self, k: &BK) -> Result<Option<V>, HostError>
     where
         BK: Ord + ?Sized,

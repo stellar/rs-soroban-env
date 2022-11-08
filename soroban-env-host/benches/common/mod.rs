@@ -53,11 +53,6 @@ pub(crate) fn for_each_host_cost_measurement<B: Benchmark>() -> std::io::Result<
     call_bench::<B, ComputeEd25519PubKeyMeasure>(&mut costs)?;
     call_bench::<B, ComputeSha256HashMeasure>(&mut costs)?;
     call_bench::<B, Ed25519ScalarMulMeasure>(&mut costs)?;
-    call_bench::<B, ImMapImmutEntryMeasure>(&mut costs)?;
-    call_bench::<B, ImMapMutEntryMeasure>(&mut costs)?;
-    call_bench::<B, ImVecImmutEntryMeasure>(&mut costs)?;
-    call_bench::<B, ImVecMutEntryMeasure>(&mut costs)?;
-    call_bench::<B, ImVecNewMeasure>(&mut costs)?;
     call_bench::<B, ScMapToHostMapMeasure>(&mut costs)?;
     call_bench::<B, ScVecToHostVecMeasure>(&mut costs)?;
     call_bench::<B, VerifyEd25519SigMeasure>(&mut costs)?;
@@ -84,6 +79,12 @@ pub(crate) fn for_each_host_cost_measurement<B: Benchmark>() -> std::io::Result<
     call_bench::<B, BigIntFromBytesMeasure>(&mut costs)?;
     call_bench::<B, BigIntToBytesMeasure>(&mut costs)?;
     call_bench::<B, BigIntToRadixMeasure>(&mut costs)?;
+    call_bench::<B, ImMapNewMeasure>(&mut costs)?;
+    call_bench::<B, ImMapImmutEntryMeasure>(&mut costs)?;
+    call_bench::<B, ImMapMutEntryMeasure>(&mut costs)?;
+    call_bench::<B, ImVecNewMeasure>(&mut costs)?;
+    call_bench::<B, ImVecImmutEntryMeasure>(&mut costs)?;
+    call_bench::<B, ImVecMutEntryMeasure>(&mut costs)?;
 
     if get_explicit_bench_names().is_none() {
         for cost in CostType::variants() {
