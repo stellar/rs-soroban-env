@@ -1,6 +1,7 @@
 use soroban_env_common::CheckedEnv;
 
 use crate::{
+    auth::AuthorizationManager,
     budget::Budget,
     host::metered_map::MeteredOrdMap,
     storage::{Footprint, Storage},
@@ -18,7 +19,11 @@ fn ledger_network_passphrase() -> Result<(), HostError> {
         },
     );
 
-    let host = Host::with_storage_and_budget(storage, budget);
+    let host = Host::with_storage_and_budget(
+        storage,
+        budget.clone(),
+        AuthorizationManager::new_enforcing(budget),
+    );
     host.set_ledger_info(LedgerInfo {
         protocol_version: 0,
         sequence_number: 0,
@@ -50,7 +55,11 @@ fn ledger_network_id() -> Result<(), HostError> {
         },
     );
 
-    let host = Host::with_storage_and_budget(storage, budget);
+    let host = Host::with_storage_and_budget(
+        storage,
+        budget.clone(),
+        AuthorizationManager::new_enforcing(budget),
+    );
     host.set_ledger_info(LedgerInfo {
         protocol_version: 0,
         sequence_number: 0,

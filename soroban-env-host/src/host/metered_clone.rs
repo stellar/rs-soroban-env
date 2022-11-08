@@ -1,3 +1,8 @@
+use soroban_env_common::{
+    xdr::{ScAccount, ScAccountId, ScAddress},
+    Symbol,
+};
+
 use crate::{
     budget::{Budget, CostType},
     host::Events,
@@ -61,11 +66,42 @@ impl MeteredClone for ScVec {
     }
 }
 
+impl MeteredClone for ScAccount {
+    fn metered_clone(&self, budget: &Budget) -> Result<Self, HostError> {
+        // TODO: accounting
+        Ok(self.clone())
+    }
+}
+
+impl MeteredClone for ScAccountId {
+    fn metered_clone(&self, budget: &Budget) -> Result<Self, HostError> {
+        // TODO: accounting
+        Ok(self.clone())
+    }
+}
+
+impl MeteredClone for ScAddress {
+    fn metered_clone(&self, budget: &Budget) -> Result<Self, HostError> {
+        // TODO: more accounting
+        Ok(self.clone())
+    }
+}
+
 impl MeteredClone for AccountId {
     fn metered_clone(&self, budget: &Budget) -> Result<Self, HostError> {
         match self.0 {
             PublicKey::PublicKeyTypeEd25519(_) => budget.charge(CostType::BytesClone, 32 as u64)?,
         }
         Ok(self.clone())
+    }
+}
+
+impl<T: MeteredClone> MeteredClone for Option<T> {
+    fn metered_clone(&self, budget: &Budget) -> Result<Self, HostError> {
+        if let Some(v) = &self {
+            Ok(Some(v.metered_clone(budget)?))
+        } else {
+            Ok(None)
+        }
     }
 }

@@ -1,8 +1,9 @@
 use std::cmp::{min, Ordering};
 
-use soroban_env_common::xdr::{AccountId, Hash, PublicKey, ScContractCode, Uint256};
+use soroban_env_common::xdr::{AccountId, Hash, PublicKey, ScAccount, ScContractCode, Uint256};
 
 use crate::{
+    auth::{AbstractAccountHandle, HostAccount},
     budget::{Budget, CostType},
     host_object::HostObject,
     HostError,
@@ -26,6 +27,7 @@ impl MeteredCmp for &HostObject {
             (HostObject::Bytes(a), HostObject::Bytes(b)) => a.metered_cmp(b, budget),
             (HostObject::ContractCode(a), HostObject::ContractCode(b)) => a.metered_cmp(b, budget),
             (HostObject::AccountId(a), HostObject::AccountId(b)) => a.metered_cmp(b, budget),
+            (HostObject::Account(a), HostObject::Account(b)) => Ok(a.cmp(b)),
             // if object types are different, the comparison is trivial, no metering.
             _ => Ok(self.cmp(other)),
         }

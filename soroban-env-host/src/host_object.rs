@@ -1,3 +1,5 @@
+use crate::auth::HostAccount;
+
 use super::{
     host::metered_map::MeteredOrdMap,
     host::metered_vector::MeteredVector,
@@ -22,6 +24,8 @@ pub(crate) enum HostObject {
     Bytes(Vec<u8>),
     ContractCode(xdr::ScContractCode),
     AccountId(xdr::AccountId),
+    Account(HostAccount),
+    Address(xdr::ScAddress),
 }
 
 pub(crate) trait HostObjectType: Sized {
@@ -61,3 +65,5 @@ declare_host_object_type!(i128, I128, I128);
 declare_host_object_type!(Vec<u8>, Bytes, Bytes);
 declare_host_object_type!(xdr::ScContractCode, ContractCode, ContractCode);
 declare_host_object_type!(xdr::AccountId, AccountId, AccountId);
+declare_host_object_type!(HostAccount, Account, Account);
+declare_host_object_type!(xdr::ScAddress, Address, Address);

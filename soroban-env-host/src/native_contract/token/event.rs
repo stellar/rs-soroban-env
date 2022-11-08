@@ -1,13 +1,13 @@
 use crate::host::Host;
 use crate::native_contract::base_types::Vec;
-use crate::native_contract::token::public_types::Identifier;
 use crate::HostError;
+use soroban_env_common::xdr::ScAddress;
 use soroban_env_common::{CheckedEnv, Symbol, TryIntoVal};
 
 pub(crate) fn approve(
     e: &Host,
-    from: Identifier,
-    to: Identifier,
+    from: ScAddress,
+    to: ScAddress,
     amount: i128,
 ) -> Result<(), HostError> {
     let mut topics = Vec::new(e)?;
@@ -20,8 +20,8 @@ pub(crate) fn approve(
 
 pub(crate) fn transfer(
     e: &Host,
-    from: Identifier,
-    to: Identifier,
+    from: ScAddress,
+    to: ScAddress,
     amount: i128,
 ) -> Result<(), HostError> {
     let mut topics = Vec::new(e)?;
@@ -34,8 +34,8 @@ pub(crate) fn transfer(
 
 pub(crate) fn mint(
     e: &Host,
-    admin: Identifier,
-    to: Identifier,
+    admin: ScAddress,
+    to: ScAddress,
     amount: i128,
 ) -> Result<(), HostError> {
     let mut topics = Vec::new(e)?;
@@ -48,8 +48,8 @@ pub(crate) fn mint(
 
 pub(crate) fn burn(
     e: &Host,
-    admin: Identifier,
-    from: Identifier,
+    admin: ScAddress,
+    from: ScAddress,
     amount: i128,
 ) -> Result<(), HostError> {
     let mut topics = Vec::new(e)?;
@@ -60,7 +60,7 @@ pub(crate) fn burn(
     Ok(())
 }
 
-pub(crate) fn freeze(e: &Host, admin: Identifier, id: Identifier) -> Result<(), HostError> {
+pub(crate) fn freeze(e: &Host, admin: ScAddress, id: ScAddress) -> Result<(), HostError> {
     let mut topics = Vec::new(e)?;
     topics.push(Symbol::from_str("freeze"))?;
     topics.push(admin)?;
@@ -68,7 +68,7 @@ pub(crate) fn freeze(e: &Host, admin: Identifier, id: Identifier) -> Result<(), 
     Ok(())
 }
 
-pub(crate) fn unfreeze(e: &Host, admin: Identifier, id: Identifier) -> Result<(), HostError> {
+pub(crate) fn unfreeze(e: &Host, admin: ScAddress, id: ScAddress) -> Result<(), HostError> {
     let mut topics = Vec::new(e)?;
     topics.push(Symbol::from_str("unfreeze"))?;
     topics.push(admin)?;
@@ -78,8 +78,8 @@ pub(crate) fn unfreeze(e: &Host, admin: Identifier, id: Identifier) -> Result<()
 
 pub(crate) fn set_admin(
     e: &Host,
-    admin: Identifier,
-    new_admin: Identifier,
+    admin: ScAddress,
+    new_admin: ScAddress,
 ) -> Result<(), HostError> {
     let mut topics = Vec::new(e)?;
     topics.push(Symbol::from_str("set_admin"))?;
@@ -88,7 +88,7 @@ pub(crate) fn set_admin(
     Ok(())
 }
 
-pub(crate) fn import(e: &Host, id: Identifier, amount: i64) -> Result<(), HostError> {
+pub(crate) fn import(e: &Host, id: ScAddress, amount: i64) -> Result<(), HostError> {
     let mut topics = Vec::new(e)?;
     topics.push(Symbol::from_str("import"))?;
     topics.push(id)?;
@@ -96,7 +96,7 @@ pub(crate) fn import(e: &Host, id: Identifier, amount: i64) -> Result<(), HostEr
     Ok(())
 }
 
-pub(crate) fn export(e: &Host, id: Identifier, amount: i64) -> Result<(), HostError> {
+pub(crate) fn export(e: &Host, id: ScAddress, amount: i64) -> Result<(), HostError> {
     let mut topics = Vec::new(e)?;
     topics.push(Symbol::from_str("export"))?;
     topics.push(id)?;

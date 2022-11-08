@@ -12,6 +12,7 @@ use crate::{
 use ed25519_dalek::{PublicKey, Signature, SIGNATURE_LENGTH};
 use sha2::{Digest, Sha256};
 use soroban_env_common::xdr::AccountId;
+use soroban_env_common::TryIntoVal;
 
 impl Host {
     // Notes on metering: free
@@ -199,15 +200,37 @@ impl Host {
         }))
     }
 
+    pub(crate) fn storage_key_for_contract(&self, contract_id: Hash, key: ScVal) -> LedgerKey {
+        LedgerKey::ContractData(LedgerKeyContractData { contract_id, key })
+    }
+
+    pub fn storage_key_from_scval(&self, key: ScVal) -> Result<LedgerKey, HostError> {
+        Ok(LedgerKey::ContractData(LedgerKeyContractData {
+            contract_id: self.get_current_contract_id()?,
+            key,
+        }))
+    }
+
     // Notes on metering: covered by components.
     pub fn contract_data_key_from_rawval(&self, k: RawVal) -> Result<LedgerKey, HostError> {
-        if self.from_host_val(k)? == ScVal::Static(ScStatic::LedgerKeyContractCode) {
-            return Err(self.err_status_msg(
-                ScHostFnErrorCode::InputArgsInvalid,
-                "cannot update contract code",
-            ));
-        }
-        self.storage_key_from_rawval(k)
+        let key_scval = self.from_host_val(k)?;
+        match &key_scval {
+            ScVal::Static(ScStatic::LedgerKeyContractCode) => {
+                return Err(self.err_status_msg(
+                    ScHostFnErrorCode::InputArgsInvalid,
+                    "cannot update contract code",
+                ));
+            }
+            ScVal::Object(Some(ScObject::NonceKey(_))) => {
+                return Err(self.err_status_msg(
+                    ScHostFnErrorCode::InputArgsInvalid,
+                    "cannot access internal nonce",
+                ));
+            }
+            _ => (),
+        };
+
+        self.storage_key_from_scval(key_scval)
     }
 
     fn event_topic_from_rawval(&self, topic: RawVal) -> Result<ScVal, HostError> {
@@ -267,6 +290,23 @@ impl Host {
         self.visit_obj(args, |hv: &HostVec| {
             // Metering: free
             Ok(hv.iter().map(|a| a.to_raw()).collect())
+        })
+    }
+
+    // Metering: free?
+    pub(crate) fn call_args_to_scvec(&self, args: Object) -> Result<ScVec, HostError> {
+        self.visit_obj(args, |hv: &HostVec| {
+            Ok(ScVec(
+                hv.iter()
+                    .map(|v| {
+                        v.to_raw()
+                            .try_into_val(self)
+                            .map_err(|_| self.err_general("couldn't convert RawVal"))
+                    })
+                    .collect::<Result<Vec<ScVal>, HostError>>()?
+                    .try_into()
+                    .map_err(|_| self.err_general("too many args"))?,
+            ))
         })
     }
 

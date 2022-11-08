@@ -1,6 +1,7 @@
 use std::rc::Rc;
 
 use crate::{
+    auth::AuthorizationManager,
     budget::Budget,
     storage::{SnapshotSource, Storage},
     xdr::Hash,
@@ -35,7 +36,11 @@ fn run_complex() -> Result<(), HostError> {
     let foot = {
         let store = Storage::with_recording_footprint(Rc::new(EmptySnap));
         let budget = Budget::default();
-        let host = Host::with_storage_and_budget(store, budget);
+        let host = Host::with_storage_and_budget(
+            store,
+            budget.clone(),
+            AuthorizationManager::new_enforcing(budget),
+        );
         host.set_ledger_info(info.clone());
         {
             let vm = Vm::new(&host, id.clone(), COMPLEX)?;
@@ -50,7 +55,11 @@ fn run_complex() -> Result<(), HostError> {
     {
         let store = Storage::with_enforcing_footprint_and_map(foot, MeteredOrdMap::default());
         let budget = Budget::default();
-        let host = Host::with_storage_and_budget(store, budget);
+        let host = Host::with_storage_and_budget(
+            store,
+            budget.clone(),
+            AuthorizationManager::new_enforcing(budget),
+        );
         host.set_ledger_info(info);
         let vm = Vm::new(&host, id, COMPLEX)?;
         let args: ScVec = host.test_scvec::<i32>(&[])?;

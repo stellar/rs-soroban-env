@@ -4,7 +4,7 @@ use crate::{
     budget::Budget,
     host::metered_map::MeteredOrdMap,
     storage::{AccessType, Footprint, Storage},
-    xdr, Host, HostError, RawVal,
+    xdr, Host, HostError, RawVal, auth::AuthorizationManager,
 };
 
 #[test]
@@ -31,7 +31,11 @@ fn check_account_exists() -> Result<(), HostError> {
         },
     );
 
-    let host = Host::with_storage_and_budget(storage, budget.clone());
+    let host = Host::with_storage_and_budget(
+        storage,
+        budget.clone(),
+        AuthorizationManager::new_enforcing(budget.clone()),
+    );
     let obj0 = host.add_host_object(acc_id0).map(|ev| ev.val).unwrap();
     let obj1 = host.add_host_object(acc_id1).map(|ev| ev.val).unwrap();
     let obj2 = host.add_host_object(acc_id2).map(|ev| ev.val).unwrap();

@@ -1,6 +1,9 @@
 use num_derive::FromPrimitive;
 use soroban_env_common::Status;
 
+// Use the same error for all the built-in contract error.
+// In theory we could have a separate enum for each built-in contract, but it's
+// not clear how to distinguish them if multiple built-in contracts are involved.
 #[derive(Debug, FromPrimitive, PartialEq, Eq)]
 pub enum ContractError {
     InternalError = 1,
@@ -9,15 +12,14 @@ pub enum ContractError {
 
     UnauthorizedError = 4,
     AuthenticationError = 5,
-    NonceError = 6,
-    SignatureError = 7,
-    AccountMissingError = 8,
+    AccountMissingError = 6,
+    AccountIsNotClassic = 7,
 
-    NegativeAmountError = 9,
-    AllowanceError = 10,
-    BalanceError = 11,
-    BalanceFrozenError = 12,
-    OverflowError = 13,
+    NegativeAmountError = 8,
+    AllowanceError = 9,
+    BalanceError = 10,
+    BalanceFrozenError = 11,
+    OverflowError = 12,
 }
 
 impl From<ContractError> for Status {

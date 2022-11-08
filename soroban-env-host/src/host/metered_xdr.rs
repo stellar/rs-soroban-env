@@ -1,5 +1,6 @@
 use std::{error::Error, io::Write};
 
+use sha2::{Digest, Sha256};
 use soroban_env_common::Object;
 
 use crate::{
@@ -7,8 +8,6 @@ use crate::{
     xdr::{ReadXdr, WriteXdr},
     Host, HostError,
 };
-
-use sha2::{Digest, Sha256};
 
 struct MeteredWrite<'a, W: Write> {
     host: &'a Host,

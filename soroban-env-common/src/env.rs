@@ -162,10 +162,10 @@ macro_rules! call_macro_with_all_host_functions {
                 /// length <= 4 that cannot contain `Vec`, `Map`, or `Bytes` with length > 32
                 /// On success, returns an `SCStatus::Ok`.
                 {"2", fn contract_event(topics:Object, data:RawVal) -> RawVal }
-                /// Get the contractID `Bytes` of the contract which invoked the
-                /// running contract. Traps if the running contract was not
+                /// Get the authorized entity for the current contract.
+                /// Traps if the running contract was not
                 /// invoked by a contract.
-                {"3", fn get_current_contract() -> Object }
+                {"3", fn get_current_contract_account() -> Object }
                 /// Return the protocol version of the current ledger as a u32.
                 {"4", fn get_ledger_version() -> RawVal }
                 /// Return the sequence number of the current ledger as a u32.
@@ -422,6 +422,8 @@ macro_rules! call_macro_with_all_host_functions {
                 /// Given an ID `a` (`a` is `AccountId`) of an account, check if
                 /// it exists. Returns (SCStatic) TRUE/FALSE.
                 {"3", fn account_exists(a:Object) -> RawVal}
+                {"4", fn authorize_account(account: Object, args: Object) -> RawVal}
+                {"5", fn get_account_address(account: Object) -> Object}
             }
 
             mod test "t" {

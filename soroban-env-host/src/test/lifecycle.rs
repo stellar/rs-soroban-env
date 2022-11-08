@@ -1,4 +1,5 @@
 use crate::{
+    auth::AuthorizationManager,
     budget::Budget,
     host::metered_map::MeteredOrdMap,
     storage::{AccessType, Footprint, Storage},
@@ -66,7 +67,11 @@ fn test_host() -> Host {
             budget: budget.clone(),
         },
     );
-    let host = Host::with_storage_and_budget(storage, budget);
+    let host = Host::with_storage_and_budget(
+        storage,
+        budget.clone(),
+        AuthorizationManager::new_enforcing(budget),
+    );
     host.set_ledger_info(LedgerInfo {
         network_passphrase,
         ..Default::default()

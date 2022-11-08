@@ -11,6 +11,7 @@ use soroban_env_common::{
 };
 
 use crate::{
+    auth::AuthorizationManager,
     budget::{Budget, CostType},
     host_object::{HostObj, HostVal},
     storage::{test_storage::MockSnapshotSource, Storage},
@@ -55,7 +56,15 @@ impl Host {
     pub(crate) fn test_host_with_recording_footprint() -> Self {
         let snapshot_source = Rc::<MockSnapshotSource>::new(MockSnapshotSource::new());
         let storage = Storage::with_recording_footprint(snapshot_source);
-        let host = Host::with_storage_and_budget(storage, Budget::default());
+        let budget = Budget::default();
+        let host = Host::with_storage_and_budget(
+            storage,
+            budget.clone(),
+            // Tests should explicitly use the recording auth manager, as only
+            // some of them need auth and also testing auth in the recording
+            // mode may not be necessarily desired for host.
+            AuthorizationManager::new_enforcing(budget),
+        );
         host.set_ledger_info(Default::default());
         host
     }

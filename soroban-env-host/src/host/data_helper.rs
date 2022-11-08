@@ -76,7 +76,7 @@ impl Host {
             .put(&key, &Host::ledger_entry_from_data(data))?;
         Ok(())
     }
-
+    
     // notes on metering: covers the key and salt. Rest are free.
     pub fn id_preimage_from_ed25519(
         &self,

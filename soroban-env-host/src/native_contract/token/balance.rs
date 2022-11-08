@@ -1,18 +1,17 @@
 use crate::host::Host;
+use crate::native_contract::contract_error::ContractError;
 use crate::native_contract::token::metadata::read_metadata;
-use crate::native_contract::token::public_types::{Identifier, Metadata};
+use crate::native_contract::token::public_types::Metadata;
 use crate::native_contract::token::storage_types::DataKey;
 use crate::{err, HostError};
 use soroban_env_common::xdr::{
-    AccountEntryExt, AccountEntryExtensionV1Ext, AccountId, LedgerEntryData, TrustLineAsset,
-    TrustLineEntryExt, TrustLineFlags,
+    AccountEntryExt, AccountEntryExtensionV1Ext, AccountId, LedgerEntryData, ScAddress,
+    TrustLineAsset, TrustLineEntryExt, TrustLineFlags,
 };
 use soroban_env_common::{CheckedEnv, TryIntoVal};
 
-use super::error::ContractError;
-
 // Metering: *mostly* covered by components. Not sure about `try_into_val`.
-pub fn read_balance(e: &Host, id: Identifier) -> Result<i128, HostError> {
+pub fn read_balance(e: &Host, id: ScAddress) -> Result<i128, HostError> {
     let key = DataKey::Balance(id);
     if let Ok(balance) = e.get_contract_data(key.try_into_val(e)?) {
         Ok(balance.try_into_val(e)?)
@@ -22,14 +21,14 @@ pub fn read_balance(e: &Host, id: Identifier) -> Result<i128, HostError> {
 }
 
 // Metering: *mostly* covered by components. Not sure about `try_into_val`.
-fn write_balance(e: &Host, id: Identifier, amount: i128) -> Result<(), HostError> {
+fn write_balance(e: &Host, id: ScAddress, amount: i128) -> Result<(), HostError> {
     let key = DataKey::Balance(id);
     e.put_contract_data(key.try_into_val(e)?, amount.try_into_val(e)?)?;
     Ok(())
 }
 
 // Metering: covered by components.
-pub fn receive_balance(e: &Host, id: Identifier, amount: i128) -> Result<(), HostError> {
+pub fn receive_balance(e: &Host, id: ScAddress, amount: i128) -> Result<(), HostError> {
     let balance = read_balance(e, id.clone())?;
     let is_frozen = read_state(e, id.clone())?;
     if is_frozen {
@@ -43,7 +42,7 @@ pub fn receive_balance(e: &Host, id: Identifier, amount: i128) -> Result<(), Hos
 }
 
 // Metering: covered by components.
-pub fn spend_balance(e: &Host, id: Identifier, amount: i128) -> Result<(), HostError> {
+pub fn spend_balance(e: &Host, id: ScAddress, amount: i128) -> Result<(), HostError> {
     let balance = read_balance(e, id.clone())?;
     let is_frozen = read_state(e, id.clone())?;
     if is_frozen {
@@ -65,7 +64,7 @@ pub fn spend_balance(e: &Host, id: Identifier, amount: i128) -> Result<(), HostE
 }
 
 // Metering: *mostly* covered by components. Not sure about `try_into_val`.
-pub fn read_state(e: &Host, id: Identifier) -> Result<bool, HostError> {
+pub fn read_state(e: &Host, id: ScAddress) -> Result<bool, HostError> {
     let key = DataKey::State(id);
     if let Ok(state) = e.get_contract_data(key.try_into_val(e)?) {
         Ok(state.try_into()?)
@@ -75,7 +74,7 @@ pub fn read_state(e: &Host, id: Identifier) -> Result<bool, HostError> {
 }
 
 // Metering: *mostly* covered by components. Not sure about `try_into_val`.
-pub fn write_state(e: &Host, id: Identifier, is_frozen: bool) -> Result<(), HostError> {
+pub fn write_state(e: &Host, id: ScAddress, is_frozen: bool) -> Result<(), HostError> {
     let key = DataKey::State(id);
     e.put_contract_data(key.try_into_val(e)?, is_frozen.into())?;
     Ok(())

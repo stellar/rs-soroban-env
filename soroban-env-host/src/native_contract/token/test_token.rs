@@ -1,21 +1,22 @@
 use crate::{
     host_vec,
     native_contract::{
-        testutils::{sign_args, HostVec, TestSigner},
+        base_types::i128,
+        testutils::{AccountAuthBuilder, HostVec, TestSigner},
         token::public_types::TokenMetadata,
     },
     test::util::{generate_account_id, generate_bytes_array},
     Host, HostError,
 };
 use soroban_env_common::{
-    xdr::{Asset, ContractId, CreateContractArgs, HostFunction, ScContractCode, Uint256},
+    xdr::{
+        Asset, ContractId, CreateContractArgs, HostFunction, ScAddress, ScContractCode, Uint256,
+    },
     CheckedEnv, RawVal,
 };
 use soroban_env_common::{Symbol, TryFromVal, TryIntoVal};
 
 use crate::native_contract::base_types::{Bytes, BytesN};
-
-use crate::native_contract::token::public_types::Identifier;
 
 pub(crate) struct TestToken<'a> {
     pub(crate) id: BytesN<32>,
@@ -55,7 +56,7 @@ impl<'a> TestToken<'a> {
         }
     }
 
-    pub(crate) fn init(&self, admin: Identifier, metadata: TokenMetadata) -> Result<(), HostError> {
+    pub(crate) fn init(&self, admin: ScAddress, metadata: TokenMetadata) -> Result<(), HostError> {
         Ok(self
             .host
             .call(
@@ -66,21 +67,10 @@ impl<'a> TestToken<'a> {
             .try_into_val(self.host)?)
     }
 
-    pub(crate) fn nonce(&self, id: Identifier) -> Result<i128, HostError> {
-        Ok(self
-            .host
-            .call(
-                self.id.clone().into(),
-                Symbol::from_str("nonce").into(),
-                host_vec![self.host, id].into(),
-            )?
-            .try_into_val(self.host)?)
-    }
-
     pub(crate) fn allowance(
         &self,
-        from: Identifier,
-        spender: Identifier,
+        from: ScAddress,
+        spender: ScAddress,
     ) -> Result<i128, HostError> {
         Ok(self
             .host
@@ -95,35 +85,28 @@ impl<'a> TestToken<'a> {
     pub(crate) fn approve(
         &self,
         from: &TestSigner,
-        nonce: i128,
-        spender: Identifier,
+        spender: ScAddress,
         amount: i128,
     ) -> Result<(), HostError> {
-        let signature = sign_args(
-            self.host,
-            from,
-            "approve",
-            &self.id,
-            host_vec![
-                self.host,
-                from.get_identifier(self.host),
-                nonce.clone(),
-                spender.clone(),
-                amount.clone()
-            ],
-        );
+        let from_acc = AccountAuthBuilder::new(self.host, from)
+            .add_invocation(
+                &self.id,
+                "approve",
+                host_vec![self.host, spender.clone(), amount.clone()],
+            )
+            .build();
 
         Ok(self
             .host
             .call(
                 self.id.clone().into(),
                 Symbol::from_str("approve").into(),
-                host_vec![self.host, signature, nonce, spender, amount].into(),
+                host_vec![self.host, from_acc, spender, amount].into(),
             )?
             .try_into()?)
     }
 
-    pub(crate) fn balance(&self, id: Identifier) -> Result<i128, HostError> {
+    pub(crate) fn balance(&self, id: ScAddress) -> Result<i128, HostError> {
         Ok(self
             .host
             .call(
@@ -137,30 +120,23 @@ impl<'a> TestToken<'a> {
     pub(crate) fn xfer(
         &self,
         from: &TestSigner,
-        nonce: i128,
-        to: Identifier,
+        to: ScAddress,
         amount: i128,
     ) -> Result<(), HostError> {
-        let signature = sign_args(
-            self.host,
-            from,
-            "xfer",
-            &self.id,
-            host_vec![
-                self.host,
-                from.get_identifier(self.host),
-                nonce.clone(),
-                to.clone(),
-                amount.clone()
-            ],
-        );
+        let from_acc = AccountAuthBuilder::new(self.host, from)
+            .add_invocation(
+                &self.id,
+                "xfer",
+                host_vec![self.host, to.clone(), amount.clone()],
+            )
+            .build();
 
         Ok(self
             .host
             .call(
                 self.id.clone().into(),
                 Symbol::from_str("xfer").into(),
-                host_vec![self.host, signature, nonce, to, amount].into(),
+                host_vec![self.host, from_acc, to, amount].into(),
             )?
             .try_into()?)
     }
@@ -168,95 +144,58 @@ impl<'a> TestToken<'a> {
     pub(crate) fn xfer_from(
         &self,
         spender: &TestSigner,
-        nonce: i128,
-        from: Identifier,
-        to: Identifier,
+        from: ScAddress,
+        to: ScAddress,
         amount: i128,
     ) -> Result<(), HostError> {
-        let signature = sign_args(
-            self.host,
-            spender,
-            "xfer_from",
-            &self.id,
-            host_vec![
-                self.host,
-                spender.get_identifier(self.host),
-                nonce.clone(),
-                from.clone(),
-                to.clone(),
-                amount.clone()
-            ],
-        );
+        let spender_acc = AccountAuthBuilder::new(self.host, spender)
+            .add_invocation(
+                &self.id,
+                "xfer_from",
+                host_vec![self.host, from.clone(), to.clone(), amount.clone()],
+            )
+            .build();
 
         Ok(self
             .host
             .call(
                 self.id.clone().into(),
                 Symbol::from_str("xfer_from").into(),
-                host_vec![self.host, signature, nonce, from, to, amount].into(),
+                host_vec![self.host, spender_acc, from, to, amount].into(),
             )?
             .try_into()?)
     }
 
-    pub(crate) fn freeze(
-        &self,
-        admin: &TestSigner,
-        nonce: i128,
-        id: Identifier,
-    ) -> Result<(), HostError> {
-        let signature = sign_args(
-            self.host,
-            admin,
-            "freeze",
-            &self.id,
-            host_vec![
-                self.host,
-                admin.get_identifier(self.host),
-                nonce.clone(),
-                id.clone()
-            ],
-        );
-
+    pub(crate) fn freeze(&self, admin: &TestSigner, id: ScAddress) -> Result<(), HostError> {
+        let admin_acc = AccountAuthBuilder::new(self.host, admin)
+            .add_invocation(&self.id, "freeze", host_vec![self.host, id.clone()])
+            .build();
         Ok(self
             .host
             .call(
                 self.id.clone().into(),
                 Symbol::from_str("freeze").into(),
-                host_vec![self.host, signature, nonce, id].into(),
+                host_vec![self.host, admin_acc, id].into(),
             )?
             .try_into()?)
     }
 
-    pub(crate) fn unfreeze(
-        &self,
-        admin: &TestSigner,
-        nonce: i128,
-        id: Identifier,
-    ) -> Result<(), HostError> {
-        let signature = sign_args(
-            self.host,
-            admin,
-            "unfreeze",
-            &self.id,
-            host_vec![
-                self.host,
-                admin.get_identifier(self.host),
-                nonce.clone(),
-                id.clone()
-            ],
-        );
+    pub(crate) fn unfreeze(&self, admin: &TestSigner, id: ScAddress) -> Result<(), HostError> {
+        let admin_acc = AccountAuthBuilder::new(self.host, admin)
+            .add_invocation(&self.id, "unfreeze", host_vec![self.host, id.clone()])
+            .build();
 
         Ok(self
             .host
             .call(
                 self.id.clone().into(),
                 Symbol::from_str("unfreeze").into(),
-                host_vec![self.host, signature, nonce, id].into(),
+                host_vec![self.host, admin_acc, id].into(),
             )?
             .try_into()?)
     }
 
-    pub(crate) fn is_frozen(&self, id: Identifier) -> Result<bool, HostError> {
+    pub(crate) fn is_frozen(&self, id: ScAddress) -> Result<bool, HostError> {
         Ok(self
             .host
             .call(
@@ -270,30 +209,23 @@ impl<'a> TestToken<'a> {
     pub(crate) fn mint(
         &self,
         admin: &TestSigner,
-        nonce: i128,
-        to: Identifier,
+        to: ScAddress,
         amount: i128,
     ) -> Result<(), HostError> {
-        let signature = sign_args(
-            self.host,
-            admin,
-            "mint",
-            &self.id,
-            host_vec![
-                self.host,
-                admin.get_identifier(self.host),
-                nonce.clone(),
-                to.clone(),
-                amount.clone()
-            ],
-        );
+        let admin_acc = AccountAuthBuilder::new(self.host, admin)
+            .add_invocation(
+                &self.id,
+                "mint",
+                host_vec![self.host, to.clone(), amount.clone()],
+            )
+            .build();
 
         Ok(self
             .host
             .call(
                 self.id.clone().into(),
                 Symbol::from_str("mint").into(),
-                host_vec![self.host, signature, nonce, to, amount].into(),
+                host_vec![self.host, admin_acc, to, amount].into(),
             )?
             .try_into()?)
     }
@@ -301,30 +233,23 @@ impl<'a> TestToken<'a> {
     pub(crate) fn burn(
         &self,
         admin: &TestSigner,
-        nonce: i128,
-        from: Identifier,
+        from: ScAddress,
         amount: i128,
     ) -> Result<(), HostError> {
-        let signature = sign_args(
-            self.host,
-            admin,
-            "burn",
-            &self.id,
-            host_vec![
-                self.host,
-                admin.get_identifier(self.host),
-                nonce.clone(),
-                from.clone(),
-                amount.clone()
-            ],
-        );
+        let admin_acc = AccountAuthBuilder::new(self.host, admin)
+            .add_invocation(
+                &self.id,
+                "burn",
+                host_vec![self.host, from.clone(), amount.clone()],
+            )
+            .build();
 
         Ok(self
             .host
             .call(
                 self.id.clone().into(),
                 Symbol::from_str("burn").into(),
-                host_vec![self.host, signature, nonce, from, amount].into(),
+                host_vec![self.host, admin_acc, from, amount].into(),
             )?
             .try_into()?)
     }
@@ -332,28 +257,22 @@ impl<'a> TestToken<'a> {
     pub(crate) fn set_admin(
         &self,
         admin: &TestSigner,
-        nonce: i128,
-        new_admin: Identifier,
+        new_admin: ScAddress,
     ) -> Result<(), HostError> {
-        let signature = sign_args(
-            self.host,
-            admin,
-            "set_admin",
-            &self.id,
-            host_vec![
-                self.host,
-                admin.get_identifier(self.host),
-                nonce.clone(),
-                new_admin.clone(),
-            ],
-        );
+        let admin_acc = AccountAuthBuilder::new(self.host, admin)
+            .add_invocation(
+                &self.id,
+                "set_admin",
+                host_vec![self.host, new_admin.clone()],
+            )
+            .build();
 
         Ok(self
             .host
             .call(
                 self.id.clone().into(),
                 Symbol::from_str("set_admin").into(),
-                host_vec![self.host, signature, nonce, new_admin].into(),
+                host_vec![self.host, admin_acc, new_admin].into(),
             )?
             .try_into()?)
     }
@@ -391,60 +310,31 @@ impl<'a> TestToken<'a> {
             .try_into_val(self.host)?)
     }
 
-    pub(crate) fn import(
-        &self,
-        id: &TestSigner,
-        nonce: i128,
-        amount: i64,
-    ) -> Result<(), HostError> {
-        let signature = sign_args(
-            self.host,
-            id,
-            "import",
-            &self.id,
-            host_vec![
-                self.host,
-                id.get_identifier(self.host),
-                nonce.clone(),
-                amount
-            ],
-        );
-
+    pub(crate) fn import(&self, from: &TestSigner, amount: i64) -> Result<(), HostError> {
+        let from_acc = AccountAuthBuilder::new(self.host, from)
+            .add_invocation(&self.id, "import", host_vec![self.host, amount])
+            .build();
         Ok(self
             .host
             .call(
                 self.id.clone().into(),
                 Symbol::from_str("import").into(),
-                host_vec![self.host, signature, nonce, amount].into(),
+                host_vec![self.host, from_acc, amount].into(),
             )?
             .try_into()?)
     }
 
-    pub(crate) fn export(
-        &self,
-        id: &TestSigner,
-        nonce: i128,
-        amount: i64,
-    ) -> Result<(), HostError> {
-        let signature = sign_args(
-            self.host,
-            id,
-            "export",
-            &self.id,
-            host_vec![
-                self.host,
-                id.get_identifier(self.host),
-                nonce.clone(),
-                amount
-            ],
-        );
+    pub(crate) fn export(&self, from: &TestSigner, amount: i64) -> Result<(), HostError> {
+        let from_acc = AccountAuthBuilder::new(self.host, from)
+            .add_invocation(&self.id, "export", host_vec![self.host, amount])
+            .build();
 
         Ok(self
             .host
             .call(
                 self.id.clone().into(),
                 Symbol::from_str("export").into(),
-                host_vec![self.host, signature, nonce, amount].into(),
+                host_vec![self.host, from_acc, amount].into(),
             )?
             .try_into()?)
     }

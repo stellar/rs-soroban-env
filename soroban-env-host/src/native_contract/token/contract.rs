@@ -1,25 +1,25 @@
+use std::cmp::Ordering;
+
 use crate::host::metered_clone::MeteredClone;
 use crate::host::Host;
-use crate::native_contract::base_types::{Bytes, BytesN, Vec};
+use crate::native_contract::base_types::{get_account_id, Account, i128, Bytes, BytesN, Vec};
+use crate::native_contract::contract_error::ContractError;
 use crate::native_contract::token::admin::{check_admin, write_administrator};
 use crate::native_contract::token::allowance::{read_allowance, spend_allowance, write_allowance};
 use crate::native_contract::token::balance::{
     read_balance, read_state, receive_balance, spend_balance, transfer_classic_balance, write_state,
 };
-use crate::native_contract::token::cryptography::check_auth;
 use crate::native_contract::token::event;
 use crate::native_contract::token::metadata::{
     has_metadata, read_decimal, read_name, read_symbol, write_metadata,
 };
-use crate::native_contract::token::nonce::read_nonce;
-use crate::native_contract::token::public_types::{Identifier, Metadata, Signature, TokenMetadata};
+use crate::native_contract::token::public_types::{Metadata, TokenMetadata};
 use crate::{err, HostError};
 
-use soroban_env_common::xdr::Asset;
-use soroban_env_common::{CheckedEnv, EnvBase, Symbol, TryFromVal, TryIntoVal};
+use soroban_env_common::xdr::{Asset, ScAddress};
+use soroban_env_common::{CheckedEnv, EnvBase, TryFromVal, TryIntoVal};
 use soroban_native_sdk_macros::contractimpl;
 
-use super::error::ContractError;
 use super::public_types::{AlphaNum12Metadata, AlphaNum4Metadata};
 
 pub trait TokenTrait {
@@ -34,67 +34,40 @@ pub trait TokenTrait {
     fn init_asset(e: &Host, asset_bytes: Bytes) -> Result<(), HostError>;
 
     /// init creates a token contract that does not wrap an asset on the classic side.
-    fn init(e: &Host, admin: Identifier, metadata: TokenMetadata) -> Result<(), HostError>;
+    fn init(e: &Host, admin: ScAddress, metadata: TokenMetadata) -> Result<(), HostError>;
 
-    fn nonce(e: &Host, id: Identifier) -> Result<i128, HostError>;
-
-    fn allowance(e: &Host, from: Identifier, spender: Identifier) -> Result<i128, HostError>;
+    fn allowance(e: &Host, from: ScAddress, spender: ScAddress) -> Result<i128, HostError>;
 
     fn approve(
         e: &Host,
-        from: Signature,
-        nonce: i128,
-        spender: Identifier,
+        from: Account,
+        spender: ScAddress,
         amount: i128,
     ) -> Result<(), HostError>;
 
-    fn balance(e: &Host, id: Identifier) -> Result<i128, HostError>;
+    fn balance(e: &Host, id: ScAddress) -> Result<i128, HostError>;
 
-    fn is_frozen(e: &Host, id: Identifier) -> Result<bool, HostError>;
+    fn is_frozen(e: &Host, id: ScAddress) -> Result<bool, HostError>;
 
-    fn xfer(
-        e: &Host,
-        from: Signature,
-        nonce: i128,
-        to: Identifier,
-        amount: i128,
-    ) -> Result<(), HostError>;
+    fn xfer(e: &Host, from: Account, to: ScAddress, amount: i128) -> Result<(), HostError>;
 
     fn xfer_from(
         e: &Host,
-        spender: Signature,
-        nonce: i128,
-        from: Identifier,
-        to: Identifier,
+        spender: Account,
+        from: ScAddress,
+        to: ScAddress,
         amount: i128,
     ) -> Result<(), HostError>;
 
-    fn freeze(e: &Host, admin: Signature, nonce: i128, id: Identifier) -> Result<(), HostError>;
+    fn freeze(e: &Host, admin: Account, id: ScAddress) -> Result<(), HostError>;
 
-    fn unfreeze(e: &Host, admin: Signature, nonce: i128, id: Identifier) -> Result<(), HostError>;
+    fn unfreeze(e: &Host, admin: Account, id: ScAddress) -> Result<(), HostError>;
 
-    fn mint(
-        e: &Host,
-        admin: Signature,
-        nonce: i128,
-        to: Identifier,
-        amount: i128,
-    ) -> Result<(), HostError>;
+    fn mint(e: &Host, admin: Account, to: ScAddress, amount: i128) -> Result<(), HostError>;
 
-    fn burn(
-        e: &Host,
-        admin: Signature,
-        nonce: i128,
-        from: Identifier,
-        amount: i128,
-    ) -> Result<(), HostError>;
+    fn burn(e: &Host, admin: Account, from: ScAddress, amount: i128) -> Result<(), HostError>;
 
-    fn set_admin(
-        e: &Host,
-        admin: Signature,
-        nonce: i128,
-        new_admin: Identifier,
-    ) -> Result<(), HostError>;
+    fn set_admin(e: &Host, admin: Account, new_admin: ScAddress) -> Result<(), HostError>;
 
     fn decimals(e: &Host) -> Result<u32, HostError>;
 
@@ -102,31 +75,18 @@ pub trait TokenTrait {
 
     fn symbol(e: &Host) -> Result<Bytes, HostError>;
 
-    fn import(e: &Host, id: Signature, nonce: i128, amount: i64) -> Result<(), HostError>;
+    fn import(e: &Host, from: Account, amount: i64) -> Result<(), HostError>;
 
-    fn export(e: &Host, id: Signature, nonce: i128, amount: i64) -> Result<(), HostError>;
+    fn export(e: &Host, from: Account, amount: i64) -> Result<(), HostError>;
 }
 
 pub struct Token;
-
-fn check_nonnegative_amount(e: &Host, amount: i128) -> Result<(), HostError> {
-    if amount < 0 {
-        Err(err!(
-            e,
-            ContractError::NegativeAmountError,
-            "negative amount is not allowed: {}",
-            amount
-        ))
-    } else {
-        Ok(())
-    }
-}
 
 #[contractimpl]
 // Metering: *mostly* covered by components.
 impl TokenTrait for Token {
     fn init_asset(e: &Host, asset_bytes: Bytes) -> Result<(), HostError> {
-        if has_metadata(&e)? {
+        if has_metadata(e)? {
             return Err(e.err_status_msg(
                 ContractError::AlreadyInitializedError,
                 "token has been already initialized",
@@ -135,30 +95,29 @@ impl TokenTrait for Token {
 
         let asset: Asset = e.metered_from_xdr_obj(asset_bytes.into())?;
 
-        let curr_contract_id = BytesN::<32>::try_from_val(e, e.get_current_contract()?)?;
-        let expected_contract_id =
-            BytesN::<32>::try_from_val(e, e.get_contract_id_from_asset(asset.clone())?)?;
+        let curr_contract_id = e.get_current_contract_id()?;
+        let expected_contract_id = e.get_contract_id_from_asset(asset.clone())?;
         if curr_contract_id != expected_contract_id {
             return Err(err!(
                 e,
                 ContractError::InternalError,
                 "bad id for asset contract: '{}' expected, got '{}'",
-                expected_contract_id,
-                curr_contract_id
+                expected_contract_id.0,
+                curr_contract_id.0
             ));
         }
         match asset {
             Asset::Native => {
-                write_metadata(&e, Metadata::Native)?;
+                write_metadata(e, Metadata::Native)?;
                 //No admin for the Native token
             }
             Asset::CreditAlphanum4(asset4) => {
                 write_administrator(
-                    &e,
-                    Identifier::Account(asset4.issuer.metered_clone(e.budget_ref())?),
+                    e,
+                    ScAddress::ClassicAccount(asset4.issuer.metered_clone(e.budget_ref())?),
                 )?;
                 write_metadata(
-                    &e,
+                    e,
                     Metadata::AlphaNum4(AlphaNum4Metadata {
                         asset_code: BytesN::<4>::try_from_val(
                             e,
@@ -170,11 +129,11 @@ impl TokenTrait for Token {
             }
             Asset::CreditAlphanum12(asset12) => {
                 write_administrator(
-                    &e,
-                    Identifier::Account(asset12.issuer.metered_clone(e.budget_ref())?),
+                    e,
+                    ScAddress::ClassicAccount(asset12.issuer.metered_clone(e.budget_ref())?),
                 )?;
                 write_metadata(
-                    &e,
+                    e,
                     Metadata::AlphaNum12(AlphaNum12Metadata {
                         asset_code: BytesN::<12>::try_from_val(
                             e,
@@ -188,76 +147,75 @@ impl TokenTrait for Token {
         Ok(())
     }
 
-    fn init(e: &Host, admin: Identifier, metadata: TokenMetadata) -> Result<(), HostError> {
-        if has_metadata(&e)? {
+    fn init(e: &Host, admin: ScAddress, metadata: TokenMetadata) -> Result<(), HostError> {
+        if has_metadata(e)? {
             return Err(e.err_status_msg(
                 ContractError::AlreadyInitializedError,
                 "token has been already initialized",
             ));
         }
 
-        write_administrator(&e, admin)?;
-        write_metadata(&e, Metadata::Token(metadata))?;
+        write_administrator(e, admin)?;
+        write_metadata(e, Metadata::Token(metadata))?;
         Ok(())
     }
 
-    fn nonce(e: &Host, id: Identifier) -> Result<i128, HostError> {
-        read_nonce(e, id)
-    }
-
-    fn allowance(e: &Host, from: Identifier, spender: Identifier) -> Result<i128, HostError> {
-        read_allowance(&e, from, spender)
+    fn allowance(e: &Host, from: ScAddress, spender: ScAddress) -> Result<i128, HostError> {
+        read_allowance(e, from, spender)
     }
 
     // Metering: covered by components
     fn approve(
         e: &Host,
-        from: Signature,
-        nonce: i128,
-        spender: Identifier,
+        from: Account,
+        spender: ScAddress,
         amount: i128,
     ) -> Result<(), HostError> {
-        check_nonnegative_amount(e, amount)?;
-        let from_id = from.get_identifier(&e)?;
+        if amount.compare(&i128::from_u64(e, 0)?)? == Ordering::Less {
+            return Err(err!(
+                e,
+                ContractError::NegativeAmountError,
+                "negative amount is not allowed: {}",
+                amount
+            ));
+        }
+        let from_id = from.address()?;
         let mut args = Vec::new(e)?;
-        args.push(from.get_identifier(&e)?)?;
-        args.push(nonce.clone())?;
         args.push(spender.clone())?;
         args.push(amount.clone())?;
-        check_auth(&e, from, nonce, Symbol::from_str("approve"), args)?;
-        write_allowance(&e, from_id.clone(), spender.clone(), amount.clone())?;
+        from.authorize(args)?;
+        write_allowance(e, from_id.clone(), spender.clone(), amount.clone())?;
         event::approve(e, from_id, spender, amount)?;
         Ok(())
     }
 
     // Metering: covered by components
-    fn balance(e: &Host, id: Identifier) -> Result<i128, HostError> {
+    fn balance(e: &Host, id: ScAddress) -> Result<i128, HostError> {
         read_balance(e, id)
     }
 
     // Metering: covered by components
-    fn is_frozen(e: &Host, id: Identifier) -> Result<bool, HostError> {
-        read_state(&e, id)
+    fn is_frozen(e: &Host, id: ScAddress) -> Result<bool, HostError> {
+        read_state(e, id)
     }
 
     // Metering: covered by components
-    fn xfer(
-        e: &Host,
-        from: Signature,
-        nonce: i128,
-        to: Identifier,
-        amount: i128,
-    ) -> Result<(), HostError> {
-        check_nonnegative_amount(e, amount)?;
-        let from_id = from.get_identifier(&e)?;
+    fn xfer(e: &Host, from: Account, to: ScAddress, amount: i128) -> Result<(), HostError> {
+        if amount.compare(&i128::from_u64(e, 0)?)? == Ordering::Less {
+            return Err(err!(
+                e,
+                ContractError::NegativeAmountError,
+                "negative amount is not allowed: {}",
+                amount
+            ));
+        }
+        let from_id = from.address()?;
         let mut args = Vec::new(e)?;
-        args.push(from.get_identifier(&e)?)?;
-        args.push(nonce.clone())?;
         args.push(to.clone())?;
         args.push(amount.clone())?;
-        check_auth(&e, from, nonce, Symbol::from_str("xfer"), args)?;
-        spend_balance(&e, from_id.clone(), amount.clone())?;
-        receive_balance(&e, to.clone(), amount.clone())?;
+        from.authorize(args)?;
+        spend_balance(e, from_id.clone(), amount.clone())?;
+        receive_balance(e, to.clone(), amount.clone())?;
         event::transfer(e, from_id, to, amount)?;
         Ok(())
     }
@@ -265,168 +223,181 @@ impl TokenTrait for Token {
     // Metering: covered by components
     fn xfer_from(
         e: &Host,
-        spender: Signature,
-        nonce: i128,
-        from: Identifier,
-        to: Identifier,
+        spender: Account,
+        from: ScAddress,
+        to: ScAddress,
         amount: i128,
     ) -> Result<(), HostError> {
-        check_nonnegative_amount(e, amount)?;
-        let spender_id = spender.get_identifier(&e)?;
+        if amount.compare(&i128::from_u64(e, 0)?)? == Ordering::Less {
+            return Err(err!(
+                e,
+                ContractError::NegativeAmountError,
+                "negative amount is not allowed: {}",
+                amount
+            ));
+        }
+        let spender_id = spender.address()?;
         let mut args = Vec::new(e)?;
-        args.push(spender.get_identifier(&e)?)?;
-        args.push(nonce.clone())?;
         args.push(from.clone())?;
         args.push(to.clone())?;
         args.push(amount.clone())?;
-        check_auth(&e, spender, nonce, Symbol::from_str("xfer_from"), args)?;
-        spend_allowance(&e, from.clone(), spender_id, amount.clone())?;
-        spend_balance(&e, from.clone(), amount.clone())?;
-        receive_balance(&e, to.clone(), amount.clone())?;
+        spender.authorize(args)?;
+        spend_allowance(e, from.clone(), spender_id, amount.clone())?;
+        spend_balance(e, from.clone(), amount.clone())?;
+        receive_balance(e, to.clone(), amount.clone())?;
         event::transfer(e, from, to, amount)?;
         Ok(())
     }
 
     // Metering: covered by components
-    fn burn(
-        e: &Host,
-        admin: Signature,
-        nonce: i128,
-        from: Identifier,
-        amount: i128,
-    ) -> Result<(), HostError> {
-        check_nonnegative_amount(e, amount)?;
-        check_admin(&e, &admin)?;
+    fn burn(e: &Host, admin: Account, from: ScAddress, amount: i128) -> Result<(), HostError> {
+        if amount.compare(&i128::from_u64(e, 0)?)? == Ordering::Less {
+            return Err(err!(
+                e,
+                ContractError::NegativeAmountError,
+                "negative amount is not allowed: {}",
+                amount
+            ));
+        }
+        let admin_id = admin.address()?;
+        check_admin(e, &admin_id)?;
         let mut args = Vec::new(e)?;
-        let admin_id = admin.get_identifier(&e)?;
-        args.push(admin_id.clone())?;
-        args.push(nonce.clone())?;
         args.push(from.clone())?;
         args.push(amount.clone())?;
-        check_auth(&e, admin, nonce, Symbol::from_str("burn"), args)?;
-        spend_balance(&e, from.clone(), amount.clone())?;
+        admin.authorize(args)?;
+        spend_balance(e, from.clone(), amount.clone())?;
         event::burn(e, admin_id, from, amount)?;
         Ok(())
     }
 
     // Metering: covered by components
-    fn freeze(e: &Host, admin: Signature, nonce: i128, id: Identifier) -> Result<(), HostError> {
-        check_admin(&e, &admin)?;
+    fn freeze(e: &Host, admin: Account, id: ScAddress) -> Result<(), HostError> {
+        check_admin(e, &admin.address()?)?;
         let mut args = Vec::new(e)?;
-        let admin_id = admin.get_identifier(&e)?;
-        args.push(admin_id.clone())?;
-        args.push(nonce.clone())?;
+        let admin_id = admin.address()?;
         args.push(id.clone())?;
-        check_auth(&e, admin, nonce, Symbol::from_str("freeze"), args)?;
-        write_state(&e, id.clone(), true)?;
+        admin.authorize(args)?;
+        write_state(e, id.clone(), true)?;
         event::freeze(e, admin_id, id)?;
         Ok(())
     }
 
     // Metering: covered by components
-    fn mint(
-        e: &Host,
-        admin: Signature,
-        nonce: i128,
-        to: Identifier,
-        amount: i128,
-    ) -> Result<(), HostError> {
-        check_nonnegative_amount(e, amount)?;
-        check_admin(&e, &admin)?;
+    fn mint(e: &Host, admin: Account, to: ScAddress, amount: i128) -> Result<(), HostError> {
+        if amount.compare(&i128::from_u64(e, 0)?)? == Ordering::Less {
+            return Err(err!(
+                e,
+                ContractError::NegativeAmountError,
+                "negative amount is not allowed: {}",
+                amount
+            ));
+        }
+        check_admin(e, &admin.address()?)?;
         let mut args = Vec::new(e)?;
-        let admin_id = admin.get_identifier(&e)?;
-        args.push(admin_id.clone())?;
-        args.push(nonce.clone())?;
         args.push(to.clone())?;
         args.push(amount.clone())?;
-        check_auth(&e, admin, nonce, Symbol::from_str("mint"), args)?;
-        receive_balance(&e, to.clone(), amount.clone())?;
-        event::mint(e, admin_id, to, amount)?;
+        admin.authorize(args)?;
+        receive_balance(e, to.clone(), amount.clone())?;
+        event::mint(e, admin.address()?, to, amount)?;
         Ok(())
     }
 
     // Metering: covered by components
-    fn set_admin(
-        e: &Host,
-        admin: Signature,
-        nonce: i128,
-        new_admin: Identifier,
-    ) -> Result<(), HostError> {
-        check_admin(&e, &admin)?;
+    fn set_admin(e: &Host, admin: Account, new_admin: ScAddress) -> Result<(), HostError> {
+        check_admin(e, &admin.address()?)?;
         let mut args = Vec::new(e)?;
-        let admin_id = admin.get_identifier(&e)?;
-        args.push(admin_id.clone())?;
-        args.push(nonce.clone())?;
         args.push(new_admin.clone())?;
-        check_auth(&e, admin, nonce, Symbol::from_str("set_admin"), args)?;
-        write_administrator(&e, new_admin.clone())?;
-        event::set_admin(e, admin_id, new_admin)?;
+        admin.authorize(args)?;
+        write_administrator(e, new_admin.clone())?;
+        event::set_admin(e, admin.address()?, new_admin)?;
         Ok(())
     }
 
     // Metering: covered by components
-    fn unfreeze(e: &Host, admin: Signature, nonce: i128, id: Identifier) -> Result<(), HostError> {
-        check_admin(&e, &admin)?;
-        let mut args = Vec::new(e)?;
-        let admin_id = admin.get_identifier(&e)?;
-        args.push(admin_id.clone())?;
-        args.push(nonce.clone())?;
+    fn unfreeze(e: &Host, admin: Account, id: ScAddress) -> Result<(), HostError> {
+        check_admin(e, &admin.address()?)?;
+        let mut args = Vec::new(e)?;        
         args.push(id.clone())?;
-        check_auth(&e, admin, nonce, Symbol::from_str("unfreeze"), args)?;
-        write_state(&e, id.clone(), false)?;
-        event::unfreeze(e, admin_id, id)?;
+        admin.authorize(args)?;
+        write_state(e, id.clone(), false)?;
+        event::unfreeze(e, admin.address()?, id)?;
         Ok(())
     }
 
     fn decimals(e: &Host) -> Result<u32, HostError> {
-        read_decimal(&e)
+        read_decimal(e)
     }
 
     fn name(e: &Host) -> Result<Bytes, HostError> {
-        read_name(&e)
+        read_name(e)
     }
 
     fn symbol(e: &Host) -> Result<Bytes, HostError> {
-        read_symbol(&e)
+        read_symbol(e)
     }
 
     // Metering: covered by components
-    fn import(e: &Host, id: Signature, nonce: i128, amount: i64) -> Result<(), HostError> {
-        let amount_i128: i128 = amount as i128;
-        check_nonnegative_amount(e, amount_i128)?;
+    fn import(e: &Host, from: Account, amount: i64) -> Result<(), HostError> {
+        if amount < 0 {
+            return Err(err!(
+                e,
+                ContractError::NegativeAmountError,
+                "negative amount is not allowed: {}",
+                amount
+            ));
+        }
 
-        let account_id = id.get_account_id(e)?;
+        let from_address = from.address()?;
+        let account_id = get_account_id(e, &from_address)?;
 
         let mut args = Vec::new(e)?;
-        let ident = id.get_identifier(&e)?;
-        args.push(ident.clone())?;
-        args.push(nonce.clone())?;
         args.push(amount.clone())?;
-        check_auth(&e, id, nonce, Symbol::from_str("import"), args)?;
+        from.authorize(args)?;
 
         transfer_classic_balance(e, account_id.metered_clone(e.budget_ref())?, -amount)?;
-        receive_balance(&e, Identifier::Account(account_id), amount_i128)?;
-        event::import(e, ident, amount)?;
+        receive_balance(
+            e,
+            from_address.metered_clone(e.budget_ref())?,
+            i128::from_u64(
+                e,
+                amount.try_into().map_err(|_| {
+                    e.err_status_msg(ContractError::InternalError, "bad int conversion")
+                })?,
+            )?,
+        )?;
+        event::import(e, from_address, amount)?;
         Ok(())
     }
 
     // Metering: covered by components
-    fn export(e: &Host, id: Signature, nonce: i128, amount: i64) -> Result<(), HostError> {
-        let amount_i128: i128 = amount as i128;
-        check_nonnegative_amount(e, amount_i128)?;
-
-        let account_id = id.get_account_id(e)?;
+    fn export(e: &Host, from: Account, amount: i64) -> Result<(), HostError> {
+        if amount < 0 {
+            return Err(err!(
+                e,
+                ContractError::NegativeAmountError,
+                "negative amount is not allowed: {}",
+                amount
+            ));
+        }
+        let from_address = from.address()?;
+        let account_id = get_account_id(e, &from_address)?;
 
         let mut args = Vec::new(e)?;
-        let ident = id.get_identifier(&e)?;
-        args.push(ident.clone())?;
-        args.push(nonce.clone())?;
         args.push(amount.clone())?;
-        check_auth(&e, id, nonce, Symbol::from_str("export"), args)?;
+        from.authorize(args)?;
 
         transfer_classic_balance(e, account_id.metered_clone(e.budget_ref())?, amount)?;
-        spend_balance(&e, Identifier::Account(account_id), amount_i128)?;
-        event::export(e, ident, amount)?;
+        spend_balance(
+            e,
+            from_address.metered_clone(e.budget_ref())?,
+            i128::from_u64(
+                e,
+                amount.try_into().map_err(|_| {
+                    e.err_status_msg(ContractError::InternalError, "bad int conversion")
+                })?,
+            )?,
+        )?;
+        event::export(e, from_address, amount)?;
         Ok(())
     }
 }
