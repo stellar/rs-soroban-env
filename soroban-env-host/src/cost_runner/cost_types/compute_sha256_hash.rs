@@ -7,7 +7,7 @@ impl CostRunner for ComputeSha256HashRun {
     const COST_TYPE: CostType = CostType::ComputeSha256Hash;
     type SampleType = Vec<u8>;
 
-    fn run_iter(_host: &crate::Host, _iter: u64, sample: &mut Self::SampleType) {
+    fn run_iter(_host: &crate::Host, _iter: u64, sample: Self::SampleType) {
         Sha256::digest(sample).as_slice().to_vec();
     }
 

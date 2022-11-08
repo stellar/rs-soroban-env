@@ -3,6 +3,7 @@ use crate::{budget::CostType, cost_runner::CostRunner, EnvVal, Host, RawVal};
 
 pub struct ImVecMutEntryRun;
 
+#[derive(Clone)]
 pub struct ImVecMutEntrySample {
     pub im: ImVecImmutEntrySample,
     pub second_vec_ref: im_rc::Vector<EnvVal<Host, RawVal>>,
@@ -12,7 +13,7 @@ impl CostRunner for ImVecMutEntryRun {
     const COST_TYPE: CostType = CostType::ImVecMutEntry;
     type SampleType = ImVecMutEntrySample;
 
-    fn run_iter(_host: &Host, iter: u64, sample: &mut Self::SampleType) {
+    fn run_iter(_host: &Host, iter: u64, mut sample: Self::SampleType) {
         let _ = sample
             .im
             .vec

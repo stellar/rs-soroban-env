@@ -54,7 +54,6 @@ pub(crate) fn for_each_host_cost_measurement<B: Benchmark>() -> std::io::Result<
     call_bench::<B, ComputeEd25519PubKeyMeasure>(&mut costs)?;
     call_bench::<B, ComputeSha256HashMeasure>(&mut costs)?;
     call_bench::<B, Ed25519ScalarMulMeasure>(&mut costs)?;
-    call_bench::<B, HostObjAllocSlotMeasure>(&mut costs)?;
     call_bench::<B, ImMapImmutEntryMeasure>(&mut costs)?;
     call_bench::<B, ImMapMutEntryMeasure>(&mut costs)?;
     call_bench::<B, ImVecImmutEntryMeasure>(&mut costs)?;
@@ -68,6 +67,11 @@ pub(crate) fn for_each_host_cost_measurement<B: Benchmark>() -> std::io::Result<
     call_bench::<B, CreateRecordDebugEventMeasure>(&mut costs)?;
     call_bench::<B, RecordContractEventMeasure>(&mut costs)?;
     call_bench::<B, VisitObjectMeasure>(&mut costs)?;
+    call_bench::<B, GuardFrameMeasure>(&mut costs)?;
+    call_bench::<B, ValXdrConvMeasure>(&mut costs)?;
+    call_bench::<B, ValSerMeasure>(&mut costs)?;
+    call_bench::<B, ValDeserMeasure>(&mut costs)?;
+    call_bench::<B, HostObjAllocSlotMeasure>(&mut costs)?;
 
     if get_explicit_bench_names().is_none() {
         for cost in CostType::variants() {
@@ -79,9 +83,6 @@ pub(crate) fn for_each_host_cost_measurement<B: Benchmark>() -> std::io::Result<
         // warning: missing cost measurement for HostFunction
         // warning: missing cost measurement for PushFrame
         // warning: missing cost measurement for PopFrame
-        // warning: missing cost measurement for ValXdrConv
-        // warning: missing cost measurement for ValSer
-        // warning: missing cost measurement for ValDeser
         // warning: missing cost measurement for CloneEvents
         // warning: missing cost measurement for HostVecAllocCell
         // warning: missing cost measurement for HostMapAllocCell
@@ -92,7 +93,6 @@ pub(crate) fn for_each_host_cost_measurement<B: Benchmark>() -> std::io::Result<
         // warning: missing cost measurement for ImMapNew
         // warning: missing cost measurement for ScVecFromHostVec
         // warning: missing cost measurement for ScMapFromHostMap
-        // warning: missing cost measurement for GuardFrame
         // warning: missing cost measurement for CloneVm
         // warning: missing cost measurement for BigIntNew
         // warning: missing cost measurement for BigIntAddSub

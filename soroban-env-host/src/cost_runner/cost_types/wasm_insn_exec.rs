@@ -8,6 +8,7 @@ use std::rc::Rc;
 
 pub struct WasmInsnExecRun;
 
+#[derive(Clone)]
 pub struct WasmInsnExecSample {
     pub insns: u64,
     pub args: ScVec,
@@ -18,7 +19,7 @@ impl CostRunner for WasmInsnExecRun {
     const COST_TYPE: CostType = CostType::WasmInsnExec;
     type SampleType = WasmInsnExecSample;
 
-    fn run_iter(host: &crate::Host, _iter: u64, sample: &mut Self::SampleType) {
+    fn run_iter(host: &crate::Host, _iter: u64, sample: Self::SampleType) {
         let scval = sample
             .vm
             .invoke_function(host, "test", &sample.args)

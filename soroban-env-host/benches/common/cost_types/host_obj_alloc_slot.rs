@@ -1,5 +1,5 @@
 use crate::common::HostCostMeasurement;
-use rand::rngs::StdRng;
+use rand::{rngs::StdRng, RngCore};
 use soroban_env_host::{
     cost_runner::HostObjAllocSlotRun,
     xdr::{ScObject, ScVal},
@@ -15,7 +15,7 @@ pub(crate) struct HostObjAllocSlotMeasure;
 impl HostCostMeasurement for HostObjAllocSlotMeasure {
     type Runner = HostObjAllocSlotRun;
 
-    fn new_random_case(host: &Host, _rng: &mut StdRng, input: u64) -> ScVal {
+    fn new_random_case(host: &Host, rng: &mut StdRng, input: u64) -> Vec<u8> {
         // During setup we inject a bunch of copies of the object to make
         // the host object array large.
         let size = input * 100;
@@ -23,6 +23,9 @@ impl HostCostMeasurement for HostObjAllocSlotMeasure {
         for _ in 0..size {
             host.inject_val(&val).unwrap();
         }
-        val
+        // here we insert a pre-constructed bytes of various sizes to show that
+        // the cost of inserting one additional host object is constant w.r.t.
+        // the actual object size.
+        (0..input).map(|_| rng.next_u32() as u8).collect()
     }
 }

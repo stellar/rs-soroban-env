@@ -1,5 +1,4 @@
 use crate::{budget::CostType, Host};
-
 /// `CostRunner` is an interface to running a host cost entity of a `CostType` (usually a block of
 /// WASM bytecode or a host function), given a sample of `SampleType`.
 pub trait CostRunner: Sized {
@@ -12,18 +11,18 @@ pub trait CostRunner: Sized {
     const RUN_ITERATIONS: u64 = 100;
 
     /// Data type of the sample running with.
-    type SampleType;
+    type SampleType: Clone;
 
     /// Run a iteration of the `CostRunner`, called by `run` for 0..RUN_ITERATIONS.
-    fn run_iter(host: &Host, iter: u64, sample: &mut Self::SampleType);
+    fn run_iter(host: &Host, iter: u64, sample: Self::SampleType);
 
     /// Run the `CostRunner`. This method is called under CPU-and-memory tracking
     /// machinery, so anything that happens during it will be considered part of
     /// the cost for running the HostMeasurement at the returned input. Will call
     /// `run_iter` with iter set to each number in 0..RUN_ITERATIONS.
-    fn run(host: &Host, sample: &mut Self::SampleType) {
-        for iter in 0..Self::RUN_ITERATIONS {
-            Self::run_iter(host, iter, sample);
+    fn run(host: &Host, samples: Vec<Self::SampleType>) {
+        for (iter, sample) in samples.into_iter().enumerate() {
+            Self::run_iter(host, iter as u64, sample)
         }
     }
 

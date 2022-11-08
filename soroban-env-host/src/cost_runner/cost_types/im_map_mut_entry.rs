@@ -3,6 +3,7 @@ use crate::{budget::CostType, cost_runner::CostRunner, EnvVal, Host, RawVal};
 
 pub struct ImMapMutEntryRun;
 
+#[derive(Clone)]
 pub struct ImMapMutEntrySample {
     pub im: ImMapImmutEntrySample,
     pub second_map_ref: im_rc::OrdMap<EnvVal<Host, RawVal>, EnvVal<Host, RawVal>>,
@@ -12,7 +13,7 @@ impl CostRunner for ImMapMutEntryRun {
     const COST_TYPE: CostType = CostType::ImMapMutEntry;
     type SampleType = ImMapMutEntrySample;
 
-    fn run_iter(_host: &crate::Host, iter: u64, sample: &mut Self::SampleType) {
+    fn run_iter(_host: &crate::Host, iter: u64, mut sample: Self::SampleType) {
         let _ = sample
             .im
             .map

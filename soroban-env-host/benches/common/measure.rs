@@ -211,7 +211,7 @@ pub trait HostCostMeasurement: Sized {
         Self::new_random_case(host, rng, input)
     }
 
-    fn run(host: &Host, sample: &mut <Self::Runner as CostRunner>::SampleType) {
+    fn run(host: &Host, sample: Vec<<Self::Runner as CostRunner>::SampleType>) {
         <Self::Runner as CostRunner>::run(host, sample)
     }
 
@@ -297,19 +297,24 @@ where
         // prepare the measurement
         let host = Host::default();
         host.with_budget(|budget| budget.reset_unlimited());
-        let mut m = match next_hcm(&host) {
+        // memory tracking needs to start here (instead of right before `run`) because the sample
+        // data container allocation needs to be counted. Otherwise, the allocation/deallocation
+        // count will be asymmetric, which will lead to mem tracker count underflow.
+        mem_tracker.0.store(0, Ordering::SeqCst);
+        let alloc_guard = alloc_group_token.enter();
+        let m = match next_hcm(&host) {
             Some(m) => m,
             None => break,
         };
-        // start the measurement
+
+        let iterations = <HCM::Runner as CostRunner>::RUN_ITERATIONS;
+        let mvec = (0..iterations).map(|_| m.clone()).collect();
+        // start the insrn count measurement
         let start = Instant::now();
-        mem_tracker.0.store(0, Ordering::SeqCst);
-        let alloc_guard = alloc_group_token.enter();
         host.with_budget(|budget| budget.reset_inputs());
         cpu_insn_counter.begin();
-        HCM::run(&host, &mut m);
+        HCM::run(&host, mvec);
         // collect the metrics
-        let iterations = <HCM::Runner as CostRunner>::RUN_ITERATIONS;
         let cpu_insns = cpu_insn_counter.end_and_count() / iterations;
         drop(alloc_guard);
         let stop = Instant::now();

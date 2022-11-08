@@ -23,9 +23,9 @@ pub enum CostType {
     // TODO: consider removing. This is just indexing into an array. Fixed cost around 400 insns.
     // Only thing to make sure is the guest can't visitObject repeatly without incurring some charges elsewhere.
     VisitObject = 5,
-    // Cost of pushing a frame into the context
+    // TODO: remove, covered by GuardFrame. Cost of pushing a frame into the context
     PushFrame = 6,
-    // Cost of poping a frame out of the context
+    // TODO: remove, covered by GuardFrame. Cost of poping a frame out of the context
     PopFrame = 7,
     // Tracks a single Val (RawVal or primative Object like U64) <=> ScVal
     // conversion cost. Most of these Val counterparts in ScVal (except e.g.
@@ -39,6 +39,7 @@ pub enum CostType {
     CloneEvents = 11,
     // Cost of occupying a host object slot
     HostObjAllocSlot = 12,
+    // TODO: remove 12-18, 61-62. They are not needed, HostObjAllocSlot is enough.
     // Cost of pushing a new `Vec` object to the object storage.
     HostVecAllocCell = 13,
     // Cost of pushing a new `Map` object to the object storage.
@@ -67,6 +68,7 @@ pub enum CostType {
     ImVecMutEntry = 25,
     // Cost of (immutably) accessing an entry in a Vector
     ImVecImmutEntry = 26,
+    //TODO: 27-30 are probably redundent.They are covered elsewhere.
     // Cost of work needed to collect elements from a HostVec into a ScVec. This does not account for the
     // conversion of the elements into its ScVal form.
     ScVecFromHostVec = 27,
@@ -85,6 +87,7 @@ pub enum CostType {
     CloneVm = 32,
     // Cost of verifying ed25519 signature of a payload.
     VerifyEd25519Sig = 33,
+    //TODO: 34-47 to be done after we decide on the bigint library.
     // Cost of creating a new bigint.
     BigIntNew = 34,
     // Cost of bigint's add, sub ops.
