@@ -438,6 +438,23 @@ impl Host {
         res
     }
 
+    /// Pushes a test contract [`Frame`], runs a closure, and then pops the
+    /// frame, rolling back if the closure returned an error. Returns the result
+    /// that the closure returned (or any error caused during the frame
+    /// push/pop). Used for testing.
+    #[cfg(any(test, feature = "testutils"))]
+    pub fn with_test_contract_frame<F>(
+        &self,
+        id: Hash,
+        func: Symbol,
+        f: F,
+    ) -> Result<RawVal, HostError>
+    where
+        F: FnOnce() -> Result<RawVal, HostError>,
+    {
+        self.with_frame(Frame::TestContract(TestContractFrame::new(id, func)), f)
+    }
+
     /// Returns [`Hash`] contract ID from the VM frame at the top of the context
     /// stack, or a [`HostError`] if the context stack is empty or has a non-VM
     /// frame at its top.
