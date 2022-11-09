@@ -438,6 +438,25 @@ impl Host {
         res
     }
 
+    /// Pushes an artificial [`Frame`], runs a closure, and then pops the frame, rolling back
+    /// if the closure returned an error. Returns the result that the closure
+    /// returned (or any error caused during the frame push/pop).
+    // Notes on metering: `GuardFrame` charges on the work done on protecting the `context`.
+    /// It does not cover the cost of the actual closure call. The closure needs to be
+    /// metered separately.
+    #[cfg(any(test, feature = "testutils"))]
+    pub fn with_artificial_test_contract_frame<F>(
+        &self,
+        id: Hash,
+        func: Symbol,
+        f: F,
+    ) -> Result<RawVal, HostError>
+    where
+        F: FnOnce() -> Result<RawVal, HostError>,
+    {
+        self.with_frame(Frame::TestContract(TestContractFrame::new(id, func)), f)
+    }
+
     /// Returns [`Hash`] contract ID from the VM frame at the top of the context
     /// stack, or a [`HostError`] if the context stack is empty or has a non-VM
     /// frame at its top.
