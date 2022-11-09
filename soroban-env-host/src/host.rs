@@ -438,12 +438,12 @@ impl Host {
         res
     }
 
-    /// Pushes an artificial [`Frame`], runs a closure, and then pops the frame,
-    /// rolling back if the closure returned an error. Returns the result that
-    /// the closure returned (or any error caused during the frame push/pop).
-    /// Used for testing.
+    /// Pushes an test contract [`Frame`], runs a closure, and then pops the
+    /// frame, rolling back if the closure returned an error. Returns the result
+    /// that the closure returned (or any error caused during the frame
+    /// push/pop). Used for testing.
     #[cfg(any(test, feature = "testutils"))]
-    pub fn with_artificial_test_contract_frame<F>(
+    pub fn with_test_contract_frame<F>(
         &self,
         id: Hash,
         func: Symbol,
