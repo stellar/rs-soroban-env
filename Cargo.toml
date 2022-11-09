@@ -15,6 +15,8 @@ members = [
 exclude = ["soroban-test-wasms/wasm-workspace"]
 
 [workspace.dependencies]
+soroban-env-common = { version = "0.0.9" }
+soroban-native-sdk-macros = { version = "0.0.9" }
 stellar-xdr = { version = "0.0.7", default-features = false }
 wasmi = { package = "soroban-wasmi", version = "0.16.0-soroban1" }
 
