@@ -438,7 +438,7 @@ impl Host {
         res
     }
 
-    /// Pushes an test contract [`Frame`], runs a closure, and then pops the
+    /// Pushes a test contract [`Frame`], runs a closure, and then pops the
     /// frame, rolling back if the closure returned an error. Returns the result
     /// that the closure returned (or any error caused during the frame
     /// push/pop). Used for testing.
