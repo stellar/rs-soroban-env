@@ -82,9 +82,18 @@ pub(crate) fn for_each_host_cost_measurement<B: Benchmark>() -> std::io::Result<
     call_bench::<B, ImMapNewMeasure>(&mut costs)?;
     call_bench::<B, ImMapImmutEntryMeasure>(&mut costs)?;
     call_bench::<B, ImMapMutEntryMeasure>(&mut costs)?;
+    call_bench::<B, ImMapCmpMeasure>(&mut costs)?;
     call_bench::<B, ImVecNewMeasure>(&mut costs)?;
     call_bench::<B, ImVecImmutEntryMeasure>(&mut costs)?;
     call_bench::<B, ImVecMutEntryMeasure>(&mut costs)?;
+    call_bench::<B, ImVecCmpMeasure>(&mut costs)?;
+    call_bench::<B, BytesAppendMeasure>(&mut costs)?;
+    call_bench::<B, BytesCmpMeasure>(&mut costs)?;
+    call_bench::<B, BytesCloneMeasure>(&mut costs)?;
+    call_bench::<B, BytesDelMeasure>(&mut costs)?;
+    call_bench::<B, BytesInsertMeasure>(&mut costs)?;
+    call_bench::<B, BytesPopMeasure>(&mut costs)?;
+    call_bench::<B, BytesPushMeasure>(&mut costs)?;
 
     if get_explicit_bench_names().is_none() {
         for cost in CostType::variants() {
@@ -103,28 +112,18 @@ pub(crate) fn for_each_host_cost_measurement<B: Benchmark>() -> std::io::Result<
         // warning: missing cost measurement for HostI64AllocCell
         // warning: missing cost measurement for HostBytesAllocCell
         // warning: missing cost measurement for HostBigIntAllocCell
-        // warning: missing cost measurement for ImMapNew
         // warning: missing cost measurement for ScVecFromHostVec
         // warning: missing cost measurement for ScMapFromHostMap
         // warning: missing cost measurement for CloneVm
         // warning: missing cost measurement for BigIntNew
         // warning: missing cost measurement for VmMemCpy
         // warning: missing cost measurement for VmInvokeFunction
-        // warning: missing cost measurement for BytesClone
-        // warning: missing cost measurement for BytesDel
-        // warning: missing cost measurement for BytesPush
-        // warning: missing cost measurement for BytesPop
-        // warning: missing cost measurement for BytesInsert
-        // warning: missing cost measurement for BytesAppend
         // warning: missing cost measurement for BytesSlice
         // warning: missing cost measurement for BytesConcat
         // warning: missing cost measurement for CallArgsUnpack
         // warning: missing cost measurement for ChargeBudget
         // warning: missing cost measurement for HostContractCodeAllocCell
         // warning: missing cost measurement for HostAccountIdAllocCell
-        // warning: missing cost measurement for ImMapCmp
-        // warning: missing cost measurement for ImVecCmp
-        // warning: missing cost measurement for BytesCmp
     }
     Ok(())
 }

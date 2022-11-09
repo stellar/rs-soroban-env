@@ -1,4 +1,7 @@
-use crate::{budget::CostType, cost_runner::CostRunner, EnvVal, Host, MeteredOrdMap, RawVal};
+use crate::{
+    budget::CostType, cost_runner::CostRunner, host::metered_cmp::MeteredCmp, EnvVal, Host,
+    MeteredOrdMap, RawVal,
+};
 
 type HostMap = MeteredOrdMap<EnvVal<Host, RawVal>, EnvVal<Host, RawVal>>;
 
@@ -34,7 +37,7 @@ pub struct ImMapMutEntryRun;
 #[derive(Clone)]
 pub struct ImMapMutEntrySample {
     pub im: ImMapImmutEntrySample,
-    pub second_map_ref: MeteredOrdMap<EnvVal<Host, RawVal>, EnvVal<Host, RawVal>>,
+    pub second_map_ref: HostMap,
 }
 impl CostRunner for ImMapMutEntryRun {
     const COST_TYPE: CostType = CostType::ImMapMutEntry;
@@ -45,6 +48,24 @@ impl CostRunner for ImMapMutEntryRun {
             .im
             .map
             .get_mut(&sample.im.keys[iter as usize % sample.im.keys.len()])
+            .unwrap();
+    }
+}
+
+pub struct ImMapCmpRun;
+#[derive(Clone)]
+pub struct ImMapCmpSample {
+    pub a: HostMap,
+    pub b: HostMap,
+}
+impl CostRunner for ImMapCmpRun {
+    const COST_TYPE: CostType = CostType::ImMapCmp;
+    type SampleType = ImMapCmpSample;
+
+    fn run_iter(host: &Host, _iter: u64, sample: Self::SampleType) {
+        sample
+            .a
+            .metered_cmp(&sample.b, &host.budget_cloned())
             .unwrap();
     }
 }

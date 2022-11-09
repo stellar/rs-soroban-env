@@ -1,4 +1,7 @@
-use crate::{budget::CostType, cost_runner::CostRunner, EnvVal, Host, MeteredVector, RawVal};
+use crate::{
+    budget::CostType, cost_runner::CostRunner, host::metered_cmp::MeteredCmp, EnvVal, Host,
+    MeteredVector, RawVal,
+};
 
 type HostVec = MeteredVector<EnvVal<Host, RawVal>>;
 
@@ -45,6 +48,24 @@ impl CostRunner for ImVecMutEntryRun {
             .im
             .vec
             .get_mut(sample.im.idxs[iter as usize % sample.im.idxs.len()])
+            .unwrap();
+    }
+}
+
+pub struct ImVecCmpRun;
+#[derive(Clone)]
+pub struct ImVecCmpSample {
+    pub a: HostVec,
+    pub b: HostVec,
+}
+impl CostRunner for ImVecCmpRun {
+    const COST_TYPE: CostType = CostType::ImVecCmp;
+    type SampleType = ImVecCmpSample;
+
+    fn run_iter(host: &Host, _iter: u64, sample: Self::SampleType) {
+        sample
+            .a
+            .metered_cmp(&sample.b, &host.budget_cloned())
             .unwrap();
     }
 }

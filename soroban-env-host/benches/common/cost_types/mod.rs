@@ -1,4 +1,5 @@
 mod bigint_ops;
+mod bytes_ops;
 mod compute_ed25519_pubkey;
 mod compute_sha256_hash;
 mod ed25519_scalar_mul;
@@ -19,6 +20,7 @@ mod vm_instantiation;
 mod wasm_insn_exec;
 
 pub(crate) use bigint_ops::*;
+pub(crate) use bytes_ops::*;
 pub(crate) use compute_ed25519_pubkey::*;
 pub(crate) use compute_sha256_hash::*;
 pub(crate) use ed25519_scalar_mul::*;

@@ -2,8 +2,8 @@ use crate::common::{util, HostCostMeasurement};
 use rand::{rngs::StdRng, seq::SliceRandom};
 use soroban_env_host::{
     cost_runner::{
-        ImMapImmutEntryRun, ImMapImmutEntrySample, ImMapMutEntryRun, ImMapMutEntrySample,
-        ImMapNewRun,
+        ImMapCmpRun, ImMapCmpSample, ImMapImmutEntryRun, ImMapImmutEntrySample, ImMapMutEntryRun,
+        ImMapMutEntrySample, ImMapNewRun,
     },
     Host, MeteredOrdMap,
 };
@@ -75,5 +75,27 @@ impl HostCostMeasurement for ImMapMutEntryMeasure {
         let im = ImMapImmutEntryMeasure::new_random_case(host, rng, input);
         let second_map_ref = im.map.clone();
         ImMapMutEntrySample { im, second_map_ref }
+    }
+}
+
+pub(crate) struct ImMapCmpMeasure;
+// Measures the cost of comparing two OrdMaps. The worst case grows n*log(n) whereas
+// the average cost is close to constant.
+impl HostCostMeasurement for ImMapCmpMeasure {
+    type Runner = ImMapCmpRun;
+
+    fn new_random_case(host: &Host, rng: &mut StdRng, input: u64) -> ImMapCmpSample {
+        let input = input * 100;
+        let oa = util::random_ord_map(host, rng, input);
+        let ob = util::random_ord_map(host, rng, input);
+        let a = MeteredOrdMap::from_map(host.budget_cloned(), oa).unwrap();
+        let b = MeteredOrdMap::from_map(host.budget_cloned(), ob).unwrap();
+        ImMapCmpSample { a, b }
+    }
+
+    fn new_worst_case(host: &Host, rng: &mut StdRng, input: u64) -> ImMapCmpSample {
+        let a = ImMapImmutEntryMeasure::new_random_case(host, rng, input).map;
+        let b = a.clone();
+        ImMapCmpSample { a, b }
     }
 }

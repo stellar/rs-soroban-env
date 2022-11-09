@@ -2570,7 +2570,7 @@ impl VmCallerCheckedEnv for Host {
         let end = self.u32_from_rawval_input("end", end)?;
         let vnew = self.visit_obj(b, move |hv: &Vec<u8>| {
             let range = self.valid_range_from_start_end_bound(start, end, hv.len())?;
-            self.charge_budget(CostType::BytesSlice, hv.len() as u64)?;
+            self.charge_budget(CostType::BytesClone, range.len() as u64)?;
             Ok(hv.as_slice()[range].to_vec())
         })?;
         Ok(self.add_host_object(vnew)?.into())
