@@ -1053,10 +1053,10 @@ dependencies = [
 name = "soroban-env-common"
 version = "0.0.9"
 dependencies = [
- "soroban-env-macros",
+ "soroban-env-macros 0.0.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "soroban-wasmi",
  "static_assertions",
- "stellar-xdr",
+ "stellar-xdr 0.0.7 (git+https://github.com/stellar/rs-stellar-xdr?rev=e88f9fa7)",
 ]
 
 [[package]]
@@ -1108,7 +1108,20 @@ dependencies = [
  "itertools",
  "proc-macro2",
  "quote",
- "stellar-xdr",
+ "stellar-xdr 0.0.7 (git+https://github.com/stellar/rs-stellar-xdr?rev=e88f9fa7)",
+ "syn",
+]
+
+[[package]]
+name = "soroban-env-macros"
+version = "0.0.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f63b23eda217f8fc531ed46ecc25020512942d51ed437b6075022f77fee5f847"
+dependencies = [
+ "itertools",
+ "proc-macro2",
+ "quote",
+ "stellar-xdr 0.0.7 (registry+https://github.com/rust-lang/crates.io-index)",
  "syn",
 ]
 
@@ -1170,6 +1183,15 @@ name = "static_assertions"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
+
+[[package]]
+name = "stellar-xdr"
+version = "0.0.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9295054553418f5d14d9099070acab34e8befab65aae102a3bae79b9cdf76ac0"
+dependencies = [
+ "hex",
+]
 
 [[package]]
 name = "stellar-xdr"

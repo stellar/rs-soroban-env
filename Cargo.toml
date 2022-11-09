@@ -15,18 +15,13 @@ members = [
 exclude = ["soroban-test-wasms/wasm-workspace"]
 
 [workspace.dependencies]
-soroban-env-common = { version = "0.0.9" }
-soroban-native-sdk-macros = { version = "0.0.9" }
-stellar-xdr = { version = "0.0.7", default-features = false }
-wasmi = { package = "soroban-wasmi", version = "0.16.0-soroban1" }
-
-[patch.crates-io]
-soroban-env-common = { path = "soroban-env-common" }
-soroban-env-host = { path = "soroban-env-host" }
-soroban-env-macros = { path = "soroban-env-macros" }
-soroban-native-sdk-macros = { path = "soroban-native-sdk-macros" }
-stellar-xdr = { git = "https://github.com/stellar/rs-stellar-xdr", rev = "e88f9fa7" }
-wasmi = { package = "soroban-wasmi", git = "https://github.com/stellar/wasmi", rev = "d1ec0036" }
+soroban-env-common = { version = "0.0.9", path = "soroban-env-common" }
+soroban-env-guest = { version = "0.0.9", path = "soroban-env-guest" }
+soroban-env-host = { version = "0.0.9", path = "soroban-env-host" }
+soroban-env-macros = { version = "0.0.9", path = "soroban-env-macros" }
+soroban-native-sdk-macros = { version = "0.0.9", path = "soroban-native-sdk-macros" }
+stellar-xdr = { version = "0.0.7", git = "https://github.com/stellar/rs-stellar-xdr", rev = "e88f9fa7", default-features = false }
+wasmi = { package = "soroban-wasmi", version = "0.16.0-soroban1", git = "https://github.com/stellar/wasmi", rev = "d1ec0036" }
 
 [profile.release]
 codegen-units = 1
