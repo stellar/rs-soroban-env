@@ -36,6 +36,11 @@ version = "0.16.0-soroban1"
 git = "https://github.com/stellar/wasmi"
 rev = "d1ec0036"
 
+# [patch."https://github.com/stellar/wasmi"]
+# wasmi = { path = "../wasmi/" }
+# [patch."https://github.com/stellar/rs-stellar-xdr"]
+# stellar-xdr = { path = "../rs-stellar-xdr/" }
+
 [profile.release]
 codegen-units = 1
 lto = true
