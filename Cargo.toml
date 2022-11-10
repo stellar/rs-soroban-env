@@ -27,14 +27,12 @@ soroban-native-sdk-macros = { version = "0.0.9", path = "soroban-native-sdk-macr
 [workspace.dependencies.stellar-xdr]
 version = "0.0.7"
 git = "https://github.com/stellar/rs-stellar-xdr"
-rev = "e88f9fa7"
 default-features = false
 
 [workspace.dependencies.wasmi]
 package = "soroban-wasmi"
 version = "0.16.0-soroban1"
 git = "https://github.com/stellar/wasmi"
-rev = "d1ec0036"
 
 [profile.release]
 codegen-units = 1
