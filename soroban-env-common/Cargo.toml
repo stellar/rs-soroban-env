@@ -5,13 +5,13 @@ homepage = "https://github.com/stellar/rs-soroban-env"
 repository = "https://github.com/stellar/rs-soroban-env"
 authors = ["Stellar Development Foundation <info@stellar.org>"]
 license = "Apache-2.0"
-version = "0.0.9"
+version.workspace = true
 readme = "../README.md"
 edition = "2021"
 rust-version = "1.65"
 
 [dependencies]
-soroban-env-macros = { version = "0.0.9" }
+soroban-env-macros = { workspace = true }
 stellar-xdr = { workspace = true, default-features = false, features = [ "next" ] }
 wasmi = { workspace = true, optional = true }
 static_assertions = "1.1.0"

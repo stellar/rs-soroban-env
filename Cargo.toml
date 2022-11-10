@@ -14,6 +14,9 @@ members = [
 
 exclude = ["soroban-test-wasms/wasm-workspace"]
 
+[workspace.package]
+version = "0.0.9"
+
 [workspace.dependencies]
 soroban-env-common = { version = "0.0.9", path = "soroban-env-common" }
 soroban-env-guest = { version = "0.0.9", path = "soroban-env-guest" }

@@ -1,6 +1,6 @@
 [package]
 name = "test_no_std"
-version = "0.0.9"
+version.workspace = true
 edition = "2021"
 publish = false
 rust-version = "1.65"
