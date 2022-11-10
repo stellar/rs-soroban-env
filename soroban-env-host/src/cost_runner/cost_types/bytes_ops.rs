@@ -24,7 +24,7 @@ impl CostRunner for BytesDelRun {
     }
 
     fn get_total_input(_host: &crate::Host, sample: &Self::SampleType) -> u64 {
-        sample.0.len() as u64
+        (sample.0.len() as u64) * Self::RUN_ITERATIONS
     }
 }
 
@@ -38,7 +38,7 @@ impl CostRunner for BytesPushRun {
     }
 
     fn get_total_input(_host: &crate::Host, sample: &Self::SampleType) -> u64 {
-        sample.len() as u64
+        (sample.len() as u64) * Self::RUN_ITERATIONS
     }
 }
 
@@ -52,7 +52,7 @@ impl CostRunner for BytesPopRun {
     }
 
     fn get_total_input(_host: &crate::Host, sample: &Self::SampleType) -> u64 {
-        sample.len() as u64
+        (sample.len() as u64) * Self::RUN_ITERATIONS
     }
 }
 
@@ -66,7 +66,7 @@ impl CostRunner for BytesInsertRun {
     }
 
     fn get_total_input(_host: &crate::Host, sample: &Self::SampleType) -> u64 {
-        sample.0.len() as u64
+        (sample.0.len() as u64) * Self::RUN_ITERATIONS
     }
 }
 
@@ -80,7 +80,7 @@ impl CostRunner for BytesAppendRun {
     }
 
     fn get_total_input(_host: &crate::Host, sample: &Self::SampleType) -> u64 {
-        (sample.0.len() + sample.1.len()) as u64
+        ((sample.0.len() + sample.1.len()) as u64) * Self::RUN_ITERATIONS
     }
 }
 

@@ -10,7 +10,7 @@ impl HostCostMeasurement for BytesCloneMeasure {
         rng: &mut StdRng,
         input: u64,
     ) -> <Self::Runner as CostRunner>::SampleType {
-        let input = 1 + input * 10000;
+        let input = 1 + input * 100;
         let mut res: Vec<u8> = vec![0; input as usize];
         rng.fill_bytes(res.as_mut_slice());
         res
