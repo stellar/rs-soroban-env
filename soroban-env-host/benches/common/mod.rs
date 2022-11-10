@@ -101,29 +101,31 @@ pub(crate) fn for_each_host_cost_measurement<B: Benchmark>() -> std::io::Result<
                 eprintln!("warning: missing cost measurement for {:?}", cost);
             }
         }
-        // warning: missing cost measurement for WasmMemAlloc
-        // warning: missing cost measurement for HostFunction
-        // warning: missing cost measurement for PushFrame
-        // warning: missing cost measurement for PopFrame
-        // warning: missing cost measurement for CloneEvents
+        // To deprecate:
+        // warning: missing cost measurement for ScVecFromHostVec
+        // warning: missing cost measurement for ScMapFromHostMap
+        // warning: missing cost measurement for BytesSlice
+        // warning: missing cost measurement for BytesConcat
         // warning: missing cost measurement for HostVecAllocCell
         // warning: missing cost measurement for HostMapAllocCell
         // warning: missing cost measurement for HostU64AllocCell
         // warning: missing cost measurement for HostI64AllocCell
         // warning: missing cost measurement for HostBytesAllocCell
         // warning: missing cost measurement for HostBigIntAllocCell
-        // warning: missing cost measurement for ScVecFromHostVec
-        // warning: missing cost measurement for ScMapFromHostMap
+        // warning: missing cost measurement for HostContractCodeAllocCell
+        // warning: missing cost measurement for HostAccountIdAllocCell
+        // warning: missing cost measurement for PushFrame
+        // warning: missing cost measurement for PopFrame
+        // TODO:
+        // warning: missing cost measurement for WasmMemAlloc
+        // warning: missing cost measurement for HostFunction
+        // warning: missing cost measurement for CloneEvents
         // warning: missing cost measurement for CloneVm
         // warning: missing cost measurement for BigIntNew
         // warning: missing cost measurement for VmMemCpy
         // warning: missing cost measurement for VmInvokeFunction
-        // warning: missing cost measurement for BytesSlice
-        // warning: missing cost measurement for BytesConcat
         // warning: missing cost measurement for CallArgsUnpack
         // warning: missing cost measurement for ChargeBudget
-        // warning: missing cost measurement for HostContractCodeAllocCell
-        // warning: missing cost measurement for HostAccountIdAllocCell
     }
     Ok(())
 }

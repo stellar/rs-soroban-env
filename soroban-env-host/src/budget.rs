@@ -135,9 +135,9 @@ pub enum CostType {
     BytesInsert = 55,
     // Cost of appending a byte to the end of a bytes array
     BytesAppend = 56,
-    // TODO: to be removed. Same as CloneBytes.
+    // TODO: to be removed. Can be covered by BytesClone.
     BytesSlice = 57,
-    // TODO: to be removed. Same as CloneBytes.
+    // TODO: to be removed. Can be covered by BytesAppend.
     BytesConcat = 58,
     // Cost of unpacking args from a HostVec into a Vec<RawVal>
     CallArgsUnpack = 59,
