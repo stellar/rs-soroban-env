@@ -956,6 +956,7 @@ dependencies = [
 [[package]]
 name = "soroban-sdk"
 version = "0.2.1"
+source = "git+https://github.com/stellar/rs-soroban-sdk?rev=63bef69c#63bef69c72f897b1d28beeaf6923afb5293f26f1"
 dependencies = [
  "bytes-lit",
  "ed25519-dalek",
@@ -969,6 +970,7 @@ dependencies = [
 [[package]]
 name = "soroban-sdk-macros"
 version = "0.2.1"
+source = "git+https://github.com/stellar/rs-soroban-sdk?rev=63bef69c#63bef69c72f897b1d28beeaf6923afb5293f26f1"
 dependencies = [
  "darling",
  "itertools",
@@ -984,6 +986,7 @@ dependencies = [
 [[package]]
 name = "soroban-spec"
 version = "0.2.1"
+source = "git+https://github.com/stellar/rs-soroban-sdk?rev=63bef69c#63bef69c72f897b1d28beeaf6923afb5293f26f1"
 dependencies = [
  "base64",
  "darling",
