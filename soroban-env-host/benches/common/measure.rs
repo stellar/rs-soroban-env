@@ -30,15 +30,21 @@ impl AllocationTracker for MemTracker {
         self.0.fetch_add(wrapped_input as u64, Ordering::SeqCst);
     }
 
+    // We do not count memory deallocation because we are trying to estimate the worst-case
+    // memory cost under a variety of possible memory allocation models. This mimics the arena
+    // model, where memory deallocations do not happen until the very end. This is not perfect
+    // as any transient objects are counted as actual memory cost, but it is the worst-case
+    // estimate.
     fn deallocated(
         &self,
         _addr: usize,
         _object_input: usize,
-        wrapped_input: usize,
+        _wrapped_input: usize,
         _source_group_id: tracking_allocator::AllocationGroupId,
         _current_group_id: tracking_allocator::AllocationGroupId,
     ) {
-        self.0.fetch_sub(wrapped_input as u64, Ordering::SeqCst);
+        // No-Op, see comment above.
+        ()
     }
 }
 
@@ -276,7 +282,7 @@ mod cpu {
 }
 
 fn measure_costs_inner<HCM: HostCostMeasurement, F>(
-    mut next_hcm: F,
+    mut next_sample: F,
 ) -> Result<Measurements, std::io::Error>
 where
     F: FnMut(&Host) -> Option<<HCM::Runner as CostRunner>::SampleType>,
@@ -297,20 +303,16 @@ where
         // prepare the measurement
         let host = Host::default();
         host.with_budget(|budget| budget.reset_unlimited());
-        // memory tracking needs to start here (instead of right before `run`) because the sample
-        // data container allocation needs to be counted. Otherwise, the allocation/deallocation
-        // count will be asymmetric, which will lead to mem tracker count underflow.
-        mem_tracker.0.store(0, Ordering::SeqCst);
-        let alloc_guard = alloc_group_token.enter();
-        let m = match next_hcm(&host) {
-            Some(m) => m,
+        let sample = match next_sample(&host) {
+            Some(s) => s,
             None => break,
         };
-
         let iterations = <HCM::Runner as CostRunner>::RUN_ITERATIONS;
-        let mvec = (0..iterations).map(|_| m.clone()).collect();
-        // start the insrn count measurement
+        let mvec = (0..iterations).map(|_| sample.clone()).collect();
+        // start the cpu and mem measurement
         let start = Instant::now();
+        mem_tracker.0.store(0, Ordering::SeqCst);
+        let alloc_guard = alloc_group_token.enter();
         host.with_budget(|budget| budget.reset_inputs());
         cpu_insn_counter.begin();
         HCM::run(&host, mvec);
@@ -318,7 +320,7 @@ where
         let cpu_insns = cpu_insn_counter.end_and_count() / iterations;
         drop(alloc_guard);
         let stop = Instant::now();
-        let input = HCM::get_total_input(&host, &m) / iterations;
+        let input = HCM::get_total_input(&host, &sample) / iterations;
         let mem_bytes = mem_tracker.0.load(Ordering::SeqCst) / iterations;
         let time_nsecs = stop.duration_since(start).as_nanos() as u64 / iterations;
         ret.push(Measurement {
