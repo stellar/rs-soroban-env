@@ -28,87 +28,6 @@ members = [
     "complex",
     "fannkuch"
 ]
-
-[patch.crates-io]
-soroban-env-common = { path = "../../soroban-env-common" }
-soroban-env-guest = { path = "../../soroban-env-guest" }
-soroban-env-host = { path = "../../soroban-env-host" }
-soroban-env-macros = { path = "../../soroban-env-macros" }
-soroban-native-sdk-macros = { path = "../../soroban-native-sdk-macros" }
-
-# You should update this rev to the XDR rev used by the outer workspace
-# anytime you're going to recompile this workspace.
-stellar-xdr = { git = "https://github.com/stellar/rs-stellar-xdr", rev = "e88f9fa7" }
-
-# You should actually be able to set this to be any existing version of wasmi because we are
-# not building the SDK in host mode, so the "vm" feature is off.
-wasmi = { package = "soroban-wasmi", git = "https://github.com/stellar/wasmi", rev = "a61b6df" }
-
-# The following SDK patch lines must denote an SDK version that is _compatible_
-# with the current version of soroban-env-guest and soroban-env-common, as found
-# in this repo, denoted above. "Compatible" here means "still compiles"; you
-# will know if it's not compatible if it doesn't compile.
-#
-# Why would it not compile? Picture what we are doing when we make a change to
-# this repo: we are starting with the this repo, the env repo, at version E, and
-# the SDK repo at version S, and we're building a bunch of tests in the env
-# repo. So we have a dependency picture like this:
-#
-#   [test@E] --> [SDK@S] --> [env-guest@E] --> [env-common@E]
-#
-# We want to make a change to the env repo _without_ changing the SDK repo
-# (because that would be a painful cross-repo change to make) so we want to wind
-# up with this:
-#
-#   [test@E+1] --> [SDK@S] --> [env-guest@E+1] --> [env-common@E+1]
-#
-# Note how we're changing E to E+1 but _not_ changing SDK from S. We're
-# overriding its dependency on env-guest to E+1, using cargo's "patch"
-# mechanism, pointing the SDK back at this repo while not updating the SDK.
-#
-# If you are lucky, this change will still compile: specifically if the SDK
-# version S only refers to pieces of env-guest or env-common that you did not
-# change. You can then land your E+1 version immediately, and let the SDK update
-# its reference to env-guest from E to E+1 when it feels like it.
-#
-# The SDK typically refers to things in the env-guest crate by name, and the
-# env-guest and env-common crates don't actually have a lot of content in them
-# in the first place, and the names of things don't change that often, so you
-# will usually be lucky. Additive changes to the env-guest should recompile fine
-# without updating the SDK.
-#
-# If you are unlucky and your changes to env-common and/or env-guest require
-# changes to the SDK as well, not just a recompile, then you need to redirect
-# the following patch lines to point to a local checkout of the SDK that you've
-# modified to be compatible with the env-common and/or env-guest changes you're
-# making, then rebuild, embed the rebuilt wasms in your PR against the env repo,
-# merge it, and then open a PR against the SDK repo with the SDK changes.
-#
-# In other words, if you are unlucky, you will have to make the change:
-#
-#   [test@E+1] --> [SDK@S+1] --> [env-guest@E+1] --> [env-common@E+1]
-#
-# Which you'll make in 2 awkward mutually-referring PRs against 2 repos.
-#
-# If the interface version number changes (as it should anytime you change the
-# Env trait itself) that new version number will not, itself, cause compilation
-# to fail: the new interface version number will be compiled into the
-# newly-compiled WASM. But you typically only change interface version number
-# when you change the Env trait itself, and whatever change you make to Env may
-# well cause recompilation to fail. Again, you will know if it doesn't compile!
-
-soroban-sdk = { git = "https://github.com/stellar/rs-soroban-sdk", rev = "63bef69c" }
-soroban-sdk-macros = { git = "https://github.com/stellar/rs-soroban-sdk", rev = "63bef69c" }
-soroban-spec = { git = "https://github.com/stellar/rs-soroban-sdk", rev = "63bef69c" }
-
-# soroban-sdk = { path = "../../../rs-soroban-sdk/soroban-sdk" }
-# soroban-sdk-macros = { path = "../../../rs-soroban-sdk/soroban-sdk-macros"}
-# soroban-spec = { path = "../../../rs-soroban-sdk/soroban-spec" }
-
-# soroban-auth is currently not-used by these examples, but is in the SDK repo
-# and must be patched in lock-step with the others if it's ever used here.
-# soroban-auth = { git = "https://github.com/stellar/rs-soroban-sdk", rev = "1d1c866d" }
-
 [profile.release]
 opt-level = "z"
 overflow-checks = true
@@ -119,6 +38,20 @@ panic = "abort"
 codegen-units = 1
 lto = true
 
-[workspace.dependencies]
-soroban-sdk = "0.2.1"
+# Always build from the local instance of env as we need to rebuild test WASMs
+# only due to the env changes.
+[patch."https://github.com/stellar/rs-soroban-env"]
+soroban-env-common = { path = "../../soroban-env-common" }
+soroban-env-guest = { path = "../../soroban-env-guest" }
+soroban-env-host = { path = "../../soroban-env-host" }
+
+[workspace.dependencies.soroban-sdk]
+version = "0.2.1"
+git = "https://github.com/stellar/rs-soroban-sdk"
+rev = "63bef69c"
+
+# Uncomment the following to build against local SDK. This is useful when env
+# changes are breaking for SDK and require the respective SDK change
+# [patch."https://github.com/stellar/rs-soroban-sdk"]
+# soroban-sdk = { path = "../../../rs-soroban-sdk/soroban-sdk" }
 
