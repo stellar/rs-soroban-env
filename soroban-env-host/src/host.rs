@@ -794,9 +794,8 @@ impl Host {
         contract_code: ScContractCode,
         id_preimage: HashIdPreimage,
     ) -> Result<Object, HostError> {
-        let id_obj = self
-            .add_host_object(self.metered_hash_xdr(&id_preimage)?.to_vec())?
-            .to_object();
+        let id_arr: [u8; 32] = self.metered_hash_xdr(&id_preimage)?;
+        let id_obj = self.add_host_object(id_arr.to_vec())?.to_object();
         self.create_contract_with_id(id_obj, contract_code.metered_clone(self.budget_ref())?)?;
         self.maybe_initialize_asset_token(id_obj, id_preimage)?;
         Ok(id_obj)
@@ -804,9 +803,8 @@ impl Host {
 
     pub fn get_contract_id_from_asset(&self, asset: Asset) -> Result<Object, HostError> {
         let id_preimage = self.id_preimage_from_asset(asset)?;
-        Ok(self
-            .add_host_object(self.metered_hash_xdr(&id_preimage)?.to_vec())?
-            .to_object())
+        let id_arr: [u8; 32] = self.metered_hash_xdr(&id_preimage)?;
+        Ok(self.add_host_object(id_arr.to_vec())?.to_object())
     }
 
     // Notes on metering: this is covered by the called components.
