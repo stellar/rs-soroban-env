@@ -304,12 +304,12 @@ macro_rules! call_macro_with_all_host_functions {
                 {"0", fn has_contract_data(k:RawVal) -> RawVal}
                 {"1", fn get_contract_data(k:RawVal) -> RawVal}
                 {"2", fn del_contract_data(k:RawVal) -> RawVal}
-                // Deploys a contract from the current contract. `wasm_hash` must
-                // be a hash of the contract code that has already been installed
-                // on this network. `salt` is used to create a unique contract id.
+                /// Deploys a contract from the current contract. `wasm_hash` must
+                /// be a hash of the contract code that has already been installed
+                /// on this network. `salt` is used to create a unique contract id.
                 {"3", fn create_contract_from_contract(wasm_hash: Object, salt: Object) -> Object}
-                // Deploys a built-in token contract from the current contract.
-                // `salt` is used to create a unique contract id for the token.
+                /// Deploys a built-in token contract from the current contract.
+                /// `salt` is used to create a unique contract id for the token.
                 {"4", fn create_token_from_contract(salt: Object) -> Object}
             }
 
