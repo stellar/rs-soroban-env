@@ -1036,7 +1036,7 @@ impl Host {
             ContractId::Asset(asset) => self.id_preimage_from_asset(asset)?,
             ContractId::SourceAccount(salt) => self.id_preimage_from_source_account(salt)?,
             ContractId::Ed25519PublicKey(key_with_signature) => {
-                let signature_payload_preimage = self.create_contract_hash_preimage(
+                let signature_payload_preimage = self.create_contract_args_hash_preimage(
                     args.source.metered_clone(&self.budget_ref())?,
                     key_with_signature.salt.metered_clone(self.budget_ref())?,
                 )?;

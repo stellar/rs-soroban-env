@@ -143,7 +143,7 @@ impl Host {
     }
 
     // metering: covered by components
-    pub fn create_contract_hash_preimage(
+    pub fn create_contract_args_hash_preimage(
         &self,
         source: ScContractCode,
         salt: Uint256,
