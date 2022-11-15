@@ -70,12 +70,10 @@ impl Host {
             key: ScVal::Static(ScStatic::LedgerKeyContractCode),
             val: ScVal::Object(Some(ScObject::ContractCode(contract_source))),
         });
-        let val = LedgerEntry {
-            last_modified_ledger_seq: 0,
-            data,
-            ext: LedgerEntryExt::V0,
-        };
-        self.0.storage.borrow_mut().put(&key, &val)?;
+        self.0
+            .storage
+            .borrow_mut()
+            .put(&key, &Host::ledger_entry_from_data(data))?;
         Ok(())
     }
 
@@ -238,6 +236,16 @@ impl Host {
             }
             // We didn't find the target signer, return 0 weight to indicate that.
             Ok(0u8)
+        }
+    }
+
+    pub(crate) fn ledger_entry_from_data(data: LedgerEntryData) -> LedgerEntry {
+        LedgerEntry {
+            // This is modified to the appropriate value on the core side during
+            // commiting the ledger transaction.
+            last_modified_ledger_seq: 0,
+            data,
+            ext: LedgerEntryExt::V0,
         }
     }
 }

@@ -4,8 +4,8 @@ use rand::{thread_rng, RngCore};
 use soroban_env_common::{
     xdr::{
         AccountEntry, AccountId, ContractId, CreateContractArgs, HostFunction,
-        InstallContractCodeArgs, LedgerEntry, LedgerEntryData, LedgerEntryExt, LedgerKey,
-        PublicKey, ScContractCode, ScObject, ScVal, ScVec, Uint256,
+        InstallContractCodeArgs, LedgerEntry, LedgerEntryData, LedgerKey, PublicKey,
+        ScContractCode, ScObject, ScVal, ScVec, Uint256,
     },
     Object, RawVal, TryIntoVal,
 };
@@ -104,12 +104,10 @@ impl Host {
             signers: Default::default(),
             ext: xdr::AccountEntryExt::V0,
         };
-        let le = LedgerEntry {
-            last_modified_ledger_seq: 0,
-            data: LedgerEntryData::Account(account_entry),
-            ext: LedgerEntryExt::V0,
-        };
-        (lk, le)
+        (
+            lk,
+            Host::ledger_entry_from_data(LedgerEntryData::Account(account_entry)),
+        )
     }
 
     pub(crate) fn test_scvec<T: AsScVal>(&self, vals: &[T]) -> Result<ScVec, HostError> {

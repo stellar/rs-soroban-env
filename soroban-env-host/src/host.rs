@@ -13,10 +13,10 @@ use soroban_env_common::{
         AccountId, Asset, ContractCodeEntry, ContractDataEntry, ContractEvent, ContractEventBody,
         ContractEventType, ContractEventV0, ContractId, CreateContractArgs, ExtensionPoint, Hash,
         HashIdPreimage, HostFunction, HostFunctionType, InstallContractCodeArgs, LedgerEntry,
-        LedgerEntryData, LedgerEntryExt, LedgerKey, LedgerKeyContractCode, ScBigInt,
-        ScContractCode, ScHostContextErrorCode, ScHostFnErrorCode, ScHostObjErrorCode,
-        ScHostStorageErrorCode, ScHostValErrorCode, ScMap, ScMapEntry, ScObject, ScStatusType,
-        ScVal, ScVec, ThresholdIndexes,
+        LedgerEntryData, LedgerKey, LedgerKeyContractCode, ScBigInt, ScContractCode,
+        ScHostContextErrorCode, ScHostFnErrorCode, ScHostObjErrorCode, ScHostStorageErrorCode,
+        ScHostValErrorCode, ScMap, ScMapEntry, ScObject, ScStatusType, ScVal, ScVec,
+        ThresholdIndexes,
     },
     EnvVal, InvokerType, Status, TryConvert, TryFromVal, TryIntoVal, VmCaller, VmCallerCheckedEnv,
 };
@@ -1068,14 +1068,7 @@ impl Host {
                     code: args.code,
                     ext: ExtensionPoint::V0,
                 });
-                storage.put(
-                    &code_key,
-                    &LedgerEntry {
-                        last_modified_ledger_seq: 0,
-                        data,
-                        ext: LedgerEntryExt::V0,
-                    },
-                )
+                storage.put(&code_key, &Host::ledger_entry_from_data(data))
             })?;
         }
         Ok(hash_obj)
@@ -1809,12 +1802,10 @@ impl VmCallerCheckedEnv for Host {
             key: self.from_host_val(k)?,
             val: self.from_host_val(v)?,
         });
-        let val = LedgerEntry {
-            last_modified_ledger_seq: 0,
-            data,
-            ext: LedgerEntryExt::V0,
-        };
-        self.0.storage.borrow_mut().put(&key, &val)?;
+        self.0
+            .storage
+            .borrow_mut()
+            .put(&key, &Host::ledger_entry_from_data(data))?;
         Ok(().into())
     }
 
