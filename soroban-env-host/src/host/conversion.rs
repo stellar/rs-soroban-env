@@ -116,12 +116,44 @@ impl Host {
         self.fixed_length_bytes_from_obj_input::<Uint256, 32>(name, u256)
     }
 
+    pub(crate) fn signature_from_bytes(
+        &self,
+        name: &'static str,
+        bytes: &[u8],
+    ) -> Result<Signature, HostError> {
+        self.fixed_length_bytes_from_slice::<Signature, SIGNATURE_LENGTH>(name, bytes)
+    }
+
     pub(crate) fn signature_from_obj_input(
         &self,
         name: &'static str,
         sig: Object,
     ) -> Result<Signature, HostError> {
         self.fixed_length_bytes_from_obj_input::<Signature, SIGNATURE_LENGTH>(name, sig)
+    }
+
+    fn fixed_length_bytes_from_slice<T, const N: usize>(
+        &self,
+        name: &'static str,
+        bytes_arr: &[u8],
+    ) -> Result<T, HostError>
+    where
+        T: From<[u8; N]>,
+    {
+        match <[u8; N]>::try_from(bytes_arr) {
+            Ok(arr) => {
+                self.charge_budget(CostType::BytesClone, N as u64)?;
+                Ok(arr.into())
+            }
+            Err(cvt) => Err(self.err(
+                // TODO: This is a wrong error code to use here, we should replace
+                // it with a more generic one.
+                DebugError::new(ScHostObjErrorCode::ContractHashWrongLength) // TODO: this should be renamed to be more generic
+                    .msg("{} has wrong length for input '{}'")
+                    .arg(std::any::type_name::<T>())
+                    .arg(name),
+            )),
+        }
     }
 
     fn fixed_length_bytes_from_obj_input<T, const N: usize>(
@@ -133,29 +165,19 @@ impl Host {
         T: From<[u8; N]>,
     {
         self.visit_obj(obj, |bytes: &Vec<u8>| {
-            match <[u8; N]>::try_from(bytes.as_slice()) {
-                Ok(arr) => {
-                    self.charge_budget(CostType::BytesClone, N as u64)?;
-                    Ok(arr.into())
-                }
-                Err(cvt) => Err(self.err(
-                    DebugError::new(ScHostObjErrorCode::ContractHashWrongLength) // TODO: this should be renamed to be more generic
-                        .msg("{} {} has wrong length for input {}")
-                        .arg(std::any::type_name::<T>())
-                        .arg(obj.to_raw())
-                        .arg(name),
-                )),
-            }
+            self.fixed_length_bytes_from_slice(name, bytes)
+        })
+    }
+
+    pub(crate) fn ed25519_pub_key_from_bytes(&self, bytes: &[u8]) -> Result<PublicKey, HostError> {
+        self.charge_budget(CostType::ComputeEd25519PubKey, bytes.len() as u64)?;
+        PublicKey::from_bytes(bytes).map_err(|_| {
+            self.err_status_msg(ScHostObjErrorCode::UnexpectedType, "invalid public key")
         })
     }
 
     pub fn ed25519_pub_key_from_obj_input(&self, k: Object) -> Result<PublicKey, HostError> {
-        self.visit_obj(k, |bytes: &Vec<u8>| {
-            self.charge_budget(CostType::ComputeEd25519PubKey, bytes.len() as u64)?;
-            PublicKey::from_bytes(bytes).map_err(|_| {
-                self.err_status_msg(ScHostObjErrorCode::UnexpectedType, "invalid public key")
-            })
-        })
+        self.visit_obj(k, |bytes: &Vec<u8>| self.ed25519_pub_key_from_bytes(bytes))
     }
 
     pub fn sha256_hash_from_bytes_input(&self, x: Object) -> Result<Vec<u8>, HostError> {

@@ -1041,14 +1041,13 @@ impl Host {
                     key_with_signature.salt.metered_clone(self.budget_ref())?,
                 )?;
                 let signature_payload = self.metered_hash_xdr(&signature_payload_preimage)?;
-                self.verify_sig_ed25519(
-                    &mut VmCaller::none(),
-                    self.add_host_object(signature_payload.to_vec())?
-                        .to_object(),
-                    self.add_host_object(key_with_signature.key.0.to_vec())?
-                        .to_object(),
-                    self.add_host_object(key_with_signature.signature.0.to_vec())?
-                        .to_object(),
+                self.verify_sig_ed25519_internal(
+                    &signature_payload,
+                    &self.ed25519_pub_key_from_bytes(&key_with_signature.key.0)?,
+                    &self.signature_from_bytes(
+                        "create_contract_sig",
+                        &key_with_signature.signature.0,
+                    )?,
                 )?;
                 self.id_preimage_from_ed25519(key_with_signature.key, key_with_signature.salt)?
             }
@@ -1080,6 +1079,19 @@ impl Host {
             })?;
         }
         Ok(hash_obj)
+    }
+
+    pub(crate) fn verify_sig_ed25519_internal(
+        &self,
+        payload: &[u8],
+        public_key: &ed25519_dalek::PublicKey,
+        sig: &ed25519_dalek::Signature,
+    ) -> Result<(), HostError> {
+        use ed25519_dalek::Verifier;
+        self.charge_budget(CostType::VerifyEd25519Sig, payload.len() as u64)?;
+        public_key
+            .verify(payload, &sig)
+            .map_err(|_| self.err_general("Failed ED25519 verification"))
     }
 }
 
@@ -2559,14 +2571,10 @@ impl VmCallerCheckedEnv for Host {
         k: Object,
         s: Object,
     ) -> Result<RawVal, HostError> {
-        use ed25519_dalek::Verifier;
         let public_key = self.ed25519_pub_key_from_obj_input(k)?;
         let sig = self.signature_from_obj_input("sig", s)?;
-        let res = self.visit_obj(x, |bytes: &Vec<u8>| {
-            self.charge_budget(CostType::VerifyEd25519Sig, bytes.len() as u64)?;
-            public_key
-                .verify(bytes, &sig)
-                .map_err(|_| self.err_general("Failed ED25519 verification"))
+        let res = self.visit_obj(x, |payload: &Vec<u8>| {
+            self.verify_sig_ed25519_internal(payload, &public_key, &sig)
         });
         Ok(res?.into())
     }
