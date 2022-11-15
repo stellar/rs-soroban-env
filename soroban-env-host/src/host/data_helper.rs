@@ -16,7 +16,7 @@ use super::metered_clone::MeteredClone;
 
 impl Host {
     // Notes on metering: free
-    pub fn contract_code_handle_ledger_key(&self, contract_id: Hash) -> LedgerKey {
+    pub fn contract_source_ledger_key(&self, contract_id: Hash) -> LedgerKey {
         LedgerKey::ContractData(LedgerKeyContractData {
             contract_id,
             key: ScVal::Static(ScStatic::LedgerKeyContractCode),
@@ -24,7 +24,7 @@ impl Host {
     }
 
     // Notes on metering: retrieving from storage covered. Rest are free.
-    pub(crate) fn retrieve_contract_code_handle_from_storage(
+    pub(crate) fn retrieve_contract_source_from_storage(
         &self,
         key: &LedgerKey,
     ) -> Result<ScContractCode, HostError> {
@@ -59,16 +59,16 @@ impl Host {
     }
 
     // Notes on metering: `from_host_obj` and `put` to storage covered, rest are free.
-    pub(crate) fn store_contract_code(
+    pub(crate) fn store_contract_source(
         &self,
-        contract_code: ScContractCode,
+        contract_source: ScContractCode,
         contract_id: Hash,
         key: &LedgerKey,
     ) -> Result<(), HostError> {
         let data = LedgerEntryData::ContractData(ContractDataEntry {
             contract_id,
             key: ScVal::Static(ScStatic::LedgerKeyContractCode),
-            val: ScVal::Object(Some(ScObject::ContractCode(contract_code))),
+            val: ScVal::Object(Some(ScObject::ContractCode(contract_source))),
         });
         let val = LedgerEntry {
             last_modified_ledger_seq: 0,

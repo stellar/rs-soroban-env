@@ -747,25 +747,25 @@ impl Host {
     fn create_contract_with_id(
         &self,
         contract_id: Object,
-        contract_code: ScContractCode,
+        contract_source: ScContractCode,
     ) -> Result<(), HostError> {
         let new_contract_id = self.hash_from_obj_input("id_obj", contract_id)?;
         let storage_key =
-            self.contract_code_handle_ledger_key(new_contract_id.metered_clone(&self.0.budget)?);
+            self.contract_source_ledger_key(new_contract_id.metered_clone(&self.0.budget)?);
         if self.0.storage.borrow_mut().has(&storage_key)? {
             return Err(self.err_general("Contract already exists"));
         }
         // Make sure the contract code exists. With immutable contracts and
         // without this check it would be possible to accidentally create a
         // contract that never may be invoked (just by providing a bad hash).
-        if let ScContractCode::WasmRef(wasm_hash) = &contract_code {
+        if let ScContractCode::WasmRef(wasm_hash) = &contract_source {
             let wasm_storage_key =
                 self.contract_code_ledger_key(wasm_hash.metered_clone(&self.0.budget)?);
             if !self.0.storage.borrow_mut().has(&wasm_storage_key)? {
                 return Err(self.err_general("Contract code was not installed"));
             }
         }
-        self.store_contract_code(contract_code, new_contract_id, &storage_key)?;
+        self.store_contract_source(contract_source, new_contract_id, &storage_key)?;
         Ok(())
     }
 
@@ -791,12 +791,12 @@ impl Host {
 
     fn create_contract_with_id_preimage(
         &self,
-        contract_code: ScContractCode,
+        contract_source: ScContractCode,
         id_preimage: HashIdPreimage,
     ) -> Result<Object, HostError> {
         let id_arr: [u8; 32] = self.metered_hash_xdr(&id_preimage)?;
         let id_obj = self.add_host_object(id_arr.to_vec())?.to_object();
-        self.create_contract_with_id(id_obj, contract_code.metered_clone(self.budget_ref())?)?;
+        self.create_contract_with_id(id_obj, contract_source.metered_clone(self.budget_ref())?)?;
         self.maybe_initialize_asset_token(id_obj, id_preimage)?;
         Ok(id_obj)
     }
@@ -815,8 +815,8 @@ impl Host {
         args: &[RawVal],
     ) -> Result<RawVal, HostError> {
         // Create key for storage
-        let storage_key = self.contract_code_handle_ledger_key(id.metered_clone(&self.0.budget)?);
-        match self.retrieve_contract_code_handle_from_storage(&storage_key)? {
+        let storage_key = self.contract_source_ledger_key(id.metered_clone(&self.0.budget)?);
+        match self.retrieve_contract_source_from_storage(&storage_key)? {
             #[cfg(feature = "vm")]
             ScContractCode::WasmRef(wasm_hash) => {
                 let code_entry = self.retrieve_contract_code_from_storage(wasm_hash)?;

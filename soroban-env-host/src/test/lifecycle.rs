@@ -5,8 +5,7 @@ use crate::{
     xdr::{
         self, ContractId, CreateContractArgs, Hash, HashIdPreimage, HashIdPreimageContractId,
         HashIdPreimageSourceAccountContractId, HostFunction, InstallContractCodeArgs,
-        LedgerEntryData, LedgerKey, LedgerKeyContractCode, LedgerKeyContractData, ScContractCode,
-        ScObject, ScStatic, ScVal, ScVec, Uint256,
+        LedgerEntryData, ScContractCode, ScObject, ScVal, ScVec, Uint256,
     },
     CheckedEnv, Host, LedgerInfo, Symbol,
 };
@@ -18,17 +17,8 @@ use sha2::{Digest, Sha256};
 
 use super::util::{generate_account_id, generate_bytes_array};
 
-fn contract_code_ref_key(contract_id: Hash) -> LedgerKey {
-    let key = ScVal::Static(ScStatic::LedgerKeyContractCode);
-    LedgerKey::ContractData(LedgerKeyContractData { contract_id, key })
-}
-
-fn contract_code_wasm_key(wasm_hash: Hash) -> LedgerKey {
-    LedgerKey::ContractCode(LedgerKeyContractCode { hash: wasm_hash })
-}
-
 fn get_contract_wasm_ref(host: &Host, contract_id: Hash) -> Hash {
-    let storage_key = contract_code_ref_key(contract_id);
+    let storage_key = host.contract_source_ledger_key(contract_id);
     host.with_mut_storage(|s: &mut Storage| {
         assert!(s.has(&storage_key).unwrap());
 
@@ -44,7 +34,7 @@ fn get_contract_wasm_ref(host: &Host, contract_id: Hash) -> Hash {
 }
 
 fn get_contract_wasm(host: &Host, wasm_hash: Hash) -> Vec<u8> {
-    let storage_key = contract_code_wasm_key(wasm_hash);
+    let storage_key = host.contract_code_ledger_key(wasm_hash);
     host.with_mut_storage(|s: &mut Storage| {
         assert!(s.has(&storage_key).unwrap());
 
@@ -110,13 +100,13 @@ fn test_create_contract_from_source_account(host: &Host, code: &[u8]) -> Hash {
     host.with_mut_storage(|s: &mut Storage| {
         s.footprint
             .record_access(
-                &contract_code_ref_key(contract_id.clone()),
+                &host.contract_source_ledger_key(contract_id.clone()),
                 AccessType::ReadWrite,
             )
             .unwrap();
         s.footprint
             .record_access(
-                &contract_code_wasm_key(wasm_hash.clone()),
+                &host.contract_code_ledger_key(wasm_hash.clone()),
                 AccessType::ReadWrite,
             )
             .unwrap();
@@ -179,13 +169,13 @@ fn create_contract_using_parent_id_test() {
     host.with_mut_storage(|s: &mut Storage| {
         s.footprint
             .record_access(
-                &contract_code_ref_key(child_id.clone()),
+                &host.contract_source_ledger_key(child_id.clone()),
                 AccessType::ReadWrite,
             )
             .unwrap();
         s.footprint
             .record_access(
-                &contract_code_wasm_key(wasm_hash.clone()),
+                &host.contract_code_ledger_key(wasm_hash.clone()),
                 AccessType::ReadWrite,
             )
             .unwrap();
