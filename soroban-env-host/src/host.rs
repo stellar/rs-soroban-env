@@ -117,7 +117,7 @@ struct VmSlice {
     len: u32,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct LedgerInfo {
     pub protocol_version: u32,
     pub sequence_number: u32,
