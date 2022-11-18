@@ -1052,7 +1052,7 @@ fn test_transfer_with_allowance() {
 }
 
 #[test]
-fn test_freeze_and_unfreeze() {
+fn test_deauth_and_authorize() {
     let test = TokenTest::setup();
     let admin = TestSigner::Ed25519(&test.admin_key);
     let token = test.default_smart_token(&admin);
@@ -1076,18 +1076,18 @@ fn test_freeze_and_unfreeze() {
         )
         .unwrap();
 
-    assert!(!token.is_frozen(user.get_identifier(&test.host)).unwrap());
+    assert!(!token.is_deauth(user.get_identifier(&test.host)).unwrap());
 
-    // Freeze the balance of `user`.
+    // Deauthorize the balance of `user`.
     token
-        .freeze(
+        .de_auth(
             &admin,
             token.nonce(admin.get_identifier(&test.host)).unwrap(),
             user.get_identifier(&test.host),
         )
         .unwrap();
 
-    assert!(token.is_frozen(user.get_identifier(&test.host)).unwrap());
+    assert!(token.is_deauth(user.get_identifier(&test.host)).unwrap());
     // Make sure neither outgoing nor incoming balance transfers are possible.
     assert_eq!(
         to_contract_err(
@@ -1118,16 +1118,16 @@ fn test_freeze_and_unfreeze() {
         ContractError::BalanceFrozenError
     );
 
-    // Unfreeze the balance of `user`.
+    // Authorize the balance of `user`.
     token
-        .unfreeze(
+        .authorize(
             &admin,
             token.nonce(admin.get_identifier(&test.host)).unwrap(),
             user.get_identifier(&test.host),
         )
         .unwrap();
 
-    assert!(!token.is_frozen(user.get_identifier(&test.host)).unwrap());
+    assert!(!token.is_deauth(user.get_identifier(&test.host)).unwrap());
     // Make sure balance transfers are possible now.
     token
         .xfer(
@@ -1283,7 +1283,7 @@ fn test_set_admin() {
     assert_eq!(
         to_contract_err(
             token
-                .freeze(
+                .de_auth(
                     &admin,
                     token.nonce(admin.get_identifier(&test.host)).unwrap(),
                     new_admin.get_identifier(&test.host),
@@ -1296,7 +1296,7 @@ fn test_set_admin() {
     assert_eq!(
         to_contract_err(
             token
-                .unfreeze(
+                .authorize(
                     &admin,
                     token.nonce(admin.get_identifier(&test.host)).unwrap(),
                     new_admin.get_identifier(&test.host),
@@ -1325,14 +1325,14 @@ fn test_set_admin() {
         )
         .unwrap();
     token
-        .freeze(
+        .de_auth(
             &new_admin,
             token.nonce(new_admin.get_identifier(&test.host)).unwrap(),
             admin.get_identifier(&test.host),
         )
         .unwrap();
     token
-        .unfreeze(
+        .authorize(
             &new_admin,
             token.nonce(new_admin.get_identifier(&test.host)).unwrap(),
             admin.get_identifier(&test.host),

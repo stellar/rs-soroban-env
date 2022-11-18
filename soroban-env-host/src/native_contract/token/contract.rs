@@ -33,7 +33,7 @@ pub trait TokenTrait {
     /// called by the create_token_from_asset host function for this reason.
     ///
     /// No admin will be set for the Native token, so any function that checks the admin
-    /// (burn, freeze, unfreeze, mint, set_admin) will always fail
+    /// (burn, de_auth, authorize, mint, set_admin) will always fail
     fn init_asset(e: &Host, asset_bytes: Bytes) -> Result<(), HostError>;
 
     /// init creates a token contract that does not wrap an asset on the classic side.
@@ -53,7 +53,7 @@ pub trait TokenTrait {
 
     fn balance(e: &Host, id: Identifier) -> Result<BigInt, HostError>;
 
-    fn is_frozen(e: &Host, id: Identifier) -> Result<bool, HostError>;
+    fn is_deauth(e: &Host, id: Identifier) -> Result<bool, HostError>;
 
     fn xfer(
         e: &Host,
@@ -72,10 +72,15 @@ pub trait TokenTrait {
         amount: BigInt,
     ) -> Result<(), HostError>;
 
-    fn freeze(e: &Host, admin: Signature, nonce: BigInt, id: Identifier) -> Result<(), HostError>;
+    //TODO::change to deauthorize
+    fn de_auth(e: &Host, admin: Signature, nonce: BigInt, id: Identifier) -> Result<(), HostError>;
 
-    fn unfreeze(e: &Host, admin: Signature, nonce: BigInt, id: Identifier)
-        -> Result<(), HostError>;
+    fn authorize(
+        e: &Host,
+        admin: Signature,
+        nonce: BigInt,
+        id: Identifier,
+    ) -> Result<(), HostError>;
 
     fn mint(
         e: &Host,
@@ -234,8 +239,8 @@ impl TokenTrait for Token {
     }
 
     // Metering: covered by components
-    fn is_frozen(e: &Host, id: Identifier) -> Result<bool, HostError> {
-        //TODO: is_frozen vs is_authorized
+    fn is_deauth(e: &Host, id: Identifier) -> Result<bool, HostError> {
+        //TODO: is_deauth vs is_authorized
         Ok(!read_authorization(&e, id)?)
     }
 
@@ -330,16 +335,16 @@ impl TokenTrait for Token {
     }
 
     // Metering: covered by components
-    fn freeze(e: &Host, admin: Signature, nonce: BigInt, id: Identifier) -> Result<(), HostError> {
+    fn de_auth(e: &Host, admin: Signature, nonce: BigInt, id: Identifier) -> Result<(), HostError> {
         check_admin(&e, &admin)?;
         let mut args = Vec::new(e)?;
         let admin_id = admin.get_identifier(&e)?;
         args.push(admin_id.clone())?;
         args.push(nonce.clone())?;
         args.push(id.clone())?;
-        check_auth(&e, admin, nonce, Symbol::from_str("freeze"), args)?;
+        check_auth(&e, admin, nonce, Symbol::from_str("de_auth"), args)?;
         write_authorization(&e, id.clone(), false)?;
-        event::freeze(e, admin_id, id)?;
+        event::de_auth(e, admin_id, id)?;
         Ok(())
     }
 
@@ -392,7 +397,7 @@ impl TokenTrait for Token {
     }
 
     // Metering: covered by components
-    fn unfreeze(
+    fn authorize(
         e: &Host,
         admin: Signature,
         nonce: BigInt,
@@ -404,9 +409,9 @@ impl TokenTrait for Token {
         args.push(admin_id.clone())?;
         args.push(nonce.clone())?;
         args.push(id.clone())?;
-        check_auth(&e, admin, nonce, Symbol::from_str("unfreeze"), args)?;
+        check_auth(&e, admin, nonce, Symbol::from_str("authorize"), args)?;
         write_authorization(&e, id.clone(), true)?;
-        event::unfreeze(e, admin_id, id)?;
+        event::authorize(e, admin_id, id)?;
         Ok(())
     }
 

@@ -187,7 +187,7 @@ impl<'a> TestToken<'a> {
             .try_into()?)
     }
 
-    pub(crate) fn freeze(
+    pub(crate) fn de_auth(
         &self,
         admin: &TestSigner,
         nonce: BigInt,
@@ -196,7 +196,7 @@ impl<'a> TestToken<'a> {
         let signature = sign_args(
             self.host,
             admin,
-            "freeze",
+            "de_auth",
             &self.id,
             host_vec![
                 self.host,
@@ -210,13 +210,13 @@ impl<'a> TestToken<'a> {
             .host
             .call(
                 self.id.clone().into(),
-                Symbol::from_str("freeze").into(),
+                Symbol::from_str("de_auth").into(),
                 host_vec![self.host, signature, nonce, id].into(),
             )?
             .try_into()?)
     }
 
-    pub(crate) fn unfreeze(
+    pub(crate) fn authorize(
         &self,
         admin: &TestSigner,
         nonce: BigInt,
@@ -225,7 +225,7 @@ impl<'a> TestToken<'a> {
         let signature = sign_args(
             self.host,
             admin,
-            "unfreeze",
+            "authorize",
             &self.id,
             host_vec![
                 self.host,
@@ -239,18 +239,18 @@ impl<'a> TestToken<'a> {
             .host
             .call(
                 self.id.clone().into(),
-                Symbol::from_str("unfreeze").into(),
+                Symbol::from_str("authorize").into(),
                 host_vec![self.host, signature, nonce, id].into(),
             )?
             .try_into()?)
     }
 
-    pub(crate) fn is_frozen(&self, id: Identifier) -> Result<bool, HostError> {
+    pub(crate) fn is_deauth(&self, id: Identifier) -> Result<bool, HostError> {
         Ok(self
             .host
             .call(
                 self.id.clone().into(),
-                Symbol::from_str("is_frozen").into(),
+                Symbol::from_str("is_deauth").into(),
                 host_vec![self.host, id].into(),
             )?
             .try_into_val(self.host)?)
