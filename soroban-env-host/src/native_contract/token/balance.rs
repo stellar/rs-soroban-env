@@ -6,74 +6,150 @@ use crate::native_contract::token::storage_types::DataKey;
 use crate::{err, HostError};
 use core::cmp::Ordering;
 use soroban_env_common::xdr::{
-    AccountEntryExt, AccountEntryExtensionV1Ext, AccountId, LedgerEntryData, TrustLineAsset,
-    TrustLineEntryExt, TrustLineFlags,
+    AccountEntryExt, AccountEntryExtensionV1Ext, AccountFlags, AccountId, LedgerEntryData,
+    TrustLineAsset, TrustLineEntryExt, TrustLineFlags,
 };
 use soroban_env_common::{CheckedEnv, TryIntoVal};
 
 use super::error::ContractError;
+use super::storage_types::BalanceValue;
 
 // Metering: *mostly* covered by components. Not sure about `try_into_val`.
 pub fn read_balance(e: &Host, id: Identifier) -> Result<BigInt, HostError> {
     let key = DataKey::Balance(id);
     if let Ok(balance) = e.get_contract_data(key.try_into_val(e)?) {
-        Ok(balance.try_into_val(e)?)
+        let balance: BalanceValue = balance.try_into_val(e)?;
+        Ok(balance.amount)
     } else {
         Ok(BigInt::from_u64(e, 0)?)
     }
 }
 
+fn is_issuer_auth_required(e: &Host, issuer_id: AccountId) -> Result<bool, HostError> {
+    let lk = e.to_account_key(issuer_id.clone());
+    e.with_mut_storage(|storage| {
+        //TODO: Should we add a try_get method to storage?
+        if storage.has(&lk)? {
+            let le = storage.get(&lk)?;
+            let auth_required = match le.data {
+                LedgerEntryData::Account(ae) => {
+                    (ae.flags & (AccountFlags::RequiredFlag as u32)) != 0
+                }
+                _ => false, //TODO: This shouldn't happen... should we error instead?
+            };
+
+            Ok(auth_required)
+        } else {
+            //issuer is missing, so authorization is not required because anyone
+            //can re-create the issuer without issuer flags
+            Ok(false)
+        }
+    })
+}
+
+fn is_asset_auth_required(e: &Host) -> Result<bool, HostError> {
+    match read_metadata(e)? {
+        Metadata::Token(_) => Ok(false),
+        Metadata::Native => Ok(false),
+        Metadata::AlphaNum4(asset) => is_issuer_auth_required(e, asset.issuer),
+        Metadata::AlphaNum12(asset) => is_issuer_auth_required(e, asset.issuer),
+    }
+}
+
 // Metering: *mostly* covered by components. Not sure about `try_into_val`.
 fn write_balance(e: &Host, id: Identifier, amount: BigInt) -> Result<(), HostError> {
-    let key = DataKey::Balance(id);
-    e.put_contract_data(key.try_into_val(e)?, amount.try_into_val(e)?)?;
+    let raw_key = DataKey::Balance(id).try_into_val(e)?;
+
+    if let Ok(raw_balance) = e.get_contract_data(raw_key) {
+        let mut balance: BalanceValue = raw_balance.try_into_val(e)?;
+        balance.amount = amount;
+        e.put_contract_data(raw_key, balance.try_into_val(e)?)?;
+    } else {
+        // Balance does not exist, so now we need to enforce auth_required IF this is a wrapped token
+        // with an auth_required issuer.
+        if is_asset_auth_required(e)? {
+            return Err(e.err_status_msg(
+                ContractError::IssuerAuthRequiredError,
+                "Issuer is auth required",
+            ));
+        } else {
+            e.put_contract_data(
+                raw_key,
+                BalanceValue {
+                    amount,
+                    authorized: true,
+                }
+                .try_into_val(e)?,
+            )?;
+        }
+    }
     Ok(())
 }
 
 // Metering: covered by components.
 pub fn receive_balance(e: &Host, id: Identifier, amount: BigInt) -> Result<(), HostError> {
     let balance = read_balance(e, id.clone())?;
-    let is_frozen = read_state(e, id.clone())?;
-    if is_frozen {
-        Err(e.err_status_msg(ContractError::BalanceFrozenError, "balance is frozen"))
-    } else {
+    let is_authorized = read_authorization(e, id.clone())?;
+    if is_authorized {
         write_balance(e, id, (balance + amount)?)
+    } else {
+        Err(e.err_status_msg(ContractError::BalanceFrozenError, "balance is frozen"))
     }
 }
 
 // Metering: covered by components.
 pub fn spend_balance(e: &Host, id: Identifier, amount: BigInt) -> Result<(), HostError> {
     let balance = read_balance(e, id.clone())?;
-    let is_frozen = read_state(e, id.clone())?;
-    if is_frozen {
+    let is_authorized = read_authorization(e, id.clone())?;
+    if is_authorized {
+        if balance.compare(&amount)? == Ordering::Less {
+            Err(err!(
+                e,
+                ContractError::BalanceError,
+                "balance is not sufficient to spend: {} < {}",
+                balance,
+                amount
+            ))
+        } else {
+            write_balance(e, id, (balance - amount)?)
+        }
+    } else {
         Err(e.err_status_msg(ContractError::BalanceFrozenError, "balance is frozen"))
-    } else if balance.compare(&amount)? == Ordering::Less {
-        Err(err!(
-            e,
-            ContractError::BalanceError,
-            "balance is not sufficient to spend: {} < {}",
-            balance,
-            amount
-        ))
-    } else {
-        write_balance(e, id, (balance - amount)?)
     }
 }
 
 // Metering: *mostly* covered by components. Not sure about `try_into_val`.
-pub fn read_state(e: &Host, id: Identifier) -> Result<bool, HostError> {
-    let key = DataKey::State(id);
-    if let Ok(state) = e.get_contract_data(key.try_into_val(e)?) {
-        Ok(state.try_into()?)
+pub fn read_authorization(e: &Host, id: Identifier) -> Result<bool, HostError> {
+    let key = DataKey::Balance(id);
+    if let Ok(balance) = e.get_contract_data(key.try_into_val(e)?) {
+        let balance: BalanceValue = balance.try_into_val(e)?;
+        Ok(balance.authorized)
     } else {
-        Ok(false)
+        Ok(!is_asset_auth_required(e)?)
     }
 }
 
 // Metering: *mostly* covered by components. Not sure about `try_into_val`.
-pub fn write_state(e: &Host, id: Identifier, is_frozen: bool) -> Result<(), HostError> {
-    let key = DataKey::State(id);
-    e.put_contract_data(key.try_into_val(e)?, is_frozen.into())?;
+pub fn write_authorization(e: &Host, id: Identifier, authorized: bool) -> Result<(), HostError> {
+    let raw_key = DataKey::Balance(id).try_into_val(e)?;
+
+    if let Ok(raw_balance) = e.get_contract_data(raw_key) {
+        let mut balance: BalanceValue = raw_balance.try_into_val(e)?;
+        balance.authorized = authorized;
+        e.put_contract_data(raw_key, balance.try_into_val(e)?)?;
+    } else {
+        // Balance does not exist, so write a 0 amount along with the authorization flag.
+        // No need to check auth_required because this function can only be called by the admin.
+        e.put_contract_data(
+            raw_key,
+            BalanceValue {
+                amount: BigInt::from_u64(&e, 0)?,
+                authorized,
+            }
+            .try_into_val(e)?,
+        )?;
+    }
+
     Ok(())
 }
 

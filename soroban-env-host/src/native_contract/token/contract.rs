@@ -6,7 +6,7 @@ use crate::native_contract::base_types::{BigInt, Bytes, BytesN, Vec};
 use crate::native_contract::token::admin::{check_admin, write_administrator};
 use crate::native_contract::token::allowance::{read_allowance, spend_allowance, write_allowance};
 use crate::native_contract::token::balance::{
-    read_balance, read_state, receive_balance, spend_balance, transfer_classic_balance, write_state,
+    read_balance, receive_balance, spend_balance, transfer_classic_balance,
 };
 use crate::native_contract::token::cryptography::check_auth;
 use crate::native_contract::token::event;
@@ -21,6 +21,7 @@ use soroban_env_common::xdr::Asset;
 use soroban_env_common::{CheckedEnv, EnvBase, Symbol, TryFromVal, TryIntoVal};
 use soroban_native_sdk_macros::contractimpl;
 
+use super::balance::{read_authorization, write_authorization};
 use super::error::ContractError;
 use super::public_types::{AlphaNum12Metadata, AlphaNum4Metadata};
 
@@ -234,7 +235,8 @@ impl TokenTrait for Token {
 
     // Metering: covered by components
     fn is_frozen(e: &Host, id: Identifier) -> Result<bool, HostError> {
-        read_state(&e, id)
+        //TODO: is_frozen vs is_authorized
+        Ok(!read_authorization(&e, id)?)
     }
 
     // Metering: covered by components
@@ -336,7 +338,7 @@ impl TokenTrait for Token {
         args.push(nonce.clone())?;
         args.push(id.clone())?;
         check_auth(&e, admin, nonce, Symbol::from_str("freeze"), args)?;
-        write_state(&e, id.clone(), true)?;
+        write_authorization(&e, id.clone(), false)?;
         event::freeze(e, admin_id, id)?;
         Ok(())
     }
@@ -403,7 +405,7 @@ impl TokenTrait for Token {
         args.push(nonce.clone())?;
         args.push(id.clone())?;
         check_auth(&e, admin, nonce, Symbol::from_str("unfreeze"), args)?;
-        write_state(&e, id.clone(), false)?;
+        write_authorization(&e, id.clone(), true)?;
         event::unfreeze(e, admin_id, id)?;
         Ok(())
     }
