@@ -18,8 +18,7 @@ pub enum CostType {
     // The average of cpu insns is around 300.
     HostEventContract = 3,
     // Cost of a host function invocation, not including the actual work done by the function
-    // TODO: remove. This is covered by `InvokeHostFunction`.
-    HostFunction = 4,
+    InvokeHostFunction = 4,
     // Cost of visiting a host object from the host object storage
     // TODO: consider removing. This is just indexing into an array. Fixed cost around 400 insns.
     // Only thing to make sure is the guest can't visitObject repeatly without incurring some charges elsewhere.
@@ -122,8 +121,8 @@ pub enum CostType {
     VmMemRead = 48,
     // Cost of instantiation a VM from wasm bytes code.
     VmInstantiation = 49,
-    // Roundtrip cost of invoking a host function: host->Vm->host.
-    InvokeHostFunction = 50,
+    // Roundtrip cost of invoking a VM function from the host.
+    InvokeVmFunction = 50,
     // Cost of cloning bytes.
     BytesClone = 51,
     // Cost of deleting a byte from a bytes array,
@@ -169,7 +168,7 @@ impl CostType {
             CostType::WasmMemAlloc,
             CostType::HostEventDebug,
             CostType::HostEventContract,
-            CostType::HostFunction,
+            CostType::InvokeHostFunction,
             CostType::VisitObject,
             CostType::PushFrame,
             CostType::PopFrame,
@@ -216,7 +215,7 @@ impl CostType {
             CostType::VmMemRead,
             CostType::VmMemWrite,
             CostType::VmInstantiation,
-            CostType::InvokeHostFunction,
+            CostType::InvokeVmFunction,
             CostType::BytesClone,
             CostType::BytesDel,
             CostType::BytesPush,
@@ -536,9 +535,9 @@ impl Default for BudgetImpl {
                 // this and some are much less.
                 CostType::WasmInsnExec => cpu.lin_param = 32,
                 CostType::WasmMemAlloc => cpu.lin_param = 1000,
-                CostType::HostEventDebug | CostType::HostEventContract | CostType::HostFunction => {
-                    cpu.const_param = 1000
-                }
+                CostType::HostEventDebug
+                | CostType::HostEventContract
+                | CostType::InvokeHostFunction => cpu.const_param = 1000,
                 CostType::VisitObject | CostType::PushFrame | CostType::PopFrame => {
                     cpu.const_param = 100
                 }
@@ -602,7 +601,7 @@ impl Default for BudgetImpl {
                 CostType::VmMemRead => cpu.lin_param = 10,
                 CostType::VmMemWrite => cpu.lin_param = 10,
                 CostType::VmInstantiation => cpu.const_param = 100_000,
-                CostType::InvokeHostFunction => cpu.const_param = 10_000,
+                CostType::InvokeVmFunction => cpu.const_param = 10_000,
                 CostType::BytesClone
                 | CostType::BytesDel
                 | CostType::BytesPush
@@ -626,7 +625,7 @@ impl Default for BudgetImpl {
                 CostType::WasmInsnExec => (),
                 CostType::WasmMemAlloc => mem.lin_param = 1,
                 CostType::HostEventDebug | CostType::HostEventContract => mem.const_param = 100,
-                CostType::HostFunction
+                CostType::InvokeHostFunction
                 | CostType::VisitObject
                 | CostType::PushFrame
                 | CostType::PopFrame => mem.const_param = 100,
@@ -667,7 +666,7 @@ impl Default for BudgetImpl {
                 CostType::VmMemRead
                 | CostType::VmMemWrite
                 | CostType::VmInstantiation
-                | CostType::InvokeHostFunction
+                | CostType::InvokeVmFunction
                 | CostType::BytesClone
                 | CostType::BytesDel
                 | CostType::BytesPush

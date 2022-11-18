@@ -232,7 +232,7 @@ impl Vm {
         func: &str,
         args: &[RawVal],
     ) -> Result<RawVal, HostError> {
-        host.charge_budget(CostType::InvokeHostFunction, 1)?;
+        host.charge_budget(CostType::InvokeVmFunction, 1)?;
         host.with_frame(
             Frame::ContractVM(self.clone(), Symbol::from_str(func)),
             || {

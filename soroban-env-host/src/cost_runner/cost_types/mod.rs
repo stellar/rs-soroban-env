@@ -9,7 +9,7 @@ mod host_obj_alloc_slot;
 mod im_map_ops;
 mod im_vec_ops;
 #[cfg(feature = "vm")]
-mod invoke_host_function;
+mod invoke;
 mod record_contract_event;
 mod record_debug_event;
 mod scmap_to_host_map;
@@ -35,7 +35,7 @@ pub use host_obj_alloc_slot::*;
 pub use im_map_ops::*;
 pub use im_vec_ops::*;
 #[cfg(feature = "vm")]
-pub use invoke_host_function::*;
+pub use invoke::*;
 pub use record_contract_event::*;
 pub use record_debug_event::*;
 pub use scmap_to_host_map::*;

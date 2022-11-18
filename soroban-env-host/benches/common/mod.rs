@@ -98,6 +98,7 @@ pub(crate) fn for_each_host_cost_measurement<B: Benchmark>() -> std::io::Result<
     call_bench::<B, BytesInsertMeasure>(&mut costs)?;
     call_bench::<B, BytesPopMeasure>(&mut costs)?;
     call_bench::<B, BytesPushMeasure>(&mut costs)?;
+    call_bench::<B, InvokeVmFunctionMeasure>(&mut costs)?;
     call_bench::<B, InvokeHostFunctionMeasure>(&mut costs)?;
     call_bench::<B, ChargeBudgetMeasure>(&mut costs)?;
 
