@@ -26,7 +26,7 @@ pub fn read_balance(e: &Host, id: Identifier) -> Result<BigInt, HostError> {
 }
 
 fn is_issuer_auth_required(e: &Host, issuer_id: AccountId) -> Result<bool, HostError> {
-    let lk = e.to_account_key(issuer_id.clone());
+    let lk = e.to_account_key(issuer_id);
     e.with_mut_storage(|storage| {
         //TODO: Should we add a try_get method to storage?
         if storage.has(&lk)? {
@@ -35,7 +35,12 @@ fn is_issuer_auth_required(e: &Host, issuer_id: AccountId) -> Result<bool, HostE
                 LedgerEntryData::Account(ae) => {
                     (ae.flags & (AccountFlags::RequiredFlag as u32)) != 0
                 }
-                _ => false, //TODO: This shouldn't happen... should we error instead?
+                _ => {
+                    return Err(e.err_status_msg(
+                        ContractError::InternalError,
+                        "non-account entry found for account key",
+                    ))
+                }
             };
 
             Ok(auth_required)
