@@ -349,7 +349,6 @@ impl Host {
     /// operation fails, it can be used to roll the [`Host`] back to the state
     /// it had before its associated [`Frame`] was pushed.
     fn push_frame(&self, frame: Frame) -> Result<RollbackPoint, HostError> {
-        self.charge_budget(CostType::PushFrame, 1)?;
         self.0.context.borrow_mut().push(frame);
         Ok(RollbackPoint {
             objects: self.0.objects.borrow().len(),
@@ -361,7 +360,6 @@ impl Host {
     /// the current context and optionally rolls back the [`Host`]'s objects
     /// and storage map to the state in the provided [`RollbackPoint`].
     fn pop_frame(&self, orp: Option<RollbackPoint>) -> Result<(), HostError> {
-        self.charge_budget(CostType::PopFrame, 1)?;
         self.0
             .context
             .borrow_mut()
@@ -691,34 +689,6 @@ impl Host {
         ho: HostObject,
     ) -> Result<HostObject, HostError> {
         self.charge_budget(CostType::HostObjAllocSlot, prev_len as u64)?;
-        match &ho {
-            HostObject::Vec(v) => {
-                self.charge_budget(CostType::HostVecAllocCell, v.len() as u64)?;
-            }
-            HostObject::Map(m) => {
-                self.charge_budget(CostType::HostMapAllocCell, m.len() as u64)?;
-            }
-            HostObject::U64(_) => {
-                self.charge_budget(CostType::HostU64AllocCell, 1)?;
-            }
-            HostObject::I64(_) => {
-                self.charge_budget(CostType::HostI64AllocCell, 1)?;
-            }
-            HostObject::Bytes(b) => {
-                self.charge_budget(CostType::HostBytesAllocCell, b.len() as u64)?;
-            }
-            HostObject::BigInt(bi) => {
-                self.charge_budget(CostType::HostBigIntAllocCell, bi.bits() as u64)?;
-            }
-            HostObject::ContractCode(cc) => {
-                if let ScContractCode::Wasm(c) = cc {
-                    self.charge_budget(CostType::HostContractCodeAllocCell, c.len() as u64)?;
-                }
-            }
-            HostObject::AccountId(_) => {
-                self.charge_budget(CostType::HostAccountIdAllocCell, 1)?;
-            }
-        }
         Ok(ho)
     }
 
@@ -940,7 +910,6 @@ impl Host {
                         // max number of args is fairly limited.
                         let object = self.to_host_obj(scobj)?.to_object();
                         let symbol = <Symbol>::try_from(scsym)?;
-                        self.charge_budget(CostType::CallArgsUnpack, rest.len() as u64)?;
                         let args = rest
                             .iter()
                             .map(|scv| self.to_host_val(scv).map(|hv| hv.val))
@@ -1924,7 +1893,7 @@ impl VmCallerCheckedEnv for Host {
             [separator.as_bytes(), salt_val.as_ref()].concat()
         };
         // Another charge-after-work. Easier to get the num bytes this way.
-        self.charge_budget(CostType::BytesConcat, params.len() as u64)?;
+        self.charge_budget(CostType::BytesAppend, params.len() as u64)?;
         let hash = self.compute_hash_sha256(vmcaller, self.add_host_object(params)?.into())?;
 
         self.verify_sig_ed25519(vmcaller, hash, key, sig)?;
