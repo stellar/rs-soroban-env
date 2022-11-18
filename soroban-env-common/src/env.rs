@@ -481,6 +481,13 @@ macro_rules! call_macro_with_all_host_functions {
                 /// it exists. Returns (SCStatic) TRUE/FALSE.
                 {"3", fn account_exists(a:Object) -> RawVal}
             }
+
+            mod test "t" {
+                /// A dummy function taking 0 arguments and performs no-op.
+                /// This function is for test purpose only, for measuring the roundtrip cost of
+                /// invoking a host function, i.e. host->Vm->host.
+                {"_", fn dummy0() -> RawVal}
+            }
         }
     };
 }

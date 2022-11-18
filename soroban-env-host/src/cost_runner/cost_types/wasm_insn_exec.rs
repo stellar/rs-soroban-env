@@ -31,3 +31,20 @@ impl CostRunner for WasmInsnExecRun {
         sample.insns * 4 // TODO: avoid magic number
     }
 }
+
+pub struct WasmMemAllocRun;
+impl CostRunner for WasmMemAllocRun {
+    const COST_TYPE: CostType = CostType::WasmMemAlloc;
+
+    const RUN_ITERATIONS: u64 = 1;
+
+    type SampleType = (Rc<Vm>, usize);
+
+    fn run_iter(host: &crate::Host, _iter: u64, sample: Self::SampleType) {
+        sample.0.invoke_function_raw(host, "test", &[]).unwrap();
+    }
+
+    fn get_total_input(_host: &crate::Host, sample: &Self::SampleType) -> u64 {
+        (sample.1 as u64) * Self::RUN_ITERATIONS * 65536
+    }
+}

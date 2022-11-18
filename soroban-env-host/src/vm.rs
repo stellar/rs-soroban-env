@@ -14,7 +14,7 @@ mod func_info;
 use crate::{
     budget::CostType,
     host::{Frame, HostImpl},
-    HostError,
+    HostError, VmCaller,
 };
 use std::{cell::RefCell, io::Cursor, ops::RangeInclusive, rc::Rc};
 
@@ -29,8 +29,10 @@ use soroban_env_common::{
     ConversionError,
 };
 
-use wasmi::{core::Value, Memory};
-use wasmi::{Engine, Instance, Linker, Module, StepMeter, Store};
+use wasmi::{
+    core::Value, Caller, Engine, Instance, Linker, Memory, Module, StepMeter, Store,
+    StoreContextMut,
+};
 
 impl wasmi::core::HostError for HostError {}
 
@@ -230,7 +232,7 @@ impl Vm {
         func: &str,
         args: &[RawVal],
     ) -> Result<RawVal, HostError> {
-        host.charge_budget(CostType::VmInvokeFunction, args.len() as u64)?;
+        host.charge_budget(CostType::InvokeHostFunction, 1)?;
         host.with_frame(
             Frame::ContractVM(self.clone(), Symbol::from_str(func)),
             || {
@@ -319,5 +321,19 @@ impl Vm {
     /// module loaded into the [Vm], or `None` if no such custom section exists.
     pub fn custom_section(&self, name: impl AsRef<str>) -> Option<&[u8]> {
         Self::module_custom_section(&self.module, name)
+    }
+
+    /// Utility function that synthesizes a `VmCaller<Host>` configured to point
+    /// to this VM's `Store` and `Instance`, and calls the provided function
+    /// back with it. Mainly used for testing.
+    pub fn with_vmcaller<F, T>(&self, f: F) -> T
+    where
+        F: FnOnce(&mut VmCaller<Host>) -> T,
+    {
+        let store: &mut Store<Host> = &mut *self.store.borrow_mut();
+        let mut ctx: StoreContextMut<Host> = store.into();
+        let caller: Caller<Host> = Caller::new(&mut ctx, Some(self.instance));
+        let mut vmcaller: VmCaller<Host> = VmCaller(Some(caller));
+        f(&mut vmcaller)
     }
 }

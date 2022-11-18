@@ -3,6 +3,15 @@ use num_bigint::BigInt;
 use rand::{rngs::StdRng, Rng, RngCore};
 use soroban_env_host::{cost_runner::*, Host, MeteredBigInt};
 
+pub(crate) struct BigIntNewMeasure;
+impl HostCostMeasurement for BigIntNewMeasure {
+    type Runner = BigIntNewRun;
+
+    fn new_random_case(_host: &Host, rng: &mut StdRng, _input: u64) -> u64 {
+        rng.next_u64()
+    }
+}
+
 pub(crate) struct BigIntAddSubMeasure;
 impl HostCostMeasurement for BigIntAddSubMeasure {
     type Runner = BigIntAddSubRun;

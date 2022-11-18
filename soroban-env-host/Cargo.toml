@@ -43,6 +43,7 @@ soroban-test-wasms = { package = "soroban-test-wasms", path = "../soroban-test-w
 soroban-synth-wasm = { package = "soroban-synth-wasm", path = "../soroban-synth-wasm" }
 bytes-lit = "0.0.4"
 textplots = "0.8.0"
+wasmprinter = "0.2.41"
 
 [features]
 vm = ["wasmi", "soroban-env-common/vm"]

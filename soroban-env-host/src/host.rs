@@ -4,6 +4,7 @@
 use core::cell::RefCell;
 use core::cmp::Ordering;
 use core::fmt::Debug;
+use std::rc::Rc;
 
 use im_rc::{OrdMap, Vector};
 use num_bigint::Sign;
@@ -30,7 +31,6 @@ use crate::xdr::{
     ScBigInt, ScContractCode, ScHostContextErrorCode, ScHostFnErrorCode, ScHostObjErrorCode,
     ScHostStorageErrorCode, ScHostValErrorCode, ScMap, ScMapEntry, ScObject, ScVal, ScVec,
 };
-use std::rc::Rc;
 
 use crate::host_object::{HostMap, HostObj, HostObject, HostObjectType, HostVal, HostVec};
 #[cfg(feature = "vm")]
@@ -47,6 +47,8 @@ pub(crate) mod metered_bigint;
 pub(crate) mod metered_clone;
 pub(crate) mod metered_cmp;
 pub(crate) mod metered_map;
+#[cfg(feature = "vm")]
+mod metered_utils;
 pub(crate) mod metered_vector;
 pub(crate) mod metered_xdr;
 mod validity;
@@ -933,6 +935,9 @@ impl Host {
                     args.as_slice()
                 {
                     self.with_frame(Frame::HostFunction(hf), || {
+                        // Metering: conversions to host objects are covered. Cost of collecting
+                        // RawVals into Vec is ignored. Since 1. RawVals are cheap to clone 2. the
+                        // max number of args is fairly limited.
                         let object = self.to_host_obj(scobj)?.to_object();
                         let symbol = <Symbol>::try_from(scsym)?;
                         self.charge_budget(CostType::CallArgsUnpack, rest.len() as u64)?;
@@ -2355,12 +2360,7 @@ impl VmCallerCheckedEnv for Host {
             let b_pos = u32::try_from(b_pos)?;
             self.visit_obj(b, move |hv: &Vec<u8>| {
                 let range = self.valid_range_from_start_span_bound(b_pos, len, hv.len())?;
-                let mem = vm.get_memory(self)?;
-                self.charge_budget(CostType::VmMemCpy, hv.len() as u64)?;
-                self.map_err(
-                    mem.write(vmcaller.try_mut()?, pos as usize, &hv.as_slice()[range])
-                        .map_err(|me| wasmi::Error::Memory(me)),
-                )?;
+                self.metered_vm_mem_write(vmcaller, vm, pos, range, hv)?;
                 Ok(().into())
             })
         }
@@ -2390,16 +2390,7 @@ impl VmCallerCheckedEnv for Host {
             if end_idx > vnew.len() {
                 vnew.resize(end_idx, 0);
             }
-            let mem = vm.get_memory(self)?;
-            self.charge_budget(CostType::VmMemCpy, len as u64)?;
-            self.map_err(
-                mem.read(
-                    vmcaller.try_mut()?,
-                    pos as usize,
-                    &mut vnew.as_mut_slice()[b_pos as usize..end_idx],
-                )
-                .map_err(|me| wasmi::Error::Memory(me)),
-            )?;
+            self.metered_vm_mem_read(vmcaller, vm, pos, b_pos as usize..end_idx, &mut vnew)?;
             Ok(self.add_host_object(vnew)?.into())
         }
     }
@@ -2416,12 +2407,7 @@ impl VmCallerCheckedEnv for Host {
         {
             let VmSlice { vm, pos, len } = self.decode_vmslice(lm_pos, len)?;
             let mut vnew: Vec<u8> = vec![0; len as usize];
-            let mem = vm.get_memory(self)?;
-            self.charge_budget(CostType::VmMemCpy, len as u64)?;
-            self.map_err(
-                mem.read(vmcaller.try_ref()?, pos as usize, vnew.as_mut_slice())
-                    .map_err(|me| wasmi::Error::Memory(me)),
-            )?;
+            self.metered_vm_mem_read(vmcaller, vm, pos, 0..len as usize, &mut vnew)?;
             Ok(self.add_host_object(vnew)?.into())
         }
     }
@@ -2800,5 +2786,9 @@ impl VmCallerCheckedEnv for Host {
                 "contract attempted to fail with non-ContractError status code",
             ))
         }
+    }
+
+    fn dummy0(&self, vmcaller: &mut VmCaller<Self::VmUserState>) -> Result<RawVal, Self::Error> {
+        Ok(().into())
     }
 }

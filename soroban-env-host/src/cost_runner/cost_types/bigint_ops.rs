@@ -4,6 +4,17 @@ use crate::{
     budget::CostType, cost_runner::CostRunner, host::metered_cmp::MeteredCmp, MeteredBigInt,
 };
 
+pub struct BigIntNewRun;
+impl CostRunner for BigIntNewRun {
+    const COST_TYPE: CostType = CostType::BigIntNew;
+    type SampleType = u64;
+    const RUN_ITERATIONS: u64 = 1000;
+
+    fn run_iter(host: &crate::Host, _iter: u64, sample: Self::SampleType) {
+        MeteredBigInt::from_u64(host.budget_cloned(), sample).unwrap();
+    }
+}
+
 pub struct BigIntAddSubRun;
 impl CostRunner for BigIntAddSubRun {
     const COST_TYPE: CostType = CostType::BigIntAddSub;

@@ -57,7 +57,10 @@ pub(crate) fn for_each_host_cost_measurement<B: Benchmark>() -> std::io::Result<
     call_bench::<B, ScVecToHostVecMeasure>(&mut costs)?;
     call_bench::<B, VerifyEd25519SigMeasure>(&mut costs)?;
     call_bench::<B, VmInstantiationMeasure>(&mut costs)?;
+    call_bench::<B, VmMemReadMeasure>(&mut costs)?;
+    call_bench::<B, VmMemWriteMeasure>(&mut costs)?;
     call_bench::<B, WasmInsnExecMeasure>(&mut costs)?;
+    call_bench::<B, WasmMemAllocMeasure>(&mut costs)?;
     call_bench::<B, CreateRecordDebugEventMeasure>(&mut costs)?;
     call_bench::<B, RecordContractEventMeasure>(&mut costs)?;
     call_bench::<B, VisitObjectMeasure>(&mut costs)?;
@@ -66,6 +69,7 @@ pub(crate) fn for_each_host_cost_measurement<B: Benchmark>() -> std::io::Result<
     call_bench::<B, ValSerMeasure>(&mut costs)?;
     call_bench::<B, ValDeserMeasure>(&mut costs)?;
     call_bench::<B, HostObjAllocSlotMeasure>(&mut costs)?;
+    call_bench::<B, BigIntNewMeasure>(&mut costs)?;
     call_bench::<B, BigIntAddSubMeasure>(&mut costs)?;
     call_bench::<B, BigIntMulMeasure>(&mut costs)?;
     call_bench::<B, BigIntDivRemMeasure>(&mut costs)?;
@@ -94,6 +98,8 @@ pub(crate) fn for_each_host_cost_measurement<B: Benchmark>() -> std::io::Result<
     call_bench::<B, BytesInsertMeasure>(&mut costs)?;
     call_bench::<B, BytesPopMeasure>(&mut costs)?;
     call_bench::<B, BytesPushMeasure>(&mut costs)?;
+    call_bench::<B, InvokeHostFunctionMeasure>(&mut costs)?;
+    call_bench::<B, ChargeBudgetMeasure>(&mut costs)?;
 
     if get_explicit_bench_names().is_none() {
         for cost in CostType::variants() {
@@ -116,16 +122,15 @@ pub(crate) fn for_each_host_cost_measurement<B: Benchmark>() -> std::io::Result<
         // warning: missing cost measurement for HostAccountIdAllocCell
         // warning: missing cost measurement for PushFrame
         // warning: missing cost measurement for PopFrame
-        // TODO:
-        // warning: missing cost measurement for WasmMemAlloc
         // warning: missing cost measurement for HostFunction
-        // warning: missing cost measurement for CloneEvents
-        // warning: missing cost measurement for CloneVm
-        // warning: missing cost measurement for BigIntNew
-        // warning: missing cost measurement for VmMemCpy
-        // warning: missing cost measurement for VmInvokeFunction
         // warning: missing cost measurement for CallArgsUnpack
+        // warning: missing cost measurement for CloneVm
         // warning: missing cost measurement for ChargeBudget
+        // warning: missing cost measurement for BigIntNew
+        // TODO:
+        // Not knowing what to do:
+        // CloneEvents: need to know the limits and take an upper bound
+        // Storage: key are LedgerKey, cmp needs to know the size limit
     }
     Ok(())
 }

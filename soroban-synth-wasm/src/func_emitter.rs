@@ -262,7 +262,14 @@ impl FuncEmitter {
     pub fn drop(&mut self) -> &mut Self {
         self.insn(&Instruction::Drop)
     }
-
+    /// Emit an [`Instruction::MemoryGrow`]
+    pub fn mem_grow(&mut self, loc: LocalRef) -> &mut Self {
+        self.insn(&Instruction::MemoryGrow(loc.0))
+    }
+    /// Emit an [`Instruction::MemorySize`]
+    pub fn mem_size(&mut self, loc: LocalRef) -> &mut Self {
+        self.insn(&Instruction::MemorySize(loc.0))
+    }
     /// Emit an [`Instruction::End`] and finish emitting code for this function,
     /// defining it in its enclosing [`ModEmitter`] and returning that
     /// [`ModEmitter`] as well as a [`FuncRef`] referring to the newly-defined

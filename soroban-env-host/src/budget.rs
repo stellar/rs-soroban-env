@@ -18,6 +18,7 @@ pub enum CostType {
     // The average of cpu insns is around 300.
     HostEventContract = 3,
     // Cost of a host function invocation, not including the actual work done by the function
+    // TODO: remove. This is covered by `InvokeHostFunction`.
     HostFunction = 4,
     // Cost of visiting a host object from the host object storage
     // TODO: consider removing. This is just indexing into an array. Fixed cost around 400 insns.
@@ -84,6 +85,7 @@ pub enum CostType {
     // Cost of guarding a frame, which involves pushing and poping a frame and capturing a rollback point.
     GuardFrame = 31,
     // Cost of cloning a VM.
+    // TODO: remove. Not being used. Vm is contained in Rc, so cloning is cheap.
     CloneVm = 32,
     // Cost of verifying ed25519 signature of a payload.
     VerifyEd25519Sig = 33,
@@ -116,13 +118,12 @@ pub enum CostType {
     BigIntToBytes = 46,
     // Cost of converting a bigint to a byte array where each byte is a digit in some pre-determined base.
     BigIntToRadix = 47,
-    // Cost of accessing vm lineary memory
-    VmMemCpy = 48,
+    // Cost of reading a slice of vm linear memory
+    VmMemRead = 48,
     // Cost of instantiation a VM from wasm bytes code.
     VmInstantiation = 49,
-    // The overhead cost of invoking a host function.
-    // TODO: this is somewhat duplicate from HostFunction
-    VmInvokeFunction = 50,
+    // Roundtrip cost of invoking a host function: host->Vm->host.
+    InvokeHostFunction = 50,
     // Cost of cloning bytes.
     BytesClone = 51,
     // Cost of deleting a byte from a bytes array,
@@ -140,6 +141,7 @@ pub enum CostType {
     // TODO: to be removed. Can be covered by BytesAppend.
     BytesConcat = 58,
     // Cost of unpacking args from a HostVec into a Vec<RawVal>
+    // TODO: remove, this is a little too granular, the max number of call args aren't that many.
     CallArgsUnpack = 59,
     // Cost of charging a value to the budgeting system.
     ChargeBudget = 60,
@@ -155,6 +157,8 @@ pub enum CostType {
     // here for exploring calibration, not a long-term cost we surface
     // separately from signature verification.
     EdwardsPointCurve25519ScalarMul = 66,
+    // Cost of writing to a slice of vm linear memory
+    VmMemWrite = 67,
 }
 
 // TODO: add XDR support for iterating over all the elements of an enum
@@ -209,9 +213,10 @@ impl CostType {
             CostType::BigIntFromBytes,
             CostType::BigIntToBytes,
             CostType::BigIntToRadix,
-            CostType::VmMemCpy,
+            CostType::VmMemRead,
+            CostType::VmMemWrite,
             CostType::VmInstantiation,
-            CostType::VmInvokeFunction,
+            CostType::InvokeHostFunction,
             CostType::BytesClone,
             CostType::BytesDel,
             CostType::BytesPush,
@@ -594,9 +599,10 @@ impl Default for BudgetImpl {
                 CostType::BigIntToBytes => cpu.lin_param = 10,
                 CostType::BigIntToRadix => cpu.lin_param = 10,
 
-                CostType::VmMemCpy => cpu.lin_param = 10,
+                CostType::VmMemRead => cpu.lin_param = 10,
+                CostType::VmMemWrite => cpu.lin_param = 10,
                 CostType::VmInstantiation => cpu.const_param = 100_000,
-                CostType::VmInvokeFunction => cpu.const_param = 10_000,
+                CostType::InvokeHostFunction => cpu.const_param = 10_000,
                 CostType::BytesClone
                 | CostType::BytesDel
                 | CostType::BytesPush
@@ -658,9 +664,10 @@ impl Default for BudgetImpl {
                 | CostType::BigIntFromBytes
                 | CostType::BigIntToBytes
                 | CostType::BigIntToRadix => mem.lin_param = 10,
-                CostType::VmMemCpy
+                CostType::VmMemRead
+                | CostType::VmMemWrite
                 | CostType::VmInstantiation
-                | CostType::VmInvokeFunction
+                | CostType::InvokeHostFunction
                 | CostType::BytesClone
                 | CostType::BytesDel
                 | CostType::BytesPush
