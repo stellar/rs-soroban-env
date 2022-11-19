@@ -1101,7 +1101,7 @@ fn test_deauth_and_authorize() {
                 .err()
                 .unwrap()
         ),
-        ContractError::BalanceFrozenError
+        ContractError::BalanceDeauthorizedError
     );
     assert_eq!(
         to_contract_err(
@@ -1115,7 +1115,7 @@ fn test_deauth_and_authorize() {
                 .err()
                 .unwrap()
         ),
-        ContractError::BalanceFrozenError
+        ContractError::BalanceDeauthorizedError
     );
 
     // Authorize the balance of `user`.

@@ -83,7 +83,10 @@ pub fn receive_balance(e: &Host, id: Identifier, amount: BigInt) -> Result<(), H
         if balance.authorized {
             write_balance_and_auth(e, id, (balance.amount + amount)?, true)
         } else {
-            Err(e.err_status_msg(ContractError::BalanceFrozenError, "balance is frozen"))
+            Err(e.err_status_msg(
+                ContractError::BalanceDeauthorizedError,
+                "balance is deauthorized",
+            ))
         }
     } else if is_asset_auth_required(e)? {
         // Balance does not exist, so now we need to enforce auth_required IF this is a wrapped token
@@ -117,7 +120,10 @@ pub fn spend_balance(e: &Host, id: Identifier, amount: BigInt) -> Result<(), Hos
                 write_balance_and_auth(e, id, (balance.amount - amount)?, true)
             }
         } else {
-            Err(e.err_status_msg(ContractError::BalanceFrozenError, "balance is frozen"))
+            Err(e.err_status_msg(
+                ContractError::BalanceDeauthorizedError,
+                "balance is deauthorized",
+            ))
         }
     } else {
         Err(e.err_status_msg(ContractError::BalanceError, "balance does not exist"))
