@@ -42,20 +42,22 @@ fn vm_hostfn_invocation() -> Result<(), HostError> {
         Host::test_storage_with_contracts(vec![dummy_id.into()], vec![VEC], budget.clone());
     let host = Host::with_storage_and_budget(storage, budget)
         .test_budget(100_000, 100_000)
-        .enable_model(CostType::HostFunction);
+        .enable_model(CostType::InvokeVmFunction)
+        .enable_model(CostType::InvokeHostFunction);
 
     let obj = host.test_bin_obj(&dummy_id)?;
     // `vec_err` is a test contract function which calls `vec_new` (1 call)
-    // and `vec_put` (1 call) so total input of 2 to the budget from `CostType::HostFunction`.
+    // and `vec_put` (1 call) so total input of 2 to the budget from `CostType::InvokeHostFunction`.
     let sym = Symbol::from_str("vec_err");
     let args = host.test_vec_obj::<u32>(&[1])?;
 
     // try_call
     host.try_call(obj.to_object(), sym.into(), args.clone().into())?;
     host.with_budget(|budget| {
-        assert_eq!(budget.get_input(CostType::HostFunction), 2);
-        assert_eq!(budget.get_cpu_insns_count(), 20);
-        assert_eq!(budget.get_mem_bytes_count(), 2);
+        assert_eq!(budget.get_input(CostType::InvokeVmFunction), 1);
+        assert_eq!(budget.get_input(CostType::InvokeHostFunction), 2);
+        assert_eq!(budget.get_cpu_insns_count(), 30);
+        assert_eq!(budget.get_mem_bytes_count(), 3);
     });
 
     Ok(())

@@ -9,7 +9,7 @@ use std::cmp::{min, Ordering};
 use std::ops::RangeBounds;
 use std::rc::Rc;
 
-pub(crate) struct MeteredVector<A> {
+pub struct MeteredVector<A> {
     budget: Budget,
     vec: Vector<A>,
 }
@@ -66,6 +66,14 @@ impl<A: Clone> MeteredVector<A> {
         self.charge_immut_access(self.len() as u64)?;
         self.vec
             .get(index)
+            .ok_or_else(|| ScHostObjErrorCode::VecIndexOutOfBound.into())
+    }
+
+    // Time: O(log n)
+    pub fn get_mut(&mut self, index: usize) -> Result<&mut A, HostError> {
+        self.charge_mut_access(self.len() as u64)?;
+        self.vec
+            .get_mut(index)
             .ok_or_else(|| ScHostObjErrorCode::VecIndexOutOfBound.into())
     }
 

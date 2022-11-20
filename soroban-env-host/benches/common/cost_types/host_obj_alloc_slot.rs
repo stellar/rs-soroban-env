@@ -1,7 +1,7 @@
 use crate::common::HostCostMeasurement;
-use rand::rngs::StdRng;
+use rand::{rngs::StdRng, RngCore};
 use soroban_env_host::{
-    budget::CostType,
+    cost_runner::HostObjAllocSlotRun,
     xdr::{ScObject, ScVal},
     Host,
 };
@@ -10,17 +10,12 @@ use soroban_env_host::{
 // which is pretty much just the cost of doing a vector-grow operation in
 // rust. It should be _amortized_ constant-time. The input value is the
 // new object handle number, which is the size of the existing object array.
-pub(crate) struct HostObjAllocSlotRun {
-    val: ScVal,
-}
+pub(crate) struct HostObjAllocSlotMeasure;
 
-impl HostCostMeasurement for HostObjAllocSlotRun {
-    const COST_TYPE: CostType = CostType::HostObjAllocSlot;
+impl HostCostMeasurement for HostObjAllocSlotMeasure {
+    type Runner = HostObjAllocSlotRun;
 
-    // We iterate a bunch of times so that we cross a reallocation boundary.
-    const RUN_ITERATIONS: u64 = 100;
-
-    fn new_random_case(host: &Host, _rng: &mut StdRng, input: u64) -> Self {
+    fn new_random_case(host: &Host, rng: &mut StdRng, input: u64) -> Vec<u8> {
         // During setup we inject a bunch of copies of the object to make
         // the host object array large.
         let size = input * 100;
@@ -28,12 +23,9 @@ impl HostCostMeasurement for HostObjAllocSlotRun {
         for _ in 0..size {
             host.inject_val(&val).unwrap();
         }
-        Self { val }
-    }
-
-    fn run(&mut self, _iter: u64, host: &Host) {
-        // When measuring, we just inject a single copy to see what
-        // the cost of "one more" is at the given size.
-        host.inject_val(&self.val).unwrap();
+        // here we insert a pre-constructed bytes of various sizes to show that
+        // the cost of inserting one additional host object is constant w.r.t.
+        // the actual object size.
+        (0..input).map(|_| rng.next_u32() as u8).collect()
     }
 }

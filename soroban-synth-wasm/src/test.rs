@@ -52,6 +52,7 @@ fn test_synth_wasm() {
             local.get 0
             call 2
           )
+          (memory (;0;) 1)
           (export "test_map" (func 3))
         )"#]];
     expected.assert_eq(&printed);

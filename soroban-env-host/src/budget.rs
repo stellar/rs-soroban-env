@@ -11,144 +11,124 @@ use crate::{xdr::ScVmErrorCode, HostError};
 pub enum CostType {
     // Cost of running 1 wasm interpreter loop
     WasmInsnExec = 0,
+    // Cost of growing wasm linear memory by 1 page
     WasmMemAlloc = 1,
     // Cost of forming a debug event and pushing it into the event storage
     HostEventDebug = 2,
-    // Cost of forming a contract event and pushing it into the event storage
+    // Cost of pushing a contract event it into the event storage
     HostEventContract = 3,
     // Cost of a host function invocation, not including the actual work done by the function
-    HostFunction = 4,
+    InvokeHostFunction = 4,
     // Cost of visiting a host object from the host object storage
+    // TODO: consider removing. This is just indexing into an array. Fixed cost around 400 insns.
+    // Only thing to make sure is the guest can't visitObject repeatly without incurring some charges elsewhere.
     VisitObject = 5,
-    // Cost of pushing a frame into the context
-    PushFrame = 6,
-    // Cost of poping a frame out of the context
-    PopFrame = 7,
     // Tracks a single Val (RawVal or primative Object like U64) <=> ScVal
     // conversion cost. Most of these Val counterparts in ScVal (except e.g.
     // Symbol) consumes a single int64 and therefore is a constant overhead.
-    ValXdrConv = 8,
+    ValXdrConv = 6,
     // Cost of serializing an xdr object to bytes
-    ValSer = 9,
+    ValSer = 7,
     // Cost of deserializing an xdr object from bytes
-    ValDeser = 10,
+    ValDeser = 8,
     // Cost of cloning events
-    CloneEvents = 11,
+    CloneEvents = 9,
     // Cost of occupying a host object slot
-    HostObjAllocSlot = 12,
-    // Cost of pushing a new `Vec` object to the object storage.
-    HostVecAllocCell = 13,
-    // Cost of pushing a new `Map` object to the object storage.
-    HostMapAllocCell = 14,
-    // Cost of pushing a new `U64` object to the object storage.
-    HostU64AllocCell = 15,
-    // Cost of pushing a new `I64` object to the object storage.
-    HostI64AllocCell = 16,
-    // Cost of pushing a new `Bytes` object to the object storage.
-    HostBytesAllocCell = 17,
-    // Cost of pushing a new `BigInt` object to the object storage.
-    HostBigIntAllocCell = 18,
+    HostObjAllocSlot = 10,
     // Cost of computing the sha256 hash from bytes
-    ComputeSha256Hash = 19,
+    ComputeSha256Hash = 11,
     // Cost of computing the ed25519 pubkey from bytes
-    ComputeEd25519PubKey = 20,
+    ComputeEd25519PubKey = 12,
     // Cost of constructing an empty new OrdMap
-    ImMapNew = 21,
+    ImMapNew = 13,
     // Cost of (mutably) accessing an entry in an OrdMap
-    ImMapMutEntry = 22,
+    ImMapMutEntry = 14,
     // Cost of (immutably) accessing an entry in an OrdMap
-    ImMapImmutEntry = 23,
+    ImMapImmutEntry = 15,
+    // Cost of comparison of two OrdMaps
+    ImMapCmp = 16,
     // Cost of constructing an empty new Vector
-    ImVecNew = 24,
+    ImVecNew = 17,
     // Cost of (mutably) accessing an entry in a Vector
-    ImVecMutEntry = 25,
+    ImVecMutEntry = 18,
     // Cost of (immutably) accessing an entry in a Vector
-    ImVecImmutEntry = 26,
+    ImVecImmutEntry = 19,
+    // Cost of comparison of two Vectors
+    ImVecCmp = 20,
+    //TODO: 27-30 are probably redundent.They are covered elsewhere.
     // Cost of work needed to collect elements from a HostVec into a ScVec. This does not account for the
     // conversion of the elements into its ScVal form.
-    ScVecFromHostVec = 27,
+    ScVecFromHostVec = 21,
     // Cost of work needed to collect elements from a HostMap into a ScMap. This does not account for the
     // conversion of the elements into its ScVal form.
-    ScMapFromHostMap = 28,
+    ScMapFromHostMap = 22,
     // Cost of work needed to collect elements from an ScVec into a HostVec. This does not account for the
     // conversion of the elements from its ScVal form.
-    ScVecToHostVec = 29,
+    ScVecToHostVec = 23,
     // Cost of work needed to collect elements from an ScMap into a HostMap. This does not account for the
     // conversion of the elements from its ScVal form.
-    ScMapToHostMap = 30,
+    ScMapToHostMap = 24,
     // Cost of guarding a frame, which involves pushing and poping a frame and capturing a rollback point.
-    GuardFrame = 31,
-    // Cost of cloning a VM.
-    CloneVm = 32,
+    GuardFrame = 25,
     // Cost of verifying ed25519 signature of a payload.
-    VerifyEd25519Sig = 33,
+    VerifyEd25519Sig = 26,
+    //TODO: bigints are to be deprecated
     // Cost of creating a new bigint.
-    BigIntNew = 34,
+    BigIntNew = 27,
     // Cost of bigint's add, sub ops.
-    BigIntAddSub = 35,
+    BigIntAddSub = 28,
     // Cost of bigint's mul op.
-    BigIntMul = 36,
+    BigIntMul = 29,
     // Cost of bigint's div and rem ops.
-    BigIntDivRem = 37,
+    BigIntDivRem = 30,
     // Cost of bigint's bitwise ops (and, or, xor).
-    BigIntBitwiseOp = 38,
+    BigIntBitwiseOp = 31,
     // Cost of bigint's shl and shr ops.
-    BigIntShift = 39,
+    BigIntShift = 32,
     // Cost of bigint's cmp op.
-    BigIntCmp = 40,
+    BigIntCmp = 33,
     // Cost of bigint's gcd, lcm ops.
-    BigIntGcdLcm = 41,
+    BigIntGcdLcm = 34,
     // Cost of bigint's pow op.
-    BigIntPow = 42,
+    BigIntPow = 35,
     // Cost of bigint's powmod op.
-    BigIntPowMod = 43,
+    BigIntPowMod = 36,
     // Cost of bigint's sqrt op.
-    BigIntSqrt = 44,
+    BigIntSqrt = 37,
     // Cost of constructing a bigint from bytes.
-    BigIntFromBytes = 45,
+    BigIntFromBytes = 38,
     // Cost of constructing bytes from a bigint.
-    BigIntToBytes = 46,
+    BigIntToBytes = 39,
     // Cost of converting a bigint to a byte array where each byte is a digit in some pre-determined base.
-    BigIntToRadix = 47,
-    // Cost of accessing vm lineary memory
-    VmMemCpy = 48,
+    BigIntToRadix = 40,
+    // Cost of reading a slice of vm linear memory
+    VmMemRead = 41,
+    // Cost of writing to a slice of vm linear memory
+    VmMemWrite = 42,
     // Cost of instantiation a VM from wasm bytes code.
-    VmInstantiation = 49,
-    // The overhead cost of invoking a host function.
-    // TODO: this is somewhat duplicate from HostFunction
-    VmInvokeFunction = 50,
+    VmInstantiation = 43,
+    // Roundtrip cost of invoking a VM function from the host.
+    InvokeVmFunction = 44,
     // Cost of cloning bytes.
-    BytesClone = 51,
+    BytesClone = 45,
     // Cost of deleting a byte from a bytes array,
-    BytesDel = 52,
+    BytesDel = 46,
     // Cost of pushing a byte
-    BytesPush = 53,
+    BytesPush = 47,
     // Cost of poping a byte
-    BytesPop = 54,
+    BytesPop = 48,
     // Cost of inserting a byte into a bytes array at some index
-    BytesInsert = 55,
+    BytesInsert = 49,
     // Cost of appending a byte to the end of a bytes array
-    BytesAppend = 56,
-    // Cost of slicing a bytes array
-    BytesSlice = 57,
-    // Cost of concatenating two bytes arrays
-    BytesConcat = 58,
-    // Cost of unpacking args from a HostVec into a Vec<RawVal>
-    CallArgsUnpack = 59,
+    BytesAppend = 50,
+    // Cost of comparing two bytes arrays
+    BytesCmp = 51,
     // Cost of charging a value to the budgeting system.
-    ChargeBudget = 60,
-    // TODO: reshuffle to bring the "AllocCell" types together
-    // Cost of pushing a new `ContractCode` object to the object storage.
-    HostContractCodeAllocCell = 61,
-    // Cost of pushing a new `AccountId` object to the object storage.
-    HostAccountIdAllocCell = 62,
-    ImMapCmp = 63,
-    ImVecCmp = 64,
-    BytesCmp = 65,
+    ChargeBudget = 52,
     // Cost of a 25519 scalar multiplication in the Ed25519 library,
     // here for exploring calibration, not a long-term cost we surface
     // separately from signature verification.
-    EdwardsPointCurve25519ScalarMul = 66,
+    EdwardsPointCurve25519ScalarMul = 53,
 }
 
 // TODO: add XDR support for iterating over all the elements of an enum
@@ -159,35 +139,28 @@ impl CostType {
             CostType::WasmMemAlloc,
             CostType::HostEventDebug,
             CostType::HostEventContract,
-            CostType::HostFunction,
+            CostType::InvokeHostFunction,
             CostType::VisitObject,
-            CostType::PushFrame,
-            CostType::PopFrame,
             CostType::ValXdrConv,
             CostType::ValSer,
             CostType::ValDeser,
             CostType::CloneEvents,
             CostType::HostObjAllocSlot,
-            CostType::HostVecAllocCell,
-            CostType::HostMapAllocCell,
-            CostType::HostU64AllocCell,
-            CostType::HostI64AllocCell,
-            CostType::HostBytesAllocCell,
-            CostType::HostBigIntAllocCell,
             CostType::ComputeSha256Hash,
             CostType::ComputeEd25519PubKey,
             CostType::ImMapNew,
             CostType::ImMapMutEntry,
             CostType::ImMapImmutEntry,
+            CostType::ImMapCmp,
             CostType::ImVecNew,
             CostType::ImVecMutEntry,
             CostType::ImVecImmutEntry,
+            CostType::ImVecCmp,
             CostType::ScVecFromHostVec,
             CostType::ScMapFromHostMap,
             CostType::ScVecToHostVec,
             CostType::ScMapToHostMap,
             CostType::GuardFrame,
-            CostType::CloneVm,
             CostType::VerifyEd25519Sig,
             CostType::BigIntNew,
             CostType::BigIntAddSub,
@@ -203,24 +176,18 @@ impl CostType {
             CostType::BigIntFromBytes,
             CostType::BigIntToBytes,
             CostType::BigIntToRadix,
-            CostType::VmMemCpy,
+            CostType::VmMemRead,
+            CostType::VmMemWrite,
             CostType::VmInstantiation,
-            CostType::VmInvokeFunction,
+            CostType::InvokeVmFunction,
             CostType::BytesClone,
             CostType::BytesDel,
             CostType::BytesPush,
             CostType::BytesPop,
             CostType::BytesInsert,
             CostType::BytesAppend,
-            CostType::BytesSlice,
-            CostType::BytesConcat,
-            CostType::CallArgsUnpack,
-            CostType::ChargeBudget,
-            CostType::HostContractCodeAllocCell,
-            CostType::HostAccountIdAllocCell,
-            CostType::ImMapCmp,
-            CostType::ImVecCmp,
             CostType::BytesCmp,
+            CostType::ChargeBudget,
             CostType::EdwardsPointCurve25519ScalarMul,
         ];
         VARIANTS.iter()
@@ -525,24 +492,13 @@ impl Default for BudgetImpl {
                 // this and some are much less.
                 CostType::WasmInsnExec => cpu.lin_param = 32,
                 CostType::WasmMemAlloc => cpu.lin_param = 1000,
-                CostType::HostEventDebug | CostType::HostEventContract | CostType::HostFunction => {
-                    cpu.const_param = 1000
-                }
-                CostType::VisitObject | CostType::PushFrame | CostType::PopFrame => {
-                    cpu.const_param = 100
-                }
+                CostType::HostEventDebug
+                | CostType::HostEventContract
+                | CostType::InvokeHostFunction => cpu.const_param = 1000,
+                CostType::VisitObject => cpu.const_param = 100,
                 CostType::ValXdrConv | CostType::ValSer | CostType::ValDeser => cpu.lin_param = 10,
                 CostType::CloneEvents => cpu.lin_param = 10,
                 CostType::HostObjAllocSlot => cpu.const_param = 1000,
-                CostType::HostVecAllocCell => cpu.lin_param = 300,
-                CostType::HostMapAllocCell => {
-                    cpu.const_param = 2000;
-                    cpu.log_base_param = 64;
-                    cpu.log_param = 1;
-                }
-                CostType::HostU64AllocCell | CostType::HostI64AllocCell => (), // counted in HostObjAllocSlot
-                CostType::HostBytesAllocCell => cpu.lin_param = 10,
-                CostType::HostBigIntAllocCell => cpu.lin_param = 10,
 
                 CostType::ComputeSha256Hash => {
                     cpu.const_param = 3000;
@@ -561,15 +517,16 @@ impl Default for BudgetImpl {
                     cpu.log_base_param = 64;
                     cpu.log_param = 10;
                 }
+                CostType::ImMapCmp => cpu.lin_param = 10,
 
                 CostType::ImVecNew => cpu.const_param = 1500,
                 CostType::ImVecMutEntry | CostType::ImVecImmutEntry => cpu.const_param = 300,
+                CostType::ImVecCmp => cpu.lin_param = 10,
                 CostType::ScVecFromHostVec => cpu.lin_param = 10,
                 CostType::ScMapFromHostMap => cpu.lin_param = 10,
                 CostType::ScVecToHostVec => cpu.lin_param = 300,
                 CostType::ScMapToHostMap => cpu.lin_param = 2500,
                 CostType::GuardFrame => cpu.lin_param = 10,
-                CostType::CloneVm => cpu.const_param = 1000,
 
                 CostType::BigIntNew
                 | CostType::BigIntAddSub
@@ -588,24 +545,18 @@ impl Default for BudgetImpl {
                 CostType::BigIntToBytes => cpu.lin_param = 10,
                 CostType::BigIntToRadix => cpu.lin_param = 10,
 
-                CostType::VmMemCpy => cpu.lin_param = 10,
+                CostType::VmMemRead => cpu.lin_param = 10,
+                CostType::VmMemWrite => cpu.lin_param = 10,
                 CostType::VmInstantiation => cpu.const_param = 100_000,
-                CostType::VmInvokeFunction => cpu.const_param = 10_000,
+                CostType::InvokeVmFunction => cpu.const_param = 10_000,
                 CostType::BytesClone
                 | CostType::BytesDel
                 | CostType::BytesPush
                 | CostType::BytesPop
                 | CostType::BytesInsert
-                | CostType::BytesAppend
-                | CostType::BytesSlice
-                | CostType::BytesConcat => cpu.lin_param = 10,
-                CostType::CallArgsUnpack => cpu.lin_param = 10,
-                CostType::ChargeBudget => cpu.const_param = 50,
-                CostType::HostContractCodeAllocCell => cpu.lin_param = 10,
-                CostType::HostAccountIdAllocCell => cpu.lin_param = 320,
-                CostType::ImMapCmp => cpu.lin_param = 10,
-                CostType::ImVecCmp => cpu.lin_param = 10,
+                | CostType::BytesAppend => cpu.lin_param = 10,
                 CostType::BytesCmp => cpu.lin_param = 10,
+                CostType::ChargeBudget => cpu.const_param = 50,
                 CostType::EdwardsPointCurve25519ScalarMul => cpu.const_param = 10,
             }
 
@@ -614,29 +565,22 @@ impl Default for BudgetImpl {
                 CostType::WasmInsnExec => (),
                 CostType::WasmMemAlloc => mem.lin_param = 1,
                 CostType::HostEventDebug | CostType::HostEventContract => mem.const_param = 100,
-                CostType::HostFunction
-                | CostType::VisitObject
-                | CostType::PushFrame
-                | CostType::PopFrame => mem.const_param = 100,
+                CostType::InvokeHostFunction | CostType::VisitObject => mem.const_param = 100,
                 CostType::ValXdrConv | CostType::ValSer | CostType::ValDeser => mem.lin_param = 1,
                 CostType::CloneEvents => mem.lin_param = 100,
                 CostType::HostObjAllocSlot => mem.const_param = 100,
-                CostType::HostVecAllocCell
-                | CostType::HostMapAllocCell
-                | CostType::HostU64AllocCell
-                | CostType::HostI64AllocCell => (), // counted in ObjAllocSlot
-                CostType::HostBytesAllocCell => mem.lin_param = 1,
-                CostType::HostBigIntAllocCell => mem.lin_param = 1,
                 CostType::ComputeSha256Hash | CostType::ComputeEd25519PubKey => (),
                 CostType::ImMapNew => mem.const_param = 3000,
                 CostType::ImMapMutEntry | CostType::ImMapImmutEntry => (),
+                CostType::ImMapCmp => mem.lin_param = 1,
                 CostType::ImVecNew => mem.const_param = 100,
                 CostType::ImVecMutEntry | CostType::ImVecImmutEntry => (),
+                CostType::ImVecCmp => mem.lin_param = 1,
                 CostType::ScVecFromHostVec
                 | CostType::ScMapFromHostMap
                 | CostType::ScVecToHostVec
                 | CostType::ScMapToHostMap => mem.lin_param = 100,
-                CostType::GuardFrame | CostType::CloneVm => mem.const_param = 100,
+                CostType::GuardFrame => mem.const_param = 100,
                 CostType::VerifyEd25519Sig => (),
                 CostType::BigIntNew
                 | CostType::BigIntAddSub
@@ -652,23 +596,18 @@ impl Default for BudgetImpl {
                 | CostType::BigIntFromBytes
                 | CostType::BigIntToBytes
                 | CostType::BigIntToRadix => mem.lin_param = 10,
-                CostType::VmMemCpy
+                CostType::VmMemRead
+                | CostType::VmMemWrite
                 | CostType::VmInstantiation
-                | CostType::VmInvokeFunction
+                | CostType::InvokeVmFunction
                 | CostType::BytesClone
                 | CostType::BytesDel
                 | CostType::BytesPush
                 | CostType::BytesPop
                 | CostType::BytesInsert
-                | CostType::BytesAppend
-                | CostType::BytesSlice
-                | CostType::BytesConcat => mem.lin_param = 1,
-                CostType::CallArgsUnpack | CostType::ChargeBudget => (),
-                CostType::HostContractCodeAllocCell => mem.lin_param = 1,
-                CostType::HostAccountIdAllocCell => mem.lin_param = 32,
-                CostType::ImMapCmp => mem.lin_param = 1,
-                CostType::ImVecCmp => mem.lin_param = 1,
+                | CostType::BytesAppend => mem.lin_param = 1,
                 CostType::BytesCmp => mem.lin_param = 1,
+                CostType::ChargeBudget => (),
                 CostType::EdwardsPointCurve25519ScalarMul => mem.const_param = 1,
             }
         }
