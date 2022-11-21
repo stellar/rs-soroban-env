@@ -517,11 +517,16 @@ impl Default for BudgetImpl {
                     cpu.log_base_param = 64;
                     cpu.log_param = 10;
                 }
-                CostType::ImMapCmp => cpu.lin_param = 10,
+                // The Cmp costs are temporarily disabled due to bug
+                // (https://github.com/stellar/rs-soroban-env/issues/579). This prevents `obj_cmp`
+                // from escalating an out-of-budget `HostError` to a `panic`.
+                CostType::ImMapCmp
+                | CostType::ImVecCmp
+                | CostType::BigIntCmp
+                | CostType::BytesCmp => cpu.lin_param = 0,
 
                 CostType::ImVecNew => cpu.const_param = 1500,
                 CostType::ImVecMutEntry | CostType::ImVecImmutEntry => cpu.const_param = 300,
-                CostType::ImVecCmp => cpu.lin_param = 10,
                 CostType::ScVecFromHostVec => cpu.lin_param = 10,
                 CostType::ScMapFromHostMap => cpu.lin_param = 10,
                 CostType::ScVecToHostVec => cpu.lin_param = 300,
@@ -531,8 +536,7 @@ impl Default for BudgetImpl {
                 CostType::BigIntNew
                 | CostType::BigIntAddSub
                 | CostType::BigIntBitwiseOp
-                | CostType::BigIntShift
-                | CostType::BigIntCmp => cpu.lin_param = 10,
+                | CostType::BigIntShift => cpu.lin_param = 10,
 
                 CostType::BigIntGcdLcm
                 | CostType::BigIntPow
@@ -555,7 +559,6 @@ impl Default for BudgetImpl {
                 | CostType::BytesPop
                 | CostType::BytesInsert
                 | CostType::BytesAppend => cpu.lin_param = 10,
-                CostType::BytesCmp => cpu.lin_param = 10,
                 CostType::ChargeBudget => cpu.const_param = 50,
                 CostType::EdwardsPointCurve25519ScalarMul => cpu.const_param = 10,
             }
@@ -572,10 +575,16 @@ impl Default for BudgetImpl {
                 CostType::ComputeSha256Hash | CostType::ComputeEd25519PubKey => (),
                 CostType::ImMapNew => mem.const_param = 3000,
                 CostType::ImMapMutEntry | CostType::ImMapImmutEntry => (),
-                CostType::ImMapCmp => mem.lin_param = 1,
+                // The Cmp costs are temporarily disabled due to bug
+                // (https://github.com/stellar/rs-soroban-env/issues/579). This prevents `obj_cmp`
+                // from escalating an out-of-budget `HostError` to a `panic`.
+                CostType::ImMapCmp
+                | CostType::ImVecCmp
+                | CostType::BigIntCmp
+                | CostType::BytesCmp => mem.lin_param = 0,
+
                 CostType::ImVecNew => mem.const_param = 100,
                 CostType::ImVecMutEntry | CostType::ImVecImmutEntry => (),
-                CostType::ImVecCmp => mem.lin_param = 1,
                 CostType::ScVecFromHostVec
                 | CostType::ScMapFromHostMap
                 | CostType::ScVecToHostVec
@@ -588,7 +597,6 @@ impl Default for BudgetImpl {
                 | CostType::BigIntDivRem
                 | CostType::BigIntBitwiseOp
                 | CostType::BigIntShift
-                | CostType::BigIntCmp
                 | CostType::BigIntGcdLcm
                 | CostType::BigIntPow
                 | CostType::BigIntPowMod
@@ -606,7 +614,6 @@ impl Default for BudgetImpl {
                 | CostType::BytesPop
                 | CostType::BytesInsert
                 | CostType::BytesAppend => mem.lin_param = 1,
-                CostType::BytesCmp => mem.lin_param = 1,
                 CostType::ChargeBudget => (),
                 CostType::EdwardsPointCurve25519ScalarMul => mem.const_param = 1,
             }
