@@ -4,6 +4,7 @@
 use core::cell::RefCell;
 use core::cmp::Ordering;
 use core::fmt::Debug;
+use std::rc::Rc;
 
 use im_rc::{OrdMap, Vector};
 use num_bigint::Sign;
@@ -26,7 +27,6 @@ use crate::events::{DebugError, DebugEvent, Events};
 use crate::storage::Storage;
 use crate::weak_host::WeakHost;
 
-use std::rc::Rc;
 
 use crate::host_object::{HostMap, HostObj, HostObject, HostObjectType, HostVal, HostVec};
 #[cfg(feature = "vm")]
@@ -43,6 +43,8 @@ pub(crate) mod metered_bigint;
 pub(crate) mod metered_clone;
 pub(crate) mod metered_cmp;
 pub(crate) mod metered_map;
+#[cfg(feature = "vm")]
+mod metered_utils;
 pub(crate) mod metered_vector;
 pub(crate) mod metered_xdr;
 mod validity;
@@ -132,7 +134,7 @@ pub(crate) struct HostImpl {
     ledger: RefCell<Option<LedgerInfo>>,
     objects: RefCell<Vec<HostObject>>,
     storage: RefCell<Storage>,
-    context: RefCell<Vec<Frame>>,
+    pub(crate) context: RefCell<Vec<Frame>>,
     // Note: budget is refcounted and is _not_ deep-cloned when you call HostImpl::deep_clone,
     // mainly because it's not really possible to achieve (the same budget is connected to many
     // metered sub-objects) but also because it's plausible that the person calling deep_clone
@@ -263,7 +265,7 @@ impl Host {
         &self.0.budget
     }
 
-    pub(crate) fn budget_cloned(&self) -> Budget {
+    pub fn budget_cloned(&self) -> Budget {
         self.0.budget.clone()
     }
 
@@ -348,7 +350,6 @@ impl Host {
     /// operation fails, it can be used to roll the [`Host`] back to the state
     /// it had before its associated [`Frame`] was pushed.
     fn push_frame(&self, frame: Frame) -> Result<RollbackPoint, HostError> {
-        self.charge_budget(CostType::PushFrame, 1)?;
         self.0.context.borrow_mut().push(frame);
         Ok(RollbackPoint {
             objects: self.0.objects.borrow().len(),
@@ -360,7 +361,6 @@ impl Host {
     /// the current context and optionally rolls back the [`Host`]'s objects
     /// and storage map to the state in the provided [`RollbackPoint`].
     fn pop_frame(&self, orp: Option<RollbackPoint>) -> Result<(), HostError> {
-        self.charge_budget(CostType::PopFrame, 1)?;
         self.0
             .context
             .borrow_mut()
@@ -403,8 +403,8 @@ impl Host {
     /// if the closure returned an error. Returns the result that the closure
     /// returned (or any error caused during the frame push/pop).
     // Notes on metering: `GuardFrame` charges on the work done on protecting the `context`.
-    /// It does not cover the cost of the actual closure call. The closure needs to be
-    /// metered separately.
+    // It does not cover the cost of the actual closure call. The closure needs to be
+    // metered separately.
     pub(crate) fn with_frame<F>(&self, frame: Frame, f: F) -> Result<RawVal, HostError>
     where
         F: FnOnce() -> Result<RawVal, HostError>,
@@ -474,7 +474,11 @@ impl Host {
 
     // Notes on metering: closure call needs to be metered separatedly. `VisitObject` only covers
     /// the cost of visiting an object.
-    unsafe fn unchecked_visit_val_obj<F, U>(&self, val: RawVal, f: F) -> Result<U, HostError>
+    pub(crate) unsafe fn unchecked_visit_val_obj<F, U>(
+        &self,
+        val: RawVal,
+        f: F,
+    ) -> Result<U, HostError>
     where
         F: FnOnce(Option<&HostObject>) -> Result<U, HostError>,
     {
@@ -686,36 +690,6 @@ impl Host {
         ho: HostObject,
     ) -> Result<HostObject, HostError> {
         self.charge_budget(CostType::HostObjAllocSlot, prev_len as u64)?;
-        match &ho {
-            HostObject::Vec(v) => {
-                self.charge_budget(CostType::HostVecAllocCell, v.len() as u64)?;
-            }
-            HostObject::Map(m) => {
-                self.charge_budget(CostType::HostMapAllocCell, m.len() as u64)?;
-            }
-            HostObject::U64(_) => {
-                self.charge_budget(CostType::HostU64AllocCell, 1)?;
-            }
-            HostObject::I64(_) => {
-                self.charge_budget(CostType::HostI64AllocCell, 1)?;
-            }
-            HostObject::Bytes(b) => {
-                self.charge_budget(CostType::HostBytesAllocCell, b.len() as u64)?;
-            }
-            HostObject::BigInt(bi) => {
-                self.charge_budget(CostType::HostBigIntAllocCell, bi.bits() as u64)?;
-            }
-            HostObject::ContractCode(cc) => match cc {
-                ScContractCode::WasmRef(h) => {
-                    self.charge_budget(CostType::HostContractCodeAllocCell, h.0.len() as u64)?;
-                }
-                ScContractCode::Token => (),
-            },
-
-            HostObject::AccountId(_) => {
-                self.charge_budget(CostType::HostAccountIdAllocCell, 1)?;
-            }
-        }
         Ok(ho)
     }
 
@@ -965,9 +939,11 @@ impl Host {
                     args.as_slice()
                 {
                     self.with_frame(Frame::HostFunction(hf_type), || {
+                        // Metering: conversions to host objects are covered. Cost of collecting
+                        // RawVals into Vec is ignored. Since 1. RawVals are cheap to clone 2. the
+                        // max number of args is fairly limited.
                         let object = self.to_host_obj(scobj)?.to_object();
                         let symbol = <Symbol>::try_from(scsym)?;
-                        self.charge_budget(CostType::CallArgsUnpack, rest.len() as u64)?;
                         let args = self.scvals_to_rawvals(rest)?;
                         // since the `HostFunction` frame must be the bottom of the call stack,
                         // reentry is irrelevant, we always pass in `allow_reentry = false`.
@@ -2274,12 +2250,7 @@ impl VmCallerCheckedEnv for Host {
             let b_pos = u32::try_from(b_pos)?;
             self.visit_obj(b, move |hv: &Vec<u8>| {
                 let range = self.valid_range_from_start_span_bound(b_pos, len, hv.len())?;
-                let mem = vm.get_memory(self)?;
-                self.charge_budget(CostType::VmMemCpy, hv.len() as u64)?;
-                self.map_err(
-                    mem.write(vmcaller.try_mut()?, pos as usize, &hv.as_slice()[range])
-                        .map_err(|me| wasmi::Error::Memory(me)),
-                )?;
+                self.metered_vm_mem_write(vmcaller, vm, pos, range, hv)?;
                 Ok(().into())
             })
         }
@@ -2309,16 +2280,7 @@ impl VmCallerCheckedEnv for Host {
             if end_idx > vnew.len() {
                 vnew.resize(end_idx, 0);
             }
-            let mem = vm.get_memory(self)?;
-            self.charge_budget(CostType::VmMemCpy, len as u64)?;
-            self.map_err(
-                mem.read(
-                    vmcaller.try_mut()?,
-                    pos as usize,
-                    &mut vnew.as_mut_slice()[b_pos as usize..end_idx],
-                )
-                .map_err(|me| wasmi::Error::Memory(me)),
-            )?;
+            self.metered_vm_mem_read(vmcaller, vm, pos, b_pos as usize..end_idx, &mut vnew)?;
             Ok(self.add_host_object(vnew)?.into())
         }
     }
@@ -2335,12 +2297,7 @@ impl VmCallerCheckedEnv for Host {
         {
             let VmSlice { vm, pos, len } = self.decode_vmslice(lm_pos, len)?;
             let mut vnew: Vec<u8> = vec![0; len as usize];
-            let mem = vm.get_memory(self)?;
-            self.charge_budget(CostType::VmMemCpy, len as u64)?;
-            self.map_err(
-                mem.read(vmcaller.try_ref()?, pos as usize, vnew.as_mut_slice())
-                    .map_err(|me| wasmi::Error::Memory(me)),
-            )?;
+            self.metered_vm_mem_read(vmcaller, vm, pos, 0..len as usize, &mut vnew)?;
             Ok(self.add_host_object(vnew)?.into())
         }
     }
@@ -2506,7 +2463,7 @@ impl VmCallerCheckedEnv for Host {
         let end = self.u32_from_rawval_input("end", end)?;
         let vnew = self.visit_obj(b, move |hv: &Vec<u8>| {
             let range = self.valid_range_from_start_end_bound(start, end, hv.len())?;
-            self.charge_budget(CostType::BytesSlice, hv.len() as u64)?;
+            self.charge_budget(CostType::BytesClone, range.len() as u64)?;
             Ok(hv.as_slice()[range].to_vec())
         })?;
         Ok(self.add_host_object(vnew)?.into())
@@ -2715,5 +2672,9 @@ impl VmCallerCheckedEnv for Host {
                 "contract attempted to fail with non-ContractError status code",
             ))
         }
+    }
+
+    fn dummy0(&self, vmcaller: &mut VmCaller<Self::VmUserState>) -> Result<RawVal, Self::Error> {
+        Ok(().into())
     }
 }

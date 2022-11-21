@@ -318,7 +318,7 @@ impl Host {
 
     pub(crate) fn call_args_from_obj(&self, args: Object) -> Result<Vec<RawVal>, HostError> {
         self.visit_obj(args, |hv: &HostVec| {
-            self.charge_budget(CostType::CallArgsUnpack, hv.len() as u64)?;
+            // Metering: free
             Ok(hv.iter().map(|a| a.to_raw()).collect())
         })
     }

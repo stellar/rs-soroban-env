@@ -915,6 +915,7 @@ name = "soroban-env-host"
 version = "0.0.9"
 dependencies = [
  "backtrace",
+ "curve25519-dalek",
  "dyn-fmt",
  "ed25519-dalek",
  "hex",

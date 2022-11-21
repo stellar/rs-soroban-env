@@ -2,7 +2,7 @@ use crate::FuncEmitter;
 use std::collections::HashMap;
 use wasm_encoder::{
     CodeSection, CustomSection, EntityType, ExportSection, Function, FunctionSection,
-    ImportSection, Module, TypeSection, ValType,
+    ImportSection, MemorySection, MemoryType, Module, TypeSection, ValType,
 };
 
 /// Wrapper for a u32 that defines the arity of a function -- that is, the number of
@@ -40,6 +40,7 @@ pub struct ModEmitter {
     types: TypeSection,
     imports: ImportSection,
     funcs: FunctionSection,
+    memories: MemorySection,
     exports: ExportSection,
     codes: CodeSection,
 
@@ -60,9 +61,15 @@ impl ModEmitter {
         let types = TypeSection::new();
         let imports = ImportSection::new();
         let funcs = FunctionSection::new();
+        let mut memories = MemorySection::new();
+        memories.memory(MemoryType {
+            minimum: 1,
+            maximum: None,
+            memory64: false,
+            shared: false,
+        });
         let exports = ExportSection::new();
         let codes = CodeSection::new();
-
         let typerefs = HashMap::new();
         let importrefs = HashMap::new();
         Self {
@@ -70,6 +77,7 @@ impl ModEmitter {
             types,
             imports,
             funcs,
+            memories,
             exports,
             codes,
             type_refs: typerefs,
@@ -153,6 +161,9 @@ impl ModEmitter {
         }
         if !self.funcs.is_empty() {
             self.module.section(&self.funcs);
+        }
+        if !self.memories.is_empty() {
+            self.module.section(&self.memories);
         }
         if !self.exports.is_empty() {
             self.module.section(&self.exports);

@@ -1099,6 +1099,7 @@ dependencies = [
  "thousands",
  "tinyvec",
  "tracking-allocator",
+ "wasmprinter",
 ]
 
 [[package]]
