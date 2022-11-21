@@ -27,7 +27,6 @@ use crate::events::{DebugError, DebugEvent, Events};
 use crate::storage::Storage;
 use crate::weak_host::WeakHost;
 
-
 use crate::host_object::{HostMap, HostObj, HostObject, HostObjectType, HostVal, HostVec};
 #[cfg(feature = "vm")]
 use crate::SymbolStr;
