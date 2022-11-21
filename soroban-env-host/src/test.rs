@@ -14,15 +14,12 @@ mod vec;
 mod budget_metering;
 #[cfg(feature = "vm")]
 mod complex;
-#[cfg(any(test, feature = "testutils"))]
 mod contract_event;
 #[cfg(feature = "vm")]
 mod hostile;
 #[cfg(feature = "vm")]
 mod invocation;
-#[cfg(all(feature = "vm", feature = "testutils"))]
+#[cfg(feature = "vm")]
 mod lifecycle;
-mod tuple;
-
-#[cfg(any(test, feature = "testutils"))]
 mod token;
+mod tuple;

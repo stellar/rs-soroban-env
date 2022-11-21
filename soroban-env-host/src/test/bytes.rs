@@ -6,15 +6,7 @@ use crate::{
 use soroban_env_common::EnvBase;
 
 #[cfg(feature = "vm")]
-use crate::{
-    im_rc::OrdMap,
-    storage::{AccessType, Footprint, Storage},
-    xdr::{
-        ContractDataEntry, Hash, LedgerEntry, LedgerEntryData, LedgerEntryExt, LedgerKey,
-        LedgerKeyContractData,
-    },
-    Object, Symbol,
-};
+use crate::{Object, Symbol};
 #[cfg(feature = "vm")]
 use soroban_test_wasms::LINEAR_MEMORY;
 
@@ -167,50 +159,12 @@ fn bytes_xdr_roundtrip() -> Result<(), HostError> {
 #[cfg(feature = "vm")]
 #[test]
 fn linear_memory_operations() -> Result<(), HostError> {
-    use crate::xdr::ScContractCode;
-    use crate::{budget::Budget, host::metered_map::MeteredOrdMap};
-
-    let contract_id: Hash = [0; 32].into();
-    let key = ScVal::Static(ScStatic::LedgerKeyContractCode);
-    let storage_key = LedgerKey::ContractData(LedgerKeyContractData {
-        contract_id: contract_id.clone(),
-        key: key.clone(),
-    });
-    let val = ScVal::Object(Some(ScObject::ContractCode(ScContractCode::Wasm(
-        LINEAR_MEMORY.try_into().unwrap(),
-    ))));
-    let le = LedgerEntry {
-        last_modified_ledger_seq: 0,
-        data: LedgerEntryData::ContractData(ContractDataEntry {
-            contract_id,
-            key,
-            val,
-        }),
-        ext: LedgerEntryExt::V0,
-    };
-    let map = OrdMap::unit(Box::new(storage_key.clone()), Some(Box::new(le)));
-    let mut footprint = Footprint::default();
-    footprint.record_access(&storage_key, AccessType::ReadOnly)?;
-
-    // initialize storage and host
-    let storage = Storage::with_enforcing_footprint_and_map(
-        footprint,
-        MeteredOrdMap {
-            map,
-            budget: Budget::default(),
-        },
-    );
-    let host = Host::with_storage_and_budget(storage, Budget::default());
-    // create a dummy contract obj as the caller
-    let id_obj = host.test_bin_obj(&[0; 32])?;
+    let host = Host::test_host_with_recording_footprint();
+    let id_obj = host.register_test_contract_wasm(LINEAR_MEMORY)?;
     // tests bytes_new_from_linear_memory
     {
         let args = host.test_vec_obj::<u32>(&[0xaabbccdd])?;
-        let obj = host.call(
-            id_obj.to_object(),
-            Symbol::from_str("bin_word").into(),
-            args.into(),
-        )?;
+        let obj = host.call(id_obj, Symbol::from_str("bin_word").into(), args.into())?;
         let obj_ref = host.test_bin_obj(&[0xaa, 0xbb, 0xcc, 0xdd])?;
         assert_eq!(host.obj_cmp(obj.into(), obj_ref.into())?, 0);
     }
@@ -220,11 +174,7 @@ fn linear_memory_operations() -> Result<(), HostError> {
         let mut args = host.vec_new(RawVal::from_void())?;
         args = host.vec_push_back(args, obj0.to_raw())?;
         let obj: Object = host
-            .call(
-                id_obj.to_object(),
-                Symbol::from_str("bin_inc").into(),
-                args.into(),
-            )?
+            .call(id_obj, Symbol::from_str("bin_inc").into(), args.into())?
             .try_into()?;
         let obj_ref = host.test_bin_obj(&[2, 3, 4, 5])?;
         assert_eq!(host.obj_cmp(obj.into(), obj_ref.into())?, 0);

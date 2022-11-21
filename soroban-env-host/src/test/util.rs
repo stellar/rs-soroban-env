@@ -1,16 +1,20 @@
+use std::rc::Rc;
+
+use rand::{thread_rng, RngCore};
+use soroban_env_common::{
+    xdr::{
+        AccountEntry, AccountId, ContractId, CreateContractArgs, HostFunction,
+        InstallContractCodeArgs, LedgerEntry, LedgerEntryData, LedgerKey, PublicKey,
+        ScContractCode, ScObject, ScVal, ScVec, Uint256,
+    },
+    Object, RawVal, TryIntoVal,
+};
+
 use crate::{
     budget::{Budget, CostType},
-    host::metered_map::MeteredOrdMap,
     host_object::{HostObj, HostVal},
-    im_rc::OrdMap,
-    storage::{AccessType, Footprint, Storage},
-    xdr,
-    xdr::{
-        AccountEntry, AccountId, ContractDataEntry, Hash, LedgerEntry, LedgerEntryData,
-        LedgerEntryExt, LedgerKey, LedgerKeyContractData, ScContractCode, ScObject, ScStatic,
-        ScVal, ScVec,
-    },
-    Host, HostError,
+    storage::{test_storage::MockSnapshotSource, Storage},
+    xdr, Host, HostError, LedgerInfo,
 };
 
 // Test utilities for the host, used in various tests in sub-modules.
@@ -30,10 +34,30 @@ impl AsScVal for i32 {
     }
 }
 
+pub(crate) fn generate_account_id() -> AccountId {
+    AccountId(PublicKey::PublicKeyTypeEd25519(Uint256(
+        generate_bytes_array(),
+    )))
+}
+
+pub(crate) fn generate_bytes_array() -> [u8; 32] {
+    let mut bytes: [u8; 32] = Default::default();
+    thread_rng().fill_bytes(&mut bytes);
+    bytes
+}
+
 #[allow(dead_code)]
 impl Host {
     pub(crate) fn test_host() -> Self {
         Host::default()
+    }
+
+    pub(crate) fn test_host_with_recording_footprint() -> Self {
+        let snapshot_source = Rc::<MockSnapshotSource>::new(MockSnapshotSource::new());
+        let storage = Storage::with_recording_footprint(snapshot_source);
+        let host = Host::with_storage_and_budget(storage, Budget::default());
+        host.set_ledger_info(Default::default());
+        host
     }
 
     pub(crate) fn test_budget(self, cpu: u64, mem: u64) -> Self {
@@ -62,41 +86,6 @@ impl Host {
         self
     }
 
-    pub(crate) fn test_storage_with_contracts(
-        ids: Vec<Hash>,
-        codes: Vec<&'static [u8]>,
-        budget: Budget,
-    ) -> Storage {
-        let it = ids.iter().zip(codes.iter());
-        let mut footprint = Footprint::default();
-        let mut map = OrdMap::default();
-        for (id, contract) in it {
-            let key = ScVal::Static(ScStatic::LedgerKeyContractCode);
-            let storage_key = LedgerKey::ContractData(LedgerKeyContractData {
-                contract_id: id.clone(),
-                key: key.clone(),
-            });
-            // We unwrap here rather than host.map_err because the host doesn't exist yet.
-            let val = ScVal::Object(Some(ScObject::ContractCode(ScContractCode::Wasm(
-                (*contract).try_into().unwrap(),
-            ))));
-            let le = LedgerEntry {
-                last_modified_ledger_seq: 0,
-                data: LedgerEntryData::ContractData(ContractDataEntry {
-                    contract_id: id.clone(),
-                    key,
-                    val,
-                }),
-                ext: LedgerEntryExt::V0,
-            };
-            map.insert(Box::new(storage_key.clone()), Some(Box::new(le)));
-            footprint
-                .record_access(&storage_key, AccessType::ReadOnly)
-                .unwrap();
-        }
-        Storage::with_enforcing_footprint_and_map(footprint, MeteredOrdMap { budget, map })
-    }
-
     pub(crate) fn test_account_ledger_key_entry_pair(
         account_id: AccountId,
     ) -> (LedgerKey, LedgerEntry) {
@@ -115,12 +104,10 @@ impl Host {
             signers: Default::default(),
             ext: xdr::AccountEntryExt::V0,
         };
-        let le = LedgerEntry {
-            last_modified_ledger_seq: 0,
-            data: LedgerEntryData::Account(account_entry),
-            ext: LedgerEntryExt::V0,
-        };
-        (lk, le)
+        (
+            lk,
+            Host::ledger_entry_from_data(LedgerEntryData::Account(account_entry)),
+        )
     }
 
     pub(crate) fn test_scvec<T: AsScVal>(&self, vals: &[T]) -> Result<ScVec, HostError> {
@@ -144,5 +131,52 @@ impl Host {
 
     pub(crate) fn test_bin_obj(&self, vals: &[u8]) -> Result<HostObj, HostError> {
         self.to_host_obj(&self.test_bin_scobj(vals)?)
+    }
+
+    pub(crate) fn raw_val_vec_to_sc_vec(&self, v: Vec<RawVal>) -> ScVec {
+        let mut res = Vec::<ScVal>::new();
+        for val in v {
+            res.push(val.try_into_val(self).unwrap());
+        }
+        res.try_into().unwrap()
+    }
+
+    // Registers a contract with provided WASM source and returns the registered
+    // contract ID.
+    // This relies on the host to have no footprint enforcement.
+    pub(crate) fn register_test_contract_wasm(
+        &self,
+        contract_wasm: &[u8],
+    ) -> Result<Object, HostError> {
+        self.set_source_account(generate_account_id());
+        let wasm_id: RawVal = self
+            .invoke_function(HostFunction::InstallContractCode(InstallContractCodeArgs {
+                code: contract_wasm
+                    .to_vec()
+                    .try_into()
+                    .map_err(|_| self.err_general("too large wasm"))?,
+            }))?
+            .try_into_val(self)?;
+        let wasm_id = self.hash_from_obj_input("wasm_hash", wasm_id.try_into()?)?;
+        let id_obj: RawVal = self
+            .invoke_function(HostFunction::CreateContract(CreateContractArgs {
+                contract_id: ContractId::SourceAccount(Uint256(generate_bytes_array())),
+                source: ScContractCode::WasmRef(wasm_id),
+            }))?
+            .try_into_val(self)?;
+        self.remove_source_account();
+        Ok(id_obj.try_into()?)
+    }
+}
+
+impl Default for LedgerInfo {
+    fn default() -> Self {
+        Self {
+            protocol_version: Default::default(),
+            sequence_number: Default::default(),
+            timestamp: Default::default(),
+            network_passphrase: vec![0; 32],
+            base_reserve: Default::default(),
+        }
     }
 }
