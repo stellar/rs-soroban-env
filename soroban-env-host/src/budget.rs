@@ -519,7 +519,7 @@ impl Default for BudgetImpl {
                 }
                 // The Cmp costs are temporarily disabled due to bug
                 // (https://github.com/stellar/rs-soroban-env/issues/579). This prevents `obj_cmp`
-                // from escalating an out-of-budget `HostError` to a `panic` that crashes the host.
+                // from escalating an out-of-budget `HostError` to a `panic`.
                 CostType::ImMapCmp
                 | CostType::ImVecCmp
                 | CostType::BigIntCmp
@@ -577,7 +577,7 @@ impl Default for BudgetImpl {
                 CostType::ImMapMutEntry | CostType::ImMapImmutEntry => (),
                 // The Cmp costs are temporarily disabled due to bug
                 // (https://github.com/stellar/rs-soroban-env/issues/579). This prevents `obj_cmp`
-                // from escalating an out-of-budget `HostError` to a `panic` that crashes the host.
+                // from escalating an out-of-budget `HostError` to a `panic`.
                 CostType::ImMapCmp
                 | CostType::ImVecCmp
                 | CostType::BigIntCmp
