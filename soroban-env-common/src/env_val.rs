@@ -222,6 +222,91 @@ impl<E: Env> TryIntoVal<E, u64> for RawVal {
     }
 }
 
+impl<E: Env> IntoVal<E, RawVal> for u128 {
+    fn into_val(self, env: &E) -> RawVal {
+        env.obj_from_u128_pieces(self as u64, (self >> 64) as u64)
+            .to_raw()
+    }
+}
+
+impl<E: Env> IntoVal<E, RawVal> for &u128 {
+    fn into_val(self, env: &E) -> RawVal {
+        (*self).into_val(env)
+    }
+}
+
+impl<E: Env> IntoVal<E, RawVal> for i128 {
+    fn into_val(self, env: &E) -> RawVal {
+        env.obj_from_i128_pieces(self as u64, (self as u128 >> 64) as u64)
+            .to_raw()
+    }
+}
+
+impl<E: Env> IntoVal<E, RawVal> for &i128 {
+    fn into_val(self, env: &E) -> RawVal {
+        (*self).into_val(env)
+    }
+}
+
+impl<E: Env> TryFromVal<E, RawVal> for i128 {
+    type Error = ConversionError;
+
+    fn try_from_val(env: &E, val: RawVal) -> Result<Self, Self::Error> {
+        <Self as TryFromVal<E, Object>>::try_from_val(env, val.try_into()?)
+    }
+}
+
+impl<E: Env> TryIntoVal<E, i128> for RawVal {
+    type Error = ConversionError;
+
+    fn try_into_val(self, env: &E) -> Result<i128, Self::Error> {
+        <i128 as TryFromVal<E, RawVal>>::try_from_val(env, self.try_into()?)
+    }
+}
+
+impl<E: Env> TryIntoVal<E, RawVal> for i128 {
+    type Error = ConversionError;
+
+    fn try_into_val(self, env: &E) -> Result<RawVal, Self::Error> {
+        Ok(<Self as TryIntoVal<E, Object>>::try_into_val(self, env)?.into())
+    }
+}
+
+impl<E: Env> TryIntoVal<E, Object> for i128 {
+    type Error = ConversionError;
+
+    fn try_into_val(self, env: &E) -> Result<Object, Self::Error> {
+        Ok(env.obj_from_i128_pieces(self as u64, (self as u128 >> 64) as u64))
+    }
+}
+
+impl<E: Env> TryFromVal<E, i128> for Object {
+    type Error = ConversionError;
+
+    fn try_from_val(env: &E, val: i128) -> Result<Self, Self::Error> {
+        <i128 as TryIntoVal<E, Object>>::try_into_val(val, env)
+    }
+}
+
+impl<E: Env> TryFromVal<E, Object> for i128 {
+    type Error = ConversionError;
+
+    fn try_from_val(env: &E, val: Object) -> Result<Self, Self::Error> {
+        let lo = env.obj_to_i128_lo64(val);
+        let hi = env.obj_to_i128_hi64(val);
+        let u: u128 = (lo as u128) | ((hi as u128) << 64);
+        Ok(u as i128)
+    }
+}
+
+impl<E: Env> TryIntoVal<E, i128> for Object {
+    type Error = ConversionError;
+
+    fn try_into_val(self, env: &E) -> Result<i128, Self::Error> {
+        <i128 as TryFromVal<E, Object>>::try_from_val(env, self)
+    }
+}
+
 #[cfg(feature = "std")]
 impl<E: Env> TryFromVal<E, RawVal> for ScVal
 where

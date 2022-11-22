@@ -49,8 +49,7 @@ pub mod cost_runner;
 #[cfg(any(test, feature = "testutils"))]
 pub use host::ContractFunctionSet;
 pub use host::{
-    metered_bigint::MeteredBigInt, metered_map::MeteredOrdMap, metered_vector::MeteredVector, Host,
-    HostError, LedgerInfo,
+    metered_map::MeteredOrdMap, metered_vector::MeteredVector, Host, HostError, LedgerInfo,
 };
 pub use im_rc;
 pub use soroban_env_common::*;

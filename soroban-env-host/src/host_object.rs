@@ -1,5 +1,4 @@
 use super::{
-    host::metered_bigint::MeteredBigInt,
     host::metered_map::MeteredOrdMap,
     host::metered_vector::MeteredVector,
     weak_host::WeakHost,
@@ -18,8 +17,9 @@ pub(crate) enum HostObject {
     Map(HostMap),
     U64(u64),
     I64(i64),
+    U128(u128),
+    I128(i128),
     Bytes(Vec<u8>),
-    BigInt(MeteredBigInt),
     ContractCode(xdr::ScContractCode),
     AccountId(xdr::AccountId),
 }
@@ -56,7 +56,8 @@ declare_host_object_type!(HostMap, Map, Map);
 declare_host_object_type!(HostVec, Vec, Vec);
 declare_host_object_type!(u64, U64, U64);
 declare_host_object_type!(i64, I64, I64);
+declare_host_object_type!(u128, U128, U128);
+declare_host_object_type!(i128, I128, I128);
 declare_host_object_type!(Vec<u8>, Bytes, Bytes);
-declare_host_object_type!(MeteredBigInt, BigInt, BigInt);
 declare_host_object_type!(xdr::ScContractCode, ContractCode, ContractCode);
 declare_host_object_type!(xdr::AccountId, AccountId, AccountId);

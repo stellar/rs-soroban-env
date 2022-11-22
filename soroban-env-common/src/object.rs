@@ -24,7 +24,7 @@ impl Debug for Object {
             Err(_) => &"Unknown",
         };
         let index = self.as_raw().get_major();
-        write!(f, "Object({}({}))", object_type_name, index)
+        write!(f, "Object({}(#{}))", object_type_name, index)
     }
 }
 

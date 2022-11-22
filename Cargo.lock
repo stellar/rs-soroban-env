@@ -213,6 +213,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "const_format"
+version = "0.2.30"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7309d9b4d3d2c0641e018d449232f2e28f1b22933c137f157d3dbc14228b8c0e"
+dependencies = [
+ "const_format_proc_macros",
+]
+
+[[package]]
+name = "const_format_proc_macros"
+version = "0.2.29"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d897f47bf7270cf70d370f8f98c1abb6d2d4cf60a6845d30e05bfb90c6568650"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "unicode-xid",
+]
+
+[[package]]
 name = "core-foundation-sys"
 version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -225,6 +245,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dc948ebb96241bb40ab73effeb80d9f93afaad49359d159a5e61be51619fe813"
 dependencies = [
  "libc",
+]
+
+[[package]]
+name = "crate-git-revision"
+version = "0.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "07bf26dd21fe3d2cfed5afaedba648f944ba425e39083d1b86b6993e0d71b430"
+dependencies = [
+ "serde",
+ "serde_derive",
+ "serde_json",
 ]
 
 [[package]]
@@ -1080,7 +1111,6 @@ dependencies = [
  "hex",
  "im-rc",
  "log",
- "num-bigint",
  "num-derive",
  "num-integer",
  "num-traits",
@@ -1175,9 +1205,11 @@ checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 [[package]]
 name = "stellar-xdr"
 version = "0.0.7"
-source = "git+https://github.com/stellar/rs-stellar-xdr?rev=5fd7c7d4#5fd7c7d44d66452209a951be89c0c3602ab9f302"
+source = "git+https://github.com/stellar/rs-stellar-xdr?rev=dc7bee80#dc7bee80026d409220919b1d8e92757bc9a3150f"
 dependencies = [
  "base64",
+ "const_format",
+ "crate-git-revision",
  "hex",
  "serde",
  "serde_with",

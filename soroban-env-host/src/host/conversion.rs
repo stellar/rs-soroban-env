@@ -1,8 +1,7 @@
-use super::metered_bigint::MeteredBigInt;
 use super::metered_clone::MeteredClone;
 use crate::xdr::{
-    Hash, LedgerKey, LedgerKeyContractData, ScBigInt, ScHostFnErrorCode, ScHostObjErrorCode,
-    ScHostValErrorCode, ScObject, ScStatic, ScVal, ScVec, Uint256,
+    Hash, LedgerKey, LedgerKeyContractData, ScHostFnErrorCode, ScHostObjErrorCode,
+    ScHostValErrorCode, ScStatic, ScVal, ScVec, Uint256,
 };
 use crate::{
     budget::CostType,
@@ -11,7 +10,6 @@ use crate::{
     Host, HostError, Object, RawVal,
 };
 use ed25519_dalek::{PublicKey, Signature, SIGNATURE_LENGTH};
-use num_bigint::Sign;
 use sha2::{Digest, Sha256};
 use soroban_env_common::xdr::AccountId;
 
@@ -212,19 +210,6 @@ impl Host {
         self.storage_key_from_rawval(k)
     }
 
-    pub(crate) fn scobj_from_bigint(&self, bi: &MeteredBigInt) -> Result<ScObject, HostError> {
-        let (sign, data) = bi.to_bytes_be()?;
-        match sign {
-            Sign::Minus => Ok(ScObject::BigInt(ScBigInt::Negative(
-                self.map_err(data.try_into())?,
-            ))),
-            Sign::NoSign => Ok(ScObject::BigInt(ScBigInt::Zero)),
-            Sign::Plus => Ok(ScObject::BigInt(ScBigInt::Positive(
-                self.map_err(data.try_into())?,
-            ))),
-        }
-    }
-
     fn event_topic_from_rawval(&self, topic: RawVal) -> Result<ScVal, HostError> {
         self.validate_event_topic(topic)?;
         self.from_host_val(topic)
@@ -252,44 +237,6 @@ impl Host {
                     },
                 }
             })
-        }
-    }
-
-    pub(crate) fn bigint_sign_from_rawval(&self, sign: RawVal) -> Result<Sign, HostError> {
-        match i32::try_from(sign) {
-            Ok(s) => match s {
-                -1 => Ok(Sign::Minus),
-                0 => Ok(Sign::NoSign),
-                1 => Ok(Sign::Plus),
-                _ => Err(self.err(
-                    DebugError::new(ScHostFnErrorCode::InputArgsInvalid)
-                        .msg("invalid sign {}, expect -1, 0 or 1")
-                        .arg(sign),
-                )),
-            },
-            Err(cvt) => Err(self.err(
-                DebugError::new(ScHostFnErrorCode::InputArgsWrongType)
-                    .msg("unexpected RawVal {} for sign, need I32")
-                    .arg(sign),
-            )),
-        }
-    }
-
-    pub(crate) fn bigint_radix_from_rawval(&self, radix: RawVal) -> Result<u32, HostError> {
-        match u32::try_from(radix) {
-            Ok(r) => match r {
-                2..=256 => Ok(r),
-                _ => Err(self.err(
-                    DebugError::new(ScHostFnErrorCode::InputArgsInvalid)
-                        .msg("invalid radix {}, expected range 2..=256")
-                        .arg(radix),
-                )),
-            },
-            Err(cvt) => Err(self.err(
-                DebugError::new(ScHostFnErrorCode::InputArgsWrongType)
-                    .msg("unexpected RawVal {} for radix, need U32")
-                    .arg(radix),
-            )),
         }
     }
 
