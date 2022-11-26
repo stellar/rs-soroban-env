@@ -1,3 +1,4 @@
+use crate::budget::AsBudget;
 use crate::host::Host;
 use crate::native_contract::token::metadata::read_metadata;
 use crate::native_contract::token::public_types::{Identifier, Metadata};
@@ -112,7 +113,7 @@ fn transfer_account_balance(e: &Host, account_id: AccountId, amount: i64) -> Res
     let lk = e.to_account_key(account_id.clone());
 
     e.with_mut_storage(|storage| {
-        let mut le = storage.get(&lk)?;
+        let mut le = storage.get(&lk, e.as_budget())?;
         let ae = match &mut le.data {
             LedgerEntryData::Account(ae) => Ok(ae),
             _ => Err(err!(
@@ -155,7 +156,7 @@ fn transfer_account_balance(e: &Host, account_id: AccountId, amount: i64) -> Res
         };
         if new_balance >= min_balance && new_balance <= max_balance {
             ae.balance = new_balance;
-            storage.put(&lk, &le)
+            storage.put(&lk, &le, e.as_budget())
         } else {
             Err(err!(
                 e,
@@ -178,7 +179,7 @@ fn transfer_trustline_balance(
 ) -> Result<(), HostError> {
     let lk = e.to_trustline_key(account_id, asset);
     e.with_mut_storage(|storage| {
-        let mut le = storage.get(&lk)?;
+        let mut le = storage.get(&lk, e.as_budget())?;
         let tl = match &mut le.data {
             LedgerEntryData::Trustline(tl) => Ok(tl),
             _ => Err(e.err_status_msg(
@@ -220,7 +221,7 @@ fn transfer_trustline_balance(
         };
         if new_balance >= min_balance && new_balance <= max_balance {
             tl.balance = new_balance;
-            storage.put(&lk, &le)
+            storage.put(&lk, &le, e.as_budget())
         } else {
             Err(err!(
                 e,

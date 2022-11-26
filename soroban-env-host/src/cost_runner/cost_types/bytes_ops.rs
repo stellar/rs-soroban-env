@@ -1,7 +1,9 @@
+use soroban_env_common::Compare;
+
 use crate::{
-    budget::CostType,
+    budget::{AsBudget, CostType},
     cost_runner::CostRunner,
-    host::{metered_clone::MeteredClone, metered_cmp::MeteredCmp},
+    host::metered_clone::MeteredClone,
 };
 
 pub struct BytesCloneRun;
@@ -90,9 +92,8 @@ impl CostRunner for BytesCmpRun {
     type SampleType = (Vec<u8>, Vec<u8>);
 
     fn run_iter(host: &crate::Host, _iter: u64, sample: Self::SampleType) {
-        sample
-            .0
-            .metered_cmp(&sample.1, &host.budget_cloned())
+        host.as_budget()
+            .compare(&sample.0.as_slice(), &sample.1.as_slice())
             .unwrap();
     }
 }

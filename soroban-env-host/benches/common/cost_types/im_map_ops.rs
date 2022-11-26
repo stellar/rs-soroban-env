@@ -1,10 +1,7 @@
 use crate::common::{util, HostCostMeasurement};
 use rand::{rngs::StdRng, seq::SliceRandom};
 use soroban_env_host::{
-    cost_runner::{
-        ImMapCmpRun, ImMapCmpSample, ImMapImmutEntryRun, ImMapImmutEntrySample, ImMapMutEntryRun,
-        ImMapMutEntrySample, ImMapNewRun,
-    },
+    cost_runner::{ImMapImmutEntryRun, ImMapImmutEntrySample, ImMapNewRun},
     Host, MeteredOrdMap,
 };
 
@@ -27,75 +24,27 @@ impl HostCostMeasurement for ImMapImmutEntryMeasure {
 
     fn new_random_case(host: &Host, rng: &mut StdRng, input: u64) -> ImMapImmutEntrySample {
         let input = input * 100;
-        let mut keys: Vec<_> = util::to_envval_u32(host, 0..(input as u32)).collect();
+        let mut keys: Vec<_> = util::to_rawval_u32(host, 0..(input as u32)).collect();
         keys.shuffle(rng);
         let om = keys.iter().cloned().zip(keys.iter().cloned()).collect();
-        let map: MeteredOrdMap<_, _> = MeteredOrdMap::from_map(host.budget_cloned(), om).unwrap();
+        let map: MeteredOrdMap<_, _, _> = MeteredOrdMap::from_map(om, host).unwrap();
         keys.shuffle(rng);
         ImMapImmutEntrySample { map, keys }
     }
 
     fn new_worst_case(host: &Host, _rng: &mut StdRng, input: u64) -> ImMapImmutEntrySample {
         let input = input * 100;
-        let keys: Vec<_> = util::to_envval_u32(host, 0..(input as u32)).collect();
+        let keys: Vec<_> = util::to_rawval_u32(host, 0..(input as u32)).collect();
         let om = keys.iter().cloned().zip(keys.iter().cloned()).collect();
-        let map: MeteredOrdMap<_, _> = MeteredOrdMap::from_map(host.budget_cloned(), om).unwrap();
-        let keys = util::to_envval_u32(host, [0, u32::MAX].iter().cloned()).collect();
+        let map: MeteredOrdMap<_, _, _> = MeteredOrdMap::from_map(om, host).unwrap();
+        let keys = util::to_rawval_u32(host, [0, u32::MAX].iter().cloned()).collect();
         ImMapImmutEntrySample { map, keys }
     }
 
     fn new_best_case(host: &Host, _rng: &mut StdRng) -> ImMapImmutEntrySample {
-        let keys: Vec<_> = util::to_envval_u32(host, [0].iter().cloned()).collect();
+        let keys: Vec<_> = util::to_rawval_u32(host, [0].iter().cloned()).collect();
         let om = keys.iter().cloned().zip(keys.iter().cloned()).collect();
-        let map: MeteredOrdMap<_, _> = MeteredOrdMap::from_map(host.budget_cloned(), om).unwrap();
+        let map: MeteredOrdMap<_, _, _> = MeteredOrdMap::from_map(om, host).unwrap();
         ImMapImmutEntrySample { map, keys }
-    }
-}
-
-pub(crate) struct ImMapMutEntryMeasure;
-// This is just a variant of ImMapImmutEntryRun that calls the get_mut method on
-// a multiply-referenced map, causing a copy-on-write of some nodes. It should
-// cost a nearly-constant (perhaps very-slow-log) amount of memory and CPU.
-impl HostCostMeasurement for ImMapMutEntryMeasure {
-    type Runner = ImMapMutEntryRun;
-
-    fn new_best_case(host: &Host, rng: &mut StdRng) -> ImMapMutEntrySample {
-        let im = ImMapImmutEntryMeasure::new_best_case(host, rng);
-        let second_map_ref = im.map.clone();
-        ImMapMutEntrySample { im, second_map_ref }
-    }
-
-    fn new_worst_case(host: &Host, rng: &mut StdRng, input: u64) -> ImMapMutEntrySample {
-        let im = ImMapImmutEntryMeasure::new_worst_case(host, rng, input);
-        let second_map_ref = im.map.clone();
-        ImMapMutEntrySample { im, second_map_ref }
-    }
-
-    fn new_random_case(host: &Host, rng: &mut StdRng, input: u64) -> ImMapMutEntrySample {
-        let im = ImMapImmutEntryMeasure::new_random_case(host, rng, input);
-        let second_map_ref = im.map.clone();
-        ImMapMutEntrySample { im, second_map_ref }
-    }
-}
-
-pub(crate) struct ImMapCmpMeasure;
-// Measures the cost of comparing two OrdMaps. The worst case grows n*log(n) whereas
-// the average cost is close to constant.
-impl HostCostMeasurement for ImMapCmpMeasure {
-    type Runner = ImMapCmpRun;
-
-    fn new_random_case(host: &Host, rng: &mut StdRng, input: u64) -> ImMapCmpSample {
-        let input = input * 100;
-        let oa = util::random_ord_map(host, rng, input);
-        let ob = util::random_ord_map(host, rng, input);
-        let a = MeteredOrdMap::from_map(host.budget_cloned(), oa).unwrap();
-        let b = MeteredOrdMap::from_map(host.budget_cloned(), ob).unwrap();
-        ImMapCmpSample { a, b }
-    }
-
-    fn new_worst_case(host: &Host, rng: &mut StdRng, input: u64) -> ImMapCmpSample {
-        let a = ImMapImmutEntryMeasure::new_random_case(host, rng, input).map;
-        let b = a.clone();
-        ImMapCmpSample { a, b }
     }
 }

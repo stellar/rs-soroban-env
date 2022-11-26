@@ -1,44 +1,72 @@
-use super::{MeteredClone, MeteredCmp};
+use soroban_env_common::xdr::ScHostObjErrorCode;
+
+use super::MeteredClone;
 use crate::{
-    budget::{Budget, CostType},
-    HostError,
+    budget::{AsBudget, Budget, CostType},
+    xdr::ScHostFnErrorCode,
+    Compare, Host, HostError,
 };
-use im_rc::ordmap::{ConsumingIter, Iter, Keys, Values};
-use im_rc::OrdMap;
-use std::{
-    borrow::Borrow,
-    cmp::{min, Ordering},
-    rc::Rc,
-};
+use std::{borrow::Borrow, cmp::Ordering, marker::PhantomData};
 
-pub struct MeteredOrdMap<K, V> {
-    pub(crate) budget: Budget,
-    pub(crate) map: OrdMap<K, V>,
+pub struct MeteredOrdMap<K, V, Ctx>
+where
+    K: MeteredClone,
+    V: MeteredClone,
+    Ctx: AsBudget + Compare<K, Error = HostError> + Compare<V, Error = HostError>,
+{
+    pub(crate) map: Vec<(K, V)>,
+    ctx: PhantomData<Ctx>,
 }
 
-impl<K, V> MeteredOrdMap<K, V> {
-    fn charge_new(&self) -> Result<(), HostError> {
-        self.budget.charge(CostType::ImMapNew, 1)
-    }
-
-    fn charge_mut_access(&self, x: u64) -> Result<(), HostError> {
-        self.budget.charge(CostType::ImMapMutEntry, x)
-    }
-
-    fn charge_immut_access(&self, x: u64) -> Result<(), HostError> {
-        self.budget.charge(CostType::ImMapImmutEntry, x)
-    }
-
-    fn charge_cmp(&self, x: u64) -> Result<(), HostError> {
-        self.budget.charge(CostType::ImMapCmp, x)
+impl<K, V, Ctx> Clone for MeteredOrdMap<K, V, Ctx>
+where
+    K: MeteredClone,
+    V: MeteredClone,
+    Ctx: AsBudget + Compare<K, Error = HostError> + Compare<V, Error = HostError>,
+{
+    fn clone(&self) -> Self {
+        Self {
+            map: self.map.clone(),
+            ctx: Default::default(),
+        }
     }
 }
 
-impl<K, V> Default for MeteredOrdMap<K, V> {
+impl<K, V, Ctx> MeteredOrdMap<K, V, Ctx>
+where
+    K: MeteredClone,
+    V: MeteredClone,
+    Ctx: AsBudget + Compare<K, Error = HostError> + Compare<V, Error = HostError>,
+{
+    fn charge_new<B: AsBudget>(&self, size: usize, b: &B) -> Result<(), HostError> {
+        b.as_budget().charge(CostType::MapNew, size as u64)
+    }
+
+    fn charge_access<B: AsBudget>(&self, count: usize, b: &B) -> Result<(), HostError> {
+        b.as_budget().charge(CostType::MapEntry, count as u64)
+    }
+
+    fn charge_scan<B: AsBudget>(&self, b: &B) -> Result<(), HostError> {
+        b.as_budget()
+            .charge(CostType::MapEntry, self.map.len() as u64)
+    }
+
+    fn charge_binsearch<B: AsBudget>(&self, b: &B) -> Result<(), HostError> {
+        let mag = 64 - (self.map.len() as u64).leading_zeros();
+        b.as_budget().charge(CostType::MapEntry, mag as u64)
+    }
+}
+
+impl<K, V, Ctx> Default for MeteredOrdMap<K, V, Ctx>
+where
+    K: MeteredClone,
+    V: MeteredClone,
+    Ctx: AsBudget + Compare<K, Error = HostError> + Compare<V, Error = HostError>,
+{
     fn default() -> Self {
         Self {
-            budget: Default::default(),
             map: Default::default(),
+            ctx: Default::default(),
         }
     }
 }
@@ -50,221 +78,321 @@ fn check_size_is_small<T>(name: &str) {
     }
 }
 
-impl<K, V> MeteredOrdMap<K, V>
+// We abstract over Ctx:AsBudget here so that you can operate on MeteredOrdMap
+// before you have a Host constructed -- a bit, though only with certain types,
+// for example you can't do any lookups on maps keyed by Objects -- so long as
+// you at _least_ have a Budget. This is done to allow clients to populate and
+// reuse Storage maps keyed by non-Objects such as LedgerKey while only keeping
+// a Budget alive, rather than a whole Host.
+impl<K, V, Ctx> MeteredOrdMap<K, V, Ctx>
 where
-    K: Ord + Clone,
-    V: Clone,
+    K: MeteredClone,
+    V: MeteredClone,
+    Ctx: AsBudget + Compare<K, Error = HostError> + Compare<V, Error = HostError>,
 {
-    pub fn new(budget: Budget) -> Result<Self, HostError> {
+    pub fn new(ctx: &Ctx) -> Result<Self, HostError> {
         check_size_is_small::<K>("key");
         check_size_is_small::<V>("val");
-        budget.charge(CostType::ImMapNew, 1)?;
+        ctx.as_budget().charge(CostType::MapNew, 1)?;
         Ok(MeteredOrdMap {
-            budget,
-            map: OrdMap::new(),
+            map: Vec::new(),
+            ctx: Default::default(),
         })
     }
 
-    pub fn from_map(budget: Budget, map: OrdMap<K, V>) -> Result<Self, HostError> {
+    pub fn from_map(map: Vec<(K, V)>, ctx: &Ctx) -> Result<Self, HostError> {
         check_size_is_small::<K>("key");
         check_size_is_small::<V>("val");
-        budget.charge(CostType::ImMapNew, 1)?;
-        Ok(MeteredOrdMap { budget, map })
+        // Construction cost already paid for by caller, just check
+        // that input has sorted and unique keys.
+        let m = MeteredOrdMap {
+            map,
+            ctx: Default::default(),
+        };
+        m.charge_scan(ctx)?;
+        for w in m.map.as_slice().windows(2) {
+            match <Ctx as Compare<K>>::compare(ctx, &w[0].0, &w[1].0)? {
+                Ordering::Less => (),
+                // TODO need a better error code for "duplicate key"
+                Ordering::Equal => return Err(ScHostFnErrorCode::UnknownError.into()),
+                // TODO need a better error code for "out-of-order keys"
+                Ordering::Greater => return Err(ScHostFnErrorCode::UnknownError.into()),
+            }
+        }
+        Ok(m)
     }
 
-    // Time: O(log n)
-    pub fn insert(&mut self, key: K, value: V) -> Result<Option<V>, HostError> {
-        self.charge_mut_access(self.map.len() as u64)?;
-        Ok(self.map.insert(key, value))
+    // This doesn't take ExactSizeIterator since that is not implemented for Chain
+    // (see https://github.com/rust-lang/rust/issues/34433) but it only works
+    // with iterators that report an exact size_hint, and it constructs a new
+    // Vec from that iterator with a single allocation-and-copy.
+    pub fn from_exact_iter<I: Iterator<Item = (K, V)>>(
+        iter: I,
+        ctx: &Ctx,
+    ) -> Result<Self, HostError> {
+        if let (_, Some(sz)) = iter.size_hint() {
+            ctx.as_budget().charge(CostType::MapNew, sz as u64)?;
+            // TODO need to do a metered_clone bulk-charge here as well.
+            // ctx.as_budget().charge(CostType::BytesClone, nbytes)?;
+            let map: Vec<(K, V)> = iter.collect();
+            Ok(Self {
+                map,
+                ctx: Default::default(),
+            })
+        } else {
+            // TODO use a better error code for "unbounded input itertors"
+            Err(ScHostFnErrorCode::UnknownError.into())
+        }
     }
 
-    // Time: O(log n)
-    pub fn get<BK>(&self, key: &BK) -> Result<Option<&V>, HostError>
+    fn find<Q>(&self, key: &Q, ctx: &Ctx) -> Result<Result<usize, usize>, HostError>
     where
-        BK: Ord + ?Sized,
-        K: Borrow<BK>,
+        K: Borrow<Q>,
+        Ctx: Compare<Q, Error = HostError>,
     {
-        self.charge_immut_access(self.map.len() as u64)?;
-        Ok(self.map.get(key))
+        self.charge_binsearch(ctx)?;
+        let mut err: Option<HostError> = None;
+        let res = self.map.binary_search_by(|probe| {
+            // We've already hit an error, return Ordering::Equal
+            // to terminate search asap.
+            if err.is_some() {
+                return Ordering::Equal;
+            }
+            match <Ctx as Compare<Q>>::compare(ctx, probe.0.borrow(), key) {
+                Ok(ord) => ord,
+                Err(he) => {
+                    err = Some(he);
+                    Ordering::Equal
+                }
+            }
+        });
+        match err {
+            Some(he) => Err(he),
+            None => Ok(res),
+        }
     }
 
-    // Time: O(log n)
-    pub fn get_mut<BK>(&mut self, key: &BK) -> Result<Option<&mut V>, HostError>
+    pub fn insert(&self, key: K, value: V, ctx: &Ctx) -> Result<Self, HostError> {
+        self.charge_access(1, ctx)?;
+        match self.find(&key, ctx)? {
+            Ok(replace_pos) => {
+                // [0,1,2] replace_pos == 1
+                // take(1) + new + skip(2)
+                // [0] + new + [2]
+                if replace_pos == usize::MAX - 1 {
+                    // TODO: something better for integer overflow.
+                    return Err(ScHostObjErrorCode::VecIndexOutOfBound.into());
+                }
+                let init = self.map.iter().take(replace_pos).cloned();
+                let fini = self.map.iter().skip(replace_pos + 1).cloned();
+                let iter = init.chain([(key, value)].into_iter()).chain(fini);
+                Self::from_exact_iter(iter, ctx)
+            }
+            Err(insert_pos) => {
+                // [0,1,2] insert_pos == 1
+                // take(1) + new + skip(1)
+                // [0] new [1, 2]
+                let init = self.map.iter().take(insert_pos).cloned();
+                let fini = self.map.iter().skip(insert_pos).cloned();
+                let iter = init.chain([(key, value)].into_iter()).chain(fini);
+                Self::from_exact_iter(iter, ctx)
+            }
+        }
+    }
+
+    pub fn get<Q>(&self, key: &Q, ctx: &Ctx) -> Result<Option<&V>, HostError>
     where
-        BK: Ord + ?Sized,
-        K: Borrow<BK>,
+        K: Borrow<Q>,
+        Ctx: Compare<Q, Error = HostError>,
     {
-        self.charge_mut_access(self.map.len() as u64)?;
-        Ok(self.map.get_mut(key))
+        match self.find(key, ctx)? {
+            Ok(found) => {
+                self.charge_access(1, ctx)?;
+                Ok(Some(&self.map[found].1))
+            }
+            _ => Ok(None),
+        }
     }
 
-    // Time: O(log n)
-    pub fn remove<BK>(&mut self, k: &BK) -> Result<Option<V>, HostError>
+    /// Returns a `Some((new_self, val))` pair where `new_self` no longer
+    /// contains an entry for `key`, if the key existed, otherwise `None` if
+    /// `key` didn't exist (in which case there's no need to clone).
+    pub fn remove<Q>(&self, key: &Q, ctx: &Ctx) -> Result<Option<(Self, V)>, HostError>
     where
-        BK: Ord + ?Sized,
-        K: Borrow<BK>,
+        K: Borrow<Q>,
+        Ctx: Compare<Q, Error = HostError>,
     {
-        self.charge_mut_access(self.map.len() as u64)?;
-        Ok(self.map.remove(k))
+        match self.find(key, ctx)? {
+            Ok(found) if found > 0 => {
+                // There's a nonempty prefix to preserve.
+                let init = self.map.iter().take(found - 1).cloned();
+                let fini = self.map.iter().skip(found).cloned();
+                let iter = init.chain(fini);
+                let new = Self::from_exact_iter(iter, ctx)?;
+                let res = self.map[found].1.metered_clone(ctx.as_budget())?;
+                Ok(Some((new, res)))
+            }
+            Ok(found) => {
+                // No prefix, removing at position 0.
+                // If the suffix is empty it's harmless.
+                let iter = self.map.iter().skip(1).cloned();
+                let new = Self::from_exact_iter(iter, ctx)?;
+                let res = self.map[found].1.metered_clone(ctx.as_budget())?;
+                Ok(Some((new, res)))
+            }
+            _ => Ok(None),
+        }
     }
 
-    // Time: O(1). Free of charge.
-    #[inline]
     pub fn len(&self) -> usize {
         self.map.len()
     }
 
-    // Time: O(log n)
-    pub fn contains_key<BK>(&self, k: &BK) -> Result<bool, HostError>
+    pub fn contains_key<Q>(&self, key: &Q, ctx: &Ctx) -> Result<bool, HostError>
     where
-        BK: Ord + ?Sized,
-        K: Borrow<BK>,
+        K: Borrow<Q>,
+        Ctx: Compare<Q, Error = HostError>,
     {
-        self.charge_immut_access(self.map.len() as u64)?;
-        Ok(self.map.contains_key(k))
+        Ok(self.find(key, ctx)?.is_ok())
     }
 
-    /// Time: O(log n)
-    pub fn extract<BK>(&self, k: &BK) -> Result<Option<(V, Self)>, HostError>
+    pub fn get_prev<Q>(&self, key: &Q, ctx: &Ctx) -> Result<Option<&(K, V)>, HostError>
     where
-        BK: Ord + ?Sized,
-        K: Borrow<BK>,
+        K: Borrow<Q>,
+        Ctx: Compare<Q, Error = HostError>,
     {
-        self.charge_immut_access(self.map.len() as u64)?;
-        if let Some((v, m)) = self.map.extract(k) {
-            Ok(Some((v, Self::from_map(self.budget.clone(), m)?)))
-        } else {
-            Ok(None)
+        match self.find(key, ctx)? {
+            Ok(hit) if hit == 0 => Ok(None),
+            Ok(hit) => Ok(Some(&self.map[hit - 1])),
+            // Err(miss) means you could insert key at miss
+            // to maintain sort order (meaning that the element
+            // currently at miss, if it exists, is > than key).
+            Err(miss) if miss == 0 => Ok(None),
+            Err(miss) if miss - 1 < self.map.len() => Ok(Some(&self.map[miss - 1])),
+            Err(_) => Ok(None),
         }
     }
 
-    pub fn get_prev<BK>(&self, key: &BK) -> Result<Option<(&K, &V)>, HostError>
+    pub fn get_next<Q>(&self, key: &Q, ctx: &Ctx) -> Result<Option<&(K, V)>, HostError>
     where
-        BK: Ord + ?Sized,
-        K: Borrow<BK>,
+        K: Borrow<Q>,
+        Ctx: Compare<Q, Error = HostError>,
     {
-        self.charge_immut_access(self.map.len() as u64)?;
-        Ok(self.map.get_prev(key))
-    }
-
-    pub fn get_next<BK>(&self, key: &BK) -> Result<Option<(&K, &V)>, HostError>
-    where
-        BK: Ord + ?Sized,
-        K: Borrow<BK>,
-    {
-        self.charge_immut_access(self.map.len() as u64)?;
-        Ok(self.map.get_next(key))
-    }
-
-    /// Time: O(log n)
-    pub fn get_min(&self) -> Result<Option<&(K, V)>, HostError> {
-        self.charge_immut_access(self.map.len() as u64)?;
-        Ok(self.map.get_min())
-    }
-
-    /// Time: O(log n)
-    pub fn get_max(&self) -> Result<Option<&(K, V)>, HostError> {
-        self.charge_immut_access(self.map.len() as u64)?;
-        Ok(self.map.get_max())
-    }
-
-    pub fn keys(&self) -> Result<Keys<'_, K, V>, HostError> {
-        self.charge_immut_access(self.map.len() as u64)?;
-        Ok(self.map.keys())
-    }
-
-    pub fn values(&self) -> Result<Values<'_, K, V>, HostError> {
-        self.charge_immut_access(self.map.len() as u64)?;
-        Ok(self.map.values())
-    }
-
-    #[inline]
-    pub fn iter(&self) -> Iter<'_, K, V> {
-        self.map.iter()
-    }
-}
-
-impl<K, V> Clone for MeteredOrdMap<K, V> {
-    fn clone(&self) -> Self {
-        Self {
-            budget: self.budget.clone(),
-            map: self.map.clone(),
+        match self.find(key, ctx)? {
+            Ok(hit) if (hit < usize::MAX) && (hit + 1 < self.map.len()) => {
+                Ok(Some(&self.map[hit + 1]))
+            }
+            Ok(hit) => Ok(None),
+            Err(miss) if (miss < self.map.len()) => Ok(Some(&self.map[miss])),
+            Err(miss) => Ok(None),
         }
     }
+
+    pub fn get_min<Q>(&self, ctx: &Ctx) -> Result<Option<&(K, V)>, HostError>
+    where
+        K: Borrow<Q>,
+        Ctx: Compare<Q, Error = HostError>,
+    {
+        self.charge_access(1, ctx)?;
+        Ok(self.map.as_slice().first())
+    }
+
+    pub fn get_max<Q>(&self, ctx: &Ctx) -> Result<Option<&(K, V)>, HostError>
+    where
+        K: Borrow<Q>,
+        Ctx: Compare<Q, Error = HostError>,
+    {
+        self.charge_access(1, ctx)?;
+        Ok(self.map.as_slice().last())
+    }
+
+    pub fn keys(&self, ctx: &Ctx) -> Result<impl Iterator<Item = &K>, HostError> {
+        self.charge_scan(ctx)?;
+        Ok(self.map.iter().map(|(k, _)| k))
+    }
+
+    pub fn values(&self, ctx: &Ctx) -> Result<impl Iterator<Item = &V>, HostError> {
+        self.charge_scan(ctx)?;
+        Ok(self.map.iter().map(|(_, v)| v))
+    }
+
+    pub fn iter(&self, ctx: &Ctx) -> Result<impl Iterator<Item = &(K, V)>, HostError> {
+        self.charge_scan(ctx)?;
+        Ok(self.map.iter())
+    }
 }
 
-impl<K, V> MeteredClone for MeteredOrdMap<K, V> {
+impl<K, V, Ctx> MeteredClone for MeteredOrdMap<K, V, Ctx>
+where
+    K: MeteredClone,
+    V: MeteredClone,
+    Ctx: AsBudget + Compare<K, Error = HostError> + Compare<V, Error = HostError>,
+{
     fn metered_clone(&self, budget: &Budget) -> Result<Self, HostError> {
-        assert!(Rc::ptr_eq(&self.budget.0, &budget.0));
-        self.charge_new()?;
+        self.charge_new(self.map.len(), budget)?;
         Ok(self.clone())
     }
 }
 
-impl<K, V> PartialEq for MeteredOrdMap<K, V>
+impl<K, V> Compare<MeteredOrdMap<K, V, Host>> for Host
 where
-    K: Ord + PartialEq,
-    V: PartialEq,
+    K: MeteredClone,
+    V: MeteredClone,
+    Host: Compare<K, Error = HostError> + Compare<V, Error = HostError>,
 {
-    fn eq(&self, other: &Self) -> bool {
-        Rc::ptr_eq(&self.budget.0, &other.budget.0) && self.map == other.map
-    }
-}
-impl<K: Ord + Eq, V: Eq> Eq for MeteredOrdMap<K, V> {}
+    type Error = HostError;
 
-impl<K, V> PartialOrd for MeteredOrdMap<K, V>
-where
-    K: Ord,
-    V: PartialOrd,
-{
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        assert!(Rc::ptr_eq(&self.budget.0, &other.budget.0));
-        self.map.partial_cmp(&other.map)
+    fn compare(
+        &self,
+        a: &MeteredOrdMap<K, V, Host>,
+        b: &MeteredOrdMap<K, V, Host>,
+    ) -> Result<Ordering, Self::Error> {
+        self.as_budget()
+            .charge(CostType::MapEntry, a.map.len().min(b.map.len()) as u64)?;
+        <Self as Compare<Vec<(K, V)>>>::compare(self, &a.map, &b.map)
     }
 }
 
-impl<K, V> Ord for MeteredOrdMap<K, V>
+impl<K, V> Compare<MeteredOrdMap<K, V, Budget>> for Budget
 where
-    K: Ord,
-    V: Ord,
+    K: MeteredClone,
+    V: MeteredClone,
+    Budget: Compare<K, Error = HostError> + Compare<V, Error = HostError>,
 {
-    fn cmp(&self, other: &Self) -> Ordering {
-        assert!(Rc::ptr_eq(&self.budget.0, &other.budget.0));
-        self.map.cmp(&other.map)
+    type Error = HostError;
+
+    fn compare(
+        &self,
+        a: &MeteredOrdMap<K, V, Budget>,
+        b: &MeteredOrdMap<K, V, Budget>,
+    ) -> Result<Ordering, Self::Error> {
+        self.charge(CostType::MapEntry, a.map.len().min(b.map.len()) as u64)?;
+        <Self as Compare<Vec<(K, V)>>>::compare(self, &a.map, &b.map)
     }
 }
 
-impl<K, V> MeteredCmp for MeteredOrdMap<K, V>
+impl<'a, K, V, Ctx> IntoIterator for &'a MeteredOrdMap<K, V, Ctx>
 where
-    K: Ord + Clone,
-    V: Ord + Clone,
+    K: MeteredClone,
+    V: MeteredClone,
+    Ctx: AsBudget + Compare<K, Error = HostError> + Compare<V, Error = HostError>,
 {
-    fn metered_cmp(&self, other: &Self, budget: &Budget) -> Result<Ordering, HostError> {
-        assert!(Rc::ptr_eq(&self.budget.0, &other.budget.0));
-        self.charge_cmp(min(self.len(), other.len()) as u64)?;
-        Ok(self.map.cmp(&other.map))
-    }
-}
-
-impl<'a, K, V> IntoIterator for &'a MeteredOrdMap<K, V>
-where
-    K: Ord,
-{
-    type Item = (&'a K, &'a V);
-    type IntoIter = Iter<'a, K, V>;
+    type Item = &'a (K, V);
+    type IntoIter = core::slice::Iter<'a, (K, V)>;
 
     fn into_iter(self) -> Self::IntoIter {
-        self.map.into_iter()
+        (&self.map).into_iter()
     }
 }
 
-impl<K, V> IntoIterator for MeteredOrdMap<K, V>
+impl<K, V, Ctx> IntoIterator for MeteredOrdMap<K, V, Ctx>
 where
-    K: Ord + Clone,
-    V: Clone,
+    K: MeteredClone,
+    V: MeteredClone,
+    Ctx: AsBudget + Compare<K, Error = HostError> + Compare<V, Error = HostError>,
 {
     type Item = (K, V);
-    type IntoIter = ConsumingIter<(K, V)>;
+    type IntoIter = std::vec::IntoIter<(K, V)>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.map.into_iter()

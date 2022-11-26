@@ -1,4 +1,5 @@
-use im_rc::OrdMap;
+use std::rc::Rc;
+
 use soroban_env_common::xdr::{
     AccountId, LedgerEntry, LedgerKey, LedgerKeyAccount, PublicKey, Uint256,
 };
@@ -28,8 +29,8 @@ fn map_put_has_and_get() -> Result<(), HostError> {
     let obj = host.to_host_obj(&scobj)?;
     let k: RawVal = 3_u32.into();
     let v: RawVal = 6_u32.into();
-    assert!(!bool::try_from(host.map_has(obj.to_object(), k)?)?);
-    let obj1 = host.map_put(obj.to_object(), k, v)?;
+    assert!(!bool::try_from(host.map_has(obj, k)?)?);
+    let obj1 = host.map_put(obj, k, v)?;
     assert!(bool::try_from(host.map_has(obj1, k)?)?);
     let rv = host.map_get(obj1, k)?;
     let v = unsafe { <u32 as RawValConvertible>::unchecked_from_val(rv) };
@@ -58,56 +59,46 @@ fn map_prev_and_next() -> Result<(), HostError> {
     // prev
     {
         assert_eq!(
-            host.map_prev_key(obj.to_object(), 0_u32.into())?
-                .get_payload(),
+            host.map_prev_key(obj, 0_u32.into())?.get_payload(),
             Status::UNKNOWN_ERROR.to_raw().get_payload()
         );
         assert_eq!(
-            host.map_prev_key(obj.to_object(), 1_u32.into())?
-                .get_payload(),
+            host.map_prev_key(obj, 1_u32.into())?.get_payload(),
             Status::UNKNOWN_ERROR.to_raw().get_payload()
         );
         assert_eq!(
-            host.map_prev_key(obj.to_object(), 2_u32.into())?
-                .get_payload(),
+            host.map_prev_key(obj, 2_u32.into())?.get_payload(),
             RawVal::from_u32(1).get_payload()
         );
         assert_eq!(
-            host.map_prev_key(obj.to_object(), 4_u32.into())?
-                .get_payload(),
+            host.map_prev_key(obj, 4_u32.into())?.get_payload(),
             RawVal::from_u32(1).get_payload()
         );
         assert_eq!(
-            host.map_prev_key(obj.to_object(), 5_u32.into())?
-                .get_payload(),
+            host.map_prev_key(obj, 5_u32.into())?.get_payload(),
             RawVal::from_u32(4).get_payload()
         );
     }
     // next
     {
         assert_eq!(
-            host.map_next_key(obj.to_object(), 5_u32.into())?
-                .get_payload(),
+            host.map_next_key(obj, 5_u32.into())?.get_payload(),
             Status::UNKNOWN_ERROR.to_raw().get_payload()
         );
         assert_eq!(
-            host.map_next_key(obj.to_object(), 4_u32.into())?
-                .get_payload(),
+            host.map_next_key(obj, 4_u32.into())?.get_payload(),
             Status::UNKNOWN_ERROR.to_raw().get_payload()
         );
         assert_eq!(
-            host.map_next_key(obj.to_object(), 3_u32.into())?
-                .get_payload(),
+            host.map_next_key(obj, 3_u32.into())?.get_payload(),
             RawVal::from_u32(4).get_payload()
         );
         assert_eq!(
-            host.map_next_key(obj.to_object(), 1_u32.into())?
-                .get_payload(),
+            host.map_next_key(obj, 1_u32.into())?.get_payload(),
             RawVal::from_u32(4).get_payload()
         );
         assert_eq!(
-            host.map_next_key(obj.to_object(), 0_u32.into())?
-                .get_payload(),
+            host.map_next_key(obj, 0_u32.into())?.get_payload(),
             RawVal::from_u32(1).get_payload()
         );
     }
@@ -228,26 +219,8 @@ fn map_values() -> Result<(), HostError> {
 }
 
 #[test]
-#[ignore = "aborts with a stack overflow"]
-fn map_stack_overflow_63356_big_keys_and_vals() {
-    let mut map: OrdMap<LedgerKey, Option<LedgerEntry>> = OrdMap::new();
-    for a in 0..=255 {
-        for b in 0..=255 {
-            let mut k: [u8; 32] = [0; 32];
-            k[0] = a;
-            k[1] = b;
-            let pk = PublicKey::PublicKeyTypeEd25519(Uint256(k));
-            let key = LedgerKey::Account(LedgerKeyAccount {
-                account_id: AccountId(pk),
-            });
-            map.insert(key, None);
-        }
-    }
-}
-
-#[test]
 fn map_stack_no_overflow_65536_boxed_keys_and_vals() {
-    let mut map: OrdMap<Box<LedgerKey>, Option<Box<LedgerEntry>>> = OrdMap::new();
+    let mut map: Vec<(Rc<LedgerKey>, Option<Rc<LedgerEntry>>)> = Vec::new();
     for a in 0..=255 {
         for b in 0..=255 {
             let mut k: [u8; 32] = [0; 32];
@@ -257,28 +230,7 @@ fn map_stack_no_overflow_65536_boxed_keys_and_vals() {
             let key = LedgerKey::Account(LedgerKeyAccount {
                 account_id: AccountId(pk),
             });
-            map.insert(Box::new(key), None);
-        }
-    }
-}
-
-#[test]
-#[ignore = "runs for too long on debug builds"]
-fn map_stack_no_overflow_16777216_boxed_keys_and_vals() {
-    let mut map: OrdMap<Box<LedgerKey>, Option<Box<LedgerEntry>>> = OrdMap::new();
-    for a in 0..=255 {
-        for b in 0..=255 {
-            for c in 0..=255 {
-                let mut k: [u8; 32] = [0; 32];
-                k[0] = a;
-                k[1] = b;
-                k[2] = c;
-                let pk = PublicKey::PublicKeyTypeEd25519(Uint256(k));
-                let key = LedgerKey::Account(LedgerKeyAccount {
-                    account_id: AccountId(pk),
-                });
-                map.insert(Box::new(key), None);
-            }
+            map.push((Rc::new(key), None));
         }
     }
 }

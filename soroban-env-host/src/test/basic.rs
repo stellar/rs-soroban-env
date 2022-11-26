@@ -51,9 +51,9 @@ fn u32_as_seen_by_host() -> Result<(), HostError> {
     let host = Host::default();
     let scval0 = ScVal::U32(12345);
     let val0 = host.to_host_val(&scval0)?;
-    assert!(val0.val.is::<u32>());
-    assert!(val0.val.get_tag() == Tag::U32);
-    let u = unsafe { <u32 as RawValConvertible>::unchecked_from_val(val0.val) };
+    assert!(val0.is::<u32>());
+    assert!(val0.get_tag() == Tag::U32);
+    let u = unsafe { <u32 as RawValConvertible>::unchecked_from_val(val0) };
     assert_eq!(u, 12345);
     Ok(())
 }
@@ -63,9 +63,9 @@ fn i32_as_seen_by_host() -> Result<(), HostError> {
     let host = Host::default();
     let scval0 = ScVal::I32(-12345);
     let val0 = host.to_host_val(&scval0)?;
-    assert!(val0.val.is::<i32>());
-    assert!(val0.val.get_tag() == Tag::I32);
-    let i = unsafe { <i32 as RawValConvertible>::unchecked_from_val(val0.val) };
+    assert!(val0.is::<i32>());
+    assert!(val0.get_tag() == Tag::I32);
+    let i = unsafe { <i32 as RawValConvertible>::unchecked_from_val(val0) };
     assert_eq!(i, -12345);
     Ok(())
 }
