@@ -1,250 +1,298 @@
-use super::{MeteredClone, MeteredCmp};
-use crate::xdr::ScHostObjErrorCode;
+use soroban_env_common::{xdr::ScHostFnErrorCode, Compare};
+
+use super::MeteredClone;
 use crate::{
-    budget::{Budget, CostType},
-    HostError,
+    budget::{AsBudget, Budget, CostType},
+    xdr::ScHostObjErrorCode,
+    Host, HostError,
 };
-use im_rc::{vector::Iter, vector::IterMut, Vector};
-use std::cmp::{min, Ordering};
-use std::ops::RangeBounds;
-use std::rc::Rc;
+use std::{cmp::Ordering, ops::Range};
 
-pub struct MeteredVector<A> {
-    budget: Budget,
-    vec: Vector<A>,
+#[derive(Clone)]
+pub struct MeteredVector<A>
+where
+    A: MeteredClone,
+{
+    vec: Vec<A>,
 }
 
-impl<A> MeteredVector<A> {
-    fn charge_new(&self) -> Result<(), HostError> {
-        self.budget.charge(CostType::ImVecNew, 1)
+impl<A> MeteredVector<A>
+where
+    A: MeteredClone,
+{
+    fn charge_new(&self, size: usize, budget: &Budget) -> Result<(), HostError> {
+        budget.charge(CostType::VecNew, size as u64)
     }
 
-    fn charge_mut_access(&self, x: u64) -> Result<(), HostError> {
-        self.budget.charge(CostType::ImVecMutEntry, x)
+    fn charge_access(&self, count: usize, budget: &Budget) -> Result<(), HostError> {
+        budget.charge(CostType::VecEntry, count as u64)
     }
 
-    fn charge_immut_access(&self, x: u64) -> Result<(), HostError> {
-        self.budget.charge(CostType::ImVecImmutEntry, x)
+    fn charge_scan(&self, budget: &Budget) -> Result<(), HostError> {
+        budget.charge(CostType::VecEntry, self.len() as u64)
     }
 
-    fn charge_cmp(&self, x: u64) -> Result<(), HostError> {
-        self.budget.charge(CostType::ImVecCmp, x)
+    fn charge_binsearch(&self, budget: &Budget) -> Result<(), HostError> {
+        let mag = 64 - (self.len() as u64).leading_zeros();
+        budget.charge(CostType::VecEntry, mag as u64)
     }
 }
 
-// TODO: this whole section can probably be done with macro
-impl<A: Clone> MeteredVector<A> {
-    pub fn new(budget: Budget) -> Result<Self, HostError> {
-        budget.charge(CostType::ImVecNew, 1)?;
-        Ok(MeteredVector {
-            budget,
-            vec: Vector::new(),
-        })
+impl<A> MeteredVector<A>
+where
+    A: MeteredClone,
+{
+    pub fn new(budget: &Budget) -> Result<Self, HostError> {
+        budget.charge(CostType::VecNew, 0)?;
+        Self::from_vec(Vec::new())
     }
 
-    pub fn from_array<const N: usize>(budget: Budget, buf: [A; N]) -> Result<Self, HostError> {
-        let mut vec = Self::new(budget)?;
-        for v in buf {
-            vec.push_back(v)?;
+    pub fn from_array<const N: usize>(buf: [A; N], budget: &Budget) -> Result<Self, HostError> {
+        budget.charge(CostType::VecNew, N as u64)?;
+        Self::from_vec(buf.into())
+    }
+
+    pub fn from_vec(vec: Vec<A>) -> Result<Self, HostError> {
+        // No charge here: vector already allocated, charge happened in claler.
+        Ok(Self { vec })
+    }
+
+    // This doesn't take ExactSizeIterator since that is not implemented for Chain
+    // (see https://github.com/rust-lang/rust/issues/34433) but it only works
+    // with iterators that report an exact size_hint, and it constructs a new
+    // Vec from that iterator with a single allocation-and-copy.
+    pub fn from_exact_iter<I: Iterator<Item = A>>(
+        iter: I,
+        budget: &Budget,
+    ) -> Result<Self, HostError> {
+        if let (_, Some(sz)) = iter.size_hint() {
+            budget.charge(CostType::VecNew, sz as u64)?;
+            // It's possible we temporarily go over-budget here before charging, but
+            // only by the cost of temporarily allocating twice the size of our largest
+            // possible object. In exchange we get to batch all charges associated with
+            // the clone into one (when A::IS_SHALLOW==true).
+            let vec: Vec<A> = iter.collect();
+            A::charge_for_clones(vec.as_slice(), budget)?;
+            Ok(Self { vec })
+        } else {
+            // TODO use a better error code for "unbounded input itertors"
+            Err(ScHostFnErrorCode::UnknownError.into())
         }
-        Ok(vec)
     }
 
-    pub fn from_vec(budget: Budget, vec: Vector<A>) -> Result<Self, HostError> {
-        budget.charge(CostType::ImVecNew, 1)?;
-        Ok(MeteredVector { budget, vec })
+    pub fn set(&self, index: usize, value: A, budget: &Budget) -> Result<Self, HostError> {
+        let mut new = self.metered_clone(budget)?;
+        new.charge_access(1, budget)?;
+        let cell: Result<&mut A, HostError> = new
+            .vec
+            .get_mut(index)
+            .ok_or_else(|| ScHostObjErrorCode::VecIndexOutOfBound.into());
+        *(cell?) = value;
+        Ok(new)
     }
 
-    // Time: O(log n)
-    pub fn set(&mut self, index: usize, value: A) -> Result<A, HostError> {
-        self.charge_mut_access(self.len() as u64)?;
-        Ok(self.vec.set(index, value))
-    }
-
-    // Time: O(log n)
-    pub fn get(&self, index: usize) -> Result<&A, HostError> {
-        self.charge_immut_access(self.len() as u64)?;
+    pub fn get(&self, index: usize, budget: &Budget) -> Result<&A, HostError> {
+        self.charge_access(1, budget)?;
         self.vec
             .get(index)
             .ok_or_else(|| ScHostObjErrorCode::VecIndexOutOfBound.into())
     }
 
-    // Time: O(log n)
-    pub fn get_mut(&mut self, index: usize) -> Result<&mut A, HostError> {
-        self.charge_mut_access(self.len() as u64)?;
-        self.vec
-            .get_mut(index)
-            .ok_or_else(|| ScHostObjErrorCode::VecIndexOutOfBound.into())
-    }
-
-    // Time: O(log n)
-    pub fn remove(&mut self, index: usize) -> Result<A, HostError> {
-        self.charge_mut_access(self.len() as u64)?;
-        Ok(self.vec.remove(index))
-    }
-
-    // Time: O(1). Free of charge.
-    #[inline]
     pub fn len(&self) -> usize {
         self.vec.len()
     }
 
-    // Time: O(log n) worst case, O(1) ammortized
-    pub fn push_front(&mut self, value: A) -> Result<(), HostError> {
-        self.charge_immut_access(self.len() as u64)?;
-        Ok(self.vec.push_front(value))
+    pub fn push_front(&self, value: A, budget: &Budget) -> Result<Self, HostError> {
+        let iter = [value].into_iter().chain(self.vec.iter().cloned());
+        Self::from_exact_iter(iter, budget)
     }
 
-    // Time: O(log n) worst case, O(1) ammortized
-    pub fn pop_front(&mut self) -> Result<A, HostError> {
-        self.charge_immut_access(self.len() as u64)?;
-        self.vec
-            .pop_front()
-            .ok_or_else(|| ScHostObjErrorCode::VecIndexOutOfBound.into())
-    }
-
-    // Time: O(log n) worst case, O(1) ammortized
-    pub fn push_back(&mut self, value: A) -> Result<(), HostError> {
-        self.charge_immut_access(self.len() as u64)?;
-        Ok(self.vec.push_back(value))
-    }
-
-    // Time: O(log n) worst case, O(1) ammortized
-    pub fn pop_back(&mut self) -> Result<A, HostError> {
-        self.charge_immut_access(self.len() as u64)?;
-        self.vec
-            .pop_back()
-            .ok_or_else(|| ScHostObjErrorCode::VecIndexOutOfBound.into())
-    }
-
-    // Time: O(log n)
-    pub fn front(&self) -> Result<&A, HostError> {
-        self.charge_immut_access(self.len() as u64)?;
-        self.vec
-            .front()
-            .ok_or_else(|| ScHostObjErrorCode::VecIndexOutOfBound.into())
-    }
-
-    // Time: O(log n)
-    pub fn back(&self) -> Result<&A, HostError> {
-        self.charge_immut_access(self.len() as u64)?;
-        self.vec
-            .back()
-            .ok_or_else(|| ScHostObjErrorCode::VecIndexOutOfBound.into())
-    }
-
-    // Time: O(log n)
-    pub fn insert(&mut self, index: usize, value: A) -> Result<(), HostError> {
-        self.charge_mut_access(self.len() as u64)?;
-        Ok(self.vec.insert(index, value))
-    }
-
-    // Time: O(log n)
-    pub fn append(&mut self, other: Self) -> Result<(), HostError> {
-        self.charge_mut_access((self.len() + other.len()) as u64)?;
-        Ok(self.vec.append(other.vec))
-    }
-
-    // Time: O(log n)
-    pub fn slice<R>(&mut self, range: R) -> Result<Self, HostError>
-    where
-        R: RangeBounds<usize>,
-    {
-        self.charge_mut_access(self.len() as u64)?;
-        Ok(MeteredVector {
-            budget: self.budget.clone(),
-            vec: self.vec.slice(range),
-        })
-    }
-
-    /// Time: O(n)
-    pub fn first_index_of(&self, value: &A) -> Result<Option<usize>, HostError>
-    where
-        A: PartialEq,
-    {
-        self.charge_immut_access(self.len() as u64)?;
-        Ok(self.vec.index_of(value))
-    }
-
-    /// Time: O(n)
-    pub fn last_index_of(&self, value: &A) -> Result<Option<usize>, HostError>
-    where
-        A: PartialEq,
-    {
-        self.charge_immut_access(self.len() as u64)?;
-        for (index, item) in self.vec.iter().rev().enumerate() {
-            if value == item {
-                return Ok(Some(self.len() - 1 - index));
-            }
+    pub fn pop_front(&self, budget: &Budget) -> Result<Self, HostError> {
+        if self.vec.len() == 0 {
+            Err(ScHostObjErrorCode::VecIndexOutOfBound.into())
+        } else {
+            let iter = self.vec.iter().skip(1).cloned();
+            Self::from_exact_iter(iter, budget)
         }
-        Ok(None)
     }
 
-    /// Time: O(log n)
-    pub fn binary_search(&self, value: &A) -> Result<Result<usize, usize>, HostError>
+    pub fn push_back(&self, value: A, budget: &Budget) -> Result<Self, HostError> {
+        let iter = self.vec.iter().cloned().chain([value].into_iter());
+        Self::from_exact_iter(iter, budget)
+    }
+
+    fn err_overflow() -> HostError {
+        // TODO: need a better overflow code.
+        ScHostFnErrorCode::UnknownError.into()
+    }
+
+    fn add_or_overflow(x: usize, y: usize) -> Result<usize, HostError> {
+        x.checked_add(y).ok_or_else(|| Self::err_overflow())
+    }
+
+    fn sub_or_overflow(x: usize, y: usize) -> Result<usize, HostError> {
+        x.checked_sub(y).ok_or_else(|| Self::err_overflow())
+    }
+
+    pub fn pop_back(&self, budget: &Budget) -> Result<Self, HostError> {
+        if self.vec.len() == 0 {
+            Err(ScHostObjErrorCode::VecIndexOutOfBound.into())
+        } else {
+            let count = Self::sub_or_overflow(self.vec.len(), 1)?;
+            let iter = self.vec.iter().take(count).cloned();
+            Self::from_exact_iter(iter, budget)
+        }
+    }
+
+    pub fn remove(&self, idx: usize, budget: &Budget) -> Result<Self, HostError> {
+        if idx >= self.vec.len() || idx == usize::MAX - 1 {
+            Err(ScHostObjErrorCode::VecIndexOutOfBound.into())
+        } else {
+            // [0, 1, 2]
+            // del 1 => take(1) + skip(2)
+            let skip = Self::add_or_overflow(idx, 1)?;
+            let init = self.vec.iter().take(idx).cloned();
+            let fini = self.vec.iter().skip(skip).cloned();
+            Self::from_exact_iter(init.chain(fini), budget)
+        }
+    }
+
+    pub fn front(&self, budget: &Budget) -> Result<&A, HostError> {
+        self.charge_access(1, budget)?;
+        self.vec
+            .first()
+            .ok_or_else(|| ScHostObjErrorCode::VecIndexOutOfBound.into())
+    }
+
+    pub fn back(&self, budget: &Budget) -> Result<&A, HostError> {
+        self.charge_access(1, budget)?;
+        self.vec
+            .last()
+            .ok_or_else(|| ScHostObjErrorCode::VecIndexOutOfBound.into())
+    }
+
+    pub fn insert(&self, index: usize, value: A, budget: &Budget) -> Result<Self, HostError> {
+        let len = self.vec.len();
+        if index > len {
+            Err(ScHostObjErrorCode::VecIndexOutOfBound.into())
+        } else if index == len {
+            self.push_back(value, budget)
+        } else if index == 0 {
+            self.push_front(value, budget)
+        } else {
+            let init = self.vec.iter().take(index).cloned();
+            let fini = self.vec.iter().skip(index).cloned();
+            let iter = init.chain([value].into_iter()).chain(fini);
+            Self::from_exact_iter(iter, budget)
+        }
+    }
+
+    pub fn append(&self, other: &Self, budget: &Budget) -> Result<Self, HostError> {
+        let iter = self.vec.iter().cloned().chain(other.vec.iter().cloned());
+        Self::from_exact_iter(iter, budget)
+    }
+
+    pub fn slice(&self, range: Range<usize>, budget: &Budget) -> Result<Self, HostError> {
+        match self.vec.get(range) {
+            Some(slice) => Self::from_exact_iter(slice.iter().cloned(), budget),
+            None => Err(ScHostObjErrorCode::VecIndexOutOfBound.into()),
+        }
+    }
+
+    pub fn first_index_of<F>(&self, f: F, budget: &Budget) -> Result<Option<usize>, HostError>
     where
-        A: Ord,
+        F: FnMut(&A) -> bool,
     {
-        self.charge_immut_access(self.len() as u64)?;
-        Ok(self.vec.binary_search(value))
+        self.charge_scan(budget)?;
+        Ok(self.vec.iter().position(f))
     }
 
-    /// Time: O(1)
-    #[inline]
-    pub fn iter(&self) -> Iter<'_, A> {
+    pub fn last_index_of<F>(&self, f: F, budget: &Budget) -> Result<Option<usize>, HostError>
+    where
+        F: FnMut(&A) -> bool,
+    {
+        self.charge_scan(budget)?;
+        Ok(self.vec.iter().rposition(f))
+    }
+
+    pub fn binary_search_by<F>(
+        &self,
+        mut cmp: F,
+        budget: &Budget,
+    ) -> Result<Result<usize, usize>, HostError>
+    where
+        F: FnMut(&A) -> Result<Ordering, HostError>,
+    {
+        self.charge_binsearch(budget)?;
+        let mut err: Option<HostError> = None;
+        let res = self.vec.binary_search_by(|probe| {
+            // We've already hit an error, return Ordering::Equal
+            // to terminate search asap.
+            if err.is_some() {
+                return Ordering::Equal;
+            }
+            match cmp(probe) {
+                Ok(ord) => ord,
+                Err(he) => {
+                    err = Some(he);
+                    Ordering::Equal
+                }
+            }
+        });
+        match err {
+            Some(he) => Err(he),
+            None => Ok(res),
+        }
+    }
+
+    pub fn iter(&self) -> std::slice::Iter<'_, A> {
         self.vec.iter()
     }
 
-    /// Time: O(1)
-    #[inline]
-    pub fn iter_mut(&mut self) -> IterMut<'_, A> {
+    pub fn iter_mut(&mut self) -> std::slice::IterMut<'_, A> {
         self.vec.iter_mut()
     }
 }
 
-impl<A: Clone> Clone for MeteredVector<A> {
-    fn clone(&self) -> Self {
-        Self {
-            budget: self.budget.clone(),
-            vec: self.vec.clone(),
-        }
+impl<A> MeteredClone for MeteredVector<A>
+where
+    A: MeteredClone,
+{
+    fn charge_for_clone(&self, budget: &Budget) -> Result<(), HostError> {
+        self.charge_new(self.len(), budget)
     }
 }
 
-impl<A: Clone> MeteredClone for MeteredVector<A> {
-    fn metered_clone(&self, budget: &Budget) -> Result<Self, HostError> {
-        assert!(Rc::ptr_eq(&self.budget.0, &budget.0));
-        self.charge_new()?;
-        Ok(self.clone())
+impl<Elt: MeteredClone> Compare<MeteredVector<Elt>> for Budget
+where
+    Budget: Compare<Elt, Error = HostError>,
+{
+    type Error = HostError;
+
+    fn compare(
+        &self,
+        a: &MeteredVector<Elt>,
+        b: &MeteredVector<Elt>,
+    ) -> Result<Ordering, Self::Error> {
+        self.as_budget()
+            .charge(CostType::VecEntry, a.vec.len().min(b.vec.len()) as u64)?;
+        <Self as Compare<Vec<Elt>>>::compare(self, &a.vec, &b.vec)
     }
 }
 
-impl<A: Clone + PartialEq> PartialEq for MeteredVector<A> {
-    fn eq(&self, other: &Self) -> bool {
-        Rc::ptr_eq(&self.budget.0, &other.budget.0) && self.vec == other.vec
-    }
-}
+impl<Elt: MeteredClone> Compare<MeteredVector<Elt>> for Host
+where
+    Host: Compare<Elt, Error = HostError>,
+{
+    type Error = HostError;
 
-impl<A: Clone + Eq> Eq for MeteredVector<A> {}
-
-impl<A: Clone + PartialOrd> PartialOrd for MeteredVector<A> {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        assert!(Rc::ptr_eq(&self.budget.0, &other.budget.0));
-        self.vec.partial_cmp(&other.vec)
-    }
-}
-
-impl<A: Clone + Ord> Ord for MeteredVector<A> {
-    fn cmp(&self, other: &Self) -> Ordering {
-        assert!(Rc::ptr_eq(&self.budget.0, &other.budget.0));
-        self.vec.cmp(&other.vec)
-    }
-}
-
-impl<A: Clone + Ord> MeteredCmp for MeteredVector<A> {
-    fn metered_cmp(&self, other: &Self, budget: &Budget) -> Result<Ordering, HostError> {
-        assert!(Rc::ptr_eq(&self.budget.0, &other.budget.0));
-        self.charge_cmp(min(self.len(), other.len()) as u64)?;
-        Ok(self.vec.cmp(&other.vec))
+    fn compare(
+        &self,
+        a: &MeteredVector<Elt>,
+        b: &MeteredVector<Elt>,
+    ) -> Result<Ordering, Self::Error> {
+        self.as_budget()
+            .charge(CostType::VecEntry, a.vec.len().min(b.vec.len()) as u64)?;
+        <Self as Compare<Vec<Elt>>>::compare(self, &a.vec, &b.vec)
     }
 }

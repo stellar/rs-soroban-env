@@ -12,10 +12,7 @@ fn ledger_network_passphrase() -> Result<(), HostError> {
     let budget = Budget::default();
     let storage = Storage::with_enforcing_footprint_and_map(
         Footprint::default(),
-        MeteredOrdMap {
-            budget: budget.clone(),
-            map: im_rc::OrdMap::default(),
-        },
+        MeteredOrdMap::new(&budget)?,
     );
 
     let host = Host::with_storage_and_budget(storage, budget);
@@ -44,10 +41,7 @@ fn ledger_network_id() -> Result<(), HostError> {
     let budget = Budget::default();
     let storage = Storage::with_enforcing_footprint_and_map(
         Footprint::default(),
-        MeteredOrdMap {
-            budget: budget.clone(),
-            map: im_rc::OrdMap::default(),
-        },
+        MeteredOrdMap::new(&budget)?,
     );
 
     let host = Host::with_storage_and_budget(storage, budget);

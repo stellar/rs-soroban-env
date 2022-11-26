@@ -227,9 +227,9 @@ impl Host {
                                 // TODO: proper error code "event topics exceeds count limit"
                                 return Err(self.err_status(ScHostObjErrorCode::UnknownError));
                             }
-                            let mut sv = Vec::new();
+                            let mut sv = Vec::with_capacity(vv.len());
                             for e in vv.iter() {
-                                sv.push(self.event_topic_from_rawval(e.val)?);
+                                sv.push(self.event_topic_from_rawval(*e)?);
                             }
                             Ok(ScVec(self.map_err(sv.try_into())?))
                         }
@@ -266,14 +266,14 @@ impl Host {
     pub(crate) fn call_args_from_obj(&self, args: Object) -> Result<Vec<RawVal>, HostError> {
         self.visit_obj(args, |hv: &HostVec| {
             // Metering: free
-            Ok(hv.iter().map(|a| a.to_raw()).collect())
+            Ok(hv.iter().cloned().collect())
         })
     }
 
     pub(crate) fn scvals_to_rawvals(&self, sc_vals: &[ScVal]) -> Result<Vec<RawVal>, HostError> {
         sc_vals
             .iter()
-            .map(|scv| self.to_host_val(scv).map(|hv| hv.val))
+            .map(|scv| self.to_host_val(scv))
             .collect::<Result<Vec<RawVal>, HostError>>()
     }
 }

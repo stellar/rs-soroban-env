@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use soroban_env_common::CheckedEnv;
 
 use crate::{
@@ -18,23 +20,20 @@ fn check_account_exists() -> Result<(), HostError> {
 
     let budget = Budget::default();
     let mut footprint = Footprint::default();
-    footprint.record_access(&lk0, AccessType::ReadOnly).unwrap();
-    footprint.record_access(&lk1, AccessType::ReadOnly).unwrap();
+    footprint.record_access(&lk0, AccessType::ReadOnly, &budget)?;
+    footprint.record_access(&lk1, AccessType::ReadOnly, &budget)?;
 
-    let mut map = im_rc::OrdMap::default();
-    map.insert(Box::new(lk0), Some(Box::new(le0)));
+    let mut map = Vec::new();
+    map.push((Rc::new(lk0), Some(Rc::new(le0))));
     let storage = Storage::with_enforcing_footprint_and_map(
         footprint,
-        MeteredOrdMap {
-            budget: budget.clone(),
-            map,
-        },
+        MeteredOrdMap::from_map(map, &budget)?,
     );
 
     let host = Host::with_storage_and_budget(storage, budget.clone());
-    let obj0 = host.add_host_object(acc_id0).map(|ev| ev.val).unwrap();
-    let obj1 = host.add_host_object(acc_id1).map(|ev| ev.val).unwrap();
-    let obj2 = host.add_host_object(acc_id2).map(|ev| ev.val).unwrap();
+    let obj0 = host.add_host_object(acc_id0)?;
+    let obj1 = host.add_host_object(acc_id1)?;
+    let obj2 = host.add_host_object(acc_id2)?;
     // declared and exists
     assert_eq!(
         host.account_exists(obj0)?.get_payload(),

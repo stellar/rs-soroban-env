@@ -1,11 +1,11 @@
-use crate::{budget::CostType, cost_runner::CostRunner, events::DebugEvent, EnvVal, Host, RawVal};
+use crate::{budget::CostType, cost_runner::CostRunner, events::DebugEvent, Host, RawVal};
 
 pub struct CreateRecordDebugEventRun;
 
 #[derive(Clone)]
 pub struct CreateRecordDebugEventSample {
     pub msg: &'static str,
-    pub args: Vec<EnvVal<Host, RawVal>>,
+    pub args: Vec<RawVal>,
 }
 
 impl CostRunner for CreateRecordDebugEventRun {
@@ -15,7 +15,7 @@ impl CostRunner for CreateRecordDebugEventRun {
     fn run_iter(host: &Host, _iter: u64, sample: Self::SampleType) {
         let mut de = DebugEvent::new().msg(sample.msg);
         for arg in sample.args {
-            de = de.arg(arg.to_raw());
+            de = de.arg(arg);
         }
         host.record_debug_event(de).unwrap();
     }

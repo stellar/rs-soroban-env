@@ -135,7 +135,7 @@ fn invoke_cross_contract_indirect() -> Result<(), HostError> {
     // prepare arguments
     let sym = Symbol::from_str("add_with");
     let args = host.test_vec_obj::<i32>(&[5, 6])?;
-    let args = host.vec_push_back(args.val, id1_obj.to_raw())?;
+    let args = host.vec_push_back(args, id1_obj.to_raw())?;
     // try call
     let val = host.call(id0_obj, sym.into(), args.clone().into())?;
     let exp: RawVal = 11i32.into();
@@ -150,7 +150,7 @@ fn invoke_cross_contract_indirect_err() -> Result<(), HostError> {
     let id1_obj = host.register_test_contract_wasm(ADD_I32)?;
     let sym = Symbol::from_str("add_with");
     let args = host.test_vec_obj::<i32>(&[i32::MAX, 1])?;
-    let args = host.vec_push_back(args.val, id1_obj.into())?;
+    let args = host.vec_push_back(args, id1_obj.into())?;
 
     // try call -- add will trap, and add_with will trap, but we will get a status
     let status = host.try_call(id0_obj, sym.into(), args.clone().into())?;
@@ -228,7 +228,7 @@ fn invoke_contract_with_reentry() -> Result<(), HostError> {
     // prepare arguments
     let sym = Symbol::from_str("add_with");
     let args = host.test_vec_obj::<i32>(&[i32::MAX, 1])?;
-    let args = host.vec_push_back(args.val, id0_obj.clone().into())?; // trying to call its own `add` function
+    let args = host.vec_push_back(args, id0_obj.clone().into())?; // trying to call its own `add` function
 
     // try call -- add will trap, and add_with will trap, but we will get a status
     let res = host.call(id0_obj.clone(), sym.into(), args.clone().into());

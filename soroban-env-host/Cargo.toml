@@ -15,7 +15,6 @@ soroban-native-sdk-macros = { workspace = true }
 soroban-env-common = { workspace = true, features = ["std"] }
 wasmi = { workspace = true, optional = true }
 static_assertions = "1.1.0"
-im-rc = "15.0.0"
 sha2 = "0.10.2"
 ed25519-dalek = "1.0.1"
 # NB: this must match the same curve25519 version used by ed25519-dalek above

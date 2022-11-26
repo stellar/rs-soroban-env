@@ -286,7 +286,7 @@ impl Vm {
     ) -> Result<ScVal, HostError> {
         let mut raw_args: Vec<RawVal> = Vec::new();
         for scv in args.0.iter() {
-            raw_args.push(host.to_host_val(scv)?.val);
+            raw_args.push(host.to_host_val(scv)?);
         }
         let raw_res = self.invoke_function_raw(host, func, raw_args.as_slice())?;
         Ok(host.from_host_val(raw_res)?)

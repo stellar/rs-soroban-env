@@ -130,15 +130,14 @@ fn map_insert_key_vec_obj() -> Result<(), HostError> {
     // now we enable various cost models
     host = host
         .enable_model(CostType::VisitObject)
-        .enable_model(CostType::ImVecCmp)
-        .enable_model(CostType::ImMapMutEntry);
+        .enable_model(CostType::MapEntry);
     host.map_put(m, k1.into(), v1)?;
 
     host.with_budget(|budget| {
         // 4 = 1 visit map + 1 visit k1 + (obj_comp which needs to) 1 visit both k0 and k1
         assert_eq!(budget.get_input(CostType::VisitObject), 4);
-        assert_eq!(budget.get_input(CostType::ImVecCmp), 2); // the shorter vec len
-        assert_eq!(budget.get_input(CostType::ImMapMutEntry), 1); // len of the map before put
+        // number of map-accesses, counting both binary-search and point-access.
+        assert_eq!(budget.get_input(CostType::MapEntry), 3);
     });
 
     Ok(())
