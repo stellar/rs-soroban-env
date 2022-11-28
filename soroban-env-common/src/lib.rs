@@ -21,7 +21,10 @@
 const PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
 const GIT_REVISION: &str = env!("GIT_REVISION");
 const XDR_VERSION: &str = stellar_xdr::VERSION;
-pub const VERSION: &str = const_format::formatcp!("{PKG_VERSION} ({GIT_REVISION}) ({XDR_VERSION})");
+pub const VERSION: &str = const_format::formatcp!(
+    "{PKG_VERSION} ({GIT_REVISION}) (env interface {}) ({XDR_VERSION})",
+    meta::INTERFACE_VERSION
+);
 
 mod val_wrapper;
 
