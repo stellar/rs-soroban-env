@@ -1084,6 +1084,8 @@ dependencies = [
 name = "soroban-env-common"
 version = "0.0.9"
 dependencies = [
+ "const_format",
+ "crate-git-revision",
  "soroban-env-macros",
  "soroban-wasmi",
  "static_assertions",

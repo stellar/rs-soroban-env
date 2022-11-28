@@ -10,11 +10,15 @@ readme = "../README.md"
 edition = "2021"
 rust-version = "1.65"
 
+[build_dependencies]
+crate-git-revision = "0.0.3"
+
 [dependencies]
 soroban-env-macros = { workspace = true }
 stellar-xdr = { workspace = true, default-features = false, features = [ "next" ] }
 wasmi = { workspace = true, optional = true }
 static_assertions = "1.1.0"
+const_format = "0.2.30"
 
 [features]
 std = ["stellar-xdr/std", "stellar-xdr/base64"]
