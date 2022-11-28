@@ -18,12 +18,12 @@
 //! [RawVal] type and XDR types, and re-exports the XDR definitions from
 //! [stellar_xdr] under the module [xdr].
 
-const PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
-const GIT_REVISION: &str = env!("GIT_REVISION");
-const XDR_VERSION: &str = stellar_xdr::VERSION;
 pub const VERSION: &str = const_format::formatcp!(
-    "{PKG_VERSION} ({GIT_REVISION}) (env interface {}) ({XDR_VERSION})",
-    meta::INTERFACE_VERSION
+    "{} ({}) (interface {}) (xdr {})",
+    env!("CARGO_PKG_VERSION"),
+    env!("GIT_REVISION"),
+    meta::INTERFACE_VERSION,
+    stellar_xdr::VERSION,
 );
 
 mod val_wrapper;
