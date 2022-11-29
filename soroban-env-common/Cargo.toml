@@ -18,7 +18,7 @@ soroban-env-macros = { workspace = true }
 stellar-xdr = { workspace = true, default-features = false, features = [ "next" ] }
 wasmi = { workspace = true, optional = true }
 static_assertions = "1.1.0"
-const_format = "0.2.30"
+serde = "1.0.148"
 
 [features]
 std = ["stellar-xdr/std", "stellar-xdr/base64"]

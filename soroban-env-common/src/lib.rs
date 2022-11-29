@@ -18,13 +18,21 @@
 //! [RawVal] type and XDR types, and re-exports the XDR definitions from
 //! [stellar_xdr] under the module [xdr].
 
-pub const VERSION: &str = const_format::formatcp!(
-    "{} ({}) (interface {}) (xdr {})",
-    env!("CARGO_PKG_VERSION"),
-    env!("GIT_REVISION"),
-    meta::INTERFACE_VERSION,
-    stellar_xdr::VERSION,
-);
+#[derive(Clone, Debug, Eq, PartialEq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct Version<'a> {
+    pub pkg: &'a str,
+    pub rev: &'a str,
+    pub interface: u64,
+    pub xdr: stellar_xdr::Version<'a>,
+}
+
+pub const VERSION: Version = Version {
+    pkg: env!("CARGO_PKG_VERSION"),
+    rev: env!("GIT_REVISION"),
+    interface: meta::INTERFACE_VERSION,
+    xdr: stellar_xdr::VERSION,
+};
 
 mod val_wrapper;
 
