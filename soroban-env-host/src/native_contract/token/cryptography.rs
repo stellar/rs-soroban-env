@@ -1,5 +1,5 @@
 use crate::host::Host;
-use crate::native_contract::base_types::{BigInt, Bytes, BytesN, Vec};
+use crate::native_contract::base_types::{Bytes, BytesN, Vec};
 use crate::native_contract::token::nonce::read_and_increment_nonce;
 use crate::native_contract::token::public_types::{
     AccountSignatures, Ed25519Signature, Identifier, Signature, SignaturePayload,
@@ -120,13 +120,13 @@ fn check_account_auth(
 pub fn check_auth(
     e: &Host,
     auth: Signature,
-    nonce: BigInt,
+    nonce: i128,
     function: Symbol,
     args: Vec,
 ) -> Result<(), HostError> {
     match auth {
         Signature::Invoker => {
-            if nonce.compare(&BigInt::from_u64(e, 0)?)? != Ordering::Equal {
+            if nonce != 0 {
                 Err(err!(
                     e,
                     ContractError::NonceError,
@@ -145,7 +145,7 @@ pub fn check_auth(
         Signature::Ed25519(kea) => {
             let stored_nonce =
                 read_and_increment_nonce(e, Identifier::Ed25519(kea.public_key.clone()))?;
-            if nonce.compare(&stored_nonce)? != Ordering::Equal {
+            if nonce != stored_nonce {
                 Err(err!(
                     e,
                     ContractError::NonceError,
@@ -161,7 +161,7 @@ pub fn check_auth(
         Signature::Account(kaa) => {
             let stored_nonce =
                 read_and_increment_nonce(e, Identifier::Account(kaa.account_id.clone()))?;
-            if nonce.compare(&stored_nonce)? != Ordering::Equal {
+            if nonce != stored_nonce {
                 Err(err!(
                     e,
                     ContractError::NonceError,

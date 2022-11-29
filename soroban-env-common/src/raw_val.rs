@@ -672,7 +672,7 @@ fn test_debug() {
     assert_eq!(format!("{:?}", Symbol::from_str("hello")), "Symbol(hello)");
     assert_eq!(
         format!("{:?}", Object::from_type_and_handle(ScObjectType::Vec, 7)),
-        "Object(Vec(7))"
+        "Object(Vec(#7))"
     );
     assert_eq!(
         format!(

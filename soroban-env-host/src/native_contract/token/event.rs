@@ -1,5 +1,5 @@
 use crate::host::Host;
-use crate::native_contract::base_types::{BigInt, Vec};
+use crate::native_contract::base_types::Vec;
 use crate::native_contract::token::public_types::Identifier;
 use crate::HostError;
 use soroban_env_common::{CheckedEnv, Symbol, TryIntoVal};
@@ -8,7 +8,7 @@ pub(crate) fn approve(
     e: &Host,
     from: Identifier,
     to: Identifier,
-    amount: BigInt,
+    amount: i128,
 ) -> Result<(), HostError> {
     let mut topics = Vec::new(e)?;
     topics.push(Symbol::from_str("approve"))?;
@@ -22,7 +22,7 @@ pub(crate) fn transfer(
     e: &Host,
     from: Identifier,
     to: Identifier,
-    amount: BigInt,
+    amount: i128,
 ) -> Result<(), HostError> {
     let mut topics = Vec::new(e)?;
     topics.push(Symbol::from_str("transfer"))?;
@@ -36,7 +36,7 @@ pub(crate) fn mint(
     e: &Host,
     admin: Identifier,
     to: Identifier,
-    amount: BigInt,
+    amount: i128,
 ) -> Result<(), HostError> {
     let mut topics = Vec::new(e)?;
     topics.push(Symbol::from_str("mint"))?;
@@ -50,7 +50,7 @@ pub(crate) fn burn(
     e: &Host,
     admin: Identifier,
     from: Identifier,
-    amount: BigInt,
+    amount: i128,
 ) -> Result<(), HostError> {
     let mut topics = Vec::new(e)?;
     topics.push(Symbol::from_str("burn"))?;

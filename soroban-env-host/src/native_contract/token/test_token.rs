@@ -1,7 +1,6 @@
 use crate::{
     host_vec,
     native_contract::{
-        base_types::BigInt,
         testutils::{sign_args, HostVec, TestSigner},
         token::public_types::TokenMetadata,
     },
@@ -67,7 +66,7 @@ impl<'a> TestToken<'a> {
             .try_into_val(self.host)?)
     }
 
-    pub(crate) fn nonce(&self, id: Identifier) -> Result<BigInt, HostError> {
+    pub(crate) fn nonce(&self, id: Identifier) -> Result<i128, HostError> {
         Ok(self
             .host
             .call(
@@ -82,7 +81,7 @@ impl<'a> TestToken<'a> {
         &self,
         from: Identifier,
         spender: Identifier,
-    ) -> Result<BigInt, HostError> {
+    ) -> Result<i128, HostError> {
         Ok(self
             .host
             .call(
@@ -96,9 +95,9 @@ impl<'a> TestToken<'a> {
     pub(crate) fn approve(
         &self,
         from: &TestSigner,
-        nonce: BigInt,
+        nonce: i128,
         spender: Identifier,
-        amount: BigInt,
+        amount: i128,
     ) -> Result<(), HostError> {
         let signature = sign_args(
             self.host,
@@ -124,7 +123,7 @@ impl<'a> TestToken<'a> {
             .try_into()?)
     }
 
-    pub(crate) fn balance(&self, id: Identifier) -> Result<BigInt, HostError> {
+    pub(crate) fn balance(&self, id: Identifier) -> Result<i128, HostError> {
         Ok(self
             .host
             .call(
@@ -138,9 +137,9 @@ impl<'a> TestToken<'a> {
     pub(crate) fn xfer(
         &self,
         from: &TestSigner,
-        nonce: BigInt,
+        nonce: i128,
         to: Identifier,
-        amount: BigInt,
+        amount: i128,
     ) -> Result<(), HostError> {
         let signature = sign_args(
             self.host,
@@ -169,10 +168,10 @@ impl<'a> TestToken<'a> {
     pub(crate) fn xfer_from(
         &self,
         spender: &TestSigner,
-        nonce: BigInt,
+        nonce: i128,
         from: Identifier,
         to: Identifier,
-        amount: BigInt,
+        amount: i128,
     ) -> Result<(), HostError> {
         let signature = sign_args(
             self.host,
@@ -202,7 +201,7 @@ impl<'a> TestToken<'a> {
     pub(crate) fn freeze(
         &self,
         admin: &TestSigner,
-        nonce: BigInt,
+        nonce: i128,
         id: Identifier,
     ) -> Result<(), HostError> {
         let signature = sign_args(
@@ -231,7 +230,7 @@ impl<'a> TestToken<'a> {
     pub(crate) fn unfreeze(
         &self,
         admin: &TestSigner,
-        nonce: BigInt,
+        nonce: i128,
         id: Identifier,
     ) -> Result<(), HostError> {
         let signature = sign_args(
@@ -271,9 +270,9 @@ impl<'a> TestToken<'a> {
     pub(crate) fn mint(
         &self,
         admin: &TestSigner,
-        nonce: BigInt,
+        nonce: i128,
         to: Identifier,
-        amount: BigInt,
+        amount: i128,
     ) -> Result<(), HostError> {
         let signature = sign_args(
             self.host,
@@ -302,9 +301,9 @@ impl<'a> TestToken<'a> {
     pub(crate) fn burn(
         &self,
         admin: &TestSigner,
-        nonce: BigInt,
+        nonce: i128,
         from: Identifier,
-        amount: BigInt,
+        amount: i128,
     ) -> Result<(), HostError> {
         let signature = sign_args(
             self.host,
@@ -333,7 +332,7 @@ impl<'a> TestToken<'a> {
     pub(crate) fn set_admin(
         &self,
         admin: &TestSigner,
-        nonce: BigInt,
+        nonce: i128,
         new_admin: Identifier,
     ) -> Result<(), HostError> {
         let signature = sign_args(
@@ -395,7 +394,7 @@ impl<'a> TestToken<'a> {
     pub(crate) fn import(
         &self,
         id: &TestSigner,
-        nonce: BigInt,
+        nonce: i128,
         amount: i64,
     ) -> Result<(), HostError> {
         let signature = sign_args(
@@ -424,7 +423,7 @@ impl<'a> TestToken<'a> {
     pub(crate) fn export(
         &self,
         id: &TestSigner,
-        nonce: BigInt,
+        nonce: i128,
         amount: i64,
     ) -> Result<(), HostError> {
         let signature = sign_args(

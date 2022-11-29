@@ -72,63 +72,34 @@ pub enum CostType {
     GuardFrame = 25,
     // Cost of verifying ed25519 signature of a payload.
     VerifyEd25519Sig = 26,
-    //TODO: bigints are to be deprecated
-    // Cost of creating a new bigint.
-    BigIntNew = 27,
-    // Cost of bigint's add, sub ops.
-    BigIntAddSub = 28,
-    // Cost of bigint's mul op.
-    BigIntMul = 29,
-    // Cost of bigint's div and rem ops.
-    BigIntDivRem = 30,
-    // Cost of bigint's bitwise ops (and, or, xor).
-    BigIntBitwiseOp = 31,
-    // Cost of bigint's shl and shr ops.
-    BigIntShift = 32,
-    // Cost of bigint's cmp op.
-    BigIntCmp = 33,
-    // Cost of bigint's gcd, lcm ops.
-    BigIntGcdLcm = 34,
-    // Cost of bigint's pow op.
-    BigIntPow = 35,
-    // Cost of bigint's powmod op.
-    BigIntPowMod = 36,
-    // Cost of bigint's sqrt op.
-    BigIntSqrt = 37,
-    // Cost of constructing a bigint from bytes.
-    BigIntFromBytes = 38,
-    // Cost of constructing bytes from a bigint.
-    BigIntToBytes = 39,
-    // Cost of converting a bigint to a byte array where each byte is a digit in some pre-determined base.
-    BigIntToRadix = 40,
     // Cost of reading a slice of vm linear memory
-    VmMemRead = 41,
+    VmMemRead = 27,
     // Cost of writing to a slice of vm linear memory
-    VmMemWrite = 42,
+    VmMemWrite = 28,
     // Cost of instantiation a VM from wasm bytes code.
-    VmInstantiation = 43,
+    VmInstantiation = 29,
     // Roundtrip cost of invoking a VM function from the host.
-    InvokeVmFunction = 44,
+    InvokeVmFunction = 30,
     // Cost of cloning bytes.
-    BytesClone = 45,
+    BytesClone = 31,
     // Cost of deleting a byte from a bytes array,
-    BytesDel = 46,
+    BytesDel = 32,
     // Cost of pushing a byte
-    BytesPush = 47,
+    BytesPush = 33,
     // Cost of poping a byte
-    BytesPop = 48,
+    BytesPop = 34,
     // Cost of inserting a byte into a bytes array at some index
-    BytesInsert = 49,
+    BytesInsert = 35,
     // Cost of appending a byte to the end of a bytes array
-    BytesAppend = 50,
+    BytesAppend = 36,
     // Cost of comparing two bytes arrays
-    BytesCmp = 51,
+    BytesCmp = 37,
     // Cost of charging a value to the budgeting system.
-    ChargeBudget = 52,
+    ChargeBudget = 38,
     // Cost of a 25519 scalar multiplication in the Ed25519 library,
     // here for exploring calibration, not a long-term cost we surface
     // separately from signature verification.
-    EdwardsPointCurve25519ScalarMul = 53,
+    EdwardsPointCurve25519ScalarMul = 39,
 }
 
 // TODO: add XDR support for iterating over all the elements of an enum
@@ -162,20 +133,6 @@ impl CostType {
             CostType::ScMapToHostMap,
             CostType::GuardFrame,
             CostType::VerifyEd25519Sig,
-            CostType::BigIntNew,
-            CostType::BigIntAddSub,
-            CostType::BigIntMul,
-            CostType::BigIntDivRem,
-            CostType::BigIntBitwiseOp,
-            CostType::BigIntShift,
-            CostType::BigIntCmp,
-            CostType::BigIntGcdLcm,
-            CostType::BigIntPow,
-            CostType::BigIntPowMod,
-            CostType::BigIntSqrt,
-            CostType::BigIntFromBytes,
-            CostType::BigIntToBytes,
-            CostType::BigIntToRadix,
             CostType::VmMemRead,
             CostType::VmMemWrite,
             CostType::VmInstantiation,
@@ -520,10 +477,7 @@ impl Default for BudgetImpl {
                 // The Cmp costs are temporarily disabled due to bug
                 // (https://github.com/stellar/rs-soroban-env/issues/579). This prevents `obj_cmp`
                 // from escalating an out-of-budget `HostError` to a `panic`.
-                CostType::ImMapCmp
-                | CostType::ImVecCmp
-                | CostType::BigIntCmp
-                | CostType::BytesCmp => cpu.lin_param = 0,
+                CostType::ImMapCmp | CostType::ImVecCmp | CostType::BytesCmp => cpu.lin_param = 0,
 
                 CostType::ImVecNew => cpu.const_param = 1500,
                 CostType::ImVecMutEntry | CostType::ImVecImmutEntry => cpu.const_param = 300,
@@ -532,22 +486,6 @@ impl Default for BudgetImpl {
                 CostType::ScVecToHostVec => cpu.lin_param = 300,
                 CostType::ScMapToHostMap => cpu.lin_param = 2500,
                 CostType::GuardFrame => cpu.lin_param = 10,
-
-                CostType::BigIntNew
-                | CostType::BigIntAddSub
-                | CostType::BigIntBitwiseOp
-                | CostType::BigIntShift => cpu.lin_param = 10,
-
-                CostType::BigIntGcdLcm
-                | CostType::BigIntPow
-                | CostType::BigIntPowMod
-                | CostType::BigIntMul
-                | CostType::BigIntDivRem
-                | CostType::BigIntSqrt => cpu.quad_param = 10,
-
-                CostType::BigIntFromBytes => cpu.lin_param = 10,
-                CostType::BigIntToBytes => cpu.lin_param = 10,
-                CostType::BigIntToRadix => cpu.lin_param = 10,
 
                 CostType::VmMemRead => cpu.lin_param = 10,
                 CostType::VmMemWrite => cpu.lin_param = 10,
@@ -578,10 +516,7 @@ impl Default for BudgetImpl {
                 // The Cmp costs are temporarily disabled due to bug
                 // (https://github.com/stellar/rs-soroban-env/issues/579). This prevents `obj_cmp`
                 // from escalating an out-of-budget `HostError` to a `panic`.
-                CostType::ImMapCmp
-                | CostType::ImVecCmp
-                | CostType::BigIntCmp
-                | CostType::BytesCmp => mem.lin_param = 0,
+                CostType::ImMapCmp | CostType::ImVecCmp | CostType::BytesCmp => mem.lin_param = 0,
 
                 CostType::ImVecNew => mem.const_param = 100,
                 CostType::ImVecMutEntry | CostType::ImVecImmutEntry => (),
@@ -591,19 +526,6 @@ impl Default for BudgetImpl {
                 | CostType::ScMapToHostMap => mem.lin_param = 100,
                 CostType::GuardFrame => mem.const_param = 100,
                 CostType::VerifyEd25519Sig => (),
-                CostType::BigIntNew
-                | CostType::BigIntAddSub
-                | CostType::BigIntMul
-                | CostType::BigIntDivRem
-                | CostType::BigIntBitwiseOp
-                | CostType::BigIntShift
-                | CostType::BigIntGcdLcm
-                | CostType::BigIntPow
-                | CostType::BigIntPowMod
-                | CostType::BigIntSqrt
-                | CostType::BigIntFromBytes
-                | CostType::BigIntToBytes
-                | CostType::BigIntToRadix => mem.lin_param = 10,
                 CostType::VmMemRead
                 | CostType::VmMemWrite
                 | CostType::VmInstantiation

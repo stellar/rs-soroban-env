@@ -199,17 +199,33 @@ macro_rules! call_macro_with_all_host_functions {
                 {"d", fn get_ledger_network_id() -> Object }
             }
 
-            mod u64 "u" {
-                {"_", fn obj_from_u64(v:u64) -> Object }
-                {"0", fn obj_to_u64(obj:Object) -> u64 }
-            }
-
-            /// Functions concerned with the i64 type
+            /// Functions concerned with boxed integer types
             mod i64 "i" {
+
+                /// Convert a u64 to an object containing a u64.
+                {"_", fn obj_from_u64(v:u64) -> Object }
+                /// Convert an object containing a i64 to a u64.
+                {"0", fn obj_to_u64(obj:Object) -> u64 }
                 /// Convert an i64 to an object containing an i64.
-                {"_", fn obj_from_i64(v:i64) -> Object }
+                {"1", fn obj_from_i64(v:i64) -> Object }
                 /// Convert an object containing an i64 to an i64.
-                {"0", fn obj_to_i64(obj:Object) -> i64 }
+                {"2", fn obj_to_i64(obj:Object) -> i64 }
+
+                /// Convert the low and high 64-bit words of a u128 to an
+                /// object containing a u128.
+                {"5", fn obj_from_u128_pieces(lo:u64,hi:u64) -> Object }
+                /// Extract the low 64 bits from an object containing a u128.
+                {"6", fn obj_to_u128_lo64(obj:Object) -> u64 }
+                /// Extract the high 64 bits from an object containing a u128.
+                {"7", fn obj_to_u128_hi64(obj:Object) -> u64 }
+
+                /// Convert the lo and hi 64-bit words of an i128 to an
+                /// object containing an i128.
+                {"8", fn obj_from_i128_pieces(lo:u64,hi:u64) -> Object }
+                /// Extract the low 64 bits from an object containing an i128.
+                {"9", fn obj_to_i128_lo64(obj:Object) -> u64 }
+                /// Extract the high 64 bits from an object containing an i128.
+                {"a", fn obj_to_i128_hi64(obj:Object) -> u64 }
             }
 
             mod map "m" {
@@ -321,72 +337,6 @@ macro_rules! call_macro_with_all_host_functions {
                 /// - if successful, result of the called function.
                 /// - otherwise, an `SCStatus` containing the error status code.
                 {"0", fn try_call(contract:Object, func:Symbol, args:Object) -> RawVal}
-            }
-
-            mod bigint "g" {
-                /// Constructs a BigInt from an u64.
-                {"_", fn bigint_from_u64(x:u64) -> Object}
-                /// Converts a BigInt to an u64. Traps if the value cannot fit into u64.
-                {"0", fn bigint_to_u64(x:Object) -> u64}
-                /// Constructs a BigInt from an i64.
-                {"1", fn bigint_from_i64(x:i64) -> Object}
-                /// Converts a BigInt to an i64. Traps if the value cannot fit into i64.
-                {"2", fn bigint_to_i64(x:Object) -> i64}
-                /// Performs the `+` operation.
-                {"3", fn bigint_add(x:Object, y:Object) -> Object}
-                /// Performs the `-` operation.
-                {"4", fn bigint_sub(x:Object, y:Object) -> Object}
-                /// Performs the `*` operation.
-                {"5", fn bigint_mul(x:Object, y:Object) -> Object}
-                /// Performs the `/` operation. Traps if `y` is zero.
-                {"6", fn bigint_div(x:Object, y:Object) -> Object}
-                /// Performs the `%` operation. Traps if `y` is zero.
-                {"7", fn bigint_rem(x:Object, y:Object) -> Object}
-                /// Performs the `&` operation.
-                {"8", fn bigint_and(x:Object, y:Object) -> Object}
-                /// Performs the `|` operation.
-                {"9", fn bigint_or(x:Object, y:Object) -> Object}
-                /// Performs the `^` operation.
-                {"A", fn bigint_xor(x:Object, y:Object) -> Object}
-                /// Performs the `<<` operation. Traps if `y` is negative or larger than the size of u64.
-                {"B", fn bigint_shl(x:Object, y:Object) -> Object}
-                /// Performs the `>>` operation. Traps if `y` is negative or larger than the size of u64.
-                {"C", fn bigint_shr(x:Object, y:Object) -> Object}
-                /// Returns true if `x` is equal to the additive identity.
-                {"D", fn bigint_is_zero(x:Object) -> RawVal}
-                /// Performs the unary `-` operation.
-                {"E", fn bigint_neg(x:Object) -> Object}
-                /// Performs the unary `!` operation.
-                {"F", fn bigint_not(x:Object) -> Object}
-                /// Calculates the Greatest Common Divisor (GCD) of `x` and `y`.
-                {"G", fn bigint_gcd(x:Object, y:Object) -> Object}
-                /// Calculates the Lowest Common Multiple (LCM) of `x` and `y`.
-                {"H", fn bigint_lcm(x:Object, y:Object) -> Object}
-                /// Calculates `x` to the power `y`. Traps if `y` is negative or larger than the size of u64.
-                {"I", fn bigint_pow(x:Object, y:Object) -> Object}
-                /// Calculates `(p ^ q) mod m`. Note that this rounds like `mod_floor`, not like the `%` operator, which makes a difference when given a negative `p` or `m`.
-                /// The result will be in the interval `[0, m)` for `m > 0`, or in the interval `(m, 0]` for `m < 0`.
-                /// Traps if the `q` is negative or the `m` is zero.
-                {"J", fn bigint_pow_mod(p:Object, q:Object, m:Object) -> Object}
-                /// Calculates the truncated principal square root of `x`. Traps if `x` is negative.
-                {"K", fn bigint_sqrt(x:Object) -> Object}
-                /// Determines the fewest bits necessary to express `x`, not including the sign.
-                {"L", fn bigint_bits(x:Object) -> u64}
-                /// Outputs the BigInt's magnitude in big-endian byte order into a byte array. The sign is dropped.
-                {"M", fn bigint_to_bytes_be(x:Object) -> Object}
-                /// Outputs the BigInt's magnitude in the requested base in big-endian digit order into a byte array.
-                /// The sign is dropped. Radix must be in the range 2...256.
-                {"N", fn bigint_to_radix_be(x:Object, radix:RawVal) -> Object}
-                /// Creates a BigInt from a byte array and i32 sign.
-                /// Bytes are in big-endian order. Sign is interpreted: -1 as negative, 0 as zero, 1 as positive
-                /// If sign is 0, then the input bytes are ignored and will return a BigInt of 0.
-                {"O", fn bigint_from_bytes_be(sign:RawVal, bytes:Object) -> Object}
-                /// Creates a BigInt from a byte array `buf`, an i32 sign and an u32 radix.
-                /// Each u8 of the byte array is interpreted as one digit of the number and
-                /// must therefore be less than the radix. The bytes are in big-endian byte order.
-                /// Radix must be in the range 2..=256. Sign follows same rule as in `bigint_from_bytes_be`.
-                {"P", fn bigint_from_radix_be(sign:RawVal, buf:Object, radix:RawVal) -> Object}
-
             }
 
             mod bytes "b" {
