@@ -17,7 +17,7 @@ crate-git-revision = "0.0.3"
 soroban-env-macros = { workspace = true }
 stellar-xdr = { workspace = true, default-features = false, features = [ "next" ] }
 wasmi = { workspace = true, optional = true }
-serde = { version = "1.0.148", features = ["derive"], optional = true }
+serde = { version = "1.0", features = ["derive"], optional = true }
 static_assertions = "1.1.0"
 
 [features]
