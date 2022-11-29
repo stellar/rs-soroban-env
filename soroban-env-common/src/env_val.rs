@@ -260,7 +260,7 @@ impl<E: Env> TryIntoVal<E, i128> for RawVal {
     type Error = ConversionError;
 
     fn try_into_val(self, env: &E) -> Result<i128, Self::Error> {
-        <i128 as TryFromVal<E, RawVal>>::try_from_val(env, self.try_into()?)
+        <i128 as TryFromVal<E, RawVal>>::try_from_val(env, self)
     }
 }
 
