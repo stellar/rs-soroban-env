@@ -1,10 +1,9 @@
 use std::cmp::{min, Ordering};
 
-use soroban_env_common::xdr::{AccountId, PublicKey, ScContractCode, Uint256};
+use soroban_env_common::xdr::{AccountId, Hash, PublicKey, ScContractCode, Uint256};
 
 use crate::{
     budget::{Budget, CostType},
-    host::Hash,
     host_object::HostObject,
     HostError,
 };
@@ -24,7 +23,6 @@ impl MeteredCmp for &HostObject {
         match (self, other) {
             (HostObject::Vec(a), HostObject::Vec(b)) => a.metered_cmp(b, budget),
             (HostObject::Map(a), HostObject::Map(b)) => a.metered_cmp(b, budget),
-            (HostObject::BigInt(a), HostObject::BigInt(b)) => a.metered_cmp(b, budget),
             (HostObject::Bytes(a), HostObject::Bytes(b)) => a.metered_cmp(b, budget),
             (HostObject::ContractCode(a), HostObject::ContractCode(b)) => a.metered_cmp(b, budget),
             (HostObject::AccountId(a), HostObject::AccountId(b)) => a.metered_cmp(b, budget),

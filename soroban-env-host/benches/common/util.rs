@@ -1,5 +1,4 @@
 use im_rc::{OrdMap, Vector};
-use num_bigint::{BigInt, Sign};
 use rand::{rngs::StdRng, Rng, RngCore};
 use soroban_env_host::{EnvVal, Host, RawVal};
 

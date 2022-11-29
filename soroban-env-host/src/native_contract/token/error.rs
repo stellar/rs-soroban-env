@@ -17,6 +17,7 @@ pub enum ContractError {
     AllowanceError = 10,
     BalanceError = 11,
     BalanceFrozenError = 12,
+    OverflowError = 13,
 }
 
 impl From<ContractError> for Status {

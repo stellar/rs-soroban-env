@@ -1,4 +1,3 @@
-mod bigint_ops;
 mod bytes_ops;
 mod charge_budget;
 mod compute_ed25519_pubkey;
@@ -24,7 +23,6 @@ mod vm_ops;
 #[cfg(feature = "vm")]
 mod wasm_insn_exec;
 
-pub use bigint_ops::*;
 pub use bytes_ops::*;
 pub use charge_budget::*;
 pub use compute_ed25519_pubkey::*;

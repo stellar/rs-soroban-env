@@ -1,4 +1,3 @@
-mod bigint_ops;
 mod bytes_ops;
 mod charge_budget;
 mod compute_ed25519_pubkey;
@@ -21,7 +20,6 @@ mod visit_object;
 mod vm_ops;
 mod wasm_insn_exec;
 
-pub(crate) use bigint_ops::*;
 pub(crate) use bytes_ops::*;
 pub(crate) use charge_budget::*;
 pub(crate) use compute_ed25519_pubkey::*;

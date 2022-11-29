@@ -222,6 +222,121 @@ impl<E: Env> TryIntoVal<E, u64> for RawVal {
     }
 }
 
+// Innermost conversions: infallible {ui}128 -> Object and
+// fallible Object -> {ui}128
+impl<E: Env> IntoVal<E, Object> for u128 {
+    fn into_val(self, env: &E) -> Object {
+        env.obj_from_u128_pieces(self as u64, (self >> 64) as u64)
+    }
+}
+
+impl<E: Env> IntoVal<E, Object> for i128 {
+    fn into_val(self, env: &E) -> Object {
+        env.obj_from_i128_pieces(self as u64, (self as u128 >> 64) as u64)
+    }
+}
+
+impl<E: Env> TryIntoVal<E, u128> for Object {
+    type Error = ConversionError;
+
+    fn try_into_val(self, env: &E) -> Result<u128, Self::Error> {
+        let lo = env.obj_to_u128_lo64(self);
+        let hi = env.obj_to_u128_hi64(self);
+        let u: u128 = (lo as u128) | ((hi as u128) << 64);
+        Ok(u)
+    }
+}
+
+impl<E: Env> TryIntoVal<E, i128> for Object {
+    type Error = ConversionError;
+
+    fn try_into_val(self, env: &E) -> Result<i128, Self::Error> {
+        let lo = env.obj_to_i128_lo64(self);
+        let hi = env.obj_to_i128_hi64(self);
+        let u: u128 = (lo as u128) | ((hi as u128) << 64);
+        Ok(u as i128)
+    }
+}
+
+macro_rules! decl_int128_conversions {
+    ($T:ty) => {
+        // RawVal-typed versions delegate to Object-typed
+        impl<E: Env> IntoVal<E, RawVal> for $T {
+            fn into_val(self, env: &E) -> RawVal {
+                <Self as IntoVal<E, Object>>::into_val(self, env).to_raw()
+            }
+        }
+        impl<E: Env> TryIntoVal<E, $T> for RawVal {
+            type Error = ConversionError;
+            fn try_into_val(self, env: &E) -> Result<$T, Self::Error> {
+                let ob: Object = self.try_into_val(env)?;
+                <Object as TryIntoVal<E, $T>>::try_into_val(ob, env)
+            }
+        }
+        // Infallible reference-types delegate to deref
+        impl<E: Env> IntoVal<E, Object> for &$T {
+            fn into_val(self, env: &E) -> Object {
+                (*self).into_val(env)
+            }
+        }
+        impl<E: Env> IntoVal<E, RawVal> for &$T {
+            fn into_val(self, env: &E) -> RawVal {
+                (*self).into_val(env)
+            }
+        }
+        // Fallibe versions of infallibe injections just delegate to them.
+        impl<E: Env> TryIntoVal<E, RawVal> for $T {
+            type Error = ConversionError;
+
+            fn try_into_val(self, env: &E) -> Result<RawVal, Self::Error> {
+                Ok(<Self as IntoVal<E, RawVal>>::into_val(self, env).into())
+            }
+        }
+
+        impl<E: Env> TryIntoVal<E, RawVal> for &$T {
+            type Error = ConversionError;
+
+            fn try_into_val(self, env: &E) -> Result<RawVal, Self::Error> {
+                Ok(<Self as IntoVal<E, RawVal>>::into_val(self, env).into())
+            }
+        }
+
+        impl<E: Env> TryIntoVal<E, Object> for $T {
+            type Error = ConversionError;
+
+            fn try_into_val(self, env: &E) -> Result<Object, Self::Error> {
+                Ok(<Self as IntoVal<E, Object>>::into_val(self, env).into())
+            }
+        }
+
+        impl<E: Env> TryIntoVal<E, Object> for &$T {
+            type Error = ConversionError;
+
+            fn try_into_val(self, env: &E) -> Result<Object, Self::Error> {
+                Ok(<Self as IntoVal<E, Object>>::into_val(self, env).into())
+            }
+        }
+        // TryFrom impls delegate to TryInto impls the other direction
+        impl<E: Env> TryFromVal<E, RawVal> for $T {
+            type Error = ConversionError;
+
+            fn try_from_val(env: &E, val: RawVal) -> Result<Self, Self::Error> {
+                <RawVal as TryIntoVal<E, $T>>::try_into_val(val, env)
+            }
+        }
+        impl<E: Env> TryFromVal<E, Object> for $T {
+            type Error = ConversionError;
+
+            fn try_from_val(env: &E, val: Object) -> Result<Self, Self::Error> {
+                <Object as TryIntoVal<E, $T>>::try_into_val(val, env)
+            }
+        }
+    };
+}
+
+decl_int128_conversions!(u128);
+decl_int128_conversions!(i128);
+
 #[cfg(feature = "std")]
 impl<E: Env> TryFromVal<E, RawVal> for ScVal
 where

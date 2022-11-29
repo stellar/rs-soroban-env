@@ -1,10 +1,8 @@
 use crate::host::Host;
-use crate::native_contract::base_types::BigInt;
 use crate::native_contract::token::metadata::read_metadata;
 use crate::native_contract::token::public_types::{Identifier, Metadata};
 use crate::native_contract::token::storage_types::DataKey;
 use crate::{err, HostError};
-use core::cmp::Ordering;
 use soroban_env_common::xdr::{
     AccountEntryExt, AccountEntryExtensionV1Ext, AccountId, LedgerEntryData, TrustLineAsset,
     TrustLineEntryExt, TrustLineFlags,
@@ -14,40 +12,43 @@ use soroban_env_common::{CheckedEnv, TryIntoVal};
 use super::error::ContractError;
 
 // Metering: *mostly* covered by components. Not sure about `try_into_val`.
-pub fn read_balance(e: &Host, id: Identifier) -> Result<BigInt, HostError> {
+pub fn read_balance(e: &Host, id: Identifier) -> Result<i128, HostError> {
     let key = DataKey::Balance(id);
     if let Ok(balance) = e.get_contract_data(key.try_into_val(e)?) {
         Ok(balance.try_into_val(e)?)
     } else {
-        Ok(BigInt::from_u64(e, 0)?)
+        Ok(0)
     }
 }
 
 // Metering: *mostly* covered by components. Not sure about `try_into_val`.
-fn write_balance(e: &Host, id: Identifier, amount: BigInt) -> Result<(), HostError> {
+fn write_balance(e: &Host, id: Identifier, amount: i128) -> Result<(), HostError> {
     let key = DataKey::Balance(id);
     e.put_contract_data(key.try_into_val(e)?, amount.try_into_val(e)?)?;
     Ok(())
 }
 
 // Metering: covered by components.
-pub fn receive_balance(e: &Host, id: Identifier, amount: BigInt) -> Result<(), HostError> {
+pub fn receive_balance(e: &Host, id: Identifier, amount: i128) -> Result<(), HostError> {
     let balance = read_balance(e, id.clone())?;
     let is_frozen = read_state(e, id.clone())?;
     if is_frozen {
         Err(e.err_status_msg(ContractError::BalanceFrozenError, "balance is frozen"))
     } else {
-        write_balance(e, id, (balance + amount)?)
+        let new_balance = balance
+            .checked_add(amount)
+            .ok_or_else(|| e.err_status(ContractError::OverflowError))?;
+        write_balance(e, id, new_balance)
     }
 }
 
 // Metering: covered by components.
-pub fn spend_balance(e: &Host, id: Identifier, amount: BigInt) -> Result<(), HostError> {
+pub fn spend_balance(e: &Host, id: Identifier, amount: i128) -> Result<(), HostError> {
     let balance = read_balance(e, id.clone())?;
     let is_frozen = read_state(e, id.clone())?;
     if is_frozen {
         Err(e.err_status_msg(ContractError::BalanceFrozenError, "balance is frozen"))
-    } else if balance.compare(&amount)? == Ordering::Less {
+    } else if balance < amount {
         Err(err!(
             e,
             ContractError::BalanceError,
@@ -56,7 +57,10 @@ pub fn spend_balance(e: &Host, id: Identifier, amount: BigInt) -> Result<(), Hos
             amount
         ))
     } else {
-        write_balance(e, id, (balance - amount)?)
+        let new_balance = balance
+            .checked_sub(amount)
+            .ok_or_else(|| e.err_status(ContractError::OverflowError))?;
+        write_balance(e, id, new_balance)
     }
 }
 
