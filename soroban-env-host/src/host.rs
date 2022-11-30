@@ -956,11 +956,11 @@ impl Host {
             }
             HostFunction::CreateContract(args) => self
                 .with_frame(Frame::HostFunction(hf_type), || {
-                    self.create_contract(args).map(<RawVal>::from)
+                    self.create_contract(args).map(RawVal::from)
                 }),
             HostFunction::InstallContractCode(args) => self
                 .with_frame(Frame::HostFunction(hf_type), || {
-                    self.install_contract(args).map(<RawVal>::from)
+                    self.install_contract(args).map(RawVal::from)
                 }),
         }
     }
