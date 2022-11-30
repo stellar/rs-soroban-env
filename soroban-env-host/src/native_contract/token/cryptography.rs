@@ -78,11 +78,7 @@ fn check_account_auth(
             }
         }
 
-        e.verify_sig_ed25519(
-            msg_bin,
-            sig.public_key.clone().into(),
-            sig.signature.into(),
-        )?;
+        e.verify_sig_ed25519(msg_bin, sig.public_key.clone().into(), sig.signature.into())?;
 
         let signer_weight =
             e.get_signer_weight_from_account(Uint256(sig.public_key.to_array()?), &account)?;

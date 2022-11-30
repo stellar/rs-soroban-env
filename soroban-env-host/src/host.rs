@@ -246,7 +246,7 @@ impl Host {
             Some(li) => {
                 f(li);
                 Ok(())
-            },
+            }
         }
     }
 
@@ -803,12 +803,10 @@ impl Host {
             }
             #[cfg(not(feature = "vm"))]
             ScContractCode::WasmRef(_) => Err(self.err_general("could not dispatch")),
-            ScContractCode::Token => {
-                self.with_frame(Frame::Token(id.clone(), *func), || {
-                    use crate::native_contract::{NativeContract, Token};
-                    Token.call(func, self, args)
-                })
-            }
+            ScContractCode::Token => self.with_frame(Frame::Token(id.clone(), *func), || {
+                use crate::native_contract::{NativeContract, Token};
+                Token.call(func, self, args)
+            }),
         }
     }
 

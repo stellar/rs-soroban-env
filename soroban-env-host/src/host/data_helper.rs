@@ -34,12 +34,10 @@ impl Host {
         }?;
         match scval {
             ScVal::Object(Some(ScObject::ContractCode(code))) => Ok(code),
-            _ => {
-                Err(self.err_status_msg(
-                    ScHostValErrorCode::UnexpectedValType,
-                    "ledger entry for contract code does not contain contract code",
-                ))
-            }
+            _ => Err(self.err_status_msg(
+                ScHostValErrorCode::UnexpectedValType,
+                "ledger entry for contract code does not contain contract code",
+            )),
         }
     }
 

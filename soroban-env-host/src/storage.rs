@@ -183,8 +183,7 @@ impl Storage {
                 self.footprint.enforce_access(key, ty)?;
             }
         };
-        self.map
-            .insert(Box::new(key.clone()), val.map(Box::new))?;
+        self.map.insert(Box::new(key.clone()), val.map(Box::new))?;
         Ok(())
     }
 
