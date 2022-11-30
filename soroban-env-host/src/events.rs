@@ -175,6 +175,7 @@ impl From<xdr::Error> for DebugError {
     fn from(err: xdr::Error) -> Self {
         let msg = match err {
             xdr::Error::Invalid => "XDR error: invalid",
+            xdr::Error::Unsupported => "XDR error: unsupported",
             xdr::Error::LengthExceedsMax => "XDR error: length exceeds max",
             xdr::Error::LengthMismatch => "XDR error: length mismatch",
             xdr::Error::NonZeroPadding => "XDR error: nonzero padding",
