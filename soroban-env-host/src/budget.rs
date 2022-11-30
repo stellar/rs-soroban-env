@@ -105,7 +105,7 @@ pub enum CostType {
 // TODO: add XDR support for iterating over all the elements of an enum
 impl CostType {
     pub fn variants() -> std::slice::Iter<'static, CostType> {
-        static VARIANTS: &'static [CostType] = &[
+        static VARIANTS: &[CostType] = &[
             CostType::WasmInsnExec,
             CostType::WasmMemAlloc,
             CostType::HostEventDebug,

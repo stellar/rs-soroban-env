@@ -373,7 +373,7 @@ where
                 }
                 Tag::Object => unsafe {
                     let ob = <Object as RawValConvertible>::unchecked_from_val(val);
-                    let scob = ScObject::try_from_val(&env, ob).map_err(|_| ConversionError)?;
+                    let scob = ScObject::try_from_val(env, ob).map_err(|_| ConversionError)?;
                     Ok(ScVal::Object(Some(scob)))
                 },
                 Tag::Symbol => {

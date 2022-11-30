@@ -126,7 +126,7 @@ fn check_nonnegative_amount(e: &Host, amount: i128) -> Result<(), HostError> {
 // Metering: *mostly* covered by components.
 impl TokenTrait for Token {
     fn init_asset(e: &Host, asset_bytes: Bytes) -> Result<(), HostError> {
-        if has_metadata(&e)? {
+        if has_metadata(e)? {
             return Err(e.err_status_msg(
                 ContractError::AlreadyInitializedError,
                 "token has been already initialized",
@@ -149,16 +149,16 @@ impl TokenTrait for Token {
         }
         match asset {
             Asset::Native => {
-                write_metadata(&e, Metadata::Native)?;
+                write_metadata(e, Metadata::Native)?;
                 //No admin for the Native token
             }
             Asset::CreditAlphanum4(asset4) => {
                 write_administrator(
-                    &e,
+                    e,
                     Identifier::Account(asset4.issuer.metered_clone(e.budget_ref())?),
                 )?;
                 write_metadata(
-                    &e,
+                    e,
                     Metadata::AlphaNum4(AlphaNum4Metadata {
                         asset_code: BytesN::<4>::try_from_val(
                             e,
@@ -170,11 +170,11 @@ impl TokenTrait for Token {
             }
             Asset::CreditAlphanum12(asset12) => {
                 write_administrator(
-                    &e,
+                    e,
                     Identifier::Account(asset12.issuer.metered_clone(e.budget_ref())?),
                 )?;
                 write_metadata(
-                    &e,
+                    e,
                     Metadata::AlphaNum12(AlphaNum12Metadata {
                         asset_code: BytesN::<12>::try_from_val(
                             e,
@@ -189,15 +189,15 @@ impl TokenTrait for Token {
     }
 
     fn init(e: &Host, admin: Identifier, metadata: TokenMetadata) -> Result<(), HostError> {
-        if has_metadata(&e)? {
+        if has_metadata(e)? {
             return Err(e.err_status_msg(
                 ContractError::AlreadyInitializedError,
                 "token has been already initialized",
             ));
         }
 
-        write_administrator(&e, admin)?;
-        write_metadata(&e, Metadata::Token(metadata))?;
+        write_administrator(e, admin)?;
+        write_metadata(e, Metadata::Token(metadata))?;
         Ok(())
     }
 
@@ -206,7 +206,7 @@ impl TokenTrait for Token {
     }
 
     fn allowance(e: &Host, from: Identifier, spender: Identifier) -> Result<i128, HostError> {
-        read_allowance(&e, from, spender)
+        read_allowance(e, from, spender)
     }
 
     // Metering: covered by components
@@ -218,14 +218,14 @@ impl TokenTrait for Token {
         amount: i128,
     ) -> Result<(), HostError> {
         check_nonnegative_amount(e, amount)?;
-        let from_id = from.get_identifier(&e)?;
+        let from_id = from.get_identifier(e)?;
         let mut args = Vec::new(e)?;
-        args.push(from.get_identifier(&e)?)?;
-        args.push(nonce.clone())?;
+        args.push(from.get_identifier(e)?)?;
+        args.push(nonce)?;
         args.push(spender.clone())?;
-        args.push(amount.clone())?;
-        check_auth(&e, from, nonce, Symbol::from_str("approve"), args)?;
-        write_allowance(&e, from_id.clone(), spender.clone(), amount.clone())?;
+        args.push(amount)?;
+        check_auth(e, from, nonce, Symbol::from_str("approve"), args)?;
+        write_allowance(e, from_id.clone(), spender.clone(), amount)?;
         event::approve(e, from_id, spender, amount)?;
         Ok(())
     }
@@ -237,7 +237,7 @@ impl TokenTrait for Token {
 
     // Metering: covered by components
     fn is_frozen(e: &Host, id: Identifier) -> Result<bool, HostError> {
-        read_state(&e, id)
+        read_state(e, id)
     }
 
     // Metering: covered by components
@@ -249,15 +249,15 @@ impl TokenTrait for Token {
         amount: i128,
     ) -> Result<(), HostError> {
         check_nonnegative_amount(e, amount)?;
-        let from_id = from.get_identifier(&e)?;
+        let from_id = from.get_identifier(e)?;
         let mut args = Vec::new(e)?;
-        args.push(from.get_identifier(&e)?)?;
-        args.push(nonce.clone())?;
+        args.push(from.get_identifier(e)?)?;
+        args.push(nonce)?;
         args.push(to.clone())?;
-        args.push(amount.clone())?;
-        check_auth(&e, from, nonce, Symbol::from_str("xfer"), args)?;
-        spend_balance(&e, from_id.clone(), amount.clone())?;
-        receive_balance(&e, to.clone(), amount.clone())?;
+        args.push(amount)?;
+        check_auth(e, from, nonce, Symbol::from_str("xfer"), args)?;
+        spend_balance(e, from_id.clone(), amount)?;
+        receive_balance(e, to.clone(), amount)?;
         event::transfer(e, from_id, to, amount)?;
         Ok(())
     }
@@ -272,17 +272,17 @@ impl TokenTrait for Token {
         amount: i128,
     ) -> Result<(), HostError> {
         check_nonnegative_amount(e, amount)?;
-        let spender_id = spender.get_identifier(&e)?;
+        let spender_id = spender.get_identifier(e)?;
         let mut args = Vec::new(e)?;
-        args.push(spender.get_identifier(&e)?)?;
-        args.push(nonce.clone())?;
+        args.push(spender.get_identifier(e)?)?;
+        args.push(nonce)?;
         args.push(from.clone())?;
         args.push(to.clone())?;
-        args.push(amount.clone())?;
-        check_auth(&e, spender, nonce, Symbol::from_str("xfer_from"), args)?;
-        spend_allowance(&e, from.clone(), spender_id, amount.clone())?;
-        spend_balance(&e, from.clone(), amount.clone())?;
-        receive_balance(&e, to.clone(), amount.clone())?;
+        args.push(amount)?;
+        check_auth(e, spender, nonce, Symbol::from_str("xfer_from"), args)?;
+        spend_allowance(e, from.clone(), spender_id, amount)?;
+        spend_balance(e, from.clone(), amount)?;
+        receive_balance(e, to.clone(), amount)?;
         event::transfer(e, from, to, amount)?;
         Ok(())
     }
@@ -296,29 +296,29 @@ impl TokenTrait for Token {
         amount: i128,
     ) -> Result<(), HostError> {
         check_nonnegative_amount(e, amount)?;
-        check_admin(&e, &admin)?;
+        check_admin(e, &admin)?;
         let mut args = Vec::new(e)?;
-        let admin_id = admin.get_identifier(&e)?;
+        let admin_id = admin.get_identifier(e)?;
         args.push(admin_id.clone())?;
-        args.push(nonce.clone())?;
+        args.push(nonce)?;
         args.push(from.clone())?;
-        args.push(amount.clone())?;
-        check_auth(&e, admin, nonce, Symbol::from_str("burn"), args)?;
-        spend_balance(&e, from.clone(), amount.clone())?;
+        args.push(amount)?;
+        check_auth(e, admin, nonce, Symbol::from_str("burn"), args)?;
+        spend_balance(e, from.clone(), amount)?;
         event::burn(e, admin_id, from, amount)?;
         Ok(())
     }
 
     // Metering: covered by components
     fn freeze(e: &Host, admin: Signature, nonce: i128, id: Identifier) -> Result<(), HostError> {
-        check_admin(&e, &admin)?;
+        check_admin(e, &admin)?;
         let mut args = Vec::new(e)?;
-        let admin_id = admin.get_identifier(&e)?;
+        let admin_id = admin.get_identifier(e)?;
         args.push(admin_id.clone())?;
-        args.push(nonce.clone())?;
+        args.push(nonce)?;
         args.push(id.clone())?;
-        check_auth(&e, admin, nonce, Symbol::from_str("freeze"), args)?;
-        write_state(&e, id.clone(), true)?;
+        check_auth(e, admin, nonce, Symbol::from_str("freeze"), args)?;
+        write_state(e, id.clone(), true)?;
         event::freeze(e, admin_id, id)?;
         Ok(())
     }
@@ -332,15 +332,15 @@ impl TokenTrait for Token {
         amount: i128,
     ) -> Result<(), HostError> {
         check_nonnegative_amount(e, amount)?;
-        check_admin(&e, &admin)?;
+        check_admin(e, &admin)?;
         let mut args = Vec::new(e)?;
-        let admin_id = admin.get_identifier(&e)?;
+        let admin_id = admin.get_identifier(e)?;
         args.push(admin_id.clone())?;
-        args.push(nonce.clone())?;
+        args.push(nonce)?;
         args.push(to.clone())?;
-        args.push(amount.clone())?;
-        check_auth(&e, admin, nonce, Symbol::from_str("mint"), args)?;
-        receive_balance(&e, to.clone(), amount.clone())?;
+        args.push(amount)?;
+        check_auth(e, admin, nonce, Symbol::from_str("mint"), args)?;
+        receive_balance(e, to.clone(), amount)?;
         event::mint(e, admin_id, to, amount)?;
         Ok(())
     }
@@ -352,42 +352,42 @@ impl TokenTrait for Token {
         nonce: i128,
         new_admin: Identifier,
     ) -> Result<(), HostError> {
-        check_admin(&e, &admin)?;
+        check_admin(e, &admin)?;
         let mut args = Vec::new(e)?;
-        let admin_id = admin.get_identifier(&e)?;
+        let admin_id = admin.get_identifier(e)?;
         args.push(admin_id.clone())?;
-        args.push(nonce.clone())?;
+        args.push(nonce)?;
         args.push(new_admin.clone())?;
-        check_auth(&e, admin, nonce, Symbol::from_str("set_admin"), args)?;
-        write_administrator(&e, new_admin.clone())?;
+        check_auth(e, admin, nonce, Symbol::from_str("set_admin"), args)?;
+        write_administrator(e, new_admin.clone())?;
         event::set_admin(e, admin_id, new_admin)?;
         Ok(())
     }
 
     // Metering: covered by components
     fn unfreeze(e: &Host, admin: Signature, nonce: i128, id: Identifier) -> Result<(), HostError> {
-        check_admin(&e, &admin)?;
+        check_admin(e, &admin)?;
         let mut args = Vec::new(e)?;
-        let admin_id = admin.get_identifier(&e)?;
+        let admin_id = admin.get_identifier(e)?;
         args.push(admin_id.clone())?;
-        args.push(nonce.clone())?;
+        args.push(nonce)?;
         args.push(id.clone())?;
-        check_auth(&e, admin, nonce, Symbol::from_str("unfreeze"), args)?;
-        write_state(&e, id.clone(), false)?;
+        check_auth(e, admin, nonce, Symbol::from_str("unfreeze"), args)?;
+        write_state(e, id.clone(), false)?;
         event::unfreeze(e, admin_id, id)?;
         Ok(())
     }
 
     fn decimals(e: &Host) -> Result<u32, HostError> {
-        read_decimal(&e)
+        read_decimal(e)
     }
 
     fn name(e: &Host) -> Result<Bytes, HostError> {
-        read_name(&e)
+        read_name(e)
     }
 
     fn symbol(e: &Host) -> Result<Bytes, HostError> {
-        read_symbol(&e)
+        read_symbol(e)
     }
 
     // Metering: covered by components
@@ -398,14 +398,14 @@ impl TokenTrait for Token {
         let account_id = id.get_account_id(e)?;
 
         let mut args = Vec::new(e)?;
-        let ident = id.get_identifier(&e)?;
+        let ident = id.get_identifier(e)?;
         args.push(ident.clone())?;
-        args.push(nonce.clone())?;
-        args.push(amount.clone())?;
-        check_auth(&e, id, nonce, Symbol::from_str("import"), args)?;
+        args.push(nonce)?;
+        args.push(amount)?;
+        check_auth(e, id, nonce, Symbol::from_str("import"), args)?;
 
         transfer_classic_balance(e, account_id.metered_clone(e.budget_ref())?, -amount)?;
-        receive_balance(&e, Identifier::Account(account_id), amount_i128)?;
+        receive_balance(e, Identifier::Account(account_id), amount_i128)?;
         event::import(e, ident, amount)?;
         Ok(())
     }
@@ -418,14 +418,14 @@ impl TokenTrait for Token {
         let account_id = id.get_account_id(e)?;
 
         let mut args = Vec::new(e)?;
-        let ident = id.get_identifier(&e)?;
+        let ident = id.get_identifier(e)?;
         args.push(ident.clone())?;
-        args.push(nonce.clone())?;
-        args.push(amount.clone())?;
-        check_auth(&e, id, nonce, Symbol::from_str("export"), args)?;
+        args.push(nonce)?;
+        args.push(amount)?;
+        check_auth(e, id, nonce, Symbol::from_str("export"), args)?;
 
         transfer_classic_balance(e, account_id.metered_clone(e.budget_ref())?, amount)?;
-        spend_balance(&e, Identifier::Account(account_id), amount_i128)?;
+        spend_balance(e, Identifier::Account(account_id), amount_i128)?;
         event::export(e, ident, amount)?;
         Ok(())
     }

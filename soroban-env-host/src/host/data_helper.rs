@@ -35,7 +35,7 @@ impl Host {
         match scval {
             ScVal::Object(Some(ScObject::ContractCode(code))) => Ok(code),
             _ => {
-                return Err(self.err_status_msg(
+                Err(self.err_status_msg(
                     ScHostValErrorCode::UnexpectedValType,
                     "ledger entry for contract code does not contain contract code",
                 ))
@@ -73,7 +73,7 @@ impl Host {
         self.0
             .storage
             .borrow_mut()
-            .put(&key, &Host::ledger_entry_from_data(data))?;
+            .put(key, &Host::ledger_entry_from_data(data))?;
         Ok(())
     }
 
@@ -228,9 +228,9 @@ impl Host {
                         // weight.
                         let weight = min(signer.weight, u8::MAX as u32);
                         // We've found the target signer in the account signers, so return the weight
-                        return Ok(weight
+                        return weight
                             .try_into()
-                            .map_err(|_| self.err_general("signer weight overflow"))?);
+                            .map_err(|_| self.err_general("signer weight overflow"));
                     }
                 }
             }

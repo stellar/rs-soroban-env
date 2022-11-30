@@ -76,9 +76,9 @@ macro_rules! decl_tagged_val_wrapper_methods {
                 match maybe {
                     Some(u) => {
                         let raw = RawVal::from_payload(u);
-                        if <Self as crate::RawValConvertible>::is_val_type(raw) {
+                        if <Self as $crate::RawValConvertible>::is_val_type(raw) {
                             Some(unsafe {
-                                <Self as crate::RawValConvertible>::unchecked_from_val(raw)
+                                <Self as $crate::RawValConvertible>::unchecked_from_val(raw)
                             })
                         } else {
                             None

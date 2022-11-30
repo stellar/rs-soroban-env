@@ -58,7 +58,7 @@ impl Host {
 
     pub(crate) fn to_account_id(&self, a: Object) -> Result<AccountId, HostError> {
         self.visit_obj(a, |account_id: &AccountId| {
-            Ok(account_id.metered_clone(&self.0.budget)?)
+            account_id.metered_clone(&self.0.budget)
         })
     }
 

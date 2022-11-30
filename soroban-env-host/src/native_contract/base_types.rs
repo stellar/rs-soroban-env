@@ -369,6 +369,6 @@ impl TryIntoVal<Host, RawVal> for AccountId {
     type Error = HostError;
 
     fn try_into_val(self, env: &Host) -> Result<RawVal, Self::Error> {
-        Ok(env.add_host_object(self.clone())?.to_raw())
+        Ok(env.add_host_object(self)?.to_raw())
     }
 }

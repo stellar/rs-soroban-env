@@ -73,7 +73,7 @@ impl Debug for HostError {
                         .enumerate()
                 {
                     if !wrote_heading {
-                        writeln!(f, "")?;
+                        writeln!(f)?;
                         writeln!(f, "Debug events (newest first):")?;
                         wrote_heading = true;
                     }
@@ -84,7 +84,7 @@ impl Debug for HostError {
                 }
             }
         }
-        writeln!(f, "")?;
+        writeln!(f)?;
         writeln!(f, "Backtrace (newest first):")?;
         writeln!(f, "{:?}", bt)
     }

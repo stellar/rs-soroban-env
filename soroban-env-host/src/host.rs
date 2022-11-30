@@ -243,7 +243,10 @@ impl Host {
     {
         match self.0.ledger.borrow_mut().as_mut() {
             None => Err(self.err_general("missing ledger info")),
-            Some(li) => Ok(f(li)),
+            Some(li) => {
+                f(li);
+                Ok(())
+            },
         }
     }
 
@@ -273,7 +276,7 @@ impl Host {
     where
         F: FnOnce(&mut Events) -> Result<U, HostError>,
     {
-        f(&mut *self.0.events.borrow_mut())
+        f(&mut self.0.events.borrow_mut())
     }
 
     /// Records a debug event. This in itself is not necessarily an error; it
@@ -312,7 +315,10 @@ impl Host {
             type_,
             body: ContractEventBody::V0(ContractEventV0 { topics, data }),
         };
-        self.get_events_mut(|events| Ok(events.record_contract_event(ce)))?;
+        self.get_events_mut(|events| {
+            events.record_contract_event(ce);
+            Ok(())
+        })?;
         // Notes on metering: the length of topics and the complexity of data
         // have been covered by various `ValXdrConv` charges. Here we charge 1
         // unit just for recording this event.
@@ -323,7 +329,7 @@ impl Host {
     where
         F: FnOnce(&mut Storage) -> Result<U, HostError>,
     {
-        f(&mut *self.0.storage.borrow_mut())
+        f(&mut self.0.storage.borrow_mut())
     }
 
     /// Accept a _unique_ (refcount = 1) host reference and destroy the
@@ -669,7 +675,7 @@ impl Host {
                 self.add_host_object((i.lo as u128 | ((i.hi as u128) << 64)) as i128)
             }
             ScObject::Bytes(b) => {
-                self.add_host_object::<Vec<u8>>(b.as_vec().metered_clone(&self.0.budget)?.into())
+                self.add_host_object::<Vec<u8>>(b.as_vec().metered_clone(&self.0.budget)?)
             }
             ScObject::ContractCode(cc) => self.add_host_object(cc.metered_clone(&self.0.budget)?),
             ScObject::AccountId(account_id) => {
@@ -798,7 +804,7 @@ impl Host {
             #[cfg(not(feature = "vm"))]
             ScContractCode::WasmRef(_) => Err(self.err_general("could not dispatch")),
             ScContractCode::Token => {
-                self.with_frame(Frame::Token(id.clone(), func.clone()), || {
+                self.with_frame(Frame::Token(id.clone(), *func), || {
                     use crate::native_contract::{NativeContract, Token};
                     Token.call(func, self, args)
                 })
@@ -920,7 +926,7 @@ impl Host {
             }
         }
 
-        return self.call_contract_fn(&id, &func, args);
+        self.call_contract_fn(&id, &func, args)
     }
 
     // Notes on metering: covered by the called components.
@@ -952,11 +958,11 @@ impl Host {
             }
             HostFunction::CreateContract(args) => self
                 .with_frame(Frame::HostFunction(hf_type), || {
-                    self.create_contract(args).map(|obj| <RawVal>::from(obj))
+                    self.create_contract(args).map(<RawVal>::from)
                 }),
             HostFunction::InstallContractCode(args) => self
                 .with_frame(Frame::HostFunction(hf_type), || {
-                    self.install_contract(args).map(|obj| <RawVal>::from(obj))
+                    self.install_contract(args).map(<RawVal>::from)
                 }),
         }
     }
@@ -1007,7 +1013,7 @@ impl Host {
             ContractId::SourceAccount(salt) => self.id_preimage_from_source_account(salt)?,
             ContractId::Ed25519PublicKey(key_with_signature) => {
                 let signature_payload_preimage = self.create_contract_args_hash_preimage(
-                    args.source.metered_clone(&self.budget_ref())?,
+                    args.source.metered_clone(self.budget_ref())?,
                     key_with_signature.salt.metered_clone(self.budget_ref())?,
                 )?;
                 let signature_payload = self.metered_hash_xdr(&signature_payload_preimage)?;
@@ -1053,7 +1059,7 @@ impl Host {
         use ed25519_dalek::Verifier;
         self.charge_budget(CostType::VerifyEd25519Sig, payload.len() as u64)?;
         public_key
-            .verify(payload, &sig)
+            .verify(payload, sig)
             .map_err(|_| self.err_general("Failed ED25519 verification"))
     }
 }
@@ -1328,7 +1334,7 @@ impl VmCallerCheckedEnv for Host {
     ) -> Result<i64, HostError> {
         let res = unsafe {
             self.unchecked_visit_val_obj(a, |ao| {
-                self.unchecked_visit_val_obj(b, |bo| Ok(ao.metered_cmp(&bo, &self.0.budget)?))
+                self.unchecked_visit_val_obj(b, |bo| ao.metered_cmp(&bo, &self.0.budget))
             })?
         };
         Ok(match res {
@@ -1391,7 +1397,7 @@ impl VmCallerCheckedEnv for Host {
         vmcaller: &mut VmCaller<Self::VmUserState>,
         obj: Object,
     ) -> Result<u64, Self::Error> {
-        Ok(self.visit_obj(obj, move |u: &u128| Ok(*u as u64))?)
+        self.visit_obj(obj, move |u: &u128| Ok(*u as u64))
     }
 
     fn obj_to_u128_hi64(
@@ -1399,7 +1405,7 @@ impl VmCallerCheckedEnv for Host {
         vmcaller: &mut VmCaller<Self::VmUserState>,
         obj: Object,
     ) -> Result<u64, Self::Error> {
-        Ok(self.visit_obj(obj, move |u: &u128| Ok((*u >> 64) as u64))?)
+        self.visit_obj(obj, move |u: &u128| Ok((*u >> 64) as u64))
     }
 
     fn obj_from_i128_pieces(
@@ -1420,7 +1426,7 @@ impl VmCallerCheckedEnv for Host {
         vmcaller: &mut VmCaller<Self::VmUserState>,
         obj: Object,
     ) -> Result<u64, Self::Error> {
-        Ok(self.visit_obj(obj, move |u: &i128| Ok((*u as u128) as u64))?)
+        self.visit_obj(obj, move |u: &i128| Ok((*u as u128) as u64))
     }
 
     fn obj_to_i128_hi64(
@@ -1428,7 +1434,7 @@ impl VmCallerCheckedEnv for Host {
         vmcaller: &mut VmCaller<Self::VmUserState>,
         obj: Object,
     ) -> Result<u64, Self::Error> {
-        Ok(self.visit_obj(obj, move |u: &i128| Ok(((*u as u128) >> 64) as u64))?)
+        self.visit_obj(obj, move |u: &i128| Ok(((*u as u128) >> 64) as u64))
     }
 
     fn map_new(&self, _vmcaller: &mut VmCaller<Host>) -> Result<Object, HostError> {
@@ -1514,18 +1520,16 @@ impl VmCallerCheckedEnv for Host {
             if let Some((pk, _)) = hm.get_prev(&k)? {
                 if *pk != k {
                     Ok(pk.to_raw())
+                } else if let Some((pk2, _)) = hm
+                    .metered_clone(&self.0.budget)?
+                    .extract(pk)? // removes (pk, pv) and returns an Option<(pv, updated_map)>
+                    .ok_or_else(|| self.err_general("key not exist"))?
+                    .1
+                    .get_prev(pk)?
+                {
+                    Ok(pk2.to_raw())
                 } else {
-                    if let Some((pk2, _)) = hm
-                        .metered_clone(&self.0.budget)?
-                        .extract(pk)? // removes (pk, pv) and returns an Option<(pv, updated_map)>
-                        .ok_or_else(|| self.err_general("key not exist"))?
-                        .1
-                        .get_prev(pk)?
-                    {
-                        Ok(pk2.to_raw())
-                    } else {
-                        Ok(Status::UNKNOWN_ERROR.to_raw()) //FIXME: replace with the actual status code
-                    }
+                    Ok(Status::UNKNOWN_ERROR.to_raw()) //FIXME: replace with the actual status code
                 }
             } else {
                 Ok(Status::UNKNOWN_ERROR.to_raw()) //FIXME: replace with the actual status code
@@ -1544,18 +1548,16 @@ impl VmCallerCheckedEnv for Host {
             if let Some((pk, _)) = hm.get_next(&k)? {
                 if *pk != k {
                     Ok(pk.to_raw())
+                } else if let Some((pk2, _)) = hm
+                    .metered_clone(&self.0.budget)?
+                    .extract(pk)? // removes (pk, pv) and returns an Option<(pv, updated_map)>
+                    .ok_or_else(|| self.err_general("key not exist"))?
+                    .1
+                    .get_next(pk)?
+                {
+                    Ok(pk2.to_raw())
                 } else {
-                    if let Some((pk2, _)) = hm
-                        .metered_clone(&self.0.budget)?
-                        .extract(pk)? // removes (pk, pv) and returns an Option<(pv, updated_map)>
-                        .ok_or_else(|| self.err_general("key not exist"))?
-                        .1
-                        .get_next(pk)?
-                    {
-                        Ok(pk2.to_raw())
-                    } else {
-                        Ok(Status::UNKNOWN_ERROR.to_raw()) //FIXME: replace with the actual status code
-                    }
+                    Ok(Status::UNKNOWN_ERROR.to_raw()) //FIXME: replace with the actual status code
                 }
             } else {
                 Ok(Status::UNKNOWN_ERROR.to_raw()) //FIXME: replace with the actual status code
@@ -1746,8 +1748,8 @@ impl VmCallerCheckedEnv for Host {
         v1: Object,
         v2: Object,
     ) -> Result<Object, HostError> {
-        let mut vnew = self.visit_obj(v1, |hv: &HostVec| Ok(hv.metered_clone(&self.0.budget)?))?;
-        let v2 = self.visit_obj(v2, |hv: &HostVec| Ok(hv.metered_clone(&self.0.budget)?))?;
+        let mut vnew = self.visit_obj(v1, |hv: &HostVec| hv.metered_clone(&self.0.budget))?;
+        let v2 = self.visit_obj(v2, |hv: &HostVec| hv.metered_clone(&self.0.budget))?;
         if v2.len() > u32::MAX as usize - vnew.len() {
             return Err(self.err_status_msg(ScHostFnErrorCode::InputArgsInvalid, "u32 overflow"));
         }
@@ -2180,8 +2182,8 @@ impl VmCallerCheckedEnv for Host {
         b1: Object,
         b2: Object,
     ) -> Result<Object, HostError> {
-        let mut vnew = self.visit_obj(b1, |hv: &Vec<u8>| Ok(hv.metered_clone(&self.0.budget)?))?;
-        let mut b2 = self.visit_obj(b2, |hv: &Vec<u8>| Ok(hv.metered_clone(&self.0.budget)?))?;
+        let mut vnew = self.visit_obj(b1, |hv: &Vec<u8>| hv.metered_clone(&self.0.budget))?;
+        let mut b2 = self.visit_obj(b2, |hv: &Vec<u8>| hv.metered_clone(&self.0.budget))?;
         if b2.len() > u32::MAX as usize - vnew.len() {
             return Err(self.err_status_msg(ScHostFnErrorCode::InputArgsInvalid, "u32 overflow"));
         }
@@ -2367,7 +2369,7 @@ impl VmCallerCheckedEnv for Host {
                 let id_val =
                     self.associate_raw_val(self.add_host_object(<Vec<u8>>::from(id.0))?.into());
 
-                let function_val = self.associate_raw_val(function.clone().into());
+                let function_val = self.associate_raw_val((*function).into());
                 Ok((id_val, function_val))
             };
 
@@ -2382,7 +2384,7 @@ impl VmCallerCheckedEnv for Host {
                 }
                 Frame::HostFunction(_) => (),
                 Frame::Token(id, function) => {
-                    let vals = get_host_val_tuple(&id, &function)?;
+                    let vals = get_host_val_tuple(id, function)?;
                     let inner = MeteredVector::from_array(self.budget_cloned(), [vals.0, vals.1])?;
                     outer.push_back(self.add_host_object(inner)?.into())?;
                 }

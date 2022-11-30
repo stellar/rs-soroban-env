@@ -21,7 +21,7 @@ impl Debug for Object {
             (self.as_raw().get_minor() as i32).try_into();
         let object_type_name: &str = match &object_type_res {
             Ok(ty) => ty.name(),
-            Err(_) => &"Unknown",
+            Err(_) => "Unknown",
         };
         let index = self.as_raw().get_major();
         write!(f, "Object({}(#{}))", object_type_name, index)

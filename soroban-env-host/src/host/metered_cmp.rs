@@ -75,7 +75,7 @@ impl MeteredCmp for AccountId {
     fn metered_cmp(&self, other: &Self, budget: &Budget) -> Result<Ordering, HostError> {
         match (&self.0, &other.0) {
             (PublicKey::PublicKeyTypeEd25519(a), PublicKey::PublicKeyTypeEd25519(b)) => {
-                a.metered_cmp(&b, budget)
+                a.metered_cmp(b, budget)
             }
         }
     }

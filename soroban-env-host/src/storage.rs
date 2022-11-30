@@ -184,7 +184,7 @@ impl Storage {
             }
         };
         self.map
-            .insert(Box::new(key.clone()), val.map(|v| Box::new(v)))?;
+            .insert(Box::new(key.clone()), val.map(Box::new))?;
         Ok(())
     }
 

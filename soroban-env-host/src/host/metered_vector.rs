@@ -92,7 +92,8 @@ impl<A: Clone> MeteredVector<A> {
     // Time: O(log n) worst case, O(1) ammortized
     pub fn push_front(&mut self, value: A) -> Result<(), HostError> {
         self.charge_immut_access(self.len() as u64)?;
-        Ok(self.vec.push_front(value))
+        self.vec.push_front(value);
+        Ok(())
     }
 
     // Time: O(log n) worst case, O(1) ammortized
@@ -106,7 +107,8 @@ impl<A: Clone> MeteredVector<A> {
     // Time: O(log n) worst case, O(1) ammortized
     pub fn push_back(&mut self, value: A) -> Result<(), HostError> {
         self.charge_immut_access(self.len() as u64)?;
-        Ok(self.vec.push_back(value))
+        self.vec.push_back(value);
+        Ok(())
     }
 
     // Time: O(log n) worst case, O(1) ammortized
@@ -136,13 +138,15 @@ impl<A: Clone> MeteredVector<A> {
     // Time: O(log n)
     pub fn insert(&mut self, index: usize, value: A) -> Result<(), HostError> {
         self.charge_mut_access(self.len() as u64)?;
-        Ok(self.vec.insert(index, value))
+        self.vec.insert(index, value);
+        Ok(())
     }
 
     // Time: O(log n)
     pub fn append(&mut self, other: Self) -> Result<(), HostError> {
         self.charge_mut_access((self.len() + other.len()) as u64)?;
-        Ok(self.vec.append(other.vec))
+        self.vec.append(other.vec);
+        Ok(())
     }
 
     // Time: O(log n)

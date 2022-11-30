@@ -354,7 +354,7 @@ impl TryFrom<Symbol> for ScVal {
 impl TryFrom<&Symbol> for ScVal {
     type Error = ConversionError;
     fn try_from(s: &Symbol) -> Result<Self, Self::Error> {
-        s.clone().try_into()
+        (*s).try_into()
     }
 }
 

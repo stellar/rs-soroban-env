@@ -5,7 +5,7 @@ use crate::{Host, HostError};
 
 use super::base_types::BytesN;
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Eq)]
 #[contracttype]
 pub enum Invoker {
     Account(AccountId),
@@ -13,15 +13,15 @@ pub enum Invoker {
 }
 
 pub fn invoker(env: &Host) -> Result<Invoker, HostError> {
-    let invoker_type: InvokerType = Host::get_invoker_type(&env)?.try_into()?;
+    let invoker_type: InvokerType = Host::get_invoker_type(env)?.try_into()?;
     Ok(match invoker_type {
         InvokerType::Account => Invoker::Account(AccountId::try_from_val(
             env,
-            Host::get_invoking_account(&env)?,
+            Host::get_invoking_account(env)?,
         )?),
         InvokerType::Contract => Invoker::Contract(BytesN::<32>::try_from_val(
             env,
-            Host::get_invoking_contract(&env)?,
+            Host::get_invoking_contract(env)?,
         )?),
     })
 }

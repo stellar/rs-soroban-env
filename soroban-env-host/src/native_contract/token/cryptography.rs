@@ -79,7 +79,7 @@ fn check_account_auth(
         }
 
         e.verify_sig_ed25519(
-            msg_bin.clone(),
+            msg_bin,
             sig.public_key.clone().into(),
             sig.signature.into(),
         )?;
@@ -134,7 +134,7 @@ pub fn check_auth(
                     nonce
                 ))
             } else {
-                let invoker_type: InvokerType = Host::get_invoker_type(&e)?.try_into()?;
+                let invoker_type: InvokerType = Host::get_invoker_type(e)?.try_into()?;
                 match invoker_type {
                     InvokerType::Account => e.get_invoking_account()?,
                     InvokerType::Contract => e.get_invoking_contract()?,
