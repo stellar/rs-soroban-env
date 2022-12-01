@@ -1,7 +1,6 @@
 use crate::{
     host_vec,
     native_contract::{
-        base_types::i128,
         testutils::{AccountAuthBuilder, HostVec, TestSigner},
         token::public_types::TokenMetadata,
     },
@@ -67,11 +66,7 @@ impl<'a> TestToken<'a> {
             .try_into_val(self.host)?)
     }
 
-    pub(crate) fn allowance(
-        &self,
-        from: ScAddress,
-        spender: ScAddress,
-    ) -> Result<i128, HostError> {
+    pub(crate) fn allowance(&self, from: ScAddress, spender: ScAddress) -> Result<i128, HostError> {
         Ok(self
             .host
             .call(

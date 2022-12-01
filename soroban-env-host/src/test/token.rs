@@ -5,7 +5,6 @@ use crate::{
     host::{Frame, TestContractFrame},
     host_vec,
     native_contract::{
-        base_types::i128,
         contract_error::ContractError,
         testutils::{
             generate_bytes, generate_keypair, signer_to_account_id, signer_to_id_bytes,
@@ -311,7 +310,7 @@ fn test_smart_token_init_and_balance() {
 
     let user = TestSigner::Ed25519(&test.user_key);
 
-    assert_eq!(token.balance(user.get_address()).unwrap().to_i64(), 0);
+    assert_eq!(token.balance(user.get_address()).unwrap(), 0);
     assert_eq!(
         test.host
             .read_nonce(&token_id, &admin.get_address())
@@ -319,18 +318,9 @@ fn test_smart_token_init_and_balance() {
         0
     );
 
-    token
-        .mint(
-            &admin,
-            user.get_address(),
-            i128::from_u64(&test.host, 10_000_000).unwrap(),
-        )
-        .unwrap();
+    token.mint(&admin, user.get_address(), 10_000_000).unwrap();
 
-    assert_eq!(
-        token.balance(user.get_address()).unwrap().to_i64(),
-        10_000_000
-    );
+    assert_eq!(token.balance(user.get_address()).unwrap(), 10_000_000);
     assert_eq!(
         test.host
             .read_nonce(&token_id, &admin.get_address())
@@ -356,13 +346,7 @@ fn test_smart_tokens_dont_support_classic_ops() {
         None,
     );
 
-    token
-        .mint(
-            &admin,
-            user.get_address(),
-            i128::from_u64(&test.host, 100_000).unwrap(),
-        )
-        .unwrap();
+    token.mint(&admin, user.get_address(), 100_000).unwrap();
 
     assert_eq!(
         to_contract_err(token.export(&user, 1).err().unwrap()),
@@ -420,7 +404,7 @@ fn test_native_token_smart_roundtrip() {
     assert!(token.set_admin(&user, user.get_address()).is_err());
 
     assert_eq!(test.get_native_balance(&account_id), 100_000_000);
-    assert_eq!(token.balance(user.get_address()).unwrap().to_i64(), 0);
+    assert_eq!(token.balance(user.get_address()).unwrap(), 0);
     assert_eq!(
         test.host
             .read_nonce(&expected_token_id, &user.get_address())
@@ -431,10 +415,7 @@ fn test_native_token_smart_roundtrip() {
     token.import(&user, 10_000_000).unwrap();
 
     assert_eq!(test.get_native_balance(&account_id), 90_000_000);
-    assert_eq!(
-        token.balance(user.get_address()).unwrap().to_i64(),
-        10_000_000
-    );
+    assert_eq!(token.balance(user.get_address()).unwrap(), 10_000_000);
     assert_eq!(
         test.host
             .read_nonce(&expected_token_id, &user.get_address())
@@ -445,10 +426,7 @@ fn test_native_token_smart_roundtrip() {
     token.export(&user, 5_000_000).unwrap();
 
     assert_eq!(test.get_native_balance(&account_id), 95_000_000);
-    assert_eq!(
-        token.balance(user.get_address()).unwrap().to_i64(),
-        5_000_000
-    );
+    assert_eq!(token.balance(user.get_address()).unwrap(), 5_000_000);
     assert_eq!(
         test.host
             .read_nonce(&expected_token_id, &user.get_address())
@@ -552,7 +530,7 @@ fn test_classic_asset_roundtrip(asset_code: &[u8]) {
         test.get_classic_trustline_balance(&trustline_key),
         10_000_000
     );
-    assert_eq!(token.balance(user.get_address()).unwrap().to_i64(), 0);
+    assert_eq!(token.balance(user.get_address()).unwrap(), 0);
     assert_eq!(
         test.host
             .read_nonce(&expected_token_id, &user.get_address())
@@ -566,10 +544,7 @@ fn test_classic_asset_roundtrip(asset_code: &[u8]) {
         test.get_classic_trustline_balance(&trustline_key),
         9_000_000
     );
-    assert_eq!(
-        token.balance(user.get_address()).unwrap().to_i64(),
-        1_000_000
-    );
+    assert_eq!(token.balance(user.get_address()).unwrap(), 1_000_000);
     assert_eq!(
         test.host
             .read_nonce(&expected_token_id, &user.get_address())
@@ -583,7 +558,7 @@ fn test_classic_asset_roundtrip(asset_code: &[u8]) {
         test.get_classic_trustline_balance(&trustline_key),
         9_500_000
     );
-    assert_eq!(token.balance(user.get_address()).unwrap().to_i64(), 500_000);
+    assert_eq!(token.balance(user.get_address()).unwrap(), 500_000);
     assert_eq!(
         test.host
             .read_nonce(&expected_token_id, &user.get_address())
@@ -624,45 +599,20 @@ fn test_direct_transfer() {
 
     let user = TestSigner::Ed25519(&test.user_key);
     let user_2 = TestSigner::Ed25519(&test.user_key_2);
-    token
-        .mint(
-            &admin,
-            user.get_address(),
-            i128::from_u64(&test.host, 100_000_000).unwrap(),
-        )
-        .unwrap();
-    assert_eq!(
-        token.balance(user.get_address()).unwrap().to_i64(),
-        100_000_000
-    );
-    assert_eq!(token.balance(user_2.get_address()).unwrap().to_i64(), 0);
+    token.mint(&admin, user.get_address(), 100_000_000).unwrap();
+    assert_eq!(token.balance(user.get_address()).unwrap(), 100_000_000);
+    assert_eq!(token.balance(user_2.get_address()).unwrap(), 0);
 
     // Transfer some balance from user 1 to user 2.
-    token
-        .xfer(
-            &user,
-            user_2.get_address(),
-            i128::from_u64(&test.host, 9_999_999).unwrap(),
-        )
-        .unwrap();
-    assert_eq!(
-        token.balance(user.get_address()).unwrap().to_i64(),
-        90_000_001
-    );
-    assert_eq!(
-        token.balance(user_2.get_address()).unwrap().to_i64(),
-        9_999_999
-    );
+    token.xfer(&user, user_2.get_address(), 9_999_999).unwrap();
+    assert_eq!(token.balance(user.get_address()).unwrap(), 90_000_001);
+    assert_eq!(token.balance(user_2.get_address()).unwrap(), 9_999_999);
 
     // Can't transfer more than the balance from user 2.
     assert_eq!(
         to_contract_err(
             token
-                .xfer(
-                    &user_2,
-                    user.get_address(),
-                    i128::from_u64(&test.host, 10_000_000).unwrap(),
-                )
+                .xfer(&user_2, user.get_address(), 10_000_000,)
                 .err()
                 .unwrap()
         ),
@@ -670,21 +620,9 @@ fn test_direct_transfer() {
     );
 
     // Transfer some balance back from user 2 to user 1.
-    token
-        .xfer(
-            &user_2,
-            user.get_address(),
-            i128::from_u64(&test.host, 999_999).unwrap(),
-        )
-        .unwrap();
-    assert_eq!(
-        token.balance(user.get_address()).unwrap().to_i64(),
-        91_000_000
-    );
-    assert_eq!(
-        token.balance(user_2.get_address()).unwrap().to_i64(),
-        9_000_000
-    );
+    token.xfer(&user_2, user.get_address(), 999_999).unwrap();
+    assert_eq!(token.balance(user.get_address()).unwrap(), 91_000_000);
+    assert_eq!(token.balance(user_2.get_address()).unwrap(), 9_000_000);
 }
 
 #[test]
@@ -696,66 +634,39 @@ fn test_transfer_with_allowance() {
     let user = TestSigner::Ed25519(&test.user_key);
     let user_2 = TestSigner::Ed25519(&test.user_key_2);
     let user_3 = TestSigner::Ed25519(&test.user_key_3);
-    token
-        .mint(
-            &admin,
-            user.get_address(),
-            i128::from_u64(&test.host, 100_000_000).unwrap(),
-        )
-        .unwrap();
-    assert_eq!(
-        token.balance(user.get_address()).unwrap().to_i64(),
-        100_000_000
-    );
-    assert_eq!(token.balance(user_2.get_address()).unwrap().to_i64(), 0);
+    token.mint(&admin, user.get_address(), 100_000_000).unwrap();
+    assert_eq!(token.balance(user.get_address()).unwrap(), 100_000_000);
+    assert_eq!(token.balance(user_2.get_address()).unwrap(), 0);
     assert_eq!(
         token
             .allowance(user.get_address(), user_3.get_address())
-            .unwrap()
-            .to_i64(),
+            .unwrap(),
         0
     );
 
     // Allow 10_000_000 units of token to be transferred from user by user 3.
     token
-        .approve(
-            &user,
-            user_3.get_address(),
-            i128::from_u64(&test.host, 10_000_000).unwrap(),
-        )
+        .approve(&user, user_3.get_address(), 10_000_000)
         .unwrap();
 
     assert_eq!(
         token
             .allowance(user.get_address(), user_3.get_address())
-            .unwrap()
-            .to_i64(),
+            .unwrap(),
         10_000_000
     );
 
     // Transfer 5_000_000 of allowance to user 2.
     token
-        .xfer_from(
-            &user_3,
-            user.get_address(),
-            user_2.get_address(),
-            i128::from_u64(&test.host, 6_000_000).unwrap(),
-        )
+        .xfer_from(&user_3, user.get_address(), user_2.get_address(), 6_000_000)
         .unwrap();
-    assert_eq!(
-        token.balance(user.get_address()).unwrap().to_i64(),
-        94_000_000
-    );
-    assert_eq!(
-        token.balance(user_2.get_address()).unwrap().to_i64(),
-        6_000_000
-    );
-    assert_eq!(token.balance(user_3.get_address()).unwrap().to_i64(), 0);
+    assert_eq!(token.balance(user.get_address()).unwrap(), 94_000_000);
+    assert_eq!(token.balance(user_2.get_address()).unwrap(), 6_000_000);
+    assert_eq!(token.balance(user_3.get_address()).unwrap(), 0);
     assert_eq!(
         token
             .allowance(user.get_address(), user_3.get_address())
-            .unwrap()
-            .to_i64(),
+            .unwrap(),
         4_000_000
     );
 
@@ -763,12 +674,7 @@ fn test_transfer_with_allowance() {
     assert_eq!(
         to_contract_err(
             token
-                .xfer_from(
-                    &user_3,
-                    user.get_address(),
-                    user_3.get_address(),
-                    i128::from_u64(&test.host, 4_000_001).unwrap(),
-                )
+                .xfer_from(&user_3, user.get_address(), user_3.get_address(), 4_000_001,)
                 .err()
                 .unwrap()
         ),
@@ -777,31 +683,16 @@ fn test_transfer_with_allowance() {
 
     // Transfer the remaining allowance to user 3.
     token
-        .xfer_from(
-            &user_3,
-            user.get_address(),
-            user_3.get_address(),
-            i128::from_u64(&test.host, 4_000_000).unwrap(),
-        )
+        .xfer_from(&user_3, user.get_address(), user_3.get_address(), 4_000_000)
         .unwrap();
 
-    assert_eq!(
-        token.balance(user.get_address()).unwrap().to_i64(),
-        90_000_000
-    );
-    assert_eq!(
-        token.balance(user_2.get_address()).unwrap().to_i64(),
-        6_000_000
-    );
-    assert_eq!(
-        token.balance(user_3.get_address()).unwrap().to_i64(),
-        4_000_000
-    );
+    assert_eq!(token.balance(user.get_address()).unwrap(), 90_000_000);
+    assert_eq!(token.balance(user_2.get_address()).unwrap(), 6_000_000);
+    assert_eq!(token.balance(user_3.get_address()).unwrap(), 4_000_000);
     assert_eq!(
         token
             .allowance(user.get_address(), user_3.get_address())
-            .unwrap()
-            .to_i64(),
+            .unwrap(),
         0
     );
 
@@ -809,12 +700,7 @@ fn test_transfer_with_allowance() {
     assert_eq!(
         to_contract_err(
             token
-                .xfer_from(
-                    &user_3,
-                    user.get_address(),
-                    user_3.get_address(),
-                    i128::from_u64(&test.host, 1).unwrap(),
-                )
+                .xfer_from(&user_3, user.get_address(), user_3.get_address(), 1,)
                 .err()
                 .unwrap()
         ),
@@ -830,19 +716,9 @@ fn test_freeze_and_unfreeze() {
 
     let user = TestSigner::Ed25519(&test.user_key);
     let user_2 = TestSigner::Ed25519(&test.user_key_2);
+    token.mint(&admin, user.get_address(), 100_000_000).unwrap();
     token
-        .mint(
-            &admin,
-            user.get_address(),
-            i128::from_u64(&test.host, 100_000_000).unwrap(),
-        )
-        .unwrap();
-    token
-        .mint(
-            &admin,
-            user_2.get_address(),
-            i128::from_u64(&test.host, 200_000_000).unwrap(),
-        )
+        .mint(&admin, user_2.get_address(), 200_000_000)
         .unwrap();
 
     assert!(!token.is_frozen(user.get_address()).unwrap());
@@ -853,29 +729,11 @@ fn test_freeze_and_unfreeze() {
     assert!(token.is_frozen(user.get_address()).unwrap());
     // Make sure neither outgoing nor incoming balance transfers are possible.
     assert_eq!(
-        to_contract_err(
-            token
-                .xfer(
-                    &user,
-                    user_2.get_address(),
-                    i128::from_u64(&test.host, 1).unwrap()
-                )
-                .err()
-                .unwrap()
-        ),
+        to_contract_err(token.xfer(&user, user_2.get_address(), 1).err().unwrap()),
         ContractError::BalanceFrozenError
     );
     assert_eq!(
-        to_contract_err(
-            token
-                .xfer(
-                    &user_2,
-                    user.get_address(),
-                    i128::from_u64(&test.host, 1).unwrap()
-                )
-                .err()
-                .unwrap()
-        ),
+        to_contract_err(token.xfer(&user_2, user.get_address(), 1).err().unwrap()),
         ContractError::BalanceFrozenError
     );
 
@@ -884,20 +742,8 @@ fn test_freeze_and_unfreeze() {
 
     assert!(!token.is_frozen(user.get_address()).unwrap());
     // Make sure balance transfers are possible now.
-    token
-        .xfer(
-            &user,
-            user_2.get_address(),
-            i128::from_u64(&test.host, 1).unwrap(),
-        )
-        .unwrap();
-    token
-        .xfer(
-            &user_2,
-            user.get_address(),
-            i128::from_u64(&test.host, 1).unwrap(),
-        )
-        .unwrap();
+    token.xfer(&user, user_2.get_address(), 1).unwrap();
+    token.xfer(&user_2, user.get_address(), 1).unwrap();
 }
 
 #[test]
@@ -907,41 +753,19 @@ fn test_burn() {
     let token = test.default_smart_token(&admin);
 
     let user = TestSigner::Ed25519(&test.user_key);
-    token
-        .mint(
-            &admin,
-            user.get_address(),
-            i128::from_u64(&test.host, 100_000_000).unwrap(),
-        )
-        .unwrap();
+    token.mint(&admin, user.get_address(), 100_000_000).unwrap();
 
-    assert_eq!(
-        token.balance(user.get_address()).unwrap().to_i64(),
-        100_000_000
-    );
+    assert_eq!(token.balance(user.get_address()).unwrap(), 100_000_000);
 
-    token
-        .burn(
-            &admin,
-            user.get_address(),
-            i128::from_u64(&test.host, 40_000_000).unwrap(),
-        )
-        .unwrap();
+    token.burn(&admin, user.get_address(), 40_000_000).unwrap();
 
-    assert_eq!(
-        token.balance(user.get_address()).unwrap().to_i64(),
-        60_000_000
-    );
+    assert_eq!(token.balance(user.get_address()).unwrap(), 60_000_000);
 
     // Can't burn more than the balance
     assert_eq!(
         to_contract_err(
             token
-                .burn(
-                    &admin,
-                    user.get_address(),
-                    i128::from_u64(&test.host, 60_000_001).unwrap(),
-                )
+                .burn(&admin, user.get_address(), 60_000_001,)
                 .err()
                 .unwrap()
         ),
@@ -949,14 +773,8 @@ fn test_burn() {
     );
 
     // Burn everything else
-    token
-        .burn(
-            &admin,
-            user.get_address(),
-            i128::from_u64(&test.host, 60_000_000).unwrap(),
-        )
-        .unwrap();
-    assert_eq!(token.balance(user.get_address()).unwrap().to_i64(), 0);
+    token.burn(&admin, user.get_address(), 60_000_000).unwrap();
+    assert_eq!(token.balance(user.get_address()).unwrap(), 0);
 }
 
 #[test]
@@ -982,11 +800,7 @@ fn test_set_admin() {
     assert_eq!(
         to_contract_err(
             token
-                .mint(
-                    &admin,
-                    new_admin.get_address(),
-                    i128::from_u64(&test.host, 1).unwrap()
-                )
+                .mint(&admin, new_admin.get_address(), 1)
                 .err()
                 .unwrap()
         ),
@@ -995,11 +809,7 @@ fn test_set_admin() {
     assert_eq!(
         to_contract_err(
             token
-                .burn(
-                    &admin,
-                    new_admin.get_address(),
-                    i128::from_u64(&test.host, 1).unwrap()
-                )
+                .burn(&admin, new_admin.get_address(), 1)
                 .err()
                 .unwrap()
         ),
@@ -1025,33 +835,15 @@ fn test_set_admin() {
     );
 
     // The admin functions are now available to the new admin.
-    token
-        .mint(
-            &new_admin,
-            admin.get_address(),
-            i128::from_u64(&test.host, 1).unwrap(),
-        )
-        .unwrap();
-    token
-        .burn(
-            &new_admin,
-            admin.get_address(),
-            i128::from_u64(&test.host, 1).unwrap(),
-        )
-        .unwrap();
+    token.mint(&new_admin, admin.get_address(), 1).unwrap();
+    token.burn(&new_admin, admin.get_address(), 1).unwrap();
     token.freeze(&new_admin, admin.get_address()).unwrap();
     token.unfreeze(&new_admin, admin.get_address()).unwrap();
 
     // Return the admin rights to the old admin
     token.set_admin(&new_admin, admin.get_address()).unwrap();
     // Make sure old admin can now perform admin operations
-    token
-        .mint(
-            &admin,
-            new_admin.get_address(),
-            i128::from_u64(&test.host, 1).unwrap(),
-        )
-        .unwrap();
+    token.mint(&admin, new_admin.get_address(), 1).unwrap();
 }
 
 #[test]
@@ -1088,7 +880,7 @@ fn test_account_invoker_auth() {
         token.mint(
             &TestSigner::ClassicAccountInvoker,
             user_address.clone(),
-            i128::from_u64(&test.host, 1000).unwrap(),
+            1000,
         )
     })
     .unwrap();
@@ -1098,13 +890,13 @@ fn test_account_invoker_auth() {
         token.mint(
             &TestSigner::ClassicAccountInvoker,
             admin_address.clone(),
-            i128::from_u64(&test.host, 2000).unwrap(),
+            2000,
         )
     })
     .unwrap();
 
-    assert_eq!(token.balance(user_address.clone()).unwrap().to_i64(), 1000);
-    assert_eq!(token.balance(admin_address.clone()).unwrap().to_i64(), 2000);
+    assert_eq!(token.balance(user_address.clone()).unwrap(), 1000);
+    assert_eq!(token.balance(admin_address.clone()).unwrap(), 2000);
 
     // User invoker can't perform admin operation.
     assert_eq!(
@@ -1113,7 +905,7 @@ fn test_account_invoker_auth() {
                 token.mint(
                     &TestSigner::ClassicAccountInvoker,
                     user_address.clone(),
-                    i128::from_u64(&test.host, 1000).unwrap(),
+                    1000,
                 )
             })
             .err()
@@ -1127,7 +919,7 @@ fn test_account_invoker_auth() {
         token.xfer(
             &TestSigner::ClassicAccountInvoker,
             admin_address.clone(),
-            i128::from_u64(&test.host, 500).unwrap(),
+            500,
         )
     })
     .unwrap();
@@ -1136,23 +928,19 @@ fn test_account_invoker_auth() {
         token.xfer(
             &TestSigner::ClassicAccountInvoker,
             user_address.clone(),
-            i128::from_u64(&test.host, 800).unwrap(),
+            800,
         )
     })
     .unwrap();
 
-    assert_eq!(token.balance(user_address.clone()).unwrap().to_i64(), 1300);
-    assert_eq!(token.balance(admin_address.clone()).unwrap().to_i64(), 1700);
+    assert_eq!(token.balance(user_address.clone()).unwrap(), 1300);
+    assert_eq!(token.balance(admin_address.clone()).unwrap(), 1700);
 
     // Contract invoker can't perform unauthorized admin operation.
     assert_eq!(
         to_contract_err(
             test.run_from_contract(&generate_bytes(&test.host), || {
-                token.mint(
-                    &TestSigner::ContractInvoker,
-                    user_address.clone(),
-                    i128::from_u64(&test.host, 1000).unwrap(),
-                )
+                token.mint(&TestSigner::ContractInvoker, user_address.clone(), 1000)
             })
             .err()
             .unwrap()
@@ -1183,48 +971,24 @@ fn test_contract_invoker_auth() {
     let token = test.default_smart_token_with_admin_id(&admin_contract_address);
 
     test.run_from_contract(&admin_contract_id_bytes, || {
-        token.mint(
-            &contract_invoker,
-            user_contract_address.clone(),
-            i128::from_u64(&test.host, 1000).unwrap(),
-        )
+        token.mint(&contract_invoker, user_contract_address.clone(), 1000)
     })
     .unwrap();
 
     // Make another succesful call
     test.run_from_contract(&admin_contract_id_bytes, || {
-        token.mint(
-            &contract_invoker,
-            admin_contract_address.clone(),
-            i128::from_u64(&test.host, 2000).unwrap(),
-        )
+        token.mint(&contract_invoker, admin_contract_address.clone(), 2000)
     })
     .unwrap();
 
-    assert_eq!(
-        token
-            .balance(user_contract_address.clone())
-            .unwrap()
-            .to_i64(),
-        1000
-    );
-    assert_eq!(
-        token
-            .balance(admin_contract_address.clone())
-            .unwrap()
-            .to_i64(),
-        2000
-    );
+    assert_eq!(token.balance(user_contract_address.clone()).unwrap(), 1000);
+    assert_eq!(token.balance(admin_contract_address.clone()).unwrap(), 2000);
 
     // User contract invoker can't perform admin operation.
     assert_eq!(
         to_contract_err(
             test.run_from_contract(&user_contract_id_bytes, || {
-                token.mint(
-                    &contract_invoker,
-                    user_contract_address.clone(),
-                    i128::from_u64(&test.host, 1000).unwrap(),
-                )
+                token.mint(&contract_invoker, user_contract_address.clone(), 1000)
             })
             .err()
             .unwrap()
@@ -1234,48 +998,24 @@ fn test_contract_invoker_auth() {
 
     // Perform transfers based on the invoker id.
     test.run_from_contract(&user_contract_id_bytes, || {
-        token.xfer(
-            &contract_invoker,
-            admin_contract_address.clone(),
-            i128::from_u64(&test.host, 500).unwrap(),
-        )
+        token.xfer(&contract_invoker, admin_contract_address.clone(), 500)
     })
     .unwrap();
 
     test.run_from_contract(&admin_contract_id_bytes, || {
-        token.xfer(
-            &contract_invoker,
-            user_contract_address.clone(),
-            i128::from_u64(&test.host, 800).unwrap(),
-        )
+        token.xfer(&contract_invoker, user_contract_address.clone(), 800)
     })
     .unwrap();
 
-    assert_eq!(
-        token
-            .balance(user_contract_address.clone())
-            .unwrap()
-            .to_i64(),
-        1300
-    );
-    assert_eq!(
-        token
-            .balance(admin_contract_address.clone())
-            .unwrap()
-            .to_i64(),
-        1700
-    );
+    assert_eq!(token.balance(user_contract_address.clone()).unwrap(), 1300);
+    assert_eq!(token.balance(admin_contract_address.clone()).unwrap(), 1700);
 
     // Account invoker can't perform unauthorized admin operation.
     let acc_invoker = TestSigner::ClassicAccountInvoker;
     assert_eq!(
         to_contract_err(
             test.run_from_account(signer_to_account_id(&test.host, &test.admin_key), || {
-                token.mint(
-                    &acc_invoker,
-                    user_contract_address.clone(),
-                    i128::from_u64(&test.host, 1000).unwrap(),
-                )
+                token.mint(&acc_invoker, user_contract_address.clone(), 1000)
             })
             .err()
             .unwrap()
@@ -1297,7 +1037,7 @@ fn test_contract_invoker_auth() {
 //             &admin,
 //             token.nonce(admin.get_address()).unwrap(),
 //             user.get_address(),
-//             i128::from_u64(&test.host, 100_000_000).unwrap(),
+//             100_000_000,
 //         )
 //         .unwrap();
 
@@ -1305,9 +1045,9 @@ fn test_contract_invoker_auth() {
 //     token
 //         .approve(
 //             &user,
-//             i128::from_u64(&test.host, 0).unwrap(),
+//             0,
 //             user_2.get_address(),
-//             i128::from_u64(&test.host, 1000).unwrap(),
+//             1000,
 //         )
 //         .unwrap();
 
@@ -1316,9 +1056,9 @@ fn test_contract_invoker_auth() {
 //             token
 //                 .xfer(
 //                     &user,
-//                     i128::from_u64(&test.host, 2).unwrap(),
+//                     2,
 //                     user_2.get_address(),
-//                     i128::from_u64(&test.host, 1000).unwrap()
+//                     1000
 //                 )
 //                 .err()
 //                 .unwrap()
@@ -1331,9 +1071,9 @@ fn test_contract_invoker_auth() {
 //             token
 //                 .approve(
 //                     &user,
-//                     i128::from_u64(&test.host, 2).unwrap(),
+//                     2,
 //                     user_2.get_address(),
-//                     i128::from_u64(&test.host, 1000).unwrap()
+//                     1000
 //                 )
 //                 .err()
 //                 .unwrap()
@@ -1345,10 +1085,10 @@ fn test_contract_invoker_auth() {
 //             token
 //                 .xfer_from(
 //                     &user_2,
-//                     i128::from_u64(&test.host, 1).unwrap(),
+//                     1,
 //                     user.get_address(),
 //                     user_2.get_address(),
-//                     i128::from_u64(&test.host, 100).unwrap()
+//                     100
 //                 )
 //                 .err()
 //                 .unwrap()
@@ -1360,9 +1100,9 @@ fn test_contract_invoker_auth() {
 //             token
 //                 .mint(
 //                     &admin,
-//                     i128::from_u64(&test.host, 2).unwrap(),
+//                     2,
 //                     user.get_address(),
-//                     i128::from_u64(&test.host, 10_000_000).unwrap(),
+//                     10_000_000,
 //                 )
 //                 .err()
 //                 .unwrap()
@@ -1374,9 +1114,9 @@ fn test_contract_invoker_auth() {
 //             token
 //                 .burn(
 //                     &admin,
-//                     i128::from_u64(&test.host, 2).unwrap(),
+//                     2,
 //                     user.get_address(),
-//                     i128::from_u64(&test.host, 10_000_000).unwrap(),
+//                     10_000_000,
 //                 )
 //                 .err()
 //                 .unwrap()
@@ -1388,7 +1128,7 @@ fn test_contract_invoker_auth() {
 //             token
 //                 .set_admin(
 //                     &admin,
-//                     i128::from_u64(&test.host, 2).unwrap(),
+//                     2,
 //                     user.get_address()
 //                 )
 //                 .err()
@@ -1430,7 +1170,7 @@ fn test_auth_rejected_for_incorrect_function_name() {
     let token = test.default_smart_token(&admin);
     let user = TestSigner::Ed25519(&test.user_key);
 
-    let amount = i128::from_u64(&test.host, 1000).unwrap();
+    let amount = 1000;
     let admin_acc = AccountAuthBuilder::new(&test.host, &admin)
         .add_invocation(
             &token.id,
@@ -1460,11 +1200,7 @@ fn test_auth_rejected_for_incorrect_function_args() {
         .add_invocation(
             &token.id,
             "mint",
-            host_vec![
-                &test.host,
-                user.get_address(),
-                i128::from_u64(&test.host, 1000).unwrap()
-            ],
+            host_vec![&test.host, user.get_address(), 1000],
         )
         .build();
 
@@ -1473,13 +1209,7 @@ fn test_auth_rejected_for_incorrect_function_args() {
         .call(
             token.id.clone().into(),
             Symbol::from_str("mint").into(),
-            host_vec![
-                &test.host,
-                admin_acc,
-                user.get_address(),
-                i128::from_u64(&test.host, 1_000_000).unwrap()
-            ]
-            .into(),
+            host_vec![&test.host, admin_acc, user.get_address(), 1_000_000].into(),
         )
         .is_err());
 }
@@ -1693,64 +1423,27 @@ fn test_negative_amounts_are_not_allowed() {
 
     let user = TestSigner::Ed25519(&test.user_key);
     let user_2 = TestSigner::Ed25519(&test.user_key_2);
-    token
-        .mint(
-            &admin,
-            user.get_address(),
-            i128::from_u64(&test.host, 100_000_000).unwrap(),
-        )
-        .unwrap();
+    token.mint(&admin, user.get_address(), 100_000_000).unwrap();
 
     assert_eq!(
-        to_contract_err(
-            token
-                .mint(
-                    &admin,
-                    user.get_address(),
-                    i128::from_i64(&test.host, -1).unwrap(),
-                )
-                .err()
-                .unwrap()
-        ),
+        to_contract_err(token.mint(&admin, user.get_address(), -1,).err().unwrap()),
+        ContractError::NegativeAmountError
+    );
+
+    assert_eq!(
+        to_contract_err(token.burn(&admin, user.get_address(), -1,).err().unwrap()),
+        ContractError::NegativeAmountError
+    );
+
+    assert_eq!(
+        to_contract_err(token.xfer(&user, user_2.get_address(), -1).err().unwrap()),
         ContractError::NegativeAmountError
     );
 
     assert_eq!(
         to_contract_err(
             token
-                .burn(
-                    &admin,
-                    user.get_address(),
-                    i128::from_i64(&test.host, -1).unwrap(),
-                )
-                .err()
-                .unwrap()
-        ),
-        ContractError::NegativeAmountError
-    );
-
-    assert_eq!(
-        to_contract_err(
-            token
-                .xfer(
-                    &user,
-                    user_2.get_address(),
-                    i128::from_i64(&test.host, -1).unwrap(),
-                )
-                .err()
-                .unwrap()
-        ),
-        ContractError::NegativeAmountError
-    );
-
-    assert_eq!(
-        to_contract_err(
-            token
-                .approve(
-                    &user,
-                    user_2.get_address(),
-                    i128::from_i64(&test.host, -1).unwrap(),
-                )
+                .approve(&user, user_2.get_address(), -1)
                 .err()
                 .unwrap()
         ),
@@ -1758,23 +1451,12 @@ fn test_negative_amounts_are_not_allowed() {
     );
 
     // Approve some balance before doing the negative xfer_from.
-    token
-        .approve(
-            &user,
-            user_2.get_address(),
-            i128::from_i64(&test.host, 10_000).unwrap(),
-        )
-        .unwrap();
+    token.approve(&user, user_2.get_address(), 10_000).unwrap();
 
     assert_eq!(
         to_contract_err(
             token
-                .xfer_from(
-                    &user_2,
-                    user.get_address(),
-                    user_2.get_address(),
-                    i128::from_i64(&test.host, -1).unwrap(),
-                )
+                .xfer_from(&user_2, user.get_address(), user_2.get_address(), -1,)
                 .err()
                 .unwrap()
         ),
@@ -1837,7 +1519,7 @@ fn test_native_token_classic_balance_boundaries(
         .xfer(
             &large_balance_signer,
             user.get_address(),
-            i128::from_u64(&test.host, i64::MAX as u64 - 10_000_000).unwrap(),
+            i64::MAX as i128 - 10_000_000,
         )
         .unwrap();
 
@@ -2080,11 +1762,7 @@ fn test_wrapped_asset_classic_balance_boundaries(
 
     // Mint a large amount of token in smart.
     token
-        .mint(
-            &issuer,
-            user.get_address(),
-            i128::from_u64(&test.host, u64::MAX).unwrap(),
-        )
+        .mint(&issuer, user.get_address(), u64::MAX.into())
         .unwrap();
 
     // Transferring the balance to classic that would exceed

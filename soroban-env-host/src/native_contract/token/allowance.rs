@@ -2,7 +2,7 @@ use crate::host::Host;
 use crate::native_contract::contract_error::ContractError;
 use crate::native_contract::token::storage_types::{AllowanceDataKey, DataKey};
 use crate::{err, HostError};
-use core::cmp::Ordering;
+use soroban_env_common::xdr::ScAddress;
 use soroban_env_common::{CheckedEnv, TryIntoVal};
 
 // Metering: covered by components

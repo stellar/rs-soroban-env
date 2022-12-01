@@ -2,7 +2,7 @@ use std::cmp::Ordering;
 
 use crate::host::metered_clone::MeteredClone;
 use crate::host::Host;
-use crate::native_contract::base_types::{get_account_id, Account, i128, Bytes, BytesN, Vec};
+use crate::native_contract::base_types::{get_account_id, Account, Bytes, BytesN, Vec};
 use crate::native_contract::contract_error::ContractError;
 use crate::native_contract::token::admin::{check_admin, write_administrator};
 use crate::native_contract::token::allowance::{read_allowance, spend_allowance, write_allowance};
@@ -38,12 +38,7 @@ pub trait TokenTrait {
 
     fn allowance(e: &Host, from: ScAddress, spender: ScAddress) -> Result<i128, HostError>;
 
-    fn approve(
-        e: &Host,
-        from: Account,
-        spender: ScAddress,
-        amount: i128,
-    ) -> Result<(), HostError>;
+    fn approve(e: &Host, from: Account, spender: ScAddress, amount: i128) -> Result<(), HostError>;
 
     fn balance(e: &Host, id: ScAddress) -> Result<i128, HostError>;
 
@@ -81,6 +76,19 @@ pub trait TokenTrait {
 }
 
 pub struct Token;
+
+fn check_nonnegative_amount(e: &Host, amount: i128) -> Result<(), HostError> {
+    if amount < 0 {
+        Err(err!(
+            e,
+            ContractError::NegativeAmountError,
+            "negative amount is not allowed: {}",
+            amount
+        ))
+    } else {
+        Ok(())
+    }
+}
 
 #[contractimpl]
 // Metering: *mostly* covered by components.
@@ -165,20 +173,8 @@ impl TokenTrait for Token {
     }
 
     // Metering: covered by components
-    fn approve(
-        e: &Host,
-        from: Account,
-        spender: ScAddress,
-        amount: i128,
-    ) -> Result<(), HostError> {
-        if amount.compare(&i128::from_u64(e, 0)?)? == Ordering::Less {
-            return Err(err!(
-                e,
-                ContractError::NegativeAmountError,
-                "negative amount is not allowed: {}",
-                amount
-            ));
-        }
+    fn approve(e: &Host, from: Account, spender: ScAddress, amount: i128) -> Result<(), HostError> {
+        check_nonnegative_amount(e, amount)?;
         let from_id = from.address()?;
         let mut args = Vec::new(e)?;
         args.push(spender.clone())?;
@@ -201,14 +197,7 @@ impl TokenTrait for Token {
 
     // Metering: covered by components
     fn xfer(e: &Host, from: Account, to: ScAddress, amount: i128) -> Result<(), HostError> {
-        if amount.compare(&i128::from_u64(e, 0)?)? == Ordering::Less {
-            return Err(err!(
-                e,
-                ContractError::NegativeAmountError,
-                "negative amount is not allowed: {}",
-                amount
-            ));
-        }
+        check_nonnegative_amount(e, amount)?;
         let from_id = from.address()?;
         let mut args = Vec::new(e)?;
         args.push(to.clone())?;
@@ -228,14 +217,7 @@ impl TokenTrait for Token {
         to: ScAddress,
         amount: i128,
     ) -> Result<(), HostError> {
-        if amount.compare(&i128::from_u64(e, 0)?)? == Ordering::Less {
-            return Err(err!(
-                e,
-                ContractError::NegativeAmountError,
-                "negative amount is not allowed: {}",
-                amount
-            ));
-        }
+        check_nonnegative_amount(e, amount)?;
         let spender_id = spender.address()?;
         let mut args = Vec::new(e)?;
         args.push(from.clone())?;
@@ -251,14 +233,7 @@ impl TokenTrait for Token {
 
     // Metering: covered by components
     fn burn(e: &Host, admin: Account, from: ScAddress, amount: i128) -> Result<(), HostError> {
-        if amount.compare(&i128::from_u64(e, 0)?)? == Ordering::Less {
-            return Err(err!(
-                e,
-                ContractError::NegativeAmountError,
-                "negative amount is not allowed: {}",
-                amount
-            ));
-        }
+        check_nonnegative_amount(e, amount)?;
         let admin_id = admin.address()?;
         check_admin(e, &admin_id)?;
         let mut args = Vec::new(e)?;
@@ -284,14 +259,7 @@ impl TokenTrait for Token {
 
     // Metering: covered by components
     fn mint(e: &Host, admin: Account, to: ScAddress, amount: i128) -> Result<(), HostError> {
-        if amount.compare(&i128::from_u64(e, 0)?)? == Ordering::Less {
-            return Err(err!(
-                e,
-                ContractError::NegativeAmountError,
-                "negative amount is not allowed: {}",
-                amount
-            ));
-        }
+        check_nonnegative_amount(e, amount)?;
         check_admin(e, &admin.address()?)?;
         let mut args = Vec::new(e)?;
         args.push(to.clone())?;
@@ -316,7 +284,7 @@ impl TokenTrait for Token {
     // Metering: covered by components
     fn unfreeze(e: &Host, admin: Account, id: ScAddress) -> Result<(), HostError> {
         check_admin(e, &admin.address()?)?;
-        let mut args = Vec::new(e)?;        
+        let mut args = Vec::new(e)?;
         args.push(id.clone())?;
         admin.authorize(args)?;
         write_state(e, id.clone(), false)?;
@@ -338,14 +306,8 @@ impl TokenTrait for Token {
 
     // Metering: covered by components
     fn import(e: &Host, from: Account, amount: i64) -> Result<(), HostError> {
-        if amount < 0 {
-            return Err(err!(
-                e,
-                ContractError::NegativeAmountError,
-                "negative amount is not allowed: {}",
-                amount
-            ));
-        }
+        let amount_i128: i128 = amount as i128;
+        check_nonnegative_amount(e, amount_i128)?;
 
         let from_address = from.address()?;
         let account_id = get_account_id(e, &from_address)?;
@@ -355,30 +317,15 @@ impl TokenTrait for Token {
         from.authorize(args)?;
 
         transfer_classic_balance(e, account_id.metered_clone(e.budget_ref())?, -amount)?;
-        receive_balance(
-            e,
-            from_address.metered_clone(e.budget_ref())?,
-            i128::from_u64(
-                e,
-                amount.try_into().map_err(|_| {
-                    e.err_status_msg(ContractError::InternalError, "bad int conversion")
-                })?,
-            )?,
-        )?;
+        receive_balance(e, from_address.metered_clone(e.budget_ref())?, amount_i128)?;
         event::import(e, from_address, amount)?;
         Ok(())
     }
 
     // Metering: covered by components
     fn export(e: &Host, from: Account, amount: i64) -> Result<(), HostError> {
-        if amount < 0 {
-            return Err(err!(
-                e,
-                ContractError::NegativeAmountError,
-                "negative amount is not allowed: {}",
-                amount
-            ));
-        }
+        let amount_i128: i128 = amount as i128;
+        check_nonnegative_amount(e, amount_i128)?;
         let from_address = from.address()?;
         let account_id = get_account_id(e, &from_address)?;
 
@@ -387,16 +334,7 @@ impl TokenTrait for Token {
         from.authorize(args)?;
 
         transfer_classic_balance(e, account_id.metered_clone(e.budget_ref())?, amount)?;
-        spend_balance(
-            e,
-            from_address.metered_clone(e.budget_ref())?,
-            i128::from_u64(
-                e,
-                amount.try_into().map_err(|_| {
-                    e.err_status_msg(ContractError::InternalError, "bad int conversion")
-                })?,
-            )?,
-        )?;
+        spend_balance(e, from_address.metered_clone(e.budget_ref())?, amount_i128)?;
         event::export(e, from_address, amount)?;
         Ok(())
     }

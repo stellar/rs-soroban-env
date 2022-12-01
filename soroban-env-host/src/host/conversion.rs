@@ -11,7 +11,7 @@ use crate::{
 };
 use ed25519_dalek::{PublicKey, Signature, SIGNATURE_LENGTH};
 use sha2::{Digest, Sha256};
-use soroban_env_common::xdr::AccountId;
+use soroban_env_common::xdr::{AccountId, ScObject};
 use soroban_env_common::TryIntoVal;
 
 impl Host {

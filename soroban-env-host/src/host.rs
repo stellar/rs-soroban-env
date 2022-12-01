@@ -12,8 +12,8 @@ use soroban_env_common::{
     xdr::{
         AccountId, Asset, ContractCodeEntry, ContractDataEntry, ContractEvent, ContractEventBody,
         ContractEventType, ContractEventV0, ContractId, CreateContractArgs, ExtensionPoint, Hash,
-        HashIdPreimage, HostFunction, HostFunctionType, InstallContractCodeArgs, LedgerEntry, Int128Parts,
-        LedgerEntryData, LedgerKey, LedgerKeyContractCode, ScAddress, ScContractCode,
+        HashIdPreimage, HostFunction, HostFunctionType, InstallContractCodeArgs, Int128Parts,
+        LedgerEntry, LedgerEntryData, LedgerKey, LedgerKeyContractCode, ScAddress, ScContractCode,
         ScHostContextErrorCode, ScHostFnErrorCode, ScHostObjErrorCode, ScHostStorageErrorCode,
         ScHostValErrorCode, ScMap, ScMapEntry, ScObject, ScStatusType, ScVal, ScVec,
         ThresholdIndexes,
@@ -628,10 +628,20 @@ impl Host {
                             }
                             HostObject::U64(u) => Ok(ScObject::U64(*u)),
                             HostObject::I64(i) => Ok(ScObject::I64(*i)),
+                            HostObject::U128(u) => Ok(ScObject::U128(Int128Parts {
+                                lo: *u as u64,
+                                hi: (*u >> 64) as u64,
+                            })),
+                            HostObject::I128(u) => {
+                                let u = *u as u128;
+                                Ok(ScObject::I128(Int128Parts {
+                                    lo: u as u64,
+                                    hi: (u >> 64) as u64,
+                                }))
+                            }
                             HostObject::Bytes(b) => Ok(ScObject::Bytes(
                                 self.map_err(b.metered_clone(&self.0.budget)?.try_into())?,
                             )),
-                            HostObject::BigInt(bi) => self.scobj_from_bigint(bi),
                             HostObject::ContractCode(cc) => {
                                 Ok(ScObject::ContractCode(cc.metered_clone(&self.0.budget)?))
                             }
@@ -643,31 +653,8 @@ impl Host {
                             HostObject::Address(addr) => {
                                 Ok(ScObject::Address(addr.metered_clone(&self.0.budget)?))
                             }
-                            Ok(ScObject::Map(ScMap(self.map_err(mv.try_into())?)))
                         }
-                        HostObject::U64(u) => Ok(ScObject::U64(*u)),
-                        HostObject::I64(i) => Ok(ScObject::I64(*i)),
-                        HostObject::U128(u) => Ok(ScObject::U128(Int128Parts {
-                            lo: *u as u64,
-                            hi: (*u >> 64) as u64,
-                        })),
-                        HostObject::I128(u) => {
-                            let u = *u as u128;
-                            Ok(ScObject::I128(Int128Parts {
-                                lo: u as u64,
-                                hi: (u >> 64) as u64,
-                            }))
-                        }
-                        HostObject::Bytes(b) => Ok(ScObject::Bytes(
-                            self.map_err(b.metered_clone(&self.0.budget)?.try_into())?,
-                        )),
-                        HostObject::ContractCode(cc) => {
-                            Ok(ScObject::ContractCode(cc.metered_clone(&self.0.budget)?))
-                        }
-                        HostObject::AccountId(aid) => {
-                            Ok(ScObject::AccountId(aid.metered_clone(&self.0.budget)?))
-                        }
-                    },
+                    }
                 }
             })
         }
@@ -2477,11 +2464,12 @@ impl VmCallerCheckedEnv for Host {
         args: Object,
     ) -> Result<RawVal, Self::Error> {
         let host_account = self.visit_obj(account, |acc: &HostAccount| Ok(acc.clone()))?;
-        Ok(self.0.authorization_manager.borrow_mut().authorize(
-            self,
-            &host_account,
-            self.call_args_to_scvec(args)?,
-        )?.into())
+        Ok(self
+            .0
+            .authorization_manager
+            .borrow_mut()
+            .authorize(self, &host_account, self.call_args_to_scvec(args)?)?
+            .into())
     }
 
     fn get_account_address(
