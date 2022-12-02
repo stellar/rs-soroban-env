@@ -1,5 +1,5 @@
 use im_rc::{OrdMap, Vector};
-use rand::{rngs::StdRng, Rng, RngCore};
+use rand::{rngs::StdRng, RngCore};
 use soroban_env_host::{EnvVal, Host, RawVal};
 
 type HostVal = EnvVal<Host, RawVal>;
