@@ -1,6 +1,4 @@
-use soroban_env_host::{EnvVal, Host, RawVal};
-
-type HostVal = EnvVal<Host, RawVal>;
+use soroban_env_host::{Host, RawVal};
 
 pub(crate) fn to_rawval_u32<I: Iterator<Item = u32>>(
     _host: &Host,

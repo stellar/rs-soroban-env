@@ -1,4 +1,6 @@
-use soroban_env_common::{IntoVal, TryIntoVal};
+use std::cmp::Ordering;
+
+use soroban_env_common::{Compare, IntoVal, TryIntoVal};
 
 use crate::{CheckedEnv, Host, HostError, RawVal};
 
@@ -12,7 +14,7 @@ fn tuple_conversions() -> Result<(), HostError> {
     obj = host.vec_push_back(obj, (1u32).into())?;
     obj = host.vec_push_back(obj, (1i32).into())?;
 
-    assert_eq!(host.obj_cmp(raw, obj.to_raw())?, 0);
+    assert_eq!(host.compare(&raw, obj.as_raw())?, Ordering::Equal);
 
     let roundtrip: (u32, i32) = raw.try_into_val(&host)?;
     assert_eq!(roundtrip, (1u32, 1i32));

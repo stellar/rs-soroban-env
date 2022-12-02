@@ -1,7 +1,8 @@
-use std::rc::Rc;
+use std::{cmp::Ordering, rc::Rc};
 
-use soroban_env_common::xdr::{
-    AccountId, LedgerEntry, LedgerKey, LedgerKeyAccount, PublicKey, Uint256,
+use soroban_env_common::{
+    xdr::{AccountId, LedgerEntry, LedgerKey, LedgerKeyAccount, PublicKey, Uint256},
+    Compare,
 };
 
 use crate::{
@@ -195,9 +196,9 @@ fn map_keys() -> Result<(), HostError> {
     map = host.map_put(map, 1u32.into(), 10u32.into())?;
     let keys = host.map_keys(map)?;
 
-    let expected_keys = host.test_vec_obj::<u32>(&[1, 2])?.to_raw();
+    let expected_keys = host.test_vec_obj::<u32>(&[1, 2])?;
 
-    assert_eq!(host.obj_cmp(keys.to_raw(), expected_keys)?, 0);
+    assert_eq!(host.compare(&keys, &expected_keys)?, Ordering::Equal);
 
     Ok(())
 }
@@ -211,9 +212,9 @@ fn map_values() -> Result<(), HostError> {
     map = host.map_put(map, 1u32.into(), 10u32.into())?;
     let values = host.map_values(map)?;
 
-    let expected_values = host.test_vec_obj::<u32>(&[10, 20])?.to_raw();
+    let expected_values = host.test_vec_obj::<u32>(&[10, 20])?;
 
-    assert_eq!(host.obj_cmp(values.to_raw(), expected_values)?, 0);
+    assert_eq!(host.compare(&values, &expected_values)?, Ordering::Equal);
 
     Ok(())
 }

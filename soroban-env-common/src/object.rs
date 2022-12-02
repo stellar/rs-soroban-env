@@ -1,6 +1,6 @@
 use crate::{
-    decl_tagged_val_wrapper_methods, xdr::ScObjectType, Convert, Env, EnvVal, RawVal, Tag,
-    TryFromVal, TryIntoVal,
+    decl_tagged_val_wrapper_methods, xdr::ScObjectType, Convert, Env, RawVal, Tag, TryFromVal,
+    TryIntoVal,
 };
 use core::fmt::Debug;
 use stellar_xdr::{ScObject, ScVal};

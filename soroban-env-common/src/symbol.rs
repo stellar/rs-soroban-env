@@ -1,4 +1,4 @@
-use crate::{decl_tagged_val_wrapper_methods, require, ConversionError, Env, EnvVal, RawVal, Tag};
+use crate::{decl_tagged_val_wrapper_methods, require, ConversionError, RawVal, Tag};
 use core::{
     cmp::Ordering,
     fmt::Debug,

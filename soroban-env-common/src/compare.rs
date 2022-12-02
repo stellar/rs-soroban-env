@@ -1,7 +1,7 @@
 #[cfg(feature = "std")]
 use std::rc::Rc;
 
-use crate::{BitSet, CheckedEnv, RawVal, RawValConvertible, Status, Symbol, Tag};
+use crate::{BitSet, CheckedEnv, Object, RawVal, RawValConvertible, Status, Symbol, Tag};
 use core::cmp::Ordering;
 
 /// General trait representing the ability to compare two values of some type.
@@ -116,6 +116,20 @@ impl<T, C: Compare<T>> Compare<Rc<T>> for C {
 // better). But we can list out any concrete Ord instances we want to support
 // here.
 
+impl<E: CheckedEnv> Compare<Object> for E {
+    type Error = E::Error;
+    fn compare(&self, a: &Object, b: &Object) -> Result<Ordering, Self::Error> {
+        let v = self.obj_cmp(*a, *b)?;
+        if v == 0 {
+            Ok(Ordering::Equal)
+        } else if v < 0 {
+            Ok(Ordering::Less)
+        } else {
+            Ok(Ordering::Greater)
+        }
+    }
+}
+
 impl<E: CheckedEnv> Compare<RawVal> for E {
     type Error = E::Error;
 
@@ -141,14 +155,9 @@ impl<E: CheckedEnv> Compare<RawVal> for E {
                 }
                 Tag::Static => Ok(a.get_body().cmp(&b.get_body())),
                 Tag::Object => {
-                    let v = self.obj_cmp(*a, *b)?;
-                    if v == 0 {
-                        Ok(Ordering::Equal)
-                    } else if v < 0 {
-                        Ok(Ordering::Less)
-                    } else {
-                        Ok(Ordering::Greater)
-                    }
+                    let a = unsafe { <Object as RawValConvertible>::unchecked_from_val(*a) };
+                    let b = unsafe { <Object as RawValConvertible>::unchecked_from_val(*b) };
+                    self.compare(&a, &b)
                 }
                 Tag::Symbol => {
                     let a = unsafe { <Symbol as RawValConvertible>::unchecked_from_val(*a) };

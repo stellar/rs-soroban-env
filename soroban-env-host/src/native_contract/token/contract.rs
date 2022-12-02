@@ -1,3 +1,5 @@
+use std::cmp::Ordering;
+
 use crate::host::metered_clone::MeteredClone;
 use crate::host::Host;
 use crate::native_contract::base_types::{Bytes, BytesN, Vec};
@@ -16,7 +18,7 @@ use crate::native_contract::token::public_types::{Identifier, Metadata, Signatur
 use crate::{err, HostError};
 
 use soroban_env_common::xdr::Asset;
-use soroban_env_common::{CheckedEnv, EnvBase, Symbol, TryFromVal, TryIntoVal};
+use soroban_env_common::{CheckedEnv, Compare, EnvBase, Symbol, TryFromVal, TryIntoVal};
 use soroban_native_sdk_macros::contractimpl;
 
 use super::error::ContractError;
@@ -138,7 +140,7 @@ impl TokenTrait for Token {
         let curr_contract_id = BytesN::<32>::try_from_val(e, e.get_current_contract()?)?;
         let expected_contract_id =
             BytesN::<32>::try_from_val(e, e.get_contract_id_from_asset(asset.clone())?)?;
-        if curr_contract_id != expected_contract_id {
+        if e.compare(&curr_contract_id, &expected_contract_id)? != Ordering::Equal {
             return Err(err!(
                 e,
                 ContractError::InternalError,

@@ -157,7 +157,7 @@ macro_rules! call_macro_with_all_host_functions {
                 /// running contract. Traps if the running contract was not
                 /// invoked by a contract.
                 {"0", fn get_invoking_contract() -> Object }
-                {"1", fn obj_cmp(a:RawVal, b:RawVal) -> i64 }
+                {"1", fn obj_cmp(a:Object, b:Object) -> i64 }
                 /// Records a contract event. `topics` is expected to be a `SCVec` with
                 /// length <= 4 that cannot contain `Vec`, `Map`, or `Bytes` with length > 32
                 /// On success, returns an `SCStatus::Ok`.

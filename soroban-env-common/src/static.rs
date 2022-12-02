@@ -1,6 +1,6 @@
 use stellar_xdr::ScStatic;
 
-use crate::{decl_tagged_val_wrapper_methods, impl_wrapper_from, Env, EnvVal, RawVal, Tag};
+use crate::{decl_tagged_val_wrapper_methods, impl_wrapper_from, Env, RawVal, Tag};
 
 /// Wrapper for a [RawVal] that is tagged with [Tag::Static], interpreting the
 /// [RawVal]'s body as a 32-bit value from a reserved set of "static" values

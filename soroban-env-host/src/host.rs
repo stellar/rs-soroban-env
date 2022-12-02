@@ -1267,12 +1267,15 @@ impl VmCallerCheckedEnv for Host {
     fn obj_cmp(
         &self,
         _vmcaller: &mut VmCaller<Host>,
-        a: RawVal,
-        b: RawVal,
+        a: Object,
+        b: Object,
     ) -> Result<i64, HostError> {
         let res = unsafe {
-            self.unchecked_visit_val_obj(a, |ao| {
-                self.unchecked_visit_val_obj(b, |bo| Ok(self.compare(&ao, &bo)?))
+            // FIXME: this does not return an error on bad inputs (eg.
+            // non-objects or objects out-of-bounds) but it probably should.
+            // See https://github.com/stellar/rs-soroban-env/issues/595
+            self.unchecked_visit_val_obj(a.to_raw(), |ao| {
+                self.unchecked_visit_val_obj(b.to_raw(), |bo| Ok(self.compare(&ao, &bo)?))
             })?
         };
         Ok(match res {

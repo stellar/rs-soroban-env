@@ -30,44 +30,6 @@ macro_rules! decl_tagged_val_wrapper_methods {
             }
         }
 
-        // EnvVal ref/mut/from support
-        impl<E: Env> AsRef<$tagname> for EnvVal<E, $tagname> {
-            fn as_ref(&self) -> &$tagname {
-                &self.val
-            }
-        }
-        impl<E: Env> AsMut<$tagname> for EnvVal<E, $tagname> {
-            fn as_mut(&mut self) -> &mut $tagname {
-                &mut self.val
-            }
-        }
-        impl<E: Env> From<EnvVal<E, $tagname>> for EnvVal<E, RawVal> {
-            fn from(ev: EnvVal<E, $tagname>) -> Self {
-                EnvVal {
-                    env: ev.env,
-                    val: ev.val.to_raw(),
-                }
-            }
-        }
-        impl<E: Env> From<EnvVal<E, $tagname>> for RawVal {
-            fn from(ev: EnvVal<E, $tagname>) -> Self {
-                ev.val.0
-            }
-        }
-        impl<E: Env> From<EnvVal<E, $tagname>> for $tagname {
-            fn from(ev: EnvVal<E, $tagname>) -> Self {
-                ev.val
-            }
-        }
-        impl<E: Env> EnvVal<E, $tagname> {
-            pub fn as_raw(&self) -> &RawVal {
-                self.val.as_ref()
-            }
-            pub fn to_raw(&self) -> RawVal {
-                self.val.to_raw()
-            }
-        }
-
         // wasmi / VM argument support
         #[cfg(feature = "vm")]
         impl wasmi::core::FromValue for $tagname {
@@ -105,13 +67,6 @@ macro_rules! decl_tagged_val_wrapper_methods {
 
             pub const fn to_raw(&self) -> RawVal {
                 self.0
-            }
-
-            pub fn in_env<E: Env>(self, env: &E) -> EnvVal<E, Self> {
-                EnvVal {
-                    env: env.clone(),
-                    val: self,
-                }
             }
 
             #[inline(always)]

@@ -1,9 +1,11 @@
+use std::cmp::Ordering;
+
 use crate::xdr::ScHostFnErrorCode;
 use crate::{
     xdr::{ScHostObjErrorCode, ScObject, ScStatic, ScStatus, ScVal},
     CheckedEnv, Host, HostError, RawVal, RawValConvertible,
 };
-use soroban_env_common::EnvBase;
+use soroban_env_common::{Compare, EnvBase};
 
 #[cfg(feature = "vm")]
 use crate::{Object, Symbol};
@@ -124,7 +126,7 @@ fn bytes_xdr_roundtrip() -> Result<(), HostError> {
         let rv: RawVal = host.to_host_val(&v)?.into();
         let bo = host.serialize_to_bytes(rv.clone())?;
         let rv_back = host.deserialize_from_bytes(bo)?;
-        assert_eq!(host.obj_cmp(rv, rv_back)?, 0);
+        assert_eq!(host.compare(&rv, &rv_back)?, Ordering::Equal);
         Ok(())
     };
     // u63
@@ -166,7 +168,7 @@ fn linear_memory_operations() -> Result<(), HostError> {
         let args = host.test_vec_obj::<u32>(&[0xaabbccdd])?;
         let obj = host.call(id_obj, Symbol::from_str("bin_word").into(), args.into())?;
         let obj_ref = host.test_bin_obj(&[0xaa, 0xbb, 0xcc, 0xdd])?;
-        assert_eq!(host.obj_cmp(obj.into(), obj_ref.into())?, 0);
+        assert_eq!(host.compare(&obj, obj_ref.as_raw())?, Ordering::Equal);
     }
     // tests bytes_copy_{to,from}_linear_memory
     {
@@ -177,7 +179,7 @@ fn linear_memory_operations() -> Result<(), HostError> {
             .call(id_obj, Symbol::from_str("bin_inc").into(), args.into())?
             .try_into()?;
         let obj_ref = host.test_bin_obj(&[2, 3, 4, 5])?;
-        assert_eq!(host.obj_cmp(obj.into(), obj_ref.into())?, 0);
+        assert_eq!(host.compare(&obj, &obj_ref)?, Ordering::Equal);
     }
 
     Ok(())

@@ -120,10 +120,10 @@ fn vec_push_pop_front() -> Result<(), HostError> {
     vec = host.vec_push_front(vec, 2u32.into())?;
     vec = host.vec_push_front(vec, 3u32.into())?;
     let mut vec_ref = host.test_vec_obj::<u32>(&[3, 2, 1])?;
-    assert_eq!(host.obj_cmp(vec.to_raw(), vec_ref.to_raw())?, 0);
+    assert_eq!(host.compare(&vec, &vec_ref)?, Ordering::Equal);
     vec = host.vec_pop_front(vec)?;
     vec_ref = host.test_vec_obj::<u32>(&[2, 1])?;
-    assert_eq!(host.obj_cmp(vec.to_raw(), vec_ref.to_raw())?, 0);
+    assert_eq!(host.compare(&vec, &vec_ref)?, Ordering::Equal);
     vec = host.vec_pop_front(vec)?;
     vec = host.vec_pop_front(vec)?;
     let res = host.vec_pop_front(vec);
