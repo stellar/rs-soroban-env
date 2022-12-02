@@ -186,8 +186,8 @@ fn global_set(n: usize, _rng: &mut StdRng) -> Vec<u8> {
 
 fn memory_grow(n: usize, _rng: &mut StdRng) -> Vec<u8> {
     let mut fe = ModEmitter::new().func(Arity(0), 0);
-    for i in 0..n {
-        fe.i32_const(i as i32);
+    for _ in 0..n {
+        fe.i32_const(1);
         fe.memory_grow();
         fe.drop();
     }

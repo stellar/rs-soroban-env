@@ -160,10 +160,6 @@ impl CostRunner for WasmMemAllocRun {
     fn run_iter(host: &crate::Host, _iter: u64, sample: Self::SampleType) {
         sample.0.invoke_function_raw(host, "test", &[]).unwrap();
     }
-
-    fn get_total_input(_host: &crate::Host, sample: &Self::SampleType) -> u64 {
-        (sample.1 as u64) * Self::RUN_ITERATIONS * 65536
-    }
 }
 
 macro_rules! impl_wasm_insn_runner {
