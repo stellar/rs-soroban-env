@@ -6,7 +6,7 @@ use crate::native_contract::base_types::{Bytes, BytesN, Vec};
 use crate::native_contract::token::admin::{check_admin, write_administrator};
 use crate::native_contract::token::allowance::{read_allowance, spend_allowance, write_allowance};
 use crate::native_contract::token::balance::{
-    read_balance, read_state, receive_balance, spend_balance, transfer_classic_balance, write_state,
+    read_balance, read_state, receive_balance, spend_balance, write_state,
 };
 use crate::native_contract::token::cryptography::check_auth;
 use crate::native_contract::token::event;
@@ -21,6 +21,7 @@ use soroban_env_common::xdr::Asset;
 use soroban_env_common::{CheckedEnv, Compare, EnvBase, Symbol, TryFromVal, TryIntoVal};
 use soroban_native_sdk_macros::contractimpl;
 
+use super::balance::check_clawbackable;
 use super::error::ContractError;
 use super::public_types::{AlphaNum12Metadata, AlphaNum4Metadata};
 
@@ -47,6 +48,7 @@ pub trait TokenTrait {
         amount: i128,
     ) -> Result<(), HostError>;
 
+    //TODO: Add spendable_balance()
     fn balance(e: &Host, id: Identifier) -> Result<i128, HostError>;
 
     fn is_frozen(e: &Host, id: Identifier) -> Result<bool, HostError>;
@@ -100,10 +102,6 @@ pub trait TokenTrait {
     fn name(e: &Host) -> Result<Bytes, HostError>;
 
     fn symbol(e: &Host) -> Result<Bytes, HostError>;
-
-    fn import(e: &Host, id: Signature, nonce: i128, amount: i64) -> Result<(), HostError>;
-
-    fn export(e: &Host, id: Signature, nonce: i128, amount: i64) -> Result<(), HostError>;
 }
 
 pub struct Token;
@@ -283,6 +281,7 @@ impl TokenTrait for Token {
     ) -> Result<(), HostError> {
         check_nonnegative_amount(e, amount)?;
         check_admin(&e, &admin)?;
+        check_clawbackable(&e, from.clone())?;
         let mut args = Vec::new(e)?;
         let admin_id = admin.get_identifier(&e)?;
         args.push(admin_id.clone())?;
@@ -374,45 +373,5 @@ impl TokenTrait for Token {
 
     fn symbol(e: &Host) -> Result<Bytes, HostError> {
         read_symbol(&e)
-    }
-
-    // Metering: covered by components
-    fn import(e: &Host, id: Signature, nonce: i128, amount: i64) -> Result<(), HostError> {
-        let amount_i128: i128 = amount as i128;
-        check_nonnegative_amount(e, amount_i128)?;
-
-        let account_id = id.get_account_id(e)?;
-
-        let mut args = Vec::new(e)?;
-        let ident = id.get_identifier(&e)?;
-        args.push(ident.clone())?;
-        args.push(nonce.clone())?;
-        args.push(amount.clone())?;
-        check_auth(&e, id, nonce, Symbol::from_str("import"), args)?;
-
-        transfer_classic_balance(e, account_id.metered_clone(e.budget_ref())?, -amount)?;
-        receive_balance(&e, Identifier::Account(account_id), amount_i128)?;
-        event::import(e, ident, amount)?;
-        Ok(())
-    }
-
-    // Metering: covered by components
-    fn export(e: &Host, id: Signature, nonce: i128, amount: i64) -> Result<(), HostError> {
-        let amount_i128: i128 = amount as i128;
-        check_nonnegative_amount(e, amount_i128)?;
-
-        let account_id = id.get_account_id(e)?;
-
-        let mut args = Vec::new(e)?;
-        let ident = id.get_identifier(&e)?;
-        args.push(ident.clone())?;
-        args.push(nonce.clone())?;
-        args.push(amount.clone())?;
-        check_auth(&e, id, nonce, Symbol::from_str("export"), args)?;
-
-        transfer_classic_balance(e, account_id.metered_clone(e.budget_ref())?, amount)?;
-        spend_balance(&e, Identifier::Account(account_id), amount_i128)?;
-        event::export(e, ident, amount)?;
-        Ok(())
     }
 }
