@@ -15,20 +15,6 @@ pub(crate) fn to_envval_u32<I: Iterator<Item = u32>>(
     })
 }
 
-pub(crate) fn repeating_byte_bigint(byte: u8, input: u64) -> BigInt {
-    let buf: Vec<u8> = (0..input / 8).map(|_| byte).collect();
-    let a = BigInt::from_bytes_be(Sign::Plus, &buf);
-    let one: BigInt = 1.into();
-    a + one
-}
-
-pub(crate) fn random_bigint(rng: &mut StdRng, input: u64) -> BigInt {
-    let buf: Vec<u8> = (0..input / 8).map(|_| rng.gen::<u8>()).collect();
-    let a = BigInt::from_bytes_be(Sign::Plus, &buf);
-    let one: BigInt = 1.into();
-    a + one
-}
-
 pub(crate) fn random_ord_map(
     host: &Host,
     rng: &mut StdRng,
