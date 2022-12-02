@@ -4,7 +4,6 @@
 
 use crate::{Arity, FuncEmitter, Operand};
 use soroban_env_common::call_macro_with_all_host_functions;
-use wasm_encoder::Instruction;
 
 // This is a helper macro that matches simple ident:ty argument list token-trees
 // and returns a literal token that is the arity (number of arguments) in the
@@ -57,7 +56,7 @@ macro_rules! generate_call_emitter_functions {
                     let fn_id = self.mod_emit.import_func($mod_str, $fn_str, Arity(arity_helper!{($($arg),*)}));
                     let mut _is_first_arg = true;
                     $(self.push_full($arg.into(), &mut _is_first_arg);)*
-                    self.func.instruction(&Instruction::Call(fn_id.0));
+                    self.call_func(fn_id);
                 }
             )*
         )*

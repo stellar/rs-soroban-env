@@ -9,7 +9,7 @@ members = [
     "soroban-env-macros",
     "soroban-native-sdk-macros",
     "soroban-test-wasms",
-    "soroban-synth-wasm"
+    "soroban-synth-wasm",
 ]
 
 exclude = ["soroban-test-wasms/wasm-workspace"]
@@ -39,7 +39,8 @@ rev = "862b32f5"
 # [patch."https://github.com/stellar/rs-stellar-xdr"]
 # stellar-xdr = { path = "../rs-stellar-xdr/" }
 # [patch."https://github.com/stellar/wasmi"]
-# wasmi = { path = "../wasmi/" }
+# soroban-wasmi = { path = "../wasmi/wasmi_v1/" }
+# soroban-wasmi_core = { path = "../wasmi/core/" }
 
 [profile.release]
 codegen-units = 1

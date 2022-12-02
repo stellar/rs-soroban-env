@@ -9,7 +9,10 @@ use cost_types::*;
 pub use measure::*;
 pub use modelfit::*;
 
-use soroban_env_host::{budget::CostType, cost_runner::CostRunner};
+use soroban_env_host::{
+    budget::CostType,
+    cost_runner::{CostRunner, WasmInsnType},
+};
 use std::collections::BTreeSet;
 
 pub(crate) trait Benchmark {
@@ -102,3 +105,68 @@ pub(crate) fn for_each_host_cost_measurement<B: Benchmark>() -> std::io::Result<
     }
     Ok(())
 }
+
+macro_rules! run_wasm_insn_measurement {
+    ( $($HCM: ident),* ) => {
+        pub(crate) fn for_each_wasm_insn_measurement<B: Benchmark>() -> std::io::Result<()> {
+            let mut coverage: BTreeSet<WasmInsnType> = BTreeSet::new();
+            $(
+                let ty = <$HCM as HostCostMeasurement>::Runner::INSN_TYPE;
+                eprintln!(
+                    "\nMeasuring costs for WasmInsnType::{:?}\n", ty);
+                B::bench::<$HCM>()?;
+                coverage.insert(ty);
+            )*
+            for insn in WasmInsnType::variants() {
+                if !coverage.contains(insn) {
+                    eprintln!("warning: missing cost measurement for {:?}", insn);
+                }
+            }
+            Ok(())
+        }
+    };
+}
+run_wasm_insn_measurement!(
+    WasmSelectMeasure,
+    WasmBrMeasure,
+    WasmConstMeasure,
+    WasmLocalGetMeasure,
+    WasmLocalSetMeasure,
+    WasmLocalTeeMeasure,
+    WasmCallMeasure,
+    WasmCallIndirectMeasure,
+    WasmGlobalGetMeasure,
+    WasmGlobalSetMeasure,
+    WasmI64StoreMeasure,
+    WasmI64Store8Measure,
+    WasmI64Store16Measure,
+    WasmI64Store32Measure,
+    WasmI64LoadMeasure,
+    WasmI64Load8Measure,
+    WasmI64Load16Measure,
+    WasmI64Load32Measure,
+    WasmMemorySizeMeasure,
+    WasmMemoryGrowMeasure,
+    WasmI64ClzMeasure,
+    WasmI64CtzMeasure,
+    WasmI64PopcntMeasure,
+    WasmI64EqzMeasure,
+    WasmI64EqMeasure,
+    WasmI64NeMeasure,
+    WasmI64LtSMeasure,
+    WasmI64GtSMeasure,
+    WasmI64LeSMeasure,
+    WasmI64GeSMeasure,
+    WasmI64AddMeasure,
+    WasmI64SubMeasure,
+    WasmI64MulMeasure,
+    WasmI64DivSMeasure,
+    WasmI64RemSMeasure,
+    WasmI64AndMeasure,
+    WasmI64OrMeasure,
+    WasmI64XorMeasure,
+    WasmI64ShlMeasure,
+    WasmI64ShrSMeasure,
+    WasmI64RotlMeasure,
+    WasmI64RotrMeasure
+);

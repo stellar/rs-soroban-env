@@ -1,8 +1,9 @@
 use crate::FuncEmitter;
 use std::collections::HashMap;
 use wasm_encoder::{
-    CodeSection, CustomSection, EntityType, ExportSection, Function, FunctionSection,
-    ImportSection, MemorySection, MemoryType, Module, TypeSection, ValType,
+    CodeSection, ConstExpr, CustomSection, ElementSection, Elements, EntityType, ExportSection,
+    Function, FunctionSection, GlobalSection, GlobalType, ImportSection, MemorySection, MemoryType,
+    Module, TableSection, TableType, TypeSection, ValType,
 };
 
 /// Wrapper for a u32 that defines the arity of a function -- that is, the number of
@@ -26,6 +27,10 @@ pub struct TypeRef(pub u32);
 #[derive(Hash, PartialEq, Eq, Copy, Clone)]
 pub struct FuncRef(pub u32);
 
+/// An index into the globals for the current module.
+#[derive(Hash, PartialEq, Eq, Copy, Clone)]
+pub struct GlobalRef(pub u32);
+
 /// Utility type for emitting a contract WASM module, with several simplifying
 /// assumptions specific to soroban contracts. For example: all function types
 /// are defined using a single [`Arity`] number, assuming that all functions
@@ -40,8 +45,11 @@ pub struct ModEmitter {
     types: TypeSection,
     imports: ImportSection,
     funcs: FunctionSection,
+    tables: TableSection,
     memories: MemorySection,
+    globals: GlobalSection,
     exports: ExportSection,
+    elements: ElementSection,
     codes: CodeSection,
 
     type_refs: HashMap<Arity, TypeRef>,
@@ -61,6 +69,12 @@ impl ModEmitter {
         let types = TypeSection::new();
         let imports = ImportSection::new();
         let funcs = FunctionSection::new();
+        let mut tables = TableSection::new();
+        tables.table(TableType {
+            element_type: ValType::FuncRef,
+            minimum: 128,
+            maximum: None,
+        });
         let mut memories = MemorySection::new();
         memories.memory(MemoryType {
             minimum: 1,
@@ -68,7 +82,16 @@ impl ModEmitter {
             memory64: false,
             shared: false,
         });
+        let mut globals = GlobalSection::new();
+        globals.global(
+            GlobalType {
+                val_type: ValType::I64,
+                mutable: true,
+            },
+            &ConstExpr::i64_const(42),
+        );
         let exports = ExportSection::new();
+        let elements = ElementSection::new();
         let codes = CodeSection::new();
         let typerefs = HashMap::new();
         let importrefs = HashMap::new();
@@ -77,8 +100,11 @@ impl ModEmitter {
             types,
             imports,
             funcs,
+            tables,
             memories,
+            globals,
             exports,
+            elements,
             codes,
             type_refs: typerefs,
             import_refs: importrefs,
@@ -148,6 +174,16 @@ impl ModEmitter {
             .export(name, wasm_encoder::ExportKind::Func, fid.0);
     }
 
+    pub fn define_elems(&mut self, funcs: &[FuncRef]) {
+        let table_index = 0;
+        let offset = ConstExpr::i32_const(0);
+        let element_type = ValType::FuncRef;
+        let ids: Vec<u32> = funcs.iter().map(|r| r.0).collect();
+        let functions = Elements::Functions(ids.as_slice());
+        self.elements
+            .active(Some(table_index), &offset, element_type, functions);
+    }
+
     /// Finish emitting code, consuming the `self`, serializing a WASM binary
     /// blob, validating and returning it. Panics the resulting blob fails
     /// validation.
@@ -162,11 +198,20 @@ impl ModEmitter {
         if !self.funcs.is_empty() {
             self.module.section(&self.funcs);
         }
+        if !self.tables.is_empty() {
+            self.module.section(&self.tables);
+        }
         if !self.memories.is_empty() {
             self.module.section(&self.memories);
         }
+        if !self.globals.is_empty() {
+            self.module.section(&self.globals);
+        }
         if !self.exports.is_empty() {
             self.module.section(&self.exports);
+        }
+        if !self.elements.is_empty() {
+            self.module.section(&self.elements);
         }
         if !self.codes.is_empty() {
             self.module.section(&self.codes);
