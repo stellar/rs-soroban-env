@@ -1,6 +1,5 @@
 use crate::{
-    decl_tagged_val_wrapper_methods, xdr::ScObjectType, Convert, Env, EnvVal, RawVal, Tag,
-    TryFromVal, TryIntoVal,
+    impl_wrapper_common, xdr::ScObjectType, Convert, Env, RawVal, Tag, TryFromVal, TryIntoVal,
 };
 use core::fmt::Debug;
 use stellar_xdr::{ScObject, ScVal};
@@ -13,7 +12,7 @@ use stellar_xdr::{ScObject, ScVal};
 #[derive(Copy, Clone)]
 pub struct Object(RawVal);
 
-decl_tagged_val_wrapper_methods!(Object);
+impl_wrapper_common!(Object);
 
 impl Debug for Object {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {

@@ -22,6 +22,18 @@ pub fn derive_type_struct(ident: &Ident, data: &DataStruct) -> TokenStream2 {
         .multiunzip();
 
     quote! {
+
+        impl soroban_env_common::Compare<#ident> for crate::Host {
+            type Error = crate::HostError;
+            fn compare(&self, a: &#ident, b: &#ident) -> Result<core::cmp::Ordering, crate::HostError> {
+                #(match self.compare(&a.#names, &b.#names)? {
+                    core::cmp::Ordering::Equal => (),
+                    unequal => return Ok(unequal)
+                })*
+                Ok(core::cmp::Ordering::Equal)
+            }
+        }
+
         impl soroban_env_common::TryFromVal<crate::Host, soroban_env_common::Object> for #ident {
             type Error = crate::HostError;
 
@@ -64,42 +76,57 @@ pub fn derive_type_struct(ident: &Ident, data: &DataStruct) -> TokenStream2 {
 pub fn derive_type_enum(ident: &Ident, data: &DataEnum) -> TokenStream2 {
     let mut errors = Vec::<Error>::new();
 
-    let (consts, froms, intos): (Vec<_>, Vec<_>, Vec<_>) = data.variants
+    let (consts, froms, intos, syms, compares): (Vec<_>, Vec<_>, Vec<_>, Vec<_>, Vec<_>) = data.variants
         .iter()
         .map(|f| {
-            let ident = &f.ident;
-            let name = ident.to_string();
-            let discriminant_ident = format_ident!("DISCRIMINANT_{}", name.to_uppercase());
+            let case_ident = &f.ident;
+            let case_name = case_ident.to_string();
+            let discriminant_ident = format_ident!("DISCRIMINANT_{}", case_name.to_uppercase());
+            let discriminant_sym = quote! { crate::Symbol::from_str(#case_name) };
             let discriminant_const = quote! {
-                const #discriminant_ident: u64 = soroban_env_common::Symbol::from_str(#name).to_raw().get_payload()
+                const #discriminant_ident: u64 = #discriminant_sym.to_raw().get_payload()
             };
 
             if f.fields.is_empty() {
                 let from = quote! {
-                    #discriminant_ident => Ok(Self::#ident)
+                    #discriminant_ident => Ok(Self::#case_ident)
                 };
                 let into = quote! {
-                    Self::#ident => {
-                        vec.push({ const k: soroban_env_common::Symbol = soroban_env_common::Symbol::from_str(#name); k })?;
+                    Self::#case_ident => {
+                        vec.push({ const k: crate::Symbol = crate::Symbol::from_str(#case_name); k })?;
                     }
                 };
-                (discriminant_const, from, into)
+                let sym = quote! {
+                    #ident::#case_ident => #discriminant_sym
+                };
+                let compare = quote! {
+                    (#ident::#case_ident, #ident::#case_ident) => Ok(core::cmp::Ordering::Equal)
+                };
+                (discriminant_const, from, into, sym, compare)
             } else if f.fields.len() == 1 {
                 let from = quote! {
-                    #discriminant_ident => Ok(Self::#ident(vec.get(1)?))
+                    #discriminant_ident => Ok(Self::#case_ident(vec.get(1)?))
                 };
                 let into = quote! {
-                    Self::#ident(x) => {
-                        vec.push({ const k: soroban_env_common::Symbol = soroban_env_common::Symbol::from_str(#name); k })?;
+                    Self::#case_ident(x) => {
+                        vec.push({ const k: crate::Symbol = crate::Symbol::from_str(#case_name); k })?;
                         vec.push(x)?;
                     }
                 };
-                (discriminant_const, from, into)
+                let sym = quote! {
+                    #ident::#case_ident(_) => #discriminant_sym
+                };
+                let compare = quote! {
+                    (#ident::#case_ident(a), #ident::#case_ident(b)) => self.compare(a, b)
+                };
+                (discriminant_const, from, into, sym, compare)
             } else {
                 errors.push(Error::new(f.span(), "tuple variants with more than 1 element not supported"));
                 let from = quote! { };
                 let into = quote! { };
-                (discriminant_const, from, into)
+                let cmp = quote! { };
+                let sym = quote! { };
+                (discriminant_const, from, into, cmp, sym)
             }
         })
         .multiunzip();
@@ -109,6 +136,25 @@ pub fn derive_type_enum(ident: &Ident, data: &DataEnum) -> TokenStream2 {
         quote! { #(#compile_errors)* }
     } else {
         quote! {
+
+            impl #ident {
+                fn discriminant_sym(&self) -> crate::Symbol {
+                    match self {
+                        #(#syms,)*
+                    }
+                }
+            }
+
+            impl soroban_env_common::Compare<#ident> for crate::Host {
+                type Error = crate::HostError;
+                fn compare(&self, a: &#ident, b: &#ident) -> Result<core::cmp::Ordering, crate::HostError> {
+                    match (a, b) {
+                        #(#compares,)*
+                        _ => self.compare(&a.discriminant_sym(), &b.discriminant_sym())
+                    }
+                }
+            }
+
             impl soroban_env_common::TryFromVal<crate::Host, soroban_env_common::Object> for #ident {
                 type Error = crate::HostError;
 

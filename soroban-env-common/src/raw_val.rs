@@ -1,7 +1,7 @@
 use stellar_xdr::{ScStatic, ScStatus, ScStatusType};
 
 use super::{
-    BitSet, Env, EnvVal, FromVal, IntoVal, Object, Static, Status, Symbol, TryFromVal, TryIntoVal,
+    BitSet, Env, FromVal, IntoVal, Object, Static, Status, Symbol, TryFromVal, TryIntoVal,
 };
 use core::{convert::Infallible, fmt::Debug};
 
@@ -453,13 +453,6 @@ impl From<&ScStatus> for RawVal {
 }
 
 impl RawVal {
-    pub fn in_env<E: Env>(self, env: &E) -> EnvVal<E, RawVal> {
-        EnvVal {
-            env: env.clone(),
-            val: self,
-        }
-    }
-
     #[inline(always)]
     pub const fn get_payload(self) -> u64 {
         self.0

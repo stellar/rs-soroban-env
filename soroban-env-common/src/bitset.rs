@@ -1,4 +1,4 @@
-use crate::{decl_tagged_val_wrapper_methods, ConversionError, Env, EnvVal, RawVal, Tag};
+use crate::{impl_wrapper_common, ConversionError, RawVal, Tag};
 use core::cmp::Ordering;
 use core::fmt::Debug;
 use core::hash::{Hash, Hasher};
@@ -8,7 +8,7 @@ use core::hash::{Hash, Hasher};
 #[derive(Copy, Clone)]
 pub struct BitSet(RawVal);
 
-decl_tagged_val_wrapper_methods!(BitSet);
+impl_wrapper_common!(BitSet);
 
 /// Errors related to operations on the [BitSet] type.
 #[derive(Debug)]

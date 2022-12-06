@@ -1,4 +1,4 @@
-use crate::{decl_tagged_val_wrapper_methods, require, ConversionError, Env, EnvVal, RawVal, Tag};
+use crate::{impl_wrapper_common, require, ConversionError, RawVal, Tag};
 use core::{
     cmp::Ordering,
     fmt::Debug,
@@ -58,7 +58,7 @@ sa::const_assert!(CODE_BITS * MAX_CHARS == BODY_BITS);
 #[derive(Copy, Clone)]
 pub struct Symbol(RawVal);
 
-decl_tagged_val_wrapper_methods!(Symbol);
+impl_wrapper_common!(Symbol);
 
 impl Hash for Symbol {
     fn hash<H: Hasher>(&self, state: &mut H) {
