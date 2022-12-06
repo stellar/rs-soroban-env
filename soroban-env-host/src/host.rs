@@ -374,6 +374,20 @@ impl Host {
             .pop()
             .expect("unmatched host frame push/pop");
         self.0.authorization_manager.borrow_mut().pop_frame();
+        #[cfg(feature = "testutils")]
+        {
+            // Empty call stack in tests means that some contract function call
+            // has been finished and hence the authorization manager can be reset.
+            // In non-test scenarios, there should be no need to ever reset
+            // the authorization manager as the host instance shouldn't be
+            // shared between the contract invocations.
+            if self.0.context.borrow().is_empty() {
+                if self.0.context.borrow().is_empty() {
+                    self.0.authorization_manager.borrow_mut().reset(self)?;
+                }
+            }
+        }
+
         if let Some(rp) = orp {
             self.0.objects.borrow_mut().truncate(rp.objects);
             self.0.storage.borrow_mut().map = rp.storage;
@@ -1020,6 +1034,33 @@ impl Host {
         self.with_mut_storage(|storage| storage.put(&key, &val))
     }
 
+    #[cfg(any(test, feature = "testutils"))]
+    pub fn verify_account_authorization(
+        &self,
+        account: Object,
+        call_stack: Vec<(Hash, Symbol)>,
+        args: Object,
+    ) -> Result<bool, HostError> {
+        use crate::auth::ContractInvocation;
+        let host_account = self.visit_obj(account, |acc: &HostAccount| Ok(acc.clone()))?;
+        let call_stack = call_stack
+            .into_iter()
+            .map(|(contract_id, function_name)| ContractInvocation {
+                contract_id,
+                function_name,
+            })
+            .collect();
+        self.0
+            .authorization_manager
+            .borrow_mut()
+            .verify_last_authorization(
+                self,
+                &host_account,
+                call_stack,
+                self.call_args_to_scvec(args)?,
+            )
+    }
+
     /// Records a `System` contract event. `topics` is expected to be a `SCVec`
     /// length <= 4 that cannot contain `Vec`, `Map`, or `Bytes` with length > 32
     /// On success, returns an `SCStatus::Ok`.
@@ -1391,7 +1432,11 @@ impl VmCallerCheckedEnv for Host {
         &self,
         _vmcaller: &mut VmCaller<Host>,
     ) -> Result<Object, HostError> {
-        Ok(self.add_host_object(HostAccount::InvokerContract)?.into())
+        Ok(self
+            .add_host_object(HostAccount::InvokerContract(
+                self.get_current_contract_id()?,
+            ))?
+            .into())
     }
 
     // Notes on metering: covered by `add_host_object`.
@@ -2479,8 +2524,8 @@ impl VmCallerCheckedEnv for Host {
     ) -> Result<Object, Self::Error> {
         let address = self.visit_obj(account, |acc: &HostAccount| match acc {
             HostAccount::AbstractAccount(acc) => acc.address.metered_clone(self.budget_ref()),
-            HostAccount::InvokerContract => {
-                Ok(ScAddress::Contract(self.get_invoking_contract_internal()?))
+            HostAccount::InvokerContract(id) => {
+                Ok(ScAddress::Contract(id.metered_clone(self.budget_ref())?))
             }
         })?;
         Ok(self.add_host_object(address)?.to_object())

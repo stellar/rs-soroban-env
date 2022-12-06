@@ -18,7 +18,7 @@ use super::xdr::{Hash, ScUnknownErrorCode, ScVec, Uint256};
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum HostAccount {
     AbstractAccount(AbstractAccountHandle),
-    InvokerContract,
+    InvokerContract(Hash),
 }
 
 #[derive(Clone, PartialEq, Eq, PartialOrd)]
@@ -36,6 +36,8 @@ struct AbstractAccount {
     authorized_for_frame: Vec<Option<bool>>,
     authenticated: bool,
     need_nonce: bool,
+    #[cfg(feature = "testutils")]
+    last_recorded_invocations: Vec<AuthorizedInvocation>,
 }
 
 #[derive(Clone, PartialEq, Eq)]
@@ -45,9 +47,9 @@ enum AuthorizationMode {
 }
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
-struct ContractInvocation {
-    contract_id: Hash,
-    function_name: Symbol,
+pub(crate) struct ContractInvocation {
+    pub(crate) contract_id: Hash,
+    pub(crate) function_name: Symbol,
 }
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -165,6 +167,28 @@ impl AuthorizationManager {
         }
     }
 
+    #[cfg(feature = "testutils")]
+    pub(crate) fn reset(&mut self, host: &Host) -> Result<(), HostError> {
+        match self.mode {
+            // The usefullness of the enforcing mode in tests is questionable,
+            // but in any case the right thing is to invalidate all the accounts,
+            // so that no authorization persists. This also has to be accompanied
+            // by the AccountHandle host object invalidation - not sure how to
+            // properly do that (maybe store the ref to AuthorizationManager and
+            // change the manager instance every reset?).
+            AuthorizationMode::Enforcing => {
+                self.accounts.clear();
+            }
+            AuthorizationMode::Recording => {
+                for account in &mut self.accounts {
+                    account.reset_recording(host)?;
+                }
+            }
+        };
+        self.call_stack.clear();
+        Ok(())
+    }
+
     pub(crate) fn add_account(
         &mut self,
         host: &Host,
@@ -269,7 +293,35 @@ impl AuthorizationManager {
             // Maybe there should be a way to authorize sub-contract calls on
             // behalf of the contract in order to make the contract behavior
             // consistent with the account behavior.
-            HostAccount::InvokerContract => Ok(()),
+            HostAccount::InvokerContract(invoker_id) => {
+                if invoker_id.0 == host.get_invoking_contract_internal()?.0 {
+                    Ok(())
+                } else {
+                    Err(host.err_general("TODO"))
+                }
+            }
+        }
+    }
+
+    #[cfg(feature = "testutils")]
+    pub(crate) fn verify_last_authorization(
+        &mut self,
+        host: &Host,
+        account: &HostAccount,
+        call_stack: Vec<ContractInvocation>,
+        args: ScVec,
+    ) -> Result<bool, HostError> {
+        if !matches!(self.mode, AuthorizationMode::Recording) {
+            panic!("verifying the authorization is only available for recording-mode auth");
+        }
+        match account {
+            HostAccount::AbstractAccount(account_handle) => self
+                .get_mut_account(account_handle)?
+                .verify_last_authorization(call_stack, args),
+            HostAccount::InvokerContract(_) => {
+                Err(host
+                    .err_general("test auth verification is not available for invoker accounts"))
+            }
         }
     }
 
@@ -316,7 +368,30 @@ impl AbstractAccount {
             authorized_for_frame: vec![],
             authenticated: false,
             need_nonce,
+            #[cfg(feature = "testutils")]
+            last_recorded_invocations: vec![],
         })
+    }
+
+    #[cfg(feature = "testutils")]
+    fn reset_recording(&mut self, host: &Host) -> Result<(), HostError> {
+        let last_recorded_invocations = self
+            .authorized_invocations
+            .clone()
+            .into_iter()
+            .map(|mut i| {
+                i.nonce = None;
+                i
+            })
+            .collect();
+        let sc_account = ScAccount {
+            account_id: self.account_id.clone(),
+            invocations: vec![].try_into().unwrap(),
+            signature_args: ScVec(vec![].try_into().unwrap()),
+        };
+        *self = AbstractAccount::from_xdr(host, sc_account, self.address.clone())?;
+        self.last_recorded_invocations = last_recorded_invocations;
+        Ok(())
     }
 
     fn to_xdr(&self, budget: &Budget) -> Result<ScObject, HostError> {
@@ -464,6 +539,25 @@ impl AbstractAccount {
             nonce,
         )?);
         Ok(())
+    }
+
+    #[cfg(feature = "testutils")]
+    fn verify_last_authorization(
+        &mut self,
+        call_stack: Vec<ContractInvocation>,
+        top_args: ScVec,
+    ) -> Result<bool, HostError> {
+        let expected_invocation = AuthorizedInvocation::new(call_stack, top_args, None)?;
+        if let Some(index) = self
+            .last_recorded_invocations
+            .iter()
+            .position(|v| v == &expected_invocation)
+        {
+            self.last_recorded_invocations.swap_remove(index);
+            Ok(true)
+        } else {
+            Ok(false)
+        }
     }
 
     fn get_signature_payload(&self, host: &Host) -> Result<[u8; 32], HostError> {

@@ -937,10 +937,17 @@ fn test_account_invoker_auth() {
     assert_eq!(token.balance(admin_address.clone()).unwrap(), 1700);
 
     // Contract invoker can't perform unauthorized admin operation.
+    let contract_id = generate_bytes_array();
+    let contract_invoker = TestSigner::ContractInvoker(Hash(contract_id.clone()));
+    let contract_id_bytes = BytesN::<32>::try_from_val(
+        &test.host,
+        test.host.bytes_new_from_slice(&contract_id).unwrap(),
+    )
+    .unwrap();
     assert_eq!(
         to_contract_err(
-            test.run_from_contract(&generate_bytes(&test.host), || {
-                token.mint(&TestSigner::ContractInvoker, user_address.clone(), 1000)
+            test.run_from_contract(&contract_id_bytes, || {
+                token.mint(&contract_invoker, user_address.clone(), 1000)
             })
             .err()
             .unwrap()
@@ -952,10 +959,11 @@ fn test_account_invoker_auth() {
 #[test]
 fn test_contract_invoker_auth() {
     let test = TokenTest::setup();
-    let contract_invoker = TestSigner::ContractInvoker;
 
     let admin_contract_id = generate_bytes_array();
     let user_contract_id = generate_bytes_array();
+    let admin_contract_invoker = TestSigner::ContractInvoker(Hash(admin_contract_id.clone()));
+    let user_contract_invoker = TestSigner::ContractInvoker(Hash(user_contract_id.clone()));
     let admin_contract_address = ScAddress::Contract(Hash(admin_contract_id.clone()));
     let user_contract_address = ScAddress::Contract(Hash(user_contract_id.clone()));
     let admin_contract_id_bytes = BytesN::<32>::try_from_val(
@@ -971,13 +979,17 @@ fn test_contract_invoker_auth() {
     let token = test.default_smart_token_with_admin_id(&admin_contract_address);
 
     test.run_from_contract(&admin_contract_id_bytes, || {
-        token.mint(&contract_invoker, user_contract_address.clone(), 1000)
+        token.mint(&admin_contract_invoker, user_contract_address.clone(), 1000)
     })
     .unwrap();
 
     // Make another succesful call
     test.run_from_contract(&admin_contract_id_bytes, || {
-        token.mint(&contract_invoker, admin_contract_address.clone(), 2000)
+        token.mint(
+            &admin_contract_invoker,
+            admin_contract_address.clone(),
+            2000,
+        )
     })
     .unwrap();
 
@@ -988,7 +1000,7 @@ fn test_contract_invoker_auth() {
     assert_eq!(
         to_contract_err(
             test.run_from_contract(&user_contract_id_bytes, || {
-                token.mint(&contract_invoker, user_contract_address.clone(), 1000)
+                token.mint(&user_contract_invoker, user_contract_address.clone(), 1000)
             })
             .err()
             .unwrap()
@@ -996,14 +1008,22 @@ fn test_contract_invoker_auth() {
         ContractError::UnauthorizedError
     );
 
+    // Also don't allow an incorrect contract invoker (not a contract error, should
+    // be some auth error)
+    assert!(test
+        .run_from_contract(&user_contract_id_bytes, || {
+            token.mint(&admin_contract_invoker, user_contract_address.clone(), 1000)
+        })
+        .is_err());
+
     // Perform transfers based on the invoker id.
     test.run_from_contract(&user_contract_id_bytes, || {
-        token.xfer(&contract_invoker, admin_contract_address.clone(), 500)
+        token.xfer(&user_contract_invoker, admin_contract_address.clone(), 500)
     })
     .unwrap();
 
     test.run_from_contract(&admin_contract_id_bytes, || {
-        token.xfer(&contract_invoker, user_contract_address.clone(), 800)
+        token.xfer(&admin_contract_invoker, user_contract_address.clone(), 800)
     })
     .unwrap();
 

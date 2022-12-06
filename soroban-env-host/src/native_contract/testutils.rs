@@ -62,7 +62,7 @@ pub(crate) fn signer_to_account_id(host: &Host, key: &Keypair) -> AccountId {
 }
 
 pub(crate) enum TestSigner<'a> {
-    ContractInvoker,
+    ContractInvoker(Hash),
     ClassicAccountInvoker,
     Ed25519(&'a Keypair),
     Account(AccountSigner<'a>),
@@ -100,7 +100,7 @@ impl<'a> TestSigner<'a> {
                 }
                 host_vec![host, Signature::Account(signatures)]
             }
-            TestSigner::ContractInvoker => unreachable!(),
+            TestSigner::ContractInvoker(_) => unreachable!(),
         };
         host.call_args_to_scvec(signature_args.into()).unwrap()
     }
@@ -112,7 +112,7 @@ impl<'a> TestSigner<'a> {
             }
             TestSigner::Account(acc) => ScAccountId::BuiltinClassicAccount(acc.account_id.clone()),
             TestSigner::ClassicAccountInvoker => ScAccountId::BuiltinInvoker,
-            TestSigner::ContractInvoker => unreachable!(),
+            TestSigner::ContractInvoker(_) => unreachable!(),
         }
     }
 
@@ -121,7 +121,7 @@ impl<'a> TestSigner<'a> {
             TestSigner::ClassicAccountInvoker => panic!("not supported"),
             TestSigner::Ed25519(kp) => ScAddress::Ed25519(kp.public.to_bytes().try_into().unwrap()),
             TestSigner::Account(acc) => ScAddress::ClassicAccount(acc.account_id.clone()),
-            TestSigner::ContractInvoker => panic!("not supported"),
+            TestSigner::ContractInvoker(hash) => ScAddress::Contract(hash.clone()),
         }
     }
 }
@@ -157,7 +157,7 @@ impl<'a, 'b> AccountAuthBuilder<'a, 'b> {
                     )
                     .unwrap(),
             ),
-            TestSigner::ContractInvoker => {
+            TestSigner::ContractInvoker(_) => {
                 return self;
             }
         };
@@ -177,35 +177,37 @@ impl<'a, 'b> AccountAuthBuilder<'a, 'b> {
     }
 
     pub(crate) fn build(&mut self) -> Account {
-        let host_acc = if !matches!(self.signer, TestSigner::ContractInvoker) {
-            let account_id = self.signer.get_account_id();
-            let signature_payload_preimage =
-                HashIdPreimage::ContractAuth(HashIdPreimageContractAuth {
-                    network_passphrase: self
-                        .host
-                        .with_ledger_info(|li: &LedgerInfo| Ok(li.network_passphrase.clone()))
-                        .unwrap()
-                        .try_into()
-                        .unwrap(),
-                    invocations: self.invocations.clone().try_into().unwrap(),
-                });
-            let signature_payload = self
+        let host_acc = match self.signer {
+            TestSigner::ContractInvoker(id) => self
                 .host
-                .metered_hash_xdr(&signature_payload_preimage)
-                .unwrap();
-            let signature_args = self.signer.sign(self.host, &signature_payload);
-            let account = ScAccount {
-                account_id,
-                invocations: self.invocations.clone().try_into().unwrap(),
-                signature_args,
-            };
-            let sc_obj = ScVal::Object(Some(ScObject::Account(account)));
-            self.host.to_host_val(&sc_obj).unwrap()
-        } else {
-            self.host
-                .add_host_object(HostAccount::InvokerContract)
+                .add_host_object(HostAccount::InvokerContract(id.clone()))
                 .unwrap()
-                .into()
+                .into(),
+            _ => {
+                let account_id = self.signer.get_account_id();
+                let signature_payload_preimage =
+                    HashIdPreimage::ContractAuth(HashIdPreimageContractAuth {
+                        network_passphrase: self
+                            .host
+                            .with_ledger_info(|li: &LedgerInfo| Ok(li.network_passphrase.clone()))
+                            .unwrap()
+                            .try_into()
+                            .unwrap(),
+                        invocations: self.invocations.clone().try_into().unwrap(),
+                    });
+                let signature_payload = self
+                    .host
+                    .metered_hash_xdr(&signature_payload_preimage)
+                    .unwrap();
+                let signature_args = self.signer.sign(self.host, &signature_payload);
+                let account = ScAccount {
+                    account_id,
+                    invocations: self.invocations.clone().try_into().unwrap(),
+                    signature_args,
+                };
+                let sc_obj = ScVal::Object(Some(ScObject::Account(account)));
+                self.host.to_host_val(&sc_obj).unwrap()
+            }
         };
         Account::try_from_val(self.host, host_acc.val).unwrap()
     }
