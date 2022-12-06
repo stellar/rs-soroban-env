@@ -1,4 +1,4 @@
-use std::cmp::{min, Ordering};
+use core::cmp::{min, Ordering};
 
 use soroban_env_common::{
     xdr::{
@@ -110,10 +110,27 @@ macro_rules! impl_compare_fixed_size_ord_type {
                 self.compare(&FixedSizeOrdType(a), &FixedSizeOrdType(b))
             }
         }
+        impl Compare<$t> for Host {
+            type Error = HostError;
+            fn compare(&self, a: &$t, b: &$t) -> Result<Ordering, Self::Error> {
+                self.as_budget().compare(a, b)
+            }
+        }
     };
 }
 
+impl_compare_fixed_size_ord_type!(bool);
+
 impl_compare_fixed_size_ord_type!(u32);
+impl_compare_fixed_size_ord_type!(i32);
+impl_compare_fixed_size_ord_type!(u64);
+impl_compare_fixed_size_ord_type!(i64);
+impl_compare_fixed_size_ord_type!(u128);
+impl_compare_fixed_size_ord_type!(i128);
+
+impl_compare_fixed_size_ord_type!(crate::Symbol);
+impl_compare_fixed_size_ord_type!(crate::Status);
+impl_compare_fixed_size_ord_type!(crate::Static);
 
 impl_compare_fixed_size_ord_type!(Hash);
 impl_compare_fixed_size_ord_type!(Uint256);

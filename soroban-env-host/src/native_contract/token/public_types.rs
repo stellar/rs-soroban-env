@@ -60,7 +60,7 @@ impl Signature {
     }
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone)]
 #[contracttype]
 pub enum Identifier {
     Contract(BytesN<32>),

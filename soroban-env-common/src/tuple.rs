@@ -1,8 +1,7 @@
 use stellar_xdr::ScObjectType;
 
 use crate::{
-    ConversionError, Env, EnvVal, IntoVal, Object, RawVal, RawValConvertible, TryFromVal,
-    TryIntoVal,
+    ConversionError, Env, IntoVal, Object, RawVal, RawValConvertible, TryFromVal, TryIntoVal,
 };
 
 macro_rules! impl_for_tuple {
@@ -67,19 +66,6 @@ macro_rules! impl_for_tuple {
                 let vec = env.vec_new($count.into());
                 $(let vec = env.vec_push_back(vec, (&self.$idx).into_val(&env));)*
                 vec.to_raw()
-            }
-        }
-
-        impl<E: Env, $($typ),*> IntoVal<E, EnvVal<E, RawVal>> for ($($typ,)*)
-        where
-            $($typ: IntoVal<E, RawVal>),*
-        {
-            fn into_val(self, env: &E) -> EnvVal<E, RawVal> {
-                let rv: RawVal = self.into_val(env);
-                EnvVal{
-                    env: env.clone(),
-                    val: rv,
-                }
             }
         }
 

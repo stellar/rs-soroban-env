@@ -1,4 +1,4 @@
-use std::cmp::min;
+use core::cmp::min;
 
 use soroban_env_common::{CheckedEnv, InvokerType};
 

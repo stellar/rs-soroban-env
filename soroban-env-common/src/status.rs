@@ -1,7 +1,4 @@
-use crate::{
-    decl_tagged_val_wrapper_methods, BitSetError, ConversionError, Env, EnvVal, RawVal,
-    SymbolError, Tag,
-};
+use crate::{impl_wrapper_common, BitSetError, ConversionError, RawVal, SymbolError, Tag};
 use core::{
     cmp::Ordering,
     convert::TryFrom,
@@ -21,7 +18,7 @@ use stellar_xdr::{
 #[derive(Copy, Clone)]
 pub struct Status(RawVal);
 
-decl_tagged_val_wrapper_methods!(Status);
+impl_wrapper_common!(Status);
 
 impl Status {
     pub const UNKNOWN_ERROR: Status =
