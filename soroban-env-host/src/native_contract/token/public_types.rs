@@ -3,7 +3,7 @@ pub(crate) use crate::native_contract::base_types::{Bytes, BytesN, Map, Vec};
 use crate::native_contract::invoker::{invoker, Invoker};
 use crate::HostError;
 use soroban_env_common::xdr::AccountId;
-use soroban_env_common::{Compare, Symbol, TryIntoVal};
+use soroban_env_common::{Compare, Symbol};
 use soroban_native_sdk_macros::contracttype;
 
 use super::error::ContractError;

@@ -1,6 +1,5 @@
 use crate::native_contract::base_types::Map;
 use crate::native_contract::token::public_types::Identifier;
-use soroban_env_common::TryIntoVal;
 use soroban_native_sdk_macros::contracttype;
 
 #[contracttype]

@@ -15,82 +15,80 @@ pub fn derive_type_struct(ident: &Ident, data: &DataStruct) -> TokenStream2 {
                 .map_or_else(|| format_ident!("{}", i), Ident::clone);
             let name = ident.to_string();
             let map_key = quote! { // TODO: Handle field names longer than a symbol. Hash the name? Truncate the name?
-                { const k: soroban_env_common::Symbol = soroban_env_common::Symbol::from_str(#name); k }
+                { const k: crate::Symbol = crate::Symbol::from_str(#name); k }
             };
             (ident, map_key)
         })
         .multiunzip();
 
     quote! {
-        impl soroban_env_common::TryFromVal<crate::Host, soroban_env_common::Object> for #ident {
+        impl crate::Convert<crate::Object, #ident> for crate::Host {
             type Error = crate::HostError;
-
-            fn try_from_val(env: &crate::Host, val: soroban_env_common::Object) -> Result<Self, Self::Error> {
-                let map = Map::try_from_val(env, val)?;
-                Ok(Self {
-                    #(#names: map.get(#map_keys)?,)*
+            fn convert_ref(&self, obj: &crate::Object) -> Result<#ident, crate::HostError> {
+                let map: Map = self.convert_ref(obj)?;
+                Ok(#ident {
+                    #(#names: map.get(&#map_keys)?,)*
                 })
             }
         }
 
-        impl soroban_env_common::TryFromVal<crate::Host, soroban_env_common::RawVal> for #ident {
+        impl crate::Convert<crate::RawVal, #ident> for crate::Host {
             type Error = crate::HostError;
-
-            fn try_from_val(env: &crate::Host, val: soroban_env_common::RawVal) -> Result<Self, Self::Error> {
-                <_ as soroban_env_common::TryFromVal<_, soroban_env_common::Object>>::try_from_val(env, val.try_into()?)
+            fn convert_ref(&self, rv: &crate::RawVal) -> Result<#ident, crate::HostError> {
+                let obj: crate::Object = rv.try_into()?;
+                self.convert_ref(&obj)
             }
         }
 
-        impl TryIntoVal<crate::Host, soroban_env_common::RawVal> for #ident {
+        impl crate::Convert<#ident, crate::Object> for crate::Host {
             type Error = crate::HostError;
-
-            fn try_into_val(self, env: &crate::Host) -> Result<soroban_env_common::RawVal, Self::Error> {
-                let mut map = Map::new(env)?;
-                #(map.set(#map_keys, self.#names)?;)*
-                map.try_into_val(env)
+            fn convert_ref(&self, v: &#ident) -> Result<crate::Object, crate::HostError> {
+                let mut map: Map = Map::new(self)?;
+                #(map.set(&#map_keys, &v.#names)?;)*
+                self.convert(map)
             }
         }
 
-        impl TryIntoVal<crate::Host, #ident> for soroban_env_common::RawVal {
+        impl crate::Convert<#ident, crate::RawVal> for crate::Host {
             type Error = crate::HostError;
-
-            fn try_into_val(self, env: &crate::Host) -> Result<#ident, Self::Error> {
-                <_ as soroban_env_common::TryFromVal<_, _>>::try_from_val(env, self)
+            fn convert_ref(&self, v: &#ident) -> Result<crate::RawVal, crate::HostError> {
+                let obj: crate::Object = self.convert_ref(v)?;
+                Ok(obj.into())
             }
         }
     }
 }
 
-pub fn derive_type_enum(ident: &Ident, data: &DataEnum) -> TokenStream2 {
+pub fn derive_type_enum(ty_ident: &Ident, data: &DataEnum) -> TokenStream2 {
     let mut errors = Vec::<Error>::new();
 
     let (consts, froms, intos): (Vec<_>, Vec<_>, Vec<_>) = data.variants
         .iter()
         .map(|f| {
-            let ident = &f.ident;
-            let name = ident.to_string();
-            let discriminant_ident = format_ident!("DISCRIMINANT_{}", name.to_uppercase());
+            let case_ident = &f.ident;
+            let case_name = case_ident.to_string();
+            let discriminant_ident = format_ident!("DISCRIMINANT_{}", case_name.to_uppercase());
             let discriminant_const = quote! {
-                const #discriminant_ident: u64 = soroban_env_common::Symbol::from_str(#name).to_raw().get_payload()
+                const #discriminant_ident: u64 = crate::Symbol::from_str(#case_name).to_raw().get_payload()
             };
 
             if f.fields.is_empty() {
                 let from = quote! {
-                    #discriminant_ident => Ok(Self::#ident)
+                    #discriminant_ident => Ok(#ty_ident::#case_ident)
                 };
                 let into = quote! {
-                    Self::#ident => {
-                        vec.push({ const k: soroban_env_common::Symbol = soroban_env_common::Symbol::from_str(#name); k })?;
+                    #ty_ident::#case_ident => {
+                        vec.push(&{ const k: crate::Symbol = crate::Symbol::from_str(#case_name); k })?;
                     }
                 };
                 (discriminant_const, from, into)
             } else if f.fields.len() == 1 {
                 let from = quote! {
-                    #discriminant_ident => Ok(Self::#ident(vec.get(1)?))
+                    #discriminant_ident => Ok(#ty_ident::#case_ident(vec.get(1)?))
                 };
                 let into = quote! {
-                    Self::#ident(x) => {
-                        vec.push({ const k: soroban_env_common::Symbol = soroban_env_common::Symbol::from_str(#name); k })?;
+                    #ty_ident::#case_ident(x) => {
+                        vec.push(&{ const k: crate::Symbol = crate::Symbol::from_str(#case_name); k })?;
                         vec.push(x)?;
                     }
                 };
@@ -109,46 +107,45 @@ pub fn derive_type_enum(ident: &Ident, data: &DataEnum) -> TokenStream2 {
         quote! { #(#compile_errors)* }
     } else {
         quote! {
-            impl soroban_env_common::TryFromVal<crate::Host, soroban_env_common::Object> for #ident {
-                type Error = crate::HostError;
 
-                fn try_from_val(env: &crate::Host, val: soroban_env_common::Object) -> Result<Self, Self::Error> {
+            impl crate::Convert<crate::Object, #ty_ident> for crate::Host {
+                type Error = crate::HostError;
+                fn convert_ref(&self, obj: &crate::Object) -> Result<#ty_ident, Self::Error> {
                     #(#consts;)*
-                    let vec = crate::native_contract::base_types::Vec::try_from_val(env, val)?;
-                    let discriminant: soroban_env_common::Symbol = vec.get(0)?;
+                    let vec: crate::native_contract::base_types::Vec = self.convert_ref(obj)?;
+                    let discriminant: crate::Symbol = vec.get(0)?;
                     match discriminant.to_raw().get_payload() {
                         #(#froms,)*
-                        _ => Err(soroban_env_common::ConversionError.into())
+                        _ => Err(crate::ConversionError.into())
                     }
                 }
             }
 
-            impl soroban_env_common::TryFromVal<crate::Host, soroban_env_common::RawVal> for #ident {
+            impl crate::Convert<crate::RawVal, #ty_ident> for crate::Host {
                 type Error = crate::HostError;
-
-                fn try_from_val(env: &crate::Host, val: soroban_env_common::RawVal) -> Result<Self, Self::Error> {
-                    <_ as soroban_env_common::TryFromVal<_, soroban_env_common::Object>>::try_from_val(env, val.try_into()?)
+                fn convert_ref(&self, val: &crate::RawVal) -> Result<#ty_ident, Self::Error> {
+                    let obj: crate::Object = val.try_into()?;
+                    self.convert_ref(&obj)
                 }
             }
 
-            impl TryIntoVal<crate::Host, soroban_env_common::RawVal> for #ident {
+            impl crate::Convert<#ty_ident, crate::Object> for crate::Host {
                 type Error = crate::HostError;
-
-                fn try_into_val(self, env: &crate::Host) -> Result<soroban_env_common::RawVal, Self::Error> {
+                fn convert_ref(&self, obj: &#ty_ident) -> Result<crate::Object, Self::Error> {
                     #(#consts;)*
-                    let mut vec = crate::native_contract::base_types::Vec::new(env)?;
-                    match self {
+                    let mut vec = crate::native_contract::base_types::Vec::new(self)?;
+                    match obj {
                         #(#intos)*
                     };
-                    vec.try_into_val(env)
+                    self.convert_ref(&vec)
                 }
             }
 
-            impl TryIntoVal<crate::Host, #ident> for soroban_env_common::RawVal {
+            impl crate::Convert<#ty_ident, crate::RawVal> for crate::Host {
                 type Error = crate::HostError;
-
-                fn try_into_val(self, env: &crate::Host) -> Result<#ident, Self::Error> {
-                    <_ as soroban_env_common::TryFromVal<_, _>>::try_from_val(env, self)
+                fn convert_ref(&self, v: &#ty_ident) -> Result<crate::RawVal, Self::Error> {
+                    let obj: crate::Object = self.convert_ref(v)?;
+                    Ok(obj.into())
                 }
             }
         }

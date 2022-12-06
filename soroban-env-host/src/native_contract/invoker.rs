@@ -1,4 +1,4 @@
-use soroban_env_common::{xdr::AccountId, CheckedEnv, InvokerType, TryFromVal, TryIntoVal};
+use soroban_env_common::{xdr::AccountId, CheckedEnv, Convert, InvokerType};
 use soroban_native_sdk_macros::contracttype;
 
 use crate::{Host, HostError};
@@ -13,15 +13,9 @@ pub enum Invoker {
 }
 
 pub fn invoker(env: &Host) -> Result<Invoker, HostError> {
-    let invoker_type: InvokerType = Host::get_invoker_type(&env)?.try_into()?;
+    let invoker_type: InvokerType = env.get_invoker_type()?.try_into()?;
     Ok(match invoker_type {
-        InvokerType::Account => Invoker::Account(AccountId::try_from_val(
-            env,
-            Host::get_invoking_account(&env)?,
-        )?),
-        InvokerType::Contract => Invoker::Contract(BytesN::<32>::try_from_val(
-            env,
-            Host::get_invoking_contract(&env)?,
-        )?),
+        InvokerType::Account => Invoker::Account(env.convert(env.get_invoking_account()?)?),
+        InvokerType::Contract => Invoker::Contract(env.convert(env.get_invoking_contract()?)?),
     })
 }

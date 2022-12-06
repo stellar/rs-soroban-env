@@ -29,7 +29,7 @@ use soroban_env_common::{
     },
     RawVal,
 };
-use soroban_env_common::{CheckedEnv, EnvBase, Symbol, TryFromVal, TryIntoVal};
+use soroban_env_common::{CheckedEnv, EnvBase, Symbol};
 
 use crate::native_contract::base_types::{Bytes, BytesN};
 

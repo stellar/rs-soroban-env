@@ -7,11 +7,11 @@ use crate::{
     test::util::{generate_account_id, generate_bytes_array},
     Host, HostError,
 };
+use soroban_env_common::Symbol;
 use soroban_env_common::{
     xdr::{Asset, ContractId, CreateContractArgs, HostFunction, ScContractCode, Uint256},
-    CheckedEnv, RawVal,
+    CheckedEnv, Convert, RawVal,
 };
-use soroban_env_common::{Symbol, TryFromVal, TryIntoVal};
 
 use crate::native_contract::base_types::{Bytes, BytesN};
 
@@ -26,55 +26,51 @@ impl<'a> TestToken<'a> {
     pub(crate) fn new(host: &'a Host) -> Self {
         host.set_source_account(generate_account_id());
         let id_obj: RawVal = host
-            .invoke_function(HostFunction::CreateContract(CreateContractArgs {
-                contract_id: ContractId::SourceAccount(Uint256(generate_bytes_array())),
-                source: ScContractCode::Token,
-            }))
-            .unwrap()
-            .try_into_val(host)
+            .convert(
+                host.invoke_function(HostFunction::CreateContract(CreateContractArgs {
+                    contract_id: ContractId::SourceAccount(Uint256(generate_bytes_array())),
+                    source: ScContractCode::Token,
+                }))
+                .unwrap(),
+            )
             .unwrap();
         host.remove_source_account();
         Self {
-            id: BytesN::<32>::try_from_val(host, id_obj).unwrap(),
+            id: host.convert(id_obj).unwrap(),
             host,
         }
     }
 
     pub(crate) fn new_from_asset(host: &'a Host, asset: Asset) -> Self {
         let id_obj: RawVal = host
-            .invoke_function(HostFunction::CreateContract(CreateContractArgs {
-                contract_id: ContractId::Asset(asset),
-                source: ScContractCode::Token,
-            }))
-            .unwrap()
-            .try_into_val(host)
+            .convert(
+                host.invoke_function(HostFunction::CreateContract(CreateContractArgs {
+                    contract_id: ContractId::Asset(asset),
+                    source: ScContractCode::Token,
+                }))
+                .unwrap(),
+            )
             .unwrap();
         Self {
-            id: BytesN::<32>::try_from_val(host, id_obj).unwrap(),
+            id: host.convert(id_obj).unwrap(),
             host,
         }
     }
 
     pub(crate) fn init(&self, admin: Identifier, metadata: TokenMetadata) -> Result<(), HostError> {
-        Ok(self
-            .host
-            .call(
-                self.id.clone().into(),
-                Symbol::from_str("init").into(),
-                host_vec![self.host, admin, metadata].into(),
-            )?
-            .try_into_val(self.host)?)
+        Ok(self.host.convert(self.host.call(
+            self.id.clone().into(),
+            Symbol::from_str("init").into(),
+            host_vec![self.host, admin, metadata].into(),
+        )?)?)
     }
 
     pub(crate) fn nonce(&self, id: Identifier) -> Result<i128, HostError> {
-        Ok(self
-            .host
-            .call(
-                self.id.clone().into(),
-                Symbol::from_str("nonce").into(),
-                host_vec![self.host, id].into(),
-            )?
-            .try_into_val(self.host)?)
+        Ok(self.host.convert(self.host.call(
+            self.id.clone().into(),
+            Symbol::from_str("nonce").into(),
+            host_vec![self.host, id].into(),
+        )?)?)
     }
 
     pub(crate) fn allowance(
@@ -82,14 +78,11 @@ impl<'a> TestToken<'a> {
         from: Identifier,
         spender: Identifier,
     ) -> Result<i128, HostError> {
-        Ok(self
-            .host
-            .call(
-                self.id.clone().into(),
-                Symbol::from_str("allowance").into(),
-                host_vec![self.host, from, spender].into(),
-            )?
-            .try_into_val(self.host)?)
+        Ok(self.host.convert(self.host.call(
+            self.id.clone().into(),
+            Symbol::from_str("allowance").into(),
+            host_vec![self.host, from, spender].into(),
+        )?)?)
     }
 
     pub(crate) fn approve(
@@ -124,14 +117,11 @@ impl<'a> TestToken<'a> {
     }
 
     pub(crate) fn balance(&self, id: Identifier) -> Result<i128, HostError> {
-        Ok(self
-            .host
-            .call(
-                self.id.clone().into(),
-                Symbol::from_str("balance").into(),
-                host_vec![self.host, id].into(),
-            )?
-            .try_into_val(self.host)?)
+        Ok(self.host.convert(self.host.call(
+            self.id.clone().into(),
+            Symbol::from_str("balance").into(),
+            host_vec![self.host, id].into(),
+        )?)?)
     }
 
     pub(crate) fn xfer(
@@ -257,14 +247,11 @@ impl<'a> TestToken<'a> {
     }
 
     pub(crate) fn is_frozen(&self, id: Identifier) -> Result<bool, HostError> {
-        Ok(self
-            .host
-            .call(
-                self.id.clone().into(),
-                Symbol::from_str("is_frozen").into(),
-                host_vec![self.host, id].into(),
-            )?
-            .try_into_val(self.host)?)
+        Ok(self.host.convert(self.host.call(
+            self.id.clone().into(),
+            Symbol::from_str("is_frozen").into(),
+            host_vec![self.host, id].into(),
+        )?)?)
     }
 
     pub(crate) fn mint(
@@ -370,25 +357,19 @@ impl<'a> TestToken<'a> {
     }
 
     pub(crate) fn name(&self) -> Result<Bytes, HostError> {
-        Ok(self
-            .host
-            .call(
-                self.id.clone().into(),
-                Symbol::from_str("name").into(),
-                host_vec![self.host].into(),
-            )?
-            .try_into_val(self.host)?)
+        Ok(self.host.convert(self.host.call(
+            self.id.clone().into(),
+            Symbol::from_str("name").into(),
+            host_vec![self.host].into(),
+        )?)?)
     }
 
     pub(crate) fn symbol(&self) -> Result<Bytes, HostError> {
-        Ok(self
-            .host
-            .call(
-                self.id.clone().into(),
-                Symbol::from_str("symbol").into(),
-                host_vec![self.host].into(),
-            )?
-            .try_into_val(self.host)?)
+        Ok(self.host.convert(self.host.call(
+            self.id.clone().into(),
+            Symbol::from_str("symbol").into(),
+            host_vec![self.host].into(),
+        )?)?)
     }
 
     pub(crate) fn import(

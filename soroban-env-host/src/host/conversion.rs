@@ -1,4 +1,5 @@
 use super::metered_clone::MeteredClone;
+use crate::budget::AsBudget;
 use crate::xdr::{
     Hash, LedgerKey, LedgerKeyContractData, ScHostFnErrorCode, ScHostObjErrorCode,
     ScHostValErrorCode, ScStatic, ScVal, ScVec, Uint256,
@@ -12,6 +13,7 @@ use crate::{
 use ed25519_dalek::{PublicKey, Signature, SIGNATURE_LENGTH};
 use sha2::{Digest, Sha256};
 use soroban_env_common::xdr::AccountId;
+use soroban_env_common::Convert;
 
 impl Host {
     // Notes on metering: free
@@ -275,5 +277,22 @@ impl Host {
             .iter()
             .map(|scv| self.to_host_val(scv))
             .collect::<Result<Vec<RawVal>, HostError>>()
+    }
+}
+
+impl Convert<Object, AccountId> for Host {
+    type Error = HostError;
+    fn convert_ref(&self, obj: &Object) -> Result<AccountId, Self::Error> {
+        self.visit_obj(*obj, |acc: &AccountId| acc.metered_clone(self.as_budget()))
+    }
+}
+
+impl Convert<AccountId, Object> for Host {
+    type Error = HostError;
+    fn convert(&self, f: AccountId) -> Result<Object, Self::Error> {
+        self.add_host_object(f)
+    }
+    fn convert_ref(&self, f: &AccountId) -> Result<Object, Self::Error> {
+        self.convert(f.metered_clone(self.as_budget())?)
     }
 }

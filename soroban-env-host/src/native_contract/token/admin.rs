@@ -4,21 +4,21 @@ use crate::host::Host;
 use crate::native_contract::token::public_types::{Identifier, Signature};
 use crate::native_contract::token::storage_types::DataKey;
 use crate::{err, HostError};
-use soroban_env_common::{CheckedEnv, Compare, TryFromVal, TryIntoVal};
+use soroban_env_common::{CheckedEnv, Compare, Convert};
 
 use super::error::ContractError;
 
 // Metering: covered by components
 fn read_administrator(e: &Host) -> Result<Identifier, HostError> {
     let key = DataKey::Admin;
-    let rv = e.get_contract_data(key.try_into_val(e)?)?;
-    Ok(Identifier::try_from_val(e, rv)?)
+    let rv = e.get_contract_data(e.convert(key)?)?;
+    e.convert(rv)
 }
 
 // Metering: covered by components
 pub fn write_administrator(e: &Host, id: Identifier) -> Result<(), HostError> {
     let key = DataKey::Admin;
-    e.put_contract_data(key.try_into_val(e)?, id.try_into_val(e)?)?;
+    e.put_contract_data(e.convert(key)?, e.convert(id)?)?;
     Ok(())
 }
 

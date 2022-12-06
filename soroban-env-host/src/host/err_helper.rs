@@ -110,6 +110,6 @@ impl Host {
 #[macro_export]
 macro_rules! err {
     ($host:expr, $status:expr, $msg:expr, $($args:expr),+) => {
-        $host.err_status_msg_with_args($status, $msg, &[$($args.try_into_val($host)?,)+])
+        $host.err_status_msg_with_args($status, $msg, &[$(<_ as crate::Convert<_, crate::RawVal>>::convert_ref($host, &$args)?,)+])
     };
 }

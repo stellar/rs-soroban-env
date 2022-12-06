@@ -1,5 +1,5 @@
 #![no_std]
-use soroban_sdk::{contractimpl, vec, BytesN, Env, IntoVal, Symbol};
+use soroban_sdk::{contractimpl, vec, BytesN, Env, Symbol};
 
 pub struct Contract;
 

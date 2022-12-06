@@ -1,9 +1,9 @@
-use soroban_env_common::{RawVal, TryFromVal};
+use soroban_env_common::RawVal;
 
 use crate::{
     host::HostError,
     xdr::{ScObjectType, ScVal},
-    Host, IntoVal, Object, RawValConvertible, Tag,
+    Host, Object, RawValConvertible, Tag,
 };
 
 /// numbers test

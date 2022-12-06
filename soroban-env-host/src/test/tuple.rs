@@ -1,6 +1,6 @@
 use std::cmp::Ordering;
 
-use soroban_env_common::{Compare, IntoVal, TryIntoVal};
+use soroban_env_common::Compare;
 
 use crate::{CheckedEnv, Host, HostError, RawVal};
 

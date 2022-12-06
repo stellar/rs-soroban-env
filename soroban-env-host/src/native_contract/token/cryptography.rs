@@ -1,5 +1,5 @@
 use crate::host::Host;
-use crate::native_contract::base_types::{Bytes, BytesN, Vec};
+use crate::native_contract::base_types::{BytesN, Vec};
 use crate::native_contract::token::nonce::read_and_increment_nonce;
 use crate::native_contract::token::public_types::{
     AccountSignatures, Ed25519Signature, Identifier, Signature, SignaturePayload,
@@ -8,7 +8,7 @@ use crate::native_contract::token::public_types::{
 use crate::{err, HostError};
 use core::cmp::Ordering;
 use soroban_env_common::xdr::{ThresholdIndexes, Uint256};
-use soroban_env_common::{CheckedEnv, InvokerType, Symbol, TryFromVal, TryIntoVal};
+use soroban_env_common::{CheckedEnv, Convert, InvokerType, Symbol};
 
 use super::error::ContractError;
 
@@ -23,11 +23,11 @@ fn check_ed25519_auth(
 ) -> Result<(), HostError> {
     let msg = SignaturePayloadV0 {
         name,
-        contract: BytesN::<32>::try_from_val(e, e.get_current_contract()?)?,
-        network: Bytes::try_from_val(e, e.get_ledger_network_passphrase()?)?,
+        contract: e.convert(e.get_current_contract()?)?,
+        network: e.convert(e.get_ledger_network_passphrase()?)?,
         args,
     };
-    let msg_bin = e.serialize_to_bytes(SignaturePayload::V0(msg).try_into_val(e)?)?;
+    let msg_bin = e.serialize_to_bytes(e.convert(SignaturePayload::V0(msg))?)?;
 
     e.verify_sig_ed25519(msg_bin, auth.public_key.into(), auth.signature.into())?;
     Ok(())
@@ -42,11 +42,11 @@ fn check_account_auth(
 ) -> Result<(), HostError> {
     let msg = SignaturePayloadV0 {
         name,
-        contract: BytesN::<32>::try_from_val(e, e.get_current_contract()?)?,
-        network: Bytes::try_from_val(e, e.get_ledger_network_passphrase()?)?,
+        contract: e.convert(e.get_current_contract()?)?,
+        network: e.convert(e.get_ledger_network_passphrase()?)?,
         args,
     };
-    let msg_bin = e.serialize_to_bytes(SignaturePayload::V0(msg).try_into_val(e)?)?;
+    let msg_bin = e.serialize_to_bytes(e.convert(SignaturePayload::V0(msg))?)?;
 
     let mut weight = 0u32;
     let sigs = &auth.signatures;

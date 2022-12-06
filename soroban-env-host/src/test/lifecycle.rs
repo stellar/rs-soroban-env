@@ -9,7 +9,7 @@ use crate::{
     },
     CheckedEnv, Host, LedgerInfo, Symbol,
 };
-use soroban_env_common::{RawVal, TryIntoVal};
+use soroban_env_common::RawVal;
 use soroban_test_wasms::CREATE_CONTRACT;
 
 use sha2::{Digest, Sha256};

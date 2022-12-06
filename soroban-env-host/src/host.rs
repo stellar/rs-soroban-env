@@ -17,7 +17,7 @@ use soroban_env_common::{
         ScHostValErrorCode, ScMap, ScMapEntry, ScObject, ScStatusType, ScVal, ScVec,
         ThresholdIndexes,
     },
-    Convert, InvokerType, Status, TryFromVal, TryIntoVal, VmCaller, VmCallerCheckedEnv,
+    Convert, InvokerType, Status, VmCaller, VmCallerCheckedEnv,
 };
 
 use crate::budget::{AsBudget, Budget, CostType};
@@ -158,31 +158,17 @@ impl Debug for Host {
     }
 }
 
-impl Convert<&Object, ScObject> for Host {
-    type Error = HostError;
-    fn convert(&self, ob: &Object) -> Result<ScObject, Self::Error> {
-        self.from_host_obj(*ob)
-    }
-}
-
 impl Convert<Object, ScObject> for Host {
     type Error = HostError;
-    fn convert(&self, ob: Object) -> Result<ScObject, Self::Error> {
-        self.from_host_obj(ob)
-    }
-}
-
-impl Convert<&ScObject, Object> for Host {
-    type Error = HostError;
-    fn convert(&self, ob: &ScObject) -> Result<Object, Self::Error> {
-        self.to_host_obj(ob)
+    fn convert_ref(&self, ob: &Object) -> Result<ScObject, Self::Error> {
+        self.from_host_obj(*ob)
     }
 }
 
 impl Convert<ScObject, Object> for Host {
     type Error = HostError;
-    fn convert(&self, ob: ScObject) -> Result<Object, Self::Error> {
-        self.to_host_obj(&ob)
+    fn convert_ref(&self, ob: &ScObject) -> Result<Object, Self::Error> {
+        self.to_host_obj(ob)
     }
 }
 
@@ -534,13 +520,13 @@ impl Host {
         // For an `Object`, the actual structural conversion (such as byte
         // cloning) occurs in `from_host_obj` and is metered there.
         self.charge_budget(CostType::ValXdrConv, 1)?;
-        ScVal::try_from_val(self, val)
+        <Host as Convert<RawVal, ScVal>>::convert(self, val)
             .map_err(|_| self.err_status(ScHostValErrorCode::UnknownError))
     }
 
     pub(crate) fn to_host_val(&self, v: &ScVal) -> Result<RawVal, HostError> {
         self.charge_budget(CostType::ValXdrConv, 1)?;
-        v.try_into_val(self)
+        <Host as Convert<ScVal, RawVal>>::convert_ref(self, v)
             .map_err(|_| self.err_status(ScHostValErrorCode::UnknownError))
     }
 

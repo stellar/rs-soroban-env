@@ -1,6 +1,6 @@
 use soroban_env_host::Host;
 
-use soroban_env_common::{xdr::ScObjectType, Env, Object, RawVal, TryIntoVal};
+use soroban_env_common::{xdr::ScObjectType, Env, Object, RawVal};
 
 #[test]
 fn u8_array() {

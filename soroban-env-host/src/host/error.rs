@@ -5,6 +5,7 @@ use crate::{
 };
 use backtrace::{Backtrace, BacktraceFrame};
 use core::fmt::Debug;
+use soroban_env_common::ConversionError;
 
 #[derive(Clone)]
 pub struct HostError {

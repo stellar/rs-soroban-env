@@ -8,15 +8,15 @@ use soroban_env_common::xdr::{
     AccountEntryExt, AccountEntryExtensionV1Ext, AccountId, LedgerEntryData, TrustLineAsset,
     TrustLineEntryExt, TrustLineFlags,
 };
-use soroban_env_common::{CheckedEnv, TryIntoVal};
+use soroban_env_common::{CheckedEnv, Convert};
 
 use super::error::ContractError;
 
 // Metering: *mostly* covered by components. Not sure about `try_into_val`.
 pub fn read_balance(e: &Host, id: Identifier) -> Result<i128, HostError> {
     let key = DataKey::Balance(id);
-    if let Ok(balance) = e.get_contract_data(key.try_into_val(e)?) {
-        Ok(balance.try_into_val(e)?)
+    if let Ok(balance) = e.get_contract_data(e.convert(key)?) {
+        Ok(e.convert(balance)?)
     } else {
         Ok(0)
     }
@@ -25,7 +25,7 @@ pub fn read_balance(e: &Host, id: Identifier) -> Result<i128, HostError> {
 // Metering: *mostly* covered by components. Not sure about `try_into_val`.
 fn write_balance(e: &Host, id: Identifier, amount: i128) -> Result<(), HostError> {
     let key = DataKey::Balance(id);
-    e.put_contract_data(key.try_into_val(e)?, amount.try_into_val(e)?)?;
+    e.put_contract_data(e.convert(key)?, e.convert(amount)?)?;
     Ok(())
 }
 
@@ -68,7 +68,7 @@ pub fn spend_balance(e: &Host, id: Identifier, amount: i128) -> Result<(), HostE
 // Metering: *mostly* covered by components. Not sure about `try_into_val`.
 pub fn read_state(e: &Host, id: Identifier) -> Result<bool, HostError> {
     let key = DataKey::State(id);
-    if let Ok(state) = e.get_contract_data(key.try_into_val(e)?) {
+    if let Ok(state) = e.get_contract_data(e.convert(key)?) {
         Ok(state.try_into()?)
     } else {
         Ok(false)
@@ -78,7 +78,7 @@ pub fn read_state(e: &Host, id: Identifier) -> Result<bool, HostError> {
 // Metering: *mostly* covered by components. Not sure about `try_into_val`.
 pub fn write_state(e: &Host, id: Identifier, is_frozen: bool) -> Result<(), HostError> {
     let key = DataKey::State(id);
-    e.put_contract_data(key.try_into_val(e)?, is_frozen.into())?;
+    e.put_contract_data(e.convert(key)?, is_frozen.into())?;
     Ok(())
 }
 

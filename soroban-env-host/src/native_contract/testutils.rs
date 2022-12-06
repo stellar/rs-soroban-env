@@ -9,9 +9,9 @@ use ed25519_dalek::{Keypair, Signer};
 use rand::thread_rng;
 use soroban_env_common::{
     xdr::{AccountId, PublicKey, Uint256},
-    CheckedEnv,
+    CheckedEnv, Convert,
 };
-use soroban_env_common::{EnvBase, RawVal, Symbol, TryFromVal, TryIntoVal};
+use soroban_env_common::{EnvBase, RawVal, Symbol};
 
 use crate::native_contract::base_types::{Bytes, BytesN};
 
@@ -34,7 +34,7 @@ macro_rules! host_vec {
         HostVec::new($host).unwrap()
     };
     ($host:expr, $($x:expr),+ $(,)?) => {
-        HostVec::from_array($host, &[$($x.try_into_val($host).unwrap()),+]).unwrap()
+        HostVec::from_array($host, &[$($host.convert($x).unwrap()),+]).unwrap()
     };
 }
 
@@ -43,19 +43,13 @@ pub(crate) fn generate_keypair() -> Keypair {
 }
 
 pub(crate) fn generate_bytes(host: &Host) -> BytesN<32> {
-    BytesN::<32>::try_from_val(
-        host,
-        host.bytes_new_from_slice(&generate_bytes_array()).unwrap(),
-    )
-    .unwrap()
+    host.convert(host.bytes_new_from_slice(&generate_bytes_array()).unwrap())
+        .unwrap()
 }
 
 pub(crate) fn signer_to_id_bytes(host: &Host, key: &Keypair) -> BytesN<32> {
-    BytesN::<32>::try_from_val(
-        host,
-        host.bytes_new_from_slice(&key.public.to_bytes()).unwrap(),
-    )
-    .unwrap()
+    host.convert(host.bytes_new_from_slice(&key.public.to_bytes()).unwrap())
+        .unwrap()
 }
 
 pub(crate) fn signer_to_account_id(host: &Host, key: &Keypair) -> AccountId {
@@ -114,13 +108,14 @@ pub(crate) fn sign_args(
     let msg = SignaturePayload::V0(SignaturePayloadV0 {
         name: Symbol::from_str(fn_name),
         contract: contract_id.clone(),
-        network: Bytes::try_from_val(host, host.get_ledger_network_passphrase().unwrap()).unwrap(),
+        network: host
+            .convert(host.get_ledger_network_passphrase().unwrap())
+            .unwrap(),
         args,
     });
-    let msg_bin = host
-        .serialize_to_bytes(msg.try_into_val(host).unwrap())
-        .unwrap();
-    let msg_bytes = Bytes::try_from_val(host, msg_bin).unwrap().to_vec();
+    let msg_bin = host.serialize_to_bytes(host.convert(msg).unwrap()).unwrap();
+    let msg_bytes: Bytes = host.convert(msg_bin).unwrap();
+    let msg_bytes = msg_bytes.to_vec();
     let payload = &msg_bytes[..];
 
     match signer {
@@ -132,7 +127,7 @@ pub(crate) fn sign_args(
             signatures: {
                 let mut signatures = HostVec::new(&host).unwrap();
                 for key in &account_signer.signers {
-                    signatures.push(sign_payload(host, key, payload)).unwrap();
+                    signatures.push(&sign_payload(host, key, payload)).unwrap();
                 }
                 signatures
             },
@@ -142,17 +137,17 @@ pub(crate) fn sign_args(
 
 fn sign_payload(host: &Host, signer: &Keypair, payload: &[u8]) -> Ed25519Signature {
     Ed25519Signature {
-        public_key: BytesN::<32>::try_from_val(
-            host,
-            host.bytes_new_from_slice(&signer.public.to_bytes())
-                .unwrap(),
-        )
-        .unwrap(),
-        signature: BytesN::<64>::try_from_val(
-            host,
-            host.bytes_new_from_slice(&signer.sign(payload).to_bytes())
-                .unwrap(),
-        )
-        .unwrap(),
+        public_key: host
+            .convert(
+                host.bytes_new_from_slice(&signer.public.to_bytes())
+                    .unwrap(),
+            )
+            .unwrap(),
+        signature: host
+            .convert(
+                host.bytes_new_from_slice(&signer.sign(payload).to_bytes())
+                    .unwrap(),
+            )
+            .unwrap(),
     }
 }

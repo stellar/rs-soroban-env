@@ -18,7 +18,7 @@ use crate::native_contract::token::public_types::{Identifier, Metadata, Signatur
 use crate::{err, HostError};
 
 use soroban_env_common::xdr::Asset;
-use soroban_env_common::{CheckedEnv, Compare, EnvBase, Symbol, TryFromVal, TryIntoVal};
+use soroban_env_common::{CheckedEnv, Compare, Convert, EnvBase, Symbol};
 use soroban_native_sdk_macros::contractimpl;
 
 use super::error::ContractError;
@@ -137,9 +137,9 @@ impl TokenTrait for Token {
 
         let asset: Asset = e.metered_from_xdr_obj(asset_bytes.into())?;
 
-        let curr_contract_id = BytesN::<32>::try_from_val(e, e.get_current_contract()?)?;
-        let expected_contract_id =
-            BytesN::<32>::try_from_val(e, e.get_contract_id_from_asset(asset.clone())?)?;
+        let curr_contract_id: BytesN<32> = e.convert(e.get_current_contract()?)?;
+        let expected_contract_id: BytesN<32> =
+            e.convert(e.get_contract_id_from_asset(asset.clone())?)?;
         if e.compare(&curr_contract_id, &expected_contract_id)? != Ordering::Equal {
             return Err(err!(
                 e,
@@ -162,10 +162,7 @@ impl TokenTrait for Token {
                 write_metadata(
                     &e,
                     Metadata::AlphaNum4(AlphaNum4Metadata {
-                        asset_code: BytesN::<4>::try_from_val(
-                            e,
-                            e.bytes_new_from_slice(&asset4.asset_code.0)?,
-                        )?,
+                        asset_code: e.convert(e.bytes_new_from_slice(&asset4.asset_code.0)?)?,
                         issuer: asset4.issuer,
                     }),
                 )?;
@@ -178,10 +175,7 @@ impl TokenTrait for Token {
                 write_metadata(
                     &e,
                     Metadata::AlphaNum12(AlphaNum12Metadata {
-                        asset_code: BytesN::<12>::try_from_val(
-                            e,
-                            e.bytes_new_from_slice(&asset12.asset_code.0)?,
-                        )?,
+                        asset_code: e.convert(e.bytes_new_from_slice(&asset12.asset_code.0)?)?,
                         issuer: asset12.issuer,
                     }),
                 )?;
@@ -222,10 +216,10 @@ impl TokenTrait for Token {
         check_nonnegative_amount(e, amount)?;
         let from_id = from.get_identifier(&e)?;
         let mut args = Vec::new(e)?;
-        args.push(from.get_identifier(&e)?)?;
-        args.push(nonce.clone())?;
-        args.push(spender.clone())?;
-        args.push(amount.clone())?;
+        args.push(&from.get_identifier(&e)?)?;
+        args.push(&nonce)?;
+        args.push(&spender)?;
+        args.push(&amount)?;
         check_auth(&e, from, nonce, Symbol::from_str("approve"), args)?;
         write_allowance(&e, from_id.clone(), spender.clone(), amount.clone())?;
         event::approve(e, from_id, spender, amount)?;
@@ -253,10 +247,10 @@ impl TokenTrait for Token {
         check_nonnegative_amount(e, amount)?;
         let from_id = from.get_identifier(&e)?;
         let mut args = Vec::new(e)?;
-        args.push(from.get_identifier(&e)?)?;
-        args.push(nonce.clone())?;
-        args.push(to.clone())?;
-        args.push(amount.clone())?;
+        args.push(&from.get_identifier(&e)?)?;
+        args.push(&nonce)?;
+        args.push(&to)?;
+        args.push(&amount)?;
         check_auth(&e, from, nonce, Symbol::from_str("xfer"), args)?;
         spend_balance(&e, from_id.clone(), amount.clone())?;
         receive_balance(&e, to.clone(), amount.clone())?;
@@ -276,11 +270,11 @@ impl TokenTrait for Token {
         check_nonnegative_amount(e, amount)?;
         let spender_id = spender.get_identifier(&e)?;
         let mut args = Vec::new(e)?;
-        args.push(spender.get_identifier(&e)?)?;
-        args.push(nonce.clone())?;
-        args.push(from.clone())?;
-        args.push(to.clone())?;
-        args.push(amount.clone())?;
+        args.push(&spender.get_identifier(&e)?)?;
+        args.push(&nonce)?;
+        args.push(&from)?;
+        args.push(&to)?;
+        args.push(&amount)?;
         check_auth(&e, spender, nonce, Symbol::from_str("xfer_from"), args)?;
         spend_allowance(&e, from.clone(), spender_id, amount.clone())?;
         spend_balance(&e, from.clone(), amount.clone())?;
@@ -301,10 +295,10 @@ impl TokenTrait for Token {
         check_admin(&e, &admin)?;
         let mut args = Vec::new(e)?;
         let admin_id = admin.get_identifier(&e)?;
-        args.push(admin_id.clone())?;
-        args.push(nonce.clone())?;
-        args.push(from.clone())?;
-        args.push(amount.clone())?;
+        args.push(&admin_id)?;
+        args.push(&nonce)?;
+        args.push(&from)?;
+        args.push(&amount)?;
         check_auth(&e, admin, nonce, Symbol::from_str("burn"), args)?;
         spend_balance(&e, from.clone(), amount.clone())?;
         event::burn(e, admin_id, from, amount)?;
@@ -316,9 +310,9 @@ impl TokenTrait for Token {
         check_admin(&e, &admin)?;
         let mut args = Vec::new(e)?;
         let admin_id = admin.get_identifier(&e)?;
-        args.push(admin_id.clone())?;
-        args.push(nonce.clone())?;
-        args.push(id.clone())?;
+        args.push(&admin_id)?;
+        args.push(&nonce)?;
+        args.push(&id)?;
         check_auth(&e, admin, nonce, Symbol::from_str("freeze"), args)?;
         write_state(&e, id.clone(), true)?;
         event::freeze(e, admin_id, id)?;
@@ -337,10 +331,10 @@ impl TokenTrait for Token {
         check_admin(&e, &admin)?;
         let mut args = Vec::new(e)?;
         let admin_id = admin.get_identifier(&e)?;
-        args.push(admin_id.clone())?;
-        args.push(nonce.clone())?;
-        args.push(to.clone())?;
-        args.push(amount.clone())?;
+        args.push(&admin_id)?;
+        args.push(&nonce)?;
+        args.push(&to)?;
+        args.push(&amount)?;
         check_auth(&e, admin, nonce, Symbol::from_str("mint"), args)?;
         receive_balance(&e, to.clone(), amount.clone())?;
         event::mint(e, admin_id, to, amount)?;
@@ -357,9 +351,9 @@ impl TokenTrait for Token {
         check_admin(&e, &admin)?;
         let mut args = Vec::new(e)?;
         let admin_id = admin.get_identifier(&e)?;
-        args.push(admin_id.clone())?;
-        args.push(nonce.clone())?;
-        args.push(new_admin.clone())?;
+        args.push(&admin_id)?;
+        args.push(&nonce)?;
+        args.push(&new_admin)?;
         check_auth(&e, admin, nonce, Symbol::from_str("set_admin"), args)?;
         write_administrator(&e, new_admin.clone())?;
         event::set_admin(e, admin_id, new_admin)?;
@@ -371,9 +365,9 @@ impl TokenTrait for Token {
         check_admin(&e, &admin)?;
         let mut args = Vec::new(e)?;
         let admin_id = admin.get_identifier(&e)?;
-        args.push(admin_id.clone())?;
-        args.push(nonce.clone())?;
-        args.push(id.clone())?;
+        args.push(&admin_id)?;
+        args.push(&nonce)?;
+        args.push(&id)?;
         check_auth(&e, admin, nonce, Symbol::from_str("unfreeze"), args)?;
         write_state(&e, id.clone(), false)?;
         event::unfreeze(e, admin_id, id)?;
@@ -401,9 +395,9 @@ impl TokenTrait for Token {
 
         let mut args = Vec::new(e)?;
         let ident = id.get_identifier(&e)?;
-        args.push(ident.clone())?;
-        args.push(nonce.clone())?;
-        args.push(amount.clone())?;
+        args.push(&ident)?;
+        args.push(&nonce)?;
+        args.push(&amount)?;
         check_auth(&e, id, nonce, Symbol::from_str("import"), args)?;
 
         transfer_classic_balance(e, account_id.metered_clone(e.budget_ref())?, -amount)?;
@@ -421,9 +415,9 @@ impl TokenTrait for Token {
 
         let mut args = Vec::new(e)?;
         let ident = id.get_identifier(&e)?;
-        args.push(ident.clone())?;
-        args.push(nonce.clone())?;
-        args.push(amount.clone())?;
+        args.push(&ident)?;
+        args.push(&nonce)?;
+        args.push(&amount)?;
         check_auth(&e, id, nonce, Symbol::from_str("export"), args)?;
 
         transfer_classic_balance(e, account_id.metered_clone(e.budget_ref())?, amount)?;

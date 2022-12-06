@@ -83,22 +83,3 @@ macro_rules! decl_tagged_val_wrapper_methods {
         }
     };
 }
-
-#[doc(hidden)]
-#[macro_export]
-macro_rules! impl_wrapper_from {
-    ($fromty:ty, $tagname:ident) => {
-        impl From<$fromty> for $tagname {
-            fn from(x: $fromty) -> Self {
-                Self(x.into())
-            }
-        }
-        impl<E: Env> $crate::TryFromVal<E, $tagname> for $fromty {
-            type Error = $crate::ConversionError;
-            #[inline(always)]
-            fn try_from_val(_env: &E, val: $tagname) -> Result<Self, Self::Error> {
-                Self::try_from(val.to_raw())
-            }
-        }
-    };
-}

@@ -1,4 +1,5 @@
-use crate::{ConversionError, Env, IntoVal, RawVal, Status, TryFromVal, TryIntoVal};
+/*
+use crate::{ConversionError, Env, RawVal, Status};
 
 impl<E: Env, T, R> TryFromVal<E, RawVal> for Result<T, R>
 where
@@ -63,3 +64,4 @@ where
         }
     }
 }
+*/

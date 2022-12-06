@@ -31,8 +31,9 @@ pub fn derive_contract_function_set<'a>(
             let func_call = quote! {
                 #discriminant_ident => {
                     if args.len() == #num_args {
-                        #(let #args: #arg_types = args.get(#arg_indices).cloned().ok_or(soroban_env_common::ConversionError)?.try_into_val(host)?;)*
-                        Ok(Self::#ident(host, #(#args,)*)?.try_into_val(host)?)
+                        #(let #args: #arg_types = host.convert_ref(args.get(#arg_indices).ok_or(soroban_env_common::ConversionError)?)?;)*
+                        let res = Self::#ident(host, #(#args,)*)?;
+                        Ok(host.convert(res)?)
                     } else {
                         Err(host.err_general("wrong number of args"))
                     }

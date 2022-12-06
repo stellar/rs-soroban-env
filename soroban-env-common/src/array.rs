@@ -1,12 +1,39 @@
-use crate::xdr::ScHostValErrorCode;
+use crate::{xdr::ScHostValErrorCode, Convert};
 use stellar_xdr::ScObjectType;
 
 use crate::{
-    ConversionError, Env, Object, RawVal, RawValConvertible, Status, TryFromVal, TryIntoVal,
+    ConversionError, Env, Object, RawVal, RawValConvertible, Status,
 };
 
 // TODO: these conversions happen as RawVal, but they actually take and produce
 // Objects; consider making the signatures tighter.
+
+impl<E:Env, const N: usize> Convert<RawVal,[u8;N]> for E {
+    type Error = Status;
+
+    fn convert_ref(&self, val: &RawVal) -> Result<[u8;N], Self::Error> {
+        if !Object::val_is_obj_type(*val, ScObjectType::Bytes) {
+            return Err(ScHostValErrorCode::UnexpectedValType.into());
+        }
+        let bytes = unsafe { Object::unchecked_from_val(*val) };
+        let len = unsafe { u32::unchecked_from_val(self.bytes_len(bytes)) };
+        if len as usize != N {
+            return Err(ConversionError.into());
+        }
+        let mut arr = [0u8; N];
+        self.bytes_copy_to_slice(bytes, RawVal::U32_ZERO, &mut arr)?;
+        Ok(arr)
+    }
+}
+
+impl<E:Env> Convert<&[u8],RawVal> for E {
+    type Error = Status;
+
+    fn convert_ref(&self, f: &&[u8]) -> Result<RawVal, Status> {
+        Ok(self.bytes_new_from_slice(*f)?.to_raw())
+    }
+}
+/*
 
 impl<E: Env, const N: usize> TryFromVal<E, RawVal> for [u8; N] {
     type Error = Status;
@@ -68,3 +95,5 @@ impl<E: Env> TryIntoVal<E, RawVal> for &Vec<u8> {
         self.as_slice().try_into_val(env)
     }
 }
+
+ */
