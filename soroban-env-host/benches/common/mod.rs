@@ -129,7 +129,9 @@ macro_rules! run_wasm_insn_measurement {
 run_wasm_insn_measurement!(
     WasmSelectMeasure,
     WasmBrMeasure,
+    WasmBrTableMeasure,
     WasmConstMeasure,
+    WasmDropMeasure,
     WasmLocalGetMeasure,
     WasmLocalSetMeasure,
     WasmLocalTeeMeasure,

@@ -154,10 +154,6 @@ impl FuncEmitter {
     pub fn i32_const(&mut self, i: i32) -> &mut Self {
         self.insn(&Instruction::I32Const(i))
     }
-    /// Emit an [`Instruction::Unreachable`]
-    pub fn trap(&mut self) -> &mut Self {
-        self.insn(&Instruction::Unreachable)
-    }
 
     /// Emit an [`Instruction::If`], call `t(self)`, then emit
     /// an [`Instruction::End`].
@@ -196,12 +192,9 @@ impl FuncEmitter {
         // common and useful, has to be done by bouncing off a local.
         self.local_tee(tmp).local_get(tmp)
     }
-    pub fn select(&mut self) -> &mut Self {
-        self.insn(&Instruction::Select)
-    }
-    /// Emit an [`Instruction::Drop`]
-    pub fn drop(&mut self) -> &mut Self {
-        self.insn(&Instruction::Drop)
+    /// Emit an [`Instruction::BrTable`]
+    pub fn br_table(&mut self, ls: &[u32], l: u32) -> &mut Self {
+        self.insn(&Instruction::BrTable(std::borrow::Cow::Borrowed(ls), l))
     }
     /// Emit an [`Instruction::MemoryGrow`]
     pub fn memory_grow(&mut self) -> &mut Self {
@@ -215,13 +208,9 @@ impl FuncEmitter {
     pub fn block(&mut self) -> &mut Self {
         self.insn(&Instruction::Block(BlockType::Empty))
     }
-    /// Emit an [`Instruction::End`]
-    pub fn end(&mut self) -> &mut Self {
-        self.insn(&Instruction::End)
-    }
     /// Emit an [`Instruction::Br`]
-    pub fn br(&mut self, loc: LocalRef) -> &mut Self {
-        self.insn(&Instruction::Br(loc.0))
+    pub fn br(&mut self, loc: u32) -> &mut Self {
+        self.insn(&Instruction::Br(loc))
     }
     /// Emit an [`Instruction::Call`]
     pub fn call_func(&mut self, fun: FuncRef) -> &mut Self {
@@ -250,6 +239,26 @@ impl FuncEmitter {
         me
     }
 }
+
+macro_rules! trivial_control_insn {
+    ( $(($func_name: ident, $insn: ident)),* )
+    =>
+    {
+        impl FuncEmitter {
+        $(
+            pub fn $func_name(&mut self) -> &mut Self {
+                self.insn(&Instruction::$insn)
+            }
+        )*}
+    };
+}
+trivial_control_insn!(
+    (drop, Drop),
+    (select, Select),
+    (end, End),
+    (ret, Return),
+    (trap, Unreachable)
+);
 
 macro_rules! variable_insn {
     ( $(($func_name: ident, $insn: ident, $ref: ty)),* )

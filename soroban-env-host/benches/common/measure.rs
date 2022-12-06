@@ -224,6 +224,10 @@ pub trait HostCostMeasurement: Sized {
     fn get_total_input(host: &Host, sample: &<Self::Runner as CostRunner>::SampleType) -> u64 {
         <Self::Runner as CostRunner>::get_total_input(host, sample)
     }
+
+    fn get_insns_overhead(_host: &Host, _sample: &<Self::Runner as CostRunner>::SampleType) -> u64 {
+        0
+    }
 }
 
 #[cfg(target_os = "linux")]
@@ -317,10 +321,11 @@ where
         cpu_insn_counter.begin();
         HCM::run(&host, mvec);
         // collect the metrics
-        let cpu_insns = cpu_insn_counter.end_and_count() / iterations;
+        let mut cpu_insns = cpu_insn_counter.end_and_count() / iterations;
         drop(alloc_guard);
         let stop = Instant::now();
         let input = HCM::get_total_input(&host, &sample) / iterations;
+        cpu_insns = cpu_insns - HCM::get_insns_overhead(&host, &sample);
         let mem_bytes = mem_tracker.0.load(Ordering::SeqCst) / iterations;
         let time_nsecs = stop.duration_since(start).as_nanos() as u64 / iterations;
         ret.push(Measurement {

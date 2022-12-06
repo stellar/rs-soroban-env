@@ -215,3 +215,103 @@ fn store_i64() {
         )"#]];
     expected.assert_eq(&printed);
 }
+
+#[test]
+fn br() {
+    let mut fe = ModEmitter::new().func(Arity(0), 0);
+    fe.block(); // 3
+    fe.block(); // 2
+    fe.block(); // 1
+    fe.block(); // 0
+    fe.br(0);
+    fe.end(); // 0
+    fe.br(0);
+    fe.end(); // 1
+    fe.br(0);
+    fe.end(); // 2
+    fe.br(0);
+    fe.end(); // 3
+    fe.push(Symbol::from_str("pass"));
+    let bytes = fe.finish_and_export("test").finish();
+    let printed = print_bytes(bytes).expect("wasmprinter");
+    // run `UPDATE_EXPECT=true cargo test` to update this.
+    let expected = expect![[r#"
+        (module
+          (type (;0;) (func (result i64)))
+          (func (;0;) (type 0) (result i64)
+            block  ;; label = @1
+              block  ;; label = @2
+                block  ;; label = @3
+                  block  ;; label = @4
+                    br 0 (;@4;)
+                  end
+                  br 0 (;@3;)
+                end
+                br 0 (;@2;)
+              end
+              br 0 (;@1;)
+            end
+            i64.const 224846729
+          )
+          (table (;0;) 128 funcref)
+          (memory (;0;) 1)
+          (global (;0;) (mut i64) i64.const 42)
+          (export "test" (func 0))
+        )"#]];
+    expected.assert_eq(&printed);
+}
+
+#[test]
+fn br_table() {
+    let mut fe = ModEmitter::new().func(Arity(0), 0);
+    fe.block(); // 3
+    fe.block(); // 2
+    fe.block(); // 1
+    fe.block(); // 0
+    fe.i32_const(10); // selector
+    fe.br_table(&[0, 1, 2, 3], 3);
+    fe.end(); // 0
+    fe.push(Symbol::from_str("a"));
+    fe.ret();
+    fe.end(); // 1
+    fe.push(Symbol::from_str("b"));
+    fe.ret();
+    fe.end(); // 2
+    fe.push(Symbol::from_str("c"));
+    fe.ret();
+    fe.end(); // 3
+    fe.push(Symbol::from_str("d"));
+    fe.ret();
+    let bytes = fe.finish_and_export("test").finish();
+    let printed = print_bytes(bytes).expect("wasmprinter");
+    // run `UPDATE_EXPECT=true cargo test` to update this.
+    let expected = expect![[r#"
+        (module
+          (type (;0;) (func (result i64)))
+          (func (;0;) (type 0) (result i64)
+            block  ;; label = @1
+              block  ;; label = @2
+                block  ;; label = @3
+                  block  ;; label = @4
+                    i32.const 10
+                    br_table 0 (;@4;) 1 (;@3;) 2 (;@2;) 3 (;@1;) 3 (;@1;)
+                  end
+                  i64.const 617
+                  return
+                end
+                i64.const 633
+                return
+              end
+              i64.const 649
+              return
+            end
+            i64.const 665
+            return
+          )
+          (table (;0;) 128 funcref)
+          (memory (;0;) 1)
+          (global (;0;) (mut i64) i64.const 42)
+          (export "test" (func 0))
+        )"#]];
+    expected.assert_eq(&printed);
+}

@@ -120,8 +120,9 @@ impl WasmInsnType {
 
 #[derive(Clone)]
 pub struct WasmInsnSample {
-    pub insns: u64,
     pub vm: Rc<Vm>,
+    pub insns: u64,
+    pub overhead: u64,
 }
 
 #[derive(Clone)]
@@ -175,19 +176,24 @@ macro_rules! impl_wasm_insn_runner {
             const COST_TYPE: CostType = CostType::WasmInsnExec;
 
             fn run_iter(host: &crate::Host, _iter: u64, sample: WasmInsnSample) {
-                sample.vm.invoke_function_raw(host, "test", &[]).unwrap();
+                sample
+                    .vm
+                    .invoke_function_raw(host, "test", &[])
+                    .unwrap_or_default();
             }
 
             fn get_total_input(_host: &crate::Host, sample: &WasmInsnSample) -> u64 {
-                (sample.insns as u64) * Self::RUN_ITERATIONS
+                sample.insns * Self::RUN_ITERATIONS
             }
         }
     };
 }
 
+impl_wasm_insn_runner!(ConstRun, Const);
+impl_wasm_insn_runner!(DropRun, Drop);
 impl_wasm_insn_runner!(SelectRun, Select);
 impl_wasm_insn_runner!(BrRun, Br);
-impl_wasm_insn_runner!(ConstRun, Const);
+impl_wasm_insn_runner!(BrTableRun, BrTable);
 impl_wasm_insn_runner!(LocalGetRun, LocalGet);
 impl_wasm_insn_runner!(LocalSetRun, LocalSet);
 impl_wasm_insn_runner!(LocalTeeRun, LocalTee);
