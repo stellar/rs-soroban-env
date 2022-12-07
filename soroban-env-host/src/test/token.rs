@@ -20,6 +20,7 @@ use crate::{
 };
 use ed25519_dalek::Keypair;
 use soroban_env_common::{
+    try_convert_to,
     xdr::{
         AccountEntry, AccountEntryExt, AccountEntryExtensionV1, AccountEntryExtensionV1Ext,
         AccountEntryExtensionV2, AccountEntryExtensionV2Ext, AccountId, AlphaNum12, AlphaNum4,
@@ -29,7 +30,7 @@ use soroban_env_common::{
     },
     RawVal,
 };
-use soroban_env_common::{CheckedEnv, EnvBase, Symbol, TryFromVal, TryIntoVal};
+use soroban_env_common::{CheckedEnv, EnvBase, Symbol, TryIntoVal};
 
 use crate::native_contract::base_types::{Bytes, BytesN};
 
@@ -231,7 +232,11 @@ impl TokenTest {
     }
 
     fn convert_bytes(&self, bytes: &[u8]) -> Bytes {
-        Bytes::try_from_val(&self.host, self.host.bytes_new_from_slice(bytes).unwrap()).unwrap()
+        self.host
+            .bytes_new_from_slice(bytes)
+            .unwrap()
+            .try_into_val(&self.host)
+            .unwrap()
     }
 
     fn run_from_contract<T, F>(
@@ -396,9 +401,9 @@ fn test_native_token_smart_roundtrip() {
         None,
     );
     let token = TestToken::new_from_asset(&test.host, Asset::Native);
-    let expected_token_id = BytesN::<32>::try_from_val(
-        &test.host,
+    let expected_token_id = try_convert_to::<BytesN<32>, _, _>(
         test.host.get_contract_id_from_asset(Asset::Native).unwrap(),
+        &test.host,
     )
     .unwrap();
 
@@ -540,9 +545,9 @@ fn test_classic_asset_roundtrip(asset_code: &[u8]) {
         })
     };
     let token = TestToken::new_from_asset(&test.host, asset.clone());
-    let expected_token_id = BytesN::<32>::try_from_val(
-        &test.host,
+    let expected_token_id = try_convert_to::<BytesN<32>, _, _>(
         test.host.get_contract_id_from_asset(asset).unwrap(),
+        &test.host,
     )
     .unwrap();
     assert_eq!(token.id.to_vec(), expected_token_id.to_vec());

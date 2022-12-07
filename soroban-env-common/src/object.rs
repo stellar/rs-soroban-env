@@ -1,6 +1,4 @@
-use crate::{
-    impl_wrapper_common, xdr::ScObjectType, Convert, Env, RawVal, Tag, TryFromVal, TryIntoVal,
-};
+use crate::{impl_wrapper_common, xdr::ScObjectType, Convert, Env, RawVal, Tag, TryIntoVal};
 use core::fmt::Debug;
 use stellar_xdr::{ScObject, ScVal};
 
@@ -52,16 +50,6 @@ impl Object {
     }
 }
 
-impl<E> TryFromVal<E, Object> for ScObject
-where
-    E: Env + Convert<Object, ScObject>,
-{
-    type Error = E::Error;
-    fn try_from_val(env: &E, val: Object) -> Result<Self, Self::Error> {
-        env.convert(val)
-    }
-}
-
 impl<'a, E> TryIntoVal<E, Object> for &'a ScObject
 where
     E: Env + Convert<&'a ScObject, Object>,
@@ -78,6 +66,16 @@ where
 {
     type Error = E::Error;
     fn try_into_val(self, env: &E) -> Result<Object, Self::Error> {
+        env.convert(self)
+    }
+}
+
+impl<E> TryIntoVal<E, ScObject> for Object
+where
+    E: Env + Convert<Object, ScObject>,
+{
+    type Error = E::Error;
+    fn try_into_val(self, env: &E) -> Result<ScObject, Self::Error> {
         env.convert(self)
     }
 }

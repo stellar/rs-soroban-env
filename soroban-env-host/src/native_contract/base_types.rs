@@ -3,7 +3,7 @@ use crate::host::{Host, HostError};
 use core::cmp::Ordering;
 use soroban_env_common::xdr::{AccountId, ScObjectType};
 use soroban_env_common::{
-    CheckedEnv, Compare, ConversionError, EnvBase, Object, RawVal, TryFromVal, TryIntoVal,
+    try_convert_to, CheckedEnv, Compare, ConversionError, EnvBase, Object, RawVal, TryIntoVal,
 };
 
 #[derive(Clone)]
@@ -20,14 +20,14 @@ impl Compare<Bytes> for Host {
     }
 }
 
-impl TryFromVal<Host, Object> for Bytes {
+impl TryIntoVal<Host, Bytes> for Object {
     type Error = HostError;
 
-    fn try_from_val(env: &Host, val: Object) -> Result<Self, Self::Error> {
-        if val.is_obj_type(ScObjectType::Bytes) {
+    fn try_into_val(self, env: &Host) -> Result<Bytes, Self::Error> {
+        if self.is_obj_type(ScObjectType::Bytes) {
             Ok(Bytes {
                 host: env.clone(),
-                object: val,
+                object: self,
             })
         } else {
             Err(ConversionError.into())
@@ -35,19 +35,11 @@ impl TryFromVal<Host, Object> for Bytes {
     }
 }
 
-impl TryFromVal<Host, RawVal> for Bytes {
-    type Error = HostError;
-
-    fn try_from_val(env: &Host, val: RawVal) -> Result<Self, Self::Error> {
-        <_ as TryFromVal<_, Object>>::try_from_val(env, val.try_into()?)
-    }
-}
-
 impl TryIntoVal<Host, Bytes> for RawVal {
     type Error = HostError;
 
     fn try_into_val(self, env: &Host) -> Result<Bytes, Self::Error> {
-        <_ as TryFromVal<_, RawVal>>::try_from_val(env, self.try_into()?)
+        try_convert_to::<Object, _, _>(self, env)?.try_into_val(env)
     }
 }
 
@@ -109,25 +101,6 @@ pub struct BytesN<const N: usize> {
     object: Object,
 }
 
-impl<const N: usize> TryFromVal<Host, Object> for BytesN<N> {
-    type Error = HostError;
-
-    fn try_from_val(env: &Host, val: Object) -> Result<Self, Self::Error> {
-        let len: u32 = env.bytes_len(val)?.try_into()?;
-        if len
-            == N.try_into()
-                .map_err(|_| env.err_general("bytes buffer overflow"))?
-        {
-            Ok(Self {
-                host: env.clone(),
-                object: val,
-            })
-        } else {
-            Err(ConversionError.into())
-        }
-    }
-}
-
 impl<const N: usize> Compare<BytesN<N>> for Host {
     type Error = HostError;
 
@@ -136,11 +109,22 @@ impl<const N: usize> Compare<BytesN<N>> for Host {
     }
 }
 
-impl<const N: usize> TryFromVal<Host, RawVal> for BytesN<N> {
+impl<const N: usize> TryIntoVal<Host, BytesN<N>> for Object {
     type Error = HostError;
 
-    fn try_from_val(env: &Host, val: RawVal) -> Result<Self, Self::Error> {
-        <_ as TryFromVal<_, Object>>::try_from_val(env, val.try_into()?)
+    fn try_into_val(self: Object, env: &Host) -> Result<BytesN<N>, Self::Error> {
+        let len: u32 = env.bytes_len(self)?.try_into()?;
+        if len
+            == N.try_into()
+                .map_err(|_| env.err_general("bytes buffer overflow"))?
+        {
+            Ok(BytesN {
+                host: env.clone(),
+                object: self,
+            })
+        } else {
+            Err(ConversionError.into())
+        }
     }
 }
 
@@ -148,7 +132,7 @@ impl<const N: usize> TryIntoVal<Host, BytesN<N>> for RawVal {
     type Error = HostError;
 
     fn try_into_val(self, env: &Host) -> Result<BytesN<N>, Self::Error> {
-        <_ as TryFromVal<_, RawVal>>::try_from_val(env, self.try_into()?)
+        try_convert_to::<Object, _, _>(self, env)?.try_into_val(env)
     }
 }
 
@@ -203,21 +187,6 @@ pub struct Map {
     object: Object,
 }
 
-impl TryFromVal<Host, Object> for Map {
-    type Error = HostError;
-
-    fn try_from_val(env: &Host, val: Object) -> Result<Self, Self::Error> {
-        if val.is_obj_type(ScObjectType::Map) {
-            Ok(Map {
-                host: env.clone(),
-                object: val,
-            })
-        } else {
-            Err(ConversionError.into())
-        }
-    }
-}
-
 impl Compare<Map> for Host {
     type Error = HostError;
 
@@ -226,11 +195,18 @@ impl Compare<Map> for Host {
     }
 }
 
-impl TryFromVal<Host, RawVal> for Map {
+impl TryIntoVal<Host, Map> for Object {
     type Error = HostError;
 
-    fn try_from_val(env: &Host, val: RawVal) -> Result<Self, Self::Error> {
-        <_ as TryFromVal<_, Object>>::try_from_val(env, val.try_into()?)
+    fn try_into_val(self, env: &Host) -> Result<Map, Self::Error> {
+        if self.is_obj_type(ScObjectType::Map) {
+            Ok(Map {
+                host: env.clone(),
+                object: self,
+            })
+        } else {
+            Err(ConversionError.into())
+        }
     }
 }
 
@@ -238,7 +214,7 @@ impl TryIntoVal<Host, Map> for RawVal {
     type Error = HostError;
 
     fn try_into_val(self, env: &Host) -> Result<Map, Self::Error> {
-        <_ as TryFromVal<_, RawVal>>::try_from_val(env, self.try_into()?)
+        try_convert_to::<Object, _, _>(self, env)?.try_into_val(env)
     }
 }
 
@@ -265,25 +241,22 @@ impl Map {
         })
     }
 
-    pub fn get<K: TryIntoVal<Host, RawVal>, V: TryFromVal<Host, RawVal>>(
-        &self,
-        k: K,
-    ) -> Result<V, HostError>
+    pub fn get<K, V>(&self, k: K) -> Result<V, HostError>
     where
+        K: TryIntoVal<Host, RawVal>,
+        RawVal: TryIntoVal<Host, V>,
         HostError: From<<K as TryIntoVal<Host, RawVal>>::Error>,
-        HostError: From<<V as TryFromVal<Host, RawVal>>::Error>,
+        HostError: From<<RawVal as TryIntoVal<Host, V>>::Error>,
     {
         let k_rv = k.try_into_val(&self.host)?;
         let v_rv = self.host.map_get(self.object, k_rv)?;
-        Ok(V::try_from_val(&self.host, v_rv)?)
+        Ok(try_convert_to::<V, _, _>(v_rv, &self.host)?)
     }
 
-    pub fn set<K: TryIntoVal<Host, RawVal>, V: TryIntoVal<Host, RawVal>>(
-        &mut self,
-        k: K,
-        v: V,
-    ) -> Result<(), HostError>
+    pub fn set<K, V>(&mut self, k: K, v: V) -> Result<(), HostError>
     where
+        K: TryIntoVal<Host, RawVal>,
+        V: TryIntoVal<Host, RawVal>,
         HostError: From<<K as TryIntoVal<Host, RawVal>>::Error>,
         HostError: From<<V as TryIntoVal<Host, RawVal>>::Error>,
     {
@@ -308,14 +281,14 @@ impl Compare<Vec> for Host {
     }
 }
 
-impl TryFromVal<Host, Object> for Vec {
+impl TryIntoVal<Host, Vec> for Object {
     type Error = HostError;
 
-    fn try_from_val(env: &Host, val: Object) -> Result<Self, Self::Error> {
-        if val.is_obj_type(ScObjectType::Vec) {
+    fn try_into_val(self, env: &Host) -> Result<Vec, Self::Error> {
+        if self.is_obj_type(ScObjectType::Vec) {
             Ok(Vec {
                 host: env.clone(),
-                object: val,
+                object: self,
             })
         } else {
             Err(ConversionError.into())
@@ -323,19 +296,11 @@ impl TryFromVal<Host, Object> for Vec {
     }
 }
 
-impl TryFromVal<Host, RawVal> for Vec {
-    type Error = HostError;
-
-    fn try_from_val(env: &Host, val: RawVal) -> Result<Self, Self::Error> {
-        <_ as TryFromVal<_, Object>>::try_from_val(env, val.try_into()?)
-    }
-}
-
 impl TryIntoVal<Host, Vec> for RawVal {
     type Error = HostError;
 
     fn try_into_val(self, env: &Host) -> Result<Vec, Self::Error> {
-        <_ as TryFromVal<_, RawVal>>::try_from_val(env, self.try_into()?)
+        try_convert_to::<Object, _, _>(self, env)?.try_into_val(env)
     }
 }
 
@@ -362,17 +327,18 @@ impl Vec {
         })
     }
 
-    pub fn get<T: TryFromVal<Host, RawVal>>(&self, i: u32) -> Result<T, HostError>
+    pub fn get<T>(&self, i: u32) -> Result<T, HostError>
     where
-        HostError: From<<T as TryFromVal<Host, RawVal>>::Error>,
+        RawVal: TryIntoVal<Host, T>,
+        HostError: From<<RawVal as TryIntoVal<Host, T>>::Error>,
     {
         let rv = self.host.vec_get(self.object, i.into())?;
-        Ok(T::try_from_val(&self.host, rv)?)
+        Ok(try_convert_to::<T, _, _>(rv, &self.host)?)
     }
 
     pub fn len(&self) -> Result<u32, HostError> {
         let rv = self.host.vec_len(self.object)?;
-        Ok(u32::try_from_val(&self.host, rv)?)
+        Ok(try_convert_to::<u32, _, _>(rv, &self.host)?)
     }
 
     pub fn push<T: TryIntoVal<Host, RawVal>>(&mut self, x: T) -> Result<(), HostError>
@@ -389,19 +355,19 @@ impl Vec {
     }
 }
 
-impl TryFromVal<Host, Object> for AccountId {
+impl TryIntoVal<Host, AccountId> for Object {
     type Error = HostError;
 
-    fn try_from_val(env: &Host, val: Object) -> Result<Self, Self::Error> {
-        env.visit_obj(val, |acc: &AccountId| Ok(acc.clone()))
+    fn try_into_val(self, env: &Host) -> Result<AccountId, Self::Error> {
+        env.visit_obj(self, |acc: &AccountId| Ok(acc.clone()))
     }
 }
 
-impl TryFromVal<Host, RawVal> for AccountId {
+impl TryIntoVal<Host, AccountId> for RawVal {
     type Error = HostError;
 
-    fn try_from_val(env: &Host, val: RawVal) -> Result<Self, Self::Error> {
-        <_ as TryFromVal<_, Object>>::try_from_val(env, val.try_into()?)
+    fn try_into_val(self, env: &Host) -> Result<AccountId, Self::Error> {
+        try_convert_to::<Object, _, _>(self, env)?.try_into_val(env)
     }
 }
 

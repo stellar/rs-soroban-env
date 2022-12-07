@@ -1,8 +1,6 @@
 use stellar_xdr::{ScStatic, ScStatus, ScStatusType};
 
-use super::{
-    BitSet, Env, FromVal, IntoVal, Object, Static, Status, Symbol, TryFromVal, TryIntoVal,
-};
+use super::{BitSet, Env, IntoVal, Object, Static, Status, Symbol, TryIntoVal};
 use core::{convert::Infallible, fmt::Debug};
 
 extern crate static_assertions as sa;
@@ -120,32 +118,6 @@ impl AsMut<RawVal> for RawVal {
     }
 }
 
-impl<E: Env> FromVal<E, RawVal> for RawVal {
-    fn from_val(_env: &E, val: RawVal) -> Self {
-        val
-    }
-}
-
-impl<E: Env> FromVal<E, &RawVal> for RawVal {
-    fn from_val(_env: &E, val: &RawVal) -> Self {
-        *val
-    }
-}
-
-impl<E: Env> TryFromVal<E, RawVal> for RawVal {
-    type Error = Infallible;
-    fn try_from_val(_env: &E, val: RawVal) -> Result<Self, Self::Error> {
-        Ok(val)
-    }
-}
-
-impl<E: Env> TryFromVal<E, &RawVal> for RawVal {
-    type Error = Infallible;
-    fn try_from_val(_env: &E, val: &RawVal) -> Result<Self, Self::Error> {
-        Ok(*val)
-    }
-}
-
 impl<E: Env> IntoVal<E, RawVal> for RawVal {
     fn into_val(self, _env: &E) -> RawVal {
         self
@@ -260,13 +232,6 @@ macro_rules! declare_tryfrom {
                 (*self).into()
             }
         }
-        impl<E: Env> TryFromVal<E, RawVal> for $T {
-            type Error = ConversionError;
-            #[inline(always)]
-            fn try_from_val(_env: &E, val: RawVal) -> Result<Self, Self::Error> {
-                Self::try_from(val)
-            }
-        }
         impl<E: Env> TryIntoVal<E, RawVal> for $T {
             type Error = ConversionError;
             fn try_into_val(self, _env: &E) -> Result<RawVal, Self::Error> {
@@ -275,8 +240,8 @@ macro_rules! declare_tryfrom {
         }
         impl<E: Env> TryIntoVal<E, $T> for RawVal {
             type Error = ConversionError;
-            fn try_into_val(self, env: &E) -> Result<$T, Self::Error> {
-                <_ as TryFromVal<E, RawVal>>::try_from_val(&env, self)
+            fn try_into_val(self, _env: &E) -> Result<$T, Self::Error> {
+                Ok(self.try_into()?)
             }
         }
     };

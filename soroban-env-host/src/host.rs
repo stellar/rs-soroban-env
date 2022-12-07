@@ -8,6 +8,7 @@ use std::rc::Rc;
 
 use sha2::{Digest, Sha256};
 use soroban_env_common::{
+    try_convert_to,
     xdr::{
         AccountId, Asset, ContractCodeEntry, ContractDataEntry, ContractEvent, ContractEventBody,
         ContractEventType, ContractEventV0, ContractId, CreateContractArgs, ExtensionPoint, Hash,
@@ -17,7 +18,7 @@ use soroban_env_common::{
         ScHostValErrorCode, ScMap, ScMapEntry, ScObject, ScStatusType, ScVal, ScVec,
         ThresholdIndexes,
     },
-    Convert, InvokerType, Status, TryFromVal, TryIntoVal, VmCaller, VmCallerCheckedEnv,
+    Convert, InvokerType, Status, TryIntoVal, VmCaller, VmCallerCheckedEnv,
 };
 
 use crate::budget::{AsBudget, Budget, CostType};
@@ -534,7 +535,7 @@ impl Host {
         // For an `Object`, the actual structural conversion (such as byte
         // cloning) occurs in `from_host_obj` and is metered there.
         self.charge_budget(CostType::ValXdrConv, 1)?;
-        ScVal::try_from_val(self, val)
+        try_convert_to::<ScVal, _, _>(val, self)
             .map_err(|_| self.err_status(ScHostValErrorCode::UnknownError))
     }
 

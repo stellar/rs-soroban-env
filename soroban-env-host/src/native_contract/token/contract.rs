@@ -18,7 +18,7 @@ use crate::native_contract::token::public_types::{Identifier, Metadata, Signatur
 use crate::{err, HostError};
 
 use soroban_env_common::xdr::Asset;
-use soroban_env_common::{CheckedEnv, Compare, EnvBase, Symbol, TryFromVal, TryIntoVal};
+use soroban_env_common::{try_convert_to, CheckedEnv, Compare, EnvBase, Symbol, TryIntoVal};
 use soroban_native_sdk_macros::contractimpl;
 
 use super::error::ContractError;
@@ -137,9 +137,9 @@ impl TokenTrait for Token {
 
         let asset: Asset = e.metered_from_xdr_obj(asset_bytes.into())?;
 
-        let curr_contract_id = BytesN::<32>::try_from_val(e, e.get_current_contract()?)?;
+        let curr_contract_id = try_convert_to::<BytesN<32>, _, _>(e.get_current_contract()?, e)?;
         let expected_contract_id =
-            BytesN::<32>::try_from_val(e, e.get_contract_id_from_asset(asset.clone())?)?;
+            try_convert_to::<BytesN<32>, _, _>(e.get_contract_id_from_asset(asset.clone())?, e)?;
         if e.compare(&curr_contract_id, &expected_contract_id)? != Ordering::Equal {
             return Err(err!(
                 e,
@@ -162,10 +162,9 @@ impl TokenTrait for Token {
                 write_metadata(
                     &e,
                     Metadata::AlphaNum4(AlphaNum4Metadata {
-                        asset_code: BytesN::<4>::try_from_val(
-                            e,
-                            e.bytes_new_from_slice(&asset4.asset_code.0)?,
-                        )?,
+                        asset_code: e
+                            .bytes_new_from_slice(&asset4.asset_code.0)?
+                            .try_into_val(e)?,
                         issuer: asset4.issuer,
                     }),
                 )?;
@@ -178,10 +177,9 @@ impl TokenTrait for Token {
                 write_metadata(
                     &e,
                     Metadata::AlphaNum12(AlphaNum12Metadata {
-                        asset_code: BytesN::<12>::try_from_val(
-                            e,
-                            e.bytes_new_from_slice(&asset12.asset_code.0)?,
-                        )?,
+                        asset_code: e
+                            .bytes_new_from_slice(&asset12.asset_code.0)?
+                            .try_into_val(e)?,
                         issuer: asset12.issuer,
                     }),
                 )?;
