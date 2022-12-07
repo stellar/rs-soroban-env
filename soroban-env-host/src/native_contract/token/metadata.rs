@@ -2,7 +2,7 @@ use crate::native_contract::base_types::Bytes;
 use crate::native_contract::token::public_types::Metadata;
 use crate::native_contract::token::storage_types::DataKey;
 use crate::{host::Host, HostError};
-use soroban_env_common::{CheckedEnv, EnvBase, TryFromVal, TryIntoVal};
+use soroban_env_common::{try_convert_to, CheckedEnv, EnvBase, TryIntoVal};
 
 // Metering: *mostly* covered by components.
 pub fn write_metadata(e: &Host, metadata: Metadata) -> Result<(), HostError> {
@@ -28,14 +28,14 @@ pub fn has_metadata(e: &Host) -> Result<bool, HostError> {
 // Metering: *mostly* covered by components. `bytes_new_from_slice` and `Bytes` not covered.
 pub fn read_name(e: &Host) -> Result<Bytes, HostError> {
     match read_metadata(e)? {
-        Metadata::Native => Ok(Bytes::try_from_val(e, e.bytes_new_from_slice(b"native")?)?),
+        Metadata::Native => Ok(e.bytes_new_from_slice(b"native")?.try_into_val(e)?),
         Metadata::AlphaNum4(asset) => {
             let mut res: Bytes = asset.asset_code.into();
             res.push(b':')?;
             let issuer_id = e.to_u256_from_account(&asset.issuer)?;
-            res.append(Bytes::try_from_val(
-                e,
+            res.append(try_convert_to::<Bytes, _, _>(
                 e.bytes_new_from_slice(&issuer_id.0)?,
+                e,
             )?)?;
             Ok(res)
         }
@@ -43,9 +43,9 @@ pub fn read_name(e: &Host) -> Result<Bytes, HostError> {
             let mut res: Bytes = asset.asset_code.into();
             res.push(b':')?;
             let issuer_id = e.to_u256_from_account(&asset.issuer)?;
-            res.append(Bytes::try_from_val(
-                e,
+            res.append(try_convert_to::<Bytes, _, _>(
                 e.bytes_new_from_slice(&issuer_id.0)?,
+                e,
             )?)?;
             Ok(res)
         }
@@ -55,7 +55,7 @@ pub fn read_name(e: &Host) -> Result<Bytes, HostError> {
 // Metering: *mostly* covered by components.`bytes_new_from_slice` and `Bytes` not covered.
 pub fn read_symbol(e: &Host) -> Result<Bytes, HostError> {
     match read_metadata(e)? {
-        Metadata::Native => Ok(Bytes::try_from_val(e, e.bytes_new_from_slice(b"native")?)?),
+        Metadata::Native => Ok(e.bytes_new_from_slice(b"native")?.try_into_val(e)?),
         Metadata::AlphaNum4(asset) => Ok(asset.asset_code.into()),
         Metadata::AlphaNum12(asset) => Ok(asset.asset_code.into()),
     }

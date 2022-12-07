@@ -7,7 +7,7 @@ use soroban_env_common::{
     xdr::{Asset, ContractId, CreateContractArgs, HostFunction, ScContractCode},
     CheckedEnv, RawVal,
 };
-use soroban_env_common::{Symbol, TryFromVal, TryIntoVal};
+use soroban_env_common::{Symbol, TryIntoVal};
 
 use crate::native_contract::base_types::{Bytes, BytesN};
 
@@ -29,7 +29,7 @@ impl<'a> TestToken<'a> {
             .try_into_val(host)
             .unwrap();
         Self {
-            id: BytesN::<32>::try_from_val(host, id_obj).unwrap(),
+            id: id_obj.try_into_val(host).unwrap(),
             host,
         }
     }

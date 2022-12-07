@@ -21,15 +21,6 @@ pub trait TryIntoVal<E: Env, V>: Sized {
     fn try_into_val(self, env: &E) -> Result<V, Self::Error>;
 }
 
-pub trait FromVal<E: Env, V>: Sized {
-    fn from_val(env: &E, v: V) -> Self;
-}
-
-pub trait TryFromVal<E: Env, V>: Sized {
-    type Error;
-    fn try_from_val(env: &E, v: V) -> Result<Self, Self::Error>;
-}
-
 pub(crate) fn log_err_convert<T>(env: &impl Env, val: &impl AsRef<RawVal>) {
     // Logging here is best-effort; ignore failures (they only arise if we're
     // out of gas or something otherwise-unrecoverable).
@@ -38,22 +29,6 @@ pub(crate) fn log_err_convert<T>(env: &impl Env, val: &impl AsRef<RawVal>) {
         *val.as_ref(),
         core::any::type_name::<T>(),
     );
-}
-
-impl<E: Env> TryFromVal<E, RawVal> for i64 {
-    type Error = ConversionError;
-
-    fn try_from_val(env: &E, val: RawVal) -> Result<Self, Self::Error> {
-        if val.is_u63() {
-            Ok(unsafe { val.unchecked_as_u63() })
-        } else if Object::val_is_obj_type(val, ScObjectType::I64) {
-            let obj = unsafe { Object::unchecked_from_val(val) };
-            Ok(env.obj_to_i64(obj))
-        } else {
-            log_err_convert::<i64>(env, &val);
-            Err(ConversionError)
-        }
-    }
 }
 
 impl<E: Env> IntoVal<E, RawVal> for i64 {
@@ -80,21 +55,15 @@ impl<E: Env> TryIntoVal<E, RawVal> for i64 {
 }
 
 impl<E: Env> TryIntoVal<E, i64> for RawVal {
-    type Error = <i64 as TryFromVal<E, RawVal>>::Error;
-    fn try_into_val(self, env: &E) -> Result<i64, Self::Error> {
-        <_ as TryFromVal<_, _>>::try_from_val(env, self)
-    }
-}
-
-impl<E: Env> TryFromVal<E, RawVal> for u64 {
     type Error = ConversionError;
-
-    fn try_from_val(env: &E, val: RawVal) -> Result<Self, Self::Error> {
-        if Object::val_is_obj_type(val, ScObjectType::U64) {
-            let obj = unsafe { Object::unchecked_from_val(val) };
-            Ok(env.obj_to_u64(obj))
+    fn try_into_val(self, env: &E) -> Result<i64, Self::Error> {
+        if self.is_u63() {
+            Ok(unsafe { self.unchecked_as_u63() })
+        } else if Object::val_is_obj_type(self, ScObjectType::I64) {
+            let obj = unsafe { Object::unchecked_from_val(self) };
+            Ok(env.obj_to_i64(obj))
         } else {
-            log_err_convert::<u64>(env, &val);
+            log_err_convert::<i64>(env, &self);
             Err(ConversionError)
         }
     }
@@ -120,9 +89,15 @@ impl<E: Env> TryIntoVal<E, RawVal> for u64 {
 }
 
 impl<E: Env> TryIntoVal<E, u64> for RawVal {
-    type Error = <u64 as TryFromVal<E, RawVal>>::Error;
+    type Error = ConversionError;
     fn try_into_val(self, env: &E) -> Result<u64, Self::Error> {
-        <_ as TryFromVal<_, _>>::try_from_val(env, self)
+        if Object::val_is_obj_type(self, ScObjectType::U64) {
+            let obj = unsafe { Object::unchecked_from_val(self) };
+            Ok(env.obj_to_u64(obj))
+        } else {
+            log_err_convert::<u64>(env, &self);
+            Err(ConversionError)
+        }
     }
 }
 
@@ -173,7 +148,7 @@ macro_rules! decl_int128_conversions {
         impl<E: Env> TryIntoVal<E, $T> for RawVal {
             type Error = ConversionError;
             fn try_into_val(self, env: &E) -> Result<$T, Self::Error> {
-                let ob: Object = self.try_into_val(env)?;
+                let ob: Object = <RawVal as TryIntoVal<E, Object>>::try_into_val(self, env)?;
                 <Object as TryIntoVal<E, $T>>::try_into_val(ob, env)
             }
         }
@@ -220,21 +195,6 @@ macro_rules! decl_int128_conversions {
                 Ok(<Self as IntoVal<E, Object>>::into_val(self, env).into())
             }
         }
-        // TryFrom impls delegate to TryInto impls the other direction
-        impl<E: Env> TryFromVal<E, RawVal> for $T {
-            type Error = ConversionError;
-
-            fn try_from_val(env: &E, val: RawVal) -> Result<Self, Self::Error> {
-                <RawVal as TryIntoVal<E, $T>>::try_into_val(val, env)
-            }
-        }
-        impl<E: Env> TryFromVal<E, Object> for $T {
-            type Error = ConversionError;
-
-            fn try_from_val(env: &E, val: Object) -> Result<Self, Self::Error> {
-                <Object as TryIntoVal<E, $T>>::try_into_val(val, env)
-            }
-        }
     };
 }
 
@@ -242,26 +202,26 @@ decl_int128_conversions!(u128);
 decl_int128_conversions!(i128);
 
 #[cfg(feature = "std")]
-impl<E: Env> TryFromVal<E, RawVal> for ScVal
+impl<E: Env> TryIntoVal<E, ScVal> for RawVal
 where
-    ScObject: TryFromVal<E, Object>,
+    Object: TryIntoVal<E, ScObject>,
 {
     type Error = ConversionError;
 
-    fn try_from_val(env: &E, val: RawVal) -> Result<Self, Self::Error> {
-        if val.is_u63() {
-            Ok(ScVal::U63(unsafe { val.unchecked_as_u63() }))
+    fn try_into_val(self, env: &E) -> Result<ScVal, Self::Error> {
+        if self.is_u63() {
+            Ok(ScVal::U63(unsafe { self.unchecked_as_u63() }))
         } else {
-            match val.get_tag() {
+            match self.get_tag() {
                 Tag::U32 => Ok(ScVal::U32(unsafe {
-                    <u32 as RawValConvertible>::unchecked_from_val(val)
+                    <u32 as RawValConvertible>::unchecked_from_val(self)
                 })),
                 Tag::I32 => Ok(ScVal::I32(unsafe {
-                    <i32 as RawValConvertible>::unchecked_from_val(val)
+                    <i32 as RawValConvertible>::unchecked_from_val(self)
                 })),
                 Tag::Static => {
                     let tag_static =
-                        unsafe { <Static as RawValConvertible>::unchecked_from_val(val) };
+                        unsafe { <Static as RawValConvertible>::unchecked_from_val(self) };
                     if tag_static.is_type(ScStatic::True) {
                         Ok(ScVal::Static(ScStatic::True))
                     } else if tag_static.is_type(ScStatic::False) {
@@ -271,42 +231,31 @@ where
                     } else if tag_static.is_type(ScStatic::LedgerKeyContractCode) {
                         Ok(ScVal::Static(ScStatic::LedgerKeyContractCode))
                     } else {
-                        log_err_convert::<Self>(env, &val);
+                        log_err_convert::<Self>(env, &self);
                         Err(ConversionError)
                     }
                 }
                 Tag::Object => unsafe {
-                    let ob = <Object as RawValConvertible>::unchecked_from_val(val);
-                    let scob = ScObject::try_from_val(&env, ob).map_err(|_| ConversionError)?;
+                    let ob = <Object as RawValConvertible>::unchecked_from_val(self);
+                    let scob = <Object as TryIntoVal<E, ScObject>>::try_into_val(ob, &env)
+                        .map_err(|_| ConversionError)?;
                     Ok(ScVal::Object(Some(scob)))
                 },
                 Tag::Symbol => {
                     let sym: Symbol =
-                        unsafe { <Symbol as RawValConvertible>::unchecked_from_val(val) };
+                        unsafe { <Symbol as RawValConvertible>::unchecked_from_val(self) };
                     let str: String = sym.into_iter().collect();
                     Ok(ScVal::Symbol(str.as_bytes().try_into()?))
                 }
-                Tag::BitSet => Ok(ScVal::Bitset(val.get_payload())),
+                Tag::BitSet => Ok(ScVal::Bitset(self.get_payload())),
                 Tag::Status => {
                     let status: Status =
-                        unsafe { <Status as RawValConvertible>::unchecked_from_val(val) };
+                        unsafe { <Status as RawValConvertible>::unchecked_from_val(self) };
                     Ok(status.try_into()?)
                 }
                 Tag::Reserved => Err(ConversionError),
             }
         }
-    }
-}
-
-#[cfg(feature = "std")]
-impl<E: Env> TryIntoVal<E, ScVal> for RawVal
-where
-    ScObject: TryFromVal<E, Object>,
-{
-    type Error = <ScVal as TryFromVal<E, RawVal>>::Error;
-
-    fn try_into_val(self, env: &E) -> Result<ScVal, Self::Error> {
-        <_ as TryFromVal<E, RawVal>>::try_from_val(env, self)
     }
 }
 

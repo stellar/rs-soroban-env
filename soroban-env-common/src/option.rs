@@ -1,28 +1,17 @@
-use crate::{Env, IntoVal, RawVal, TryFromVal, TryIntoVal};
-
-impl<E: Env, T> TryFromVal<E, RawVal> for Option<T>
-where
-    T: TryFromVal<E, RawVal>,
-{
-    type Error = T::Error;
-
-    fn try_from_val(env: &E, val: RawVal) -> Result<Self, Self::Error> {
-        if val.is_void() {
-            Ok(None)
-        } else {
-            Ok(Some(T::try_from_val(env, val)?))
-        }
-    }
-}
+use crate::{Env, IntoVal, RawVal, TryIntoVal};
 
 impl<E: Env, T> TryIntoVal<E, Option<T>> for RawVal
 where
-    T: TryFromVal<E, RawVal>,
+    RawVal: TryIntoVal<E, T>,
 {
-    type Error = T::Error;
+    type Error = <RawVal as TryIntoVal<E, T>>::Error;
     #[inline(always)]
     fn try_into_val(self, env: &E) -> Result<Option<T>, Self::Error> {
-        <_ as TryFromVal<E, RawVal>>::try_from_val(env, self)
+        if self.is_void() {
+            Ok(None)
+        } else {
+            Ok(Some(<Self as TryIntoVal<E, T>>::try_into_val(self, env)?))
+        }
     }
 }
 

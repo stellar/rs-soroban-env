@@ -48,7 +48,10 @@ pub mod meta;
 mod object;
 mod option;
 mod raw_val;
-mod result;
+// TODO: uncommenting this produces an infinite recursion in the
+// trait solver due to a presumably-mistaken bit of codegen in
+// the native SDK's #[contracttype] macro. Investigate.
+// mod result;
 mod r#static;
 mod status;
 mod r#str;
@@ -68,9 +71,9 @@ pub use val::Val;
 // RawVal and EnvObj couple raw types to environments.
 pub use checked_env::CheckedEnv;
 pub use compare::Compare;
-pub use convert::Convert;
+pub use convert::{convert_to, try_convert_to, Convert};
 pub use env::{call_macro_with_all_host_functions, Env, EnvBase};
-pub use env_val::{FromVal, IntoVal, TryFromVal, TryIntoVal};
+pub use env_val::{IntoVal, TryIntoVal};
 pub use unimplemented_env::UnimplementedEnv;
 pub use vmcaller_checked_env::{VmCaller, VmCallerCheckedEnv};
 

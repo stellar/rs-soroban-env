@@ -1,4 +1,4 @@
-use crate::{impl_wrapper_common, impl_wrapper_from, Env, RawVal, Tag};
+use crate::{impl_wrapper_common, impl_wrapper_from, ConversionError, Env, RawVal, Tag};
 use core::cmp::{Eq, Ord, PartialEq, PartialOrd};
 use stellar_xdr::ScStatic;
 
@@ -12,6 +12,32 @@ impl_wrapper_common!(Static);
 
 impl_wrapper_from!((), Static);
 impl_wrapper_from!(bool, Static);
+
+impl TryFrom<Static> for bool {
+    type Error = ConversionError;
+
+    fn try_from(value: Static) -> Result<Self, Self::Error> {
+        if value.is_type(ScStatic::True) {
+            Ok(true)
+        } else if value.is_type(ScStatic::False) {
+            Ok(false)
+        } else {
+            Err(ConversionError)
+        }
+    }
+}
+
+impl TryFrom<Static> for () {
+    type Error = ConversionError;
+
+    fn try_from(value: Static) -> Result<Self, Self::Error> {
+        if value.is_type(ScStatic::Void) {
+            Ok(())
+        } else {
+            Err(ConversionError)
+        }
+    }
+}
 
 impl Eq for Static {}
 
