@@ -13,28 +13,49 @@ use crate::{
     HostError,
 };
 
+// Charge for an N-element "shallow copy" of some type, not cloning any
+// substructure. In a better world we would multiply this by size_of<Self> but
+// that's not guaranteed to be stable. Also this has a fairly serious level of
+// inaccuracy since we call the same charge for any shallow type, whether it's a
+// simple byte-copy or a sequence of Rc<>.clone calls (each of which bumps a
+// refcount -- shallow but not as cheap as memcpy).
+//
+// TODO: this is correct for CPU-cost but not memory-cost, since there's no heap
+// allocation implied by a shallow clone. We should (maybe) split BytesClone
+// into ByteCopy (the CPU byte-copying part) and HeapAlloc (the heap-allocating
+// part). See https://github.com/stellar/rs-soroban-env/issues/604.
+fn charge_shallow_copy(n_elts: usize, budget: &Budget) -> Result<(), HostError> {
+    budget.charge(CostType::BytesClone, n_elts as u64)
+}
+
 pub trait MeteredClone: Clone {
-    // By default every MeteredClone type just charges based on its byte-size.
-    // This is adequate for ShallowClone types.
-    // TODO: this is correct for CPU-cost but not memory-cost, since
-    // there's no heap allocation on a ShallowClone. We should split
-    // BytesClone into ByteCopy (the CPU byte-copying part)
-    // and HeapAlloc (the memory-allocating part)
+    // By default every MeteredClone type just charges as though it's shallow;
+    // if a type is non-shallow (has variable-sized substructure to consider) it
+    // should override both `IS_SHALLOW` (setting it to `false`) and
+    // `charge_for_clone` (correctly charging for cloning the substructure).
     const IS_SHALLOW: bool = true;
-    fn charge_self_memcpy(n_elts: usize, budget: &Budget) -> Result<(), HostError> {
-        budget.charge(
-            CostType::BytesClone,
-            (n_elts as u64).saturating_mul(std::mem::size_of::<Self>() as u64),
-        )
-    }
+
+    // Called to clone a single element of type Self, a default implementation
+    // that charges for a 1-unit memcpy and is _only_ appropriate when Self is
+    // a shallow type (with no substructure). If you override Self::IS_SHALLOW
+    // and set it to false, you should override this method also (it will actually
+    // panic if you don't).
     fn charge_for_clone(&self, budget: &Budget) -> Result<(), HostError> {
         assert!(Self::IS_SHALLOW);
-        Self::charge_self_memcpy(1, budget)
+        charge_shallow_copy(1, budget)
     }
+
+    // Called when cloning a slice of elements of type Self. Can be more
+    // efficient than cloning element-by-element when Self::IS_SHALLOW, because
+    // it's acceptable to charge once for the whole slice -- a single charge for
+    // the cost of a memcpy -- followed by copying the slice via memcpy (or
+    // something similar to a memcpy, eg. cloning a bunch of Rc<>s). If
+    // Self::IS_SHALLOW is false, this method will do element-wise charging,
+    // assuming it is paired with element-wise cloning.
     fn charge_for_clones(clones: &[Self], budget: &Budget) -> Result<(), HostError> {
         if Self::IS_SHALLOW {
             // If we're shallow, we're allowed to batch our charges.
-            Self::charge_self_memcpy(clones.len(), budget)
+            charge_shallow_copy(clones.len(), budget)
         } else {
             for elt in clones {
                 elt.charge_for_clone(budget)?;
@@ -59,7 +80,10 @@ impl MeteredClone for ScContractCode {}
 impl MeteredClone for Uint256 {}
 impl<const N: usize> MeteredClone for [u8; N] {}
 
-// TODO: this isn't correct: these two have substructure to account for.
+// TODO: this isn't correct: these two have substructure to account for;
+// probably they should never be cloned in the middle of a contract at all (the
+// storage maps are Rc<> now) but changing that means changing the storage
+// interface. See https://github.com/stellar/rs-soroban-env/issues/603
 impl MeteredClone for LedgerKey {}
 impl MeteredClone for LedgerEntry {}
 
@@ -67,7 +91,7 @@ impl MeteredClone for ScVal {
     const IS_SHALLOW: bool = false;
 
     fn charge_for_clone(&self, budget: &Budget) -> Result<(), HostError> {
-        Self::charge_self_memcpy(1, budget)?;
+        charge_shallow_copy(1, budget)?;
         match self {
             ScVal::Object(Some(obj)) => {
                 match obj {
@@ -120,7 +144,7 @@ impl<const C: u32> MeteredClone for BytesM<C> {
     const IS_SHALLOW: bool = false;
 
     fn charge_for_clone(&self, budget: &Budget) -> Result<(), HostError> {
-        Self::charge_self_memcpy(1, budget)?;
+        charge_shallow_copy(1, budget)?;
         budget.charge(CostType::BytesClone, self.len() as u64)
     }
 }
@@ -129,7 +153,7 @@ impl MeteredClone for Vec<u8> {
     const IS_SHALLOW: bool = false;
 
     fn charge_for_clone(&self, budget: &Budget) -> Result<(), HostError> {
-        Self::charge_self_memcpy(1, budget)?;
+        charge_shallow_copy(1, budget)?;
         budget.charge(CostType::BytesClone, self.len() as u64)
     }
 }
@@ -139,10 +163,7 @@ impl<C: MeteredClone> MeteredClone for Vec<C> {
     fn metered_clone(&self, budget: &Budget) -> Result<Self, HostError> {
         if C::IS_SHALLOW {
             // Shallow types we can batch-up our charging for.
-            budget.charge(
-                CostType::BytesClone,
-                (self.len() as u64).saturating_mul(std::mem::size_of::<C>() as u64),
-            )?;
+            budget.charge(CostType::BytesClone, self.len() as u64)?;
             Ok(self.clone())
         } else {
             self.iter().map(|elt| elt.metered_clone(budget)).collect()

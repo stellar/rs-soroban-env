@@ -71,13 +71,6 @@ where
     }
 }
 
-fn check_size_is_small<T>(name: &str) {
-    let sz = core::mem::size_of::<T>();
-    if sz > 64 {
-        panic!("type '{}' is too big: {}", name, sz);
-    }
-}
-
 // We abstract over Ctx:AsBudget here so that you can operate on MeteredOrdMap
 // before you have a Host constructed -- a bit, though only with certain types,
 // for example you can't do any lookups on maps keyed by Objects -- so long as
@@ -91,8 +84,6 @@ where
     Ctx: AsBudget + Compare<K, Error = HostError> + Compare<V, Error = HostError>,
 {
     pub fn new(ctx: &Ctx) -> Result<Self, HostError> {
-        check_size_is_small::<K>("key");
-        check_size_is_small::<V>("val");
         ctx.as_budget().charge(CostType::MapNew, 1)?;
         Ok(MeteredOrdMap {
             map: Vec::new(),
@@ -101,8 +92,6 @@ where
     }
 
     pub fn from_map(map: Vec<(K, V)>, ctx: &Ctx) -> Result<Self, HostError> {
-        check_size_is_small::<K>("key");
-        check_size_is_small::<V>("val");
         // Construction cost already paid for by caller, just check
         // that input has sorted and unique keys.
         let m = MeteredOrdMap {
