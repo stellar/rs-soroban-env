@@ -229,17 +229,6 @@ dependencies = [
 
 [[package]]
 name = "crate-git-revision"
-version = "0.0.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "78cea8a8c6f40508aa6292231db40fe5b4968f6959fefcad608e528b50657564"
-dependencies = [
- "serde",
- "serde_derive",
- "serde_json",
-]
-
-[[package]]
-name = "crate-git-revision"
 version = "0.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f998aef136a4e7833b0e4f0fc0939a59c40140b28e0ffbf524ad84fb2cc568c8"
@@ -1073,9 +1062,9 @@ dependencies = [
 
 [[package]]
 name = "soroban-env-common"
-version = "0.0.10"
+version = "0.0.11"
 dependencies = [
- "crate-git-revision 0.0.4",
+ "crate-git-revision",
  "serde",
  "soroban-env-macros",
  "soroban-wasmi",
@@ -1085,7 +1074,7 @@ dependencies = [
 
 [[package]]
 name = "soroban-env-guest"
-version = "0.0.10"
+version = "0.0.11"
 dependencies = [
  "soroban-env-common",
  "static_assertions",
@@ -1093,7 +1082,7 @@ dependencies = [
 
 [[package]]
 name = "soroban-env-host"
-version = "0.0.10"
+version = "0.0.11"
 dependencies = [
  "backtrace",
  "bytes-lit",
@@ -1127,7 +1116,7 @@ dependencies = [
 
 [[package]]
 name = "soroban-env-macros"
-version = "0.0.10"
+version = "0.0.11"
 dependencies = [
  "itertools",
  "proc-macro2",
@@ -1138,7 +1127,7 @@ dependencies = [
 
 [[package]]
 name = "soroban-native-sdk-macros"
-version = "0.0.10"
+version = "0.0.11"
 dependencies = [
  "itertools",
  "proc-macro2",
@@ -1148,7 +1137,7 @@ dependencies = [
 
 [[package]]
 name = "soroban-synth-wasm"
-version = "0.0.10"
+version = "0.0.11"
 dependencies = [
  "expect-test",
  "soroban-env-common",
@@ -1159,7 +1148,7 @@ dependencies = [
 
 [[package]]
 name = "soroban-test-wasms"
-version = "0.0.10"
+version = "0.0.11"
 
 [[package]]
 name = "soroban-wasmi"
@@ -1197,11 +1186,11 @@ checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 
 [[package]]
 name = "stellar-xdr"
-version = "0.0.9"
-source = "git+https://github.com/stellar/rs-stellar-xdr?rev=1309e3de#1309e3de46fcb01743f818831de3a9ac4a5b1ab6"
+version = "0.0.11"
+source = "git+https://github.com/stellar/rs-stellar-xdr?rev=dbf2aba#dbf2abab7cfde069f89ec5846a1c0c75ce4764ef"
 dependencies = [
  "base64",
- "crate-git-revision 0.0.3",
+ "crate-git-revision",
  "hex",
  "serde",
  "serde_with",
@@ -1292,7 +1281,7 @@ dependencies = [
 
 [[package]]
 name = "test_no_std"
-version = "0.0.10"
+version = "0.0.11"
 dependencies = [
  "soroban-env-common",
 ]
