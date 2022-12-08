@@ -39,6 +39,7 @@ mod val_wrapper;
 mod array;
 mod bitset;
 mod checked_env;
+mod compare;
 mod convert;
 mod env;
 mod env_val;
@@ -66,7 +67,8 @@ pub use val::Val;
 
 // RawVal and EnvObj couple raw types to environments.
 pub use checked_env::CheckedEnv;
-pub use convert::TryConvert;
+pub use compare::Compare;
+pub use convert::Convert;
 pub use env::{Env, EnvBase};
 pub use env_val::{EnvVal, FromVal, IntoVal, TryFromVal, TryIntoVal};
 pub use unimplemented_env::UnimplementedEnv;

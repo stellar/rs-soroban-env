@@ -32,7 +32,6 @@ pub mod budget;
 pub mod events;
 mod host;
 pub(crate) mod host_object;
-pub(crate) mod weak_host;
 
 mod native_contract;
 
@@ -51,5 +50,4 @@ pub use host::ContractFunctionSet;
 pub use host::{
     metered_map::MeteredOrdMap, metered_vector::MeteredVector, Host, HostError, LedgerInfo,
 };
-pub use im_rc;
 pub use soroban_env_common::*;

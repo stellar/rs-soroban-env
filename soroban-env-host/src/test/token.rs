@@ -1,7 +1,7 @@
 use std::{convert::TryInto, rc::Rc};
 
 use crate::{
-    budget::Budget,
+    budget::{AsBudget, Budget},
     host::{Frame, TestContractFrame},
     host_vec,
     native_contract::{
@@ -90,7 +90,7 @@ impl TokenTest {
 
     fn get_classic_trustline_balance(&self, key: &LedgerKey) -> i64 {
         self.host
-            .with_mut_storage(|s| match s.get(key).unwrap().data {
+            .with_mut_storage(|s| match s.get(key, self.host.as_budget()).unwrap().data {
                 LedgerEntryData::Trustline(trustline) => Ok(trustline.balance),
                 _ => unreachable!(),
             })

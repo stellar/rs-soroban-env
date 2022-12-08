@@ -2,6 +2,7 @@ use std::cmp::min;
 
 use soroban_env_common::{CheckedEnv, InvokerType};
 
+use crate::budget::AsBudget;
 use crate::xdr::{
     AccountEntry, AccountId, Asset, ContractCodeEntry, ContractDataEntry, Hash, HashIdPreimage,
     HashIdPreimageContractId, HashIdPreimageCreateContractArgs, HashIdPreimageEd25519ContractId,
@@ -28,7 +29,7 @@ impl Host {
         &self,
         key: &LedgerKey,
     ) -> Result<ScContractCode, HostError> {
-        let scval = match self.0.storage.borrow_mut().get(key)?.data {
+        let scval = match self.0.storage.borrow_mut().get(key, self.as_budget())?.data {
             LedgerEntryData::ContractData(ContractDataEntry { val, .. }) => Ok(val),
             _ => Err(self.err_status(ScHostStorageErrorCode::ExpectContractData)),
         }?;
@@ -52,7 +53,13 @@ impl Host {
         wasm_hash: Hash,
     ) -> Result<ContractCodeEntry, HostError> {
         let key = self.contract_code_ledger_key(wasm_hash);
-        match self.0.storage.borrow_mut().get(&key)?.data {
+        match self
+            .0
+            .storage
+            .borrow_mut()
+            .get(&key, self.as_budget())?
+            .data
+        {
             LedgerEntryData::ContractCode(e) => Ok(e),
             _ => Err(self.err_status(ScHostStorageErrorCode::AccessToUnknownEntry)),
         }
@@ -70,10 +77,11 @@ impl Host {
             key: ScVal::Static(ScStatic::LedgerKeyContractCode),
             val: ScVal::Object(Some(ScObject::ContractCode(contract_source))),
         });
-        self.0
-            .storage
-            .borrow_mut()
-            .put(&key, &Host::ledger_entry_from_data(data))?;
+        self.0.storage.borrow_mut().put(
+            &key,
+            &Host::ledger_entry_from_data(data),
+            self.as_budget(),
+        )?;
         Ok(())
     }
 
@@ -159,7 +167,7 @@ impl Host {
     // notes on metering: `get` from storage is covered. Rest are free.
     pub fn load_account(&self, account_id: AccountId) -> Result<AccountEntry, HostError> {
         let acc = self.to_account_key(account_id);
-        self.with_mut_storage(|storage| match storage.get(&acc)?.data {
+        self.with_mut_storage(|storage| match storage.get(&acc, self.as_budget())?.data {
             LedgerEntryData::Account(ae) => Ok(ae),
             _ => Err(self.err_general("not account")),
         })
@@ -168,7 +176,7 @@ impl Host {
     // notes on metering: covered by `has`.
     pub fn has_account(&self, account_id: AccountId) -> Result<bool, HostError> {
         let acc = self.to_account_key(account_id);
-        self.with_mut_storage(|storage| storage.has(&acc))
+        self.with_mut_storage(|storage| storage.has(&acc, self.as_budget()))
     }
 
     pub(crate) fn to_account_key(&self, account_id: AccountId) -> LedgerKey {

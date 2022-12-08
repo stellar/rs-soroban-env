@@ -1,17 +1,16 @@
+use crate::Host;
+
 use super::{
     host::metered_map::MeteredOrdMap,
     host::metered_vector::MeteredVector,
-    weak_host::WeakHost,
     xdr::{self, ScObjectType},
-    EnvVal, Object, RawVal,
+    RawVal,
 };
 
-pub(crate) type HostObj = EnvVal<WeakHost, Object>;
-pub(crate) type HostVal = EnvVal<WeakHost, RawVal>;
-pub(crate) type HostMap = MeteredOrdMap<HostVal, HostVal>;
-pub(crate) type HostVec = MeteredVector<HostVal>;
+pub(crate) type HostMap = MeteredOrdMap<RawVal, RawVal, Host>;
+pub(crate) type HostVec = MeteredVector<RawVal>;
 
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone)]
 pub(crate) enum HostObject {
     Vec(HostVec),
     Map(HostMap),

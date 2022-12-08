@@ -12,7 +12,6 @@ use soroban_env_common::{
 
 use crate::{
     budget::{Budget, CostType},
-    host_object::{HostObj, HostVal},
     storage::{test_storage::MockSnapshotSource, Storage},
     xdr, Host, HostError, LedgerInfo,
 };
@@ -115,12 +114,12 @@ impl Host {
         self.map_err(v.try_into())
     }
 
-    pub(crate) fn test_vec_obj<T: AsScVal>(&self, vals: &[T]) -> Result<HostObj, HostError> {
+    pub(crate) fn test_vec_obj<T: AsScVal>(&self, vals: &[T]) -> Result<Object, HostError> {
         let v = self.test_scvec(vals)?;
         self.to_host_obj(&ScObject::Vec(v))
     }
 
-    pub(crate) fn test_vec_val<T: AsScVal>(&self, vals: &[T]) -> Result<HostVal, HostError> {
+    pub(crate) fn test_vec_val<T: AsScVal>(&self, vals: &[T]) -> Result<RawVal, HostError> {
         let v = self.test_scvec(vals)?;
         self.to_host_val(&ScVal::Object(Some(ScObject::Vec(v))))
     }
@@ -129,7 +128,7 @@ impl Host {
         Ok(ScObject::Bytes(self.map_err(vals.try_into())?))
     }
 
-    pub(crate) fn test_bin_obj(&self, vals: &[u8]) -> Result<HostObj, HostError> {
+    pub(crate) fn test_bin_obj(&self, vals: &[u8]) -> Result<Object, HostError> {
         self.to_host_obj(&self.test_bin_scobj(vals)?)
     }
 

@@ -3,7 +3,7 @@ use std::{
     rc::Rc,
 };
 
-use crate::{xdr::ScVmErrorCode, HostError};
+use crate::{xdr::ScVmErrorCode, Host, HostError};
 
 // TODO: move this to an XDR enum
 #[repr(i32)]
@@ -39,67 +39,62 @@ pub enum CostType {
     ComputeSha256Hash = 11,
     // Cost of computing the ed25519 pubkey from bytes
     ComputeEd25519PubKey = 12,
-    // Cost of constructing an empty new OrdMap
-    ImMapNew = 13,
-    // Cost of (mutably) accessing an entry in an OrdMap
-    ImMapMutEntry = 14,
-    // Cost of (immutably) accessing an entry in an OrdMap
-    ImMapImmutEntry = 15,
-    // Cost of comparison of two OrdMaps
-    ImMapCmp = 16,
-    // Cost of constructing an empty new Vector
-    ImVecNew = 17,
-    // Cost of (mutably) accessing an entry in a Vector
-    ImVecMutEntry = 18,
-    // Cost of (immutably) accessing an entry in a Vector
-    ImVecImmutEntry = 19,
-    // Cost of comparison of two Vectors
-    ImVecCmp = 20,
+    // Cost of constructing an new map. The input is the number
+    // of entries allocated.
+    MapNew = 13,
+    // Cost of accessing an entry in a map. The input is the count of the number of
+    // entries examined (which will be the log of the size of the map under binary search).
+    MapEntry = 14,
+    // Cost of constructing a new vector. The input is the number of entries allocated.
+    VecNew = 15,
+    // Cost of accessing one or more elements in a Vector. The input is the count of
+    // the number of elements accessed.
+    VecEntry = 16,
     //TODO: 27-30 are probably redundent.They are covered elsewhere.
     // Cost of work needed to collect elements from a HostVec into a ScVec. This does not account for the
     // conversion of the elements into its ScVal form.
-    ScVecFromHostVec = 21,
+    ScVecFromHostVec = 17,
     // Cost of work needed to collect elements from a HostMap into a ScMap. This does not account for the
     // conversion of the elements into its ScVal form.
-    ScMapFromHostMap = 22,
+    ScMapFromHostMap = 18,
     // Cost of work needed to collect elements from an ScVec into a HostVec. This does not account for the
     // conversion of the elements from its ScVal form.
-    ScVecToHostVec = 23,
+    ScVecToHostVec = 19,
     // Cost of work needed to collect elements from an ScMap into a HostMap. This does not account for the
     // conversion of the elements from its ScVal form.
-    ScMapToHostMap = 24,
+    ScMapToHostMap = 20,
     // Cost of guarding a frame, which involves pushing and poping a frame and capturing a rollback point.
-    GuardFrame = 25,
+    GuardFrame = 21,
     // Cost of verifying ed25519 signature of a payload.
-    VerifyEd25519Sig = 26,
+    VerifyEd25519Sig = 22,
     // Cost of reading a slice of vm linear memory
-    VmMemRead = 27,
+    VmMemRead = 23,
     // Cost of writing to a slice of vm linear memory
-    VmMemWrite = 28,
+    VmMemWrite = 24,
     // Cost of instantiation a VM from wasm bytes code.
-    VmInstantiation = 29,
+    VmInstantiation = 25,
     // Roundtrip cost of invoking a VM function from the host.
-    InvokeVmFunction = 30,
+    InvokeVmFunction = 26,
     // Cost of cloning bytes.
-    BytesClone = 31,
+    BytesClone = 27,
     // Cost of deleting a byte from a bytes array,
-    BytesDel = 32,
+    BytesDel = 28,
     // Cost of pushing a byte
-    BytesPush = 33,
+    BytesPush = 29,
     // Cost of poping a byte
-    BytesPop = 34,
+    BytesPop = 30,
     // Cost of inserting a byte into a bytes array at some index
-    BytesInsert = 35,
+    BytesInsert = 31,
     // Cost of appending a byte to the end of a bytes array
-    BytesAppend = 36,
+    BytesAppend = 32,
     // Cost of comparing two bytes arrays
-    BytesCmp = 37,
+    BytesCmp = 33,
     // Cost of charging a value to the budgeting system.
-    ChargeBudget = 38,
+    ChargeBudget = 34,
     // Cost of a 25519 scalar multiplication in the Ed25519 library,
     // here for exploring calibration, not a long-term cost we surface
     // separately from signature verification.
-    EdwardsPointCurve25519ScalarMul = 39,
+    EdwardsPointCurve25519ScalarMul = 35,
 }
 
 // TODO: add XDR support for iterating over all the elements of an enum
@@ -119,14 +114,10 @@ impl CostType {
             CostType::HostObjAllocSlot,
             CostType::ComputeSha256Hash,
             CostType::ComputeEd25519PubKey,
-            CostType::ImMapNew,
-            CostType::ImMapMutEntry,
-            CostType::ImMapImmutEntry,
-            CostType::ImMapCmp,
-            CostType::ImVecNew,
-            CostType::ImVecMutEntry,
-            CostType::ImVecImmutEntry,
-            CostType::ImVecCmp,
+            CostType::MapNew,
+            CostType::MapEntry,
+            CostType::VecNew,
+            CostType::VecEntry,
             CostType::ScVecFromHostVec,
             CostType::ScMapFromHostMap,
             CostType::ScVecToHostVec,
@@ -331,6 +322,22 @@ pub(crate) struct BudgetImpl {
 #[derive(Default, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Budget(pub(crate) Rc<RefCell<BudgetImpl>>);
 
+pub trait AsBudget {
+    fn as_budget(&self) -> &Budget;
+}
+
+impl AsBudget for Budget {
+    fn as_budget(&self) -> &Budget {
+        self
+    }
+}
+
+impl AsBudget for Host {
+    fn as_budget(&self) -> &Budget {
+        self.budget_ref()
+    }
+}
+
 impl Budget {
     // Helper function to avoid multiple borrow_mut
     fn mut_budget<T, F>(&self, f: F) -> Result<T, HostError>
@@ -468,19 +475,10 @@ impl Default for BudgetImpl {
                     cpu.lin_param = 35;
                 }
 
-                CostType::ImMapNew => cpu.const_param = 2000,
-                CostType::ImMapMutEntry | CostType::ImMapImmutEntry => {
-                    cpu.const_param = 2000;
-                    cpu.log_base_param = 64;
-                    cpu.log_param = 10;
-                }
-                // The Cmp costs are temporarily disabled due to bug
-                // (https://github.com/stellar/rs-soroban-env/issues/579). This prevents `obj_cmp`
-                // from escalating an out-of-budget `HostError` to a `panic`.
-                CostType::ImMapCmp | CostType::ImVecCmp | CostType::BytesCmp => cpu.lin_param = 0,
-
-                CostType::ImVecNew => cpu.const_param = 1500,
-                CostType::ImVecMutEntry | CostType::ImVecImmutEntry => cpu.const_param = 300,
+                CostType::MapNew => cpu.lin_param = 2000,
+                CostType::MapEntry => cpu.lin_param = 100,
+                CostType::VecNew => cpu.lin_param = 2000,
+                CostType::VecEntry => cpu.lin_param = 100,
                 CostType::ScVecFromHostVec => cpu.lin_param = 10,
                 CostType::ScMapFromHostMap => cpu.lin_param = 10,
                 CostType::ScVecToHostVec => cpu.lin_param = 300,
@@ -497,6 +495,7 @@ impl Default for BudgetImpl {
                 | CostType::BytesPop
                 | CostType::BytesInsert
                 | CostType::BytesAppend => cpu.lin_param = 10,
+                CostType::BytesCmp => cpu.lin_param = 1,
                 CostType::ChargeBudget => cpu.const_param = 50,
                 CostType::EdwardsPointCurve25519ScalarMul => cpu.const_param = 10,
             }
@@ -511,15 +510,10 @@ impl Default for BudgetImpl {
                 CostType::CloneEvents => mem.lin_param = 100,
                 CostType::HostObjAllocSlot => mem.const_param = 100,
                 CostType::ComputeSha256Hash | CostType::ComputeEd25519PubKey => (),
-                CostType::ImMapNew => mem.const_param = 3000,
-                CostType::ImMapMutEntry | CostType::ImMapImmutEntry => (),
-                // The Cmp costs are temporarily disabled due to bug
-                // (https://github.com/stellar/rs-soroban-env/issues/579). This prevents `obj_cmp`
-                // from escalating an out-of-budget `HostError` to a `panic`.
-                CostType::ImMapCmp | CostType::ImVecCmp | CostType::BytesCmp => mem.lin_param = 0,
-
-                CostType::ImVecNew => mem.const_param = 100,
-                CostType::ImVecMutEntry | CostType::ImVecImmutEntry => (),
+                CostType::MapNew => mem.lin_param = 16,
+                CostType::MapEntry => (),
+                CostType::VecNew => mem.lin_param = 16,
+                CostType::VecEntry => (),
                 CostType::ScVecFromHostVec
                 | CostType::ScMapFromHostMap
                 | CostType::ScVecToHostVec
@@ -536,6 +530,7 @@ impl Default for BudgetImpl {
                 | CostType::BytesPop
                 | CostType::BytesInsert
                 | CostType::BytesAppend => mem.lin_param = 1,
+                CostType::BytesCmp => (),
                 CostType::ChargeBudget => (),
                 CostType::EdwardsPointCurve25519ScalarMul => mem.const_param = 1,
             }

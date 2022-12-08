@@ -1,5 +1,5 @@
 use crate::{
-    decl_tagged_val_wrapper_methods, xdr::ScObjectType, Env, EnvVal, RawVal, Tag, TryConvert,
+    decl_tagged_val_wrapper_methods, xdr::ScObjectType, Convert, Env, EnvVal, RawVal, Tag,
     TryFromVal, TryIntoVal,
 };
 use core::fmt::Debug;
@@ -55,7 +55,7 @@ impl Object {
 
 impl<E> TryFromVal<E, Object> for ScObject
 where
-    E: Env + TryConvert<Object, ScObject>,
+    E: Env + Convert<Object, ScObject>,
 {
     type Error = E::Error;
     fn try_from_val(env: &E, val: Object) -> Result<Self, Self::Error> {
@@ -65,7 +65,7 @@ where
 
 impl<'a, E> TryIntoVal<E, Object> for &'a ScObject
 where
-    E: Env + TryConvert<&'a ScObject, Object>,
+    E: Env + Convert<&'a ScObject, Object>,
 {
     type Error = E::Error;
     fn try_into_val(self, env: &E) -> Result<Object, Self::Error> {
@@ -75,7 +75,7 @@ where
 
 impl<E> TryIntoVal<E, Object> for ScObject
 where
-    E: Env + TryConvert<ScObject, Object>,
+    E: Env + Convert<ScObject, Object>,
 {
     type Error = E::Error;
     fn try_into_val(self, env: &E) -> Result<Object, Self::Error> {
@@ -85,7 +85,7 @@ where
 
 impl<'a, E> TryIntoVal<E, Object> for &'a ScVal
 where
-    E: Env + TryConvert<&'a ScObject, Object>,
+    E: Env + Convert<&'a ScObject, Object>,
 {
     type Error = E::Error;
     fn try_into_val(self, env: &E) -> Result<Object, Self::Error> {
@@ -99,7 +99,7 @@ where
 
 impl<E> TryIntoVal<E, Object> for ScVal
 where
-    E: Env + TryConvert<ScObject, Object>,
+    E: Env + Convert<ScObject, Object>,
 {
     type Error = E::Error;
     fn try_into_val(self, env: &E) -> Result<Object, Self::Error> {

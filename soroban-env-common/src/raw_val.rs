@@ -471,6 +471,11 @@ impl RawVal {
     }
 
     #[inline(always)]
+    pub const fn shallow_eq(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+
+    #[inline(always)]
     pub const fn is_u63(self) -> bool {
         (self.0 & 1) == 0
     }

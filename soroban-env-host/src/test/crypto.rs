@@ -9,7 +9,7 @@ use hex::FromHex;
 fn sha256_test() -> Result<(), HostError> {
     let host = Host::default();
     let obj0 = host.test_bin_obj(&[1])?;
-    let hash_obj = host.compute_hash_sha256(obj0.to_object())?;
+    let hash_obj = host.compute_hash_sha256(obj0)?;
 
     let v = host.from_host_val(hash_obj.to_raw())?;
     let bytes = match v {
@@ -51,11 +51,7 @@ fn ed25519_verify_test() -> Result<(), HostError> {
     let obj_msg = host.test_bin_obj(&msg_bytes)?;
     let obj_sig = host.test_bin_obj(&sig_bytes)?;
 
-    let res = host.verify_sig_ed25519(
-        obj_msg.to_object(),
-        obj_pub.to_object(),
-        obj_sig.to_object(),
-    );
+    let res = host.verify_sig_ed25519(obj_msg, obj_pub, obj_sig);
 
     res.expect("verification failed");
 
@@ -64,11 +60,7 @@ fn ed25519_verify_test() -> Result<(), HostError> {
     let msg_bytes2: Vec<u8> = FromHex::from_hex(message2).unwrap();
     let obj_msg2 = host.test_bin_obj(&msg_bytes2)?;
 
-    let res_failed = host.verify_sig_ed25519(
-        obj_msg2.to_object(),
-        obj_pub.to_object(),
-        obj_sig.to_object(),
-    );
+    let res_failed = host.verify_sig_ed25519(obj_msg2, obj_pub, obj_sig);
 
     match res_failed {
         Ok(_) => panic!("verification test failed"),
