@@ -136,8 +136,8 @@ fn map_insert_key_vec_obj() -> Result<(), HostError> {
     host.with_budget(|budget| {
         // 4 = 1 visit map + 1 visit k1 + (obj_comp which needs to) 1 visit both k0 and k1
         assert_eq!(budget.get_input(CostType::VisitObject), 4);
-        // number of map-accesses, counting both binary-search and point-access.
-        assert_eq!(budget.get_input(CostType::MapEntry), 3);
+        // upper bound of number of map-accesses, counting both binary-search and point-access.
+        assert_eq!(budget.get_input(CostType::MapEntry), 5);
     });
 
     Ok(())

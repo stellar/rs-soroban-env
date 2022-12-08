@@ -20,7 +20,7 @@ impl<A> MeteredVector<A>
 where
     A: MeteredClone,
 {
-    fn charge_new(&self, size: usize, budget: &Budget) -> Result<(), HostError> {
+    fn charge_new(size: usize, budget: &Budget) -> Result<(), HostError> {
         budget.charge(CostType::VecNew, size as u64)
     }
 
@@ -34,7 +34,7 @@ where
 
     fn charge_binsearch(&self, budget: &Budget) -> Result<(), HostError> {
         let mag = 64 - (self.len() as u64).leading_zeros();
-        budget.charge(CostType::VecEntry, mag as u64)
+        budget.charge(CostType::VecEntry, 1 + mag as u64)
     }
 }
 
@@ -43,17 +43,17 @@ where
     A: MeteredClone,
 {
     pub fn new(budget: &Budget) -> Result<Self, HostError> {
-        budget.charge(CostType::VecNew, 0)?;
+        Self::charge_new(0, budget)?;
         Self::from_vec(Vec::new())
     }
 
     pub fn from_array<const N: usize>(buf: [A; N], budget: &Budget) -> Result<Self, HostError> {
-        budget.charge(CostType::VecNew, N as u64)?;
+        Self::charge_new(N, budget)?;
         Self::from_vec(buf.into())
     }
 
     pub fn from_vec(vec: Vec<A>) -> Result<Self, HostError> {
-        // No charge here: vector already allocated, charge happened in claler.
+        // No charge here: vector already allocated, charge happened in caller.
         Ok(Self { vec })
     }
 
@@ -66,7 +66,7 @@ where
         budget: &Budget,
     ) -> Result<Self, HostError> {
         if let (_, Some(sz)) = iter.size_hint() {
-            budget.charge(CostType::VecNew, sz as u64)?;
+            Self::charge_new(sz, budget)?;
             // It's possible we temporarily go over-budget here before charging, but
             // only by the cost of temporarily allocating twice the size of our largest
             // possible object. In exchange we get to batch all charges associated with
@@ -75,7 +75,7 @@ where
             A::charge_for_clones(vec.as_slice(), budget)?;
             Ok(Self { vec })
         } else {
-            // TODO use a better error code for "unbounded input itertors"
+            // TODO use a better error code for "unbounded input iterators"
             Err(ScHostFnErrorCode::UnknownError.into())
         }
     }
@@ -259,7 +259,7 @@ where
     A: MeteredClone,
 {
     fn charge_for_clone(&self, budget: &Budget) -> Result<(), HostError> {
-        self.charge_new(self.len(), budget)
+        Self::charge_new(self.len(), budget)
     }
 }
 

@@ -80,6 +80,15 @@ impl Compare<&[u8]> for Budget {
     }
 }
 
+// Apparently we can't do a blanket T:Ord impl because there are Ord derivations
+// that also go through &T and Option<T> that conflict with our impls above
+// (patches welcome from someone who understands trait-system workarounds
+// better). But we can list out any concrete Ord instances we want to support
+// here.
+//
+// We only do this for fixed-size types, because we want to charge them a constant
+// (actually just "1" to avoid being subject to instability in layout / size_of).
+
 struct FixedSizeOrdType<'a, T: Ord>(&'a T);
 impl<T: Ord> Compare<FixedSizeOrdType<'_, T>> for Budget {
     type Error = HostError;
@@ -88,7 +97,7 @@ impl<T: Ord> Compare<FixedSizeOrdType<'_, T>> for Budget {
         a: &FixedSizeOrdType<'_, T>,
         b: &FixedSizeOrdType<'_, T>,
     ) -> Result<Ordering, Self::Error> {
-        self.charge(CostType::BytesCmp, core::mem::size_of::<T>() as u64)?;
+        self.charge(CostType::BytesCmp, 1)?;
         Ok(a.0.cmp(&b.0))
     }
 }

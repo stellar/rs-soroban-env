@@ -53,7 +53,7 @@ where
 
     fn charge_binsearch<B: AsBudget>(&self, b: &B) -> Result<(), HostError> {
         let mag = 64 - (self.map.len() as u64).leading_zeros();
-        b.as_budget().charge(CostType::MapEntry, mag as u64)
+        b.as_budget().charge(CostType::MapEntry, 1 + mag as u64)
     }
 }
 

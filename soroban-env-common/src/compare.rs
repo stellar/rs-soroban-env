@@ -110,12 +110,6 @@ impl<T, C: Compare<T>> Compare<Rc<T>> for C {
     }
 }
 
-// Apparently we can't do a blanket T:Ord impl because there are Ord derivations
-// that also go through &T and Option<T> that conflict with our impls above
-// (patches welcome from someone who understands trait-system workarounds
-// better). But we can list out any concrete Ord instances we want to support
-// here.
-
 impl<E: CheckedEnv> Compare<RawVal> for E {
     type Error = E::Error;
 
