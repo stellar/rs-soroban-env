@@ -220,17 +220,6 @@ dependencies = [
 
 [[package]]
 name = "crate-git-revision"
-version = "0.0.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "78cea8a8c6f40508aa6292231db40fe5b4968f6959fefcad608e528b50657564"
-dependencies = [
- "serde",
- "serde_derive",
- "serde_json",
-]
-
-[[package]]
-name = "crate-git-revision"
 version = "0.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f998aef136a4e7833b0e4f0fc0939a59c40140b28e0ffbf524ad84fb2cc568c8"
@@ -1027,7 +1016,7 @@ checksum = "f0ea32af43239f0d353a7dd75a22d94c329c8cdaafdcb4c1c1335aa10c298a4a"
 name = "soroban-env-common"
 version = "0.0.10"
 dependencies = [
- "crate-git-revision 0.0.4",
+ "crate-git-revision",
  "serde",
  "soroban-env-macros",
  "soroban-wasmi",
@@ -1149,10 +1138,10 @@ checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 [[package]]
 name = "stellar-xdr"
 version = "0.0.9"
-source = "git+https://github.com/stellar/rs-stellar-xdr?rev=1309e3de#1309e3de46fcb01743f818831de3a9ac4a5b1ab6"
+source = "git+https://github.com/stellar/rs-stellar-xdr?rev=045e7d5e#045e7d5e481b0aa46076db6426dc3ba1e7fe56bd"
 dependencies = [
  "base64",
- "crate-git-revision 0.0.3",
+ "crate-git-revision",
  "hex",
  "serde",
  "serde_with",
