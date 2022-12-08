@@ -24,5 +24,7 @@ impl Benchmark for WorstCaseLinearModels {
 #[cfg(all(test, any(target_os = "linux", target_os = "macos")))]
 fn main() -> std::io::Result<()> {
     env_logger::init();
-    for_each_host_cost_measurement::<WorstCaseLinearModels>()
+    for_each_host_cost_measurement::<WorstCaseLinearModels>()?;
+    for_each_wasm_insn_measurement::<WorstCaseLinearModels>()?;
+    Ok(())
 }

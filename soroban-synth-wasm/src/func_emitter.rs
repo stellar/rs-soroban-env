@@ -1,6 +1,6 @@
-use crate::{Arity, FuncRef, ModEmitter};
+use crate::{Arity, FuncRef, GlobalRef, ModEmitter, TypeRef};
 use soroban_env_common::{xdr::ScStatus, RawVal, Status, Symbol, Tag};
-use wasm_encoder::{BlockType, Function, Instruction, ValType};
+use wasm_encoder::{BlockType, Function, Instruction, MemArg, ValType};
 
 /// An index into the _locals_ for the current function, which may refer
 /// either to a function argument or a local variable.
@@ -147,66 +147,12 @@ impl FuncEmitter {
     }
 
     /// Emit an [`Instruction::I64Const`]
-    pub fn const64(&mut self, i: i64) -> &mut Self {
+    pub fn i64_const(&mut self, i: i64) -> &mut Self {
         self.insn(&Instruction::I64Const(i))
     }
     /// Emit an [`Instruction::I32Const`]
-    pub fn const32(&mut self, i: i32) -> &mut Self {
+    pub fn i32_const(&mut self, i: i32) -> &mut Self {
         self.insn(&Instruction::I32Const(i))
-    }
-    /// Emit an [`Instruction::I32Const`] representing a boolean
-    pub fn const_bool(&mut self, b: bool) -> &mut Self {
-        self.insn(&Instruction::I32Const(if b { 1 } else { 0 }))
-    }
-
-    /// Emit an [`Instruction::I64Mul`]
-    pub fn mul64(&mut self) -> &mut Self {
-        self.insn(&Instruction::I64Mul)
-    }
-    /// Emit an [`Instruction::I64Add`]
-    pub fn add64(&mut self) -> &mut Self {
-        self.insn(&Instruction::I64Add)
-    }
-    /// Emit an [`Instruction::I64And`]
-    pub fn and64(&mut self) -> &mut Self {
-        self.insn(&Instruction::I64And)
-    }
-    /// Emit an [`Instruction::I32And`]
-    pub fn and32(&mut self) -> &mut Self {
-        self.insn(&Instruction::I32And)
-    }
-    /// Emit an [`Instruction::I64Or`]
-    pub fn or64(&mut self) -> &mut Self {
-        self.insn(&Instruction::I64Or)
-    }
-    /// Emit an [`Instruction::I32Or`]
-    pub fn or32(&mut self) -> &mut Self {
-        self.insn(&Instruction::I32Or)
-    }
-    /// Emit an [`Instruction::I64Shl`]
-    pub fn shl64(&mut self) -> &mut Self {
-        self.insn(&Instruction::I64Shl)
-    }
-    /// Emit an [`Instruction::I64Sub`]
-    pub fn sub64(&mut self) -> &mut Self {
-        self.insn(&Instruction::I64Sub)
-    }
-    /// Emit an [`Instruction::I64Eq`]
-    pub fn eq64(&mut self) -> &mut Self {
-        self.insn(&Instruction::I64Eq)
-    }
-    /// Emit an [`Instruction::I64Eqz`]
-    pub fn eqz64(&mut self) -> &mut Self {
-        self.insn(&Instruction::I64Eqz)
-    }
-    /// Emit an [`Instruction::I64Ne`]
-    pub fn ne64(&mut self) -> &mut Self {
-        self.insn(&Instruction::I64Ne)
-    }
-
-    /// Emit an [`Instruction::Unreachable`]
-    pub fn trap(&mut self) -> &mut Self {
-        self.insn(&Instruction::Unreachable)
     }
 
     /// Emit an [`Instruction::If`], call `t(self)`, then emit
@@ -229,25 +175,13 @@ impl FuncEmitter {
     /// trapping if not. Consumes the top of stack value, so you might need to
     /// call [`FuncEmitter::dup_via`] first.
     pub fn assert_val_tag(&mut self, tag: Tag) -> &mut Self {
-        self.const64(Tag::rawval_mask())
-            .and64()
-            .const64(tag.rawval_const())
-            .ne64()
+        self.i64_const(Tag::rawval_mask())
+            .i64_and()
+            .i64_const(tag.rawval_const())
+            .i64_ne()
             .if_then_trap()
     }
 
-    /// Emit an [`Instruction::LocalGet`]
-    pub fn get(&mut self, loc: LocalRef) -> &mut Self {
-        self.insn(&Instruction::LocalGet(loc.0))
-    }
-    /// Emit an [`Instruction::LocalSet`]
-    pub fn set(&mut self, loc: LocalRef) -> &mut Self {
-        self.insn(&Instruction::LocalSet(loc.0))
-    }
-    /// Emit an [`Instruction::LocalTee`]
-    pub fn tee(&mut self, loc: LocalRef) -> &mut Self {
-        self.insn(&Instruction::LocalTee(loc.0))
-    }
     /// Emit an [`Instruction::LocalTee`] followed by an
     /// [`Instruction::LocalGet`], effectively duplicating the top-of-stack
     /// element.
@@ -256,20 +190,37 @@ impl FuncEmitter {
         // stack-machine operators like dup or pick, uses local variables for
         // them instead. Usually this is actually better, but 'dup' is quite
         // common and useful, has to be done by bouncing off a local.
-        self.tee(tmp).get(tmp)
+        self.local_tee(tmp).local_get(tmp)
     }
-    /// Emit an [`Instruction::Drop`]
-    pub fn drop(&mut self) -> &mut Self {
-        self.insn(&Instruction::Drop)
+    /// Emit an [`Instruction::BrTable`]
+    pub fn br_table(&mut self, ls: &[u32], l: u32) -> &mut Self {
+        self.insn(&Instruction::BrTable(std::borrow::Cow::Borrowed(ls), l))
     }
     /// Emit an [`Instruction::MemoryGrow`]
-    pub fn mem_grow(&mut self, loc: LocalRef) -> &mut Self {
-        self.insn(&Instruction::MemoryGrow(loc.0))
+    pub fn memory_grow(&mut self) -> &mut Self {
+        self.insn(&Instruction::MemoryGrow(0))
     }
     /// Emit an [`Instruction::MemorySize`]
-    pub fn mem_size(&mut self, loc: LocalRef) -> &mut Self {
-        self.insn(&Instruction::MemorySize(loc.0))
+    pub fn memory_size(&mut self) -> &mut Self {
+        self.insn(&Instruction::MemorySize(0))
     }
+    /// Emit an [`Instruction::Block`]
+    pub fn block(&mut self) -> &mut Self {
+        self.insn(&Instruction::Block(BlockType::Empty))
+    }
+    /// Emit an [`Instruction::Br`]
+    pub fn br(&mut self, loc: u32) -> &mut Self {
+        self.insn(&Instruction::Br(loc))
+    }
+    /// Emit an [`Instruction::Call`]
+    pub fn call_func(&mut self, fun: FuncRef) -> &mut Self {
+        self.insn(&Instruction::Call(fun.0))
+    }
+    /// Emit an [`Instruction::CallIndirect`]
+    pub fn call_func_indirect(&mut self, ty: TypeRef) -> &mut Self {
+        self.insn(&Instruction::CallIndirect { ty: ty.0, table: 0 })
+    }
+
     /// Emit an [`Instruction::End`] and finish emitting code for this function,
     /// defining it in its enclosing [`ModEmitter`] and returning that
     /// [`ModEmitter`] as well as a [`FuncRef`] referring to the newly-defined
@@ -288,3 +239,117 @@ impl FuncEmitter {
         me
     }
 }
+
+macro_rules! trivial_control_insn {
+    ( $(($func_name: ident, $insn: ident)),* )
+    =>
+    {
+        impl FuncEmitter {
+        $(
+            pub fn $func_name(&mut self) -> &mut Self {
+                self.insn(&Instruction::$insn)
+            }
+        )*}
+    };
+}
+trivial_control_insn!(
+    (drop, Drop),
+    (select, Select),
+    (end, End),
+    (ret, Return),
+    (trap, Unreachable)
+);
+
+macro_rules! variable_insn {
+    ( $(($func_name: ident, $insn: ident, $ref: ty)),* )
+    =>
+    {
+        impl FuncEmitter {
+        $(
+            pub fn $func_name(&mut self, r: $ref) -> &mut Self {
+                self.insn(&Instruction::$insn(r.0))
+            }
+        )*
+        }
+    }
+}
+variable_insn!(
+    (local_get, LocalGet, LocalRef),
+    (local_set, LocalSet, LocalRef),
+    (local_tee, LocalTee, LocalRef),
+    (global_get, GlobalGet, GlobalRef),
+    (global_set, GlobalSet, GlobalRef)
+);
+
+macro_rules! i64_mem_insn {
+    ( $(($func_name: ident, $insn: ident)),* )
+    =>
+    {
+        impl FuncEmitter {
+        $(
+            pub fn $func_name(&mut self, memory_index: u32) -> &mut Self {
+                self.insn(&Instruction::$insn(MemArg {
+                    offset: 0,
+                    align: 0,
+                    memory_index,
+                }))
+            }
+        )*
+        }
+    }
+}
+i64_mem_insn!(
+    (i64_store, I64Store),
+    (i64_load, I64Load),
+    (i64_load8_s, I64Load8S),
+    (i64_load16_s, I64Load16S),
+    (i64_load32_s, I64Load32S),
+    (i64_store8, I64Store8),
+    (i64_store16, I64Store16),
+    (i64_store32, I64Store32)
+);
+
+macro_rules! i64_numeric_insn {
+    ( $(($func_name: ident, $insn: ident)),* )
+    =>
+    {
+        impl FuncEmitter {
+        $(
+            pub fn $func_name(&mut self) -> &mut Self {
+                self.insn(&Instruction::$insn)
+            }
+        )*
+        }
+    }
+}
+i64_numeric_insn!(
+    (i64_eqz, I64Eqz),
+    (i64_eq, I64Eq),
+    (i64_ne, I64Ne),
+    (i64_lt_s, I64LtS),
+    (i64_lt_u, I64LtU),
+    (i64_gt_s, I64GtS),
+    (i64_gt_u, I64GtU),
+    (i64_le_s, I64LeS),
+    (i64_le_u, I64LeU),
+    (i64_ge_s, I64GeS),
+    (i64_ge_u, I64GeU),
+    (i64_clz, I64Clz),
+    (i64_ctz, I64Ctz),
+    (i64_popcnt, I64Popcnt),
+    (i64_add, I64Add),
+    (i64_sub, I64Sub),
+    (i64_mul, I64Mul),
+    (i64_div_s, I64DivS),
+    (i64_div_u, I64DivU),
+    (i64_rem_s, I64RemS),
+    (i64_rem_u, I64RemU),
+    (i64_and, I64And),
+    (i64_or, I64Or),
+    (i64_xor, I64Xor),
+    (i64_shl, I64Shl),
+    (i64_shr_s, I64ShrS),
+    (i64_shr_u, I64ShrU),
+    (i64_rotl, I64Rotl),
+    (i64_rotr, I64Rotr)
+);

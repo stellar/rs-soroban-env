@@ -16,4 +16,4 @@ mod mod_emitter;
 mod test;
 
 pub use func_emitter::{FuncEmitter, LocalRef, Operand};
-pub use mod_emitter::{Arity, FuncRef, ModEmitter, TypeRef};
+pub use mod_emitter::{Arity, FuncRef, GlobalRef, ModEmitter, TypeRef};
