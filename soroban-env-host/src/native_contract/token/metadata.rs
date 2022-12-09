@@ -28,7 +28,6 @@ pub fn has_metadata(e: &Host) -> Result<bool, HostError> {
 // Metering: *mostly* covered by components. `bytes_new_from_slice` and `Bytes` not covered.
 pub fn read_name(e: &Host) -> Result<Bytes, HostError> {
     match read_metadata(e)? {
-        Metadata::Token(token) => Ok(token.name),
         Metadata::Native => Ok(Bytes::try_from_val(e, e.bytes_new_from_slice(b"native")?)?),
         Metadata::AlphaNum4(asset) => {
             let mut res: Bytes = asset.asset_code.into();
@@ -56,17 +55,8 @@ pub fn read_name(e: &Host) -> Result<Bytes, HostError> {
 // Metering: *mostly* covered by components.`bytes_new_from_slice` and `Bytes` not covered.
 pub fn read_symbol(e: &Host) -> Result<Bytes, HostError> {
     match read_metadata(e)? {
-        Metadata::Token(token) => Ok(token.symbol),
         Metadata::Native => Ok(Bytes::try_from_val(e, e.bytes_new_from_slice(b"native")?)?),
         Metadata::AlphaNum4(asset) => Ok(asset.asset_code.into()),
         Metadata::AlphaNum12(asset) => Ok(asset.asset_code.into()),
-    }
-}
-
-// Metering: covered by components
-pub fn read_decimal(e: &Host) -> Result<u32, HostError> {
-    match read_metadata(e)? {
-        Metadata::Token(token) => Ok(token.decimals),
-        Metadata::Native | Metadata::AlphaNum4(_) | Metadata::AlphaNum12(_) => Ok(7),
     }
 }

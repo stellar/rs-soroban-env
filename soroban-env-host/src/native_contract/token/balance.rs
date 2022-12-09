@@ -85,12 +85,6 @@ pub fn write_state(e: &Host, id: Identifier, is_frozen: bool) -> Result<(), Host
 // Metering: covered by components
 pub fn transfer_classic_balance(e: &Host, to_key: AccountId, amount: i64) -> Result<(), HostError> {
     match read_metadata(e)? {
-        Metadata::Token(_) => {
-            return Err(e.err_status_msg(
-                ContractError::OperationNotSupportedError,
-                "smart tokens don't support conversions to/from classic",
-            ))
-        }
         Metadata::Native => transfer_account_balance(e, to_key, amount)?,
         Metadata::AlphaNum4(asset) => transfer_trustline_balance(
             e,

@@ -1,14 +1,10 @@
 use crate::{
     host_vec,
-    native_contract::{
-        testutils::{sign_args, HostVec, TestSigner},
-        token::public_types::TokenMetadata,
-    },
-    test::util::{generate_account_id, generate_bytes_array},
+    native_contract::testutils::{sign_args, HostVec, TestSigner},
     Host, HostError,
 };
 use soroban_env_common::{
-    xdr::{Asset, ContractId, CreateContractArgs, HostFunction, ScContractCode, Uint256},
+    xdr::{Asset, ContractId, CreateContractArgs, HostFunction, ScContractCode},
     CheckedEnv, RawVal,
 };
 use soroban_env_common::{Symbol, TryFromVal, TryIntoVal};
@@ -23,23 +19,6 @@ pub(crate) struct TestToken<'a> {
 }
 
 impl<'a> TestToken<'a> {
-    pub(crate) fn new(host: &'a Host) -> Self {
-        host.set_source_account(generate_account_id());
-        let id_obj: RawVal = host
-            .invoke_function(HostFunction::CreateContract(CreateContractArgs {
-                contract_id: ContractId::SourceAccount(Uint256(generate_bytes_array())),
-                source: ScContractCode::Token,
-            }))
-            .unwrap()
-            .try_into_val(host)
-            .unwrap();
-        host.remove_source_account();
-        Self {
-            id: BytesN::<32>::try_from_val(host, id_obj).unwrap(),
-            host,
-        }
-    }
-
     pub(crate) fn new_from_asset(host: &'a Host, asset: Asset) -> Self {
         let id_obj: RawVal = host
             .invoke_function(HostFunction::CreateContract(CreateContractArgs {
@@ -53,17 +32,6 @@ impl<'a> TestToken<'a> {
             id: BytesN::<32>::try_from_val(host, id_obj).unwrap(),
             host,
         }
-    }
-
-    pub(crate) fn init(&self, admin: Identifier, metadata: TokenMetadata) -> Result<(), HostError> {
-        Ok(self
-            .host
-            .call(
-                self.id.clone().into(),
-                Symbol::from_str("init").into(),
-                host_vec![self.host, admin, metadata].into(),
-            )?
-            .try_into_val(self.host)?)
     }
 
     pub(crate) fn nonce(&self, id: Identifier) -> Result<i128, HostError> {

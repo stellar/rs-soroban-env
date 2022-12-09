@@ -11,10 +11,10 @@ use crate::native_contract::token::balance::{
 use crate::native_contract::token::cryptography::check_auth;
 use crate::native_contract::token::event;
 use crate::native_contract::token::metadata::{
-    has_metadata, read_decimal, read_name, read_symbol, write_metadata,
+    has_metadata, read_name, read_symbol, write_metadata,
 };
 use crate::native_contract::token::nonce::read_nonce;
-use crate::native_contract::token::public_types::{Identifier, Metadata, Signature, TokenMetadata};
+use crate::native_contract::token::public_types::{Identifier, Metadata, Signature};
 use crate::{err, HostError};
 
 use soroban_env_common::xdr::Asset;
@@ -34,9 +34,6 @@ pub trait TokenTrait {
     /// No admin will be set for the Native token, so any function that checks the admin
     /// (burn, freeze, unfreeze, mint, set_admin) will always fail
     fn init_asset(e: &Host, asset_bytes: Bytes) -> Result<(), HostError>;
-
-    /// init creates a token contract that does not wrap an asset on the classic side.
-    fn init(e: &Host, admin: Identifier, metadata: TokenMetadata) -> Result<(), HostError>;
 
     fn nonce(e: &Host, id: Identifier) -> Result<i128, HostError>;
 
@@ -187,19 +184,6 @@ impl TokenTrait for Token {
                 )?;
             }
         }
-        Ok(())
-    }
-
-    fn init(e: &Host, admin: Identifier, metadata: TokenMetadata) -> Result<(), HostError> {
-        if has_metadata(&e)? {
-            return Err(e.err_status_msg(
-                ContractError::AlreadyInitializedError,
-                "token has been already initialized",
-            ));
-        }
-
-        write_administrator(&e, admin)?;
-        write_metadata(&e, Metadata::Token(metadata))?;
         Ok(())
     }
 
@@ -380,8 +364,8 @@ impl TokenTrait for Token {
         Ok(())
     }
 
-    fn decimals(e: &Host) -> Result<u32, HostError> {
-        read_decimal(&e)
+    fn decimals(_e: &Host) -> Result<u32, HostError> {
+        Ok(7)
     }
 
     fn name(e: &Host) -> Result<Bytes, HostError> {
