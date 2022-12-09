@@ -5,7 +5,7 @@ use soroban_env_host::{
     xdr::{Hash, ScVal, ScVec},
     Host, Symbol, Vm,
 };
-use soroban_synth_wasm::{Arity, GlobalRef, LocalRef, ModEmitter, Operand};
+use soroban_synth_wasm::{Arity, GlobalRef, ModEmitter, Operand};
 
 const INSNS_OVERHEAD_CONST: u64 = 21; // measured by `push_const`
 const INSNS_OVERHEAD_DROP: u64 = 17; // measured by `drop`

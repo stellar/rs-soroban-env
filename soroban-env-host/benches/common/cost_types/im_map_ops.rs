@@ -24,7 +24,7 @@ impl HostCostMeasurement for ImMapImmutEntryMeasure {
 
     fn new_random_case(host: &Host, rng: &mut StdRng, input: u64) -> ImMapImmutEntrySample {
         let input = input * 100;
-        let mut keys: Vec<_> = util::to_rawval_u32(host, 0..(input as u32)).collect();
+        let mut keys: Vec<_> = util::to_rawval_u32(0..(input as u32)).collect();
         keys.shuffle(rng);
         let om = keys.iter().cloned().zip(keys.iter().cloned()).collect();
         let map: MeteredOrdMap<_, _, _> = MeteredOrdMap::from_map(om, host).unwrap();
@@ -34,15 +34,15 @@ impl HostCostMeasurement for ImMapImmutEntryMeasure {
 
     fn new_worst_case(host: &Host, _rng: &mut StdRng, input: u64) -> ImMapImmutEntrySample {
         let input = input * 100;
-        let keys: Vec<_> = util::to_rawval_u32(host, 0..(input as u32)).collect();
+        let keys: Vec<_> = util::to_rawval_u32(0..(input as u32)).collect();
         let om = keys.iter().cloned().zip(keys.iter().cloned()).collect();
         let map: MeteredOrdMap<_, _, _> = MeteredOrdMap::from_map(om, host).unwrap();
-        let keys = util::to_rawval_u32(host, [0, u32::MAX].iter().cloned()).collect();
+        let keys = util::to_rawval_u32([0, u32::MAX].iter().cloned()).collect();
         ImMapImmutEntrySample { map, keys }
     }
 
     fn new_best_case(host: &Host, _rng: &mut StdRng) -> ImMapImmutEntrySample {
-        let keys: Vec<_> = util::to_rawval_u32(host, [0].iter().cloned()).collect();
+        let keys: Vec<_> = util::to_rawval_u32([0].iter().cloned()).collect();
         let om = keys.iter().cloned().zip(keys.iter().cloned()).collect();
         let map: MeteredOrdMap<_, _, _> = MeteredOrdMap::from_map(om, host).unwrap();
         ImMapImmutEntrySample { map, keys }

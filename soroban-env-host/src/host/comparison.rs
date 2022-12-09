@@ -119,6 +119,9 @@ macro_rules! impl_compare_fixed_size_ord_type {
     };
 }
 
+// TODO: we should pass in the indivial size (in bytes) of each type and have the budget charge
+// that given amount. This is similar to self.charge(CostType::BytesCmp, mem::size_of<T>)?;
+// but we are passing the size in explicitly (because the `size_of` is unstable).
 impl_compare_fixed_size_ord_type!(bool);
 
 impl_compare_fixed_size_ord_type!(u32);
