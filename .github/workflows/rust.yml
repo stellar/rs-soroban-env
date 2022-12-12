@@ -57,7 +57,7 @@ jobs:
     runs-on: ${{ matrix.sys.os }}
     steps:
     - uses: actions/checkout@v3
-    - uses: stellar/actions/rust-cache@main
+    - uses: stellar/actions/rust-cache@cache-with-small-entries
     - run: rustup update
     - run: rustup target add ${{ matrix.sys.target }}
     - uses: stellar/binaries@v12
