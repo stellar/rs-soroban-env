@@ -217,10 +217,8 @@ where
                 // [0,1,2] remove_pos == 1
                 // take(1) + skip(2)
                 // [0] [2]
-                if found == usize::MAX - 1 {
-                    // TODO: something better for integer overflow.
-                    return Err(ScHostObjErrorCode::VecIndexOutOfBound.into());
-                }
+                // `found` cannot be > `usize::MAX` - 1, since that means the map contains more than
+                // `usize::MAX` elements. Therefore `found + 1` is guaranteed to not overflow.
                 let init = self.map.iter().take(found).cloned();
                 let fini = self.map.iter().skip(found + 1).cloned();
                 let iter = init.chain(fini);
