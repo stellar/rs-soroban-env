@@ -39,6 +39,66 @@ fn map_put_has_and_get() -> Result<(), HostError> {
 }
 
 #[test]
+fn map_put_insert_and_remove() -> Result<(), HostError> {
+    let host = Host::default();
+    let scmap: ScMap = host.map_err(
+        vec![
+            ScMapEntry {
+                key: ScVal::U32(1),
+                val: ScVal::U32(10),
+            },
+            ScMapEntry {
+                key: ScVal::U32(3),
+                val: ScVal::U32(30),
+            },
+        ]
+        .try_into(),
+    )?;
+    let scobj = ScObject::Map(scmap);
+    let mut obj = host.to_host_obj(&scobj)?;
+
+    obj = host.map_put(obj, 0_u32.into(), 0_u32.into())?;
+    obj = host.map_put(obj, 2_u32.into(), 20_u32.into())?;
+    obj = host.map_put(obj, 4_u32.into(), 40_u32.into())?;
+
+    let scmap_r: ScMap = host.map_err(
+        vec![
+            ScMapEntry {
+                key: ScVal::U32(0),
+                val: ScVal::U32(0),
+            },
+            ScMapEntry {
+                key: ScVal::U32(1),
+                val: ScVal::U32(10),
+            },
+            ScMapEntry {
+                key: ScVal::U32(2),
+                val: ScVal::U32(20),
+            },
+            ScMapEntry {
+                key: ScVal::U32(3),
+                val: ScVal::U32(30),
+            },
+            ScMapEntry {
+                key: ScVal::U32(4),
+                val: ScVal::U32(40),
+            },
+        ]
+        .try_into(),
+    )?;
+    let scobj_r = ScObject::Map(scmap_r);
+    let obj_r = host.to_host_obj(&scobj_r)?;
+    assert_eq!(host.obj_cmp(obj_r.into(), obj.into())?, 0);
+
+    obj = host.map_del(obj, 0_u32.into())?;
+    obj = host.map_del(obj, 2_u32.into())?;
+    obj = host.map_del(obj, 4_u32.into())?;
+    let obj_o = host.to_host_obj(&scobj)?;
+    assert_eq!(host.obj_cmp(obj_o.into(), obj.into())?, 0);
+    Ok(())
+}
+
+#[test]
 fn map_prev_and_next() -> Result<(), HostError> {
     let host = Host::default();
     let scmap: ScMap = host.map_err(

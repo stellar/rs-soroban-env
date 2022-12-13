@@ -214,8 +214,15 @@ where
         match self.find(key, ctx)? {
             Ok(found) if found > 0 => {
                 // There's a nonempty prefix to preserve.
-                let init = self.map.iter().take(found - 1).cloned();
-                let fini = self.map.iter().skip(found).cloned();
+                // [0,1,2] remove_pos == 1
+                // take(1) + skip(2)
+                // [0] [2]
+                if found == usize::MAX - 1 {
+                    // TODO: something better for integer overflow.
+                    return Err(ScHostObjErrorCode::VecIndexOutOfBound.into());
+                }
+                let init = self.map.iter().take(found).cloned();
+                let fini = self.map.iter().skip(found + 1).cloned();
                 let iter = init.chain(fini);
                 let new = Self::from_exact_iter(iter, ctx)?;
                 let res = self.map[found].1.metered_clone(ctx.as_budget())?;
