@@ -5,7 +5,7 @@ use crate::{Host, HostError};
 
 use super::base_types::BytesN;
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone)]
 #[contracttype]
 pub enum Invoker {
     Account(AccountId),

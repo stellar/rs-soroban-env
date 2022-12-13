@@ -10,11 +10,11 @@ impl HostCostMeasurement for CreateRecordDebugEventMeasure {
     type Runner = CreateRecordDebugEventRun;
 
     fn new_random_case(
-        host: &Host,
+        _host: &Host,
         _rng: &mut rand::prelude::StdRng,
         input: u64,
     ) -> CreateRecordDebugEventSample {
-        let args = util::to_rawval_u32(host, 0..(input as u32)).collect();
+        let args = util::to_rawval_u32(0..(input as u32)).collect();
         CreateRecordDebugEventSample {
             msg: "this is a debug msg",
             args,

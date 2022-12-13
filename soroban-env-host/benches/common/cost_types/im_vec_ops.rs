@@ -22,17 +22,17 @@ pub(crate) struct ImVecImmutEntryMeasure;
 impl HostCostMeasurement for ImVecImmutEntryMeasure {
     type Runner = ImVecImmutEntryRun;
 
-    fn new_best_case(host: &Host, _rng: &mut StdRng) -> ImVecImmutEntrySample {
-        let ov = util::to_rawval_u32(host, 0..1).collect();
+    fn new_best_case(_host: &Host, _rng: &mut StdRng) -> ImVecImmutEntrySample {
+        let ov = util::to_rawval_u32(0..1).collect();
         let vec: MeteredVector<_> = MeteredVector::from_vec(ov).unwrap();
         let idxs = [0].to_vec();
         ImVecImmutEntrySample { vec, idxs }
     }
 
     // Random case is worst case.
-    fn new_random_case(host: &Host, rng: &mut StdRng, input: u64) -> ImVecImmutEntrySample {
+    fn new_random_case(_host: &Host, rng: &mut StdRng, input: u64) -> ImVecImmutEntrySample {
         let input = 1 + (input * 100);
-        let ov = util::to_rawval_u32(host, 0..(input as u32)).collect();
+        let ov = util::to_rawval_u32(0..(input as u32)).collect();
         let vec: MeteredVector<_> = MeteredVector::from_vec(ov).unwrap();
         let mut idxs: Vec<usize> = (0..input as usize).collect();
         idxs.shuffle(rng);

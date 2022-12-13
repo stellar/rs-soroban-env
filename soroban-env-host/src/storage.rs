@@ -33,7 +33,7 @@ pub enum AccessType {
 impl Compare<AccessType> for Host {
     type Error = HostError;
 
-    fn compare(&self, a: &AccessType, b: &AccessType) -> Result<std::cmp::Ordering, Self::Error> {
+    fn compare(&self, a: &AccessType, b: &AccessType) -> Result<core::cmp::Ordering, Self::Error> {
         Ok(a.cmp(b))
     }
 }
@@ -41,7 +41,7 @@ impl Compare<AccessType> for Host {
 impl Compare<AccessType> for Budget {
     type Error = HostError;
 
-    fn compare(&self, a: &AccessType, b: &AccessType) -> Result<std::cmp::Ordering, Self::Error> {
+    fn compare(&self, a: &AccessType, b: &AccessType) -> Result<core::cmp::Ordering, Self::Error> {
         Ok(a.cmp(b))
     }
 }

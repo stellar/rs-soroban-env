@@ -1,22 +1,30 @@
-use soroban_env_host::{events::HostEvent, xdr::ScObjectType, Env, EnvBase, Host, Object, RawVal};
+use soroban_env_host::{
+    events::HostEvent, xdr::ScObjectType, Compare, Env, EnvBase, Host, Object, RawVal,
+};
 
 #[test]
 fn vec_as_seen_by_user() -> Result<(), ()> {
     let host = Host::default();
-    let int1 = host.obj_from_i64(5).in_env(&host);
+    let int1 = host.obj_from_i64(5);
 
-    let vec1a = host.vec_new(RawVal::from_void()).in_env(&host);
-    let vec1b = host.vec_push_back(vec1a.val, *int1.as_ref()).in_env(&host);
+    let vec1a = host.vec_new(RawVal::from_void());
+    let vec1b = host.vec_push_back(vec1a, *int1.as_ref());
 
     assert_ne!(vec1a.as_raw().get_payload(), vec1b.as_raw().get_payload());
 
-    let vec2a = host.vec_new(RawVal::from_void()).in_env(&host);
-    let vec2b = host.vec_push_back(vec2a.val, *int1.as_ref()).in_env(&host);
+    let vec2a = host.vec_new(RawVal::from_void());
+    let vec2b = host.vec_push_back(vec2a, *int1.as_ref());
 
     assert_ne!(vec2a.as_raw().get_payload(), vec2b.as_raw().get_payload());
     assert_ne!(vec1b.as_raw().get_payload(), vec2b.as_raw().get_payload());
-    assert_eq!(vec1a, vec2a);
-    assert_eq!(vec1b, vec2b);
+    assert_eq!(
+        host.compare(&vec1a, &vec2a).unwrap(),
+        core::cmp::Ordering::Equal
+    );
+    assert_eq!(
+        host.compare(&vec1b, &vec2b).unwrap(),
+        core::cmp::Ordering::Equal
+    );
     Ok(())
 }
 

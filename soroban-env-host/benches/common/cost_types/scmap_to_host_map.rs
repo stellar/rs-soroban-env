@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::BTreeSet;
 
 use crate::common::HostCostMeasurement;
 use rand::{rngs::StdRng, Rng};
@@ -18,7 +18,7 @@ impl HostCostMeasurement for ScMapToHostMapMeasure {
 
     fn new_random_case(_host: &Host, rng: &mut StdRng, input: u64) -> ScVal {
         let input = input * 100;
-        let mut hs: HashSet<u32> = HashSet::new();
+        let mut hs: BTreeSet<u32> = BTreeSet::new();
         while hs.len() < (input as usize) {
             hs.insert(rng.gen());
         }
