@@ -26,7 +26,7 @@ members = [
     "vec",
     "hostile",
     "complex",
-    "fannkuch"
+    "fannkuch",
 ]
 [profile.release]
 opt-level = "z"
@@ -46,12 +46,11 @@ soroban-env-guest = { path = "../../soroban-env-guest" }
 soroban-env-host = { path = "../../soroban-env-host" }
 
 [workspace.dependencies.soroban-sdk]
-version = "0.2.1"
+version = "0.3.2"
 git = "https://github.com/stellar/rs-soroban-sdk"
-rev = "63bef69c"
+rev = "c8175bd"
 
 # Uncomment the following to build against local SDK. This is useful when env
 # changes are breaking for SDK and require the respective SDK change
-[patch."https://github.com/stellar/rs-soroban-sdk"]
-soroban-sdk = { path = "../../../rs-soroban-sdk/soroban-sdk" }
-
+# [patch."https://github.com/stellar/rs-soroban-sdk"]
+# soroban-sdk = { path = "../../../rs-soroban-sdk/soroban-sdk" }
