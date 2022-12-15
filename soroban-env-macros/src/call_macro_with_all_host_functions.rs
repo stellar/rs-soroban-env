@@ -1,4 +1,4 @@
-use proc_macro2::{Literal, TokenStream};
+use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use std::fs::File;
 use syn::{Error, LitStr};
@@ -24,7 +24,7 @@ pub fn generate(file_lit: LitStr) -> Result<TokenStream, Error> {
     })?;
     let modules = modules.iter().map(|m| {
         let name = format_ident!("{}", &m.name);
-        let export = Literal::string(&m.export);
+        let export = &m.export;
         let functions = m.functions.iter().map(|f| {
             let docs = f.docs.as_deref().unwrap_or_default();
             let export = &f.export;
