@@ -18,7 +18,7 @@ pub fn generate(file_lit: LitStr) -> Result<TokenStream, Error> {
         )
     })?;
 
-    let modules: Vec<Module> = serde_json::from_reader(file).map_err(|e| {
+    let root: Root = serde_json::from_reader(file).map_err(|e| {
         Error::new(
             file_lit.span(),
             format!("error parsing file '{}': {}", file_str, e),
@@ -26,7 +26,7 @@ pub fn generate(file_lit: LitStr) -> Result<TokenStream, Error> {
     })?;
 
     // Build the 'mod' sections.
-    let modules = modules.iter().map(|m| {
+    let modules = root.modules.iter().map(|m| {
         let name = format_ident!("{}", &m.name);
         let export = &m.export;
 
@@ -87,6 +87,11 @@ pub fn generate(file_lit: LitStr) -> Result<TokenStream, Error> {
         }
         pub use _call_macro_with_all_host_functions as call_macro_with_all_host_functions;
     })
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Root {
+    pub modules: Vec<Module>,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
