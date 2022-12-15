@@ -1,12 +1,13 @@
-name: 'check for changes that should accompany env.rs change'
+name: 'check for changes that should accompany env.json change'
 
 on:
   pull_request:
     paths:
-      - 'soroban-env-common/src/env.rs'
+      - 'soroban-env-common/env.json'
 
 jobs:
   check:
+    if: '!contains( github.event.pull_request.labels.*.name, "skip-env-interface-version-bump")'
     runs-on: 'ubuntu-20.04'
     steps:
     - name: "check soroban-env-common/src/meta.rs was modified"
