@@ -1,8 +1,11 @@
+mod call_macro_with_all_host_functions;
+mod path;
+
 extern crate proc_macro;
 
 use proc_macro::TokenStream;
 use quote::{quote, ToTokens};
-use syn::{parse::Parse, parse_macro_input, Ident, LitInt, Token};
+use syn::{parse::Parse, parse_macro_input, Ident, LitInt, LitStr, Token};
 
 use stellar_xdr::{ScEnvMetaEntry, WriteXdr};
 
@@ -65,4 +68,13 @@ pub fn generate_env_meta_consts(input: TokenStream) -> TokenStream {
     let meta_input = parse_macro_input!(input as MetaInput);
     let meta_consts_output = MetaConstsOutput { input: meta_input };
     quote! { #meta_consts_output }.into()
+}
+
+#[proc_macro]
+pub fn generate_call_macro_with_all_host_functions(input: TokenStream) -> TokenStream {
+    let file = parse_macro_input!(input as LitStr);
+    match call_macro_with_all_host_functions::generate(file) {
+        Ok(t) => t.into(),
+        Err(e) => e.to_compile_error().into(),
+    }
 }

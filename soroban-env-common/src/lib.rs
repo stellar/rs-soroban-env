@@ -69,7 +69,7 @@ pub use val::Val;
 pub use checked_env::CheckedEnv;
 pub use compare::Compare;
 pub use convert::Convert;
-pub use env::{Env, EnvBase};
+pub use env::{call_macro_with_all_host_functions, Env, EnvBase};
 pub use env_val::{FromVal, IntoVal, TryFromVal, TryIntoVal};
 pub use unimplemented_env::UnimplementedEnv;
 pub use vmcaller_checked_env::{VmCaller, VmCallerCheckedEnv};
