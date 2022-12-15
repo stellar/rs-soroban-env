@@ -18,7 +18,7 @@ use crate::Host;
 use crate::{host::metered_map::MeteredOrdMap, HostError};
 
 pub type FootprintType = MeteredOrdMap<Rc<LedgerKey>, AccessType, Budget>;
-pub type StorageMapType = MeteredOrdMap<Rc<LedgerKey>, Option<Rc<LedgerEntry>>, Budget>;
+pub type StorageType = MeteredOrdMap<Rc<LedgerKey>, Option<Rc<LedgerEntry>>, Budget>;
 
 /// A helper type used by [Footprint] to designate which ways
 /// a given [LedgerKey] is accessed, or is allowed to be accessed,
@@ -147,7 +147,7 @@ impl Default for FootprintMode {
 pub struct Storage {
     pub footprint: Footprint,
     pub mode: FootprintMode,
-    pub map: StorageMapType,
+    pub map: StorageType,
 }
 
 // Notes on metering: all storage operations: `put`, `get`, `del`, `has` are
@@ -156,7 +156,7 @@ impl Storage {
     /// Constructs a new [Storage] in [FootprintMode::Enforcing] using a
     /// given [Footprint] and a storage map populated with all the keys
     /// listed in the [Footprint].
-    pub fn with_enforcing_footprint_and_map(footprint: Footprint, map: StorageMapType) -> Self {
+    pub fn with_enforcing_footprint_and_map(footprint: Footprint, map: StorageType) -> Self {
         Self {
             mode: FootprintMode::Enforcing,
             footprint,

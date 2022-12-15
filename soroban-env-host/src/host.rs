@@ -21,7 +21,7 @@ use soroban_env_common::{
 
 use crate::budget::{AsBudget, Budget, CostType};
 use crate::events::{DebugError, DebugEvent, Events};
-use crate::storage::{Storage, StorageMapType};
+use crate::storage::{Storage, StorageType};
 
 use crate::host_object::{HostMap, HostObject, HostObjectType, HostVec};
 #[cfg(feature = "vm")]
@@ -53,7 +53,7 @@ use crate::Compare;
 // Notes on metering: `RollbackPoint` are metered under Frame operations
 #[derive(Clone)]
 pub(crate) struct RollbackPoint {
-    storage: StorageMapType,
+    storage: StorageType,
     objects: usize,
 }
 
