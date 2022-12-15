@@ -1771,17 +1771,6 @@ impl VmCallerCheckedEnv for Host {
         self.create_contract_with_id_preimage(code, id_preimage)
     }
 
-    fn create_token_from_contract(
-        &self,
-        _vmcaller: &mut VmCaller<Host>,
-        salt: Object,
-    ) -> Result<Object, HostError> {
-        let contract_id = self.get_current_contract_id()?;
-        let salt = self.uint256_from_obj_input("salt", salt)?;
-        let id_preimage = self.id_preimage_from_contract(contract_id, salt)?;
-        self.create_contract_with_id_preimage(ScContractCode::Token, id_preimage)
-    }
-
     // Notes on metering: here covers the args unpacking. The actual VM work is changed at lower layers.
     fn call(
         &self,

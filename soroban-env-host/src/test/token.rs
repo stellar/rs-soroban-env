@@ -11,7 +11,7 @@ use crate::{
         },
         token::{
             error::ContractError,
-            public_types::{Ed25519Signature, Identifier, Signature, TokenMetadata},
+            public_types::{Ed25519Signature, Identifier, Signature},
             test_token::TestToken,
         },
     },
@@ -29,9 +29,9 @@ use soroban_env_common::{
     },
     RawVal,
 };
-use soroban_env_common::{CheckedEnv, EnvBase, Symbol, TryFromVal, TryIntoVal};
+use soroban_env_common::{CheckedEnv, Symbol, TryFromVal, TryIntoVal};
 
-use crate::native_contract::base_types::{Bytes, BytesN};
+use crate::native_contract::base_types::BytesN;
 
 struct TokenTest {
     host: Host,
@@ -64,23 +64,41 @@ impl TokenTest {
         }
     }
 
-    fn default_smart_token_with_admin_id(&self, admin: Identifier) -> TestToken {
-        let token = TestToken::new(&self.host);
+    fn default_token_with_admin_id(&self, new_admin: Identifier) -> TestToken {
+        let issuer_id = signer_to_account_id(&self.host, &self.admin_key);
+        self.create_classic_account(
+            &issuer_id,
+            vec![(&self.admin_key, 100)],
+            10_000_000,
+            1,
+            [1, 0, 0, 0],
+            None,
+            None,
+        );
+
+        let asset_code = [0_u8; 4];
+        let asset = Asset::CreditAlphanum4(AlphaNum4 {
+            asset_code: AssetCode4(asset_code),
+            issuer: issuer_id.clone(),
+        });
+
+        let token = TestToken::new_from_asset(&self.host, asset.clone());
+
+        let issuer = TestSigner::account(&issuer_id, vec![&self.admin_key]);
+
         token
-            .init(
-                admin,
-                TokenMetadata {
-                    name: self.convert_bytes(b"abcd"),
-                    symbol: self.convert_bytes(b"123xyz"),
-                    decimals: 8,
-                },
+            .set_admin(
+                &issuer,
+                token.nonce(issuer.get_identifier(&self.host)).unwrap(),
+                new_admin,
             )
             .unwrap();
+
         token
     }
 
-    fn default_smart_token(&self, admin: &TestSigner) -> TestToken {
-        self.default_smart_token_with_admin_id(admin.get_identifier(&self.host))
+    fn default_token(&self, admin: &TestSigner) -> TestToken {
+        self.default_token_with_admin_id(admin.get_identifier(&self.host))
     }
 
     fn get_native_balance(&self, account_id: &AccountId) -> i64 {
@@ -230,10 +248,6 @@ impl TokenTest {
         key
     }
 
-    fn convert_bytes(&self, bytes: &[u8]) -> Bytes {
-        Bytes::try_from_val(&self.host, self.host.bytes_new_from_slice(bytes).unwrap()).unwrap()
-    }
-
     fn run_from_contract<T, F>(
         &self,
         contract_id_bytes: &BytesN<32>,
@@ -283,105 +297,6 @@ fn to_contract_err(e: HostError) -> ContractError {
 }
 
 #[test]
-fn test_smart_token_init_and_balance() {
-    let test = TokenTest::setup();
-    let token = TestToken::new(&test.host);
-    let admin = TestSigner::Ed25519(&test.admin_key);
-    let token_metadata = TokenMetadata {
-        name: test.convert_bytes(&[0, 0, b'a']),
-        symbol: test.convert_bytes(&[255, 123, 0, b'a']),
-        decimals: 0xffffffff,
-    };
-    token
-        .init(admin.get_identifier(&test.host), token_metadata.clone())
-        .unwrap();
-
-    // Make sure double initialization is not possible.
-    assert_eq!(
-        to_contract_err(
-            token
-                .init(admin.get_identifier(&test.host), token_metadata.clone())
-                .err()
-                .unwrap()
-        ),
-        ContractError::AlreadyInitializedError
-    );
-
-    assert_eq!(token.name().unwrap().to_vec(), vec![0, 0, b'a']);
-    assert_eq!(token.symbol().unwrap().to_vec(), vec![255, 123, 0, b'a']);
-    assert_eq!(token.decimals().unwrap(), 0xffffffff);
-
-    let user = TestSigner::Ed25519(&test.user_key);
-
-    assert_eq!(token.balance(user.get_identifier(&test.host)).unwrap(), 0);
-    assert_eq!(token.nonce(admin.get_identifier(&test.host)).unwrap(), 0);
-
-    token
-        .mint(&admin, 0, user.get_identifier(&test.host), 10_000_000)
-        .unwrap();
-
-    assert_eq!(
-        token.balance(user.get_identifier(&test.host)).unwrap(),
-        10_000_000
-    );
-    assert_eq!(token.nonce(admin.get_identifier(&test.host)).unwrap(), 1);
-}
-
-#[test]
-fn test_smart_tokens_dont_support_classic_ops() {
-    let test = TokenTest::setup();
-    let admin = TestSigner::Ed25519(&test.admin_key);
-    let token = test.default_smart_token(&admin);
-    let account_id = signer_to_account_id(&test.host, &test.user_key);
-    let user = TestSigner::account(&account_id, vec![&test.user_key]);
-    test.create_classic_account(
-        &account_id,
-        vec![(&test.user_key, 100)],
-        10_000_000,
-        0,
-        [1, 0, 0, 0],
-        None,
-        None,
-    );
-
-    token
-        .mint(
-            &admin,
-            token.nonce(admin.get_identifier(&test.host)).unwrap(),
-            user.get_identifier(&test.host),
-            100_000,
-        )
-        .unwrap();
-
-    assert_eq!(
-        to_contract_err(
-            token
-                .export(
-                    &user,
-                    token.nonce(user.get_identifier(&test.host)).unwrap(),
-                    1
-                )
-                .err()
-                .unwrap()
-        ),
-        ContractError::OperationNotSupportedError
-    );
-    assert_eq!(
-        to_contract_err(
-            token
-                .import(
-                    &user,
-                    token.nonce(user.get_identifier(&test.host)).unwrap(),
-                    1
-                )
-                .err()
-                .unwrap()
-        ),
-        ContractError::OperationNotSupportedError
-    );
-}
-
-#[test]
 fn test_native_token_smart_roundtrip() {
     let test = TokenTest::setup();
 
@@ -410,23 +325,6 @@ fn test_native_token_smart_roundtrip() {
 
     let user = TestSigner::account(&account_id, vec![&test.user_key]);
 
-    // Wrapped token can't be initialized as regular token.
-    assert_eq!(
-        to_contract_err(
-            token
-                .init(
-                    user.get_identifier(&test.host),
-                    TokenMetadata {
-                        name: test.convert_bytes(b"native"),
-                        symbol: test.convert_bytes(b"native"),
-                        decimals: 7,
-                    },
-                )
-                .err()
-                .unwrap()
-        ),
-        ContractError::AlreadyInitializedError
-    );
     // Also can't set a new admin (and there is no admin in the first place).
     assert!(token
         .set_admin(&user, 0, user.get_identifier(&test.host))
@@ -562,24 +460,6 @@ fn test_classic_asset_roundtrip(asset_code: &[u8]) {
 
     let user = TestSigner::account(&account_id, vec![&test.user_key]);
 
-    // Wrapped token can't be initialized as regular token.
-    assert_eq!(
-        to_contract_err(
-            token
-                .init(
-                    user.get_identifier(&test.host),
-                    TokenMetadata {
-                        name: test.convert_bytes(b"native"),
-                        symbol: test.convert_bytes(b"native"),
-                        decimals: 7,
-                    },
-                )
-                .err()
-                .unwrap()
-        ),
-        ContractError::AlreadyInitializedError
-    );
-
     assert_eq!(
         test.get_classic_trustline_balance(&trustline_key),
         10_000_000
@@ -670,7 +550,7 @@ fn test_classic_asset12_smart_roundtrip() {
 fn test_direct_transfer() {
     let test = TokenTest::setup();
     let admin = TestSigner::Ed25519(&test.admin_key);
-    let token = test.default_smart_token(&admin);
+    let token = test.default_token(&admin);
 
     let user = TestSigner::Ed25519(&test.user_key);
     let user_2 = TestSigner::Ed25519(&test.user_key_2);
@@ -745,7 +625,7 @@ fn test_direct_transfer() {
 fn test_transfer_with_allowance() {
     let test = TokenTest::setup();
     let admin = TestSigner::Ed25519(&test.admin_key);
-    let token = test.default_smart_token(&admin);
+    let token = test.default_token(&admin);
 
     let user = TestSigner::Ed25519(&test.user_key);
     let user_2 = TestSigner::Ed25519(&test.user_key_2);
@@ -894,7 +774,7 @@ fn test_transfer_with_allowance() {
 fn test_freeze_and_unfreeze() {
     let test = TokenTest::setup();
     let admin = TestSigner::Ed25519(&test.admin_key);
-    let token = test.default_smart_token(&admin);
+    let token = test.default_token(&admin);
 
     let user = TestSigner::Ed25519(&test.user_key);
     let user_2 = TestSigner::Ed25519(&test.user_key_2);
@@ -990,7 +870,7 @@ fn test_freeze_and_unfreeze() {
 fn test_burn() {
     let test = TokenTest::setup();
     let admin = TestSigner::Ed25519(&test.admin_key);
-    let token = test.default_smart_token(&admin);
+    let token = test.default_token(&admin);
 
     let user = TestSigner::Ed25519(&test.user_key);
     token
@@ -1053,7 +933,7 @@ fn test_burn() {
 fn test_set_admin() {
     let test = TokenTest::setup();
     let admin = TestSigner::Ed25519(&test.admin_key);
-    let token = test.default_smart_token(&admin);
+    let token = test.default_token(&admin);
     let new_admin = TestSigner::Ed25519(&test.user_key);
 
     // Give admin rights to the new admin.
@@ -1214,7 +1094,7 @@ fn test_account_invoker_auth() {
     let user_id = Identifier::Account(user_acc.clone());
 
     let acc_invoker = TestSigner::AccountInvoker;
-    let token = test.default_smart_token_with_admin_id(admin_id.clone());
+    let token = test.default_token_with_admin_id(admin_id.clone());
 
     // Admin invoker can perform admin operation.
     test.run_from_account(admin_acc.clone(), || {
@@ -1293,7 +1173,7 @@ fn test_contract_invoker_auth() {
     let admin_contract_id = Identifier::Contract(admin_contract_id_bytes.clone());
     let user_contract_id = Identifier::Contract(user_contract_id_bytes.clone());
 
-    let token = test.default_smart_token_with_admin_id(admin_contract_id.clone());
+    let token = test.default_token_with_admin_id(admin_contract_id.clone());
 
     test.run_from_contract(&admin_contract_id_bytes, || {
         token.mint(&contract_invoker, 0, user_contract_id.clone(), 1000)
@@ -1365,7 +1245,7 @@ fn test_contract_invoker_auth() {
 fn test_auth_rejected_with_incorrect_nonce() {
     let test = TokenTest::setup();
     let admin = TestSigner::Ed25519(&test.admin_key);
-    let token = test.default_smart_token(&admin);
+    let token = test.default_token(&admin);
     let user = TestSigner::Ed25519(&test.user_key);
     let user_2 = TestSigner::Ed25519(&test.user_key_2);
 
@@ -1450,7 +1330,7 @@ fn test_auth_rejected_with_incorrect_nonce() {
 fn test_auth_rejected_with_incorrect_signer() {
     let test = TokenTest::setup();
     let admin = TestSigner::Ed25519(&test.admin_key);
-    let token = test.default_smart_token(&admin);
+    let token = test.default_token(&admin);
     let user = TestSigner::Ed25519(&test.user_key);
 
     let nonce = 0;
@@ -1501,7 +1381,7 @@ fn test_auth_rejected_with_incorrect_signer() {
 fn test_auth_rejected_for_incorrect_function_name() {
     let test = TokenTest::setup();
     let admin = TestSigner::Ed25519(&test.admin_key);
-    let token = test.default_smart_token(&admin);
+    let token = test.default_token(&admin);
     let user = TestSigner::Ed25519(&test.user_key);
 
     let nonce = 0;
@@ -1541,7 +1421,7 @@ fn test_auth_rejected_for_incorrect_function_name() {
 fn test_auth_rejected_for_incorrect_function_args() {
     let test = TokenTest::setup();
     let admin = TestSigner::Ed25519(&test.admin_key);
-    let token = test.default_smart_token(&admin);
+    let token = test.default_token(&admin);
     let user = TestSigner::Ed25519(&test.user_key);
 
     let nonce = 0;
@@ -1802,7 +1682,7 @@ fn test_classic_account_multisig_auth() {
 fn test_negative_amounts_are_not_allowed() {
     let test = TokenTest::setup();
     let admin = TestSigner::Ed25519(&test.admin_key);
-    let token = test.default_smart_token(&admin);
+    let token = test.default_token(&admin);
 
     let user = TestSigner::Ed25519(&test.user_key);
     let user_2 = TestSigner::Ed25519(&test.user_key_2);
