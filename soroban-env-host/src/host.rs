@@ -1649,7 +1649,7 @@ impl VmCallerCheckedEnv for Host {
     ) -> Result<RawVal, Self::Error> {
         self.visit_obj(v, |hv: &HostVec| {
             Ok(
-                match hv.first_index_of(|other| x.shallow_eq(other), &self.as_budget())? {
+                match hv.first_index_of(|other| self.compare(&x, other), &self.as_budget())? {
                     Some(u) => self.usize_to_rawval_u32(u)?,
                     None => RawVal::from_void(),
                 },
@@ -1665,7 +1665,7 @@ impl VmCallerCheckedEnv for Host {
     ) -> Result<RawVal, Self::Error> {
         self.visit_obj(v, |hv: &HostVec| {
             Ok(
-                match hv.last_index_of(|other| x.shallow_eq(other), self.as_budget())? {
+                match hv.last_index_of(|other| self.compare(&x, other), self.as_budget())? {
                     Some(u) => self.usize_to_rawval_u32(u)?,
                     None => RawVal::from_void(),
                 },
