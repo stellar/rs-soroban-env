@@ -12,10 +12,9 @@ use soroban_env_common::{
         AccountId, Asset, ContractCodeEntry, ContractDataEntry, ContractEvent, ContractEventBody,
         ContractEventType, ContractEventV0, ContractId, CreateContractArgs, ExtensionPoint, Hash,
         HashIdPreimage, HostFunction, HostFunctionType, InstallContractCodeArgs, Int128Parts,
-        LedgerEntry, LedgerEntryData, LedgerKey, LedgerKeyContractCode, ScContractCode,
-        ScHostContextErrorCode, ScHostFnErrorCode, ScHostObjErrorCode, ScHostStorageErrorCode,
-        ScHostValErrorCode, ScMap, ScMapEntry, ScObject, ScStatusType, ScVal, ScVec,
-        ThresholdIndexes,
+        LedgerEntryData, LedgerKey, LedgerKeyContractCode, ScContractCode, ScHostContextErrorCode,
+        ScHostFnErrorCode, ScHostObjErrorCode, ScHostStorageErrorCode, ScHostValErrorCode, ScMap,
+        ScMapEntry, ScObject, ScStatusType, ScVal, ScVec, ThresholdIndexes,
     },
     Convert, InvokerType, Status, TryFromVal, TryIntoVal, VmCaller, VmCallerCheckedEnv,
 };
@@ -960,7 +959,11 @@ impl Host {
     // Writes an arbitrary ledger entry to storage.
     // "testutils" is not covered by budget metering.
     #[cfg(any(test, feature = "testutils"))]
-    pub fn add_ledger_entry(&self, key: LedgerKey, val: LedgerEntry) -> Result<(), HostError> {
+    pub fn add_ledger_entry(
+        &self,
+        key: LedgerKey,
+        val: soroban_env_common::xdr::LedgerEntry,
+    ) -> Result<(), HostError> {
         self.with_mut_storage(|storage| storage.put(&key, &val, self.as_budget()))
     }
 
