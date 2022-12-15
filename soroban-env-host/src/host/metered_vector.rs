@@ -201,18 +201,36 @@ where
 
     pub fn first_index_of<F>(&self, f: F, budget: &Budget) -> Result<Option<usize>, HostError>
     where
-        F: FnMut(&A) -> bool,
+        F: Fn(&A) -> Result<Ordering, HostError>,
     {
         self.charge_scan(budget)?;
-        Ok(self.vec.iter().position(f))
+        let mut i = 0;
+        let mut iter = self.vec.iter();
+        // this is similar logic to `iter.position(f)` but is fallible
+        while let Some(val) = iter.next() {
+            if f(val)? == Ordering::Equal {
+                return Ok(Some(i));
+            }
+            i += 1;
+        }
+        Ok(None)
     }
 
     pub fn last_index_of<F>(&self, f: F, budget: &Budget) -> Result<Option<usize>, HostError>
     where
-        F: FnMut(&A) -> bool,
+        F: Fn(&A) -> Result<Ordering, HostError>,
     {
         self.charge_scan(budget)?;
-        Ok(self.vec.iter().rposition(f))
+        let mut i = self.vec.len();
+        let mut iter = self.vec.iter();
+        // this is similar logic to `iter.rposition(f)` but is fallible
+        while let Some(val) = iter.next_back() {
+            i -= 1;
+            if f(val)? == Ordering::Equal {
+                return Ok(Some(i));
+            }
+        }
+        Ok(None)
     }
 
     pub fn binary_search_by<F>(

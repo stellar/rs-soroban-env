@@ -12,17 +12,16 @@ use soroban_env_common::{
         AccountId, Asset, ContractCodeEntry, ContractDataEntry, ContractEvent, ContractEventBody,
         ContractEventType, ContractEventV0, ContractId, CreateContractArgs, ExtensionPoint, Hash,
         HashIdPreimage, HostFunction, HostFunctionType, InstallContractCodeArgs, Int128Parts,
-        LedgerEntry, LedgerEntryData, LedgerKey, LedgerKeyContractCode, ScContractCode,
-        ScHostContextErrorCode, ScHostFnErrorCode, ScHostObjErrorCode, ScHostStorageErrorCode,
-        ScHostValErrorCode, ScMap, ScMapEntry, ScObject, ScStatusType, ScVal, ScVec,
-        ThresholdIndexes,
+        LedgerEntryData, LedgerKey, LedgerKeyContractCode, ScContractCode, ScHostContextErrorCode,
+        ScHostFnErrorCode, ScHostObjErrorCode, ScHostStorageErrorCode, ScHostValErrorCode, ScMap,
+        ScMapEntry, ScObject, ScStatusType, ScVal, ScVec, ThresholdIndexes,
     },
     Convert, InvokerType, Status, TryFromVal, TryIntoVal, VmCaller, VmCallerCheckedEnv,
 };
 
 use crate::budget::{AsBudget, Budget, CostType};
 use crate::events::{DebugError, DebugEvent, Events};
-use crate::storage::Storage;
+use crate::storage::{Storage, StorageMap};
 
 use crate::host_object::{HostMap, HostObject, HostObjectType, HostVec};
 #[cfg(feature = "vm")]
@@ -46,7 +45,6 @@ mod validity;
 pub use error::HostError;
 
 use self::metered_clone::MeteredClone;
-use self::metered_map::MeteredOrdMap;
 use self::metered_vector::MeteredVector;
 use crate::Compare;
 
@@ -55,7 +53,7 @@ use crate::Compare;
 // Notes on metering: `RollbackPoint` are metered under Frame operations
 #[derive(Clone)]
 pub(crate) struct RollbackPoint {
-    storage: MeteredOrdMap<Rc<LedgerKey>, Option<Rc<LedgerEntry>>, Budget>,
+    storage: StorageMap,
     objects: usize,
 }
 
@@ -961,7 +959,11 @@ impl Host {
     // Writes an arbitrary ledger entry to storage.
     // "testutils" is not covered by budget metering.
     #[cfg(any(test, feature = "testutils"))]
-    pub fn add_ledger_entry(&self, key: LedgerKey, val: LedgerEntry) -> Result<(), HostError> {
+    pub fn add_ledger_entry(
+        &self,
+        key: LedgerKey,
+        val: soroban_env_common::xdr::LedgerEntry,
+    ) -> Result<(), HostError> {
         self.with_mut_storage(|storage| storage.put(&key, &val, self.as_budget()))
     }
 
@@ -1649,7 +1651,7 @@ impl VmCallerCheckedEnv for Host {
     ) -> Result<RawVal, Self::Error> {
         self.visit_obj(v, |hv: &HostVec| {
             Ok(
-                match hv.first_index_of(|other| x.shallow_eq(other), &self.as_budget())? {
+                match hv.first_index_of(|other| self.compare(&x, other), &self.as_budget())? {
                     Some(u) => self.usize_to_rawval_u32(u)?,
                     None => RawVal::from_void(),
                 },
@@ -1665,7 +1667,7 @@ impl VmCallerCheckedEnv for Host {
     ) -> Result<RawVal, Self::Error> {
         self.visit_obj(v, |hv: &HostVec| {
             Ok(
-                match hv.last_index_of(|other| x.shallow_eq(other), self.as_budget())? {
+                match hv.last_index_of(|other| self.compare(&x, other), self.as_budget())? {
                     Some(u) => self.usize_to_rawval_u32(u)?,
                     None => RawVal::from_void(),
                 },
