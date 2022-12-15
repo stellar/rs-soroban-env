@@ -2,8 +2,8 @@
 //! embedded in binaries (especially WASM binaries) compiled against a
 //! particular version of this crate. Versioning at this level provides an early
 //! diagnostic check for compatibility between a loaded WASM binary and the
-//! [Env](crate::Env) interface provided by the host, rather than a cryptic
-//! failure due to a runtime host function signature mismatch.
+//! [Env](crate::Env) interface provided by the host, rather than a cryptic failure
+//! due to a runtime host function signature mismatch.
 
 // There are two different notions of versioning in this system:
 //
@@ -58,5 +58,5 @@
 pub const ENV_META_V0_SECTION_NAME: &'static str = "contractenvmetav0";
 
 soroban_env_macros::generate_env_meta_consts!(
-    interface_version: 26,
+    interface_version: 27,
 );
