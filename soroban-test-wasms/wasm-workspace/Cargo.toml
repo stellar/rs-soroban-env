@@ -48,7 +48,7 @@ soroban-env-host = { path = "../../soroban-env-host" }
 [workspace.dependencies.soroban-sdk]
 version = "0.3.2"
 git = "https://github.com/stellar/rs-soroban-sdk"
-rev = "e2ecbee"
+rev = "62a2030"
 
 # Uncomment the following to build against local SDK. This is useful when env
 # changes are breaking for SDK and require the respective SDK change

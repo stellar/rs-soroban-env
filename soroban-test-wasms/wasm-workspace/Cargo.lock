@@ -920,6 +920,7 @@ dependencies = [
  "serde",
  "serde_json",
  "soroban-env-host",
+ "thiserror",
 ]
 
 [[package]]
