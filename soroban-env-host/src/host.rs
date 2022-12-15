@@ -353,10 +353,14 @@ impl Host {
     /// operation fails, it can be used to roll the [`Host`] back to the state
     /// it had before its associated [`Frame`] was pushed.
     fn push_frame(&self, frame: Frame) -> Result<RollbackPoint, HostError> {
-        self.0
-            .authorization_manager
-            .borrow_mut()
-            .push_frame(&frame)?;
+        // This is a bit hacky, as it relies on re-borrow to occur only doing
+        // the account contract invocations. Instead we should probably call it
+        // in more explicitly different fashion and check if we're calling it
+        // instead of a borrow check.
+        if let Ok(mut auth_manager) = self.0.authorization_manager.try_borrow_mut() {
+            auth_manager.push_frame(&frame)?;
+        }
+
         self.0.context.borrow_mut().push(frame);
         Ok(RollbackPoint {
             objects: self.0.objects.borrow().len(),
@@ -373,7 +377,13 @@ impl Host {
             .borrow_mut()
             .pop()
             .expect("unmatched host frame push/pop");
-        self.0.authorization_manager.borrow_mut().pop_frame();
+        // This is a bit hacky, as it relies on re-borrow to occur only doing
+        // the account contract invocations. Instead we should probably call it
+        // in more explicitly different fashion and check if we're calling it
+        // instead of a borrow check.
+        if let Ok(mut auth_manager) = self.0.authorization_manager.try_borrow_mut() {
+            auth_manager.pop_frame();
+        }
         #[cfg(feature = "testutils")]
         {
             // Empty call stack in tests means that some contract function call
@@ -849,17 +859,25 @@ impl Host {
         }
     }
 
-    // Notes on metering: this is covered by the called components.
     fn call_n(
         &self,
-        contract: Object,
+        id: Object,
         func: Symbol,
         args: &[RawVal],
         allow_reentry: bool,
     ) -> Result<RawVal, HostError> {
-        // Get contract ID
-        let id = self.hash_from_obj_input("contract", contract)?;
+        let id = self.hash_from_obj_input("contract", id)?;
+        self.call_n_internal(&id, func, args, allow_reentry)
+    }
 
+    // Notes on metering: this is covered by the called components.
+    pub(crate) fn call_n_internal(
+        &self,
+        id: &Hash,
+        func: Symbol,
+        args: &[RawVal],
+        allow_reentry: bool,
+    ) -> Result<RawVal, HostError> {
         if !allow_reentry {
             for f in self.0.context.borrow().iter() {
                 let exist_id = match f {
@@ -870,7 +888,7 @@ impl Host {
                     Frame::TestContract(tc) => &tc.id,
                     Frame::HostFunction(_) => continue,
                 };
-                if id == *exist_id {
+                if id == exist_id {
                     return Err(self.err_status_msg(
                         // TODO: proper error code
                         ScHostContextErrorCode::UnknownError,

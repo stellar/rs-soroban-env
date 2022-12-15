@@ -1,3 +1,4 @@
+use crate::auth::AuthorizedInvocation;
 // This is a built-in account 'contract'. This is not actually a contract, as
 // it doesn't need to be directly invoked. But semantically this is analagous
 // to a generic smart wallet contract that supports authentication and blanket
@@ -11,7 +12,7 @@ use crate::native_contract::{
 use crate::{err, HostError};
 use core::cmp::Ordering;
 use soroban_env_common::xdr::{Hash, ScAccountId, ThresholdIndexes, Uint256};
-use soroban_env_common::{CheckedEnv, RawVal, Symbol, TryFromVal, TryIntoVal};
+use soroban_env_common::{CheckedEnv, EnvBase, RawVal, Symbol, TryFromVal, TryIntoVal};
 
 use crate::native_contract::base_types::Vec as HostVec;
 
@@ -19,6 +20,14 @@ const MAX_ACCOUNT_SIGNATURES: u32 = 20;
 
 use soroban_env_common::xdr::AccountId;
 use soroban_native_sdk_macros::contracttype;
+
+#[derive(Clone)]
+#[contracttype]
+pub struct AuthorizationContext {
+    pub contract: BytesN<32>,
+    pub fn_name: Symbol,
+    pub args: HostVec,
+}
 
 #[derive(Clone)]
 #[contracttype]
@@ -32,6 +41,58 @@ pub enum Signature {
 pub struct AccountEd25519Signature {
     pub public_key: BytesN<32>,
     pub signature: BytesN<64>,
+}
+
+impl AuthorizationContext {
+    fn from_invocation(host: &Host, invocation: &AuthorizedInvocation) -> Result<Self, HostError> {
+        let top_invocation = invocation
+            .call_stack
+            .last()
+            .ok_or_else(|| host.err_general("empty auth call stack"))?;
+        let args = HostVec::try_from_val(
+            host,
+            host.scvals_to_rawvals(invocation.top_args.0.as_slice())?,
+        )?;
+        Ok(Self {
+            contract: BytesN::try_from_val(
+                host,
+                host.bytes_new_from_slice(top_invocation.contract_id.0.as_slice())?,
+            )?,
+            fn_name: top_invocation.function_name,
+            args,
+        })
+    }
+}
+
+pub(crate) fn check_generic_account_auth(
+    host: &Host,
+    generic_account_contract: &Hash,
+    signature_payload: &[u8; 32],
+    signature_args: Vec<RawVal>,
+    invocations: &Vec<AuthorizedInvocation>,
+) -> Result<(), HostError> {
+    let payload_obj = host.bytes_new_from_slice(signature_payload)?;
+    let signature_args_vec = HostVec::try_from_val(host, signature_args)?;
+    let mut auth_context_vec = HostVec::new(host)?;
+    for invocation in invocations {
+        auth_context_vec.push(AuthorizationContext::from_invocation(host, invocation)?)?;
+    }
+    Ok(host
+        .call_n_internal(
+            generic_account_contract,
+            Symbol::from_str("check_auth"),
+            &[
+                payload_obj.into(),
+                signature_args_vec.into(),
+                auth_context_vec.into(),
+            ],
+            // Allow reentry for this function in order to do wallet admin ops
+            // within the auth framework. Maybe there is a more elegant way 
+            // around this.
+            // TODO: check if there are security concerns about this.
+            true,
+        )?
+        .try_into()?)
 }
 
 pub(crate) fn check_account_authentication(

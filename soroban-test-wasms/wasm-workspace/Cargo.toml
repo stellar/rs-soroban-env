@@ -26,7 +26,8 @@ members = [
     "vec",
     "hostile",
     "complex",
-    "fannkuch"
+    "fannkuch",
+    "simple_account",
 ]
 [profile.release]
 opt-level = "z"
@@ -50,8 +51,16 @@ version = "0.2.1"
 git = "https://github.com/stellar/rs-soroban-sdk"
 rev = "63bef69c"
 
+[workspace.dependencies.soroban-account]
+version = "0.2.1"
+git = "https://github.com/stellar/rs-soroban-sdk"
+rev = "63bef69c"
+
 # Uncomment the following to build against local SDK. This is useful when env
 # changes are breaking for SDK and require the respective SDK change
 [patch."https://github.com/stellar/rs-soroban-sdk"]
 soroban-sdk = { path = "../../../rs-soroban-sdk/soroban-sdk" }
+soroban-account = { path = "../../../rs-soroban-sdk/soroban-account" }
 
+[patch."https://github.com/stellar/rs-stellar-xdr"]
+stellar-xdr = { path = "../../../rs-stellar-xdr/" }

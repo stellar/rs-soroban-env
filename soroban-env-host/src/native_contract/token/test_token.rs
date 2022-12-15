@@ -60,7 +60,7 @@ impl<'a> TestToken<'a> {
             .host
             .call(
                 self.id.clone().into(),
-                Symbol::from_str("init").into(),
+                Symbol::from_str("init"),
                 host_vec![self.host, admin, metadata].into(),
             )?
             .try_into_val(self.host)?)
@@ -71,7 +71,7 @@ impl<'a> TestToken<'a> {
             .host
             .call(
                 self.id.clone().into(),
-                Symbol::from_str("allowance").into(),
+                Symbol::from_str("allowance"),
                 host_vec![self.host, from, spender].into(),
             )?
             .try_into_val(self.host)?)
@@ -95,7 +95,7 @@ impl<'a> TestToken<'a> {
             .host
             .call(
                 self.id.clone().into(),
-                Symbol::from_str("approve").into(),
+                Symbol::from_str("approve"),
                 host_vec![self.host, from_acc, spender, amount].into(),
             )?
             .try_into()?)
@@ -106,7 +106,7 @@ impl<'a> TestToken<'a> {
             .host
             .call(
                 self.id.clone().into(),
-                Symbol::from_str("balance").into(),
+                Symbol::from_str("balance"),
                 host_vec![self.host, id].into(),
             )?
             .try_into_val(self.host)?)
@@ -130,7 +130,7 @@ impl<'a> TestToken<'a> {
             .host
             .call(
                 self.id.clone().into(),
-                Symbol::from_str("xfer").into(),
+                Symbol::from_str("xfer"),
                 host_vec![self.host, from_acc, to, amount].into(),
             )?
             .try_into()?)
@@ -155,7 +155,7 @@ impl<'a> TestToken<'a> {
             .host
             .call(
                 self.id.clone().into(),
-                Symbol::from_str("xfer_from").into(),
+                Symbol::from_str("xfer_from"),
                 host_vec![self.host, spender_acc, from, to, amount].into(),
             )?
             .try_into()?)
@@ -169,7 +169,7 @@ impl<'a> TestToken<'a> {
             .host
             .call(
                 self.id.clone().into(),
-                Symbol::from_str("freeze").into(),
+                Symbol::from_str("freeze"),
                 host_vec![self.host, admin_acc, id].into(),
             )?
             .try_into()?)
@@ -184,7 +184,7 @@ impl<'a> TestToken<'a> {
             .host
             .call(
                 self.id.clone().into(),
-                Symbol::from_str("unfreeze").into(),
+                Symbol::from_str("unfreeze"),
                 host_vec![self.host, admin_acc, id].into(),
             )?
             .try_into()?)
@@ -195,7 +195,7 @@ impl<'a> TestToken<'a> {
             .host
             .call(
                 self.id.clone().into(),
-                Symbol::from_str("is_frozen").into(),
+                Symbol::from_str("is_frozen"),
                 host_vec![self.host, id].into(),
             )?
             .try_into_val(self.host)?)
@@ -219,7 +219,7 @@ impl<'a> TestToken<'a> {
             .host
             .call(
                 self.id.clone().into(),
-                Symbol::from_str("mint").into(),
+                Symbol::from_str("mint"),
                 host_vec![self.host, admin_acc, to, amount].into(),
             )?
             .try_into()?)
@@ -243,7 +243,7 @@ impl<'a> TestToken<'a> {
             .host
             .call(
                 self.id.clone().into(),
-                Symbol::from_str("burn").into(),
+                Symbol::from_str("burn"),
                 host_vec![self.host, admin_acc, from, amount].into(),
             )?
             .try_into()?)
@@ -266,7 +266,7 @@ impl<'a> TestToken<'a> {
             .host
             .call(
                 self.id.clone().into(),
-                Symbol::from_str("set_admin").into(),
+                Symbol::from_str("set_admin"),
                 host_vec![self.host, admin_acc, new_admin].into(),
             )?
             .try_into()?)
@@ -277,7 +277,7 @@ impl<'a> TestToken<'a> {
             .host
             .call(
                 self.id.clone().into(),
-                Symbol::from_str("decimals").into(),
+                Symbol::from_str("decimals"),
                 host_vec![self.host].into(),
             )?
             .try_into()?)
@@ -288,7 +288,7 @@ impl<'a> TestToken<'a> {
             .host
             .call(
                 self.id.clone().into(),
-                Symbol::from_str("name").into(),
+                Symbol::from_str("name"),
                 host_vec![self.host].into(),
             )?
             .try_into_val(self.host)?)
@@ -299,7 +299,7 @@ impl<'a> TestToken<'a> {
             .host
             .call(
                 self.id.clone().into(),
-                Symbol::from_str("symbol").into(),
+                Symbol::from_str("symbol"),
                 host_vec![self.host].into(),
             )?
             .try_into_val(self.host)?)
@@ -313,7 +313,7 @@ impl<'a> TestToken<'a> {
             .host
             .call(
                 self.id.clone().into(),
-                Symbol::from_str("import").into(),
+                Symbol::from_str("import"),
                 host_vec![self.host, from_acc, amount].into(),
             )?
             .try_into()?)
@@ -328,7 +328,7 @@ impl<'a> TestToken<'a> {
             .host
             .call(
                 self.id.clone().into(),
-                Symbol::from_str("export").into(),
+                Symbol::from_str("export"),
                 host_vec![self.host, from_acc, amount].into(),
             )?
             .try_into()?)

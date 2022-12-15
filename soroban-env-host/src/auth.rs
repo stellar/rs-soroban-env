@@ -4,12 +4,13 @@ use soroban_env_common::xdr::{
     ContractDataEntry, EnvelopeType, HashIdPreimage, HashIdPreimageContractAuth, LedgerEntry,
     LedgerEntryData, LedgerEntryExt, ScAccount, ScAccountId, ScAddress, ScObject, ScVal, StringM,
 };
-use soroban_env_common::{CheckedEnv, RawVal, Symbol};
+use soroban_env_common::{CheckedEnv, EnvBase, RawVal, Symbol};
 
 use crate::budget::Budget;
 use crate::host::metered_clone::MeteredClone;
 use crate::host::Frame;
-use crate::native_contract::account_contract::check_account_authentication;
+use crate::native_contract::account_contract::{check_account_authentication, check_generic_account_auth};
+use crate::native_contract::base_types::BytesN;
 use crate::{Host, HostError};
 
 use super::xdr;
@@ -36,7 +37,7 @@ struct AbstractAccount {
     authorized_for_frame: Vec<Option<bool>>,
     authenticated: bool,
     need_nonce: bool,
-    #[cfg(feature = "testutils")]
+    #[cfg(any(test, feature = "testutils"))]
     last_recorded_invocations: Vec<AuthorizedInvocation>,
 }
 
@@ -53,10 +54,10 @@ pub(crate) struct ContractInvocation {
 }
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
-struct AuthorizedInvocation {
-    call_stack: Vec<ContractInvocation>,
-    top_args: ScVec,
-    nonce: Option<u64>,
+pub(crate) struct AuthorizedInvocation {
+    pub(crate) call_stack: Vec<ContractInvocation>,
+    pub(crate) top_args: ScVec,
+    pub(crate) nonce: Option<u64>,
 }
 
 #[derive(Clone)]
@@ -303,7 +304,7 @@ impl AuthorizationManager {
         }
     }
 
-    #[cfg(feature = "testutils")]
+    #[cfg(any(test, feature = "testutils"))]
     pub(crate) fn verify_last_authorization(
         &mut self,
         host: &Host,
@@ -368,7 +369,7 @@ impl AbstractAccount {
             authorized_for_frame: vec![],
             authenticated: false,
             need_nonce,
-            #[cfg(feature = "testutils")]
+            #[cfg(any(test, feature = "testutils"))]
             last_recorded_invocations: vec![],
         })
     }
@@ -541,7 +542,7 @@ impl AbstractAccount {
         Ok(())
     }
 
-    #[cfg(feature = "testutils")]
+    #[cfg(any(test, feature = "testutils"))]
     fn verify_last_authorization(
         &mut self,
         call_stack: Vec<ContractInvocation>,
@@ -589,7 +590,13 @@ impl AbstractAccount {
         // (for preflight with auth enforced).
         let payload = self.get_signature_payload(host)?;
         if let ScAccountId::GenericAccount(generic_acc) = &self.account_id {
-            todo!();
+            check_generic_account_auth(
+                host,
+                generic_acc,
+                &payload,
+                self.signature_args.clone(),
+                &self.authorized_invocations,
+            )?;
         } else {
             check_account_authentication(
                 host,

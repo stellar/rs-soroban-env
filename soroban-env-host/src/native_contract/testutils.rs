@@ -66,6 +66,12 @@ pub(crate) enum TestSigner<'a> {
     ClassicAccountInvoker,
     Ed25519(&'a Keypair),
     Account(AccountSigner<'a>),
+    GenericAccount(GenericAccountSigner<'a>),
+}
+
+pub(crate) struct GenericAccountSigner<'a> {
+    pub(crate) id: Hash,
+    pub(crate) sign: Box<dyn Fn(&[u8]) -> HostVec + 'a>,
 }
 
 pub(crate) struct AccountSigner<'a> {
@@ -101,6 +107,7 @@ impl<'a> TestSigner<'a> {
                 host_vec![host, Signature::Account(signatures)]
             }
             TestSigner::ContractInvoker(_) => unreachable!(),
+            TestSigner::GenericAccount(signer) => (signer.sign)(payload),
         };
         host.call_args_to_scvec(signature_args.into()).unwrap()
     }
@@ -112,16 +119,18 @@ impl<'a> TestSigner<'a> {
             }
             TestSigner::Account(acc) => ScAccountId::BuiltinClassicAccount(acc.account_id.clone()),
             TestSigner::ClassicAccountInvoker => ScAccountId::BuiltinInvoker,
+            TestSigner::GenericAccount(signer) => ScAccountId::GenericAccount(signer.id.clone()),
             TestSigner::ContractInvoker(_) => unreachable!(),
         }
     }
 
-    pub(crate) fn get_address(&self) -> ScAddress {
+    pub(crate) fn address(&self) -> ScAddress {
         match self {
             TestSigner::ClassicAccountInvoker => panic!("not supported"),
             TestSigner::Ed25519(kp) => ScAddress::Ed25519(kp.public.to_bytes().try_into().unwrap()),
             TestSigner::Account(acc) => ScAddress::ClassicAccount(acc.account_id.clone()),
             TestSigner::ContractInvoker(hash) => ScAddress::Contract(hash.clone()),
+            TestSigner::GenericAccount(signer) => ScAddress::Contract(signer.id.clone()),
         }
     }
 }
@@ -149,14 +158,16 @@ impl<'a, 'b> AccountAuthBuilder<'a, 'b> {
     ) -> &mut Self {
         let nonce = match self.signer {
             TestSigner::ClassicAccountInvoker => None,
-            TestSigner::Ed25519(_) | TestSigner::Account(_) => Some(
-                self.host
-                    .read_nonce(
-                        &Hash(contract_id.to_vec().clone().try_into().unwrap()),
-                        &self.signer.get_address(),
-                    )
-                    .unwrap(),
-            ),
+            TestSigner::Ed25519(_) | TestSigner::Account(_) | TestSigner::GenericAccount(_) => {
+                Some(
+                    self.host
+                        .read_nonce(
+                            &Hash(contract_id.to_vec().clone().try_into().unwrap()),
+                            &self.signer.address(),
+                        )
+                        .unwrap(),
+                )
+            }
             TestSigner::ContractInvoker(_) => {
                 return self;
             }
@@ -234,7 +245,11 @@ fn sign_payload_for_account(
     }
 }
 
-fn sign_payload_for_ed25519(host: &Host, signer: &Keypair, payload: &[u8]) -> BytesN<64> {
+pub(crate) fn sign_payload_for_ed25519(
+    host: &Host,
+    signer: &Keypair,
+    payload: &[u8],
+) -> BytesN<64> {
     BytesN::<64>::try_from_val(
         host,
         host.bytes_new_from_slice(&signer.sign(payload).to_bytes())

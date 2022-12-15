@@ -160,6 +160,12 @@ impl<const N: usize> TryIntoVal<Host, RawVal> for BytesN<N> {
     }
 }
 
+impl<const N: usize> Into<RawVal> for BytesN<N> {
+    fn into(self) -> RawVal {
+        self.0.val.into()
+    }
+}
+
 impl<const N: usize> From<BytesN<N>> for Object {
     fn from(bytes: BytesN<N>) -> Self {
         bytes.0.val
@@ -313,9 +319,27 @@ impl TryIntoVal<Host, RawVal> for Vec {
     }
 }
 
+impl Into<RawVal> for Vec {
+    fn into(self) -> RawVal {
+        self.0.val.into()
+    }
+}
+
 impl From<Vec> for Object {
     fn from(vec: Vec) -> Self {
         vec.0.val
+    }
+}
+
+impl TryFromVal<Host, std::vec::Vec<RawVal>> for Vec {
+    type Error = HostError;
+
+    fn try_from_val(env: &Host, vals: std::vec::Vec<RawVal>) -> Result<Self, Self::Error> {
+        let mut v = Vec::new(env)?;
+        for rv in vals {
+            v.push_raw(rv)?
+        }
+        Ok(v)
     }
 }
 
@@ -445,7 +469,6 @@ impl TryIntoVal<Host, RawVal> for Account {
         Ok(self.0.val.into())
     }
 }
-
 
 impl TryIntoVal<Host, Account> for RawVal {
     type Error = HostError;
