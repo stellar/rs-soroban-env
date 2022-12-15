@@ -7,7 +7,7 @@ on:
 
 jobs:
   check:
-    if: '!contains( github.event.pull_request.labels.*.name, "skip-env-interface-version-bump")'
+    if: "!contains( github.event.pull_request.labels.*.name, 'skip-env-interface-version-bump')"
     runs-on: 'ubuntu-20.04'
     steps:
     - name: "check soroban-env-common/src/meta.rs was modified"
