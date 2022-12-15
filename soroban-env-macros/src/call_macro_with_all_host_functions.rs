@@ -1,7 +1,7 @@
 use proc_macro2::{Literal, TokenStream};
 use quote::{format_ident, quote};
 use std::fs::File;
-use syn::{Error, LitStr, Type};
+use syn::{Error, LitStr};
 
 use serde::{Deserialize, Serialize};
 
@@ -32,11 +32,9 @@ pub fn generate(file_lit: LitStr) -> Result<TokenStream, Error> {
             let args = f.args.iter().map(|a| {
                 let name = format_ident!("{}", &a.name);
                 let r#type = format_ident!("{}", &a.r#type);
-                let r#type = Type::Verbatim(quote! { #r#type });
                 quote! { #name: #r#type }
             });
             let r#return = format_ident!("{}", &f.r#return);
-            let r#return = Type::Verbatim(quote! { #r#return });
             quote! {
                 #[doc = #docs]
                 { #export, fn #name(#(#args),*) -> #r#return }
