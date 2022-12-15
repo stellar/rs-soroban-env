@@ -17,6 +17,9 @@ use crate::xdr::{LedgerEntry, LedgerKey, ScHostStorageErrorCode};
 use crate::Host;
 use crate::{host::metered_map::MeteredOrdMap, HostError};
 
+pub type FootprintMap = MeteredOrdMap<Rc<LedgerKey>, AccessType, Budget>;
+pub type StorageMap = MeteredOrdMap<Rc<LedgerKey>, Option<Rc<LedgerEntry>>, Budget>;
+
 /// A helper type used by [Footprint] to designate which ways
 /// a given [LedgerKey] is accessed, or is allowed to be accessed,
 /// in a given transaction.
@@ -63,7 +66,7 @@ pub trait SnapshotSource {
 /// against a suitably fresh [SnapshotSource].
 // Notes on metering: covered by the underneath `MeteredOrdMap`.
 #[derive(Clone, Default)]
-pub struct Footprint(pub MeteredOrdMap<Rc<LedgerKey>, AccessType, Budget>);
+pub struct Footprint(pub FootprintMap);
 
 impl Footprint {
     pub fn record_access(
@@ -100,7 +103,7 @@ impl Footprint {
         ty: AccessType,
         budget: &Budget,
     ) -> Result<(), HostError> {
-        if let Some(existing) = self.0.get(key, budget)? {
+        if let Some(existing) = self.0.get::<LedgerKey>(key, budget)? {
             match (existing, ty) {
                 (AccessType::ReadOnly, AccessType::ReadOnly) => Ok(()),
                 (AccessType::ReadOnly, AccessType::ReadWrite) => {
@@ -144,7 +147,7 @@ impl Default for FootprintMode {
 pub struct Storage {
     pub footprint: Footprint,
     pub mode: FootprintMode,
-    pub map: MeteredOrdMap<Rc<LedgerKey>, Option<Rc<LedgerEntry>>, Budget>,
+    pub map: StorageMap,
 }
 
 // Notes on metering: all storage operations: `put`, `get`, `del`, `has` are
@@ -153,10 +156,7 @@ impl Storage {
     /// Constructs a new [Storage] in [FootprintMode::Enforcing] using a
     /// given [Footprint] and a storage map populated with all the keys
     /// listed in the [Footprint].
-    pub fn with_enforcing_footprint_and_map(
-        footprint: Footprint,
-        map: MeteredOrdMap<Rc<LedgerKey>, Option<Rc<LedgerEntry>>, Budget>,
-    ) -> Self {
+    pub fn with_enforcing_footprint_and_map(footprint: Footprint, map: StorageMap) -> Self {
         Self {
             mode: FootprintMode::Enforcing,
             footprint,

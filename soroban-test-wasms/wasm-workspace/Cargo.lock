@@ -916,6 +916,10 @@ dependencies = [
 [[package]]
 name = "soroban-ledger-snapshot"
 version = "0.3.2"
+<<<<<<< HEAD
+=======
+source = "git+https://github.com/stellar/rs-soroban-sdk?rev=c8175bd#c8175bd90194c7bd670eececcd27d1a669cc8367"
+>>>>>>> upstream/main
 dependencies = [
  "serde",
  "serde_json",
@@ -936,6 +940,10 @@ dependencies = [
 [[package]]
 name = "soroban-sdk"
 version = "0.3.2"
+<<<<<<< HEAD
+=======
+source = "git+https://github.com/stellar/rs-soroban-sdk?rev=c8175bd#c8175bd90194c7bd670eececcd27d1a669cc8367"
+>>>>>>> upstream/main
 dependencies = [
  "bytes-lit",
  "ed25519-dalek",
@@ -950,6 +958,10 @@ dependencies = [
 [[package]]
 name = "soroban-sdk-macros"
 version = "0.3.2"
+<<<<<<< HEAD
+=======
+source = "git+https://github.com/stellar/rs-soroban-sdk?rev=c8175bd#c8175bd90194c7bd670eececcd27d1a669cc8367"
+>>>>>>> upstream/main
 dependencies = [
  "darling",
  "itertools",
@@ -965,6 +977,10 @@ dependencies = [
 [[package]]
 name = "soroban-spec"
 version = "0.3.2"
+<<<<<<< HEAD
+=======
+source = "git+https://github.com/stellar/rs-soroban-sdk?rev=c8175bd#c8175bd90194c7bd670eececcd27d1a669cc8367"
+>>>>>>> upstream/main
 dependencies = [
  "base64",
  "darling",
