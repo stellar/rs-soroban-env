@@ -22,9 +22,9 @@ use ed25519_dalek::Keypair;
 use soroban_env_common::{
     xdr::{
         AccountEntry, AccountEntryExt, AccountEntryExtensionV1, AccountEntryExtensionV1Ext,
-        AccountEntryExtensionV2, AccountEntryExtensionV2Ext, AccountId, AlphaNum12, AlphaNum4,
-        Asset, AssetCode12, AssetCode4, Hash, HostFunctionType, LedgerEntryData, LedgerKey,
-        Liabilities, PublicKey, ScStatusType, SequenceNumber, SignerKey, Thresholds,
+        AccountEntryExtensionV2, AccountEntryExtensionV2Ext, AccountFlags, AccountId, AlphaNum12,
+        AlphaNum4, Asset, AssetCode12, AssetCode4, Hash, HostFunctionType, LedgerEntryData,
+        LedgerKey, Liabilities, PublicKey, ScStatusType, SequenceNumber, SignerKey, Thresholds,
         TrustLineEntry, TrustLineEntryExt, TrustLineEntryV1, TrustLineEntryV1Ext, TrustLineFlags,
     },
     RawVal,
@@ -78,6 +78,7 @@ impl TokenTest {
             [1, 0, 0, 0],
             None,
             None,
+            0,
         );
 
         let asset = Asset::CreditAlphanum4(AlphaNum4 {
@@ -133,6 +134,7 @@ impl TokenTest {
         liabilities: Option<(i64, i64)>,
         // (num_sponsored, num_sponsoring) counts
         sponsorships: Option<(u32, u32)>,
+        flags: u32,
     ) {
         let key = self.host.to_account_key(account_id.clone().into());
         let account_id = match &key {
@@ -180,7 +182,7 @@ impl TokenTest {
             seq_num: SequenceNumber(0),
             num_sub_entries,
             inflation_dest: None,
-            flags: 0,
+            flags,
             home_domain: Default::default(),
             thresholds: Thresholds(thresholds),
             signers: acc_signers.try_into().unwrap(),
@@ -202,7 +204,7 @@ impl TokenTest {
         asset_code: &[u8],
         balance: i64,
         limit: i64,
-        authorized: bool,
+        flags: u32,
         // (buying, selling) liabilities
         liabilities: Option<(i64, i64)>,
     ) -> LedgerKey {
@@ -237,11 +239,7 @@ impl TokenTest {
             asset,
             balance,
             limit,
-            flags: if authorized {
-                TrustLineFlags::AuthorizedFlag as u32
-            } else {
-                0
-            },
+            flags,
             ext,
         };
 
@@ -316,6 +314,7 @@ fn test_native_token_smart_roundtrip() {
         [1, 0, 0, 0],
         None,
         None,
+        0,
     );
     let token = TestToken::new_from_asset(&test.host, Asset::Native);
     let expected_token_id = BytesN::<32>::try_from_val(
@@ -359,6 +358,7 @@ fn test_classic_asset_init(asset_code: &[u8]) {
         [1, 0, 0, 0],
         None,
         None,
+        0,
     );
 
     let trustline_key = test.create_classic_trustline(
@@ -367,7 +367,7 @@ fn test_classic_asset_init(asset_code: &[u8]) {
         asset_code,
         10_000_000,
         100_000_000,
-        true,
+        TrustLineFlags::AuthorizedFlag as u32,
         None,
     );
     let asset = if asset_code.len() == 4 {
@@ -949,8 +949,33 @@ fn test_set_admin() {
 }
 
 #[test]
-fn test_account_invoker_auth_with_issuer_admin() {
+fn test_account_spendable_balance() {
     let test = TokenTest::setup();
+    let token = TestToken::new_from_asset(&test.host, Asset::Native);
+    let user_acc = signer_to_account_id(&test.host, &test.user_key);
+    let user_id = Identifier::Account(user_acc.clone());
+
+    test.create_classic_account(
+        &user_acc,
+        vec![(&test.user_key, 100)],
+        100_000_000,
+        1,
+        [1, 0, 0, 0],
+        None,
+        None,
+        0,
+    );
+
+    assert_eq!(token.balance(user_id.clone()).unwrap(), 100_000_000);
+    // base reserve = 5_000_000
+    // signer + account = 3 base reserves
+    assert_eq!(token.sp_balance(user_id.clone()).unwrap(), 85_000_000);
+}
+
+#[test]
+fn test_trustline_auth() {
+    let test = TokenTest::setup();
+    // the admin is the issuer_key
     let admin_acc = signer_to_account_id(&test.host, &test.issuer_key);
     let user_acc = signer_to_account_id(&test.host, &test.user_key);
 
@@ -962,6 +987,7 @@ fn test_account_invoker_auth_with_issuer_admin() {
         [1, 0, 0, 0],
         None,
         None,
+        0,
     );
     test.create_classic_account(
         &user_acc,
@@ -971,6 +997,7 @@ fn test_account_invoker_auth_with_issuer_admin() {
         [1, 0, 0, 0],
         None,
         None,
+        0,
     );
 
     let admin_id = Identifier::Account(admin_acc.clone());
@@ -986,7 +1013,179 @@ fn test_account_invoker_auth_with_issuer_admin() {
         &test.asset_code,
         0,
         10000,
-        true,
+        TrustLineFlags::AuthorizedFlag as u32,
+        Some((0, 0)),
+    );
+
+    //mint to user_id
+    test.run_from_account(admin_acc.clone(), || {
+        token.mint(&acc_invoker, 0, user_id.clone(), 1000)
+    })
+    .unwrap();
+
+    assert_eq!(token.balance(user_id.clone()).unwrap(), 1000);
+
+    // transfer 1 back to the issuer (which is a burn)
+    test.run_from_account(user_acc.clone(), || {
+        token.xfer(&acc_invoker, 0, admin_id.clone(), 1)
+    })
+    .unwrap();
+
+    assert_eq!(token.balance(user_id.clone()).unwrap(), 999);
+    assert_eq!(token.balance(admin_id.clone()).unwrap(), i64::MAX.into());
+
+    // try to deauthorize trustline, but fail because RevocableFlag is not set on the issuer
+    assert_eq!(
+        to_contract_err(
+            test.run_from_account(admin_acc.clone(), || {
+                token.freeze(&acc_invoker, 0, user_id.clone())
+            })
+            .err()
+            .unwrap()
+        ),
+        ContractError::OperationNotSupportedError
+    );
+
+    // Add RevocableFlag to the issuer
+    test.create_classic_account(
+        &admin_acc,
+        vec![(&test.admin_key, 100)],
+        10_000_000,
+        1,
+        [1, 0, 0, 0],
+        None,
+        None,
+        AccountFlags::RevocableFlag as u32,
+    );
+
+    // trustline should be deauthorized now.
+    test.run_from_account(admin_acc.clone(), || {
+        token.freeze(&acc_invoker, 0, user_id.clone())
+    })
+    .unwrap();
+
+    // transfer should fail from deauthorized trustline
+    assert_eq!(
+        to_contract_err(
+            test.run_from_account(user_acc.clone(), || {
+                token.xfer(&acc_invoker, 0, admin_id.clone(), 1)
+            })
+            .err()
+            .unwrap()
+        ),
+        ContractError::BalanceFrozenError
+    );
+
+    // mint should also fail for the same reason
+    assert_eq!(
+        to_contract_err(
+            test.run_from_account(admin_acc.clone(), || {
+                token.mint(&acc_invoker, 0, user_id.clone(), 1000)
+            })
+            .err()
+            .unwrap()
+        ),
+        ContractError::BalanceFrozenError
+    );
+
+    // Now authorize trustline
+    test.run_from_account(admin_acc.clone(), || {
+        token.unfreeze(&acc_invoker, 0, user_id.clone())
+    })
+    .unwrap();
+
+    test.run_from_account(user_acc.clone(), || {
+        token.approve(&acc_invoker, 0, admin_id.clone(), 500)
+    })
+    .unwrap();
+
+    test.run_from_account(admin_acc.clone(), || {
+        token.xfer_from(&acc_invoker, 0, user_id.clone(), admin_id, 500)
+    })
+    .unwrap();
+
+    test.run_from_account(admin_acc.clone(), || {
+        token.mint(&acc_invoker, 0, user_id.clone(), 1)
+    })
+    .unwrap();
+
+    assert_eq!(token.balance(user_id.clone()).unwrap(), 500);
+
+    // try to clawback
+    assert_eq!(
+        to_contract_err(
+            test.run_from_account(admin_acc.clone(), || {
+                token.burn(&acc_invoker, 0, user_id.clone(), 10)
+            })
+            .err()
+            .unwrap()
+        ),
+        ContractError::BalanceError
+    );
+
+    // set TrustlineClawbackEnabledFlag on trustline
+    // Also add selling liabilities to test spendable balance
+    test.create_classic_trustline(
+        &user_acc,
+        &admin_acc,
+        &test.asset_code,
+        500,
+        10000,
+        //TODO: burn/clawback requires trustline to be authorized. This needs to be updated to match classic.
+        TrustLineFlags::TrustlineClawbackEnabledFlag as u32 | TrustLineFlags::AuthorizedFlag as u32,
+        Some((0, 10)),
+    );
+
+    test.run_from_account(admin_acc.clone(), || {
+        token.burn(&acc_invoker, 0, user_id.clone(), 10)
+    })
+    .unwrap();
+
+    assert_eq!(token.balance(user_id.clone()).unwrap(), 490);
+    assert_eq!(token.sp_balance(user_id.clone()).unwrap(), 480);
+}
+
+#[test]
+fn test_account_invoker_auth_with_issuer_admin() {
+    let test = TokenTest::setup();
+    let admin_acc = signer_to_account_id(&test.host, &test.issuer_key);
+    let user_acc = signer_to_account_id(&test.host, &test.user_key);
+
+    test.create_classic_account(
+        &admin_acc,
+        vec![(&test.admin_key, 100)],
+        10_000_000,
+        1,
+        [1, 0, 0, 0],
+        None,
+        None,
+        0,
+    );
+    test.create_classic_account(
+        &user_acc,
+        vec![(&test.user_key, 100)],
+        10_000_000,
+        1,
+        [1, 0, 0, 0],
+        None,
+        None,
+        0,
+    );
+
+    let admin_id = Identifier::Account(admin_acc.clone());
+    let user_id = Identifier::Account(user_acc.clone());
+
+    let acc_invoker = TestSigner::AccountInvoker;
+    let token = test.default_token_with_admin_id(admin_id.clone());
+
+    // create a trustline for user_acc so the issuer can mint into it
+    test.create_classic_trustline(
+        &user_acc,
+        &admin_acc,
+        &test.asset_code,
+        0,
+        10000,
+        TrustLineFlags::AuthorizedFlag as u32,
         Some((0, 0)),
     );
 
@@ -1369,6 +1568,7 @@ fn test_classic_account_multisig_auth() {
         [40, 10, 100, 150],
         None,
         None,
+        0,
     );
 
     let account_ident = Identifier::Account(account_id.clone());
@@ -1711,6 +1911,7 @@ fn test_native_token_classic_balance_boundaries(
         [1, 0, 0, 0],
         None,
         None,
+        0,
     );
 
     // Try to do xfer that would leave balance lower than min.
@@ -1766,6 +1967,7 @@ fn test_native_token_classic_balance_boundaries(
         [1, 0, 0, 0],
         None,
         None,
+        0,
     );
 
     // Transferring a balance that would exceed
@@ -1818,6 +2020,7 @@ fn test_native_token_classic_balance_boundaries_simple() {
         [1, 0, 0, 0],
         None,
         None,
+        0,
     );
     // Min balance should be
     // (2 (account) + 5 (subentries)) * base_reserve = 35_000_000.
@@ -1844,6 +2047,7 @@ fn test_native_token_classic_balance_boundaries_with_liabilities() {
         [1, 0, 0, 0],
         Some((300_000_000, 500_000_000)),
         None,
+        0,
     );
     // Min balance should be
     // (2 (account) + 8 (subentries)) * base_reserve + 500_000_000 (selling
@@ -1872,6 +2076,7 @@ fn test_native_token_classic_balance_boundaries_with_sponsorships() {
         [1, 0, 0, 0],
         None,
         Some((3, 6)),
+        0,
     );
     // Min balance should be
     // (2 (account) + 5 (subentries) + (6 sponsoring - 3 sponsored)) * base_reserve
@@ -1899,6 +2104,7 @@ fn test_native_token_classic_balance_boundaries_with_sponsorships_and_liabilitie
         [1, 0, 0, 0],
         Some((300_000_000, 500_000_000)),
         Some((3, 6)),
+        0,
     );
     // Min balance should be
     // (2 (account) + 5 (subentries) + (6 sponsoring - 3 sponsored)) * base_reserve
@@ -1927,6 +2133,7 @@ fn test_native_token_classic_balance_boundaries_with_large_values() {
         [1, 0, 0, 0],
         Some((i64::MAX / 4, i64::MAX / 5)),
         Some((0, u32::MAX)),
+        0,
     );
     test_native_token_classic_balance_boundaries(
         &test,
@@ -1959,6 +2166,7 @@ fn test_wrapped_asset_classic_balance_boundaries(
         [1, 0, 0, 0],
         None,
         None,
+        0,
     );
 
     let account_id2 = signer_to_account_id(&test.host, &test.user_key_2);
@@ -1971,6 +2179,7 @@ fn test_wrapped_asset_classic_balance_boundaries(
         [1, 0, 0, 0],
         None,
         None,
+        0,
     );
 
     let issuer_id = signer_to_account_id(&test.host, &test.admin_key);
@@ -1983,6 +2192,7 @@ fn test_wrapped_asset_classic_balance_boundaries(
         [1, 0, 0, 0],
         None,
         None,
+        0,
     );
 
     let trustline_key = test.create_classic_trustline(
@@ -1991,7 +2201,7 @@ fn test_wrapped_asset_classic_balance_boundaries(
         &[255; 12],
         init_balance,
         limit,
-        true,
+        TrustLineFlags::AuthorizedFlag as u32,
         liabilities,
     );
 
@@ -2001,7 +2211,7 @@ fn test_wrapped_asset_classic_balance_boundaries(
         &[255; 12],
         0,
         limit,
-        true,
+        TrustLineFlags::AuthorizedFlag as u32,
         Some((0, 0)),
     );
 
@@ -2151,6 +2361,7 @@ fn test_classic_transfers_not_possible_for_unauthorized_asset() {
         [1, 0, 0, 0],
         None,
         None,
+        0,
     );
 
     let issuer_id = signer_to_account_id(&test.host, &test.admin_key);
@@ -2161,7 +2372,7 @@ fn test_classic_transfers_not_possible_for_unauthorized_asset() {
         &[255; 4],
         100_000_000,
         i64::MAX,
-        true,
+        TrustLineFlags::AuthorizedFlag as u32,
         None,
     );
 
@@ -2197,7 +2408,7 @@ fn test_classic_transfers_not_possible_for_unauthorized_asset() {
         &[255; 4],
         100_000_000,
         i64::MAX,
-        false,
+        0,
         None,
     );
 
@@ -2214,7 +2425,7 @@ fn test_classic_transfers_not_possible_for_unauthorized_asset() {
                 .err()
                 .unwrap()
         ),
-        ContractError::BalanceError
+        ContractError::BalanceFrozenError
     );
 
     // Trustline balance stays the same.
