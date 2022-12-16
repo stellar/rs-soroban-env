@@ -259,7 +259,10 @@ fn transfer_account_balance(e: &Host, account_id: AccountId, amount: i64) -> Res
     let lk = e.to_account_key(account_id.clone());
 
     e.with_mut_storage(|storage| {
-        let mut le = storage.get(&lk, e.as_budget())?;
+        let mut le = storage
+            .get(&lk, e.as_budget())
+            .map_err(|_| e.err_status_msg(ContractError::AccountMissingError, "account missing"))?;
+
         let ae = match &mut le.data {
             LedgerEntryData::Account(ae) => Ok(ae),
             _ => Err(e.err_status_msg(ContractError::InternalError, "unexpected entry found")),
@@ -299,7 +302,10 @@ fn transfer_trustline_balance(
 ) -> Result<(), HostError> {
     let lk = e.to_trustline_key(account_id, asset);
     e.with_mut_storage(|storage| {
-        let mut le = storage.get(&lk, e.as_budget())?;
+        let mut le = storage.get(&lk, e.as_budget()).map_err(|_| {
+            e.err_status_msg(ContractError::TrustlineMissingError, "trustline missing")
+        })?;
+
         let tl = match &mut le.data {
             LedgerEntryData::Trustline(tl) => Ok(tl),
             _ => Err(e.err_status_msg(ContractError::InternalError, "unexpected entry found")),
@@ -336,7 +342,10 @@ fn get_account_balance(e: &Host, account_id: AccountId) -> Result<(i64, i64), Ho
     let lk = e.to_account_key(account_id.clone());
 
     e.with_mut_storage(|storage| {
-        let le = storage.get(&lk, e.as_budget())?;
+        let le = storage
+            .get(&lk, e.as_budget())
+            .map_err(|_| e.err_status_msg(ContractError::AccountMissingError, "account missing"))?;
+
         let ae = match le.data {
             LedgerEntryData::Account(ae) => Ok(ae),
             _ => Err(e.err_status_msg(ContractError::InternalError, "unexpected entry found")),
@@ -387,7 +396,10 @@ fn get_trustline_balance(
 ) -> Result<(i64, i64), HostError> {
     let lk = e.to_trustline_key(account_id, asset);
     e.with_mut_storage(|storage| {
-        let mut le = storage.get(&lk, e.as_budget())?;
+        let mut le = storage.get(&lk, e.as_budget()).map_err(|_| {
+            e.err_status_msg(ContractError::TrustlineMissingError, "trustline missing")
+        })?;
+
         let tl = match &mut le.data {
             LedgerEntryData::Trustline(tl) => Ok(tl),
             _ => Err(e.err_status_msg(ContractError::InternalError, "unexpected entry found")),
@@ -462,7 +474,10 @@ fn get_trustline_flags(
 ) -> Result<u32, HostError> {
     let lk = e.to_trustline_key(account_id, asset);
     e.with_mut_storage(|storage| {
-        let le = storage.get(&lk, e.as_budget())?;
+        let le = storage.get(&lk, e.as_budget()).map_err(|_| {
+            e.err_status_msg(ContractError::TrustlineMissingError, "trustline missing")
+        })?;
+
         let tl = match le.data {
             LedgerEntryData::Trustline(tl) => Ok(tl),
             _ => Err(e.err_status_msg(ContractError::InternalError, "unexpected entry found")),
@@ -539,7 +554,10 @@ fn set_trustline_authorization(
 ) -> Result<(), HostError> {
     let lk = e.to_trustline_key(account_id, asset);
     e.with_mut_storage(|storage| {
-        let mut le = storage.get(&lk, e.as_budget())?;
+        let mut le = storage.get(&lk, e.as_budget()).map_err(|_| {
+            e.err_status_msg(ContractError::TrustlineMissingError, "trustline missing")
+        })?;
+
         let tl = match &mut le.data {
             LedgerEntryData::Trustline(tl) => Ok(tl),
             _ => Err(e.err_status_msg(ContractError::InternalError, "unexpected entry found")),
