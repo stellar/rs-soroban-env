@@ -21,7 +21,7 @@ use soroban_env_common::xdr::Asset;
 use soroban_env_common::{CheckedEnv, Compare, EnvBase, Symbol, TryFromVal, TryIntoVal};
 use soroban_native_sdk_macros::contractimpl;
 
-use super::balance::check_clawbackable;
+use super::balance::{check_clawbackable, get_spendable_balance};
 use super::error::ContractError;
 use super::public_types::{AlphaNum12Metadata, AlphaNum4Metadata};
 
@@ -48,8 +48,9 @@ pub trait TokenTrait {
         amount: i128,
     ) -> Result<(), HostError>;
 
-    //TODO: Add spendable_balance()
     fn balance(e: &Host, id: Identifier) -> Result<i128, HostError>;
+
+    fn sp_balance(e: &Host, id: Identifier) -> Result<i128, HostError>;
 
     fn is_frozen(e: &Host, id: Identifier) -> Result<bool, HostError>;
 
@@ -217,6 +218,10 @@ impl TokenTrait for Token {
     // Metering: covered by components
     fn balance(e: &Host, id: Identifier) -> Result<i128, HostError> {
         read_balance(e, id)
+    }
+
+    fn sp_balance(e: &Host, id: Identifier) -> Result<i128, HostError> {
+        get_spendable_balance(e, id)
     }
 
     // Metering: covered by components

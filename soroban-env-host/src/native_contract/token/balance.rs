@@ -15,7 +15,7 @@ use super::error::ContractError;
 // Metering: *mostly* covered by components. Not sure about `try_into_val`.
 pub fn read_balance(e: &Host, id: Identifier) -> Result<i128, HostError> {
     match id {
-        Identifier::Account(acc_id) => Ok(get_classic_balance(e, acc_id)?.into()),
+        Identifier::Account(acc_id) => Ok(get_classic_balance(e, acc_id)?.0.into()),
         _ => {
             let key = DataKey::Balance(id);
             if let Ok(balance) = e.get_contract_data(key.try_into_val(e)?) {
@@ -24,6 +24,13 @@ pub fn read_balance(e: &Host, id: Identifier) -> Result<i128, HostError> {
                 Ok(0)
             }
         }
+    }
+}
+
+pub fn get_spendable_balance(e: &Host, id: Identifier) -> Result<i128, HostError> {
+    match id {
+        Identifier::Account(acc_id) => Ok(get_classic_balance(e, acc_id)?.1.into()),
+        _ => read_balance(e, id),
     }
 }
 
@@ -206,12 +213,13 @@ pub fn transfer_classic_balance(e: &Host, to_key: AccountId, amount: i64) -> Res
     Ok(())
 }
 
-pub fn get_classic_balance(e: &Host, to_key: AccountId) -> Result<i64, HostError> {
+//returns (total balance, spendable balance)
+pub fn get_classic_balance(e: &Host, to_key: AccountId) -> Result<(i64, i64), HostError> {
     match read_metadata(e)? {
         Metadata::Native => get_account_balance(e, to_key),
         Metadata::AlphaNum4(asset) => {
             if asset.issuer == to_key {
-                return Ok(i64::MAX);
+                return Ok((i64::MAX, i64::MAX));
             }
 
             get_trustline_balance(
@@ -222,7 +230,7 @@ pub fn get_classic_balance(e: &Host, to_key: AccountId) -> Result<i64, HostError
         }
         Metadata::AlphaNum12(asset) => {
             if asset.issuer == to_key {
-                return Ok(i64::MAX);
+                return Ok((i64::MAX, i64::MAX));
             }
 
             get_trustline_balance(
@@ -321,7 +329,8 @@ fn transfer_trustline_balance(
     })
 }
 
-fn get_account_balance(e: &Host, account_id: AccountId) -> Result<i64, HostError> {
+//returns (total balance, spendable balance)
+fn get_account_balance(e: &Host, account_id: AccountId) -> Result<(i64, i64), HostError> {
     let lk = e.to_account_key(account_id.clone());
 
     e.with_mut_storage(|storage| {
@@ -336,11 +345,17 @@ fn get_account_balance(e: &Host, account_id: AccountId) -> Result<i64, HostError
             )),
         }?;
 
-        Ok(ae.balance)
+        let min = get_min_max_account_balance(e, &ae)?.0;
+        if ae.balance < min {
+            return Err(e.err_status_msg(
+                ContractError::InternalError,
+                "account has balance < spendable_balance",
+            ));
+        }
+        Ok((ae.balance, ae.balance - min))
     })
 }
 
-//TODO: use this and get_min_max_trustline_balance for a get_spendable_balance method
 fn get_min_max_account_balance(e: &Host, ae: &AccountEntry) -> Result<(i64, i64), HostError> {
     if ae.balance < 0 {
         return Err(e.err_status_msg(ContractError::InternalError, "initial balance is negative"));
@@ -366,11 +381,12 @@ fn get_min_max_account_balance(e: &Host, ae: &AccountEntry) -> Result<(i64, i64)
 }
 
 // Metering: *mostly* covered by components. The arithmatics are free.
+// returns (total balance, spendable balance)
 fn get_trustline_balance(
     e: &Host,
     account_id: AccountId,
     asset: TrustLineAsset,
-) -> Result<i64, HostError> {
+) -> Result<(i64, i64), HostError> {
     let lk = e.to_trustline_key(account_id, asset);
     e.with_mut_storage(|storage| {
         let mut le = storage.get(&lk, e.as_budget())?;
@@ -382,7 +398,14 @@ fn get_trustline_balance(
             )),
         }?;
 
-        Ok(tl.balance)
+        let min = get_min_max_trustline_balance(e, tl)?.0;
+        if tl.balance < min {
+            return Err(e.err_status_msg(
+                ContractError::InternalError,
+                "trustline has balance < spendable_balance",
+            ));
+        }
+        Ok((tl.balance, tl.balance - min))
     })
 }
 
