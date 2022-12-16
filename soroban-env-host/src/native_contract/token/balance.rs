@@ -250,12 +250,7 @@ fn transfer_account_balance(e: &Host, account_id: AccountId, amount: i64) -> Res
         let mut le = storage.get(&lk, e.as_budget())?;
         let ae = match &mut le.data {
             LedgerEntryData::Account(ae) => Ok(ae),
-            _ => Err(err!(
-                e,
-                ContractError::AccountMissingError,
-                "account '{}' doesn't exist",
-                account_id
-            )),
+            _ => Err(e.err_status_msg(ContractError::InternalError, "unexpected entry found")),
         }?;
 
         let (min_balance, max_balance) = get_min_max_account_balance(e, ae)?;
@@ -295,10 +290,7 @@ fn transfer_trustline_balance(
         let mut le = storage.get(&lk, e.as_budget())?;
         let tl = match &mut le.data {
             LedgerEntryData::Trustline(tl) => Ok(tl),
-            _ => Err(e.err_status_msg(
-                ContractError::AccountMissingError,
-                "trustline doesn't exist",
-            )),
+            _ => Err(e.err_status_msg(ContractError::InternalError, "unexpected entry found")),
         }?;
         if tl.flags & (TrustLineFlags::AuthorizedFlag as u32) == 0 {
             return Err(e.err_status_msg(ContractError::BalanceError, "trustline isn't authorized"));
@@ -337,12 +329,7 @@ fn get_account_balance(e: &Host, account_id: AccountId) -> Result<(i64, i64), Ho
         let le = storage.get(&lk, e.as_budget())?;
         let ae = match le.data {
             LedgerEntryData::Account(ae) => Ok(ae),
-            _ => Err(err!(
-                e,
-                ContractError::AccountMissingError,
-                "account '{}' doesn't exist",
-                account_id
-            )),
+            _ => Err(e.err_status_msg(ContractError::InternalError, "unexpected entry found")),
         }?;
 
         let min = get_min_max_account_balance(e, &ae)?.0;
@@ -392,10 +379,7 @@ fn get_trustline_balance(
         let mut le = storage.get(&lk, e.as_budget())?;
         let tl = match &mut le.data {
             LedgerEntryData::Trustline(tl) => Ok(tl),
-            _ => Err(e.err_status_msg(
-                ContractError::AccountMissingError,
-                "trustline doesn't exist",
-            )),
+            _ => Err(e.err_status_msg(ContractError::InternalError, "unexpected entry found")),
         }?;
 
         let min = get_min_max_trustline_balance(e, tl)?.0;
@@ -467,10 +451,7 @@ fn get_trustline_flags(
         let le = storage.get(&lk, e.as_budget())?;
         let tl = match le.data {
             LedgerEntryData::Trustline(tl) => Ok(tl),
-            _ => Err(e.err_status_msg(
-                ContractError::AccountMissingError,
-                "trustline doesn't exist",
-            )),
+            _ => Err(e.err_status_msg(ContractError::InternalError, "unexpected entry found")),
         }?;
 
         Ok(tl.flags)
@@ -546,10 +527,7 @@ fn set_trustline_authorization(
         let mut le = storage.get(&lk, e.as_budget())?;
         let tl = match &mut le.data {
             LedgerEntryData::Trustline(tl) => Ok(tl),
-            _ => Err(e.err_status_msg(
-                ContractError::AccountMissingError,
-                "trustline doesn't exist",
-            )),
+            _ => Err(e.err_status_msg(ContractError::InternalError, "unexpected entry found")),
         }?;
 
         if authorize {
