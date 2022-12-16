@@ -21,7 +21,7 @@ use soroban_env_common::xdr::Asset;
 use soroban_env_common::{CheckedEnv, Compare, EnvBase, Symbol, TryFromVal, TryIntoVal};
 use soroban_native_sdk_macros::contractimpl;
 
-use super::balance::{check_clawbackable, get_spendable_balance};
+use super::balance::{check_clawbackable, get_spendable_balance, spend_balance_no_freeze_check};
 use super::error::ContractError;
 use super::public_types::{AlphaNum12Metadata, AlphaNum4Metadata};
 
@@ -294,7 +294,8 @@ impl TokenTrait for Token {
         args.push(from.clone())?;
         args.push(amount.clone())?;
         check_auth(&e, admin, nonce, Symbol::from_str("burn"), args)?;
-        spend_balance(&e, from.clone(), amount.clone())?;
+        // admin can burn a frozen balance
+        spend_balance_no_freeze_check(&e, from.clone(), amount.clone())?;
         event::burn(e, admin_id, from, amount)?;
         Ok(())
     }

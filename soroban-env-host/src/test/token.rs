@@ -1131,8 +1131,7 @@ fn test_trustline_auth() {
         &test.asset_code,
         500,
         10000,
-        //TODO: burn/clawback requires trustline to be authorized. This needs to be updated to match classic.
-        TrustLineFlags::TrustlineClawbackEnabledFlag as u32 | TrustLineFlags::AuthorizedFlag as u32,
+        TrustLineFlags::TrustlineClawbackEnabledFlag as u32,
         Some((0, 10)),
     );
 

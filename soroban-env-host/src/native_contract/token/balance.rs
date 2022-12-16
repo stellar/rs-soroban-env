@@ -64,13 +64,11 @@ pub fn receive_balance(e: &Host, id: Identifier, amount: i128) -> Result<(), Hos
     }
 }
 
-// Metering: covered by components.
-pub fn spend_balance(e: &Host, id: Identifier, amount: i128) -> Result<(), HostError> {
-    let is_frozen = read_state(e, id.clone())?;
-    if is_frozen {
-        return Err(e.err_status_msg(ContractError::BalanceFrozenError, "balance is frozen"));
-    }
-
+pub fn spend_balance_no_freeze_check(
+    e: &Host,
+    id: Identifier,
+    amount: i128,
+) -> Result<(), HostError> {
     match id {
         Identifier::Account(acc_id) => {
             let i64_amount = i64::try_from(amount)
@@ -95,6 +93,16 @@ pub fn spend_balance(e: &Host, id: Identifier, amount: i128) -> Result<(), HostE
             }
         }
     }
+}
+
+// Metering: covered by components.
+pub fn spend_balance(e: &Host, id: Identifier, amount: i128) -> Result<(), HostError> {
+    let is_frozen = read_state(e, id.clone())?;
+    if is_frozen {
+        return Err(e.err_status_msg(ContractError::BalanceFrozenError, "balance is frozen"));
+    }
+
+    spend_balance_no_freeze_check(e, id, amount)
 }
 
 // Metering: *mostly* covered by components. Not sure about `try_into_val`.
@@ -292,9 +300,6 @@ fn transfer_trustline_balance(
             LedgerEntryData::Trustline(tl) => Ok(tl),
             _ => Err(e.err_status_msg(ContractError::InternalError, "unexpected entry found")),
         }?;
-        if tl.flags & (TrustLineFlags::AuthorizedFlag as u32) == 0 {
-            return Err(e.err_status_msg(ContractError::BalanceError, "trustline isn't authorized"));
-        }
 
         let (min_balance, max_balance) = get_min_max_trustline_balance(e, &tl)?;
 
