@@ -226,7 +226,7 @@ pub fn transfer_classic_balance(e: &Host, to_key: AccountId, amount: i64) -> Res
 
 // TODO: Metering analysis
 //returns (total balance, spendable balance)
-pub fn get_classic_balance(e: &Host, to_key: AccountId) -> Result<(i64, i64), HostError> {
+fn get_classic_balance(e: &Host, to_key: AccountId) -> Result<(i64, i64), HostError> {
     match read_metadata(e)? {
         Metadata::Native => get_account_balance(e, to_key),
         Metadata::AlphaNum4(asset) => {
