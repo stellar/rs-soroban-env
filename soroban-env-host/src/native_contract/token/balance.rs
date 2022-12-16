@@ -27,6 +27,7 @@ pub fn read_balance(e: &Host, id: Identifier) -> Result<i128, HostError> {
     }
 }
 
+// Metering: *mostly* covered by components.
 pub fn get_spendable_balance(e: &Host, id: Identifier) -> Result<i128, HostError> {
     match id {
         Identifier::Account(acc_id) => Ok(get_classic_balance(e, acc_id)?.1.into()),
@@ -64,6 +65,7 @@ pub fn receive_balance(e: &Host, id: Identifier, amount: i128) -> Result<(), Hos
     }
 }
 
+// TODO: Metering analysis
 pub fn spend_balance_no_freeze_check(
     e: &Host,
     id: Identifier,
@@ -132,6 +134,7 @@ pub fn write_state(e: &Host, id: Identifier, is_frozen: bool) -> Result<(), Host
     }
 }
 
+// TODO: Metering analysis
 pub fn check_clawbackable(e: &Host, id: Identifier) -> Result<(), HostError> {
     match id {
         Identifier::Account(acc_id) => match read_metadata(e)? {
@@ -221,6 +224,7 @@ pub fn transfer_classic_balance(e: &Host, to_key: AccountId, amount: i64) -> Res
     Ok(())
 }
 
+// TODO: Metering analysis
 //returns (total balance, spendable balance)
 pub fn get_classic_balance(e: &Host, to_key: AccountId) -> Result<(i64, i64), HostError> {
     match read_metadata(e)? {
@@ -326,6 +330,7 @@ fn transfer_trustline_balance(
     })
 }
 
+// TODO: Metering analysis
 //returns (total balance, spendable balance)
 fn get_account_balance(e: &Host, account_id: AccountId) -> Result<(i64, i64), HostError> {
     let lk = e.to_account_key(account_id.clone());
@@ -348,6 +353,7 @@ fn get_account_balance(e: &Host, account_id: AccountId) -> Result<(i64, i64), Ho
     })
 }
 
+// TODO: Metering analysis
 fn get_min_max_account_balance(e: &Host, ae: &AccountEntry) -> Result<(i64, i64), HostError> {
     if ae.balance < 0 {
         return Err(e.err_status_msg(ContractError::InternalError, "initial balance is negative"));
@@ -398,6 +404,7 @@ fn get_trustline_balance(
     })
 }
 
+// TODO: Metering analysis
 fn get_min_max_trustline_balance(e: &Host, tl: &TrustLineEntry) -> Result<(i64, i64), HostError> {
     if tl.balance < 0 {
         return Err(e.err_status_msg(ContractError::InternalError, "initial balance is negative"));
@@ -420,6 +427,7 @@ fn get_min_max_trustline_balance(e: &Host, tl: &TrustLineEntry) -> Result<(i64, 
     }
 }
 
+// TODO: Metering analysis
 fn is_account_deauthorized(e: &Host, to_key: AccountId) -> Result<bool, HostError> {
     match read_metadata(e)? {
         Metadata::Native => Ok(false),
@@ -446,6 +454,7 @@ fn is_account_deauthorized(e: &Host, to_key: AccountId) -> Result<bool, HostErro
     }
 }
 
+// TODO: Metering analysis
 fn get_trustline_flags(
     e: &Host,
     account_id: AccountId,
@@ -521,6 +530,7 @@ fn set_authorization(e: &Host, to_key: AccountId, authorize: bool) -> Result<(),
     }
 }
 
+// TODO: Metering analysis
 fn set_trustline_authorization(
     e: &Host,
     account_id: AccountId,
