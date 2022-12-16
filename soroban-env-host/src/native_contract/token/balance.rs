@@ -51,8 +51,12 @@ pub fn receive_balance(e: &Host, id: Identifier, amount: i128) -> Result<(), Hos
 
     match id {
         Identifier::Account(acc_id) => {
-            let i64_amount = i64::try_from(amount)
-                .map_err(|_| e.err_status_msg(ContractError::OverflowError, "greater than i64"))?;
+            let i64_amount = i64::try_from(amount).map_err(|_| {
+                e.err_status_msg(
+                    ContractError::OverflowError,
+                    "received amount is too large for an i64",
+                )
+            })?;
             Ok(transfer_classic_balance(e, acc_id, i64_amount)?)
         }
         _ => {
@@ -73,8 +77,12 @@ pub fn spend_balance_no_freeze_check(
 ) -> Result<(), HostError> {
     match id {
         Identifier::Account(acc_id) => {
-            let i64_amount = i64::try_from(amount)
-                .map_err(|_| e.err_status_msg(ContractError::OverflowError, "greater than i64"))?;
+            let i64_amount = i64::try_from(amount).map_err(|_| {
+                e.err_status_msg(
+                    ContractError::OverflowError,
+                    "spent amount is too large for an i64",
+                )
+            })?;
             transfer_classic_balance(e, acc_id, -(i64_amount as i64))
         }
         _ => {
