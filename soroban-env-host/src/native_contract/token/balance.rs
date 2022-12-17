@@ -144,6 +144,23 @@ pub fn write_state(e: &Host, id: Identifier, is_frozen: bool) -> Result<(), Host
 
 // TODO: Metering analysis
 pub fn check_clawbackable(e: &Host, id: Identifier) -> Result<(), HostError> {
+    let validate_trustline =
+        |asset: TrustLineAsset, issuer: AccountId, account: AccountId| -> Result<(), HostError> {
+            if issuer == account {
+                return Err(e.err_status_msg(
+                    ContractError::OperationNotSupportedError,
+                    "cannot clawback from issuer",
+                ));
+            }
+            let tl_flags = get_trustline_flags(e, account, asset)?;
+            if tl_flags & (TrustLineFlags::TrustlineClawbackEnabledFlag as u32) == 0 {
+                return Err(
+                    e.err_status_msg(ContractError::BalanceError, "trustline isn't clawbackable")
+                );
+            }
+            Ok(())
+        };
+
     match id {
         Identifier::Account(acc_id) => match read_metadata(e)? {
             Metadata::Native => {
@@ -152,46 +169,16 @@ pub fn check_clawbackable(e: &Host, id: Identifier) -> Result<(), HostError> {
                     "cannot clawback native asset",
                 ))
             }
-            Metadata::AlphaNum4(asset) => {
-                if asset.issuer == acc_id {
-                    return Err(e.err_status_msg(
-                        ContractError::OperationNotSupportedError,
-                        "cannot clawback from issuer",
-                    ));
-                }
-                let tl_flags = get_trustline_flags(
-                    e,
-                    acc_id,
-                    e.create_asset_4(asset.asset_code.to_array()?, asset.issuer),
-                )?;
-                if tl_flags & (TrustLineFlags::TrustlineClawbackEnabledFlag as u32) == 0 {
-                    return Err(e.err_status_msg(
-                        ContractError::BalanceError,
-                        "trustline isn't clawbackable",
-                    ));
-                }
-                Ok(())
-            }
-            Metadata::AlphaNum12(asset) => {
-                if asset.issuer == acc_id {
-                    return Err(e.err_status_msg(
-                        ContractError::OperationNotSupportedError,
-                        "cannot clawback from issuer",
-                    ));
-                }
-                let tl_flags = get_trustline_flags(
-                    e,
-                    acc_id,
-                    e.create_asset_12(asset.asset_code.to_array()?, asset.issuer),
-                )?;
-                if tl_flags & (TrustLineFlags::TrustlineClawbackEnabledFlag as u32) == 0 {
-                    return Err(e.err_status_msg(
-                        ContractError::BalanceError,
-                        "trustline isn't clawbackable",
-                    ));
-                }
-                Ok(())
-            }
+            Metadata::AlphaNum4(asset) => validate_trustline(
+                e.create_asset_4(asset.asset_code.to_array()?, asset.issuer.clone()),
+                asset.issuer,
+                acc_id,
+            ),
+            Metadata::AlphaNum12(asset) => validate_trustline(
+                e.create_asset_12(asset.asset_code.to_array()?, asset.issuer.clone()),
+                asset.issuer,
+                acc_id,
+            ),
         },
         _ => {
             // TODO: Non-account balances are always clawbackable for now if admin is set. Revisit this.
@@ -202,32 +189,27 @@ pub fn check_clawbackable(e: &Host, id: Identifier) -> Result<(), HostError> {
 
 // Metering: covered by components
 pub fn transfer_classic_balance(e: &Host, to_key: AccountId, amount: i64) -> Result<(), HostError> {
+    let transfer_trustline_balance_safe =
+        |asset: TrustLineAsset, issuer: AccountId, to: AccountId| -> Result<(), HostError> {
+            if issuer == to {
+                return Ok(());
+            }
+
+            transfer_trustline_balance(e, to, asset, amount)
+        };
+
     match read_metadata(e)? {
         Metadata::Native => transfer_account_balance(e, to_key, amount)?,
-        Metadata::AlphaNum4(asset) => {
-            if asset.issuer == to_key {
-                return Ok(());
-            }
-
-            transfer_trustline_balance(
-                e,
-                to_key,
-                e.create_asset_4(asset.asset_code.to_array()?, asset.issuer),
-                amount,
-            )?
-        }
-        Metadata::AlphaNum12(asset) => {
-            if asset.issuer == to_key {
-                return Ok(());
-            }
-
-            transfer_trustline_balance(
-                e,
-                to_key,
-                e.create_asset_12(asset.asset_code.to_array()?, asset.issuer),
-                amount,
-            )?
-        }
+        Metadata::AlphaNum4(asset) => transfer_trustline_balance_safe(
+            e.create_asset_4(asset.asset_code.to_array()?, asset.issuer.clone()),
+            asset.issuer,
+            to_key,
+        )?,
+        Metadata::AlphaNum12(asset) => transfer_trustline_balance_safe(
+            e.create_asset_12(asset.asset_code.to_array()?, asset.issuer.clone()),
+            asset.issuer,
+            to_key,
+        )?,
     };
     Ok(())
 }
@@ -235,30 +217,29 @@ pub fn transfer_classic_balance(e: &Host, to_key: AccountId, amount: i64) -> Res
 // TODO: Metering analysis
 //returns (total balance, spendable balance)
 fn get_classic_balance(e: &Host, to_key: AccountId) -> Result<(i64, i64), HostError> {
+    let get_trustline_balance_safe = |asset: TrustLineAsset,
+                                      issuer: AccountId,
+                                      to: AccountId|
+     -> Result<(i64, i64), HostError> {
+        if issuer == to {
+            return Ok((i64::MAX, i64::MAX));
+        }
+
+        get_trustline_balance(e, to, asset)
+    };
+
     match read_metadata(e)? {
         Metadata::Native => get_account_balance(e, to_key),
-        Metadata::AlphaNum4(asset) => {
-            if asset.issuer == to_key {
-                return Ok((i64::MAX, i64::MAX));
-            }
-
-            get_trustline_balance(
-                e,
-                to_key,
-                e.create_asset_4(asset.asset_code.to_array()?, asset.issuer),
-            )
-        }
-        Metadata::AlphaNum12(asset) => {
-            if asset.issuer == to_key {
-                return Ok((i64::MAX, i64::MAX));
-            }
-
-            get_trustline_balance(
-                e,
-                to_key,
-                e.create_asset_12(asset.asset_code.to_array()?, asset.issuer),
-            )
-        }
+        Metadata::AlphaNum4(asset) => get_trustline_balance_safe(
+            e.create_asset_4(asset.asset_code.to_array()?, asset.issuer.clone()),
+            asset.issuer,
+            to_key,
+        ),
+        Metadata::AlphaNum12(asset) => get_trustline_balance_safe(
+            e.create_asset_12(asset.asset_code.to_array()?, asset.issuer.clone()),
+            asset.issuer,
+            to_key,
+        ),
     }
 }
 
@@ -449,28 +430,26 @@ fn get_min_max_trustline_balance(e: &Host, tl: &TrustLineEntry) -> Result<(i64, 
 
 // TODO: Metering analysis
 fn is_account_deauthorized(e: &Host, to_key: AccountId) -> Result<bool, HostError> {
+    let is_trustline_deauthorized_safe =
+        |asset: TrustLineAsset, issuer: AccountId, to: AccountId| -> Result<bool, HostError> {
+            if issuer == to {
+                return Ok(false);
+            }
+            is_trustline_deauthorized(e, to, asset)
+        };
+
     match read_metadata(e)? {
         Metadata::Native => Ok(false),
-        Metadata::AlphaNum4(asset) => {
-            if asset.issuer == to_key {
-                return Ok(false);
-            }
-            is_trustline_deauthorized(
-                e,
-                to_key,
-                e.create_asset_4(asset.asset_code.to_array()?, asset.issuer),
-            )
-        }
-        Metadata::AlphaNum12(asset) => {
-            if asset.issuer == to_key {
-                return Ok(false);
-            }
-            is_trustline_deauthorized(
-                e,
-                to_key,
-                e.create_asset_12(asset.asset_code.to_array()?, asset.issuer),
-            )
-        }
+        Metadata::AlphaNum4(asset) => is_trustline_deauthorized_safe(
+            e.create_asset_4(asset.asset_code.to_array()?, asset.issuer.clone()),
+            asset.issuer,
+            to_key,
+        ),
+        Metadata::AlphaNum12(asset) => is_trustline_deauthorized_safe(
+            e.create_asset_12(asset.asset_code.to_array()?, asset.issuer.clone()),
+            asset.issuer,
+            to_key,
+        ),
     }
 }
 
@@ -506,24 +485,26 @@ fn is_trustline_deauthorized(
 }
 
 fn set_authorization(e: &Host, to_key: AccountId, authorize: bool) -> Result<(), HostError> {
-    let validate_issuer = |issuer: &AccountId| -> Result<(), HostError> {
-        if *issuer == to_key {
-            return Err(e.err_status_msg(
-                ContractError::OperationNotSupportedError,
-                "issuer doesn't have a trustline",
-            ));
-        }
+    let set_trustline_authorization_safe =
+        |asset: TrustLineAsset, issuer: AccountId, to: AccountId| -> Result<(), HostError> {
+            if issuer == to {
+                return Err(e.err_status_msg(
+                    ContractError::OperationNotSupportedError,
+                    "issuer doesn't have a trustline",
+                ));
+            }
 
-        let issuer_acc = e.load_account(issuer.clone())?;
+            let issuer_acc = e.load_account(issuer.clone())?;
 
-        if !authorize && (issuer_acc.flags & (AccountFlags::RevocableFlag as u32) == 0) {
-            return Err(e.err_status_msg(
-                ContractError::OperationNotSupportedError,
-                "issuer does not have AUTH_REVOCABLE set",
-            ));
-        }
-        Ok(())
-    };
+            if !authorize && (issuer_acc.flags & (AccountFlags::RevocableFlag as u32) == 0) {
+                return Err(e.err_status_msg(
+                    ContractError::OperationNotSupportedError,
+                    "issuer does not have AUTH_REVOCABLE set",
+                ));
+            }
+
+            set_trustline_authorization(e, to, asset, authorize)
+        };
 
     match read_metadata(e)? {
         Metadata::Native => {
@@ -532,24 +513,16 @@ fn set_authorization(e: &Host, to_key: AccountId, authorize: bool) -> Result<(),
                 "expected trustline asset",
             ))
         }
-        Metadata::AlphaNum4(asset) => {
-            validate_issuer(&asset.issuer)?;
-            set_trustline_authorization(
-                e,
-                to_key,
-                e.create_asset_4(asset.asset_code.to_array()?, asset.issuer),
-                authorize,
-            )
-        }
-        Metadata::AlphaNum12(asset) => {
-            validate_issuer(&asset.issuer)?;
-            set_trustline_authorization(
-                e,
-                to_key,
-                e.create_asset_12(asset.asset_code.to_array()?, asset.issuer),
-                authorize,
-            )
-        }
+        Metadata::AlphaNum4(asset) => set_trustline_authorization_safe(
+            e.create_asset_4(asset.asset_code.to_array()?, asset.issuer.clone()),
+            asset.issuer,
+            to_key,
+        ),
+        Metadata::AlphaNum12(asset) => set_trustline_authorization_safe(
+            e.create_asset_12(asset.asset_code.to_array()?, asset.issuer.clone()),
+            asset.issuer,
+            to_key,
+        ),
     }
 }
 
