@@ -50,7 +50,7 @@ pub trait TokenTrait {
 
     fn balance(e: &Host, id: Identifier) -> Result<i128, HostError>;
 
-    fn sp_balance(e: &Host, id: Identifier) -> Result<i128, HostError>;
+    fn spendable(e: &Host, id: Identifier) -> Result<i128, HostError>;
 
     fn is_frozen(e: &Host, id: Identifier) -> Result<bool, HostError>;
 
@@ -220,7 +220,7 @@ impl TokenTrait for Token {
         read_balance(e, id)
     }
 
-    fn sp_balance(e: &Host, id: Identifier) -> Result<i128, HostError> {
+    fn spendable(e: &Host, id: Identifier) -> Result<i128, HostError> {
         get_spendable_balance(e, id)
     }
 

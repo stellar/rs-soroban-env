@@ -102,12 +102,12 @@ impl<'a> TestToken<'a> {
             .try_into_val(self.host)?)
     }
 
-    pub(crate) fn sp_balance(&self, id: Identifier) -> Result<i128, HostError> {
+    pub(crate) fn spendable(&self, id: Identifier) -> Result<i128, HostError> {
         Ok(self
             .host
             .call(
                 self.id.clone().into(),
-                Symbol::from_str("sp_balance").into(),
+                Symbol::from_str("spendable").into(),
                 host_vec![self.host, id].into(),
             )?
             .try_into_val(self.host)?)
