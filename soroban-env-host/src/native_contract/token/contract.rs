@@ -25,6 +25,7 @@ use super::balance::{
     check_clawbackable, get_spendable_balance, spend_balance_no_authorization_check,
 };
 use super::error::ContractError;
+use super::metadata::read_metadata;
 use super::public_types::{AlphaNum12Metadata, AlphaNum4Metadata};
 
 pub trait TokenTrait {
@@ -81,6 +82,16 @@ pub trait TokenTrait {
         amount: i128,
     ) -> Result<(), HostError>;
 
+    fn burn(e: &Host, from: Signature, nonce: i128, amount: i128) -> Result<(), HostError>;
+
+    fn burn_from(
+        e: &Host,
+        spender: Signature,
+        nonce: i128,
+        from: Identifier,
+        amount: i128,
+    ) -> Result<(), HostError>;
+
     fn freeze(e: &Host, admin: Signature, nonce: i128, id: Identifier) -> Result<(), HostError>;
 
     fn unfreeze(e: &Host, admin: Signature, nonce: i128, id: Identifier) -> Result<(), HostError>;
@@ -127,6 +138,16 @@ fn check_nonnegative_amount(e: &Host, amount: i128) -> Result<(), HostError> {
         ))
     } else {
         Ok(())
+    }
+}
+
+fn check_non_native(e: &Host) -> Result<(), HostError> {
+    match read_metadata(e)? {
+        Metadata::Native => Err(e.err_status_msg(
+            ContractError::OperationNotSupportedError,
+            "operation invalid on native asset",
+        )),
+        Metadata::AlphaNum4(_) | Metadata::AlphaNum12(_) => Ok(()),
     }
 }
 
@@ -321,6 +342,44 @@ impl TokenTrait for Token {
         spend_balance(&e, from.clone(), amount.clone())?;
         receive_balance(&e, to.clone(), amount.clone())?;
         event::transfer(e, from, to, amount)?;
+        Ok(())
+    }
+
+    // Metering: covered by components
+    fn burn(e: &Host, from: Signature, nonce: i128, amount: i128) -> Result<(), HostError> {
+        check_nonnegative_amount(e, amount)?;
+        check_non_native(e)?;
+        let from_id = from.get_identifier(&e)?;
+        let mut args = Vec::new(e)?;
+        args.push(from.get_identifier(&e)?)?;
+        args.push(nonce.clone())?;
+        args.push(amount.clone())?;
+        check_auth(&e, from, nonce, Symbol::from_str("burn"), args)?;
+        spend_balance(&e, from_id.clone(), amount.clone())?;
+        event::burn(e, from_id, amount)?;
+        Ok(())
+    }
+
+    // Metering: covered by components
+    fn burn_from(
+        e: &Host,
+        spender: Signature,
+        nonce: i128,
+        from: Identifier,
+        amount: i128,
+    ) -> Result<(), HostError> {
+        check_nonnegative_amount(e, amount)?;
+        check_non_native(e)?;
+        let spender_id = spender.get_identifier(&e)?;
+        let mut args = Vec::new(e)?;
+        args.push(spender.get_identifier(&e)?)?;
+        args.push(nonce.clone())?;
+        args.push(from.clone())?;
+        args.push(amount.clone())?;
+        check_auth(&e, spender, nonce, Symbol::from_str("burn_from"), args)?;
+        spend_allowance(&e, from.clone(), spender_id, amount.clone())?;
+        spend_balance(&e, from.clone(), amount.clone())?;
+        event::burn(e, from, amount)?;
         Ok(())
     }
 

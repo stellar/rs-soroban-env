@@ -101,3 +101,11 @@ pub(crate) fn set_admin(
     e.contract_event(topics.into(), new_admin.try_into_val(e)?)?;
     Ok(())
 }
+
+pub(crate) fn burn(e: &Host, from: Identifier, amount: i128) -> Result<(), HostError> {
+    let mut topics = Vec::new(e)?;
+    topics.push(Symbol::from_str("burn"))?;
+    topics.push(from)?;
+    e.contract_event(topics.into(), amount.try_into_val(e)?)?;
+    Ok(())
+}

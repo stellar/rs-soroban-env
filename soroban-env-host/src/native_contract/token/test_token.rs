@@ -208,6 +208,66 @@ impl<'a> TestToken<'a> {
             .try_into()?)
     }
 
+    pub(crate) fn burn(
+        &self,
+        from: &TestSigner,
+        nonce: i128,
+        amount: i128,
+    ) -> Result<(), HostError> {
+        let signature = sign_args(
+            self.host,
+            from,
+            "burn",
+            &self.id,
+            host_vec![
+                self.host,
+                from.get_identifier(self.host),
+                nonce.clone(),
+                amount.clone()
+            ],
+        );
+
+        Ok(self
+            .host
+            .call(
+                self.id.clone().into(),
+                Symbol::from_str("burn").into(),
+                host_vec![self.host, signature, nonce, amount].into(),
+            )?
+            .try_into()?)
+    }
+
+    pub(crate) fn burn_from(
+        &self,
+        spender: &TestSigner,
+        nonce: i128,
+        from: Identifier,
+        amount: i128,
+    ) -> Result<(), HostError> {
+        let signature = sign_args(
+            self.host,
+            spender,
+            "burn_from",
+            &self.id,
+            host_vec![
+                self.host,
+                spender.get_identifier(self.host),
+                nonce.clone(),
+                from.clone(),
+                amount.clone()
+            ],
+        );
+
+        Ok(self
+            .host
+            .call(
+                self.id.clone().into(),
+                Symbol::from_str("burn_from").into(),
+                host_vec![self.host, signature, nonce, from, amount].into(),
+            )?
+            .try_into()?)
+    }
+
     pub(crate) fn freeze(
         &self,
         admin: &TestSigner,

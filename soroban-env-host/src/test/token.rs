@@ -683,6 +683,249 @@ fn test_transfer_with_allowance() {
 }
 
 #[test]
+fn test_burn() {
+    let test = TokenTest::setup();
+    let admin = TestSigner::Ed25519(&test.admin_key);
+    let token = test.default_token(&admin);
+
+    let user = TestSigner::Ed25519(&test.user_key);
+    let user_2 = TestSigner::Ed25519(&test.user_key_2);
+
+    token
+        .mint(
+            &admin,
+            token.nonce(admin.get_identifier(&test.host)).unwrap(),
+            user.get_identifier(&test.host),
+            100_000_000,
+        )
+        .unwrap();
+    assert_eq!(
+        token.balance(user.get_identifier(&test.host)).unwrap(),
+        100_000_000
+    );
+    assert_eq!(token.balance(user_2.get_identifier(&test.host)).unwrap(), 0);
+    assert_eq!(
+        token
+            .allowance(
+                user.get_identifier(&test.host),
+                user_2.get_identifier(&test.host)
+            )
+            .unwrap(),
+        0
+    );
+
+    // Allow 10_000_000 units of token to be transferred from user by user 3.
+    token
+        .incr_allow(
+            &user,
+            token.nonce(user.get_identifier(&test.host)).unwrap(),
+            user_2.get_identifier(&test.host),
+            10_000_000,
+        )
+        .unwrap();
+
+    assert_eq!(
+        token
+            .allowance(
+                user.get_identifier(&test.host),
+                user_2.get_identifier(&test.host)
+            )
+            .unwrap(),
+        10_000_000
+    );
+
+    // Burn 5_000_000 of allowance from user.
+    token
+        .burn_from(
+            &user_2,
+            token.nonce(user_2.get_identifier(&test.host)).unwrap(),
+            user.get_identifier(&test.host),
+            6_000_000,
+        )
+        .unwrap();
+    assert_eq!(
+        token.balance(user.get_identifier(&test.host)).unwrap(),
+        94_000_000
+    );
+
+    assert_eq!(token.balance(user_2.get_identifier(&test.host)).unwrap(), 0);
+    assert_eq!(
+        token
+            .allowance(
+                user.get_identifier(&test.host),
+                user_2.get_identifier(&test.host)
+            )
+            .unwrap(),
+        4_000_000
+    );
+
+    // Can't burn more than remaining allowance.
+    assert_eq!(
+        to_contract_err(
+            token
+                .burn_from(
+                    &user_2,
+                    token.nonce(user_2.get_identifier(&test.host)).unwrap(),
+                    user.get_identifier(&test.host),
+                    4_000_001,
+                )
+                .err()
+                .unwrap()
+        ),
+        ContractError::AllowanceError
+    );
+
+    // Burn the remaining allowance to user 3.
+    token
+        .burn_from(
+            &user_2,
+            token.nonce(user_2.get_identifier(&test.host)).unwrap(),
+            user.get_identifier(&test.host),
+            4_000_000,
+        )
+        .unwrap();
+
+    assert_eq!(
+        token.balance(user.get_identifier(&test.host)).unwrap(),
+        90_000_000
+    );
+    assert_eq!(token.balance(user_2.get_identifier(&test.host)).unwrap(), 0);
+    assert_eq!(
+        token
+            .allowance(
+                user.get_identifier(&test.host),
+                user_2.get_identifier(&test.host)
+            )
+            .unwrap(),
+        0
+    );
+
+    // Now call burn
+    token
+        .burn(
+            &user,
+            token.nonce(user.get_identifier(&test.host)).unwrap(),
+            45_000_000,
+        )
+        .unwrap();
+
+    assert_eq!(
+        token.balance(user.get_identifier(&test.host)).unwrap(),
+        45_000_000
+    );
+
+    // Freeze the balance of `user` and then try to burn.
+    token
+        .freeze(
+            &admin,
+            token.nonce(admin.get_identifier(&test.host)).unwrap(),
+            user.get_identifier(&test.host),
+        )
+        .unwrap();
+
+    // Can't burn while frozen
+    assert_eq!(
+        to_contract_err(
+            token
+                .burn(
+                    &user,
+                    token.nonce(user.get_identifier(&test.host)).unwrap(),
+                    100,
+                )
+                .err()
+                .unwrap()
+        ),
+        ContractError::BalanceFrozenError
+    );
+
+    // Unfreeze the balance of `user` and then burn.
+    token
+        .unfreeze(
+            &admin,
+            token.nonce(admin.get_identifier(&test.host)).unwrap(),
+            user.get_identifier(&test.host),
+        )
+        .unwrap();
+
+    token
+        .burn(
+            &user,
+            token.nonce(user.get_identifier(&test.host)).unwrap(),
+            1_000_000,
+        )
+        .unwrap();
+
+    assert_eq!(
+        token.balance(user.get_identifier(&test.host)).unwrap(),
+        44_000_000
+    );
+}
+
+#[test]
+fn test_cannot_burn_native() {
+    let test = TokenTest::setup();
+    let token = TestToken::new_from_asset(&test.host, Asset::Native);
+    let user_acc = signer_to_account_id(&test.host, &test.user_key);
+    let user_id = Identifier::Account(user_acc.clone());
+
+    let user_signer = TestSigner::Ed25519(&test.user_key);
+    let user2_signer = TestSigner::Ed25519(&test.user_key_2);
+
+    test.create_classic_account(
+        &user_acc,
+        vec![(&test.user_key, 100)],
+        100_000_000,
+        1,
+        [1, 0, 0, 0],
+        None,
+        None,
+        0,
+    );
+
+    assert_eq!(token.balance(user_id.clone()).unwrap(), 100_000_000);
+
+    assert_eq!(
+        to_contract_err(
+            token
+                .burn(
+                    &user_signer,
+                    token.nonce(user_signer.get_identifier(&test.host)).unwrap(),
+                    1,
+                )
+                .err()
+                .unwrap()
+        ),
+        ContractError::OperationNotSupportedError
+    );
+
+    token
+        .incr_allow(
+            &user_signer,
+            token.nonce(user_signer.get_identifier(&test.host)).unwrap(),
+            user2_signer.get_identifier(&test.host),
+            100,
+        )
+        .unwrap();
+
+    assert_eq!(
+        to_contract_err(
+            token
+                .burn_from(
+                    &user2_signer,
+                    token
+                        .nonce(user2_signer.get_identifier(&test.host))
+                        .unwrap(),
+                    user_signer.get_identifier(&test.host),
+                    1,
+                )
+                .err()
+                .unwrap()
+        ),
+        ContractError::OperationNotSupportedError
+    );
+}
+
+#[test]
 fn test_freeze_and_unfreeze() {
     let test = TokenTest::setup();
     let admin = TestSigner::Ed25519(&test.admin_key);
