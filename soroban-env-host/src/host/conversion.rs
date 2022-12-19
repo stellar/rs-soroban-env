@@ -195,7 +195,7 @@ impl Host {
     // Notes on metering: covered by components.
     pub fn storage_key_from_rawval(&self, k: RawVal) -> Result<LedgerKey, HostError> {
         Ok(LedgerKey::ContractData(LedgerKeyContractData {
-            contract_id: self.get_current_contract_id()?,
+            contract_id: self.get_current_contract_id_internal()?,
             key: self.from_host_val(k)?,
         }))
     }
@@ -206,7 +206,7 @@ impl Host {
 
     pub fn storage_key_from_scval(&self, key: ScVal) -> Result<LedgerKey, HostError> {
         Ok(LedgerKey::ContractData(LedgerKeyContractData {
-            contract_id: self.get_current_contract_id()?,
+            contract_id: self.get_current_contract_id_internal()?,
             key,
         }))
     }

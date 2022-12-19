@@ -315,7 +315,7 @@ impl Host {
     ) -> Result<(), HostError> {
         let ce = ContractEvent {
             ext: ExtensionPoint::V0,
-            contract_id: self.get_current_contract_id().ok(),
+            contract_id: self.get_current_contract_id_internal().ok(),
             type_,
             body: ContractEventBody::V0(ContractEventV0 { topics, data }),
         };
@@ -491,7 +491,7 @@ impl Host {
     /// Returns [`Hash`] contract ID from the VM frame at the top of the context
     /// stack, or a [`HostError`] if the context stack is empty or has a non-VM
     /// frame at its top.
-    pub(crate) fn get_current_contract_id(&self) -> Result<Hash, HostError> {
+    pub(crate) fn get_current_contract_id_internal(&self) -> Result<Hash, HostError> {
         self.with_current_frame(|frame| match frame {
             #[cfg(feature = "vm")]
             Frame::ContractVM(vm, _) => vm.contract_id.metered_clone(&self.0.budget),
@@ -1452,7 +1452,7 @@ impl VmCallerCheckedEnv for Host {
     ) -> Result<Object, HostError> {
         Ok(self
             .add_host_object(HostAccount::InvokerContract(
-                self.get_current_contract_id()?,
+                self.get_current_contract_id_internal()?,
             ))?
             .into())
     }
@@ -1924,7 +1924,7 @@ impl VmCallerCheckedEnv for Host {
     ) -> Result<RawVal, HostError> {
         let key = self.contract_data_key_from_rawval(k)?;
         let data = LedgerEntryData::ContractData(ContractDataEntry {
-            contract_id: self.get_current_contract_id()?,
+            contract_id: self.get_current_contract_id_internal()?,
             key: self.from_host_val(k)?,
             val: self.from_host_val(v)?,
         });
@@ -1984,7 +1984,7 @@ impl VmCallerCheckedEnv for Host {
         wasm_hash: Object,
         salt: Object,
     ) -> Result<Object, HostError> {
-        let contract_id = self.get_current_contract_id()?;
+        let contract_id = self.get_current_contract_id_internal()?;
         let salt = self.uint256_from_obj_input("salt", salt)?;
 
         let code = ScContractCode::WasmRef(self.hash_from_obj_input("wasm_hash", wasm_hash)?);
@@ -1997,7 +1997,7 @@ impl VmCallerCheckedEnv for Host {
         _vmcaller: &mut VmCaller<Host>,
         salt: Object,
     ) -> Result<Object, HostError> {
-        let contract_id = self.get_current_contract_id()?;
+        let contract_id = self.get_current_contract_id_internal()?;
         let salt = self.uint256_from_obj_input("salt", salt)?;
         let id_preimage = self.id_preimage_from_contract(contract_id, salt)?;
         self.create_contract_with_id_preimage(ScContractCode::Token, id_preimage)
@@ -2547,5 +2547,13 @@ impl VmCallerCheckedEnv for Host {
             }
         })?;
         Ok(self.add_host_object(address)?.to_object())
+    }
+
+    fn get_current_contract_id(
+        &self,
+        vmcaller: &mut VmCaller<Self::VmUserState>,
+    ) -> Result<Object, Self::Error> {
+        let id = self.get_current_contract_id_internal()?;
+        Ok(self.add_host_object(id.0.to_vec())?.into())
     }
 }

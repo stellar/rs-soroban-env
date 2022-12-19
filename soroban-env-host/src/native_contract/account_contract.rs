@@ -77,6 +77,10 @@ pub(crate) fn check_generic_account_auth(
     for invocation in invocations {
         auth_context_vec.push(AuthorizationContext::from_invocation(host, invocation)?)?;
     }
+    // TODO: auth_context_vec now contains account which may be problematic from
+    // the security and safety perspective. Probably AuthorizationManager and Host
+    // should fail on any account access while checking account auth (one more
+    // reason for the special mode for the check_auth invocations).
     Ok(host
         .call_n_internal(
             generic_account_contract,

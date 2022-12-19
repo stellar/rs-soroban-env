@@ -197,6 +197,10 @@ macro_rules! call_macro_with_all_host_functions {
                 /// the current ledger as `Bytes`. The value is always 32 bytes
                 /// in length.
                 {"d", fn get_ledger_network_id() -> Object }
+                /// Get the 32-byte identifer of the current contract.
+                /// Traps if the running contract was not
+                /// invoked by a contract.
+                {"e", fn get_current_contract_id() -> Object }
             }
 
             /// Functions concerned with boxed integer types

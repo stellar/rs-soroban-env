@@ -103,7 +103,7 @@ impl TokenTrait for Token {
 
         let asset: Asset = e.metered_from_xdr_obj(asset_bytes.into())?;
 
-        let curr_contract_id = e.get_current_contract_id()?;
+        let curr_contract_id = e.get_current_contract_id_internal()?;
         let expected_contract_id = e.get_contract_id_from_asset(asset.clone())?;
         if curr_contract_id != expected_contract_id {
             return Err(err!(
