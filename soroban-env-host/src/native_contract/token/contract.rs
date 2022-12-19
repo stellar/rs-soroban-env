@@ -40,7 +40,15 @@ pub trait TokenTrait {
 
     fn allowance(e: &Host, from: Identifier, spender: Identifier) -> Result<i128, HostError>;
 
-    fn approve(
+    fn incr_allow(
+        e: &Host,
+        from: Signature,
+        nonce: i128,
+        spender: Identifier,
+        amount: i128,
+    ) -> Result<(), HostError>;
+
+    fn decr_allow(
         e: &Host,
         from: Signature,
         nonce: i128,
@@ -195,7 +203,7 @@ impl TokenTrait for Token {
     }
 
     // Metering: covered by components
-    fn approve(
+    fn incr_allow(
         e: &Host,
         from: Signature,
         nonce: i128,
@@ -209,9 +217,47 @@ impl TokenTrait for Token {
         args.push(nonce.clone())?;
         args.push(spender.clone())?;
         args.push(amount.clone())?;
-        check_auth(&e, from, nonce, Symbol::from_str("approve"), args)?;
-        write_allowance(&e, from_id.clone(), spender.clone(), amount.clone())?;
-        event::approve(e, from_id, spender, amount)?;
+        check_auth(&e, from, nonce, Symbol::from_str("incr_allow"), args)?;
+
+        let allowance = read_allowance(&e, from_id.clone(), spender.clone())?;
+        let new_allowance = allowance
+            .checked_add(amount)
+            .ok_or_else(|| e.err_status(ContractError::OverflowError))?;
+
+        write_allowance(&e, from_id.clone(), spender.clone(), new_allowance)?;
+        event::incr_allow(e, from_id, spender, amount)?;
+        Ok(())
+    }
+
+    fn decr_allow(
+        e: &Host,
+        from: Signature,
+        nonce: i128,
+        spender: Identifier,
+        amount: i128,
+    ) -> Result<(), HostError> {
+        check_nonnegative_amount(e, amount)?;
+        let from_id = from.get_identifier(&e)?;
+        let mut args = Vec::new(e)?;
+        args.push(from.get_identifier(&e)?)?;
+        args.push(nonce.clone())?;
+        args.push(spender.clone())?;
+        args.push(amount.clone())?;
+        check_auth(&e, from, nonce, Symbol::from_str("decr_allow"), args)?;
+
+        let allowance = read_allowance(&e, from_id.clone(), spender.clone())?;
+
+        if amount >= allowance {
+            write_allowance(&e, from_id.clone(), spender.clone(), 0)?;
+        } else {
+            write_allowance(
+                &e,
+                from_id.clone(),
+                spender.clone(),
+                allowance - amount.clone(),
+            )?;
+        }
+        event::decr_allow(e, from_id, spender, amount)?;
         Ok(())
     }
 

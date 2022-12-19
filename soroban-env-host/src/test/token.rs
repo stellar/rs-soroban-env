@@ -538,7 +538,7 @@ fn test_transfer_with_allowance() {
 
     // Allow 10_000_000 units of token to be transferred from user by user 3.
     token
-        .approve(
+        .incr_allow(
             &user,
             token.nonce(user.get_identifier(&test.host)).unwrap(),
             user_3.get_identifier(&test.host),
@@ -601,6 +601,35 @@ fn test_transfer_with_allowance() {
         ),
         ContractError::AllowanceError
     );
+
+    // Decrease allow by more than what's left. This will set the allowance to 0
+    token
+        .decr_allow(
+            &user,
+            token.nonce(user.get_identifier(&test.host)).unwrap(),
+            user_3.get_identifier(&test.host),
+            10_000_000,
+        )
+        .unwrap();
+
+    assert_eq!(
+        token
+            .allowance(
+                user.get_identifier(&test.host),
+                user_3.get_identifier(&test.host)
+            )
+            .unwrap(),
+        0
+    );
+
+    token
+        .incr_allow(
+            &user,
+            token.nonce(user.get_identifier(&test.host)).unwrap(),
+            user_3.get_identifier(&test.host),
+            4_000_000,
+        )
+        .unwrap();
 
     // Transfer the remaining allowance to user 3.
     token
@@ -1095,7 +1124,7 @@ fn test_trustline_auth() {
     .unwrap();
 
     test.run_from_account(user_acc.clone(), || {
-        token.approve(&acc_invoker, 0, admin_id.clone(), 500)
+        token.incr_allow(&acc_invoker, 0, admin_id.clone(), 500)
     })
     .unwrap();
 
@@ -1352,7 +1381,7 @@ fn test_auth_rejected_with_incorrect_nonce() {
 
     // Bump user's nonce and approve some amount to cover xfer_from below.
     token
-        .approve(&user, 0, user_2.get_identifier(&test.host), 1000)
+        .incr_allow(&user, 0, user_2.get_identifier(&test.host), 1000)
         .unwrap();
 
     assert_eq!(
@@ -1368,7 +1397,7 @@ fn test_auth_rejected_with_incorrect_nonce() {
     assert_eq!(
         to_contract_err(
             token
-                .approve(&user, 2, user_2.get_identifier(&test.host), 1000)
+                .incr_allow(&user, 2, user_2.get_identifier(&test.host), 1000)
                 .err()
                 .unwrap()
         ),
@@ -1850,7 +1879,22 @@ fn test_negative_amounts_are_not_allowed() {
     assert_eq!(
         to_contract_err(
             token
-                .approve(
+                .incr_allow(
+                    &user,
+                    token.nonce(user.get_identifier(&test.host)).unwrap(),
+                    user_2.get_identifier(&test.host),
+                    -1,
+                )
+                .err()
+                .unwrap()
+        ),
+        ContractError::NegativeAmountError
+    );
+
+    assert_eq!(
+        to_contract_err(
+            token
+                .decr_allow(
                     &user,
                     token.nonce(user.get_identifier(&test.host)).unwrap(),
                     user_2.get_identifier(&test.host),
@@ -1864,7 +1908,7 @@ fn test_negative_amounts_are_not_allowed() {
 
     // Approve some balance before doing the negative xfer_from.
     token
-        .approve(
+        .incr_allow(
             &user,
             token.nonce(user.get_identifier(&test.host)).unwrap(),
             user_2.get_identifier(&test.host),

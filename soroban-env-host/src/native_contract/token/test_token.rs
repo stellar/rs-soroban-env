@@ -60,7 +60,7 @@ impl<'a> TestToken<'a> {
             .try_into_val(self.host)?)
     }
 
-    pub(crate) fn approve(
+    pub(crate) fn incr_allow(
         &self,
         from: &TestSigner,
         nonce: i128,
@@ -70,7 +70,7 @@ impl<'a> TestToken<'a> {
         let signature = sign_args(
             self.host,
             from,
-            "approve",
+            "incr_allow",
             &self.id,
             host_vec![
                 self.host,
@@ -85,7 +85,38 @@ impl<'a> TestToken<'a> {
             .host
             .call(
                 self.id.clone().into(),
-                Symbol::from_str("approve").into(),
+                Symbol::from_str("incr_allow").into(),
+                host_vec![self.host, signature, nonce, spender, amount].into(),
+            )?
+            .try_into()?)
+    }
+
+    pub(crate) fn decr_allow(
+        &self,
+        from: &TestSigner,
+        nonce: i128,
+        spender: Identifier,
+        amount: i128,
+    ) -> Result<(), HostError> {
+        let signature = sign_args(
+            self.host,
+            from,
+            "decr_allow",
+            &self.id,
+            host_vec![
+                self.host,
+                from.get_identifier(self.host),
+                nonce.clone(),
+                spender.clone(),
+                amount.clone()
+            ],
+        );
+
+        Ok(self
+            .host
+            .call(
+                self.id.clone().into(),
+                Symbol::from_str("decr_allow").into(),
                 host_vec![self.host, signature, nonce, spender, amount].into(),
             )?
             .try_into()?)
