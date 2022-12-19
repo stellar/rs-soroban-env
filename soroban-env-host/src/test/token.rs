@@ -22,9 +22,9 @@ use ed25519_dalek::Keypair;
 use soroban_env_common::{
     xdr::{
         AccountEntry, AccountEntryExt, AccountEntryExtensionV1, AccountEntryExtensionV1Ext,
-        AccountEntryExtensionV2, AccountEntryExtensionV2Ext, AccountId, AlphaNum12, AlphaNum4,
-        Asset, AssetCode12, AssetCode4, Hash, HostFunctionType, LedgerEntryData, LedgerKey,
-        Liabilities, PublicKey, ScStatusType, SequenceNumber, SignerKey, Thresholds,
+        AccountEntryExtensionV2, AccountEntryExtensionV2Ext, AccountFlags, AccountId, AlphaNum12,
+        AlphaNum4, Asset, AssetCode12, AssetCode4, Hash, HostFunctionType, LedgerEntryData,
+        LedgerKey, Liabilities, PublicKey, ScStatusType, SequenceNumber, SignerKey, Thresholds,
         TrustLineEntry, TrustLineEntryExt, TrustLineEntryV1, TrustLineEntryV1Ext, TrustLineFlags,
     },
     RawVal,
@@ -36,10 +36,12 @@ use crate::native_contract::base_types::BytesN;
 struct TokenTest {
     host: Host,
     admin_key: Keypair,
+    issuer_key: Keypair,
     user_key: Keypair,
     user_key_2: Keypair,
     user_key_3: Keypair,
     user_key_4: Keypair,
+    asset_code: [u8; 4],
 }
 
 impl TokenTest {
@@ -57,35 +59,42 @@ impl TokenTest {
         Self {
             host,
             admin_key: generate_keypair(),
+            issuer_key: generate_keypair(),
             user_key: generate_keypair(),
             user_key_2: generate_keypair(),
             user_key_3: generate_keypair(),
             user_key_4: generate_keypair(),
+            asset_code: [0_u8; 4],
         }
     }
 
     fn default_token_with_admin_id(&self, new_admin: Identifier) -> TestToken {
-        let issuer_id = signer_to_account_id(&self.host, &self.admin_key);
+        let issuer_id = signer_to_account_id(&self.host, &self.issuer_key);
         self.create_classic_account(
             &issuer_id,
-            vec![(&self.admin_key, 100)],
+            vec![(&self.issuer_key, 100)],
             10_000_000,
             1,
             [1, 0, 0, 0],
             None,
             None,
+            0,
         );
 
-        let asset_code = [0_u8; 4];
         let asset = Asset::CreditAlphanum4(AlphaNum4 {
-            asset_code: AssetCode4(asset_code),
+            asset_code: AssetCode4(self.asset_code),
             issuer: issuer_id.clone(),
         });
 
         let token = TestToken::new_from_asset(&self.host, asset.clone());
 
-        let issuer = TestSigner::account(&issuer_id, vec![&self.admin_key]);
+        if let Identifier::Account(new_admin_id) = new_admin.clone() {
+            if new_admin_id == issuer_id {
+                return token;
+            }
+        }
 
+        let issuer = TestSigner::account(&issuer_id, vec![&self.issuer_key]);
         token
             .set_admin(
                 &issuer,
@@ -93,7 +102,6 @@ impl TokenTest {
                 new_admin,
             )
             .unwrap();
-
         token
     }
 
@@ -126,6 +134,7 @@ impl TokenTest {
         liabilities: Option<(i64, i64)>,
         // (num_sponsored, num_sponsoring) counts
         sponsorships: Option<(u32, u32)>,
+        flags: u32,
     ) {
         let key = self.host.to_account_key(account_id.clone().into());
         let account_id = match &key {
@@ -173,7 +182,7 @@ impl TokenTest {
             seq_num: SequenceNumber(0),
             num_sub_entries,
             inflation_dest: None,
-            flags: 0,
+            flags,
             home_domain: Default::default(),
             thresholds: Thresholds(thresholds),
             signers: acc_signers.try_into().unwrap(),
@@ -195,7 +204,7 @@ impl TokenTest {
         asset_code: &[u8],
         balance: i64,
         limit: i64,
-        authorized: bool,
+        flags: u32,
         // (buying, selling) liabilities
         liabilities: Option<(i64, i64)>,
     ) -> LedgerKey {
@@ -230,11 +239,7 @@ impl TokenTest {
             asset,
             balance,
             limit,
-            flags: if authorized {
-                TrustLineFlags::AuthorizedFlag as u32
-            } else {
-                0
-            },
+            flags,
             ext,
         };
 
@@ -309,6 +314,7 @@ fn test_native_token_smart_roundtrip() {
         [1, 0, 0, 0],
         None,
         None,
+        0,
     );
     let token = TestToken::new_from_asset(&test.host, Asset::Native);
     let expected_token_id = BytesN::<32>::try_from_val(
@@ -331,73 +337,14 @@ fn test_native_token_smart_roundtrip() {
         .is_err());
 
     assert_eq!(test.get_native_balance(&account_id), 100_000_000);
-    assert_eq!(token.balance(user.get_identifier(&test.host)).unwrap(), 0);
+    assert_eq!(
+        token.balance(user.get_identifier(&test.host)).unwrap(),
+        100_000_000
+    );
     assert_eq!(token.nonce(user.get_identifier(&test.host)).unwrap(), 0);
-
-    token.import(&user, 0, 10_000_000).unwrap();
-
-    assert_eq!(test.get_native_balance(&account_id), 90_000_000);
-    assert_eq!(
-        token.balance(user.get_identifier(&test.host)).unwrap(),
-        10_000_000
-    );
-    assert_eq!(token.nonce(user.get_identifier(&test.host)).unwrap(), 1);
-
-    token.export(&user, 1, 5_000_000).unwrap();
-
-    assert_eq!(test.get_native_balance(&account_id), 95_000_000);
-    assert_eq!(
-        token.balance(user.get_identifier(&test.host)).unwrap(),
-        5_000_000
-    );
-    assert_eq!(token.nonce(user.get_identifier(&test.host)).unwrap(), 2);
-
-    // Make sure negative amounts are not allowed in smart/classic conversions.
-    assert_eq!(
-        to_contract_err(
-            token
-                .import(
-                    &user,
-                    token.nonce(user.get_identifier(&test.host)).unwrap(),
-                    i64::MIN,
-                )
-                .err()
-                .unwrap()
-        ),
-        ContractError::NegativeAmountError
-    );
-    assert_eq!(
-        to_contract_err(
-            token
-                .export(
-                    &user,
-                    token.nonce(user.get_identifier(&test.host)).unwrap(),
-                    -1,
-                )
-                .err()
-                .unwrap()
-        ),
-        ContractError::NegativeAmountError
-    );
-
-    // Also cover potential overflows
-    assert!(token
-        .import(
-            &user,
-            token.nonce(user.get_identifier(&test.host)).unwrap(),
-            i64::MAX,
-        )
-        .is_err());
-    assert!(token
-        .export(
-            &user,
-            token.nonce(user.get_identifier(&test.host)).unwrap(),
-            i64::MAX,
-        )
-        .is_err());
 }
 
-fn test_classic_asset_roundtrip(asset_code: &[u8]) {
+fn test_classic_asset_init(asset_code: &[u8]) {
     let test = TokenTest::setup();
 
     let account_id = signer_to_account_id(&test.host, &test.user_key);
@@ -411,6 +358,7 @@ fn test_classic_asset_roundtrip(asset_code: &[u8]) {
         [1, 0, 0, 0],
         None,
         None,
+        0,
     );
 
     let trustline_key = test.create_classic_trustline(
@@ -419,7 +367,7 @@ fn test_classic_asset_roundtrip(asset_code: &[u8]) {
         asset_code,
         10_000_000,
         100_000_000,
-        true,
+        TrustLineFlags::AuthorizedFlag as u32,
         None,
     );
     let asset = if asset_code.len() == 4 {
@@ -464,86 +412,21 @@ fn test_classic_asset_roundtrip(asset_code: &[u8]) {
         test.get_classic_trustline_balance(&trustline_key),
         10_000_000
     );
-    assert_eq!(token.balance(user.get_identifier(&test.host)).unwrap(), 0);
+    assert_eq!(
+        token.balance(user.get_identifier(&test.host)).unwrap(),
+        10_000_000
+    );
     assert_eq!(token.nonce(user.get_identifier(&test.host)).unwrap(), 0);
-
-    token.import(&user, 0, 1_000_000).unwrap();
-
-    assert_eq!(
-        test.get_classic_trustline_balance(&trustline_key),
-        9_000_000
-    );
-    assert_eq!(
-        token.balance(user.get_identifier(&test.host)).unwrap(),
-        1_000_000
-    );
-    assert_eq!(token.nonce(user.get_identifier(&test.host)).unwrap(), 1);
-
-    token.export(&user, 1, 500_000).unwrap();
-
-    assert_eq!(
-        test.get_classic_trustline_balance(&trustline_key),
-        9_500_000
-    );
-    assert_eq!(
-        token.balance(user.get_identifier(&test.host)).unwrap(),
-        500_000
-    );
-    assert_eq!(token.nonce(user.get_identifier(&test.host)).unwrap(), 2);
-
-    // Make sure negative amounts are not allowed in smart/classic conversions.
-    assert_eq!(
-        to_contract_err(
-            token
-                .import(
-                    &user,
-                    token.nonce(user.get_identifier(&test.host)).unwrap(),
-                    -1,
-                )
-                .err()
-                .unwrap()
-        ),
-        ContractError::NegativeAmountError
-    );
-    assert_eq!(
-        to_contract_err(
-            token
-                .export(
-                    &user,
-                    token.nonce(user.get_identifier(&test.host)).unwrap(),
-                    i64::MIN,
-                )
-                .err()
-                .unwrap()
-        ),
-        ContractError::NegativeAmountError
-    );
-
-    // Also cover potential overflows
-    assert!(token
-        .import(
-            &user,
-            token.nonce(user.get_identifier(&test.host)).unwrap(),
-            i64::MAX,
-        )
-        .is_err());
-    assert!(token
-        .export(
-            &user,
-            token.nonce(user.get_identifier(&test.host)).unwrap(),
-            i64::MAX,
-        )
-        .is_err());
 }
 
 #[test]
-fn test_classic_asset4_smart_roundtrip() {
-    test_classic_asset_roundtrip(&[0, 'a' as u8, 'b' as u8, 255]);
+fn test_classic_asset4_smart_init() {
+    test_classic_asset_init(&[0, 'a' as u8, 'b' as u8, 255]);
 }
 
 #[test]
-fn test_classic_asset12_smart_roundtrip() {
-    test_classic_asset_roundtrip(&[255, 0, 0, 127, b'a', b'b', b'c', 1, 2, 3, 4, 5]);
+fn test_classic_asset12_smart_init() {
+    test_classic_asset_init(&[255, 0, 0, 127, b'a', b'b', b'c', 1, 2, 3, 4, 5]);
 }
 
 #[test]
@@ -1066,9 +949,34 @@ fn test_set_admin() {
 }
 
 #[test]
-fn test_account_invoker_auth() {
+fn test_account_spendable_balance() {
     let test = TokenTest::setup();
-    let admin_acc = signer_to_account_id(&test.host, &test.admin_key);
+    let token = TestToken::new_from_asset(&test.host, Asset::Native);
+    let user_acc = signer_to_account_id(&test.host, &test.user_key);
+    let user_id = Identifier::Account(user_acc.clone());
+
+    test.create_classic_account(
+        &user_acc,
+        vec![(&test.user_key, 100)],
+        100_000_000,
+        1,
+        [1, 0, 0, 0],
+        None,
+        None,
+        0,
+    );
+
+    assert_eq!(token.balance(user_id.clone()).unwrap(), 100_000_000);
+    // base reserve = 5_000_000
+    // signer + account = 3 base reserves
+    assert_eq!(token.spendable(user_id.clone()).unwrap(), 85_000_000);
+}
+
+#[test]
+fn test_trustline_auth() {
+    let test = TokenTest::setup();
+    // the admin is the issuer_key
+    let admin_acc = signer_to_account_id(&test.host, &test.issuer_key);
     let user_acc = signer_to_account_id(&test.host, &test.user_key);
 
     test.create_classic_account(
@@ -1079,6 +987,7 @@ fn test_account_invoker_auth() {
         [1, 0, 0, 0],
         None,
         None,
+        0,
     );
     test.create_classic_account(
         &user_acc,
@@ -1088,6 +997,7 @@ fn test_account_invoker_auth() {
         [1, 0, 0, 0],
         None,
         None,
+        0,
     );
 
     let admin_id = Identifier::Account(admin_acc.clone());
@@ -1095,6 +1005,188 @@ fn test_account_invoker_auth() {
 
     let acc_invoker = TestSigner::AccountInvoker;
     let token = test.default_token_with_admin_id(admin_id.clone());
+
+    // create a trustline for user_acc so the issuer can mint into it
+    test.create_classic_trustline(
+        &user_acc,
+        &admin_acc,
+        &test.asset_code,
+        0,
+        10000,
+        TrustLineFlags::AuthorizedFlag as u32,
+        Some((0, 0)),
+    );
+
+    //mint to user_id
+    test.run_from_account(admin_acc.clone(), || {
+        token.mint(&acc_invoker, 0, user_id.clone(), 1000)
+    })
+    .unwrap();
+
+    assert_eq!(token.balance(user_id.clone()).unwrap(), 1000);
+
+    // transfer 1 back to the issuer (which is a burn)
+    test.run_from_account(user_acc.clone(), || {
+        token.xfer(&acc_invoker, 0, admin_id.clone(), 1)
+    })
+    .unwrap();
+
+    assert_eq!(token.balance(user_id.clone()).unwrap(), 999);
+    assert_eq!(token.balance(admin_id.clone()).unwrap(), i64::MAX.into());
+
+    // try to deauthorize trustline, but fail because RevocableFlag is not set on the issuer
+    assert_eq!(
+        to_contract_err(
+            test.run_from_account(admin_acc.clone(), || {
+                token.freeze(&acc_invoker, 0, user_id.clone())
+            })
+            .err()
+            .unwrap()
+        ),
+        ContractError::OperationNotSupportedError
+    );
+
+    // Add RevocableFlag to the issuer
+    test.create_classic_account(
+        &admin_acc,
+        vec![(&test.admin_key, 100)],
+        10_000_000,
+        1,
+        [1, 0, 0, 0],
+        None,
+        None,
+        AccountFlags::RevocableFlag as u32,
+    );
+
+    // trustline should be deauthorized now.
+    test.run_from_account(admin_acc.clone(), || {
+        token.freeze(&acc_invoker, 0, user_id.clone())
+    })
+    .unwrap();
+
+    // transfer should fail from deauthorized trustline
+    assert_eq!(
+        to_contract_err(
+            test.run_from_account(user_acc.clone(), || {
+                token.xfer(&acc_invoker, 0, admin_id.clone(), 1)
+            })
+            .err()
+            .unwrap()
+        ),
+        ContractError::BalanceFrozenError
+    );
+
+    // mint should also fail for the same reason
+    assert_eq!(
+        to_contract_err(
+            test.run_from_account(admin_acc.clone(), || {
+                token.mint(&acc_invoker, 0, user_id.clone(), 1000)
+            })
+            .err()
+            .unwrap()
+        ),
+        ContractError::BalanceFrozenError
+    );
+
+    // Now authorize trustline
+    test.run_from_account(admin_acc.clone(), || {
+        token.unfreeze(&acc_invoker, 0, user_id.clone())
+    })
+    .unwrap();
+
+    test.run_from_account(user_acc.clone(), || {
+        token.approve(&acc_invoker, 0, admin_id.clone(), 500)
+    })
+    .unwrap();
+
+    test.run_from_account(admin_acc.clone(), || {
+        token.xfer_from(&acc_invoker, 0, user_id.clone(), admin_id, 500)
+    })
+    .unwrap();
+
+    test.run_from_account(admin_acc.clone(), || {
+        token.mint(&acc_invoker, 0, user_id.clone(), 1)
+    })
+    .unwrap();
+
+    assert_eq!(token.balance(user_id.clone()).unwrap(), 500);
+
+    // try to clawback
+    assert_eq!(
+        to_contract_err(
+            test.run_from_account(admin_acc.clone(), || {
+                token.burn(&acc_invoker, 0, user_id.clone(), 10)
+            })
+            .err()
+            .unwrap()
+        ),
+        ContractError::BalanceError
+    );
+
+    // set TrustlineClawbackEnabledFlag on trustline
+    // Also add selling liabilities to test spendable balance
+    test.create_classic_trustline(
+        &user_acc,
+        &admin_acc,
+        &test.asset_code,
+        500,
+        10000,
+        TrustLineFlags::TrustlineClawbackEnabledFlag as u32,
+        Some((0, 10)),
+    );
+
+    test.run_from_account(admin_acc.clone(), || {
+        token.burn(&acc_invoker, 0, user_id.clone(), 10)
+    })
+    .unwrap();
+
+    assert_eq!(token.balance(user_id.clone()).unwrap(), 490);
+    assert_eq!(token.spendable(user_id.clone()).unwrap(), 480);
+}
+
+#[test]
+fn test_account_invoker_auth_with_issuer_admin() {
+    let test = TokenTest::setup();
+    let admin_acc = signer_to_account_id(&test.host, &test.issuer_key);
+    let user_acc = signer_to_account_id(&test.host, &test.user_key);
+
+    test.create_classic_account(
+        &admin_acc,
+        vec![(&test.admin_key, 100)],
+        10_000_000,
+        1,
+        [1, 0, 0, 0],
+        None,
+        None,
+        0,
+    );
+    test.create_classic_account(
+        &user_acc,
+        vec![(&test.user_key, 100)],
+        10_000_000,
+        1,
+        [1, 0, 0, 0],
+        None,
+        None,
+        0,
+    );
+
+    let admin_id = Identifier::Account(admin_acc.clone());
+    let user_id = Identifier::Account(user_acc.clone());
+
+    let acc_invoker = TestSigner::AccountInvoker;
+    let token = test.default_token_with_admin_id(admin_id.clone());
+
+    // create a trustline for user_acc so the issuer can mint into it
+    test.create_classic_trustline(
+        &user_acc,
+        &admin_acc,
+        &test.asset_code,
+        0,
+        10000,
+        TrustLineFlags::AuthorizedFlag as u32,
+        Some((0, 0)),
+    );
 
     // Admin invoker can perform admin operation.
     test.run_from_account(admin_acc.clone(), || {
@@ -1121,7 +1213,7 @@ fn test_account_invoker_auth() {
     .unwrap();
 
     assert_eq!(token.balance(user_id.clone()).unwrap(), 1000);
-    assert_eq!(token.balance(admin_id.clone()).unwrap(), 2000);
+    assert_eq!(token.balance(admin_id.clone()).unwrap(), i64::MAX.into());
 
     // // User invoker can't perform admin operation.
     // test.host.set_source_account(user_acc.clone());
@@ -1148,7 +1240,7 @@ fn test_account_invoker_auth() {
     .unwrap();
 
     assert_eq!(token.balance(user_id.clone()).unwrap(), 1300);
-    assert_eq!(token.balance(admin_id.clone()).unwrap(), 1700);
+    assert_eq!(token.balance(admin_id.clone()).unwrap(), i64::MAX.into());
 
     // Contract invoker can't perform unauthorized admin operation.
     assert_eq!(
@@ -1475,52 +1567,58 @@ fn test_classic_account_multisig_auth() {
         [40, 10, 100, 150],
         None,
         None,
+        0,
     );
+
     let account_ident = Identifier::Account(account_id.clone());
     let token = TestToken::new_from_asset(&test.host, Asset::Native);
 
     // Success: account weight (60) + 40 = 100
     token
-        .import(
+        .xfer(
             &TestSigner::account(&account_id, vec![&test.user_key, &test.user_key_3]),
             token.nonce(account_ident.clone()).unwrap(),
+            account_ident.clone(),
             100,
         )
         .unwrap();
 
     // Success: 1 high weight signer (u32::MAX)
     token
-        .import(
+        .xfer(
             &TestSigner::account(&account_id, vec![&test.user_key_2]),
             token.nonce(account_ident.clone()).unwrap(),
+            account_ident.clone(),
             100,
         )
         .unwrap();
 
     // Success: 60 + 59 > 100, no account signature
     token
-        .import(
+        .xfer(
             &TestSigner::account(&account_id, vec![&test.user_key_3, &test.user_key_4]),
             token.nonce(account_ident.clone()).unwrap(),
+            account_ident.clone(),
             100,
         )
         .unwrap();
 
     // Success: 40 + 60 + 59 > 100
     token
-        .import(
+        .xfer(
             &TestSigner::account(
                 &account_id,
                 vec![&test.user_key, &test.user_key_3, &test.user_key_4],
             ),
             token.nonce(account_ident.clone()).unwrap(),
+            account_ident.clone(),
             100,
         )
         .unwrap();
 
     // Success: all signers
     token
-        .import(
+        .xfer(
             &TestSigner::account(
                 &account_id,
                 vec![
@@ -1531,6 +1629,7 @@ fn test_classic_account_multisig_auth() {
                 ],
             ),
             token.nonce(account_ident.clone()).unwrap(),
+            account_ident.clone(),
             100,
         )
         .unwrap();
@@ -1539,9 +1638,10 @@ fn test_classic_account_multisig_auth() {
     assert_eq!(
         to_contract_err(
             token
-                .import(
+                .xfer(
                     &TestSigner::account(&account_id, vec![&test.user_key]),
                     token.nonce(account_ident.clone()).unwrap(),
+                    account_ident.clone(),
                     100,
                 )
                 .err()
@@ -1554,9 +1654,10 @@ fn test_classic_account_multisig_auth() {
     assert_eq!(
         to_contract_err(
             token
-                .import(
+                .xfer(
                     &TestSigner::account(&account_id, vec![&test.user_key, &test.user_key_4]),
                     token.nonce(account_ident.clone()).unwrap(),
+                    account_ident.clone(),
                     100,
                 )
                 .err()
@@ -1569,9 +1670,10 @@ fn test_classic_account_multisig_auth() {
     assert_eq!(
         to_contract_err(
             token
-                .import(
+                .xfer(
                     &TestSigner::account(&account_id, vec![&test.user_key_3, &test.user_key_3]),
                     token.nonce(account_ident.clone()).unwrap(),
+                    account_ident.clone(),
                     100,
                 )
                 .err()
@@ -1584,12 +1686,13 @@ fn test_classic_account_multisig_auth() {
     assert_eq!(
         to_contract_err(
             token
-                .import(
+                .xfer(
                     &TestSigner::account(
                         &account_id,
                         vec![&test.user_key_3, &test.user_key_4, &test.user_key_3],
                     ),
                     token.nonce(account_ident.clone()).unwrap(),
+                    account_ident.clone(),
                     100,
                 )
                 .err()
@@ -1602,9 +1705,10 @@ fn test_classic_account_multisig_auth() {
     assert_eq!(
         to_contract_err(
             token
-                .import(
+                .xfer(
                     &TestSigner::account(&account_id, vec![&test.user_key_3, &test.admin_key],),
                     token.nonce(account_ident.clone()).unwrap(),
+                    account_ident.clone(),
                     100,
                 )
                 .err()
@@ -1617,12 +1721,13 @@ fn test_classic_account_multisig_auth() {
     assert_eq!(
         to_contract_err(
             token
-                .import(
+                .xfer(
                     &TestSigner::account(
                         &account_id,
                         vec![&test.user_key_3, &test.user_key_4, &test.admin_key],
                     ),
                     token.nonce(account_ident.clone()).unwrap(),
+                    account_ident.clone(),
                     100,
                 )
                 .err()
@@ -1640,9 +1745,10 @@ fn test_classic_account_multisig_auth() {
     assert_eq!(
         to_contract_err(
             token
-                .import(
+                .xfer(
                     &TestSigner::account(&account_id, too_many_sigs,),
                     token.nonce(account_ident.clone()).unwrap(),
+                    account_ident.clone(),
                     100,
                 )
                 .err()
@@ -1663,12 +1769,13 @@ fn test_classic_account_multisig_auth() {
     assert_eq!(
         to_contract_err(
             token
-                .import(
+                .xfer(
                     &TestSigner::Account(AccountSigner {
                         account_id: account_id,
                         signers: out_of_order_signers,
                     }),
                     token.nonce(account_ident.clone()).unwrap(),
+                    account_ident,
                     100,
                 )
                 .err()
@@ -1791,14 +1898,30 @@ fn test_native_token_classic_balance_boundaries(
     expected_max_balance: i64,
 ) {
     let token = TestToken::new_from_asset(&test.host, Asset::Native);
-    // Try to do smart conversion that would leave balance lower than min.
+
+    let new_balance_key = generate_keypair();
+    let new_balance_acc = signer_to_account_id(&test.host, &new_balance_key);
+    let new_balance_signer = TestSigner::account(&new_balance_acc, vec![&new_balance_key]);
+    test.create_classic_account(
+        &new_balance_acc,
+        vec![(&new_balance_key, 100)],
+        10_000_000,
+        0,
+        [1, 0, 0, 0],
+        None,
+        None,
+        0,
+    );
+
+    // Try to do xfer that would leave balance lower than min.
     assert_eq!(
         to_contract_err(
             token
-                .import(
+                .xfer(
                     &user,
                     token.nonce(user.get_identifier(&test.host)).unwrap(),
-                    init_balance - expected_min_balance + 1,
+                    new_balance_signer.get_identifier(&test.host),
+                    (init_balance - expected_min_balance + 1).into(),
                 )
                 .err()
                 .unwrap()
@@ -1806,32 +1929,29 @@ fn test_native_token_classic_balance_boundaries(
         ContractError::BalanceError
     );
 
-    // Now convert everything but min balance to smart.
+    // now transfer spendable balance
     token
-        .import(
+        .xfer(
             &user,
             token.nonce(user.get_identifier(&test.host)).unwrap(),
-            init_balance - expected_min_balance,
+            new_balance_signer.get_identifier(&test.host),
+            (init_balance - expected_min_balance).into(),
         )
         .unwrap();
-    assert_eq!(test.get_native_balance(account_id), expected_min_balance);
 
-    // Converting to smart is no longer possible.
-    assert_eq!(
-        to_contract_err(
+    // now transfer back
+    token
+        .xfer(
+            &new_balance_signer,
             token
-                .import(
-                    &user,
-                    token.nonce(user.get_identifier(&test.host)).unwrap(),
-                    1,
-                )
-                .err()
-                .unwrap()
-        ),
-        ContractError::BalanceError
-    );
+                .nonce(new_balance_signer.get_identifier(&test.host))
+                .unwrap(),
+            user.get_identifier(&test.host),
+            (init_balance - expected_min_balance).into(),
+        )
+        .unwrap();
 
-    // Create an account with smart balance close to i64::MAX and transfer it
+    // Create an account with balance close to i64::MAX and transfer it
     // to the account being tested. That's not a realistic scenario
     // given limited XLM supply, but that's the only way to
     // cover max_balance.
@@ -1846,16 +1966,30 @@ fn test_native_token_classic_balance_boundaries(
         [1, 0, 0, 0],
         None,
         None,
+        0,
     );
-    token
-        .import(
-            &large_balance_signer,
+
+    // Transferring a balance that would exceed
+    // expected_max_balance shouldn't be possible.
+    assert_eq!(
+        to_contract_err(
             token
-                .nonce(large_balance_signer.get_identifier(&test.host))
-                .unwrap(),
-            i64::MAX - 10_000_000,
-        )
-        .unwrap();
+                .xfer(
+                    &large_balance_signer,
+                    token
+                        .nonce(large_balance_signer.get_identifier(&test.host))
+                        .unwrap(),
+                    user.get_identifier(&test.host),
+                    (expected_max_balance - init_balance + 1).into(),
+                )
+                .err()
+                .unwrap()
+        ),
+        ContractError::BalanceError
+    );
+
+    // ...but transferring exactly up to expected_max_balance should be
+    // possible.
     token
         .xfer(
             &large_balance_signer,
@@ -1863,35 +1997,7 @@ fn test_native_token_classic_balance_boundaries(
                 .nonce(large_balance_signer.get_identifier(&test.host))
                 .unwrap(),
             user.get_identifier(&test.host),
-            i64::MAX as i128 - 10_000_000,
-        )
-        .unwrap();
-
-    // User balance should be now i64::MAX - 10_000_000 +
-    // init_balance - expected_min_balance, which we expect to exceed
-    // i64::MAX and hence exceed expected_max_balance.
-    // Transferring the balance to classic that would exceed
-    // expected_max_balance shouldn't be possible.
-    assert_eq!(
-        to_contract_err(
-            token
-                .export(
-                    &user,
-                    token.nonce(user.get_identifier(&test.host)).unwrap(),
-                    expected_max_balance - expected_min_balance + 1
-                )
-                .err()
-                .unwrap()
-        ),
-        ContractError::BalanceError
-    );
-    // ...but transferring exactly up to expected_max_balance should be
-    // possible.
-    token
-        .export(
-            &user,
-            token.nonce(user.get_identifier(&test.host)).unwrap(),
-            expected_max_balance - expected_min_balance,
+            (expected_max_balance - init_balance).into(),
         )
         .unwrap();
 
@@ -1913,6 +2019,7 @@ fn test_native_token_classic_balance_boundaries_simple() {
         [1, 0, 0, 0],
         None,
         None,
+        0,
     );
     // Min balance should be
     // (2 (account) + 5 (subentries)) * base_reserve = 35_000_000.
@@ -1939,6 +2046,7 @@ fn test_native_token_classic_balance_boundaries_with_liabilities() {
         [1, 0, 0, 0],
         Some((300_000_000, 500_000_000)),
         None,
+        0,
     );
     // Min balance should be
     // (2 (account) + 8 (subentries)) * base_reserve + 500_000_000 (selling
@@ -1967,6 +2075,7 @@ fn test_native_token_classic_balance_boundaries_with_sponsorships() {
         [1, 0, 0, 0],
         None,
         Some((3, 6)),
+        0,
     );
     // Min balance should be
     // (2 (account) + 5 (subentries) + (6 sponsoring - 3 sponsored)) * base_reserve
@@ -1994,6 +2103,7 @@ fn test_native_token_classic_balance_boundaries_with_sponsorships_and_liabilitie
         [1, 0, 0, 0],
         Some((300_000_000, 500_000_000)),
         Some((3, 6)),
+        0,
     );
     // Min balance should be
     // (2 (account) + 5 (subentries) + (6 sponsoring - 3 sponsored)) * base_reserve
@@ -2017,17 +2127,18 @@ fn test_native_token_classic_balance_boundaries_with_large_values() {
     test.create_classic_account(
         &account_id,
         vec![(&test.user_key, 100)],
-        i64::MAX,
+        i64::MAX - i64::MAX / 4,
         u32::MAX,
         [1, 0, 0, 0],
         Some((i64::MAX / 4, i64::MAX / 5)),
         Some((0, u32::MAX)),
+        0,
     );
     test_native_token_classic_balance_boundaries(
         &test,
         &user,
         &account_id,
-        i64::MAX,
+        i64::MAX - i64::MAX / 4,
         (2 /* account */ + u32::MAX as i64 /* sub-entries */ + u32::MAX as i64/* sponsoring - sponsored */)
             * 5_000_000
             + i64::MAX / 5, /* Selling liabilities */
@@ -2054,6 +2165,20 @@ fn test_wrapped_asset_classic_balance_boundaries(
         [1, 0, 0, 0],
         None,
         None,
+        0,
+    );
+
+    let account_id2 = signer_to_account_id(&test.host, &test.user_key_2);
+    let user2 = TestSigner::account(&account_id2, vec![&test.user_key_2]);
+    test.create_classic_account(
+        &account_id2,
+        vec![(&test.user_key_2, 100)],
+        10_000_000,
+        0,
+        [1, 0, 0, 0],
+        None,
+        None,
+        0,
     );
 
     let issuer_id = signer_to_account_id(&test.host, &test.admin_key);
@@ -2066,6 +2191,7 @@ fn test_wrapped_asset_classic_balance_boundaries(
         [1, 0, 0, 0],
         None,
         None,
+        0,
     );
 
     let trustline_key = test.create_classic_trustline(
@@ -2074,9 +2200,20 @@ fn test_wrapped_asset_classic_balance_boundaries(
         &[255; 12],
         init_balance,
         limit,
-        true,
+        TrustLineFlags::AuthorizedFlag as u32,
         liabilities,
     );
+
+    let trustline_key2 = test.create_classic_trustline(
+        &account_id2,
+        &issuer_id,
+        &[255; 12],
+        0,
+        limit,
+        TrustLineFlags::AuthorizedFlag as u32,
+        Some((0, 0)),
+    );
+
     let token = TestToken::new_from_asset(
         &test.host,
         Asset::CreditAlphanum12(AlphaNum12 {
@@ -2086,14 +2223,15 @@ fn test_wrapped_asset_classic_balance_boundaries(
             )),
         }),
     );
-    // Try to do smart conversion that would leave balance lower than min.
+    // Try to do transfer that would leave balance lower than min.
     assert_eq!(
         to_contract_err(
             token
-                .import(
+                .xfer(
                     &user,
                     token.nonce(user.get_identifier(&test.host)).unwrap(),
-                    init_balance - expected_min_balance + 1,
+                    user.get_identifier(&test.host),
+                    (init_balance - expected_min_balance + 1).into(),
                 )
                 .err()
                 .unwrap()
@@ -2101,27 +2239,46 @@ fn test_wrapped_asset_classic_balance_boundaries(
         ContractError::BalanceError
     );
 
-    // Now convert everything but min balance to smart.
+    // Send spendable balance
     token
-        .import(
+        .xfer(
             &user,
             token.nonce(user.get_identifier(&test.host)).unwrap(),
-            init_balance - expected_min_balance,
+            user2.get_identifier(&test.host),
+            (init_balance - expected_min_balance).into(),
         )
         .unwrap();
+
     assert_eq!(
         test.get_classic_trustline_balance(&trustline_key),
         expected_min_balance
     );
 
-    // Converting to smart is no longer possible.
+    assert_eq!(
+        test.get_classic_trustline_balance(&trustline_key2),
+        init_balance - expected_min_balance
+    );
+
+    // Send back
+    token
+        .xfer(
+            &user2,
+            token.nonce(user2.get_identifier(&test.host)).unwrap(),
+            user.get_identifier(&test.host),
+            (init_balance - expected_min_balance).into(),
+        )
+        .unwrap();
+
+    // Mint a balancethat would exceed
+    // expected_max_balance shouldn't be possible.
     assert_eq!(
         to_contract_err(
             token
-                .import(
-                    &user,
-                    token.nonce(user.get_identifier(&test.host)).unwrap(),
-                    1,
+                .mint(
+                    &issuer,
+                    token.nonce(issuer.get_identifier(&test.host)).unwrap(),
+                    user.get_identifier(&test.host),
+                    (expected_max_balance - init_balance + 1).into(),
                 )
                 .err()
                 .unwrap()
@@ -2129,41 +2286,14 @@ fn test_wrapped_asset_classic_balance_boundaries(
         ContractError::BalanceError
     );
 
-    // Mint a large amount of token in smart.
+    // ...but transferring exactly up to expected_max_balance should be
+    // possible.
     token
         .mint(
             &issuer,
             token.nonce(issuer.get_identifier(&test.host)).unwrap(),
             user.get_identifier(&test.host),
-            u64::MAX as i128,
-        )
-        .unwrap();
-
-    // Transferring the balance to classic that would exceed
-    // expected_max_balance shouldn't be possible.
-    if expected_max_balance - expected_min_balance < i64::MAX {
-        assert_eq!(
-            to_contract_err(
-                token
-                    .export(
-                        &user,
-                        token.nonce(user.get_identifier(&test.host)).unwrap(),
-                        expected_max_balance - expected_min_balance + 1
-                    )
-                    .err()
-                    .unwrap()
-            ),
-            ContractError::BalanceError
-        );
-    }
-
-    // ...but transferring exactly up to expected_max_balance should be
-    // possible.
-    token
-        .export(
-            &user,
-            token.nonce(user.get_identifier(&test.host)).unwrap(),
-            expected_max_balance - expected_min_balance,
+            (expected_max_balance - init_balance).into(),
         )
         .unwrap();
 
@@ -2171,6 +2301,7 @@ fn test_wrapped_asset_classic_balance_boundaries(
         test.get_classic_trustline_balance(&trustline_key),
         expected_max_balance
     );
+    assert_eq!(test.get_classic_trustline_balance(&trustline_key2), 0);
 }
 
 #[test]
@@ -2208,7 +2339,7 @@ fn test_asset_token_classic_balance_boundaries_with_limit_and_liabilities() {
 #[test]
 fn test_asset_token_classic_balance_boundaries_large_values() {
     test_wrapped_asset_classic_balance_boundaries(
-        i64::MAX,
+        i64::MAX - i64::MAX / 5,
         i64::MAX / 4,
         i64::MAX - i64::MAX / 5,
         Some((i64::MAX / 5, i64::MAX / 4)),
@@ -2229,6 +2360,7 @@ fn test_classic_transfers_not_possible_for_unauthorized_asset() {
         [1, 0, 0, 0],
         None,
         None,
+        0,
     );
 
     let issuer_id = signer_to_account_id(&test.host, &test.admin_key);
@@ -2239,9 +2371,15 @@ fn test_classic_transfers_not_possible_for_unauthorized_asset() {
         &[255; 4],
         100_000_000,
         i64::MAX,
-        true,
+        TrustLineFlags::AuthorizedFlag as u32,
         None,
     );
+
+    assert_eq!(
+        test.get_classic_trustline_balance(&trustline_key),
+        100_000_000
+    );
+
     let token = TestToken::new_from_asset(
         &test.host,
         Asset::CreditAlphanum4(AlphaNum4 {
@@ -2252,60 +2390,46 @@ fn test_classic_transfers_not_possible_for_unauthorized_asset() {
         }),
     );
 
-    // Transfer some balance to smart.
+    // Authorized to xfer
     token
-        .import(
+        .xfer(
             &user,
             token.nonce(user.get_identifier(&test.host)).unwrap(),
-            40_000_000,
+            user.get_identifier(&test.host),
+            1.into(),
         )
         .unwrap();
-    assert_eq!(
-        test.get_classic_trustline_balance(&trustline_key),
-        60_000_000
-    );
 
     // Override the trustline authorization flag.
     let trustline_key = test.create_classic_trustline(
         &account_id,
         &issuer_id,
         &[255; 4],
-        60_000_000,
+        100_000_000,
         i64::MAX,
-        false,
+        0,
         None,
     );
+
+    // No longer authorized
+    assert_eq!(
+        to_contract_err(
+            token
+                .xfer(
+                    &user,
+                    token.nonce(user.get_identifier(&test.host)).unwrap(),
+                    user.get_identifier(&test.host),
+                    1.into(),
+                )
+                .err()
+                .unwrap()
+        ),
+        ContractError::BalanceFrozenError
+    );
+
     // Trustline balance stays the same.
     assert_eq!(
         test.get_classic_trustline_balance(&trustline_key),
-        60_000_000
-    );
-    // Smart/classic conversions are no longer possible as classic balance is no
-    // longer authorized.
-    assert_eq!(
-        to_contract_err(
-            token
-                .import(
-                    &user,
-                    token.nonce(user.get_identifier(&test.host)).unwrap(),
-                    10_000_000,
-                )
-                .err()
-                .unwrap()
-        ),
-        ContractError::BalanceError
-    );
-    assert_eq!(
-        to_contract_err(
-            token
-                .export(
-                    &user,
-                    token.nonce(user.get_identifier(&test.host)).unwrap(),
-                    10_000_000,
-                )
-                .err()
-                .unwrap()
-        ),
-        ContractError::BalanceError
+        100_000_000
     );
 }

@@ -102,6 +102,17 @@ impl<'a> TestToken<'a> {
             .try_into_val(self.host)?)
     }
 
+    pub(crate) fn spendable(&self, id: Identifier) -> Result<i128, HostError> {
+        Ok(self
+            .host
+            .call(
+                self.id.clone().into(),
+                Symbol::from_str("spendable").into(),
+                host_vec![self.host, id].into(),
+            )?
+            .try_into_val(self.host)?)
+    }
+
     pub(crate) fn xfer(
         &self,
         from: &TestSigner,
@@ -357,63 +368,5 @@ impl<'a> TestToken<'a> {
                 host_vec![self.host].into(),
             )?
             .try_into_val(self.host)?)
-    }
-
-    pub(crate) fn import(
-        &self,
-        id: &TestSigner,
-        nonce: i128,
-        amount: i64,
-    ) -> Result<(), HostError> {
-        let signature = sign_args(
-            self.host,
-            id,
-            "import",
-            &self.id,
-            host_vec![
-                self.host,
-                id.get_identifier(self.host),
-                nonce.clone(),
-                amount
-            ],
-        );
-
-        Ok(self
-            .host
-            .call(
-                self.id.clone().into(),
-                Symbol::from_str("import").into(),
-                host_vec![self.host, signature, nonce, amount].into(),
-            )?
-            .try_into()?)
-    }
-
-    pub(crate) fn export(
-        &self,
-        id: &TestSigner,
-        nonce: i128,
-        amount: i64,
-    ) -> Result<(), HostError> {
-        let signature = sign_args(
-            self.host,
-            id,
-            "export",
-            &self.id,
-            host_vec![
-                self.host,
-                id.get_identifier(self.host),
-                nonce.clone(),
-                amount
-            ],
-        );
-
-        Ok(self
-            .host
-            .call(
-                self.id.clone().into(),
-                Symbol::from_str("export").into(),
-                host_vec![self.host, signature, nonce, amount].into(),
-            )?
-            .try_into()?)
     }
 }

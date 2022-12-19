@@ -87,19 +87,3 @@ pub(crate) fn set_admin(
     e.contract_event(topics.into(), new_admin.try_into_val(e)?)?;
     Ok(())
 }
-
-pub(crate) fn import(e: &Host, id: Identifier, amount: i64) -> Result<(), HostError> {
-    let mut topics = Vec::new(e)?;
-    topics.push(Symbol::from_str("import"))?;
-    topics.push(id)?;
-    e.contract_event(topics.into(), amount.try_into_val(e)?)?;
-    Ok(())
-}
-
-pub(crate) fn export(e: &Host, id: Identifier, amount: i64) -> Result<(), HostError> {
-    let mut topics = Vec::new(e)?;
-    topics.push(Symbol::from_str("export"))?;
-    topics.push(id)?;
-    e.contract_event(topics.into(), amount.try_into_val(e)?)?;
-    Ok(())
-}
