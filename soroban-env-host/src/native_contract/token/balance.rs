@@ -44,9 +44,8 @@ fn write_balance(e: &Host, id: Identifier, amount: i128) -> Result<(), HostError
 
 // Metering: covered by components.
 pub fn receive_balance(e: &Host, id: Identifier, amount: i128) -> Result<(), HostError> {
-    let is_frozen = read_state(e, id.clone())?;
-    if is_frozen {
-        return Err(e.err_status_msg(ContractError::BalanceFrozenError, "balance is frozen"));
+    if is_deauthorized(e, id.clone())? {
+        return Err(e.err_status_msg(ContractError::BalanceFrozenError, "balance is deauthorized"));
     }
 
     match id {
@@ -70,7 +69,7 @@ pub fn receive_balance(e: &Host, id: Identifier, amount: i128) -> Result<(), Hos
 }
 
 // TODO: Metering analysis
-pub fn spend_balance_no_freeze_check(
+pub fn spend_balance_no_authorization_check(
     e: &Host,
     id: Identifier,
     amount: i128,
@@ -107,16 +106,16 @@ pub fn spend_balance_no_freeze_check(
 
 // Metering: covered by components.
 pub fn spend_balance(e: &Host, id: Identifier, amount: i128) -> Result<(), HostError> {
-    let is_frozen = read_state(e, id.clone())?;
+    let is_frozen = is_deauthorized(e, id.clone())?;
     if is_frozen {
         return Err(e.err_status_msg(ContractError::BalanceFrozenError, "balance is frozen"));
     }
 
-    spend_balance_no_freeze_check(e, id, amount)
+    spend_balance_no_authorization_check(e, id, amount)
 }
 
 // Metering: *mostly* covered by components. Not sure about `try_into_val`.
-pub fn read_state(e: &Host, id: Identifier) -> Result<bool, HostError> {
+pub fn is_deauthorized(e: &Host, id: Identifier) -> Result<bool, HostError> {
     match id {
         Identifier::Account(acc_id) => is_account_deauthorized(e, acc_id),
         Identifier::Contract(_) | Identifier::Ed25519(_) => {
@@ -131,12 +130,13 @@ pub fn read_state(e: &Host, id: Identifier) -> Result<bool, HostError> {
 }
 
 // Metering: *mostly* covered by components. Not sure about `try_into_val`.
-pub fn write_state(e: &Host, id: Identifier, is_frozen: bool) -> Result<(), HostError> {
+pub fn write_authorization(e: &Host, id: Identifier, authorize: bool) -> Result<(), HostError> {
     match id {
-        Identifier::Account(acc_id) => set_authorization(e, acc_id, !is_frozen),
+        Identifier::Account(acc_id) => set_authorization(e, acc_id, authorize),
         Identifier::Contract(_) | Identifier::Ed25519(_) => {
             let key = DataKey::State(id);
-            e.put_contract_data(key.try_into_val(e)?, is_frozen.into())?;
+            // The flag stored at this key is true if the balance is deauthorized
+            e.put_contract_data(key.try_into_val(e)?, (!authorize).into())?;
             Ok(())
         }
     }
