@@ -16,7 +16,7 @@ use super::error::ContractError;
 pub fn read_balance(e: &Host, id: Identifier) -> Result<i128, HostError> {
     match id {
         Identifier::Account(acc_id) => Ok(get_classic_balance(e, acc_id)?.0.into()),
-        _ => {
+        Identifier::Contract(_) | Identifier::Ed25519(_) => {
             let key = DataKey::Balance(id);
             if let Ok(balance) = e.get_contract_data(key.try_into_val(e)?) {
                 Ok(balance.try_into_val(e)?)
@@ -31,7 +31,7 @@ pub fn read_balance(e: &Host, id: Identifier) -> Result<i128, HostError> {
 pub fn get_spendable_balance(e: &Host, id: Identifier) -> Result<i128, HostError> {
     match id {
         Identifier::Account(acc_id) => Ok(get_classic_balance(e, acc_id)?.1.into()),
-        _ => read_balance(e, id),
+        Identifier::Contract(_) | Identifier::Ed25519(_) => read_balance(e, id),
     }
 }
 
@@ -59,7 +59,7 @@ pub fn receive_balance(e: &Host, id: Identifier, amount: i128) -> Result<(), Hos
             })?;
             Ok(transfer_classic_balance(e, acc_id, i64_amount)?)
         }
-        _ => {
+        Identifier::Contract(_) | Identifier::Ed25519(_) => {
             let balance = read_balance(e, id.clone())?;
             let new_balance = balance
                 .checked_add(amount)
@@ -85,7 +85,7 @@ pub fn spend_balance_no_freeze_check(
             })?;
             transfer_classic_balance(e, acc_id, -(i64_amount as i64))
         }
-        _ => {
+        Identifier::Contract(_) | Identifier::Ed25519(_) => {
             let balance = read_balance(e, id.clone())?;
             if balance < amount {
                 Err(err!(
@@ -119,7 +119,7 @@ pub fn spend_balance(e: &Host, id: Identifier, amount: i128) -> Result<(), HostE
 pub fn read_state(e: &Host, id: Identifier) -> Result<bool, HostError> {
     match id {
         Identifier::Account(acc_id) => is_account_deauthorized(e, acc_id),
-        _ => {
+        Identifier::Contract(_) | Identifier::Ed25519(_) => {
             let key = DataKey::State(id);
             if let Ok(state) = e.get_contract_data(key.try_into_val(e)?) {
                 Ok(state.try_into()?)
@@ -134,7 +134,7 @@ pub fn read_state(e: &Host, id: Identifier) -> Result<bool, HostError> {
 pub fn write_state(e: &Host, id: Identifier, is_frozen: bool) -> Result<(), HostError> {
     match id {
         Identifier::Account(acc_id) => set_authorization(e, acc_id, !is_frozen),
-        _ => {
+        Identifier::Contract(_) | Identifier::Ed25519(_) => {
             let key = DataKey::State(id);
             e.put_contract_data(key.try_into_val(e)?, is_frozen.into())?;
             Ok(())
@@ -180,7 +180,7 @@ pub fn check_clawbackable(e: &Host, id: Identifier) -> Result<(), HostError> {
                 acc_id,
             ),
         },
-        _ => {
+        Identifier::Contract(_) | Identifier::Ed25519(_) => {
             // TODO: Non-account balances are always clawbackable for now if admin is set. Revisit this.
             Ok(())
         }
