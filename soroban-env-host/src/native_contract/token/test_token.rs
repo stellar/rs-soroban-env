@@ -308,7 +308,7 @@ impl<'a> TestToken<'a> {
             .try_into()?)
     }
 
-    pub(crate) fn burn(
+    pub(crate) fn clawback(
         &self,
         admin: &TestSigner,
         nonce: i128,
@@ -318,7 +318,7 @@ impl<'a> TestToken<'a> {
         let signature = sign_args(
             self.host,
             admin,
-            "burn",
+            "clawback",
             &self.id,
             host_vec![
                 self.host,
@@ -333,7 +333,7 @@ impl<'a> TestToken<'a> {
             .host
             .call(
                 self.id.clone().into(),
-                Symbol::from_str("burn").into(),
+                Symbol::from_str("clawback").into(),
                 host_vec![self.host, signature, nonce, from, amount].into(),
             )?
             .try_into()?)

@@ -60,14 +60,14 @@ pub(crate) fn mint(
     Ok(())
 }
 
-pub(crate) fn burn(
+pub(crate) fn clawback(
     e: &Host,
     admin: Identifier,
     from: Identifier,
     amount: i128,
 ) -> Result<(), HostError> {
     let mut topics = Vec::new(e)?;
-    topics.push(Symbol::from_str("burn"))?;
+    topics.push(Symbol::from_str("clawback"))?;
     topics.push(admin)?;
     topics.push(from)?;
     e.contract_event(topics.into(), amount.try_into_val(e)?)?;

@@ -33,7 +33,7 @@ pub trait TokenTrait {
     /// called by the create_token_from_asset host function for this reason.
     ///
     /// No admin will be set for the Native token, so any function that checks the admin
-    /// (burn, freeze, unfreeze, mint, set_admin) will always fail
+    /// (clawback, freeze, unfreeze, mint, set_admin) will always fail
     fn init_asset(e: &Host, asset_bytes: Bytes) -> Result<(), HostError>;
 
     fn nonce(e: &Host, id: Identifier) -> Result<i128, HostError>;
@@ -91,7 +91,7 @@ pub trait TokenTrait {
         amount: i128,
     ) -> Result<(), HostError>;
 
-    fn burn(
+    fn clawback(
         e: &Host,
         admin: Signature,
         nonce: i128,
@@ -323,7 +323,7 @@ impl TokenTrait for Token {
     }
 
     // Metering: covered by components
-    fn burn(
+    fn clawback(
         e: &Host,
         admin: Signature,
         nonce: i128,
@@ -339,10 +339,10 @@ impl TokenTrait for Token {
         args.push(nonce.clone())?;
         args.push(from.clone())?;
         args.push(amount.clone())?;
-        check_auth(&e, admin, nonce, Symbol::from_str("burn"), args)?;
-        // admin can burn a frozen balance
+        check_auth(&e, admin, nonce, Symbol::from_str("clawback"), args)?;
+        // admin can clawback a frozen balance
         spend_balance_no_freeze_check(&e, from.clone(), amount.clone())?;
-        event::burn(e, admin_id, from, amount)?;
+        event::clawback(e, admin_id, from, amount)?;
         Ok(())
     }
 

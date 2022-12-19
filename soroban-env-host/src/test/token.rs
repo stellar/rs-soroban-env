@@ -779,7 +779,7 @@ fn test_freeze_and_unfreeze() {
 }
 
 #[test]
-fn test_burn() {
+fn test_clawback() {
     let test = TokenTest::setup();
     let admin = TestSigner::Ed25519(&test.admin_key);
     let token = test.default_token(&admin);
@@ -800,7 +800,7 @@ fn test_burn() {
     );
 
     token
-        .burn(
+        .clawback(
             &admin,
             token.nonce(admin.get_identifier(&test.host)).unwrap(),
             user.get_identifier(&test.host),
@@ -813,11 +813,11 @@ fn test_burn() {
         60_000_000
     );
 
-    // Can't burn more than the balance
+    // Can't clawback more than the balance
     assert_eq!(
         to_contract_err(
             token
-                .burn(
+                .clawback(
                     &admin,
                     token.nonce(admin.get_identifier(&test.host)).unwrap(),
                     user.get_identifier(&test.host),
@@ -829,9 +829,9 @@ fn test_burn() {
         ContractError::BalanceError
     );
 
-    // Burn everything else
+    // clawback everything else
     token
-        .burn(
+        .clawback(
             &admin,
             token.nonce(admin.get_identifier(&test.host)).unwrap(),
             user.get_identifier(&test.host),
@@ -888,7 +888,7 @@ fn test_set_admin() {
     assert_eq!(
         to_contract_err(
             token
-                .burn(
+                .clawback(
                     &admin,
                     token.nonce(admin.get_identifier(&test.host)).unwrap(),
                     new_admin.get_identifier(&test.host),
@@ -936,7 +936,7 @@ fn test_set_admin() {
         )
         .unwrap();
     token
-        .burn(
+        .clawback(
             &new_admin,
             token.nonce(new_admin.get_identifier(&test.host)).unwrap(),
             admin.get_identifier(&test.host),
@@ -1054,7 +1054,7 @@ fn test_trustline_auth() {
 
     assert_eq!(token.balance(user_id.clone()).unwrap(), 1000);
 
-    // transfer 1 back to the issuer (which is a burn)
+    // transfer 1 back to the issuer (which gets burned)
     test.run_from_account(user_acc.clone(), || {
         token.xfer(&acc_invoker, 0, admin_id.clone(), 1)
     })
@@ -1144,7 +1144,7 @@ fn test_trustline_auth() {
     assert_eq!(
         to_contract_err(
             test.run_from_account(admin_acc.clone(), || {
-                token.burn(&acc_invoker, 0, user_id.clone(), 10)
+                token.clawback(&acc_invoker, 0, user_id.clone(), 10)
             })
             .err()
             .unwrap()
@@ -1165,7 +1165,7 @@ fn test_trustline_auth() {
     );
 
     test.run_from_account(admin_acc.clone(), || {
-        token.burn(&acc_invoker, 0, user_id.clone(), 10)
+        token.clawback(&acc_invoker, 0, user_id.clone(), 10)
     })
     .unwrap();
 
@@ -1430,7 +1430,7 @@ fn test_auth_rejected_with_incorrect_nonce() {
     assert_eq!(
         to_contract_err(
             token
-                .burn(&admin, 2, user.get_identifier(&test.host), 10_000_000,)
+                .clawback(&admin, 2, user.get_identifier(&test.host), 10_000_000,)
                 .err()
                 .unwrap()
         ),
@@ -1510,7 +1510,7 @@ fn test_auth_rejected_for_incorrect_function_name() {
     let signature = sign_args(
         &test.host,
         &admin,
-        "burn",
+        "clawback",
         &token.id,
         host_vec![
             &test.host,
@@ -1849,7 +1849,7 @@ fn test_negative_amounts_are_not_allowed() {
     assert_eq!(
         to_contract_err(
             token
-                .burn(
+                .clawback(
                     &admin,
                     token.nonce(admin.get_identifier(&test.host)).unwrap(),
                     user.get_identifier(&test.host),
