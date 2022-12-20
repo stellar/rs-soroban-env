@@ -126,8 +126,7 @@ pub fn is_authorized(e: &Host, id: Identifier) -> Result<bool, HostError> {
         Identifier::Contract(_) | Identifier::Ed25519(_) => {
             let key = DataKey::State(id);
             if let Ok(state) = e.get_contract_data(key.try_into_val(e)?) {
-                // The flag stored at this key is true if the balance is deauthorized
-                Ok(!(state.try_into()?))
+                Ok(state.try_into()?)
             } else {
                 Ok(true)
             }
@@ -141,8 +140,7 @@ pub fn write_authorization(e: &Host, id: Identifier, authorize: bool) -> Result<
         Identifier::Account(acc_id) => set_authorization(e, acc_id, authorize),
         Identifier::Contract(_) | Identifier::Ed25519(_) => {
             let key = DataKey::State(id);
-            // The flag stored at this key is true if the balance is deauthorized
-            e.put_contract_data(key.try_into_val(e)?, (!authorize).into())?;
+            e.put_contract_data(key.try_into_val(e)?, authorize.into())?;
             Ok(())
         }
     }
