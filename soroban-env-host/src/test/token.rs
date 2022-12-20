@@ -538,7 +538,7 @@ fn test_transfer_with_allowance() {
 
     // Allow 10_000_000 units of token to be transferred from user by user 3.
     token
-        .approve(
+        .incr_allow(
             &user,
             token.nonce(user.get_identifier(&test.host)).unwrap(),
             user_3.get_identifier(&test.host),
@@ -602,6 +602,35 @@ fn test_transfer_with_allowance() {
         ContractError::AllowanceError
     );
 
+    // Decrease allow by more than what's left. This will set the allowance to 0
+    token
+        .decr_allow(
+            &user,
+            token.nonce(user.get_identifier(&test.host)).unwrap(),
+            user_3.get_identifier(&test.host),
+            10_000_000,
+        )
+        .unwrap();
+
+    assert_eq!(
+        token
+            .allowance(
+                user.get_identifier(&test.host),
+                user_3.get_identifier(&test.host)
+            )
+            .unwrap(),
+        0
+    );
+
+    token
+        .incr_allow(
+            &user,
+            token.nonce(user.get_identifier(&test.host)).unwrap(),
+            user_3.get_identifier(&test.host),
+            4_000_000,
+        )
+        .unwrap();
+
     // Transfer the remaining allowance to user 3.
     token
         .xfer_from(
@@ -654,7 +683,252 @@ fn test_transfer_with_allowance() {
 }
 
 #[test]
-fn test_freeze_and_unfreeze() {
+fn test_burn() {
+    let test = TokenTest::setup();
+    let admin = TestSigner::Ed25519(&test.admin_key);
+    let token = test.default_token(&admin);
+
+    let user = TestSigner::Ed25519(&test.user_key);
+    let user_2 = TestSigner::Ed25519(&test.user_key_2);
+
+    token
+        .mint(
+            &admin,
+            token.nonce(admin.get_identifier(&test.host)).unwrap(),
+            user.get_identifier(&test.host),
+            100_000_000,
+        )
+        .unwrap();
+    assert_eq!(
+        token.balance(user.get_identifier(&test.host)).unwrap(),
+        100_000_000
+    );
+    assert_eq!(token.balance(user_2.get_identifier(&test.host)).unwrap(), 0);
+    assert_eq!(
+        token
+            .allowance(
+                user.get_identifier(&test.host),
+                user_2.get_identifier(&test.host)
+            )
+            .unwrap(),
+        0
+    );
+
+    // Allow 10_000_000 units of token to be transferred from user by user 3.
+    token
+        .incr_allow(
+            &user,
+            token.nonce(user.get_identifier(&test.host)).unwrap(),
+            user_2.get_identifier(&test.host),
+            10_000_000,
+        )
+        .unwrap();
+
+    assert_eq!(
+        token
+            .allowance(
+                user.get_identifier(&test.host),
+                user_2.get_identifier(&test.host)
+            )
+            .unwrap(),
+        10_000_000
+    );
+
+    // Burn 5_000_000 of allowance from user.
+    token
+        .burn_from(
+            &user_2,
+            token.nonce(user_2.get_identifier(&test.host)).unwrap(),
+            user.get_identifier(&test.host),
+            6_000_000,
+        )
+        .unwrap();
+    assert_eq!(
+        token.balance(user.get_identifier(&test.host)).unwrap(),
+        94_000_000
+    );
+
+    assert_eq!(token.balance(user_2.get_identifier(&test.host)).unwrap(), 0);
+    assert_eq!(
+        token
+            .allowance(
+                user.get_identifier(&test.host),
+                user_2.get_identifier(&test.host)
+            )
+            .unwrap(),
+        4_000_000
+    );
+
+    // Can't burn more than remaining allowance.
+    assert_eq!(
+        to_contract_err(
+            token
+                .burn_from(
+                    &user_2,
+                    token.nonce(user_2.get_identifier(&test.host)).unwrap(),
+                    user.get_identifier(&test.host),
+                    4_000_001,
+                )
+                .err()
+                .unwrap()
+        ),
+        ContractError::AllowanceError
+    );
+
+    // Burn the remaining allowance to user 3.
+    token
+        .burn_from(
+            &user_2,
+            token.nonce(user_2.get_identifier(&test.host)).unwrap(),
+            user.get_identifier(&test.host),
+            4_000_000,
+        )
+        .unwrap();
+
+    assert_eq!(
+        token.balance(user.get_identifier(&test.host)).unwrap(),
+        90_000_000
+    );
+    assert_eq!(token.balance(user_2.get_identifier(&test.host)).unwrap(), 0);
+    assert_eq!(
+        token
+            .allowance(
+                user.get_identifier(&test.host),
+                user_2.get_identifier(&test.host)
+            )
+            .unwrap(),
+        0
+    );
+
+    // Now call burn
+    token
+        .burn(
+            &user,
+            token.nonce(user.get_identifier(&test.host)).unwrap(),
+            45_000_000,
+        )
+        .unwrap();
+
+    assert_eq!(
+        token.balance(user.get_identifier(&test.host)).unwrap(),
+        45_000_000
+    );
+
+    // Deauthorize the balance of `user` and then try to burn.
+    token
+        .set_auth(
+            &admin,
+            token.nonce(admin.get_identifier(&test.host)).unwrap(),
+            user.get_identifier(&test.host),
+            false,
+        )
+        .unwrap();
+
+    // Can't burn while deauthorized
+    assert_eq!(
+        to_contract_err(
+            token
+                .burn(
+                    &user,
+                    token.nonce(user.get_identifier(&test.host)).unwrap(),
+                    100,
+                )
+                .err()
+                .unwrap()
+        ),
+        ContractError::BalanceDeauthorizedError
+    );
+
+    // Authorize the balance of `user` and then burn.
+    token
+        .set_auth(
+            &admin,
+            token.nonce(admin.get_identifier(&test.host)).unwrap(),
+            user.get_identifier(&test.host),
+            true,
+        )
+        .unwrap();
+
+    token
+        .burn(
+            &user,
+            token.nonce(user.get_identifier(&test.host)).unwrap(),
+            1_000_000,
+        )
+        .unwrap();
+
+    assert_eq!(
+        token.balance(user.get_identifier(&test.host)).unwrap(),
+        44_000_000
+    );
+}
+
+#[test]
+fn test_cannot_burn_native() {
+    let test = TokenTest::setup();
+    let token = TestToken::new_from_asset(&test.host, Asset::Native);
+    let user_acc = signer_to_account_id(&test.host, &test.user_key);
+    let user_id = Identifier::Account(user_acc.clone());
+
+    let user_signer = TestSigner::Ed25519(&test.user_key);
+    let user2_signer = TestSigner::Ed25519(&test.user_key_2);
+
+    test.create_classic_account(
+        &user_acc,
+        vec![(&test.user_key, 100)],
+        100_000_000,
+        1,
+        [1, 0, 0, 0],
+        None,
+        None,
+        0,
+    );
+
+    assert_eq!(token.balance(user_id.clone()).unwrap(), 100_000_000);
+
+    assert_eq!(
+        to_contract_err(
+            token
+                .burn(
+                    &user_signer,
+                    token.nonce(user_signer.get_identifier(&test.host)).unwrap(),
+                    1,
+                )
+                .err()
+                .unwrap()
+        ),
+        ContractError::OperationNotSupportedError
+    );
+
+    token
+        .incr_allow(
+            &user_signer,
+            token.nonce(user_signer.get_identifier(&test.host)).unwrap(),
+            user2_signer.get_identifier(&test.host),
+            100,
+        )
+        .unwrap();
+
+    assert_eq!(
+        to_contract_err(
+            token
+                .burn_from(
+                    &user2_signer,
+                    token
+                        .nonce(user2_signer.get_identifier(&test.host))
+                        .unwrap(),
+                    user_signer.get_identifier(&test.host),
+                    1,
+                )
+                .err()
+                .unwrap()
+        ),
+        ContractError::OperationNotSupportedError
+    );
+}
+
+#[test]
+fn test_token_authorization() {
     let test = TokenTest::setup();
     let admin = TestSigner::Ed25519(&test.admin_key);
     let token = test.default_token(&admin);
@@ -678,18 +952,19 @@ fn test_freeze_and_unfreeze() {
         )
         .unwrap();
 
-    assert!(!token.is_frozen(user.get_identifier(&test.host)).unwrap());
+    assert!(token.authorized(user.get_identifier(&test.host)).unwrap());
 
-    // Freeze the balance of `user`.
+    // Deauthorize the balance of `user`.
     token
-        .freeze(
+        .set_auth(
             &admin,
             token.nonce(admin.get_identifier(&test.host)).unwrap(),
             user.get_identifier(&test.host),
+            false,
         )
         .unwrap();
 
-    assert!(token.is_frozen(user.get_identifier(&test.host)).unwrap());
+    assert!(!token.authorized(user.get_identifier(&test.host)).unwrap());
     // Make sure neither outgoing nor incoming balance transfers are possible.
     assert_eq!(
         to_contract_err(
@@ -703,7 +978,7 @@ fn test_freeze_and_unfreeze() {
                 .err()
                 .unwrap()
         ),
-        ContractError::BalanceFrozenError
+        ContractError::BalanceDeauthorizedError
     );
     assert_eq!(
         to_contract_err(
@@ -717,19 +992,20 @@ fn test_freeze_and_unfreeze() {
                 .err()
                 .unwrap()
         ),
-        ContractError::BalanceFrozenError
+        ContractError::BalanceDeauthorizedError
     );
 
-    // Unfreeze the balance of `user`.
+    // Authorize the balance of `user`.
     token
-        .unfreeze(
+        .set_auth(
             &admin,
             token.nonce(admin.get_identifier(&test.host)).unwrap(),
             user.get_identifier(&test.host),
+            true,
         )
         .unwrap();
 
-    assert!(!token.is_frozen(user.get_identifier(&test.host)).unwrap());
+    assert!(token.authorized(user.get_identifier(&test.host)).unwrap());
     // Make sure balance transfers are possible now.
     token
         .xfer(
@@ -750,7 +1026,7 @@ fn test_freeze_and_unfreeze() {
 }
 
 #[test]
-fn test_burn() {
+fn test_clawback() {
     let test = TokenTest::setup();
     let admin = TestSigner::Ed25519(&test.admin_key);
     let token = test.default_token(&admin);
@@ -771,7 +1047,7 @@ fn test_burn() {
     );
 
     token
-        .burn(
+        .clawback(
             &admin,
             token.nonce(admin.get_identifier(&test.host)).unwrap(),
             user.get_identifier(&test.host),
@@ -784,11 +1060,11 @@ fn test_burn() {
         60_000_000
     );
 
-    // Can't burn more than the balance
+    // Can't clawback more than the balance
     assert_eq!(
         to_contract_err(
             token
-                .burn(
+                .clawback(
                     &admin,
                     token.nonce(admin.get_identifier(&test.host)).unwrap(),
                     user.get_identifier(&test.host),
@@ -800,9 +1076,9 @@ fn test_burn() {
         ContractError::BalanceError
     );
 
-    // Burn everything else
+    // clawback everything else
     token
-        .burn(
+        .clawback(
             &admin,
             token.nonce(admin.get_identifier(&test.host)).unwrap(),
             user.get_identifier(&test.host),
@@ -859,7 +1135,7 @@ fn test_set_admin() {
     assert_eq!(
         to_contract_err(
             token
-                .burn(
+                .clawback(
                     &admin,
                     token.nonce(admin.get_identifier(&test.host)).unwrap(),
                     new_admin.get_identifier(&test.host),
@@ -873,10 +1149,11 @@ fn test_set_admin() {
     assert_eq!(
         to_contract_err(
             token
-                .freeze(
+                .set_auth(
                     &admin,
                     token.nonce(admin.get_identifier(&test.host)).unwrap(),
                     new_admin.get_identifier(&test.host),
+                    false
                 )
                 .err()
                 .unwrap()
@@ -886,10 +1163,11 @@ fn test_set_admin() {
     assert_eq!(
         to_contract_err(
             token
-                .unfreeze(
+                .set_auth(
                     &admin,
                     token.nonce(admin.get_identifier(&test.host)).unwrap(),
                     new_admin.get_identifier(&test.host),
+                    true
                 )
                 .err()
                 .unwrap()
@@ -907,7 +1185,7 @@ fn test_set_admin() {
         )
         .unwrap();
     token
-        .burn(
+        .clawback(
             &new_admin,
             token.nonce(new_admin.get_identifier(&test.host)).unwrap(),
             admin.get_identifier(&test.host),
@@ -915,17 +1193,19 @@ fn test_set_admin() {
         )
         .unwrap();
     token
-        .freeze(
+        .set_auth(
             &new_admin,
             token.nonce(new_admin.get_identifier(&test.host)).unwrap(),
             admin.get_identifier(&test.host),
+            false,
         )
         .unwrap();
     token
-        .unfreeze(
+        .set_auth(
             &new_admin,
             token.nonce(new_admin.get_identifier(&test.host)).unwrap(),
             admin.get_identifier(&test.host),
+            true,
         )
         .unwrap();
 
@@ -1025,7 +1305,7 @@ fn test_trustline_auth() {
 
     assert_eq!(token.balance(user_id.clone()).unwrap(), 1000);
 
-    // transfer 1 back to the issuer (which is a burn)
+    // transfer 1 back to the issuer (which gets burned)
     test.run_from_account(user_acc.clone(), || {
         token.xfer(&acc_invoker, 0, admin_id.clone(), 1)
     })
@@ -1038,7 +1318,7 @@ fn test_trustline_auth() {
     assert_eq!(
         to_contract_err(
             test.run_from_account(admin_acc.clone(), || {
-                token.freeze(&acc_invoker, 0, user_id.clone())
+                token.set_auth(&acc_invoker, 0, user_id.clone(), false)
             })
             .err()
             .unwrap()
@@ -1060,7 +1340,7 @@ fn test_trustline_auth() {
 
     // trustline should be deauthorized now.
     test.run_from_account(admin_acc.clone(), || {
-        token.freeze(&acc_invoker, 0, user_id.clone())
+        token.set_auth(&acc_invoker, 0, user_id.clone(), false)
     })
     .unwrap();
 
@@ -1073,7 +1353,7 @@ fn test_trustline_auth() {
             .err()
             .unwrap()
         ),
-        ContractError::BalanceFrozenError
+        ContractError::BalanceDeauthorizedError
     );
 
     // mint should also fail for the same reason
@@ -1085,17 +1365,17 @@ fn test_trustline_auth() {
             .err()
             .unwrap()
         ),
-        ContractError::BalanceFrozenError
+        ContractError::BalanceDeauthorizedError
     );
 
     // Now authorize trustline
     test.run_from_account(admin_acc.clone(), || {
-        token.unfreeze(&acc_invoker, 0, user_id.clone())
+        token.set_auth(&acc_invoker, 0, user_id.clone(), true)
     })
     .unwrap();
 
     test.run_from_account(user_acc.clone(), || {
-        token.approve(&acc_invoker, 0, admin_id.clone(), 500)
+        token.incr_allow(&acc_invoker, 0, admin_id.clone(), 500)
     })
     .unwrap();
 
@@ -1115,7 +1395,7 @@ fn test_trustline_auth() {
     assert_eq!(
         to_contract_err(
             test.run_from_account(admin_acc.clone(), || {
-                token.burn(&acc_invoker, 0, user_id.clone(), 10)
+                token.clawback(&acc_invoker, 0, user_id.clone(), 10)
             })
             .err()
             .unwrap()
@@ -1136,7 +1416,7 @@ fn test_trustline_auth() {
     );
 
     test.run_from_account(admin_acc.clone(), || {
-        token.burn(&acc_invoker, 0, user_id.clone(), 10)
+        token.clawback(&acc_invoker, 0, user_id.clone(), 10)
     })
     .unwrap();
 
@@ -1352,7 +1632,7 @@ fn test_auth_rejected_with_incorrect_nonce() {
 
     // Bump user's nonce and approve some amount to cover xfer_from below.
     token
-        .approve(&user, 0, user_2.get_identifier(&test.host), 1000)
+        .incr_allow(&user, 0, user_2.get_identifier(&test.host), 1000)
         .unwrap();
 
     assert_eq!(
@@ -1368,7 +1648,7 @@ fn test_auth_rejected_with_incorrect_nonce() {
     assert_eq!(
         to_contract_err(
             token
-                .approve(&user, 2, user_2.get_identifier(&test.host), 1000)
+                .incr_allow(&user, 2, user_2.get_identifier(&test.host), 1000)
                 .err()
                 .unwrap()
         ),
@@ -1401,7 +1681,7 @@ fn test_auth_rejected_with_incorrect_nonce() {
     assert_eq!(
         to_contract_err(
             token
-                .burn(&admin, 2, user.get_identifier(&test.host), 10_000_000,)
+                .clawback(&admin, 2, user.get_identifier(&test.host), 10_000_000,)
                 .err()
                 .unwrap()
         ),
@@ -1481,7 +1761,7 @@ fn test_auth_rejected_for_incorrect_function_name() {
     let signature = sign_args(
         &test.host,
         &admin,
-        "burn",
+        "clawback",
         &token.id,
         host_vec![
             &test.host,
@@ -1820,7 +2100,7 @@ fn test_negative_amounts_are_not_allowed() {
     assert_eq!(
         to_contract_err(
             token
-                .burn(
+                .clawback(
                     &admin,
                     token.nonce(admin.get_identifier(&test.host)).unwrap(),
                     user.get_identifier(&test.host),
@@ -1850,7 +2130,22 @@ fn test_negative_amounts_are_not_allowed() {
     assert_eq!(
         to_contract_err(
             token
-                .approve(
+                .incr_allow(
+                    &user,
+                    token.nonce(user.get_identifier(&test.host)).unwrap(),
+                    user_2.get_identifier(&test.host),
+                    -1,
+                )
+                .err()
+                .unwrap()
+        ),
+        ContractError::NegativeAmountError
+    );
+
+    assert_eq!(
+        to_contract_err(
+            token
+                .decr_allow(
                     &user,
                     token.nonce(user.get_identifier(&test.host)).unwrap(),
                     user_2.get_identifier(&test.host),
@@ -1864,7 +2159,7 @@ fn test_negative_amounts_are_not_allowed() {
 
     // Approve some balance before doing the negative xfer_from.
     token
-        .approve(
+        .incr_allow(
             &user,
             token.nonce(user.get_identifier(&test.host)).unwrap(),
             user_2.get_identifier(&test.host),
@@ -2424,7 +2719,7 @@ fn test_classic_transfers_not_possible_for_unauthorized_asset() {
                 .err()
                 .unwrap()
         ),
-        ContractError::BalanceFrozenError
+        ContractError::BalanceDeauthorizedError
     );
 
     // Trustline balance stays the same.

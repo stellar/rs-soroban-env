@@ -6,7 +6,7 @@ use crate::native_contract::base_types::{Bytes, BytesN, Vec};
 use crate::native_contract::token::admin::{check_admin, write_administrator};
 use crate::native_contract::token::allowance::{read_allowance, spend_allowance, write_allowance};
 use crate::native_contract::token::balance::{
-    read_balance, read_state, receive_balance, spend_balance, write_state,
+    is_authorized, read_balance, receive_balance, spend_balance, write_authorization,
 };
 use crate::native_contract::token::cryptography::check_auth;
 use crate::native_contract::token::event;
@@ -21,8 +21,11 @@ use soroban_env_common::xdr::Asset;
 use soroban_env_common::{CheckedEnv, Compare, EnvBase, Symbol, TryFromVal, TryIntoVal};
 use soroban_native_sdk_macros::contractimpl;
 
-use super::balance::{check_clawbackable, get_spendable_balance, spend_balance_no_freeze_check};
+use super::balance::{
+    check_clawbackable, get_spendable_balance, spend_balance_no_authorization_check,
+};
 use super::error::ContractError;
+use super::metadata::read_metadata;
 use super::public_types::{AlphaNum12Metadata, AlphaNum4Metadata};
 
 pub trait TokenTrait {
@@ -33,14 +36,22 @@ pub trait TokenTrait {
     /// called by the create_token_from_asset host function for this reason.
     ///
     /// No admin will be set for the Native token, so any function that checks the admin
-    /// (burn, freeze, unfreeze, mint, set_admin) will always fail
+    /// (clawback, set_auth, mint, set_admin) will always fail
     fn init_asset(e: &Host, asset_bytes: Bytes) -> Result<(), HostError>;
 
     fn nonce(e: &Host, id: Identifier) -> Result<i128, HostError>;
 
     fn allowance(e: &Host, from: Identifier, spender: Identifier) -> Result<i128, HostError>;
 
-    fn approve(
+    fn incr_allow(
+        e: &Host,
+        from: Signature,
+        nonce: i128,
+        spender: Identifier,
+        amount: i128,
+    ) -> Result<(), HostError>;
+
+    fn decr_allow(
         e: &Host,
         from: Signature,
         nonce: i128,
@@ -52,7 +63,7 @@ pub trait TokenTrait {
 
     fn spendable(e: &Host, id: Identifier) -> Result<i128, HostError>;
 
-    fn is_frozen(e: &Host, id: Identifier) -> Result<bool, HostError>;
+    fn authorized(e: &Host, id: Identifier) -> Result<bool, HostError>;
 
     fn xfer(
         e: &Host,
@@ -71,9 +82,23 @@ pub trait TokenTrait {
         amount: i128,
     ) -> Result<(), HostError>;
 
-    fn freeze(e: &Host, admin: Signature, nonce: i128, id: Identifier) -> Result<(), HostError>;
+    fn burn(e: &Host, from: Signature, nonce: i128, amount: i128) -> Result<(), HostError>;
 
-    fn unfreeze(e: &Host, admin: Signature, nonce: i128, id: Identifier) -> Result<(), HostError>;
+    fn burn_from(
+        e: &Host,
+        spender: Signature,
+        nonce: i128,
+        from: Identifier,
+        amount: i128,
+    ) -> Result<(), HostError>;
+
+    fn set_auth(
+        e: &Host,
+        admin: Signature,
+        nonce: i128,
+        id: Identifier,
+        authorize: bool,
+    ) -> Result<(), HostError>;
 
     fn mint(
         e: &Host,
@@ -83,7 +108,7 @@ pub trait TokenTrait {
         amount: i128,
     ) -> Result<(), HostError>;
 
-    fn burn(
+    fn clawback(
         e: &Host,
         admin: Signature,
         nonce: i128,
@@ -117,6 +142,16 @@ fn check_nonnegative_amount(e: &Host, amount: i128) -> Result<(), HostError> {
         ))
     } else {
         Ok(())
+    }
+}
+
+fn check_non_native(e: &Host) -> Result<(), HostError> {
+    match read_metadata(e)? {
+        Metadata::Native => Err(e.err_status_msg(
+            ContractError::OperationNotSupportedError,
+            "operation invalid on native asset",
+        )),
+        Metadata::AlphaNum4(_) | Metadata::AlphaNum12(_) => Ok(()),
     }
 }
 
@@ -195,7 +230,7 @@ impl TokenTrait for Token {
     }
 
     // Metering: covered by components
-    fn approve(
+    fn incr_allow(
         e: &Host,
         from: Signature,
         nonce: i128,
@@ -209,9 +244,47 @@ impl TokenTrait for Token {
         args.push(nonce.clone())?;
         args.push(spender.clone())?;
         args.push(amount.clone())?;
-        check_auth(&e, from, nonce, Symbol::from_str("approve"), args)?;
-        write_allowance(&e, from_id.clone(), spender.clone(), amount.clone())?;
-        event::approve(e, from_id, spender, amount)?;
+        check_auth(&e, from, nonce, Symbol::from_str("incr_allow"), args)?;
+
+        let allowance = read_allowance(&e, from_id.clone(), spender.clone())?;
+        let new_allowance = allowance
+            .checked_add(amount)
+            .ok_or_else(|| e.err_status(ContractError::OverflowError))?;
+
+        write_allowance(&e, from_id.clone(), spender.clone(), new_allowance)?;
+        event::incr_allow(e, from_id, spender, amount)?;
+        Ok(())
+    }
+
+    fn decr_allow(
+        e: &Host,
+        from: Signature,
+        nonce: i128,
+        spender: Identifier,
+        amount: i128,
+    ) -> Result<(), HostError> {
+        check_nonnegative_amount(e, amount)?;
+        let from_id = from.get_identifier(&e)?;
+        let mut args = Vec::new(e)?;
+        args.push(from.get_identifier(&e)?)?;
+        args.push(nonce.clone())?;
+        args.push(spender.clone())?;
+        args.push(amount.clone())?;
+        check_auth(&e, from, nonce, Symbol::from_str("decr_allow"), args)?;
+
+        let allowance = read_allowance(&e, from_id.clone(), spender.clone())?;
+
+        if amount >= allowance {
+            write_allowance(&e, from_id.clone(), spender.clone(), 0)?;
+        } else {
+            write_allowance(
+                &e,
+                from_id.clone(),
+                spender.clone(),
+                allowance - amount.clone(),
+            )?;
+        }
+        event::decr_allow(e, from_id, spender, amount)?;
         Ok(())
     }
 
@@ -225,8 +298,8 @@ impl TokenTrait for Token {
     }
 
     // Metering: covered by components
-    fn is_frozen(e: &Host, id: Identifier) -> Result<bool, HostError> {
-        read_state(&e, id)
+    fn authorized(e: &Host, id: Identifier) -> Result<bool, HostError> {
+        is_authorized(&e, id)
     }
 
     // Metering: covered by components
@@ -277,7 +350,45 @@ impl TokenTrait for Token {
     }
 
     // Metering: covered by components
-    fn burn(
+    fn burn(e: &Host, from: Signature, nonce: i128, amount: i128) -> Result<(), HostError> {
+        check_nonnegative_amount(e, amount)?;
+        check_non_native(e)?;
+        let from_id = from.get_identifier(&e)?;
+        let mut args = Vec::new(e)?;
+        args.push(from.get_identifier(&e)?)?;
+        args.push(nonce.clone())?;
+        args.push(amount.clone())?;
+        check_auth(&e, from, nonce, Symbol::from_str("burn"), args)?;
+        spend_balance(&e, from_id.clone(), amount.clone())?;
+        event::burn(e, from_id, amount)?;
+        Ok(())
+    }
+
+    // Metering: covered by components
+    fn burn_from(
+        e: &Host,
+        spender: Signature,
+        nonce: i128,
+        from: Identifier,
+        amount: i128,
+    ) -> Result<(), HostError> {
+        check_nonnegative_amount(e, amount)?;
+        check_non_native(e)?;
+        let spender_id = spender.get_identifier(&e)?;
+        let mut args = Vec::new(e)?;
+        args.push(spender.get_identifier(&e)?)?;
+        args.push(nonce.clone())?;
+        args.push(from.clone())?;
+        args.push(amount.clone())?;
+        check_auth(&e, spender, nonce, Symbol::from_str("burn_from"), args)?;
+        spend_allowance(&e, from.clone(), spender_id, amount.clone())?;
+        spend_balance(&e, from.clone(), amount.clone())?;
+        event::burn(e, from, amount)?;
+        Ok(())
+    }
+
+    // Metering: covered by components
+    fn clawback(
         e: &Host,
         admin: Signature,
         nonce: i128,
@@ -293,24 +404,31 @@ impl TokenTrait for Token {
         args.push(nonce.clone())?;
         args.push(from.clone())?;
         args.push(amount.clone())?;
-        check_auth(&e, admin, nonce, Symbol::from_str("burn"), args)?;
-        // admin can burn a frozen balance
-        spend_balance_no_freeze_check(&e, from.clone(), amount.clone())?;
-        event::burn(e, admin_id, from, amount)?;
+        check_auth(&e, admin, nonce, Symbol::from_str("clawback"), args)?;
+        // admin can clawback a deauthorized balance
+        spend_balance_no_authorization_check(&e, from.clone(), amount.clone())?;
+        event::clawback(e, admin_id, from, amount)?;
         Ok(())
     }
 
     // Metering: covered by components
-    fn freeze(e: &Host, admin: Signature, nonce: i128, id: Identifier) -> Result<(), HostError> {
+    fn set_auth(
+        e: &Host,
+        admin: Signature,
+        nonce: i128,
+        id: Identifier,
+        authorize: bool,
+    ) -> Result<(), HostError> {
         check_admin(&e, &admin)?;
         let mut args = Vec::new(e)?;
         let admin_id = admin.get_identifier(&e)?;
         args.push(admin_id.clone())?;
         args.push(nonce.clone())?;
         args.push(id.clone())?;
-        check_auth(&e, admin, nonce, Symbol::from_str("freeze"), args)?;
-        write_state(&e, id.clone(), true)?;
-        event::freeze(e, admin_id, id)?;
+        args.push(authorize)?;
+        check_auth(&e, admin, nonce, Symbol::from_str("set_auth"), args)?;
+        write_authorization(&e, id.clone(), authorize)?;
+        event::set_auth(e, admin_id, id, authorize)?;
         Ok(())
     }
 
@@ -352,20 +470,6 @@ impl TokenTrait for Token {
         check_auth(&e, admin, nonce, Symbol::from_str("set_admin"), args)?;
         write_administrator(&e, new_admin.clone())?;
         event::set_admin(e, admin_id, new_admin)?;
-        Ok(())
-    }
-
-    // Metering: covered by components
-    fn unfreeze(e: &Host, admin: Signature, nonce: i128, id: Identifier) -> Result<(), HostError> {
-        check_admin(&e, &admin)?;
-        let mut args = Vec::new(e)?;
-        let admin_id = admin.get_identifier(&e)?;
-        args.push(admin_id.clone())?;
-        args.push(nonce.clone())?;
-        args.push(id.clone())?;
-        check_auth(&e, admin, nonce, Symbol::from_str("unfreeze"), args)?;
-        write_state(&e, id.clone(), false)?;
-        event::unfreeze(e, admin_id, id)?;
         Ok(())
     }
 

@@ -60,7 +60,7 @@ impl<'a> TestToken<'a> {
             .try_into_val(self.host)?)
     }
 
-    pub(crate) fn approve(
+    pub(crate) fn incr_allow(
         &self,
         from: &TestSigner,
         nonce: i128,
@@ -70,7 +70,7 @@ impl<'a> TestToken<'a> {
         let signature = sign_args(
             self.host,
             from,
-            "approve",
+            "incr_allow",
             &self.id,
             host_vec![
                 self.host,
@@ -85,7 +85,38 @@ impl<'a> TestToken<'a> {
             .host
             .call(
                 self.id.clone().into(),
-                Symbol::from_str("approve").into(),
+                Symbol::from_str("incr_allow").into(),
+                host_vec![self.host, signature, nonce, spender, amount].into(),
+            )?
+            .try_into()?)
+    }
+
+    pub(crate) fn decr_allow(
+        &self,
+        from: &TestSigner,
+        nonce: i128,
+        spender: Identifier,
+        amount: i128,
+    ) -> Result<(), HostError> {
+        let signature = sign_args(
+            self.host,
+            from,
+            "decr_allow",
+            &self.id,
+            host_vec![
+                self.host,
+                from.get_identifier(self.host),
+                nonce.clone(),
+                spender.clone(),
+                amount.clone()
+            ],
+        );
+
+        Ok(self
+            .host
+            .call(
+                self.id.clone().into(),
+                Symbol::from_str("decr_allow").into(),
                 host_vec![self.host, signature, nonce, spender, amount].into(),
             )?
             .try_into()?)
@@ -177,22 +208,22 @@ impl<'a> TestToken<'a> {
             .try_into()?)
     }
 
-    pub(crate) fn freeze(
+    pub(crate) fn burn(
         &self,
-        admin: &TestSigner,
+        from: &TestSigner,
         nonce: i128,
-        id: Identifier,
+        amount: i128,
     ) -> Result<(), HostError> {
         let signature = sign_args(
             self.host,
-            admin,
-            "freeze",
+            from,
+            "burn",
             &self.id,
             host_vec![
                 self.host,
-                admin.get_identifier(self.host),
+                from.get_identifier(self.host),
                 nonce.clone(),
-                id.clone()
+                amount.clone()
             ],
         );
 
@@ -200,28 +231,30 @@ impl<'a> TestToken<'a> {
             .host
             .call(
                 self.id.clone().into(),
-                Symbol::from_str("freeze").into(),
-                host_vec![self.host, signature, nonce, id].into(),
+                Symbol::from_str("burn").into(),
+                host_vec![self.host, signature, nonce, amount].into(),
             )?
             .try_into()?)
     }
 
-    pub(crate) fn unfreeze(
+    pub(crate) fn burn_from(
         &self,
-        admin: &TestSigner,
+        spender: &TestSigner,
         nonce: i128,
-        id: Identifier,
+        from: Identifier,
+        amount: i128,
     ) -> Result<(), HostError> {
         let signature = sign_args(
             self.host,
-            admin,
-            "unfreeze",
+            spender,
+            "burn_from",
             &self.id,
             host_vec![
                 self.host,
-                admin.get_identifier(self.host),
+                spender.get_identifier(self.host),
                 nonce.clone(),
-                id.clone()
+                from.clone(),
+                amount.clone()
             ],
         );
 
@@ -229,18 +262,49 @@ impl<'a> TestToken<'a> {
             .host
             .call(
                 self.id.clone().into(),
-                Symbol::from_str("unfreeze").into(),
-                host_vec![self.host, signature, nonce, id].into(),
+                Symbol::from_str("burn_from").into(),
+                host_vec![self.host, signature, nonce, from, amount].into(),
             )?
             .try_into()?)
     }
 
-    pub(crate) fn is_frozen(&self, id: Identifier) -> Result<bool, HostError> {
+    pub(crate) fn set_auth(
+        &self,
+        admin: &TestSigner,
+        nonce: i128,
+        id: Identifier,
+        authorize: bool,
+    ) -> Result<(), HostError> {
+        let signature = sign_args(
+            self.host,
+            admin,
+            "set_auth",
+            &self.id,
+            host_vec![
+                self.host,
+                admin.get_identifier(self.host),
+                nonce.clone(),
+                id.clone(),
+                authorize
+            ],
+        );
+
         Ok(self
             .host
             .call(
                 self.id.clone().into(),
-                Symbol::from_str("is_frozen").into(),
+                Symbol::from_str("set_auth").into(),
+                host_vec![self.host, signature, nonce, id, authorize].into(),
+            )?
+            .try_into()?)
+    }
+
+    pub(crate) fn authorized(&self, id: Identifier) -> Result<bool, HostError> {
+        Ok(self
+            .host
+            .call(
+                self.id.clone().into(),
+                Symbol::from_str("authorized").into(),
                 host_vec![self.host, id].into(),
             )?
             .try_into_val(self.host)?)
@@ -277,7 +341,7 @@ impl<'a> TestToken<'a> {
             .try_into()?)
     }
 
-    pub(crate) fn burn(
+    pub(crate) fn clawback(
         &self,
         admin: &TestSigner,
         nonce: i128,
@@ -287,7 +351,7 @@ impl<'a> TestToken<'a> {
         let signature = sign_args(
             self.host,
             admin,
-            "burn",
+            "clawback",
             &self.id,
             host_vec![
                 self.host,
@@ -302,7 +366,7 @@ impl<'a> TestToken<'a> {
             .host
             .call(
                 self.id.clone().into(),
-                Symbol::from_str("burn").into(),
+                Symbol::from_str("clawback").into(),
                 host_vec![self.host, signature, nonce, from, amount].into(),
             )?
             .try_into()?)

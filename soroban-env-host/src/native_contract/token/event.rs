@@ -4,14 +4,28 @@ use crate::native_contract::token::public_types::Identifier;
 use crate::HostError;
 use soroban_env_common::{CheckedEnv, Symbol, TryIntoVal};
 
-pub(crate) fn approve(
+pub(crate) fn incr_allow(
     e: &Host,
     from: Identifier,
     to: Identifier,
     amount: i128,
 ) -> Result<(), HostError> {
     let mut topics = Vec::new(e)?;
-    topics.push(Symbol::from_str("approve"))?;
+    topics.push(Symbol::from_str("incr_allow"))?;
+    topics.push(from)?;
+    topics.push(to)?;
+    e.contract_event(topics.into(), amount.try_into_val(e)?)?;
+    Ok(())
+}
+
+pub(crate) fn decr_allow(
+    e: &Host,
+    from: Identifier,
+    to: Identifier,
+    amount: i128,
+) -> Result<(), HostError> {
+    let mut topics = Vec::new(e)?;
+    topics.push(Symbol::from_str("decr_allow"))?;
     topics.push(from)?;
     topics.push(to)?;
     e.contract_event(topics.into(), amount.try_into_val(e)?)?;
@@ -46,33 +60,31 @@ pub(crate) fn mint(
     Ok(())
 }
 
-pub(crate) fn burn(
+pub(crate) fn clawback(
     e: &Host,
     admin: Identifier,
     from: Identifier,
     amount: i128,
 ) -> Result<(), HostError> {
     let mut topics = Vec::new(e)?;
-    topics.push(Symbol::from_str("burn"))?;
+    topics.push(Symbol::from_str("clawback"))?;
     topics.push(admin)?;
     topics.push(from)?;
     e.contract_event(topics.into(), amount.try_into_val(e)?)?;
     Ok(())
 }
 
-pub(crate) fn freeze(e: &Host, admin: Identifier, id: Identifier) -> Result<(), HostError> {
+pub(crate) fn set_auth(
+    e: &Host,
+    admin: Identifier,
+    id: Identifier,
+    authorize: bool,
+) -> Result<(), HostError> {
     let mut topics = Vec::new(e)?;
-    topics.push(Symbol::from_str("freeze"))?;
+    topics.push(Symbol::from_str("set_auth"))?;
     topics.push(admin)?;
-    e.contract_event(topics.into(), id.try_into_val(e)?)?;
-    Ok(())
-}
-
-pub(crate) fn unfreeze(e: &Host, admin: Identifier, id: Identifier) -> Result<(), HostError> {
-    let mut topics = Vec::new(e)?;
-    topics.push(Symbol::from_str("unfreeze"))?;
-    topics.push(admin)?;
-    e.contract_event(topics.into(), id.try_into_val(e)?)?;
+    topics.push(id)?;
+    e.contract_event(topics.into(), authorize.try_into_val(e)?)?;
     Ok(())
 }
 
@@ -85,5 +97,13 @@ pub(crate) fn set_admin(
     topics.push(Symbol::from_str("set_admin"))?;
     topics.push(admin)?;
     e.contract_event(topics.into(), new_admin.try_into_val(e)?)?;
+    Ok(())
+}
+
+pub(crate) fn burn(e: &Host, from: Identifier, amount: i128) -> Result<(), HostError> {
+    let mut topics = Vec::new(e)?;
+    topics.push(Symbol::from_str("burn"))?;
+    topics.push(from)?;
+    e.contract_event(topics.into(), amount.try_into_val(e)?)?;
     Ok(())
 }

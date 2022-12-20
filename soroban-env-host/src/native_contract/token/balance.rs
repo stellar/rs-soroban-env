@@ -44,9 +44,11 @@ fn write_balance(e: &Host, id: Identifier, amount: i128) -> Result<(), HostError
 
 // Metering: covered by components.
 pub fn receive_balance(e: &Host, id: Identifier, amount: i128) -> Result<(), HostError> {
-    let is_frozen = read_state(e, id.clone())?;
-    if is_frozen {
-        return Err(e.err_status_msg(ContractError::BalanceFrozenError, "balance is frozen"));
+    if !is_authorized(e, id.clone())? {
+        return Err(e.err_status_msg(
+            ContractError::BalanceDeauthorizedError,
+            "balance is deauthorized",
+        ));
     }
 
     match id {
@@ -70,7 +72,7 @@ pub fn receive_balance(e: &Host, id: Identifier, amount: i128) -> Result<(), Hos
 }
 
 // TODO: Metering analysis
-pub fn spend_balance_no_freeze_check(
+pub fn spend_balance_no_authorization_check(
     e: &Host,
     id: Identifier,
     amount: i128,
@@ -107,36 +109,38 @@ pub fn spend_balance_no_freeze_check(
 
 // Metering: covered by components.
 pub fn spend_balance(e: &Host, id: Identifier, amount: i128) -> Result<(), HostError> {
-    let is_frozen = read_state(e, id.clone())?;
-    if is_frozen {
-        return Err(e.err_status_msg(ContractError::BalanceFrozenError, "balance is frozen"));
+    if !is_authorized(e, id.clone())? {
+        return Err(e.err_status_msg(
+            ContractError::BalanceDeauthorizedError,
+            "balance is deauthorized",
+        ));
     }
 
-    spend_balance_no_freeze_check(e, id, amount)
+    spend_balance_no_authorization_check(e, id, amount)
 }
 
 // Metering: *mostly* covered by components. Not sure about `try_into_val`.
-pub fn read_state(e: &Host, id: Identifier) -> Result<bool, HostError> {
+pub fn is_authorized(e: &Host, id: Identifier) -> Result<bool, HostError> {
     match id {
-        Identifier::Account(acc_id) => is_account_deauthorized(e, acc_id),
+        Identifier::Account(acc_id) => is_account_authorized(e, acc_id),
         Identifier::Contract(_) | Identifier::Ed25519(_) => {
             let key = DataKey::State(id);
             if let Ok(state) = e.get_contract_data(key.try_into_val(e)?) {
                 Ok(state.try_into()?)
             } else {
-                Ok(false)
+                Ok(true)
             }
         }
     }
 }
 
 // Metering: *mostly* covered by components. Not sure about `try_into_val`.
-pub fn write_state(e: &Host, id: Identifier, is_frozen: bool) -> Result<(), HostError> {
+pub fn write_authorization(e: &Host, id: Identifier, authorize: bool) -> Result<(), HostError> {
     match id {
-        Identifier::Account(acc_id) => set_authorization(e, acc_id, !is_frozen),
+        Identifier::Account(acc_id) => set_authorization(e, acc_id, authorize),
         Identifier::Contract(_) | Identifier::Ed25519(_) => {
             let key = DataKey::State(id);
-            e.put_contract_data(key.try_into_val(e)?, is_frozen.into())?;
+            e.put_contract_data(key.try_into_val(e)?, authorize.into())?;
             Ok(())
         }
     }
@@ -429,23 +433,23 @@ fn get_min_max_trustline_balance(e: &Host, tl: &TrustLineEntry) -> Result<(i64, 
 }
 
 // TODO: Metering analysis
-fn is_account_deauthorized(e: &Host, to_key: AccountId) -> Result<bool, HostError> {
-    let is_trustline_deauthorized_safe =
+fn is_account_authorized(e: &Host, to_key: AccountId) -> Result<bool, HostError> {
+    let is_trustline_authorized_safe =
         |asset: TrustLineAsset, issuer: AccountId, to: AccountId| -> Result<bool, HostError> {
             if issuer == to {
-                return Ok(false);
+                return Ok(true);
             }
-            is_trustline_deauthorized(e, to, asset)
+            is_trustline_authorized(e, to, asset)
         };
 
     match read_metadata(e)? {
-        Metadata::Native => Ok(false),
-        Metadata::AlphaNum4(asset) => is_trustline_deauthorized_safe(
+        Metadata::Native => Ok(true),
+        Metadata::AlphaNum4(asset) => is_trustline_authorized_safe(
             e.create_asset_4(asset.asset_code.to_array()?, asset.issuer.clone()),
             asset.issuer,
             to_key,
         ),
-        Metadata::AlphaNum12(asset) => is_trustline_deauthorized_safe(
+        Metadata::AlphaNum12(asset) => is_trustline_authorized_safe(
             e.create_asset_12(asset.asset_code.to_array()?, asset.issuer.clone()),
             asset.issuer,
             to_key,
@@ -475,13 +479,13 @@ fn get_trustline_flags(
 }
 
 // Metering: *mostly* covered by components. The arithmatics are free.
-fn is_trustline_deauthorized(
+fn is_trustline_authorized(
     e: &Host,
     account_id: AccountId,
     asset: TrustLineAsset,
 ) -> Result<bool, HostError> {
     let tl_flags = get_trustline_flags(e, account_id, asset)?;
-    Ok(tl_flags & (TrustLineFlags::AuthorizedFlag as u32) == 0)
+    Ok(tl_flags & (TrustLineFlags::AuthorizedFlag as u32) != 0)
 }
 
 fn set_authorization(e: &Host, to_key: AccountId, authorize: bool) -> Result<(), HostError> {
