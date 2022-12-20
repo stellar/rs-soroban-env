@@ -74,19 +74,17 @@ pub(crate) fn clawback(
     Ok(())
 }
 
-pub(crate) fn freeze(e: &Host, admin: Identifier, id: Identifier) -> Result<(), HostError> {
+pub(crate) fn set_auth(
+    e: &Host,
+    admin: Identifier,
+    id: Identifier,
+    authorize: bool,
+) -> Result<(), HostError> {
     let mut topics = Vec::new(e)?;
-    topics.push(Symbol::from_str("freeze"))?;
+    topics.push(Symbol::from_str("set_auth"))?;
     topics.push(admin)?;
-    e.contract_event(topics.into(), id.try_into_val(e)?)?;
-    Ok(())
-}
-
-pub(crate) fn unfreeze(e: &Host, admin: Identifier, id: Identifier) -> Result<(), HostError> {
-    let mut topics = Vec::new(e)?;
-    topics.push(Symbol::from_str("unfreeze"))?;
-    topics.push(admin)?;
-    e.contract_event(topics.into(), id.try_into_val(e)?)?;
+    topics.push(id)?;
+    e.contract_event(topics.into(), authorize.try_into_val(e)?)?;
     Ok(())
 }
 

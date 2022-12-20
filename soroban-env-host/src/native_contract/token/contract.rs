@@ -92,9 +92,13 @@ pub trait TokenTrait {
         amount: i128,
     ) -> Result<(), HostError>;
 
-    fn freeze(e: &Host, admin: Signature, nonce: i128, id: Identifier) -> Result<(), HostError>;
-
-    fn unfreeze(e: &Host, admin: Signature, nonce: i128, id: Identifier) -> Result<(), HostError>;
+    fn set_auth(
+        e: &Host,
+        admin: Signature,
+        nonce: i128,
+        id: Identifier,
+        authorize: bool,
+    ) -> Result<(), HostError>;
 
     fn mint(
         e: &Host,
@@ -408,16 +412,23 @@ impl TokenTrait for Token {
     }
 
     // Metering: covered by components
-    fn freeze(e: &Host, admin: Signature, nonce: i128, id: Identifier) -> Result<(), HostError> {
+    fn set_auth(
+        e: &Host,
+        admin: Signature,
+        nonce: i128,
+        id: Identifier,
+        authorize: bool,
+    ) -> Result<(), HostError> {
         check_admin(&e, &admin)?;
         let mut args = Vec::new(e)?;
         let admin_id = admin.get_identifier(&e)?;
         args.push(admin_id.clone())?;
         args.push(nonce.clone())?;
         args.push(id.clone())?;
-        check_auth(&e, admin, nonce, Symbol::from_str("freeze"), args)?;
-        write_authorization(&e, id.clone(), false)?;
-        event::freeze(e, admin_id, id)?;
+        args.push(authorize)?;
+        check_auth(&e, admin, nonce, Symbol::from_str("set_auth"), args)?;
+        write_authorization(&e, id.clone(), authorize)?;
+        event::set_auth(e, admin_id, id, authorize)?;
         Ok(())
     }
 
@@ -459,20 +470,6 @@ impl TokenTrait for Token {
         check_auth(&e, admin, nonce, Symbol::from_str("set_admin"), args)?;
         write_administrator(&e, new_admin.clone())?;
         event::set_admin(e, admin_id, new_admin)?;
-        Ok(())
-    }
-
-    // Metering: covered by components
-    fn unfreeze(e: &Host, admin: Signature, nonce: i128, id: Identifier) -> Result<(), HostError> {
-        check_admin(&e, &admin)?;
-        let mut args = Vec::new(e)?;
-        let admin_id = admin.get_identifier(&e)?;
-        args.push(admin_id.clone())?;
-        args.push(nonce.clone())?;
-        args.push(id.clone())?;
-        check_auth(&e, admin, nonce, Symbol::from_str("unfreeze"), args)?;
-        write_authorization(&e, id.clone(), true)?;
-        event::unfreeze(e, admin_id, id)?;
         Ok(())
     }
 

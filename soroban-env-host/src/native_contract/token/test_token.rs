@@ -268,22 +268,24 @@ impl<'a> TestToken<'a> {
             .try_into()?)
     }
 
-    pub(crate) fn freeze(
+    pub(crate) fn set_auth(
         &self,
         admin: &TestSigner,
         nonce: i128,
         id: Identifier,
+        authorize: bool,
     ) -> Result<(), HostError> {
         let signature = sign_args(
             self.host,
             admin,
-            "freeze",
+            "set_auth",
             &self.id,
             host_vec![
                 self.host,
                 admin.get_identifier(self.host),
                 nonce.clone(),
-                id.clone()
+                id.clone(),
+                authorize
             ],
         );
 
@@ -291,37 +293,8 @@ impl<'a> TestToken<'a> {
             .host
             .call(
                 self.id.clone().into(),
-                Symbol::from_str("freeze").into(),
-                host_vec![self.host, signature, nonce, id].into(),
-            )?
-            .try_into()?)
-    }
-
-    pub(crate) fn unfreeze(
-        &self,
-        admin: &TestSigner,
-        nonce: i128,
-        id: Identifier,
-    ) -> Result<(), HostError> {
-        let signature = sign_args(
-            self.host,
-            admin,
-            "unfreeze",
-            &self.id,
-            host_vec![
-                self.host,
-                admin.get_identifier(self.host),
-                nonce.clone(),
-                id.clone()
-            ],
-        );
-
-        Ok(self
-            .host
-            .call(
-                self.id.clone().into(),
-                Symbol::from_str("unfreeze").into(),
-                host_vec![self.host, signature, nonce, id].into(),
+                Symbol::from_str("set_auth").into(),
+                host_vec![self.host, signature, nonce, id, authorize].into(),
             )?
             .try_into()?)
     }

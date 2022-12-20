@@ -816,10 +816,11 @@ fn test_burn() {
 
     // Freeze the balance of `user` and then try to burn.
     token
-        .freeze(
+        .set_auth(
             &admin,
             token.nonce(admin.get_identifier(&test.host)).unwrap(),
             user.get_identifier(&test.host),
+            false,
         )
         .unwrap();
 
@@ -840,10 +841,11 @@ fn test_burn() {
 
     // Unfreeze the balance of `user` and then burn.
     token
-        .unfreeze(
+        .set_auth(
             &admin,
             token.nonce(admin.get_identifier(&test.host)).unwrap(),
             user.get_identifier(&test.host),
+            true,
         )
         .unwrap();
 
@@ -926,7 +928,7 @@ fn test_cannot_burn_native() {
 }
 
 #[test]
-fn test_freeze_and_unfreeze() {
+fn test_token_authorization() {
     let test = TokenTest::setup();
     let admin = TestSigner::Ed25519(&test.admin_key);
     let token = test.default_token(&admin);
@@ -954,10 +956,11 @@ fn test_freeze_and_unfreeze() {
 
     // Freeze the balance of `user`.
     token
-        .freeze(
+        .set_auth(
             &admin,
             token.nonce(admin.get_identifier(&test.host)).unwrap(),
             user.get_identifier(&test.host),
+            false,
         )
         .unwrap();
 
@@ -994,10 +997,11 @@ fn test_freeze_and_unfreeze() {
 
     // Unfreeze the balance of `user`.
     token
-        .unfreeze(
+        .set_auth(
             &admin,
             token.nonce(admin.get_identifier(&test.host)).unwrap(),
             user.get_identifier(&test.host),
+            true,
         )
         .unwrap();
 
@@ -1145,10 +1149,11 @@ fn test_set_admin() {
     assert_eq!(
         to_contract_err(
             token
-                .freeze(
+                .set_auth(
                     &admin,
                     token.nonce(admin.get_identifier(&test.host)).unwrap(),
                     new_admin.get_identifier(&test.host),
+                    false
                 )
                 .err()
                 .unwrap()
@@ -1158,10 +1163,11 @@ fn test_set_admin() {
     assert_eq!(
         to_contract_err(
             token
-                .unfreeze(
+                .set_auth(
                     &admin,
                     token.nonce(admin.get_identifier(&test.host)).unwrap(),
                     new_admin.get_identifier(&test.host),
+                    true
                 )
                 .err()
                 .unwrap()
@@ -1187,17 +1193,19 @@ fn test_set_admin() {
         )
         .unwrap();
     token
-        .freeze(
+        .set_auth(
             &new_admin,
             token.nonce(new_admin.get_identifier(&test.host)).unwrap(),
             admin.get_identifier(&test.host),
+            false,
         )
         .unwrap();
     token
-        .unfreeze(
+        .set_auth(
             &new_admin,
             token.nonce(new_admin.get_identifier(&test.host)).unwrap(),
             admin.get_identifier(&test.host),
+            true,
         )
         .unwrap();
 
@@ -1310,7 +1318,7 @@ fn test_trustline_auth() {
     assert_eq!(
         to_contract_err(
             test.run_from_account(admin_acc.clone(), || {
-                token.freeze(&acc_invoker, 0, user_id.clone())
+                token.set_auth(&acc_invoker, 0, user_id.clone(), false)
             })
             .err()
             .unwrap()
@@ -1332,7 +1340,7 @@ fn test_trustline_auth() {
 
     // trustline should be deauthorized now.
     test.run_from_account(admin_acc.clone(), || {
-        token.freeze(&acc_invoker, 0, user_id.clone())
+        token.set_auth(&acc_invoker, 0, user_id.clone(), false)
     })
     .unwrap();
 
@@ -1362,7 +1370,7 @@ fn test_trustline_auth() {
 
     // Now authorize trustline
     test.run_from_account(admin_acc.clone(), || {
-        token.unfreeze(&acc_invoker, 0, user_id.clone())
+        token.set_auth(&acc_invoker, 0, user_id.clone(), true)
     })
     .unwrap();
 
