@@ -299,12 +299,12 @@ impl<'a> TestToken<'a> {
             .try_into()?)
     }
 
-    pub(crate) fn is_frozen(&self, id: Identifier) -> Result<bool, HostError> {
+    pub(crate) fn authorized(&self, id: Identifier) -> Result<bool, HostError> {
         Ok(self
             .host
             .call(
                 self.id.clone().into(),
-                Symbol::from_str("is_frozen").into(),
+                Symbol::from_str("authorized").into(),
                 host_vec![self.host, id].into(),
             )?
             .try_into_val(self.host)?)

@@ -952,7 +952,7 @@ fn test_token_authorization() {
         )
         .unwrap();
 
-    assert!(!token.is_frozen(user.get_identifier(&test.host)).unwrap());
+    assert!(token.authorized(user.get_identifier(&test.host)).unwrap());
 
     // Freeze the balance of `user`.
     token
@@ -964,7 +964,7 @@ fn test_token_authorization() {
         )
         .unwrap();
 
-    assert!(token.is_frozen(user.get_identifier(&test.host)).unwrap());
+    assert!(!token.authorized(user.get_identifier(&test.host)).unwrap());
     // Make sure neither outgoing nor incoming balance transfers are possible.
     assert_eq!(
         to_contract_err(
@@ -1005,7 +1005,7 @@ fn test_token_authorization() {
         )
         .unwrap();
 
-    assert!(!token.is_frozen(user.get_identifier(&test.host)).unwrap());
+    assert!(token.authorized(user.get_identifier(&test.host)).unwrap());
     // Make sure balance transfers are possible now.
     token
         .xfer(

@@ -63,7 +63,7 @@ pub trait TokenTrait {
 
     fn spendable(e: &Host, id: Identifier) -> Result<i128, HostError>;
 
-    fn is_frozen(e: &Host, id: Identifier) -> Result<bool, HostError>;
+    fn authorized(e: &Host, id: Identifier) -> Result<bool, HostError>;
 
     fn xfer(
         e: &Host,
@@ -298,8 +298,8 @@ impl TokenTrait for Token {
     }
 
     // Metering: covered by components
-    fn is_frozen(e: &Host, id: Identifier) -> Result<bool, HostError> {
-        Ok(!is_authorized(&e, id)?)
+    fn authorized(e: &Host, id: Identifier) -> Result<bool, HostError> {
+        is_authorized(&e, id)
     }
 
     // Metering: covered by components
