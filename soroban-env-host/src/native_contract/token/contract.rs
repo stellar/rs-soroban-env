@@ -33,7 +33,7 @@ pub trait TokenTrait {
     /// (Native, AlphaNum4, or AlphaNum12). It will fail if the contractID
     /// of this contract does not match the expected contractID for this asset
     /// returned by Host::get_contract_id_from_asset. This function should only be
-    /// called by the create_token_from_asset host function for this reason.
+    /// called internally by the host.
     ///
     /// No admin will be set for the Native token, so any function that checks the admin
     /// (clawback, set_auth, mint, set_admin) will always fail
