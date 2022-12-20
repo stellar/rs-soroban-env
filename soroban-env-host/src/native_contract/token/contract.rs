@@ -6,7 +6,7 @@ use crate::native_contract::base_types::{Bytes, BytesN, Vec};
 use crate::native_contract::token::admin::{check_admin, write_administrator};
 use crate::native_contract::token::allowance::{read_allowance, spend_allowance, write_allowance};
 use crate::native_contract::token::balance::{
-    is_deauthorized, read_balance, receive_balance, spend_balance, write_authorization,
+    is_authorized, read_balance, receive_balance, spend_balance, write_authorization,
 };
 use crate::native_contract::token::cryptography::check_auth;
 use crate::native_contract::token::event;
@@ -295,7 +295,7 @@ impl TokenTrait for Token {
 
     // Metering: covered by components
     fn is_frozen(e: &Host, id: Identifier) -> Result<bool, HostError> {
-        is_deauthorized(&e, id)
+        Ok(!is_authorized(&e, id)?)
     }
 
     // Metering: covered by components
