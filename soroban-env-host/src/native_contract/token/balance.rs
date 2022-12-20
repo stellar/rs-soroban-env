@@ -45,7 +45,10 @@ fn write_balance(e: &Host, id: Identifier, amount: i128) -> Result<(), HostError
 // Metering: covered by components.
 pub fn receive_balance(e: &Host, id: Identifier, amount: i128) -> Result<(), HostError> {
     if !is_authorized(e, id.clone())? {
-        return Err(e.err_status_msg(ContractError::BalanceFrozenError, "balance is frozen"));
+        return Err(e.err_status_msg(
+            ContractError::BalanceDeauthorizedError,
+            "balance is deauthorized",
+        ));
     }
 
     match id {
@@ -107,7 +110,10 @@ pub fn spend_balance_no_authorization_check(
 // Metering: covered by components.
 pub fn spend_balance(e: &Host, id: Identifier, amount: i128) -> Result<(), HostError> {
     if !is_authorized(e, id.clone())? {
-        return Err(e.err_status_msg(ContractError::BalanceFrozenError, "balance is frozen"));
+        return Err(e.err_status_msg(
+            ContractError::BalanceDeauthorizedError,
+            "balance is deauthorized",
+        ));
     }
 
     spend_balance_no_authorization_check(e, id, amount)

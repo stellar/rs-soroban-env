@@ -36,7 +36,7 @@ pub trait TokenTrait {
     /// called by the create_token_from_asset host function for this reason.
     ///
     /// No admin will be set for the Native token, so any function that checks the admin
-    /// (clawback, freeze, unfreeze, mint, set_admin) will always fail
+    /// (clawback, set_auth, mint, set_admin) will always fail
     fn init_asset(e: &Host, asset_bytes: Bytes) -> Result<(), HostError>;
 
     fn nonce(e: &Host, id: Identifier) -> Result<i128, HostError>;
@@ -405,7 +405,7 @@ impl TokenTrait for Token {
         args.push(from.clone())?;
         args.push(amount.clone())?;
         check_auth(&e, admin, nonce, Symbol::from_str("clawback"), args)?;
-        // admin can clawback a frozen balance
+        // admin can clawback a deauthorized balance
         spend_balance_no_authorization_check(&e, from.clone(), amount.clone())?;
         event::clawback(e, admin_id, from, amount)?;
         Ok(())

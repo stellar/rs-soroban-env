@@ -814,7 +814,7 @@ fn test_burn() {
         45_000_000
     );
 
-    // Freeze the balance of `user` and then try to burn.
+    // Deauthorize the balance of `user` and then try to burn.
     token
         .set_auth(
             &admin,
@@ -824,7 +824,7 @@ fn test_burn() {
         )
         .unwrap();
 
-    // Can't burn while frozen
+    // Can't burn while deauthorized
     assert_eq!(
         to_contract_err(
             token
@@ -836,10 +836,10 @@ fn test_burn() {
                 .err()
                 .unwrap()
         ),
-        ContractError::BalanceFrozenError
+        ContractError::BalanceDeauthorizedError
     );
 
-    // Unfreeze the balance of `user` and then burn.
+    // Authorize the balance of `user` and then burn.
     token
         .set_auth(
             &admin,
@@ -954,7 +954,7 @@ fn test_token_authorization() {
 
     assert!(token.authorized(user.get_identifier(&test.host)).unwrap());
 
-    // Freeze the balance of `user`.
+    // Deauthorize the balance of `user`.
     token
         .set_auth(
             &admin,
@@ -978,7 +978,7 @@ fn test_token_authorization() {
                 .err()
                 .unwrap()
         ),
-        ContractError::BalanceFrozenError
+        ContractError::BalanceDeauthorizedError
     );
     assert_eq!(
         to_contract_err(
@@ -992,10 +992,10 @@ fn test_token_authorization() {
                 .err()
                 .unwrap()
         ),
-        ContractError::BalanceFrozenError
+        ContractError::BalanceDeauthorizedError
     );
 
-    // Unfreeze the balance of `user`.
+    // Authorize the balance of `user`.
     token
         .set_auth(
             &admin,
@@ -1353,7 +1353,7 @@ fn test_trustline_auth() {
             .err()
             .unwrap()
         ),
-        ContractError::BalanceFrozenError
+        ContractError::BalanceDeauthorizedError
     );
 
     // mint should also fail for the same reason
@@ -1365,7 +1365,7 @@ fn test_trustline_auth() {
             .err()
             .unwrap()
         ),
-        ContractError::BalanceFrozenError
+        ContractError::BalanceDeauthorizedError
     );
 
     // Now authorize trustline
@@ -2719,7 +2719,7 @@ fn test_classic_transfers_not_possible_for_unauthorized_asset() {
                 .err()
                 .unwrap()
         ),
-        ContractError::BalanceFrozenError
+        ContractError::BalanceDeauthorizedError
     );
 
     // Trustline balance stays the same.
