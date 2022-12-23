@@ -243,7 +243,7 @@ impl TokenTrait for Token {
         args.push(from.get_identifier(&e)?)?;
         args.push(nonce.clone())?;
         args.push(spender.clone())?;
-        args.push(amount.clone())?;
+        args.push(amount)?;
         check_auth(&e, from, nonce, Symbol::from_str("incr_allow"), args)?;
 
         let allowance = read_allowance(&e, from_id.clone(), spender.clone())?;
@@ -269,7 +269,7 @@ impl TokenTrait for Token {
         args.push(from.get_identifier(&e)?)?;
         args.push(nonce.clone())?;
         args.push(spender.clone())?;
-        args.push(amount.clone())?;
+        args.push(amount)?;
         check_auth(&e, from, nonce, Symbol::from_str("decr_allow"), args)?;
 
         let allowance = read_allowance(&e, from_id.clone(), spender.clone())?;
@@ -277,12 +277,7 @@ impl TokenTrait for Token {
         if amount >= allowance {
             write_allowance(&e, from_id.clone(), spender.clone(), 0)?;
         } else {
-            write_allowance(
-                &e,
-                from_id.clone(),
-                spender.clone(),
-                allowance - amount.clone(),
-            )?;
+            write_allowance(&e, from_id.clone(), spender.clone(), allowance - amount)?;
         }
         event::decr_allow(e, from_id, spender, amount)?;
         Ok(())
@@ -316,10 +311,10 @@ impl TokenTrait for Token {
         args.push(from.get_identifier(&e)?)?;
         args.push(nonce.clone())?;
         args.push(to.clone())?;
-        args.push(amount.clone())?;
+        args.push(amount)?;
         check_auth(&e, from, nonce, Symbol::from_str("xfer"), args)?;
-        spend_balance(&e, from_id.clone(), amount.clone())?;
-        receive_balance(&e, to.clone(), amount.clone())?;
+        spend_balance(&e, from_id.clone(), amount)?;
+        receive_balance(&e, to.clone(), amount)?;
         event::transfer(e, from_id, to, amount)?;
         Ok(())
     }
@@ -340,11 +335,11 @@ impl TokenTrait for Token {
         args.push(nonce.clone())?;
         args.push(from.clone())?;
         args.push(to.clone())?;
-        args.push(amount.clone())?;
+        args.push(amount)?;
         check_auth(&e, spender, nonce, Symbol::from_str("xfer_from"), args)?;
-        spend_allowance(&e, from.clone(), spender_id, amount.clone())?;
-        spend_balance(&e, from.clone(), amount.clone())?;
-        receive_balance(&e, to.clone(), amount.clone())?;
+        spend_allowance(&e, from.clone(), spender_id, amount)?;
+        spend_balance(&e, from.clone(), amount)?;
+        receive_balance(&e, to.clone(), amount)?;
         event::transfer(e, from, to, amount)?;
         Ok(())
     }
@@ -357,9 +352,9 @@ impl TokenTrait for Token {
         let mut args = Vec::new(e)?;
         args.push(from.get_identifier(&e)?)?;
         args.push(nonce.clone())?;
-        args.push(amount.clone())?;
+        args.push(amount)?;
         check_auth(&e, from, nonce, Symbol::from_str("burn"), args)?;
-        spend_balance(&e, from_id.clone(), amount.clone())?;
+        spend_balance(&e, from_id.clone(), amount)?;
         event::burn(e, from_id, amount)?;
         Ok(())
     }
@@ -379,10 +374,10 @@ impl TokenTrait for Token {
         args.push(spender.get_identifier(&e)?)?;
         args.push(nonce.clone())?;
         args.push(from.clone())?;
-        args.push(amount.clone())?;
+        args.push(amount)?;
         check_auth(&e, spender, nonce, Symbol::from_str("burn_from"), args)?;
-        spend_allowance(&e, from.clone(), spender_id, amount.clone())?;
-        spend_balance(&e, from.clone(), amount.clone())?;
+        spend_allowance(&e, from.clone(), spender_id, amount)?;
+        spend_balance(&e, from.clone(), amount)?;
         event::burn(e, from, amount)?;
         Ok(())
     }
@@ -403,10 +398,10 @@ impl TokenTrait for Token {
         args.push(admin_id.clone())?;
         args.push(nonce.clone())?;
         args.push(from.clone())?;
-        args.push(amount.clone())?;
+        args.push(amount)?;
         check_auth(&e, admin, nonce, Symbol::from_str("clawback"), args)?;
         // admin can clawback a deauthorized balance
-        spend_balance_no_authorization_check(&e, from.clone(), amount.clone())?;
+        spend_balance_no_authorization_check(&e, from.clone(), amount)?;
         event::clawback(e, admin_id, from, amount)?;
         Ok(())
     }
@@ -447,9 +442,9 @@ impl TokenTrait for Token {
         args.push(admin_id.clone())?;
         args.push(nonce.clone())?;
         args.push(to.clone())?;
-        args.push(amount.clone())?;
+        args.push(amount)?;
         check_auth(&e, admin, nonce, Symbol::from_str("mint"), args)?;
-        receive_balance(&e, to.clone(), amount.clone())?;
+        receive_balance(&e, to.clone(), amount)?;
         event::mint(e, admin_id, to, amount)?;
         Ok(())
     }
