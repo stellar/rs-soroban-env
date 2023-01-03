@@ -1140,8 +1140,8 @@ checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 
 [[package]]
 name = "stellar-xdr"
-version = "0.0.11"
-source = "git+https://github.com/stellar/rs-stellar-xdr?rev=dbf2aba#dbf2abab7cfde069f89ec5846a1c0c75ce4764ef"
+version = "0.0.12"
+source = "git+https://github.com/stellar/rs-stellar-xdr?rev=154e07e#154e07ebbb0ad307475fd665d5a0dcf169a9596f"
 dependencies = [
  "base64",
  "crate-git-revision",
