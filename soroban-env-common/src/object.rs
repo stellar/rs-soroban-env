@@ -62,49 +62,55 @@ where
     }
 }
 
-impl<'a, E> TryIntoVal<E, Object> for &'a ScObject
+impl<'a, E> TryFromVal<E, &'a ScObject> for Object
 where
     E: Env + Convert<&'a ScObject, Object>,
 {
     type Error = E::Error;
-    fn try_into_val(self, env: &E) -> Result<Object, Self::Error> {
-        env.convert(self)
+
+    fn try_from_val(env: &E, v: &'a ScObject) -> Result<Self, Self::Error> {
+        env.convert(v)
     }
 }
 
-impl<E> TryIntoVal<E, Object> for ScObject
+impl<E> TryFromVal<E, ScObject> for Object
 where
     E: Env + Convert<ScObject, Object>,
 {
     type Error = E::Error;
-    fn try_into_val(self, env: &E) -> Result<Object, Self::Error> {
-        env.convert(self)
+
+    fn try_from_val(env: &E, v: ScObject) -> Result<Self, Self::Error> {
+        env.convert(v)
     }
 }
 
-impl<'a, E> TryIntoVal<E, Object> for &'a ScVal
+impl<'a, E> TryFromVal<E, &'a ScVal> for Object
 where
     E: Env + Convert<&'a ScObject, Object>,
 {
     type Error = E::Error;
-    fn try_into_val(self, env: &E) -> Result<Object, Self::Error> {
-        if let ScVal::Object(Some(o)) = self {
+
+    fn try_from_val(env: &E, v: &'a ScVal) -> Result<Self, Self::Error> {
+        if let ScVal::Object(Some(o)) = v {
             o.try_into_val(env)
         } else {
+            // TODO: synthesize the appropriate error
             todo!()
         }
     }
 }
 
-impl<E> TryIntoVal<E, Object> for ScVal
+impl<E> TryFromVal<E, ScVal> for Object
 where
     E: Env + Convert<ScObject, Object>,
 {
     type Error = E::Error;
-    fn try_into_val(self, env: &E) -> Result<Object, Self::Error> {
-        if let ScVal::Object(Some(o)) = self {
+
+    fn try_from_val(env: &E, v: ScVal) -> Result<Self, Self::Error> {
+        if let ScVal::Object(Some(o)) = v {
             o.try_into_val(env)
         } else {
+            // TODO: synthesize the appropriate error
             todo!()
         }
     }

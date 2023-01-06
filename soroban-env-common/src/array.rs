@@ -27,44 +27,26 @@ impl<E: Env, const N: usize> TryFromVal<E, RawVal> for [u8; N] {
     }
 }
 
-impl<E: Env, const N: usize> TryIntoVal<E, [u8; N]> for RawVal {
-    type Error = <[u8; N] as TryFromVal<E, RawVal>>::Error;
-    #[inline(always)]
-    fn try_into_val(self, env: &E) -> Result<[u8; N], Self::Error> {
-        <_ as TryFromVal<_, _>>::try_from_val(env, self)
+impl<E: Env> TryFromVal<E, &[u8]> for RawVal {
+    type Error = Status;
+    fn try_from_val(env: &E, v: &[u8]) -> Result<Self, Self::Error> {
+        Ok(env.bytes_new_from_slice(v)?.to_raw())
     }
 }
 
-impl<E: Env> TryIntoVal<E, RawVal> for &[u8] {
+impl<E: Env, const N: usize> TryFromVal<E, [u8; N]> for RawVal {
     type Error = Status;
-    #[inline(always)]
-    fn try_into_val(self, env: &E) -> Result<RawVal, Self::Error> {
-        Ok(env.bytes_new_from_slice(self)?.to_raw())
-    }
-}
 
-impl<E: Env, const N: usize> TryIntoVal<E, RawVal> for [u8; N] {
-    type Error = Status;
-    #[inline(always)]
-    fn try_into_val(self, env: &E) -> Result<RawVal, Self::Error> {
-        self.as_slice().try_into_val(env)
+    fn try_from_val(env: &E, v: [u8; N]) -> Result<Self, Self::Error> {
+        v.as_slice().try_into_val(env)
     }
 }
 
 #[cfg(feature = "std")]
-impl<E: Env> TryIntoVal<E, RawVal> for Vec<u8> {
+impl<E: Env> TryFromVal<E, Vec<u8>> for RawVal {
     type Error = Status;
-    #[inline(always)]
-    fn try_into_val(self, env: &E) -> Result<RawVal, Self::Error> {
-        (&self).try_into_val(env)
-    }
-}
 
-#[cfg(feature = "std")]
-impl<E: Env> TryIntoVal<E, RawVal> for &Vec<u8> {
-    type Error = Status;
-    #[inline(always)]
-    fn try_into_val(self, env: &E) -> Result<RawVal, Self::Error> {
-        self.as_slice().try_into_val(env)
+    fn try_from_val(env: &E, v: Vec<u8>) -> Result<Self, Self::Error> {
+        v.as_slice().try_into_val(env)
     }
 }
