@@ -20,6 +20,8 @@ pub struct Guest;
 // Host for a non-WASM build.
 #[cfg(not(target_family = "wasm"))]
 impl EnvBase for Guest {
+    type Error = Status;
+
     fn as_mut_any(&mut self) -> &mut dyn core::any::Any {
         unimplemented!()
     }

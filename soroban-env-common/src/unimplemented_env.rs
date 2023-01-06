@@ -7,6 +7,8 @@ use core::any;
 pub struct UnimplementedEnv;
 
 impl EnvBase for UnimplementedEnv {
+    type Error = Status;
+
     fn as_mut_any(&mut self) -> &mut dyn any::Any {
         self
     }

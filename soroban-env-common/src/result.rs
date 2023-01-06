@@ -1,65 +1,39 @@
-use crate::{ConversionError, Env, IntoVal, RawVal, Status, TryFromVal, TryIntoVal};
+use crate::{convert::ConvertObject, ConvertFrom, RawVal, Status};
+use core::borrow::Borrow;
 
-impl<E: Env, T, R> TryFromVal<E, RawVal> for Result<T, R>
+impl<T, E, R> ConvertFrom<E, Result<T, R>> for RawVal
 where
-    T: TryFromVal<E, RawVal, Error = ConversionError>,
-    R: TryFrom<Status>,
+    E: ConvertObject<T>,
+    RawVal: ConvertFrom<E, T>,
+    Status: for<'a> From<&'a R>,
 {
-    type Error = ConversionError;
+    fn convert_from(e: &E, t: impl Borrow<Result<T, R>>) -> Result<Self, E::Error> {
+        match t.borrow() {
+            Ok(t) => RawVal::convert_from(e, t),
+            Err(r) => {
+                let status: Status = Status::from(r);
+                Err(status.into())
+            }
+        }
+    }
+}
 
-    #[inline(always)]
-    fn try_from_val(env: &E, val: RawVal) -> Result<Self, Self::Error> {
-        if let Ok(status) = Status::try_from_val(env, val) {
-            Ok(Err(status.try_into().map_err(|_| ConversionError)?))
+impl<E, T, R> ConvertFrom<E, RawVal> for Result<T, R>
+where
+    E: ConvertObject<T>,
+    T: ConvertFrom<E, RawVal>,
+    R: From<Status>,
+{
+    fn convert_from(e: &E, t: impl Borrow<RawVal>) -> Result<Self, E::Error> {
+        let t = *t.borrow();
+        if let Ok(status) = Status::try_from(t) {
+            Ok(Err(status.into()))
         } else {
-            Ok(Ok(T::try_from_val(env, val)?))
-        }
-    }
-}
-
-impl<E: Env, T, R> TryIntoVal<E, Result<T, R>> for RawVal
-where
-    T: TryFromVal<E, RawVal, Error = ConversionError>,
-    R: TryFrom<Status>,
-{
-    type Error = ConversionError;
-
-    #[inline(always)]
-    fn try_into_val(self, env: &E) -> Result<Result<T, R>, Self::Error> {
-        <_ as TryFromVal<E, RawVal>>::try_from_val(env, self)
-    }
-}
-
-impl<E: Env, T, R> IntoVal<E, RawVal> for Result<T, R>
-where
-    T: IntoVal<E, RawVal>,
-    R: Into<Status>,
-{
-    #[inline(always)]
-    fn into_val(self, env: &E) -> RawVal {
-        match self {
-            Ok(t) => t.into_val(env),
-            Err(r) => {
-                let status: Status = r.into();
-                status.into_val(env)
-            }
-        }
-    }
-}
-
-impl<E: Env, T, R> IntoVal<E, RawVal> for &Result<T, R>
-where
-    for<'a> &'a T: IntoVal<E, RawVal>,
-    for<'a> &'a R: Into<Status>,
-{
-    #[inline(always)]
-    fn into_val(self, env: &E) -> RawVal {
-        match self {
-            Ok(t) => t.into_val(env),
-            Err(r) => {
-                let status: Status = r.into();
-                status.into_val(env)
-            }
+            // Do not collapse this Ok(Ok(x?)) into Ok(x); we want
+            // a failure during the inner convert_from to turn into
+            // an outermost Err, not an outermost Ok.
+            let converted: T = T::convert_from(e, t)?;
+            Ok(Ok(converted))
         }
     }
 }

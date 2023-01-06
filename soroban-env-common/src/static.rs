@@ -1,4 +1,4 @@
-use crate::{impl_wrapper_common, impl_wrapper_from, Env, RawVal, Tag};
+use crate::{impl_wrapper_common, RawVal, Tag};
 use core::cmp::{Eq, Ord, PartialEq, PartialOrd};
 use stellar_xdr::ScStatic;
 
@@ -10,8 +10,17 @@ pub struct Static(RawVal);
 
 impl_wrapper_common!(Static);
 
-impl_wrapper_from!((), Static);
-impl_wrapper_from!(bool, Static);
+impl From<()> for Static {
+    fn from(value: ()) -> Self {
+        Static(value.into())
+    }
+}
+
+impl From<bool> for Static {
+    fn from(value: bool) -> Self {
+        Static(value.into())
+    }
+}
 
 impl Eq for Static {}
 

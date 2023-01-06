@@ -1,4 +1,4 @@
-use soroban_env_common::{IntoVal, TryIntoVal};
+use soroban_env_common::{ConvertInto, IntoVal};
 
 use crate::{CheckedEnv, Host, HostError, RawVal};
 

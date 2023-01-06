@@ -16,7 +16,7 @@ use soroban_env_common::{
         ScHostFnErrorCode, ScHostObjErrorCode, ScHostStorageErrorCode, ScHostValErrorCode, ScMap,
         ScMapEntry, ScObject, ScStatusType, ScVal, ScVec, ThresholdIndexes,
     },
-    Convert, InvokerType, Status, TryFromVal, TryIntoVal, VmCaller, VmCallerCheckedEnv,
+    Convert, ConvertFrom, ConvertInto, InvokerType, Status, VmCaller, VmCallerCheckedEnv,
 };
 
 use crate::budget::{AsBudget, Budget, CostType};

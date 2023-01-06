@@ -42,7 +42,6 @@ mod checked_env;
 mod compare;
 mod convert;
 mod env;
-mod env_val;
 mod invoker;
 pub mod meta;
 mod object;
@@ -53,9 +52,8 @@ mod r#static;
 mod status;
 mod r#str;
 mod symbol;
-mod tuple;
+//mod tuple;
 mod unimplemented_env;
-mod val;
 mod vmcaller_checked_env;
 
 // Re-export the XDR definitions
@@ -63,14 +61,12 @@ pub use stellar_xdr as xdr;
 
 // RawVal and RawObj are the 64-bit transparent type.
 pub use raw_val::{ConversionError, RawVal, RawValConvertible, Tag};
-pub use val::Val;
 
 // RawVal and EnvObj couple raw types to environments.
 pub use checked_env::CheckedEnv;
 pub use compare::Compare;
-pub use convert::Convert;
+pub use convert::{ConvertFrom, ConvertInto, ConvertObject};
 pub use env::{call_macro_with_all_host_functions, Env, EnvBase};
-pub use env_val::{FromVal, IntoVal, TryFromVal, TryIntoVal};
 pub use unimplemented_env::UnimplementedEnv;
 pub use vmcaller_checked_env::{VmCaller, VmCallerCheckedEnv};
 

@@ -1,5 +1,6 @@
 use crate::{impl_wrapper_common, require, ConversionError, RawVal, Tag};
 use core::{
+    borrow::Borrow,
     cmp::Ordering,
     fmt::Debug,
     hash::{Hash, Hasher},
@@ -195,21 +196,21 @@ impl SymbolStr {
 
 impl Debug for SymbolStr {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        let s: &str = self.as_ref();
+        let s: &str = self.borrow();
         f.debug_tuple("SymbolStr").field(&s).finish()
     }
 }
 
-impl AsRef<[u8]> for SymbolStr {
-    fn as_ref(&self) -> &[u8] {
+impl Borrow<[u8]> for SymbolStr {
+    fn borrow(&self) -> &[u8] {
         let s: &[u8] = &self.0;
         &s[..self.len()]
     }
 }
 
-impl AsRef<str> for SymbolStr {
-    fn as_ref(&self) -> &str {
-        let s: &[u8] = self.as_ref();
+impl Borrow<str> for SymbolStr {
+    fn borrow(&self) -> &str {
+        let s: &[u8] = self.borrow();
         unsafe { str::from_utf8_unchecked(s) }
     }
 }
@@ -255,7 +256,7 @@ impl ToString for Symbol {
 #[cfg(feature = "std")]
 impl ToString for SymbolStr {
     fn to_string(&self) -> String {
-        let s: &str = self.as_ref();
+        let s: &str = self.borrow();
         s.to_string()
     }
 }
@@ -360,6 +361,8 @@ impl TryFrom<&Symbol> for ScVal {
 
 #[cfg(test)]
 mod test_without_string {
+    use core::borrow::Borrow;
+
     use super::{Symbol, SymbolStr};
 
     #[test]
@@ -367,7 +370,7 @@ mod test_without_string {
         let input = "stellar";
         let sym = Symbol::from_str(input);
         let sym_str = SymbolStr::from(sym);
-        let s: &str = sym_str.as_ref();
+        let s: &str = sym_str.borrow();
         assert_eq!(s, input);
     }
 
@@ -376,7 +379,7 @@ mod test_without_string {
         let input = "";
         let sym = Symbol::from_str(input);
         let sym_str = SymbolStr::from(sym);
-        let s: &str = sym_str.as_ref();
+        let s: &str = sym_str.borrow();
         assert_eq!(s, input);
     }
 
@@ -385,7 +388,7 @@ mod test_without_string {
         let input = "0123456789";
         let sym = Symbol::from_str(input);
         let sym_str = SymbolStr::from(sym);
-        let s: &str = sym_str.as_ref();
+        let s: &str = sym_str.borrow();
         assert_eq!(s, input);
     }
 

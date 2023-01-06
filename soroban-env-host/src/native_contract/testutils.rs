@@ -11,7 +11,7 @@ use soroban_env_common::{
     xdr::{AccountId, PublicKey, Uint256},
     CheckedEnv,
 };
-use soroban_env_common::{EnvBase, RawVal, Symbol, TryFromVal, TryIntoVal};
+use soroban_env_common::{ConvertFrom, ConvertInto, EnvBase, RawVal, Symbol};
 
 use crate::native_contract::base_types::{Bytes, BytesN};
 

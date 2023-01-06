@@ -18,7 +18,7 @@ use crate::native_contract::token::public_types::{Identifier, Metadata, Signatur
 use crate::{err, HostError};
 
 use soroban_env_common::xdr::Asset;
-use soroban_env_common::{CheckedEnv, Compare, EnvBase, Symbol, TryFromVal, TryIntoVal};
+use soroban_env_common::{CheckedEnv, Compare, ConvertFrom, ConvertInto, EnvBase, Symbol};
 use soroban_native_sdk_macros::contractimpl;
 
 use super::balance::{
