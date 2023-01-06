@@ -12,7 +12,7 @@ pub struct MeteredOrdMap<K, V, Ctx>
 where
     K: MeteredClone,
     V: MeteredClone,
-    Ctx: AsBudget + Compare<K, Error = HostError> + Compare<V, Error = HostError>,
+    Ctx: AsBudget + Compare<K, Error = HostError>,
 {
     pub(crate) map: Vec<(K, V)>,
     ctx: PhantomData<Ctx>,
@@ -22,7 +22,7 @@ impl<K, V, Ctx> Clone for MeteredOrdMap<K, V, Ctx>
 where
     K: MeteredClone,
     V: MeteredClone,
-    Ctx: AsBudget + Compare<K, Error = HostError> + Compare<V, Error = HostError>,
+    Ctx: AsBudget + Compare<K, Error = HostError>,
 {
     fn clone(&self) -> Self {
         Self {
@@ -36,7 +36,7 @@ impl<K, V, Ctx> MeteredOrdMap<K, V, Ctx>
 where
     K: MeteredClone,
     V: MeteredClone,
-    Ctx: AsBudget + Compare<K, Error = HostError> + Compare<V, Error = HostError>,
+    Ctx: AsBudget + Compare<K, Error = HostError>,
 {
     fn charge_new<B: AsBudget>(&self, size: usize, b: &B) -> Result<(), HostError> {
         b.as_budget().charge(CostType::MapNew, size as u64)
@@ -61,7 +61,7 @@ impl<K, V, Ctx> Default for MeteredOrdMap<K, V, Ctx>
 where
     K: MeteredClone,
     V: MeteredClone,
-    Ctx: AsBudget + Compare<K, Error = HostError> + Compare<V, Error = HostError>,
+    Ctx: AsBudget + Compare<K, Error = HostError>,
 {
     fn default() -> Self {
         Self {
@@ -81,7 +81,7 @@ impl<K, V, Ctx> MeteredOrdMap<K, V, Ctx>
 where
     K: MeteredClone,
     V: MeteredClone,
-    Ctx: AsBudget + Compare<K, Error = HostError> + Compare<V, Error = HostError>,
+    Ctx: AsBudget + Compare<K, Error = HostError>,
 {
     pub fn new(ctx: &Ctx) -> Result<Self, HostError> {
         ctx.as_budget().charge(CostType::MapNew, 1)?;
