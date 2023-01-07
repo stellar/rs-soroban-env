@@ -93,7 +93,7 @@ macro_rules! impl_wrapper_from {
                 Self(x.into())
             }
         }
-        impl<E: Env> $crate::TryFromVal<E, $tagname> for $fromty {
+        impl<E: Env> $crate::TryFromVal<$tagname, E> for $fromty {
             type Error = $crate::ConversionError;
             #[inline(always)]
             fn try_from_val(_env: &E, val: $tagname) -> Result<Self, Self::Error> {

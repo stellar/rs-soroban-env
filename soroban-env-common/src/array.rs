@@ -8,7 +8,7 @@ use crate::{
 // TODO: these conversions happen as RawVal, but they actually take and produce
 // Objects; consider making the signatures tighter.
 
-impl<E: Env, const N: usize> TryFromVal<E, RawVal> for [u8; N] {
+impl<E: Env, const N: usize> TryFromVal<RawVal, E> for [u8; N] {
     type Error = Status;
 
     fn try_from_val(env: &E, val: RawVal) -> Result<Self, Self::Error> {
@@ -27,14 +27,14 @@ impl<E: Env, const N: usize> TryFromVal<E, RawVal> for [u8; N] {
     }
 }
 
-impl<E: Env> TryFromVal<E, &[u8]> for RawVal {
+impl<E: Env> TryFromVal<&[u8], E> for RawVal {
     type Error = Status;
     fn try_from_val(env: &E, v: &[u8]) -> Result<Self, Self::Error> {
         Ok(env.bytes_new_from_slice(v)?.to_raw())
     }
 }
 
-impl<E: Env, const N: usize> TryFromVal<E, [u8; N]> for RawVal {
+impl<E: Env, const N: usize> TryFromVal<[u8; N], E> for RawVal {
     type Error = Status;
 
     fn try_from_val(env: &E, v: [u8; N]) -> Result<Self, Self::Error> {
@@ -43,7 +43,7 @@ impl<E: Env, const N: usize> TryFromVal<E, [u8; N]> for RawVal {
 }
 
 #[cfg(feature = "std")]
-impl<E: Env> TryFromVal<E, Vec<u8>> for RawVal {
+impl<E: Env> TryFromVal<Vec<u8>, E> for RawVal {
     type Error = Status;
 
     fn try_from_val(env: &E, v: Vec<u8>) -> Result<Self, Self::Error> {

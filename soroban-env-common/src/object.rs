@@ -52,7 +52,7 @@ impl Object {
     }
 }
 
-impl<E> TryFromVal<E, Object> for ScObject
+impl<E> TryFromVal<Object, E> for ScObject
 where
     E: Env + Convert<Object, ScObject>,
 {
@@ -62,7 +62,7 @@ where
     }
 }
 
-impl<'a, E> TryFromVal<E, &'a ScObject> for Object
+impl<'a, E> TryFromVal<&'a ScObject, E> for Object
 where
     E: Env + Convert<&'a ScObject, Object>,
 {
@@ -73,7 +73,7 @@ where
     }
 }
 
-impl<E> TryFromVal<E, ScObject> for Object
+impl<E> TryFromVal<ScObject, E> for Object
 where
     E: Env + Convert<ScObject, Object>,
 {
@@ -84,7 +84,7 @@ where
     }
 }
 
-impl<'a, E> TryFromVal<E, &'a ScVal> for Object
+impl<'a, E> TryFromVal<&'a ScVal, E> for Object
 where
     E: Env + Convert<&'a ScObject, Object>,
 {
@@ -100,7 +100,7 @@ where
     }
 }
 
-impl<E> TryFromVal<E, ScVal> for Object
+impl<E> TryFromVal<ScVal, E> for Object
 where
     E: Env + Convert<ScObject, Object>,
 {

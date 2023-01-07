@@ -1,10 +1,10 @@
 use crate::{Env, FromVal, IntoVal, RawVal, TryFromVal, TryIntoVal};
 
-impl<E: Env, T> TryFromVal<E, RawVal> for Option<T>
+impl<E: Env, T> TryFromVal<RawVal, E> for Option<T>
 where
-    T: TryFromVal<E, RawVal>,
+    T: TryFromVal<RawVal, E>,
 {
-    type Error = <RawVal as TryIntoVal<E, T>>::Error;
+    type Error = <RawVal as TryIntoVal<T, E>>::Error;
 
     fn try_from_val(env: &E, val: RawVal) -> Result<Self, Self::Error> {
         if val.is_void() {
@@ -15,9 +15,9 @@ where
     }
 }
 
-impl<E: Env, T> TryFromVal<E, Option<T>> for RawVal
+impl<E: Env, T> TryFromVal<Option<T>, E> for RawVal
 where
-    T: TryIntoVal<E, RawVal>,
+    T: TryIntoVal<RawVal, E>,
 {
     type Error = T::Error;
 
@@ -29,9 +29,9 @@ where
     }
 }
 
-impl<E: Env, T> FromVal<E, RawVal> for Option<T>
+impl<E: Env, T> FromVal<RawVal, E> for Option<T>
 where
-    T: FromVal<E, RawVal>,
+    T: FromVal<RawVal, E>,
 {
     fn from_val(env: &E, v: RawVal) -> Self {
         if v.is_void() {
@@ -42,9 +42,9 @@ where
     }
 }
 
-impl<E: Env, T> FromVal<E, Option<T>> for RawVal
+impl<E: Env, T> FromVal<Option<T>, E> for RawVal
 where
-    T: IntoVal<E, RawVal>,
+    T: IntoVal<RawVal, E>,
 {
     fn from_val(env: &E, v: Option<T>) -> Self {
         match v {

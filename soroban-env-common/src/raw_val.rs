@@ -196,7 +196,7 @@ macro_rules! declare_tryfrom {
                 }
             }
         }
-        impl<E: Env> FromVal<E, $T> for RawVal {
+        impl<E: Env> FromVal<$T, E> for RawVal {
             fn from_val(_env: &E, val: $T) -> RawVal {
                 val.into()
             }
@@ -215,7 +215,7 @@ macro_rules! declare_tryfrom {
         // between fallible and infallible conversions, or types that need or
         // don't need environment help for conversions. So we add TryFromVal
         // impls for both directions.
-        impl<E: Env> TryFromVal<E, RawVal> for $T {
+        impl<E: Env> TryFromVal<RawVal, E> for $T {
             type Error = ConversionError;
             #[inline(always)]
             fn try_from_val(_env: &E, v: RawVal) -> Result<Self, Self::Error> {
@@ -223,7 +223,7 @@ macro_rules! declare_tryfrom {
             }
         }
 
-        impl<E: Env> TryFromVal<E, $T> for RawVal {
+        impl<E: Env> TryFromVal<$T, E> for RawVal {
             type Error = ConversionError;
             #[inline(always)]
             fn try_from_val(_env: &E, v: $T) -> Result<Self, Self::Error> {

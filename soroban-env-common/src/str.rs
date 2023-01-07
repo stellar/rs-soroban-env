@@ -10,7 +10,7 @@ use crate::{Object, RawValConvertible, TryIntoVal};
 // Objects; consider making the signatures tighter.
 
 #[cfg(feature = "std")]
-impl<E: Env> TryFromVal<E, RawVal> for String {
+impl<E: Env> TryFromVal<RawVal, E> for String {
     type Error = ConversionError;
 
     #[inline(always)]
@@ -28,7 +28,7 @@ impl<E: Env> TryFromVal<E, RawVal> for String {
     }
 }
 
-impl<E: Env> TryFromVal<E, &str> for RawVal {
+impl<E: Env> TryFromVal<&str, E> for RawVal {
     type Error = ConversionError;
 
     fn try_from_val(env: &E, v: &str) -> Result<Self, Self::Error> {
@@ -40,7 +40,7 @@ impl<E: Env> TryFromVal<E, &str> for RawVal {
 }
 
 #[cfg(feature = "std")]
-impl<E: Env> TryFromVal<E, String> for RawVal {
+impl<E: Env> TryFromVal<String, E> for RawVal {
     type Error = ConversionError;
 
     fn try_from_val(env: &E, v: String) -> Result<Self, Self::Error> {
@@ -49,7 +49,7 @@ impl<E: Env> TryFromVal<E, String> for RawVal {
 }
 
 #[cfg(feature = "std")]
-impl<E: Env> TryFromVal<E, &String> for RawVal {
+impl<E: Env> TryFromVal<&String, E> for RawVal {
     type Error = ConversionError;
 
     fn try_from_val(env: &E, v: &String) -> Result<Self, Self::Error> {

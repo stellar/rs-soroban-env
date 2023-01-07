@@ -1,8 +1,8 @@
 use crate::{ConversionError, Env, FromVal, IntoVal, RawVal, Status, TryFromVal};
 
-impl<E: Env, T, R> TryFromVal<E, RawVal> for Result<T, R>
+impl<E: Env, T, R> TryFromVal<RawVal, E> for Result<T, R>
 where
-    T: TryFromVal<E, RawVal, Error = ConversionError>,
+    T: TryFromVal<RawVal, E, Error = ConversionError>,
     R: TryFrom<Status>,
 {
     type Error = ConversionError;
@@ -17,9 +17,9 @@ where
     }
 }
 
-impl<E: Env, T, R> FromVal<E, Result<T, R>> for RawVal
+impl<E: Env, T, R> FromVal<Result<T, R>, E> for RawVal
 where
-    T: IntoVal<E, RawVal>,
+    T: IntoVal<RawVal, E>,
     R: Into<Status>,
 {
     fn from_val(env: &E, v: Result<T, R>) -> Self {
@@ -33,9 +33,9 @@ where
     }
 }
 
-impl<E: Env, T, R> FromVal<E, &Result<T, R>> for RawVal
+impl<E: Env, T, R> FromVal<&Result<T, R>, E> for RawVal
 where
-    for<'a> &'a T: IntoVal<E, RawVal>,
+    for<'a> &'a T: IntoVal<RawVal, E>,
     for<'a> &'a R: Into<Status>,
 {
     fn from_val(env: &E, v: &Result<T, R>) -> Self {

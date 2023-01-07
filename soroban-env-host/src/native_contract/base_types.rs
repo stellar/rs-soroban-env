@@ -20,7 +20,7 @@ impl Compare<Bytes> for Host {
     }
 }
 
-impl TryFromVal<Host, Object> for Bytes {
+impl TryFromVal<Object, Host> for Bytes {
     type Error = HostError;
 
     fn try_from_val(env: &Host, val: Object) -> Result<Self, Self::Error> {
@@ -35,15 +35,15 @@ impl TryFromVal<Host, Object> for Bytes {
     }
 }
 
-impl TryFromVal<Host, RawVal> for Bytes {
+impl TryFromVal<RawVal, Host> for Bytes {
     type Error = HostError;
 
     fn try_from_val(env: &Host, val: RawVal) -> Result<Self, Self::Error> {
-        <_ as TryFromVal<_, Object>>::try_from_val(env, val.try_into()?)
+        <_ as TryFromVal<Object, _>>::try_from_val(env, val.try_into()?)
     }
 }
 
-impl TryFromVal<Host, Bytes> for RawVal {
+impl TryFromVal<Bytes, Host> for RawVal {
     type Error = HostError;
 
     fn try_from_val(_env: &Host, val: Bytes) -> Result<RawVal, Self::Error> {
@@ -101,7 +101,7 @@ pub struct BytesN<const N: usize> {
     object: Object,
 }
 
-impl<const N: usize> TryFromVal<Host, Object> for BytesN<N> {
+impl<const N: usize> TryFromVal<Object, Host> for BytesN<N> {
     type Error = HostError;
 
     fn try_from_val(env: &Host, val: Object) -> Result<Self, Self::Error> {
@@ -128,15 +128,15 @@ impl<const N: usize> Compare<BytesN<N>> for Host {
     }
 }
 
-impl<const N: usize> TryFromVal<Host, RawVal> for BytesN<N> {
+impl<const N: usize> TryFromVal<RawVal, Host> for BytesN<N> {
     type Error = HostError;
 
     fn try_from_val(env: &Host, val: RawVal) -> Result<Self, Self::Error> {
-        <_ as TryFromVal<_, Object>>::try_from_val(env, val.try_into()?)
+        <_ as TryFromVal<Object, _>>::try_from_val(env, val.try_into()?)
     }
 }
 
-impl<const N: usize> TryFromVal<Host, BytesN<N>> for RawVal {
+impl<const N: usize> TryFromVal<BytesN<N>, Host> for RawVal {
     type Error = HostError;
 
     fn try_from_val(_env: &Host, val: BytesN<N>) -> Result<RawVal, Self::Error> {
@@ -187,7 +187,7 @@ pub struct Map {
     object: Object,
 }
 
-impl TryFromVal<Host, Object> for Map {
+impl TryFromVal<Object, Host> for Map {
     type Error = HostError;
 
     fn try_from_val(env: &Host, val: Object) -> Result<Self, Self::Error> {
@@ -210,15 +210,15 @@ impl Compare<Map> for Host {
     }
 }
 
-impl TryFromVal<Host, RawVal> for Map {
+impl TryFromVal<RawVal, Host> for Map {
     type Error = HostError;
 
     fn try_from_val(env: &Host, val: RawVal) -> Result<Self, Self::Error> {
-        <_ as TryFromVal<_, Object>>::try_from_val(env, val.try_into()?)
+        <_ as TryFromVal<Object, _>>::try_from_val(env, val.try_into()?)
     }
 }
 
-impl TryFromVal<Host, Map> for RawVal {
+impl TryFromVal<Map, Host> for RawVal {
     type Error = HostError;
 
     fn try_from_val(_env: &Host, val: Map) -> Result<RawVal, Self::Error> {
@@ -241,27 +241,27 @@ impl Map {
         })
     }
 
-    pub fn get<K: TryIntoVal<Host, RawVal>, V: TryFromVal<Host, RawVal>>(
+    pub fn get<K: TryIntoVal<RawVal, Host>, V: TryFromVal<RawVal, Host>>(
         &self,
         k: K,
     ) -> Result<V, HostError>
     where
-        HostError: From<<K as TryIntoVal<Host, RawVal>>::Error>,
-        HostError: From<<V as TryFromVal<Host, RawVal>>::Error>,
+        HostError: From<<K as TryIntoVal<RawVal, Host>>::Error>,
+        HostError: From<<V as TryFromVal<RawVal, Host>>::Error>,
     {
         let k_rv = k.try_into_val(&self.host)?;
         let v_rv = self.host.map_get(self.object, k_rv)?;
         Ok(V::try_from_val(&self.host, v_rv)?)
     }
 
-    pub fn set<K: TryIntoVal<Host, RawVal>, V: TryIntoVal<Host, RawVal>>(
+    pub fn set<K: TryIntoVal<RawVal, Host>, V: TryIntoVal<RawVal, Host>>(
         &mut self,
         k: K,
         v: V,
     ) -> Result<(), HostError>
     where
-        HostError: From<<K as TryIntoVal<Host, RawVal>>::Error>,
-        HostError: From<<V as TryIntoVal<Host, RawVal>>::Error>,
+        HostError: From<<K as TryIntoVal<RawVal, Host>>::Error>,
+        HostError: From<<V as TryIntoVal<RawVal, Host>>::Error>,
     {
         let k_rv = k.try_into_val(&self.host)?;
         let v_rv = v.try_into_val(&self.host)?;
@@ -284,7 +284,7 @@ impl Compare<Vec> for Host {
     }
 }
 
-impl TryFromVal<Host, Object> for Vec {
+impl TryFromVal<Object, Host> for Vec {
     type Error = HostError;
 
     fn try_from_val(env: &Host, val: Object) -> Result<Self, Self::Error> {
@@ -299,15 +299,15 @@ impl TryFromVal<Host, Object> for Vec {
     }
 }
 
-impl TryFromVal<Host, RawVal> for Vec {
+impl TryFromVal<RawVal, Host> for Vec {
     type Error = HostError;
 
     fn try_from_val(env: &Host, val: RawVal) -> Result<Self, Self::Error> {
-        <_ as TryFromVal<_, Object>>::try_from_val(env, val.try_into()?)
+        <_ as TryFromVal<Object, _>>::try_from_val(env, val.try_into()?)
     }
 }
 
-impl TryFromVal<Host, Vec> for RawVal {
+impl TryFromVal<Vec, Host> for RawVal {
     type Error = HostError;
 
     fn try_from_val(_env: &Host, val: Vec) -> Result<RawVal, Self::Error> {
@@ -315,7 +315,7 @@ impl TryFromVal<Host, Vec> for RawVal {
     }
 }
 
-impl TryFromVal<Host, Vec> for Object {
+impl TryFromVal<Vec, Host> for Object {
     type Error = HostError;
 
     fn try_from_val(_env: &Host, val: Vec) -> Result<Object, Self::Error> {
@@ -338,9 +338,9 @@ impl Vec {
         })
     }
 
-    pub fn get<T: TryFromVal<Host, RawVal>>(&self, i: u32) -> Result<T, HostError>
+    pub fn get<T: TryFromVal<RawVal, Host>>(&self, i: u32) -> Result<T, HostError>
     where
-        HostError: From<<T as TryFromVal<Host, RawVal>>::Error>,
+        HostError: From<<T as TryFromVal<RawVal, Host>>::Error>,
     {
         let rv = self.host.vec_get(self.object, i.into())?;
         Ok(T::try_from_val(&self.host, rv)?)
@@ -351,9 +351,9 @@ impl Vec {
         Ok(u32::try_from(rv)?)
     }
 
-    pub fn push<T: TryIntoVal<Host, RawVal>>(&mut self, x: T) -> Result<(), HostError>
+    pub fn push<T: TryIntoVal<RawVal, Host>>(&mut self, x: T) -> Result<(), HostError>
     where
-        HostError: From<<T as TryIntoVal<Host, RawVal>>::Error>,
+        HostError: From<<T as TryIntoVal<RawVal, Host>>::Error>,
     {
         let rv = x.try_into_val(&self.host)?;
         self.push_raw(rv)
@@ -365,7 +365,7 @@ impl Vec {
     }
 }
 
-impl TryFromVal<Host, Object> for AccountId {
+impl TryFromVal<Object, Host> for AccountId {
     type Error = HostError;
 
     fn try_from_val(env: &Host, val: Object) -> Result<Self, Self::Error> {
@@ -373,15 +373,15 @@ impl TryFromVal<Host, Object> for AccountId {
     }
 }
 
-impl TryFromVal<Host, RawVal> for AccountId {
+impl TryFromVal<RawVal, Host> for AccountId {
     type Error = HostError;
 
     fn try_from_val(env: &Host, val: RawVal) -> Result<Self, Self::Error> {
-        <_ as TryFromVal<_, Object>>::try_from_val(env, val.try_into()?)
+        <_ as TryFromVal<Object, _>>::try_from_val(env, val.try_into()?)
     }
 }
 
-impl TryIntoVal<Host, RawVal> for AccountId {
+impl TryIntoVal<RawVal, Host> for AccountId {
     type Error = HostError;
 
     fn try_into_val(self, env: &Host) -> Result<RawVal, Self::Error> {

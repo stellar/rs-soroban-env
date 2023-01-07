@@ -10,9 +10,9 @@ macro_rules! impl_for_tuple {
 
         // Conversions to and from RawVal.
 
-        impl<E: Env, $($typ),*> TryFromVal<E, RawVal> for ($($typ,)*)
+        impl<E: Env, $($typ),*> TryFromVal<RawVal, E> for ($($typ,)*)
         where
-            $($typ: TryFromVal<E, RawVal>),*
+            $($typ: TryFromVal<RawVal, E>),*
         {
             type Error = ConversionError;
 
@@ -35,9 +35,9 @@ macro_rules! impl_for_tuple {
             }
         }
 
-        impl<E: Env, $($typ),*> FromVal<E, ($($typ,)*)> for RawVal
+        impl<E: Env, $($typ),*> FromVal<($($typ,)*), E> for RawVal
         where
-            $($typ: IntoVal<E, RawVal>),*
+            $($typ: IntoVal<RawVal, E>),*
         {
             fn from_val(env: &E, v: ($($typ,)*)) -> Self {
                 let env = env.clone();
@@ -48,9 +48,9 @@ macro_rules! impl_for_tuple {
         }
 
         // Conversions to and from Array of RawVal.
-        impl<E: Env, $($typ),*, const N: usize> TryFromVal<E, [RawVal; N]> for ($($typ,)*)
+        impl<E: Env, $($typ),*, const N: usize> TryFromVal<[RawVal; N], E> for ($($typ,)*)
         where
-            $($typ: TryFromVal<E, RawVal>),*
+            $($typ: TryFromVal<RawVal, E>),*
         {
             type Error = ConversionError;
 
@@ -63,9 +63,9 @@ macro_rules! impl_for_tuple {
             }
         }
 
-        impl<E: Env, $($typ),*, const N: usize> TryFromVal<E, ($($typ,)*)> for [RawVal; N]
+        impl<E: Env, $($typ),*, const N: usize> TryFromVal<($($typ,)*), E> for [RawVal; N]
         where
-            $($typ: TryIntoVal<E, RawVal>),*
+            $($typ: TryIntoVal<RawVal, E>),*
         {
             type Error = ConversionError;
 
@@ -76,9 +76,9 @@ macro_rules! impl_for_tuple {
             }
         }
 
-        impl<E: Env, $($typ),*, const N: usize> FromVal<E, ($($typ,)*)> for [RawVal; N]
+        impl<E: Env, $($typ),*, const N: usize> FromVal<($($typ,)*), E> for [RawVal; N]
         where
-            $($typ: IntoVal<E, RawVal>),*
+            $($typ: IntoVal<RawVal, E>),*
         {
             fn from_val(env: &E, v: ($($typ,)*)) -> [RawVal; N] {
                 let mut arr = [RawVal::VOID; N];
@@ -108,7 +108,7 @@ impl_for_tuple! { 12_u32 12_usize T0 0 T1 1 T2 2 T3 3 T4 4 T5 5 T6 6 T7 7 T8 8 T
 // conversions to and from arrays. Note that unit typles convert to
 // RawVal::VOID, see raw_val.rs for those conversions.
 
-impl<E: Env> TryFromVal<E, [RawVal; 0]> for () {
+impl<E: Env> TryFromVal<[RawVal; 0], E> for () {
     type Error = ConversionError;
 
     fn try_from_val(_env: &E, _val: [RawVal; 0]) -> Result<Self, Self::Error> {
@@ -116,7 +116,7 @@ impl<E: Env> TryFromVal<E, [RawVal; 0]> for () {
     }
 }
 
-impl<E: Env> TryFromVal<E, ()> for [RawVal; 0] {
+impl<E: Env> TryFromVal<(), E> for [RawVal; 0] {
     type Error = ConversionError;
 
     fn try_from_val(_env: &E, _val: ()) -> Result<Self, Self::Error> {
@@ -124,13 +124,13 @@ impl<E: Env> TryFromVal<E, ()> for [RawVal; 0] {
     }
 }
 
-impl<E: Env> FromVal<E, ()> for [RawVal; 0] {
+impl<E: Env> FromVal<(), E> for [RawVal; 0] {
     fn from_val(_env: &E, _v: ()) -> [RawVal; 0] {
         [RawVal::VOID; 0]
     }
 }
 
-impl<E: Env> FromVal<E, [RawVal; 0]> for () {
+impl<E: Env> FromVal<[RawVal; 0], E> for () {
     fn from_val(_env: &E, _v: [RawVal; 0]) -> () {
         ()
     }

@@ -12,11 +12,11 @@ use super::{
     Env,
 };
 
-pub trait FromVal<E: Env, V>: Sized {
+pub trait FromVal<V, E: Env>: Sized {
     fn from_val(env: &E, v: V) -> Self;
 }
 
-pub trait TryFromVal<E: Env, V>: Sized {
+pub trait TryFromVal<V, E: Env>: Sized {
     type Error;
     fn try_from_val(env: &E, v: V) -> Result<Self, Self::Error>;
 }
@@ -24,13 +24,13 @@ pub trait TryFromVal<E: Env, V>: Sized {
 /// As with the design in the Rust stdlib's Into type, the IntoVal
 /// trait is defined as a convenience form with a blanket impl that
 /// calls into the corresponding FromVal impl.
-pub trait IntoVal<E: Env, V>: Sized {
+pub trait IntoVal<V, E: Env>: Sized {
     fn into_val(self, env: &E) -> V;
 }
 
-impl<E: Env, T, F> IntoVal<E, T> for F
+impl<T, F, E: Env> IntoVal<T, E> for F
 where
-    T: FromVal<E, F>,
+    T: FromVal<F, E>,
 {
     fn into_val(self, env: &E) -> T {
         T::from_val(env, self)
@@ -40,14 +40,14 @@ where
 /// As with the design in the Rust stdlib's Into type, the TryIntoVal
 /// trait is defined as a convenience form with a blanket impl that
 /// calls into the corresponding TryFromVal impl.
-pub trait TryIntoVal<E: Env, V>: Sized {
+pub trait TryIntoVal<V, E: Env>: Sized {
     type Error;
     fn try_into_val(self, env: &E) -> Result<V, Self::Error>;
 }
 
-impl<E: Env, T, F> TryIntoVal<E, T> for F
+impl<T, F, E: Env> TryIntoVal<T, E> for F
 where
-    T: TryFromVal<E, F>,
+    T: TryFromVal<F, E>,
 {
     type Error = T::Error;
 
@@ -65,10 +65,10 @@ where
 // considered as colliding with all other blankets. Blankets are apparently
 // considered for collision against one another but not concrete impls. The
 // orphan rules are subtle.
-/*
-impl<E:Env, T, F> TryFromVal<E, F> for T
+
+/* impl<T, F, E:Env> TryFromVal<F, E> for T
 where
-    F: IntoVal<E, T>
+    F: IntoVal<T, E>
 {
     type Error = Infallible;
 
@@ -76,13 +76,13 @@ where
         Ok(F::into_val(v, env))
     }
 }
-*/
+ */
 
 // Similarly, we'd like to have that an environment-free `F: Into<T>` implies
-// `T: FromVal<E, F>` that ignores its environment, but this will collide with
+// `T: FromVal<F, E>` that ignores its environment, but this will collide with
 // all other generic FromVal impls.
 /*
-impl<E:Env, T, F> FromVal<E, F> for T
+impl<E:Env, T, F> FromVal<F, E> for T
 where
     F: Into<T>
 {
@@ -93,10 +93,10 @@ where
 */
 
 // Similarly, we'd like to have that an environment-free `F: TryInto<T>`
-// implies `T: TryFromVal<E, F>` that ignores its environment, but this
+// implies `T: TryFromVal<F, E>` that ignores its environment, but this
 // will collide with all other generic TryFromVal impls.
 /*
-impl<E:Env, T, F> TryFromVal<E, F> for T
+impl<E:Env, T, F> TryFromVal<F, E> for T
 where
     F: TryInto<T>
 {
@@ -118,7 +118,7 @@ pub(crate) fn log_err_convert<T>(env: &impl Env, val: &impl AsRef<RawVal>) {
     );
 }
 
-impl<E: Env> TryFromVal<E, RawVal> for i64 {
+impl<E: Env> TryFromVal<RawVal, E> for i64 {
     type Error = ConversionError;
 
     fn try_from_val(env: &E, val: RawVal) -> Result<Self, Self::Error> {
@@ -135,13 +135,13 @@ impl<E: Env> TryFromVal<E, RawVal> for i64 {
 }
 // This is only required for the UDT code to call, users should
 // call FromVal since it's not fallible.
-impl<E: Env> TryFromVal<E, i64> for RawVal {
+impl<E: Env> TryFromVal<i64, E> for RawVal {
     type Error = ConversionError;
     fn try_from_val(env: &E, v: i64) -> Result<Self, Self::Error> {
         Ok(v.into_val(env))
     }
 }
-impl<E: Env> FromVal<E, i64> for RawVal {
+impl<E: Env> FromVal<i64, E> for RawVal {
     fn from_val(env: &E, v: i64) -> Self {
         if v >= 0 {
             unsafe { RawVal::unchecked_from_u63(v) }
@@ -151,7 +151,7 @@ impl<E: Env> FromVal<E, i64> for RawVal {
     }
 }
 
-impl<E: Env> TryFromVal<E, RawVal> for u64 {
+impl<E: Env> TryFromVal<RawVal, E> for u64 {
     type Error = ConversionError;
 
     fn try_from_val(env: &E, val: RawVal) -> Result<Self, Self::Error> {
@@ -165,7 +165,7 @@ impl<E: Env> TryFromVal<E, RawVal> for u64 {
     }
 }
 
-impl<E: Env> FromVal<E, u64> for RawVal {
+impl<E: Env> FromVal<u64, E> for RawVal {
     fn from_val(env: &E, v: u64) -> Self {
         env.obj_from_u64(v).to_raw()
     }
@@ -173,19 +173,19 @@ impl<E: Env> FromVal<E, u64> for RawVal {
 
 // Innermost conversions: infallible {ui}128 -> Object and
 // fallible Object -> {ui}128
-impl<E: Env> FromVal<E, u128> for Object {
+impl<E: Env> FromVal<u128, E> for Object {
     fn from_val(env: &E, v: u128) -> Self {
         env.obj_from_u128_pieces(v as u64, (v >> 64) as u64)
     }
 }
 
-impl<E: Env> FromVal<E, i128> for Object {
+impl<E: Env> FromVal<i128, E> for Object {
     fn from_val(env: &E, v: i128) -> Self {
         env.obj_from_i128_pieces(v as u64, (v as u128 >> 64) as u64)
     }
 }
 
-impl<E: Env> TryFromVal<E, Object> for u128 {
+impl<E: Env> TryFromVal<Object, E> for u128 {
     type Error = ConversionError;
 
     fn try_from_val(env: &E, v: Object) -> Result<Self, Self::Error> {
@@ -196,7 +196,7 @@ impl<E: Env> TryFromVal<E, Object> for u128 {
     }
 }
 
-impl<E: Env> TryFromVal<E, Object> for i128 {
+impl<E: Env> TryFromVal<Object, E> for i128 {
     type Error = ConversionError;
 
     fn try_from_val(env: &E, v: Object) -> Result<Self, Self::Error> {
@@ -209,7 +209,7 @@ impl<E: Env> TryFromVal<E, Object> for i128 {
 
 macro_rules! decl_rawval_conversions_via_object {
     ($T:ty) => {
-        impl<E: Env> TryFromVal<E, RawVal> for $T {
+        impl<E: Env> TryFromVal<RawVal, E> for $T {
             type Error = ConversionError;
 
             fn try_from_val(env: &E, val: RawVal) -> Result<Self, Self::Error> {
@@ -219,14 +219,14 @@ macro_rules! decl_rawval_conversions_via_object {
         }
         // This is only required for the UDT code to call, users should
         // call FromVal since it's not fallible.
-        impl<E: Env> TryFromVal<E, $T> for RawVal {
+        impl<E: Env> TryFromVal<$T, E> for RawVal {
             type Error = ConversionError;
             fn try_from_val(env: &E, v: $T) -> Result<Self, Self::Error> {
                 let ob: Object = v.into_val(env);
                 Ok(ob.to_raw())
             }
         }
-        impl<E: Env> FromVal<E, $T> for RawVal {
+        impl<E: Env> FromVal<$T, E> for RawVal {
             fn from_val(env: &E, v: $T) -> Self {
                 let ob: Object = v.into_val(env);
                 ob.to_raw()
@@ -243,9 +243,9 @@ decl_rawval_conversions_via_object!(u128);
 decl_rawval_conversions_via_object!(i128);
 
 #[cfg(feature = "std")]
-impl<E: Env> TryFromVal<E, RawVal> for ScVal
+impl<E: Env> TryFromVal<RawVal, E> for ScVal
 where
-    ScObject: TryFromVal<E, Object>,
+    ScObject: TryFromVal<Object, E>,
 {
     type Error = ConversionError;
 
@@ -300,9 +300,9 @@ where
 }
 
 #[cfg(feature = "std")]
-impl<E: Env> TryFromVal<E, &ScVal> for RawVal
+impl<E: Env> TryFromVal<&ScVal, E> for RawVal
 where
-    for<'a> &'a ScObject: TryIntoVal<E, Object>,
+    for<'a> &'a ScObject: TryIntoVal<Object, E>,
 {
     type Error = ConversionError;
 
@@ -336,9 +336,9 @@ where
     }
 }
 #[cfg(feature = "std")]
-impl<E: Env> TryFromVal<E, ScVal> for RawVal
+impl<E: Env> TryFromVal<ScVal, E> for RawVal
 where
-    for<'a> &'a ScObject: TryIntoVal<E, Object>,
+    for<'a> &'a ScObject: TryIntoVal<Object, E>,
 {
     type Error = ConversionError;
 
