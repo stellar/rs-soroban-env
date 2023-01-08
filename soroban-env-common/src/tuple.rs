@@ -1,8 +1,8 @@
 use stellar_xdr::ScObjectType;
 
 use crate::{
-    ConversionError, Env, FromVal, IntoVal, Object, RawVal, RawValConvertible, TryFromVal,
-    TryIntoVal,
+    ConversionError, Env, FromVal, IntoVal, Object, RawVal, RawValConvertible, ConvertFrom,
+    ConvertInto,
 };
 
 macro_rules! impl_for_tuple {
@@ -10,9 +10,9 @@ macro_rules! impl_for_tuple {
 
         // Conversions to and from RawVal.
 
-        impl<E: Env, $($typ),*> TryFromVal<RawVal, E> for ($($typ,)*)
+        impl<E: Env, $($typ),*> ConvertFrom<RawVal, E> for ($($typ,)*)
         where
-            $($typ: TryFromVal<RawVal, E>),*
+            $($typ: ConvertFrom<RawVal, E>),*
         {
             type Error = ConversionError;
 
@@ -48,9 +48,9 @@ macro_rules! impl_for_tuple {
         }
 
         // Conversions to and from Array of RawVal.
-        impl<E: Env, $($typ),*, const N: usize> TryFromVal<[RawVal; N], E> for ($($typ,)*)
+        impl<E: Env, $($typ),*, const N: usize> ConvertFrom<[RawVal; N], E> for ($($typ,)*)
         where
-            $($typ: TryFromVal<RawVal, E>),*
+            $($typ: ConvertFrom<RawVal, E>),*
         {
             type Error = ConversionError;
 
@@ -63,9 +63,9 @@ macro_rules! impl_for_tuple {
             }
         }
 
-        impl<E: Env, $($typ),*, const N: usize> TryFromVal<($($typ,)*), E> for [RawVal; N]
+        impl<E: Env, $($typ),*, const N: usize> ConvertFrom<($($typ,)*), E> for [RawVal; N]
         where
-            $($typ: TryIntoVal<RawVal, E>),*
+            $($typ: ConvertInto<RawVal, E>),*
         {
             type Error = ConversionError;
 
@@ -108,7 +108,7 @@ impl_for_tuple! { 12_u32 12_usize T0 0 T1 1 T2 2 T3 3 T4 4 T5 5 T6 6 T7 7 T8 8 T
 // conversions to and from arrays. Note that unit typles convert to
 // RawVal::VOID, see raw_val.rs for those conversions.
 
-impl<E: Env> TryFromVal<[RawVal; 0], E> for () {
+impl<E: Env> ConvertFrom<[RawVal; 0], E> for () {
     type Error = ConversionError;
 
     fn try_from_val(_env: &E, _val: [RawVal; 0]) -> Result<Self, Self::Error> {
@@ -116,7 +116,7 @@ impl<E: Env> TryFromVal<[RawVal; 0], E> for () {
     }
 }
 
-impl<E: Env> TryFromVal<(), E> for [RawVal; 0] {
+impl<E: Env> ConvertFrom<(), E> for [RawVal; 0] {
     type Error = ConversionError;
 
     fn try_from_val(_env: &E, _val: ()) -> Result<Self, Self::Error> {

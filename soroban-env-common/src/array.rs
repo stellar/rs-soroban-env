@@ -1,52 +1,50 @@
-use crate::xdr::ScHostValErrorCode;
+use core::borrow::Borrow;
+
+use crate::{ConvertFrom, convert::{EnvConvert, EnvConvertError}, EnvConvertObject};
 use stellar_xdr::ScObjectType;
 
 use crate::{
-    ConversionError, Env, Object, RawVal, RawValConvertible, Status, TryFromVal, TryIntoVal,
+    ConversionError, Object, RawVal, RawValConvertible
 };
 
-// TODO: these conversions happen as RawVal, but they actually take and produce
-// Objects; consider making the signatures tighter.
+// Dummy EnvConvertObject impl, the ConvertFrom methods here don't use it
+// since there are sufficient methods on EnvBase.
+impl<'a, E: EnvConvertError> EnvConvertObject<&'a [u8]> for E {}
 
-impl<E: Env, const N: usize> TryFromVal<RawVal, E> for [u8; N] {
-    type Error = Status;
+impl<'a> ConvertFrom<&'a [u8]> for RawVal {
+    fn convert_from<C:EnvConvert<&'a [u8],Self>>(t: impl Borrow<&'a [u8]>, c: &C) -> Result<Self, C::Error> {
+        Ok(c.bytes_new_from_slice(t.borrow())?.to_raw())
+    }
+}
 
-    fn try_from_val(env: &E, val: RawVal) -> Result<Self, Self::Error> {
-        if !Object::val_is_obj_type(val, ScObjectType::Bytes) {
-            return Err(ScHostValErrorCode::UnexpectedValType.into());
+impl <const N: usize> ConvertFrom<RawVal> for [u8;N] {
+    fn convert_from<C:EnvConvert<RawVal,Self>>(t: impl Borrow<RawVal>, c: &C) -> Result<Self, C::Error> {
+        if !Object::val_is_obj_type(t, ScObjectType::Bytes) {
+            return Err(c.cvt_err::<RawVal,[u8;N]>(t));
         }
-        let env = env.clone();
-        let bytes = unsafe { Object::unchecked_from_val(val) };
-        let len = unsafe { u32::unchecked_from_val(env.bytes_len(bytes)) };
+        let obj = unsafe { Object::unchecked_from_val(t) };
+        let len = unsafe { u32::unchecked_from_val(c.bytes_len(obj)) };
         if len as usize != N {
             return Err(ConversionError.into());
         }
         let mut arr = [0u8; N];
-        env.bytes_copy_to_slice(bytes, RawVal::U32_ZERO, &mut arr)?;
+        c.bytes_copy_to_slice(obj, RawVal::U32_ZERO, &mut arr)?;
         Ok(arr)
     }
 }
 
-impl<E: Env> TryFromVal<&[u8], E> for RawVal {
-    type Error = Status;
-    fn try_from_val(env: &E, v: &[u8]) -> Result<Self, Self::Error> {
-        Ok(env.bytes_new_from_slice(v)?.to_raw())
-    }
-}
-
-impl<E: Env, const N: usize> TryFromVal<[u8; N], E> for RawVal {
-    type Error = Status;
-
-    fn try_from_val(env: &E, v: [u8; N]) -> Result<Self, Self::Error> {
-        v.as_slice().try_into_val(env)
-    }
-}
 
 #[cfg(feature = "std")]
-impl<E: Env> TryFromVal<Vec<u8>, E> for RawVal {
-    type Error = Status;
-
-    fn try_from_val(env: &E, v: Vec<u8>) -> Result<Self, Self::Error> {
-        v.as_slice().try_into_val(env)
+impl ConvertFrom<RawVal> for Vec<u8> {
+    fn convert_from<C:EnvConvert<RawVal,Self>>(val: impl Borrow<RawVal>, c: &C) -> Result<Self, C::Error> {
+        if !Object::val_is_obj_type(val, ScObjectType::Bytes) {
+            return Err(c.cvt_err::<RawVal,Vec<u8>>(val));
+        }
+        let bytes = unsafe { Object::unchecked_from_val(val) };
+        let len = unsafe { u32::unchecked_from_val(c.bytes_len(bytes)) };
+        let mut v = vec![0; len];
+        c.bytes_copy_to_slice(bytes, RawVal::U32_ZERO, &mut v)?;
+        Ok(v)
+        
     }
 }

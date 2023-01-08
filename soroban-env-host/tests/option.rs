@@ -1,4 +1,4 @@
-use soroban_env_common::{xdr::ScStatic, IntoVal, RawVal, Static, TryIntoVal};
+use soroban_env_common::{xdr::ScStatic, IntoVal, RawVal, Static, ConvertInto};
 use soroban_env_host::Host;
 
 #[test]

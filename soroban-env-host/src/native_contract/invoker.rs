@@ -1,4 +1,4 @@
-use soroban_env_common::{xdr::AccountId, CheckedEnv, InvokerType, TryFromVal, TryIntoVal};
+use soroban_env_common::{xdr::AccountId, CheckedEnv, InvokerType, ConvertFrom, ConvertInto};
 use soroban_native_sdk_macros::contracttype;
 
 use crate::{Host, HostError};

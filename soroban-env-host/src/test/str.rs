@@ -1,6 +1,6 @@
 use std::convert::TryInto;
 
-use soroban_env_common::TryIntoVal;
+use soroban_env_common::ConvertInto;
 
 use crate::{CheckedEnv, Host, HostError, Object, RawVal};
 

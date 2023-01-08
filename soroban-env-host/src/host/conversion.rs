@@ -11,6 +11,7 @@ use crate::{
 };
 use ed25519_dalek::{PublicKey, Signature, SIGNATURE_LENGTH};
 use sha2::{Digest, Sha256};
+use soroban_env_common::EnvConvertObject;
 use soroban_env_common::xdr::AccountId;
 
 impl Host {
@@ -275,5 +276,50 @@ impl Host {
             .iter()
             .map(|scv| self.to_host_val(scv))
             .collect::<Result<Vec<RawVal>, HostError>>()
+    }
+}
+
+impl ConvertErrorHelper for Host {
+    type HelperError = HostError;
+}
+
+impl EnvConvertObject<RawVal, HostError> for Host {
+
+    fn to_object(&self, t: impl Borrow<RawVal>) -> Result<Object, HostError> {
+        Err(self.cvt_err::<RawVal,Object>(t))
+    }
+
+    fn from_object(&self, obj: Object) -> Result<RawVal, HostError> {
+        Err(self.cvt_err::<Object,RawVal>(obj))
+    }
+}
+
+impl EnvConvertObject<i128,HostError> for Host {
+
+    fn to_object(&self, t: impl Borrow<i128>) -> Result<Object, HostError> {
+        let i: i128 = *t.borrow();
+        self.obj_from_i128_pieces(i as u64, (i as u128 >> 64) as u64)
+    }
+
+    fn from_object(&self, obj: Object) -> Result<i128, HostError> {
+        let lo = self.obj_to_i128_lo64(obj)?;
+        let hi = self.obj_to_i128_hi64(obj)?;
+        let u: u128 = (lo as u128) | ((hi as u128) << 64);
+        Ok(u as i128)
+    }
+}
+
+impl EnvConvertObject<u128,HostError> for Host {
+
+    fn to_object(&self, t: impl Borrow<u128>) -> Result<Object, HostError> {
+        let i: u128 = *t.borrow();
+        self.obj_from_u128_pieces(i as u64, (i as u128 >> 64) as u64)
+    }
+
+    fn from_object(&self, obj: Object) -> Result<u128, HostError> {
+        let lo = self.obj_to_u128_lo64(obj)?;
+        let hi = self.obj_to_u128_hi64(obj)?;
+        let u: u128 = (lo as u128) | ((hi as u128) << 64);
+        Ok(u)
     }
 }

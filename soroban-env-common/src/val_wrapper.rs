@@ -2,17 +2,12 @@
 #[macro_export]
 macro_rules! impl_wrapper_common {
     ($tagname:ident) => {
-        // AsRef / AsMut to RawVal.
-        impl AsRef<RawVal> for $tagname {
-            fn as_ref(&self) -> &RawVal {
+        impl core::borrow::Borrow<RawVal> for $tagname {
+            fn borrow(&self) -> &RawVal {
                 &self.0
             }
         }
-        impl AsMut<RawVal> for $tagname {
-            fn as_mut(&mut self) -> &mut RawVal {
-                &mut self.0
-            }
-        }
+
         // Basic conversion support: wrapper to raw, and try-into helper.
         impl From<$tagname> for RawVal {
             fn from(b: $tagname) -> Self {
@@ -79,25 +74,6 @@ macro_rules! impl_wrapper_common {
             pub(crate) const unsafe fn from_major_minor(major: u32, minor: u32) -> $tagname {
                 let rv = RawVal::from_major_minor_and_tag(major, minor, Tag::$tagname);
                 Self(rv)
-            }
-        }
-    };
-}
-
-#[doc(hidden)]
-#[macro_export]
-macro_rules! impl_wrapper_from {
-    ($fromty:ty, $tagname:ident) => {
-        impl From<$fromty> for $tagname {
-            fn from(x: $fromty) -> Self {
-                Self(x.into())
-            }
-        }
-        impl<E: Env> $crate::TryFromVal<$tagname, E> for $fromty {
-            type Error = $crate::ConversionError;
-            #[inline(always)]
-            fn try_from_val(_env: &E, val: $tagname) -> Result<Self, Self::Error> {
-                Self::try_from(val.to_raw())
             }
         }
     };

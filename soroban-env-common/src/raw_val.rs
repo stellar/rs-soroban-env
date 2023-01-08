@@ -1,6 +1,6 @@
 use stellar_xdr::{ScStatic, ScStatus, ScStatusType};
 
-use super::{BitSet, Env, FromVal, Object, Static, Status, Symbol, TryFromVal};
+use super::{BitSet, Object, Status, Static, Symbol};
 use core::{convert::Infallible, fmt::Debug};
 
 extern crate static_assertions as sa;
@@ -106,18 +106,6 @@ impl Default for RawVal {
     }
 }
 
-impl AsRef<RawVal> for RawVal {
-    fn as_ref(&self) -> &RawVal {
-        self
-    }
-}
-
-impl AsMut<RawVal> for RawVal {
-    fn as_mut(&mut self) -> &mut RawVal {
-        self
-    }
-}
-
 // This is a 0-arg struct rather than an enum to ensure it completely compiles
 // away, the same way `()` would, while remaining a separate type to allow
 // conversion to a more-structured error code at a higher level.
@@ -143,7 +131,7 @@ impl From<stellar_xdr::Error> for ConversionError {
 /// [TryFrom] but with a different signature that enables generating slightly
 /// more efficient conversion code. An implementation of `TryFrom<RawVal>` is also
 /// provided for any type that implements `RawValConvertible`.
-pub trait RawValConvertible: Into<RawVal> + TryFrom<RawVal> {
+pub trait RawValConvertible: Clone + Into<RawVal> + TryFrom<RawVal> {
     /// Returns `true` if `v` is in a union state compatible with `Self`.
     fn is_val_type(v: RawVal) -> bool;
 
@@ -171,6 +159,18 @@ pub trait RawValConvertible: Into<RawVal> + TryFrom<RawVal> {
     }
 }
 
+/* impl<R:RawValConvertible> TryFrom<RawVal> for R {
+    type Error = ConversionError;
+    fn try_from(value: RawVal) -> Result<Self, Self::Error> {
+        if let Some(c) = <Self as RawValConvertible>::try_convert(value) {
+            Ok(c)
+        } else {
+            Err(ConversionError)
+        }
+    }
+}
+ */
+
 // Orphan rules mean we have to macro these, can't blanket-impl on V:Valtype.
 macro_rules! declare_tryfrom {
     ($T:ty) => {
@@ -194,40 +194,6 @@ macro_rules! declare_tryfrom {
                 } else {
                     Err(ConversionError)
                 }
-            }
-        }
-        impl<E: Env> FromVal<$T, E> for RawVal {
-            fn from_val(_env: &E, val: $T) -> RawVal {
-                val.into()
-            }
-        }
-
-        // Ideally we'd get these via blanket impls derived from TryFrom impls
-        // above and From impls below, but such blanket impls are themselves not
-        // allowed, as they conflict with other mostly concrete but
-        // generic-over-Env impls, so we have to do this manually (see
-        // commentary near trait TryFromVal).
-        //
-        // We could also just _not provide_ a TryFromVal for these types, since
-        // the user has a TryFrom they can call above and a From they can call
-        // below, but the "user" is not always human: there are macro-generated
-        // calls to try_from_val in UDT code that does not know the difference
-        // between fallible and infallible conversions, or types that need or
-        // don't need environment help for conversions. So we add TryFromVal
-        // impls for both directions.
-        impl<E: Env> TryFromVal<RawVal, E> for $T {
-            type Error = ConversionError;
-            #[inline(always)]
-            fn try_from_val(_env: &E, v: RawVal) -> Result<Self, Self::Error> {
-                Self::try_from(v)
-            }
-        }
-
-        impl<E: Env> TryFromVal<$T, E> for RawVal {
-            type Error = ConversionError;
-            #[inline(always)]
-            fn try_from_val(_env: &E, v: $T) -> Result<Self, Self::Error> {
-                Ok(Self::from(v))
             }
         }
     };

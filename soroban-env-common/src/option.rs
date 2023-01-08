@@ -1,55 +1,27 @@
-use crate::{Env, FromVal, IntoVal, RawVal, TryFromVal, TryIntoVal};
+use crate::{RawVal, ConvertFrom, convert::EnvConvert};
+use core::{fmt::Debug, borrow::Borrow};
 
-impl<E: Env, T> TryFromVal<RawVal, E> for Option<T>
-where
-    T: TryFromVal<RawVal, E>,
+/* impl<T> ConvertFrom<RawVal> for Option<T>
+where T: ConvertFrom<RawVal>
 {
-    type Error = <RawVal as TryIntoVal<T, E>>::Error;
-
-    fn try_from_val(env: &E, val: RawVal) -> Result<Self, Self::Error> {
+    fn convert_from<C:EnvConvert<RawVal,Self>>(val: impl Borrow<RawVal>, c: &C) -> Result<Self, C::Error> {
         if val.is_void() {
             Ok(None)
         } else {
-            Ok(Some(T::try_from_val(env, val)?))
+            Ok(Some(T::convert_from(val, c)?))
         }
     }
 }
-
-impl<E: Env, T> TryFromVal<Option<T>, E> for RawVal
+ */
+impl<T:Debug> ConvertFrom<Option<T>> for RawVal
 where
-    T: TryIntoVal<RawVal, E>,
+    RawVal: ConvertFrom<T>,
 {
-    type Error = T::Error;
-
-    fn try_from_val(env: &E, v: Option<T>) -> Result<Self, Self::Error> {
-        match v {
-            Some(e) => e.try_into_val(env),
+    fn convert_from<C:EnvConvert<Option<T>,Self>>(t: impl Borrow<Option<T>>, c: &C) -> Result<Self, C::Error> {
+        match t.borrow() {
+            Some(e) => RawVal::convert_from(e, c),
             None => Ok(RawVal::VOID),
         }
     }
 }
 
-impl<E: Env, T> FromVal<RawVal, E> for Option<T>
-where
-    T: FromVal<RawVal, E>,
-{
-    fn from_val(env: &E, v: RawVal) -> Self {
-        if v.is_void() {
-            None
-        } else {
-            Some(v.into_val(env))
-        }
-    }
-}
-
-impl<E: Env, T> FromVal<Option<T>, E> for RawVal
-where
-    T: IntoVal<RawVal, E>,
-{
-    fn from_val(env: &E, v: Option<T>) -> Self {
-        match v {
-            Some(t) => t.into_val(env),
-            None => RawVal::VOID,
-        }
-    }
-}

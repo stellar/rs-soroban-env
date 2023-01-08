@@ -7,7 +7,7 @@ use soroban_env_common::{
     xdr::{Asset, ContractId, CreateContractArgs, HostFunction, ScContractCode},
     CheckedEnv, RawVal,
 };
-use soroban_env_common::{Symbol, TryFromVal, TryIntoVal};
+use soroban_env_common::{Symbol, ConvertFrom, ConvertInto};
 
 use crate::native_contract::base_types::{Bytes, BytesN};
 

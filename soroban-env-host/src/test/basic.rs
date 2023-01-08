@@ -1,4 +1,4 @@
-use soroban_env_common::{RawVal, TryFromVal};
+use soroban_env_common::{RawVal, ConvertFrom};
 
 use crate::{
     host::HostError,

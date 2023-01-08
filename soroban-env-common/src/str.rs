@@ -1,58 +1,36 @@
-use crate::{ConversionError, Env, RawVal, TryFromVal};
+use core::borrow::Borrow;
+
+use crate::{ConversionError, Env, RawVal, EnvConvertObject, CheckedEnv, EnvBase, ConvertFrom, convert::{EnvConvert, EnvConvertError}};
 
 #[cfg(feature = "std")]
 use stellar_xdr::ScObjectType;
 
 #[cfg(feature = "std")]
-use crate::{Object, RawValConvertible, TryIntoVal};
+use crate::{Object, RawValConvertible};
 
-// TODO: these conversions happen as RawVal, but they actually take and produce
-// Objects; consider making the signatures tighter.
+// Dummy EnvConvertObject impl, the ConvertFrom methods here don't use it
+// since there are sufficient methods on EnvBase.
+impl<'a,E:EnvConvertError> EnvConvertObject<&'a str> for E {}
+
+impl<'a> ConvertFrom<&'a str> for RawVal {
+    fn convert_from<C:EnvConvert<&'a str,Self>>(t: impl Borrow<&'a str>, c: &C) -> Result<Self, C::Error> {
+        let bytes: &[u8] = t.borrow().as_bytes();
+        RawVal::convert_from(bytes, c)
+    }
+}
 
 #[cfg(feature = "std")]
-impl<E: Env> TryFromVal<RawVal, E> for String {
-    type Error = ConversionError;
-
-    #[inline(always)]
-    fn try_from_val(env: &E, val: RawVal) -> Result<Self, Self::Error> {
-        let obj: Object = val.try_into()?;
+impl ConvertFrom<RawVal> for String {
+    fn convert_from<C:EnvConvert<RawVal,Self>>(t: impl Borrow<RawVal>, c: &C) -> Result<Self, C::Error> {
+        let obj: Object = t.try_into()?;
         if obj.is_obj_type(ScObjectType::Bytes) {
-            let len = unsafe { <u32 as RawValConvertible>::unchecked_from_val(env.bytes_len(obj)) };
+            let len = unsafe { <u32 as RawValConvertible>::unchecked_from_val(c.bytes_len(obj)) };
             let mut vec = std::vec![0; len as usize];
-            env.bytes_copy_to_slice(obj, RawVal::U32_ZERO, &mut vec)
+            c.bytes_copy_to_slice(obj, RawVal::U32_ZERO, &mut vec)
                 .map_err(|_| ConversionError)?;
             String::from_utf8(vec).map_err(|_| ConversionError)
         } else {
             Err(ConversionError)
         }
-    }
-}
-
-impl<E: Env> TryFromVal<&str, E> for RawVal {
-    type Error = ConversionError;
-
-    fn try_from_val(env: &E, v: &str) -> Result<Self, Self::Error> {
-        Ok(env
-            .bytes_new_from_slice(v.as_bytes())
-            .map_err(|_| ConversionError)?
-            .to_raw())
-    }
-}
-
-#[cfg(feature = "std")]
-impl<E: Env> TryFromVal<String, E> for RawVal {
-    type Error = ConversionError;
-
-    fn try_from_val(env: &E, v: String) -> Result<Self, Self::Error> {
-        v.as_str().try_into_val(env)
-    }
-}
-
-#[cfg(feature = "std")]
-impl<E: Env> TryFromVal<&String, E> for RawVal {
-    type Error = ConversionError;
-
-    fn try_from_val(env: &E, v: &String) -> Result<Self, Self::Error> {
-        v.as_str().try_into_val(env)
     }
 }

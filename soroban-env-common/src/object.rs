@@ -1,8 +1,7 @@
 use crate::{
-    impl_wrapper_common, xdr::ScObjectType, Convert, Env, RawVal, Tag, TryFromVal, TryIntoVal,
+    impl_wrapper_common, xdr::ScObjectType, RawVal, Tag,
 };
 use core::fmt::Debug;
-use stellar_xdr::{ScObject, ScVal};
 
 /// Wrapper for a [RawVal] that is tagged with [Tag::Object], interpreting the
 /// [RawVal]'s body as a pair of a 28-bit object-type code and a 32-bit handle
@@ -49,69 +48,5 @@ impl Object {
     #[inline(always)]
     pub fn from_type_and_handle(ty: ScObjectType, handle: u32) -> Self {
         unsafe { Self::from_major_minor(handle, ty as u32) }
-    }
-}
-
-impl<E> TryFromVal<Object, E> for ScObject
-where
-    E: Env + Convert<Object, ScObject>,
-{
-    type Error = E::Error;
-    fn try_from_val(env: &E, val: Object) -> Result<Self, Self::Error> {
-        env.convert(val)
-    }
-}
-
-impl<'a, E> TryFromVal<&'a ScObject, E> for Object
-where
-    E: Env + Convert<&'a ScObject, Object>,
-{
-    type Error = E::Error;
-
-    fn try_from_val(env: &E, v: &'a ScObject) -> Result<Self, Self::Error> {
-        env.convert(v)
-    }
-}
-
-impl<E> TryFromVal<ScObject, E> for Object
-where
-    E: Env + Convert<ScObject, Object>,
-{
-    type Error = E::Error;
-
-    fn try_from_val(env: &E, v: ScObject) -> Result<Self, Self::Error> {
-        env.convert(v)
-    }
-}
-
-impl<'a, E> TryFromVal<&'a ScVal, E> for Object
-where
-    E: Env + Convert<&'a ScObject, Object>,
-{
-    type Error = E::Error;
-
-    fn try_from_val(env: &E, v: &'a ScVal) -> Result<Self, Self::Error> {
-        if let ScVal::Object(Some(o)) = v {
-            o.try_into_val(env)
-        } else {
-            // TODO: synthesize the appropriate error
-            todo!()
-        }
-    }
-}
-
-impl<E> TryFromVal<ScVal, E> for Object
-where
-    E: Env + Convert<ScObject, Object>,
-{
-    type Error = E::Error;
-
-    fn try_from_val(env: &E, v: ScVal) -> Result<Self, Self::Error> {
-        if let ScVal::Object(Some(o)) = v {
-            o.try_into_val(env)
-        } else {
-            // TODO: synthesize the appropriate error
-            todo!()
-        }
     }
 }

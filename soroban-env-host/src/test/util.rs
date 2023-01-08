@@ -7,7 +7,7 @@ use soroban_env_common::{
         InstallContractCodeArgs, LedgerEntry, LedgerEntryData, LedgerKey, PublicKey,
         ScContractCode, ScObject, ScVal, ScVec, Uint256,
     },
-    Object, RawVal, TryIntoVal,
+    Object, RawVal, ConvertInto,
 };
 
 use crate::{
