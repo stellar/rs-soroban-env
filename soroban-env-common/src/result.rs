@@ -34,14 +34,15 @@ where
         t: impl Borrow<Result<T, R>>,
         c: &C,
     ) -> Result<Self, C::Error> {
-        match t.borrow() {
+        todo!()
+/*         match t.borrow() {
             Ok(t) => RawVal::convert_from(t, c),
             Err(r) => {
                 let status: Status = r.into();
                 Err(status.into())
             }
         }
-    }
+ */    }
 }
 
 impl<C, T, R> ConvertFrom<RawVal, C> for Result<T, R>

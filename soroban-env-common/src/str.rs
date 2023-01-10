@@ -17,7 +17,8 @@ where C:EnvConvert<&'a str,Self>
 {
     fn convert_from(t: impl Borrow<&'a str>, c: &C) -> Result<Self, C::Error> {
         let bytes: &[u8] = t.borrow().as_bytes();
-        RawVal::convert_from(bytes, c)
+        todo!()
+        //RawVal::convert_from(bytes, c)
     }
 }
 
@@ -25,7 +26,8 @@ where C:EnvConvert<&'a str,Self>
 impl<C> ConvertFrom<RawVal,C> for String
 where C:EnvConvert<RawVal,Self> {
     fn convert_from(t: impl Borrow<RawVal>, c: &C) -> Result<Self, C::Error> {
-        let obj: Object = t.try_into()?;
+        todo!()
+/*         let obj: Object = t.try_into()?;
         if obj.is_obj_type(ScObjectType::Bytes) {
             let len = unsafe { <u32 as RawValConvertible>::unchecked_from_val(c.bytes_len(obj)) };
             let mut vec = std::vec![0; len as usize];
@@ -35,5 +37,5 @@ where C:EnvConvert<RawVal,Self> {
         } else {
             Err(ConversionError)
         }
-    }
+ */    }
 }

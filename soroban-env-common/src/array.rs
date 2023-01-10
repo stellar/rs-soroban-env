@@ -23,7 +23,8 @@ impl <const N: usize, C> ConvertFrom<RawVal, C> for [u8;N]
 where C:EnvConvert<RawVal,Self>
 {
     fn convert_from(t: impl Borrow<RawVal>, c: &C) -> Result<Self, C::Error> {
-        let t = *t.borrow();
+        todo!()
+/*         let t = *t.borrow();
         if !Object::val_is_obj_type(t, ScObjectType::Bytes) {
             return Err(c.val_cvt_err::<[u8;N]>(t));
         }
@@ -35,7 +36,7 @@ where C:EnvConvert<RawVal,Self>
         let mut arr = [0u8; N];
         c.bytes_copy_to_slice(obj, RawVal::U32_ZERO, &mut arr)?;
         Ok(arr)
-    }
+ */    }
 }
 
 
@@ -44,7 +45,8 @@ impl<C> ConvertFrom<RawVal, C> for Vec<u8>
 where C:EnvConvert<RawVal,Self>
  {
     fn convert_from(val: impl Borrow<RawVal>, c: &C) -> Result<Self, C::Error> {
-        let val = *val.borrow();
+        todo!()
+/*         let val = *val.borrow();
         if !Object::val_is_obj_type(val, ScObjectType::Bytes) {
             return Err(c.val_cvt_err::<Vec<u8>>(val));
         }
@@ -53,6 +55,6 @@ where C:EnvConvert<RawVal,Self>
         let mut v = vec![0; len];
         c.bytes_copy_to_slice(bytes, RawVal::U32_ZERO, &mut v)?;
         Ok(v)
-        
+ */        
     }
 }

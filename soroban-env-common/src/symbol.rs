@@ -360,6 +360,8 @@ impl TryFrom<&Symbol> for ScVal {
 
 #[cfg(test)]
 mod test_without_string {
+    use core::borrow::Borrow;
+
     use super::{Symbol, SymbolStr};
 
     #[test]
