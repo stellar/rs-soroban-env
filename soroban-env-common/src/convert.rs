@@ -109,22 +109,23 @@ where
     X: EnvConvertObject<U>
 {} 
 
-pub trait ConvertFrom<T>: Sized {
-    fn convert_from<C:EnvConvert<T,Self>>(t: impl Borrow<T>, c: &C) -> Result<Self, C::Error>;
+pub trait ConvertFrom<T,C:EnvConvert<T,Self>>: Sized {
+    fn convert_from(t: impl Borrow<T>, c: &C) -> Result<Self, C::Error>;
 }
 
 /// As with the design in the Rust stdlib's Into type, the ConvertInto
 /// trait is defined as a convenience form with a blanket impl that
 /// calls into the corresponding ConvertFrom impl.
-pub trait ConvertInto<T>: Sized {
-    fn convert_into<C:EnvConvert<T,Self>>(&self, c: &C) -> Result<T, C::Error>;
+pub trait ConvertInto<T,C:EnvConvert<T,Self>>: Sized {
+    fn convert_into(&self, c: &C) -> Result<T, C::Error>;
 }
 
-impl<T, U> ConvertInto<U> for T
+impl<T, U, C> ConvertInto<U,C> for T
 where
-    U: ConvertFrom<T>,
+    U: ConvertFrom<T,C>,
+    C: EnvConvert<T,U>
 {
-    fn convert_into<C:EnvConvert<U,Self>>(&self, c: &C) -> Result<U, C::Error> {
+    fn convert_into(&self, c: &C) -> Result<U, C::Error> {
         U::convert_from(self, c)
     }
 }
@@ -134,18 +135,21 @@ where
 /// implementing the Rust standard fallible conversion types
 /// `TryFrom`/`TryInto`. Since `TryInto`/`TryFrom` themselves have a blanket
 /// impl on types implementing `From`/`Into`, this extends those types as well.
-impl<T:Clone,U> ConvertFrom<T> for U
+impl<C,T:Clone,U> ConvertFrom<T,C> for U
 where
     U: TryFrom<T>,
+    C: EnvConvert<T,U>
 {
-    fn convert_from<C:EnvConvert<T,U>>(t: impl Borrow<T>, c: &C) -> Result<Self, C::Error> {
+    fn convert_from(t: impl Borrow<T>, c: &C) -> Result<Self, C::Error> {
         U::try_from(t.borrow().clone()).map_err(|_| c.ty_cvt_err::<T,U>())
     }
 }
 
 // i64 conversions
-impl ConvertFrom<i64> for RawVal {
-    fn convert_from<C:EnvConvert<i64,RawVal>>(t: impl Borrow<i64>, c: &C) -> Result<Self, C::Error> {
+impl<C> ConvertFrom<i64,C> for RawVal
+where C: EnvConvert<i64,RawVal>
+{
+    fn convert_from(t: impl Borrow<i64>, c: &C) -> Result<Self, C::Error> {
         let t = *t.borrow();
         if t >= 0 {
             Ok(unsafe { RawVal::unchecked_from_u63(t) })
@@ -155,8 +159,10 @@ impl ConvertFrom<i64> for RawVal {
     }
 }
 
-impl ConvertFrom<RawVal> for i64 {
-    fn convert_from<C:EnvConvert<RawVal,i64>>(t: impl Borrow<RawVal>, c: &C) -> Result<Self, C::Error> {
+impl<C> ConvertFrom<RawVal,C> for i64
+where C: EnvConvert<RawVal,i64>
+{
+    fn convert_from(t: impl Borrow<RawVal>, c: &C) -> Result<Self, C::Error> {
         let t = *t.borrow();
         if t.is_u63() {
             Ok(unsafe { t.unchecked_as_u63() })
@@ -171,14 +177,18 @@ impl ConvertFrom<RawVal> for i64 {
 
 
 // u64 conversions
-impl ConvertFrom<u64> for RawVal {
-    fn convert_from<C:EnvConvert<u64,RawVal>>(t: impl Borrow<u64>, c: &C) -> Result<Self, C::Error> {
+impl<C> ConvertFrom<u64, C> for RawVal 
+where C:EnvConvert<u64,RawVal>
+{
+    fn convert_from(t: impl Borrow<u64>, c: &C) -> Result<Self, C::Error> {
         c.to_object(t).map(|obj| obj.to_raw())
     }
 }
 
-impl ConvertFrom<RawVal> for u64 {
-    fn convert_from<C:EnvConvert<RawVal,u64>>(t: impl Borrow<RawVal>, c: &C) -> Result<Self, C::Error> {
+impl<C> ConvertFrom<RawVal, C> for u64 
+where C:EnvConvert<RawVal,u64>
+{
+    fn convert_from(t: impl Borrow<RawVal>, c: &C) -> Result<Self, C::Error> {
         let t = *t.borrow();
         if Object::val_is_obj_type(t, ScObjectType::U64){
             let obj = unsafe { Object::unchecked_from_val(t) };
@@ -190,14 +200,17 @@ impl ConvertFrom<RawVal> for u64 {
 }
 
 // i128 conversions
-impl ConvertFrom<i128> for RawVal {
-    fn convert_from<C:EnvConvert<i128,RawVal>>(t: impl Borrow<i128>, c: &C) -> Result<Self, C::Error> {
+impl<C> ConvertFrom<i128, C> for RawVal 
+where C:EnvConvert<i128,RawVal>
+{
+    fn convert_from(t: impl Borrow<i128>, c: &C) -> Result<Self, C::Error> {
         c.to_object(t).map(|obj| obj.to_raw())
     }
 }
 
-impl ConvertFrom<RawVal> for i128 {
-    fn convert_from<C:EnvConvert<RawVal,i128>>(t: impl Borrow<RawVal>, c: &C) -> Result<Self, C::Error> {
+impl<C> ConvertFrom<RawVal, C> for i128 
+where C:EnvConvert<RawVal,i128> {
+    fn convert_from(t: impl Borrow<RawVal>, c: &C) -> Result<Self, C::Error> {
         let t = *t.borrow();
         if Object::val_is_obj_type(t, ScObjectType::I128) {
             let obj = unsafe { Object::unchecked_from_val(t) };
@@ -209,14 +222,18 @@ impl ConvertFrom<RawVal> for i128 {
 }
 
 // u128 conversions
-impl ConvertFrom<u128> for RawVal {
-    fn convert_from<C:EnvConvert<u128,RawVal>>(t: impl Borrow<u128>, c: &C) -> Result<Self, C::Error> {
+impl<C> ConvertFrom<u128, C> for RawVal
+where C:EnvConvert<u128,RawVal>
+{
+    fn convert_from(t: impl Borrow<u128>, c: &C) -> Result<Self, C::Error> {
         c.to_object(t).map(|obj| obj.to_raw())
     }
 }
 
-impl ConvertFrom<RawVal> for u128 {
-    fn convert_from<C:EnvConvert<RawVal,u128>>(t: impl Borrow<RawVal>, c: &C) -> Result<Self, C::Error> {
+impl<C> ConvertFrom<RawVal, C> for u128 
+where C:EnvConvert<RawVal,u128>
+{
+    fn convert_from(t: impl Borrow<RawVal>, c: &C) -> Result<Self, C::Error> {
         let t = *t.borrow();
         if Object::val_is_obj_type(t, ScObjectType::U128) {
             let obj = unsafe { Object::unchecked_from_val(t) };
@@ -232,8 +249,9 @@ impl ConvertFrom<RawVal> for u128 {
 // which are provided in downstream crates.
 
 #[cfg(feature = "std")]
-impl ConvertFrom<RawVal> for ScVal {
-    fn convert_from<C:EnvConvert<RawVal,Self>>(val: impl Borrow<RawVal>, c: &C) -> Result<Self, C::Error> {
+impl<C> ConvertFrom<RawVal, C> for ScVal 
+where C:EnvConvert<RawVal,Self> {
+    fn convert_from(val: impl Borrow<RawVal>, c: &C) -> Result<Self, C::Error> {
         let val: RawVal = *val.borrow();
         if val.is_u63() {
             Ok(ScVal::U63(unsafe { val.unchecked_as_u63() }))
@@ -286,8 +304,10 @@ impl ConvertFrom<RawVal> for ScVal {
 
 
 #[cfg(feature = "std")]
-impl ConvertFrom<ScVal> for RawVal {
-    fn convert_from<C:EnvConvert<ScVal,Self>>(val: impl Borrow<ScVal>, c: &C) -> Result<Self, C::Error> {
+impl<C> ConvertFrom<ScVal, C> for RawVal
+where C:EnvConvert<ScVal,Self>
+{
+    fn convert_from(val: impl Borrow<ScVal>, c: &C) -> Result<Self, C::Error> {
         match val.borrow() {
             ScVal::U63(i) => {
                 if *i >= 0 {

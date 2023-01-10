@@ -22,12 +22,15 @@ where
     }
 }
 
-impl<T, R> ConvertFrom<Result<T, R>> for RawVal
+impl<'a, C, T, R> ConvertFrom<Result<T, R>, C> for RawVal
 where
-    RawVal: ConvertFrom<T>,
-    R: From<Status>,
+    RawVal: ConvertFrom<T,C>,
+    Status: From<&'a R>,
+    R: 'a,
+    C: EnvConvert<Result<T, R>,RawVal>,
+    C: EnvConvert<T,RawVal>
 {
-    fn convert_from<C: EnvConvert<Result<T, R>, Self>>(
+    fn convert_from(
         t: impl Borrow<Result<T, R>>,
         c: &C,
     ) -> Result<Self, C::Error> {
@@ -41,12 +44,14 @@ where
     }
 }
 
-impl<T, R> ConvertFrom<RawVal> for Result<T, R>
+impl<C, T, R> ConvertFrom<RawVal, C> for Result<T, R>
 where
-    T: ConvertFrom<RawVal>,
+    T: ConvertFrom<RawVal, C>,
     R: From<Status>,
+    C: EnvConvert<RawVal, Result<T, R>>,
+    C: EnvConvert<RawVal, T>
 {
-    fn convert_from<C: EnvConvert<RawVal, Self>>(
+    fn convert_from<>(
         t: impl Borrow<RawVal>,
         c: &C,
     ) -> Result<Self, C::Error> {

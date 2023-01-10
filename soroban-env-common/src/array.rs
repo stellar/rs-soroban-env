@@ -11,16 +11,21 @@ use crate::{
 // since there are sufficient methods on EnvBase.
 impl<'a, E: EnvConvertError> EnvConvertObject<&'a [u8]> for E {}
 
-impl<'a> ConvertFrom<&'a [u8]> for RawVal {
-    fn convert_from<C:EnvConvert<&'a [u8],Self>>(t: impl Borrow<&'a [u8]>, c: &C) -> Result<Self, C::Error> {
+impl<'a, C> ConvertFrom<&'a [u8], C> for RawVal 
+where C:EnvConvert<&'a [u8],Self>
+{
+    fn convert_from(t: impl Borrow<&'a [u8]>, c: &C) -> Result<Self, C::Error> {
         Ok(c.bytes_new_from_slice(t.borrow())?.to_raw())
     }
 }
 
-impl <const N: usize> ConvertFrom<RawVal> for [u8;N] {
-    fn convert_from<C:EnvConvert<RawVal,Self>>(t: impl Borrow<RawVal>, c: &C) -> Result<Self, C::Error> {
+impl <const N: usize, C> ConvertFrom<RawVal, C> for [u8;N] 
+where C:EnvConvert<RawVal,Self>
+{
+    fn convert_from(t: impl Borrow<RawVal>, c: &C) -> Result<Self, C::Error> {
+        let t = *t.borrow();
         if !Object::val_is_obj_type(t, ScObjectType::Bytes) {
-            return Err(c.cvt_err::<RawVal,[u8;N]>(t));
+            return Err(c.val_cvt_err::<[u8;N]>(t));
         }
         let obj = unsafe { Object::unchecked_from_val(t) };
         let len = unsafe { u32::unchecked_from_val(c.bytes_len(obj)) };
@@ -35,10 +40,13 @@ impl <const N: usize> ConvertFrom<RawVal> for [u8;N] {
 
 
 #[cfg(feature = "std")]
-impl ConvertFrom<RawVal> for Vec<u8> {
-    fn convert_from<C:EnvConvert<RawVal,Self>>(val: impl Borrow<RawVal>, c: &C) -> Result<Self, C::Error> {
+impl<C> ConvertFrom<RawVal, C> for Vec<u8>
+where C:EnvConvert<RawVal,Self>
+ {
+    fn convert_from(val: impl Borrow<RawVal>, c: &C) -> Result<Self, C::Error> {
+        let val = *val.borrow();
         if !Object::val_is_obj_type(val, ScObjectType::Bytes) {
-            return Err(c.cvt_err::<RawVal,Vec<u8>>(val));
+            return Err(c.val_cvt_err::<Vec<u8>>(val));
         }
         let bytes = unsafe { Object::unchecked_from_val(val) };
         let len = unsafe { u32::unchecked_from_val(c.bytes_len(bytes)) };

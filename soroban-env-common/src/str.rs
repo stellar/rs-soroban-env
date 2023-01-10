@@ -12,16 +12,19 @@ use crate::{Object, RawValConvertible};
 // since there are sufficient methods on EnvBase.
 impl<'a,E:EnvConvertError> EnvConvertObject<&'a str> for E {}
 
-impl<'a> ConvertFrom<&'a str> for RawVal {
-    fn convert_from<C:EnvConvert<&'a str,Self>>(t: impl Borrow<&'a str>, c: &C) -> Result<Self, C::Error> {
+impl<'a,C> ConvertFrom<&'a str,C> for RawVal
+where C:EnvConvert<&'a str,Self>
+{
+    fn convert_from(t: impl Borrow<&'a str>, c: &C) -> Result<Self, C::Error> {
         let bytes: &[u8] = t.borrow().as_bytes();
         RawVal::convert_from(bytes, c)
     }
 }
 
 #[cfg(feature = "std")]
-impl ConvertFrom<RawVal> for String {
-    fn convert_from<C:EnvConvert<RawVal,Self>>(t: impl Borrow<RawVal>, c: &C) -> Result<Self, C::Error> {
+impl<C> ConvertFrom<RawVal,C> for String
+where C:EnvConvert<RawVal,Self> {
+    fn convert_from(t: impl Borrow<RawVal>, c: &C) -> Result<Self, C::Error> {
         let obj: Object = t.try_into()?;
         if obj.is_obj_type(ScObjectType::Bytes) {
             let len = unsafe { <u32 as RawValConvertible>::unchecked_from_val(c.bytes_len(obj)) };

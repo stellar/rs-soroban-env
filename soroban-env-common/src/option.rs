@@ -12,8 +12,7 @@ where T: ConvertFrom<RawVal>
         }
     }
 }
- */
-impl<T:Debug> ConvertFrom<Option<T>> for RawVal
+impl<C, T> ConvertFrom<Option<T>> for RawVal
 where
     RawVal: ConvertFrom<T>,
 {
@@ -25,3 +24,4 @@ where
     }
 }
 
+ */
