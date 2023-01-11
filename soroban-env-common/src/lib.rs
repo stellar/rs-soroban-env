@@ -65,7 +65,7 @@ pub use raw_val::{ConversionError, RawVal, RawValConvertible, Tag};
 // RawVal and EnvObj couple raw types to environments.
 pub use checked_env::CheckedEnv;
 pub use compare::Compare;
-pub use convert::{EnvConvertObject,ConvertInto,ConvertFrom};
+pub use convert::{Convert,ConvertInto,ConvertFrom};
 pub use env::{call_macro_with_all_host_functions, Env, EnvBase};
 pub use unimplemented_env::UnimplementedEnv;
 pub use vmcaller_checked_env::{VmCaller, VmCallerCheckedEnv};

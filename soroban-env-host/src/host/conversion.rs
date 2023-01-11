@@ -11,7 +11,7 @@ use crate::{
 };
 use ed25519_dalek::{PublicKey, Signature, SIGNATURE_LENGTH};
 use sha2::{Digest, Sha256};
-use soroban_env_common::EnvConvertObject;
+use soroban_env_common::Convert;
 use soroban_env_common::xdr::AccountId;
 
 impl Host {
@@ -283,7 +283,7 @@ impl ConvertErrorHelper for Host {
     type HelperError = HostError;
 }
 
-impl EnvConvertObject<RawVal, HostError> for Host {
+impl Convert<RawVal, HostError> for Host {
 
     fn to_object(&self, t: impl Borrow<RawVal>) -> Result<Object, HostError> {
         Err(self.cvt_err::<RawVal,Object>(t))
@@ -294,7 +294,7 @@ impl EnvConvertObject<RawVal, HostError> for Host {
     }
 }
 
-impl EnvConvertObject<i128,HostError> for Host {
+impl Convert<i128,HostError> for Host {
 
     fn to_object(&self, t: impl Borrow<i128>) -> Result<Object, HostError> {
         let i: i128 = *t.borrow();
@@ -309,7 +309,7 @@ impl EnvConvertObject<i128,HostError> for Host {
     }
 }
 
-impl EnvConvertObject<u128,HostError> for Host {
+impl Convert<u128,HostError> for Host {
 
     fn to_object(&self, t: impl Borrow<u128>) -> Result<Object, HostError> {
         let i: u128 = *t.borrow();

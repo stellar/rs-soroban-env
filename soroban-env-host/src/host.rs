@@ -16,7 +16,7 @@ use soroban_env_common::{
         ScHostFnErrorCode, ScHostObjErrorCode, ScHostStorageErrorCode, ScHostValErrorCode, ScMap,
         ScMapEntry, ScObject, ScStatusType, ScVal, ScVec, ThresholdIndexes,
     },
-    EnvConvertObject, InvokerType, Status, ConvertFrom, ConvertInto, VmCaller, VmCallerCheckedEnv,
+    Convert, InvokerType, Status, ConvertFrom, ConvertInto, VmCaller, VmCallerCheckedEnv,
 };
 
 use crate::budget::{AsBudget, Budget, CostType};
@@ -156,28 +156,28 @@ impl Debug for Host {
     }
 }
 
-impl EnvConvertObject<&Object, ScObject> for Host {
+impl Convert<&Object, ScObject> for Host {
     type HelperError = HostError;
     fn convert(&self, ob: &Object) -> Result<ScObject, Self::HelperError> {
         self.from_host_obj(*ob)
     }
 }
 
-impl EnvConvertObject<Object, ScObject> for Host {
+impl Convert<Object, ScObject> for Host {
     type HelperError = HostError;
     fn convert(&self, ob: Object) -> Result<ScObject, Self::HelperError> {
         self.from_host_obj(ob)
     }
 }
 
-impl EnvConvertObject<&ScObject, Object> for Host {
+impl Convert<&ScObject, Object> for Host {
     type HelperError = HostError;
     fn convert(&self, ob: &ScObject) -> Result<Object, Self::HelperError> {
         self.to_host_obj(ob)
     }
 }
 
-impl EnvConvertObject<ScObject, Object> for Host {
+impl Convert<ScObject, Object> for Host {
     type HelperError = HostError;
     fn convert(&self, ob: ScObject) -> Result<Object, Self::HelperError> {
         self.to_host_obj(&ob)

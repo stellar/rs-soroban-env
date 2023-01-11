@@ -1,27 +1,30 @@
-use crate::{RawVal, ConvertFrom, convert::EnvConvert};
-use core::{fmt::Debug, borrow::Borrow};
+use crate::{RawVal, ConvertFrom, convert::Convert};
+use core::{borrow::Borrow};
 
-/* impl<T> ConvertFrom<RawVal> for Option<T>
-where T: ConvertFrom<RawVal>
+
+impl<T,C> ConvertFrom<T,C,RawVal> for Option<T>
+where
+    C: Convert<T>,
+    T: ConvertFrom<T,C,RawVal>,
 {
-    fn convert_from<C:EnvConvert<RawVal,Self>>(val: impl Borrow<RawVal>, c: &C) -> Result<Self, C::Error> {
-        if val.is_void() {
+    fn convert_from(c: &C, val: impl Borrow<RawVal>) -> Result<Self, C::Error> {
+        if val.borrow().is_void() {
             Ok(None)
         } else {
-            Ok(Some(T::convert_from(val, c)?))
+            Ok(Some(T::convert_from(c, val)?))
         }
     }
 }
-impl<C, T> ConvertFrom<Option<T>> for RawVal
+
+impl<T,C> ConvertFrom<T,C,Option<T>> for RawVal
 where
-    RawVal: ConvertFrom<T>,
+    C: Convert<T>,
+    RawVal: ConvertFrom<T,C,T>,
 {
-    fn convert_from<C:EnvConvert<Option<T>,Self>>(t: impl Borrow<Option<T>>, c: &C) -> Result<Self, C::Error> {
+    fn convert_from(c: &C, t: impl Borrow<Option<T>>) -> Result<Self, C::Error> {
         match t.borrow() {
-            Some(e) => RawVal::convert_from(e, c),
+            Some(inner) => RawVal::convert_from(c, inner),
             None => Ok(RawVal::VOID),
         }
     }
 }
-
- */

@@ -1,6 +1,9 @@
 use stellar_xdr::{ScStatic, ScStatus, ScStatusType};
 
 use super::{BitSet, Object, Status, Static, Symbol};
+use crate::EnvBase;
+use crate::convert::{Convert,ConvertFrom};
+use core::borrow::Borrow;
 use core::{convert::Infallible, fmt::Debug};
 
 extern crate static_assertions as sa;
@@ -159,19 +162,7 @@ pub trait RawValConvertible: Clone + Into<RawVal> + TryFrom<RawVal> {
     }
 }
 
-/* impl<R:RawValConvertible> TryFrom<RawVal> for R {
-    type Error = ConversionError;
-    fn try_from(value: RawVal) -> Result<Self, Self::Error> {
-        if let Some(c) = <Self as RawValConvertible>::try_convert(value) {
-            Ok(c)
-        } else {
-            Err(ConversionError)
-        }
-    }
-}
- */
-
-// Orphan rules mean we have to macro these, can't blanket-impl on V:Valtype.
+// Orphan rules mean we have to macro these, can't blanket-impl on R:RawValConvertible.
 macro_rules! declare_tryfrom {
     ($T:ty) => {
         impl TryFrom<RawVal> for $T {
@@ -194,6 +185,14 @@ macro_rules! declare_tryfrom {
                 } else {
                     Err(ConversionError)
                 }
+            }
+        }
+        impl<C> ConvertFrom<RawVal,C,$T> for RawVal
+        where
+            C: Convert<RawVal>
+        {
+            fn convert_from(c: &C, t: impl Borrow<$T>) -> Result<RawVal, C::Error> {
+                RawVal::try_from(t.borrow().clone()).map_err(|_| c.ty_cvt_err::<$T,RawVal>())
             }
         }
     };
