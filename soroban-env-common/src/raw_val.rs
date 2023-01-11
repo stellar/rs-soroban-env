@@ -1,8 +1,8 @@
 use stellar_xdr::{ScStatic, ScStatus, ScStatusType};
 
-use super::{BitSet, Object, Status, Static, Symbol};
+use super::{BitSet, Object, Static, Status, Symbol};
+use crate::convert::ConvertFrom;
 use crate::EnvBase;
-use crate::convert::{Convert,ConvertFrom};
 use core::borrow::Borrow;
 use core::{convert::Infallible, fmt::Debug};
 
@@ -168,8 +168,8 @@ macro_rules! declare_tryfrom {
         impl TryFrom<RawVal> for $T {
             type Error = ConversionError;
             #[inline(always)]
-            fn try_from(v: RawVal) -> Result<Self, Self::Error> {
-                if let Some(c) = <Self as RawValConvertible>::try_convert(v) {
+            fn try_from(r: RawVal) -> Result<Self, Self::Error> {
+                if let Some(c) = <Self as RawValConvertible>::try_convert(r) {
                     Ok(c)
                 } else {
                     Err(ConversionError)
@@ -179,20 +179,17 @@ macro_rules! declare_tryfrom {
         impl TryFrom<&RawVal> for $T {
             type Error = ConversionError;
             #[inline(always)]
-            fn try_from(v: &RawVal) -> Result<Self, Self::Error> {
-                if let Some(c) = <Self as RawValConvertible>::try_convert(*v) {
+            fn try_from(r: &RawVal) -> Result<Self, Self::Error> {
+                if let Some(c) = <Self as RawValConvertible>::try_convert(*r) {
                     Ok(c)
                 } else {
                     Err(ConversionError)
                 }
             }
         }
-        impl<C> ConvertFrom<RawVal,C,$T> for RawVal
-        where
-            C: Convert<RawVal>
-        {
-            fn convert_from(c: &C, t: impl Borrow<$T>) -> Result<RawVal, C::Error> {
-                RawVal::try_from(t.borrow().clone()).map_err(|_| c.ty_cvt_err::<$T,RawVal>())
+        impl<E: EnvBase> ConvertFrom<E, $T> for RawVal {
+            fn convert_from(e: &E, t: impl Borrow<$T>) -> Result<RawVal, E::Error> {
+                RawVal::try_from(t.borrow().clone()).map_err(|_| e.err_convert_type::<$T, RawVal>())
             }
         }
     };

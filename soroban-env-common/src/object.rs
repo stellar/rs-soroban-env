@@ -1,7 +1,7 @@
-use crate::{
-    impl_wrapper_common, xdr::ScObjectType, RawVal, Tag,
-};
-use core::fmt::Debug;
+use stellar_xdr::ScObject;
+
+use crate::{impl_wrapper_common, xdr::ScObjectType, ConvertFrom, ConvertObject, RawVal, Tag};
+use core::{borrow::Borrow, fmt::Debug};
 
 /// Wrapper for a [RawVal] that is tagged with [Tag::Object], interpreting the
 /// [RawVal]'s body as a pair of a 28-bit object-type code and a 32-bit handle
@@ -48,5 +48,23 @@ impl Object {
     #[inline(always)]
     pub fn from_type_and_handle(ty: ScObjectType, handle: u32) -> Self {
         unsafe { Self::from_major_minor(handle, ty as u32) }
+    }
+}
+
+impl<E> ConvertFrom<E, ScObject> for Object
+where
+    E: ConvertObject<ScObject>,
+{
+    fn convert_from(e: &E, t: impl Borrow<ScObject>) -> Result<Self, E::Error> {
+        e.to_object(t)
+    }
+}
+
+impl<E> ConvertFrom<E, Object> for ScObject
+where
+    E: ConvertObject<ScObject>,
+{
+    fn convert_from(e: &E, t: impl Borrow<Object>) -> Result<Self, E::Error> {
+        e.from_object(*t.borrow())
     }
 }

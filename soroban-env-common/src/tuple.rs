@@ -63,7 +63,7 @@ macro_rules! impl_for_tuple {
             }
         }
 
-        impl<E: Env, $($typ),*, const N: usize> ConvertFrom<($($typ,)*), E> for [RawVal; N]
+        impl<E: Env, $($typ),*, const N: usize> ConvertFrom< E> for [RawVal; N]
         where
             $($typ: ConvertInto<RawVal, E>),*
         {

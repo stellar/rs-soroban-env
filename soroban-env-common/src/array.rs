@@ -1,49 +1,60 @@
-use core::borrow::Borrow;
-use crate::{ConvertFrom, convert::{Convert}};
-use stellar_xdr::ScObjectType;
+use crate::{convert::ConvertObject, ConvertFrom, EnvBase};
 use crate::{Object, RawVal, RawValConvertible};
+use core::borrow::Borrow;
+use stellar_xdr::ScObjectType;
 
-
-impl<'a, V, C> ConvertFrom<V, C, &'a [u8]> for RawVal 
-where C:Convert<V>
+impl<'a, E: EnvBase> ConvertFrom<E, &'a [u8]> for RawVal
+where
+    E: ConvertObject<&'a [u8]>,
 {
-    fn convert_from(c: &C, t: impl Borrow<&'a [u8]>) -> Result<Self, C::Error> {
-        Ok(c.bytes_new_from_slice(t.borrow())?.to_raw())
+    fn convert_from(e: &E, t: impl Borrow<&'a [u8]>) -> Result<Self, E::Error> {
+        Ok(e.bytes_new_from_slice(t.borrow())?.to_raw())
     }
 }
 
-impl <'a, const N: usize, C> ConvertFrom<&'a [u8], C, RawVal> for [u8;N] 
-where C:Convert<&'a [u8]>
+impl<const N: usize, E: EnvBase> ConvertFrom<E, [u8; N]> for RawVal
+where
+    E: for<'a> ConvertObject<&'a [u8]>,
 {
-    fn convert_from(c: &C, t: impl Borrow<RawVal>) -> Result<Self, C::Error> {
+    fn convert_from(e: &E, t: impl Borrow<[u8; N]>) -> Result<Self, <E as EnvBase>::Error> {
+        <RawVal as ConvertFrom<E, &[u8]>>::convert_from(e, t.borrow().as_slice())
+    }
+}
+
+impl<const N: usize, E: EnvBase> ConvertFrom<E, RawVal> for [u8; N]
+where
+    E: for<'a> ConvertObject<&'a [u8]>,
+{
+    fn convert_from(e: &E, t: impl Borrow<RawVal>) -> Result<Self, E::Error> {
         let t = *t.borrow();
         if !Object::val_is_obj_type(t, ScObjectType::Bytes) {
-            return Err(c.val_cvt_err::<[u8;N]>(t));
+            return Err(e.err_convert_value::<[u8; N]>(t));
         }
         let obj = unsafe { Object::unchecked_from_val(t) };
-        let len = c.object_len(obj)?;
+        let len = e.object_len(obj)?;
         if len != N {
-            return Err(c.val_cvt_err::<[u8;N]>(t));
+            return Err(e.err_convert_value::<[u8; N]>(t));
         }
         let mut arr = [0u8; N];
-        c.bytes_copy_to_slice(obj, RawVal::U32_ZERO, &mut arr)?;
+        e.bytes_copy_to_slice(obj, RawVal::U32_ZERO, &mut arr)?;
         Ok(arr)
-     }
+    }
 }
 
 #[cfg(feature = "std")]
-impl<'a, C> ConvertFrom<&'a [u8], C, RawVal> for Vec<u8>
-where C:Convert<&'a [u8]>
- {
-    fn convert_from(c: &C, val: impl Borrow<RawVal>) -> Result<Self, C::Error> {
-         let val = *val.borrow();
+impl<E: EnvBase> ConvertFrom<E, RawVal> for Vec<u8>
+where
+    E: for<'a> ConvertObject<&'a [u8]>,
+{
+    fn convert_from(e: &E, val: impl Borrow<RawVal>) -> Result<Self, E::Error> {
+        let val = *val.borrow();
         if !Object::val_is_obj_type(val, ScObjectType::Bytes) {
-            return Err(c.val_cvt_err::<Vec<u8>>(val));
+            return Err(e.err_convert_value::<Vec<u8>>(val));
         }
         let bytes = unsafe { Object::unchecked_from_val(val) };
-        let len = c.object_len(bytes)?;
+        let len = e.object_len(bytes)?;
         let mut v = vec![0; len];
-        c.bytes_copy_to_slice(bytes, RawVal::U32_ZERO, &mut v)?;
+        e.bytes_copy_to_slice(bytes, RawVal::U32_ZERO, &mut v)?;
         Ok(v)
     }
 }

@@ -1,4 +1,5 @@
 use soroban_env_macros::generate_call_macro_with_all_host_functions;
+use stellar_xdr::ScHostValErrorCode;
 
 use super::Symbol;
 use super::{Object, RawVal, Status};
@@ -7,6 +8,9 @@ use core::any;
 /// Base trait extended by the [Env](crate::Env) trait, providing various special-case
 /// functions that do _not_ simply call across cross the guest/host interface.
 pub trait EnvBase: Sized + Clone {
+    /// Type used for errors returned form the environment.
+    type Error: From<Status>;
+
     /// Used for recovering the concrete type of the Host.
     fn as_mut_any(&mut self) -> &mut dyn any::Any;
 
@@ -98,6 +102,35 @@ pub trait EnvBase: Sized + Clone {
         vals: &[RawVal],
         strs: &[&'static str],
     ) -> Result<(), Status>;
+
+    /// Log and return an error representing a failed attempt to convert a
+    /// `RawVal` to some other type.
+    fn err_convert_value<U>(&self, val: RawVal) -> Self::Error {
+        // Logging here is best-effort; ignore failures (they only arise if
+        // we're out of gas or something otherwise-unrecoverable).
+        let _ = self.log_static_fmt_val_static_str(
+            "error converting value {} to type {}",
+            val,
+            core::any::type_name::<U>(),
+        );
+        self.err_convert_general()
+    }
+
+    /// Log and return an error representing a failed attempt to convert
+    /// some type to another.
+    fn err_convert_type<A, B>(&self) -> Self::Error {
+        let _ = self.log_static_fmt_general(
+            "error converting type {} to type {}",
+            &[],
+            &[core::any::type_name::<A>(), core::any::type_name::<B>()],
+        );
+        self.err_convert_general()
+    }
+
+    /// Return an error representing a general conversion error.
+    fn err_convert_general(&self) -> Self::Error {
+        Self::Error::from(ScHostValErrorCode::UnexpectedValType.into())
+    }
 }
 
 ///////////////////////////////////////////////////////////////////////////////

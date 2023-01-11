@@ -1,9 +1,9 @@
-use crate::{EnvBase, Object, RawVal, RawValConvertible, Status};
+use crate::{EnvBase, Object, RawVal, RawValConvertible};
 use core::borrow::Borrow;
-use stellar_xdr::{ScHostValErrorCode, ScObjectType};
+use stellar_xdr::ScObjectType;
 
 #[cfg(feature = "std")]
-use crate::{BitSet, Static, Symbol, Tag};
+use crate::{BitSet, Static, Status, Symbol, Tag};
 #[cfg(feature = "std")]
 use stellar_xdr::{ScObject, ScStatic, ScStatus, ScVal, StringM};
 
@@ -40,74 +40,38 @@ use stellar_xdr::{ScObject, ScStatic, ScStatus, ScVal, StringM};
 ///      implementation, and any context that did those injections can just
 ///      `.unwrap()` the result to get the same effect they got before.)
 
-pub trait Convert<T>: EnvBase {
-    type Error: From<Status> + 'static;
-
-    /// Generate an error of the correct error type without attempting
-    /// conversion; this is used by clients that may wish to generate an error
-    /// before even attempting a conversion, or by impls that wish to
-    /// use simple, default error reporting.
-    fn val_cvt_err<U>(&self, val: RawVal) -> Self::Error {
-        // Logging here is best-effort; ignore failures (they only arise if
-        // we're out of gas or something otherwise-unrecoverable).
-        let _ = self.log_static_fmt_val_static_str(
-            "error converting value {} to type {}",
-            val,
-            core::any::type_name::<U>(),
-        );
-        self.cvt_err()
-    }
-
-    fn ty_cvt_err<A, B>(&self) -> Self::Error {
-        let _ = self.log_static_fmt_general(
-            "error converting type {} to type {}",
-            &[],
-            &[core::any::type_name::<A>(), core::any::type_name::<B>()],
-        );
-        self.cvt_err()
-    }
-
-    fn cvt_err(&self) -> Self::Error {
-        Self::Error::from(ScHostValErrorCode::UnexpectedValType.into())
-    }
-
+pub trait ConvertObject<T>: EnvBase {
     fn object_len(&self, obj: Object) -> Result<usize, Self::Error> {
-        Err(self.val_cvt_err::<T>(obj.to_raw()))
+        Err(self.err_convert_value::<T>(obj.to_raw()))
     }
 
     fn to_object(&self, _t: impl Borrow<T>) -> Result<Object, Self::Error> {
-        Err(self.ty_cvt_err::<T, Object>())
+        Err(self.err_convert_type::<T, Object>())
     }
 
     fn from_object(&self, obj: Object) -> Result<T, Self::Error> {
-        Err(self.val_cvt_err::<T>(obj.to_raw()))
+        Err(self.err_convert_value::<T>(obj.to_raw()))
     }
 }
 
-pub trait ConvertFrom<V, C, T>: Sized
-where
-    C: Convert<V>,
-{
-    fn convert_from(c: &C, t: impl Borrow<T>) -> Result<Self, C::Error>;
+pub trait ConvertFrom<E: EnvBase, T>: Sized {
+    fn convert_from(e: &E, t: impl Borrow<T>) -> Result<Self, E::Error>;
 }
 
 /// As with the design in the Rust stdlib's Into type, the ConvertInto
 /// trait is defined as a convenience form with a blanket impl that
 /// calls into the corresponding ConvertFrom impl.
-pub trait ConvertInto<V, C, T>: Sized
-where
-    C: Convert<V>,
-{
-    fn convert_into(&self, c: &C) -> Result<T, C::Error>;
+pub trait ConvertInto<E: EnvBase, T>: Sized {
+    fn convert_into(&self, e: &E) -> Result<T, E::Error>;
 }
 
-impl<V, C, T, U> ConvertInto<V, C, U> for T
+impl<E, T, U> ConvertInto<E, U> for T
 where
-    C: Convert<V>,
-    U: ConvertFrom<V, C, T>,
+    E: EnvBase,
+    U: ConvertFrom<E, T>,
 {
-    fn convert_into(&self, c: &C) -> Result<U, C::Error> {
-        U::convert_from(c, self)
+    fn convert_into(&self, e: &E) -> Result<U, E::Error> {
+        U::convert_from(e, self)
     }
 }
 
@@ -115,134 +79,129 @@ where
 // overlap-check failure if we use generics elsewhere (as we wish to, in option
 // or result). Instead we include impls of the (few) env-less 'TryFrom' upgrades
 // we wish to support on RawVal over in the raw_val module.
-/* impl<C,T:Clone,U,V> ConvertFrom<T,V,C> for U
+/* impl<E:EnvBase,T:Clone,U> ConvertFrom<E,C> for U
 where
-    U: TryFrom<T>,
-    C: Convert<V>
+    U: TryFrom<T>
 {
-    fn convert_from(c: &C, t: impl Borrow<T>) -> Result<Self, C::Error> {
-        U::try_from(t.borrow().clone()).map_err(|_| c.ty_cvt_err::<T,U>())
+    fn convert_from(e: &E, t: impl Borrow<T>) -> Result<Self, E::Error> {
+        U::try_from(t.borrow().clone()).map_err(|_| e.err_convert_type::<T,U>())
     }
 }
  */
 
 // i64 conversions
-impl<C> ConvertFrom<i64, C, i64> for RawVal
+impl<E: EnvBase> ConvertFrom<E, i64> for RawVal
 where
-    C: Convert<i64>,
+    E: ConvertObject<i64>,
 {
-    fn convert_from(c: &C, t: impl Borrow<i64>) -> Result<Self, C::Error> {
+    fn convert_from(e: &E, t: impl Borrow<i64>) -> Result<Self, E::Error> {
         let t = *t.borrow();
         if t >= 0 {
             Ok(unsafe { RawVal::unchecked_from_u63(t) })
         } else {
-            c.to_object(t).map(|obj| obj.to_raw())
+            e.to_object(t).map(|obj| obj.to_raw())
         }
     }
 }
 
-impl<C> ConvertFrom<i64, C, RawVal> for i64
+impl<E: EnvBase> ConvertFrom<E, RawVal> for i64
 where
-    C: Convert<i64>,
+    E: ConvertObject<i64>,
 {
-    fn convert_from(c: &C, t: impl Borrow<RawVal>) -> Result<Self, C::Error> {
+    fn convert_from(e: &E, t: impl Borrow<RawVal>) -> Result<Self, E::Error> {
         let t = *t.borrow();
         if t.is_u63() {
             Ok(unsafe { t.unchecked_as_u63() })
         } else if Object::val_is_obj_type(t, ScObjectType::I64) {
             let obj = unsafe { Object::unchecked_from_val(t) };
-            c.from_object(obj)
+            e.from_object(obj)
         } else {
-            Err(c.val_cvt_err::<i64>(t))
+            Err(e.err_convert_value::<i64>(t))
         }
     }
 }
 
 // u64 conversions
-impl<C> ConvertFrom<u64, C, u64> for RawVal
+impl<E: EnvBase> ConvertFrom<E, u64> for RawVal
 where
-    C: Convert<u64>,
+    E: ConvertObject<u64>,
 {
-    fn convert_from(c: &C, t: impl Borrow<u64>) -> Result<Self, C::Error> {
-        c.to_object(t).map(|obj| obj.to_raw())
+    fn convert_from(e: &E, t: impl Borrow<u64>) -> Result<Self, E::Error> {
+        e.to_object(t).map(|obj| obj.to_raw())
     }
 }
 
-impl<C> ConvertFrom<u64, C, RawVal> for u64
+impl<E: EnvBase> ConvertFrom<E, RawVal> for u64
 where
-    C: Convert<u64>,
+    E: ConvertObject<u64>,
 {
-    fn convert_from(c: &C, t: impl Borrow<RawVal>) -> Result<Self, C::Error> {
+    fn convert_from(e: &E, t: impl Borrow<RawVal>) -> Result<Self, E::Error> {
         let t = *t.borrow();
         if Object::val_is_obj_type(t, ScObjectType::U64) {
             let obj = unsafe { Object::unchecked_from_val(t) };
-            c.from_object(obj)
+            e.from_object(obj)
         } else {
-            Err(c.val_cvt_err::<u64>(t))
+            Err(e.err_convert_value::<u64>(t))
         }
     }
 }
 
 // i128 conversions
-impl<C> ConvertFrom<i128, C, i128> for RawVal
+impl<E: EnvBase> ConvertFrom<E, i128> for RawVal
 where
-    C: Convert<i128>,
+    E: ConvertObject<i128>,
 {
-    fn convert_from(c: &C, t: impl Borrow<i128>) -> Result<Self, C::Error> {
-        c.to_object(t).map(|obj| obj.to_raw())
+    fn convert_from(e: &E, t: impl Borrow<i128>) -> Result<Self, E::Error> {
+        e.to_object(t).map(|obj| obj.to_raw())
     }
 }
 
-impl<C> ConvertFrom<i128, C, RawVal> for i128
+impl<E: EnvBase> ConvertFrom<E, RawVal> for i128
 where
-    C: Convert<i128>,
+    E: ConvertObject<i128>,
 {
-    fn convert_from(c: &C, t: impl Borrow<RawVal>) -> Result<Self, C::Error> {
+    fn convert_from(e: &E, t: impl Borrow<RawVal>) -> Result<Self, E::Error> {
         let t = *t.borrow();
         if Object::val_is_obj_type(t, ScObjectType::I128) {
             let obj = unsafe { Object::unchecked_from_val(t) };
-            c.from_object(obj)
+            e.from_object(obj)
         } else {
-            Err(c.val_cvt_err::<i128>(t))
+            Err(e.err_convert_value::<i128>(t))
         }
     }
 }
 
 // u128 conversions
-impl<C> ConvertFrom<u128, C, u128> for RawVal
+impl<E: EnvBase> ConvertFrom<E, u128> for RawVal
 where
-    C: Convert<u128>,
+    E: ConvertObject<u128>,
 {
-    fn convert_from(c: &C, t: impl Borrow<u128>) -> Result<Self, C::Error> {
-        c.to_object(t).map(|obj| obj.to_raw())
+    fn convert_from(e: &E, t: impl Borrow<u128>) -> Result<Self, E::Error> {
+        e.to_object(t).map(|obj| obj.to_raw())
     }
 }
 
-impl<C> ConvertFrom<u128, C, RawVal> for u128
+impl<E: EnvBase> ConvertFrom<E, RawVal> for u128
 where
-    C: Convert<u128>,
+    E: ConvertObject<u128>,
 {
-    fn convert_from(c: &C, t: impl Borrow<RawVal>) -> Result<Self, C::Error> {
+    fn convert_from(e: &E, t: impl Borrow<RawVal>) -> Result<Self, E::Error> {
         let t = *t.borrow();
         if Object::val_is_obj_type(t, ScObjectType::U128) {
             let obj = unsafe { Object::unchecked_from_val(t) };
-            c.from_object(obj)
+            e.from_object(obj)
         } else {
-            Err(c.val_cvt_err::<u128>(t))
+            Err(e.err_convert_value::<u128>(t))
         }
     }
 }
 
-// We define a pair of `Converter<RawVal,ScVal>` impls for `Env` and
-// `CheckedEnv` that both depend on impls of `Converter<Object,ScObject>`
-// which are provided in downstream crates.
-
 #[cfg(feature = "std")]
-impl<C> ConvertFrom<ScObject, C, RawVal> for ScVal
+impl<E: EnvBase> ConvertFrom<E, RawVal> for ScVal
 where
-    C: Convert<ScObject>,
+    E: ConvertObject<ScObject>,
 {
-    fn convert_from(c: &C, val: impl Borrow<RawVal>) -> Result<Self, C::Error> {
+    fn convert_from(e: &E, val: impl Borrow<RawVal>) -> Result<Self, E::Error> {
         let val: RawVal = *val.borrow();
         if val.is_u63() {
             Ok(ScVal::U63(unsafe { val.unchecked_as_u63() }))
@@ -266,12 +225,12 @@ where
                     } else if tag_static.is_type(ScStatic::LedgerKeyContractCode) {
                         Ok(ScVal::Static(ScStatic::LedgerKeyContractCode))
                     } else {
-                        Err(c.val_cvt_err::<ScVal>(val))
+                        Err(e.err_convert_value::<ScVal>(val))
                     }
                 }
                 Tag::Object => unsafe {
                     let ob = <Object as RawValConvertible>::unchecked_from_val(val);
-                    c.from_object(ob).map(|scob| ScVal::Object(Some(scob)))
+                    e.from_object(ob).map(|scob| ScVal::Object(Some(scob)))
                 },
                 Tag::Symbol => {
                     let sym: Symbol =
@@ -280,7 +239,7 @@ where
                     let bytes: StringM<10> = str
                         .as_bytes()
                         .try_into()
-                        .map_err(|_| c.val_cvt_err::<StringM<10>>(val))?;
+                        .map_err(|_| e.err_convert_value::<StringM<10>>(val))?;
                     Ok(ScVal::Symbol(bytes))
                 }
                 Tag::BitSet => Ok(ScVal::Bitset(val.get_payload())),
@@ -289,27 +248,27 @@ where
                         unsafe { <Status as RawValConvertible>::unchecked_from_val(val) };
                     let scstatus: ScStatus = status
                         .try_into()
-                        .map_err(|_| c.val_cvt_err::<ScStatus>(val))?;
+                        .map_err(|_| e.err_convert_value::<ScStatus>(val))?;
                     Ok(ScVal::Status(scstatus))
                 }
-                Tag::Reserved => Err(c.val_cvt_err::<ScVal>(val)),
+                Tag::Reserved => Err(e.err_convert_value::<ScVal>(val)),
             }
         }
     }
 }
 
 #[cfg(feature = "std")]
-impl<C> ConvertFrom<ScObject, C, ScVal> for RawVal
+impl<E: EnvBase> ConvertFrom<E, ScVal> for RawVal
 where
-    C: Convert<ScObject>,
+    E: ConvertObject<ScObject>,
 {
-    fn convert_from(c: &C, val: impl Borrow<ScVal>) -> Result<Self, C::Error> {
+    fn convert_from(e: &E, val: impl Borrow<ScVal>) -> Result<Self, E::Error> {
         match val.borrow() {
             ScVal::U63(i) => {
                 if *i >= 0 {
                     Ok(unsafe { RawVal::unchecked_from_u63(*i) })
                 } else {
-                    Err(c.ty_cvt_err::<i64, RawVal>())
+                    Err(e.err_convert_type::<i64, RawVal>())
                 }
             }
             ScVal::U32(u) => Ok((*u).into()),
@@ -318,19 +277,19 @@ where
             ScVal::Static(ScStatic::True) => Ok(RawVal::from_bool(true)),
             ScVal::Static(ScStatic::False) => Ok(RawVal::from_bool(false)),
             ScVal::Static(other) => Ok(RawVal::from_other_static(*other)),
-            ScVal::Object(None) => Err(c.ty_cvt_err::<ScVal, RawVal>()),
-            ScVal::Object(Some(scob)) => c.to_object(scob).map(|obj| obj.to_raw()),
+            ScVal::Object(None) => Err(e.err_convert_type::<ScVal, RawVal>()),
+            ScVal::Object(Some(scob)) => e.to_object(scob).map(|obj| obj.to_raw()),
             ScVal::Symbol(bytes) => {
                 let ss = match std::str::from_utf8(bytes.as_slice()) {
                     Ok(ss) => ss,
-                    Err(_) => return Err(c.ty_cvt_err::<StringM<10>, &str>()),
+                    Err(_) => return Err(e.err_convert_type::<StringM<10>, &str>()),
                 };
                 Ok(Symbol::try_from_str(ss)
-                    .map_err(|_| c.ty_cvt_err::<&str, Symbol>())?
+                    .map_err(|_| e.err_convert_type::<&str, Symbol>())?
                     .into())
             }
             ScVal::Bitset(i) => Ok(BitSet::try_from_u64(*i)
-                .map_err(|_| c.ty_cvt_err::<u64, BitSet>())?
+                .map_err(|_| e.err_convert_type::<u64, BitSet>())?
                 .into()),
             ScVal::Status(st) => Ok(st.into()),
         }

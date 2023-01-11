@@ -286,11 +286,11 @@ impl ConvertErrorHelper for Host {
 impl Convert<RawVal, HostError> for Host {
 
     fn to_object(&self, t: impl Borrow<RawVal>) -> Result<Object, HostError> {
-        Err(self.cvt_err::<RawVal,Object>(t))
+        Err(self.err_convert_general::<RawVal,Object>(t))
     }
 
     fn from_object(&self, obj: Object) -> Result<RawVal, HostError> {
-        Err(self.cvt_err::<Object,RawVal>(obj))
+        Err(self.err_convert_general::<Object,RawVal>(obj))
     }
 }
 

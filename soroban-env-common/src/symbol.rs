@@ -1,9 +1,10 @@
 use crate::{impl_wrapper_common, require, ConversionError, RawVal, Tag};
 use core::{
+    borrow::Borrow,
     cmp::Ordering,
     fmt::Debug,
     hash::{Hash, Hasher},
-    str, borrow::Borrow,
+    str,
 };
 
 /// Errors related to operations on the [Symbol] type.
