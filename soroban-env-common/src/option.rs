@@ -1,5 +1,3 @@
-use core::borrow::Borrow;
-
 use crate::{Env, RawVal, TryFromVal, TryIntoVal};
 
 impl<E: Env, T> TryFromVal<E, RawVal> for Option<T>
@@ -8,12 +6,12 @@ where
 {
     type Error = T::Error;
 
-    fn try_from_val(env: &E, val: impl Borrow<RawVal>) -> Result<Self, Self::Error> {
-        let val = *val.borrow();
+    fn try_from_val(env: &E, val: &RawVal) -> Result<Self, Self::Error> {
+        let val = *val;
         if val.is_void() {
             Ok(None)
         } else {
-            Ok(Some(T::try_from_val(env, val)?))
+            Ok(Some(T::try_from_val(env, &val)?))
         }
     }
 }
@@ -24,8 +22,8 @@ where
 {
     type Error = T::Error;
 
-    fn try_from_val(env: &E, v: impl Borrow<Option<T>>) -> Result<Self, Self::Error> {
-        match v.borrow() {
+    fn try_from_val(env: &E, v: &Option<T>) -> Result<Self, Self::Error> {
+        match v {
             Some(t) => t.try_into_val(env),
             None => Ok(RawVal::from_void()),
         }

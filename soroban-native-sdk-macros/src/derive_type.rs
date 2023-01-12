@@ -1,10 +1,10 @@
 use itertools::MultiUnzip;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
-use syn::{spanned::Spanned, DataEnum, DataStruct, Error, Ident, Type, Visibility};
+use syn::{spanned::Spanned, DataEnum, DataStruct, Error, Ident, Visibility};
 
 pub fn derive_type_struct(ident: &Ident, data: &DataStruct) -> TokenStream2 {
-    let (names, tys, map_keys): (Vec<_>, Vec<_>, Vec<_>) = data.fields
+    let (names, map_keys): (Vec<_>, Vec<_>) = data.fields
         .iter()
         .filter(|f| matches!(f.vis, Visibility::Public(_)))
         .enumerate()
@@ -17,7 +17,7 @@ pub fn derive_type_struct(ident: &Ident, data: &DataStruct) -> TokenStream2 {
             let map_key = quote! { // TODO: Handle field names longer than a symbol. Hash the name? Truncate the name?
                 { const k: soroban_env_common::Symbol = soroban_env_common::Symbol::from_str(#name); k }
             };
-            (ident, f.ty.clone(), map_key)
+            (ident, map_key)
         })
         .multiunzip();
 
@@ -37,11 +37,10 @@ pub fn derive_type_struct(ident: &Ident, data: &DataStruct) -> TokenStream2 {
         impl soroban_env_common::TryFromVal<crate::Host, soroban_env_common::Object> for #ident {
             type Error = crate::HostError;
 
-            fn try_from_val(env: &crate::Host, val: impl core::borrow::Borrow<soroban_env_common::Object>) -> Result<Self, Self::Error> {
-                let val = *val.borrow();
+            fn try_from_val(env: &crate::Host, val: &soroban_env_common::Object) -> Result<Self, Self::Error> {
                 let map = Map::try_from_val(env, val)?;
                 Ok(Self {
-                    #(#names: map.get(#map_keys)?,)*
+                    #(#names: map.get(&#map_keys)?,)*
                 })
             }
         }
@@ -49,19 +48,18 @@ pub fn derive_type_struct(ident: &Ident, data: &DataStruct) -> TokenStream2 {
         impl soroban_env_common::TryFromVal<crate::Host, soroban_env_common::RawVal> for #ident {
             type Error = crate::HostError;
 
-            fn try_from_val(env: &crate::Host, val: impl core::borrow::Borrow<soroban_env_common::RawVal>) -> Result<Self, Self::Error> {
-                let val = *val.borrow();
+            fn try_from_val(env: &crate::Host, val: &soroban_env_common::RawVal) -> Result<Self, Self::Error> {
                 let obj: soroban_env_common::Object = val.try_into()?;
-                Self::try_from_val(env, obj)
+                obj.try_into_val(env)
             }
         }
 
         impl soroban_env_common::TryFromVal<crate::Host, #ident> for soroban_env_common::RawVal {
             type Error = crate::HostError;
 
-            fn try_from_val(env: &crate::Host, val: impl core::borrow::Borrow<#ident>) -> Result<Self, Self::Error> {
+            fn try_from_val(env: &crate::Host, val: &#ident) -> Result<Self, Self::Error> {
                 let mut map = Map::new(env)?;
-                #(map.set::<soroban_env_common::Symbol, #tys>(#map_keys, &val.borrow().#names)?;)*
+                #(map.set(&#map_keys, &val.#names)?;)*
                 map.try_into_val(env)
             }
         }
@@ -88,7 +86,7 @@ pub fn derive_type_enum(ident: &Ident, data: &DataEnum) -> TokenStream2 {
                 };
                 let into = quote! {
                     #ident::#case_ident => {
-                        vec.push({ const k: crate::Symbol = crate::Symbol::from_str(#case_name); k })?;
+                        vec.push(&{ const k: crate::Symbol = crate::Symbol::from_str(#case_name); k })?;
                     }
                 };
                 let sym = quote! {
@@ -99,18 +97,13 @@ pub fn derive_type_enum(ident: &Ident, data: &DataEnum) -> TokenStream2 {
                 };
                 (discriminant_const, from, into, sym, compare)
             } else if f.fields.len() == 1 {
-                let ty:Type = match &f.fields {
-                    syn::Fields::Named(fs) => fs.named.first().unwrap().ty.clone(),
-                    syn::Fields::Unnamed(fs) => fs.unnamed.first().unwrap().ty.clone(),
-                    syn::Fields::Unit => syn::parse_quote!{ () },
-                };
                 let from = quote! {
                     #discriminant_ident => Ok(Self::#case_ident(vec.get(1)?))
                 };
                 let into = quote! {
                     #ident::#case_ident(x) => {
-                        vec.push({ const k: crate::Symbol = crate::Symbol::from_str(#case_name); k })?;
-                        vec.push::<#ty>(x)?;
+                        vec.push(&{ const k: crate::Symbol = crate::Symbol::from_str(#case_name); k })?;
+                        vec.push(x)?;
                     }
                 };
                 let sym = quote! {
@@ -158,8 +151,7 @@ pub fn derive_type_enum(ident: &Ident, data: &DataEnum) -> TokenStream2 {
             impl soroban_env_common::TryFromVal<crate::Host, soroban_env_common::Object> for #ident {
                 type Error = crate::HostError;
 
-                fn try_from_val(env: &crate::Host, val: impl core::borrow::Borrow<soroban_env_common::Object>) -> Result<Self, Self::Error> {
-                    let val = *val.borrow();
+                fn try_from_val(env: &crate::Host, val: &soroban_env_common::Object) -> Result<Self, Self::Error> {
                     #(#consts;)*
                     let vec = crate::native_contract::base_types::Vec::try_from_val(env, val)?;
                     let discriminant: soroban_env_common::Symbol = vec.get(0)?;
@@ -173,20 +165,19 @@ pub fn derive_type_enum(ident: &Ident, data: &DataEnum) -> TokenStream2 {
             impl soroban_env_common::TryFromVal<crate::Host, soroban_env_common::RawVal> for #ident {
                 type Error = crate::HostError;
 
-                fn try_from_val(env: &crate::Host, val: impl core::borrow::Borrow<soroban_env_common::RawVal>) -> Result<Self, Self::Error> {
-                    let val = *val.borrow();
+                fn try_from_val(env: &crate::Host, val: &soroban_env_common::RawVal) -> Result<Self, Self::Error> {
                     let obj: soroban_env_common::Object = val.try_into()?;
-                    Self::try_from_val(env, obj)
+                    obj.try_into_val(env)
                 }
             }
 
             impl soroban_env_common::TryFromVal<crate::Host, #ident> for soroban_env_common::RawVal {
                 type Error = crate::HostError;
 
-                fn try_from_val(env: &crate::Host, val: impl core::borrow::Borrow<#ident>) -> Result<soroban_env_common::RawVal, Self::Error> {
+                fn try_from_val(env: &crate::Host, val: &#ident) -> Result<soroban_env_common::RawVal, Self::Error> {
                     #(#consts;)*
                     let mut vec = crate::native_contract::base_types::Vec::new(env)?;
-                    match val.borrow() {
+                    match val {
                         #(#intos)*
                     };
                     vec.try_into_val(env)

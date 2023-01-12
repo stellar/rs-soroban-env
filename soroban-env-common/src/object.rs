@@ -1,7 +1,7 @@
 use crate::{
     impl_wrapper_common, xdr::ScObjectType, ConversionError, Convert, Env, RawVal, Tag, TryFromVal,
 };
-use core::{borrow::Borrow, fmt::Debug};
+use core::fmt::Debug;
 use stellar_xdr::ScObject;
 
 /// Wrapper for a [RawVal] that is tagged with [Tag::Object], interpreting the
@@ -57,8 +57,8 @@ where
     E: Env + Convert<Object, ScObject>,
 {
     type Error = E::Error;
-    fn try_from_val(env: &E, val: impl Borrow<Object>) -> Result<Self, Self::Error> {
-        env.convert(*val.borrow())
+    fn try_from_val(env: &E, val: &Object) -> Result<Self, Self::Error> {
+        env.convert(*val)
     }
 }
 
@@ -75,8 +75,8 @@ where
 
     type Error = ConversionError;
 
-    fn try_from_val(env: &E, v: impl Borrow<ScObject>) -> Result<Self, Self::Error> {
-        let scob: &ScObject = v.borrow();
+    fn try_from_val(env: &E, v: &ScObject) -> Result<Self, Self::Error> {
+        let scob: &ScObject = v;
         match env.convert(scob) {
             Ok(obj) => Ok(obj),
             Err(_) => Err(ConversionError),

@@ -1,7 +1,7 @@
 use stellar_xdr::{ScStatic, ScStatus, ScStatusType};
 
 use super::{BitSet, Env, Object, Static, Status, Symbol, TryFromVal};
-use core::{borrow::Borrow, convert::Infallible, fmt::Debug};
+use core::{convert::Infallible, fmt::Debug};
 
 extern crate static_assertions as sa;
 
@@ -120,8 +120,8 @@ impl AsMut<RawVal> for RawVal {
 
 impl<E: Env> TryFromVal<E, RawVal> for RawVal {
     type Error = Infallible;
-    fn try_from_val(_env: &E, val: impl Borrow<RawVal>) -> Result<Self, Self::Error> {
-        Ok(*val.borrow())
+    fn try_from_val(_env: &E, val: &RawVal) -> Result<Self, Self::Error> {
+        Ok(*val)
     }
 }
 
@@ -206,14 +206,14 @@ macro_rules! declare_tryfrom {
         impl<E: Env> TryFromVal<E, RawVal> for $T {
             type Error = ConversionError;
             #[inline(always)]
-            fn try_from_val(_env: &E, val: impl Borrow<RawVal>) -> Result<Self, Self::Error> {
-                Self::try_from(*val.borrow())
+            fn try_from_val(_env: &E, val: &RawVal) -> Result<Self, Self::Error> {
+                Self::try_from(*val)
             }
         }
         impl<E: Env> TryFromVal<E, $T> for RawVal {
             type Error = ConversionError;
-            fn try_from_val(_env: &E, val: impl Borrow<$T>) -> Result<Self, Self::Error> {
-                Ok((*val.borrow()).into())
+            fn try_from_val(_env: &E, val: &$T) -> Result<Self, Self::Error> {
+                Ok((*val).into())
             }
         }
     };

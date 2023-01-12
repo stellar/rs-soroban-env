@@ -1,4 +1,3 @@
-use core::borrow::Borrow;
 use stellar_xdr::ScObjectType;
 
 #[cfg(feature = "std")]
@@ -20,7 +19,7 @@ pub trait TryIntoVal<E: Env, V> {
 
 pub trait TryFromVal<E: Env, V: ?Sized>: Sized {
     type Error;
-    fn try_from_val(env: &E, v: impl Borrow<V>) -> Result<Self, Self::Error>;
+    fn try_from_val(env: &E, v: &V) -> Result<Self, Self::Error>;
 }
 
 // Blanket-impl uses of TryIntoVal to TryFromVal, so that we
@@ -51,8 +50,8 @@ pub(crate) fn log_err_convert<T>(env: &impl Env, val: &impl AsRef<RawVal>) {
 impl<E: Env> TryFromVal<E, RawVal> for i64 {
     type Error = ConversionError;
 
-    fn try_from_val(env: &E, val: impl Borrow<RawVal>) -> Result<Self, Self::Error> {
-        let val = *val.borrow();
+    fn try_from_val(env: &E, val: &RawVal) -> Result<Self, Self::Error> {
+        let val = *val;
         if val.is_u63() {
             Ok(unsafe { val.unchecked_as_u63() })
         } else if Object::val_is_obj_type(val, ScObjectType::I64) {
@@ -68,8 +67,8 @@ impl<E: Env> TryFromVal<E, RawVal> for i64 {
 impl<E: Env> TryFromVal<E, i64> for RawVal {
     type Error = ConversionError;
 
-    fn try_from_val(env: &E, v: impl Borrow<i64>) -> Result<Self, Self::Error> {
-        let v = *v.borrow();
+    fn try_from_val(env: &E, v: &i64) -> Result<Self, Self::Error> {
+        let v = *v;
         if v >= 0 {
             Ok(unsafe { RawVal::unchecked_from_u63(v) })
         } else {
@@ -83,8 +82,8 @@ impl<E: Env> TryFromVal<E, i64> for RawVal {
 impl<E: Env> TryFromVal<E, RawVal> for u64 {
     type Error = ConversionError;
 
-    fn try_from_val(env: &E, val: impl Borrow<RawVal>) -> Result<Self, Self::Error> {
-        let val = *val.borrow();
+    fn try_from_val(env: &E, val: &RawVal) -> Result<Self, Self::Error> {
+        let val = *val;
         if Object::val_is_obj_type(val, ScObjectType::U64) {
             let obj = unsafe { Object::unchecked_from_val(val) };
             Ok(env.obj_to_u64(obj))
@@ -98,8 +97,8 @@ impl<E: Env> TryFromVal<E, RawVal> for u64 {
 impl<E: Env> TryFromVal<E, u64> for RawVal {
     type Error = ConversionError;
 
-    fn try_from_val(env: &E, v: impl Borrow<u64>) -> Result<Self, Self::Error> {
-        Ok(env.obj_from_u64(*v.borrow()).to_raw())
+    fn try_from_val(env: &E, v: &u64) -> Result<Self, Self::Error> {
+        Ok(env.obj_from_u64(*v).to_raw())
     }
 }
 
@@ -108,8 +107,8 @@ impl<E: Env> TryFromVal<E, u64> for RawVal {
 impl<E: Env> TryFromVal<E, RawVal> for i128 {
     type Error = ConversionError;
 
-    fn try_from_val(env: &E, v: impl Borrow<RawVal>) -> Result<Self, Self::Error> {
-        let v = *v.borrow();
+    fn try_from_val(env: &E, v: &RawVal) -> Result<Self, Self::Error> {
+        let v = *v;
         let obj = v.try_into()?;
         let lo = env.obj_to_i128_lo64(obj);
         let hi = env.obj_to_i128_hi64(obj);
@@ -120,8 +119,8 @@ impl<E: Env> TryFromVal<E, RawVal> for i128 {
 impl<E: Env> TryFromVal<E, i128> for RawVal {
     type Error = ConversionError;
 
-    fn try_from_val(env: &E, v: impl Borrow<i128>) -> Result<Self, Self::Error> {
-        let v = *v.borrow();
+    fn try_from_val(env: &E, v: &i128) -> Result<Self, Self::Error> {
+        let v = *v;
         Ok(env
             .obj_from_i128_pieces(v as u64, (v as u128 >> 64) as u64)
             .into())
@@ -133,8 +132,8 @@ impl<E: Env> TryFromVal<E, i128> for RawVal {
 impl<E: Env> TryFromVal<E, RawVal> for u128 {
     type Error = ConversionError;
 
-    fn try_from_val(env: &E, v: impl Borrow<RawVal>) -> Result<Self, Self::Error> {
-        let v = *v.borrow();
+    fn try_from_val(env: &E, v: &RawVal) -> Result<Self, Self::Error> {
+        let v = *v;
         let obj = v.try_into()?;
         let lo = env.obj_to_u128_lo64(obj);
         let hi = env.obj_to_u128_hi64(obj);
@@ -145,8 +144,8 @@ impl<E: Env> TryFromVal<E, RawVal> for u128 {
 impl<E: Env> TryFromVal<E, u128> for RawVal {
     type Error = ConversionError;
 
-    fn try_from_val(env: &E, v: impl Borrow<u128>) -> Result<Self, Self::Error> {
-        let v = *v.borrow();
+    fn try_from_val(env: &E, v: &u128) -> Result<Self, Self::Error> {
+        let v = *v;
         Ok(env.obj_from_u128_pieces(v as u64, (v >> 64) as u64).into())
     }
 }
@@ -160,8 +159,8 @@ where
 {
     type Error = ConversionError;
 
-    fn try_from_val(env: &E, val: impl Borrow<RawVal>) -> Result<Self, Self::Error> {
-        let val = *val.borrow();
+    fn try_from_val(env: &E, val: &RawVal) -> Result<Self, Self::Error> {
+        let val = *val;
         if val.is_u63() {
             Ok(ScVal::U63(unsafe { val.unchecked_as_u63() }))
         } else {
@@ -190,7 +189,7 @@ where
                 }
                 Tag::Object => unsafe {
                     let ob = <Object as RawValConvertible>::unchecked_from_val(val);
-                    let scob = ScObject::try_from_val(&env, ob).map_err(|_| ConversionError)?;
+                    let scob = ScObject::try_from_val(&env, &ob).map_err(|_| ConversionError)?;
                     Ok(ScVal::Object(Some(scob)))
                 },
                 Tag::Symbol => {
@@ -217,8 +216,8 @@ where
     Object: TryFromVal<E, ScObject>,
 {
     type Error = ConversionError;
-    fn try_from_val(env: &E, val: impl Borrow<ScVal>) -> Result<RawVal, Self::Error> {
-        Ok(match val.borrow() {
+    fn try_from_val(env: &E, val: &ScVal) -> Result<RawVal, Self::Error> {
+        Ok(match val {
             ScVal::U63(i) => {
                 if *i >= 0 {
                     unsafe { RawVal::unchecked_from_u63(*i) }

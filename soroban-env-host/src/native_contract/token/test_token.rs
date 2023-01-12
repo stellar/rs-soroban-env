@@ -29,7 +29,7 @@ impl<'a> TestToken<'a> {
             .try_into_val(host)
             .unwrap();
         Self {
-            id: BytesN::<32>::try_from_val(host, id_obj).unwrap(),
+            id: BytesN::<32>::try_from_val(host, &id_obj).unwrap(),
             host,
         }
     }

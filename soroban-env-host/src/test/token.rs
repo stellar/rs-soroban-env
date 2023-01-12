@@ -319,7 +319,7 @@ fn test_native_token_smart_roundtrip() {
     let token = TestToken::new_from_asset(&test.host, Asset::Native);
     let expected_token_id = BytesN::<32>::try_from_val(
         &test.host,
-        test.host.get_contract_id_from_asset(Asset::Native).unwrap(),
+        &test.host.get_contract_id_from_asset(Asset::Native).unwrap(),
     )
     .unwrap();
 
@@ -388,7 +388,7 @@ fn test_classic_asset_init(asset_code: &[u8]) {
     let token = TestToken::new_from_asset(&test.host, asset.clone());
     let expected_token_id = BytesN::<32>::try_from_val(
         &test.host,
-        test.host.get_contract_id_from_asset(asset).unwrap(),
+        &test.host.get_contract_id_from_asset(asset).unwrap(),
     )
     .unwrap();
     assert_eq!(token.id.to_vec(), expected_token_id.to_vec());

@@ -1,4 +1,3 @@
-use core::borrow::Borrow;
 use stellar_xdr::ScObjectType;
 
 use crate::{ConversionError, Env, Object, RawVal, RawValConvertible, TryFromVal, TryIntoVal};
@@ -14,8 +13,8 @@ macro_rules! impl_for_tuple {
         {
             type Error = ConversionError;
 
-            fn try_from_val(env: &E, val: impl Borrow<RawVal>) -> Result<Self, Self::Error> {
-                let val = *val.borrow();
+            fn try_from_val(env: &E, val: &RawVal) -> Result<Self, Self::Error> {
+                let val = *val;
                 if !Object::val_is_obj_type(val, ScObjectType::Vec) {
                     return Err(ConversionError);
                 }
@@ -28,7 +27,7 @@ macro_rules! impl_for_tuple {
                     $({
                         let idx: u32 = $idx;
                         let val = env.vec_get(vec, idx.into());
-                        $typ::try_from_val(&env, val).map_err(|_| ConversionError)?
+                        $typ::try_from_val(&env, &val).map_err(|_| ConversionError)?
                     },)*
                 ))
             }
@@ -39,9 +38,9 @@ macro_rules! impl_for_tuple {
             $($typ: TryIntoVal<E, RawVal>),*
         {
             type Error = ConversionError;
-            fn try_from_val(env: &E, v: impl Borrow<($($typ,)*)>) -> Result<Self, Self::Error> {
+            fn try_from_val(env: &E, v: &($($typ,)*)) -> Result<Self, Self::Error> {
                 let vec = env.vec_new($count.into());
-                $(let vec = env.vec_push_back(vec, v.borrow().$idx.try_into_val(&env).map_err(|_| ConversionError)?);)*
+                $(let vec = env.vec_push_back(vec, v.$idx.try_into_val(&env).map_err(|_| ConversionError)?);)*
                 Ok(vec.to_raw())
             }
         }
@@ -55,10 +54,10 @@ macro_rules! impl_for_tuple {
         {
             type Error = ConversionError;
 
-            fn try_from_val(env: &E, val: impl Borrow<[RawVal; N]>) -> Result<Self, Self::Error> {
+            fn try_from_val(env: &E, val: &[RawVal; N]) -> Result<Self, Self::Error> {
                 Ok((
                     $({
-                        $typ::try_from_val(&env, val.borrow()[$idx]).map_err(|_| ConversionError)?
+                        $typ::try_from_val(&env, &val[$idx]).map_err(|_| ConversionError)?
                     },)*
                 ))
             }
@@ -70,9 +69,9 @@ macro_rules! impl_for_tuple {
         {
             type Error = ConversionError;
 
-            fn try_from_val(env: &E, val: impl Borrow<($($typ,)*)>) -> Result<Self, Self::Error> {
+            fn try_from_val(env: &E, val: &($($typ,)*)) -> Result<Self, Self::Error> {
                 let mut arr = [RawVal::VOID; N];
-                $(arr[$idx] = val.borrow().$idx.try_into_val(env).map_err(|_| ConversionError)?;)*
+                $(arr[$idx] = val.$idx.try_into_val(env).map_err(|_| ConversionError)?;)*
                 Ok(arr)
             }
         }
@@ -101,7 +100,7 @@ impl_for_tuple! { 12_u32 12_usize T0 0 T1 1 T2 2 T3 3 T4 4 T5 5 T6 6 T7 7 T8 8 T
 impl<E: Env> TryFromVal<E, [RawVal; 0]> for () {
     type Error = ConversionError;
 
-    fn try_from_val(_env: &E, _val: impl Borrow<[RawVal; 0]>) -> Result<Self, Self::Error> {
+    fn try_from_val(_env: &E, _val: &[RawVal; 0]) -> Result<Self, Self::Error> {
         Ok(())
     }
 }
@@ -109,7 +108,7 @@ impl<E: Env> TryFromVal<E, [RawVal; 0]> for () {
 impl<E: Env> TryFromVal<E, ()> for [RawVal; 0] {
     type Error = ConversionError;
 
-    fn try_from_val(_env: &E, _v: impl Borrow<()>) -> Result<Self, Self::Error> {
+    fn try_from_val(_env: &E, _v: &()) -> Result<Self, Self::Error> {
         Ok([RawVal::VOID; 0])
     }
 }
