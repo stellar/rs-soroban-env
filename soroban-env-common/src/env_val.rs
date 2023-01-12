@@ -1,3 +1,4 @@
+use core::borrow::Borrow;
 use stellar_xdr::ScObjectType;
 
 #[cfg(feature = "std")]
@@ -12,22 +13,27 @@ use super::{
     Env,
 };
 
-pub trait IntoVal<E: Env, V>: Sized {
-    fn into_val(self, env: &E) -> V;
-}
-
-pub trait TryIntoVal<E: Env, V>: Sized {
+pub trait TryIntoVal<E: Env, V> {
     type Error;
-    fn try_into_val(self, env: &E) -> Result<V, Self::Error>;
+    fn try_into_val(&self, env: &E) -> Result<V, Self::Error>;
 }
 
-pub trait FromVal<E: Env, V>: Sized {
-    fn from_val(env: &E, v: V) -> Self;
-}
-
-pub trait TryFromVal<E: Env, V>: Sized {
+pub trait TryFromVal<E: Env, V: ?Sized>: Sized {
     type Error;
-    fn try_from_val(env: &E, v: V) -> Result<Self, Self::Error>;
+    fn try_from_val(env: &E, v: impl Borrow<V>) -> Result<Self, Self::Error>;
+}
+
+// Blanket-impl uses of TryIntoVal to TryFromVal, so that we
+// only ever have to impl TryFromVal.
+impl<E: Env, T, U> TryIntoVal<E, T> for U
+where
+    T: TryFromVal<E, U>,
+{
+    type Error = T::Error;
+
+    fn try_into_val(&self, env: &E) -> Result<T, Self::Error> {
+        T::try_from_val(env, self)
+    }
 }
 
 pub(crate) fn log_err_convert<T>(env: &impl Env, val: &impl AsRef<RawVal>) {
@@ -40,10 +46,13 @@ pub(crate) fn log_err_convert<T>(env: &impl Env, val: &impl AsRef<RawVal>) {
     );
 }
 
+// i64 conversions
+
 impl<E: Env> TryFromVal<E, RawVal> for i64 {
     type Error = ConversionError;
 
-    fn try_from_val(env: &E, val: RawVal) -> Result<Self, Self::Error> {
+    fn try_from_val(env: &E, val: impl Borrow<RawVal>) -> Result<Self, Self::Error> {
+        let val = *val.borrow();
         if val.is_u63() {
             Ok(unsafe { val.unchecked_as_u63() })
         } else if Object::val_is_obj_type(val, ScObjectType::I64) {
@@ -56,40 +65,26 @@ impl<E: Env> TryFromVal<E, RawVal> for i64 {
     }
 }
 
-impl<E: Env> IntoVal<E, RawVal> for i64 {
-    fn into_val(self, env: &E) -> RawVal {
-        if self >= 0 {
-            unsafe { RawVal::unchecked_from_u63(self) }
+impl<E: Env> TryFromVal<E, i64> for RawVal {
+    type Error = ConversionError;
+
+    fn try_from_val(env: &E, v: impl Borrow<i64>) -> Result<Self, Self::Error> {
+        let v = *v.borrow();
+        if v >= 0 {
+            Ok(unsafe { RawVal::unchecked_from_u63(v) })
         } else {
-            env.obj_from_i64(self).to_raw()
+            Ok(env.obj_from_i64(v).to_raw())
         }
     }
 }
 
-impl<E: Env> IntoVal<E, RawVal> for &i64 {
-    fn into_val(self, env: &E) -> RawVal {
-        (*self).into_val(env)
-    }
-}
-
-impl<E: Env> TryIntoVal<E, RawVal> for i64 {
-    type Error = ConversionError;
-    fn try_into_val(self, env: &E) -> Result<RawVal, Self::Error> {
-        Ok(IntoVal::into_val(self, env))
-    }
-}
-
-impl<E: Env> TryIntoVal<E, i64> for RawVal {
-    type Error = <i64 as TryFromVal<E, RawVal>>::Error;
-    fn try_into_val(self, env: &E) -> Result<i64, Self::Error> {
-        <_ as TryFromVal<_, _>>::try_from_val(env, self)
-    }
-}
+// u64 conversions
 
 impl<E: Env> TryFromVal<E, RawVal> for u64 {
     type Error = ConversionError;
 
-    fn try_from_val(env: &E, val: RawVal) -> Result<Self, Self::Error> {
+    fn try_from_val(env: &E, val: impl Borrow<RawVal>) -> Result<Self, Self::Error> {
+        let val = *val.borrow();
         if Object::val_is_obj_type(val, ScObjectType::U64) {
             let obj = unsafe { Object::unchecked_from_val(val) };
             Ok(env.obj_to_u64(obj))
@@ -100,146 +95,63 @@ impl<E: Env> TryFromVal<E, RawVal> for u64 {
     }
 }
 
-impl<E: Env> IntoVal<E, RawVal> for u64 {
-    fn into_val(self, env: &E) -> RawVal {
-        env.obj_from_u64(self).to_raw()
-    }
-}
-
-impl<E: Env> IntoVal<E, RawVal> for &u64 {
-    fn into_val(self, env: &E) -> RawVal {
-        (*self).into_val(env)
-    }
-}
-
-impl<E: Env> TryIntoVal<E, RawVal> for u64 {
-    type Error = ConversionError;
-    fn try_into_val(self, env: &E) -> Result<RawVal, Self::Error> {
-        Ok(IntoVal::into_val(self, env))
-    }
-}
-
-impl<E: Env> TryIntoVal<E, u64> for RawVal {
-    type Error = <u64 as TryFromVal<E, RawVal>>::Error;
-    fn try_into_val(self, env: &E) -> Result<u64, Self::Error> {
-        <_ as TryFromVal<_, _>>::try_from_val(env, self)
-    }
-}
-
-// Innermost conversions: infallible {ui}128 -> Object and
-// fallible Object -> {ui}128
-impl<E: Env> IntoVal<E, Object> for u128 {
-    fn into_val(self, env: &E) -> Object {
-        env.obj_from_u128_pieces(self as u64, (self >> 64) as u64)
-    }
-}
-
-impl<E: Env> IntoVal<E, Object> for i128 {
-    fn into_val(self, env: &E) -> Object {
-        env.obj_from_i128_pieces(self as u64, (self as u128 >> 64) as u64)
-    }
-}
-
-impl<E: Env> TryIntoVal<E, u128> for Object {
+impl<E: Env> TryFromVal<E, u64> for RawVal {
     type Error = ConversionError;
 
-    fn try_into_val(self, env: &E) -> Result<u128, Self::Error> {
-        let lo = env.obj_to_u128_lo64(self);
-        let hi = env.obj_to_u128_hi64(self);
-        let u: u128 = (lo as u128) | ((hi as u128) << 64);
-        Ok(u)
+    fn try_from_val(env: &E, v: impl Borrow<u64>) -> Result<Self, Self::Error> {
+        Ok(env.obj_from_u64(*v.borrow()).to_raw())
     }
 }
 
-impl<E: Env> TryIntoVal<E, i128> for Object {
+// i128 conversions
+
+impl<E: Env> TryFromVal<E, RawVal> for i128 {
     type Error = ConversionError;
 
-    fn try_into_val(self, env: &E) -> Result<i128, Self::Error> {
-        let lo = env.obj_to_i128_lo64(self);
-        let hi = env.obj_to_i128_hi64(self);
+    fn try_from_val(env: &E, v: impl Borrow<RawVal>) -> Result<Self, Self::Error> {
+        let v = *v.borrow();
+        let obj = v.try_into()?;
+        let lo = env.obj_to_i128_lo64(obj);
+        let hi = env.obj_to_i128_hi64(obj);
         let u: u128 = (lo as u128) | ((hi as u128) << 64);
         Ok(u as i128)
     }
 }
+impl<E: Env> TryFromVal<E, i128> for RawVal {
+    type Error = ConversionError;
 
-macro_rules! decl_int128_conversions {
-    ($T:ty) => {
-        // RawVal-typed versions delegate to Object-typed
-        impl<E: Env> IntoVal<E, RawVal> for $T {
-            fn into_val(self, env: &E) -> RawVal {
-                <Self as IntoVal<E, Object>>::into_val(self, env).to_raw()
-            }
-        }
-        impl<E: Env> TryIntoVal<E, $T> for RawVal {
-            type Error = ConversionError;
-            fn try_into_val(self, env: &E) -> Result<$T, Self::Error> {
-                let ob: Object = self.try_into_val(env)?;
-                <Object as TryIntoVal<E, $T>>::try_into_val(ob, env)
-            }
-        }
-        // Infallible reference-types delegate to deref
-        impl<E: Env> IntoVal<E, Object> for &$T {
-            fn into_val(self, env: &E) -> Object {
-                (*self).into_val(env)
-            }
-        }
-        impl<E: Env> IntoVal<E, RawVal> for &$T {
-            fn into_val(self, env: &E) -> RawVal {
-                (*self).into_val(env)
-            }
-        }
-        // Fallibe versions of infallibe injections just delegate to them.
-        impl<E: Env> TryIntoVal<E, RawVal> for $T {
-            type Error = ConversionError;
-
-            fn try_into_val(self, env: &E) -> Result<RawVal, Self::Error> {
-                Ok(<Self as IntoVal<E, RawVal>>::into_val(self, env).into())
-            }
-        }
-
-        impl<E: Env> TryIntoVal<E, RawVal> for &$T {
-            type Error = ConversionError;
-
-            fn try_into_val(self, env: &E) -> Result<RawVal, Self::Error> {
-                Ok(<Self as IntoVal<E, RawVal>>::into_val(self, env).into())
-            }
-        }
-
-        impl<E: Env> TryIntoVal<E, Object> for $T {
-            type Error = ConversionError;
-
-            fn try_into_val(self, env: &E) -> Result<Object, Self::Error> {
-                Ok(<Self as IntoVal<E, Object>>::into_val(self, env).into())
-            }
-        }
-
-        impl<E: Env> TryIntoVal<E, Object> for &$T {
-            type Error = ConversionError;
-
-            fn try_into_val(self, env: &E) -> Result<Object, Self::Error> {
-                Ok(<Self as IntoVal<E, Object>>::into_val(self, env).into())
-            }
-        }
-        // TryFrom impls delegate to TryInto impls the other direction
-        impl<E: Env> TryFromVal<E, RawVal> for $T {
-            type Error = ConversionError;
-
-            fn try_from_val(env: &E, val: RawVal) -> Result<Self, Self::Error> {
-                <RawVal as TryIntoVal<E, $T>>::try_into_val(val, env)
-            }
-        }
-        impl<E: Env> TryFromVal<E, Object> for $T {
-            type Error = ConversionError;
-
-            fn try_from_val(env: &E, val: Object) -> Result<Self, Self::Error> {
-                <Object as TryIntoVal<E, $T>>::try_into_val(val, env)
-            }
-        }
-    };
+    fn try_from_val(env: &E, v: impl Borrow<i128>) -> Result<Self, Self::Error> {
+        let v = *v.borrow();
+        Ok(env
+            .obj_from_i128_pieces(v as u64, (v as u128 >> 64) as u64)
+            .into())
+    }
 }
 
-decl_int128_conversions!(u128);
-decl_int128_conversions!(i128);
+// u128 conversions
+
+impl<E: Env> TryFromVal<E, RawVal> for u128 {
+    type Error = ConversionError;
+
+    fn try_from_val(env: &E, v: impl Borrow<RawVal>) -> Result<Self, Self::Error> {
+        let v = *v.borrow();
+        let obj = v.try_into()?;
+        let lo = env.obj_to_u128_lo64(obj);
+        let hi = env.obj_to_u128_hi64(obj);
+        let u: u128 = (lo as u128) | ((hi as u128) << 64);
+        Ok(u)
+    }
+}
+impl<E: Env> TryFromVal<E, u128> for RawVal {
+    type Error = ConversionError;
+
+    fn try_from_val(env: &E, v: impl Borrow<u128>) -> Result<Self, Self::Error> {
+        let v = *v.borrow();
+        Ok(env.obj_from_u128_pieces(v as u64, (v >> 64) as u64).into())
+    }
+}
+
+// ScVal conversions (that require ScObject conversions)
 
 #[cfg(feature = "std")]
 impl<E: Env> TryFromVal<E, RawVal> for ScVal
@@ -248,7 +160,8 @@ where
 {
     type Error = ConversionError;
 
-    fn try_from_val(env: &E, val: RawVal) -> Result<Self, Self::Error> {
+    fn try_from_val(env: &E, val: impl Borrow<RawVal>) -> Result<Self, Self::Error> {
+        let val = *val.borrow();
         if val.is_u63() {
             Ok(ScVal::U63(unsafe { val.unchecked_as_u63() }))
         } else {
@@ -299,25 +212,13 @@ where
 }
 
 #[cfg(feature = "std")]
-impl<E: Env> TryIntoVal<E, ScVal> for RawVal
+impl<E: Env> TryFromVal<E, ScVal> for RawVal
 where
-    ScObject: TryFromVal<E, Object>,
-{
-    type Error = <ScVal as TryFromVal<E, RawVal>>::Error;
-
-    fn try_into_val(self, env: &E) -> Result<ScVal, Self::Error> {
-        <_ as TryFromVal<E, RawVal>>::try_from_val(env, self)
-    }
-}
-
-#[cfg(feature = "std")]
-impl<E: Env> TryIntoVal<E, RawVal> for &ScVal
-where
-    for<'a> &'a ScObject: TryIntoVal<E, Object>,
+    Object: TryFromVal<E, ScObject>,
 {
     type Error = ConversionError;
-    fn try_into_val(self, env: &E) -> Result<RawVal, Self::Error> {
-        Ok(match self {
+    fn try_from_val(env: &E, val: impl Borrow<ScVal>) -> Result<RawVal, Self::Error> {
+        Ok(match val.borrow() {
             ScVal::U63(i) => {
                 if *i >= 0 {
                     unsafe { RawVal::unchecked_from_u63(*i) }
@@ -332,7 +233,9 @@ where
             ScVal::Static(ScStatic::False) => RawVal::from_bool(false),
             ScVal::Static(other) => RawVal::from_other_static(*other),
             ScVal::Object(None) => return Err(ConversionError),
-            ScVal::Object(Some(ob)) => ob.try_into_val(env).map_err(|_| ConversionError)?.to_raw(),
+            ScVal::Object(Some(ob)) => Object::try_from_val(env, ob)
+                .map_err(|_| ConversionError)?
+                .to_raw(),
             ScVal::Symbol(bytes) => {
                 let ss = match std::str::from_utf8(bytes.as_slice()) {
                     Ok(ss) => ss,
@@ -343,16 +246,5 @@ where
             ScVal::Bitset(i) => BitSet::try_from_u64(*i)?.into(),
             ScVal::Status(st) => st.into(),
         })
-    }
-}
-
-#[cfg(feature = "std")]
-impl<E: Env> TryIntoVal<E, RawVal> for ScVal
-where
-    for<'a> &'a ScObject: TryIntoVal<E, Object>,
-{
-    type Error = ConversionError;
-    fn try_into_val(self, env: &E) -> Result<RawVal, Self::Error> {
-        (&self).try_into_val(env)
     }
 }

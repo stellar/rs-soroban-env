@@ -1,8 +1,8 @@
 use crate::{
-    impl_wrapper_common, xdr::ScObjectType, Convert, Env, RawVal, Tag, TryFromVal, TryIntoVal,
+    impl_wrapper_common, xdr::ScObjectType, ConversionError, Convert, Env, RawVal, Tag, TryFromVal,
 };
-use core::fmt::Debug;
-use stellar_xdr::{ScObject, ScVal};
+use core::{borrow::Borrow, fmt::Debug};
+use stellar_xdr::ScObject;
 
 /// Wrapper for a [RawVal] that is tagged with [Tag::Object], interpreting the
 /// [RawVal]'s body as a pair of a 28-bit object-type code and a 32-bit handle
@@ -57,55 +57,29 @@ where
     E: Env + Convert<Object, ScObject>,
 {
     type Error = E::Error;
-    fn try_from_val(env: &E, val: Object) -> Result<Self, Self::Error> {
-        env.convert(val)
+    fn try_from_val(env: &E, val: impl Borrow<Object>) -> Result<Self, Self::Error> {
+        env.convert(*val.borrow())
     }
 }
 
-impl<'a, E> TryIntoVal<E, Object> for &'a ScObject
+impl<E> TryFromVal<E, ScObject> for Object
 where
-    E: Env + Convert<&'a ScObject, Object>,
+    E: Env + for<'a> Convert<&'a ScObject, Object>,
 {
-    type Error = E::Error;
-    fn try_into_val(self, env: &E) -> Result<Object, Self::Error> {
-        env.convert(self)
-    }
-}
+    // We want this:
+    //
+    //   type Error = <E as for<'a> Convert<&'a ScObject, Object>>::Error;
+    //
+    // But due to lifetime difficulties we will use a simpler error for now.
+    // (This is temporary anyways, we'll be moving the errors to EnvBase soon)
 
-impl<E> TryIntoVal<E, Object> for ScObject
-where
-    E: Env + Convert<ScObject, Object>,
-{
-    type Error = E::Error;
-    fn try_into_val(self, env: &E) -> Result<Object, Self::Error> {
-        env.convert(self)
-    }
-}
+    type Error = ConversionError;
 
-impl<'a, E> TryIntoVal<E, Object> for &'a ScVal
-where
-    E: Env + Convert<&'a ScObject, Object>,
-{
-    type Error = E::Error;
-    fn try_into_val(self, env: &E) -> Result<Object, Self::Error> {
-        if let ScVal::Object(Some(o)) = self {
-            o.try_into_val(env)
-        } else {
-            todo!()
-        }
-    }
-}
-
-impl<E> TryIntoVal<E, Object> for ScVal
-where
-    E: Env + Convert<ScObject, Object>,
-{
-    type Error = E::Error;
-    fn try_into_val(self, env: &E) -> Result<Object, Self::Error> {
-        if let ScVal::Object(Some(o)) = self {
-            o.try_into_val(env)
-        } else {
-            todo!()
+    fn try_from_val(env: &E, v: impl Borrow<ScObject>) -> Result<Self, Self::Error> {
+        let scob: &ScObject = v.borrow();
+        match env.convert(scob) {
+            Ok(obj) => Ok(obj),
+            Err(_) => Err(ConversionError),
         }
     }
 }

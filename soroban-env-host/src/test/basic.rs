@@ -1,9 +1,9 @@
-use soroban_env_common::{RawVal, TryFromVal};
+use soroban_env_common::{RawVal, TryFromVal, TryIntoVal};
 
 use crate::{
     host::HostError,
     xdr::{ScObjectType, ScVal},
-    Host, IntoVal, Object, RawValConvertible, Tag,
+    Host, Object, RawValConvertible, Tag,
 };
 
 /// numbers test
@@ -11,7 +11,7 @@ use crate::{
 fn u64_roundtrip() -> Result<(), HostError> {
     let host = Host::default();
     let u: u64 = 38473_u64; // This will be treated as a ScVal::Object::U64
-    let v: RawVal = u.into_val(&host);
+    let v: RawVal = u.try_into_val(&host)?;
     let obj: Object = v.try_into()?;
     assert!(obj.is_obj_type(ScObjectType::U64));
     assert_eq!(obj.get_handle(), 0);
@@ -19,7 +19,7 @@ fn u64_roundtrip() -> Result<(), HostError> {
     assert_eq!(u, j);
 
     let u2: u64 = u64::MAX; // This will be treated as a ScVal::Object::U64
-    let v2: RawVal = u2.into_val(&host);
+    let v2: RawVal = u2.try_into_val(&host)?;
     let obj: Object = v2.try_into()?;
     assert!(obj.is_obj_type(ScObjectType::U64));
     assert_eq!(obj.get_handle(), 1);
@@ -32,12 +32,12 @@ fn u64_roundtrip() -> Result<(), HostError> {
 fn i64_roundtrip() -> Result<(), HostError> {
     let host = Host::default();
     let i: i64 = 12345_i64; // Will be treated as ScVal::I64
-    let v: RawVal = i.into_val(&host);
+    let v: RawVal = i.try_into_val(&host)?;
     let j = i64::try_from_val(&host, v)?;
     assert_eq!(i, j);
 
     let i2: i64 = -13234_i64; // WIll be treated as ScVal::Object::I64
-    let v2: RawVal = i2.into_val(&host);
+    let v2: RawVal = i2.try_into_val(&host)?;
     let obj: Object = v2.try_into()?;
     assert!(obj.is_obj_type(ScObjectType::I64));
     assert_eq!(obj.get_handle(), 0);
@@ -74,7 +74,7 @@ fn i32_as_seen_by_host() -> Result<(), HostError> {
 fn tuple_roundtrip() -> Result<(), HostError> {
     let host = Host::default();
     let t0: (u32, i32) = (5, -4);
-    let ev: RawVal = t0.into_val(&host);
+    let ev: RawVal = t0.try_into_val(&host)?;
     let t0_back: (u32, i32) = <(u32, i32)>::try_from_val(&host, ev)?;
     assert_eq!(t0, t0_back);
     Ok(())
