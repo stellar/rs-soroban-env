@@ -10,11 +10,16 @@ pub struct AllowanceDataKey {
 }
 
 #[contracttype]
+pub struct BalanceValue {
+    pub amount: i128,
+    pub authorized: bool,
+}
+
+#[contracttype]
 pub enum DataKey {
     Allowance(AllowanceDataKey),
     Balance(Identifier),
     Nonce(Identifier),
-    State(Identifier),
     Admin,
     Metadata,
 }

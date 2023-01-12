@@ -2728,3 +2728,56 @@ fn test_classic_transfers_not_possible_for_unauthorized_asset() {
         100_000_000
     );
 }
+
+#[test]
+fn test_non_account_auth_required() {
+    let test = TokenTest::setup();
+
+    // the admin is the issuer_key
+    let admin_acc = signer_to_account_id(&test.host, &test.issuer_key);
+    let user = TestSigner::Ed25519(&test.user_key);
+
+    let admin_id = Identifier::Account(admin_acc.clone());
+    let user_id = user.get_identifier(&test.host);
+
+    let acc_invoker = TestSigner::AccountInvoker;
+    let token = test.default_token_with_admin_id(admin_id.clone());
+
+    test.create_classic_account(
+        &admin_acc,
+        vec![(&test.admin_key, 100)],
+        10_000_000,
+        1,
+        [1, 0, 0, 0],
+        None,
+        None,
+        AccountFlags::RequiredFlag as u32,
+    );
+
+    // user_id is deauthorized by default because the issuer has AUTH_REQUIRED set,
+    assert!(!token.authorized(user_id.clone()).unwrap());
+
+    // xfer to user_id will fail because the issuer has the AUTH_REQUIRED flag set
+    assert_eq!(
+        to_contract_err(
+            test.run_from_account(admin_acc.clone(), || {
+                token.xfer(&acc_invoker, 0, user_id.clone(), 1)
+            })
+            .err()
+            .unwrap()
+        ),
+        ContractError::BalanceDeauthorizedError
+    );
+
+    // authorize user_id
+    test.run_from_account(admin_acc.clone(), || {
+        token.set_auth(&acc_invoker, 0, user_id.clone(), true)
+    })
+    .unwrap();
+
+    // user_id can now hold a balance
+    test.run_from_account(admin_acc.clone(), || {
+        token.xfer(&acc_invoker, 0, user_id.clone(), 1)
+    })
+    .unwrap();
+}
