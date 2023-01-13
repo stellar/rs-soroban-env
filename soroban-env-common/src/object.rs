@@ -1,8 +1,9 @@
 use crate::{
     impl_wrapper_common, xdr::ScObjectType, ConversionError, Convert, Env, RawVal, Tag, TryFromVal,
+    TryIntoVal,
 };
 use core::fmt::Debug;
-use stellar_xdr::ScObject;
+use stellar_xdr::{ScObject, ScVal};
 
 /// Wrapper for a [RawVal] that is tagged with [Tag::Object], interpreting the
 /// [RawVal]'s body as a pair of a 28-bit object-type code and a 32-bit handle
@@ -80,6 +81,21 @@ where
         match env.convert(scob) {
             Ok(obj) => Ok(obj),
             Err(_) => Err(ConversionError),
+        }
+    }
+}
+
+impl<E> TryFromVal<E, ScVal> for Object
+where
+    E: Env + for<'a> Convert<&'a ScObject, Object>,
+{
+    type Error = ConversionError;
+
+    fn try_from_val(env: &E, v: &ScVal) -> Result<Self, Self::Error> {
+        if let ScVal::Object(Some(o)) = v {
+            o.try_into_val(env)
+        } else {
+            Err(ConversionError)
         }
     }
 }
