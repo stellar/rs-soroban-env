@@ -1,3 +1,4 @@
+use core::fmt::Debug;
 use stellar_xdr::ScObjectType;
 
 #[cfg(feature = "std")]
@@ -13,12 +14,12 @@ use super::{
 };
 
 pub trait TryIntoVal<E: Env, V> {
-    type Error;
+    type Error: Debug;
     fn try_into_val(&self, env: &E) -> Result<V, Self::Error>;
 }
 
 pub trait TryFromVal<E: Env, V: ?Sized>: Sized {
-    type Error;
+    type Error: Debug;
     fn try_from_val(env: &E, v: &V) -> Result<Self, Self::Error>;
 }
 

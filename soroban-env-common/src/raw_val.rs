@@ -119,7 +119,7 @@ impl AsMut<RawVal> for RawVal {
 }
 
 impl<E: Env> TryFromVal<E, RawVal> for RawVal {
-    type Error = Infallible;
+    type Error = ConversionError;
     fn try_from_val(_env: &E, val: &RawVal) -> Result<Self, Self::Error> {
         Ok(*val)
     }
