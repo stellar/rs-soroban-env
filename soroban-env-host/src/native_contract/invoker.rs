@@ -17,11 +17,11 @@ pub fn invoker(env: &Host) -> Result<Invoker, HostError> {
     Ok(match invoker_type {
         InvokerType::Account => Invoker::Account(AccountId::try_from_val(
             env,
-            Host::get_invoking_account(&env)?,
+            &Host::get_invoking_account(&env)?,
         )?),
         InvokerType::Contract => Invoker::Contract(BytesN::<32>::try_from_val(
             env,
-            Host::get_invoking_contract(&env)?,
+            &Host::get_invoking_contract(&env)?,
         )?),
     })
 }

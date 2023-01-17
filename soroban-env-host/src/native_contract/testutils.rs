@@ -45,7 +45,7 @@ pub(crate) fn generate_keypair() -> Keypair {
 pub(crate) fn generate_bytes(host: &Host) -> BytesN<32> {
     BytesN::<32>::try_from_val(
         host,
-        host.bytes_new_from_slice(&generate_bytes_array()).unwrap(),
+        &host.bytes_new_from_slice(&generate_bytes_array()).unwrap(),
     )
     .unwrap()
 }
@@ -53,7 +53,7 @@ pub(crate) fn generate_bytes(host: &Host) -> BytesN<32> {
 pub(crate) fn signer_to_id_bytes(host: &Host, key: &Keypair) -> BytesN<32> {
     BytesN::<32>::try_from_val(
         host,
-        host.bytes_new_from_slice(&key.public.to_bytes()).unwrap(),
+        &host.bytes_new_from_slice(&key.public.to_bytes()).unwrap(),
     )
     .unwrap()
 }
@@ -114,13 +114,13 @@ pub(crate) fn sign_args(
     let msg = SignaturePayload::V0(SignaturePayloadV0 {
         name: Symbol::from_str(fn_name),
         contract: contract_id.clone(),
-        network: Bytes::try_from_val(host, host.get_ledger_network_passphrase().unwrap()).unwrap(),
+        network: Bytes::try_from_val(host, &host.get_ledger_network_passphrase().unwrap()).unwrap(),
         args,
     });
     let msg_bin = host
         .serialize_to_bytes(msg.try_into_val(host).unwrap())
         .unwrap();
-    let msg_bytes = Bytes::try_from_val(host, msg_bin).unwrap().to_vec();
+    let msg_bytes = Bytes::try_from_val(host, &msg_bin).unwrap().to_vec();
     let payload = &msg_bytes[..];
 
     match signer {
@@ -132,7 +132,7 @@ pub(crate) fn sign_args(
             signatures: {
                 let mut signatures = HostVec::new(&host).unwrap();
                 for key in &account_signer.signers {
-                    signatures.push(sign_payload(host, key, payload)).unwrap();
+                    signatures.push(&sign_payload(host, key, payload)).unwrap();
                 }
                 signatures
             },
@@ -144,13 +144,15 @@ fn sign_payload(host: &Host, signer: &Keypair, payload: &[u8]) -> Ed25519Signatu
     Ed25519Signature {
         public_key: BytesN::<32>::try_from_val(
             host,
-            host.bytes_new_from_slice(&signer.public.to_bytes())
+            &host
+                .bytes_new_from_slice(&signer.public.to_bytes())
                 .unwrap(),
         )
         .unwrap(),
         signature: BytesN::<64>::try_from_val(
             host,
-            host.bytes_new_from_slice(&signer.sign(payload).to_bytes())
+            &host
+                .bytes_new_from_slice(&signer.sign(payload).to_bytes())
                 .unwrap(),
         )
         .unwrap(),
