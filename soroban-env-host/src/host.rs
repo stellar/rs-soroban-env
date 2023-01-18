@@ -532,7 +532,7 @@ impl Host {
         // For an `Object`, the actual structural conversion (such as byte
         // cloning) occurs in `from_host_obj` and is metered there.
         self.charge_budget(CostType::ValXdrConv, 1)?;
-        ScVal::try_from_val(self, val)
+        ScVal::try_from_val(self, &val)
             .map_err(|_| self.err_status(ScHostValErrorCode::UnknownError))
     }
 

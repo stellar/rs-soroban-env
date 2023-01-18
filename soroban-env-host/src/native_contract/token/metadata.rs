@@ -28,14 +28,14 @@ pub fn has_metadata(e: &Host) -> Result<bool, HostError> {
 // Metering: *mostly* covered by components. `bytes_new_from_slice` and `Bytes` not covered.
 pub fn read_name(e: &Host) -> Result<Bytes, HostError> {
     match read_metadata(e)? {
-        Metadata::Native => Ok(Bytes::try_from_val(e, e.bytes_new_from_slice(b"native")?)?),
+        Metadata::Native => Ok(Bytes::try_from_val(e, &e.bytes_new_from_slice(b"native")?)?),
         Metadata::AlphaNum4(asset) => {
             let mut res: Bytes = asset.asset_code.into();
             res.push(b':')?;
             let issuer_id = e.to_u256_from_account(&asset.issuer)?;
             res.append(Bytes::try_from_val(
                 e,
-                e.bytes_new_from_slice(&issuer_id.0)?,
+                &e.bytes_new_from_slice(&issuer_id.0)?,
             )?)?;
             Ok(res)
         }
@@ -45,7 +45,7 @@ pub fn read_name(e: &Host) -> Result<Bytes, HostError> {
             let issuer_id = e.to_u256_from_account(&asset.issuer)?;
             res.append(Bytes::try_from_val(
                 e,
-                e.bytes_new_from_slice(&issuer_id.0)?,
+                &e.bytes_new_from_slice(&issuer_id.0)?,
             )?)?;
             Ok(res)
         }
@@ -55,7 +55,7 @@ pub fn read_name(e: &Host) -> Result<Bytes, HostError> {
 // Metering: *mostly* covered by components.`bytes_new_from_slice` and `Bytes` not covered.
 pub fn read_symbol(e: &Host) -> Result<Bytes, HostError> {
     match read_metadata(e)? {
-        Metadata::Native => Ok(Bytes::try_from_val(e, e.bytes_new_from_slice(b"native")?)?),
+        Metadata::Native => Ok(Bytes::try_from_val(e, &e.bytes_new_from_slice(b"native")?)?),
         Metadata::AlphaNum4(asset) => Ok(asset.asset_code.into()),
         Metadata::AlphaNum12(asset) => Ok(asset.asset_code.into()),
     }

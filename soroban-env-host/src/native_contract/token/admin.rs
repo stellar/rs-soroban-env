@@ -2,7 +2,7 @@ use crate::host::Host;
 use crate::native_contract::token::public_types::{Identifier, Signature};
 use crate::native_contract::token::storage_types::DataKey;
 use crate::{err, HostError};
-use soroban_env_common::{CheckedEnv, Compare, TryFromVal, TryIntoVal};
+use soroban_env_common::{CheckedEnv, Compare, TryIntoVal};
 
 use super::error::ContractError;
 
@@ -10,7 +10,7 @@ use super::error::ContractError;
 fn read_administrator(e: &Host) -> Result<Identifier, HostError> {
     let key = DataKey::Admin;
     let rv = e.get_contract_data(key.try_into_val(e)?)?;
-    Ok(Identifier::try_from_val(e, rv)?)
+    Ok(rv.try_into_val(e)?)
 }
 
 // Metering: covered by components

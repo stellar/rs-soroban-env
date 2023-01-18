@@ -1,8 +1,6 @@
 use stellar_xdr::ScObjectType;
 
-use crate::{
-    ConversionError, Env, IntoVal, Object, RawVal, RawValConvertible, TryFromVal, TryIntoVal,
-};
+use crate::{ConversionError, Env, Object, RawVal, RawValConvertible, TryFromVal, TryIntoVal};
 
 macro_rules! impl_for_tuple {
     ( $count:literal $count_usize:literal $($typ:ident $idx:tt)+ ) => {
@@ -15,7 +13,8 @@ macro_rules! impl_for_tuple {
         {
             type Error = ConversionError;
 
-            fn try_from_val(env: &E, val: RawVal) -> Result<Self, Self::Error> {
+            fn try_from_val(env: &E, val: &RawVal) -> Result<Self, Self::Error> {
+                let val = *val;
                 if !Object::val_is_obj_type(val, ScObjectType::Vec) {
                     return Err(ConversionError);
                 }
@@ -28,50 +27,28 @@ macro_rules! impl_for_tuple {
                     $({
                         let idx: u32 = $idx;
                         let val = env.vec_get(vec, idx.into());
-                        $typ::try_from_val(&env, val).map_err(|_| ConversionError)?
+                        $typ::try_from_val(&env, &val).map_err(|_| ConversionError)?
                     },)*
                 ))
             }
         }
 
-        impl<E: Env, $($typ),*> TryIntoVal<E, ($($typ,)*)> for RawVal
+        impl<E: Env, $($typ),*> TryFromVal<E, ($($typ,)*)> for RawVal
         where
-            $($typ: TryFromVal<E, RawVal>),*
+            $($typ: TryIntoVal<E, RawVal>),*
         {
             type Error = ConversionError;
-            #[inline(always)]
-            fn try_into_val(self, env: &E) -> Result<($($typ,)*), Self::Error> {
-                <_ as TryFromVal<_, _>>::try_from_val(env, self)
+            fn try_from_val(env: &E, v: &($($typ,)*)) -> Result<Self, Self::Error> {
+                let vec = env.vec_new($count.into());
+                $(let vec = env.vec_push_back(vec, v.$idx.try_into_val(&env).map_err(|_| ConversionError)?);)*
+                Ok(vec.to_raw())
             }
         }
 
-        impl<E: Env, $($typ),*> IntoVal<E, RawVal> for ($($typ,)*)
-        where
-            $($typ: IntoVal<E, RawVal>),*
-        {
-            fn into_val(self, env: &E) -> RawVal {
-                let env = env.clone();
-                let vec = env.vec_new($count.into());
-                $(let vec = env.vec_push_back(vec, self.$idx.into_val(&env));)*
-                vec.to_raw()
-            }
-        }
-
-        impl<E: Env, $($typ),*> IntoVal<E, RawVal> for &($($typ,)*)
-        where
-            $(for<'a> &'a $typ: IntoVal<E, RawVal>),*
-        {
-            fn into_val(self, env: &E) -> RawVal {
-                let env = env.clone();
-                let vec = env.vec_new($count.into());
-                $(let vec = env.vec_push_back(vec, (&self.$idx).into_val(&env));)*
-                vec.to_raw()
-            }
-        }
 
         // Conversions to and from Array of RawVal.
 
-        impl<E: Env, $($typ),*, const N: usize> TryFromVal<E, &[RawVal; N]> for ($($typ,)*)
+        impl<E: Env, $($typ),*, const N: usize> TryFromVal<E, [RawVal; N]> for ($($typ,)*)
         where
             $($typ: TryFromVal<E, RawVal>),*
         {
@@ -80,42 +57,22 @@ macro_rules! impl_for_tuple {
             fn try_from_val(env: &E, val: &[RawVal; N]) -> Result<Self, Self::Error> {
                 Ok((
                     $({
-                        $typ::try_from_val(&env, val[$idx]).map_err(|_| ConversionError)?
+                        $typ::try_from_val(&env, &val[$idx]).map_err(|_| ConversionError)?
                     },)*
                 ))
             }
         }
 
-        impl<E: Env, $($typ),*, const N: usize> TryIntoVal<E, ($($typ,)*)> for &[RawVal; N]
+        impl<E: Env, $($typ),*, const N: usize> TryFromVal<E, ($($typ,)*)> for [RawVal; N]
         where
-            $($typ: TryFromVal<E, RawVal>),*
+            $(RawVal: TryFromVal<E, $typ>),*
         {
             type Error = ConversionError;
-            #[inline(always)]
-            fn try_into_val(self, env: &E) -> Result<($($typ,)*), Self::Error> {
-                <_ as TryFromVal<_, _>>::try_from_val(env, self)
-            }
-        }
 
-        impl<E: Env, $($typ),*, const N: usize> IntoVal<E, [RawVal; N]> for &($($typ,)*)
-        where
-            $(for<'a> &'a $typ: IntoVal<E, RawVal>),*
-        {
-            fn into_val(self, env: &E) -> [RawVal; N] {
+            fn try_from_val(env: &E, val: &($($typ,)*)) -> Result<Self, Self::Error> {
                 let mut arr = [RawVal::VOID; N];
-                $(arr[$idx] = self.$idx.into_val(&env);)*
-                arr
-            }
-        }
-
-        impl<E: Env, $($typ),*, const N: usize> IntoVal<E, [RawVal; N]> for ($($typ,)*)
-        where
-            $($typ: IntoVal<E, RawVal>),*
-        {
-            fn into_val(self, env: &E) -> [RawVal; N] {
-                let mut arr = [RawVal::VOID; N];
-                $(arr[$idx] = self.$idx.into_val(&env);)*
-                arr
+                $(arr[$idx] = val.$idx.try_into_val(env).map_err(|_| ConversionError)?;)*
+                Ok(arr)
             }
         }
     };
@@ -140,7 +97,7 @@ impl_for_tuple! { 12_u32 12_usize T0 0 T1 1 T2 2 T3 3 T4 4 T5 5 T6 6 T7 7 T8 8 T
 // conversions to and from arrays. Note that unit typles convert to
 // RawVal::VOID, see raw_val.rs for those conversions.
 
-impl<E: Env> TryFromVal<E, &[RawVal; 0]> for () {
+impl<E: Env> TryFromVal<E, [RawVal; 0]> for () {
     type Error = ConversionError;
 
     fn try_from_val(_env: &E, _val: &[RawVal; 0]) -> Result<Self, Self::Error> {
@@ -148,22 +105,10 @@ impl<E: Env> TryFromVal<E, &[RawVal; 0]> for () {
     }
 }
 
-impl<E: Env> TryIntoVal<E, ()> for &[RawVal; 0] {
+impl<E: Env> TryFromVal<E, ()> for [RawVal; 0] {
     type Error = ConversionError;
-    #[inline(always)]
-    fn try_into_val(self, env: &E) -> Result<(), Self::Error> {
-        <_ as TryFromVal<_, _>>::try_from_val(env, self)
-    }
-}
 
-impl<E: Env> IntoVal<E, [RawVal; 0]> for &() {
-    fn into_val(self, _env: &E) -> [RawVal; 0] {
-        [RawVal::VOID; 0]
-    }
-}
-
-impl<E: Env> IntoVal<E, [RawVal; 0]> for () {
-    fn into_val(self, _env: &E) -> [RawVal; 0] {
-        [RawVal::VOID; 0]
+    fn try_from_val(_env: &E, _v: &()) -> Result<Self, Self::Error> {
+        Ok([RawVal::VOID; 0])
     }
 }
