@@ -42,7 +42,6 @@ mod checked_env;
 mod compare;
 mod convert;
 mod env;
-mod env_val;
 mod invoker;
 pub mod meta;
 mod object;
@@ -68,9 +67,8 @@ pub use val::Val;
 // RawVal and EnvObj couple raw types to environments.
 pub use checked_env::CheckedEnv;
 pub use compare::Compare;
-pub use convert::Convert;
+pub use convert::{TryFromVal, TryIntoVal, Convert};
 pub use env::{call_macro_with_all_host_functions, Env, EnvBase};
-pub use env_val::{TryFromVal, TryIntoVal};
 pub use unimplemented_env::UnimplementedEnv;
 pub use vmcaller_checked_env::{VmCaller, VmCallerCheckedEnv};
 
