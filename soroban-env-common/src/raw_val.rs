@@ -1,6 +1,6 @@
 use stellar_xdr::{ScStatic, ScStatus, ScStatusType};
 
-use super::{BitSet, Env, Object, Static, Status, Symbol, TryFromVal};
+use super::{BitSet, Env, MapErrToEnv, Object, Static, Status, Symbol, TryFromVal};
 use core::{convert::Infallible, fmt::Debug};
 
 extern crate static_assertions as sa;
@@ -119,8 +119,7 @@ impl AsMut<RawVal> for RawVal {
 }
 
 impl<E: Env> TryFromVal<E, RawVal> for RawVal {
-    type Error = ConversionError;
-    fn try_from_val(_env: &E, val: &RawVal) -> Result<Self, Self::Error> {
+    fn try_from_val(_env: &E, val: &RawVal) -> Result<Self, E::Error> {
         Ok(*val)
     }
 }
@@ -204,15 +203,13 @@ macro_rules! declare_tryfrom {
             }
         }
         impl<E: Env> TryFromVal<E, RawVal> for $T {
-            type Error = ConversionError;
             #[inline(always)]
-            fn try_from_val(_env: &E, val: &RawVal) -> Result<Self, Self::Error> {
-                Self::try_from(*val)
+            fn try_from_val(env: &E, val: &RawVal) -> Result<Self, E::Error> {
+                Self::try_from(*val).map_err_to_env(env)
             }
         }
         impl<E: Env> TryFromVal<E, $T> for RawVal {
-            type Error = ConversionError;
-            fn try_from_val(_env: &E, val: &$T) -> Result<Self, Self::Error> {
+            fn try_from_val(_env: &E, val: &$T) -> Result<Self, E::Error> {
                 Ok((*val).into())
             }
         }

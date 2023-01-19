@@ -35,9 +35,7 @@ pub fn derive_type_struct(ident: &Ident, data: &DataStruct) -> TokenStream2 {
         }
 
         impl soroban_env_common::TryFromVal<crate::Host, soroban_env_common::Object> for #ident {
-            type Error = crate::HostError;
-
-            fn try_from_val(env: &crate::Host, val: &soroban_env_common::Object) -> Result<Self, Self::Error> {
+            fn try_from_val(env: &crate::Host, val: &soroban_env_common::Object) -> Result<Self, crate::HostError> {
                 let map = Map::try_from_val(env, val)?;
                 Ok(Self {
                     #(#names: map.get(&#map_keys)?,)*
@@ -46,18 +44,14 @@ pub fn derive_type_struct(ident: &Ident, data: &DataStruct) -> TokenStream2 {
         }
 
         impl soroban_env_common::TryFromVal<crate::Host, soroban_env_common::RawVal> for #ident {
-            type Error = crate::HostError;
-
-            fn try_from_val(env: &crate::Host, val: &soroban_env_common::RawVal) -> Result<Self, Self::Error> {
+            fn try_from_val(env: &crate::Host, val: &soroban_env_common::RawVal) -> Result<Self, crate::HostError> {
                 let obj: soroban_env_common::Object = val.try_into()?;
                 obj.try_into_val(env)
             }
         }
 
         impl soroban_env_common::TryFromVal<crate::Host, #ident> for soroban_env_common::RawVal {
-            type Error = crate::HostError;
-
-            fn try_from_val(env: &crate::Host, val: &#ident) -> Result<Self, Self::Error> {
+            fn try_from_val(env: &crate::Host, val: &#ident) -> Result<Self, crate::HostError> {
                 let mut map = Map::new(env)?;
                 #(map.set(&#map_keys, &val.#names)?;)*
                 map.try_into_val(env)
@@ -149,9 +143,7 @@ pub fn derive_type_enum(ident: &Ident, data: &DataEnum) -> TokenStream2 {
             }
 
             impl soroban_env_common::TryFromVal<crate::Host, soroban_env_common::Object> for #ident {
-                type Error = crate::HostError;
-
-                fn try_from_val(env: &crate::Host, val: &soroban_env_common::Object) -> Result<Self, Self::Error> {
+                fn try_from_val(env: &crate::Host, val: &soroban_env_common::Object) -> Result<Self, crate::HostError> {
                     #(#consts;)*
                     let vec = crate::native_contract::base_types::Vec::try_from_val(env, val)?;
                     let discriminant: soroban_env_common::Symbol = vec.get(0)?;
@@ -163,18 +155,14 @@ pub fn derive_type_enum(ident: &Ident, data: &DataEnum) -> TokenStream2 {
             }
 
             impl soroban_env_common::TryFromVal<crate::Host, soroban_env_common::RawVal> for #ident {
-                type Error = crate::HostError;
-
-                fn try_from_val(env: &crate::Host, val: &soroban_env_common::RawVal) -> Result<Self, Self::Error> {
+                fn try_from_val(env: &crate::Host, val: &soroban_env_common::RawVal) -> Result<Self, crate::HostError> {
                     let obj: soroban_env_common::Object = val.try_into()?;
                     obj.try_into_val(env)
                 }
             }
 
             impl soroban_env_common::TryFromVal<crate::Host, #ident> for soroban_env_common::RawVal {
-                type Error = crate::HostError;
-
-                fn try_from_val(env: &crate::Host, val: &#ident) -> Result<soroban_env_common::RawVal, Self::Error> {
+                fn try_from_val(env: &crate::Host, val: &#ident) -> Result<soroban_env_common::RawVal, crate::HostError> {
                     #(#consts;)*
                     let mut vec = crate::native_contract::base_types::Vec::new(env)?;
                     match val {

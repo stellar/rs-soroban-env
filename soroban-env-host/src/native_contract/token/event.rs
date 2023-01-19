@@ -2,7 +2,7 @@ use crate::host::Host;
 use crate::native_contract::base_types::Vec;
 use crate::native_contract::token::public_types::Identifier;
 use crate::HostError;
-use soroban_env_common::{CheckedEnv, Symbol, TryIntoVal};
+use soroban_env_common::{Env, Symbol, TryIntoVal};
 
 pub(crate) fn incr_allow(
     e: &Host,

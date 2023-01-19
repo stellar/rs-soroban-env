@@ -1,7 +1,7 @@
 use crate::xdr::ScHostFnErrorCode;
 use crate::{
     xdr::{ScHostObjErrorCode, ScObject, ScStatic, ScStatus, ScVal},
-    CheckedEnv, Host, HostError, RawVal, RawValConvertible,
+    Env, Host, HostError, RawVal, RawValConvertible,
 };
 use soroban_env_common::EnvBase;
 

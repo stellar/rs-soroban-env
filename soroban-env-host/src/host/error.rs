@@ -8,10 +8,20 @@ use core::fmt::Debug;
 
 #[derive(Clone)]
 pub struct HostError {
-    pub(crate) status: Status,
+    pub status: Status,
     pub(crate) events: Option<Events>,
     pub(crate) backtrace: backtrace::Backtrace,
 }
+
+// HostError equality is defined in terms of the underlying Status values;
+// the event and backtrace values are not considered "part of the error".
+impl PartialEq for HostError {
+    fn eq(&self, other: &Self) -> bool {
+        self.status == other.status
+    }
+}
+
+impl Eq for HostError {}
 
 impl std::error::Error for HostError {}
 

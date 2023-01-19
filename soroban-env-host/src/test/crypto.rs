@@ -1,6 +1,6 @@
 use crate::{
     xdr::{ScObject, ScVal},
-    CheckedEnv, Host, HostError,
+    Env, Host, HostError,
 };
 use hex::FromHex;
 

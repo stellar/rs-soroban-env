@@ -4,7 +4,7 @@ use soroban_env_common::Compare;
 
 use crate::{
     xdr::{ScHostFnErrorCode, ScHostObjErrorCode, ScObject, ScObjectType},
-    CheckedEnv, Host, HostError, Object, RawVal, RawValConvertible,
+    Env, Host, HostError, Object, RawVal, RawValConvertible,
 };
 
 #[test]

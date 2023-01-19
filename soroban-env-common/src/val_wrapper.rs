@@ -94,10 +94,10 @@ macro_rules! impl_wrapper_from {
             }
         }
         impl<E: Env> $crate::TryFromVal<E, $tagname> for $fromty {
-            type Error = $crate::ConversionError;
             #[inline(always)]
-            fn try_from_val(_env: &E, val: &$tagname) -> Result<Self, Self::Error> {
-                Self::try_from((*val).to_raw())
+            fn try_from_val(env: &E, val: &$tagname) -> Result<Self, E::Error> {
+                use crate::MapErrToEnv;
+                Self::try_from((*val).to_raw()).map_err_to_env(env)
             }
         }
     };

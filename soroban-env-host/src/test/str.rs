@@ -2,7 +2,7 @@ use std::convert::TryInto;
 
 use soroban_env_common::TryIntoVal;
 
-use crate::{CheckedEnv, Host, HostError, Object, RawVal};
+use crate::{Env, Host, HostError, Object, RawVal};
 
 #[test]
 fn str_conversions() -> Result<(), HostError> {

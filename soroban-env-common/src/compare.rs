@@ -1,7 +1,7 @@
 #[cfg(feature = "std")]
 use std::rc::Rc;
 
-use crate::{BitSet, CheckedEnv, Object, RawVal, RawValConvertible, Status, Symbol, Tag};
+use crate::{BitSet, Env, Object, RawVal, RawValConvertible, Status, Symbol, Tag};
 use core::cmp::Ordering;
 
 /// General trait representing the ability to compare two values of some type.
@@ -116,7 +116,7 @@ impl<T, C: Compare<T>> Compare<Rc<T>> for C {
 // better). But we can list out any concrete Ord instances we want to support
 // here.
 
-impl<E: CheckedEnv> Compare<Object> for E {
+impl<E: Env> Compare<Object> for E {
     type Error = E::Error;
 
     fn compare(&self, a: &Object, b: &Object) -> Result<Ordering, Self::Error> {
@@ -131,7 +131,7 @@ impl<E: CheckedEnv> Compare<Object> for E {
     }
 }
 
-impl<E: CheckedEnv> Compare<RawVal> for E {
+impl<E: Env> Compare<RawVal> for E {
     type Error = E::Error;
 
     fn compare(&self, a: &RawVal, b: &RawVal) -> Result<Ordering, Self::Error> {

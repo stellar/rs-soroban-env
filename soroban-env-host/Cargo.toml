@@ -47,7 +47,7 @@ wasmprinter = "0.2.41"
 vm = ["wasmi", "soroban-env-common/vm"]
 hostfn_log_fmt_values = []
 serde = ["soroban-env-common/serde"]
-testutils = []
+testutils = ["soroban-env-common/testutils"]
 
 [target.'cfg(target_os = "linux")'.dev-dependencies]
 perf-event = "0.4.7"

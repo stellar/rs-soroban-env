@@ -1,5 +1,5 @@
 use super::{call_macro_with_all_host_functions, Env, EnvBase, Object, RawVal, Status, Symbol};
-use core::any;
+use core::{any, convert::Infallible};
 
 /// A dummy implementation of the [Env] trait that fails with `unimplemented!()` in
 /// all functions. Useful for certain testing scenarios.
@@ -7,6 +7,17 @@ use core::any;
 pub struct UnimplementedEnv;
 
 impl EnvBase for UnimplementedEnv {
+    type Error = Infallible;
+
+    fn escalate_status_to_error(&self, _s: Status) -> Self::Error {
+        unimplemented!()
+    }
+
+    #[cfg(feature = "testutils")]
+    fn escalate_error_to_panic(&self, _s: Self::Error) -> ! {
+        unimplemented!()
+    }
+
     fn as_mut_any(&mut self) -> &mut dyn any::Any {
         self
     }
@@ -22,7 +33,7 @@ impl EnvBase for UnimplementedEnv {
         _b: Object,
         _b_pos: RawVal,
         _mem: &[u8],
-    ) -> Result<Object, Status> {
+    ) -> Result<Object, Self::Error> {
         unimplemented!()
     }
 
@@ -31,15 +42,15 @@ impl EnvBase for UnimplementedEnv {
         _b: Object,
         _b_pos: RawVal,
         _mem: &mut [u8],
-    ) -> Result<(), Status> {
+    ) -> Result<(), Self::Error> {
         unimplemented!()
     }
 
-    fn bytes_new_from_slice(&self, _mem: &[u8]) -> Result<Object, Status> {
+    fn bytes_new_from_slice(&self, _mem: &[u8]) -> Result<Object, Self::Error> {
         unimplemented!()
     }
 
-    fn log_static_fmt_val(&self, _fmt: &'static str, _v: RawVal) -> Result<(), Status> {
+    fn log_static_fmt_val(&self, _fmt: &'static str, _v: RawVal) -> Result<(), Self::Error> {
         unimplemented!()
     }
 
@@ -47,7 +58,7 @@ impl EnvBase for UnimplementedEnv {
         &self,
         _fmt: &'static str,
         _s: &'static str,
-    ) -> Result<(), Status> {
+    ) -> Result<(), Self::Error> {
         unimplemented!()
     }
 
@@ -56,7 +67,7 @@ impl EnvBase for UnimplementedEnv {
         _fmt: &'static str,
         _v: RawVal,
         _s: &'static str,
-    ) -> Result<(), Status> {
+    ) -> Result<(), Self::Error> {
         unimplemented!()
     }
 
@@ -65,7 +76,7 @@ impl EnvBase for UnimplementedEnv {
         _fmt: &'static str,
         _vals: &[RawVal],
         _strs: &[&'static str],
-    ) -> Result<(), Status> {
+    ) -> Result<(), Self::Error> {
         unimplemented!()
     }
 }
@@ -81,7 +92,7 @@ macro_rules! host_function_helper {
     {fn $fn_id:ident($($arg:ident:$type:ty),*) -> $ret:ty}
     =>
     {
-        fn $fn_id(&self, $(_:$type),*) -> $ret {
+        fn $fn_id(&self, $(_:$type),*) -> Result<$ret, Self::Error> {
             unimplemented!()
         }
     };

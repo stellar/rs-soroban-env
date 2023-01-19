@@ -1,4 +1,4 @@
-use soroban_env_common::CheckedEnv;
+use soroban_env_common::Env;
 
 use crate::{
     budget::Budget,

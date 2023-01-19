@@ -1,6 +1,6 @@
 use crate::{
-    impl_wrapper_common, xdr::ScObjectType, ConversionError, Convert, Env, RawVal, Tag, TryFromVal,
-    TryIntoVal,
+    impl_wrapper_common, xdr::ScObjectType, ConversionError, Convert, Env, MapErrToEnv, RawVal,
+    Tag, TryFromVal, TryIntoVal,
 };
 use core::fmt::Debug;
 use stellar_xdr::{ScObject, ScVal};
@@ -57,8 +57,7 @@ impl<E> TryFromVal<E, Object> for ScObject
 where
     E: Env + Convert<Object, ScObject>,
 {
-    type Error = E::Error;
-    fn try_from_val(env: &E, val: &Object) -> Result<Self, Self::Error> {
+    fn try_from_val(env: &E, val: &Object) -> Result<Self, E::Error> {
         env.convert(*val)
     }
 }
@@ -74,14 +73,9 @@ where
     // But due to lifetime difficulties we will use a simpler error for now.
     // (This is temporary anyways, we'll be moving the errors to EnvBase soon)
 
-    type Error = ConversionError;
-
-    fn try_from_val(env: &E, v: &ScObject) -> Result<Self, Self::Error> {
+    fn try_from_val(env: &E, v: &ScObject) -> Result<Self, E::Error> {
         let scob: &ScObject = v;
-        match env.convert(scob) {
-            Ok(obj) => Ok(obj),
-            Err(_) => Err(ConversionError),
-        }
+        env.convert(scob)
     }
 }
 
@@ -89,13 +83,11 @@ impl<E> TryFromVal<E, ScVal> for Object
 where
     E: Env + for<'a> Convert<&'a ScObject, Object>,
 {
-    type Error = ConversionError;
-
-    fn try_from_val(env: &E, v: &ScVal) -> Result<Self, Self::Error> {
+    fn try_from_val(env: &E, v: &ScVal) -> Result<Self, E::Error> {
         if let ScVal::Object(Some(o)) = v {
             o.try_into_val(env)
         } else {
-            Err(ConversionError)
+            Err(ConversionError).map_err_to_env(env)
         }
     }
 }

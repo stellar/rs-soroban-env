@@ -8,7 +8,7 @@ use crate::native_contract::token::public_types::{
 use crate::{err, HostError};
 use core::cmp::Ordering;
 use soroban_env_common::xdr::{ThresholdIndexes, Uint256};
-use soroban_env_common::{CheckedEnv, InvokerType, Symbol, TryFromVal, TryIntoVal};
+use soroban_env_common::{Env, InvokerType, Symbol, TryFromVal, TryIntoVal};
 
 use super::error::ContractError;
 

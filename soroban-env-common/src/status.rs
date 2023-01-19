@@ -168,6 +168,12 @@ impl TryFrom<Status> for ScStatus {
     }
 }
 
+impl From<stellar_xdr::Error> for Status {
+    fn from(_value: stellar_xdr::Error) -> Self {
+        Status::from_status(ScStatus::UnknownError(ScUnknownErrorCode::Xdr))
+    }
+}
+
 impl TryFrom<Status> for ScVal {
     type Error = stellar_xdr::Error;
     fn try_from(st: Status) -> Result<Self, Self::Error> {
@@ -294,11 +300,5 @@ impl Status {
             ScStatus::ContractError(code) => code as u32,
         };
         Self::from_type_and_code(sc.discriminant(), code)
-    }
-}
-
-impl From<core::convert::Infallible> for crate::Status {
-    fn from(_: core::convert::Infallible) -> Self {
-        panic!()
     }
 }

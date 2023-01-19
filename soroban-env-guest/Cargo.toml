@@ -11,8 +11,11 @@ edition = "2021"
 rust-version = "1.66"
 
 [dependencies]
-soroban-env-common = { workspace = true }
+soroban-env-common = { workspace = true, default-features = false, features = []}
 static_assertions = "1.1.0"
 
 [package.metadata.docs.rs]
 all-features = true
+
+[features]
+testutils = ["soroban-env-common/testutils"]

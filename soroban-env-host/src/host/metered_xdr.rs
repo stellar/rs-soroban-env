@@ -55,7 +55,7 @@ impl Host {
         let mut buf = vec![];
         self.metered_write_xdr(obj, &mut buf)?;
         self.charge_budget(CostType::ComputeSha256Hash, buf.len() as u64)?;
-        Ok(Sha256::digest(buf).try_into()?)
+        Ok(Sha256::digest(buf).into())
     }
 
     pub(crate) fn metered_from_xdr<T: ReadXdr>(&self, bytes: &[u8]) -> Result<T, HostError> {

@@ -1,6 +1,6 @@
 use soroban_env_common::TryIntoVal;
 
-use crate::{CheckedEnv, Host, HostError, RawVal};
+use crate::{Env, Host, HostError, RawVal};
 
 #[test]
 fn tuple_conversions() -> Result<(), HostError> {
