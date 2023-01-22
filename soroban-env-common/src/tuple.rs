@@ -19,14 +19,14 @@ macro_rules! impl_for_tuple {
                     return Err(ConversionError);
                 }
                 let vec = unsafe { Object::unchecked_from_val(val) };
-                let len: u32 = env.vec_len(vec).try_into()?;
+                let len: u32 = env.vec_len(vec).map_err(|_| ConversionError)?.try_into()?;
                 if len != $count {
                     return Err(ConversionError);
                 }
                 Ok((
                     $({
                         let idx: u32 = $idx;
-                        let val = env.vec_get(vec, idx.into());
+                        let val = env.vec_get(vec, idx.into()).map_err(|_| ConversionError)?;
                         $typ::try_from_val(&env, &val).map_err(|_| ConversionError)?
                     },)*
                 ))
@@ -39,8 +39,8 @@ macro_rules! impl_for_tuple {
         {
             type Error = ConversionError;
             fn try_from_val(env: &E, v: &($($typ,)*)) -> Result<Self, Self::Error> {
-                let vec = env.vec_new($count.into());
-                $(let vec = env.vec_push_back(vec, v.$idx.try_into_val(&env).map_err(|_| ConversionError)?);)*
+                let vec = env.vec_new($count.into()).map_err(|_| ConversionError)?;
+                $(let vec = env.vec_push_back(vec, v.$idx.try_into_val(&env).map_err(|_| ConversionError)?).map_err(|_| ConversionError)?;)*
                 Ok(vec.to_raw())
             }
         }

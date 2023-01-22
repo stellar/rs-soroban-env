@@ -57,7 +57,7 @@ impl<E: Env> TryFromVal<E, RawVal> for i64 {
             Ok(unsafe { val.unchecked_as_u63() })
         } else if Object::val_is_obj_type(val, ScObjectType::I64) {
             let obj = unsafe { Object::unchecked_from_val(val) };
-            Ok(env.obj_to_i64(obj))
+            Ok(env.obj_to_i64(obj).map_err(|_| ConversionError)?)
         } else {
             log_err_convert::<i64>(env, &val);
             Err(ConversionError)
@@ -73,7 +73,7 @@ impl<E: Env> TryFromVal<E, i64> for RawVal {
         if v >= 0 {
             Ok(unsafe { RawVal::unchecked_from_u63(v) })
         } else {
-            Ok(env.obj_from_i64(v).to_raw())
+            Ok(env.obj_from_i64(v).map_err(|_| ConversionError)?.to_raw())
         }
     }
 }
@@ -87,7 +87,7 @@ impl<E: Env> TryFromVal<E, RawVal> for u64 {
         let val = *val;
         if Object::val_is_obj_type(val, ScObjectType::U64) {
             let obj = unsafe { Object::unchecked_from_val(val) };
-            Ok(env.obj_to_u64(obj))
+            Ok(env.obj_to_u64(obj).map_err(|_| ConversionError)?)
         } else {
             log_err_convert::<u64>(env, &val);
             Err(ConversionError)
@@ -99,7 +99,7 @@ impl<E: Env> TryFromVal<E, u64> for RawVal {
     type Error = ConversionError;
 
     fn try_from_val(env: &E, v: &u64) -> Result<Self, Self::Error> {
-        Ok(env.obj_from_u64(*v).to_raw())
+        Ok(env.obj_from_u64(*v).map_err(|_| ConversionError)?.to_raw())
     }
 }
 
@@ -111,8 +111,8 @@ impl<E: Env> TryFromVal<E, RawVal> for i128 {
     fn try_from_val(env: &E, v: &RawVal) -> Result<Self, Self::Error> {
         let v = *v;
         let obj = v.try_into()?;
-        let lo = env.obj_to_i128_lo64(obj);
-        let hi = env.obj_to_i128_hi64(obj);
+        let lo = env.obj_to_i128_lo64(obj).map_err(|_| ConversionError)?;
+        let hi = env.obj_to_i128_hi64(obj).map_err(|_| ConversionError)?;
         let u: u128 = (lo as u128) | ((hi as u128) << 64);
         Ok(u as i128)
     }
@@ -124,6 +124,7 @@ impl<E: Env> TryFromVal<E, i128> for RawVal {
         let v = *v;
         Ok(env
             .obj_from_i128_pieces(v as u64, (v as u128 >> 64) as u64)
+            .map_err(|_| ConversionError)?
             .into())
     }
 }
@@ -136,8 +137,8 @@ impl<E: Env> TryFromVal<E, RawVal> for u128 {
     fn try_from_val(env: &E, v: &RawVal) -> Result<Self, Self::Error> {
         let v = *v;
         let obj = v.try_into()?;
-        let lo = env.obj_to_u128_lo64(obj);
-        let hi = env.obj_to_u128_hi64(obj);
+        let lo = env.obj_to_u128_lo64(obj).map_err(|_| ConversionError)?;
+        let hi = env.obj_to_u128_hi64(obj).map_err(|_| ConversionError)?;
         let u: u128 = (lo as u128) | ((hi as u128) << 64);
         Ok(u)
     }
@@ -147,7 +148,10 @@ impl<E: Env> TryFromVal<E, u128> for RawVal {
 
     fn try_from_val(env: &E, v: &u128) -> Result<Self, Self::Error> {
         let v = *v;
-        Ok(env.obj_from_u128_pieces(v as u64, (v >> 64) as u64).into())
+        Ok(env
+            .obj_from_u128_pieces(v as u64, (v >> 64) as u64)
+            .map_err(|_| ConversionError)?
+            .into())
     }
 }
 

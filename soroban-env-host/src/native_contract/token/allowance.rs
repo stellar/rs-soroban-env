@@ -2,7 +2,7 @@ use crate::host::Host;
 use crate::native_contract::token::public_types::Identifier;
 use crate::native_contract::token::storage_types::{AllowanceDataKey, DataKey};
 use crate::{err, HostError};
-use soroban_env_common::{CheckedEnv, TryIntoVal};
+use soroban_env_common::{Env, TryIntoVal};
 
 use super::error::ContractError;
 

@@ -9,7 +9,7 @@ use ed25519_dalek::{Keypair, Signer};
 use rand::thread_rng;
 use soroban_env_common::{
     xdr::{AccountId, PublicKey, Uint256},
-    CheckedEnv,
+    Env,
 };
 use soroban_env_common::{EnvBase, RawVal, Symbol, TryFromVal, TryIntoVal};
 

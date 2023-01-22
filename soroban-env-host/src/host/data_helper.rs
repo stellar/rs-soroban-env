@@ -1,6 +1,6 @@
 use core::cmp::min;
 
-use soroban_env_common::{CheckedEnv, InvokerType};
+use soroban_env_common::{Env, InvokerType};
 
 use crate::budget::AsBudget;
 use crate::xdr::{

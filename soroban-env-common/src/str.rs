@@ -17,7 +17,11 @@ impl<E: Env> TryFromVal<E, RawVal> for String {
             return Err(ConversionError);
         }
         let obj: Object = val.try_into_val(env)?;
-        let len = unsafe { <u32 as RawValConvertible>::unchecked_from_val(env.bytes_len(obj)) };
+        let len = unsafe {
+            <u32 as RawValConvertible>::unchecked_from_val(
+                env.bytes_len(obj).map_err(|_| ConversionError)?,
+            )
+        };
         let mut vec = std::vec![0; len as usize];
         env.bytes_copy_to_slice(obj, RawVal::U32_ZERO, &mut vec)
             .map_err(|_| ConversionError)?;

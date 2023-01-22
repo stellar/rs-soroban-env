@@ -1,6 +1,8 @@
 #![allow(dead_code)]
 #![allow(unused_variables)]
 
+use core::convert::Infallible;
+
 use soroban_env_common::call_macro_with_all_host_functions;
 
 use super::{Env, EnvBase, Object, RawVal, Status, Symbol};
@@ -20,6 +22,13 @@ pub struct Guest;
 // Host for a non-WASM build.
 #[cfg(not(target_family = "wasm"))]
 impl EnvBase for Guest {
+    type Error = Infallible;
+
+    #[cfg(feature = "testutils")]
+    fn escalate_error_to_panic(&self, e: Self::Error) -> ! {
+        unimplemented!()
+    }
+
     fn as_mut_any(&mut self) -> &mut dyn core::any::Any {
         unimplemented!()
     }
@@ -37,23 +46,32 @@ impl EnvBase for Guest {
         b: Object,
         b_pos: RawVal,
         mem: &[u8],
-    ) -> Result<Object, Status> {
+    ) -> Result<Object, Self::Error> {
         unimplemented!()
     }
 
-    fn bytes_copy_to_slice(&self, b: Object, b_pos: RawVal, mem: &mut [u8]) -> Result<(), Status> {
+    fn bytes_copy_to_slice(
+        &self,
+        b: Object,
+        b_pos: RawVal,
+        mem: &mut [u8],
+    ) -> Result<(), Self::Error> {
         unimplemented!()
     }
 
-    fn bytes_new_from_slice(&self, mem: &[u8]) -> Result<Object, Status> {
+    fn bytes_new_from_slice(&self, mem: &[u8]) -> Result<Object, Self::Error> {
         unimplemented!()
     }
 
-    fn log_static_fmt_val(&self, fmt: &'static str, v: RawVal) -> Result<(), Status> {
+    fn log_static_fmt_val(&self, fmt: &'static str, v: RawVal) -> Result<(), Self::Error> {
         unimplemented!()
     }
 
-    fn log_static_fmt_static_str(&self, fmt: &'static str, s: &'static str) -> Result<(), Status> {
+    fn log_static_fmt_static_str(
+        &self,
+        fmt: &'static str,
+        s: &'static str,
+    ) -> Result<(), Self::Error> {
         unimplemented!()
     }
 
@@ -62,7 +80,7 @@ impl EnvBase for Guest {
         fmt: &'static str,
         v: RawVal,
         s: &'static str,
-    ) -> Result<(), Status> {
+    ) -> Result<(), Self::Error> {
         unimplemented!()
     }
 
@@ -71,13 +89,20 @@ impl EnvBase for Guest {
         fmt: &'static str,
         vals: &[RawVal],
         strs: &[&'static str],
-    ) -> Result<(), Status> {
+    ) -> Result<(), Self::Error> {
         unimplemented!()
     }
 }
 
 #[cfg(target_family = "wasm")]
 impl EnvBase for Guest {
+    type Error = Infallible;
+
+    #[cfg(feature = "testutils")]
+    fn escalate_error_to_panic(&self, e: Self::Error) -> ! {
+        core::arch::wasm32::unreachable()
+    }
+
     fn as_mut_any(&mut self) -> &mut dyn core::any::Any {
         return self;
     }
@@ -95,34 +120,39 @@ impl EnvBase for Guest {
         b: Object,
         b_pos: RawVal,
         mem: &[u8],
-    ) -> Result<Object, Status> {
+    ) -> Result<Object, Self::Error> {
         sa::assert_eq_size!(u32, *const u8);
         sa::assert_eq_size!(u32, usize);
         let lm_pos: RawVal = RawVal::from_u32(mem.as_ptr() as u32);
         let len: RawVal = RawVal::from_u32(mem.len() as u32);
         // NB: any failure in the host function here will trap the guest,
         // not return, so we only have to code the happy path.
-        Ok(self.bytes_copy_from_linear_memory(b, b_pos, lm_pos, len))
+        self.bytes_copy_from_linear_memory(b, b_pos, lm_pos, len)
     }
 
-    fn bytes_copy_to_slice(&self, b: Object, b_pos: RawVal, mem: &mut [u8]) -> Result<(), Status> {
+    fn bytes_copy_to_slice(
+        &self,
+        b: Object,
+        b_pos: RawVal,
+        mem: &mut [u8],
+    ) -> Result<(), Self::Error> {
         sa::assert_eq_size!(u32, *const u8);
         sa::assert_eq_size!(u32, usize);
         let lm_pos: RawVal = RawVal::from_u32(mem.as_ptr() as u32);
         let len: RawVal = RawVal::from_u32(mem.len() as u32);
-        self.bytes_copy_to_linear_memory(b, b_pos, lm_pos, len);
+        self.bytes_copy_to_linear_memory(b, b_pos, lm_pos, len)?;
         Ok(())
     }
 
-    fn bytes_new_from_slice(&self, mem: &[u8]) -> Result<Object, Status> {
+    fn bytes_new_from_slice(&self, mem: &[u8]) -> Result<Object, Self::Error> {
         sa::assert_eq_size!(u32, *const u8);
         sa::assert_eq_size!(u32, usize);
         let lm_pos: RawVal = RawVal::from_u32(mem.as_ptr() as u32);
         let len: RawVal = RawVal::from_u32(mem.len() as u32);
-        Ok(self.bytes_new_from_linear_memory(lm_pos, len))
+        self.bytes_new_from_linear_memory(lm_pos, len)
     }
 
-    fn log_static_fmt_val(&self, fmt: &'static str, v: RawVal) -> Result<(), Status> {
+    fn log_static_fmt_val(&self, fmt: &'static str, v: RawVal) -> Result<(), Self::Error> {
         // TODO: It's possible we might want to do something in the wasm
         // case with static strings similar to the bytes functions above,
         // eg. decay the strings to u32 values and pass them to the host as linear
@@ -137,7 +167,11 @@ impl EnvBase for Guest {
         Ok(())
     }
 
-    fn log_static_fmt_static_str(&self, fmt: &'static str, s: &'static str) -> Result<(), Status> {
+    fn log_static_fmt_static_str(
+        &self,
+        fmt: &'static str,
+        s: &'static str,
+    ) -> Result<(), Self::Error> {
         // Intentionally a no-op in this cfg. See above.
         Ok(())
     }
@@ -147,7 +181,7 @@ impl EnvBase for Guest {
         fmt: &'static str,
         v: RawVal,
         s: &'static str,
-    ) -> Result<(), Status> {
+    ) -> Result<(), Self::Error> {
         // Intentionally a no-op in this cfg. See above.
         Ok(())
     }
@@ -157,7 +191,7 @@ impl EnvBase for Guest {
         fmt: &'static str,
         vals: &[RawVal],
         strs: &[&'static str],
-    ) -> Result<(), Status> {
+    ) -> Result<(), Self::Error> {
         // Intentionally a no-op in this cfg. See above.
         Ok(())
     }
@@ -179,9 +213,9 @@ macro_rules! guest_function_helper {
     {$mod_id:ident, fn $fn_id:ident($($arg:ident:$type:ty),*) -> $ret:ty}
     =>
     {
-        fn $fn_id(&self, $($arg:$type),*) -> $ret {
+        fn $fn_id(&self, $($arg:$type),*) -> Result<$ret, Self::Error>{
             unsafe {
-                $mod_id::$fn_id($($arg),*)
+                Ok($mod_id::$fn_id($($arg),*))
             }
         }
     };

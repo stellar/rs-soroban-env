@@ -1,7 +1,7 @@
 use crate::{
     budget::CostType,
     xdr::{ScMap, ScMapEntry, ScObject, ScVal, ScVmErrorCode},
-    CheckedEnv, Host, HostError, RawVal, Symbol,
+    Env, Host, HostError, RawVal, Symbol,
 };
 use soroban_test_wasms::VEC;
 

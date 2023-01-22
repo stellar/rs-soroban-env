@@ -6,7 +6,7 @@ use soroban_env_common::xdr::{
 
 use crate::{
     xdr::{ScMap, ScMapEntry, ScObject, ScVal, ScVec},
-    CheckedEnv, Host, HostError, RawVal, RawValConvertible, Status, Symbol,
+    Env, Host, HostError, RawVal, RawValConvertible, Status, Symbol,
 };
 
 #[test]

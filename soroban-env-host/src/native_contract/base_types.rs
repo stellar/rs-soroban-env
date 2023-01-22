@@ -3,9 +3,7 @@ use crate::host::{Host, HostError};
 
 use core::cmp::Ordering;
 use soroban_env_common::xdr::{AccountId, ScObjectType};
-use soroban_env_common::{
-    CheckedEnv, Compare, ConversionError, EnvBase, Object, RawVal, TryFromVal,
-};
+use soroban_env_common::{Compare, ConversionError, Env, EnvBase, Object, RawVal, TryFromVal};
 
 #[derive(Clone)]
 pub struct Bytes {

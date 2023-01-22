@@ -2,7 +2,7 @@ use crate::native_contract::base_types::Bytes;
 use crate::native_contract::token::public_types::Metadata;
 use crate::native_contract::token::storage_types::DataKey;
 use crate::{host::Host, HostError};
-use soroban_env_common::{CheckedEnv, EnvBase, TryFromVal, TryIntoVal};
+use soroban_env_common::{Env, EnvBase, TryFromVal, TryIntoVal};
 
 // Metering: *mostly* covered by components.
 pub fn write_metadata(e: &Host, metadata: Metadata) -> Result<(), HostError> {
