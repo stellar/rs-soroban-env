@@ -7,7 +7,7 @@ use crate::{
         HashIdPreimageSourceAccountContractId, HostFunction, InstallContractCodeArgs,
         LedgerEntryData, ScContractCode, ScObject, ScVal, ScVec, Uint256,
     },
-    CheckedEnv, Host, LedgerInfo, Symbol,
+    Env, Host, LedgerInfo, Symbol,
 };
 use soroban_env_common::{RawVal, TryIntoVal};
 use soroban_test_wasms::CREATE_CONTRACT;

@@ -7,6 +7,36 @@ use core::any;
 /// Base trait extended by the [Env](crate::Env) trait, providing various special-case
 /// functions that do _not_ simply call across cross the guest/host interface.
 pub trait EnvBase: Sized + Clone {
+    /// The type of error returned from the environment when the environment
+    /// itself fails "unrecoverably", or at least in a way that the user is not
+    /// expected to be able to recover from, such as an internal logic error,
+    /// exceeding the execution budget, or being passed malformed input in a way
+    /// that the user-facing API does not anticipate or allow for. This type is
+    /// returned from _all_ environment-interface methods, and will only ever
+    /// take on two possible concrete types: either `Infallible` (in the
+    /// `Guest`) or `HostError` (in the `Host`).
+    ///
+    /// The `Guest` can treat all such errors as impossible-to-observe since
+    /// they will result in the `Host` _trapping_ the `Guest` before returning
+    /// an `Error` to it. Such errors still remain present in the `Env` API so
+    /// that we can use the same API in both scenarios, rather than having to
+    /// have separate "fallible" or "infallible" environments and separate
+    /// conversion routines for each (as was attempted in earlier iterations).
+    ///
+    /// This type is _not_ the same as an error intended to make it to the
+    /// user-facing API: user-facing errors should return `Ok(Status)` at the
+    /// environment-interface level, and then either directly handle or escalate
+    /// the contained `Status` code to the user as a `Status` or `Result<>` of
+    /// some other type, depending on the API.
+    type Error: core::fmt::Debug;
+
+    /// Reject an error from the environment, turning it into a panic but on
+    /// terms that the environment controls (eg. transforming or logging it).
+    /// This should only ever be called by client-side / SDK local-testing code,
+    /// never in the `Host`.
+    #[cfg(feature = "testutils")]
+    fn escalate_error_to_panic(&self, e: Self::Error) -> !;
+
     /// Used for recovering the concrete type of the Host.
     fn as_mut_any(&mut self) -> &mut dyn any::Any;
 
@@ -32,16 +62,25 @@ pub trait EnvBase: Sized + Clone {
 
     /// Copy a slice of bytes from the caller's memory into an existing `Bytes`
     /// object the host, returning a new `Bytes`.
-    fn bytes_copy_from_slice(&self, b: Object, b_pos: RawVal, mem: &[u8])
-        -> Result<Object, Status>;
+    fn bytes_copy_from_slice(
+        &self,
+        b: Object,
+        b_pos: RawVal,
+        mem: &[u8],
+    ) -> Result<Object, Self::Error>;
 
     /// Copy a slice of bytes from a `Bytes` object in the host into the
     /// caller's memory.
-    fn bytes_copy_to_slice(&self, b: Object, b_pos: RawVal, mem: &mut [u8]) -> Result<(), Status>;
+    fn bytes_copy_to_slice(
+        &self,
+        b: Object,
+        b_pos: RawVal,
+        mem: &mut [u8],
+    ) -> Result<(), Self::Error>;
 
     /// Form a new `Bytes` object in the host from a slice of memory in the
     /// caller.
-    fn bytes_new_from_slice(&self, mem: &[u8]) -> Result<Object, Status>;
+    fn bytes_new_from_slice(&self, mem: &[u8]) -> Result<Object, Self::Error>;
 
     // As with the bytes functions above, these take _slices_ with definite
     // lifetimes. The first slice is interpreted as a (very restricted)
@@ -69,13 +108,17 @@ pub trait EnvBase: Sized + Clone {
     /// a simplified format string (supporting only positional `{}` markers) and
     /// a single [RawVal] argument that will be inserted at the marker in the
     /// format string.
-    fn log_static_fmt_val(&self, fmt: &'static str, v: RawVal) -> Result<(), Status>;
+    fn log_static_fmt_val(&self, fmt: &'static str, v: RawVal) -> Result<(), Self::Error>;
 
     /// Log a formatted debugging message to the debug log (if present), passing
     /// a simplified format string (supporting only positional `{}` markers) and
     /// a single string-slice argument that will be inserted at the marker in
     /// the format string.
-    fn log_static_fmt_static_str(&self, fmt: &'static str, s: &'static str) -> Result<(), Status>;
+    fn log_static_fmt_static_str(
+        &self,
+        fmt: &'static str,
+        s: &'static str,
+    ) -> Result<(), Self::Error>;
 
     /// Log a formatted debugging message to the debug log (if present), passing
     /// a simplified format string (supporting only positional `{}` markers) and
@@ -86,7 +129,7 @@ pub trait EnvBase: Sized + Clone {
         fmt: &'static str,
         v: RawVal,
         s: &'static str,
-    ) -> Result<(), Status>;
+    ) -> Result<(), Self::Error>;
 
     /// Log a formatted debugging message to the debug log (if present), passing
     /// a simplified format string (supporting only positional `{}` markers) and
@@ -97,7 +140,7 @@ pub trait EnvBase: Sized + Clone {
         fmt: &'static str,
         vals: &[RawVal],
         strs: &[&'static str],
-    ) -> Result<(), Status>;
+    ) -> Result<(), Self::Error>;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -149,7 +192,7 @@ macro_rules! host_function_helper {
     =>
     {
         $(#[$attr])*
-        fn $fn_id(&self, $($arg:$type),*) -> $ret;
+        fn $fn_id(&self, $($arg:$type),*) -> Result<$ret, Self::Error>;
     };
 }
 
@@ -186,7 +229,7 @@ macro_rules! generate_env_trait {
         // This macro expands to a single item: the Env trait.
 
         /// This trait represents the interface between Host and Guest, used by
-        /// client contract code and implemented (via [CheckedEnv](crate::CheckedEnv)) by the host.
+        /// client contract code and implemented (via [Env](crate::Env)) by the host.
         /// It consists of functions that take or return only 64-bit values such
         /// as [RawVal] or [u64].
         pub trait Env: EnvBase

@@ -14,12 +14,15 @@ impl<E: Env, const N: usize> TryFromVal<E, RawVal> for [u8; N] {
             return Err(ScHostValErrorCode::UnexpectedValType.into());
         }
         let bytes = unsafe { Object::unchecked_from_val(val) };
-        let len = unsafe { u32::unchecked_from_val(env.bytes_len(bytes)) } as usize;
+        let len =
+            unsafe { u32::unchecked_from_val(env.bytes_len(bytes).map_err(|_| ConversionError)?) }
+                as usize;
         if len != N {
             return Err(ConversionError.into());
         }
         let mut arr = [0u8; N];
-        env.bytes_copy_to_slice(bytes, RawVal::U32_ZERO, &mut arr)?;
+        env.bytes_copy_to_slice(bytes, RawVal::U32_ZERO, &mut arr)
+            .map_err(|_| ConversionError)?;
         Ok(arr)
     }
 }
@@ -34,9 +37,12 @@ impl<E: Env> TryFromVal<E, RawVal> for Vec<u8> {
             return Err(ScHostValErrorCode::UnexpectedValType.into());
         }
         let bytes = unsafe { Object::unchecked_from_val(val) };
-        let len = unsafe { u32::unchecked_from_val(env.bytes_len(bytes)) } as usize;
+        let len =
+            unsafe { u32::unchecked_from_val(env.bytes_len(bytes).map_err(|_| ConversionError)?) }
+                as usize;
         let mut vec = vec![0u8; len];
-        env.bytes_copy_to_slice(bytes, RawVal::U32_ZERO, &mut vec)?;
+        env.bytes_copy_to_slice(bytes, RawVal::U32_ZERO, &mut vec)
+            .map_err(|_| ConversionError)?;
         Ok(vec)
     }
 }
@@ -45,7 +51,10 @@ impl<E: Env> TryFromVal<E, &[u8]> for RawVal {
     type Error = Status;
     #[inline(always)]
     fn try_from_val(env: &E, v: &&[u8]) -> Result<RawVal, Self::Error> {
-        Ok(env.bytes_new_from_slice(v)?.to_raw())
+        Ok(env
+            .bytes_new_from_slice(v)
+            .map_err(|_| ConversionError)?
+            .to_raw())
     }
 }
 

@@ -299,6 +299,6 @@ impl Status {
 
 impl From<core::convert::Infallible> for crate::Status {
     fn from(_: core::convert::Infallible) -> Self {
-        panic!()
+        unreachable!()
     }
 }

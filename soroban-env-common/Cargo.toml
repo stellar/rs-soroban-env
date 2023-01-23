@@ -24,6 +24,7 @@ static_assertions = "1.1.0"
 std = ["stellar-xdr/std", "stellar-xdr/base64"]
 serde = ["dep:serde", "stellar-xdr/serde"]
 vm = ["wasmi"]
+testutils = []
 
 [package.metadata.docs.rs]
 all-features = true

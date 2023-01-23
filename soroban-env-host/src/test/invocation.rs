@@ -7,7 +7,7 @@ use crate::{
     events::{DebugArg, HostEvent},
     vm::Vm,
     xdr::{Hash, ScHostObjErrorCode, ScStatusType, ScVal, ScVec},
-    CheckedEnv, Host, HostError, Status, Symbol, Tag,
+    Env, Host, HostError, Status, Symbol, Tag,
 };
 use soroban_test_wasms::{ADD_I32, INVOKE_CONTRACT, VEC};
 

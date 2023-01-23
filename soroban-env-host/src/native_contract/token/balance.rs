@@ -8,7 +8,7 @@ use soroban_env_common::xdr::{
     AccountEntry, AccountEntryExt, AccountEntryExtensionV1Ext, AccountFlags, AccountId,
     LedgerEntryData, TrustLineAsset, TrustLineEntry, TrustLineEntryExt, TrustLineFlags,
 };
-use soroban_env_common::{CheckedEnv, TryIntoVal};
+use soroban_env_common::{Env, TryIntoVal};
 
 use super::error::ContractError;
 use super::storage_types::BalanceValue;

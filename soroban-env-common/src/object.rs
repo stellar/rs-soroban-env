@@ -57,7 +57,7 @@ impl<E> TryFromVal<E, Object> for ScObject
 where
     E: Env + Convert<Object, ScObject>,
 {
-    type Error = E::Error;
+    type Error = <E as Convert<Object, ScObject>>::Error;
     fn try_from_val(env: &E, val: &Object) -> Result<Self, Self::Error> {
         env.convert(*val)
     }

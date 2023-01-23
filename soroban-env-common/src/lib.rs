@@ -38,7 +38,6 @@ mod val_wrapper;
 
 mod array;
 mod bitset;
-mod checked_env;
 mod compare;
 mod convert;
 mod env;
@@ -56,7 +55,7 @@ mod symbol;
 mod tuple;
 mod unimplemented_env;
 mod val;
-mod vmcaller_checked_env;
+mod vmcaller_env;
 
 // Re-export the XDR definitions
 pub use stellar_xdr as xdr;
@@ -66,13 +65,12 @@ pub use raw_val::{ConversionError, RawVal, RawValConvertible, Tag};
 pub use val::Val;
 
 // RawVal and EnvObj couple raw types to environments.
-pub use checked_env::CheckedEnv;
 pub use compare::Compare;
 pub use convert::Convert;
 pub use env::{call_macro_with_all_host_functions, Env, EnvBase};
 pub use env_val::{TryFromVal, TryIntoVal};
 pub use unimplemented_env::UnimplementedEnv;
-pub use vmcaller_checked_env::{VmCaller, VmCallerCheckedEnv};
+pub use vmcaller_env::{VmCaller, VmCallerEnv};
 
 // BitSet, Status and Symbol wrap RawVals.
 // TODO: maybe these should wrap EnvVals?

@@ -13,12 +13,12 @@ pub struct EmptyContractWithEvents;
 impl ContractFunctionSet for EmptyContractWithEvents {
     fn call(&self, _func: &Symbol, host: &Host, _args: &[RawVal]) -> Option<RawVal> {
         // Add a contract event
-        let mut data = host.map_new();
-        data = host.map_put(data, 1_u32.into(), 2_u32.into());
-        let mut topics = host.vec_new(().into());
-        topics = host.vec_push_back(topics, 0u32.into());
-        topics = host.vec_push_back(topics, 1u32.into());
-        Some(host.contract_event(topics, data.to_raw()))
+        let mut data = host.map_new().unwrap();
+        data = host.map_put(data, 1_u32.into(), 2_u32.into()).unwrap();
+        let mut topics = host.vec_new(().into()).unwrap();
+        topics = host.vec_push_back(topics, 0u32.into()).unwrap();
+        topics = host.vec_push_back(topics, 1u32.into()).unwrap();
+        Some(host.contract_event(topics, data.to_raw()).unwrap())
     }
 }
 
@@ -32,7 +32,7 @@ fn contract_event() -> Result<(), HostError> {
     let args = host.test_vec_obj::<i32>(&[1, 2])?;
     host.register_test_contract(id, test_contract)?;
     assert_eq!(
-        host.call(id, sym.into(), args.into()).get_payload(),
+        host.call(id, sym.into(), args.into())?.get_payload(),
         RawVal::from_void().get_payload()
     );
 

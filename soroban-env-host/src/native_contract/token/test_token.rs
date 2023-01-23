@@ -5,7 +5,7 @@ use crate::{
 };
 use soroban_env_common::{
     xdr::{Asset, ContractId, CreateContractArgs, HostFunction, ScContractCode},
-    CheckedEnv, RawVal,
+    Env, RawVal,
 };
 use soroban_env_common::{Symbol, TryFromVal, TryIntoVal};
 
