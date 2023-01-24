@@ -189,6 +189,13 @@ macro_rules! impl_wasm_insn_runner {
                     .unwrap_or_default();
             }
 
+            fn run_baseline_iter(host: &crate::Host, _iter: u64, base_sample: Self::SampleType) {
+                base_sample
+                    .vm
+                    .invoke_function_raw(host, "test", &[])
+                    .unwrap_or_default();
+            }
+
             fn get_total_input(_host: &crate::Host, sample: &WasmInsnSample) -> u64 {
                 sample.insns * Self::RUN_ITERATIONS
             }

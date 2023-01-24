@@ -12,20 +12,19 @@ impl CostRunner for ImMapNewRun {
     }
 }
 
-pub struct ImMapImmutEntryRun;
+pub struct ImMapEntryRun;
 #[derive(Clone)]
-pub struct ImMapImmutEntrySample {
+pub struct ImMapEntrySample {
     pub map: HostMap,
     pub keys: Vec<RawVal>,
 }
-impl CostRunner for ImMapImmutEntryRun {
+impl CostRunner for ImMapEntryRun {
     const COST_TYPE: CostType = CostType::MapEntry;
-    type SampleType = ImMapImmutEntrySample;
+    type SampleType = ImMapEntrySample;
 
-    fn run_iter(host: &crate::Host, iter: u64, sample: Self::SampleType) {
-        let _ = sample
-            .map
-            .get(&sample.keys[iter as usize % sample.keys.len()], host)
-            .unwrap();
+    fn run_iter(host: &crate::Host, _iter: u64, sample: Self::SampleType) {
+        for k in sample.keys {
+            sample.map.get(&k, host).unwrap();
+        }
     }
 }

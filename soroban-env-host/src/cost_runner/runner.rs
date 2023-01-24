@@ -13,8 +13,18 @@ pub trait CostRunner: Sized {
     /// Data type of the sample running with.
     type SampleType: Clone;
 
+    fn run_baseline_iter(_host: &Host, _iter: u64, _sample: Self::SampleType) {
+        ()
+    }
+
     /// Run a iteration of the `CostRunner`, called by `run` for 0..RUN_ITERATIONS.
     fn run_iter(host: &Host, iter: u64, sample: Self::SampleType);
+
+    fn run_baseline(host: &Host, samples: Vec<Self::SampleType>) {
+        for (iter, sample) in samples.into_iter().enumerate() {
+            Self::run_baseline_iter(host, iter as u64, sample)
+        }
+    }
 
     /// Run the `CostRunner`. This method is called under CPU-and-memory tracking
     /// machinery, so anything that happens during it will be considered part of

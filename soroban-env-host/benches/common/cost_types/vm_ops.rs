@@ -21,24 +21,39 @@ impl HostCostMeasurement for VmInstantiationMeasure {
         VmInstantiationSample { id, wasm }
     }
 
-    fn new_worst_case(_host: &Host, _rng: &mut StdRng, _input: u64) -> VmInstantiationSample {
+    fn new_worst_case(_host: &Host, _rng: &mut StdRng, input: u64) -> VmInstantiationSample {
         let id: xdr::Hash = [0; 32].into();
-        let wasm: Vec<u8> = soroban_test_wasms::COMPLEX.clone().into();
+        let wasm = match input % 10 {
+            0 => soroban_test_wasms::ADD_I32,
+            1 => soroban_test_wasms::CREATE_CONTRACT,
+            2 => soroban_test_wasms::CONTRACT_DATA,
+            3 => soroban_test_wasms::LINEAR_MEMORY,
+            4 => soroban_test_wasms::VEC,
+            5 => soroban_test_wasms::INVOKE_CONTRACT,
+            6 => soroban_test_wasms::HOSTILE,
+            7 => soroban_test_wasms::FIB,
+            8 => soroban_test_wasms::FANNKUCH,
+            9 => soroban_test_wasms::COMPLEX,
+            _ => unreachable!(),
+        }
+        .clone()
+        .into();
         VmInstantiationSample { id, wasm }
     }
 
     fn new_random_case(_host: &Host, rng: &mut StdRng, _input: u64) -> VmInstantiationSample {
         let id: xdr::Hash = [0; 32].into();
-        let wasm = match rng.gen_range(0, 9) {
+        let wasm = match rng.gen_range(0, 10) {
             0 => soroban_test_wasms::ADD_I32,
-            1 => soroban_test_wasms::COMPLEX,
+            1 => soroban_test_wasms::CREATE_CONTRACT,
             2 => soroban_test_wasms::CONTRACT_DATA,
-            3 => soroban_test_wasms::CREATE_CONTRACT,
-            4 => soroban_test_wasms::FANNKUCH,
-            5 => soroban_test_wasms::FIB,
+            3 => soroban_test_wasms::LINEAR_MEMORY,
+            4 => soroban_test_wasms::VEC,
+            5 => soroban_test_wasms::INVOKE_CONTRACT,
             6 => soroban_test_wasms::HOSTILE,
-            7 => soroban_test_wasms::LINEAR_MEMORY,
-            8 => soroban_test_wasms::VEC,
+            7 => soroban_test_wasms::FIB,
+            8 => soroban_test_wasms::FANNKUCH,
+            9 => soroban_test_wasms::COMPLEX,
             _ => unreachable!(),
         };
         let wasm: Vec<u8> = wasm.clone().into();

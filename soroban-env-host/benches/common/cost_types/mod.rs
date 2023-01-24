@@ -24,6 +24,7 @@ pub(crate) use bytes_ops::*;
 pub(crate) use charge_budget::*;
 pub(crate) use compute_ed25519_pubkey::*;
 pub(crate) use compute_sha256_hash::*;
+#[allow(unused)]
 pub(crate) use ed25519_scalar_mul::*;
 pub(crate) use guard_frame::*;
 pub(crate) use host_obj_alloc_slot::*;

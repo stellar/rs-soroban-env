@@ -633,7 +633,6 @@ impl Host {
     where
         F: FnOnce(Option<&HostObject>) -> Result<U, HostError>,
     {
-        self.charge_budget(CostType::VisitObject, 1)?;
         let r = self.0.objects.borrow();
         let obj: Object = obj.into();
         let handle: u32 = obj.get_handle();

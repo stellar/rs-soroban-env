@@ -57,24 +57,21 @@ pub struct Measurement {
 }
 
 #[derive(Clone, Debug, Default)]
-pub struct Measurements(pub Vec<Measurement>);
+pub struct Measurements {
+    pub baseline: Measurement,
+    pub measurements: Vec<Measurement>,
+}
+
 impl Measurements {
-    /// Subtracts the values of the first measurement from all subsequent
-    /// measurements, to eliminate constant factors; this should only be done if
-    /// you're sure you don't want to capture those constant factors in a later
-    /// cost model.
+    /// Subtracts baseline value from all measurements, to eliminate constant factors which
+    /// attributes from the measurement setup. This is to differentiate from the constant factor
+    /// from the measurements themselves, which must be included as part of the model.
     pub fn subtract_baseline(&mut self) {
-        match self.0.split_first_mut() {
-            None => (),
-            Some((first, rest)) => {
-                for e in rest {
-                    e.input = e.input.saturating_sub(first.input);
-                    e.cpu_insns = e.cpu_insns.saturating_sub(first.cpu_insns);
-                    e.mem_bytes = e.mem_bytes.saturating_sub(first.mem_bytes);
-                    e.time_nsecs = e.time_nsecs.saturating_sub(first.time_nsecs);
-                }
-                *first = Measurement::default();
-            }
+        for e in self.measurements.iter_mut() {
+            e.input = e.input.saturating_sub(self.baseline.input);
+            e.cpu_insns = e.cpu_insns.saturating_sub(self.baseline.cpu_insns);
+            e.mem_bytes = e.mem_bytes.saturating_sub(self.baseline.mem_bytes);
+            e.time_nsecs = e.time_nsecs.saturating_sub(self.baseline.time_nsecs);
         }
     }
 
@@ -84,7 +81,7 @@ impl Measurements {
     {
         use thousands::Separable;
         let points: Vec<(f32, f32)> = self
-            .0
+            .measurements
             .iter()
             .enumerate()
             .map(|(i, m)| (i as f32, get_output(m) as f32))
@@ -98,13 +95,13 @@ impl Measurements {
         let hist = textplots::utils::histogram(&points, ymin, ymax, 30);
 
         let in_min = self
-            .0
+            .measurements
             .iter()
             .map(|m| m.input as f32)
             .reduce(f32::min)
             .unwrap();
         let in_max = self
-            .0
+            .measurements
             .iter()
             .map(|m| m.input as f32)
             .reduce(f32::max)
@@ -138,19 +135,22 @@ impl Measurements {
 
         writeln!(
             &mut tw,
-            "input\tcpu insns\tmem bytes\ttime nsecs\tinsns/input\tbytes/input\tnsecs/input"
+            "input\tinput_baseline\tcpu_insns\tcpu_baseline\tinsns/input\tmem_bytes\tmem_baseline\tbytes/input\ttime nsecs\tnsecs/input"
         )
         .unwrap();
-        for m in self.0.iter() {
+        for m in self.measurements.iter() {
             writeln!(
                 &mut tw,
-                "{}\t{}\t{}\t{}ns\t{}\t{}\t{}ns",
+                "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
                 m.input.separate_with_commas(),
+                self.baseline.input.separate_with_commas(),
                 m.cpu_insns.separate_with_commas(),
-                m.mem_bytes.separate_with_commas(),
-                m.time_nsecs.separate_with_commas(),
+                self.baseline.cpu_insns.separate_with_commas(),
                 (m.cpu_insns / m.input.max(1)).separate_with_commas(),
+                m.mem_bytes.separate_with_commas(),
+                self.baseline.mem_bytes.separate_with_commas(),
                 (m.mem_bytes / m.input.max(1)).separate_with_commas(),
+                m.time_nsecs.separate_with_commas(),
                 (m.time_nsecs / m.input.max(1)).separate_with_commas()
             )
             .unwrap();
@@ -161,7 +161,7 @@ impl Measurements {
 
     pub fn fit_model_to_cpu(&self) -> FPCostModel {
         let data = self
-            .0
+            .measurements
             .iter()
             .map(|m| FPPoint {
                 x: m.input as f64,
@@ -173,7 +173,7 @@ impl Measurements {
 
     pub fn fit_model_to_mem(&self) -> FPCostModel {
         let data = self
-            .0
+            .measurements
             .iter()
             .map(|m| FPPoint {
                 x: m.input as f64,
@@ -208,6 +208,16 @@ pub trait HostCostMeasurement: Sized {
         Self::new_random_case(host, rng, 1)
     }
 
+    /// Baseline case is absolute minimal cost instance. It is used for estimating for the
+    /// "background noise" of the measurement. The best-case is the cheapest but valid instance.
+    /// The baseline-case may not be an actual valid case.
+    fn new_baseline_case(
+        host: &Host,
+        rng: &mut StdRng,
+    ) -> <Self::Runner as CostRunner>::SampleType {
+        Self::new_random_case(host, rng, 0)
+    }
+
     /// Initialize a worst-case (most-expensive) instance at a given size. Defaults to random.
     fn new_worst_case(
         host: &Host,
@@ -215,6 +225,10 @@ pub trait HostCostMeasurement: Sized {
         input: u64,
     ) -> <Self::Runner as CostRunner>::SampleType {
         Self::new_random_case(host, rng, input)
+    }
+
+    fn run_baseline(host: &Host, sample: Vec<<Self::Runner as CostRunner>::SampleType>) {
+        <Self::Runner as CostRunner>::run_baseline(host, sample)
     }
 
     fn run(host: &Host, sample: Vec<<Self::Runner as CostRunner>::SampleType>) {
@@ -285,11 +299,49 @@ mod cpu {
     }
 }
 
-fn measure_costs_inner<HCM: HostCostMeasurement, F>(
+fn harness<HCM: HostCostMeasurement, F>(
+    host: &Host,
+    mem_tracker: &MemTracker,
+    cpu_insn_counter: &mut cpu::InstructionCounter,
+    alloc_group_token: &mut AllocationGroupToken,
+    iterations: u64,
+    f: &mut F,
+    samples: Vec<<<HCM as HostCostMeasurement>::Runner as CostRunner>::SampleType>,
+) -> Measurement
+where
+    F: FnMut(&Host, Vec<<<HCM as HostCostMeasurement>::Runner as CostRunner>::SampleType>),
+{
+    // TODO get rid of dependency of inputs on samples
+    let sample = samples[0].clone();
+    // start the cpu and mem measurement
+    let start = Instant::now();
+    mem_tracker.0.store(0, Ordering::SeqCst);
+    let alloc_guard = alloc_group_token.enter();
+    host.with_budget(|budget| budget.reset_inputs());
+    cpu_insn_counter.begin();
+    f(host, samples);
+    // collect the metrics
+    let cpu_insns = cpu_insn_counter.end_and_count() / iterations;
+    drop(alloc_guard);
+    let stop = Instant::now();
+    let input = HCM::get_total_input(&host, &sample) / iterations;
+    let mem_bytes = mem_tracker.0.load(Ordering::SeqCst) / iterations;
+    let time_nsecs = stop.duration_since(start).as_nanos() as u64 / iterations;
+    Measurement {
+        input,
+        cpu_insns,
+        mem_bytes,
+        time_nsecs,
+    }
+}
+
+fn measure_costs_inner<HCM: HostCostMeasurement, F, R>(
     mut next_sample: F,
-) -> Result<Measurements, std::io::Error>
+    mut runner: R,
+) -> Result<Vec<Measurement>, std::io::Error>
 where
     F: FnMut(&Host) -> Option<<HCM::Runner as CostRunner>::SampleType>,
+    R: FnMut(&Host, Vec<<HCM::Runner as CostRunner>::SampleType>),
 {
     let mut cpu_insn_counter = cpu::InstructionCounter::new();
     let mem_tracker = MemTracker(Arc::new(AtomicU64::new(0)));
@@ -312,34 +364,31 @@ where
             None => break,
         };
         let iterations = <HCM::Runner as CostRunner>::RUN_ITERATIONS;
-        let mvec = (0..iterations).map(|_| sample.clone()).collect();
-        // start the cpu and mem measurement
-        let start = Instant::now();
-        mem_tracker.0.store(0, Ordering::SeqCst);
-        let alloc_guard = alloc_group_token.enter();
-        host.with_budget(|budget| budget.reset_inputs());
-        cpu_insn_counter.begin();
-        HCM::run(&host, mvec);
-        // collect the metrics
-        let mut cpu_insns = cpu_insn_counter.end_and_count() / iterations;
-        drop(alloc_guard);
-        let stop = Instant::now();
-        let input = HCM::get_total_input(&host, &sample) / iterations;
-        cpu_insns = cpu_insns - HCM::get_insns_overhead(&host, &sample);
-        let mem_bytes = mem_tracker.0.load(Ordering::SeqCst) / iterations;
-        let time_nsecs = stop.duration_since(start).as_nanos() as u64 / iterations;
+
+        let mes = harness::<HCM, _>(
+            &host,
+            &mem_tracker,
+            &mut cpu_insn_counter,
+            &mut alloc_group_token,
+            iterations,
+            &mut runner,
+            (0..iterations).map(|_| sample.clone()).collect(),
+        );
+
         ret.push(Measurement {
-            input,
-            cpu_insns,
-            mem_bytes,
-            time_nsecs,
+            input: mes.input,
+            cpu_insns: mes
+                .cpu_insns
+                .saturating_sub(HCM::get_insns_overhead(&host, &sample)),
+            mem_bytes: mes.mem_bytes,
+            time_nsecs: mes.time_nsecs,
         });
     }
     AllocationRegistry::disable_tracking();
     unsafe {
         AllocationRegistry::clear_global_tracker();
     }
-    Ok(Measurements(ret))
+    Ok(ret)
 }
 
 pub fn measure_worst_case_costs<HCM: HostCostMeasurement>(
@@ -347,9 +396,26 @@ pub fn measure_worst_case_costs<HCM: HostCostMeasurement>(
 ) -> Result<Measurements, std::io::Error> {
     let mut it = step_range;
     let mut rng = StdRng::from_seed([0xff; 32]);
-    measure_costs_inner::<HCM, _>(|host| {
-        it.next()
-            .map(|input| HCM::new_worst_case(host, &mut rng, input))
+    // run baseline measure
+    let mut it2 = std::iter::once(0);
+    let baseline = measure_costs_inner::<HCM, _, _>(
+        |host| it2.next().map(|_| HCM::new_baseline_case(host, &mut rng)),
+        &HCM::run_baseline,
+    )?
+    .first()
+    .expect("baseline is empty")
+    .clone();
+    // run the actual measurements
+    let measurements = measure_costs_inner::<HCM, _, _>(
+        |host| {
+            it.next()
+                .map(|input| HCM::new_worst_case(host, &mut rng, input))
+        },
+        HCM::run,
+    )?;
+    Ok(Measurements {
+        baseline,
+        measurements,
     })
 }
 
@@ -359,16 +425,38 @@ pub fn measure_cost_variation<HCM: HostCostMeasurement>(
     let count = 100;
     let mut i = 0;
     let mut rng = StdRng::from_seed([0xff; 32]);
-    measure_costs_inner::<HCM, _>(|host| {
-        i += 1;
-        match i {
-            1 => Some(HCM::new_best_case(host, &mut rng)),
-            2 => Some(HCM::new_worst_case(host, &mut rng, large_input)),
-            n if n < count => {
-                let input = rng.gen_range(1, 2 + large_input);
-                Some(HCM::new_random_case(host, &mut rng, input))
+
+    // run baseline measure
+    let baseline = measure_costs_inner::<HCM, _, _>(
+        |host| {
+            std::iter::once(0)
+                .next()
+                .map(|_| HCM::new_baseline_case(host, &mut rng))
+        },
+        &HCM::run_baseline,
+    )?
+    .first()
+    .expect("baseline is empty")
+    .clone();
+
+    // run the actual measurements
+    let measurements = measure_costs_inner::<HCM, _, _>(
+        |host| {
+            i += 1;
+            match i {
+                1 => Some(HCM::new_best_case(host, &mut rng)),
+                2 => Some(HCM::new_worst_case(host, &mut rng, large_input)),
+                n if n < count => {
+                    let input = rng.gen_range(1, 2 + large_input);
+                    Some(HCM::new_random_case(host, &mut rng, input))
+                }
+                _ => None,
             }
-            _ => None,
-        }
+        },
+        HCM::run,
+    )?;
+    Ok(Measurements {
+        baseline,
+        measurements,
     })
 }

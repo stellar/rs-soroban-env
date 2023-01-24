@@ -12,7 +12,7 @@ impl HostCostMeasurement for RecordContractEventMeasure {
     type Runner = RecordContractEventRun;
 
     fn new_random_case(
-        host: &Host,
+        _host: &Host,
         _rng: &mut rand::prelude::StdRng,
         input: u64,
     ) -> RecordContractEventSample {

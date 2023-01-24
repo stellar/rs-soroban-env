@@ -172,10 +172,14 @@ impl Host {
         })
     }
 
+    pub(crate) fn sha256_hash_from_bytes(&self, bytes: &[u8]) -> Result<Vec<u8>, HostError> {
+        self.charge_budget(CostType::ComputeSha256Hash, bytes.len() as u64)?;
+        Ok(Sha256::digest(bytes).as_slice().to_vec())
+    }
+
     pub fn sha256_hash_from_bytesobj_input(&self, x: BytesObject) -> Result<Vec<u8>, HostError> {
         self.visit_obj(x, |bytes: &ScBytes| {
-            self.charge_budget(CostType::ComputeSha256Hash, bytes.len() as u64)?;
-            let hash = Sha256::digest(bytes).as_slice().to_vec();
+            let hash = self.sha256_hash_from_bytes(bytes.as_slice())?;
             if hash.len() != 32 {
                 return Err(self.err_general("incorrect hash size"));
             }
