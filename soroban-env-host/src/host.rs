@@ -35,6 +35,7 @@ use crate::{EnvBase, Object, RawVal, RawValConvertible, Symbol};
 pub(crate) mod comparison;
 mod conversion;
 mod data_helper;
+mod diagnostics_helper;
 mod err_helper;
 mod error;
 pub(crate) mod metered_clone;
@@ -126,6 +127,18 @@ pub struct LedgerInfo {
     pub base_reserve: u32,
 }
 
+#[derive(Clone)]
+pub enum DiagnosticLevel {
+    None,
+    Debug,
+}
+
+impl Default for DiagnosticLevel {
+    fn default() -> Self {
+        DiagnosticLevel::None
+    }
+}
+
 #[derive(Clone, Default)]
 pub(crate) struct HostImpl {
     source_account: RefCell<Option<AccountId>>,
@@ -140,6 +153,7 @@ pub(crate) struct HostImpl {
     pub(crate) budget: Budget,
     pub(crate) events: RefCell<InternalEventsBuffer>,
     authorization_manager: RefCell<AuthorizationManager>,
+    diagnostic_level: RefCell<DiagnosticLevel>,
     // Note: we're not going to charge metering for testutils because it's out of the scope
     // of what users will be charged for in production -- it's scaffolding for testing a contract,
     // but shouldn't be charged to the contract itself (and will never be compiled-in to
@@ -215,6 +229,7 @@ impl Host {
             authorization_manager: RefCell::new(
                 AuthorizationManager::new_enforcing_without_authorizations(budget),
             ),
+            diagnostic_level: Default::default(),
             #[cfg(any(test, feature = "testutils"))]
             contracts: Default::default(),
             #[cfg(any(test, feature = "testutils"))]
@@ -297,6 +312,14 @@ impl Host {
 
     pub fn charge_budget(&self, ty: CostType, input: u64) -> Result<(), HostError> {
         self.0.budget.clone().charge(ty, input)
+    }
+
+    pub fn set_diagnostic_level(&self, diagnostic_level: DiagnosticLevel) {
+        *self.0.diagnostic_level.borrow_mut() = diagnostic_level;
+    }
+
+    pub fn is_debug(&self) -> bool {
+        matches!(*self.0.diagnostic_level.borrow(), DiagnosticLevel::Debug)
     }
 
     pub(crate) fn get_events_mut<F, U>(&self, f: F) -> Result<U, HostError>
@@ -889,6 +912,13 @@ impl Host {
         args: &[RawVal],
         allow_reentry: bool,
     ) -> Result<RawVal, HostError> {
+        if self.is_debug() {
+            // This event will not be rolled back if the call to func fails
+            // because the next frame has not been pushed. However, if the call to func fails,
+            // the return value event emitted in fn_return_diagnostics will be rolled back.
+            self.fn_call_diagnostics(&id, &func, args)?;
+        }
+
         if !allow_reentry {
             for f in self.0.context.borrow().iter() {
                 let exist_id = match f {
@@ -948,7 +978,12 @@ impl Host {
                     let closure = AssertUnwindSafe(move || cfs.call(&func, self, args));
                     let res: Result<Option<RawVal>, PanicVal> = testutils::call_with_suppressed_panic_hook(closure);
                     match res {
-                        Ok(Some(rawval)) => Ok(rawval),
+                        Ok(Some(rawval)) => {
+                            // This is under testutils, so no need to check is_debug since it's
+                            // already done in fn_return_diagnostics.
+                            self.fn_return_diagnostics(id, &func, &rawval)?;
+                            Ok(rawval)
+                        },
                         Ok(None) => Err(self.err(
                             DebugError::general()
                                 .msg("error '{}': calling unknown contract function '{}'")
@@ -988,7 +1023,15 @@ impl Host {
             }
         }
 
-        return self.call_contract_fn(&id, &func, args);
+        let res = self.call_contract_fn(&id, &func, args);
+
+        if self.is_debug() {
+            match res.clone() {
+                Ok(res) => self.fn_return_diagnostics(id, &func, &res)?,
+                Err(err) => {}
+            }
+        }
+        return res;
     }
 
     // Notes on metering: covered by the called components.

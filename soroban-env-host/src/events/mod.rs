@@ -10,6 +10,7 @@ pub(crate) use internal::{InternalContractEvent, InternalEvent, InternalEventsBu
 pub enum HostEvent {
     Contract(crate::xdr::ContractEvent),
     Debug(DebugEvent),
+    StructuredDebug(crate::xdr::ContractEvent),
 }
 
 /// The external representation of events in the chronological order.

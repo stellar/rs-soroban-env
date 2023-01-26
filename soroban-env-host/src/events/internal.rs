@@ -45,6 +45,7 @@ impl InternalContractEvent {
 pub(crate) enum InternalEvent {
     Contract(InternalContractEvent),
     Debug(DebugEvent),
+    StructuredDebug(InternalContractEvent),
     #[default]
     None,
 }
@@ -88,12 +89,13 @@ impl InternalEventsBuffer {
                 if i < events {
                     Ok(true)
                 } else {
-                    if let InternalEvent::Contract(c) = e {
-                        *e = Self::defunct_contract_event(c);
-                        rollback_count += 1;
-                        Ok(true)
-                    } else {
-                        Ok(true)
+                    match e {
+                        InternalEvent::Contract(c) | InternalEvent::StructuredDebug(c) => {
+                            *e = Self::defunct_contract_event(c);
+                            rollback_count += 1;
+                            Ok(true)
+                        }
+                        InternalEvent::Debug(_) | InternalEvent::None => Ok(true),
                     }
                 }
             },
@@ -123,6 +125,7 @@ impl InternalEventsBuffer {
             match e {
                 InternalEvent::Contract(c) => debug!("Contract event: {:?}", c),
                 InternalEvent::Debug(d) => debug!("Debug event: {}", d),
+                InternalEvent::StructuredDebug(c) => debug!("StructuredDebug event: {:?}", c),
                 InternalEvent::None => (),
             }
         }
@@ -139,6 +142,9 @@ impl InternalEventsBuffer {
             .map(|e| match e {
                 InternalEvent::Contract(c) => Ok(HostEvent::Contract(c.clone().to_xdr(host)?)),
                 InternalEvent::Debug(d) => Ok(HostEvent::Debug(d.clone())),
+                InternalEvent::StructuredDebug(c) => {
+                    Ok(HostEvent::StructuredDebug(c.clone().to_xdr(host)?))
+                }
                 InternalEvent::None => Err(host.err_general("Unexpected event type")),
             })
             .collect();
