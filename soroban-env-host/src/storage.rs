@@ -400,15 +400,18 @@ mod test_footprint {
 
 #[cfg(test)]
 pub(crate) mod test_storage {
+    use crate::test::util;
     use core::fmt::Debug;
     use std::collections::BTreeMap;
 
     #[derive(Debug)]
-    pub(crate) struct MyError;
-    impl std::error::Error for MyError {}
-    impl std::fmt::Display for MyError {
+    pub(crate) struct SnapshotError {
+        code: u32,
+    }
+    impl std::error::Error for SnapshotError {}
+    impl std::fmt::Display for SnapshotError {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            <MyError as Debug>::fmt(self, f)
+            <SnapshotError as Debug>::fmt(self, f)
         }
     }
 
@@ -426,12 +429,22 @@ pub(crate) mod test_storage {
             if let Some(val) = self.0.get(key) {
                 Ok(val.clone())
             } else {
-                Err(Box::new(MyError))
+                Err(Box::new(SnapshotError { code: 1234 }))
             }
         }
 
         fn has(&self, key: &LedgerKey) -> Result<bool, Box<dyn Error>> {
             Ok(self.0.contains_key(key))
         }
+    }
+
+    #[test]
+    fn test_retrieve_error() {
+        let snapshot = MockSnapshotSource(BTreeMap::new());
+        let lk = LedgerKey::Account(crate::xdr::LedgerKeyAccount {
+            account_id: util::generate_account_id(),
+        });
+        let err = snapshot.get(&lk).expect_err("key not exist");
+        assert_eq!(err.downcast_ref::<SnapshotError>().unwrap().code, 1234);
     }
 }
