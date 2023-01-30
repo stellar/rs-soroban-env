@@ -7,7 +7,7 @@
 //!   - [Env::put_contract_data](crate::Env::put_contract_data)
 //!   - [Env::del_contract_data](crate::Env::del_contract_data)
 
-use std::rc::Rc;
+use std::{error::Error, rc::Rc};
 
 use soroban_env_common::Compare;
 
@@ -52,8 +52,8 @@ impl Compare<AccessType> for Budget {
 /// A helper type used by [FootprintMode::Recording] to provide access
 /// to a stable read-snapshot of a ledger.
 pub trait SnapshotSource {
-    fn get(&self, key: &LedgerKey) -> Result<LedgerEntry, HostError>;
-    fn has(&self, key: &LedgerKey) -> Result<bool, HostError>;
+    fn get(&self, key: &LedgerKey) -> Result<LedgerEntry, Box<dyn Error>>;
+    fn has(&self, key: &LedgerKey) -> Result<bool, Box<dyn Error>>;
 }
 
 /// Describes the total set of [LedgerKey]s that a given transaction
@@ -193,9 +193,12 @@ impl Storage {
                 // In recording mode we treat the map as a cache
                 // that misses read-through to the underlying src.
                 if !self.map.contains_key::<LedgerKey>(key, budget)? {
+                    let val = src
+                        .get(key)
+                        .map_err(|_| HostError::from(ScHostStorageErrorCode::MissingKeyInGet))?;
                     self.map = self.map.insert(
                         Rc::new(key.metered_clone(budget)?),
-                        Some(Rc::new(src.get(key)?)),
+                        Some(Rc::new(val)),
                         budget,
                     )?;
                 }
@@ -284,7 +287,9 @@ impl Storage {
                 match self.map.get::<LedgerKey>(key, budget)? {
                     Some(None) => Ok(false),
                     Some(Some(_)) => Ok(true),
-                    None => src.has(key),
+                    None => src
+                        .has(key)
+                        .map_err(|_| ScHostStorageErrorCode::MissingKeyInGet.into()),
                 }
             }
             FootprintMode::Enforcing => {
@@ -395,9 +400,17 @@ mod test_footprint {
 
 #[cfg(test)]
 pub(crate) mod test_storage {
+    use core::fmt::Debug;
     use std::collections::BTreeMap;
 
-    use soroban_env_common::xdr::ScUnknownErrorCode;
+    #[derive(Debug)]
+    pub(crate) struct MyError;
+    impl std::error::Error for MyError {}
+    impl std::fmt::Display for MyError {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            <MyError as Debug>::fmt(self, f)
+        }
+    }
 
     use super::*;
     #[allow(dead_code)]
@@ -409,15 +422,15 @@ pub(crate) mod test_storage {
         }
     }
     impl SnapshotSource for MockSnapshotSource {
-        fn get(&self, key: &LedgerKey) -> Result<LedgerEntry, HostError> {
+        fn get(&self, key: &LedgerKey) -> Result<LedgerEntry, Box<dyn Error>> {
             if let Some(val) = self.0.get(key) {
                 Ok(val.clone())
             } else {
-                Err(ScUnknownErrorCode::General.into())
+                Err(Box::new(MyError))
             }
         }
 
-        fn has(&self, key: &LedgerKey) -> Result<bool, HostError> {
+        fn has(&self, key: &LedgerKey) -> Result<bool, Box<dyn Error>> {
             Ok(self.0.contains_key(key))
         }
     }

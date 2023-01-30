@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::{error::Error, rc::Rc};
 
 use crate::{
     budget::Budget,
@@ -11,11 +11,11 @@ use soroban_test_wasms::COMPLEX;
 
 struct EmptySnap;
 impl SnapshotSource for EmptySnap {
-    fn get(&self, _key: &LedgerKey) -> Result<LedgerEntry, HostError> {
-        Err(ScHostStorageErrorCode::AccessToUnknownEntry.into())
+    fn get(&self, _key: &LedgerKey) -> Result<LedgerEntry, Box<dyn Error>> {
+        Err(HostError::from(ScHostStorageErrorCode::AccessToUnknownEntry).into())
     }
 
-    fn has(&self, _key: &LedgerKey) -> Result<bool, HostError> {
+    fn has(&self, _key: &LedgerKey) -> Result<bool, Box<dyn Error>> {
         Ok(false)
     }
 }
