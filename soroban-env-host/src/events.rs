@@ -138,6 +138,23 @@ impl DebugEvent {
 /// used as a transient type when recording a (possibly enriched)
 /// debug event for a status and then converting the status to a
 /// HostError. See [host::Host::err](crate::host::Host::err) for normal use.
+///
+/// # Examples
+///
+/// ```rust
+/// use soroban_env_host::{RawVal, xdr::ScHostFnErrorCode, events::DebugError};
+///
+/// let r: RawVal = 1i32.into();
+/// let name: &'static str = "abc";
+/// let de = DebugError::new(ScHostFnErrorCode::InputArgsWrongType)
+///     .msg("unexpected RawVal {} for input '{}', need U32")
+///     .arg(r)
+///     .arg(name);
+/// assert_eq!(
+///     format!("{}", de.event),
+///     "unexpected RawVal I32(1) for input 'abc', need U32"
+/// );
+/// ```
 #[derive(Clone, Debug)]
 pub struct DebugError {
     pub event: DebugEvent,
@@ -151,7 +168,7 @@ impl DebugError {
     {
         let status: Status = status.into();
         Self {
-            event: DebugEvent::new().arg::<RawVal>(status.into()),
+            event: DebugEvent::new(),
             status,
         }
     }
