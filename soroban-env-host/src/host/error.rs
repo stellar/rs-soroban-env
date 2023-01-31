@@ -1,10 +1,11 @@
 use crate::{
     events::{Events, HostEvent},
     xdr::{self, ScStatus},
-    Status,
+    Host, Status,
 };
 use backtrace::{Backtrace, BacktraceFrame};
 use core::fmt::Debug;
+use std::error::Error;
 
 #[derive(Clone)]
 pub struct HostError {
@@ -13,7 +14,7 @@ pub struct HostError {
     pub(crate) backtrace: backtrace::Backtrace,
 }
 
-impl std::error::Error for HostError {}
+impl Error for HostError {}
 
 impl Debug for HostError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -138,5 +139,28 @@ impl TryFrom<&HostError> for ScStatus {
 impl From<HostError> for std::io::Error {
     fn from(e: HostError) -> Self {
         std::io::Error::new(std::io::ErrorKind::Other, e)
+    }
+}
+
+pub trait MapHostError<T> {
+    fn map_host_error(self, host: &Host) -> Result<T, HostError>;
+}
+
+impl<T> MapHostError<T> for Result<T, Box<dyn Error>> {
+    fn map_host_error(self, host: &Host) -> Result<T, HostError> {
+        self.map_err(|e| match e.downcast_ref::<HostError>() {
+            Some(e) => e.clone(),
+            None => {
+                let buf: Vec<u8> = Vec::from(e.to_string());
+                match host.add_host_object(buf) {
+                    Ok(obj) => host.err_status_msg_with_args(
+                        crate::xdr::ScUnknownErrorCode::General,
+                        "err: ",
+                        &[obj.into()],
+                    ),
+                    Err(e) => e,
+                }
+            }
+        })
     }
 }

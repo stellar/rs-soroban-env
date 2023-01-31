@@ -11,7 +11,7 @@ use crate::xdr::{
     LedgerKeyTrustLine, PublicKey, ScContractCode, ScHostStorageErrorCode, ScHostValErrorCode,
     ScObject, ScStatic, ScVal, Signer, SignerKey, ThresholdIndexes, TrustLineAsset, Uint256,
 };
-use crate::{Host, HostError};
+use crate::{Host, HostError, MapHostError};
 
 use super::metered_clone::MeteredClone;
 
@@ -29,7 +29,14 @@ impl Host {
         &self,
         key: &LedgerKey,
     ) -> Result<ScContractCode, HostError> {
-        let scval = match self.0.storage.borrow_mut().get(key, self.as_budget())?.data {
+        let scval = match self
+            .0
+            .storage
+            .borrow_mut()
+            .get(key, self.as_budget())
+            .map_host_error(&self)?
+            .data
+        {
             LedgerEntryData::ContractData(ContractDataEntry { val, .. }) => Ok(val),
             _ => Err(self.err_status(ScHostStorageErrorCode::ExpectContractData)),
         }?;
@@ -57,7 +64,8 @@ impl Host {
             .0
             .storage
             .borrow_mut()
-            .get(&key, self.as_budget())?
+            .get(&key, self.as_budget())
+            .map_host_error(&self)?
             .data
         {
             LedgerEntryData::ContractCode(e) => Ok(e),
@@ -77,11 +85,11 @@ impl Host {
             key: ScVal::Static(ScStatic::LedgerKeyContractCode),
             val: ScVal::Object(Some(ScObject::ContractCode(contract_source))),
         });
-        self.0.storage.borrow_mut().put(
-            &key,
-            &Host::ledger_entry_from_data(data),
-            self.as_budget(),
-        )?;
+        self.0
+            .storage
+            .borrow_mut()
+            .put(&key, &Host::ledger_entry_from_data(data), self.as_budget())
+            .map_host_error(&self)?;
         Ok(())
     }
 
@@ -167,16 +175,22 @@ impl Host {
     // notes on metering: `get` from storage is covered. Rest are free.
     pub fn load_account(&self, account_id: AccountId) -> Result<AccountEntry, HostError> {
         let acc = self.to_account_key(account_id);
-        self.with_mut_storage(|storage| match storage.get(&acc, self.as_budget())?.data {
-            LedgerEntryData::Account(ae) => Ok(ae),
-            _ => Err(self.err_general("not account")),
+        self.with_mut_storage(|storage| {
+            match storage
+                .get(&acc, self.as_budget())
+                .map_host_error(&self)?
+                .data
+            {
+                LedgerEntryData::Account(ae) => Ok(ae),
+                _ => Err(self.err_general("not account")),
+            }
         })
     }
 
     // notes on metering: covered by `has`.
     pub fn has_account(&self, account_id: AccountId) -> Result<bool, HostError> {
         let acc = self.to_account_key(account_id);
-        self.with_mut_storage(|storage| storage.has(&acc, self.as_budget()))
+        self.with_mut_storage(|storage| storage.has(&acc, self.as_budget()).map_host_error(&self))
     }
 
     pub(crate) fn to_account_key(&self, account_id: AccountId) -> LedgerKey {

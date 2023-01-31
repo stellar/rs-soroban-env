@@ -1,5 +1,5 @@
 use crate::budget::AsBudget;
-use crate::host::Host;
+use crate::host::{Host, MapHostError};
 use crate::native_contract::token::metadata::read_metadata;
 use crate::native_contract::token::public_types::{Identifier, Metadata};
 use crate::native_contract::token::storage_types::DataKey;
@@ -315,7 +315,7 @@ fn transfer_account_balance(e: &Host, account_id: AccountId, amount: i64) -> Res
         };
         if new_balance >= min_balance && new_balance <= max_balance {
             ae.balance = new_balance;
-            storage.put(&lk, &le, e.as_budget())
+            storage.put(&lk, &le, e.as_budget()).map_host_error(e)
         } else {
             Err(err!(
                 e,
@@ -358,7 +358,7 @@ fn transfer_trustline_balance(
         };
         if new_balance >= min_balance && new_balance <= max_balance {
             tl.balance = new_balance;
-            storage.put(&lk, &le, e.as_budget())
+            storage.put(&lk, &le, e.as_budget()).map_host_error(e)
         } else {
             Err(err!(
                 e,
@@ -600,7 +600,7 @@ fn set_trustline_authorization(
             tl.flags &= !(TrustLineFlags::AuthorizedFlag as u32);
             tl.flags |= TrustLineFlags::AuthorizedToMaintainLiabilitiesFlag as u32;
         }
-        storage.put(&lk, &le, e.as_budget())
+        storage.put(&lk, &le, e.as_budget()).map_host_error(e)
     })
 }
 

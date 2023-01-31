@@ -49,5 +49,6 @@ pub mod cost_runner;
 pub use host::ContractFunctionSet;
 pub use host::{
     metered_map::MeteredOrdMap, metered_vector::MeteredVector, Host, HostError, LedgerInfo,
+    MapHostError,
 };
 pub use soroban_env_common::*;

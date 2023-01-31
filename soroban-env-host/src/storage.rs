@@ -74,7 +74,7 @@ impl Footprint {
         key: &LedgerKey,
         ty: AccessType,
         budget: &Budget,
-    ) -> Result<(), HostError> {
+    ) -> Result<(), Box<dyn Error>> {
         if let Some(existing) = self.0.get::<LedgerKey>(key, budget)? {
             match (existing, ty.clone()) {
                 (AccessType::ReadOnly, AccessType::ReadOnly) => Ok(()),
@@ -102,18 +102,20 @@ impl Footprint {
         key: &LedgerKey,
         ty: AccessType,
         budget: &Budget,
-    ) -> Result<(), HostError> {
+    ) -> Result<(), Box<dyn Error>> {
         if let Some(existing) = self.0.get::<LedgerKey>(key, budget)? {
             match (existing, ty) {
                 (AccessType::ReadOnly, AccessType::ReadOnly) => Ok(()),
-                (AccessType::ReadOnly, AccessType::ReadWrite) => {
-                    Err(ScHostStorageErrorCode::ReadwriteAccessToReadonlyEntry.into())
-                }
+                (AccessType::ReadOnly, AccessType::ReadWrite) => Err(Box::new(HostError::from(
+                    ScHostStorageErrorCode::ReadwriteAccessToReadonlyEntry,
+                ))),
                 (AccessType::ReadWrite, AccessType::ReadOnly) => Ok(()),
                 (AccessType::ReadWrite, AccessType::ReadWrite) => Ok(()),
             }
         } else {
-            Err(ScHostStorageErrorCode::AccessToUnknownEntry.into())
+            Err(Box::new(HostError::from(
+                ScHostStorageErrorCode::AccessToUnknownEntry,
+            )))
         }
     }
 }
@@ -185,7 +187,7 @@ impl Storage {
     ///
     /// In [FootprintMode::Enforcing] mode, succeeds only if the read
     /// [LedgerKey] has been declared in the [Footprint].
-    pub fn get(&mut self, key: &LedgerKey, budget: &Budget) -> Result<LedgerEntry, HostError> {
+    pub fn get(&mut self, key: &LedgerKey, budget: &Budget) -> Result<LedgerEntry, Box<dyn Error>> {
         let ty = AccessType::ReadOnly;
         match self.mode {
             FootprintMode::Recording(ref src) => {
@@ -193,12 +195,9 @@ impl Storage {
                 // In recording mode we treat the map as a cache
                 // that misses read-through to the underlying src.
                 if !self.map.contains_key::<LedgerKey>(key, budget)? {
-                    let val = src
-                        .get(key)
-                        .map_err(|_| HostError::from(ScHostStorageErrorCode::MissingKeyInGet))?;
                     self.map = self.map.insert(
                         Rc::new(key.metered_clone(budget)?),
-                        Some(Rc::new(val)),
+                        Some(Rc::new(src.get(key)?)),
                         budget,
                     )?;
                 }
@@ -208,8 +207,12 @@ impl Storage {
             }
         };
         match self.map.get::<LedgerKey>(key, budget)? {
-            None => Err(ScHostStorageErrorCode::MissingKeyInGet.into()),
-            Some(None) => Err(ScHostStorageErrorCode::GetOnDeletedKey.into()),
+            None => Err(Box::new(HostError::from(
+                ScHostStorageErrorCode::MissingKeyInGet,
+            ))),
+            Some(None) => Err(Box::new(HostError::from(
+                ScHostStorageErrorCode::GetOnDeletedKey,
+            ))),
             Some(Some(val)) => Ok((**val).metered_clone(budget)?),
         }
     }
@@ -219,7 +222,7 @@ impl Storage {
         key: &LedgerKey,
         val: Option<LedgerEntry>,
         budget: &Budget,
-    ) -> Result<(), HostError> {
+    ) -> Result<(), Box<dyn Error>> {
         let ty = AccessType::ReadWrite;
         match self.mode {
             FootprintMode::Recording(_) => {
@@ -251,7 +254,7 @@ impl Storage {
         key: &LedgerKey,
         val: &LedgerEntry,
         budget: &Budget,
-    ) -> Result<(), HostError> {
+    ) -> Result<(), Box<dyn Error>> {
         self.put_opt(key, Some(val.metered_clone(budget)?), budget)
     }
 
@@ -264,7 +267,7 @@ impl Storage {
     /// In [FootprintMode::Enforcing] mode, succeeds only if the deleted
     /// [LedgerKey] has been declared in the [Footprint] as
     /// [AccessType::ReadWrite].
-    pub fn del(&mut self, key: &LedgerKey, budget: &Budget) -> Result<(), HostError> {
+    pub fn del(&mut self, key: &LedgerKey, budget: &Budget) -> Result<(), Box<dyn Error>> {
         self.put_opt(key, None, budget)
     }
 
@@ -277,7 +280,7 @@ impl Storage {
     ///
     /// In [FootprintMode::Enforcing] mode, succeeds only if the access has been
     /// declared in the [Footprint].
-    pub fn has(&mut self, key: &LedgerKey, budget: &Budget) -> Result<bool, HostError> {
+    pub fn has(&mut self, key: &LedgerKey, budget: &Budget) -> Result<bool, Box<dyn Error>> {
         let ty = AccessType::ReadOnly;
         match self.mode {
             FootprintMode::Recording(ref src) => {
@@ -287,9 +290,7 @@ impl Storage {
                 match self.map.get::<LedgerKey>(key, budget)? {
                     Some(None) => Ok(false),
                     Some(Some(_)) => Ok(true),
-                    None => src
-                        .has(key)
-                        .map_err(|_| ScHostStorageErrorCode::MissingKeyInGet.into()),
+                    None => src.has(key),
                 }
             }
             FootprintMode::Enforcing => {
@@ -312,7 +313,7 @@ mod test_footprint {
     use crate::xdr::{LedgerKeyContractData, ScVal};
 
     #[test]
-    fn footprint_record_access() -> Result<(), HostError> {
+    fn footprint_record_access() -> Result<(), Box<dyn Error>> {
         let budget = Budget::default();
         budget.reset_unlimited();
         let mut fp = Footprint::default();
@@ -343,7 +344,7 @@ mod test_footprint {
     }
 
     #[test]
-    fn footprint_enforce_access() -> Result<(), HostError> {
+    fn footprint_enforce_access() -> Result<(), Box<dyn Error>> {
         let budget = Budget::default();
         let contract_id = [0; 32].into();
         let key = LedgerKey::ContractData(LedgerKeyContractData {
@@ -362,7 +363,7 @@ mod test_footprint {
     }
 
     #[test]
-    fn footprint_enforce_access_not_exist() -> Result<(), HostError> {
+    fn footprint_enforce_access_not_exist() -> Result<(), Box<dyn Error>> {
         let budget = Budget::default();
         let mut fp = Footprint::default();
         let contract_id = [0; 32].into();
@@ -370,11 +371,15 @@ mod test_footprint {
             contract_id,
             key: ScVal::I32(0),
         });
-        let res = fp.enforce_access(&key, AccessType::ReadOnly, &budget);
-        assert!(HostError::result_matches_err_status(
-            res,
-            ScHostStorageErrorCode::AccessToUnknownEntry
-        ));
+        let res = fp
+            .enforce_access(&key, AccessType::ReadOnly, &budget)
+            .expect_err("unknown entry");
+        let err = res.downcast_ref::<HostError>().unwrap();
+        assert_eq!(
+            err.status,
+            ScHostStorageErrorCode::AccessToUnknownEntry.into()
+        );
+
         Ok(())
     }
 
@@ -389,11 +394,14 @@ mod test_footprint {
         let om = [(Rc::new(key.clone()), AccessType::ReadOnly)].into();
         let mom = MeteredOrdMap::from_map(om, &budget)?;
         let mut fp = Footprint(mom);
-        let res = fp.enforce_access(&key, AccessType::ReadWrite, &budget);
-        assert!(HostError::result_matches_err_status(
-            res,
-            ScHostStorageErrorCode::ReadwriteAccessToReadonlyEntry
-        ));
+        let res = fp
+            .enforce_access(&key, AccessType::ReadWrite, &budget)
+            .expect_err("read only");
+        let err = res.downcast_ref::<HostError>().unwrap();
+        assert_eq!(
+            err.status,
+            ScHostStorageErrorCode::ReadwriteAccessToReadonlyEntry.into()
+        );
         Ok(())
     }
 }

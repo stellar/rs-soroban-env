@@ -42,7 +42,7 @@ mod metered_utils;
 pub(crate) mod metered_vector;
 pub(crate) mod metered_xdr;
 mod validity;
-pub use error::HostError;
+pub use error::{HostError, MapHostError};
 
 use self::metered_clone::MeteredClone;
 use self::metered_vector::MeteredVector;
@@ -686,7 +686,8 @@ impl Host {
             .0
             .storage
             .borrow_mut()
-            .has(&storage_key, self.as_budget())?
+            .has(&storage_key, self.as_budget())
+            .map_host_error(&self)?
         {
             return Err(self.err_general("Contract already exists"));
         }
@@ -700,7 +701,8 @@ impl Host {
                 .0
                 .storage
                 .borrow_mut()
-                .has(&wasm_storage_key, self.as_budget())?
+                .has(&wasm_storage_key, self.as_budget())
+                .map_host_error(&self)?
             {
                 return Err(self.err_general("Contract code was not installed"));
             }
@@ -961,7 +963,11 @@ impl Host {
         key: LedgerKey,
         val: soroban_env_common::xdr::LedgerEntry,
     ) -> Result<(), HostError> {
-        self.with_mut_storage(|storage| storage.put(&key, &val, self.as_budget()))
+        self.with_mut_storage(|storage| {
+            storage
+                .put(&key, &val, self.as_budget())
+                .map_host_error(&self)
+        })
     }
 
     /// Records a `System` contract event. `topics` is expected to be a `SCVec`
@@ -1008,7 +1014,8 @@ impl Host {
             .0
             .storage
             .borrow_mut()
-            .has(&code_key, self.as_budget())?
+            .has(&code_key, self.as_budget())
+            .map_host_error(&self)?
         {
             self.with_mut_storage(|storage| {
                 let data = LedgerEntryData::ContractCode(ContractCodeEntry {
@@ -1016,11 +1023,13 @@ impl Host {
                     code: args.code,
                     ext: ExtensionPoint::V0,
                 });
-                storage.put(
-                    &code_key,
-                    &Host::ledger_entry_from_data(data),
-                    self.as_budget(),
-                )
+                storage
+                    .put(
+                        &code_key,
+                        &Host::ledger_entry_from_data(data),
+                        self.as_budget(),
+                    )
+                    .map_host_error(&self)
             })?;
         }
         Ok(hash_obj)
@@ -1710,11 +1719,11 @@ impl VmCallerEnv for Host {
             key: self.from_host_val(k)?,
             val: self.from_host_val(v)?,
         });
-        self.0.storage.borrow_mut().put(
-            &key,
-            &Host::ledger_entry_from_data(data),
-            self.as_budget(),
-        )?;
+        self.0
+            .storage
+            .borrow_mut()
+            .put(&key, &Host::ledger_entry_from_data(data), self.as_budget())
+            .map_host_error(&self)?;
         Ok(().into())
     }
 
@@ -1725,7 +1734,12 @@ impl VmCallerEnv for Host {
         k: RawVal,
     ) -> Result<RawVal, HostError> {
         let key = self.storage_key_from_rawval(k)?;
-        let res = self.0.storage.borrow_mut().has(&key, self.as_budget())?;
+        let res = self
+            .0
+            .storage
+            .borrow_mut()
+            .has(&key, self.as_budget())
+            .map_host_error(&self)?;
         Ok(RawVal::from_bool(res))
     }
 
@@ -1740,7 +1754,8 @@ impl VmCallerEnv for Host {
             .0
             .storage
             .borrow_mut()
-            .get(&key, self.as_budget())?
+            .get(&key, self.as_budget())
+            .map_host_error(&self)?
             .data
         {
             LedgerEntryData::ContractData(ContractDataEntry {
@@ -1762,7 +1777,11 @@ impl VmCallerEnv for Host {
         k: RawVal,
     ) -> Result<RawVal, HostError> {
         let key = self.contract_data_key_from_rawval(k)?;
-        self.0.storage.borrow_mut().del(&key, self.as_budget())?;
+        self.0
+            .storage
+            .borrow_mut()
+            .del(&key, self.as_budget())
+            .map_host_error(&self)?;
         Ok(().into())
     }
 

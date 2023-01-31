@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::{error::Error, rc::Rc};
 
 use soroban_env_common::Env;
 
@@ -10,7 +10,7 @@ use crate::{
 };
 
 #[test]
-fn check_account_exists() -> Result<(), HostError> {
+fn check_account_exists() -> Result<(), Box<dyn Error>> {
     let acc_id0 = xdr::AccountId(xdr::PublicKey::PublicKeyTypeEd25519(xdr::Uint256([0; 32])));
     let acc_id1 = xdr::AccountId(xdr::PublicKey::PublicKeyTypeEd25519(xdr::Uint256([1; 32]))); // declared, but not in storage
     let acc_id2 = xdr::AccountId(xdr::PublicKey::PublicKeyTypeEd25519(xdr::Uint256([2; 32]))); // not declared
