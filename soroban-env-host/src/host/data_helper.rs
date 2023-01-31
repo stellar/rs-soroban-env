@@ -173,12 +173,6 @@ impl Host {
         })
     }
 
-    // notes on metering: covered by `has`.
-    pub fn has_account(&self, account_id: AccountId) -> Result<bool, HostError> {
-        let acc = self.to_account_key(account_id);
-        self.with_mut_storage(|storage| storage.has(&acc, self.as_budget()))
-    }
-
     pub(crate) fn to_account_key(&self, account_id: AccountId) -> LedgerKey {
         LedgerKey::Account(LedgerKeyAccount { account_id })
     }

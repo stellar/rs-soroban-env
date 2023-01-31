@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use soroban_env_common::{
-    xdr::{BytesM, LedgerEntry, LedgerKey, ScMap, ScObject, ScVal},
+    xdr::{BytesM, LedgerEntry, LedgerKey, ScAddress, ScMap, ScObject, ScVal},
     RawVal,
 };
 
@@ -104,7 +104,8 @@ impl MeteredClone for ScVal {
                     | ScObject::U128(_)
                     | ScObject::I128(_)
                     | ScObject::ContractCode(_)
-                    | ScObject::AccountId(_) => Ok(()),
+                    | ScObject::Address(_)
+                    | ScObject::NonceKey(_) => Ok(()),
                 }
             }
             ScVal::Object(None)
@@ -188,6 +189,21 @@ impl<C: MeteredClone> MeteredClone for Option<C> {
             Some(elt) => Ok(Some(elt.metered_clone(budget)?)),
             None => Ok(None),
         }
+    }
+}
+
+impl<A: MeteredClone, B: MeteredClone> MeteredClone for (A, B) {
+    const IS_SHALLOW: bool = A::IS_SHALLOW && B::IS_SHALLOW;
+
+    fn metered_clone(&self, budget: &Budget) -> Result<Self, HostError> {
+        Ok((self.0.metered_clone(budget)?, self.1.metered_clone(budget)?))
+    }
+}
+
+impl MeteredClone for ScAddress {
+    fn metered_clone(&self, budget: &Budget) -> Result<Self, HostError> {
+        // TODO: more accounting
+        Ok(self.clone())
     }
 }
 

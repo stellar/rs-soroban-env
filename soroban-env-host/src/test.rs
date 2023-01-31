@@ -1,6 +1,5 @@
 pub(crate) mod util;
 
-mod account;
 mod basic;
 mod bytes;
 mod crypto;
