@@ -151,6 +151,9 @@ impl<T> MapHostError<T> for Result<T, Box<dyn Error>> {
         self.map_err(|e| match e.downcast_ref::<HostError>() {
             Some(e) => e.clone(),
             None => {
+                // For now, the error is converted to a `Bytes` object so that it can be recorded
+                // as a `DebugEvent`. Once we have better alternatives for host string object type,
+                // we can use that instead.
                 let buf: Vec<u8> = Vec::from(e.to_string());
                 match host.add_host_object(buf) {
                     Ok(obj) => host.err_status_msg_with_args(
