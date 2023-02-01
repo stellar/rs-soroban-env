@@ -329,7 +329,7 @@ impl AuthorizationManager {
                             tracker.address = Some(source_addr);
                             source_matches
                         };
-                        // If address doesn't much, just skip the tracker.
+                        // If address doesn't match, just skip the tracker.
                         if address_matches {
                             match tracker.maybe_authorize_invocation(
                                 host,
