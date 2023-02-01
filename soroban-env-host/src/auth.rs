@@ -485,6 +485,7 @@ impl AuthorizationManager {
                 &mut self.trackers,
                 &mut recording_info.last_recorded_trackers,
             );
+            recording_info.tracker_by_address_handle.clear();
         }
         // In enforcing mode reset would deny all the authorizations. Normally
         // tests should be using the recording mode and host tests of enforcing
@@ -573,6 +574,10 @@ impl AuthorizationTracker {
         args: ScVec,
         current_stack_len: usize,
     ) -> Result<Self, HostError> {
+        if current_stack_len == 0 {
+            // This would be a bug.
+            return Err(host.err_general("unexpected empty stack in recording auth"));
+        }
         // If the invoker account is known, set it to `None`, so that the final
         // recorded payload wouldn't contain the address. This makes it easier
         // to use more optimal payload when only invoker auth is used.
@@ -590,6 +595,12 @@ impl AuthorizationTracker {
             Some(address)
         };
         let is_invoker = address.is_none();
+        // Create the stack of `None` leading to the current invocation to
+        // represent invocations that didn't need authorization on behalf of
+        // the tracked address.
+        let mut invocation_id_in_call_stack = vec![None; current_stack_len - 1];
+        // Add the id for the current(root) invocation.
+        invocation_id_in_call_stack.push(Some(0));
         Ok(Self {
             address,
             root_authorized_invocation: AuthorizedInvocation::new_recording(
@@ -597,7 +608,7 @@ impl AuthorizationTracker {
                 function_name,
                 args,
             ),
-            invocation_id_in_call_stack: vec![None; current_stack_len],
+            invocation_id_in_call_stack,
             signature_args: Default::default(),
             is_valid: true,
             authenticated: true,
