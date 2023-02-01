@@ -2389,6 +2389,7 @@ fn simple_account_sign_fn<'a>(
     })
 }
 
+#[cfg(feature = "vm")]
 #[test]
 fn test_custom_account_auth() {
     let test = TokenTest::setup();
