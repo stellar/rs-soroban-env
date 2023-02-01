@@ -510,30 +510,9 @@ impl AuthorizationManager {
                 panic!("verifying the authorization is only available for recording-mode auth")
             }
             AuthorizationMode::Recording(_recording_info) => {
-                #[cfg(any(test, feature = "testutils"))]
-                {
-                    for tracker in &mut _recording_info.last_recorded_trackers {
-                        if tracker.verify_top_authorization(
-                            address,
-                            contract_id,
-                            function_name,
-                            args,
-                        ) {
-                            return true;
-                        }
-                    }
-                }
-                #[cfg(not(any(test, feature = "testutils")))]
-                {
-                    for tracker in &mut self.trackers {
-                        if tracker.verify_top_authorization(
-                            address,
-                            contract_id,
-                            function_name,
-                            args,
-                        ) {
-                            return true;
-                        }
+                for tracker in &mut _recording_info.last_recorded_trackers {
+                    if tracker.verify_top_authorization(address, contract_id, function_name, args) {
+                        return true;
                     }
                 }
                 return false;
