@@ -78,6 +78,7 @@ impl MeteredClone for AccessType {}
 impl MeteredClone for AccountId {}
 impl MeteredClone for ScContractCode {}
 impl MeteredClone for Uint256 {}
+impl MeteredClone for ScAddress {}
 impl<const N: usize> MeteredClone for [u8; N] {}
 
 // TODO: this isn't correct: these two have substructure to account for;
@@ -189,21 +190,6 @@ impl<C: MeteredClone> MeteredClone for Option<C> {
             Some(elt) => Ok(Some(elt.metered_clone(budget)?)),
             None => Ok(None),
         }
-    }
-}
-
-impl<A: MeteredClone, B: MeteredClone> MeteredClone for (A, B) {
-    const IS_SHALLOW: bool = A::IS_SHALLOW && B::IS_SHALLOW;
-
-    fn metered_clone(&self, budget: &Budget) -> Result<Self, HostError> {
-        Ok((self.0.metered_clone(budget)?, self.1.metered_clone(budget)?))
-    }
-}
-
-impl MeteredClone for ScAddress {
-    fn metered_clone(&self, budget: &Budget) -> Result<Self, HostError> {
-        // TODO: more accounting
-        Ok(self.clone())
     }
 }
 
