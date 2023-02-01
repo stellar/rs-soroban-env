@@ -11,8 +11,7 @@ use crate::{
         testutils::{
             account_to_address, authorize_single_invocation,
             authorize_single_invocation_with_nonce, contract_id_to_address, generate_keypair,
-            keypair_to_account_id, sign_payload_for_ed25519, AccountContractSigner, AccountSigner,
-            HostVec, TestSigner,
+            keypair_to_account_id, AccountSigner, HostVec, TestSigner,
         },
         token::test_token::TestToken,
     },
@@ -32,7 +31,6 @@ use soroban_env_common::{
     EnvBase, RawVal,
 };
 use soroban_env_common::{Env, Symbol, TryFromVal, TryIntoVal};
-use soroban_test_wasms::SIMPLE_ACCOUNT_CONTRACT;
 
 use crate::native_contract::base_types::BytesN;
 
@@ -2379,10 +2377,12 @@ fn test_classic_transfers_not_possible_for_unauthorized_asset() {
     assert_eq!(test.get_trustline_balance(&trustline_key), 100_000_000);
 }
 
+#[cfg(feature = "vm")]
 fn simple_account_sign_fn<'a>(
     host: &'a Host,
     kp: &'a Keypair,
 ) -> Box<dyn Fn(&[u8]) -> HostVec + 'a> {
+    use crate::native_contract::testutils::sign_payload_for_ed25519;
     Box::new(|payload: &[u8]| -> HostVec {
         let signature = sign_payload_for_ed25519(host, kp, payload);
         host_vec![host, signature]
@@ -2392,6 +2392,9 @@ fn simple_account_sign_fn<'a>(
 #[cfg(feature = "vm")]
 #[test]
 fn test_custom_account_auth() {
+    use crate::native_contract::testutils::AccountContractSigner;
+    use soroban_test_wasms::SIMPLE_ACCOUNT_CONTRACT;
+
     let test = TokenTest::setup();
     let admin_kp = generate_keypair();
     let account_contract_id_obj = test

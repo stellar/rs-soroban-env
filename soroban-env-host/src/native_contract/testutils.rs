@@ -68,6 +68,7 @@ pub(crate) enum TestSigner<'a> {
     AccountInvoker(AccountId),
     ContractInvoker(Hash),
     Account(AccountSigner<'a>),
+    #[allow(dead_code)]
     AccountContract(AccountContractSigner<'a>),
 }
 
@@ -234,6 +235,7 @@ fn sign_payload_for_account(
     }
 }
 
+#[allow(dead_code)]
 pub(crate) fn sign_payload_for_ed25519(
     host: &Host,
     signer: &Keypair,
