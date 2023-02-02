@@ -144,6 +144,14 @@ pub(crate) struct HostImpl {
     // production hosts)
     #[cfg(any(test, feature = "testutils"))]
     contracts: RefCell<std::collections::HashMap<Hash, Rc<dyn ContractFunctionSet>>>,
+    // Store a copy of the `AuthorizationManager` for the last host function
+    // invocation. In order to emulate the production behavior in tests, we reset
+    // authorization manager after every invocation (as it's not meant to be
+    // shared between invocations).
+    // This enables test-only functions like `verify_top_authorization`
+    // that allow checking if the authorization has been recorded.
+    #[cfg(any(test, feature = "testutils"))]
+    previous_authorization_manager: RefCell<Option<AuthorizationManager>>,
 }
 // Host is a newtype on Rc<HostImpl> so we can impl Env for it below.
 #[derive(Default, Clone)]
@@ -207,6 +215,8 @@ impl Host {
             ),
             #[cfg(any(test, feature = "testutils"))]
             contracts: Default::default(),
+            #[cfg(any(test, feature = "testutils"))]
+            previous_authorization_manager: RefCell::new(None),
         }))
     }
 
@@ -406,6 +416,8 @@ impl Host {
             // the authorization manager as the host instance shouldn't be
             // shared between the contract invocations.
             if self.0.context.borrow().is_empty() {
+                *self.0.previous_authorization_manager.borrow_mut() =
+                    Some(self.0.authorization_manager.borrow().clone());
                 self.0.authorization_manager.borrow_mut().reset();
             }
         }
@@ -1041,8 +1053,10 @@ impl Host {
         let args = self.call_args_to_scvec(args)?;
         Ok(self
             .0
-            .authorization_manager
+            .previous_authorization_manager
             .borrow_mut()
+            .as_mut()
+            .ok_or(self.err_general("previous invocation is missing - no auth to verify"))?
             .verify_top_authorization(&address, &contract_id, &function_name, &args))
     }
 
@@ -1143,10 +1157,22 @@ impl Host {
     // This should only be called in the recording authorization mode, i.e. only
     // if `switch_to_recording_auth` has been called.
     pub fn get_recorded_auth_payloads(&self) -> Result<Vec<RecordedAuthPayload>, HostError> {
-        self.0
-            .authorization_manager
-            .borrow()
-            .get_recorded_auth_payloads()
+        #[cfg(not(any(test, feature = "testutils")))]
+        {
+            self.0
+                .authorization_manager
+                .borrow()
+                .get_recorded_auth_payloads()
+        }
+        #[cfg(any(test, feature = "testutils"))]
+        {
+            self.0
+                .previous_authorization_manager
+                .borrow()
+                .as_ref()
+                .ok_or(self.err_general("previous invocation is missing - no payloads recorded"))?
+                .get_recorded_auth_payloads()
+        }
     }
 }
 

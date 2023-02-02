@@ -55,6 +55,7 @@ pub struct AuthorizationManagerSnapshot {
     // rollback everything. If this is an issue, then the AuthorizationTracker should
     // probably be separated into 'mutable' and 'immutable' parts.
     trackers: Vec<AuthorizationTracker>,
+    tracker_by_address_handle: Option<HashMap<u32, usize>>,
 }
 
 #[derive(Clone)]
@@ -72,11 +73,6 @@ struct RecordingAuthInfo {
     // value, but are specified as two different objects (e.g. as two different
     // contract function inputs).
     tracker_by_address_handle: HashMap<u32, usize>,
-    // A snapshot of the trackers from the last contract invocation. This allows
-    // to reset the trackers between the test runs, while still allowing to
-    // verify the recorded authorizations.
-    #[cfg(any(test, feature = "testutils"))]
-    last_recorded_trackers: Vec<AuthorizationTracker>,
 }
 
 // Stores all the authorizations that are authorized by an address.
@@ -278,8 +274,6 @@ impl AuthorizationManager {
         Self {
             mode: AuthorizationMode::Recording(RecordingAuthInfo {
                 tracker_by_address_handle: Default::default(),
-                #[cfg(any(test, feature = "testutils"))]
-                last_recorded_trackers: vec![],
             }),
             call_stack: vec![],
             budget,
@@ -392,14 +386,29 @@ impl AuthorizationManager {
 
     // Returns a snapshot of `AuthorizationManager` to use for rollback.
     pub(crate) fn snapshot(&self) -> AuthorizationManagerSnapshot {
+        let tracker_by_address_handle = match &self.mode {
+            AuthorizationMode::Enforcing => None,
+            AuthorizationMode::Recording(recording_info) => {
+                Some(recording_info.tracker_by_address_handle.clone())
+            }
+        };
         AuthorizationManagerSnapshot {
             trackers: self.trackers.clone(),
+            tracker_by_address_handle,
         }
     }
 
     // Rolls back this `AuthorizationManager` to the snapshot state.
     pub(crate) fn rollback(&mut self, snapshot: AuthorizationManagerSnapshot) {
         self.trackers = snapshot.trackers;
+        if let Some(tracker_by_address_handle) = snapshot.tracker_by_address_handle {
+            match &mut self.mode {
+                AuthorizationMode::Recording(recording_info) => {
+                    recording_info.tracker_by_address_handle = tracker_by_address_handle;
+                }
+                AuthorizationMode::Enforcing => (),
+            }
+        }
     }
 
     // Records a new call stack frame.
@@ -451,47 +460,26 @@ impl AuthorizationManager {
     pub(crate) fn get_recorded_auth_payloads(&self) -> Result<Vec<RecordedAuthPayload>, HostError> {
         match &self.mode {
             AuthorizationMode::Enforcing => return Err(ScUnknownErrorCode::General.into()),
-            AuthorizationMode::Recording(_recording_info) => {
-                #[cfg(not(any(test, feature = "testutils")))]
-                {
-                    Ok(self
-                        .trackers
-                        .iter()
-                        .map(|tracker| tracker.get_recorded_auth_payload())
-                        .collect::<Result<Vec<RecordedAuthPayload>, HostError>>()?)
-                }
-                // In the test mode we automatically reset this
-                // `AuthorizationManager` after every invocation, so
-                // the actual trackers will be empty.
-                #[cfg(any(test, feature = "testutils"))]
-                {
-                    Ok(_recording_info
-                        .last_recorded_trackers
-                        .iter()
-                        .map(|tracker| tracker.get_recorded_auth_payload())
-                        .collect::<Result<Vec<RecordedAuthPayload>, HostError>>()?)
-                }
-            }
+            AuthorizationMode::Recording(_recording_info) => Ok(self
+                .trackers
+                .iter()
+                .map(|tracker| tracker.get_recorded_auth_payload())
+                .collect::<Result<Vec<RecordedAuthPayload>, HostError>>()?),
         }
     }
 
-    // Reset the internal state of `AuthorizationManager` without destroying it.
-    // This is useful to allow tests to invoke and verify multiple contract
-    // calls without allowing the authorizations to persist in-between calls.
+    // Returns a 'reset' instance of `AuthorizationManager` that has the same
+    // mode, but no data.
     #[cfg(any(test, feature = "testutils"))]
     pub(crate) fn reset(&mut self) {
-        if let AuthorizationMode::Recording(recording_info) = &mut self.mode {
-            std::mem::swap(
-                &mut self.trackers,
-                &mut recording_info.last_recorded_trackers,
-            );
-            recording_info.tracker_by_address_handle.clear();
+        *self = match self.mode {
+            AuthorizationMode::Enforcing => {
+                AuthorizationManager::new_enforcing_without_authorizations(self.budget.clone())
+            }
+            AuthorizationMode::Recording(_) => {
+                AuthorizationManager::new_recording(self.budget.clone())
+            }
         }
-        // In enforcing mode reset would deny all the authorizations. Normally
-        // tests should be using the recording mode and host tests of enforcing
-        // mode can directly reset the authorized trees.
-        self.trackers.clear();
-        self.call_stack.clear();
     }
 
     // Verify that the top-level authorization has happened for the given
@@ -509,8 +497,8 @@ impl AuthorizationManager {
             AuthorizationMode::Enforcing => {
                 panic!("verifying the authorization is only available for recording-mode auth")
             }
-            AuthorizationMode::Recording(_recording_info) => {
-                for tracker in &mut _recording_info.last_recorded_trackers {
+            AuthorizationMode::Recording(_) => {
+                for tracker in &mut self.trackers {
                     if tracker.verify_top_authorization(address, contract_id, function_name, args) {
                         return true;
                     }
