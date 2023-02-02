@@ -26,7 +26,7 @@ fn run_complex() -> Result<(), HostError> {
         protocol_version: 21,
         sequence_number: 1234,
         timestamp: 1234,
-        network_passphrase: "hello".as_bytes().to_vec(),
+        network_id: [7; 32],
         base_reserve: 1,
     };
     let id: Hash = [0; 32].into();
@@ -34,8 +34,7 @@ fn run_complex() -> Result<(), HostError> {
     // Run 1: record footprint, emulating "preflight".
     let foot = {
         let store = Storage::with_recording_footprint(Rc::new(EmptySnap));
-        let budget = Budget::default();
-        let host = Host::with_storage_and_budget(store, budget);
+        let host = Host::with_storage_and_budget(store, Budget::default());
         host.set_ledger_info(info.clone());
         {
             let vm = Vm::new(&host, id.clone(), COMPLEX)?;
@@ -49,8 +48,7 @@ fn run_complex() -> Result<(), HostError> {
     // Run 2: enforce preflight footprint, with empty map -- contract should only write.
     {
         let store = Storage::with_enforcing_footprint_and_map(foot, MeteredOrdMap::default());
-        let budget = Budget::default();
-        let host = Host::with_storage_and_budget(store, budget);
+        let host = Host::with_storage_and_budget(store, Budget::default());
         host.set_ledger_info(info);
         let vm = Vm::new(&host, id, COMPLEX)?;
         let args: ScVec = host.test_scvec::<i32>(&[])?;

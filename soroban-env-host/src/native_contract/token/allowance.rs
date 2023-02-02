@@ -1,13 +1,12 @@
 use crate::host::Host;
-use crate::native_contract::token::public_types::Identifier;
+use crate::native_contract::base_types::Address;
+use crate::native_contract::contract_error::ContractError;
 use crate::native_contract::token::storage_types::{AllowanceDataKey, DataKey};
 use crate::{err, HostError};
 use soroban_env_common::{Env, TryIntoVal};
 
-use super::error::ContractError;
-
 // Metering: covered by components
-pub fn read_allowance(e: &Host, from: Identifier, spender: Identifier) -> Result<i128, HostError> {
+pub fn read_allowance(e: &Host, from: Address, spender: Address) -> Result<i128, HostError> {
     let key = DataKey::Allowance(AllowanceDataKey { from, spender });
     if let Ok(allowance) = e.get_contract_data(key.try_into_val(e)?) {
         Ok(allowance.try_into_val(e)?)
@@ -19,8 +18,8 @@ pub fn read_allowance(e: &Host, from: Identifier, spender: Identifier) -> Result
 // Metering: covered by components
 pub fn write_allowance(
     e: &Host,
-    from: Identifier,
-    spender: Identifier,
+    from: Address,
+    spender: Address,
     amount: i128,
 ) -> Result<(), HostError> {
     let key = DataKey::Allowance(AllowanceDataKey { from, spender });
@@ -31,8 +30,8 @@ pub fn write_allowance(
 // Metering: covered by components
 pub fn spend_allowance(
     e: &Host,
-    from: Identifier,
-    spender: Identifier,
+    from: Address,
+    spender: Address,
     amount: i128,
 ) -> Result<(), HostError> {
     let allowance = read_allowance(e, from.clone(), spender.clone())?;

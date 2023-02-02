@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use soroban_env_common::{
-    xdr::{BytesM, LedgerEntry, LedgerKey, ScMap, ScObject, ScVal},
+    xdr::{BytesM, LedgerEntry, LedgerKey, ScAddress, ScMap, ScObject, ScVal},
     RawVal,
 };
 
@@ -78,6 +78,7 @@ impl MeteredClone for AccessType {}
 impl MeteredClone for AccountId {}
 impl MeteredClone for ScContractCode {}
 impl MeteredClone for Uint256 {}
+impl MeteredClone for ScAddress {}
 impl<const N: usize> MeteredClone for [u8; N] {}
 
 // TODO: this isn't correct: these two have substructure to account for;
@@ -104,7 +105,8 @@ impl MeteredClone for ScVal {
                     | ScObject::U128(_)
                     | ScObject::I128(_)
                     | ScObject::ContractCode(_)
-                    | ScObject::AccountId(_) => Ok(()),
+                    | ScObject::Address(_)
+                    | ScObject::NonceKey(_) => Ok(()),
                 }
             }
             ScVal::Object(None)

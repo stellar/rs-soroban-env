@@ -58,5 +58,5 @@
 pub const ENV_META_V0_SECTION_NAME: &'static str = "contractenvmetav0";
 
 soroban_env_macros::generate_env_meta_consts!(
-    interface_version: 27,
+    interface_version: 28,
 );
