@@ -353,29 +353,39 @@ impl AuthorizationManager {
                         .tracker_by_address_handle
                         .get(&address_obj_handle)
                     {
-                        // If the tracker exists, record the sub-invocation.
-                        self.trackers[*tracker_id].record_invocation(
-                            host,
-                            &curr_invocation.contract_id,
-                            curr_invocation.function_name,
-                            args,
-                        )
-                    } else {
-                        // If the tracker doesn't exist yet, create it and
-                        // initialize with the current invocation.
-                        self.trackers.push(AuthorizationTracker::new_recording(
-                            host,
-                            address,
-                            &curr_invocation.contract_id,
-                            curr_invocation.function_name,
-                            args,
-                            self.call_stack.len(),
-                        )?);
-                        recording_info
-                            .tracker_by_address_handle
-                            .insert(address_obj_handle, self.trackers.len() - 1);
-                        Ok(())
+                        let tracker = &mut self.trackers[*tracker_id];
+                        // The recording invariant is that trackers are created
+                        // with the first authorized invocation, which means
+                        // that when their stack no longer has authorized
+                        // invocation, then we've popped frames past its root
+                        // and hence need to create a new tracker.
+                        if !tracker.has_authorized_invocations_in_stack() {
+                            recording_info
+                                .tracker_by_address_handle
+                                .remove(&address_obj_handle);
+                        } else {
+                            return self.trackers[*tracker_id].record_invocation(
+                                host,
+                                &curr_invocation.contract_id,
+                                curr_invocation.function_name,
+                                args,
+                            );
+                        }
                     }
+                    // If a tracker for the new tree doesn't exist yet, create
+                    // it and initialize with the current invocation.
+                    self.trackers.push(AuthorizationTracker::new_recording(
+                        host,
+                        address,
+                        &curr_invocation.contract_id,
+                        curr_invocation.function_name,
+                        args,
+                        self.call_stack.len(),
+                    )?);
+                    recording_info
+                        .tracker_by_address_handle
+                        .insert(address_obj_handle, self.trackers.len() - 1);
+                    Ok(())
                 }
             }
         } else {
@@ -671,6 +681,12 @@ impl AuthorizationTracker {
             invocation: self.root_authorized_invocation.to_xdr_non_metered()?,
             nonce: self.nonce,
         })
+    }
+
+    // Checks if there is at least one authorized invocation in the current call
+    // stack.
+    fn has_authorized_invocations_in_stack(&self) -> bool {
+        self.invocation_id_in_call_stack.iter().any(|i| i.is_some())
     }
 
     fn invocation_to_xdr(&self, budget: &Budget) -> Result<xdr::AuthorizedInvocation, HostError> {
