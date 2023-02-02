@@ -1,5 +1,5 @@
 #![no_std]
-use soroban_sdk::{contractimpl, contracttype, Bytes, Env, Symbol, Vec};
+use soroban_sdk::{contractimpl, contracttype, Bytes, BytesN, Env, Symbol, Vec};
 
 // This is a "complex" contract that uses a nontrivial amount of the host
 // interface from the guest: UDTs (thus maps), vectors, byte arrays and linear
@@ -15,7 +15,7 @@ pub struct Contract;
 
 #[contracttype]
 struct MyLedger {
-    passphrase: Bytes,
+    network_id: BytesN<32>,
     version: u32,
     seq: u32,
     time: u64,
@@ -26,18 +26,18 @@ impl Contract {
     pub fn go(e: Env) {
         let ledger = e.ledger();
         let my_ledger = MyLedger {
-            passphrase: ledger.network_passphrase(),
+            network_id: ledger.network_id(),
             version: ledger.protocol_version(),
             seq: ledger.sequence(),
             time: ledger.timestamp(),
         };
         let data = Symbol::from_str("data");
-        let hash = e.crypto().sha256(&my_ledger.passphrase);
+        let hash = e.crypto().sha256(&my_ledger.network_id.clone().into());
         let mut buf: [u8; 32] = [0; 32];
         hash.copy_into_slice(&mut buf);
         let vec_with_half_hash = Vec::from_slice(&e, &[Bytes::from_slice(&e, &buf[0..16])]);
         e.events().publish((data,), hash);
         e.log_value(vec_with_half_hash);
-        e.storage().set(data, my_ledger);
+        e.storage().set(&data, &my_ledger);
     }
 }

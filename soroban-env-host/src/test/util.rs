@@ -13,7 +13,7 @@ use soroban_env_common::{
 use crate::{
     budget::{Budget, CostType},
     storage::{test_storage::MockSnapshotSource, Storage},
-    xdr, Host, HostError, LedgerInfo,
+    xdr, Host, HostError,
 };
 
 // Test utilities for the host, used in various tests in sub-modules.
@@ -165,17 +165,5 @@ impl Host {
             .try_into_val(self)?;
         self.remove_source_account();
         Ok(id_obj.try_into()?)
-    }
-}
-
-impl Default for LedgerInfo {
-    fn default() -> Self {
-        Self {
-            protocol_version: Default::default(),
-            sequence_number: Default::default(),
-            timestamp: Default::default(),
-            network_passphrase: vec![0; 32],
-            base_reserve: Default::default(),
-        }
     }
 }

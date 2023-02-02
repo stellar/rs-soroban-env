@@ -1,22 +1,18 @@
-use crate::{
-    native_contract::token::public_types::{
-        AccountSignatures, Ed25519Signature, Signature, SignaturePayload, SignaturePayloadV0,
-    },
-    test::util::generate_bytes_array,
-    Host, HostError,
-};
+use crate::{Host, HostError, LedgerInfo};
 use ed25519_dalek::{Keypair, Signer};
 use rand::thread_rng;
-use soroban_env_common::{
-    xdr::{AccountId, PublicKey, Uint256},
-    Env,
+use soroban_env_common::xdr::{
+    AccountId, AddressWithNonce, AuthorizedInvocation, ContractAuth, Hash, HashIdPreimage,
+    HashIdPreimageContractAuth, PublicKey, ScAddress, ScVec, Uint256,
 };
-use soroban_env_common::{EnvBase, RawVal, Symbol, TryFromVal, TryIntoVal};
+use soroban_env_common::{EnvBase, RawVal, TryFromVal, TryIntoVal};
 
-use crate::native_contract::base_types::{Bytes, BytesN};
+use crate::native_contract::base_types::BytesN;
 
-use crate::native_contract::token::public_types::{self, Identifier};
-pub(crate) use public_types::Vec as HostVec;
+pub(crate) use crate::native_contract::base_types::Vec as HostVec;
+
+use super::account_contract::AccountEd25519Signature;
+use super::base_types::Address;
 
 impl HostVec {
     pub(crate) fn from_array(host: &Host, vals: &[RawVal]) -> Result<Self, HostError> {
@@ -42,34 +38,43 @@ pub(crate) fn generate_keypair() -> Keypair {
     Keypair::generate(&mut thread_rng())
 }
 
-pub(crate) fn generate_bytes(host: &Host) -> BytesN<32> {
-    BytesN::<32>::try_from_val(
+pub(crate) fn keypair_to_account_id(key: &Keypair) -> AccountId {
+    AccountId(PublicKey::PublicKeyTypeEd25519(Uint256(
+        key.public.to_bytes(),
+    )))
+}
+
+pub(crate) fn account_to_address(host: &Host, account_id: AccountId) -> Address {
+    Address::try_from_val(
         host,
-        &host.bytes_new_from_slice(&generate_bytes_array()).unwrap(),
+        &host
+            .add_host_object(ScAddress::Account(account_id))
+            .unwrap(),
     )
     .unwrap()
 }
 
-pub(crate) fn signer_to_id_bytes(host: &Host, key: &Keypair) -> BytesN<32> {
-    BytesN::<32>::try_from_val(
+pub(crate) fn contract_id_to_address(host: &Host, contract_id: [u8; 32]) -> Address {
+    Address::try_from_val(
         host,
-        &host.bytes_new_from_slice(&key.public.to_bytes()).unwrap(),
+        &host
+            .add_host_object(ScAddress::Contract(Hash(contract_id)))
+            .unwrap(),
     )
     .unwrap()
-}
-
-pub(crate) fn signer_to_account_id(host: &Host, key: &Keypair) -> AccountId {
-    let account_id_bytes = signer_to_id_bytes(host, key);
-    AccountId(PublicKey::PublicKeyTypeEd25519(
-        host.to_u256(account_id_bytes.into()).unwrap(),
-    ))
 }
 
 pub(crate) enum TestSigner<'a> {
-    ContractInvoker,
-    AccountInvoker,
-    Ed25519(&'a Keypair),
+    AccountInvoker(AccountId),
+    ContractInvoker(Hash),
     Account(AccountSigner<'a>),
+    #[allow(dead_code)]
+    AccountContract(AccountContractSigner<'a>),
+}
+
+pub(crate) struct AccountContractSigner<'a> {
+    pub(crate) id: Hash,
+    pub(crate) sign: Box<dyn Fn(&[u8]) -> HostVec + 'a>,
 }
 
 pub(crate) struct AccountSigner<'a> {
@@ -78,7 +83,17 @@ pub(crate) struct AccountSigner<'a> {
 }
 
 impl<'a> TestSigner<'a> {
-    pub(crate) fn account(account_id: &AccountId, mut signers: Vec<&'a Keypair>) -> Self {
+    pub(crate) fn account(kp: &'a Keypair) -> Self {
+        TestSigner::Account(AccountSigner {
+            account_id: keypair_to_account_id(kp),
+            signers: vec![kp],
+        })
+    }
+
+    pub(crate) fn account_with_multisig(
+        account_id: &AccountId,
+        mut signers: Vec<&'a Keypair>,
+    ) -> Self {
         signers.sort_by_key(|k| k.public.as_bytes());
         TestSigner::Account(AccountSigner {
             account_id: account_id.clone(),
@@ -86,62 +101,123 @@ impl<'a> TestSigner<'a> {
         })
     }
 
-    pub(crate) fn get_identifier(&self, host: &Host) -> Identifier {
+    pub(crate) fn account_id(&self) -> AccountId {
         match self {
-            TestSigner::ContractInvoker => {
-                // Use stub id to make this work in wrapped contract calls.
-                // The id shouldn't be used anywhere else.
-                Identifier::Contract(BytesN::<32>::from_slice(host, &[0; 32]).unwrap())
-            }
-            TestSigner::AccountInvoker => {
-                // Use stub id to make this work in wrapped contract calls.
-                // The id shouldn't be used anywhere else.
-                Identifier::Account(AccountId(PublicKey::PublicKeyTypeEd25519(Uint256([0; 32]))))
-            }
-            TestSigner::Ed25519(key) => Identifier::Ed25519(signer_to_id_bytes(host, key)),
-            TestSigner::Account(acc_signer) => Identifier::Account(acc_signer.account_id.clone()),
+            TestSigner::AccountInvoker(acc_id) => acc_id.clone(),
+            TestSigner::Account(AccountSigner {
+                account_id,
+                signers: _,
+            }) => account_id.clone(),
+            TestSigner::AccountContract(_) => panic!("not supported"),
+            TestSigner::ContractInvoker(_) => panic!("not supported"),
         }
     }
-}
 
-pub(crate) fn sign_args(
-    host: &Host,
-    signer: &TestSigner,
-    fn_name: &str,
-    contract_id: &BytesN<32>,
-    args: HostVec,
-) -> Signature {
-    let msg = SignaturePayload::V0(SignaturePayloadV0 {
-        name: Symbol::from_str(fn_name),
-        contract: contract_id.clone(),
-        network: Bytes::try_from_val(host, &host.get_ledger_network_passphrase().unwrap()).unwrap(),
-        args,
-    });
-    let msg_bin = host
-        .serialize_to_bytes(msg.try_into_val(host).unwrap())
-        .unwrap();
-    let msg_bytes = Bytes::try_from_val(host, &msg_bin).unwrap().to_vec();
-    let payload = &msg_bytes[..];
-
-    match signer {
-        TestSigner::ContractInvoker => Signature::Invoker,
-        TestSigner::AccountInvoker => Signature::Invoker,
-        TestSigner::Ed25519(key) => Signature::Ed25519(sign_payload(host, key, payload)),
-        TestSigner::Account(account_signer) => Signature::Account(AccountSignatures {
-            account_id: account_signer.account_id.clone(),
-            signatures: {
+    fn sign(&self, host: &Host, payload: &[u8]) -> ScVec {
+        let signature_args = match self {
+            TestSigner::AccountInvoker(_) => host_vec![host],
+            TestSigner::Account(account_signer) => {
                 let mut signatures = HostVec::new(&host).unwrap();
                 for key in &account_signer.signers {
-                    signatures.push(&sign_payload(host, key, payload)).unwrap();
+                    signatures
+                        .push(&sign_payload_for_account(host, key, payload))
+                        .unwrap();
                 }
-                signatures
-            },
-        }),
+                host_vec![host, signatures]
+            }
+            TestSigner::AccountContract(signer) => (signer.sign)(payload),
+            TestSigner::ContractInvoker(_) => host_vec![host],
+        };
+        host.call_args_to_scvec(signature_args.into()).unwrap()
+    }
+
+    pub(crate) fn address(&self, host: &Host) -> Address {
+        let sc_address = match self {
+            TestSigner::AccountInvoker(acc_id) => ScAddress::Account(acc_id.clone()),
+            TestSigner::Account(acc) => ScAddress::Account(acc.account_id.clone()),
+            TestSigner::AccountContract(signer) => ScAddress::Contract(signer.id.clone()),
+            TestSigner::ContractInvoker(contract_id) => ScAddress::Contract(contract_id.clone()),
+        };
+        Address::try_from_val(host, &host.add_host_object(sc_address).unwrap()).unwrap()
     }
 }
 
-fn sign_payload(host: &Host, signer: &Keypair, payload: &[u8]) -> Ed25519Signature {
-    Ed25519Signature {
+pub(crate) fn authorize_single_invocation_with_nonce(
+    host: &Host,
+    signer: &TestSigner,
+    contract_id: &BytesN<32>,
+    function_name: &str,
+    args: HostVec,
+    nonce: Option<u64>,
+) {
+    let sc_address = signer.address(host).to_sc_address().unwrap();
+    let address_with_nonce = match signer {
+        TestSigner::AccountInvoker(_) => None,
+        TestSigner::Account(_) | TestSigner::AccountContract(_) => Some(AddressWithNonce {
+            address: sc_address.clone(),
+            nonce: nonce.unwrap(),
+        }),
+        TestSigner::ContractInvoker(_) => {
+            // Nothing need to be authorized for contract invoker here.
+            return;
+        }
+    };
+
+    let root_invocation = AuthorizedInvocation {
+        contract_id: contract_id.to_vec().try_into().unwrap(),
+        function_name: function_name.try_into().unwrap(),
+        args: host.call_args_to_scvec(args.into()).unwrap(),
+        sub_invocations: Default::default(),
+    };
+
+    let signature_payload_preimage = HashIdPreimage::ContractAuth(HashIdPreimageContractAuth {
+        network_id: host
+            .with_ledger_info(|li: &LedgerInfo| Ok(li.network_id.clone()))
+            .unwrap()
+            .try_into()
+            .unwrap(),
+        invocation: root_invocation.clone(),
+    });
+    let signature_payload = host.metered_hash_xdr(&signature_payload_preimage).unwrap();
+    let signature_args = signer.sign(host, &signature_payload);
+    let auth_entry = ContractAuth {
+        address_with_nonce,
+        root_invocation,
+        signature_args,
+    };
+
+    host.set_authorization_entries(vec![auth_entry]).unwrap();
+}
+
+pub(crate) fn authorize_single_invocation(
+    host: &Host,
+    signer: &TestSigner,
+    contract_id: &BytesN<32>,
+    function_name: &str,
+    args: HostVec,
+) {
+    let nonce = match signer {
+        TestSigner::AccountInvoker(_) => None,
+        TestSigner::Account(_) | TestSigner::AccountContract(_) => Some(
+            host.read_nonce(
+                &Hash(contract_id.to_vec().clone().try_into().unwrap()),
+                &signer.address(host).to_sc_address().unwrap(),
+            )
+            .unwrap(),
+        ),
+        TestSigner::ContractInvoker(_) => {
+            return;
+        }
+    };
+    authorize_single_invocation_with_nonce(host, signer, contract_id, function_name, args, nonce);
+}
+
+fn sign_payload_for_account(
+    host: &Host,
+    signer: &Keypair,
+    payload: &[u8],
+) -> AccountEd25519Signature {
+    AccountEd25519Signature {
         public_key: BytesN::<32>::try_from_val(
             host,
             &host
@@ -157,4 +233,19 @@ fn sign_payload(host: &Host, signer: &Keypair, payload: &[u8]) -> Ed25519Signatu
         )
         .unwrap(),
     }
+}
+
+#[allow(dead_code)]
+pub(crate) fn sign_payload_for_ed25519(
+    host: &Host,
+    signer: &Keypair,
+    payload: &[u8],
+) -> BytesN<64> {
+    BytesN::<64>::try_from_val(
+        host,
+        &host
+            .bytes_new_from_slice(&signer.sign(payload).to_bytes())
+            .unwrap(),
+    )
+    .unwrap()
 }

@@ -11,7 +11,8 @@ use crate::{
 };
 use ed25519_dalek::{PublicKey, Signature, SIGNATURE_LENGTH};
 use sha2::{Digest, Sha256};
-use soroban_env_common::xdr::AccountId;
+use soroban_env_common::xdr::{self, AccountId, ScObject};
+use soroban_env_common::TryFromVal;
 
 impl Host {
     // Notes on metering: free
@@ -54,12 +55,6 @@ impl Host {
                     .arg(name),
             )),
         }
-    }
-
-    pub(crate) fn to_account_id(&self, a: Object) -> Result<AccountId, HostError> {
-        self.visit_obj(a, |account_id: &AccountId| {
-            Ok(account_id.metered_clone(&self.0.budget)?)
-        })
     }
 
     pub(crate) fn to_u256_from_account(
@@ -178,6 +173,14 @@ impl Host {
         self.visit_obj(k, |bytes: &Vec<u8>| self.ed25519_pub_key_from_bytes(bytes))
     }
 
+    pub(crate) fn account_id_from_bytes(&self, k: Object) -> Result<AccountId, HostError> {
+        self.visit_obj(k, |bytes: &Vec<u8>| {
+            Ok(AccountId(xdr::PublicKey::PublicKeyTypeEd25519(
+                self.fixed_length_bytes_from_slice("account_id", bytes.as_slice())?,
+            )))
+        })
+    }
+
     pub fn sha256_hash_from_bytes_input(&self, x: Object) -> Result<Vec<u8>, HostError> {
         self.visit_obj(x, |bytes: &Vec<u8>| {
             self.charge_budget(CostType::ComputeSha256Hash, bytes.len() as u64)?;
@@ -194,20 +197,42 @@ impl Host {
     // Notes on metering: covered by components.
     pub fn storage_key_from_rawval(&self, k: RawVal) -> Result<LedgerKey, HostError> {
         Ok(LedgerKey::ContractData(LedgerKeyContractData {
-            contract_id: self.get_current_contract_id()?,
+            contract_id: self.get_current_contract_id_internal()?,
             key: self.from_host_val(k)?,
+        }))
+    }
+
+    pub(crate) fn storage_key_for_contract(&self, contract_id: Hash, key: ScVal) -> LedgerKey {
+        LedgerKey::ContractData(LedgerKeyContractData { contract_id, key })
+    }
+
+    pub fn storage_key_from_scval(&self, key: ScVal) -> Result<LedgerKey, HostError> {
+        Ok(LedgerKey::ContractData(LedgerKeyContractData {
+            contract_id: self.get_current_contract_id_internal()?,
+            key,
         }))
     }
 
     // Notes on metering: covered by components.
     pub fn contract_data_key_from_rawval(&self, k: RawVal) -> Result<LedgerKey, HostError> {
-        if self.from_host_val(k)? == ScVal::Static(ScStatic::LedgerKeyContractCode) {
-            return Err(self.err_status_msg(
-                ScHostFnErrorCode::InputArgsInvalid,
-                "cannot update contract code",
-            ));
-        }
-        self.storage_key_from_rawval(k)
+        let key_scval = self.from_host_val(k)?;
+        match &key_scval {
+            ScVal::Static(ScStatic::LedgerKeyContractCode) => {
+                return Err(self.err_status_msg(
+                    ScHostFnErrorCode::InputArgsInvalid,
+                    "cannot update contract code",
+                ));
+            }
+            ScVal::Object(Some(ScObject::NonceKey(_))) => {
+                return Err(self.err_status_msg(
+                    ScHostFnErrorCode::InputArgsInvalid,
+                    "cannot access internal nonce",
+                ));
+            }
+            _ => (),
+        };
+
+        self.storage_key_from_scval(key_scval)
     }
 
     fn event_topic_from_rawval(&self, topic: RawVal) -> Result<ScVal, HostError> {
@@ -267,6 +292,22 @@ impl Host {
         self.visit_obj(args, |hv: &HostVec| {
             // Metering: free
             Ok(hv.iter().cloned().collect())
+        })
+    }
+
+    // Metering: free?
+    pub(crate) fn call_args_to_scvec(&self, args: Object) -> Result<ScVec, HostError> {
+        self.visit_obj(args, |hv: &HostVec| {
+            Ok(ScVec(
+                hv.iter()
+                    .map(|v| {
+                        ScVal::try_from_val(self, v)
+                            .map_err(|_| self.err_general("couldn't convert RawVal"))
+                    })
+                    .collect::<Result<Vec<ScVal>, HostError>>()?
+                    .try_into()
+                    .map_err(|_| self.err_general("too many args"))?,
+            ))
         })
     }
 
