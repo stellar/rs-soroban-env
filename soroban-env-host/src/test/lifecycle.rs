@@ -56,15 +56,14 @@ fn get_bytes_from_sc_val(val: ScVal) -> Vec<u8> {
 }
 
 fn test_host() -> Host {
-    let network_passphrase = generate_bytes_array().to_vec();
     let budget = Budget::default();
     let storage = Storage::with_enforcing_footprint_and_map(
         Footprint::default(),
         MeteredOrdMap::new(&budget).unwrap(),
     );
-    let host = Host::with_storage_and_budget(storage, budget);
+    let host = Host::with_storage_and_budget(storage, budget.clone());
     host.set_ledger_info(LedgerInfo {
-        network_passphrase,
+        network_id: generate_bytes_array(),
         ..Default::default()
     });
 

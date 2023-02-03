@@ -1,5 +1,5 @@
 pub(crate) mod base_types;
-mod invoker;
+pub(crate) mod contract_error;
 pub(crate) mod token;
 
 use crate::host::{Host, HostError};
@@ -10,6 +10,8 @@ pub trait NativeContract {
 }
 
 pub use token::Token;
+
+pub(crate) mod account_contract;
 
 #[cfg(test)]
 pub(crate) mod testutils;

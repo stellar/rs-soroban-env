@@ -35,6 +35,7 @@ pub(crate) mod host_object;
 
 mod native_contract;
 
+pub mod auth;
 #[cfg(feature = "vm")]
 pub mod vm;
 #[cfg(feature = "vm")]

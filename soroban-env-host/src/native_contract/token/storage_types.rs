@@ -1,12 +1,11 @@
-use crate::native_contract::base_types::Map;
-use crate::native_contract::token::public_types::Identifier;
+use crate::native_contract::base_types::{Address, Map};
 use soroban_env_common::TryIntoVal;
 use soroban_native_sdk_macros::contracttype;
 
 #[contracttype]
 pub struct AllowanceDataKey {
-    pub from: Identifier,
-    pub spender: Identifier,
+    pub from: Address,
+    pub spender: Address,
 }
 
 #[contracttype]
@@ -18,8 +17,7 @@ pub struct BalanceValue {
 #[contracttype]
 pub enum DataKey {
     Allowance(AllowanceDataKey),
-    Balance(Identifier),
-    Nonce(Identifier),
+    Balance(Address),
     Admin,
     Metadata,
 }
