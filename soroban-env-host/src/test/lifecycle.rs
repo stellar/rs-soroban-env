@@ -1,7 +1,6 @@
 use crate::{
     budget::{AsBudget, Budget},
-    host::metered_map::MeteredOrdMap,
-    storage::{AccessType, Footprint, Storage},
+    storage::{AccessType, Footprint, Storage, StorageMap},
     xdr::{
         self, ContractId, CreateContractArgs, Hash, HashIdPreimage, HashIdPreimageContractId,
         HashIdPreimageSourceAccountContractId, HostFunction, InstallContractCodeArgs,
@@ -59,7 +58,7 @@ fn test_host() -> Host {
     let budget = Budget::default();
     let storage = Storage::with_enforcing_footprint_and_map(
         Footprint::default(),
-        MeteredOrdMap::new(&budget).unwrap(),
+        StorageMap::new(&budget).unwrap(),
     );
     let host = Host::with_storage_and_budget(storage, budget.clone());
     host.set_ledger_info(LedgerInfo {

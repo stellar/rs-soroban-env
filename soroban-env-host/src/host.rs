@@ -8,23 +8,22 @@ use std::rc::Rc;
 
 use soroban_env_common::{
     xdr::{
-        AccountId, Asset, ContractCodeEntry, ContractDataEntry, ContractEvent, ContractEventBody,
-        ContractEventType, ContractEventV0, ContractId, CreateContractArgs, ExtensionPoint, Hash,
-        HashIdPreimage, HostFunction, HostFunctionType, InstallContractCodeArgs, Int128Parts,
-        LedgerEntryData, LedgerKey, LedgerKeyContractCode, ScAddress, ScContractCode,
-        ScHostContextErrorCode, ScHostFnErrorCode, ScHostObjErrorCode, ScHostStorageErrorCode,
-        ScHostValErrorCode, ScMap, ScMapEntry, ScObject, ScStatusType, ScVal, ScVec,
+        AccountId, Asset, ContractCodeEntry, ContractDataEntry, ContractEventType, ContractId,
+        CreateContractArgs, ExtensionPoint, Hash, HashIdPreimage, HostFunction, HostFunctionType,
+        InstallContractCodeArgs, Int128Parts, LedgerEntryData, LedgerKey, LedgerKeyContractCode,
+        ScAddress, ScContractCode, ScHostContextErrorCode, ScHostFnErrorCode, ScHostObjErrorCode,
+        ScHostStorageErrorCode, ScHostValErrorCode, ScMap, ScMapEntry, ScObject, ScStatusType,
+        ScVal, ScVec,
     },
     Convert, InvokerType, Status, TryFromVal, TryIntoVal, VmCaller, VmCallerEnv,
 };
 
+use crate::auth::{AuthorizationManager, AuthorizationManagerSnapshot, RecordedAuthPayload};
 use crate::budget::{AsBudget, Budget, CostType};
-use crate::events::{DebugError, DebugEvent, Events};
-use crate::storage::Storage;
-use crate::{
-    auth::{AuthorizationManager, AuthorizationManagerSnapshot, RecordedAuthPayload},
-    storage::StorageMap,
+use crate::events::{
+    DebugError, DebugEvent, Events, InternalContractEvent, InternalEvent, InternalEventsBuffer,
 };
+use crate::storage::{Storage, StorageMap};
 
 use crate::host_object::{HostMap, HostObject, HostObjectType, HostVec};
 #[cfg(feature = "vm")]
@@ -55,9 +54,10 @@ use crate::Compare;
 /// on error. A helper type used by [`FrameGuard`].
 // Notes on metering: `RollbackPoint` are metered under Frame operations
 #[derive(Clone)]
-pub(crate) struct RollbackPoint {
+struct RollbackPoint {
     storage: StorageMap,
     objects: usize,
+    events: usize,
     auth: Option<AuthorizationManagerSnapshot>,
 }
 
@@ -136,7 +136,7 @@ pub(crate) struct HostImpl {
     // metered sub-objects) but also because it's plausible that the person calling deep_clone
     // actually wants their clones to be metered by "the same" total budget
     pub(crate) budget: Budget,
-    events: RefCell<Events>,
+    events: RefCell<InternalEventsBuffer>,
     authorization_manager: RefCell<AuthorizationManager>,
     // Note: we're not going to charge metering for testutils because it's out of the scope
     // of what users will be charged for in production -- it's scaffolding for testing a contract,
@@ -299,7 +299,7 @@ impl Host {
 
     pub(crate) fn get_events_mut<F, U>(&self, f: F) -> Result<U, HostError>
     where
-        F: FnOnce(&mut Events) -> Result<U, HostError>,
+        F: FnOnce(&mut InternalEventsBuffer) -> Result<U, HostError>,
     {
         f(&mut *self.0.events.borrow_mut())
     }
@@ -323,28 +323,28 @@ impl Host {
         // contract runs out of gas in; this is an atomic action from the
         // contract's perspective.
         let event: DebugEvent = src.into();
-        let len = self.get_events_mut(|events| Ok(events.record_debug_event(event)))?;
-        self.charge_budget(CostType::HostEventDebug, len)
+        self.get_events_mut(|events| {
+            Ok(events.record(InternalEvent::Debug(event), self.as_budget()))
+        })?
     }
 
     // Records a contract event.
-    pub fn record_contract_event(
+    pub(crate) fn record_contract_event(
         &self,
         type_: ContractEventType,
-        topics: ScVec,
-        data: ScVal,
+        topics: Object,
+        data: RawVal,
     ) -> Result<(), HostError> {
-        let ce = ContractEvent {
-            ext: ExtensionPoint::V0,
-            contract_id: self.get_current_contract_id_internal().ok(),
+        self.validate_contract_event_topics(topics)?;
+        let ce = InternalContractEvent {
             type_,
-            body: ContractEventBody::V0(ContractEventV0 { topics, data }),
+            contract_id: self.get_current_contract_id_internal().ok(),
+            topics,
+            data,
         };
-        self.get_events_mut(|events| Ok(events.record_contract_event(ce)))?;
-        // Notes on metering: the length of topics and the complexity of data
-        // have been covered by various `ValXdrConv` charges. Here we charge 1
-        // unit just for recording this event.
-        self.charge_budget(CostType::HostEventContract, 1)
+        self.get_events_mut(|events| {
+            Ok(events.record(InternalEvent::Contract(ce), self.as_budget()))
+        })?
     }
 
     pub fn with_mut_storage<F, U>(&self, f: F) -> Result<U, HostError>
@@ -358,12 +358,12 @@ impl Host {
     /// underlying [`HostImpl`], returning its constituent components to the
     /// caller as a tuple wrapped in `Ok(...)`. If the provided host reference
     /// is not unique, returns `Err(self)`.
-    pub fn try_finish(self) -> Result<(Storage, Budget, Events), Self> {
+    pub fn try_finish(self) -> Result<(Storage, Budget, Option<Events>), Self> {
+        let events = self.0.events.borrow().externalize(&self).ok();
         Rc::try_unwrap(self.0)
             .map(|host_impl| {
                 let storage = host_impl.storage.into_inner();
                 let budget = host_impl.budget;
-                let events = host_impl.events.into_inner();
                 (storage, budget, events)
             })
             .map_err(Host)
@@ -388,6 +388,7 @@ impl Host {
         Ok(RollbackPoint {
             objects: self.0.objects.borrow().len(),
             storage: self.0.storage.borrow().map.clone(),
+            events: self.0.events.borrow().vec.len(),
             auth: auth_snapshot,
         })
     }
@@ -425,6 +426,10 @@ impl Host {
         if let Some(rp) = orp {
             self.0.objects.borrow_mut().truncate(rp.objects);
             self.0.storage.borrow_mut().map = rp.storage;
+            self.0
+                .events
+                .borrow_mut()
+                .rollback(rp.events, self.as_budget())?;
             if let Some(auth_rp) = rp.auth {
                 self.0.authorization_manager.borrow_mut().rollback(auth_rp);
             }
@@ -569,13 +574,13 @@ impl Host {
     }
 
     // Testing interface to create values directly for later use via Env functions.
-    // Notes on metering: covered by `to_host_val`
+    // It needs to be a `pub` method because benches are considered a separate crate.
     pub fn inject_val(&self, v: &ScVal) -> Result<RawVal, HostError> {
         self.to_host_val(v).map(Into::into)
     }
 
     pub fn get_events(&self) -> Result<Events, HostError> {
-        self.0.events.borrow().metered_clone(&self.0.budget)
+        self.0.events.borrow().externalize(&self)
     }
 
     // Notes on metering: free
@@ -1064,8 +1069,6 @@ impl Host {
     /// length <= 4 that cannot contain `Vec`, `Map`, or `Bytes` with length > 32
     /// On success, returns an `SCStatus::Ok`.
     pub fn system_event(&self, topics: Object, data: RawVal) -> Result<RawVal, HostError> {
-        let topics = self.event_topics_from_host_obj(topics)?;
-        let data = self.from_host_val(data)?;
         self.record_contract_event(ContractEventType::System, topics, data)?;
         Ok(Status::OK.into())
     }
@@ -1418,8 +1421,6 @@ impl VmCallerEnv for Host {
         topics: Object,
         data: RawVal,
     ) -> Result<RawVal, HostError> {
-        let topics = self.event_topics_from_host_obj(topics)?;
-        let data = self.from_host_val(data)?;
         self.record_contract_event(ContractEventType::Contract, topics, data)?;
         Ok(Status::OK.into())
     }

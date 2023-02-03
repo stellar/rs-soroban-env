@@ -8,7 +8,7 @@ use crate::{
 };
 use std::{cmp::Ordering, ops::Range};
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct MeteredVector<A>
 where
     A: MeteredClone,

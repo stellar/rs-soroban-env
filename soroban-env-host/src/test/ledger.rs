@@ -2,18 +2,15 @@ use soroban_env_common::Env;
 
 use crate::{
     budget::Budget,
-    host::metered_map::MeteredOrdMap,
-    storage::{Footprint, Storage},
+    storage::{Footprint, Storage, StorageMap},
     Host, HostError, LedgerInfo,
 };
 
 #[test]
 fn ledger_network_id() -> Result<(), HostError> {
     let budget = Budget::default();
-    let storage = Storage::with_enforcing_footprint_and_map(
-        Footprint::default(),
-        MeteredOrdMap::new(&budget)?,
-    );
+    let storage =
+        Storage::with_enforcing_footprint_and_map(Footprint::default(), StorageMap::new(&budget)?);
 
     let host = Host::with_storage_and_budget(storage, budget.clone());
     host.set_ledger_info(LedgerInfo {
