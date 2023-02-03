@@ -753,6 +753,7 @@ impl AuthorizationTracker {
                 {
                     frame_index = Some(i);
                     sub_invocation.is_exhausted = true;
+                    break;
                 }
             }
         } else {
