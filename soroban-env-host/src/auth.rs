@@ -209,7 +209,7 @@ impl AuthorizedInvocation {
         &mut self,
         invocation_id_in_call_stack: &Vec<Option<usize>>,
         call_stack_id: usize,
-    ) -> Option<&mut AuthorizedInvocation> {
+    ) -> &mut AuthorizedInvocation {
         // Start walking the stack from `call_stack_id`. We trust the callers to
         // hold the invariant that `invocation_id_in_call_stack[call_stack_id - 1]`
         // corresponds to this invocation tree, so that the next non-`None` child
@@ -223,7 +223,7 @@ impl AuthorizedInvocation {
             }
             // Skip `None` invocations as they don't require authorization.
         }
-        Some(self)
+        self
     }
 }
 
@@ -724,9 +724,10 @@ impl AuthorizationTracker {
     fn last_authorized_invocation_mut(&mut self) -> Option<&mut AuthorizedInvocation> {
         for i in 0..self.invocation_id_in_call_stack.len() {
             if self.invocation_id_in_call_stack[i].is_some() {
-                return self
-                    .root_authorized_invocation
-                    .last_authorized_invocation_mut(&self.invocation_id_in_call_stack, i + 1);
+                return Some(
+                    self.root_authorized_invocation
+                        .last_authorized_invocation_mut(&self.invocation_id_in_call_stack, i + 1),
+                );
             }
         }
         None
