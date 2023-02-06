@@ -6,8 +6,9 @@ use core::{
     hash::{Hash, Hasher},
 };
 use stellar_xdr::{
-    ScHostContextErrorCode, ScHostFnErrorCode, ScHostObjErrorCode, ScHostStorageErrorCode, ScHostAuthErrorCode,
-    ScHostValErrorCode, ScStatus, ScStatusType, ScUnknownErrorCode, ScVal, ScVmErrorCode,
+    ScHostAuthErrorCode, ScHostContextErrorCode, ScHostFnErrorCode, ScHostObjErrorCode,
+    ScHostStorageErrorCode, ScHostValErrorCode, ScStatus, ScStatusType, ScUnknownErrorCode, ScVal,
+    ScVmErrorCode,
 };
 
 /// Wrapper for a [RawVal] that is tagged with [Tag::Status], interpreting the
@@ -223,7 +224,6 @@ impl From<ScHostAuthErrorCode> for Status {
         ScStatus::HostAuthError(code).into()
     }
 }
-
 
 impl From<ScHostContextErrorCode> for Status {
     fn from(code: ScHostContextErrorCode) -> Self {

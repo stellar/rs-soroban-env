@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use soroban_env_common::xdr::{
     ContractAuth, ContractDataEntry, HashIdPreimage, HashIdPreimageContractAuth, LedgerEntry,
-    LedgerEntryData, LedgerEntryExt, ScAddress, ScObject, ScVal, ScHostAuthErrorCode,
+    LedgerEntryData, LedgerEntryExt, ScAddress, ScHostAuthErrorCode, ScObject, ScVal,
 };
 use soroban_env_common::{RawVal, Symbol};
 
@@ -469,7 +469,9 @@ impl AuthorizationManager {
     // Should only be called in the recording mode.
     pub(crate) fn get_recorded_auth_payloads(&self) -> Result<Vec<RecordedAuthPayload>, HostError> {
         match &self.mode {
-            AuthorizationMode::Enforcing => return Err(ScHostAuthErrorCode::GetRecordingInEnforcingMode.into()),
+            AuthorizationMode::Enforcing => {
+                return Err(ScHostAuthErrorCode::GetRecordingInEnforcingMode.into())
+            }
             AuthorizationMode::Recording(_recording_info) => Ok(self
                 .trackers
                 .iter()
@@ -654,7 +656,7 @@ impl AuthorizationTracker {
             _ => false,
         };
         if frame_is_already_authorized {
-            return Err(ScHostAuthErrorCode::DuplicateAuthorization.into())
+            return Err(ScHostAuthErrorCode::DuplicateAuthorization.into());
         }
         if let Some(curr_invocation) = self.last_authorized_invocation_mut() {
             curr_invocation
