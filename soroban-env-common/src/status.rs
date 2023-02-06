@@ -6,8 +6,9 @@ use core::{
     hash::{Hash, Hasher},
 };
 use stellar_xdr::{
-    ScHostContextErrorCode, ScHostFnErrorCode, ScHostObjErrorCode, ScHostStorageErrorCode,
-    ScHostValErrorCode, ScStatus, ScStatusType, ScUnknownErrorCode, ScVal, ScVmErrorCode,
+    ScHostAuthErrorCode, ScHostContextErrorCode, ScHostFnErrorCode, ScHostObjErrorCode,
+    ScHostStorageErrorCode, ScHostValErrorCode, ScStatus, ScStatusType, ScUnknownErrorCode, ScVal,
+    ScVmErrorCode,
 };
 
 /// Wrapper for a [RawVal] that is tagged with [Tag::Status], interpreting the
@@ -92,6 +93,12 @@ impl NamedCode for ScHostStorageErrorCode {
     }
 }
 
+impl NamedCode for ScHostAuthErrorCode {
+    fn fmt_code_name(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "{}", self.name())
+    }
+}
+
 impl NamedCode for ScHostValErrorCode {
     fn fmt_code_name(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "{}", self.name())
@@ -131,6 +138,7 @@ impl Debug for Status {
             ScStatusType::HostFunctionError => fmt_named_code::<ScHostFnErrorCode>(code, f),
             ScStatusType::HostStorageError => fmt_named_code::<ScHostStorageErrorCode>(code, f),
             ScStatusType::HostContextError => fmt_named_code::<ScHostContextErrorCode>(code, f),
+            ScStatusType::HostAuthError => fmt_named_code::<ScHostAuthErrorCode>(code, f),
             ScStatusType::VmError => fmt_named_code::<ScVmErrorCode>(code, f),
             ScStatusType::ContractError => write!(f, "{}", code),
         }?;
@@ -208,6 +216,12 @@ impl From<ScHostFnErrorCode> for Status {
 impl From<ScHostStorageErrorCode> for Status {
     fn from(code: ScHostStorageErrorCode) -> Self {
         ScStatus::HostStorageError(code).into()
+    }
+}
+
+impl From<ScHostAuthErrorCode> for Status {
+    fn from(code: ScHostAuthErrorCode) -> Self {
+        ScStatus::HostAuthError(code).into()
     }
 }
 
@@ -289,6 +303,7 @@ impl Status {
             ScStatus::HostObjectError(code) => code as i32 as u32,
             ScStatus::HostFunctionError(code) => code as i32 as u32,
             ScStatus::HostStorageError(code) => code as i32 as u32,
+            ScStatus::HostAuthError(code) => code as i32 as u32,
             ScStatus::VmError(code) => code as i32 as u32,
             ScStatus::UnknownError(code) => code as i32 as u32,
             ScStatus::ContractError(code) => code as u32,

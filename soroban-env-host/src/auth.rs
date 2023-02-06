@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use soroban_env_common::xdr::{
     ContractAuth, ContractDataEntry, HashIdPreimage, HashIdPreimageContractAuth, LedgerEntry,
-    LedgerEntryData, LedgerEntryExt, ScAddress, ScObject, ScVal,
+    LedgerEntryData, LedgerEntryExt, ScAddress, ScHostAuthErrorCode, ScObject, ScVal,
 };
 use soroban_env_common::{RawVal, Symbol};
 
@@ -346,7 +346,7 @@ impl AuthorizationManager {
                     }
                     // No matching tracker found, hence the invocation isn't
                     // authorized.
-                    Err(host.err_general("invocation is not authorized"))
+                    Err(ScHostAuthErrorCode::NotAuthorized.into())
                 }
                 AuthorizationMode::Recording(recording_info) => {
                     if let Some(tracker_id) = recording_info
@@ -654,7 +654,7 @@ impl AuthorizationTracker {
             _ => false,
         };
         if frame_is_already_authorized {
-            return Err(host.err_general("duplicate authorizations are not allowed"));
+            return Err(ScHostAuthErrorCode::DuplicateAuthorization.into());
         }
         if let Some(curr_invocation) = self.last_authorized_invocation_mut() {
             curr_invocation
@@ -788,7 +788,7 @@ impl AuthorizationTracker {
         if nonce_is_correct {
             Ok(())
         } else {
-            Err(ScUnknownErrorCode::General.into())
+            Err(ScHostAuthErrorCode::NonceError.into())
         }
     }
 
