@@ -364,6 +364,7 @@ impl From<ScStatus> for RawVal {
             ScStatus::HostFunctionError(e) => e as u32,
             ScStatus::HostStorageError(e) => e as u32,
             ScStatus::HostContextError(e) => e as u32,
+            ScStatus::HostAuthError(e) => e as u32,
             ScStatus::VmError(e) => e as u32,
             ScStatus::ContractError(e) => e,
         };
@@ -382,6 +383,7 @@ impl From<&ScStatus> for RawVal {
             ScStatus::HostFunctionError(e) => e as u32,
             ScStatus::HostStorageError(e) => e as u32,
             ScStatus::HostContextError(e) => e as u32,
+            ScStatus::HostAuthError(e) => e as u32,
             ScStatus::VmError(e) => e as u32,
             ScStatus::ContractError(e) => e,
         };
