@@ -470,7 +470,7 @@ impl AuthorizationManager {
     pub(crate) fn get_recorded_auth_payloads(&self) -> Result<Vec<RecordedAuthPayload>, HostError> {
         match &self.mode {
             AuthorizationMode::Enforcing => {
-                return Err(ScHostAuthErrorCode::GetRecordingInEnforcingMode.into())
+                return Err(ScUnknownErrorCode::General.into())
             }
             AuthorizationMode::Recording(_recording_info) => Ok(self
                 .trackers
@@ -790,7 +790,7 @@ impl AuthorizationTracker {
         if nonce_is_correct {
             Ok(())
         } else {
-            Err(ScHostAuthErrorCode::WrongNonce.into())
+            Err(ScHostAuthErrorCode::NonceError.into())
         }
     }
 
@@ -830,7 +830,7 @@ impl AuthorizationTracker {
                 }
             }
         } else {
-            return Err(ScHostAuthErrorCode::MissingAddress.into());
+            return Err(host.err_general("missing address to authenticate"));
         }
         Ok(())
     }
