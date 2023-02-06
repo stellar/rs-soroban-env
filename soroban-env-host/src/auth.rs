@@ -469,9 +469,7 @@ impl AuthorizationManager {
     // Should only be called in the recording mode.
     pub(crate) fn get_recorded_auth_payloads(&self) -> Result<Vec<RecordedAuthPayload>, HostError> {
         match &self.mode {
-            AuthorizationMode::Enforcing => {
-                return Err(ScUnknownErrorCode::General.into())
-            }
+            AuthorizationMode::Enforcing => return Err(ScUnknownErrorCode::General.into()),
             AuthorizationMode::Recording(_recording_info) => Ok(self
                 .trackers
                 .iter()
