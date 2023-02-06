@@ -8,7 +8,9 @@ impl CostRunner for GuardFrameRun {
     type SampleType = (Hash, Symbol);
 
     fn run_iter(host: &crate::Host, _iter: u64, sample: Self::SampleType) {
-        host.with_frame(Frame::Token(sample.0, sample.1), || Ok(Status::OK.to_raw()))
-            .unwrap();
+        host.with_frame(Frame::Token(sample.0, sample.1, vec![]), || {
+            Ok(Status::OK.to_raw())
+        })
+        .unwrap();
     }
 }

@@ -183,7 +183,7 @@ impl TokenTrait for Token {
         args.push(&from)?;
         args.push(&spender)?;
         args.push(&amount)?;
-        from.authorize(args)?;
+        from.require_auth()?;
         let allowance = read_allowance(&e, from.clone(), spender.clone())?;
         let new_allowance = allowance
             .checked_add(amount)
@@ -204,7 +204,7 @@ impl TokenTrait for Token {
         args.push(&from)?;
         args.push(&spender)?;
         args.push(&amount)?;
-        from.authorize(args)?;
+        from.require_auth()?;
         let allowance = read_allowance(&e, from.clone(), spender.clone())?;
         if amount >= allowance {
             write_allowance(&e, from.clone(), spender.clone(), 0)?;
@@ -236,7 +236,7 @@ impl TokenTrait for Token {
         args.push(&from)?;
         args.push(&to)?;
         args.push(&amount)?;
-        from.authorize(args)?;
+        from.require_auth()?;
         spend_balance(e, from.clone(), amount)?;
         receive_balance(e, to.clone(), amount)?;
         event::transfer(e, from, to, amount)?;
@@ -257,7 +257,7 @@ impl TokenTrait for Token {
         args.push(&from)?;
         args.push(&to)?;
         args.push(&amount)?;
-        spender.authorize(args)?;
+        spender.require_auth()?;
         spend_allowance(e, from.clone(), spender, amount)?;
         spend_balance(e, from.clone(), amount)?;
         receive_balance(e, to.clone(), amount)?;
@@ -272,7 +272,7 @@ impl TokenTrait for Token {
         let mut args = Vec::new(e)?;
         args.push(&from)?;
         args.push(&amount)?;
-        from.authorize(args)?;
+        from.require_auth()?;
         spend_balance(&e, from.clone(), amount)?;
         event::burn(e, from, amount)?;
         Ok(())
@@ -286,7 +286,7 @@ impl TokenTrait for Token {
         args.push(&spender)?;
         args.push(&from)?;
         args.push(&amount)?;
-        spender.authorize(args)?;
+        spender.require_auth()?;
         spend_allowance(&e, from.clone(), spender, amount)?;
         spend_balance(&e, from.clone(), amount)?;
         event::burn(e, from, amount)?;
@@ -302,7 +302,7 @@ impl TokenTrait for Token {
         args.push(&admin)?;
         args.push(&from)?;
         args.push(&amount)?;
-        admin.authorize(args)?;
+        admin.require_auth()?;
         spend_balance_no_authorization_check(e, from.clone(), amount.clone())?;
         event::clawback(e, admin, from, amount)?;
         Ok(())
@@ -315,7 +315,7 @@ impl TokenTrait for Token {
         args.push(&admin)?;
         args.push(&addr)?;
         args.push(&authorize)?;
-        admin.authorize(args)?;
+        admin.require_auth()?;
         write_authorization(e, addr.clone(), authorize)?;
         event::set_auth(e, admin, addr, authorize)?;
         Ok(())
@@ -329,7 +329,7 @@ impl TokenTrait for Token {
         args.push(&admin)?;
         args.push(&to)?;
         args.push(&amount)?;
-        admin.authorize(args)?;
+        admin.require_auth()?;
         receive_balance(e, to.clone(), amount)?;
         event::mint(e, admin, to, amount)?;
         Ok(())
@@ -341,7 +341,7 @@ impl TokenTrait for Token {
         let mut args = Vec::new(e)?;
         args.push(&admin)?;
         args.push(&new_admin)?;
-        admin.authorize(args)?;
+        admin.require_auth()?;
         write_administrator(e, new_admin.clone())?;
         event::set_admin(e, admin, new_admin)?;
         Ok(())
