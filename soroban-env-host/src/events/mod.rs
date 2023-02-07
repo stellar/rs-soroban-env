@@ -4,14 +4,15 @@ mod internal;
 pub use debug::{DebugArg, DebugError, DebugEvent};
 pub(crate) use internal::{InternalContractEvent, InternalEvent, InternalEventsBuffer};
 
+/// The external representation of a host event.
 // TODO: optimize storage on this to use pools / bumpalo / etc.
 #[derive(Clone, Debug)]
 pub enum HostEvent {
-    // use full path to emphasize this is the external representation
     Contract(crate::xdr::ContractEvent),
     Debug(DebugEvent),
 }
 
+/// The external representation of events in the chronological order.
 #[derive(Clone, Debug, Default)]
 pub struct Events(pub Vec<HostEvent>);
 

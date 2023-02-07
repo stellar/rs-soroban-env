@@ -7,6 +7,8 @@ use crate::{
     Host, HostError, MeteredVector, Object, RawVal,
 };
 
+/// The internal representation of a `ContractEvent` that is stored in the events buffer
+/// and designed to be cheap to clone.
 #[derive(Clone, Debug)]
 pub(crate) struct InternalContractEvent {
     pub(crate) type_: xdr::ContractEventType,
@@ -37,6 +39,8 @@ impl InternalContractEvent {
     }
 }
 
+/// The internal representation of an `Event` that is stored in the events buffer
+/// and designed to be cheap to cloned.
 #[derive(Clone, Debug, Default)]
 pub(crate) enum InternalEvent {
     Contract(InternalContractEvent),
@@ -47,6 +51,7 @@ pub(crate) enum InternalEvent {
 
 impl MeteredClone for InternalEvent {}
 
+/// The events buffer. Stores `InternalEvent`s in the chronological order.
 #[derive(Clone, Default)]
 pub(crate) struct InternalEventsBuffer {
     pub(crate) vec: MeteredVector<InternalEvent>,
@@ -72,6 +77,9 @@ impl InternalEventsBuffer {
         InternalEvent::Debug(dbg)
     }
 
+    /// Rolls back the event buffer starting at `events`. Any `ContractEvent` will be converted
+    /// to a `DebugEvent` indicating the event has been rolled back. An additional `DebugEvent`
+    /// will be pushed at the end indicating the rollback happened.
     // Metering covered by the `MeteredVec`
     pub fn rollback(&mut self, events: usize, host: &Host) -> Result<(), HostError> {
         let mut rollback_count = 0u32;
@@ -117,8 +125,9 @@ impl InternalEventsBuffer {
         debug!("========End of events========")
     }
 
-    // Metering: the new vec allocation is not charged. But that should be fine, since externalize
-    // should only be called once, either when finishing the host or erroring.
+    /// Converts the internal events into their external representation. This should only be called
+    /// either when the host is finished (via `try_finish`), or when an error occurs.
+    // Metering: the new vec allocation is not charged, but that should be fine.
     pub fn externalize(&self, host: &Host) -> Result<Events, HostError> {
         let vec: Result<Vec<HostEvent>, HostError> = self
             .vec
