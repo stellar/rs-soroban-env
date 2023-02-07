@@ -1,14 +1,14 @@
 mod debug;
 mod internal;
 
-use crate::xdr::ContractEvent;
 pub use debug::{DebugArg, DebugError, DebugEvent};
 pub(crate) use internal::{InternalContractEvent, InternalEvent, InternalEventsBuffer};
 
 // TODO: optimize storage on this to use pools / bumpalo / etc.
 #[derive(Clone, Debug)]
 pub enum HostEvent {
-    Contract(ContractEvent),
+    // use full path to emphasize this is the external representation
+    Contract(crate::xdr::ContractEvent),
     Debug(DebugEvent),
 }
 

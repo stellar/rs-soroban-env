@@ -13,7 +13,7 @@ use soroban_env_common::{
         InstallContractCodeArgs, Int128Parts, LedgerEntryData, LedgerKey, LedgerKeyContractCode,
         ScAddress, ScContractCode, ScHostContextErrorCode, ScHostFnErrorCode, ScHostObjErrorCode,
         ScHostStorageErrorCode, ScHostValErrorCode, ScMap, ScMapEntry, ScObject, ScStatusType,
-        ScVal, ScVec,
+        ScUnknownErrorCode, ScVal, ScVec,
     },
     Convert, InvokerType, Status, TryFromVal, TryIntoVal, VmCaller, VmCallerEnv,
 };
@@ -136,7 +136,7 @@ pub(crate) struct HostImpl {
     // metered sub-objects) but also because it's plausible that the person calling deep_clone
     // actually wants their clones to be metered by "the same" total budget
     pub(crate) budget: Budget,
-    events: RefCell<InternalEventsBuffer>,
+    pub(crate) events: RefCell<InternalEventsBuffer>,
     authorization_manager: RefCell<AuthorizationManager>,
     // Note: we're not going to charge metering for testutils because it's out of the scope
     // of what users will be charged for in production -- it's scaffolding for testing a contract,
@@ -338,7 +338,7 @@ impl Host {
         self.validate_contract_event_topics(topics)?;
         let ce = InternalContractEvent {
             type_,
-            contract_id: self.get_current_contract_id_internal().ok(),
+            contract_id: self.obj_from_internal_contract_id()?,
             topics,
             data,
         };
@@ -358,15 +358,23 @@ impl Host {
     /// underlying [`HostImpl`], returning its constituent components to the
     /// caller as a tuple wrapped in `Ok(...)`. If the provided host reference
     /// is not unique, returns `Err(self)`.
-    pub fn try_finish(self) -> Result<(Storage, Budget, Option<Events>), Self> {
-        let events = self.0.events.borrow().externalize(&self).ok();
+    pub fn try_finish(self) -> Result<(Storage, Budget, Events), (Self, HostError)> {
+        let events = self
+            .0
+            .events
+            .borrow()
+            .externalize(&self)
+            .map_err(|e| (self.clone(), e))?;
+
+        // TODO: find a better error status to represent "internal logic error". Here the error
+        // means the Rc does not have a unique strong reference.
         Rc::try_unwrap(self.0)
             .map(|host_impl| {
                 let storage = host_impl.storage.into_inner();
                 let budget = host_impl.budget;
                 (storage, budget, events)
             })
-            .map_err(Host)
+            .map_err(|e| (Host(e), ScUnknownErrorCode::General.into()))
     }
 
     /// Helper function for [`Host::with_frame`] below. Pushes a new [`Frame`]
@@ -426,10 +434,7 @@ impl Host {
         if let Some(rp) = orp {
             self.0.objects.borrow_mut().truncate(rp.objects);
             self.0.storage.borrow_mut().map = rp.storage;
-            self.0
-                .events
-                .borrow_mut()
-                .rollback(rp.events, self.as_budget())?;
+            self.0.events.borrow_mut().rollback(rp.events, self)?;
             if let Some(auth_rp) = rp.auth {
                 self.0.authorization_manager.borrow_mut().rollback(auth_rp);
             }
@@ -907,7 +912,6 @@ impl Host {
                 return self.with_frame(Frame::TestContract(frame), || {
                     use std::any::Any;
                     use std::panic::AssertUnwindSafe;
-                    use crate::xdr::ScUnknownErrorCode;
                     type PanicVal = Box<dyn Any + Send>;
 
                     // We're directly invoking a native rust contract here,

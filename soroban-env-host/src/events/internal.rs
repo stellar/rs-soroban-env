@@ -1,9 +1,9 @@
 use super::{DebugEvent, Events, HostEvent};
 use crate::{
-    budget::Budget,
+    budget::{AsBudget, Budget},
     host::metered_clone::MeteredClone,
     xdr,
-    xdr::{Hash, ScObject},
+    xdr::ScObject,
     Host, HostError, MeteredVector, Object, RawVal,
 };
 use log::debug;
@@ -11,7 +11,7 @@ use log::debug;
 #[derive(Clone, Debug)]
 pub(crate) struct InternalContractEvent {
     pub(crate) type_: xdr::ContractEventType,
-    pub(crate) contract_id: Option<Hash>,
+    pub(crate) contract_id: Option<Object>,
     pub(crate) topics: Object,
     pub(crate) data: RawVal,
 }
@@ -25,9 +25,13 @@ impl InternalContractEvent {
             Err(host.err_status(xdr::ScHostObjErrorCode::UnexpectedType))
         }?;
         let data = host.from_host_val(self.data)?;
+        let contract_id = match self.contract_id {
+            Some(id) => Some(host.hash_from_obj_input("contract_id", id)?),
+            None => None,
+        };
         Ok(xdr::ContractEvent {
             ext: xdr::ExtensionPoint::V0,
-            contract_id: self.contract_id,
+            contract_id: contract_id,
             type_: self.type_,
             body: xdr::ContractEventBody::V0(xdr::ContractEventV0 { topics, data }),
         })
@@ -57,27 +61,44 @@ impl InternalEventsBuffer {
         Ok(())
     }
 
+    fn defunct_contract_event(c: &mut InternalContractEvent) -> InternalEvent {
+        let ty: RawVal = <i32>::from(c.type_).into();
+        let id: RawVal = c.contract_id.map_or(RawVal::from_void(), |obj| obj.into());
+        let dbg = DebugEvent::new()
+            .msg("rolled-back contract event: type {}, id {}, topics {}, data {}")
+            .arg(ty)
+            .arg(id)
+            .arg(RawVal::from(c.topics))
+            .arg(c.data);
+        InternalEvent::Debug(dbg)
+    }
+
     // Metering covered by the `MeteredVec`
-    pub fn rollback(&mut self, events: usize, budget: &Budget) -> Result<(), HostError> {
-        let mut i = events;
-        let mut v = self.vec.clone();
-        loop {
-            match v.get(i, budget)? {
-                InternalEvent::Contract(_) => {
-                    v = v.remove(i, budget)?;
+    pub fn rollback(&mut self, events: usize, host: &Host) -> Result<(), HostError> {
+        self.vec = self.vec.retain_mut(
+            |i, e| {
+                if i < events {
+                    Ok(true)
+                } else {
+                    if let InternalEvent::Contract(c) = e {
+                        *e = Self::defunct_contract_event(c);
+                        Ok(true)
+                    } else {
+                        Ok(true)
+                    }
                 }
-                InternalEvent::Debug(_) => {
-                    i += 1;
-                }
-                InternalEvent::None => {
-                    i += 1;
-                }
-            }
-            if i == v.len() {
-                break;
-            }
-        }
-        self.vec = v;
+            },
+            host.as_budget(),
+        )?;
+        self.vec = self.vec.push_back(
+            InternalEvent::Debug(
+                DebugEvent::new()
+                    .msg("Events rolled back, starting from buffer position {}")
+                    .arg(host.usize_to_rawval_u32(events)?),
+            ),
+            host.as_budget(),
+        )?;
+        self.dump_to_debug_log();
         Ok(())
     }
 

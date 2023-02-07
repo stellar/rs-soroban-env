@@ -284,4 +284,11 @@ impl Host {
             .map(|scv| self.to_host_val(scv))
             .collect::<Result<Vec<RawVal>, HostError>>()
     }
+
+    pub(crate) fn obj_from_internal_contract_id(&self) -> Result<Option<Object>, HostError> {
+        Ok(self
+            .get_current_contract_id_internal()
+            .map(|id| self.add_host_object::<Vec<u8>>(id.as_slice().to_vec()))?
+            .ok())
+    }
 }
