@@ -1,5 +1,5 @@
 use crate::host::Host;
-use crate::native_contract::base_types::{Address, Bytes, BytesN, Vec};
+use crate::native_contract::base_types::{Address, Bytes, BytesN};
 use crate::native_contract::contract_error::ContractError;
 use crate::native_contract::token::admin::{check_admin, write_administrator};
 use crate::native_contract::token::allowance::{read_allowance, spend_allowance, write_allowance};
@@ -179,10 +179,6 @@ impl TokenTrait for Token {
         amount: i128,
     ) -> Result<(), HostError> {
         check_nonnegative_amount(e, amount)?;
-        let mut args = Vec::new(e)?;
-        args.push(&from)?;
-        args.push(&spender)?;
-        args.push(&amount)?;
         from.require_auth()?;
         let allowance = read_allowance(&e, from.clone(), spender.clone())?;
         let new_allowance = allowance
@@ -200,10 +196,6 @@ impl TokenTrait for Token {
         amount: i128,
     ) -> Result<(), HostError> {
         check_nonnegative_amount(e, amount)?;
-        let mut args = Vec::new(e)?;
-        args.push(&from)?;
-        args.push(&spender)?;
-        args.push(&amount)?;
         from.require_auth()?;
         let allowance = read_allowance(&e, from.clone(), spender.clone())?;
         if amount >= allowance {
@@ -232,10 +224,6 @@ impl TokenTrait for Token {
     // Metering: covered by components
     fn xfer(e: &Host, from: Address, to: Address, amount: i128) -> Result<(), HostError> {
         check_nonnegative_amount(e, amount)?;
-        let mut args = Vec::new(e)?;
-        args.push(&from)?;
-        args.push(&to)?;
-        args.push(&amount)?;
         from.require_auth()?;
         spend_balance(e, from.clone(), amount)?;
         receive_balance(e, to.clone(), amount)?;
@@ -252,11 +240,6 @@ impl TokenTrait for Token {
         amount: i128,
     ) -> Result<(), HostError> {
         check_nonnegative_amount(e, amount)?;
-        let mut args = Vec::new(e)?;
-        args.push(&spender)?;
-        args.push(&from)?;
-        args.push(&to)?;
-        args.push(&amount)?;
         spender.require_auth()?;
         spend_allowance(e, from.clone(), spender, amount)?;
         spend_balance(e, from.clone(), amount)?;
@@ -269,9 +252,6 @@ impl TokenTrait for Token {
     fn burn(e: &Host, from: Address, amount: i128) -> Result<(), HostError> {
         check_nonnegative_amount(e, amount)?;
         check_non_native(e)?;
-        let mut args = Vec::new(e)?;
-        args.push(&from)?;
-        args.push(&amount)?;
         from.require_auth()?;
         spend_balance(&e, from.clone(), amount)?;
         event::burn(e, from, amount)?;
@@ -282,10 +262,6 @@ impl TokenTrait for Token {
     fn burn_from(e: &Host, spender: Address, from: Address, amount: i128) -> Result<(), HostError> {
         check_nonnegative_amount(e, amount)?;
         check_non_native(e)?;
-        let mut args = Vec::new(e)?;
-        args.push(&spender)?;
-        args.push(&from)?;
-        args.push(&amount)?;
         spender.require_auth()?;
         spend_allowance(&e, from.clone(), spender, amount)?;
         spend_balance(&e, from.clone(), amount)?;
@@ -298,10 +274,6 @@ impl TokenTrait for Token {
         check_nonnegative_amount(e, amount)?;
         check_admin(e, &admin)?;
         check_clawbackable(&e, from.clone())?;
-        let mut args = Vec::new(e)?;
-        args.push(&admin)?;
-        args.push(&from)?;
-        args.push(&amount)?;
         admin.require_auth()?;
         spend_balance_no_authorization_check(e, from.clone(), amount.clone())?;
         event::clawback(e, admin, from, amount)?;
@@ -311,10 +283,6 @@ impl TokenTrait for Token {
     // Metering: covered by components
     fn set_auth(e: &Host, admin: Address, addr: Address, authorize: bool) -> Result<(), HostError> {
         check_admin(e, &admin)?;
-        let mut args = Vec::new(e)?;
-        args.push(&admin)?;
-        args.push(&addr)?;
-        args.push(&authorize)?;
         admin.require_auth()?;
         write_authorization(e, addr.clone(), authorize)?;
         event::set_auth(e, admin, addr, authorize)?;
@@ -325,10 +293,6 @@ impl TokenTrait for Token {
     fn mint(e: &Host, admin: Address, to: Address, amount: i128) -> Result<(), HostError> {
         check_nonnegative_amount(e, amount)?;
         check_admin(e, &admin)?;
-        let mut args = Vec::new(e)?;
-        args.push(&admin)?;
-        args.push(&to)?;
-        args.push(&amount)?;
         admin.require_auth()?;
         receive_balance(e, to.clone(), amount)?;
         event::mint(e, admin, to, amount)?;
@@ -338,9 +302,6 @@ impl TokenTrait for Token {
     // Metering: covered by components
     fn set_admin(e: &Host, admin: Address, new_admin: Address) -> Result<(), HostError> {
         check_admin(e, &admin)?;
-        let mut args = Vec::new(e)?;
-        args.push(&admin)?;
-        args.push(&new_admin)?;
         admin.require_auth()?;
         write_administrator(e, new_admin.clone())?;
         event::set_admin(e, admin, new_admin)?;

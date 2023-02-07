@@ -410,14 +410,21 @@ impl Host {
         if let Ok(mut auth_manager) = self.0.authorization_manager.try_borrow_mut() {
             auth_manager.pop_frame();
         }
-        #[cfg(any(test, feature = "testutils"))]
-        {
+
+        if self.0.context.borrow().is_empty() {
+            // When there are no frames left, emulate authentication for the
+            // recording auth mode. This is a no-op for the enforcing mode.
+            self.0
+                .authorization_manager
+                .borrow_mut()
+                .maybe_emulate_authentication(self)?;
             // Empty call stack in tests means that some contract function call
             // has been finished and hence the authorization manager can be reset.
             // In non-test scenarios, there should be no need to ever reset
             // the authorization manager as the host instance shouldn't be
             // shared between the contract invocations.
-            if self.0.context.borrow().is_empty() {
+            #[cfg(any(test, feature = "testutils"))]
+            {
                 *self.0.previous_authorization_manager.borrow_mut() =
                     Some(self.0.authorization_manager.borrow().clone());
                 self.0.authorization_manager.borrow_mut().reset();
