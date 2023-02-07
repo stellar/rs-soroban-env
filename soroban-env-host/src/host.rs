@@ -1063,23 +1063,22 @@ impl Host {
         self.with_mut_storage(|storage| storage.put(&key, &val, self.as_budget()))
     }
 
+    // Returns the top-level authorizations that have been recorded for the last
+    // contract invocation.
+    // More technically, 'top-level' means that these invocations were the first
+    // in the call tree to have called `require_auth` (i.e. they're not
+    // necessarily invocations of the top-level contract that has been invoked).
     #[cfg(any(test, feature = "testutils"))]
-    pub fn verify_top_authorization(
+    pub fn get_recorded_top_authorizations(
         &self,
-        address: Object,
-        contract_id: Hash,
-        function_name: Symbol,
-        args: Object,
-    ) -> Result<bool, HostError> {
-        let address = self.visit_obj(address, |addr: &ScAddress| Ok(addr.clone()))?;
-        let args = self.call_args_to_scvec(args)?;
+    ) -> Result<Vec<(ScAddress, Hash, Symbol, ScVec)>, HostError> {
         Ok(self
             .0
             .previous_authorization_manager
             .borrow_mut()
             .as_mut()
-            .ok_or(self.err_general("previous invocation is missing - no auth to verify"))?
-            .verify_top_authorization(&address, &contract_id, &function_name, &args))
+            .ok_or(self.err_general("previous invocation is missing - no auth data to get"))?
+            .get_recorded_top_authorizations())
     }
 
     /// Records a `System` contract event. `topics` is expected to be a `SCVec`
