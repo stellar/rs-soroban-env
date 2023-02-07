@@ -470,11 +470,28 @@ impl AuthorizationManager {
     pub(crate) fn get_recorded_auth_payloads(&self) -> Result<Vec<RecordedAuthPayload>, HostError> {
         match &self.mode {
             AuthorizationMode::Enforcing => return Err(ScUnknownErrorCode::General.into()),
-            AuthorizationMode::Recording(_recording_info) => Ok(self
+            AuthorizationMode::Recording(_) => Ok(self
                 .trackers
                 .iter()
                 .map(|tracker| tracker.get_recorded_auth_payload())
                 .collect::<Result<Vec<RecordedAuthPayload>, HostError>>()?),
+        }
+    }
+
+    // For recording mode, emulates authentication that would normally happen in
+    // the enforcing mode.
+    // This helps to build a more realistic footprint and produce more correct
+    // meterting data for the recording mode.
+    // No-op in the enforcing mode.
+    pub(crate) fn maybe_emulate_authentication(&self, host: &Host) -> Result<(), HostError> {
+        match &self.mode {
+            AuthorizationMode::Enforcing => Ok(()),
+            AuthorizationMode::Recording(_) => {
+                for tracker in &self.trackers {
+                    tracker.emulate_authentication(host)?;
+                }
+                Ok(())
+            }
         }
     }
 
@@ -827,10 +844,32 @@ impl AuthorizationTracker {
                     )?;
                 }
             }
+            Ok(())
         } else {
-            return Err(host.err_general("missing address to authenticate"));
+            Err(host.err_general("unexpted missing address to authenticate"))
         }
-        Ok(())
+    }
+
+    // Emulates authentication for the recording mode.
+    fn emulate_authentication(&self, host: &Host) -> Result<(), HostError> {
+        if self.is_invoker {
+            return Ok(());
+        }
+        if let Some(address) = &self.address {
+            // Compute the real payload for the sake of metering, but don't use it.
+            let _payload = self.get_signature_payload(host)?;
+            match address {
+                ScAddress::Account(acc) => {
+                    let _account = host.load_account(acc.clone())?;
+                }
+                // Skip custom accounts for now - emulating authentication for
+                // them requires a dummy signature.
+                ScAddress::Contract(_) => (),
+            }
+            Ok(())
+        } else {
+            Err(host.err_general("unexpted missing address to emulate authentication"))
+        }
     }
 
     // Checks whether the provided top-level authorized invocation happened
