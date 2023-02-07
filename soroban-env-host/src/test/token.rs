@@ -20,7 +20,7 @@ use crate::{
 };
 use ed25519_dalek::Keypair;
 use soroban_env_common::{
-    xdr::{self, AccountFlags, ScVal, ScVec, Uint256},
+    xdr::{self, AccountFlags, ScAddress, ScVal, ScVec, Uint256},
     xdr::{
         AccountEntry, AccountEntryExt, AccountEntryExtensionV1, AccountEntryExtensionV1Ext,
         AccountEntryExtensionV2, AccountEntryExtensionV2Ext, AccountId, AlphaNum12, AlphaNum4,
@@ -2544,92 +2544,17 @@ fn test_recording_auth_for_token() {
         }]
     );
 
-    // Incorrect address
-    assert!(!test
-        .host
-        .verify_top_authorization(
-            user.address(&test.host).into(),
+    assert_eq!(
+        test.host.get_recorded_top_authorizations().unwrap(),
+        vec![(
+            test.host
+                .visit_obj(admin.address(&test.host).into(), |addr: &ScAddress| Ok(
+                    addr.clone()
+                ))
+                .unwrap(),
             Hash(token.id.to_array().unwrap()),
             Symbol::from_str("mint"),
-            args.clone().into()
-        )
-        .unwrap());
-
-    // Incorrect contract
-    assert!(!test
-        .host
-        .verify_top_authorization(
-            user.address(&test.host).into(),
-            Hash([1; 32]),
-            Symbol::from_str("mint"),
-            args.clone().into()
-        )
-        .unwrap());
-
-    // Incorrect function
-    assert!(!test
-        .host
-        .verify_top_authorization(
-            admin.address(&test.host).into(),
-            Hash(token.id.to_array().unwrap()),
-            Symbol::from_str("mint2"),
-            args.clone().into()
-        )
-        .unwrap());
-
-    // Incorrect args
-    assert!(!test
-        .host
-        .verify_top_authorization(
-            admin.address(&test.host).into(),
-            Hash(token.id.to_array().unwrap()),
-            Symbol::from_str("mint2"),
-            host_vec![
-                &test.host,
-                admin.address(&test.host),
-                user.address(&test.host),
-                101_i128
-            ]
-            .into()
-        )
-        .unwrap());
-
-    // Incorrect args order
-    assert!(!test
-        .host
-        .verify_top_authorization(
-            admin.address(&test.host).into(),
-            Hash(token.id.to_array().unwrap()),
-            Symbol::from_str("mint2"),
-            host_vec![
-                &test.host,
-                admin.address(&test.host),
-                100_i128,
-                user.address(&test.host),
-            ]
-            .into()
-        )
-        .unwrap());
-
-    // Correct args
-    assert!(test
-        .host
-        .verify_top_authorization(
-            admin.address(&test.host).into(),
-            Hash(token.id.to_array().unwrap()),
-            Symbol::from_str("mint"),
-            args.clone().into()
-        )
-        .unwrap());
-
-    // Correct args again, but the verification is exhausted now
-    assert!(!test
-        .host
-        .verify_top_authorization(
-            admin.address(&test.host).into(),
-            Hash(token.id.to_array().unwrap()),
-            Symbol::from_str("mint"),
-            args.clone().into()
-        )
-        .unwrap());
+            test.host.call_args_to_scvec(args.clone().into()).unwrap()
+        )]
+    );
 }

@@ -269,7 +269,7 @@ impl AuthorizationManager {
 
     // Creates a new recording `AuthorizationManager`.
     // All the authorization requirements will be recorded and can then be
-    // retrieved using `get_recorded_signature_payloads`.
+    // retrieved using `get_recorded_auth_payloads`.
     pub(crate) fn new_recording(budget: Budget) -> Self {
         Self {
             mode: AuthorizationMode::Recording(RecordingAuthInfo {
@@ -509,29 +509,28 @@ impl AuthorizationManager {
         }
     }
 
-    // Verify that the top-level authorization has happened for the given
-    // address and invocation arguments.
-    // This also keeps track of verifications that already happened.
+    // Returns the top-level authorizations that have been recorded for the last
+    // contract invocation.
     #[cfg(any(test, feature = "testutils"))]
-    pub(crate) fn verify_top_authorization(
-        &mut self,
-        address: &ScAddress,
-        contract_id: &Hash,
-        function_name: &Symbol,
-        args: &ScVec,
-    ) -> bool {
-        match &mut self.mode {
+    pub(crate) fn get_recorded_top_authorizations(&self) -> Vec<(ScAddress, Hash, Symbol, ScVec)> {
+        match self.mode {
             AuthorizationMode::Enforcing => {
-                panic!("verifying the authorization is only available for recording-mode auth")
+                panic!("get_top_authorizations is only available for recording-mode auth")
             }
-            AuthorizationMode::Recording(_) => {
-                for tracker in &mut self.trackers {
-                    if tracker.verify_top_authorization(address, contract_id, function_name, args) {
-                        return true;
-                    }
-                }
-                return false;
-            }
+            AuthorizationMode::Recording(_) => self
+                .trackers
+                .iter()
+                .map(|t| {
+                    (
+                        // It is ok to unwrap here, since in recording
+                        // mode address should be always present.
+                        t.address.clone().unwrap(),
+                        t.root_authorized_invocation.contract_id.clone(),
+                        t.root_authorized_invocation.function_name.clone(),
+                        t.root_authorized_invocation.args.clone(),
+                    )
+                })
+                .collect(),
         }
     }
 }
@@ -580,15 +579,11 @@ impl AuthorizationTracker {
         } else {
             false
         };
-        let mut nonce = None;
-
-        let address = if is_invoker {
-            None
+        let nonce = if !is_invoker {
+            Some(host.read_and_consume_nonce(&contract_id, &address)?)
         } else {
-            nonce = Some(host.read_and_consume_nonce(&contract_id, &address)?);
-            Some(address)
+            None
         };
-        let is_invoker = address.is_none();
         // Create the stack of `None` leading to the current invocation to
         // represent invocations that didn't need authorization on behalf of
         // the tracked address.
@@ -596,7 +591,7 @@ impl AuthorizationTracker {
         // Add the id for the current(root) invocation.
         invocation_id_in_call_stack.push(Some(0));
         Ok(Self {
-            address,
+            address: Some(address),
             root_authorized_invocation: AuthorizedInvocation::new_recording(
                 contract_id,
                 function_name,
@@ -606,7 +601,7 @@ impl AuthorizationTracker {
             signature_args: Default::default(),
             is_valid: true,
             authenticated: true,
-            need_nonce: !is_invoker,
+            need_nonce: false,
             is_invoker,
             nonce,
         })
@@ -694,7 +689,11 @@ impl AuthorizationTracker {
     // tracker.
     fn get_recorded_auth_payload(&self) -> Result<RecordedAuthPayload, HostError> {
         Ok(RecordedAuthPayload {
-            address: self.address.clone(),
+            address: if self.is_invoker {
+                None
+            } else {
+                self.address.clone()
+            },
             invocation: self.root_authorized_invocation.to_xdr_non_metered()?,
             nonce: self.nonce,
         })
@@ -870,35 +869,6 @@ impl AuthorizationTracker {
         } else {
             Err(host.err_general("unexpected missing address to emulate authentication"))
         }
-    }
-
-    // Checks whether the provided top-level authorized invocation happened
-    // for this tracker.
-    // This also makes sure double verification of the same invocation is not
-    // possible.
-    #[cfg(any(test, feature = "testutils"))]
-    fn verify_top_authorization(
-        &mut self,
-        address: &ScAddress,
-        contract_id: &Hash,
-        function_name: &Symbol,
-        args: &ScVec,
-    ) -> bool {
-        // The recording invariant is that every recorded authorization is
-        // immediately exhausted, so during the verification we revert the
-        // 'exhausted' flags back to 'false' values in order to prevent
-        // verifying the same authorization twice.
-        if !self.root_authorized_invocation.is_exhausted {
-            return false;
-        }
-        let is_matching = self.address.as_ref().unwrap() == address
-            && &self.root_authorized_invocation.contract_id == contract_id
-            && &self.root_authorized_invocation.function_name == function_name
-            && &self.root_authorized_invocation.args == args;
-        if is_matching {
-            self.root_authorized_invocation.is_exhausted = false;
-        }
-        is_matching
     }
 }
 
