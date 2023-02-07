@@ -846,7 +846,7 @@ impl AuthorizationTracker {
             }
             Ok(())
         } else {
-            Err(host.err_general("unexpted missing address to authenticate"))
+            Err(host.err_general("unexpected missing address to authenticate"))
         }
     }
 
@@ -868,7 +868,7 @@ impl AuthorizationTracker {
             }
             Ok(())
         } else {
-            Err(host.err_general("unexpted missing address to emulate authentication"))
+            Err(host.err_general("unexpected missing address to emulate authentication"))
         }
     }
 
