@@ -277,6 +277,7 @@ impl TokenTest {
             Frame::TestContract(TestContractFrame::new(
                 Hash(contract_id_bytes.to_array().unwrap()),
                 Symbol::from_str("foo"),
+                vec![],
             )),
             || {
                 let res = f();

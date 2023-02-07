@@ -464,10 +464,7 @@ impl Address {
             .visit_obj(self.object, |addr: &ScAddress| Ok(addr.clone()))
     }
 
-    pub(crate) fn authorize(&self, args: Vec) -> Result<(), HostError> {
-        Ok(self
-            .host
-            .require_auth(self.object, args.into())?
-            .try_into()?)
+    pub(crate) fn require_auth(&self) -> Result<(), HostError> {
+        Ok(self.host.require_auth(self.object)?.try_into()?)
     }
 }

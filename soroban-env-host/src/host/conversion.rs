@@ -264,18 +264,24 @@ impl Host {
 
     // Metering: free?
     pub(crate) fn call_args_to_scvec(&self, args: Object) -> Result<ScVec, HostError> {
-        self.visit_obj(args, |hv: &HostVec| {
-            Ok(ScVec(
-                hv.iter()
-                    .map(|v| {
-                        ScVal::try_from_val(self, v)
-                            .map_err(|_| self.err_general("couldn't convert RawVal"))
-                    })
-                    .collect::<Result<Vec<ScVal>, HostError>>()?
-                    .try_into()
-                    .map_err(|_| self.err_general("too many args"))?,
-            ))
-        })
+        self.visit_obj(args, |hv: &HostVec| self.rawvals_to_scvec(hv.iter()))
+    }
+
+    // Metering: free?
+    pub(crate) fn rawvals_to_scvec(
+        &self,
+        raw_vals: std::slice::Iter<RawVal>,
+    ) -> Result<ScVec, HostError> {
+        Ok(ScVec(
+            raw_vals
+                .map(|v| {
+                    ScVal::try_from_val(self, v)
+                        .map_err(|_| self.err_general("couldn't convert RawVal"))
+                })
+                .collect::<Result<Vec<ScVal>, HostError>>()?
+                .try_into()
+                .map_err(|_| self.err_general("too many args"))?,
+        ))
     }
 
     pub(crate) fn scvals_to_rawvals(&self, sc_vals: &[ScVal]) -> Result<Vec<RawVal>, HostError> {

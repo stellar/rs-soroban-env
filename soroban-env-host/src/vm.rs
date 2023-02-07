@@ -234,7 +234,7 @@ impl Vm {
     ) -> Result<RawVal, HostError> {
         host.charge_budget(CostType::InvokeVmFunction, 1)?;
         host.with_frame(
-            Frame::ContractVM(self.clone(), Symbol::from_str(func)),
+            Frame::ContractVM(self.clone(), Symbol::from_str(func), args.to_vec()),
             || {
                 let wasm_args: Vec<Value> = args
                     .iter()

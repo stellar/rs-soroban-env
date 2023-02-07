@@ -71,15 +71,17 @@ pub trait ContractFunctionSet {
 pub struct TestContractFrame {
     pub id: Hash,
     pub func: Symbol,
+    pub args: Vec<RawVal>,
     panic: Rc<RefCell<Option<Status>>>,
 }
 
 #[cfg(any(test, feature = "testutils"))]
 impl TestContractFrame {
-    pub fn new(id: Hash, func: Symbol) -> Self {
+    pub fn new(id: Hash, func: Symbol, args: Vec<RawVal>) -> Self {
         Self {
             id,
             func,
+            args,
             panic: Rc::new(RefCell::new(None)),
         }
     }
@@ -99,9 +101,9 @@ impl TestContractFrame {
 #[derive(Clone)]
 pub(crate) enum Frame {
     #[cfg(feature = "vm")]
-    ContractVM(Rc<Vm>, Symbol),
+    ContractVM(Rc<Vm>, Symbol, Vec<RawVal>),
     HostFunction(HostFunctionType),
-    Token(Hash, Symbol),
+    Token(Hash, Symbol, Vec<RawVal>),
     #[cfg(any(test, feature = "testutils"))]
     TestContract(TestContractFrame),
 }
@@ -417,14 +419,21 @@ impl Host {
         if let Ok(mut auth_manager) = self.0.authorization_manager.try_borrow_mut() {
             auth_manager.pop_frame();
         }
-        #[cfg(any(test, feature = "testutils"))]
-        {
+
+        if self.0.context.borrow().is_empty() {
+            // When there are no frames left, emulate authentication for the
+            // recording auth mode. This is a no-op for the enforcing mode.
+            self.0
+                .authorization_manager
+                .borrow_mut()
+                .maybe_emulate_authentication(self)?;
             // Empty call stack in tests means that some contract function call
             // has been finished and hence the authorization manager can be reset.
             // In non-test scenarios, there should be no need to ever reset
             // the authorization manager as the host instance shouldn't be
             // shared between the contract invocations.
-            if self.0.context.borrow().is_empty() {
+            #[cfg(any(test, feature = "testutils"))]
+            {
                 *self.0.previous_authorization_manager.borrow_mut() =
                     Some(self.0.authorization_manager.borrow().clone());
                 self.0.authorization_manager.borrow_mut().reset();
@@ -522,7 +531,10 @@ impl Host {
     where
         F: FnOnce() -> Result<RawVal, HostError>,
     {
-        self.with_frame(Frame::TestContract(TestContractFrame::new(id, func)), f)
+        self.with_frame(
+            Frame::TestContract(TestContractFrame::new(id, func, vec![])),
+            f,
+        )
     }
 
     /// Returns [`Hash`] contract ID from the VM frame at the top of the context
@@ -531,11 +543,11 @@ impl Host {
     pub(crate) fn get_current_contract_id_internal(&self) -> Result<Hash, HostError> {
         self.with_current_frame(|frame| match frame {
             #[cfg(feature = "vm")]
-            Frame::ContractVM(vm, _) => vm.contract_id.metered_clone(&self.0.budget),
+            Frame::ContractVM(vm, _, _) => vm.contract_id.metered_clone(&self.0.budget),
             Frame::HostFunction(_) => {
                 Err(self.err_general("Host function context has no contract ID"))
             }
-            Frame::Token(id, _) => id.metered_clone(&self.0.budget),
+            Frame::Token(id, _, _) => id.metered_clone(&self.0.budget),
             #[cfg(any(test, feature = "testutils"))]
             Frame::TestContract(tc) => Ok(tc.id.clone()),
         })
@@ -594,7 +606,7 @@ impl Host {
         let pos: u32 = self.u32_from_rawval_input("pos", pos)?;
         let len: u32 = self.u32_from_rawval_input("len", len)?;
         self.with_current_frame(|frame| match frame {
-            Frame::ContractVM(vm, _) => {
+            Frame::ContractVM(vm, _, _) => {
                 let vm = vm.clone();
                 Ok(VmSlice { vm, pos, len })
             }
@@ -848,12 +860,13 @@ impl Host {
             }
             #[cfg(not(feature = "vm"))]
             ScContractCode::WasmRef(_) => Err(self.err_general("could not dispatch")),
-            ScContractCode::Token => {
-                self.with_frame(Frame::Token(id.clone(), func.clone()), || {
+            ScContractCode::Token => self.with_frame(
+                Frame::Token(id.clone(), func.clone(), args.to_vec()),
+                || {
                     use crate::native_contract::{NativeContract, Token};
                     Token.call(func, self, args)
-                })
-            }
+                },
+            ),
         }
     }
 
@@ -880,8 +893,8 @@ impl Host {
             for f in self.0.context.borrow().iter() {
                 let exist_id = match f {
                     #[cfg(feature = "vm")]
-                    Frame::ContractVM(vm, _) => &vm.contract_id,
-                    Frame::Token(id, _) => id,
+                    Frame::ContractVM(vm, _, _) => &vm.contract_id,
+                    Frame::Token(id, _, _) => id,
                     #[cfg(any(test, feature = "testutils"))]
                     Frame::TestContract(tc) => &tc.id,
                     Frame::HostFunction(_) => continue,
@@ -907,7 +920,7 @@ impl Host {
             // maintains a borrow of self.0.contracts, which can cause borrow errors.
             let cfs_option = self.0.contracts.borrow().get(&id).cloned();
             if let Some(cfs) = cfs_option {
-                let frame = TestContractFrame::new(id.clone(), func.clone());
+                let frame = TestContractFrame::new(id.clone(), func.clone(), args.to_vec());
                 let panic = frame.panic.clone();
                 return self.with_frame(Frame::TestContract(frame), || {
                     use std::any::Any;
@@ -1148,9 +1161,9 @@ impl Host {
         let hash = match frames.as_slice() {
             [.., f2, _] => match f2 {
                 #[cfg(feature = "vm")]
-                Frame::ContractVM(vm, _) => Ok(vm.contract_id.metered_clone(&self.0.budget)?),
+                Frame::ContractVM(vm, _, _) => Ok(vm.contract_id.metered_clone(&self.0.budget)?),
                 Frame::HostFunction(_) => Err(self.err_general("invoker is not a contract")),
-                Frame::Token(id, _) => Ok(id.clone()),
+                Frame::Token(id, _, _) => Ok(id.clone()),
                 #[cfg(any(test, feature = "testutils"))]
                 Frame::TestContract(tc) => Ok(tc.id.clone()), // no metering
             },
@@ -1378,9 +1391,9 @@ impl VmCallerEnv for Host {
             // There are always two frames when WASM is executed in the VM.
             [.., f2, _] => match f2 {
                 #[cfg(feature = "vm")]
-                Frame::ContractVM(_, _) => Ok(InvokerType::Contract),
+                Frame::ContractVM(_, _, _) => Ok(InvokerType::Contract),
                 Frame::HostFunction(_) => Ok(InvokerType::Account),
-                Frame::Token(id, _) => Ok(InvokerType::Contract),
+                Frame::Token(id, _, _) => Ok(InvokerType::Contract),
                 #[cfg(any(test, feature = "testutils"))]
                 Frame::TestContract(_) => Ok(InvokerType::Contract),
             },
@@ -2272,9 +2285,11 @@ impl VmCallerEnv for Host {
         for frame in frames.iter() {
             let vals = match frame {
                 #[cfg(feature = "vm")]
-                Frame::ContractVM(vm, function) => get_host_val_tuple(&vm.contract_id, &function)?,
+                Frame::ContractVM(vm, function, _) => {
+                    get_host_val_tuple(&vm.contract_id, &function)?
+                }
                 Frame::HostFunction(_) => continue,
-                Frame::Token(id, function) => get_host_val_tuple(&id, &function)?,
+                Frame::Token(id, function, _) => get_host_val_tuple(&id, &function)?,
                 #[cfg(any(test, feature = "testutils"))]
                 Frame::TestContract(tc) => get_host_val_tuple(&tc.id, &tc.func)?,
             };
@@ -2303,7 +2318,7 @@ impl VmCallerEnv for Host {
         Ok(().into())
     }
 
-    fn require_auth(
+    fn require_auth_for_args(
         &self,
         vmcaller: &mut VmCaller<Self::VmUserState>,
         address: Object,
@@ -2321,6 +2336,34 @@ impl VmCallerEnv for Host {
                 addr,
                 self.call_args_to_scvec(args)?,
             )?
+            .into())
+    }
+
+    fn require_auth(
+        &self,
+        vmcaller: &mut VmCaller<Self::VmUserState>,
+        address: Object,
+    ) -> Result<RawVal, Self::Error> {
+        let addr = self.visit_obj(address, |addr: &ScAddress| Ok(addr.clone()))?;
+        let args = self.with_current_frame(|f| {
+            let args = match f {
+                #[cfg(feature = "vm")]
+                Frame::ContractVM(_, _, args) => args,
+                Frame::HostFunction(_) => {
+                    return Err(self.err_general("require_auth is not suppported for host fns"))
+                }
+                Frame::Token(_, _, args) => args,
+                #[cfg(any(test, feature = "testutils"))]
+                Frame::TestContract(c) => &c.args,
+            };
+            Ok(self.rawvals_to_scvec(args.iter())?)
+        })?;
+
+        Ok(self
+            .0
+            .authorization_manager
+            .borrow_mut()
+            .require_auth(self, address.get_handle(), addr, args)?
             .into())
     }
 

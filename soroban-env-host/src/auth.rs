@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use soroban_env_common::xdr::{
     ContractAuth, ContractDataEntry, HashIdPreimage, HashIdPreimageContractAuth, LedgerEntry,
-    LedgerEntryData, LedgerEntryExt, ScAddress, ScObject, ScVal,
+    LedgerEntryData, LedgerEntryExt, ScAddress, ScHostAuthErrorCode, ScObject, ScVal,
 };
 use soroban_env_common::{RawVal, Symbol};
 
@@ -346,7 +346,7 @@ impl AuthorizationManager {
                     }
                     // No matching tracker found, hence the invocation isn't
                     // authorized.
-                    Err(host.err_general("invocation is not authorized"))
+                    Err(ScHostAuthErrorCode::NotAuthorized.into())
                 }
                 AuthorizationMode::Recording(recording_info) => {
                     if let Some(tracker_id) = recording_info
@@ -426,14 +426,14 @@ impl AuthorizationManager {
     pub(crate) fn push_frame(&mut self, frame: &Frame) -> Result<(), HostError> {
         let (contract_id, function_name) = match frame {
             #[cfg(feature = "vm")]
-            Frame::ContractVM(vm, fn_name) => {
+            Frame::ContractVM(vm, fn_name, _) => {
                 (vm.contract_id.metered_clone(&self.budget)?, fn_name.clone())
             }
             // Just skip the host function stack frames for now.
             // We could also make this included into the authorized stack to
             // generalize all the host function invocations.
             Frame::HostFunction(_) => return Ok(()),
-            Frame::Token(id, fn_name) => (id.metered_clone(&self.budget)?, fn_name.clone()),
+            Frame::Token(id, fn_name, _) => (id.metered_clone(&self.budget)?, fn_name.clone()),
             #[cfg(any(test, feature = "testutils"))]
             Frame::TestContract(tc) => (tc.id.clone(), tc.func.clone()),
         };
@@ -470,11 +470,28 @@ impl AuthorizationManager {
     pub(crate) fn get_recorded_auth_payloads(&self) -> Result<Vec<RecordedAuthPayload>, HostError> {
         match &self.mode {
             AuthorizationMode::Enforcing => return Err(ScUnknownErrorCode::General.into()),
-            AuthorizationMode::Recording(_recording_info) => Ok(self
+            AuthorizationMode::Recording(_) => Ok(self
                 .trackers
                 .iter()
                 .map(|tracker| tracker.get_recorded_auth_payload())
                 .collect::<Result<Vec<RecordedAuthPayload>, HostError>>()?),
+        }
+    }
+
+    // For recording mode, emulates authentication that would normally happen in
+    // the enforcing mode.
+    // This helps to build a more realistic footprint and produce more correct
+    // meterting data for the recording mode.
+    // No-op in the enforcing mode.
+    pub(crate) fn maybe_emulate_authentication(&self, host: &Host) -> Result<(), HostError> {
+        match &self.mode {
+            AuthorizationMode::Enforcing => Ok(()),
+            AuthorizationMode::Recording(_) => {
+                for tracker in &self.trackers {
+                    tracker.emulate_authentication(host)?;
+                }
+                Ok(())
+            }
         }
     }
 
@@ -654,7 +671,7 @@ impl AuthorizationTracker {
             _ => false,
         };
         if frame_is_already_authorized {
-            return Err(host.err_general("duplicate authorizations are not allowed"));
+            return Err(ScHostAuthErrorCode::DuplicateAuthorization.into());
         }
         if let Some(curr_invocation) = self.last_authorized_invocation_mut() {
             curr_invocation
@@ -788,7 +805,7 @@ impl AuthorizationTracker {
         if nonce_is_correct {
             Ok(())
         } else {
-            Err(ScUnknownErrorCode::General.into())
+            Err(ScHostAuthErrorCode::NonceError.into())
         }
     }
 
@@ -827,10 +844,32 @@ impl AuthorizationTracker {
                     )?;
                 }
             }
+            Ok(())
         } else {
-            return Err(host.err_general("missing address to authenticate"));
+            Err(host.err_general("unexpected missing address to authenticate"))
         }
-        Ok(())
+    }
+
+    // Emulates authentication for the recording mode.
+    fn emulate_authentication(&self, host: &Host) -> Result<(), HostError> {
+        if self.is_invoker {
+            return Ok(());
+        }
+        if let Some(address) = &self.address {
+            // Compute the real payload for the sake of metering, but don't use it.
+            let _payload = self.get_signature_payload(host)?;
+            match address {
+                ScAddress::Account(acc) => {
+                    let _account = host.load_account(acc.clone())?;
+                }
+                // Skip custom accounts for now - emulating authentication for
+                // them requires a dummy signature.
+                ScAddress::Contract(_) => (),
+            }
+            Ok(())
+        } else {
+            Err(host.err_general("unexpected missing address to emulate authentication"))
+        }
     }
 
     // Checks whether the provided top-level authorized invocation happened

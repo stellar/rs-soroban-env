@@ -2,7 +2,7 @@
 
 struct SimpleAccount;
 
-use soroban_account::AuthorizationContext;
+use soroban_auth::AuthorizationContext;
 use soroban_sdk::{contractimpl, contracttype, BytesN, Env, IntoVal, Vec};
 
 #[derive(Clone)]
@@ -18,8 +18,7 @@ impl SimpleAccount {
     }
 
     pub fn set_owner(env: Env, new_owner: BytesN<32>) {
-        env.current_contract_address()
-            .require_auth((new_owner.clone(),).into_val(&env));
+        env.current_contract_address().require_auth();
         env.storage().set(&DataKey::Owner, &new_owner);
     }
 

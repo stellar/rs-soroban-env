@@ -49,18 +49,18 @@ soroban-env-host = { path = "../../soroban-env-host" }
 [workspace.dependencies.soroban-sdk]
 version = "0.4.3"
 git = "https://github.com/stellar/rs-soroban-sdk"
-rev = "63bef69c"
+rev = "e7910c7057088b3418d84af04f2c04313d0c756f"
 
-[workspace.dependencies.soroban-account]
+[workspace.dependencies.soroban-auth]
 version = "0.4.3"
 git = "https://github.com/stellar/rs-soroban-sdk"
-rev = "63bef69c"
+rev = "e7910c7057088b3418d84af04f2c04313d0c756f"
 
-# Uncomment the following to build against local SDK. This is useful when env
-# changes are breaking for SDK and require the respective SDK change
+# Always build using the local SDK. Usually the env change is accompanied with
+# the corresponding SDK change.
 [patch."https://github.com/stellar/rs-soroban-sdk"]
 soroban-sdk = { path = "../../../rs-soroban-sdk/soroban-sdk" }
-soroban-account = { path = "../../../rs-soroban-sdk/soroban-account" }
+soroban-auth = { path = "../../../rs-soroban-sdk/soroban-auth" }
 
-[patch."https://github.com/stellar/rs-stellar-xdr"]
-stellar-xdr = { path = "../../../rs-stellar-xdr/" }
+#[patch."https://github.com/stellar/rs-stellar-xdr"]
+#stellar-xdr = { path = "../../../rs-stellar-xdr/" }
