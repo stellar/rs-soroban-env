@@ -6,7 +6,6 @@ use crate::{
     xdr::ScObject,
     Host, HostError, MeteredVector, Object, RawVal,
 };
-use log::debug;
 
 #[derive(Clone, Debug)]
 pub(crate) struct InternalContractEvent {
@@ -31,7 +30,7 @@ impl InternalContractEvent {
         };
         Ok(xdr::ContractEvent {
             ext: xdr::ExtensionPoint::V0,
-            contract_id: contract_id,
+            contract_id,
             type_: self.type_,
             body: xdr::ContractEventBody::V0(xdr::ContractEventV0 { topics, data }),
         })
@@ -75,6 +74,7 @@ impl InternalEventsBuffer {
 
     // Metering covered by the `MeteredVec`
     pub fn rollback(&mut self, events: usize, host: &Host) -> Result<(), HostError> {
+        let mut rollback_count = 0u32;
         self.vec = self.vec.retain_mut(
             |i, e| {
                 if i < events {
@@ -82,6 +82,7 @@ impl InternalEventsBuffer {
                 } else {
                     if let InternalEvent::Contract(c) = e {
                         *e = Self::defunct_contract_event(c);
+                        rollback_count += 1;
                         Ok(true)
                     } else {
                         Ok(true)
@@ -93,17 +94,19 @@ impl InternalEventsBuffer {
         self.vec = self.vec.push_back(
             InternalEvent::Debug(
                 DebugEvent::new()
-                    .msg("Events rolled back, starting from buffer position {}")
+                    .msg("{} contract events rolled back. Rollback start pos = {}")
+                    .arg(RawVal::from(rollback_count))
                     .arg(host.usize_to_rawval_u32(events)?),
             ),
             host.as_budget(),
         )?;
-        self.dump_to_debug_log();
         Ok(())
     }
 
     #[allow(unused)]
     pub fn dump_to_debug_log(&self) {
+        use log::debug;
+        debug!("=======Start of events=======");
         for e in self.vec.iter() {
             match e {
                 InternalEvent::Contract(c) => debug!("Contract event: {:?}", c),
@@ -111,6 +114,7 @@ impl InternalEventsBuffer {
                 InternalEvent::None => (),
             }
         }
+        debug!("========End of events========")
     }
 
     // Metering: the new vec allocation is not charged. But that should be fine, since externalize

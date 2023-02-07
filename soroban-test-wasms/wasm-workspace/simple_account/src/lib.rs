@@ -3,7 +3,7 @@
 struct SimpleAccount;
 
 use soroban_auth::AuthorizationContext;
-use soroban_sdk::{contractimpl, contracttype, BytesN, Env, IntoVal, Vec};
+use soroban_sdk::{contractimpl, contracttype, BytesN, Env, Vec};
 
 #[derive(Clone)]
 #[contracttype]
