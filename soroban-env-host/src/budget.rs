@@ -31,8 +31,8 @@ pub enum CostType {
     ValSer = 7,
     // Cost of deserializing an xdr object from bytes
     ValDeser = 8,
-    // Cost of cloning events
-    CloneEvents = 9,
+    // Cost of cloning an `InternalEvent`
+    EventClone = 9,
     // Cost of occupying a host object slot
     HostObjAllocSlot = 10,
     // Cost of computing the sha256 hash from bytes
@@ -112,7 +112,7 @@ impl CostType {
             CostType::ValXdrConv,
             CostType::ValSer,
             CostType::ValDeser,
-            CostType::CloneEvents,
+            CostType::EventClone,
             CostType::HostObjAllocSlot,
             CostType::ComputeSha256Hash,
             CostType::ComputeEd25519PubKey,
@@ -488,7 +488,7 @@ impl Default for BudgetImpl {
                 | CostType::InvokeHostFunction => cpu.const_param = 1000,
                 CostType::VisitObject => cpu.const_param = 100,
                 CostType::ValXdrConv | CostType::ValSer | CostType::ValDeser => cpu.lin_param = 10,
-                CostType::CloneEvents => cpu.lin_param = 10,
+                CostType::EventClone => cpu.lin_param = 10,
                 CostType::HostObjAllocSlot => cpu.const_param = 1000,
 
                 CostType::ComputeSha256Hash => {
@@ -535,7 +535,7 @@ impl Default for BudgetImpl {
                 CostType::HostEventDebug | CostType::HostEventContract => mem.const_param = 100,
                 CostType::InvokeHostFunction | CostType::VisitObject => mem.const_param = 100,
                 CostType::ValXdrConv | CostType::ValSer | CostType::ValDeser => mem.lin_param = 1,
-                CostType::CloneEvents => mem.lin_param = 100,
+                CostType::EventClone => mem.lin_param = 100,
                 CostType::HostObjAllocSlot => mem.const_param = 100,
                 CostType::ComputeSha256Hash | CostType::ComputeEd25519PubKey => (),
                 CostType::MapNew => mem.lin_param = 16,

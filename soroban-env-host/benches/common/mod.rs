@@ -64,8 +64,6 @@ pub(crate) fn for_each_host_cost_measurement<B: Benchmark>() -> std::io::Result<
     call_bench::<B, VmMemWriteMeasure>(&mut costs)?;
     call_bench::<B, WasmInsnExecMeasure>(&mut costs)?;
     call_bench::<B, WasmMemAllocMeasure>(&mut costs)?;
-    call_bench::<B, CreateRecordDebugEventMeasure>(&mut costs)?;
-    call_bench::<B, RecordContractEventMeasure>(&mut costs)?;
     call_bench::<B, VisitObjectMeasure>(&mut costs)?;
     call_bench::<B, GuardFrameMeasure>(&mut costs)?;
     call_bench::<B, ValXdrConvMeasure>(&mut costs)?;
@@ -86,6 +84,7 @@ pub(crate) fn for_each_host_cost_measurement<B: Benchmark>() -> std::io::Result<
     call_bench::<B, InvokeVmFunctionMeasure>(&mut costs)?;
     call_bench::<B, InvokeHostFunctionMeasure>(&mut costs)?;
     call_bench::<B, ChargeBudgetMeasure>(&mut costs)?;
+    call_bench::<B, EventCloneMeasure>(&mut costs)?;
 
     if get_explicit_bench_names().is_none() {
         for cost in CostType::variants() {

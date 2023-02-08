@@ -10,12 +10,13 @@ use crate::{
 
 /// The internal representation of a `ContractEvent` that is stored in the events buffer
 /// and designed to be cheap to clone.
+// This is exposed as a pub type for benches.
 #[derive(Clone, Debug)]
-pub(crate) struct InternalContractEvent {
-    pub(crate) type_: xdr::ContractEventType,
-    pub(crate) contract_id: Option<BytesObject>,
-    pub(crate) topics: VecObject,
-    pub(crate) data: RawVal,
+pub struct InternalContractEvent {
+    pub type_: xdr::ContractEventType,
+    pub contract_id: Option<BytesObject>,
+    pub topics: VecObject,
+    pub data: RawVal,
 }
 
 impl InternalContractEvent {
@@ -43,7 +44,7 @@ impl InternalContractEvent {
 /// The internal representation of an `Event` that is stored in the events buffer
 /// and designed to be cheap to cloned.
 #[derive(Clone, Debug)]
-pub(crate) enum InternalEvent {
+pub enum InternalEvent {
     Contract(InternalContractEvent),
     Debug(DebugEvent),
     StructuredDebug(InternalContractEvent),
