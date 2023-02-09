@@ -416,7 +416,6 @@ impl Budget {
         }
     }
 
-    #[cfg(test)]
     pub fn reset_limits(&self, cpu: u64, mem: u64) {
         self.mut_budget(|mut b| {
             b.cpu_insns.reset(cpu);
