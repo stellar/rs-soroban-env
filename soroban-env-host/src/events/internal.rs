@@ -99,15 +99,19 @@ impl InternalEventsBuffer {
             },
             host.as_budget(),
         )?;
-        self.vec = self.vec.push_back(
-            InternalEvent::Debug(
-                DebugEvent::new()
-                    .msg("{} contract events rolled back. Rollback start pos = {}")
-                    .arg(RawVal::from(rollback_count))
-                    .arg(host.usize_to_rawval_u32(events)?),
-            ),
-            host.as_budget(),
-        )?;
+        // If any events were rolled back, we push one more debug event at the end to
+        // let the user know.
+        if rollback_count > 0 {
+            self.vec = self.vec.push_back(
+                InternalEvent::Debug(
+                    DebugEvent::new()
+                        .msg("{} contract events rolled back. Rollback start pos = {}")
+                        .arg(RawVal::from(rollback_count))
+                        .arg(host.usize_to_rawval_u32(events)?),
+                ),
+                host.as_budget(),
+            )?;
+        }
         Ok(())
     }
 
