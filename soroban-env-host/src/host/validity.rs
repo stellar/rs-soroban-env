@@ -1,8 +1,8 @@
 use std::ops::Range;
 
-use crate::events::{DebugError, TOPIC_BYTES_LENGTH_LIMIT};
+use crate::events::{DebugError, CONTRACT_EVENT_TOPICS_LIMIT, TOPIC_BYTES_LENGTH_LIMIT};
 use crate::xdr::{ScHostFnErrorCode, ScHostObjErrorCode};
-use crate::{host_object::HostObject, Host, HostError, RawVal, Tag};
+use crate::{host_object::HostObject, Host, HostError, Object, RawVal, Tag};
 
 impl Host {
     // Notes on metering: free
@@ -83,7 +83,7 @@ impl Host {
 
     // Metering: covered by components
     // TODO: the validation is incomplete. Need to further restrict Map, Vec sizes.
-    pub(crate) fn validate_event_topic(&self, topic: RawVal) -> Result<(), HostError> {
+    fn validate_topic(&self, topic: RawVal) -> Result<(), HostError> {
         if topic.is_u63() {
             Ok(())
         } else {
@@ -114,6 +114,29 @@ impl Host {
                 }
                 _ => Ok(()),
             }
+        }
+    }
+
+    pub(crate) fn validate_contract_event_topics(&self, topics: Object) -> Result<(), HostError> {
+        unsafe {
+            self.unchecked_visit_val_obj(topics.into(), |ob| {
+                match ob {
+                    None => Err(self.err_status(ScHostObjErrorCode::UnknownReference)),
+                    Some(ho) => match ho {
+                        HostObject::Vec(vv) => {
+                            if vv.len() > CONTRACT_EVENT_TOPICS_LIMIT {
+                                // TODO: proper error code "event topics exceeds count limit"
+                                return Err(self.err_status(ScHostObjErrorCode::UnknownError));
+                            }
+                            for &topic in vv.iter() {
+                                self.validate_topic(topic)?;
+                            }
+                            Ok(())
+                        }
+                        _ => Err(self.err_status(ScHostObjErrorCode::UnexpectedType)),
+                    },
+                }
+            })
         }
     }
 }

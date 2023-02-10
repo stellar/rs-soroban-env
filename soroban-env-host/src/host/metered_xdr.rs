@@ -40,8 +40,16 @@ impl Host {
         let mut w = MeteredWrite { host: &self, w };
         obj.write_xdr(&mut w).map_err(|e| {
             if let Some(e2) = e.source() {
-                if let Some(e3) = (*e2).downcast_ref::<HostError>() {
-                    e3.clone()
+                if let Some(e3) = (*e2).downcast_ref::<std::io::Error>() {
+                    if let Some(e4) = e3.get_ref() {
+                        if let Some(e5) = e4.downcast_ref::<HostError>() {
+                            e5.clone()
+                        } else {
+                            self.err_general("failed to write xdr")
+                        }
+                    } else {
+                        self.err_general("failed to write xdr")
+                    }
                 } else {
                     self.err_general("failed to write xdr")
                 }

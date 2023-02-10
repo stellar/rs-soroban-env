@@ -1042,6 +1042,7 @@ dependencies = [
  "dyn-fmt",
  "ed25519-dalek",
  "env_logger",
+ "expect-test",
  "hex",
  "log",
  "num-derive",

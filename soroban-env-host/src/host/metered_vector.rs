@@ -8,7 +8,7 @@ use crate::{
 };
 use std::{cmp::Ordering, ops::Range};
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct MeteredVector<A>
 where
     A: MeteredClone,
@@ -261,6 +261,21 @@ where
             Some(he) => Err(he),
             None => Ok(res),
         }
+    }
+
+    pub fn retain_mut<F>(&mut self, mut f: F, budget: &Budget) -> Result<Self, HostError>
+    where
+        F: FnMut(usize, &mut A) -> Result<bool, HostError>,
+    {
+        Self::charge_new(self.len(), budget)?;
+        let mut vec = Vec::with_capacity(self.len());
+        for (i, v) in self.vec.iter_mut().enumerate() {
+            if f(i, v)? {
+                vec.push(v.clone());
+            }
+        }
+        A::charge_for_clones(vec.as_slice(), budget)?;
+        Ok(Self { vec })
     }
 
     pub fn iter(&self) -> std::slice::Iter<'_, A> {

@@ -4,10 +4,7 @@ use crate::xdr::{
     ScHostValErrorCode, ScStatic, ScVal, ScVec, Uint256,
 };
 use crate::{
-    budget::CostType,
-    events::{DebugError, CONTRACT_EVENT_TOPICS_LIMIT},
-    host_object::{HostObject, HostVec},
-    Host, HostError, Object, RawVal,
+    budget::CostType, events::DebugError, host_object::HostVec, Host, HostError, Object, RawVal,
 };
 use ed25519_dalek::{PublicKey, Signature, SIGNATURE_LENGTH};
 use sha2::{Digest, Sha256};
@@ -235,36 +232,6 @@ impl Host {
         self.storage_key_from_scval(key_scval)
     }
 
-    fn event_topic_from_rawval(&self, topic: RawVal) -> Result<ScVal, HostError> {
-        self.validate_event_topic(topic)?;
-        self.from_host_val(topic)
-    }
-
-    pub(crate) fn event_topics_from_host_obj(&self, topics: Object) -> Result<ScVec, HostError> {
-        unsafe {
-            self.unchecked_visit_val_obj(topics.into(), |ob| {
-                self.charge_budget(CostType::ValXdrConv, 1)?;
-                match ob {
-                    None => Err(self.err_status(ScHostObjErrorCode::UnknownReference)),
-                    Some(ho) => match ho {
-                        HostObject::Vec(vv) => {
-                            if vv.len() > CONTRACT_EVENT_TOPICS_LIMIT {
-                                // TODO: proper error code "event topics exceeds count limit"
-                                return Err(self.err_status(ScHostObjErrorCode::UnknownError));
-                            }
-                            let mut sv = Vec::with_capacity(vv.len());
-                            for e in vv.iter() {
-                                sv.push(self.event_topic_from_rawval(*e)?);
-                            }
-                            Ok(ScVec(self.map_err(sv.try_into())?))
-                        }
-                        _ => Err(self.err_status(ScHostObjErrorCode::UnexpectedType)),
-                    },
-                }
-            })
-        }
-    }
-
     /// Converts a binary search result into a u64. `res` is `Some(index)`
     /// if the value was found at `index`, or `Err(index)` if the value was not found
     /// and would've needed to be inserted at `index`.
@@ -322,5 +289,12 @@ impl Host {
             .iter()
             .map(|scv| self.to_host_val(scv))
             .collect::<Result<Vec<RawVal>, HostError>>()
+    }
+
+    pub(crate) fn obj_from_internal_contract_id(&self) -> Result<Option<Object>, HostError> {
+        Ok(self
+            .get_current_contract_id_internal()
+            .map(|id| self.add_host_object::<Vec<u8>>(id.as_slice().to_vec()))?
+            .ok())
     }
 }

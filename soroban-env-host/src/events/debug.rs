@@ -1,55 +1,12 @@
 use std::{borrow::Cow, fmt::Display};
 
-use crate::{xdr, xdr::ContractEvent, RawVal, Status};
+use crate::{xdr, RawVal, Status};
 #[cfg(feature = "vm")]
 use crate::{
     xdr::{ScUnknownErrorCode, ScVmErrorCode},
     HostError,
 };
-use log::debug;
 use tinyvec::TinyVec;
-
-// TODO: optimize storage on this to use pools / bumpalo / etc.
-#[derive(Clone, Debug)]
-pub enum HostEvent {
-    Contract(ContractEvent),
-    Debug(DebugEvent),
-}
-
-#[derive(Clone, Debug, Default)]
-pub struct Events(pub Vec<HostEvent>);
-
-// Maximum number of topics in a `ContractEvent`. This applies to both
-// `Contract` and `System` types of contract events.
-pub(crate) const CONTRACT_EVENT_TOPICS_LIMIT: usize = 4;
-// Maximum number of bytes in a topic `Bytes`.
-pub(crate) const TOPIC_BYTES_LENGTH_LIMIT: usize = 32;
-
-impl Events {
-    // Records the smallest variant of a debug HostEvent it can, returning the size of the
-    // in_args slice (for charging to a budget).
-    // Notes on metering: this is covered by the host. See `Host::record_debug_event` for details.
-    pub fn record_debug_event(&mut self, de: DebugEvent) -> u64 {
-        let len = de.args.len();
-        self.0.push(HostEvent::Debug(de));
-        len as u64
-    }
-
-    // Records a contract HostEvent.
-    // Notes on metering: this is covered by the host. See `Host::record_contract_event` for details.
-    pub fn record_contract_event(&mut self, ce: ContractEvent) {
-        self.0.push(HostEvent::Contract(ce))
-    }
-
-    pub fn dump_to_debug_log(&self) {
-        for e in self.0.iter() {
-            match e {
-                HostEvent::Contract(e) => debug!("Contract event: {:?}", e),
-                HostEvent::Debug(e) => debug!("Debug event: {}", e),
-            }
-        }
-    }
-}
 
 #[derive(Clone, Debug)]
 pub enum DebugArg {

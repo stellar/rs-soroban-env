@@ -12,7 +12,7 @@ mod vec;
 mod budget_metering;
 #[cfg(feature = "vm")]
 mod complex;
-mod contract_event;
+mod event;
 #[cfg(feature = "vm")]
 mod hostile;
 #[cfg(feature = "vm")]

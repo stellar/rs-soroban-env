@@ -1,24 +1,24 @@
-use crate::{budget::CostType, cost_runner::CostRunner, events::HostEvent, xdr::ContractEvent};
+use crate::{budget::CostType, cost_runner::CostRunner, xdr::ContractEventType, Object, RawVal};
 
 pub struct RecordContractEventRun;
 
 #[derive(Clone)]
 pub struct RecordContractEventSample {
-    pub storage: Vec<HostEvent>,
-    pub events: Vec<ContractEvent>,
+    pub topics: Object,
+    pub data: RawVal,
+    pub count: u64,
 }
 
 impl CostRunner for RecordContractEventRun {
     const COST_TYPE: CostType = CostType::HostEventContract;
     type SampleType = RecordContractEventSample;
 
-    fn run_iter(_host: &crate::Host, _iter: u64, mut sample: Self::SampleType) {
-        sample
-            .storage
-            .push(HostEvent::Contract(sample.events.pop().unwrap()));
+    fn run_iter(host: &crate::Host, _iter: u64, sample: Self::SampleType) {
+        host.record_contract_event(ContractEventType::Contract, sample.topics, sample.data)
+            .expect("contract event")
     }
 
-    fn get_total_input(_host: &crate::Host, _sample: &Self::SampleType) -> u64 {
-        Self::RUN_ITERATIONS
+    fn get_total_input(_host: &crate::Host, sample: &Self::SampleType) -> u64 {
+        Self::RUN_ITERATIONS * sample.count
     }
 }
