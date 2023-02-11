@@ -1,10 +1,12 @@
-use crate::{budget::CostType, cost_runner::CostRunner, xdr::ContractEventType, Object, RawVal};
+use soroban_env_common::VecObject;
+
+use crate::{budget::CostType, cost_runner::CostRunner, xdr::ContractEventType, RawVal};
 
 pub struct RecordContractEventRun;
 
 #[derive(Clone)]
 pub struct RecordContractEventSample {
-    pub topics: Object,
+    pub topics: VecObject,
     pub data: RawVal,
     pub count: u64,
 }

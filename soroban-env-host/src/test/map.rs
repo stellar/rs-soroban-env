@@ -1,11 +1,12 @@
 use std::rc::Rc;
 
-use soroban_env_common::xdr::{
-    AccountId, LedgerEntry, LedgerKey, LedgerKeyAccount, PublicKey, Uint256,
+use soroban_env_common::{
+    xdr::{AccountId, LedgerEntry, LedgerKey, LedgerKeyAccount, PublicKey, Uint256},
+    MapObject,
 };
 
 use crate::{
-    xdr::{ScMap, ScMapEntry, ScObject, ScVal, ScVec},
+    xdr::{ScMap, ScMapEntry, ScVal, ScVec},
     Env, Host, HostError, RawVal, RawValConvertible, Status, Symbol,
 };
 
@@ -25,8 +26,7 @@ fn map_put_has_and_get() -> Result<(), HostError> {
         ]
         .try_into(),
     )?;
-    let scobj = ScObject::Map(scmap);
-    let obj = host.to_host_obj(&scobj)?;
+    let obj: MapObject = host.to_host_val(&ScVal::Map(Some(scmap)))?.try_into()?;
     let k: RawVal = 3_u32.into();
     let v: RawVal = 6_u32.into();
     assert!(!bool::try_from(host.map_has(obj, k)?)?);
@@ -54,8 +54,8 @@ fn map_put_insert_and_remove() -> Result<(), HostError> {
         ]
         .try_into(),
     )?;
-    let scobj = ScObject::Map(scmap);
-    let mut obj = host.to_host_obj(&scobj)?;
+    let scobj = ScVal::Map(Some(scmap));
+    let mut obj: MapObject = host.to_host_val(&scobj)?.try_into()?;
 
     obj = host.map_put(obj, 0_u32.into(), 0_u32.into())?;
     obj = host.map_put(obj, 2_u32.into(), 20_u32.into())?;
@@ -86,14 +86,13 @@ fn map_put_insert_and_remove() -> Result<(), HostError> {
         ]
         .try_into(),
     )?;
-    let scobj_r = ScObject::Map(scmap_r);
-    let obj_r = host.to_host_obj(&scobj_r)?;
+    let obj_r: MapObject = host.to_host_val(&ScVal::Map(Some(scmap_r)))?.try_into()?;
     assert_eq!(host.obj_cmp(obj_r.into(), obj.into())?, 0);
 
     obj = host.map_del(obj, 0_u32.into())?;
     obj = host.map_del(obj, 2_u32.into())?;
     obj = host.map_del(obj, 4_u32.into())?;
-    let obj_o = host.to_host_obj(&scobj)?;
+    let obj_o: MapObject = host.to_host_val(&scobj)?.try_into()?;
     assert_eq!(host.obj_cmp(obj_o.into(), obj.into())?, 0);
     Ok(())
 }
@@ -114,8 +113,8 @@ fn map_prev_and_next() -> Result<(), HostError> {
         ]
         .try_into(),
     )?;
-    let scobj = ScObject::Map(scmap);
-    let obj = host.to_host_obj(&scobj)?;
+    let scobj = ScVal::Map(Some(scmap));
+    let obj: MapObject = host.to_host_val(&scobj)?.try_into()?;
     // prev
     {
         assert_eq!(
@@ -128,15 +127,15 @@ fn map_prev_and_next() -> Result<(), HostError> {
         );
         assert_eq!(
             host.map_prev_key(obj, 2_u32.into())?.get_payload(),
-            RawVal::from_u32(1).get_payload()
+            RawVal::from_u32(1).to_raw().get_payload()
         );
         assert_eq!(
             host.map_prev_key(obj, 4_u32.into())?.get_payload(),
-            RawVal::from_u32(1).get_payload()
+            RawVal::from_u32(1).to_raw().get_payload()
         );
         assert_eq!(
             host.map_prev_key(obj, 5_u32.into())?.get_payload(),
-            RawVal::from_u32(4).get_payload()
+            RawVal::from_u32(4).to_raw().get_payload()
         );
     }
     // next
@@ -151,15 +150,15 @@ fn map_prev_and_next() -> Result<(), HostError> {
         );
         assert_eq!(
             host.map_next_key(obj, 3_u32.into())?.get_payload(),
-            RawVal::from_u32(4).get_payload()
+            RawVal::from_u32(4).to_raw().get_payload()
         );
         assert_eq!(
             host.map_next_key(obj, 1_u32.into())?.get_payload(),
-            RawVal::from_u32(4).get_payload()
+            RawVal::from_u32(4).to_raw().get_payload()
         );
         assert_eq!(
             host.map_next_key(obj, 0_u32.into())?.get_payload(),
-            RawVal::from_u32(1).get_payload()
+            RawVal::from_u32(1).to_raw().get_payload()
         );
     }
     Ok(())
@@ -177,12 +176,12 @@ fn map_prev_and_next_heterogeneous() -> Result<(), HostError> {
     )?;
     let scvec: ScVec = host.test_scvec::<u32>(&[1])?;
 
-    let scobj_map = ScObject::Map(scmap);
-    let scobj_vec = ScObject::Vec(scvec);
-    let sym = Symbol::from_str("symbol");
+    let scobj_map = ScVal::Map(Some(scmap));
+    let scobj_vec = ScVal::Vec(Some(scvec));
+    let sym = Symbol::try_from_small_str("symbol").unwrap();
 
-    let obj_map = host.to_host_obj(&scobj_map)?;
-    let obj_vec = host.to_host_obj(&scobj_vec)?;
+    let obj_map = host.to_host_val(&scobj_map)?;
+    let obj_vec = host.to_host_val(&scobj_vec)?;
 
     let mut test_map = host.map_new()?;
     test_map = host.map_put(test_map, 2u32.into(), 4u32.into())?;
@@ -198,38 +197,38 @@ fn map_prev_and_next_heterogeneous() -> Result<(), HostError> {
         );
         assert_eq!(
             host.map_prev_key(test_map, 4_u32.into())?.get_payload(),
-            RawVal::from_u32(2).get_payload()
+            RawVal::from_u32(2).to_raw().get_payload()
         );
         assert_eq!(
             host.map_prev_key(test_map, obj_vec.clone().into())?
                 .get_payload(),
-            RawVal::from_u32(2).get_payload()
+            RawVal::from_u32(2).to_raw().get_payload()
         );
         assert_eq!(
             host.map_prev_key(test_map, obj_map.clone().into())?
                 .get_payload(),
-            obj_vec.to_raw().get_payload()
+            obj_vec.get_payload()
         );
         assert_eq!(
             host.map_prev_key(test_map, sym.clone().into())?
                 .get_payload(),
-            obj_map.to_raw().get_payload()
+            obj_map.get_payload()
         );
     }
     // next
     {
         assert_eq!(
             host.map_next_key(test_map, 0_u32.into())?.get_payload(),
-            RawVal::from_u32(2).get_payload()
+            RawVal::from_u32(2).to_raw().get_payload()
         );
         assert_eq!(
             host.map_next_key(test_map, 4_u32.into())?.get_payload(),
-            obj_vec.to_raw().get_payload()
+            obj_vec.get_payload()
         );
         assert_eq!(
             host.map_next_key(test_map, obj_vec.clone().into())?
                 .get_payload(),
-            obj_map.to_raw().get_payload()
+            obj_map.get_payload()
         );
         assert_eq!(
             host.map_next_key(test_map, obj_map.clone().into())?
@@ -255,9 +254,9 @@ fn map_keys() -> Result<(), HostError> {
     map = host.map_put(map, 1u32.into(), 10u32.into())?;
     let keys = host.map_keys(map)?;
 
-    let expected_keys = host.test_vec_obj::<u32>(&[1, 2])?.to_raw();
+    let expected_keys = host.test_vec_obj::<u32>(&[1, 2])?;
 
-    assert_eq!(host.obj_cmp(keys.to_raw(), expected_keys)?, 0);
+    assert_eq!(host.obj_cmp(keys.try_into()?, expected_keys.into())?, 0);
 
     Ok(())
 }
@@ -271,9 +270,9 @@ fn map_values() -> Result<(), HostError> {
     map = host.map_put(map, 1u32.into(), 10u32.into())?;
     let values = host.map_values(map)?;
 
-    let expected_values = host.test_vec_obj::<u32>(&[10, 20])?.to_raw();
+    let expected_values = host.test_vec_obj::<u32>(&[10, 20])?;
 
-    assert_eq!(host.obj_cmp(values.to_raw(), expected_values)?, 0);
+    assert_eq!(host.obj_cmp(values.into(), expected_values.into())?, 0);
 
     Ok(())
 }

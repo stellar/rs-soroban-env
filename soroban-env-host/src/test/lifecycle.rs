@@ -4,11 +4,11 @@ use crate::{
     xdr::{
         self, ContractId, CreateContractArgs, Hash, HashIdPreimage, HashIdPreimageContractId,
         HashIdPreimageSourceAccountContractId, HostFunction, InstallContractCodeArgs,
-        LedgerEntryData, ScContractCode, ScObject, ScVal, ScVec, Uint256,
+        LedgerEntryData, ScContractExecutable, ScVal, ScVec, Uint256,
     },
     Env, Host, LedgerInfo, Symbol,
 };
-use soroban_env_common::{RawVal, TryIntoVal};
+use soroban_env_common::{xdr::ScBytes, RawVal, TryIntoVal, VecObject};
 use soroban_test_wasms::CREATE_CONTRACT;
 
 use sha2::{Digest, Sha256};
@@ -22,10 +22,8 @@ fn get_contract_wasm_ref(host: &Host, contract_id: Hash) -> Hash {
 
         match &s.get(&storage_key, host.as_budget()).unwrap().data {
             LedgerEntryData::ContractData(cde) => match &cde.val {
-                ScVal::Object(Some(ScObject::ContractCode(ScContractCode::WasmRef(h)))) => {
-                    Ok(h.clone())
-                }
-                _ => panic!("expected ScContractCode"),
+                ScVal::ContractExecutable(ScContractExecutable::WasmRef(h)) => Ok(h.clone()),
+                _ => panic!("expected ScContractExecutable"),
             },
             _ => panic!("expected contract data"),
         }
@@ -47,13 +45,10 @@ fn get_contract_wasm(host: &Host, wasm_hash: Hash) -> Vec<u8> {
 }
 
 fn get_bytes_from_sc_val(val: ScVal) -> Vec<u8> {
-    match val {
-        ScVal::Object(Some(scobj)) => match scobj {
-            ScObject::Bytes(bytes) => bytes.to_vec(),
-            _ => panic!("Wrong type"),
-        },
-        _ => panic!("Wrong type"),
-    }
+    let ScVal::Bytes(bytes) = val else {
+        panic!("Wrong type")
+    };
+    bytes.to_vec()
 }
 
 fn test_host() -> Host {
@@ -124,7 +119,7 @@ fn test_create_contract_from_source_account(host: &Host, code: &[u8]) -> Hash {
     let created_id_sc_val = host
         .invoke_function(HostFunction::CreateContract(CreateContractArgs {
             contract_id: ContractId::SourceAccount(Uint256(salt.to_vec().try_into().unwrap())),
-            source: ScContractCode::WasmRef(wasm_id),
+            source: ScContractExecutable::WasmRef(wasm_id),
         }))
         .unwrap();
 
@@ -185,12 +180,16 @@ fn create_contract_using_parent_id_test() {
 
     // Prepare arguments for the factory contract call.
     let args_scvec: ScVec = vec![
-        ScVal::Object(Some(ScObject::Bytes(wasm_hash.0.try_into().unwrap()))),
-        ScVal::Object(Some(ScObject::Bytes(salt.try_into().unwrap()))),
+        ScVal::Bytes(ScBytes(wasm_hash.0.try_into().unwrap())),
+        ScVal::Bytes(ScBytes(salt.try_into().unwrap())),
     ]
     .try_into()
     .unwrap();
-    let args = host.to_host_obj(&ScObject::Vec(args_scvec)).unwrap();
+    let args: VecObject = host
+        .to_host_val(&ScVal::Vec(Some(args_scvec)))
+        .unwrap()
+        .try_into()
+        .unwrap();
     // Can't create the contract yet, as the code hasn't been installed yet.
     assert!(host
         .call(
@@ -198,7 +197,7 @@ fn create_contract_using_parent_id_test() {
                 .unwrap()
                 .try_into()
                 .unwrap(),
-            Symbol::from_str("create").into(),
+            Symbol::try_from_small_str("create").unwrap().into(),
             args.clone().into(),
         )
         .is_err());
@@ -221,7 +220,7 @@ fn create_contract_using_parent_id_test() {
             .unwrap()
             .try_into()
             .unwrap(),
-        Symbol::from_str("create").into(),
+        Symbol::try_from_small_str("create").unwrap().into(),
         args.into(),
     )
     .unwrap();

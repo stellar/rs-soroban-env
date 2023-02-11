@@ -1,10 +1,6 @@
 use crate::common::HostCostMeasurement;
 use rand::{rngs::StdRng, RngCore};
-use soroban_env_host::{
-    cost_runner::HostObjAllocSlotRun,
-    xdr::{ScObject, ScVal},
-    Host,
-};
+use soroban_env_host::{cost_runner::HostObjAllocSlotRun, xdr::ScVal, Host};
 
 // This measures the cost of allocating a slot in the host object array,
 // which is pretty much just the cost of doing a vector-grow operation in
@@ -19,7 +15,7 @@ impl HostCostMeasurement for HostObjAllocSlotMeasure {
         // During setup we inject a bunch of copies of the object to make
         // the host object array large.
         let size = input * 100;
-        let val = ScVal::Object(Some(ScObject::I64(0)));
+        let val = ScVal::I64(0);
         for _ in 0..size {
             host.inject_val(&val).unwrap();
         }

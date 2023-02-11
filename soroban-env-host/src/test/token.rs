@@ -264,7 +264,7 @@ impl TokenTest {
         self.host.with_frame(
             Frame::TestContract(TestContractFrame::new(
                 Hash(contract_id_bytes.to_array().unwrap()),
-                Symbol::from_str("foo"),
+                Symbol::try_from_small_str("foo").unwrap(),
                 vec![],
             )),
             || {
@@ -1149,7 +1149,7 @@ fn test_trustline_auth() {
     assert_eq!(token.balance(user.address(&test.host)).unwrap(), 999);
     assert_eq!(
         token.balance(admin.address(&test.host)).unwrap(),
-        i64::MAX.into()
+        i128::from(i64::MAX)
     );
 
     // try to deauthorize trustline, but fail because RevocableFlag is not set
@@ -1320,7 +1320,7 @@ fn test_account_invoker_auth_with_issuer_admin() {
     assert_eq!(token.balance(user_address.clone()).unwrap(), 1000);
     assert_eq!(
         token.balance(admin_address.clone()).unwrap(),
-        i64::MAX.into()
+        i128::from(i64::MAX)
     );
 
     // User invoker can't perform admin operation.
@@ -1372,7 +1372,7 @@ fn test_account_invoker_auth_with_issuer_admin() {
     assert_eq!(token.balance(user_address.clone()).unwrap(), 1300);
     assert_eq!(
         token.balance(admin_address.clone()).unwrap(),
-        i64::MAX.into()
+        i128::from(i64::MAX)
     );
 
     // Contract invoker can't perform unauthorized admin operation.
@@ -1512,7 +1512,7 @@ fn test_auth_rejected_for_incorrect_nonce() {
         .host
         .call(
             token.id.clone().into(),
-            Symbol::from_str("mint").into(),
+            Symbol::try_from_small_str("mint").unwrap().into(),
             args.clone().into(),
         )
         .is_err());
@@ -1529,7 +1529,7 @@ fn test_auth_rejected_for_incorrect_nonce() {
     test.host
         .call(
             token.id.clone().into(),
-            Symbol::from_str("mint").into(),
+            Symbol::try_from_small_str("mint").unwrap().into(),
             args.clone().into(),
         )
         .unwrap();
@@ -1547,7 +1547,7 @@ fn test_auth_rejected_for_incorrect_nonce() {
         .host
         .call(
             token.id.clone().into(),
-            Symbol::from_str("mint").into(),
+            Symbol::try_from_small_str("mint").unwrap().into(),
             args.clone().into(),
         )
         .is_err());
@@ -1564,7 +1564,7 @@ fn test_auth_rejected_for_incorrect_nonce() {
     test.host
         .call(
             token.id.clone().into(),
-            Symbol::from_str("mint").into(),
+            Symbol::try_from_small_str("mint").unwrap().into(),
             args.clone().into(),
         )
         .unwrap();
@@ -1592,7 +1592,7 @@ fn test_auth_rejected_for_incorrect_payload() {
         .host
         .call(
             token.id.clone().into(),
-            Symbol::from_str("mint").into(),
+            Symbol::try_from_small_str("mint").unwrap().into(),
             args.clone().into(),
         )
         .is_err());
@@ -1603,7 +1603,7 @@ fn test_auth_rejected_for_incorrect_payload() {
         .host
         .call(
             token.id.clone().into(),
-            Symbol::from_str("mint").into(),
+            Symbol::try_from_small_str("mint").unwrap().into(),
             args.clone().into(),
         )
         .is_err());
@@ -1625,7 +1625,7 @@ fn test_auth_rejected_for_incorrect_payload() {
         .host
         .call(
             token.id.clone().into(),
-            Symbol::from_str("mint").into(),
+            Symbol::try_from_small_str("mint").unwrap().into(),
             args.clone().into(),
         )
         .is_err());
@@ -1647,7 +1647,7 @@ fn test_auth_rejected_for_incorrect_payload() {
         .host
         .call(
             token.id.clone().into(),
-            Symbol::from_str("mint").into(),
+            Symbol::try_from_small_str("mint").unwrap().into(),
             args.clone().into(),
         )
         .is_err());
@@ -1658,7 +1658,7 @@ fn test_auth_rejected_for_incorrect_payload() {
     test.host
         .call(
             token.id.clone().into(),
-            Symbol::from_str("mint").into(),
+            Symbol::try_from_small_str("mint").unwrap().into(),
             args.into(),
         )
         .unwrap();
@@ -2546,7 +2546,7 @@ fn test_custom_account_auth() {
     test.host
         .call(
             account_contract_id_obj.clone(),
-            Symbol::from_str("init"),
+            Symbol::try_from_small_str("init").unwrap(),
             host_vec![&test.host, admin_public_key.clone()].into(),
         )
         .unwrap();
@@ -2591,7 +2591,7 @@ fn test_custom_account_auth() {
     test.host
         .call(
             account_contract_id_obj.clone(),
-            Symbol::from_str("set_owner"),
+            Symbol::try_from_small_str("set_owner").unwrap(),
             host_vec![&test.host, new_admin_public_key].into(),
         )
         .unwrap();
@@ -2626,7 +2626,7 @@ fn test_recording_auth_for_token() {
     test.host
         .call(
             token.id.clone().into(),
-            Symbol::from_str("mint"),
+            Symbol::try_from_small_str("mint").unwrap(),
             args.clone().into(),
         )
         .unwrap();
@@ -2639,7 +2639,7 @@ fn test_recording_auth_for_token() {
             nonce: Some(0),
             invocation: xdr::AuthorizedInvocation {
                 contract_id: Hash(token.id.to_array().unwrap()),
-                function_name: "mint".try_into().unwrap(),
+                function_name: xdr::ScSymbol("mint".try_into().unwrap()),
                 args: ScVec(
                     vec![
                         ScVal::try_from_val(
@@ -2675,7 +2675,7 @@ fn test_recording_auth_for_token() {
                 ))
                 .unwrap(),
             Hash(token.id.to_array().unwrap()),
-            Symbol::from_str("mint"),
+            xdr::ScSymbol("mint".try_into().unwrap()),
             test.host.call_args_to_scvec(args.clone().into()).unwrap()
         )]
     );

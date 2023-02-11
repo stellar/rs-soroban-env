@@ -60,6 +60,10 @@ where
         Ok(Self { vec })
     }
 
+    pub fn as_slice(&self) -> &[A] {
+        self.vec.as_slice()
+    }
+
     // This doesn't take ExactSizeIterator since that is not implemented for Chain
     // (see https://github.com/rust-lang/rust/issues/34433) but it only works
     // with iterators that report an exact size_hint, and it constructs a new

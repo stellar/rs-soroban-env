@@ -5,9 +5,9 @@ use soroban_env_common::{
     xdr::{
         AccountEntry, AccountId, ContractId, CreateContractArgs, HostFunction,
         InstallContractCodeArgs, LedgerEntry, LedgerEntryData, LedgerKey, PublicKey,
-        ScContractCode, ScObject, ScVal, ScVec, Uint256,
+        ScContractExecutable, ScVal, ScVec, Uint256,
     },
-    Object, RawVal, TryIntoVal,
+    BytesObject, RawVal, TryIntoVal, VecObject,
 };
 
 use crate::{
@@ -112,22 +112,24 @@ impl Host {
         self.map_err(v.try_into())
     }
 
-    pub(crate) fn test_vec_obj<T: AsScVal>(&self, vals: &[T]) -> Result<Object, HostError> {
+    pub(crate) fn test_vec_obj<T: AsScVal>(&self, vals: &[T]) -> Result<VecObject, HostError> {
         let v = self.test_scvec(vals)?;
-        self.to_host_obj(&ScObject::Vec(v))
+        Ok(self.to_host_val(&ScVal::Vec(Some(v)))?.try_into()?)
     }
 
     pub(crate) fn test_vec_val<T: AsScVal>(&self, vals: &[T]) -> Result<RawVal, HostError> {
         let v = self.test_scvec(vals)?;
-        self.to_host_val(&ScVal::Object(Some(ScObject::Vec(v))))
+        self.to_host_val(&ScVal::Vec(Some(v)))
     }
 
-    pub(crate) fn test_bin_scobj(&self, vals: &[u8]) -> Result<ScObject, HostError> {
-        Ok(ScObject::Bytes(self.map_err(vals.try_into())?))
+    pub(crate) fn test_bin_scobj(&self, vals: &[u8]) -> Result<ScVal, HostError> {
+        Ok(ScVal::Bytes(self.map_err(vals.to_vec().try_into())?))
     }
 
-    pub(crate) fn test_bin_obj(&self, vals: &[u8]) -> Result<Object, HostError> {
-        self.to_host_obj(&self.test_bin_scobj(vals)?)
+    pub(crate) fn test_bin_obj(&self, vals: &[u8]) -> Result<BytesObject, HostError> {
+        let scval: ScVal = self.test_bin_scobj(vals)?;
+        let rawval: RawVal = self.to_host_val(&scval)?;
+        Ok(rawval.try_into()?)
     }
 
     pub(crate) fn raw_val_vec_to_sc_vec(&self, v: Vec<RawVal>) -> ScVec {
@@ -144,7 +146,7 @@ impl Host {
     pub(crate) fn register_test_contract_wasm(
         &self,
         contract_wasm: &[u8],
-    ) -> Result<Object, HostError> {
+    ) -> Result<BytesObject, HostError> {
         self.set_source_account(generate_account_id());
         let wasm_id: RawVal = self
             .invoke_function(HostFunction::InstallContractCode(InstallContractCodeArgs {
@@ -158,7 +160,7 @@ impl Host {
         let id_obj: RawVal = self
             .invoke_function(HostFunction::CreateContract(CreateContractArgs {
                 contract_id: ContractId::SourceAccount(Uint256(generate_bytes_array())),
-                source: ScContractCode::WasmRef(wasm_id),
+                source: ScContractExecutable::WasmRef(wasm_id),
             }))?
             .try_into_val(self)?;
         self.remove_source_account();

@@ -1,7 +1,10 @@
 use soroban_env_macros::generate_call_macro_with_all_host_functions;
 
 use super::Symbol;
-use super::{Object, RawVal, Status};
+use super::{
+    AddressObject, Bool, BytesObject, I128Object, I64Object, MapObject, Object, RawVal, Status,
+    StringObject, SymbolObject, U128Object, U32Val, U64Object, U64Val, VecObject, Void,
+};
 use core::any;
 
 /// Base trait extended by the [Env](crate::Env) trait, providing various special-case
@@ -60,27 +63,78 @@ pub trait EnvBase: Sized + Clone {
     // _only_ interface to passing contract pointers to the host is going to be
     // in EnvBase, not Env, and as a bonus we get lifetime checking for free.
 
-    /// Copy a slice of bytes from the caller's memory into an existing `Bytes`
-    /// object the host, returning a new `Bytes`.
+    /// Clone an existing `Bytes` object in the host, replacing the portion of
+    /// its memory with bytes supplied by `slice`, returning the new object. The
+    /// replaced portion of the original object's memory begins at `b_pos` and
+    /// extends for the same length as the new `slice`.
     fn bytes_copy_from_slice(
         &self,
-        b: Object,
-        b_pos: RawVal,
-        mem: &[u8],
-    ) -> Result<Object, Self::Error>;
+        b: BytesObject,
+        b_pos: U32Val,
+        slice: &[u8],
+    ) -> Result<BytesObject, Self::Error>;
 
-    /// Copy a slice of bytes from a `Bytes` object in the host into the
-    /// caller's memory.
+    /// Copy a slice of bytes from a `Bytes` object in the host into a slice in
+    /// the caller's memory.
     fn bytes_copy_to_slice(
         &self,
-        b: Object,
-        b_pos: RawVal,
+        b: BytesObject,
+        b_pos: U32Val,
+        slice: &mut [u8],
+    ) -> Result<(), Self::Error>;
+
+    /// Copy a slice of bytes from a `String` object in the host into a slice in
+    /// the caller's memory.
+    fn string_copy_to_slice(
+        &self,
+        b: StringObject,
+        b_pos: U32Val,
+        slice: &mut [u8],
+    ) -> Result<(), Self::Error>;
+
+    /// Copy a slice of bytes from a `Symbol` object in the host into the
+    /// caller's memory.
+    fn symbol_copy_to_slice(
+        &self,
+        b: SymbolObject,
+        b_pos: U32Val,
         mem: &mut [u8],
     ) -> Result<(), Self::Error>;
 
-    /// Form a new `Bytes` object in the host from a slice of memory in the
-    /// caller.
-    fn bytes_new_from_slice(&self, mem: &[u8]) -> Result<Object, Self::Error>;
+    /// Form a new `Bytes` host object from a slice of client memory.
+    fn bytes_new_from_slice(&self, slice: &[u8]) -> Result<BytesObject, Self::Error>;
+
+    /// Form a new `String` host object from a slice of client memory.
+    fn string_new_from_slice(&self, slice: &str) -> Result<StringObject, Self::Error>;
+
+    /// Form a new `Symbol` host object from a slice of client memory.
+    fn symbol_new_from_slice(&self, slice: &str) -> Result<SymbolObject, Self::Error>;
+
+    /// Form a new `Map` host object from a slice of symbol-names and a slice of values.
+    /// Keys must be in sorted order.
+    fn map_new_from_slices(&self, keys: &[&str], vals: &[RawVal])
+        -> Result<MapObject, Self::Error>;
+
+    /// Unpack a `Map` host object with a specified set of keys to a slice of
+    /// `RawVal`s. Keys must be in sorted order and must match the key set of
+    /// the unpacked object exactly.
+    fn map_unpack_to_slice(
+        &self,
+        map: MapObject,
+        keys: &[&str],
+        vals: &mut [RawVal],
+    ) -> Result<Void, Self::Error>;
+
+    /// Form a new `Vec` host object from a slice of values.
+    fn vec_new_from_slice(&self, vals: &[RawVal]) -> Result<VecObject, Self::Error>;
+
+    /// Form a new `Vec` host object from a slice of values. The values slice must
+    /// be the same length as the host object.
+    fn vec_unpack_to_slice(&self, vec: VecObject, vals: &mut [RawVal])
+        -> Result<Void, Self::Error>;
+
+    /// Return the index of a `Symbol` in an array of &strs, or error if not found.
+    fn symbol_index_in_strs(&self, key: Symbol, strs: &[&str]) -> Result<U32Val, Self::Error>;
 
     // As with the bytes functions above, these take _slices_ with definite
     // lifetimes. The first slice is interpreted as a (very restricted)

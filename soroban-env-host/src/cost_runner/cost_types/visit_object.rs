@@ -1,10 +1,10 @@
-use crate::{budget::CostType, cost_runner::CostRunner, RawVal};
+use crate::{budget::CostType, cost_runner::CostRunner, Object};
 
 pub struct VisitObjectRun;
 
 impl CostRunner for VisitObjectRun {
     const COST_TYPE: CostType = CostType::VisitObject;
-    type SampleType = Vec<RawVal>;
+    type SampleType = Vec<Object>;
 
     fn run_iter(host: &crate::Host, iter: u64, sample: Self::SampleType) {
         unsafe {

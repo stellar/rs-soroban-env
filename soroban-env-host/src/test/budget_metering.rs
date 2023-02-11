@@ -1,7 +1,7 @@
 use crate::{
     budget::{AsBudget, CostType},
     host::metered_clone::MeteredClone,
-    xdr::{ScMap, ScMapEntry, ScObject, ScVal, ScVmErrorCode},
+    xdr::{ScMap, ScMapEntry, ScVal, ScVmErrorCode},
     Env, Host, HostError, RawVal, Symbol,
 };
 use expect_test::{self, expect};
@@ -25,13 +25,17 @@ fn xdr_object_conversion() -> Result<(), HostError> {
         ]
         .try_into(),
     )?;
-    let scobj = ScObject::Map(scmap);
-    host.to_host_obj(&scobj)?;
+    host.to_host_val(&ScVal::Map(Some(scmap)))?;
 
     host.with_budget(|budget| {
-        assert_eq!(budget.get_input(CostType::ValXdrConv), 5);
-        assert_eq!(budget.get_cpu_insns_count(), 50);
-        assert_eq!(budget.get_mem_bytes_count(), 5);
+        // NB: It might seem like this should be 5 rather han 6
+        // but due to the fact that one can convert an "object" or
+        // a "value" on separate paths that both need metering,
+        // we wind up double-counting the conversion of "objects".
+        // Possibly this should be improved in the future.
+        assert_eq!(budget.get_input(CostType::ValXdrConv), 6);
+        assert_eq!(budget.get_cpu_insns_count(), 60);
+        assert_eq!(budget.get_mem_bytes_count(), 6);
     });
     Ok(())
 }
@@ -47,7 +51,7 @@ fn vm_hostfn_invocation() -> Result<(), HostError> {
 
     // `vec_err` is a test contract function which calls `vec_new` (1 call)
     // and `vec_put` (1 call) so total input of 2 to the budget from `CostType::InvokeHostFunction`.
-    let sym = Symbol::from_str("vec_err");
+    let sym = Symbol::try_from_small_str("vec_err").unwrap();
     let args = host.test_vec_obj::<u32>(&[1])?;
 
     // try_call

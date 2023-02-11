@@ -19,6 +19,7 @@ stellar-xdr = { workspace = true, default-features = false, features = [ "next" 
 wasmi = { workspace = true, optional = true }
 serde = { version = "1.0.0", features = ["derive"], optional = true }
 static_assertions = "1.1.0"
+ethnum = "1.3.2"
 
 [features]
 std = ["stellar-xdr/std", "stellar-xdr/base64"]

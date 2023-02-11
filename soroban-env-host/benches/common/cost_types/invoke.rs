@@ -11,7 +11,7 @@ use soroban_synth_wasm::{Arity, ModEmitter};
 
 fn wasm_module_with_empty_invoke() -> Vec<u8> {
     let mut fe = ModEmitter::new().func(Arity(0), 0);
-    fe.push(Symbol::from_str("pass"));
+    fe.push(Symbol::try_from_small_str("pass").unwrap());
     fe.finish_and_export("test").finish()
 }
 
@@ -21,7 +21,7 @@ fn wasm_module_with_dummy_hostfn_invoke(repeat: u64) -> Vec<u8> {
         fe.dummy0();
         fe.drop();
     }
-    fe.push(Symbol::from_str("pass"));
+    fe.push(Symbol::try_from_small_str("pass").unwrap());
     fe.finish_and_export("test").finish()
 }
 

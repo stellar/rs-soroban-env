@@ -2,7 +2,7 @@ use crate::common::HostCostMeasurement;
 use rand::rngs::StdRng;
 use soroban_env_host::{
     cost_runner::ScVecToHostVecRun,
-    xdr::{ScObject, ScVal, ScVec},
+    xdr::{ScVal, ScVec},
     Host,
 };
 
@@ -22,6 +22,6 @@ impl HostCostMeasurement for ScVecToHostVecMeasure {
                 .try_into()
                 .unwrap(),
         );
-        ScVal::Object(Some(ScObject::Vec(scvec)))
+        ScVal::Vec(Some(scvec))
     }
 }

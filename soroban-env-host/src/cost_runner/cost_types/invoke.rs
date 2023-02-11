@@ -1,7 +1,12 @@
-use crate::{budget::CostType, cost_runner::CostRunner, Vm};
+use crate::{budget::CostType, cost_runner::CostRunner, Symbol, Vm};
 use std::rc::Rc;
 
 pub struct InvokeVmFunctionRun;
+
+const TEST_SYM: Symbol = match Symbol::try_from_small_str("test") {
+    Ok(s) => s,
+    _ => panic!(),
+};
 
 impl CostRunner for InvokeVmFunctionRun {
     const COST_TYPE: CostType = CostType::InvokeVmFunction;
@@ -10,7 +15,7 @@ impl CostRunner for InvokeVmFunctionRun {
     const RUN_ITERATIONS: u64 = 100;
 
     fn run_iter(host: &crate::Host, _iter: u64, sample: Self::SampleType) {
-        sample.invoke_function_raw(host, "test", &[]).unwrap();
+        sample.invoke_function_raw(host, &TEST_SYM, &[]).unwrap();
     }
 }
 
@@ -24,6 +29,6 @@ impl CostRunner for InvokeHostFunctionRun {
     type SampleType = Rc<Vm>;
 
     fn run_iter(host: &crate::Host, _iter: u64, sample: Self::SampleType) {
-        sample.invoke_function_raw(host, "test", &[]).unwrap();
+        sample.invoke_function_raw(host, &TEST_SYM, &[]).unwrap();
     }
 }

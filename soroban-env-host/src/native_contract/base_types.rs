@@ -2,36 +2,34 @@ use crate::budget::CostType;
 use crate::host::{Host, HostError};
 
 use core::cmp::Ordering;
-use soroban_env_common::xdr::{AccountId, ScAddress, ScObjectType};
-use soroban_env_common::{Compare, ConversionError, Env, EnvBase, Object, RawVal, TryFromVal};
+use soroban_env_common::xdr::{AccountId, ScAddress};
+use soroban_env_common::{
+    AddressObject, BytesObject, Compare, ConversionError, Env, EnvBase, MapObject, RawVal,
+    TryFromVal, VecObject,
+};
 
 #[derive(Clone)]
 pub struct Bytes {
     host: Host,
-    object: Object,
+    object: BytesObject,
 }
 
 impl Compare<Bytes> for Host {
     type Error = HostError;
 
     fn compare(&self, a: &Bytes, b: &Bytes) -> Result<Ordering, Self::Error> {
-        self.compare(&a.object, &b.object)
+        self.compare(&a.object.to_raw(), &b.object.to_raw())
     }
 }
 
-impl TryFromVal<Host, Object> for Bytes {
+impl TryFromVal<Host, BytesObject> for Bytes {
     type Error = HostError;
 
-    fn try_from_val(env: &Host, val: &Object) -> Result<Self, Self::Error> {
-        let val = *val;
-        if val.is_obj_type(ScObjectType::Bytes) {
-            Ok(Bytes {
-                host: env.clone(),
-                object: val,
-            })
-        } else {
-            Err(ConversionError.into())
-        }
+    fn try_from_val(env: &Host, val: &BytesObject) -> Result<Self, Self::Error> {
+        Ok(Bytes {
+            host: env.clone(),
+            object: *val,
+        })
     }
 }
 
@@ -40,7 +38,7 @@ impl TryFromVal<Host, RawVal> for Bytes {
 
     fn try_from_val(env: &Host, val: &RawVal) -> Result<Self, Self::Error> {
         let val = *val;
-        let obj: Object = val.try_into()?;
+        let obj: BytesObject = val.try_into()?;
         Bytes::try_from_val(env, &obj)
     }
 }
@@ -53,7 +51,7 @@ impl TryFromVal<Host, Bytes> for RawVal {
     }
 }
 
-impl From<Bytes> for Object {
+impl From<Bytes> for BytesObject {
     fn from(b: Bytes) -> Self {
         b.object
     }
@@ -71,24 +69,25 @@ impl<const N: usize> From<BytesN<N>> for Bytes {
 impl Bytes {
     pub fn push(&mut self, x: u8) -> Result<(), HostError> {
         let x32: u32 = x.into();
-        self.object = self.host.bytes_push(self.object, x32.into())?;
+        self.object = self
+            .host
+            .bytes_push(self.object.into(), x32.into())?
+            .try_into()?;
         Ok(())
     }
 
     pub fn append(&mut self, other: Bytes) -> Result<(), HostError> {
-        self.object = self.host.bytes_append(self.object, other.object)?;
+        self.object = self
+            .host
+            .bytes_append(self.object.into(), other.object.into())?
+            .try_into()?;
         Ok(())
     }
 
     #[cfg(test)]
     pub(crate) fn to_vec(&self) -> std::vec::Vec<u8> {
-        use soroban_env_common::RawValConvertible;
         let mut res = std::vec::Vec::<u8>::new();
-        let size = unsafe {
-            <u32 as RawValConvertible>::unchecked_from_val(
-                self.host.bytes_len(self.object).unwrap(),
-            )
-        };
+        let size: u32 = self.host.bytes_len(self.object).unwrap().into();
         res.resize(size as usize, 0);
         self.host
             .bytes_copy_to_slice(self.object, RawVal::U32_ZERO, &mut res[..])
@@ -100,15 +99,15 @@ impl Bytes {
 #[derive(Clone)]
 pub struct BytesN<const N: usize> {
     host: Host,
-    object: Object,
+    object: BytesObject,
 }
 
-impl<const N: usize> TryFromVal<Host, Object> for BytesN<N> {
+impl<const N: usize> TryFromVal<Host, BytesObject> for BytesN<N> {
     type Error = HostError;
 
-    fn try_from_val(env: &Host, val: &Object) -> Result<Self, Self::Error> {
+    fn try_from_val(env: &Host, val: &BytesObject) -> Result<Self, Self::Error> {
         let val = *val;
-        let len: u32 = env.bytes_len(val)?.try_into()?;
+        let len: u32 = env.bytes_len(val.into())?.try_into()?;
         if len
             == N.try_into()
                 .map_err(|_| env.err_general("bytes buffer overflow"))?
@@ -127,7 +126,7 @@ impl<const N: usize> Compare<BytesN<N>> for Host {
     type Error = HostError;
 
     fn compare(&self, a: &BytesN<N>, b: &BytesN<N>) -> Result<Ordering, Self::Error> {
-        self.compare(&a.object, &b.object)
+        self.compare(&a.object.to_raw(), &b.object.to_raw())
     }
 }
 
@@ -136,7 +135,7 @@ impl<const N: usize> TryFromVal<Host, RawVal> for BytesN<N> {
 
     fn try_from_val(env: &Host, val: &RawVal) -> Result<Self, Self::Error> {
         let val = *val;
-        let obj: Object = val.try_into()?;
+        let obj: BytesObject = val.try_into()?;
         <BytesN<N>>::try_from_val(env, &obj)
     }
 }
@@ -155,7 +154,7 @@ impl<const N: usize> Into<RawVal> for BytesN<N> {
     }
 }
 
-impl<const N: usize> From<BytesN<N>> for Object {
+impl<const N: usize> From<BytesN<N>> for BytesObject {
     fn from(bytes: BytesN<N>) -> Self {
         bytes.object
     }
@@ -174,7 +173,7 @@ impl<const N: usize> BytesN<N> {
         let mut slice = [0_u8; N];
         self.host.charge_budget(CostType::BytesClone, N as u64)?;
         self.host
-            .bytes_copy_to_slice(self.object, RawVal::U32_ZERO, &mut slice)?;
+            .bytes_copy_to_slice(self.object.into(), RawVal::U32_ZERO, &mut slice)?;
         Ok(slice)
     }
 
@@ -195,22 +194,18 @@ impl<const N: usize> BytesN<N> {
 #[derive(Clone)]
 pub struct Map {
     host: Host,
-    object: Object,
+    object: MapObject,
 }
 
-impl TryFromVal<Host, Object> for Map {
+impl TryFromVal<Host, MapObject> for Map {
     type Error = HostError;
 
-    fn try_from_val(env: &Host, val: &Object) -> Result<Self, Self::Error> {
+    fn try_from_val(env: &Host, val: &MapObject) -> Result<Self, Self::Error> {
         let val = *val;
-        if val.is_obj_type(ScObjectType::Map) {
-            Ok(Map {
-                host: env.clone(),
-                object: val,
-            })
-        } else {
-            Err(ConversionError.into())
-        }
+        Ok(Map {
+            host: env.clone(),
+            object: val,
+        })
     }
 }
 
@@ -218,7 +213,7 @@ impl Compare<Map> for Host {
     type Error = HostError;
 
     fn compare(&self, a: &Map, b: &Map) -> Result<Ordering, Self::Error> {
-        self.compare(&a.object, &b.object)
+        self.compare(&a.object.to_raw(), &b.object.to_raw())
     }
 }
 
@@ -227,7 +222,7 @@ impl TryFromVal<Host, RawVal> for Map {
 
     fn try_from_val(env: &Host, val: &RawVal) -> Result<Self, Self::Error> {
         let val = *val;
-        let obj: Object = val.try_into()?;
+        let obj: MapObject = val.try_into()?;
         Map::try_from_val(env, &obj)
     }
 }
@@ -240,7 +235,7 @@ impl TryFromVal<Host, Map> for RawVal {
     }
 }
 
-impl From<Map> for Object {
+impl From<Map> for MapObject {
     fn from(map: Map) -> Self {
         map.object
     }
@@ -248,7 +243,7 @@ impl From<Map> for Object {
 
 impl Map {
     pub fn new(env: &Host) -> Result<Self, HostError> {
-        let map = env.map_new()?;
+        let map = env.map_new()?.try_into()?;
         Ok(Self {
             host: env.clone(),
             object: map,
@@ -263,7 +258,7 @@ impl Map {
         HostError: From<<V as TryFromVal<Host, RawVal>>::Error>,
     {
         let k_rv = RawVal::try_from_val(&self.host, k)?;
-        let v_rv = self.host.map_get(self.object, k_rv)?;
+        let v_rv = self.host.map_get(self.object.into(), k_rv)?;
         Ok(V::try_from_val(&self.host, &v_rv)?)
     }
 
@@ -276,7 +271,10 @@ impl Map {
     {
         let k_rv = RawVal::try_from_val(&self.host, k)?;
         let v_rv = RawVal::try_from_val(&self.host, v)?;
-        self.object = self.host.map_put(self.object, k_rv, v_rv)?;
+        self.object = self
+            .host
+            .map_put(self.object.into(), k_rv, v_rv)?
+            .try_into()?;
         Ok(())
     }
 }
@@ -284,30 +282,26 @@ impl Map {
 #[derive(Clone)]
 pub struct Vec {
     host: Host,
-    object: Object,
+    object: VecObject,
 }
 
 impl Compare<Vec> for Host {
     type Error = HostError;
 
     fn compare(&self, a: &Vec, b: &Vec) -> Result<Ordering, Self::Error> {
-        self.compare(&a.object, &b.object)
+        self.compare(&a.object.as_raw(), &b.object.as_raw())
     }
 }
 
-impl TryFromVal<Host, Object> for Vec {
+impl TryFromVal<Host, VecObject> for Vec {
     type Error = HostError;
 
-    fn try_from_val(env: &Host, val: &Object) -> Result<Self, Self::Error> {
+    fn try_from_val(env: &Host, val: &VecObject) -> Result<Self, Self::Error> {
         let val = *val;
-        if val.is_obj_type(ScObjectType::Vec) {
-            Ok(Vec {
-                host: env.clone(),
-                object: val,
-            })
-        } else {
-            Err(ConversionError.into())
-        }
+        Ok(Vec {
+            host: env.clone(),
+            object: val,
+        })
     }
 }
 
@@ -316,7 +310,7 @@ impl TryFromVal<Host, RawVal> for Vec {
 
     fn try_from_val(env: &Host, val: &RawVal) -> Result<Self, Self::Error> {
         let val = *val;
-        let obj: Object = val.try_into()?;
+        let obj: VecObject = val.try_into()?;
         Vec::try_from_val(env, &obj)
     }
 }
@@ -335,7 +329,7 @@ impl Into<RawVal> for Vec {
     }
 }
 
-impl From<Vec> for Object {
+impl From<Vec> for VecObject {
     fn from(vec: Vec) -> Self {
         vec.object
     }
@@ -363,7 +357,7 @@ impl TryFromVal<Host, &std::vec::Vec<RawVal>> for Vec {
 
 impl Vec {
     pub fn new(env: &Host) -> Result<Self, HostError> {
-        let vec = env.vec_new(().into())?;
+        let vec: VecObject = env.vec_new(().into())?.try_into()?;
         Ok(Self {
             host: env.clone(),
             object: vec,
@@ -379,8 +373,7 @@ impl Vec {
     }
 
     pub fn len(&self) -> Result<u32, HostError> {
-        let rv = self.host.vec_len(self.object)?;
-        Ok(u32::try_from_val(&self.host, &rv)?)
+        Ok(self.host.vec_len(self.object)?.into())
     }
 
     pub fn push<T>(&mut self, x: &T) -> Result<(), HostError>
@@ -401,21 +394,17 @@ impl Vec {
 #[derive(Clone)]
 pub struct Address {
     host: Host,
-    object: Object,
+    object: AddressObject,
 }
 
-impl TryFromVal<Host, Object> for Address {
+impl TryFromVal<Host, AddressObject> for Address {
     type Error = HostError;
 
-    fn try_from_val(env: &Host, obj: &Object) -> Result<Self, Self::Error> {
-        if obj.is_obj_type(ScObjectType::Address) {
-            Ok(Address {
-                host: env.clone(),
-                object: obj.clone(),
-            })
-        } else {
-            Err(ConversionError.into())
-        }
+    fn try_from_val(env: &Host, obj: &AddressObject) -> Result<Self, Self::Error> {
+        Ok(Address {
+            host: env.clone(),
+            object: obj.clone(),
+        })
     }
 }
 
@@ -424,7 +413,7 @@ impl TryFromVal<Host, RawVal> for Address {
 
     fn try_from_val(env: &Host, val: &RawVal) -> Result<Self, Self::Error> {
         let val = *val;
-        let obj: Object = val.try_into()?;
+        let obj: AddressObject = val.try_into()?;
         Address::try_from_val(env, &obj)
     }
 }
@@ -441,11 +430,11 @@ impl Compare<Address> for Host {
     type Error = HostError;
 
     fn compare(&self, a: &Address, b: &Address) -> Result<Ordering, Self::Error> {
-        self.compare(&a.object, &b.object)
+        self.compare(&a.object.to_raw(), &b.object.to_raw())
     }
 }
 
-impl From<Address> for Object {
+impl From<Address> for AddressObject {
     fn from(a: Address) -> Self {
         a.object
     }

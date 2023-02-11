@@ -40,11 +40,11 @@ fn invoke_cross_contract() -> Result<(), HostError> {
     let host = Host::test_host_with_recording_footprint();
     let id_obj = host.register_test_contract_wasm(ADD_I32)?;
     // prepare arguments
-    let sym = Symbol::from_str("add");
+    let sym = Symbol::try_from_small_str("add").unwrap();
     let args = host.test_vec_obj::<i32>(&[1, 2])?;
     let res = host.call(id_obj, sym.into(), args.into())?;
     assert!(res.is::<i32>());
-    assert!(res.get_tag() == Tag::I32);
+    assert!(res.get_tag() == Tag::I32Val);
     let i: i32 = res.try_into()?;
     assert_eq!(i, 3);
     Ok(())
@@ -55,7 +55,7 @@ fn invoke_cross_contract_with_err() -> Result<(), HostError> {
     let host = Host::test_host_with_recording_footprint();
     let id_obj = host.register_test_contract_wasm(VEC)?;
     // prepare arguments
-    let sym = Symbol::from_str("vec_err");
+    let sym = Symbol::try_from_small_str("vec_err").unwrap();
     let args = host.test_vec_obj::<u32>(&[1])?;
 
     // try_call
@@ -133,7 +133,7 @@ fn invoke_cross_contract_indirect() -> Result<(), HostError> {
     let id0_obj = host.register_test_contract_wasm(INVOKE_CONTRACT)?;
     let id1_obj = host.register_test_contract_wasm(ADD_I32)?;
     // prepare arguments
-    let sym = Symbol::from_str("add_with");
+    let sym = Symbol::try_from_small_str("add_with").unwrap();
     let args = host.test_vec_obj::<i32>(&[5, 6])?;
     let args = host.vec_push_back(args, id1_obj.to_raw())?;
     // try call
@@ -148,7 +148,7 @@ fn invoke_cross_contract_indirect_err() -> Result<(), HostError> {
     let host = Host::test_host_with_recording_footprint();
     let id0_obj = host.register_test_contract_wasm(INVOKE_CONTRACT)?;
     let id1_obj = host.register_test_contract_wasm(ADD_I32)?;
-    let sym = Symbol::from_str("add_with");
+    let sym = Symbol::try_from_small_str("add_with").unwrap();
     let args = host.test_vec_obj::<i32>(&[i32::MAX, 1])?;
     let args = host.vec_push_back(args, id1_obj.into())?;
 
@@ -226,7 +226,7 @@ fn invoke_contract_with_reentry() -> Result<(), HostError> {
     let host = Host::test_host_with_recording_footprint();
     let id0_obj = host.register_test_contract_wasm(INVOKE_CONTRACT)?;
     // prepare arguments
-    let sym = Symbol::from_str("add_with");
+    let sym = Symbol::try_from_small_str("add_with").unwrap();
     let args = host.test_vec_obj::<i32>(&[i32::MAX, 1])?;
     let args = host.vec_push_back(args, id0_obj.clone().into())?; // trying to call its own `add` function
 

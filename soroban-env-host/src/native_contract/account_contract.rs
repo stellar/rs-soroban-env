@@ -5,10 +5,7 @@ use crate::auth::AuthorizedInvocation;
 // context authorization.
 use crate::host::metered_clone::MeteredClone;
 use crate::host::Host;
-use crate::native_contract::{
-    base_types::{BytesN, Map},
-    contract_error::ContractError,
-};
+use crate::native_contract::{base_types::BytesN, contract_error::ContractError};
 use crate::{err, HostError};
 use core::cmp::Ordering;
 use soroban_env_common::xdr::{Hash, ThresholdIndexes, Uint256};
@@ -18,7 +15,7 @@ use crate::native_contract::base_types::Vec as HostVec;
 
 const MAX_ACCOUNT_SIGNATURES: u32 = 20;
 
-use soroban_env_common::xdr::AccountId;
+use soroban_env_common::xdr::{AccountId, ScVal};
 use soroban_native_sdk_macros::contracttype;
 
 #[derive(Clone)]
@@ -40,12 +37,14 @@ impl AuthorizationContext {
     fn from_invocation(host: &Host, invocation: &AuthorizedInvocation) -> Result<Self, HostError> {
         let args =
             HostVec::try_from_val(host, &host.scvals_to_rawvals(invocation.args.0.as_slice())?)?;
+        let fn_name =
+            Symbol::try_from(host.to_host_val(&ScVal::Symbol(invocation.function_name.clone()))?)?;
         Ok(Self {
             contract: BytesN::try_from_val(
                 host,
                 &host.bytes_new_from_slice(invocation.contract_id.0.as_slice())?,
             )?,
-            fn_name: invocation.function_name,
+            fn_name,
             args,
         })
     }
@@ -77,7 +76,7 @@ pub(crate) fn check_account_contract_auth(
     Ok(host
         .call_n_internal(
             account_contract,
-            Symbol::from_str("check_auth"),
+            Symbol::try_from_val(host, &"check_auth")?,
             &[
                 payload_obj.into(),
                 signature_args_vec.into(),

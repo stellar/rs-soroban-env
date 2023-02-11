@@ -1,7 +1,7 @@
 #[cfg(feature = "std")]
 use std::rc::Rc;
 
-use crate::{BitSet, Env, Object, RawVal, RawValConvertible, Status, Symbol, Tag};
+use crate::{Env, RawVal, RawValConvertible, Tag};
 use core::cmp::Ordering;
 
 /// General trait representing the ability to compare two values of some type.
@@ -116,25 +116,33 @@ impl<T, C: Compare<T>> Compare<Rc<T>> for C {
 // better). But we can list out any concrete Ord instances we want to support
 // here.
 
-impl<E: Env> Compare<Object> for E {
-    type Error = E::Error;
-
-    fn compare(&self, a: &Object, b: &Object) -> Result<Ordering, Self::Error> {
-        let v = self.obj_cmp(a.to_raw(), b.to_raw())?;
-        if v == 0 {
-            Ok(Ordering::Equal)
-        } else if v < 0 {
-            Ok(Ordering::Less)
-        } else {
-            Ok(Ordering::Greater)
-        }
-    }
+macro_rules! delegate_compare_to_wrapper {
+    ($T:ident,$A:ident,$B:ident,$SELF:ident) => {{
+        let a = unsafe { crate::$T::unchecked_from_val(*$A) };
+        let b = unsafe { crate::$T::unchecked_from_val(*$B) };
+        $SELF.compare(&a, &b)
+    }};
 }
 
 impl<E: Env> Compare<RawVal> for E {
     type Error = E::Error;
 
     fn compare(&self, a: &RawVal, b: &RawVal) -> Result<Ordering, Self::Error> {
+        if a.get_payload() == b.get_payload() {
+            // Fast-path exactly-equal values.
+            return Ok(Ordering::Equal);
+        }
+        if a.is_object() || b.is_object() {
+            // Delegate any object-comparing to environment.
+            let v = self.obj_cmp(*a, *b)?;
+            return if v == 0 {
+                Ok(Ordering::Equal)
+            } else if v < 0 {
+                Ok(Ordering::Less)
+            } else {
+                Ok(Ordering::Greater)
+            };
+        }
         let a_tag = a.get_tag();
         let b_tag = b.get_tag();
         if a_tag < b_tag {
@@ -144,38 +152,56 @@ impl<E: Env> Compare<RawVal> for E {
         } else {
             // Tags are equal so we only have to switch on one.
             match a_tag {
-                Tag::U32 => {
-                    let a = unsafe { <u32 as RawValConvertible>::unchecked_from_val(*a) };
-                    let b = unsafe { <u32 as RawValConvertible>::unchecked_from_val(*b) };
-                    Ok(a.cmp(&b))
-                }
-                Tag::I32 => {
-                    let a = unsafe { <i32 as RawValConvertible>::unchecked_from_val(*a) };
-                    let b = unsafe { <i32 as RawValConvertible>::unchecked_from_val(*b) };
-                    Ok(a.cmp(&b))
-                }
-                Tag::Static => Ok(a.get_body().cmp(&b.get_body())),
-                Tag::Object => {
-                    let a = unsafe { Object::unchecked_from_val(*a) };
-                    let b = unsafe { Object::unchecked_from_val(*b) };
-                    self.compare(&a, &b)
-                }
-                Tag::Symbol => {
-                    let a = unsafe { <Symbol as RawValConvertible>::unchecked_from_val(*a) };
-                    let b = unsafe { <Symbol as RawValConvertible>::unchecked_from_val(*b) };
-                    Ok(a.cmp(&b))
-                }
-                Tag::BitSet => {
-                    let a = unsafe { <BitSet as RawValConvertible>::unchecked_from_val(*a) };
-                    let b = unsafe { <BitSet as RawValConvertible>::unchecked_from_val(*b) };
-                    Ok(a.cmp(&b))
-                }
-                Tag::Status => {
-                    let a = unsafe { <Status as RawValConvertible>::unchecked_from_val(*a) };
-                    let b = unsafe { <Status as RawValConvertible>::unchecked_from_val(*b) };
-                    Ok(a.cmp(&b))
-                }
-                Tag::Reserved => Ok(a.get_body().cmp(&b.get_body())),
+                Tag::False => Ok(Ordering::Equal),
+                Tag::True => Ok(Ordering::Equal),
+                Tag::Void => Ok(Ordering::Equal),
+
+                Tag::Status => delegate_compare_to_wrapper!(Status, a, b, self),
+
+                Tag::U32Val => delegate_compare_to_wrapper!(U32Val, a, b, self),
+                Tag::I32Val => delegate_compare_to_wrapper!(I32Val, a, b, self),
+
+                Tag::U64Small => delegate_compare_to_wrapper!(U64Small, a, b, self),
+                Tag::I64Small => delegate_compare_to_wrapper!(I64Small, a, b, self),
+
+                Tag::TimepointSmall => delegate_compare_to_wrapper!(TimepointSmall, a, b, self),
+                Tag::DurationSmall => delegate_compare_to_wrapper!(DurationSmall, a, b, self),
+
+                Tag::U128Small => delegate_compare_to_wrapper!(U128Small, a, b, self),
+                Tag::I128Small => delegate_compare_to_wrapper!(I128Small, a, b, self),
+
+                Tag::U256Small => delegate_compare_to_wrapper!(U256Small, a, b, self),
+                Tag::I256Small => delegate_compare_to_wrapper!(I256Small, a, b, self),
+
+                Tag::SymbolSmall => delegate_compare_to_wrapper!(SymbolSmall, a, b, self),
+
+                Tag::LedgerKeyContractExecutable => Ok(Ordering::Equal),
+
+                Tag::SmallCodeUpperBound => Ok(Ordering::Equal),
+                Tag::ObjectCodeLowerBound => Ok(Ordering::Equal),
+
+                // None of the object cases should be reachable, they
+                // should all have been handled by the is_object() branch
+                // above.
+                Tag::U64Object
+                | Tag::I64Object
+                | Tag::TimepointObject
+                | Tag::DurationObject
+                | Tag::U128Object
+                | Tag::I128Object
+                | Tag::U256Object
+                | Tag::I256Object
+                | Tag::BytesObject
+                | Tag::StringObject
+                | Tag::SymbolObject
+                | Tag::VecObject
+                | Tag::MapObject
+                | Tag::ContractExecutableObject
+                | Tag::AddressObject
+                | Tag::LedgerKeyNonceObject => unreachable!(),
+
+                Tag::ObjectCodeUpperBound => Ok(Ordering::Equal),
+                Tag::Bad => Ok(Ordering::Equal),
             }
         }
     }

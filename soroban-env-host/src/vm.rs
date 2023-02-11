@@ -26,7 +26,7 @@ use func_info::HOST_FUNCTIONS;
 use soroban_env_common::{
     meta,
     xdr::{ReadXdr, ScEnvMetaEntry, ScHostFnErrorCode, ScVmErrorCode},
-    ConversionError,
+    ConversionError, SymbolStr, TryFromVal, TryIntoVal,
 };
 
 use wasmi::{
@@ -229,20 +229,23 @@ impl Vm {
     pub(crate) fn invoke_function_raw(
         self: &Rc<Self>,
         host: &Host,
-        func: &str,
+        func: &Symbol,
         args: &[RawVal],
     ) -> Result<RawVal, HostError> {
         host.charge_budget(CostType::InvokeVmFunction, 1)?;
         host.with_frame(
-            Frame::ContractVM(self.clone(), Symbol::from_str(func), args.to_vec()),
+            Frame::ContractVM(self.clone(), *func, args.to_vec()),
             || {
                 let wasm_args: Vec<Value> = args
                     .iter()
                     .map(|i| Value::I64(i.get_payload() as i64))
                     .collect();
                 let mut wasm_ret: [Value; 1] = [Value::I64(0)];
-
-                let ext = match self.instance.get_export(&*self.store.borrow(), func) {
+                let func_ss: SymbolStr = func.try_into_val(host)?;
+                let ext = match self
+                    .instance
+                    .get_export(&*self.store.borrow(), func_ss.as_ref())
+                {
                     None => {
                         return Err(
                             host.err_status_msg(ScVmErrorCode::Unknown, "invoking unknown export")
@@ -284,11 +287,12 @@ impl Vm {
         func: &str,
         args: &ScVec,
     ) -> Result<ScVal, HostError> {
+        let func_sym = Symbol::try_from_val(host, &func)?;
         let mut raw_args: Vec<RawVal> = Vec::new();
         for scv in args.0.iter() {
             raw_args.push(host.to_host_val(scv)?);
         }
-        let raw_res = self.invoke_function_raw(host, func, raw_args.as_slice())?;
+        let raw_res = self.invoke_function_raw(host, &func_sym, raw_args.as_slice())?;
         Ok(host.from_host_val(raw_res)?)
     }
 
