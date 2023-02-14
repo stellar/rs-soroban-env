@@ -185,7 +185,7 @@ impl TokenTrait for Token {
             .checked_add(amount)
             .ok_or_else(|| e.err_status(ContractError::OverflowError))?;
         write_allowance(&e, from.clone(), spender.clone(), new_allowance)?;
-        event::incr_allow(e, from, spender, amount)?;
+        event::incr_allow(e, from, spender, amount, read_name(&e)?)?;
         Ok(())
     }
 
@@ -203,7 +203,7 @@ impl TokenTrait for Token {
         } else {
             write_allowance(&e, from.clone(), spender.clone(), allowance - amount)?;
         }
-        event::decr_allow(e, from, spender, amount)?;
+        event::decr_allow(e, from, spender, amount, read_name(&e)?)?;
         Ok(())
     }
 
@@ -227,7 +227,7 @@ impl TokenTrait for Token {
         from.require_auth()?;
         spend_balance(e, from.clone(), amount)?;
         receive_balance(e, to.clone(), amount)?;
-        event::transfer(e, from, to, amount)?;
+        event::transfer(e, from, to, amount, read_name(&e)?)?;
         Ok(())
     }
 
@@ -244,7 +244,7 @@ impl TokenTrait for Token {
         spend_allowance(e, from.clone(), spender, amount)?;
         spend_balance(e, from.clone(), amount)?;
         receive_balance(e, to.clone(), amount)?;
-        event::transfer(e, from, to, amount)?;
+        event::transfer(e, from, to, amount, read_name(&e)?)?;
         Ok(())
     }
 
@@ -254,7 +254,7 @@ impl TokenTrait for Token {
         check_non_native(e)?;
         from.require_auth()?;
         spend_balance(&e, from.clone(), amount)?;
-        event::burn(e, from, amount)?;
+        event::burn(e, from, amount, read_name(&e)?)?;
         Ok(())
     }
 
@@ -265,7 +265,7 @@ impl TokenTrait for Token {
         spender.require_auth()?;
         spend_allowance(&e, from.clone(), spender, amount)?;
         spend_balance(&e, from.clone(), amount)?;
-        event::burn(e, from, amount)?;
+        event::burn(e, from, amount, read_name(&e)?)?;
         Ok(())
     }
 
@@ -276,7 +276,7 @@ impl TokenTrait for Token {
         check_clawbackable(&e, from.clone())?;
         admin.require_auth()?;
         spend_balance_no_authorization_check(e, from.clone(), amount.clone())?;
-        event::clawback(e, admin, from, amount)?;
+        event::clawback(e, admin, from, amount, read_name(&e)?)?;
         Ok(())
     }
 
@@ -285,7 +285,7 @@ impl TokenTrait for Token {
         check_admin(e, &admin)?;
         admin.require_auth()?;
         write_authorization(e, addr.clone(), authorize)?;
-        event::set_auth(e, admin, addr, authorize)?;
+        event::set_auth(e, admin, addr, authorize, read_name(&e)?)?;
         Ok(())
     }
 
@@ -295,7 +295,7 @@ impl TokenTrait for Token {
         check_admin(e, &admin)?;
         admin.require_auth()?;
         receive_balance(e, to.clone(), amount)?;
-        event::mint(e, admin, to, amount)?;
+        event::mint(e, admin, to, amount, read_name(&e)?)?;
         Ok(())
     }
 
@@ -304,7 +304,7 @@ impl TokenTrait for Token {
         check_admin(e, &admin)?;
         admin.require_auth()?;
         write_administrator(e, new_admin.clone())?;
-        event::set_admin(e, admin, new_admin)?;
+        event::set_admin(e, admin, new_admin, read_name(&e)?)?;
         Ok(())
     }
 
