@@ -19,10 +19,6 @@ impl Host {
         topics: Object,
         data: RawVal,
     ) -> Result<(), HostError> {
-        if !self.is_debug() {
-            return Ok(());
-        }
-
         let ce = InternalContractEvent {
             type_,
             contract_id: None,
