@@ -816,6 +816,10 @@ impl AuthorizationTracker {
                 host.with_ledger_info(|li| li.network_id.metered_clone(host.budget_ref()))?,
             ),
             invocation: self.invocation_to_xdr(host.budget_ref())?,
+            nonce: self
+                .nonce
+                .clone()
+                .ok_or(host.err_general("unexpected missing nonce"))?,
         });
 
         host.metered_hash_xdr(&payload_preimage)
