@@ -170,15 +170,21 @@ pub(crate) fn authorize_single_invocation_with_nonce(
         sub_invocations: Default::default(),
     };
 
-    let signature_payload_preimage = HashIdPreimage::ContractAuth(HashIdPreimageContractAuth {
-        network_id: host
-            .with_ledger_info(|li: &LedgerInfo| Ok(li.network_id.clone()))
-            .unwrap()
-            .try_into()
-            .unwrap(),
-        invocation: root_invocation.clone(),
-    });
-    let signature_payload = host.metered_hash_xdr(&signature_payload_preimage).unwrap();
+    let signature_payload = if let Some(addr_with_nonce) = &address_with_nonce {
+        let signature_payload_preimage = HashIdPreimage::ContractAuth(HashIdPreimageContractAuth {
+            network_id: host
+                .with_ledger_info(|li: &LedgerInfo| Ok(li.network_id.clone()))
+                .unwrap()
+                .try_into()
+                .unwrap(),
+            invocation: root_invocation.clone(),
+            nonce: addr_with_nonce.nonce,
+        });
+        host.metered_hash_xdr(&signature_payload_preimage).unwrap()
+    } else {
+        [0; 32]
+    };
+
     let signature_args = signer.sign(host, &signature_payload);
     let auth_entry = ContractAuth {
         address_with_nonce,
