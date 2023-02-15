@@ -236,6 +236,10 @@ impl Vm {
         host.with_frame(
             Frame::ContractVM(self.clone(), Symbol::from_str(func), args.to_vec()),
             || {
+                if host.is_debug() {
+                    host.fn_call_diagnostics(&self.contract_id, &Symbol::from_str(func), args)?;
+                }
+
                 let wasm_args: Vec<Value> = args
                     .iter()
                     .map(|i| Value::I64(i.get_payload() as i64))

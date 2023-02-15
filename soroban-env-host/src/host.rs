@@ -886,6 +886,10 @@ impl Host {
             ScContractCode::Token => self.with_frame(
                 Frame::Token(id.clone(), func.clone(), args.to_vec()),
                 || {
+                    if self.is_debug() {
+                        self.fn_call_diagnostics(&id, &func, args)?;
+                    }
+
                     use crate::native_contract::{NativeContract, Token};
                     Token.call(func, self, args)
                 },
@@ -912,13 +916,6 @@ impl Host {
         args: &[RawVal],
         allow_reentry: bool,
     ) -> Result<RawVal, HostError> {
-        if self.is_debug() {
-            // This event will not be rolled back if the call to func fails
-            // because the next frame has not been pushed. However, if the call to func fails,
-            // the return value event emitted in fn_return_diagnostics will be rolled back.
-            self.fn_call_diagnostics(&id, &func, args)?;
-        }
-
         if !allow_reentry {
             for f in self.0.context.borrow().iter() {
                 let exist_id = match f {
@@ -956,6 +953,10 @@ impl Host {
                     use std::any::Any;
                     use std::panic::AssertUnwindSafe;
                     type PanicVal = Box<dyn Any + Send>;
+
+                    if self.is_debug() {
+                        self.fn_call_diagnostics(&id, &func, args)?;
+                    }
 
                     // We're directly invoking a native rust contract here,
                     // which we allow only in local testing scenarios, and we
