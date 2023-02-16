@@ -49,17 +49,9 @@ pub fn get_spendable_balance(e: &Host, addr: Address) -> Result<i128, HostError>
     }
 }
 
-fn write_balance_and_auth(
-    e: &Host,
-    addr: Address,
-    amount: i128,
-    authorized: bool,
-) -> Result<(), HostError> {
+fn write_balance(e: &Host, addr: Address, balance: BalanceValue) -> Result<(), HostError> {
     let key = DataKey::Balance(addr);
-    e.put_contract_data(
-        key.try_into_val(e)?,
-        BalanceValue { amount, authorized }.try_into_val(e)?,
-    )?;
+    e.put_contract_data(key.try_into_val(e)?, balance.try_into_val(e)?)?;
     Ok(())
 }
 
@@ -83,13 +75,26 @@ pub fn receive_balance(e: &Host, addr: Address, amount: i128) -> Result<(), Host
             Ok(transfer_classic_balance(e, acc_id, i64_amount)?)
         }
         ScAddress::Contract(_) => {
-            let balance = read_balance(e, addr.clone())?;
+            let key = DataKey::Balance(addr.clone());
+            let mut balance = if let Ok(raw_balance) = e.get_contract_data(key.try_into_val(e)?) {
+                let balance: BalanceValue = raw_balance.try_into_val(e)?;
+                balance
+            } else {
+                // balance passed the authorization check at the top of this function, so write true.
+                BalanceValue {
+                    amount: 0,
+                    authorized: true,
+                    clawback: is_asset_clawback_enabled(&e)?,
+                }
+            };
+
             let new_balance = balance
+                .amount
                 .checked_add(amount)
                 .ok_or_else(|| e.err_status(ContractError::OverflowError))?;
 
-            // balance passed the authorization check at the top of this function, so write true.
-            write_balance_and_auth(e, addr, new_balance, true)
+            balance.amount = new_balance;
+            write_balance(e, addr, balance)
         }
     }
 }
@@ -115,7 +120,7 @@ pub fn spend_balance_no_authorization_check(
             // this can be used to clawback when deauthorized.
             let key = DataKey::Balance(addr.clone());
             if let Ok(raw_balance) = e.get_contract_data(key.try_into_val(e)?) {
-                let balance: BalanceValue = raw_balance.try_into_val(e)?;
+                let mut balance: BalanceValue = raw_balance.try_into_val(e)?;
                 if balance.amount < amount {
                     return Err(err!(
                         e,
@@ -129,7 +134,9 @@ pub fn spend_balance_no_authorization_check(
                         .amount
                         .checked_sub(amount)
                         .ok_or_else(|| e.err_status(ContractError::OverflowError))?;
-                    write_balance_and_auth(e, addr, new_balance, balance.authorized)?
+                    balance.amount = new_balance;
+
+                    write_balance(e, addr, balance)?
                 }
             } else if amount > 0 {
                 return Err(err!(
@@ -179,12 +186,18 @@ pub fn write_authorization(e: &Host, addr: Address, authorize: bool) -> Result<(
         ScAddress::Contract(_) => {
             let key = DataKey::Balance(addr.clone());
             if let Ok(raw_balance) = e.get_contract_data(key.try_into_val(e)?) {
-                let balance: BalanceValue = raw_balance.try_into_val(e)?;
-                write_balance_and_auth(e, addr, balance.amount, authorize)
+                let mut balance: BalanceValue = raw_balance.try_into_val(e)?;
+                balance.authorized = authorize;
+                write_balance(e, addr, balance)
             } else {
                 // Balance does not exist, so write a 0 amount along with the authorization flag.
                 // No need to check auth_required because this function can only be called by the admin.
-                write_balance_and_auth(e, addr, 0, authorize)
+                let balance = BalanceValue {
+                    amount: 0,
+                    authorized: authorize,
+                    clawback: is_asset_clawback_enabled(&e)?,
+                };
+                write_balance(e, addr, balance)
             }
         }
     }
@@ -235,7 +248,22 @@ pub fn check_clawbackable(e: &Host, addr: Address) -> Result<(), HostError> {
             }
         },
         ScAddress::Contract(_) => {
-            // TODO: Non-account balances are always clawbackable for now if admin is set. Revisit this.
+            let key = DataKey::Balance(addr);
+            if let Ok(raw_balance) = e.get_contract_data(key.try_into_val(e)?) {
+                let balance: BalanceValue = raw_balance.try_into_val(e)?;
+                if !balance.clawback {
+                    return Err(e.err_status_msg(
+                        ContractError::BalanceError,
+                        "balance isn't clawbackable",
+                    ));
+                }
+            } else {
+                // We fail even if the clawback amount is 0. This is a better alternative than
+                // checking the issuer to make sure clawback is enabled and then succeeding
+                // in the 0 clawback case.
+                return Err(e.err_status_msg(ContractError::BalanceError, "no balance to clawback"));
+            }
+
             Ok(())
         }
     }
@@ -646,5 +674,18 @@ fn is_asset_auth_required(e: &Host) -> Result<bool, HostError> {
         Metadata::Native => Ok(false),
         Metadata::AlphaNum4(asset) => is_issuer_auth_required(e, asset.issuer),
         Metadata::AlphaNum12(asset) => is_issuer_auth_required(e, asset.issuer),
+    }
+}
+
+fn is_issuer_clawback_enabled(e: &Host, issuer_id: BytesN<32>) -> Result<bool, HostError> {
+    let issuer_acc = e.load_account(e.account_id_from_bytes(issuer_id.into())?)?;
+    Ok(issuer_acc.flags & (AccountFlags::ClawbackEnabledFlag as u32) != 0)
+}
+
+fn is_asset_clawback_enabled(e: &Host) -> Result<bool, HostError> {
+    match read_metadata(e)? {
+        Metadata::Native => Ok(false),
+        Metadata::AlphaNum4(asset) => is_issuer_clawback_enabled(e, asset.issuer),
+        Metadata::AlphaNum12(asset) => is_issuer_clawback_enabled(e, asset.issuer),
     }
 }
