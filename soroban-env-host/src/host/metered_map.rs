@@ -18,6 +18,8 @@ where
     ctx: PhantomData<Ctx>,
 }
 
+/// `Clone` should not be used directly, used `MeteredClone` instead if possible. It is defined to
+/// satisfy trait requirements.
 impl<K, V, Ctx> Clone for MeteredOrdMap<K, V, Ctx>
 where
     K: MeteredClone,
@@ -38,8 +40,9 @@ where
     V: MeteredClone,
     Ctx: AsBudget + Compare<K, Error = HostError> + Compare<V, Error = HostError>,
 {
-    fn charge_new<B: AsBudget>(&self, size: usize, b: &B) -> Result<(), HostError> {
-        b.as_budget().charge(CostType::MapNew, size as u64)
+    fn charge_new<B: AsBudget>(n_elts: u64, b: &B) -> Result<(), HostError> {
+        let n_bytes = <Vec<(K, V)> as MeteredClone>::ELT_SIZE * n_elts;
+        b.as_budget().charge(CostType::MapNew, n_bytes)
     }
 
     fn charge_access<B: AsBudget>(&self, count: usize, b: &B) -> Result<(), HostError> {
@@ -84,7 +87,7 @@ where
     Ctx: AsBudget + Compare<K, Error = HostError> + Compare<V, Error = HostError>,
 {
     pub fn new(ctx: &Ctx) -> Result<Self, HostError> {
-        ctx.as_budget().charge(CostType::MapNew, 1)?;
+        Self::charge_new(0, ctx)?;
         Ok(MeteredOrdMap {
             map: Vec::new(),
             ctx: Default::default(),
@@ -120,10 +123,12 @@ where
         ctx: &Ctx,
     ) -> Result<Self, HostError> {
         if let (_, Some(sz)) = iter.size_hint() {
-            ctx.as_budget().charge(CostType::MapNew, sz as u64)?;
-            // TODO need to do a metered_clone bulk-charge here as well.
-            // ctx.as_budget().charge(CostType::BytesClone, nbytes)?;
+            // It's possible we temporarily go over-budget here before charging, but
+            // only by the cost of temporarily allocating twice the size of our largest
+            // possible object. In exchange we get to batch all charges associated with
+            // the clone into one (when A::IS_SHALLOW==true).
             let map: Vec<(K, V)> = iter.collect();
+            map.charge_for_clone(ctx.as_budget())?;
             Ok(Self {
                 map,
                 ctx: Default::default(),
@@ -322,8 +327,10 @@ where
     V: MeteredClone,
     Ctx: AsBudget + Compare<K, Error = HostError> + Compare<V, Error = HostError>,
 {
+    const ELT_SIZE: u64 = <Vec<(K, V)> as MeteredClone>::ELT_SIZE;
+
     fn metered_clone(&self, budget: &Budget) -> Result<Self, HostError> {
-        self.charge_new(self.map.len(), budget)?;
+        self.map.charge_for_clone(budget)?;
         Ok(self.clone())
     }
 }

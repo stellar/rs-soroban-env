@@ -1,8 +1,10 @@
 use crate::{
-    budget::CostType,
+    budget::{AsBudget, CostType},
+    host::metered_clone::MeteredClone,
     xdr::{ScMap, ScMapEntry, ScObject, ScVal, ScVmErrorCode},
     Env, Host, HostError, RawVal, Symbol,
 };
+use expect_test::{self, expect};
 use soroban_test_wasms::VEC;
 
 #[test]
@@ -140,5 +142,53 @@ fn map_insert_key_vec_obj() -> Result<(), HostError> {
         assert_eq!(budget.get_input(CostType::MapEntry), 5);
     });
 
+    Ok(())
+}
+
+#[test]
+fn test_recursive_type_clone() -> Result<(), HostError> {
+    let host = Host::test_host()
+        .test_budget(100000, 100000)
+        .enable_model(CostType::HostMemAlloc)
+        .enable_model(CostType::HostMemCpy);
+    let scmap: ScMap = host.map_err(
+        vec![
+            ScMapEntry {
+                key: ScVal::U32(1),
+                val: ScVal::U32(2),
+            },
+            ScMapEntry {
+                key: ScVal::U32(2),
+                val: ScVal::U32(4),
+            },
+        ]
+        .try_into(),
+    )?;
+    let v: Vec<Box<ScMap>> = vec![
+        Box::new(scmap.clone()),
+        Box::new(scmap.clone()),
+        Box::new(scmap.clone()),
+    ];
+
+    v.charge_for_clone(host.as_budget())?;
+    // Transition #                  (1)           (2)             (3)
+    // Type(size, count):  Vec(24,1) ---> Box(8,3) ----> Vec(24,3) ------> ScMapEntry(80,3x2)
+    // MemAlloc:                     8x3           24x3            80x3x2                     = 576
+    // MemCpy:             24        8x3  8x3      24x3  24x3      80x3x2  80x3x2             = 1176
+    // At the alloc boundary there is some double-charging happening.
+    // For example in transition #1, `Vec` charges for (1) allocation of 8x3 bytes, (2) copying of
+    // 8x3 bytes data into it. The `Box` charges for 8x3 for its own size.
+    expect!["576"].assert_eq(
+        host.as_budget()
+            .get_input(CostType::HostMemAlloc)
+            .to_string()
+            .as_str(),
+    );
+    expect!["1176"].assert_eq(
+        host.as_budget()
+            .get_input(CostType::HostMemCpy)
+            .to_string()
+            .as_str(),
+    );
     Ok(())
 }
