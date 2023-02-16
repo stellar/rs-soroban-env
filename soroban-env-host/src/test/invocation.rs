@@ -35,9 +35,12 @@ fn invoke_single_contract_function() -> Result<(), HostError> {
     Ok(())
 }
 
-#[test]
-fn invoke_cross_contract() -> Result<(), HostError> {
+fn invoke_cross_contract(diagnostics: bool) -> Result<(), HostError> {
     let host = Host::test_host_with_recording_footprint();
+    if diagnostics {
+        host.set_diagnostic_level(crate::DiagnosticLevel::Debug);
+    }
+
     let id_obj = host.register_test_contract_wasm(ADD_I32)?;
     // prepare arguments
     let sym = Symbol::from_str("add");
@@ -48,6 +51,16 @@ fn invoke_cross_contract() -> Result<(), HostError> {
     let i: i32 = res.try_into()?;
     assert_eq!(i, 3);
     Ok(())
+}
+
+#[test]
+fn invoke_cross_contract_without_diagnostics() -> Result<(), HostError> {
+    invoke_cross_contract(false)
+}
+
+#[test]
+fn invoke_cross_contract_with_diagnostics() -> Result<(), HostError> {
+    invoke_cross_contract(true)
 }
 
 #[test]
