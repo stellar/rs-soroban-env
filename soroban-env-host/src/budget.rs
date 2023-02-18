@@ -369,9 +369,9 @@ impl Budget {
         })
     }
 
-    pub fn with_free_budget<F>(&self, f: F) -> Result<(), HostError>
+    pub fn with_free_budget<F, T>(&self, f: F) -> Result<T, HostError>
     where
-        F: FnOnce() -> Result<(), HostError>,
+        F: FnOnce() -> Result<T, HostError>,
     {
         self.mut_budget(|mut b| {
             b.enabled = false;
