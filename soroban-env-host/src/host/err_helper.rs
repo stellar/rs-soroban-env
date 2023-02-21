@@ -17,7 +17,7 @@ impl Host {
         } else {
             let mut he: HostError = ds.status.into();
             // If `get_events` causes an out-of-budget err, the events will not be recorded.
-            he.events = self.get_events().ok();
+            he.events = self.get_events().ok().unzip().0;
             he
         }
     }

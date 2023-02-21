@@ -17,6 +17,9 @@ pub enum HostEvent {
 #[derive(Clone, Debug, Default)]
 pub struct Events(pub Vec<HostEvent>);
 
+#[derive(Clone, Default)]
+pub struct RolledbackDiagnosticEvents(pub Vec<crate::xdr::ContractEvent>);
+
 // Maximum number of topics in a `ContractEvent`. This applies to both
 // `Contract` and `System` types of contract events.
 pub(crate) const CONTRACT_EVENT_TOPICS_LIMIT: usize = 4;

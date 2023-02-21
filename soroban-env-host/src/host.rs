@@ -18,12 +18,15 @@ use soroban_env_common::{
     Convert, InvokerType, Status, TryFromVal, TryIntoVal, VmCaller, VmCallerEnv,
 };
 
-use crate::auth::{AuthorizationManager, AuthorizationManagerSnapshot, RecordedAuthPayload};
 use crate::budget::{AsBudget, Budget, CostType};
 use crate::events::{
     DebugError, DebugEvent, Events, InternalContractEvent, InternalEvent, InternalEventsBuffer,
 };
 use crate::storage::{Storage, StorageMap};
+use crate::{
+    auth::{AuthorizationManager, AuthorizationManagerSnapshot, RecordedAuthPayload},
+    events::RolledbackDiagnosticEvents,
+};
 
 use crate::host_object::{HostMap, HostObject, HostObjectType, HostVec};
 #[cfg(feature = "vm")]
@@ -383,7 +386,9 @@ impl Host {
     /// underlying [`HostImpl`], returning its constituent components to the
     /// caller as a tuple wrapped in `Ok(...)`. If the provided host reference
     /// is not unique, returns `Err(self)`.
-    pub fn try_finish(self) -> Result<(Storage, Budget, Events), (Self, HostError)> {
+    pub fn try_finish(
+        self,
+    ) -> Result<(Storage, Budget, Events, RolledbackDiagnosticEvents), (Self, HostError)> {
         let events = self
             .0
             .events
@@ -397,7 +402,7 @@ impl Host {
             .map(|host_impl| {
                 let storage = host_impl.storage.into_inner();
                 let budget = host_impl.budget;
-                (storage, budget, events)
+                (storage, budget, events.0, events.1)
             })
             .map_err(|e| (Host(e), ScUnknownErrorCode::General.into()))
     }
@@ -464,9 +469,11 @@ impl Host {
         }
 
         if let Some(rp) = orp {
+            // rollback the events first so we have access to the objects before
+            // they're truncated. This only matters for diagnostic events.
+            self.0.events.borrow_mut().rollback(rp.events, self)?;
             self.0.objects.borrow_mut().truncate(rp.objects);
             self.0.storage.borrow_mut().map = rp.storage;
-            self.0.events.borrow_mut().rollback(rp.events, self)?;
             if let Some(auth_rp) = rp.auth {
                 self.0.authorization_manager.borrow_mut().rollback(auth_rp);
             }
@@ -619,7 +626,7 @@ impl Host {
         self.to_host_val(v).map(Into::into)
     }
 
-    pub fn get_events(&self) -> Result<Events, HostError> {
+    pub fn get_events(&self) -> Result<(Events, RolledbackDiagnosticEvents), HostError> {
         self.0.events.borrow().externalize(&self)
     }
 

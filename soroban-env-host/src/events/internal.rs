@@ -1,4 +1,4 @@
-use super::{DebugEvent, Events, HostEvent};
+use super::{DebugEvent, Events, HostEvent, RolledbackDiagnosticEvents};
 use crate::{
     budget::{AsBudget, Budget},
     host::metered_clone::MeteredClone,
@@ -56,6 +56,9 @@ impl MeteredClone for InternalEvent {}
 #[derive(Clone, Default)]
 pub(crate) struct InternalEventsBuffer {
     pub(crate) vec: Vec<InternalEvent>,
+    // Store the xdr diagnostic events before rolling back. This is required because
+    // the objects that the events point to will be truncated on rollback.
+    pub(crate) rolled_back_diagnostics: RolledbackDiagnosticEvents,
 }
 
 impl InternalEventsBuffer {
@@ -88,7 +91,17 @@ impl InternalEventsBuffer {
         // note that we first skip the events that are not being rolled back
         for e in self.vec.iter_mut().skip(events) {
             match e {
-                InternalEvent::Contract(c) | InternalEvent::StructuredDebug(c) => {
+                InternalEvent::Contract(c) => {
+                    *e = Self::defunct_contract_event(c);
+                    rollback_count += 1;
+                }
+                InternalEvent::StructuredDebug(c) => {
+                    let xdr_event = host
+                        .as_budget()
+                        .with_free_budget(|| Ok(c.clone().to_xdr(host)?))?;
+
+                    self.rolled_back_diagnostics.0.push(xdr_event);
+
                     *e = Self::defunct_contract_event(c);
                     rollback_count += 1;
                 }
@@ -127,7 +140,10 @@ impl InternalEventsBuffer {
     /// Converts the internal events into their external representation. This should only be called
     /// either when the host is finished (via `try_finish`), or when an error occurs.
     // TODO: Metering for non-diagnostic events?
-    pub fn externalize(&self, host: &Host) -> Result<Events, HostError> {
+    pub fn externalize(
+        &self,
+        host: &Host,
+    ) -> Result<(Events, RolledbackDiagnosticEvents), HostError> {
         let vec: Result<Vec<HostEvent>, HostError> = self
             .vec
             .iter()
@@ -140,6 +156,6 @@ impl InternalEventsBuffer {
                 InternalEvent::None => Err(host.err_general("Unexpected event type")),
             })
             .collect();
-        Ok(Events(vec?))
+        Ok((Events(vec?), self.rolled_back_diagnostics.clone()))
     }
 }
