@@ -318,7 +318,10 @@ impl AuthorizationManager {
                             // so that it's possible to create the auth manager
                             // without knowing the invoker beforehand and also
                             // to not keep calling into `source_account` function.
-                            let source_addr = ScAddress::Account(host.source_account()?);
+                            let source_addr =
+                                ScAddress::Account(host.source_account().ok_or_else(|| {
+                                    host.err_general("unexpected missing invoker in auth manager")
+                                })?);
                             let source_matches = source_addr == address;
                             tracker.address = Some(source_addr);
                             source_matches
@@ -574,7 +577,7 @@ impl AuthorizationTracker {
         // If the invoker account is known, set it to `None`, so that the final
         // recorded payload wouldn't contain the address. This makes it easier
         // to use more optimal payload when only invoker auth is used.
-        let is_invoker = if let Ok(source_acc) = host.source_account() {
+        let is_invoker = if let Some(source_acc) = host.source_account() {
             ScAddress::Account(source_acc) == address
         } else {
             false
@@ -819,7 +822,7 @@ impl AuthorizationTracker {
             nonce: self
                 .nonce
                 .clone()
-                .ok_or(host.err_general("unexpected missing nonce"))?,
+                .ok_or_else(|| host.err_general("unexpected missing nonce"))?,
         });
 
         host.metered_hash_xdr(&payload_preimage)
