@@ -102,7 +102,7 @@ impl AuthTreeTest {
         }
     }
 
-    // Runs the test for the given setup in enforcing mode. `sign_payloads` 
+    // Runs the test for the given setup in enforcing mode. `sign_payloads`
     // contain should contain a vec of `SignNode` inputs for every signer in the
     // setup. The nodes then are mapped to the respective `ContractAuth` entries.
     fn test_enforcing(
