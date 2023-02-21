@@ -114,9 +114,8 @@ impl InternalEventsBuffer {
         if rollback_count > 0 {
             self.vec.push(InternalEvent::Debug(
                 DebugEvent::new()
-                    .msg("{} contract events rolled back. Rollback start pos = {}")
-                    .arg(RawVal::from(rollback_count))
-                    .arg(host.usize_to_rawval_u32(events)?),
+                    .msg("{} contract events rolled back.")
+                    .arg(RawVal::from(rollback_count)),
             ));
         }
         Ok(())
