@@ -17,12 +17,10 @@ use crate::{
     HostError,
 };
 
-extern crate static_assertions as sa;
-
 // Charge for an N-element "shallow copy" of some type, not cloning any substructure. The charge
-// unit is number of elements `n_elts` multiply by size of each element. In a better world we would
-// multiply by size_of<Self> instead but that's not guaranteed to be stable, which might cause
-// metering to differ across compilations, causing serious problems in concensus and replay.
+// unit is number of elements `n_elts` multiplied by a declared size of each element. In a better
+// world we would multiply by `size_of<Self>` instead but that's not guaranteed to be stable, which
+// might cause metering to differ across compilations, causing problems in concensus and replay.
 fn charge_shallow_copy<T: MeteredClone>(n_elts: u64, budget: &Budget) -> Result<(), HostError> {
     // Ideally we would want a static assertion. However, it does not work due to rust restrictions
     // (e.g. see https://github.com/rust-lang/rust/issues/57775). Here we make a runtime assertion
@@ -30,16 +28,16 @@ fn charge_shallow_copy<T: MeteredClone>(n_elts: u64, budget: &Budget) -> Result<
     // only happens in debug build. In optimized build, not satisfying the asserted condition just
     // means an underestimation of the cost.
     debug_assert!(mem::size_of::<T>() as u64 <= T::ELT_SIZE);
-    budget.charge(CostType::HostMemCpy, n_elts * T::ELT_SIZE)
+    budget.charge(CostType::HostMemCpy, n_elts.saturating_mul(T::ELT_SIZE))
 }
 
-// Let it be a free function instead of a trait because charge heap alloc maybe called elsewhere,
+// Let it be a free function instead of a trait because charge_heap_alloc maybe called elsewhere,
 // not just metered clone, e.g. Box::<T>::new().
 fn charge_heap_alloc<T: MeteredClone>(n_elts: u64, budget: &Budget) -> Result<(), HostError> {
     // Here we make a runtime assertion that the type's size is below its promised element size for
     // budget charging.
     debug_assert!(mem::size_of::<T>() as u64 <= T::ELT_SIZE);
-    budget.charge(CostType::HostMemAlloc, n_elts * T::ELT_SIZE)
+    budget.charge(CostType::HostMemAlloc, n_elts.saturating_mul(T::ELT_SIZE))
 }
 
 pub trait MeteredClone: Clone {
@@ -49,46 +47,53 @@ pub trait MeteredClone: Clone {
     // `charge_for_clone` (correctly charging for cloning the substructure).
     const IS_SHALLOW: bool = true;
 
-    // Size (num of bytes) of a single element. This value determines the input for budget charging.
+    // Size (bytes) of a single element. This value determines the input for budget charging.
     // It should be the upperbound (across various compilations and platforms) of the actual type's
     // size. Implementer of the trait needs to decide this value based on Rust's guideline on type
     // layout: https://doc.rust-lang.org/reference/type-layout.html
     const ELT_SIZE: u64;
 
-    // Called to clone a single element of type Self, a default implementation
-    // that charges for a 1-unit memcpy and is _only_ appropriate when Self is
-    // a shallow type (with no substructure). If you override Self::IS_SHALLOW
-    // and set it to false, you should override this method also (it will actually
-    // panic if you don't).
-    fn charge_for_clone(&self, budget: &Budget) -> Result<(), HostError> {
+    // Called to clone the substructures of Self. The default implementation is a no-op and is
+    // _only_ appropriate when Self is a shallow type (with no substructure). If you override
+    // Self::IS_SHALLOW and set it to false, you should override this method also (it will actually
+    // panic if you don't). This charge does not include shallow copying of `Self` because that
+    // should be taken care of by the caller beforehand, e.g. in `metered_clone`.
+    fn charge_for_substructure(&self, budget: &Budget) -> Result<(), HostError> {
         assert!(Self::IS_SHALLOW);
-        charge_shallow_copy::<Self>(1, budget)
+        Ok(())
     }
 
-    // Called when cloning a slice of elements of type Self. Can be more
-    // efficient than cloning element-by-element when Self::IS_SHALLOW, because
-    // it's acceptable to charge once for the whole slice -- a single charge for
-    // the cost of a memcpy -- followed by copying the slice via memcpy (or
-    // something similar to a memcpy, eg. cloning a bunch of Rc<>s). If
-    // Self::IS_SHALLOW is false, this method will do element-wise charging,
-    // assuming it is paired with element-wise cloning.
-    fn charge_for_clones(clones: &[Self], budget: &Budget) -> Result<(), HostError> {
+    // Called when cloning the substructures of a slice of Self. When Self::IS_SHALLOW, this is a
+    // no-op. If Self::IS_SHALLOW is false, this method will do element-wise charging for
+    // substructure, assuming it is paired with element-wise cloning.
+    fn bulk_charge_for_substructure(clones: &[Self], budget: &Budget) -> Result<(), HostError> {
         if Self::IS_SHALLOW {
-            // If we're shallow, we're allowed to batch our charges.
-            charge_shallow_copy::<Self>(clones.len() as u64, budget)
+            // If we're shallow, just return.
+            Ok(())
         } else {
             for elt in clones {
-                elt.charge_for_clone(budget)?;
+                elt.charge_for_substructure(budget)?;
             }
             Ok(())
         }
     }
 
-    // Composite helper that just does a charge_for_clone followed by a clone.
-    // This should not need to be overriden since any non-trivial clone metering should be taken
-    // care of by `charge_for_clones` and this function just need to call the regular `clone()`.
+    // Convenience method for charging for a deep clone knowing the type is not shallow.
+    fn charge_deep_clone(&self, budget: &Budget) -> Result<(), HostError> {
+        debug_assert!(!Self::IS_SHALLOW);
+        charge_shallow_copy::<Self>(1, budget)?;
+        self.charge_for_substructure(budget)
+    }
+
+    // Composite helper handles metering before clone. It first charges for the shallow footprint
+    // of the type, followed by charging the substructure clone. The reason
+    // `charge_for_substructure` does not include shallow copying of `Self` is because it is taken
+    // care of here. Typically overriding `IS_SHALLOW` and `charge_for_substructure` should
+    // propertly take care of custom non-trivial cloning. Thus this method should not need to be
+    // overriden.
     fn metered_clone(&self, budget: &Budget) -> Result<Self, HostError> {
-        self.charge_for_clone(budget)?;
+        charge_shallow_copy::<Self>(1, budget)?;
+        self.charge_for_substructure(budget)?;
         Ok(self.clone())
     }
 }
@@ -125,8 +130,9 @@ impl<T> MeteredClone for Rc<T> {
     const ELT_SIZE: u64 = 16;
 }
 
-impl<const N: usize> MeteredClone for [u8; N] {
-    const ELT_SIZE: u64 = N as u64;
+// Cloning a slice only clones the reference without deep cloning its contents.
+impl<T> MeteredClone for &[T] {
+    const ELT_SIZE: u64 = 16;
 }
 
 impl<K, V> MeteredClone for (K, V)
@@ -148,21 +154,28 @@ impl MeteredClone for LedgerEntry {
     const ELT_SIZE: u64 = 264;
 }
 
+impl<C: MeteredClone, const N: usize> MeteredClone for [C; N] {
+    const IS_SHALLOW: bool = C::IS_SHALLOW;
+
+    const ELT_SIZE: u64 = C::ELT_SIZE.saturating_mul(N as u64);
+
+    fn charge_for_substructure(&self, budget: &Budget) -> Result<(), HostError> {
+        C::bulk_charge_for_substructure(self.as_slice(), budget)
+    }
+}
+
 impl MeteredClone for ScVal {
     const IS_SHALLOW: bool = false;
 
     const ELT_SIZE: u64 = 40;
 
-    fn charge_for_clone(&self, budget: &Budget) -> Result<(), HostError> {
-        // first handle the shallow clone
-        charge_shallow_copy::<ScVal>(1, budget)?;
-        // then handle any substructures
+    fn charge_for_substructure(&self, budget: &Budget) -> Result<(), HostError> {
         match self {
             ScVal::Object(Some(obj)) => {
                 match obj {
-                    ScObject::Vec(v) => ScVec::charge_for_clone(v, budget),
-                    ScObject::Map(m) => ScMap::charge_for_clone(m, budget),
-                    ScObject::Bytes(b) => BytesM::charge_for_clone(b, budget),
+                    ScObject::Vec(v) => ScVec::charge_for_substructure(v, budget),
+                    ScObject::Map(m) => ScMap::charge_for_substructure(m, budget),
+                    ScObject::Bytes(b) => BytesM::charge_for_substructure(b, budget),
                     // Everything else was handled by the memcpy above.
                     ScObject::U64(_)
                     | ScObject::I64(_)
@@ -190,9 +203,9 @@ impl MeteredClone for ScMapEntry {
 
     const ELT_SIZE: u64 = 80;
 
-    fn charge_for_clone(&self, budget: &Budget) -> Result<(), HostError> {
-        self.key.charge_for_clone(budget)?;
-        self.val.charge_for_clone(budget)
+    fn charge_for_substructure(&self, budget: &Budget) -> Result<(), HostError> {
+        self.key.charge_for_substructure(budget)?;
+        self.val.charge_for_substructure(budget)
     }
 }
 
@@ -201,8 +214,8 @@ impl MeteredClone for ScVec {
 
     const ELT_SIZE: u64 = 24;
 
-    fn charge_for_clone(&self, budget: &Budget) -> Result<(), HostError> {
-        self.0.charge_for_clone(budget) // self.0 will be deref'ed into Vec
+    fn charge_for_substructure(&self, budget: &Budget) -> Result<(), HostError> {
+        self.0.charge_for_substructure(budget) // self.0 will be deref'ed into Vec
     }
 }
 
@@ -211,8 +224,8 @@ impl MeteredClone for ScMap {
 
     const ELT_SIZE: u64 = 24;
 
-    fn charge_for_clone(&self, budget: &Budget) -> Result<(), HostError> {
-        self.0.charge_for_clone(budget) // self.0 will be deref'ed into Vec
+    fn charge_for_substructure(&self, budget: &Budget) -> Result<(), HostError> {
+        self.0.charge_for_substructure(budget) // self.0 will be deref'ed into Vec
     }
 }
 
@@ -221,8 +234,8 @@ impl<const C: u32> MeteredClone for BytesM<C> {
 
     const ELT_SIZE: u64 = 24;
 
-    fn charge_for_clone(&self, budget: &Budget) -> Result<(), HostError> {
-        <Self as AsRef<Vec<u8>>>::as_ref(self).charge_for_clone(budget)
+    fn charge_for_substructure(&self, budget: &Budget) -> Result<(), HostError> {
+        <Self as AsRef<Vec<u8>>>::as_ref(self).charge_for_substructure(budget)
     }
 }
 
@@ -231,16 +244,12 @@ impl<C: MeteredClone> MeteredClone for Vec<C> {
 
     const ELT_SIZE: u64 = 24;
 
-    fn charge_for_clone(&self, budget: &Budget) -> Result<(), HostError> {
-        // first take care of Vec clone, which involves allocating memory, (shallowly) memcpy the
-        // underlying data into it, and copying the vec data structure.
-        charge_shallow_copy::<Vec<C>>(1, budget)?;
+    fn charge_for_substructure(&self, budget: &Budget) -> Result<(), HostError> {
+        // first take care of Vec clone, which involves allocating memory and shallowly cloning the
+        // data type into it, then deep clone any substructure.
         charge_heap_alloc::<C>(self.len() as u64, budget)?;
         charge_shallow_copy::<C>(self.len() as u64, budget)?;
-        // then take care of any substructure clone (recursively)
-        for elt in self {
-            elt.charge_for_clone(budget)?;
-        }
+        C::bulk_charge_for_substructure(self.as_slice(), budget)?;
         Ok(())
     }
 }
@@ -250,14 +259,13 @@ impl<C: MeteredClone> MeteredClone for Box<C> {
 
     const ELT_SIZE: u64 = 8;
 
-    fn charge_for_clone(&self, budget: &Budget) -> Result<(), HostError> {
-        // first take care of the Box part
-        charge_shallow_copy::<Box<C>>(1, budget)?;
+    fn charge_for_substructure(&self, budget: &Budget) -> Result<(), HostError> {
+        // first take care of the Box clone: allocating memory and shallow cloning of data type.
         charge_heap_alloc::<C>(1, budget)?;
         charge_shallow_copy::<C>(1, budget)?;
         // then take care of any substructure clone (recursively)
         let inner: &C = &**self;
-        inner.charge_for_clone(budget)
+        inner.charge_for_substructure(budget)
     }
 }
 
@@ -268,12 +276,9 @@ impl<C: MeteredClone> MeteredClone for Option<C> {
     // alignment size, we need to increase the overhead.
     const ELT_SIZE: u64 = C::ELT_SIZE + 8;
 
-    fn charge_for_clone(&self, budget: &Budget) -> Result<(), HostError> {
-        // first take care of the Option part, which is just a shallow copy
-        charge_shallow_copy::<Self>(1, budget)?;
-        // then take care of any substructure clone (recursively)
+    fn charge_for_substructure(&self, budget: &Budget) -> Result<(), HostError> {
         match self {
-            Some(elt) => elt.charge_for_clone(budget),
+            Some(elt) => elt.charge_for_substructure(budget),
             None => Ok(()),
         }
     }
@@ -284,16 +289,16 @@ impl MeteredClone for DebugEvent {
 
     const ELT_SIZE: u64 = 80;
 
-    fn charge_for_clone(&self, budget: &Budget) -> Result<(), HostError> {
-        charge_shallow_copy::<Self>(1, budget)?;
+    fn charge_for_substructure(&self, budget: &Budget) -> Result<(), HostError> {
         if self.args.is_heap() {
-            // equivalent to charging for a `Vec` clone.
-            charge_shallow_copy::<Vec<DebugArg>>(1, budget)?;
+            // equivalent to charging for a `Vec` clone except we already know there is no
+            // substructure. `TinyVec` doesn't let us retrieve the `Vec` directly.
             charge_heap_alloc::<Vec<DebugArg>>(self.args.len() as u64, budget)?;
             charge_shallow_copy::<Vec<DebugArg>>(self.args.len() as u64, budget)
         } else {
             // equivalent to charging for a slice clone.
-            DebugArg::charge_for_clones(self.args.as_slice(), budget)
+            // Here the size is limited to the `tiny_vec`'s limit we defined.
+            DebugArg::bulk_charge_for_substructure(self.args.as_slice(), budget)
         }
     }
 }
@@ -303,11 +308,10 @@ impl MeteredClone for ContractEvent {
 
     const ELT_SIZE: u64 = 104;
 
-    fn charge_for_clone(&self, budget: &Budget) -> Result<(), HostError> {
-        charge_shallow_copy::<Self>(1, budget)?;
+    fn charge_for_substructure(&self, budget: &Budget) -> Result<(), HostError> {
         let ContractEventBody::V0(event) = &self.body;
-        event.topics.charge_for_clone(budget)?;
-        event.data.charge_for_clone(budget)
+        event.topics.charge_for_substructure(budget)?;
+        event.data.charge_for_substructure(budget)
     }
 }
 
@@ -316,10 +320,10 @@ impl MeteredClone for HostEvent {
 
     const ELT_SIZE: u64 = 112;
 
-    fn charge_for_clone(&self, budget: &Budget) -> Result<(), HostError> {
+    fn charge_for_substructure(&self, budget: &Budget) -> Result<(), HostError> {
         match self {
-            HostEvent::Contract(c) => c.charge_for_clone(budget),
-            HostEvent::Debug(d) => d.charge_for_clone(budget),
+            HostEvent::Contract(c) => c.charge_for_substructure(budget),
+            HostEvent::Debug(d) => d.charge_for_substructure(budget),
         }
     }
 }
@@ -329,8 +333,8 @@ impl MeteredClone for Events {
 
     const ELT_SIZE: u64 = 24;
 
-    fn charge_for_clone(&self, budget: &Budget) -> Result<(), HostError> {
-        self.0.charge_for_clone(budget)
+    fn charge_for_substructure(&self, budget: &Budget) -> Result<(), HostError> {
+        self.0.charge_for_substructure(budget)
     }
 }
 
@@ -339,11 +343,10 @@ impl MeteredClone for InternalEvent {
 
     const ELT_SIZE: u64 = 80;
 
-    fn charge_for_clone(&self, budget: &Budget) -> Result<(), HostError> {
-        charge_shallow_copy::<Self>(1, budget)?;
+    fn charge_for_substructure(&self, budget: &Budget) -> Result<(), HostError> {
         match self {
-            InternalEvent::Contract(c) => c.charge_for_clone(budget),
-            InternalEvent::Debug(d) => d.charge_for_clone(budget),
+            InternalEvent::Contract(c) => c.charge_for_substructure(budget),
+            InternalEvent::Debug(d) => d.charge_for_substructure(budget),
             InternalEvent::None => Ok(()),
         }
     }

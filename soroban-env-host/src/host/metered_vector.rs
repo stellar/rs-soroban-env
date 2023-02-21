@@ -51,7 +51,7 @@ where
     pub fn from_array(buf: &[A], budget: &Budget) -> Result<Self, HostError> {
         // we may temporarily go over budget here.
         let vec: Vec<A> = buf.into();
-        vec.charge_for_clone(budget)?;
+        vec.charge_deep_clone(budget)?;
         Self::from_vec(buf.into())
     }
 
@@ -74,7 +74,7 @@ where
             // possible object. In exchange we get to batch all charges associated with
             // the clone into one (when A::IS_SHALLOW==true).
             let vec: Vec<A> = iter.collect();
-            vec.charge_for_clone(budget)?;
+            vec.charge_deep_clone(budget)?;
             Self::from_vec(vec)
         } else {
             // TODO use a better error code for "unbounded input iterators"
@@ -277,7 +277,7 @@ where
                 vec.push(v.clone());
             }
         }
-        vec.charge_for_clone(budget)?;
+        vec.charge_deep_clone(budget)?;
         Self::from_vec(vec)
     }
 
@@ -296,8 +296,8 @@ where
 {
     const ELT_SIZE: u64 = <Vec<A> as MeteredClone>::ELT_SIZE;
 
-    fn charge_for_clone(&self, budget: &Budget) -> Result<(), HostError> {
-        self.vec.charge_for_clone(budget)
+    fn charge_for_substructure(&self, budget: &Budget) -> Result<(), HostError> {
+        self.vec.charge_for_substructure(budget)
     }
 }
 

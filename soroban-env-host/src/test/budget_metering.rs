@@ -170,21 +170,22 @@ fn test_recursive_type_clone() -> Result<(), HostError> {
         Box::new(scmap.clone()),
     ];
 
-    v.charge_for_clone(host.as_budget())?;
-    // Transition #                  (1)           (2)             (3)
-    // Type(size, count):  Vec(24,1) ---> Box(8,3) ----> Vec(24,3) ------> ScMapEntry(80,3x2)
-    // MemAlloc:                     8x3           24x3            80x3x2                     = 576
-    // MemCpy:             24        8x3  8x3      24x3  24x3      80x3x2  80x3x2             = 1176
-    // At the alloc boundary there is some double-charging happening.
-    // For example in transition #1, `Vec` charges for (1) allocation of 8x3 bytes, (2) copying of
-    // 8x3 bytes data into it. The `Box` charges for 8x3 for its own size.
+    v.metered_clone(host.as_budget())?;
+
+    //*********************************************************************************************************************************************/
+    /* Type(size, count) | Vec(24,1) ---> Box(8,3) ----> ScMap(24,3) --> Vec(24,3) ----> ScMapEntry(80,6) --> ScVal(40, 12) --> U32(4, 12)        */
+    /* MemAlloc          |            8x3      +    24x3              +             80x6                                                    = 576 */
+    /* MemCpy            |  24    +   8x3      +    24x3              +             80x6                                                    = 600 */
+    //*********************************************************************************************************************************************/
     expect!["576"].assert_eq(
         host.as_budget()
             .get_input(CostType::HostMemAlloc)
             .to_string()
             .as_str(),
     );
-    expect!["1176"].assert_eq(
+    // 600 = 576 + 24 is correct because we need to copy all the memory allocated, as well as the
+    // memory layout of the top level type (Vec).
+    expect!["600"].assert_eq(
         host.as_budget()
             .get_input(CostType::HostMemCpy)
             .to_string()

@@ -128,7 +128,7 @@ where
             // possible object. In exchange we get to batch all charges associated with
             // the clone into one (when A::IS_SHALLOW==true).
             let map: Vec<(K, V)> = iter.collect();
-            map.charge_for_clone(ctx.as_budget())?;
+            map.charge_deep_clone(ctx.as_budget())?;
             Ok(Self {
                 map,
                 ctx: Default::default(),
@@ -329,9 +329,8 @@ where
 {
     const ELT_SIZE: u64 = <Vec<(K, V)> as MeteredClone>::ELT_SIZE;
 
-    fn metered_clone(&self, budget: &Budget) -> Result<Self, HostError> {
-        self.map.charge_for_clone(budget)?;
-        Ok(self.clone())
+    fn charge_for_substructure(&self, budget: &Budget) -> Result<(), HostError> {
+        self.map.charge_for_substructure(budget)
     }
 }
 
