@@ -54,7 +54,7 @@ fn contract_event() -> Result<(), HostError> {
 
     // Fish out the last contract event and check that it is
     // correct, and formats as expected.
-    let events = host.get_events()?;
+    let events = host.get_events()?.0;
     match events.0.last() {
         Some(HostEvent::Contract(ce)) => {
             assert_eq!(*ce, event_ref)
@@ -98,9 +98,9 @@ fn test_event_rollback() -> Result<(), HostError> {
     host.0.events.borrow_mut().rollback(1, &host)?;
 
     let expected = expect![[
-        r#"Events([Contract(ContractEvent { ext: V0, contract_id: Some(Hash(0000000000000000000000000000000000000000000000000000000000000000)), type_: Contract, body: V0(ContractEventV0 { topics: ScVec(VecM([I32(0), I32(1)])), data: U32(0) }) }), Debug(DebugEvent { msg: Some("debug event 0"), args: [] }), Debug(DebugEvent { msg: Some("rolled-back contract event: type {}, id {}, topics {}, data {}"), args: [Val(I32(0)), Val(Object(Bytes(#4))), Val(Object(Vec(#2))), Val(U32(0))] }), Debug(DebugEvent { msg: Some("{} contract events rolled back. Rollback start pos = {}"), args: [Val(U32(1)), Val(U32(1))] })])"#
+        r#"Events([Contract(ContractEvent { ext: V0, contract_id: Some(Hash(0000000000000000000000000000000000000000000000000000000000000000)), type_: Contract, body: V0(ContractEventV0 { topics: ScVec(VecM([I32(0), I32(1)])), data: U32(0) }) }), Debug(DebugEvent { msg: Some("debug event 0"), args: [] }), Debug(DebugEvent { msg: Some("rolled-back contract event: type {}, id {}, topics {}, data {}"), args: [Val(I32(0)), Val(Object(Bytes(#4))), Val(Object(Vec(#2))), Val(U32(0))] }), Debug(DebugEvent { msg: Some("{} contract events rolled back."), args: [Val(U32(1))] })])"#
     ]];
-    let actual = format!("{:?}", host.0.events.borrow().externalize(&host)?);
+    let actual = format!("{:?}", host.0.events.borrow().externalize(&host)?.0);
     expected.assert_eq(&actual);
     Ok(())
 }

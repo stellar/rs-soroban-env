@@ -50,7 +50,7 @@ fn debug_fmt() {
 
     // Fish out the last debug event and check that it is
     // correct, and formats as expected.
-    let events = host.get_events().unwrap();
+    let events = host.get_events().unwrap().0;
     match events.0.last() {
         Some(HostEvent::Debug(de)) => {
             assert_eq!(
