@@ -9,6 +9,7 @@
 
 use std::rc::Rc;
 
+use soroban_env_common::xdr::{self, LedgerFootprint};
 use soroban_env_common::Compare;
 
 use crate::budget::Budget;
@@ -115,6 +116,23 @@ impl Footprint {
         } else {
             Err(ScHostStorageErrorCode::AccessToUnknownEntry.into())
         }
+    }
+
+    pub fn create_ledger_footprint(&self) -> Result<LedgerFootprint, xdr::Error> {
+        let mut read_only: Vec<LedgerKey> = vec![];
+        let mut read_write: Vec<LedgerKey> = vec![];
+        let Footprint(m) = self;
+        for (k, v) in m {
+            let dest = match v {
+                AccessType::ReadOnly => &mut read_only,
+                AccessType::ReadWrite => &mut read_write,
+            };
+            dest.push((**k).clone());
+        }
+        Ok(LedgerFootprint {
+            read_only: read_only.try_into()?,
+            read_write: read_write.try_into()?,
+        })
     }
 }
 
