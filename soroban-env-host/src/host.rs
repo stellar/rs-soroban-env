@@ -2290,7 +2290,7 @@ impl VmCallerEnv for Host {
                 #[cfg(any(test, feature = "testutils"))]
                 Frame::TestContract(tc) => get_host_val_tuple(&tc.id, &tc.func)?,
             };
-            let inner = MeteredVector::from_array(vals, self.as_budget())?;
+            let inner = MeteredVector::from_array(&vals, self.as_budget())?;
             outer.push(self.add_host_object(inner)?.into());
         }
         Ok(self.add_host_object(HostVec::from_vec(outer)?)?.into())
