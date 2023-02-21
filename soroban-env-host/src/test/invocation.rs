@@ -65,7 +65,6 @@ fn invoke_cross_contract_with_err() -> Result<(), HostError> {
     assert_eq!(sv.get_payload(), exp_st.to_raw().get_payload());
 
     let events = host.get_events()?;
-    println!("{:#?}", events);
     assert_eq!(events.0.len(), 4);
     let last_event = events.0.last();
     match last_event {
