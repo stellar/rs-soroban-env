@@ -106,9 +106,6 @@ macro_rules! impl_metered_clone_for_shallow_types {
     };
 }
 
-// These are results from running mem::size_of::<T>()
-// TODO: we need some kind of automatic tests to validate those numbers
-// and automatically update them
 impl_metered_clone_for_shallow_types!(u8, 1);
 impl_metered_clone_for_shallow_types!(u32, 4);
 impl_metered_clone_for_shallow_types!(i32, 4);
