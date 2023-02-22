@@ -80,7 +80,7 @@ impl TokenTest {
             [1, 0, 0, 0],
             None,
             None,
-            AccountFlags::RevocableFlag as u32,
+            AccountFlags::RevocableFlag as u32 | AccountFlags::ClawbackEnabledFlag as u32,
         );
 
         let asset = Asset::CreditAlphanum4(AlphaNum4 {
@@ -109,7 +109,7 @@ impl TokenTest {
         );
     }
 
-    fn create_default_trustline(&self, user: &TestSigner) {
+    fn create_default_trustline(&self, user: &TestSigner) -> LedgerKey {
         self.create_trustline(
             &user.account_id(),
             &keypair_to_account_id(&self.issuer_key),
@@ -119,7 +119,7 @@ impl TokenTest {
             TrustLineFlags::AuthorizedFlag as u32
                 | TrustLineFlags::TrustlineClawbackEnabledFlag as u32,
             None,
-        );
+        )
     }
 
     fn get_native_balance(&self, account_id: &AccountId) -> i64 {
@@ -160,6 +160,19 @@ impl TokenTest {
             sponsorships,
             flags,
         );
+    }
+
+    fn update_account_flags(&self, key: &LedgerKey, new_flags: u32) {
+        self.host
+            .with_mut_storage(|s| match s.get(key, self.host.as_budget()).unwrap().data {
+                LedgerEntryData::Account(mut account) => {
+                    account.flags = new_flags;
+                    let update = Host::ledger_entry_from_data(LedgerEntryData::Account(account));
+                    s.put(&key, &update, self.host.as_budget())
+                }
+                _ => unreachable!(),
+            })
+            .unwrap();
     }
 
     fn create_trustline(
@@ -216,6 +229,20 @@ impl TokenTest {
             .unwrap();
 
         key
+    }
+
+    fn update_trustline_flags(&self, key: &LedgerKey, new_flags: u32) {
+        self.host
+            .with_mut_storage(|s| match s.get(key, self.host.as_budget()).unwrap().data {
+                LedgerEntryData::Trustline(mut trustline) => {
+                    trustline.flags = new_flags;
+                    let update =
+                        Host::ledger_entry_from_data(LedgerEntryData::Trustline(trustline));
+                    s.put(&key, &update, self.host.as_budget())
+                }
+                _ => unreachable!(),
+            })
+            .unwrap();
     }
 
     fn run_from_contract<T, F>(
@@ -375,6 +402,58 @@ fn test_asset4_smart_init() {
 #[test]
 fn test_asset12_smart_init() {
     test_asset_init(&[255, 0, 0, 127, b'a', b'b', b'c', 1, 2, 3, 4, 5]);
+}
+
+#[test]
+fn test_zero_amounts() {
+    let test = TokenTest::setup();
+    let admin = TestSigner::account(&test.issuer_key);
+    let token = test.default_token();
+
+    let user = TestSigner::account(&test.user_key);
+    let user_2 = TestSigner::account(&test.user_key_2);
+
+    let user_contract_id = generate_bytes_array();
+    let user_contract_address = contract_id_to_address(&test.host, user_contract_id.clone());
+
+    test.create_default_account(&user);
+    test.create_default_account(&user_2);
+    test.create_default_trustline(&user);
+    test.create_default_trustline(&user_2);
+
+    token.xfer(&user, user_2.address(&test.host), 0).unwrap();
+    token.burn(&user, 0).unwrap();
+    token
+        .burn_from(&user, user_2.address(&test.host), 0)
+        .unwrap();
+
+    token
+        .burn_from(&user, user_contract_address.clone(), 0)
+        .unwrap();
+
+    // clawback on 0 is fine if a balance or trustline exists
+    token
+        .clawback(&admin, user_2.address(&test.host), 0)
+        .unwrap();
+
+    //balance doesn't exist
+    assert_eq!(
+        to_contract_err(
+            token
+                .clawback(&admin, user_contract_address.clone(), 0)
+                .err()
+                .unwrap()
+        ),
+        ContractError::BalanceError
+    );
+
+    //this will create a 0 balance with clawback enabled because the issuer has the clawback flag set
+    token
+        .set_auth(&admin, user_contract_address.clone(), true)
+        .unwrap();
+    token
+        .clawback(&admin, user_contract_address.clone(), 0)
+        .unwrap();
 }
 
 #[test]
@@ -779,13 +858,13 @@ fn test_token_authorization() {
 }
 
 #[test]
-fn test_clawback() {
+fn test_clawback_on_account() {
     let test = TokenTest::setup();
     let admin = TestSigner::account(&test.issuer_key);
     let token = test.default_token();
 
     let user = TestSigner::account(&test.user_key);
-    test.create_default_trustline(&user);
+    let tl_key = test.create_default_trustline(&user);
 
     token
         .mint(&admin, user.address(&test.host), 100_000_000)
@@ -813,11 +892,92 @@ fn test_clawback() {
         ContractError::BalanceError
     );
 
+    // disable clawback on the trustline
+    test.update_trustline_flags(&tl_key, 0);
+    assert_eq!(
+        to_contract_err(
+            token
+                .clawback(&admin, user.address(&test.host), 60_000_000)
+                .err()
+                .unwrap()
+        ),
+        ContractError::BalanceError
+    );
+
+    // enable clawback on the trustline
+    test.update_trustline_flags(&tl_key, TrustLineFlags::TrustlineClawbackEnabledFlag as u32);
+
     // Clawback everything else
     token
         .clawback(&admin, user.address(&test.host), 60_000_000)
         .unwrap();
     assert_eq!(token.balance(user.address(&test.host)).unwrap(), 0);
+}
+
+#[test]
+fn test_clawback_on_contract() {
+    let test = TokenTest::setup();
+    let admin = TestSigner::account(&test.issuer_key);
+    let token = test.default_token();
+
+    let issuer_ledger_key = test
+        .host
+        .to_account_key(keypair_to_account_id(&test.issuer_key).into());
+
+    let user_1 = generate_bytes_array();
+    let user_2 = generate_bytes_array();
+    let user_1_addr = contract_id_to_address(&test.host, user_1);
+    let user_2_addr = contract_id_to_address(&test.host, user_2);
+
+    token
+        .mint(&admin, user_1_addr.clone(), 100_000_000)
+        .unwrap();
+
+    //disable clawback before minting to user_2
+    test.update_account_flags(&issuer_ledger_key, 0);
+    token
+        .mint(&admin, user_2_addr.clone(), 100_000_000)
+        .unwrap();
+
+    assert_eq!(token.balance(user_1_addr.clone()).unwrap(), 100_000_000);
+
+    assert_eq!(token.balance(user_2_addr.clone()).unwrap(), 100_000_000);
+
+    // issuer did not have clawback enabled when user_2 balance was created, so this should fail
+    token
+        .clawback(&admin, user_1_addr.clone(), 40_000_000)
+        .unwrap();
+
+    assert_eq!(
+        to_contract_err(
+            token
+                .clawback(&admin, user_2_addr.clone(), 40_000_000)
+                .err()
+                .unwrap()
+        ),
+        ContractError::BalanceError
+    );
+
+    // enable clawback on the issuer again. Nothing should change for existing balances
+    test.update_account_flags(&issuer_ledger_key, AccountFlags::ClawbackEnabledFlag as u32);
+
+    token
+        .clawback(&admin, user_1_addr.clone(), 40_000_000)
+        .unwrap();
+
+    assert_eq!(
+        to_contract_err(
+            token
+                .clawback(&admin, user_2_addr.clone(), 40_000_000)
+                .err()
+                .unwrap()
+        ),
+        ContractError::BalanceError
+    );
+
+    assert_eq!(token.balance(user_1_addr.clone()).unwrap(), 20_000_000);
+
+    assert_eq!(token.balance(user_2_addr.clone()).unwrap(), 100_000_000);
 }
 
 #[test]
