@@ -77,8 +77,7 @@ pub fn receive_balance(e: &Host, addr: Address, amount: i128) -> Result<(), Host
         ScAddress::Contract(_) => {
             let key = DataKey::Balance(addr.clone());
             let mut balance = if let Ok(raw_balance) = e.get_contract_data(key.try_into_val(e)?) {
-                let balance: BalanceValue = raw_balance.try_into_val(e)?;
-                balance
+                raw_balance.try_into_val(e)?
             } else {
                 // balance passed the authorization check at the top of this function, so write true.
                 BalanceValue {
