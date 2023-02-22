@@ -20,8 +20,9 @@ impl<A> MeteredVector<A>
 where
     A: MeteredClone,
 {
-    fn charge_new(size: usize, budget: &Budget) -> Result<(), HostError> {
-        budget.charge(CostType::VecNew, size as u64)
+    /// Covers the cost of allocating a new Vec<A> with size in number of elements.
+    fn charge_new(n_elts: u64, budget: &Budget) -> Result<(), HostError> {
+        budget.charge(CostType::VecNew, n_elts * A::ELT_SIZE)
     }
 
     fn charge_access(&self, count: usize, budget: &Budget) -> Result<(), HostError> {
@@ -47,8 +48,10 @@ where
         Self::from_vec(Vec::new())
     }
 
-    pub fn from_array<const N: usize>(buf: [A; N], budget: &Budget) -> Result<Self, HostError> {
-        Self::charge_new(N, budget)?;
+    pub fn from_array(buf: &[A], budget: &Budget) -> Result<Self, HostError> {
+        // we may temporarily go over budget here.
+        let vec: Vec<A> = buf.into();
+        vec.charge_deep_clone(budget)?;
         Self::from_vec(buf.into())
     }
 
@@ -66,14 +69,13 @@ where
         budget: &Budget,
     ) -> Result<Self, HostError> {
         if let (_, Some(sz)) = iter.size_hint() {
-            Self::charge_new(sz, budget)?;
             // It's possible we temporarily go over-budget here before charging, but
             // only by the cost of temporarily allocating twice the size of our largest
             // possible object. In exchange we get to batch all charges associated with
             // the clone into one (when A::IS_SHALLOW==true).
             let vec: Vec<A> = iter.collect();
-            A::charge_for_clones(vec.as_slice(), budget)?;
-            Ok(Self { vec })
+            vec.charge_deep_clone(budget)?;
+            Self::from_vec(vec)
         } else {
             // TODO use a better error code for "unbounded input iterators"
             Err(ScHostFnErrorCode::UnknownError.into())
@@ -267,15 +269,16 @@ where
     where
         F: FnMut(usize, &mut A) -> Result<bool, HostError>,
     {
-        Self::charge_new(self.len(), budget)?;
+        // The closure evaluation is not metered here, it is assumed to be taken care of outside.
+        // Here just covers the cost of cloning a Vec.
         let mut vec = Vec::with_capacity(self.len());
         for (i, v) in self.vec.iter_mut().enumerate() {
             if f(i, v)? {
                 vec.push(v.clone());
             }
         }
-        A::charge_for_clones(vec.as_slice(), budget)?;
-        Ok(Self { vec })
+        vec.charge_deep_clone(budget)?;
+        Self::from_vec(vec)
     }
 
     pub fn iter(&self) -> std::slice::Iter<'_, A> {
@@ -291,8 +294,10 @@ impl<A> MeteredClone for MeteredVector<A>
 where
     A: MeteredClone,
 {
-    fn charge_for_clone(&self, budget: &Budget) -> Result<(), HostError> {
-        Self::charge_new(self.len(), budget)
+    const ELT_SIZE: u64 = <Vec<A> as MeteredClone>::ELT_SIZE;
+
+    fn charge_for_substructure(&self, budget: &Budget) -> Result<(), HostError> {
+        self.vec.charge_for_substructure(budget)
     }
 }
 

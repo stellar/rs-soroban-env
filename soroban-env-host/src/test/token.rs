@@ -10,8 +10,8 @@ use crate::{
         contract_error::ContractError,
         testutils::{
             account_to_address, authorize_single_invocation,
-            authorize_single_invocation_with_nonce, contract_id_to_address, generate_keypair,
-            keypair_to_account_id, AccountSigner, HostVec, TestSigner,
+            authorize_single_invocation_with_nonce, contract_id_to_address, create_account,
+            generate_keypair, keypair_to_account_id, AccountSigner, HostVec, TestSigner,
         },
         token::test_token::TestToken,
     },
@@ -20,13 +20,11 @@ use crate::{
 };
 use ed25519_dalek::Keypair;
 use soroban_env_common::{
-    xdr::{self, AccountFlags, ScAddress, ScVal, ScVec, Uint256},
+    xdr::{self, AccountFlags, ScAddress, ScVal, ScVec},
     xdr::{
-        AccountEntry, AccountEntryExt, AccountEntryExtensionV1, AccountEntryExtensionV1Ext,
-        AccountEntryExtensionV2, AccountEntryExtensionV2Ext, AccountId, AlphaNum12, AlphaNum4,
-        Asset, AssetCode12, AssetCode4, Hash, HostFunctionType, LedgerEntryData, LedgerKey,
-        Liabilities, PublicKey, ScStatusType, SequenceNumber, SignerKey, Thresholds,
-        TrustLineEntry, TrustLineEntryExt, TrustLineEntryV1, TrustLineEntryV1Ext, TrustLineFlags,
+        AccountId, AlphaNum12, AlphaNum4, Asset, AssetCode12, AssetCode4, Hash, HostFunctionType,
+        LedgerEntryData, LedgerKey, Liabilities, PublicKey, ScStatusType, TrustLineEntry,
+        TrustLineEntryExt, TrustLineEntryV1, TrustLineEntryV1Ext, TrustLineFlags,
     },
     EnvBase, RawVal,
 };
@@ -151,61 +149,17 @@ impl TokenTest {
         sponsorships: Option<(u32, u32)>,
         flags: u32,
     ) {
-        let key = self.host.to_account_key(account_id.clone().into());
-        let account_id = match &key {
-            LedgerKey::Account(acc) => acc.account_id.clone(),
-            _ => unreachable!(),
-        };
-        let mut acc_signers = vec![];
-        for (signer, weight) in signers {
-            acc_signers.push(soroban_env_common::xdr::Signer {
-                key: SignerKey::Ed25519(Uint256(signer.public.to_bytes())),
-                weight,
-            });
-        }
-        let ext = if sponsorships.is_some() || liabilities.is_some() {
-            AccountEntryExt::V1(AccountEntryExtensionV1 {
-                liabilities: if let Some((buying, selling)) = liabilities {
-                    Liabilities { buying, selling }
-                } else {
-                    Liabilities {
-                        buying: 0,
-                        selling: 0,
-                    }
-                },
-                ext: if let Some((num_sponsored, num_sponsoring)) = sponsorships {
-                    AccountEntryExtensionV1Ext::V2(AccountEntryExtensionV2 {
-                        num_sponsored,
-                        num_sponsoring,
-                        signer_sponsoring_i_ds: Default::default(),
-                        ext: AccountEntryExtensionV2Ext::V0 {},
-                    })
-                } else {
-                    AccountEntryExtensionV1Ext::V0
-                },
-            })
-        } else {
-            AccountEntryExt::V0
-        };
-        let acc_entry = AccountEntry {
+        create_account(
+            &self.host,
             account_id,
-            balance: balance,
-            seq_num: SequenceNumber(0),
+            signers,
+            balance,
             num_sub_entries,
-            inflation_dest: None,
+            thresholds,
+            liabilities,
+            sponsorships,
             flags,
-            home_domain: Default::default(),
-            thresholds: Thresholds(thresholds),
-            signers: acc_signers.try_into().unwrap(),
-            ext,
-        };
-
-        self.host
-            .add_ledger_entry(
-                key,
-                Host::ledger_entry_from_data(LedgerEntryData::Account(acc_entry)),
-            )
-            .unwrap();
+        );
     }
 
     fn update_account_flags(&self, key: &LedgerKey, new_flags: u32) {
@@ -2554,6 +2508,7 @@ fn simple_account_sign_fn<'a>(
 #[test]
 fn test_custom_account_auth() {
     use crate::native_contract::testutils::AccountContractSigner;
+    use soroban_env_common::EnvBase;
     use soroban_test_wasms::SIMPLE_ACCOUNT_CONTRACT;
 
     let test = TokenTest::setup();

@@ -231,12 +231,8 @@ impl Host {
         *self.0.source_account.borrow_mut() = None;
     }
 
-    pub fn source_account(&self) -> Result<AccountId, HostError> {
-        if let Some(account_id) = self.0.source_account.borrow().as_ref() {
-            Ok(account_id.clone())
-        } else {
-            Err(self.err_general("invoker account is not configured"))
-        }
+    pub fn source_account(&self) -> Option<AccountId> {
+        self.0.source_account.borrow().clone()
     }
 
     pub fn switch_to_recording_auth(&self) {
@@ -1077,7 +1073,9 @@ impl Host {
             .previous_authorization_manager
             .borrow_mut()
             .as_mut()
-            .ok_or(self.err_general("previous invocation is missing - no auth data to get"))?
+            .ok_or_else(|| {
+                self.err_general("previous invocation is missing - no auth data to get")
+            })?
             .get_recorded_top_authorizations())
     }
 
@@ -2292,7 +2290,7 @@ impl VmCallerEnv for Host {
                 #[cfg(any(test, feature = "testutils"))]
                 Frame::TestContract(tc) => get_host_val_tuple(&tc.id, &tc.func)?,
             };
-            let inner = MeteredVector::from_array(vals, self.as_budget())?;
+            let inner = MeteredVector::from_array(&vals, self.as_budget())?;
             outer.push(self.add_host_object(inner)?.into());
         }
         Ok(self.add_host_object(HostVec::from_vec(outer)?)?.into())

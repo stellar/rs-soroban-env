@@ -1,8 +1,10 @@
 use crate::{
-    budget::CostType,
+    budget::{AsBudget, CostType},
+    host::metered_clone::MeteredClone,
     xdr::{ScMap, ScMapEntry, ScObject, ScVal, ScVmErrorCode},
     Env, Host, HostError, RawVal, Symbol,
 };
+use expect_test::{self, expect};
 use soroban_test_wasms::VEC;
 
 #[test]
@@ -140,5 +142,54 @@ fn map_insert_key_vec_obj() -> Result<(), HostError> {
         assert_eq!(budget.get_input(CostType::MapEntry), 5);
     });
 
+    Ok(())
+}
+
+#[test]
+fn test_recursive_type_clone() -> Result<(), HostError> {
+    let host = Host::test_host()
+        .test_budget(100000, 100000)
+        .enable_model(CostType::HostMemAlloc)
+        .enable_model(CostType::HostMemCpy);
+    let scmap: ScMap = host.map_err(
+        vec![
+            ScMapEntry {
+                key: ScVal::U32(1),
+                val: ScVal::U32(2),
+            },
+            ScMapEntry {
+                key: ScVal::U32(2),
+                val: ScVal::U32(4),
+            },
+        ]
+        .try_into(),
+    )?;
+    let v: Vec<Box<ScMap>> = vec![
+        Box::new(scmap.clone()),
+        Box::new(scmap.clone()),
+        Box::new(scmap.clone()),
+    ];
+
+    v.metered_clone(host.as_budget())?;
+
+    //*********************************************************************************************************************************************/
+    /* Type(size, count) | Vec(24,1) ---> Box(8,3) ----> ScMap(24,3) --> Vec(24,3) ----> ScMapEntry(80,6) --> ScVal(40, 12) --> U32(4, 12)        */
+    /* MemAlloc          |            8x3      +    24x3              +             80x6                                                    = 576 */
+    /* MemCpy            |  24    +   8x3      +    24x3              +             80x6                                                    = 600 */
+    //*********************************************************************************************************************************************/
+    expect!["576"].assert_eq(
+        host.as_budget()
+            .get_input(CostType::HostMemAlloc)
+            .to_string()
+            .as_str(),
+    );
+    // 600 = 576 + 24 is correct because we need to copy all the memory allocated, as well as the
+    // memory layout of the top level type (Vec).
+    expect!["600"].assert_eq(
+        host.as_budget()
+            .get_input(CostType::HostMemCpy)
+            .to_string()
+            .as_str(),
+    );
     Ok(())
 }
