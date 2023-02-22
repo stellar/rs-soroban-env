@@ -1,7 +1,6 @@
 use super::{DebugEvent, Events, HostEvent};
 use crate::{
     budget::{AsBudget, Budget},
-    host::metered_clone::MeteredClone,
     xdr,
     xdr::ScObject,
     Host, HostError, MeteredVector, Object, RawVal,
@@ -48,8 +47,6 @@ pub(crate) enum InternalEvent {
     #[default]
     None,
 }
-
-impl MeteredClone for InternalEvent {}
 
 /// The events buffer. Stores `InternalEvent`s in the chronological order.
 #[derive(Clone, Default)]
