@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use crate::budget::AsBudget;
 use crate::host::Host;
 use crate::native_contract::base_types::Address;
@@ -343,15 +345,15 @@ fn transfer_account_balance(e: &Host, account_id: AccountId, amount: i64) -> Res
 
     e.with_mut_storage(|storage| {
         let mut le = storage
-            .get(&lk, e.as_budget())
+            .get(Rc::clone(&lk), e.as_budget())
             .map_err(|_| e.err_status_msg(ContractError::AccountMissingError, "account missing"))?;
 
-        let ae = match &mut le.data {
-            LedgerEntryData::Account(ae) => Ok(ae),
+        let mut ae = match &le.data {
+            LedgerEntryData::Account(ae) => Ok(ae.clone()),
             _ => Err(e.err_status_msg(ContractError::InternalError, "unexpected entry found")),
         }?;
 
-        let (min_balance, max_balance) = get_min_max_account_balance(e, ae)?;
+        let (min_balance, max_balance) = get_min_max_account_balance(e, &ae)?;
 
         let new_balance = if amount <= 0 {
             ae.balance + amount
@@ -362,7 +364,8 @@ fn transfer_account_balance(e: &Host, account_id: AccountId, amount: i64) -> Res
         };
         if new_balance >= min_balance && new_balance <= max_balance {
             ae.balance = new_balance;
-            storage.put(&lk, &le, e.as_budget())
+            le = Host::ledger_entry_from_data(LedgerEntryData::Account(ae));
+            storage.put(lk, le, e.as_budget())
         } else {
             Err(err!(
                 e,
@@ -385,12 +388,12 @@ fn transfer_trustline_balance(
 ) -> Result<(), HostError> {
     let lk = e.to_trustline_key(account_id, asset);
     e.with_mut_storage(|storage| {
-        let mut le = storage.get(&lk, e.as_budget()).map_err(|_| {
+        let mut le = storage.get(Rc::clone(&lk), e.as_budget()).map_err(|_| {
             e.err_status_msg(ContractError::TrustlineMissingError, "trustline missing")
         })?;
 
-        let tl = match &mut le.data {
-            LedgerEntryData::Trustline(tl) => Ok(tl),
+        let mut tl = match &le.data {
+            LedgerEntryData::Trustline(tl) => Ok(tl.clone()),
             _ => Err(e.err_status_msg(ContractError::InternalError, "unexpected entry found")),
         }?;
 
@@ -405,7 +408,8 @@ fn transfer_trustline_balance(
         };
         if new_balance >= min_balance && new_balance <= max_balance {
             tl.balance = new_balance;
-            storage.put(&lk, &le, e.as_budget())
+            le = Host::ledger_entry_from_data(LedgerEntryData::Trustline(tl));
+            storage.put(lk, le, e.as_budget())
         } else {
             Err(err!(
                 e,
@@ -426,10 +430,10 @@ fn get_account_balance(e: &Host, account_id: AccountId) -> Result<(i64, i64), Ho
 
     e.with_mut_storage(|storage| {
         let le = storage
-            .get(&lk, e.as_budget())
+            .get(lk, e.as_budget())
             .map_err(|_| e.err_status_msg(ContractError::AccountMissingError, "account missing"))?;
 
-        let ae = match le.data {
+        let ae = match &le.data {
             LedgerEntryData::Account(ae) => Ok(ae),
             _ => Err(e.err_status_msg(ContractError::InternalError, "unexpected entry found")),
         }?;
@@ -479,16 +483,16 @@ fn get_trustline_balance(
 ) -> Result<(i64, i64), HostError> {
     let lk = e.to_trustline_key(account_id, asset);
     e.with_mut_storage(|storage| {
-        let mut le = storage.get(&lk, e.as_budget()).map_err(|_| {
+        let le = storage.get(lk, e.as_budget()).map_err(|_| {
             e.err_status_msg(ContractError::TrustlineMissingError, "trustline missing")
         })?;
 
-        let tl = match &mut le.data {
-            LedgerEntryData::Trustline(tl) => Ok(tl),
+        let tl = match &le.data {
+            LedgerEntryData::Trustline(tl) => Ok(tl.clone()),
             _ => Err(e.err_status_msg(ContractError::InternalError, "unexpected entry found")),
         }?;
 
-        let min = get_min_max_trustline_balance(e, tl)?.0;
+        let min = get_min_max_trustline_balance(e, &tl)?.0;
         if tl.balance < min {
             return Err(e.err_status_msg(
                 ContractError::InternalError,
@@ -561,11 +565,11 @@ fn get_trustline_flags(
 ) -> Result<u32, HostError> {
     let lk = e.to_trustline_key(account_id, asset);
     e.with_mut_storage(|storage| {
-        let le = storage.get(&lk, e.as_budget()).map_err(|_| {
+        let le = storage.get(lk, e.as_budget()).map_err(|_| {
             e.err_status_msg(ContractError::TrustlineMissingError, "trustline missing")
         })?;
 
-        let tl = match le.data {
+        let tl = match &le.data {
             LedgerEntryData::Trustline(tl) => Ok(tl),
             _ => Err(e.err_status_msg(ContractError::InternalError, "unexpected entry found")),
         }?;
@@ -641,12 +645,12 @@ fn set_trustline_authorization(
 ) -> Result<(), HostError> {
     let lk = e.to_trustline_key(account_id, asset);
     e.with_mut_storage(|storage| {
-        let mut le = storage.get(&lk, e.as_budget()).map_err(|_| {
+        let mut le = storage.get(Rc::clone(&lk), e.as_budget()).map_err(|_| {
             e.err_status_msg(ContractError::TrustlineMissingError, "trustline missing")
         })?;
 
-        let tl = match &mut le.data {
-            LedgerEntryData::Trustline(tl) => Ok(tl),
+        let mut tl = match &le.data {
+            LedgerEntryData::Trustline(tl) => Ok(tl.clone()),
             _ => Err(e.err_status_msg(ContractError::InternalError, "unexpected entry found")),
         }?;
 
@@ -659,7 +663,8 @@ fn set_trustline_authorization(
             tl.flags &= !(TrustLineFlags::AuthorizedFlag as u32);
             tl.flags |= TrustLineFlags::AuthorizedToMaintainLiabilitiesFlag as u32;
         }
-        storage.put(&lk, &le, e.as_budget())
+        le = Host::ledger_entry_from_data(LedgerEntryData::Trustline(tl));
+        storage.put(lk, le, e.as_budget())
     })
 }
 

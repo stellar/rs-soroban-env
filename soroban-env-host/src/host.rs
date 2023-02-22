@@ -767,13 +767,12 @@ impl Host {
         contract_source: ScContractCode,
     ) -> Result<(), HostError> {
         let new_contract_id = self.hash_from_obj_input("id_obj", contract_id)?;
-        let storage_key =
-            self.contract_source_ledger_key(new_contract_id.metered_clone(&self.0.budget)?);
+        let storage_key = self.contract_source_ledger_key(&new_contract_id)?;
         if self
             .0
             .storage
             .borrow_mut()
-            .has(&storage_key, self.as_budget())?
+            .has(Rc::clone(&storage_key), self.as_budget())?
         {
             return Err(self.err_general("Contract already exists"));
         }
@@ -781,18 +780,17 @@ impl Host {
         // without this check it would be possible to accidentally create a
         // contract that never may be invoked (just by providing a bad hash).
         if let ScContractCode::WasmRef(wasm_hash) = &contract_source {
-            let wasm_storage_key =
-                self.contract_code_ledger_key(wasm_hash.metered_clone(&self.0.budget)?);
+            let wasm_storage_key = self.contract_code_ledger_key(wasm_hash)?;
             if !self
                 .0
                 .storage
                 .borrow_mut()
-                .has(&wasm_storage_key, self.as_budget())?
+                .has(wasm_storage_key, self.as_budget())?
             {
                 return Err(self.err_general("Contract code was not installed"));
             }
         }
-        self.store_contract_source(contract_source, new_contract_id, &storage_key)?;
+        self.store_contract_source(contract_source, new_contract_id, storage_key)?;
         Ok(())
     }
 
@@ -842,11 +840,18 @@ impl Host {
         args: &[RawVal],
     ) -> Result<RawVal, HostError> {
         // Create key for storage
-        let storage_key = self.contract_source_ledger_key(id.metered_clone(&self.0.budget)?);
-        match self.retrieve_contract_source_from_storage(&storage_key)? {
+        let storage_key = self.contract_source_ledger_key(id)?;
+        match self.retrieve_contract_source_from_storage(storage_key)? {
             #[cfg(feature = "vm")]
             ScContractCode::WasmRef(wasm_hash) => {
-                let code_entry = self.retrieve_contract_code_from_storage(wasm_hash)?;
+                let key = self.contract_code_ledger_key(&wasm_hash)?;
+                let entry = &self.0.storage.borrow_mut().get(key, self.as_budget())?;
+                let code_entry = if let LedgerEntryData::ContractCode(e) = &entry.data {
+                    Ok(e)
+                } else {
+                    Err(self.err_status(ScHostStorageErrorCode::AccessToUnknownEntry))
+                }?;
+
                 let vm = Vm::new(
                     self,
                     id.metered_clone(&self.0.budget)?,
@@ -1053,10 +1058,10 @@ impl Host {
     #[cfg(any(test, feature = "testutils"))]
     pub fn add_ledger_entry(
         &self,
-        key: LedgerKey,
-        val: soroban_env_common::xdr::LedgerEntry,
+        key: Rc<LedgerKey>,
+        val: Rc<soroban_env_common::xdr::LedgerEntry>,
     ) -> Result<(), HostError> {
-        self.with_mut_storage(|storage| storage.put(&key, &val, self.as_budget()))
+        self.with_mut_storage(|storage| storage.put(key, val, self.as_budget()))
     }
 
     // Returns the top-level authorizations that have been recorded for the last
@@ -1114,14 +1119,14 @@ impl Host {
     fn install_contract(&self, args: InstallContractCodeArgs) -> Result<Object, HostError> {
         let hash_bytes = self.metered_hash_xdr(&args)?;
         let hash_obj = self.add_host_object(hash_bytes.to_vec())?;
-        let code_key = LedgerKey::ContractCode(LedgerKeyContractCode {
+        let code_key = Rc::new(LedgerKey::ContractCode(LedgerKeyContractCode {
             hash: Hash(hash_bytes.metered_clone(self.budget_ref())?),
-        });
+        }));
         if !self
             .0
             .storage
             .borrow_mut()
-            .has(&code_key, self.as_budget())?
+            .has(Rc::clone(&code_key), self.as_budget())?
         {
             self.with_mut_storage(|storage| {
                 let data = LedgerEntryData::ContractCode(ContractCodeEntry {
@@ -1130,8 +1135,8 @@ impl Host {
                     ext: ExtensionPoint::V0,
                 });
                 storage.put(
-                    &code_key,
-                    &Host::ledger_entry_from_data(data),
+                    code_key,
+                    Host::ledger_entry_from_data(data),
                     self.as_budget(),
                 )
             })?;
@@ -1850,8 +1855,8 @@ impl VmCallerEnv for Host {
             val: self.from_host_val(v)?,
         });
         self.0.storage.borrow_mut().put(
-            &key,
-            &Host::ledger_entry_from_data(data),
+            key,
+            Host::ledger_entry_from_data(data),
             self.as_budget(),
         )?;
         Ok(().into())
@@ -1864,7 +1869,7 @@ impl VmCallerEnv for Host {
         k: RawVal,
     ) -> Result<RawVal, HostError> {
         let key = self.storage_key_from_rawval(k)?;
-        let res = self.0.storage.borrow_mut().has(&key, self.as_budget())?;
+        let res = self.0.storage.borrow_mut().has(key, self.as_budget())?;
         Ok(RawVal::from_bool(res))
     }
 
@@ -1875,13 +1880,12 @@ impl VmCallerEnv for Host {
         k: RawVal,
     ) -> Result<RawVal, HostError> {
         let key = self.storage_key_from_rawval(k)?;
-        match self
+        let entry = self
             .0
             .storage
             .borrow_mut()
-            .get(&key, self.as_budget())?
-            .data
-        {
+            .get(Rc::clone(&key), self.as_budget())?;
+        match &entry.data {
             LedgerEntryData::ContractData(ContractDataEntry {
                 contract_id,
                 key,
@@ -1901,7 +1905,7 @@ impl VmCallerEnv for Host {
         k: RawVal,
     ) -> Result<RawVal, HostError> {
         let key = self.contract_data_key_from_rawval(k)?;
-        self.0.storage.borrow_mut().del(&key, self.as_budget())?;
+        self.0.storage.borrow_mut().del(key, self.as_budget())?;
         Ok(().into())
     }
 

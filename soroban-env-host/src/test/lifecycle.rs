@@ -16,13 +16,15 @@ use sha2::{Digest, Sha256};
 use super::util::{generate_account_id, generate_bytes_array};
 
 fn get_contract_wasm_ref(host: &Host, contract_id: Hash) -> Hash {
-    let storage_key = host.contract_source_ledger_key(contract_id);
+    let storage_key = host.contract_source_ledger_key(&contract_id).unwrap();
     host.with_mut_storage(|s: &mut Storage| {
-        assert!(s.has(&storage_key, host.as_budget()).unwrap());
+        assert!(s.has(storage_key.clone(), host.as_budget()).unwrap());
 
-        match s.get(&storage_key, host.as_budget()).unwrap().data {
-            LedgerEntryData::ContractData(cde) => match cde.val {
-                ScVal::Object(Some(ScObject::ContractCode(ScContractCode::WasmRef(h)))) => Ok(h),
+        match &s.get(storage_key, host.as_budget()).unwrap().data {
+            LedgerEntryData::ContractData(cde) => match &cde.val {
+                ScVal::Object(Some(ScObject::ContractCode(ScContractCode::WasmRef(h)))) => {
+                    Ok(h.clone())
+                }
                 _ => panic!("expected ScContractCode"),
             },
             _ => panic!("expected contract data"),
@@ -32,11 +34,11 @@ fn get_contract_wasm_ref(host: &Host, contract_id: Hash) -> Hash {
 }
 
 fn get_contract_wasm(host: &Host, wasm_hash: Hash) -> Vec<u8> {
-    let storage_key = host.contract_code_ledger_key(wasm_hash);
+    let storage_key = host.contract_code_ledger_key(&wasm_hash).unwrap();
     host.with_mut_storage(|s: &mut Storage| {
-        assert!(s.has(&storage_key, host.as_budget()).unwrap());
+        assert!(s.has(storage_key.clone(), host.as_budget()).unwrap());
 
-        match s.get(&storage_key, host.as_budget()).unwrap().data {
+        match &s.get(storage_key, host.as_budget()).unwrap().data {
             LedgerEntryData::ContractCode(code_entry) => Ok(code_entry.code.to_vec()),
             _ => panic!("expected contract WASM code"),
         }
@@ -94,14 +96,14 @@ fn test_create_contract_from_source_account(host: &Host, code: &[u8]) -> Hash {
     host.with_mut_storage(|s: &mut Storage| {
         s.footprint
             .record_access(
-                &host.contract_source_ledger_key(contract_id.clone()),
+                host.contract_source_ledger_key(&contract_id).unwrap(),
                 AccessType::ReadWrite,
                 host.as_budget(),
             )
             .unwrap();
         s.footprint
             .record_access(
-                &host.contract_code_ledger_key(wasm_hash.clone()),
+                host.contract_code_ledger_key(&wasm_hash).unwrap(),
                 AccessType::ReadWrite,
                 host.as_budget(),
             )
@@ -165,14 +167,14 @@ fn create_contract_using_parent_id_test() {
     host.with_mut_storage(|s: &mut Storage| {
         s.footprint
             .record_access(
-                &host.contract_source_ledger_key(child_id.clone()),
+                host.contract_source_ledger_key(&child_id).unwrap(),
                 AccessType::ReadWrite,
                 host.as_budget(),
             )
             .unwrap();
         s.footprint
             .record_access(
-                &host.contract_code_ledger_key(wasm_hash.clone()),
+                host.contract_code_ledger_key(&wasm_hash).unwrap(),
                 AccessType::ReadWrite,
                 host.as_budget(),
             )

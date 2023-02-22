@@ -1,10 +1,11 @@
 use core::cmp::min;
+use std::rc::Rc;
 
 use soroban_env_common::{Env, InvokerType};
 
 use crate::budget::AsBudget;
 use crate::xdr::{
-    AccountEntry, AccountId, Asset, ContractCodeEntry, ContractDataEntry, Hash, HashIdPreimage,
+    AccountEntry, AccountId, Asset, ContractDataEntry, Hash, HashIdPreimage,
     HashIdPreimageContractId, HashIdPreimageCreateContractArgs, HashIdPreimageEd25519ContractId,
     HashIdPreimageFromAsset, HashIdPreimageSourceAccountContractId, LedgerEntry, LedgerEntryData,
     LedgerEntryExt, LedgerKey, LedgerKeyAccount, LedgerKeyContractCode, LedgerKeyContractData,
@@ -17,52 +18,43 @@ use super::metered_clone::MeteredClone;
 
 impl Host {
     // Notes on metering: free
-    pub fn contract_source_ledger_key(&self, contract_id: Hash) -> LedgerKey {
-        LedgerKey::ContractData(LedgerKeyContractData {
+    pub fn contract_source_ledger_key(
+        &self,
+        contract_id: &Hash,
+    ) -> Result<Rc<LedgerKey>, HostError> {
+        let contract_id = contract_id.metered_clone(self.as_budget())?;
+        Ok(Rc::new(LedgerKey::ContractData(LedgerKeyContractData {
             contract_id,
             key: ScVal::Static(ScStatic::LedgerKeyContractCode),
-        })
+        })))
     }
 
     // Notes on metering: retrieving from storage covered. Rest are free.
     pub(crate) fn retrieve_contract_source_from_storage(
         &self,
-        key: &LedgerKey,
+        key: Rc<LedgerKey>,
     ) -> Result<ScContractCode, HostError> {
-        let scval = match self.0.storage.borrow_mut().get(key, self.as_budget())?.data {
-            LedgerEntryData::ContractData(ContractDataEntry { val, .. }) => Ok(val),
-            _ => Err(self.err_status(ScHostStorageErrorCode::ExpectContractData)),
-        }?;
-        match scval {
-            ScVal::Object(Some(ScObject::ContractCode(code))) => Ok(code),
-            _ => {
-                return Err(self.err_status_msg(
+        let entry = self.0.storage.borrow_mut().get(key, self.as_budget())?;
+        match &entry.data {
+            LedgerEntryData::ContractData(ContractDataEntry { val, .. }) => match val {
+                ScVal::Object(Some(ScObject::ContractCode(code))) => Ok(code.clone()),
+                _ => Err(self.err_status_msg(
                     ScHostValErrorCode::UnexpectedValType,
                     "ledger entry for contract code does not contain contract code",
-                ))
-            }
+                )),
+            },
+            _ => Err(self.err_status(ScHostStorageErrorCode::ExpectContractData)),
         }
     }
 
-    pub(crate) fn contract_code_ledger_key(&self, wasm_hash: Hash) -> LedgerKey {
-        LedgerKey::ContractCode(LedgerKeyContractCode { hash: wasm_hash })
-    }
-
-    pub(crate) fn retrieve_contract_code_from_storage(
+    pub(crate) fn contract_code_ledger_key(
         &self,
-        wasm_hash: Hash,
-    ) -> Result<ContractCodeEntry, HostError> {
-        let key = self.contract_code_ledger_key(wasm_hash);
-        match self
-            .0
-            .storage
-            .borrow_mut()
-            .get(&key, self.as_budget())?
-            .data
-        {
-            LedgerEntryData::ContractCode(e) => Ok(e),
-            _ => Err(self.err_status(ScHostStorageErrorCode::AccessToUnknownEntry)),
-        }
+        wasm_hash: &Hash,
+    ) -> Result<Rc<LedgerKey>, HostError> {
+        let wasm_hash = wasm_hash.metered_clone(self.as_budget())?;
+        Ok(Rc::new(LedgerKey::ContractCode(LedgerKeyContractCode {
+            hash: wasm_hash,
+        })))
     }
 
     // Notes on metering: `from_host_obj` and `put` to storage covered, rest are free.
@@ -70,7 +62,7 @@ impl Host {
         &self,
         contract_source: ScContractCode,
         contract_id: Hash,
-        key: &LedgerKey,
+        key: Rc<LedgerKey>,
     ) -> Result<(), HostError> {
         let data = LedgerEntryData::ContractData(ContractDataEntry {
             contract_id,
@@ -78,8 +70,8 @@ impl Host {
             val: ScVal::Object(Some(ScObject::ContractCode(contract_source))),
         });
         self.0.storage.borrow_mut().put(
-            &key,
-            &Host::ledger_entry_from_data(data),
+            key,
+            Host::ledger_entry_from_data(data),
             self.as_budget(),
         )?;
         Ok(())
@@ -169,14 +161,14 @@ impl Host {
     // notes on metering: `get` from storage is covered. Rest are free.
     pub fn load_account(&self, account_id: AccountId) -> Result<AccountEntry, HostError> {
         let acc = self.to_account_key(account_id);
-        self.with_mut_storage(|storage| match storage.get(&acc, self.as_budget())?.data {
-            LedgerEntryData::Account(ae) => Ok(ae),
+        self.with_mut_storage(|storage| match &storage.get(acc, self.as_budget())?.data {
+            LedgerEntryData::Account(ae) => Ok(ae.clone()), // TODO: clone needs to be metered
             _ => Err(self.err_general("not account")),
         })
     }
 
-    pub(crate) fn to_account_key(&self, account_id: AccountId) -> LedgerKey {
-        LedgerKey::Account(LedgerKeyAccount { account_id })
+    pub(crate) fn to_account_key(&self, account_id: AccountId) -> Rc<LedgerKey> {
+        Rc::new(LedgerKey::Account(LedgerKeyAccount { account_id }))
     }
 
     pub(crate) fn create_asset_4(&self, asset_code: [u8; 4], issuer: AccountId) -> TrustLineAsset {
@@ -203,8 +195,11 @@ impl Host {
         &self,
         account_id: AccountId,
         asset: TrustLineAsset,
-    ) -> LedgerKey {
-        LedgerKey::Trustline(LedgerKeyTrustLine { account_id, asset })
+    ) -> Rc<LedgerKey> {
+        Rc::new(LedgerKey::Trustline(LedgerKeyTrustLine {
+            account_id,
+            asset,
+        }))
     }
 
     pub(crate) fn get_signer_weight_from_account(
@@ -243,13 +238,13 @@ impl Host {
         }
     }
 
-    pub(crate) fn ledger_entry_from_data(data: LedgerEntryData) -> LedgerEntry {
-        LedgerEntry {
+    pub(crate) fn ledger_entry_from_data(data: LedgerEntryData) -> Rc<LedgerEntry> {
+        Rc::new(LedgerEntry {
             // This is modified to the appropriate value on the core side during
             // commiting the ledger transaction.
             last_modified_ledger_seq: 0,
             data,
             ext: LedgerEntryExt::V0,
-        }
+        })
     }
 }

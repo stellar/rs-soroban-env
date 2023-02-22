@@ -2,8 +2,7 @@ use std::{mem, rc::Rc};
 
 use soroban_env_common::{
     xdr::{
-        BytesM, ContractEvent, ContractEventBody, LedgerEntry, LedgerKey, ScAddress, ScMap,
-        ScMapEntry, ScObject, ScVal,
+        BytesM, ContractEvent, ContractEventBody, ScAddress, ScMap, ScMapEntry, ScObject, ScVal,
     },
     RawVal,
 };
@@ -138,17 +137,6 @@ where
     V: MeteredClone,
 {
     const ELT_SIZE: u64 = <K as MeteredClone>::ELT_SIZE + <V as MeteredClone>::ELT_SIZE;
-}
-
-// TODO: this isn't correct: these two have substructure to account for;
-// probably they should never be cloned in the middle of a contract at all (the
-// storage maps are Rc<> now) but changing that means changing the storage
-// interface. See https://github.com/stellar/rs-soroban-env/issues/603
-impl MeteredClone for LedgerKey {
-    const ELT_SIZE: u64 = 80;
-}
-impl MeteredClone for LedgerEntry {
-    const ELT_SIZE: u64 = 264;
 }
 
 impl<C: MeteredClone, const N: usize> MeteredClone for [C; N] {
@@ -366,8 +354,6 @@ mod test {
         expect!["33"].assert_eq(std::mem::size_of::<ScContractCode>().to_string().as_str());
         expect!["32"].assert_eq(std::mem::size_of::<Uint256>().to_string().as_str());
         expect!["33"].assert_eq(std::mem::size_of::<ScAddress>().to_string().as_str());
-        expect!["80"].assert_eq(std::mem::size_of::<LedgerKey>().to_string().as_str());
-        expect!["264"].assert_eq(std::mem::size_of::<LedgerEntry>().to_string().as_str());
         expect!["40"].assert_eq(std::mem::size_of::<ScVal>().to_string().as_str());
         expect!["24"].assert_eq(std::mem::size_of::<ScVec>().to_string().as_str());
         expect!["80"].assert_eq(std::mem::size_of::<ScMapEntry>().to_string().as_str());
@@ -405,8 +391,6 @@ mod test {
         assert_mem_size_equals_elt_size!(ScContractCode);
         assert_mem_size_equals_elt_size!(Uint256);
         assert_mem_size_equals_elt_size!(ScAddress);
-        assert_mem_size_equals_elt_size!(LedgerKey);
-        assert_mem_size_equals_elt_size!(LedgerEntry);
         assert_mem_size_equals_elt_size!(ScVal);
         assert_mem_size_equals_elt_size!(ScVec);
         assert_mem_size_equals_elt_size!(ScMapEntry);

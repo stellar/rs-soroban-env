@@ -1,4 +1,4 @@
-use std::convert::TryInto;
+use std::{convert::TryInto, rc::Rc};
 
 use crate::{
     auth::RecordedAuthPayload,
@@ -109,7 +109,7 @@ impl TokenTest {
         );
     }
 
-    fn create_default_trustline(&self, user: &TestSigner) -> LedgerKey {
+    fn create_default_trustline(&self, user: &TestSigner) -> Rc<LedgerKey> {
         self.create_trustline(
             &user.account_id(),
             &keypair_to_account_id(&self.issuer_key),
@@ -127,10 +127,10 @@ impl TokenTest {
         account.balance
     }
 
-    fn get_trustline_balance(&self, key: &LedgerKey) -> i64 {
+    fn get_trustline_balance(&self, key: Rc<LedgerKey>) -> i64 {
         self.host
-            .with_mut_storage(|s| match s.get(key, self.host.as_budget()).unwrap().data {
-                LedgerEntryData::Trustline(trustline) => Ok(trustline.balance),
+            .with_mut_storage(|s| match &s.get(key, self.host.as_budget()).unwrap().data {
+                LedgerEntryData::Trustline(trustline) => Ok(trustline.balance.clone()),
                 _ => unreachable!(),
             })
             .unwrap()
@@ -162,15 +162,19 @@ impl TokenTest {
         );
     }
 
-    fn update_account_flags(&self, key: &LedgerKey, new_flags: u32) {
+    fn update_account_flags(&self, key: Rc<LedgerKey>, new_flags: u32) {
         self.host
-            .with_mut_storage(|s| match s.get(key, self.host.as_budget()).unwrap().data {
-                LedgerEntryData::Account(mut account) => {
-                    account.flags = new_flags;
-                    let update = Host::ledger_entry_from_data(LedgerEntryData::Account(account));
-                    s.put(&key, &update, self.host.as_budget())
+            .with_mut_storage(|s| {
+                let entry = s.get(Rc::clone(&key), self.host.as_budget()).unwrap();
+                match entry.data.clone() {
+                    LedgerEntryData::Account(mut account) => {
+                        account.flags = new_flags;
+                        let update =
+                            Host::ledger_entry_from_data(LedgerEntryData::Account(account));
+                        s.put(key, update, self.host.as_budget())
+                    }
+                    _ => unreachable!(),
                 }
-                _ => unreachable!(),
             })
             .unwrap();
     }
@@ -185,7 +189,7 @@ impl TokenTest {
         flags: u32,
         // (buying, selling) liabilities
         liabilities: Option<(i64, i64)>,
-    ) -> LedgerKey {
+    ) -> Rc<LedgerKey> {
         let asset = match asset_code.len() {
             4 => {
                 let mut code = [0_u8; 4];
@@ -231,16 +235,19 @@ impl TokenTest {
         key
     }
 
-    fn update_trustline_flags(&self, key: &LedgerKey, new_flags: u32) {
+    fn update_trustline_flags(&self, key: Rc<LedgerKey>, new_flags: u32) {
         self.host
-            .with_mut_storage(|s| match s.get(key, self.host.as_budget()).unwrap().data {
-                LedgerEntryData::Trustline(mut trustline) => {
-                    trustline.flags = new_flags;
-                    let update =
-                        Host::ledger_entry_from_data(LedgerEntryData::Trustline(trustline));
-                    s.put(&key, &update, self.host.as_budget())
+            .with_mut_storage(|s| {
+                let entry = s.get(key.clone(), self.host.as_budget()).unwrap();
+                match entry.data.clone() {
+                    LedgerEntryData::Trustline(mut trustline) => {
+                        trustline.flags = new_flags;
+                        let update =
+                            Host::ledger_entry_from_data(LedgerEntryData::Trustline(trustline));
+                        s.put(key, update, self.host.as_budget())
+                    }
+                    _ => unreachable!(),
                 }
-                _ => unreachable!(),
             })
             .unwrap();
     }
@@ -390,7 +397,7 @@ fn test_asset_init(asset_code: &[u8]) {
 
     let user = TestSigner::account_with_multisig(&account_id, vec![&test.user_key]);
 
-    assert_eq!(test.get_trustline_balance(&trustline_key), 10_000_000);
+    assert_eq!(test.get_trustline_balance(trustline_key), 10_000_000);
     assert_eq!(token.balance(user.address(&test.host)).unwrap(), 10_000_000);
 }
 
@@ -893,7 +900,7 @@ fn test_clawback_on_account() {
     );
 
     // disable clawback on the trustline
-    test.update_trustline_flags(&tl_key, 0);
+    test.update_trustline_flags(Rc::clone(&tl_key), 0);
     assert_eq!(
         to_contract_err(
             token
@@ -905,7 +912,7 @@ fn test_clawback_on_account() {
     );
 
     // enable clawback on the trustline
-    test.update_trustline_flags(&tl_key, TrustLineFlags::TrustlineClawbackEnabledFlag as u32);
+    test.update_trustline_flags(tl_key, TrustLineFlags::TrustlineClawbackEnabledFlag as u32);
 
     // Clawback everything else
     token
@@ -934,7 +941,7 @@ fn test_clawback_on_contract() {
         .unwrap();
 
     //disable clawback before minting to user_2
-    test.update_account_flags(&issuer_ledger_key, 0);
+    test.update_account_flags(Rc::clone(&issuer_ledger_key), 0);
     token
         .mint(&admin, user_2_addr.clone(), 100_000_000)
         .unwrap();
@@ -959,7 +966,7 @@ fn test_clawback_on_contract() {
     );
 
     // enable clawback on the issuer again. Nothing should change for existing balances
-    test.update_account_flags(&issuer_ledger_key, AccountFlags::ClawbackEnabledFlag as u32);
+    test.update_account_flags(issuer_ledger_key, AccountFlags::ClawbackEnabledFlag as u32);
 
     token
         .clawback(&admin, user_1_addr.clone(), 40_000_000)
@@ -2329,12 +2336,12 @@ fn test_wrapped_asset_classic_balance_boundaries(
         )
         .unwrap();
     assert_eq!(
-        test.get_trustline_balance(&trustline_key),
+        test.get_trustline_balance(trustline_key.clone()),
         expected_min_balance
     );
 
     assert_eq!(
-        test.get_trustline_balance(&trustline_key2),
+        test.get_trustline_balance(trustline_key2.clone()),
         init_balance - expected_min_balance
     );
 
@@ -2374,10 +2381,10 @@ fn test_wrapped_asset_classic_balance_boundaries(
         .unwrap();
 
     assert_eq!(
-        test.get_trustline_balance(&trustline_key),
+        test.get_trustline_balance(trustline_key),
         expected_max_balance
     );
-    assert_eq!(test.get_trustline_balance(&trustline_key2), 0);
+    assert_eq!(test.get_trustline_balance(trustline_key2), 0);
 }
 
 #[test]
@@ -2451,7 +2458,7 @@ fn test_classic_transfers_not_possible_for_unauthorized_asset() {
         None,
     );
 
-    assert_eq!(test.get_trustline_balance(&trustline_key), 100_000_000);
+    assert_eq!(test.get_trustline_balance(trustline_key), 100_000_000);
 
     let token = TestToken::new_from_asset(
         &test.host,
@@ -2489,7 +2496,7 @@ fn test_classic_transfers_not_possible_for_unauthorized_asset() {
     );
 
     // Trustline balance stays the same.
-    assert_eq!(test.get_trustline_balance(&trustline_key), 100_000_000);
+    assert_eq!(test.get_trustline_balance(trustline_key), 100_000_000);
 }
 
 #[cfg(feature = "vm")]

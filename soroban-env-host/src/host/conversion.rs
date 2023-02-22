@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use super::metered_clone::MeteredClone;
 use crate::xdr::{
     Hash, LedgerKey, LedgerKeyContractData, ScHostFnErrorCode, ScHostObjErrorCode,
@@ -192,26 +194,29 @@ impl Host {
     /// Converts a [`RawVal`] to an [`ScVal`] and combines it with the currently-executing
     /// [`ContractID`] to produce a [`Key`], that can be used to access ledger [`Storage`].
     // Notes on metering: covered by components.
-    pub fn storage_key_from_rawval(&self, k: RawVal) -> Result<LedgerKey, HostError> {
-        Ok(LedgerKey::ContractData(LedgerKeyContractData {
+    pub fn storage_key_from_rawval(&self, k: RawVal) -> Result<Rc<LedgerKey>, HostError> {
+        Ok(Rc::new(LedgerKey::ContractData(LedgerKeyContractData {
             contract_id: self.get_current_contract_id_internal()?,
             key: self.from_host_val(k)?,
-        }))
+        })))
     }
 
-    pub(crate) fn storage_key_for_contract(&self, contract_id: Hash, key: ScVal) -> LedgerKey {
-        LedgerKey::ContractData(LedgerKeyContractData { contract_id, key })
-    }
-
-    pub fn storage_key_from_scval(&self, key: ScVal) -> Result<LedgerKey, HostError> {
-        Ok(LedgerKey::ContractData(LedgerKeyContractData {
-            contract_id: self.get_current_contract_id_internal()?,
+    pub(crate) fn storage_key_for_contract(&self, contract_id: Hash, key: ScVal) -> Rc<LedgerKey> {
+        Rc::new(LedgerKey::ContractData(LedgerKeyContractData {
+            contract_id,
             key,
         }))
     }
 
+    pub fn storage_key_from_scval(&self, key: ScVal) -> Result<Rc<LedgerKey>, HostError> {
+        Ok(Rc::new(LedgerKey::ContractData(LedgerKeyContractData {
+            contract_id: self.get_current_contract_id_internal()?,
+            key,
+        })))
+    }
+
     // Notes on metering: covered by components.
-    pub fn contract_data_key_from_rawval(&self, k: RawVal) -> Result<LedgerKey, HostError> {
+    pub fn contract_data_key_from_rawval(&self, k: RawVal) -> Result<Rc<LedgerKey>, HostError> {
         let key_scval = self.from_host_val(k)?;
         match &key_scval {
             ScVal::Static(ScStatic::LedgerKeyContractCode) => {
@@ -228,7 +233,6 @@ impl Host {
             }
             _ => (),
         };
-
         self.storage_key_from_scval(key_scval)
     }
 

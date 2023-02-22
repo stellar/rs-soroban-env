@@ -12,7 +12,6 @@ use std::rc::Rc;
 use soroban_env_common::Compare;
 
 use crate::budget::Budget;
-use crate::host::metered_clone::MeteredClone;
 use crate::xdr::{LedgerEntry, LedgerKey, ScHostStorageErrorCode};
 use crate::Host;
 use crate::{host::metered_map::MeteredOrdMap, HostError};
@@ -52,8 +51,8 @@ impl Compare<AccessType> for Budget {
 /// A helper type used by [FootprintMode::Recording] to provide access
 /// to a stable read-snapshot of a ledger.
 pub trait SnapshotSource {
-    fn get(&self, key: &LedgerKey) -> Result<LedgerEntry, HostError>;
-    fn has(&self, key: &LedgerKey) -> Result<bool, HostError>;
+    fn get(&self, key: &Rc<LedgerKey>) -> Result<Rc<LedgerEntry>, HostError>;
+    fn has(&self, key: &Rc<LedgerKey>) -> Result<bool, HostError>;
 }
 
 /// Describes the total set of [LedgerKey]s that a given transaction
@@ -71,39 +70,35 @@ pub struct Footprint(pub FootprintMap);
 impl Footprint {
     pub fn record_access(
         &mut self,
-        key: &LedgerKey,
+        key: Rc<LedgerKey>,
         ty: AccessType,
         budget: &Budget,
     ) -> Result<(), HostError> {
-        if let Some(existing) = self.0.get::<LedgerKey>(key, budget)? {
+        if let Some(existing) = self.0.get::<Rc<LedgerKey>>(&key, budget)? {
             match (existing, ty.clone()) {
                 (AccessType::ReadOnly, AccessType::ReadOnly) => Ok(()),
                 (AccessType::ReadOnly, AccessType::ReadWrite) => {
                     // The only interesting case is an upgrade
                     // from previously-read-only to read-write.
-                    self.0 = self
-                        .0
-                        .insert(Rc::new(key.metered_clone(budget)?), ty, budget)?;
+                    self.0 = self.0.insert(key, ty, budget)?;
                     Ok(())
                 }
                 (AccessType::ReadWrite, AccessType::ReadOnly) => Ok(()),
                 (AccessType::ReadWrite, AccessType::ReadWrite) => Ok(()),
             }
         } else {
-            self.0 = self
-                .0
-                .insert(Rc::new(key.metered_clone(budget)?), ty, budget)?;
+            self.0 = self.0.insert(key, ty, budget)?;
             Ok(())
         }
     }
 
     pub fn enforce_access(
         &mut self,
-        key: &LedgerKey,
+        key: &Rc<LedgerKey>,
         ty: AccessType,
         budget: &Budget,
     ) -> Result<(), HostError> {
-        if let Some(existing) = self.0.get::<LedgerKey>(key, budget)? {
+        if let Some(existing) = self.0.get::<Rc<LedgerKey>>(key, budget)? {
             match (existing, ty) {
                 (AccessType::ReadOnly, AccessType::ReadOnly) => Ok(()),
                 (AccessType::ReadOnly, AccessType::ReadWrite) => {
@@ -185,52 +180,50 @@ impl Storage {
     ///
     /// In [FootprintMode::Enforcing] mode, succeeds only if the read
     /// [LedgerKey] has been declared in the [Footprint].
-    pub fn get(&mut self, key: &LedgerKey, budget: &Budget) -> Result<LedgerEntry, HostError> {
+    pub fn get(
+        &mut self,
+        key: Rc<LedgerKey>,
+        budget: &Budget,
+    ) -> Result<Rc<LedgerEntry>, HostError> {
         let ty = AccessType::ReadOnly;
         match self.mode {
             FootprintMode::Recording(ref src) => {
-                self.footprint.record_access(key, ty, budget)?;
+                self.footprint.record_access(Rc::clone(&key), ty, budget)?;
                 // In recording mode we treat the map as a cache
                 // that misses read-through to the underlying src.
-                if !self.map.contains_key::<LedgerKey>(key, budget)? {
-                    self.map = self.map.insert(
-                        Rc::new(key.metered_clone(budget)?),
-                        Some(Rc::new(src.get(key)?)),
-                        budget,
-                    )?;
+                if !self.map.contains_key::<Rc<LedgerKey>>(&key, budget)? {
+                    self.map = self
+                        .map
+                        .insert(Rc::clone(&key), Some(src.get(&key)?), budget)?;
                 }
             }
             FootprintMode::Enforcing => {
-                self.footprint.enforce_access(key, ty, budget)?;
+                self.footprint.enforce_access(&key, ty, budget)?;
             }
         };
-        match self.map.get::<LedgerKey>(key, budget)? {
+        match self.map.get::<Rc<LedgerKey>>(&key, budget)? {
             None => Err(ScHostStorageErrorCode::MissingKeyInGet.into()),
             Some(None) => Err(ScHostStorageErrorCode::GetOnDeletedKey.into()),
-            Some(Some(val)) => Ok((**val).metered_clone(budget)?),
+            Some(Some(val)) => Ok(Rc::clone(&val)),
         }
     }
 
     fn put_opt(
         &mut self,
-        key: &LedgerKey,
-        val: Option<LedgerEntry>,
+        key: Rc<LedgerKey>,
+        val: Option<Rc<LedgerEntry>>,
         budget: &Budget,
     ) -> Result<(), HostError> {
         let ty = AccessType::ReadWrite;
         match self.mode {
             FootprintMode::Recording(_) => {
-                self.footprint.record_access(key, ty, budget)?;
+                self.footprint.record_access(Rc::clone(&key), ty, budget)?;
             }
             FootprintMode::Enforcing => {
-                self.footprint.enforce_access(key, ty, budget)?;
+                self.footprint.enforce_access(&key, ty, budget)?;
             }
         };
-        self.map = self.map.insert(
-            Rc::new(key.metered_clone(budget)?),
-            val.map(|v| Rc::new(v)),
-            budget,
-        )?;
+        self.map = self.map.insert(key, val, budget)?;
         Ok(())
     }
 
@@ -245,11 +238,11 @@ impl Storage {
     /// [AccessType::ReadWrite].
     pub fn put(
         &mut self,
-        key: &LedgerKey,
-        val: &LedgerEntry,
+        key: Rc<LedgerKey>,
+        val: Rc<LedgerEntry>,
         budget: &Budget,
     ) -> Result<(), HostError> {
-        self.put_opt(key, Some(val.metered_clone(budget)?), budget)
+        self.put_opt(key, Some(val), budget)
     }
 
     /// Attempts to delete the [LedgerEntry] associated with a given [LedgerKey]
@@ -261,7 +254,7 @@ impl Storage {
     /// In [FootprintMode::Enforcing] mode, succeeds only if the deleted
     /// [LedgerKey] has been declared in the [Footprint] as
     /// [AccessType::ReadWrite].
-    pub fn del(&mut self, key: &LedgerKey, budget: &Budget) -> Result<(), HostError> {
+    pub fn del(&mut self, key: Rc<LedgerKey>, budget: &Budget) -> Result<(), HostError> {
         self.put_opt(key, None, budget)
     }
 
@@ -274,22 +267,22 @@ impl Storage {
     ///
     /// In [FootprintMode::Enforcing] mode, succeeds only if the access has been
     /// declared in the [Footprint].
-    pub fn has(&mut self, key: &LedgerKey, budget: &Budget) -> Result<bool, HostError> {
+    pub fn has(&mut self, key: Rc<LedgerKey>, budget: &Budget) -> Result<bool, HostError> {
         let ty = AccessType::ReadOnly;
         match self.mode {
             FootprintMode::Recording(ref src) => {
-                self.footprint.record_access(key, ty, budget)?;
+                self.footprint.record_access(Rc::clone(&key), ty, budget)?;
                 // We don't cache has() calls but we do
                 // consult the cache before answering them.
-                match self.map.get::<LedgerKey>(key, budget)? {
+                match self.map.get::<Rc<LedgerKey>>(&key, budget)? {
                     Some(None) => Ok(false),
                     Some(Some(_)) => Ok(true),
-                    None => src.has(key),
+                    None => src.has(&key),
                 }
             }
             FootprintMode::Enforcing => {
-                self.footprint.enforce_access(key, ty, budget)?;
-                match self.map.get::<LedgerKey>(key, budget)? {
+                self.footprint.enforce_access(&key, ty, budget)?;
+                match self.map.get::<Rc<LedgerKey>>(&key, budget)? {
                     Some(None) => Ok(false),
                     Some(Some(_)) => Ok(true),
                     None => Ok(false),
@@ -313,23 +306,23 @@ mod test_footprint {
         let mut fp = Footprint::default();
         // record when key not exist
         let contract_id = [0; 32].into();
-        let key = LedgerKey::ContractData(LedgerKeyContractData {
+        let key = Rc::new(LedgerKey::ContractData(LedgerKeyContractData {
             contract_id,
             key: ScVal::I32(0),
-        });
-        fp.record_access(&key, AccessType::ReadOnly, &budget)?;
+        }));
+        fp.record_access(Rc::clone(&key), AccessType::ReadOnly, &budget)?;
         assert_eq!(fp.0.contains_key::<LedgerKey>(&key, &budget)?, true);
         assert_eq!(
             fp.0.get::<LedgerKey>(&key, &budget)?,
             Some(&AccessType::ReadOnly)
         );
         // record and change access
-        fp.record_access(&key, AccessType::ReadWrite, &budget)?;
+        fp.record_access(Rc::clone(&key), AccessType::ReadWrite, &budget)?;
         assert_eq!(
             fp.0.get::<LedgerKey>(&key, &budget)?,
             Some(&AccessType::ReadWrite)
         );
-        fp.record_access(&key, AccessType::ReadOnly, &budget)?;
+        fp.record_access(Rc::clone(&key), AccessType::ReadOnly, &budget)?;
         assert_eq!(
             fp.0.get::<LedgerKey>(&key, &budget)?,
             Some(&AccessType::ReadWrite)
@@ -341,16 +334,16 @@ mod test_footprint {
     fn footprint_enforce_access() -> Result<(), HostError> {
         let budget = Budget::default();
         let contract_id = [0; 32].into();
-        let key = LedgerKey::ContractData(LedgerKeyContractData {
+        let key = Rc::new(LedgerKey::ContractData(LedgerKeyContractData {
             contract_id,
             key: ScVal::I32(0),
-        });
-        let om = [(Rc::new(key.clone()), AccessType::ReadOnly)].into();
+        }));
+        let om = [(Rc::clone(&key), AccessType::ReadOnly)].into();
         let mom = MeteredOrdMap::from_map(om, &budget)?;
         let mut fp = Footprint(mom);
         fp.enforce_access(&key, AccessType::ReadOnly, &budget)?;
         fp.0 =
-            fp.0.insert(Rc::new(key.clone()), AccessType::ReadWrite, &budget)?;
+            fp.0.insert(Rc::clone(&key), AccessType::ReadWrite, &budget)?;
         fp.enforce_access(&key, AccessType::ReadOnly, &budget)?;
         fp.enforce_access(&key, AccessType::ReadWrite, &budget)?;
         Ok(())
@@ -361,10 +354,10 @@ mod test_footprint {
         let budget = Budget::default();
         let mut fp = Footprint::default();
         let contract_id = [0; 32].into();
-        let key = LedgerKey::ContractData(LedgerKeyContractData {
+        let key = Rc::new(LedgerKey::ContractData(LedgerKeyContractData {
             contract_id,
             key: ScVal::I32(0),
-        });
+        }));
         let res = fp.enforce_access(&key, AccessType::ReadOnly, &budget);
         assert!(HostError::result_matches_err_status(
             res,
@@ -377,11 +370,11 @@ mod test_footprint {
     fn footprint_attempt_to_write_readonly_entry() -> Result<(), HostError> {
         let budget = Budget::default();
         let contract_id = [0; 32].into();
-        let key = LedgerKey::ContractData(LedgerKeyContractData {
+        let key = Rc::new(LedgerKey::ContractData(LedgerKeyContractData {
             contract_id,
             key: ScVal::I32(0),
-        });
-        let om = [(Rc::new(key.clone()), AccessType::ReadOnly)].into();
+        }));
+        let om = [(Rc::clone(&key), AccessType::ReadOnly)].into();
         let mom = MeteredOrdMap::from_map(om, &budget)?;
         let mut fp = Footprint(mom);
         let res = fp.enforce_access(&key, AccessType::ReadWrite, &budget);
@@ -401,23 +394,23 @@ pub(crate) mod test_storage {
 
     use super::*;
     #[allow(dead_code)]
-    pub(crate) struct MockSnapshotSource(BTreeMap<LedgerKey, LedgerEntry>);
+    pub(crate) struct MockSnapshotSource(BTreeMap<Rc<LedgerKey>, Rc<LedgerEntry>>);
     #[allow(dead_code)]
     impl MockSnapshotSource {
         pub(crate) fn new() -> Self {
-            Self(BTreeMap::<LedgerKey, LedgerEntry>::new())
+            Self(BTreeMap::<Rc<LedgerKey>, Rc<LedgerEntry>>::new())
         }
     }
     impl SnapshotSource for MockSnapshotSource {
-        fn get(&self, key: &LedgerKey) -> Result<LedgerEntry, HostError> {
+        fn get(&self, key: &Rc<LedgerKey>) -> Result<Rc<LedgerEntry>, HostError> {
             if let Some(val) = self.0.get(key) {
-                Ok(val.clone())
+                Ok(Rc::clone(&val))
             } else {
                 Err(ScUnknownErrorCode::General.into())
             }
         }
 
-        fn has(&self, key: &LedgerKey) -> Result<bool, HostError> {
+        fn has(&self, key: &Rc<LedgerKey>) -> Result<bool, HostError> {
             Ok(self.0.contains_key(key))
         }
     }
