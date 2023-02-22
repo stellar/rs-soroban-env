@@ -649,6 +649,7 @@ impl AuthorizationTracker {
                 self.is_valid = false;
                 return Err(err);
             }
+            self.authenticated = true;
         }
         Ok(true)
     }

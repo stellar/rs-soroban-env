@@ -2,8 +2,11 @@ use crate::{Host, HostError, LedgerInfo};
 use ed25519_dalek::{Keypair, Signer};
 use rand::thread_rng;
 use soroban_env_common::xdr::{
-    AccountId, AddressWithNonce, AuthorizedInvocation, ContractAuth, Hash, HashIdPreimage,
-    HashIdPreimageContractAuth, PublicKey, ScAddress, ScVec, Uint256,
+    AccountEntry, AccountEntryExt, AccountEntryExtensionV1, AccountEntryExtensionV1Ext,
+    AccountEntryExtensionV2, AccountEntryExtensionV2Ext, AccountId, AddressWithNonce,
+    AuthorizedInvocation, ContractAuth, Hash, HashIdPreimage, HashIdPreimageContractAuth,
+    LedgerEntryData, LedgerKey, Liabilities, PublicKey, ScAddress, ScVec, SequenceNumber,
+    SignerKey, Thresholds, Uint256,
 };
 use soroban_env_common::{EnvBase, RawVal, TryFromVal, TryIntoVal};
 
@@ -218,7 +221,7 @@ pub(crate) fn authorize_single_invocation(
     authorize_single_invocation_with_nonce(host, signer, contract_id, function_name, args, nonce);
 }
 
-fn sign_payload_for_account(
+pub(crate) fn sign_payload_for_account(
     host: &Host,
     signer: &Keypair,
     payload: &[u8],
@@ -254,4 +257,73 @@ pub(crate) fn sign_payload_for_ed25519(
             .unwrap(),
     )
     .unwrap()
+}
+
+pub(crate) fn create_account(
+    host: &Host,
+    account_id: &AccountId,
+    signers: Vec<(&Keypair, u32)>,
+    balance: i64,
+    num_sub_entries: u32,
+    thresholds: [u8; 4],
+    // (buying, selling) liabilities
+    liabilities: Option<(i64, i64)>,
+    // (num_sponsored, num_sponsoring) counts
+    sponsorships: Option<(u32, u32)>,
+    flags: u32,
+) {
+    let key = host.to_account_key(account_id.clone().into());
+    let account_id = match &key {
+        LedgerKey::Account(acc) => acc.account_id.clone(),
+        _ => unreachable!(),
+    };
+    let mut acc_signers = vec![];
+    for (signer, weight) in signers {
+        acc_signers.push(soroban_env_common::xdr::Signer {
+            key: SignerKey::Ed25519(Uint256(signer.public.to_bytes())),
+            weight,
+        });
+    }
+    let ext = if sponsorships.is_some() || liabilities.is_some() {
+        AccountEntryExt::V1(AccountEntryExtensionV1 {
+            liabilities: if let Some((buying, selling)) = liabilities {
+                Liabilities { buying, selling }
+            } else {
+                Liabilities {
+                    buying: 0,
+                    selling: 0,
+                }
+            },
+            ext: if let Some((num_sponsored, num_sponsoring)) = sponsorships {
+                AccountEntryExtensionV1Ext::V2(AccountEntryExtensionV2 {
+                    num_sponsored,
+                    num_sponsoring,
+                    signer_sponsoring_i_ds: Default::default(),
+                    ext: AccountEntryExtensionV2Ext::V0 {},
+                })
+            } else {
+                AccountEntryExtensionV1Ext::V0
+            },
+        })
+    } else {
+        AccountEntryExt::V0
+    };
+    let acc_entry = AccountEntry {
+        account_id,
+        balance: balance,
+        seq_num: SequenceNumber(0),
+        num_sub_entries,
+        inflation_dest: None,
+        flags,
+        home_domain: Default::default(),
+        thresholds: Thresholds(thresholds),
+        signers: acc_signers.try_into().unwrap(),
+        ext,
+    };
+
+    host.add_ledger_entry(
+        key,
+        Host::ledger_entry_from_data(LedgerEntryData::Account(acc_entry)),
+    )
+    .unwrap();
 }
