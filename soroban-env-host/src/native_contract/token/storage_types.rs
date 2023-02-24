@@ -12,6 +12,7 @@ pub struct AllowanceDataKey {
 pub struct BalanceValue {
     pub amount: i128,
     pub authorized: bool,
+    pub clawback: bool,
 }
 
 #[contracttype]
