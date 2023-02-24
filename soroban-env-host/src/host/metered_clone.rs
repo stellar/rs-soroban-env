@@ -10,7 +10,7 @@ use soroban_env_common::{
 
 use crate::{
     budget::{Budget, CostType},
-    events::{DebugArg, DebugEvent, HostEvent, InternalContractEvent, InternalEvent},
+    events::{DebugArg, DebugEvent, Event, HostEvent, InternalContractEvent, InternalEvent},
     host::Events,
     num::{I256, U256},
     storage::AccessType,
@@ -353,9 +353,10 @@ impl MeteredClone for HostEvent {
     const ELT_SIZE: u64 = 112;
 
     fn charge_for_substructure(&self, budget: &Budget) -> Result<(), HostError> {
-        match self {
-            HostEvent::Contract(c) => c.charge_for_substructure(budget),
-            HostEvent::Debug(d) => d.charge_for_substructure(budget),
+        match &self.event {
+            Event::Contract(c) => c.charge_for_substructure(budget),
+            Event::Debug(d) => d.charge_for_substructure(budget),
+            Event::StructuredDebug(_) => Ok(()), // StructuredDebug events shouldn't affect metering
         }
     }
 }
@@ -379,7 +380,7 @@ impl MeteredClone for InternalEvent {
         match self {
             InternalEvent::Contract(c) => c.charge_for_substructure(budget),
             InternalEvent::Debug(d) => d.charge_for_substructure(budget),
-            InternalEvent::None => Ok(()),
+            InternalEvent::StructuredDebug(_) | InternalEvent::None => Ok(()),
         }
     }
 }
