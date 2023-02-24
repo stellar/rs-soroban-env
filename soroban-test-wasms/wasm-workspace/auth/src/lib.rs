@@ -36,4 +36,17 @@ impl AuthContract {
             );
         }
     }
+
+    pub fn order_fn(env: Env, addr: Address, child_id: BytesN<32>) {
+        env.invoke_contract::<()>(
+            &child_id,
+            &symbol!("do_auth"),
+            (&addr, 10_u32).into_val(&env),
+        );
+        addr.require_auth();
+    }
+
+    pub fn do_auth(env: Env, addr: Address, val: u32) {
+        addr.require_auth();
+    }
 }
