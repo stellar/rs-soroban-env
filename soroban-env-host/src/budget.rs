@@ -321,6 +321,7 @@ pub(crate) struct BudgetImpl {
     /// Tracks the sums of _input_ values to the cost models, for purposes of
     /// calibration and reporting; not used for budget-limiting per se.
     inputs: Vec<u64>,
+    enabled: bool,
 }
 
 #[derive(Default, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -352,6 +353,10 @@ impl Budget {
     }
 
     pub fn charge(&self, ty: CostType, input: u64) -> Result<(), HostError> {
+        if !self.0.borrow().enabled {
+            return Ok(());
+        }
+
         // println!("charging {} of {:?} (cpu budget: {}, mem budget: {})",
         // input, ty, self.get_cpu_insns_count(), self.get_mem_bytes_count());
         //
@@ -366,6 +371,24 @@ impl Budget {
             b.cpu_insns.charge(ty, input)?;
             b.mem_bytes.charge(ty, input)
         })
+    }
+
+    pub fn with_free_budget<F, T>(&self, f: F) -> Result<T, HostError>
+    where
+        F: FnOnce() -> Result<T, HostError>,
+    {
+        self.mut_budget(|mut b| {
+            b.enabled = false;
+            Ok(())
+        })?;
+
+        let res = f();
+
+        self.mut_budget(|mut b| {
+            b.enabled = true;
+            Ok(())
+        })?;
+        res
     }
 
     pub fn get_input(&self, ty: CostType) -> u64 {
@@ -448,6 +471,7 @@ impl Default for BudgetImpl {
             cpu_insns: BudgetDimension::new(ScVmErrorCode::TrapCpuLimitExceeded),
             mem_bytes: BudgetDimension::new(ScVmErrorCode::TrapMemLimitExceeded),
             inputs: Default::default(),
+            enabled: true,
         };
 
         for ct in CostType::variants() {
