@@ -7,6 +7,7 @@ mod ledger;
 mod map;
 mod str;
 mod vec;
+mod address;
 
 #[cfg(feature = "vm")]
 mod auth;
