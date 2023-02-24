@@ -322,8 +322,8 @@ pub(crate) fn create_account(
     };
 
     host.add_ledger_entry(
-        key,
-        Host::ledger_entry_from_data(LedgerEntryData::Account(acc_entry)),
+        &key,
+        &Host::ledger_entry_from_data(LedgerEntryData::Account(acc_entry)),
     )
     .unwrap();
 }

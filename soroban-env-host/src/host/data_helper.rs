@@ -5,7 +5,7 @@ use soroban_env_common::{Env, InvokerType};
 
 use crate::budget::AsBudget;
 use crate::xdr::{
-    AccountEntry, AccountId, Asset, ContractDataEntry, Hash, HashIdPreimage,
+    AccountEntry, AccountId, Asset, ContractCodeEntry, ContractDataEntry, Hash, HashIdPreimage,
     HashIdPreimageContractId, HashIdPreimageCreateContractArgs, HashIdPreimageEd25519ContractId,
     HashIdPreimageFromAsset, HashIdPreimageSourceAccountContractId, LedgerEntry, LedgerEntryData,
     LedgerEntryExt, LedgerKey, LedgerKeyAccount, LedgerKeyContractCode, LedgerKeyContractData,
@@ -32,7 +32,7 @@ impl Host {
     // Notes on metering: retrieving from storage covered. Rest are free.
     pub(crate) fn retrieve_contract_source_from_storage(
         &self,
-        key: Rc<LedgerKey>,
+        key: &Rc<LedgerKey>,
     ) -> Result<ScContractCode, HostError> {
         let entry = self.0.storage.borrow_mut().get(key, self.as_budget())?;
         match &entry.data {
@@ -57,12 +57,29 @@ impl Host {
         })))
     }
 
+    pub(crate) fn retrieve_contract_code_from_storage(
+        &self,
+        wasm_hash: &Hash,
+    ) -> Result<ContractCodeEntry, HostError> {
+        let key = self.contract_code_ledger_key(wasm_hash)?;
+        match &self
+            .0
+            .storage
+            .borrow_mut()
+            .get(&key, self.as_budget())?
+            .data
+        {
+            LedgerEntryData::ContractCode(e) => Ok(e.clone()),
+            _ => Err(self.err_status(ScHostStorageErrorCode::AccessToUnknownEntry)),
+        }
+    }
+
     // Notes on metering: `from_host_obj` and `put` to storage covered, rest are free.
     pub(crate) fn store_contract_source(
         &self,
         contract_source: ScContractCode,
         contract_id: Hash,
-        key: Rc<LedgerKey>,
+        key: &Rc<LedgerKey>,
     ) -> Result<(), HostError> {
         let data = LedgerEntryData::ContractData(ContractDataEntry {
             contract_id,
@@ -71,7 +88,7 @@ impl Host {
         });
         self.0.storage.borrow_mut().put(
             key,
-            Host::ledger_entry_from_data(data),
+            &Host::ledger_entry_from_data(data),
             self.as_budget(),
         )?;
         Ok(())
@@ -161,7 +178,7 @@ impl Host {
     // notes on metering: `get` from storage is covered. Rest are free.
     pub fn load_account(&self, account_id: AccountId) -> Result<AccountEntry, HostError> {
         let acc = self.to_account_key(account_id);
-        self.with_mut_storage(|storage| match &storage.get(acc, self.as_budget())?.data {
+        self.with_mut_storage(|storage| match &storage.get(&acc, self.as_budget())?.data {
             LedgerEntryData::Account(ae) => Ok(ae.clone()), // TODO: clone needs to be metered
             _ => Err(self.err_general("not account")),
         })

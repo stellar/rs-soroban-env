@@ -1,5 +1,3 @@
-use std::rc::Rc;
-
 use crate::budget::AsBudget;
 use crate::host::Host;
 use crate::native_contract::base_types::Address;
@@ -345,7 +343,7 @@ fn transfer_account_balance(e: &Host, account_id: AccountId, amount: i64) -> Res
 
     e.with_mut_storage(|storage| {
         let mut le = storage
-            .get(Rc::clone(&lk), e.as_budget())
+            .get(&lk, e.as_budget())
             .map_err(|_| e.err_status_msg(ContractError::AccountMissingError, "account missing"))?;
 
         let mut ae = match &le.data {
@@ -365,7 +363,7 @@ fn transfer_account_balance(e: &Host, account_id: AccountId, amount: i64) -> Res
         if new_balance >= min_balance && new_balance <= max_balance {
             ae.balance = new_balance;
             le = Host::ledger_entry_from_data(LedgerEntryData::Account(ae));
-            storage.put(lk, le, e.as_budget())
+            storage.put(&lk, &le, e.as_budget())
         } else {
             Err(err!(
                 e,
@@ -388,7 +386,7 @@ fn transfer_trustline_balance(
 ) -> Result<(), HostError> {
     let lk = e.to_trustline_key(account_id, asset);
     e.with_mut_storage(|storage| {
-        let mut le = storage.get(Rc::clone(&lk), e.as_budget()).map_err(|_| {
+        let mut le = storage.get(&lk, e.as_budget()).map_err(|_| {
             e.err_status_msg(ContractError::TrustlineMissingError, "trustline missing")
         })?;
 
@@ -409,7 +407,7 @@ fn transfer_trustline_balance(
         if new_balance >= min_balance && new_balance <= max_balance {
             tl.balance = new_balance;
             le = Host::ledger_entry_from_data(LedgerEntryData::Trustline(tl));
-            storage.put(lk, le, e.as_budget())
+            storage.put(&lk, &le, e.as_budget())
         } else {
             Err(err!(
                 e,
@@ -430,7 +428,7 @@ fn get_account_balance(e: &Host, account_id: AccountId) -> Result<(i64, i64), Ho
 
     e.with_mut_storage(|storage| {
         let le = storage
-            .get(lk, e.as_budget())
+            .get(&lk, e.as_budget())
             .map_err(|_| e.err_status_msg(ContractError::AccountMissingError, "account missing"))?;
 
         let ae = match &le.data {
@@ -483,7 +481,7 @@ fn get_trustline_balance(
 ) -> Result<(i64, i64), HostError> {
     let lk = e.to_trustline_key(account_id, asset);
     e.with_mut_storage(|storage| {
-        let le = storage.get(lk, e.as_budget()).map_err(|_| {
+        let le = storage.get(&lk, e.as_budget()).map_err(|_| {
             e.err_status_msg(ContractError::TrustlineMissingError, "trustline missing")
         })?;
 
@@ -565,7 +563,7 @@ fn get_trustline_flags(
 ) -> Result<u32, HostError> {
     let lk = e.to_trustline_key(account_id, asset);
     e.with_mut_storage(|storage| {
-        let le = storage.get(lk, e.as_budget()).map_err(|_| {
+        let le = storage.get(&lk, e.as_budget()).map_err(|_| {
             e.err_status_msg(ContractError::TrustlineMissingError, "trustline missing")
         })?;
 
@@ -645,7 +643,7 @@ fn set_trustline_authorization(
 ) -> Result<(), HostError> {
     let lk = e.to_trustline_key(account_id, asset);
     e.with_mut_storage(|storage| {
-        let mut le = storage.get(Rc::clone(&lk), e.as_budget()).map_err(|_| {
+        let mut le = storage.get(&lk, e.as_budget()).map_err(|_| {
             e.err_status_msg(ContractError::TrustlineMissingError, "trustline missing")
         })?;
 
@@ -664,7 +662,7 @@ fn set_trustline_authorization(
             tl.flags |= TrustLineFlags::AuthorizedToMaintainLiabilitiesFlag as u32;
         }
         le = Host::ledger_entry_from_data(LedgerEntryData::Trustline(tl));
-        storage.put(lk, le, e.as_budget())
+        storage.put(&lk, &le, e.as_budget())
     })
 }
 

@@ -772,7 +772,7 @@ impl Host {
             .0
             .storage
             .borrow_mut()
-            .has(Rc::clone(&storage_key), self.as_budget())?
+            .has(&storage_key, self.as_budget())?
         {
             return Err(self.err_general("Contract already exists"));
         }
@@ -785,12 +785,12 @@ impl Host {
                 .0
                 .storage
                 .borrow_mut()
-                .has(wasm_storage_key, self.as_budget())?
+                .has(&wasm_storage_key, self.as_budget())?
             {
                 return Err(self.err_general("Contract code was not installed"));
             }
         }
-        self.store_contract_source(contract_source, new_contract_id, storage_key)?;
+        self.store_contract_source(contract_source, new_contract_id, &storage_key)?;
         Ok(())
     }
 
@@ -841,17 +841,10 @@ impl Host {
     ) -> Result<RawVal, HostError> {
         // Create key for storage
         let storage_key = self.contract_source_ledger_key(id)?;
-        match self.retrieve_contract_source_from_storage(storage_key)? {
+        match self.retrieve_contract_source_from_storage(&storage_key)? {
             #[cfg(feature = "vm")]
             ScContractCode::WasmRef(wasm_hash) => {
-                let key = self.contract_code_ledger_key(&wasm_hash)?;
-                let entry = &self.0.storage.borrow_mut().get(key, self.as_budget())?;
-                let code_entry = if let LedgerEntryData::ContractCode(e) = &entry.data {
-                    Ok(e)
-                } else {
-                    Err(self.err_status(ScHostStorageErrorCode::AccessToUnknownEntry))
-                }?;
-
+                let code_entry = self.retrieve_contract_code_from_storage(&wasm_hash)?;
                 let vm = Vm::new(
                     self,
                     id.metered_clone(&self.0.budget)?,
@@ -1058,8 +1051,8 @@ impl Host {
     #[cfg(any(test, feature = "testutils"))]
     pub fn add_ledger_entry(
         &self,
-        key: Rc<LedgerKey>,
-        val: Rc<soroban_env_common::xdr::LedgerEntry>,
+        key: &Rc<LedgerKey>,
+        val: &Rc<soroban_env_common::xdr::LedgerEntry>,
     ) -> Result<(), HostError> {
         self.with_mut_storage(|storage| storage.put(key, val, self.as_budget()))
     }
@@ -1126,7 +1119,7 @@ impl Host {
             .0
             .storage
             .borrow_mut()
-            .has(Rc::clone(&code_key), self.as_budget())?
+            .has(&code_key, self.as_budget())?
         {
             self.with_mut_storage(|storage| {
                 let data = LedgerEntryData::ContractCode(ContractCodeEntry {
@@ -1135,8 +1128,8 @@ impl Host {
                     ext: ExtensionPoint::V0,
                 });
                 storage.put(
-                    code_key,
-                    Host::ledger_entry_from_data(data),
+                    &code_key,
+                    &Host::ledger_entry_from_data(data),
                     self.as_budget(),
                 )
             })?;
@@ -1855,8 +1848,8 @@ impl VmCallerEnv for Host {
             val: self.from_host_val(v)?,
         });
         self.0.storage.borrow_mut().put(
-            key,
-            Host::ledger_entry_from_data(data),
+            &key,
+            &Host::ledger_entry_from_data(data),
             self.as_budget(),
         )?;
         Ok(().into())
@@ -1869,7 +1862,7 @@ impl VmCallerEnv for Host {
         k: RawVal,
     ) -> Result<RawVal, HostError> {
         let key = self.storage_key_from_rawval(k)?;
-        let res = self.0.storage.borrow_mut().has(key, self.as_budget())?;
+        let res = self.0.storage.borrow_mut().has(&key, self.as_budget())?;
         Ok(RawVal::from_bool(res))
     }
 
@@ -1880,11 +1873,7 @@ impl VmCallerEnv for Host {
         k: RawVal,
     ) -> Result<RawVal, HostError> {
         let key = self.storage_key_from_rawval(k)?;
-        let entry = self
-            .0
-            .storage
-            .borrow_mut()
-            .get(Rc::clone(&key), self.as_budget())?;
+        let entry = self.0.storage.borrow_mut().get(&key, self.as_budget())?;
         match &entry.data {
             LedgerEntryData::ContractData(ContractDataEntry {
                 contract_id,
@@ -1905,7 +1894,7 @@ impl VmCallerEnv for Host {
         k: RawVal,
     ) -> Result<RawVal, HostError> {
         let key = self.contract_data_key_from_rawval(k)?;
-        self.0.storage.borrow_mut().del(key, self.as_budget())?;
+        self.0.storage.borrow_mut().del(&key, self.as_budget())?;
         Ok(().into())
     }
 
