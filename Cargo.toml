@@ -15,19 +15,19 @@ members = [
 exclude = ["soroban-test-wasms/wasm-workspace"]
 
 [workspace.package]
-version = "0.0.13"
+version = "0.0.14"
 
 [workspace.dependencies]
-soroban-env-common = { version = "0.0.13", path = "soroban-env-common" }
-soroban-env-guest = { version = "0.0.13", path = "soroban-env-guest" }
-soroban-env-host = { version = "0.0.13", path = "soroban-env-host" }
-soroban-env-macros = { version = "0.0.13", path = "soroban-env-macros" }
-soroban-native-sdk-macros = { version = "0.0.13", path = "soroban-native-sdk-macros" }
+soroban-env-common = { version = "0.0.14", path = "soroban-env-common" }
+soroban-env-guest = { version = "0.0.14", path = "soroban-env-guest" }
+soroban-env-host = { version = "0.0.14", path = "soroban-env-host" }
+soroban-env-macros = { version = "0.0.14", path = "soroban-env-macros" }
+soroban-native-sdk-macros = { version = "0.0.14", path = "soroban-native-sdk-macros" }
 
 [workspace.dependencies.stellar-xdr]
-version = "0.0.13"
+version = "0.0.14"
 git = "https://github.com/stellar/rs-stellar-xdr"
-rev = "bd9deaf09fe86bd287d21527651b240e90c320b5"
+rev = "55f47d302a3bbcd34cf32bfcd28abccfaeffc5e0"
 default-features = false
 
 [workspace.dependencies.wasmi]

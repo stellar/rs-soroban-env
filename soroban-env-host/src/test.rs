@@ -9,6 +9,8 @@ mod str;
 mod vec;
 
 #[cfg(feature = "vm")]
+mod auth;
+#[cfg(feature = "vm")]
 mod budget_metering;
 #[cfg(feature = "vm")]
 mod complex;

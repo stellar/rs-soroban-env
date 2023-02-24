@@ -137,7 +137,9 @@ impl Host {
             return Err(self.err_general("invoker is not an account"));
         }
 
-        let source_account = self.source_account()?;
+        let source_account = self
+            .source_account()
+            .ok_or_else(|| self.err_general("unexpected missing invoker in id preimage"))?;
         Ok(HashIdPreimage::ContractIdFromSourceAccount(
             HashIdPreimageSourceAccountContractId {
                 network_id: self
