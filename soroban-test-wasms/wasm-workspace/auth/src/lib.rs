@@ -46,7 +46,7 @@ impl AuthContract {
         addr.require_auth();
     }
 
-    pub fn do_auth(env: Env, addr: Address, val: u32) {
+    pub fn do_auth(env: Env, addr: Address, _val: u32) {
         addr.require_auth();
     }
 }

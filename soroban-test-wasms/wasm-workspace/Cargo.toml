@@ -40,6 +40,7 @@ panic = "abort"
 codegen-units = 1
 lto = true
 
+
 # Always build from the local instance of env as we need to rebuild test WASMs
 # only due to the env changes.
 [patch."https://github.com/stellar/rs-soroban-env"]
@@ -49,9 +50,11 @@ soroban-env-host = { path = "../../soroban-env-host" }
 
 [workspace.dependencies.soroban-sdk]
 version = "0.6.0"
+git = "https://github.com/stellar/rs-soroban-sdk"
 
 [workspace.dependencies.soroban-auth]
 version = "0.6.0"
+git = "https://github.com/stellar/rs-soroban-sdk"
 
 # Always build using the local SDK. Usually the env change is accompanied with
 # the corresponding SDK change.
