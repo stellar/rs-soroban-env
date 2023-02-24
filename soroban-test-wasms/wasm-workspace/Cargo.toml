@@ -48,14 +48,10 @@ soroban-env-guest = { path = "../../soroban-env-guest" }
 soroban-env-host = { path = "../../soroban-env-host" }
 
 [workspace.dependencies.soroban-sdk]
-version = "0.4.3"
-git = "https://github.com/stellar/rs-soroban-sdk"
-rev = "e7910c7057088b3418d84af04f2c04313d0c756f"
+version = "0.6.0"
 
 [workspace.dependencies.soroban-auth]
-version = "0.4.3"
-git = "https://github.com/stellar/rs-soroban-sdk"
-rev = "e7910c7057088b3418d84af04f2c04313d0c756f"
+version = "0.6.0"
 
 # Always build using the local SDK. Usually the env change is accompanied with
 # the corresponding SDK change.
