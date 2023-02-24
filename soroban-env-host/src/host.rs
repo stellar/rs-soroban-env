@@ -58,7 +58,6 @@ use crate::Compare;
 #[derive(Clone)]
 struct RollbackPoint {
     storage: StorageMap,
-    objects: usize,
     events: usize,
     auth: Option<AuthorizationManagerSnapshot>,
 }
@@ -416,7 +415,6 @@ impl Host {
 
         self.0.context.borrow_mut().push(frame);
         Ok(RollbackPoint {
-            objects: self.0.objects.borrow().len(),
             storage: self.0.storage.borrow().map.clone(),
             events: self.0.events.borrow().vec.len(),
             auth: auth_snapshot,
@@ -461,7 +459,6 @@ impl Host {
         }
 
         if let Some(rp) = orp {
-            self.0.objects.borrow_mut().truncate(rp.objects);
             self.0.storage.borrow_mut().map = rp.storage;
             self.0.events.borrow_mut().rollback(rp.events)?;
             if let Some(auth_rp) = rp.auth {
