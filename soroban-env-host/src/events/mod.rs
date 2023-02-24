@@ -20,4 +20,4 @@ pub struct Events(pub Vec<HostEvent>);
 // `Contract` and `System` types of contract events.
 pub(crate) const CONTRACT_EVENT_TOPICS_LIMIT: usize = 4;
 // Maximum number of bytes in a topic `Bytes`.
-pub(crate) const TOPIC_BYTES_LENGTH_LIMIT: usize = 32;
+pub(crate) const TOPIC_BYTES_LENGTH_LIMIT: usize = 64;
