@@ -11,11 +11,11 @@ use soroban_test_wasms::COMPLEX;
 
 struct EmptySnap;
 impl SnapshotSource for EmptySnap {
-    fn get(&self, _key: &LedgerKey) -> Result<LedgerEntry, HostError> {
+    fn get(&self, _key: &Rc<LedgerKey>) -> Result<Rc<LedgerEntry>, HostError> {
         Err(ScHostStorageErrorCode::AccessToUnknownEntry.into())
     }
 
-    fn has(&self, _key: &LedgerKey) -> Result<bool, HostError> {
+    fn has(&self, _key: &Rc<LedgerKey>) -> Result<bool, HostError> {
         Ok(false)
     }
 }
