@@ -701,10 +701,10 @@ impl Host {
                     }
                     Some(ho) => match ho {
                         HostObject::Vec(vv) => {
-                            // Here covers the cost of space allocating and maneuvering needed to go
-                            // from one structure to the other. The actual conversion work (heavy lifting)
-                            // is covered by `from_host_val`, which is recursive.
-                            self.charge_budget(CostType::ScVecFromHostVec, vv.len() as u64)?;
+                            metered_clone::charge_heap_alloc::<Vec<ScVal>>(
+                                vv.len() as u64,
+                                self.as_budget(),
+                            )?;
                             let sv = vv.iter().map(|e| self.from_host_val(*e)).collect::<Result<
                                 Vec<ScVal>,
                                 HostError,
@@ -713,11 +713,11 @@ impl Host {
                             ScVal::Vec(Some(ScVec(self.map_err(sv.try_into())?)))
                         }
                         HostObject::Map(mm) => {
-                            // Here covers the cost of space allocating and maneuvering needed to go
-                            // from one structure to the other. The actual conversion work (heavy lifting)
-                            // is covered by `from_host_val`, which is recursive.
-                            self.charge_budget(CostType::ScMapFromHostMap, mm.len() as u64)?;
-                            let mut mv = Vec::new();
+                            metered_clone::charge_heap_alloc::<Vec<ScMapEntry>>(
+                                mm.len() as u64,
+                                self.as_budget(),
+                            )?;
+                            let mut mv = Vec::with_capacity(mm.len());
                             for (k, v) in mm.iter(self)? {
                                 let key = self.from_host_val(*k)?;
                                 let val = self.from_host_val(*v)?;

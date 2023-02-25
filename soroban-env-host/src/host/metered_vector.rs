@@ -1,6 +1,6 @@
 use soroban_env_common::{xdr::ScHostFnErrorCode, Compare};
 
-use super::{declared_size::DeclaredSizeForMetering, MeteredClone};
+use super::{declared_size::DeclaredSizeForMetering, metered_clone, MeteredClone};
 use crate::{
     budget::{AsBudget, Budget, CostType},
     xdr::ScHostObjErrorCode,
@@ -49,6 +49,15 @@ where
     pub fn new(budget: &Budget) -> Result<Self, HostError> {
         Self::charge_new(0, budget)?;
         Self::from_vec(Vec::new())
+    }
+
+    // Constructs a new, empty `MeteredVector` with at least the specified capacity.
+    // This is purely used for the cost calibration of allocating host memory.
+    // Do *not* use it for `MeteredVector` construction, since `MeteredVector` is immutable,
+    // the allocation will be wasted.
+    pub fn with_capacity(capacity: usize, budget: &Budget) -> Result<Self, HostError> {
+        metered_clone::charge_heap_alloc::<A>(capacity as u64, budget)?;
+        Self::from_vec(Vec::with_capacity(capacity))
     }
 
     pub fn from_array(buf: &[A], budget: &Budget) -> Result<Self, HostError> {

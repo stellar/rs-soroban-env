@@ -85,6 +85,8 @@ pub(crate) fn for_each_host_cost_measurement<B: Benchmark>() -> std::io::Result<
     call_bench::<B, InvokeHostFunctionMeasure>(&mut costs)?;
     call_bench::<B, ChargeBudgetMeasure>(&mut costs)?;
     call_bench::<B, EventCloneMeasure>(&mut costs)?;
+    call_bench::<B, HostMemAllocMeasure>(&mut costs)?;
+    call_bench::<B, HostMemCpyMeasure>(&mut costs)?;
 
     if get_explicit_bench_names().is_none() {
         for cost in CostType::variants() {

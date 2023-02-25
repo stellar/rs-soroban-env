@@ -30,7 +30,10 @@ use super::declared_size::DeclaredSizeForMetering;
 // unit is number of elements `n_elts` multiplied by a declared size of each element. In a better
 // world we would multiply by `size_of<Self>` instead but that's not guaranteed to be stable, which
 // might cause metering to differ across compilations, causing problems in concensus and replay.
-fn charge_shallow_copy<T: MeteredClone>(n_elts: u64, budget: &Budget) -> Result<(), HostError> {
+pub(crate) fn charge_shallow_copy<T: MeteredClone>(
+    n_elts: u64,
+    budget: &Budget,
+) -> Result<(), HostError> {
     // Ideally we would want a static assertion. However, it does not work due to rust restrictions
     // (e.g. see https://github.com/rust-lang/rust/issues/57775). Here we make a runtime assertion
     // that the type's size is below its promised element size for budget charging. This assertion
@@ -45,7 +48,10 @@ fn charge_shallow_copy<T: MeteredClone>(n_elts: u64, budget: &Budget) -> Result<
 
 // Let it be a free function instead of a trait because charge_heap_alloc maybe called elsewhere,
 // not just metered clone, e.g. Box::<T>::new().
-fn charge_heap_alloc<T: MeteredClone>(n_elts: u64, budget: &Budget) -> Result<(), HostError> {
+pub(crate) fn charge_heap_alloc<T: MeteredClone>(
+    n_elts: u64,
+    budget: &Budget,
+) -> Result<(), HostError> {
     // Here we make a runtime assertion that the type's size is below its promised element size for
     // budget charging.
     debug_assert!(mem::size_of::<T>() as u64 <= T::DECLARED_SIZE);
