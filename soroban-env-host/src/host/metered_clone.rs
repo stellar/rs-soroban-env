@@ -350,7 +350,7 @@ impl MeteredClone for ContractEvent {
 impl MeteredClone for HostEvent {
     const IS_SHALLOW: bool = false;
 
-    const ELT_SIZE: u64 = 112;
+    const ELT_SIZE: u64 = 120;
 
     fn charge_for_substructure(&self, budget: &Budget) -> Result<(), HostError> {
         match &self.event {
@@ -417,7 +417,7 @@ mod test {
         expect!["8"].assert_eq(std::mem::size_of::<Box<ScVal>>().to_string().as_str());
         expect!["80"].assert_eq(std::mem::size_of::<DebugEvent>().to_string().as_str());
         expect!["104"].assert_eq(std::mem::size_of::<ContractEvent>().to_string().as_str());
-        expect!["112"].assert_eq(std::mem::size_of::<HostEvent>().to_string().as_str());
+        expect!["120"].assert_eq(std::mem::size_of::<HostEvent>().to_string().as_str());
         expect!["24"].assert_eq(std::mem::size_of::<Events>().to_string().as_str());
         expect!["80"].assert_eq(std::mem::size_of::<InternalEvent>().to_string().as_str());
         expect!["40"].assert_eq(
