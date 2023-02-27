@@ -1,5 +1,6 @@
 pub(crate) mod util;
 
+mod address;
 mod basic;
 mod bytes;
 mod crypto;
@@ -7,7 +8,6 @@ mod ledger;
 mod map;
 mod str;
 mod vec;
-mod address;
 
 #[cfg(feature = "vm")]
 mod auth;
