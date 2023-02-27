@@ -11,9 +11,9 @@ use soroban_env_common::{
         AccountId, Asset, ContractCodeEntry, ContractDataEntry, ContractEventType, ContractId,
         CreateContractArgs, ExtensionPoint, Hash, HashIdPreimage, HostFunction, HostFunctionType,
         InstallContractCodeArgs, Int128Parts, LedgerEntryData, LedgerKey, LedgerKeyContractCode,
-        ScAddress, ScContractCode, ScHostContextErrorCode, ScHostFnErrorCode, ScHostObjErrorCode,
-        ScHostStorageErrorCode, ScHostValErrorCode, ScMap, ScMapEntry, ScObject, ScStatusType,
-        ScUnknownErrorCode, ScVal, ScVec,
+        PublicKey, ScAddress, ScContractCode, ScHostContextErrorCode, ScHostFnErrorCode,
+        ScHostObjErrorCode, ScHostStorageErrorCode, ScHostValErrorCode, ScMap, ScMapEntry,
+        ScObject, ScStatusType, ScUnknownErrorCode, ScVal, ScVec,
     },
     Convert, InvokerType, Status, TryFromVal, TryIntoVal, VmCaller, VmCallerEnv,
 };
@@ -2363,6 +2363,50 @@ impl VmCallerEnv for Host {
     ) -> Result<Object, Self::Error> {
         let id = self.get_current_contract_id_internal()?;
         Ok(self.add_host_object(id.0.to_vec())?)
+    }
+
+    fn account_public_key_to_address(
+        &self,
+        _vmcaller: &mut VmCaller<Self::VmUserState>,
+        pk_bytes: Object,
+    ) -> Result<Object, Self::Error> {
+        let account_id = self.account_id_from_bytes(pk_bytes)?;
+        self.add_host_object(ScAddress::Account(account_id))
+    }
+
+    fn contract_id_to_address(
+        &self,
+        _vmcaller: &mut VmCaller<Self::VmUserState>,
+        contract_id_bytes: Object,
+    ) -> Result<Object, Self::Error> {
+        let contract_id = self.hash_from_obj_input("contract_id", contract_id_bytes)?;
+        self.add_host_object(ScAddress::Contract(contract_id))
+    }
+
+    fn address_to_account_public_key(
+        &self,
+        _vmcaller: &mut VmCaller<Self::VmUserState>,
+        address: Object,
+    ) -> Result<RawVal, Self::Error> {
+        let addr = self.visit_obj(address, |addr: &ScAddress| Ok(addr.clone()))?;
+        match addr {
+            ScAddress::Account(AccountId(PublicKey::PublicKeyTypeEd25519(pk))) => {
+                Ok(self.add_host_object(pk.0.to_vec())?.into())
+            }
+            ScAddress::Contract(_) => Ok(().into()),
+        }
+    }
+
+    fn address_to_contract_id(
+        &self,
+        _vmcaller: &mut VmCaller<Self::VmUserState>,
+        address: Object,
+    ) -> Result<RawVal, Self::Error> {
+        let addr = self.visit_obj(address, |addr: &ScAddress| Ok(addr.clone()))?;
+        match addr {
+            ScAddress::Account(_) => Ok(().into()),
+            ScAddress::Contract(Hash(h)) => Ok(self.add_host_object(h.to_vec())?.into()),
+        }
     }
 }
 
