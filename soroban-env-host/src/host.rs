@@ -767,8 +767,7 @@ impl Host {
         contract_source: ScContractCode,
     ) -> Result<(), HostError> {
         let new_contract_id = self.hash_from_obj_input("id_obj", contract_id)?;
-        let storage_key =
-            self.contract_source_ledger_key(new_contract_id.metered_clone(&self.0.budget)?);
+        let storage_key = self.contract_source_ledger_key(&new_contract_id)?;
         if self
             .0
             .storage
@@ -781,8 +780,7 @@ impl Host {
         // without this check it would be possible to accidentally create a
         // contract that never may be invoked (just by providing a bad hash).
         if let ScContractCode::WasmRef(wasm_hash) = &contract_source {
-            let wasm_storage_key =
-                self.contract_code_ledger_key(wasm_hash.metered_clone(&self.0.budget)?);
+            let wasm_storage_key = self.contract_code_ledger_key(wasm_hash)?;
             if !self
                 .0
                 .storage
@@ -842,11 +840,11 @@ impl Host {
         args: &[RawVal],
     ) -> Result<RawVal, HostError> {
         // Create key for storage
-        let storage_key = self.contract_source_ledger_key(id.metered_clone(&self.0.budget)?);
+        let storage_key = self.contract_source_ledger_key(id)?;
         match self.retrieve_contract_source_from_storage(&storage_key)? {
             #[cfg(feature = "vm")]
             ScContractCode::WasmRef(wasm_hash) => {
-                let code_entry = self.retrieve_contract_code_from_storage(wasm_hash)?;
+                let code_entry = self.retrieve_contract_code_from_storage(&wasm_hash)?;
                 let vm = Vm::new(
                     self,
                     id.metered_clone(&self.0.budget)?,
@@ -1053,10 +1051,10 @@ impl Host {
     #[cfg(any(test, feature = "testutils"))]
     pub fn add_ledger_entry(
         &self,
-        key: LedgerKey,
-        val: soroban_env_common::xdr::LedgerEntry,
+        key: &Rc<LedgerKey>,
+        val: &Rc<soroban_env_common::xdr::LedgerEntry>,
     ) -> Result<(), HostError> {
-        self.with_mut_storage(|storage| storage.put(&key, &val, self.as_budget()))
+        self.with_mut_storage(|storage| storage.put(key, val, self.as_budget()))
     }
 
     // Returns the top-level authorizations that have been recorded for the last
@@ -1114,9 +1112,9 @@ impl Host {
     fn install_contract(&self, args: InstallContractCodeArgs) -> Result<Object, HostError> {
         let hash_bytes = self.metered_hash_xdr(&args)?;
         let hash_obj = self.add_host_object(hash_bytes.to_vec())?;
-        let code_key = LedgerKey::ContractCode(LedgerKeyContractCode {
+        let code_key = Rc::new(LedgerKey::ContractCode(LedgerKeyContractCode {
             hash: Hash(hash_bytes.metered_clone(self.budget_ref())?),
-        });
+        }));
         if !self
             .0
             .storage
@@ -1875,13 +1873,8 @@ impl VmCallerEnv for Host {
         k: RawVal,
     ) -> Result<RawVal, HostError> {
         let key = self.storage_key_from_rawval(k)?;
-        match self
-            .0
-            .storage
-            .borrow_mut()
-            .get(&key, self.as_budget())?
-            .data
-        {
+        let entry = self.0.storage.borrow_mut().get(&key, self.as_budget())?;
+        match &entry.data {
             LedgerEntryData::ContractData(ContractDataEntry {
                 contract_id,
                 key,

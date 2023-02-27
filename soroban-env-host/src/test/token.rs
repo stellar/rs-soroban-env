@@ -1,4 +1,4 @@
-use std::convert::TryInto;
+use std::{convert::TryInto, rc::Rc};
 
 use crate::{
     auth::RecordedAuthPayload,
@@ -109,7 +109,7 @@ impl TokenTest {
         );
     }
 
-    fn create_default_trustline(&self, user: &TestSigner) -> LedgerKey {
+    fn create_default_trustline(&self, user: &TestSigner) -> Rc<LedgerKey> {
         self.create_trustline(
             &user.account_id(),
             &keypair_to_account_id(&self.issuer_key),
@@ -127,10 +127,10 @@ impl TokenTest {
         account.balance
     }
 
-    fn get_trustline_balance(&self, key: &LedgerKey) -> i64 {
+    fn get_trustline_balance(&self, key: &Rc<LedgerKey>) -> i64 {
         self.host
-            .with_mut_storage(|s| match s.get(key, self.host.as_budget()).unwrap().data {
-                LedgerEntryData::Trustline(trustline) => Ok(trustline.balance),
+            .with_mut_storage(|s| match &s.get(key, self.host.as_budget()).unwrap().data {
+                LedgerEntryData::Trustline(trustline) => Ok(trustline.balance.clone()),
                 _ => unreachable!(),
             })
             .unwrap()
@@ -162,15 +162,19 @@ impl TokenTest {
         );
     }
 
-    fn update_account_flags(&self, key: &LedgerKey, new_flags: u32) {
+    fn update_account_flags(&self, key: &Rc<LedgerKey>, new_flags: u32) {
         self.host
-            .with_mut_storage(|s| match s.get(key, self.host.as_budget()).unwrap().data {
-                LedgerEntryData::Account(mut account) => {
-                    account.flags = new_flags;
-                    let update = Host::ledger_entry_from_data(LedgerEntryData::Account(account));
-                    s.put(&key, &update, self.host.as_budget())
+            .with_mut_storage(|s| {
+                let entry = s.get(key, self.host.as_budget()).unwrap();
+                match entry.data.clone() {
+                    LedgerEntryData::Account(mut account) => {
+                        account.flags = new_flags;
+                        let update =
+                            Host::ledger_entry_from_data(LedgerEntryData::Account(account));
+                        s.put(key, &update, self.host.as_budget())
+                    }
+                    _ => unreachable!(),
                 }
-                _ => unreachable!(),
             })
             .unwrap();
     }
@@ -185,7 +189,7 @@ impl TokenTest {
         flags: u32,
         // (buying, selling) liabilities
         liabilities: Option<(i64, i64)>,
-    ) -> LedgerKey {
+    ) -> Rc<LedgerKey> {
         let asset = match asset_code.len() {
             4 => {
                 let mut code = [0_u8; 4];
@@ -223,24 +227,27 @@ impl TokenTest {
 
         self.host
             .add_ledger_entry(
-                key.clone(),
-                Host::ledger_entry_from_data(LedgerEntryData::Trustline(trustline_entry)),
+                &key,
+                &Host::ledger_entry_from_data(LedgerEntryData::Trustline(trustline_entry)),
             )
             .unwrap();
 
         key
     }
 
-    fn update_trustline_flags(&self, key: &LedgerKey, new_flags: u32) {
+    fn update_trustline_flags(&self, key: &Rc<LedgerKey>, new_flags: u32) {
         self.host
-            .with_mut_storage(|s| match s.get(key, self.host.as_budget()).unwrap().data {
-                LedgerEntryData::Trustline(mut trustline) => {
-                    trustline.flags = new_flags;
-                    let update =
-                        Host::ledger_entry_from_data(LedgerEntryData::Trustline(trustline));
-                    s.put(&key, &update, self.host.as_budget())
+            .with_mut_storage(|s| {
+                let entry = s.get(key, self.host.as_budget()).unwrap();
+                match entry.data.clone() {
+                    LedgerEntryData::Trustline(mut trustline) => {
+                        trustline.flags = new_flags;
+                        let update =
+                            Host::ledger_entry_from_data(LedgerEntryData::Trustline(trustline));
+                        s.put(key, &update, self.host.as_budget())
+                    }
+                    _ => unreachable!(),
                 }
-                _ => unreachable!(),
             })
             .unwrap();
     }

@@ -87,10 +87,10 @@ impl Host {
 
     pub(crate) fn test_account_ledger_key_entry_pair(
         account_id: AccountId,
-    ) -> (LedgerKey, LedgerEntry) {
-        let lk = LedgerKey::Account(xdr::LedgerKeyAccount {
+    ) -> (Rc<LedgerKey>, Rc<LedgerEntry>) {
+        let lk = Rc::new(LedgerKey::Account(xdr::LedgerKeyAccount {
             account_id: account_id.clone(),
-        });
+        }));
         let account_entry = AccountEntry {
             account_id,
             balance: 100,
@@ -103,10 +103,8 @@ impl Host {
             signers: Default::default(),
             ext: xdr::AccountEntryExt::V0,
         };
-        (
-            lk,
-            Host::ledger_entry_from_data(LedgerEntryData::Account(account_entry)),
-        )
+        let le = Host::ledger_entry_from_data(LedgerEntryData::Account(account_entry));
+        (lk, le)
     }
 
     pub(crate) fn test_scvec<T: AsScVal>(&self, vals: &[T]) -> Result<ScVec, HostError> {
