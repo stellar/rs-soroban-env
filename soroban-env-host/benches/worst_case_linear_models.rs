@@ -1,5 +1,5 @@
 // Run this with
-// $ cargo bench --features vm --bench worst_case_linear_models -- --nocapture
+// $ cargo bench --features vm,testutils --bench worst_case_linear_models -- --nocapture
 mod common;
 use common::*;
 

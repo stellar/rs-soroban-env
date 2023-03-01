@@ -1,5 +1,5 @@
 // Run this with
-// $ cargo bench --features vm --bench variation_histograms -- --nocapture
+// $ cargo bench --features vm,testutils --bench variation_histograms -- --nocapture
 mod common;
 use common::*;
 
