@@ -1,6 +1,6 @@
 use soroban_env_common::xdr::ScHostObjErrorCode;
 
-use super::MeteredClone;
+use super::{declared_size::DeclaredSizeForMetering, MeteredClone};
 use crate::{
     budget::{AsBudget, Budget, CostType},
     xdr::ScHostFnErrorCode,
@@ -41,7 +41,7 @@ where
     Ctx: AsBudget + Compare<K, Error = HostError> + Compare<V, Error = HostError>,
 {
     fn charge_new<B: AsBudget>(n_elts: u64, b: &B) -> Result<(), HostError> {
-        let n_bytes = <Vec<(K, V)> as MeteredClone>::ELT_SIZE * n_elts;
+        let n_bytes = <(K, V) as DeclaredSizeForMetering>::DECLARED_SIZE * n_elts;
         b.as_budget().charge(CostType::MapNew, n_bytes)
     }
 
@@ -321,14 +321,21 @@ where
     }
 }
 
+impl<K, V, Ctx> DeclaredSizeForMetering for MeteredOrdMap<K, V, Ctx>
+where
+    K: MeteredClone,
+    V: MeteredClone,
+    Ctx: AsBudget + Compare<K, Error = HostError> + Compare<V, Error = HostError>,
+{
+    const DECLARED_SIZE: u64 = <Vec<(K, V)> as DeclaredSizeForMetering>::DECLARED_SIZE;
+}
+
 impl<K, V, Ctx> MeteredClone for MeteredOrdMap<K, V, Ctx>
 where
     K: MeteredClone,
     V: MeteredClone,
     Ctx: AsBudget + Compare<K, Error = HostError> + Compare<V, Error = HostError>,
 {
-    const ELT_SIZE: u64 = <Vec<(K, V)> as MeteredClone>::ELT_SIZE;
-
     fn charge_for_substructure(&self, budget: &Budget) -> Result<(), HostError> {
         self.map.charge_for_substructure(budget)
     }

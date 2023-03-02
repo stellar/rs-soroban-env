@@ -18,6 +18,8 @@ use crate::{
     Host, HostError,
 };
 
+use super::declared_size::DeclaredSizeForMetering;
+
 // We can't use core::mem::discriminant here because it returns an opaque type
 // that only supports Eq, not Ord, to reduce the possibility of an API breakage
 // based on reordering enums: https://github.com/rust-lang/rust/issues/51561
@@ -116,18 +118,21 @@ impl<const N: usize> Compare<[u8; N]> for Budget {
 // better). But we can list out any concrete Ord instances we want to support
 // here.
 //
-// We only do this for fixed-size types, because we want to charge them a constant
-// (actually just "1" to avoid being subject to instability in layout / size_of).
+// We only do this for declared-size types, because we want to charge them a constant
+// based on their size declared in accordance with their type layout.
 
-struct FixedSizeOrdType<'a, T: Ord>(&'a T);
-impl<T: Ord> Compare<FixedSizeOrdType<'_, T>> for Budget {
+struct FixedSizeOrdType<'a, T: Ord + DeclaredSizeForMetering>(&'a T);
+impl<T: Ord + DeclaredSizeForMetering> Compare<FixedSizeOrdType<'_, T>> for Budget {
     type Error = HostError;
     fn compare(
         &self,
         a: &FixedSizeOrdType<'_, T>,
         b: &FixedSizeOrdType<'_, T>,
     ) -> Result<Ordering, Self::Error> {
-        self.charge(CostType::BytesCmp, 1)?;
+        self.charge(
+            CostType::BytesCmp,
+            <T as DeclaredSizeForMetering>::DECLARED_SIZE,
+        )?;
         Ok(a.0.cmp(&b.0))
     }
 }
@@ -149,9 +154,6 @@ macro_rules! impl_compare_fixed_size_ord_type {
     };
 }
 
-// TODO: we should pass in the indivial size (in bytes) of each type and have the budget charge
-// that given amount. This is similar to self.charge(CostType::BytesCmp, mem::size_of<T>)?;
-// but we are passing the size in explicitly (because the `size_of` is unstable).
 impl_compare_fixed_size_ord_type!(bool);
 
 impl_compare_fixed_size_ord_type!(u32);

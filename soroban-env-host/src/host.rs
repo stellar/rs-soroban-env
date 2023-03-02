@@ -37,6 +37,7 @@ use crate::{EnvBase, Object, RawVal, Symbol};
 pub(crate) mod comparison;
 mod conversion;
 mod data_helper;
+pub(crate) mod declared_size;
 mod err_helper;
 mod error;
 mod mem_helper;
