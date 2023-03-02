@@ -2974,15 +2974,10 @@ impl VmCallerEnv for Host {
 }
 
 #[cfg(any(test, feature = "testutils"))]
-mod testutils {
-    use crate::RawVal;
-    use std::any::Any;
+pub(crate) mod testutils {
     use std::cell::Cell;
-    use std::panic::UnwindSafe;
-    use std::panic::{catch_unwind, set_hook, take_hook};
+    use std::panic::{catch_unwind, set_hook, take_hook, UnwindSafe};
     use std::sync::Once;
-
-    type PanicVal = Box<dyn Any + Send>;
 
     /// Catch panics while suppressing the default panic hook that prints to the
     /// console.
@@ -2996,9 +2991,9 @@ mod testutils {
     /// hook. It then uses a thread local variable to track contract call depth.
     /// If a panick occurs during a contract call the original hook is not
     /// called, otherwise it is called.
-    pub fn call_with_suppressed_panic_hook<C>(closure: C) -> Result<Option<RawVal>, PanicVal>
+    pub fn call_with_suppressed_panic_hook<C, R>(closure: C) -> std::thread::Result<R>
     where
-        C: FnOnce() -> Option<RawVal> + UnwindSafe,
+        C: FnOnce() -> R + UnwindSafe,
     {
         thread_local! {
             static TEST_CONTRACT_CALL_COUNT: Cell<u64> = Cell::new(0);
@@ -3022,7 +3017,7 @@ mod testutils {
             c.set(new_count);
         });
 
-        let res: Result<Option<RawVal>, PanicVal> = catch_unwind(closure);
+        let res = catch_unwind(closure);
 
         TEST_CONTRACT_CALL_COUNT.with(|c| {
             let old_count = c.get();
