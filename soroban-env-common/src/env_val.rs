@@ -1,4 +1,4 @@
-use crate::{ConversionError, Env, I128Small, I64Small, RawVal, U128Small, U64Small};
+use crate::{ConversionError, Env, I128Small, I64Small, RawVal, U128Small, U64Small, U64Val};
 use core::fmt::Debug;
 
 #[cfg(feature = "std")]
@@ -99,6 +99,33 @@ impl<E: Env> TryFromVal<E, u64> for RawVal {
             Ok(so.into())
         } else {
             Ok(env.obj_from_u64(v).map_err(|_| ConversionError)?.to_raw())
+        }
+    }
+}
+
+impl<E: Env> TryFromVal<E, U64Val> for u64 {
+    type Error = ConversionError;
+
+    fn try_from_val(env: &E, val: &U64Val) -> Result<Self, Self::Error> {
+        let val = *val;
+        if let Ok(so) = U64Small::try_from(val) {
+            Ok(so.into())
+        } else {
+            let obj = val.try_into()?;
+            Ok(env.obj_to_u64(obj).map_err(|_| ConversionError)?)
+        }
+    }
+}
+
+impl<E: Env> TryFromVal<E, u64> for U64Val {
+    type Error = ConversionError;
+
+    fn try_from_val(env: &E, v: &u64) -> Result<Self, Self::Error> {
+        let v = *v;
+        if let Ok(so) = U64Small::try_from(v) {
+            Ok(so.into())
+        } else {
+            Ok(env.obj_from_u64(v).map_err(|_| ConversionError)?.into())
         }
     }
 }
