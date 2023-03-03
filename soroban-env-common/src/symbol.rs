@@ -349,7 +349,7 @@ impl FromIterator<char> for SymbolSmall {
 }
 
 #[cfg(feature = "std")]
-use crate::xdr::{ScVal, ScSymbol};
+use crate::xdr::{ScSymbol, ScVal};
 
 #[cfg(feature = "std")]
 impl TryFrom<ScVal> for SymbolSmall {
@@ -387,10 +387,9 @@ impl<E: Env> TryFromVal<E, &ScVal> for Symbol {
             Symbol::try_from_val(env, &sym)
         } else {
             Err(ConversionError)
-        }  
+        }
     }
 }
-
 
 #[cfg(feature = "std")]
 impl<E: Env> TryFromVal<E, ScSymbol> for Symbol {
@@ -405,7 +404,7 @@ impl<E: Env> TryFromVal<E, ScSymbol> for Symbol {
 impl<E: Env> TryFromVal<E, &ScSymbol> for Symbol {
     type Error = ConversionError;
     fn try_from_val(env: &E, v: &&ScSymbol) -> Result<Self, Self::Error> {
-            Symbol::try_from_val(env, &v.0.as_slice())
+        Symbol::try_from_val(env, &v.0.as_slice())
     }
 }
 
