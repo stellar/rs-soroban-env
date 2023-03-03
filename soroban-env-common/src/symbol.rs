@@ -349,7 +349,7 @@ impl FromIterator<char> for SymbolSmall {
 }
 
 #[cfg(feature = "std")]
-use crate::xdr::ScVal;
+use crate::xdr::{ScVal, ScSymbol};
 
 #[cfg(feature = "std")]
 impl TryFrom<ScVal> for SymbolSmall {
@@ -367,6 +367,45 @@ impl TryFrom<&ScVal> for SymbolSmall {
         } else {
             Err(ConversionError)
         }
+    }
+}
+
+#[cfg(feature = "std")]
+impl<E: Env> TryFromVal<E, ScVal> for Symbol {
+    type Error = ConversionError;
+
+    fn try_from_val(env: &E, v: &ScVal) -> Result<Self, Self::Error> {
+        Symbol::try_from_val(env, &v)
+    }
+}
+
+#[cfg(feature = "std")]
+impl<E: Env> TryFromVal<E, &ScVal> for Symbol {
+    type Error = ConversionError;
+    fn try_from_val(env: &E, v: &&ScVal) -> Result<Self, Self::Error> {
+        if let ScVal::Symbol(sym) = v {
+            Symbol::try_from_val(env, &sym)
+        } else {
+            Err(ConversionError)
+        }  
+    }
+}
+
+
+#[cfg(feature = "std")]
+impl<E: Env> TryFromVal<E, ScSymbol> for Symbol {
+    type Error = ConversionError;
+
+    fn try_from_val(env: &E, v: &ScSymbol) -> Result<Self, Self::Error> {
+        Symbol::try_from_val(env, &v)
+    }
+}
+
+#[cfg(feature = "std")]
+impl<E: Env> TryFromVal<E, &ScSymbol> for Symbol {
+    type Error = ConversionError;
+    fn try_from_val(env: &E, v: &&ScSymbol) -> Result<Self, Self::Error> {
+            Symbol::try_from_val(env, &v.0.as_slice())
     }
 }
 
