@@ -100,6 +100,14 @@ impl<E: Env> Compare<Symbol> for E {
 }
 
 impl Symbol {
+    #[doc(hidden)]
+    pub const unsafe fn from_small_body(body: u64) -> Self {
+        // Can't panic, though it's possible you gave it a weird
+        // symbol, every possible bit-pattern in the low 56 bits
+        // is a valid small symbol.
+        Symbol(SymbolSmall::from_body(body).0)
+    }
+
     pub const fn try_from_small_str(s: &str) -> Result<Self, SymbolError> {
         match SymbolSmall::try_from_str(s) {
             Ok(ss) => Ok(Symbol(ss.0)),
@@ -173,6 +181,11 @@ impl SymbolSmall {
 
     pub const fn try_from_str(s: &str) -> Result<SymbolSmall, SymbolError> {
         Self::try_from_bytes(s.as_bytes())
+    }
+
+    #[doc(hidden)]
+    pub const unsafe fn get_body(&self) -> u64 {
+        self.0.get_body()
     }
 
     // This should not be generally available as it can easily panic.
