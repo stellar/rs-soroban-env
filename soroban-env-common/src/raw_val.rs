@@ -642,8 +642,8 @@ impl Debug for RawVal {
         }
 
         match self.get_tag() {
-            Tag::U32Val => write!(f, "U32({})", self.get_body() as u32),
-            Tag::I32Val => write!(f, "I32({})", (self.get_body() as u32) as i32),
+            Tag::U32Val => write!(f, "U32({})", self.get_major() as u32),
+            Tag::I32Val => write!(f, "I32({})", (self.get_major() as u32) as i32),
             Tag::False => write!(f, "False"),
             Tag::True => write!(f, "True"),
             Tag::Void => write!(f, "Void"),
@@ -651,15 +651,15 @@ impl Debug for RawVal {
                 unsafe { <Status as RawValConvertible>::unchecked_from_val(*self) }.fmt(f)
             }
             Tag::U64Small => write!(f, "U64({})", self.get_body()),
-            Tag::I64Small => write!(f, "I64({})", self.get_body() as i64),
+            Tag::I64Small => write!(f, "I64({})", self.get_signed_body()),
             Tag::TimepointSmall => write!(f, "Timepoint({})", self.get_body()),
             Tag::DurationSmall => write!(f, "Duration({})", self.get_body()),
             // These can't be bigger than u64/i64 so just cast to them.
             Tag::U128Small => write!(f, "U128({})", self.get_body()),
-            Tag::I128Small => write!(f, "I128({})", self.get_body() as i64),
+            Tag::I128Small => write!(f, "I128({})", self.get_signed_body() as i64),
             // These can't be bigger than u64/i64 so just cast to them.
             Tag::U256Small => write!(f, "U256({})", self.get_body()),
-            Tag::I256Small => write!(f, "I256({})", self.get_body() as i64),
+            Tag::I256Small => write!(f, "I256({})", self.get_signed_body() as i64),
             Tag::SymbolSmall => {
                 let ss: SymbolStr =
                     unsafe { <SymbolSmall as RawValConvertible>::unchecked_from_val(*self) }.into();
@@ -704,12 +704,16 @@ impl Debug for RawVal {
 #[cfg(feature = "std")]
 fn test_debug() {
     use super::{Object, Status, SymbolSmall};
-    use crate::xdr::{ScHostValErrorCode, ScStatus};
+    use crate::{xdr::{ScHostValErrorCode, ScStatus}, I64Small, U64Small};
     assert_eq!(format!("{:?}", RawVal::from_void()), "Void");
     assert_eq!(format!("{:?}", RawVal::from_bool(true)), "True");
     assert_eq!(format!("{:?}", RawVal::from_bool(false)), "False");
     assert_eq!(format!("{:?}", RawVal::from_i32(10)), "I32(10)");
+    assert_eq!(format!("{:?}", RawVal::from_i32(-10)), "I32(-10)");
     assert_eq!(format!("{:?}", RawVal::from_u32(10)), "U32(10)");
+    assert_eq!(format!("{:?}", I64Small::try_from(10).unwrap()), "I64(10)");
+    assert_eq!(format!("{:?}", I64Small::try_from(-10).unwrap()), "I64(-10)");
+    assert_eq!(format!("{:?}", U64Small::try_from(10).unwrap()), "U64(10)");
     assert_eq!(
         format!("{:?}", SymbolSmall::try_from_str("hello").unwrap()),
         "Symbol(hello)"

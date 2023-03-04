@@ -3,10 +3,10 @@ use crate::{
     xdr::{ScHostObjErrorCode, ScStatus, ScVal},
     Env, Host, HostError, RawVal,
 };
-use soroban_env_common::EnvBase;
+use soroban_env_common::{EnvBase, Compare};
 
 #[cfg(feature = "vm")]
-use crate::{Object, Symbol};
+use crate::{Symbol};
 #[cfg(feature = "vm")]
 use soroban_test_wasms::LINEAR_MEMORY;
 
@@ -102,7 +102,7 @@ fn bytes_xdr_roundtrip() -> Result<(), HostError> {
         let rv: RawVal = host.to_host_val(&v)?.into();
         let bo = host.serialize_to_bytes(rv.clone())?;
         let rv_back = host.deserialize_from_bytes(bo)?;
-        assert_eq!(host.obj_cmp(rv.try_into()?, rv_back.try_into()?)?, 0);
+        assert_eq!(host.compare(&rv, &rv_back)?, core::cmp::Ordering::Equal);
         Ok(())
     };
     // u64
@@ -135,33 +135,35 @@ fn bytes_xdr_roundtrip() -> Result<(), HostError> {
 #[cfg(feature = "vm")]
 #[test]
 fn linear_memory_operations() -> Result<(), HostError> {
+    use soroban_env_common::BytesObject;
+
+
     let host = Host::test_host_with_recording_footprint();
     let id_obj = host.register_test_contract_wasm(LINEAR_MEMORY)?;
     // tests bytes_new_from_linear_memory
     {
         let args = host.test_vec_obj::<u32>(&[0xaabbccdd])?;
-        let obj = host.call(
+        let obj: BytesObject = host.call(
             id_obj,
             Symbol::try_from_small_str("bin_word").unwrap().into(),
             args.into(),
-        )?;
-        let obj_ref = host.test_bin_obj(&[0xaa, 0xbb, 0xcc, 0xdd])?;
-        assert_eq!(host.obj_cmp(obj.try_into()?, obj_ref.try_into()?)?, 0);
+        )?.try_into()?;
+        let obj_ref: BytesObject = host.test_bin_obj(&[0xaa, 0xbb, 0xcc, 0xdd])?;
+        assert_eq!(host.compare(&obj.to_raw(), &obj_ref.to_raw())?, core::cmp::Ordering::Equal);
     }
     // tests bytes_copy_{to,from}_linear_memory
     {
         let obj0 = host.test_bin_obj(&[1, 2, 3, 4])?;
         let mut args = host.vec_new(RawVal::from_void().into())?;
         args = host.vec_push_back(args, obj0.to_raw())?;
-        let obj: Object = host
+        let obj: BytesObject = host
             .call(
                 id_obj,
                 Symbol::try_from_small_str("bin_inc").unwrap().into(),
                 args.into(),
-            )?
-            .try_into()?;
+            )?.try_into()?;
         let obj_ref = host.test_bin_obj(&[2, 3, 4, 5])?;
-        assert_eq!(host.obj_cmp(obj.into(), obj_ref.into())?, 0);
+        assert_eq!(host.compare(&obj.to_raw(), &obj_ref.to_raw())?, core::cmp::Ordering::Equal);
     }
 
     Ok(())
