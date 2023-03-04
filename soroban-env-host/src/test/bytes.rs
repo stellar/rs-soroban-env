@@ -3,10 +3,10 @@ use crate::{
     xdr::{ScHostObjErrorCode, ScStatus, ScVal},
     Env, Host, HostError, RawVal,
 };
-use soroban_env_common::{EnvBase, Compare};
+use soroban_env_common::{Compare, EnvBase};
 
 #[cfg(feature = "vm")]
-use crate::{Symbol};
+use crate::Symbol;
 #[cfg(feature = "vm")]
 use soroban_test_wasms::LINEAR_MEMORY;
 
@@ -137,19 +137,23 @@ fn bytes_xdr_roundtrip() -> Result<(), HostError> {
 fn linear_memory_operations() -> Result<(), HostError> {
     use soroban_env_common::BytesObject;
 
-
     let host = Host::test_host_with_recording_footprint();
     let id_obj = host.register_test_contract_wasm(LINEAR_MEMORY)?;
     // tests bytes_new_from_linear_memory
     {
         let args = host.test_vec_obj::<u32>(&[0xaabbccdd])?;
-        let obj: BytesObject = host.call(
-            id_obj,
-            Symbol::try_from_small_str("bin_word").unwrap().into(),
-            args.into(),
-        )?.try_into()?;
+        let obj: BytesObject = host
+            .call(
+                id_obj,
+                Symbol::try_from_small_str("bin_word").unwrap().into(),
+                args.into(),
+            )?
+            .try_into()?;
         let obj_ref: BytesObject = host.test_bin_obj(&[0xaa, 0xbb, 0xcc, 0xdd])?;
-        assert_eq!(host.compare(&obj.to_raw(), &obj_ref.to_raw())?, core::cmp::Ordering::Equal);
+        assert_eq!(
+            host.compare(&obj.to_raw(), &obj_ref.to_raw())?,
+            core::cmp::Ordering::Equal
+        );
     }
     // tests bytes_copy_{to,from}_linear_memory
     {
@@ -161,9 +165,13 @@ fn linear_memory_operations() -> Result<(), HostError> {
                 id_obj,
                 Symbol::try_from_small_str("bin_inc").unwrap().into(),
                 args.into(),
-            )?.try_into()?;
+            )?
+            .try_into()?;
         let obj_ref = host.test_bin_obj(&[2, 3, 4, 5])?;
-        assert_eq!(host.compare(&obj.to_raw(), &obj_ref.to_raw())?, core::cmp::Ordering::Equal);
+        assert_eq!(
+            host.compare(&obj.to_raw(), &obj_ref.to_raw())?,
+            core::cmp::Ordering::Equal
+        );
     }
 
     Ok(())

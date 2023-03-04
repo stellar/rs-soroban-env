@@ -704,7 +704,10 @@ impl Debug for RawVal {
 #[cfg(feature = "std")]
 fn test_debug() {
     use super::{Object, Status, SymbolSmall};
-    use crate::{xdr::{ScHostValErrorCode, ScStatus}, I64Small, U64Small};
+    use crate::{
+        xdr::{ScHostValErrorCode, ScStatus},
+        I64Small, U64Small,
+    };
     assert_eq!(format!("{:?}", RawVal::from_void()), "Void");
     assert_eq!(format!("{:?}", RawVal::from_bool(true)), "True");
     assert_eq!(format!("{:?}", RawVal::from_bool(false)), "False");
@@ -712,7 +715,10 @@ fn test_debug() {
     assert_eq!(format!("{:?}", RawVal::from_i32(-10)), "I32(-10)");
     assert_eq!(format!("{:?}", RawVal::from_u32(10)), "U32(10)");
     assert_eq!(format!("{:?}", I64Small::try_from(10).unwrap()), "I64(10)");
-    assert_eq!(format!("{:?}", I64Small::try_from(-10).unwrap()), "I64(-10)");
+    assert_eq!(
+        format!("{:?}", I64Small::try_from(-10).unwrap()),
+        "I64(-10)"
+    );
     assert_eq!(format!("{:?}", U64Small::try_from(10).unwrap()), "U64(10)");
     assert_eq!(
         format!("{:?}", SymbolSmall::try_from_str("hello").unwrap()),
