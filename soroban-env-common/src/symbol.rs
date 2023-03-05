@@ -442,6 +442,15 @@ impl TryFrom<&SymbolSmall> for ScVal {
     }
 }
 
+#[cfg(feature = "std")]
+impl<E: Env> TryFromVal<E, Symbol> for ScVal {
+    type Error = ConversionError;
+    fn try_from_val(e: &E, s: &Symbol) -> Result<Self, Self::Error> {
+        let sstr = SymbolStr::try_from_val(e, s)?;
+        Ok(ScVal::Symbol(ScSymbol(sstr.0.as_slice().try_into()?)))
+    }
+}
+
 #[cfg(test)]
 mod test_without_string {
     use super::{SymbolSmall, SymbolStr};

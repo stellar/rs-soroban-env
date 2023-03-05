@@ -137,6 +137,12 @@ macro_rules! impl_wrapper_as_and_to_rawval {
             }
         }
 
+        impl From<&$wrapper> for $crate::RawVal {
+            fn from(b: &$wrapper) -> Self {
+                b.0
+            }
+        }
+
         // Various inherent helper / disambiguation methods which
         // may or may-not ever get used per-type, so allowed-dead.
         #[allow(dead_code)]
