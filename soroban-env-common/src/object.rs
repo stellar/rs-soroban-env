@@ -46,6 +46,29 @@ impl Object {
     }
 }
 
+impl<E: Env> Compare<Object> for E {
+    type Error = E::Error;
+
+    fn compare(&self, a: &Object, b: &Object) -> Result<Ordering, Self::Error> {
+        self.compare(&a.to_raw(), &b.to_raw())
+    }
+}
+
+/// `ScValObject` (and its reference-based type `ScValObjRef`) is a small
+/// wrapper type that does _not_ have its own XDR definition, it just denotes
+/// (as a type) the subset of `ScVal` values that need to be represented in
+/// `RawVal` by one of the cases that can be an `Object`. In other words
+/// `RawVal::try_from_val(&v, e).is_object()` will be true iff
+/// `ScValObject::classify(v)` is `Ok(ScValObject(v))`.
+
+#[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub struct ScValObject(ScVal);
+impl From<ScValObject> for ScVal {
+    fn from(value: ScValObject) -> Self {
+        value.0
+    }
+}
+
 impl<E> TryFromVal<E, Object> for ScValObject
 where
     E: Env + Convert<Object, ScValObject>,
@@ -67,29 +90,6 @@ where
             Ok(obj) => Ok(obj),
             Err(_) => Err(ConversionError),
         }
-    }
-}
-
-impl<E: Env> Compare<Object> for E {
-    type Error = E::Error;
-
-    fn compare(&self, a: &Object, b: &Object) -> Result<Ordering, Self::Error> {
-        self.compare(&a.to_raw(), &b.to_raw())
-    }
-}
-
-/// `ScValObject` (and its reference-based type `ScValObjRef`) is a small
-/// wrapper type that does _not_ have its own XDR definition, it just denotes
-/// (as a type) the subset of `ScVal` values that need to be represented in
-/// `RawVal` by one of the cases that can be an `Object`. In other words
-/// `RawVal::try_from_val(&v, e).is_object()` will be true iff
-/// `ScValObject::classify(v)` is `Ok(ScValObject(v))`.
-
-#[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
-pub struct ScValObject(ScVal);
-impl From<ScValObject> for ScVal {
-    fn from(value: ScValObject) -> Self {
-        value.0
     }
 }
 

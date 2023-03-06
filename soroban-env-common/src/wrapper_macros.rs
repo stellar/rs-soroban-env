@@ -3,7 +3,7 @@
 macro_rules! impl_wrapper_tag_based_rawvalconvertible {
     ($tagname:ident) => {
         // A RawValConvertible impl for types where the wrapper _has the same
-        // name_ as a Tag:: case and being-that-wrapper is identical to
+        // name_ as a Tag::case and being-that-wrapper is identical to
         // having-that-tag.
         impl $crate::RawValConvertible for $tagname {
             #[inline(always)]
@@ -59,11 +59,7 @@ macro_rules! impl_tryfroms_and_tryfromvals_delegating_to_rawvalconvertible {
             type Error = $crate::ConversionError;
             #[inline(always)]
             fn try_from(v: &$crate::RawVal) -> Result<Self, Self::Error> {
-                if let Some(c) = <Self as $crate::RawValConvertible>::try_convert(*v) {
-                    Ok(c)
-                } else {
-                    Err($crate::ConversionError)
-                }
+                Self::try_from(*v)
             }
         }
         impl<E: $crate::Env> $crate::TryFromVal<E, $crate::RawVal> for $T {

@@ -158,6 +158,41 @@ impl Tag {
     pub fn rawval_const(&self) -> i64 {
         *self as i64
     }
+    pub const fn is_object(self) -> bool {
+        let tu8 = self as u8;
+        tu8 > (Tag::ObjectCodeLowerBound as u8) || tu8 < (Tag::ObjectCodeUpperBound as u8)
+    }
+}
+
+#[repr(transparent)]
+#[derive(Copy, Clone)]
+pub struct RawVal(u64);
+
+impl Default for RawVal {
+    fn default() -> Self {
+        Self::from_void().into()
+    }
+}
+
+// Impl AsRef/AsMut and TryFromVal<RawVal> so that clients can abstract over a
+// wrapper-or-RawVal because all wrappers also impl these.
+impl AsRef<RawVal> for RawVal {
+    fn as_ref(&self) -> &RawVal {
+        self
+    }
+}
+
+impl AsMut<RawVal> for RawVal {
+    fn as_mut(&mut self) -> &mut RawVal {
+        self
+    }
+}
+
+impl<E: Env> TryFromVal<E, RawVal> for RawVal {
+    type Error = ConversionError;
+    fn try_from_val(_env: &E, val: &RawVal) -> Result<Self, Self::Error> {
+        Ok(*val)
+    }
 }
 
 // Declare a few extra small-value wrapper types that don't live anywhere else.
@@ -226,51 +261,6 @@ declare_tag_based_object_wrapper!(MapObject);
 declare_tag_based_object_wrapper!(ContractExecutableObject);
 declare_tag_based_object_wrapper!(LedgerKeyNonceObject);
 declare_tag_based_object_wrapper!(AddressObject);
-
-impl Tag {
-    pub const fn val_const(&self) -> i64 {
-        *self as i64
-    }
-    pub const fn val_mask() -> i64 {
-        TAG_MASK as i64
-    }
-    pub const fn is_object(self) -> bool {
-        let tu8 = self as u8;
-        tu8 > (Tag::ObjectCodeLowerBound as u8) || tu8 < (Tag::ObjectCodeUpperBound as u8)
-    }
-}
-
-#[repr(transparent)]
-#[derive(Copy, Clone)]
-pub struct RawVal(u64);
-
-impl Default for RawVal {
-    fn default() -> Self {
-        Self::from_void().into()
-    }
-}
-
-// Impl AsRef/AsMut and TryFromVal<RawVal> so that clients can abstract over a
-// wrapper-or-RawVal because all wrappers also impl these.
-
-impl AsRef<RawVal> for RawVal {
-    fn as_ref(&self) -> &RawVal {
-        self
-    }
-}
-
-impl AsMut<RawVal> for RawVal {
-    fn as_mut(&mut self) -> &mut RawVal {
-        self
-    }
-}
-
-impl<E: Env> TryFromVal<E, RawVal> for RawVal {
-    type Error = ConversionError;
-    fn try_from_val(_env: &E, val: &RawVal) -> Result<Self, Self::Error> {
-        Ok(*val)
-    }
-}
 
 // This is a 0-arg struct rather than an enum to ensure it completely compiles
 // away, the same way `()` would, while remaining a separate type to allow
