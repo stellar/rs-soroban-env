@@ -290,6 +290,12 @@ macro_rules! declare_tag_based_small_and_object_wrappers {
             }
         }
 
+        impl $GENERAL {
+            pub const fn from_small(s: $SMALL) -> Self {
+                Self(s.to_raw())
+            }
+        }
+
         impl core::fmt::Debug for $GENERAL {
             fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
                 self.0.fmt(f)
