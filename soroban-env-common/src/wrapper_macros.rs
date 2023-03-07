@@ -293,6 +293,12 @@ macro_rules! declare_tag_based_small_and_object_wrappers {
             }
         }
 
+        impl $GENERAL {
+            pub const fn from_small(s: $SMALL) -> Self {
+                Self(s.to_raw())
+            }
+        }
+
         impl core::hash::Hash for $SMALL {
             fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
                 self.as_raw().get_payload().hash(state);
