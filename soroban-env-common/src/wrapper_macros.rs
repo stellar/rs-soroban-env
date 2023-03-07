@@ -173,6 +173,24 @@ macro_rules! impl_wrapper_from_other_type {
     };
 }
 
+/// Macro for base implementation of a type wrapping a [`RawVal`]
+#[doc(hidden)]
+#[macro_export]
+macro_rules! impl_rawval_wrapper_base {
+    ($T:ident) => {
+        impl core::fmt::Debug for $T {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                self.0.fmt(f)
+            }
+        }
+        $crate::impl_wrapper_as_and_to_rawval!($T);
+        $crate::impl_wrapper_wasmi_conversions!($T);
+        $crate::impl_tryfroms_and_tryfromvals_delegating_to_rawvalconvertible!($T);
+    };
+}
+
+/// Declares [`RawVal`]-wrapping type [`Tag`] where the wrapper _has the same
+/// name_ as a Tag::case and being-that-wrapper is identical to having-that-tag.
 #[doc(hidden)]
 #[macro_export]
 macro_rules! declare_tag_based_wrapper {
@@ -181,15 +199,7 @@ macro_rules! declare_tag_based_wrapper {
         #[derive(Copy, Clone)]
         pub struct $T($crate::RawVal);
 
-        impl core::fmt::Debug for $T {
-            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-                self.0.fmt(f)
-            }
-        }
-
-        $crate::impl_wrapper_as_and_to_rawval!($T);
-        $crate::impl_wrapper_wasmi_conversions!($T);
-        $crate::impl_tryfroms_and_tryfromvals_delegating_to_rawvalconvertible!($T);
+        $crate::impl_rawval_wrapper_base!($T);
         $crate::impl_wrapper_tag_based_rawvalconvertible!($T);
         $crate::impl_wrapper_tag_based_constructors!($T);
     };
@@ -245,10 +255,7 @@ macro_rules! declare_tag_based_small_and_object_wrappers {
 
         #[derive(Copy, Clone)]
         pub struct $GENERAL($crate::RawVal);
-
-        $crate::impl_wrapper_as_and_to_rawval!($GENERAL);
-        $crate::impl_tryfroms_and_tryfromvals_delegating_to_rawvalconvertible!($GENERAL);
-        $crate::impl_wrapper_wasmi_conversions!($GENERAL);
+        $crate::impl_rawval_wrapper_base!($GENERAL);
 
         impl $crate::RawValConvertible for $GENERAL {
             fn is_val_type(v: $crate::RawVal) -> bool {
@@ -283,12 +290,6 @@ macro_rules! declare_tag_based_small_and_object_wrappers {
             type Error = $crate::ConversionError;
             fn try_from(s: $GENERAL) -> Result<Self, Self::Error> {
                 $OBJECT::try_from(s.0)
-            }
-        }
-
-        impl core::fmt::Debug for $GENERAL {
-            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-                self.0.fmt(f)
             }
         }
 

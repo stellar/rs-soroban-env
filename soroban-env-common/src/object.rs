@@ -1,6 +1,5 @@
 use crate::{
-    impl_tryfroms_and_tryfromvals_delegating_to_rawvalconvertible, impl_wrapper_as_and_to_rawval,
-    impl_wrapper_wasmi_conversions, num, Compare, ConversionError, Convert, Env, RawVal,
+    impl_rawval_wrapper_base, num, Compare, ConversionError, Convert, Env, RawVal,
     RawValConvertible, Tag, TryFromVal,
 };
 use core::{cmp::Ordering, fmt::Debug};
@@ -12,10 +11,7 @@ use stellar_xdr::{Duration, ScVal, TimePoint};
 /// to a host object of the object-type.
 #[derive(Copy, Clone)]
 pub struct Object(pub(crate) RawVal);
-
-impl_wrapper_as_and_to_rawval!(Object);
-impl_tryfroms_and_tryfromvals_delegating_to_rawvalconvertible!(Object);
-impl_wrapper_wasmi_conversions!(Object);
+impl_rawval_wrapper_base!(Object);
 
 impl RawValConvertible for Object {
     fn is_val_type(v: RawVal) -> bool {
@@ -24,12 +20,6 @@ impl RawValConvertible for Object {
 
     unsafe fn unchecked_from_val(v: RawVal) -> Self {
         Object(v)
-    }
-}
-
-impl Debug for Object {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        self.0.fmt(f)
     }
 }
 

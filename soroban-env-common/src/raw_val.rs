@@ -1,7 +1,7 @@
 use crate::{
-    declare_tag_based_object_wrapper, declare_tag_based_wrapper,
-    impl_tryfroms_and_tryfromvals_delegating_to_rawvalconvertible, impl_wrapper_as_and_to_rawval,
-    impl_wrapper_wasmi_conversions, Compare, I32Val, SymbolSmall, SymbolStr, U32Val,
+    declare_tag_based_object_wrapper, declare_tag_based_wrapper, impl_rawval_wrapper_base,
+    impl_tryfroms_and_tryfromvals_delegating_to_rawvalconvertible, Compare, I32Val, SymbolSmall,
+    SymbolStr, U32Val,
 };
 use stellar_xdr::{ScStatus, ScStatusType};
 
@@ -214,16 +214,7 @@ impl<E: Env> Compare<Void> for E {
 #[repr(transparent)]
 #[derive(Copy, Clone)]
 pub struct Bool(RawVal);
-
-impl core::fmt::Debug for Bool {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        self.0.fmt(f)
-    }
-}
-
-impl_wrapper_as_and_to_rawval!(Bool);
-impl_wrapper_wasmi_conversions!(Bool);
-impl_tryfroms_and_tryfromvals_delegating_to_rawvalconvertible!(Bool);
+impl_rawval_wrapper_base!(Bool);
 
 impl From<bool> for Bool {
     fn from(value: bool) -> Self {
