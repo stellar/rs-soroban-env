@@ -93,7 +93,7 @@ impl From<U64Small> for u64 {
 
 impl From<I64Small> for i64 {
     fn from(value: I64Small) -> Self {
-        value.0.get_body() as i64
+        value.0.get_signed_body() as i64
     }
 }
 
@@ -117,7 +117,7 @@ impl From<U128Small> for u128 {
 
 impl From<I128Small> for i128 {
     fn from(value: I128Small) -> Self {
-        (value.0.get_body() as i64) as i128
+        (value.0.get_signed_body() as i64) as i128
     }
 }
 
@@ -129,7 +129,7 @@ impl From<U256Small> for U256 {
 
 impl From<I256Small> for I256 {
     fn from(value: I256Small) -> Self {
-        I256::from(value.0.get_body() as i64)
+        I256::from(value.0.get_signed_body() as i64)
     }
 }
 
