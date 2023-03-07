@@ -1,10 +1,8 @@
 use std::ops::Range;
 
-use soroban_env_common::VecObject;
-
 use crate::events::{DebugError, CONTRACT_EVENT_TOPICS_LIMIT, TOPIC_BYTES_LENGTH_LIMIT};
 use crate::xdr::{ScHostFnErrorCode, ScHostObjErrorCode};
-use crate::{host_object::HostObject, Host, HostError, Object, RawVal};
+use crate::{host_object::HostObject, Host, HostError, Object, RawVal, VecObject};
 
 impl Host {
     // Notes on metering: free

@@ -1,12 +1,11 @@
 use crate::{
     budget::CostType,
     xdr::{ReadXdr, ScBytes, WriteXdr},
-    Host, HostError,
+    BytesObject, Host, HostError,
 };
 use std::{error::Error, io::Write};
 
 use sha2::{Digest, Sha256};
-use soroban_env_common::BytesObject;
 
 struct MeteredWrite<'a, W: Write> {
     host: &'a Host,
