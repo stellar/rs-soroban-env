@@ -31,12 +31,12 @@ impl Contract {
             seq: ledger.sequence(),
             time: ledger.timestamp(),
         };
-        let data = Symbol::from_str("data");
+        let data = Symbol::short("data");
         let hash = e.crypto().sha256(&my_ledger.network_id.clone().into());
         let mut buf: [u8; 32] = [0; 32];
         hash.copy_into_slice(&mut buf);
         let vec_with_half_hash = Vec::from_slice(&e, &[Bytes::from_slice(&e, &buf[0..16])]);
-        e.events().publish((data,), hash);
+        e.events().publish((data.clone(),), hash);
         e.log_value(vec_with_half_hash);
         e.storage().set(&data, &my_ledger);
     }

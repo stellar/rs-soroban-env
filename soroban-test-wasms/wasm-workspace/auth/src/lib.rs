@@ -1,5 +1,5 @@
 #![no_std]
-use soroban_sdk::{contractimpl, contracttype, symbol, vec, Address, BytesN, Env, IntoVal, Vec};
+use soroban_sdk::{contractimpl, contracttype, vec, Address, BytesN, Env, IntoVal, Symbol, Vec};
 
 struct AuthContract;
 
@@ -31,7 +31,7 @@ impl AuthContract {
             let child = child.unwrap();
             env.invoke_contract::<()>(
                 &child.id.clone(),
-                &symbol!("tree_fn"),
+                &Symbol::short("tree_fn"),
                 (addresses.clone(), child).into_val(&env),
             );
         }
@@ -40,13 +40,13 @@ impl AuthContract {
     pub fn order_fn(env: Env, addr: Address, child_id: BytesN<32>) {
         env.invoke_contract::<()>(
             &child_id,
-            &symbol!("do_auth"),
+            &Symbol::short("do_auth"),
             (&addr, 10_u32).into_val(&env),
         );
         addr.require_auth();
     }
 
-    pub fn do_auth(env: Env, addr: Address, _val: u32) {
+    pub fn do_auth(_env: Env, addr: Address, _val: u32) {
         addr.require_auth();
     }
 }
