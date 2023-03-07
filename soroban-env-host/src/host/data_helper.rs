@@ -103,7 +103,7 @@ impl Host {
         Ok(HashIdPreimage::ContractIdFromEd25519(
             HashIdPreimageEd25519ContractId {
                 network_id: self
-                    .hash_from_obj_input("network_id", self.get_ledger_network_id()?)?,
+                    .hash_from_bytesobj_input("network_id", self.get_ledger_network_id()?)?,
                 ed25519: key,
                 salt,
             },
@@ -119,7 +119,7 @@ impl Host {
         Ok(HashIdPreimage::ContractIdFromContract(
             HashIdPreimageContractId {
                 network_id: self
-                    .hash_from_obj_input("network_id", self.get_ledger_network_id()?)?,
+                    .hash_from_bytesobj_input("network_id", self.get_ledger_network_id()?)?,
                 contract_id,
                 salt,
             },
@@ -131,7 +131,7 @@ impl Host {
         Ok(HashIdPreimage::ContractIdFromAsset(
             HashIdPreimageFromAsset {
                 network_id: self
-                    .hash_from_obj_input("network_id", self.get_ledger_network_id()?)?,
+                    .hash_from_bytesobj_input("network_id", self.get_ledger_network_id()?)?,
                 asset,
             },
         ))
@@ -152,7 +152,7 @@ impl Host {
         Ok(HashIdPreimage::ContractIdFromSourceAccount(
             HashIdPreimageSourceAccountContractId {
                 network_id: self
-                    .hash_from_obj_input("network_id", self.get_ledger_network_id()?)?,
+                    .hash_from_bytesobj_input("network_id", self.get_ledger_network_id()?)?,
                 source_account,
                 salt,
             },
@@ -168,7 +168,7 @@ impl Host {
         Ok(HashIdPreimage::CreateContractArgs(
             HashIdPreimageCreateContractArgs {
                 network_id: self
-                    .hash_from_obj_input("network_id", self.get_ledger_network_id()?)?,
+                    .hash_from_bytesobj_input("network_id", self.get_ledger_network_id()?)?,
                 source,
                 salt,
             },

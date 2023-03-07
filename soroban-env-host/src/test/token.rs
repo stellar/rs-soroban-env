@@ -2526,7 +2526,7 @@ fn test_custom_account_auth() {
         .unwrap();
     let account_contract_id = test
         .host
-        .hash_from_obj_input("account_contract_id", account_contract_id_obj)
+        .hash_from_bytesobj_input("account_contract_id", account_contract_id_obj)
         .unwrap();
 
     let admin = TestSigner::AccountContract(AccountContractSigner {

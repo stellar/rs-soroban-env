@@ -22,7 +22,7 @@ impl Host {
     }
 
     // Notes on metering: free
-    pub(crate) fn usize_to_rawval_u32(&self, u: usize) -> Result<U32Val, HostError> {
+    pub(crate) fn usize_to_u32val(&self, u: usize) -> Result<U32Val, HostError> {
         self.usize_to_u32(u).map(|v| v.into())
     }
 
@@ -61,16 +61,6 @@ impl Host {
         Ok(ed25519)
     }
 
-    pub(crate) fn to_u256(&self, a: BytesObject) -> Result<Uint256, HostError> {
-        self.visit_obj(a, |bytes: &ScBytes| {
-            self.charge_budget(CostType::BytesClone, 32)?;
-            bytes
-                .as_slice()
-                .try_into()
-                .map_err(|_| self.err_general("bad u256 length"))
-        })
-    }
-
     // Notes on metering: free
     pub(crate) fn u8_from_u32val_input(
         &self,
@@ -89,20 +79,20 @@ impl Host {
         }
     }
 
-    pub(crate) fn hash_from_obj_input(
+    pub(crate) fn hash_from_bytesobj_input(
         &self,
         name: &'static str,
         hash: BytesObject,
     ) -> Result<Hash, HostError> {
-        self.fixed_length_bytes_from_obj_input::<Hash, 32>(name, hash)
+        self.fixed_length_bytes_from_bytesobj_input::<Hash, 32>(name, hash)
     }
 
-    pub(crate) fn uint256_from_obj_input(
+    pub(crate) fn uint256_from_bytesobj_input(
         &self,
         name: &'static str,
         u256: BytesObject,
     ) -> Result<Uint256, HostError> {
-        self.fixed_length_bytes_from_obj_input::<Uint256, 32>(name, u256)
+        self.fixed_length_bytes_from_bytesobj_input::<Uint256, 32>(name, u256)
     }
 
     pub(crate) fn signature_from_bytes(
@@ -113,12 +103,12 @@ impl Host {
         self.fixed_length_bytes_from_slice::<Signature, SIGNATURE_LENGTH>(name, bytes)
     }
 
-    pub(crate) fn signature_from_obj_input(
+    pub(crate) fn signature_from_bytesobj_input(
         &self,
         name: &'static str,
         sig: BytesObject,
     ) -> Result<Signature, HostError> {
-        self.fixed_length_bytes_from_obj_input::<Signature, SIGNATURE_LENGTH>(name, sig)
+        self.fixed_length_bytes_from_bytesobj_input::<Signature, SIGNATURE_LENGTH>(name, sig)
     }
 
     fn fixed_length_bytes_from_slice<T, const N: usize>(
@@ -145,7 +135,7 @@ impl Host {
         }
     }
 
-    fn fixed_length_bytes_from_obj_input<T, const N: usize>(
+    fn fixed_length_bytes_from_bytesobj_input<T, const N: usize>(
         &self,
         name: &'static str,
         obj: BytesObject,
@@ -165,13 +155,16 @@ impl Host {
         })
     }
 
-    pub fn ed25519_pub_key_from_obj_input(&self, k: BytesObject) -> Result<PublicKey, HostError> {
+    pub fn ed25519_pub_key_from_bytesobj_input(
+        &self,
+        k: BytesObject,
+    ) -> Result<PublicKey, HostError> {
         self.visit_obj(k, |bytes: &ScBytes| {
             self.ed25519_pub_key_from_bytes(bytes.as_slice())
         })
     }
 
-    pub(crate) fn account_id_from_bytes(&self, k: BytesObject) -> Result<AccountId, HostError> {
+    pub(crate) fn account_id_from_bytesobj(&self, k: BytesObject) -> Result<AccountId, HostError> {
         self.visit_obj(k, |bytes: &ScBytes| {
             Ok(AccountId(xdr::PublicKey::PublicKeyTypeEd25519(
                 self.fixed_length_bytes_from_slice("account_id", bytes.as_slice())?,
@@ -179,7 +172,7 @@ impl Host {
         })
     }
 
-    pub fn sha256_hash_from_bytes_input(&self, x: BytesObject) -> Result<Vec<u8>, HostError> {
+    pub fn sha256_hash_from_bytesobj_input(&self, x: BytesObject) -> Result<Vec<u8>, HostError> {
         self.visit_obj(x, |bytes: &ScBytes| {
             self.charge_budget(CostType::ComputeSha256Hash, bytes.len() as u64)?;
             let hash = Sha256::digest(bytes).as_slice().to_vec();
@@ -294,7 +287,9 @@ impl Host {
             .collect::<Result<Vec<RawVal>, HostError>>()
     }
 
-    pub(crate) fn obj_from_internal_contract_id(&self) -> Result<Option<BytesObject>, HostError> {
+    pub(crate) fn bytesobj_from_internal_contract_id(
+        &self,
+    ) -> Result<Option<BytesObject>, HostError> {
         if let Some(id) = self.get_current_contract_id_opt_internal()? {
             let obj = self.add_host_object::<ScBytes>(id.as_slice().to_vec().try_into()?)?;
             Ok(Some(obj))

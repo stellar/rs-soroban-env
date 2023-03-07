@@ -230,7 +230,7 @@ pub fn check_clawbackable(e: &Host, addr: Address) -> Result<(), HostError> {
                 ))
             }
             Metadata::AlphaNum4(asset) => {
-                let issuer_account_id = e.account_id_from_bytes(asset.issuer.into())?;
+                let issuer_account_id = e.account_id_from_bytesobj(asset.issuer.into())?;
                 validate_trustline(
                     e.create_asset_4(asset.asset_code.to_array()?, issuer_account_id.clone()),
                     issuer_account_id,
@@ -238,7 +238,7 @@ pub fn check_clawbackable(e: &Host, addr: Address) -> Result<(), HostError> {
                 )
             }
             Metadata::AlphaNum12(asset) => {
-                let issuer_account_id = e.account_id_from_bytes(asset.issuer.into())?;
+                let issuer_account_id = e.account_id_from_bytesobj(asset.issuer.into())?;
                 validate_trustline(
                     e.create_asset_12(asset.asset_code.to_array()?, issuer_account_id.clone()),
                     issuer_account_id,
@@ -282,7 +282,7 @@ pub fn transfer_classic_balance(e: &Host, to_key: AccountId, amount: i64) -> Res
     match read_metadata(e)? {
         Metadata::Native => transfer_account_balance(e, to_key, amount)?,
         Metadata::AlphaNum4(asset) => {
-            let issuer_account_id = e.account_id_from_bytes(asset.issuer.into())?;
+            let issuer_account_id = e.account_id_from_bytesobj(asset.issuer.into())?;
             transfer_trustline_balance_safe(
                 e.create_asset_4(asset.asset_code.to_array()?, issuer_account_id.clone()),
                 issuer_account_id,
@@ -290,7 +290,7 @@ pub fn transfer_classic_balance(e: &Host, to_key: AccountId, amount: i64) -> Res
             )?
         }
         Metadata::AlphaNum12(asset) => {
-            let issuer_account_id = e.account_id_from_bytes(asset.issuer.into())?;
+            let issuer_account_id = e.account_id_from_bytesobj(asset.issuer.into())?;
             transfer_trustline_balance_safe(
                 e.create_asset_12(asset.asset_code.to_array()?, issuer_account_id.clone()),
                 issuer_account_id,
@@ -318,7 +318,7 @@ fn get_classic_balance(e: &Host, to_key: AccountId) -> Result<(i64, i64), HostEr
     match read_metadata(e)? {
         Metadata::Native => get_account_balance(e, to_key),
         Metadata::AlphaNum4(asset) => {
-            let issuer_account_id = e.account_id_from_bytes(asset.issuer.into())?;
+            let issuer_account_id = e.account_id_from_bytesobj(asset.issuer.into())?;
             get_trustline_balance_safe(
                 e.create_asset_4(asset.asset_code.to_array()?, issuer_account_id.clone()),
                 issuer_account_id,
@@ -327,7 +327,7 @@ fn get_classic_balance(e: &Host, to_key: AccountId) -> Result<(i64, i64), HostEr
         }
 
         Metadata::AlphaNum12(asset) => {
-            let issuer_account_id = e.account_id_from_bytes(asset.issuer.into())?;
+            let issuer_account_id = e.account_id_from_bytesobj(asset.issuer.into())?;
             get_trustline_balance_safe(
                 e.create_asset_12(asset.asset_code.to_array()?, issuer_account_id.clone()),
                 issuer_account_id,
@@ -537,7 +537,7 @@ fn is_account_authorized(e: &Host, account_id: AccountId) -> Result<bool, HostEr
     match read_metadata(e)? {
         Metadata::Native => Ok(true),
         Metadata::AlphaNum4(asset) => {
-            let issuer_account_id = e.account_id_from_bytes(asset.issuer.into())?;
+            let issuer_account_id = e.account_id_from_bytesobj(asset.issuer.into())?;
             is_trustline_authorized_safe(
                 e.create_asset_4(asset.asset_code.to_array()?, issuer_account_id.clone()),
                 issuer_account_id,
@@ -545,7 +545,7 @@ fn is_account_authorized(e: &Host, account_id: AccountId) -> Result<bool, HostEr
             )
         }
         Metadata::AlphaNum12(asset) => {
-            let issuer_account_id = e.account_id_from_bytes(asset.issuer.into())?;
+            let issuer_account_id = e.account_id_from_bytesobj(asset.issuer.into())?;
             is_trustline_authorized_safe(
                 e.create_asset_12(asset.asset_code.to_array()?, issuer_account_id.clone()),
                 issuer_account_id,
@@ -616,7 +616,7 @@ fn set_authorization(e: &Host, to_key: AccountId, authorize: bool) -> Result<(),
             ))
         }
         Metadata::AlphaNum4(asset) => {
-            let issuer_account_id = e.account_id_from_bytes(asset.issuer.into())?;
+            let issuer_account_id = e.account_id_from_bytesobj(asset.issuer.into())?;
             set_trustline_authorization_safe(
                 e.create_asset_4(asset.asset_code.to_array()?, issuer_account_id.clone()),
                 issuer_account_id,
@@ -624,7 +624,7 @@ fn set_authorization(e: &Host, to_key: AccountId, authorize: bool) -> Result<(),
             )
         }
         Metadata::AlphaNum12(asset) => {
-            let issuer_account_id = e.account_id_from_bytes(asset.issuer.into())?;
+            let issuer_account_id = e.account_id_from_bytesobj(asset.issuer.into())?;
             set_trustline_authorization_safe(
                 e.create_asset_12(asset.asset_code.to_array()?, issuer_account_id.clone()),
                 issuer_account_id,
@@ -667,7 +667,7 @@ fn set_trustline_authorization(
 }
 
 fn is_issuer_auth_required(e: &Host, issuer_id: BytesN<32>) -> Result<bool, HostError> {
-    let issuer_acc = e.load_account(e.account_id_from_bytes(issuer_id.into())?)?;
+    let issuer_acc = e.load_account(e.account_id_from_bytesobj(issuer_id.into())?)?;
     Ok(issuer_acc.flags & (AccountFlags::RequiredFlag as u32) != 0)
 }
 
@@ -680,7 +680,7 @@ fn is_asset_auth_required(e: &Host) -> Result<bool, HostError> {
 }
 
 fn is_issuer_clawback_enabled(e: &Host, issuer_id: BytesN<32>) -> Result<bool, HostError> {
-    let issuer_acc = e.load_account(e.account_id_from_bytes(issuer_id.into())?)?;
+    let issuer_acc = e.load_account(e.account_id_from_bytesobj(issuer_id.into())?)?;
     Ok(issuer_acc.flags & (AccountFlags::ClawbackEnabledFlag as u32) != 0)
 }
 
