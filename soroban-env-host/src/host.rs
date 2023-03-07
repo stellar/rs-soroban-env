@@ -337,7 +337,7 @@ impl Host {
         self.validate_contract_event_topics(topics)?;
         let ce = InternalContractEvent {
             type_,
-            contract_id: self.obj_from_internal_contract_id()?,
+            contract_id: self.bytesobj_from_internal_contract_id()?,
             topics,
             data,
         };
@@ -805,7 +805,7 @@ impl Host {
         contract_id: BytesObject,
         contract_source: ScContractExecutable,
     ) -> Result<(), HostError> {
-        let new_contract_id = self.hash_from_obj_input("id_obj", contract_id)?;
+        let new_contract_id = self.hash_from_bytesobj_input("id_obj", contract_id)?;
         let storage_key = self.contract_source_ledger_key(&new_contract_id)?;
         if self
             .0
@@ -912,7 +912,7 @@ impl Host {
         args: &[RawVal],
         allow_reentry: bool,
     ) -> Result<RawVal, HostError> {
-        let id = self.hash_from_obj_input("contract", id)?;
+        let id = self.hash_from_bytesobj_input("contract", id)?;
         self.call_n_internal(&id, func, args, allow_reentry)
     }
 
@@ -1075,7 +1075,7 @@ impl Host {
         contract_id: BytesObject,
         contract_fns: Rc<dyn ContractFunctionSet>,
     ) -> Result<(), HostError> {
-        let hash = self.hash_from_obj_input("contract_id", contract_id)?;
+        let hash = self.hash_from_bytesobj_input("contract_id", contract_id)?;
         let mut contracts = self.0.contracts.borrow_mut();
         if !contracts.contains_key(&hash) {
             contracts.insert(hash, contract_fns);
@@ -1755,7 +1755,7 @@ impl VmCallerEnv for Host {
 
     fn map_len(&self, _vmcaller: &mut VmCaller<Host>, m: MapObject) -> Result<U32Val, HostError> {
         let len = self.visit_obj(m, |hm: &HostMap| Ok(hm.len()))?;
-        self.usize_to_rawval_u32(len)
+        self.usize_to_u32val(len)
     }
 
     fn map_has(
@@ -2005,7 +2005,7 @@ impl VmCallerEnv for Host {
 
     fn vec_len(&self, _vmcaller: &mut VmCaller<Host>, v: VecObject) -> Result<U32Val, HostError> {
         let len = self.visit_obj(v, |hv: &HostVec| Ok(hv.len()))?;
-        self.usize_to_rawval_u32(len)
+        self.usize_to_u32val(len)
     }
 
     fn vec_push_front(
@@ -2116,7 +2116,7 @@ impl VmCallerEnv for Host {
         self.visit_obj(v, |hv: &HostVec| {
             Ok(
                 match hv.first_index_of(|other| self.compare(&x, other), &self.as_budget())? {
-                    Some(u) => self.usize_to_rawval_u32(u)?.into(),
+                    Some(u) => self.usize_to_u32val(u)?.into(),
                     None => RawVal::VOID.into(),
                 },
             )
@@ -2132,7 +2132,7 @@ impl VmCallerEnv for Host {
         self.visit_obj(v, |hv: &HostVec| {
             Ok(
                 match hv.last_index_of(|other| self.compare(&x, other), self.as_budget())? {
-                    Some(u) => self.usize_to_rawval_u32(u)?.into(),
+                    Some(u) => self.usize_to_u32val(u)?.into(),
                     None => RawVal::VOID.into(),
                 },
             )
@@ -2272,9 +2272,10 @@ impl VmCallerEnv for Host {
         salt: BytesObject,
     ) -> Result<BytesObject, HostError> {
         let contract_id = self.get_current_contract_id_internal()?;
-        let salt = self.uint256_from_obj_input("salt", salt)?;
+        let salt = self.uint256_from_bytesobj_input("salt", salt)?;
 
-        let code = ScContractExecutable::WasmRef(self.hash_from_obj_input("wasm_hash", wasm_hash)?);
+        let code =
+            ScContractExecutable::WasmRef(self.hash_from_bytesobj_input("wasm_hash", wasm_hash)?);
         let id_preimage = self.id_preimage_from_contract(contract_id, salt)?;
         self.create_contract_with_id_preimage(code, id_preimage)
     }
@@ -2555,7 +2556,7 @@ impl VmCallerEnv for Host {
         b: BytesObject,
     ) -> Result<U32Val, HostError> {
         let len = self.visit_obj(b, |hv: &ScBytes| Ok(hv.len()))?;
-        self.usize_to_rawval_u32(len)
+        self.usize_to_u32val(len)
     }
 
     // Notes on metering: `len` is free
@@ -2565,7 +2566,7 @@ impl VmCallerEnv for Host {
         b: StringObject,
     ) -> Result<U32Val, HostError> {
         let len = self.visit_obj(b, |hv: &ScString| Ok(hv.len()))?;
-        self.usize_to_rawval_u32(len)
+        self.usize_to_u32val(len)
     }
 
     // Notes on metering: `len` is free
@@ -2575,7 +2576,7 @@ impl VmCallerEnv for Host {
         b: SymbolObject,
     ) -> Result<U32Val, HostError> {
         let len = self.visit_obj(b, |hv: &ScSymbol| Ok(hv.len()))?;
-        self.usize_to_rawval_u32(len)
+        self.usize_to_u32val(len)
     }
 
     // Notes on metering: `push` is free
@@ -2700,7 +2701,7 @@ impl VmCallerEnv for Host {
         _vmcaller: &mut VmCaller<Host>,
         x: BytesObject,
     ) -> Result<BytesObject, HostError> {
-        let hash = self.sha256_hash_from_bytes_input(x)?;
+        let hash = self.sha256_hash_from_bytesobj_input(x)?;
         self.add_host_object(self.scbytes_from_vec(hash)?)
     }
 
@@ -2712,8 +2713,8 @@ impl VmCallerEnv for Host {
         k: BytesObject,
         s: BytesObject,
     ) -> Result<Void, HostError> {
-        let public_key = self.ed25519_pub_key_from_obj_input(k)?;
-        let sig = self.signature_from_obj_input("sig", s)?;
+        let public_key = self.ed25519_pub_key_from_bytesobj_input(k)?;
+        let sig = self.signature_from_bytesobj_input("sig", s)?;
         let res = self.visit_obj(x, |payload: &ScBytes| {
             self.verify_sig_ed25519_internal(payload.as_slice(), &public_key, &sig)
         });
@@ -2854,7 +2855,7 @@ impl VmCallerEnv for Host {
         _vmcaller: &mut VmCaller<Self::VmUserState>,
         pk_bytes: BytesObject,
     ) -> Result<AddressObject, Self::Error> {
-        let account_id = self.account_id_from_bytes(pk_bytes)?;
+        let account_id = self.account_id_from_bytesobj(pk_bytes)?;
         self.add_host_object(ScAddress::Account(account_id))
     }
 
@@ -2863,7 +2864,7 @@ impl VmCallerEnv for Host {
         _vmcaller: &mut VmCaller<Self::VmUserState>,
         contract_id_bytes: BytesObject,
     ) -> Result<AddressObject, Self::Error> {
-        let contract_id = self.hash_from_obj_input("contract_id", contract_id_bytes)?;
+        let contract_id = self.hash_from_bytesobj_input("contract_id", contract_id_bytes)?;
         self.add_host_object(ScAddress::Contract(contract_id))
     }
 

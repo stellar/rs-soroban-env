@@ -76,7 +76,7 @@ fn test_create_contract_from_source_account(host: &Host, code: &[u8]) -> Hash {
             source_account: source_account,
             salt: Uint256(salt.to_vec().try_into().unwrap()),
             network_id: host
-                .hash_from_obj_input("network_id", host.get_ledger_network_id().unwrap())
+                .hash_from_bytesobj_input("network_id", host.get_ledger_network_id().unwrap())
                 .unwrap(),
         });
 
@@ -114,7 +114,7 @@ fn test_create_contract_from_source_account(host: &Host, code: &[u8]) -> Hash {
         .try_into_val(host)
         .unwrap();
     let wasm_id = host
-        .hash_from_obj_input("wasm_hash", wasm_id.try_into().unwrap())
+        .hash_from_bytesobj_input("wasm_hash", wasm_id.try_into().unwrap())
         .unwrap();
     let created_id_sc_val = host
         .invoke_function(HostFunction::CreateContract(CreateContractArgs {
@@ -146,7 +146,7 @@ fn create_contract_using_parent_id_test() {
         contract_id: parent_contract_id.clone(),
         salt: Uint256(salt.clone()),
         network_id: host
-            .hash_from_obj_input("network_id", host.get_ledger_network_id().unwrap())
+            .hash_from_bytesobj_input("network_id", host.get_ledger_network_id().unwrap())
             .unwrap(),
     });
 

@@ -1,6 +1,5 @@
 use crate::{
-    impl_tryfroms_and_tryfromvals_delegating_to_rawvalconvertible, impl_wrapper_as_and_to_rawval,
-    impl_wrapper_wasmi_conversions, num, Compare, ConversionError, Convert, Env, RawVal,
+    impl_rawval_wrapper_base, num, Compare, ConversionError, Convert, Env, RawVal,
     RawValConvertible, Tag, TryFromVal,
 };
 use core::{cmp::Ordering, fmt::Debug};
@@ -12,10 +11,7 @@ use stellar_xdr::{Duration, ScVal, TimePoint};
 /// to a host object of the object-type.
 #[derive(Copy, Clone)]
 pub struct Object(pub(crate) RawVal);
-
-impl_wrapper_as_and_to_rawval!(Object);
-impl_tryfroms_and_tryfromvals_delegating_to_rawvalconvertible!(Object);
-impl_wrapper_wasmi_conversions!(Object);
+impl_rawval_wrapper_base!(Object);
 
 impl RawValConvertible for Object {
     fn is_val_type(v: RawVal) -> bool {
@@ -24,12 +20,6 @@ impl RawValConvertible for Object {
 
     unsafe fn unchecked_from_val(v: RawVal) -> Self {
         Object(v)
-    }
-}
-
-impl Debug for Object {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        self.0.fmt(f)
     }
 }
 
@@ -43,6 +33,29 @@ impl Object {
     pub const fn from_handle_and_tag(handle: u32, tag: Tag) -> Self {
         debug_assert!(tag.is_object());
         unsafe { Object(RawVal::from_major_minor_and_tag(handle, 0, tag)) }
+    }
+}
+
+impl<E: Env> Compare<Object> for E {
+    type Error = E::Error;
+
+    fn compare(&self, a: &Object, b: &Object) -> Result<Ordering, Self::Error> {
+        self.compare(&a.to_raw(), &b.to_raw())
+    }
+}
+
+/// `ScValObject` (and its reference-based type `ScValObjRef`) is a small
+/// wrapper type that does _not_ have its own XDR definition, it just denotes
+/// (as a type) the subset of `ScVal` values that need to be represented in
+/// `RawVal` by one of the cases that can be an `Object`. In other words
+/// `RawVal::try_from_val(&v, e).is_object()` will be true iff
+/// `ScValObject::classify(v)` is `Ok(ScValObject(v))`.
+
+#[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub struct ScValObject(ScVal);
+impl From<ScValObject> for ScVal {
+    fn from(value: ScValObject) -> Self {
+        value.0
     }
 }
 
@@ -67,29 +80,6 @@ where
             Ok(obj) => Ok(obj),
             Err(_) => Err(ConversionError),
         }
-    }
-}
-
-impl<E: Env> Compare<Object> for E {
-    type Error = E::Error;
-
-    fn compare(&self, a: &Object, b: &Object) -> Result<Ordering, Self::Error> {
-        self.compare(&a.to_raw(), &b.to_raw())
-    }
-}
-
-/// `ScValObject` (and its reference-based type `ScValObjRef`) is a small
-/// wrapper type that does _not_ have its own XDR definition, it just denotes
-/// (as a type) the subset of `ScVal` values that need to be represented in
-/// `RawVal` by one of the cases that can be an `Object`. In other words
-/// `RawVal::try_from_val(&v, e).is_object()` will be true iff
-/// `ScValObject::classify(v)` is `Ok(ScValObject(v))`.
-
-#[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
-pub struct ScValObject(ScVal);
-impl From<ScValObject> for ScVal {
-    fn from(value: ScValObject) -> Self {
-        value.0
     }
 }
 

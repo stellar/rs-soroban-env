@@ -6,6 +6,7 @@ mod bytes;
 mod crypto;
 mod ledger;
 mod map;
+mod num;
 mod str;
 mod vec;
 

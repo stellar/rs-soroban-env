@@ -156,7 +156,7 @@ impl Host {
                     .map_err(|_| self.err_general("too large wasm"))?,
             }))?
             .try_into_val(self)?;
-        let wasm_id = self.hash_from_obj_input("wasm_hash", wasm_id.try_into()?)?;
+        let wasm_id = self.hash_from_bytesobj_input("wasm_hash", wasm_id.try_into()?)?;
         let id_obj: RawVal = self
             .invoke_function(HostFunction::CreateContract(CreateContractArgs {
                 contract_id: ContractId::SourceAccount(Uint256(generate_bytes_array())),

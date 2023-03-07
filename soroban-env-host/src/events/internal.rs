@@ -28,7 +28,7 @@ impl InternalContractEvent {
         }?;
         let data = host.from_host_val(self.data)?;
         let contract_id = match self.contract_id {
-            Some(id) => Some(host.hash_from_obj_input("contract_id", id)?),
+            Some(id) => Some(host.hash_from_bytesobj_input("contract_id", id)?),
             None => None,
         };
         Ok(xdr::ContractEvent {
@@ -106,7 +106,7 @@ impl InternalEventsBuffer {
                     DebugEvent::new()
                         .msg("{} contract events rolled back. Rollback start pos = {}")
                         .arg(RawVal::from(rollback_count))
-                        .arg(host.usize_to_rawval_u32(events)?.to_raw()),
+                        .arg(host.usize_to_u32val(events)?.to_raw()),
                 ),
                 host.as_budget(),
             )?;
