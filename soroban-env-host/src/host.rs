@@ -1351,11 +1351,12 @@ impl EnvBase for Host {
 
     fn symbol_copy_to_slice(
         &self,
-        b: SymbolObject,
+        s: SymbolObject,
         b_pos: U32Val,
         slice: &mut [u8],
     ) -> Result<(), HostError> {
-        self.memobj_copy_to_slice::<ScSymbol>(b, b_pos, slice)
+        let len = self.visit_obj(s, |sym: &ScSymbol| Ok(sym.len()))?;
+        self.memobj_copy_to_slice::<ScSymbol>(s, b_pos, &mut slice[..len])
     }
 
     fn bytes_new_from_slice(&self, mem: &[u8]) -> Result<BytesObject, HostError> {

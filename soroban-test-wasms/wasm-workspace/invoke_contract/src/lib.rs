@@ -6,16 +6,16 @@ pub struct Contract;
 #[contractimpl]
 impl Contract {
     pub fn add(env: Env, a: i32, b: i32) -> i32 {
-        env.events().publish((Symbol::from_str("add"),), (a, b));
+        env.events().publish((Symbol::short("add"),), (a, b));
         a + b
     }
 
     pub fn add_with(env: Env, x: i32, y: i32, contract_id: BytesN<32>) -> i32 {
         env.events()
-            .publish((Symbol::from_str("add_with"),), (x, y, contract_id.clone()));
+            .publish((Symbol::short("add_with"),), (x, y, contract_id.clone()));
         env.invoke_contract(
             &contract_id,
-            &Symbol::from_str("add"),
+            &Symbol::short("add"),
             vec![&env, x.into_val(&env), y.into_val(&env)],
         )
     }
