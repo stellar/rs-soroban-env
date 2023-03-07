@@ -9,6 +9,7 @@ use stellar_xdr::{Duration, ScVal, TimePoint};
 /// Wrapper for a [RawVal] that is tagged with one of the object types,
 /// interpreting the [RawVal]'s body as containing a 32-bit object-code handle
 /// to a host object of the object-type.
+#[repr(transparent)]
 #[derive(Copy, Clone)]
 pub struct Object(pub(crate) RawVal);
 impl_rawval_wrapper_base!(Object);

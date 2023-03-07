@@ -253,6 +253,7 @@ macro_rules! declare_tag_based_small_and_object_wrappers {
         $crate::declare_tag_based_wrapper!($SMALL);
         $crate::declare_tag_based_object_wrapper!($OBJECT);
 
+        #[repr(transparent)]
         #[derive(Copy, Clone)]
         pub struct $GENERAL($crate::RawVal);
         $crate::impl_rawval_wrapper_base!($GENERAL);

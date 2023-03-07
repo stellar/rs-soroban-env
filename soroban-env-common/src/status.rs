@@ -20,6 +20,7 @@ use stellar_xdr::{
 /// code. The status-type codes correspond to the enumerated cases of
 /// [ScStatusType], and the status codes correspond to the code values stored in
 /// each variant of the [ScStatus] union.
+#[repr(transparent)]
 #[derive(Copy, Clone)]
 pub struct Status(RawVal);
 
