@@ -178,7 +178,10 @@ impl Host {
                 let len_bytes: [u8; 4] = s[4..8].try_into().unwrap();
                 let slice_ptr = u32::from_le_bytes(ptr_bytes);
                 let slice_len = u32::from_le_bytes(len_bytes);
-                let slice_range = slice_ptr as usize..slice_len as usize;
+                let slice_end = slice_ptr
+                    .checked_add(slice_len)
+                    .ok_or(ScHostValErrorCode::U32OutOfRange)?;
+                let slice_range = slice_ptr as usize..slice_end as usize;
                 let slice = mem_data.get(slice_range).ok_or(ScVmErrorCode::Memory)?;
                 callback(i, slice)?
             } else {

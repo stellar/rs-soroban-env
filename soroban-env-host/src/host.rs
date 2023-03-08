@@ -1881,7 +1881,7 @@ impl VmCallerEnv for Host {
             // Step 2: extract all val RawVals.
             let vals_pos: u32 = vals_pos.into();
             self.charge_budget(CostType::VecNew, len as u64)?;
-            let mut vals: Vec<RawVal> = Vec::with_capacity(len as usize);
+            let mut vals: Vec<RawVal> = vec![RawVal::VOID.into(); len as usize];
             self.metered_vm_read_vals_from_linear_memory::<8, RawVal>(
                 vmcaller,
                 &vm,
