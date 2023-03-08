@@ -29,7 +29,7 @@ impl CostRunner for VmMemReadRun {
         let mut buf: Vec<u8> = vec![0; sample.1];
         let vm = sample.0;
         vm.with_vmcaller(|caller| {
-            host.metered_vm_mem_read(caller, vm.clone(), 0, 0..sample.1, &mut buf)
+            host.metered_vm_read_bytes_from_linear_memory(caller, &vm, 0, &mut buf)
                 .unwrap()
         })
     }
@@ -42,10 +42,9 @@ impl CostRunner for VmMemWriteRun {
     type SampleType = (Rc<Vm>, Vec<u8>);
 
     fn run_iter(host: &crate::Host, _iter: u64, mut sample: Self::SampleType) {
-        let buf_range = 0..sample.1.len();
         let vm = sample.0;
         vm.with_vmcaller(|caller| {
-            host.metered_vm_mem_write(caller, vm.clone(), 0, buf_range, &mut sample.1)
+            host.metered_vm_write_bytes_to_linear_memory(caller, &vm, 0, &mut sample.1)
                 .unwrap()
         })
     }

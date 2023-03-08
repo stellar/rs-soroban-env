@@ -1,7 +1,4 @@
-use crate::{
-    xdr::{ScObject, ScVal},
-    Env, Host, HostError,
-};
+use crate::{xdr::ScVal, Env, Host, HostError};
 use hex::FromHex;
 
 /// crypto tests
@@ -12,12 +9,8 @@ fn sha256_test() -> Result<(), HostError> {
     let hash_obj = host.compute_hash_sha256(obj0)?;
 
     let v = host.from_host_val(hash_obj.to_raw())?;
-    let bytes = match v {
-        ScVal::Object(Some(scobj)) => match scobj {
-            ScObject::Bytes(bytes) => bytes,
-            _ => panic!("Wrong type"),
-        },
-        _ => panic!("Wrong type"),
+    let ScVal::Bytes(bytes) = v else {
+        panic!("Wrong type")
     };
 
     /*

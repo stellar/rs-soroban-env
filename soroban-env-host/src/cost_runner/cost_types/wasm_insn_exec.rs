@@ -1,8 +1,10 @@
+use soroban_env_common::xdr::ScSymbol;
+
 use crate::{
     budget::CostType,
     cost_runner::CostRunner,
     xdr::{ScVal, ScVec},
-    Vm,
+    Symbol, Vm,
 };
 use std::rc::Rc;
 
@@ -142,13 +144,18 @@ impl CostRunner for WasmInsnExecRun {
             .vm
             .invoke_function(host, "test", &sample.args)
             .unwrap();
-        assert_eq!(scval, ScVal::Symbol("pass".try_into().unwrap()));
+        assert_eq!(scval, ScVal::Symbol(ScSymbol("pass".try_into().unwrap())));
     }
 
     fn get_total_input(_host: &crate::Host, sample: &Self::SampleType) -> u64 {
         sample.insns * 4 // TODO: avoid magic number
     }
 }
+
+const TEST_SYM: Symbol = match Symbol::try_from_small_str("test") {
+    Ok(s) => s,
+    _ => panic!(),
+};
 
 pub struct WasmMemAllocRun;
 impl CostRunner for WasmMemAllocRun {
@@ -159,7 +166,7 @@ impl CostRunner for WasmMemAllocRun {
     type SampleType = (Rc<Vm>, usize);
 
     fn run_iter(host: &crate::Host, _iter: u64, sample: Self::SampleType) {
-        sample.0.invoke_function_raw(host, "test", &[]).unwrap();
+        sample.0.invoke_function_raw(host, &TEST_SYM, &[]).unwrap();
     }
 }
 
@@ -178,7 +185,7 @@ macro_rules! impl_wasm_insn_runner {
             fn run_iter(host: &crate::Host, _iter: u64, sample: WasmInsnSample) {
                 sample
                     .vm
-                    .invoke_function_raw(host, "test", &[])
+                    .invoke_function_raw(host, &TEST_SYM, &[])
                     .unwrap_or_default();
             }
 

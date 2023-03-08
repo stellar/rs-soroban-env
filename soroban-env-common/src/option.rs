@@ -25,7 +25,7 @@ where
     fn try_from_val(env: &E, v: &Option<T>) -> Result<Self, Self::Error> {
         match v {
             Some(t) => t.try_into_val(env),
-            None => Ok(RawVal::from_void()),
+            None => Ok(RawVal::VOID.into()),
         }
     }
 }

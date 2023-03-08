@@ -6,8 +6,8 @@ use soroban_env_common::{
         DataEntry, Hash, LedgerEntry, LedgerEntryData, LedgerEntryExt, LedgerKey, LedgerKeyAccount,
         LedgerKeyClaimableBalance, LedgerKeyConfigSetting, LedgerKeyContractCode, LedgerKeyData,
         LedgerKeyLiquidityPool, LedgerKeyOffer, LedgerKeyTrustLine, LiquidityPoolEntry, OfferEntry,
-        PublicKey, ScAddress, ScContractCode, ScMap, ScObject, ScVal, ScVec, TrustLineAsset,
-        TrustLineEntry, Uint256,
+        PublicKey, ScAddress, ScContractExecutable, ScHostValErrorCode, ScMap, ScNonceKey, ScVal,
+        ScVec, TrustLineAsset, TrustLineEntry, Uint256,
     },
     Compare,
 };
@@ -27,11 +27,18 @@ fn host_obj_discriminant(ho: &HostObject) -> usize {
         HostObject::Map(_) => 1,
         HostObject::U64(_) => 2,
         HostObject::I64(_) => 3,
-        HostObject::U128(_) => 4,
-        HostObject::I128(_) => 5,
-        HostObject::Bytes(_) => 6,
-        HostObject::ContractCode(_) => 7,
-        HostObject::Address(_) => 8,
+        HostObject::TimePoint(_) => 4,
+        HostObject::Duration(_) => 5,
+        HostObject::U128(_) => 6,
+        HostObject::I128(_) => 7,
+        HostObject::U256(_) => 8,
+        HostObject::I256(_) => 9,
+        HostObject::Bytes(_) => 10,
+        HostObject::String(_) => 11,
+        HostObject::Symbol(_) => 12,
+        HostObject::Address(_) => 13,
+        HostObject::ContractExecutable(_) => 14,
+        HostObject::NonceKey(_) => 15,
     }
 }
 
@@ -43,26 +50,40 @@ impl Compare<HostObject> for Host {
         match (a, b) {
             (U64(a), U64(b)) => Ok(a.cmp(b)),
             (I64(a), I64(b)) => Ok(a.cmp(b)),
+            (TimePoint(a), TimePoint(b)) => Ok(a.cmp(b)),
+            (Duration(a), Duration(b)) => Ok(a.cmp(b)),
             (U128(a), U128(b)) => Ok(a.cmp(b)),
             (I128(a), I128(b)) => Ok(a.cmp(b)),
+            (U256(a), U256(b)) => Ok(a.cmp(b)),
+            (I256(a), I256(b)) => Ok(a.cmp(b)),
             (Vec(a), Vec(b)) => self.compare(a, b),
             (Map(a), Map(b)) => self.compare(a, b),
             (Bytes(a), Bytes(b)) => self.as_budget().compare(&a.as_slice(), &b.as_slice()),
-            (ContractCode(a), ContractCode(b)) => self.as_budget().compare(a, b),
+            (String(a), String(b)) => self.as_budget().compare(&a.as_slice(), &b.as_slice()),
+            (Symbol(a), Symbol(b)) => self.as_budget().compare(&a.as_slice(), &b.as_slice()),
+            (ContractExecutable(a), ContractExecutable(b)) => self.as_budget().compare(a, b),
             (Address(a), Address(b)) => self.as_budget().compare(a, b),
+            (NonceKey(a), NonceKey(b)) => self.as_budget().compare(a, b),
 
             // List out at least one side of all the remaining cases here so
             // we don't accidentally forget to update this when/if a new
             // HostObject type is added.
             (U64(_), _)
+            | (TimePoint(_), _)
+            | (Duration(_), _)
             | (I64(_), _)
             | (U128(_), _)
             | (I128(_), _)
+            | (U256(_), _)
+            | (I256(_), _)
             | (Vec(_), _)
             | (Map(_), _)
             | (Bytes(_), _)
-            | (ContractCode(_), _)
-            | (Address(_), _) => {
+            | (String(_), _)
+            | (Symbol(_), _)
+            | (ContractExecutable(_), _)
+            | (Address(_), _)
+            | (NonceKey(_), _) => {
                 let a = host_obj_discriminant(a);
                 let b = host_obj_discriminant(b);
                 Ok(a.cmp(&b))
@@ -140,15 +161,12 @@ impl_compare_fixed_size_ord_type!(i64);
 impl_compare_fixed_size_ord_type!(u128);
 impl_compare_fixed_size_ord_type!(i128);
 
-impl_compare_fixed_size_ord_type!(crate::Symbol);
-impl_compare_fixed_size_ord_type!(crate::Status);
-impl_compare_fixed_size_ord_type!(crate::Static);
-
 impl_compare_fixed_size_ord_type!(Hash);
 impl_compare_fixed_size_ord_type!(Uint256);
-impl_compare_fixed_size_ord_type!(ScContractCode);
+impl_compare_fixed_size_ord_type!(ScContractExecutable);
 impl_compare_fixed_size_ord_type!(AccountId);
 impl_compare_fixed_size_ord_type!(ScAddress);
+impl_compare_fixed_size_ord_type!(ScNonceKey);
 impl_compare_fixed_size_ord_type!(PublicKey);
 impl_compare_fixed_size_ord_type!(TrustLineAsset);
 
@@ -204,34 +222,49 @@ impl Compare<ScVal> for Budget {
     type Error = HostError;
 
     fn compare(&self, a: &ScVal, b: &ScVal) -> Result<Ordering, Self::Error> {
-        use ScObject::*;
         use ScVal::*;
         match (a, b) {
-            (Object(Some(a)), Object(Some(b))) => match (a, b) {
-                (Vec(a), Vec(b)) => self.compare(a, b),
-                (Map(a), Map(b)) => self.compare(a, b),
-                (Bytes(a), Bytes(b)) => {
-                    <Self as Compare<&[u8]>>::compare(self, &a.as_slice(), &b.as_slice())
-                }
-                (Vec(_), _)
-                | (Map(_), _)
-                | (U64(_), _)
-                | (I64(_), _)
-                | (U128(_), _)
-                | (I128(_), _)
-                | (Bytes(_), _)
-                | (ContractCode(_), _)
-                | (Address(_), _)
-                | (NonceKey(_), _) => Ok(a.cmp(b)),
-            },
-            (Object(_), _)
-            | (U63(_), _)
+            (Vec(Some(a)), Vec(Some(b))) => self.compare(a, b),
+            (Map(Some(a)), Map(Some(b))) => self.compare(a, b),
+
+            (Vec(None), _) | (_, Vec(None)) | (Map(None), _) | (_, Map(None)) => {
+                Err(ScHostValErrorCode::MissingObject.into())
+            }
+
+            (Bytes(a), Bytes(b)) => {
+                <Self as Compare<&[u8]>>::compare(self, &a.as_slice(), &b.as_slice())
+            }
+
+            (String(a), String(b)) => {
+                <Self as Compare<&[u8]>>::compare(self, &a.as_slice(), &b.as_slice())
+            }
+
+            (Symbol(a), Symbol(b)) => {
+                <Self as Compare<&[u8]>>::compare(self, &a.as_slice(), &b.as_slice())
+            }
+
+            (Bool(_), _)
+            | (Void, _)
+            | (Status(_), _)
             | (U32(_), _)
             | (I32(_), _)
-            | (Static(_), _)
+            | (U64(_), _)
+            | (I64(_), _)
+            | (Timepoint(_), _)
+            | (Duration(_), _)
+            | (U128(_), _)
+            | (I128(_), _)
+            | (U256(_), _)
+            | (I256(_), _)
+            | (Bytes(_), _)
+            | (String(_), _)
             | (Symbol(_), _)
-            | (Bitset(_), _)
-            | (Status(_), _) => Ok(a.cmp(b)),
+            | (Vec(_), _)
+            | (Map(_), _)
+            | (ContractExecutable(_), _)
+            | (Address(_), _)
+            | (LedgerKeyContractExecutable, _)
+            | (LedgerKeyNonce(_), _) => Ok(a.cmp(b)),
         }
     }
 }

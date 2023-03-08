@@ -1,12 +1,9 @@
-use std::{error::Error, io::Write};
-
-use soroban_env_common::Object;
-
 use crate::{
     budget::CostType,
-    xdr::{ReadXdr, WriteXdr},
-    Host, HostError,
+    xdr::{ReadXdr, ScBytes, WriteXdr},
+    BytesObject, Host, HostError,
 };
+use std::{error::Error, io::Write};
 
 use sha2::{Digest, Sha256};
 
@@ -71,7 +68,10 @@ impl Host {
         T::from_xdr(bytes).map_err(|_| self.err_general("failed to read from xdr"))
     }
 
-    pub(crate) fn metered_from_xdr_obj<T: ReadXdr>(&self, bytes: Object) -> Result<T, HostError> {
-        self.visit_obj(bytes, |hv: &Vec<u8>| self.metered_from_xdr(hv.as_slice()))
+    pub(crate) fn metered_from_xdr_obj<T: ReadXdr>(
+        &self,
+        bytes: BytesObject,
+    ) -> Result<T, HostError> {
+        self.visit_obj(bytes, |hv: &ScBytes| self.metered_from_xdr(hv.as_slice()))
     }
 }

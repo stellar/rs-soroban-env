@@ -1,33 +1,29 @@
 use std::rc::Rc;
 
 use super::metered_clone::MeteredClone;
+use crate::host_object::HostVec;
 use crate::xdr::{
     Hash, LedgerKey, LedgerKeyContractData, ScHostFnErrorCode, ScHostObjErrorCode,
-    ScHostValErrorCode, ScStatic, ScVal, ScVec, Uint256,
+    ScHostValErrorCode, ScVal, ScVec, Uint256,
 };
-use crate::{
-    budget::CostType, events::DebugError, host_object::HostVec, Host, HostError, Object, RawVal,
-};
+use crate::{budget::CostType, events::DebugError, Host, HostError, RawVal};
 use ed25519_dalek::{PublicKey, Signature, SIGNATURE_LENGTH};
 use sha2::{Digest, Sha256};
-use soroban_env_common::xdr::{self, AccountId, ScObject};
-use soroban_env_common::TryFromVal;
+use soroban_env_common::xdr::{self, AccountId, ScBytes};
+use soroban_env_common::{BytesObject, TryFromVal, U32Val, VecObject};
 
 impl Host {
     // Notes on metering: free
-    pub(crate) fn usize_to_u32(&self, u: usize, msg: &'static str) -> Result<u32, HostError> {
+    pub(crate) fn usize_to_u32(&self, u: usize) -> Result<u32, HostError> {
         match u32::try_from(u) {
             Ok(v) => Ok(v),
-            Err(_) => Err(self.err_general(msg)), // FIXME: need error status
+            Err(_) => Err(self.err_status(ScHostValErrorCode::U32OutOfRange)),
         }
     }
 
     // Notes on metering: free
-    pub(crate) fn usize_to_rawval_u32(&self, u: usize) -> Result<RawVal, HostError> {
-        match u32::try_from(u) {
-            Ok(v) => Ok(v.into()),
-            Err(_) => Err(self.err_status(ScHostValErrorCode::U32OutOfRange)),
-        }
+    pub(crate) fn usize_to_u32val(&self, u: usize) -> Result<U32Val, HostError> {
+        self.usize_to_u32(u).map(|v| v.into())
     }
 
     // Notes on metering: free
@@ -65,47 +61,38 @@ impl Host {
         Ok(ed25519)
     }
 
-    pub(crate) fn to_u256(&self, a: Object) -> Result<Uint256, HostError> {
-        self.visit_obj(a, |bytes: &Vec<u8>| {
-            self.charge_budget(CostType::BytesClone, 32)?;
-            bytes
-                .try_into()
-                .map_err(|_| self.err_general("bad u256 length"))
-        })
-    }
-
     // Notes on metering: free
-    pub(crate) fn u8_from_rawval_input(
+    pub(crate) fn u8_from_u32val_input(
         &self,
         name: &'static str,
-        r: RawVal,
+        r: U32Val,
     ) -> Result<u8, HostError> {
-        let u = self.u32_from_rawval_input(name, r)?;
+        let u: u32 = r.into();
         match u8::try_from(u) {
             Ok(v) => Ok(v),
             Err(cvt) => Err(self.err(
                 DebugError::new(ScHostFnErrorCode::InputArgsWrongType)
-                    .msg("unexpected RawVal {} for input '{}', need u32 no greater than 255")
-                    .arg(r)
+                    .msg("unexpected U32Val {} for input '{}', need u32 no greater than 255")
+                    .arg(r.to_raw())
                     .arg(name),
             )),
         }
     }
 
-    pub(crate) fn hash_from_obj_input(
+    pub(crate) fn hash_from_bytesobj_input(
         &self,
         name: &'static str,
-        hash: Object,
+        hash: BytesObject,
     ) -> Result<Hash, HostError> {
-        self.fixed_length_bytes_from_obj_input::<Hash, 32>(name, hash)
+        self.fixed_length_bytes_from_bytesobj_input::<Hash, 32>(name, hash)
     }
 
-    pub(crate) fn uint256_from_obj_input(
+    pub(crate) fn uint256_from_bytesobj_input(
         &self,
         name: &'static str,
-        u256: Object,
+        u256: BytesObject,
     ) -> Result<Uint256, HostError> {
-        self.fixed_length_bytes_from_obj_input::<Uint256, 32>(name, u256)
+        self.fixed_length_bytes_from_bytesobj_input::<Uint256, 32>(name, u256)
     }
 
     pub(crate) fn signature_from_bytes(
@@ -116,12 +103,12 @@ impl Host {
         self.fixed_length_bytes_from_slice::<Signature, SIGNATURE_LENGTH>(name, bytes)
     }
 
-    pub(crate) fn signature_from_obj_input(
+    pub(crate) fn signature_from_bytesobj_input(
         &self,
         name: &'static str,
-        sig: Object,
+        sig: BytesObject,
     ) -> Result<Signature, HostError> {
-        self.fixed_length_bytes_from_obj_input::<Signature, SIGNATURE_LENGTH>(name, sig)
+        self.fixed_length_bytes_from_bytesobj_input::<Signature, SIGNATURE_LENGTH>(name, sig)
     }
 
     fn fixed_length_bytes_from_slice<T, const N: usize>(
@@ -148,16 +135,16 @@ impl Host {
         }
     }
 
-    fn fixed_length_bytes_from_obj_input<T, const N: usize>(
+    fn fixed_length_bytes_from_bytesobj_input<T, const N: usize>(
         &self,
         name: &'static str,
-        obj: Object,
+        obj: BytesObject,
     ) -> Result<T, HostError>
     where
         T: From<[u8; N]>,
     {
-        self.visit_obj(obj, |bytes: &Vec<u8>| {
-            self.fixed_length_bytes_from_slice(name, bytes)
+        self.visit_obj(obj, |bytes: &ScBytes| {
+            self.fixed_length_bytes_from_slice(name, bytes.as_slice())
         })
     }
 
@@ -168,20 +155,25 @@ impl Host {
         })
     }
 
-    pub fn ed25519_pub_key_from_obj_input(&self, k: Object) -> Result<PublicKey, HostError> {
-        self.visit_obj(k, |bytes: &Vec<u8>| self.ed25519_pub_key_from_bytes(bytes))
+    pub fn ed25519_pub_key_from_bytesobj_input(
+        &self,
+        k: BytesObject,
+    ) -> Result<PublicKey, HostError> {
+        self.visit_obj(k, |bytes: &ScBytes| {
+            self.ed25519_pub_key_from_bytes(bytes.as_slice())
+        })
     }
 
-    pub(crate) fn account_id_from_bytes(&self, k: Object) -> Result<AccountId, HostError> {
-        self.visit_obj(k, |bytes: &Vec<u8>| {
+    pub(crate) fn account_id_from_bytesobj(&self, k: BytesObject) -> Result<AccountId, HostError> {
+        self.visit_obj(k, |bytes: &ScBytes| {
             Ok(AccountId(xdr::PublicKey::PublicKeyTypeEd25519(
                 self.fixed_length_bytes_from_slice("account_id", bytes.as_slice())?,
             )))
         })
     }
 
-    pub fn sha256_hash_from_bytes_input(&self, x: Object) -> Result<Vec<u8>, HostError> {
-        self.visit_obj(x, |bytes: &Vec<u8>| {
+    pub fn sha256_hash_from_bytesobj_input(&self, x: BytesObject) -> Result<Vec<u8>, HostError> {
+        self.visit_obj(x, |bytes: &ScBytes| {
             self.charge_budget(CostType::ComputeSha256Hash, bytes.len() as u64)?;
             let hash = Sha256::digest(bytes).as_slice().to_vec();
             if hash.len() != 32 {
@@ -219,13 +211,13 @@ impl Host {
     pub fn contract_data_key_from_rawval(&self, k: RawVal) -> Result<Rc<LedgerKey>, HostError> {
         let key_scval = self.from_host_val(k)?;
         match &key_scval {
-            ScVal::Static(ScStatic::LedgerKeyContractCode) => {
+            ScVal::LedgerKeyContractExecutable => {
                 return Err(self.err_status_msg(
                     ScHostFnErrorCode::InputArgsInvalid,
                     "cannot update contract code",
                 ));
             }
-            ScVal::Object(Some(ScObject::NonceKey(_))) => {
+            ScVal::LedgerKeyNonce(_) => {
                 return Err(self.err_status_msg(
                     ScHostFnErrorCode::InputArgsInvalid,
                     "cannot access internal nonce",
@@ -249,17 +241,17 @@ impl Host {
     ) -> Result<u64, HostError> {
         match res {
             Ok(u) => {
-                let v = self.usize_to_u32(u, "outside range")?;
+                let v = self.usize_to_u32(u)?;
                 Ok(u64::from(v) | (1 << u32::BITS))
             }
             Err(u) => {
-                let v = self.usize_to_u32(u, "outside range")?;
+                let v = self.usize_to_u32(u)?;
                 Ok(u64::from(v))
             }
         }
     }
 
-    pub(crate) fn call_args_from_obj(&self, args: Object) -> Result<Vec<RawVal>, HostError> {
+    pub(crate) fn call_args_from_obj(&self, args: VecObject) -> Result<Vec<RawVal>, HostError> {
         self.visit_obj(args, |hv: &HostVec| {
             // Metering: free
             Ok(hv.iter().cloned().collect())
@@ -267,7 +259,7 @@ impl Host {
     }
 
     // Metering: free?
-    pub(crate) fn call_args_to_scvec(&self, args: Object) -> Result<ScVec, HostError> {
+    pub(crate) fn call_args_to_scvec(&self, args: VecObject) -> Result<ScVec, HostError> {
         self.visit_obj(args, |hv: &HostVec| self.rawvals_to_scvec(hv.iter()))
     }
 
@@ -295,10 +287,26 @@ impl Host {
             .collect::<Result<Vec<RawVal>, HostError>>()
     }
 
-    pub(crate) fn obj_from_internal_contract_id(&self) -> Result<Option<Object>, HostError> {
-        Ok(self
-            .get_current_contract_id_internal()
-            .map(|id| self.add_host_object::<Vec<u8>>(id.as_slice().to_vec()))?
-            .ok())
+    pub(crate) fn bytesobj_from_internal_contract_id(
+        &self,
+    ) -> Result<Option<BytesObject>, HostError> {
+        if let Some(id) = self.get_current_contract_id_opt_internal()? {
+            let obj = self.add_host_object::<ScBytes>(id.as_slice().to_vec().try_into()?)?;
+            Ok(Some(obj))
+        } else {
+            Ok(None)
+        }
+    }
+
+    pub(crate) fn scbytes_from_vec(&self, v: Vec<u8>) -> Result<ScBytes, HostError> {
+        Ok(ScBytes(v.try_into()?))
+    }
+
+    pub(crate) fn scbytes_from_slice(&self, slice: &[u8]) -> Result<ScBytes, HostError> {
+        self.scbytes_from_vec(slice.to_vec())
+    }
+
+    pub(crate) fn scbytes_from_hash(&self, hash: &Hash) -> Result<ScBytes, HostError> {
+        self.scbytes_from_slice(hash.as_slice())
     }
 }

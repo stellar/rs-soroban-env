@@ -3,19 +3,19 @@ use std::collections::HashMap;
 use ed25519_dalek::Keypair;
 use soroban_env_common::xdr::{
     AccountId, AddressWithNonce, AuthorizedInvocation, ContractAuth, HashIdPreimage,
-    HashIdPreimageContractAuth, PublicKey, ScAddress, ScVec, Uint256,
+    HashIdPreimageContractAuth, PublicKey, ScAddress, ScSymbol, ScVec, Uint256,
 };
 use soroban_native_sdk_macros::contracttype;
 use soroban_test_wasms::AUTH_TEST_CONTRACT;
 
 use crate::auth::RecordedAuthPayload;
-use crate::native_contract::base_types::{BytesN, Map};
+use crate::native_contract::base_types::BytesN;
 use crate::native_contract::testutils::{
     create_account, generate_keypair, sign_payload_for_account,
 };
 use crate::xdr::Hash;
 use crate::{host_vec, Host, LedgerInfo};
-use soroban_env_common::{Env, Object, Symbol, TryIntoVal};
+use soroban_env_common::{AddressObject, Env, Symbol, SymbolStr, TryIntoVal};
 
 use crate::native_contract::base_types::Vec as HostVec;
 
@@ -76,7 +76,7 @@ impl SignNode {
         Self {
             contract_id: contract_id.clone(),
             children,
-            fn_name: Symbol::from_str("tree_fn"),
+            fn_name: Symbol::try_from_small_str("tree_fn").unwrap(),
             args: ScVec::default(),
         }
     }
@@ -131,7 +131,7 @@ impl AuthTest {
     ) {
         self.test_enforcing(
             root.contract_id.clone(),
-            Symbol::from_str("tree_fn"),
+            Symbol::try_from_small_str("tree_fn").unwrap(),
             host_vec![
                 &self.host,
                 self.get_addresses(),
@@ -249,7 +249,7 @@ impl AuthTest {
         let tree = self.convert_setup_tree(&root);
         self.run_recording(
             &root.contract_id,
-            Symbol::from_str("tree_fn"),
+            Symbol::try_from_small_str("tree_fn").unwrap(),
             host_vec![&self.host, addresses, tree],
         )
     }
@@ -273,7 +273,7 @@ impl AuthTest {
         ))))
     }
 
-    fn key_to_address(&self, key: &Keypair) -> Object {
+    fn key_to_address(&self, key: &Keypair) -> AddressObject {
         let sc_address = self.key_to_sc_address(key);
         self.host.add_host_object(sc_address).unwrap()
     }
@@ -295,9 +295,13 @@ impl AuthTest {
             sub_invocations.push(self.convert_sign_node(c));
         }
 
+        // FIXME: more and better Symbol<->SymbolStr<->ScSymbol conversions.
+        let function_name: SymbolStr = root.fn_name.try_into_val(&self.host).unwrap();
+        let function_name: ScSymbol = ScSymbol(function_name.to_string().try_into().unwrap());
+
         AuthorizedInvocation {
             contract_id: root.contract_id.to_vec().try_into().unwrap(),
-            function_name: root.fn_name.to_string().try_into().unwrap(),
+            function_name,
             args: root.args.clone(),
             sub_invocations: sub_invocations.try_into().unwrap(),
         }
@@ -1168,7 +1172,7 @@ fn test_out_of_order_auth() {
     assert_eq!(
         test.run_recording(
             &test.contracts[0],
-            Symbol::from_str("order_fn"),
+            Symbol::try_from_small_str("order_fn").unwrap(),
             host_vec![
                 &test.host,
                 test.key_to_address(&test.keys[0]),
@@ -1181,7 +1185,7 @@ fn test_out_of_order_auth() {
                 nonce: Some(0),
                 invocation: test.convert_sign_node(&SignNode::new(
                     &test.contracts[1],
-                    Symbol::from_str("do_auth"),
+                    Symbol::try_from_small_str("do_auth").unwrap(),
                     test.host
                         .call_args_to_scvec(
                             host_vec![&test.host, test.key_to_address(&test.keys[0]), 10_u32]
@@ -1196,7 +1200,7 @@ fn test_out_of_order_auth() {
                 nonce: Some(0),
                 invocation: test.convert_sign_node(&SignNode::new(
                     &test.contracts[0],
-                    Symbol::from_str("order_fn"),
+                    Symbol::try_from_small_str("order_fn").unwrap(),
                     test.host
                         .call_args_to_scvec(
                             host_vec![
@@ -1217,12 +1221,12 @@ fn test_out_of_order_auth() {
     // because do_auth happens before order_fn.
     test.test_enforcing(
         test.contracts[0].clone(),
-        Symbol::from_str("order_fn"),
+        Symbol::try_from_small_str("order_fn").unwrap(),
         call_args.clone(),
         vec![vec![
             SignNode::new(
                 &test.contracts[0],
-                Symbol::from_str("order_fn"),
+                Symbol::try_from_small_str("order_fn").unwrap(),
                 test.host
                     .call_args_to_scvec(
                         host_vec![
@@ -1237,7 +1241,7 @@ fn test_out_of_order_auth() {
             ),
             SignNode::new(
                 &test.contracts[1],
-                Symbol::from_str("do_auth"),
+                Symbol::try_from_small_str("do_auth").unwrap(),
                 test.host
                     .call_args_to_scvec(
                         host_vec![&test.host, test.key_to_address(&test.keys[0]), 10_u32].into(),
@@ -1255,11 +1259,11 @@ fn test_out_of_order_auth() {
 
     test.test_enforcing(
         test.contracts[0].clone(),
-        Symbol::from_str("order_fn"),
+        Symbol::try_from_small_str("order_fn").unwrap(),
         call_args,
         vec![vec![SignNode::new(
             &test.contracts[0],
-            Symbol::from_str("order_fn"),
+            Symbol::try_from_small_str("order_fn").unwrap(),
             test.host
                 .call_args_to_scvec(
                     host_vec![
@@ -1272,7 +1276,7 @@ fn test_out_of_order_auth() {
                 .unwrap(),
             vec![SignNode::new(
                 &test.contracts[1],
-                Symbol::from_str("do_auth"),
+                Symbol::try_from_small_str("do_auth").unwrap(),
                 test.host
                     .call_args_to_scvec(
                         host_vec![&test.host, test.key_to_address(&test.keys[0]), 10_u32].into(),

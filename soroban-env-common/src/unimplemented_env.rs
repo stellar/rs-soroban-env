@@ -1,4 +1,8 @@
-use super::{call_macro_with_all_host_functions, Env, EnvBase, Object, RawVal, Status, Symbol};
+use super::{call_macro_with_all_host_functions, Env, EnvBase, Symbol};
+use super::{
+    AddressObject, Bool, BytesObject, I128Object, I64Object, MapObject, Object, RawVal, Status,
+    StringObject, SymbolObject, U128Object, U32Val, U64Object, U64Val, VecObject, Void,
+};
 use core::{any, convert::Infallible};
 
 /// A dummy implementation of the [Env] trait that fails with `unimplemented!()` in
@@ -26,23 +30,82 @@ impl EnvBase for UnimplementedEnv {
 
     fn bytes_copy_from_slice(
         &self,
-        _b: Object,
-        _b_pos: RawVal,
-        _mem: &[u8],
-    ) -> Result<Object, Self::Error> {
+        _b: BytesObject,
+        _b_pos: U32Val,
+        _slice: &[u8],
+    ) -> Result<BytesObject, Self::Error> {
         unimplemented!()
     }
 
     fn bytes_copy_to_slice(
         &self,
-        _b: Object,
-        _b_pos: RawVal,
-        _mem: &mut [u8],
+        _b: BytesObject,
+        _b_pos: U32Val,
+        _slice: &mut [u8],
     ) -> Result<(), Self::Error> {
         unimplemented!()
     }
 
-    fn bytes_new_from_slice(&self, _mem: &[u8]) -> Result<Object, Self::Error> {
+    fn string_copy_to_slice(
+        &self,
+        _b: StringObject,
+        _b_pos: U32Val,
+        _slice: &mut [u8],
+    ) -> Result<(), Self::Error> {
+        unimplemented!()
+    }
+
+    fn symbol_copy_to_slice(
+        &self,
+        _b: SymbolObject,
+        _b_pos: U32Val,
+        _slice: &mut [u8],
+    ) -> Result<(), Self::Error> {
+        unimplemented!()
+    }
+
+    fn bytes_new_from_slice(&self, _slice: &[u8]) -> Result<BytesObject, Self::Error> {
+        unimplemented!()
+    }
+
+    fn string_new_from_slice<'a>(&self, _s: &'a str) -> Result<crate::StringObject, Self::Error> {
+        unimplemented!()
+    }
+
+    fn symbol_new_from_slice<'a>(&self, _s: &'a str) -> Result<crate::SymbolObject, Self::Error> {
+        unimplemented!()
+    }
+
+    fn map_new_from_slices(
+        &self,
+        _keys: &[&str],
+        _vals: &[RawVal],
+    ) -> Result<MapObject, Self::Error> {
+        unimplemented!()
+    }
+
+    fn map_unpack_to_slice(
+        &self,
+        _map: MapObject,
+        _keys: &[&str],
+        _vals: &mut [RawVal],
+    ) -> Result<Void, Self::Error> {
+        unimplemented!()
+    }
+
+    fn vec_new_from_slice(&self, _vals: &[RawVal]) -> Result<VecObject, Self::Error> {
+        unimplemented!()
+    }
+
+    fn vec_unpack_to_slice(
+        &self,
+        _vec: VecObject,
+        _vals: &mut [RawVal],
+    ) -> Result<Void, Self::Error> {
+        unimplemented!()
+    }
+
+    fn symbol_index_in_strs(&self, _key: Symbol, _strs: &[&str]) -> Result<U32Val, Self::Error> {
         unimplemented!()
     }
 

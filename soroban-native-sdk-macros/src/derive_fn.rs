@@ -1,5 +1,5 @@
 use itertools::MultiUnzip;
-use proc_macro2::TokenStream as TokenStream2;
+use proc_macro2::{Literal, TokenStream as TokenStream2};
 use quote::{format_ident, quote};
 use syn::{spanned::Spanned, Error, FnArg, Type};
 
@@ -9,14 +9,12 @@ pub fn derive_contract_function_set<'a>(
 ) -> TokenStream2 {
     let mut errors = Vec::<Error>::new();
 
-    let (discriminant_consts, func_calls): (Vec<_>, Vec<_>) = methods
-        .map(|m| {
+    let (str_lits, func_calls): (Vec<_>, Vec<_>) = methods
+        .enumerate()
+        .map(|(i, m)| {
             let ident = &m.sig.ident;
             let name = ident.to_string();
-            let discriminant_ident = format_ident!("DISCRIMINANT_{}", name.to_uppercase());
-            let discriminant_const = quote! {
-                const #discriminant_ident: u64 = soroban_env_common::Symbol::from_str(#name).to_raw().get_payload()
-            };
+            let str_lit = Literal::string(&name);
             let (arg_indices, args, arg_types): (Vec<_>, Vec<_>, Vec<_>) = m.sig.inputs.iter().skip(1).cloned().enumerate().map(|(i, a)| {
                 let arg = format_ident!("arg{}", i);
                 match a {
@@ -29,7 +27,7 @@ pub fn derive_contract_function_set<'a>(
             }).multiunzip();
             let num_args = args.len();
             let func_call = quote! {
-                #discriminant_ident => {
+                #i => {
                     if args.len() == #num_args {
                         #(let #args: #arg_types = args.get(#arg_indices).cloned().ok_or(soroban_env_common::ConversionError)?.try_into_val(host)?;)*
                         Ok(Self::#ident(host, #(#args,)*)?.try_into_val(host)?)
@@ -38,7 +36,7 @@ pub fn derive_contract_function_set<'a>(
                     }
                 }
             };
-            (discriminant_const, func_call)
+            (str_lit, func_call)
         })
         .multiunzip();
 
@@ -54,9 +52,10 @@ pub fn derive_contract_function_set<'a>(
                     host: &crate::Host,
                     args: &[soroban_env_common::RawVal],
                 ) -> Result<soroban_env_common::RawVal, crate::HostError> {
+                    use soroban_env_common::EnvBase;
                     use super::*;
-                    #(#discriminant_consts;)*
-                    match func.to_raw().get_payload() {
+                    const FNS: &'static [&'static str] = &[#(&#str_lits),*];
+                    match u32::from(host.symbol_index_in_strs(*func, FNS)?) as usize {
                         #(#func_calls)*
                         _ => Err(host.err_general("function doesn't exist"))
                     }

@@ -1,32 +1,45 @@
-use itertools::MultiUnzip;
-use proc_macro2::TokenStream as TokenStream2;
+use itertools::Itertools;
+use proc_macro2::{Literal, TokenStream as TokenStream2};
 use quote::{format_ident, quote};
-use syn::{spanned::Spanned, DataEnum, DataStruct, Error, Ident, Visibility};
+use syn::{spanned::Spanned, DataEnum, DataStruct, Error, Fields, Ident, Visibility};
 
 pub fn derive_type_struct(ident: &Ident, data: &DataStruct) -> TokenStream2 {
-    let (names, map_keys): (Vec<_>, Vec<_>) = data.fields
-        .iter()
-        .filter(|f| matches!(f.vis, Visibility::Public(_)))
-        .enumerate()
-        .map(|(i, f)| {
-            let ident = f
-                .ident
-                .as_ref()
-                .map_or_else(|| format_ident!("{}", i), Ident::clone);
-            let name = ident.to_string();
-            let map_key = quote! { // TODO: Handle field names longer than a symbol. Hash the name? Truncate the name?
-                { const k: soroban_env_common::Symbol = soroban_env_common::Symbol::from_str(#name); k }
-            };
-            (ident, map_key)
-        })
-        .multiunzip();
+    let len = Literal::usize_unsuffixed(data.fields.len());
+
+    let (idents, str_lits, idx_lits): (Vec<_>, Vec<_>, Vec<_>) =
+        if let Fields::Named(_) = &data.fields {
+            data.fields
+                .iter()
+                .sorted_by_key(|field| field.ident.as_ref().unwrap().to_string())
+                .filter(|f| matches!(f.vis, Visibility::Public(_)))
+                .enumerate()
+                .map(|(i, f)| {
+                    let ident = f.ident.as_ref().unwrap().clone();
+                    let str_lit = Literal::string(&ident.to_string());
+                    let idx_lit = Literal::usize_unsuffixed(i);
+                    (ident, str_lit, idx_lit)
+                })
+                .multiunzip()
+        } else {
+            data.fields
+                .iter()
+                .filter(|f| matches!(f.vis, Visibility::Public(_)))
+                .enumerate()
+                .map(|(i, _)| {
+                    let ident = format_ident!("{}", i);
+                    let str_lit = Literal::string(&ident.to_string());
+                    let idx_lit = Literal::usize_unsuffixed(i);
+                    (ident, str_lit, idx_lit)
+                })
+                .multiunzip()
+        };
 
     quote! {
 
         impl soroban_env_common::Compare<#ident> for crate::Host {
             type Error = crate::HostError;
             fn compare(&self, a: &#ident, b: &#ident) -> Result<core::cmp::Ordering, crate::HostError> {
-                #(match self.compare(&a.#names, &b.#names)? {
+                #(match self.compare(&a.#idents, &b.#idents)? {
                     core::cmp::Ordering::Equal => (),
                     unequal => return Ok(unequal)
                 })*
@@ -34,13 +47,16 @@ pub fn derive_type_struct(ident: &Ident, data: &DataStruct) -> TokenStream2 {
             }
         }
 
-        impl soroban_env_common::TryFromVal<crate::Host, soroban_env_common::Object> for #ident {
+        impl soroban_env_common::TryFromVal<crate::Host, soroban_env_common::MapObject> for #ident {
             type Error = crate::HostError;
 
-            fn try_from_val(env: &crate::Host, val: &soroban_env_common::Object) -> Result<Self, Self::Error> {
-                let map = Map::try_from_val(env, val)?;
+            fn try_from_val(env: &crate::Host, val: &soroban_env_common::MapObject) -> Result<Self, Self::Error> {
+                use soroban_env_common::EnvBase;
+                const KEYS: [&'static str; #len] = [#(#str_lits),*];
+                let mut vals: [soroban_env_common::RawVal; #len] = [soroban_env_common::RawVal::VOID.to_raw(); #len];
+                env.map_unpack_to_slice(*val, &KEYS, &mut vals)?;
                 Ok(Self {
-                    #(#names: map.get(&#map_keys)?,)*
+                    #(#idents: vals[#idx_lits].try_into_val(env)?,)*
                 })
             }
         }
@@ -49,7 +65,7 @@ pub fn derive_type_struct(ident: &Ident, data: &DataStruct) -> TokenStream2 {
             type Error = crate::HostError;
 
             fn try_from_val(env: &crate::Host, val: &soroban_env_common::RawVal) -> Result<Self, Self::Error> {
-                let obj: soroban_env_common::Object = val.try_into()?;
+                let obj: soroban_env_common::MapObject = val.try_into()?;
                 obj.try_into_val(env)
             }
         }
@@ -58,9 +74,12 @@ pub fn derive_type_struct(ident: &Ident, data: &DataStruct) -> TokenStream2 {
             type Error = crate::HostError;
 
             fn try_from_val(env: &crate::Host, val: &#ident) -> Result<Self, Self::Error> {
-                let mut map = Map::new(env)?;
-                #(map.set(&#map_keys, &val.#names)?;)*
-                map.try_into_val(env)
+                use soroban_env_common::EnvBase;
+                const KEYS: [&'static str; #len] = [#(#str_lits),*];
+                let vals: [soroban_env_common::RawVal; #len] = [
+                    #(val.#idents.try_into_val(env)?),*
+                ];
+                Ok(env.map_new_from_slices(&KEYS, &vals)?.into())
             }
         }
     }
@@ -69,57 +88,60 @@ pub fn derive_type_struct(ident: &Ident, data: &DataStruct) -> TokenStream2 {
 pub fn derive_type_enum(ident: &Ident, data: &DataEnum) -> TokenStream2 {
     let mut errors = Vec::<Error>::new();
 
-    let (consts, froms, intos, syms, compares): (Vec<_>, Vec<_>, Vec<_>, Vec<_>, Vec<_>) = data.variants
+    let (str_lits, froms, intos, syms, compares): (Vec<_>, Vec<_>, Vec<_>, Vec<_>, Vec<_>) = data
+        .variants
         .iter()
-        .map(|f| {
+        .enumerate()
+        .map(|(i, f)| {
             let case_ident = &f.ident;
             let case_name = case_ident.to_string();
-            let discriminant_ident = format_ident!("DISCRIMINANT_{}", case_name.to_uppercase());
-            let discriminant_sym = quote! { crate::Symbol::from_str(#case_name) };
-            let discriminant_const = quote! {
-                const #discriminant_ident: u64 = #discriminant_sym.to_raw().get_payload()
-            };
+            let idx_lit = Literal::usize_unsuffixed(i);
+            let str_lit = Literal::string(&case_name);
+            let case_sym = quote! { crate::Symbol::try_from_val(env, &#str_lit) };
 
             if f.fields.is_empty() {
                 let from = quote! {
-                    #discriminant_ident => Ok(Self::#case_ident)
+                    #idx_lit => Ok(Self::#case_ident)
                 };
                 let into = quote! {
                     #ident::#case_ident => {
-                        vec.push(&{ const k: crate::Symbol = crate::Symbol::from_str(#case_name); k })?;
+                        vec.push(&#case_sym?)?;
                     }
                 };
                 let sym = quote! {
-                    #ident::#case_ident => #discriminant_sym
+                    #ident::#case_ident => #case_sym
                 };
                 let compare = quote! {
                     (#ident::#case_ident, #ident::#case_ident) => Ok(core::cmp::Ordering::Equal)
                 };
-                (discriminant_const, from, into, sym, compare)
+                (str_lit, from, into, sym, compare)
             } else if f.fields.len() == 1 {
                 let from = quote! {
-                    #discriminant_ident => Ok(Self::#case_ident(vec.get(1)?))
+                    #idx_lit => Ok(Self::#case_ident(vec.get(1)?))
                 };
                 let into = quote! {
                     #ident::#case_ident(x) => {
-                        vec.push(&{ const k: crate::Symbol = crate::Symbol::from_str(#case_name); k })?;
+                        vec.push(&#case_sym?)?;
                         vec.push(x)?;
                     }
                 };
                 let sym = quote! {
-                    #ident::#case_ident(_) => #discriminant_sym
+                    #ident::#case_ident(_) => #case_sym
                 };
                 let compare = quote! {
                     (#ident::#case_ident(a), #ident::#case_ident(b)) => self.compare(a, b)
                 };
-                (discriminant_const, from, into, sym, compare)
+                (str_lit, from, into, sym, compare)
             } else {
-                errors.push(Error::new(f.span(), "tuple variants with more than 1 element not supported"));
-                let from = quote! { };
-                let into = quote! { };
-                let cmp = quote! { };
-                let sym = quote! { };
-                (discriminant_const, from, into, cmp, sym)
+                errors.push(Error::new(
+                    f.span(),
+                    "tuple variants with more than 1 element not supported",
+                ));
+                let from = quote! {};
+                let into = quote! {};
+                let cmp = quote! {};
+                let sym = quote! {};
+                (str_lit, from, into, cmp, sym)
             }
         })
         .multiunzip();
@@ -131,7 +153,8 @@ pub fn derive_type_enum(ident: &Ident, data: &DataEnum) -> TokenStream2 {
         quote! {
 
             impl #ident {
-                fn discriminant_sym(&self) -> crate::Symbol {
+                fn discriminant_sym(&self, env: &crate::Host) -> Result<crate::Symbol, crate::ConversionError> {
+                    use soroban_env_common::TryFromVal;
                     match self {
                         #(#syms,)*
                     }
@@ -143,19 +166,20 @@ pub fn derive_type_enum(ident: &Ident, data: &DataEnum) -> TokenStream2 {
                 fn compare(&self, a: &#ident, b: &#ident) -> Result<core::cmp::Ordering, crate::HostError> {
                     match (a, b) {
                         #(#compares,)*
-                        _ => self.compare(&a.discriminant_sym(), &b.discriminant_sym())
+                        _ => self.compare(&a.discriminant_sym(self)?, &b.discriminant_sym(self)?)
                     }
                 }
             }
 
-            impl soroban_env_common::TryFromVal<crate::Host, soroban_env_common::Object> for #ident {
+            impl soroban_env_common::TryFromVal<crate::Host, soroban_env_common::VecObject> for #ident {
                 type Error = crate::HostError;
 
-                fn try_from_val(env: &crate::Host, val: &soroban_env_common::Object) -> Result<Self, Self::Error> {
-                    #(#consts;)*
+                fn try_from_val(env: &crate::Host, val: &soroban_env_common::VecObject) -> Result<Self, Self::Error> {
+                    use soroban_env_common::{EnvBase,TryFromVal};
+                    const CASES: &'static [&'static str] = &[#(#str_lits),*];
                     let vec = crate::native_contract::base_types::Vec::try_from_val(env, val)?;
                     let discriminant: soroban_env_common::Symbol = vec.get(0)?;
-                    match discriminant.to_raw().get_payload() {
+                    match u32::from(env.symbol_index_in_strs(discriminant, CASES)?) as usize {
                         #(#froms,)*
                         _ => Err(soroban_env_common::ConversionError.into())
                     }
@@ -166,7 +190,7 @@ pub fn derive_type_enum(ident: &Ident, data: &DataEnum) -> TokenStream2 {
                 type Error = crate::HostError;
 
                 fn try_from_val(env: &crate::Host, val: &soroban_env_common::RawVal) -> Result<Self, Self::Error> {
-                    let obj: soroban_env_common::Object = val.try_into()?;
+                    let obj: soroban_env_common::VecObject = val.try_into()?;
                     obj.try_into_val(env)
                 }
             }
@@ -175,7 +199,7 @@ pub fn derive_type_enum(ident: &Ident, data: &DataEnum) -> TokenStream2 {
                 type Error = crate::HostError;
 
                 fn try_from_val(env: &crate::Host, val: &#ident) -> Result<soroban_env_common::RawVal, Self::Error> {
-                    #(#consts;)*
+                    use soroban_env_common::TryFromVal;
                     let mut vec = crate::native_contract::base_types::Vec::new(env)?;
                     match val {
                         #(#intos)*

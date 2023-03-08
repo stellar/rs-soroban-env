@@ -1,6 +1,4 @@
-use stellar_xdr::ScObjectType;
-
-use crate::{ConversionError, Env, Object, RawVal, RawValConvertible, TryFromVal, TryIntoVal};
+use crate::{ConversionError, Env, RawVal, TryFromVal, TryIntoVal, VecObject};
 
 macro_rules! impl_for_tuple {
     ( $count:literal $count_usize:literal $($typ:ident $idx:tt)+ ) => {
@@ -14,12 +12,8 @@ macro_rules! impl_for_tuple {
             type Error = ConversionError;
 
             fn try_from_val(env: &E, val: &RawVal) -> Result<Self, Self::Error> {
-                let val = *val;
-                if !Object::val_is_obj_type(val, ScObjectType::Vec) {
-                    return Err(ConversionError);
-                }
-                let vec = unsafe { Object::unchecked_from_val(val) };
-                let len: u32 = env.vec_len(vec).map_err(|_| ConversionError)?.try_into()?;
+                let vec: VecObject = val.try_into()?;
+                let len: u32 = env.vec_len(vec).map_err(|_| ConversionError)?.into();
                 if len != $count {
                     return Err(ConversionError);
                 }
@@ -70,7 +64,7 @@ macro_rules! impl_for_tuple {
             type Error = ConversionError;
 
             fn try_from_val(env: &E, val: &($($typ,)*)) -> Result<Self, Self::Error> {
-                let mut arr = [RawVal::VOID; N];
+                let mut arr: [RawVal; N] = [RawVal::VOID.into(); N];
                 $(arr[$idx] = val.$idx.try_into_val(env).map_err(|_| ConversionError)?;)*
                 Ok(arr)
             }
@@ -110,6 +104,6 @@ impl<E: Env> TryFromVal<E, ()> for [RawVal; 0] {
     type Error = ConversionError;
 
     fn try_from_val(_env: &E, _v: &()) -> Result<Self, Self::Error> {
-        Ok([RawVal::VOID; 0])
+        Ok([RawVal::VOID.into(); 0])
     }
 }

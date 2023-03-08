@@ -1,8 +1,12 @@
 #[cfg(feature = "vm")]
 use crate::xdr::ScHostContextErrorCode;
 
+use super::{
+    AddressObject, Bool, BytesObject, I128Object, I64Object, MapObject, Object, RawVal, Status,
+    StringObject, SymbolObject, U128Object, U32Val, U64Object, U64Val, VecObject, Void,
+};
 use crate::call_macro_with_all_host_functions;
-use crate::{EnvBase, Object, RawVal, Status, Symbol};
+use crate::{EnvBase, Symbol};
 #[cfg(not(feature = "vm"))]
 use core::marker::PhantomData;
 

@@ -168,7 +168,7 @@ pub(crate) fn authorize_single_invocation_with_nonce(
 
     let root_invocation = AuthorizedInvocation {
         contract_id: contract_id.to_vec().try_into().unwrap(),
-        function_name: function_name.try_into().unwrap(),
+        function_name: crate::xdr::ScSymbol(function_name.try_into().unwrap()),
         args: host.call_args_to_scvec(args.into()).unwrap(),
         sub_invocations: Default::default(),
     };

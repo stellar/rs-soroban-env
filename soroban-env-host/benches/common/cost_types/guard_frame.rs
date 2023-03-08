@@ -11,7 +11,7 @@ impl HostCostMeasurement for GuardFrameMeasure {
         _rng: &mut rand::prelude::StdRng,
     ) -> (Hash, Symbol) {
         let id: Hash = [0; 32].into();
-        let fun: Symbol = Symbol::from_str("add");
+        let fun: Symbol = Symbol::try_from_small_str("add").unwrap();
         (id, fun)
     }
 

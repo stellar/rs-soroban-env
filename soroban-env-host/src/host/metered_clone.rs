@@ -2,7 +2,8 @@ use std::{mem, rc::Rc};
 
 use soroban_env_common::{
     xdr::{
-        BytesM, ContractEvent, ContractEventBody, ScAddress, ScMap, ScMapEntry, ScObject, ScVal,
+        BytesM, ContractEvent, ContractEventBody, ScAddress, ScHostValErrorCode, ScMap, ScMapEntry,
+        ScVal, StringM,
     },
     RawVal,
 };
@@ -11,8 +12,12 @@ use crate::{
     budget::{Budget, CostType},
     events::{DebugArg, DebugEvent, HostEvent, InternalContractEvent, InternalEvent},
     host::Events,
+    num::{I256, U256},
     storage::AccessType,
-    xdr::{AccountId, Hash, ScContractCode, ScVec, Uint256},
+    xdr::{
+        AccountId, Duration, Hash, ScBytes, ScContractExecutable, ScNonceKey, ScString, ScSymbol,
+        ScVec, TimePoint, Uint256,
+    },
     HostError,
 };
 
@@ -110,13 +115,20 @@ impl_metered_clone_for_shallow_types!(u32, 4);
 impl_metered_clone_for_shallow_types!(i32, 4);
 impl_metered_clone_for_shallow_types!(u64, 8);
 impl_metered_clone_for_shallow_types!(i64, 8);
+impl_metered_clone_for_shallow_types!(TimePoint, 8);
+impl_metered_clone_for_shallow_types!(Duration, 8);
+impl_metered_clone_for_shallow_types!(u128, 16);
+impl_metered_clone_for_shallow_types!(i128, 16);
 impl_metered_clone_for_shallow_types!(Hash, 32);
 impl_metered_clone_for_shallow_types!(RawVal, 8);
 impl_metered_clone_for_shallow_types!(AccessType, 1);
 impl_metered_clone_for_shallow_types!(AccountId, 32);
-impl_metered_clone_for_shallow_types!(ScContractCode, 33);
+impl_metered_clone_for_shallow_types!(ScContractExecutable, 33);
 impl_metered_clone_for_shallow_types!(Uint256, 32);
+impl_metered_clone_for_shallow_types!(U256, 32);
+impl_metered_clone_for_shallow_types!(I256, 32);
 impl_metered_clone_for_shallow_types!(ScAddress, 33);
+impl_metered_clone_for_shallow_types!(ScNonceKey, 33);
 impl_metered_clone_for_shallow_types!(DebugArg, 16);
 impl_metered_clone_for_shallow_types!(InternalContractEvent, 40);
 
@@ -156,29 +168,30 @@ impl MeteredClone for ScVal {
 
     fn charge_for_substructure(&self, budget: &Budget) -> Result<(), HostError> {
         match self {
-            ScVal::Object(Some(obj)) => {
-                match obj {
-                    ScObject::Vec(v) => ScVec::charge_for_substructure(v, budget),
-                    ScObject::Map(m) => ScMap::charge_for_substructure(m, budget),
-                    ScObject::Bytes(b) => BytesM::charge_for_substructure(b, budget),
-                    // Everything else was handled by the memcpy above.
-                    ScObject::U64(_)
-                    | ScObject::I64(_)
-                    | ScObject::U128(_)
-                    | ScObject::I128(_)
-                    | ScObject::ContractCode(_)
-                    | ScObject::Address(_)
-                    | ScObject::NonceKey(_) => Ok(()),
-                }
-            }
-            ScVal::Object(None)
-            | ScVal::U63(_)
+            ScVal::Vec(Some(v)) => ScVec::charge_for_substructure(v, budget),
+            ScVal::Map(Some(m)) => ScMap::charge_for_substructure(m, budget),
+            ScVal::Vec(None) | ScVal::Map(None) => Err(ScHostValErrorCode::MissingObject.into()),
+            ScVal::Bytes(b) => BytesM::charge_for_substructure(b, budget),
+            ScVal::String(s) => StringM::charge_for_substructure(s, budget),
+            ScVal::Symbol(s) => StringM::charge_for_substructure(s, budget),
+            // Everything else was handled by the memcpy above.
+            ScVal::U64(_)
+            | ScVal::I64(_)
+            | ScVal::U128(_)
+            | ScVal::I128(_)
+            | ScVal::ContractExecutable(_)
+            | ScVal::Address(_)
             | ScVal::U32(_)
             | ScVal::I32(_)
-            | ScVal::Static(_)
-            | ScVal::Symbol(_)
-            | ScVal::Bitset(_)
-            | ScVal::Status(_) => Ok(()),
+            | ScVal::Status(_)
+            | ScVal::Bool(_)
+            | ScVal::Void
+            | ScVal::Timepoint(_)
+            | ScVal::Duration(_)
+            | ScVal::U256(_)
+            | ScVal::I256(_)
+            | ScVal::LedgerKeyContractExecutable
+            | ScVal::LedgerKeyNonce(_) => Ok(()),
         }
     }
 }
@@ -219,6 +232,40 @@ impl<const C: u32> MeteredClone for BytesM<C> {
 
     const ELT_SIZE: u64 = 24;
 
+    fn charge_for_substructure(&self, budget: &Budget) -> Result<(), HostError> {
+        <Self as AsRef<Vec<u8>>>::as_ref(self).charge_for_substructure(budget)
+    }
+}
+
+impl<const C: u32> MeteredClone for StringM<C> {
+    const IS_SHALLOW: bool = false;
+
+    const ELT_SIZE: u64 = 24;
+
+    fn charge_for_substructure(&self, budget: &Budget) -> Result<(), HostError> {
+        <Self as AsRef<Vec<u8>>>::as_ref(self).charge_for_substructure(budget)
+    }
+}
+
+impl MeteredClone for ScBytes {
+    const IS_SHALLOW: bool = false;
+    const ELT_SIZE: u64 = 24;
+    fn charge_for_substructure(&self, budget: &Budget) -> Result<(), HostError> {
+        <Self as AsRef<Vec<u8>>>::as_ref(self).charge_for_substructure(budget)
+    }
+}
+
+impl MeteredClone for ScString {
+    const IS_SHALLOW: bool = false;
+    const ELT_SIZE: u64 = 24;
+    fn charge_for_substructure(&self, budget: &Budget) -> Result<(), HostError> {
+        <Self as AsRef<Vec<u8>>>::as_ref(self).charge_for_substructure(budget)
+    }
+}
+
+impl MeteredClone for ScSymbol {
+    const IS_SHALLOW: bool = false;
+    const ELT_SIZE: u64 = 24;
     fn charge_for_substructure(&self, budget: &Budget) -> Result<(), HostError> {
         <Self as AsRef<Vec<u8>>>::as_ref(self).charge_for_substructure(budget)
     }
@@ -351,7 +398,11 @@ mod test {
         expect!["8"].assert_eq(std::mem::size_of::<RawVal>().to_string().as_str());
         expect!["1"].assert_eq(std::mem::size_of::<AccessType>().to_string().as_str());
         expect!["32"].assert_eq(std::mem::size_of::<AccountId>().to_string().as_str());
-        expect!["33"].assert_eq(std::mem::size_of::<ScContractCode>().to_string().as_str());
+        expect!["33"].assert_eq(
+            std::mem::size_of::<ScContractExecutable>()
+                .to_string()
+                .as_str(),
+        );
         expect!["32"].assert_eq(std::mem::size_of::<Uint256>().to_string().as_str());
         expect!["33"].assert_eq(std::mem::size_of::<ScAddress>().to_string().as_str());
         expect!["40"].assert_eq(std::mem::size_of::<ScVal>().to_string().as_str());
@@ -388,7 +439,7 @@ mod test {
         assert_mem_size_equals_elt_size!(RawVal);
         assert_mem_size_equals_elt_size!(AccessType);
         assert_mem_size_equals_elt_size!(AccountId);
-        assert_mem_size_equals_elt_size!(ScContractCode);
+        assert_mem_size_equals_elt_size!(ScContractExecutable);
         assert_mem_size_equals_elt_size!(Uint256);
         assert_mem_size_equals_elt_size!(ScAddress);
         assert_mem_size_equals_elt_size!(ScVal);

@@ -4,7 +4,7 @@ use crate::common::HostCostMeasurement;
 use rand::{rngs::StdRng, Rng};
 use soroban_env_host::{
     cost_runner::ValSerRun,
-    xdr::{ScMap, ScMapEntry, ScObject, ScVal},
+    xdr::{ScMap, ScMapEntry, ScVal},
     Host,
 };
 
@@ -30,6 +30,6 @@ impl HostCostMeasurement for ValSerMeasure {
                 .try_into()
                 .unwrap(),
         );
-        ScVal::Object(Some(ScObject::Map(scmap)))
+        ScVal::Map(Some(scmap))
     }
 }

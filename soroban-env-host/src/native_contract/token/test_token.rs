@@ -7,7 +7,7 @@ use crate::{
     Host, HostError,
 };
 use soroban_env_common::{
-    xdr::{Asset, ContractId, CreateContractArgs, HostFunction, ScContractCode},
+    xdr::{Asset, ContractId, CreateContractArgs, HostFunction, ScContractExecutable},
     Env, RawVal,
 };
 use soroban_env_common::{Symbol, TryFromVal, TryIntoVal};
@@ -24,7 +24,7 @@ impl<'a> TestToken<'a> {
         let id_obj: RawVal = host
             .invoke_function(HostFunction::CreateContract(CreateContractArgs {
                 contract_id: ContractId::Asset(asset),
-                source: ScContractCode::Token,
+                source: ScContractExecutable::Token,
             }))
             .unwrap()
             .try_into_val(host)
@@ -40,7 +40,7 @@ impl<'a> TestToken<'a> {
             .host
             .call(
                 self.id.clone().into(),
-                Symbol::from_str("allowance"),
+                Symbol::try_from_val(self.host, &"allowance")?,
                 host_vec![self.host, from, spender].into(),
             )?
             .try_into_val(self.host)?)
@@ -57,7 +57,7 @@ impl<'a> TestToken<'a> {
             .host
             .call(
                 self.id.clone().into(),
-                Symbol::from_str(function_name),
+                Symbol::try_from_val(self.host, &function_name)?,
                 args.into(),
             )?
             .try_into()?)
@@ -94,7 +94,7 @@ impl<'a> TestToken<'a> {
             .host
             .call(
                 self.id.clone().into(),
-                Symbol::from_str("balance"),
+                Symbol::try_from_val(self.host, &"balance")?,
                 host_vec![self.host, addr].into(),
             )?
             .try_into_val(self.host)?)
@@ -105,7 +105,7 @@ impl<'a> TestToken<'a> {
             .host
             .call(
                 self.id.clone().into(),
-                Symbol::from_str("spendable"),
+                Symbol::try_from_val(self.host, &"spendable")?,
                 host_vec![self.host, addr].into(),
             )?
             .try_into_val(self.host)?)
@@ -116,7 +116,7 @@ impl<'a> TestToken<'a> {
             .host
             .call(
                 self.id.clone().into(),
-                Symbol::from_str("authorized"),
+                Symbol::try_from_val(self.host, &"authorized")?,
                 host_vec![self.host, addr].into(),
             )?
             .try_into_val(self.host)?)
@@ -226,7 +226,7 @@ impl<'a> TestToken<'a> {
             .host
             .call(
                 self.id.clone().into(),
-                Symbol::from_str("decimals"),
+                Symbol::try_from_val(self.host, &"decimals")?,
                 host_vec![self.host].into(),
             )?
             .try_into()?)
@@ -237,7 +237,7 @@ impl<'a> TestToken<'a> {
             .host
             .call(
                 self.id.clone().into(),
-                Symbol::from_str("name"),
+                Symbol::try_from_val(self.host, &"name")?,
                 host_vec![self.host].into(),
             )?
             .try_into_val(self.host)?)
@@ -248,7 +248,7 @@ impl<'a> TestToken<'a> {
             .host
             .call(
                 self.id.clone().into(),
-                Symbol::from_str("symbol"),
+                Symbol::try_from_val(self.host, &"symbol")?,
                 host_vec![self.host].into(),
             )?
             .try_into_val(self.host)?)

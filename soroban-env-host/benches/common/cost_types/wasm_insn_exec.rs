@@ -26,7 +26,7 @@ fn wasm_module_with_4n_insns(n: usize) -> Vec<u8> {
         fe.i64_add();
     }
     fe.drop();
-    fe.push(Symbol::from_str("pass"));
+    fe.push(Symbol::try_from_small_str("pass").unwrap());
     fe.finish_and_export("test").finish()
 }
 
@@ -37,7 +37,7 @@ fn wasm_module_with_mem_grow(n_pages: usize) -> Vec<u8> {
     // need to drop the return value on the stack because it's an i32
     // and the function needs an i64 return value.
     fe.drop();
-    fe.push(Symbol::from_str("pass"));
+    fe.push(Symbol::try_from_small_str("pass").unwrap());
     fe.finish_and_export("test").finish()
 }
 
@@ -62,7 +62,7 @@ fn drop(n: u64, _rng: &mut StdRng) -> WasmModule {
         fe.push(Operand::Const64(i as i64));
         fe.drop();
     }
-    fe.push(Symbol::from_str("pass"));
+    fe.push(Symbol::try_from_small_str("pass").unwrap());
     let overhead = INSNS_OVERHEAD_CONST * (n + 1);
     let wasm = fe.finish_and_export("test").finish();
     WasmModule { wasm, overhead }
@@ -78,7 +78,7 @@ fn select(n: u64, rng: &mut StdRng) -> WasmModule {
         fe.select();
         fe.drop();
     }
-    fe.push(Symbol::from_str("pass"));
+    fe.push(Symbol::try_from_small_str("pass").unwrap());
     let overhead = INSNS_OVERHEAD_CONST * (3 * n + 1) - INSNS_OVERHEAD_DROP * n;
     let wasm = fe.finish_and_export("test").finish();
     WasmModule { wasm, overhead }
@@ -92,7 +92,7 @@ fn block_br_sequential(n: u64, _rng: &mut StdRng) -> WasmModule {
         fe.br(0);
         fe.end();
     }
-    fe.push(Symbol::from_str("pass"));
+    fe.push(Symbol::try_from_small_str("pass").unwrap());
     let wasm = fe.finish_and_export("test").finish();
     WasmModule {
         wasm,
@@ -110,7 +110,7 @@ fn block_br_nested(n: u64, _rng: &mut StdRng) -> WasmModule {
         fe.br(0);
         fe.end();
     }
-    fe.push(Symbol::from_str("pass"));
+    fe.push(Symbol::try_from_small_str("pass").unwrap());
     let wasm = fe.finish_and_export("test").finish();
     WasmModule {
         wasm,
@@ -129,7 +129,7 @@ fn br_table_nested(n: u64, _rng: &mut StdRng) -> WasmModule {
         fe.br_table(&[0], 0);
         fe.end();
     }
-    fe.push(Symbol::from_str("pass"));
+    fe.push(Symbol::try_from_small_str("pass").unwrap());
     let wasm = fe.finish_and_export("test").finish();
     let overhead = INSNS_OVERHEAD_CONST * (n + 1);
     WasmModule { wasm, overhead }
@@ -143,7 +143,7 @@ fn local_get(n: u64, _rng: &mut StdRng) -> WasmModule {
         fe.local_get(s);
         fe.drop();
     }
-    fe.push(Symbol::from_str("pass"));
+    fe.push(Symbol::try_from_small_str("pass").unwrap());
     let overhead = INSNS_OVERHEAD_DROP * n + INSNS_OVERHEAD_CONST;
     let wasm = fe.finish_and_export("test").finish();
     WasmModule { wasm, overhead }
@@ -157,7 +157,7 @@ fn local_set(n: u64, _rng: &mut StdRng) -> WasmModule {
         fe.i64_const(i as i64);
         fe.local_set(s);
     }
-    fe.push(Symbol::from_str("pass"));
+    fe.push(Symbol::try_from_small_str("pass").unwrap());
     let overhead = INSNS_OVERHEAD_CONST * (n + 1);
     let wasm = fe.finish_and_export("test").finish();
     WasmModule { wasm, overhead }
@@ -172,7 +172,7 @@ fn local_tee(n: u64, _rng: &mut StdRng) -> WasmModule {
         fe.local_tee(s);
         fe.drop();
     }
-    fe.push(Symbol::from_str("pass"));
+    fe.push(Symbol::try_from_small_str("pass").unwrap());
     let overhead = INSNS_OVERHEAD_CONST * (n + 1) + INSNS_OVERHEAD_DROP * n;
     let wasm = fe.finish_and_export("test").finish();
     WasmModule { wasm, overhead }
@@ -182,7 +182,7 @@ fn local_tee(n: u64, _rng: &mut StdRng) -> WasmModule {
 fn call_local(n: u64, _rng: &mut StdRng) -> WasmModule {
     // a local wasm function -- the callee
     let mut fe = ModEmitter::new().func(Arity(0), 0);
-    fe.push(Symbol::from_str("pass"));
+    fe.push(Symbol::try_from_small_str("pass").unwrap());
     let (m0, f0) = fe.finish();
     // the caller
     fe = m0.func(Arity(0), 0);
@@ -190,7 +190,7 @@ fn call_local(n: u64, _rng: &mut StdRng) -> WasmModule {
         fe.call_func(f0);
         fe.drop();
     }
-    fe.push(Symbol::from_str("pass"));
+    fe.push(Symbol::try_from_small_str("pass").unwrap());
     let overhead = INSNS_OVERHEAD_DROP * n + INSNS_OVERHEAD_CONST; // overhead is only for the caller
     let wasm = fe.finish_and_export("test").finish();
     WasmModule { wasm, overhead }
@@ -207,7 +207,7 @@ fn call_import(n: u64, _rng: &mut StdRng) -> WasmModule {
         fe.call_func(f0);
         fe.drop();
     }
-    fe.push(Symbol::from_str("pass"));
+    fe.push(Symbol::try_from_small_str("pass").unwrap());
     let overhead = INSNS_OVERHEAD_DROP * n + INSNS_OVERHEAD_CONST; // overhead is only for the caller
     let wasm = fe.finish_and_export("test").finish();
     WasmModule { wasm, overhead }
@@ -220,11 +220,11 @@ fn call_indirect(n: u64, _rng: &mut StdRng) -> WasmModule {
     let f0 = me.import_func("t", "_", Arity(0));
     // a local wasm function
     let mut fe = me.func(Arity(0), 0);
-    fe.push(Symbol::from_str("pass"));
+    fe.push(Symbol::try_from_small_str("pass").unwrap());
     let (me, f1) = fe.finish();
     // another local wasm function
     let mut fe = me.func(Arity(0), 0);
-    fe.push(Symbol::from_str("fail"));
+    fe.push(Symbol::try_from_small_str("fail").unwrap());
     let (mut me, f2) = fe.finish();
     // store in table
     me.define_elems(&[f0, f1, f2]);
@@ -236,7 +236,7 @@ fn call_indirect(n: u64, _rng: &mut StdRng) -> WasmModule {
         fe.call_func_indirect(ty);
         fe.drop();
     }
-    fe.push(Symbol::from_str("pass"));
+    fe.push(Symbol::try_from_small_str("pass").unwrap());
     let overhead = INSNS_OVERHEAD_DROP * n + INSNS_OVERHEAD_CONST * (n + 1); // overhead is only for the caller
     let wasm = fe.finish_and_export("test").finish();
     WasmModule { wasm, overhead }
@@ -249,7 +249,7 @@ fn global_get(n: u64, _rng: &mut StdRng) -> WasmModule {
         fe.global_get(GlobalRef(0));
         fe.drop();
     }
-    fe.push(Symbol::from_str("pass"));
+    fe.push(Symbol::try_from_small_str("pass").unwrap());
     let overhead = INSNS_OVERHEAD_DROP * n + INSNS_OVERHEAD_CONST;
     let wasm = fe.finish_and_export("test").finish();
     WasmModule { wasm, overhead }
@@ -262,7 +262,7 @@ fn global_set(n: u64, _rng: &mut StdRng) -> WasmModule {
         fe.i64_const(i as i64);
         fe.global_set(GlobalRef(0));
     }
-    fe.push(Symbol::from_str("pass"));
+    fe.push(Symbol::try_from_small_str("pass").unwrap());
     let overhead = INSNS_OVERHEAD_CONST * (n + 1);
     let wasm = fe.finish_and_export("test").finish();
     WasmModule { wasm, overhead }
@@ -275,7 +275,7 @@ fn memory_grow(n: u64, _rng: &mut StdRng) -> WasmModule {
         fe.memory_grow();
         fe.drop();
     }
-    fe.push(Symbol::from_str("pass"));
+    fe.push(Symbol::try_from_small_str("pass").unwrap());
     let overhead = INSNS_OVERHEAD_DROP * n + INSNS_OVERHEAD_CONST * (n + 1);
     let wasm = fe.finish_and_export("test").finish();
     WasmModule { wasm, overhead }
@@ -288,7 +288,7 @@ fn memory_size(n: u64, _rng: &mut StdRng) -> WasmModule {
         fe.memory_size();
         fe.drop();
     }
-    fe.push(Symbol::from_str("pass"));
+    fe.push(Symbol::try_from_small_str("pass").unwrap());
     let overhead = INSNS_OVERHEAD_DROP * n + INSNS_OVERHEAD_CONST;
     let wasm = fe.finish_and_export("test").finish();
     WasmModule { wasm, overhead }
@@ -306,7 +306,7 @@ macro_rules! generate_i64_store_insn_code {
                     fe.i64_const(5);
                     fe.$func_name(0);
                 }
-                fe.push(Symbol::from_str("pass"));
+                fe.push(Symbol::try_from_small_str("pass").unwrap());
                 let overhead = INSNS_OVERHEAD_CONST * (2 * n + 1);
                 let wasm = fe.finish_and_export("test").finish();
                 WasmModule { wasm, overhead }
@@ -328,7 +328,7 @@ macro_rules! generate_i64_load_insn_code {
                     fe.$func_name(0);
                     fe.drop();
                 }
-                fe.push(Symbol::from_str("pass"));
+                fe.push(Symbol::try_from_small_str("pass").unwrap());
                 let overhead = INSNS_OVERHEAD_DROP * n + INSNS_OVERHEAD_CONST * (n + 1);
                 let wasm = fe.finish_and_export("test").finish();
                 WasmModule { wasm, overhead }
@@ -350,7 +350,7 @@ macro_rules! generate_unary_insn_code {
                 fe.$func_name();
                 fe.drop();
             }
-            fe.push(Symbol::from_str("pass"));
+            fe.push(Symbol::try_from_small_str("pass").unwrap());
             let overhead = INSNS_OVERHEAD_DROP * n + INSNS_OVERHEAD_CONST * (n + 1);
             let wasm = fe.finish_and_export("test").finish();
             WasmModule { wasm, overhead }
@@ -373,7 +373,7 @@ macro_rules! generate_binary_insn_code {
                 fe.$func_name();
                 fe.drop();
             }
-            fe.push(Symbol::from_str("pass"));
+            fe.push(Symbol::try_from_small_str("pass").unwrap());
             let overhead = INSNS_OVERHEAD_DROP * n + INSNS_OVERHEAD_CONST * (2 * n + 1);
             let wasm = fe.finish_and_export("test").finish();
             WasmModule { wasm, overhead }
@@ -464,7 +464,7 @@ impl HostCostMeasurement for WasmInsnExecMeasure {
 
     fn new_random_case(host: &Host, _rng: &mut StdRng, step: u64) -> WasmInsnExecSample {
         let insns = step * 1000;
-        let args = ScVec(vec![ScVal::U63(5)].try_into().unwrap());
+        let args = ScVec(vec![ScVal::U64(5)].try_into().unwrap());
         let id: Hash = [0; 32].into();
         let code = wasm_module_with_4n_insns(insns as usize);
         let vm = Vm::new(&host, id, &code).unwrap();

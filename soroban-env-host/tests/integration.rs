@@ -1,5 +1,5 @@
 use soroban_env_host::{
-    events::HostEvent, xdr::ScObjectType, Compare, Env, EnvBase, Host, HostError, Object, RawVal,
+    events::HostEvent, Compare, Env, EnvBase, Host, HostError, MapObject, RawVal,
 };
 
 #[test]
@@ -7,12 +7,12 @@ fn vec_as_seen_by_user() -> Result<(), HostError> {
     let host = Host::default();
     let int1 = host.obj_from_i64(5)?;
 
-    let vec1a = host.vec_new(RawVal::from_void())?;
+    let vec1a = host.vec_new(RawVal::from_void().into())?;
     let vec1b = host.vec_push_back(vec1a, *int1.as_ref())?;
 
     assert_ne!(vec1a.as_raw().get_payload(), vec1b.as_raw().get_payload());
 
-    let vec2a = host.vec_new(RawVal::from_void())?;
+    let vec2a = host.vec_new(RawVal::from_void().into())?;
     let vec2b = host.vec_push_back(vec2a, *int1.as_ref())?;
 
     assert_ne!(vec2a.as_raw().get_payload(), vec2b.as_raw().get_payload());
@@ -32,7 +32,7 @@ fn vec_as_seen_by_user() -> Result<(), HostError> {
 fn vec_host_fn() -> Result<(), HostError> {
     let host = Host::default();
     let m = host.map_new()?;
-    assert!(Object::val_is_obj_type(m.into(), ScObjectType::Map));
+    assert!(m.as_raw().is::<MapObject>());
     Ok(())
 }
 
@@ -43,7 +43,7 @@ fn debug_fmt() {
     // Call a "native formatting-style" debug helper.
     host.log_static_fmt_val_static_str(
         "can't convert {} to {}",
-        RawVal::from_i32(1),
+        RawVal::from_i32(1).to_raw(),
         std::any::type_name::<Vec<u8>>(),
     )
     .unwrap();
