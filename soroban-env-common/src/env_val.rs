@@ -7,7 +7,7 @@ use crate::{
     I256, U256,
 };
 #[cfg(feature = "std")]
-use stellar_xdr::{Duration, Int128Parts, ScVal, TimePoint};
+use stellar_xdr::{Duration, Int128Parts, ScVal, TimePoint, Uint256};
 
 pub trait TryIntoVal<E: Env, V> {
     type Error: Debug;
@@ -240,8 +240,14 @@ where
                 hi: 0,
                 lo: val.get_signed_body() as u64,
             })),
-            Tag::U256Small => todo!(),
-            Tag::I256Small => todo!(),
+            Tag::U256Small => {
+                let val = U256::new(val.get_body() as u128);
+                Ok(ScVal::U256(Uint256(val.to_be_bytes())))
+            }
+            Tag::I256Small => {
+                let val = I256::new(val.get_signed_body() as i128);
+                Ok(ScVal::I256(Uint256(val.to_be_bytes())))
+            }
             Tag::SymbolSmall => {
                 let sym: SymbolSmall =
                     unsafe { <SymbolSmall as RawValConvertible>::unchecked_from_val(val) };
