@@ -316,6 +316,7 @@ impl IntoIterator for SymbolSmall {
 
 /// An iterator that decodes the individual bit-packed characters from a
 /// symbol and yields them as regular Rust [char] values.
+#[repr(transparent)]
 #[derive(Clone)]
 pub struct SymbolSmallIter(u64);
 

@@ -7,6 +7,7 @@ use crate::{
     raw_val::TAG_BITS, Compare, ConversionError, Env, RawVal, Tag,
 };
 pub use ethnum::{AsI256, AsU256, I256, U256};
+use stellar_xdr::{ScVal, Uint256};
 
 declare_tag_based_wrapper!(U32Val);
 declare_tag_based_wrapper!(I32Val);
@@ -208,6 +209,36 @@ impl TryFrom<I256> for I256Small {
         } else {
             Err(ConversionError)
         }
+    }
+}
+
+impl TryFrom<U256Small> for ScVal {
+    type Error = ConversionError;
+    fn try_from(value: U256Small) -> Result<Self, Self::Error> {
+        let val = U256::new(value.as_raw().get_body() as u128);
+        Ok(ScVal::U256(Uint256(val.to_be_bytes())))
+    }
+}
+
+impl TryFrom<&U256Small> for ScVal {
+    type Error = ConversionError;
+    fn try_from(value: &U256Small) -> Result<Self, Self::Error> {
+        value.clone().try_into()
+    }
+}
+
+impl TryFrom<I256Small> for ScVal {
+    type Error = ConversionError;
+    fn try_from(value: I256Small) -> Result<Self, Self::Error> {
+        let val = I256::new(value.as_raw().get_signed_body() as i128);
+        Ok(ScVal::I256(Uint256(val.to_be_bytes())))
+    }
+}
+
+impl TryFrom<&I256Small> for ScVal {
+    type Error = ConversionError;
+    fn try_from(value: &I256Small) -> Result<Self, Self::Error> {
+        value.clone().try_into()
     }
 }
 
