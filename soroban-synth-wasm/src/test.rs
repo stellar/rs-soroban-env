@@ -37,20 +37,20 @@ fn test_synth_wasm() {
           (import "m" "1" (func (;2;) (type 2)))
           (func (;3;) (type 0) (result i64)
             (local i64 i64)
-            i64.const 62479605476329
+            i64.const 999673687621134
             local.set 0
             call 0
             local.tee 1
             local.get 1
-            i64.const 15
+            i64.const 255
             i64.and
-            i64.const 7
+            i64.const 14
             i64.ne
             if  ;; label = @1
               unreachable
             end
             local.get 0
-            i64.const 1969
+            i64.const 528280977412
             call 1
             local.get 0
             call 2
@@ -79,7 +79,7 @@ fn call_local() {
         (module
           (type (;0;) (func (result i64)))
           (func (;0;) (type 0) (result i64)
-            i64.const 224846729
+            i64.const 3597547534
           )
           (func (;1;) (type 0) (result i64)
             call 0
@@ -148,10 +148,10 @@ fn call_indirect() {
           (type (;1;) (func (param i64) (result i64)))
           (import "t" "_" (func (;0;) (type 0)))
           (func (;1;) (type 0) (result i64)
-            i64.const 224846729
+            i64.const 3597547534
           )
           (func (;2;) (type 0) (result i64)
-            i64.const 182893337
+            i64.const 2926293262
           )
           (func (;3;) (type 1) (param i64) (result i64)
             i32.const 1
@@ -206,7 +206,7 @@ fn store_i64() {
             i32.const 0
             i64.const 5
             i64.store align=1
-            i64.const 224846729
+            i64.const 3597547534
           )
           (table (;0;) 128 funcref)
           (memory (;0;) 1)
@@ -251,7 +251,7 @@ fn br() {
               end
               br 0 (;@1;)
             end
-            i64.const 224846729
+            i64.const 3597547534
           )
           (table (;0;) 128 funcref)
           (memory (;0;) 1)
@@ -296,16 +296,16 @@ fn br_table() {
                     i32.const 10
                     br_table 0 (;@4;) 1 (;@3;) 2 (;@2;) 3 (;@1;) 3 (;@1;)
                   end
-                  i64.const 617
+                  i64.const 9742
                   return
                 end
-                i64.const 633
+                i64.const 9998
                 return
               end
-              i64.const 649
+              i64.const 10254
               return
             end
-            i64.const 665
+            i64.const 10510
             return
           )
           (table (;0;) 128 funcref)
