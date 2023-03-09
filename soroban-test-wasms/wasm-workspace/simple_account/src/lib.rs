@@ -22,7 +22,7 @@ impl SimpleAccount {
         env.storage().set(&DataKey::Owner, &new_owner);
     }
 
-    pub fn check_auth(
+    pub fn __check_auth(
         env: Env,
         signature_payload: BytesN<32>,
         signature_args: Vec<BytesN<64>>,

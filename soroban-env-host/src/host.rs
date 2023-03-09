@@ -21,12 +21,15 @@ use soroban_env_common::{
     I256, U256,
 };
 
-use crate::auth::{AuthorizationManager, AuthorizationManagerSnapshot, RecordedAuthPayload};
 use crate::budget::{AsBudget, Budget, CostType};
 use crate::events::{
     DebugError, DebugEvent, Events, InternalContractEvent, InternalEvent, InternalEventsBuffer,
 };
 use crate::storage::{Storage, StorageMap};
+use crate::{
+    auth::{AuthorizationManager, AuthorizationManagerSnapshot, RecordedAuthPayload},
+    native_contract::account_contract::ACCOUNT_CONTRACT_CHECK_AUTH_FN_NAME,
+};
 
 use crate::host_object::{HostMap, HostObject, HostObjectType, HostVec};
 use crate::SymbolStr;
@@ -534,6 +537,35 @@ impl Host {
         )
     }
 
+    /// Invokes the reserved `__check_auth` function on a provided contract.
+    /// 
+    /// This is useful for testing the custom account contracts. Otherwise, the
+    /// host prohibits calling `__check_auth` outside of internal implementation
+    /// of `require_auth[_for_args]` calls.
+    #[cfg(any(test, feature = "testutils"))]
+    pub fn call_account_contract_check_auth(
+        &self,
+        contract: BytesObject,
+        args: VecObject,
+    ) -> Result<RawVal, HostError> {
+        let contract_id = self.hash_from_bytesobj_input("contract", contract)?;
+        let args = self.call_args_from_obj(args)?;
+        let res = self.call_n_internal(
+            &contract_id,
+            ACCOUNT_CONTRACT_CHECK_AUTH_FN_NAME.try_into_val(self)?,
+            args.as_slice(),
+            false,
+            true,
+        );
+        if let Err(e) = &res {
+            let evt = DebugEvent::new()
+                .msg("check auth invocation for a custom account contract resulted in error {}")
+                .arg::<RawVal>(e.status.into());
+            self.record_debug_event(evt)?;
+        }
+        res
+    }
+
     /// Returns [`Hash`] contract ID from the VM frame at the top of the context
     /// stack, or a [`HostError`] if the context stack is empty or has a non-VM
     /// frame at its top.
@@ -913,7 +945,7 @@ impl Host {
         allow_reentry: bool,
     ) -> Result<RawVal, HostError> {
         let id = self.hash_from_bytesobj_input("contract", id)?;
-        self.call_n_internal(&id, func, args, allow_reentry)
+        self.call_n_internal(&id, func, args, allow_reentry, false)
     }
 
     // Notes on metering: this is covered by the called components.
@@ -923,7 +955,20 @@ impl Host {
         func: Symbol,
         args: &[RawVal],
         allow_reentry: bool,
+        internal_host_call: bool,
     ) -> Result<RawVal, HostError> {
+        // Internal host calls may call some special functions that otherwise
+        // aren't allowed to be called.
+        if !internal_host_call {
+            if SymbolStr::try_from_val(self, &func)?.to_string().as_str()
+                == ACCOUNT_CONTRACT_CHECK_AUTH_FN_NAME
+            {
+                return Err(self.err_status_msg(
+                    ScHostContextErrorCode::UnknownError,
+                    "can't invoke a custom account contract directly",
+                ));
+            }
+        }
         if !allow_reentry {
             for f in self.0.context.borrow().iter() {
                 let exist_id = match f {
@@ -2289,7 +2334,7 @@ impl VmCallerEnv for Host {
         args: VecObject,
     ) -> Result<RawVal, HostError> {
         let args = self.call_args_from_obj(args)?;
-        // this is the recommanded path of calling a contract, with `reentry` always set `false`
+        // this is the recommended path of calling a contract, with `reentry` always set `false`
         let res = self.call_n(contract, func, args.as_slice(), false);
         if let Err(e) = &res {
             let evt = DebugEvent::new()

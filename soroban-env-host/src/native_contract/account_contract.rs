@@ -18,6 +18,8 @@ const MAX_ACCOUNT_SIGNATURES: u32 = 20;
 use soroban_env_common::xdr::{AccountId, ScVal};
 use soroban_native_sdk_macros::contracttype;
 
+pub const ACCOUNT_CONTRACT_CHECK_AUTH_FN_NAME: &str = "__check_auth";
+
 #[derive(Clone)]
 #[contracttype]
 pub struct AuthorizationContext {
@@ -76,7 +78,7 @@ pub(crate) fn check_account_contract_auth(
     Ok(host
         .call_n_internal(
             account_contract,
-            Symbol::try_from_val(host, &"check_auth")?,
+            ACCOUNT_CONTRACT_CHECK_AUTH_FN_NAME.try_into_val(host)?,
             &[
                 payload_obj.into(),
                 signature_args_vec.into(),
@@ -86,6 +88,7 @@ pub(crate) fn check_account_contract_auth(
             // within the auth framework. Maybe there is a more elegant way
             // around this.
             // TODO: check if there are security concerns about this.
+            true,
             true,
         )?
         .try_into()?)
