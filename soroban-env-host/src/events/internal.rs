@@ -49,18 +49,24 @@ pub(crate) enum InternalEvent {
     StructuredDebug(InternalContractEvent),
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) enum EventStatus {
+    FromFailedCall,
+    FromSuccessfulCall,
+}
+
 /// The events buffer. Stores `InternalEvent`s in the chronological order.
 #[derive(Clone, Default)]
 pub(crate) struct InternalEventsBuffer {
     //the bool keeps track of if the call this event was emitted in failed
-    pub(crate) vec: Vec<(InternalEvent, bool)>,
+    pub(crate) vec: Vec<(InternalEvent, EventStatus)>,
 }
 
 impl InternalEventsBuffer {
     // Records an InternalEvent
     pub fn record(&mut self, e: InternalEvent, _budget: &Budget) -> Result<(), HostError> {
         //TODO:Add metering for non-diagnostic events
-        self.vec.push((e, false));
+        self.vec.push((e, EventStatus::FromSuccessfulCall));
         Ok(())
     }
 
@@ -70,7 +76,7 @@ impl InternalEventsBuffer {
     pub fn rollback(&mut self, events: usize) -> Result<(), HostError> {
         // note that we first skip the events that are not being rolled back
         for e in self.vec.iter_mut().skip(events) {
-            e.1 = true;
+            e.1 = EventStatus::FromFailedCall;
         }
 
         Ok(())
@@ -97,20 +103,24 @@ impl InternalEventsBuffer {
         let vec: Result<Vec<HostEvent>, HostError> = self
             .vec
             .iter()
-            .filter(|e| (host.is_debug() || !matches!(e.0, InternalEvent::Contract(_)) || !e.1)) //filter out rolledback Contract events if diagnostics are disabled
+            .filter(|e| {
+                host.is_debug()
+                    || !matches!(e.0, InternalEvent::Contract(_))
+                    || e.1 != EventStatus::FromFailedCall
+            }) //filter out rolledback Contract events if diagnostics are disabled
             .map(|e| match &e.0 {
                 InternalEvent::Contract(c) => Ok(HostEvent {
                     event: Event::Contract(c.to_xdr(host)?),
-                    failed_call: e.1,
+                    failed_call: e.1 == EventStatus::FromFailedCall,
                 }),
                 InternalEvent::Debug(d) => Ok(HostEvent {
                     event: Event::Debug(d.clone()),
-                    failed_call: e.1,
+                    failed_call: e.1 == EventStatus::FromFailedCall,
                 }),
                 InternalEvent::StructuredDebug(c) => host.as_budget().with_free_budget(|| {
                     Ok(HostEvent {
                         event: Event::StructuredDebug(c.to_xdr(host)?),
-                        failed_call: e.1,
+                        failed_call: e.1 == EventStatus::FromFailedCall,
                     })
                 }),
             })
