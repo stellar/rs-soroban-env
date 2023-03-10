@@ -1,15 +1,18 @@
 use soroban_env_common::{
-    xdr::{ContractEventType, Hash, ScVal, ScVec},
-    ConversionError, ScValObjRef, Symbol, TryFromVal, TryIntoVal, VecObject,
+    xdr::{ContractEventType, Hash, ScBytes},
+    BytesObject, EnvBase, Symbol, SymbolSmall, VecObject,
 };
 
-use crate::events::{InternalContractEvent, InternalEvent};
 use crate::{budget::AsBudget, Host, HostError, RawVal};
+use crate::{
+    events::{InternalContractEvent, InternalEvent},
+    host_object::HostVec,
+};
 
 /// None of these functions are metered, which is why they're behind the is_debug check
 impl Host {
-    fn hash_to_scval(&self, hash: Hash) -> Result<ScVal, HostError> {
-        Ok(ScVal::Bytes(self.scbytes_from_hash(&hash)?))
+    fn hash_to_bytesobj(&self, hash: &Hash) -> Result<BytesObject, HostError> {
+        self.add_host_object::<ScBytes>(hash.as_slice().to_vec().try_into()?)
     }
 
     fn record_system_debug_contract_event(
@@ -42,29 +45,16 @@ impl Host {
         }
 
         self.as_budget().with_free_budget(|| {
-            let mut topics: Vec<ScVal> = Vec::new();
-            topics.push(ScVal::Symbol(crate::xdr::ScSymbol(
-                self.map_err("fn_call".as_bytes().try_into())?,
-            )));
-
-            topics.push(self.hash_to_scval(contract_id.clone())?);
-            topics.push(func.try_into_val(self)?);
-
-            let scvec_topics: ScVec = self.map_err(topics.try_into())?;
-            let scval_topics = ScVal::Vec(Some(scvec_topics));
-            let topics_obj_ref = ScValObjRef::classify(&scval_topics)
-                .ok_or_else(|| self.err_general("classify failed"))?;
-
-            let data: Result<Vec<ScVal>, ConversionError> = args
-                .into_iter()
-                .map(|i| ScVal::try_from_val(self, i))
-                .collect();
-            let data_vec: ScVec = self.map_err(data?.try_into())?;
+            let mut topics: Vec<RawVal> = Vec::new();
+            topics.push(SymbolSmall::try_from_str("fn_call")?.into());
+            topics.push(self.hash_to_bytesobj(contract_id)?.into());
+            topics.push(func.into());
 
             self.record_system_debug_contract_event(
                 ContractEventType::System,
-                self.to_host_obj(&topics_obj_ref)?.try_into()?,
-                self.to_host_val(&ScVal::Vec(Some(data_vec)))?,
+                self.add_host_object(HostVec::from_vec(topics)?)?
+                    .try_into()?,
+                self.vec_new_from_slice(args)?.into(),
             )
         })
     }
@@ -82,22 +72,15 @@ impl Host {
         }
 
         self.as_budget().with_free_budget(|| {
-            let mut topics: Vec<ScVal> = Vec::new();
-            topics.push(ScVal::Symbol(crate::xdr::ScSymbol(
-                self.map_err("fn_return".as_bytes().try_into())?,
-            )));
-
-            topics.push(self.hash_to_scval(contract_id.clone())?);
-            topics.push(func.try_into_val(self)?);
-
-            let scvec_topics: ScVec = self.map_err(topics.try_into())?;
-            let scval_topics = ScVal::Vec(Some(scvec_topics));
-            let topics_obj_ref = ScValObjRef::classify(&scval_topics)
-                .ok_or_else(|| self.err_general("classify failed"))?;
+            let mut topics: Vec<RawVal> = Vec::new();
+            topics.push(SymbolSmall::try_from_str("fn_return")?.into());
+            topics.push(self.hash_to_bytesobj(contract_id)?.into());
+            topics.push(func.into());
 
             self.record_system_debug_contract_event(
                 ContractEventType::System,
-                self.to_host_obj(&topics_obj_ref)?.try_into()?,
+                self.add_host_object(HostVec::from_vec(topics)?)?
+                    .try_into()?,
                 *res,
             )
         })
