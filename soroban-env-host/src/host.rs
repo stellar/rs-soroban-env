@@ -1576,14 +1576,14 @@ impl VmCallerEnv for Host {
                     // If the object is actually missing, it's less than any non-object.
                     None => Ok(Some(Ordering::Less)),
                     // If the object is present, try a small-value comparison.
-                    Some(aobj) => Ok(aobj.try_compare_to_small(b)),
+                    Some(aobj) => aobj.try_compare_to_small(self.as_budget(), b),
                 })?,
                 // Same as previous case, but reversed.
                 (Err(_), Ok(b)) => self.unchecked_visit_val_obj(b, |bo| match bo {
                     // So we reverse the relative order of the "missing object" case.
                     None => Ok(Some(Ordering::Greater)),
                     // And reverse the result of a successful small-value comparison.
-                    Some(bobj) => Ok(match bobj.try_compare_to_small(a) {
+                    Some(bobj) => Ok(match bobj.try_compare_to_small(self.as_budget(), a)? {
                         Some(Ordering::Less) => Some(Ordering::Greater),
                         Some(Ordering::Greater) => Some(Ordering::Less),
                         other => other,
