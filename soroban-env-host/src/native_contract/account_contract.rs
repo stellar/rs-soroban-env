@@ -4,7 +4,7 @@ use crate::auth::AuthorizedInvocation;
 // to a generic smart wallet contract that supports authentication and blanket
 // context authorization.
 use crate::host::metered_clone::MeteredClone;
-use crate::host::Host;
+use crate::host::{ContractReentryMode, Host};
 use crate::native_contract::{base_types::BytesN, contract_error::ContractError};
 use crate::{err, HostError};
 use core::cmp::Ordering;
@@ -84,11 +84,9 @@ pub(crate) fn check_account_contract_auth(
                 signature_args_vec.into(),
                 auth_context_vec.into(),
             ],
-            // Allow reentry for this function in order to do wallet admin ops
-            // within the auth framework. Maybe there is a more elegant way
-            // around this.
-            // TODO: check if there are security concerns about this.
-            true,
+            // Allow self reentry for this function in order to be able to do
+            // wallet admin ops using the auth framework itself.
+            ContractReentryMode::SelfAllowed,
             true,
         )?
         .try_into()?)
