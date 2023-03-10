@@ -3,7 +3,7 @@ use std::{mem, rc::Rc};
 use soroban_env_common::{
     xdr::{
         BytesM, ContractEvent, ContractEventBody, ScAddress, ScHostValErrorCode, ScMap, ScMapEntry,
-        ScVal, StringM,
+        ScUnknownErrorCode, ScVal, StringM,
     },
     RawVal,
 };
@@ -356,7 +356,7 @@ impl MeteredClone for HostEvent {
         match &self.event {
             Event::Contract(c) => c.charge_for_substructure(budget),
             Event::Debug(d) => d.charge_for_substructure(budget),
-            Event::StructuredDebug(_) => Ok(()), // StructuredDebug events shouldn't affect metering
+            Event::StructuredDebug(_) => Err(ScUnknownErrorCode::General.into()), // StructuredDEbug events shouldn't be metered
         }
     }
 }
@@ -380,7 +380,7 @@ impl MeteredClone for InternalEvent {
         match self {
             InternalEvent::Contract(c) => c.charge_for_substructure(budget),
             InternalEvent::Debug(d) => d.charge_for_substructure(budget),
-            InternalEvent::StructuredDebug(_) => Ok(()),
+            InternalEvent::StructuredDebug(_) => Err(ScUnknownErrorCode::General.into()),
         }
     }
 }
