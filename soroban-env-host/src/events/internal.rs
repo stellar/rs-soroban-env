@@ -103,11 +103,6 @@ impl InternalEventsBuffer {
         let vec: Result<Vec<HostEvent>, HostError> = self
             .vec
             .iter()
-            .filter(|e| {
-                host.is_debug()
-                    || !matches!(e.0, InternalEvent::Contract(_))
-                    || e.1 != EventStatus::FromFailedCall
-            }) //filter out rolledback Contract events if diagnostics are disabled
             .map(|e| match &e.0 {
                 InternalEvent::Contract(c) => Ok(HostEvent {
                     event: Event::Contract(c.to_xdr(host)?),
