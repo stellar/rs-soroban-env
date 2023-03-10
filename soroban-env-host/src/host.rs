@@ -1059,7 +1059,7 @@ impl Host {
         let res = self.call_contract_fn(&id, &func, args);
 
         if self.is_debug() {
-            match res.clone() {
+            match &res {
                 Ok(res) => self.fn_return_diagnostics(id, &func, &res)?,
                 Err(err) => {}
             }

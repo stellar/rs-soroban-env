@@ -20,7 +20,7 @@ pub(crate) struct InternalContractEvent {
 
 impl InternalContractEvent {
     // Metering: covered by components
-    pub fn to_xdr(self, host: &Host) -> Result<xdr::ContractEvent, HostError> {
+    pub fn to_xdr(&self, host: &Host) -> Result<xdr::ContractEvent, HostError> {
         let topics = if let ScVal::Vec(Some(v)) = host.from_host_obj(self.topics)?.into() {
             Ok(v)
         } else {
@@ -103,7 +103,7 @@ impl InternalEventsBuffer {
             .filter(|e| (host.is_debug() || !matches!(e.0, InternalEvent::Contract(_)) || !e.1)) //filter out rolledback Contract events if diagnostics are disabled
             .map(|e| match &e.0 {
                 InternalEvent::Contract(c) => Ok(HostEvent {
-                    event: Event::Contract(c.clone().to_xdr(host)?),
+                    event: Event::Contract(c.to_xdr(host)?),
                     failed_call: e.1,
                 }),
                 InternalEvent::Debug(d) => Ok(HostEvent {
@@ -112,7 +112,7 @@ impl InternalEventsBuffer {
                 }),
                 InternalEvent::StructuredDebug(c) => host.as_budget().with_free_budget(|| {
                     Ok(HostEvent {
-                        event: Event::StructuredDebug(c.clone().to_xdr(host)?),
+                        event: Event::StructuredDebug(c.to_xdr(host)?),
                         failed_call: e.1,
                     })
                 }),
