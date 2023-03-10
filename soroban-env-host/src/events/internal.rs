@@ -42,13 +42,11 @@ impl InternalContractEvent {
 
 /// The internal representation of an `Event` that is stored in the events buffer
 /// and designed to be cheap to cloned.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub(crate) enum InternalEvent {
     Contract(InternalContractEvent),
     Debug(DebugEvent),
     StructuredDebug(InternalContractEvent),
-    #[default]
-    None,
 }
 
 /// The events buffer. Stores `InternalEvent`s in the chronological order.
@@ -87,7 +85,6 @@ impl InternalEventsBuffer {
                 InternalEvent::Contract(c) => debug!("Contract event: {:?}", c),
                 InternalEvent::Debug(d) => debug!("Debug event: {}", d),
                 InternalEvent::StructuredDebug(c) => debug!("StructuredDebug event: {:?}", c),
-                InternalEvent::None => (),
             }
         }
         debug!("========End of events========")
@@ -116,7 +113,6 @@ impl InternalEventsBuffer {
                         failed_call: e.1,
                     })
                 }),
-                InternalEvent::None => Err(host.err_general("Unexpected event type")),
             })
             .collect();
         Ok(Events(vec?))

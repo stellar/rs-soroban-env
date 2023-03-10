@@ -380,7 +380,7 @@ impl MeteredClone for InternalEvent {
         match self {
             InternalEvent::Contract(c) => c.charge_for_substructure(budget),
             InternalEvent::Debug(d) => d.charge_for_substructure(budget),
-            InternalEvent::StructuredDebug(_) | InternalEvent::None => Ok(()),
+            InternalEvent::StructuredDebug(_) => Ok(()),
         }
     }
 }
