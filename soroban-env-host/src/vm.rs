@@ -32,7 +32,10 @@ use wasmi::{
 };
 
 #[cfg(any(test, feature = "testutils"))]
-use soroban_env_common::{TryFromVal, xdr::{ScVal, ScVec}};
+use soroban_env_common::{
+    xdr::{ScVal, ScVec},
+    TryFromVal,
+};
 
 impl wasmi::core::HostError for HostError {}
 

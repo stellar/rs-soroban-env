@@ -2353,7 +2353,7 @@ impl VmCallerEnv for Host {
         args: VecObject,
     ) -> Result<RawVal, HostError> {
         let args = self.call_args_from_obj(args)?;
-        // this is the recommended path of calling a contract, with `reentry` 
+        // this is the recommended path of calling a contract, with `reentry`
         // always set `ContractReentryMode::Prohibited`
         let res = self.call_n(
             contract,
