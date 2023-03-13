@@ -45,10 +45,11 @@ impl Host {
         }
 
         self.as_budget().with_free_budget(|| {
-            let mut topics: Vec<RawVal> = Vec::new();
-            topics.push(SymbolSmall::try_from_str("fn_call")?.into());
-            topics.push(self.hash_to_bytesobj(contract_id)?.into());
-            topics.push(func.into());
+            let topics: Vec<RawVal> = vec![
+                SymbolSmall::try_from_str("fn_call")?.into(),
+                self.hash_to_bytesobj(contract_id)?.into(),
+                func.into(),
+            ];
 
             self.record_system_debug_contract_event(
                 ContractEventType::System,
@@ -72,10 +73,11 @@ impl Host {
         }
 
         self.as_budget().with_free_budget(|| {
-            let mut topics: Vec<RawVal> = Vec::new();
-            topics.push(SymbolSmall::try_from_str("fn_return")?.into());
-            topics.push(self.hash_to_bytesobj(contract_id)?.into());
-            topics.push(func.into());
+            let topics: Vec<RawVal> = vec![
+                SymbolSmall::try_from_str("fn_return")?.into(),
+                self.hash_to_bytesobj(contract_id)?.into(),
+                func.into(),
+            ];
 
             self.record_system_debug_contract_event(
                 ContractEventType::System,

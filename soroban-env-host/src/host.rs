@@ -918,9 +918,7 @@ impl Host {
             ScContractExecutable::Token => self.with_frame(
                 Frame::Token(id.clone(), func.clone(), args.to_vec()),
                 || {
-                    if self.is_debug() {
-                        self.fn_call_diagnostics(&id, &func, args)?;
-                    }
+                    self.fn_call_diagnostics(&id, &func, args)?;
 
                     use crate::native_contract::{NativeContract, Token};
                     Token.call(func, self, args)
@@ -986,9 +984,7 @@ impl Host {
                     use std::panic::AssertUnwindSafe;
                     type PanicVal = Box<dyn Any + Send>;
 
-                    if self.is_debug() {
-                        self.fn_call_diagnostics(&id, &func, args)?;
-                    }
+                    self.fn_call_diagnostics(&id, &func, args)?;
 
                     // We're directly invoking a native rust contract here,
                     // which we allow only in local testing scenarios, and we
@@ -1012,8 +1008,6 @@ impl Host {
                     let res: Result<Option<RawVal>, PanicVal> = testutils::call_with_suppressed_panic_hook(closure);
                     match res {
                         Ok(Some(rawval)) => {
-                            // This is under testutils, so no need to check is_debug since it's
-                            // already done in fn_return_diagnostics.
                             self.fn_return_diagnostics(id, &func, &rawval)?;
                             Ok(rawval)
                         },
@@ -1058,12 +1052,11 @@ impl Host {
 
         let res = self.call_contract_fn(&id, &func, args);
 
-        if self.is_debug() {
-            match &res {
-                Ok(res) => self.fn_return_diagnostics(id, &func, &res)?,
-                Err(err) => {}
-            }
+        match &res {
+            Ok(res) => self.fn_return_diagnostics(id, &func, &res)?,
+            Err(err) => {}
         }
+
         return res;
     }
 
