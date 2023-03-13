@@ -15,10 +15,9 @@ use soroban_env_common::{
         ScHostFnErrorCode, ScHostObjErrorCode, ScHostStorageErrorCode, ScHostValErrorCode, ScMap,
         ScMapEntry, ScStatusType, ScString, ScSymbol, ScUnknownErrorCode, ScVal, ScVec, Uint256,
     },
-    AddressObject, Bool, BytesObject, Convert, I128Object, I64Object, InvokerType, MapObject,
-    ScValObjRef, ScValObject, Status, StringObject, SymbolObject, SymbolSmall, TryFromVal,
-    TryIntoVal, U128Object, U32Val, U64Object, U64Val, VecObject, VmCaller, VmCallerEnv, Void,
-    I256, U256,
+    AddressObject, Bool, BytesObject, Convert, I128Object, I64Object, MapObject, ScValObjRef,
+    ScValObject, Status, StringObject, SymbolObject, SymbolSmall, TryFromVal, TryIntoVal,
+    U128Object, U32Val, U64Object, U64Val, VecObject, VmCaller, VmCallerEnv, Void, I256, U256,
 };
 
 use crate::auth::{AuthorizationManager, AuthorizationManagerSnapshot, RecordedAuthPayload};
@@ -39,6 +38,7 @@ mod conversion;
 mod data_helper;
 mod err_helper;
 mod error;
+pub(crate) mod invoker_type;
 mod mem_helper;
 pub(crate) mod metered_clone;
 pub(crate) mod metered_map;
@@ -47,8 +47,8 @@ pub(crate) mod metered_xdr;
 mod validity;
 pub use error::HostError;
 
-use self::metered_clone::MeteredClone;
 use self::metered_vector::MeteredVector;
+use self::{invoker_type::InvokerType, metered_clone::MeteredClone};
 use crate::Compare;
 
 /// Saves host state (storage and objects) for rolling back a (sub-)transaction
@@ -1251,6 +1251,29 @@ impl Host {
             Err(self.err_general("symbol mismatch"))
         }
     }
+
+    // Metering: mostly free or already covered by components (e.g. err_general)
+    fn get_invoker_type(&self) -> Result<u64, HostError> {
+        let frames = self.0.context.borrow();
+        // If the previous frame exists and is a contract, return its ID, otherwise return
+        // the account invoking.
+        let st = match frames.as_slice() {
+            // There are always two frames when WASM is executed in the VM.
+            [.., f2, _] => match f2 {
+                #[cfg(feature = "vm")]
+                Frame::ContractVM(_, _, _) => Ok(InvokerType::Contract),
+                Frame::HostFunction(_) => Ok(InvokerType::Account),
+                Frame::Token(id, _, _) => Ok(InvokerType::Contract),
+                #[cfg(any(test, feature = "testutils"))]
+                Frame::TestContract(_) => Ok(InvokerType::Contract),
+            },
+            // In tests contracts are executed with a single frame.
+            // TODO: Investigate this discrepancy: https://github.com/stellar/rs-soroban-env/issues/485.
+            [f1] => Ok(InvokerType::Account),
+            _ => Err(self.err_general("no frames to derive the invoker from")),
+        }?;
+        Ok(st as u64)
+    }
 }
 
 // Notes on metering: these are called from the guest and thus charged on the VM instructions.
@@ -1522,29 +1545,6 @@ impl VmCallerEnv for Host {
             self.record_debug_event(DebugEvent::new().msg(fmt).args(args.iter().cloned()))?;
         }
         Ok(RawVal::VOID)
-    }
-
-    // Metering: mostly free or already covered by components (e.g. err_general)
-    fn get_invoker_type(&self, _vmcaller: &mut VmCaller<Host>) -> Result<u64, HostError> {
-        let frames = self.0.context.borrow();
-        // If the previous frame exists and is a contract, return its ID, otherwise return
-        // the account invoking.
-        let st = match frames.as_slice() {
-            // There are always two frames when WASM is executed in the VM.
-            [.., f2, _] => match f2 {
-                #[cfg(feature = "vm")]
-                Frame::ContractVM(_, _, _) => Ok(InvokerType::Contract),
-                Frame::HostFunction(_) => Ok(InvokerType::Account),
-                Frame::Token(id, _, _) => Ok(InvokerType::Contract),
-                #[cfg(any(test, feature = "testutils"))]
-                Frame::TestContract(_) => Ok(InvokerType::Contract),
-            },
-            // In tests contracts are executed with a single frame.
-            // TODO: Investigate this discrepancy: https://github.com/stellar/rs-soroban-env/issues/485.
-            [f1] => Ok(InvokerType::Account),
-            _ => Err(self.err_general("no frames to derive the invoker from")),
-        }?;
-        Ok(st as u64)
     }
 
     // Notes on metering: covered by the components

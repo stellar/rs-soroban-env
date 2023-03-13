@@ -1,7 +1,7 @@
 use core::cmp::min;
 use std::rc::Rc;
 
-use soroban_env_common::{Env, InvokerType};
+use soroban_env_common::Env;
 
 use crate::budget::AsBudget;
 use crate::xdr::{
@@ -14,6 +14,7 @@ use crate::xdr::{
 };
 use crate::{Host, HostError};
 
+use super::invoker_type::InvokerType;
 use super::metered_clone::MeteredClone;
 
 impl Host {
