@@ -41,7 +41,7 @@ where
     Ctx: AsBudget + Compare<K, Error = HostError> + Compare<V, Error = HostError>,
 {
     fn charge_new<B: AsBudget>(n_elts: u64, b: &B) -> Result<(), HostError> {
-        let n_bytes = <(K, V) as DeclaredSizeForMetering>::DECLARED_SIZE * n_elts;
+        let n_bytes = <(K, V) as DeclaredSizeForMetering>::DECLARED_SIZE.saturating_mul(n_elts);
         b.as_budget().charge(CostType::MapNew, n_bytes)
     }
 

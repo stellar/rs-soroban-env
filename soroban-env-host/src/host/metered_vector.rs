@@ -24,7 +24,7 @@ where
     fn charge_new(n_elts: u64, budget: &Budget) -> Result<(), HostError> {
         budget.charge(
             CostType::VecNew,
-            n_elts * <A as DeclaredSizeForMetering>::DECLARED_SIZE,
+            n_elts.saturating_mul(<A as DeclaredSizeForMetering>::DECLARED_SIZE),
         )
     }
 

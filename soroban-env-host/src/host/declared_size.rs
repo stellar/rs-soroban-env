@@ -157,7 +157,7 @@ where
     V: DeclaredSizeForMetering,
 {
     const DECLARED_SIZE: u64 = <K as DeclaredSizeForMetering>::DECLARED_SIZE
-        + <V as DeclaredSizeForMetering>::DECLARED_SIZE;
+        .saturating_add(<V as DeclaredSizeForMetering>::DECLARED_SIZE);
 }
 
 impl<C: DeclaredSizeForMetering, const N: usize> DeclaredSizeForMetering for [C; N] {
@@ -183,7 +183,7 @@ impl<C> DeclaredSizeForMetering for Box<C> {
 impl<C: DeclaredSizeForMetering> DeclaredSizeForMetering for Option<C> {
     // Size of C plus an 8 byte alignment overhead. If we need to handle types with larger
     // alignment size, we need to increase the overhead.
-    const DECLARED_SIZE: u64 = C::DECLARED_SIZE + 8;
+    const DECLARED_SIZE: u64 = C::DECLARED_SIZE.saturating_add(8);
 }
 
 mod test {
