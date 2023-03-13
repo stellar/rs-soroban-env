@@ -918,8 +918,6 @@ impl Host {
             ScContractExecutable::Token => self.with_frame(
                 Frame::Token(id.clone(), func.clone(), args.to_vec()),
                 || {
-                    self.fn_call_diagnostics(&id, &func, args)?;
-
                     use crate::native_contract::{NativeContract, Token};
                     Token.call(func, self, args)
                 },
@@ -966,6 +964,8 @@ impl Host {
             }
         }
 
+        self.fn_call_diagnostics(&id, &func, args)?;
+
         // "testutils" is not covered by budget metering.
         #[cfg(any(test, feature = "testutils"))]
         {
@@ -983,8 +983,6 @@ impl Host {
                     use std::any::Any;
                     use std::panic::AssertUnwindSafe;
                     type PanicVal = Box<dyn Any + Send>;
-
-                    self.fn_call_diagnostics(&id, &func, args)?;
 
                     // We're directly invoking a native rust contract here,
                     // which we allow only in local testing scenarios, and we
