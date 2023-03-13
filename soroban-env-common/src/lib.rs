@@ -41,7 +41,6 @@ mod compare;
 mod convert;
 mod env;
 mod env_val;
-mod invoker;
 mod object;
 mod option;
 mod raw_val;
@@ -87,7 +86,6 @@ pub use unimplemented_env::UnimplementedEnv;
 pub use vmcaller_env::{VmCaller, VmCallerEnv};
 
 pub use bytes::BytesObject;
-pub use invoker::InvokerType;
 pub use object::{Object, ScValObjRef, ScValObject};
 pub use status::Status;
 pub use string::StringObject;
