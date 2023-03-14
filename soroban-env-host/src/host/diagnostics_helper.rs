@@ -74,7 +74,7 @@ impl Host {
             ];
 
             self.record_system_debug_contract_event(
-                ContractEventType::System,
+                ContractEventType::Diagnostic,
                 calling_contract,
                 self.add_host_object(HostVec::from_vec(topics)?)?
                     .try_into()?,
@@ -100,7 +100,7 @@ impl Host {
                 vec![SymbolSmall::try_from_str("fn_return")?.into(), func.into()];
 
             self.record_system_debug_contract_event(
-                ContractEventType::System,
+                ContractEventType::Diagnostic,
                 Some(self.hash_to_bytesobj(contract_id)?),
                 self.add_host_object(HostVec::from_vec(topics)?)?
                     .try_into()?,
