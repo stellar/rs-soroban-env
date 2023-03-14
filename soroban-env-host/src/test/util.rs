@@ -55,6 +55,7 @@ impl Host {
         let snapshot_source = Rc::<MockSnapshotSource>::new(MockSnapshotSource::new());
         let storage = Storage::with_recording_footprint(snapshot_source);
         let host = Host::with_storage_and_budget(storage, Budget::default());
+        host.with_budget(|b| b.reset_unlimited());
         host.set_ledger_info(Default::default());
         host
     }

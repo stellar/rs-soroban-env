@@ -124,7 +124,6 @@ fn metered_xdr_out_of_budget() -> Result<(), HostError> {
 }
 
 #[test]
-#[ignore]
 fn map_insert_key_vec_obj() -> Result<(), HostError> {
     let mut host = Host::test_host().test_budget(1000, 1000);
     let mut m = host.map_new()?;
