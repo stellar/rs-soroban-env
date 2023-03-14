@@ -1,8 +1,8 @@
-use crate::ConversionError;
+use soroban_env_common::ConversionError;
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(u64)]
-pub enum InvokerType {
+pub(crate) enum InvokerType {
     Account = 0,
     Contract = 1,
 }
