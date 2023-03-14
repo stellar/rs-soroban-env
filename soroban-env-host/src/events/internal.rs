@@ -70,9 +70,7 @@ impl InternalEventsBuffer {
         Ok(())
     }
 
-    /// Rolls back the event buffer starting at `events`. Any `ContractEvent` will be converted
-    /// to a `DebugEvent` indicating the event has been rolled back. An additional `DebugEvent`
-    /// will be pushed at the end indicating the rollback happened.
+    /// Rolls back the event buffer starting at `events`.
     pub fn rollback(&mut self, events: usize) -> Result<(), HostError> {
         // note that we first skip the events that are not being rolled back
         for e in self.vec.iter_mut().skip(events) {
