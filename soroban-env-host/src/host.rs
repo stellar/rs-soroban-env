@@ -40,6 +40,7 @@ pub(crate) mod comparison;
 mod conversion;
 mod data_helper;
 pub(crate) mod declared_size;
+mod diagnostics_helper;
 mod err_helper;
 mod error;
 pub(crate) mod invoker_type;
@@ -61,7 +62,6 @@ use crate::Compare;
 #[derive(Clone)]
 struct RollbackPoint {
     storage: StorageMap,
-    objects: usize,
     events: usize,
     auth: Option<AuthorizationManagerSnapshot>,
 }
@@ -142,6 +142,18 @@ pub struct LedgerInfo {
     pub base_reserve: u32,
 }
 
+#[derive(Clone)]
+pub enum DiagnosticLevel {
+    None,
+    Debug,
+}
+
+impl Default for DiagnosticLevel {
+    fn default() -> Self {
+        DiagnosticLevel::None
+    }
+}
+
 #[derive(Clone, Default)]
 pub(crate) struct HostImpl {
     source_account: RefCell<Option<AccountId>>,
@@ -156,6 +168,7 @@ pub(crate) struct HostImpl {
     pub(crate) budget: Budget,
     pub(crate) events: RefCell<InternalEventsBuffer>,
     authorization_manager: RefCell<AuthorizationManager>,
+    diagnostic_level: RefCell<DiagnosticLevel>,
     // Note: we're not going to charge metering for testutils because it's out of the scope
     // of what users will be charged for in production -- it's scaffolding for testing a contract,
     // but shouldn't be charged to the contract itself (and will never be compiled-in to
@@ -231,6 +244,7 @@ impl Host {
             authorization_manager: RefCell::new(
                 AuthorizationManager::new_enforcing_without_authorizations(budget),
             ),
+            diagnostic_level: Default::default(),
             #[cfg(any(test, feature = "testutils"))]
             contracts: Default::default(),
             #[cfg(any(test, feature = "testutils"))]
@@ -309,6 +323,14 @@ impl Host {
 
     pub fn charge_budget(&self, ty: CostType, input: u64) -> Result<(), HostError> {
         self.0.budget.clone().charge(ty, input)
+    }
+
+    pub fn set_diagnostic_level(&self, diagnostic_level: DiagnosticLevel) {
+        *self.0.diagnostic_level.borrow_mut() = diagnostic_level;
+    }
+
+    pub fn is_debug(&self) -> bool {
+        matches!(*self.0.diagnostic_level.borrow(), DiagnosticLevel::Debug)
     }
 
     pub(crate) fn get_events_mut<F, U>(&self, f: F) -> Result<U, HostError>
@@ -408,7 +430,6 @@ impl Host {
 
         self.0.context.borrow_mut().push(frame);
         Ok(RollbackPoint {
-            objects: self.0.objects.borrow().len(),
             storage: self.0.storage.borrow().map.clone(),
             events: self.0.events.borrow().vec.len(),
             auth: auth_snapshot,
@@ -453,9 +474,8 @@ impl Host {
         }
 
         if let Some(rp) = orp {
-            self.0.objects.borrow_mut().truncate(rp.objects);
             self.0.storage.borrow_mut().map = rp.storage;
-            self.0.events.borrow_mut().rollback(rp.events, self)?;
+            self.0.events.borrow_mut().rollback(rp.events)?;
             if let Some(auth_rp) = rp.auth {
                 self.0.authorization_manager.borrow_mut().rollback(auth_rp);
             }
@@ -1009,6 +1029,8 @@ impl Host {
             }
         }
 
+        self.fn_call_diagnostics(&id, &func, args)?;
+
         // "testutils" is not covered by budget metering.
         #[cfg(any(test, feature = "testutils"))]
         {
@@ -1048,7 +1070,10 @@ impl Host {
                     let closure = AssertUnwindSafe(move || cfs.call(&func, self, args));
                     let res: Result<Option<RawVal>, PanicVal> = testutils::call_with_suppressed_panic_hook(closure);
                     match res {
-                        Ok(Some(rawval)) => Ok(rawval),
+                        Ok(Some(rawval)) => {
+                            self.fn_return_diagnostics(id, &func, &rawval)?;
+                            Ok(rawval)
+                        },
                         Ok(None) => Err(self.err(
                             DebugError::general()
                                 .msg("error '{}': calling unknown contract function '{}'")
@@ -1088,7 +1113,14 @@ impl Host {
             }
         }
 
-        return self.call_contract_fn(&id, &func, args);
+        let res = self.call_contract_fn(&id, &func, args);
+
+        match &res {
+            Ok(res) => self.fn_return_diagnostics(id, &func, &res)?,
+            Err(err) => {}
+        }
+
+        return res;
     }
 
     // Notes on metering: covered by the called components.

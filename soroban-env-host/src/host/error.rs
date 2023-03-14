@@ -1,5 +1,5 @@
 use crate::{
-    events::{Events, HostEvent},
+    events::{Event, Events},
     xdr::{self, ScStatus},
     Status,
 };
@@ -65,8 +65,9 @@ impl Debug for HostError {
                 for (i, e) in
                     ev.0.iter()
                         .rev()
-                        .filter_map(|ev| match ev {
-                            HostEvent::Debug(e) => Some(format!("{:}", e)),
+                        .filter_map(|ev| match ev.event.clone() {
+                            Event::Debug(e) => Some(format!("Debug {:}", e)),
+                            Event::StructuredDebug(e) => Some(format!("StructuredDebug {:?}", e)),
                             _ => None,
                         })
                         .take(MAX_DEBUG_EVENTS)

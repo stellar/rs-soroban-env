@@ -131,7 +131,7 @@ impl_declared_size_type!(DebugArg, 16);
 impl_declared_size_type!(InternalContractEvent, 40);
 impl_declared_size_type!(DebugEvent, 80);
 impl_declared_size_type!(ContractEvent, 104);
-impl_declared_size_type!(HostEvent, 112);
+impl_declared_size_type!(HostEvent, 120);
 impl_declared_size_type!(Events, 24);
 impl_declared_size_type!(InternalEvent, 80);
 impl_declared_size_type!(ScBytes, 24);
@@ -292,7 +292,7 @@ mod test {
         expect!["40"].assert_eq(size_of::<InternalContractEvent>().to_string().as_str());
         expect!["80"].assert_eq(size_of::<DebugEvent>().to_string().as_str());
         expect!["104"].assert_eq(size_of::<ContractEvent>().to_string().as_str());
-        expect!["112"].assert_eq(size_of::<HostEvent>().to_string().as_str());
+        expect!["120"].assert_eq(size_of::<HostEvent>().to_string().as_str());
         expect!["24"].assert_eq(size_of::<Events>().to_string().as_str());
         expect!["80"].assert_eq(size_of::<InternalEvent>().to_string().as_str());
         expect!["24"].assert_eq(size_of::<ScBytes>().to_string().as_str());

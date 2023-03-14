@@ -7,9 +7,19 @@ pub(crate) use internal::{InternalContractEvent, InternalEvent, InternalEventsBu
 /// The external representation of a host event.
 // TODO: optimize storage on this to use pools / bumpalo / etc.
 #[derive(Clone, Debug)]
-pub enum HostEvent {
+pub struct HostEvent {
+    pub event: Event,
+    // failed_call keeps track of if the call this event was emitted in failed
+    pub failed_call: bool,
+}
+
+#[derive(Clone, Debug)]
+pub enum Event {
     Contract(crate::xdr::ContractEvent),
+    // Debug events are metered and will not be reported in tx meta
     Debug(DebugEvent),
+    // StructuredDebug should not affect metering
+    StructuredDebug(crate::xdr::ContractEvent),
 }
 
 /// The external representation of events in the chronological order.
