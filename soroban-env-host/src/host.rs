@@ -2227,7 +2227,7 @@ impl VmCallerEnv for Host {
         {
             let VmSlice { vm, pos, len } = self.decode_vmslice(vals_pos, len)?;
             self.charge_budget(CostType::VecNew, len as u64)?;
-            let mut vals: Vec<RawVal> = Vec::with_capacity(len as usize);
+            let mut vals: Vec<RawVal> = vec![RawVal::VOID.to_raw(); len as usize];
             self.metered_vm_read_vals_from_linear_memory::<8, RawVal>(
                 vmcaller,
                 &vm,
