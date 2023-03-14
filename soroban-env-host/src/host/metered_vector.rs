@@ -1,6 +1,6 @@
 use soroban_env_common::{xdr::ScHostFnErrorCode, Compare};
 
-use super::{declared_size::DeclaredSizeForMetering, metered_clone, MeteredClone};
+use super::{declared_size::DeclaredSizeForMetering, MeteredClone};
 use crate::{
     budget::{AsBudget, Budget, CostType},
     xdr::ScHostObjErrorCode,
@@ -55,7 +55,7 @@ where
     // the allocation will be wasted.
     #[cfg(any(test, feature = "testutils"))]
     pub fn with_capacity(capacity: usize, budget: &Budget) -> Result<Self, HostError> {
-        metered_clone::charge_heap_alloc::<A>(capacity as u64, budget)?;
+        super::metered_clone::charge_heap_alloc::<A>(capacity as u64, budget)?;
         Self::from_vec(Vec::with_capacity(capacity), budget)
     }
 

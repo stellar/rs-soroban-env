@@ -1,9 +1,9 @@
 use crate::HostCostMeasurement;
 use rand::{rngs::StdRng, RngCore};
 use soroban_env_host::{cost_runner::*, Host};
-pub struct BytesCloneMeasure;
-impl HostCostMeasurement for BytesCloneMeasure {
-    type Runner = BytesCloneRun;
+pub struct BytesPushMeasure;
+impl HostCostMeasurement for BytesPushMeasure {
+    type Runner = BytesPushRun;
 
     fn new_random_case(
         _host: &Host,
@@ -16,41 +16,6 @@ impl HostCostMeasurement for BytesCloneMeasure {
         res
     }
 }
-pub struct BytesDelMeasure;
-impl HostCostMeasurement for BytesDelMeasure {
-    type Runner = BytesDelRun;
-
-    fn new_random_case(
-        host: &Host,
-        rng: &mut StdRng,
-        input: u64,
-    ) -> <Self::Runner as CostRunner>::SampleType {
-        let v = BytesCloneMeasure::new_random_case(host, rng, input);
-        let i = rng.next_u32() as usize % v.len();
-        (v, i)
-    }
-
-    fn new_worst_case(
-        host: &Host,
-        rng: &mut StdRng,
-        input: u64,
-    ) -> <Self::Runner as CostRunner>::SampleType {
-        let v = BytesCloneMeasure::new_random_case(host, rng, input);
-        (v, 0)
-    }
-}
-pub struct BytesPushMeasure;
-impl HostCostMeasurement for BytesPushMeasure {
-    type Runner = BytesPushRun;
-
-    fn new_random_case(
-        host: &Host,
-        rng: &mut StdRng,
-        input: u64,
-    ) -> <Self::Runner as CostRunner>::SampleType {
-        BytesCloneMeasure::new_random_case(host, rng, input)
-    }
-}
 pub struct BytesPopMeasure;
 impl HostCostMeasurement for BytesPopMeasure {
     type Runner = BytesPopRun;
@@ -60,9 +25,34 @@ impl HostCostMeasurement for BytesPopMeasure {
         rng: &mut StdRng,
         input: u64,
     ) -> <Self::Runner as CostRunner>::SampleType {
-        BytesCloneMeasure::new_random_case(host, rng, input)
+        BytesPushMeasure::new_random_case(host, rng, input)
     }
 }
+
+pub struct BytesDelMeasure;
+impl HostCostMeasurement for BytesDelMeasure {
+    type Runner = BytesDelRun;
+
+    fn new_random_case(
+        host: &Host,
+        rng: &mut StdRng,
+        input: u64,
+    ) -> <Self::Runner as CostRunner>::SampleType {
+        let v = BytesPushMeasure::new_random_case(host, rng, input);
+        let i = rng.next_u32() as usize % v.len();
+        (v, i)
+    }
+
+    fn new_worst_case(
+        host: &Host,
+        rng: &mut StdRng,
+        input: u64,
+    ) -> <Self::Runner as CostRunner>::SampleType {
+        let v = BytesPushMeasure::new_random_case(host, rng, input);
+        (v, 0)
+    }
+}
+
 pub struct BytesInsertMeasure;
 impl HostCostMeasurement for BytesInsertMeasure {
     type Runner = BytesInsertRun;
@@ -92,8 +82,8 @@ impl HostCostMeasurement for BytesAppendMeasure {
         rng: &mut StdRng,
         input: u64,
     ) -> <Self::Runner as CostRunner>::SampleType {
-        let a = BytesCloneMeasure::new_random_case(host, rng, input);
-        let b = BytesCloneMeasure::new_random_case(host, rng, input);
+        let a = BytesPushMeasure::new_random_case(host, rng, input);
+        let b = BytesPushMeasure::new_random_case(host, rng, input);
         (a, b)
     }
 }
@@ -114,7 +104,7 @@ impl HostCostMeasurement for BytesCmpMeasure {
         rng: &mut StdRng,
         input: u64,
     ) -> <Self::Runner as CostRunner>::SampleType {
-        let a = BytesCloneMeasure::new_random_case(host, rng, input);
+        let a = BytesPushMeasure::new_random_case(host, rng, input);
         (a.clone(), a)
     }
 }

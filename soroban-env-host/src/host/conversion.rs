@@ -121,7 +121,7 @@ impl Host {
     {
         match <[u8; N]>::try_from(bytes_arr) {
             Ok(arr) => {
-                self.charge_budget(CostType::BytesClone, N as u64)?;
+                self.charge_budget(CostType::HostMemCpy, N as u64)?;
                 Ok(arr.into())
             }
             Err(cvt) => Err(self.err(

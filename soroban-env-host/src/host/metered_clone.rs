@@ -6,6 +6,7 @@ use crate::{
     budget::{Budget, CostType},
     events::{DebugArg, DebugEvent, Event, HostEvent, InternalContractEvent, InternalEvent},
     host::Events,
+    host_object::HostObject,
     storage::AccessType,
     xdr::{
         AccountEntry, AccountId, BytesM, ClaimableBalanceEntry, ConfigSettingEntry,
@@ -168,6 +169,7 @@ impl MeteredClone for SymbolStr {}
 impl MeteredClone for SymbolSmallIter {}
 impl MeteredClone for U256 {}
 impl MeteredClone for I256 {}
+impl MeteredClone for HostObject {}
 // xdr types
 impl MeteredClone for TimePoint {}
 impl MeteredClone for Duration {}

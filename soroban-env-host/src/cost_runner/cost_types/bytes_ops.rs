@@ -3,18 +3,7 @@ use soroban_env_common::Compare;
 use crate::{
     budget::{AsBudget, CostType},
     cost_runner::CostRunner,
-    host::metered_clone::MeteredClone,
 };
-
-pub struct BytesCloneRun;
-impl CostRunner for BytesCloneRun {
-    const COST_TYPE: CostType = CostType::BytesClone;
-    type SampleType = Vec<u8>;
-
-    fn run_iter(host: &crate::Host, _iter: u64, sample: Self::SampleType) {
-        sample.metered_clone(&host.budget_cloned()).unwrap();
-    }
-}
 
 pub struct BytesDelRun;
 impl CostRunner for BytesDelRun {

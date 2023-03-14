@@ -192,7 +192,7 @@ macro_rules! impl_wasm_insn_runner {
             fn run_baseline_iter(host: &crate::Host, _iter: u64, base_sample: Self::SampleType) {
                 base_sample
                     .vm
-                    .invoke_function_raw(host, "test", &[])
+                    .invoke_function_raw(host, &TEST_SYM, &[])
                     .unwrap_or_default();
             }
 

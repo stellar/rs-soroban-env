@@ -55,9 +55,6 @@ pub(crate) fn for_each_host_cost_measurement<B: Benchmark>() -> std::io::Result<
 
     call_bench::<B, ComputeEd25519PubKeyMeasure>(&mut costs)?;
     call_bench::<B, ComputeSha256HashMeasure>(&mut costs)?;
-    call_bench::<B, Ed25519ScalarMulMeasure>(&mut costs)?;
-    call_bench::<B, ScMapToHostMapMeasure>(&mut costs)?;
-    call_bench::<B, ScVecToHostVecMeasure>(&mut costs)?;
     call_bench::<B, VerifyEd25519SigMeasure>(&mut costs)?;
     call_bench::<B, VmInstantiationMeasure>(&mut costs)?;
     call_bench::<B, VmMemReadMeasure>(&mut costs)?;
@@ -69,14 +66,12 @@ pub(crate) fn for_each_host_cost_measurement<B: Benchmark>() -> std::io::Result<
     call_bench::<B, ValXdrConvMeasure>(&mut costs)?;
     call_bench::<B, ValSerMeasure>(&mut costs)?;
     call_bench::<B, ValDeserMeasure>(&mut costs)?;
-    call_bench::<B, HostObjAllocSlotMeasure>(&mut costs)?;
     call_bench::<B, ImMapNewMeasure>(&mut costs)?;
     call_bench::<B, ImMapEntryMeasure>(&mut costs)?;
     call_bench::<B, ImVecNewMeasure>(&mut costs)?;
     call_bench::<B, ImVecEntryMeasure>(&mut costs)?;
     call_bench::<B, BytesAppendMeasure>(&mut costs)?;
     call_bench::<B, BytesCmpMeasure>(&mut costs)?;
-    call_bench::<B, BytesCloneMeasure>(&mut costs)?;
     call_bench::<B, BytesDelMeasure>(&mut costs)?;
     call_bench::<B, BytesInsertMeasure>(&mut costs)?;
     call_bench::<B, BytesPopMeasure>(&mut costs)?;
@@ -84,7 +79,6 @@ pub(crate) fn for_each_host_cost_measurement<B: Benchmark>() -> std::io::Result<
     call_bench::<B, InvokeVmFunctionMeasure>(&mut costs)?;
     call_bench::<B, InvokeHostFunctionMeasure>(&mut costs)?;
     call_bench::<B, ChargeBudgetMeasure>(&mut costs)?;
-    call_bench::<B, EventCloneMeasure>(&mut costs)?;
     call_bench::<B, HostMemAllocMeasure>(&mut costs)?;
     call_bench::<B, HostMemCpyMeasure>(&mut costs)?;
 
@@ -94,11 +88,6 @@ pub(crate) fn for_each_host_cost_measurement<B: Benchmark>() -> std::io::Result<
                 eprintln!("warning: missing cost measurement for {:?}", cost);
             }
         }
-        // Missing because we need some kind of size limits:
-        // CloneEvents
-        // ScVecFromHostVec
-        // ScMapFromHostMap
-        // Storage related: need to know the size limit of keys which are LedgerKeys
     }
     Ok(())
 }
