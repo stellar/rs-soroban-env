@@ -9,7 +9,7 @@ impl CostRunner for ImVecNewRun {
     type SampleType = Vec<RawVal>;
 
     fn run_iter(host: &crate::Host, _iter: u64, sample: Self::SampleType) {
-        HostVec::from_array(sample.as_slice(), host.as_budget()).unwrap();
+        HostVec::from_vec(sample, host.as_budget()).unwrap();
     }
 }
 

@@ -1,6 +1,7 @@
 use crate::common::{util, HostCostMeasurement};
 use rand::{rngs::StdRng, seq::SliceRandom};
 use soroban_env_host::{
+    budget::AsBudget,
     cost_runner::{ImVecEntryRun, ImVecEntrySample, ImVecNewRun},
     Host, MeteredVector, RawVal,
 };
@@ -26,10 +27,10 @@ impl HostCostMeasurement for ImVecEntryMeasure {
     type Runner = ImVecEntryRun;
 
     // Random case is worst case.
-    fn new_random_case(_host: &Host, rng: &mut StdRng, input: u64) -> ImVecEntrySample {
+    fn new_random_case(host: &Host, rng: &mut StdRng, input: u64) -> ImVecEntrySample {
         let input = input * 100;
         let ov = util::to_rawval_u32(0..(input as u32)).collect();
-        let vec: MeteredVector<_> = MeteredVector::from_vec(ov).unwrap();
+        let vec: MeteredVector<_> = MeteredVector::from_vec(ov, host.as_budget()).unwrap();
         let mut idxs: Vec<usize> = (0..input as usize).collect();
         idxs.shuffle(rng);
         ImVecEntrySample { vec, idxs }

@@ -40,9 +40,11 @@ where
     V: MeteredClone,
     Ctx: AsBudget + Compare<K, Error = HostError> + Compare<V, Error = HostError>,
 {
-    fn charge_new<B: AsBudget>(n_elts: u64, b: &B) -> Result<(), HostError> {
-        let n_bytes = <(K, V) as DeclaredSizeForMetering>::DECLARED_SIZE.saturating_mul(n_elts);
-        b.as_budget().charge(CostType::MapNew, n_bytes)
+    // Covers the cost of creating `count` number of new `MeteredOrdMap`s. This does not include
+    // the cost of any allocation, since it is assumed memory allocation is charge separately
+    // elsewhere.
+    fn charge_new<B: AsBudget>(count: u64, b: &B) -> Result<(), HostError> {
+        b.as_budget().charge(CostType::MapNew, count)
     }
 
     fn charge_access<B: AsBudget>(&self, count: usize, b: &B) -> Result<(), HostError> {
@@ -87,7 +89,7 @@ where
     Ctx: AsBudget + Compare<K, Error = HostError> + Compare<V, Error = HostError>,
 {
     pub fn new(ctx: &Ctx) -> Result<Self, HostError> {
-        Self::charge_new(0, ctx)?;
+        Self::charge_new(1, ctx)?;
         Ok(MeteredOrdMap {
             map: Vec::new(),
             ctx: Default::default(),
@@ -95,8 +97,9 @@ where
     }
 
     pub fn from_map(map: Vec<(K, V)>, ctx: &Ctx) -> Result<Self, HostError> {
-        // Construction cost already paid for by caller, just check
-        // that input has sorted and unique keys.
+        // Allocation cost already paid for by caller, here just charge for the new map
+        // and check that input has sorted and unique keys.
+        Self::charge_new(1, ctx)?;
         let m = MeteredOrdMap {
             map,
             ctx: Default::default(),
