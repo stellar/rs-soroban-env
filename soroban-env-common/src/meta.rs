@@ -55,7 +55,7 @@
 // a contract, since the same contract will be expected to run against multliple
 // implementations over a long period of time.
 
-pub const ENV_META_V0_SECTION_NAME: &'static str = "contractenvmetav0";
+pub const ENV_META_V0_SECTION_NAME: &str = "contractenvmetav0";
 
 soroban_env_macros::generate_env_meta_consts!(
     interface_version: 32,

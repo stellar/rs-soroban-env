@@ -37,7 +37,7 @@ sa::const_assert!(MINOR_MASK == 0x00ff_ffff);
 sa::const_assert!(MAJOR_BITS + MINOR_BITS == BODY_BITS);
 
 /// Code values for the 8 `tag` bits in the bit-packed representation
-/// of [RawVal]. These don't coincide with tag numbers in the SCVal XDR
+/// of [`RawVal`]. These don't coincide with tag numbers in the `SCVal` XDR
 /// but cover all those cases as well as some optimized refinements for
 /// special cases (boolean true and false, small-value forms).
 #[repr(u8)]
@@ -274,8 +274,8 @@ impl From<stellar_xdr::Error> for ConversionError {
     }
 }
 
-/// Trait abstracting over types that can be converted into [RawVal], similar to
-/// [TryFrom] but with a different signature that enables generating slightly
+/// Trait abstracting over types that can be converted into [`RawVal`], similar to
+/// [`TryFrom`] but with a different signature that enables generating slightly
 /// more efficient conversion code. An implementation of `TryFrom<Val>` is also
 /// provided for any type that implements `ValConvertible`.
 pub trait RawValConvertible: Into<RawVal> + TryFrom<RawVal> {
@@ -370,7 +370,7 @@ impl RawValConvertible for u32 {
     }
     #[inline(always)]
     unsafe fn unchecked_from_val(v: RawVal) -> Self {
-        v.get_major() as u32
+        v.get_major()
     }
 }
 
@@ -623,8 +623,8 @@ impl Debug for RawVal {
         }
 
         match self.get_tag() {
-            Tag::U32Val => write!(f, "U32({})", self.get_major() as u32),
-            Tag::I32Val => write!(f, "I32({})", (self.get_major() as u32) as i32),
+            Tag::U32Val => write!(f, "U32({})", { self.get_major() }),
+            Tag::I32Val => write!(f, "I32({})", self.get_major() as i32),
             Tag::False => write!(f, "False"),
             Tag::True => write!(f, "True"),
             Tag::Void => write!(f, "Void"),
@@ -637,15 +637,15 @@ impl Debug for RawVal {
             Tag::DurationSmall => write!(f, "Duration({})", self.get_body()),
             // These can't be bigger than u64/i64 so just cast to them.
             Tag::U128Small => write!(f, "U128({})", self.get_body()),
-            Tag::I128Small => write!(f, "I128({})", self.get_signed_body() as i64),
+            Tag::I128Small => write!(f, "I128({})", { self.get_signed_body() }),
             // These can't be bigger than u64/i64 so just cast to them.
             Tag::U256Small => write!(f, "U256({})", self.get_body()),
-            Tag::I256Small => write!(f, "I256({})", self.get_signed_body() as i64),
+            Tag::I256Small => write!(f, "I256({})", { self.get_signed_body() }),
             Tag::SymbolSmall => {
                 let ss: SymbolStr =
                     unsafe { <SymbolSmall as RawValConvertible>::unchecked_from_val(*self) }.into();
                 let s: &str = ss.as_ref();
-                write!(f, "Symbol({})", s)
+                write!(f, "Symbol({s})")
             }
             Tag::LedgerKeyContractExecutable => write!(f, "LedgerKeyContractCode"),
 

@@ -160,7 +160,7 @@ pub trait EnvBase: Sized + Clone {
 
     /// Log a formatted debugging message to the debug log (if present), passing
     /// a simplified format string (supporting only positional `{}` markers) and
-    /// a single [RawVal] argument that will be inserted at the marker in the
+    /// a single [`RawVal`] argument that will be inserted at the marker in the
     /// format string.
     fn log_static_fmt_val(&self, fmt: &'static str, v: RawVal) -> Result<(), Self::Error>;
 
@@ -176,7 +176,7 @@ pub trait EnvBase: Sized + Clone {
 
     /// Log a formatted debugging message to the debug log (if present), passing
     /// a simplified format string (supporting only positional `{}` markers) and
-    /// both a [RawVal] and a string-slice argument, that will each be inserted
+    /// both a [`RawVal`] and a string-slice argument, that will each be inserted
     /// at markers in the format string.
     fn log_static_fmt_val_static_str(
         &self,
@@ -187,7 +187,7 @@ pub trait EnvBase: Sized + Clone {
 
     /// Log a formatted debugging message to the debug log (if present), passing
     /// a simplified format string (supporting only positional `{}` markers) and
-    /// both a slice of [RawVal]s and a slice of string-slice argument, that
+    /// both a slice of [`RawVal`]s and a slice of string-slice argument, that
     /// will be sequentially inserted at markers in the format string.
     fn log_static_fmt_general(
         &self,

@@ -59,7 +59,7 @@ impl<'a, T> VmCaller<'a, T> {
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-/// X-macro use: defining trait VmCallerEnv
+/// X-macro use: defining trait `VmCallerEnv`
 ///////////////////////////////////////////////////////////////////////////////
 
 // This is a helper macro used only by generate_vmcaller_checked_env_trait
@@ -150,7 +150,7 @@ macro_rules! generate_vmcaller_checked_env_trait {
 call_macro_with_all_host_functions! { generate_vmcaller_checked_env_trait }
 
 ///////////////////////////////////////////////////////////////////////////////
-/// X-macro use: impl<E> Env for VmCallerEnv<E>
+/// X-macro use: impl<E> Env for `VmCallerEnv`<E>
 ///////////////////////////////////////////////////////////////////////////////
 
 // This is a helper macro used only by

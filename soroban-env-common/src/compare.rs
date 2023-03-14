@@ -97,7 +97,7 @@ impl<T, C: Compare<T>> Compare<Box<T>> for C {
     type Error = C::Error;
 
     fn compare(&self, a: &Box<T>, b: &Box<T>) -> Result<Ordering, Self::Error> {
-        <Self as Compare<T>>::compare(self, &*a, &*b)
+        <Self as Compare<T>>::compare(self, a, b)
     }
 }
 
@@ -106,7 +106,7 @@ impl<T, C: Compare<T>> Compare<Rc<T>> for C {
     type Error = C::Error;
 
     fn compare(&self, a: &Rc<T>, b: &Rc<T>) -> Result<Ordering, Self::Error> {
-        <Self as Compare<T>>::compare(self, &*a, &*b)
+        <Self as Compare<T>>::compare(self, a, b)
     }
 }
 

@@ -94,7 +94,7 @@ impl From<U64Small> for u64 {
 
 impl From<I64Small> for i64 {
     fn from(value: I64Small) -> Self {
-        value.0.get_signed_body() as i64
+        value.0.get_signed_body()
     }
 }
 
@@ -112,13 +112,13 @@ impl From<DurationSmall> for u64 {
 
 impl From<U128Small> for u128 {
     fn from(value: U128Small) -> Self {
-        value.0.get_body() as u128
+        u128::from(value.0.get_body())
     }
 }
 
 impl From<I128Small> for i128 {
     fn from(value: I128Small) -> Self {
-        (value.0.get_signed_body() as i64) as i128
+        i128::from(value.0.get_signed_body())
     }
 }
 
@@ -130,7 +130,7 @@ impl From<U256Small> for U256 {
 
 impl From<I256Small> for I256 {
     fn from(value: I256Small) -> Self {
-        I256::from(value.0.get_signed_body() as i64)
+        I256::from(value.0.get_signed_body())
     }
 }
 
@@ -215,7 +215,7 @@ impl TryFrom<I256> for I256Small {
 impl TryFrom<U256Small> for ScVal {
     type Error = ConversionError;
     fn try_from(value: U256Small) -> Result<Self, Self::Error> {
-        let val = U256::new(value.as_raw().get_body() as u128);
+        let val = U256::new(u128::from(value.as_raw().get_body()));
         Ok(ScVal::U256(Uint256(val.to_be_bytes())))
     }
 }
@@ -223,14 +223,14 @@ impl TryFrom<U256Small> for ScVal {
 impl TryFrom<&U256Small> for ScVal {
     type Error = ConversionError;
     fn try_from(value: &U256Small) -> Result<Self, Self::Error> {
-        value.clone().try_into()
+        (*value).try_into()
     }
 }
 
 impl TryFrom<I256Small> for ScVal {
     type Error = ConversionError;
     fn try_from(value: I256Small) -> Result<Self, Self::Error> {
-        let val = I256::new(value.as_raw().get_signed_body() as i128);
+        let val = I256::new(i128::from(value.as_raw().get_signed_body()));
         Ok(ScVal::I256(Uint256(val.to_be_bytes())))
     }
 }
@@ -238,7 +238,7 @@ impl TryFrom<I256Small> for ScVal {
 impl TryFrom<&I256Small> for ScVal {
     type Error = ConversionError;
     fn try_from(value: &I256Small) -> Result<Self, Self::Error> {
-        value.clone().try_into()
+        (*value).try_into()
     }
 }
 
@@ -252,12 +252,12 @@ pub const fn is_small_i64(i: i64) -> bool {
 
 pub fn is_small_u128(u: u128) -> bool {
     let word = u as u64;
-    is_small_u64(word) && u == (word as u128)
+    is_small_u64(word) && u == u128::from(word)
 }
 
 pub fn is_small_i128(i: i128) -> bool {
     let word = i as i64;
-    is_small_i64(word) && i == (word as i128)
+    is_small_i64(word) && i == i128::from(word)
 }
 
 pub fn is_small_u256(u: &U256) -> bool {

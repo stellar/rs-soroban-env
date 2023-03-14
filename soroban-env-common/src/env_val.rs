@@ -143,7 +143,7 @@ impl<E: Env> TryFromVal<E, RawVal> for i128 {
             let obj = v.try_into()?;
             let lo = env.obj_to_i128_lo64(obj).map_err(|_| ConversionError)?;
             let hi = env.obj_to_i128_hi64(obj).map_err(|_| ConversionError)?;
-            let u: u128 = (lo as u128) | ((hi as u128) << 64);
+            let u: u128 = u128::from(lo) | (u128::from(hi) << 64);
             Ok(u as i128)
         }
     }
@@ -177,7 +177,7 @@ impl<E: Env> TryFromVal<E, RawVal> for u128 {
             let obj = v.try_into()?;
             let lo = env.obj_to_u128_lo64(obj).map_err(|_| ConversionError)?;
             let hi = env.obj_to_u128_hi64(obj).map_err(|_| ConversionError)?;
-            let u: u128 = (lo as u128) | ((hi as u128) << 64);
+            let u: u128 = u128::from(lo) | (u128::from(hi) << 64);
             Ok(u)
         }
     }
@@ -241,11 +241,11 @@ where
                 lo: val.get_signed_body() as u64,
             })),
             Tag::U256Small => {
-                let val = U256::new(val.get_body() as u128);
+                let val = U256::new(u128::from(val.get_body()));
                 Ok(ScVal::U256(Uint256(val.to_be_bytes())))
             }
             Tag::I256Small => {
-                let val = I256::new(val.get_signed_body() as i128);
+                let val = I256::new(i128::from(val.get_signed_body()));
                 Ok(ScVal::I256(Uint256(val.to_be_bytes())))
             }
             Tag::SymbolSmall => {
@@ -327,12 +327,12 @@ where
                 unsafe { RawVal::from_body_and_tag((i as i64) as u64, Tag::I128Small) }
             }
             ScVal::U256(u) => {
-                let u: U256 = U256::from_be_bytes(u.0.clone());
+                let u: U256 = U256::from_be_bytes(u.0);
                 assert!(num::is_small_u256(&u));
                 unsafe { RawVal::from_body_and_tag(u.as_u64(), Tag::U256Small) }
             }
             ScVal::I256(i) => {
-                let i: I256 = I256::from_be_bytes(i.0.clone());
+                let i: I256 = I256::from_be_bytes(i.0);
                 assert!(num::is_small_i256(&i));
                 unsafe { RawVal::from_body_and_tag(i.as_i64() as u64, Tag::I256Small) }
             }

@@ -14,14 +14,14 @@ pub fn generate(file_lit: LitStr) -> Result<TokenStream, Error> {
     let file = File::open(&file_path).map_err(|e| {
         Error::new(
             file_lit.span(),
-            format!("error reading file '{}': {}", file_str, e),
+            format!("error reading file '{file_str}': {e}"),
         )
     })?;
 
     let root: Root = serde_json::from_reader(file).map_err(|e| {
         Error::new(
             file_lit.span(),
-            format!("error parsing file '{}': {}", file_str, e),
+            format!("error parsing file '{file_str}': {e}"),
         )
     })?;
 

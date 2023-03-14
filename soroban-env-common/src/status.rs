@@ -15,11 +15,11 @@ use stellar_xdr::{
     ScVmErrorCode,
 };
 
-/// Wrapper for a [RawVal] that is tagged with [Tag::Status], interpreting the
-/// [RawVal]'s body as a pair of a 28-bit status-type code and a 32-bit status
+/// Wrapper for a [`RawVal`] that is tagged with [`Tag::Status`], interpreting the
+/// [`RawVal`]'s body as a pair of a 28-bit status-type code and a 32-bit status
 /// code. The status-type codes correspond to the enumerated cases of
-/// [ScStatusType], and the status codes correspond to the code values stored in
-/// each variant of the [ScStatus] union.
+/// [`ScStatusType`], and the status codes correspond to the code values stored in
+/// each variant of the [`ScStatus`] union.
 #[repr(transparent)]
 #[derive(Copy, Clone)]
 pub struct Status(RawVal);
@@ -70,7 +70,7 @@ impl Ord for Status {
 impl<E: Env> Compare<Status> for E {
     type Error = E::Error;
     fn compare(&self, a: &Status, b: &Status) -> Result<Ordering, Self::Error> {
-        Ok(a.cmp(&b))
+        Ok(a.cmp(b))
     }
 }
 
@@ -146,8 +146,8 @@ impl Debug for Status {
         };
         write!(f, "Status({}(", st.name())?;
         match st {
-            ScStatusType::Ok => write!(f, "{}", code),
-            ScStatusType::UnknownError => write!(f, "{}", code),
+            ScStatusType::Ok => write!(f, "{code}"),
+            ScStatusType::UnknownError => write!(f, "{code}"),
             ScStatusType::HostValueError => fmt_named_code::<ScHostValErrorCode>(code, f),
             ScStatusType::HostObjectError => fmt_named_code::<ScHostObjErrorCode>(code, f),
             ScStatusType::HostFunctionError => fmt_named_code::<ScHostFnErrorCode>(code, f),
@@ -155,7 +155,7 @@ impl Debug for Status {
             ScStatusType::HostContextError => fmt_named_code::<ScHostContextErrorCode>(code, f),
             ScStatusType::HostAuthError => fmt_named_code::<ScHostAuthErrorCode>(code, f),
             ScStatusType::VmError => fmt_named_code::<ScVmErrorCode>(code, f),
-            ScStatusType::ContractError => write!(f, "{}", code),
+            ScStatusType::ContractError => write!(f, "{code}"),
         }?;
         write!(f, "))")
     }
@@ -316,7 +316,7 @@ impl Status {
             ScStatus::HostAuthError(code) => code as i32 as u32,
             ScStatus::VmError(code) => code as i32 as u32,
             ScStatus::UnknownError(code) => code as i32 as u32,
-            ScStatus::ContractError(code) => code as u32,
+            ScStatus::ContractError(code) => code,
         };
         Self::from_type_and_code(sc.discriminant(), code)
     }
