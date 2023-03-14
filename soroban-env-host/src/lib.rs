@@ -40,6 +40,7 @@ pub mod auth;
 pub mod vm;
 #[cfg(feature = "vm")]
 pub use vm::Vm;
+#[cfg(any(test, feature = "testutils"))]
 pub mod cost_runner;
 pub mod storage;
 #[cfg(test)]

@@ -8,7 +8,7 @@ use core::fmt::Debug;
 
 #[derive(Clone)]
 pub struct HostError {
-    pub(crate) status: Status,
+    pub status: Status,
     pub(crate) events: Option<Events>,
     pub(crate) backtrace: backtrace::Backtrace,
 }

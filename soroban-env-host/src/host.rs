@@ -15,18 +15,20 @@ use soroban_env_common::{
         ScHostFnErrorCode, ScHostObjErrorCode, ScHostStorageErrorCode, ScHostValErrorCode, ScMap,
         ScMapEntry, ScStatusType, ScString, ScSymbol, ScUnknownErrorCode, ScVal, ScVec, Uint256,
     },
-    AddressObject, Bool, BytesObject, Convert, I128Object, I64Object, InvokerType, MapObject,
-    ScValObjRef, ScValObject, Status, StringObject, SymbolObject, SymbolSmall, TryFromVal,
-    TryIntoVal, U128Object, U32Val, U64Object, U64Val, VecObject, VmCaller, VmCallerEnv, Void,
-    I256, U256,
+    AddressObject, Bool, BytesObject, Convert, I128Object, I64Object, MapObject, ScValObjRef,
+    ScValObject, Status, StringObject, SymbolObject, SymbolSmall, TryFromVal, TryIntoVal,
+    U128Object, U32Val, U64Object, U64Val, VecObject, VmCaller, VmCallerEnv, Void, I256, U256,
 };
 
-use crate::auth::{AuthorizationManager, AuthorizationManagerSnapshot, RecordedAuthPayload};
 use crate::budget::{AsBudget, Budget, CostType};
 use crate::events::{
     DebugError, DebugEvent, Events, InternalContractEvent, InternalEvent, InternalEventsBuffer,
 };
 use crate::storage::{Storage, StorageMap};
+use crate::{
+    auth::{AuthorizationManager, AuthorizationManagerSnapshot, RecordedAuthPayload},
+    native_contract::account_contract::ACCOUNT_CONTRACT_CHECK_AUTH_FN_NAME,
+};
 
 use crate::host_object::{HostMap, HostObject, HostObjectType, HostVec};
 use crate::SymbolStr;
@@ -37,9 +39,11 @@ use crate::{EnvBase, Object, RawVal, Symbol};
 pub(crate) mod comparison;
 mod conversion;
 mod data_helper;
+pub(crate) mod declared_size;
 mod diagnostics_helper;
 mod err_helper;
 mod error;
+pub(crate) mod invoker_type;
 mod mem_helper;
 pub(crate) mod metered_clone;
 pub(crate) mod metered_map;
@@ -48,8 +52,8 @@ pub(crate) mod metered_xdr;
 mod validity;
 pub use error::HostError;
 
-use self::metered_clone::MeteredClone;
 use self::metered_vector::MeteredVector;
+use self::{invoker_type::InvokerType, metered_clone::MeteredClone};
 use crate::Compare;
 
 /// Saves host state (storage and objects) for rolling back a (sub-)transaction
@@ -107,6 +111,17 @@ pub(crate) enum Frame {
     Token(Hash, Symbol, Vec<RawVal>),
     #[cfg(any(test, feature = "testutils"))]
     TestContract(TestContractFrame),
+}
+
+/// Determines the re-entry mode for calling a contract.
+pub(crate) enum ContractReentryMode {
+    /// Re-entry is completely prohibited.
+    Prohibited,
+    /// Re-entry is allowed, but only directly into the same contract (i.e. it's
+    /// possible for a contract to do a self-call via host).
+    SelfAllowed,
+    /// Re-entry is fully allowed.
+    Allowed,
 }
 
 /// Temporary helper for denoting a slice of guest memory, as formed by
@@ -554,6 +569,35 @@ impl Host {
         )
     }
 
+    /// Invokes the reserved `__check_auth` function on a provided contract.
+    ///
+    /// This is useful for testing the custom account contracts. Otherwise, the
+    /// host prohibits calling `__check_auth` outside of internal implementation
+    /// of `require_auth[_for_args]` calls.
+    #[cfg(any(test, feature = "testutils"))]
+    pub fn call_account_contract_check_auth(
+        &self,
+        contract: BytesObject,
+        args: VecObject,
+    ) -> Result<RawVal, HostError> {
+        let contract_id = self.hash_from_bytesobj_input("contract", contract)?;
+        let args = self.call_args_from_obj(args)?;
+        let res = self.call_n_internal(
+            &contract_id,
+            ACCOUNT_CONTRACT_CHECK_AUTH_FN_NAME.try_into_val(self)?,
+            args.as_slice(),
+            ContractReentryMode::Prohibited,
+            true,
+        );
+        if let Err(e) = &res {
+            let evt = DebugEvent::new()
+                .msg("check auth invocation for a custom account contract resulted in error {}")
+                .arg::<RawVal>(e.status.into());
+            self.record_debug_event(evt)?;
+        }
+        res
+    }
+
     /// Returns [`Hash`] contract ID from the VM frame at the top of the context
     /// stack, or a [`HostError`] if the context stack is empty or has a non-VM
     /// frame at its top.
@@ -867,7 +911,7 @@ impl Host {
                 &[self
                     .add_host_object(self.scbytes_from_vec(asset_bytes)?)?
                     .into()],
-                false,
+                ContractReentryMode::Prohibited,
             )?;
             Ok(())
         } else {
@@ -930,10 +974,10 @@ impl Host {
         id: BytesObject,
         func: Symbol,
         args: &[RawVal],
-        allow_reentry: bool,
+        reentry_mode: ContractReentryMode,
     ) -> Result<RawVal, HostError> {
         let id = self.hash_from_bytesobj_input("contract", id)?;
-        self.call_n_internal(&id, func, args, allow_reentry)
+        self.call_n_internal(&id, func, args, reentry_mode, false)
     }
 
     // Notes on metering: this is covered by the called components.
@@ -942,10 +986,24 @@ impl Host {
         id: &Hash,
         func: Symbol,
         args: &[RawVal],
-        allow_reentry: bool,
+        reentry_mode: ContractReentryMode,
+        internal_host_call: bool,
     ) -> Result<RawVal, HostError> {
-        if !allow_reentry {
-            for f in self.0.context.borrow().iter() {
+        // Internal host calls may call some special functions that otherwise
+        // aren't allowed to be called.
+        if !internal_host_call {
+            if SymbolStr::try_from_val(self, &func)?.to_string().as_str()
+                == ACCOUNT_CONTRACT_CHECK_AUTH_FN_NAME
+            {
+                return Err(self.err_status_msg(
+                    ScHostContextErrorCode::UnknownError,
+                    "can't invoke a custom account contract directly",
+                ));
+            }
+        }
+        if !matches!(reentry_mode, ContractReentryMode::Allowed) {
+            let mut is_last_non_host_frame = true;
+            for f in self.0.context.borrow().iter().rev() {
                 let exist_id = match f {
                     #[cfg(feature = "vm")]
                     Frame::ContractVM(vm, _, _) => &vm.contract_id,
@@ -955,12 +1013,19 @@ impl Host {
                     Frame::HostFunction(_) => continue,
                 };
                 if id == exist_id {
+                    if matches!(reentry_mode, ContractReentryMode::SelfAllowed)
+                        && is_last_non_host_frame
+                    {
+                        is_last_non_host_frame = false;
+                        continue;
+                    }
                     return Err(self.err_status_msg(
                         // TODO: proper error code
                         ScHostContextErrorCode::UnknownError,
                         "Contract re-entry is not allowed",
                     ));
                 }
+                is_last_non_host_frame = false;
             }
         }
 
@@ -1073,8 +1138,8 @@ impl Host {
                         let symbol: Symbol = scsym.as_slice().try_into_val(self)?;
                         let args = self.scvals_to_rawvals(rest)?;
                         // since the `HostFunction` frame must be the bottom of the call stack,
-                        // reentry is irrelevant, we always pass in `allow_reentry = false`.
-                        self.call_n(object, symbol, &args[..], false)
+                        // reentry is irrelevant, we always pass in `ContractReentryMode::Prohibited`.
+                        self.call_n(object, symbol, &args[..], ContractReentryMode::Prohibited)
                     })
                 } else {
                     Err(self.err_status_msg(
@@ -1282,6 +1347,29 @@ impl Host {
         } else {
             Err(self.err_general("symbol mismatch"))
         }
+    }
+
+    // Metering: mostly free or already covered by components (e.g. err_general)
+    fn get_invoker_type(&self) -> Result<u64, HostError> {
+        let frames = self.0.context.borrow();
+        // If the previous frame exists and is a contract, return its ID, otherwise return
+        // the account invoking.
+        let st = match frames.as_slice() {
+            // There are always two frames when WASM is executed in the VM.
+            [.., f2, _] => match f2 {
+                #[cfg(feature = "vm")]
+                Frame::ContractVM(_, _, _) => Ok(InvokerType::Contract),
+                Frame::HostFunction(_) => Ok(InvokerType::Account),
+                Frame::Token(id, _, _) => Ok(InvokerType::Contract),
+                #[cfg(any(test, feature = "testutils"))]
+                Frame::TestContract(_) => Ok(InvokerType::Contract),
+            },
+            // In tests contracts are executed with a single frame.
+            // TODO: Investigate this discrepancy: https://github.com/stellar/rs-soroban-env/issues/485.
+            [f1] => Ok(InvokerType::Account),
+            _ => Err(self.err_general("no frames to derive the invoker from")),
+        }?;
+        Ok(st as u64)
     }
 }
 
@@ -1556,29 +1644,6 @@ impl VmCallerEnv for Host {
         Ok(RawVal::VOID)
     }
 
-    // Metering: mostly free or already covered by components (e.g. err_general)
-    fn get_invoker_type(&self, _vmcaller: &mut VmCaller<Host>) -> Result<u64, HostError> {
-        let frames = self.0.context.borrow();
-        // If the previous frame exists and is a contract, return its ID, otherwise return
-        // the account invoking.
-        let st = match frames.as_slice() {
-            // There are always two frames when WASM is executed in the VM.
-            [.., f2, _] => match f2 {
-                #[cfg(feature = "vm")]
-                Frame::ContractVM(_, _, _) => Ok(InvokerType::Contract),
-                Frame::HostFunction(_) => Ok(InvokerType::Account),
-                Frame::Token(id, _, _) => Ok(InvokerType::Contract),
-                #[cfg(any(test, feature = "testutils"))]
-                Frame::TestContract(_) => Ok(InvokerType::Contract),
-            },
-            // In tests contracts are executed with a single frame.
-            // TODO: Investigate this discrepancy: https://github.com/stellar/rs-soroban-env/issues/485.
-            [f1] => Ok(InvokerType::Account),
-            _ => Err(self.err_general("no frames to derive the invoker from")),
-        }?;
-        Ok(st as u64)
-    }
-
     // Notes on metering: covered by the components
     fn get_invoking_contract(&self, _vmcaller: &mut VmCaller<Host>) -> Result<Object, HostError> {
         let invoking_contract_hash = self.get_invoking_contract_internal()?;
@@ -1607,14 +1672,14 @@ impl VmCallerEnv for Host {
                     // If the object is actually missing, it's less than any non-object.
                     None => Ok(Some(Ordering::Less)),
                     // If the object is present, try a small-value comparison.
-                    Some(aobj) => Ok(aobj.try_compare_to_small(b)),
+                    Some(aobj) => aobj.try_compare_to_small(self.as_budget(), b),
                 })?,
                 // Same as previous case, but reversed.
                 (Err(_), Ok(b)) => self.unchecked_visit_val_obj(b, |bo| match bo {
                     // So we reverse the relative order of the "missing object" case.
                     None => Ok(Some(Ordering::Greater)),
                     // And reverse the result of a successful small-value comparison.
-                    Some(bobj) => Ok(match bobj.try_compare_to_small(a) {
+                    Some(bobj) => Ok(match bobj.try_compare_to_small(self.as_budget(), a)? {
                         Some(Ordering::Less) => Some(Ordering::Greater),
                         Some(Ordering::Greater) => Some(Ordering::Less),
                         other => other,
@@ -2195,7 +2260,7 @@ impl VmCallerEnv for Host {
         {
             let VmSlice { vm, pos, len } = self.decode_vmslice(vals_pos, len)?;
             self.charge_budget(CostType::VecNew, len as u64)?;
-            let mut vals: Vec<RawVal> = Vec::with_capacity(len as usize);
+            let mut vals: Vec<RawVal> = vec![RawVal::VOID.to_raw(); len as usize];
             self.metered_vm_read_vals_from_linear_memory::<8, RawVal>(
                 vmcaller,
                 &vm,
@@ -2321,8 +2386,14 @@ impl VmCallerEnv for Host {
         args: VecObject,
     ) -> Result<RawVal, HostError> {
         let args = self.call_args_from_obj(args)?;
-        // this is the recommanded path of calling a contract, with `reentry` always set `false`
-        let res = self.call_n(contract, func, args.as_slice(), false);
+        // this is the recommended path of calling a contract, with `reentry`
+        // always set `ContractReentryMode::Prohibited`
+        let res = self.call_n(
+            contract,
+            func,
+            args.as_slice(),
+            ContractReentryMode::Prohibited,
+        );
         if let Err(e) = &res {
             let evt = DebugEvent::new()
                 .msg("contract call invocation resulted in error {}")
@@ -2343,8 +2414,14 @@ impl VmCallerEnv for Host {
         let args = self.call_args_from_obj(args)?;
         // this is the "loosened" path of calling a contract.
         // TODO: A `reentry` flag will be passed from `try_call` into here.
-        // For now, we are passing in `false` to disable reentry.
-        let res = self.call_n(contract, func, args.as_slice(), false);
+        // For now, we are passing in `ContractReentryMode::Prohibited` to disable
+        // reentry.
+        let res = self.call_n(
+            contract,
+            func,
+            args.as_slice(),
+            ContractReentryMode::Prohibited,
+        );
         match res {
             Ok(rv) => Ok(rv),
             Err(e) => {

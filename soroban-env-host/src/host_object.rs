@@ -1,9 +1,9 @@
 use soroban_env_common::{
-    DurationSmall, I128Small, I256Small, I64Small, SymbolSmall, SymbolStr, TimepointSmall,
+    Compare, DurationSmall, I128Small, I256Small, I64Small, SymbolSmall, SymbolStr, TimepointSmall,
     U128Small, U256Small, U64Small,
 };
 
-use crate::host::metered_clone::MeteredClone;
+use crate::{budget::Budget, host::metered_clone::MeteredClone, HostError};
 
 use super::{
     host::metered_map::MeteredOrdMap,
@@ -41,55 +41,57 @@ impl HostObject {
     // Temporarily performs a shallow comparison against a RawVal of the
     // associated small value type, returning None if the RawVal is of
     // the wrong type.
-    //
-    // FIXME: these are fixed size but to be precise they need to connect to metering.
-    pub(crate) fn try_compare_to_small(&self, rv: RawVal) -> Option<core::cmp::Ordering> {
-        match self {
+    pub(crate) fn try_compare_to_small(
+        &self,
+        budget: &Budget,
+        rv: RawVal,
+    ) -> Result<Option<core::cmp::Ordering>, HostError> {
+        let res = match self {
             HostObject::U64(u) => {
-                let Ok(small) = U64Small::try_from(rv) else { return None };
+                let Ok(small) = U64Small::try_from(rv) else { return Ok(None) };
                 let small: u64 = small.into();
-                Some(u.cmp(&small))
+                Some(budget.compare(u, &small)?)
             }
             HostObject::I64(i) => {
-                let Ok(small) = I64Small::try_from(rv) else { return None };
+                let Ok(small) = I64Small::try_from(rv) else { return Ok(None) };
                 let small: i64 = small.into();
-                Some(i.cmp(&small))
+                Some(budget.compare(i, &small)?)
             }
             HostObject::TimePoint(tp) => {
-                let Ok(small) = TimepointSmall::try_from(rv) else { return None };
+                let Ok(small) = TimepointSmall::try_from(rv) else { return Ok(None) };
                 let small: u64 = small.into();
-                Some(tp.0.cmp(&small))
+                Some(budget.compare(&tp.0, &small)?)
             }
             HostObject::Duration(d) => {
-                let Ok(small) = DurationSmall::try_from(rv) else { return None };
+                let Ok(small) = DurationSmall::try_from(rv) else { return Ok(None) };
                 let small: u64 = small.into();
-                Some(d.0.cmp(&small))
+                Some(budget.compare(&d.0, &small)?)
             }
             HostObject::U128(u) => {
-                let Ok(small) = U128Small::try_from(rv) else { return None };
+                let Ok(small) = U128Small::try_from(rv) else { return Ok(None) };
                 let small: u128 = small.into();
-                Some(u.cmp(&small))
+                Some(budget.compare(u, &small)?)
             }
             HostObject::I128(i) => {
-                let Ok(small) = I128Small::try_from(rv) else { return None };
+                let Ok(small) = I128Small::try_from(rv) else { return Ok(None) };
                 let small: i128 = small.into();
-                Some(i.cmp(&small))
+                Some(budget.compare(i, &small)?)
             }
             HostObject::U256(u) => {
-                let Ok(small) = U256Small::try_from(rv) else { return None };
+                let Ok(small) = U256Small::try_from(rv) else { return Ok(None) };
                 let small: U256 = small.into();
-                Some(u.cmp(&small))
+                Some(budget.compare(u, &small)?)
             }
             HostObject::I256(i) => {
-                let Ok(small) = I256Small::try_from(rv) else { return None };
+                let Ok(small) = I256Small::try_from(rv) else { return Ok(None) };
                 let small: I256 = small.into();
-                Some(i.cmp(&small))
+                Some(budget.compare(i, &small)?)
             }
             HostObject::Symbol(s) => {
-                let Ok(small) = SymbolSmall::try_from(rv) else { return None };
+                let Ok(small) = SymbolSmall::try_from(rv) else { return Ok(None) };
                 let small: SymbolStr = small.into();
                 let rhs: &[u8] = small.as_ref();
-                Some(s.as_vec().as_slice().cmp(rhs))
+                Some(budget.compare(&s.as_vec().as_slice(), &rhs)?)
             }
 
             HostObject::Vec(_)
@@ -99,7 +101,8 @@ impl HostObject {
             | HostObject::ContractExecutable(_)
             | HostObject::Address(_)
             | HostObject::NonceKey(_) => None,
-        }
+        };
+        return Ok(res);
     }
 }
 
