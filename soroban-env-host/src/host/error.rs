@@ -66,9 +66,9 @@ impl Debug for HostError {
                     ev.0.iter()
                         .rev()
                         .filter_map(|ev| match ev.event.clone() {
-                            Event::Debug(e) => Some(format!("Debug {:}", e)),
-                            Event::StructuredDebug(e) => Some(format!("StructuredDebug {:?}", e)),
-                            _ => None,
+                            Event::Debug(e) => Some(format!("Debug {e:}")),
+                            Event::StructuredDebug(e) => Some(format!("StructuredDebug {e:?}")),
+                            Event::Contract(_) => None,
                         })
                         .take(MAX_DEBUG_EVENTS)
                         .enumerate()

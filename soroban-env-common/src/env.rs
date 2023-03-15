@@ -46,7 +46,6 @@ pub trait EnvBase: Sized + Clone {
     /// Used to check two environments are the same, trapping if not.
     fn check_same_env(&self, other: &Self);
 
-
     /// Used to clone an environment deeply, not just a handle to it.
     #[allow(clippy::return_self_not_must_use)]
     fn deep_clone(&self) -> Self;

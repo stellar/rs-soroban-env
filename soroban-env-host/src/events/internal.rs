@@ -84,7 +84,7 @@ impl InternalEventsBuffer {
     pub fn dump_to_debug_log(&self) {
         use log::debug;
         debug!("=======Start of events=======");
-        for e in self.vec.iter() {
+        for e in &self.vec {
             match &e.0 {
                 InternalEvent::Contract(c) => debug!("Contract event: {:?}", c),
                 InternalEvent::Debug(d) => debug!("Debug event: {}", d),

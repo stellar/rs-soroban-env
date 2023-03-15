@@ -142,16 +142,11 @@ pub struct LedgerInfo {
     pub base_reserve: u32,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub enum DiagnosticLevel {
+    #[default]
     None,
     Debug,
-}
-
-impl Default for DiagnosticLevel {
-    fn default() -> Self {
-        DiagnosticLevel::None
-    }
 }
 
 #[derive(Clone, Default)]
@@ -1026,7 +1021,7 @@ impl Host {
             }
         }
 
-        self.fn_call_diagnostics(&id, &func, args)?;
+        self.fn_call_diagnostics(id, &func, args)?;
 
         // "testutils" is not covered by budget metering.
         #[cfg(any(test, feature = "testutils"))]
@@ -1110,14 +1105,13 @@ impl Host {
             }
         }
 
-        let res = self.call_contract_fn(&id, &func, args);
+        let res = self.call_contract_fn(id, &func, args);
 
-        match &res {
-            Ok(res) => self.fn_return_diagnostics(id, &func, &res)?,
-            Err(err) => {}
+        if let Ok(res) = &res {
+            self.fn_return_diagnostics(id, &func, res)?;
         }
 
-        return res;
+        res
     }
 
     // Notes on metering: covered by the called components.
