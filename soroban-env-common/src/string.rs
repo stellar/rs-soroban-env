@@ -34,9 +34,7 @@ impl<E: Env> TryFromVal<E, &str> for StringObject {
     type Error = ConversionError;
     #[inline(always)]
     fn try_from_val(env: &E, val: &&str) -> Result<StringObject, Self::Error> {
-        env
-            .string_new_from_slice(val)
-            .map_err(|_| ConversionError)
+        env.string_new_from_slice(val).map_err(|_| ConversionError)
     }
 }
 
