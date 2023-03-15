@@ -68,10 +68,12 @@ impl EnvBase for UnimplementedEnv {
         unimplemented!()
     }
 
+    #[allow(clippy::needless_lifetimes)]
     fn string_new_from_slice<'a>(&self, _s: &'a str) -> Result<crate::StringObject, Self::Error> {
         unimplemented!()
     }
 
+    #[allow(clippy::needless_lifetimes)]
     fn symbol_new_from_slice<'a>(&self, _s: &'a str) -> Result<crate::SymbolObject, Self::Error> {
         unimplemented!()
     }

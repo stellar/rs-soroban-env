@@ -135,74 +135,65 @@ impl<E: Env> Compare<RawVal> for E {
         if a.is_object() || b.is_object() {
             // Delegate any object-comparing to environment.
             let v = self.obj_cmp(*a, *b)?;
-            return if v == 0 {
-                Ok(Ordering::Equal)
-            } else if v < 0 {
-                Ok(Ordering::Less)
-            } else {
-                Ok(Ordering::Greater)
-            };
+            return Ok(v.cmp(&0));
         }
         let a_tag = a.get_tag();
         let b_tag = b.get_tag();
-        if a_tag < b_tag {
-            Ok(Ordering::Less)
-        } else if a_tag > b_tag {
-            Ok(Ordering::Greater)
-        } else {
+        match a_tag.cmp(&b_tag) {
+            Ordering::Equal =>
             // Tags are equal so we only have to switch on one.
-            match a_tag {
-                Tag::False => Ok(Ordering::Equal),
-                Tag::True => Ok(Ordering::Equal),
-                Tag::Void => Ok(Ordering::Equal),
+            {
+                match a_tag {
+                    Tag::False
+                    | Tag::True
+                    | Tag::Void
+                    | Tag::LedgerKeyContractExecutable
+                    | Tag::SmallCodeUpperBound
+                    | Tag::ObjectCodeLowerBound
+                    | Tag::ObjectCodeUpperBound
+                    | Tag::Bad => Ok(Ordering::Equal),
 
-                Tag::Status => delegate_compare_to_wrapper!(Status, a, b, self),
+                    Tag::Status => delegate_compare_to_wrapper!(Status, a, b, self),
 
-                Tag::U32Val => delegate_compare_to_wrapper!(U32Val, a, b, self),
-                Tag::I32Val => delegate_compare_to_wrapper!(I32Val, a, b, self),
+                    Tag::U32Val => delegate_compare_to_wrapper!(U32Val, a, b, self),
+                    Tag::I32Val => delegate_compare_to_wrapper!(I32Val, a, b, self),
 
-                Tag::U64Small => delegate_compare_to_wrapper!(U64Small, a, b, self),
-                Tag::I64Small => delegate_compare_to_wrapper!(I64Small, a, b, self),
+                    Tag::U64Small => delegate_compare_to_wrapper!(U64Small, a, b, self),
+                    Tag::I64Small => delegate_compare_to_wrapper!(I64Small, a, b, self),
 
-                Tag::TimepointSmall => delegate_compare_to_wrapper!(TimepointSmall, a, b, self),
-                Tag::DurationSmall => delegate_compare_to_wrapper!(DurationSmall, a, b, self),
+                    Tag::TimepointSmall => delegate_compare_to_wrapper!(TimepointSmall, a, b, self),
+                    Tag::DurationSmall => delegate_compare_to_wrapper!(DurationSmall, a, b, self),
 
-                Tag::U128Small => delegate_compare_to_wrapper!(U128Small, a, b, self),
-                Tag::I128Small => delegate_compare_to_wrapper!(I128Small, a, b, self),
+                    Tag::U128Small => delegate_compare_to_wrapper!(U128Small, a, b, self),
+                    Tag::I128Small => delegate_compare_to_wrapper!(I128Small, a, b, self),
 
-                Tag::U256Small => delegate_compare_to_wrapper!(U256Small, a, b, self),
-                Tag::I256Small => delegate_compare_to_wrapper!(I256Small, a, b, self),
+                    Tag::U256Small => delegate_compare_to_wrapper!(U256Small, a, b, self),
+                    Tag::I256Small => delegate_compare_to_wrapper!(I256Small, a, b, self),
 
-                Tag::SymbolSmall => delegate_compare_to_wrapper!(SymbolSmall, a, b, self),
+                    Tag::SymbolSmall => delegate_compare_to_wrapper!(SymbolSmall, a, b, self),
 
-                Tag::LedgerKeyContractExecutable => Ok(Ordering::Equal),
-
-                Tag::SmallCodeUpperBound => Ok(Ordering::Equal),
-                Tag::ObjectCodeLowerBound => Ok(Ordering::Equal),
-
-                // None of the object cases should be reachable, they
-                // should all have been handled by the is_object() branch
-                // above.
-                Tag::U64Object
-                | Tag::I64Object
-                | Tag::TimepointObject
-                | Tag::DurationObject
-                | Tag::U128Object
-                | Tag::I128Object
-                | Tag::U256Object
-                | Tag::I256Object
-                | Tag::BytesObject
-                | Tag::StringObject
-                | Tag::SymbolObject
-                | Tag::VecObject
-                | Tag::MapObject
-                | Tag::ContractExecutableObject
-                | Tag::AddressObject
-                | Tag::LedgerKeyNonceObject => unreachable!(),
-
-                Tag::ObjectCodeUpperBound => Ok(Ordering::Equal),
-                Tag::Bad => Ok(Ordering::Equal),
+                    // None of the object cases should be reachable, they
+                    // should all have been handled by the is_object() branch
+                    // above.
+                    Tag::U64Object
+                    | Tag::I64Object
+                    | Tag::TimepointObject
+                    | Tag::DurationObject
+                    | Tag::U128Object
+                    | Tag::I128Object
+                    | Tag::U256Object
+                    | Tag::I256Object
+                    | Tag::BytesObject
+                    | Tag::StringObject
+                    | Tag::SymbolObject
+                    | Tag::VecObject
+                    | Tag::MapObject
+                    | Tag::ContractExecutableObject
+                    | Tag::AddressObject
+                    | Tag::LedgerKeyNonceObject => unreachable!(),
+                }
             }
+            greater_or_less => Ok(greater_or_less),
         }
     }
 }

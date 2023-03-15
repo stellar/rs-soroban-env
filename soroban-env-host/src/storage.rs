@@ -285,9 +285,8 @@ impl Storage {
             FootprintMode::Enforcing => {
                 self.footprint.enforce_access(key, ty, budget)?;
                 match self.map.get::<Rc<LedgerKey>>(key, budget)? {
-                    Some(None) => Ok(false),
                     Some(Some(_)) => Ok(true),
-                    None => Ok(false),
+                    Some(None) | None => Ok(false),
                 }
             }
         }

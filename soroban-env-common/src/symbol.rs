@@ -341,11 +341,9 @@ impl Iterator for SymbolSmallIter {
 
 impl FromIterator<char> for SymbolSmall {
     fn from_iter<T: IntoIterator<Item = char>>(iter: T) -> Self {
-        let mut n = 0;
         let mut accum: u64 = 0;
-        for i in iter {
+        for (n, i) in iter.into_iter().enumerate() {
             require(n < MAX_SMALL_CHARS);
-            n += 1;
             accum <<= CODE_BITS;
             let v = match i {
                 '_' => 1,

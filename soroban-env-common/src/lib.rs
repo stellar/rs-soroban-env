@@ -91,6 +91,7 @@ pub use status::Status;
 pub use string::StringObject;
 pub use symbol::{Symbol, SymbolError, SymbolObject, SymbolSmall, SymbolSmallIter, SymbolStr};
 
+#[allow(clippy::missing_panics_doc)]
 #[inline(always)]
 // Awkward: this is a free function rather than a trait call because
 // you can't have const trait calls. It calls panic! rather than

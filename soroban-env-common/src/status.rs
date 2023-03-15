@@ -140,14 +140,12 @@ impl Debug for Status {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         let st_res: Result<ScStatusType, _> = (self.as_raw().get_minor() as i32).try_into();
         let code = self.as_raw().get_major();
-        let st = match st_res {
-            Ok(t) => t,
-            Err(_) => return write!(f, "Status(UnknownType)"),
-        };
+        let Ok(st) = st_res else { return write!(f, "Status(UnknownType)") };
         write!(f, "Status({}(", st.name())?;
         match st {
-            ScStatusType::Ok => write!(f, "{code}"),
-            ScStatusType::UnknownError => write!(f, "{code}"),
+            ScStatusType::Ok | ScStatusType::ContractError | ScStatusType::UnknownError => {
+                write!(f, "{code}")
+            }
             ScStatusType::HostValueError => fmt_named_code::<ScHostValErrorCode>(code, f),
             ScStatusType::HostObjectError => fmt_named_code::<ScHostObjErrorCode>(code, f),
             ScStatusType::HostFunctionError => fmt_named_code::<ScHostFnErrorCode>(code, f),
@@ -155,7 +153,6 @@ impl Debug for Status {
             ScStatusType::HostContextError => fmt_named_code::<ScHostContextErrorCode>(code, f),
             ScStatusType::HostAuthError => fmt_named_code::<ScHostAuthErrorCode>(code, f),
             ScStatusType::VmError => fmt_named_code::<ScVmErrorCode>(code, f),
-            ScStatusType::ContractError => write!(f, "{code}"),
         }?;
         write!(f, "))")
     }

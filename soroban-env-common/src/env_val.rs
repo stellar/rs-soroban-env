@@ -337,10 +337,7 @@ where
                 unsafe { RawVal::from_body_and_tag(i.as_i64() as u64, Tag::I256Small) }
             }
             ScVal::Symbol(bytes) => {
-                let ss = match std::str::from_utf8(bytes.as_slice()) {
-                    Ok(ss) => ss,
-                    Err(_) => return Err(ConversionError),
-                };
+                let Ok(ss) = std::str::from_utf8(bytes.as_slice()) else { return Err(ConversionError) };
                 SymbolSmall::try_from_str(ss)?.into()
             }
             ScVal::LedgerKeyContractExecutable => unsafe {

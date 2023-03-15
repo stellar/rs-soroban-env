@@ -497,10 +497,10 @@ impl RawVal {
 
     #[inline(always)]
     pub const fn get_tag(self) -> Tag {
-        let tag = self.get_tag_u8();
         const A: u8 = Tag::SmallCodeUpperBound as u8;
         const B: u8 = Tag::ObjectCodeLowerBound as u8;
         const C: u8 = Tag::ObjectCodeUpperBound as u8;
+        let tag = self.get_tag_u8();
         if !((tag < A) || (B < tag && tag < C)) {
             return Tag::Bad;
         }
@@ -618,6 +618,7 @@ impl RawVal {
 
 impl Debug for RawVal {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        #[allow(clippy::trivially_copy_pass_by_ref)]
         fn fmt_obj(name: &str, r: &RawVal, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
             write!(f, "{}(obj#{})", name, r.get_major())
         }

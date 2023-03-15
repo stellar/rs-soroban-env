@@ -46,7 +46,9 @@ pub trait EnvBase: Sized + Clone {
     /// Used to check two environments are the same, trapping if not.
     fn check_same_env(&self, other: &Self);
 
+
     /// Used to clone an environment deeply, not just a handle to it.
+    #[allow(clippy::return_self_not_must_use)]
     fn deep_clone(&self) -> Self;
 
     // Helpers for methods that wish to pass Rust lifetime-qualified _slices_
@@ -285,7 +287,7 @@ macro_rules! generate_env_trait {
         /// This trait represents the interface between Host and Guest, used by
         /// client contract code and implemented (via [Env](crate::Env)) by the host.
         /// It consists of functions that take or return only 64-bit values such
-        /// as [RawVal] or [u64].
+        /// as [`RawVal`] or [`u64`].
         pub trait Env: EnvBase
         {
             $(

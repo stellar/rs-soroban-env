@@ -94,8 +94,8 @@ impl FuncEmitter {
     /// directly to get the corresponding [`LocalRef`]s.
     pub fn new(mod_emit: ModEmitter, arity: Arity, n_locals: u32) -> Self {
         let func = Function::new([(n_locals, ValType::I64)]);
-        let args = (0..arity.0).map(|n| LocalRef(n)).collect();
-        let locals = (arity.0..arity.0 + n_locals).map(|n| LocalRef(n)).collect();
+        let args = (0..arity.0).map(LocalRef).collect();
+        let locals = (arity.0..arity.0 + n_locals).map(LocalRef).collect();
         Self {
             mod_emit,
             arity,

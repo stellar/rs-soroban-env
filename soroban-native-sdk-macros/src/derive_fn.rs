@@ -4,7 +4,7 @@ use quote::{format_ident, quote};
 use syn::{spanned::Spanned, Error, FnArg, Type};
 
 pub fn derive_contract_function_set<'a>(
-    ty: &Box<Type>,
+    ty: &Type,
     methods: impl Iterator<Item = &'a syn::ImplItemMethod>,
 ) -> TokenStream2 {
     let mut errors = Vec::<Error>::new();
@@ -19,10 +19,8 @@ pub fn derive_contract_function_set<'a>(
                 let arg = format_ident!("arg{}", i);
                 match a {
                     FnArg::Typed(t) => (i, arg, t.ty),
-                    _ => {
-                        errors.push(Error::new(a.span(), "invalid argument type"));
-                        (i, arg, syn::parse_quote! { () })
-                    }
+                    FnArg::Receiver(_) => { errors.push(Error::new(a.span(), "invalid argument type"));
+                    (i, arg, syn::parse_quote! { () })},
                 }
             }).multiunzip();
             let num_args = args.len();
@@ -40,10 +38,7 @@ pub fn derive_contract_function_set<'a>(
         })
         .multiunzip();
 
-    if !errors.is_empty() {
-        let compile_errors = errors.iter().map(Error::to_compile_error);
-        quote! { #(#compile_errors)* }
-    } else {
+    if errors.is_empty() {
         quote! {
             impl crate::native_contract::NativeContract for #ty {
                 fn call(
@@ -62,5 +57,8 @@ pub fn derive_contract_function_set<'a>(
                 }
             }
         }
+    } else {
+        let compile_errors = errors.iter().map(Error::to_compile_error);
+        quote! { #(#compile_errors)* }
     }
 }
