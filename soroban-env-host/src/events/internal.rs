@@ -91,7 +91,7 @@ impl InternalEventsBuffer {
                 InternalEvent::StructuredDebug(c) => debug!("StructuredDebug event: {:?}", c),
             }
         }
-        debug!("========End of events========")
+        debug!("========End of events========");
     }
 
     /// Converts the internal events into their external representation. This should only be called

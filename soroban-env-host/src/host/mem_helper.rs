@@ -207,7 +207,7 @@ impl Host {
         )?;
         for (i, slice) in slices.iter().enumerate() {
             self.charge_budget(CostType::VmMemRead, slice.len() as u64)?;
-            callback(i, *slice)?;
+            callback(i, slice)?;
         }
         Ok(())
     }

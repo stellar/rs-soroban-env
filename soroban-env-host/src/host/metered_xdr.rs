@@ -19,7 +19,7 @@ where
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
         self.host
             .charge_budget(CostType::ValSer, buf.len() as u64)
-            .map_err(|e| Into::<std::io::Error>::into(e))?;
+            .map_err(Into::<std::io::Error>::into)?;
         self.w.write(buf)
     }
 
@@ -34,7 +34,7 @@ impl Host {
         obj: &impl WriteXdr,
         w: &mut Vec<u8>,
     ) -> Result<(), HostError> {
-        let mut w = MeteredWrite { host: &self, w };
+        let mut w = MeteredWrite { host: self, w };
         obj.write_xdr(&mut w).map_err(|e| {
             if let Some(e2) = e.source() {
                 if let Some(e3) = (*e2).downcast_ref::<std::io::Error>() {

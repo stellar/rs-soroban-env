@@ -134,9 +134,7 @@ impl FuncEmitter {
         *is_first_arg = false;
         let insn = match op.into() {
             Operand::StackTop => {
-                if !first {
-                    panic!("can only use Operand::StackTop as first arg");
-                }
+                assert!(first, "can only use Operand::StackTop as first arg");
                 return self;
             }
             Operand::Local(loc) => Instruction::LocalGet(loc.0),

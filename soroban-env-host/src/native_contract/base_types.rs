@@ -69,18 +69,12 @@ impl<const N: usize> From<BytesN<N>> for Bytes {
 impl Bytes {
     pub fn push(&mut self, x: u8) -> Result<(), HostError> {
         let x32: u32 = x.into();
-        self.object = self
-            .host
-            .bytes_push(self.object.into(), x32.into())?
-            .try_into()?;
+        self.object = self.host.bytes_push(self.object, x32.into())?;
         Ok(())
     }
 
     pub fn append(&mut self, other: Bytes) -> Result<(), HostError> {
-        self.object = self
-            .host
-            .bytes_append(self.object.into(), other.object.into())?
-            .try_into()?;
+        self.object = self.host.bytes_append(self.object, other.object)?;
         Ok(())
     }
 
@@ -107,7 +101,7 @@ impl<const N: usize> TryFromVal<Host, BytesObject> for BytesN<N> {
 
     fn try_from_val(env: &Host, val: &BytesObject) -> Result<Self, Self::Error> {
         let val = *val;
-        let len: u32 = env.bytes_len(val.into())?.try_into()?;
+        let len: u32 = env.bytes_len(val)?.try_into()?;
         if len
             == N.try_into()
                 .map_err(|_| env.err_general("bytes buffer overflow"))?
@@ -148,9 +142,9 @@ impl<const N: usize> TryFromVal<Host, BytesN<N>> for RawVal {
     }
 }
 
-impl<const N: usize> Into<RawVal> for BytesN<N> {
-    fn into(self) -> RawVal {
-        self.object.into()
+impl<const N: usize> From<BytesN<N>> for RawVal {
+    fn from(val: BytesN<N>) -> Self {
+        val.object.into()
     }
 }
 
@@ -173,7 +167,7 @@ impl<const N: usize> BytesN<N> {
         let mut slice = [0_u8; N];
         self.host.charge_budget(CostType::BytesClone, N as u64)?;
         self.host
-            .bytes_copy_to_slice(self.object.into(), RawVal::U32_ZERO, &mut slice)?;
+            .bytes_copy_to_slice(self.object, RawVal::U32_ZERO, &mut slice)?;
         Ok(slice)
     }
 
@@ -243,7 +237,7 @@ impl From<Map> for MapObject {
 
 impl Map {
     pub fn new(env: &Host) -> Result<Self, HostError> {
-        let map = env.map_new()?.try_into()?;
+        let map = env.map_new()?;
         Ok(Self {
             host: env.clone(),
             object: map,
@@ -258,7 +252,7 @@ impl Map {
         HostError: From<<V as TryFromVal<Host, RawVal>>::Error>,
     {
         let k_rv = RawVal::try_from_val(&self.host, k)?;
-        let v_rv = self.host.map_get(self.object.into(), k_rv)?;
+        let v_rv = self.host.map_get(self.object, k_rv)?;
         Ok(V::try_from_val(&self.host, &v_rv)?)
     }
 
@@ -271,10 +265,7 @@ impl Map {
     {
         let k_rv = RawVal::try_from_val(&self.host, k)?;
         let v_rv = RawVal::try_from_val(&self.host, v)?;
-        self.object = self
-            .host
-            .map_put(self.object.into(), k_rv, v_rv)?
-            .try_into()?;
+        self.object = self.host.map_put(self.object, k_rv, v_rv)?;
         Ok(())
     }
 }
@@ -323,9 +314,9 @@ impl TryFromVal<Host, Vec> for RawVal {
     }
 }
 
-impl Into<RawVal> for Vec {
-    fn into(self) -> RawVal {
-        self.object.into()
+impl From<Vec> for RawVal {
+    fn from(val: Vec) -> Self {
+        val.object.into()
     }
 }
 
@@ -341,7 +332,7 @@ impl TryFromVal<Host, std::vec::Vec<RawVal>> for Vec {
     fn try_from_val(env: &Host, vals: &std::vec::Vec<RawVal>) -> Result<Self, Self::Error> {
         let mut v = Vec::new(env)?;
         for rv in vals {
-            v.push_raw(rv.clone())?
+            v.push_raw(*rv)?;
         }
         Ok(v)
     }
@@ -357,7 +348,7 @@ impl TryFromVal<Host, &std::vec::Vec<RawVal>> for Vec {
 
 impl Vec {
     pub fn new(env: &Host) -> Result<Self, HostError> {
-        let vec: VecObject = env.vec_new(().into())?.try_into()?;
+        let vec: VecObject = env.vec_new(().into())?;
         Ok(Self {
             host: env.clone(),
             object: vec,
@@ -403,7 +394,7 @@ impl TryFromVal<Host, AddressObject> for Address {
     fn try_from_val(env: &Host, obj: &AddressObject) -> Result<Self, Self::Error> {
         Ok(Address {
             host: env.clone(),
-            object: obj.clone(),
+            object: *obj,
         })
     }
 }

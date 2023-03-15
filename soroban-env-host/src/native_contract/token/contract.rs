@@ -106,7 +106,7 @@ fn check_non_native(e: &Host) -> Result<(), HostError> {
 // Metering: *mostly* covered by components.
 impl TokenTrait for Token {
     fn init_asset(e: &Host, asset_bytes: Bytes) -> Result<(), HostError> {
-        if has_metadata(&e)? {
+        if has_metadata(e)? {
             return Err(e.err_status_msg(
                 ContractError::AlreadyInitializedError,
                 "token has been already initialized",
@@ -128,13 +128,13 @@ impl TokenTrait for Token {
         }
         match asset {
             Asset::Native => {
-                write_metadata(&e, Metadata::Native)?;
+                write_metadata(e, Metadata::Native)?;
                 //No admin for the Native token
             }
             Asset::CreditAlphanum4(asset4) => {
-                write_administrator(&e, Address::from_account(e, &asset4.issuer)?)?;
+                write_administrator(e, Address::from_account(e, &asset4.issuer)?)?;
                 write_metadata(
-                    &e,
+                    e,
                     Metadata::AlphaNum4(AlphaNum4Metadata {
                         asset_code: BytesN::<4>::try_from_val(
                             e,
@@ -148,9 +148,9 @@ impl TokenTrait for Token {
                 )?;
             }
             Asset::CreditAlphanum12(asset12) => {
-                write_administrator(&e, Address::from_account(e, &asset12.issuer)?)?;
+                write_administrator(e, Address::from_account(e, &asset12.issuer)?)?;
                 write_metadata(
-                    &e,
+                    e,
                     Metadata::AlphaNum12(AlphaNum12Metadata {
                         asset_code: BytesN::<12>::try_from_val(
                             e,
@@ -180,11 +180,11 @@ impl TokenTrait for Token {
     ) -> Result<(), HostError> {
         check_nonnegative_amount(e, amount)?;
         from.require_auth()?;
-        let allowance = read_allowance(&e, from.clone(), spender.clone())?;
+        let allowance = read_allowance(e, from.clone(), spender.clone())?;
         let new_allowance = allowance
             .checked_add(amount)
             .ok_or_else(|| e.err_status(ContractError::OverflowError))?;
-        write_allowance(&e, from.clone(), spender.clone(), new_allowance)?;
+        write_allowance(e, from.clone(), spender.clone(), new_allowance)?;
         event::incr_allow(e, from, spender, amount)?;
         Ok(())
     }
@@ -197,11 +197,11 @@ impl TokenTrait for Token {
     ) -> Result<(), HostError> {
         check_nonnegative_amount(e, amount)?;
         from.require_auth()?;
-        let allowance = read_allowance(&e, from.clone(), spender.clone())?;
+        let allowance = read_allowance(e, from.clone(), spender.clone())?;
         if amount >= allowance {
-            write_allowance(&e, from.clone(), spender.clone(), 0)?;
+            write_allowance(e, from.clone(), spender.clone(), 0)?;
         } else {
-            write_allowance(&e, from.clone(), spender.clone(), allowance - amount)?;
+            write_allowance(e, from.clone(), spender.clone(), allowance - amount)?;
         }
         event::decr_allow(e, from, spender, amount)?;
         Ok(())
@@ -218,7 +218,7 @@ impl TokenTrait for Token {
 
     // Metering: covered by components
     fn authorized(e: &Host, addr: Address) -> Result<bool, HostError> {
-        is_authorized(&e, addr)
+        is_authorized(e, addr)
     }
 
     // Metering: covered by components
@@ -253,7 +253,7 @@ impl TokenTrait for Token {
         check_nonnegative_amount(e, amount)?;
         check_non_native(e)?;
         from.require_auth()?;
-        spend_balance(&e, from.clone(), amount)?;
+        spend_balance(e, from.clone(), amount)?;
         event::burn(e, from, amount)?;
         Ok(())
     }
@@ -263,8 +263,8 @@ impl TokenTrait for Token {
         check_nonnegative_amount(e, amount)?;
         check_non_native(e)?;
         spender.require_auth()?;
-        spend_allowance(&e, from.clone(), spender, amount)?;
-        spend_balance(&e, from.clone(), amount)?;
+        spend_allowance(e, from.clone(), spender, amount)?;
+        spend_balance(e, from.clone(), amount)?;
         event::burn(e, from, amount)?;
         Ok(())
     }
@@ -273,9 +273,9 @@ impl TokenTrait for Token {
     fn clawback(e: &Host, admin: Address, from: Address, amount: i128) -> Result<(), HostError> {
         check_nonnegative_amount(e, amount)?;
         check_admin(e, &admin)?;
-        check_clawbackable(&e, from.clone())?;
+        check_clawbackable(e, from.clone())?;
         admin.require_auth()?;
-        spend_balance_no_authorization_check(e, from.clone(), amount.clone())?;
+        spend_balance_no_authorization_check(e, from.clone(), amount)?;
         event::clawback(e, admin, from, amount)?;
         Ok(())
     }
@@ -313,10 +313,10 @@ impl TokenTrait for Token {
     }
 
     fn name(e: &Host) -> Result<Bytes, HostError> {
-        read_name(&e)
+        read_name(e)
     }
 
     fn symbol(e: &Host) -> Result<Bytes, HostError> {
-        read_symbol(&e)
+        read_symbol(e)
     }
 }

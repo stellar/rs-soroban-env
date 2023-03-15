@@ -55,7 +55,7 @@ impl Host {
     {
         let mut e = DebugError::new(status).msg(msg);
         for arg in args {
-            e = e.arg(*arg)
+            e = e.arg(*arg);
         }
         self.err(e)
     }
@@ -94,7 +94,7 @@ impl Host {
     where
         DebugError: From<E>,
     {
-        res.map_err(|e| self.err(e.into()))
+        res.map_err(|e| self.err(e))
     }
 }
 

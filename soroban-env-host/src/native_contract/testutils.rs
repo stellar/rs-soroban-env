@@ -21,7 +21,7 @@ impl HostVec {
     pub(crate) fn from_array(host: &Host, vals: &[RawVal]) -> Result<Self, HostError> {
         let mut res = HostVec::new(host)?;
         for val in vals {
-            res.push_raw(val.clone())?;
+            res.push_raw(*val)?;
         }
         Ok(res)
     }
@@ -75,9 +75,11 @@ pub(crate) enum TestSigner<'a> {
     AccountContract(AccountContractSigner<'a>),
 }
 
+type SignFn<'a> = Box<dyn Fn(&[u8]) -> HostVec + 'a>;
+
 pub(crate) struct AccountContractSigner<'a> {
     pub(crate) id: Hash,
-    pub(crate) sign: Box<dyn Fn(&[u8]) -> HostVec + 'a>,
+    pub(crate) sign: SignFn<'a>,
 }
 
 pub(crate) struct AccountSigner<'a> {
@@ -120,7 +122,7 @@ impl<'a> TestSigner<'a> {
         let signature_args = match self {
             TestSigner::AccountInvoker(_) => host_vec![host],
             TestSigner::Account(account_signer) => {
-                let mut signatures = HostVec::new(&host).unwrap();
+                let mut signatures = HostVec::new(host).unwrap();
                 for key in &account_signer.signers {
                     signatures
                         .push(&sign_payload_for_account(host, key, payload))
@@ -157,7 +159,7 @@ pub(crate) fn authorize_single_invocation_with_nonce(
     let address_with_nonce = match signer {
         TestSigner::AccountInvoker(_) => None,
         TestSigner::Account(_) | TestSigner::AccountContract(_) => Some(AddressWithNonce {
-            address: sc_address.clone(),
+            address: sc_address,
             nonce: nonce.unwrap(),
         }),
         TestSigner::ContractInvoker(_) => {
@@ -176,7 +178,7 @@ pub(crate) fn authorize_single_invocation_with_nonce(
     let signature_payload = if let Some(addr_with_nonce) = &address_with_nonce {
         let signature_payload_preimage = HashIdPreimage::ContractAuth(HashIdPreimageContractAuth {
             network_id: host
-                .with_ledger_info(|li: &LedgerInfo| Ok(li.network_id.clone()))
+                .with_ledger_info(|li: &LedgerInfo| Ok(li.network_id))
                 .unwrap()
                 .try_into()
                 .unwrap(),
@@ -209,7 +211,7 @@ pub(crate) fn authorize_single_invocation(
         TestSigner::AccountInvoker(_) => None,
         TestSigner::Account(_) | TestSigner::AccountContract(_) => Some(
             host.read_nonce(
-                &Hash(contract_id.to_vec().clone().try_into().unwrap()),
+                &Hash(contract_id.to_vec().try_into().unwrap()),
                 &signer.address(host).to_sc_address().unwrap(),
             )
             .unwrap(),
@@ -259,6 +261,7 @@ pub(crate) fn sign_payload_for_ed25519(
     .unwrap()
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn create_account(
     host: &Host,
     account_id: &AccountId,
@@ -272,7 +275,7 @@ pub(crate) fn create_account(
     sponsorships: Option<(u32, u32)>,
     flags: u32,
 ) {
-    let key = host.to_account_key(account_id.clone().into());
+    let key = host.to_account_key(account_id.clone());
     let account_id = match key.as_ref() {
         LedgerKey::Account(acc) => acc.account_id.clone(),
         _ => unreachable!(),

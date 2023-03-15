@@ -102,7 +102,7 @@ pub enum CostType {
 // TODO: add XDR support for iterating over all the elements of an enum
 impl CostType {
     pub fn variants() -> std::slice::Iter<'static, CostType> {
-        static VARIANTS: &'static [CostType] = &[
+        static VARIANTS: &[CostType] = &[
             CostType::WasmInsnExec,
             CostType::WasmMemAlloc,
             CostType::HostEventDebug,
@@ -208,8 +208,7 @@ impl CostModel {
 fn next_2(x: u64) -> u64 {
     match x.checked_next_power_of_two() {
         None => 0x1000_0000_0000_0000,
-        Some(0) => 2,
-        Some(1) => 2,
+        Some(0 | 1) => 2,
         Some(n) => n,
     }
 }
@@ -399,7 +398,7 @@ impl Budget {
     where
         F: FnOnce(&mut u64),
     {
-        f(&mut self.0.borrow_mut().inputs[ty as usize])
+        f(&mut self.0.borrow_mut().inputs[ty as usize]);
     }
 
     pub fn get_cpu_insns_count(&self) -> u64 {
@@ -411,7 +410,7 @@ impl Budget {
     }
 
     pub fn reset_default(&self) {
-        *self.0.borrow_mut() = BudgetImpl::default()
+        *self.0.borrow_mut() = BudgetImpl::default();
     }
 
     pub fn reset_unlimited(&self) {
@@ -425,7 +424,7 @@ impl Budget {
             Ok(())
         })
         .unwrap(); // panic means multiple-mut-borrow bug
-        self.reset_inputs()
+        self.reset_inputs();
     }
 
     pub fn reset_unlimited_mem(&self) {
@@ -434,11 +433,11 @@ impl Budget {
             Ok(())
         })
         .unwrap(); // panic means multiple-mut-borrow bug
-        self.reset_inputs()
+        self.reset_inputs();
     }
 
     pub fn reset_inputs(&self) {
-        for i in self.0.borrow_mut().inputs.iter_mut() {
+        for i in &mut self.0.borrow_mut().inputs {
             *i = 0;
         }
     }
@@ -451,7 +450,7 @@ impl Budget {
         })
         .unwrap(); // impossible to panic
 
-        self.reset_inputs()
+        self.reset_inputs();
     }
 
     #[cfg(test)]
@@ -477,7 +476,7 @@ impl Default for BudgetImpl {
         for ct in CostType::variants() {
             b.inputs.push(0);
 
-            let cpu = &mut b.cpu_insns.get_cost_model_mut(*ct);
+            let cpu = b.cpu_insns.get_cost_model_mut(*ct);
             match ct {
                 // We might want to split wasm insns into separate cases; some are much more than
                 // this and some are much less.

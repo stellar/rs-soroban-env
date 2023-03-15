@@ -56,6 +56,12 @@ pub struct ModEmitter {
     import_refs: HashMap<(String, String, Arity), FuncRef>,
 }
 
+impl Default for ModEmitter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ModEmitter {
     pub fn new() -> Self {
         let mut module = Module::new();
@@ -121,6 +127,7 @@ impl ModEmitter {
     /// Return the unique [`TypeRef`] for a function with a given [`Arity`],
     /// creating such a type in the `type` section of the module if such a type
     /// does not already exist.
+    #[allow(clippy::map_entry)]
     pub fn get_fn_type(&mut self, arity: Arity) -> TypeRef {
         if self.type_refs.contains_key(&arity) {
             self.type_refs[&arity]
@@ -138,10 +145,12 @@ impl ModEmitter {
     /// Return the unique [`FuncRef`] for a function import with a given module
     /// name, function name, and arity, creating such an import in the `import`
     /// section of the module if it does not already exist.
+    #[allow(clippy::map_entry)]
     pub fn import_func(&mut self, module: &str, fname: &str, arity: Arity) -> FuncRef {
-        if self.funcs.len() != 0 {
-            panic!("must import all functions before defining any exports");
-        }
+        assert!(
+            self.funcs.is_empty(),
+            "must import all functions before defining any exports"
+        );
         let key = (module.to_owned(), fname.to_owned(), arity);
         if self.import_refs.contains_key(&key) {
             self.import_refs[&key]
