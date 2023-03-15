@@ -76,15 +76,13 @@ impl Footprint {
     ) -> Result<(), HostError> {
         if let Some(existing) = self.0.get::<Rc<LedgerKey>>(key, budget)? {
             match (existing, ty.clone()) {
-                (AccessType::ReadOnly, AccessType::ReadOnly) => Ok(()),
                 (AccessType::ReadOnly, AccessType::ReadWrite) => {
                     // The only interesting case is an upgrade
                     // from previously-read-only to read-write.
                     self.0 = self.0.insert(Rc::clone(key), ty, budget)?;
                     Ok(())
                 }
-                (AccessType::ReadWrite, AccessType::ReadOnly) => Ok(()),
-                (AccessType::ReadWrite, AccessType::ReadWrite) => Ok(()),
+                _ => Ok(()),
             }
         } else {
             self.0 = self.0.insert(Rc::clone(key), ty, budget)?;
@@ -100,12 +98,10 @@ impl Footprint {
     ) -> Result<(), HostError> {
         if let Some(existing) = self.0.get::<Rc<LedgerKey>>(key, budget)? {
             match (existing, ty) {
-                (AccessType::ReadOnly, AccessType::ReadOnly) => Ok(()),
                 (AccessType::ReadOnly, AccessType::ReadWrite) => {
                     Err(ScHostStorageErrorCode::ReadwriteAccessToReadonlyEntry.into())
                 }
-                (AccessType::ReadWrite, AccessType::ReadOnly) => Ok(()),
-                (AccessType::ReadWrite, AccessType::ReadWrite) => Ok(()),
+                _ => Ok(()),
             }
         } else {
             Err(ScHostStorageErrorCode::AccessToUnknownEntry.into())
@@ -113,16 +109,11 @@ impl Footprint {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub enum FootprintMode {
     Recording(Rc<dyn SnapshotSource>),
+    #[default]
     Enforcing,
-}
-
-impl Default for FootprintMode {
-    fn default() -> Self {
-        FootprintMode::Enforcing
-    }
 }
 
 /// A special-purpose map from [LedgerKey]s to [LedgerEntry]s. Represents a
@@ -204,7 +195,7 @@ impl Storage {
         match self.map.get::<Rc<LedgerKey>>(key, budget)? {
             None => Err(ScHostStorageErrorCode::MissingKeyInGet.into()),
             Some(None) => Err(ScHostStorageErrorCode::GetOnDeletedKey.into()),
-            Some(Some(val)) => Ok(Rc::clone(&val)),
+            Some(Some(val)) => Ok(Rc::clone(val)),
         }
     }
 
@@ -225,7 +216,7 @@ impl Storage {
         };
         self.map = self
             .map
-            .insert(Rc::clone(key), val.map(|v| Rc::clone(v)), budget)?;
+            .insert(Rc::clone(key), val.map(Rc::clone), budget)?;
         Ok(())
     }
 
@@ -312,7 +303,7 @@ mod test_footprint {
             key: ScVal::I32(0),
         }));
         fp.record_access(&key, AccessType::ReadOnly, &budget)?;
-        assert_eq!(fp.0.contains_key::<LedgerKey>(&key, &budget)?, true);
+        assert!(fp.0.contains_key::<LedgerKey>(&key, &budget)?);
         assert_eq!(
             fp.0.get::<LedgerKey>(&key, &budget)?,
             Some(&AccessType::ReadOnly)
@@ -405,7 +396,7 @@ pub(crate) mod test_storage {
     impl SnapshotSource for MockSnapshotSource {
         fn get(&self, key: &Rc<LedgerKey>) -> Result<Rc<LedgerEntry>, HostError> {
             if let Some(val) = self.0.get(key) {
-                Ok(Rc::clone(&val))
+                Ok(Rc::clone(val))
             } else {
                 Err(ScUnknownErrorCode::General.into())
             }

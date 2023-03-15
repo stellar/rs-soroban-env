@@ -765,7 +765,7 @@ impl Host {
         }
     }
 
-    pub(crate) fn to_host_obj<'a>(&self, ob: &ScValObjRef<'a>) -> Result<Object, HostError> {
+    pub(crate) fn to_host_obj(&self, ob: &ScValObjRef) -> Result<Object, HostError> {
         self.charge_budget(CostType::ValXdrConv, 1)?;
         let val: &ScVal = (*ob).into();
         match val {
