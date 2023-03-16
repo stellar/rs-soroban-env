@@ -270,13 +270,68 @@ pub fn is_small_i256(i: &I256) -> bool {
     is_small_i64(word) && *i == I256::from(word)
 }
 
+pub const MIN_SMALL_U64: u64 = 0;
+pub const MAX_SMALL_U64: u64 = 0x00ff_ffff_ffff_ffff_u64;
+
+pub const MIN_SMALL_I64: i64 = 0xff80_0000_0000_0000_u64 as i64;
+pub const MAX_SMALL_I64: i64 = 0x007f_ffff_ffff_ffff_u64 as i64;
+
+static_assertions::const_assert!(MIN_SMALL_I64 == -36_028_797_018_963_968_i64);
+static_assertions::const_assert!(MAX_SMALL_I64 == 36_028_797_018_963_967_i64);
+
+pub const MIN_SMALL_U128: u128 = MIN_SMALL_U64 as u128;
+pub const MAX_SMALL_U128: u128 = MAX_SMALL_U64 as u128;
+
+pub const MIN_SMALL_I128: i128 = MIN_SMALL_I64 as i128;
+pub const MAX_SMALL_I128: i128 = MAX_SMALL_I64 as i128;
+
+pub const MIN_SMALL_U256: U256 = U256::new(MIN_SMALL_U128);
+pub const MAX_SMALL_U256: U256 = U256::new(MAX_SMALL_U128);
+
+pub const MIN_SMALL_I256: I256 = I256::new(MIN_SMALL_I128);
+pub const MAX_SMALL_I256: I256 = I256::new(MAX_SMALL_I128);
+
 #[test]
 fn test_small_ints() {
-    assert!(!is_small_i64(0xff7f_ffff_ffff_ffff_u64 as i64));
-    assert!(is_small_i64(0xff80_0000_0000_0000_u64 as i64));
-    assert!(is_small_i64(0x007f_ffff_ffff_ffff_u64 as i64));
-    assert!(!is_small_i64(0x0080_0000_0000_0000_u64 as i64));
+    assert!(!is_small_i64(MIN_SMALL_I64 - 1));
+    assert!(is_small_i64(MIN_SMALL_I64));
+    assert!(is_small_i64(MAX_SMALL_I64));
+    assert!(!is_small_i64(MAX_SMALL_I64 + 1));
 
-    assert!(is_small_u64(0x00ff_ffff_ffff_ffff_u64));
-    assert!(!is_small_u64(0x0100_0000_0000_0000_u64));
+    assert!(is_small_u64(MIN_SMALL_U64));
+    assert!(is_small_u64(MAX_SMALL_U64));
+    assert!(!is_small_u64(MAX_SMALL_U64 + 1));
+
+    assert!(!is_small_i128(MIN_SMALL_I128 - 1));
+    assert!(is_small_i128(MIN_SMALL_I128));
+    assert!(is_small_i128(MAX_SMALL_I128));
+    assert!(!is_small_i128(MAX_SMALL_I128 + 1));
+
+    assert!(is_small_u128(MIN_SMALL_U128));
+    assert!(is_small_u128(MAX_SMALL_U128));
+    assert!(!is_small_u128(MAX_SMALL_U128 + 1));
+
+    assert!(!is_small_i256(&(MIN_SMALL_I256 - 1)));
+    assert!(is_small_i256(&(MIN_SMALL_I256)));
+    assert!(is_small_i256(&(MAX_SMALL_I256)));
+    assert!(!is_small_i256(&(MAX_SMALL_I256 + 1)));
+
+    assert!(is_small_u256(&(MIN_SMALL_U256)));
+    assert!(is_small_u256(&(MAX_SMALL_U256)));
+    assert!(!is_small_u256(&(MAX_SMALL_U256 + 1)));
+
+    assert!(is_small_i64(-1_i64));
+    assert!(is_small_i64(-12345_i64));
+    assert!(is_small_i64(1_i64));
+    assert!(is_small_i64(12345_i64));
+
+    assert!(is_small_i128(-1_i128));
+    assert!(is_small_i128(-12345_i128));
+    assert!(is_small_i128(1_i128));
+    assert!(is_small_i128(12345_i128));
+
+    assert!(is_small_i256(&I256::new(-1_i128)));
+    assert!(is_small_i256(&I256::new(-12345_i128)));
+    assert!(is_small_i256(&I256::new(1_i128)));
+    assert!(is_small_i256(&I256::new(12345_i128)));
 }
