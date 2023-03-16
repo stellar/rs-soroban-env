@@ -43,6 +43,7 @@ bytes-lit = "0.0.4"
 textplots = "0.8.0"
 wasmprinter = "0.2.41"
 expect-test = "1.4.0"
+more-asserts = "0.3.1"
 
 [features]
 vm = ["wasmi", "soroban-env-common/vm"]
