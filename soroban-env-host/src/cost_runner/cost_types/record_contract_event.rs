@@ -17,7 +17,7 @@ impl CostRunner for RecordContractEventRun {
 
     fn run_iter(host: &crate::Host, _iter: u64, sample: Self::SampleType) {
         host.record_contract_event(ContractEventType::Contract, sample.topics, sample.data)
-            .expect("contract event")
+            .expect("contract event");
     }
 
     fn get_total_input(_host: &crate::Host, sample: &Self::SampleType) -> u64 {

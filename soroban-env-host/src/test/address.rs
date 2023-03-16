@@ -16,7 +16,7 @@ fn test_account_address_conversions() {
         host.visit_obj(address_obj, |addr: &ScAddress| { Ok(addr.clone()) })
             .unwrap(),
         ScAddress::Account(AccountId(PublicKey::PublicKeyTypeEd25519(Uint256(
-            account_pk.clone()
+            account_pk
         ))))
     );
     let restored_pk_obj = host
@@ -50,7 +50,7 @@ fn test_contract_address_conversions() {
     assert_eq!(
         host.visit_obj(address_obj, |addr: &ScAddress| { Ok(addr.clone()) })
             .unwrap(),
-        ScAddress::Contract(Hash(contract_id.clone()))
+        ScAddress::Contract(Hash(contract_id))
     );
     let restored_contract_id_obj = host
         .address_to_contract_id(address_obj)

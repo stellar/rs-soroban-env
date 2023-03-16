@@ -1091,10 +1091,10 @@ impl Host {
                             // the .
                             else if cfg!(feature = "hostfn_log_fmt_values") {
                                 if let Some(str) = panic_payload.downcast_ref::<&str>() {
-                                    let msg: String = format!("caught panic '{}' from contract function '{:?}'", str, func);
+                                    let msg: String = format!("caught panic '{str}' from contract function '{func:?}'");
                                     event = DebugEvent::new().msg(msg);
                                 } else if let Some(str) = panic_payload.downcast_ref::<String>() {
-                                    let msg: String = format!("caught panic '{}' from contract function '{:?}'", str, func);
+                                    let msg: String = format!("caught panic '{str}' from contract function '{func:?}'");
                                     event = DebugEvent::new().msg(msg);
                                 }
                             }
@@ -3020,9 +3020,9 @@ mod testutils {
             set_hook(Box::new(move |info| {
                 let calling_test_contract = TEST_CONTRACT_CALL_COUNT.with(|c| c.get() != 0);
                 if !calling_test_contract {
-                    existing_panic_hook(info)
+                    existing_panic_hook(info);
                 }
-            }))
+            }));
         });
 
         TEST_CONTRACT_CALL_COUNT.with(|c| {

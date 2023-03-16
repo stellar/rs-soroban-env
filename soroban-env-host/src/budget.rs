@@ -308,7 +308,7 @@ impl BudgetDimension {
     #[cfg(test)]
     pub fn reset_models(&mut self) {
         for model in &mut self.cost_models {
-            model.reset()
+            model.reset();
         }
     }
 }

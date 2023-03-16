@@ -22,7 +22,7 @@ pub trait CostRunner: Sized {
     /// `run_iter` with iter set to each number in 0..RUN_ITERATIONS.
     fn run(host: &Host, samples: Vec<Self::SampleType>) {
         for (iter, sample) in samples.into_iter().enumerate() {
-            Self::run_iter(host, iter as u64, sample)
+            Self::run_iter(host, iter as u64, sample);
         }
     }
 

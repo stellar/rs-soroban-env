@@ -99,8 +99,8 @@ fn bytes_slice_start_greater_than_len() -> Result<(), HostError> {
 fn bytes_xdr_roundtrip() -> Result<(), HostError> {
     let host = Host::default();
     let roundtrip = |v: ScVal| -> Result<(), HostError> {
-        let rv: RawVal = host.to_host_val(&v)?.into();
-        let bo = host.serialize_to_bytes(rv.clone())?;
+        let rv: RawVal = host.to_host_val(&v)?;
+        let bo = host.serialize_to_bytes(rv)?;
         let rv_back = host.deserialize_from_bytes(bo)?;
         assert_eq!(host.compare(&rv, &rv_back)?, core::cmp::Ordering::Equal);
         Ok(())
@@ -117,7 +117,7 @@ fn bytes_xdr_roundtrip() -> Result<(), HostError> {
     {
         // vec
         let scval = ScVal::Vec(Some(host.test_scvec::<u32>(&[1, 2])?));
-        roundtrip(scval)?
+        roundtrip(scval)?;
         // TODO: add other types
     }
     // Symbol

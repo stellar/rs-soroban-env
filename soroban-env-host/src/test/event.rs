@@ -33,7 +33,7 @@ fn contract_event() -> Result<(), HostError> {
     let args = host.test_vec_obj::<i32>(&[1, 2])?;
     host.register_test_contract(id, test_contract)?;
     assert_eq!(
-        host.call(id, sym.into(), args.into())?.get_payload(),
+        host.call(id, sym, args)?.get_payload(),
         RawVal::from_void().to_raw().get_payload()
     );
 
@@ -53,21 +53,14 @@ fn contract_event() -> Result<(), HostError> {
     // Fish out the last contract event and check that it is
     // correct, and formats as expected.
     let events = host.get_events()?.0;
-    match events.last() {
-        Some(HostEvent {
-            event,
-            failed_call: _,
-        }) => match event {
-            Event::Contract(ce) => {
-                assert_eq!(*ce, event_ref)
-            }
-            _ => {
-                panic!("missing contract event")
-            }
-        },
-        _ => {
-            panic!("missing contract event")
-        }
+    if let Some(HostEvent {
+        event: Event::Contract(ce),
+        failed_call: _,
+    }) = events.last()
+    {
+        assert_eq!(*ce, event_ref);
+    } else {
+        panic!("missing contract event");
     };
     Ok(())
 }

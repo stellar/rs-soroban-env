@@ -55,9 +55,6 @@ fn ed25519_verify_test() -> Result<(), HostError> {
 
     let res_failed = host.verify_sig_ed25519(obj_msg2, obj_pub, obj_sig);
 
-    match res_failed {
-        Ok(_) => panic!("verification test failed"),
-        _ => (),
-    };
+    assert!(res_failed.is_err(), "verification test failed");
     Ok(())
 }

@@ -8,6 +8,6 @@ impl CostRunner for ValSerRun {
 
     fn run_iter(host: &crate::Host, _iter: u64, sample: Self::SampleType) {
         let mut buf = Vec::<u8>::new();
-        host.metered_write_xdr(&sample, &mut buf).unwrap()
+        host.metered_write_xdr(&sample, &mut buf).unwrap();
     }
 }
