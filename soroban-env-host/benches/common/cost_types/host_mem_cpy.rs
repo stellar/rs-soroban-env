@@ -12,6 +12,6 @@ impl HostCostMeasurement for HostMemCpyMeasure {
     fn new_random_case(_host: &Host, rng: &mut StdRng, input: u64) -> ([u8; 32], u64) {
         let mut a: [u8; 32] = [0; 32];
         rng.fill_bytes(a.as_mut_slice());
-        (a, input * 100)
+        (a, input * 1000)
     }
 }

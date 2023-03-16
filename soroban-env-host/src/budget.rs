@@ -1,5 +1,6 @@
 use std::{
     cell::{RefCell, RefMut},
+    fmt::Debug,
     rc::Rc,
 };
 
@@ -17,61 +18,51 @@ pub enum CostType {
     HostMemAlloc = 2,
     // Cost of copying a chuck of bytes into a pre-allocated host memory
     HostMemCpy = 3,
+    // Cost of comparing two slices of host memory
+    HostMemCmp = 4,
     // Cost of a host function invocation, not including the actual work done by the function
-    InvokeHostFunction = 4,
+    InvokeHostFunction = 5,
     // Cost of visiting a host object from the host object storage
     // TODO: consider removing. This is just indexing into an array. Fixed cost around 400 insns.
     // Only thing to make sure is the guest can't visitObject repeatly without incurring some charges elsewhere.
-    VisitObject = 5,
+    VisitObject = 6,
     // Tracks a single Val (RawVal or primative Object like U64) <=> ScVal
     // conversion cost. Most of these Val counterparts in ScVal (except e.g.
     // Symbol) consumes a single int64 and therefore is a constant overhead.
-    ValXdrConv = 6,
+    ValXdrConv = 7,
     // Cost of serializing an xdr object to bytes
-    ValSer = 7,
+    ValSer = 8,
     // Cost of deserializing an xdr object from bytes
-    ValDeser = 8,
+    ValDeser = 9,
     // Cost of computing the sha256 hash from bytes
-    ComputeSha256Hash = 9,
+    ComputeSha256Hash = 10,
     // Cost of computing the ed25519 pubkey from bytes
-    ComputeEd25519PubKey = 10,
+    ComputeEd25519PubKey = 11,
     // Cost of constructing an new map. The input is the number
     // of entries allocated.
-    MapNew = 11,
+    MapNew = 12,
     // Cost of accessing an entry in a map. The input is the count of the number of
     // entries examined (which will be the log of the size of the map under binary search).
-    MapEntry = 12,
+    MapEntry = 13,
     // Cost of constructing a new vector. The input is the number of entries allocated.
-    VecNew = 13,
+    VecNew = 14,
     // Cost of accessing one or more elements in a Vector. The input is the count of
     // the number of elements accessed.
-    VecEntry = 14,
+    VecEntry = 15,
     // Cost of guarding a frame, which involves pushing and poping a frame and capturing a rollback point.
-    GuardFrame = 15,
+    GuardFrame = 16,
     // Cost of verifying ed25519 signature of a payload.
-    VerifyEd25519Sig = 16,
+    VerifyEd25519Sig = 17,
     // Cost of reading a slice of vm linear memory
-    VmMemRead = 17,
+    VmMemRead = 18,
     // Cost of writing to a slice of vm linear memory
-    VmMemWrite = 18,
+    VmMemWrite = 19,
     // Cost of instantiation a VM from wasm bytes code.
-    VmInstantiation = 19,
+    VmInstantiation = 20,
     // Roundtrip cost of invoking a VM function from the host.
-    InvokeVmFunction = 20,
-    // Cost of deleting a byte from a bytes array,
-    BytesDel = 21,
-    // Cost of pushing a byte
-    BytesPush = 22,
-    // Cost of poping a byte
-    BytesPop = 23,
-    // Cost of inserting a byte into a bytes array at some index
-    BytesInsert = 24,
-    // Cost of appending a byte to the end of a bytes array
-    BytesAppend = 25,
-    // Cost of comparing two bytes arrays
-    BytesCmp = 26,
+    InvokeVmFunction = 21,
     // Cost of charging a value to the budgeting system.
-    ChargeBudget = 27,
+    ChargeBudget = 22,
 }
 
 // TODO: add XDR support for iterating over all the elements of an enum
@@ -99,61 +90,44 @@ impl CostType {
             CostType::VmMemWrite,
             CostType::VmInstantiation,
             CostType::InvokeVmFunction,
-            CostType::BytesDel,
-            CostType::BytesPush,
-            CostType::BytesPop,
-            CostType::BytesInsert,
-            CostType::BytesAppend,
-            CostType::BytesCmp,
+            CostType::HostMemCmp,
             CostType::ChargeBudget,
         ];
         VARIANTS.iter()
     }
 }
 
-/// We provide a general "cost model" object that evaluates a general
-/// expression:
+/// We provide a "cost model" object that evaluates a linear expression:
 ///
-///    f(x) = a + b*log_i(x) + c*x + d*(x^2)
+///    f(x) = a + b*x
 ///
-/// Where a, b, c, d, and i are all "fixed" parameters at construction time
-/// (extracted from an on-chain cost schedule, so technically not _totally_
-/// fixed) and x is some abstract input variable -- say, event counts or object
-/// sizes -- provided at runtime.
+/// Where a, b are "fixed" parameters at construction time (extracted from an
+/// on-chain cost schedule, so technically not _totally_ fixed) and x is some
+/// abstract input variable -- say, event counts or object sizes -- provided at
+/// runtime.
 ///
-/// The log base i is also rounded-up to its nearest power of 2, since we
-/// implement that term using bit count instructions.
+/// The same `CostModel` type, i.e. `CostType` (applied to different parameters
+/// and variables) is used for calculating memory as well as CPU time.
 ///
-/// The same CostModel type (applied to different parameters and variables) is
-/// used for calculating memory as well as CPU time. We _hope_ this expression
-/// is capable of modeling any of the costs we want to measure at runtime.
+/// The various `CostType`s are carefully choosen such that 1. their underlying
+/// cost characteristics (both cpu and memory) at runtime can be described
+/// sufficiently by a linear model and 2. they together encompass the vast
+/// majority of available operations done by the `env` -- the host and the VM.
 ///
-/// The parameters for a CostModel are calibrated empirically. See this crate's
+/// The parameters for a `CostModel` are calibrated empirically. See this crate's
 /// benchmarks for more details.
 
 #[derive(Default, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct CostModel {
     pub const_param: u64,
-    pub log_param: u64,
-    pub log_base_param: u64,
     pub lin_param: u64,
-    pub quad_param: u64,
 }
 
 impl CostModel {
     pub fn evaluate(&self, input: u64) -> u64 {
         let mut res = self.const_param;
-        if self.log_param != 0 {
-            res = res.saturating_add(
-                self.log_param
-                    .saturating_mul(ceil_log_base(input, self.log_base_param)),
-            );
-        }
         if self.lin_param != 0 {
             res = res.saturating_add(self.lin_param.saturating_mul(input));
-        }
-        if self.quad_param != 0 {
-            res = res.saturating_add(self.quad_param.saturating_mul(input.saturating_mul(input)));
         }
         res
     }
@@ -161,45 +135,11 @@ impl CostModel {
     #[cfg(test)]
     pub fn reset(&mut self) {
         self.const_param = 0;
-        self.log_param = 0;
-        self.log_base_param = 0;
         self.lin_param = 0;
-        self.quad_param = 0;
     }
 }
 
-// Returns the next power of 2 >= the input, avoiding overflow and returning 2
-// for any input <= 2 (as we want to use this for logarithm input bases below).
-fn next_2(x: u64) -> u64 {
-    match x.checked_next_power_of_two() {
-        None => 0x1000_0000_0000_0000,
-        Some(0) => 2,
-        Some(1) => 2,
-        Some(n) => n,
-    }
-}
-
-// Returns the ceil(log_base(next_2(x_in), next_2(base_in))); in other words
-// rounds-up the input numbers to their nearest powers-of-two x and base
-// respectively and then returns the least k such that base^k >= x.
-//
-// This is used below when calculating the cost to charge for a logarithmic
-// term in the cost model.
-fn ceil_log_base(x_in: u64, base_in: u64) -> u64 {
-    let x = next_2(x_in);
-    let base = next_2(base_in);
-    let x_bits = x.trailing_zeros();
-    let base_bits = base.trailing_zeros();
-    let mut res = x_bits / base_bits;
-    if x_bits % base_bits != 0 {
-        res += 1;
-    }
-    assert!(base.pow(res) >= x);
-    assert!(base.pow(res) >= x_in);
-    res as u64
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct BudgetDimension {
     trapcode: ScVmErrorCode,
 
@@ -214,9 +154,28 @@ pub struct BudgetDimension {
     /// over budget.
     limit: u64,
 
+    /// Tracks the output value from individual cost models
+    counts: Vec<u64>,
+
     /// Tracks the sum of _output_ values from the cost model, for purposes
     /// of comparing to limit.
-    count: u64,
+    total_count: u64,
+}
+
+impl Debug for BudgetDimension {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(
+            f,
+            "limit: {}, total_count: {}",
+            self.limit, self.total_count
+        )?;
+
+        for ct in CostType::variants() {
+            writeln!(f, "CostType {:?}, count {}", ct, self.counts[*ct as usize])?;
+            writeln!(f, "model: {:?}", self.cost_models[*ct as usize])?;
+        }
+        Ok(())
+    }
 }
 
 impl BudgetDimension {
@@ -225,11 +184,13 @@ impl BudgetDimension {
             trapcode,
             cost_models: Default::default(),
             limit: Default::default(),
-            count: Default::default(),
+            counts: Default::default(),
+            total_count: Default::default(),
         };
         for _ct in CostType::variants() {
             // TODO: load cost model for i from the chain.
             bd.cost_models.push(CostModel::default());
+            bd.counts.push(0);
         }
         bd
     }
@@ -242,8 +203,12 @@ impl BudgetDimension {
         &mut self.cost_models[ty as usize]
     }
 
-    pub fn get_count(&self) -> u64 {
-        self.count
+    pub fn get_count(&self, ty: CostType) -> u64 {
+        self.counts[ty as usize]
+    }
+
+    pub fn get_total_count(&self) -> u64 {
+        self.total_count
     }
 
     pub fn get_limit(&self) -> u64 {
@@ -252,16 +217,21 @@ impl BudgetDimension {
 
     pub fn reset(&mut self, limit: u64) {
         self.limit = limit;
-        self.count = 0;
+        self.total_count = 0;
+        for v in &mut self.counts {
+            *v = 0;
+        }
     }
 
     pub fn is_over_budget(&self) -> bool {
-        self.count > self.limit
+        self.total_count > self.limit
     }
 
     pub fn charge(&mut self, ty: CostType, input: u64) -> Result<(), HostError> {
         let cm = self.get_cost_model(ty);
-        self.count = self.count.saturating_add(cm.evaluate(input));
+        let amount = cm.evaluate(input);
+        self.counts[ty as usize] = self.counts[ty as usize].saturating_add(amount);
+        self.total_count = self.total_count.saturating_add(amount);
         if self.is_over_budget() {
             // TODO: convert this to a proper error code type.
             Err(self.trapcode.into())
@@ -279,7 +249,7 @@ impl BudgetDimension {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub(crate) struct BudgetImpl {
     pub cpu_insns: BudgetDimension,
     pub mem_bytes: BudgetDimension,
@@ -289,8 +259,47 @@ pub(crate) struct BudgetImpl {
     enabled: bool,
 }
 
-#[derive(Default, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+impl Debug for BudgetImpl {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(
+            f,
+            "Cpu limit: {}; used: {}",
+            self.cpu_insns.limit, self.cpu_insns.total_count
+        )?;
+        writeln!(
+            f,
+            "Mem limit: {}; used: {}",
+            self.mem_bytes.limit, self.mem_bytes.total_count
+        )?;
+
+        // FIXME: align them nicely
+        writeln!(f, "CostType\tinput\tcpu_insns\tmem_bytes")?;
+        for ct in CostType::variants() {
+            let i = *ct as usize;
+            writeln!(
+                f,
+                "{:?}\t{}\t{}\t{}",
+                ct, self.inputs[i], self.cpu_insns.counts[i], self.mem_bytes.counts[i]
+            )?;
+        }
+        Ok(())
+    }
+}
+
+#[test]
+fn test_print() {
+    let budget = Budget::default();
+    println!("{:?}", budget)
+}
+
+#[derive(Default, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Budget(pub(crate) Rc<RefCell<BudgetImpl>>);
+
+impl Debug for Budget {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "{:?}", self.0.borrow())
+    }
+}
 
 pub trait AsBudget {
     fn as_budget(&self) -> &Budget;
@@ -322,15 +331,13 @@ impl Budget {
             return Ok(());
         }
 
-        // println!("charging {} of {:?} (cpu budget: {}, mem budget: {})",
-        // input, ty, self.get_cpu_insns_count(), self.get_mem_bytes_count());
-        //
         // NB: charging a cost-amount to the budgeting machinery itself seems to
         // cost a similar amount as a single WASM instruction; so it's quite
         // important to buffer WASM step counts before flushing to budgeting,
         // and we add a constant charge here for "the cost of budget-counting"
         // itself.
         self.get_input_mut(ty, |i| *i = i.saturating_add(input));
+        self.get_input_mut(CostType::ChargeBudget, |i| *i = i.saturating_add(1));
         self.mut_budget(|mut b| {
             b.cpu_insns.charge(CostType::ChargeBudget, 1)?;
             b.cpu_insns.charge(ty, input)?;
@@ -368,11 +375,11 @@ impl Budget {
     }
 
     pub fn get_cpu_insns_count(&self) -> u64 {
-        self.0.borrow().cpu_insns.get_count()
+        self.0.borrow().cpu_insns.get_total_count()
     }
 
     pub fn get_mem_bytes_count(&self) -> u64 {
-        self.0.borrow().mem_bytes.get_count()
+        self.0.borrow().mem_bytes.get_total_count()
     }
 
     pub fn reset_default(&self) {
@@ -484,28 +491,11 @@ impl Default for BudgetImpl {
                 }
                 CostType::VmInstantiation => cpu.const_param = 1_000_000,
                 CostType::InvokeVmFunction => cpu.const_param = 4941,
-                CostType::BytesAppend => {
-                    cpu.const_param = 770;
-                    cpu.lin_param = 1
-                }
-                CostType::BytesCmp => {
+                CostType::HostMemCmp => {
                     cpu.const_param = 141;
                     cpu.lin_param = 1
                 }
-                CostType::BytesDel => {
-                    cpu.const_param = 800;
-                }
-                CostType::BytesInsert => {
-                    cpu.const_param = 756;
-                    cpu.lin_param = 1;
-                }
-                CostType::BytesPop => {
-                    cpu.const_param = 486;
-                }
-                CostType::BytesPush => {
-                    cpu.const_param = 1500;
-                }
-                CostType::ChargeBudget => cpu.const_param = 127,
+                CostType::ChargeBudget => cpu.const_param = 193,
                 CostType::HostMemAlloc => cpu.const_param = 872,
                 CostType::HostMemCpy => cpu.lin_param = 3,
             }
@@ -531,21 +521,7 @@ impl Default for BudgetImpl {
                 CostType::VmInstantiation => mem.const_param = 1_000_000,
                 CostType::VmMemRead => mem.lin_param = 1,
                 CostType::VmMemWrite => (),
-                CostType::BytesAppend => {
-                    mem.const_param = 16;
-                    mem.lin_param = 1
-                }
-                CostType::BytesCmp => (),
-                CostType::BytesDel => (),
-                CostType::BytesInsert => {
-                    cpu.const_param = 16;
-                    cpu.lin_param = 2;
-                }
-                CostType::BytesPop => (),
-                CostType::BytesPush => {
-                    cpu.const_param = 16;
-                    cpu.lin_param = 2;
-                }
+                CostType::HostMemCmp => (),
                 CostType::InvokeVmFunction => mem.const_param = 267,
                 CostType::ChargeBudget => (),
                 CostType::HostMemAlloc => mem.lin_param = 1,

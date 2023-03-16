@@ -1,5 +1,5 @@
 use rand::{rngs::StdRng, Rng, SeedableRng};
-use soroban_env_host::{cost_runner::CostRunner, Host};
+use soroban_env_host::{budget::AsBudget, cost_runner::CostRunner, Host};
 use std::{
     alloc::System,
     ops::Range,
@@ -299,17 +299,17 @@ mod cpu {
     }
 }
 
-fn harness<HCM: HostCostMeasurement, F>(
+fn harness<HCM: HostCostMeasurement, R>(
     host: &Host,
     mem_tracker: &MemTracker,
     cpu_insn_counter: &mut cpu::InstructionCounter,
     alloc_group_token: &mut AllocationGroupToken,
     iterations: u64,
-    f: &mut F,
+    runner: &mut R,
     samples: Vec<<<HCM as HostCostMeasurement>::Runner as CostRunner>::SampleType>,
 ) -> Measurement
 where
-    F: FnMut(&Host, Vec<<<HCM as HostCostMeasurement>::Runner as CostRunner>::SampleType>),
+    R: FnMut(&Host, Vec<<<HCM as HostCostMeasurement>::Runner as CostRunner>::SampleType>),
 {
     // TODO get rid of dependency of inputs on samples
     let sample = samples[0].clone();
@@ -317,9 +317,9 @@ where
     let start = Instant::now();
     mem_tracker.0.store(0, Ordering::SeqCst);
     let alloc_guard = alloc_group_token.enter();
-    host.with_budget(|budget| budget.reset_inputs());
+    host.as_budget().reset_unlimited();
     cpu_insn_counter.begin();
-    f(host, samples);
+    runner(host, samples);
     // collect the metrics
     let cpu_insns = cpu_insn_counter.end_and_count() / iterations;
     drop(alloc_guard);
@@ -358,7 +358,6 @@ where
     loop {
         // prepare the measurement
         let host = Host::default();
-        host.with_budget(|budget| budget.reset_unlimited());
         let sample = match next_sample(&host) {
             Some(s) => s,
             None => break,
