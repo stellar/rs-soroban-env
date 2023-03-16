@@ -68,12 +68,12 @@ pub(crate) struct VmMemReadMeasure;
 impl HostCostMeasurement for VmMemReadMeasure {
     type Runner = VmMemReadRun;
 
-    fn new_random_case(host: &Host, _rng: &mut StdRng, input: u64) -> (Rc<Vm>, usize) {
+    fn new_random_case(host: &Host, _rng: &mut StdRng, input: u64) -> (Rc<Vm>, Vec<u8>) {
         let input = (input * 1000) as usize;
         let id: xdr::Hash = [0; 32].into();
         let code = soroban_test_wasms::ADD_I32;
         let vm = Vm::new(&host, id, &code).unwrap();
-        (vm, input)
+        (vm, vec![0; input])
     }
 }
 
