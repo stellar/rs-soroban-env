@@ -1,9 +1,9 @@
-mod bytes_ops;
 mod charge_budget;
 mod compute_ed25519_pubkey;
 mod compute_sha256_hash;
 mod guard_frame;
 mod host_mem_alloc;
+mod host_mem_cmp;
 mod host_mem_cpy;
 mod im_map_ops;
 mod im_vec_ops;
@@ -19,12 +19,12 @@ mod vm_ops;
 #[cfg(feature = "vm")]
 mod wasm_insn_exec;
 
-pub use bytes_ops::*;
 pub use charge_budget::*;
 pub use compute_ed25519_pubkey::*;
 pub use compute_sha256_hash::*;
 pub use guard_frame::*;
 pub use host_mem_alloc::*;
+pub use host_mem_cmp::*;
 pub use host_mem_cpy::*;
 pub use im_map_ops::*;
 pub use im_vec_ops::*;

@@ -1332,13 +1332,15 @@ impl Host {
         if let Ok(ss) = SymbolSmall::try_from(sym) {
             let sstr: SymbolStr = ss.into();
             let slice: &[u8] = sstr.as_ref();
-            self.charge_budget(CostType::BytesCmp, slice.len().min(s.len()) as u64)?;
-            Ok(slice.eq(s))
+            self.as_budget()
+                .compare(&slice, &s)
+                .map(|c| c == Ordering::Equal)
         } else {
             let sobj: SymbolObject = sym.try_into()?;
             self.visit_obj(sobj, |scsym: &ScSymbol| {
-                self.charge_budget(CostType::BytesCmp, scsym.len().min(s.len()) as u64)?;
-                Ok(scsym.as_slice().eq(s))
+                self.as_budget()
+                    .compare(&scsym.as_slice(), &s)
+                    .map(|c| c == Ordering::Equal)
             })
         }
     }
@@ -2653,7 +2655,11 @@ impl VmCallerEnv for Host {
         let vnew = self.visit_obj(b, move |hv: &ScBytes| {
             self.validate_index_lt_bound(i, hv.len())?;
             let mut vnew: Vec<u8> = hv.metered_clone(&self.0.budget)?.into();
-            self.charge_budget(CostType::BytesDel, hv.len() as u64)?; // O(n) worst case
+            // len > i has been verified above but use saturating_sub just in case
+            let n_elts = (hv.len() as u64).saturating_sub(i as u64);
+            // remove elements incurrs the cost of moving bytes, it does not incur
+            // allocation/deallocation
+            metered_clone::charge_shallow_copy::<u8>(n_elts, self.as_budget())?;
             vnew.remove(i as usize);
             Ok(ScBytes(vnew.try_into()?))
         })?;
@@ -2699,9 +2705,11 @@ impl VmCallerEnv for Host {
     ) -> Result<BytesObject, HostError> {
         let u = self.u8_from_u32val_input("u", u)?;
         let vnew = self.visit_obj(b, move |hv: &ScBytes| {
-            let mut vnew: Vec<u8> = hv.metered_clone(&self.0.budget)?.into();
-            // Passing `len()` since worse case can cause reallocation.
-            self.charge_budget(CostType::BytesPush, hv.len() as u64)?;
+            let mut vnew: Vec<u8> = hv.metered_clone(self.as_budget())?.into();
+            // `Vec::push` may inccur reallocation if capacity is reached. Here we charge the cost
+            // of deep-cloning`len` bytes as the worst case. The actual bytes reallocated (if it
+            // happens) will exceed `len` but we don't know the factor (that is internal).
+            <Vec<u8> as MeteredClone>::charge_deep_clone(&vnew, self.as_budget())?;
             vnew.push(u);
             Ok(ScBytes(vnew.try_into()?))
         })?;
@@ -2715,9 +2723,9 @@ impl VmCallerEnv for Host {
         b: BytesObject,
     ) -> Result<BytesObject, HostError> {
         let vnew = self.visit_obj(b, move |hv: &ScBytes| {
-            let mut vnew: Vec<u8> = hv.metered_clone(&self.0.budget)?.into();
-            // Passing `len()` since worse case can cause reallocation.
-            self.charge_budget(CostType::BytesPop, hv.len() as u64)?;
+            let mut vnew: Vec<u8> = hv.metered_clone(self.as_budget())?.into();
+            // Popping will not trigger reallocation. Here we don't charge anything since this is
+            // just a `len` reduction.
             if vnew.pop().is_none() {
                 return Err(self.err_status(ScHostObjErrorCode::VecIndexOutOfBound));
             }
@@ -2763,8 +2771,11 @@ impl VmCallerEnv for Host {
         let u = self.u8_from_u32val_input("u", u)?;
         let vnew = self.visit_obj(b, move |hv: &ScBytes| {
             self.validate_index_le_bound(i, hv.len())?;
-            let mut vnew: Vec<u8> = hv.metered_clone(&self.0.budget)?.into();
-            self.charge_budget(CostType::BytesInsert, hv.len() as u64)?; // insert is O(n) worst case
+            let mut vnew: Vec<u8> = hv.metered_clone(self.as_budget())?.into();
+            // `Vec::insert` may inccur reallocation if capacity is reached. Here we charge the
+            // cost of deep-cloning `len` bytes as the worst case. The actual bytes reallocated
+            // (if it happens) will exceed `len` but we don't know the factor (that is internal).
+            <Vec<u8> as MeteredClone>::charge_deep_clone(&vnew, self.as_budget())?;
             vnew.insert(i as usize, u);
             Ok(ScBytes(vnew.try_into()?))
         })?;
@@ -2784,8 +2795,12 @@ impl VmCallerEnv for Host {
         if b2.len() > u32::MAX as usize - vnew.len() {
             return Err(self.err_status_msg(ScHostFnErrorCode::InputArgsInvalid, "u32 overflow"));
         }
-        self.charge_budget(CostType::BytesAppend, (vnew.len() + b2.len()) as u64)?; // worst case can cause rellocation
+        // We may temporarily undercharge by `b1.len()+b2.len()` bytes but that should be okay.
         vnew.extend(b2.iter());
+        // `Vec::extend` may inccur reallocation if capacity is reached. Here we charge the
+        // cost of deep-cloning `len` bytes as the worst case. The actual bytes reallocated
+        // (if it happens) will exceed `len` but we don't know the factor (that is internal).
+        <Vec<u8> as MeteredClone>::charge_deep_clone(&vnew, self.as_budget())?;
         Ok(self.add_host_object(ScBytes(vnew.try_into()?))?.into())
     }
 

@@ -197,16 +197,7 @@ impl Host {
         slices: &[&str],
         mut callback: impl FnMut(usize, &str) -> Result<(), HostError>,
     ) -> Result<(), HostError> {
-        // FIXME: this should be CostType::MemRead when we have that
-        self.charge_budget(
-            CostType::BytesCmp,
-            slices
-                .len()
-                .saturating_mul(2)
-                .saturating_mul(std::mem::size_of::<usize>()) as u64,
-        )?;
         for (i, slice) in slices.iter().enumerate() {
-            self.charge_budget(CostType::VmMemRead, slice.len() as u64)?;
             callback(i, *slice)?;
         }
         Ok(())
