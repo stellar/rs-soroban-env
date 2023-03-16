@@ -393,7 +393,6 @@ fn test_asset_init(asset_code: &[u8]) {
             test.issuer_key.public.to_bytes().to_vec()
         ]
         .concat()
-        
     );
 
     let user = TestSigner::account_with_multisig(&account_id, vec![&test.user_key]);
@@ -459,9 +458,7 @@ fn test_zero_amounts() {
     token
         .set_auth(&admin, user_contract_address.clone(), true)
         .unwrap();
-    token
-        .clawback(&admin, user_contract_address, 0)
-        .unwrap();
+    token.clawback(&admin, user_contract_address, 0).unwrap();
 }
 
 #[test]

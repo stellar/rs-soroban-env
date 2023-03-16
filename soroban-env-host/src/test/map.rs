@@ -200,18 +200,15 @@ fn map_prev_and_next_heterogeneous() -> Result<(), HostError> {
             RawVal::from_u32(2).to_raw().get_payload()
         );
         assert_eq!(
-            host.map_prev_key(test_map, sym.into())?
-                .get_payload(),
+            host.map_prev_key(test_map, sym.into())?.get_payload(),
             RawVal::from_u32(2).to_raw().get_payload()
         );
         assert_eq!(
-            host.map_prev_key(test_map, obj_vec)?
-                .get_payload(),
+            host.map_prev_key(test_map, obj_vec)?.get_payload(),
             sym.as_raw().get_payload()
         );
         assert_eq!(
-            host.map_prev_key(test_map, obj_map)?
-                .get_payload(),
+            host.map_prev_key(test_map, obj_map)?.get_payload(),
             obj_vec.get_payload()
         );
     }
@@ -226,18 +223,15 @@ fn map_prev_and_next_heterogeneous() -> Result<(), HostError> {
             sym.as_raw().get_payload()
         );
         assert_eq!(
-            host.map_next_key(test_map, sym.into())?
-                .get_payload(),
+            host.map_next_key(test_map, sym.into())?.get_payload(),
             obj_vec.get_payload()
         );
         assert_eq!(
-            host.map_next_key(test_map, obj_vec)?
-                .get_payload(),
+            host.map_next_key(test_map, obj_vec)?.get_payload(),
             obj_map.get_payload()
         );
         assert_eq!(
-            host.map_next_key(test_map, obj_map)?
-                .get_payload(),
+            host.map_next_key(test_map, obj_map)?.get_payload(),
             Status::UNKNOWN_ERROR.to_raw().get_payload()
         );
     }
