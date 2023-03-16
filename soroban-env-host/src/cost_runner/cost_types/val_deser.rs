@@ -8,5 +8,7 @@ impl CostRunner for ValDeserRun {
 
     fn run_iter(host: &crate::Host, _iter: u64, sample: Self::SampleType) {
         host.metered_from_xdr::<ScVal>(&sample).unwrap();
+        // `forget` avoids deallocation of sample which artificially inflates the cost
+        std::mem::forget(sample)
     }
 }

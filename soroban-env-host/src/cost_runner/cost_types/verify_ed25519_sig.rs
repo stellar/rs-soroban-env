@@ -17,5 +17,7 @@ impl CostRunner for VerifyEd25519SigRun {
     fn run_iter(host: &crate::Host, _iter: u64, sample: Self::SampleType) {
         host.verify_sig_ed25519_internal(sample.msg.as_slice(), &sample.key, &sample.sig)
             .expect("verify sig ed25519");
+        // `forget` avoids deallocation of sample which artificially inflates the cost
+        std::mem::forget(sample);
     }
 }

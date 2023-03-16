@@ -23,8 +23,10 @@ impl CostRunner for ImMapEntryRun {
     type SampleType = ImMapEntrySample;
 
     fn run_iter(host: &crate::Host, _iter: u64, sample: Self::SampleType) {
-        for k in sample.keys {
-            sample.map.get(&k, host).unwrap();
+        for k in &sample.keys {
+            sample.map.get(k, host).unwrap();
         }
+        // `forget` avoids deallocation of sample which artificially inflates the cost
+        std::mem::forget(sample)
     }
 }

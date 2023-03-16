@@ -18,6 +18,14 @@ pub trait CostRunner: Sized {
     }
 
     /// Run a iteration of the `CostRunner`, called by `run` for 0..RUN_ITERATIONS.
+    /// Execution under `run_iter` is what's actually being measured by the bench
+    /// machineary. Need to ensure as much as possible `run_iter` only calls essential
+    /// host routines that go into the measurement. Any input setup needs to be done
+    /// beforehand and passed in via `sample`. Use `std::mem::forget` to avoid deallocation
+    /// of sample for more accurate measurement when 1. the sample contains heap
+    /// allocated objects (Vec, HashMap, Rc, Box etc.) and 2. the heap size is non-constant
+    /// (grows with `input`) and 3. the iteration's computation cost does *not* significantly
+    /// outweight the deallocation cost (all three must be satisfied).
     fn run_iter(host: &Host, iter: u64, sample: Self::SampleType);
 
     fn run_baseline(host: &Host, samples: Vec<Self::SampleType>) {

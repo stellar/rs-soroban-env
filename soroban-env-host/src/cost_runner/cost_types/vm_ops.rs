@@ -16,6 +16,8 @@ impl CostRunner for VmInstantiationRun {
 
     fn run_iter(host: &crate::Host, _iter: u64, sample: Self::SampleType) {
         Vm::new(host, sample.id, &sample.wasm[..]).unwrap();
+        // `forget` avoids deallocation of sample which artificially inflates the cost
+        std::mem::forget(sample.wasm);
     }
 }
 
@@ -23,15 +25,15 @@ pub struct VmMemReadRun;
 impl CostRunner for VmMemReadRun {
     const COST_TYPE: CostType = CostType::VmMemRead;
 
-    type SampleType = (Rc<Vm>, usize);
+    type SampleType = (Rc<Vm>, Vec<u8>);
 
-    fn run_iter(host: &crate::Host, _iter: u64, sample: Self::SampleType) {
-        let mut buf: Vec<u8> = vec![0; sample.1];
+    fn run_iter(host: &crate::Host, _iter: u64, mut sample: Self::SampleType) {
         let vm = sample.0;
         vm.with_vmcaller(|caller| {
-            host.metered_vm_read_bytes_from_linear_memory(caller, &vm, 0, &mut buf)
+            host.metered_vm_read_bytes_from_linear_memory(caller, &vm, 0, &mut sample.1)
                 .unwrap()
-        })
+        });
+        std::mem::forget(sample.1);
     }
 }
 
@@ -46,6 +48,8 @@ impl CostRunner for VmMemWriteRun {
         vm.with_vmcaller(|caller| {
             host.metered_vm_write_bytes_to_linear_memory(caller, &vm, 0, &mut sample.1)
                 .unwrap()
-        })
+        });
+        // `forget` avoids deallocation of sample which artificially inflates the cost
+        std::mem::forget(sample.1);
     }
 }

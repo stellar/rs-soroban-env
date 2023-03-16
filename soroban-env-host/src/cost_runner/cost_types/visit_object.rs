@@ -9,7 +9,8 @@ impl CostRunner for VisitObjectRun {
     fn run_iter(host: &crate::Host, iter: u64, sample: Self::SampleType) {
         unsafe {
             let obj = sample[iter as usize % sample.len()];
-            let _ = host.unchecked_visit_val_obj(obj, |_| Ok(()));
+            host.unchecked_visit_val_obj(obj, |_| Ok(())).unwrap();
+            std::mem::forget(sample);
         }
     }
 }

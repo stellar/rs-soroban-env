@@ -8,6 +8,9 @@ impl CostRunner for ValSerRun {
 
     fn run_iter(host: &crate::Host, _iter: u64, sample: Self::SampleType) {
         let mut buf = Vec::<u8>::new();
-        host.metered_write_xdr(&sample, &mut buf).unwrap()
+        host.metered_write_xdr(&sample, &mut buf).unwrap();
+        // `forget` avoids deallocation of sample which artificially inflates the cost
+        std::mem::forget(sample);
+        std::mem::forget(buf)
     }
 }

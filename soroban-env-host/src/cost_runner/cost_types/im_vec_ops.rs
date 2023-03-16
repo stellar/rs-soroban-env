@@ -9,7 +9,8 @@ impl CostRunner for ImVecNewRun {
     type SampleType = Vec<RawVal>;
 
     fn run_iter(host: &crate::Host, _iter: u64, sample: Self::SampleType) {
-        HostVec::from_vec(sample, host.as_budget()).unwrap();
+        // `forget` avoids deallocation of sample which artificially inflates the cost
+        std::mem::forget(HostVec::from_vec(sample, host.as_budget()).unwrap());
     }
 }
 
@@ -24,8 +25,10 @@ impl CostRunner for ImVecEntryRun {
     type SampleType = ImVecEntrySample;
 
     fn run_iter(host: &Host, _iter: u64, sample: Self::SampleType) {
-        for i in sample.idxs {
-            sample.vec.get(i, host.as_budget()).unwrap();
+        for i in &sample.idxs {
+            sample.vec.get(*i, host.as_budget()).unwrap();
         }
+        // `forget` avoids deallocation of sample which artificially inflates the cost
+        std::mem::forget(sample)
     }
 }
