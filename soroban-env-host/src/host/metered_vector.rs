@@ -73,6 +73,10 @@ where
         Ok(Self { vec })
     }
 
+    pub fn from_free_vec(vec: Vec<A>) -> Self {
+        // free version of from_vec, for diagnostics
+        Self { vec }
+    }
     pub fn as_slice(&self) -> &[A] {
         self.vec.as_slice()
     }
