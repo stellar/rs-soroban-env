@@ -1,3 +1,4 @@
+#![allow(clippy::new_without_default)]
 use crate::FuncEmitter;
 use std::collections::HashMap;
 use wasm_encoder::{
@@ -54,12 +55,6 @@ pub struct ModEmitter {
 
     type_refs: HashMap<Arity, TypeRef>,
     import_refs: HashMap<(String, String, Arity), FuncRef>,
-}
-
-impl Default for ModEmitter {
-    fn default() -> Self {
-        Self::new()
-    }
 }
 
 impl ModEmitter {

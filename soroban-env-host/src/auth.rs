@@ -350,11 +350,6 @@ impl AuthorizationManager {
                         .get(&address_obj_handle)
                     {
                         let tracker = &mut self.trackers[*tracker_id];
-                        // The recording invariant is that trackers are created
-                        // with the first authorized invocation, which means
-                        // that when their stack no longer has authorized
-                        // invocation, then we've popped frames past its root
-                        // and hence need to create a new tracker.
                         if tracker.has_authorized_invocations_in_stack() {
                             return self.trackers[*tracker_id].record_invocation(
                                 host,
@@ -363,6 +358,11 @@ impl AuthorizationManager {
                                 args,
                             );
                         }
+                        // The recording invariant is that trackers are created
+                        // with the first authorized invocation, which means
+                        // that when their stack no longer has authorized
+                        // invocation, then we've popped frames past its root
+                        // and hence need to create a new tracker.
                         recording_info
                             .tracker_by_address_handle
                             .remove(&address_obj_handle);
