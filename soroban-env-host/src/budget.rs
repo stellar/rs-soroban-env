@@ -453,58 +453,50 @@ impl Default for BudgetImpl {
             match ct {
                 // We might want to split wasm insns into separate cases; some are much more than
                 // this and some are much less.
-                CostType::WasmInsnExec => cpu.lin_param = 32,
-                CostType::WasmMemAlloc => cpu.lin_param = 1000,
+                CostType::WasmInsnExec => cpu.lin_param = 32, // TODO: needs to be tiered
+                CostType::WasmMemAlloc => cpu.const_param = 6000, // TODO: questionable
                 CostType::InvokeHostFunction => {
-                    cpu.const_param = 5462;
-                    cpu.lin_param = 732
+                    cpu.const_param = 5455;
+                    cpu.lin_param = 702
                 }
-                CostType::VisitObject => cpu.const_param = 600,
-                CostType::ValXdrConv => cpu.lin_param = 182,
-                CostType::ValSer => cpu.lin_param = 84,
-                CostType::ValDeser => cpu.lin_param = 20,
-
+                CostType::VisitObject => (), // This is 0
+                CostType::ValXdrConv => cpu.lin_param = 255,
+                CostType::ValSer => cpu.lin_param = 77,
+                CostType::ValDeser => cpu.lin_param = 19,
                 CostType::ComputeSha256Hash => {
-                    cpu.const_param = 3000;
-                    cpu.lin_param = 50;
+                    cpu.const_param = 3110;
+                    cpu.lin_param = 33;
                 }
-
                 CostType::ComputeEd25519PubKey => cpu.const_param = 26_000,
                 CostType::VerifyEd25519Sig => {
-                    cpu.const_param = 366_877;
+                    cpu.const_param = 367_202;
                     cpu.lin_param = 22;
                 }
-
-                CostType::MapNew => cpu.const_param = 94,
-                CostType::MapEntry => cpu.lin_param = 62,
-                CostType::VecNew => cpu.lin_param = 94,
-                CostType::VecEntry => cpu.lin_param = 125,
-                CostType::GuardFrame => cpu.const_param = 3521,
-
+                CostType::MapNew => cpu.const_param = 188,
+                CostType::MapEntry => cpu.lin_param = 72,
+                CostType::VecNew => cpu.lin_param = 192,
+                CostType::VecEntry => cpu.lin_param = 195,
+                CostType::GuardFrame => cpu.const_param = 3555,
                 CostType::VmMemRead => {
-                    cpu.const_param = 369;
-                    cpu.lin_param = 1
+                    cpu.const_param = 1000; // TODO: questionable
                 }
                 CostType::VmMemWrite => {
-                    cpu.const_param = 322;
+                    cpu.const_param = 297; // TODO: questionable
                     cpu.lin_param = 1
                 }
                 CostType::VmInstantiation => cpu.const_param = 1_000_000,
-                CostType::InvokeVmFunction => cpu.const_param = 4941,
-                CostType::HostMemCmp => {
-                    cpu.const_param = 141;
-                    cpu.lin_param = 1
-                }
-                CostType::ChargeBudget => cpu.const_param = 193,
-                CostType::HostMemAlloc => cpu.const_param = 872,
-                CostType::HostMemCpy => cpu.lin_param = 3,
+                CostType::InvokeVmFunction => cpu.const_param = 4823,
+                CostType::HostMemCmp => (), // this is 0
+                CostType::ChargeBudget => cpu.const_param = 192,
+                CostType::HostMemAlloc => cpu.const_param = 1000,
+                CostType::HostMemCpy => cpu.lin_param = 6,
             }
 
             let mem = b.mem_bytes.get_cost_model_mut(*ct);
             match ct {
                 CostType::WasmInsnExec => (),
                 CostType::WasmMemAlloc => mem.lin_param = 1,
-                CostType::InvokeHostFunction => mem.const_param = 592,
+                CostType::InvokeHostFunction => (),
                 CostType::VisitObject => (),
                 CostType::ValXdrConv => (),
                 CostType::ValSer => mem.lin_param = 2,
@@ -518,8 +510,8 @@ impl Default for BudgetImpl {
                 CostType::VecEntry => (),
                 CostType::GuardFrame => mem.const_param = 267,
                 CostType::VerifyEd25519Sig => (),
-                CostType::VmInstantiation => mem.const_param = 1_000_000,
-                CostType::VmMemRead => mem.lin_param = 1,
+                CostType::VmInstantiation => mem.const_param = 1_200_000,
+                CostType::VmMemRead => (),
                 CostType::VmMemWrite => (),
                 CostType::HostMemCmp => (),
                 CostType::InvokeVmFunction => mem.const_param = 267,
