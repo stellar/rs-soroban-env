@@ -1418,7 +1418,7 @@ impl EnvBase for Host {
             Ok(())
         });
         let escalation = self.err_status_msg(e.status, "escalating error '{}' to panic");
-        panic!("{:?}", escalation)
+        panic!("{escalation:?}")
     }
 
     fn as_mut_any(&mut self) -> &mut dyn std::any::Any {

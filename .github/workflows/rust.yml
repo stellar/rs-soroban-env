@@ -6,7 +6,7 @@ on:
   pull_request:
 
 env:
-  RUSTFLAGS: -D warnings
+  CARGO_HOME: .cargo/ci/config.toml
 
 jobs:
 

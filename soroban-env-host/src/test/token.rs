@@ -2543,7 +2543,7 @@ fn test_custom_account_auth() {
     // Initialize the admin account
     test.host
         .call(
-            account_contract_id_obj.clone(),
+            account_contract_id_obj,
             Symbol::try_from_small_str("init").unwrap(),
             host_vec![&test.host, admin_public_key.clone()].into(),
         )
@@ -2562,7 +2562,7 @@ fn test_custom_account_auth() {
     // owner.
     let new_admin_kp = generate_keypair();
     let new_admin = TestSigner::AccountContract(AccountContractSigner {
-        id: account_contract_id.clone(),
+        id: account_contract_id,
         sign: simple_account_sign_fn(&test.host, &new_admin_kp),
     });
     let new_admin_public_key = BytesN::<32>::try_from_val(
@@ -2582,13 +2582,13 @@ fn test_custom_account_auth() {
         &admin,
         &account_contract_id_obj.try_into_val(&test.host).unwrap(),
         "set_owner",
-        host_vec![&test.host, new_admin_public_key.clone()],
+        host_vec![&test.host, new_admin_public_key],
     );
 
     // Change the owner of the account.
     test.host
         .call(
-            account_contract_id_obj.clone(),
+            account_contract_id_obj,
             Symbol::try_from_small_str("set_owner").unwrap(),
             host_vec![&test.host, new_admin_public_key].into(),
         )
@@ -2600,7 +2600,7 @@ fn test_custom_account_auth() {
     assert_eq!(token.balance(user_address.clone()).unwrap(), 200);
 
     // And they shouldn't work with the old owner signatures.
-    assert!(token.mint(&admin, user_address.clone(), 100).is_err());
+    assert!(token.mint(&admin, user_address, 100).is_err());
 }
 
 #[test]

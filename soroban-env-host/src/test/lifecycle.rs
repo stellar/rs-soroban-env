@@ -198,7 +198,7 @@ fn create_contract_using_parent_id_test() {
                 .try_into()
                 .unwrap(),
             Symbol::try_from_small_str("create").unwrap().into(),
-            args.clone().into(),
+            args.into(),
         )
         .is_err());
 
@@ -216,10 +216,7 @@ fn create_contract_using_parent_id_test() {
 
     // Now successfully create the child contract itself.
     host.call(
-        host.test_bin_obj(&parent_contract_id.0)
-            .unwrap()
-            .try_into()
-            .unwrap(),
+        host.test_bin_obj(&parent_contract_id.0).unwrap(),
         Symbol::try_from_small_str("create").unwrap().into(),
         args.into(),
     )
