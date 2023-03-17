@@ -4,7 +4,7 @@ use crate::auth::AuthorizedInvocation;
 // to a generic smart wallet contract that supports authentication and blanket
 // context authorization.
 use crate::host::metered_clone::MeteredClone;
-use crate::host::Host;
+use crate::host::{ContractReentryMode, Host};
 use crate::native_contract::{base_types::BytesN, contract_error::ContractError};
 use crate::{err, HostError};
 use core::cmp::Ordering;
@@ -17,6 +17,8 @@ const MAX_ACCOUNT_SIGNATURES: u32 = 20;
 
 use soroban_env_common::xdr::{AccountId, ScVal};
 use soroban_native_sdk_macros::contracttype;
+
+pub const ACCOUNT_CONTRACT_CHECK_AUTH_FN_NAME: &str = "__check_auth";
 
 #[derive(Clone)]
 #[contracttype]
@@ -76,16 +78,15 @@ pub(crate) fn check_account_contract_auth(
     Ok(host
         .call_n_internal(
             account_contract,
-            Symbol::try_from_val(host, &"check_auth")?,
+            ACCOUNT_CONTRACT_CHECK_AUTH_FN_NAME.try_into_val(host)?,
             &[
                 payload_obj.into(),
                 signature_args_vec.into(),
                 auth_context_vec.into(),
             ],
-            // Allow reentry for this function in order to do wallet admin ops
-            // within the auth framework. Maybe there is a more elegant way
-            // around this.
-            // TODO: check if there are security concerns about this.
+            // Allow self reentry for this function in order to be able to do
+            // wallet admin ops using the auth framework itself.
+            ContractReentryMode::SelfAllowed,
             true,
         )?
         .try_into()?)

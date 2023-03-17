@@ -18,20 +18,23 @@ use crate::{
 };
 use std::{cell::RefCell, io::Cursor, ops::RangeInclusive, rc::Rc};
 
-use super::{
-    xdr::{Hash, ScVal, ScVec},
-    Host, RawVal, Symbol,
-};
+use super::{xdr::Hash, Host, RawVal, Symbol};
 use func_info::HOST_FUNCTIONS;
 use soroban_env_common::{
     meta,
     xdr::{ReadXdr, ScEnvMetaEntry, ScHostFnErrorCode, ScVmErrorCode},
-    ConversionError, SymbolStr, TryFromVal, TryIntoVal,
+    ConversionError, SymbolStr, TryIntoVal,
 };
 
 use wasmi::{
     core::Value, Caller, Engine, Instance, Linker, Memory, Module, StepMeter, Store,
     StoreContextMut,
+};
+
+#[cfg(any(test, feature = "testutils"))]
+use soroban_env_common::{
+    xdr::{ScVal, ScVec},
+    TryFromVal,
 };
 
 impl wasmi::core::HostError for HostError {}
@@ -281,7 +284,8 @@ impl Vm {
     //
     // NB: This function has to take self by [Rc] because it stores self in
     // a new Frame
-    pub fn invoke_function(
+    #[cfg(any(test, feature = "testutils"))]
+    pub(crate) fn invoke_function(
         self: &Rc<Self>,
         host: &Host,
         func: &str,

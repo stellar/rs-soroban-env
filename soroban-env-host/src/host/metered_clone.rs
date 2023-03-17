@@ -1,25 +1,30 @@
 use std::{mem, rc::Rc};
 
-use soroban_env_common::{
-    xdr::{
-        BytesM, ContractEvent, ContractEventBody, ScAddress, ScHostValErrorCode, ScMap, ScMapEntry,
-        ScVal, StringM,
-    },
-    RawVal,
-};
+use soroban_env_common::xdr::ScUnknownErrorCode;
 
 use crate::{
     budget::{Budget, CostType},
-    events::{DebugArg, DebugEvent, HostEvent, InternalContractEvent, InternalEvent},
+    events::{DebugArg, DebugEvent, Event, HostEvent, InternalContractEvent, InternalEvent},
     host::Events,
-    num::{I256, U256},
     storage::AccessType,
     xdr::{
-        AccountId, Duration, Hash, ScBytes, ScContractExecutable, ScNonceKey, ScString, ScSymbol,
-        ScVec, TimePoint, Uint256,
+        AccountEntry, AccountId, BytesM, ClaimableBalanceEntry, ConfigSettingEntry,
+        ContractCodeEntry, ContractEvent, ContractEventBody, DataEntry, Duration, Hash,
+        LedgerEntryExt, LedgerKeyAccount, LedgerKeyClaimableBalance, LedgerKeyConfigSetting,
+        LedgerKeyContractCode, LedgerKeyData, LedgerKeyLiquidityPool, LedgerKeyOffer,
+        LedgerKeyTrustLine, LiquidityPoolEntry, OfferEntry, PublicKey, ScAddress, ScBytes,
+        ScContractExecutable, ScHostValErrorCode, ScMap, ScMapEntry, ScNonceKey, ScString,
+        ScSymbol, ScVal, ScVec, StringM, TimePoint, TrustLineAsset, TrustLineEntry, Uint256,
     },
-    HostError,
+    AddressObject, Bool, BytesObject, ContractExecutableObject, DurationObject, DurationSmall,
+    DurationVal, HostError, I128Object, I128Small, I128Val, I256Object, I256Small, I256Val, I32Val,
+    I64Object, I64Small, I64Val, LedgerKeyNonceObject, MapObject, Object, RawVal, ScValObject,
+    Status, StringObject, Symbol, SymbolObject, SymbolSmall, SymbolSmallIter, SymbolStr,
+    TimepointObject, TimepointSmall, TimepointVal, U128Object, U128Small, U128Val, U256Object,
+    U256Small, U256Val, U32Val, U64Object, U64Small, U64Val, VecObject, Void, I256, U256,
 };
+
+use super::declared_size::DeclaredSizeForMetering;
 
 // Charge for an N-element "shallow copy" of some type, not cloning any substructure. The charge
 // unit is number of elements `n_elts` multiplied by a declared size of each element. In a better
@@ -31,8 +36,11 @@ fn charge_shallow_copy<T: MeteredClone>(n_elts: u64, budget: &Budget) -> Result<
     // that the type's size is below its promised element size for budget charging. This assertion
     // only happens in debug build. In optimized build, not satisfying the asserted condition just
     // means an underestimation of the cost.
-    debug_assert!(mem::size_of::<T>() as u64 <= T::ELT_SIZE);
-    budget.charge(CostType::HostMemCpy, n_elts.saturating_mul(T::ELT_SIZE))
+    debug_assert!(mem::size_of::<T>() as u64 <= T::DECLARED_SIZE);
+    budget.charge(
+        CostType::HostMemCpy,
+        n_elts.saturating_mul(T::DECLARED_SIZE),
+    )
 }
 
 // Let it be a free function instead of a trait because charge_heap_alloc maybe called elsewhere,
@@ -40,22 +48,19 @@ fn charge_shallow_copy<T: MeteredClone>(n_elts: u64, budget: &Budget) -> Result<
 fn charge_heap_alloc<T: MeteredClone>(n_elts: u64, budget: &Budget) -> Result<(), HostError> {
     // Here we make a runtime assertion that the type's size is below its promised element size for
     // budget charging.
-    debug_assert!(mem::size_of::<T>() as u64 <= T::ELT_SIZE);
-    budget.charge(CostType::HostMemAlloc, n_elts.saturating_mul(T::ELT_SIZE))
+    debug_assert!(mem::size_of::<T>() as u64 <= T::DECLARED_SIZE);
+    budget.charge(
+        CostType::HostMemAlloc,
+        n_elts.saturating_mul(T::DECLARED_SIZE),
+    )
 }
 
-pub trait MeteredClone: Clone {
+pub trait MeteredClone: Clone + DeclaredSizeForMetering {
     // By default every MeteredClone type just charges as though it's shallow;
     // if a type is non-shallow (has variable-sized substructure to consider) it
     // should override both `IS_SHALLOW` (setting it to `false`) and
     // `charge_for_clone` (correctly charging for cloning the substructure).
     const IS_SHALLOW: bool = true;
-
-    // Size (bytes) of a single element. This value determines the input for budget charging.
-    // It should be the upperbound (across various compilations and platforms) of the actual type's
-    // size. Implementer of the trait needs to decide this value based on Rust's guideline on type
-    // layout: https://doc.rust-lang.org/reference/type-layout.html
-    const ELT_SIZE: u64;
 
     // Called to clone the substructures of Self. The default implementation is a no-op and is
     // _only_ appropriate when Self is a shallow type (with no substructure). If you override
@@ -102,59 +107,104 @@ pub trait MeteredClone: Clone {
     }
 }
 
-macro_rules! impl_metered_clone_for_shallow_types {
-    ($name:ident, $size:literal) => {
-        impl MeteredClone for $name {
-            const ELT_SIZE: u64 = $size;
-        }
-    };
-}
-
-impl_metered_clone_for_shallow_types!(u8, 1);
-impl_metered_clone_for_shallow_types!(u32, 4);
-impl_metered_clone_for_shallow_types!(i32, 4);
-impl_metered_clone_for_shallow_types!(u64, 8);
-impl_metered_clone_for_shallow_types!(i64, 8);
-impl_metered_clone_for_shallow_types!(TimePoint, 8);
-impl_metered_clone_for_shallow_types!(Duration, 8);
-impl_metered_clone_for_shallow_types!(u128, 16);
-impl_metered_clone_for_shallow_types!(i128, 16);
-impl_metered_clone_for_shallow_types!(Hash, 32);
-impl_metered_clone_for_shallow_types!(RawVal, 8);
-impl_metered_clone_for_shallow_types!(AccessType, 1);
-impl_metered_clone_for_shallow_types!(AccountId, 32);
-impl_metered_clone_for_shallow_types!(ScContractExecutable, 33);
-impl_metered_clone_for_shallow_types!(Uint256, 32);
-impl_metered_clone_for_shallow_types!(U256, 32);
-impl_metered_clone_for_shallow_types!(I256, 32);
-impl_metered_clone_for_shallow_types!(ScAddress, 33);
-impl_metered_clone_for_shallow_types!(ScNonceKey, 33);
-impl_metered_clone_for_shallow_types!(DebugArg, 16);
-impl_metered_clone_for_shallow_types!(InternalContractEvent, 40);
-
-// Rc is an exception, nothing is being cloned. We approximate ref counter bump with the cost of
-// cloning 16 bytes. Also it can't be below 16 since that's the size of an `Rc` structure.
-impl<T> MeteredClone for Rc<T> {
-    const ELT_SIZE: u64 = 16;
-}
-
-// Cloning a slice only clones the reference without deep cloning its contents.
-impl<T> MeteredClone for &[T] {
-    const ELT_SIZE: u64 = 16;
-}
-
+// primitive types
+impl MeteredClone for u8 {}
+impl MeteredClone for u32 {}
+impl MeteredClone for i32 {}
+impl MeteredClone for u64 {}
+impl MeteredClone for i64 {}
+impl MeteredClone for u128 {}
+impl MeteredClone for i128 {}
+// RawVal-wrapping types
+impl MeteredClone for RawVal {}
+impl MeteredClone for Void {}
+impl MeteredClone for Bool {}
+impl MeteredClone for VecObject {}
+impl MeteredClone for MapObject {}
+impl MeteredClone for ContractExecutableObject {}
+impl MeteredClone for LedgerKeyNonceObject {}
+impl MeteredClone for AddressObject {}
+impl MeteredClone for BytesObject {}
+impl MeteredClone for U32Val {}
+impl MeteredClone for I32Val {}
+impl MeteredClone for U64Val {}
+impl MeteredClone for U64Small {}
+impl MeteredClone for U64Object {}
+impl MeteredClone for I64Val {}
+impl MeteredClone for I64Small {}
+impl MeteredClone for I64Object {}
+impl MeteredClone for TimepointVal {}
+impl MeteredClone for TimepointSmall {}
+impl MeteredClone for TimepointObject {}
+impl MeteredClone for DurationVal {}
+impl MeteredClone for DurationSmall {}
+impl MeteredClone for DurationObject {}
+impl MeteredClone for U128Val {}
+impl MeteredClone for U128Small {}
+impl MeteredClone for U128Object {}
+impl MeteredClone for I128Val {}
+impl MeteredClone for I128Small {}
+impl MeteredClone for I128Object {}
+impl MeteredClone for U256Val {}
+impl MeteredClone for U256Small {}
+impl MeteredClone for U256Object {}
+impl MeteredClone for I256Val {}
+impl MeteredClone for I256Small {}
+impl MeteredClone for I256Object {}
+impl MeteredClone for Object {}
+impl MeteredClone for Status {}
+impl MeteredClone for StringObject {}
+impl MeteredClone for Symbol {}
+impl MeteredClone for SymbolSmall {}
+impl MeteredClone for SymbolObject {}
+// other common types
+impl MeteredClone for SymbolStr {}
+impl MeteredClone for SymbolSmallIter {}
+impl MeteredClone for U256 {}
+impl MeteredClone for I256 {}
+// xdr types
+impl MeteredClone for TimePoint {}
+impl MeteredClone for Duration {}
+impl MeteredClone for Hash {}
+impl MeteredClone for Uint256 {}
+impl MeteredClone for ScContractExecutable {}
+impl MeteredClone for AccountId {}
+impl MeteredClone for ScAddress {}
+impl MeteredClone for ScNonceKey {}
+impl MeteredClone for PublicKey {}
+impl MeteredClone for TrustLineAsset {}
+impl MeteredClone for LedgerKeyAccount {}
+impl MeteredClone for LedgerKeyTrustLine {}
+impl MeteredClone for LedgerKeyOffer {}
+impl MeteredClone for LedgerKeyData {}
+impl MeteredClone for LedgerKeyClaimableBalance {}
+impl MeteredClone for LedgerKeyLiquidityPool {}
+impl MeteredClone for LedgerKeyContractCode {}
+impl MeteredClone for LedgerKeyConfigSetting {}
+impl MeteredClone for LedgerEntryExt {}
+impl MeteredClone for AccountEntry {}
+impl MeteredClone for TrustLineEntry {}
+impl MeteredClone for OfferEntry {}
+impl MeteredClone for DataEntry {}
+impl MeteredClone for ClaimableBalanceEntry {}
+impl MeteredClone for LiquidityPoolEntry {}
+impl MeteredClone for ContractCodeEntry {}
+impl MeteredClone for ConfigSettingEntry {}
+impl MeteredClone for AccessType {}
+impl MeteredClone for DebugArg {}
+impl MeteredClone for InternalContractEvent {}
+// composite types
+impl<T> MeteredClone for Rc<T> {}
+impl<T> MeteredClone for &[T] {}
 impl<K, V> MeteredClone for (K, V)
 where
     K: MeteredClone,
     V: MeteredClone,
 {
-    const ELT_SIZE: u64 = <K as MeteredClone>::ELT_SIZE + <V as MeteredClone>::ELT_SIZE;
 }
 
 impl<C: MeteredClone, const N: usize> MeteredClone for [C; N] {
     const IS_SHALLOW: bool = C::IS_SHALLOW;
-
-    const ELT_SIZE: u64 = C::ELT_SIZE.saturating_mul(N as u64);
 
     fn charge_for_substructure(&self, budget: &Budget) -> Result<(), HostError> {
         C::bulk_charge_for_substructure(self.as_slice(), budget)
@@ -163,8 +213,6 @@ impl<C: MeteredClone, const N: usize> MeteredClone for [C; N] {
 
 impl MeteredClone for ScVal {
     const IS_SHALLOW: bool = false;
-
-    const ELT_SIZE: u64 = 40;
 
     fn charge_for_substructure(&self, budget: &Budget) -> Result<(), HostError> {
         match self {
@@ -196,10 +244,16 @@ impl MeteredClone for ScVal {
     }
 }
 
-impl MeteredClone for ScMapEntry {
+impl MeteredClone for ScValObject {
     const IS_SHALLOW: bool = false;
 
-    const ELT_SIZE: u64 = 80;
+    fn charge_for_substructure(&self, budget: &Budget) -> Result<(), HostError> {
+        <Self as AsRef<ScVal>>::as_ref(self).charge_for_substructure(budget)
+    }
+}
+
+impl MeteredClone for ScMapEntry {
+    const IS_SHALLOW: bool = false;
 
     fn charge_for_substructure(&self, budget: &Budget) -> Result<(), HostError> {
         self.key.charge_for_substructure(budget)?;
@@ -210,8 +264,6 @@ impl MeteredClone for ScMapEntry {
 impl MeteredClone for ScVec {
     const IS_SHALLOW: bool = false;
 
-    const ELT_SIZE: u64 = 24;
-
     fn charge_for_substructure(&self, budget: &Budget) -> Result<(), HostError> {
         self.0.charge_for_substructure(budget) // self.0 will be deref'ed into Vec
     }
@@ -219,8 +271,6 @@ impl MeteredClone for ScVec {
 
 impl MeteredClone for ScMap {
     const IS_SHALLOW: bool = false;
-
-    const ELT_SIZE: u64 = 24;
 
     fn charge_for_substructure(&self, budget: &Budget) -> Result<(), HostError> {
         self.0.charge_for_substructure(budget) // self.0 will be deref'ed into Vec
@@ -230,8 +280,6 @@ impl MeteredClone for ScMap {
 impl<const C: u32> MeteredClone for BytesM<C> {
     const IS_SHALLOW: bool = false;
 
-    const ELT_SIZE: u64 = 24;
-
     fn charge_for_substructure(&self, budget: &Budget) -> Result<(), HostError> {
         <Self as AsRef<Vec<u8>>>::as_ref(self).charge_for_substructure(budget)
     }
@@ -240,8 +288,6 @@ impl<const C: u32> MeteredClone for BytesM<C> {
 impl<const C: u32> MeteredClone for StringM<C> {
     const IS_SHALLOW: bool = false;
 
-    const ELT_SIZE: u64 = 24;
-
     fn charge_for_substructure(&self, budget: &Budget) -> Result<(), HostError> {
         <Self as AsRef<Vec<u8>>>::as_ref(self).charge_for_substructure(budget)
     }
@@ -249,7 +295,7 @@ impl<const C: u32> MeteredClone for StringM<C> {
 
 impl MeteredClone for ScBytes {
     const IS_SHALLOW: bool = false;
-    const ELT_SIZE: u64 = 24;
+
     fn charge_for_substructure(&self, budget: &Budget) -> Result<(), HostError> {
         <Self as AsRef<Vec<u8>>>::as_ref(self).charge_for_substructure(budget)
     }
@@ -257,7 +303,7 @@ impl MeteredClone for ScBytes {
 
 impl MeteredClone for ScString {
     const IS_SHALLOW: bool = false;
-    const ELT_SIZE: u64 = 24;
+
     fn charge_for_substructure(&self, budget: &Budget) -> Result<(), HostError> {
         <Self as AsRef<Vec<u8>>>::as_ref(self).charge_for_substructure(budget)
     }
@@ -265,7 +311,7 @@ impl MeteredClone for ScString {
 
 impl MeteredClone for ScSymbol {
     const IS_SHALLOW: bool = false;
-    const ELT_SIZE: u64 = 24;
+
     fn charge_for_substructure(&self, budget: &Budget) -> Result<(), HostError> {
         <Self as AsRef<Vec<u8>>>::as_ref(self).charge_for_substructure(budget)
     }
@@ -273,8 +319,6 @@ impl MeteredClone for ScSymbol {
 
 impl<C: MeteredClone> MeteredClone for Vec<C> {
     const IS_SHALLOW: bool = false;
-
-    const ELT_SIZE: u64 = 24;
 
     fn charge_for_substructure(&self, budget: &Budget) -> Result<(), HostError> {
         // first take care of Vec clone, which involves allocating memory and shallowly cloning the
@@ -289,8 +333,6 @@ impl<C: MeteredClone> MeteredClone for Vec<C> {
 impl<C: MeteredClone> MeteredClone for Box<C> {
     const IS_SHALLOW: bool = false;
 
-    const ELT_SIZE: u64 = 8;
-
     fn charge_for_substructure(&self, budget: &Budget) -> Result<(), HostError> {
         // first take care of the Box clone: allocating memory and shallow cloning of data type.
         charge_heap_alloc::<C>(1, budget)?;
@@ -304,10 +346,6 @@ impl<C: MeteredClone> MeteredClone for Box<C> {
 impl<C: MeteredClone> MeteredClone for Option<C> {
     const IS_SHALLOW: bool = C::IS_SHALLOW;
 
-    // Size of C plus an 8 byte alignment overhead. If we need to handle types with larger
-    // alignment size, we need to increase the overhead.
-    const ELT_SIZE: u64 = C::ELT_SIZE + 8;
-
     fn charge_for_substructure(&self, budget: &Budget) -> Result<(), HostError> {
         match self {
             Some(elt) => elt.charge_for_substructure(budget),
@@ -318,8 +356,6 @@ impl<C: MeteredClone> MeteredClone for Option<C> {
 
 impl MeteredClone for DebugEvent {
     const IS_SHALLOW: bool = false;
-
-    const ELT_SIZE: u64 = 80;
 
     fn charge_for_substructure(&self, budget: &Budget) -> Result<(), HostError> {
         if self.args.is_heap() {
@@ -338,8 +374,6 @@ impl MeteredClone for DebugEvent {
 impl MeteredClone for ContractEvent {
     const IS_SHALLOW: bool = false;
 
-    const ELT_SIZE: u64 = 104;
-
     fn charge_for_substructure(&self, budget: &Budget) -> Result<(), HostError> {
         let ContractEventBody::V0(event) = &self.body;
         event.topics.charge_for_substructure(budget)?;
@@ -350,20 +384,17 @@ impl MeteredClone for ContractEvent {
 impl MeteredClone for HostEvent {
     const IS_SHALLOW: bool = false;
 
-    const ELT_SIZE: u64 = 112;
-
     fn charge_for_substructure(&self, budget: &Budget) -> Result<(), HostError> {
-        match self {
-            HostEvent::Contract(c) => c.charge_for_substructure(budget),
-            HostEvent::Debug(d) => d.charge_for_substructure(budget),
+        match &self.event {
+            Event::Contract(c) => c.charge_for_substructure(budget),
+            Event::Debug(d) => d.charge_for_substructure(budget),
+            Event::StructuredDebug(_) => Err(ScUnknownErrorCode::General.into()), // StructuredDEbug events shouldn't be metered
         }
     }
 }
 
 impl MeteredClone for Events {
     const IS_SHALLOW: bool = false;
-
-    const ELT_SIZE: u64 = 24;
 
     fn charge_for_substructure(&self, budget: &Budget) -> Result<(), HostError> {
         self.0.charge_for_substructure(budget)
@@ -373,103 +404,11 @@ impl MeteredClone for Events {
 impl MeteredClone for InternalEvent {
     const IS_SHALLOW: bool = false;
 
-    const ELT_SIZE: u64 = 80;
-
     fn charge_for_substructure(&self, budget: &Budget) -> Result<(), HostError> {
         match self {
             InternalEvent::Contract(c) => c.charge_for_substructure(budget),
             InternalEvent::Debug(d) => d.charge_for_substructure(budget),
-            InternalEvent::None => Ok(()),
+            InternalEvent::StructuredDebug(_) => Err(ScUnknownErrorCode::General.into()),
         }
-    }
-}
-
-mod test {
-    #[allow(unused)]
-    use super::*;
-
-    #[test]
-    fn test_elt_size() {
-        use expect_test::expect;
-        // This section is for outputting the actual size of types. They are for informational use.
-        // They might become outdated due to Rust type changes. Run `UPDATE_EXPECT=true cargo test`
-        // to update this.
-        expect!["32"].assert_eq(std::mem::size_of::<Hash>().to_string().as_str());
-        expect!["8"].assert_eq(std::mem::size_of::<RawVal>().to_string().as_str());
-        expect!["1"].assert_eq(std::mem::size_of::<AccessType>().to_string().as_str());
-        expect!["32"].assert_eq(std::mem::size_of::<AccountId>().to_string().as_str());
-        expect!["33"].assert_eq(
-            std::mem::size_of::<ScContractExecutable>()
-                .to_string()
-                .as_str(),
-        );
-        expect!["32"].assert_eq(std::mem::size_of::<Uint256>().to_string().as_str());
-        expect!["33"].assert_eq(std::mem::size_of::<ScAddress>().to_string().as_str());
-        expect!["40"].assert_eq(std::mem::size_of::<ScVal>().to_string().as_str());
-        expect!["24"].assert_eq(std::mem::size_of::<ScVec>().to_string().as_str());
-        expect!["80"].assert_eq(std::mem::size_of::<ScMapEntry>().to_string().as_str());
-        expect!["24"].assert_eq(std::mem::size_of::<ScMap>().to_string().as_str());
-        expect!["24"].assert_eq(std::mem::size_of::<Vec<u8>>().to_string().as_str());
-        expect!["24"].assert_eq(std::mem::size_of::<Vec<ScVal>>().to_string().as_str());
-        expect!["24"].assert_eq(std::mem::size_of::<BytesM<10000>>().to_string().as_str());
-        expect!["8"].assert_eq(std::mem::size_of::<Box<u8>>().to_string().as_str());
-        expect!["8"].assert_eq(std::mem::size_of::<Box<ScVal>>().to_string().as_str());
-        expect!["80"].assert_eq(std::mem::size_of::<DebugEvent>().to_string().as_str());
-        expect!["104"].assert_eq(std::mem::size_of::<ContractEvent>().to_string().as_str());
-        expect!["112"].assert_eq(std::mem::size_of::<HostEvent>().to_string().as_str());
-        expect!["24"].assert_eq(std::mem::size_of::<Events>().to_string().as_str());
-        expect!["80"].assert_eq(std::mem::size_of::<InternalEvent>().to_string().as_str());
-        expect!["40"].assert_eq(
-            std::mem::size_of::<InternalContractEvent>()
-                .to_string()
-                .as_str(),
-        );
-
-        // These are the actual tests. We use a tighter condition (==) than the actual code (<=).
-        // For any new `MeteredClone` type, a new test case needs to be added below.
-        macro_rules! assert_mem_size_equals_elt_size {
-            ($name:ident) => {
-                assert_eq!(
-                    std::mem::size_of::<$name>() as u64,
-                    <$name as MeteredClone>::ELT_SIZE
-                );
-            };
-        }
-        assert_mem_size_equals_elt_size!(Hash);
-        assert_mem_size_equals_elt_size!(RawVal);
-        assert_mem_size_equals_elt_size!(AccessType);
-        assert_mem_size_equals_elt_size!(AccountId);
-        assert_mem_size_equals_elt_size!(ScContractExecutable);
-        assert_mem_size_equals_elt_size!(Uint256);
-        assert_mem_size_equals_elt_size!(ScAddress);
-        assert_mem_size_equals_elt_size!(ScVal);
-        assert_mem_size_equals_elt_size!(ScVec);
-        assert_mem_size_equals_elt_size!(ScMapEntry);
-        assert_mem_size_equals_elt_size!(ScMap);
-        assert_mem_size_equals_elt_size!(DebugEvent);
-        assert_mem_size_equals_elt_size!(ContractEvent);
-        assert_mem_size_equals_elt_size!(HostEvent);
-        assert_mem_size_equals_elt_size!(Events);
-        assert_mem_size_equals_elt_size!(InternalEvent);
-        assert_eq!(
-            std::mem::size_of::<Vec<u8>>() as u64,
-            <Vec<u8> as MeteredClone>::ELT_SIZE
-        );
-        assert_eq!(
-            std::mem::size_of::<Vec<ScVal>>() as u64,
-            <Vec<ScVal> as MeteredClone>::ELT_SIZE
-        );
-        assert_eq!(
-            std::mem::size_of::<BytesM<10000>>() as u64,
-            <BytesM<10000> as MeteredClone>::ELT_SIZE
-        );
-        assert_eq!(
-            std::mem::size_of::<Box<u8>>() as u64,
-            <Box<u8> as MeteredClone>::ELT_SIZE
-        );
-        assert_eq!(
-            std::mem::size_of::<Box<ScVal>>() as u64,
-            <Box<ScVal> as MeteredClone>::ELT_SIZE
-        );
     }
 }

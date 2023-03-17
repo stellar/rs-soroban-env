@@ -1,6 +1,6 @@
 use soroban_env_common::{xdr::ScHostFnErrorCode, Compare};
 
-use super::MeteredClone;
+use super::{declared_size::DeclaredSizeForMetering, MeteredClone};
 use crate::{
     budget::{AsBudget, Budget, CostType},
     xdr::ScHostObjErrorCode,
@@ -22,7 +22,10 @@ where
 {
     /// Covers the cost of allocating a new Vec<A> with size in number of elements.
     fn charge_new(n_elts: u64, budget: &Budget) -> Result<(), HostError> {
-        budget.charge(CostType::VecNew, n_elts * A::ELT_SIZE)
+        budget.charge(
+            CostType::VecNew,
+            n_elts.saturating_mul(<A as DeclaredSizeForMetering>::DECLARED_SIZE),
+        )
     }
 
     fn charge_access(&self, count: usize, budget: &Budget) -> Result<(), HostError> {
@@ -294,12 +297,17 @@ where
     }
 }
 
+impl<A> DeclaredSizeForMetering for MeteredVector<A>
+where
+    A: MeteredClone,
+{
+    const DECLARED_SIZE: u64 = <Vec<A> as DeclaredSizeForMetering>::DECLARED_SIZE;
+}
+
 impl<A> MeteredClone for MeteredVector<A>
 where
     A: MeteredClone,
 {
-    const ELT_SIZE: u64 = <Vec<A> as MeteredClone>::ELT_SIZE;
-
     fn charge_for_substructure(&self, budget: &Budget) -> Result<(), HostError> {
         self.vec.charge_for_substructure(budget)
     }

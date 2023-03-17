@@ -236,10 +236,13 @@ where
                 hi: 0,
                 lo: val.get_body(),
             })),
-            Tag::I128Small => Ok(ScVal::I128(Int128Parts {
-                hi: 0,
-                lo: val.get_signed_body() as u64,
-            })),
+            Tag::I128Small => {
+                let body = val.get_signed_body() as i128;
+                Ok(ScVal::I128(Int128Parts {
+                    hi: (body >> 64) as u64,
+                    lo: body as u64,
+                }))
+            }
             Tag::U256Small => {
                 let val = U256::new(val.get_body() as u128);
                 Ok(ScVal::U256(Uint256(val.to_be_bytes())))

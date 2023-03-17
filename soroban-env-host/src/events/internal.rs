@@ -1,11 +1,11 @@
 use soroban_env_common::{BytesObject, VecObject};
 
-use super::{DebugEvent, Events, HostEvent};
+use super::{DebugEvent, Event, Events, HostEvent};
 use crate::{
     budget::{AsBudget, Budget},
     xdr,
     xdr::ScVal,
-    Host, HostError, MeteredVector, RawVal,
+    Host, HostError, RawVal,
 };
 
 /// The internal representation of a `ContractEvent` that is stored in the events buffer
@@ -20,7 +20,7 @@ pub(crate) struct InternalContractEvent {
 
 impl InternalContractEvent {
     // Metering: covered by components
-    pub fn to_xdr(self, host: &Host) -> Result<xdr::ContractEvent, HostError> {
+    pub fn to_xdr(&self, host: &Host) -> Result<xdr::ContractEvent, HostError> {
         let topics = if let ScVal::Vec(Some(v)) = host.from_host_obj(self.topics)?.into() {
             Ok(v)
         } else {
@@ -42,75 +42,41 @@ impl InternalContractEvent {
 
 /// The internal representation of an `Event` that is stored in the events buffer
 /// and designed to be cheap to cloned.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub(crate) enum InternalEvent {
     Contract(InternalContractEvent),
     Debug(DebugEvent),
-    #[default]
-    None,
+    StructuredDebug(InternalContractEvent),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) enum EventStatus {
+    FromFailedCall,
+    FromSuccessfulCall,
 }
 
 /// The events buffer. Stores `InternalEvent`s in the chronological order.
 #[derive(Clone, Default)]
 pub(crate) struct InternalEventsBuffer {
-    pub(crate) vec: MeteredVector<InternalEvent>,
+    //the bool keeps track of if the call this event was emitted in failed
+    pub(crate) vec: Vec<(InternalEvent, EventStatus)>,
 }
 
 impl InternalEventsBuffer {
     // Records an InternalEvent
-    // Metering covered by the `MeteredVec`.
-    pub fn record(&mut self, e: InternalEvent, budget: &Budget) -> Result<(), HostError> {
-        self.vec = self.vec.push_back(e, budget)?;
+    pub fn record(&mut self, e: InternalEvent, _budget: &Budget) -> Result<(), HostError> {
+        //TODO:Add metering for non-diagnostic events
+        self.vec.push((e, EventStatus::FromSuccessfulCall));
         Ok(())
     }
 
-    fn defunct_contract_event(c: &mut InternalContractEvent) -> InternalEvent {
-        let ty: RawVal = <i32>::from(c.type_).into();
-        let id: RawVal = c.contract_id.map_or(RawVal::VOID.into(), |obj| obj.into());
-        let dbg = DebugEvent::new()
-            .msg("rolled-back contract event: type {}, id {}, topics {}, data {}")
-            .arg(ty)
-            .arg(id)
-            .arg(RawVal::from(c.topics))
-            .arg(c.data);
-        InternalEvent::Debug(dbg)
-    }
-
-    /// Rolls back the event buffer starting at `events`. Any `ContractEvent` will be converted
-    /// to a `DebugEvent` indicating the event has been rolled back. An additional `DebugEvent`
-    /// will be pushed at the end indicating the rollback happened.
-    // Metering covered by the `MeteredVec`
-    pub fn rollback(&mut self, events: usize, host: &Host) -> Result<(), HostError> {
-        let mut rollback_count = 0u32;
-        self.vec = self.vec.retain_mut(
-            |i, e| {
-                if i < events {
-                    Ok(true)
-                } else {
-                    if let InternalEvent::Contract(c) = e {
-                        *e = Self::defunct_contract_event(c);
-                        rollback_count += 1;
-                        Ok(true)
-                    } else {
-                        Ok(true)
-                    }
-                }
-            },
-            host.as_budget(),
-        )?;
-        // If any events were rolled back, we push one more debug event at the end to
-        // let the user know.
-        if rollback_count > 0 {
-            self.vec = self.vec.push_back(
-                InternalEvent::Debug(
-                    DebugEvent::new()
-                        .msg("{} contract events rolled back. Rollback start pos = {}")
-                        .arg(RawVal::from(rollback_count))
-                        .arg(host.usize_to_u32val(events)?.to_raw()),
-                ),
-                host.as_budget(),
-            )?;
+    /// Rolls back the event buffer starting at `events`.
+    pub fn rollback(&mut self, events: usize) -> Result<(), HostError> {
+        // note that we first skip the events that are not being rolled back
+        for e in self.vec.iter_mut().skip(events) {
+            e.1 = EventStatus::FromFailedCall;
         }
+
         Ok(())
     }
 
@@ -119,10 +85,10 @@ impl InternalEventsBuffer {
         use log::debug;
         debug!("=======Start of events=======");
         for e in self.vec.iter() {
-            match e {
+            match &e.0 {
                 InternalEvent::Contract(c) => debug!("Contract event: {:?}", c),
                 InternalEvent::Debug(d) => debug!("Debug event: {}", d),
-                InternalEvent::None => (),
+                InternalEvent::StructuredDebug(c) => debug!("StructuredDebug event: {:?}", c),
             }
         }
         debug!("========End of events========")
@@ -130,15 +96,26 @@ impl InternalEventsBuffer {
 
     /// Converts the internal events into their external representation. This should only be called
     /// either when the host is finished (via `try_finish`), or when an error occurs.
-    // Metering: the new vec allocation is not charged, but that should be fine.
+    // TODO: Metering for non-diagnostic events?
     pub fn externalize(&self, host: &Host) -> Result<Events, HostError> {
         let vec: Result<Vec<HostEvent>, HostError> = self
             .vec
             .iter()
-            .map(|e| match e {
-                InternalEvent::Contract(c) => Ok(HostEvent::Contract(c.clone().to_xdr(host)?)),
-                InternalEvent::Debug(d) => Ok(HostEvent::Debug(d.clone())),
-                InternalEvent::None => Err(host.err_general("Unexpected event type")),
+            .map(|e| match &e.0 {
+                InternalEvent::Contract(c) => Ok(HostEvent {
+                    event: Event::Contract(c.to_xdr(host)?),
+                    failed_call: e.1 == EventStatus::FromFailedCall,
+                }),
+                InternalEvent::Debug(d) => Ok(HostEvent {
+                    event: Event::Debug(d.clone()),
+                    failed_call: e.1 == EventStatus::FromFailedCall,
+                }),
+                InternalEvent::StructuredDebug(c) => host.as_budget().with_free_budget(|| {
+                    Ok(HostEvent {
+                        event: Event::StructuredDebug(c.to_xdr(host)?),
+                        failed_call: e.1 == EventStatus::FromFailedCall,
+                    })
+                }),
             })
             .collect();
         Ok(Events(vec?))

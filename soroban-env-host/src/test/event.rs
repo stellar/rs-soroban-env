@@ -1,5 +1,5 @@
 use crate::{
-    events::{DebugEvent, HostEvent},
+    events::{DebugEvent, Event, HostEvent},
     xdr::{
         ContractEvent, ContractEventBody, ContractEventType, ContractEventV0, ExtensionPoint, Hash,
         ScMap, ScMapEntry, ScVal,
@@ -52,11 +52,19 @@ fn contract_event() -> Result<(), HostError> {
 
     // Fish out the last contract event and check that it is
     // correct, and formats as expected.
-    let events = host.get_events()?;
-    match events.0.last() {
-        Some(HostEvent::Contract(ce)) => {
-            assert_eq!(*ce, event_ref)
-        }
+    let events = host.get_events()?.0;
+    match events.last() {
+        Some(HostEvent {
+            event,
+            failed_call: _,
+        }) => match event {
+            Event::Contract(ce) => {
+                assert_eq!(*ce, event_ref)
+            }
+            _ => {
+                panic!("missing contract event")
+            }
+        },
         _ => {
             panic!("missing contract event")
         }
@@ -93,12 +101,12 @@ fn test_event_rollback() -> Result<(), HostError> {
         host.call(id, sym.into(), args.into())?.get_payload(),
         RawVal::from_void().to_raw().get_payload()
     );
-    host.0.events.borrow_mut().rollback(1, &host)?;
+    host.0.events.borrow_mut().rollback(1)?;
     // run `UPDATE_EXPECT=true cargo test` to update this.
     let expected = expect![[
-        r#"Events([Contract(ContractEvent { ext: V0, contract_id: Some(Hash(0000000000000000000000000000000000000000000000000000000000000000)), type_: Contract, body: V0(ContractEventV0 { topics: ScVec(VecM([I32(0), I32(1)])), data: U32(0) }) }), Debug(DebugEvent { msg: Some("debug event 0"), args: [] }), Debug(DebugEvent { msg: Some("rolled-back contract event: type {}, id {}, topics {}, data {}"), args: [Val(I32(0)), Val(Bytes(obj#4)), Val(Vec(obj#2)), Val(U32(0))] }), Debug(DebugEvent { msg: Some("{} contract events rolled back. Rollback start pos = {}"), args: [Val(U32(1)), Val(U32(1))] })])"#
+        r#"[HostEvent { event: Contract(ContractEvent { ext: V0, contract_id: Some(Hash(0000000000000000000000000000000000000000000000000000000000000000)), type_: Contract, body: V0(ContractEventV0 { topics: ScVec(VecM([I32(0), I32(1)])), data: U32(0) }) }), failed_call: false }, HostEvent { event: Debug(DebugEvent { msg: Some("debug event 0"), args: [] }), failed_call: true }, HostEvent { event: Contract(ContractEvent { ext: V0, contract_id: Some(Hash(0000000000000000000000000000000000000000000000000000000000000000)), type_: System, body: V0(ContractEventV0 { topics: ScVec(VecM([I32(0), I32(1)])), data: U32(0) }) }), failed_call: true }]"#
     ]];
-    let actual = format!("{:?}", host.0.events.borrow().externalize(&host)?);
+    let actual = format!("{:?}", host.0.events.borrow().externalize(&host)?.0);
     expected.assert_eq(&actual);
     Ok(())
 }

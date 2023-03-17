@@ -40,6 +40,7 @@ pub mod auth;
 pub mod vm;
 #[cfg(feature = "vm")]
 pub use vm::Vm;
+#[cfg(any(test, feature = "testutils"))]
 pub mod cost_runner;
 pub mod storage;
 #[cfg(test)]
@@ -48,6 +49,7 @@ mod test;
 #[cfg(any(test, feature = "testutils"))]
 pub use host::ContractFunctionSet;
 pub use host::{
-    metered_map::MeteredOrdMap, metered_vector::MeteredVector, Host, HostError, LedgerInfo,
+    metered_map::MeteredOrdMap, metered_vector::MeteredVector, DiagnosticLevel, Host, HostError,
+    LedgerInfo,
 };
 pub use soroban_env_common::*;

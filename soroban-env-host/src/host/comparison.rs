@@ -3,13 +3,14 @@ use core::cmp::{min, Ordering};
 use soroban_env_common::{
     xdr::{
         AccountEntry, AccountId, ClaimableBalanceEntry, ConfigSettingEntry, ContractCodeEntry,
-        DataEntry, Hash, LedgerEntry, LedgerEntryData, LedgerEntryExt, LedgerKey, LedgerKeyAccount,
-        LedgerKeyClaimableBalance, LedgerKeyConfigSetting, LedgerKeyContractCode, LedgerKeyData,
-        LedgerKeyLiquidityPool, LedgerKeyOffer, LedgerKeyTrustLine, LiquidityPoolEntry, OfferEntry,
-        PublicKey, ScAddress, ScContractExecutable, ScHostValErrorCode, ScMap, ScNonceKey, ScVal,
-        ScVec, TrustLineAsset, TrustLineEntry, Uint256,
+        DataEntry, Duration, Hash, LedgerEntry, LedgerEntryData, LedgerEntryExt, LedgerKey,
+        LedgerKeyAccount, LedgerKeyClaimableBalance, LedgerKeyConfigSetting, LedgerKeyContractCode,
+        LedgerKeyData, LedgerKeyLiquidityPool, LedgerKeyOffer, LedgerKeyTrustLine,
+        LiquidityPoolEntry, OfferEntry, PublicKey, ScAddress, ScContractExecutable,
+        ScHostValErrorCode, ScMap, ScNonceKey, ScVal, ScVec, TimePoint, TrustLineAsset,
+        TrustLineEntry, Uint256,
     },
-    Compare,
+    Compare, SymbolStr, I256, U256,
 };
 
 use crate::{
@@ -17,6 +18,8 @@ use crate::{
     host_object::HostObject,
     Host, HostError,
 };
+
+use super::declared_size::DeclaredSizeForMetering;
 
 // We can't use core::mem::discriminant here because it returns an opaque type
 // that only supports Eq, not Ord, to reduce the possibility of an API breakage
@@ -48,14 +51,14 @@ impl Compare<HostObject> for Host {
     fn compare(&self, a: &HostObject, b: &HostObject) -> Result<Ordering, Self::Error> {
         use HostObject::*;
         match (a, b) {
-            (U64(a), U64(b)) => Ok(a.cmp(b)),
-            (I64(a), I64(b)) => Ok(a.cmp(b)),
-            (TimePoint(a), TimePoint(b)) => Ok(a.cmp(b)),
-            (Duration(a), Duration(b)) => Ok(a.cmp(b)),
-            (U128(a), U128(b)) => Ok(a.cmp(b)),
-            (I128(a), I128(b)) => Ok(a.cmp(b)),
-            (U256(a), U256(b)) => Ok(a.cmp(b)),
-            (I256(a), I256(b)) => Ok(a.cmp(b)),
+            (U64(a), U64(b)) => self.as_budget().compare(a, b),
+            (I64(a), I64(b)) => self.as_budget().compare(a, b),
+            (TimePoint(a), TimePoint(b)) => self.as_budget().compare(a, b),
+            (Duration(a), Duration(b)) => self.as_budget().compare(a, b),
+            (U128(a), U128(b)) => self.as_budget().compare(a, b),
+            (I128(a), I128(b)) => self.as_budget().compare(a, b),
+            (U256(a), U256(b)) => self.as_budget().compare(a, b),
+            (I256(a), I256(b)) => self.as_budget().compare(a, b),
             (Vec(a), Vec(b)) => self.compare(a, b),
             (Map(a), Map(b)) => self.compare(a, b),
             (Bytes(a), Bytes(b)) => self.as_budget().compare(&a.as_slice(), &b.as_slice()),
@@ -116,18 +119,21 @@ impl<const N: usize> Compare<[u8; N]> for Budget {
 // better). But we can list out any concrete Ord instances we want to support
 // here.
 //
-// We only do this for fixed-size types, because we want to charge them a constant
-// (actually just "1" to avoid being subject to instability in layout / size_of).
+// We only do this for declared-size types, because we want to charge them a constant
+// based on their size declared in accordance with their type layout.
 
-struct FixedSizeOrdType<'a, T: Ord>(&'a T);
-impl<T: Ord> Compare<FixedSizeOrdType<'_, T>> for Budget {
+struct FixedSizeOrdType<'a, T: Ord + DeclaredSizeForMetering>(&'a T);
+impl<T: Ord + DeclaredSizeForMetering> Compare<FixedSizeOrdType<'_, T>> for Budget {
     type Error = HostError;
     fn compare(
         &self,
         a: &FixedSizeOrdType<'_, T>,
         b: &FixedSizeOrdType<'_, T>,
     ) -> Result<Ordering, Self::Error> {
-        self.charge(CostType::BytesCmp, 1)?;
+        self.charge(
+            CostType::BytesCmp,
+            <T as DeclaredSizeForMetering>::DECLARED_SIZE,
+        )?;
         Ok(a.0.cmp(&b.0))
     }
 }
@@ -149,11 +155,7 @@ macro_rules! impl_compare_fixed_size_ord_type {
     };
 }
 
-// TODO: we should pass in the indivial size (in bytes) of each type and have the budget charge
-// that given amount. This is similar to self.charge(CostType::BytesCmp, mem::size_of<T>)?;
-// but we are passing the size in explicitly (because the `size_of` is unstable).
 impl_compare_fixed_size_ord_type!(bool);
-
 impl_compare_fixed_size_ord_type!(u32);
 impl_compare_fixed_size_ord_type!(i32);
 impl_compare_fixed_size_ord_type!(u64);
@@ -161,6 +163,10 @@ impl_compare_fixed_size_ord_type!(i64);
 impl_compare_fixed_size_ord_type!(u128);
 impl_compare_fixed_size_ord_type!(i128);
 
+impl_compare_fixed_size_ord_type!(U256);
+impl_compare_fixed_size_ord_type!(I256);
+impl_compare_fixed_size_ord_type!(TimePoint);
+impl_compare_fixed_size_ord_type!(Duration);
 impl_compare_fixed_size_ord_type!(Hash);
 impl_compare_fixed_size_ord_type!(Uint256);
 impl_compare_fixed_size_ord_type!(ScContractExecutable);
@@ -189,6 +195,17 @@ impl_compare_fixed_size_ord_type!(ClaimableBalanceEntry);
 impl_compare_fixed_size_ord_type!(LiquidityPoolEntry);
 impl_compare_fixed_size_ord_type!(ContractCodeEntry);
 impl_compare_fixed_size_ord_type!(ConfigSettingEntry);
+
+impl Compare<SymbolStr> for Budget {
+    type Error = HostError;
+
+    fn compare(&self, a: &SymbolStr, b: &SymbolStr) -> Result<Ordering, Self::Error> {
+        self.compare(
+            &<SymbolStr as AsRef<[u8]>>::as_ref(a),
+            &<SymbolStr as AsRef<[u8]>>::as_ref(b),
+        )
+    }
+}
 
 impl Compare<ScVec> for Budget {
     type Error = HostError;
