@@ -76,3 +76,13 @@ fn tuple_roundtrip() -> Result<(), HostError> {
     assert_eq!(t0, t0_back);
     Ok(())
 }
+
+#[cfg(feature = "wasmi")]
+#[test]
+fn f32_does_not_work() -> Result<(), HostError> {
+    use soroban_env_common::xdr::Hash;
+    let host = Host::default();
+    let hash = Hash::from([0; 32]);
+    assert!(crate::vm::Vm::new(&host, hash, soroban_test_wasms::ADD_F32).is_err());
+    Ok(())
+}

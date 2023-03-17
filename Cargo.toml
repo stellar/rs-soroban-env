@@ -32,16 +32,15 @@ default-features = false
 
 [workspace.dependencies.wasmi]
 package = "soroban-wasmi"
-version = "0.16.0-soroban2"
+version = "0.30.0-soroban"
 git = "https://github.com/stellar/wasmi"
-rev = "862b32f5"
+rev = "1a2bc7f"
 
 # [patch."https://github.com/stellar/rs-stellar-xdr"]
 # stellar-xdr = { path = "../rs-stellar-xdr/" }
-
 # [patch."https://github.com/stellar/wasmi"]
-# soroban-wasmi = { path = "../wasmi/wasmi_v1/" }
-# soroban-wasmi_core = { path = "../wasmi/core/" }
+# soroban-wasmi = { path = "../wasmi/crates/wasmi/" }
+# soroban-wasmi_core = { path = "../wasmi/crates/core/" }
 
 [profile.release]
 codegen-units = 1

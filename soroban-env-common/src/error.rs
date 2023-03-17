@@ -138,24 +138,22 @@ impl From<stellar_xdr::Error> for Error {
 impl From<wasmi::Error> for Error {
     fn from(e: wasmi::Error) -> Self {
         if let wasmi::Error::Trap(trap) = e {
-            if let Some(code) = trap.as_code() {
+            if let Some(code) = trap.trap_code() {
                 let ec = match code {
-                    wasmi::core::TrapCode::Unreachable => ScErrorCode::InternalError,
+                    wasmi::core::TrapCode::UnreachableCodeReached => ScErrorCode::InternalError,
 
-                    wasmi::core::TrapCode::MemoryAccessOutOfBounds
-                    | wasmi::core::TrapCode::TableAccessOutOfBounds => ScErrorCode::IndexBounds,
+                    wasmi::core::TrapCode::MemoryOutOfBounds
+                    | wasmi::core::TrapCode::TableOutOfBounds => ScErrorCode::IndexBounds,
 
-                    wasmi::core::TrapCode::ElemUninitialized => ScErrorCode::MissingValue,
+                    wasmi::core::TrapCode::IndirectCallToNull => ScErrorCode::MissingValue,
 
-                    wasmi::core::TrapCode::DivisionByZero
+                    wasmi::core::TrapCode::IntegerDivisionByZero
                     | wasmi::core::TrapCode::IntegerOverflow
-                    | wasmi::core::TrapCode::InvalidConversionToInt => ScErrorCode::ArithDomain,
+                    | wasmi::core::TrapCode::BadConversionToInteger => ScErrorCode::ArithDomain,
 
-                    wasmi::core::TrapCode::UnexpectedSignature => ScErrorCode::UnexpectedType,
+                    wasmi::core::TrapCode::BadSignature => ScErrorCode::UnexpectedType,
 
-                    wasmi::core::TrapCode::StackOverflow
-                    | wasmi::core::TrapCode::MemLimitExceeded
-                    | wasmi::core::TrapCode::CpuLimitExceeded => {
+                    wasmi::core::TrapCode::StackOverflow | wasmi::core::TrapCode::OutOfFuel => {
                         return Error::from_type_and_code(
                             ScErrorType::Budget,
                             ScErrorCode::ExceededLimit,

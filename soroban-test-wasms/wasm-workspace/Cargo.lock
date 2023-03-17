@@ -275,6 +275,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0198b9d0078e0f30dedc7acbb21c974e838fc8fae3ee170128658a98cb2c1c04"
 
 [[package]]
+name = "example_add_f32"
+version = "0.0.0"
+dependencies = [
+ "soroban-sdk",
+]
+
+[[package]]
 name = "example_add_i32"
 version = "0.0.0"
 dependencies = [
@@ -944,6 +951,17 @@ dependencies = [
 name = "stellar-xdr"
 version = "0.0.16"
 source = "git+https://github.com/stellar/rs-stellar-xdr?rev=b283ec0bcb791610013107b9eab7d7ff07a65db1#b283ec0bcb791610013107b9eab7d7ff07a65db1"
+dependencies = [
+ "crate-git-revision",
+ "hex",
+ "serde",
+ "serde_with",
+]
+
+[[package]]
+name = "stellar-xdr"
+version = "0.0.14"
+source = "git+https://github.com/stellar/rs-stellar-xdr?rev=74999cea9be22fe20cb030d6e485795ab2269045#74999cea9be22fe20cb030d6e485795ab2269045"
 dependencies = [
  "crate-git-revision",
  "hex",
