@@ -628,12 +628,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2dffe52ecf27772e601905b7522cb4ef790d2cc203488bbd0e2fe85fcb74566d"
 
 [[package]]
-name = "memory_units"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8452105ba047068f40ff7093dd1d9da90898e63dd61736462e9cdda6a90ad3c3"
-
-[[package]]
 name = "meval"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -691,18 +685,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "num-rational"
-version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0638a1c9d0a3c0914158145bc76cff373a75a627e6ecbfb71cbe6f453a5a19b0"
-dependencies = [
- "autocfg",
- "num-bigint",
- "num-integer",
- "num-traits",
-]
-
-[[package]]
 name = "num-traits"
 version = "0.2.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -752,6 +734,12 @@ dependencies = [
  "rand_distr",
  "rand_pcg",
 ]
+
+[[package]]
+name = "paste"
+version = "1.0.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9f746c4065a8fa3fe23974dd82f15431cc8d40779821001404d10d2e79ca7d79"
 
 [[package]]
 name = "perf-event"
@@ -1026,9 +1014,9 @@ dependencies = [
  "ethnum",
  "serde",
  "soroban-env-macros",
- "soroban-wasmi",
  "static_assertions",
  "stellar-xdr",
+ "wasmi",
 ]
 
 [[package]]
@@ -1063,13 +1051,13 @@ dependencies = [
  "soroban-native-sdk-macros",
  "soroban-synth-wasm",
  "soroban-test-wasms",
- "soroban-wasmi",
  "static_assertions",
  "tabwriter",
  "textplots",
  "thousands",
  "tinyvec",
  "tracking-allocator",
+ "wasmi",
  "wasmprinter",
 ]
 
@@ -1111,28 +1099,6 @@ dependencies = [
 [[package]]
 name = "soroban-test-wasms"
 version = "0.0.14"
-
-[[package]]
-name = "soroban-wasmi"
-version = "0.16.0-soroban2"
-source = "git+https://github.com/stellar/wasmi?rev=862b32f5#862b32f53f9c6223911e79e0b0fc8592fb3bb04c"
-dependencies = [
- "soroban-wasmi_core",
- "spin",
- "wasmparser-nostd",
-]
-
-[[package]]
-name = "soroban-wasmi_core"
-version = "0.16.0-soroban2"
-source = "git+https://github.com/stellar/wasmi?rev=862b32f5#862b32f53f9c6223911e79e0b0fc8592fb3bb04c"
-dependencies = [
- "downcast-rs",
- "libm",
- "memory_units",
- "num-rational",
- "num-traits",
-]
 
 [[package]]
 name = "spin"
@@ -1490,6 +1456,36 @@ dependencies = [
 ]
 
 [[package]]
+name = "wasmi"
+version = "0.28.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8e61a7006b0fdf24f6bbe8dcfdad5ca1b350de80061fb2827f31c82fbbb9565a"
+dependencies = [
+ "spin",
+ "wasmi_arena",
+ "wasmi_core",
+ "wasmparser-nostd",
+]
+
+[[package]]
+name = "wasmi_arena"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "401c1f35e413fac1846d4843745589d9ec678977ab35a384db8ae7830525d468"
+
+[[package]]
+name = "wasmi_core"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "624e6333e861ef49095d2d678b76ebf30b06bf37effca845be7e5b87c90071b7"
+dependencies = [
+ "downcast-rs",
+ "libm",
+ "num-traits",
+ "paste",
+]
+
+[[package]]
 name = "wasmparser"
 version = "0.92.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1500,9 +1496,9 @@ dependencies = [
 
 [[package]]
 name = "wasmparser-nostd"
-version = "0.90.0"
+version = "0.100.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "92a94fbf4c521b038f41382df2056cf47099d3b7a0faa5a6e46f7771fd7c84a6"
+checksum = "9157cab83003221bfd385833ab587a039f5d6fa7304854042ba358a3b09e0724"
 dependencies = [
  "indexmap-nostd",
 ]

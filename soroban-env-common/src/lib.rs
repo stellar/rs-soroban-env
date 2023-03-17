@@ -72,6 +72,8 @@ pub use num::{I256, U256};
 pub use stellar_xdr as xdr;
 
 // RawVal is the 64-bit transparent type.
+#[cfg(feature = "vm")]
+pub use raw_val::WasmiMarshal;
 pub use raw_val::{
     AddressObject, ContractExecutableObject, LedgerKeyNonceObject, MapObject, VecObject,
 };

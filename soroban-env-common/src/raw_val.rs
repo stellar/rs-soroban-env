@@ -313,20 +313,53 @@ impl_tryfroms_and_tryfromvals_delegating_to_rawvalconvertible!(i32);
 impl_tryfroms_and_tryfromvals_delegating_to_rawvalconvertible!(Status);
 
 #[cfg(feature = "vm")]
-impl wasmi::core::FromValue for RawVal {
-    fn from_value(val: wasmi::core::Value) -> Option<Self> {
-        if let wasmi::core::Value::I64(i) = val {
+pub trait WasmiMarshal: Sized {
+    fn try_marshal_from_value(v: wasmi::Value) -> Option<Self>;
+    fn marshal_from_self(self) -> wasmi::Value;
+}
+
+#[cfg(feature = "vm")]
+impl WasmiMarshal for RawVal {
+    fn try_marshal_from_value(v: wasmi::Value) -> Option<Self> {
+        if let wasmi::Value::I64(i) = v {
             Some(RawVal::from_payload(i as u64))
         } else {
             None
         }
     }
+
+    fn marshal_from_self(self) -> wasmi::Value {
+        wasmi::Value::I64(self.get_payload() as i64)
+    }
 }
 
 #[cfg(feature = "vm")]
-impl From<RawVal> for wasmi::core::Value {
-    fn from(v: RawVal) -> Self {
-        wasmi::core::Value::I64(v.get_payload() as i64)
+impl WasmiMarshal for u64 {
+    fn try_marshal_from_value(v: wasmi::Value) -> Option<Self> {
+        if let wasmi::Value::I64(i) = v {
+            Some(i as u64)
+        } else {
+            None
+        }
+    }
+
+    fn marshal_from_self(self) -> wasmi::Value {
+        wasmi::Value::I64(self as i64)
+    }
+}
+
+#[cfg(feature = "vm")]
+impl WasmiMarshal for i64 {
+    fn try_marshal_from_value(v: wasmi::Value) -> Option<Self> {
+        if let wasmi::Value::I64(i) = v {
+            Some(i)
+        } else {
+            None
+        }
+    }
+
+    fn marshal_from_self(self) -> wasmi::Value {
+        wasmi::Value::I64(self)
     }
 }
 

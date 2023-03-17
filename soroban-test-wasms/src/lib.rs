@@ -44,6 +44,8 @@
 
 pub const ADD_I32: &'static [u8] =
     include_bytes!("../wasm-workspace/opt/example_add_i32.wasm").as_slice();
+pub const ADD_F32: &'static [u8] =
+    include_bytes!("../wasm-workspace/opt/example_add_f32.wasm").as_slice();
 pub const CREATE_CONTRACT: &'static [u8] =
     include_bytes!("../wasm-workspace/opt/example_create_contract.wasm").as_slice();
 pub const CONTRACT_DATA: &'static [u8] =

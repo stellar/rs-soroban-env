@@ -84,28 +84,21 @@ macro_rules! impl_wrapper_wasmi_conversions {
     ($wrapper:ty) => {
         // wasmi / VM argument support
         #[cfg(feature = "vm")]
-        impl wasmi::core::FromValue for $wrapper {
-            fn from_value(val: wasmi::core::Value) -> Option<Self> {
-                let maybe: Option<u64> = <u64 as wasmi::core::FromValue>::from_value(val);
-                match maybe {
-                    Some(u) => {
-                        let raw = $crate::RawVal::from_payload(u);
-                        if <Self as $crate::RawValConvertible>::is_val_type(raw) {
-                            Some(unsafe {
-                                <Self as $crate::RawValConvertible>::unchecked_from_val(raw)
-                            })
-                        } else {
-                            None
-                        }
+        impl $crate::WasmiMarshal for $wrapper {
+            fn try_marshal_from_value(v: wasmi::Value) -> Option<Self> {
+                if let wasmi::Value::I64(i) = v {
+                    let raw = $crate::RawVal::from_payload(i as u64);
+                    if <Self as $crate::RawValConvertible>::is_val_type(raw) {
+                        return Some(unsafe {
+                            <Self as $crate::RawValConvertible>::unchecked_from_val(raw)
+                        });
                     }
-                    None => None,
                 }
+                None
             }
-        }
-        #[cfg(feature = "vm")]
-        impl From<$wrapper> for wasmi::core::Value {
-            fn from(v: $wrapper) -> Self {
-                wasmi::core::Value::I64(v.as_raw().get_payload() as i64)
+
+            fn marshal_from_self(self) -> wasmi::Value {
+                wasmi::Value::I64(self.as_raw().get_payload() as i64)
             }
         }
     };

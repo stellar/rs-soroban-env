@@ -182,27 +182,32 @@ impl From<wasmi::Error> for DebugError {
             Table(_) => ScVmErrorCode::Table,
             Memory(_) => ScVmErrorCode::Memory,
             Global(_) => ScVmErrorCode::Global,
-            Trap(trap) if trap.is_host() => {
-                let err = trap.into_host().expect("trapped HostError");
-                let status: Status = match err.downcast_ref::<HostError>() {
-                    Some(he) => he.status,
-                    None => ScUnknownErrorCode::General.into(),
-                };
-                return DebugError::new(status).msg("VM trapped with host error");
+            Trap(trap) => {
+                if let Some(code) = trap.trap_code() {
+                    match code {
+                        // Note: these are _not stable_ from one release of wasmi
+                        // to the next, we should avoid making them all canonical.
+                        UnreachableCodeReached => ScVmErrorCode::TrapUnreachable,
+                        MemoryOutOfBounds => ScVmErrorCode::TrapMemoryAccessOutOfBounds,
+                        TableOutOfBounds => ScVmErrorCode::TrapTableAccessOutOfBounds,
+                        IntegerDivisionByZero => ScVmErrorCode::TrapDivisionByZero,
+                        IntegerOverflow => ScVmErrorCode::TrapIntegerOverflow,
+                        BadConversionToInteger => ScVmErrorCode::TrapInvalidConversionToInt,
+                        StackOverflow => ScVmErrorCode::TrapStackOverflow,
+                        BadSignature => ScVmErrorCode::TrapUnexpectedSignature,
+                        OutOfFuel => ScVmErrorCode::TrapCpuLimitExceeded,
+                        // Eg: this code wasn't present before.
+                        IndirectCallToNull => ScVmErrorCode::Unknown,
+                    }
+                } else {
+                    let status = if let Some(he) = trap.downcast_ref::<HostError>() {
+                        he.status
+                    } else {
+                        ScUnknownErrorCode::General.into()
+                    };
+                    return DebugError::new(status).msg("VM trapped with host error");
+                }
             }
-            Trap(trap) => match trap.as_code().expect("trap code") {
-                Unreachable => ScVmErrorCode::TrapUnreachable,
-                MemoryAccessOutOfBounds => ScVmErrorCode::TrapMemoryAccessOutOfBounds,
-                TableAccessOutOfBounds => ScVmErrorCode::TrapTableAccessOutOfBounds,
-                ElemUninitialized => ScVmErrorCode::TrapElemUninitialized,
-                DivisionByZero => ScVmErrorCode::TrapDivisionByZero,
-                IntegerOverflow => ScVmErrorCode::TrapIntegerOverflow,
-                InvalidConversionToInt => ScVmErrorCode::TrapInvalidConversionToInt,
-                StackOverflow => ScVmErrorCode::TrapStackOverflow,
-                UnexpectedSignature => ScVmErrorCode::TrapUnexpectedSignature,
-                MemLimitExceeded => ScVmErrorCode::TrapMemLimitExceeded,
-                CpuLimitExceeded => ScVmErrorCode::TrapCpuLimitExceeded,
-            },
             _ => ScVmErrorCode::Unknown,
         };
         Self::new(code).msg(code.name())

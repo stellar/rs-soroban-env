@@ -23,13 +23,10 @@ use func_info::HOST_FUNCTIONS;
 use soroban_env_common::{
     meta,
     xdr::{ReadXdr, ScEnvMetaEntry, ScHostFnErrorCode, ScVmErrorCode},
-    ConversionError, SymbolStr, TryIntoVal,
+    ConversionError, SymbolStr, TryIntoVal, WasmiMarshal,
 };
 
-use wasmi::{
-    core::Value, Caller, Engine, Instance, Linker, Memory, Module, StepMeter, Store,
-    StoreContextMut,
-};
+use wasmi::{Caller, Engine, Instance, Linker, Memory, Module, Store, StoreContextMut, Value};
 
 #[cfg(any(test, feature = "testutils"))]
 use soroban_env_common::{
@@ -38,27 +35,6 @@ use soroban_env_common::{
 };
 
 impl wasmi::core::HostError for HostError {}
-
-impl StepMeter for HostImpl {
-    fn max_insn_step(&self) -> u64 {
-        256
-    }
-
-    fn charge_cpu(&self, insns: u64) -> Result<(), wasmi::core::TrapCode> {
-        // TODO reconcile TrapCode with HostError better.
-        self.budget
-            .clone()
-            .charge(CostType::WasmInsnExec, insns)
-            .map_err(|_| wasmi::core::TrapCode::CpuLimitExceeded)
-    }
-
-    fn charge_mem(&self, bytes: u64) -> Result<(), wasmi::core::TrapCode> {
-        self.budget
-            .clone()
-            .charge(CostType::WasmMemAlloc, bytes)
-            .map_err(|_| wasmi::core::TrapCode::MemLimitExceeded)
-    }
-}
 
 /// A [Vm] is a thin wrapper around an instance of [wasmi::Module]. Multiple
 /// [Vm]s may be held in a single [Host], and each contains a single WASM module
@@ -172,10 +148,8 @@ impl Vm {
         config.wasm_mutable_global(false);
         config.wasm_saturating_float_to_int(false);
         config.wasm_sign_extension(false);
-
-        // This should always be true, and it enforces wasmi's notion of "deterministic only"
-        // execution, which excludes all floating point ops. Double check to be sure.
-        assert!(config.wasm_features().deterministic_only);
+        config.floats(false);
+        config.consume_fuel(true);
 
         let engine = Engine::new(&config);
         let module = host.map_err(Module::new(&engine, module_wasm_code))?;
@@ -183,8 +157,7 @@ impl Vm {
         Self::check_meta_section(host, &module)?;
 
         let mut store = Store::new(&engine, host.clone());
-        store.set_step_meter(host.0.clone());
-        let mut linker = <Linker<Host>>::new();
+        let mut linker = <Linker<Host>>::new(&engine);
 
         for hf in HOST_FUNCTIONS {
             let func = (hf.wrap)(&mut store);
@@ -269,7 +242,10 @@ impl Vm {
                     wasm_args.as_slice(),
                     &mut wasm_ret,
                 ))?;
-                Ok(wasm_ret[0].try_into().ok_or(ConversionError)?)
+                Ok(
+                    <_ as WasmiMarshal>::try_marshal_from_value(wasm_ret[0].clone())
+                        .ok_or(ConversionError)?,
+                )
             },
         )
     }
@@ -304,7 +280,7 @@ impl Vm {
     pub fn functions(&self) -> Vec<VmFunction> {
         let mut res = Vec::new();
         for e in self.module.exports() {
-            if let wasmi::ExportItemKind::Func(f) = e.kind() {
+            if let wasmi::ExternType::Func(f) = e.ty() {
                 res.push(VmFunction {
                     name: e.name().to_string(),
                     param_count: f.params().len(),
@@ -316,6 +292,8 @@ impl Vm {
     }
 
     fn module_custom_section(m: &Module, name: impl AsRef<str>) -> Option<&[u8]> {
+        todo!()
+        /*
         m.custom_sections().iter().find_map(|s| {
             if &*s.name == name.as_ref() {
                 Some(&*s.data)
@@ -323,25 +301,12 @@ impl Vm {
                 None
             }
         })
+        */
     }
 
     /// Returns the raw bytes content of a named custom section from the WASM
     /// module loaded into the [Vm], or `None` if no such custom section exists.
     pub fn custom_section(&self, name: impl AsRef<str>) -> Option<&[u8]> {
         Self::module_custom_section(&self.module, name)
-    }
-
-    /// Utility function that synthesizes a `VmCaller<Host>` configured to point
-    /// to this VM's `Store` and `Instance`, and calls the provided function
-    /// back with it. Mainly used for testing.
-    pub fn with_vmcaller<F, T>(&self, f: F) -> T
-    where
-        F: FnOnce(&mut VmCaller<Host>) -> T,
-    {
-        let store: &mut Store<Host> = &mut *self.store.borrow_mut();
-        let mut ctx: StoreContextMut<Host> = store.into();
-        let caller: Caller<Host> = Caller::new(&mut ctx, Some(self.instance));
-        let mut vmcaller: VmCaller<Host> = VmCaller(Some(caller));
-        f(&mut vmcaller)
     }
 }

@@ -3,8 +3,11 @@ use crate::{
     AddressObject, BytesObject, I128Object, I64Object, MapObject, RawVal, Status, StringObject,
     Symbol, SymbolObject, U128Object, U32Val, U64Object, VecObject,
 };
-use soroban_env_common::call_macro_with_all_host_functions;
-use wasmi::core::{FromValue, Trap, TrapCode::UnexpectedSignature, Value};
+use soroban_env_common::{call_macro_with_all_host_functions, WasmiMarshal};
+use wasmi::{
+    core::{Trap, TrapCode::BadSignature},
+    Value,
+};
 
 ///////////////////////////////////////////////////////////////////////////////
 /// X-macro use: dispatch functions
@@ -67,7 +70,7 @@ macro_rules! generate_dispatch_functions {
                     // Notes on metering: a flat charge per host function invocation.
                     // This does not account for the actual work being done in those functions,
                     // which are accounted for individually at the operation level.
-                    let host = caller.host_data().clone();
+                    let host = caller.data().clone();
                     host.charge_budget(CostType::InvokeHostFunction, 1)?;
                     let mut vmcaller = VmCaller(Some(caller));
                     // The odd / seemingly-redundant use of `wasmi::Value` here
@@ -79,9 +82,9 @@ macro_rules! generate_dispatch_functions {
                     // happens to be a natural switching point for that: we have
                     // conversions to and from both RawVal and i64 / u64 for
                     // wasmi::Value.
-                    let res: Result<_, HostError> = host.$fn_id(&mut vmcaller, $(<$type as FromValue>::from_value(Value::I64($arg)).ok_or(UnexpectedSignature)?),*);
+                    let res: Result<_, HostError> = host.$fn_id(&mut vmcaller, $(<$type>::try_marshal_from_value(Value::I64($arg)).ok_or(BadSignature)?),*);
                     let res: Value = match res {
-                        Ok(ok) => ok.into(),
+                        Ok(ok) => ok.marshal_from_self(),
                         Err(hosterr) => {
                             // We make a new HostError here to capture the escalation event itself.
                             let escalation: HostError = host.err_status_msg(hosterr.status, "escalating error '{}' to VM trap");
@@ -92,7 +95,7 @@ macro_rules! generate_dispatch_functions {
                     if let Value::I64(v) = res {
                         Ok((v,))
                     } else {
-                        Err(UnexpectedSignature.into())
+                        Err(BadSignature.into())
                     }
                 }
             )*

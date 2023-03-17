@@ -338,6 +338,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0198b9d0078e0f30dedc7acbb21c974e838fc8fae3ee170128658a98cb2c1c04"
 
 [[package]]
+name = "example_add_f32"
+version = "0.0.0"
+dependencies = [
+ "soroban-sdk",
+]
+
+[[package]]
 name = "example_add_i32"
 version = "0.0.0"
 dependencies = [
@@ -899,7 +906,7 @@ dependencies = [
  "soroban-env-macros",
  "soroban-wasmi",
  "static_assertions",
- "stellar-xdr",
+ "stellar-xdr 0.0.14 (git+https://github.com/stellar/rs-stellar-xdr?rev=07aff1190dc3f97b889d31b2bfb77098e7db55ce)",
 ]
 
 [[package]]
@@ -929,6 +936,7 @@ dependencies = [
  "soroban-wasmi",
  "static_assertions",
  "tinyvec",
+ "wasmparser-nostd",
 ]
 
 [[package]]
@@ -940,7 +948,7 @@ dependencies = [
  "quote",
  "serde",
  "serde_json",
- "stellar-xdr",
+ "stellar-xdr 0.0.14 (git+https://github.com/stellar/rs-stellar-xdr?rev=07aff1190dc3f97b889d31b2bfb77098e7db55ce)",
  "syn",
  "thiserror",
 ]
@@ -990,7 +998,7 @@ dependencies = [
  "sha2 0.10.6",
  "soroban-env-common",
  "soroban-spec",
- "stellar-xdr",
+ "stellar-xdr 0.0.14 (git+https://github.com/stellar/rs-stellar-xdr?rev=74999cea9be22fe20cb030d6e485795ab2269045)",
  "syn",
 ]
 
@@ -1008,7 +1016,7 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "sha2 0.10.6",
- "stellar-xdr",
+ "stellar-xdr 0.0.14 (git+https://github.com/stellar/rs-stellar-xdr?rev=74999cea9be22fe20cb030d6e485795ab2269045)",
  "syn",
  "thiserror",
  "wasmparser",
@@ -1060,9 +1068,20 @@ dependencies = [
 [[package]]
 name = "stellar-xdr"
 version = "0.0.14"
-source = "git+https://github.com/stellar/rs-stellar-xdr?rev=74999cea9be22fe20cb030d6e485795ab2269045#74999cea9be22fe20cb030d6e485795ab2269045"
+source = "git+https://github.com/stellar/rs-stellar-xdr?rev=07aff1190dc3f97b889d31b2bfb77098e7db55ce#07aff1190dc3f97b889d31b2bfb77098e7db55ce"
 dependencies = [
  "base64",
+ "crate-git-revision",
+ "hex",
+ "serde",
+ "serde_with",
+]
+
+[[package]]
+name = "stellar-xdr"
+version = "0.0.14"
+source = "git+https://github.com/stellar/rs-stellar-xdr?rev=74999cea9be22fe20cb030d6e485795ab2269045#74999cea9be22fe20cb030d6e485795ab2269045"
+dependencies = [
  "crate-git-revision",
  "hex",
  "serde",
