@@ -8,11 +8,22 @@ pub struct HostMemAllocRun;
 
 impl CostRunner for HostMemAllocRun {
     const COST_TYPE: CostType = CostType::HostMemAlloc;
+
     type SampleType = u64;
 
-    fn run_iter(host: &crate::Host, _iter: u64, sample: Self::SampleType) {
+    type RecycledType = Option<MeteredVector<u64>>;
+
+    fn run_iter(host: &crate::Host, _iter: u64, sample: Self::SampleType) -> Self::RecycledType {
         // we just create a single MeteredVector with capacity to see what the
         // mem allocation cost is.
-        MeteredVector::<u64>::with_capacity(sample as usize, host.as_budget()).unwrap();
+        Some(MeteredVector::<u64>::with_capacity(sample as usize, host.as_budget()).unwrap())
+    }
+
+    fn run_baseline_iter(
+        _host: &crate::Host,
+        _iter: u64,
+        _sample: Self::SampleType,
+    ) -> Self::RecycledType {
+        None
     }
 }

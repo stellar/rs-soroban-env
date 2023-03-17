@@ -4,11 +4,21 @@ pub struct ValDeserRun;
 
 impl CostRunner for ValDeserRun {
     const COST_TYPE: CostType = CostType::ValDeser;
+
     type SampleType = Vec<u8>;
 
-    fn run_iter(host: &crate::Host, _iter: u64, sample: Self::SampleType) {
-        host.metered_from_xdr::<ScVal>(&sample).unwrap();
-        // `forget` avoids deallocation of sample which artificially inflates the cost
-        std::mem::forget(sample)
+    type RecycledType = (Option<ScVal>, Vec<u8>);
+
+    fn run_iter(host: &crate::Host, _iter: u64, sample: Self::SampleType) -> Self::RecycledType {
+        let sv = host.metered_from_xdr::<ScVal>(&sample).unwrap();
+        (Some(sv), sample)
+    }
+
+    fn run_baseline_iter(
+        _host: &crate::Host,
+        _iter: u64,
+        sample: Self::SampleType,
+    ) -> Self::RecycledType {
+        (None, sample)
     }
 }

@@ -18,7 +18,7 @@ impl HostCostMeasurement for VmInstantiationMeasure {
     fn new_best_case(_host: &Host, _rng: &mut StdRng) -> VmInstantiationSample {
         let id: xdr::Hash = [0; 32].into();
         let wasm: Vec<u8> = soroban_test_wasms::ADD_I32.clone().into();
-        VmInstantiationSample { id, wasm }
+        VmInstantiationSample { id: Some(id), wasm }
     }
 
     fn new_worst_case(_host: &Host, _rng: &mut StdRng, input: u64) -> VmInstantiationSample {
@@ -38,7 +38,7 @@ impl HostCostMeasurement for VmInstantiationMeasure {
         }
         .clone()
         .into();
-        VmInstantiationSample { id, wasm }
+        VmInstantiationSample { id: Some(id), wasm }
     }
 
     fn new_random_case(_host: &Host, rng: &mut StdRng, _input: u64) -> VmInstantiationSample {
@@ -57,7 +57,7 @@ impl HostCostMeasurement for VmInstantiationMeasure {
             _ => unreachable!(),
         };
         let wasm: Vec<u8> = wasm.clone().into();
-        VmInstantiationSample { id, wasm }
+        VmInstantiationSample { id: Some(id), wasm }
     }
 }
 

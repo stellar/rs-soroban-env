@@ -459,7 +459,7 @@ impl Default for BudgetImpl {
                     cpu.const_param = 5455;
                     cpu.lin_param = 702
                 }
-                CostType::VisitObject => (), // This is 0
+                CostType::VisitObject => cpu.lin_param = 208,
                 CostType::ValXdrConv => cpu.lin_param = 255,
                 CostType::ValSer => cpu.lin_param = 77,
                 CostType::ValDeser => cpu.lin_param = 19,
@@ -472,9 +472,9 @@ impl Default for BudgetImpl {
                     cpu.const_param = 367_202;
                     cpu.lin_param = 22;
                 }
-                CostType::MapNew => cpu.const_param = 188,
+                CostType::MapNew => cpu.const_param = 200,
                 CostType::MapEntry => cpu.lin_param = 72,
-                CostType::VecNew => cpu.lin_param = 192,
+                CostType::VecNew => cpu.lin_param = 200,
                 CostType::VecEntry => cpu.lin_param = 195,
                 CostType::GuardFrame => cpu.const_param = 3555,
                 CostType::VmMemRead => {
@@ -486,10 +486,10 @@ impl Default for BudgetImpl {
                 }
                 CostType::VmInstantiation => cpu.const_param = 1_000_000,
                 CostType::InvokeVmFunction => cpu.const_param = 4823,
-                CostType::HostMemCmp => (), // this is 0
+                CostType::HostMemCmp => (), // this is near 0
                 CostType::ChargeBudget => cpu.const_param = 192,
                 CostType::HostMemAlloc => cpu.const_param = 1000,
-                CostType::HostMemCpy => cpu.lin_param = 6,
+                CostType::HostMemCpy => (), // this is near 0
             }
 
             let mem = b.mem_bytes.get_cost_model_mut(*ct);

@@ -14,7 +14,7 @@ pub(crate) struct ValSerMeasure;
 impl HostCostMeasurement for ValSerMeasure {
     type Runner = ValSerRun;
 
-    fn new_random_case(_host: &Host, rng: &mut StdRng, input: u64) -> ScVal {
+    fn new_random_case(_host: &Host, rng: &mut StdRng, input: u64) -> (ScVal, Vec<u8>) {
         let input = input * 100;
         let mut hs: HashSet<u32> = HashSet::new();
         while hs.len() < (input as usize) {
@@ -30,6 +30,6 @@ impl HostCostMeasurement for ValSerMeasure {
                 .try_into()
                 .unwrap(),
         );
-        ScVal::Map(Some(scmap))
+        (ScVal::Map(Some(scmap)), Vec::default())
     }
 }

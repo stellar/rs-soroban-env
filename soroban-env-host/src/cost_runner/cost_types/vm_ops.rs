@@ -5,19 +5,30 @@ pub struct VmInstantiationRun;
 
 #[derive(Clone)]
 pub struct VmInstantiationSample {
-    pub id: Hash,
+    pub id: Option<Hash>,
     pub wasm: Vec<u8>,
 }
 
 impl CostRunner for VmInstantiationRun {
     const COST_TYPE: CostType = CostType::VmInstantiation;
+
     const RUN_ITERATIONS: u64 = 10;
+
     type SampleType = VmInstantiationSample;
 
-    fn run_iter(host: &crate::Host, _iter: u64, sample: Self::SampleType) {
-        Vm::new(host, sample.id, &sample.wasm[..]).unwrap();
-        // `forget` avoids deallocation of sample which artificially inflates the cost
-        std::mem::forget(sample.wasm);
+    type RecycledType = (Option<Rc<Vm>>, Vec<u8>);
+
+    fn run_iter(host: &crate::Host, _iter: u64, sample: Self::SampleType) -> Self::RecycledType {
+        let vm = Vm::new(host, sample.id.unwrap(), &sample.wasm[..]).unwrap();
+        (Some(vm), sample.wasm)
+    }
+
+    fn run_baseline_iter(
+        _host: &crate::Host,
+        _iter: u64,
+        sample: Self::SampleType,
+    ) -> Self::RecycledType {
+        (None, sample.wasm)
     }
 }
 
@@ -27,13 +38,27 @@ impl CostRunner for VmMemReadRun {
 
     type SampleType = (Rc<Vm>, Vec<u8>);
 
-    fn run_iter(host: &crate::Host, _iter: u64, mut sample: Self::SampleType) {
-        let vm = sample.0;
+    type RecycledType = Self::SampleType;
+
+    fn run_iter(
+        host: &crate::Host,
+        _iter: u64,
+        mut sample: Self::SampleType,
+    ) -> Self::RecycledType {
+        let vm = &sample.0;
         vm.with_vmcaller(|caller| {
-            host.metered_vm_read_bytes_from_linear_memory(caller, &vm, 0, &mut sample.1)
+            host.metered_vm_read_bytes_from_linear_memory(caller, vm, 0, &mut sample.1)
                 .unwrap()
         });
-        std::mem::forget(sample.1);
+        sample
+    }
+
+    fn run_baseline_iter(
+        _host: &crate::Host,
+        _iter: u64,
+        sample: Self::SampleType,
+    ) -> Self::RecycledType {
+        sample
     }
 }
 
@@ -43,13 +68,26 @@ impl CostRunner for VmMemWriteRun {
 
     type SampleType = (Rc<Vm>, Vec<u8>);
 
-    fn run_iter(host: &crate::Host, _iter: u64, mut sample: Self::SampleType) {
-        let vm = sample.0;
+    type RecycledType = Self::SampleType;
+
+    fn run_iter(
+        host: &crate::Host,
+        _iter: u64,
+        mut sample: Self::SampleType,
+    ) -> Self::RecycledType {
+        let vm = &sample.0;
         vm.with_vmcaller(|caller| {
-            host.metered_vm_write_bytes_to_linear_memory(caller, &vm, 0, &mut sample.1)
+            host.metered_vm_write_bytes_to_linear_memory(caller, vm, 0, &mut sample.1)
                 .unwrap()
         });
-        // `forget` avoids deallocation of sample which artificially inflates the cost
-        std::mem::forget(sample.1);
+        sample
+    }
+
+    fn run_baseline_iter(
+        _host: &crate::Host,
+        _iter: u64,
+        sample: Self::SampleType,
+    ) -> Self::RecycledType {
+        sample
     }
 }

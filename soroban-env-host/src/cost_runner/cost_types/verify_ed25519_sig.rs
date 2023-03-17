@@ -12,12 +12,22 @@ pub struct VerifyEd25519SigSample {
 
 impl CostRunner for VerifyEd25519SigRun {
     const COST_TYPE: CostType = CostType::VerifyEd25519Sig;
+
     type SampleType = VerifyEd25519SigSample;
 
-    fn run_iter(host: &crate::Host, _iter: u64, sample: Self::SampleType) {
+    type RecycledType = Self::SampleType;
+
+    fn run_iter(host: &crate::Host, _iter: u64, sample: Self::SampleType) -> Self::RecycledType {
         host.verify_sig_ed25519_internal(sample.msg.as_slice(), &sample.key, &sample.sig)
             .expect("verify sig ed25519");
-        // `forget` avoids deallocation of sample which artificially inflates the cost
-        std::mem::forget(sample);
+        sample
+    }
+
+    fn run_baseline_iter(
+        _host: &crate::Host,
+        _iter: u64,
+        sample: Self::SampleType,
+    ) -> Self::RecycledType {
+        sample
     }
 }

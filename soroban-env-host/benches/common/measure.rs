@@ -227,16 +227,24 @@ pub trait HostCostMeasurement: Sized {
         Self::new_random_case(host, rng, input)
     }
 
-    fn run_baseline(host: &Host, sample: Vec<<Self::Runner as CostRunner>::SampleType>) {
-        <Self::Runner as CostRunner>::run_baseline(host, sample)
+    fn run_baseline(
+        host: &Host,
+        samples: Vec<<Self::Runner as CostRunner>::SampleType>,
+        recycled_samples: &mut Vec<<Self::Runner as CostRunner>::RecycledType>,
+    ) {
+        <Self::Runner as CostRunner>::run_baseline(host, samples, recycled_samples)
     }
 
-    fn run(host: &Host, sample: Vec<<Self::Runner as CostRunner>::SampleType>) {
-        <Self::Runner as CostRunner>::run(host, sample)
+    fn run(
+        host: &Host,
+        samples: Vec<<Self::Runner as CostRunner>::SampleType>,
+        recycled_samples: &mut Vec<<Self::Runner as CostRunner>::RecycledType>,
+    ) {
+        <Self::Runner as CostRunner>::run(host, samples, recycled_samples)
     }
 
-    fn get_total_input(host: &Host, sample: &<Self::Runner as CostRunner>::SampleType) -> u64 {
-        <Self::Runner as CostRunner>::get_total_input(host, sample)
+    fn get_total_input(host: &Host) -> u64 {
+        <Self::Runner as CostRunner>::get_total_input(host)
     }
 
     fn get_insns_overhead(_host: &Host, _sample: &<Self::Runner as CostRunner>::SampleType) -> u64 {
@@ -309,22 +317,26 @@ fn harness<HCM: HostCostMeasurement, R>(
     samples: Vec<<<HCM as HostCostMeasurement>::Runner as CostRunner>::SampleType>,
 ) -> Measurement
 where
-    R: FnMut(&Host, Vec<<<HCM as HostCostMeasurement>::Runner as CostRunner>::SampleType>),
+    R: FnMut(
+        &Host,
+        Vec<<<HCM as HostCostMeasurement>::Runner as CostRunner>::SampleType>,
+        &mut Vec<<<HCM as HostCostMeasurement>::Runner as CostRunner>::RecycledType>,
+    ),
 {
-    // TODO get rid of dependency of inputs on samples
-    let sample = samples[0].clone();
+    let mut recycled_samples = Vec::with_capacity(samples.len());
+    host.as_budget().reset_unlimited();
+
     // start the cpu and mem measurement
     let start = Instant::now();
     mem_tracker.0.store(0, Ordering::SeqCst);
     let alloc_guard = alloc_group_token.enter();
-    host.as_budget().reset_unlimited();
     cpu_insn_counter.begin();
-    runner(host, samples);
+    runner(host, samples, &mut recycled_samples);
     // collect the metrics
     let cpu_insns = cpu_insn_counter.end_and_count() / iterations;
     drop(alloc_guard);
     let stop = Instant::now();
-    let input = HCM::get_total_input(&host, &sample) / iterations;
+    let input = HCM::get_total_input(&host) / iterations;
     let mem_bytes = mem_tracker.0.load(Ordering::SeqCst) / iterations;
     let time_nsecs = stop.duration_since(start).as_nanos() as u64 / iterations;
     Measurement {
@@ -341,7 +353,11 @@ fn measure_costs_inner<HCM: HostCostMeasurement, F, R>(
 ) -> Result<Vec<Measurement>, std::io::Error>
 where
     F: FnMut(&Host) -> Option<<HCM::Runner as CostRunner>::SampleType>,
-    R: FnMut(&Host, Vec<<HCM::Runner as CostRunner>::SampleType>),
+    R: FnMut(
+        &Host,
+        Vec<<HCM::Runner as CostRunner>::SampleType>,
+        &mut Vec<<HCM::Runner as CostRunner>::RecycledType>,
+    ),
 {
     let mut cpu_insn_counter = cpu::InstructionCounter::new();
     let mem_tracker = MemTracker(Arc::new(AtomicU64::new(0)));

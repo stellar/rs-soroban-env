@@ -345,4 +345,16 @@ impl Host {
             self.add_host_object::<HOT>(vnew.try_into()?)
         }
     }
+
+    // Test function for calibration purpose. The caller needs to ensure `src` and `dest` has
+    // the same length or else it panics.
+    #[cfg(feature = "testutils")]
+    pub(crate) fn mem_copy_from_slice<T: Copy + super::declared_size::DeclaredSizeForMetering>(
+        &self,
+        src: &[T],
+        dest: &mut [T],
+    ) -> Result<(), HostError> {
+        self.charge_budget(CostType::HostMemCpy, src.len() as u64)?;
+        Ok(dest.copy_from_slice(src))
+    }
 }

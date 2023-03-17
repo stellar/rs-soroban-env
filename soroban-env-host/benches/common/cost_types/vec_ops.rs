@@ -2,14 +2,14 @@ use crate::common::{util, HostCostMeasurement};
 use rand::{rngs::StdRng, seq::SliceRandom};
 use soroban_env_host::{
     budget::AsBudget,
-    cost_runner::{ImVecEntryRun, ImVecEntrySample, ImVecNewRun},
+    cost_runner::{VecEntryRun, VecEntrySample, VecNewRun},
     Host, MeteredVector, RawVal,
 };
 
-pub(crate) struct ImVecNewMeasure;
+pub(crate) struct VecNewMeasure;
 /// Measures the costs of allocating 0-sized vectors, without injecting to the host storage.
-impl HostCostMeasurement for ImVecNewMeasure {
-    type Runner = ImVecNewRun;
+impl HostCostMeasurement for VecNewMeasure {
+    type Runner = VecNewRun;
 
     fn new_random_case(_host: &Host, rng: &mut StdRng, input: u64) -> Vec<RawVal> {
         let input = input * 1000;
@@ -19,20 +19,20 @@ impl HostCostMeasurement for ImVecNewMeasure {
     }
 }
 
-pub(crate) struct ImVecEntryMeasure;
+pub(crate) struct VecEntryMeasure;
 // Measures the costs of accessing vectors of various sizes. It should have zero
 // memory cost and logarithmic cpu cost, which we will approximate with an upper
 // bound on vector size.
-impl HostCostMeasurement for ImVecEntryMeasure {
-    type Runner = ImVecEntryRun;
+impl HostCostMeasurement for VecEntryMeasure {
+    type Runner = VecEntryRun;
 
     // Random case is worst case.
-    fn new_random_case(host: &Host, rng: &mut StdRng, input: u64) -> ImVecEntrySample {
-        let input = input * 100;
+    fn new_random_case(host: &Host, rng: &mut StdRng, input: u64) -> VecEntrySample {
+        let input = 1 + input * 100;
         let ov = util::to_rawval_u32(0..(input as u32)).collect();
         let vec: MeteredVector<_> = MeteredVector::from_vec(ov, host.as_budget()).unwrap();
         let mut idxs: Vec<usize> = (0..input as usize).collect();
         idxs.shuffle(rng);
-        ImVecEntrySample { vec, idxs }
+        VecEntrySample { vec, idxs }
     }
 }

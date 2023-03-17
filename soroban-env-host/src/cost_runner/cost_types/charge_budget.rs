@@ -12,10 +12,14 @@ impl CostRunner for ChargeBudgetRun {
 
     type SampleType = u64;
 
-    fn run_iter(host: &crate::Host, _iter: u64, sample: Self::SampleType) {
+    type RecycledType = ();
+
+    fn run_iter(host: &crate::Host, _iter: u64, sample: u64) {
         // The `CostType` here is irrelevant, can pass in any type except `CostType::ChargeBudget`.
         host.as_budget()
             .charge(CostType::WasmInsnExec, sample)
             .unwrap();
     }
+
+    fn run_baseline_iter(_host: &crate::Host, _iter: u64, _sample: u64) {}
 }

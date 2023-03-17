@@ -5,13 +5,13 @@ mod guard_frame;
 mod host_mem_alloc;
 mod host_mem_cmp;
 mod host_mem_cpy;
-mod im_map_ops;
-mod im_vec_ops;
 #[cfg(feature = "vm")]
 mod invoke;
+mod map_ops;
 mod val_deser;
 mod val_ser;
 mod val_xdr_conv;
+mod vec_ops;
 mod verify_ed25519_sig;
 mod visit_object;
 #[cfg(feature = "vm")]
@@ -26,13 +26,13 @@ pub use guard_frame::*;
 pub use host_mem_alloc::*;
 pub use host_mem_cmp::*;
 pub use host_mem_cpy::*;
-pub use im_map_ops::*;
-pub use im_vec_ops::*;
 #[cfg(feature = "vm")]
 pub use invoke::*;
+pub use map_ops::*;
 pub use val_deser::*;
 pub use val_ser::*;
 pub use val_xdr_conv::*;
+pub use vec_ops::*;
 pub use verify_ed25519_sig::*;
 pub use visit_object::*;
 #[cfg(feature = "vm")]
