@@ -1,5 +1,5 @@
 use crate::{budget::CostType, cost_runner::CostRunner, xdr::Hash, Vm};
-use std::rc::Rc;
+use std::{hint::black_box, rc::Rc};
 
 pub struct VmInstantiationRun;
 
@@ -19,7 +19,7 @@ impl CostRunner for VmInstantiationRun {
     type RecycledType = (Option<Rc<Vm>>, Vec<u8>);
 
     fn run_iter(host: &crate::Host, _iter: u64, sample: Self::SampleType) -> Self::RecycledType {
-        let vm = Vm::new(host, sample.id.unwrap(), &sample.wasm[..]).unwrap();
+        let vm = black_box(Vm::new(host, sample.id.unwrap(), &sample.wasm[..]).unwrap());
         (Some(vm), sample.wasm)
     }
 
@@ -28,15 +28,21 @@ impl CostRunner for VmInstantiationRun {
         _iter: u64,
         sample: Self::SampleType,
     ) -> Self::RecycledType {
-        (None, sample.wasm)
+        black_box((None, sample.wasm))
     }
+}
+
+#[derive(Clone)]
+pub struct VmMemRunSample {
+    pub vm: Rc<Vm>,
+    pub buf: Vec<u8>,
 }
 
 pub struct VmMemReadRun;
 impl CostRunner for VmMemReadRun {
     const COST_TYPE: CostType = CostType::VmMemRead;
 
-    type SampleType = (Rc<Vm>, Vec<u8>);
+    type SampleType = VmMemRunSample;
 
     type RecycledType = Self::SampleType;
 
@@ -45,11 +51,10 @@ impl CostRunner for VmMemReadRun {
         _iter: u64,
         mut sample: Self::SampleType,
     ) -> Self::RecycledType {
-        let vm = &sample.0;
-        vm.with_vmcaller(|caller| {
-            host.metered_vm_read_bytes_from_linear_memory(caller, vm, 0, &mut sample.1)
+        black_box(sample.vm.with_vmcaller(|caller| {
+            host.metered_vm_read_bytes_from_linear_memory(caller, &sample.vm, 0, &mut sample.buf)
                 .unwrap()
-        });
+        }));
         sample
     }
 
@@ -58,7 +63,7 @@ impl CostRunner for VmMemReadRun {
         _iter: u64,
         sample: Self::SampleType,
     ) -> Self::RecycledType {
-        sample
+        black_box(sample)
     }
 }
 
@@ -66,7 +71,7 @@ pub struct VmMemWriteRun;
 impl CostRunner for VmMemWriteRun {
     const COST_TYPE: CostType = CostType::VmMemWrite;
 
-    type SampleType = (Rc<Vm>, Vec<u8>);
+    type SampleType = VmMemRunSample;
 
     type RecycledType = Self::SampleType;
 
@@ -75,11 +80,10 @@ impl CostRunner for VmMemWriteRun {
         _iter: u64,
         mut sample: Self::SampleType,
     ) -> Self::RecycledType {
-        let vm = &sample.0;
-        vm.with_vmcaller(|caller| {
-            host.metered_vm_write_bytes_to_linear_memory(caller, vm, 0, &mut sample.1)
+        black_box(sample.vm.with_vmcaller(|caller| {
+            host.metered_vm_write_bytes_to_linear_memory(caller, &sample.vm, 0, &mut sample.buf)
                 .unwrap()
-        });
+        }));
         sample
     }
 
@@ -88,6 +92,6 @@ impl CostRunner for VmMemWriteRun {
         _iter: u64,
         sample: Self::SampleType,
     ) -> Self::RecycledType {
-        sample
+        black_box(sample)
     }
 }

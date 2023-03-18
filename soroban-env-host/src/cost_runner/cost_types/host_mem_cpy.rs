@@ -1,3 +1,5 @@
+use std::hint::black_box;
+
 use crate::{budget::CostType, cost_runner::CostRunner};
 
 pub struct HostMemCpyRun;
@@ -10,8 +12,10 @@ impl CostRunner for HostMemCpyRun {
     type RecycledType = Self::SampleType;
 
     fn run_iter(host: &crate::Host, _iter: u64, mut sample: Self::SampleType) -> Self::SampleType {
-        host.mem_copy_from_slice(sample.0.as_slice(), sample.1.as_mut_slice())
-            .unwrap();
+        black_box(
+            host.mem_copy_from_slice(sample.0.as_slice(), sample.1.as_mut_slice())
+                .unwrap(),
+        );
         sample
     }
 
@@ -20,6 +24,6 @@ impl CostRunner for HostMemCpyRun {
         _iter: u64,
         sample: Self::SampleType,
     ) -> Self::RecycledType {
-        sample
+        black_box(sample)
     }
 }

@@ -23,7 +23,6 @@ pub enum CostType {
     // Cost of a host function invocation, not including the actual work done by the function
     InvokeHostFunction = 5,
     // Cost of visiting a host object from the host object storage
-    // TODO: consider removing. This is just indexing into an array. Fixed cost around 400 insns.
     // Only thing to make sure is the guest can't visitObject repeatly without incurring some charges elsewhere.
     VisitObject = 6,
     // Tracks a single Val (RawVal or primative Object like U64) <=> ScVal

@@ -1,3 +1,5 @@
+use std::hint::black_box;
+
 use crate::{budget::CostType, cost_runner::CostRunner};
 use ed25519_dalek::{PublicKey, Signature};
 
@@ -18,8 +20,10 @@ impl CostRunner for VerifyEd25519SigRun {
     type RecycledType = Self::SampleType;
 
     fn run_iter(host: &crate::Host, _iter: u64, sample: Self::SampleType) -> Self::RecycledType {
-        host.verify_sig_ed25519_internal(sample.msg.as_slice(), &sample.key, &sample.sig)
-            .expect("verify sig ed25519");
+        black_box(
+            host.verify_sig_ed25519_internal(sample.msg.as_slice(), &sample.key, &sample.sig)
+                .expect("verify sig ed25519"),
+        );
         sample
     }
 
@@ -28,6 +32,6 @@ impl CostRunner for VerifyEd25519SigRun {
         _iter: u64,
         sample: Self::SampleType,
     ) -> Self::RecycledType {
-        sample
+        black_box(sample)
     }
 }

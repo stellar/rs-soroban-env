@@ -1,3 +1,5 @@
+use std::hint::black_box;
+
 use crate::{budget::CostType, Host};
 /// `CostRunner` is an interface to running a host cost entity of a `CostType` (usually a block of
 /// WASM bytecode or a host function), given a sample of `SampleType`.
@@ -41,7 +43,7 @@ pub trait CostRunner: Sized {
         recycled: &mut Vec<Self::RecycledType>,
     ) {
         for (i, sample) in samples.into_iter().enumerate() {
-            recycled.push(Self::run_baseline_iter(host, i as u64, sample))
+            black_box(recycled.push(Self::run_baseline_iter(host, i as u64, sample)))
         }
     }
 
@@ -54,7 +56,7 @@ pub trait CostRunner: Sized {
     /// the measurements.
     fn run(host: &Host, samples: Vec<Self::SampleType>, recycled: &mut Vec<Self::RecycledType>) {
         for (i, sample) in samples.into_iter().enumerate() {
-            recycled.push(Self::run_iter(host, i as u64, sample))
+            black_box(recycled.push(Self::run_iter(host, i as u64, sample)))
         }
     }
 

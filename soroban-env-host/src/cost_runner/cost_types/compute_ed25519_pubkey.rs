@@ -1,3 +1,5 @@
+use std::hint::black_box;
+
 use ed25519_dalek::PublicKey;
 
 use crate::{budget::CostType, cost_runner::CostRunner};
@@ -12,9 +14,10 @@ impl CostRunner for ComputeEd25519PubKeyRun {
     type RecycledType = (Option<PublicKey>, Vec<u8>);
 
     fn run_iter(host: &crate::Host, _iter: u64, sample: Self::SampleType) -> Self::RecycledType {
-        let pk = host
-            .ed25519_pub_key_from_bytes(sample.as_slice())
-            .expect("publickey");
+        let pk = black_box(
+            host.ed25519_pub_key_from_bytes(sample.as_slice())
+                .expect("publickey"),
+        );
         (Some(pk), sample)
     }
 
@@ -23,6 +26,6 @@ impl CostRunner for ComputeEd25519PubKeyRun {
         _iter: u64,
         sample: Self::SampleType,
     ) -> Self::RecycledType {
-        (None, sample)
+        black_box((None, sample))
     }
 }

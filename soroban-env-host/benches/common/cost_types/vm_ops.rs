@@ -1,10 +1,11 @@
 use crate::common::HostCostMeasurement;
 use rand::{rngs::StdRng, Rng, RngCore};
 use soroban_env_host::{
-    cost_runner::{VmInstantiationRun, VmInstantiationSample, VmMemReadRun, VmMemWriteRun},
+    cost_runner::{
+        VmInstantiationRun, VmInstantiationSample, VmMemReadRun, VmMemRunSample, VmMemWriteRun,
+    },
     xdr, Host, Vm,
 };
-use std::rc::Rc;
 
 pub(crate) struct VmInstantiationMeasure;
 
@@ -68,12 +69,13 @@ pub(crate) struct VmMemReadMeasure;
 impl HostCostMeasurement for VmMemReadMeasure {
     type Runner = VmMemReadRun;
 
-    fn new_random_case(host: &Host, _rng: &mut StdRng, input: u64) -> (Rc<Vm>, Vec<u8>) {
+    fn new_random_case(host: &Host, _rng: &mut StdRng, input: u64) -> VmMemRunSample {
         let input = (input * 1000) as usize;
+        let buf = vec![0; input];
         let id: xdr::Hash = [0; 32].into();
         let code = soroban_test_wasms::ADD_I32;
         let vm = Vm::new(&host, id, &code).unwrap();
-        (vm, vec![0; input])
+        VmMemRunSample { vm, buf }
     }
 }
 
@@ -84,13 +86,13 @@ pub(crate) struct VmMemWriteMeasure;
 impl HostCostMeasurement for VmMemWriteMeasure {
     type Runner = VmMemWriteRun;
 
-    fn new_random_case(host: &Host, rng: &mut StdRng, input: u64) -> (Rc<Vm>, Vec<u8>) {
+    fn new_random_case(host: &Host, rng: &mut StdRng, input: u64) -> VmMemRunSample {
         let input = (input * 1000) as usize;
         let mut buf = vec![0; input];
         rng.fill_bytes(buf.as_mut_slice());
         let id: xdr::Hash = [0; 32].into();
         let code = soroban_test_wasms::ADD_I32;
         let vm = Vm::new(&host, id, &code).unwrap();
-        (vm, buf)
+        VmMemRunSample { vm, buf }
     }
 }

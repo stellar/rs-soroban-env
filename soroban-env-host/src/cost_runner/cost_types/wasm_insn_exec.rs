@@ -4,7 +4,7 @@ use crate::{
     xdr::{ScVal, ScVec},
     RawVal, Symbol, Vm,
 };
-use std::rc::Rc;
+use std::{hint::black_box, rc::Rc};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 /// This is a subset of WASM instructions we are interested in for calibration.
@@ -141,10 +141,12 @@ impl CostRunner for WasmInsnExecRun {
     type RecycledType = (Option<ScVal>, Self::SampleType);
 
     fn run_iter(host: &crate::Host, _iter: u64, sample: Self::SampleType) -> Self::RecycledType {
-        let scval = sample
-            .vm
-            .invoke_function(host, "test", &sample.args)
-            .unwrap();
+        let scval = black_box(
+            sample
+                .vm
+                .invoke_function(host, "test", &sample.args)
+                .unwrap(),
+        );
         (Some(scval), sample)
     }
 
@@ -153,7 +155,7 @@ impl CostRunner for WasmInsnExecRun {
         _iter: u64,
         sample: Self::SampleType,
     ) -> Self::RecycledType {
-        (None, sample)
+        black_box((None, sample))
     }
 }
 
@@ -168,12 +170,12 @@ impl CostRunner for WasmMemAllocRun {
 
     const RUN_ITERATIONS: u64 = 1;
 
-    type SampleType = (Rc<Vm>, usize);
+    type SampleType = Rc<Vm>;
 
     type RecycledType = (Option<RawVal>, Self::SampleType);
 
     fn run_iter(host: &crate::Host, _iter: u64, sample: Self::SampleType) -> Self::RecycledType {
-        let rv = sample.0.invoke_function_raw(host, &TEST_SYM, &[]).unwrap();
+        let rv = black_box(sample.invoke_function_raw(host, &TEST_SYM, &[]).unwrap());
         (Some(rv), sample)
     }
 
@@ -182,7 +184,7 @@ impl CostRunner for WasmMemAllocRun {
         _iter: u64,
         sample: Self::SampleType,
     ) -> Self::RecycledType {
-        (None, sample)
+        black_box((None, sample))
     }
 }
 
@@ -204,10 +206,12 @@ macro_rules! impl_wasm_insn_runner {
                 _iter: u64,
                 sample: Self::SampleType,
             ) -> Self::RecycledType {
-                let rv = sample
-                    .vm
-                    .invoke_function_raw(host, &TEST_SYM, &[])
-                    .unwrap_or_default();
+                let rv = black_box(
+                    sample
+                        .vm
+                        .invoke_function_raw(host, &TEST_SYM, &[])
+                        .unwrap_or_default(),
+                );
                 (Some(rv), sample)
             }
 
@@ -216,10 +220,12 @@ macro_rules! impl_wasm_insn_runner {
                 _iter: u64,
                 base_sample: Self::SampleType,
             ) -> Self::RecycledType {
-                let rv = base_sample
-                    .vm
-                    .invoke_function_raw(host, &TEST_SYM, &[])
-                    .unwrap_or_default();
+                let rv = black_box(
+                    base_sample
+                        .vm
+                        .invoke_function_raw(host, &TEST_SYM, &[])
+                        .unwrap_or_default(),
+                );
                 (Some(rv), base_sample)
             }
         }

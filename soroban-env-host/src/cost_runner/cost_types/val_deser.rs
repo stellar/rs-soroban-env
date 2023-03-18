@@ -1,3 +1,5 @@
+use std::hint::black_box;
+
 use crate::{budget::CostType, cost_runner::CostRunner, xdr::ScVal};
 
 pub struct ValDeserRun;
@@ -10,7 +12,7 @@ impl CostRunner for ValDeserRun {
     type RecycledType = (Option<ScVal>, Vec<u8>);
 
     fn run_iter(host: &crate::Host, _iter: u64, sample: Self::SampleType) -> Self::RecycledType {
-        let sv = host.metered_from_xdr::<ScVal>(&sample).unwrap();
+        let sv = black_box(host.metered_from_xdr::<ScVal>(&sample).unwrap());
         (Some(sv), sample)
     }
 
@@ -19,6 +21,6 @@ impl CostRunner for ValDeserRun {
         _iter: u64,
         sample: Self::SampleType,
     ) -> Self::RecycledType {
-        (None, sample)
+        black_box((None, sample))
     }
 }

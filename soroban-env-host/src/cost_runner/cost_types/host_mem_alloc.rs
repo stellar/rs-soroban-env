@@ -1,3 +1,5 @@
+use std::hint::black_box;
+
 use crate::{
     budget::{AsBudget, CostType},
     cost_runner::CostRunner,
@@ -16,7 +18,9 @@ impl CostRunner for HostMemAllocRun {
     fn run_iter(host: &crate::Host, _iter: u64, sample: Self::SampleType) -> Self::RecycledType {
         // we just create a single MeteredVector with capacity to see what the
         // mem allocation cost is.
-        Some(MeteredVector::<u64>::with_capacity(sample as usize, host.as_budget()).unwrap())
+        black_box(Some(
+            MeteredVector::<u64>::with_capacity(sample as usize, host.as_budget()).unwrap(),
+        ))
     }
 
     fn run_baseline_iter(
@@ -24,6 +28,6 @@ impl CostRunner for HostMemAllocRun {
         _iter: u64,
         _sample: Self::SampleType,
     ) -> Self::RecycledType {
-        None
+        black_box(None)
     }
 }

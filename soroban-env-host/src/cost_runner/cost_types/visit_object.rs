@@ -1,3 +1,5 @@
+use std::hint::black_box;
+
 use crate::{budget::CostType, cost_runner::CostRunner, host_object::HostObject, Object};
 
 pub struct VisitObjectRun;
@@ -11,14 +13,15 @@ impl CostRunner for VisitObjectRun {
 
     fn run_iter(host: &crate::Host, iter: u64, sample: Self::SampleType) -> Self::RecycledType {
         unsafe {
-            let i = host
-                .unchecked_visit_val_obj(sample[iter as usize % sample.len()], |obj| {
-                    match obj.unwrap() {
-                        HostObject::I64(i) => Ok(*i),
-                        _ => panic!("unexpected type, check HCM"),
-                    }
+            let i = black_box(
+                host.unchecked_visit_val_obj(sample[iter as usize % sample.len()], |obj| match obj
+                    .unwrap()
+                {
+                    HostObject::I64(i) => Ok(*i),
+                    _ => panic!("unexpected type, check HCM"),
                 })
-                .unwrap();
+                .unwrap(),
+            );
             (Some(i), sample)
         }
     }
@@ -28,6 +31,6 @@ impl CostRunner for VisitObjectRun {
         _iter: u64,
         sample: Self::SampleType,
     ) -> Self::RecycledType {
-        (None, sample)
+        black_box((None, sample))
     }
 }

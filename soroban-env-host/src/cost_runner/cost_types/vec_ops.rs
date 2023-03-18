@@ -1,3 +1,5 @@
+use std::hint::black_box;
+
 use crate::budget::AsBudget;
 use crate::{budget::CostType, cost_runner::CostRunner, Host, MeteredVector, RawVal};
 
@@ -40,18 +42,20 @@ impl CostRunner for VecEntryRun {
     type RecycledType = (Option<u64>, Self::SampleType);
 
     fn run_iter(host: &Host, iter: u64, sample: Self::SampleType) -> Self::RecycledType {
-        let v = sample
-            .vec
-            .get(
-                sample.idxs[iter as usize % sample.idxs.len()],
-                host.as_budget(),
-            )
-            .unwrap()
-            .get_payload();
+        let v = black_box(
+            sample
+                .vec
+                .get(
+                    sample.idxs[iter as usize % sample.idxs.len()],
+                    host.as_budget(),
+                )
+                .unwrap()
+                .get_payload(),
+        );
         (Some(v), sample)
     }
 
     fn run_baseline_iter(_host: &Host, _iter: u64, sample: Self::SampleType) -> Self::RecycledType {
-        (None, sample)
+        black_box((None, sample))
     }
 }

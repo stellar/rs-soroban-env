@@ -1,3 +1,5 @@
+use std::hint::black_box;
+
 use crate::{budget::CostType, cost_runner::CostRunner, xdr::ScVal, RawVal};
 
 pub struct ValXdrConvRun;
@@ -10,8 +12,8 @@ impl CostRunner for ValXdrConvRun {
     type RecycledType = (Option<(ScVal, RawVal)>, ScVal);
 
     fn run_iter(host: &crate::Host, _iter: u64, sample: Self::SampleType) -> Self::RecycledType {
-        let sv = host.from_host_val(sample.0.unwrap()).unwrap();
-        let rv = host.to_host_val(&sample.1).unwrap();
+        let sv = black_box(host.from_host_val(sample.0.unwrap()).unwrap());
+        let rv = black_box(host.to_host_val(&sample.1).unwrap());
         (Some((sv, rv)), sample.1)
     }
 
@@ -20,6 +22,6 @@ impl CostRunner for ValXdrConvRun {
         _iter: u64,
         sample: Self::SampleType,
     ) -> Self::RecycledType {
-        (None, sample.1)
+        black_box((None, sample.1))
     }
 }

@@ -535,10 +535,8 @@ impl HostCostMeasurement for WasmMemAllocMeasure {
         _rng: &mut StdRng,
         input: u64,
     ) -> <Self::Runner as soroban_env_host::cost_runner::CostRunner>::SampleType {
-        let n_pages = input as usize;
         let id: Hash = [0; 32].into();
-        let code = wasm_module_with_mem_grow(n_pages);
-        let vm = Vm::new(&host, id, &code).unwrap();
-        (vm, n_pages)
+        let code = wasm_module_with_mem_grow(input as usize);
+        Vm::new(&host, id, &code).unwrap()
     }
 }
