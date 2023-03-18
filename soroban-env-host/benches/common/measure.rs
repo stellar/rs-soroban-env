@@ -327,15 +327,15 @@ where
     host.as_budget().reset_unlimited();
 
     // start the cpu and mem measurement
-    let start = Instant::now();
     mem_tracker.0.store(0, Ordering::SeqCst);
     let alloc_guard = alloc_group_token.enter();
+    let start = Instant::now();
     cpu_insn_counter.begin();
     runner(host, samples, &mut recycled_samples);
     // collect the metrics
     let cpu_insns = cpu_insn_counter.end_and_count() / iterations;
-    drop(alloc_guard);
     let stop = Instant::now();
+    drop(alloc_guard);
     let input = HCM::get_total_input(&host) / iterations;
     let mem_bytes = mem_tracker.0.load(Ordering::SeqCst) / iterations;
     let time_nsecs = stop.duration_since(start).as_nanos() as u64 / iterations;

@@ -2705,11 +2705,13 @@ impl VmCallerEnv for Host {
     ) -> Result<BytesObject, HostError> {
         let u = self.u8_from_u32val_input("u", u)?;
         let vnew = self.visit_obj(b, move |hv: &ScBytes| {
-            let mut vnew: Vec<u8> = hv.metered_clone(self.as_budget())?.into();
-            // `Vec::push` may inccur reallocation if capacity is reached. Here we charge the cost
-            // of deep-cloning`len` bytes as the worst case. The actual bytes reallocated (if it
-            // happens) will exceed `len` but we don't know the factor (that is internal).
-            <Vec<u8> as MeteredClone>::charge_deep_clone(&vnew, self.as_budget())?;
+            // we allocate the new vector to be able to hold `len + 1` bytes, so that the push
+            // will not trigger a reallocation, causing data to be cloned twice.
+            let len = hv.len() + 1;
+            metered_clone::charge_heap_alloc::<u8>(len as u64, self.as_budget())?;
+            metered_clone::charge_shallow_copy::<u8>(len as u64, self.as_budget())?;
+            let mut vnew: Vec<u8> = Vec::with_capacity(len);
+            vnew.extend_from_slice(hv.as_slice());
             vnew.push(u);
             Ok(ScBytes(vnew.try_into()?))
         })?;
@@ -2771,11 +2773,15 @@ impl VmCallerEnv for Host {
         let u = self.u8_from_u32val_input("u", u)?;
         let vnew = self.visit_obj(b, move |hv: &ScBytes| {
             self.validate_index_le_bound(i, hv.len())?;
-            let mut vnew: Vec<u8> = hv.metered_clone(self.as_budget())?.into();
-            // `Vec::insert` may inccur reallocation if capacity is reached. Here we charge the
-            // cost of deep-cloning `len` bytes as the worst case. The actual bytes reallocated
-            // (if it happens) will exceed `len` but we don't know the factor (that is internal).
-            <Vec<u8> as MeteredClone>::charge_deep_clone(&vnew, self.as_budget())?;
+            // we allocate the new vector to be able to hold `len + 1` bytes, so that the push
+            // will not trigger a reallocation, causing data to be cloned twice.
+            let len = hv.len() + 1;
+            metered_clone::charge_heap_alloc::<u8>(len as u64, self.as_budget())?;
+            metered_clone::charge_shallow_copy::<u8>(len as u64, self.as_budget())?;
+            let mut vnew: Vec<u8> = Vec::with_capacity(len);
+            vnew.extend_from_slice(hv.as_slice());
+            // insert will cause the memcpy by shifting all the values at and after `i`.
+            metered_clone::charge_shallow_copy::<u8>(len as u64, self.as_budget())?;
             vnew.insert(i as usize, u);
             Ok(ScBytes(vnew.try_into()?))
         })?;
@@ -2788,19 +2794,24 @@ impl VmCallerEnv for Host {
         b1: BytesObject,
         b2: BytesObject,
     ) -> Result<BytesObject, HostError> {
-        let mut vnew: Vec<u8> = self
-            .visit_obj(b1, |hv: &ScBytes| Ok(hv.metered_clone(&self.0.budget)?))?
-            .into();
-        let b2 = self.visit_obj(b2, |hv: &ScBytes| Ok(hv.metered_clone(&self.0.budget)?))?;
-        if b2.len() > u32::MAX as usize - vnew.len() {
-            return Err(self.err_status_msg(ScHostFnErrorCode::InputArgsInvalid, "u32 overflow"));
-        }
-        // We may temporarily undercharge by `b1.len()+b2.len()` bytes but that should be okay.
-        vnew.extend(b2.iter());
-        // `Vec::extend` may inccur reallocation if capacity is reached. Here we charge the
-        // cost of deep-cloning `len` bytes as the worst case. The actual bytes reallocated
-        // (if it happens) will exceed `len` but we don't know the factor (that is internal).
-        <Vec<u8> as MeteredClone>::charge_deep_clone(&vnew, self.as_budget())?;
+        let vnew = self.visit_obj(b1, |sb1: &ScBytes| {
+            self.visit_obj(b2, |sb2: &ScBytes| {
+                if sb2.len() > u32::MAX as usize - sb1.len() {
+                    return Err(
+                        self.err_status_msg(ScHostFnErrorCode::InputArgsInvalid, "u32 overflow")
+                    );
+                }
+                // we allocate large enough memory to hold the new combined vector, so that allocation
+                // only happens once, and charge for it upfront.
+                let len = sb1.len() + sb2.len();
+                metered_clone::charge_heap_alloc::<u8>(len as u64, self.as_budget())?;
+                metered_clone::charge_shallow_copy::<u8>(len as u64, self.as_budget())?;
+                let mut vnew: Vec<u8> = Vec::with_capacity(len);
+                vnew.extend_from_slice(sb1.as_slice());
+                vnew.extend_from_slice(sb2.as_slice());
+                Ok(vnew)
+            })
+        })?;
         Ok(self.add_host_object(ScBytes(vnew.try_into()?))?.into())
     }
 

@@ -16,7 +16,7 @@ pub trait CostRunner: Sized {
     type SampleType: Clone;
 
     /// Data type to be recycled, this may include (but not limited to) the returned value and
-    /// unused sample. The main reason for recycling are 1. avoid unwanted memory deallocation
+    /// unused samples. The main reason for recycling are 1. avoid unwanted memory deallocation
     /// being counted as part of the run cost 2. prevent the optimizer from performing optimization
     /// around unused value, making the bench deviate from the real case.
     type RecycledType;
@@ -27,11 +27,7 @@ pub trait CostRunner: Sized {
     /// Execution under `run_iter` is what's actually being measured by the bench
     /// machineary. Need to ensure as much as possible `run_iter` only calls essential
     /// host routines that go into the measurement. Any input setup needs to be done
-    /// beforehand and passed in via `sample`. Use `std::mem::forget` to avoid deallocation
-    /// of sample for more accurate measurement when 1. the sample contains heap
-    /// allocated objects (Vec, HashMap, Rc, Box etc.) and 2. the heap size is non-constant
-    /// (grows with `input`) and 3. the iteration's computation cost does *not* significantly
-    /// outweight the deallocation cost (all three must be satisfied).
+    /// beforehand and passed in via `sample`.
     fn run_iter(host: &Host, iter: u64, sample: Self::SampleType) -> Self::RecycledType;
 
     /// Make sure `recycled` has been initialized with sufficient capacity needed to
@@ -43,6 +39,7 @@ pub trait CostRunner: Sized {
         recycled: &mut Vec<Self::RecycledType>,
     ) {
         for (i, sample) in samples.into_iter().enumerate() {
+            // use `black_box` to prevent unwanted optimization
             black_box(recycled.push(Self::run_baseline_iter(host, i as u64, sample)))
         }
     }
@@ -56,6 +53,7 @@ pub trait CostRunner: Sized {
     /// the measurements.
     fn run(host: &Host, samples: Vec<Self::SampleType>, recycled: &mut Vec<Self::RecycledType>) {
         for (i, sample) in samples.into_iter().enumerate() {
+            // use `black_box` to prevent unwanted optimization
             black_box(recycled.push(Self::run_iter(host, i as u64, sample)))
         }
     }
