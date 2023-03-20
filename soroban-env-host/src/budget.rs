@@ -454,10 +454,7 @@ impl Default for BudgetImpl {
                 // this and some are much less.
                 CostType::WasmInsnExec => cpu.lin_param = 32, // TODO: needs to be tiered
                 CostType::WasmMemAlloc => cpu.const_param = 6000, // TODO: questionable
-                CostType::InvokeHostFunction => {
-                    cpu.const_param = 5455;
-                    cpu.lin_param = 702
-                }
+                CostType::InvokeHostFunction => cpu.lin_param = 714,
                 CostType::VisitObject => cpu.lin_param = 208,
                 CostType::ValXdrConv => cpu.lin_param = 255,
                 CostType::ValSer => cpu.lin_param = 77,
