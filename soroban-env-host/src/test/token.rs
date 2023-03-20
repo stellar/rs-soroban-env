@@ -2545,7 +2545,7 @@ fn test_custom_account_auth() {
         .call(
             account_contract_id_obj,
             Symbol::try_from_small_str("init").unwrap(),
-            host_vec![&test.host, admin_public_key.clone()].into(),
+            host_vec![&test.host, admin_public_key].into(),
         )
         .unwrap();
 

@@ -57,7 +57,7 @@ fn test_host() -> Host {
         Footprint::default(),
         StorageMap::new(&budget).unwrap(),
     );
-    let host = Host::with_storage_and_budget(storage, budget.clone());
+    let host = Host::with_storage_and_budget(storage, budget);
     host.set_ledger_info(LedgerInfo {
         network_id: generate_bytes_array(),
         ..Default::default()
@@ -73,7 +73,7 @@ fn test_create_contract_from_source_account(host: &Host, code: &[u8]) -> Hash {
     // Make contractID so we can include it in the footprint
     let id_pre_image =
         HashIdPreimage::ContractIdFromSourceAccount(HashIdPreimageSourceAccountContractId {
-            source_account: source_account,
+            source_account,
             salt: Uint256(salt.to_vec().try_into().unwrap()),
             network_id: host
                 .hash_from_bytesobj_input("network_id", host.get_ledger_network_id().unwrap())
@@ -109,7 +109,7 @@ fn test_create_contract_from_source_account(host: &Host, code: &[u8]) -> Hash {
 
     // Create contract
     let wasm_id: RawVal = host
-        .invoke_function(HostFunction::InstallContractCode(install_args.clone()))
+        .invoke_function(HostFunction::InstallContractCode(install_args))
         .unwrap()
         .try_into_val(host)
         .unwrap();
@@ -129,9 +129,9 @@ fn test_create_contract_from_source_account(host: &Host, code: &[u8]) -> Hash {
     );
     assert_eq!(
         wasm_hash.as_slice(),
-        get_contract_wasm_ref(&host, contract_id.clone()).as_slice()
+        get_contract_wasm_ref(host, contract_id.clone()).as_slice()
     );
-    assert_eq!(code, get_contract_wasm(&host, wasm_hash));
+    assert_eq!(code, get_contract_wasm(host, wasm_hash));
 
     contract_id
 }
@@ -144,7 +144,7 @@ fn create_contract_using_parent_id_test() {
     let salt = generate_bytes_array();
     let child_pre_image = HashIdPreimage::ContractIdFromContract(HashIdPreimageContractId {
         contract_id: parent_contract_id.clone(),
-        salt: Uint256(salt.clone()),
+        salt: Uint256(salt),
         network_id: host
             .hash_from_bytesobj_input("network_id", host.get_ledger_network_id().unwrap())
             .unwrap(),
@@ -157,7 +157,7 @@ fn create_contract_using_parent_id_test() {
     };
 
     // Install the code for the child contract.
-    let wasm_hash = sha256_hash_id_preimage(install_args.clone());
+    let wasm_hash = sha256_hash_id_preimage(install_args);
     // Add the contract code and code reference access to the footprint.
     host.with_mut_storage(|s: &mut Storage| {
         s.footprint
@@ -193,12 +193,9 @@ fn create_contract_using_parent_id_test() {
     // Can't create the contract yet, as the code hasn't been installed yet.
     assert!(host
         .call(
-            host.test_bin_obj(&parent_contract_id.0)
-                .unwrap()
-                .try_into()
-                .unwrap(),
-            Symbol::try_from_small_str("create").unwrap().into(),
-            args.into(),
+            host.test_bin_obj(&parent_contract_id.0).unwrap(),
+            Symbol::try_from_small_str("create").unwrap(),
+            args,
         )
         .is_err());
 
@@ -217,8 +214,8 @@ fn create_contract_using_parent_id_test() {
     // Now successfully create the child contract itself.
     host.call(
         host.test_bin_obj(&parent_contract_id.0).unwrap(),
-        Symbol::try_from_small_str("create").unwrap().into(),
-        args.into(),
+        Symbol::try_from_small_str("create").unwrap(),
+        args,
     )
     .unwrap();
 

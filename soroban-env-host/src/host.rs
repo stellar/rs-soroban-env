@@ -2561,10 +2561,8 @@ impl VmCallerEnv for Host {
                 pos,
                 len as usize,
                 |i, slice| {
-                    if self.symbol_matches(slice, sym)? {
-                        if found.is_none() {
-                            found = Some(self.usize_to_u32(i)?)
-                        }
+                    if self.symbol_matches(slice, sym)? && found.is_none() {
+                        found = Some(self.usize_to_u32(i)?)
                     }
                     Ok(())
                 },

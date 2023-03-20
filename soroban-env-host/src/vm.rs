@@ -114,16 +114,15 @@ impl Vm {
             let mut cursor = Cursor::new(env_meta);
             for env_meta_entry in ScEnvMetaEntry::read_xdr_iter(&mut cursor) {
                 match host.map_err(env_meta_entry)? {
-                    ScEnvMetaEntry::ScEnvMetaKindInterfaceVersion(v) => {
-                        if SUPPORTED_INTERFACE_VERSION_RANGE.contains(&v) {
-                            return Ok(());
-                        } else {
-                            return Err(host.err_status_msg(
-                                ScHostFnErrorCode::InputArgsInvalid,
-                                "unexpected environment interface version",
-                            ));
-                        }
+                    ScEnvMetaEntry::ScEnvMetaKindInterfaceVersion(v)
+                        if !SUPPORTED_INTERFACE_VERSION_RANGE.contains(&v) =>
+                    {
+                        return Err(host.err_status_msg(
+                            ScHostFnErrorCode::InputArgsInvalid,
+                            "unexpected environment interface version",
+                        ))
                     }
+
                     #[allow(unreachable_patterns)]
                     _ => (),
                 }
@@ -309,7 +308,7 @@ impl Vm {
                     name: e.name().to_string(),
                     param_count: f.params().len(),
                     result_count: f.results().len(),
-                })
+                });
             }
         }
         res
@@ -338,7 +337,7 @@ impl Vm {
     where
         F: FnOnce(&mut VmCaller<Host>) -> T,
     {
-        let store: &mut Store<Host> = &mut *self.store.borrow_mut();
+        let store: &mut Store<Host> = &mut self.store.borrow_mut();
         let mut ctx: StoreContextMut<Host> = store.into();
         let caller: Caller<Host> = Caller::new(&mut ctx, Some(self.instance));
         let mut vmcaller: VmCaller<Host> = VmCaller(Some(caller));

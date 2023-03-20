@@ -141,7 +141,7 @@ fn linear_memory_operations() -> Result<(), HostError> {
     let id_obj = host.register_test_contract_wasm(LINEAR_MEMORY)?;
     // tests bytes_new_from_linear_memory
     {
-        let args = host.test_vec_obj::<u32>(&[0xaabbccdd])?;
+        let args = host.test_vec_obj::<u32>(&[0xaabb_ccdd])?;
         let obj: BytesObject = host
             .call(
                 id_obj,

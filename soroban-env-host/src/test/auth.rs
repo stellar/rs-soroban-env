@@ -155,8 +155,8 @@ impl AuthTest {
 
         self.last_nonces.clear();
 
-        for address_id in 0..self.keys.len() {
-            let sc_address = self.key_to_sc_address(&self.keys[address_id]);
+        for (address_id, key) in self.keys.iter().enumerate() {
+            let sc_address = self.key_to_sc_address(&key);
             let mut next_nonce = HashMap::<Vec<u8>, u64>::new();
             for sign_root in &sign_payloads[address_id] {
                 let contract_id_vec = sign_root.contract_id.to_vec();
@@ -184,7 +184,7 @@ impl AuthTest {
                 let payload_preimage = HashIdPreimage::ContractAuth(HashIdPreimageContractAuth {
                     network_id: self
                         .host
-                        .with_ledger_info(|li: &LedgerInfo| Ok(li.network_id.clone()))
+                        .with_ledger_info(|li: &LedgerInfo| Ok(li.network_id))
                         .unwrap()
                         .try_into()
                         .unwrap(),
@@ -246,7 +246,7 @@ impl AuthTest {
     // returns the recorded payloads.
     fn tree_run_recording(&self, root: &SetupNode) -> Vec<RecordedAuthPayload> {
         let addresses = self.get_addresses();
-        let tree = self.convert_setup_tree(&root);
+        let tree = self.convert_setup_tree(root);
         self.run_recording(
             &root.contract_id,
             Symbol::try_from_small_str("tree_fn").unwrap(),

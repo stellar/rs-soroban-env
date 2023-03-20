@@ -46,6 +46,7 @@ rustflags = [
     "-Aclippy::match_same_arms",
     "-Aclippy::iter_not_returning_iterator",
     "-Aclippy::unnecessary_wraps",
+    "-Aclippy::type_complexity",
 ] # custom flags to pass to all compiler invocations
 # rustdocflags = ["…", "…"]     # custom flags to pass to rustdoc
 # incremental = true            # whether or not to enable incremental compilation
