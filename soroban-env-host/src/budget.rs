@@ -271,7 +271,7 @@ impl Debug for BudgetImpl {
             self.mem_bytes.limit, self.mem_bytes.total_count
         )?;
 
-        // FIXME: align them nicely
+        // TODO: align them nicely
         writeln!(f, "CostType\tinput\tcpu_insns\tmem_bytes")?;
         for ct in CostType::variants() {
             let i = *ct as usize;
