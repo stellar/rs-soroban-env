@@ -473,7 +473,7 @@ impl Default for BudgetImpl {
                 }
                 CostType::MapNew => cpu.const_param = 200,
                 CostType::MapEntry => cpu.lin_param = 72,
-                CostType::VecNew => cpu.lin_param = 200,
+                CostType::VecNew => cpu.const_param = 200,
                 CostType::VecEntry => cpu.lin_param = 195,
                 CostType::GuardFrame => cpu.const_param = 3555,
                 CostType::VmMemRead => {

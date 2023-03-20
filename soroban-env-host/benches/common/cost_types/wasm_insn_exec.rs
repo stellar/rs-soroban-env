@@ -41,7 +41,7 @@ fn wasm_module_with_mem_grow(n_pages: usize) -> Vec<u8> {
     fe.finish_and_export("test").finish()
 }
 
-// A wasm module with a single const
+// A wasm module with a single const to serve as the baseline
 fn wasm_module_baseline() -> WasmModule {
     let mut fe = ModEmitter::new().func(Arity(0), 0);
     fe.push(Symbol::try_from_small_str("pass").unwrap());
@@ -49,7 +49,7 @@ fn wasm_module_baseline() -> WasmModule {
     WasmModule { wasm, overhead: 0 }
 }
 
-// A wasm module with a single const
+// A wasm module with a single trap to serve as the baseline
 fn wasm_module_baseline_trap() -> WasmModule {
     let mut fe = ModEmitter::new().func(Arity(0), 0);
     fe.trap();

@@ -19,7 +19,6 @@ mod wasm_insn_exec;
 pub(crate) use charge_budget::*;
 pub(crate) use compute_ed25519_pubkey::*;
 pub(crate) use compute_sha256_hash::*;
-#[allow(unused)]
 pub(crate) use guard_frame::*;
 pub(crate) use host_mem_alloc::*;
 pub(crate) use host_mem_cmp::*;

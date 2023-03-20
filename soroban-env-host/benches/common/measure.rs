@@ -63,9 +63,9 @@ pub struct Measurements {
 }
 
 impl Measurements {
-    /// Subtracts baseline value from all measurements, to eliminate constant factors which
-    /// attributes from the measurement setup. This is to differentiate from the constant factor
-    /// from the measurements themselves, which must be included as part of the model.
+    /// Subtracts baseline value from all measurements. This is to differentiate the const part
+    /// of the model from the "background noise" i.e. measurement setup which we do not want to
+    /// include as part of the model.
     pub fn subtract_baseline(&mut self) {
         for e in self.measurements.iter_mut() {
             e.input = e.input.saturating_sub(self.baseline.input);

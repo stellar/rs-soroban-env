@@ -2657,7 +2657,7 @@ impl VmCallerEnv for Host {
             let mut vnew: Vec<u8> = hv.metered_clone(&self.0.budget)?.into();
             // len > i has been verified above but use saturating_sub just in case
             let n_elts = (hv.len() as u64).saturating_sub(i as u64);
-            // remove elements incurrs the cost of moving bytes, it does not incur
+            // remove elements incurs the cost of moving bytes, it does not incur
             // allocation/deallocation
             metered_clone::charge_shallow_copy::<u8>(n_elts, self.as_budget())?;
             vnew.remove(i as usize);

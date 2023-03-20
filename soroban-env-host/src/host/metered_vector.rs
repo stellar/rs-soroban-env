@@ -21,7 +21,7 @@ where
     A: MeteredClone,
 {
     // Covers the cost of creating `count` number of new `MeteredVector`s. This does not include
-    // the cost of any allocation, since it is assumed memory allocation is charge separately
+    // the cost of any allocation, since it is assumed memory allocation is charged separately
     // elsewhere.
     fn charge_new(count: u64, budget: &Budget) -> Result<(), HostError> {
         budget.charge(CostType::VecNew, count)

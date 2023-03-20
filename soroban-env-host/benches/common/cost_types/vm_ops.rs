@@ -1,4 +1,4 @@
-use crate::common::HostCostMeasurement;
+use crate::common::{util, HostCostMeasurement};
 use rand::{rngs::StdRng, Rng, RngCore};
 use soroban_env_host::{
     cost_runner::{
@@ -24,40 +24,15 @@ impl HostCostMeasurement for VmInstantiationMeasure {
 
     fn new_worst_case(_host: &Host, _rng: &mut StdRng, input: u64) -> VmInstantiationSample {
         let id: xdr::Hash = [0; 32].into();
-        let wasm = match input % 10 {
-            0 => soroban_test_wasms::ADD_I32,
-            1 => soroban_test_wasms::CREATE_CONTRACT,
-            2 => soroban_test_wasms::CONTRACT_DATA,
-            3 => soroban_test_wasms::LINEAR_MEMORY,
-            4 => soroban_test_wasms::VEC,
-            5 => soroban_test_wasms::INVOKE_CONTRACT,
-            6 => soroban_test_wasms::HOSTILE,
-            7 => soroban_test_wasms::FIB,
-            8 => soroban_test_wasms::FANNKUCH,
-            9 => soroban_test_wasms::COMPLEX,
-            _ => unreachable!(),
-        }
-        .clone()
-        .into();
+        let idx = input as usize % util::TEST_WASMS.len();
+        let wasm = util::TEST_WASMS[idx].clone().into();
         VmInstantiationSample { id: Some(id), wasm }
     }
 
     fn new_random_case(_host: &Host, rng: &mut StdRng, _input: u64) -> VmInstantiationSample {
         let id: xdr::Hash = [0; 32].into();
-        let wasm = match rng.gen_range(0, 10) {
-            0 => soroban_test_wasms::ADD_I32,
-            1 => soroban_test_wasms::CREATE_CONTRACT,
-            2 => soroban_test_wasms::CONTRACT_DATA,
-            3 => soroban_test_wasms::LINEAR_MEMORY,
-            4 => soroban_test_wasms::VEC,
-            5 => soroban_test_wasms::INVOKE_CONTRACT,
-            6 => soroban_test_wasms::HOSTILE,
-            7 => soroban_test_wasms::FIB,
-            8 => soroban_test_wasms::FANNKUCH,
-            9 => soroban_test_wasms::COMPLEX,
-            _ => unreachable!(),
-        };
-        let wasm: Vec<u8> = wasm.clone().into();
+        let idx = rng.gen_range(0, 10) % util::TEST_WASMS.len();
+        let wasm = util::TEST_WASMS[idx].clone().into();
         VmInstantiationSample { id: Some(id), wasm }
     }
 }
