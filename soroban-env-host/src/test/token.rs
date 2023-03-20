@@ -23,8 +23,8 @@ use soroban_env_common::{
     xdr::{self, AccountFlags, ScAddress, ScVal, ScVec},
     xdr::{
         AccountId, AlphaNum12, AlphaNum4, Asset, AssetCode12, AssetCode4, Hash, HostFunctionType,
-        LedgerEntryData, LedgerKey, Liabilities, PublicKey, ScStatusType, TrustLineEntry,
-        TrustLineEntryExt, TrustLineEntryV1, TrustLineEntryV1Ext, TrustLineFlags,
+        LedgerEntryData, LedgerKey, Liabilities, PublicKey, ScHostAuthErrorCode, ScStatusType,
+        TrustLineEntry, TrustLineEntryExt, TrustLineEntryV1, TrustLineEntryV1Ext, TrustLineFlags,
     },
     EnvBase, RawVal,
 };
@@ -1006,49 +1006,44 @@ fn test_set_admin() {
 
     // Make sure admin functions are unavailable to the old admin.
     assert_eq!(
-        to_contract_err(
-            token
-                .set_admin(&admin, new_admin.address(&test.host),)
-                .err()
-                .unwrap()
-        ),
-        ContractError::UnauthorizedError
+        token
+            .set_admin(&admin, new_admin.address(&test.host),)
+            .err()
+            .unwrap()
+            .status,
+        ScHostAuthErrorCode::NotAuthorized.into()
     );
     assert_eq!(
-        to_contract_err(
-            token
-                .mint(&admin, new_admin.address(&test.host), 1)
-                .err()
-                .unwrap()
-        ),
-        ContractError::UnauthorizedError
+        token
+            .mint(&admin, new_admin.address(&test.host), 1)
+            .err()
+            .unwrap()
+            .status,
+        ScHostAuthErrorCode::NotAuthorized.into()
     );
     assert_eq!(
-        to_contract_err(
-            token
-                .clawback(&admin, new_admin.address(&test.host), 1)
-                .err()
-                .unwrap()
-        ),
-        ContractError::UnauthorizedError
+        token
+            .clawback(&admin, new_admin.address(&test.host), 1)
+            .err()
+            .unwrap()
+            .status,
+        ScHostAuthErrorCode::NotAuthorized.into()
     );
     assert_eq!(
-        to_contract_err(
-            token
-                .set_auth(&admin, new_admin.address(&test.host), false,)
-                .err()
-                .unwrap()
-        ),
-        ContractError::UnauthorizedError
+        token
+            .set_auth(&admin, new_admin.address(&test.host), false,)
+            .err()
+            .unwrap()
+            .status,
+        ScHostAuthErrorCode::NotAuthorized.into()
     );
     assert_eq!(
-        to_contract_err(
-            token
-                .set_auth(&admin, new_admin.address(&test.host), true)
-                .err()
-                .unwrap()
-        ),
-        ContractError::UnauthorizedError
+        token
+            .set_auth(&admin, new_admin.address(&test.host), true)
+            .err()
+            .unwrap()
+            .status,
+        ScHostAuthErrorCode::NotAuthorized.into()
     );
 
     // The admin functions are now available to the new admin.
@@ -1325,18 +1320,17 @@ fn test_account_invoker_auth_with_issuer_admin() {
 
     // User invoker can't perform admin operation.
     assert_eq!(
-        to_contract_err(
-            test.run_from_account(user_acc.clone(), || {
-                token.mint(
-                    &TestSigner::AccountInvoker(user_acc.clone()),
-                    user_address.clone(),
-                    1000,
-                )
-            })
-            .err()
-            .unwrap()
-        ),
-        ContractError::UnauthorizedError
+        test.run_from_account(user_acc.clone(), || {
+            token.mint(
+                &TestSigner::AccountInvoker(user_acc.clone()),
+                user_address.clone(),
+                1000,
+            )
+        })
+        .err()
+        .unwrap()
+        .status,
+        ScHostAuthErrorCode::NotAuthorized.into()
     );
     // Invoke a transaction with non-matching address - this will fail in host
     // due to invoker mismatching with admin.
@@ -1384,14 +1378,13 @@ fn test_account_invoker_auth_with_issuer_admin() {
     )
     .unwrap();
     assert_eq!(
-        to_contract_err(
-            test.run_from_contract(&contract_id_bytes, || {
-                token.mint(&contract_invoker, user_address.clone(), 1000)
-            })
-            .err()
-            .unwrap()
-        ),
-        ContractError::UnauthorizedError
+        test.run_from_contract(&contract_id_bytes, || {
+            token.mint(&contract_invoker, user_address.clone(), 1000)
+        })
+        .err()
+        .unwrap()
+        .status,
+        ScHostAuthErrorCode::NotAuthorized.into()
     );
 }
 
@@ -1437,14 +1430,13 @@ fn test_contract_invoker_auth() {
 
     // User contract invoker can't perform admin operation.
     assert_eq!(
-        to_contract_err(
-            test.run_from_contract(&user_contract_id_bytes, || {
-                token.mint(&user_contract_invoker, user_contract_address.clone(), 1000)
-            })
-            .err()
-            .unwrap()
-        ),
-        ContractError::UnauthorizedError
+        test.run_from_contract(&user_contract_id_bytes, || {
+            token.mint(&user_contract_invoker, user_contract_address.clone(), 1000)
+        })
+        .err()
+        .unwrap()
+        .status,
+        ScHostAuthErrorCode::NotAuthorized.into()
     );
 
     // Also don't allow an incorrect contract invoker (not a contract error, should
@@ -1472,14 +1464,13 @@ fn test_contract_invoker_auth() {
     // Account invoker can't perform unauthorized admin operation.
     let acc_invoker = TestSigner::AccountInvoker(keypair_to_account_id(&test.issuer_key));
     assert_eq!(
-        to_contract_err(
-            test.run_from_account(keypair_to_account_id(&test.issuer_key), || {
-                token.mint(&acc_invoker, user_contract_address.clone(), 1000)
-            })
-            .err()
-            .unwrap()
-        ),
-        ContractError::UnauthorizedError
+        test.run_from_account(keypair_to_account_id(&test.issuer_key), || {
+            token.mint(&acc_invoker, user_contract_address.clone(), 1000)
+        })
+        .err()
+        .unwrap()
+        .status,
+        ScHostAuthErrorCode::NotAuthorized.into()
     );
 }
 
@@ -1492,12 +1483,7 @@ fn test_auth_rejected_for_incorrect_nonce() {
     test.create_default_account(&user);
     test.create_default_trustline(&user);
 
-    let args = host_vec![
-        &test.host,
-        admin.address(&test.host),
-        user.address(&test.host),
-        100_i128
-    ];
+    let args = host_vec![&test.host, user.address(&test.host), 100_i128];
 
     // Incorrect value of nonce
     authorize_single_invocation_with_nonce(
@@ -1579,12 +1565,7 @@ fn test_auth_rejected_for_incorrect_payload() {
     test.create_default_account(&user);
     test.create_default_trustline(&user);
 
-    let args = host_vec![
-        &test.host,
-        admin.address(&test.host),
-        user.address(&test.host),
-        100_i128
-    ];
+    let args = host_vec![&test.host, user.address(&test.host), 100_i128];
 
     // Incorrect signer.
     authorize_single_invocation(&test.host, &user, &token.id, "mint", args.clone());
@@ -2617,12 +2598,7 @@ fn test_recording_auth_for_token() {
     test.create_default_trustline(&user);
     test.host.switch_to_recording_auth();
 
-    let args = host_vec![
-        &test.host,
-        admin.address(&test.host),
-        user.address(&test.host),
-        100_i128
-    ];
+    let args = host_vec![&test.host, user.address(&test.host), 100_i128];
     test.host
         .call(
             token.id.clone().into(),
@@ -2642,11 +2618,6 @@ fn test_recording_auth_for_token() {
                 function_name: xdr::ScSymbol("mint".try_into().unwrap()),
                 args: ScVec(
                     vec![
-                        ScVal::try_from_val(
-                            &test.host,
-                            &RawVal::try_from_val(&test.host, &admin.address(&test.host)).unwrap()
-                        )
-                        .unwrap(),
                         ScVal::try_from_val(
                             &test.host,
                             &RawVal::try_from_val(&test.host, &user.address(&test.host)).unwrap()
