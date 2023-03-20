@@ -1964,14 +1964,14 @@ impl VmCallerEnv for Host {
                 &vm,
                 vals_pos,
                 vals.as_mut_slice(),
-                |buf| RawVal::from_payload(u64::from_le_bytes(buf.clone())),
+                |buf| RawVal::from_payload(u64::from_le_bytes(*buf)),
             )?;
 
             // Step 3: turn pairs into a map.
             let pair_iter = key_syms
                 .iter()
-                .map(|s| s.to_raw())
-                .zip(vals.iter().cloned());
+                .map(Symbol::to_raw)
+                .zip(vals.iter().copied());
             let map = HostMap::from_exact_iter(pair_iter, self)?;
             self.add_host_object(map)
         }
@@ -2246,7 +2246,7 @@ impl VmCallerEnv for Host {
                 &vm,
                 pos,
                 vals.as_mut_slice(),
-                |buf| RawVal::from_payload(u64::from_le_bytes(buf.clone())),
+                |buf| RawVal::from_payload(u64::from_le_bytes(*buf)),
             )?;
             self.add_host_object(HostVec::from_vec(vals)?)
         }
@@ -2562,7 +2562,7 @@ impl VmCallerEnv for Host {
                 len as usize,
                 |i, slice| {
                     if self.symbol_matches(slice, sym)? && found.is_none() {
-                        found = Some(self.usize_to_u32(i)?)
+                        found = Some(self.usize_to_u32(i)?);
                     }
                     Ok(())
                 },
@@ -2844,7 +2844,7 @@ impl VmCallerEnv for Host {
             let vals = match frame {
                 #[cfg(feature = "vm")]
                 Frame::ContractVM(vm, function, _) => {
-                    get_host_val_tuple(&vm.contract_id, &function)?
+                    get_host_val_tuple(&vm.contract_id, function)?
                 }
                 Frame::HostFunction(_) => continue,
                 Frame::Token(id, function, _) => get_host_val_tuple(id, function)?,

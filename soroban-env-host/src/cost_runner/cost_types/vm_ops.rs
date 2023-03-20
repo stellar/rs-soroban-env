@@ -9,6 +9,22 @@ pub struct VmInstantiationSample {
     pub wasm: Vec<u8>,
 }
 
+impl VmInstantiationSample {
+    pub fn new<I: Into<Vec<u8>>>(id: Hash, wasm: I) -> Self {
+        Self {
+            id,
+            wasm: wasm.into(),
+        }
+    }
+
+    pub fn default_id<I: Into<Vec<u8>>>(wasm: I) -> Self {
+        Self {
+            id: [0; 32].into(),
+            wasm: wasm.into(),
+        }
+    }
+}
+
 impl CostRunner for VmInstantiationRun {
     const COST_TYPE: CostType = CostType::VmInstantiation;
     const RUN_ITERATIONS: u64 = 10;
@@ -30,8 +46,8 @@ impl CostRunner for VmMemReadRun {
         let vm = sample.0;
         vm.with_vmcaller(|caller| {
             host.metered_vm_read_bytes_from_linear_memory(caller, &vm, 0, &mut buf)
-                .unwrap()
-        })
+                .unwrap();
+        });
     }
 }
 
@@ -41,11 +57,12 @@ impl CostRunner for VmMemWriteRun {
 
     type SampleType = (Rc<Vm>, Vec<u8>);
 
+    #[allow(clippy::unnecessary_mut_passed)]
     fn run_iter(host: &crate::Host, _iter: u64, mut sample: Self::SampleType) {
         let vm = sample.0;
         vm.with_vmcaller(|caller| {
             host.metered_vm_write_bytes_to_linear_memory(caller, &vm, 0, &mut sample.1)
-                .unwrap()
-        })
+                .unwrap();
+        });
     }
 }

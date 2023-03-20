@@ -27,16 +27,16 @@ impl HostCostMeasurement for Ed25519ScalarMulMeasure {
         let A = constants::ED25519_BASEPOINT_COMPRESSED
             .decompress()
             .unwrap();
-        Ed25519ScalarMulSample { a, b, A }
+        Ed25519ScalarMulSample { a, A, b }
     }
 
     fn new_worst_case(_host: &Host, _rng: &mut StdRng, _input: u64) -> Ed25519ScalarMulSample {
         let a = scalar::Scalar::from_bytes_mod_order([0xff; 32]);
-        let b = a.clone();
+        let b = a;
         let A = constants::ED25519_BASEPOINT_COMPRESSED
             .decompress()
             .unwrap();
-        Ed25519ScalarMulSample { a, b, A }
+        Ed25519ScalarMulSample { a, A, b }
     }
 
     fn new_random_case(_host: &Host, rng: &mut StdRng, _input: u64) -> Ed25519ScalarMulSample {
@@ -48,7 +48,7 @@ impl HostCostMeasurement for Ed25519ScalarMulMeasure {
             // occurrences here to have more than a handful of contiguous zeroes here
             // but for thoroughness we'll let it go up to 64 (8 bytes).
             for i in 0..rng.gen_range(0, 9) {
-                buf[31 - i] = 0
+                buf[31 - i] = 0;
             }
             scalar::Scalar::from_bytes_mod_order(buf)
         }
@@ -57,6 +57,6 @@ impl HostCostMeasurement for Ed25519ScalarMulMeasure {
         let A = constants::ED25519_BASEPOINT_COMPRESSED
             .decompress()
             .unwrap();
-        Ed25519ScalarMulSample { a, b, A }
+        Ed25519ScalarMulSample { a, A, b }
     }
 }

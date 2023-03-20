@@ -10,9 +10,7 @@ pub(crate) struct ImVecNewMeasure;
 impl HostCostMeasurement for ImVecNewMeasure {
     type Runner = ImVecNewRun;
 
-    fn new_random_case(_host: &Host, _rng: &mut StdRng, _input: u64) {
-        ()
-    }
+    fn new_random_case(_host: &Host, _rng: &mut StdRng, _input: u64) {}
 }
 
 pub(crate) struct ImVecImmutEntryMeasure;

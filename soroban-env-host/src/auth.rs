@@ -422,7 +422,7 @@ impl AuthorizationManager {
         let (contract_id, function_name) = match frame {
             #[cfg(feature = "vm")]
             Frame::ContractVM(vm, fn_name, _) => {
-                (vm.contract_id.metered_clone(&self.budget)?, fn_name.clone())
+                (vm.contract_id.metered_clone(&self.budget)?, *fn_name)
             }
             // Just skip the host function stack frames for now.
             // We could also make this included into the authorized stack to

@@ -41,7 +41,7 @@ impl Host {
         let mem = vm.get_memory(self)?;
         self.map_err(
             mem.write(vmcaller.try_mut()?, mem_pos as usize, buf)
-                .map_err(|me| wasmi::Error::Memory(me)),
+                .map_err(wasmi::Error::Memory),
         )
     }
 
@@ -57,7 +57,7 @@ impl Host {
         let mem = vm.get_memory(self)?;
         self.map_err(
             mem.read(vmcaller.try_mut()?, mem_pos as usize, buf)
-                .map_err(|me| wasmi::Error::Memory(me)),
+                .map_err(wasmi::Error::Memory),
         )
     }
 
@@ -87,7 +87,7 @@ impl Host {
         let mem_slice = mem_data.get_mut(mem_range).ok_or(ScVmErrorCode::Memory)?;
 
         self.charge_budget(CostType::VmMemWrite, byte_len as u64)?;
-        for (src, dst) in buf.iter().zip(mem_slice.chunks_mut(VAL_SZ as usize)) {
+        for (src, dst) in buf.iter().zip(mem_slice.chunks_mut(VAL_SZ)) {
             if dst.len() != VAL_SZ {
                 // This should be impossible unless there's an error above, but just in case.
                 return Err(ScHostObjErrorCode::VecIndexOutOfBound.into());
@@ -125,7 +125,7 @@ impl Host {
 
         self.charge_budget(CostType::VmMemRead, byte_len as u64)?;
         let mut tmp: [u8; VAL_SZ] = [0u8; VAL_SZ];
-        for (dst, src) in buf.iter_mut().zip(mem_slice.chunks(VAL_SZ as usize)) {
+        for (dst, src) in buf.iter_mut().zip(mem_slice.chunks(VAL_SZ)) {
             if let Ok(src) = TryInto::<&[u8; VAL_SZ]>::try_into(src) {
                 tmp.copy_from_slice(src);
                 *dst = from_le_bytes(&tmp);
@@ -183,7 +183,7 @@ impl Host {
                     .ok_or(ScHostValErrorCode::U32OutOfRange)?;
                 let slice_range = slice_ptr as usize..slice_end as usize;
                 let slice = mem_data.get(slice_range).ok_or(ScVmErrorCode::Memory)?;
-                callback(i, slice)?
+                callback(i, slice)?;
             } else {
                 // This should be impossible unless there's an error above, but just in case.
                 return Err(ScHostObjErrorCode::VecIndexOutOfBound.into());

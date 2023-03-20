@@ -124,7 +124,7 @@ impl Vm {
                     }
 
                     #[allow(unreachable_patterns)]
-                    _ => (),
+                    ScEnvMetaEntry::ScEnvMetaKindInterfaceVersion(_) => (),
                 }
             }
             Err(host.err_status_msg(
@@ -244,25 +244,18 @@ impl Vm {
                     .collect();
                 let mut wasm_ret: [Value; 1] = [Value::I64(0)];
                 let func_ss: SymbolStr = func.try_into_val(host)?;
-                let ext = match self
+                let Some(ext) = self
                     .instance
-                    .get_export(&*self.store.borrow(), func_ss.as_ref())
-                {
-                    None => {
+                    .get_export(&*self.store.borrow(), func_ss.as_ref()) else {
                         return Err(
                             host.err_status_msg(ScVmErrorCode::Unknown, "invoking unknown export")
                         )
-                    }
-                    Some(e) => e,
-                };
-                let func = match ext.into_func() {
-                    None => {
+                    };
+                let Some(func) = ext.into_func() else {
                         return Err(
                             host.err_status_msg(ScVmErrorCode::Unknown, "export is not a function")
                         )
-                    }
-                    Some(e) => e,
-                };
+                    };
                 host.map_err(func.call(
                     &mut *self.store.borrow_mut(),
                     wasm_args.as_slice(),
@@ -296,7 +289,7 @@ impl Vm {
             raw_args.push(host.to_host_val(scv)?);
         }
         let raw_res = self.invoke_function_raw(host, &func_sym, raw_args.as_slice())?;
-        Ok(host.from_host_val(raw_res)?)
+        host.from_host_val(raw_res)
     }
 
     /// Returns a list of functions in the WASM module loaded into the [Vm].

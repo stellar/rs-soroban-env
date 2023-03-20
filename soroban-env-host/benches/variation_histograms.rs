@@ -1,7 +1,9 @@
 // Run this with
 // $ cargo bench --features vm --bench variation_histograms -- --nocapture
 mod common;
-use common::*;
+use common::{
+    for_each_host_cost_measurement, measure_cost_variation, Benchmark, HostCostMeasurement,
+};
 
 struct LinearModelTables;
 impl Benchmark for LinearModelTables {

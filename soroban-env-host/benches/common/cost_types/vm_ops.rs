@@ -16,19 +16,14 @@ impl HostCostMeasurement for VmInstantiationMeasure {
     type Runner = VmInstantiationRun;
 
     fn new_best_case(_host: &Host, _rng: &mut StdRng) -> VmInstantiationSample {
-        let id: xdr::Hash = [0; 32].into();
-        let wasm: Vec<u8> = soroban_test_wasms::ADD_I32.clone().into();
-        VmInstantiationSample { id, wasm }
+        VmInstantiationSample::default_id(soroban_test_wasms::ADD_I32)
     }
 
     fn new_worst_case(_host: &Host, _rng: &mut StdRng, _input: u64) -> VmInstantiationSample {
-        let id: xdr::Hash = [0; 32].into();
-        let wasm: Vec<u8> = soroban_test_wasms::COMPLEX.clone().into();
-        VmInstantiationSample { id, wasm }
+        VmInstantiationSample::default_id(soroban_test_wasms::COMPLEX)
     }
 
     fn new_random_case(_host: &Host, rng: &mut StdRng, _input: u64) -> VmInstantiationSample {
-        let id: xdr::Hash = [0; 32].into();
         let wasm = match rng.gen_range(0, 9) {
             0 => soroban_test_wasms::ADD_I32,
             1 => soroban_test_wasms::COMPLEX,
@@ -41,8 +36,7 @@ impl HostCostMeasurement for VmInstantiationMeasure {
             8 => soroban_test_wasms::VEC,
             _ => unreachable!(),
         };
-        let wasm: Vec<u8> = wasm.clone().into();
-        VmInstantiationSample { id, wasm }
+        VmInstantiationSample::default_id(wasm)
     }
 }
 
@@ -57,7 +51,7 @@ impl HostCostMeasurement for VmMemReadMeasure {
         let input = (input * 1000) as usize;
         let id: xdr::Hash = [0; 32].into();
         let code = soroban_test_wasms::ADD_I32;
-        let vm = Vm::new(&host, id, &code).unwrap();
+        let vm = Vm::new(host, id, code).unwrap();
         (vm, input)
     }
 }
@@ -75,7 +69,7 @@ impl HostCostMeasurement for VmMemWriteMeasure {
         rng.fill_bytes(buf.as_mut_slice());
         let id: xdr::Hash = [0; 32].into();
         let code = soroban_test_wasms::ADD_I32;
-        let vm = Vm::new(&host, id, &code).unwrap();
+        let vm = Vm::new(host, id, code).unwrap();
         (vm, buf)
     }
 }

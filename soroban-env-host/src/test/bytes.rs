@@ -145,8 +145,8 @@ fn linear_memory_operations() -> Result<(), HostError> {
         let obj: BytesObject = host
             .call(
                 id_obj,
-                Symbol::try_from_small_str("bin_word").unwrap().into(),
-                args.into(),
+                Symbol::try_from_small_str("bin_word").unwrap(),
+                args,
             )?
             .try_into()?;
         let obj_ref: BytesObject = host.test_bin_obj(&[0xaa, 0xbb, 0xcc, 0xdd])?;
@@ -161,11 +161,7 @@ fn linear_memory_operations() -> Result<(), HostError> {
         let mut args = host.vec_new(RawVal::from_void().into())?;
         args = host.vec_push_back(args, obj0.to_raw())?;
         let obj: BytesObject = host
-            .call(
-                id_obj,
-                Symbol::try_from_small_str("bin_inc").unwrap().into(),
-                args.into(),
-            )?
+            .call(id_obj, Symbol::try_from_small_str("bin_inc").unwrap(), args)?
             .try_into()?;
         let obj_ref = host.test_bin_obj(&[2, 3, 4, 5])?;
         assert_eq!(

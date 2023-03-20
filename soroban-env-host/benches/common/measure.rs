@@ -44,7 +44,6 @@ impl AllocationTracker for MemTracker {
         _current_group_id: tracking_allocator::AllocationGroupId,
     ) {
         // No-Op, see comment above.
-        ()
     }
 }
 
@@ -58,6 +57,8 @@ pub struct Measurement {
 
 #[derive(Clone, Debug, Default)]
 pub struct Measurements(pub Vec<Measurement>);
+
+#[allow(clippy::cast_precision_loss)]
 impl Measurements {
     /// Subtracts the values of the first measurement from all subsequent
     /// measurements, to eliminate constant factors; this should only be done if
@@ -78,10 +79,12 @@ impl Measurements {
         }
     }
 
+    #[allow(clippy::cast_precision_loss)]
     pub fn report_histogram<F>(&self, out_name: &str, get_output: F)
     where
         F: Fn(&Measurement) -> u64,
     {
+        use textplots::{Chart, Plot, Shape};
         use thousands::Separable;
         let points: Vec<(f32, f32)> = self
             .0
@@ -92,7 +95,7 @@ impl Measurements {
         let ymin = points.iter().map(|(_, y)| *y).reduce(f32::min).unwrap();
         let ymax = points.iter().map(|(_, y)| *y).reduce(f32::max).unwrap();
 
-        if ymin == ymax {
+        if (ymin - ymax).abs() < 0.00001 {
             return;
         }
         let hist = textplots::utils::histogram(&points, ymin, ymax, 30);
@@ -110,7 +113,6 @@ impl Measurements {
             .reduce(f32::max)
             .unwrap();
 
-        use textplots::{Chart, Plot, Shape};
         println!(
             "cost input: min {}; max {}; max/min = {}",
             in_min,
@@ -141,7 +143,7 @@ impl Measurements {
             "input\tcpu insns\tmem bytes\ttime nsecs\tinsns/input\tbytes/input\tnsecs/input"
         )
         .unwrap();
-        for m in self.0.iter() {
+        for m in &self.0 {
             writeln!(
                 &mut tw,
                 "{}\t{}\t{}\t{}ns\t{}\t{}\t{}ns",
@@ -167,7 +169,7 @@ impl Measurements {
                 x: m.input as f64,
                 y: m.cpu_insns as f64,
             })
-            .collect();
+            .collect::<Vec<_>>();
         fit_model(&data)
     }
 
@@ -179,7 +181,7 @@ impl Measurements {
                 x: m.input as f64,
                 y: m.mem_bytes as f64,
             })
-            .collect();
+            .collect::<Vec<_>>();
         fit_model(&data)
     }
 }
@@ -218,7 +220,7 @@ pub trait HostCostMeasurement: Sized {
     }
 
     fn run(host: &Host, sample: Vec<<Self::Runner as CostRunner>::SampleType>) {
-        <Self::Runner as CostRunner>::run(host, sample)
+        <Self::Runner as CostRunner>::run(host, sample);
     }
 
     fn get_total_input(host: &Host, sample: &<Self::Runner as CostRunner>::SampleType) -> u64 {
@@ -262,7 +264,7 @@ mod cpu {
     pub struct InstructionCounter(u64);
     impl InstructionCounter {
         fn get() -> u64 {
-            use rusagev4::*;
+            use rusagev4::{proc_pid_rusage, rusage_info_v4, RUSAGE_INFO_V4};
             use std::os::raw::c_int;
             let mut ri = rusage_info_v4::default();
             let pid: c_int = std::process::id() as c_int;
@@ -307,10 +309,7 @@ where
         // prepare the measurement
         let host = Host::default();
         host.with_budget(|budget| budget.reset_unlimited());
-        let sample = match next_sample(&host) {
-            Some(s) => s,
-            None => break,
-        };
+        let Some(sample) = next_sample(&host) else { break };
         let iterations = <HCM::Runner as CostRunner>::RUN_ITERATIONS;
         let mvec = (0..iterations).map(|_| sample.clone()).collect();
         // start the cpu and mem measurement
@@ -325,7 +324,7 @@ where
         drop(alloc_guard);
         let stop = Instant::now();
         let input = HCM::get_total_input(&host, &sample) / iterations;
-        cpu_insns = cpu_insns - HCM::get_insns_overhead(&host, &sample);
+        cpu_insns -= HCM::get_insns_overhead(&host, &sample);
         let mem_bytes = mem_tracker.0.load(Ordering::SeqCst) / iterations;
         let time_nsecs = stop.duration_since(start).as_nanos() as u64 / iterations;
         ret.push(Measurement {

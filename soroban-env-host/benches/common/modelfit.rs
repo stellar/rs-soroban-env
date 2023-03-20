@@ -21,13 +21,13 @@ pub struct FPCostModel {
 // confused due to rounding/truncation.
 impl FPCostModel {
     pub fn new(params: &[f64]) -> Self {
-        let mut fcm = FPCostModel::default();
-        fcm.const_param = params[0];
-        fcm.log_param = params[1];
-        fcm.log_base_param = params[2];
-        fcm.lin_param = params[3];
-        fcm.quad_param = params[4];
-        fcm
+        FPCostModel {
+            const_param: params[0],
+            log_param: params[1],
+            log_base_param: params[2],
+            lin_param: params[3],
+            quad_param: params[4],
+        }
     }
     // This is the same as the 'evaluate' function in the integral cost model,
     // just using f64 ops rather than saturating integer ops.
@@ -44,7 +44,7 @@ impl FPCostModel {
 
 // Fits a FloatCostModel to the provided data, using least-squares
 // gradient descent optimization.
-pub fn fit_model(data: &Vec<FPPoint>) -> FPCostModel {
+pub fn fit_model(data: &[FPPoint]) -> FPCostModel {
     // We construct an objective function for the optimizer here that treats its
     // inputs as parametes to a FloatCostModel, and returns the sum (over all
     // provided data points) of squares of differences between the data.y value

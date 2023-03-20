@@ -55,7 +55,7 @@ fn vm_hostfn_invocation() -> Result<(), HostError> {
     let args = host.test_vec_obj::<u32>(&[1])?;
 
     // try_call
-    host.try_call(id_obj, sym, args.into())?;
+    host.try_call(id_obj, sym, args)?;
     host.with_budget(|budget| {
         assert_eq!(budget.get_input(CostType::InvokeVmFunction), 1);
         assert_eq!(budget.get_input(CostType::InvokeHostFunction), 2);

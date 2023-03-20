@@ -10,9 +10,7 @@ pub(crate) struct ImMapNewMeasure;
 impl HostCostMeasurement for ImMapNewMeasure {
     type Runner = ImMapNewRun;
 
-    fn new_random_case(_host: &Host, _rng: &mut StdRng, _input: u64) {
-        ()
-    }
+    fn new_random_case(_host: &Host, _rng: &mut StdRng, _input: u64) {}
 }
 
 pub(crate) struct ImMapImmutEntryMeasure;
@@ -26,7 +24,7 @@ impl HostCostMeasurement for ImMapImmutEntryMeasure {
         let input = input * 100;
         let mut keys: Vec<_> = util::to_rawval_u32(0..(input as u32)).collect();
         keys.shuffle(rng);
-        let om = keys.iter().cloned().zip(keys.iter().cloned()).collect();
+        let om = keys.iter().copied().zip(keys.iter().copied()).collect();
         let map: MeteredOrdMap<_, _, _> = MeteredOrdMap::from_map(om, host).unwrap();
         keys.shuffle(rng);
         ImMapImmutEntrySample { map, keys }
@@ -35,15 +33,15 @@ impl HostCostMeasurement for ImMapImmutEntryMeasure {
     fn new_worst_case(host: &Host, _rng: &mut StdRng, input: u64) -> ImMapImmutEntrySample {
         let input = input * 100;
         let keys: Vec<_> = util::to_rawval_u32(0..(input as u32)).collect();
-        let om = keys.iter().cloned().zip(keys.iter().cloned()).collect();
+        let om = keys.iter().copied().zip(keys.iter().copied()).collect();
         let map: MeteredOrdMap<_, _, _> = MeteredOrdMap::from_map(om, host).unwrap();
-        let keys = util::to_rawval_u32([0, u32::MAX].iter().cloned()).collect();
+        let keys = util::to_rawval_u32([0, u32::MAX].iter().copied()).collect();
         ImMapImmutEntrySample { map, keys }
     }
 
     fn new_best_case(host: &Host, _rng: &mut StdRng) -> ImMapImmutEntrySample {
-        let keys: Vec<_> = util::to_rawval_u32([0].iter().cloned()).collect();
-        let om = keys.iter().cloned().zip(keys.iter().cloned()).collect();
+        let keys: Vec<_> = util::to_rawval_u32([0].iter().copied()).collect();
+        let om = keys.iter().copied().zip(keys.iter().copied()).collect();
         let map: MeteredOrdMap<_, _, _> = MeteredOrdMap::from_map(om, host).unwrap();
         ImMapImmutEntrySample { map, keys }
     }
