@@ -173,12 +173,10 @@ impl EnvBase for Guest {
     }
 
     fn as_mut_any(&mut self) -> &mut dyn core::any::Any {
-        return self;
+        self
     }
 
-    fn check_same_env(&self, other: &Self) {
-        ()
-    }
+    fn check_same_env(&self, other: &Self) {}
 
     fn deep_clone(&self) -> Self {
         Self
