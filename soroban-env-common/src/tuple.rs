@@ -13,17 +13,9 @@ macro_rules! impl_for_tuple {
 
             fn try_from_val(env: &E, val: &RawVal) -> Result<Self, Self::Error> {
                 let vec: VecObject = val.try_into()?;
-                let len: u32 = env.vec_len(vec).map_err(|_| ConversionError)?.into();
-                if len != $count {
-                    return Err(ConversionError);
-                }
-                Ok((
-                    $({
-                        let idx: u32 = $idx;
-                        let val = env.vec_get(vec, idx.into()).map_err(|_| ConversionError)?;
-                        $typ::try_from_val(&env, &val).map_err(|_| ConversionError)?
-                    },)*
-                ))
+                let mut tmp: [RawVal; $count as usize] = [RawVal::VOID.to_raw(); $count as usize];
+                env.vec_unpack_to_slice(vec, &mut tmp).map_err(|_| ConversionError)?;
+                Ok(($($typ::try_from_val(env, &tmp[$idx]).map_err(|_| ConversionError)?,)*))
             }
         }
 
@@ -33,8 +25,10 @@ macro_rules! impl_for_tuple {
         {
             type Error = ConversionError;
             fn try_from_val(env: &E, v: &($($typ,)*)) -> Result<Self, Self::Error> {
-                let vec = env.vec_new($count.into()).map_err(|_| ConversionError)?;
-                $(let vec = env.vec_push_back(vec, v.$idx.try_into_val(&env).map_err(|_| ConversionError)?).map_err(|_| ConversionError)?;)*
+                let tmp: [RawVal; $count as usize] = [
+                    $(v.$idx.try_into_val(&env).map_err(|_| ConversionError)?,)*
+                ];
+                let vec = env.vec_new_from_slice(&tmp).map_err(|_| ConversionError)?;
                 Ok(vec.to_raw())
             }
         }
