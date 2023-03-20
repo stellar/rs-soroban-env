@@ -6,7 +6,7 @@ use core::{cmp::Ordering, fmt::Debug, hash::Hash, str};
 
 declare_tag_based_small_and_object_wrappers!(Symbol, SymbolSmall, SymbolObject);
 
-/// Errors related to operations on the [SymbolObject] and [SymbolSmall] types.
+/// Errors related to operations on the [`SymbolObject`] and [`SymbolSmall`] types.
 #[derive(Debug)]
 pub enum SymbolError {
     /// Returned when attempting to form a [SymbolSmall] from a string with more
@@ -21,12 +21,10 @@ impl core::fmt::Display for SymbolError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
             SymbolError::TooLong(len) => f.write_fmt(format_args!(
-                "symbol too long: length {}, max {}",
-                len, MAX_SMALL_CHARS
+                "symbol too long: length {len}, max {MAX_SMALL_CHARS}"
             )),
             SymbolError::BadChar(char) => f.write_fmt(format_args!(
-                "symbol bad char: encountered {}, supported range [a-zA-Z0-9_]",
-                char
+                "symbol bad char: encountered {char}, supported range [a-zA-Z0-9_]"
             )),
         }
     }
@@ -69,7 +67,7 @@ impl<E: Env> TryFromVal<E, &[u8]> for Symbol {
 
     fn try_from_val(env: &E, v: &&[u8]) -> Result<Self, Self::Error> {
         // We don't know this byte-slice is actually utf-8 ...
-        let s: &str = unsafe { core::str::from_utf8_unchecked(*v) };
+        let s: &str = unsafe { core::str::from_utf8_unchecked(v) };
         // ... but this next conversion step will check that its
         // _bytes_ are in the symbol-char range, which is a subset
         // of utf-8, so we're only lying harmlessly.
@@ -343,11 +341,9 @@ impl Iterator for SymbolSmallIter {
 
 impl FromIterator<char> for SymbolSmall {
     fn from_iter<T: IntoIterator<Item = char>>(iter: T) -> Self {
-        let mut n = 0;
         let mut accum: u64 = 0;
-        for i in iter {
+        for (n, i) in iter.into_iter().enumerate() {
             require(n < MAX_SMALL_CHARS);
-            n += 1;
             accum <<= CODE_BITS;
             let v = match i {
                 '_' => 1,
@@ -439,7 +435,7 @@ impl TryFrom<SymbolSmall> for ScVal {
 impl TryFrom<&SymbolSmall> for ScVal {
     type Error = ConversionError;
     fn try_from(s: &SymbolSmall) -> Result<Self, Self::Error> {
-        s.clone().try_into()
+        (*s).try_into()
     }
 }
 

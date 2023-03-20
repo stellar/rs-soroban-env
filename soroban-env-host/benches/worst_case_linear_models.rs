@@ -1,7 +1,10 @@
 // Run this with
 // $ cargo bench --features vm --bench worst_case_linear_models -- --nocapture
 mod common;
-use common::*;
+use common::{
+    for_each_host_cost_measurement, for_each_wasm_insn_measurement, measure_worst_case_costs,
+    Benchmark, HostCostMeasurement,
+};
 
 struct WorstCaseLinearModels;
 impl Benchmark for WorstCaseLinearModels {

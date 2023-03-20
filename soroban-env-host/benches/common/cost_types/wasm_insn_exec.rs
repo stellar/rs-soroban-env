@@ -1,7 +1,15 @@
 use crate::common::HostCostMeasurement;
 use rand::{rngs::StdRng, RngCore};
 use soroban_env_host::{
-    cost_runner::*,
+    cost_runner::{
+        BrRun, BrTableRun, CallIndirectRun, CallRun, ConstRun, DropRun, GlobalGetRun, GlobalSetRun,
+        I64AddRun, I64AndRun, I64ClzRun, I64CtzRun, I64DivSRun, I64EqRun, I64EqzRun, I64GeSRun,
+        I64GtSRun, I64LeSRun, I64Load16SRun, I64Load32SRun, I64Load8SRun, I64LoadRun, I64LtSRun,
+        I64MulRun, I64NeRun, I64OrRun, I64PopcntRun, I64RemSRun, I64RotlRun, I64RotrRun, I64ShlRun,
+        I64ShrSRun, I64Store16Run, I64Store32Run, I64Store8Run, I64StoreRun, I64SubRun, I64XorRun,
+        LocalGetRun, LocalSetRun, LocalTeeRun, MemoryGrowRun, MemorySizeRun, SelectRun,
+        WasmInsnExecRun, WasmInsnExecSample, WasmInsnSample, WasmMemAllocRun,
+    },
     xdr::{Hash, ScVal, ScVec},
     Host, Symbol, Vm,
 };
@@ -467,7 +475,7 @@ impl HostCostMeasurement for WasmInsnExecMeasure {
         let args = ScVec(vec![ScVal::U64(5)].try_into().unwrap());
         let id: Hash = [0; 32].into();
         let code = wasm_module_with_4n_insns(insns as usize);
-        let vm = Vm::new(&host, id, &code).unwrap();
+        let vm = Vm::new(host, id, &code).unwrap();
         WasmInsnExecSample { insns, args, vm }
     }
 }
@@ -487,7 +495,7 @@ impl HostCostMeasurement for WasmMemAllocMeasure {
         let n_pages = input as usize;
         let id: Hash = [0; 32].into();
         let code = wasm_module_with_mem_grow(n_pages);
-        let vm = Vm::new(&host, id, &code).unwrap();
+        let vm = Vm::new(host, id, &code).unwrap();
         (vm, n_pages)
     }
 }

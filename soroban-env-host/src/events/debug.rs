@@ -35,8 +35,8 @@ impl Default for DebugArg {
 impl Display for DebugArg {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            DebugArg::Str(s) => write!(f, "{}", s),
-            DebugArg::Val(rv) => write!(f, "{:?}", rv),
+            DebugArg::Str(s) => write!(f, "{s}"),
+            DebugArg::Val(rv) => write!(f, "{rv:?}"),
         }
     }
 }
@@ -44,7 +44,7 @@ impl Display for DebugArg {
 /// A cheap record type to store in the events buffer for diagnostic reporting
 /// when something goes wrong. Should cost very little even when enabled. See
 /// [host::Host::debug_event](crate::host::Host::debug_event) for normal use.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct DebugEvent {
     pub msg: Option<Cow<'static, str>>,
     pub args: TinyVec<[DebugArg; 2]>,
@@ -55,13 +55,13 @@ impl core::fmt::Display for DebugEvent {
         match &self.msg {
             None => {
                 for arg in self.args.iter() {
-                    write!(f, "{}", arg)?;
+                    write!(f, "{arg}")?;
                 }
                 Ok(())
             }
             Some(fmt) => {
                 let args = dyn_fmt::Arguments::new(fmt, self.args.as_slice());
-                write!(f, "{}", args)
+                write!(f, "{args}")
             }
         }
     }
@@ -69,10 +69,7 @@ impl core::fmt::Display for DebugEvent {
 
 impl DebugEvent {
     pub fn new() -> Self {
-        Self {
-            msg: None,
-            args: Default::default(),
-        }
+        Self::default()
     }
 
     pub fn msg(mut self, msg: impl Into<Cow<'static, str>>) -> Self {
@@ -86,7 +83,7 @@ impl DebugEvent {
     }
 
     pub fn args<T: Into<DebugArg>>(mut self, args: impl IntoIterator<Item = T>) -> Self {
-        self.args.extend(args.into_iter().map(|arg| arg.into()));
+        self.args.extend(args.into_iter().map(Into::into));
         self
     }
 }

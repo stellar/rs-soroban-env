@@ -65,7 +65,7 @@ pub enum WasmInsnType {
 
 impl WasmInsnType {
     pub fn variants() -> std::slice::Iter<'static, WasmInsnType> {
-        static VARIANTS: &'static [WasmInsnType] = &[
+        static VARIANTS: &[WasmInsnType] = &[
             WasmInsnType::LocalGet,
             WasmInsnType::LocalSet,
             WasmInsnType::LocalTee,

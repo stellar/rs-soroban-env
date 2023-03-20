@@ -9,7 +9,7 @@ use soroban_env_common::{Compare, Env, TryIntoVal};
 fn read_administrator(e: &Host) -> Result<Address, HostError> {
     let key = DataKey::Admin;
     let rv = e.get_contract_data(key.try_into_val(e)?)?;
-    Ok(rv.try_into_val(e)?)
+    rv.try_into_val(e)
 }
 
 // Metering: covered by components
@@ -22,7 +22,9 @@ pub fn write_administrator(e: &Host, id: Address) -> Result<(), HostError> {
 // Metering: *mostly* covered by components.
 pub fn check_admin(e: &Host, addr: &Address) -> Result<(), HostError> {
     let admin = read_administrator(e)?;
-    if e.compare(&admin, addr)? != core::cmp::Ordering::Equal {
+    if e.compare(&admin, addr)? == core::cmp::Ordering::Equal {
+        Ok(())
+    } else {
         Err(err!(
             e,
             ContractError::UnauthorizedError,
@@ -30,7 +32,5 @@ pub fn check_admin(e: &Host, addr: &Address) -> Result<(), HostError> {
             addr.clone(),
             admin
         ))
-    } else {
-        Ok(())
     }
 }

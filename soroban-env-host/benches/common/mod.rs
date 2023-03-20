@@ -5,6 +5,7 @@ mod measure;
 mod modelfit;
 mod util;
 
+#[allow(clippy::wildcard_imports)]
 use cost_types::*;
 pub use measure::*;
 pub use modelfit::*;
@@ -20,7 +21,7 @@ pub(crate) trait Benchmark {
 }
 
 fn get_explicit_bench_names() -> Option<Vec<String>> {
-    let bare_args: Vec<_> = std::env::args().filter(|x| !x.starts_with("-")).collect();
+    let bare_args: Vec<_> = std::env::args().filter(|x| !x.starts_with('-')).collect();
     match bare_args.len() {
         0 | 1 => None,
         _ => Some(bare_args[1..].into()),
@@ -34,7 +35,7 @@ fn should_run<HCM: HostCostMeasurement>() -> bool {
             .last()
             .unwrap()
             .to_string();
-        bench_names.into_iter().find(|arg| *arg == name).is_some()
+        bench_names.into_iter().any(|arg| arg == name)
     } else {
         true
     }
@@ -90,7 +91,7 @@ pub(crate) fn for_each_host_cost_measurement<B: Benchmark>() -> std::io::Result<
     if get_explicit_bench_names().is_none() {
         for cost in CostType::variants() {
             if !costs.contains(cost) {
-                eprintln!("warning: missing cost measurement for {:?}", cost);
+                eprintln!("warning: missing cost measurement for {cost:?}");
             }
         }
         // Missing because we need some kind of size limits:

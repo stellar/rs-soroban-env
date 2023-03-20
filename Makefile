@@ -8,6 +8,9 @@ test:
 build:
 	cargo hack --feature-powerset check
 
+clippy:
+	cargo hack --feature-powerset clippy --all-targets
+
 watch:
 	cargo watch --clear --watch-when-idle --shell '$(MAKE)'
 

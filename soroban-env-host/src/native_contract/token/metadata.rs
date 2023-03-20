@@ -15,7 +15,7 @@ pub fn write_metadata(e: &Host, metadata: Metadata) -> Result<(), HostError> {
 pub fn read_metadata(e: &Host) -> Result<Metadata, HostError> {
     let key = DataKey::Metadata;
     let rv = e.get_contract_data(key.try_into_val(e)?)?;
-    Ok(rv.try_into_val(e)?)
+    rv.try_into_val(e)
 }
 
 // Metering: *mostly* covered by components.

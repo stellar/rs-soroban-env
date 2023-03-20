@@ -47,6 +47,7 @@ pub trait EnvBase: Sized + Clone {
     fn check_same_env(&self, other: &Self);
 
     /// Used to clone an environment deeply, not just a handle to it.
+    #[allow(clippy::return_self_not_must_use)]
     fn deep_clone(&self) -> Self;
 
     // Helpers for methods that wish to pass Rust lifetime-qualified _slices_
@@ -160,7 +161,7 @@ pub trait EnvBase: Sized + Clone {
 
     /// Log a formatted debugging message to the debug log (if present), passing
     /// a simplified format string (supporting only positional `{}` markers) and
-    /// a single [RawVal] argument that will be inserted at the marker in the
+    /// a single [`RawVal`] argument that will be inserted at the marker in the
     /// format string.
     fn log_static_fmt_val(&self, fmt: &'static str, v: RawVal) -> Result<(), Self::Error>;
 
@@ -176,7 +177,7 @@ pub trait EnvBase: Sized + Clone {
 
     /// Log a formatted debugging message to the debug log (if present), passing
     /// a simplified format string (supporting only positional `{}` markers) and
-    /// both a [RawVal] and a string-slice argument, that will each be inserted
+    /// both a [`RawVal`] and a string-slice argument, that will each be inserted
     /// at markers in the format string.
     fn log_static_fmt_val_static_str(
         &self,
@@ -187,7 +188,7 @@ pub trait EnvBase: Sized + Clone {
 
     /// Log a formatted debugging message to the debug log (if present), passing
     /// a simplified format string (supporting only positional `{}` markers) and
-    /// both a slice of [RawVal]s and a slice of string-slice argument, that
+    /// both a slice of [`RawVal`]s and a slice of string-slice argument, that
     /// will be sequentially inserted at markers in the format string.
     fn log_static_fmt_general(
         &self,
@@ -285,7 +286,7 @@ macro_rules! generate_env_trait {
         /// This trait represents the interface between Host and Guest, used by
         /// client contract code and implemented (via [Env](crate::Env)) by the host.
         /// It consists of functions that take or return only 64-bit values such
-        /// as [RawVal] or [u64].
+        /// as [`RawVal`] or [`u64`].
         pub trait Env: EnvBase
         {
             $(

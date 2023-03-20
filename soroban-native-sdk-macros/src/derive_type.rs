@@ -146,10 +146,7 @@ pub fn derive_type_enum(ident: &Ident, data: &DataEnum) -> TokenStream2 {
         })
         .multiunzip();
 
-    if !errors.is_empty() {
-        let compile_errors = errors.iter().map(Error::to_compile_error);
-        quote! { #(#compile_errors)* }
-    } else {
+    if errors.is_empty() {
         quote! {
 
             impl #ident {
@@ -208,5 +205,8 @@ pub fn derive_type_enum(ident: &Ident, data: &DataEnum) -> TokenStream2 {
                 }
             }
         }
+    } else {
+        let compile_errors = errors.iter().map(Error::to_compile_error);
+        quote! { #(#compile_errors)* }
     }
 }

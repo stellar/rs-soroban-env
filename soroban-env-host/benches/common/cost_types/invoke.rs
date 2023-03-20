@@ -36,7 +36,7 @@ impl HostCostMeasurement for InvokeVmFunctionMeasure {
     fn new_random_case(host: &Host, _rng: &mut StdRng, _input: u64) -> Rc<Vm> {
         let id: Hash = [0; 32].into();
         let code = wasm_module_with_empty_invoke();
-        Vm::new(&host, id, &code).unwrap()
+        Vm::new(host, id, &code).unwrap()
     }
 }
 
@@ -54,6 +54,6 @@ impl HostCostMeasurement for InvokeHostFunctionMeasure {
         let input = input * 1000;
         let id: Hash = [0; 32].into();
         let code = wasm_module_with_dummy_hostfn_invoke(input);
-        Vm::new(&host, id, &code).unwrap()
+        Vm::new(host, id, &code).unwrap()
     }
 }

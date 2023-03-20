@@ -185,9 +185,9 @@ fn map_prev_and_next_heterogeneous() -> Result<(), HostError> {
 
     let mut test_map = host.map_new()?;
     test_map = host.map_put(test_map, 2u32.into(), 4u32.into())?;
-    test_map = host.map_put(test_map, obj_map.clone().into(), 4u32.into())?;
-    test_map = host.map_put(test_map, obj_vec.clone().into(), 4u32.into())?;
-    test_map = host.map_put(test_map, sym.clone().into(), 4u32.into())?;
+    test_map = host.map_put(test_map, obj_map, 4u32.into())?;
+    test_map = host.map_put(test_map, obj_vec, 4u32.into())?;
+    test_map = host.map_put(test_map, sym.into(), 4u32.into())?;
     // The key ordering should be [u32, symbol, vec, map]
     // prev
     {
@@ -200,18 +200,15 @@ fn map_prev_and_next_heterogeneous() -> Result<(), HostError> {
             RawVal::from_u32(2).to_raw().get_payload()
         );
         assert_eq!(
-            host.map_prev_key(test_map, sym.clone().into())?
-                .get_payload(),
+            host.map_prev_key(test_map, sym.into())?.get_payload(),
             RawVal::from_u32(2).to_raw().get_payload()
         );
         assert_eq!(
-            host.map_prev_key(test_map, obj_vec.clone().into())?
-                .get_payload(),
+            host.map_prev_key(test_map, obj_vec)?.get_payload(),
             sym.as_raw().get_payload()
         );
         assert_eq!(
-            host.map_prev_key(test_map, obj_map.clone().into())?
-                .get_payload(),
+            host.map_prev_key(test_map, obj_map)?.get_payload(),
             obj_vec.get_payload()
         );
     }
@@ -226,18 +223,15 @@ fn map_prev_and_next_heterogeneous() -> Result<(), HostError> {
             sym.as_raw().get_payload()
         );
         assert_eq!(
-            host.map_next_key(test_map, sym.clone().into())?
-                .get_payload(),
+            host.map_next_key(test_map, sym.into())?.get_payload(),
             obj_vec.get_payload()
         );
         assert_eq!(
-            host.map_next_key(test_map, obj_vec.clone().into())?
-                .get_payload(),
+            host.map_next_key(test_map, obj_vec)?.get_payload(),
             obj_map.get_payload()
         );
         assert_eq!(
-            host.map_next_key(test_map, obj_map.clone().into())?
-                .get_payload(),
+            host.map_next_key(test_map, obj_map)?.get_payload(),
             Status::UNKNOWN_ERROR.to_raw().get_payload()
         );
     }

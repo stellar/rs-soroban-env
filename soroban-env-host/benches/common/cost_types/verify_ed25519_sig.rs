@@ -17,7 +17,7 @@ impl HostCostMeasurement for VerifyEd25519SigMeasure {
     fn new_random_case(_host: &Host, rng: &mut StdRng, input: u64) -> VerifyEd25519SigSample {
         let size = input * 10000;
         let keypair: Keypair = Keypair::generate(rng);
-        let key: PublicKey = keypair.public.clone();
+        let key: PublicKey = keypair.public;
         let msg: Vec<u8> = (0..size).map(|x| x as u8).collect();
         let sig: Signature = keypair.sign(msg.as_slice());
         VerifyEd25519SigSample { key, msg, sig }

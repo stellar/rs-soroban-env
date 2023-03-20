@@ -42,6 +42,7 @@ fn test_256_roundtrip() -> Result<(), HostError> {
 
 #[test]
 fn test_num_scval_roundtrips() {
+    #[allow(clippy::wildcard_imports)]
     use soroban_env_common::num::*;
 
     fn check_roundtrip_ok<

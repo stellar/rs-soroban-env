@@ -114,18 +114,17 @@ impl Vm {
             let mut cursor = Cursor::new(env_meta);
             for env_meta_entry in ScEnvMetaEntry::read_xdr_iter(&mut cursor) {
                 match host.map_err(env_meta_entry)? {
-                    ScEnvMetaEntry::ScEnvMetaKindInterfaceVersion(v) => {
-                        if SUPPORTED_INTERFACE_VERSION_RANGE.contains(&v) {
-                            return Ok(());
-                        } else {
-                            return Err(host.err_status_msg(
-                                ScHostFnErrorCode::InputArgsInvalid,
-                                "unexpected environment interface version",
-                            ));
-                        }
+                    ScEnvMetaEntry::ScEnvMetaKindInterfaceVersion(v)
+                        if !SUPPORTED_INTERFACE_VERSION_RANGE.contains(&v) =>
+                    {
+                        return Err(host.err_status_msg(
+                            ScHostFnErrorCode::InputArgsInvalid,
+                            "unexpected environment interface version",
+                        ))
                     }
+
                     #[allow(unreachable_patterns)]
-                    _ => (),
+                    ScEnvMetaEntry::ScEnvMetaKindInterfaceVersion(_) => (),
                 }
             }
             Err(host.err_status_msg(
@@ -245,25 +244,18 @@ impl Vm {
                     .collect();
                 let mut wasm_ret: [Value; 1] = [Value::I64(0)];
                 let func_ss: SymbolStr = func.try_into_val(host)?;
-                let ext = match self
+                let Some(ext) = self
                     .instance
-                    .get_export(&*self.store.borrow(), func_ss.as_ref())
-                {
-                    None => {
+                    .get_export(&*self.store.borrow(), func_ss.as_ref()) else {
                         return Err(
                             host.err_status_msg(ScVmErrorCode::Unknown, "invoking unknown export")
                         )
-                    }
-                    Some(e) => e,
-                };
-                let func = match ext.into_func() {
-                    None => {
+                    };
+                let Some(func) = ext.into_func() else {
                         return Err(
                             host.err_status_msg(ScVmErrorCode::Unknown, "export is not a function")
                         )
-                    }
-                    Some(e) => e,
-                };
+                    };
                 host.map_err(func.call(
                     &mut *self.store.borrow_mut(),
                     wasm_args.as_slice(),
@@ -297,7 +289,7 @@ impl Vm {
             raw_args.push(host.to_host_val(scv)?);
         }
         let raw_res = self.invoke_function_raw(host, &func_sym, raw_args.as_slice())?;
-        Ok(host.from_host_val(raw_res)?)
+        host.from_host_val(raw_res)
     }
 
     /// Returns a list of functions in the WASM module loaded into the [Vm].
@@ -309,7 +301,7 @@ impl Vm {
                     name: e.name().to_string(),
                     param_count: f.params().len(),
                     result_count: f.results().len(),
-                })
+                });
             }
         }
         res
@@ -338,7 +330,7 @@ impl Vm {
     where
         F: FnOnce(&mut VmCaller<Host>) -> T,
     {
-        let store: &mut Store<Host> = &mut *self.store.borrow_mut();
+        let store: &mut Store<Host> = &mut self.store.borrow_mut();
         let mut ctx: StoreContextMut<Host> = store.into();
         let caller: Caller<Host> = Caller::new(&mut ctx, Some(self.instance));
         let mut vmcaller: VmCaller<Host> = VmCaller(Some(caller));

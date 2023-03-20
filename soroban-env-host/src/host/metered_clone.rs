@@ -333,6 +333,7 @@ impl<C: MeteredClone> MeteredClone for Vec<C> {
 impl<C: MeteredClone> MeteredClone for Box<C> {
     const IS_SHALLOW: bool = false;
 
+    #[allow(clippy::explicit_auto_deref)]
     fn charge_for_substructure(&self, budget: &Budget) -> Result<(), HostError> {
         // first take care of the Box clone: allocating memory and shallow cloning of data type.
         charge_heap_alloc::<C>(1, budget)?;

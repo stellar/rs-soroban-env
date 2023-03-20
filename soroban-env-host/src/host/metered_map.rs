@@ -94,6 +94,7 @@ where
         })
     }
 
+    #[allow(clippy::match_same_arms)]
     pub fn from_map(map: Vec<(K, V)>, ctx: &Ctx) -> Result<Self, HostError> {
         // Construction cost already paid for by caller, just check
         // that input has sorted and unique keys.
@@ -247,6 +248,10 @@ where
         self.map.len()
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
     pub fn contains_key<Q>(&self, key: &Q, ctx: &Ctx) -> Result<bool, HostError>
     where
         K: Borrow<Q>,
@@ -388,7 +393,7 @@ where
     type IntoIter = core::slice::Iter<'a, (K, V)>;
 
     fn into_iter(self) -> Self::IntoIter {
-        (&self.map).into_iter()
+        self.map.iter()
     }
 }
 

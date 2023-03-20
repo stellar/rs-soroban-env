@@ -17,6 +17,8 @@ impl std::error::Error for HostError {}
 
 impl Debug for HostError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // TODO: maybe make this something users can adjust?
+        const MAX_DEBUG_EVENTS: usize = 10;
         // We do a little trimming here, skipping the first two frames (which
         // are always into, from, and one or more Host::err_foo calls) and all
         // the frames _after_ the short-backtrace marker that rust compiles-in.
@@ -24,7 +26,7 @@ impl Debug for HostError {
         fn frame_name_matches(frame: &BacktraceFrame, pat: &str) -> bool {
             for sym in frame.symbols() {
                 match sym.name() {
-                    Some(sn) if format!("{:}", sn).contains(pat) => {
+                    Some(sn) if format!("{sn:}").contains(pat) => {
                         return true;
                     }
                     _ => (),
@@ -56,8 +58,6 @@ impl Debug for HostError {
         let bt: Backtrace = frames.into();
         writeln!(f, "HostError")?;
         writeln!(f, "Value: {:?}", self.status)?;
-        // TODO: maybe make this something users can adjust?
-        const MAX_DEBUG_EVENTS: usize = 10;
         match &self.events {
             None => (),
             Some(ev) => {
@@ -66,28 +66,28 @@ impl Debug for HostError {
                     ev.0.iter()
                         .rev()
                         .filter_map(|ev| match ev.event.clone() {
-                            Event::Debug(e) => Some(format!("Debug {:}", e)),
-                            Event::StructuredDebug(e) => Some(format!("StructuredDebug {:?}", e)),
-                            _ => None,
+                            Event::Debug(e) => Some(format!("Debug {e:}")),
+                            Event::StructuredDebug(e) => Some(format!("StructuredDebug {e:?}")),
+                            Event::Contract(_) => None,
                         })
                         .take(MAX_DEBUG_EVENTS)
                         .enumerate()
                 {
                     if !wrote_heading {
-                        writeln!(f, "")?;
+                        writeln!(f)?;
                         writeln!(f, "Debug events (newest first):")?;
                         wrote_heading = true;
                     }
-                    writeln!(f, "   {:?}: {:?}", i, e)?;
+                    writeln!(f, "   {i:?}: {e:?}")?;
                 }
                 if ev.0.len() > MAX_DEBUG_EVENTS {
-                    writeln!(f, "   {:?}: ... elided ...", MAX_DEBUG_EVENTS)?;
+                    writeln!(f, "   {MAX_DEBUG_EVENTS:?}: ... elided ...")?;
                 }
             }
         }
-        writeln!(f, "")?;
+        writeln!(f)?;
         writeln!(f, "Backtrace (newest first):")?;
-        writeln!(f, "{:?}", bt)
+        writeln!(f, "{bt:?}")
     }
 }
 

@@ -83,7 +83,7 @@ pub fn receive_balance(e: &Host, addr: Address, amount: i128) -> Result<(), Host
                 BalanceValue {
                     amount: 0,
                     authorized: true,
-                    clawback: is_asset_clawback_enabled(&e)?,
+                    clawback: is_asset_clawback_enabled(e)?,
                 }
             };
 
@@ -112,7 +112,7 @@ pub fn spend_balance_no_authorization_check(
                     "spent amount is too large for an i64",
                 )
             })?;
-            transfer_classic_balance(e, acc_id, -(i64_amount as i64))
+            transfer_classic_balance(e, acc_id, -i64_amount)
         }
         ScAddress::Contract(_) => {
             // If a balance exists, calculate new amount and write the existing authorized state as is because
@@ -128,15 +128,14 @@ pub fn spend_balance_no_authorization_check(
                         balance,
                         amount
                     ));
-                } else {
-                    let new_balance = balance
-                        .amount
-                        .checked_sub(amount)
-                        .ok_or_else(|| e.err_status(ContractError::OverflowError))?;
-                    balance.amount = new_balance;
-
-                    write_balance(e, addr, balance)?
                 }
+                let new_balance = balance
+                    .amount
+                    .checked_sub(amount)
+                    .ok_or_else(|| e.err_status(ContractError::OverflowError))?;
+                balance.amount = new_balance;
+
+                write_balance(e, addr, balance)?;
             } else if amount > 0 {
                 return Err(err!(
                     e,
@@ -194,7 +193,7 @@ pub fn write_authorization(e: &Host, addr: Address, authorize: bool) -> Result<(
                 let balance = BalanceValue {
                     amount: 0,
                     authorized: authorize,
-                    clawback: is_asset_clawback_enabled(&e)?,
+                    clawback: is_asset_clawback_enabled(e)?,
                 };
                 write_balance(e, addr, balance)
             }
@@ -223,12 +222,10 @@ pub fn check_clawbackable(e: &Host, addr: Address) -> Result<(), HostError> {
 
     match addr.to_sc_address()? {
         ScAddress::Account(acc_id) => match read_metadata(e)? {
-            Metadata::Native => {
-                return Err(e.err_status_msg(
-                    ContractError::OperationNotSupportedError,
-                    "cannot clawback native asset",
-                ))
-            }
+            Metadata::Native => Err(e.err_status_msg(
+                ContractError::OperationNotSupportedError,
+                "cannot clawback native asset",
+            )),
             Metadata::AlphaNum4(asset) => {
                 let issuer_account_id = e.account_id_from_bytesobj(asset.issuer.into())?;
                 validate_trustline(
@@ -287,7 +284,7 @@ pub fn transfer_classic_balance(e: &Host, to_key: AccountId, amount: i64) -> Res
                 e.create_asset_4(asset.asset_code.to_array()?, issuer_account_id.clone()),
                 issuer_account_id,
                 to_key,
-            )?
+            )?;
         }
         Metadata::AlphaNum12(asset) => {
             let issuer_account_id = e.account_id_from_bytesobj(asset.issuer.into())?;
@@ -295,7 +292,7 @@ pub fn transfer_classic_balance(e: &Host, to_key: AccountId, amount: i64) -> Res
                 e.create_asset_12(asset.asset_code.to_array()?, issuer_account_id.clone()),
                 issuer_account_id,
                 to_key,
-            )?
+            )?;
         }
     };
     Ok(())
@@ -339,7 +336,7 @@ fn get_classic_balance(e: &Host, to_key: AccountId) -> Result<(i64, i64), HostEr
 
 // Metering: *mostly* covered by components. The arithmetics are free.
 fn transfer_account_balance(e: &Host, account_id: AccountId, amount: i64) -> Result<(), HostError> {
-    let lk = e.to_account_key(account_id.clone());
+    let lk = e.to_account_key(account_id);
 
     e.with_mut_storage(|storage| {
         let mut le = storage
@@ -353,9 +350,7 @@ fn transfer_account_balance(e: &Host, account_id: AccountId, amount: i64) -> Res
 
         let (min_balance, max_balance) = get_min_max_account_balance(e, &ae)?;
 
-        let new_balance = if amount <= 0 {
-            ae.balance + amount
-        } else if ae.balance <= i64::MAX - amount {
+        let new_balance = if amount <= 0 || ae.balance <= i64::MAX - amount {
             ae.balance + amount
         } else {
             return Err(e.err_status_msg(ContractError::BalanceError, "resulting balance overflow"));
@@ -397,9 +392,7 @@ fn transfer_trustline_balance(
 
         let (min_balance, max_balance) = get_min_max_trustline_balance(e, &tl)?;
 
-        let new_balance = if amount <= 0 {
-            tl.balance + amount
-        } else if tl.balance <= i64::MAX - amount {
+        let new_balance = if amount <= 0 || tl.balance <= i64::MAX - amount {
             tl.balance + amount
         } else {
             return Err(e.err_status_msg(ContractError::BalanceError, "resulting balance overflow"));
@@ -424,7 +417,7 @@ fn transfer_trustline_balance(
 // TODO: Metering analysis
 //returns (total balance, spendable balance)
 fn get_account_balance(e: &Host, account_id: AccountId) -> Result<(i64, i64), HostError> {
-    let lk = e.to_account_key(account_id.clone());
+    let lk = e.to_account_key(account_id);
 
     e.with_mut_storage(|storage| {
         let le = storage
@@ -436,7 +429,7 @@ fn get_account_balance(e: &Host, account_id: AccountId) -> Result<(i64, i64), Ho
             _ => Err(e.err_status_msg(ContractError::InternalError, "unexpected entry found")),
         }?;
 
-        let min = get_min_max_account_balance(e, &ae)?.0;
+        let min = get_min_max_account_balance(e, ae)?.0;
         if ae.balance < min {
             return Err(e.err_status_msg(
                 ContractError::InternalError,
@@ -596,7 +589,7 @@ fn set_authorization(e: &Host, to_key: AccountId, authorize: bool) -> Result<(),
                 ));
             }
 
-            let issuer_acc = e.load_account(issuer.clone())?;
+            let issuer_acc = e.load_account(issuer)?;
 
             if !authorize && (issuer_acc.flags & (AccountFlags::RevocableFlag as u32) == 0) {
                 return Err(e.err_status_msg(
@@ -609,12 +602,10 @@ fn set_authorization(e: &Host, to_key: AccountId, authorize: bool) -> Result<(),
         };
 
     match read_metadata(e)? {
-        Metadata::Native => {
-            return Err(e.err_status_msg(
-                ContractError::OperationNotSupportedError,
-                "expected trustline asset",
-            ))
-        }
+        Metadata::Native => Err(e.err_status_msg(
+            ContractError::OperationNotSupportedError,
+            "expected trustline asset",
+        )),
         Metadata::AlphaNum4(asset) => {
             let issuer_account_id = e.account_id_from_bytesobj(asset.issuer.into())?;
             set_trustline_authorization_safe(

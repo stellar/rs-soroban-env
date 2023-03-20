@@ -71,22 +71,25 @@ impl Compare<HostObject> for Host {
             // List out at least one side of all the remaining cases here so
             // we don't accidentally forget to update this when/if a new
             // HostObject type is added.
-            (U64(_), _)
-            | (TimePoint(_), _)
-            | (Duration(_), _)
-            | (I64(_), _)
-            | (U128(_), _)
-            | (I128(_), _)
-            | (U256(_), _)
-            | (I256(_), _)
-            | (Vec(_), _)
-            | (Map(_), _)
-            | (Bytes(_), _)
-            | (String(_), _)
-            | (Symbol(_), _)
-            | (ContractExecutable(_), _)
-            | (Address(_), _)
-            | (NonceKey(_), _) => {
+            (
+                U64(_)
+                | TimePoint(_)
+                | Duration(_)
+                | I64(_)
+                | U128(_)
+                | I128(_)
+                | U256(_)
+                | I256(_)
+                | Vec(_)
+                | Map(_)
+                | Bytes(_)
+                | String(_)
+                | Symbol(_)
+                | ContractExecutable(_)
+                | Address(_)
+                | NonceKey(_),
+                _,
+            ) => {
                 let a = host_obj_discriminant(a);
                 let b = host_obj_discriminant(b);
                 Ok(a.cmp(&b))
@@ -134,7 +137,7 @@ impl<T: Ord + DeclaredSizeForMetering> Compare<FixedSizeOrdType<'_, T>> for Budg
             CostType::BytesCmp,
             <T as DeclaredSizeForMetering>::DECLARED_SIZE,
         )?;
-        Ok(a.0.cmp(&b.0))
+        Ok(a.0.cmp(b.0))
     }
 }
 
@@ -244,7 +247,7 @@ impl Compare<ScVal> for Budget {
             (Vec(Some(a)), Vec(Some(b))) => self.compare(a, b),
             (Map(Some(a)), Map(Some(b))) => self.compare(a, b),
 
-            (Vec(None), _) | (_, Vec(None)) | (Map(None), _) | (_, Map(None)) => {
+            (Vec(None) | Map(None), _) | (_, Vec(None) | Map(None)) => {
                 Err(ScHostValErrorCode::MissingObject.into())
             }
 
@@ -260,28 +263,31 @@ impl Compare<ScVal> for Budget {
                 <Self as Compare<&[u8]>>::compare(self, &a.as_slice(), &b.as_slice())
             }
 
-            (Bool(_), _)
-            | (Void, _)
-            | (Status(_), _)
-            | (U32(_), _)
-            | (I32(_), _)
-            | (U64(_), _)
-            | (I64(_), _)
-            | (Timepoint(_), _)
-            | (Duration(_), _)
-            | (U128(_), _)
-            | (I128(_), _)
-            | (U256(_), _)
-            | (I256(_), _)
-            | (Bytes(_), _)
-            | (String(_), _)
-            | (Symbol(_), _)
-            | (Vec(_), _)
-            | (Map(_), _)
-            | (ContractExecutable(_), _)
-            | (Address(_), _)
-            | (LedgerKeyContractExecutable, _)
-            | (LedgerKeyNonce(_), _) => Ok(a.cmp(b)),
+            (
+                Bool(_)
+                | Void
+                | Status(_)
+                | U32(_)
+                | I32(_)
+                | U64(_)
+                | I64(_)
+                | Timepoint(_)
+                | Duration(_)
+                | U128(_)
+                | I128(_)
+                | U256(_)
+                | I256(_)
+                | Bytes(_)
+                | String(_)
+                | Symbol(_)
+                | Vec(_)
+                | Map(_)
+                | ContractExecutable(_)
+                | Address(_)
+                | LedgerKeyContractExecutable
+                | LedgerKeyNonce(_),
+                _,
+            ) => Ok(a.cmp(b)),
         }
     }
 }
@@ -307,15 +313,11 @@ impl Compare<LedgerKey> for Budget {
             // List out one side of each remaining unequal-discriminant case so
             // we remember to update this code if LedgerKey changes. We don't
             // charge for these since they're just 1-integer compares.
-            (Account(_), _)
-            | (Trustline(_), _)
-            | (Offer(_), _)
-            | (Data(_), _)
-            | (ClaimableBalance(_), _)
-            | (LiquidityPool(_), _)
-            | (ContractData(_), _)
-            | (ContractCode(_), _)
-            | (ConfigSetting(_), _) => Ok(a.cmp(b)),
+            (
+                Account(_) | Trustline(_) | Offer(_) | Data(_) | ClaimableBalance(_)
+                | LiquidityPool(_) | ContractData(_) | ContractCode(_) | ConfigSetting(_),
+                _,
+            ) => Ok(a.cmp(b)),
         }
     }
 }
@@ -350,15 +352,11 @@ impl Compare<LedgerEntryData> for Budget {
             (ContractCode(a), ContractCode(b)) => self.compare(&a, &b),
             (ConfigSetting(a), ConfigSetting(b)) => self.compare(&a, &b),
 
-            (Account(_), _)
-            | (Trustline(_), _)
-            | (Offer(_), _)
-            | (Data(_), _)
-            | (ClaimableBalance(_), _)
-            | (LiquidityPool(_), _)
-            | (ContractData(_), _)
-            | (ContractCode(_), _)
-            | (ConfigSetting(_), _) => Ok(a.cmp(b)),
+            (
+                Account(_) | Trustline(_) | Offer(_) | Data(_) | ClaimableBalance(_)
+                | LiquidityPool(_) | ContractData(_) | ContractCode(_) | ConfigSetting(_),
+                _,
+            ) => Ok(a.cmp(b)),
         }
     }
 }

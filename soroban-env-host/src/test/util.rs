@@ -108,7 +108,7 @@ impl Host {
     }
 
     pub(crate) fn test_scvec<T: AsScVal>(&self, vals: &[T]) -> Result<ScVec, HostError> {
-        let v: Vec<ScVal> = vals.iter().map(|x| x.as_scval()).collect();
+        let v: Vec<ScVal> = vals.iter().map(T::as_scval).collect();
         self.map_err(v.try_into())
     }
 

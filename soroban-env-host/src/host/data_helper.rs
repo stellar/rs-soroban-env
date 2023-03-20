@@ -245,9 +245,9 @@ impl Host {
                         // weight.
                         let weight = min(signer.weight, u8::MAX as u32);
                         // We've found the target signer in the account signers, so return the weight
-                        return Ok(weight
+                        return weight
                             .try_into()
-                            .map_err(|_| self.err_general("signer weight overflow"))?);
+                            .map_err(|_| self.err_general("signer weight overflow"));
                     }
                 }
             }

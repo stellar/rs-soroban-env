@@ -23,7 +23,7 @@ impl Host {
 
     // Notes on metering: free
     pub(crate) fn usize_to_u32val(&self, u: usize) -> Result<U32Val, HostError> {
-        self.usize_to_u32(u).map(|v| v.into())
+        self.usize_to_u32(u).map(Into::into)
     }
 
     // Notes on metering: free
@@ -254,7 +254,7 @@ impl Host {
     pub(crate) fn call_args_from_obj(&self, args: VecObject) -> Result<Vec<RawVal>, HostError> {
         self.visit_obj(args, |hv: &HostVec| {
             // Metering: free
-            Ok(hv.iter().cloned().collect())
+            Ok(hv.iter().copied().collect())
         })
     }
 
