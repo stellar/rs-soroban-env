@@ -22,8 +22,10 @@ pub(crate) struct MapEntryMeasure;
 impl HostCostMeasurement for MapEntryMeasure {
     type Runner = MapEntryRun;
 
+    const STEP_SIZE: u64 = 100;
+
     fn new_random_case(host: &Host, rng: &mut StdRng, input: u64) -> MapEntrySample {
-        let input = 1 + input * 100;
+        let input = 1 + input * Self::STEP_SIZE;
         let mut keys: Vec<_> = util::to_rawval_u32(0..(input as u32)).collect();
         let om = keys.iter().cloned().zip(keys.iter().cloned()).collect();
         let map: MeteredOrdMap<_, _, _> = MeteredOrdMap::from_map(om, host).unwrap();

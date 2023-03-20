@@ -404,7 +404,7 @@ pub(crate) struct WasmConstMeasure;
 impl HostCostMeasurement for WasmConstMeasure {
     type Runner = ConstRun;
     fn new_random_case(host: &Host, rng: &mut StdRng, step: u64) -> WasmInsnSample {
-        let insns = step * 1000;
+        let insns = 1 + step * Self::STEP_SIZE;
         let id: Hash = [0; 32].into();
         let module = push_const(insns, rng);
         let vm = Vm::new(&host, id, &module.wasm).unwrap();
@@ -440,7 +440,7 @@ macro_rules! impl_wasm_insn_measure {
                 // By default we like to scale the insn count so that the actual measured work
                 // averages out the overhead. If a scale factor is explictly passed in,
                 // then we grow/shrink it additionally.
-                let insns = step * 1000 $(* $grow / $shrink)?;
+                let insns = 1 + step * Self::STEP_SIZE $(* $grow / $shrink)?;
                 let id: Hash = [0; 32].into();
                 let module = $wasm_gen(insns, rng);
                 let vm = Vm::new(&host, id, &module.wasm).unwrap();
@@ -514,7 +514,7 @@ impl HostCostMeasurement for WasmInsnExecMeasure {
     type Runner = WasmInsnExecRun;
 
     fn new_random_case(host: &Host, _rng: &mut StdRng, step: u64) -> WasmInsnExecSample {
-        let insns = step * 1000;
+        let insns = 1 + step * Self::STEP_SIZE;
         let args = ScVec(vec![ScVal::U64(5)].try_into().unwrap());
         let id: Hash = [0; 32].into();
         let code = wasm_module_with_4n_insns(insns as usize);
@@ -530,13 +530,17 @@ pub(crate) struct WasmMemAllocMeasure;
 impl HostCostMeasurement for WasmMemAllocMeasure {
     type Runner = WasmMemAllocRun;
 
+    // The input unit is number of pages (64kb) so we don't scale the input further
+    const STEP_SIZE: u64 = 1;
+
     fn new_random_case(
         host: &Host,
         _rng: &mut StdRng,
         input: u64,
     ) -> <Self::Runner as soroban_env_host::cost_runner::CostRunner>::SampleType {
         let id: Hash = [0; 32].into();
-        let code = wasm_module_with_mem_grow(input as usize);
+        let pages = 1 + input * Self::STEP_SIZE;
+        let code = wasm_module_with_mem_grow(pages as usize);
         Vm::new(&host, id, &code).unwrap()
     }
 }

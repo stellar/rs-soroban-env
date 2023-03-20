@@ -12,6 +12,6 @@ impl HostCostMeasurement for HostMemAllocMeasure {
     fn new_random_case(_host: &Host, _rng: &mut StdRng, input: u64) -> u64 {
         // we just pass along the size and let the runner allocate the memory
         // of the given size
-        input * 1000
+        1 + input * Self::STEP_SIZE
     }
 }

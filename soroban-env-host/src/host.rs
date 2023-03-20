@@ -2707,7 +2707,7 @@ impl VmCallerEnv for Host {
         let vnew = self.visit_obj(b, move |hv: &ScBytes| {
             // we allocate the new vector to be able to hold `len + 1` bytes, so that the push
             // will not trigger a reallocation, causing data to be cloned twice.
-            let len = hv.len() + 1;
+            let len = hv.len().saturating_add(1);
             metered_clone::charge_heap_alloc::<u8>(len as u64, self.as_budget())?;
             metered_clone::charge_shallow_copy::<u8>(len as u64, self.as_budget())?;
             let mut vnew: Vec<u8> = Vec::with_capacity(len);
@@ -2775,7 +2775,7 @@ impl VmCallerEnv for Host {
             self.validate_index_le_bound(i, hv.len())?;
             // we allocate the new vector to be able to hold `len + 1` bytes, so that the push
             // will not trigger a reallocation, causing data to be cloned twice.
-            let len = hv.len() + 1;
+            let len = hv.len().saturating_add(1);
             metered_clone::charge_heap_alloc::<u8>(len as u64, self.as_budget())?;
             metered_clone::charge_shallow_copy::<u8>(len as u64, self.as_budget())?;
             let mut vnew: Vec<u8> = Vec::with_capacity(len);
@@ -2801,9 +2801,11 @@ impl VmCallerEnv for Host {
                         self.err_status_msg(ScHostFnErrorCode::InputArgsInvalid, "u32 overflow")
                     );
                 }
-                // we allocate large enough memory to hold the new combined vector, so that allocation
-                // only happens once, and charge for it upfront.
-                let len = sb1.len() + sb2.len();
+                // we allocate large enough memory to hold the new combined vector, so that
+                // allocation only happens once, and charge for it upfront.
+                // we already checked above that `len` will not overflow, here using
+                // saturating_add just in case.
+                let len = sb1.len().saturating_add(sb2.len());
                 metered_clone::charge_heap_alloc::<u8>(len as u64, self.as_budget())?;
                 metered_clone::charge_shallow_copy::<u8>(len as u64, self.as_budget())?;
                 let mut vnew: Vec<u8> = Vec::with_capacity(len);

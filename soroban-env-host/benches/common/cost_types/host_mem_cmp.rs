@@ -2,9 +2,8 @@ use crate::HostCostMeasurement;
 use rand::{rngs::StdRng, RngCore};
 use soroban_env_host::{cost_runner::*, Host};
 
-fn randvec(rng: &mut StdRng, input: u64) -> Vec<u8> {
-    let input = 1 + input * 1000;
-    let mut res: Vec<u8> = vec![0; input as usize];
+fn randvec(rng: &mut StdRng, len: u64) -> Vec<u8> {
+    let mut res: Vec<u8> = vec![0; len as usize];
     rng.fill_bytes(res.as_mut_slice());
     res
 }
@@ -18,8 +17,9 @@ impl HostCostMeasurement for HostMemCmpMeasure {
         rng: &mut StdRng,
         input: u64,
     ) -> <Self::Runner as CostRunner>::SampleType {
-        let a = randvec(rng, input);
-        let b = randvec(rng, input);
+        let len = 1 + input * Self::STEP_SIZE;
+        let a = randvec(rng, len);
+        let b = randvec(rng, len);
         (a, b)
     }
 
@@ -28,7 +28,8 @@ impl HostCostMeasurement for HostMemCmpMeasure {
         rng: &mut StdRng,
         input: u64,
     ) -> <Self::Runner as CostRunner>::SampleType {
-        let a = randvec(rng, input);
+        let len = 1 + input * Self::STEP_SIZE;
+        let a = randvec(rng, len);
         (a.clone(), a)
     }
 }

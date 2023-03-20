@@ -14,8 +14,10 @@ pub(crate) struct VerifyEd25519SigMeasure;
 impl HostCostMeasurement for VerifyEd25519SigMeasure {
     type Runner = VerifyEd25519SigRun;
 
+    const STEP_SIZE: u64 = 10000;
+
     fn new_random_case(_host: &Host, rng: &mut StdRng, input: u64) -> VerifyEd25519SigSample {
-        let size = input * 10000;
+        let size = 1 + input * Self::STEP_SIZE;
         let keypair: Keypair = Keypair::generate(rng);
         let key: PublicKey = keypair.public.clone();
         let msg: Vec<u8> = (0..size).map(|x| x as u8).collect();

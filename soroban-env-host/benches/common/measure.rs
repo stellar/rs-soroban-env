@@ -190,6 +190,9 @@ pub trait HostCostMeasurement: Sized {
     /// The type of host runner we're using. Uniquely identifies a `CostType`.
     type Runner: CostRunner;
 
+    /// Step size of the measurement to scale the input by.
+    const STEP_SIZE: u64 = 1000;
+
     /// Initialize a new instance of a HostMeasurement at a given input _hint_, for
     /// the run; the HostMeasurement can choose a precise input for a given hint
     /// and use it during `run`; the precise input will be extracted at the end
