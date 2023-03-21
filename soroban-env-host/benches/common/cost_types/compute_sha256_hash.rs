@@ -10,8 +10,10 @@ pub(crate) struct ComputeSha256HashMeasure;
 impl HostCostMeasurement for ComputeSha256HashMeasure {
     type Runner = ComputeSha256HashRun;
 
+    const STEP_SIZE: u64 = 100;
+
     fn new_random_case(_host: &Host, _rng: &mut StdRng, input: u64) -> Vec<u8> {
-        let size = input * 100;
+        let size = 1 + input * Self::STEP_SIZE;
         (0..size).map(|n| n as u8).collect()
     }
 }

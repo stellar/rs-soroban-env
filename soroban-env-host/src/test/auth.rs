@@ -9,6 +9,7 @@ use soroban_native_sdk_macros::contracttype;
 use soroban_test_wasms::AUTH_TEST_CONTRACT;
 
 use crate::auth::RecordedAuthPayload;
+use crate::budget::AsBudget;
 use crate::native_contract::base_types::BytesN;
 use crate::native_contract::testutils::{
     create_account, generate_keypair, sign_payload_for_account,
@@ -86,6 +87,9 @@ impl SignNode {
 impl AuthTest {
     fn setup(signer_cnt: usize, contract_cnt: usize) -> Self {
         let host = Host::test_host_with_recording_footprint();
+        // TODO: remove the `reset_unlimited` and instead reset inputs wherever appropriate
+        // to respect the budget limit.
+        host.as_budget().reset_unlimited();
         let mut accounts = vec![];
         for _ in 0..signer_cnt {
             accounts.push(generate_keypair());

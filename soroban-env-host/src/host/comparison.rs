@@ -99,7 +99,7 @@ impl Compare<&[u8]> for Budget {
     type Error = HostError;
 
     fn compare(&self, a: &&[u8], b: &&[u8]) -> Result<Ordering, Self::Error> {
-        self.charge(CostType::BytesCmp, min(a.len(), b.len()) as u64)?;
+        self.charge(CostType::HostMemCmp, min(a.len(), b.len()) as u64)?;
         Ok(a.cmp(b))
     }
 }
@@ -108,7 +108,7 @@ impl<const N: usize> Compare<[u8; N]> for Budget {
     type Error = HostError;
 
     fn compare(&self, a: &[u8; N], b: &[u8; N]) -> Result<Ordering, Self::Error> {
-        self.charge(CostType::BytesCmp, min(a.len(), b.len()) as u64)?;
+        self.charge(CostType::HostMemCmp, min(a.len(), b.len()) as u64)?;
         Ok(a.cmp(b))
     }
 }
@@ -131,7 +131,7 @@ impl<T: Ord + DeclaredSizeForMetering> Compare<FixedSizeOrdType<'_, T>> for Budg
         b: &FixedSizeOrdType<'_, T>,
     ) -> Result<Ordering, Self::Error> {
         self.charge(
-            CostType::BytesCmp,
+            CostType::HostMemCmp,
             <T as DeclaredSizeForMetering>::DECLARED_SIZE,
         )?;
         Ok(a.0.cmp(&b.0))
