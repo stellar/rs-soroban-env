@@ -87,7 +87,7 @@ impl SignNode {
 impl AuthTest {
     fn setup(signer_cnt: usize, contract_cnt: usize) -> Self {
         let host = Host::test_host_with_recording_footprint();
-        // FIXME: remove the `reset_unlimited` and instead reset inputs wherever appropriate
+        // TODO: remove the `reset_unlimited` and instead reset inputs wherever appropriate
         // to respect the budget limit.
         host.as_budget().reset_unlimited();
         let mut accounts = vec![];
