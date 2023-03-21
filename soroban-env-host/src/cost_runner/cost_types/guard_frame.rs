@@ -1,3 +1,7 @@
+use std::hint::black_box;
+
+use soroban_env_common::RawVal;
+
 use crate::{budget::CostType, cost_runner::CostRunner, host::Frame, xdr::Hash, Status, Symbol};
 
 pub struct GuardFrameRun;
@@ -7,10 +11,23 @@ impl CostRunner for GuardFrameRun {
 
     type SampleType = (Hash, Symbol);
 
-    fn run_iter(host: &crate::Host, _iter: u64, sample: Self::SampleType) {
-        host.with_frame(Frame::Token(sample.0, sample.1, vec![]), || {
-            Ok(Status::OK.to_raw())
-        })
-        .unwrap();
+    type RecycledType = Option<RawVal>;
+
+    fn run_iter(host: &crate::Host, _iter: u64, sample: Self::SampleType) -> Self::RecycledType {
+        let rv = black_box(
+            host.with_frame(Frame::Token(sample.0, sample.1, vec![]), || {
+                Ok(Status::OK.to_raw())
+            })
+            .unwrap(),
+        );
+        Some(rv)
+    }
+
+    fn run_baseline_iter(
+        _host: &crate::Host,
+        _iter: u64,
+        _sample: Self::SampleType,
+    ) -> Self::RecycledType {
+        black_box(None)
     }
 }

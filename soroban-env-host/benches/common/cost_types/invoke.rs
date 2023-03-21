@@ -51,7 +51,7 @@ impl HostCostMeasurement for InvokeHostFunctionMeasure {
     type Runner = InvokeHostFunctionRun;
 
     fn new_random_case(host: &Host, _rng: &mut StdRng, input: u64) -> Rc<Vm> {
-        let input = input * 1000;
+        let input = 1 + input * Self::STEP_SIZE;
         let id: Hash = [0; 32].into();
         let code = wasm_module_with_dummy_hostfn_invoke(input);
         Vm::new(&host, id, &code).unwrap()

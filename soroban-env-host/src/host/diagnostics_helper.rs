@@ -76,7 +76,7 @@ impl Host {
             self.record_system_debug_contract_event(
                 ContractEventType::Diagnostic,
                 calling_contract,
-                self.add_host_object(HostVec::from_vec(topics)?)?
+                self.add_host_object(HostVec::from_vec(topics, self.as_budget())?)?
                     .try_into()?,
                 self.vec_new_from_slice(args)?.into(),
             )
@@ -102,7 +102,7 @@ impl Host {
             self.record_system_debug_contract_event(
                 ContractEventType::Diagnostic,
                 Some(self.hash_to_bytesobj(contract_id)?),
-                self.add_host_object(HostVec::from_vec(topics)?)?
+                self.add_host_object(HostVec::from_vec(topics, self.as_budget())?)?
                     .try_into()?,
                 *res,
             )
