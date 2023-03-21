@@ -1222,6 +1222,11 @@ impl Host {
             .get_recorded_top_authorizations())
     }
 
+    #[cfg(any(test, feature = "testutils"))]
+    pub fn reset_temp_storage(&self) {
+        *self.0.temp_storage.borrow_mut() = Default::default();
+    }
+
     /// Records a `System` contract event. `topics` is expected to be a `SCVec`
     /// length <= 4 that cannot contain `Vec`, `Map`, or `Bytes` with length > 32
     /// On success, returns an `SCStatus::Ok`.
