@@ -197,16 +197,7 @@ impl Host {
         slices: &[&str],
         mut callback: impl FnMut(usize, &str) -> Result<(), HostError>,
     ) -> Result<(), HostError> {
-        // FIXME: this should be CostType::MemRead when we have that
-        self.charge_budget(
-            CostType::BytesCmp,
-            slices
-                .len()
-                .saturating_mul(2)
-                .saturating_mul(std::mem::size_of::<usize>()) as u64,
-        )?;
         for (i, slice) in slices.iter().enumerate() {
-            self.charge_budget(CostType::VmMemRead, slice.len() as u64)?;
             callback(i, *slice)?;
         }
         Ok(())
@@ -218,8 +209,7 @@ impl Host {
             // since copy_from_slice below will panic if there's a size mismatch.
             return Err(ScHostObjErrorCode::VecIndexOutOfBound.into());
         }
-        // FIXME: this should be CostType::HostMemCopy when we have that
-        self.charge_budget(CostType::BytesClone, dst.len() as u64)?;
+        self.charge_budget(CostType::HostMemCpy, dst.len() as u64)?;
         dst.copy_from_slice(src);
         Ok(())
     }
@@ -295,8 +285,7 @@ impl Host {
         // TODO: we currently grow the destination vec if it's not big enough,
         // make sure this is desirable behaviour.
         if obj_new.len() < obj_end {
-            // FIXME: this should be CostType::HostMemAlloc when we have that
-            self.charge_budget(CostType::BytesClone, (obj_end - obj_new.len()) as u64)?;
+            self.charge_budget(CostType::HostMemAlloc, (obj_end - obj_new.len()) as u64)?;
             obj_new.resize(obj_end, 0);
         }
         let obj_range = obj_pos as usize..obj_end;
@@ -350,11 +339,22 @@ impl Host {
         #[cfg(feature = "vm")]
         {
             let VmSlice { vm, pos, len } = self.decode_vmslice(lm_pos, len)?;
-            // FIXME: this should be CostType::HostMemAlloc when we have that
-            self.charge_budget(CostType::BytesClone, len as u64)?;
+            self.charge_budget(CostType::HostMemAlloc, len as u64)?;
             let mut vnew: Vec<u8> = vec![0; len as usize];
             self.metered_vm_read_bytes_from_linear_memory(vmcaller, &vm, pos, &mut vnew)?;
             self.add_host_object::<HOT>(vnew.try_into()?)
         }
+    }
+
+    // Test function for calibration purpose. The caller needs to ensure `src` and `dest` has
+    // the same length or else it panics.
+    #[cfg(any(test, feature = "testutils"))]
+    pub(crate) fn mem_copy_from_slice<T: Copy + super::declared_size::DeclaredSizeForMetering>(
+        &self,
+        src: &[T],
+        dest: &mut [T],
+    ) -> Result<(), HostError> {
+        self.charge_budget(CostType::HostMemCpy, src.len() as u64)?;
+        Ok(dest.copy_from_slice(src))
     }
 }

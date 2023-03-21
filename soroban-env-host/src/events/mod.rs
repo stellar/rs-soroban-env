@@ -2,7 +2,9 @@ mod debug;
 mod internal;
 
 pub use debug::{DebugArg, DebugError, DebugEvent};
-pub(crate) use internal::{InternalContractEvent, InternalEvent, InternalEventsBuffer};
+pub(crate) use internal::InternalEventsBuffer;
+// expose them as pub use for benches
+pub use internal::{InternalContractEvent, InternalEvent};
 
 /// The external representation of a host event.
 // TODO: optimize storage on this to use pools / bumpalo / etc.

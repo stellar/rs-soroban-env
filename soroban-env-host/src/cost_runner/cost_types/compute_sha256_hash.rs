@@ -1,17 +1,29 @@
+use std::hint::black_box;
+
 use crate::{budget::CostType, cost_runner::CostRunner};
-use sha2::{Digest, Sha256};
 
 pub struct ComputeSha256HashRun;
 
 impl CostRunner for ComputeSha256HashRun {
     const COST_TYPE: CostType = CostType::ComputeSha256Hash;
+
     type SampleType = Vec<u8>;
 
-    fn run_iter(_host: &crate::Host, _iter: u64, sample: Self::SampleType) {
-        Sha256::digest(sample).as_slice().to_vec();
+    type RecycledType = (Option<Vec<u8>>, Vec<u8>);
+
+    fn run_iter(host: &crate::Host, _iter: u64, sample: Self::SampleType) -> Self::RecycledType {
+        let hash = black_box(
+            host.sha256_hash_from_bytes(sample.as_slice())
+                .expect("sha256"),
+        );
+        (Some(hash), sample)
     }
 
-    fn get_total_input(_host: &crate::Host, sample: &Self::SampleType) -> u64 {
-        (sample.len() as u64) * Self::RUN_ITERATIONS
+    fn run_baseline_iter(
+        _host: &crate::Host,
+        _iter: u64,
+        sample: Self::SampleType,
+    ) -> Self::RecycledType {
+        black_box((None, sample))
     }
 }

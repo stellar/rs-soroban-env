@@ -22,3 +22,6 @@ regenerate-test-wasms:
 
 publish:
 	cargo workspaces publish --all --force '*' --from-git --yes
+
+publish-dry-run:
+	./publish-dry-run.sh

@@ -1,4 +1,3 @@
-use crate::budget::CostType;
 use crate::host::{Host, HostError};
 
 use core::cmp::Ordering;
@@ -171,7 +170,6 @@ impl<const N: usize> BytesN<N> {
     #[inline(always)]
     pub fn to_array(&self) -> Result<[u8; N], HostError> {
         let mut slice = [0_u8; N];
-        self.host.charge_budget(CostType::BytesClone, N as u64)?;
         self.host
             .bytes_copy_to_slice(self.object.into(), RawVal::U32_ZERO, &mut slice)?;
         Ok(slice)

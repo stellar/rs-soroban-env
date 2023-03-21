@@ -20,12 +20,11 @@ impl<A> MeteredVector<A>
 where
     A: MeteredClone,
 {
-    /// Covers the cost of allocating a new Vec<A> with size in number of elements.
-    fn charge_new(n_elts: u64, budget: &Budget) -> Result<(), HostError> {
-        budget.charge(
-            CostType::VecNew,
-            n_elts.saturating_mul(<A as DeclaredSizeForMetering>::DECLARED_SIZE),
-        )
+    // Covers the cost of creating `count` number of new `MeteredVector`s. This does not include
+    // the cost of any allocation, since it is assumed memory allocation is charged separately
+    // elsewhere.
+    fn charge_new(count: u64, budget: &Budget) -> Result<(), HostError> {
+        budget.charge(CostType::VecNew, count)
     }
 
     fn charge_access(&self, count: usize, budget: &Budget) -> Result<(), HostError> {
@@ -47,19 +46,30 @@ where
     A: MeteredClone,
 {
     pub fn new(budget: &Budget) -> Result<Self, HostError> {
-        Self::charge_new(0, budget)?;
-        Self::from_vec(Vec::new())
+        Self::from_vec(Vec::new(), budget)
+    }
+
+    // Constructs a new, empty `MeteredVector` with at least the specified capacity.
+    // This is purely used for the cost calibration of allocating host memory.
+    // Do *not* use it for construction, since `MeteredVector` is immutable,
+    // the allocation will be wasted.
+    #[cfg(any(test, feature = "testutils"))]
+    pub fn with_capacity(capacity: usize, budget: &Budget) -> Result<Self, HostError> {
+        super::metered_clone::charge_heap_alloc::<A>(capacity as u64, budget)?;
+        Self::from_vec(Vec::with_capacity(capacity), budget)
     }
 
     pub fn from_array(buf: &[A], budget: &Budget) -> Result<Self, HostError> {
         // we may temporarily go over budget here.
         let vec: Vec<A> = buf.into();
         vec.charge_deep_clone(budget)?;
-        Self::from_vec(buf.into())
+        Self::from_vec(vec, budget)
     }
 
-    pub fn from_vec(vec: Vec<A>) -> Result<Self, HostError> {
-        // No charge here: vector already allocated, charge happened in caller.
+    pub fn from_vec(vec: Vec<A>, budget: &Budget) -> Result<Self, HostError> {
+        // Only charge for the new vector, assuming allocation cost has been covered
+        // by the caller from the outside.
+        Self::charge_new(1, budget)?;
         Ok(Self { vec })
     }
 
@@ -82,7 +92,7 @@ where
             // the clone into one (when A::IS_SHALLOW==true).
             let vec: Vec<A> = iter.collect();
             vec.charge_deep_clone(budget)?;
-            Self::from_vec(vec)
+            Self::from_vec(vec, budget)
         } else {
             // TODO use a better error code for "unbounded input iterators"
             Err(ScHostFnErrorCode::UnknownError.into())
@@ -285,7 +295,7 @@ where
             }
         }
         vec.charge_deep_clone(budget)?;
-        Self::from_vec(vec)
+        Self::from_vec(vec, budget)
     }
 
     pub fn iter(&self) -> std::slice::Iter<'_, A> {

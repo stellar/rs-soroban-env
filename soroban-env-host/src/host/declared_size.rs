@@ -3,6 +3,7 @@ use std::rc::Rc;
 use crate::{
     events::{DebugArg, DebugEvent, HostEvent, InternalContractEvent, InternalEvent},
     host::Events,
+    host_object::HostObject,
     storage::AccessType,
     xdr::{
         AccountEntry, AccountId, BytesM, ClaimableBalanceEntry, ConfigSettingEntry,
@@ -93,6 +94,7 @@ impl_declared_size_type!(SymbolStr, SCSYMBOL_LIMIT);
 impl_declared_size_type!(SymbolSmallIter, 8);
 impl_declared_size_type!(U256, 32);
 impl_declared_size_type!(I256, 32);
+impl_declared_size_type!(HostObject, 48);
 // xdr types
 impl_declared_size_type!(TimePoint, 8);
 impl_declared_size_type!(Duration, 8);
@@ -190,13 +192,14 @@ mod test {
     #[allow(unused)]
     use super::*;
 
+    // This section is for outputting the actual size of types. They are for informational use.
+    // They might become outdated due to Rust type changes, and numbers may differ between
+    // platforms. Run `UPDATE_EXPECT=true cargo test` to update this.
+    #[ignore]
     #[test]
-    fn test_declared_size() {
+    fn test_expected_size() {
         use expect_test::expect;
         use std::mem::size_of;
-        // This section is for outputting the actual size of types. They are for informational use.
-        // They might become outdated due to Rust type changes. Run `UPDATE_EXPECT=true cargo test`
-        // to update this.
 
         // primitive types
         expect!["1"].assert_eq(size_of::<bool>().to_string().as_str());
@@ -254,6 +257,7 @@ mod test {
         expect!["8"].assert_eq(size_of::<SymbolSmallIter>().to_string().as_str());
         expect!["32"].assert_eq(size_of::<U256>().to_string().as_str());
         expect!["32"].assert_eq(size_of::<I256>().to_string().as_str());
+        expect!["48"].assert_eq(size_of::<HostObject>().to_string().as_str());
         // xdr types
         expect!["8"].assert_eq(size_of::<TimePoint>().to_string().as_str());
         expect!["8"].assert_eq(size_of::<Duration>().to_string().as_str());
@@ -306,133 +310,136 @@ mod test {
         expect!["24"].assert_eq(size_of::<StringM<10000>>().to_string().as_str());
         expect!["24"].assert_eq(size_of::<Vec<ScVal>>().to_string().as_str());
         expect!["8"].assert_eq(size_of::<Box<ScVal>>().to_string().as_str());
-        // For these below we don't reply on the size_of, since it is the lower bound
-        // of what we declared
-        // expect!["8"].assert_eq(size_of::<Rc<ScVal>>().to_string().as_str());
-        // expect!["40"].assert_eq(size_of::<Option<ScVal>>().to_string().as_str());
+        expect!["8"].assert_eq(size_of::<Rc<ScVal>>().to_string().as_str());
+        expect!["40"].assert_eq(size_of::<Option<ScVal>>().to_string().as_str());
+    }
 
-        // These are the actual tests.
-        // For any new type that impls `DeclaredSizeForMetering`, a new test case needs to be
-        // added below.
-        macro_rules! assert_mem_size_equals_declared_size {
+    // This is the actual test.
+    // For any new type that impls `DeclaredSizeForMetering`, a new test case needs to be
+    // added below.
+    #[test]
+    fn test_declared_size() {
+        use more_asserts as ma;
+        use std::mem::size_of;
+
+        macro_rules! assert_mem_size_le_declared_size {
             ($t:ty) => {
-                assert_eq!(
+                ma::assert_le!(
                     size_of::<$t>() as u64,
                     <$t as DeclaredSizeForMetering>::DECLARED_SIZE
                 );
             };
         }
         // primitive types
-        assert_mem_size_equals_declared_size!(bool);
-        assert_mem_size_equals_declared_size!(u8);
-        assert_mem_size_equals_declared_size!(u32);
-        assert_mem_size_equals_declared_size!(i32);
-        assert_mem_size_equals_declared_size!(u64);
-        assert_mem_size_equals_declared_size!(i64);
-        assert_mem_size_equals_declared_size!(u128);
-        assert_mem_size_equals_declared_size!(i128);
+        assert_mem_size_le_declared_size!(bool);
+        assert_mem_size_le_declared_size!(u8);
+        assert_mem_size_le_declared_size!(u32);
+        assert_mem_size_le_declared_size!(i32);
+        assert_mem_size_le_declared_size!(u64);
+        assert_mem_size_le_declared_size!(i64);
+        assert_mem_size_le_declared_size!(u128);
+        assert_mem_size_le_declared_size!(i128);
         // RawVal-wrapping types
-        assert_mem_size_equals_declared_size!(RawVal);
-        assert_mem_size_equals_declared_size!(Void);
-        assert_mem_size_equals_declared_size!(Bool);
-        assert_mem_size_equals_declared_size!(VecObject);
-        assert_mem_size_equals_declared_size!(MapObject);
-        assert_mem_size_equals_declared_size!(ContractExecutableObject);
-        assert_mem_size_equals_declared_size!(LedgerKeyNonceObject);
-        assert_mem_size_equals_declared_size!(AddressObject);
-        assert_mem_size_equals_declared_size!(BytesObject);
-        assert_mem_size_equals_declared_size!(U32Val);
-        assert_mem_size_equals_declared_size!(I32Val);
-        assert_mem_size_equals_declared_size!(U64Val);
-        assert_mem_size_equals_declared_size!(U64Small);
-        assert_mem_size_equals_declared_size!(U64Object);
-        assert_mem_size_equals_declared_size!(I64Val);
-        assert_mem_size_equals_declared_size!(I64Small);
-        assert_mem_size_equals_declared_size!(I64Object);
-        assert_mem_size_equals_declared_size!(TimepointVal);
-        assert_mem_size_equals_declared_size!(TimepointSmall);
-        assert_mem_size_equals_declared_size!(TimepointObject);
-        assert_mem_size_equals_declared_size!(DurationVal);
-        assert_mem_size_equals_declared_size!(DurationSmall);
-        assert_mem_size_equals_declared_size!(DurationObject);
-        assert_mem_size_equals_declared_size!(U128Val);
-        assert_mem_size_equals_declared_size!(U128Small);
-        assert_mem_size_equals_declared_size!(U128Object);
-        assert_mem_size_equals_declared_size!(I128Val);
-        assert_mem_size_equals_declared_size!(I128Small);
-        assert_mem_size_equals_declared_size!(I128Object);
-        assert_mem_size_equals_declared_size!(U256Val);
-        assert_mem_size_equals_declared_size!(U256Small);
-        assert_mem_size_equals_declared_size!(U256Object);
-        assert_mem_size_equals_declared_size!(I256Val);
-        assert_mem_size_equals_declared_size!(I256Small);
-        assert_mem_size_equals_declared_size!(I256Object);
-        assert_mem_size_equals_declared_size!(Object);
-        assert_mem_size_equals_declared_size!(Status);
-        assert_mem_size_equals_declared_size!(StringObject);
-        assert_mem_size_equals_declared_size!(Symbol);
-        assert_mem_size_equals_declared_size!(SymbolSmall);
-        assert_mem_size_equals_declared_size!(SymbolObject);
+        assert_mem_size_le_declared_size!(RawVal);
+        assert_mem_size_le_declared_size!(Void);
+        assert_mem_size_le_declared_size!(Bool);
+        assert_mem_size_le_declared_size!(VecObject);
+        assert_mem_size_le_declared_size!(MapObject);
+        assert_mem_size_le_declared_size!(ContractExecutableObject);
+        assert_mem_size_le_declared_size!(LedgerKeyNonceObject);
+        assert_mem_size_le_declared_size!(AddressObject);
+        assert_mem_size_le_declared_size!(BytesObject);
+        assert_mem_size_le_declared_size!(U32Val);
+        assert_mem_size_le_declared_size!(I32Val);
+        assert_mem_size_le_declared_size!(U64Val);
+        assert_mem_size_le_declared_size!(U64Small);
+        assert_mem_size_le_declared_size!(U64Object);
+        assert_mem_size_le_declared_size!(I64Val);
+        assert_mem_size_le_declared_size!(I64Small);
+        assert_mem_size_le_declared_size!(I64Object);
+        assert_mem_size_le_declared_size!(TimepointVal);
+        assert_mem_size_le_declared_size!(TimepointSmall);
+        assert_mem_size_le_declared_size!(TimepointObject);
+        assert_mem_size_le_declared_size!(DurationVal);
+        assert_mem_size_le_declared_size!(DurationSmall);
+        assert_mem_size_le_declared_size!(DurationObject);
+        assert_mem_size_le_declared_size!(U128Val);
+        assert_mem_size_le_declared_size!(U128Small);
+        assert_mem_size_le_declared_size!(U128Object);
+        assert_mem_size_le_declared_size!(I128Val);
+        assert_mem_size_le_declared_size!(I128Small);
+        assert_mem_size_le_declared_size!(I128Object);
+        assert_mem_size_le_declared_size!(U256Val);
+        assert_mem_size_le_declared_size!(U256Small);
+        assert_mem_size_le_declared_size!(U256Object);
+        assert_mem_size_le_declared_size!(I256Val);
+        assert_mem_size_le_declared_size!(I256Small);
+        assert_mem_size_le_declared_size!(I256Object);
+        assert_mem_size_le_declared_size!(Object);
+        assert_mem_size_le_declared_size!(Status);
+        assert_mem_size_le_declared_size!(StringObject);
+        assert_mem_size_le_declared_size!(Symbol);
+        assert_mem_size_le_declared_size!(SymbolSmall);
+        assert_mem_size_le_declared_size!(SymbolObject);
         // other common types
-        assert_mem_size_equals_declared_size!(SymbolStr);
-        assert_mem_size_equals_declared_size!(SymbolSmallIter);
-        assert_mem_size_equals_declared_size!(U256);
-        assert_mem_size_equals_declared_size!(I256);
+        assert_mem_size_le_declared_size!(SymbolStr);
+        assert_mem_size_le_declared_size!(SymbolSmallIter);
+        assert_mem_size_le_declared_size!(U256);
+        assert_mem_size_le_declared_size!(I256);
+        assert_mem_size_le_declared_size!(HostObject);
         // xdr types
-        assert_mem_size_equals_declared_size!(TimePoint);
-        assert_mem_size_equals_declared_size!(Duration);
-        assert_mem_size_equals_declared_size!(ScVal);
-        assert_mem_size_equals_declared_size!(ScValObject);
-        assert_mem_size_equals_declared_size!(ScMapEntry);
-        assert_mem_size_equals_declared_size!(ScVec);
-        assert_mem_size_equals_declared_size!(ScMap);
-        assert_mem_size_equals_declared_size!(Hash);
-        assert_mem_size_equals_declared_size!(Uint256);
-        assert_mem_size_equals_declared_size!(ScContractExecutable);
-        assert_mem_size_equals_declared_size!(AccountId);
-        assert_mem_size_equals_declared_size!(ScAddress);
-        assert_mem_size_equals_declared_size!(ScNonceKey);
-        assert_mem_size_equals_declared_size!(PublicKey);
-        assert_mem_size_equals_declared_size!(TrustLineAsset);
-        assert_mem_size_equals_declared_size!(LedgerKeyAccount);
-        assert_mem_size_equals_declared_size!(LedgerKeyTrustLine);
-        assert_mem_size_equals_declared_size!(LedgerKeyOffer);
-        assert_mem_size_equals_declared_size!(LedgerKeyData);
-        assert_mem_size_equals_declared_size!(LedgerKeyClaimableBalance);
-        assert_mem_size_equals_declared_size!(LedgerKeyLiquidityPool);
-        assert_mem_size_equals_declared_size!(LedgerKeyContractCode);
-        assert_mem_size_equals_declared_size!(LedgerKeyConfigSetting);
-        assert_mem_size_equals_declared_size!(LedgerEntryExt);
-        assert_mem_size_equals_declared_size!(AccountEntry);
-        assert_mem_size_equals_declared_size!(TrustLineEntry);
-        assert_mem_size_equals_declared_size!(OfferEntry);
-        assert_mem_size_equals_declared_size!(DataEntry);
-        assert_mem_size_equals_declared_size!(ClaimableBalanceEntry);
-        assert_mem_size_equals_declared_size!(LiquidityPoolEntry);
-        assert_mem_size_equals_declared_size!(ContractCodeEntry);
-        assert_mem_size_equals_declared_size!(ConfigSettingEntry);
-        assert_mem_size_equals_declared_size!(AccessType);
-        assert_mem_size_equals_declared_size!(DebugArg);
-        assert_mem_size_equals_declared_size!(InternalContractEvent);
-        assert_mem_size_equals_declared_size!(DebugEvent);
-        assert_mem_size_equals_declared_size!(ContractEvent);
-        assert_mem_size_equals_declared_size!(HostEvent);
-        assert_mem_size_equals_declared_size!(Events);
-        assert_mem_size_equals_declared_size!(InternalEvent);
-        assert_mem_size_equals_declared_size!(ScBytes);
-        assert_mem_size_equals_declared_size!(ScString);
-        assert_mem_size_equals_declared_size!(ScSymbol);
+        assert_mem_size_le_declared_size!(TimePoint);
+        assert_mem_size_le_declared_size!(Duration);
+        assert_mem_size_le_declared_size!(ScVal);
+        assert_mem_size_le_declared_size!(ScValObject);
+        assert_mem_size_le_declared_size!(ScMapEntry);
+        assert_mem_size_le_declared_size!(ScVec);
+        assert_mem_size_le_declared_size!(ScMap);
+        assert_mem_size_le_declared_size!(Hash);
+        assert_mem_size_le_declared_size!(Uint256);
+        assert_mem_size_le_declared_size!(ScContractExecutable);
+        assert_mem_size_le_declared_size!(AccountId);
+        assert_mem_size_le_declared_size!(ScAddress);
+        assert_mem_size_le_declared_size!(ScNonceKey);
+        assert_mem_size_le_declared_size!(PublicKey);
+        assert_mem_size_le_declared_size!(TrustLineAsset);
+        assert_mem_size_le_declared_size!(LedgerKeyAccount);
+        assert_mem_size_le_declared_size!(LedgerKeyTrustLine);
+        assert_mem_size_le_declared_size!(LedgerKeyOffer);
+        assert_mem_size_le_declared_size!(LedgerKeyData);
+        assert_mem_size_le_declared_size!(LedgerKeyClaimableBalance);
+        assert_mem_size_le_declared_size!(LedgerKeyLiquidityPool);
+        assert_mem_size_le_declared_size!(LedgerKeyContractCode);
+        assert_mem_size_le_declared_size!(LedgerKeyConfigSetting);
+        assert_mem_size_le_declared_size!(LedgerEntryExt);
+        assert_mem_size_le_declared_size!(AccountEntry);
+        assert_mem_size_le_declared_size!(TrustLineEntry);
+        assert_mem_size_le_declared_size!(OfferEntry);
+        assert_mem_size_le_declared_size!(DataEntry);
+        assert_mem_size_le_declared_size!(ClaimableBalanceEntry);
+        assert_mem_size_le_declared_size!(LiquidityPoolEntry);
+        assert_mem_size_le_declared_size!(ContractCodeEntry);
+        assert_mem_size_le_declared_size!(ConfigSettingEntry);
+        assert_mem_size_le_declared_size!(AccessType);
+        assert_mem_size_le_declared_size!(DebugArg);
+        assert_mem_size_le_declared_size!(InternalContractEvent);
+        assert_mem_size_le_declared_size!(DebugEvent);
+        assert_mem_size_le_declared_size!(ContractEvent);
+        assert_mem_size_le_declared_size!(HostEvent);
+        assert_mem_size_le_declared_size!(Events);
+        assert_mem_size_le_declared_size!(InternalEvent);
+        assert_mem_size_le_declared_size!(ScBytes);
+        assert_mem_size_le_declared_size!(ScString);
+        assert_mem_size_le_declared_size!(ScSymbol);
         // composite types
-        assert_mem_size_equals_declared_size!(&[ScVal]);
-        assert_mem_size_equals_declared_size!((RawVal, ScVal));
-        assert_mem_size_equals_declared_size!([ScVal; 5]);
-        assert_mem_size_equals_declared_size!(BytesM<10000>);
-        assert_mem_size_equals_declared_size!(StringM<10000>);
-        assert_mem_size_equals_declared_size!(Vec<ScVal>);
-        assert_mem_size_equals_declared_size!(Box<ScVal>);
-        // For these below we don't reply on the size_of, since it is the lower bound
-        // of what we declared
-        // assert_mem_size_equals_declared_size!(Option<ScVal>);
-        // assert_mem_size_equals_declared_size!(Rc<ScVal>);
+        assert_mem_size_le_declared_size!(&[ScVal]);
+        assert_mem_size_le_declared_size!((RawVal, ScVal));
+        assert_mem_size_le_declared_size!([ScVal; 5]);
+        assert_mem_size_le_declared_size!(BytesM<10000>);
+        assert_mem_size_le_declared_size!(StringM<10000>);
+        assert_mem_size_le_declared_size!(Vec<ScVal>);
+        assert_mem_size_le_declared_size!(Box<ScVal>);
+        assert_mem_size_le_declared_size!(Option<ScVal>);
+        assert_mem_size_le_declared_size!(Rc<ScVal>);
     }
 }
