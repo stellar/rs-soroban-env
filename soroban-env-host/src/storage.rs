@@ -13,7 +13,7 @@ use std::rc::Rc;
 use soroban_env_common::{Compare, RawVal};
 
 use crate::budget::Budget;
-use crate::xdr::{LedgerEntry, LedgerKey, ScHostStorageErrorCode, ScVal};
+use crate::xdr::{Hash, LedgerEntry, LedgerKey, ScHostStorageErrorCode, ScVal};
 use crate::Host;
 use crate::{host::metered_map::MeteredOrdMap, HostError};
 
@@ -24,7 +24,7 @@ pub type StorageMap = MeteredOrdMap<Rc<LedgerKey>, Option<Rc<LedgerEntry>>, Budg
 // This is used in `TempStorageMap` to make sure that we don't do expensive
 // value comparisons.
 pub type ShallowComparableRawVal = RawVal;
-pub type TempStorageMap = MeteredOrdMap<([u8; 32], ScVal), ShallowComparableRawVal, Budget>;
+pub type TempStorageMap = MeteredOrdMap<Rc<(Hash, ScVal)>, ShallowComparableRawVal, Budget>;
 
 /// A helper type used by [Footprint] to designate which ways
 /// a given [LedgerKey] is accessed, or is allowed to be accessed,
@@ -328,12 +328,7 @@ pub struct TempStorage {
 }
 
 impl TempStorage {
-    pub fn get(
-        &self,
-        contract_id: [u8; 32],
-        key: ScVal,
-        budget: &Budget,
-    ) -> Result<RawVal, HostError> {
+    pub fn get(&self, contract_id: Hash, key: ScVal, budget: &Budget) -> Result<RawVal, HostError> {
         match self.map.get(&(contract_id, key), budget)? {
             None => Err(ScHostStorageErrorCode::MissingKeyInGet.into()),
             Some(val) => Ok(*val),
@@ -342,22 +337,17 @@ impl TempStorage {
 
     pub fn put(
         &mut self,
-        contract_id: [u8; 32],
+        contract_id: Hash,
         key: ScVal,
         val: RawVal,
         budget: &Budget,
     ) -> Result<(), HostError> {
-        self.map = self.map.insert((contract_id, key), val, budget)?;
+        self.map = self.map.insert(Rc::new((contract_id, key)), val, budget)?;
         Ok(())
     }
 
-    pub fn del(
-        &mut self,
-        contract_id: [u8; 32],
-        key: ScVal,
-        budget: &Budget,
-    ) -> Result<(), HostError> {
-        match self.map.remove(&(contract_id, key), budget)? {
+    pub fn del(&mut self, contract_id: Hash, key: ScVal, budget: &Budget) -> Result<(), HostError> {
+        match self.map.remove(&Rc::new((contract_id, key)), budget)? {
             Some((new_self, _)) => {
                 self.map = new_self;
             }
@@ -368,11 +358,11 @@ impl TempStorage {
 
     pub fn has(
         &mut self,
-        contract_id: [u8; 32],
+        contract_id: Hash,
         key: ScVal,
         budget: &Budget,
     ) -> Result<bool, HostError> {
-        self.map.contains_key(&(contract_id, key), budget)
+        self.map.contains_key(&Rc::new((contract_id, key)), budget)
     }
 }
 

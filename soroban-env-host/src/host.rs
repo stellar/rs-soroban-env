@@ -2397,7 +2397,7 @@ impl VmCallerEnv for Host {
     ) -> Result<Void, HostError> {
         let key = self.from_host_val(k)?;
         self.0.temp_storage.borrow_mut().put(
-            self.get_current_contract_id_internal()?.0,
+            self.get_current_contract_id_internal()?,
             key,
             v,
             self.as_budget(),
@@ -2413,7 +2413,7 @@ impl VmCallerEnv for Host {
     ) -> Result<Bool, HostError> {
         let key = self.from_host_val(k)?;
         let res = self.0.temp_storage.borrow_mut().has(
-            self.get_current_contract_id_internal()?.0,
+            self.get_current_contract_id_internal()?,
             key,
             self.as_budget(),
         )?;
@@ -2428,7 +2428,7 @@ impl VmCallerEnv for Host {
     ) -> Result<RawVal, HostError> {
         let key = self.from_host_val(k)?;
         self.0.temp_storage.borrow_mut().get(
-            self.get_current_contract_id_internal()?.0,
+            self.get_current_contract_id_internal()?,
             key,
             self.as_budget(),
         )
@@ -2442,7 +2442,7 @@ impl VmCallerEnv for Host {
     ) -> Result<Void, HostError> {
         let key = self.from_host_val(k)?;
         self.0.temp_storage.borrow_mut().del(
-            self.get_current_contract_id_internal()?.0,
+            self.get_current_contract_id_internal()?,
             key,
             self.as_budget(),
         )?;
