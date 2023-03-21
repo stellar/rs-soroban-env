@@ -321,7 +321,7 @@ impl Compare<ShallowComparableRawVal> for Budget {
 ///
 /// Semantically, this is similar to the `Storage`, but it is never persisted
 /// and hence doesn't need to support the footprints and convert keys to the
-/// ledger-compatibile types.
+/// ledger-compatible types.
 #[derive(Clone, Default)]
 pub struct TempStorage {
     pub map: TempStorageMap,
