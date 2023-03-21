@@ -1,12 +1,10 @@
-use soroban_env_common::xdr::ScSymbol;
-
 use crate::{
     budget::CostType,
     cost_runner::CostRunner,
     xdr::{ScVal, ScVec},
-    Symbol, Vm,
+    RawVal, Symbol, Vm,
 };
-use std::rc::Rc;
+use std::{hint::black_box, rc::Rc};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 /// This is a subset of WASM instructions we are interested in for calibration.
@@ -137,18 +135,27 @@ pub struct WasmInsnExecSample {
 pub struct WasmInsnExecRun;
 impl CostRunner for WasmInsnExecRun {
     const COST_TYPE: CostType = CostType::WasmInsnExec;
+
     type SampleType = WasmInsnExecSample;
 
-    fn run_iter(host: &crate::Host, _iter: u64, sample: Self::SampleType) {
-        let scval = sample
-            .vm
-            .invoke_function(host, "test", &sample.args)
-            .unwrap();
-        assert_eq!(scval, ScVal::Symbol(ScSymbol("pass".try_into().unwrap())));
+    type RecycledType = (Option<ScVal>, Self::SampleType);
+
+    fn run_iter(host: &crate::Host, _iter: u64, sample: Self::SampleType) -> Self::RecycledType {
+        let scval = black_box(
+            sample
+                .vm
+                .invoke_function(host, "test", &sample.args)
+                .unwrap(),
+        );
+        (Some(scval), sample)
     }
 
-    fn get_total_input(_host: &crate::Host, sample: &Self::SampleType) -> u64 {
-        sample.insns * 4 // TODO: avoid magic number
+    fn run_baseline_iter(
+        _host: &crate::Host,
+        _iter: u64,
+        sample: Self::SampleType,
+    ) -> Self::RecycledType {
+        black_box((None, sample))
     }
 }
 
@@ -163,10 +170,21 @@ impl CostRunner for WasmMemAllocRun {
 
     const RUN_ITERATIONS: u64 = 1;
 
-    type SampleType = (Rc<Vm>, usize);
+    type SampleType = Rc<Vm>;
 
-    fn run_iter(host: &crate::Host, _iter: u64, sample: Self::SampleType) {
-        sample.0.invoke_function_raw(host, &TEST_SYM, &[]).unwrap();
+    type RecycledType = (Option<RawVal>, Self::SampleType);
+
+    fn run_iter(host: &crate::Host, _iter: u64, sample: Self::SampleType) -> Self::RecycledType {
+        let rv = black_box(sample.invoke_function_raw(host, &TEST_SYM, &[]).unwrap());
+        (Some(rv), sample)
+    }
+
+    fn run_baseline_iter(
+        _host: &crate::Host,
+        _iter: u64,
+        sample: Self::SampleType,
+    ) -> Self::RecycledType {
+        black_box((None, sample))
     }
 }
 
@@ -179,18 +197,36 @@ macro_rules! impl_wasm_insn_runner {
         }
 
         impl CostRunner for $runner {
-            type SampleType = WasmInsnSample;
             const COST_TYPE: CostType = CostType::WasmInsnExec;
+            type SampleType = WasmInsnSample;
+            type RecycledType = (Option<RawVal>, Self::SampleType);
 
-            fn run_iter(host: &crate::Host, _iter: u64, sample: WasmInsnSample) {
-                sample
-                    .vm
-                    .invoke_function_raw(host, &TEST_SYM, &[])
-                    .unwrap_or_default();
+            fn run_iter(
+                host: &crate::Host,
+                _iter: u64,
+                sample: Self::SampleType,
+            ) -> Self::RecycledType {
+                let rv = black_box(
+                    sample
+                        .vm
+                        .invoke_function_raw(host, &TEST_SYM, &[])
+                        .unwrap_or_default(),
+                );
+                (Some(rv), sample)
             }
 
-            fn get_total_input(_host: &crate::Host, sample: &WasmInsnSample) -> u64 {
-                sample.insns * Self::RUN_ITERATIONS
+            fn run_baseline_iter(
+                host: &crate::Host,
+                _iter: u64,
+                base_sample: Self::SampleType,
+            ) -> Self::RecycledType {
+                let rv = black_box(
+                    base_sample
+                        .vm
+                        .invoke_function_raw(host, &TEST_SYM, &[])
+                        .unwrap_or_default(),
+                );
+                (Some(rv), base_sample)
             }
         }
     };

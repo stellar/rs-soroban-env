@@ -4,7 +4,7 @@ use soroban_env_common::{
 };
 
 use crate::{
-    events::{DebugArg, HostEvent},
+    events::{DebugArg, Event},
     vm::Vm,
     xdr::{Hash, ScHostObjErrorCode, ScStatusType, ScVal, ScVec},
     Env, Host, HostError, Status, Symbol, Tag,
@@ -35,9 +35,12 @@ fn invoke_single_contract_function() -> Result<(), HostError> {
     Ok(())
 }
 
-#[test]
-fn invoke_cross_contract() -> Result<(), HostError> {
+fn invoke_cross_contract(diagnostics: bool) -> Result<(), HostError> {
     let host = Host::test_host_with_recording_footprint();
+    if diagnostics {
+        host.set_diagnostic_level(crate::DiagnosticLevel::Debug);
+    }
+
     let id_obj = host.register_test_contract_wasm(ADD_I32)?;
     // prepare arguments
     let sym = Symbol::try_from_small_str("add").unwrap();
@@ -48,6 +51,16 @@ fn invoke_cross_contract() -> Result<(), HostError> {
     let i: i32 = res.try_into()?;
     assert_eq!(i, 3);
     Ok(())
+}
+
+#[test]
+fn invoke_cross_contract_without_diagnostics() -> Result<(), HostError> {
+    invoke_cross_contract(false)
+}
+
+#[test]
+fn invoke_cross_contract_with_diagnostics() -> Result<(), HostError> {
+    invoke_cross_contract(true)
 }
 
 #[test]
@@ -64,11 +77,11 @@ fn invoke_cross_contract_with_err() -> Result<(), HostError> {
     let exp_st: Status = code.into();
     assert_eq!(sv.get_payload(), exp_st.to_raw().get_payload());
 
-    let events = host.get_events()?;
-    assert_eq!(events.0.len(), 4);
-    let last_event = events.0.last();
-    match last_event {
-        Some(HostEvent::Debug(de)) => {
+    let events = host.get_events()?.0;
+    assert_eq!(events.len(), 4);
+    let last_event = events.last().unwrap();
+    match &last_event.event {
+        Event::Debug(de) => {
             assert_eq!(
                 de.msg,
                 Some("contract call invocation resulted in error {}".into())
@@ -96,11 +109,11 @@ fn invoke_cross_contract_with_err() -> Result<(), HostError> {
     let res = host.call(id_obj, sym.into(), args.into());
     assert!(HostError::result_matches_err_status(res, code));
 
-    let events = host.get_events()?;
-    assert_eq!(events.0.len(), 8);
-    let last_event = events.0.last();
-    match last_event {
-        Some(HostEvent::Debug(de)) => {
+    let events = host.get_events()?.0;
+    assert_eq!(events.len(), 8);
+    let last_event = events.last().unwrap();
+    match &last_event.event {
+        Event::Debug(de) => {
             assert_eq!(
                 de.msg,
                 Some("contract call invocation resulted in error {}".into())
@@ -158,11 +171,11 @@ fn invoke_cross_contract_indirect_err() -> Result<(), HostError> {
     let exp: Status = code.into();
     assert_eq!(status.get_payload(), exp.to_raw().get_payload());
 
-    let events = host.get_events()?;
-    assert_eq!(events.0.len(), 9);
-    let last_event = events.0.last();
-    match last_event {
-        Some(HostEvent::Debug(de)) => {
+    let events = host.get_events()?.0;
+    assert_eq!(events.len(), 7);
+    let last_event = events.last().unwrap();
+    match &last_event.event {
+        Event::Debug(de) => {
             assert_eq!(
                 de.msg,
                 Some("contract call invocation resulted in error {}".into())
@@ -190,11 +203,11 @@ fn invoke_cross_contract_indirect_err() -> Result<(), HostError> {
     let res = host.call(id0_obj, sym.into(), args.clone().into());
     assert!(HostError::result_matches_err_status(res, code));
 
-    let events = host.get_events()?;
-    assert_eq!(events.0.len(), 18);
-    let last_event = events.0.last();
-    match last_event {
-        Some(HostEvent::Debug(de)) => {
+    let events = host.get_events()?.0;
+    assert_eq!(events.len(), 14);
+    let last_event = events.last().unwrap();
+    match &last_event.event {
+        Event::Debug(de) => {
             assert_eq!(
                 de.msg,
                 Some("contract call invocation resulted in error {}".into())

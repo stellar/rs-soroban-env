@@ -1,3 +1,5 @@
+use std::hint::black_box;
+
 use crate::{budget::CostType, Host};
 /// `CostRunner` is an interface to running a host cost entity of a `CostType` (usually a block of
 /// WASM bytecode or a host function), given a sample of `SampleType`.
@@ -13,16 +15,46 @@ pub trait CostRunner: Sized {
     /// Data type of the sample running with.
     type SampleType: Clone;
 
+    /// Data type to be recycled, this may include (but not limited to) the returned value and
+    /// unused samples. The main reason for recycling are 1. avoid unwanted memory deallocation
+    /// being counted as part of the run cost 2. prevent the optimizer from performing optimization
+    /// around unused value, making the bench deviate from the real case.
+    type RecycledType;
+
+    fn run_baseline_iter(_host: &Host, _iter: u64, sample: Self::SampleType) -> Self::RecycledType;
+
     /// Run a iteration of the `CostRunner`, called by `run` for 0..RUN_ITERATIONS.
-    fn run_iter(host: &Host, iter: u64, sample: Self::SampleType);
+    /// Execution under `run_iter` is what's actually being measured by the bench
+    /// machineary. Need to ensure as much as possible `run_iter` only calls essential
+    /// host routines that go into the measurement. Any input setup needs to be done
+    /// beforehand and passed in via `sample`.
+    fn run_iter(host: &Host, iter: u64, sample: Self::SampleType) -> Self::RecycledType;
+
+    /// Make sure `recycled` has been initialized with sufficient capacity needed to
+    /// store all the recycled value such that no allocation is triggered that will
+    /// polute the measurements.
+    fn run_baseline(
+        host: &Host,
+        samples: Vec<Self::SampleType>,
+        recycled: &mut Vec<Self::RecycledType>,
+    ) {
+        for (i, sample) in samples.into_iter().enumerate() {
+            // use `black_box` to prevent unwanted optimization
+            black_box(recycled.push(Self::run_baseline_iter(host, i as u64, sample)))
+        }
+    }
 
     /// Run the `CostRunner`. This method is called under CPU-and-memory tracking
     /// machinery, so anything that happens during it will be considered part of
     /// the cost for running the HostMeasurement at the returned input. Will call
     /// `run_iter` with iter set to each number in 0..RUN_ITERATIONS.
-    fn run(host: &Host, samples: Vec<Self::SampleType>) {
-        for (iter, sample) in samples.into_iter().enumerate() {
-            Self::run_iter(host, iter as u64, sample)
+    /// Make sure `recycled` has been initialized with sufficient capacity to store
+    /// all the recycled value such that no allocation is triggered that will polute
+    /// the measurements.
+    fn run(host: &Host, samples: Vec<Self::SampleType>, recycled: &mut Vec<Self::RecycledType>) {
+        for (i, sample) in samples.into_iter().enumerate() {
+            // use `black_box` to prevent unwanted optimization
+            black_box(recycled.push(Self::run_iter(host, i as u64, sample)))
         }
     }
 
@@ -31,7 +63,7 @@ pub trait CostRunner: Sized {
     /// a risk of the computed input being diverged from the actual input from the host's
     /// perspective. So use it carefully. This should be after the `run`, outside of the
     /// CPU-and-memory tracking machineary.
-    fn get_total_input(host: &Host, _sample: &Self::SampleType) -> u64 {
+    fn get_total_input(host: &Host) -> u64 {
         host.0.budget.get_input(Self::COST_TYPE)
     }
 }

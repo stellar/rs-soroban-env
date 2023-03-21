@@ -39,6 +39,8 @@ use crate::{EnvBase, Object, RawVal, Symbol};
 pub(crate) mod comparison;
 mod conversion;
 mod data_helper;
+pub(crate) mod declared_size;
+mod diagnostics_helper;
 mod err_helper;
 mod error;
 pub(crate) mod invoker_type;
@@ -60,7 +62,6 @@ use crate::Compare;
 #[derive(Clone)]
 struct RollbackPoint {
     storage: StorageMap,
-    objects: usize,
     events: usize,
     auth: Option<AuthorizationManagerSnapshot>,
 }
@@ -141,6 +142,18 @@ pub struct LedgerInfo {
     pub base_reserve: u32,
 }
 
+#[derive(Clone)]
+pub enum DiagnosticLevel {
+    None,
+    Debug,
+}
+
+impl Default for DiagnosticLevel {
+    fn default() -> Self {
+        DiagnosticLevel::None
+    }
+}
+
 #[derive(Clone, Default)]
 pub(crate) struct HostImpl {
     source_account: RefCell<Option<AccountId>>,
@@ -155,6 +168,7 @@ pub(crate) struct HostImpl {
     pub(crate) budget: Budget,
     pub(crate) events: RefCell<InternalEventsBuffer>,
     authorization_manager: RefCell<AuthorizationManager>,
+    diagnostic_level: RefCell<DiagnosticLevel>,
     // Note: we're not going to charge metering for testutils because it's out of the scope
     // of what users will be charged for in production -- it's scaffolding for testing a contract,
     // but shouldn't be charged to the contract itself (and will never be compiled-in to
@@ -230,6 +244,7 @@ impl Host {
             authorization_manager: RefCell::new(
                 AuthorizationManager::new_enforcing_without_authorizations(budget),
             ),
+            diagnostic_level: Default::default(),
             #[cfg(any(test, feature = "testutils"))]
             contracts: Default::default(),
             #[cfg(any(test, feature = "testutils"))]
@@ -308,6 +323,14 @@ impl Host {
 
     pub fn charge_budget(&self, ty: CostType, input: u64) -> Result<(), HostError> {
         self.0.budget.clone().charge(ty, input)
+    }
+
+    pub fn set_diagnostic_level(&self, diagnostic_level: DiagnosticLevel) {
+        *self.0.diagnostic_level.borrow_mut() = diagnostic_level;
+    }
+
+    pub fn is_debug(&self) -> bool {
+        matches!(*self.0.diagnostic_level.borrow(), DiagnosticLevel::Debug)
     }
 
     pub(crate) fn get_events_mut<F, U>(&self, f: F) -> Result<U, HostError>
@@ -407,7 +430,6 @@ impl Host {
 
         self.0.context.borrow_mut().push(frame);
         Ok(RollbackPoint {
-            objects: self.0.objects.borrow().len(),
             storage: self.0.storage.borrow().map.clone(),
             events: self.0.events.borrow().vec.len(),
             auth: auth_snapshot,
@@ -452,9 +474,8 @@ impl Host {
         }
 
         if let Some(rp) = orp {
-            self.0.objects.borrow_mut().truncate(rp.objects);
             self.0.storage.borrow_mut().map = rp.storage;
-            self.0.events.borrow_mut().rollback(rp.events, self)?;
+            self.0.events.borrow_mut().rollback(rp.events)?;
             if let Some(auth_rp) = rp.auth {
                 self.0.authorization_manager.borrow_mut().rollback(auth_rp);
             }
@@ -603,7 +624,7 @@ impl Host {
     }
 
     // Notes on metering: closure call needs to be metered separatedly. `VisitObject` only covers
-    /// the cost of visiting an object.
+    // the cost of visiting an object.
     pub(crate) unsafe fn unchecked_visit_val_obj<F, U>(
         &self,
         obj: impl Into<Object>,
@@ -620,7 +641,7 @@ impl Host {
     }
 
     // Notes on metering: object visiting part is covered by unchecked_visit_val_obj. Closure function
-    /// needs to be metered separately.
+    // needs to be metered separately.
     pub(crate) fn visit_obj<HOT: HostObjectType, F, U>(
         &self,
         obj: HOT::Wrapper,
@@ -681,10 +702,10 @@ impl Host {
                     }
                     Some(ho) => match ho {
                         HostObject::Vec(vv) => {
-                            // Here covers the cost of space allocating and maneuvering needed to go
-                            // from one structure to the other. The actual conversion work (heavy lifting)
-                            // is covered by `from_host_val`, which is recursive.
-                            self.charge_budget(CostType::ScVecFromHostVec, vv.len() as u64)?;
+                            metered_clone::charge_heap_alloc::<ScVal>(
+                                vv.len() as u64,
+                                self.as_budget(),
+                            )?;
                             let sv = vv.iter().map(|e| self.from_host_val(*e)).collect::<Result<
                                 Vec<ScVal>,
                                 HostError,
@@ -693,11 +714,11 @@ impl Host {
                             ScVal::Vec(Some(ScVec(self.map_err(sv.try_into())?)))
                         }
                         HostObject::Map(mm) => {
-                            // Here covers the cost of space allocating and maneuvering needed to go
-                            // from one structure to the other. The actual conversion work (heavy lifting)
-                            // is covered by `from_host_val`, which is recursive.
-                            self.charge_budget(CostType::ScMapFromHostMap, mm.len() as u64)?;
-                            let mut mv = Vec::new();
+                            metered_clone::charge_heap_alloc::<ScMapEntry>(
+                                mm.len() as u64,
+                                self.as_budget(),
+                            )?;
+                            let mut mv = Vec::with_capacity(mm.len());
                             for (k, v) in mm.iter(self)? {
                                 let key = self.from_host_val(*k)?;
                                 let val = self.from_host_val(*v)?;
@@ -707,8 +728,12 @@ impl Host {
                         }
                         HostObject::U64(u) => ScVal::U64(*u),
                         HostObject::I64(i) => ScVal::I64(*i),
-                        HostObject::TimePoint(tp) => ScVal::Timepoint(tp.clone()),
-                        HostObject::Duration(d) => ScVal::Duration(d.clone()),
+                        HostObject::TimePoint(tp) => {
+                            ScVal::Timepoint(tp.metered_clone(self.as_budget())?)
+                        }
+                        HostObject::Duration(d) => {
+                            ScVal::Duration(d.metered_clone(self.as_budget())?)
+                        }
                         HostObject::U128(u) => ScVal::U128(Int128Parts {
                             lo: *u as u64,
                             hi: (*u >> 64) as u64,
@@ -722,17 +747,17 @@ impl Host {
                         }
                         HostObject::U256(u) => ScVal::U256(Uint256(u.to_be_bytes())),
                         HostObject::I256(i) => ScVal::I256(Uint256(i.to_be_bytes())),
-                        HostObject::Bytes(b) => ScVal::Bytes(b.metered_clone(&self.0.budget)?),
-                        HostObject::String(s) => ScVal::String(s.metered_clone(&self.0.budget)?),
-                        HostObject::Symbol(s) => ScVal::Symbol(s.metered_clone(&self.0.budget)?),
+                        HostObject::Bytes(b) => ScVal::Bytes(b.metered_clone(self.as_budget())?),
+                        HostObject::String(s) => ScVal::String(s.metered_clone(self.as_budget())?),
+                        HostObject::Symbol(s) => ScVal::Symbol(s.metered_clone(self.as_budget())?),
                         HostObject::ContractExecutable(cc) => {
-                            ScVal::ContractExecutable(cc.metered_clone(&self.0.budget)?)
+                            ScVal::ContractExecutable(cc.metered_clone(self.as_budget())?)
                         }
                         HostObject::Address(addr) => {
-                            ScVal::Address(addr.metered_clone(&self.0.budget)?)
+                            ScVal::Address(addr.metered_clone(self.as_budget())?)
                         }
                         HostObject::NonceKey(nk) => {
-                            ScVal::LedgerKeyNonce(nk.metered_clone(&self.0.budget)?)
+                            ScVal::LedgerKeyNonce(nk.metered_clone(self.as_budget())?)
                         }
                     },
                 };
@@ -746,15 +771,20 @@ impl Host {
         let val: &ScVal = (*ob).into();
         match val {
             ScVal::Vec(Some(v)) => {
-                self.charge_budget(CostType::ScVecToHostVec, v.len() as u64)?;
+                metered_clone::charge_heap_alloc::<RawVal>(v.len() as u64, self.as_budget())?;
                 let mut vv = Vec::with_capacity(v.len());
                 for e in v.iter() {
                     vv.push(self.to_host_val(e)?)
                 }
-                Ok(self.add_host_object(HostVec::from_vec(vv)?)?.into())
+                Ok(self
+                    .add_host_object(HostVec::from_vec(vv, self.as_budget())?)?
+                    .into())
             }
             ScVal::Map(Some(m)) => {
-                self.charge_budget(CostType::ScMapToHostMap, m.len() as u64)?;
+                metered_clone::charge_heap_alloc::<(RawVal, RawVal)>(
+                    m.len() as u64,
+                    self.as_budget(),
+                )?;
                 let mut mm = Vec::with_capacity(m.len());
                 for pair in m.iter() {
                     let k = self.to_host_val(&pair.key)?;
@@ -768,8 +798,12 @@ impl Host {
             }
             ScVal::U64(u) => Ok(self.add_host_object(*u)?.into()),
             ScVal::I64(i) => Ok(self.add_host_object(*i)?.into()),
-            ScVal::Timepoint(t) => Ok(self.add_host_object(t.clone())?.into()),
-            ScVal::Duration(d) => Ok(self.add_host_object(d.clone())?.into()),
+            ScVal::Timepoint(t) => Ok(self
+                .add_host_object(t.metered_clone(self.as_budget())?)?
+                .into()),
+            ScVal::Duration(d) => Ok(self
+                .add_host_object(d.metered_clone(self.as_budget())?)?
+                .into()),
             ScVal::U128(u) => Ok(self
                 .add_host_object(u.lo as u128 | ((u.hi as u128) << 64))?
                 .into()),
@@ -777,28 +811,28 @@ impl Host {
                 .add_host_object((i.lo as u128 | ((i.hi as u128) << 64)) as i128)?
                 .into()),
             ScVal::U256(u) => Ok(self
-                .add_host_object(U256::from_be_bytes(u.0.clone()))?
+                .add_host_object(U256::from_be_bytes(u.0.metered_clone(self.as_budget())?))?
                 .into()),
             ScVal::I256(i) => Ok(self
-                .add_host_object(I256::from_be_bytes(i.0.clone()))?
+                .add_host_object(I256::from_be_bytes(i.0.metered_clone(self.as_budget())?))?
                 .into()),
             ScVal::Bytes(b) => Ok(self
-                .add_host_object(b.metered_clone(&self.0.budget)?)?
+                .add_host_object(b.metered_clone(self.as_budget())?)?
                 .into()),
             ScVal::String(s) => Ok(self
-                .add_host_object(s.metered_clone(&self.0.budget)?)?
+                .add_host_object(s.metered_clone(self.as_budget())?)?
                 .into()),
             ScVal::Symbol(s) => Ok(self
-                .add_host_object(s.metered_clone(&self.0.budget)?)?
+                .add_host_object(s.metered_clone(self.as_budget())?)?
                 .into()),
             ScVal::ContractExecutable(cc) => Ok(self
-                .add_host_object(cc.metered_clone(&self.0.budget)?)?
+                .add_host_object(cc.metered_clone(self.as_budget())?)?
                 .into()),
             ScVal::LedgerKeyNonce(_) => {
                 Err(self.err_general("nonce keys aren't allowed to be used directly"))
             }
             ScVal::Address(addr) => Ok(self
-                .add_host_object(addr.metered_clone(&self.0.budget)?)?
+                .add_host_object(addr.metered_clone(self.as_budget())?)?
                 .into()),
 
             ScVal::Bool(_)
@@ -812,20 +846,9 @@ impl Host {
         }
     }
 
-    pub(crate) fn charge_for_new_host_object(
-        &self,
-        prev_len: usize,
-        ho: HostObject,
-    ) -> Result<HostObject, HostError> {
-        self.charge_budget(CostType::HostObjAllocSlot, prev_len as u64)?;
-        Ok(ho)
-    }
-
     /// Moves a value of some type implementing [`HostObjectType`] into the host's
     /// object array, returning a [`HostObj`] containing the new object's array
     /// index, tagged with the [`xdr::ScObjectType`].
-    // Notes on metering: new object is charged by `charge_for_new_host_object`. The
-    // rest is free.
     pub(crate) fn add_host_object<HOT: HostObjectType>(
         &self,
         hot: HOT,
@@ -834,10 +857,10 @@ impl Host {
         if prev_len > u32::MAX as usize {
             return Err(self.err_status(ScHostObjErrorCode::ObjectCountExceedsU32Max));
         }
-        self.0
-            .objects
-            .borrow_mut()
-            .push(self.charge_for_new_host_object(prev_len, HOT::inject(hot))?);
+        // charge for the new host object, which is just the amortized cost of a single
+        // `HostObject` allocation
+        metered_clone::charge_heap_alloc::<HostObject>(1, self.as_budget())?;
+        self.0.objects.borrow_mut().push(HOT::inject(hot));
         let handle = prev_len as u32;
         Ok(HOT::new_from_handle(handle))
     }
@@ -1008,6 +1031,8 @@ impl Host {
             }
         }
 
+        self.fn_call_diagnostics(&id, &func, args)?;
+
         // "testutils" is not covered by budget metering.
         #[cfg(any(test, feature = "testutils"))]
         {
@@ -1047,7 +1072,10 @@ impl Host {
                     let closure = AssertUnwindSafe(move || cfs.call(&func, self, args));
                     let res: Result<Option<RawVal>, PanicVal> = testutils::call_with_suppressed_panic_hook(closure);
                     match res {
-                        Ok(Some(rawval)) => Ok(rawval),
+                        Ok(Some(rawval)) => {
+                            self.fn_return_diagnostics(id, &func, &rawval)?;
+                            Ok(rawval)
+                        },
                         Ok(None) => Err(self.err(
                             DebugError::general()
                                 .msg("error '{}': calling unknown contract function '{}'")
@@ -1087,7 +1115,14 @@ impl Host {
             }
         }
 
-        return self.call_contract_fn(&id, &func, args);
+        let res = self.call_contract_fn(&id, &func, args);
+
+        match &res {
+            Ok(res) => self.fn_return_diagnostics(id, &func, &res)?,
+            Err(err) => {}
+        }
+
+        return res;
     }
 
     // Notes on metering: covered by the called components.
@@ -1297,13 +1332,15 @@ impl Host {
         if let Ok(ss) = SymbolSmall::try_from(sym) {
             let sstr: SymbolStr = ss.into();
             let slice: &[u8] = sstr.as_ref();
-            self.charge_budget(CostType::BytesCmp, slice.len().min(s.len()) as u64)?;
-            Ok(slice.eq(s))
+            self.as_budget()
+                .compare(&slice, &s)
+                .map(|c| c == Ordering::Equal)
         } else {
             let sobj: SymbolObject = sym.try_into()?;
             self.visit_obj(sobj, |scsym: &ScSymbol| {
-                self.charge_budget(CostType::BytesCmp, scsym.len().min(s.len()) as u64)?;
-                Ok(scsym.as_slice().eq(s))
+                self.as_budget()
+                    .compare(&scsym.as_slice(), &s)
+                    .map(|c| c == Ordering::Equal)
             })
         }
     }
@@ -1639,14 +1676,14 @@ impl VmCallerEnv for Host {
                     // If the object is actually missing, it's less than any non-object.
                     None => Ok(Some(Ordering::Less)),
                     // If the object is present, try a small-value comparison.
-                    Some(aobj) => Ok(aobj.try_compare_to_small(b)),
+                    Some(aobj) => aobj.try_compare_to_small(self.as_budget(), b),
                 })?,
                 // Same as previous case, but reversed.
                 (Err(_), Ok(b)) => self.unchecked_visit_val_obj(b, |bo| match bo {
                     // So we reverse the relative order of the "missing object" case.
                     None => Ok(Some(Ordering::Greater)),
                     // And reverse the result of a successful small-value comparison.
-                    Some(bobj) => Ok(match bobj.try_compare_to_small(a) {
+                    Some(bobj) => Ok(match bobj.try_compare_to_small(self.as_budget(), a)? {
                         Some(Ordering::Less) => Some(Ordering::Greater),
                         Some(Ordering::Greater) => Some(Ordering::Less),
                         other => other,
@@ -2235,7 +2272,7 @@ impl VmCallerEnv for Host {
                 vals.as_mut_slice(),
                 |buf| RawVal::from_payload(u64::from_le_bytes(buf.clone())),
             )?;
-            self.add_host_object(HostVec::from_vec(vals)?)
+            self.add_host_object(HostVec::from_vec(vals, self.as_budget())?)
         }
     }
 
@@ -2618,7 +2655,11 @@ impl VmCallerEnv for Host {
         let vnew = self.visit_obj(b, move |hv: &ScBytes| {
             self.validate_index_lt_bound(i, hv.len())?;
             let mut vnew: Vec<u8> = hv.metered_clone(&self.0.budget)?.into();
-            self.charge_budget(CostType::BytesDel, hv.len() as u64)?; // O(n) worst case
+            // len > i has been verified above but use saturating_sub just in case
+            let n_elts = (hv.len() as u64).saturating_sub(i as u64);
+            // remove elements incurs the cost of moving bytes, it does not incur
+            // allocation/deallocation
+            metered_clone::charge_shallow_copy::<u8>(n_elts, self.as_budget())?;
             vnew.remove(i as usize);
             Ok(ScBytes(vnew.try_into()?))
         })?;
@@ -2664,9 +2705,13 @@ impl VmCallerEnv for Host {
     ) -> Result<BytesObject, HostError> {
         let u = self.u8_from_u32val_input("u", u)?;
         let vnew = self.visit_obj(b, move |hv: &ScBytes| {
-            let mut vnew: Vec<u8> = hv.metered_clone(&self.0.budget)?.into();
-            // Passing `len()` since worse case can cause reallocation.
-            self.charge_budget(CostType::BytesPush, hv.len() as u64)?;
+            // we allocate the new vector to be able to hold `len + 1` bytes, so that the push
+            // will not trigger a reallocation, causing data to be cloned twice.
+            let len = hv.len().saturating_add(1);
+            metered_clone::charge_heap_alloc::<u8>(len as u64, self.as_budget())?;
+            metered_clone::charge_shallow_copy::<u8>(len as u64, self.as_budget())?;
+            let mut vnew: Vec<u8> = Vec::with_capacity(len);
+            vnew.extend_from_slice(hv.as_slice());
             vnew.push(u);
             Ok(ScBytes(vnew.try_into()?))
         })?;
@@ -2680,9 +2725,9 @@ impl VmCallerEnv for Host {
         b: BytesObject,
     ) -> Result<BytesObject, HostError> {
         let vnew = self.visit_obj(b, move |hv: &ScBytes| {
-            let mut vnew: Vec<u8> = hv.metered_clone(&self.0.budget)?.into();
-            // Passing `len()` since worse case can cause reallocation.
-            self.charge_budget(CostType::BytesPop, hv.len() as u64)?;
+            let mut vnew: Vec<u8> = hv.metered_clone(self.as_budget())?.into();
+            // Popping will not trigger reallocation. Here we don't charge anything since this is
+            // just a `len` reduction.
             if vnew.pop().is_none() {
                 return Err(self.err_status(ScHostObjErrorCode::VecIndexOutOfBound));
             }
@@ -2728,8 +2773,15 @@ impl VmCallerEnv for Host {
         let u = self.u8_from_u32val_input("u", u)?;
         let vnew = self.visit_obj(b, move |hv: &ScBytes| {
             self.validate_index_le_bound(i, hv.len())?;
-            let mut vnew: Vec<u8> = hv.metered_clone(&self.0.budget)?.into();
-            self.charge_budget(CostType::BytesInsert, hv.len() as u64)?; // insert is O(n) worst case
+            // we allocate the new vector to be able to hold `len + 1` bytes, so that the push
+            // will not trigger a reallocation, causing data to be cloned twice.
+            let len = hv.len().saturating_add(1);
+            metered_clone::charge_heap_alloc::<u8>(len as u64, self.as_budget())?;
+            metered_clone::charge_shallow_copy::<u8>(len as u64, self.as_budget())?;
+            let mut vnew: Vec<u8> = Vec::with_capacity(len);
+            vnew.extend_from_slice(hv.as_slice());
+            // insert will cause the memcpy by shifting all the values at and after `i`.
+            metered_clone::charge_shallow_copy::<u8>(len as u64, self.as_budget())?;
             vnew.insert(i as usize, u);
             Ok(ScBytes(vnew.try_into()?))
         })?;
@@ -2742,15 +2794,26 @@ impl VmCallerEnv for Host {
         b1: BytesObject,
         b2: BytesObject,
     ) -> Result<BytesObject, HostError> {
-        let mut vnew: Vec<u8> = self
-            .visit_obj(b1, |hv: &ScBytes| Ok(hv.metered_clone(&self.0.budget)?))?
-            .into();
-        let b2 = self.visit_obj(b2, |hv: &ScBytes| Ok(hv.metered_clone(&self.0.budget)?))?;
-        if b2.len() > u32::MAX as usize - vnew.len() {
-            return Err(self.err_status_msg(ScHostFnErrorCode::InputArgsInvalid, "u32 overflow"));
-        }
-        self.charge_budget(CostType::BytesAppend, (vnew.len() + b2.len()) as u64)?; // worst case can cause rellocation
-        vnew.extend(b2.iter());
+        let vnew = self.visit_obj(b1, |sb1: &ScBytes| {
+            self.visit_obj(b2, |sb2: &ScBytes| {
+                if sb2.len() > u32::MAX as usize - sb1.len() {
+                    return Err(
+                        self.err_status_msg(ScHostFnErrorCode::InputArgsInvalid, "u32 overflow")
+                    );
+                }
+                // we allocate large enough memory to hold the new combined vector, so that
+                // allocation only happens once, and charge for it upfront.
+                // we already checked above that `len` will not overflow, here using
+                // saturating_add just in case.
+                let len = sb1.len().saturating_add(sb2.len());
+                metered_clone::charge_heap_alloc::<u8>(len as u64, self.as_budget())?;
+                metered_clone::charge_shallow_copy::<u8>(len as u64, self.as_budget())?;
+                let mut vnew: Vec<u8> = Vec::with_capacity(len);
+                vnew.extend_from_slice(sb1.as_slice());
+                vnew.extend_from_slice(sb2.as_slice());
+                Ok(vnew)
+            })
+        })?;
         Ok(self.add_host_object(ScBytes(vnew.try_into()?))?.into())
     }
 
@@ -2765,7 +2828,8 @@ impl VmCallerEnv for Host {
         let end: u32 = end.into();
         let vnew = self.visit_obj(b, move |hv: &ScBytes| {
             let range = self.valid_range_from_start_end_bound(start, end, hv.len())?;
-            self.charge_budget(CostType::BytesClone, range.len() as u64)?;
+            metered_clone::charge_heap_alloc::<u8>(range.len() as u64, self.as_budget())?;
+            metered_clone::charge_shallow_copy::<u8>(range.len() as u64, self.as_budget())?;
             Ok(hv.as_slice()[range].to_vec())
         })?;
         self.add_host_object(self.scbytes_from_vec(vnew)?)
@@ -2847,7 +2911,9 @@ impl VmCallerEnv for Host {
             let inner = MeteredVector::from_array(&vals, self.as_budget())?;
             outer.push(self.add_host_object(inner)?.into());
         }
-        Ok(self.add_host_object(HostVec::from_vec(outer)?)?.into())
+        Ok(self
+            .add_host_object(HostVec::from_vec(outer, self.as_budget())?)?
+            .into())
     }
 
     fn fail_with_status(

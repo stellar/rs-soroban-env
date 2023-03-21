@@ -1,6 +1,4 @@
-use soroban_env_host::{
-    events::HostEvent, Compare, Env, EnvBase, Host, HostError, MapObject, RawVal,
-};
+use soroban_env_host::{events::Event, Compare, Env, EnvBase, Host, HostError, MapObject, RawVal};
 
 #[test]
 fn vec_as_seen_by_user() -> Result<(), HostError> {
@@ -50,9 +48,9 @@ fn debug_fmt() {
 
     // Fish out the last debug event and check that it is
     // correct, and formats as expected.
-    let events = host.get_events().unwrap();
-    match events.0.last() {
-        Some(HostEvent::Debug(de)) => {
+    let events = host.get_events().unwrap().0;
+    match &events.last().unwrap().event {
+        Event::Debug(de) => {
             assert_eq!(
                 format!("{}", de),
                 "can't convert I32(1) to alloc::vec::Vec<u8>"

@@ -14,6 +14,6 @@ impl HostCostMeasurement for ValDeserMeasure {
         input: u64,
     ) -> Vec<u8> {
         let scval = ValSerMeasure::new_random_case(host, rng, input);
-        scval.to_xdr().unwrap()
+        scval.0.to_xdr().unwrap()
     }
 }

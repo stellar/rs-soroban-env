@@ -1,4 +1,9 @@
-use crate::{budget::Budget, budget::CostType, cost_runner::CostRunner};
+use std::hint::black_box;
+
+use crate::{
+    budget::{AsBudget, CostType},
+    cost_runner::CostRunner,
+};
 
 pub struct ChargeBudgetRun;
 
@@ -7,14 +12,20 @@ impl CostRunner for ChargeBudgetRun {
 
     const RUN_ITERATIONS: u64 = 1000;
 
-    type SampleType = (Budget, u64);
+    type SampleType = u64;
 
-    fn run_iter(_host: &crate::Host, _iter: u64, sample: Self::SampleType) {
+    type RecycledType = ();
+
+    fn run_iter(host: &crate::Host, _iter: u64, sample: u64) {
         // The `CostType` here is irrelevant, can pass in any type except `CostType::ChargeBudget`.
-        sample.0.charge(CostType::WasmInsnExec, sample.1).unwrap();
+        black_box(
+            host.as_budget()
+                .charge(CostType::WasmInsnExec, sample)
+                .unwrap(),
+        );
     }
 
-    fn get_total_input(_host: &crate::Host, _sample: &Self::SampleType) -> u64 {
-        Self::RUN_ITERATIONS
+    fn run_baseline_iter(_host: &crate::Host, _iter: u64, sample: u64) {
+        black_box(sample);
     }
 }

@@ -1,37 +1,69 @@
 use crate::{budget::CostType, cost_runner::CostRunner, xdr::Hash, Vm};
-use std::rc::Rc;
+use std::{hint::black_box, rc::Rc};
 
 pub struct VmInstantiationRun;
 
 #[derive(Clone)]
 pub struct VmInstantiationSample {
-    pub id: Hash,
+    pub id: Option<Hash>,
     pub wasm: Vec<u8>,
 }
 
 impl CostRunner for VmInstantiationRun {
     const COST_TYPE: CostType = CostType::VmInstantiation;
+
     const RUN_ITERATIONS: u64 = 10;
+
     type SampleType = VmInstantiationSample;
 
-    fn run_iter(host: &crate::Host, _iter: u64, sample: Self::SampleType) {
-        Vm::new(host, sample.id, &sample.wasm[..]).unwrap();
+    type RecycledType = (Option<Rc<Vm>>, Vec<u8>);
+
+    fn run_iter(host: &crate::Host, _iter: u64, sample: Self::SampleType) -> Self::RecycledType {
+        let vm = black_box(Vm::new(host, sample.id.unwrap(), &sample.wasm[..]).unwrap());
+        (Some(vm), sample.wasm)
     }
+
+    fn run_baseline_iter(
+        _host: &crate::Host,
+        _iter: u64,
+        sample: Self::SampleType,
+    ) -> Self::RecycledType {
+        black_box((None, sample.wasm))
+    }
+}
+
+#[derive(Clone)]
+pub struct VmMemRunSample {
+    pub vm: Rc<Vm>,
+    pub buf: Vec<u8>,
 }
 
 pub struct VmMemReadRun;
 impl CostRunner for VmMemReadRun {
     const COST_TYPE: CostType = CostType::VmMemRead;
 
-    type SampleType = (Rc<Vm>, usize);
+    type SampleType = VmMemRunSample;
 
-    fn run_iter(host: &crate::Host, _iter: u64, sample: Self::SampleType) {
-        let mut buf: Vec<u8> = vec![0; sample.1];
-        let vm = sample.0;
-        vm.with_vmcaller(|caller| {
-            host.metered_vm_read_bytes_from_linear_memory(caller, &vm, 0, &mut buf)
+    type RecycledType = Self::SampleType;
+
+    fn run_iter(
+        host: &crate::Host,
+        _iter: u64,
+        mut sample: Self::SampleType,
+    ) -> Self::RecycledType {
+        black_box(sample.vm.with_vmcaller(|caller| {
+            host.metered_vm_read_bytes_from_linear_memory(caller, &sample.vm, 0, &mut sample.buf)
                 .unwrap()
-        })
+        }));
+        sample
+    }
+
+    fn run_baseline_iter(
+        _host: &crate::Host,
+        _iter: u64,
+        sample: Self::SampleType,
+    ) -> Self::RecycledType {
+        black_box(sample)
     }
 }
 
@@ -39,13 +71,27 @@ pub struct VmMemWriteRun;
 impl CostRunner for VmMemWriteRun {
     const COST_TYPE: CostType = CostType::VmMemWrite;
 
-    type SampleType = (Rc<Vm>, Vec<u8>);
+    type SampleType = VmMemRunSample;
 
-    fn run_iter(host: &crate::Host, _iter: u64, mut sample: Self::SampleType) {
-        let vm = sample.0;
-        vm.with_vmcaller(|caller| {
-            host.metered_vm_write_bytes_to_linear_memory(caller, &vm, 0, &mut sample.1)
+    type RecycledType = Self::SampleType;
+
+    fn run_iter(
+        host: &crate::Host,
+        _iter: u64,
+        mut sample: Self::SampleType,
+    ) -> Self::RecycledType {
+        black_box(sample.vm.with_vmcaller(|caller| {
+            host.metered_vm_write_bytes_to_linear_memory(caller, &sample.vm, 0, &mut sample.buf)
                 .unwrap()
-        })
+        }));
+        sample
+    }
+
+    fn run_baseline_iter(
+        _host: &crate::Host,
+        _iter: u64,
+        sample: Self::SampleType,
+    ) -> Self::RecycledType {
+        black_box(sample)
     }
 }

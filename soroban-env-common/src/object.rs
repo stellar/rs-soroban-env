@@ -102,6 +102,12 @@ impl ScValObject {
     }
 }
 
+impl AsRef<ScVal> for ScValObject {
+    fn as_ref(&self) -> &ScVal {
+        &self.0
+    }
+}
+
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ScValObjRef<'a>(&'a ScVal);
 
