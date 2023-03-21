@@ -470,6 +470,7 @@ impl Host {
                 *self.0.previous_authorization_manager.borrow_mut() =
                     Some(self.0.authorization_manager.borrow().clone());
                 self.0.authorization_manager.borrow_mut().reset();
+                self.as_budget().reset_default();
             }
         }
 
