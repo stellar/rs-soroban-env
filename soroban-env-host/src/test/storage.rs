@@ -61,7 +61,13 @@ fn test_peristent_storage() {
                 .call(
                     contract_id.clone(),
                     Symbol::from_small_str("has"),
-                    host_vec![&host, key_2].into(),
+                    host_vec![
+                        &host,
+                        // Use a new object to sanity-check that comparison
+                        // happens based on value.
+                        Symbol::try_from_val(&host, &"this_is_key_2").unwrap()
+                    ]
+                    .into(),
                 )
                 .unwrap()
         )
@@ -196,7 +202,9 @@ fn test_temp_storage() {
                 .call(
                     contract_id.clone(),
                     Symbol::from_small_str("has_tmp"),
-                    host_vec![&host, key_1].into(),
+                    // Use a new object to sanity-check that comparison
+                    // happens based on value.
+                    host_vec![&host, 1_i128 << 100].into(),
                 )
                 .unwrap()
         )
