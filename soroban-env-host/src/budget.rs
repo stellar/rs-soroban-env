@@ -1,6 +1,6 @@
 use std::{
     cell::{RefCell, RefMut},
-    fmt::Debug,
+    fmt::{Debug, Display},
     rc::Rc,
 };
 
@@ -271,24 +271,24 @@ impl Debug for BudgetImpl {
             self.mem_bytes.limit, self.mem_bytes.total_count
         )?;
 
-        // TODO: align them nicely
-        writeln!(f, "CostType\tinput\tcpu_insns\tmem_bytes")?;
+        writeln!(
+            f,
+            "{:<20}{:<8}\t{:<8}\t{:<8}",
+            "CostType", "input", "cpu_insns", "mem_bytes"
+        )?;
         for ct in CostType::variants() {
             let i = *ct as usize;
             writeln!(
                 f,
-                "{:?}\t{}\t{}\t{}",
-                ct, self.inputs[i], self.cpu_insns.counts[i], self.mem_bytes.counts[i]
+                "{:<20}\t{:<8}\t{:<8}\t{:<8}",
+                format!("{:?}", ct),
+                self.inputs[i],
+                self.cpu_insns.counts[i],
+                self.mem_bytes.counts[i]
             )?;
         }
         Ok(())
     }
-}
-
-#[test]
-fn test_print() {
-    let budget = Budget::default();
-    println!("{:?}", budget)
 }
 
 #[derive(Default, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -297,6 +297,12 @@ pub struct Budget(pub(crate) Rc<RefCell<BudgetImpl>>);
 impl Debug for Budget {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "{:?}", self.0.borrow())
+    }
+}
+
+impl Display for Budget {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        <Self as Debug>::fmt(&self, f)
     }
 }
 
@@ -532,7 +538,7 @@ impl Default for BudgetImpl {
         // TODO: Set proper limits once all the machinary (including in SDK tests) is in place and models are calibrated.
         // For now we set a generous but finite limit for DOS prevention.
         b.cpu_insns.reset(40_000_000); // 100x the estimation above which corresponds to 10ms
-        b.mem_bytes.reset(0xa0_0000); // 10MB of memory
+        b.mem_bytes.reset(0x320_0000); // 50MB of memory
         b
     }
 }
