@@ -7,6 +7,7 @@ mod crypto;
 mod ledger;
 mod map;
 mod num;
+mod storage;
 mod str;
 mod vec;
 
