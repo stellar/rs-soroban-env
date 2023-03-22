@@ -1,12 +1,13 @@
 // Run this with
-// $ cargo bench --features vm --bench variation_histograms -- --nocapture
+// $ cargo bench --features vm,testutils --bench variation_histograms -- --nocapture
 mod common;
 use common::*;
 
 struct LinearModelTables;
 impl Benchmark for LinearModelTables {
     fn bench<HCM: HostCostMeasurement>() -> std::io::Result<()> {
-        let measurements = measure_cost_variation::<HCM>(100)?;
+        let mut measurements = measure_cost_variation::<HCM>(100)?;
+        measurements.subtract_baseline();
         measurements.report_histogram("cpu", |m| m.cpu_insns);
         measurements.report_histogram("mem", |m| m.mem_bytes);
         Ok(())

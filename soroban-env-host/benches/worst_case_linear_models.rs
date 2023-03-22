@@ -1,16 +1,14 @@
 // Run this with
-// $ cargo bench --features vm --bench worst_case_linear_models -- --nocapture
+// $ cargo bench --features vm,testutils --bench worst_case_linear_models -- --nocapture
 mod common;
 use common::*;
 
 struct WorstCaseLinearModels;
 impl Benchmark for WorstCaseLinearModels {
     fn bench<HCM: HostCostMeasurement>() -> std::io::Result<()> {
-        let measurements = measure_worst_case_costs::<HCM>(0..20)?;
+        let mut measurements = measure_worst_case_costs::<HCM>(0..20)?;
 
-        // TODO: decide what to do about baselines
-        // measurements.subtract_baseline();
-
+        measurements.subtract_baseline();
         measurements.report_table();
 
         if std::env::var("FIT_MODELS").is_ok() {
