@@ -9,16 +9,13 @@ use crate::{
 use std::{cmp::Ordering, ops::Range};
 
 #[derive(Clone, Default)]
-pub struct MeteredVector<A>
-where
-    A: MeteredClone,
-{
+pub struct MeteredVector<A> {
     vec: Vec<A>,
 }
 
 impl<A> MeteredVector<A>
 where
-    A: MeteredClone,
+    A: DeclaredSizeForMetering,
 {
     /// Covers the cost of allocating a new Vec<A> with size in number of elements.
     fn charge_new(n_elts: u64, budget: &Budget) -> Result<(), HostError> {
@@ -33,11 +30,11 @@ where
     }
 
     fn charge_scan(&self, budget: &Budget) -> Result<(), HostError> {
-        budget.charge(CostType::VecEntry, self.len() as u64)
+        budget.charge(CostType::VecEntry, self.vec.len() as u64)
     }
 
     fn charge_binsearch(&self, budget: &Budget) -> Result<(), HostError> {
-        let mag = 64 - (self.len() as u64).leading_zeros();
+        let mag = 64 - (self.vec.len() as u64).leading_zeros();
         budget.charge(CostType::VecEntry, 1 + mag as u64)
     }
 }
@@ -299,7 +296,7 @@ where
 
 impl<A> DeclaredSizeForMetering for MeteredVector<A>
 where
-    A: MeteredClone,
+    A: DeclaredSizeForMetering,
 {
     const DECLARED_SIZE: u64 = <Vec<A> as DeclaredSizeForMetering>::DECLARED_SIZE;
 }
