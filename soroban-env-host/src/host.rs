@@ -2400,12 +2400,11 @@ impl VmCallerEnv for Host {
         k: RawVal,
         v: RawVal,
     ) -> Result<Void, HostError> {
-        let key = self.from_host_val(k)?;
         self.0.temp_storage.borrow_mut().put(
             self.get_current_contract_id_internal()?,
-            key,
+            k,
             v,
-            self.as_budget(),
+            self,
         )?;
         Ok(RawVal::VOID)
     }
@@ -2416,11 +2415,10 @@ impl VmCallerEnv for Host {
         _vmcaller: &mut VmCaller<Host>,
         k: RawVal,
     ) -> Result<Bool, HostError> {
-        let key = self.from_host_val(k)?;
         let res = self.0.temp_storage.borrow_mut().has(
             self.get_current_contract_id_internal()?,
-            key,
-            self.as_budget(),
+            k,
+            self,
         )?;
         Ok(RawVal::from_bool(res))
     }
@@ -2431,12 +2429,10 @@ impl VmCallerEnv for Host {
         _vmcaller: &mut VmCaller<Host>,
         k: RawVal,
     ) -> Result<RawVal, HostError> {
-        let key = self.from_host_val(k)?;
-        self.0.temp_storage.borrow_mut().get(
-            self.get_current_contract_id_internal()?,
-            key,
-            self.as_budget(),
-        )
+        self.0
+            .temp_storage
+            .borrow_mut()
+            .get(self.get_current_contract_id_internal()?, k, self)
     }
 
     // Notes on metering: covered by components
@@ -2445,12 +2441,10 @@ impl VmCallerEnv for Host {
         _vmcaller: &mut VmCaller<Host>,
         k: RawVal,
     ) -> Result<Void, HostError> {
-        let key = self.from_host_val(k)?;
-        self.0.temp_storage.borrow_mut().del(
-            self.get_current_contract_id_internal()?,
-            key,
-            self.as_budget(),
-        )?;
+        self.0
+            .temp_storage
+            .borrow_mut()
+            .del(self.get_current_contract_id_internal()?, k, self)?;
         Ok(RawVal::VOID)
     }
 

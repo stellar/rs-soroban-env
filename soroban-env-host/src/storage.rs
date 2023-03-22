@@ -7,24 +7,18 @@
 //!   - [Env::put_contract_data](crate::Env::put_contract_data)
 //!   - [Env::del_contract_data](crate::Env::del_contract_data)
 
-use std::cmp::Ordering;
 use std::rc::Rc;
 
 use soroban_env_common::{Compare, RawVal};
 
 use crate::budget::Budget;
-use crate::xdr::{Hash, LedgerEntry, LedgerKey, ScHostStorageErrorCode, ScVal};
+use crate::xdr::{Hash, LedgerEntry, LedgerKey, ScHostStorageErrorCode};
 use crate::Host;
 use crate::{host::metered_map::MeteredOrdMap, HostError};
 
 pub type FootprintMap = MeteredOrdMap<Rc<LedgerKey>, AccessType, Budget>;
 pub type StorageMap = MeteredOrdMap<Rc<LedgerKey>, Option<Rc<LedgerEntry>>, Budget>;
-// Alias for the `RawVal` that has the cheap 'shallow' comparison defined - it
-// just compares the payloads without looking at the value semantics.
-// This is used in `TempStorageMap` to make sure that we don't do expensive
-// value comparisons.
-pub type ShallowComparableRawVal = RawVal;
-pub type TempStorageMap = MeteredOrdMap<Rc<(Hash, ScVal)>, ShallowComparableRawVal, Budget>;
+pub type TempStorageMap = MeteredOrdMap<Rc<(Hash, RawVal)>, RawVal, Host>;
 
 /// A helper type used by [Footprint] to designate which ways
 /// a given [LedgerKey] is accessed, or is allowed to be accessed,
@@ -301,18 +295,6 @@ impl Storage {
     }
 }
 
-impl Compare<ShallowComparableRawVal> for Budget {
-    type Error = HostError;
-
-    fn compare(
-        &self,
-        a: &ShallowComparableRawVal,
-        b: &ShallowComparableRawVal,
-    ) -> Result<Ordering, Self::Error> {
-        Ok(a.get_payload().cmp(&b.get_payload()))
-    }
-}
-
 /// A special-purpose map from arbitrary contract-owned values to arbitrary
 /// values.
 ///
@@ -328,8 +310,8 @@ pub struct TempStorage {
 }
 
 impl TempStorage {
-    pub fn get(&self, contract_id: Hash, key: ScVal, budget: &Budget) -> Result<RawVal, HostError> {
-        match self.map.get(&(contract_id, key), budget)? {
+    pub fn get(&self, contract_id: Hash, key: RawVal, host: &Host) -> Result<RawVal, HostError> {
+        match self.map.get(&(contract_id, key), host)? {
             None => Err(ScHostStorageErrorCode::MissingKeyInGet.into()),
             Some(val) => Ok(*val),
         }
@@ -338,16 +320,16 @@ impl TempStorage {
     pub fn put(
         &mut self,
         contract_id: Hash,
-        key: ScVal,
+        key: RawVal,
         val: RawVal,
-        budget: &Budget,
+        host: &Host,
     ) -> Result<(), HostError> {
-        self.map = self.map.insert(Rc::new((contract_id, key)), val, budget)?;
+        self.map = self.map.insert(Rc::new((contract_id, key)), val, host)?;
         Ok(())
     }
 
-    pub fn del(&mut self, contract_id: Hash, key: ScVal, budget: &Budget) -> Result<(), HostError> {
-        match self.map.remove(&Rc::new((contract_id, key)), budget)? {
+    pub fn del(&mut self, contract_id: Hash, key: RawVal, host: &Host) -> Result<(), HostError> {
+        match self.map.remove(&(contract_id, key), host)? {
             Some((new_self, _)) => {
                 self.map = new_self;
             }
@@ -356,13 +338,8 @@ impl TempStorage {
         Ok(())
     }
 
-    pub fn has(
-        &mut self,
-        contract_id: Hash,
-        key: ScVal,
-        budget: &Budget,
-    ) -> Result<bool, HostError> {
-        self.map.contains_key(&Rc::new((contract_id, key)), budget)
+    pub fn has(&mut self, contract_id: Hash, key: RawVal, host: &Host) -> Result<bool, HostError> {
+        self.map.contains_key(&(contract_id, key), host)
     }
 }
 
