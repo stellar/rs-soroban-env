@@ -260,6 +260,7 @@ pub(crate) struct BudgetImpl {
 
 impl Debug for BudgetImpl {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "{:=<70}", "")?;
         writeln!(
             f,
             "Cpu limit: {}; used: {}",
@@ -270,23 +271,24 @@ impl Debug for BudgetImpl {
             "Mem limit: {}; used: {}",
             self.mem_bytes.limit, self.mem_bytes.total_count
         )?;
-
+        writeln!(f, "{:=<70}", "")?;
         writeln!(
             f,
-            "{:<20}{:<8}\t{:<8}\t{:<8}",
+            "{:<25}{:<15}{:<15}{:<15}",
             "CostType", "input", "cpu_insns", "mem_bytes"
         )?;
         for ct in CostType::variants() {
             let i = *ct as usize;
             writeln!(
                 f,
-                "{:<20}\t{:<8}\t{:<8}\t{:<8}",
+                "{:<25}{:<15}{:<15}{:<15}",
                 format!("{:?}", ct),
                 self.inputs[i],
                 self.cpu_insns.counts[i],
                 self.mem_bytes.counts[i]
             )?;
         }
+        writeln!(f, "{:=<70}", "")?;
         Ok(())
     }
 }
