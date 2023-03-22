@@ -1026,7 +1026,7 @@ checksum = "f0ea32af43239f0d353a7dd75a22d94c329c8cdaafdcb4c1c1335aa10c298a4a"
 
 [[package]]
 name = "soroban-env-common"
-version = "0.0.14"
+version = "0.0.15"
 dependencies = [
  "crate-git-revision",
  "ethnum",
@@ -1039,7 +1039,7 @@ dependencies = [
 
 [[package]]
 name = "soroban-env-guest"
-version = "0.0.14"
+version = "0.0.15"
 dependencies = [
  "soroban-env-common",
  "static_assertions",
@@ -1047,7 +1047,7 @@ dependencies = [
 
 [[package]]
 name = "soroban-env-host"
-version = "0.0.14"
+version = "0.0.15"
 dependencies = [
  "backtrace",
  "bytes-lit",
@@ -1082,7 +1082,7 @@ dependencies = [
 
 [[package]]
 name = "soroban-env-macros"
-version = "0.0.14"
+version = "0.0.15"
 dependencies = [
  "itertools",
  "proc-macro2",
@@ -1096,7 +1096,7 @@ dependencies = [
 
 [[package]]
 name = "soroban-native-sdk-macros"
-version = "0.0.14"
+version = "0.0.15"
 dependencies = [
  "itertools",
  "proc-macro2",
@@ -1106,7 +1106,7 @@ dependencies = [
 
 [[package]]
 name = "soroban-synth-wasm"
-version = "0.0.14"
+version = "0.0.15"
 dependencies = [
  "expect-test",
  "soroban-env-common",
@@ -1117,7 +1117,7 @@ dependencies = [
 
 [[package]]
 name = "soroban-test-wasms"
-version = "0.0.14"
+version = "0.0.15"
 
 [[package]]
 name = "soroban-wasmi"
@@ -1250,7 +1250,7 @@ dependencies = [
 
 [[package]]
 name = "test_no_std"
-version = "0.0.14"
+version = "0.0.15"
 dependencies = [
  "soroban-env-common",
 ]
