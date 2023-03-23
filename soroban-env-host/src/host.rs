@@ -1434,7 +1434,7 @@ impl EnvBase for Host {
     // To get it to do that, we have to call `panic!()`, not `panic_any`.
     // Personally I think this is a glaring weakness of `panic_any` but we are
     // not in a position to improve it.
-    #[cfg(any(test, feature = "testutils"))]
+    #[cfg(feature = "testutils")]
     fn escalate_error_to_panic(&self, e: Self::Error) -> ! {
         let _ = self.with_current_frame_opt(|f| {
             if let Some(Frame::TestContract(frame)) = f {

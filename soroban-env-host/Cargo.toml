@@ -44,7 +44,6 @@ textplots = "0.8.0"
 wasmprinter = "0.2.41"
 expect-test = "1.4.0"
 more-asserts = "0.3.1"
-soroban-env-common = { workspace = true, features = ["std", "testutils"] }
 
 [features]
 vm = ["wasmi", "soroban-env-common/vm"]

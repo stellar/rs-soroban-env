@@ -7,6 +7,11 @@ mod crypto;
 mod ledger;
 mod map;
 mod num;
+// In theory, this test module should run fine without testutils. However,
+// currently it won't compile without 'testutils' feature as the compiler
+// doesn't see `escalate_error_to_panic` implementation, even though
+// everything seems correct from the build configuration standpoint.
+#[cfg(feature = "testutils")]
 mod storage;
 mod str;
 mod vec;
