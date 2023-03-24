@@ -20,7 +20,6 @@ use soroban_env_common::{
     U128Object, U32Val, U64Object, U64Val, VecObject, VmCaller, VmCallerEnv, Void, I256, U256,
 };
 
-use crate::budget::{AsBudget, Budget, CostType};
 use crate::events::{
     DebugError, DebugEvent, Events, InternalContractEvent, InternalEvent, InternalEventsBuffer,
 };
@@ -28,6 +27,10 @@ use crate::storage::{Storage, StorageMap};
 use crate::{
     auth::{AuthorizationManager, AuthorizationManagerSnapshot, RecordedAuthPayload},
     native_contract::account_contract::ACCOUNT_CONTRACT_CHECK_AUTH_FN_NAME,
+};
+use crate::{
+    budget::{AsBudget, Budget, CostType},
+    storage::{TempStorage, TempStorageMap},
 };
 
 use crate::host_object::{HostMap, HostObject, HostObjectType, HostVec};
@@ -62,6 +65,7 @@ use crate::Compare;
 #[derive(Clone)]
 struct RollbackPoint {
     storage: StorageMap,
+    temp_storage: TempStorageMap,
     events: usize,
     auth: Option<AuthorizationManagerSnapshot>,
 }
@@ -160,6 +164,7 @@ pub(crate) struct HostImpl {
     ledger: RefCell<Option<LedgerInfo>>,
     objects: RefCell<Vec<HostObject>>,
     storage: RefCell<Storage>,
+    temp_storage: RefCell<TempStorage>,
     pub(crate) context: RefCell<Vec<Frame>>,
     // Note: budget is refcounted and is _not_ deep-cloned when you call HostImpl::deep_clone,
     // mainly because it's not really possible to achieve (the same budget is connected to many
@@ -238,6 +243,7 @@ impl Host {
             ledger: RefCell::new(None),
             objects: Default::default(),
             storage: RefCell::new(storage),
+            temp_storage: Default::default(),
             context: Default::default(),
             budget: budget.clone(),
             events: Default::default(),
@@ -431,6 +437,7 @@ impl Host {
         self.0.context.borrow_mut().push(frame);
         Ok(RollbackPoint {
             storage: self.0.storage.borrow().map.clone(),
+            temp_storage: self.0.temp_storage.borrow().map.clone(),
             events: self.0.events.borrow().vec.len(),
             auth: auth_snapshot,
         })
@@ -1213,6 +1220,11 @@ impl Host {
                 self.err_general("previous invocation is missing - no auth data to get")
             })?
             .get_recorded_top_authorizations())
+    }
+
+    #[cfg(any(test, feature = "testutils"))]
+    pub fn reset_temp_storage(&self) {
+        *self.0.temp_storage.borrow_mut() = Default::default();
     }
 
     /// Records a `System` contract event. `topics` is expected to be a `SCVec`
@@ -2307,7 +2319,7 @@ impl VmCallerEnv for Host {
         _vmcaller: &mut VmCaller<Host>,
         k: RawVal,
         v: RawVal,
-    ) -> Result<RawVal, HostError> {
+    ) -> Result<Void, HostError> {
         let key = self.contract_data_key_from_rawval(k)?;
         let data = LedgerEntryData::ContractData(ContractDataEntry {
             contract_id: self.get_current_contract_id_internal()?,
@@ -2319,7 +2331,7 @@ impl VmCallerEnv for Host {
             &Host::ledger_entry_from_data(data),
             self.as_budget(),
         )?;
-        Ok(().into())
+        Ok(RawVal::VOID)
     }
 
     // Notes on metering: covered by components
@@ -2359,10 +2371,10 @@ impl VmCallerEnv for Host {
         &self,
         _vmcaller: &mut VmCaller<Host>,
         k: RawVal,
-    ) -> Result<RawVal, HostError> {
+    ) -> Result<Void, HostError> {
         let key = self.contract_data_key_from_rawval(k)?;
         self.0.storage.borrow_mut().del(&key, self.as_budget())?;
-        Ok(().into())
+        Ok(RawVal::VOID)
     }
 
     // Notes on metering: covered by the components.
@@ -2379,6 +2391,61 @@ impl VmCallerEnv for Host {
             ScContractExecutable::WasmRef(self.hash_from_bytesobj_input("wasm_hash", wasm_hash)?);
         let id_preimage = self.id_preimage_from_contract(contract_id, salt)?;
         self.create_contract_with_id_preimage(code, id_preimage)
+    }
+
+    // Notes on metering: covered by components
+    fn put_tmp_contract_data(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        k: RawVal,
+        v: RawVal,
+    ) -> Result<Void, HostError> {
+        self.0.temp_storage.borrow_mut().put(
+            self.get_current_contract_id_internal()?,
+            k,
+            v,
+            self,
+        )?;
+        Ok(RawVal::VOID)
+    }
+
+    // Notes on metering: covered by components
+    fn has_tmp_contract_data(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        k: RawVal,
+    ) -> Result<Bool, HostError> {
+        let res = self.0.temp_storage.borrow_mut().has(
+            self.get_current_contract_id_internal()?,
+            k,
+            self,
+        )?;
+        Ok(RawVal::from_bool(res))
+    }
+
+    // Notes on metering: covered by components
+    fn get_tmp_contract_data(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        k: RawVal,
+    ) -> Result<RawVal, HostError> {
+        self.0
+            .temp_storage
+            .borrow_mut()
+            .get(self.get_current_contract_id_internal()?, k, self)
+    }
+
+    // Notes on metering: covered by components
+    fn del_tmp_contract_data(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        k: RawVal,
+    ) -> Result<Void, HostError> {
+        self.0
+            .temp_storage
+            .borrow_mut()
+            .del(self.get_current_contract_id_internal()?, k, self)?;
+        Ok(RawVal::VOID)
     }
 
     // Notes on metering: here covers the args unpacking. The actual VM work is changed at lower layers.
@@ -3040,15 +3107,10 @@ impl VmCallerEnv for Host {
 }
 
 #[cfg(any(test, feature = "testutils"))]
-mod testutils {
-    use crate::RawVal;
-    use std::any::Any;
+pub(crate) mod testutils {
     use std::cell::Cell;
-    use std::panic::UnwindSafe;
-    use std::panic::{catch_unwind, set_hook, take_hook};
+    use std::panic::{catch_unwind, set_hook, take_hook, UnwindSafe};
     use std::sync::Once;
-
-    type PanicVal = Box<dyn Any + Send>;
 
     /// Catch panics while suppressing the default panic hook that prints to the
     /// console.
@@ -3062,9 +3124,9 @@ mod testutils {
     /// hook. It then uses a thread local variable to track contract call depth.
     /// If a panick occurs during a contract call the original hook is not
     /// called, otherwise it is called.
-    pub fn call_with_suppressed_panic_hook<C>(closure: C) -> Result<Option<RawVal>, PanicVal>
+    pub fn call_with_suppressed_panic_hook<C, R>(closure: C) -> std::thread::Result<R>
     where
-        C: FnOnce() -> Option<RawVal> + UnwindSafe,
+        C: FnOnce() -> R + UnwindSafe,
     {
         thread_local! {
             static TEST_CONTRACT_CALL_COUNT: Cell<u64> = Cell::new(0);
@@ -3088,7 +3150,7 @@ mod testutils {
             c.set(new_count);
         });
 
-        let res: Result<Option<RawVal>, PanicVal> = catch_unwind(closure);
+        let res = catch_unwind(closure);
 
         TEST_CONTRACT_CALL_COUNT.with(|c| {
             let old_count = c.get();
