@@ -8,12 +8,7 @@ use crate::{
 };
 use std::{borrow::Borrow, cmp::Ordering, marker::PhantomData};
 
-pub struct MeteredOrdMap<K, V, Ctx>
-where
-    K: MeteredClone,
-    V: MeteredClone,
-    Ctx: AsBudget + Compare<K, Error = HostError> + Compare<V, Error = HostError>,
-{
+pub struct MeteredOrdMap<K, V, Ctx> {
     pub(crate) map: Vec<(K, V)>,
     ctx: PhantomData<Ctx>,
 }
@@ -24,7 +19,7 @@ impl<K, V, Ctx> Clone for MeteredOrdMap<K, V, Ctx>
 where
     K: MeteredClone,
     V: MeteredClone,
-    Ctx: AsBudget + Compare<K, Error = HostError> + Compare<V, Error = HostError>,
+    Ctx: AsBudget,
 {
     fn clone(&self) -> Self {
         Self {
@@ -36,9 +31,9 @@ where
 
 impl<K, V, Ctx> MeteredOrdMap<K, V, Ctx>
 where
-    K: MeteredClone,
-    V: MeteredClone,
-    Ctx: AsBudget + Compare<K, Error = HostError> + Compare<V, Error = HostError>,
+    K: DeclaredSizeForMetering,
+    V: DeclaredSizeForMetering,
+    Ctx: AsBudget,
 {
     // Covers the cost of creating `count` number of new `MeteredOrdMap`s. This does not include
     // the cost of any allocation, since it is assumed memory allocation is charge separately
@@ -64,9 +59,7 @@ where
 
 impl<K, V, Ctx> Default for MeteredOrdMap<K, V, Ctx>
 where
-    K: MeteredClone,
-    V: MeteredClone,
-    Ctx: AsBudget + Compare<K, Error = HostError> + Compare<V, Error = HostError>,
+    Ctx: Default,
 {
     fn default() -> Self {
         Self {
@@ -86,7 +79,7 @@ impl<K, V, Ctx> MeteredOrdMap<K, V, Ctx>
 where
     K: MeteredClone,
     V: MeteredClone,
-    Ctx: AsBudget + Compare<K, Error = HostError> + Compare<V, Error = HostError>,
+    Ctx: AsBudget + Compare<K, Error = HostError>,
 {
     pub fn new(ctx: &Ctx) -> Result<Self, HostError> {
         Self::charge_new(1, ctx)?;
@@ -326,9 +319,8 @@ where
 
 impl<K, V, Ctx> DeclaredSizeForMetering for MeteredOrdMap<K, V, Ctx>
 where
-    K: MeteredClone,
-    V: MeteredClone,
-    Ctx: AsBudget + Compare<K, Error = HostError> + Compare<V, Error = HostError>,
+    K: DeclaredSizeForMetering,
+    V: DeclaredSizeForMetering,
 {
     const DECLARED_SIZE: u64 = <Vec<(K, V)> as DeclaredSizeForMetering>::DECLARED_SIZE;
 }
@@ -337,7 +329,7 @@ impl<K, V, Ctx> MeteredClone for MeteredOrdMap<K, V, Ctx>
 where
     K: MeteredClone,
     V: MeteredClone,
-    Ctx: AsBudget + Compare<K, Error = HostError> + Compare<V, Error = HostError>,
+    Ctx: AsBudget,
 {
     fn charge_for_substructure(&self, budget: &Budget) -> Result<(), HostError> {
         self.map.charge_for_substructure(budget)
@@ -346,8 +338,6 @@ where
 
 impl<K, V> Compare<MeteredOrdMap<K, V, Host>> for Host
 where
-    K: MeteredClone,
-    V: MeteredClone,
     Host: Compare<K, Error = HostError> + Compare<V, Error = HostError>,
 {
     type Error = HostError;
@@ -365,8 +355,6 @@ where
 
 impl<K, V> Compare<MeteredOrdMap<K, V, Budget>> for Budget
 where
-    K: MeteredClone,
-    V: MeteredClone,
     Budget: Compare<K, Error = HostError> + Compare<V, Error = HostError>,
 {
     type Error = HostError;
@@ -381,12 +369,7 @@ where
     }
 }
 
-impl<'a, K, V, Ctx> IntoIterator for &'a MeteredOrdMap<K, V, Ctx>
-where
-    K: MeteredClone,
-    V: MeteredClone,
-    Ctx: AsBudget + Compare<K, Error = HostError> + Compare<V, Error = HostError>,
-{
+impl<'a, K, V, Ctx> IntoIterator for &'a MeteredOrdMap<K, V, Ctx> {
     type Item = &'a (K, V);
     type IntoIter = core::slice::Iter<'a, (K, V)>;
 
@@ -395,12 +378,7 @@ where
     }
 }
 
-impl<K, V, Ctx> IntoIterator for MeteredOrdMap<K, V, Ctx>
-where
-    K: MeteredClone,
-    V: MeteredClone,
-    Ctx: AsBudget + Compare<K, Error = HostError> + Compare<V, Error = HostError>,
-{
+impl<K, V, Ctx> IntoIterator for MeteredOrdMap<K, V, Ctx> {
     type Item = (K, V);
     type IntoIter = std::vec::IntoIter<(K, V)>;
 
