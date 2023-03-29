@@ -888,18 +888,12 @@ impl Host {
         {
             return Err(self.err_general("Contract already exists"));
         }
-        // Make sure the contract code exists. With immutable contracts and
-        // without this check it would be possible to accidentally create a
-        // contract that never may be invoked (just by providing a bad hash).
+        // Make sure the contract code exists. Without this check it would be
+        // possible to accidentally create a contract that never may be invoked
+        // (just by providing a bad hash).
         if let ScContractExecutable::WasmRef(wasm_hash) = &contract_source {
-            let wasm_storage_key = self.contract_code_ledger_key(wasm_hash)?;
-            if !self
-                .0
-                .storage
-                .borrow_mut()
-                .has(&wasm_storage_key, self.as_budget())?
-            {
-                return Err(self.err_general("Contract code was not installed"));
+            if !self.contract_code_exists(wasm_hash)? {
+                return Err(self.err_general("Wasm does not exist"));
             }
         }
         self.store_contract_source(contract_source, new_contract_id, &storage_key)?;
@@ -2445,6 +2439,25 @@ impl VmCallerEnv for Host {
             .temp_storage
             .borrow_mut()
             .del(self.get_current_contract_id_internal()?, k, self)?;
+        Ok(RawVal::VOID)
+    }
+
+    fn update_current_contract_wasm(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        hash: BytesObject,
+    ) -> Result<Void, HostError> {
+        let wasm_hash = self.hash_from_bytesobj_input("wasm_hash", hash)?;
+        if !self.contract_code_exists(&wasm_hash)? {
+            return Err(self.err_general("Wasm does not exist"));
+        }
+        let curr_contract_id = self.get_current_contract_id_internal()?;
+        let key = self.contract_source_ledger_key(&curr_contract_id)?;
+        self.store_contract_source(
+            ScContractExecutable::WasmRef(wasm_hash),
+            curr_contract_id,
+            &key,
+        )?;
         Ok(RawVal::VOID)
     }
 

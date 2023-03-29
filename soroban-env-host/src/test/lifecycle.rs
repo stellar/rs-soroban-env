@@ -1,5 +1,7 @@
+use crate::native_contract::testutils::HostVec;
 use crate::{
     budget::{AsBudget, Budget},
+    host_vec,
     storage::{AccessType, Footprint, Storage, StorageMap},
     xdr::{
         self, ContractId, CreateContractArgs, Hash, HashIdPreimage, HashIdPreimageContractId,
@@ -8,10 +10,9 @@ use crate::{
     },
     Env, Host, LedgerInfo, Symbol,
 };
-use soroban_env_common::{xdr::ScBytes, RawVal, TryIntoVal, VecObject};
-use soroban_test_wasms::CREATE_CONTRACT;
-
 use sha2::{Digest, Sha256};
+use soroban_env_common::{xdr::ScBytes, RawVal, TryIntoVal, VecObject};
+use soroban_test_wasms::{ADD_I32, CREATE_CONTRACT, UPDATEABLE_CONTRACT};
 
 use super::util::{generate_account_id, generate_bytes_array};
 
@@ -244,4 +245,48 @@ pub(crate) fn sha256_hash_id_preimage<T: xdr::WriteXdr>(pre_image: T) -> xdr::Ha
         .expect("preimage write failed");
 
     xdr::Hash(Sha256::digest(buf).try_into().expect("invalid hash"))
+}
+
+#[test]
+fn test_contract_wasm_update() {
+    let host = Host::test_host_with_recording_footprint();
+    let contract_id = host
+        .register_test_contract_wasm(UPDATEABLE_CONTRACT)
+        .unwrap();
+
+    let updated_wasm = ADD_I32;
+    let install_args = xdr::InstallContractCodeArgs {
+        code: updated_wasm.to_vec().try_into().unwrap(),
+    };
+
+    let updated_wasm_hash: RawVal = host
+        .invoke_function(HostFunction::InstallContractCode(install_args.clone()))
+        .unwrap()
+        .try_into_val(&host)
+        .unwrap();
+    let res: i32 = host
+        .call(
+            contract_id,
+            Symbol::try_from_small_str("update").unwrap(),
+            host_vec![&host, &updated_wasm_hash].into(),
+        )
+        .unwrap()
+        .try_into_val(&host)
+        .unwrap();
+    // Make sure execution continued after the update and we've got the function
+    // return value.
+    assert_eq!(res, 123);
+
+    // Now the contract implementation has the `add` function for adding two
+    // numbers.
+    let updated_res: i32 = host
+        .call(
+            contract_id,
+            Symbol::try_from_small_str("add").unwrap(),
+            host_vec![&host, 10_i32, 20_i32].into(),
+        )
+        .unwrap()
+        .try_into_val(&host)
+        .unwrap();
+    assert_eq!(updated_res, 30);
 }

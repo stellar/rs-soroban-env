@@ -75,6 +75,11 @@ impl Host {
         }
     }
 
+    pub(crate) fn contract_code_exists(&self, wasm_hash: &Hash) -> Result<bool, HostError> {
+        let key = self.contract_code_ledger_key(wasm_hash)?;
+        self.0.storage.borrow_mut().has(&key, self.as_budget())
+    }
+
     // Notes on metering: `from_host_obj` and `put` to storage covered, rest are free.
     pub(crate) fn store_contract_source(
         &self,
