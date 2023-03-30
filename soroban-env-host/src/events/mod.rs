@@ -1,5 +1,6 @@
 mod debug;
 mod internal;
+pub(crate) mod system_events;
 
 pub use debug::{DebugArg, DebugError, DebugEvent};
 pub(crate) use internal::InternalEventsBuffer;

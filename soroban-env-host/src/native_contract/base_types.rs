@@ -355,7 +355,15 @@ impl TryFromVal<Host, &std::vec::Vec<RawVal>> for Vec {
 
 impl Vec {
     pub fn new(env: &Host) -> Result<Self, HostError> {
-        let vec: VecObject = env.vec_new(().into())?.try_into()?;
+        let vec = env.vec_new(().into())?;
+        Ok(Self {
+            host: env.clone(),
+            object: vec,
+        })
+    }
+
+    pub fn from_slice(env: &Host, slice: &[RawVal]) -> Result<Self, HostError> {
+        let vec = env.vec_new_from_slice(slice)?;
         Ok(Self {
             host: env.clone(),
             object: vec,
