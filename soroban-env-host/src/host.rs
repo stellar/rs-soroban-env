@@ -52,6 +52,7 @@ pub(crate) mod metered_clone;
 pub(crate) mod metered_map;
 pub(crate) mod metered_vector;
 pub(crate) mod metered_xdr;
+mod spec;
 mod validity;
 pub use error::HostError;
 
