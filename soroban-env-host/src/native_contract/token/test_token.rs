@@ -176,11 +176,7 @@ impl<'a> TestToken<'a> {
         addr: Address,
         authorize: bool,
     ) -> Result<(), HostError> {
-        self.call_with_single_signer(
-            admin,
-            "set_auth",
-            host_vec![self.host, admin.address(self.host), addr, authorize],
-        )
+        self.call_with_single_signer(admin, "set_auth", host_vec![self.host, addr, authorize])
     }
 
     pub(crate) fn mint(
@@ -189,11 +185,7 @@ impl<'a> TestToken<'a> {
         to: Address,
         amount: i128,
     ) -> Result<(), HostError> {
-        self.call_with_single_signer(
-            admin,
-            "mint",
-            host_vec![self.host, admin.address(self.host), to, amount],
-        )
+        self.call_with_single_signer(admin, "mint", host_vec![self.host, to, amount])
     }
 
     pub(crate) fn clawback(
@@ -202,11 +194,7 @@ impl<'a> TestToken<'a> {
         from: Address,
         amount: i128,
     ) -> Result<(), HostError> {
-        self.call_with_single_signer(
-            admin,
-            "clawback",
-            host_vec![self.host, admin.address(self.host), from, amount],
-        )
+        self.call_with_single_signer(admin, "clawback", host_vec![self.host, from, amount])
     }
 
     pub(crate) fn set_admin(
@@ -214,11 +202,7 @@ impl<'a> TestToken<'a> {
         admin: &TestSigner,
         new_admin: Address,
     ) -> Result<(), HostError> {
-        self.call_with_single_signer(
-            admin,
-            "set_admin",
-            host_vec![self.host, admin.address(self.host), new_admin],
-        )
+        self.call_with_single_signer(admin, "set_admin", host_vec![self.host, new_admin])
     }
 
     pub(crate) fn decimals(&self) -> Result<u32, HostError> {
