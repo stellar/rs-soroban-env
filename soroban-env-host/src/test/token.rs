@@ -428,7 +428,9 @@ fn test_zero_amounts() {
     test.create_default_trustline(&user);
     test.create_default_trustline(&user_2);
 
-    token.transfer(&user, user_2.address(&test.host), 0).unwrap();
+    token
+        .transfer(&user, user_2.address(&test.host), 0)
+        .unwrap();
     token.burn(&user, 0).unwrap();
     token
         .burn_from(&user, user_2.address(&test.host), 0)
@@ -860,8 +862,12 @@ fn test_token_authorization() {
 
     assert!(token.authorized(user.address(&test.host)).unwrap());
     // Make sure balance transfers are possible now.
-    token.transfer(&user, user_2.address(&test.host), 1).unwrap();
-    token.transfer(&user_2, user.address(&test.host), 1).unwrap();
+    token
+        .transfer(&user, user_2.address(&test.host), 1)
+        .unwrap();
+    token
+        .transfer(&user_2, user.address(&test.host), 1)
+        .unwrap();
 }
 
 #[test]
@@ -1087,7 +1093,10 @@ fn test_account_spendable_balance() {
     assert_eq!(token.balance(user_addr.clone()).unwrap(), 100_000_000);
     // base reserve = 5_000_000
     // signer + account = 3 base reserves
-    assert_eq!(token.spendable_balance(user_addr.clone()).unwrap(), 85_000_000);
+    assert_eq!(
+        token.spendable_balance(user_addr.clone()).unwrap(),
+        85_000_000
+    );
 }
 
 #[test]
@@ -1248,7 +1257,10 @@ fn test_trustline_auth() {
         .unwrap();
 
     assert_eq!(token.balance(user.address(&test.host)).unwrap(), 490);
-    assert_eq!(token.spendable_balance(user.address(&test.host)).unwrap(), 480);
+    assert_eq!(
+        token.spendable_balance(user.address(&test.host)).unwrap(),
+        480
+    );
 }
 
 #[test]
@@ -2452,7 +2464,9 @@ fn test_classic_transfers_not_possible_for_unauthorized_asset() {
     );
 
     // Authorized to transfer
-    token.transfer(&user, user.address(&test.host), 1_i128).unwrap();
+    token
+        .transfer(&user, user.address(&test.host), 1_i128)
+        .unwrap();
 
     // Override the trustline authorization flag.
     let trustline_key = test.create_trustline(

@@ -36,11 +36,19 @@ pub trait TokenTrait {
 
     fn allowance(e: &Host, from: Address, spender: Address) -> Result<i128, HostError>;
 
-    fn increase_allowance(e: &Host, from: Address, spender: Address, amount: i128)
-        -> Result<(), HostError>;
+    fn increase_allowance(
+        e: &Host,
+        from: Address,
+        spender: Address,
+        amount: i128,
+    ) -> Result<(), HostError>;
 
-    fn decrease_allowance(e: &Host, from: Address, spender: Address, amount: i128)
-        -> Result<(), HostError>;
+    fn decrease_allowance(
+        e: &Host,
+        from: Address,
+        spender: Address,
+        amount: i128,
+    ) -> Result<(), HostError>;
 
     fn balance(e: &Host, addr: Address) -> Result<i128, HostError>;
 
