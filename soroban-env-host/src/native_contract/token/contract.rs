@@ -62,7 +62,7 @@ pub trait TokenTrait {
 
     fn burn_from(e: &Host, spender: Address, from: Address, amount: i128) -> Result<(), HostError>;
 
-    fn set_auth(e: &Host, addr: Address, authorize: bool) -> Result<(), HostError>;
+    fn set_authorized(e: &Host, addr: Address, authorize: bool) -> Result<(), HostError>;
 
     fn mint(e: &Host, to: Address, amount: i128) -> Result<(), HostError>;
 
@@ -281,11 +281,11 @@ impl TokenTrait for Token {
     }
 
     // Metering: covered by components
-    fn set_auth(e: &Host, addr: Address, authorize: bool) -> Result<(), HostError> {
+    fn set_authorized(e: &Host, addr: Address, authorize: bool) -> Result<(), HostError> {
         let admin = read_administrator(e)?;
         admin.require_auth()?;
         write_authorization(e, addr.clone(), authorize)?;
-        event::set_auth(e, admin, addr, authorize)?;
+        event::set_authorized(e, admin, addr, authorize)?;
         Ok(())
     }
 

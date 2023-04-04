@@ -456,7 +456,7 @@ fn test_zero_amounts() {
 
     //this will create a 0 balance with clawback enabled because the issuer has the clawback flag set
     token
-        .set_auth(&admin, user_contract_address.clone(), true)
+        .set_authorized(&admin, user_contract_address.clone(), true)
         .unwrap();
     token
         .clawback(&admin, user_contract_address.clone(), 0)
@@ -741,7 +741,7 @@ fn test_burn() {
 
     // Deauthorize the balance of `user` and then try to burn.
     token
-        .set_auth(&admin, user.address(&test.host), false)
+        .set_authorized(&admin, user.address(&test.host), false)
         .unwrap();
 
     // Can't burn while deauthorized
@@ -752,7 +752,7 @@ fn test_burn() {
 
     // Authorize the balance of `user` and then burn.
     token
-        .set_auth(&admin, user.address(&test.host), true)
+        .set_authorized(&admin, user.address(&test.host), true)
         .unwrap();
 
     token.burn(&user, 1_000_000).unwrap();
@@ -829,7 +829,7 @@ fn test_token_authorization() {
 
     // Deauthorize the balance of `user`.
     token
-        .set_auth(&admin, user.address(&test.host), false)
+        .set_authorized(&admin, user.address(&test.host), false)
         .unwrap();
 
     assert!(!token.authorized(user.address(&test.host)).unwrap());
@@ -855,7 +855,7 @@ fn test_token_authorization() {
 
     // Authorize the balance of `user`.
     token
-        .set_auth(&admin, user.address(&test.host), true)
+        .set_authorized(&admin, user.address(&test.host), true)
         .unwrap();
 
     assert!(token.authorized(user.address(&test.host)).unwrap());
@@ -1031,7 +1031,7 @@ fn test_set_admin() {
     );
     assert_eq!(
         token
-            .set_auth(&admin, new_admin.address(&test.host), false,)
+            .set_authorized(&admin, new_admin.address(&test.host), false,)
             .err()
             .unwrap()
             .status,
@@ -1039,7 +1039,7 @@ fn test_set_admin() {
     );
     assert_eq!(
         token
-            .set_auth(&admin, new_admin.address(&test.host), true)
+            .set_authorized(&admin, new_admin.address(&test.host), true)
             .err()
             .unwrap()
             .status,
@@ -1052,10 +1052,10 @@ fn test_set_admin() {
         .clawback(&new_admin, user.address(&test.host), 1)
         .unwrap();
     token
-        .set_auth(&new_admin, user.address(&test.host), false)
+        .set_authorized(&new_admin, user.address(&test.host), false)
         .unwrap();
     token
-        .set_auth(&new_admin, user.address(&test.host), true)
+        .set_authorized(&new_admin, user.address(&test.host), true)
         .unwrap();
 
     // Return the admin rights to the old admin
@@ -1152,7 +1152,7 @@ fn test_trustline_auth() {
     assert_eq!(
         to_contract_err(
             token
-                .set_auth(&admin, user.address(&test.host), false)
+                .set_authorized(&admin, user.address(&test.host), false)
                 .err()
                 .unwrap()
         ),
@@ -1174,7 +1174,7 @@ fn test_trustline_auth() {
     // trustline should be deauthorized now.
 
     token
-        .set_auth(&admin, user.address(&test.host), false)
+        .set_authorized(&admin, user.address(&test.host), false)
         .unwrap();
 
     // transfer should fail from deauthorized trustline
@@ -1201,7 +1201,7 @@ fn test_trustline_auth() {
 
     // Now authorize trustline
     token
-        .set_auth(&admin, user.address(&test.host), true)
+        .set_authorized(&admin, user.address(&test.host), true)
         .unwrap();
 
     // Balance operations are possible now.

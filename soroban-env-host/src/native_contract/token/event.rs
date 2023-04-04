@@ -75,7 +75,7 @@ pub(crate) fn clawback(
     Ok(())
 }
 
-pub(crate) fn set_auth(
+pub(crate) fn set_authorized(
     e: &Host,
     admin: Address,
     id: Address,

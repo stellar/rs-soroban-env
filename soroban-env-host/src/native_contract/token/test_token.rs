@@ -170,13 +170,17 @@ impl<'a> TestToken<'a> {
         )
     }
 
-    pub(crate) fn set_auth(
+    pub(crate) fn set_authorized(
         &self,
         admin: &TestSigner,
         addr: Address,
         authorize: bool,
     ) -> Result<(), HostError> {
-        self.call_with_single_signer(admin, "set_auth", host_vec![self.host, addr, authorize])
+        self.call_with_single_signer(
+            admin,
+            "set_authorized",
+            host_vec![self.host, addr, authorize],
+        )
     }
 
     pub(crate) fn mint(
