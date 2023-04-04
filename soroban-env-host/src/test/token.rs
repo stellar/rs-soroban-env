@@ -1087,7 +1087,7 @@ fn test_account_spendable_balance() {
     assert_eq!(token.balance(user_addr.clone()).unwrap(), 100_000_000);
     // base reserve = 5_000_000
     // signer + account = 3 base reserves
-    assert_eq!(token.spendable(user_addr.clone()).unwrap(), 85_000_000);
+    assert_eq!(token.spendable_balance(user_addr.clone()).unwrap(), 85_000_000);
 }
 
 #[test]
@@ -1248,7 +1248,7 @@ fn test_trustline_auth() {
         .unwrap();
 
     assert_eq!(token.balance(user.address(&test.host)).unwrap(), 490);
-    assert_eq!(token.spendable(user.address(&test.host)).unwrap(), 480);
+    assert_eq!(token.spendable_balance(user.address(&test.host)).unwrap(), 480);
 }
 
 #[test]

@@ -44,7 +44,7 @@ pub trait TokenTrait {
 
     fn balance(e: &Host, addr: Address) -> Result<i128, HostError>;
 
-    fn spendable(e: &Host, addr: Address) -> Result<i128, HostError>;
+    fn spendable_balance(e: &Host, addr: Address) -> Result<i128, HostError>;
 
     fn authorized(e: &Host, addr: Address) -> Result<bool, HostError>;
 
@@ -212,7 +212,7 @@ impl TokenTrait for Token {
         read_balance(e, addr)
     }
 
-    fn spendable(e: &Host, addr: Address) -> Result<i128, HostError> {
+    fn spendable_balance(e: &Host, addr: Address) -> Result<i128, HostError> {
         get_spendable_balance(e, addr)
     }
 
