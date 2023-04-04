@@ -122,7 +122,7 @@ impl<'a> TestToken<'a> {
             .try_into_val(self.host)?)
     }
 
-    pub(crate) fn xfer(
+    pub(crate) fn transfer(
         &self,
         from: &TestSigner,
         to: Address,
@@ -130,12 +130,12 @@ impl<'a> TestToken<'a> {
     ) -> Result<(), HostError> {
         self.call_with_single_signer(
             from,
-            "xfer",
+            "transfer",
             host_vec![self.host, from.address(self.host), to, amount],
         )
     }
 
-    pub(crate) fn xfer_from(
+    pub(crate) fn transfer_from(
         &self,
         spender: &TestSigner,
         from: Address,
@@ -144,7 +144,7 @@ impl<'a> TestToken<'a> {
     ) -> Result<(), HostError> {
         self.call_with_single_signer(
             spender,
-            "xfer_from",
+            "transfer_from",
             host_vec![self.host, spender.address(self.host), from, to, amount],
         )
     }

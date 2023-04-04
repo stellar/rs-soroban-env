@@ -48,9 +48,9 @@ pub trait TokenTrait {
 
     fn authorized(e: &Host, addr: Address) -> Result<bool, HostError>;
 
-    fn xfer(e: &Host, from: Address, to: Address, amount: i128) -> Result<(), HostError>;
+    fn transfer(e: &Host, from: Address, to: Address, amount: i128) -> Result<(), HostError>;
 
-    fn xfer_from(
+    fn transfer_from(
         e: &Host,
         spender: Address,
         from: Address,
@@ -222,7 +222,7 @@ impl TokenTrait for Token {
     }
 
     // Metering: covered by components
-    fn xfer(e: &Host, from: Address, to: Address, amount: i128) -> Result<(), HostError> {
+    fn transfer(e: &Host, from: Address, to: Address, amount: i128) -> Result<(), HostError> {
         check_nonnegative_amount(e, amount)?;
         from.require_auth()?;
         spend_balance(e, from.clone(), amount)?;
@@ -232,7 +232,7 @@ impl TokenTrait for Token {
     }
 
     // Metering: covered by components
-    fn xfer_from(
+    fn transfer_from(
         e: &Host,
         spender: Address,
         from: Address,
