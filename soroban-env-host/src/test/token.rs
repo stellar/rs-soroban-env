@@ -428,7 +428,9 @@ fn test_zero_amounts() {
     test.create_default_trustline(&user);
     test.create_default_trustline(&user_2);
 
-    token.xfer(&user, user_2.address(&test.host), 0).unwrap();
+    token
+        .transfer(&user, user_2.address(&test.host), 0)
+        .unwrap();
     token.burn(&user, 0).unwrap();
     token
         .burn_from(&user, user_2.address(&test.host), 0)
@@ -456,7 +458,7 @@ fn test_zero_amounts() {
 
     //this will create a 0 balance with clawback enabled because the issuer has the clawback flag set
     token
-        .set_auth(&admin, user_contract_address.clone(), true)
+        .set_authorized(&admin, user_contract_address.clone(), true)
         .unwrap();
     token
         .clawback(&admin, user_contract_address.clone(), 0)
@@ -487,7 +489,7 @@ fn test_direct_transfer() {
 
     // Transfer some balance from user 1 to user 2.
     token
-        .xfer(&user, user_2.address(&test.host), 9_999_999)
+        .transfer(&user, user_2.address(&test.host), 9_999_999)
         .unwrap();
     assert_eq!(token.balance(user.address(&test.host)).unwrap(), 90_000_001);
     assert_eq!(
@@ -499,7 +501,7 @@ fn test_direct_transfer() {
     assert_eq!(
         to_contract_err(
             token
-                .xfer(&user_2, user.address(&test.host), 10_000_000,)
+                .transfer(&user_2, user.address(&test.host), 10_000_000,)
                 .err()
                 .unwrap()
         ),
@@ -508,7 +510,7 @@ fn test_direct_transfer() {
 
     // Transfer some balance back from user 2 to user 1.
     token
-        .xfer(&user_2, user.address(&test.host), 999_999)
+        .transfer(&user_2, user.address(&test.host), 999_999)
         .unwrap();
     assert_eq!(token.balance(user.address(&test.host)).unwrap(), 91_000_000);
     assert_eq!(
@@ -550,7 +552,7 @@ fn test_transfer_with_allowance() {
 
     // Allow 10_000_000 units of token to be transferred from user by user 3.
     token
-        .incr_allow(&user, user_3.address(&test.host), 10_000_000)
+        .increase_allowance(&user, user_3.address(&test.host), 10_000_000)
         .unwrap();
 
     assert_eq!(
@@ -562,7 +564,7 @@ fn test_transfer_with_allowance() {
 
     // Transfer 5_000_000 of allowance to user 2.
     token
-        .xfer_from(
+        .transfer_from(
             &user_3,
             user.address(&test.host),
             user_2.address(&test.host),
@@ -586,7 +588,7 @@ fn test_transfer_with_allowance() {
     assert_eq!(
         to_contract_err(
             token
-                .xfer_from(
+                .transfer_from(
                     &user_3,
                     user.address(&test.host),
                     user_3.address(&test.host),
@@ -599,7 +601,7 @@ fn test_transfer_with_allowance() {
     );
     // Decrease allow by more than what's left. This will set the allowance to 0
     token
-        .decr_allow(&user, user_3.address(&test.host), 10_000_000)
+        .decrease_allowance(&user, user_3.address(&test.host), 10_000_000)
         .unwrap();
 
     assert_eq!(
@@ -610,11 +612,11 @@ fn test_transfer_with_allowance() {
     );
 
     token
-        .incr_allow(&user, user_3.address(&test.host), 4_000_000)
+        .increase_allowance(&user, user_3.address(&test.host), 4_000_000)
         .unwrap();
     // Transfer the remaining allowance to user 3.
     token
-        .xfer_from(
+        .transfer_from(
             &user_3,
             user.address(&test.host),
             user_3.address(&test.host),
@@ -642,7 +644,7 @@ fn test_transfer_with_allowance() {
     assert_eq!(
         to_contract_err(
             token
-                .xfer_from(
+                .transfer_from(
                     &user_3,
                     user.address(&test.host),
                     user_3.address(&test.host),
@@ -685,7 +687,7 @@ fn test_burn() {
 
     // Allow 10_000_000 units of token to be transferred from user by user 3.
     token
-        .incr_allow(&user, user_2.address(&test.host), 10_000_000)
+        .increase_allowance(&user, user_2.address(&test.host), 10_000_000)
         .unwrap();
 
     assert_eq!(
@@ -741,7 +743,7 @@ fn test_burn() {
 
     // Deauthorize the balance of `user` and then try to burn.
     token
-        .set_auth(&admin, user.address(&test.host), false)
+        .set_authorized(&admin, user.address(&test.host), false)
         .unwrap();
 
     // Can't burn while deauthorized
@@ -752,7 +754,7 @@ fn test_burn() {
 
     // Authorize the balance of `user` and then burn.
     token
-        .set_auth(&admin, user.address(&test.host), true)
+        .set_authorized(&admin, user.address(&test.host), true)
         .unwrap();
 
     token.burn(&user, 1_000_000).unwrap();
@@ -791,7 +793,7 @@ fn test_cannot_burn_native() {
     );
 
     token
-        .incr_allow(&user, user2.address(&test.host), 100)
+        .increase_allowance(&user, user2.address(&test.host), 100)
         .unwrap();
 
     assert_eq!(
@@ -829,7 +831,7 @@ fn test_token_authorization() {
 
     // Deauthorize the balance of `user`.
     token
-        .set_auth(&admin, user.address(&test.host), false)
+        .set_authorized(&admin, user.address(&test.host), false)
         .unwrap();
 
     assert!(!token.authorized(user.address(&test.host)).unwrap());
@@ -837,7 +839,7 @@ fn test_token_authorization() {
     assert_eq!(
         to_contract_err(
             token
-                .xfer(&user, user_2.address(&test.host), 1)
+                .transfer(&user, user_2.address(&test.host), 1)
                 .err()
                 .unwrap()
         ),
@@ -846,7 +848,7 @@ fn test_token_authorization() {
     assert_eq!(
         to_contract_err(
             token
-                .xfer(&user_2, user.address(&test.host), 1)
+                .transfer(&user_2, user.address(&test.host), 1)
                 .err()
                 .unwrap()
         ),
@@ -855,13 +857,17 @@ fn test_token_authorization() {
 
     // Authorize the balance of `user`.
     token
-        .set_auth(&admin, user.address(&test.host), true)
+        .set_authorized(&admin, user.address(&test.host), true)
         .unwrap();
 
     assert!(token.authorized(user.address(&test.host)).unwrap());
     // Make sure balance transfers are possible now.
-    token.xfer(&user, user_2.address(&test.host), 1).unwrap();
-    token.xfer(&user_2, user.address(&test.host), 1).unwrap();
+    token
+        .transfer(&user, user_2.address(&test.host), 1)
+        .unwrap();
+    token
+        .transfer(&user_2, user.address(&test.host), 1)
+        .unwrap();
 }
 
 #[test]
@@ -1031,7 +1037,7 @@ fn test_set_admin() {
     );
     assert_eq!(
         token
-            .set_auth(&admin, new_admin.address(&test.host), false,)
+            .set_authorized(&admin, new_admin.address(&test.host), false,)
             .err()
             .unwrap()
             .status,
@@ -1039,7 +1045,7 @@ fn test_set_admin() {
     );
     assert_eq!(
         token
-            .set_auth(&admin, new_admin.address(&test.host), true)
+            .set_authorized(&admin, new_admin.address(&test.host), true)
             .err()
             .unwrap()
             .status,
@@ -1052,10 +1058,10 @@ fn test_set_admin() {
         .clawback(&new_admin, user.address(&test.host), 1)
         .unwrap();
     token
-        .set_auth(&new_admin, user.address(&test.host), false)
+        .set_authorized(&new_admin, user.address(&test.host), false)
         .unwrap();
     token
-        .set_auth(&new_admin, user.address(&test.host), true)
+        .set_authorized(&new_admin, user.address(&test.host), true)
         .unwrap();
 
     // Return the admin rights to the old admin
@@ -1087,7 +1093,10 @@ fn test_account_spendable_balance() {
     assert_eq!(token.balance(user_addr.clone()).unwrap(), 100_000_000);
     // base reserve = 5_000_000
     // signer + account = 3 base reserves
-    assert_eq!(token.spendable(user_addr.clone()).unwrap(), 85_000_000);
+    assert_eq!(
+        token.spendable_balance(user_addr.clone()).unwrap(),
+        85_000_000
+    );
 }
 
 #[test]
@@ -1139,7 +1148,7 @@ fn test_trustline_auth() {
     assert_eq!(token.balance(user.address(&test.host)).unwrap(), 1000);
 
     // transfer 1 back to the issuer (which gets burned)
-    token.xfer(&user, admin.address(&test.host), 1).unwrap();
+    token.transfer(&user, admin.address(&test.host), 1).unwrap();
 
     assert_eq!(token.balance(user.address(&test.host)).unwrap(), 999);
     assert_eq!(
@@ -1152,7 +1161,7 @@ fn test_trustline_auth() {
     assert_eq!(
         to_contract_err(
             token
-                .set_auth(&admin, user.address(&test.host), false)
+                .set_authorized(&admin, user.address(&test.host), false)
                 .err()
                 .unwrap()
         ),
@@ -1174,14 +1183,14 @@ fn test_trustline_auth() {
     // trustline should be deauthorized now.
 
     token
-        .set_auth(&admin, user.address(&test.host), false)
+        .set_authorized(&admin, user.address(&test.host), false)
         .unwrap();
 
     // transfer should fail from deauthorized trustline
     assert_eq!(
         to_contract_err(
             token
-                .xfer(&user, admin.address(&test.host), 1)
+                .transfer(&user, admin.address(&test.host), 1)
                 .err()
                 .unwrap()
         ),
@@ -1201,15 +1210,15 @@ fn test_trustline_auth() {
 
     // Now authorize trustline
     token
-        .set_auth(&admin, user.address(&test.host), true)
+        .set_authorized(&admin, user.address(&test.host), true)
         .unwrap();
 
     // Balance operations are possible now.
     token
-        .incr_allow(&user, admin.address(&test.host), 500)
+        .increase_allowance(&user, admin.address(&test.host), 500)
         .unwrap();
     token
-        .xfer_from(
+        .transfer_from(
             &admin,
             user.address(&test.host),
             admin.address(&test.host),
@@ -1248,7 +1257,10 @@ fn test_trustline_auth() {
         .unwrap();
 
     assert_eq!(token.balance(user.address(&test.host)).unwrap(), 490);
-    assert_eq!(token.spendable(user.address(&test.host)).unwrap(), 480);
+    assert_eq!(
+        token.spendable_balance(user.address(&test.host)).unwrap(),
+        480
+    );
 }
 
 #[test]
@@ -1346,7 +1358,7 @@ fn test_account_invoker_auth_with_issuer_admin() {
 
     // Perform transfers based on the invoker id.
     test.run_from_account(user_acc.clone(), || {
-        token.xfer(
+        token.transfer(
             &TestSigner::AccountInvoker(user_acc.clone()),
             admin_address.clone(),
             500,
@@ -1355,7 +1367,7 @@ fn test_account_invoker_auth_with_issuer_admin() {
     .unwrap();
 
     test.run_from_account(admin_acc.clone(), || {
-        token.xfer(
+        token.transfer(
             &TestSigner::AccountInvoker(admin_acc.clone()),
             user_address.clone(),
             800,
@@ -1449,12 +1461,12 @@ fn test_contract_invoker_auth() {
 
     // Perform transfers based on the invoker id.
     test.run_from_contract(&user_contract_id_bytes, || {
-        token.xfer(&user_contract_invoker, admin_contract_address.clone(), 500)
+        token.transfer(&user_contract_invoker, admin_contract_address.clone(), 500)
     })
     .unwrap();
 
     test.run_from_contract(&admin_contract_id_bytes, || {
-        token.xfer(&admin_contract_invoker, user_contract_address.clone(), 800)
+        token.transfer(&admin_contract_invoker, user_contract_address.clone(), 800)
     })
     .unwrap();
 
@@ -1670,7 +1682,7 @@ fn test_classic_account_multisig_auth() {
 
     // Success: account weight (60) + 40 = 100
     token
-        .xfer(
+        .transfer(
             &TestSigner::account_with_multisig(&account_id, vec![&test.user_key, &test.user_key_3]),
             receiver.clone(),
             100,
@@ -1679,7 +1691,7 @@ fn test_classic_account_multisig_auth() {
 
     // Success: 1 high weight signer (u32::MAX)
     token
-        .xfer(
+        .transfer(
             &TestSigner::account_with_multisig(&account_id, vec![&test.user_key_2]),
             receiver.clone(),
             100,
@@ -1688,7 +1700,7 @@ fn test_classic_account_multisig_auth() {
 
     // Success: 60 + 59 > 100, no account signature
     token
-        .xfer(
+        .transfer(
             &TestSigner::account_with_multisig(
                 &account_id,
                 vec![&test.user_key_3, &test.user_key_4],
@@ -1700,7 +1712,7 @@ fn test_classic_account_multisig_auth() {
 
     // Success: 40 + 60 + 59 > 100
     token
-        .xfer(
+        .transfer(
             &TestSigner::account_with_multisig(
                 &account_id,
                 vec![&test.user_key, &test.user_key_3, &test.user_key_4],
@@ -1712,7 +1724,7 @@ fn test_classic_account_multisig_auth() {
 
     // Success: all signers
     token
-        .xfer(
+        .transfer(
             &TestSigner::account_with_multisig(
                 &account_id,
                 vec![
@@ -1731,7 +1743,7 @@ fn test_classic_account_multisig_auth() {
     assert_eq!(
         to_contract_err(
             token
-                .xfer(
+                .transfer(
                     &TestSigner::account_with_multisig(&account_id, vec![&test.user_key]),
                     receiver.clone(),
                     100,
@@ -1746,7 +1758,7 @@ fn test_classic_account_multisig_auth() {
     assert_eq!(
         to_contract_err(
             token
-                .xfer(
+                .transfer(
                     &TestSigner::account_with_multisig(
                         &account_id,
                         vec![&test.user_key, &test.user_key_4]
@@ -1764,7 +1776,7 @@ fn test_classic_account_multisig_auth() {
     assert_eq!(
         to_contract_err(
             token
-                .xfer(
+                .transfer(
                     &TestSigner::account_with_multisig(
                         &account_id,
                         vec![&test.user_key_3, &test.user_key_3]
@@ -1782,7 +1794,7 @@ fn test_classic_account_multisig_auth() {
     assert_eq!(
         to_contract_err(
             token
-                .xfer(
+                .transfer(
                     &TestSigner::account_with_multisig(
                         &account_id,
                         vec![&test.user_key_3, &test.user_key_4, &test.user_key_3],
@@ -1800,7 +1812,7 @@ fn test_classic_account_multisig_auth() {
     assert_eq!(
         to_contract_err(
             token
-                .xfer(
+                .transfer(
                     &TestSigner::account_with_multisig(
                         &account_id,
                         vec![&test.user_key_3, &test.issuer_key],
@@ -1818,7 +1830,7 @@ fn test_classic_account_multisig_auth() {
     assert_eq!(
         to_contract_err(
             token
-                .xfer(
+                .transfer(
                     &TestSigner::account_with_multisig(
                         &account_id,
                         vec![&test.user_key_3, &test.user_key_4, &test.issuer_key],
@@ -1841,7 +1853,7 @@ fn test_classic_account_multisig_auth() {
     assert_eq!(
         to_contract_err(
             token
-                .xfer(
+                .transfer(
                     &TestSigner::account_with_multisig(&account_id, too_many_sigs,),
                     receiver.clone(),
                     100,
@@ -1864,7 +1876,7 @@ fn test_classic_account_multisig_auth() {
     assert_eq!(
         to_contract_err(
             token
-                .xfer(
+                .transfer(
                     &TestSigner::Account(AccountSigner {
                         account_id: account_id,
                         signers: out_of_order_signers,
@@ -1919,7 +1931,7 @@ fn test_negative_amounts_are_not_allowed() {
     assert_eq!(
         to_contract_err(
             token
-                .xfer(&user, user_2.address(&test.host), -1)
+                .transfer(&user, user_2.address(&test.host), -1)
                 .err()
                 .unwrap()
         ),
@@ -1929,7 +1941,7 @@ fn test_negative_amounts_are_not_allowed() {
     assert_eq!(
         to_contract_err(
             token
-                .incr_allow(&user, user_2.address(&test.host), -1)
+                .increase_allowance(&user, user_2.address(&test.host), -1)
                 .err()
                 .unwrap()
         ),
@@ -1939,22 +1951,22 @@ fn test_negative_amounts_are_not_allowed() {
     assert_eq!(
         to_contract_err(
             token
-                .decr_allow(&user, user_2.address(&test.host), -1)
+                .decrease_allowance(&user, user_2.address(&test.host), -1)
                 .err()
                 .unwrap()
         ),
         ContractError::NegativeAmountError
     );
 
-    // Approve some balance before doing the negative xfer_from.
+    // Approve some balance before doing the negative transfer_from.
     token
-        .incr_allow(&user, user_2.address(&test.host), 10_000)
+        .increase_allowance(&user, user_2.address(&test.host), 10_000)
         .unwrap();
 
     assert_eq!(
         to_contract_err(
             token
-                .xfer_from(
+                .transfer_from(
                     &user_2,
                     user.address(&test.host),
                     user_2.address(&test.host),
@@ -1992,11 +2004,11 @@ fn test_native_token_classic_balance_boundaries(
         0,
     );
 
-    // Try to do xfer that would leave balance lower than min.
+    // Try to do transfer that would leave balance lower than min.
     assert_eq!(
         to_contract_err(
             token
-                .xfer(
+                .transfer(
                     &user,
                     new_balance_signer.address(&test.host),
                     (init_balance - expected_min_balance + 1).into(),
@@ -2009,7 +2021,7 @@ fn test_native_token_classic_balance_boundaries(
 
     // now transfer spendable balance
     token
-        .xfer(
+        .transfer(
             &user,
             new_balance_signer.address(&test.host),
             (init_balance - expected_min_balance).into(),
@@ -2019,7 +2031,7 @@ fn test_native_token_classic_balance_boundaries(
 
     // now transfer back
     token
-        .xfer(
+        .transfer(
             &new_balance_signer,
             user.address(&test.host),
             (init_balance - expected_min_balance).into(),
@@ -2050,7 +2062,7 @@ fn test_native_token_classic_balance_boundaries(
     assert_eq!(
         to_contract_err(
             token
-                .xfer(
+                .transfer(
                     &large_balance_signer,
                     user.address(&test.host),
                     (expected_max_balance - init_balance + 1).into(),
@@ -2064,7 +2076,7 @@ fn test_native_token_classic_balance_boundaries(
     // ...but transferring exactly up to expected_max_balance should be
     // possible.
     token
-        .xfer(
+        .transfer(
             &large_balance_signer,
             user.address(&test.host),
             (expected_max_balance - init_balance).into(),
@@ -2297,7 +2309,7 @@ fn test_wrapped_asset_classic_balance_boundaries(
     assert_eq!(
         to_contract_err(
             token
-                .xfer(
+                .transfer(
                     &user,
                     user2.address(&test.host),
                     (init_balance - expected_min_balance + 1).into(),
@@ -2310,7 +2322,7 @@ fn test_wrapped_asset_classic_balance_boundaries(
 
     // Send spendable balance
     token
-        .xfer(
+        .transfer(
             &user,
             user2.address(&test.host),
             (init_balance - expected_min_balance).into(),
@@ -2328,7 +2340,7 @@ fn test_wrapped_asset_classic_balance_boundaries(
 
     // Send back
     token
-        .xfer(
+        .transfer(
             &user2,
             user.address(&test.host),
             (init_balance - expected_min_balance).into(),
@@ -2451,8 +2463,10 @@ fn test_classic_transfers_not_possible_for_unauthorized_asset() {
         }),
     );
 
-    // Authorized to xfer
-    token.xfer(&user, user.address(&test.host), 1_i128).unwrap();
+    // Authorized to transfer
+    token
+        .transfer(&user, user.address(&test.host), 1_i128)
+        .unwrap();
 
     // Override the trustline authorization flag.
     let trustline_key = test.create_trustline(
@@ -2469,7 +2483,7 @@ fn test_classic_transfers_not_possible_for_unauthorized_asset() {
     assert_eq!(
         to_contract_err(
             token
-                .xfer(&user, user.address(&test.host), 1_i128,)
+                .transfer(&user, user.address(&test.host), 1_i128,)
                 .err()
                 .unwrap()
         ),

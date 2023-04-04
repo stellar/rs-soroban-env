@@ -36,21 +36,29 @@ pub trait TokenTrait {
 
     fn allowance(e: &Host, from: Address, spender: Address) -> Result<i128, HostError>;
 
-    fn incr_allow(e: &Host, from: Address, spender: Address, amount: i128)
-        -> Result<(), HostError>;
+    fn increase_allowance(
+        e: &Host,
+        from: Address,
+        spender: Address,
+        amount: i128,
+    ) -> Result<(), HostError>;
 
-    fn decr_allow(e: &Host, from: Address, spender: Address, amount: i128)
-        -> Result<(), HostError>;
+    fn decrease_allowance(
+        e: &Host,
+        from: Address,
+        spender: Address,
+        amount: i128,
+    ) -> Result<(), HostError>;
 
     fn balance(e: &Host, addr: Address) -> Result<i128, HostError>;
 
-    fn spendable(e: &Host, addr: Address) -> Result<i128, HostError>;
+    fn spendable_balance(e: &Host, addr: Address) -> Result<i128, HostError>;
 
     fn authorized(e: &Host, addr: Address) -> Result<bool, HostError>;
 
-    fn xfer(e: &Host, from: Address, to: Address, amount: i128) -> Result<(), HostError>;
+    fn transfer(e: &Host, from: Address, to: Address, amount: i128) -> Result<(), HostError>;
 
-    fn xfer_from(
+    fn transfer_from(
         e: &Host,
         spender: Address,
         from: Address,
@@ -62,7 +70,7 @@ pub trait TokenTrait {
 
     fn burn_from(e: &Host, spender: Address, from: Address, amount: i128) -> Result<(), HostError>;
 
-    fn set_auth(e: &Host, addr: Address, authorize: bool) -> Result<(), HostError>;
+    fn set_authorized(e: &Host, addr: Address, authorize: bool) -> Result<(), HostError>;
 
     fn mint(e: &Host, to: Address, amount: i128) -> Result<(), HostError>;
 
@@ -172,7 +180,7 @@ impl TokenTrait for Token {
     }
 
     // Metering: covered by components
-    fn incr_allow(
+    fn increase_allowance(
         e: &Host,
         from: Address,
         spender: Address,
@@ -185,11 +193,11 @@ impl TokenTrait for Token {
             .checked_add(amount)
             .ok_or_else(|| e.err_status(ContractError::OverflowError))?;
         write_allowance(&e, from.clone(), spender.clone(), new_allowance)?;
-        event::incr_allow(e, from, spender, amount)?;
+        event::increase_allowance(e, from, spender, amount)?;
         Ok(())
     }
 
-    fn decr_allow(
+    fn decrease_allowance(
         e: &Host,
         from: Address,
         spender: Address,
@@ -203,7 +211,7 @@ impl TokenTrait for Token {
         } else {
             write_allowance(&e, from.clone(), spender.clone(), allowance - amount)?;
         }
-        event::decr_allow(e, from, spender, amount)?;
+        event::decrease_allowance(e, from, spender, amount)?;
         Ok(())
     }
 
@@ -212,7 +220,7 @@ impl TokenTrait for Token {
         read_balance(e, addr)
     }
 
-    fn spendable(e: &Host, addr: Address) -> Result<i128, HostError> {
+    fn spendable_balance(e: &Host, addr: Address) -> Result<i128, HostError> {
         get_spendable_balance(e, addr)
     }
 
@@ -222,7 +230,7 @@ impl TokenTrait for Token {
     }
 
     // Metering: covered by components
-    fn xfer(e: &Host, from: Address, to: Address, amount: i128) -> Result<(), HostError> {
+    fn transfer(e: &Host, from: Address, to: Address, amount: i128) -> Result<(), HostError> {
         check_nonnegative_amount(e, amount)?;
         from.require_auth()?;
         spend_balance(e, from.clone(), amount)?;
@@ -232,7 +240,7 @@ impl TokenTrait for Token {
     }
 
     // Metering: covered by components
-    fn xfer_from(
+    fn transfer_from(
         e: &Host,
         spender: Address,
         from: Address,
@@ -281,11 +289,11 @@ impl TokenTrait for Token {
     }
 
     // Metering: covered by components
-    fn set_auth(e: &Host, addr: Address, authorize: bool) -> Result<(), HostError> {
+    fn set_authorized(e: &Host, addr: Address, authorize: bool) -> Result<(), HostError> {
         let admin = read_administrator(e)?;
         admin.require_auth()?;
         write_authorization(e, addr.clone(), authorize)?;
-        event::set_auth(e, admin, addr, authorize)?;
+        event::set_authorized(e, admin, addr, authorize)?;
         Ok(())
     }
 
