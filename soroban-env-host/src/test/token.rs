@@ -550,7 +550,7 @@ fn test_transfer_with_allowance() {
 
     // Allow 10_000_000 units of token to be transferred from user by user 3.
     token
-        .incr_allow(&user, user_3.address(&test.host), 10_000_000)
+        .increase_allowance(&user, user_3.address(&test.host), 10_000_000)
         .unwrap();
 
     assert_eq!(
@@ -599,7 +599,7 @@ fn test_transfer_with_allowance() {
     );
     // Decrease allow by more than what's left. This will set the allowance to 0
     token
-        .decr_allow(&user, user_3.address(&test.host), 10_000_000)
+        .decrease_allowance(&user, user_3.address(&test.host), 10_000_000)
         .unwrap();
 
     assert_eq!(
@@ -610,7 +610,7 @@ fn test_transfer_with_allowance() {
     );
 
     token
-        .incr_allow(&user, user_3.address(&test.host), 4_000_000)
+        .increase_allowance(&user, user_3.address(&test.host), 4_000_000)
         .unwrap();
     // Transfer the remaining allowance to user 3.
     token
@@ -685,7 +685,7 @@ fn test_burn() {
 
     // Allow 10_000_000 units of token to be transferred from user by user 3.
     token
-        .incr_allow(&user, user_2.address(&test.host), 10_000_000)
+        .increase_allowance(&user, user_2.address(&test.host), 10_000_000)
         .unwrap();
 
     assert_eq!(
@@ -791,7 +791,7 @@ fn test_cannot_burn_native() {
     );
 
     token
-        .incr_allow(&user, user2.address(&test.host), 100)
+        .increase_allowance(&user, user2.address(&test.host), 100)
         .unwrap();
 
     assert_eq!(
@@ -1206,7 +1206,7 @@ fn test_trustline_auth() {
 
     // Balance operations are possible now.
     token
-        .incr_allow(&user, admin.address(&test.host), 500)
+        .increase_allowance(&user, admin.address(&test.host), 500)
         .unwrap();
     token
         .transfer_from(
@@ -1929,7 +1929,7 @@ fn test_negative_amounts_are_not_allowed() {
     assert_eq!(
         to_contract_err(
             token
-                .incr_allow(&user, user_2.address(&test.host), -1)
+                .increase_allowance(&user, user_2.address(&test.host), -1)
                 .err()
                 .unwrap()
         ),
@@ -1939,7 +1939,7 @@ fn test_negative_amounts_are_not_allowed() {
     assert_eq!(
         to_contract_err(
             token
-                .decr_allow(&user, user_2.address(&test.host), -1)
+                .decrease_allowance(&user, user_2.address(&test.host), -1)
                 .err()
                 .unwrap()
         ),
@@ -1948,7 +1948,7 @@ fn test_negative_amounts_are_not_allowed() {
 
     // Approve some balance before doing the negative transfer_from.
     token
-        .incr_allow(&user, user_2.address(&test.host), 10_000)
+        .increase_allowance(&user, user_2.address(&test.host), 10_000)
         .unwrap();
 
     assert_eq!(

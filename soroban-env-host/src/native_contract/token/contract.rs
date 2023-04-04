@@ -36,10 +36,10 @@ pub trait TokenTrait {
 
     fn allowance(e: &Host, from: Address, spender: Address) -> Result<i128, HostError>;
 
-    fn incr_allow(e: &Host, from: Address, spender: Address, amount: i128)
+    fn increase_allowance(e: &Host, from: Address, spender: Address, amount: i128)
         -> Result<(), HostError>;
 
-    fn decr_allow(e: &Host, from: Address, spender: Address, amount: i128)
+    fn decrease_allowance(e: &Host, from: Address, spender: Address, amount: i128)
         -> Result<(), HostError>;
 
     fn balance(e: &Host, addr: Address) -> Result<i128, HostError>;
@@ -172,7 +172,7 @@ impl TokenTrait for Token {
     }
 
     // Metering: covered by components
-    fn incr_allow(
+    fn increase_allowance(
         e: &Host,
         from: Address,
         spender: Address,
@@ -185,11 +185,11 @@ impl TokenTrait for Token {
             .checked_add(amount)
             .ok_or_else(|| e.err_status(ContractError::OverflowError))?;
         write_allowance(&e, from.clone(), spender.clone(), new_allowance)?;
-        event::incr_allow(e, from, spender, amount)?;
+        event::increase_allowance(e, from, spender, amount)?;
         Ok(())
     }
 
-    fn decr_allow(
+    fn decrease_allowance(
         e: &Host,
         from: Address,
         spender: Address,
@@ -203,7 +203,7 @@ impl TokenTrait for Token {
         } else {
             write_allowance(&e, from.clone(), spender.clone(), allowance - amount)?;
         }
-        event::decr_allow(e, from, spender, amount)?;
+        event::decrease_allowance(e, from, spender, amount)?;
         Ok(())
     }
 
