@@ -4,8 +4,51 @@ use core::cmp::Ordering;
 use soroban_env_common::xdr::{AccountId, ScAddress};
 use soroban_env_common::{
     AddressObject, BytesObject, Compare, ConversionError, Env, EnvBase, MapObject, RawVal,
-    TryFromVal, VecObject,
+    Symbol as SymbolVal, SymbolSmall, TryFromVal, VecObject,
 };
+
+#[derive(Clone)]
+pub struct Symbol {
+    val: SymbolVal,
+}
+
+impl TryFromVal<Host, SymbolVal> for Symbol {
+    type Error = HostError;
+
+    fn try_from_val(_env: &Host, val: &SymbolVal) -> Result<Self, Self::Error> {
+        Ok(Symbol { val: *val })
+    }
+}
+
+impl TryFromVal<Host, RawVal> for Symbol {
+    type Error = HostError;
+
+    fn try_from_val(env: &Host, val: &RawVal) -> Result<Self, Self::Error> {
+        let val = *val;
+        let obj: SymbolVal = val.try_into()?;
+        Symbol::try_from_val(env, &obj)
+    }
+}
+
+impl TryFromVal<Host, Symbol> for RawVal {
+    type Error = ConversionError;
+
+    fn try_from_val(_env: &Host, v: &Symbol) -> Result<Self, Self::Error> {
+        Ok(v.val.into())
+    }
+}
+
+impl Symbol {
+    pub const fn short(s: &str) -> Self {
+        if let Ok(sym) = SymbolSmall::try_from_str(s) {
+            Symbol {
+                val: SymbolVal::from_small(sym),
+            }
+        } else {
+            panic!("short symbols are limited to 9 characters");
+        }
+    }
+}
 
 #[derive(Clone)]
 pub struct Bytes {

@@ -3,7 +3,7 @@ use crate::HostError;
 use crate::{host::Host, native_contract::base_types::Address};
 use soroban_env_common::{Env, Symbol, TryFromVal, TryIntoVal};
 
-use super::asset_info::read_name;
+use super::metadata::read_name;
 
 pub(crate) fn increase_allowance(
     e: &Host,

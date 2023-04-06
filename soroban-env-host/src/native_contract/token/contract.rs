@@ -2,9 +2,7 @@ use crate::host::Host;
 use crate::native_contract::base_types::{Address, Bytes, BytesN};
 use crate::native_contract::contract_error::ContractError;
 use crate::native_contract::token::allowance::{read_allowance, spend_allowance, write_allowance};
-use crate::native_contract::token::asset_info::{
-    has_asset_info, read_name, read_symbol, write_asset_info,
-};
+use crate::native_contract::token::asset_info::{has_asset_info, write_asset_info};
 use crate::native_contract::token::balance::{
     is_authorized, read_balance, receive_balance, spend_balance, write_authorization,
 };
@@ -21,6 +19,7 @@ use super::asset_info::read_asset_info;
 use super::balance::{
     check_clawbackable, get_spendable_balance, spend_balance_no_authorization_check,
 };
+use super::metadata::{read_name, read_symbol, set_metadata, DECIMAL};
 use super::public_types::{AlphaNum12AssetInfo, AlphaNum4AssetInfo};
 
 pub trait TokenTrait {
@@ -172,6 +171,9 @@ impl TokenTrait for Token {
                 )?;
             }
         }
+
+        //Write metadata only after asset_info is set
+        set_metadata(&e)?;
         Ok(())
     }
 
@@ -317,7 +319,8 @@ impl TokenTrait for Token {
     }
 
     fn decimals(_e: &Host) -> Result<u32, HostError> {
-        Ok(7)
+        // no need to load metadta since this is fixed for all SAC tokens
+        Ok(DECIMAL)
     }
 
     fn name(e: &Host) -> Result<Bytes, HostError> {
