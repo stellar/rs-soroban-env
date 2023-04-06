@@ -1,9 +1,9 @@
 mod admin;
 mod allowance;
+mod asset_info;
 mod balance;
 mod contract;
 mod event;
-mod metadata;
 pub(crate) mod public_types;
 mod storage_types;
 
