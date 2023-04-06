@@ -556,23 +556,23 @@ impl Default for BudgetImpl {
             let cpu = &mut b.cpu_insns.get_cost_model_mut(*ct);
             match ct {
                 CostType::WasmInsnExec => {
-                    cpu.const_param = 23;
+                    cpu.const_param = 22;
                     cpu.lin_param = 0;
                 }
                 CostType::WasmMemAlloc => {
-                    cpu.const_param = 10815;
-                    cpu.lin_param = 1;
+                    cpu.const_param = 0;
+                    cpu.lin_param = 0;
                 }
                 CostType::HostMemAlloc => {
-                    cpu.const_param = 569;
-                    cpu.lin_param = 1;
+                    cpu.const_param = 1000;
+                    cpu.lin_param = 0;
                 }
                 CostType::HostMemCpy => {
                     cpu.const_param = 25;
-                    cpu.lin_param = 1;
+                    cpu.lin_param = 0;
                 }
                 CostType::HostMemCmp => {
-                    cpu.const_param = 46;
+                    cpu.const_param = 39;
                     cpu.lin_param = 1;
                 }
                 CostType::InvokeHostFunction => {
@@ -580,27 +580,27 @@ impl Default for BudgetImpl {
                     cpu.lin_param = 0;
                 }
                 CostType::VisitObject => {
-                    cpu.const_param = 29;
+                    cpu.const_param = 22;
                     cpu.lin_param = 0;
                 }
                 CostType::ValXdrConv => {
-                    cpu.const_param = 192;
+                    cpu.const_param = 190;
                     cpu.lin_param = 0;
                 }
                 CostType::ValSer => {
-                    cpu.const_param = 805;
+                    cpu.const_param = 695;
                     cpu.lin_param = 1;
                 }
                 CostType::ValDeser => {
-                    cpu.const_param = 826;
-                    cpu.lin_param = 1;
+                    cpu.const_param = 862;
+                    cpu.lin_param = 0;
                 }
                 CostType::ComputeSha256Hash => {
-                    cpu.const_param = 1930;
-                    cpu.lin_param = 33;
+                    cpu.const_param = 1911;
+                    cpu.lin_param = 32;
                 }
                 CostType::ComputeEd25519PubKey => {
-                    cpu.const_param = 25768;
+                    cpu.const_param = 25765;
                     cpu.lin_param = 0;
                 }
                 CostType::MapNew => {
@@ -608,7 +608,7 @@ impl Default for BudgetImpl {
                     cpu.lin_param = 0;
                 }
                 CostType::MapEntry => {
-                    cpu.const_param = 61;
+                    cpu.const_param = 56;
                     cpu.lin_param = 0;
                 }
                 CostType::VecNew => {
@@ -616,35 +616,38 @@ impl Default for BudgetImpl {
                     cpu.lin_param = 0;
                 }
                 CostType::VecEntry => {
-                    cpu.const_param = 7;
+                    cpu.const_param = 0;
                     cpu.lin_param = 0;
                 }
                 CostType::GuardFrame => {
-                    cpu.const_param = 5079;
+                    cpu.const_param = 5159;
                     cpu.lin_param = 0;
                 }
                 CostType::VerifyEd25519Sig => {
-                    cpu.const_param = 368384;
-                    cpu.lin_param = 21;
+                    cpu.const_param = 368361;
+                    cpu.lin_param = 20;
                 }
                 CostType::VmMemRead => {
-                    cpu.const_param = 95;
-                    cpu.lin_param = 1;
+                    cpu.const_param = 97;
+                    cpu.lin_param = 0;
                 }
                 CostType::VmMemWrite => {
-                    cpu.const_param = 99;
-                    cpu.lin_param = 1;
+                    cpu.const_param = 96;
+                    cpu.lin_param = 0;
                 }
+                // This (as well as its mem model params), are not taken from calibration results.
+                // if we want to do that we need more sample contracts of various sizes. Right now
+                // this is just an eye-balled upperbound.
                 CostType::VmInstantiation => {
                     cpu.const_param = 1000000;
                     cpu.lin_param = 0;
                 }
                 CostType::InvokeVmFunction => {
-                    cpu.const_param = 6188;
+                    cpu.const_param = 6216;
                     cpu.lin_param = 0;
                 }
                 CostType::ChargeBudget => {
-                    cpu.const_param = 206;
+                    cpu.const_param = 205;
                     cpu.lin_param = 0;
                 }
             }
@@ -658,10 +661,10 @@ impl Default for BudgetImpl {
                 }
                 CostType::WasmMemAlloc => {
                     mem.const_param = 66136;
-                    mem.lin_param = 2;
+                    mem.lin_param = 1;
                 }
                 CostType::HostMemAlloc => {
-                    mem.const_param = 9;
+                    mem.const_param = 8;
                     mem.lin_param = 1;
                 }
                 CostType::HostMemCpy => {
@@ -686,14 +689,14 @@ impl Default for BudgetImpl {
                 }
                 CostType::ValSer => {
                     mem.const_param = 9;
-                    mem.lin_param = 4;
+                    mem.lin_param = 3;
                 }
                 CostType::ValDeser => {
                     mem.const_param = 4;
-                    mem.lin_param = 2;
+                    mem.lin_param = 1;
                 }
                 CostType::ComputeSha256Hash => {
-                    mem.const_param = 41;
+                    mem.const_param = 40;
                     mem.lin_param = 0;
                 }
                 CostType::ComputeEd25519PubKey => {
@@ -732,6 +735,9 @@ impl Default for BudgetImpl {
                     mem.const_param = 0;
                     mem.lin_param = 0;
                 }
+                // This (as well as its cpu model params), are not taken from calibration results.
+                // if we want to do that we need more sample contracts of various sizes. Right now
+                // this is just an eye-balled upperbound.
                 CostType::VmInstantiation => {
                     mem.const_param = 1100000;
                     mem.lin_param = 0;

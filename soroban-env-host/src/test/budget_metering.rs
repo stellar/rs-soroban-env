@@ -244,33 +244,33 @@ fn total_amount_charged_from_random_inputs() -> Result<(), HostError> {
     let actual = format!("{:?}", host.as_budget());
     expect![[r#"
         =====================================================================================================================================================================
-        Cpu limit: 40000000; used: 8415428
-        Mem limit: 52428800; used: 1228398
+        Cpu limit: 40000000; used: 8527127
+        Mem limit: 52428800; used: 1219916
         =====================================================================================================================================================================
         CostType                 iterations     input          cpu_insns      mem_bytes      const_param_cpu     lin_param_cpu       const_param_mem     lin_param_mem       
-        WasmInsnExec             246            None           5658           0              23                  0                   0                   0                   
-        WasmMemAlloc             1              Some(184)      10999          66504          10815               1                   66136               2                   
-        HostMemAlloc             1              Some(152)      721            161            569                 1                   9                   1                   
-        HostMemCpy               1              Some(65)       90             0              25                  1                   0                   0                   
-        HostMemCmp               1              Some(74)       120            0              46                  1                   0                   0                   
+        WasmInsnExec             246            None           5412           0              22                  0                   0                   0                   
+        WasmMemAlloc             1              Some(184)      0              66320          0                   0                   66136               1                   
+        HostMemAlloc             1              Some(152)      1000           160            1000                0                   8                   1                   
+        HostMemCpy               1              Some(65)       25             0              25                  0                   0                   0                   
+        HostMemCmp               1              Some(74)       113            0              39                  1                   0                   0                   
         InvokeHostFunction       176            None           135696         0              771                 0                   0                   0                   
-        VisitObject              97             None           2813           0              29                  0                   0                   0                   
-        ValXdrConv               148            None           28416          0              192                 0                   0                   0                   
-        ValSer                   1              Some(49)       854            205            805                 1                   9                   4                   
-        ValDeser                 1              Some(103)      929            210            826                 1                   4                   2                   
-        ComputeSha256Hash        1              Some(193)      8299           41             1930                33                  41                  0                   
-        ComputeEd25519PubKey     226            None           5823568        0              25768               0                   0                   0                   
+        VisitObject              97             None           2134           0              22                  0                   0                   0                   
+        ValXdrConv               148            None           28120          0              190                 0                   0                   0                   
+        ValSer                   1              Some(49)       744            156            695                 1                   9                   3                   
+        ValDeser                 1              Some(103)      862            107            862                 0                   4                   1                   
+        ComputeSha256Hash        1              Some(193)      8087           40             1911                32                  40                  0                   
+        ComputeEd25519PubKey     226            None           5822890        0              25765               0                   0                   0                   
         MapNew                   62             None           0              0              0                   0                   0                   0                   
-        MapEntry                 250            None           15250          0              61                  0                   0                   0                   
+        MapEntry                 250            None           14000          0              56                  0                   0                   0                   
         VecNew                   162            None           0              0              0                   0                   0                   0                   
-        VecEntry                 186            None           1302           0              7                   0                   0                   0                   
-        GuardFrame               152            None           772008         40584          5079                0                   267                 0                   
-        VerifyEd25519Sig         1              Some(227)      373151         0              368384              21                  0                   0                   
-        VmMemRead                1              Some(69)       164            0              95                  1                   0                   0                   
-        VmMemWrite               1              Some(160)      259            0              99                  1                   0                   0                   
-        VmInstantiation          1              Some(147)      885379         1108144        842308              293                 1100353             53                  
-        InvokeVmFunction         47             None           290836         12549          6188                0                   267                 0                   
-        ChargeBudget             286            None           58916          0              206                 0                   0                   0                   
+        VecEntry                 186            None           0              0              0                   0                   0                   0                   
+        GuardFrame               152            None           784168         40584          5159                0                   267                 0                   
+        VerifyEd25519Sig         1              Some(227)      372901         0              368361              20                  0                   0                   
+        VmMemRead                1              Some(69)       97             0              97                  0                   0                   0                   
+        VmMemWrite               1              Some(160)      96             0              96                  0                   0                   0                   
+        VmInstantiation          1              Some(147)      1000000        1100000        1000000             0                   1100000             0                   
+        InvokeVmFunction         47             None           292152         12549          6216                0                   267                 0                   
+        ChargeBudget             286            None           58630          0              205                 0                   0                   0                   
         =====================================================================================================================================================================
 
     "#]]
