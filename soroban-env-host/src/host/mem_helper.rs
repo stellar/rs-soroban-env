@@ -37,7 +37,7 @@ impl Host {
         mem_pos: u32,
         buf: &[u8],
     ) -> Result<(), HostError> {
-        self.charge_budget(CostType::VmMemWrite, buf.len() as u64)?;
+        self.charge_budget(CostType::VmMemWrite, 1, Some(buf.len() as u64))?;
         let mem = vm.get_memory(self)?;
         self.map_err(
             mem.write(vmcaller.try_mut()?, mem_pos as usize, buf)
@@ -53,7 +53,7 @@ impl Host {
         mem_pos: u32,
         buf: &mut [u8],
     ) -> Result<(), HostError> {
-        self.charge_budget(CostType::VmMemRead, buf.len() as u64)?;
+        self.charge_budget(CostType::VmMemRead, 1, Some(buf.len() as u64))?;
         let mem = vm.get_memory(self)?;
         self.map_err(
             mem.read(vmcaller.try_mut()?, mem_pos as usize, buf)
@@ -86,7 +86,7 @@ impl Host {
         let mem_data = vm.get_memory(self)?.data_mut(vmcaller.try_mut()?);
         let mem_slice = mem_data.get_mut(mem_range).ok_or(ScVmErrorCode::Memory)?;
 
-        self.charge_budget(CostType::VmMemWrite, byte_len as u64)?;
+        self.charge_budget(CostType::VmMemWrite, 1, Some(byte_len as u64))?;
         for (src, dst) in buf.iter().zip(mem_slice.chunks_mut(VAL_SZ as usize)) {
             if dst.len() != VAL_SZ {
                 // This should be impossible unless there's an error above, but just in case.
@@ -123,7 +123,7 @@ impl Host {
         let mem_data = vm.get_memory(self)?.data(vmcaller.try_mut()?);
         let mem_slice = mem_data.get(mem_range).ok_or(ScVmErrorCode::Memory)?;
 
-        self.charge_budget(CostType::VmMemRead, byte_len as u64)?;
+        self.charge_budget(CostType::VmMemRead, 1, Some(byte_len as u64))?;
         let mut tmp: [u8; VAL_SZ] = [0u8; VAL_SZ];
         for (dst, src) in buf.iter_mut().zip(mem_slice.chunks(VAL_SZ as usize)) {
             if let Ok(src) = TryInto::<&[u8; VAL_SZ]>::try_into(src) {
@@ -160,7 +160,11 @@ impl Host {
         use soroban_env_common::xdr::ScVmErrorCode;
 
         let mem_data = vm.get_memory(self)?.data(vmcaller.try_mut()?);
-        self.charge_budget(CostType::VmMemRead, num_slices.saturating_mul(8) as u64)?;
+        self.charge_budget(
+            CostType::VmMemRead,
+            1,
+            Some(num_slices.saturating_mul(8) as u64),
+        )?;
 
         for i in 0..num_slices {
             // This is _very specific_ about what it's reading: 8 bytes
@@ -209,7 +213,7 @@ impl Host {
             // since copy_from_slice below will panic if there's a size mismatch.
             return Err(ScHostObjErrorCode::VecIndexOutOfBound.into());
         }
-        self.charge_budget(CostType::HostMemCpy, dst.len() as u64)?;
+        self.charge_budget(CostType::HostMemCpy, 1, Some(dst.len() as u64))?;
         dst.copy_from_slice(src);
         Ok(())
     }
@@ -285,7 +289,11 @@ impl Host {
         // TODO: we currently grow the destination vec if it's not big enough,
         // make sure this is desirable behaviour.
         if obj_new.len() < obj_end {
-            self.charge_budget(CostType::HostMemAlloc, (obj_end - obj_new.len()) as u64)?;
+            self.charge_budget(
+                CostType::HostMemAlloc,
+                1,
+                Some((obj_end - obj_new.len()) as u64),
+            )?;
             obj_new.resize(obj_end, 0);
         }
         let obj_range = obj_pos as usize..obj_end;
@@ -339,7 +347,7 @@ impl Host {
         #[cfg(feature = "vm")]
         {
             let VmSlice { vm, pos, len } = self.decode_vmslice(lm_pos, len)?;
-            self.charge_budget(CostType::HostMemAlloc, len as u64)?;
+            self.charge_budget(CostType::HostMemAlloc, 1, Some(len as u64))?;
             let mut vnew: Vec<u8> = vec![0; len as usize];
             self.metered_vm_read_bytes_from_linear_memory(vmcaller, &vm, pos, &mut vnew)?;
             self.add_host_object::<HOT>(vnew.try_into()?)
@@ -354,7 +362,7 @@ impl Host {
         src: &[T],
         dest: &mut [T],
     ) -> Result<(), HostError> {
-        self.charge_budget(CostType::HostMemCpy, src.len() as u64)?;
+        self.charge_budget(CostType::HostMemCpy, 1, Some(src.len() as u64))?;
         Ok(dest.copy_from_slice(src))
     }
 }

@@ -67,20 +67,40 @@ impl Host {
         self
     }
 
-    pub(crate) fn enable_model(self, ty: CostType) -> Self {
+    pub(crate) fn enable_model(
+        self,
+        ty: CostType,
+        const_cpu: u64,
+        lin_cpu: u64,
+        const_mem: u64,
+        lin_mem: u64,
+    ) -> Self {
         self.with_budget(|budget| {
             budget
                 .0
                 .borrow_mut()
                 .cpu_insns
                 .get_cost_model_mut(ty)
-                .lin_param = 10;
+                .const_param = const_cpu;
+            budget
+                .0
+                .borrow_mut()
+                .cpu_insns
+                .get_cost_model_mut(ty)
+                .lin_param = lin_cpu;
+
             budget
                 .0
                 .borrow_mut()
                 .mem_bytes
                 .get_cost_model_mut(ty)
-                .lin_param = 1;
+                .const_param = const_mem;
+            budget
+                .0
+                .borrow_mut()
+                .mem_bytes
+                .get_cost_model_mut(ty)
+                .lin_param = lin_mem;
         });
         self
     }

@@ -14,16 +14,12 @@ impl CostRunner for VecNewRun {
     type RecycledType = Option<HostVec>;
 
     fn run_iter(host: &crate::Host, _iter: u64, sample: Self::SampleType) -> Self::RecycledType {
-        let hv = HostVec::from_vec(sample, host.as_budget()).unwrap();
-        Some(hv)
+        black_box(Some(HostVec::from_vec(sample, host.as_budget()).unwrap()))
     }
 
-    fn run_baseline_iter(
-        _host: &Host,
-        _iter: u64,
-        _sample: Self::SampleType,
-    ) -> Self::RecycledType {
-        None
+    fn run_baseline_iter(host: &Host, _iter: u64, _sample: Self::SampleType) -> Self::RecycledType {
+        black_box(host.charge_budget(Self::COST_TYPE, 1, None).unwrap());
+        black_box(None)
     }
 }
 
@@ -55,7 +51,8 @@ impl CostRunner for VecEntryRun {
         (Some(v), sample)
     }
 
-    fn run_baseline_iter(_host: &Host, _iter: u64, sample: Self::SampleType) -> Self::RecycledType {
+    fn run_baseline_iter(host: &Host, _iter: u64, sample: Self::SampleType) -> Self::RecycledType {
+        black_box(host.charge_budget(Self::COST_TYPE, 1, None).unwrap());
         black_box((None, sample))
     }
 }

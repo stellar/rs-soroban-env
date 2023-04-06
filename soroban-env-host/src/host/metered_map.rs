@@ -39,21 +39,22 @@ where
     // the cost of any allocation, since it is assumed memory allocation is charge separately
     // elsewhere.
     fn charge_new<B: AsBudget>(count: u64, b: &B) -> Result<(), HostError> {
-        b.as_budget().charge(CostType::MapNew, count)
+        b.as_budget().charge(CostType::MapNew, count, None)
     }
 
     fn charge_access<B: AsBudget>(&self, count: usize, b: &B) -> Result<(), HostError> {
-        b.as_budget().charge(CostType::MapEntry, count as u64)
+        b.as_budget().charge(CostType::MapEntry, count as u64, None)
     }
 
     fn charge_scan<B: AsBudget>(&self, b: &B) -> Result<(), HostError> {
         b.as_budget()
-            .charge(CostType::MapEntry, self.map.len() as u64)
+            .charge(CostType::MapEntry, self.map.len() as u64, None)
     }
 
     fn charge_binsearch<B: AsBudget>(&self, b: &B) -> Result<(), HostError> {
         let mag = 64 - (self.map.len() as u64).leading_zeros();
-        b.as_budget().charge(CostType::MapEntry, 1 + mag as u64)
+        b.as_budget()
+            .charge(CostType::MapEntry, 1 + mag as u64, None)
     }
 }
 
@@ -347,8 +348,11 @@ where
         a: &MeteredOrdMap<K, V, Host>,
         b: &MeteredOrdMap<K, V, Host>,
     ) -> Result<Ordering, Self::Error> {
-        self.as_budget()
-            .charge(CostType::MapEntry, a.map.len().min(b.map.len()) as u64)?;
+        self.as_budget().charge(
+            CostType::MapEntry,
+            a.map.len().min(b.map.len()) as u64,
+            None,
+        )?;
         <Self as Compare<Vec<(K, V)>>>::compare(self, &a.map, &b.map)
     }
 }
@@ -364,7 +368,11 @@ where
         a: &MeteredOrdMap<K, V, Budget>,
         b: &MeteredOrdMap<K, V, Budget>,
     ) -> Result<Ordering, Self::Error> {
-        self.charge(CostType::MapEntry, a.map.len().min(b.map.len()) as u64)?;
+        self.charge(
+            CostType::MapEntry,
+            a.map.len().min(b.map.len()) as u64,
+            None,
+        )?;
         <Self as Compare<Vec<(K, V)>>>::compare(self, &a.map, &b.map)
     }
 }

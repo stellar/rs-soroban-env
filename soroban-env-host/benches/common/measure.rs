@@ -12,7 +12,7 @@ use std::{
 use tabwriter::{Alignment, TabWriter};
 use tracking_allocator::{AllocationGroupToken, AllocationRegistry, AllocationTracker, Allocator};
 
-use super::{fit_model, FPCostModel, FPPoint};
+use super::{fit_model, FPCostModel};
 
 #[global_allocator]
 static GLOBAL: Allocator<System> = Allocator::system();
@@ -50,7 +50,8 @@ impl AllocationTracker for MemTracker {
 
 #[derive(Clone, Debug, Default)]
 pub struct Measurement {
-    pub input: u64,
+    pub iterations: u64,
+    pub inputs: Option<u64>,
     pub cpu_insns: u64,
     pub mem_bytes: u64,
     pub time_nsecs: u64,
@@ -60,19 +61,28 @@ pub struct Measurement {
 pub struct Measurements {
     pub baseline: Measurement,
     pub measurements: Vec<Measurement>,
+    pub net_meas_per_iter: Vec<Measurement>,
 }
 
 impl Measurements {
-    /// Subtracts baseline value from all measurements. This is to differentiate the const part
-    /// of the model from the "background noise" i.e. measurement setup which we do not want to
-    /// include as part of the model.
-    pub fn subtract_baseline(&mut self) {
-        for e in self.measurements.iter_mut() {
-            e.input = e.input.saturating_sub(self.baseline.input);
-            e.cpu_insns = e.cpu_insns.saturating_sub(self.baseline.cpu_insns);
-            e.mem_bytes = e.mem_bytes.saturating_sub(self.baseline.mem_bytes);
-            e.time_nsecs = e.time_nsecs.saturating_sub(self.baseline.time_nsecs);
-        }
+    // This is the preprocess step to convert raw measurements into `net_meas_per_iter`,
+    // ready to be fitted by the linear model.
+    // We start from `N_r * ( N_x * (a + b * Option<x>) + Overhead_b)`, first substracts baseline
+    // => `N_r * N_x * (a + b * Option<x>)`, then divides it by the iterations `(N_r * N_x)` =>
+    // returns `y = a + b * Option<x>` ready to be fitted.
+    pub fn preprocess(&mut self) {
+        self.net_meas_per_iter = self
+            .measurements
+            .iter()
+            .map(|m| {
+                let mut e = m.clone();
+                e.inputs = e.inputs.map(|i| i / e.iterations);
+                e.cpu_insns = e.cpu_insns.saturating_sub(self.baseline.cpu_insns) / e.iterations;
+                e.mem_bytes = e.mem_bytes.saturating_sub(self.baseline.mem_bytes) / e.iterations;
+                e.time_nsecs = e.time_nsecs.saturating_sub(self.baseline.time_nsecs) / e.iterations;
+                e
+            })
+            .collect()
     }
 
     pub fn report_histogram<F>(&self, out_name: &str, get_output: F)
@@ -97,13 +107,13 @@ impl Measurements {
         let in_min = self
             .measurements
             .iter()
-            .map(|m| m.input as f32)
+            .map(|m| m.inputs.unwrap_or(0) as f32)
             .reduce(f32::min)
             .unwrap();
         let in_max = self
             .measurements
             .iter()
-            .map(|m| m.input as f32)
+            .map(|m| m.inputs.unwrap_or(0) as f32)
             .reduce(f32::max)
             .unwrap();
 
@@ -127,31 +137,32 @@ impl Measurements {
     }
 
     pub fn report_table(&self) {
+        // data must be preprocessed
+        assert_eq!(self.measurements.len(), self.net_meas_per_iter.len());
+
         use std::io::Write;
         use thousands::Separable;
         let mut tw = TabWriter::new(vec![])
             .padding(5)
             .alignment(Alignment::Right);
 
-        writeln!(
-            &mut tw,
-            "input\tinput_baseline\tcpu_insns\tcpu_baseline\tinsns/input\tmem_bytes\tmem_baseline\tbytes/input\ttime nsecs\tnsecs/input"
-        )
-        .unwrap();
-        for m in self.measurements.iter() {
+        writeln!(&mut tw, "iterations\tinputs\tcpu_insns_total\tcpu_insns_base\tmem_bytes_total\tmem_bytes_base\ttime_ns_total\ttime_ns_base\tinput/iter\tnet_insns/iter\tnet_bytes/iter\tnet_ns/input").unwrap();
+        for (mes, net) in self.measurements.iter().zip(self.net_meas_per_iter.iter()) {
             writeln!(
                 &mut tw,
-                "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
-                m.input.separate_with_commas(),
-                self.baseline.input.separate_with_commas(),
-                m.cpu_insns.separate_with_commas(),
+                "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+                mes.iterations.separate_with_commas(),
+                mes.inputs.unwrap_or(0).separate_with_commas(),
+                mes.cpu_insns.separate_with_commas(),
                 self.baseline.cpu_insns.separate_with_commas(),
-                (m.cpu_insns / m.input.max(1)).separate_with_commas(),
-                m.mem_bytes.separate_with_commas(),
+                mes.mem_bytes.separate_with_commas(),
                 self.baseline.mem_bytes.separate_with_commas(),
-                (m.mem_bytes / m.input.max(1)).separate_with_commas(),
-                m.time_nsecs.separate_with_commas(),
-                (m.time_nsecs / m.input.max(1)).separate_with_commas()
+                mes.time_nsecs.separate_with_commas(),
+                self.baseline.time_nsecs.separate_with_commas(),
+                net.inputs.unwrap_or(0).separate_with_commas(),
+                net.cpu_insns.separate_with_commas(),
+                net.mem_bytes.separate_with_commas(),
+                net.time_nsecs.separate_with_commas(),
             )
             .unwrap();
         }
@@ -160,32 +171,63 @@ impl Measurements {
     }
 
     pub fn fit_model_to_cpu(&self) -> FPCostModel {
-        let data = self
-            .measurements
+        // data must be preprocessed
+        assert_eq!(self.measurements.len(), self.net_meas_per_iter.len());
+
+        let (x, y): (Vec<_>, Vec<_>) = self
+            .net_meas_per_iter
             .iter()
-            .map(|m| FPPoint {
-                x: m.input as f64,
-                y: m.cpu_insns as f64,
-            })
-            .collect();
-        fit_model(&data)
+            .skip(1) // for some reason first data point is often flakey, skip it
+            .map(|m| (m.inputs.unwrap_or(0), m.cpu_insns))
+            .unzip();
+
+        fit_model(x, y)
     }
 
     pub fn fit_model_to_mem(&self) -> FPCostModel {
-        let data = self
-            .measurements
+        // data must be preprocessed
+        assert_eq!(self.measurements.len(), self.net_meas_per_iter.len());
+
+        let (x, y): (Vec<_>, Vec<_>) = self
+            .net_meas_per_iter
             .iter()
-            .map(|m| FPPoint {
-                x: m.input as f64,
-                y: m.mem_bytes as f64,
-            })
-            .collect();
-        fit_model(&data)
+            .skip(1) // for some reason first data point is often flakey, skip it
+            .map(|m| (m.inputs.unwrap_or(0), m.mem_bytes))
+            .unzip();
+
+        fit_model(x, y)
     }
 }
 
-/// HostCostMeasurement is an interface to measuring the memory and CPU
+/// HostCostMeasurement (HCM) is an interface to measuring the memory and CPU
 /// costs of a CostType: usually a block of WASM bytecode or a host function.
+/// All types of costs are modeled by the linear function (see [`CostModel`]):
+///
+///     f(x) = N_x * (a + b * Option<x>)                                    [1]
+///
+/// The goal of the HCM is to record the relation of x and f(x) in order for
+/// a, b -- the constant and linear cost parameters -- to be extracted.
+/// In the ideal setup, we pass in an array of samples with various inputs {x},
+/// The host do the exact amount of work designed for the CostType on the samples
+/// and we record the work done {f(x)}, and pass {x, f(x)} into a model fitter
+/// to extract a and b.
+///
+/// The actual measurement setup, due to its limitations, is actually measuring
+///
+///     g(x) = N_r * (f(x) + Overhead_b + Overhead_s)                       [2]
+///
+/// where f(x) is the target cost we want to measure, `N_r` is the number of
+/// iterations each sample run is repeated (to average out the measurement
+/// noise). `Overhead_b` is the overhead cost due to the benchmark setup and
+/// `Overhead_s` is the overhead cost due to each sample setup. Both
+/// `Overhead_b` and `Overhead_s` are unavoidable (due to the bench setup), and
+/// cannot be averaged out since they scale with num of iterations. Therefore
+/// in addition to the `run` function (which records `g(x)`), HCM also requires
+/// a `run_baseline` function which measures `N_r * Overhead_b` and
+/// `get_insns_overhead_per_sample` which gets the `Overhead_s` info from a
+/// sample. In the end both of these overheads are subtracted away and we get
+/// `N * (a + b * Option<x>)` where `N == N_r * N_x` is the number of
+/// `iterations` reported by the host for the `CostModel`.
 pub trait HostCostMeasurement: Sized {
     /// The type of host runner we're using. Uniquely identifies a `CostType`.
     type Runner: CostRunner;
@@ -248,11 +290,22 @@ pub trait HostCostMeasurement: Sized {
         <Self::Runner as CostRunner>::run(host, samples, recycled_samples)
     }
 
-    fn get_total_input(host: &Host) -> u64 {
-        <Self::Runner as CostRunner>::get_total_input(host)
+    fn get_tracker(host: &Host) -> (u64, Option<u64>) {
+        <Self::Runner as CostRunner>::get_tracker(host)
     }
 
-    fn get_insns_overhead(_host: &Host, _sample: &<Self::Runner as CostRunner>::SampleType) -> u64 {
+    // This is kind of a hack to account for the additional cpu_insn overhead
+    // that are both significant (scales with the input) and not accounted for
+    // by the `run_baseline`. So far the only use case for this is for
+    // calibrating individual wasm instructions, where the target wasm instruction
+    // needs to be accompanied by some boilerplate. For example to measure the
+    // cpu_insns of `drop`, we need to do N * (`push`+`drop`), the `push` scales with
+    // N and cannot accounted for by the baseline.
+    // This part is the `Overhead_s` part of equation [2]. Defaults to 0.
+    fn get_insns_overhead_per_sample(
+        _host: &Host,
+        _sample: &<Self::Runner as CostRunner>::SampleType,
+    ) -> u64 {
         0
     }
 }
@@ -317,7 +370,6 @@ fn harness<HCM: HostCostMeasurement, R>(
     mem_tracker: &MemTracker,
     cpu_insn_counter: &mut cpu::InstructionCounter,
     alloc_group_token: &mut AllocationGroupToken,
-    iterations: u64,
     runner: &mut R,
     samples: Vec<<<HCM as HostCostMeasurement>::Runner as CostRunner>::SampleType>,
 ) -> Measurement
@@ -338,14 +390,17 @@ where
     cpu_insn_counter.begin();
     runner(host, samples, &mut recycled_samples);
     // collect the metrics
-    let cpu_insns = cpu_insn_counter.end_and_count() / iterations;
+    let cpu_insns = cpu_insn_counter.end_and_count();
     let stop = Instant::now();
     drop(alloc_guard);
-    let input = HCM::get_total_input(&host) / iterations;
-    let mem_bytes = mem_tracker.0.load(Ordering::SeqCst) / iterations;
-    let time_nsecs = stop.duration_since(start).as_nanos() as u64 / iterations;
+    // Note: the `iterations` here is not same as `RUN_ITERATIONS`. This is the `N` part of the
+    // cost model, which is `RUN_ITERATIONS` * "model iterations from the sample"
+    let (iterations, inputs) = HCM::get_tracker(&host);
+    let mem_bytes = mem_tracker.0.load(Ordering::SeqCst);
+    let time_nsecs = stop.duration_since(start).as_nanos() as u64;
     Measurement {
-        input,
+        iterations,
+        inputs,
         cpu_insns,
         mem_bytes,
         time_nsecs,
@@ -383,26 +438,25 @@ where
             Some(s) => s,
             None => break,
         };
-        let iterations = <HCM::Runner as CostRunner>::RUN_ITERATIONS;
+        let samples = (0..<HCM::Runner as CostRunner>::RUN_ITERATIONS)
+            .map(|_| sample.clone())
+            .collect();
+        // This part is the `N_r * Overhead_s` part of equation [2].
+        // This is 0 unless we are doing wasm-insn level calibration
+        let samples_cpu_insns_overhead = <HCM::Runner as CostRunner>::RUN_ITERATIONS
+            .saturating_mul(HCM::get_insns_overhead_per_sample(&host, &sample));
 
-        let mes = harness::<HCM, _>(
+        let mut mes = harness::<HCM, _>(
             &host,
             &mem_tracker,
             &mut cpu_insn_counter,
             &mut alloc_group_token,
-            iterations,
             &mut runner,
-            (0..iterations).map(|_| sample.clone()).collect(),
+            samples,
         );
-
-        ret.push(Measurement {
-            input: mes.input,
-            cpu_insns: mes
-                .cpu_insns
-                .saturating_sub(HCM::get_insns_overhead(&host, &sample)),
-            mem_bytes: mes.mem_bytes,
-            time_nsecs: mes.time_nsecs,
-        });
+        mes.cpu_insns -= samples_cpu_insns_overhead;
+        // the return result contains `N_r * (f(x) + Overhead_b)` (see equation [2])
+        ret.push(mes);
     }
     AllocationRegistry::disable_tracking();
     unsafe {
@@ -411,15 +465,22 @@ where
     Ok(ret)
 }
 
+// Takes each value in the input range, creates a worst-case sample with that input,
+// and run the measurement for a number of iterations (defined by the runner).
+// Also runs a single baseline sample for the same number of iterations. Return both
+// the measurements and the baseline.
 pub fn measure_worst_case_costs<HCM: HostCostMeasurement>(
-    step_range: Range<u64>,
+    mut input_range: Range<u64>,
 ) -> Result<Measurements, std::io::Error> {
-    let mut it = step_range;
     let mut rng = StdRng::from_seed([0xff; 32]);
     // run baseline measure
-    let mut it2 = std::iter::once(0);
+    let mut base_range = std::iter::once(0);
     let baseline = measure_costs_inner::<HCM, _, _>(
-        |host| it2.next().map(|_| HCM::new_baseline_case(host, &mut rng)),
+        |host| {
+            base_range
+                .next()
+                .map(|_| HCM::new_baseline_case(host, &mut rng))
+        },
         &HCM::run_baseline,
     )?
     .first()
@@ -428,7 +489,8 @@ pub fn measure_worst_case_costs<HCM: HostCostMeasurement>(
     // run the actual measurements
     let measurements = measure_costs_inner::<HCM, _, _>(
         |host| {
-            it.next()
+            input_range
+                .next()
                 .map(|input| HCM::new_worst_case(host, &mut rng, input))
         },
         HCM::run,
@@ -436,6 +498,7 @@ pub fn measure_worst_case_costs<HCM: HostCostMeasurement>(
     Ok(Measurements {
         baseline,
         measurements,
+        net_meas_per_iter: Default::default(),
     })
 }
 
@@ -478,5 +541,6 @@ pub fn measure_cost_variation<HCM: HostCostMeasurement>(
     Ok(Measurements {
         baseline,
         measurements,
+        net_meas_per_iter: Default::default(),
     })
 }

@@ -18,10 +18,11 @@ impl CostRunner for ValXdrConvRun {
     }
 
     fn run_baseline_iter(
-        _host: &crate::Host,
+        host: &crate::Host,
         _iter: u64,
         sample: Self::SampleType,
     ) -> Self::RecycledType {
+        black_box(host.charge_budget(Self::COST_TYPE, 1, None).unwrap());
         black_box((None, sample.1))
     }
 }

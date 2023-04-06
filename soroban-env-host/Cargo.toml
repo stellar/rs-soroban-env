@@ -29,7 +29,6 @@ log = "0.4.17"
 backtrace = "0.3"
 
 [dev-dependencies]
-optimization = "0.2.0"
 env_logger = "0.9.0"
 log = "0.4.17"
 tracking-allocator = "0.4.0"
@@ -44,6 +43,7 @@ textplots = "0.8.0"
 wasmprinter = "0.2.41"
 expect-test = "1.4.0"
 more-asserts = "0.3.1"
+linregress = "0.5.1"
 
 [features]
 vm = ["wasmi", "soroban-env-common/vm"]

@@ -58,12 +58,12 @@ pub trait CostRunner: Sized {
         }
     }
 
-    /// Get the total input from this run. Default to asking the host. May be overridden
-    /// if host is not actually involved in the actual run. However, if overridden, there is
-    /// a risk of the computed input being diverged from the actual input from the host's
-    /// perspective. So use it carefully. This should be after the `run`, outside of the
-    /// CPU-and-memory tracking machineary.
-    fn get_total_input(host: &Host) -> u64 {
-        host.0.budget.get_input(Self::COST_TYPE)
+    /// Get the (iterations, inputs) tracker from this run. Default to asking the host.
+    /// May be overridden if host is not actually involved in the actual run. However,
+    /// if overridden, there is a risk of the computed input being diverged from the
+    /// actual input from the host's perspective. So use it carefully. This should be
+    /// after the `run`, outside of the CPU-and-memory tracking machineary.
+    fn get_tracker(host: &Host) -> (u64, Option<u64>) {
+        host.0.budget.get_tracker(Self::COST_TYPE)
     }
 }

@@ -21,20 +21,20 @@ where
     // the cost of any allocation, since it is assumed memory allocation is charged separately
     // elsewhere.
     fn charge_new(count: u64, budget: &Budget) -> Result<(), HostError> {
-        budget.charge(CostType::VecNew, count)
+        budget.charge(CostType::VecNew, count, None)
     }
 
     fn charge_access(&self, count: usize, budget: &Budget) -> Result<(), HostError> {
-        budget.charge(CostType::VecEntry, count as u64)
+        budget.charge(CostType::VecEntry, count as u64, None)
     }
 
     fn charge_scan(&self, budget: &Budget) -> Result<(), HostError> {
-        budget.charge(CostType::VecEntry, self.vec.len() as u64)
+        budget.charge(CostType::VecEntry, self.vec.len() as u64, None)
     }
 
     fn charge_binsearch(&self, budget: &Budget) -> Result<(), HostError> {
         let mag = 64 - (self.vec.len() as u64).leading_zeros();
-        budget.charge(CostType::VecEntry, 1 + mag as u64)
+        budget.charge(CostType::VecEntry, 1 + mag as u64, None)
     }
 }
 
@@ -331,8 +331,11 @@ where
         a: &MeteredVector<Elt>,
         b: &MeteredVector<Elt>,
     ) -> Result<Ordering, Self::Error> {
-        self.as_budget()
-            .charge(CostType::VecEntry, a.vec.len().min(b.vec.len()) as u64)?;
+        self.as_budget().charge(
+            CostType::VecEntry,
+            a.vec.len().min(b.vec.len()) as u64,
+            None,
+        )?;
         <Self as Compare<Vec<Elt>>>::compare(self, &a.vec, &b.vec)
     }
 }
@@ -348,8 +351,11 @@ where
         a: &MeteredVector<Elt>,
         b: &MeteredVector<Elt>,
     ) -> Result<Ordering, Self::Error> {
-        self.as_budget()
-            .charge(CostType::VecEntry, a.vec.len().min(b.vec.len()) as u64)?;
+        self.as_budget().charge(
+            CostType::VecEntry,
+            a.vec.len().min(b.vec.len()) as u64,
+            None,
+        )?;
         <Self as Compare<Vec<Elt>>>::compare(self, &a.vec, &b.vec)
     }
 }
