@@ -7,7 +7,7 @@ use soroban_env_common::{
         LedgerKeyAccount, LedgerKeyClaimableBalance, LedgerKeyConfigSetting, LedgerKeyContractCode,
         LedgerKeyData, LedgerKeyLiquidityPool, LedgerKeyOffer, LedgerKeyTrustLine,
         LiquidityPoolEntry, OfferEntry, PublicKey, ScAddress, ScContractExecutable,
-        ScHostValErrorCode, ScMap, ScNonceKey, ScVal, ScVec, TimePoint, TrustLineAsset,
+        ScHostValErrorCode, ScMap, ScMapEntry, ScNonceKey, ScVal, ScVec, TimePoint, TrustLineAsset,
         TrustLineEntry, Uint256,
     },
     Compare, SymbolStr, I256, U256,
@@ -211,13 +211,9 @@ impl Compare<ScVec> for Budget {
     type Error = HostError;
 
     fn compare(&self, a: &ScVec, b: &ScVec) -> Result<Ordering, Self::Error> {
-        for (a, b) in a.iter().zip(b.iter()) {
-            match self.compare(a, b)? {
-                Ordering::Equal => (),
-                unequal => return Ok(unequal),
-            }
-        }
-        Ok(Ordering::Equal)
+        let a: &Vec<ScVal> = &*a;
+        let b: &Vec<ScVal> = &*b;
+        self.compare(a, b)
     }
 }
 
@@ -225,13 +221,20 @@ impl Compare<ScMap> for Budget {
     type Error = HostError;
 
     fn compare(&self, a: &ScMap, b: &ScMap) -> Result<Ordering, Self::Error> {
-        for (a, b) in a.iter().zip(b.iter()) {
-            match self.compare(&(&a.key, &a.val), &(&b.key, &b.val))? {
-                Ordering::Equal => (),
-                unequal => return Ok(unequal),
-            }
+        let a: &Vec<ScMapEntry> = &*a;
+        let b: &Vec<ScMapEntry> = &*b;
+        self.compare(a, b)
+    }
+}
+
+impl Compare<ScMapEntry> for Budget {
+    type Error = HostError;
+
+    fn compare(&self, a: &ScMapEntry, b: &ScMapEntry) -> Result<Ordering, Self::Error> {
+        match self.compare(&a.key, &b.key)? {
+            Ordering::Equal => self.compare(&a.val, &b.val),
+            cmp => Ok(cmp),
         }
-        Ok(Ordering::Equal)
     }
 }
 
@@ -359,6 +362,119 @@ impl Compare<LedgerEntryData> for Budget {
             | (ContractData(_), _)
             | (ContractCode(_), _)
             | (ConfigSetting(_), _) => Ok(a.cmp(b)),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_scvec_unequal_lengths() {
+        {
+            let v1 = ScVec::try_from((0, 1)).unwrap();
+            let v2 = ScVec::try_from((0, 1, 2)).unwrap();
+            let expected_cmp = Ordering::Less;
+            let budget = Budget::default();
+            let actual_cmp = budget.compare(&v1, &v2).unwrap();
+            assert_eq!(expected_cmp, actual_cmp);
+        }
+        {
+            let v1 = ScVec::try_from((0, 1, 2)).unwrap();
+            let v2 = ScVec::try_from((0, 1)).unwrap();
+            let expected_cmp = Ordering::Greater;
+            let budget = Budget::default();
+            let actual_cmp = budget.compare(&v1, &v2).unwrap();
+            assert_eq!(expected_cmp, actual_cmp);
+        }
+        {
+            let v1 = ScVec::try_from((0, 1)).unwrap();
+            let v2 = ScVec::try_from((0, 0, 2)).unwrap();
+            let expected_cmp = Ordering::Greater;
+            let budget = Budget::default();
+            let actual_cmp = budget.compare(&v1, &v2).unwrap();
+            assert_eq!(expected_cmp, actual_cmp);
+        }
+        {
+            let v1 = ScVec::try_from((0, 0, 2)).unwrap();
+            let v2 = ScVec::try_from((0, 1)).unwrap();
+            let expected_cmp = Ordering::Less;
+            let budget = Budget::default();
+            let actual_cmp = budget.compare(&v1, &v2).unwrap();
+            assert_eq!(expected_cmp, actual_cmp);
+        }
+    }
+
+    #[test]
+    fn test_scmap_unequal_lengths() {
+        {
+            let v1 = ScMap::sorted_from([
+                (ScVal::U32(0), ScVal::U32(0)),
+                (ScVal::U32(1), ScVal::U32(1)),
+            ])
+            .unwrap();
+            let v2 = ScMap::sorted_from([
+                (ScVal::U32(0), ScVal::U32(0)),
+                (ScVal::U32(1), ScVal::U32(1)),
+                (ScVal::U32(2), ScVal::U32(2)),
+            ])
+            .unwrap();
+            let expected_cmp = Ordering::Less;
+            let budget = Budget::default();
+            let actual_cmp = budget.compare(&v1, &v2).unwrap();
+            assert_eq!(expected_cmp, actual_cmp);
+        }
+        {
+            let v1 = ScMap::sorted_from([
+                (ScVal::U32(0), ScVal::U32(0)),
+                (ScVal::U32(1), ScVal::U32(1)),
+                (ScVal::U32(2), ScVal::U32(2)),
+            ])
+            .unwrap();
+            let v2 = ScMap::sorted_from([
+                (ScVal::U32(0), ScVal::U32(0)),
+                (ScVal::U32(1), ScVal::U32(1)),
+            ])
+            .unwrap();
+            let expected_cmp = Ordering::Greater;
+            let budget = Budget::default();
+            let actual_cmp = budget.compare(&v1, &v2).unwrap();
+            assert_eq!(expected_cmp, actual_cmp);
+        }
+        {
+            let v1 = ScMap::sorted_from([
+                (ScVal::U32(0), ScVal::U32(0)),
+                (ScVal::U32(1), ScVal::U32(1)),
+            ])
+            .unwrap();
+            let v2 = ScMap::sorted_from([
+                (ScVal::U32(0), ScVal::U32(0)),
+                (ScVal::U32(1), ScVal::U32(0)),
+                (ScVal::U32(2), ScVal::U32(2)),
+            ])
+            .unwrap();
+            let expected_cmp = Ordering::Greater;
+            let budget = Budget::default();
+            let actual_cmp = budget.compare(&v1, &v2).unwrap();
+            assert_eq!(expected_cmp, actual_cmp);
+        }
+        {
+            let v1 = ScMap::sorted_from([
+                (ScVal::U32(0), ScVal::U32(0)),
+                (ScVal::U32(1), ScVal::U32(0)),
+                (ScVal::U32(2), ScVal::U32(2)),
+            ])
+            .unwrap();
+            let v2 = ScMap::sorted_from([
+                (ScVal::U32(0), ScVal::U32(0)),
+                (ScVal::U32(1), ScVal::U32(1)),
+            ])
+            .unwrap();
+            let expected_cmp = Ordering::Less;
+            let budget = Budget::default();
+            let actual_cmp = budget.compare(&v1, &v2).unwrap();
+            assert_eq!(expected_cmp, actual_cmp);
         }
     }
 }
