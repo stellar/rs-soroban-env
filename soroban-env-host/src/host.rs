@@ -20,14 +20,11 @@ use soroban_env_common::{
     U128Object, U32Val, U64Object, U64Val, VecObject, VmCaller, VmCallerEnv, Void, I256, U256,
 };
 
+use crate::auth::{AuthorizationManager, AuthorizationManagerSnapshot, RecordedAuthPayload};
 use crate::events::{
     DebugError, DebugEvent, Events, InternalContractEvent, InternalEvent, InternalEventsBuffer,
 };
 use crate::storage::{Storage, StorageMap};
-use crate::{
-    auth::{AuthorizationManager, AuthorizationManagerSnapshot, RecordedAuthPayload},
-    native_contract::account_contract::ACCOUNT_CONTRACT_CHECK_AUTH_FN_NAME,
-};
 use crate::{
     budget::{AsBudget, Budget, CostType},
     storage::{TempStorage, TempStorageMap},
@@ -58,6 +55,11 @@ pub use error::HostError;
 use self::metered_vector::MeteredVector;
 use self::{invoker_type::InvokerType, metered_clone::MeteredClone};
 use crate::Compare;
+
+/// All the contract functions starting with double underscore are considered
+/// to be reserved by the Soroban host and can't be directly called by another
+/// contracts.
+const RESERVED_CONTRACT_FN_PREFIX: &str = "__";
 
 /// Saves host state (storage and objects) for rolling back a (sub-)transaction
 /// on error. A helper type used by [`FrameGuard`].
@@ -587,6 +589,8 @@ impl Host {
         contract: BytesObject,
         args: VecObject,
     ) -> Result<RawVal, HostError> {
+        use crate::native_contract::account_contract::ACCOUNT_CONTRACT_CHECK_AUTH_FN_NAME;
+
         let contract_id = self.hash_from_bytesobj_input("contract", contract)?;
         let args = self.call_args_from_obj(args)?;
         let res = self.call_n_internal(
@@ -1001,12 +1005,14 @@ impl Host {
         // Internal host calls may call some special functions that otherwise
         // aren't allowed to be called.
         if !internal_host_call {
-            if SymbolStr::try_from_val(self, &func)?.to_string().as_str()
-                == ACCOUNT_CONTRACT_CHECK_AUTH_FN_NAME
+            if SymbolStr::try_from_val(self, &func)?
+                .to_string()
+                .as_str()
+                .starts_with(RESERVED_CONTRACT_FN_PREFIX)
             {
                 return Err(self.err_status_msg(
                     ScHostContextErrorCode::UnknownError,
-                    "can't invoke a custom account contract directly",
+                    "can't invoke a reserved function directly",
                 ));
             }
         }
