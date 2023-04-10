@@ -63,7 +63,7 @@ impl<'a> TestToken<'a> {
             .try_into()?)
     }
 
-    pub(crate) fn incr_allow(
+    pub(crate) fn increase_allowance(
         &self,
         from: &TestSigner,
         spender: Address,
@@ -71,12 +71,12 @@ impl<'a> TestToken<'a> {
     ) -> Result<(), HostError> {
         self.call_with_single_signer(
             from,
-            "incr_allow",
+            "increase_allowance",
             host_vec![self.host, from.address(self.host), spender, amount],
         )
     }
 
-    pub(crate) fn decr_allow(
+    pub(crate) fn decrease_allowance(
         &self,
         from: &TestSigner,
         spender: Address,
@@ -84,7 +84,7 @@ impl<'a> TestToken<'a> {
     ) -> Result<(), HostError> {
         self.call_with_single_signer(
             from,
-            "decr_allow",
+            "decrease_allowance",
             host_vec![self.host, from.address(self.host), spender, amount],
         )
     }
@@ -100,12 +100,12 @@ impl<'a> TestToken<'a> {
             .try_into_val(self.host)?)
     }
 
-    pub(crate) fn spendable(&self, addr: Address) -> Result<i128, HostError> {
+    pub(crate) fn spendable_balance(&self, addr: Address) -> Result<i128, HostError> {
         Ok(self
             .host
             .call(
                 self.id.clone().into(),
-                Symbol::try_from_val(self.host, &"spendable")?,
+                Symbol::try_from_val(self.host, &"spendable_balance")?,
                 host_vec![self.host, addr].into(),
             )?
             .try_into_val(self.host)?)
@@ -122,7 +122,7 @@ impl<'a> TestToken<'a> {
             .try_into_val(self.host)?)
     }
 
-    pub(crate) fn xfer(
+    pub(crate) fn transfer(
         &self,
         from: &TestSigner,
         to: Address,
@@ -130,12 +130,12 @@ impl<'a> TestToken<'a> {
     ) -> Result<(), HostError> {
         self.call_with_single_signer(
             from,
-            "xfer",
+            "transfer",
             host_vec![self.host, from.address(self.host), to, amount],
         )
     }
 
-    pub(crate) fn xfer_from(
+    pub(crate) fn transfer_from(
         &self,
         spender: &TestSigner,
         from: Address,
@@ -144,7 +144,7 @@ impl<'a> TestToken<'a> {
     ) -> Result<(), HostError> {
         self.call_with_single_signer(
             spender,
-            "xfer_from",
+            "transfer_from",
             host_vec![self.host, spender.address(self.host), from, to, amount],
         )
     }
@@ -170,7 +170,7 @@ impl<'a> TestToken<'a> {
         )
     }
 
-    pub(crate) fn set_auth(
+    pub(crate) fn set_authorized(
         &self,
         admin: &TestSigner,
         addr: Address,
@@ -178,8 +178,8 @@ impl<'a> TestToken<'a> {
     ) -> Result<(), HostError> {
         self.call_with_single_signer(
             admin,
-            "set_auth",
-            host_vec![self.host, admin.address(self.host), addr, authorize],
+            "set_authorized",
+            host_vec![self.host, addr, authorize],
         )
     }
 
@@ -189,11 +189,7 @@ impl<'a> TestToken<'a> {
         to: Address,
         amount: i128,
     ) -> Result<(), HostError> {
-        self.call_with_single_signer(
-            admin,
-            "mint",
-            host_vec![self.host, admin.address(self.host), to, amount],
-        )
+        self.call_with_single_signer(admin, "mint", host_vec![self.host, to, amount])
     }
 
     pub(crate) fn clawback(
@@ -202,11 +198,7 @@ impl<'a> TestToken<'a> {
         from: Address,
         amount: i128,
     ) -> Result<(), HostError> {
-        self.call_with_single_signer(
-            admin,
-            "clawback",
-            host_vec![self.host, admin.address(self.host), from, amount],
-        )
+        self.call_with_single_signer(admin, "clawback", host_vec![self.host, from, amount])
     }
 
     pub(crate) fn set_admin(
@@ -214,11 +206,7 @@ impl<'a> TestToken<'a> {
         admin: &TestSigner,
         new_admin: Address,
     ) -> Result<(), HostError> {
-        self.call_with_single_signer(
-            admin,
-            "set_admin",
-            host_vec![self.host, admin.address(self.host), new_admin],
-        )
+        self.call_with_single_signer(admin, "set_admin", host_vec![self.host, new_admin])
     }
 
     pub(crate) fn decimals(&self) -> Result<u32, HostError> {
