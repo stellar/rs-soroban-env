@@ -314,35 +314,28 @@ fn test_contract_wasm_update() {
                     contract_id: Some(contract_id),
                     type_: ContractEventType::System,
                     body: ContractEventBody::V0(ContractEventV0 {
-                        topics: vec![ScVal::Symbol(ScSymbol(
-                            "executable_update".try_into().unwrap()
-                        ))]
+                        topics: vec![
+                            ScVal::Symbol(ScSymbol("executable_update".try_into().unwrap())),
+                            ScVal::Vec(Some(ScVec(
+                                vec![
+                                    ScVal::Symbol(ScSymbol("WasmRef".try_into().unwrap())),
+                                    ScVal::Bytes(ScBytes(old_wasm_hash.0.try_into().unwrap()))
+                                ]
+                                .try_into()
+                                .unwrap()
+                            ))),
+                            ScVal::Vec(Some(ScVec(
+                                vec![
+                                    ScVal::Symbol(ScSymbol("WasmRef".try_into().unwrap())),
+                                    ScVal::Bytes(ScBytes(updated_wasm_hash.0.try_into().unwrap()))
+                                ]
+                                .try_into()
+                                .unwrap()
+                            )))
+                        ]
                         .try_into()
                         .unwrap(),
-                        data: ScVal::Vec(Some(ScVec(
-                            vec![
-                                ScVal::Vec(Some(ScVec(
-                                    vec![
-                                        ScVal::Symbol(ScSymbol("WasmRef".try_into().unwrap())),
-                                        ScVal::Bytes(ScBytes(old_wasm_hash.0.try_into().unwrap()))
-                                    ]
-                                    .try_into()
-                                    .unwrap()
-                                ))),
-                                ScVal::Vec(Some(ScVec(
-                                    vec![
-                                        ScVal::Symbol(ScSymbol("WasmRef".try_into().unwrap())),
-                                        ScVal::Bytes(ScBytes(
-                                            updated_wasm_hash.0.try_into().unwrap()
-                                        ))
-                                    ]
-                                    .try_into()
-                                    .unwrap()
-                                )))
-                            ]
-                            .try_into()
-                            .unwrap()
-                        ))),
+                        data: ScVal::Vec(Some(ScVec(vec![].try_into().unwrap()))),
                     }),
                 }
             );

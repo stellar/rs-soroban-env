@@ -33,16 +33,12 @@ impl Host {
         new_executable: &ScContractExecutable,
     ) -> Result<(), HostError> {
         self.system_event(
-            self.vec_new_from_slice(&[Symbol::try_from_val(
-                self,
-                &CONTRACT_EXECUTABLE_UPDATE_TOPIC,
-            )?
-            .into()])?,
             self.vec_new_from_slice(&[
+                Symbol::try_from_val(self, &CONTRACT_EXECUTABLE_UPDATE_TOPIC)?.into(),
                 ContractExecutable::from_xdr(self, old_executable)?.try_into_val(self)?,
                 ContractExecutable::from_xdr(self, new_executable)?.try_into_val(self)?,
-            ])?
-            .into(),
+            ])?,
+            self.vec_new_from_slice(&[])?.into(),
         )?;
         Ok(())
     }
