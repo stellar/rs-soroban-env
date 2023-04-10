@@ -1,7 +1,6 @@
 use crate::host::Host;
 use crate::native_contract::base_types::{Address, Bytes, BytesN};
 use crate::native_contract::contract_error::ContractError;
-use crate::native_contract::token::admin::{check_admin, write_administrator};
 use crate::native_contract::token::allowance::{read_allowance, spend_allowance, write_allowance};
 use crate::native_contract::token::balance::{
     is_authorized, read_balance, receive_balance, spend_balance, write_authorization,
@@ -17,6 +16,7 @@ use soroban_env_common::xdr::Asset;
 use soroban_env_common::{EnvBase, TryFromVal, TryIntoVal};
 use soroban_native_sdk_macros::contractimpl;
 
+use super::admin::{read_administrator, write_administrator};
 use super::balance::{
     check_clawbackable, get_spendable_balance, spend_balance_no_authorization_check,
 };
@@ -36,21 +36,29 @@ pub trait TokenTrait {
 
     fn allowance(e: &Host, from: Address, spender: Address) -> Result<i128, HostError>;
 
-    fn incr_allow(e: &Host, from: Address, spender: Address, amount: i128)
-        -> Result<(), HostError>;
+    fn increase_allowance(
+        e: &Host,
+        from: Address,
+        spender: Address,
+        amount: i128,
+    ) -> Result<(), HostError>;
 
-    fn decr_allow(e: &Host, from: Address, spender: Address, amount: i128)
-        -> Result<(), HostError>;
+    fn decrease_allowance(
+        e: &Host,
+        from: Address,
+        spender: Address,
+        amount: i128,
+    ) -> Result<(), HostError>;
 
     fn balance(e: &Host, addr: Address) -> Result<i128, HostError>;
 
-    fn spendable(e: &Host, addr: Address) -> Result<i128, HostError>;
+    fn spendable_balance(e: &Host, addr: Address) -> Result<i128, HostError>;
 
     fn authorized(e: &Host, addr: Address) -> Result<bool, HostError>;
 
-    fn xfer(e: &Host, from: Address, to: Address, amount: i128) -> Result<(), HostError>;
+    fn transfer(e: &Host, from: Address, to: Address, amount: i128) -> Result<(), HostError>;
 
-    fn xfer_from(
+    fn transfer_from(
         e: &Host,
         spender: Address,
         from: Address,
@@ -62,13 +70,13 @@ pub trait TokenTrait {
 
     fn burn_from(e: &Host, spender: Address, from: Address, amount: i128) -> Result<(), HostError>;
 
-    fn set_auth(e: &Host, admin: Address, addr: Address, authorize: bool) -> Result<(), HostError>;
+    fn set_authorized(e: &Host, addr: Address, authorize: bool) -> Result<(), HostError>;
 
-    fn mint(e: &Host, admin: Address, to: Address, amount: i128) -> Result<(), HostError>;
+    fn mint(e: &Host, to: Address, amount: i128) -> Result<(), HostError>;
 
-    fn clawback(e: &Host, admin: Address, from: Address, amount: i128) -> Result<(), HostError>;
+    fn clawback(e: &Host, from: Address, amount: i128) -> Result<(), HostError>;
 
-    fn set_admin(e: &Host, admin: Address, new_admin: Address) -> Result<(), HostError>;
+    fn set_admin(e: &Host, new_admin: Address) -> Result<(), HostError>;
 
     fn decimals(e: &Host) -> Result<u32, HostError>;
 
@@ -172,7 +180,7 @@ impl TokenTrait for Token {
     }
 
     // Metering: covered by components
-    fn incr_allow(
+    fn increase_allowance(
         e: &Host,
         from: Address,
         spender: Address,
@@ -185,11 +193,11 @@ impl TokenTrait for Token {
             .checked_add(amount)
             .ok_or_else(|| e.err_status(ContractError::OverflowError))?;
         write_allowance(&e, from.clone(), spender.clone(), new_allowance)?;
-        event::incr_allow(e, from, spender, amount)?;
+        event::increase_allowance(e, from, spender, amount)?;
         Ok(())
     }
 
-    fn decr_allow(
+    fn decrease_allowance(
         e: &Host,
         from: Address,
         spender: Address,
@@ -203,7 +211,7 @@ impl TokenTrait for Token {
         } else {
             write_allowance(&e, from.clone(), spender.clone(), allowance - amount)?;
         }
-        event::decr_allow(e, from, spender, amount)?;
+        event::decrease_allowance(e, from, spender, amount)?;
         Ok(())
     }
 
@@ -212,7 +220,7 @@ impl TokenTrait for Token {
         read_balance(e, addr)
     }
 
-    fn spendable(e: &Host, addr: Address) -> Result<i128, HostError> {
+    fn spendable_balance(e: &Host, addr: Address) -> Result<i128, HostError> {
         get_spendable_balance(e, addr)
     }
 
@@ -222,7 +230,7 @@ impl TokenTrait for Token {
     }
 
     // Metering: covered by components
-    fn xfer(e: &Host, from: Address, to: Address, amount: i128) -> Result<(), HostError> {
+    fn transfer(e: &Host, from: Address, to: Address, amount: i128) -> Result<(), HostError> {
         check_nonnegative_amount(e, amount)?;
         from.require_auth()?;
         spend_balance(e, from.clone(), amount)?;
@@ -232,7 +240,7 @@ impl TokenTrait for Token {
     }
 
     // Metering: covered by components
-    fn xfer_from(
+    fn transfer_from(
         e: &Host,
         spender: Address,
         from: Address,
@@ -270,10 +278,10 @@ impl TokenTrait for Token {
     }
 
     // Metering: covered by components
-    fn clawback(e: &Host, admin: Address, from: Address, amount: i128) -> Result<(), HostError> {
+    fn clawback(e: &Host, from: Address, amount: i128) -> Result<(), HostError> {
         check_nonnegative_amount(e, amount)?;
-        check_admin(e, &admin)?;
         check_clawbackable(&e, from.clone())?;
+        let admin = read_administrator(e)?;
         admin.require_auth()?;
         spend_balance_no_authorization_check(e, from.clone(), amount.clone())?;
         event::clawback(e, admin, from, amount)?;
@@ -281,18 +289,18 @@ impl TokenTrait for Token {
     }
 
     // Metering: covered by components
-    fn set_auth(e: &Host, admin: Address, addr: Address, authorize: bool) -> Result<(), HostError> {
-        check_admin(e, &admin)?;
+    fn set_authorized(e: &Host, addr: Address, authorize: bool) -> Result<(), HostError> {
+        let admin = read_administrator(e)?;
         admin.require_auth()?;
         write_authorization(e, addr.clone(), authorize)?;
-        event::set_auth(e, admin, addr, authorize)?;
+        event::set_authorized(e, admin, addr, authorize)?;
         Ok(())
     }
 
     // Metering: covered by components
-    fn mint(e: &Host, admin: Address, to: Address, amount: i128) -> Result<(), HostError> {
+    fn mint(e: &Host, to: Address, amount: i128) -> Result<(), HostError> {
         check_nonnegative_amount(e, amount)?;
-        check_admin(e, &admin)?;
+        let admin = read_administrator(e)?;
         admin.require_auth()?;
         receive_balance(e, to.clone(), amount)?;
         event::mint(e, admin, to, amount)?;
@@ -300,8 +308,8 @@ impl TokenTrait for Token {
     }
 
     // Metering: covered by components
-    fn set_admin(e: &Host, admin: Address, new_admin: Address) -> Result<(), HostError> {
-        check_admin(e, &admin)?;
+    fn set_admin(e: &Host, new_admin: Address) -> Result<(), HostError> {
+        let admin = read_administrator(e)?;
         admin.require_auth()?;
         write_administrator(e, new_admin.clone())?;
         event::set_admin(e, admin, new_admin)?;
