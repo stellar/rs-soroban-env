@@ -4,22 +4,22 @@ use soroban_native_sdk_macros::contracttype;
 
 #[derive(Clone)]
 #[contracttype]
-pub struct AlphaNum4Metadata {
+pub struct AlphaNum4AssetInfo {
     pub asset_code: BytesN<4>,
     pub issuer: BytesN<32>,
 }
 
 #[derive(Clone)]
 #[contracttype]
-pub struct AlphaNum12Metadata {
+pub struct AlphaNum12AssetInfo {
     pub asset_code: BytesN<12>,
     pub issuer: BytesN<32>,
 }
 
 #[derive(Clone)]
 #[contracttype]
-pub enum Metadata {
+pub enum AssetInfo {
     Native,
-    AlphaNum4(AlphaNum4Metadata),
-    AlphaNum12(AlphaNum12Metadata),
+    AlphaNum4(AlphaNum4AssetInfo),
+    AlphaNum12(AlphaNum12AssetInfo),
 }

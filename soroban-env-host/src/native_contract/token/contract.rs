@@ -2,14 +2,12 @@ use crate::host::Host;
 use crate::native_contract::base_types::{Address, Bytes, BytesN};
 use crate::native_contract::contract_error::ContractError;
 use crate::native_contract::token::allowance::{read_allowance, spend_allowance, write_allowance};
+use crate::native_contract::token::asset_info::{has_asset_info, write_asset_info};
 use crate::native_contract::token::balance::{
     is_authorized, read_balance, receive_balance, spend_balance, write_authorization,
 };
 use crate::native_contract::token::event;
-use crate::native_contract::token::metadata::{
-    has_metadata, read_name, read_symbol, write_metadata,
-};
-use crate::native_contract::token::public_types::Metadata;
+use crate::native_contract::token::public_types::AssetInfo;
 use crate::{err, HostError};
 
 use soroban_env_common::xdr::Asset;
@@ -17,11 +15,12 @@ use soroban_env_common::{EnvBase, TryFromVal, TryIntoVal};
 use soroban_native_sdk_macros::contractimpl;
 
 use super::admin::{read_administrator, write_administrator};
+use super::asset_info::read_asset_info;
 use super::balance::{
     check_clawbackable, get_spendable_balance, spend_balance_no_authorization_check,
 };
-use super::metadata::read_metadata;
-use super::public_types::{AlphaNum12Metadata, AlphaNum4Metadata};
+use super::metadata::{read_name, read_symbol, set_metadata, DECIMAL};
+use super::public_types::{AlphaNum12AssetInfo, AlphaNum4AssetInfo};
 
 pub trait TokenTrait {
     /// init_asset can create a contract for a wrapped classic asset
@@ -101,12 +100,12 @@ fn check_nonnegative_amount(e: &Host, amount: i128) -> Result<(), HostError> {
 }
 
 fn check_non_native(e: &Host) -> Result<(), HostError> {
-    match read_metadata(e)? {
-        Metadata::Native => Err(e.err_status_msg(
+    match read_asset_info(e)? {
+        AssetInfo::Native => Err(e.err_status_msg(
             ContractError::OperationNotSupportedError,
             "operation invalid on native asset",
         )),
-        Metadata::AlphaNum4(_) | Metadata::AlphaNum12(_) => Ok(()),
+        AssetInfo::AlphaNum4(_) | AssetInfo::AlphaNum12(_) => Ok(()),
     }
 }
 
@@ -114,7 +113,7 @@ fn check_non_native(e: &Host) -> Result<(), HostError> {
 // Metering: *mostly* covered by components.
 impl TokenTrait for Token {
     fn init_asset(e: &Host, asset_bytes: Bytes) -> Result<(), HostError> {
-        if has_metadata(&e)? {
+        if has_asset_info(&e)? {
             return Err(e.err_status_msg(
                 ContractError::AlreadyInitializedError,
                 "token has been already initialized",
@@ -136,14 +135,14 @@ impl TokenTrait for Token {
         }
         match asset {
             Asset::Native => {
-                write_metadata(&e, Metadata::Native)?;
+                write_asset_info(&e, AssetInfo::Native)?;
                 //No admin for the Native token
             }
             Asset::CreditAlphanum4(asset4) => {
                 write_administrator(&e, Address::from_account(e, &asset4.issuer)?)?;
-                write_metadata(
+                write_asset_info(
                     &e,
-                    Metadata::AlphaNum4(AlphaNum4Metadata {
+                    AssetInfo::AlphaNum4(AlphaNum4AssetInfo {
                         asset_code: BytesN::<4>::try_from_val(
                             e,
                             &e.bytes_new_from_slice(&asset4.asset_code.0)?,
@@ -157,9 +156,9 @@ impl TokenTrait for Token {
             }
             Asset::CreditAlphanum12(asset12) => {
                 write_administrator(&e, Address::from_account(e, &asset12.issuer)?)?;
-                write_metadata(
+                write_asset_info(
                     &e,
-                    Metadata::AlphaNum12(AlphaNum12Metadata {
+                    AssetInfo::AlphaNum12(AlphaNum12AssetInfo {
                         asset_code: BytesN::<12>::try_from_val(
                             e,
                             &e.bytes_new_from_slice(&asset12.asset_code.0)?,
@@ -172,6 +171,9 @@ impl TokenTrait for Token {
                 )?;
             }
         }
+
+        //Write metadata only after asset_info is set
+        set_metadata(&e)?;
         Ok(())
     }
 
@@ -317,7 +319,8 @@ impl TokenTrait for Token {
     }
 
     fn decimals(_e: &Host) -> Result<u32, HostError> {
-        Ok(7)
+        // no need to load metadta since this is fixed for all SAC tokens
+        Ok(DECIMAL)
     }
 
     fn name(e: &Host) -> Result<Bytes, HostError> {

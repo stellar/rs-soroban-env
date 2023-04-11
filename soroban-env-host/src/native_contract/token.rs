@@ -1,5 +1,6 @@
 mod admin;
 mod allowance;
+mod asset_info;
 mod balance;
 mod contract;
 mod event;
