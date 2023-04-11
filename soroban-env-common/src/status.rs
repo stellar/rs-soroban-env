@@ -61,8 +61,8 @@ impl PartialOrd for Status {
 impl Ord for Status {
     #[inline(always)]
     fn cmp(&self, other: &Self) -> Ordering {
-        let self_tup = (self.as_raw().get_major(), self.as_raw().get_minor());
-        let other_tup = (other.as_raw().get_major(), other.as_raw().get_minor());
+        let self_tup = (self.as_raw().get_minor(), self.as_raw().get_major());
+        let other_tup = (other.as_raw().get_minor(), other.as_raw().get_major());
         self_tup.cmp(&other_tup)
     }
 }
@@ -325,5 +325,61 @@ impl Status {
 impl From<core::convert::Infallible> for crate::Status {
     fn from(_: core::convert::Infallible) -> Self {
         unreachable!()
+    }
+}
+
+#[cfg(all(test, feature = "std"))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn status_ord_same_as_scstatus() {
+        // The impl `Ord for Status` must agree with `Ord for ScStatus`,
+        // re https://github.com/stellar/rs-soroban-env/issues/743.
+        //
+        // This test creates pairs of corresponding ScStatus/Status values,
+        // puts them all into a list, and sorts them with each comparison function,
+        // then checks that both lists are sorted the same.
+
+        use crate::xdr::*;
+
+        let xdr_vals = &[
+            ScStatus::Ok,
+            ScStatus::UnknownError(ScUnknownErrorCode::General),
+            ScStatus::UnknownError(ScUnknownErrorCode::Xdr),
+            ScStatus::HostValueError(ScHostValErrorCode::UnknownError),
+            ScStatus::HostValueError(ScHostValErrorCode::ReservedTagValue),
+            ScStatus::HostObjectError(ScHostObjErrorCode::UnknownError),
+            ScStatus::HostObjectError(ScHostObjErrorCode::UnknownReference),
+            ScStatus::HostFunctionError(ScHostFnErrorCode::UnknownError),
+            ScStatus::HostFunctionError(ScHostFnErrorCode::UnexpectedHostFunctionAction),
+            ScStatus::HostStorageError(ScHostStorageErrorCode::UnknownError),
+            ScStatus::HostStorageError(ScHostStorageErrorCode::ExpectContractData),
+            ScStatus::HostContextError(ScHostContextErrorCode::UnknownError),
+            ScStatus::HostContextError(ScHostContextErrorCode::NoContractRunning),
+            ScStatus::VmError(ScVmErrorCode::Unknown),
+            ScStatus::VmError(ScVmErrorCode::Validation),
+            ScStatus::ContractError(0),
+            ScStatus::ContractError(1),
+            ScStatus::HostAuthError(ScHostAuthErrorCode::UnknownError),
+            ScStatus::HostAuthError(ScHostAuthErrorCode::NonceError),
+        ];
+
+        let pairs: Vec<_> = xdr_vals
+            .into_iter()
+            .map(|xdr_val| {
+                let host_val = Status::try_from(xdr_val.clone()).unwrap();
+                (xdr_val, host_val)
+            })
+            .collect();
+
+        let mut pairs_xdr_sorted = pairs.clone();
+        let mut pairs_host_sorted = pairs_xdr_sorted.clone();
+
+        pairs_xdr_sorted.sort_by(|&(v1, _), &(v2, _)| v1.cmp(&v2));
+
+        pairs_host_sorted.sort_by(|&(_, v1), &(_, v2)| v1.cmp(&v2));
+
+        assert_eq!(pairs_xdr_sorted, pairs_host_sorted);
     }
 }
