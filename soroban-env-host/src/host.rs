@@ -7,17 +7,20 @@ use core::fmt::Debug;
 use std::rc::Rc;
 
 use soroban_env_common::{
+    num::{i256_from_pieces, i256_into_pieces, u256_from_pieces, u256_into_pieces},
     xdr::{
-        AccountId, Asset, ContractCodeEntry, ContractDataEntry, ContractEventType, ContractId,
-        CreateContractArgs, ExtensionPoint, Hash, HashIdPreimage, HostFunction, HostFunctionType,
-        InstallContractCodeArgs, Int128Parts, LedgerEntryData, LedgerKey, LedgerKeyContractCode,
-        PublicKey, ScAddress, ScBytes, ScContractExecutable, ScHostContextErrorCode,
-        ScHostFnErrorCode, ScHostObjErrorCode, ScHostStorageErrorCode, ScHostValErrorCode, ScMap,
-        ScMapEntry, ScStatusType, ScString, ScSymbol, ScUnknownErrorCode, ScVal, ScVec, Uint256,
+        int128_helpers, AccountId, Asset, ContractCodeEntry, ContractDataEntry, ContractEventType,
+        ContractId, CreateContractArgs, ExtensionPoint, Hash, HashIdPreimage, HostFunction,
+        HostFunctionType, InstallContractCodeArgs, Int128Parts, Int256Parts, LedgerEntryData,
+        LedgerKey, LedgerKeyContractCode, PublicKey, ScAddress, ScBytes, ScContractExecutable,
+        ScHostContextErrorCode, ScHostFnErrorCode, ScHostObjErrorCode, ScHostStorageErrorCode,
+        ScHostValErrorCode, ScMap, ScMapEntry, ScStatusType, ScString, ScSymbol,
+        ScUnknownErrorCode, ScVal, ScVec, UInt128Parts, UInt256Parts,
     },
-    AddressObject, Bool, BytesObject, Convert, I128Object, I64Object, MapObject, ScValObjRef,
-    ScValObject, Status, StringObject, SymbolObject, SymbolSmall, TryFromVal, TryIntoVal,
-    U128Object, U32Val, U64Object, U64Val, VecObject, VmCaller, VmCallerEnv, Void, I256, U256,
+    AddressObject, Bool, BytesObject, Convert, I128Object, I256Object, I64Object, MapObject,
+    ScValObjRef, ScValObject, Status, StringObject, SymbolObject, SymbolSmall, TryFromVal,
+    TryIntoVal, U128Object, U256Object, U32Val, U64Object, U64Val, VecObject, VmCaller,
+    VmCallerEnv, Void, I256, U256,
 };
 
 use crate::auth::{AuthorizationManager, AuthorizationManagerSnapshot, RecordedAuthPayload};
@@ -828,19 +831,32 @@ impl Host {
                         HostObject::Duration(d) => {
                             ScVal::Duration(d.metered_clone(self.as_budget())?)
                         }
-                        HostObject::U128(u) => ScVal::U128(Int128Parts {
-                            lo: *u as u64,
-                            hi: (*u >> 64) as u64,
+                        HostObject::U128(u) => ScVal::U128(UInt128Parts {
+                            hi: int128_helpers::u128_hi(*u),
+                            lo: int128_helpers::u128_lo(*u),
                         }),
-                        HostObject::I128(u) => {
-                            let u = *u as u128;
-                            ScVal::I128(Int128Parts {
-                                lo: u as u64,
-                                hi: (u >> 64) as u64,
+                        HostObject::I128(i) => ScVal::I128(Int128Parts {
+                            hi: int128_helpers::i128_hi(*i),
+                            lo: int128_helpers::i128_lo(*i),
+                        }),
+                        HostObject::U256(u) => {
+                            let (hi_hi, hi_lo, lo_hi, lo_lo) = u256_into_pieces(*u);
+                            ScVal::U256(UInt256Parts {
+                                hi_hi,
+                                hi_lo,
+                                lo_hi,
+                                lo_lo,
                             })
                         }
-                        HostObject::U256(u) => ScVal::U256(Uint256(u.to_be_bytes())),
-                        HostObject::I256(i) => ScVal::I256(Uint256(i.to_be_bytes())),
+                        HostObject::I256(i) => {
+                            let (hi_hi, hi_lo, lo_hi, lo_lo) = i256_into_pieces(*i);
+                            ScVal::I256(Int256Parts {
+                                hi_hi,
+                                hi_lo,
+                                lo_hi,
+                                lo_lo,
+                            })
+                        }
                         HostObject::Bytes(b) => ScVal::Bytes(b.metered_clone(self.as_budget())?),
                         HostObject::String(s) => ScVal::String(s.metered_clone(self.as_budget())?),
                         HostObject::Symbol(s) => ScVal::Symbol(s.metered_clone(self.as_budget())?),
@@ -899,16 +915,16 @@ impl Host {
                 .add_host_object(d.metered_clone(self.as_budget())?)?
                 .into()),
             ScVal::U128(u) => Ok(self
-                .add_host_object(u.lo as u128 | ((u.hi as u128) << 64))?
+                .add_host_object(int128_helpers::u128_from_pieces(u.hi, u.lo))?
                 .into()),
             ScVal::I128(i) => Ok(self
-                .add_host_object((i.lo as u128 | ((i.hi as u128) << 64)) as i128)?
+                .add_host_object(int128_helpers::i128_from_pieces(i.hi, i.lo))?
                 .into()),
             ScVal::U256(u) => Ok(self
-                .add_host_object(U256::from_be_bytes(u.0.metered_clone(self.as_budget())?))?
+                .add_host_object(u256_from_pieces(u.hi_hi, u.hi_lo, u.lo_hi, u.lo_lo))?
                 .into()),
             ScVal::I256(i) => Ok(self
-                .add_host_object(I256::from_be_bytes(i.0.metered_clone(self.as_budget())?))?
+                .add_host_object(i256_from_pieces(i.hi_hi, i.hi_lo, i.lo_hi, i.lo_lo))?
                 .into()),
             ScVal::Bytes(b) => Ok(self
                 .add_host_object(b.metered_clone(self.as_budget())?)?
@@ -1864,11 +1880,10 @@ impl VmCallerEnv for Host {
     fn obj_from_u128_pieces(
         &self,
         vmcaller: &mut VmCaller<Self::VmUserState>,
-        lo: u64,
         hi: u64,
+        lo: u64,
     ) -> Result<U128Object, Self::Error> {
-        let u: u128 = ((hi as u128) << 64) | lo as u128;
-        self.add_host_object(u)
+        self.add_host_object(int128_helpers::u128_from_pieces(hi, lo))
     }
 
     fn obj_to_u128_lo64(
@@ -1876,7 +1891,7 @@ impl VmCallerEnv for Host {
         vmcaller: &mut VmCaller<Self::VmUserState>,
         obj: U128Object,
     ) -> Result<u64, Self::Error> {
-        self.visit_obj(obj, move |u: &u128| Ok(*u as u64))
+        self.visit_obj(obj, move |u: &u128| Ok(int128_helpers::u128_lo(*u)))
     }
 
     fn obj_to_u128_hi64(
@@ -1884,19 +1899,16 @@ impl VmCallerEnv for Host {
         vmcaller: &mut VmCaller<Self::VmUserState>,
         obj: U128Object,
     ) -> Result<u64, Self::Error> {
-        self.visit_obj(obj, move |u: &u128| Ok((*u >> 64) as u64))
+        self.visit_obj(obj, move |u: &u128| Ok(int128_helpers::u128_hi(*u)))
     }
 
     fn obj_from_i128_pieces(
         &self,
         vmcaller: &mut VmCaller<Self::VmUserState>,
+        hi: i64,
         lo: u64,
-        hi: u64,
     ) -> Result<I128Object, Self::Error> {
-        // NB: always do assembly/disassembly as unsigned, to avoid sign extension.
-        let u: u128 = ((hi as u128) << 64) | lo as u128;
-        let i: i128 = u as i128;
-        self.add_host_object(i)
+        self.add_host_object(int128_helpers::i128_from_pieces(hi, lo))
     }
 
     fn obj_to_i128_lo64(
@@ -1904,15 +1916,125 @@ impl VmCallerEnv for Host {
         vmcaller: &mut VmCaller<Self::VmUserState>,
         obj: I128Object,
     ) -> Result<u64, Self::Error> {
-        self.visit_obj(obj, move |u: &i128| Ok((*u as u128) as u64))
+        self.visit_obj(obj, move |i: &i128| Ok(int128_helpers::i128_lo(*i)))
     }
 
     fn obj_to_i128_hi64(
         &self,
         vmcaller: &mut VmCaller<Self::VmUserState>,
         obj: I128Object,
-    ) -> Result<u64, Self::Error> {
-        self.visit_obj(obj, move |u: &i128| Ok(((*u as u128) >> 64) as u64))
+    ) -> Result<i64, Self::Error> {
+        self.visit_obj(obj, move |i: &i128| Ok(int128_helpers::i128_hi(*i)))
+    }
+
+    fn obj_from_u256_pieces(
+        &self,
+        vmcaller: &mut VmCaller<Self::VmUserState>,
+        hi_hi: u64,
+        hi_lo: u64,
+        lo_hi: u64,
+        lo_lo: u64,
+    ) -> Result<U256Object, Self::Error> {
+        self.add_host_object(u256_from_pieces(hi_hi, hi_lo, lo_hi, lo_lo))
+    }
+
+    fn obj_to_u256_hi_hi(
+        &self,
+        vmcaller: &mut VmCaller<Self::VmUserState>,
+        obj: U256Object,
+    ) -> Result<u64, HostError> {
+        self.visit_obj(obj, move |u: &U256| {
+            let (hi_hi, _, _, _) = u256_into_pieces(*u);
+            Ok(hi_hi)
+        })
+    }
+
+    fn obj_to_u256_hi_lo(
+        &self,
+        vmcaller: &mut VmCaller<Self::VmUserState>,
+        obj: U256Object,
+    ) -> Result<u64, HostError> {
+        self.visit_obj(obj, move |u: &U256| {
+            let (_, hi_lo, _, _) = u256_into_pieces(*u);
+            Ok(hi_lo)
+        })
+    }
+
+    fn obj_to_u256_lo_hi(
+        &self,
+        vmcaller: &mut VmCaller<Self::VmUserState>,
+        obj: U256Object,
+    ) -> Result<u64, HostError> {
+        self.visit_obj(obj, move |u: &U256| {
+            let (_, _, lo_hi, _) = u256_into_pieces(*u);
+            Ok(lo_hi)
+        })
+    }
+
+    fn obj_to_u256_lo_lo(
+        &self,
+        vmcaller: &mut VmCaller<Self::VmUserState>,
+        obj: U256Object,
+    ) -> Result<u64, HostError> {
+        self.visit_obj(obj, move |u: &U256| {
+            let (_, _, _, lo_lo) = u256_into_pieces(*u);
+            Ok(lo_lo)
+        })
+    }
+
+    fn obj_from_i256_pieces(
+        &self,
+        vmcaller: &mut VmCaller<Self::VmUserState>,
+        hi_hi: i64,
+        hi_lo: u64,
+        lo_hi: u64,
+        lo_lo: u64,
+    ) -> Result<I256Object, Self::Error> {
+        self.add_host_object(i256_from_pieces(hi_hi, hi_lo, lo_hi, lo_lo))
+    }
+
+    fn obj_to_i256_hi_hi(
+        &self,
+        vmcaller: &mut VmCaller<Self::VmUserState>,
+        obj: I256Object,
+    ) -> Result<i64, HostError> {
+        self.visit_obj(obj, move |i: &I256| {
+            let (hi_hi, _, _, _) = i256_into_pieces(*i);
+            Ok(hi_hi)
+        })
+    }
+
+    fn obj_to_i256_hi_lo(
+        &self,
+        vmcaller: &mut VmCaller<Self::VmUserState>,
+        obj: I256Object,
+    ) -> Result<u64, HostError> {
+        self.visit_obj(obj, move |i: &I256| {
+            let (_, hi_lo, _, _) = i256_into_pieces(*i);
+            Ok(hi_lo)
+        })
+    }
+
+    fn obj_to_i256_lo_hi(
+        &self,
+        vmcaller: &mut VmCaller<Self::VmUserState>,
+        obj: I256Object,
+    ) -> Result<u64, HostError> {
+        self.visit_obj(obj, move |i: &I256| {
+            let (_, _, lo_hi, _) = i256_into_pieces(*i);
+            Ok(lo_hi)
+        })
+    }
+
+    fn obj_to_i256_lo_lo(
+        &self,
+        vmcaller: &mut VmCaller<Self::VmUserState>,
+        obj: I256Object,
+    ) -> Result<u64, HostError> {
+        self.visit_obj(obj, move |i: &I256| {
+            let (_, _, _, lo_lo) = i256_into_pieces(*i);
+            Ok(lo_lo)
+        })
     }
 
     fn map_new(&self, _vmcaller: &mut VmCaller<Host>) -> Result<MapObject, HostError> {

@@ -577,9 +577,9 @@ checksum = "8e04e2fd2b8188ea827b32ef11de88377086d690286ab35747ef7f9bf3ccb590"
 
 [[package]]
 name = "itertools"
-version = "0.10.3"
+version = "0.10.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a9a9d19fa1e79b6215ff29b9d6880b706147f16e9b1dbb1e4e5947b5b02bc5e3"
+checksum = "b0fd2260e829bddf4cb6ea802289de2f86d6a7a690192fbe91b3f46e0f2c8473"
 dependencies = [
  "either",
 ]
@@ -1177,7 +1177,7 @@ checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 [[package]]
 name = "stellar-xdr"
 version = "0.0.15"
-source = "git+https://github.com/stellar/rs-stellar-xdr?rev=bcf6f4c3a9dd32822a20af89880650a421d10e7f#bcf6f4c3a9dd32822a20af89880650a421d10e7f"
+source = "git+https://github.com/jayz22/rs-stellar-xdr?rev=b04c3c26546335b063e2797175689c45c752612a#b04c3c26546335b063e2797175689c45c752612a"
 dependencies = [
  "arbitrary",
  "base64",
