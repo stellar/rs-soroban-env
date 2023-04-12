@@ -127,7 +127,7 @@ impl_declared_size_type!(DataEntry, 80);
 impl_declared_size_type!(ClaimableBalanceEntry, 120);
 impl_declared_size_type!(LiquidityPoolEntry, 160);
 impl_declared_size_type!(ContractCodeEntry, 56);
-impl_declared_size_type!(ConfigSettingEntry, 8);
+impl_declared_size_type!(ConfigSettingEntry, 104);
 impl_declared_size_type!(AccessType, 1);
 impl_declared_size_type!(DebugArg, 16);
 impl_declared_size_type!(InternalContractEvent, 40);
