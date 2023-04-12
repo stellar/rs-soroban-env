@@ -7,27 +7,27 @@ use core::fmt::Debug;
 use std::rc::Rc;
 
 use soroban_env_common::{
+    num::{i256_from_pieces, i256_into_pieces, u256_from_pieces, u256_into_pieces},
     xdr::{
-        AccountId, Asset, ContractCodeEntry, ContractDataEntry, ContractEventType, ContractId,
-        CreateContractArgs, ExtensionPoint, Hash, HashIdPreimage, HostFunction, HostFunctionType,
-        InstallContractCodeArgs, Int128Parts, LedgerEntryData, LedgerKey, LedgerKeyContractCode,
-        PublicKey, ScAddress, ScBytes, ScContractExecutable, ScHostContextErrorCode,
-        ScHostFnErrorCode, ScHostObjErrorCode, ScHostStorageErrorCode, ScHostValErrorCode, ScMap,
-        ScMapEntry, ScStatusType, ScString, ScSymbol, ScUnknownErrorCode, ScVal, ScVec, Uint256,
+        int128_helpers, AccountId, Asset, ContractCodeEntry, ContractDataEntry, ContractEventType,
+        ContractId, CreateContractArgs, ExtensionPoint, Hash, HashIdPreimage, HostFunction,
+        HostFunctionType, InstallContractCodeArgs, Int128Parts, Int256Parts, LedgerEntryData,
+        LedgerKey, LedgerKeyContractCode, PublicKey, ScAddress, ScBytes, ScContractExecutable,
+        ScHostContextErrorCode, ScHostFnErrorCode, ScHostObjErrorCode, ScHostStorageErrorCode,
+        ScHostValErrorCode, ScMap, ScMapEntry, ScStatusType, ScString, ScSymbol,
+        ScUnknownErrorCode, ScVal, ScVec, UInt128Parts, UInt256Parts,
     },
-    AddressObject, Bool, BytesObject, Convert, I128Object, I64Object, MapObject, ScValObjRef,
-    ScValObject, Status, StringObject, SymbolObject, SymbolSmall, TryFromVal, TryIntoVal,
-    U128Object, U32Val, U64Object, U64Val, VecObject, VmCaller, VmCallerEnv, Void, I256, U256,
+    AddressObject, Bool, BytesObject, Convert, I128Object, I256Object, I64Object, MapObject,
+    ScValObjRef, ScValObject, Status, StringObject, SymbolObject, SymbolSmall, TryFromVal,
+    TryIntoVal, U128Object, U256Object, U32Val, U64Object, U64Val, VecObject, VmCaller,
+    VmCallerEnv, Void, I256, U256,
 };
 
+use crate::auth::{AuthorizationManager, AuthorizationManagerSnapshot, RecordedAuthPayload};
 use crate::events::{
     DebugError, DebugEvent, Events, InternalContractEvent, InternalEvent, InternalEventsBuffer,
 };
 use crate::storage::{Storage, StorageMap};
-use crate::{
-    auth::{AuthorizationManager, AuthorizationManagerSnapshot, RecordedAuthPayload},
-    native_contract::account_contract::ACCOUNT_CONTRACT_CHECK_AUTH_FN_NAME,
-};
 use crate::{
     budget::{AsBudget, Budget, CostType},
     storage::{TempStorage, TempStorageMap},
@@ -58,6 +58,11 @@ pub use error::HostError;
 use self::metered_vector::MeteredVector;
 use self::{invoker_type::InvokerType, metered_clone::MeteredClone};
 use crate::Compare;
+
+/// All the contract functions starting with double underscore are considered
+/// to be reserved by the Soroban host and can't be directly called by another
+/// contracts.
+const RESERVED_CONTRACT_FN_PREFIX: &str = "__";
 
 /// Saves host state (storage and objects) for rolling back a (sub-)transaction
 /// on error. A helper type used by [`FrameGuard`].
@@ -158,8 +163,82 @@ impl Default for DiagnosticLevel {
     }
 }
 
+/// LegacyEpoch defines a set of _past_ (legacy) behaviour that we have logic in
+/// the host to handle, that can be activated by the embedder to replay past
+/// contracts "the same way they ran before".
+///
+/// Legacy epochs are added when some change in behaviour is detected by the
+/// embedder, during the second phase of the embedder upgrading the host, when
+/// the embedder performs a replay of some past transactions in order to expire
+/// old versions of the host, and notices some behaviour that diverges: that
+/// does not replay identically. At that point the _current_ behaviour is always
+/// considered part of `LegacyEpoch:Current` and a new _earlier_ epoch is added
+/// before it, that is named for the _previous_ behaviour.
+///
+/// To illustrate this with an example, first suppose that host versions are
+/// being _sequentially numbered_ by the embedder as v74, v75, v76, v77, etc. We
+/// do not assign such versions in the host itself, since the host does not know
+/// precisely when the embedder takes updates (and in any case the embedder
+/// needs to pin the entire dependency tree of versions the host's dependencies
+/// are resolved to in the embedding).
+///
+/// Now suppose that host v75 accidentally shipped a bug in the binary search
+/// function in `MeteredVector`, and suppose further that the embedder
+/// accidentally recorded a transaction using that buggy binary search. So there
+/// is a transaction labeled with host logic v75 that needs to run on bad binary
+/// search to execute correctly.
+///
+/// Now suppose it's time for the embedder to upgrade. Upgrading only works when
+/// the embedder embeds a _pair_ of host versions. Without loss of generality we
+/// can assume they have v75 and v76, the network is running on v76, and so
+/// their "upgrade" consists of expiring v75 (which is no longer recording new
+/// transactions) and activating v77.
+///
+/// To do this, the embedder replays all transactions labeled with v75 on v76.
+/// They will observe divergence on the transaction that relies on the bad
+/// binary search. Once the embedder has to debugged that fact and isolated it,
+/// they will want to add an enum entry `LegacyEpoch::BadBinSearch` to the host,
+/// designating the _old_ behaviour. Then when replaying a v75 transaction, the
+/// embedder will pass `LegacyEpoch::BadBinSearch`, and the host would be
+/// modified to keep the old bad binary search logic under a guard like `if
+/// self.is_in_legacy_epoch(LegacyEpoch::BadBinSearch) ... `.
+///
+/// Unfortunately such a change cannot be made to v76 since it's already frozen,
+/// in the field and recording transactions: it's the version in the live
+/// network. However, the change _can_ be made to the as-yet-unnumbered host
+/// that will soon be designated v77, since that version is still not yet
+/// finalized or deployed. So v77 will contain the legacy epoch-guarded copy of
+/// the old, bad code path.
+///
+/// Schematically, the upgrade looks like this:
+///
+/// ```text
+///
+///     [v75: has only bad logic] (expiring)
+///                    ||
+///                    \/
+///     [v76: has only good logic] (active)
+///                    ||
+///                    \/
+///     [v77: has both, with epoch guard] (to be deployed)
+///
+///```
+///
+/// Once the embedder confirms that replay of all "v75 transactions" succeed on
+/// host v77 emulating "the parts of v75 relevant to any actually-recorded
+/// transactions" (as indicated with `LegacyEpoch::BadBinSearch`) the embedder
+/// can do a release containing only hosts v76 and v77, and forget the rest of
+/// v75.
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default)]
+pub enum LegacyEpoch {
+    #[default]
+    Current,
+}
+
 #[derive(Clone, Default)]
 pub(crate) struct HostImpl {
+    legacy_epoch: RefCell<LegacyEpoch>,
     source_account: RefCell<Option<AccountId>>,
     ledger: RefCell<Option<LedgerInfo>>,
     objects: RefCell<Vec<HostObject>>,
@@ -239,6 +318,7 @@ impl Host {
     /// [`Env::get_contract_data`].
     pub fn with_storage_and_budget(storage: Storage, budget: Budget) -> Self {
         Self(Rc::new(HostImpl {
+            legacy_epoch: Default::default(),
             source_account: RefCell::new(None),
             ledger: RefCell::new(None),
             objects: Default::default(),
@@ -256,6 +336,14 @@ impl Host {
             #[cfg(any(test, feature = "testutils"))]
             previous_authorization_manager: RefCell::new(None),
         }))
+    }
+
+    pub fn set_legacy_epoch(&self, legacy_epoch: LegacyEpoch) {
+        *self.0.legacy_epoch.borrow_mut() = legacy_epoch
+    }
+
+    pub fn is_in_legacy_epoch(&self, legacy_epoch: LegacyEpoch) -> bool {
+        *self.0.legacy_epoch.borrow() <= legacy_epoch
     }
 
     pub fn set_source_account(&self, source_account: AccountId) {
@@ -587,6 +675,8 @@ impl Host {
         contract: BytesObject,
         args: VecObject,
     ) -> Result<RawVal, HostError> {
+        use crate::native_contract::account_contract::ACCOUNT_CONTRACT_CHECK_AUTH_FN_NAME;
+
         let contract_id = self.hash_from_bytesobj_input("contract", contract)?;
         let args = self.call_args_from_obj(args)?;
         let res = self.call_n_internal(
@@ -741,19 +831,32 @@ impl Host {
                         HostObject::Duration(d) => {
                             ScVal::Duration(d.metered_clone(self.as_budget())?)
                         }
-                        HostObject::U128(u) => ScVal::U128(Int128Parts {
-                            lo: *u as u64,
-                            hi: (*u >> 64) as u64,
+                        HostObject::U128(u) => ScVal::U128(UInt128Parts {
+                            hi: int128_helpers::u128_hi(*u),
+                            lo: int128_helpers::u128_lo(*u),
                         }),
-                        HostObject::I128(u) => {
-                            let u = *u as u128;
-                            ScVal::I128(Int128Parts {
-                                lo: u as u64,
-                                hi: (u >> 64) as u64,
+                        HostObject::I128(i) => ScVal::I128(Int128Parts {
+                            hi: int128_helpers::i128_hi(*i),
+                            lo: int128_helpers::i128_lo(*i),
+                        }),
+                        HostObject::U256(u) => {
+                            let (hi_hi, hi_lo, lo_hi, lo_lo) = u256_into_pieces(*u);
+                            ScVal::U256(UInt256Parts {
+                                hi_hi,
+                                hi_lo,
+                                lo_hi,
+                                lo_lo,
                             })
                         }
-                        HostObject::U256(u) => ScVal::U256(Uint256(u.to_be_bytes())),
-                        HostObject::I256(i) => ScVal::I256(Uint256(i.to_be_bytes())),
+                        HostObject::I256(i) => {
+                            let (hi_hi, hi_lo, lo_hi, lo_lo) = i256_into_pieces(*i);
+                            ScVal::I256(Int256Parts {
+                                hi_hi,
+                                hi_lo,
+                                lo_hi,
+                                lo_lo,
+                            })
+                        }
                         HostObject::Bytes(b) => ScVal::Bytes(b.metered_clone(self.as_budget())?),
                         HostObject::String(s) => ScVal::String(s.metered_clone(self.as_budget())?),
                         HostObject::Symbol(s) => ScVal::Symbol(s.metered_clone(self.as_budget())?),
@@ -812,16 +915,16 @@ impl Host {
                 .add_host_object(d.metered_clone(self.as_budget())?)?
                 .into()),
             ScVal::U128(u) => Ok(self
-                .add_host_object(u.lo as u128 | ((u.hi as u128) << 64))?
+                .add_host_object(int128_helpers::u128_from_pieces(u.hi, u.lo))?
                 .into()),
             ScVal::I128(i) => Ok(self
-                .add_host_object((i.lo as u128 | ((i.hi as u128) << 64)) as i128)?
+                .add_host_object(int128_helpers::i128_from_pieces(i.hi, i.lo))?
                 .into()),
             ScVal::U256(u) => Ok(self
-                .add_host_object(U256::from_be_bytes(u.0.metered_clone(self.as_budget())?))?
+                .add_host_object(u256_from_pieces(u.hi_hi, u.hi_lo, u.lo_hi, u.lo_lo))?
                 .into()),
             ScVal::I256(i) => Ok(self
-                .add_host_object(I256::from_be_bytes(i.0.metered_clone(self.as_budget())?))?
+                .add_host_object(i256_from_pieces(i.hi_hi, i.hi_lo, i.lo_hi, i.lo_lo))?
                 .into()),
             ScVal::Bytes(b) => Ok(self
                 .add_host_object(b.metered_clone(self.as_budget())?)?
@@ -995,12 +1098,14 @@ impl Host {
         // Internal host calls may call some special functions that otherwise
         // aren't allowed to be called.
         if !internal_host_call {
-            if SymbolStr::try_from_val(self, &func)?.to_string().as_str()
-                == ACCOUNT_CONTRACT_CHECK_AUTH_FN_NAME
+            if SymbolStr::try_from_val(self, &func)?
+                .to_string()
+                .as_str()
+                .starts_with(RESERVED_CONTRACT_FN_PREFIX)
             {
                 return Err(self.err_status_msg(
                     ScHostContextErrorCode::UnknownError,
-                    "can't invoke a custom account contract directly",
+                    "can't invoke a reserved function directly",
                 ));
             }
         }
@@ -1768,11 +1873,10 @@ impl VmCallerEnv for Host {
     fn obj_from_u128_pieces(
         &self,
         vmcaller: &mut VmCaller<Self::VmUserState>,
-        lo: u64,
         hi: u64,
+        lo: u64,
     ) -> Result<U128Object, Self::Error> {
-        let u: u128 = ((hi as u128) << 64) | lo as u128;
-        self.add_host_object(u)
+        self.add_host_object(int128_helpers::u128_from_pieces(hi, lo))
     }
 
     fn obj_to_u128_lo64(
@@ -1780,7 +1884,7 @@ impl VmCallerEnv for Host {
         vmcaller: &mut VmCaller<Self::VmUserState>,
         obj: U128Object,
     ) -> Result<u64, Self::Error> {
-        self.visit_obj(obj, move |u: &u128| Ok(*u as u64))
+        self.visit_obj(obj, move |u: &u128| Ok(int128_helpers::u128_lo(*u)))
     }
 
     fn obj_to_u128_hi64(
@@ -1788,19 +1892,16 @@ impl VmCallerEnv for Host {
         vmcaller: &mut VmCaller<Self::VmUserState>,
         obj: U128Object,
     ) -> Result<u64, Self::Error> {
-        self.visit_obj(obj, move |u: &u128| Ok((*u >> 64) as u64))
+        self.visit_obj(obj, move |u: &u128| Ok(int128_helpers::u128_hi(*u)))
     }
 
     fn obj_from_i128_pieces(
         &self,
         vmcaller: &mut VmCaller<Self::VmUserState>,
+        hi: i64,
         lo: u64,
-        hi: u64,
     ) -> Result<I128Object, Self::Error> {
-        // NB: always do assembly/disassembly as unsigned, to avoid sign extension.
-        let u: u128 = ((hi as u128) << 64) | lo as u128;
-        let i: i128 = u as i128;
-        self.add_host_object(i)
+        self.add_host_object(int128_helpers::i128_from_pieces(hi, lo))
     }
 
     fn obj_to_i128_lo64(
@@ -1808,15 +1909,125 @@ impl VmCallerEnv for Host {
         vmcaller: &mut VmCaller<Self::VmUserState>,
         obj: I128Object,
     ) -> Result<u64, Self::Error> {
-        self.visit_obj(obj, move |u: &i128| Ok((*u as u128) as u64))
+        self.visit_obj(obj, move |i: &i128| Ok(int128_helpers::i128_lo(*i)))
     }
 
     fn obj_to_i128_hi64(
         &self,
         vmcaller: &mut VmCaller<Self::VmUserState>,
         obj: I128Object,
-    ) -> Result<u64, Self::Error> {
-        self.visit_obj(obj, move |u: &i128| Ok(((*u as u128) >> 64) as u64))
+    ) -> Result<i64, Self::Error> {
+        self.visit_obj(obj, move |i: &i128| Ok(int128_helpers::i128_hi(*i)))
+    }
+
+    fn obj_from_u256_pieces(
+        &self,
+        vmcaller: &mut VmCaller<Self::VmUserState>,
+        hi_hi: u64,
+        hi_lo: u64,
+        lo_hi: u64,
+        lo_lo: u64,
+    ) -> Result<U256Object, Self::Error> {
+        self.add_host_object(u256_from_pieces(hi_hi, hi_lo, lo_hi, lo_lo))
+    }
+
+    fn obj_to_u256_hi_hi(
+        &self,
+        vmcaller: &mut VmCaller<Self::VmUserState>,
+        obj: U256Object,
+    ) -> Result<u64, HostError> {
+        self.visit_obj(obj, move |u: &U256| {
+            let (hi_hi, _, _, _) = u256_into_pieces(*u);
+            Ok(hi_hi)
+        })
+    }
+
+    fn obj_to_u256_hi_lo(
+        &self,
+        vmcaller: &mut VmCaller<Self::VmUserState>,
+        obj: U256Object,
+    ) -> Result<u64, HostError> {
+        self.visit_obj(obj, move |u: &U256| {
+            let (_, hi_lo, _, _) = u256_into_pieces(*u);
+            Ok(hi_lo)
+        })
+    }
+
+    fn obj_to_u256_lo_hi(
+        &self,
+        vmcaller: &mut VmCaller<Self::VmUserState>,
+        obj: U256Object,
+    ) -> Result<u64, HostError> {
+        self.visit_obj(obj, move |u: &U256| {
+            let (_, _, lo_hi, _) = u256_into_pieces(*u);
+            Ok(lo_hi)
+        })
+    }
+
+    fn obj_to_u256_lo_lo(
+        &self,
+        vmcaller: &mut VmCaller<Self::VmUserState>,
+        obj: U256Object,
+    ) -> Result<u64, HostError> {
+        self.visit_obj(obj, move |u: &U256| {
+            let (_, _, _, lo_lo) = u256_into_pieces(*u);
+            Ok(lo_lo)
+        })
+    }
+
+    fn obj_from_i256_pieces(
+        &self,
+        vmcaller: &mut VmCaller<Self::VmUserState>,
+        hi_hi: i64,
+        hi_lo: u64,
+        lo_hi: u64,
+        lo_lo: u64,
+    ) -> Result<I256Object, Self::Error> {
+        self.add_host_object(i256_from_pieces(hi_hi, hi_lo, lo_hi, lo_lo))
+    }
+
+    fn obj_to_i256_hi_hi(
+        &self,
+        vmcaller: &mut VmCaller<Self::VmUserState>,
+        obj: I256Object,
+    ) -> Result<i64, HostError> {
+        self.visit_obj(obj, move |i: &I256| {
+            let (hi_hi, _, _, _) = i256_into_pieces(*i);
+            Ok(hi_hi)
+        })
+    }
+
+    fn obj_to_i256_hi_lo(
+        &self,
+        vmcaller: &mut VmCaller<Self::VmUserState>,
+        obj: I256Object,
+    ) -> Result<u64, HostError> {
+        self.visit_obj(obj, move |i: &I256| {
+            let (_, hi_lo, _, _) = i256_into_pieces(*i);
+            Ok(hi_lo)
+        })
+    }
+
+    fn obj_to_i256_lo_hi(
+        &self,
+        vmcaller: &mut VmCaller<Self::VmUserState>,
+        obj: I256Object,
+    ) -> Result<u64, HostError> {
+        self.visit_obj(obj, move |i: &I256| {
+            let (_, _, lo_hi, _) = i256_into_pieces(*i);
+            Ok(lo_hi)
+        })
+    }
+
+    fn obj_to_i256_lo_lo(
+        &self,
+        vmcaller: &mut VmCaller<Self::VmUserState>,
+        obj: I256Object,
+    ) -> Result<u64, HostError> {
+        self.visit_obj(obj, move |i: &I256| {
+            let (_, _, _, lo_lo) = i256_into_pieces(*i);
+            Ok(lo_lo)
+        })
     }
 
     fn map_new(&self, _vmcaller: &mut VmCaller<Host>) -> Result<MapObject, HostError> {

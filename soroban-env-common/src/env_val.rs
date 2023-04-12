@@ -1,13 +1,19 @@
-use crate::{ConversionError, Env, I128Small, I64Small, RawVal, U128Small, U64Small, U64Val};
+use crate::{
+    num::{i256_from_pieces, i256_into_pieces, u256_from_pieces, u256_into_pieces},
+    ConversionError, Env, I128Small, I256Small, I64Small, RawVal, U128Small, U256Small, U64Small,
+    U64Val, I256, U256,
+};
 use core::fmt::Debug;
+use stellar_xdr::int128_helpers;
 
 #[cfg(feature = "std")]
 use crate::{
     num, object::ScValObjRef, Object, RawValConvertible, ScValObject, Status, SymbolSmall, Tag,
-    I256, U256,
 };
 #[cfg(feature = "std")]
-use stellar_xdr::{Duration, Int128Parts, ScVal, TimePoint, Uint256};
+use stellar_xdr::{
+    Duration, Int128Parts, Int256Parts, ScVal, TimePoint, UInt128Parts, UInt256Parts,
+};
 
 pub trait TryIntoVal<E: Env, V> {
     type Error: Debug;
@@ -141,10 +147,9 @@ impl<E: Env> TryFromVal<E, RawVal> for i128 {
             Ok(so.into())
         } else {
             let obj = v.try_into()?;
-            let lo = env.obj_to_i128_lo64(obj).map_err(|_| ConversionError)?;
             let hi = env.obj_to_i128_hi64(obj).map_err(|_| ConversionError)?;
-            let u: u128 = (lo as u128) | ((hi as u128) << 64);
-            Ok(u as i128)
+            let lo = env.obj_to_i128_lo64(obj).map_err(|_| ConversionError)?;
+            Ok(int128_helpers::i128_from_pieces(hi, lo))
         }
     }
 }
@@ -157,7 +162,7 @@ impl<E: Env> TryFromVal<E, i128> for RawVal {
             Ok(so.into())
         } else {
             Ok(env
-                .obj_from_i128_pieces(v as u64, (v as u128 >> 64) as u64)
+                .obj_from_i128_pieces(int128_helpers::i128_hi(v), int128_helpers::i128_lo(v))
                 .map_err(|_| ConversionError)?
                 .into())
         }
@@ -175,10 +180,9 @@ impl<E: Env> TryFromVal<E, RawVal> for u128 {
             Ok(so.into())
         } else {
             let obj = v.try_into()?;
-            let lo = env.obj_to_u128_lo64(obj).map_err(|_| ConversionError)?;
             let hi = env.obj_to_u128_hi64(obj).map_err(|_| ConversionError)?;
-            let u: u128 = (lo as u128) | ((hi as u128) << 64);
-            Ok(u)
+            let lo = env.obj_to_u128_lo64(obj).map_err(|_| ConversionError)?;
+            Ok(int128_helpers::u128_from_pieces(hi, lo))
         }
     }
 }
@@ -191,14 +195,82 @@ impl<E: Env> TryFromVal<E, u128> for RawVal {
             Ok(so.into())
         } else {
             Ok(env
-                .obj_from_u128_pieces(v as u64, (v >> 64) as u64)
+                .obj_from_u128_pieces(int128_helpers::u128_hi(v), int128_helpers::u128_lo(v))
                 .map_err(|_| ConversionError)?
                 .into())
         }
     }
 }
 
-// TODO: need some {iu}256 conversions, once we have host functions.
+// i256 conversions
+impl<E: Env> TryFromVal<E, RawVal> for I256 {
+    type Error = ConversionError;
+
+    fn try_from_val(env: &E, v: &RawVal) -> Result<Self, Self::Error> {
+        let v = *v;
+        if let Ok(so) = I256Small::try_from(v) {
+            Ok(so.into())
+        } else {
+            let obj = v.try_into()?;
+            let hi_hi = env.obj_to_i256_hi_hi(obj).map_err(|_| ConversionError)?;
+            let hi_lo = env.obj_to_i256_hi_lo(obj).map_err(|_| ConversionError)?;
+            let lo_hi = env.obj_to_i256_lo_hi(obj).map_err(|_| ConversionError)?;
+            let lo_lo = env.obj_to_i256_lo_lo(obj).map_err(|_| ConversionError)?;
+            Ok(i256_from_pieces(hi_hi, hi_lo, lo_hi, lo_lo))
+        }
+    }
+}
+impl<E: Env> TryFromVal<E, I256> for RawVal {
+    type Error = ConversionError;
+
+    fn try_from_val(env: &E, v: &I256) -> Result<Self, Self::Error> {
+        let v = *v;
+        if let Ok(so) = I256Small::try_from(v) {
+            Ok(so.into())
+        } else {
+            let (hi_hi, hi_lo, lo_hi, lo_lo) = i256_into_pieces(v);
+            Ok(env
+                .obj_from_i256_pieces(hi_hi, hi_lo, lo_hi, lo_lo)
+                .map_err(|_| ConversionError)?
+                .into())
+        }
+    }
+}
+
+// u256 conversions
+impl<E: Env> TryFromVal<E, RawVal> for U256 {
+    type Error = ConversionError;
+
+    fn try_from_val(env: &E, v: &RawVal) -> Result<Self, Self::Error> {
+        let v = *v;
+        if let Ok(so) = U256Small::try_from(v) {
+            Ok(so.into())
+        } else {
+            let obj = v.try_into()?;
+            let hi_hi = env.obj_to_u256_hi_hi(obj).map_err(|_| ConversionError)?;
+            let hi_lo = env.obj_to_u256_hi_lo(obj).map_err(|_| ConversionError)?;
+            let lo_hi = env.obj_to_u256_lo_hi(obj).map_err(|_| ConversionError)?;
+            let lo_lo = env.obj_to_u256_lo_lo(obj).map_err(|_| ConversionError)?;
+            Ok(u256_from_pieces(hi_hi, hi_lo, lo_hi, lo_lo))
+        }
+    }
+}
+impl<E: Env> TryFromVal<E, U256> for RawVal {
+    type Error = ConversionError;
+
+    fn try_from_val(env: &E, v: &U256) -> Result<Self, Self::Error> {
+        let v = *v;
+        if let Ok(so) = U256Small::try_from(v) {
+            Ok(so.into())
+        } else {
+            let (hi_hi, hi_lo, lo_hi, lo_lo) = u256_into_pieces(v);
+            Ok(env
+                .obj_from_u256_pieces(hi_hi, hi_lo, lo_hi, lo_lo)
+                .map_err(|_| ConversionError)?
+                .into())
+        }
+    }
+}
 
 // ScVal conversions (that require Object conversions)
 
@@ -232,24 +304,32 @@ where
             Tag::I64Small => Ok(ScVal::I64(val.get_signed_body())),
             Tag::TimepointSmall => Ok(ScVal::Timepoint(TimePoint(val.get_body()))),
             Tag::DurationSmall => Ok(ScVal::Duration(Duration(val.get_body()))),
-            Tag::U128Small => Ok(ScVal::U128(Int128Parts {
+            Tag::U128Small => Ok(ScVal::U128(UInt128Parts {
                 hi: 0,
                 lo: val.get_body(),
             })),
             Tag::I128Small => {
                 let body = val.get_signed_body() as i128;
                 Ok(ScVal::I128(Int128Parts {
-                    hi: (body >> 64) as u64,
+                    hi: (body >> 64) as i64,
                     lo: body as u64,
                 }))
             }
-            Tag::U256Small => {
-                let val = U256::new(val.get_body() as u128);
-                Ok(ScVal::U256(Uint256(val.to_be_bytes())))
-            }
+            Tag::U256Small => Ok(ScVal::U256(UInt256Parts {
+                hi_hi: 0,
+                hi_lo: 0,
+                lo_hi: 0,
+                lo_lo: val.get_body(),
+            })),
             Tag::I256Small => {
-                let val = I256::new(val.get_signed_body() as i128);
-                Ok(ScVal::I256(Uint256(val.to_be_bytes())))
+                let body = val.get_signed_body() as i128;
+                let (hi_hi, hi_lo, lo_hi, lo_lo) = i256_into_pieces(I256::from(body));
+                Ok(ScVal::I256(Int256Parts {
+                    hi_hi,
+                    hi_lo,
+                    lo_hi,
+                    lo_lo,
+                }))
             }
             Tag::SymbolSmall => {
                 let sym: SymbolSmall =
@@ -330,14 +410,12 @@ where
                 unsafe { RawVal::from_body_and_tag((i as i64) as u64, Tag::I128Small) }
             }
             ScVal::U256(u) => {
-                let u: U256 = U256::from_be_bytes(u.0.clone());
-                assert!(num::is_small_u256(&u));
-                unsafe { RawVal::from_body_and_tag(u.as_u64(), Tag::U256Small) }
+                assert!(num::is_small_u256_parts(u));
+                unsafe { RawVal::from_body_and_tag(u.lo_lo, Tag::U256Small) }
             }
             ScVal::I256(i) => {
-                let i: I256 = I256::from_be_bytes(i.0.clone());
-                assert!(num::is_small_i256(&i));
-                unsafe { RawVal::from_body_and_tag(i.as_i64() as u64, Tag::I256Small) }
+                assert!(num::is_small_i256_parts(i));
+                unsafe { RawVal::from_body_and_tag(i.lo_lo as u64, Tag::I256Small) }
             }
             ScVal::Symbol(bytes) => {
                 let ss = match std::str::from_utf8(bytes.as_slice()) {
