@@ -68,7 +68,7 @@ macro_rules! generate_dispatch_functions {
                     // This does not account for the actual work being done in those functions,
                     // which are accounted for individually at the operation level.
                     let host = caller.host_data().clone();
-                    host.charge_budget(CostType::InvokeHostFunction, 1, None)?;
+                    host.charge_budget(CostType::InvokeHostFunction, None)?;
                     let mut vmcaller = VmCaller(Some(caller));
                     // The odd / seemingly-redundant use of `wasmi::Value` here
                     // as intermediates -- rather than just passing RawVals --

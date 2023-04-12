@@ -20,21 +20,21 @@ where
     // Covers the cost of creating `count` number of new `MeteredVector`s. This does not include
     // the cost of any allocation, since it is assumed memory allocation is charged separately
     // elsewhere.
-    fn charge_new(count: u64, budget: &Budget) -> Result<(), HostError> {
-        budget.charge(CostType::VecNew, count, None)
+    fn charge_new(budget: &Budget) -> Result<(), HostError> {
+        budget.charge(CostType::VecNew, None)
     }
 
     fn charge_access(&self, count: usize, budget: &Budget) -> Result<(), HostError> {
-        budget.charge(CostType::VecEntry, count as u64, None)
+        budget.batched_charge(CostType::VecEntry, count as u64, None)
     }
 
     fn charge_scan(&self, budget: &Budget) -> Result<(), HostError> {
-        budget.charge(CostType::VecEntry, self.vec.len() as u64, None)
+        budget.batched_charge(CostType::VecEntry, self.vec.len() as u64, None)
     }
 
     fn charge_binsearch(&self, budget: &Budget) -> Result<(), HostError> {
         let mag = 64 - (self.vec.len() as u64).leading_zeros();
-        budget.charge(CostType::VecEntry, 1 + mag as u64, None)
+        budget.batched_charge(CostType::VecEntry, 1 + mag as u64, None)
     }
 }
 
@@ -66,7 +66,7 @@ where
     pub fn from_vec(vec: Vec<A>, budget: &Budget) -> Result<Self, HostError> {
         // Only charge for the new vector, assuming allocation cost has been covered
         // by the caller from the outside.
-        Self::charge_new(1, budget)?;
+        Self::charge_new(budget)?;
         Ok(Self { vec })
     }
 
@@ -331,7 +331,7 @@ where
         a: &MeteredVector<Elt>,
         b: &MeteredVector<Elt>,
     ) -> Result<Ordering, Self::Error> {
-        self.as_budget().charge(
+        self.as_budget().batched_charge(
             CostType::VecEntry,
             a.vec.len().min(b.vec.len()) as u64,
             None,
@@ -351,7 +351,7 @@ where
         a: &MeteredVector<Elt>,
         b: &MeteredVector<Elt>,
     ) -> Result<Ordering, Self::Error> {
-        self.as_budget().charge(
+        self.as_budget().batched_charge(
             CostType::VecEntry,
             a.vec.len().min(b.vec.len()) as u64,
             None,

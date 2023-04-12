@@ -101,14 +101,13 @@ impl CostType {
 
 /// We provide a "cost model" object that evaluates a linear expression:
 ///
-///    f(x) = N * (a + b * Option<x>)
+///    f(x) = a + b * Option<x>
 ///
 /// Where a, b are "fixed" parameters at construction time (extracted from an
 /// on-chain cost schedule, so technically not _totally_ fixed) and Option<x>
 /// is some abstract input variable -- say, event counts or object sizes --
 /// provided at runtime. If the input cannot be defined, i.e., the cost is
-/// constant, input-independent, then pass in `None` as the input. N is
-/// "iterations", i.e. the batch count for batching multiple model charges.
+/// constant, input-independent, then pass in `None` as the input.
 ///
 /// The same `CostModel` type, i.e. `CostType` (applied to different parameters
 /// and variables) is used for calculating memory as well as CPU time.
@@ -125,19 +124,14 @@ impl CostType {
 pub struct CostModel {
     pub(crate) const_param: u64,
     pub(crate) lin_param: u64,
-    pub(crate) iterations: u64,
 }
 
 impl CostModel {
-    /// Evaluates the linear model `f(input) = const_param + lin_param * input`.
-    /// If the input is `None`, then the input is ignored, resulting in a constant
+    /// Evaluates the linear model `f(input) = const_param + lin_param * Option<input>`.
+    /// If the input is `None`, then the linear part is ingored, resulting in a constant
     /// model.
-    pub fn evaluate(&self, iterations: u64, input: Option<u64>) -> u64 {
-        if iterations == 0 {
-            return 0;
-        };
-
-        let eval = match input {
+    pub fn evaluate(&self, input: Option<u64>) -> u64 {
+        match input {
             Some(input) => {
                 let mut res = self.const_param;
                 if self.lin_param != 0 {
@@ -146,15 +140,13 @@ impl CostModel {
                 res
             }
             None => self.const_param,
-        };
-        iterations.saturating_mul(eval)
+        }
     }
 
     #[cfg(test)]
     pub fn reset(&mut self) {
         self.const_param = 0;
         self.lin_param = 0;
-        self.iterations = 0;
     }
 }
 
@@ -246,10 +238,11 @@ impl BudgetDimension {
         self.total_count > self.limit
     }
 
-    /// Charges an input amount to the budget under the specified `CostType`. If the input
-    /// is `Some`, then the total input charged is iterations * input, assuming all batched
-    /// units have the same input. If input is `None`, then the input is ignored and the
-    /// model is treated as a constant model.
+    /// Performs a bulk charge to the budget under the specified `CostType`.
+    /// If the input is `Some`, then the total input charged is iterations *
+    /// input, assuming all batched units have the same input size. If input
+    /// is `None`, the input is ignored and the model is treated as a constant
+    /// model, and amount charged is iterations * const_param.
     pub fn charge(
         &mut self,
         ty: CostType,
@@ -257,7 +250,7 @@ impl BudgetDimension {
         input: Option<u64>,
     ) -> Result<(), HostError> {
         let cm = self.get_cost_model(ty);
-        let amount = cm.evaluate(iterations, input);
+        let amount = cm.evaluate(input).saturating_mul(iterations);
         self.counts[ty as usize] = self.counts[ty as usize].saturating_add(amount);
         self.total_count = self.total_count.saturating_add(amount);
         if self.is_over_budget() {
@@ -409,7 +402,7 @@ impl Budget {
         f(self.0.borrow_mut())
     }
 
-    pub fn charge(
+    fn charge_in_bulk(
         &self,
         ty: CostType,
         iterations: u64,
@@ -447,6 +440,19 @@ impl Budget {
             b.cpu_insns.charge(ty, iterations, input)?;
             b.mem_bytes.charge(ty, iterations, input)
         })
+    }
+
+    pub fn charge(&self, ty: CostType, input: Option<u64>) -> Result<(), HostError> {
+        self.charge_in_bulk(ty, 1, input)
+    }
+
+    pub fn batched_charge(
+        &self,
+        ty: CostType,
+        iterations: u64,
+        input: Option<u64>,
+    ) -> Result<(), HostError> {
+        self.charge_in_bulk(ty, iterations, input)
     }
 
     pub fn with_free_budget<F, T>(&self, f: F) -> Result<T, HostError>

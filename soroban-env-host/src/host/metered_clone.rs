@@ -43,7 +43,6 @@ pub(crate) fn charge_shallow_copy<T: MeteredClone>(
     debug_assert!(mem::size_of::<T>() as u64 <= T::DECLARED_SIZE);
     budget.charge(
         CostType::HostMemCpy,
-        1,
         Some(n_elts.saturating_mul(T::DECLARED_SIZE)),
     )
 }
@@ -59,7 +58,6 @@ pub(crate) fn charge_heap_alloc<T: MeteredClone>(
     debug_assert!(mem::size_of::<T>() as u64 <= T::DECLARED_SIZE);
     budget.charge(
         CostType::HostMemAlloc,
-        1,
         Some(n_elts.saturating_mul(T::DECLARED_SIZE)),
     )
 }

@@ -27,7 +27,7 @@ impl CostRunner for InvokeVmFunctionRun {
         _iter: u64,
         sample: Self::SampleType,
     ) -> Self::RecycledType {
-        black_box(host.charge_budget(Self::COST_TYPE, 1, None).unwrap());
+        black_box(host.charge_budget(Self::COST_TYPE, None).unwrap());
         black_box((None, sample))
     }
 }
@@ -53,7 +53,7 @@ impl CostRunner for InvokeHostFunctionRun {
         _iter: u64,
         sample: Self::SampleType,
     ) -> Self::RecycledType {
-        black_box(host.charge_budget(Self::COST_TYPE, 1, None).unwrap());
+        black_box(host.charge_budget(Self::COST_TYPE, None).unwrap());
         black_box((None, sample))
     }
 }

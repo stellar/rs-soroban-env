@@ -327,13 +327,8 @@ impl Host {
         self.0.budget.clone()
     }
 
-    pub fn charge_budget(
-        &self,
-        ty: CostType,
-        iterations: u64,
-        input: Option<u64>,
-    ) -> Result<(), HostError> {
-        self.0.budget.clone().charge(ty, iterations, input)
+    pub fn charge_budget(&self, ty: CostType, input: Option<u64>) -> Result<(), HostError> {
+        self.0.budget.clone().charge(ty, input)
     }
 
     pub fn set_diagnostic_level(&self, diagnostic_level: DiagnosticLevel) {
@@ -531,7 +526,7 @@ impl Host {
     where
         F: FnOnce() -> Result<RawVal, HostError>,
     {
-        self.charge_budget(CostType::GuardFrame, 1, None)?;
+        self.charge_budget(CostType::GuardFrame, None)?;
         let start_depth = self.0.context.borrow().len();
         let rp = self.push_frame(frame)?;
         let res = f();
@@ -645,7 +640,7 @@ impl Host {
     where
         F: FnOnce(Option<&HostObject>) -> Result<U, HostError>,
     {
-        self.charge_budget(CostType::VisitObject, 1, None)?;
+        self.charge_budget(CostType::VisitObject, None)?;
         let r = self.0.objects.borrow();
         let obj: Object = obj.into();
         let handle: u32 = obj.get_handle();
@@ -689,14 +684,14 @@ impl Host {
         // translates a u64 into another form defined by the xdr.
         // For an `Object`, the actual structural conversion (such as byte
         // cloning) occurs in `from_host_obj` and is metered there.
-        self.charge_budget(CostType::ValXdrConv, 1, None)?;
+        self.charge_budget(CostType::ValXdrConv, None)?;
         ScVal::try_from_val(self, &val)
             .map_err(|_| self.err_status(ScHostValErrorCode::UnknownError))
     }
 
     pub(crate) fn to_host_val(&self, v: &ScVal) -> Result<RawVal, HostError> {
         // `ValXdrConv` is const cost in both cpu and mem. The input=0 will be ignored.
-        self.charge_budget(CostType::ValXdrConv, 1, None)?;
+        self.charge_budget(CostType::ValXdrConv, None)?;
         v.try_into_val(self)
             .map_err(|_| self.err_status(ScHostValErrorCode::UnknownError))
     }
@@ -709,7 +704,7 @@ impl Host {
                 // work such as byte cloning, has to be accounted for and
                 // metered in indivial match arms.
                 // `ValXdrConv` is const cost in both cpu and mem. The input=0 will be ignored.
-                self.charge_budget(CostType::ValXdrConv, 1, None)?;
+                self.charge_budget(CostType::ValXdrConv, None)?;
                 let val = match ob {
                     None => {
                         return Err(self.err_status(ScHostObjErrorCode::UnknownReference));
@@ -782,7 +777,7 @@ impl Host {
 
     pub(crate) fn to_host_obj<'a>(&self, ob: &ScValObjRef<'a>) -> Result<Object, HostError> {
         // `ValXdrConv` is const cost in both cpu and mem. The input=0 will be ignored.
-        self.charge_budget(CostType::ValXdrConv, 1, None)?;
+        self.charge_budget(CostType::ValXdrConv, None)?;
         let val: &ScVal = (*ob).into();
         match val {
             ScVal::Vec(Some(v)) => {
@@ -1302,7 +1297,7 @@ impl Host {
         sig: &ed25519_dalek::Signature,
     ) -> Result<(), HostError> {
         use ed25519_dalek::Verifier;
-        self.charge_budget(CostType::VerifyEd25519Sig, 1, Some(payload.len() as u64))?;
+        self.charge_budget(CostType::VerifyEd25519Sig, Some(payload.len() as u64))?;
         public_key
             .verify(payload, &sig)
             .map_err(|_| self.err_general("Failed ED25519 verification"))
@@ -1994,7 +1989,7 @@ impl VmCallerEnv for Host {
                 keys_pos,
                 len as usize,
                 |n, slice| {
-                    self.charge_budget(CostType::VmMemRead, 1, Some(slice.len() as u64))?;
+                    self.charge_budget(CostType::VmMemRead, Some(slice.len() as u64))?;
                     let scsym = ScSymbol(slice.try_into()?);
                     let sym = Symbol::try_from(self.to_host_val(&ScVal::Symbol(scsym))?)?;
                     key_syms.push(sym);

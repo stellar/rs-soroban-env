@@ -18,7 +18,7 @@ impl CostRunner for VecNewRun {
     }
 
     fn run_baseline_iter(host: &Host, _iter: u64, _sample: Self::SampleType) -> Self::RecycledType {
-        black_box(host.charge_budget(Self::COST_TYPE, 1, None).unwrap());
+        black_box(host.charge_budget(Self::COST_TYPE, None).unwrap());
         black_box(None)
     }
 }
@@ -52,7 +52,7 @@ impl CostRunner for VecEntryRun {
     }
 
     fn run_baseline_iter(host: &Host, _iter: u64, sample: Self::SampleType) -> Self::RecycledType {
-        black_box(host.charge_budget(Self::COST_TYPE, 1, None).unwrap());
+        black_box(host.charge_budget(Self::COST_TYPE, None).unwrap());
         black_box((None, sample))
     }
 }

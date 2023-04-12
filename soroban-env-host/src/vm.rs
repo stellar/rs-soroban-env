@@ -48,15 +48,15 @@ impl StepMeter for HostImpl {
         // TODO reconcile TrapCode with HostError better.
         self.budget
             .clone()
-            .charge(CostType::WasmInsnExec, insns, None)
+            .batched_charge(CostType::WasmInsnExec, insns, None)
             .map_err(|_| wasmi::core::TrapCode::CpuLimitExceeded)
     }
 
-    fn charge_mem(&self, bytes: u64) -> Result<(), wasmi::core::TrapCode> {
+    // each page is 64kB
+    fn charge_mem(&self, pages: u64) -> Result<(), wasmi::core::TrapCode> {
         self.budget
             .clone()
-            // we do not batch memory charging. The bytes here is the input.
-            .charge(CostType::WasmMemAlloc, 1, Some(bytes))
+            .charge(CostType::WasmMemAlloc, Some(pages))
             .map_err(|_| wasmi::core::TrapCode::MemLimitExceeded)
     }
 }
@@ -167,7 +167,6 @@ impl Vm {
         // `VmInstantiation` is const cost in both cpu and mem. It has weak variance on
         host.charge_budget(
             CostType::VmInstantiation,
-            1,
             Some(module_wasm_code.len() as u64),
         )?;
 
@@ -241,7 +240,7 @@ impl Vm {
         func: &Symbol,
         args: &[RawVal],
     ) -> Result<RawVal, HostError> {
-        host.charge_budget(CostType::InvokeVmFunction, 1, None)?;
+        host.charge_budget(CostType::InvokeVmFunction, None)?;
         host.with_frame(
             Frame::ContractVM(self.clone(), *func, args.to_vec()),
             || {
