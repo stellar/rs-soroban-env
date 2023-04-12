@@ -3,7 +3,6 @@ use crate::{
     RawValConvertible, Tag, TryFromVal,
 };
 use core::{cmp::Ordering, fmt::Debug};
-use ethnum::{I256, U256};
 use stellar_xdr::{Duration, ScVal, TimePoint};
 
 /// Wrapper for a [RawVal] that is tagged with one of the object types,
@@ -175,17 +174,15 @@ impl<'a> ScValObjRef<'a> {
                     Some(ScValObjRef(value))
                 }
             }
-            ScVal::U256(bytes) => {
-                let u = U256::from_be_bytes(bytes.0.clone());
-                if num::is_small_u256(&u) {
+            ScVal::U256(u) => {
+                if num::is_small_u256_parts(u) {
                     None
                 } else {
                     Some(ScValObjRef(value))
                 }
             }
-            ScVal::I256(bytes) => {
-                let i = I256::from_be_bytes(bytes.0.clone());
-                if num::is_small_i256(&i) {
+            ScVal::I256(i) => {
+                if num::is_small_i256_parts(i) {
                     None
                 } else {
                     Some(ScValObjRef(value))

@@ -503,16 +503,26 @@ mod tests {
             ScVal::I64(i64::MAX),
             ScVal::Timepoint(xdr::TimePoint(u64::MAX)),
             ScVal::Duration(xdr::Duration(u64::MAX)),
-            ScVal::U128(xdr::Int128Parts {
-                lo: u64::MAX,
+            ScVal::U128(xdr::UInt128Parts {
                 hi: u64::MAX,
+                lo: u64::MAX,
             }),
             ScVal::I128(xdr::Int128Parts {
+                hi: i64::MIN,
                 lo: u64::MAX,
-                hi: 0,
             }),
-            ScVal::U256(xdr::Uint256([0xff; 32])),
-            ScVal::I256(xdr::Uint256([0xf0; 32])),
+            ScVal::U256(xdr::UInt256Parts {
+                hi_hi: u64::MAX,
+                hi_lo: u64::MAX,
+                lo_hi: u64::MAX,
+                lo_lo: u64::MAX,
+            }),
+            ScVal::I256(xdr::Int256Parts {
+                hi_hi: i64::MIN,
+                hi_lo: u64::MAX,
+                lo_hi: u64::MAX,
+                lo_lo: u64::MAX,
+            }),
             ScVal::Bytes(xdr::ScBytes::try_from(vec![]).unwrap()),
             ScVal::String(xdr::ScString::try_from(vec![]).unwrap()),
             ScVal::Symbol(xdr::ScSymbol::try_from("big-symbol").unwrap()),

@@ -7,7 +7,7 @@ use crate::{
     raw_val::TAG_BITS, Compare, ConversionError, Env, RawVal, Tag,
 };
 pub use ethnum::{AsI256, AsU256, I256, U256};
-use stellar_xdr::{ScVal, Uint256};
+use stellar_xdr::{Int256Parts, ScVal, UInt256Parts};
 
 declare_tag_based_wrapper!(U32Val);
 declare_tag_based_wrapper!(I32Val);
@@ -216,7 +216,13 @@ impl TryFrom<U256Small> for ScVal {
     type Error = ConversionError;
     fn try_from(value: U256Small) -> Result<Self, Self::Error> {
         let val = U256::new(value.as_raw().get_body() as u128);
-        Ok(ScVal::U256(Uint256(val.to_be_bytes())))
+        let (hi_hi, hi_lo, lo_hi, lo_lo) = u256_into_pieces(val);
+        Ok(ScVal::U256(UInt256Parts {
+            hi_hi,
+            hi_lo,
+            lo_hi,
+            lo_lo,
+        }))
     }
 }
 
@@ -231,7 +237,13 @@ impl TryFrom<I256Small> for ScVal {
     type Error = ConversionError;
     fn try_from(value: I256Small) -> Result<Self, Self::Error> {
         let val = I256::new(value.as_raw().get_signed_body() as i128);
-        Ok(ScVal::I256(Uint256(val.to_be_bytes())))
+        let (hi_hi, hi_lo, lo_hi, lo_lo) = i256_into_pieces(val);
+        Ok(ScVal::I256(Int256Parts {
+            hi_hi,
+            hi_lo,
+            lo_hi,
+            lo_lo,
+        }))
     }
 }
 
@@ -268,6 +280,41 @@ pub fn is_small_u256(u: &U256) -> bool {
 pub fn is_small_i256(i: &I256) -> bool {
     let word = i.as_i64();
     is_small_i64(word) && *i == I256::from(word)
+}
+
+pub fn is_small_u256_parts(u: &UInt256Parts) -> bool {
+    u.hi_hi == 0 && u.hi_lo == 0 && u.lo_hi == 0 && is_small_u64(u.lo_lo)
+}
+
+pub fn is_small_i256_parts(i: &Int256Parts) -> bool {
+    let i = i256_from_pieces(i.hi_hi, i.hi_lo, i.lo_hi, i.lo_lo);
+    is_small_i256(&i)
+}
+
+pub fn u256_from_pieces(hi_hi: u64, hi_lo: u64, lo_hi: u64, lo_lo: u64) -> U256 {
+    let high = (u128::from(hi_hi)) << 64 | u128::from(hi_lo);
+    let low = (u128::from(lo_hi)) << 64 | u128::from(lo_lo);
+    U256::from_words(high, low)
+}
+
+pub fn u256_into_pieces(u: U256) -> (u64, u64, u64, u64) {
+    let (high, low) = u.into_words();
+    let (hi_hi, hi_lo) = ((high >> 64) as u64, high as u64);
+    let (lo_hi, lo_lo) = ((low >> 64) as u64, low as u64);
+    (hi_hi, hi_lo, lo_hi, lo_lo)
+}
+
+pub fn i256_from_pieces(hi_hi: i64, hi_lo: u64, lo_hi: u64, lo_lo: u64) -> I256 {
+    let high = ((u128::from(hi_hi as u64) << 64) | u128::from(hi_lo)) as i128;
+    let low = ((u128::from(lo_hi) << 64) | u128::from(lo_lo)) as i128;
+    I256::from_words(high, low)
+}
+
+pub fn i256_into_pieces(i: I256) -> (i64, u64, u64, u64) {
+    let (high, low) = i.into_words();
+    let (hi_hi, hi_lo) = ((high >> 64) as i64, high as u64);
+    let (lo_hi, lo_lo) = ((low >> 64) as u64, low as u64);
+    (hi_hi, hi_lo, lo_hi, lo_lo)
 }
 
 pub const MIN_SMALL_U64: u64 = 0;
