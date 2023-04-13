@@ -64,3 +64,5 @@ pub const SIMPLE_ACCOUNT_CONTRACT: &'static [u8] =
     include_bytes!("../wasm-workspace/opt/example_simple_account.wasm").as_slice();
 pub const AUTH_TEST_CONTRACT: &'static [u8] =
     include_bytes!("../wasm-workspace/opt/auth_test_contract.wasm").as_slice();
+pub const UPDATEABLE_CONTRACT: &'static [u8] =
+    include_bytes!("../wasm-workspace/opt/example_updateable_contract.wasm").as_slice();

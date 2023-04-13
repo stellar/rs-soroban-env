@@ -29,6 +29,7 @@ members = [
     "complex",
     "fannkuch",
     "simple_account",
+    "update"
 ]
 [profile.release]
 opt-level = "z"
@@ -49,11 +50,11 @@ soroban-env-guest = { path = "../../soroban-env-guest" }
 soroban-env-host = { path = "../../soroban-env-host" }
 
 [workspace.dependencies.soroban-sdk]
-version = "0.6.0"
+version = "0.7.0"
 git = "https://github.com/stellar/rs-soroban-sdk"
 
 [workspace.dependencies.soroban-auth]
-version = "0.6.0"
+version = "0.7.0"
 git = "https://github.com/stellar/rs-soroban-sdk"
 
 # Always build using the local SDK. Usually the env change is accompanied with

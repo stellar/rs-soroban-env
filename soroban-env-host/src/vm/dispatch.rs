@@ -1,7 +1,7 @@
 use crate::{budget::CostType, Host, HostError, VmCaller, VmCallerEnv};
 use crate::{
-    AddressObject, BytesObject, I128Object, I64Object, MapObject, RawVal, Status, StringObject,
-    Symbol, SymbolObject, U128Object, U32Val, U64Object, VecObject,
+    AddressObject, BytesObject, I128Object, I256Object, I64Object, MapObject, RawVal, Status,
+    StringObject, Symbol, SymbolObject, U128Object, U256Object, U32Val, U64Object, VecObject,
 };
 use soroban_env_common::call_macro_with_all_host_functions;
 use wasmi::core::{FromValue, Trap, TrapCode::UnexpectedSignature, Value};

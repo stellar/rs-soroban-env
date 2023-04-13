@@ -2,8 +2,8 @@ use crate::budget::AsBudget;
 use crate::host::Host;
 use crate::native_contract::base_types::Address;
 use crate::native_contract::contract_error::ContractError;
-use crate::native_contract::token::metadata::read_metadata;
-use crate::native_contract::token::public_types::Metadata;
+use crate::native_contract::token::asset_info::read_asset_info;
+use crate::native_contract::token::public_types::AssetInfo;
 use crate::native_contract::token::storage_types::DataKey;
 use crate::{err, HostError};
 use soroban_env_common::xdr::{
@@ -222,14 +222,14 @@ pub fn check_clawbackable(e: &Host, addr: Address) -> Result<(), HostError> {
         };
 
     match addr.to_sc_address()? {
-        ScAddress::Account(acc_id) => match read_metadata(e)? {
-            Metadata::Native => {
+        ScAddress::Account(acc_id) => match read_asset_info(e)? {
+            AssetInfo::Native => {
                 return Err(e.err_status_msg(
                     ContractError::OperationNotSupportedError,
                     "cannot clawback native asset",
                 ))
             }
-            Metadata::AlphaNum4(asset) => {
+            AssetInfo::AlphaNum4(asset) => {
                 let issuer_account_id = e.account_id_from_bytesobj(asset.issuer.into())?;
                 validate_trustline(
                     e.create_asset_4(asset.asset_code.to_array()?, issuer_account_id.clone()),
@@ -237,7 +237,7 @@ pub fn check_clawbackable(e: &Host, addr: Address) -> Result<(), HostError> {
                     acc_id,
                 )
             }
-            Metadata::AlphaNum12(asset) => {
+            AssetInfo::AlphaNum12(asset) => {
                 let issuer_account_id = e.account_id_from_bytesobj(asset.issuer.into())?;
                 validate_trustline(
                     e.create_asset_12(asset.asset_code.to_array()?, issuer_account_id.clone()),
@@ -279,9 +279,9 @@ pub fn transfer_classic_balance(e: &Host, to_key: AccountId, amount: i64) -> Res
             transfer_trustline_balance(e, to, asset, amount)
         };
 
-    match read_metadata(e)? {
-        Metadata::Native => transfer_account_balance(e, to_key, amount)?,
-        Metadata::AlphaNum4(asset) => {
+    match read_asset_info(e)? {
+        AssetInfo::Native => transfer_account_balance(e, to_key, amount)?,
+        AssetInfo::AlphaNum4(asset) => {
             let issuer_account_id = e.account_id_from_bytesobj(asset.issuer.into())?;
             transfer_trustline_balance_safe(
                 e.create_asset_4(asset.asset_code.to_array()?, issuer_account_id.clone()),
@@ -289,7 +289,7 @@ pub fn transfer_classic_balance(e: &Host, to_key: AccountId, amount: i64) -> Res
                 to_key,
             )?
         }
-        Metadata::AlphaNum12(asset) => {
+        AssetInfo::AlphaNum12(asset) => {
             let issuer_account_id = e.account_id_from_bytesobj(asset.issuer.into())?;
             transfer_trustline_balance_safe(
                 e.create_asset_12(asset.asset_code.to_array()?, issuer_account_id.clone()),
@@ -315,9 +315,9 @@ fn get_classic_balance(e: &Host, to_key: AccountId) -> Result<(i64, i64), HostEr
         get_trustline_balance(e, to, asset)
     };
 
-    match read_metadata(e)? {
-        Metadata::Native => get_account_balance(e, to_key),
-        Metadata::AlphaNum4(asset) => {
+    match read_asset_info(e)? {
+        AssetInfo::Native => get_account_balance(e, to_key),
+        AssetInfo::AlphaNum4(asset) => {
             let issuer_account_id = e.account_id_from_bytesobj(asset.issuer.into())?;
             get_trustline_balance_safe(
                 e.create_asset_4(asset.asset_code.to_array()?, issuer_account_id.clone()),
@@ -326,7 +326,7 @@ fn get_classic_balance(e: &Host, to_key: AccountId) -> Result<(i64, i64), HostEr
             )
         }
 
-        Metadata::AlphaNum12(asset) => {
+        AssetInfo::AlphaNum12(asset) => {
             let issuer_account_id = e.account_id_from_bytesobj(asset.issuer.into())?;
             get_trustline_balance_safe(
                 e.create_asset_12(asset.asset_code.to_array()?, issuer_account_id.clone()),
@@ -534,9 +534,9 @@ fn is_account_authorized(e: &Host, account_id: AccountId) -> Result<bool, HostEr
             is_trustline_authorized(e, to, asset)
         };
 
-    match read_metadata(e)? {
-        Metadata::Native => Ok(true),
-        Metadata::AlphaNum4(asset) => {
+    match read_asset_info(e)? {
+        AssetInfo::Native => Ok(true),
+        AssetInfo::AlphaNum4(asset) => {
             let issuer_account_id = e.account_id_from_bytesobj(asset.issuer.into())?;
             is_trustline_authorized_safe(
                 e.create_asset_4(asset.asset_code.to_array()?, issuer_account_id.clone()),
@@ -544,7 +544,7 @@ fn is_account_authorized(e: &Host, account_id: AccountId) -> Result<bool, HostEr
                 account_id,
             )
         }
-        Metadata::AlphaNum12(asset) => {
+        AssetInfo::AlphaNum12(asset) => {
             let issuer_account_id = e.account_id_from_bytesobj(asset.issuer.into())?;
             is_trustline_authorized_safe(
                 e.create_asset_12(asset.asset_code.to_array()?, issuer_account_id.clone()),
@@ -608,14 +608,14 @@ fn set_authorization(e: &Host, to_key: AccountId, authorize: bool) -> Result<(),
             set_trustline_authorization(e, to, asset, authorize)
         };
 
-    match read_metadata(e)? {
-        Metadata::Native => {
+    match read_asset_info(e)? {
+        AssetInfo::Native => {
             return Err(e.err_status_msg(
                 ContractError::OperationNotSupportedError,
                 "expected trustline asset",
             ))
         }
-        Metadata::AlphaNum4(asset) => {
+        AssetInfo::AlphaNum4(asset) => {
             let issuer_account_id = e.account_id_from_bytesobj(asset.issuer.into())?;
             set_trustline_authorization_safe(
                 e.create_asset_4(asset.asset_code.to_array()?, issuer_account_id.clone()),
@@ -623,7 +623,7 @@ fn set_authorization(e: &Host, to_key: AccountId, authorize: bool) -> Result<(),
                 to_key,
             )
         }
-        Metadata::AlphaNum12(asset) => {
+        AssetInfo::AlphaNum12(asset) => {
             let issuer_account_id = e.account_id_from_bytesobj(asset.issuer.into())?;
             set_trustline_authorization_safe(
                 e.create_asset_12(asset.asset_code.to_array()?, issuer_account_id.clone()),
@@ -672,10 +672,10 @@ fn is_issuer_auth_required(e: &Host, issuer_id: BytesN<32>) -> Result<bool, Host
 }
 
 fn is_asset_auth_required(e: &Host) -> Result<bool, HostError> {
-    match read_metadata(e)? {
-        Metadata::Native => Ok(false),
-        Metadata::AlphaNum4(asset) => is_issuer_auth_required(e, asset.issuer),
-        Metadata::AlphaNum12(asset) => is_issuer_auth_required(e, asset.issuer),
+    match read_asset_info(e)? {
+        AssetInfo::Native => Ok(false),
+        AssetInfo::AlphaNum4(asset) => is_issuer_auth_required(e, asset.issuer),
+        AssetInfo::AlphaNum12(asset) => is_issuer_auth_required(e, asset.issuer),
     }
 }
 
@@ -685,9 +685,9 @@ fn is_issuer_clawback_enabled(e: &Host, issuer_id: BytesN<32>) -> Result<bool, H
 }
 
 fn is_asset_clawback_enabled(e: &Host) -> Result<bool, HostError> {
-    match read_metadata(e)? {
-        Metadata::Native => Ok(false),
-        Metadata::AlphaNum4(asset) => is_issuer_clawback_enabled(e, asset.issuer),
-        Metadata::AlphaNum12(asset) => is_issuer_clawback_enabled(e, asset.issuer),
+    match read_asset_info(e)? {
+        AssetInfo::Native => Ok(false),
+        AssetInfo::AlphaNum4(asset) => is_issuer_clawback_enabled(e, asset.issuer),
+        AssetInfo::AlphaNum12(asset) => is_issuer_clawback_enabled(e, asset.issuer),
     }
 }

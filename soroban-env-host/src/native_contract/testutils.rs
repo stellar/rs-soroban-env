@@ -1,4 +1,4 @@
-use crate::{Host, HostError, LedgerInfo};
+use crate::{Host, LedgerInfo};
 use ed25519_dalek::{Keypair, Signer};
 use rand::thread_rng;
 use soroban_env_common::xdr::{
@@ -8,7 +8,7 @@ use soroban_env_common::xdr::{
     LedgerEntryData, LedgerKey, Liabilities, PublicKey, ScAddress, ScVec, SequenceNumber,
     SignerKey, Thresholds, Uint256,
 };
-use soroban_env_common::{EnvBase, RawVal, TryFromVal, TryIntoVal};
+use soroban_env_common::{EnvBase, TryFromVal, TryIntoVal};
 
 use crate::native_contract::base_types::BytesN;
 
@@ -17,23 +17,13 @@ pub(crate) use crate::native_contract::base_types::Vec as HostVec;
 use super::account_contract::AccountEd25519Signature;
 use super::base_types::Address;
 
-impl HostVec {
-    pub(crate) fn from_array(host: &Host, vals: &[RawVal]) -> Result<Self, HostError> {
-        let mut res = HostVec::new(host)?;
-        for val in vals {
-            res.push_raw(val.clone())?;
-        }
-        Ok(res)
-    }
-}
-
 #[macro_export]
 macro_rules! host_vec {
     ($host:expr $(,)?) => {
         HostVec::new($host).unwrap()
     };
     ($host:expr, $($x:expr),+ $(,)?) => {
-        HostVec::from_array($host, &[$($x.try_into_val($host).unwrap()),+]).unwrap()
+        HostVec::from_slice($host, &[$($x.try_into_val($host).unwrap()),+]).unwrap()
     };
 }
 

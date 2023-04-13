@@ -20,5 +20,5 @@ pub enum DataKey {
     Allowance(AllowanceDataKey),
     Balance(Address),
     Admin,
-    Metadata,
+    AssetInfo,
 }

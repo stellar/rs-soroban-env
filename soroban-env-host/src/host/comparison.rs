@@ -7,7 +7,7 @@ use soroban_env_common::{
         LedgerKeyAccount, LedgerKeyClaimableBalance, LedgerKeyConfigSetting, LedgerKeyContractCode,
         LedgerKeyData, LedgerKeyLiquidityPool, LedgerKeyOffer, LedgerKeyTrustLine,
         LiquidityPoolEntry, OfferEntry, PublicKey, ScAddress, ScContractExecutable,
-        ScHostValErrorCode, ScMap, ScNonceKey, ScVal, ScVec, TimePoint, TrustLineAsset,
+        ScHostValErrorCode, ScMap, ScMapEntry, ScNonceKey, ScVal, ScVec, TimePoint, TrustLineAsset,
         TrustLineEntry, Uint256,
     },
     Compare, SymbolStr, I256, U256,
@@ -24,23 +24,26 @@ use super::declared_size::DeclaredSizeForMetering;
 // We can't use core::mem::discriminant here because it returns an opaque type
 // that only supports Eq, not Ord, to reduce the possibility of an API breakage
 // based on reordering enums: https://github.com/rust-lang/rust/issues/51561
+//
+// Note that these must have the same order as the impl
+// of Ord for ScVal, re https://github.com/stellar/rs-soroban-env/issues/743
 fn host_obj_discriminant(ho: &HostObject) -> usize {
     match ho {
-        HostObject::Vec(_) => 0,
-        HostObject::Map(_) => 1,
-        HostObject::U64(_) => 2,
-        HostObject::I64(_) => 3,
-        HostObject::TimePoint(_) => 4,
-        HostObject::Duration(_) => 5,
-        HostObject::U128(_) => 6,
-        HostObject::I128(_) => 7,
-        HostObject::U256(_) => 8,
-        HostObject::I256(_) => 9,
-        HostObject::Bytes(_) => 10,
-        HostObject::String(_) => 11,
-        HostObject::Symbol(_) => 12,
-        HostObject::Address(_) => 13,
-        HostObject::ContractExecutable(_) => 14,
+        HostObject::U64(_) => 0,
+        HostObject::I64(_) => 1,
+        HostObject::TimePoint(_) => 2,
+        HostObject::Duration(_) => 3,
+        HostObject::U128(_) => 4,
+        HostObject::I128(_) => 5,
+        HostObject::U256(_) => 6,
+        HostObject::I256(_) => 7,
+        HostObject::Bytes(_) => 8,
+        HostObject::String(_) => 9,
+        HostObject::Symbol(_) => 10,
+        HostObject::Vec(_) => 11,
+        HostObject::Map(_) => 12,
+        HostObject::ContractExecutable(_) => 13,
+        HostObject::Address(_) => 14,
         HostObject::NonceKey(_) => 15,
     }
 }
@@ -216,13 +219,9 @@ impl Compare<ScVec> for Budget {
     type Error = HostError;
 
     fn compare(&self, a: &ScVec, b: &ScVec) -> Result<Ordering, Self::Error> {
-        for (a, b) in a.iter().zip(b.iter()) {
-            match self.compare(a, b)? {
-                Ordering::Equal => (),
-                unequal => return Ok(unequal),
-            }
-        }
-        Ok(Ordering::Equal)
+        let a: &Vec<ScVal> = &*a;
+        let b: &Vec<ScVal> = &*b;
+        self.compare(a, b)
     }
 }
 
@@ -230,13 +229,20 @@ impl Compare<ScMap> for Budget {
     type Error = HostError;
 
     fn compare(&self, a: &ScMap, b: &ScMap) -> Result<Ordering, Self::Error> {
-        for (a, b) in a.iter().zip(b.iter()) {
-            match self.compare(&(&a.key, &a.val), &(&b.key, &b.val))? {
-                Ordering::Equal => (),
-                unequal => return Ok(unequal),
-            }
+        let a: &Vec<ScMapEntry> = &*a;
+        let b: &Vec<ScMapEntry> = &*b;
+        self.compare(a, b)
+    }
+}
+
+impl Compare<ScMapEntry> for Budget {
+    type Error = HostError;
+
+    fn compare(&self, a: &ScMapEntry, b: &ScMapEntry) -> Result<Ordering, Self::Error> {
+        match self.compare(&a.key, &b.key)? {
+            Ordering::Equal => self.compare(&a.val, &b.val),
+            cmp => Ok(cmp),
         }
-        Ok(Ordering::Equal)
     }
 }
 
@@ -364,6 +370,206 @@ impl Compare<LedgerEntryData> for Budget {
             | (ContractData(_), _)
             | (ContractCode(_), _)
             | (ConfigSetting(_), _) => Ok(a.cmp(b)),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_scvec_unequal_lengths() {
+        {
+            let v1 = ScVec::try_from((0, 1)).unwrap();
+            let v2 = ScVec::try_from((0, 1, 2)).unwrap();
+            let expected_cmp = Ordering::Less;
+            let budget = Budget::default();
+            let actual_cmp = budget.compare(&v1, &v2).unwrap();
+            assert_eq!(expected_cmp, actual_cmp);
+        }
+        {
+            let v1 = ScVec::try_from((0, 1, 2)).unwrap();
+            let v2 = ScVec::try_from((0, 1)).unwrap();
+            let expected_cmp = Ordering::Greater;
+            let budget = Budget::default();
+            let actual_cmp = budget.compare(&v1, &v2).unwrap();
+            assert_eq!(expected_cmp, actual_cmp);
+        }
+        {
+            let v1 = ScVec::try_from((0, 1)).unwrap();
+            let v2 = ScVec::try_from((0, 0, 2)).unwrap();
+            let expected_cmp = Ordering::Greater;
+            let budget = Budget::default();
+            let actual_cmp = budget.compare(&v1, &v2).unwrap();
+            assert_eq!(expected_cmp, actual_cmp);
+        }
+        {
+            let v1 = ScVec::try_from((0, 0, 2)).unwrap();
+            let v2 = ScVec::try_from((0, 1)).unwrap();
+            let expected_cmp = Ordering::Less;
+            let budget = Budget::default();
+            let actual_cmp = budget.compare(&v1, &v2).unwrap();
+            assert_eq!(expected_cmp, actual_cmp);
+        }
+    }
+
+    #[test]
+    fn test_scmap_unequal_lengths() {
+        {
+            let v1 = ScMap::sorted_from([
+                (ScVal::U32(0), ScVal::U32(0)),
+                (ScVal::U32(1), ScVal::U32(1)),
+            ])
+            .unwrap();
+            let v2 = ScMap::sorted_from([
+                (ScVal::U32(0), ScVal::U32(0)),
+                (ScVal::U32(1), ScVal::U32(1)),
+                (ScVal::U32(2), ScVal::U32(2)),
+            ])
+            .unwrap();
+            let expected_cmp = Ordering::Less;
+            let budget = Budget::default();
+            let actual_cmp = budget.compare(&v1, &v2).unwrap();
+            assert_eq!(expected_cmp, actual_cmp);
+        }
+        {
+            let v1 = ScMap::sorted_from([
+                (ScVal::U32(0), ScVal::U32(0)),
+                (ScVal::U32(1), ScVal::U32(1)),
+                (ScVal::U32(2), ScVal::U32(2)),
+            ])
+            .unwrap();
+            let v2 = ScMap::sorted_from([
+                (ScVal::U32(0), ScVal::U32(0)),
+                (ScVal::U32(1), ScVal::U32(1)),
+            ])
+            .unwrap();
+            let expected_cmp = Ordering::Greater;
+            let budget = Budget::default();
+            let actual_cmp = budget.compare(&v1, &v2).unwrap();
+            assert_eq!(expected_cmp, actual_cmp);
+        }
+        {
+            let v1 = ScMap::sorted_from([
+                (ScVal::U32(0), ScVal::U32(0)),
+                (ScVal::U32(1), ScVal::U32(1)),
+            ])
+            .unwrap();
+            let v2 = ScMap::sorted_from([
+                (ScVal::U32(0), ScVal::U32(0)),
+                (ScVal::U32(1), ScVal::U32(0)),
+                (ScVal::U32(2), ScVal::U32(2)),
+            ])
+            .unwrap();
+            let expected_cmp = Ordering::Greater;
+            let budget = Budget::default();
+            let actual_cmp = budget.compare(&v1, &v2).unwrap();
+            assert_eq!(expected_cmp, actual_cmp);
+        }
+        {
+            let v1 = ScMap::sorted_from([
+                (ScVal::U32(0), ScVal::U32(0)),
+                (ScVal::U32(1), ScVal::U32(0)),
+                (ScVal::U32(2), ScVal::U32(2)),
+            ])
+            .unwrap();
+            let v2 = ScMap::sorted_from([
+                (ScVal::U32(0), ScVal::U32(0)),
+                (ScVal::U32(1), ScVal::U32(1)),
+            ])
+            .unwrap();
+            let expected_cmp = Ordering::Less;
+            let budget = Budget::default();
+            let actual_cmp = budget.compare(&v1, &v2).unwrap();
+            assert_eq!(expected_cmp, actual_cmp);
+        }
+    }
+
+    #[test]
+    fn host_obj_discriminant_order() {
+        // The HostObject discriminants need to be ordered the same
+        // as the ScVal discriminants so that Compare<HostObject>
+        // produces the same results as `Ord for ScVal`,
+        // re https://github.com/stellar/rs-soroban-env/issues/743.
+        //
+        // This test creates pairs of corresponding ScVal/HostObjects,
+        // puts them all into a list, and sorts them 2 ways:
+        // comparing ScVals, and comparing the HostObject discriminants;
+        // then tests that the two lists are the same.
+
+        use crate::ScValObjRef;
+        use soroban_env_common::xdr;
+
+        let host = Host::default();
+
+        let xdr_vals = &[
+            ScVal::U64(u64::MAX),
+            ScVal::I64(i64::MAX),
+            ScVal::Timepoint(xdr::TimePoint(u64::MAX)),
+            ScVal::Duration(xdr::Duration(u64::MAX)),
+            ScVal::U128(xdr::UInt128Parts {
+                hi: u64::MAX,
+                lo: u64::MAX,
+            }),
+            ScVal::I128(xdr::Int128Parts {
+                hi: i64::MIN,
+                lo: u64::MAX,
+            }),
+            ScVal::U256(xdr::UInt256Parts {
+                hi_hi: u64::MAX,
+                hi_lo: u64::MAX,
+                lo_hi: u64::MAX,
+                lo_lo: u64::MAX,
+            }),
+            ScVal::I256(xdr::Int256Parts {
+                hi_hi: i64::MIN,
+                hi_lo: u64::MAX,
+                lo_hi: u64::MAX,
+                lo_lo: u64::MAX,
+            }),
+            ScVal::Bytes(xdr::ScBytes::try_from(vec![]).unwrap()),
+            ScVal::String(xdr::ScString::try_from(vec![]).unwrap()),
+            ScVal::Symbol(xdr::ScSymbol::try_from("big-symbol").unwrap()),
+            ScVal::Vec(Some(xdr::ScVec::try_from((0,)).unwrap())),
+            ScVal::Map(Some(xdr::ScMap::try_from(vec![]).unwrap())),
+            ScVal::ContractExecutable(xdr::ScContractExecutable::Token),
+            ScVal::Address(xdr::ScAddress::Contract(xdr::Hash([0; 32]))),
+        ];
+
+        let pairs: Vec<_> = xdr_vals
+            .into_iter()
+            .map(|xdr_val| {
+                let xdr_obj = ScValObjRef::classify(&xdr_val).unwrap();
+                let host_obj = host.to_host_obj(&xdr_obj).unwrap();
+                (xdr_obj, host_obj)
+            })
+            .collect();
+
+        let mut pairs_xdr_sorted = pairs.clone();
+        let mut pairs_host_sorted = pairs_xdr_sorted.clone();
+
+        pairs_xdr_sorted.sort_by(|&(v1, _), &(v2, _)| v1.cmp(&v2));
+
+        pairs_host_sorted.sort_by(|&(_, v1), &(_, v2)| unsafe {
+            host.unchecked_visit_val_obj(v1, |v1| {
+                host.unchecked_visit_val_obj(v2, |v2| {
+                    let v1 = v1.unwrap();
+                    let v2 = v2.unwrap();
+                    let v1d = host_obj_discriminant(v1);
+                    let v2d = host_obj_discriminant(v2);
+                    Ok(v1d.cmp(&v2d))
+                })
+            })
+            .unwrap()
+        });
+
+        let iter = pairs_xdr_sorted
+            .into_iter()
+            .zip(pairs_host_sorted.into_iter());
+
+        for ((xdr1, _), (xdr2, _)) in iter {
+            assert_eq!(xdr1, xdr2);
         }
     }
 }

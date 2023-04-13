@@ -53,6 +53,6 @@ pub use host::testutils::call_with_suppressed_panic_hook;
 pub use host::ContractFunctionSet;
 pub use host::{
     metered_map::MeteredOrdMap, metered_vector::MeteredVector, DiagnosticLevel, Host, HostError,
-    LedgerInfo,
+    LedgerInfo, LegacyEpoch,
 };
 pub use soroban_env_common::*;
