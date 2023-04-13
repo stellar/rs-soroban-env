@@ -29,6 +29,7 @@ members = [
     "complex",
     "fannkuch",
     "simple_account",
+    "update"
 ]
 [profile.release]
 opt-level = "z"

@@ -19,7 +19,7 @@ use super::metered_clone::MeteredClone;
 
 impl Host {
     // Notes on metering: free
-    pub fn contract_source_ledger_key(
+    pub fn contract_executable_ledger_key(
         &self,
         contract_id: &Hash,
     ) -> Result<Rc<LedgerKey>, HostError> {
@@ -31,7 +31,7 @@ impl Host {
     }
 
     // Notes on metering: retrieving from storage covered. Rest are free.
-    pub(crate) fn retrieve_contract_source_from_storage(
+    pub(crate) fn retrieve_contract_executable_from_storage(
         &self,
         key: &Rc<LedgerKey>,
     ) -> Result<ScContractExecutable, HostError> {
@@ -48,21 +48,18 @@ impl Host {
         }
     }
 
-    pub(crate) fn contract_code_ledger_key(
-        &self,
-        wasm_hash: &Hash,
-    ) -> Result<Rc<LedgerKey>, HostError> {
+    pub(crate) fn wasm_ledger_key(&self, wasm_hash: &Hash) -> Result<Rc<LedgerKey>, HostError> {
         let wasm_hash = wasm_hash.metered_clone(self.as_budget())?;
         Ok(Rc::new(LedgerKey::ContractCode(LedgerKeyContractCode {
             hash: wasm_hash,
         })))
     }
 
-    pub(crate) fn retrieve_contract_code_from_storage(
+    pub(crate) fn retrieve_wasm_from_storage(
         &self,
         wasm_hash: &Hash,
     ) -> Result<ContractCodeEntry, HostError> {
-        let key = self.contract_code_ledger_key(wasm_hash)?;
+        let key = self.wasm_ledger_key(wasm_hash)?;
         match &self
             .0
             .storage
@@ -75,17 +72,22 @@ impl Host {
         }
     }
 
+    pub(crate) fn contract_code_exists(&self, wasm_hash: &Hash) -> Result<bool, HostError> {
+        let key = self.wasm_ledger_key(wasm_hash)?;
+        self.0.storage.borrow_mut().has(&key, self.as_budget())
+    }
+
     // Notes on metering: `from_host_obj` and `put` to storage covered, rest are free.
-    pub(crate) fn store_contract_source(
+    pub(crate) fn store_contract_executable(
         &self,
-        contract_source: ScContractExecutable,
+        executable: ScContractExecutable,
         contract_id: Hash,
         key: &Rc<LedgerKey>,
     ) -> Result<(), HostError> {
         let data = LedgerEntryData::ContractData(ContractDataEntry {
             contract_id,
             key: ScVal::LedgerKeyContractExecutable,
-            val: ScVal::ContractExecutable(contract_source),
+            val: ScVal::ContractExecutable(executable),
         });
         self.0.storage.borrow_mut().put(
             key,

@@ -982,7 +982,7 @@ impl Host {
         contract_source: ScContractExecutable,
     ) -> Result<(), HostError> {
         let new_contract_id = self.hash_from_bytesobj_input("id_obj", contract_id)?;
-        let storage_key = self.contract_source_ledger_key(&new_contract_id)?;
+        let storage_key = self.contract_executable_ledger_key(&new_contract_id)?;
         if self
             .0
             .storage
@@ -991,21 +991,15 @@ impl Host {
         {
             return Err(self.err_general("Contract already exists"));
         }
-        // Make sure the contract code exists. With immutable contracts and
-        // without this check it would be possible to accidentally create a
-        // contract that never may be invoked (just by providing a bad hash).
+        // Make sure the contract code exists. Without this check it would be
+        // possible to accidentally create a contract that never may be invoked
+        // (just by providing a bad hash).
         if let ScContractExecutable::WasmRef(wasm_hash) = &contract_source {
-            let wasm_storage_key = self.contract_code_ledger_key(wasm_hash)?;
-            if !self
-                .0
-                .storage
-                .borrow_mut()
-                .has(&wasm_storage_key, self.as_budget())?
-            {
-                return Err(self.err_general("Contract code was not installed"));
+            if !self.contract_code_exists(wasm_hash)? {
+                return Err(self.err_general("Wasm does not exist"));
             }
         }
-        self.store_contract_source(contract_source, new_contract_id, &storage_key)?;
+        self.store_contract_executable(contract_source, new_contract_id, &storage_key)?;
         Ok(())
     }
 
@@ -1057,11 +1051,11 @@ impl Host {
         args: &[RawVal],
     ) -> Result<RawVal, HostError> {
         // Create key for storage
-        let storage_key = self.contract_source_ledger_key(id)?;
-        match self.retrieve_contract_source_from_storage(&storage_key)? {
+        let storage_key = self.contract_executable_ledger_key(id)?;
+        match self.retrieve_contract_executable_from_storage(&storage_key)? {
             #[cfg(feature = "vm")]
             ScContractExecutable::WasmRef(wasm_hash) => {
-                let code_entry = self.retrieve_contract_code_from_storage(&wasm_hash)?;
+                let code_entry = self.retrieve_wasm_from_storage(&wasm_hash)?;
                 let vm = Vm::new(
                     self,
                     id.metered_clone(&self.0.budget)?,
@@ -1334,10 +1328,9 @@ impl Host {
 
     /// Records a `System` contract event. `topics` is expected to be a `SCVec`
     /// length <= 4 that cannot contain `Vec`, `Map`, or `Bytes` with length > 32
-    /// On success, returns an `SCStatus::Ok`.
-    pub fn system_event(&self, topics: VecObject, data: RawVal) -> Result<RawVal, HostError> {
+    pub fn system_event(&self, topics: VecObject, data: RawVal) -> Result<(), HostError> {
         self.record_contract_event(ContractEventType::System, topics, data)?;
-        Ok(Status::OK.into())
+        Ok(())
     }
 
     fn create_contract(&self, args: CreateContractArgs) -> Result<BytesObject, HostError> {
@@ -2656,6 +2649,24 @@ impl VmCallerEnv for Host {
             .temp_storage
             .borrow_mut()
             .del(self.get_current_contract_id_internal()?, k, self)?;
+        Ok(RawVal::VOID)
+    }
+
+    fn update_current_contract_wasm(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        hash: BytesObject,
+    ) -> Result<Void, HostError> {
+        let wasm_hash = self.hash_from_bytesobj_input("wasm_hash", hash)?;
+        if !self.contract_code_exists(&wasm_hash)? {
+            return Err(self.err_general("Wasm does not exist"));
+        }
+        let curr_contract_id = self.get_current_contract_id_internal()?;
+        let key = self.contract_executable_ledger_key(&curr_contract_id)?;
+        let old_executable = self.retrieve_contract_executable_from_storage(&key)?;
+        let new_executable = ScContractExecutable::WasmRef(wasm_hash);
+        self.emit_update_contract_event(&old_executable, &new_executable)?;
+        self.store_contract_executable(new_executable, curr_contract_id, &key)?;
         Ok(RawVal::VOID)
     }
 
