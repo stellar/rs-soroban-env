@@ -34,7 +34,7 @@ fn should_run<HCM: HostCostMeasurement>() -> bool {
             .last()
             .unwrap()
             .to_string();
-        bench_names.into_iter().find(|arg| *arg == name).is_some()
+        bench_names.iter().any(|arg| *arg == name)
     } else {
         true
     }
@@ -43,7 +43,7 @@ fn should_run<HCM: HostCostMeasurement>() -> bool {
 fn should_run_wasm_insn(ty: WasmInsnType) -> bool {
     if let Some(bench_names) = get_explicit_bench_names() {
         let name = format!("{:?}", ty).split("::").last().unwrap().to_string();
-        bench_names.into_iter().find(|arg| *arg == name).is_some()
+        bench_names.iter().any(|arg| *arg == name)
     } else {
         true
     }

@@ -61,17 +61,17 @@ pub struct Measurement {
 pub struct Measurements {
     pub baseline: Measurement,
     pub measurements: Vec<Measurement>,
-    pub net_meas_per_iter: Vec<Measurement>,
+    pub averaged_net_measurements: Vec<Measurement>,
 }
 
 impl Measurements {
-    // This is the preprocess step to convert raw measurements into `net_meas_per_iter`,
+    // This is the preprocess step to convert raw measurements into `averaged_net_measurements`,
     // ready to be fitted by the linear model.
     // We start from `N_r * ( N_x * (a + b * Option<x>) + Overhead_b)`, first substracts baseline
     // => `N_r * N_x * (a + b * Option<x>)`, then divides it by the iterations `(N_r * N_x)` =>
     // returns `y = a + b * Option<x>` ready to be fitted.
     pub fn preprocess(&mut self) {
-        self.net_meas_per_iter = self
+        self.averaged_net_measurements = self
             .measurements
             .iter()
             .map(|m| {
@@ -138,7 +138,10 @@ impl Measurements {
 
     pub fn report_table(&self) {
         // data must be preprocessed
-        assert_eq!(self.measurements.len(), self.net_meas_per_iter.len());
+        assert_eq!(
+            self.measurements.len(),
+            self.averaged_net_measurements.len()
+        );
 
         use std::io::Write;
         use thousands::Separable;
@@ -146,11 +149,15 @@ impl Measurements {
             .padding(5)
             .alignment(Alignment::Right);
 
-        writeln!(&mut tw, "iterations\tinputs\tcpu_insns_total\tcpu_insns_base\tmem_bytes_total\tmem_bytes_base\ttime_ns_total\ttime_ns_base\tinput/iter\tnet_insns/iter\tnet_bytes/iter\tnet_ns/input").unwrap();
-        for (mes, net) in self.measurements.iter().zip(self.net_meas_per_iter.iter()) {
+        writeln!(&mut tw, "iterations\tinputs\tcpu_insns_total\tcpu_insns_base\tmem_bytes_total\tmem_bytes_base\ttime_ns_total\ttime_ns_base\tave_net_input\tave_net_insns\tave_net_bytes\tave_net_ns\tave_net_insn_per_input\tave_net_bytes_per_input").unwrap();
+        for (mes, net) in self
+            .measurements
+            .iter()
+            .zip(self.averaged_net_measurements.iter())
+        {
             writeln!(
                 &mut tw,
-                "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+                "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
                 mes.iterations.separate_with_commas(),
                 mes.inputs.unwrap_or(0).separate_with_commas(),
                 mes.cpu_insns.separate_with_commas(),
@@ -163,6 +170,8 @@ impl Measurements {
                 net.cpu_insns.separate_with_commas(),
                 net.mem_bytes.separate_with_commas(),
                 net.time_nsecs.separate_with_commas(),
+                (net.cpu_insns / net.inputs.unwrap_or(0).max(1)).separate_with_commas(),
+                (net.mem_bytes / net.inputs.unwrap_or(0).max(1)).separate_with_commas(),
             )
             .unwrap();
         }
@@ -172,10 +181,13 @@ impl Measurements {
 
     pub fn fit_model_to_cpu(&self) -> FPCostModel {
         // data must be preprocessed
-        assert_eq!(self.measurements.len(), self.net_meas_per_iter.len());
+        assert_eq!(
+            self.measurements.len(),
+            self.averaged_net_measurements.len()
+        );
 
         let (x, y): (Vec<_>, Vec<_>) = self
-            .net_meas_per_iter
+            .averaged_net_measurements
             .iter()
             .skip(1) // for some reason first data point is often flakey, skip it
             .map(|m| (m.inputs.unwrap_or(0), m.cpu_insns))
@@ -186,10 +198,13 @@ impl Measurements {
 
     pub fn fit_model_to_mem(&self) -> FPCostModel {
         // data must be preprocessed
-        assert_eq!(self.measurements.len(), self.net_meas_per_iter.len());
+        assert_eq!(
+            self.measurements.len(),
+            self.averaged_net_measurements.len()
+        );
 
         let (x, y): (Vec<_>, Vec<_>) = self
-            .net_meas_per_iter
+            .averaged_net_measurements
             .iter()
             .skip(1) // for some reason first data point is often flakey, skip it
             .map(|m| (m.inputs.unwrap_or(0), m.mem_bytes))
@@ -205,12 +220,13 @@ impl Measurements {
 ///
 ///     f(x) = N_x * (a + b * Option<x>)                                    [1]
 ///
-/// The goal of the HCM is to record the relation of x and f(x) in order for
-/// a, b -- the constant and linear cost parameters -- to be extracted.
-/// In the ideal setup, we pass in an array of samples with various inputs {x},
-/// The host do the exact amount of work designed for the CostType on the samples
-/// and we record the work done {f(x)}, and pass {x, f(x)} into a model fitter
-/// to extract a and b.
+/// The `N_x` here is batch size if the host is doing `batched_charge` for the
+/// corresponding `x`.  The goal of the HCM is to record the relation of x and
+/// f(x) in order for  a, b -- the constant and linear cost parameters -- to be
+/// extracted. In the ideal setup, we pass in an array of samples with various
+/// inputs {x}, The host do the exact amount of work designed for the CostType
+/// on the samples and we record the work done {f(x)}, and pass {x, f(x)} into
+/// a model fitter to extract a and b.
 ///
 /// The actual measurement setup, due to its limitations, is actually measuring
 ///
@@ -218,16 +234,16 @@ impl Measurements {
 ///
 /// where f(x) is the target cost we want to measure, `N_r` is the number of
 /// iterations each sample run is repeated (to average out the measurement
-/// noise). `Overhead_b` is the overhead cost due to the benchmark setup and
-/// `Overhead_s` is the overhead cost due to each sample setup. Both
-/// `Overhead_b` and `Overhead_s` are unavoidable (due to the bench setup), and
-/// cannot be averaged out since they scale with num of iterations. Therefore
-/// in addition to the `run` function (which records `g(x)`), HCM also requires
-/// a `run_baseline` function which measures `N_r * Overhead_b` and
-/// `get_insns_overhead_per_sample` which gets the `Overhead_s` info from a
-/// sample. In the end both of these overheads are subtracted away and we get
-/// `N * (a + b * Option<x>)` where `N == N_r * N_x` is the number of
-/// `iterations` reported by the host for the `CostModel`.
+/// noise) i.e. `CostRunner::RUN_ITERATIONS`. `Overhead_b` is the overhead cost
+/// due to the benchmark setup and `Overhead_s` is the overhead cost due to
+/// each sample setup. Both `Overhead_b` and `Overhead_s` are unavoidable (due
+/// to the bench setup), and cannot be averaged out since they scale with run
+/// iterations. Therefore in addition to the `run` function (which records
+/// `g(x)`), HCM also requires a `run_baseline` function which measures
+/// `N_r * Overhead_b` and `get_insns_overhead_per_sample` which gets the
+/// `Overhead_s` info from a sample. In the end both of these overheads are
+/// subtracted away and we get `N * (a + b * Option<x>)` where `N == N_r * N_x`
+/// is the number of `iterations` reported by the host for the `CostModel`.
 pub trait HostCostMeasurement: Sized {
     /// The type of host runner we're using. Uniquely identifies a `CostType`.
     type Runner: CostRunner;
@@ -498,7 +514,7 @@ pub fn measure_worst_case_costs<HCM: HostCostMeasurement>(
     Ok(Measurements {
         baseline,
         measurements,
-        net_meas_per_iter: Default::default(),
+        averaged_net_measurements: Default::default(),
     })
 }
 
@@ -541,6 +557,6 @@ pub fn measure_cost_variation<HCM: HostCostMeasurement>(
     Ok(Measurements {
         baseline,
         measurements,
-        net_meas_per_iter: Default::default(),
+        averaged_net_measurements: Default::default(),
     })
 }

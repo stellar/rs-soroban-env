@@ -442,10 +442,21 @@ impl Budget {
         })
     }
 
+    /// Charges the budget under the specified [`CostType`]. The actual amount
+    /// charged is determined by the underlying [`CostModel`] and may depend on
+    /// the input. If the input is `None`, the model is assumed to be constant.
+    /// Otherwise it is a linear model.  The caller needs to ensure the input
+    /// passed is consistent with the inherent model underneath.
     pub fn charge(&self, ty: CostType, input: Option<u64>) -> Result<(), HostError> {
         self.charge_in_bulk(ty, 1, input)
     }
 
+    /// Performs a bulk charge to the budget under the specified [`CostType`].
+    /// The `iterations` is the batch size. The caller needs to ensure:
+    /// 1. the batched charges have identical costs (having the same
+    /// [`CostType`] and `input`)
+    /// 2. The input passed in (Some/None) is consistent with the [`CostModel`]
+    /// underneath the [`CostType`] (linear/constant).
     pub fn batched_charge(
         &self,
         ty: CostType,

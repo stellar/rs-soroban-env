@@ -21,6 +21,8 @@ pub trait CostRunner: Sized {
     /// around unused value, making the bench deviate from the real case.
     type RecycledType;
 
+    /// Run an baseline iterations, to get an estimation of the benchmark overhead
+    /// (`Overhead_b` in eq.[2], see [`HostCostMeasurement`]).
     fn run_baseline_iter(_host: &Host, _iter: u64, sample: Self::SampleType) -> Self::RecycledType;
 
     /// Run a iteration of the `CostRunner`, called by `run` for 0..RUN_ITERATIONS.
