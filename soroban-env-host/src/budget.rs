@@ -570,59 +570,59 @@ impl Default for BudgetImpl {
                     cpu.lin_param = 0;
                 }
                 CostType::WasmMemAlloc => {
-                    cpu.const_param = 0;
+                    cpu.const_param = 521;
                     cpu.lin_param = 0;
                 }
                 CostType::HostMemAlloc => {
-                    cpu.const_param = 1000;
+                    cpu.const_param = 883;
                     cpu.lin_param = 0;
                 }
                 CostType::HostMemCpy => {
-                    cpu.const_param = 25;
+                    cpu.const_param = 24;
                     cpu.lin_param = 0;
                 }
                 CostType::HostMemCmp => {
-                    cpu.const_param = 39;
+                    cpu.const_param = 42;
                     cpu.lin_param = 1;
                 }
                 CostType::InvokeHostFunction => {
-                    cpu.const_param = 771;
+                    cpu.const_param = 759;
                     cpu.lin_param = 0;
                 }
                 CostType::VisitObject => {
-                    cpu.const_param = 22;
+                    cpu.const_param = 29;
                     cpu.lin_param = 0;
                 }
                 CostType::ValXdrConv => {
-                    cpu.const_param = 190;
+                    cpu.const_param = 177;
                     cpu.lin_param = 0;
                 }
                 CostType::ValSer => {
-                    cpu.const_param = 695;
-                    cpu.lin_param = 1;
+                    cpu.const_param = 741;
+                    cpu.lin_param = 0;
                 }
                 CostType::ValDeser => {
-                    cpu.const_param = 862;
+                    cpu.const_param = 846;
                     cpu.lin_param = 0;
                 }
                 CostType::ComputeSha256Hash => {
-                    cpu.const_param = 1911;
+                    cpu.const_param = 1912;
                     cpu.lin_param = 32;
                 }
                 CostType::ComputeEd25519PubKey => {
-                    cpu.const_param = 25765;
+                    cpu.const_param = 25766;
                     cpu.lin_param = 0;
                 }
                 CostType::MapEntry => {
-                    cpu.const_param = 56;
+                    cpu.const_param = 59;
                     cpu.lin_param = 0;
                 }
                 CostType::VecEntry => {
-                    cpu.const_param = 0;
+                    cpu.const_param = 14;
                     cpu.lin_param = 0;
                 }
                 CostType::GuardFrame => {
-                    cpu.const_param = 5159;
+                    cpu.const_param = 4512;
                     cpu.lin_param = 0;
                 }
                 CostType::VerifyEd25519Sig => {
@@ -630,26 +630,26 @@ impl Default for BudgetImpl {
                     cpu.lin_param = 20;
                 }
                 CostType::VmMemRead => {
-                    cpu.const_param = 97;
+                    cpu.const_param = 95;
                     cpu.lin_param = 0;
                 }
                 CostType::VmMemWrite => {
-                    cpu.const_param = 96;
+                    cpu.const_param = 97;
                     cpu.lin_param = 0;
                 }
                 // This (as well as its mem model params), are not taken from calibration results.
                 // if we want to do that we need more sample contracts of various sizes. Right now
                 // this is just an eye-balled upperbound.
                 CostType::VmInstantiation => {
-                    cpu.const_param = 1000000;
+                    cpu.const_param = 1_000_000;
                     cpu.lin_param = 0;
                 }
                 CostType::InvokeVmFunction => {
-                    cpu.const_param = 6216;
+                    cpu.const_param = 6212;
                     cpu.lin_param = 0;
                 }
                 CostType::ChargeBudget => {
-                    cpu.const_param = 205;
+                    cpu.const_param = 198;
                     cpu.lin_param = 0;
                 }
             }

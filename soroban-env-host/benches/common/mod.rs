@@ -75,9 +75,7 @@ pub(crate) fn for_each_host_cost_measurement<B: Benchmark>(
     call_bench::<B, ValXdrConvMeasure>(&mut params)?;
     call_bench::<B, ValSerMeasure>(&mut params)?;
     call_bench::<B, ValDeserMeasure>(&mut params)?;
-    call_bench::<B, MapNewMeasure>(&mut params)?;
     call_bench::<B, MapEntryMeasure>(&mut params)?;
-    call_bench::<B, VecNewMeasure>(&mut params)?;
     call_bench::<B, VecEntryMeasure>(&mut params)?;
     call_bench::<B, HostMemCmpMeasure>(&mut params)?;
     call_bench::<B, InvokeVmFunctionMeasure>(&mut params)?;
