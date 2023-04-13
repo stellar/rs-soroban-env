@@ -1,19 +1,9 @@
 use crate::common::{util, HostCostMeasurement};
 use rand::{rngs::StdRng, seq::SliceRandom};
 use soroban_env_host::{
-    cost_runner::{MapEntryRun, MapEntrySample, MapNewRun},
+    cost_runner::{MapEntryRun, MapEntrySample},
     Host, MeteredOrdMap,
 };
-
-pub(crate) struct MapNewMeasure;
-// Measures the overhead cost of creating a new map, without inserting into the host storage.
-impl HostCostMeasurement for MapNewMeasure {
-    type Runner = MapNewRun;
-
-    fn new_random_case(_host: &Host, _rng: &mut StdRng, _input: u64) {
-        ()
-    }
-}
 
 pub(crate) struct MapEntryMeasure;
 // Measures the costs of accessing maps of varying sizes. It should have zero

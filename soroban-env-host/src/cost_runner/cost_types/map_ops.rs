@@ -4,25 +4,6 @@ use crate::{budget::CostType, cost_runner::CostRunner, Host, MeteredOrdMap, RawV
 
 type HostMap = MeteredOrdMap<RawVal, RawVal, Host>;
 
-pub struct MapNewRun;
-
-impl CostRunner for MapNewRun {
-    const COST_TYPE: CostType = CostType::MapNew;
-
-    type SampleType = ();
-
-    type RecycledType = Option<HostMap>;
-
-    fn run_iter(host: &Host, _iter: u64, _sample: Self::SampleType) -> Self::RecycledType {
-        black_box(Some(HostMap::new(host).unwrap()))
-    }
-
-    fn run_baseline_iter(host: &Host, _iter: u64, _sample: Self::SampleType) -> Self::RecycledType {
-        black_box(host.charge_budget(Self::COST_TYPE, None).unwrap());
-        black_box(None)
-    }
-}
-
 pub struct MapEntryRun;
 
 #[derive(Clone)]

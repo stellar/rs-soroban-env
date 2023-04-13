@@ -786,9 +786,7 @@ impl Host {
                 for e in v.iter() {
                     vv.push(self.to_host_val(e)?)
                 }
-                Ok(self
-                    .add_host_object(HostVec::from_vec(vv, self.as_budget())?)?
-                    .into())
+                Ok(self.add_host_object(HostVec::from_vec(vv)?)?.into())
             }
             ScVal::Map(Some(m)) => {
                 metered_clone::charge_heap_alloc::<(RawVal, RawVal)>(
@@ -1829,7 +1827,7 @@ impl VmCallerEnv for Host {
     }
 
     fn map_new(&self, _vmcaller: &mut VmCaller<Host>) -> Result<MapObject, HostError> {
-        self.add_host_object(HostMap::new(self)?)
+        self.add_host_object(HostMap::new()?)
     }
 
     fn map_put(
@@ -2081,7 +2079,7 @@ impl VmCallerEnv for Host {
             self.usize_from_rawval_u32_input("c", c)?
         };
         // TODO: optimize the vector based on capacity
-        self.add_host_object(HostVec::new(self.budget_ref())?)
+        self.add_host_object(HostVec::new()?)
     }
 
     fn vec_put(
@@ -2296,7 +2294,7 @@ impl VmCallerEnv for Host {
                 vals.as_mut_slice(),
                 |buf| RawVal::from_payload(u64::from_le_bytes(buf.clone())),
             )?;
-            self.add_host_object(HostVec::from_vec(vals, self.as_budget())?)
+            self.add_host_object(HostVec::from_vec(vals)?)
         }
     }
 
@@ -2990,9 +2988,7 @@ impl VmCallerEnv for Host {
             let inner = MeteredVector::from_array(&vals, self.as_budget())?;
             outer.push(self.add_host_object(inner)?.into());
         }
-        Ok(self
-            .add_host_object(HostVec::from_vec(outer, self.as_budget())?)?
-            .into())
+        Ok(self.add_host_object(HostVec::from_vec(outer)?)?.into())
     }
 
     fn fail_with_status(

@@ -10,7 +10,7 @@ use crate::{
 fn ledger_network_id() -> Result<(), HostError> {
     let budget = Budget::default();
     let storage =
-        Storage::with_enforcing_footprint_and_map(Footprint::default(), StorageMap::new(&budget)?);
+        Storage::with_enforcing_footprint_and_map(Footprint::default(), StorageMap::new()?);
 
     let host = Host::with_storage_and_budget(storage, budget.clone());
     host.set_ledger_info(LedgerInfo {

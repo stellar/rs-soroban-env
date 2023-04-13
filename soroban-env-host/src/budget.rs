@@ -40,31 +40,26 @@ pub enum CostType {
     ComputeSha256Hash = 10,
     // Cost of computing the ed25519 pubkey from bytes
     ComputeEd25519PubKey = 11,
-    // Cost of constructing an new map. The input is the number
-    // of entries allocated.
-    MapNew = 12,
     // Cost of accessing an entry in a map. The input is the count of the number of
     // entries examined (which will be the log of the size of the map under binary search).
-    MapEntry = 13,
-    // Cost of constructing a new vector. The input is the number of entries allocated.
-    VecNew = 14,
+    MapEntry = 12,
     // Cost of accessing one or more elements in a Vector. The input is the count of
     // the number of elements accessed.
-    VecEntry = 15,
+    VecEntry = 13,
     // Cost of guarding a frame, which involves pushing and poping a frame and capturing a rollback point.
-    GuardFrame = 16,
+    GuardFrame = 14,
     // Cost of verifying ed25519 signature of a payload.
-    VerifyEd25519Sig = 17,
+    VerifyEd25519Sig = 15,
     // Cost of reading a slice of vm linear memory
-    VmMemRead = 18,
+    VmMemRead = 16,
     // Cost of writing to a slice of vm linear memory
-    VmMemWrite = 19,
+    VmMemWrite = 17,
     // Cost of instantiation a VM from wasm bytes code.
-    VmInstantiation = 20,
+    VmInstantiation = 18,
     // Roundtrip cost of invoking a VM function from the host.
-    InvokeVmFunction = 21,
+    InvokeVmFunction = 19,
     // Cost of charging a value to the budgeting system.
-    ChargeBudget = 22,
+    ChargeBudget = 20,
 }
 
 // TODO: add XDR support for iterating over all the elements of an enum
@@ -83,9 +78,7 @@ impl CostType {
             CostType::ValDeser,
             CostType::ComputeSha256Hash,
             CostType::ComputeEd25519PubKey,
-            CostType::MapNew,
             CostType::MapEntry,
-            CostType::VecNew,
             CostType::VecEntry,
             CostType::GuardFrame,
             CostType::VerifyEd25519Sig,
@@ -620,16 +613,8 @@ impl Default for BudgetImpl {
                     cpu.const_param = 25765;
                     cpu.lin_param = 0;
                 }
-                CostType::MapNew => {
-                    cpu.const_param = 0;
-                    cpu.lin_param = 0;
-                }
                 CostType::MapEntry => {
                     cpu.const_param = 56;
-                    cpu.lin_param = 0;
-                }
-                CostType::VecNew => {
-                    cpu.const_param = 0;
                     cpu.lin_param = 0;
                 }
                 CostType::VecEntry => {
@@ -720,15 +705,7 @@ impl Default for BudgetImpl {
                     mem.const_param = 0;
                     mem.lin_param = 0;
                 }
-                CostType::MapNew => {
-                    mem.const_param = 0;
-                    mem.lin_param = 0;
-                }
                 CostType::MapEntry => {
-                    mem.const_param = 0;
-                    mem.lin_param = 0;
-                }
-                CostType::VecNew => {
                     mem.const_param = 0;
                     mem.lin_param = 0;
                 }
@@ -786,9 +763,7 @@ impl Default for BudgetImpl {
                 CostType::ValDeser => b.tracker[i].1 = Some(0), // number of bytes in the buffer
                 CostType::ComputeSha256Hash => b.tracker[i].1 = Some(0), // number of bytes in the buffer
                 CostType::ComputeEd25519PubKey => (),
-                CostType::MapNew => (),
                 CostType::MapEntry => (),
-                CostType::VecNew => (),
                 CostType::VecEntry => (),
                 CostType::GuardFrame => (),
                 CostType::VerifyEd25519Sig => b.tracker[i].1 = Some(0), // length of the signature buffer
