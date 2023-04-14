@@ -40,11 +40,9 @@ pub enum CostType {
     ComputeSha256Hash = 10,
     // Cost of computing the ed25519 pubkey from bytes
     ComputeEd25519PubKey = 11,
-    // Cost of accessing an entry in a map. The input is the count of the number of
-    // entries examined (which will be the log of the size of the map under binary search).
+    // Cost of accessing an entry in a Map.
     MapEntry = 12,
-    // Cost of accessing one or more elements in a Vector. The input is the count of
-    // the number of elements accessed.
+    // Cost of accessing an entry in a Vec
     VecEntry = 13,
     // Cost of guarding a frame, which involves pushing and poping a frame and capturing a rollback point.
     GuardFrame = 14,
