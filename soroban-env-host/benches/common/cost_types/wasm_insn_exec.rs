@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use crate::common::HostCostMeasurement;
 use rand::{rngs::StdRng, RngCore};
 use soroban_env_host::{
@@ -426,7 +428,7 @@ impl HostCostMeasurement for WasmConstMeasure {
         }
     }
 
-    fn get_insns_overhead(_host: &Host, sample: &WasmInsnSample) -> u64 {
+    fn get_insns_overhead_per_sample(_host: &Host, sample: &WasmInsnSample) -> u64 {
         sample.overhead
     }
 }
@@ -454,7 +456,7 @@ macro_rules! impl_wasm_insn_measure {
                 WasmInsnSample { vm, insns: 0, overhead: module.overhead }
             }
 
-            fn get_insns_overhead(_host: &Host, sample: &WasmInsnSample) -> u64 {
+            fn get_insns_overhead_per_sample(_host: &Host, sample: &WasmInsnSample) -> u64 {
                 sample.overhead
             }
         }
@@ -519,7 +521,15 @@ impl HostCostMeasurement for WasmInsnExecMeasure {
         let id: Hash = [0; 32].into();
         let code = wasm_module_with_4n_insns(insns as usize);
         let vm = Vm::new(&host, id, &code).unwrap();
-        WasmInsnExecSample { insns, args, vm }
+        WasmInsnExecSample { args, vm }
+    }
+
+    fn new_baseline_case(host: &Host, _rng: &mut StdRng) -> WasmInsnExecSample {
+        let args = ScVec(vec![ScVal::U64(5)].try_into().unwrap());
+        let id: Hash = [0; 32].into();
+        let code = wasm_module_with_4n_insns(0);
+        let vm = Vm::new(&host, id, &code).unwrap();
+        WasmInsnExecSample { args, vm }
     }
 }
 
@@ -533,14 +543,16 @@ impl HostCostMeasurement for WasmMemAllocMeasure {
     // The input unit is number of pages (64kb) so we don't scale the input further
     const STEP_SIZE: u64 = 1;
 
-    fn new_random_case(
-        host: &Host,
-        _rng: &mut StdRng,
-        input: u64,
-    ) -> <Self::Runner as soroban_env_host::cost_runner::CostRunner>::SampleType {
+    fn new_random_case(host: &Host, _rng: &mut StdRng, input: u64) -> Rc<Vm> {
         let id: Hash = [0; 32].into();
         let pages = 1 + input * Self::STEP_SIZE;
         let code = wasm_module_with_mem_grow(pages as usize);
+        Vm::new(&host, id, &code).unwrap()
+    }
+
+    fn new_baseline_case(host: &Host, _rng: &mut StdRng) -> Rc<Vm> {
+        let id: Hash = [0; 32].into();
+        let code = wasm_module_with_mem_grow(0);
         Vm::new(&host, id, &code).unwrap()
     }
 }

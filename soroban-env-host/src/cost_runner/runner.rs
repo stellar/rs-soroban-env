@@ -21,6 +21,8 @@ pub trait CostRunner: Sized {
     /// around unused value, making the bench deviate from the real case.
     type RecycledType;
 
+    /// Run an baseline iterations, to get an estimation of the benchmark overhead
+    /// (`Overhead_b` in eq.[2], see [`HostCostMeasurement`]).
     fn run_baseline_iter(_host: &Host, _iter: u64, sample: Self::SampleType) -> Self::RecycledType;
 
     /// Run a iteration of the `CostRunner`, called by `run` for 0..RUN_ITERATIONS.
@@ -58,12 +60,12 @@ pub trait CostRunner: Sized {
         }
     }
 
-    /// Get the total input from this run. Default to asking the host. May be overridden
-    /// if host is not actually involved in the actual run. However, if overridden, there is
-    /// a risk of the computed input being diverged from the actual input from the host's
-    /// perspective. So use it carefully. This should be after the `run`, outside of the
-    /// CPU-and-memory tracking machineary.
-    fn get_total_input(host: &Host) -> u64 {
-        host.0.budget.get_input(Self::COST_TYPE)
+    /// Get the (iterations, inputs) tracker from this run. Default to asking the host.
+    /// May be overridden if host is not actually involved in the actual run. However,
+    /// if overridden, there is a risk of the computed input being diverged from the
+    /// actual input from the host's perspective. So use it carefully. This should be
+    /// after the `run`, outside of the CPU-and-memory tracking machineary.
+    fn get_tracker(host: &Host) -> (u64, Option<u64>) {
+        host.0.budget.get_tracker(Self::COST_TYPE)
     }
 }

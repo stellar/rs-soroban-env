@@ -127,7 +127,6 @@ pub struct WasmInsnSample {
 
 #[derive(Clone)]
 pub struct WasmInsnExecSample {
-    pub insns: u64,
     pub args: ScVec,
     pub vm: Rc<Vm>,
 }
@@ -151,10 +150,11 @@ impl CostRunner for WasmInsnExecRun {
     }
 
     fn run_baseline_iter(
-        _host: &crate::Host,
+        host: &crate::Host,
         _iter: u64,
         sample: Self::SampleType,
     ) -> Self::RecycledType {
+        black_box(host.charge_budget(Self::COST_TYPE, None).unwrap());
         black_box((None, sample))
     }
 }
@@ -180,10 +180,11 @@ impl CostRunner for WasmMemAllocRun {
     }
 
     fn run_baseline_iter(
-        _host: &crate::Host,
+        host: &crate::Host,
         _iter: u64,
         sample: Self::SampleType,
     ) -> Self::RecycledType {
+        black_box(host.charge_budget(Self::COST_TYPE, Some(0)).unwrap());
         black_box((None, sample))
     }
 }

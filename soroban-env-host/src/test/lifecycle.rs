@@ -56,10 +56,8 @@ fn get_bytes_from_sc_val(val: ScVal) -> Vec<u8> {
 
 fn test_host() -> Host {
     let budget = Budget::default();
-    let storage = Storage::with_enforcing_footprint_and_map(
-        Footprint::default(),
-        StorageMap::new(&budget).unwrap(),
-    );
+    let storage =
+        Storage::with_enforcing_footprint_and_map(Footprint::default(), StorageMap::new().unwrap());
     let host = Host::with_storage_and_budget(storage, budget.clone());
     host.set_ledger_info(LedgerInfo {
         network_id: generate_bytes_array(),

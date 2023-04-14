@@ -415,7 +415,7 @@ impl Host {
         self.0.budget.clone()
     }
 
-    pub fn charge_budget(&self, ty: CostType, input: u64) -> Result<(), HostError> {
+    pub fn charge_budget(&self, ty: CostType, input: Option<u64>) -> Result<(), HostError> {
         self.0.budget.clone().charge(ty, input)
     }
 
@@ -614,7 +614,7 @@ impl Host {
     where
         F: FnOnce() -> Result<RawVal, HostError>,
     {
-        self.charge_budget(CostType::GuardFrame, 1)?;
+        self.charge_budget(CostType::GuardFrame, None)?;
         let start_depth = self.0.context.borrow().len();
         let rp = self.push_frame(frame)?;
         let res = f();
@@ -730,7 +730,7 @@ impl Host {
     where
         F: FnOnce(Option<&HostObject>) -> Result<U, HostError>,
     {
-        self.charge_budget(CostType::VisitObject, 1)?;
+        self.charge_budget(CostType::VisitObject, None)?;
         let r = self.0.objects.borrow();
         let obj: Object = obj.into();
         let handle: u32 = obj.get_handle();
@@ -774,13 +774,14 @@ impl Host {
         // translates a u64 into another form defined by the xdr.
         // For an `Object`, the actual structural conversion (such as byte
         // cloning) occurs in `from_host_obj` and is metered there.
-        self.charge_budget(CostType::ValXdrConv, 1)?;
+        self.charge_budget(CostType::ValXdrConv, None)?;
         ScVal::try_from_val(self, &val)
             .map_err(|_| self.err_status(ScHostValErrorCode::UnknownError))
     }
 
     pub(crate) fn to_host_val(&self, v: &ScVal) -> Result<RawVal, HostError> {
-        self.charge_budget(CostType::ValXdrConv, 1)?;
+        // `ValXdrConv` is const cost in both cpu and mem. The input=0 will be ignored.
+        self.charge_budget(CostType::ValXdrConv, None)?;
         v.try_into_val(self)
             .map_err(|_| self.err_status(ScHostValErrorCode::UnknownError))
     }
@@ -792,7 +793,8 @@ impl Host {
                 // and the "shell" of a complex object (ScMap). Any non-trivial
                 // work such as byte cloning, has to be accounted for and
                 // metered in indivial match arms.
-                self.charge_budget(CostType::ValXdrConv, 1)?;
+                // `ValXdrConv` is const cost in both cpu and mem. The input=0 will be ignored.
+                self.charge_budget(CostType::ValXdrConv, None)?;
                 let val = match ob {
                     None => {
                         return Err(self.err_status(ScHostObjErrorCode::UnknownReference));
@@ -877,7 +879,8 @@ impl Host {
     }
 
     pub(crate) fn to_host_obj<'a>(&self, ob: &ScValObjRef<'a>) -> Result<Object, HostError> {
-        self.charge_budget(CostType::ValXdrConv, 1)?;
+        // `ValXdrConv` is const cost in both cpu and mem. The input=0 will be ignored.
+        self.charge_budget(CostType::ValXdrConv, None)?;
         let val: &ScVal = (*ob).into();
         match val {
             ScVal::Vec(Some(v)) => {
@@ -886,9 +889,7 @@ impl Host {
                 for e in v.iter() {
                     vv.push(self.to_host_val(e)?)
                 }
-                Ok(self
-                    .add_host_object(HostVec::from_vec(vv, self.as_budget())?)?
-                    .into())
+                Ok(self.add_host_object(HostVec::from_vec(vv)?)?.into())
             }
             ScVal::Map(Some(m)) => {
                 metered_clone::charge_heap_alloc::<(RawVal, RawVal)>(
@@ -1392,7 +1393,7 @@ impl Host {
         sig: &ed25519_dalek::Signature,
     ) -> Result<(), HostError> {
         use ed25519_dalek::Verifier;
-        self.charge_budget(CostType::VerifyEd25519Sig, payload.len() as u64)?;
+        self.charge_budget(CostType::VerifyEd25519Sig, Some(payload.len() as u64))?;
         public_key
             .verify(payload, &sig)
             .map_err(|_| self.err_general("Failed ED25519 verification"))
@@ -1606,9 +1607,10 @@ impl EnvBase for Host {
     }
 
     fn map_new_from_slices(&self, keys: &[&str], vals: &[RawVal]) -> Result<MapObject, HostError> {
-        // FIXME: this is not the right cost to charge here, but we need to charge
-        // something for now.
-        self.charge_budget(CostType::VecNew, keys.len() as u64)?;
+        metered_clone::charge_container_bulk_init_with_elts::<Vec<Symbol>, Symbol>(
+            keys.len() as u64,
+            self.as_budget(),
+        )?;
         // If only fallible iterators worked better in Rust, we would not need this Vec<...>.
         let mut key_syms: Vec<Symbol> = Vec::with_capacity(keys.len());
         for k in keys.iter() {
@@ -1628,9 +1630,9 @@ impl EnvBase for Host {
         keys: &[&str],
         vals: &mut [RawVal],
     ) -> Result<Void, HostError> {
-        // FIXME: this is not the right cost to charge here, but we need to charge
-        // something for now.
-        self.charge_budget(CostType::VecNew, keys.len() as u64)?;
+        // Main costs are already covered by `visit_obj` and `check_symbol_matches`. Here
+        // we charge shallow copy of the values.
+        metered_clone::charge_shallow_copy::<RawVal>(keys.len() as u64, self.as_budget())?;
         if keys.len() != vals.len() {
             return Err(self.err_status(ScHostFnErrorCode::InputArgsWrongLength));
         }
@@ -1662,13 +1664,11 @@ impl EnvBase for Host {
         vec: VecObject,
         vals: &mut [RawVal],
     ) -> Result<Void, Self::Error> {
-        // FIXME: this is not the right cost to charge here, but we need to charge
-        // something for now.
-        self.charge_budget(CostType::VecNew, vals.len() as u64)?;
         self.visit_obj(vec, |hv: &HostVec| {
             if hv.len() != vals.len() {
                 return Err(self.err_status(ScHostFnErrorCode::InputArgsWrongLength));
             }
+            metered_clone::charge_shallow_copy::<RawVal>(hv.len() as u64, self.as_budget())?;
             vals.copy_from_slice(hv.as_slice());
             Ok(())
         })?;
@@ -2031,7 +2031,7 @@ impl VmCallerEnv for Host {
     }
 
     fn map_new(&self, _vmcaller: &mut VmCaller<Host>) -> Result<MapObject, HostError> {
-        self.add_host_object(HostMap::new(self)?)
+        self.add_host_object(HostMap::new()?)
     }
 
     fn map_put(
@@ -2179,7 +2179,11 @@ impl VmCallerEnv for Host {
                 pos: keys_pos,
                 len,
             } = self.decode_vmslice(keys_pos, len)?;
-            self.charge_budget(CostType::VecNew, len as u64)?;
+            // covers `Vec::with_capacity` and `len` pushes
+            metered_clone::charge_container_bulk_init_with_elts::<Vec<Symbol>, Symbol>(
+                len as u64,
+                self.as_budget(),
+            )?;
             let mut key_syms: Vec<Symbol> = Vec::with_capacity(len as usize);
             self.metered_vm_scan_slices_in_linear_memory(
                 vmcaller,
@@ -2187,7 +2191,7 @@ impl VmCallerEnv for Host {
                 keys_pos,
                 len as usize,
                 |n, slice| {
-                    self.charge_budget(CostType::VmMemRead, slice.len() as u64)?;
+                    self.charge_budget(CostType::VmMemRead, Some(slice.len() as u64))?;
                     let scsym = ScSymbol(slice.try_into()?);
                     let sym = Symbol::try_from(self.to_host_val(&ScVal::Symbol(scsym))?)?;
                     key_syms.push(sym);
@@ -2197,7 +2201,10 @@ impl VmCallerEnv for Host {
 
             // Step 2: extract all val RawVals.
             let vals_pos: u32 = vals_pos.into();
-            self.charge_budget(CostType::VecNew, len as u64)?;
+            metered_clone::charge_container_bulk_init_with_elts::<Vec<Symbol>, Symbol>(
+                len as u64,
+                self.as_budget(),
+            )?;
             let mut vals: Vec<RawVal> = vec![RawVal::VOID.into(); len as usize];
             self.metered_vm_read_vals_from_linear_memory::<8, RawVal>(
                 vmcaller,
@@ -2276,7 +2283,7 @@ impl VmCallerEnv for Host {
             self.usize_from_rawval_u32_input("c", c)?
         };
         // TODO: optimize the vector based on capacity
-        self.add_host_object(HostVec::new(self.budget_ref())?)
+        self.add_host_object(HostVec::new()?)
     }
 
     fn vec_put(
@@ -2479,7 +2486,10 @@ impl VmCallerEnv for Host {
         #[cfg(feature = "vm")]
         {
             let VmSlice { vm, pos, len } = self.decode_vmslice(vals_pos, len)?;
-            self.charge_budget(CostType::VecNew, len as u64)?;
+            metered_clone::charge_container_bulk_init_with_elts::<Vec<Symbol>, Symbol>(
+                len as u64,
+                self.as_budget(),
+            )?;
             let mut vals: Vec<RawVal> = vec![RawVal::VOID.to_raw(); len as usize];
             self.metered_vm_read_vals_from_linear_memory::<8, RawVal>(
                 vmcaller,
@@ -2488,7 +2498,7 @@ impl VmCallerEnv for Host {
                 vals.as_mut_slice(),
                 |buf| RawVal::from_payload(u64::from_le_bytes(buf.clone())),
             )?;
-            self.add_host_object(HostVec::from_vec(vals, self.as_budget())?)
+            self.add_host_object(HostVec::from_vec(vals)?)
         }
     }
 
@@ -3200,9 +3210,7 @@ impl VmCallerEnv for Host {
             let inner = MeteredVector::from_array(&vals, self.as_budget())?;
             outer.push(self.add_host_object(inner)?.into());
         }
-        Ok(self
-            .add_host_object(HostVec::from_vec(outer, self.as_budget())?)?
-            .into())
+        Ok(self.add_host_object(HostVec::from_vec(outer)?)?.into())
     }
 
     fn fail_with_status(

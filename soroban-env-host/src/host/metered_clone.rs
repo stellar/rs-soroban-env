@@ -43,7 +43,7 @@ pub(crate) fn charge_shallow_copy<T: MeteredClone>(
     debug_assert!(mem::size_of::<T>() as u64 <= T::DECLARED_SIZE);
     budget.charge(
         CostType::HostMemCpy,
-        n_elts.saturating_mul(T::DECLARED_SIZE),
+        Some(n_elts.saturating_mul(T::DECLARED_SIZE)),
     )
 }
 
@@ -58,8 +58,20 @@ pub(crate) fn charge_heap_alloc<T: MeteredClone>(
     debug_assert!(mem::size_of::<T>() as u64 <= T::DECLARED_SIZE);
     budget.charge(
         CostType::HostMemAlloc,
-        n_elts.saturating_mul(T::DECLARED_SIZE),
+        Some(n_elts.saturating_mul(T::DECLARED_SIZE)),
     )
+}
+
+// A convenience method for a container bulk initialization with elements, e.g. a
+// `Vec::with_capacity(N)` immediately followed by N element pushes.
+pub(crate) fn charge_container_bulk_init_with_elts<C: MeteredClone, T: MeteredClone>(
+    n_elts: u64,
+    budget: &Budget,
+) -> Result<(), HostError> {
+    debug_assert!(!C::IS_SHALLOW);
+    charge_shallow_copy::<C>(1, budget)?;
+    charge_heap_alloc::<T>(n_elts, budget)?;
+    charge_shallow_copy::<T>(n_elts, budget)
 }
 
 pub trait MeteredClone: Clone + DeclaredSizeForMetering {
