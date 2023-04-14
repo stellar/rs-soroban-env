@@ -157,6 +157,25 @@ impl<const N: u32> TryFrom<&StringM<N>> for SymbolSmall {
 }
 
 impl SymbolSmall {
+    #[doc(hidden)]
+    pub const fn validate_char(ch: char) -> Result<(), SymbolError> {
+        match SymbolSmall::encode_char(ch) {
+            Ok(_) => Ok(()),
+            Err(e) => Err(e),
+        }
+    }
+
+    const fn encode_char(ch: char) -> Result<u64, SymbolError> {
+        let v = match ch {
+            '_' => 1,
+            '0'..='9' => 2 + ((ch as u64) - ('0' as u64)),
+            'A'..='Z' => 12 + ((ch as u64) - ('A' as u64)),
+            'a'..='z' => 38 + ((ch as u64) - ('a' as u64)),
+            _ => return Err(SymbolError::BadChar(ch)),
+        };
+        Ok(v)
+    }
+
     pub const fn try_from_bytes(b: &[u8]) -> Result<SymbolSmall, SymbolError> {
         let mut n = 0;
         let mut accum: u64 = 0;
@@ -167,12 +186,9 @@ impl SymbolSmall {
             }
             n += 1;
             accum <<= CODE_BITS;
-            let v = match ch {
-                '_' => 1,
-                '0'..='9' => 2 + ((ch as u64) - ('0' as u64)),
-                'A'..='Z' => 12 + ((ch as u64) - ('A' as u64)),
-                'a'..='z' => 38 + ((ch as u64) - ('a' as u64)),
-                _ => return Err(SymbolError::BadChar(ch)),
+            let v = match SymbolSmall::encode_char(ch) {
+                Ok(v) => v,
+                Err(e) => return Err(e),
             };
             accum |= v;
         }

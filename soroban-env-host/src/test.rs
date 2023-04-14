@@ -14,6 +14,7 @@ mod num;
 #[cfg(all(feature = "testutils", feature = "vm"))]
 mod storage;
 mod str;
+mod symbol;
 mod vec;
 
 #[cfg(feature = "vm")]
