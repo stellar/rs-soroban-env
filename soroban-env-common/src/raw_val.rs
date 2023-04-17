@@ -3,7 +3,7 @@ use crate::{
     impl_tryfroms_and_tryfromvals_delegating_to_rawvalconvertible, Compare, I32Val, SymbolSmall,
     SymbolStr, U32Val,
 };
-use stellar_xdr::{ScStatus, ScStatusType};
+use stellar_xdr::{ScStatus, ScStatusType, ScValType};
 
 use super::{Env, Status, TryFromVal};
 use core::{cmp::Ordering, convert::Infallible, fmt::Debug};
@@ -182,6 +182,60 @@ impl Tag {
         //
         // The `test_tag_from_u8` test should ensure this cast is correct.
         unsafe { ::core::mem::transmute(tag) }
+    }
+
+    /// Get the ScValType of the XDR type that corresponds to this tag.
+    ///
+    /// For use in the `Host::obj_cmp` comparison function so that comparison
+    /// based on tags can be done identically to the `ScVal` type.
+    ///
+    /// Returns `None` for `Tag::Bad`.
+    ///
+    /// # Panics
+    ///
+    /// If `self` is any of the three marker tags,
+    /// `SmallCodeUpperBound`, `ObjectCodeLowerBound`, `ObjectCodeUpperBound`.
+    /// These should not be constructed under code paths that might use this function.
+    #[inline(always)]
+    pub const fn get_scval_type(&self) -> Option<ScValType> {
+        match *self {
+            Tag::False => Some(ScValType::Bool),
+            Tag::True => Some(ScValType::Bool),
+            Tag::Void => Some(ScValType::Void),
+            Tag::Status => Some(ScValType::Status),
+            Tag::U32Val => Some(ScValType::U32),
+            Tag::I32Val => Some(ScValType::I32),
+            Tag::U64Small => Some(ScValType::U64),
+            Tag::I64Small => Some(ScValType::I64),
+            Tag::TimepointSmall => Some(ScValType::Timepoint),
+            Tag::DurationSmall => Some(ScValType::Duration),
+            Tag::U128Small => Some(ScValType::U128),
+            Tag::I128Small => Some(ScValType::I128),
+            Tag::U256Small => Some(ScValType::U256),
+            Tag::I256Small => Some(ScValType::I256),
+            Tag::SymbolSmall => Some(ScValType::Symbol),
+            Tag::LedgerKeyContractExecutable => Some(ScValType::LedgerKeyContractExecutable),
+            Tag::SmallCodeUpperBound => panic!(),
+            Tag::ObjectCodeLowerBound => panic!(),
+            Tag::U64Object => Some(ScValType::U64),
+            Tag::I64Object => Some(ScValType::I64),
+            Tag::TimepointObject => Some(ScValType::Timepoint),
+            Tag::DurationObject => Some(ScValType::Duration),
+            Tag::U128Object => Some(ScValType::U128),
+            Tag::I128Object => Some(ScValType::I128),
+            Tag::U256Object => Some(ScValType::U256),
+            Tag::I256Object => Some(ScValType::I256),
+            Tag::BytesObject => Some(ScValType::Bytes),
+            Tag::StringObject => Some(ScValType::String),
+            Tag::SymbolObject => Some(ScValType::Symbol),
+            Tag::VecObject => Some(ScValType::Vec),
+            Tag::MapObject => Some(ScValType::Map),
+            Tag::ContractExecutableObject => Some(ScValType::ContractExecutable),
+            Tag::AddressObject => Some(ScValType::Address),
+            Tag::LedgerKeyNonceObject => Some(ScValType::LedgerKeyNonce),
+            Tag::ObjectCodeUpperBound => panic!(),
+            Tag::Bad => None,
+        }
     }
 }
 
