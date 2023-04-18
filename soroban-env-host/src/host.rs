@@ -1603,6 +1603,9 @@ impl EnvBase for Host {
     }
 
     fn symbol_new_from_slice(&self, s: &str) -> Result<SymbolObject, HostError> {
+        for ch in s.chars() {
+            SymbolSmall::validate_char(ch)?;
+        }
         self.add_host_object(ScSymbol(s.as_bytes().to_vec().try_into()?))
     }
 
