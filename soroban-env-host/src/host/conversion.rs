@@ -121,7 +121,7 @@ impl Host {
     {
         match <[u8; N]>::try_from(bytes_arr) {
             Ok(arr) => {
-                self.charge_budget(CostType::HostMemCpy, N as u64)?;
+                self.charge_budget(CostType::HostMemCpy, Some(N as u64))?;
                 Ok(arr.into())
             }
             Err(cvt) => Err(self.err(
@@ -149,7 +149,8 @@ impl Host {
     }
 
     pub(crate) fn ed25519_pub_key_from_bytes(&self, bytes: &[u8]) -> Result<PublicKey, HostError> {
-        self.charge_budget(CostType::ComputeEd25519PubKey, bytes.len() as u64)?;
+        debug_assert!(bytes.len() == 32);
+        self.charge_budget(CostType::ComputeEd25519PubKey, None)?;
         PublicKey::from_bytes(bytes).map_err(|_| {
             self.err_status_msg(ScHostObjErrorCode::UnexpectedType, "invalid public key")
         })
@@ -173,7 +174,7 @@ impl Host {
     }
 
     pub(crate) fn sha256_hash_from_bytes(&self, bytes: &[u8]) -> Result<Vec<u8>, HostError> {
-        self.charge_budget(CostType::ComputeSha256Hash, bytes.len() as u64)?;
+        self.charge_budget(CostType::ComputeSha256Hash, Some(bytes.len() as u64))?;
         Ok(Sha256::digest(bytes).as_slice().to_vec())
     }
 

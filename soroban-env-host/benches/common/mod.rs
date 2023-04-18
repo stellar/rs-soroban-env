@@ -13,10 +13,10 @@ use soroban_env_host::{
     budget::CostType,
     cost_runner::{CostRunner, WasmInsnType},
 };
-use std::collections::BTreeSet;
+use std::collections::BTreeMap;
 
 pub(crate) trait Benchmark {
-    fn bench<HCM: HostCostMeasurement>() -> std::io::Result<()>;
+    fn bench<HCM: HostCostMeasurement>() -> std::io::Result<(FPCostModel, FPCostModel)>;
 }
 
 fn get_explicit_bench_names() -> Option<Vec<String>> {
@@ -34,76 +34,87 @@ fn should_run<HCM: HostCostMeasurement>() -> bool {
             .last()
             .unwrap()
             .to_string();
-        bench_names.into_iter().find(|arg| *arg == name).is_some()
+        bench_names.iter().any(|arg| *arg == name)
+    } else {
+        true
+    }
+}
+
+fn should_run_wasm_insn(ty: WasmInsnType) -> bool {
+    if let Some(bench_names) = get_explicit_bench_names() {
+        let name = format!("{:?}", ty).split("::").last().unwrap().to_string();
+        bench_names.iter().any(|arg| *arg == name)
     } else {
         true
     }
 }
 
 fn call_bench<B: Benchmark, HCM: HostCostMeasurement>(
-    costs: &mut BTreeSet<CostType>,
+    params: &mut BTreeMap<CostType, (FPCostModel, FPCostModel)>,
 ) -> std::io::Result<()> {
     if should_run::<HCM>() {
-        B::bench::<HCM>()?;
-        costs.insert(<HCM::Runner as CostRunner>::COST_TYPE);
+        params.insert(<HCM::Runner as CostRunner>::COST_TYPE, B::bench::<HCM>()?);
     }
     Ok(())
 }
 
-pub(crate) fn for_each_host_cost_measurement<B: Benchmark>() -> std::io::Result<()> {
-    let mut costs: BTreeSet<CostType> = BTreeSet::new();
+pub(crate) fn for_each_host_cost_measurement<B: Benchmark>(
+) -> std::io::Result<BTreeMap<CostType, (FPCostModel, FPCostModel)>> {
+    let mut params: BTreeMap<CostType, (FPCostModel, FPCostModel)> = BTreeMap::new();
 
-    call_bench::<B, ComputeEd25519PubKeyMeasure>(&mut costs)?;
-    call_bench::<B, ComputeSha256HashMeasure>(&mut costs)?;
-    call_bench::<B, VerifyEd25519SigMeasure>(&mut costs)?;
-    call_bench::<B, VmInstantiationMeasure>(&mut costs)?;
-    call_bench::<B, VmMemReadMeasure>(&mut costs)?;
-    call_bench::<B, VmMemWriteMeasure>(&mut costs)?;
-    call_bench::<B, WasmInsnExecMeasure>(&mut costs)?;
-    call_bench::<B, WasmMemAllocMeasure>(&mut costs)?;
-    call_bench::<B, VisitObjectMeasure>(&mut costs)?;
-    call_bench::<B, GuardFrameMeasure>(&mut costs)?;
-    call_bench::<B, ValXdrConvMeasure>(&mut costs)?;
-    call_bench::<B, ValSerMeasure>(&mut costs)?;
-    call_bench::<B, ValDeserMeasure>(&mut costs)?;
-    call_bench::<B, MapNewMeasure>(&mut costs)?;
-    call_bench::<B, MapEntryMeasure>(&mut costs)?;
-    call_bench::<B, VecNewMeasure>(&mut costs)?;
-    call_bench::<B, VecEntryMeasure>(&mut costs)?;
-    call_bench::<B, HostMemCmpMeasure>(&mut costs)?;
-    call_bench::<B, InvokeVmFunctionMeasure>(&mut costs)?;
-    call_bench::<B, InvokeHostFunctionMeasure>(&mut costs)?;
-    call_bench::<B, ChargeBudgetMeasure>(&mut costs)?;
-    call_bench::<B, HostMemAllocMeasure>(&mut costs)?;
-    call_bench::<B, HostMemCpyMeasure>(&mut costs)?;
+    call_bench::<B, ComputeEd25519PubKeyMeasure>(&mut params)?;
+    call_bench::<B, ComputeSha256HashMeasure>(&mut params)?;
+    call_bench::<B, VerifyEd25519SigMeasure>(&mut params)?;
+    call_bench::<B, VmInstantiationMeasure>(&mut params)?;
+    call_bench::<B, VmMemReadMeasure>(&mut params)?;
+    call_bench::<B, VmMemWriteMeasure>(&mut params)?;
+    call_bench::<B, WasmInsnExecMeasure>(&mut params)?;
+    call_bench::<B, WasmMemAllocMeasure>(&mut params)?;
+    call_bench::<B, VisitObjectMeasure>(&mut params)?;
+    call_bench::<B, GuardFrameMeasure>(&mut params)?;
+    call_bench::<B, ValXdrConvMeasure>(&mut params)?;
+    call_bench::<B, ValSerMeasure>(&mut params)?;
+    call_bench::<B, ValDeserMeasure>(&mut params)?;
+    call_bench::<B, MapEntryMeasure>(&mut params)?;
+    call_bench::<B, VecEntryMeasure>(&mut params)?;
+    call_bench::<B, HostMemCmpMeasure>(&mut params)?;
+    call_bench::<B, InvokeVmFunctionMeasure>(&mut params)?;
+    call_bench::<B, InvokeHostFunctionMeasure>(&mut params)?;
+    call_bench::<B, ChargeBudgetMeasure>(&mut params)?;
+    call_bench::<B, HostMemAllocMeasure>(&mut params)?;
+    call_bench::<B, HostMemCpyMeasure>(&mut params)?;
 
     if get_explicit_bench_names().is_none() {
         for cost in CostType::variants() {
-            if !costs.contains(cost) {
+            if !params.contains_key(cost) {
                 eprintln!("warning: missing cost measurement for {:?}", cost);
             }
         }
     }
-    Ok(())
+    Ok(params)
 }
 
 macro_rules! run_wasm_insn_measurement {
     ( $($HCM: ident),* ) => {
-        pub(crate) fn for_each_wasm_insn_measurement<B: Benchmark>() -> std::io::Result<()> {
-            let mut coverage: BTreeSet<WasmInsnType> = BTreeSet::new();
+        pub(crate) fn for_each_wasm_insn_measurement<B: Benchmark>() -> std::io::Result<BTreeMap<WasmInsnType, (FPCostModel, FPCostModel)>> {
+            let mut params: BTreeMap<WasmInsnType, (FPCostModel, FPCostModel)> = BTreeMap::new();
             $(
                 let ty = <$HCM as HostCostMeasurement>::Runner::INSN_TYPE;
-                eprintln!(
-                    "\nMeasuring costs for WasmInsnType::{:?}\n", ty);
-                B::bench::<$HCM>()?;
-                coverage.insert(ty);
+                if should_run_wasm_insn(ty) {
+                    eprintln!(
+                        "\nMeasuring costs for WasmInsnType::{:?}\n", ty);
+                    params.insert(ty, B::bench::<$HCM>()?);
+                }
             )*
-            for insn in WasmInsnType::variants() {
-                if !coverage.contains(insn) {
-                    eprintln!("warning: missing cost measurement for {:?}", insn);
+
+            if get_explicit_bench_names().is_none() {
+                for insn in WasmInsnType::variants() {
+                    if !params.contains_key(insn) {
+                        eprintln!("warning: missing cost measurement for {:?}", insn);
+                    }
                 }
             }
-            Ok(())
+            Ok(params)
         }
     };
 }

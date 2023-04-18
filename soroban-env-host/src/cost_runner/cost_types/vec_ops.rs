@@ -5,28 +5,6 @@ use crate::{budget::CostType, cost_runner::CostRunner, Host, MeteredVector, RawV
 
 type HostVec = MeteredVector<RawVal>;
 
-pub struct VecNewRun;
-impl CostRunner for VecNewRun {
-    const COST_TYPE: CostType = CostType::VecNew;
-
-    type SampleType = Vec<RawVal>;
-
-    type RecycledType = Option<HostVec>;
-
-    fn run_iter(host: &crate::Host, _iter: u64, sample: Self::SampleType) -> Self::RecycledType {
-        let hv = HostVec::from_vec(sample, host.as_budget()).unwrap();
-        Some(hv)
-    }
-
-    fn run_baseline_iter(
-        _host: &Host,
-        _iter: u64,
-        _sample: Self::SampleType,
-    ) -> Self::RecycledType {
-        None
-    }
-}
-
 pub struct VecEntryRun;
 
 #[derive(Clone)]
@@ -55,7 +33,8 @@ impl CostRunner for VecEntryRun {
         (Some(v), sample)
     }
 
-    fn run_baseline_iter(_host: &Host, _iter: u64, sample: Self::SampleType) -> Self::RecycledType {
+    fn run_baseline_iter(host: &Host, _iter: u64, sample: Self::SampleType) -> Self::RecycledType {
+        black_box(host.charge_budget(Self::COST_TYPE, None).unwrap());
         black_box((None, sample))
     }
 }

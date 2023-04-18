@@ -35,25 +35,20 @@ where
     V: DeclaredSizeForMetering,
     Ctx: AsBudget,
 {
-    // Covers the cost of creating `count` number of new `MeteredOrdMap`s. This does not include
-    // the cost of any allocation, since it is assumed memory allocation is charge separately
-    // elsewhere.
-    fn charge_new<B: AsBudget>(count: u64, b: &B) -> Result<(), HostError> {
-        b.as_budget().charge(CostType::MapNew, count)
-    }
-
     fn charge_access<B: AsBudget>(&self, count: usize, b: &B) -> Result<(), HostError> {
-        b.as_budget().charge(CostType::MapEntry, count as u64)
+        b.as_budget()
+            .batched_charge(CostType::MapEntry, count as u64, None)
     }
 
     fn charge_scan<B: AsBudget>(&self, b: &B) -> Result<(), HostError> {
         b.as_budget()
-            .charge(CostType::MapEntry, self.map.len() as u64)
+            .batched_charge(CostType::MapEntry, self.map.len() as u64, None)
     }
 
     fn charge_binsearch<B: AsBudget>(&self, b: &B) -> Result<(), HostError> {
         let mag = 64 - (self.map.len() as u64).leading_zeros();
-        b.as_budget().charge(CostType::MapEntry, 1 + mag as u64)
+        b.as_budget()
+            .batched_charge(CostType::MapEntry, 1 + mag as u64, None)
     }
 }
 
@@ -81,8 +76,7 @@ where
     V: MeteredClone,
     Ctx: AsBudget + Compare<K, Error = HostError>,
 {
-    pub fn new(ctx: &Ctx) -> Result<Self, HostError> {
-        Self::charge_new(1, ctx)?;
+    pub fn new() -> Result<Self, HostError> {
         Ok(MeteredOrdMap {
             map: Vec::new(),
             ctx: Default::default(),
@@ -90,9 +84,8 @@ where
     }
 
     pub fn from_map(map: Vec<(K, V)>, ctx: &Ctx) -> Result<Self, HostError> {
-        // Allocation cost already paid for by caller, here just charge for the new map
-        // and check that input has sorted and unique keys.
-        Self::charge_new(1, ctx)?;
+        // Allocation cost already paid for by caller, here just checks that input
+        // has sorted and unique keys.
         let m = MeteredOrdMap {
             map,
             ctx: Default::default(),
@@ -347,8 +340,11 @@ where
         a: &MeteredOrdMap<K, V, Host>,
         b: &MeteredOrdMap<K, V, Host>,
     ) -> Result<Ordering, Self::Error> {
-        self.as_budget()
-            .charge(CostType::MapEntry, a.map.len().min(b.map.len()) as u64)?;
+        self.as_budget().batched_charge(
+            CostType::MapEntry,
+            a.map.len().min(b.map.len()) as u64,
+            None,
+        )?;
         <Self as Compare<Vec<(K, V)>>>::compare(self, &a.map, &b.map)
     }
 }
@@ -364,7 +360,11 @@ where
         a: &MeteredOrdMap<K, V, Budget>,
         b: &MeteredOrdMap<K, V, Budget>,
     ) -> Result<Ordering, Self::Error> {
-        self.charge(CostType::MapEntry, a.map.len().min(b.map.len()) as u64)?;
+        self.batched_charge(
+            CostType::MapEntry,
+            a.map.len().min(b.map.len()) as u64,
+            None,
+        )?;
         <Self as Compare<Vec<(K, V)>>>::compare(self, &a.map, &b.map)
     }
 }
