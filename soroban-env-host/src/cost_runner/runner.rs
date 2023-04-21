@@ -1,11 +1,11 @@
 use std::hint::black_box;
 
-use crate::{budget::CostType, Host};
+use crate::{xdr::ContractCostType, Host};
 /// `CostRunner` is an interface to running a host cost entity of a `CostType` (usually a block of
 /// WASM bytecode or a host function), given a sample of `SampleType`.
 pub trait CostRunner: Sized {
     /// The type of cost we're measuring.
-    const COST_TYPE: CostType;
+    const COST_TYPE: ContractCostType;
 
     /// Number of iterations to run, used to divide the resulting measured values.
     /// Defaults to 100 to average out the measurement noises for fast-running cases.

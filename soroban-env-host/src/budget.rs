@@ -5,90 +5,12 @@ use std::{
 };
 
 use crate::{
-    xdr::{ScUnknownErrorCode, ScVmErrorCode},
+    xdr::{
+        ContractCostParamEntry, ContractCostParams, ContractCostType, ScUnknownErrorCode,
+        ScVmErrorCode,
+    },
     Host, HostError,
 };
-
-// TODO: move this to an XDR enum
-#[repr(i32)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum CostType {
-    // Cost of running 1 wasm instruction
-    WasmInsnExec = 0,
-    // Cost of growing wasm linear memory by 1 page
-    WasmMemAlloc = 1,
-    // Cost of allocating a chuck of host memory (in bytes)
-    HostMemAlloc = 2,
-    // Cost of copying a chuck of bytes into a pre-allocated host memory
-    HostMemCpy = 3,
-    // Cost of comparing two slices of host memory
-    HostMemCmp = 4,
-    // Cost of a host function invocation, not including the actual work done by the function
-    InvokeHostFunction = 5,
-    // Cost of visiting a host object from the host object storage
-    // Only thing to make sure is the guest can't visitObject repeatly without incurring some charges elsewhere.
-    VisitObject = 6,
-    // Tracks a single Val (RawVal or primative Object like U64) <=> ScVal
-    // conversion cost. Most of these Val counterparts in ScVal (except e.g.
-    // Symbol) consumes a single int64 and therefore is a constant overhead.
-    ValXdrConv = 7,
-    // Cost of serializing an xdr object to bytes
-    ValSer = 8,
-    // Cost of deserializing an xdr object from bytes
-    ValDeser = 9,
-    // Cost of computing the sha256 hash from bytes
-    ComputeSha256Hash = 10,
-    // Cost of computing the ed25519 pubkey from bytes
-    ComputeEd25519PubKey = 11,
-    // Cost of accessing an entry in a Map.
-    MapEntry = 12,
-    // Cost of accessing an entry in a Vec
-    VecEntry = 13,
-    // Cost of guarding a frame, which involves pushing and poping a frame and capturing a rollback point.
-    GuardFrame = 14,
-    // Cost of verifying ed25519 signature of a payload.
-    VerifyEd25519Sig = 15,
-    // Cost of reading a slice of vm linear memory
-    VmMemRead = 16,
-    // Cost of writing to a slice of vm linear memory
-    VmMemWrite = 17,
-    // Cost of instantiation a VM from wasm bytes code.
-    VmInstantiation = 18,
-    // Roundtrip cost of invoking a VM function from the host.
-    InvokeVmFunction = 19,
-    // Cost of charging a value to the budgeting system.
-    ChargeBudget = 20,
-}
-
-// TODO: add XDR support for iterating over all the elements of an enum
-impl CostType {
-    pub fn variants() -> std::slice::Iter<'static, CostType> {
-        static VARIANTS: &'static [CostType] = &[
-            CostType::WasmInsnExec,
-            CostType::WasmMemAlloc,
-            CostType::HostMemAlloc,
-            CostType::HostMemCpy,
-            CostType::HostMemCmp,
-            CostType::InvokeHostFunction,
-            CostType::VisitObject,
-            CostType::ValXdrConv,
-            CostType::ValSer,
-            CostType::ValDeser,
-            CostType::ComputeSha256Hash,
-            CostType::ComputeEd25519PubKey,
-            CostType::MapEntry,
-            CostType::VecEntry,
-            CostType::GuardFrame,
-            CostType::VerifyEd25519Sig,
-            CostType::VmMemRead,
-            CostType::VmMemWrite,
-            CostType::VmInstantiation,
-            CostType::InvokeVmFunction,
-            CostType::ChargeBudget,
-        ];
-        VARIANTS.iter()
-    }
-}
 
 /// We provide a "cost model" object that evaluates a linear expression:
 ///
@@ -118,6 +40,13 @@ pub struct CostModel {
 }
 
 impl CostModel {
+    pub fn from_xdr(xdr: &ContractCostParamEntry) -> Self {
+        CostModel {
+            const_param: xdr.const_term as u64,
+            lin_param: xdr.linear_term as u64,
+        }
+    }
+
     /// Evaluates the linear model `f(input) = const_param + lin_param * Option<input>`.
     /// If the input is `None`, then the linear part is ingored, resulting in a constant
     /// model.
@@ -172,9 +101,9 @@ impl Debug for BudgetDimension {
             self.limit, self.total_count
         )?;
 
-        for ct in CostType::variants() {
-            writeln!(f, "CostType {:?}, count {}", ct, self.counts[*ct as usize])?;
-            writeln!(f, "model: {:?}", self.cost_models[*ct as usize])?;
+        for ct in ContractCostType::variants() {
+            writeln!(f, "CostType {:?}, count {}", ct, self.counts[ct as usize])?;
+            writeln!(f, "model: {:?}", self.cost_models[ct as usize])?;
         }
         Ok(())
     }
@@ -189,23 +118,38 @@ impl BudgetDimension {
             counts: Default::default(),
             total_count: Default::default(),
         };
-        for _ct in CostType::variants() {
-            // TODO: load cost model for i from the chain.
+        for _ct in ContractCostType::variants() {
             bd.cost_models.push(CostModel::default());
             bd.counts.push(0);
         }
         bd
     }
 
-    pub fn get_cost_model(&self, ty: CostType) -> &CostModel {
+    pub fn from_network_configs(trapcode: ScVmErrorCode, cost_params: &ContractCostParams) -> Self {
+        let mut bd = Self {
+            trapcode,
+            cost_models: Default::default(),
+            limit: Default::default(),
+            counts: Default::default(),
+            total_count: Default::default(),
+        };
+
+        for param in cost_params.0.as_vec() {
+            bd.cost_models.push(CostModel::from_xdr(param));
+            bd.counts.push(0);
+        }
+        bd
+    }
+
+    pub fn get_cost_model(&self, ty: ContractCostType) -> &CostModel {
         &self.cost_models[ty as usize]
     }
 
-    pub fn get_cost_model_mut(&mut self, ty: CostType) -> &mut CostModel {
+    pub fn get_cost_model_mut(&mut self, ty: ContractCostType) -> &mut CostModel {
         &mut self.cost_models[ty as usize]
     }
 
-    pub fn get_count(&self, ty: CostType) -> u64 {
+    pub fn get_count(&self, ty: ContractCostType) -> u64 {
         self.counts[ty as usize]
     }
 
@@ -236,7 +180,7 @@ impl BudgetDimension {
     /// model, and amount charged is iterations * const_param.
     pub fn charge(
         &mut self,
-        ty: CostType,
+        ty: ContractCostType,
         iterations: u64,
         input: Option<u64>,
     ) -> Result<(), HostError> {
@@ -271,6 +215,67 @@ pub(crate) struct BudgetImpl {
     enabled: bool,
 }
 
+impl BudgetImpl {
+    /// Initializes the budget from network configuration settings.
+    fn from_network_configs(
+        cpu_limit: u64,
+        mem_limit: u64,
+        cpu_cost_params: &ContractCostParams,
+        mem_cost_params: &ContractCostParams,
+    ) -> Self {
+        let mut b = Self {
+            cpu_insns: BudgetDimension::from_network_configs(
+                ScVmErrorCode::TrapCpuLimitExceeded,
+                cpu_cost_params,
+            ),
+            mem_bytes: BudgetDimension::from_network_configs(
+                ScVmErrorCode::TrapMemLimitExceeded,
+                mem_cost_params,
+            ),
+            tracker: vec![(0, None); ContractCostType::variants().len()],
+            enabled: true,
+        };
+
+        b.init_tracker();
+
+        b.cpu_insns.reset(cpu_limit);
+        b.mem_bytes.reset(mem_limit);
+        b
+    }
+
+    fn init_tracker(&mut self) {
+        for ct in ContractCostType::variants() {
+            // Define what inputs actually mean. For any constant-cost types -- whether it is a
+            // true constant unit cost type, or empirically assigned (via measurement) constant
+            // type -- we leave the input as `None`, otherwise, we initialize the input to 0.
+            let i = ct as usize;
+            match ct {
+                ContractCostType::WasmInsnExec => (),
+                ContractCostType::WasmMemAlloc => self.tracker[i].1 = Some(0), // number of pages in wasm linear memory to allocate (each page is 64kB)
+                ContractCostType::HostMemAlloc => self.tracker[i].1 = Some(0), // number of bytes in host memory to allocate
+                ContractCostType::HostMemCpy => self.tracker[i].1 = Some(0), // number of bytes in host to copy
+                ContractCostType::HostMemCmp => self.tracker[i].1 = Some(0), // number of bytes in host to compare
+                ContractCostType::InvokeHostFunction => (),
+                ContractCostType::VisitObject => (),
+                ContractCostType::ValXdrConv => (),
+                ContractCostType::ValSer => self.tracker[i].1 = Some(0), // number of bytes in the result buffer
+                ContractCostType::ValDeser => self.tracker[i].1 = Some(0), // number of bytes in the buffer
+                ContractCostType::ComputeSha256Hash => self.tracker[i].1 = Some(0), // number of bytes in the buffer
+                ContractCostType::ComputeEd25519PubKey => (),
+                ContractCostType::MapEntry => (),
+                ContractCostType::VecEntry => (),
+                ContractCostType::GuardFrame => (),
+                ContractCostType::VerifyEd25519Sig => self.tracker[i].1 = Some(0), // length of the signature buffer
+                ContractCostType::VmMemRead => self.tracker[i].1 = Some(0), // number of bytes in the linear memory to read
+                ContractCostType::VmMemWrite => self.tracker[i].1 = Some(0), // number of bytes in the linear memory to write
+                ContractCostType::VmInstantiation => self.tracker[i].1 = Some(0), // length of the wasm bytes
+                ContractCostType::InvokeVmFunction => (),
+                ContractCostType::ChargeBudget => (),
+            }
+        }
+    }
+}
+
 impl Debug for BudgetImpl {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "{:=<165}", "")?;
@@ -298,8 +303,8 @@ impl Debug for BudgetImpl {
             "const_param_mem",
             "lin_param_mem",
         )?;
-        for ct in CostType::variants() {
-            let i = *ct as usize;
+        for ct in ContractCostType::variants() {
+            let i = ct as usize;
             writeln!(
                 f,
                 "{:<25}{:<15}{:<15}{:<15}{:<15}{:<20}{:<20}{:<20}{:<20}",
@@ -338,8 +343,8 @@ impl Display for BudgetImpl {
             "{:<25}{:<15}{:<15}",
             "CostType", "cpu_insns", "mem_bytes",
         )?;
-        for ct in CostType::variants() {
-            let i = *ct as usize;
+        for ct in ContractCostType::variants() {
+            let i = ct as usize;
             writeln!(
                 f,
                 "{:<25}{:<15}{:<15}",
@@ -385,6 +390,21 @@ impl AsBudget for Host {
 }
 
 impl Budget {
+    /// Initializes the budget from network configuration settings.
+    pub fn from_network_configs(
+        cpu_limit: u64,
+        mem_limit: u64,
+        cpu_cost_params: &ContractCostParams,
+        mem_cost_params: &ContractCostParams,
+    ) -> Self {
+        Self(Rc::new(RefCell::new(BudgetImpl::from_network_configs(
+            cpu_limit,
+            mem_limit,
+            cpu_cost_params,
+            mem_cost_params,
+        ))))
+    }
+
     // Helper function to avoid multiple borrow_mut
     fn mut_budget<T, F>(&self, f: F) -> Result<T, HostError>
     where
@@ -395,7 +415,7 @@ impl Budget {
 
     fn charge_in_bulk(
         &self,
-        ty: CostType,
+        ty: ContractCostType,
         iterations: u64,
         input: Option<u64>,
     ) -> Result<(), HostError> {
@@ -419,7 +439,7 @@ impl Budget {
                 _ => Err(ScUnknownErrorCode::General.into()),
             }
         })?;
-        self.get_tracker_mut(CostType::ChargeBudget, |(t_iters, _)| {
+        self.get_tracker_mut(ContractCostType::ChargeBudget, |(t_iters, _)| {
             // we already know `ChargeBudget` has undefined input, so here we just add 1 iteration.
             Ok(*t_iters = t_iters.saturating_add(1))
         })?;
@@ -427,7 +447,8 @@ impl Budget {
         // do the actual budget charging
         self.mut_budget(|mut b| {
             // we already know `ChargeBudget` only affects the cpu budget
-            b.cpu_insns.charge(CostType::ChargeBudget, 1, None)?;
+            b.cpu_insns
+                .charge(ContractCostType::ChargeBudget, 1, None)?;
             b.cpu_insns.charge(ty, iterations, input)?;
             b.mem_bytes.charge(ty, iterations, input)
         })
@@ -438,7 +459,7 @@ impl Budget {
     /// the input. If the input is `None`, the model is assumed to be constant.
     /// Otherwise it is a linear model.  The caller needs to ensure the input
     /// passed is consistent with the inherent model underneath.
-    pub fn charge(&self, ty: CostType, input: Option<u64>) -> Result<(), HostError> {
+    pub fn charge(&self, ty: ContractCostType, input: Option<u64>) -> Result<(), HostError> {
         self.charge_in_bulk(ty, 1, input)
     }
 
@@ -450,7 +471,7 @@ impl Budget {
     /// underneath the [`CostType`] (linear/constant).
     pub fn batched_charge(
         &self,
-        ty: CostType,
+        ty: ContractCostType,
         iterations: u64,
         input: Option<u64>,
     ) -> Result<(), HostError> {
@@ -475,11 +496,11 @@ impl Budget {
         res
     }
 
-    pub fn get_tracker(&self, ty: CostType) -> (u64, Option<u64>) {
+    pub fn get_tracker(&self, ty: ContractCostType) -> (u64, Option<u64>) {
         self.0.borrow().tracker[ty as usize]
     }
 
-    pub(crate) fn get_tracker_mut<F>(&self, ty: CostType, f: F) -> Result<(), HostError>
+    pub(crate) fn get_tracker_mut<F>(&self, ty: ContractCostType, f: F) -> Result<(), HostError>
     where
         F: FnOnce(&mut (u64, Option<u64>)) -> Result<(), HostError>,
     {
@@ -555,222 +576,196 @@ impl Default for BudgetImpl {
         let mut b = Self {
             cpu_insns: BudgetDimension::new(ScVmErrorCode::TrapCpuLimitExceeded),
             mem_bytes: BudgetDimension::new(ScVmErrorCode::TrapMemLimitExceeded),
-            tracker: vec![(0, None); CostType::variants().len()],
+            tracker: vec![(0, None); ContractCostType::variants().len()],
             enabled: true,
         };
 
-        for ct in CostType::variants() {
+        for ct in ContractCostType::variants() {
             // define the cpu cost model parameters
-            let cpu = &mut b.cpu_insns.get_cost_model_mut(*ct);
+            let cpu = &mut b.cpu_insns.get_cost_model_mut(ct);
             match ct {
-                CostType::WasmInsnExec => {
+                ContractCostType::WasmInsnExec => {
                     cpu.const_param = 22;
                     cpu.lin_param = 0;
                 }
-                CostType::WasmMemAlloc => {
+                ContractCostType::WasmMemAlloc => {
                     cpu.const_param = 521;
                     cpu.lin_param = 0;
                 }
-                CostType::HostMemAlloc => {
+                ContractCostType::HostMemAlloc => {
                     cpu.const_param = 883;
                     cpu.lin_param = 0;
                 }
-                CostType::HostMemCpy => {
+                ContractCostType::HostMemCpy => {
                     cpu.const_param = 24;
                     cpu.lin_param = 0;
                 }
-                CostType::HostMemCmp => {
+                ContractCostType::HostMemCmp => {
                     cpu.const_param = 42;
                     cpu.lin_param = 1;
                 }
-                CostType::InvokeHostFunction => {
+                ContractCostType::InvokeHostFunction => {
                     cpu.const_param = 759;
                     cpu.lin_param = 0;
                 }
-                CostType::VisitObject => {
+                ContractCostType::VisitObject => {
                     cpu.const_param = 29;
                     cpu.lin_param = 0;
                 }
-                CostType::ValXdrConv => {
+                ContractCostType::ValXdrConv => {
                     cpu.const_param = 177;
                     cpu.lin_param = 0;
                 }
-                CostType::ValSer => {
+                ContractCostType::ValSer => {
                     cpu.const_param = 741;
                     cpu.lin_param = 0;
                 }
-                CostType::ValDeser => {
+                ContractCostType::ValDeser => {
                     cpu.const_param = 846;
                     cpu.lin_param = 0;
                 }
-                CostType::ComputeSha256Hash => {
+                ContractCostType::ComputeSha256Hash => {
                     cpu.const_param = 1912;
                     cpu.lin_param = 32;
                 }
-                CostType::ComputeEd25519PubKey => {
+                ContractCostType::ComputeEd25519PubKey => {
                     cpu.const_param = 25766;
                     cpu.lin_param = 0;
                 }
-                CostType::MapEntry => {
+                ContractCostType::MapEntry => {
                     cpu.const_param = 59;
                     cpu.lin_param = 0;
                 }
-                CostType::VecEntry => {
+                ContractCostType::VecEntry => {
                     cpu.const_param = 14;
                     cpu.lin_param = 0;
                 }
-                CostType::GuardFrame => {
+                ContractCostType::GuardFrame => {
                     cpu.const_param = 4512;
                     cpu.lin_param = 0;
                 }
-                CostType::VerifyEd25519Sig => {
+                ContractCostType::VerifyEd25519Sig => {
                     cpu.const_param = 368361;
                     cpu.lin_param = 20;
                 }
-                CostType::VmMemRead => {
+                ContractCostType::VmMemRead => {
                     cpu.const_param = 95;
                     cpu.lin_param = 0;
                 }
-                CostType::VmMemWrite => {
+                ContractCostType::VmMemWrite => {
                     cpu.const_param = 97;
                     cpu.lin_param = 0;
                 }
                 // This (as well as its mem model params), are not taken from calibration results.
                 // if we want to do that we need more sample contracts of various sizes. Right now
                 // this is just an eye-balled upperbound.
-                CostType::VmInstantiation => {
+                ContractCostType::VmInstantiation => {
                     cpu.const_param = 1_000_000;
                     cpu.lin_param = 0;
                 }
-                CostType::InvokeVmFunction => {
+                ContractCostType::InvokeVmFunction => {
                     cpu.const_param = 6212;
                     cpu.lin_param = 0;
                 }
-                CostType::ChargeBudget => {
+                ContractCostType::ChargeBudget => {
                     cpu.const_param = 198;
                     cpu.lin_param = 0;
                 }
             }
 
             // define the memory cost model parameters
-            let mem = b.mem_bytes.get_cost_model_mut(*ct);
+            let mem = b.mem_bytes.get_cost_model_mut(ct);
             match ct {
-                CostType::WasmInsnExec => {
+                ContractCostType::WasmInsnExec => {
                     mem.const_param = 0;
                     mem.lin_param = 0;
                 }
-                CostType::WasmMemAlloc => {
+                ContractCostType::WasmMemAlloc => {
                     mem.const_param = 66136;
                     mem.lin_param = 1;
                 }
-                CostType::HostMemAlloc => {
+                ContractCostType::HostMemAlloc => {
                     mem.const_param = 8;
                     mem.lin_param = 1;
                 }
-                CostType::HostMemCpy => {
+                ContractCostType::HostMemCpy => {
                     mem.const_param = 0;
                     mem.lin_param = 0;
                 }
-                CostType::HostMemCmp => {
+                ContractCostType::HostMemCmp => {
                     mem.const_param = 0;
                     mem.lin_param = 0;
                 }
-                CostType::InvokeHostFunction => {
+                ContractCostType::InvokeHostFunction => {
                     mem.const_param = 0;
                     mem.lin_param = 0;
                 }
-                CostType::VisitObject => {
+                ContractCostType::VisitObject => {
                     mem.const_param = 0;
                     mem.lin_param = 0;
                 }
-                CostType::ValXdrConv => {
+                ContractCostType::ValXdrConv => {
                     mem.const_param = 0;
                     mem.lin_param = 0;
                 }
-                CostType::ValSer => {
+                ContractCostType::ValSer => {
                     mem.const_param = 9;
                     mem.lin_param = 3;
                 }
-                CostType::ValDeser => {
+                ContractCostType::ValDeser => {
                     mem.const_param = 4;
                     mem.lin_param = 1;
                 }
-                CostType::ComputeSha256Hash => {
+                ContractCostType::ComputeSha256Hash => {
                     mem.const_param = 40;
                     mem.lin_param = 0;
                 }
-                CostType::ComputeEd25519PubKey => {
+                ContractCostType::ComputeEd25519PubKey => {
                     mem.const_param = 0;
                     mem.lin_param = 0;
                 }
-                CostType::MapEntry => {
+                ContractCostType::MapEntry => {
                     mem.const_param = 0;
                     mem.lin_param = 0;
                 }
-                CostType::VecEntry => {
+                ContractCostType::VecEntry => {
                     mem.const_param = 0;
                     mem.lin_param = 0;
                 }
-                CostType::GuardFrame => {
+                ContractCostType::GuardFrame => {
                     mem.const_param = 267;
                     mem.lin_param = 0;
                 }
-                CostType::VerifyEd25519Sig => {
+                ContractCostType::VerifyEd25519Sig => {
                     mem.const_param = 0;
                     mem.lin_param = 0;
                 }
-                CostType::VmMemRead => {
+                ContractCostType::VmMemRead => {
                     mem.const_param = 0;
                     mem.lin_param = 0;
                 }
-                CostType::VmMemWrite => {
+                ContractCostType::VmMemWrite => {
                     mem.const_param = 0;
                     mem.lin_param = 0;
                 }
                 // This (as well as its cpu model params), are not taken from calibration results.
                 // if we want to do that we need more sample contracts of various sizes. Right now
                 // this is just an eye-balled upperbound.
-                CostType::VmInstantiation => {
+                ContractCostType::VmInstantiation => {
                     mem.const_param = 1100000;
                     mem.lin_param = 0;
                 }
-                CostType::InvokeVmFunction => {
+                ContractCostType::InvokeVmFunction => {
                     mem.const_param = 267;
                     mem.lin_param = 0;
                 }
-                CostType::ChargeBudget => {
+                ContractCostType::ChargeBudget => {
                     mem.const_param = 0;
                     mem.lin_param = 0;
                 }
             }
 
-            // Define what inputs actually mean. For any constant-cost types -- whether it is a
-            // true constant unit cost type, or empirically assigned (via measurement) constant
-            // type -- we leave the input as `None`, otherwise, we initialize the input to 0.
-            let i = *ct as usize;
-            match ct {
-                CostType::WasmInsnExec => (),
-                CostType::WasmMemAlloc => b.tracker[i].1 = Some(0), // number of pages in wasm linear memory to allocate (each page is 64kB)
-                CostType::HostMemAlloc => b.tracker[i].1 = Some(0), // number of bytes in host memory to allocate
-                CostType::HostMemCpy => b.tracker[i].1 = Some(0), // number of bytes in host to copy
-                CostType::HostMemCmp => b.tracker[i].1 = Some(0), // number of bytes in host to compare
-                CostType::InvokeHostFunction => (),
-                CostType::VisitObject => (),
-                CostType::ValXdrConv => (),
-                CostType::ValSer => b.tracker[i].1 = Some(0), // number of bytes in the result buffer
-                CostType::ValDeser => b.tracker[i].1 = Some(0), // number of bytes in the buffer
-                CostType::ComputeSha256Hash => b.tracker[i].1 = Some(0), // number of bytes in the buffer
-                CostType::ComputeEd25519PubKey => (),
-                CostType::MapEntry => (),
-                CostType::VecEntry => (),
-                CostType::GuardFrame => (),
-                CostType::VerifyEd25519Sig => b.tracker[i].1 = Some(0), // length of the signature buffer
-                CostType::VmMemRead => b.tracker[i].1 = Some(0), // number of bytes in the linear memory to read
-                CostType::VmMemWrite => b.tracker[i].1 = Some(0), // number of bytes in the linear memory to write
-                CostType::VmInstantiation => b.tracker[i].1 = Some(0), // length of the wasm bytes
-                CostType::InvokeVmFunction => (),
-                CostType::ChargeBudget => (),
-            }
+            b.init_tracker();
         }
 
         // For the time being we don't have "on chain" cost models
@@ -784,9 +779,6 @@ impl Default for BudgetImpl {
         // 4bn instructions / sec. So about 4000 instructions per usec, or 400k
         // instructions in a 100usec time budget, or about 5479 wasm instructions
         // using the calibration above (73 CPU insns per wasm insn). Very roughly!
-        //
-        // TODO: Set proper limits once all the machinary (including in SDK tests) is in place and models are calibrated.
-        // For now we set a generous but finite limit for DOS prevention.
         b.cpu_insns.reset(40_000_000); // 100x the estimation above which corresponds to 10ms
         b.mem_bytes.reset(0x320_0000); // 50MB of memory
         b

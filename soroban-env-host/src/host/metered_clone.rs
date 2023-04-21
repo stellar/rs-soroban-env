@@ -3,15 +3,15 @@ use std::{mem, rc::Rc};
 use soroban_env_common::xdr::ScUnknownErrorCode;
 
 use crate::{
-    budget::{Budget, CostType},
+    budget::Budget,
     events::{DebugArg, DebugEvent, Event, HostEvent, InternalContractEvent, InternalEvent},
     host::Events,
     host_object::HostObject,
     storage::AccessType,
     xdr::{
         AccountEntry, AccountId, BytesM, ClaimableBalanceEntry, ConfigSettingEntry,
-        ContractCodeEntry, ContractEvent, ContractEventBody, DataEntry, Duration, Hash,
-        LedgerEntryExt, LedgerKeyAccount, LedgerKeyClaimableBalance, LedgerKeyConfigSetting,
+        ContractCodeEntry, ContractCostType, ContractEvent, ContractEventBody, DataEntry, Duration,
+        Hash, LedgerEntryExt, LedgerKeyAccount, LedgerKeyClaimableBalance, LedgerKeyConfigSetting,
         LedgerKeyContractCode, LedgerKeyData, LedgerKeyLiquidityPool, LedgerKeyOffer,
         LedgerKeyTrustLine, LiquidityPoolEntry, OfferEntry, PublicKey, ScAddress, ScBytes,
         ScContractExecutable, ScHostValErrorCode, ScMap, ScMapEntry, ScNonceKey, ScString,
@@ -42,7 +42,7 @@ pub(crate) fn charge_shallow_copy<T: MeteredClone>(
     // means an underestimation of the cost.
     debug_assert!(mem::size_of::<T>() as u64 <= T::DECLARED_SIZE);
     budget.charge(
-        CostType::HostMemCpy,
+        ContractCostType::HostMemCpy,
         Some(n_elts.saturating_mul(T::DECLARED_SIZE)),
     )
 }
@@ -57,7 +57,7 @@ pub(crate) fn charge_heap_alloc<T: MeteredClone>(
     // budget charging.
     debug_assert!(mem::size_of::<T>() as u64 <= T::DECLARED_SIZE);
     budget.charge(
-        CostType::HostMemAlloc,
+        ContractCostType::HostMemAlloc,
         Some(n_elts.saturating_mul(T::DECLARED_SIZE)),
     )
 }

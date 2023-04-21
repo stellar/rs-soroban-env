@@ -3,7 +3,7 @@ use std::rc::Rc;
 use rand::{thread_rng, RngCore};
 use soroban_env_common::{
     xdr::{
-        AccountEntry, AccountId, ContractId, CreateContractArgs, HostFunction,
+        AccountEntry, AccountId, ContractCostType, ContractId, CreateContractArgs, HostFunction,
         InstallContractCodeArgs, LedgerEntry, LedgerEntryData, LedgerKey, PublicKey,
         ScContractExecutable, ScVal, ScVec, Uint256,
     },
@@ -11,7 +11,7 @@ use soroban_env_common::{
 };
 
 use crate::{
-    budget::{Budget, CostType},
+    budget::Budget,
     storage::{test_storage::MockSnapshotSource, Storage},
     xdr, Host, HostError,
 };
@@ -69,7 +69,7 @@ impl Host {
 
     pub(crate) fn enable_model(
         self,
-        ty: CostType,
+        ty: ContractCostType,
         const_cpu: u64,
         lin_cpu: u64,
         const_mem: u64,

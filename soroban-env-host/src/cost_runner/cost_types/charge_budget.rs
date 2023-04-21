@@ -1,14 +1,11 @@
 use std::hint::black_box;
 
-use crate::{
-    budget::{AsBudget, CostType},
-    cost_runner::CostRunner,
-};
+use crate::{budget::AsBudget, cost_runner::CostRunner, xdr::ContractCostType};
 
 pub struct ChargeBudgetRun;
 
 impl CostRunner for ChargeBudgetRun {
-    const COST_TYPE: CostType = CostType::ChargeBudget;
+    const COST_TYPE: ContractCostType = ContractCostType::ChargeBudget;
 
     const RUN_ITERATIONS: u64 = 1000;
 
@@ -19,7 +16,7 @@ impl CostRunner for ChargeBudgetRun {
     fn run_iter(host: &crate::Host, _iter: u64, _sample: u64) {
         black_box(
             host.as_budget()
-                .charge(CostType::WasmInsnExec, None)
+                .charge(ContractCostType::WasmInsnExec, None)
                 .unwrap(),
         );
     }
