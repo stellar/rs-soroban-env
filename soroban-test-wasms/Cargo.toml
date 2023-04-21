@@ -4,4 +4,4 @@ version.workspace = true
 description = "crate full of precompiled test WASM binaries for soroban -- for use in other tests, do not publish"
 edition = "2021"
 publish = false
-rust-version = "1.68"
+rust-version = "1.69"
