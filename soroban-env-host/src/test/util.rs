@@ -81,26 +81,26 @@ impl Host {
                 .borrow_mut()
                 .cpu_insns
                 .get_cost_model_mut(ty)
-                .const_param = const_cpu;
+                .const_term = const_cpu as i32;
             budget
                 .0
                 .borrow_mut()
                 .cpu_insns
                 .get_cost_model_mut(ty)
-                .lin_param = lin_cpu;
+                .linear_term = lin_cpu as i32;
 
             budget
                 .0
                 .borrow_mut()
                 .mem_bytes
                 .get_cost_model_mut(ty)
-                .const_param = const_mem;
+                .const_term = const_mem as i32;
             budget
                 .0
                 .borrow_mut()
                 .mem_bytes
                 .get_cost_model_mut(ty)
-                .lin_param = lin_mem;
+                .linear_term = lin_mem as i32;
         });
         self
     }

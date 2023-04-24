@@ -6,8 +6,8 @@ use std::{
 
 use crate::{
     xdr::{
-        ContractCostParamEntry, ContractCostParams, ContractCostType, ScUnknownErrorCode,
-        ScVmErrorCode,
+        ContractCostParamEntry, ContractCostParams, ContractCostType, ExtensionPoint,
+        ScUnknownErrorCode, ScVmErrorCode,
     },
     Host, HostError,
 };
@@ -33,40 +33,75 @@ use crate::{
 /// The parameters for a `CostModel` are calibrated empirically. See this crate's
 /// benchmarks for more details.
 
-#[derive(Default, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct CostModel {
-    pub(crate) const_param: u64,
-    pub(crate) lin_param: u64,
+// #[derive(Default, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+// pub struct CostModel {
+//     pub(crate) const_param: u64,
+//     pub(crate) lin_param: u64,
+// }
+
+// impl CostModel {
+//     pub fn from_xdr(xdr: &ContractCostParamEntry) -> Self {
+//         CostModel {
+//             const_param: xdr.const_term as u64,
+//             lin_param: xdr.linear_term as u64,
+//         }
+//     }
+
+//     /// Evaluates the linear model `f(input) = const_param + lin_param * Option<input>`.
+//     /// If the input is `None`, then the linear part is ingored, resulting in a constant
+//     /// model.
+//     pub fn evaluate(&self, input: Option<u64>) -> u64 {
+//         match input {
+//             Some(input) => {
+//                 let mut res = self.const_param;
+//                 if self.lin_param != 0 {
+//                     res = res.saturating_add(self.lin_param.saturating_mul(input));
+//                 }
+//                 res
+//             }
+//             None => self.const_param,
+//         }
+//     }
+
+//     #[cfg(test)]
+//     pub fn reset(&mut self) {
+//         self.const_param = 0;
+//         self.lin_param = 0;
+//     }
+// }
+
+pub trait HostCostModel {
+    fn evaluate(&self, input: Option<u64>) -> Result<u64, HostError>;
+
+    #[cfg(test)]
+    fn reset(&mut self);
 }
 
-impl CostModel {
-    pub fn from_xdr(xdr: &ContractCostParamEntry) -> Self {
-        CostModel {
-            const_param: xdr.const_term as u64,
-            lin_param: xdr.linear_term as u64,
+impl HostCostModel for ContractCostParamEntry {
+    fn evaluate(&self, input: Option<u64>) -> Result<u64, HostError> {
+        if self.const_term < 0 || self.linear_term < 0 {
+            // TODO: consider more concrete error code "malformed xdr input"
+            return Err(ScUnknownErrorCode::Xdr.into());
         }
-    }
 
-    /// Evaluates the linear model `f(input) = const_param + lin_param * Option<input>`.
-    /// If the input is `None`, then the linear part is ingored, resulting in a constant
-    /// model.
-    pub fn evaluate(&self, input: Option<u64>) -> u64 {
+        let const_term = i64::from(self.const_term) as u64;
+        let lin_term = i64::from(self.linear_term) as u64;
         match input {
             Some(input) => {
-                let mut res = self.const_param;
-                if self.lin_param != 0 {
-                    res = res.saturating_add(self.lin_param.saturating_mul(input));
+                let mut res = const_term;
+                if self.linear_term != 0 {
+                    res = res.saturating_add(lin_term.saturating_mul(input));
                 }
-                res
+                Ok(res)
             }
-            None => self.const_param,
+            None => Ok(const_term),
         }
     }
 
     #[cfg(test)]
-    pub fn reset(&mut self) {
-        self.const_param = 0;
-        self.lin_param = 0;
+    fn reset(&mut self) {
+        self.const_term = 0;
+        self.linear_term = 0;
     }
 }
 
@@ -79,7 +114,7 @@ pub struct BudgetDimension {
     /// tracked by this dimension (eg. cpu or memory). CostType enum values are
     /// used as indexes into this vector, to make runtime lookups as cheap as
     /// possible.
-    cost_models: Vec<CostModel>,
+    cost_models: Vec<ContractCostParamEntry>,
 
     /// The limit against-which the count is compared to decide if we're
     /// over budget.
@@ -119,33 +154,31 @@ impl BudgetDimension {
             total_count: Default::default(),
         };
         for _ct in ContractCostType::variants() {
-            bd.cost_models.push(CostModel::default());
+            bd.cost_models.push(ContractCostParamEntry {
+                const_term: 0,
+                linear_term: 0,
+                ext: ExtensionPoint::V0,
+            });
             bd.counts.push(0);
         }
         bd
     }
 
-    pub fn from_network_configs(trapcode: ScVmErrorCode, cost_params: &ContractCostParams) -> Self {
-        let mut bd = Self {
+    pub fn from_network_configs(trapcode: ScVmErrorCode, cost_params: ContractCostParams) -> Self {
+        Self {
             trapcode,
-            cost_models: Default::default(),
+            cost_models: cost_params.0.to_vec(),
             limit: Default::default(),
-            counts: Default::default(),
+            counts: vec![0; cost_params.0.len()],
             total_count: Default::default(),
-        };
-
-        for param in cost_params.0.as_vec() {
-            bd.cost_models.push(CostModel::from_xdr(param));
-            bd.counts.push(0);
         }
-        bd
     }
 
-    pub fn get_cost_model(&self, ty: ContractCostType) -> &CostModel {
+    pub fn get_cost_model(&self, ty: ContractCostType) -> &ContractCostParamEntry {
         &self.cost_models[ty as usize]
     }
 
-    pub fn get_cost_model_mut(&mut self, ty: ContractCostType) -> &mut CostModel {
+    pub fn get_cost_model_mut(&mut self, ty: ContractCostType) -> &mut ContractCostParamEntry {
         &mut self.cost_models[ty as usize]
     }
 
@@ -185,7 +218,7 @@ impl BudgetDimension {
         input: Option<u64>,
     ) -> Result<(), HostError> {
         let cm = self.get_cost_model(ty);
-        let amount = cm.evaluate(input).saturating_mul(iterations);
+        let amount = cm.evaluate(input)?.saturating_mul(iterations);
         self.counts[ty as usize] = self.counts[ty as usize].saturating_add(amount);
         self.total_count = self.total_count.saturating_add(amount);
         if self.is_over_budget() {
@@ -220,8 +253,8 @@ impl BudgetImpl {
     fn from_network_configs(
         cpu_limit: u64,
         mem_limit: u64,
-        cpu_cost_params: &ContractCostParams,
-        mem_cost_params: &ContractCostParams,
+        cpu_cost_params: ContractCostParams,
+        mem_cost_params: ContractCostParams,
     ) -> Self {
         let mut b = Self {
             cpu_insns: BudgetDimension::from_network_configs(
@@ -298,10 +331,10 @@ impl Debug for BudgetImpl {
             "input",
             "cpu_insns",
             "mem_bytes",
-            "const_param_cpu",
-            "lin_param_cpu",
-            "const_param_mem",
-            "lin_param_mem",
+            "const_term_cpu",
+            "lin_term_cpu",
+            "const_term_mem",
+            "lin_term_mem",
         )?;
         for ct in ContractCostType::variants() {
             let i = ct as usize;
@@ -313,10 +346,10 @@ impl Debug for BudgetImpl {
                 format!("{:?}", self.tracker[i].1),
                 self.cpu_insns.counts[i],
                 self.mem_bytes.counts[i],
-                self.cpu_insns.cost_models[i].const_param,
-                self.cpu_insns.cost_models[i].lin_param,
-                self.mem_bytes.cost_models[i].const_param,
-                self.mem_bytes.cost_models[i].lin_param,
+                self.cpu_insns.cost_models[i].const_term,
+                self.cpu_insns.cost_models[i].linear_term,
+                self.mem_bytes.cost_models[i].const_term,
+                self.mem_bytes.cost_models[i].linear_term,
             )?;
         }
         writeln!(f, "{:=<165}", "")?;
@@ -394,8 +427,8 @@ impl Budget {
     pub fn from_network_configs(
         cpu_limit: u64,
         mem_limit: u64,
-        cpu_cost_params: &ContractCostParams,
-        mem_cost_params: &ContractCostParams,
+        cpu_cost_params: ContractCostParams,
+        mem_cost_params: ContractCostParams,
     ) -> Self {
         Self(Rc::new(RefCell::new(BudgetImpl::from_network_configs(
             cpu_limit,
@@ -571,6 +604,8 @@ impl Budget {
     }
 }
 
+/// Default settings for local/sandbox testing only. The actual operations will use parameters
+/// read on-chain from network configuration via [`from_network_configs`] above.
 impl Default for BudgetImpl {
     fn default() -> Self {
         let mut b = Self {
@@ -585,91 +620,91 @@ impl Default for BudgetImpl {
             let cpu = &mut b.cpu_insns.get_cost_model_mut(ct);
             match ct {
                 ContractCostType::WasmInsnExec => {
-                    cpu.const_param = 22;
-                    cpu.lin_param = 0;
+                    cpu.const_term = 22;
+                    cpu.linear_term = 0;
                 }
                 ContractCostType::WasmMemAlloc => {
-                    cpu.const_param = 521;
-                    cpu.lin_param = 0;
+                    cpu.const_term = 521;
+                    cpu.linear_term = 0;
                 }
                 ContractCostType::HostMemAlloc => {
-                    cpu.const_param = 883;
-                    cpu.lin_param = 0;
+                    cpu.const_term = 883;
+                    cpu.linear_term = 0;
                 }
                 ContractCostType::HostMemCpy => {
-                    cpu.const_param = 24;
-                    cpu.lin_param = 0;
+                    cpu.const_term = 24;
+                    cpu.linear_term = 0;
                 }
                 ContractCostType::HostMemCmp => {
-                    cpu.const_param = 42;
-                    cpu.lin_param = 1;
+                    cpu.const_term = 42;
+                    cpu.linear_term = 1;
                 }
                 ContractCostType::InvokeHostFunction => {
-                    cpu.const_param = 759;
-                    cpu.lin_param = 0;
+                    cpu.const_term = 759;
+                    cpu.linear_term = 0;
                 }
                 ContractCostType::VisitObject => {
-                    cpu.const_param = 29;
-                    cpu.lin_param = 0;
+                    cpu.const_term = 29;
+                    cpu.linear_term = 0;
                 }
                 ContractCostType::ValXdrConv => {
-                    cpu.const_param = 177;
-                    cpu.lin_param = 0;
+                    cpu.const_term = 177;
+                    cpu.linear_term = 0;
                 }
                 ContractCostType::ValSer => {
-                    cpu.const_param = 741;
-                    cpu.lin_param = 0;
+                    cpu.const_term = 741;
+                    cpu.linear_term = 0;
                 }
                 ContractCostType::ValDeser => {
-                    cpu.const_param = 846;
-                    cpu.lin_param = 0;
+                    cpu.const_term = 846;
+                    cpu.linear_term = 0;
                 }
                 ContractCostType::ComputeSha256Hash => {
-                    cpu.const_param = 1912;
-                    cpu.lin_param = 32;
+                    cpu.const_term = 1912;
+                    cpu.linear_term = 32;
                 }
                 ContractCostType::ComputeEd25519PubKey => {
-                    cpu.const_param = 25766;
-                    cpu.lin_param = 0;
+                    cpu.const_term = 25766;
+                    cpu.linear_term = 0;
                 }
                 ContractCostType::MapEntry => {
-                    cpu.const_param = 59;
-                    cpu.lin_param = 0;
+                    cpu.const_term = 59;
+                    cpu.linear_term = 0;
                 }
                 ContractCostType::VecEntry => {
-                    cpu.const_param = 14;
-                    cpu.lin_param = 0;
+                    cpu.const_term = 14;
+                    cpu.linear_term = 0;
                 }
                 ContractCostType::GuardFrame => {
-                    cpu.const_param = 4512;
-                    cpu.lin_param = 0;
+                    cpu.const_term = 4512;
+                    cpu.linear_term = 0;
                 }
                 ContractCostType::VerifyEd25519Sig => {
-                    cpu.const_param = 368361;
-                    cpu.lin_param = 20;
+                    cpu.const_term = 368361;
+                    cpu.linear_term = 20;
                 }
                 ContractCostType::VmMemRead => {
-                    cpu.const_param = 95;
-                    cpu.lin_param = 0;
+                    cpu.const_term = 95;
+                    cpu.linear_term = 0;
                 }
                 ContractCostType::VmMemWrite => {
-                    cpu.const_param = 97;
-                    cpu.lin_param = 0;
+                    cpu.const_term = 97;
+                    cpu.linear_term = 0;
                 }
                 // This (as well as its mem model params), are not taken from calibration results.
                 // if we want to do that we need more sample contracts of various sizes. Right now
                 // this is just an eye-balled upperbound.
                 ContractCostType::VmInstantiation => {
-                    cpu.const_param = 1_000_000;
-                    cpu.lin_param = 0;
+                    cpu.const_term = 1_000_000;
+                    cpu.linear_term = 0;
                 }
                 ContractCostType::InvokeVmFunction => {
-                    cpu.const_param = 6212;
-                    cpu.lin_param = 0;
+                    cpu.const_term = 6212;
+                    cpu.linear_term = 0;
                 }
                 ContractCostType::ChargeBudget => {
-                    cpu.const_param = 198;
-                    cpu.lin_param = 0;
+                    cpu.const_term = 198;
+                    cpu.linear_term = 0;
                 }
             }
 
@@ -677,91 +712,91 @@ impl Default for BudgetImpl {
             let mem = b.mem_bytes.get_cost_model_mut(ct);
             match ct {
                 ContractCostType::WasmInsnExec => {
-                    mem.const_param = 0;
-                    mem.lin_param = 0;
+                    mem.const_term = 0;
+                    mem.linear_term = 0;
                 }
                 ContractCostType::WasmMemAlloc => {
-                    mem.const_param = 66136;
-                    mem.lin_param = 1;
+                    mem.const_term = 66136;
+                    mem.linear_term = 1;
                 }
                 ContractCostType::HostMemAlloc => {
-                    mem.const_param = 8;
-                    mem.lin_param = 1;
+                    mem.const_term = 8;
+                    mem.linear_term = 1;
                 }
                 ContractCostType::HostMemCpy => {
-                    mem.const_param = 0;
-                    mem.lin_param = 0;
+                    mem.const_term = 0;
+                    mem.linear_term = 0;
                 }
                 ContractCostType::HostMemCmp => {
-                    mem.const_param = 0;
-                    mem.lin_param = 0;
+                    mem.const_term = 0;
+                    mem.linear_term = 0;
                 }
                 ContractCostType::InvokeHostFunction => {
-                    mem.const_param = 0;
-                    mem.lin_param = 0;
+                    mem.const_term = 0;
+                    mem.linear_term = 0;
                 }
                 ContractCostType::VisitObject => {
-                    mem.const_param = 0;
-                    mem.lin_param = 0;
+                    mem.const_term = 0;
+                    mem.linear_term = 0;
                 }
                 ContractCostType::ValXdrConv => {
-                    mem.const_param = 0;
-                    mem.lin_param = 0;
+                    mem.const_term = 0;
+                    mem.linear_term = 0;
                 }
                 ContractCostType::ValSer => {
-                    mem.const_param = 9;
-                    mem.lin_param = 3;
+                    mem.const_term = 9;
+                    mem.linear_term = 3;
                 }
                 ContractCostType::ValDeser => {
-                    mem.const_param = 4;
-                    mem.lin_param = 1;
+                    mem.const_term = 4;
+                    mem.linear_term = 1;
                 }
                 ContractCostType::ComputeSha256Hash => {
-                    mem.const_param = 40;
-                    mem.lin_param = 0;
+                    mem.const_term = 40;
+                    mem.linear_term = 0;
                 }
                 ContractCostType::ComputeEd25519PubKey => {
-                    mem.const_param = 0;
-                    mem.lin_param = 0;
+                    mem.const_term = 0;
+                    mem.linear_term = 0;
                 }
                 ContractCostType::MapEntry => {
-                    mem.const_param = 0;
-                    mem.lin_param = 0;
+                    mem.const_term = 0;
+                    mem.linear_term = 0;
                 }
                 ContractCostType::VecEntry => {
-                    mem.const_param = 0;
-                    mem.lin_param = 0;
+                    mem.const_term = 0;
+                    mem.linear_term = 0;
                 }
                 ContractCostType::GuardFrame => {
-                    mem.const_param = 267;
-                    mem.lin_param = 0;
+                    mem.const_term = 267;
+                    mem.linear_term = 0;
                 }
                 ContractCostType::VerifyEd25519Sig => {
-                    mem.const_param = 0;
-                    mem.lin_param = 0;
+                    mem.const_term = 0;
+                    mem.linear_term = 0;
                 }
                 ContractCostType::VmMemRead => {
-                    mem.const_param = 0;
-                    mem.lin_param = 0;
+                    mem.const_term = 0;
+                    mem.linear_term = 0;
                 }
                 ContractCostType::VmMemWrite => {
-                    mem.const_param = 0;
-                    mem.lin_param = 0;
+                    mem.const_term = 0;
+                    mem.linear_term = 0;
                 }
                 // This (as well as its cpu model params), are not taken from calibration results.
                 // if we want to do that we need more sample contracts of various sizes. Right now
                 // this is just an eye-balled upperbound.
                 ContractCostType::VmInstantiation => {
-                    mem.const_param = 1100000;
-                    mem.lin_param = 0;
+                    mem.const_term = 1100000;
+                    mem.linear_term = 0;
                 }
                 ContractCostType::InvokeVmFunction => {
-                    mem.const_param = 267;
-                    mem.lin_param = 0;
+                    mem.const_term = 267;
+                    mem.linear_term = 0;
                 }
                 ContractCostType::ChargeBudget => {
-                    mem.const_param = 0;
-                    mem.lin_param = 0;
+                    mem.const_term = 0;
+                    mem.linear_term = 0;
                 }
             }
 

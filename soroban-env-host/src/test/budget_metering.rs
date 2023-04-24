@@ -252,7 +252,7 @@ fn total_amount_charged_from_random_inputs() -> Result<(), HostError> {
         Cpu limit: 40000000; used: 8426807
         Mem limit: 52428800; used: 1219916
         =====================================================================================================================================================================
-        CostType                 iterations     input          cpu_insns      mem_bytes      const_param_cpu     lin_param_cpu       const_param_mem     lin_param_mem       
+        CostType                 iterations     input          cpu_insns      mem_bytes      const_term_cpu      lin_term_cpu        const_term_mem      lin_term_mem        
         WasmInsnExec             246            None           5412           0              22                  0                   0                   0                   
         WasmMemAlloc             1              Some(184)      521            66320          521                 0                   66136               1                   
         HostMemAlloc             1              Some(152)      883            160            883                 0                   8                   1                   
