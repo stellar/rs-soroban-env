@@ -184,7 +184,7 @@ impl Host {
         let id_obj: RawVal = self.invoke_functions(vec![HostFunction {
             args: HostFunctionArgs::CreateContract(CreateContractArgs {
                 contract_id: ContractId::SourceAccount(Uint256(generate_bytes_array())),
-                source: ScContractExecutable::WasmRef(wasm_id),
+                executable: ScContractExecutable::WasmRef(wasm_id),
             }),
             auth: Default::default(),
         }])?[0]

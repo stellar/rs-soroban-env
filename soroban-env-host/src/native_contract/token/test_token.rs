@@ -27,7 +27,7 @@ impl<'a> TestToken<'a> {
             .invoke_functions(vec![HostFunction {
                 args: HostFunctionArgs::CreateContract(CreateContractArgs {
                     contract_id: ContractId::Asset(asset),
-                    source: ScContractExecutable::Token,
+                    executable: ScContractExecutable::Token,
                 }),
                 auth: Default::default(),
             }])

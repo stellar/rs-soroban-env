@@ -121,7 +121,7 @@ fn test_create_contract_from_source_account(host: &Host, code: &[u8]) -> Hash {
                     contract_id: ContractId::SourceAccount(Uint256(
                         salt.to_vec().try_into().unwrap(),
                     )),
-                    source: ScContractExecutable::WasmRef(wasm_hash.clone()),
+                    executable: ScContractExecutable::WasmRef(wasm_hash.clone()),
                 }),
                 auth: Default::default(),
             },

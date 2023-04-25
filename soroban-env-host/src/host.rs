@@ -1348,7 +1348,7 @@ impl Host {
             ContractId::SourceAccount(salt) => self.id_preimage_from_source_account(salt)?,
             ContractId::Ed25519PublicKey(key_with_signature) => {
                 let signature_payload_preimage = self.create_contract_args_hash_preimage(
-                    args.source.metered_clone(&self.budget_ref())?,
+                    args.executable.metered_clone(&self.budget_ref())?,
                     key_with_signature.salt.metered_clone(self.budget_ref())?,
                 )?;
                 let signature_payload = self.metered_hash_xdr(&signature_payload_preimage)?;
@@ -1363,7 +1363,7 @@ impl Host {
                 self.id_preimage_from_ed25519(key_with_signature.key, key_with_signature.salt)?
             }
         };
-        self.create_contract_with_id_preimage(args.source, id_preimage)
+        self.create_contract_with_id_preimage(args.executable, id_preimage)
     }
 
     fn install_contract(&self, args: UploadContractWasmArgs) -> Result<BytesObject, HostError> {

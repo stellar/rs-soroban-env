@@ -610,7 +610,7 @@ impl AuthorizationTracker {
             is_invoker,
             nonce,
         })
-    }    
+    }
 
     // Tries to find and enforce the provided invocation with this tracker and
     // lazily performs authentication when needed.
