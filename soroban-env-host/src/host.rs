@@ -3151,8 +3151,8 @@ impl VmCallerEnv for Host {
     fn verify_sig_ed25519(
         &self,
         _vmcaller: &mut VmCaller<Host>,
-        x: BytesObject,
         k: BytesObject,
+        x: BytesObject,
         s: BytesObject,
     ) -> Result<Void, HostError> {
         let public_key = self.ed25519_pub_key_from_bytesobj_input(k)?;
