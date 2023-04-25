@@ -7,12 +7,13 @@ use crate::{
     xdr::{
         self, ContractEvent, ContractEventBody, ContractEventType, ContractEventV0, ContractId,
         CreateContractArgs, ExtensionPoint, Hash, HashIdPreimage, HashIdPreimageContractId,
-        HashIdPreimageSourceAccountContractId, HostFunction, InstallContractCodeArgs,
-        LedgerEntryData, ScContractExecutable, ScSymbol, ScVal, ScVec, Uint256,
+        HashIdPreimageSourceAccountContractId, HostFunction, LedgerEntryData, ScContractExecutable,
+        ScSymbol, ScVal, ScVec, Uint256, UploadContractWasmArgs,
     },
     Env, Host, LedgerInfo, Symbol,
 };
 use sha2::{Digest, Sha256};
+use soroban_env_common::xdr::HostFunctionArgs;
 use soroban_env_common::{xdr::ScBytes, RawVal, TryIntoVal, VecObject};
 use soroban_test_wasms::{ADD_I32, CREATE_CONTRACT, UPDATEABLE_CONTRACT};
 
@@ -83,11 +84,11 @@ fn test_create_contract_from_source_account(host: &Host, code: &[u8]) -> Hash {
 
     let contract_id = sha256_hash_id_preimage(id_pre_image);
 
-    let install_args = xdr::InstallContractCodeArgs {
+    let upload_args = xdr::UploadContractWasmArgs {
         code: code.to_vec().try_into().unwrap(),
     };
 
-    let wasm_hash = sha256_hash_id_preimage(install_args.clone());
+    let wasm_hash = sha256_hash_id_preimage(upload_args.clone());
 
     host.with_mut_storage(|s: &mut Storage| {
         s.footprint
@@ -110,7 +111,10 @@ fn test_create_contract_from_source_account(host: &Host, code: &[u8]) -> Hash {
 
     // Create contract
     let wasm_id: RawVal = host
-        .invoke_function(HostFunction::InstallContractCode(install_args.clone()))
+        .invoke_function(HostFunction {
+            args: HostFunctionArgs::UploadContractWasm(upload_args.clone()),
+            auth: Default::default(),
+        })
         .unwrap()
         .try_into_val(host)
         .unwrap();
@@ -118,10 +122,13 @@ fn test_create_contract_from_source_account(host: &Host, code: &[u8]) -> Hash {
         .hash_from_bytesobj_input("wasm_hash", wasm_id.try_into().unwrap())
         .unwrap();
     let created_id_sc_val = host
-        .invoke_function(HostFunction::CreateContract(CreateContractArgs {
-            contract_id: ContractId::SourceAccount(Uint256(salt.to_vec().try_into().unwrap())),
-            source: ScContractExecutable::WasmRef(wasm_id),
-        }))
+        .invoke_function(HostFunction {
+            args: HostFunctionArgs::CreateContract(CreateContractArgs {
+                contract_id: ContractId::SourceAccount(Uint256(salt.to_vec().try_into().unwrap())),
+                source: ScContractExecutable::WasmRef(wasm_id),
+            }),
+            auth: Default::default(),
+        })
         .unwrap();
 
     assert_eq!(
@@ -153,12 +160,12 @@ fn create_contract_using_parent_id_test() {
 
     let child_id = sha256_hash_id_preimage(child_pre_image);
     let child_wasm: &[u8] = b"70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4";
-    let install_args = xdr::InstallContractCodeArgs {
+    let upload_args = xdr::UploadContractWasmArgs {
         code: child_wasm.to_vec().try_into().unwrap(),
     };
 
     // Install the code for the child contract.
-    let wasm_hash = sha256_hash_id_preimage(install_args.clone());
+    let wasm_hash = sha256_hash_id_preimage(upload_args.clone());
     // Add the contract code and code reference access to the footprint.
     host.with_mut_storage(|s: &mut Storage| {
         s.footprint
@@ -205,9 +212,12 @@ fn create_contract_using_parent_id_test() {
 
     // Install the code of the child contract.
     let wasm_hash_sc_val = host
-        .invoke_function(HostFunction::InstallContractCode(InstallContractCodeArgs {
-            code: child_wasm.try_into().unwrap(),
-        }))
+        .invoke_function(HostFunction {
+            args: HostFunctionArgs::UploadContractWasm(UploadContractWasmArgs {
+                code: child_wasm.try_into().unwrap(),
+            }),
+            auth: Default::default(),
+        })
         .unwrap();
     assert_eq!(
         wasm_hash.as_slice(),
@@ -251,11 +261,14 @@ pub(crate) fn sha256_hash_id_preimage<T: xdr::WriteXdr>(pre_image: T) -> xdr::Ha
 fn test_contract_wasm_update() {
     let host = Host::test_host_with_recording_footprint();
 
-    let old_install_args = xdr::InstallContractCodeArgs {
+    let old_upload_args = xdr::UploadContractWasmArgs {
         code: UPDATEABLE_CONTRACT.to_vec().try_into().unwrap(),
     };
     let old_wasm_hash_obj: RawVal = host
-        .invoke_function(HostFunction::InstallContractCode(old_install_args.clone()))
+        .invoke_function(HostFunction {
+            args: HostFunctionArgs::UploadContractWasm(old_upload_args.clone()),
+            auth: Default::default(),
+        })
         .unwrap()
         .try_into_val(&host)
         .unwrap();
@@ -267,12 +280,15 @@ fn test_contract_wasm_update() {
         .hash_from_bytesobj_input("contract_id", contract_id_obj)
         .unwrap();
     let updated_wasm = ADD_I32;
-    let install_args = xdr::InstallContractCodeArgs {
+    let upload_args = xdr::UploadContractWasmArgs {
         code: updated_wasm.to_vec().try_into().unwrap(),
     };
 
     let updated_wasm_hash_obj: RawVal = host
-        .invoke_function(HostFunction::InstallContractCode(install_args.clone()))
+        .invoke_function(HostFunction {
+            args: HostFunctionArgs::UploadContractWasm(upload_args.clone()),
+            auth: Default::default(),
+        })
         .unwrap()
         .try_into_val(&host)
         .unwrap();
