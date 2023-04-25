@@ -169,27 +169,25 @@ impl Host {
     ) -> Result<BytesObject, HostError> {
         self.set_source_account(generate_account_id());
 
-        let wasm_id: RawVal = self
-            .invoke_function(HostFunction {
-                args: HostFunctionArgs::UploadContractWasm(UploadContractWasmArgs {
-                    code: contract_wasm
-                        .to_vec()
-                        .try_into()
-                        .map_err(|_| self.err_general("too large wasm"))?,
-                }),
-                auth: Default::default(),
-            })?
+        let wasm_id: RawVal = self.invoke_functions(vec![HostFunction {
+            args: HostFunctionArgs::UploadContractWasm(UploadContractWasmArgs {
+                code: contract_wasm
+                    .to_vec()
+                    .try_into()
+                    .map_err(|_| self.err_general("too large wasm"))?,
+            }),
+            auth: Default::default(),
+        }])?[0]
             .try_into_val(self)?;
 
         let wasm_id = self.hash_from_bytesobj_input("wasm_hash", wasm_id.try_into()?)?;
-        let id_obj: RawVal = self
-            .invoke_function(HostFunction {
-                args: HostFunctionArgs::CreateContract(CreateContractArgs {
-                    contract_id: ContractId::SourceAccount(Uint256(generate_bytes_array())),
-                    source: ScContractExecutable::WasmRef(wasm_id),
-                }),
-                auth: Default::default(),
-            })?
+        let id_obj: RawVal = self.invoke_functions(vec![HostFunction {
+            args: HostFunctionArgs::CreateContract(CreateContractArgs {
+                contract_id: ContractId::SourceAccount(Uint256(generate_bytes_array())),
+                source: ScContractExecutable::WasmRef(wasm_id),
+            }),
+            auth: Default::default(),
+        }])?[0]
             .try_into_val(self)?;
         self.remove_source_account();
         Ok(id_obj.try_into()?)

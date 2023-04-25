@@ -24,14 +24,14 @@ pub(crate) struct TestToken<'a> {
 impl<'a> TestToken<'a> {
     pub(crate) fn new_from_asset(host: &'a Host, asset: Asset) -> Self {
         let id_obj: RawVal = host
-            .invoke_function(HostFunction {
+            .invoke_functions(vec![HostFunction {
                 args: HostFunctionArgs::CreateContract(CreateContractArgs {
                     contract_id: ContractId::Asset(asset),
                     source: ScContractExecutable::Token,
                 }),
                 auth: Default::default(),
-            })
-            .unwrap()
+            }])
+            .unwrap()[0]
             .try_into_val(host)
             .unwrap();
         Self {

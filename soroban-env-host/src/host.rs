@@ -1269,10 +1269,17 @@ impl Host {
     }
 
     // Notes on metering: covered by the called components.
-    pub fn invoke_function(&self, hf: HostFunction) -> Result<ScVal, HostError> {
-        self.set_authorization_entries(hf.auth.to_vec())?;
-        let rv = self.invoke_function_raw(hf.args)?;
-        self.from_host_val(rv)
+    pub fn invoke_functions(&self, host_fns: Vec<HostFunction>) -> Result<Vec<ScVal>, HostError> {
+        let is_recording_auth = self.0.authorization_manager.borrow().is_recording();
+        let mut res = vec![];
+        for hf in host_fns {
+            if !is_recording_auth {
+                self.set_authorization_entries(hf.auth.to_vec())?;
+            }
+            let rv = self.invoke_function_raw(hf.args)?;
+            res.push(self.from_host_val(rv)?);
+        }
+        Ok(res)
     }
 
     // "testutils" is not covered by budget metering.

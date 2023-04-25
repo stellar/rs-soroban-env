@@ -48,7 +48,7 @@ fn get_contract_wasm(host: &Host, wasm_hash: Hash) -> Vec<u8> {
     .unwrap()
 }
 
-fn get_bytes_from_sc_val(val: ScVal) -> Vec<u8> {
+fn get_bytes_from_sc_val(val: &ScVal) -> Vec<u8> {
     let ScVal::Bytes(bytes) = val else {
         panic!("Wrong type")
     };
@@ -109,36 +109,38 @@ fn test_create_contract_from_source_account(host: &Host, code: &[u8]) -> Hash {
     })
     .unwrap();
 
-    // Create contract
-    let wasm_id: RawVal = host
-        .invoke_function(HostFunction {
-            args: HostFunctionArgs::UploadContractWasm(upload_args.clone()),
-            auth: Default::default(),
-        })
-        .unwrap()
-        .try_into_val(host)
+    // Upload & create contract
+    let res = host
+        .invoke_functions(vec![
+            HostFunction {
+                args: HostFunctionArgs::UploadContractWasm(upload_args.clone()),
+                auth: Default::default(),
+            },
+            HostFunction {
+                args: HostFunctionArgs::CreateContract(CreateContractArgs {
+                    contract_id: ContractId::SourceAccount(Uint256(
+                        salt.to_vec().try_into().unwrap(),
+                    )),
+                    source: ScContractExecutable::WasmRef(wasm_hash.clone()),
+                }),
+                auth: Default::default(),
+            },
+        ])
         .unwrap();
-    let wasm_id = host
-        .hash_from_bytesobj_input("wasm_hash", wasm_id.try_into().unwrap())
-        .unwrap();
-    let created_id_sc_val = host
-        .invoke_function(HostFunction {
-            args: HostFunctionArgs::CreateContract(CreateContractArgs {
-                contract_id: ContractId::SourceAccount(Uint256(salt.to_vec().try_into().unwrap())),
-                source: ScContractExecutable::WasmRef(wasm_id),
-            }),
-            auth: Default::default(),
-        })
-        .unwrap();
-
+    assert_eq!(res.len(), 2);
     assert_eq!(
-        contract_id.as_slice(),
-        get_bytes_from_sc_val(created_id_sc_val).as_slice()
+        wasm_hash.as_slice(),
+        get_bytes_from_sc_val(&res[0]).as_slice()
     );
     assert_eq!(
         wasm_hash.as_slice(),
         get_contract_wasm_ref(&host, contract_id.clone()).as_slice()
     );
+    assert_eq!(
+        contract_id.as_slice(),
+        get_bytes_from_sc_val(&res[1]).as_slice()
+    );
+
     assert_eq!(code, get_contract_wasm(&host, wasm_hash));
 
     contract_id
@@ -212,16 +214,17 @@ fn create_contract_using_parent_id_test() {
 
     // Install the code of the child contract.
     let wasm_hash_sc_val = host
-        .invoke_function(HostFunction {
+        .invoke_functions(vec![HostFunction {
             args: HostFunctionArgs::UploadContractWasm(UploadContractWasmArgs {
                 code: child_wasm.try_into().unwrap(),
             }),
             auth: Default::default(),
-        })
-        .unwrap();
+        }])
+        .unwrap()[0]
+        .clone();
     assert_eq!(
         wasm_hash.as_slice(),
-        get_bytes_from_sc_val(wasm_hash_sc_val).as_slice()
+        get_bytes_from_sc_val(&wasm_hash_sc_val).as_slice()
     );
     assert_eq!(child_wasm, get_contract_wasm(&host, wasm_hash.clone()));
 
@@ -265,11 +268,11 @@ fn test_contract_wasm_update() {
         code: UPDATEABLE_CONTRACT.to_vec().try_into().unwrap(),
     };
     let old_wasm_hash_obj: RawVal = host
-        .invoke_function(HostFunction {
+        .invoke_functions(vec![HostFunction {
             args: HostFunctionArgs::UploadContractWasm(old_upload_args.clone()),
             auth: Default::default(),
-        })
-        .unwrap()
+        }])
+        .unwrap()[0]
         .try_into_val(&host)
         .unwrap();
 
@@ -285,11 +288,11 @@ fn test_contract_wasm_update() {
     };
 
     let updated_wasm_hash_obj: RawVal = host
-        .invoke_function(HostFunction {
+        .invoke_functions(vec![HostFunction {
             args: HostFunctionArgs::UploadContractWasm(upload_args.clone()),
             auth: Default::default(),
-        })
-        .unwrap()
+        }])
+        .unwrap()[0]
         .try_into_val(&host)
         .unwrap();
     let res: i32 = host
