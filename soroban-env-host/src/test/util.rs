@@ -4,8 +4,8 @@ use rand::{thread_rng, RngCore};
 use soroban_env_common::{
     xdr::{
         AccountEntry, AccountId, ContractCostType, ContractId, CreateContractArgs, HostFunction,
-        HostFunctionArgs, InstallContractCodeArgs, LedgerEntry, LedgerEntryData, LedgerKey,
-        PublicKey, ScContractExecutable, ScVal, ScVec, Uint256, UploadContractWasmArgs,
+        HostFunctionArgs, LedgerEntry, LedgerEntryData, LedgerKey, PublicKey, ScContractExecutable,
+        ScVal, ScVec, Uint256, UploadContractWasmArgs,
     },
     BytesObject, RawVal, TryIntoVal, VecObject,
 };
