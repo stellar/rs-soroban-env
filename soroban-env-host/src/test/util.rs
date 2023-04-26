@@ -3,9 +3,9 @@ use std::rc::Rc;
 use rand::{thread_rng, RngCore};
 use soroban_env_common::{
     xdr::{
-        AccountEntry, AccountId, ContractId, CreateContractArgs, HostFunction,
-        InstallContractCodeArgs, LedgerEntry, LedgerEntryData, LedgerKey, PublicKey,
-        ScContractExecutable, ScVal, ScVec, Uint256,
+        AccountEntry, AccountId, ContractId, CreateContractArgs, HostFunction, HostFunctionArgs,
+        LedgerEntry, LedgerEntryData, LedgerKey, PublicKey, ScContractExecutable, ScVal, ScVec,
+        Uint256, UploadContractWasmArgs,
     },
     BytesObject, RawVal, TryIntoVal, VecObject,
 };
@@ -168,20 +168,26 @@ impl Host {
         contract_wasm: &[u8],
     ) -> Result<BytesObject, HostError> {
         self.set_source_account(generate_account_id());
-        let wasm_id: RawVal = self
-            .invoke_function(HostFunction::InstallContractCode(InstallContractCodeArgs {
+
+        let wasm_id: RawVal = self.invoke_functions(vec![HostFunction {
+            args: HostFunctionArgs::UploadContractWasm(UploadContractWasmArgs {
                 code: contract_wasm
                     .to_vec()
                     .try_into()
                     .map_err(|_| self.err_general("too large wasm"))?,
-            }))?
+            }),
+            auth: Default::default(),
+        }])?[0]
             .try_into_val(self)?;
+
         let wasm_id = self.hash_from_bytesobj_input("wasm_hash", wasm_id.try_into()?)?;
-        let id_obj: RawVal = self
-            .invoke_function(HostFunction::CreateContract(CreateContractArgs {
+        let id_obj: RawVal = self.invoke_functions(vec![HostFunction {
+            args: HostFunctionArgs::CreateContract(CreateContractArgs {
                 contract_id: ContractId::SourceAccount(Uint256(generate_bytes_array())),
-                source: ScContractExecutable::WasmRef(wasm_id),
-            }))?
+                executable: ScContractExecutable::WasmRef(wasm_id),
+            }),
+            auth: Default::default(),
+        }])?[0]
             .try_into_val(self)?;
         self.remove_source_account();
         Ok(id_obj.try_into()?)

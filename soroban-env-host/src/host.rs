@@ -11,11 +11,11 @@ use soroban_env_common::{
     xdr::{
         int128_helpers, AccountId, Asset, ContractCodeEntry, ContractDataEntry, ContractEventType,
         ContractId, CreateContractArgs, ExtensionPoint, Hash, HashIdPreimage, HostFunction,
-        HostFunctionType, InstallContractCodeArgs, Int128Parts, Int256Parts, LedgerEntryData,
-        LedgerKey, LedgerKeyContractCode, PublicKey, ScAddress, ScBytes, ScContractExecutable,
+        HostFunctionArgs, HostFunctionType, Int128Parts, Int256Parts, LedgerEntryData, LedgerKey,
+        LedgerKeyContractCode, PublicKey, ScAddress, ScBytes, ScContractExecutable,
         ScHostContextErrorCode, ScHostFnErrorCode, ScHostObjErrorCode, ScHostStorageErrorCode,
         ScHostValErrorCode, ScMap, ScMapEntry, ScStatusType, ScString, ScSymbol,
-        ScUnknownErrorCode, ScVal, ScVec, UInt128Parts, UInt256Parts,
+        ScUnknownErrorCode, ScVal, ScVec, UInt128Parts, UInt256Parts, UploadContractWasmArgs,
     },
     AddressObject, Bool, BytesObject, Convert, I128Object, I256Object, I64Object, MapObject,
     ScValObjRef, ScValObject, Status, StringObject, SymbolObject, SymbolSmall, TryFromVal,
@@ -364,7 +364,7 @@ impl Host {
             AuthorizationManager::new_recording(self.budget_cloned());
     }
 
-    pub fn set_authorization_entries(
+    pub(crate) fn set_authorization_entries(
         &self,
         auth_entries: Vec<soroban_env_common::xdr::ContractAuth>,
     ) -> Result<(), HostError> {
@@ -1233,11 +1233,11 @@ impl Host {
     }
 
     // Notes on metering: covered by the called components.
-    fn invoke_function_raw(&self, hf: HostFunction) -> Result<RawVal, HostError> {
+    fn invoke_function_raw(&self, hf: HostFunctionArgs) -> Result<RawVal, HostError> {
         let hf_type = hf.discriminant();
         //TODO: should the create_* methods below return a RawVal instead of Object to avoid this conversion?
         match hf {
-            HostFunction::InvokeContract(args) => {
+            HostFunctionArgs::InvokeContract(args) => {
                 if let [ScVal::Bytes(scbytes), ScVal::Symbol(scsym), rest @ ..] = args.as_slice() {
                     self.with_frame(Frame::HostFunction(hf_type), || {
                         // Metering: conversions to host objects are covered. Cost of collecting
@@ -1257,11 +1257,11 @@ impl Host {
                     ))
                 }
             }
-            HostFunction::CreateContract(args) => self
+            HostFunctionArgs::CreateContract(args) => self
                 .with_frame(Frame::HostFunction(hf_type), || {
                     self.create_contract(args).map(|obj| <RawVal>::from(obj))
                 }),
-            HostFunction::InstallContractCode(args) => self
+            HostFunctionArgs::UploadContractWasm(args) => self
                 .with_frame(Frame::HostFunction(hf_type), || {
                     self.install_contract(args).map(|obj| <RawVal>::from(obj))
                 }),
@@ -1269,9 +1269,17 @@ impl Host {
     }
 
     // Notes on metering: covered by the called components.
-    pub fn invoke_function(&self, hf: HostFunction) -> Result<ScVal, HostError> {
-        let rv = self.invoke_function_raw(hf)?;
-        self.from_host_val(rv)
+    pub fn invoke_functions(&self, host_fns: Vec<HostFunction>) -> Result<Vec<ScVal>, HostError> {
+        let is_recording_auth = self.0.authorization_manager.borrow().is_recording();
+        let mut res = vec![];
+        for hf in host_fns {
+            if !is_recording_auth {
+                self.set_authorization_entries(hf.auth.to_vec())?;
+            }
+            let rv = self.invoke_function_raw(hf.args)?;
+            res.push(self.from_host_val(rv)?);
+        }
+        Ok(res)
     }
 
     // "testutils" is not covered by budget metering.
@@ -1340,7 +1348,7 @@ impl Host {
             ContractId::SourceAccount(salt) => self.id_preimage_from_source_account(salt)?,
             ContractId::Ed25519PublicKey(key_with_signature) => {
                 let signature_payload_preimage = self.create_contract_args_hash_preimage(
-                    args.source.metered_clone(&self.budget_ref())?,
+                    args.executable.metered_clone(&self.budget_ref())?,
                     key_with_signature.salt.metered_clone(self.budget_ref())?,
                 )?;
                 let signature_payload = self.metered_hash_xdr(&signature_payload_preimage)?;
@@ -1355,10 +1363,10 @@ impl Host {
                 self.id_preimage_from_ed25519(key_with_signature.key, key_with_signature.salt)?
             }
         };
-        self.create_contract_with_id_preimage(args.source, id_preimage)
+        self.create_contract_with_id_preimage(args.executable, id_preimage)
     }
 
-    fn install_contract(&self, args: InstallContractCodeArgs) -> Result<BytesObject, HostError> {
+    fn install_contract(&self, args: UploadContractWasmArgs) -> Result<BytesObject, HostError> {
         let hash_bytes = self.metered_hash_xdr(&args)?;
         let hash_obj = self.add_host_object(self.scbytes_from_hash(&Hash(hash_bytes))?)?;
         let code_key = Rc::new(LedgerKey::ContractCode(LedgerKeyContractCode {
