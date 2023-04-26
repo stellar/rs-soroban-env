@@ -32,44 +32,6 @@ use crate::{
 ///
 /// The parameters for a `CostModel` are calibrated empirically. See this crate's
 /// benchmarks for more details.
-
-// #[derive(Default, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-// pub struct CostModel {
-//     pub(crate) const_param: u64,
-//     pub(crate) lin_param: u64,
-// }
-
-// impl CostModel {
-//     pub fn from_xdr(xdr: &ContractCostParamEntry) -> Self {
-//         CostModel {
-//             const_param: xdr.const_term as u64,
-//             lin_param: xdr.linear_term as u64,
-//         }
-//     }
-
-//     /// Evaluates the linear model `f(input) = const_param + lin_param * Option<input>`.
-//     /// If the input is `None`, then the linear part is ingored, resulting in a constant
-//     /// model.
-//     pub fn evaluate(&self, input: Option<u64>) -> u64 {
-//         match input {
-//             Some(input) => {
-//                 let mut res = self.const_param;
-//                 if self.lin_param != 0 {
-//                     res = res.saturating_add(self.lin_param.saturating_mul(input));
-//                 }
-//                 res
-//             }
-//             None => self.const_param,
-//         }
-//     }
-
-//     #[cfg(test)]
-//     pub fn reset(&mut self) {
-//         self.const_param = 0;
-//         self.lin_param = 0;
-//     }
-// }
-
 pub trait HostCostModel {
     fn evaluate(&self, input: Option<u64>) -> Result<u64, HostError>;
 
