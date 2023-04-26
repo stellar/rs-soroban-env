@@ -44,7 +44,7 @@ fn ed25519_verify_test() -> Result<(), HostError> {
     let obj_msg = host.test_bin_obj(&msg_bytes)?;
     let obj_sig = host.test_bin_obj(&sig_bytes)?;
 
-    let res = host.verify_sig_ed25519(obj_msg, obj_pub, obj_sig);
+    let res = host.verify_sig_ed25519(obj_pub, obj_msg, obj_sig);
 
     res.expect("verification failed");
 
@@ -53,7 +53,7 @@ fn ed25519_verify_test() -> Result<(), HostError> {
     let msg_bytes2: Vec<u8> = FromHex::from_hex(message2).unwrap();
     let obj_msg2 = host.test_bin_obj(&msg_bytes2)?;
 
-    let res_failed = host.verify_sig_ed25519(obj_msg2, obj_pub, obj_sig);
+    let res_failed = host.verify_sig_ed25519(obj_pub, obj_msg2, obj_sig);
 
     match res_failed {
         Ok(_) => panic!("verification test failed"),
