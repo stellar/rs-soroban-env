@@ -7,7 +7,9 @@ use crate::{
     Host, HostError,
 };
 use soroban_env_common::{
-    xdr::{Asset, ContractId, CreateContractArgs, HostFunction, ScContractExecutable},
+    xdr::{
+        Asset, ContractId, CreateContractArgs, HostFunction, HostFunctionArgs, ScContractExecutable,
+    },
     Env, RawVal,
 };
 use soroban_env_common::{Symbol, TryFromVal, TryIntoVal};
@@ -22,11 +24,14 @@ pub(crate) struct TestToken<'a> {
 impl<'a> TestToken<'a> {
     pub(crate) fn new_from_asset(host: &'a Host, asset: Asset) -> Self {
         let id_obj: RawVal = host
-            .invoke_function(HostFunction::CreateContract(CreateContractArgs {
-                contract_id: ContractId::Asset(asset),
-                source: ScContractExecutable::Token,
-            }))
-            .unwrap()
+            .invoke_functions(vec![HostFunction {
+                args: HostFunctionArgs::CreateContract(CreateContractArgs {
+                    contract_id: ContractId::Asset(asset),
+                    executable: ScContractExecutable::Token,
+                }),
+                auth: Default::default(),
+            }])
+            .unwrap()[0]
             .try_into_val(host)
             .unwrap();
         Self {

@@ -274,6 +274,10 @@ impl AuthorizationManager {
         }
     }
 
+    pub(crate) fn is_recording(&self) -> bool {
+        matches!(self.mode, AuthorizationMode::Recording(_))
+    }
+
     // Require the `address` to have authorized the current contract invocation
     // with provided args and within the current context (i.e. the current
     // authorized call stack and for the current network).

@@ -165,14 +165,14 @@ impl Host {
     // metering: covered by components
     pub fn create_contract_args_hash_preimage(
         &self,
-        source: ScContractExecutable,
+        executable: ScContractExecutable,
         salt: Uint256,
     ) -> Result<HashIdPreimage, HostError> {
         Ok(HashIdPreimage::CreateContractArgs(
             HashIdPreimageCreateContractArgs {
                 network_id: self
                     .hash_from_bytesobj_input("network_id", self.get_ledger_network_id()?)?,
-                source,
+                executable,
                 salt,
             },
         ))

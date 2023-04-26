@@ -144,8 +144,8 @@ pub(crate) fn check_account_authentication(
         }
 
         host.verify_sig_ed25519(
-            payload_obj.clone(),
             sig.public_key.clone().into(),
+            payload_obj.clone(),
             sig.signature.into(),
         )?;
 
