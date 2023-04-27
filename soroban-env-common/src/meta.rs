@@ -6,7 +6,7 @@
 //! due to a runtime host function signature mismatch.
 
 // Currently the only constant is `INTERFACE_VERSION` which is a u64 with a low
-// and high component. The low component is a pre-release verison which should
+// and high component. The low component is a pre-release version which should
 // be zero any time you make a real release, and the high component is the
 // ledger version / protocol version (the two terms are used interchangably in
 // the stellar codebase), which should both match the major release version of
