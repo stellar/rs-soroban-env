@@ -365,7 +365,7 @@ impl Host {
             AuthorizationManager::new_recording(self.budget_cloned());
     }
 
-    pub(crate) fn set_authorization_entries(
+    pub fn set_authorization_entries(
         &self,
         auth_entries: Vec<soroban_env_common::xdr::ContractAuth>,
     ) -> Result<(), HostError> {
