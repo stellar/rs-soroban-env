@@ -5,58 +5,52 @@
 //! [Env](crate::Env) interface provided by the host, rather than a cryptic failure
 //! due to a runtime host function signature mismatch.
 
-// There are two different notions of versioning in this system:
+// Currently the only constant is `INTERFACE_VERSION` which is a u64 with a low
+// and high component. The low component is a pre-release verison which should
+// be zero any time you make a real release, and the high component is the
+// ledger version / protocol version (the two terms are used interchangably in
+// the stellar codebase), which should both match the major release version of
+// soroban and the major release version of stellar-core that it's embedded
+// within.
 //
-//   1. Interface versioning
-//   2. Implementation versioning
+// Protocol numbers will be checked for ordered compatibility (a host will only
+// run protocols it's at least as new as) whereas pre-release numbers will be
+// checked for _exact_ identity. Any pre-release number is considered
+// incompatible with every other pre-release number, requires recompiling
+// contracts.
 //
-// Interface versioning controls the willingness of a host to _try_ to run a
-// _new_ transaction against some contract. For this, a contract embeds an
-// interface version number _inside itself_ and the host inspects it before
-// starting the contract. If the contract's interface version is outside the
-// supported range for a host, the host will fail the transaction with a useful
-// error rather than an inscrutable misbehaviour (link error, data corruption,
-// etc.) during execution.
+// Any change to the logical interface of a released version of soroban (with a
+// nonzero major version):
 //
-// At present the supported interface-version range is always just a single
-// point, and it is hard-wired into the host (in
-// `soroban_env_host::vm::check_meta_section`) as a comparison against the
-// current [`meta::INTERFACE_VERSION`] declared by the macro below. Every time
-// this declaration changes, the host compiled with it implicitly drops support
-// for old contracts compiled against the old version number; this is due to us
-// existing in a "pre-API-stability" development regime, where every change
-// is a compatibility break.
+//   - Must be accompanied by a protocol-number increment, so the network
+//     switches behaviour in consensus, and can gate backward-compatibility code
+//     on protocol transitions during replay.
 //
-//  In the future when we commit to API stability two things will change:
+//   - Should in most cases made in a way that's backward compatible with old
+//     versions, so that an old contract can continue to run on a new host.
+//     Exceptions can be made for intentional breakage such as deprecating bad
+//     functionality or insecure functions, but keep in mind any code that was
+//     exercised in a recorded transaction _must_ stay around at least gated by
+//     protocol so it can replay correctly.
 //
-//   1. The value will stop being hard-wired; it will change based on the
-//      current ledger, as a config value that varies over time based on
-//      consensus.
-//
-//   2. It will (mostly) have a fixed lower bound and only ever have its upper
-//      bound expand, since that is what "API stability" means: old code still
-//      runs on new hosts. The "mostly" qualifier here covers the case where we
-//      have to reset the lower bound to expire old APIs (used by old contracts)
-//      if they prove to be a security risk; this will only happen in extreme
-//      cases, hopefully never.
-//
-// Implementation versioning is different, and has more to do with ensuring that
-// all validators that _do_ decide to execute a transaction -- whether new _or
-// old_ -- execute it on an observably-identical software version, such that an
-// arbitrarily subtle dependency on implementation quirks does not cause any
-// bit-level divergence in the transaction results. Implementation versioning is
-// done in stellar-core itself, by maintaining multiple versions of the host
-// crate: strictly identical versions for new transactions entering the network,
-// and observably-identical ones for replay of historical transactions (with a
-// policy to allow expiring old versions that differ only in ways no
-// transactions in the public network history actually observe). Implementation
-// versioning will also be done by storing a version on-chain that changes by
-// consensus, but the host implementation version number is _not_ compiled into
-// a contract, since the same contract will be expected to run against multliple
-// implementations over a long period of time.
+// When a release goes out, it should have pre-release version zero. During
+// development of a new release, or before the initial release of soroban, a
+// nonzero pre-release number can be used to force recompiles on interface
+// changes.
 
 pub const ENV_META_V0_SECTION_NAME: &'static str = "contractenvmetav0";
 
 soroban_env_macros::generate_env_meta_consts!(
-    interface_version: 36,
+    ledger_protocol_version: 20,
+    pre_release_version: 37,
 );
+
+pub fn get_ledger_protocol_version(interface_version: u64) -> u32 {
+    // The ledger protocol version is the high 32 bits of INTERFACE_VERSION
+    (interface_version >> 32) as u32
+}
+
+pub fn get_pre_release_version(interface_version: u64) -> u32 {
+    // The protocol version is the low 32 bits of INTERFACE_VERSION
+    interface_version as u32
+}
