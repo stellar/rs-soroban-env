@@ -51,6 +51,6 @@ pub fn get_ledger_protocol_version(interface_version: u64) -> u32 {
 }
 
 pub fn get_pre_release_version(interface_version: u64) -> u32 {
-    // The protocol version is the low 32 bits of INTERFACE_VERSION
+    // The pre-release version is the low 32 bits of INTERFACE_VERSION
     interface_version as u32
 }
