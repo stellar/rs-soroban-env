@@ -1,11 +1,11 @@
 use std::hint::black_box;
 
-use crate::{budget::CostType, cost_runner::CostRunner};
+use crate::{cost_runner::CostRunner, xdr::ContractCostType};
 
 pub struct ComputeSha256HashRun;
 
 impl CostRunner for ComputeSha256HashRun {
-    const COST_TYPE: CostType = CostType::ComputeSha256Hash;
+    const COST_TYPE: ContractCostType = ContractCostType::ComputeSha256Hash;
 
     type SampleType = Vec<u8>;
 

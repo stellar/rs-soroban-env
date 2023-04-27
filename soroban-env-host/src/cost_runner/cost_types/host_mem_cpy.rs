@@ -1,11 +1,11 @@
 use std::hint::black_box;
 
-use crate::{budget::CostType, cost_runner::CostRunner};
+use crate::{cost_runner::CostRunner, xdr::ContractCostType};
 
 pub struct HostMemCpyRun;
 
 impl CostRunner for HostMemCpyRun {
-    const COST_TYPE: CostType = CostType::HostMemCpy;
+    const COST_TYPE: ContractCostType = ContractCostType::HostMemCpy;
 
     type SampleType = (Vec<u8>, Vec<u8>);
 

@@ -1,4 +1,4 @@
-use crate::{budget::CostType, cost_runner::CostRunner, xdr::Hash, Vm};
+use crate::{cost_runner::CostRunner, xdr::ContractCostType, xdr::Hash, Vm};
 use std::{hint::black_box, rc::Rc};
 
 pub struct VmInstantiationRun;
@@ -10,7 +10,7 @@ pub struct VmInstantiationSample {
 }
 
 impl CostRunner for VmInstantiationRun {
-    const COST_TYPE: CostType = CostType::VmInstantiation;
+    const COST_TYPE: ContractCostType = ContractCostType::VmInstantiation;
 
     const RUN_ITERATIONS: u64 = 10;
 
@@ -41,7 +41,7 @@ pub struct VmMemRunSample {
 
 pub struct VmMemReadRun;
 impl CostRunner for VmMemReadRun {
-    const COST_TYPE: CostType = CostType::VmMemRead;
+    const COST_TYPE: ContractCostType = ContractCostType::VmMemRead;
 
     type SampleType = VmMemRunSample;
 
@@ -71,7 +71,7 @@ impl CostRunner for VmMemReadRun {
 
 pub struct VmMemWriteRun;
 impl CostRunner for VmMemWriteRun {
-    const COST_TYPE: CostType = CostType::VmMemWrite;
+    const COST_TYPE: ContractCostType = ContractCostType::VmMemWrite;
 
     type SampleType = VmMemRunSample;
 
