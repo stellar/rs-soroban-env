@@ -93,7 +93,6 @@ pub struct VmFunction {
 
 impl Vm {
     fn check_meta_section(host: &Host, m: &Module) -> Result<(), HostError> {
-
         // We check that the interface version number has the same pre-release number as
         // us as well as a protocol that's less than or equal to our protocol.
 
