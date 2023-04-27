@@ -9,13 +9,14 @@ use std::rc::Rc;
 use soroban_env_common::{
     num::{i256_from_pieces, i256_into_pieces, u256_from_pieces, u256_into_pieces},
     xdr::{
-        int128_helpers, AccountId, Asset, ContractCodeEntry, ContractDataEntry, ContractEventType,
-        ContractId, CreateContractArgs, ExtensionPoint, Hash, HashIdPreimage, HostFunction,
-        HostFunctionArgs, HostFunctionType, Int128Parts, Int256Parts, LedgerEntryData, LedgerKey,
-        LedgerKeyContractCode, PublicKey, ScAddress, ScBytes, ScContractExecutable,
-        ScHostContextErrorCode, ScHostFnErrorCode, ScHostObjErrorCode, ScHostStorageErrorCode,
-        ScHostValErrorCode, ScMap, ScMapEntry, ScStatusType, ScString, ScSymbol,
-        ScUnknownErrorCode, ScVal, ScVec, UInt128Parts, UInt256Parts, UploadContractWasmArgs,
+        int128_helpers, AccountId, Asset, ContractCodeEntry, ContractCostType, ContractDataEntry,
+        ContractEventType, ContractId, CreateContractArgs, ExtensionPoint, Hash, HashIdPreimage,
+        HostFunction, HostFunctionArgs, HostFunctionType, Int128Parts, Int256Parts,
+        LedgerEntryData, LedgerKey, LedgerKeyContractCode, PublicKey, ScAddress, ScBytes,
+        ScContractExecutable, ScHostContextErrorCode, ScHostFnErrorCode, ScHostObjErrorCode,
+        ScHostStorageErrorCode, ScHostValErrorCode, ScMap, ScMapEntry, ScStatusType, ScString,
+        ScSymbol, ScUnknownErrorCode, ScVal, ScVec, UInt128Parts, UInt256Parts,
+        UploadContractWasmArgs,
     },
     AddressObject, Bool, BytesObject, Convert, I128Object, I256Object, I64Object, MapObject,
     ScValObjRef, ScValObject, Status, StringObject, SymbolObject, SymbolSmall, TryFromVal,
@@ -29,7 +30,7 @@ use crate::events::{
 };
 use crate::storage::{Storage, StorageMap};
 use crate::{
-    budget::{AsBudget, Budget, CostType},
+    budget::{AsBudget, Budget},
     storage::{TempStorage, TempStorageMap},
 };
 
@@ -281,7 +282,7 @@ impl Host {
             AuthorizationManager::new_recording(self.budget_cloned());
     }
 
-    pub(crate) fn set_authorization_entries(
+    pub fn set_authorization_entries(
         &self,
         auth_entries: Vec<soroban_env_common::xdr::ContractAuth>,
     ) -> Result<(), HostError> {
@@ -332,7 +333,7 @@ impl Host {
         self.0.budget.clone()
     }
 
-    pub fn charge_budget(&self, ty: CostType, input: Option<u64>) -> Result<(), HostError> {
+    pub fn charge_budget(&self, ty: ContractCostType, input: Option<u64>) -> Result<(), HostError> {
         self.0.budget.clone().charge(ty, input)
     }
 
@@ -531,7 +532,7 @@ impl Host {
     where
         F: FnOnce() -> Result<RawVal, HostError>,
     {
-        self.charge_budget(CostType::GuardFrame, None)?;
+        self.charge_budget(ContractCostType::GuardFrame, None)?;
         let start_depth = self.0.context.borrow().len();
         let rp = self.push_frame(frame)?;
         let res = f();
@@ -647,7 +648,7 @@ impl Host {
     where
         F: FnOnce(Option<&HostObject>) -> Result<U, HostError>,
     {
-        self.charge_budget(CostType::VisitObject, None)?;
+        self.charge_budget(ContractCostType::VisitObject, None)?;
         let r = self.0.objects.borrow();
         let obj: Object = obj.into();
         let handle: u32 = obj.get_handle();
@@ -691,14 +692,14 @@ impl Host {
         // translates a u64 into another form defined by the xdr.
         // For an `Object`, the actual structural conversion (such as byte
         // cloning) occurs in `from_host_obj` and is metered there.
-        self.charge_budget(CostType::ValXdrConv, None)?;
+        self.charge_budget(ContractCostType::ValXdrConv, None)?;
         ScVal::try_from_val(self, &val)
             .map_err(|_| self.err_status(ScHostValErrorCode::UnknownError))
     }
 
     pub(crate) fn to_host_val(&self, v: &ScVal) -> Result<RawVal, HostError> {
         // `ValXdrConv` is const cost in both cpu and mem. The input=0 will be ignored.
-        self.charge_budget(CostType::ValXdrConv, None)?;
+        self.charge_budget(ContractCostType::ValXdrConv, None)?;
         v.try_into_val(self)
             .map_err(|_| self.err_status(ScHostValErrorCode::UnknownError))
     }
@@ -711,7 +712,7 @@ impl Host {
                 // work such as byte cloning, has to be accounted for and
                 // metered in indivial match arms.
                 // `ValXdrConv` is const cost in both cpu and mem. The input=0 will be ignored.
-                self.charge_budget(CostType::ValXdrConv, None)?;
+                self.charge_budget(ContractCostType::ValXdrConv, None)?;
                 let val = match ob {
                     None => {
                         return Err(self.err_status(ScHostObjErrorCode::UnknownReference));
@@ -797,7 +798,7 @@ impl Host {
 
     pub(crate) fn to_host_obj<'a>(&self, ob: &ScValObjRef<'a>) -> Result<Object, HostError> {
         // `ValXdrConv` is const cost in both cpu and mem. The input=0 will be ignored.
-        self.charge_budget(CostType::ValXdrConv, None)?;
+        self.charge_budget(ContractCostType::ValXdrConv, None)?;
         let val: &ScVal = (*ob).into();
         match val {
             ScVal::Vec(Some(v)) => {
@@ -1318,7 +1319,10 @@ impl Host {
         sig: &ed25519_dalek::Signature,
     ) -> Result<(), HostError> {
         use ed25519_dalek::Verifier;
-        self.charge_budget(CostType::VerifyEd25519Sig, Some(payload.len() as u64))?;
+        self.charge_budget(
+            ContractCostType::VerifyEd25519Sig,
+            Some(payload.len() as u64),
+        )?;
         public_key
             .verify(payload, &sig)
             .map_err(|_| self.err_general("Failed ED25519 verification"))
@@ -2119,7 +2123,7 @@ impl VmCallerEnv for Host {
                 keys_pos,
                 len as usize,
                 |n, slice| {
-                    self.charge_budget(CostType::VmMemRead, Some(slice.len() as u64))?;
+                    self.charge_budget(ContractCostType::VmMemRead, Some(slice.len() as u64))?;
                     let scsym = ScSymbol(slice.try_into()?);
                     let sym = Symbol::try_from(self.to_host_val(&ScVal::Symbol(scsym))?)?;
                     key_syms.push(sym);

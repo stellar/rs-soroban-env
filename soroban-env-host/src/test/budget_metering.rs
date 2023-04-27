@@ -1,7 +1,7 @@
 use crate::{
-    budget::{AsBudget, CostType},
+    budget::AsBudget,
     host::metered_clone::MeteredClone,
-    xdr::{ScMap, ScMapEntry, ScVal, ScVmErrorCode},
+    xdr::{ContractCostType, ScMap, ScMapEntry, ScVal, ScVmErrorCode},
     Env, Host, HostError, RawVal, Symbol,
 };
 use expect_test::{self, expect};
@@ -11,7 +11,7 @@ use soroban_test_wasms::VEC;
 fn xdr_object_conversion() -> Result<(), HostError> {
     let host = Host::test_host()
         .test_budget(100_000, 100_000)
-        .enable_model(CostType::ValXdrConv, 10, 0, 1, 0);
+        .enable_model(ContractCostType::ValXdrConv, 10, 0, 1, 0);
     let scmap: ScMap = host.map_err(
         vec![
             ScMapEntry {
@@ -33,7 +33,7 @@ fn xdr_object_conversion() -> Result<(), HostError> {
         // a "value" on separate paths that both need metering,
         // we wind up double-counting the conversion of "objects".
         // Possibly this should be improved in the future.
-        assert_eq!(budget.get_tracker(CostType::ValXdrConv).0, 6);
+        assert_eq!(budget.get_tracker(ContractCostType::ValXdrConv).0, 6);
         assert_eq!(budget.get_cpu_insns_count(), 60);
         assert_eq!(budget.get_mem_bytes_count(), 6);
     });
@@ -46,8 +46,8 @@ fn vm_hostfn_invocation() -> Result<(), HostError> {
     let id_obj = host.register_test_contract_wasm(VEC)?;
     let host = host
         .test_budget(100_000, 100_000)
-        .enable_model(CostType::InvokeVmFunction, 10, 0, 1, 0)
-        .enable_model(CostType::InvokeHostFunction, 10, 0, 1, 0);
+        .enable_model(ContractCostType::InvokeVmFunction, 10, 0, 1, 0)
+        .enable_model(ContractCostType::InvokeHostFunction, 10, 0, 1, 0);
 
     // `vec_err` is a test contract function which calls `vec_new` (1 call)
     // and `vec_put` (1 call) so total input of 2 to the budget from `CostType::InvokeHostFunction`.
@@ -57,8 +57,11 @@ fn vm_hostfn_invocation() -> Result<(), HostError> {
     // try_call
     host.try_call(id_obj, sym.into(), args.clone().into())?;
     host.with_budget(|budget| {
-        assert_eq!(budget.get_tracker(CostType::InvokeVmFunction).0, 1);
-        assert_eq!(budget.get_tracker(CostType::InvokeHostFunction).0, 2);
+        assert_eq!(budget.get_tracker(ContractCostType::InvokeVmFunction).0, 1);
+        assert_eq!(
+            budget.get_tracker(ContractCostType::InvokeHostFunction).0,
+            2
+        );
         assert_eq!(budget.get_cpu_insns_count(), 30);
         assert_eq!(budget.get_mem_bytes_count(), 3);
     });
@@ -70,8 +73,8 @@ fn vm_hostfn_invocation() -> Result<(), HostError> {
 fn metered_xdr() -> Result<(), HostError> {
     let host = Host::test_host()
         .test_budget(100_000, 100_000)
-        .enable_model(CostType::ValSer, 0, 10, 0, 1)
-        .enable_model(CostType::ValDeser, 0, 10, 0, 1);
+        .enable_model(ContractCostType::ValSer, 0, 10, 0, 1)
+        .enable_model(ContractCostType::ValDeser, 0, 10, 0, 1);
     let scmap: ScMap = host.map_err(
         vec![
             ScMapEntry {
@@ -88,13 +91,16 @@ fn metered_xdr() -> Result<(), HostError> {
     let mut w = Vec::<u8>::new();
     host.metered_write_xdr(&scmap, &mut w)?;
     host.with_budget(|budget| {
-        assert_eq!(budget.get_tracker(CostType::ValSer).1, Some(w.len() as u64));
+        assert_eq!(
+            budget.get_tracker(ContractCostType::ValSer).1,
+            Some(w.len() as u64)
+        );
     });
 
     host.metered_from_xdr::<ScMap>(w.as_slice())?;
     host.with_budget(|budget| {
         assert_eq!(
-            budget.get_tracker(CostType::ValDeser).1,
+            budget.get_tracker(ContractCostType::ValDeser).1,
             Some(w.len() as u64)
         );
     });
@@ -103,9 +109,10 @@ fn metered_xdr() -> Result<(), HostError> {
 
 #[test]
 fn metered_xdr_out_of_budget() -> Result<(), HostError> {
-    let host = Host::test_host()
-        .test_budget(10, 10)
-        .enable_model(CostType::ValSer, 0, 10, 0, 1);
+    let host =
+        Host::test_host()
+            .test_budget(10, 10)
+            .enable_model(ContractCostType::ValSer, 0, 10, 0, 1);
     let scmap: ScMap = host.map_err(
         vec![
             ScMapEntry {
@@ -138,15 +145,15 @@ fn map_insert_key_vec_obj() -> Result<(), HostError> {
 
     // now we enable various cost models
     host = host
-        .enable_model(CostType::VisitObject, 10, 0, 1, 0)
-        .enable_model(CostType::MapEntry, 10, 0, 1, 0);
+        .enable_model(ContractCostType::VisitObject, 10, 0, 1, 0)
+        .enable_model(ContractCostType::MapEntry, 10, 0, 1, 0);
     host.map_put(m, k1.into(), v1)?;
 
     host.with_budget(|budget| {
         // 4 = 1 visit map + 1 visit k1 + (obj_comp which needs to) 1 visit both k0 and k1
-        assert_eq!(budget.get_tracker(CostType::VisitObject).0, 4);
+        assert_eq!(budget.get_tracker(ContractCostType::VisitObject).0, 4);
         // upper bound of number of map-accesses, counting both binary-search and point-access.
-        assert_eq!(budget.get_tracker(CostType::MapEntry).0, 5);
+        assert_eq!(budget.get_tracker(ContractCostType::MapEntry).0, 5);
     });
 
     Ok(())
@@ -156,8 +163,8 @@ fn map_insert_key_vec_obj() -> Result<(), HostError> {
 fn test_recursive_type_clone() -> Result<(), HostError> {
     let host = Host::test_host()
         .test_budget(100000, 100000)
-        .enable_model(CostType::HostMemAlloc, 10, 0, 1, 0)
-        .enable_model(CostType::HostMemCpy, 10, 0, 1, 0);
+        .enable_model(ContractCostType::HostMemAlloc, 10, 0, 1, 0)
+        .enable_model(ContractCostType::HostMemCpy, 10, 0, 1, 0);
     let scmap: ScMap = host.map_err(
         vec![
             ScMapEntry {
@@ -186,7 +193,7 @@ fn test_recursive_type_clone() -> Result<(), HostError> {
     //*********************************************************************************************************************************************/
     expect!["576"].assert_eq(
         host.as_budget()
-            .get_tracker(CostType::HostMemAlloc)
+            .get_tracker(ContractCostType::HostMemAlloc)
             .1
             .unwrap()
             .to_string()
@@ -196,7 +203,7 @@ fn test_recursive_type_clone() -> Result<(), HostError> {
     // memory layout of the top level type (Vec).
     expect!["600"].assert_eq(
         host.as_budget()
-            .get_tracker(CostType::HostMemCpy)
+            .get_tracker(ContractCostType::HostMemCpy)
             .1
             .unwrap()
             .to_string()
@@ -236,10 +243,8 @@ fn total_amount_charged_from_random_inputs() -> Result<(), HostError> {
         (263, None),
     ];
 
-    for ty in CostType::variants() {
-        host.with_budget(|b| {
-            b.batched_charge(*ty, tracker[*ty as usize].0, tracker[*ty as usize].1)
-        })?;
+    for ty in ContractCostType::variants() {
+        host.with_budget(|b| b.batched_charge(ty, tracker[ty as usize].0, tracker[ty as usize].1))?;
     }
     let actual = format!("{:?}", host.as_budget());
     expect![[r#"
@@ -247,7 +252,7 @@ fn total_amount_charged_from_random_inputs() -> Result<(), HostError> {
         Cpu limit: 40000000; used: 8426807
         Mem limit: 52428800; used: 1219916
         =====================================================================================================================================================================
-        CostType                 iterations     input          cpu_insns      mem_bytes      const_param_cpu     lin_param_cpu       const_param_mem     lin_param_mem       
+        CostType                 iterations     input          cpu_insns      mem_bytes      const_term_cpu      lin_term_cpu        const_term_mem      lin_term_mem        
         WasmInsnExec             246            None           5412           0              22                  0                   0                   0                   
         WasmMemAlloc             1              Some(184)      521            66320          521                 0                   66136               1                   
         HostMemAlloc             1              Some(152)      883            160            883                 0                   8                   1                   

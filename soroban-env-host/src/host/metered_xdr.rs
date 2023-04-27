@@ -1,5 +1,5 @@
 use crate::{
-    budget::CostType,
+    xdr::ContractCostType,
     xdr::{ReadXdr, ScBytes, WriteXdr},
     BytesObject, Host, HostError,
 };
@@ -18,7 +18,7 @@ where
 {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
         self.host
-            .charge_budget(CostType::ValSer, Some(buf.len() as u64))
+            .charge_budget(ContractCostType::ValSer, Some(buf.len() as u64))
             .map_err(|e| Into::<std::io::Error>::into(e))?;
         self.w.write(buf)
     }
@@ -59,12 +59,12 @@ impl Host {
     pub(crate) fn metered_hash_xdr(&self, obj: &impl WriteXdr) -> Result<[u8; 32], HostError> {
         let mut buf = vec![];
         self.metered_write_xdr(obj, &mut buf)?;
-        self.charge_budget(CostType::ComputeSha256Hash, Some(buf.len() as u64))?;
+        self.charge_budget(ContractCostType::ComputeSha256Hash, Some(buf.len() as u64))?;
         Ok(Sha256::digest(buf).try_into()?)
     }
 
     pub(crate) fn metered_from_xdr<T: ReadXdr>(&self, bytes: &[u8]) -> Result<T, HostError> {
-        self.charge_budget(CostType::ValDeser, Some(bytes.len() as u64))?;
+        self.charge_budget(ContractCostType::ValDeser, Some(bytes.len() as u64))?;
         T::from_xdr(bytes).map_err(|_| self.err_general("failed to read from xdr"))
     }
 
