@@ -1,11 +1,11 @@
 use std::hint::black_box;
 
-use crate::{budget::CostType, cost_runner::CostRunner, host_object::HostObject, Object};
+use crate::{cost_runner::CostRunner, host_object::HostObject, xdr::ContractCostType, Object};
 
 pub struct VisitObjectRun;
 
 impl CostRunner for VisitObjectRun {
-    const COST_TYPE: CostType = CostType::VisitObject;
+    const COST_TYPE: ContractCostType = ContractCostType::VisitObject;
 
     type SampleType = Vec<Object>;
 

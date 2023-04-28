@@ -10,8 +10,8 @@ pub use measure::*;
 pub use modelfit::*;
 
 use soroban_env_host::{
-    budget::CostType,
     cost_runner::{CostRunner, WasmInsnType},
+    xdr::ContractCostType,
 };
 use std::collections::BTreeMap;
 
@@ -50,7 +50,7 @@ fn should_run_wasm_insn(ty: WasmInsnType) -> bool {
 }
 
 fn call_bench<B: Benchmark, HCM: HostCostMeasurement>(
-    params: &mut BTreeMap<CostType, (FPCostModel, FPCostModel)>,
+    params: &mut BTreeMap<ContractCostType, (FPCostModel, FPCostModel)>,
 ) -> std::io::Result<()> {
     if should_run::<HCM>() {
         params.insert(<HCM::Runner as CostRunner>::COST_TYPE, B::bench::<HCM>()?);
@@ -59,8 +59,8 @@ fn call_bench<B: Benchmark, HCM: HostCostMeasurement>(
 }
 
 pub(crate) fn for_each_host_cost_measurement<B: Benchmark>(
-) -> std::io::Result<BTreeMap<CostType, (FPCostModel, FPCostModel)>> {
-    let mut params: BTreeMap<CostType, (FPCostModel, FPCostModel)> = BTreeMap::new();
+) -> std::io::Result<BTreeMap<ContractCostType, (FPCostModel, FPCostModel)>> {
+    let mut params: BTreeMap<ContractCostType, (FPCostModel, FPCostModel)> = BTreeMap::new();
 
     call_bench::<B, ComputeEd25519PubKeyMeasure>(&mut params)?;
     call_bench::<B, ComputeSha256HashMeasure>(&mut params)?;
@@ -85,8 +85,8 @@ pub(crate) fn for_each_host_cost_measurement<B: Benchmark>(
     call_bench::<B, HostMemCpyMeasure>(&mut params)?;
 
     if get_explicit_bench_names().is_none() {
-        for cost in CostType::variants() {
-            if !params.contains_key(cost) {
+        for cost in ContractCostType::variants() {
+            if !params.contains_key(&cost) {
                 eprintln!("warning: missing cost measurement for {:?}", cost);
             }
         }

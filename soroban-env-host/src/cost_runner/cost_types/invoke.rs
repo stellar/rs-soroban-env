@@ -1,4 +1,4 @@
-use crate::{budget::CostType, cost_runner::CostRunner, RawVal, Symbol, Vm};
+use crate::{cost_runner::CostRunner, xdr::ContractCostType, RawVal, Symbol, Vm};
 use std::{hint::black_box, rc::Rc};
 
 pub struct InvokeVmFunctionRun;
@@ -9,7 +9,7 @@ const TEST_SYM: Symbol = match Symbol::try_from_small_str("test") {
 };
 
 impl CostRunner for InvokeVmFunctionRun {
-    const COST_TYPE: CostType = CostType::InvokeVmFunction;
+    const COST_TYPE: ContractCostType = ContractCostType::InvokeVmFunction;
 
     type SampleType = Rc<Vm>;
 
@@ -35,7 +35,7 @@ impl CostRunner for InvokeVmFunctionRun {
 pub struct InvokeHostFunctionRun;
 
 impl CostRunner for InvokeHostFunctionRun {
-    const COST_TYPE: CostType = CostType::InvokeHostFunction;
+    const COST_TYPE: ContractCostType = ContractCostType::InvokeHostFunction;
 
     const RUN_ITERATIONS: u64 = 1;
 

@@ -1,4 +1,4 @@
-use crate::{budget::CostType, Host, HostError, VmCaller, VmCallerEnv};
+use crate::{xdr::ContractCostType, Host, HostError, VmCaller, VmCallerEnv};
 use crate::{
     AddressObject, BytesObject, I128Object, I256Object, I64Object, MapObject, RawVal, Status,
     StringObject, Symbol, SymbolObject, U128Object, U256Object, U32Val, U64Object, VecObject,
@@ -68,7 +68,7 @@ macro_rules! generate_dispatch_functions {
                     // This does not account for the actual work being done in those functions,
                     // which are accounted for individually at the operation level.
                     let host = caller.host_data().clone();
-                    host.charge_budget(CostType::InvokeHostFunction, None)?;
+                    host.charge_budget(ContractCostType::InvokeHostFunction, None)?;
                     let mut vmcaller = VmCaller(Some(caller));
                     // The odd / seemingly-redundant use of `wasmi::Value` here
                     // as intermediates -- rather than just passing RawVals --

@@ -2,14 +2,11 @@ use std::{cmp::Ordering, hint::black_box};
 
 use soroban_env_common::Compare;
 
-use crate::{
-    budget::{AsBudget, CostType},
-    cost_runner::CostRunner,
-};
+use crate::{budget::AsBudget, cost_runner::CostRunner, xdr::ContractCostType};
 
 pub struct HostMemCmpRun;
 impl CostRunner for HostMemCmpRun {
-    const COST_TYPE: CostType = CostType::HostMemCmp;
+    const COST_TYPE: ContractCostType = ContractCostType::HostMemCmp;
 
     type SampleType = (Vec<u8>, Vec<u8>);
 

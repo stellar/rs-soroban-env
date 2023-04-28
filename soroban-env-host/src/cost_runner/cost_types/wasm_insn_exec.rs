@@ -1,6 +1,6 @@
 use crate::{
-    budget::CostType,
     cost_runner::CostRunner,
+    xdr::ContractCostType,
     xdr::{ScVal, ScVec},
     RawVal, Symbol, Vm,
 };
@@ -133,7 +133,7 @@ pub struct WasmInsnExecSample {
 
 pub struct WasmInsnExecRun;
 impl CostRunner for WasmInsnExecRun {
-    const COST_TYPE: CostType = CostType::WasmInsnExec;
+    const COST_TYPE: ContractCostType = ContractCostType::WasmInsnExec;
 
     type SampleType = WasmInsnExecSample;
 
@@ -166,7 +166,7 @@ const TEST_SYM: Symbol = match Symbol::try_from_small_str("test") {
 
 pub struct WasmMemAllocRun;
 impl CostRunner for WasmMemAllocRun {
-    const COST_TYPE: CostType = CostType::WasmMemAlloc;
+    const COST_TYPE: ContractCostType = ContractCostType::WasmMemAlloc;
 
     const RUN_ITERATIONS: u64 = 1;
 
@@ -198,7 +198,7 @@ macro_rules! impl_wasm_insn_runner {
         }
 
         impl CostRunner for $runner {
-            const COST_TYPE: CostType = CostType::WasmInsnExec;
+            const COST_TYPE: ContractCostType = ContractCostType::WasmInsnExec;
             type SampleType = WasmInsnSample;
             type RecycledType = (Option<RawVal>, Self::SampleType);
 

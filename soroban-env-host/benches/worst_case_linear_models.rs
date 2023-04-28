@@ -1,10 +1,10 @@
 // Run this with
 // $ cargo bench --features vm,testutils --bench worst_case_linear_models -- --nocapture
-// You can optionally pass in args listing the {`CostType`, `WasmInsnType`} combination to run with, e.g.
+// You can optionally pass in args listing the {`ContractCostType`, `WasmInsnType`} combination to run with, e.g.
 // $ cargo bench --features vm,testutils --bench worst_case_linear_models -- VecNew I64Rotr --nocapture
 mod common;
 use common::*;
-use soroban_env_host::{budget::CostType, cost_runner::WasmInsnType};
+use soroban_env_host::{cost_runner::WasmInsnType, xdr::ContractCostType};
 use std::{collections::BTreeMap, fmt::Debug, io::Write};
 use tabwriter::{Alignment, TabWriter};
 
@@ -39,7 +39,7 @@ fn write_cost_params_table<T: Debug>(
     tw.flush()
 }
 
-fn write_budget_params_code(params: BTreeMap<CostType, (FPCostModel, FPCostModel)>) {
+fn write_budget_params_code(params: BTreeMap<ContractCostType, (FPCostModel, FPCostModel)>) {
     println!("");
     println!("");
     for (ty, (cpu, _)) in params
@@ -73,7 +73,7 @@ fn main() -> std::io::Result<()> {
     let mut tw = TabWriter::new(vec![])
         .padding(5)
         .alignment(Alignment::Right);
-    write_cost_params_table::<CostType>(&mut tw, &params)?;
+    write_cost_params_table::<ContractCostType>(&mut tw, &params)?;
     write_cost_params_table::<WasmInsnType>(&mut tw, &params_wasm)?;
     eprintln!("{}", String::from_utf8(tw.into_inner().unwrap()).unwrap());
 
