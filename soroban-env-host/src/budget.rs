@@ -46,8 +46,8 @@ impl HostCostModel for ContractCostParamEntry {
             return Err(ScUnknownErrorCode::Xdr.into());
         }
 
-        let const_term = i64::from(self.const_term) as u64;
-        let lin_term = i64::from(self.linear_term) as u64;
+        let const_term = self.const_term as u64;
+        let lin_term = self.linear_term as u64;
         match input {
             Some(input) => {
                 let mut res = const_term;
@@ -126,7 +126,7 @@ impl BudgetDimension {
         bd
     }
 
-    pub fn from_network_configs(trapcode: ScVmErrorCode, cost_params: ContractCostParams) -> Self {
+    pub fn from_configs(trapcode: ScVmErrorCode, cost_params: ContractCostParams) -> Self {
         Self {
             trapcode,
             cost_models: cost_params.0.to_vec(),
@@ -212,18 +212,18 @@ pub(crate) struct BudgetImpl {
 
 impl BudgetImpl {
     /// Initializes the budget from network configuration settings.
-    fn from_network_configs(
+    fn from_configs(
         cpu_limit: u64,
         mem_limit: u64,
         cpu_cost_params: ContractCostParams,
         mem_cost_params: ContractCostParams,
     ) -> Self {
         let mut b = Self {
-            cpu_insns: BudgetDimension::from_network_configs(
+            cpu_insns: BudgetDimension::from_configs(
                 ScVmErrorCode::TrapCpuLimitExceeded,
                 cpu_cost_params,
             ),
-            mem_bytes: BudgetDimension::from_network_configs(
+            mem_bytes: BudgetDimension::from_configs(
                 ScVmErrorCode::TrapMemLimitExceeded,
                 mem_cost_params,
             ),
@@ -386,13 +386,13 @@ impl AsBudget for Host {
 
 impl Budget {
     /// Initializes the budget from network configuration settings.
-    pub fn from_network_configs(
+    pub fn from_configs(
         cpu_limit: u64,
         mem_limit: u64,
         cpu_cost_params: ContractCostParams,
         mem_cost_params: ContractCostParams,
     ) -> Self {
-        Self(Rc::new(RefCell::new(BudgetImpl::from_network_configs(
+        Self(Rc::new(RefCell::new(BudgetImpl::from_configs(
             cpu_limit,
             mem_limit,
             cpu_cost_params,
@@ -567,7 +567,7 @@ impl Budget {
 }
 
 /// Default settings for local/sandbox testing only. The actual operations will use parameters
-/// read on-chain from network configuration via [`from_network_configs`] above.
+/// read on-chain from network configuration via [`from_configs`] above.
 impl Default for BudgetImpl {
     fn default() -> Self {
         let mut b = Self {
