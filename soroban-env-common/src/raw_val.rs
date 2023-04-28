@@ -132,21 +132,21 @@ pub enum Tag {
     I256Object = 71,
 
     BytesObject = 72,
-    StringObject = 74,
-    SymbolObject = 75,
+    StringObject = 73,
+    SymbolObject = 74,
 
-    VecObject = 77,
-    MapObject = 78,
+    VecObject = 75,
+    MapObject = 76,
 
-    ContractExecutableObject = 79,
-    AddressObject = 80,
+    ContractExecutableObject = 77,
+    AddressObject = 78,
 
     /// Tag for a [RawVal] that corresponds to
     /// [stellar_xdr::ScVal::LedgerKeyNonce] and refers to a host-side
     /// address object that specifies which address it's the nonce for.
-    LedgerKeyNonceObject = 81,
+    LedgerKeyNonceObject = 79,
 
-    ObjectCodeUpperBound = 82,
+    ObjectCodeUpperBound = 80,
 
     Bad = 0x7f,
 }
