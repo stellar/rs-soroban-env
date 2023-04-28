@@ -126,7 +126,7 @@ impl BudgetDimension {
         bd
     }
 
-    pub fn from_configs(trapcode: ScVmErrorCode, cost_params: ContractCostParams) -> Self {
+    pub fn from_config(trapcode: ScVmErrorCode, cost_params: ContractCostParams) -> Self {
         Self {
             trapcode,
             cost_models: cost_params.0.to_vec(),
@@ -219,11 +219,11 @@ impl BudgetImpl {
         mem_cost_params: ContractCostParams,
     ) -> Self {
         let mut b = Self {
-            cpu_insns: BudgetDimension::from_configs(
+            cpu_insns: BudgetDimension::from_config(
                 ScVmErrorCode::TrapCpuLimitExceeded,
                 cpu_cost_params,
             ),
-            mem_bytes: BudgetDimension::from_configs(
+            mem_bytes: BudgetDimension::from_config(
                 ScVmErrorCode::TrapMemLimitExceeded,
                 mem_cost_params,
             ),
