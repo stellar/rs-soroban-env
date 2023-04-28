@@ -1244,7 +1244,7 @@ checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 [[package]]
 name = "stellar-xdr"
 version = "0.0.15"
-source = "git+https://github.com/stellar/rs-stellar-xdr?rev=2302358949c88e6e7529ee46947e41212e6de3b1#2302358949c88e6e7529ee46947e41212e6de3b1"
+source = "git+https://github.com/stellar/rs-stellar-xdr?rev=76a4fa1ada4d3e175c627b7d023ceca06f757289#76a4fa1ada4d3e175c627b7d023ceca06f757289"
 dependencies = [
  "arbitrary",
  "base64",
