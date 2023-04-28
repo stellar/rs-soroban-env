@@ -512,31 +512,27 @@ impl AuthorizationManager {
         }
     }
 
-    // Returns the top-level authorizations that have been recorded for the last
-    // contract invocation.
+    // Returns the top-level authorizations that have been authenticated for the
+    // last contract invocation.
     #[cfg(any(test, feature = "testutils"))]
-    pub(crate) fn get_recorded_top_authorizations(
+    pub(crate) fn get_authenticated_top_authorizations(
         &self,
     ) -> Vec<(ScAddress, Hash, ScSymbol, ScVec)> {
-        match self.mode {
-            AuthorizationMode::Enforcing => {
-                panic!("get_top_authorizations is only available for recording-mode auth")
-            }
-            AuthorizationMode::Recording(_) => self
-                .trackers
-                .iter()
-                .map(|t| {
+        self.trackers
+            .iter()
+            .filter(|t| t.authenticated)
+            .filter_map(|t| {
+                // Ignore authorizations without an address as they are implied.
+                t.address.as_ref().map(|a| {
                     (
-                        // It is ok to unwrap here, since in recording
-                        // mode address should be always present.
-                        t.address.clone().unwrap(),
+                        a.clone(),
                         t.root_authorized_invocation.contract_id.clone(),
                         t.root_authorized_invocation.function_name.clone(),
                         t.root_authorized_invocation.args.clone(),
                     )
                 })
-                .collect(),
-        }
+            })
+            .collect()
     }
 }
 
