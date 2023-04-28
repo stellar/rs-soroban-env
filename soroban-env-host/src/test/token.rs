@@ -2652,7 +2652,7 @@ fn test_recording_auth_for_token() {
     );
 
     assert_eq!(
-        test.host.get_recorded_top_authorizations().unwrap(),
+        test.host.get_authenticated_top_authorizations().unwrap(),
         vec![(
             test.host
                 .visit_obj(admin.address(&test.host).into(), |addr: &ScAddress| Ok(
