@@ -3,18 +3,18 @@ use core::cmp::{min, Ordering};
 use soroban_env_common::{
     xdr::{
         AccountEntry, AccountId, ClaimableBalanceEntry, ConfigSettingEntry, ContractCodeEntry,
-        DataEntry, Duration, Hash, LedgerEntry, LedgerEntryData, LedgerEntryExt, LedgerKey,
-        LedgerKeyAccount, LedgerKeyClaimableBalance, LedgerKeyConfigSetting, LedgerKeyContractCode,
-        LedgerKeyData, LedgerKeyLiquidityPool, LedgerKeyOffer, LedgerKeyTrustLine,
-        LiquidityPoolEntry, OfferEntry, PublicKey, ScAddress, ScContractExecutable,
-        ScHostValErrorCode, ScMap, ScMapEntry, ScNonceKey, ScVal, ScVec, TimePoint, TrustLineAsset,
-        TrustLineEntry, Uint256,
+        ContractCostType, DataEntry, Duration, Hash, LedgerEntry, LedgerEntryData, LedgerEntryExt,
+        LedgerKey, LedgerKeyAccount, LedgerKeyClaimableBalance, LedgerKeyConfigSetting,
+        LedgerKeyContractCode, LedgerKeyData, LedgerKeyLiquidityPool, LedgerKeyOffer,
+        LedgerKeyTrustLine, LiquidityPoolEntry, OfferEntry, PublicKey, ScAddress,
+        ScContractExecutable, ScHostValErrorCode, ScMap, ScMapEntry, ScNonceKey, ScVal, ScVec,
+        TimePoint, TrustLineAsset, TrustLineEntry, Uint256,
     },
     Compare, SymbolStr, I256, U256,
 };
 
 use crate::{
-    budget::{AsBudget, Budget, CostType},
+    budget::{AsBudget, Budget},
     host_object::HostObject,
     Host, HostError,
 };
@@ -102,7 +102,10 @@ impl Compare<&[u8]> for Budget {
     type Error = HostError;
 
     fn compare(&self, a: &&[u8], b: &&[u8]) -> Result<Ordering, Self::Error> {
-        self.charge(CostType::HostMemCmp, Some(min(a.len(), b.len()) as u64))?;
+        self.charge(
+            ContractCostType::HostMemCmp,
+            Some(min(a.len(), b.len()) as u64),
+        )?;
         Ok(a.cmp(b))
     }
 }
@@ -111,7 +114,10 @@ impl<const N: usize> Compare<[u8; N]> for Budget {
     type Error = HostError;
 
     fn compare(&self, a: &[u8; N], b: &[u8; N]) -> Result<Ordering, Self::Error> {
-        self.charge(CostType::HostMemCmp, Some(min(a.len(), b.len()) as u64))?;
+        self.charge(
+            ContractCostType::HostMemCmp,
+            Some(min(a.len(), b.len()) as u64),
+        )?;
         Ok(a.cmp(b))
     }
 }
@@ -139,7 +145,7 @@ impl<T: Ord + DeclaredSizeForMetering> Compare<FixedSizeOrdType<'_, T>> for Budg
             std::mem::size_of::<T>() as u64 <= <T as DeclaredSizeForMetering>::DECLARED_SIZE
         );
         self.charge(
-            CostType::HostMemCmp,
+            ContractCostType::HostMemCmp,
             Some(<T as DeclaredSizeForMetering>::DECLARED_SIZE),
         )?;
         Ok(a.0.cmp(&b.0))

@@ -17,11 +17,17 @@ impl Parse for MetaInput {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         Ok(MetaInput {
             interface_version: {
-                assert_eq!(input.parse::<Ident>()?, "interface_version");
+                assert_eq!(input.parse::<Ident>()?, "ledger_protocol_version");
                 input.parse::<Token![:]>()?;
-                let v = input.parse::<LitInt>()?.base10_parse()?;
+                let proto: u64 = input.parse::<LitInt>()?.base10_parse()?;
                 input.parse::<Token![,]>()?;
-                v
+                assert_eq!(input.parse::<Ident>()?, "pre_release_version");
+                input.parse::<Token![:]>()?;
+                let pre: u64 = input.parse::<LitInt>()?.base10_parse()?;
+                input.parse::<Token![,]>()?;
+                assert!(pre <= 0xffff_ffff);
+                assert!(proto <= 0xffff_ffff);
+                proto << 32 | pre
             },
         })
     }

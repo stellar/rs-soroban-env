@@ -2,12 +2,12 @@ use std::hint::black_box;
 
 use ed25519_dalek::PublicKey;
 
-use crate::{budget::CostType, cost_runner::CostRunner};
+use crate::{cost_runner::CostRunner, xdr::ContractCostType};
 
 pub struct ComputeEd25519PubKeyRun;
 
 impl CostRunner for ComputeEd25519PubKeyRun {
-    const COST_TYPE: CostType = CostType::ComputeEd25519PubKey;
+    const COST_TYPE: ContractCostType = ContractCostType::ComputeEd25519PubKey;
 
     type SampleType = Vec<u8>;
 

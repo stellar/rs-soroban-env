@@ -1,6 +1,6 @@
 use std::hint::black_box;
 
-use crate::{budget::CostType, cost_runner::CostRunner, Host, MeteredOrdMap, RawVal};
+use crate::{cost_runner::CostRunner, xdr::ContractCostType, Host, MeteredOrdMap, RawVal};
 
 type HostMap = MeteredOrdMap<RawVal, RawVal, Host>;
 
@@ -13,7 +13,7 @@ pub struct MapEntrySample {
 }
 
 impl CostRunner for MapEntryRun {
-    const COST_TYPE: CostType = CostType::MapEntry;
+    const COST_TYPE: ContractCostType = ContractCostType::MapEntry;
 
     type SampleType = MapEntrySample;
 

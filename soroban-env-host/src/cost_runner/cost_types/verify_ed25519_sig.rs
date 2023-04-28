@@ -1,6 +1,6 @@
 use std::hint::black_box;
 
-use crate::{budget::CostType, cost_runner::CostRunner};
+use crate::{cost_runner::CostRunner, xdr::ContractCostType};
 use ed25519_dalek::{PublicKey, Signature};
 
 pub struct VerifyEd25519SigRun;
@@ -13,7 +13,7 @@ pub struct VerifyEd25519SigSample {
 }
 
 impl CostRunner for VerifyEd25519SigRun {
-    const COST_TYPE: CostType = CostType::VerifyEd25519Sig;
+    const COST_TYPE: ContractCostType = ContractCostType::VerifyEd25519Sig;
 
     type SampleType = VerifyEd25519SigSample;
 

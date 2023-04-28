@@ -9,13 +9,14 @@ use std::rc::Rc;
 use soroban_env_common::{
     num::{i256_from_pieces, i256_into_pieces, u256_from_pieces, u256_into_pieces},
     xdr::{
-        int128_helpers, AccountId, Asset, ContractCodeEntry, ContractDataEntry, ContractEventType,
-        ContractId, CreateContractArgs, ExtensionPoint, Hash, HashIdPreimage, HostFunction,
-        HostFunctionArgs, HostFunctionType, Int128Parts, Int256Parts, LedgerEntryData, LedgerKey,
-        LedgerKeyContractCode, PublicKey, ScAddress, ScBytes, ScContractExecutable,
-        ScHostContextErrorCode, ScHostFnErrorCode, ScHostObjErrorCode, ScHostStorageErrorCode,
-        ScHostValErrorCode, ScMap, ScMapEntry, ScStatusType, ScString, ScSymbol,
-        ScUnknownErrorCode, ScVal, ScVec, UInt128Parts, UInt256Parts, UploadContractWasmArgs,
+        int128_helpers, AccountId, Asset, ContractCodeEntry, ContractCostType, ContractDataEntry,
+        ContractEventType, ContractId, CreateContractArgs, ExtensionPoint, Hash, HashIdPreimage,
+        HostFunction, HostFunctionArgs, HostFunctionType, Int128Parts, Int256Parts,
+        LedgerEntryData, LedgerKey, LedgerKeyContractCode, PublicKey, ScAddress, ScBytes,
+        ScContractExecutable, ScHostContextErrorCode, ScHostFnErrorCode, ScHostObjErrorCode,
+        ScHostStorageErrorCode, ScHostValErrorCode, ScMap, ScMapEntry, ScStatusType, ScString,
+        ScSymbol, ScUnknownErrorCode, ScVal, ScVec, UInt128Parts, UInt256Parts,
+        UploadContractWasmArgs,
     },
     AddressObject, Bool, BytesObject, Convert, I128Object, I256Object, I64Object, MapObject,
     ScValObjRef, ScValObject, Status, StringObject, SymbolObject, SymbolSmall, TryFromVal,
@@ -29,7 +30,7 @@ use crate::events::{
 };
 use crate::storage::{Storage, StorageMap};
 use crate::{
-    budget::{AsBudget, Budget, CostType},
+    budget::{AsBudget, Budget},
     storage::{TempStorage, TempStorageMap},
 };
 
@@ -163,82 +164,8 @@ impl Default for DiagnosticLevel {
     }
 }
 
-/// LegacyEpoch defines a set of _past_ (legacy) behaviour that we have logic in
-/// the host to handle, that can be activated by the embedder to replay past
-/// contracts "the same way they ran before".
-///
-/// Legacy epochs are added when some change in behaviour is detected by the
-/// embedder, during the second phase of the embedder upgrading the host, when
-/// the embedder performs a replay of some past transactions in order to expire
-/// old versions of the host, and notices some behaviour that diverges: that
-/// does not replay identically. At that point the _current_ behaviour is always
-/// considered part of `LegacyEpoch:Current` and a new _earlier_ epoch is added
-/// before it, that is named for the _previous_ behaviour.
-///
-/// To illustrate this with an example, first suppose that host versions are
-/// being _sequentially numbered_ by the embedder as v74, v75, v76, v77, etc. We
-/// do not assign such versions in the host itself, since the host does not know
-/// precisely when the embedder takes updates (and in any case the embedder
-/// needs to pin the entire dependency tree of versions the host's dependencies
-/// are resolved to in the embedding).
-///
-/// Now suppose that host v75 accidentally shipped a bug in the binary search
-/// function in `MeteredVector`, and suppose further that the embedder
-/// accidentally recorded a transaction using that buggy binary search. So there
-/// is a transaction labeled with host logic v75 that needs to run on bad binary
-/// search to execute correctly.
-///
-/// Now suppose it's time for the embedder to upgrade. Upgrading only works when
-/// the embedder embeds a _pair_ of host versions. Without loss of generality we
-/// can assume they have v75 and v76, the network is running on v76, and so
-/// their "upgrade" consists of expiring v75 (which is no longer recording new
-/// transactions) and activating v77.
-///
-/// To do this, the embedder replays all transactions labeled with v75 on v76.
-/// They will observe divergence on the transaction that relies on the bad
-/// binary search. Once the embedder has to debugged that fact and isolated it,
-/// they will want to add an enum entry `LegacyEpoch::BadBinSearch` to the host,
-/// designating the _old_ behaviour. Then when replaying a v75 transaction, the
-/// embedder will pass `LegacyEpoch::BadBinSearch`, and the host would be
-/// modified to keep the old bad binary search logic under a guard like `if
-/// self.is_in_legacy_epoch(LegacyEpoch::BadBinSearch) ... `.
-///
-/// Unfortunately such a change cannot be made to v76 since it's already frozen,
-/// in the field and recording transactions: it's the version in the live
-/// network. However, the change _can_ be made to the as-yet-unnumbered host
-/// that will soon be designated v77, since that version is still not yet
-/// finalized or deployed. So v77 will contain the legacy epoch-guarded copy of
-/// the old, bad code path.
-///
-/// Schematically, the upgrade looks like this:
-///
-/// ```text
-///
-///     [v75: has only bad logic] (expiring)
-///                    ||
-///                    \/
-///     [v76: has only good logic] (active)
-///                    ||
-///                    \/
-///     [v77: has both, with epoch guard] (to be deployed)
-///
-///```
-///
-/// Once the embedder confirms that replay of all "v75 transactions" succeed on
-/// host v77 emulating "the parts of v75 relevant to any actually-recorded
-/// transactions" (as indicated with `LegacyEpoch::BadBinSearch`) the embedder
-/// can do a release containing only hosts v76 and v77, and forget the rest of
-/// v75.
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default)]
-pub enum LegacyEpoch {
-    #[default]
-    Current,
-}
-
 #[derive(Clone, Default)]
 pub(crate) struct HostImpl {
-    legacy_epoch: RefCell<LegacyEpoch>,
     source_account: RefCell<Option<AccountId>>,
     ledger: RefCell<Option<LedgerInfo>>,
     objects: RefCell<Vec<HostObject>>,
@@ -318,7 +245,6 @@ impl Host {
     /// [`Env::get_contract_data`].
     pub fn with_storage_and_budget(storage: Storage, budget: Budget) -> Self {
         Self(Rc::new(HostImpl {
-            legacy_epoch: Default::default(),
             source_account: RefCell::new(None),
             ledger: RefCell::new(None),
             objects: Default::default(),
@@ -336,14 +262,6 @@ impl Host {
             #[cfg(any(test, feature = "testutils"))]
             previous_authorization_manager: RefCell::new(None),
         }))
-    }
-
-    pub fn set_legacy_epoch(&self, legacy_epoch: LegacyEpoch) {
-        *self.0.legacy_epoch.borrow_mut() = legacy_epoch
-    }
-
-    pub fn is_in_legacy_epoch(&self, legacy_epoch: LegacyEpoch) -> bool {
-        *self.0.legacy_epoch.borrow() <= legacy_epoch
     }
 
     pub fn set_source_account(&self, source_account: AccountId) {
@@ -415,7 +333,7 @@ impl Host {
         self.0.budget.clone()
     }
 
-    pub fn charge_budget(&self, ty: CostType, input: Option<u64>) -> Result<(), HostError> {
+    pub fn charge_budget(&self, ty: ContractCostType, input: Option<u64>) -> Result<(), HostError> {
         self.0.budget.clone().charge(ty, input)
     }
 
@@ -614,7 +532,7 @@ impl Host {
     where
         F: FnOnce() -> Result<RawVal, HostError>,
     {
-        self.charge_budget(CostType::GuardFrame, None)?;
+        self.charge_budget(ContractCostType::GuardFrame, None)?;
         let start_depth = self.0.context.borrow().len();
         let rp = self.push_frame(frame)?;
         let res = f();
@@ -730,7 +648,7 @@ impl Host {
     where
         F: FnOnce(Option<&HostObject>) -> Result<U, HostError>,
     {
-        self.charge_budget(CostType::VisitObject, None)?;
+        self.charge_budget(ContractCostType::VisitObject, None)?;
         let r = self.0.objects.borrow();
         let obj: Object = obj.into();
         let handle: u32 = obj.get_handle();
@@ -774,14 +692,14 @@ impl Host {
         // translates a u64 into another form defined by the xdr.
         // For an `Object`, the actual structural conversion (such as byte
         // cloning) occurs in `from_host_obj` and is metered there.
-        self.charge_budget(CostType::ValXdrConv, None)?;
+        self.charge_budget(ContractCostType::ValXdrConv, None)?;
         ScVal::try_from_val(self, &val)
             .map_err(|_| self.err_status(ScHostValErrorCode::UnknownError))
     }
 
     pub(crate) fn to_host_val(&self, v: &ScVal) -> Result<RawVal, HostError> {
         // `ValXdrConv` is const cost in both cpu and mem. The input=0 will be ignored.
-        self.charge_budget(CostType::ValXdrConv, None)?;
+        self.charge_budget(ContractCostType::ValXdrConv, None)?;
         v.try_into_val(self)
             .map_err(|_| self.err_status(ScHostValErrorCode::UnknownError))
     }
@@ -794,7 +712,7 @@ impl Host {
                 // work such as byte cloning, has to be accounted for and
                 // metered in indivial match arms.
                 // `ValXdrConv` is const cost in both cpu and mem. The input=0 will be ignored.
-                self.charge_budget(CostType::ValXdrConv, None)?;
+                self.charge_budget(ContractCostType::ValXdrConv, None)?;
                 let val = match ob {
                     None => {
                         return Err(self.err_status(ScHostObjErrorCode::UnknownReference));
@@ -880,7 +798,7 @@ impl Host {
 
     pub(crate) fn to_host_obj<'a>(&self, ob: &ScValObjRef<'a>) -> Result<Object, HostError> {
         // `ValXdrConv` is const cost in both cpu and mem. The input=0 will be ignored.
-        self.charge_budget(CostType::ValXdrConv, None)?;
+        self.charge_budget(ContractCostType::ValXdrConv, None)?;
         let val: &ScVal = (*ob).into();
         match val {
             ScVal::Vec(Some(v)) => {
@@ -1401,7 +1319,10 @@ impl Host {
         sig: &ed25519_dalek::Signature,
     ) -> Result<(), HostError> {
         use ed25519_dalek::Verifier;
-        self.charge_budget(CostType::VerifyEd25519Sig, Some(payload.len() as u64))?;
+        self.charge_budget(
+            ContractCostType::VerifyEd25519Sig,
+            Some(payload.len() as u64),
+        )?;
         public_key
             .verify(payload, &sig)
             .map_err(|_| self.err_general("Failed ED25519 verification"))
@@ -2202,7 +2123,7 @@ impl VmCallerEnv for Host {
                 keys_pos,
                 len as usize,
                 |n, slice| {
-                    self.charge_budget(CostType::VmMemRead, Some(slice.len() as u64))?;
+                    self.charge_budget(ContractCostType::VmMemRead, Some(slice.len() as u64))?;
                     let scsym = ScSymbol(slice.try_into()?);
                     let sym = Symbol::try_from(self.to_host_val(&ScVal::Symbol(scsym))?)?;
                     key_syms.push(sym);
