@@ -522,7 +522,11 @@ impl AuthorizationManager {
             .iter()
             .filter(|t| t.authenticated)
             .filter_map(|t| {
-                // Ignore authorizations without an address as they are implied.
+                // Ignore authorizations without an address as they are implied,
+                // less useful as a test utility, and not succinctly capturable
+                // in the list of tuples. This is a tradeoff between offering up
+                // all authorizations vs the authorizations developers will
+                // mostly care about.
                 t.address.as_ref().map(|a| {
                     (
                         a.clone(),
