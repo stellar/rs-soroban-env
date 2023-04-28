@@ -1291,12 +1291,8 @@ impl Host {
     ) -> Result<(), HostError> {
         let hash = self.hash_from_bytesobj_input("contract_id", contract_id)?;
         let mut contracts = self.0.contracts.borrow_mut();
-        if !contracts.contains_key(&hash) {
-            contracts.insert(hash, contract_fns);
-            Ok(())
-        } else {
-            Err(self.err_general("vtable already exists"))
-        }
+        contracts.insert(hash, contract_fns);
+        Ok(())
     }
 
     // Writes an arbitrary ledger entry to storage.
