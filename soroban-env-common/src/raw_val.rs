@@ -162,6 +162,26 @@ impl Tag {
         let tu8 = self as u8;
         tu8 > (Tag::ObjectCodeLowerBound as u8) || tu8 < (Tag::ObjectCodeUpperBound as u8)
     }
+
+    #[inline(always)]
+    pub const fn from_u8(tag: u8) -> Tag {
+        const A: u8 = Tag::SmallCodeUpperBound as u8;
+        const B: u8 = Tag::ObjectCodeLowerBound as u8;
+        const C: u8 = Tag::ObjectCodeUpperBound as u8;
+        if !((tag < A) || (B < tag && tag < C)) {
+            return Tag::Bad;
+        }
+
+        // Transmuting an integer to an enum is UB if outside the defined enum
+        // value set, so we need to test above to be safe. Note that it's ok for
+        // this to be a _little_ slow since it's not called in a lot
+        // of small/tight paths, only when doing a switch-based comparison. Most
+        // small paths call `has_tag` which tests a _known_ enum case against
+        // the tag byte, and therefore doesn't need the range check.
+        //
+        // The `test_tag_from_u8` test should ensure this cast is correct.
+        unsafe { ::core::mem::transmute(tag) }
+    }
 }
 
 #[repr(transparent)]
@@ -498,19 +518,7 @@ impl RawVal {
     #[inline(always)]
     pub const fn get_tag(self) -> Tag {
         let tag = self.get_tag_u8();
-        const A: u8 = Tag::SmallCodeUpperBound as u8;
-        const B: u8 = Tag::ObjectCodeLowerBound as u8;
-        const C: u8 = Tag::ObjectCodeUpperBound as u8;
-        if !((tag < A) || (B < tag && tag < C)) {
-            return Tag::Bad;
-        }
-        // Transmuting an integer to an enum is UB if outside the defined enum
-        // value set, so we need to test above to be safe. Note that it's ok for
-        // `get_tag` here to be a _little_ slow since it's not called in a lot
-        // of small/tight paths, only when doing a switch-based comparison. Most
-        // small paths call `has_tag` which tests a _known_ enum case against
-        // the tag byte, and therefore doesn't need the range check.
-        unsafe { ::core::mem::transmute(tag) }
+        Tag::from_u8(tag)
     }
 
     #[inline(always)]
