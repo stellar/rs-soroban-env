@@ -82,7 +82,7 @@ pub(crate) fn set_authorized(
     authorize: bool,
 ) -> Result<(), HostError> {
     let mut topics = Vec::new(e)?;
-    topics.push(&Symbol::try_from_val(e, &"set_auth")?)?;
+    topics.push(&Symbol::try_from_val(e, &"set_authorized")?)?;
     topics.push(&admin)?;
     topics.push(&id)?;
     topics.push(&read_name(&e)?)?;

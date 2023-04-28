@@ -2,8 +2,8 @@ use soroban_env_common::xdr::ScHostObjErrorCode;
 
 use super::{declared_size::DeclaredSizeForMetering, MeteredClone};
 use crate::{
-    budget::{AsBudget, Budget, CostType},
-    xdr::ScHostFnErrorCode,
+    budget::{AsBudget, Budget},
+    xdr::{ContractCostType, ScHostFnErrorCode},
     Compare, Host, HostError,
 };
 use std::{borrow::Borrow, cmp::Ordering, marker::PhantomData};
@@ -37,18 +37,18 @@ where
 {
     fn charge_access<B: AsBudget>(&self, count: usize, b: &B) -> Result<(), HostError> {
         b.as_budget()
-            .batched_charge(CostType::MapEntry, count as u64, None)
+            .batched_charge(ContractCostType::MapEntry, count as u64, None)
     }
 
     fn charge_scan<B: AsBudget>(&self, b: &B) -> Result<(), HostError> {
         b.as_budget()
-            .batched_charge(CostType::MapEntry, self.map.len() as u64, None)
+            .batched_charge(ContractCostType::MapEntry, self.map.len() as u64, None)
     }
 
     fn charge_binsearch<B: AsBudget>(&self, b: &B) -> Result<(), HostError> {
         let mag = 64 - (self.map.len() as u64).leading_zeros();
         b.as_budget()
-            .batched_charge(CostType::MapEntry, 1 + mag as u64, None)
+            .batched_charge(ContractCostType::MapEntry, 1 + mag as u64, None)
     }
 }
 
@@ -341,7 +341,7 @@ where
         b: &MeteredOrdMap<K, V, Host>,
     ) -> Result<Ordering, Self::Error> {
         self.as_budget().batched_charge(
-            CostType::MapEntry,
+            ContractCostType::MapEntry,
             a.map.len().min(b.map.len()) as u64,
             None,
         )?;
@@ -361,7 +361,7 @@ where
         b: &MeteredOrdMap<K, V, Budget>,
     ) -> Result<Ordering, Self::Error> {
         self.batched_charge(
-            CostType::MapEntry,
+            ContractCostType::MapEntry,
             a.map.len().min(b.map.len()) as u64,
             None,
         )?;

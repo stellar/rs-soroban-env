@@ -2,8 +2,8 @@ use soroban_env_common::{xdr::ScHostFnErrorCode, Compare};
 
 use super::{declared_size::DeclaredSizeForMetering, MeteredClone};
 use crate::{
-    budget::{AsBudget, Budget, CostType},
-    xdr::ScHostObjErrorCode,
+    budget::{AsBudget, Budget},
+    xdr::{ContractCostType, ScHostObjErrorCode},
     Host, HostError,
 };
 use std::{cmp::Ordering, ops::Range};
@@ -18,16 +18,16 @@ where
     A: DeclaredSizeForMetering,
 {
     fn charge_access(&self, count: usize, budget: &Budget) -> Result<(), HostError> {
-        budget.batched_charge(CostType::VecEntry, count as u64, None)
+        budget.batched_charge(ContractCostType::VecEntry, count as u64, None)
     }
 
     fn charge_scan(&self, budget: &Budget) -> Result<(), HostError> {
-        budget.batched_charge(CostType::VecEntry, self.vec.len() as u64, None)
+        budget.batched_charge(ContractCostType::VecEntry, self.vec.len() as u64, None)
     }
 
     fn charge_binsearch(&self, budget: &Budget) -> Result<(), HostError> {
         let mag = 64 - (self.vec.len() as u64).leading_zeros();
-        budget.batched_charge(CostType::VecEntry, 1 + mag as u64, None)
+        budget.batched_charge(ContractCostType::VecEntry, 1 + mag as u64, None)
     }
 }
 
@@ -323,7 +323,7 @@ where
         b: &MeteredVector<Elt>,
     ) -> Result<Ordering, Self::Error> {
         self.as_budget().batched_charge(
-            CostType::VecEntry,
+            ContractCostType::VecEntry,
             a.vec.len().min(b.vec.len()) as u64,
             None,
         )?;
@@ -343,7 +343,7 @@ where
         b: &MeteredVector<Elt>,
     ) -> Result<Ordering, Self::Error> {
         self.as_budget().batched_charge(
-            CostType::VecEntry,
+            ContractCostType::VecEntry,
             a.vec.len().min(b.vec.len()) as u64,
             None,
         )?;

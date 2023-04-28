@@ -3,15 +3,15 @@ use std::rc::Rc;
 use rand::{thread_rng, RngCore};
 use soroban_env_common::{
     xdr::{
-        AccountEntry, AccountId, ContractId, CreateContractArgs, HostFunction, HostFunctionArgs,
-        LedgerEntry, LedgerEntryData, LedgerKey, PublicKey, ScContractExecutable, ScVal, ScVec,
-        Uint256, UploadContractWasmArgs,
+        AccountEntry, AccountId, ContractCostType, ContractId, CreateContractArgs, HostFunction,
+        HostFunctionArgs, LedgerEntry, LedgerEntryData, LedgerKey, PublicKey, ScContractExecutable,
+        ScVal, ScVec, Uint256, UploadContractWasmArgs,
     },
     BytesObject, RawVal, TryIntoVal, VecObject,
 };
 
 use crate::{
-    budget::{Budget, CostType},
+    budget::Budget,
     storage::{test_storage::MockSnapshotSource, Storage},
     xdr, Host, HostError,
 };
@@ -69,7 +69,7 @@ impl Host {
 
     pub(crate) fn enable_model(
         self,
-        ty: CostType,
+        ty: ContractCostType,
         const_cpu: u64,
         lin_cpu: u64,
         const_mem: u64,
@@ -81,26 +81,26 @@ impl Host {
                 .borrow_mut()
                 .cpu_insns
                 .get_cost_model_mut(ty)
-                .const_param = const_cpu;
+                .const_term = const_cpu as i64;
             budget
                 .0
                 .borrow_mut()
                 .cpu_insns
                 .get_cost_model_mut(ty)
-                .lin_param = lin_cpu;
+                .linear_term = lin_cpu as i64;
 
             budget
                 .0
                 .borrow_mut()
                 .mem_bytes
                 .get_cost_model_mut(ty)
-                .const_param = const_mem;
+                .const_term = const_mem as i64;
             budget
                 .0
                 .borrow_mut()
                 .mem_bytes
                 .get_cost_model_mut(ty)
-                .lin_param = lin_mem;
+                .linear_term = lin_mem as i64;
         });
         self
     }

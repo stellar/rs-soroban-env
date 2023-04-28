@@ -1,11 +1,11 @@
 use std::hint::black_box;
 
-use crate::{budget::CostType, cost_runner::CostRunner, xdr::ScVal, RawVal};
+use crate::{cost_runner::CostRunner, xdr::ContractCostType, xdr::ScVal, RawVal};
 
 pub struct ValXdrConvRun;
 
 impl CostRunner for ValXdrConvRun {
-    const COST_TYPE: CostType = CostType::ValXdrConv;
+    const COST_TYPE: ContractCostType = ContractCostType::ValXdrConv;
 
     type SampleType = (Option<RawVal>, ScVal);
 

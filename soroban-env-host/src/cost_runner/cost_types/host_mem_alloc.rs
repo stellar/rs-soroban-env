@@ -1,15 +1,11 @@
 use std::hint::black_box;
 
-use crate::{
-    budget::{AsBudget, CostType},
-    cost_runner::CostRunner,
-    MeteredVector,
-};
+use crate::{budget::AsBudget, cost_runner::CostRunner, xdr::ContractCostType, MeteredVector};
 
 pub struct HostMemAllocRun;
 
 impl CostRunner for HostMemAllocRun {
-    const COST_TYPE: CostType = CostType::HostMemAlloc;
+    const COST_TYPE: ContractCostType = ContractCostType::HostMemAlloc;
 
     type SampleType = u64;
 

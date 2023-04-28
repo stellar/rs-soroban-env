@@ -1,7 +1,7 @@
 use std::hint::black_box;
 
 use crate::budget::AsBudget;
-use crate::{budget::CostType, cost_runner::CostRunner, Host, MeteredVector, RawVal};
+use crate::{cost_runner::CostRunner, xdr::ContractCostType, Host, MeteredVector, RawVal};
 
 type HostVec = MeteredVector<RawVal>;
 
@@ -13,7 +13,7 @@ pub struct VecEntrySample {
     pub idxs: Vec<usize>,
 }
 impl CostRunner for VecEntryRun {
-    const COST_TYPE: CostType = CostType::VecEntry;
+    const COST_TYPE: ContractCostType = ContractCostType::VecEntry;
 
     type SampleType = VecEntrySample;
 

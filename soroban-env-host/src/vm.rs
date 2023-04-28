@@ -12,16 +12,16 @@ mod dispatch;
 mod func_info;
 
 use crate::{
-    budget::CostType,
     host::{Frame, HostImpl},
+    xdr::ContractCostType,
     HostError, VmCaller,
 };
-use std::{cell::RefCell, io::Cursor, ops::RangeInclusive, rc::Rc};
+use std::{cell::RefCell, io::Cursor, rc::Rc};
 
 use super::{xdr::Hash, Host, RawVal, Symbol};
 use func_info::HOST_FUNCTIONS;
 use soroban_env_common::{
-    meta,
+    meta::{self, get_ledger_protocol_version, get_pre_release_version},
     xdr::{ReadXdr, ScEnvMetaEntry, ScHostFnErrorCode, ScVmErrorCode},
     ConversionError, SymbolStr, TryIntoVal,
 };
@@ -48,7 +48,7 @@ impl StepMeter for HostImpl {
         // TODO reconcile TrapCode with HostError better.
         self.budget
             .clone()
-            .batched_charge(CostType::WasmInsnExec, insns, None)
+            .batched_charge(ContractCostType::WasmInsnExec, insns, None)
             .map_err(|_| wasmi::core::TrapCode::CpuLimitExceeded)
     }
 
@@ -56,7 +56,7 @@ impl StepMeter for HostImpl {
     fn charge_mem(&self, pages: u64) -> Result<(), wasmi::core::TrapCode> {
         self.budget
             .clone()
-            .charge(CostType::WasmMemAlloc, Some(pages))
+            .charge(ContractCostType::WasmMemAlloc, Some(pages))
             .map_err(|_| wasmi::core::TrapCode::MemLimitExceeded)
     }
 }
@@ -93,30 +93,19 @@ pub struct VmFunction {
 
 impl Vm {
     fn check_meta_section(host: &Host, m: &Module) -> Result<(), HostError> {
-        // At present the supported interface-version range is always just a single
-        // point, and it is hard-wired into the host as the current
-        // `soroban_env_common` value [`meta::INTERFACE_VERSION`]. In the future when
-        // we commit to API stability two things will change:
-        //
-        //   1. The value will stop being hard-wired; it will change based on the
-        //      current ledger, as a config value that varies over time based on
-        //      consensus.
-        //
-        //   2. It will (mostly) have a fixed lower bound and only ever have its upper
-        //      bound expand, since that is what "API stability" means: old code still
-        //      runs on new hosts. The "mostly" qualifier here covers the case where we
-        //      have to reset the lower bound to expire old APIs (used by old
-        //      contracts) if they prove to be a security risk; this will only happen
-        //      in extreme cases, hopefully never.
-        const SUPPORTED_INTERFACE_VERSION_RANGE: RangeInclusive<u64> =
-            meta::INTERFACE_VERSION..=meta::INTERFACE_VERSION;
+        // We check that the interface version number has the same pre-release number as
+        // us as well as a protocol that's less than or equal to our protocol.
 
         if let Some(env_meta) = Self::module_custom_section(m, meta::ENV_META_V0_SECTION_NAME) {
             let mut cursor = Cursor::new(env_meta);
             for env_meta_entry in ScEnvMetaEntry::read_xdr_iter(&mut cursor) {
                 match host.map_err(env_meta_entry)? {
                     ScEnvMetaEntry::ScEnvMetaKindInterfaceVersion(v) => {
-                        if SUPPORTED_INTERFACE_VERSION_RANGE.contains(&v) {
+                        if get_pre_release_version(v)
+                            == get_pre_release_version(meta::INTERFACE_VERSION)
+                            && get_ledger_protocol_version(v)
+                                <= get_ledger_protocol_version(meta::INTERFACE_VERSION)
+                        {
                             return Ok(());
                         } else {
                             return Err(host.err_status_msg(
@@ -166,7 +155,7 @@ impl Vm {
     ) -> Result<Rc<Self>, HostError> {
         // `VmInstantiation` is const cost in both cpu and mem. It has weak variance on
         host.charge_budget(
-            CostType::VmInstantiation,
+            ContractCostType::VmInstantiation,
             Some(module_wasm_code.len() as u64),
         )?;
 
@@ -240,7 +229,7 @@ impl Vm {
         func: &Symbol,
         args: &[RawVal],
     ) -> Result<RawVal, HostError> {
-        host.charge_budget(CostType::InvokeVmFunction, None)?;
+        host.charge_budget(ContractCostType::InvokeVmFunction, None)?;
         host.with_frame(
             Frame::ContractVM(self.clone(), *func, args.to_vec()),
             || {

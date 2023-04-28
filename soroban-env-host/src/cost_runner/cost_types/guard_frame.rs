@@ -1,11 +1,13 @@
 use std::hint::black_box;
 
-use crate::{budget::CostType, cost_runner::CostRunner, host::Frame, xdr::Hash, Status, Symbol};
+use crate::{
+    cost_runner::CostRunner, host::Frame, xdr::ContractCostType, xdr::Hash, Status, Symbol,
+};
 
 pub struct GuardFrameRun;
 
 impl CostRunner for GuardFrameRun {
-    const COST_TYPE: CostType = CostType::GuardFrame;
+    const COST_TYPE: ContractCostType = ContractCostType::GuardFrame;
 
     type SampleType = (Hash, Symbol);
 
