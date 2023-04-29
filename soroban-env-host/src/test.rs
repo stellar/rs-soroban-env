@@ -3,7 +3,6 @@ pub(crate) mod util;
 mod address;
 mod basic;
 mod bytes;
-mod comparison;
 mod crypto;
 mod ledger;
 mod map;
