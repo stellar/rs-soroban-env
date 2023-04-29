@@ -189,13 +189,8 @@ impl Tag {
     /// For use in the `Host::obj_cmp` comparison function so that comparison
     /// based on tags can be done identically to the `ScVal` type.
     ///
-    /// Returns `None` for `Tag::Bad`.
-    ///
-    /// # Panics
-    ///
-    /// If `self` is any of the three marker tags,
+    /// Returns `None` for `Tag::Bad`, and for the three marker tags
     /// `SmallCodeUpperBound`, `ObjectCodeLowerBound`, `ObjectCodeUpperBound`.
-    /// These should not be constructed under code paths that might use this function.
     #[inline(always)]
     pub const fn get_scval_type(&self) -> Option<ScValType> {
         match *self {
@@ -215,8 +210,8 @@ impl Tag {
             Tag::I256Small => Some(ScValType::I256),
             Tag::SymbolSmall => Some(ScValType::Symbol),
             Tag::LedgerKeyContractExecutable => Some(ScValType::LedgerKeyContractExecutable),
-            Tag::SmallCodeUpperBound => panic!(),
-            Tag::ObjectCodeLowerBound => panic!(),
+            Tag::SmallCodeUpperBound => None,
+            Tag::ObjectCodeLowerBound => None,
             Tag::U64Object => Some(ScValType::U64),
             Tag::I64Object => Some(ScValType::I64),
             Tag::TimepointObject => Some(ScValType::Timepoint),
@@ -233,7 +228,7 @@ impl Tag {
             Tag::ContractExecutableObject => Some(ScValType::ContractExecutable),
             Tag::AddressObject => Some(ScValType::Address),
             Tag::LedgerKeyNonceObject => Some(ScValType::LedgerKeyNonce),
-            Tag::ObjectCodeUpperBound => panic!(),
+            Tag::ObjectCodeUpperBound => None,
             Tag::Bad => None,
         }
     }
