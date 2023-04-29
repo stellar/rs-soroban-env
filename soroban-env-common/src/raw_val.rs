@@ -42,6 +42,7 @@ sa::const_assert!(MAJOR_BITS + MINOR_BITS == BODY_BITS);
 /// special cases (boolean true and false, small-value forms).
 #[repr(u8)]
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
+#[cfg_attr(test, derive(int_enum::IntEnum))]
 pub enum Tag {
     /// Tag for a [RawVal] that encodes [bool] `false`. The bool type is refined to
     /// two single-value subtypes in order for each tag number to coincides with
@@ -132,21 +133,21 @@ pub enum Tag {
     I256Object = 71,
 
     BytesObject = 72,
-    StringObject = 74,
-    SymbolObject = 75,
+    StringObject = 73,
+    SymbolObject = 74,
 
-    VecObject = 77,
-    MapObject = 78,
+    VecObject = 75,
+    MapObject = 76,
 
-    ContractExecutableObject = 79,
-    AddressObject = 80,
+    ContractExecutableObject = 77,
+    AddressObject = 78,
 
     /// Tag for a [RawVal] that corresponds to
     /// [stellar_xdr::ScVal::LedgerKeyNonce] and refers to a host-side
     /// address object that specifies which address it's the nonce for.
-    LedgerKeyNonceObject = 81,
+    LedgerKeyNonceObject = 79,
 
-    ObjectCodeUpperBound = 82,
+    ObjectCodeUpperBound = 80,
 
     Bad = 0x7f,
 }
@@ -161,6 +162,26 @@ impl Tag {
     pub const fn is_object(self) -> bool {
         let tu8 = self as u8;
         tu8 > (Tag::ObjectCodeLowerBound as u8) || tu8 < (Tag::ObjectCodeUpperBound as u8)
+    }
+
+    #[inline(always)]
+    pub const fn from_u8(tag: u8) -> Tag {
+        const A: u8 = Tag::SmallCodeUpperBound as u8;
+        const B: u8 = Tag::ObjectCodeLowerBound as u8;
+        const C: u8 = Tag::ObjectCodeUpperBound as u8;
+        if !((tag < A) || (B < tag && tag < C)) {
+            return Tag::Bad;
+        }
+
+        // Transmuting an integer to an enum is UB if outside the defined enum
+        // value set, so we need to test above to be safe. Note that it's ok for
+        // this to be a _little_ slow since it's not called in a lot
+        // of small/tight paths, only when doing a switch-based comparison. Most
+        // small paths call `has_tag` which tests a _known_ enum case against
+        // the tag byte, and therefore doesn't need the range check.
+        //
+        // The `test_tag_from_u8` test should ensure this cast is correct.
+        unsafe { ::core::mem::transmute(tag) }
     }
 }
 
@@ -498,19 +519,7 @@ impl RawVal {
     #[inline(always)]
     pub const fn get_tag(self) -> Tag {
         let tag = self.get_tag_u8();
-        const A: u8 = Tag::SmallCodeUpperBound as u8;
-        const B: u8 = Tag::ObjectCodeLowerBound as u8;
-        const C: u8 = Tag::ObjectCodeUpperBound as u8;
-        if !((tag < A) || (B < tag && tag < C)) {
-            return Tag::Bad;
-        }
-        // Transmuting an integer to an enum is UB if outside the defined enum
-        // value set, so we need to test above to be safe. Note that it's ok for
-        // `get_tag` here to be a _little_ slow since it's not called in a lot
-        // of small/tight paths, only when doing a switch-based comparison. Most
-        // small paths call `has_tag` which tests a _known_ enum case against
-        // the tag byte, and therefore doesn't need the range check.
-        unsafe { ::core::mem::transmute(tag) }
+        Tag::from_u8(tag)
     }
 
     #[inline(always)]
@@ -718,4 +727,34 @@ fn test_debug() {
         ),
         "Status(HostValueError(ReservedTagValue))"
     );
+}
+
+// `Tag::from_u8` is implemented by hand unsafely.
+//
+// This test ensures that all cases are correct by comparing to the
+// macro-generated results of the int-enum crate, which is only enabled as a
+// dev-dependency.
+#[test]
+fn test_tag_from_u8() {
+    use int_enum::IntEnum;
+
+    for i in 0_u8..=255 {
+        let expected_tag = Tag::from_int(i);
+        let actual_tag = Tag::from_u8(i);
+        match expected_tag {
+            Ok(Tag::SmallCodeUpperBound)
+            | Ok(Tag::ObjectCodeLowerBound)
+            | Ok(Tag::ObjectCodeUpperBound) => {
+                assert_eq!(actual_tag, Tag::Bad);
+            }
+            Ok(expected_tag) => {
+                assert_eq!(expected_tag, actual_tag);
+                let i_again = actual_tag as u8;
+                assert_eq!(i, i_again);
+            }
+            Err(_) => {
+                assert_eq!(actual_tag, Tag::Bad);
+            }
+        }
+    }
 }
