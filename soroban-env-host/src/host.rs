@@ -1250,6 +1250,28 @@ impl Host {
             .get_authenticated_top_authorizations())
     }
 
+    // Returns the authorizations that have been authenticated for the last
+    // contract invocation.
+    //
+    // Authenticated means that either the authorization was authenticated using
+    // the actual authorization logic for that authorization in enforced mode,
+    // or that it was recorded in recording mode and authorization was assumed
+    // successful.
+    #[cfg(any(test, feature = "testutils"))]
+    pub fn get_authenticated_authorizations(
+        &self,
+    ) -> Result<Vec<(ScAddress, Hash, ScSymbol, ScVec)>, HostError> {
+        Ok(self
+            .0
+            .previous_authorization_manager
+            .borrow_mut()
+            .as_mut()
+            .ok_or_else(|| {
+                self.err_general("previous invocation is missing - no auth data to get")
+            })?
+            .get_authenticated_authorizations())
+    }
+
     #[cfg(any(test, feature = "testutils"))]
     pub fn reset_temp_storage(&self) {
         *self.0.temp_storage.borrow_mut() = Default::default();
@@ -1741,17 +1763,17 @@ impl VmCallerEnv for Host {
             Some(res) => res,
 
             // Otherwise someone gave us an object and a non-paired value (not a small-value
-            // case of the same type). Order hese by their tags.
+            // case of the same type). Order these by their ScValType.
             None => {
-                let atag = a.get_tag();
-                let btag = b.get_tag();
-                if atag == btag {
+                let atype = a.get_tag().get_scval_type();
+                let btype = b.get_tag().get_scval_type();
+                if atype == btype {
                     // This shouldn't have happened, but if it does there's a logic error.
                     return Err(
                         self.err_general("equal-tagged values rejected by small-value obj_cmp")
                     );
                 }
-                a.get_tag().cmp(&b.get_tag())
+                atype.cmp(&btype)
             }
         };
         // Finally, translate Ordering::Foo to a number to return to caller.
