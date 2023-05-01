@@ -56,3 +56,5 @@ pub use host::{
     LedgerInfo,
 };
 pub use soroban_env_common::*;
+
+pub mod fees;
