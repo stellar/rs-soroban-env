@@ -557,7 +557,11 @@ impl AuthorizationManager {
                         auths: &mut Vec<(ScAddress, Hash, ScSymbol, ScVec)>,
                         i: &AuthorizedInvocation,
                     ) {
-                        auths.push(AuthorizationManager::invocation_to_tuple(a, i));
+                        // Is exhausted indicates if the auth was in fact
+                        // consumed by a call to require_auth.
+                        if i.is_exhausted {
+                            auths.push(AuthorizationManager::invocation_to_tuple(a, i));
+                        }
                         for sub in &i.sub_invocations {
                             add_recursively_to_auths(a, auths, sub);
                         }
