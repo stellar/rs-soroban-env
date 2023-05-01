@@ -512,21 +512,6 @@ impl AuthorizationManager {
         }
     }
 
-    #[cfg(any(test, feature = "testutils"))]
-    // Builds a tuple containing the common details exposed from the
-    // AuthorizationManager about authenticated authorizations.
-    fn invocation_to_tuple(
-        address: &ScAddress,
-        authorized_invocation: &AuthorizedInvocation,
-    ) -> (ScAddress, Hash, ScSymbol, ScVec) {
-        (
-            address.clone(),
-            authorized_invocation.contract_id.clone(),
-            authorized_invocation.function_name.clone(),
-            authorized_invocation.args.clone(),
-        )
-    }
-
     // Returns the top-level authorizations that have been authenticated for the
     // last contract invocation.
     #[cfg(any(test, feature = "testutils"))]
@@ -584,6 +569,21 @@ impl AuthorizationManager {
             })
             .flatten()
             .collect()
+    }
+
+    #[cfg(any(test, feature = "testutils"))]
+    // Builds a tuple containing the common details exposed from the
+    // AuthorizationManager about authenticated authorizations.
+    fn invocation_to_tuple(
+        address: &ScAddress,
+        authorized_invocation: &AuthorizedInvocation,
+    ) -> (ScAddress, Hash, ScSymbol, ScVec) {
+        (
+            address.clone(),
+            authorized_invocation.contract_id.clone(),
+            authorized_invocation.function_name.clone(),
+            authorized_invocation.args.clone(),
+        )
     }
 }
 
