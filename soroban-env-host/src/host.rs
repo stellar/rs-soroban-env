@@ -1250,6 +1250,28 @@ impl Host {
             .get_authenticated_top_authorizations())
     }
 
+    // Returns the authorizations that have been authenticated for the last
+    // contract invocation.
+    //
+    // Authenticated means that either the authorization was authenticated using
+    // the actual authorization logic for that authorization in enforced mode,
+    // or that it was recorded in recording mode and authorization was assumed
+    // successful.
+    #[cfg(any(test, feature = "testutils"))]
+    pub fn get_authenticated_authorizations(
+        &self,
+    ) -> Result<Vec<(ScAddress, Hash, ScSymbol, ScVec)>, HostError> {
+        Ok(self
+            .0
+            .previous_authorization_manager
+            .borrow_mut()
+            .as_mut()
+            .ok_or_else(|| {
+                self.err_general("previous invocation is missing - no auth data to get")
+            })?
+            .get_authenticated_authorizations())
+    }
+
     #[cfg(any(test, feature = "testutils"))]
     pub fn reset_temp_storage(&self) {
         *self.0.temp_storage.borrow_mut() = Default::default();
