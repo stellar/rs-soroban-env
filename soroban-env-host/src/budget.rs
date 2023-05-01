@@ -429,14 +429,18 @@ impl Budget {
             *t_iters = t_iters.saturating_add(iterations);
             match (t_inputs, input) {
                 (None, None) => Ok(()),
-                (Some(t), Some(i)) => Ok(*t = t.saturating_add(i.saturating_mul(iterations))),
+                (Some(t), Some(i)) => {
+                    *t = t.saturating_add(i.saturating_mul(iterations));
+                    Ok(())
+                }
                 // TODO: improve error code "unexpected cost model input"
                 _ => Err(ScUnknownErrorCode::General.into()),
             }
         })?;
         self.get_tracker_mut(ContractCostType::ChargeBudget, |(t_iters, _)| {
             // we already know `ChargeBudget` has undefined input, so here we just add 1 iteration.
-            Ok(*t_iters = t_iters.saturating_add(1))
+            *t_iters = t_iters.saturating_add(1);
+            Ok(())
         })?;
 
         // do the actual budget charging

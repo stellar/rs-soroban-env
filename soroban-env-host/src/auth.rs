@@ -141,7 +141,7 @@ impl AuthorizedInvocation {
         let sub_invocations_xdr = xdr_invocation.sub_invocations.into_vec();
         let sub_invocations = sub_invocations_xdr
             .into_iter()
-            .map(|i| AuthorizedInvocation::from_xdr(i))
+            .map(AuthorizedInvocation::from_xdr)
             .collect::<Result<Vec<_>, _>>()?;
         Ok(Self {
             contract_id: xdr_invocation.contract_id,
@@ -433,7 +433,7 @@ impl AuthorizationManager {
             // We could also make this included into the authorized stack to
             // generalize all the host function invocations.
             Frame::HostFunction(_) => return Ok(()),
-            Frame::Token(id, fn_name, _) => (id.metered_clone(&self.budget)?, fn_name.clone()),
+            Frame::Token(id, fn_name, _) => (id.metered_clone(&self.budget)?, *fn_name),
             #[cfg(any(test, feature = "testutils"))]
             Frame::TestContract(tc) => (tc.id.clone(), tc.func.clone()),
         };
@@ -472,7 +472,7 @@ impl AuthorizationManager {
     // Should only be called in the recording mode.
     pub(crate) fn get_recorded_auth_payloads(&self) -> Result<Vec<RecordedAuthPayload>, HostError> {
         match &self.mode {
-            AuthorizationMode::Enforcing => return Err(ScUnknownErrorCode::General.into()),
+            AuthorizationMode::Enforcing => Err(ScUnknownErrorCode::General.into()),
             AuthorizationMode::Recording(_) => Ok(self
                 .trackers
                 .iter()
@@ -636,7 +636,7 @@ impl AuthorizationTracker {
             false
         };
         let nonce = if !is_invoker {
-            Some(host.read_and_consume_nonce(&contract_id, &address)?)
+            Some(host.read_and_consume_nonce(contract_id, &address)?)
         } else {
             None
         };
@@ -829,15 +829,13 @@ impl AuthorizationTracker {
                     break;
                 }
             }
-        } else {
-            if !self.root_authorized_invocation.is_exhausted
-                && &self.root_authorized_invocation.contract_id == contract_id
-                && &self.root_authorized_invocation.function_name == function_name
-                && &self.root_authorized_invocation.args == args
-            {
-                frame_index = Some(0);
-                self.root_authorized_invocation.is_exhausted = true;
-            }
+        } else if !self.root_authorized_invocation.is_exhausted
+            && &self.root_authorized_invocation.contract_id == contract_id
+            && &self.root_authorized_invocation.function_name == function_name
+            && &self.root_authorized_invocation.args == args
+        {
+            frame_index = Some(0);
+            self.root_authorized_invocation.is_exhausted = true;
         }
         if frame_index.is_some() {
             *self.invocation_id_in_call_stack.last_mut().unwrap() = frame_index;
@@ -875,7 +873,6 @@ impl AuthorizationTracker {
             invocation: self.invocation_to_xdr(host.budget_ref())?,
             nonce: self
                 .nonce
-                .clone()
                 .ok_or_else(|| host.err_general("unexpected missing nonce"))?,
         });
 
@@ -892,7 +889,7 @@ impl AuthorizationTracker {
             let payload = self.get_signature_payload(host)?;
             match address {
                 ScAddress::Account(acc) => {
-                    check_account_authentication(host, &acc, &payload, &self.signature_args)?;
+                    check_account_authentication(host, acc, &payload, &self.signature_args)?;
                 }
                 ScAddress::Contract(acc_contract) => {
                     check_account_contract_auth(
@@ -984,7 +981,7 @@ impl Host {
                     self.with_mut_storage(|storage| storage.get(&nonce_key, self.budget_ref()))?;
                 match &entry.data {
                     LedgerEntryData::ContractData(ContractDataEntry { val, .. }) => match val {
-                        ScVal::U64(val) => val.clone(),
+                        ScVal::U64(val) => *val,
                         _ => {
                             return Err(self.err_general("unexpected nonce entry type"));
                         }

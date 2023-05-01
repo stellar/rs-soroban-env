@@ -12,7 +12,7 @@ impl<E: Env> TryFromVal<E, StringObject> for String {
     fn try_from_val(env: &E, v: &StringObject) -> Result<Self, Self::Error> {
         let len: u32 = env.string_len(*v).map_err(|_| ConversionError)?.into();
         let len = len as usize;
-        let mut vec = std::vec![0; len as usize];
+        let mut vec = std::vec![0; len];
         env.string_copy_to_slice(*v, RawVal::U32_ZERO, &mut vec)
             .map_err(|_| ConversionError)?;
         String::from_utf8(vec).map_err(|_| ConversionError)
@@ -34,9 +34,7 @@ impl<E: Env> TryFromVal<E, &str> for StringObject {
     type Error = ConversionError;
     #[inline(always)]
     fn try_from_val(env: &E, val: &&str) -> Result<StringObject, Self::Error> {
-        Ok(env
-            .string_new_from_slice(*val)
-            .map_err(|_| ConversionError)?)
+        env.string_new_from_slice(val).map_err(|_| ConversionError)
     }
 }
 

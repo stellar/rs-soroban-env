@@ -152,16 +152,11 @@ pub struct LedgerInfo {
     pub base_reserve: u32,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub enum DiagnosticLevel {
+    #[default]
     None,
     Debug,
-}
-
-impl Default for DiagnosticLevel {
-    fn default() -> Self {
-        DiagnosticLevel::None
-    }
 }
 
 #[derive(Clone, Default)]
@@ -311,7 +306,10 @@ impl Host {
     {
         match self.0.ledger.borrow_mut().as_mut() {
             None => Err(self.err_general("missing ledger info")),
-            Some(li) => Ok(f(li)),
+            Some(li) => {
+                f(li);
+                Ok(())
+            }
         }
     }
 
@@ -349,7 +347,7 @@ impl Host {
     where
         F: FnOnce(&mut InternalEventsBuffer) -> Result<U, HostError>,
     {
-        f(&mut *self.0.events.borrow_mut())
+        f(&mut self.0.events.borrow_mut())
     }
 
     /// Records a debug event. This in itself is not necessarily an error; it
@@ -399,7 +397,7 @@ impl Host {
     where
         F: FnOnce(&mut Storage) -> Result<U, HostError>,
     {
-        f(&mut *self.0.storage.borrow_mut())
+        f(&mut self.0.storage.borrow_mut())
     }
 
     /// Accept a _unique_ (refcount = 1) host reference and destroy the
@@ -683,7 +681,7 @@ impl Host {
     }
 
     pub fn get_events(&self) -> Result<Events, HostError> {
-        self.0.events.borrow().externalize(&self)
+        self.0.events.borrow().externalize(self)
     }
 
     pub(crate) fn from_host_val(&self, val: RawVal) -> Result<ScVal, HostError> {
@@ -796,7 +794,7 @@ impl Host {
         }
     }
 
-    pub(crate) fn to_host_obj<'a>(&self, ob: &ScValObjRef<'a>) -> Result<Object, HostError> {
+    pub(crate) fn to_host_obj(&self, ob: &ScValObjRef<'_>) -> Result<Object, HostError> {
         // `ValXdrConv` is const cost in both cpu and mem. The input=0 will be ignored.
         self.charge_budget(ContractCostType::ValXdrConv, None)?;
         let val: &ScVal = (*ob).into();
@@ -984,13 +982,12 @@ impl Host {
             }
             #[cfg(not(feature = "vm"))]
             ScContractExecutable::WasmRef(_) => Err(self.err_general("could not dispatch")),
-            ScContractExecutable::Token => self.with_frame(
-                Frame::Token(id.clone(), func.clone(), args.to_vec()),
-                || {
+            ScContractExecutable::Token => {
+                self.with_frame(Frame::Token(id.clone(), *func, args.to_vec()), || {
                     use crate::native_contract::{NativeContract, Token};
                     Token.call(func, self, args)
-                },
-            ),
+                })
+            }
         }
     }
 
@@ -1016,17 +1013,16 @@ impl Host {
     ) -> Result<RawVal, HostError> {
         // Internal host calls may call some special functions that otherwise
         // aren't allowed to be called.
-        if !internal_host_call {
-            if SymbolStr::try_from_val(self, &func)?
+        if !internal_host_call
+            && SymbolStr::try_from_val(self, &func)?
                 .to_string()
                 .as_str()
                 .starts_with(RESERVED_CONTRACT_FN_PREFIX)
-            {
-                return Err(self.err_status_msg(
-                    ScHostContextErrorCode::UnknownError,
-                    "can't invoke a reserved function directly",
-                ));
-            }
+        {
+            return Err(self.err_status_msg(
+                ScHostContextErrorCode::UnknownError,
+                "can't invoke a reserved function directly",
+            ));
         }
         if !matches!(reentry_mode, ContractReentryMode::Allowed) {
             let mut is_last_non_host_frame = true;
@@ -1056,7 +1052,7 @@ impl Host {
             }
         }
 
-        self.fn_call_diagnostics(&id, &func, args)?;
+        self.fn_call_diagnostics(id, &func, args)?;
 
         // "testutils" is not covered by budget metering.
         #[cfg(any(test, feature = "testutils"))]
@@ -1140,14 +1136,14 @@ impl Host {
             }
         }
 
-        let res = self.call_contract_fn(&id, &func, args);
+        let res = self.call_contract_fn(id, &func, args);
 
         match &res {
-            Ok(res) => self.fn_return_diagnostics(id, &func, &res)?,
+            Ok(res) => self.fn_return_diagnostics(id, &func, res)?,
             Err(err) => {}
         }
 
-        return res;
+        res
     }
 
     // Notes on metering: covered by the called components.
@@ -1177,11 +1173,11 @@ impl Host {
             }
             HostFunctionArgs::CreateContract(args) => self
                 .with_frame(Frame::HostFunction(hf_type), || {
-                    self.create_contract(args).map(|obj| <RawVal>::from(obj))
+                    self.create_contract(args).map(<RawVal>::from)
                 }),
             HostFunctionArgs::UploadContractWasm(args) => self
                 .with_frame(Frame::HostFunction(hf_type), || {
-                    self.install_contract(args).map(|obj| <RawVal>::from(obj))
+                    self.install_contract(args).map(<RawVal>::from)
                 }),
         }
     }
@@ -1290,7 +1286,7 @@ impl Host {
             ContractId::SourceAccount(salt) => self.id_preimage_from_source_account(salt)?,
             ContractId::Ed25519PublicKey(key_with_signature) => {
                 let signature_payload_preimage = self.create_contract_args_hash_preimage(
-                    args.executable.metered_clone(&self.budget_ref())?,
+                    args.executable.metered_clone(self.budget_ref())?,
                     key_with_signature.salt.metered_clone(self.budget_ref())?,
                 )?;
                 let signature_payload = self.metered_hash_xdr(&signature_payload_preimage)?;
@@ -1348,7 +1344,7 @@ impl Host {
             Some(payload.len() as u64),
         )?;
         public_key
-            .verify(payload, &sig)
+            .verify(payload, sig)
             .map_err(|_| self.err_general("Failed ED25519 verification"))
     }
 
@@ -1634,10 +1630,8 @@ impl EnvBase for Host {
     fn symbol_index_in_strs(&self, sym: Symbol, slices: &[&str]) -> Result<U32Val, Self::Error> {
         let mut found = None;
         self.metered_scan_slice_of_slices(slices, |i, slice| {
-            if self.symbol_matches(slice.as_bytes(), sym)? {
-                if found.is_none() {
-                    found = Some(i)
-                }
+            if self.symbol_matches(slice.as_bytes(), sym)? && found.is_none() {
+                found = Some(i)
             }
             Ok(())
         })?;
@@ -1791,7 +1785,7 @@ impl VmCallerEnv for Host {
         data: RawVal,
     ) -> Result<Void, HostError> {
         self.record_contract_event(ContractEventType::Contract, topics, data)?;
-        Ok(RawVal::VOID.into())
+        Ok(RawVal::VOID)
     }
 
     // Notes on metering: covered by the components.
@@ -1799,11 +1793,9 @@ impl VmCallerEnv for Host {
         &self,
         _vmcaller: &mut VmCaller<Host>,
     ) -> Result<AddressObject, HostError> {
-        Ok(self
-            .add_host_object(ScAddress::Contract(
-                self.get_current_contract_id_internal()?,
-            ))?
-            .into())
+        self.add_host_object(ScAddress::Contract(
+            self.get_current_contract_id_internal()?,
+        ))
     }
 
     // Notes on metering: covered by `add_host_object`.
@@ -2009,7 +2001,7 @@ impl VmCallerEnv for Host {
     ) -> Result<RawVal, HostError> {
         self.visit_obj(m, move |hm: &HostMap| {
             hm.get(&k, self)?
-                .map(|v| *v)
+                .copied()
                 .ok_or_else(|| self.err_general("map key not found")) // FIXME: need error code
         })
     }
@@ -2021,7 +2013,7 @@ impl VmCallerEnv for Host {
         k: RawVal,
     ) -> Result<MapObject, HostError> {
         match self.visit_obj(m, |hm: &HostMap| hm.remove(&k, self))? {
-            Some((mnew, _)) => Ok(self.add_host_object(mnew)?.into()),
+            Some((mnew, _)) => Ok(self.add_host_object(mnew)?),
             None => Err(self.err_general("map key not found")),
         }
     }
@@ -2254,7 +2246,7 @@ impl VmCallerEnv for Host {
             self.validate_index_lt_bound(i, hv.len())?;
             hv.set(i as usize, x, self.as_budget())
         })?;
-        Ok(self.add_host_object(vnew)?.into())
+        self.add_host_object(vnew)
     }
 
     fn vec_get(
@@ -2295,7 +2287,7 @@ impl VmCallerEnv for Host {
         x: RawVal,
     ) -> Result<VecObject, HostError> {
         let vnew = self.visit_obj(v, move |hv: &HostVec| hv.push_front(x, self.as_budget()))?;
-        Ok(self.add_host_object(vnew)?.into())
+        self.add_host_object(vnew)
     }
 
     fn vec_pop_front(
@@ -2304,7 +2296,7 @@ impl VmCallerEnv for Host {
         v: VecObject,
     ) -> Result<VecObject, HostError> {
         let vnew = self.visit_obj(v, move |hv: &HostVec| hv.pop_front(self.as_budget()))?;
-        Ok(self.add_host_object(vnew)?.into())
+        self.add_host_object(vnew)
     }
 
     fn vec_push_back(
@@ -2314,7 +2306,7 @@ impl VmCallerEnv for Host {
         x: RawVal,
     ) -> Result<VecObject, HostError> {
         let vnew = self.visit_obj(v, move |hv: &HostVec| hv.push_back(x, self.as_budget()))?;
-        Ok(self.add_host_object(vnew)?.into())
+        self.add_host_object(vnew)
     }
 
     fn vec_pop_back(
@@ -2323,7 +2315,7 @@ impl VmCallerEnv for Host {
         v: VecObject,
     ) -> Result<VecObject, HostError> {
         let vnew = self.visit_obj(v, move |hv: &HostVec| hv.pop_back(self.as_budget()))?;
-        Ok(self.add_host_object(vnew)?.into())
+        self.add_host_object(vnew)
     }
 
     fn vec_front(&self, _vmcaller: &mut VmCaller<Host>, v: VecObject) -> Result<RawVal, HostError> {
@@ -2350,7 +2342,7 @@ impl VmCallerEnv for Host {
             self.validate_index_le_bound(i, hv.len())?;
             hv.insert(i as usize, x, self.as_budget())
         })?;
-        Ok(self.add_host_object(vnew)?.into())
+        self.add_host_object(vnew)
     }
 
     fn vec_append(
@@ -2368,7 +2360,7 @@ impl VmCallerEnv for Host {
                 }
             })
         })?;
-        Ok(self.add_host_object(vnew)?.into())
+        self.add_host_object(vnew)
     }
 
     fn vec_slice(
@@ -2384,7 +2376,7 @@ impl VmCallerEnv for Host {
             let range = self.valid_range_from_start_end_bound(start, end, hv.len())?;
             hv.slice(range, self.as_budget())
         })?;
-        Ok(self.add_host_object(vnew)?.into())
+        self.add_host_object(vnew)
     }
 
     fn vec_first_index_of(
@@ -2395,7 +2387,7 @@ impl VmCallerEnv for Host {
     ) -> Result<RawVal, Self::Error> {
         self.visit_obj(v, |hv: &HostVec| {
             Ok(
-                match hv.first_index_of(|other| self.compare(&x, other), &self.as_budget())? {
+                match hv.first_index_of(|other| self.compare(&x, other), self.as_budget())? {
                     Some(u) => self.usize_to_u32val(u)?.into(),
                     None => RawVal::VOID.into(),
                 },
@@ -2528,7 +2520,7 @@ impl VmCallerEnv for Host {
                 contract_id,
                 key,
                 val,
-            }) => Ok(self.to_host_val(&val)?.into()),
+            }) => Ok(self.to_host_val(val)?),
             _ => Err(self.err_status_msg(
                 ScHostStorageErrorCode::ExpectContractData,
                 "expected contract data",
@@ -2703,7 +2695,7 @@ impl VmCallerEnv for Host {
         let scv = self.from_host_val(v)?;
         let mut buf = Vec::<u8>::new();
         self.metered_write_xdr(&scv, &mut buf)?;
-        Ok(self.add_host_object(self.scbytes_from_vec(buf)?)?.into())
+        self.add_host_object(self.scbytes_from_vec(buf)?)
     }
 
     // Notes on metering: covered by components
@@ -2715,7 +2707,7 @@ impl VmCallerEnv for Host {
         let scv = self.visit_obj(b, |hv: &ScBytes| {
             self.metered_from_xdr::<ScVal>(hv.as_slice())
         })?;
-        Ok(self.to_host_val(&scv)?.into())
+        self.to_host_val(&scv)
     }
 
     fn string_copy_to_linear_memory(
@@ -2857,9 +2849,7 @@ impl VmCallerEnv for Host {
 
     // Notes on metering: covered by `add_host_object`
     fn bytes_new(&self, _vmcaller: &mut VmCaller<Host>) -> Result<BytesObject, HostError> {
-        Ok(self
-            .add_host_object(self.scbytes_from_vec(Vec::<u8>::new())?)?
-            .into())
+        self.add_host_object(self.scbytes_from_vec(Vec::<u8>::new())?)
     }
 
     // Notes on metering: `get_mut` is free
@@ -2882,7 +2872,7 @@ impl VmCallerEnv for Host {
                 }
             }
         })?;
-        Ok(self.add_host_object(vnew)?.into())
+        self.add_host_object(vnew)
     }
 
     // Notes on metering: `get` is free
@@ -2918,7 +2908,7 @@ impl VmCallerEnv for Host {
             vnew.remove(i as usize);
             Ok(ScBytes(vnew.try_into()?))
         })?;
-        Ok(self.add_host_object(vnew)?.into())
+        self.add_host_object(vnew)
     }
 
     // Notes on metering: `len` is free
@@ -2970,7 +2960,7 @@ impl VmCallerEnv for Host {
             vnew.push(u);
             Ok(ScBytes(vnew.try_into()?))
         })?;
-        Ok(self.add_host_object(vnew)?.into())
+        self.add_host_object(vnew)
     }
 
     // Notes on metering: `pop` is free
@@ -2988,7 +2978,7 @@ impl VmCallerEnv for Host {
             }
             Ok(ScBytes(vnew.try_into()?))
         })?;
-        Ok(self.add_host_object(vnew)?.into())
+        self.add_host_object(vnew)
     }
 
     // Notes on metering: `first` is free
@@ -3040,7 +3030,7 @@ impl VmCallerEnv for Host {
             vnew.insert(i as usize, u);
             Ok(ScBytes(vnew.try_into()?))
         })?;
-        Ok(self.add_host_object(vnew)?.into())
+        self.add_host_object(vnew)
     }
 
     fn bytes_append(
@@ -3069,7 +3059,7 @@ impl VmCallerEnv for Host {
                 Ok(vnew)
             })
         })?;
-        Ok(self.add_host_object(ScBytes(vnew.try_into()?))?.into())
+        self.add_host_object(ScBytes(vnew.try_into()?))
     }
 
     fn bytes_slice(
@@ -3132,11 +3122,9 @@ impl VmCallerEnv for Host {
         &self,
         _vmcaller: &mut VmCaller<Host>,
     ) -> Result<BytesObject, Self::Error> {
-        Ok(self
-            .with_ledger_info(|li| {
-                self.add_host_object(self.scbytes_from_slice(li.network_id.as_slice())?)
-            })?
-            .into())
+        self.with_ledger_info(|li| {
+            self.add_host_object(self.scbytes_from_slice(li.network_id.as_slice())?)
+        })
     }
 
     fn get_current_call_stack(
@@ -3147,7 +3135,7 @@ impl VmCallerEnv for Host {
 
         let get_host_val_tuple = |id: &Hash, function: &Symbol| -> Result<[RawVal; 2], HostError> {
             let id_val = self.add_host_object(self.scbytes_from_hash(id)?)?.into();
-            let function_val = function.clone().into();
+            let function_val = (*function).into();
             Ok([id_val, function_val])
         };
 
@@ -3159,14 +3147,14 @@ impl VmCallerEnv for Host {
                     get_host_val_tuple(&vm.contract_id, &function)?
                 }
                 Frame::HostFunction(_) => continue,
-                Frame::Token(id, function, _) => get_host_val_tuple(&id, &function)?,
+                Frame::Token(id, function, _) => get_host_val_tuple(id, function)?,
                 #[cfg(any(test, feature = "testutils"))]
                 Frame::TestContract(tc) => get_host_val_tuple(&tc.id, &tc.func)?,
             };
             let inner = MeteredVector::from_array(&vals, self.as_budget())?;
             outer.push(self.add_host_object(inner)?.into());
         }
-        Ok(self.add_host_object(HostVec::from_vec(outer)?)?.into())
+        self.add_host_object(HostVec::from_vec(outer)?)
     }
 
     fn fail_with_status(
@@ -3226,7 +3214,7 @@ impl VmCallerEnv for Host {
                 #[cfg(any(test, feature = "testutils"))]
                 Frame::TestContract(c) => &c.args,
             };
-            Ok(self.rawvals_to_scvec(args.iter())?)
+            self.rawvals_to_scvec(args.iter())
         })?;
 
         Ok(self

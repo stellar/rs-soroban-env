@@ -69,7 +69,7 @@ impl<E: Env> TryFromVal<E, &[u8]> for Symbol {
 
     fn try_from_val(env: &E, v: &&[u8]) -> Result<Self, Self::Error> {
         // We don't know this byte-slice is actually utf-8 ...
-        let s: &str = unsafe { core::str::from_utf8_unchecked(*v) };
+        let s: &str = unsafe { core::str::from_utf8_unchecked(v) };
         // ... but this next conversion step will check that its
         // _bytes_ are in the symbol-char range, which is a subset
         // of utf-8, so we're only lying harmlessly.
@@ -455,7 +455,7 @@ impl TryFrom<SymbolSmall> for ScVal {
 impl TryFrom<&SymbolSmall> for ScVal {
     type Error = ConversionError;
     fn try_from(s: &SymbolSmall) -> Result<Self, Self::Error> {
-        s.clone().try_into()
+        (*s).try_into()
     }
 }
 

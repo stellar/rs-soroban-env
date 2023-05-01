@@ -374,7 +374,7 @@ impl<'a, K, V, Ctx> IntoIterator for &'a MeteredOrdMap<K, V, Ctx> {
     type IntoIter = core::slice::Iter<'a, (K, V)>;
 
     fn into_iter(self) -> Self::IntoIter {
-        (&self.map).into_iter()
+        self.map.iter()
     }
 }
 

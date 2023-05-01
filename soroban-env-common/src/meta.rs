@@ -38,7 +38,7 @@
 // nonzero pre-release number can be used to force recompiles on interface
 // changes.
 
-pub const ENV_META_V0_SECTION_NAME: &'static str = "contractenvmetav0";
+pub const ENV_META_V0_SECTION_NAME: &str = "contractenvmetav0";
 
 soroban_env_macros::generate_env_meta_consts!(
     ledger_protocol_version: 20,

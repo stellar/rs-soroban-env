@@ -42,27 +42,24 @@
 //!      documentation purpopses without having to worry about breaking tests in
 //!      the host here.
 
-pub const ADD_I32: &'static [u8] =
-    include_bytes!("../wasm-workspace/opt/example_add_i32.wasm").as_slice();
-pub const CREATE_CONTRACT: &'static [u8] =
+pub const ADD_I32: &[u8] = include_bytes!("../wasm-workspace/opt/example_add_i32.wasm").as_slice();
+pub const CREATE_CONTRACT: &[u8] =
     include_bytes!("../wasm-workspace/opt/example_create_contract.wasm").as_slice();
-pub const CONTRACT_STORAGE: &'static [u8] =
+pub const CONTRACT_STORAGE: &[u8] =
     include_bytes!("../wasm-workspace/opt/example_contract_data.wasm").as_slice();
-pub const LINEAR_MEMORY: &'static [u8] =
+pub const LINEAR_MEMORY: &[u8] =
     include_bytes!("../wasm-workspace/opt/example_linear_memory.wasm").as_slice();
-pub const VEC: &'static [u8] = include_bytes!("../wasm-workspace/opt/example_vec.wasm").as_slice();
-pub const INVOKE_CONTRACT: &'static [u8] =
+pub const VEC: &[u8] = include_bytes!("../wasm-workspace/opt/example_vec.wasm").as_slice();
+pub const INVOKE_CONTRACT: &[u8] =
     include_bytes!("../wasm-workspace/opt/example_invoke_contract.wasm").as_slice();
-pub const HOSTILE: &'static [u8] =
-    include_bytes!("../wasm-workspace/opt/example_hostile.wasm").as_slice();
-pub const FIB: &'static [u8] = include_bytes!("../wasm-workspace/opt/example_fib.wasm").as_slice();
-pub const FANNKUCH: &'static [u8] =
+pub const HOSTILE: &[u8] = include_bytes!("../wasm-workspace/opt/example_hostile.wasm").as_slice();
+pub const FIB: &[u8] = include_bytes!("../wasm-workspace/opt/example_fib.wasm").as_slice();
+pub const FANNKUCH: &[u8] =
     include_bytes!("../wasm-workspace/opt/example_fannkuch.wasm").as_slice();
-pub const COMPLEX: &'static [u8] =
-    include_bytes!("../wasm-workspace/opt/example_complex.wasm").as_slice();
-pub const SIMPLE_ACCOUNT_CONTRACT: &'static [u8] =
+pub const COMPLEX: &[u8] = include_bytes!("../wasm-workspace/opt/example_complex.wasm").as_slice();
+pub const SIMPLE_ACCOUNT_CONTRACT: &[u8] =
     include_bytes!("../wasm-workspace/opt/example_simple_account.wasm").as_slice();
-pub const AUTH_TEST_CONTRACT: &'static [u8] =
+pub const AUTH_TEST_CONTRACT: &[u8] =
     include_bytes!("../wasm-workspace/opt/auth_test_contract.wasm").as_slice();
-pub const UPDATEABLE_CONTRACT: &'static [u8] =
+pub const UPDATEABLE_CONTRACT: &[u8] =
     include_bytes!("../wasm-workspace/opt/example_updateable_contract.wasm").as_slice();

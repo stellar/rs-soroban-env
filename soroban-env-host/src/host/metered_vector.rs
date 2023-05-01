@@ -115,7 +115,7 @@ where
     }
 
     pub fn pop_front(&self, budget: &Budget) -> Result<Self, HostError> {
-        if self.vec.len() == 0 {
+        if self.vec.is_empty() {
             Err(ScHostObjErrorCode::VecIndexOutOfBound.into())
         } else {
             let iter = self.vec.iter().skip(1).cloned();
@@ -142,7 +142,7 @@ where
     }
 
     pub fn pop_back(&self, budget: &Budget) -> Result<Self, HostError> {
-        if self.vec.len() == 0 {
+        if self.vec.is_empty() {
             Err(ScHostObjErrorCode::VecIndexOutOfBound.into())
         } else {
             let count = Self::sub_or_overflow(self.vec.len(), 1)?;
@@ -212,9 +212,9 @@ where
     {
         self.charge_scan(budget)?;
         let mut i = 0;
-        let mut iter = self.vec.iter();
+        let iter = self.vec.iter();
         // this is similar logic to `iter.position(f)` but is fallible
-        while let Some(val) = iter.next() {
+        for val in iter {
             if f(val)? == Ordering::Equal {
                 return Ok(Some(i));
             }

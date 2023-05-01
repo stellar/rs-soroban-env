@@ -94,7 +94,7 @@ impl Host {
     where
         DebugError: From<E>,
     {
-        res.map_err(|e| self.err(e.into()))
+        res.map_err(|e| self.err(e))
     }
 }
 
