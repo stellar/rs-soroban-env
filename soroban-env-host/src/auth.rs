@@ -138,15 +138,15 @@ pub(crate) struct AuthorizedInvocation {
 
 impl AuthorizedInvocation {
     fn from_xdr(xdr_invocation: xdr::AuthorizedInvocation) -> Result<Self, HostError> {
-        let sub_invocations_xdr = xdr_invocation.sub_invocations.to_vec();
+        let sub_invocations_xdr = xdr_invocation.sub_invocations.into_vec();
         let sub_invocations = sub_invocations_xdr
             .into_iter()
             .map(|i| AuthorizedInvocation::from_xdr(i))
             .collect::<Result<Vec<_>, _>>()?;
         Ok(Self {
-            contract_id: xdr_invocation.contract_id.clone(),
-            function_name: xdr_invocation.function_name.clone(),
-            args: xdr_invocation.args.clone(),
+            contract_id: xdr_invocation.contract_id,
+            function_name: xdr_invocation.function_name,
+            args: xdr_invocation.args,
             sub_invocations,
             is_exhausted: false,
         })
