@@ -529,15 +529,65 @@ impl AuthorizationManager {
                 // mostly care about at the benefit of making this list easier
                 // to use.
                 t.address.as_ref().map(|a| {
-                    (
-                        a.clone(),
-                        t.root_authorized_invocation.contract_id.clone(),
-                        t.root_authorized_invocation.function_name.clone(),
-                        t.root_authorized_invocation.args.clone(),
-                    )
+                    AuthorizationManager::invocation_to_tuple(a, &t.root_authorized_invocation)
                 })
             })
             .collect()
+    }
+
+    // Returns all authorizations that have been authenticated for the
+    // last contract invocation.
+    #[cfg(any(test, feature = "testutils"))]
+    pub(crate) fn get_authenticated_authorizations(
+        &self,
+    ) -> Vec<(ScAddress, Hash, ScSymbol, ScVec)> {
+        self.trackers
+            .iter()
+            .filter(|t| t.authenticated)
+            .filter_map(|t| {
+                // Ignore authorizations without an address as they are implied,
+                // less useful as a test utility, and not succinctly capturable
+                // in the list of tuples. This is a tradeoff between offering up
+                // all authorizations vs the authorizations developers will
+                // mostly care about at the benefit of making this list easier
+                // to use.
+                t.address.as_ref().map(|a| {
+                    fn add_recursively_to_auths(
+                        a: &ScAddress,
+                        auths: &mut Vec<(ScAddress, Hash, ScSymbol, ScVec)>,
+                        i: &AuthorizedInvocation,
+                    ) {
+                        // Is exhausted indicates if the auth was in fact
+                        // consumed by a call to require_auth.
+                        if i.is_exhausted {
+                            auths.push(AuthorizationManager::invocation_to_tuple(a, i));
+                        }
+                        for sub in &i.sub_invocations {
+                            add_recursively_to_auths(a, auths, sub);
+                        }
+                    }
+                    let mut auths = vec![];
+                    add_recursively_to_auths(a, &mut auths, &t.root_authorized_invocation);
+                    auths
+                })
+            })
+            .flatten()
+            .collect()
+    }
+
+    #[cfg(any(test, feature = "testutils"))]
+    // Builds a tuple containing the common details exposed from the
+    // AuthorizationManager about authenticated authorizations.
+    fn invocation_to_tuple(
+        address: &ScAddress,
+        authorized_invocation: &AuthorizedInvocation,
+    ) -> (ScAddress, Hash, ScSymbol, ScVec) {
+        (
+            address.clone(),
+            authorized_invocation.contract_id.clone(),
+            authorized_invocation.function_name.clone(),
+            authorized_invocation.args.clone(),
+        )
     }
 }
 
