@@ -681,7 +681,7 @@ impl Debug for RawVal {
         }
 
         match self.get_tag() {
-            Tag::U32Val => write!(f, "U32({})", { self.get_major() }),
+            Tag::U32Val => write!(f, "U32({})", self.get_major()),
             Tag::I32Val => write!(f, "I32({})", self.get_major() as i32),
             Tag::False => write!(f, "False"),
             Tag::True => write!(f, "True"),
