@@ -8,7 +8,7 @@ use crate::derive_type::{derive_type_enum, derive_type_struct};
 use proc_macro::TokenStream;
 use quote::quote;
 use syn::{
-    parse_macro_input, spanned::Spanned, DeriveInput, Error, ImplItem, ImplItemMethod, ItemImpl,
+    parse_macro_input, spanned::Spanned, DeriveInput, Error, ImplItem, ImplItemFn, ItemImpl,
     Visibility,
 };
 
@@ -39,9 +39,9 @@ pub fn derive_contract_type(input: TokenStream) -> TokenStream {
     quote! { #derived }.into()
 }
 
-fn get_methods(imp: &ItemImpl) -> impl Iterator<Item = &ImplItemMethod> {
+fn get_methods(imp: &ItemImpl) -> impl Iterator<Item = &ImplItemFn> {
     imp.items.iter().filter_map(|i| match i {
-        ImplItem::Method(m) => Some(m),
+        ImplItem::Fn(m) => Some(m),
         _ => None,
     })
 }
