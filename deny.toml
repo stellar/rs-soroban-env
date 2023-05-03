@@ -38,7 +38,19 @@ targets = [
 # so it should be used with care. The identifiers are [Package ID Specifications]
 # (https://doc.rust-lang.org/cargo/reference/pkgid-spec.html)
 
-exclude = ["ansi_term"]
+exclude = [
+   # used only when doing CPU-calibration benchmarks, not worth worrying about
+   "ansi_term",
+   "textplots",
+   "linregress",
+   # for the time being some metaprogramming crates haven't updated to syn 2. The
+   # only way to deal with these is to prune them from the tree.
+   "derive_arbitrary",
+   "num-derive",
+   "zeroize_derive",
+   # also a not upgraded to syn 2, but just a dev-dep anyway
+   "int-enum"
+]
 
 # If true, metadata will be collected with `--all-features`. Note that this can't
 # be toggled off if true, if you want to conditionally enable `--all-features` it
@@ -55,7 +67,7 @@ no-default-features = false
 # This option is included since the graphs can be quite large and the addition
 # of features from the crate(s) to all of the graph roots can be far too verbose.
 # This option can be overridden via `--feature-depth` on the cmd line
-feature-depth = 1
+# feature-depth = 1
 
 # This section is considered when running `cargo deny check advisories`
 # More documentation for the advisories section can be found here:
@@ -253,7 +265,6 @@ skip = [
 # dependencies starting at the specified crate, up to a certain depth, which is
 # by default infinite.
 skip-tree = [
-    { name = "textplots" },
 ]
 
 # This section is considered when running `cargo deny check sources`.
