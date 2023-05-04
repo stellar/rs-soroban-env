@@ -257,7 +257,7 @@ pub(crate) fn sha256_hash_id_preimage<T: xdr::WriteXdr>(pre_image: T) -> xdr::Ha
         .write_xdr(&mut buf)
         .expect("preimage write failed");
 
-    xdr::Hash(Sha256::digest(buf).try_into().expect("invalid hash"))
+    xdr::Hash(Sha256::digest(&buf).try_into().expect("invalid hash"))
 }
 
 #[test]

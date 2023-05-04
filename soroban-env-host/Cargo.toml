@@ -15,7 +15,7 @@ soroban-native-sdk-macros = { workspace = true }
 soroban-env-common = { workspace = true, features = ["std"] }
 wasmi = { workspace = true, optional = true }
 static_assertions = "1.1.0"
-sha2 = "0.10.2"
+sha2 = "0.9.0"
 ed25519-dalek = "1.0.1"
 # NB: this must match the same curve25519 version used by ed25519-dalek above
 curve25519-dalek = "3.0.0"
@@ -39,7 +39,7 @@ thousands = "0.2.0"
 rand = "0.7.3"
 soroban-test-wasms = { package = "soroban-test-wasms", path = "../soroban-test-wasms" }
 soroban-synth-wasm = { package = "soroban-synth-wasm", path = "../soroban-synth-wasm" }
-bytes-lit = "0.0.4"
+bytes-lit = "0.0.5"
 textplots = "0.8.0"
 wasmprinter = "0.2.41"
 expect-test = "1.4.0"
