@@ -1065,7 +1065,7 @@ impl Host {
             // maintains a borrow of self.0.contracts, which can cause borrow errors.
             let cfs_option = self.0.contracts.borrow().get(&id).cloned();
             if let Some(cfs) = cfs_option {
-                let frame = TestContractFrame::new(id.clone(), func.clone(), args.to_vec());
+                let frame = TestContractFrame::new(id.clone(), func, args.to_vec());
                 let panic = frame.panic.clone();
                 return self.with_frame(Frame::TestContract(frame), || {
                     use std::any::Any;
@@ -2159,7 +2159,7 @@ impl VmCallerEnv for Host {
                 &vm,
                 vals_pos,
                 vals.as_mut_slice(),
-                |buf| RawVal::from_payload(u64::from_le_bytes(buf.clone())),
+                |buf| RawVal::from_payload(u64::from_le_bytes(*buf)),
             )?;
 
             // Step 3: turn pairs into a map.
@@ -2444,7 +2444,7 @@ impl VmCallerEnv for Host {
                 &vm,
                 pos,
                 vals.as_mut_slice(),
-                |buf| RawVal::from_payload(u64::from_le_bytes(buf.clone())),
+                |buf| RawVal::from_payload(u64::from_le_bytes(*buf)),
             )?;
             self.add_host_object(HostVec::from_vec(vals)?)
         }

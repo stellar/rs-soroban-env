@@ -124,6 +124,7 @@ macro_rules! delegate_compare_to_wrapper {
     }};
 }
 
+#[allow(clippy::comparison_chain)]
 impl<E: Env> Compare<RawVal> for E {
     type Error = E::Error;
 

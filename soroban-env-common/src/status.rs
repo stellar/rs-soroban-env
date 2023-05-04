@@ -146,8 +146,8 @@ impl Debug for Status {
         };
         write!(f, "Status({}(", st.name())?;
         match st {
-            ScStatusType::Ok => write!(f, "{}", code),
-            ScStatusType::UnknownError => write!(f, "{}", code),
+            ScStatusType::Ok => write!(f, "{code}"),
+            ScStatusType::UnknownError => write!(f, "{code}"),
             ScStatusType::HostValueError => fmt_named_code::<ScHostValErrorCode>(code, f),
             ScStatusType::HostObjectError => fmt_named_code::<ScHostObjErrorCode>(code, f),
             ScStatusType::HostFunctionError => fmt_named_code::<ScHostFnErrorCode>(code, f),
@@ -155,7 +155,7 @@ impl Debug for Status {
             ScStatusType::HostContextError => fmt_named_code::<ScHostContextErrorCode>(code, f),
             ScStatusType::HostAuthError => fmt_named_code::<ScHostAuthErrorCode>(code, f),
             ScStatusType::VmError => fmt_named_code::<ScVmErrorCode>(code, f),
-            ScStatusType::ContractError => write!(f, "{}", code),
+            ScStatusType::ContractError => write!(f, "{code}"),
         }?;
         write!(f, "))")
     }
@@ -341,7 +341,11 @@ mod tests {
         // puts them all into a list, and sorts them with each comparison function,
         // then checks that both lists are sorted the same.
 
-        use crate::xdr::*;
+        use crate::xdr::{
+            ScHostAuthErrorCode, ScHostContextErrorCode, ScHostFnErrorCode, ScHostObjErrorCode,
+            ScHostStorageErrorCode, ScHostValErrorCode, ScStatus, ScUnknownErrorCode,
+            ScVmErrorCode,
+        };
 
         let xdr_vals = &[
             ScStatus::Ok,

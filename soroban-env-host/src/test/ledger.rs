@@ -12,7 +12,7 @@ fn ledger_network_id() -> Result<(), HostError> {
     let storage =
         Storage::with_enforcing_footprint_and_map(Footprint::default(), StorageMap::new()?);
 
-    let host = Host::with_storage_and_budget(storage, budget.clone());
+    let host = Host::with_storage_and_budget(storage, budget);
     host.set_ledger_info(LedgerInfo {
         protocol_version: 0,
         sequence_number: 0,

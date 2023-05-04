@@ -87,7 +87,7 @@ impl Host {
         let mem_slice = mem_data.get_mut(mem_range).ok_or(ScVmErrorCode::Memory)?;
 
         self.charge_budget(ContractCostType::VmMemWrite, Some(byte_len as u64))?;
-        for (src, dst) in buf.iter().zip(mem_slice.chunks_mut(VAL_SZ as usize)) {
+        for (src, dst) in buf.iter().zip(mem_slice.chunks_mut(VAL_SZ)) {
             if dst.len() != VAL_SZ {
                 // This should be impossible unless there's an error above, but just in case.
                 return Err(ScHostObjErrorCode::VecIndexOutOfBound.into());
@@ -125,7 +125,7 @@ impl Host {
 
         self.charge_budget(ContractCostType::VmMemRead, Some(byte_len as u64))?;
         let mut tmp: [u8; VAL_SZ] = [0u8; VAL_SZ];
-        for (dst, src) in buf.iter_mut().zip(mem_slice.chunks(VAL_SZ as usize)) {
+        for (dst, src) in buf.iter_mut().zip(mem_slice.chunks(VAL_SZ)) {
             if let Ok(src) = TryInto::<&[u8; VAL_SZ]>::try_into(src) {
                 tmp.copy_from_slice(src);
                 *dst = from_le_bytes(&tmp);
@@ -361,6 +361,7 @@ impl Host {
         dest: &mut [T],
     ) -> Result<(), HostError> {
         self.charge_budget(ContractCostType::HostMemCpy, Some(src.len() as u64))?;
-        Ok(dest.copy_from_slice(src))
+        dest.copy_from_slice(src);
+        Ok(())
     }
 }

@@ -12,7 +12,7 @@ fn tuple_conversions() -> Result<(), HostError> {
     obj = host.vec_push_back(obj, (1u32).into())?;
     obj = host.vec_push_back(obj, (1i32).into())?;
 
-    assert_eq!(host.obj_cmp(raw.try_into()?, obj.into())?, 0);
+    assert_eq!(host.obj_cmp(raw, obj.into())?, 0);
 
     let roundtrip: (u32, i32) = raw.try_into_val(&host)?;
     assert_eq!(roundtrip, (1u32, 1i32));
@@ -25,8 +25,7 @@ fn tuple_array_conversions() -> Result<(), HostError> {
     let host = Host::default();
 
     let raw: [RawVal; 0] = ().try_into_val(&host)?;
-    let unit: () = raw.try_into_val(&host)?;
-    assert_eq!(unit, ());
+    let _unit: () = raw.try_into_val(&host)?;
 
     let raw: [RawVal; 2] = (1u32, 1i32).try_into_val(&host)?;
     let roundtrip: (u32, i32) = raw.try_into_val(&host)?;

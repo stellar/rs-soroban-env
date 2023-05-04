@@ -5,9 +5,6 @@ on:
     branches: [main, release/**]
   pull_request:
 
-env:
-  RUSTFLAGS: -D warnings
-
 jobs:
 
   complete:
@@ -79,7 +76,7 @@ jobs:
       with:
         name: cargo-hack
         version: 0.5.16
-    - run: cargo hack --feature-powerset check --locked --target ${{ matrix.sys.target }}
+    - run: cargo hack --feature-powerset clippy --locked --target ${{ matrix.sys.target }}
     - if: matrix.sys.test
       run: cargo hack --feature-powerset test --locked --target ${{ matrix.sys.target }}
 

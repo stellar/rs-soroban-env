@@ -226,24 +226,22 @@ impl<'a> TestToken<'a> {
     }
 
     pub(crate) fn name(&self) -> Result<Bytes, HostError> {
-        Ok(self
-            .host
+        self.host
             .call(
                 self.id.clone().into(),
                 Symbol::try_from_val(self.host, &"name")?,
                 host_vec![self.host].into(),
             )?
-            .try_into_val(self.host)?)
+            .try_into_val(self.host)
     }
 
     pub(crate) fn symbol(&self) -> Result<Bytes, HostError> {
-        Ok(self
-            .host
+        self.host
             .call(
                 self.id.clone().into(),
                 Symbol::try_from_val(self.host, &"symbol")?,
                 host_vec![self.host].into(),
             )?
-            .try_into_val(self.host)?)
+            .try_into_val(self.host)
     }
 }

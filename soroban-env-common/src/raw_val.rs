@@ -703,7 +703,7 @@ impl Debug for RawVal {
                 let ss: SymbolStr =
                     unsafe { <SymbolSmall as RawValConvertible>::unchecked_from_val(*self) }.into();
                 let s: &str = ss.as_ref();
-                write!(f, "Symbol({})", s)
+                write!(f, "Symbol({s})")
             }
             Tag::LedgerKeyContractExecutable => write!(f, "LedgerKeyContractCode"),
 
@@ -791,9 +791,9 @@ fn test_tag_from_u8() {
         let expected_tag = Tag::from_int(i);
         let actual_tag = Tag::from_u8(i);
         match expected_tag {
-            Ok(Tag::SmallCodeUpperBound)
-            | Ok(Tag::ObjectCodeLowerBound)
-            | Ok(Tag::ObjectCodeUpperBound) => {
+            Ok(
+                Tag::SmallCodeUpperBound | Tag::ObjectCodeLowerBound | Tag::ObjectCodeUpperBound,
+            ) => {
                 assert_eq!(actual_tag, Tag::Bad);
             }
             Ok(expected_tag) => {

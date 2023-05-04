@@ -82,7 +82,7 @@ fn resource_fee_computation() {
                 fee_per_propagate_1kb: 900,
             },
         ),
-        (1304913, 62824)
+        (1_304_913, 62824)
     );
 
     // Integer limits
@@ -112,6 +112,6 @@ fn resource_fee_computation() {
         // after multiplication and hence it's i64::MAX / 1024.
         // Hitting the integer size limits shouldn't be an issue in practice;
         // we need to just make sure there are no overflows.
-        (i64::MAX, 9007199254740992)
+        (i64::MAX, 9_007_199_254_740_992)
     );
 }

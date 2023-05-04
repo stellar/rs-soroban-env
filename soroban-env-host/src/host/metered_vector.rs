@@ -211,14 +211,12 @@ where
         F: Fn(&A) -> Result<Ordering, HostError>,
     {
         self.charge_scan(budget)?;
-        let mut i = 0;
         let iter = self.vec.iter();
         // this is similar logic to `iter.position(f)` but is fallible
-        for val in iter {
+        for (i, val) in iter.enumerate() {
             if f(val)? == Ordering::Equal {
                 return Ok(Some(i));
             }
-            i += 1;
         }
         Ok(None)
     }

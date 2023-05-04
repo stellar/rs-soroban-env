@@ -55,7 +55,7 @@ fn vm_hostfn_invocation() -> Result<(), HostError> {
     let args = host.test_vec_obj::<u32>(&[1])?;
 
     // try_call
-    host.try_call(id_obj, sym.into(), args.clone().into())?;
+    host.try_call(id_obj, sym, args)?;
     host.with_budget(|budget| {
         assert_eq!(budget.get_tracker(ContractCostType::InvokeVmFunction).0, 1);
         assert_eq!(
@@ -181,7 +181,7 @@ fn test_recursive_type_clone() -> Result<(), HostError> {
     let v: Vec<Box<ScMap>> = vec![
         Box::new(scmap.clone()),
         Box::new(scmap.clone()),
-        Box::new(scmap.clone()),
+        Box::new(scmap),
     ];
 
     v.metered_clone(host.as_budget())?;

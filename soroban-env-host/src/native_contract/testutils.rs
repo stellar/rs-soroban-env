@@ -67,6 +67,7 @@ pub(crate) enum TestSigner<'a> {
 
 pub(crate) struct AccountContractSigner<'a> {
     pub(crate) id: Hash,
+    #[allow(clippy::type_complexity)]
     pub(crate) sign: Box<dyn Fn(&[u8]) -> HostVec + 'a>,
 }
 
@@ -147,7 +148,7 @@ pub(crate) fn authorize_single_invocation_with_nonce(
     let address_with_nonce = match signer {
         TestSigner::AccountInvoker(_) => None,
         TestSigner::Account(_) | TestSigner::AccountContract(_) => Some(AddressWithNonce {
-            address: sc_address.clone(),
+            address: sc_address,
             nonce: nonce.unwrap(),
         }),
         TestSigner::ContractInvoker(_) => {
@@ -166,7 +167,7 @@ pub(crate) fn authorize_single_invocation_with_nonce(
     let signature_payload = if let Some(addr_with_nonce) = &address_with_nonce {
         let signature_payload_preimage = HashIdPreimage::ContractAuth(HashIdPreimageContractAuth {
             network_id: host
-                .with_ledger_info(|li: &LedgerInfo| Ok(li.network_id.clone()))
+                .with_ledger_info(|li: &LedgerInfo| Ok(li.network_id))
                 .unwrap()
                 .try_into()
                 .unwrap(),
@@ -199,7 +200,7 @@ pub(crate) fn authorize_single_invocation(
         TestSigner::AccountInvoker(_) => None,
         TestSigner::Account(_) | TestSigner::AccountContract(_) => Some(
             host.read_nonce(
-                &Hash(contract_id.to_vec().clone().try_into().unwrap()),
+                &Hash(contract_id.to_vec().try_into().unwrap()),
                 &signer.address(host).to_sc_address().unwrap(),
             )
             .unwrap(),
@@ -249,6 +250,7 @@ pub(crate) fn sign_payload_for_ed25519(
     .unwrap()
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn create_account(
     host: &Host,
     account_id: &AccountId,
@@ -262,7 +264,7 @@ pub(crate) fn create_account(
     sponsorships: Option<(u32, u32)>,
     flags: u32,
 ) {
-    let key = host.to_account_key(account_id.clone().into());
+    let key = host.to_account_key(account_id.clone());
     let account_id = match key.as_ref() {
         LedgerKey::Account(acc) => acc.account_id.clone(),
         _ => unreachable!(),

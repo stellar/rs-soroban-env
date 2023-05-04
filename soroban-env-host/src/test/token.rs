@@ -85,7 +85,7 @@ impl TokenTest {
 
         let asset = Asset::CreditAlphanum4(AlphaNum4 {
             asset_code: AssetCode4(self.asset_code),
-            issuer: issuer_id.clone(),
+            issuer: issuer_id,
         });
 
         TestToken::new_from_asset(&self.host, asset)
@@ -130,12 +130,12 @@ impl TokenTest {
     fn get_trustline_balance(&self, key: &Rc<LedgerKey>) -> i64 {
         self.host
             .with_mut_storage(|s| match &s.get(key, self.host.as_budget()).unwrap().data {
-                LedgerEntryData::Trustline(trustline) => Ok(trustline.balance.clone()),
+                LedgerEntryData::Trustline(trustline) => Ok(trustline.balance),
                 _ => unreachable!(),
             })
             .unwrap()
     }
-
+    #[allow(clippy::too_many_arguments)]
     fn create_account(
         &self,
         account_id: &AccountId,
@@ -178,7 +178,7 @@ impl TokenTest {
             })
             .unwrap();
     }
-
+    #[allow(clippy::too_many_arguments)]
     fn create_trustline(
         &self,
         account_id: &AccountId,
@@ -368,14 +368,14 @@ fn test_asset_init(asset_code: &[u8]) {
         code.clone_from_slice(asset_code);
         Asset::CreditAlphanum4(AlphaNum4 {
             asset_code: AssetCode4(code),
-            issuer: issuer_id.clone(),
+            issuer: issuer_id,
         })
     } else {
         let mut code = [0_u8; 12];
         code.clone_from_slice(asset_code);
         Asset::CreditAlphanum12(AlphaNum12 {
             asset_code: AssetCode12(code),
-            issuer: issuer_id.clone(),
+            issuer: issuer_id,
         })
     };
     let token = TestToken::new_from_asset(&test.host, asset.clone());
@@ -403,7 +403,7 @@ fn test_asset_init(asset_code: &[u8]) {
 
 #[test]
 fn test_asset4_smart_init() {
-    test_asset_init(&[0, 'a' as u8, 'b' as u8, 255]);
+    test_asset_init(&[0, b'a', b'b', 255]);
 }
 
 #[test]
@@ -421,7 +421,7 @@ fn test_zero_amounts() {
     let user_2 = TestSigner::account(&test.user_key_2);
 
     let user_contract_id = generate_bytes_array();
-    let user_contract_address = contract_id_to_address(&test.host, user_contract_id.clone());
+    let user_contract_address = contract_id_to_address(&test.host, user_contract_id);
 
     test.create_default_account(&user);
     test.create_default_account(&user_2);
@@ -460,9 +460,7 @@ fn test_zero_amounts() {
     token
         .set_authorized(&admin, user_contract_address.clone(), true)
         .unwrap();
-    token
-        .clawback(&admin, user_contract_address.clone(), 0)
-        .unwrap();
+    token.clawback(&admin, user_contract_address, 0).unwrap();
 }
 
 #[test]
@@ -935,7 +933,7 @@ fn test_clawback_on_contract() {
 
     let issuer_ledger_key = test
         .host
-        .to_account_key(keypair_to_account_id(&test.issuer_key).into());
+        .to_account_key(keypair_to_account_id(&test.issuer_key));
 
     let user_1 = generate_bytes_array();
     let user_2 = generate_bytes_array();
@@ -988,9 +986,9 @@ fn test_clawback_on_contract() {
         ContractError::BalanceError
     );
 
-    assert_eq!(token.balance(user_1_addr.clone()).unwrap(), 20_000_000);
+    assert_eq!(token.balance(user_1_addr).unwrap(), 20_000_000);
 
-    assert_eq!(token.balance(user_2_addr.clone()).unwrap(), 100_000_000);
+    assert_eq!(token.balance(user_2_addr).unwrap(), 100_000_000);
 }
 
 #[test]
@@ -1093,10 +1091,7 @@ fn test_account_spendable_balance() {
     assert_eq!(token.balance(user_addr.clone()).unwrap(), 100_000_000);
     // base reserve = 5_000_000
     // signer + account = 3 base reserves
-    assert_eq!(
-        token.spendable_balance(user_addr.clone()).unwrap(),
-        85_000_000
-    );
+    assert_eq!(token.spendable_balance(user_addr).unwrap(), 85_000_000);
 }
 
 #[test]
@@ -1383,7 +1378,7 @@ fn test_account_invoker_auth_with_issuer_admin() {
 
     // Contract invoker can't perform unauthorized admin operation.
     let contract_id = generate_bytes_array();
-    let contract_invoker = TestSigner::ContractInvoker(Hash(contract_id.clone()));
+    let contract_invoker = TestSigner::ContractInvoker(Hash(contract_id));
     let contract_id_bytes = BytesN::<32>::try_from_val(
         &test.host,
         &test.host.bytes_new_from_slice(&contract_id).unwrap(),
@@ -1406,10 +1401,10 @@ fn test_contract_invoker_auth() {
 
     let admin_contract_id = generate_bytes_array();
     let user_contract_id = generate_bytes_array();
-    let admin_contract_invoker = TestSigner::ContractInvoker(Hash(admin_contract_id.clone()));
-    let user_contract_invoker = TestSigner::ContractInvoker(Hash(user_contract_id.clone()));
-    let admin_contract_address = contract_id_to_address(&test.host, admin_contract_id.clone());
-    let user_contract_address = contract_id_to_address(&test.host, user_contract_id.clone());
+    let admin_contract_invoker = TestSigner::ContractInvoker(Hash(admin_contract_id));
+    let user_contract_invoker = TestSigner::ContractInvoker(Hash(user_contract_id));
+    let admin_contract_address = contract_id_to_address(&test.host, admin_contract_id);
+    let user_contract_address = contract_id_to_address(&test.host, user_contract_id);
     let admin_contract_id_bytes = BytesN::<32>::try_from_val(
         &test.host,
         &test.host.bytes_new_from_slice(&admin_contract_id).unwrap(),
@@ -1510,7 +1505,7 @@ fn test_auth_rejected_for_incorrect_nonce() {
         .host
         .call(
             token.id.clone().into(),
-            Symbol::try_from_small_str("mint").unwrap().into(),
+            Symbol::try_from_small_str("mint").unwrap(),
             args.clone().into(),
         )
         .is_err());
@@ -1527,7 +1522,7 @@ fn test_auth_rejected_for_incorrect_nonce() {
     test.host
         .call(
             token.id.clone().into(),
-            Symbol::try_from_small_str("mint").unwrap().into(),
+            Symbol::try_from_small_str("mint").unwrap(),
             args.clone().into(),
         )
         .unwrap();
@@ -1545,7 +1540,7 @@ fn test_auth_rejected_for_incorrect_nonce() {
         .host
         .call(
             token.id.clone().into(),
-            Symbol::try_from_small_str("mint").unwrap().into(),
+            Symbol::try_from_small_str("mint").unwrap(),
             args.clone().into(),
         )
         .is_err());
@@ -1561,9 +1556,9 @@ fn test_auth_rejected_for_incorrect_nonce() {
     );
     test.host
         .call(
-            token.id.clone().into(),
-            Symbol::try_from_small_str("mint").unwrap().into(),
-            args.clone().into(),
+            token.id.into(),
+            Symbol::try_from_small_str("mint").unwrap(),
+            args.into(),
         )
         .unwrap();
 }
@@ -1585,7 +1580,7 @@ fn test_auth_rejected_for_incorrect_payload() {
         .host
         .call(
             token.id.clone().into(),
-            Symbol::try_from_small_str("mint").unwrap().into(),
+            Symbol::try_from_small_str("mint").unwrap(),
             args.clone().into(),
         )
         .is_err());
@@ -1596,7 +1591,7 @@ fn test_auth_rejected_for_incorrect_payload() {
         .host
         .call(
             token.id.clone().into(),
-            Symbol::try_from_small_str("mint").unwrap().into(),
+            Symbol::try_from_small_str("mint").unwrap(),
             args.clone().into(),
         )
         .is_err());
@@ -1618,7 +1613,7 @@ fn test_auth_rejected_for_incorrect_payload() {
         .host
         .call(
             token.id.clone().into(),
-            Symbol::try_from_small_str("mint").unwrap().into(),
+            Symbol::try_from_small_str("mint").unwrap(),
             args.clone().into(),
         )
         .is_err());
@@ -1640,7 +1635,7 @@ fn test_auth_rejected_for_incorrect_payload() {
         .host
         .call(
             token.id.clone().into(),
-            Symbol::try_from_small_str("mint").unwrap().into(),
+            Symbol::try_from_small_str("mint").unwrap(),
             args.clone().into(),
         )
         .is_err());
@@ -1650,8 +1645,8 @@ fn test_auth_rejected_for_incorrect_payload() {
 
     test.host
         .call(
-            token.id.clone().into(),
-            Symbol::try_from_small_str("mint").unwrap().into(),
+            token.id.into(),
+            Symbol::try_from_small_str("mint").unwrap(),
             args.into(),
         )
         .unwrap();
@@ -1881,7 +1876,7 @@ fn test_classic_account_multisig_auth() {
                         account_id: account_id,
                         signers: out_of_order_signers,
                     }),
-                    receiver.clone(),
+                    receiver,
                     100,
                 )
                 .err()
@@ -2495,6 +2490,7 @@ fn test_classic_transfers_not_possible_for_unauthorized_asset() {
 }
 
 #[cfg(feature = "vm")]
+#[allow(clippy::type_complexity)]
 fn simple_account_sign_fn<'a>(
     host: &'a Host,
     kp: &'a Keypair,
@@ -2540,9 +2536,9 @@ fn test_custom_account_auth() {
     // Initialize the admin account
     test.host
         .call(
-            account_contract_id_obj.clone(),
+            account_contract_id_obj,
             Symbol::try_from_small_str("init").unwrap(),
-            host_vec![&test.host, admin_public_key.clone()].into(),
+            host_vec![&test.host, admin_public_key].into(),
         )
         .unwrap();
 
@@ -2559,7 +2555,7 @@ fn test_custom_account_auth() {
     // owner.
     let new_admin_kp = generate_keypair();
     let new_admin = TestSigner::AccountContract(AccountContractSigner {
-        id: account_contract_id.clone(),
+        id: account_contract_id,
         sign: simple_account_sign_fn(&test.host, &new_admin_kp),
     });
     let new_admin_public_key = BytesN::<32>::try_from_val(
@@ -2579,13 +2575,13 @@ fn test_custom_account_auth() {
         &admin,
         &account_contract_id_obj.try_into_val(&test.host).unwrap(),
         "set_owner",
-        host_vec![&test.host, new_admin_public_key.clone()],
+        host_vec![&test.host, new_admin_public_key],
     );
 
     // Change the owner of the account.
     test.host
         .call(
-            account_contract_id_obj.clone(),
+            account_contract_id_obj,
             Symbol::try_from_small_str("set_owner").unwrap(),
             host_vec![&test.host, new_admin_public_key].into(),
         )
@@ -2597,7 +2593,7 @@ fn test_custom_account_auth() {
     assert_eq!(token.balance(user_address.clone()).unwrap(), 200);
 
     // And they shouldn't work with the old owner signatures.
-    assert!(token.mint(&admin, user_address.clone(), 100).is_err());
+    assert!(token.mint(&admin, user_address, 100).is_err());
 }
 
 #[test]
@@ -2661,7 +2657,7 @@ fn test_recording_auth_for_token() {
                 .unwrap(),
             Hash(token.id.to_array().unwrap()),
             xdr::ScSymbol("mint".try_into().unwrap()),
-            test.host.call_args_to_scvec(args.clone().into()).unwrap()
+            test.host.call_args_to_scvec(args.into()).unwrap()
         )]
     );
 }

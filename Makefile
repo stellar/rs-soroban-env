@@ -1,12 +1,10 @@
 all: build test
 
-export RUSTFLAGS=-Dwarnings
-
 test:
 	cargo hack --feature-powerset test
 
 build:
-	cargo hack --feature-powerset check
+	cargo hack --feature-powerset clippy
 
 watch:
 	cargo watch --clear --watch-when-idle --shell '$(MAKE)'

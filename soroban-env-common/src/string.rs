@@ -47,7 +47,7 @@ impl<E: Env> TryFromVal<E, &str> for RawVal {
 }
 
 #[cfg(feature = "std")]
-impl<'a, E: Env> TryFromVal<E, String> for StringObject {
+impl<E: Env> TryFromVal<E, String> for StringObject {
     type Error = ConversionError;
 
     fn try_from_val(env: &E, v: &String) -> Result<Self, Self::Error> {
@@ -56,7 +56,7 @@ impl<'a, E: Env> TryFromVal<E, String> for StringObject {
 }
 
 #[cfg(feature = "std")]
-impl<'a, E: Env> TryFromVal<E, String> for RawVal {
+impl<E: Env> TryFromVal<E, String> for RawVal {
     type Error = ConversionError;
 
     fn try_from_val(env: &E, v: &String) -> Result<Self, Self::Error> {

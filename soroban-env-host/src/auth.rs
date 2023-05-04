@@ -427,7 +427,7 @@ impl AuthorizationManager {
         let (contract_id, function_name) = match frame {
             #[cfg(feature = "vm")]
             Frame::ContractVM(vm, fn_name, _) => {
-                (vm.contract_id.metered_clone(&self.budget)?, fn_name.clone())
+                (vm.contract_id.metered_clone(&self.budget)?, *fn_name)
             }
             // Just skip the host function stack frames for now.
             // We could also make this included into the authorized stack to
@@ -435,7 +435,7 @@ impl AuthorizationManager {
             Frame::HostFunction(_) => return Ok(()),
             Frame::Token(id, fn_name, _) => (id.metered_clone(&self.budget)?, *fn_name),
             #[cfg(any(test, feature = "testutils"))]
-            Frame::TestContract(tc) => (tc.id.clone(), tc.func.clone()),
+            Frame::TestContract(tc) => (tc.id.clone(), tc.func),
         };
         let Ok(ScVal::Symbol(function_name)) = host.from_host_val(function_name.to_raw()) else {
             return Err(host.err_status(xdr::ScHostObjErrorCode::UnexpectedType))
@@ -950,7 +950,7 @@ impl Host {
                     self.with_mut_storage(|storage| storage.get(&nonce_key, self.budget_ref()))?;
                 match &entry.data {
                     LedgerEntryData::ContractData(ContractDataEntry { val, .. }) => match val {
-                        ScVal::U64(val) => val.clone(),
+                        ScVal::U64(val) => *val,
                         _ => {
                             return Err(self.err_general("unexpected nonce entry type"));
                         }

@@ -52,7 +52,7 @@ fn debug_fmt() {
     match &events.last().unwrap().event {
         Event::Debug(de) => {
             assert_eq!(
-                format!("{}", de),
+                format!("{de}"),
                 "can't convert I32(1) to alloc::vec::Vec<u8>"
             )
         }
