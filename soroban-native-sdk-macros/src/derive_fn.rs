@@ -4,7 +4,7 @@ use quote::{format_ident, quote};
 use syn::{spanned::Spanned, Error, FnArg, Type};
 
 pub fn derive_contract_function_set<'a>(
-    ty: &Box<Type>,
+    ty: &Type,
     methods: impl Iterator<Item = &'a syn::ImplItemFn>,
 ) -> TokenStream2 {
     let mut errors = Vec::<Error>::new();

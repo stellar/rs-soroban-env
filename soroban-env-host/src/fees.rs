@@ -115,11 +115,11 @@ pub fn compute_transaction_resource_fee(
         .saturating_add(ledger_write_bytes_fee)
         .saturating_add(historical_fee)
         .saturating_add(bandwidth_fee);
-    let res = (
+
+    (
         refundable_fee.saturating_add(non_refundable_fee),
         refundable_fee,
-    );
-    res
+    )
 }
 
 fn compute_fee_per_increment(resource_value: u32, fee_rate: i64, increment: i64) -> i64 {

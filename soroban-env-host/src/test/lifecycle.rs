@@ -59,7 +59,7 @@ fn test_host() -> Host {
     let budget = Budget::default();
     let storage =
         Storage::with_enforcing_footprint_and_map(Footprint::default(), StorageMap::new().unwrap());
-    let host = Host::with_storage_and_budget(storage, budget.clone());
+    let host = Host::with_storage_and_budget(storage, budget);
     host.set_ledger_info(LedgerInfo {
         network_id: generate_bytes_array(),
         ..Default::default()
@@ -113,7 +113,7 @@ fn test_create_contract_from_source_account(host: &Host, code: &[u8]) -> Hash {
     let res = host
         .invoke_functions(vec![
             HostFunction {
-                args: HostFunctionArgs::UploadContractWasm(upload_args.clone()),
+                args: HostFunctionArgs::UploadContractWasm(upload_args),
                 auth: Default::default(),
             },
             HostFunction {
@@ -154,7 +154,7 @@ fn create_contract_using_parent_id_test() {
     let salt = generate_bytes_array();
     let child_pre_image = HashIdPreimage::ContractIdFromContract(HashIdPreimageContractId {
         contract_id: parent_contract_id.clone(),
-        salt: Uint256(salt.clone()),
+        salt: Uint256(salt),
         network_id: host
             .hash_from_bytesobj_input("network_id", host.get_ledger_network_id().unwrap())
             .unwrap(),
@@ -167,7 +167,7 @@ fn create_contract_using_parent_id_test() {
     };
 
     // Install the code for the child contract.
-    let wasm_hash = sha256_hash_id_preimage(upload_args.clone());
+    let wasm_hash = sha256_hash_id_preimage(upload_args);
     // Add the contract code and code reference access to the footprint.
     host.with_mut_storage(|s: &mut Storage| {
         s.footprint
@@ -203,12 +203,9 @@ fn create_contract_using_parent_id_test() {
     // Can't create the contract yet, as the code hasn't been installed yet.
     assert!(host
         .call(
-            host.test_bin_obj(&parent_contract_id.0)
-                .unwrap()
-                .try_into()
-                .unwrap(),
-            Symbol::try_from_small_str("create").unwrap().into(),
-            args.clone().into(),
+            host.test_bin_obj(&parent_contract_id.0).unwrap(),
+            Symbol::try_from_small_str("create").unwrap(),
+            args,
         )
         .is_err());
 
@@ -230,12 +227,9 @@ fn create_contract_using_parent_id_test() {
 
     // Now successfully create the child contract itself.
     host.call(
-        host.test_bin_obj(&parent_contract_id.0)
-            .unwrap()
-            .try_into()
-            .unwrap(),
-        Symbol::try_from_small_str("create").unwrap().into(),
-        args.into(),
+        host.test_bin_obj(&parent_contract_id.0).unwrap(),
+        Symbol::try_from_small_str("create").unwrap(),
+        args,
     )
     .unwrap();
 
@@ -269,7 +263,7 @@ fn test_contract_wasm_update() {
     };
     let old_wasm_hash_obj: RawVal = host
         .invoke_functions(vec![HostFunction {
-            args: HostFunctionArgs::UploadContractWasm(old_upload_args.clone()),
+            args: HostFunctionArgs::UploadContractWasm(old_upload_args),
             auth: Default::default(),
         }])
         .unwrap()[0]
@@ -289,7 +283,7 @@ fn test_contract_wasm_update() {
 
     let updated_wasm_hash_obj: RawVal = host
         .invoke_functions(vec![HostFunction {
-            args: HostFunctionArgs::UploadContractWasm(upload_args.clone()),
+            args: HostFunctionArgs::UploadContractWasm(upload_args),
             auth: Default::default(),
         }])
         .unwrap()[0]

@@ -18,21 +18,21 @@ impl HostCostMeasurement for VmInstantiationMeasure {
 
     fn new_best_case(_host: &Host, _rng: &mut StdRng) -> VmInstantiationSample {
         let id: xdr::Hash = [0; 32].into();
-        let wasm: Vec<u8> = soroban_test_wasms::ADD_I32.clone().into();
+        let wasm: Vec<u8> = soroban_test_wasms::ADD_I32.into();
         VmInstantiationSample { id: Some(id), wasm }
     }
 
     fn new_worst_case(_host: &Host, _rng: &mut StdRng, input: u64) -> VmInstantiationSample {
         let id: xdr::Hash = [0; 32].into();
         let idx = input as usize % util::TEST_WASMS.len();
-        let wasm = util::TEST_WASMS[idx].clone().into();
+        let wasm = util::TEST_WASMS[idx].into();
         VmInstantiationSample { id: Some(id), wasm }
     }
 
     fn new_random_case(_host: &Host, rng: &mut StdRng, _input: u64) -> VmInstantiationSample {
         let id: xdr::Hash = [0; 32].into();
         let idx = rng.gen_range(0, 10) % util::TEST_WASMS.len();
-        let wasm = util::TEST_WASMS[idx].clone().into();
+        let wasm = util::TEST_WASMS[idx].into();
         VmInstantiationSample { id: Some(id), wasm }
     }
 }

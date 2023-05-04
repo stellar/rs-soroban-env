@@ -100,7 +100,5 @@ pub use symbol::{Symbol, SymbolError, SymbolObject, SymbolSmall, SymbolSmallIter
 // that did panic! in a const context and rt::trap in a non-const
 // context but it's not clear how to actually do that.
 pub const fn require(b: bool) {
-    if !b {
-        panic!();
-    }
+    assert!(b,);
 }

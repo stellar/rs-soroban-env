@@ -68,15 +68,12 @@ impl<const N: usize> From<BytesN<N>> for Bytes {
 impl Bytes {
     pub fn push(&mut self, x: u8) -> Result<(), HostError> {
         let x32: u32 = x.into();
-        self.object = self.host.bytes_push(self.object, x32.into())?.try_into()?;
+        self.object = self.host.bytes_push(self.object, x32.into())?;
         Ok(())
     }
 
     pub fn append(&mut self, other: Bytes) -> Result<(), HostError> {
-        self.object = self
-            .host
-            .bytes_append(self.object, other.object)?
-            .try_into()?;
+        self.object = self.host.bytes_append(self.object, other.object)?;
         Ok(())
     }
 
@@ -238,7 +235,7 @@ impl From<Map> for MapObject {
 
 impl Map {
     pub fn new(env: &Host) -> Result<Self, HostError> {
-        let map = env.map_new()?.try_into()?;
+        let map = env.map_new()?;
         Ok(Self {
             host: env.clone(),
             object: map,
@@ -266,7 +263,7 @@ impl Map {
     {
         let k_rv = RawVal::try_from_val(&self.host, k)?;
         let v_rv = RawVal::try_from_val(&self.host, v)?;
-        self.object = self.host.map_put(self.object, k_rv, v_rv)?.try_into()?;
+        self.object = self.host.map_put(self.object, k_rv, v_rv)?;
         Ok(())
     }
 }

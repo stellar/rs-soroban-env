@@ -291,7 +291,7 @@ impl Vm {
             raw_args.push(host.to_host_val(scv)?);
         }
         let raw_res = self.invoke_function_raw(host, &func_sym, raw_args.as_slice())?;
-        Ok(host.from_host_val(raw_res)?)
+        host.from_host_val(raw_res)
     }
 
     /// Returns a list of functions in the WASM module loaded into the [Vm].
@@ -332,7 +332,7 @@ impl Vm {
     where
         F: FnOnce(&mut VmCaller<Host>) -> T,
     {
-        let store: &mut Store<Host> = &mut *self.store.borrow_mut();
+        let store: &mut Store<Host> = &mut self.store.borrow_mut();
         let mut ctx: StoreContextMut<Host> = store.into();
         let caller: Caller<Host> = Caller::new(&mut ctx, Some(self.instance));
         let mut vmcaller: VmCaller<Host> = VmCaller(Some(caller));

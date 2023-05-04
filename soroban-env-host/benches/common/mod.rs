@@ -20,7 +20,7 @@ pub(crate) trait Benchmark {
 }
 
 fn get_explicit_bench_names() -> Option<Vec<String>> {
-    let bare_args: Vec<_> = std::env::args().filter(|x| !x.starts_with("-")).collect();
+    let bare_args: Vec<_> = std::env::args().filter(|x| !x.starts_with('-')).collect();
     match bare_args.len() {
         0 | 1 => None,
         _ => Some(bare_args[1..].into()),

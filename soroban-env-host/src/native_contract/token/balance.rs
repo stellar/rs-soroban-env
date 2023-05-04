@@ -351,11 +351,7 @@ fn transfer_account_balance(e: &Host, account_id: AccountId, amount: i64) -> Res
 
         let (min_balance, max_balance) = get_min_max_account_balance(e, &ae)?;
 
-        let new_balance = if amount <= 0 {
-            ae.balance + amount
-        } else if ae.balance <= i64::MAX - amount {
-            ae.balance + amount
-        } else {
+        let Some(new_balance) = ae.balance.checked_add(amount) else {
             return Err(e.err_status_msg(ContractError::BalanceError, "resulting balance overflow"));
         };
         if new_balance >= min_balance && new_balance <= max_balance {
@@ -395,11 +391,7 @@ fn transfer_trustline_balance(
 
         let (min_balance, max_balance) = get_min_max_trustline_balance(e, &tl)?;
 
-        let new_balance = if amount <= 0 {
-            tl.balance + amount
-        } else if tl.balance <= i64::MAX - amount {
-            tl.balance + amount
-        } else {
+        let Some(new_balance) = tl.balance.checked_add(amount) else {
             return Err(e.err_status_msg(ContractError::BalanceError, "resulting balance overflow"));
         };
         if new_balance >= min_balance && new_balance <= max_balance {

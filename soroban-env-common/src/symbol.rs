@@ -21,12 +21,10 @@ impl core::fmt::Display for SymbolError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
             SymbolError::TooLong(len) => f.write_fmt(format_args!(
-                "symbol too long: length {}, max {}",
-                len, MAX_SMALL_CHARS
+                "symbol too long: length {len}, max {MAX_SMALL_CHARS}"
             )),
             SymbolError::BadChar(char) => f.write_fmt(format_args!(
-                "symbol bad char: encountered {}, supported range [a-zA-Z0-9_]",
-                char
+                "symbol bad char: encountered {char}, supported range [a-zA-Z0-9_]"
             )),
         }
     }
@@ -359,11 +357,9 @@ impl Iterator for SymbolSmallIter {
 
 impl FromIterator<char> for SymbolSmall {
     fn from_iter<T: IntoIterator<Item = char>>(iter: T) -> Self {
-        let mut n = 0;
         let mut accum: u64 = 0;
-        for i in iter {
+        for (n, i) in iter.into_iter().enumerate() {
             require(n < MAX_SMALL_CHARS);
-            n += 1;
             accum <<= CODE_BITS;
             let v = match i {
                 '_' => 1,

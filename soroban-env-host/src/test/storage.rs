@@ -15,7 +15,7 @@ fn test_peristent_storage() {
             &host,
             &host
                 .call(
-                    contract_id.clone(),
+                    contract_id,
                     Symbol::from_small_str("has"),
                     host_vec![&host, key_1].into(),
                 )
@@ -26,7 +26,7 @@ fn test_peristent_storage() {
     );
     // Put a key to storage and verify it's there
     host.call(
-        contract_id.clone(),
+        contract_id,
         Symbol::from_small_str("put"),
         host_vec![&host, key_1, 1234_u64].into(),
     )
@@ -37,7 +37,7 @@ fn test_peristent_storage() {
             &host,
             &host
                 .call(
-                    contract_id.clone(),
+                    contract_id,
                     Symbol::from_small_str("has"),
                     host_vec![&host, key_1].into(),
                 )
@@ -49,7 +49,7 @@ fn test_peristent_storage() {
 
     // Put anothrer key and verify it's there
     host.call(
-        contract_id.clone(),
+        contract_id,
         Symbol::from_small_str("put"),
         host_vec![&host, key_2, u64::MAX].into(),
     )
@@ -59,7 +59,7 @@ fn test_peristent_storage() {
             &host,
             &host
                 .call(
-                    contract_id.clone(),
+                    contract_id,
                     Symbol::from_small_str("has"),
                     host_vec![
                         &host,
@@ -82,7 +82,7 @@ fn test_peristent_storage() {
             &host,
             &host
                 .call(
-                    contract_id.clone(),
+                    contract_id,
                     Symbol::from_small_str("get"),
                     host_vec![&host, key_1].into(),
                 )
@@ -96,7 +96,7 @@ fn test_peristent_storage() {
             &host,
             &host
                 .call(
-                    contract_id.clone(),
+                    contract_id,
                     Symbol::from_small_str("get"),
                     host_vec![&host, key_2].into(),
                 )
@@ -108,7 +108,7 @@ fn test_peristent_storage() {
 
     // Update value for key 2 and check it
     host.call(
-        contract_id.clone(),
+        contract_id,
         Symbol::from_small_str("put"),
         host_vec![&host, key_2, 4321_u64].into(),
     )
@@ -118,7 +118,7 @@ fn test_peristent_storage() {
             &host,
             &host
                 .call(
-                    contract_id.clone(),
+                    contract_id,
                     Symbol::from_small_str("get"),
                     host_vec![&host, key_2].into(),
                 )
@@ -130,7 +130,7 @@ fn test_peristent_storage() {
 
     // Delete entry for key 1
     host.call(
-        contract_id.clone(),
+        contract_id,
         Symbol::from_small_str("del"),
         host_vec![&host, key_1].into(),
     )
@@ -141,7 +141,7 @@ fn test_peristent_storage() {
             &host,
             &host
                 .call(
-                    contract_id.clone(),
+                    contract_id,
                     Symbol::from_small_str("has"),
                     host_vec![&host, key_1].into(),
                 )
@@ -155,7 +155,7 @@ fn test_peristent_storage() {
             &host,
             &host
                 .call(
-                    contract_id.clone(),
+                    contract_id,
                     Symbol::from_small_str("has"),
                     host_vec![&host, key_2].into(),
                 )
@@ -178,7 +178,7 @@ fn test_temp_storage() {
             &host,
             &host
                 .call(
-                    contract_id.clone(),
+                    contract_id,
                     Symbol::from_small_str("has_tmp"),
                     host_vec![&host, key_1].into(),
                 )
@@ -189,7 +189,7 @@ fn test_temp_storage() {
     );
     // Put a key to storage and verify it's there
     host.call(
-        contract_id.clone(),
+        contract_id,
         Symbol::from_small_str("put_tmp"),
         host_vec![&host, key_1, Symbol::from_small_str("val_1")].into(),
     )
@@ -200,7 +200,7 @@ fn test_temp_storage() {
             &host,
             &host
                 .call(
-                    contract_id.clone(),
+                    contract_id,
                     Symbol::from_small_str("has_tmp"),
                     // Use a new object to sanity-check that comparison
                     // happens based on value.
@@ -214,7 +214,7 @@ fn test_temp_storage() {
 
     // Put anothrer key and verify it's there
     host.call(
-        contract_id.clone(),
+        contract_id,
         Symbol::from_small_str("put_tmp"),
         host_vec![&host, key_2, Symbol::from_small_str("val_2")].into(),
     )
@@ -224,7 +224,7 @@ fn test_temp_storage() {
             &host,
             &host
                 .call(
-                    contract_id.clone(),
+                    contract_id,
                     Symbol::from_small_str("has_tmp"),
                     host_vec![&host, key_2].into(),
                 )
@@ -241,7 +241,7 @@ fn test_temp_storage() {
             &host,
             &host
                 .call(
-                    contract_id.clone(),
+                    contract_id,
                     Symbol::from_small_str("get_tmp"),
                     host_vec![&host, key_1].into(),
                 )
@@ -256,7 +256,7 @@ fn test_temp_storage() {
             &host,
             &host
                 .call(
-                    contract_id.clone(),
+                    contract_id,
                     Symbol::from_small_str("get_tmp"),
                     host_vec![&host, 1000_i128].into(),
                 )
@@ -269,7 +269,7 @@ fn test_temp_storage() {
 
     // Update value for key 2 and check it
     host.call(
-        contract_id.clone(),
+        contract_id,
         Symbol::from_small_str("put_tmp"),
         host_vec![&host, key_2, Symbol::from_small_str("new_val")].into(),
     )
@@ -279,7 +279,7 @@ fn test_temp_storage() {
             &host,
             &host
                 .call(
-                    contract_id.clone(),
+                    contract_id,
                     Symbol::from_small_str("get_tmp"),
                     host_vec![&host, key_2].into(),
                 )
@@ -292,7 +292,7 @@ fn test_temp_storage() {
 
     // Delete entry for key 1
     host.call(
-        contract_id.clone(),
+        contract_id,
         Symbol::from_small_str("del_tmp"),
         host_vec![&host, key_1].into(),
     )
@@ -303,7 +303,7 @@ fn test_temp_storage() {
             &host,
             &host
                 .call(
-                    contract_id.clone(),
+                    contract_id,
                     Symbol::from_small_str("has_tmp"),
                     host_vec![&host, key_1].into(),
                 )
@@ -317,7 +317,7 @@ fn test_temp_storage() {
             &host,
             &host
                 .call(
-                    contract_id.clone(),
+                    contract_id,
                     Symbol::from_small_str("has_tmp"),
                     host_vec![&host, key_2].into(),
                 )
@@ -335,7 +335,7 @@ fn test_temp_storage() {
             &host,
             &host
                 .call(
-                    contract_id.clone(),
+                    contract_id,
                     Symbol::from_small_str("has_tmp"),
                     host_vec![&host, key_2].into(),
                 )

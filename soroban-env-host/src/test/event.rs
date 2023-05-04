@@ -33,7 +33,7 @@ fn contract_event() -> Result<(), HostError> {
     let args = host.test_vec_obj::<i32>(&[1, 2])?;
     host.register_test_contract(id, test_contract)?;
     assert_eq!(
-        host.call(id, sym.into(), args.into())?.get_payload(),
+        host.call(id, sym, args)?.get_payload(),
         RawVal::from_void().to_raw().get_payload()
     );
 
@@ -98,7 +98,7 @@ fn test_event_rollback() -> Result<(), HostError> {
     let args = host.test_vec_obj::<i32>(&[1, 2])?;
     host.register_test_contract(id, test_contract)?;
     assert_eq!(
-        host.call(id, sym.into(), args.into())?.get_payload(),
+        host.call(id, sym, args)?.get_payload(),
         RawVal::from_void().to_raw().get_payload()
     );
     host.0.events.borrow_mut().rollback(1)?;

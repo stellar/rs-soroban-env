@@ -140,8 +140,7 @@ impl AuthTest {
                 &self.host,
                 self.get_addresses(),
                 self.convert_setup_tree(&root)
-            ]
-            .into(),
+            ],
             sign_payloads,
             success,
         );
@@ -188,7 +187,7 @@ impl AuthTest {
                 let payload_preimage = HashIdPreimage::ContractAuth(HashIdPreimageContractAuth {
                     network_id: self
                         .host
-                        .with_ledger_info(|li: &LedgerInfo| Ok(li.network_id.clone()))
+                        .with_ledger_info(|li: &LedgerInfo| Ok(li.network_id))
                         .unwrap()
                         .try_into()
                         .unwrap(),
@@ -217,7 +216,7 @@ impl AuthTest {
         self.host.set_authorization_entries(contract_auth).unwrap();
         assert_eq!(
             self.host
-                .call(contract_id.clone().into(), fn_name, args.into(),)
+                .call(contract_id.into(), fn_name, args.into(),)
                 .is_ok(),
             success
         );
