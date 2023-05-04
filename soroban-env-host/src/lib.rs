@@ -30,6 +30,7 @@
 
 pub mod budget;
 pub mod events;
+pub use events::diagnostic::DiagnosticLevel;
 mod host;
 pub(crate) mod host_object;
 
@@ -52,8 +53,7 @@ pub use host::testutils::call_with_suppressed_panic_hook;
 #[cfg(any(test, feature = "testutils"))]
 pub use host::ContractFunctionSet;
 pub use host::{
-    metered_map::MeteredOrdMap, metered_vector::MeteredVector, DiagnosticLevel, Host, HostError,
-    LedgerInfo,
+    metered_map::MeteredOrdMap, metered_vector::MeteredVector, Host, HostError, LedgerInfo,
 };
 pub use soroban_env_common::*;
 
