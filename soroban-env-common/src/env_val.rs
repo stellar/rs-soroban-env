@@ -415,7 +415,7 @@ where
             }
             ScVal::I256(i) => {
                 assert!(num::is_small_i256_parts(i));
-                unsafe { RawVal::from_body_and_tag(i.lo_lo as u64, Tag::I256Small) }
+                unsafe { RawVal::from_body_and_tag(i.lo_lo, Tag::I256Small) }
             }
             ScVal::Symbol(bytes) => {
                 let ss = match std::str::from_utf8(bytes.as_slice()) {

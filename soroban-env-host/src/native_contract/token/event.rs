@@ -15,7 +15,7 @@ pub(crate) fn increase_allowance(
     topics.push(&Symbol::try_from_val(e, &"increase_allowance")?)?;
     topics.push(&from)?;
     topics.push(&to)?;
-    topics.push(&read_name(&e)?)?;
+    topics.push(&read_name(e)?)?;
     e.contract_event(topics.into(), amount.try_into_val(e)?)?;
     Ok(())
 }
@@ -30,7 +30,7 @@ pub(crate) fn decrease_allowance(
     topics.push(&Symbol::try_from_val(e, &"decrease_allowance")?)?;
     topics.push(&from)?;
     topics.push(&to)?;
-    topics.push(&read_name(&e)?)?;
+    topics.push(&read_name(e)?)?;
     e.contract_event(topics.into(), amount.try_into_val(e)?)?;
     Ok(())
 }
@@ -45,7 +45,7 @@ pub(crate) fn transfer(
     topics.push(&Symbol::try_from_val(e, &"transfer")?)?;
     topics.push(&from)?;
     topics.push(&to)?;
-    topics.push(&read_name(&e)?)?;
+    topics.push(&read_name(e)?)?;
     e.contract_event(topics.into(), amount.try_into_val(e)?)?;
     Ok(())
 }
@@ -55,7 +55,7 @@ pub(crate) fn mint(e: &Host, admin: Address, to: Address, amount: i128) -> Resul
     topics.push(&Symbol::try_from_val(e, &"mint")?)?;
     topics.push(&admin)?;
     topics.push(&to)?;
-    topics.push(&read_name(&e)?)?;
+    topics.push(&read_name(e)?)?;
     e.contract_event(topics.into(), amount.try_into_val(e)?)?;
     Ok(())
 }
@@ -70,7 +70,7 @@ pub(crate) fn clawback(
     topics.push(&Symbol::try_from_val(e, &"clawback")?)?;
     topics.push(&admin)?;
     topics.push(&from)?;
-    topics.push(&read_name(&e)?)?;
+    topics.push(&read_name(e)?)?;
     e.contract_event(topics.into(), amount.try_into_val(e)?)?;
     Ok(())
 }
@@ -85,7 +85,7 @@ pub(crate) fn set_authorized(
     topics.push(&Symbol::try_from_val(e, &"set_authorized")?)?;
     topics.push(&admin)?;
     topics.push(&id)?;
-    topics.push(&read_name(&e)?)?;
+    topics.push(&read_name(e)?)?;
     e.contract_event(topics.into(), authorize.try_into_val(e)?)?;
     Ok(())
 }
@@ -94,7 +94,7 @@ pub(crate) fn set_admin(e: &Host, admin: Address, new_admin: Address) -> Result<
     let mut topics = Vec::new(e)?;
     topics.push(&Symbol::try_from_val(e, &"set_admin")?)?;
     topics.push(&admin)?;
-    topics.push(&read_name(&e)?)?;
+    topics.push(&read_name(e)?)?;
     e.contract_event(topics.into(), new_admin.try_into_val(e)?)?;
     Ok(())
 }
@@ -103,7 +103,7 @@ pub(crate) fn burn(e: &Host, from: Address, amount: i128) -> Result<(), HostErro
     let mut topics = Vec::new(e)?;
     topics.push(&Symbol::try_from_val(e, &"burn")?)?;
     topics.push(&from)?;
-    topics.push(&read_name(&e)?)?;
+    topics.push(&read_name(e)?)?;
     e.contract_event(topics.into(), amount.try_into_val(e)?)?;
     Ok(())
 }

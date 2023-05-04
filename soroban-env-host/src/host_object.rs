@@ -102,7 +102,7 @@ impl HostObject {
             | HostObject::Address(_)
             | HostObject::NonceKey(_) => None,
         };
-        return Ok(res);
+        Ok(res)
     }
 }
 

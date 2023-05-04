@@ -87,7 +87,7 @@ impl ScValObject {
     /// Inspect the provided `value` and return `Ok(ScValObject(value))` if it
     /// is a value that should be represented as an object, else `Err(value)`.
     pub fn classify(value: ScVal) -> Result<ScValObject, ScVal> {
-        if let Some(_) = ScValObjRef::classify(&value) {
+        if ScValObjRef::classify(&value).is_some() {
             Ok(ScValObject(value))
         } else {
             Err(value)
@@ -110,9 +110,9 @@ impl AsRef<ScVal> for ScValObject {
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ScValObjRef<'a>(&'a ScVal);
 
-impl<'a> Into<&'a ScVal> for ScValObjRef<'a> {
-    fn into(self) -> &'a ScVal {
-        self.0
+impl<'a> From<ScValObjRef<'a>> for &'a ScVal {
+    fn from(val: ScValObjRef<'a>) -> Self {
+        val.0
     }
 }
 

@@ -148,7 +148,7 @@ impl<T: Ord + DeclaredSizeForMetering> Compare<FixedSizeOrdType<'_, T>> for Budg
             ContractCostType::HostMemCmp,
             Some(<T as DeclaredSizeForMetering>::DECLARED_SIZE),
         )?;
-        Ok(a.0.cmp(&b.0))
+        Ok(a.0.cmp(b.0))
     }
 }
 
@@ -225,8 +225,8 @@ impl Compare<ScVec> for Budget {
     type Error = HostError;
 
     fn compare(&self, a: &ScVec, b: &ScVec) -> Result<Ordering, Self::Error> {
-        let a: &Vec<ScVal> = &*a;
-        let b: &Vec<ScVal> = &*b;
+        let a: &Vec<ScVal> = a;
+        let b: &Vec<ScVal> = b;
         self.compare(a, b)
     }
 }
@@ -235,8 +235,8 @@ impl Compare<ScMap> for Budget {
     type Error = HostError;
 
     fn compare(&self, a: &ScMap, b: &ScMap) -> Result<Ordering, Self::Error> {
-        let a: &Vec<ScMapEntry> = &*a;
-        let b: &Vec<ScMapEntry> = &*b;
+        let a: &Vec<ScMapEntry> = a;
+        let b: &Vec<ScMapEntry> = b;
         self.compare(a, b)
     }
 }

@@ -8,7 +8,7 @@ use soroban_env_common::{Env, TryIntoVal};
 pub fn read_administrator(e: &Host) -> Result<Address, HostError> {
     let key = DataKey::Admin;
     let rv = e.get_contract_data(key.try_into_val(e)?)?;
-    Ok(rv.try_into_val(e)?)
+    rv.try_into_val(e)
 }
 
 // Metering: covered by components

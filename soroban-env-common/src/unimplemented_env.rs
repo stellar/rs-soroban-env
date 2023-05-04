@@ -69,11 +69,11 @@ impl EnvBase for UnimplementedEnv {
         unimplemented!()
     }
 
-    fn string_new_from_slice<'a>(&self, _s: &'a str) -> Result<crate::StringObject, Self::Error> {
+    fn string_new_from_slice(&self, _s: &str) -> Result<crate::StringObject, Self::Error> {
         unimplemented!()
     }
 
-    fn symbol_new_from_slice<'a>(&self, _s: &'a str) -> Result<crate::SymbolObject, Self::Error> {
+    fn symbol_new_from_slice(&self, _s: &str) -> Result<crate::SymbolObject, Self::Error> {
         unimplemented!()
     }
 

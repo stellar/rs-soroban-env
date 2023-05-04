@@ -12,7 +12,7 @@ pub fn write_asset_info(e: &Host, asset_info: AssetInfo) -> Result<(), HostError
 pub fn read_asset_info(e: &Host) -> Result<AssetInfo, HostError> {
     let key = DataKey::AssetInfo;
     let rv = e.get_contract_data(key.try_into_val(e)?)?;
-    Ok(rv.try_into_val(e)?)
+    rv.try_into_val(e)
 }
 
 pub fn has_asset_info(e: &Host) -> Result<bool, HostError> {

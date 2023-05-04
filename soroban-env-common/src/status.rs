@@ -70,7 +70,7 @@ impl Ord for Status {
 impl<E: Env> Compare<Status> for E {
     type Error = E::Error;
     fn compare(&self, a: &Status, b: &Status) -> Result<Ordering, Self::Error> {
-        Ok(a.cmp(&b))
+        Ok(a.cmp(b))
     }
 }
 
@@ -316,7 +316,7 @@ impl Status {
             ScStatus::HostAuthError(code) => code as i32 as u32,
             ScStatus::VmError(code) => code as i32 as u32,
             ScStatus::UnknownError(code) => code as i32 as u32,
-            ScStatus::ContractError(code) => code as u32,
+            ScStatus::ContractError(code) => code,
         };
         Self::from_type_and_code(sc.discriminant(), code)
     }
@@ -366,7 +366,7 @@ mod tests {
         ];
 
         let pairs: Vec<_> = xdr_vals
-            .into_iter()
+            .iter()
             .map(|xdr_val| {
                 let host_val = Status::try_from(xdr_val.clone()).unwrap();
                 (xdr_val, host_val)
@@ -376,7 +376,7 @@ mod tests {
         let mut pairs_xdr_sorted = pairs.clone();
         let mut pairs_host_sorted = pairs_xdr_sorted.clone();
 
-        pairs_xdr_sorted.sort_by(|&(v1, _), &(v2, _)| v1.cmp(&v2));
+        pairs_xdr_sorted.sort_by(|&(v1, _), &(v2, _)| v1.cmp(v2));
 
         pairs_host_sorted.sort_by(|&(_, v1), &(_, v2)| v1.cmp(&v2));
 

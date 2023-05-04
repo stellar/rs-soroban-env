@@ -358,7 +358,7 @@ impl<C: MeteredClone> MeteredClone for Box<C> {
         charge_heap_alloc::<C>(1, budget)?;
         charge_shallow_copy::<C>(1, budget)?;
         // then take care of any substructure clone (recursively)
-        let inner: &C = &**self;
+        let inner: &C = self;
         inner.charge_for_substructure(budget)
     }
 }

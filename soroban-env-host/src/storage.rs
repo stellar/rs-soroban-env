@@ -114,16 +114,11 @@ impl Footprint {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub enum FootprintMode {
     Recording(Rc<dyn SnapshotSource>),
+    #[default]
     Enforcing,
-}
-
-impl Default for FootprintMode {
-    fn default() -> Self {
-        FootprintMode::Enforcing
-    }
 }
 
 /// A special-purpose map from [LedgerKey]s to [LedgerEntry]s. Represents a
@@ -205,7 +200,7 @@ impl Storage {
         match self.map.get::<Rc<LedgerKey>>(key, budget)? {
             None => Err(ScHostStorageErrorCode::MissingKeyInGet.into()),
             Some(None) => Err(ScHostStorageErrorCode::GetOnDeletedKey.into()),
-            Some(Some(val)) => Ok(Rc::clone(&val)),
+            Some(Some(val)) => Ok(Rc::clone(val)),
         }
     }
 
@@ -226,7 +221,7 @@ impl Storage {
         };
         self.map = self
             .map
-            .insert(Rc::clone(key), val.map(|v| Rc::clone(v)), budget)?;
+            .insert(Rc::clone(key), val.map(Rc::clone), budget)?;
         Ok(())
     }
 

@@ -201,7 +201,7 @@ impl Host {
         mut callback: impl FnMut(usize, &str) -> Result<(), HostError>,
     ) -> Result<(), HostError> {
         for (i, slice) in slices.iter().enumerate() {
-            callback(i, *slice)?;
+            callback(i, slice)?;
         }
         Ok(())
     }
