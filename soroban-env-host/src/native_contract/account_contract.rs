@@ -4,7 +4,7 @@ use crate::auth::AuthorizedInvocation;
 // to a generic smart wallet contract that supports authentication and blanket
 // context authorization.
 use crate::host::metered_clone::MeteredClone;
-use crate::host::{ContractReentryMode, Host};
+use crate::host::{frame::ContractReentryMode, Host};
 use crate::native_contract::{base_types::BytesN, contract_error::ContractError};
 use crate::{err, HostError};
 use core::cmp::Ordering;

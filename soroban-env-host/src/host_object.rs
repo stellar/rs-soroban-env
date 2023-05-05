@@ -1,9 +1,14 @@
 use soroban_env_common::{
+    xdr::{ContractCostType, ScHostObjErrorCode},
     Compare, DurationSmall, I128Small, I256Small, I64Small, SymbolSmall, SymbolStr, TimepointSmall,
     U128Small, U256Small, U64Small,
 };
 
-use crate::{budget::Budget, host::metered_clone::MeteredClone, HostError};
+use crate::{
+    budget::{AsBudget, Budget},
+    host::metered_clone::{self, MeteredClone},
+    HostError,
+};
 
 use super::{
     host::metered_map::MeteredOrdMap,
@@ -174,3 +179,62 @@ declare_host_object_type!(
 );
 declare_host_object_type!(xdr::ScAddress, AddressObject, Address);
 declare_host_object_type!(xdr::ScNonceKey, LedgerKeyNonceObject, NonceKey);
+
+impl Host {
+    /// Moves a value of some type implementing [`HostObjectType`] into the host's
+    /// object array, returning a [`HostObj`] containing the new object's array
+    /// index, tagged with the [`xdr::ScObjectType`].
+    pub(crate) fn add_host_object<HOT: HostObjectType>(
+        &self,
+        hot: HOT,
+    ) -> Result<HOT::Wrapper, HostError> {
+        let prev_len = self.0.objects.borrow().len();
+        if prev_len > u32::MAX as usize {
+            return Err(self.err_status(ScHostObjErrorCode::ObjectCountExceedsU32Max));
+        }
+        // charge for the new host object, which is just the amortized cost of a single
+        // `HostObject` allocation
+        metered_clone::charge_heap_alloc::<HostObject>(1, self.as_budget())?;
+        self.0.objects.borrow_mut().push(HOT::inject(hot));
+        let handle = prev_len as u32;
+        Ok(HOT::new_from_handle(handle))
+    }
+
+    // Notes on metering: closure call needs to be metered separatedly. `VisitObject` only covers
+    // the cost of visiting an object.
+    pub(crate) unsafe fn unchecked_visit_val_obj<F, U>(
+        &self,
+        obj: impl Into<Object>,
+        f: F,
+    ) -> Result<U, HostError>
+    where
+        F: FnOnce(Option<&HostObject>) -> Result<U, HostError>,
+    {
+        self.charge_budget(ContractCostType::VisitObject, None)?;
+        let r = self.0.objects.borrow();
+        let obj: Object = obj.into();
+        let handle: u32 = obj.get_handle();
+        f(r.get(handle as usize))
+    }
+
+    // Notes on metering: object visiting part is covered by unchecked_visit_val_obj. Closure function
+    // needs to be metered separately.
+    pub(crate) fn visit_obj<HOT: HostObjectType, F, U>(
+        &self,
+        obj: HOT::Wrapper,
+        f: F,
+    ) -> Result<U, HostError>
+    where
+        F: FnOnce(&HOT) -> Result<U, HostError>,
+    {
+        unsafe {
+            self.unchecked_visit_val_obj(obj, |hopt| match hopt {
+                None => Err(self.err_status(ScHostObjErrorCode::UnknownReference)),
+                Some(hobj) => match HOT::try_extract(hobj) {
+                    None => Err(self.err_status(ScHostObjErrorCode::UnexpectedType)),
+                    Some(hot) => f(hot),
+                },
+            })
+        }
+    }
+}

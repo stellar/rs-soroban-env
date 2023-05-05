@@ -3,31 +3,37 @@ use soroban_env_common::{
     BytesObject, EnvBase, Symbol, SymbolSmall, VecObject,
 };
 
-use crate::{budget::AsBudget, Host, HostError, RawVal};
-use crate::{
-    events::{InternalContractEvent, InternalEvent},
-    host_object::HostVec,
-};
+use crate::host_object::HostVec;
+use crate::{budget::AsBudget, host::Frame, Host, HostError, RawVal};
 
-use super::Frame;
+use super::{InternalContractEvent, InternalEvent};
+
+#[derive(Clone, Default)]
+pub enum DiagnosticLevel {
+    #[default]
+    None,
+    Debug,
+}
 
 /// None of these functions are metered, which is why they're behind the is_debug check
 impl Host {
+    pub fn set_diagnostic_level(&self, diagnostic_level: DiagnosticLevel) {
+        *self.0.diagnostic_level.borrow_mut() = diagnostic_level;
+    }
+
+    pub fn is_debug(&self) -> bool {
+        matches!(*self.0.diagnostic_level.borrow(), DiagnosticLevel::Debug)
+    }
+
     fn hash_to_bytesobj(&self, hash: &Hash) -> Result<BytesObject, HostError> {
         self.add_host_object::<ScBytes>(hash.as_slice().to_vec().try_into()?)
     }
 
-    // Will not return error if frame is missing
-    fn get_current_contract_id(&self) -> Result<Option<Hash>, HostError> {
-        self.with_current_frame_opt(|frame| match frame {
-            #[cfg(feature = "vm")]
-            Some(Frame::ContractVM(vm, _, _)) => Ok(Some(vm.contract_id.clone())),
-            Some(Frame::HostFunction(_)) => Ok(None),
-            Some(Frame::Token(id, _, _)) => Ok(Some(id.clone())),
-            #[cfg(any(test, feature = "testutils"))]
-            Some(Frame::TestContract(tc)) => Ok(Some(tc.id.clone())),
-            None => Ok(None),
-        })
+    /// Records a `System` contract event. `topics` is expected to be a `SCVec`
+    /// length <= 4 that cannot contain `Vec`, `Map`, or `Bytes` with length > 32
+    pub fn system_event(&self, topics: VecObject, data: RawVal) -> Result<(), HostError> {
+        self.record_contract_event(ContractEventType::System, topics, data)?;
+        Ok(())
     }
 
     fn record_system_debug_contract_event(
@@ -43,11 +49,23 @@ impl Host {
             topics,
             data,
         };
-        self.get_events_mut(|events| {
+        self.with_events_mut(|events| {
             Ok(events.record(InternalEvent::StructuredDebug(ce), self.as_budget()))
         })?
     }
 
+    // Will not return error if frame is missing
+    pub(crate) fn get_current_contract_id_unmetered(&self) -> Result<Option<Hash>, HostError> {
+        self.with_current_frame_opt(|frame| match frame {
+            #[cfg(feature = "vm")]
+            Some(Frame::ContractVM(vm, _, _)) => Ok(Some(vm.contract_id.clone())),
+            Some(Frame::HostFunction(_)) => Ok(None),
+            Some(Frame::Token(id, _, _)) => Ok(Some(id.clone())),
+            #[cfg(any(test, feature = "testutils"))]
+            Some(Frame::TestContract(tc)) => Ok(Some(tc.id.clone())),
+            None => Ok(None),
+        })
+    }
     // Emits an event with topic = ["fn_call", called_contract_id, function_name] and
     // data = [arg1, args2, ...]
     // Should called prior to opening a frame for the next call so the calling contract can be inferred correctly
@@ -62,7 +80,7 @@ impl Host {
         }
 
         let mut calling_contract: Option<BytesObject> = None;
-        if let Some(calling_hash) = self.get_current_contract_id()? {
+        if let Some(calling_hash) = self.get_current_contract_id_unmetered()? {
             calling_contract = Some(self.hash_to_bytesobj(&calling_hash)?);
         }
 
