@@ -1,13 +1,16 @@
 #![allow(unused_variables)]
 #![allow(dead_code)]
 
-use core::cell::RefCell;
-use core::cmp::Ordering;
-use core::fmt::Debug;
+use core::{cell::RefCell, cmp::Ordering, fmt::Debug};
 use std::rc::Rc;
 
-use soroban_env_common::{
+use crate::{
+    auth::{AuthorizationManager, RecordedAuthPayload},
+    budget::{AsBudget, Budget},
+    events::{diagnostic::DiagnosticLevel, DebugEvent, Events, InternalEventsBuffer},
+    host_object::{HostMap, HostObject, HostVec},
     num::{i256_from_pieces, i256_into_pieces, u256_from_pieces, u256_into_pieces},
+    storage::Storage,
     xdr::{
         int128_helpers, AccountId, Asset, ContractCodeEntry, ContractCostType, ContractDataEntry,
         ContractEventType, ContractId, CreateContractArgs, ExtensionPoint, Hash, HashIdPreimage,
@@ -17,23 +20,10 @@ use soroban_env_common::{
         UploadContractWasmArgs,
     },
     AddressObject, Bool, BytesObject, I128Object, I256Object, I64Object, MapObject, Status,
-    StringObject, SymbolObject, SymbolSmall, TryFromVal, U128Object, U256Object, U32Val, U64Object,
-    U64Val, VecObject, VmCaller, VmCallerEnv, Void, I256, U256,
+    StringObject, SymbolObject, SymbolSmall, SymbolStr, TryFromVal, U128Object, U256Object, U32Val,
+    U64Object, U64Val, VecObject, VmCaller, VmCallerEnv, Void, I256, U256,
 };
 
-use crate::events::{DebugEvent, Events, InternalEventsBuffer};
-use crate::storage::Storage;
-use crate::{
-    auth::{AuthorizationManager, RecordedAuthPayload},
-    events::diagnostic::DiagnosticLevel,
-};
-use crate::{
-    budget::{AsBudget, Budget},
-    storage::TempStorage,
-};
-
-use crate::host_object::{HostMap, HostObject, HostVec};
-use crate::SymbolStr;
 #[cfg(feature = "vm")]
 use crate::Vm;
 use crate::{EnvBase, Object, RawVal, Symbol};
@@ -86,7 +76,6 @@ pub(crate) struct HostImpl {
     ledger: RefCell<Option<LedgerInfo>>,
     pub(crate) objects: RefCell<Vec<HostObject>>,
     storage: RefCell<Storage>,
-    temp_storage: RefCell<TempStorage>,
     pub(crate) context: RefCell<Vec<Frame>>,
     // Note: budget is refcounted and is _not_ deep-cloned when you call HostImpl::deep_clone,
     // mainly because it's not really possible to achieve (the same budget is connected to many
@@ -137,7 +126,6 @@ impl Host {
             ledger: RefCell::new(None),
             objects: Default::default(),
             storage: RefCell::new(storage),
-            temp_storage: Default::default(),
             context: Default::default(),
             budget: budget.clone(),
             events: Default::default(),
@@ -433,11 +421,6 @@ impl Host {
                 self.err_general("previous invocation is missing - no auth data to get")
             })?
             .get_authenticated_authorizations())
-    }
-
-    #[cfg(any(test, feature = "testutils"))]
-    pub fn reset_temp_storage(&self) {
-        *self.0.temp_storage.borrow_mut() = Default::default();
     }
 
     fn create_contract(&self, args: CreateContractArgs) -> Result<BytesObject, HostError> {
@@ -1696,61 +1679,6 @@ impl VmCallerEnv for Host {
             ScContractExecutable::WasmRef(self.hash_from_bytesobj_input("wasm_hash", wasm_hash)?);
         let id_preimage = self.id_preimage_from_contract(contract_id, salt)?;
         self.create_contract_with_id_preimage(code, id_preimage)
-    }
-
-    // Notes on metering: covered by components
-    fn put_tmp_contract_data(
-        &self,
-        _vmcaller: &mut VmCaller<Host>,
-        k: RawVal,
-        v: RawVal,
-    ) -> Result<Void, HostError> {
-        self.0.temp_storage.borrow_mut().put(
-            self.get_current_contract_id_internal()?,
-            k,
-            v,
-            self,
-        )?;
-        Ok(RawVal::VOID)
-    }
-
-    // Notes on metering: covered by components
-    fn has_tmp_contract_data(
-        &self,
-        _vmcaller: &mut VmCaller<Host>,
-        k: RawVal,
-    ) -> Result<Bool, HostError> {
-        let res = self.0.temp_storage.borrow_mut().has(
-            self.get_current_contract_id_internal()?,
-            k,
-            self,
-        )?;
-        Ok(RawVal::from_bool(res))
-    }
-
-    // Notes on metering: covered by components
-    fn get_tmp_contract_data(
-        &self,
-        _vmcaller: &mut VmCaller<Host>,
-        k: RawVal,
-    ) -> Result<RawVal, HostError> {
-        self.0
-            .temp_storage
-            .borrow_mut()
-            .get(self.get_current_contract_id_internal()?, k, self)
-    }
-
-    // Notes on metering: covered by components
-    fn del_tmp_contract_data(
-        &self,
-        _vmcaller: &mut VmCaller<Host>,
-        k: RawVal,
-    ) -> Result<Void, HostError> {
-        self.0
-            .temp_storage
-            .borrow_mut()
-            .del(self.get_current_contract_id_internal()?, k, self)?;
-        Ok(RawVal::VOID)
     }
 
     fn update_current_contract_wasm(

@@ -9,16 +9,15 @@
 
 use std::rc::Rc;
 
-use soroban_env_common::{Compare, RawVal};
+use soroban_env_common::Compare;
 
 use crate::budget::Budget;
-use crate::xdr::{Hash, LedgerEntry, LedgerKey, ScHostStorageErrorCode};
+use crate::xdr::{LedgerEntry, LedgerKey, ScHostStorageErrorCode};
 use crate::Host;
 use crate::{host::metered_map::MeteredOrdMap, HostError};
 
 pub type FootprintMap = MeteredOrdMap<Rc<LedgerKey>, AccessType, Budget>;
 pub type StorageMap = MeteredOrdMap<Rc<LedgerKey>, Option<Rc<LedgerEntry>>, Budget>;
-pub type TempStorageMap = MeteredOrdMap<Rc<(Hash, RawVal)>, RawVal, Host>;
 
 /// A helper type used by [Footprint] to designate which ways
 /// a given [LedgerKey] is accessed, or is allowed to be accessed,
@@ -287,54 +286,6 @@ impl Storage {
                 }
             }
         }
-    }
-}
-
-/// A special-purpose map from arbitrary contract-owned values to arbitrary
-/// values.
-///
-/// Since `TempStorage` stores `RawVal`s, it has to be attributed to the host
-/// instance and can't be transferred between host instances.
-///
-/// Semantically, this is similar to the `Storage`, but it is never persisted
-/// and hence doesn't need to support the footprints and convert keys to the
-/// ledger-compatible types.
-#[derive(Clone, Default)]
-pub struct TempStorage {
-    pub map: TempStorageMap,
-}
-
-impl TempStorage {
-    pub fn get(&self, contract_id: Hash, key: RawVal, host: &Host) -> Result<RawVal, HostError> {
-        match self.map.get(&(contract_id, key), host)? {
-            None => Err(ScHostStorageErrorCode::MissingKeyInGet.into()),
-            Some(val) => Ok(*val),
-        }
-    }
-
-    pub fn put(
-        &mut self,
-        contract_id: Hash,
-        key: RawVal,
-        val: RawVal,
-        host: &Host,
-    ) -> Result<(), HostError> {
-        self.map = self.map.insert(Rc::new((contract_id, key)), val, host)?;
-        Ok(())
-    }
-
-    pub fn del(&mut self, contract_id: Hash, key: RawVal, host: &Host) -> Result<(), HostError> {
-        match self.map.remove(&(contract_id, key), host)? {
-            Some((new_self, _)) => {
-                self.map = new_self;
-            }
-            None => (),
-        };
-        Ok(())
-    }
-
-    pub fn has(&mut self, contract_id: Hash, key: RawVal, host: &Host) -> Result<bool, HostError> {
-        self.map.contains_key(&(contract_id, key), host)
     }
 }
 

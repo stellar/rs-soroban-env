@@ -1,7 +1,7 @@
 use crate::{
     auth::AuthorizationManagerSnapshot,
     events::DebugError,
-    storage::{StorageMap, TempStorageMap},
+    storage::StorageMap,
     xdr::{
         ContractCostType, Hash, HostFunction, HostFunctionArgs, HostFunctionType,
         ScContractExecutable, ScHostContextErrorCode, ScHostFnErrorCode, ScVal,
@@ -43,7 +43,6 @@ const RESERVED_CONTRACT_FN_PREFIX: &str = "__";
 #[derive(Clone)]
 pub(super) struct RollbackPoint {
     storage: StorageMap,
-    temp_storage: TempStorageMap,
     events: usize,
     auth: Option<AuthorizationManagerSnapshot>,
 }
@@ -114,7 +113,6 @@ impl Host {
         self.0.context.borrow_mut().push(frame);
         Ok(RollbackPoint {
             storage: self.0.storage.borrow().map.clone(),
-            temp_storage: self.0.temp_storage.borrow().map.clone(),
             events: self.0.events.borrow().vec.len(),
             auth: auth_snapshot,
         })

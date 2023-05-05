@@ -14,11 +14,11 @@ jobs:
       uses: brettcannon/check-for-changed-files@36aaa76474fc979db4e19e44c05e8e978759ac01
       with:
         file-pattern: "soroban-env-common/src/meta.rs"
-    - name: "check 'interface_version:' changed in the diff"
+    - name: "check 'pre_release_version:' changed in the diff"
       uses: graydon/gh-pr-content-checker@a85f72c50a84400bb3e0837555b5a50c985370e7
       with:
         github-token: ${{github.token}}
-        diffContainsRegex: " interface_version: [0-9]+,"
+        diffContainsRegex: " pre_release_version: [0-9]+,"
     - name: "check soroban-test-wasms/wasm-workspace/opt/*.wasm were modified"
       uses: brettcannon/check-for-changed-files@36aaa76474fc979db4e19e44c05e8e978759ac01
       with:
