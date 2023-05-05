@@ -20,20 +20,4 @@ impl Contract {
     pub fn get(e: Env, key: Symbol) -> u64 {
         e.storage().get(&key).unwrap().unwrap()
     }
-
-    pub fn put_tmp(e: Env, key: i128, val: Symbol) {
-        e.temp_storage().set(&key, &val)
-    }
-
-    pub fn del_tmp(e: Env, key: i128) {
-        e.temp_storage().remove(&key)
-    }
-
-    pub fn has_tmp(e: Env, key: i128) -> bool {
-        e.temp_storage().has(&key)
-    }
-
-    pub fn get_tmp(e: Env, key: i128) -> Symbol {
-        e.temp_storage().get(&key).unwrap().unwrap()
-    }
 }
