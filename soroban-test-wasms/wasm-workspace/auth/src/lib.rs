@@ -1,4 +1,5 @@
 #![no_std]
+use soroban_env_common::{AddressObject, Env as _, TryFromVal};
 use soroban_sdk::{contractimpl, contracttype, vec, Address, BytesN, Env, IntoVal, Symbol, Vec};
 
 struct AuthContract;
@@ -29,8 +30,9 @@ impl AuthContract {
         }
         for child in tree.children.iter() {
             let child = child.unwrap();
+            let child_ao: AddressObject = env.contract_id_to_address(child.id.to_object()).unwrap();
             env.invoke_contract::<()>(
-                &child.id.clone(),
+                &Address::try_from_val(&env, &child_ao).unwrap(),
                 &Symbol::short("tree_fn"),
                 (addresses.clone(), child).into_val(&env),
             );
@@ -38,8 +40,9 @@ impl AuthContract {
     }
 
     pub fn order_fn(env: Env, addr: Address, child_id: BytesN<32>) {
+        let child_ao: AddressObject = env.contract_id_to_address(child_id.to_object()).unwrap();
         env.invoke_contract::<()>(
-            &child_id,
+            &Address::try_from_val(&env, &child_ao).unwrap(),
             &Symbol::short("do_auth"),
             (&addr, 10_u32).into_val(&env),
         );

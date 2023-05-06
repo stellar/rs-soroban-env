@@ -39,6 +39,7 @@ dependencies = [
 name = "auth_test_contract"
 version = "0.0.0"
 dependencies = [
+ "soroban-env-common",
  "soroban-sdk",
 ]
 
@@ -294,12 +295,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9ea835d29036a4087793836fa931b08837ad5e957da9e23886b29586fb9b6650"
 
 [[package]]
-name = "dyn-fmt"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c2a0836c9bd73a9d3ca55b0effc5b1eedf96dd13ef994389bcac6d4d33c46188"
-
-[[package]]
 name = "ed25519"
 version = "1.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -387,6 +382,7 @@ dependencies = [
 name = "example_invoke_contract"
 version = "0.0.0"
 dependencies = [
+ "soroban-env-common",
  "soroban-sdk",
 ]
 
@@ -401,7 +397,6 @@ dependencies = [
 name = "example_simple_account"
 version = "0.0.0"
 dependencies = [
- "soroban-auth",
  "soroban-sdk",
 ]
 
@@ -835,14 +830,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "74233d3b3b2f6d4b006dc19dee745e73e2a6bfb6f93607cd3b02bd5b00797d7c"
 
 [[package]]
-name = "soroban-auth"
-version = "0.8.0"
-dependencies = [
- "soroban-env-host",
- "soroban-sdk",
-]
-
-[[package]]
 name = "soroban-env-common"
 version = "0.0.16"
 dependencies = [
@@ -853,7 +840,7 @@ dependencies = [
  "soroban-env-macros",
  "soroban-wasmi",
  "static_assertions",
- "stellar-xdr",
+ "stellar-xdr 0.0.16 (git+https://github.com/stellar/rs-stellar-xdr?rev=eda841f3c08a023bb50f7f79b8b8b8d6083aad83)",
 ]
 
 [[package]]
@@ -870,19 +857,19 @@ version = "0.0.16"
 dependencies = [
  "backtrace",
  "curve25519-dalek",
- "dyn-fmt",
  "ed25519-dalek",
  "hex",
  "log",
  "num-derive",
  "num-integer",
  "num-traits",
+ "rand",
+ "rand_chacha",
  "sha2",
  "soroban-env-common",
  "soroban-native-sdk-macros",
  "soroban-wasmi",
  "static_assertions",
- "tinyvec",
 ]
 
 [[package]]
@@ -894,14 +881,14 @@ dependencies = [
  "quote",
  "serde",
  "serde_json",
- "stellar-xdr",
+ "stellar-xdr 0.0.16 (git+https://github.com/stellar/rs-stellar-xdr?rev=eda841f3c08a023bb50f7f79b8b8b8d6083aad83)",
  "syn 2.0.15",
  "thiserror",
 ]
 
 [[package]]
 name = "soroban-ledger-snapshot"
-version = "0.8.0"
+version = "0.8.4"
 dependencies = [
  "serde",
  "serde_json",
@@ -922,7 +909,7 @@ dependencies = [
 
 [[package]]
 name = "soroban-sdk"
-version = "0.8.0"
+version = "0.8.4"
 dependencies = [
  "bytes-lit",
  "ed25519-dalek",
@@ -936,7 +923,7 @@ dependencies = [
 
 [[package]]
 name = "soroban-sdk-macros"
-version = "0.8.0"
+version = "0.8.4"
 dependencies = [
  "darling",
  "itertools",
@@ -945,13 +932,13 @@ dependencies = [
  "sha2",
  "soroban-env-common",
  "soroban-spec",
- "stellar-xdr",
+ "stellar-xdr 0.0.16 (git+https://github.com/stellar/rs-stellar-xdr?rev=b283ec0bcb791610013107b9eab7d7ff07a65db1)",
  "syn 2.0.15",
 ]
 
 [[package]]
 name = "soroban-spec"
-version = "0.8.0"
+version = "0.8.4"
 dependencies = [
  "base64 0.13.1",
  "darling",
@@ -963,7 +950,7 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "sha2",
- "stellar-xdr",
+ "stellar-xdr 0.0.16 (git+https://github.com/stellar/rs-stellar-xdr?rev=b283ec0bcb791610013107b9eab7d7ff07a65db1)",
  "syn 2.0.15",
  "thiserror",
  "wasmparser",
@@ -1016,6 +1003,17 @@ dependencies = [
 name = "stellar-xdr"
 version = "0.0.16"
 source = "git+https://github.com/stellar/rs-stellar-xdr?rev=b283ec0bcb791610013107b9eab7d7ff07a65db1#b283ec0bcb791610013107b9eab7d7ff07a65db1"
+dependencies = [
+ "crate-git-revision",
+ "hex",
+ "serde",
+ "serde_with",
+]
+
+[[package]]
+name = "stellar-xdr"
+version = "0.0.16"
+source = "git+https://github.com/stellar/rs-stellar-xdr?rev=eda841f3c08a023bb50f7f79b8b8b8d6083aad83#eda841f3c08a023bb50f7f79b8b8b8d6083aad83"
 dependencies = [
  "arbitrary",
  "base64 0.13.1",
@@ -1126,21 +1124,6 @@ checksum = "d967f99f534ca7e495c575c62638eebc2898a8c84c119b89e250477bc4ba16b2"
 dependencies = [
  "time-core",
 ]
-
-[[package]]
-name = "tinyvec"
-version = "1.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "87cc5ceb3875bb20c2890005a4e226a4651264a5c75edb2421b52861a0a0cb50"
-dependencies = [
- "tinyvec_macros",
-]
-
-[[package]]
-name = "tinyvec_macros"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cda74da7e1a664f795bb1f8a87ec406fb89a02522cf6e50620d016add6dbbf5c"
 
 [[package]]
 name = "typenum"

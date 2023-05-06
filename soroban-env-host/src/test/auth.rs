@@ -90,6 +90,7 @@ impl AuthTest {
         // TODO: remove the `reset_unlimited` and instead reset inputs wherever appropriate
         // to respect the budget limit.
         host.as_budget().reset_unlimited();
+        host.enable_debug();
         let mut accounts = vec![];
         for _ in 0..signer_cnt {
             accounts.push(generate_keypair());

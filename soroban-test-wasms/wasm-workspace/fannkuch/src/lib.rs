@@ -4,13 +4,13 @@ use soroban_sdk::{contractimpl, Env, RawVal};
 pub struct Contract;
 
 fn fannkuchredux<const N: usize>(env: Env) -> usize {
-    let mut perm: [usize;N] = [0;N];
-    let mut perm1: [usize;N] = [0;N];
-    let mut count: [usize;N] = [0;N];
+    let mut perm: [usize; N] = [0; N];
+    let mut perm1: [usize; N] = [0; N];
+    let mut count: [usize; N] = [0; N];
     let mut max_flips_count: usize = 0;
     let mut perm_count: usize = 0;
     let mut checksum: usize = 0;
-    
+
     for i in 0..N {
         perm1[i] = i;
     }
@@ -18,7 +18,7 @@ fn fannkuchredux<const N: usize>(env: Env) -> usize {
     let mut r: usize = N;
     loop {
         while r != 1 {
-            count[r-1] = r;
+            count[r - 1] = r;
             r -= 1;
         }
 
@@ -33,11 +33,11 @@ fn fannkuchredux<const N: usize>(env: Env) -> usize {
             if k == 0 {
                 break;
             }
-            let k2 = (k+1) >> 1;
+            let k2 = (k + 1) >> 1;
             for i in 0..k2 {
                 let temp = perm[i];
-                perm[i] = perm[k-i];
-                perm[k-i] = temp;
+                perm[i] = perm[k - i];
+                perm[k - i] = temp;
             }
             flips_count += 1;
         }
@@ -54,8 +54,12 @@ fn fannkuchredux<const N: usize>(env: Env) -> usize {
 
         loop {
             if r == N {
-                env.logger().log("checksum", &[RawVal::from_u32(checksum as u32).to_raw()]);
-                env.logger().log("max_flips", &[RawVal::from_u32(max_flips_count as u32).to_raw()]);
+                env.logger()
+                    .log("checksum", &[RawVal::from_u32(checksum as u32).to_raw()]);
+                env.logger().log(
+                    "max_flips",
+                    &[RawVal::from_u32(max_flips_count as u32).to_raw()],
+                );
                 return max_flips_count;
             }
 
@@ -75,7 +79,6 @@ fn fannkuchredux<const N: usize>(env: Env) -> usize {
         }
         perm_count += 1;
     }
-
 }
 
 #[contractimpl]
