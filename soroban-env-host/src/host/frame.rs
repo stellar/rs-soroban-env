@@ -8,7 +8,7 @@ use crate::{
         ContractCostType, Hash, HostFunction, HostFunctionArgs, HostFunctionType,
         ScContractExecutable, ScVal,
     },
-    BytesObject, Error, Host, HostError, RawVal, Symbol, SymbolStr, TryFromVal, TryIntoVal,
+    BytesObject, Error, Host, HostError, RawVal, Symbol, SymbolStr, TryFromVal, TryIntoVal, budget::AsBudget,
 };
 
 #[cfg(any(test, feature = "testutils"))]
@@ -19,7 +19,7 @@ use std::rc::Rc;
 
 use crate::Vm;
 
-use super::metered_clone::MeteredClone;
+use super::{invoker_type::InvokerType, metered_clone::MeteredClone, prng::Prng};
 
 /// Determines the re-entry mode for calling a contract.
 pub(crate) enum ContractReentryMode {
@@ -73,6 +73,14 @@ impl TestContractFrame {
     }
 }
 
+/// Context pairs a variable-case [`Frame`] enum with state that's common to all
+/// cases (eg. a [`Prng`]).
+#[derive(Clone)]
+pub(crate) struct Context {
+    pub(crate) frame: Frame,
+    prng: Prng,
+}
+
 /// Holds contextual information about a single invocation, either
 /// a reference to a contract [`Vm`] or an enclosing [`HostFunction`]
 /// invocation.
@@ -99,6 +107,7 @@ impl Host {
     /// operation fails, it can be used to roll the [`Host`] back to the state
     /// it had before its associated [`Frame`] was pushed.
     pub(super) fn push_frame(&self, frame: Frame) -> Result<RollbackPoint, HostError> {
+        let prng = self.0.base_prng.borrow_mut().sub_prng(self.as_budget())?;
         // This is a bit hacky, as it relies on re-borrow to occur only during
         // the account contract invocations. Instead we should probably call it
         // in more explicitly different fashion and check if we're calling it
@@ -108,8 +117,8 @@ impl Host {
             auth_manager.push_frame(self, &frame)?;
             auth_snapshot = Some(auth_manager.snapshot());
         }
-
-        self.0.context.borrow_mut().push(frame);
+        let ctx = Context { frame, prng };
+        self.0.context.borrow_mut().push(ctx);
         Ok(RollbackPoint {
             storage: self.0.storage.borrow().map.clone(),
             events: self.0.events.borrow().vec.len(),
@@ -173,14 +182,18 @@ impl Host {
     where
         F: FnOnce(&Frame) -> Result<U, HostError>,
     {
-        f(self.0.context.borrow().last().ok_or_else(|| {
-            self.err(
+        f(&self
+            .0
+            .context
+            .borrow()
+            .last()
+            .ok_or_else(|| self.err(
                 ScErrorType::Context,
                 ScErrorCode::MissingValue,
                 "no contract running",
                 &[],
-            )
-        })?)
+            ))?
+            .frame)
     }
 
     /// Same as [`Self::with_current_frame`] but passes `None` when there is no current
@@ -189,7 +202,20 @@ impl Host {
     where
         F: FnOnce(Option<&Frame>) -> Result<U, HostError>,
     {
-        f(self.0.context.borrow().last())
+        f(self.0.context.borrow().last().map(|ctx| &ctx.frame))
+    }
+
+    pub(crate) fn with_current_prng<F, U>(&self, f: F) -> Result<U, HostError>
+    where
+        F: FnOnce(&mut Prng) -> Result<U, HostError>,
+    {
+        f(&mut self
+            .0
+            .context
+            .borrow_mut()
+            .last_mut()
+            .ok_or_else(|| self.err(ScErrorType::Context, ScErrorCode::MissingValue, "no contract running", &[]))?
+            .prng)
     }
 
     /// Pushes a [`Frame`], runs a closure, and then pops the frame, rolling back
@@ -261,7 +287,7 @@ impl Host {
         let frames = self.0.context.borrow();
         // the previous frame must exist and must be a contract
         let hash = match frames.as_slice() {
-            [.., f2, _] => match f2 {
+            [.., c2, _] => match &c2.frame {
                 Frame::ContractVM(vm, _, _) => Ok(vm.contract_id.metered_clone(&self.0.budget)?),
                 Frame::HostFunction(_) => Err(self.err(
                     ScErrorType::Context,
@@ -281,6 +307,33 @@ impl Host {
             )),
         }?;
         Ok(hash)
+    }
+
+    // Metering: mostly free or already covered by components (e.g. err_general)
+    pub(super) fn get_invoker_type(&self) -> Result<u64, HostError> {
+        let frames = self.0.context.borrow();
+        // If the previous frame exists and is a contract, return its ID, otherwise return
+        // the account invoking.
+        let st = match frames.as_slice() {
+            // There are always two frames when WASM is executed in the VM.
+            [.., c2, _] => match &c2.frame {
+                Frame::ContractVM(_, _, _) => Ok(InvokerType::Contract),
+                Frame::HostFunction(_) => Ok(InvokerType::Account),
+                Frame::Token(id, _, _) => Ok(InvokerType::Contract),
+                #[cfg(any(test, feature = "testutils"))]
+                Frame::TestContract(_) => Ok(InvokerType::Contract),
+            },
+            // In tests contracts are executed with a single frame.
+            // TODO: Investigate this discrepancy: https://github.com/stellar/rs-soroban-env/issues/485.
+            [_] => Ok(InvokerType::Account),
+            _ => Err(self.err(
+                ScErrorType::Context,
+                ScErrorCode::InternalError,
+                "no frames to derive the invoker from",
+                &[],
+            )),
+        }?;
+        Ok(st as u64)
     }
 
     /// Pushes a test contract [`Frame`], runs a closure, and then pops the
@@ -368,8 +421,8 @@ impl Host {
         }
         if !matches!(reentry_mode, ContractReentryMode::Allowed) {
             let mut is_last_non_host_frame = true;
-            for f in self.0.context.borrow().iter().rev() {
-                let exist_id = match f {
+            for ctx in self.0.context.borrow().iter().rev() {
+                let exist_id = match &ctx.frame {
                     Frame::ContractVM(vm, _, _) => &vm.contract_id,
                     Frame::Token(id, _, _) => id,
                     #[cfg(any(test, feature = "testutils"))]

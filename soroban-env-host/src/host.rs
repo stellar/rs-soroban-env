@@ -38,12 +38,18 @@ pub(crate) mod metered_clone;
 pub(crate) mod metered_map;
 pub(crate) mod metered_vector;
 pub(crate) mod metered_xdr;
+mod prng;
+pub use prng::{Seed, SEED_BYTES};
 mod validity;
 pub use error::HostError;
 use soroban_env_common::xdr::ScErrorCode;
 
-use self::{frame::ContractReentryMode, metered_vector::MeteredVector};
-use self::{invoker_type::InvokerType, metered_clone::MeteredClone};
+use self::metered_clone::MeteredClone;
+use self::{
+    frame::{Context, ContractReentryMode},
+    metered_vector::MeteredVector,
+    prng::Prng,
+};
 use crate::Compare;
 #[cfg(any(test, feature = "testutils"))]
 use crate::{xdr::ScVec, TryIntoVal};
@@ -74,7 +80,7 @@ pub(crate) struct HostImpl {
     ledger: RefCell<Option<LedgerInfo>>,
     pub(crate) objects: RefCell<Vec<HostObject>>,
     storage: RefCell<Storage>,
-    pub(crate) context: RefCell<Vec<Frame>>,
+    pub(crate) context: RefCell<Vec<Context>>,
     // Note: budget is refcounted and is _not_ deep-cloned when you call HostImpl::deep_clone,
     // mainly because it's not really possible to achieve (the same budget is connected to many
     // metered sub-objects) but also because it's plausible that the person calling deep_clone
@@ -83,6 +89,7 @@ pub(crate) struct HostImpl {
     pub(crate) events: RefCell<InternalEventsBuffer>,
     authorization_manager: RefCell<AuthorizationManager>,
     pub(crate) diagnostic_level: RefCell<DiagnosticLevel>,
+    pub(crate) base_prng: RefCell<Prng>,
     // Note: we're not going to charge metering for testutils because it's out of the scope
     // of what users will be charged for in production -- it's scaffolding for testing a contract,
     // but shouldn't be charged to the contract itself (and will never be compiled-in to
@@ -131,6 +138,7 @@ impl Host {
                 AuthorizationManager::new_enforcing_without_authorizations(budget),
             ),
             diagnostic_level: Default::default(),
+            base_prng: RefCell::new(Prng::default()),
             #[cfg(any(test, feature = "testutils"))]
             contracts: Default::default(),
             #[cfg(any(test, feature = "testutils"))]
@@ -163,6 +171,10 @@ impl Host {
         let new_auth_manager = AuthorizationManager::new_enforcing(self, auth_entries)?;
         *self.0.authorization_manager.borrow_mut() = new_auth_manager;
         Ok(())
+    }
+
+    pub fn set_base_prng_seed(&self, seed: prng::Seed) {
+        self.0.base_prng.borrow_mut().reseed(seed)
     }
 
     pub fn set_ledger_info(&self, info: LedgerInfo) {
@@ -592,33 +604,6 @@ impl Host {
                 &[sym.to_raw()],
             ))
         }
-    }
-
-    // Metering: mostly free or already covered by components (e.g. err)
-    fn get_invoker_type(&self) -> Result<u64, HostError> {
-        let frames = self.0.context.borrow();
-        // If the previous frame exists and is a contract, return its ID, otherwise return
-        // the account invoking.
-        let st = match frames.as_slice() {
-            // There are always two frames when WASM is executed in the VM.
-            [.., f2, _] => match f2 {
-                Frame::ContractVM(_, _, _) => Ok(InvokerType::Contract),
-                Frame::HostFunction(_) => Ok(InvokerType::Account),
-                Frame::Token(id, _, _) => Ok(InvokerType::Contract),
-                #[cfg(any(test, feature = "testutils"))]
-                Frame::TestContract(_) => Ok(InvokerType::Contract),
-            },
-            // In tests contracts are executed with a single frame.
-            // TODO: Investigate this discrepancy: https://github.com/stellar/rs-soroban-env/issues/485.
-            [f1] => Ok(InvokerType::Account),
-            _ => Err(self.err(
-                ScErrorType::Context,
-                ScErrorCode::InternalError,
-                "no frames to derive the invoker from",
-                &[],
-            )),
-        }?;
-        Ok(st as u64)
     }
 }
 
@@ -2283,7 +2268,7 @@ impl VmCallerEnv for Host {
         &self,
         _vmcaller: &mut VmCaller<Host>,
     ) -> Result<VecObject, HostError> {
-        let frames = self.0.context.borrow();
+        let contexts = self.0.context.borrow();
 
         let get_host_val_tuple = |id: &Hash, function: &Symbol| -> Result<[RawVal; 2], HostError> {
             let id_val = self.add_host_object(self.scbytes_from_hash(id)?)?.into();
@@ -2291,9 +2276,9 @@ impl VmCallerEnv for Host {
             Ok([id_val, function_val])
         };
 
-        let mut outer = Vec::with_capacity(frames.len());
-        for frame in frames.iter() {
-            let vals = match frame {
+        let mut outer = Vec::with_capacity(contexts.len());
+        for context in contexts.iter() {
+            let vals = match &context.frame {
                 Frame::ContractVM(vm, function, _) => {
                     get_host_val_tuple(&vm.contract_id, &function)?
                 }
@@ -2438,6 +2423,68 @@ impl VmCallerEnv for Host {
                 .add_host_object(ScBytes(h.to_vec().try_into()?))?
                 .into()),
         }
+    }
+
+    fn prng_reseed(
+        &self,
+        vmcaller: &mut VmCaller<Self::VmUserState>,
+        seed: BytesObject,
+    ) -> Result<Void, Self::Error> {
+        self.visit_obj(seed, |bytes: &ScBytes| {
+            let slice: &[u8] = bytes.as_ref();
+            self.charge_budget(ContractCostType::HostMemCpy, Some(prng::SEED_BYTES as u64))?;
+            if let Ok(seed32) = slice.try_into() {
+                self.with_current_prng(|prng| {
+                    prng.reseed(seed32);
+                    Ok(())
+                })?;
+                Ok(RawVal::VOID)
+            } else if let Ok(len) = u32::try_from(slice.len()) {
+                Err(self.err(
+                    ScErrorType::Value,
+                    ScErrorCode::UnexpectedSize,
+                    "Unexpected size of BytesObject in prng_reseed",
+                    &[U32Val::from(len).to_raw()],
+                ))
+            } else {
+                Err(self.err(
+                    ScErrorType::Value,
+                    ScErrorCode::UnexpectedSize,
+                    "Unexpected size of BytesObject in prng_reseed",
+                    &[],
+                ))
+            }
+        })
+    }
+
+    fn prng_bytes_new(
+        &self,
+        vmcaller: &mut VmCaller<Self::VmUserState>,
+        length: U32Val,
+    ) -> Result<BytesObject, Self::Error> {
+        self.add_host_object(
+            self.with_current_prng(|prng| prng.bytes_new(length.into(), self.as_budget()))?,
+        )
+    }
+
+    fn prng_u64_in_inclusive_range(
+        &self,
+        vmcaller: &mut VmCaller<Self::VmUserState>,
+        lo: u64,
+        hi: u64,
+    ) -> Result<u64, Self::Error> {
+        self.with_current_prng(|prng| prng.u64_in_inclusive_range(lo..=hi, self.as_budget()))
+    }
+
+    fn prng_vec_shuffle(
+        &self,
+        vmcaller: &mut VmCaller<Self::VmUserState>,
+        vec: VecObject,
+    ) -> Result<VecObject, Self::Error> {
+        let vnew = self.visit_obj(vec, |v: &HostVec| {
+            self.with_current_prng(|prng| prng.vec_shuffle(v, self.as_budget()))
+        })?;
+        self.add_host_object(vnew)
     }
 }
 

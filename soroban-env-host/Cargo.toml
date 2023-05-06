@@ -19,6 +19,10 @@ sha2 = "0.9.0"
 ed25519-dalek = "1.0.1"
 # NB: this must match the same curve25519 version used by ed25519-dalek above
 curve25519-dalek = "3.0.0"
+# NB: this must match the same rand version used by ed25519-dalek above
+rand = "0.7.3"
+# NB: this must match the same rand_chacha version used by ed25519-dalek above
+rand_chacha = "0.2.2"
 hex = "0.4.3"
 num-traits = "0.2.15"
 num-integer = "0.1.45"
@@ -33,8 +37,6 @@ log = "0.4.17"
 tracking-allocator = "0.4.0"
 tabwriter = "1.2.1"
 thousands = "0.2.0"
-# NB: this must match the same rand version used by ed25519-dalek above
-rand = "0.7.3"
 soroban-test-wasms = { package = "soroban-test-wasms", path = "../soroban-test-wasms" }
 soroban-synth-wasm = { package = "soroban-synth-wasm", path = "../soroban-synth-wasm" }
 bytes-lit = "0.0.5"
