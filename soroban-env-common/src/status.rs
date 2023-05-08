@@ -164,27 +164,35 @@ impl Debug for Status {
 impl TryFrom<Status> for ScStatus {
     type Error = stellar_xdr::Error;
     fn try_from(st: Status) -> Result<Self, Self::Error> {
-        let ok = {
-            if st.is_type(ScStatusType::Ok) {
-                ScStatus::Ok
-            } else if st.is_type(ScStatusType::UnknownError) {
+        let st_res: Result<ScStatusType, _> = (st.as_raw().get_minor() as i32).try_into();
+        let st_type = match st_res {
+            Ok(t) => t,
+            Err(_) => return Err(stellar_xdr::Error::Invalid),
+        };
+        let ok = match st_type {
+            ScStatusType::Ok => ScStatus::Ok,
+            ScStatusType::UnknownError => {
                 ScStatus::UnknownError((st.get_code() as i32).try_into()?)
-            } else if st.is_type(ScStatusType::HostValueError) {
+            }
+            ScStatusType::HostValueError => {
                 ScStatus::HostValueError((st.get_code() as i32).try_into()?)
-            } else if st.is_type(ScStatusType::HostObjectError) {
+            }
+            ScStatusType::HostObjectError => {
                 ScStatus::HostObjectError((st.get_code() as i32).try_into()?)
-            } else if st.is_type(ScStatusType::HostFunctionError) {
+            }
+            ScStatusType::HostFunctionError => {
                 ScStatus::HostFunctionError((st.get_code() as i32).try_into()?)
-            } else if st.is_type(ScStatusType::HostStorageError) {
+            }
+            ScStatusType::HostStorageError => {
                 ScStatus::HostStorageError((st.get_code() as i32).try_into()?)
-            } else if st.is_type(ScStatusType::HostContextError) {
+            }
+            ScStatusType::HostContextError => {
                 ScStatus::HostContextError((st.get_code() as i32).try_into()?)
-            } else if st.is_type(ScStatusType::VmError) {
-                ScStatus::VmError((st.get_code() as i32).try_into()?)
-            } else if st.is_type(ScStatusType::ContractError) {
-                ScStatus::ContractError(st.get_code())
-            } else {
-                return Err(stellar_xdr::Error::Invalid);
+            }
+            ScStatusType::VmError => ScStatus::VmError((st.get_code() as i32).try_into()?),
+            ScStatusType::ContractError => ScStatus::ContractError(st.get_code()),
+            ScStatusType::HostAuthError => {
+                ScStatus::HostAuthError((st.get_code() as i32).try_into()?)
             }
         };
         Ok(ok)
