@@ -441,10 +441,10 @@ impl Host {
                                 status = st;
                                 event = DebugEvent::new().msg("caught panic from contract function '{}', propagating escalated error '{}'").arg(func).arg(st.to_raw());
                             }
-                            // If we're allowed to record dynamic strings (which happens in
-                            // native test configurations), also log the panic payload into
-                            // the .
-                            else if cfg!(feature = "hostfn_log_fmt_values") {
+                            // If we're allowed to record dynamic strings (which happens 
+                            // when diagnostics are active), also log the panic payload into
+                            // the Debug buffer.
+                            else if self.is_debug() {
                                 if let Some(str) = panic_payload.downcast_ref::<&str>() {
                                     let msg: String = format!("caught panic '{}' from contract function '{:?}'", str, func);
                                     event = DebugEvent::new().msg(msg);

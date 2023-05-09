@@ -47,7 +47,6 @@ more-asserts = "0.3.1"
 linregress = "0.5.1"
 
 [features]
-hostfn_log_fmt_values = []
 testutils = ["soroban-env-common/testutils"]
 
 [target.'cfg(target_os = "linux")'.dev-dependencies]

@@ -817,7 +817,7 @@ impl VmCallerEnv for Host {
         fmt: StringObject,
         args: VecObject,
     ) -> Result<Void, HostError> {
-        if cfg!(feature = "hostfn_log_fmt_values") {
+        if self.is_debug() {
             let fmt: String = self
                 .visit_obj(fmt, move |hv: &ScString| {
                     Ok(String::from_utf8(hv.clone().into()))
