@@ -13,10 +13,8 @@ use crate::{
 use crate::{events::DebugEvent, host::testutils, xdr::ScUnknownErrorCode};
 #[cfg(any(test, feature = "testutils"))]
 use core::cell::RefCell;
-#[cfg(any(test, feature = "testutils", feature = "vm"))]
 use std::rc::Rc;
 
-#[cfg(feature = "vm")]
 use crate::Vm;
 
 use super::metered_clone::MeteredClone;
@@ -86,7 +84,6 @@ impl TestContractFrame {
 /// commit or roll back that state when it pops the stack.
 #[derive(Clone)]
 pub(crate) enum Frame {
-    #[cfg(feature = "vm")]
     ContractVM(Rc<Vm>, Symbol, Vec<RawVal>),
     HostFunction(HostFunctionType),
     Token(Hash, Symbol, Vec<RawVal>),
@@ -236,7 +233,6 @@ impl Host {
     /// frame at its top.
     pub(crate) fn get_current_contract_id_opt_internal(&self) -> Result<Option<Hash>, HostError> {
         self.with_current_frame(|frame| match frame {
-            #[cfg(feature = "vm")]
             Frame::ContractVM(vm, _, _) => Ok(Some(vm.contract_id.metered_clone(&self.0.budget)?)),
             Frame::HostFunction(_) => Ok(None),
             Frame::Token(id, _, _) => Ok(Some(id.metered_clone(&self.0.budget)?)),
@@ -261,7 +257,6 @@ impl Host {
         // the previous frame must exist and must be a contract
         let hash = match frames.as_slice() {
             [.., f2, _] => match f2 {
-                #[cfg(feature = "vm")]
                 Frame::ContractVM(vm, _, _) => Ok(vm.contract_id.metered_clone(&self.0.budget)?),
                 Frame::HostFunction(_) => Err(self.err_general("invoker is not a contract")),
                 Frame::Token(id, _, _) => Ok(id.clone()),
@@ -303,7 +298,6 @@ impl Host {
         // Create key for storage
         let storage_key = self.contract_executable_ledger_key(id)?;
         match self.retrieve_contract_executable_from_storage(&storage_key)? {
-            #[cfg(feature = "vm")]
             ScContractExecutable::WasmRef(wasm_hash) => {
                 let code_entry = self.retrieve_wasm_from_storage(&wasm_hash)?;
                 let vm = Vm::new(
@@ -313,8 +307,6 @@ impl Host {
                 )?;
                 vm.invoke_function_raw(self, func, args)
             }
-            #[cfg(not(feature = "vm"))]
-            ScContractExecutable::WasmRef(_) => Err(self.err_general("could not dispatch")),
             ScContractExecutable::Token => {
                 self.with_frame(Frame::Token(id.clone(), *func, args.to_vec()), || {
                     use crate::native_contract::{NativeContract, Token};
@@ -361,7 +353,6 @@ impl Host {
             let mut is_last_non_host_frame = true;
             for f in self.0.context.borrow().iter().rev() {
                 let exist_id = match f {
-                    #[cfg(feature = "vm")]
                     Frame::ContractVM(vm, _, _) => &vm.contract_id,
                     Frame::Token(id, _, _) => id,
                     #[cfg(any(test, feature = "testutils"))]

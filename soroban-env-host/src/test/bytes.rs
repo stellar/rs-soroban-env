@@ -5,9 +5,7 @@ use crate::{
 };
 use soroban_env_common::{Compare, EnvBase};
 
-#[cfg(feature = "vm")]
 use crate::Symbol;
-#[cfg(feature = "vm")]
 use soroban_test_wasms::LINEAR_MEMORY;
 
 #[test]
@@ -132,7 +130,6 @@ fn bytes_xdr_roundtrip() -> Result<(), HostError> {
     Ok(())
 }
 
-#[cfg(feature = "vm")]
 #[test]
 fn linear_memory_operations() -> Result<(), HostError> {
     use soroban_env_common::BytesObject;

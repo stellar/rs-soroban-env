@@ -6,11 +6,6 @@
 //! crate for use by host (or contract local-testing) code. Most of the type and
 //! module definitions visible here are actually defined in the common crate.
 //!
-//! The `Host` can be configured with or without support for a [vm::Vm],
-//! depending on the `"vm"` cargo feature. When enabled, the VM is currently a
-//! thin wrapper around the [wasmi](https://github.com/paritytech/wasmi)
-//! interpreter, though other VMs might be supported in the future.
-//!
 //! It may seem unusual to configure a contract host _without_ a VM, but this
 //! configuration makes more sense when considering that Soroban supports a
 //! "local testing" configuration where host and guest code are _both compiled
@@ -37,9 +32,7 @@ pub(crate) mod host_object;
 mod native_contract;
 
 pub mod auth;
-#[cfg(feature = "vm")]
 pub mod vm;
-#[cfg(feature = "vm")]
 pub use vm::Vm;
 #[cfg(any(test, feature = "testutils"))]
 pub mod cost_runner;
