@@ -1,9 +1,9 @@
 #[cfg(feature = "wasmi")]
-use crate::xdr::ScHostContextErrorCode;
+use stellar_xdr::{ScErrorCode, ScErrorType};
 
 use super::{
-    AddressObject, Bool, BytesObject, I128Object, I256Object, I64Object, MapObject, Object, RawVal,
-    Status, StringObject, SymbolObject, U128Object, U256Object, U32Val, U64Object, U64Val,
+    AddressObject, Bool, BytesObject, Error, I128Object, I256Object, I64Object, MapObject, Object,
+    RawVal, StringObject, SymbolObject, U128Object, U256Object, U32Val, U64Object, U64Val,
     VecObject, Void,
 };
 use crate::call_macro_with_all_host_functions;
@@ -32,16 +32,22 @@ impl<'a, T> VmCaller<'a, T> {
     pub fn none() -> Self {
         VmCaller(None)
     }
-    pub fn try_ref(&self) -> Result<&wasmi::Caller<'a, T>, ScHostContextErrorCode> {
+    pub fn try_ref(&self) -> Result<&wasmi::Caller<'a, T>, Error> {
         match &self.0 {
             Some(caller) => Ok(caller),
-            None => Err(ScHostContextErrorCode::NoContractRunning),
+            None => Err(Error::from_type_and_code(
+                ScErrorType::WasmVm,
+                ScErrorCode::MissingValue,
+            )),
         }
     }
-    pub fn try_mut(&mut self) -> Result<&mut wasmi::Caller<'a, T>, ScHostContextErrorCode> {
+    pub fn try_mut(&mut self) -> Result<&mut wasmi::Caller<'a, T>, Error> {
         match &mut self.0 {
             Some(caller) => Ok(caller),
-            None => Err(ScHostContextErrorCode::NoContractRunning),
+            None => Err(Error::from_type_and_code(
+                ScErrorType::WasmVm,
+                ScErrorCode::MissingValue,
+            )),
         }
     }
 }

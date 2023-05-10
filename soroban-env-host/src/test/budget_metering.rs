@@ -1,10 +1,11 @@
 use crate::{
     budget::AsBudget,
     host::metered_clone::MeteredClone,
-    xdr::{ContractCostType, ScMap, ScMapEntry, ScVal, ScVmErrorCode},
+    xdr::{ContractCostType, ScMap, ScMapEntry, ScVal},
     Env, Host, HostError, RawVal, Symbol,
 };
 use expect_test::{self, expect};
+use soroban_env_common::xdr::{ScErrorCode, ScErrorType};
 use soroban_test_wasms::VEC;
 
 #[test]
@@ -128,8 +129,8 @@ fn metered_xdr_out_of_budget() -> Result<(), HostError> {
     )?;
     let mut w = Vec::<u8>::new();
     let res = host.metered_write_xdr(&scmap, &mut w);
-    let code = ScVmErrorCode::TrapCpuLimitExceeded;
-    assert!(HostError::result_matches_err_status(res, code));
+    let code = (ScErrorType::Budget, ScErrorCode::ExceededLimit);
+    assert!(HostError::result_matches_err(res, code));
     Ok(())
 }
 

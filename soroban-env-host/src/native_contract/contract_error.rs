@@ -1,5 +1,5 @@
 use num_derive::FromPrimitive;
-use soroban_env_common::Status;
+use soroban_env_common::Error;
 
 // Use the same error for all the built-in contract error.
 // In theory we could have a separate enum for each built-in contract, but it's
@@ -23,8 +23,8 @@ pub enum ContractError {
     TrustlineMissingError = 13,
 }
 
-impl From<ContractError> for Status {
+impl From<ContractError> for Error {
     fn from(err: ContractError) -> Self {
-        Status::from_contract_error(err as u32)
+        Error::from_contract_error(err as u32)
     }
 }

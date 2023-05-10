@@ -1,9 +1,9 @@
-use soroban_env_common::xdr::ScHostObjErrorCode;
+use soroban_env_common::xdr::{ScErrorCode, ScErrorType};
 
 use super::{declared_size::DeclaredSizeForMetering, MeteredClone};
 use crate::{
     budget::{AsBudget, Budget},
-    xdr::{ContractCostType, ScHostFnErrorCode},
+    xdr::ContractCostType,
     Compare, Host, HostError,
 };
 use std::{borrow::Borrow, cmp::Ordering, marker::PhantomData};
@@ -94,10 +94,7 @@ where
         for w in m.map.as_slice().windows(2) {
             match <Ctx as Compare<K>>::compare(ctx, &w[0].0, &w[1].0)? {
                 Ordering::Less => (),
-                // TODO need a better error code for "duplicate key"
-                Ordering::Equal => return Err(ScHostFnErrorCode::UnknownError.into()),
-                // TODO need a better error code for "out-of-order keys"
-                Ordering::Greater => return Err(ScHostFnErrorCode::UnknownError.into()),
+                _ => return Err((ScErrorType::Object, ScErrorCode::InvalidInput).into()),
             }
         }
         Ok(m)
@@ -123,8 +120,8 @@ where
                 ctx: Default::default(),
             })
         } else {
-            // TODO use a better error code for "unbounded input itertors"
-            Err(ScHostFnErrorCode::UnknownError.into())
+            // This is a logic error, we should never get here.
+            Err((ScErrorType::Object, ScErrorCode::InternalError).into())
         }
     }
 
@@ -163,8 +160,7 @@ where
                 // take(1) + new + skip(2)
                 // [0] + new + [2]
                 if replace_pos == usize::MAX - 1 {
-                    // TODO: something better for integer overflow.
-                    return Err(ScHostObjErrorCode::VecIndexOutOfBound.into());
+                    return Err((ScErrorType::Value, ScErrorCode::ArithDomain).into());
                 }
                 let init = self.map.iter().take(replace_pos).cloned();
                 let fini = self.map.iter().skip(replace_pos + 1).cloned();

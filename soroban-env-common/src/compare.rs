@@ -157,7 +157,7 @@ impl<E: Env> Compare<RawVal> for E {
                 Tag::True => Ok(Ordering::Equal),
                 Tag::Void => Ok(Ordering::Equal),
 
-                Tag::Status => delegate_compare_to_wrapper!(Status, a, b, self),
+                Tag::Error => delegate_compare_to_wrapper!(Error, a, b, self),
 
                 Tag::U32Val => delegate_compare_to_wrapper!(U32Val, a, b, self),
                 Tag::I32Val => delegate_compare_to_wrapper!(I32Val, a, b, self),

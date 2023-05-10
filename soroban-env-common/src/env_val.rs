@@ -8,7 +8,7 @@ use stellar_xdr::int128_helpers;
 
 #[cfg(feature = "std")]
 use crate::{
-    num, object::ScValObjRef, Object, RawValConvertible, ScValObject, Status, SymbolSmall, Tag,
+    num, object::ScValObjRef, Error, Object, RawValConvertible, ScValObject, SymbolSmall, Tag,
 };
 #[cfg(feature = "std")]
 use stellar_xdr::{
@@ -36,19 +36,6 @@ where
     fn try_into_val(&self, env: &E) -> Result<T, Self::Error> {
         T::try_from_val(env, self)
     }
-}
-
-// FIXME: maybe return to conversion errors and improve logging / revive
-// this code path.
-#[allow(dead_code)]
-pub(crate) fn log_err_convert<T>(env: &impl Env, val: &impl AsRef<RawVal>) {
-    // Logging here is best-effort; ignore failures (they only arise if we're
-    // out of gas or something otherwise-unrecoverable).
-    let _ = env.log_static_fmt_val_static_str(
-        "can't convert {} to {}",
-        *val.as_ref(),
-        core::any::type_name::<T>(),
-    );
 }
 
 // i64 conversions
@@ -281,7 +268,7 @@ where
 {
     type Error = ConversionError;
 
-    fn try_from_val(env: &E, val: &RawVal) -> Result<Self, Self::Error> {
+    fn try_from_val(env: &E, val: &RawVal) -> Result<Self, ConversionError> {
         if let Ok(object) = Object::try_from(val) {
             // FIXME: it's not really great to be dropping the error from the other
             // TryFromVal here, we should really switch to taking errors from E.
@@ -293,9 +280,9 @@ where
             Tag::False => Ok(ScVal::Bool(false)),
             Tag::True => Ok(ScVal::Bool(true)),
             Tag::Void => Ok(ScVal::Void),
-            Tag::Status => {
-                let status: Status =
-                    unsafe { <Status as RawValConvertible>::unchecked_from_val(val) };
+            Tag::Error => {
+                let status: Error =
+                    unsafe { <Error as RawValConvertible>::unchecked_from_val(val) };
                 Ok(status.try_into()?)
             }
             Tag::U32Val => Ok(ScVal::U32(val.get_major())),
@@ -380,7 +367,7 @@ where
         Ok(match val {
             ScVal::Bool(b) => RawVal::from_bool(*b).into(),
             ScVal::Void => RawVal::from_void().into(),
-            ScVal::Status(st) => st.into(),
+            ScVal::Error(e) => e.into(),
             ScVal::U32(u) => (*u).into(),
             ScVal::I32(i) => (*i).into(),
             ScVal::U64(u) => {

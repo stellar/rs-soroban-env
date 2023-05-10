@@ -1,5 +1,5 @@
 use crate::{Arity, FuncRef, GlobalRef, ModEmitter, TypeRef};
-use soroban_env_common::{xdr::ScStatus, RawVal, Status, Symbol, Tag};
+use soroban_env_common::{xdr::ScError, Error, RawVal, Symbol, Tag};
 use wasm_encoder::{BlockType, Function, Instruction, MemArg, ValType};
 
 /// An index into the _locals_ for the current function, which may refer
@@ -42,15 +42,15 @@ impl From<Symbol> for Operand {
     }
 }
 
-impl From<Status> for Operand {
-    fn from(s: Status) -> Self {
+impl From<Error> for Operand {
+    fn from(s: Error) -> Self {
         let r: RawVal = s.into();
         r.into()
     }
 }
 
-impl From<ScStatus> for Operand {
-    fn from(s: ScStatus) -> Self {
+impl From<ScError> for Operand {
+    fn from(s: ScError) -> Self {
         let r: RawVal = s.into();
         r.into()
     }

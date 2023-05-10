@@ -4,7 +4,7 @@
 //!   - The [RawVal] type, a 64-bit value type that is a union between several
 //!     different types (numbers, booleans, symbols, object references), encoded
 //!     via careful bit-packing.
-//!   - Wrapper types ([Object], [Symbol], [Status]) that
+//!   - Wrapper types ([Object], [Symbol], [Error]) that
 //!     contain [RawVal] in a specific, known union state. These are also 64-bit
 //!     values, but offer methods specific to the union state (eg. [Symbol] will
 //!     interconvert with Rust strings).
@@ -42,11 +42,11 @@ mod compare;
 mod convert;
 mod env;
 mod env_val;
+mod error;
 mod object;
 mod option;
 mod raw_val;
 mod result;
-mod status;
 mod string;
 mod symbol;
 mod tuple;
@@ -87,8 +87,8 @@ pub use unimplemented_env::UnimplementedEnv;
 pub use vmcaller_env::{VmCaller, VmCallerEnv};
 
 pub use bytes::BytesObject;
+pub use error::Error;
 pub use object::{Object, ScValObjRef, ScValObject};
-pub use status::Status;
 pub use string::StringObject;
 pub use symbol::{Symbol, SymbolError, SymbolObject, SymbolSmall, SymbolSmallIter, SymbolStr};
 

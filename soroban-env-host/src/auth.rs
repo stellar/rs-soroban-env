@@ -3,7 +3,8 @@ use std::rc::Rc;
 
 use soroban_env_common::xdr::{
     ContractAuth, ContractDataEntry, HashIdPreimage, HashIdPreimageContractAuth, LedgerEntry,
-    LedgerEntryData, LedgerEntryExt, ScAddress, ScHostAuthErrorCode, ScNonceKey, ScSymbol, ScVal,
+    LedgerEntryData, LedgerEntryExt, ScAddress, ScErrorCode, ScErrorType, ScNonceKey, ScSymbol,
+    ScVal,
 };
 use soroban_env_common::RawVal;
 
@@ -16,7 +17,7 @@ use crate::native_contract::account_contract::{
 use crate::{Host, HostError};
 
 use super::xdr;
-use super::xdr::{Hash, ScUnknownErrorCode, ScVec};
+use super::xdr::{Hash, ScVec};
 
 // Authorization manager encapsulates host-based authentication & authorization
 // framework.
@@ -164,7 +165,7 @@ impl AuthorizedInvocation {
                 .map(|i| i.to_xdr(budget))
                 .collect::<Result<Vec<xdr::AuthorizedInvocation>, HostError>>()?
                 .try_into()
-                .map_err(|_| HostError::from(ScUnknownErrorCode::General))?,
+                .map_err(|_| HostError::from((ScErrorType::Auth, ScErrorCode::InternalError)))?,
         })
     }
 
@@ -192,7 +193,7 @@ impl AuthorizedInvocation {
                 .map(|i| i.to_xdr_non_metered())
                 .collect::<Result<Vec<xdr::AuthorizedInvocation>, HostError>>()?
                 .try_into()
-                .map_err(|_| HostError::from(ScUnknownErrorCode::General))?,
+                .map_err(|_| HostError::from((ScErrorType::Auth, ScErrorCode::InternalError)))?,
         })
     }
 
@@ -317,7 +318,12 @@ impl AuthorizationManager {
                             // to not keep calling into `source_account` function.
                             let source_addr =
                                 ScAddress::Account(host.source_account().ok_or_else(|| {
-                                    host.err_general("unexpected missing invoker in auth manager")
+                                    host.err(
+                                        ScErrorType::Auth,
+                                        ScErrorCode::InternalError,
+                                        "unexpected missing invoker in auth manager",
+                                        &[],
+                                    )
                                 })?);
                             let source_matches = source_addr == address;
                             tracker.address = Some(source_addr);
@@ -346,7 +352,10 @@ impl AuthorizationManager {
                     }
                     // No matching tracker found, hence the invocation isn't
                     // authorized.
-                    Err(ScHostAuthErrorCode::NotAuthorized.into())
+                    Err(HostError::from((
+                        ScErrorType::Auth,
+                        ScErrorCode::InvalidAction,
+                    )))
                 }
                 AuthorizationMode::Recording(recording_info) => {
                     if let Some(tracker_id) = recording_info
@@ -390,7 +399,7 @@ impl AuthorizationManager {
             }
         } else {
             // This would be a bug
-            Err(ScUnknownErrorCode::General.into())
+            Err((ScErrorType::Auth, ScErrorCode::InternalError).into())
         }
     }
 
@@ -437,7 +446,7 @@ impl AuthorizationManager {
             Frame::TestContract(tc) => (tc.id.clone(), tc.func),
         };
         let Ok(ScVal::Symbol(function_name)) = host.from_host_val(function_name.to_raw()) else {
-            return Err(host.err_status(xdr::ScHostObjErrorCode::UnexpectedType))
+            return Err(host.err(ScErrorType::Auth, ScErrorCode::InternalError, "frame function name conversion failed", &[]))
         };
         self.call_stack.push(ContractInvocation {
             contract_id,
@@ -471,7 +480,10 @@ impl AuthorizationManager {
     // Should only be called in the recording mode.
     pub(crate) fn get_recorded_auth_payloads(&self) -> Result<Vec<RecordedAuthPayload>, HostError> {
         match &self.mode {
-            AuthorizationMode::Enforcing => Err(ScUnknownErrorCode::General.into()),
+            AuthorizationMode::Enforcing => Err(HostError::from((
+                ScErrorType::Auth,
+                ScErrorCode::InternalError,
+            ))),
             AuthorizationMode::Recording(_) => Ok(self
                 .trackers
                 .iter()
@@ -624,7 +636,12 @@ impl AuthorizationTracker {
     ) -> Result<Self, HostError> {
         if current_stack_len == 0 {
             // This would be a bug.
-            return Err(host.err_general("unexpected empty stack in recording auth"));
+            return Err(host.err(
+                ScErrorType::Auth,
+                ScErrorCode::InternalError,
+                "unexpected empty stack in recording auth",
+                &[],
+            ));
         }
         // If the invoker account is known, set it to `None`, so that the final
         // recorded payload wouldn't contain the address. This makes it easier
@@ -722,7 +739,12 @@ impl AuthorizationTracker {
             _ => false,
         };
         if frame_is_already_authorized {
-            return Err(ScHostAuthErrorCode::DuplicateAuthorization.into());
+            return Err(host.err(
+                ScErrorType::Auth,
+                ScErrorCode::ExistingValue,
+                "frame is already authorized",
+                &[],
+            ));
         }
         if let Some(curr_invocation) = self.last_authorized_invocation_mut() {
             curr_invocation
@@ -736,7 +758,12 @@ impl AuthorizationTracker {
                 Some(curr_invocation.sub_invocations.len() - 1);
         } else {
             // This would be a bug
-            return Err(host.err_general("unexpected missing authorized invocation"));
+            return Err(host.err(
+                ScErrorType::Auth,
+                ScErrorCode::InternalError,
+                "unexpected missing authorized invocation",
+                &[],
+            ));
         }
         Ok(())
     }
@@ -858,7 +885,12 @@ impl AuthorizationTracker {
         if nonce_is_correct {
             Ok(())
         } else {
-            Err(ScHostAuthErrorCode::NonceError.into())
+            Err(host.err(
+                ScErrorType::Auth,
+                ScErrorCode::InvalidInput,
+                "nonce is incorrect",
+                &[],
+            ))
         }
     }
 
@@ -870,9 +902,14 @@ impl AuthorizationTracker {
                 host.with_ledger_info(|li| li.network_id.metered_clone(host.budget_ref()))?,
             ),
             invocation: self.invocation_to_xdr(host.budget_ref())?,
-            nonce: self
-                .nonce
-                .ok_or_else(|| host.err_general("unexpected missing nonce"))?,
+            nonce: self.nonce.ok_or_else(|| {
+                host.err(
+                    ScErrorType::Auth,
+                    ScErrorCode::InternalError,
+                    "unexpected missing nonce",
+                    &[],
+                )
+            })?,
         });
 
         host.metered_hash_xdr(&payload_preimage)
@@ -902,7 +939,12 @@ impl AuthorizationTracker {
             }
             Ok(())
         } else {
-            Err(host.err_general("unexpected missing address to authenticate"))
+            Err(host.err(
+                ScErrorType::Auth,
+                ScErrorCode::InternalError,
+                "unexpected missing address to authenticate",
+                &[],
+            ))
         }
     }
 
@@ -924,7 +966,12 @@ impl AuthorizationTracker {
             }
             Ok(())
         } else {
-            Err(host.err_general("unexpected missing address to emulate authentication"))
+            Err(host.err(
+                ScErrorType::Auth,
+                ScErrorCode::InternalError,
+                "unexpected missing address to emulate authentication",
+                &[],
+            ))
         }
     }
 }
@@ -951,10 +998,22 @@ impl Host {
                     LedgerEntryData::ContractData(ContractDataEntry { val, .. }) => match val {
                         ScVal::U64(val) => *val,
                         _ => {
-                            return Err(self.err_general("unexpected nonce entry type"));
+                            return Err(self.err(
+                                ScErrorType::Auth,
+                                ScErrorCode::UnexpectedType,
+                                "unexpected nonce entry type",
+                                &[],
+                            ));
                         }
                     },
-                    _ => return Err(self.err_general("unexpected missing nonce entry")),
+                    _ => {
+                        return Err(self.err(
+                            ScErrorType::Auth,
+                            ScErrorCode::InternalError,
+                            "unexpected missing nonce entry",
+                            &[],
+                        ))
+                    }
                 }
             } else {
                 0
@@ -982,10 +1041,22 @@ impl Host {
                     LedgerEntryData::ContractData(ContractDataEntry { val, .. }) => match val {
                         ScVal::U64(val) => *val,
                         _ => {
-                            return Err(self.err_general("unexpected nonce entry type"));
+                            return Err(self.err(
+                                ScErrorType::Auth,
+                                ScErrorCode::UnexpectedType,
+                                "unexpected nonce entry type",
+                                &[],
+                            ));
                         }
                     },
-                    _ => return Err(self.err_general("unexpected missing nonce entry")),
+                    _ => {
+                        return Err(self.err(
+                            ScErrorType::Auth,
+                            ScErrorCode::InternalError,
+                            "unexpected missing nonce entry",
+                            &[],
+                        ))
+                    }
                 }
             } else {
                 0

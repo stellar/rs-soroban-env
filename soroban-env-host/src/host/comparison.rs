@@ -7,8 +7,8 @@ use soroban_env_common::{
         LedgerKey, LedgerKeyAccount, LedgerKeyClaimableBalance, LedgerKeyConfigSetting,
         LedgerKeyContractCode, LedgerKeyData, LedgerKeyLiquidityPool, LedgerKeyOffer,
         LedgerKeyTrustLine, LiquidityPoolEntry, OfferEntry, PublicKey, ScAddress,
-        ScContractExecutable, ScHostValErrorCode, ScMap, ScMapEntry, ScNonceKey, ScVal, ScVec,
-        TimePoint, TrustLineAsset, TrustLineEntry, Uint256,
+        ScContractExecutable, ScErrorCode, ScErrorType, ScMap, ScMapEntry, ScNonceKey, ScVal,
+        ScVec, TimePoint, TrustLineAsset, TrustLineEntry, Uint256,
     },
     Compare, SymbolStr, I256, U256,
 };
@@ -262,7 +262,7 @@ impl Compare<ScVal> for Budget {
             (Map(Some(a)), Map(Some(b))) => self.compare(a, b),
 
             (Vec(None), _) | (_, Vec(None)) | (Map(None), _) | (_, Map(None)) => {
-                Err(ScHostValErrorCode::MissingObject.into())
+                Err((ScErrorType::Object, ScErrorCode::MissingValue).into())
             }
 
             (Bytes(a), Bytes(b)) => {
@@ -279,7 +279,7 @@ impl Compare<ScVal> for Budget {
 
             (Bool(_), _)
             | (Void, _)
-            | (Status(_), _)
+            | (Error(_), _)
             | (U32(_), _)
             | (I32(_), _)
             | (U64(_), _)
@@ -632,13 +632,16 @@ mod tests {
     }
 
     fn example_for_tag(host: &Host, tag: Tag) -> RawVal {
-        use crate::{xdr, Status};
+        use crate::{xdr, Error};
 
         let ex = match tag {
             Tag::False => RawVal::from(false),
             Tag::True => RawVal::from(true),
             Tag::Void => RawVal::from(()),
-            Tag::Status => RawVal::from(Status::from(xdr::ScStatus::Ok)),
+            Tag::Error => RawVal::from(Error::from_type_and_code(
+                ScErrorType::Context,
+                ScErrorCode::InternalError,
+            )),
             Tag::U32Val => RawVal::from(u32::MAX),
             Tag::I32Val => RawVal::from(i32::MAX),
             Tag::U64Small => RawVal::try_from_val(host, &0_u64).unwrap(),

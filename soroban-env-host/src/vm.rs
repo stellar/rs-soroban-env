@@ -12,6 +12,7 @@ mod dispatch;
 mod func_info;
 
 use crate::{
+    err,
     host::{Frame, HostImpl},
     xdr::ContractCostType,
     HostError, VmCaller,
@@ -22,7 +23,7 @@ use super::{xdr::Hash, Host, RawVal, Symbol};
 use func_info::HOST_FUNCTIONS;
 use soroban_env_common::{
     meta::{self, get_ledger_protocol_version, get_pre_release_version},
-    xdr::{ReadXdr, ScEnvMetaEntry, ScHostFnErrorCode, ScVmErrorCode},
+    xdr::{ReadXdr, ScEnvMetaEntry, ScErrorCode, ScErrorType},
     ConversionError, SymbolStr, TryIntoVal,
 };
 
@@ -98,34 +99,45 @@ impl Vm {
 
         if let Some(env_meta) = Self::module_custom_section(m, meta::ENV_META_V0_SECTION_NAME) {
             let mut cursor = Cursor::new(env_meta);
-            for env_meta_entry in ScEnvMetaEntry::read_xdr_iter(&mut cursor) {
-                match host.map_err(env_meta_entry)? {
-                    ScEnvMetaEntry::ScEnvMetaKindInterfaceVersion(v) => {
-                        if get_pre_release_version(v)
-                            == get_pre_release_version(meta::INTERFACE_VERSION)
-                            && get_ledger_protocol_version(v)
-                                <= get_ledger_protocol_version(meta::INTERFACE_VERSION)
-                        {
-                            return Ok(());
-                        } else {
-                            return Err(host.err_status_msg(
-                                ScHostFnErrorCode::InputArgsInvalid,
-                                "unexpected environment interface version",
-                            ));
-                        }
-                    }
-                    #[allow(unreachable_patterns)]
-                    _ => (),
+            if let Some(env_meta_entry) = ScEnvMetaEntry::read_xdr_iter(&mut cursor).next() {
+                let ScEnvMetaEntry::ScEnvMetaKindInterfaceVersion(v) =
+                    host.map_err(env_meta_entry)?;
+                let got_pre = get_pre_release_version(v);
+                let want_pre = get_pre_release_version(meta::INTERFACE_VERSION);
+                let got_proto = get_ledger_protocol_version(v);
+                let want_proto = get_ledger_protocol_version(meta::INTERFACE_VERSION);
+                if got_pre != want_pre {
+                    return Err(err!(
+                        host,
+                        (ScErrorType::WasmVm, ScErrorCode::InvalidInput),
+                        "contract pre-release number does not match host",
+                        got_pre,
+                        want_pre
+                    ));
+                } else if got_proto > want_proto {
+                    return Err(err!(
+                        host,
+                        (ScErrorType::WasmVm, ScErrorCode::InvalidInput),
+                        "contract ledger protocol number exceeds host",
+                        got_proto,
+                        want_proto
+                    ));
+                } else {
+                    return Ok(());
                 }
             }
-            Err(host.err_status_msg(
-                ScHostFnErrorCode::InputArgsInvalid,
-                "missing environment interface version",
+            Err(host.err(
+                ScErrorType::WasmVm,
+                ScErrorCode::InvalidInput,
+                "contract missing environment interface version",
+                &[],
             ))
         } else {
-            Err(host.err_status_msg(
-                ScHostFnErrorCode::InputArgsInvalid,
-                "input contract missing metadata section",
+            Err(host.err(
+                ScErrorType::WasmVm,
+                ScErrorCode::InvalidInput,
+                "contract missing metadata section",
+                &[],
             ))
         }
     }
@@ -182,21 +194,20 @@ impl Vm {
 
         for hf in HOST_FUNCTIONS {
             let func = (hf.wrap)(&mut store);
-            linker.define(hf.mod_str, hf.fn_str, func).map_err(|_| {
-                host.err_status_msg(ScVmErrorCode::Instantiation, "error defining host function")
-            })?;
+            host.map_err(
+                linker
+                    .define(hf.mod_str, hf.fn_str, func)
+                    .map_err(|le| wasmi::Error::Linker(le)),
+            )?;
         }
 
         let not_started_instance = host.map_err(linker.instantiate(&mut store, &module))?;
 
-        let instance = not_started_instance
-            .ensure_no_start(&mut store)
-            .map_err(|_| {
-                host.err_status_msg(
-                    ScVmErrorCode::Instantiation,
-                    "module contains disallowed start function",
-                )
-            })?;
+        let instance = host.map_err(
+            not_started_instance
+                .ensure_no_start(&mut store)
+                .map_err(|ie| wasmi::Error::Instantiation(ie)),
+        )?;
 
         let memory = if let Some(ext) = instance.get_export(&mut store, "memory") {
             ext.into_memory()
@@ -217,53 +228,99 @@ impl Vm {
     pub(crate) fn get_memory(&self, host: &Host) -> Result<Memory, HostError> {
         match self.memory {
             Some(mem) => Ok(mem),
-            None => {
-                Err(host.err_status_msg(ScVmErrorCode::Memory, "no linear memory named `memory`"))
-            }
+            None => Err(host.err(
+                ScErrorType::WasmVm,
+                ScErrorCode::MissingValue,
+                "no linear memory named `memory`",
+                &[],
+            )),
         }
     }
 
     pub(crate) fn invoke_function_raw(
         self: &Rc<Self>,
         host: &Host,
-        func: &Symbol,
+        func_sym: &Symbol,
         args: &[RawVal],
     ) -> Result<RawVal, HostError> {
         host.charge_budget(ContractCostType::InvokeVmFunction, None)?;
         host.with_frame(
-            Frame::ContractVM(self.clone(), *func, args.to_vec()),
+            Frame::ContractVM(self.clone(), *func_sym, args.to_vec()),
             || {
                 let wasm_args: Vec<Value> = args
                     .iter()
                     .map(|i| Value::I64(i.get_payload() as i64))
                     .collect();
                 let mut wasm_ret: [Value; 1] = [Value::I64(0)];
-                let func_ss: SymbolStr = func.try_into_val(host)?;
+                let func_ss: SymbolStr = func_sym.try_into_val(host)?;
                 let ext = match self
                     .instance
                     .get_export(&*self.store.borrow(), func_ss.as_ref())
                 {
                     None => {
-                        return Err(
-                            host.err_status_msg(ScVmErrorCode::Unknown, "invoking unknown export")
-                        )
+                        return Err(host.err(
+                            ScErrorType::WasmVm,
+                            ScErrorCode::MissingValue,
+                            "invoking unknown export",
+                            &[func_sym.to_raw()],
+                        ))
                     }
                     Some(e) => e,
                 };
                 let func = match ext.into_func() {
                     None => {
-                        return Err(
-                            host.err_status_msg(ScVmErrorCode::Unknown, "export is not a function")
-                        )
+                        return Err(host.err(
+                            ScErrorType::WasmVm,
+                            ScErrorCode::UnexpectedType,
+                            "export is not a function",
+                            &[func_sym.to_raw()],
+                        ))
                     }
                     Some(e) => e,
                 };
-                host.map_err(func.call(
+
+                let res = func.call(
                     &mut *self.store.borrow_mut(),
                     wasm_args.as_slice(),
                     &mut wasm_ret,
-                ))?;
-                Ok(wasm_ret[0].try_into().ok_or(ConversionError)?)
+                );
+
+                if let Err(e) = res {
+                    // When a call fails with a wasmi::Error::Trap that carries a HostError
+                    // we propagate that HostError as is, rather than producing something new.
+
+                    match e {
+                        wasmi::Error::Trap(trap) if trap.is_host() => {
+                            if let Some(he) = trap.into_host() {
+                                if let Ok(he) = he.downcast::<HostError>() {
+                                    host.debug_diagnostics(
+                                        "VM call trapped with HostError",
+                                        &[func_sym.to_raw(), he.error.to_raw()],
+                                    )?;
+                                    return Err(*he);
+                                }
+                            }
+                            return Err(host.err(
+                                ScErrorType::WasmVm,
+                                ScErrorCode::InternalError,
+                                "VM trapped with HostError but propagation failed",
+                                &[],
+                            ));
+                        }
+                        e => {
+                            return Err(if host.is_debug() {
+                                // With diagnostics on: log as much detail as we can from wasmi.
+                                let msg = format!("VM call failed: {:?}", &e);
+                                host.error(e.into(), &msg, &[func_sym.to_raw()])
+                            } else {
+                                host.error(e.into(), "VM call failed", &[func_sym.to_raw()])
+                            });
+                        }
+                    }
+                }
+                wasm_ret[0].try_into().ok_or_else(|| {
+                    host.error(ConversionError.into(), "converting result of VM call", &[])
+                })
             },
         )
     }

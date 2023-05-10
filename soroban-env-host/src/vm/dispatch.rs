@@ -1,6 +1,6 @@
 use crate::{xdr::ContractCostType, Host, HostError, VmCaller, VmCallerEnv};
 use crate::{
-    AddressObject, BytesObject, I128Object, I256Object, I64Object, MapObject, RawVal, Status,
+    AddressObject, BytesObject, Error, I128Object, I256Object, I64Object, MapObject, RawVal,
     StringObject, Symbol, SymbolObject, U128Object, U256Object, U32Val, U64Object, VecObject,
 };
 use soroban_env_common::call_macro_with_all_host_functions;
@@ -84,7 +84,10 @@ macro_rules! generate_dispatch_functions {
                         Ok(ok) => ok.into(),
                         Err(hosterr) => {
                             // We make a new HostError here to capture the escalation event itself.
-                            let escalation: HostError = host.err_status_msg(hosterr.status, "escalating error '{}' to VM trap");
+                            let escalation: HostError =
+                                host.error(hosterr.error,
+                                           concat!("escalating error to VM trap from failed host function call: ",
+                                                   stringify!($fn_id)), &[]);
                             let trap: Trap = escalation.into();
                             return Err(trap)
                         }

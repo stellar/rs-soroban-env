@@ -44,9 +44,13 @@ pub fn spend_allowance(
             amount
         ))
     } else {
-        let new_allowance = allowance
-            .checked_sub(amount)
-            .ok_or_else(|| e.err_status(ContractError::OverflowError))?;
+        let new_allowance = allowance.checked_sub(amount).ok_or_else(|| {
+            e.error(
+                ContractError::OverflowError.into(),
+                "allowance overflowed",
+                &[],
+            )
+        })?;
         write_allowance(e, from, spender, new_allowance)
     }
 }

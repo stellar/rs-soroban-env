@@ -1,7 +1,6 @@
 use soroban_env_common::{
-    xdr::{ContractCostType, ScHostObjErrorCode},
-    Compare, DurationSmall, I128Small, I256Small, I64Small, SymbolSmall, SymbolStr, TimepointSmall,
-    U128Small, U256Small, U64Small,
+    xdr::ContractCostType, Compare, DurationSmall, I128Small, I256Small, I64Small, SymbolSmall,
+    SymbolStr, TimepointSmall, U128Small, U256Small, U64Small,
 };
 
 use crate::{
@@ -190,7 +189,7 @@ impl Host {
     ) -> Result<HOT::Wrapper, HostError> {
         let prev_len = self.0.objects.borrow().len();
         if prev_len > u32::MAX as usize {
-            return Err(self.err_status(ScHostObjErrorCode::ObjectCountExceedsU32Max));
+            return Err(self.err_arith_overflow());
         }
         // charge for the new host object, which is just the amortized cost of a single
         // `HostObject` allocation
@@ -229,9 +228,19 @@ impl Host {
     {
         unsafe {
             self.unchecked_visit_val_obj(obj, |hopt| match hopt {
-                None => Err(self.err_status(ScHostObjErrorCode::UnknownReference)),
+                None => Err(self.err(
+                    xdr::ScErrorType::Object,
+                    xdr::ScErrorCode::MissingValue,
+                    "unknown object reference",
+                    &[],
+                )),
                 Some(hobj) => match HOT::try_extract(hobj) {
-                    None => Err(self.err_status(ScHostObjErrorCode::UnexpectedType)),
+                    None => Err(self.err(
+                        xdr::ScErrorType::Object,
+                        xdr::ScErrorCode::UnexpectedType,
+                        "object reference type does not match tag",
+                        &[],
+                    )),
                     Some(hot) => f(hot),
                 },
             })

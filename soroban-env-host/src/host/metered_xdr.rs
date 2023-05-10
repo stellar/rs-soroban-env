@@ -3,9 +3,10 @@ use crate::{
     xdr::{ReadXdr, ScBytes, WriteXdr},
     BytesObject, Host, HostError,
 };
-use std::{error::Error, io::Write};
+use std::io::Write;
 
 use sha2::{Digest, Sha256};
+use soroban_env_common::xdr::{ScErrorCode, ScErrorType};
 
 struct MeteredWrite<'a, W: Write> {
     host: &'a Host,
@@ -35,25 +36,11 @@ impl Host {
         w: &mut Vec<u8>,
     ) -> Result<(), HostError> {
         let mut w = MeteredWrite { host: self, w };
-        obj.write_xdr(&mut w).map_err(|e| {
-            if let Some(e2) = e.source() {
-                if let Some(e3) = (*e2).downcast_ref::<std::io::Error>() {
-                    if let Some(e4) = e3.get_ref() {
-                        if let Some(e5) = e4.downcast_ref::<HostError>() {
-                            e5.clone()
-                        } else {
-                            self.err_general("failed to write xdr")
-                        }
-                    } else {
-                        self.err_general("failed to write xdr")
-                    }
-                } else {
-                    self.err_general("failed to write xdr")
-                }
-            } else {
-                self.err_general("failed to write xdr")
-            }
-        })
+        // MeteredWrite above turned any budget failure into an IO error; we turn it
+        // back to a budget failure here, since there's really no "IO error" that can
+        // occur when writing to a Vec<u8>.
+        obj.write_xdr(&mut w)
+            .map_err(|_| (ScErrorType::Budget, ScErrorCode::ExceededLimit).into())
     }
 
     pub(crate) fn metered_hash_xdr(&self, obj: &impl WriteXdr) -> Result<[u8; 32], HostError> {
@@ -65,7 +52,7 @@ impl Host {
 
     pub(crate) fn metered_from_xdr<T: ReadXdr>(&self, bytes: &[u8]) -> Result<T, HostError> {
         self.charge_budget(ContractCostType::ValDeser, Some(bytes.len() as u64))?;
-        T::from_xdr(bytes).map_err(|_| self.err_general("failed to read from xdr"))
+        self.map_err(T::from_xdr(bytes))
     }
 
     pub(crate) fn metered_from_xdr_obj<T: ReadXdr>(

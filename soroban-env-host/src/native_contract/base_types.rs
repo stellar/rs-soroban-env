@@ -101,10 +101,7 @@ impl<const N: usize> TryFromVal<Host, BytesObject> for BytesN<N> {
     fn try_from_val(env: &Host, val: &BytesObject) -> Result<Self, Self::Error> {
         let val = *val;
         let len: u32 = env.bytes_len(val)?.try_into()?;
-        if len
-            == N.try_into()
-                .map_err(|_| env.err_general("bytes buffer overflow"))?
-        {
+        if len == N.try_into().map_err(|_| env.err_arith_overflow())? {
             Ok(Self {
                 host: env.clone(),
                 object: val,

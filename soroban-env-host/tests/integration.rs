@@ -1,4 +1,6 @@
-use soroban_env_host::{events::Event, Compare, Env, EnvBase, Host, HostError, MapObject, RawVal};
+use expect_test::expect;
+use soroban_env_common::EnvBase;
+use soroban_env_host::{Compare, DiagnosticLevel, Env, Host, HostError, MapObject, RawVal};
 
 #[test]
 fn vec_as_seen_by_user() -> Result<(), HostError> {
@@ -35,29 +37,20 @@ fn vec_host_fn() -> Result<(), HostError> {
 }
 
 #[test]
-fn debug_fmt() {
+fn debug_log() {
     let host = Host::default();
-
-    // Call a "native formatting-style" debug helper.
-    host.log_static_fmt_val_static_str(
-        "can't convert {} to {}",
-        RawVal::from_i32(1).to_raw(),
-        std::any::type_name::<Vec<u8>>(),
-    )
-    .unwrap();
+    host.set_diagnostic_level(DiagnosticLevel::Debug);
+    // Call a debug-log helper.
+    host.log_from_slice("can't convert value", &[RawVal::from_i32(1).to_raw()])
+        .unwrap();
 
     // Fish out the last debug event and check that it is
     // correct, and formats as expected.
     let events = host.get_events().unwrap().0;
-    match &events.last().unwrap().event {
-        Event::Debug(de) => {
-            assert_eq!(
-                format!("{de}"),
-                "can't convert I32(1) to alloc::vec::Vec<u8>"
-            )
-        }
-        _ => {
-            panic!("missing debug event")
-        }
-    }
+    let last_event = &events.last().unwrap();
+    // run `UPDATE_EXPECT=true cargo test` to update this.
+    let expected =
+        expect![[r#"[Diagnostic Event] topics:[debug], data:["can't convert value", 1]"#]];
+    let actual = format!("{}", last_event.event);
+    expected.assert_eq(&actual);
 }

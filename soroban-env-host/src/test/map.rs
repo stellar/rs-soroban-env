@@ -1,13 +1,16 @@
 use std::rc::Rc;
 
 use soroban_env_common::{
-    xdr::{AccountId, LedgerEntry, LedgerKey, LedgerKeyAccount, PublicKey, Uint256},
+    xdr::{
+        AccountId, LedgerEntry, LedgerKey, LedgerKeyAccount, PublicKey, ScErrorCode, ScErrorType,
+        Uint256,
+    },
     MapObject,
 };
 
 use crate::{
     xdr::{ScMap, ScMapEntry, ScVal, ScVec},
-    Env, Host, HostError, RawVal, RawValConvertible, Status, Symbol,
+    Env, Error, Host, HostError, RawVal, RawValConvertible, Symbol,
 };
 
 #[test]
@@ -119,11 +122,15 @@ fn map_prev_and_next() -> Result<(), HostError> {
     {
         assert_eq!(
             host.map_prev_key(obj, 0_u32.into())?.get_payload(),
-            Status::UNKNOWN_ERROR.to_raw().get_payload()
+            Error::from_type_and_code(ScErrorType::Object, ScErrorCode::IndexBounds)
+                .to_raw()
+                .get_payload()
         );
         assert_eq!(
             host.map_prev_key(obj, 1_u32.into())?.get_payload(),
-            Status::UNKNOWN_ERROR.to_raw().get_payload()
+            Error::from_type_and_code(ScErrorType::Object, ScErrorCode::IndexBounds)
+                .to_raw()
+                .get_payload()
         );
         assert_eq!(
             host.map_prev_key(obj, 2_u32.into())?.get_payload(),
@@ -142,11 +149,15 @@ fn map_prev_and_next() -> Result<(), HostError> {
     {
         assert_eq!(
             host.map_next_key(obj, 5_u32.into())?.get_payload(),
-            Status::UNKNOWN_ERROR.to_raw().get_payload()
+            Error::from_type_and_code(ScErrorType::Object, ScErrorCode::IndexBounds)
+                .to_raw()
+                .get_payload()
         );
         assert_eq!(
             host.map_next_key(obj, 4_u32.into())?.get_payload(),
-            Status::UNKNOWN_ERROR.to_raw().get_payload()
+            Error::from_type_and_code(ScErrorType::Object, ScErrorCode::IndexBounds)
+                .to_raw()
+                .get_payload()
         );
         assert_eq!(
             host.map_next_key(obj, 3_u32.into())?.get_payload(),
@@ -193,7 +204,9 @@ fn map_prev_and_next_heterogeneous() -> Result<(), HostError> {
     {
         assert_eq!(
             host.map_prev_key(test_map, 0_u32.into())?.get_payload(),
-            Status::UNKNOWN_ERROR.to_raw().get_payload()
+            Error::from_type_and_code(ScErrorType::Object, ScErrorCode::IndexBounds)
+                .to_raw()
+                .get_payload()
         );
         assert_eq!(
             host.map_prev_key(test_map, 4_u32.into())?.get_payload(),
@@ -232,7 +245,9 @@ fn map_prev_and_next_heterogeneous() -> Result<(), HostError> {
         );
         assert_eq!(
             host.map_next_key(test_map, obj_map)?.get_payload(),
-            Status::UNKNOWN_ERROR.to_raw().get_payload()
+            Error::from_type_and_code(ScErrorType::Object, ScErrorCode::IndexBounds)
+                .to_raw()
+                .get_payload()
         );
     }
 
