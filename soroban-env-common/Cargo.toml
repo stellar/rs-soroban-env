@@ -28,7 +28,7 @@ int-enum = "0.5.0"
 [features]
 std = ["stellar-xdr/std", "stellar-xdr/base64"]
 serde = ["dep:serde", "stellar-xdr/serde"]
-vm = ["wasmi"]
+wasmi = ["dep:wasmi"]
 testutils = ["dep:arbitrary", "stellar-xdr/arbitrary"]
 
 [package.metadata.docs.rs]

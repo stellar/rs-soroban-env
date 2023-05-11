@@ -24,7 +24,6 @@ use crate::{
     U64Object, U64Val, VecObject, VmCaller, VmCallerEnv, Void, I256, U256,
 };
 
-#[cfg(feature = "vm")]
 use crate::Vm;
 use crate::{EnvBase, Object, RawVal, Symbol};
 
@@ -54,7 +53,6 @@ pub use frame::{ContractFunctionSet, TestContractFrame};
 
 /// Temporary helper for denoting a slice of guest memory, as formed by
 /// various bytes operations.
-#[cfg(feature = "vm")]
 pub(crate) struct VmSlice {
     vm: Rc<Vm>,
     pos: u32,
@@ -547,7 +545,6 @@ impl Host {
         let st = match frames.as_slice() {
             // There are always two frames when WASM is executed in the VM.
             [.., f2, _] => match f2 {
-                #[cfg(feature = "vm")]
                 Frame::ContractVM(_, _, _) => Ok(InvokerType::Contract),
                 Frame::HostFunction(_) => Ok(InvokerType::Account),
                 Frame::Token(id, _, _) => Ok(InvokerType::Contract),
@@ -820,7 +817,7 @@ impl VmCallerEnv for Host {
         fmt: StringObject,
         args: VecObject,
     ) -> Result<Void, HostError> {
-        if cfg!(feature = "hostfn_log_fmt_values") {
+        if self.is_debug() {
             let fmt: String = self
                 .visit_obj(fmt, move |hv: &ScString| {
                     Ok(String::from_utf8(hv.clone().into()))
@@ -1243,59 +1240,54 @@ impl VmCallerEnv for Host {
         vals_pos: U32Val,
         len: U32Val,
     ) -> Result<MapObject, HostError> {
-        #[cfg(not(feature = "vm"))]
-        unimplemented!();
-        #[cfg(feature = "vm")]
-        {
-            // Step 1: extract all key symbols.
-            let VmSlice {
-                vm,
-                pos: keys_pos,
-                len,
-            } = self.decode_vmslice(keys_pos, len)?;
-            // covers `Vec::with_capacity` and `len` pushes
-            metered_clone::charge_container_bulk_init_with_elts::<Vec<Symbol>, Symbol>(
-                len as u64,
-                self.as_budget(),
-            )?;
-            let mut key_syms: Vec<Symbol> = Vec::with_capacity(len as usize);
-            self.metered_vm_scan_slices_in_linear_memory(
-                vmcaller,
-                &vm,
-                keys_pos,
-                len as usize,
-                |n, slice| {
-                    self.charge_budget(ContractCostType::VmMemRead, Some(slice.len() as u64))?;
-                    let scsym = ScSymbol(slice.try_into()?);
-                    let sym = Symbol::try_from(self.to_host_val(&ScVal::Symbol(scsym))?)?;
-                    key_syms.push(sym);
-                    Ok(())
-                },
-            )?;
+        // Step 1: extract all key symbols.
+        let VmSlice {
+            vm,
+            pos: keys_pos,
+            len,
+        } = self.decode_vmslice(keys_pos, len)?;
+        // covers `Vec::with_capacity` and `len` pushes
+        metered_clone::charge_container_bulk_init_with_elts::<Vec<Symbol>, Symbol>(
+            len as u64,
+            self.as_budget(),
+        )?;
+        let mut key_syms: Vec<Symbol> = Vec::with_capacity(len as usize);
+        self.metered_vm_scan_slices_in_linear_memory(
+            vmcaller,
+            &vm,
+            keys_pos,
+            len as usize,
+            |n, slice| {
+                self.charge_budget(ContractCostType::VmMemRead, Some(slice.len() as u64))?;
+                let scsym = ScSymbol(slice.try_into()?);
+                let sym = Symbol::try_from(self.to_host_val(&ScVal::Symbol(scsym))?)?;
+                key_syms.push(sym);
+                Ok(())
+            },
+        )?;
 
-            // Step 2: extract all val RawVals.
-            let vals_pos: u32 = vals_pos.into();
-            metered_clone::charge_container_bulk_init_with_elts::<Vec<Symbol>, Symbol>(
-                len as u64,
-                self.as_budget(),
-            )?;
-            let mut vals: Vec<RawVal> = vec![RawVal::VOID.into(); len as usize];
-            self.metered_vm_read_vals_from_linear_memory::<8, RawVal>(
-                vmcaller,
-                &vm,
-                vals_pos,
-                vals.as_mut_slice(),
-                |buf| RawVal::from_payload(u64::from_le_bytes(*buf)),
-            )?;
+        // Step 2: extract all val RawVals.
+        let vals_pos: u32 = vals_pos.into();
+        metered_clone::charge_container_bulk_init_with_elts::<Vec<Symbol>, Symbol>(
+            len as u64,
+            self.as_budget(),
+        )?;
+        let mut vals: Vec<RawVal> = vec![RawVal::VOID.into(); len as usize];
+        self.metered_vm_read_vals_from_linear_memory::<8, RawVal>(
+            vmcaller,
+            &vm,
+            vals_pos,
+            vals.as_mut_slice(),
+            |buf| RawVal::from_payload(u64::from_le_bytes(*buf)),
+        )?;
 
-            // Step 3: turn pairs into a map.
-            let pair_iter = key_syms
-                .iter()
-                .map(|s| s.to_raw())
-                .zip(vals.iter().cloned());
-            let map = HostMap::from_exact_iter(pair_iter, self)?;
-            self.add_host_object(map)
-        }
+        // Step 3: turn pairs into a map.
+        let pair_iter = key_syms
+            .iter()
+            .map(|s| s.to_raw())
+            .zip(vals.iter().cloned());
+        let map = HostMap::from_exact_iter(pair_iter, self)?;
+        self.add_host_object(map)
     }
 
     fn map_unpack_to_linear_memory(
@@ -1306,48 +1298,43 @@ impl VmCallerEnv for Host {
         vals_pos: U32Val,
         len: U32Val,
     ) -> Result<Void, HostError> {
-        #[cfg(not(feature = "vm"))]
-        unimplemented!();
-        #[cfg(feature = "vm")]
-        {
-            let VmSlice {
-                vm,
-                pos: keys_pos,
-                len,
-            } = self.decode_vmslice(keys_pos, len)?;
-            self.visit_obj(map, |mapobj: &HostMap| {
-                // Step 1: check all key symbols.
-                self.metered_vm_scan_slices_in_linear_memory(
-                    vmcaller,
-                    &vm,
-                    keys_pos,
-                    len as usize,
-                    |n, slice| {
-                        let sym = Symbol::try_from(
-                            mapobj
-                                .map
-                                .get(n)
-                                .ok_or(ScHostObjErrorCode::VecIndexOutOfBound)?
-                                .0,
-                        )?;
-                        self.check_symbol_matches(slice, sym)?;
-                        Ok(())
-                    },
-                )?;
+        let VmSlice {
+            vm,
+            pos: keys_pos,
+            len,
+        } = self.decode_vmslice(keys_pos, len)?;
+        self.visit_obj(map, |mapobj: &HostMap| {
+            // Step 1: check all key symbols.
+            self.metered_vm_scan_slices_in_linear_memory(
+                vmcaller,
+                &vm,
+                keys_pos,
+                len as usize,
+                |n, slice| {
+                    let sym = Symbol::try_from(
+                        mapobj
+                            .map
+                            .get(n)
+                            .ok_or(ScHostObjErrorCode::VecIndexOutOfBound)?
+                            .0,
+                    )?;
+                    self.check_symbol_matches(slice, sym)?;
+                    Ok(())
+                },
+            )?;
 
-                // Step 2: write all vals.
-                self.metered_vm_write_vals_to_linear_memory(
-                    vmcaller,
-                    &vm,
-                    vals_pos.into(),
-                    mapobj.map.as_slice(),
-                    |pair| u64::to_le_bytes(pair.1.get_payload()),
-                )?;
-                Ok(())
-            })?;
+            // Step 2: write all vals.
+            self.metered_vm_write_vals_to_linear_memory(
+                vmcaller,
+                &vm,
+                vals_pos.into(),
+                mapobj.map.as_slice(),
+                |pair| u64::to_le_bytes(pair.1.get_payload()),
+            )?;
+            Ok(())
+        })?;
 
-            Ok(RawVal::VOID)
-        }
+        Ok(RawVal::VOID)
     }
 
     fn vec_new(&self, _vmcaller: &mut VmCaller<Host>, c: RawVal) -> Result<VecObject, HostError> {
@@ -1555,25 +1542,20 @@ impl VmCallerEnv for Host {
         vals_pos: U32Val,
         len: U32Val,
     ) -> Result<VecObject, HostError> {
-        #[cfg(not(feature = "vm"))]
-        unimplemented!();
-        #[cfg(feature = "vm")]
-        {
-            let VmSlice { vm, pos, len } = self.decode_vmslice(vals_pos, len)?;
-            metered_clone::charge_container_bulk_init_with_elts::<Vec<Symbol>, Symbol>(
-                len as u64,
-                self.as_budget(),
-            )?;
-            let mut vals: Vec<RawVal> = vec![RawVal::VOID.to_raw(); len as usize];
-            self.metered_vm_read_vals_from_linear_memory::<8, RawVal>(
-                vmcaller,
-                &vm,
-                pos,
-                vals.as_mut_slice(),
-                |buf| RawVal::from_payload(u64::from_le_bytes(*buf)),
-            )?;
-            self.add_host_object(HostVec::from_vec(vals)?)
-        }
+        let VmSlice { vm, pos, len } = self.decode_vmslice(vals_pos, len)?;
+        metered_clone::charge_container_bulk_init_with_elts::<Vec<Symbol>, Symbol>(
+            len as u64,
+            self.as_budget(),
+        )?;
+        let mut vals: Vec<RawVal> = vec![RawVal::VOID.to_raw(); len as usize];
+        self.metered_vm_read_vals_from_linear_memory::<8, RawVal>(
+            vmcaller,
+            &vm,
+            pos,
+            vals.as_mut_slice(),
+            |buf| RawVal::from_payload(u64::from_le_bytes(*buf)),
+        )?;
+        self.add_host_object(HostVec::from_vec(vals)?)
     }
 
     fn vec_unpack_to_linear_memory(
@@ -1583,22 +1565,17 @@ impl VmCallerEnv for Host {
         vals_pos: U32Val,
         len: U32Val,
     ) -> Result<Void, HostError> {
-        #[cfg(not(feature = "vm"))]
-        unimplemented!();
-        #[cfg(feature = "vm")]
-        {
-            let VmSlice { vm, pos, len } = self.decode_vmslice(vals_pos, len)?;
-            self.visit_obj(vec, |vecobj: &HostVec| {
-                self.metered_vm_write_vals_to_linear_memory(
-                    vmcaller,
-                    &vm,
-                    vals_pos.into(),
-                    vecobj.as_slice(),
-                    |x| u64::to_le_bytes(x.get_payload()),
-                )
-            })?;
-            Ok(RawVal::VOID)
-        }
+        let VmSlice { vm, pos, len } = self.decode_vmslice(vals_pos, len)?;
+        self.visit_obj(vec, |vecobj: &HostVec| {
+            self.metered_vm_write_vals_to_linear_memory(
+                vmcaller,
+                &vm,
+                vals_pos.into(),
+                vecobj.as_slice(),
+                |x| u64::to_le_bytes(x.get_payload()),
+            )
+        })?;
+        Ok(RawVal::VOID)
     }
 
     // Notes on metering: covered by components
@@ -1789,13 +1766,8 @@ impl VmCallerEnv for Host {
         lm_pos: U32Val,
         len: U32Val,
     ) -> Result<Void, HostError> {
-        #[cfg(not(feature = "vm"))]
-        unimplemented!();
-        #[cfg(feature = "vm")]
-        {
-            self.memobj_copy_to_linear_memory::<ScString>(vmcaller, s, s_pos, lm_pos, len)?;
-            Ok(RawVal::VOID)
-        }
+        self.memobj_copy_to_linear_memory::<ScString>(vmcaller, s, s_pos, lm_pos, len)?;
+        Ok(RawVal::VOID)
     }
 
     fn symbol_copy_to_linear_memory(
@@ -1806,13 +1778,8 @@ impl VmCallerEnv for Host {
         lm_pos: U32Val,
         len: U32Val,
     ) -> Result<Void, HostError> {
-        #[cfg(not(feature = "vm"))]
-        unimplemented!();
-        #[cfg(feature = "vm")]
-        {
-            self.memobj_copy_to_linear_memory::<ScSymbol>(vmcaller, s, s_pos, lm_pos, len)?;
-            Ok(RawVal::VOID)
-        }
+        self.memobj_copy_to_linear_memory::<ScSymbol>(vmcaller, s, s_pos, lm_pos, len)?;
+        Ok(RawVal::VOID)
     }
 
     fn bytes_copy_to_linear_memory(
@@ -1823,13 +1790,8 @@ impl VmCallerEnv for Host {
         lm_pos: U32Val,
         len: U32Val,
     ) -> Result<Void, HostError> {
-        #[cfg(not(feature = "vm"))]
-        unimplemented!();
-        #[cfg(feature = "vm")]
-        {
-            self.memobj_copy_to_linear_memory::<ScBytes>(vmcaller, b, b_pos, lm_pos, len)?;
-            Ok(RawVal::VOID)
-        }
+        self.memobj_copy_to_linear_memory::<ScBytes>(vmcaller, b, b_pos, lm_pos, len)?;
+        Ok(RawVal::VOID)
     }
 
     fn bytes_copy_from_linear_memory(
@@ -1840,12 +1802,7 @@ impl VmCallerEnv for Host {
         lm_pos: U32Val,
         len: U32Val,
     ) -> Result<BytesObject, HostError> {
-        #[cfg(not(feature = "vm"))]
-        unimplemented!();
-        #[cfg(feature = "vm")]
-        {
-            self.memobj_copy_from_linear_memory::<ScBytes>(vmcaller, b, b_pos, lm_pos, len)
-        }
+        self.memobj_copy_from_linear_memory::<ScBytes>(vmcaller, b, b_pos, lm_pos, len)
     }
 
     fn bytes_new_from_linear_memory(
@@ -1854,9 +1811,6 @@ impl VmCallerEnv for Host {
         lm_pos: U32Val,
         len: U32Val,
     ) -> Result<BytesObject, HostError> {
-        #[cfg(not(feature = "vm"))]
-        unimplemented!();
-        #[cfg(feature = "vm")]
         self.memobj_new_from_linear_memory::<ScBytes>(vmcaller, lm_pos, len)
     }
 
@@ -1866,9 +1820,6 @@ impl VmCallerEnv for Host {
         lm_pos: U32Val,
         len: U32Val,
     ) -> Result<StringObject, HostError> {
-        #[cfg(not(feature = "vm"))]
-        unimplemented!();
-        #[cfg(feature = "vm")]
         self.memobj_new_from_linear_memory::<ScString>(vmcaller, lm_pos, len)
     }
 
@@ -1878,9 +1829,6 @@ impl VmCallerEnv for Host {
         lm_pos: U32Val,
         len: U32Val,
     ) -> Result<SymbolObject, HostError> {
-        #[cfg(not(feature = "vm"))]
-        unimplemented!();
-        #[cfg(feature = "vm")]
         self.memobj_new_from_linear_memory::<ScSymbol>(vmcaller, lm_pos, len)
     }
 
@@ -1891,30 +1839,25 @@ impl VmCallerEnv for Host {
         lm_pos: U32Val,
         len: U32Val,
     ) -> Result<U32Val, HostError> {
-        #[cfg(not(feature = "vm"))]
-        unimplemented!();
-        #[cfg(feature = "vm")]
-        {
-            let VmSlice { vm, pos, len } = self.decode_vmslice(lm_pos, len)?;
-            let mut found = None;
-            self.metered_vm_scan_slices_in_linear_memory(
-                vmcaller,
-                &vm,
-                pos,
-                len as usize,
-                |i, slice| {
-                    if self.symbol_matches(slice, sym)? {
-                        if found.is_none() {
-                            found = Some(self.usize_to_u32(i)?)
-                        }
+        let VmSlice { vm, pos, len } = self.decode_vmslice(lm_pos, len)?;
+        let mut found = None;
+        self.metered_vm_scan_slices_in_linear_memory(
+            vmcaller,
+            &vm,
+            pos,
+            len as usize,
+            |i, slice| {
+                if self.symbol_matches(slice, sym)? {
+                    if found.is_none() {
+                        found = Some(self.usize_to_u32(i)?)
                     }
-                    Ok(())
-                },
-            )?;
-            match found {
-                None => Err(self.err_status(ScHostFnErrorCode::InputArgsInvalid)),
-                Some(idx) => Ok(U32Val::from(idx)),
-            }
+                }
+                Ok(())
+            },
+        )?;
+        match found {
+            None => Err(self.err_status(ScHostFnErrorCode::InputArgsInvalid)),
+            Some(idx) => Ok(U32Val::from(idx)),
         }
     }
 
@@ -2213,7 +2156,6 @@ impl VmCallerEnv for Host {
         let mut outer = Vec::with_capacity(frames.len());
         for frame in frames.iter() {
             let vals = match frame {
-                #[cfg(feature = "vm")]
                 Frame::ContractVM(vm, function, _) => {
                     get_host_val_tuple(&vm.contract_id, &function)?
                 }
@@ -2276,7 +2218,6 @@ impl VmCallerEnv for Host {
         let addr = self.visit_obj(address, |addr: &ScAddress| Ok(addr.clone()))?;
         let args = self.with_current_frame(|f| {
             let args = match f {
-                #[cfg(feature = "vm")]
                 Frame::ContractVM(_, _, args) => args,
                 Frame::HostFunction(_) => {
                     return Err(self.err_general("require_auth is not suppported for host fns"))

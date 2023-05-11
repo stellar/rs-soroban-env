@@ -382,7 +382,7 @@ impl_tryfroms_and_tryfromvals_delegating_to_rawvalconvertible!(u32);
 impl_tryfroms_and_tryfromvals_delegating_to_rawvalconvertible!(i32);
 impl_tryfroms_and_tryfromvals_delegating_to_rawvalconvertible!(Status);
 
-#[cfg(feature = "vm")]
+#[cfg(feature = "wasmi")]
 impl wasmi::core::FromValue for RawVal {
     fn from_value(val: wasmi::core::Value) -> Option<Self> {
         if let wasmi::core::Value::I64(i) = val {
@@ -393,7 +393,7 @@ impl wasmi::core::FromValue for RawVal {
     }
 }
 
-#[cfg(feature = "vm")]
+#[cfg(feature = "wasmi")]
 impl From<RawVal> for wasmi::core::Value {
     fn from(v: RawVal) -> Self {
         wasmi::core::Value::I64(v.get_payload() as i64)

@@ -12,8 +12,8 @@ rust-version = "1.69"
 
 [dependencies]
 soroban-native-sdk-macros = { workspace = true }
-soroban-env-common = { workspace = true, features = ["std"] }
-wasmi = { workspace = true, optional = true }
+soroban-env-common = { workspace = true, features = ["std", "wasmi"] }
+wasmi = { workspace = true }
 static_assertions = "1.1.0"
 sha2 = "0.9.0"
 ed25519-dalek = "1.0.1"
@@ -47,23 +47,20 @@ more-asserts = "0.3.1"
 linregress = "0.5.1"
 
 [features]
-vm = ["wasmi", "soroban-env-common/vm"]
-hostfn_log_fmt_values = []
-serde = ["soroban-env-common/serde"]
 testutils = ["soroban-env-common/testutils"]
 
 [target.'cfg(target_os = "linux")'.dev-dependencies]
 perf-event = "0.4.7"
 
 [[bench]]
-required-features = ["vm", "testutils"]
+required-features = ["testutils"]
 harness = false
 bench = true
 name = "worst_case_linear_models"
 path = "benches/worst_case_linear_models.rs"
 
 [[bench]]
-required-features = ["vm", "testutils"]
+required-features = ["testutils"]
 harness = false
 bench = true
 name = "variation_histograms"

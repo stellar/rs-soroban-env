@@ -5,10 +5,8 @@ use soroban_env_common::{
 
 use crate::{host_object::MemHostObjectType, xdr::ContractCostType, Host, HostError, VmCaller};
 
-#[cfg(feature = "vm")]
 use std::rc::Rc;
 
-#[cfg(feature = "vm")]
 use crate::{
     host::{Frame, VmSlice},
     Vm,
@@ -16,7 +14,6 @@ use crate::{
 
 impl Host {
     // Notes on metering: free
-    #[cfg(feature = "vm")]
     pub(crate) fn decode_vmslice(&self, pos: U32Val, len: U32Val) -> Result<VmSlice, HostError> {
         let pos: u32 = pos.into();
         let len: u32 = len.into();
@@ -29,7 +26,6 @@ impl Host {
         })
     }
 
-    #[cfg(feature = "vm")]
     pub(crate) fn metered_vm_write_bytes_to_linear_memory(
         &self,
         vmcaller: &mut VmCaller<Host>,
@@ -45,7 +41,6 @@ impl Host {
         )
     }
 
-    #[cfg(feature = "vm")]
     pub(crate) fn metered_vm_read_bytes_from_linear_memory(
         &self,
         vmcaller: &mut VmCaller<Host>,
@@ -61,7 +56,6 @@ impl Host {
         )
     }
 
-    #[cfg(feature = "vm")]
     pub(crate) fn metered_vm_write_vals_to_linear_memory<const VAL_SZ: usize, VAL>(
         &self,
         vmcaller: &mut VmCaller<Host>,
@@ -98,7 +92,6 @@ impl Host {
         Ok(())
     }
 
-    #[cfg(feature = "vm")]
     pub(crate) fn metered_vm_read_vals_from_linear_memory<const VAL_SZ: usize, VAL>(
         &self,
         vmcaller: &mut VmCaller<Host>,
@@ -148,7 +141,6 @@ impl Host {
     // this assumption is incorrect, this will not break the safety of this
     // function, only make it read junk memory in the guest and therefore likely
     // cause the callback to return an error.
-    #[cfg(feature = "vm")]
     pub(crate) fn metered_vm_scan_slices_in_linear_memory(
         &self,
         vmcaller: &mut VmCaller<Host>,
@@ -259,15 +251,10 @@ impl Host {
         lm_pos: U32Val,
         len: U32Val,
     ) -> Result<(), HostError> {
-        #[cfg(not(feature = "vm"))]
-        unimplemented!();
-        #[cfg(feature = "vm")]
-        {
-            let VmSlice { vm, pos, len } = self.decode_vmslice(lm_pos, len)?;
-            self.memobj_visit_and_copy_bytes_out::<HOT>(obj, obj_pos, len, |obj_buf| {
-                self.metered_vm_write_bytes_to_linear_memory(vmcaller, &vm, pos, obj_buf)
-            })
-        }
+        let VmSlice { vm, pos, len } = self.decode_vmslice(lm_pos, len)?;
+        self.memobj_visit_and_copy_bytes_out::<HOT>(obj, obj_pos, len, |obj_buf| {
+            self.metered_vm_write_bytes_to_linear_memory(vmcaller, &vm, pos, obj_buf)
+        })
     }
 
     // Helper called by memobj_copy_from_slice and memobj_copy_from_linear_memory
@@ -323,15 +310,10 @@ impl Host {
         lm_pos: U32Val,
         len: U32Val,
     ) -> Result<HOT::Wrapper, HostError> {
-        #[cfg(not(feature = "vm"))]
-        unimplemented!();
-        #[cfg(feature = "vm")]
-        {
-            let VmSlice { vm, pos, len } = self.decode_vmslice(lm_pos, len)?;
-            self.memobj_clone_resize_and_copy_bytes_in::<HOT>(obj, obj_pos, len, |obj_buf| {
-                self.metered_vm_read_bytes_from_linear_memory(vmcaller, &vm, pos, obj_buf)
-            })
-        }
+        let VmSlice { vm, pos, len } = self.decode_vmslice(lm_pos, len)?;
+        self.memobj_clone_resize_and_copy_bytes_in::<HOT>(obj, obj_pos, len, |obj_buf| {
+            self.metered_vm_read_bytes_from_linear_memory(vmcaller, &vm, pos, obj_buf)
+        })
     }
 
     pub(crate) fn memobj_new_from_linear_memory<HOT: MemHostObjectType>(
@@ -340,16 +322,11 @@ impl Host {
         lm_pos: U32Val,
         len: U32Val,
     ) -> Result<HOT::Wrapper, HostError> {
-        #[cfg(not(feature = "vm"))]
-        unimplemented!();
-        #[cfg(feature = "vm")]
-        {
-            let VmSlice { vm, pos, len } = self.decode_vmslice(lm_pos, len)?;
-            self.charge_budget(ContractCostType::HostMemAlloc, Some(len as u64))?;
-            let mut vnew: Vec<u8> = vec![0; len as usize];
-            self.metered_vm_read_bytes_from_linear_memory(vmcaller, &vm, pos, &mut vnew)?;
-            self.add_host_object::<HOT>(vnew.try_into()?)
-        }
+        let VmSlice { vm, pos, len } = self.decode_vmslice(lm_pos, len)?;
+        self.charge_budget(ContractCostType::HostMemAlloc, Some(len as u64))?;
+        let mut vnew: Vec<u8> = vec![0; len as usize];
+        self.metered_vm_read_bytes_from_linear_memory(vmcaller, &vm, pos, &mut vnew)?;
+        self.add_host_object::<HOT>(vnew.try_into()?)
     }
 
     // Test function for calibration purpose. The caller needs to ensure `src` and `dest` has

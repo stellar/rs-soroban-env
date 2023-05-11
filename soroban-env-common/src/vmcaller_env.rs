@@ -1,4 +1,4 @@
-#[cfg(feature = "vm")]
+#[cfg(feature = "wasmi")]
 use crate::xdr::ScHostContextErrorCode;
 
 use super::{
@@ -8,7 +8,7 @@ use super::{
 };
 use crate::call_macro_with_all_host_functions;
 use crate::{EnvBase, Symbol};
-#[cfg(not(feature = "vm"))]
+#[cfg(not(feature = "wasmi"))]
 use core::marker::PhantomData;
 
 /// The VmCallerEnv trait is similar to the Env trait -- it
@@ -25,9 +25,9 @@ use core::marker::PhantomData;
 /// contract) to call host methods without having to write `VmCaller::none()`
 /// everywhere.
 
-#[cfg(feature = "vm")]
+#[cfg(feature = "wasmi")]
 pub struct VmCaller<'a, T>(pub Option<wasmi::Caller<'a, T>>);
-#[cfg(feature = "vm")]
+#[cfg(feature = "wasmi")]
 impl<'a, T> VmCaller<'a, T> {
     pub fn none() -> Self {
         VmCaller(None)
@@ -46,11 +46,11 @@ impl<'a, T> VmCaller<'a, T> {
     }
 }
 
-#[cfg(not(feature = "vm"))]
+#[cfg(not(feature = "wasmi"))]
 pub struct VmCaller<'a, T> {
     _nothing: PhantomData<&'a T>,
 }
-#[cfg(not(feature = "vm"))]
+#[cfg(not(feature = "wasmi"))]
 impl<'a, T> VmCaller<'a, T> {
     pub fn none() -> Self {
         VmCaller {
