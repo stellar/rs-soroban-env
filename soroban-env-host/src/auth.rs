@@ -425,7 +425,6 @@ impl AuthorizationManager {
     // This should be called for every `Host` `push_frame`.
     pub(crate) fn push_frame(&mut self, host: &Host, frame: &Frame) -> Result<(), HostError> {
         let (contract_id, function_name) = match frame {
-            #[cfg(feature = "vm")]
             Frame::ContractVM(vm, fn_name, _) => {
                 (vm.contract_id.metered_clone(&self.budget)?, *fn_name)
             }

@@ -1,7 +1,6 @@
 use std::{borrow::Cow, fmt::Display};
 
 use crate::{xdr, RawVal, Status};
-#[cfg(feature = "vm")]
 use crate::{
     xdr::{ScUnknownErrorCode, ScVmErrorCode},
     HostError,
@@ -161,7 +160,6 @@ impl From<xdr::Error> for DebugError {
     }
 }
 
-#[cfg(feature = "vm")]
 impl From<wasmi::Error> for DebugError {
     fn from(err: wasmi::Error) -> Self {
         // At the moment we have a status code for each of the wasmi error types,

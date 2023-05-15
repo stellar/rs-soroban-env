@@ -2489,7 +2489,6 @@ fn test_classic_transfers_not_possible_for_unauthorized_asset() {
     assert_eq!(test.get_trustline_balance(&trustline_key), 100_000_000);
 }
 
-#[cfg(feature = "vm")]
 #[allow(clippy::type_complexity)]
 fn simple_account_sign_fn<'a>(
     host: &'a Host,
@@ -2502,7 +2501,6 @@ fn simple_account_sign_fn<'a>(
     })
 }
 
-#[cfg(feature = "vm")]
 #[test]
 fn test_custom_account_auth() {
     use crate::native_contract::testutils::AccountContractSigner;

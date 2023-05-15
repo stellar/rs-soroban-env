@@ -7,7 +7,7 @@ use soroban_test_wasms::CONTRACT_STORAGE;
 fn test_peristent_storage() {
     let host = Host::test_host_with_recording_footprint();
     let contract_id = host.register_test_contract_wasm(CONTRACT_STORAGE).unwrap();
-    let key_1 = Symbol::from_small_str("key_1");
+    let key_1 = Symbol::try_from_small_str("key_1").unwrap();
     let key_2 = Symbol::try_from_val(&host, &"this_is_key_2").unwrap();
     // Check that the key is not in the storage yet
     assert_eq!(
@@ -16,7 +16,7 @@ fn test_peristent_storage() {
             &host
                 .call(
                     contract_id,
-                    Symbol::from_small_str("has"),
+                    Symbol::try_from_small_str("has").unwrap(),
                     host_vec![&host, key_1].into(),
                 )
                 .unwrap()
@@ -27,7 +27,7 @@ fn test_peristent_storage() {
     // Put a key to storage and verify it's there
     host.call(
         contract_id,
-        Symbol::from_small_str("put"),
+        Symbol::try_from_small_str("put").unwrap(),
         host_vec![&host, key_1, 1234_u64].into(),
     )
     .unwrap();
@@ -38,7 +38,7 @@ fn test_peristent_storage() {
             &host
                 .call(
                     contract_id,
-                    Symbol::from_small_str("has"),
+                    Symbol::try_from_small_str("has").unwrap(),
                     host_vec![&host, key_1].into(),
                 )
                 .unwrap()
@@ -50,7 +50,7 @@ fn test_peristent_storage() {
     // Put anothrer key and verify it's there
     host.call(
         contract_id,
-        Symbol::from_small_str("put"),
+        Symbol::try_from_small_str("put").unwrap(),
         host_vec![&host, key_2, u64::MAX].into(),
     )
     .unwrap();
@@ -60,7 +60,7 @@ fn test_peristent_storage() {
             &host
                 .call(
                     contract_id,
-                    Symbol::from_small_str("has"),
+                    Symbol::try_from_small_str("has").unwrap(),
                     host_vec![
                         &host,
                         // Use a new object to sanity-check that comparison
@@ -83,7 +83,7 @@ fn test_peristent_storage() {
             &host
                 .call(
                     contract_id,
-                    Symbol::from_small_str("get"),
+                    Symbol::try_from_small_str("get").unwrap(),
                     host_vec![&host, key_1].into(),
                 )
                 .unwrap()
@@ -97,7 +97,7 @@ fn test_peristent_storage() {
             &host
                 .call(
                     contract_id,
-                    Symbol::from_small_str("get"),
+                    Symbol::try_from_small_str("get").unwrap(),
                     host_vec![&host, key_2].into(),
                 )
                 .unwrap()
@@ -109,7 +109,7 @@ fn test_peristent_storage() {
     // Update value for key 2 and check it
     host.call(
         contract_id,
-        Symbol::from_small_str("put"),
+        Symbol::try_from_small_str("put").unwrap(),
         host_vec![&host, key_2, 4321_u64].into(),
     )
     .unwrap();
@@ -119,7 +119,7 @@ fn test_peristent_storage() {
             &host
                 .call(
                     contract_id,
-                    Symbol::from_small_str("get"),
+                    Symbol::try_from_small_str("get").unwrap(),
                     host_vec![&host, key_2].into(),
                 )
                 .unwrap()
@@ -131,7 +131,7 @@ fn test_peristent_storage() {
     // Delete entry for key 1
     host.call(
         contract_id,
-        Symbol::from_small_str("del"),
+        Symbol::try_from_small_str("del").unwrap(),
         host_vec![&host, key_1].into(),
     )
     .unwrap();
@@ -142,7 +142,7 @@ fn test_peristent_storage() {
             &host
                 .call(
                     contract_id,
-                    Symbol::from_small_str("has"),
+                    Symbol::try_from_small_str("has").unwrap(),
                     host_vec![&host, key_1].into(),
                 )
                 .unwrap()
@@ -156,7 +156,7 @@ fn test_peristent_storage() {
             &host
                 .call(
                     contract_id,
-                    Symbol::from_small_str("has"),
+                    Symbol::try_from_small_str("has").unwrap(),
                     host_vec![&host, key_2].into(),
                 )
                 .unwrap()

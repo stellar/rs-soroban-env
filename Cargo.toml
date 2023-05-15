@@ -27,7 +27,7 @@ soroban-native-sdk-macros = { version = "0.0.16", path = "soroban-native-sdk-mac
 [workspace.dependencies.stellar-xdr]
 version = "0.0.16"
 git = "https://github.com/stellar/rs-stellar-xdr"
-rev = "53e1a9cf2335aff29305c72deb6f075e78915dad"
+rev = "89df4ca73dce2a45127b2fded3ef9c02f8bda665"
 default-features = false
 
 [workspace.dependencies.wasmi]
@@ -38,6 +38,7 @@ rev = "862b32f5"
 
 # [patch."https://github.com/stellar/rs-stellar-xdr"]
 # stellar-xdr = { path = "../rs-stellar-xdr/" }
+
 # [patch."https://github.com/stellar/wasmi"]
 # soroban-wasmi = { path = "../wasmi/wasmi_v1/" }
 # soroban-wasmi_core = { path = "../wasmi/core/" }
