@@ -323,7 +323,7 @@ impl TokenTrait for Token {
     }
 
     fn decimals(_e: &Host) -> Result<u32, HostError> {
-        // no need to load metadta since this is fixed for all SAC tokens
+        // no need to load metadata since this is fixed for all SAC tokens
         Ok(DECIMAL)
     }
 

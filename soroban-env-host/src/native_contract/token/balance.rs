@@ -190,6 +190,13 @@ pub fn is_authorized(e: &Host, addr: Address) -> Result<bool, HostError> {
 
 // Metering: *mostly* covered by components. Not sure about `try_into_val`.
 pub fn write_authorization(e: &Host, addr: Address, authorize: bool) -> Result<(), HostError> {
+    if !authorize && !is_asset_auth_revocable(e)? {
+        return Err(e.err_status_msg(
+            ContractError::OperationNotSupportedError,
+            "issuer does not have AUTH_REVOCABLE set",
+        ));
+    }
+
     match addr.to_sc_address()? {
         ScAddress::Account(acc_id) => set_authorization(e, acc_id, authorize),
         ScAddress::Contract(_) => {
@@ -641,16 +648,6 @@ fn set_authorization(e: &Host, to_key: AccountId, authorize: bool) -> Result<(),
                 ));
             }
 
-            let issuer_acc = e.load_account(issuer)?;
-
-            if !authorize && (issuer_acc.flags & (AccountFlags::RevocableFlag as u32) == 0) {
-                return Err(e.error(
-                    ContractError::OperationNotSupportedError.into(),
-                    "issuer does not have AUTH_REVOCABLE set",
-                    &[],
-                ));
-            }
-
             set_trustline_authorization(e, to, asset, authorize)
         };
 
@@ -742,5 +739,18 @@ fn is_asset_clawback_enabled(e: &Host) -> Result<bool, HostError> {
         AssetInfo::Native => Ok(false),
         AssetInfo::AlphaNum4(asset) => is_issuer_clawback_enabled(e, asset.issuer),
         AssetInfo::AlphaNum12(asset) => is_issuer_clawback_enabled(e, asset.issuer),
+    }
+}
+
+fn is_issuer_auth_revocable(e: &Host, issuer_id: BytesN<32>) -> Result<bool, HostError> {
+    let issuer_acc = e.load_account(e.account_id_from_bytesobj(issuer_id.into())?)?;
+    Ok(issuer_acc.flags & (AccountFlags::RevocableFlag as u32) != 0)
+}
+
+fn is_asset_auth_revocable(e: &Host) -> Result<bool, HostError> {
+    match read_asset_info(e)? {
+        AssetInfo::Native => Ok(false),
+        AssetInfo::AlphaNum4(asset) => is_issuer_auth_revocable(e, asset.issuer),
+        AssetInfo::AlphaNum12(asset) => is_issuer_auth_revocable(e, asset.issuer),
     }
 }
