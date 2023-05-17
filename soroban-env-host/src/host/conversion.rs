@@ -1,21 +1,19 @@
 use std::rc::Rc;
 
-use super::metered_clone::{self, MeteredClone};
+use super::metered_clone::{self, charge_container_bulk_init_with_elts, MeteredClone};
 use crate::budget::AsBudget;
+use crate::err;
 use crate::host_object::{HostMap, HostObject, HostVec};
-use crate::xdr::{
-    Hash, LedgerKey, LedgerKeyContractData, ScHostFnErrorCode, ScHostObjErrorCode,
-    ScHostValErrorCode, ScVal, ScVec, Uint256,
-};
-use crate::{events::DebugError, xdr::ContractCostType, Host, HostError, RawVal};
+use crate::xdr::{Hash, LedgerKey, LedgerKeyContractData, ScVal, ScVec, Uint256};
+use crate::{xdr::ContractCostType, Host, HostError, RawVal};
 use ed25519_dalek::{PublicKey, Signature, SIGNATURE_LENGTH};
 use sha2::{Digest, Sha256};
 use soroban_env_common::num::{
     i256_from_pieces, i256_into_pieces, u256_from_pieces, u256_into_pieces,
 };
 use soroban_env_common::xdr::{
-    self, int128_helpers, AccountId, Int128Parts, Int256Parts, ScBytes, ScMap, ScMapEntry,
-    UInt128Parts, UInt256Parts,
+    self, int128_helpers, AccountId, Int128Parts, Int256Parts, ScBytes, ScErrorCode, ScErrorType,
+    ScMap, ScMapEntry, UInt128Parts, UInt256Parts,
 };
 use soroban_env_common::{
     BytesObject, Convert, Object, ScValObjRef, ScValObject, TryFromVal, TryIntoVal, U32Val,
@@ -27,7 +25,12 @@ impl Host {
     pub(crate) fn usize_to_u32(&self, u: usize) -> Result<u32, HostError> {
         match u32::try_from(u) {
             Ok(v) => Ok(v),
-            Err(_) => Err(self.err_status(ScHostValErrorCode::U32OutOfRange)),
+            Err(_) => Err(self.err(
+                ScErrorType::Value,
+                ScErrorCode::ArithDomain,
+                "provided usize does not fit in u32",
+                &[],
+            )),
         }
     }
 
@@ -54,10 +57,10 @@ impl Host {
         match u32::try_from(r) {
             Ok(v) => Ok(v),
             Err(cvt) => Err(self.err(
-                DebugError::new(ScHostFnErrorCode::InputArgsWrongType)
-                    .msg("unexpected RawVal {} for input '{}', need U32")
-                    .arg(r)
-                    .arg(name),
+                ScErrorType::Value,
+                ScErrorCode::UnexpectedType,
+                "expecting U32Val",
+                &[r],
             )),
         }
     }
@@ -81,10 +84,10 @@ impl Host {
         match u8::try_from(u) {
             Ok(v) => Ok(v),
             Err(cvt) => Err(self.err(
-                DebugError::new(ScHostFnErrorCode::InputArgsWrongType)
-                    .msg("unexpected U32Val {} for input '{}', need u32 no greater than 255")
-                    .arg(r.to_raw())
-                    .arg(name),
+                ScErrorType::Value,
+                ScErrorCode::InvalidInput,
+                "expecting U32Val less than 256",
+                &[r.to_raw()],
             )),
         }
     }
@@ -134,13 +137,13 @@ impl Host {
                 self.charge_budget(ContractCostType::HostMemCpy, Some(N as u64))?;
                 Ok(arr.into())
             }
-            Err(cvt) => Err(self.err(
-                // TODO: This is a wrong error code to use here, we should replace
-                // it with a more generic one.
-                DebugError::new(ScHostObjErrorCode::ContractHashWrongLength) // TODO: this should be renamed to be more generic
-                    .msg("{} has wrong length for input '{}'")
-                    .arg(std::any::type_name::<T>())
-                    .arg(name),
+            Err(cvt) => Err(err!(
+                self,
+                (ScErrorType::Object, ScErrorCode::UnexpectedSize),
+                "expected fixed-length bytes slice, got slice with different size",
+                name,
+                N,
+                bytes_arr.len()
             )),
         }
     }
@@ -162,7 +165,12 @@ impl Host {
         debug_assert!(bytes.len() == 32);
         self.charge_budget(ContractCostType::ComputeEd25519PubKey, None)?;
         PublicKey::from_bytes(bytes).map_err(|_| {
-            self.err_status_msg(ScHostObjErrorCode::UnexpectedType, "invalid public key")
+            err!(
+                self,
+                (ScErrorType::Crypto, ScErrorCode::InvalidInput),
+                "invalid ed25519 public key",
+                bytes
+            )
         })
     }
 
@@ -195,7 +203,12 @@ impl Host {
         self.visit_obj(x, |bytes: &ScBytes| {
             let hash = self.sha256_hash_from_bytes(bytes.as_slice())?;
             if hash.len() != 32 {
-                return Err(self.err_general("incorrect hash size"));
+                return Err(err!(
+                    self,
+                    (ScErrorType::Object, ScErrorCode::UnexpectedSize),
+                    "expected 32-byte BytesObject for hash, got different size",
+                    hash.len()
+                ));
             }
             Ok(hash)
         })
@@ -228,21 +241,14 @@ impl Host {
     // Notes on metering: covered by components.
     pub fn contract_data_key_from_rawval(&self, k: RawVal) -> Result<Rc<LedgerKey>, HostError> {
         let key_scval = self.from_host_val(k)?;
-        match &key_scval {
-            ScVal::LedgerKeyContractExecutable => {
-                return Err(self.err_status_msg(
-                    ScHostFnErrorCode::InputArgsInvalid,
-                    "cannot update contract code",
-                ));
-            }
-            ScVal::LedgerKeyNonce(_) => {
-                return Err(self.err_status_msg(
-                    ScHostFnErrorCode::InputArgsInvalid,
-                    "cannot access internal nonce",
-                ));
-            }
-            _ => (),
-        };
+        if let ScVal::LedgerKeyContractExecutable | ScVal::LedgerKeyNonce(_) = key_scval {
+            return Err(self.err(
+                ScErrorType::Storage,
+                ScErrorCode::InvalidInput,
+                "value type cannot be used as contract data key",
+                &[k],
+            ));
+        }
         self.storage_key_from_scval(key_scval)
     }
 
@@ -278,23 +284,28 @@ impl Host {
 
     // Metering: free?
     pub(crate) fn call_args_to_scvec(&self, args: VecObject) -> Result<ScVec, HostError> {
-        self.visit_obj(args, |hv: &HostVec| self.rawvals_to_scvec(hv.iter()))
+        self.visit_obj(args, |hv: &HostVec| self.rawvals_to_scvec(hv.as_slice()))
     }
 
-    // Metering: free?
-    pub(crate) fn rawvals_to_scvec(
-        &self,
-        raw_vals: std::slice::Iter<RawVal>,
-    ) -> Result<ScVec, HostError> {
+    pub(crate) fn rawvals_to_scvec(&self, raw_vals: &[RawVal]) -> Result<ScVec, HostError> {
+        charge_container_bulk_init_with_elts::<Vec<RawVal>, RawVal>(
+            raw_vals.len() as u64,
+            self.as_budget(),
+        )?;
         Ok(ScVec(
             raw_vals
-                .map(|v| {
-                    ScVal::try_from_val(self, v)
-                        .map_err(|_| self.err_general("couldn't convert RawVal"))
-                })
+                .iter()
+                .map(|v| ScVal::try_from_val(self, v).map_err(|e| e.into()))
                 .collect::<Result<Vec<ScVal>, HostError>>()?
                 .try_into()
-                .map_err(|_| self.err_general("too many args"))?,
+                .map_err(|_| {
+                    err!(
+                        self,
+                        (ScErrorType::Object, ScErrorCode::ExceededLimit),
+                        "vector size limit exceeded",
+                        raw_vals.len()
+                    )
+                })?,
         ))
     }
 
@@ -365,20 +376,33 @@ impl Host {
         // For an `Object`, the actual structural conversion (such as byte
         // cloning) occurs in `from_host_obj` and is metered there.
         self.charge_budget(ContractCostType::ValXdrConv, None)?;
-        ScVal::try_from_val(self, &val)
-            .map_err(|_| self.err_status(ScHostValErrorCode::UnknownError))
+        ScVal::try_from_val(self, &val).map_err(|_| {
+            self.err(
+                ScErrorType::Value,
+                ScErrorCode::InvalidInput,
+                "failed to convert host value to ScVal",
+                &[val],
+            )
+        })
     }
 
     pub(crate) fn to_host_val(&self, v: &ScVal) -> Result<RawVal, HostError> {
         // `ValXdrConv` is const cost in both cpu and mem. The input=0 will be ignored.
         self.charge_budget(ContractCostType::ValXdrConv, None)?;
-        v.try_into_val(self)
-            .map_err(|_| self.err_status(ScHostValErrorCode::UnknownError))
+        v.try_into_val(self).map_err(|_| {
+            self.err(
+                ScErrorType::Value,
+                ScErrorCode::InternalError,
+                "failed to convert ScVal to host value",
+                &[],
+            )
+        })
     }
 
     pub(crate) fn from_host_obj(&self, ob: impl Into<Object>) -> Result<ScValObject, HostError> {
         unsafe {
-            self.unchecked_visit_val_obj(ob.into(), |ob| {
+            let objref: Object = ob.into();
+            self.unchecked_visit_val_obj(objref, |ob| {
                 // This accounts for conversion of "primitive" objects (e.g U64)
                 // and the "shell" of a complex object (ScMap). Any non-trivial
                 // work such as byte cloning, has to be accounted for and
@@ -387,7 +411,12 @@ impl Host {
                 self.charge_budget(ContractCostType::ValXdrConv, None)?;
                 let val = match ob {
                     None => {
-                        return Err(self.err_status(ScHostObjErrorCode::UnknownReference));
+                        return Err(self.err(
+                            ScErrorType::Object,
+                            ScErrorCode::MissingValue,
+                            "object handle references nonexistent object",
+                            &[U32Val::from(objref.get_handle()).to_raw()],
+                        ));
                     }
                     Some(ho) => match ho {
                         HostObject::Vec(vv) => {
@@ -494,9 +523,18 @@ impl Host {
                 }
                 Ok(self.add_host_object(HostMap::from_map(mm, self)?)?.into())
             }
-            ScVal::Vec(None) | ScVal::Map(None) => {
-                Err(self.err_status(ScHostValErrorCode::MissingObject))
-            }
+            ScVal::Vec(None) => Err(self.err(
+                ScErrorType::Object,
+                ScErrorCode::MissingValue,
+                "vector body missing",
+                &[],
+            )),
+            ScVal::Map(None) => Err(self.err(
+                ScErrorType::Object,
+                ScErrorCode::MissingValue,
+                "map body missing",
+                &[],
+            )),
             ScVal::U64(u) => Ok(self.add_host_object(*u)?.into()),
             ScVal::I64(i) => Ok(self.add_host_object(*i)?.into()),
             ScVal::Timepoint(t) => Ok(self
@@ -529,21 +567,22 @@ impl Host {
             ScVal::ContractExecutable(cc) => Ok(self
                 .add_host_object(cc.metered_clone(self.as_budget())?)?
                 .into()),
-            ScVal::LedgerKeyNonce(_) => {
-                Err(self.err_general("nonce keys aren't allowed to be used directly"))
-            }
             ScVal::Address(addr) => Ok(self
                 .add_host_object(addr.metered_clone(self.as_budget())?)?
                 .into()),
 
             ScVal::Bool(_)
             | ScVal::Void
-            | ScVal::Status(_)
+            | ScVal::Error(_)
             | ScVal::U32(_)
             | ScVal::I32(_)
-            | ScVal::LedgerKeyContractExecutable => {
-                Err(self.err_status(ScHostObjErrorCode::UnexpectedType))
-            }
+            | ScVal::LedgerKeyNonce(_)
+            | ScVal::LedgerKeyContractExecutable => Err(err!(
+                self,
+                (ScErrorType::Object, ScErrorCode::InvalidInput),
+                "converting unsupported value to object",
+                *val
+            )),
         }
     }
 }

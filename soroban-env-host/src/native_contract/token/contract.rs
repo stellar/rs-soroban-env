@@ -101,9 +101,10 @@ fn check_nonnegative_amount(e: &Host, amount: i128) -> Result<(), HostError> {
 
 fn check_non_native(e: &Host) -> Result<(), HostError> {
     match read_asset_info(e)? {
-        AssetInfo::Native => Err(e.err_status_msg(
-            ContractError::OperationNotSupportedError,
+        AssetInfo::Native => Err(e.error(
+            ContractError::OperationNotSupportedError.into(),
             "operation invalid on native asset",
+            &[],
         )),
         AssetInfo::AlphaNum4(_) | AssetInfo::AlphaNum12(_) => Ok(()),
     }
@@ -114,9 +115,10 @@ fn check_non_native(e: &Host) -> Result<(), HostError> {
 impl TokenTrait for Token {
     fn init_asset(e: &Host, asset_bytes: Bytes) -> Result<(), HostError> {
         if has_asset_info(e)? {
-            return Err(e.err_status_msg(
-                ContractError::AlreadyInitializedError,
+            return Err(e.error(
+                ContractError::AlreadyInitializedError.into(),
                 "token has been already initialized",
+                &[],
             ));
         }
 
@@ -125,12 +127,10 @@ impl TokenTrait for Token {
         let curr_contract_id = e.get_current_contract_id_internal()?;
         let expected_contract_id = e.get_contract_id_from_asset(asset.clone())?;
         if curr_contract_id != expected_contract_id {
-            return Err(err!(
-                e,
-                ContractError::InternalError,
-                "bad id for asset contract: '{}' expected, got '{}'",
-                expected_contract_id.0,
-                curr_contract_id.0
+            return Err(e.error(
+                ContractError::InternalError.into(),
+                "bad id for asset contract",
+                &[],
             ));
         }
         match asset {
@@ -191,9 +191,13 @@ impl TokenTrait for Token {
         check_nonnegative_amount(e, amount)?;
         from.require_auth()?;
         let allowance = read_allowance(e, from.clone(), spender.clone())?;
-        let new_allowance = allowance
-            .checked_add(amount)
-            .ok_or_else(|| e.err_status(ContractError::OverflowError))?;
+        let new_allowance = allowance.checked_add(amount).ok_or_else(|| {
+            e.error(
+                ContractError::OverflowError.into(),
+                "allowance overflow in increase_allowance",
+                &[],
+            )
+        })?;
         write_allowance(e, from.clone(), spender.clone(), new_allowance)?;
         event::increase_allowance(e, from, spender, amount)?;
         Ok(())

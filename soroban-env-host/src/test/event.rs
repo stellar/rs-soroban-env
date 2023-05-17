@@ -1,5 +1,5 @@
 use crate::{
-    events::{DebugEvent, Event, HostEvent},
+    events::{Event, HostEvent},
     xdr::{
         ContractEvent, ContractEventBody, ContractEventType, ContractEventV0, ExtensionPoint, Hash,
         ScMap, ScMapEntry, ScVal,
@@ -80,8 +80,7 @@ impl ContractFunctionSet for ContractWithMultipleEvents {
         let data = RawVal::from(0u32);
         host.record_contract_event(ContractEventType::Contract, topics, data)
             .unwrap();
-        host.record_debug_event(DebugEvent::new().msg("debug event 0"))
-            .unwrap();
+        host.debug_diagnostics("debug event 0", &[]).unwrap();
         host.record_contract_event(ContractEventType::System, topics, data)
             .unwrap();
         Some(().into())
@@ -103,9 +102,7 @@ fn test_event_rollback() -> Result<(), HostError> {
     );
     host.0.events.borrow_mut().rollback(1)?;
     // run `UPDATE_EXPECT=true cargo test` to update this.
-    let expected = expect![[
-        r#"[HostEvent { event: Contract(ContractEvent { ext: V0, contract_id: Some(Hash(0000000000000000000000000000000000000000000000000000000000000000)), type_: Contract, body: V0(ContractEventV0 { topics: ScVec(VecM([I32(0), I32(1)])), data: U32(0) }) }), failed_call: false }, HostEvent { event: Debug(DebugEvent { msg: Some("debug event 0"), args: [] }), failed_call: true }, HostEvent { event: Contract(ContractEvent { ext: V0, contract_id: Some(Hash(0000000000000000000000000000000000000000000000000000000000000000)), type_: System, body: V0(ContractEventV0 { topics: ScVec(VecM([I32(0), I32(1)])), data: U32(0) }) }), failed_call: true }]"#
-    ]];
+    let expected = expect!["[HostEvent { event: Contract(ContractEvent { ext: V0, contract_id: Some(Hash(0000000000000000000000000000000000000000000000000000000000000000)), type_: Contract, body: V0(ContractEventV0 { topics: ScVec(VecM([I32(0), I32(1)])), data: U32(0) }) }), failed_call: false }, HostEvent { event: Contract(ContractEvent { ext: V0, contract_id: Some(Hash(0000000000000000000000000000000000000000000000000000000000000000)), type_: System, body: V0(ContractEventV0 { topics: ScVec(VecM([I32(0), I32(1)])), data: U32(0) }) }), failed_call: true }]"];
     let actual = format!("{:?}", host.0.events.borrow().externalize(&host)?.0);
     expected.assert_eq(&actual);
     Ok(())

@@ -5,7 +5,7 @@ use soroban_env_common::{
     xdr::{
         AccountEntry, AccountId, ContractCostType, ContractId, CreateContractArgs, HostFunction,
         HostFunctionArgs, LedgerEntry, LedgerEntryData, LedgerKey, PublicKey, ScContractExecutable,
-        ScVal, ScVec, Uint256, UploadContractWasmArgs,
+        ScErrorCode, ScErrorType, ScVal, ScVec, Uint256, UploadContractWasmArgs,
     },
     BytesObject, RawVal, TryIntoVal, VecObject,
 };
@@ -171,10 +171,14 @@ impl Host {
 
         let wasm_id: RawVal = self.invoke_functions(vec![HostFunction {
             args: HostFunctionArgs::UploadContractWasm(UploadContractWasmArgs {
-                code: contract_wasm
-                    .to_vec()
-                    .try_into()
-                    .map_err(|_| self.err_general("too large wasm"))?,
+                code: contract_wasm.to_vec().try_into().map_err(|_| {
+                    self.err(
+                        ScErrorType::Context,
+                        ScErrorCode::ExceededLimit,
+                        "too large wasm",
+                        &[],
+                    )
+                })?,
             }),
             auth: Default::default(),
         }])?[0]

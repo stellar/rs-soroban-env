@@ -437,7 +437,7 @@ impl<E: Env> TryFromVal<E, &ScSymbol> for Symbol {
 #[cfg(feature = "std")]
 impl TryFrom<SymbolSmall> for ScVal {
     type Error = ConversionError;
-    fn try_from(s: SymbolSmall) -> Result<Self, Self::Error> {
+    fn try_from(s: SymbolSmall) -> Result<Self, ConversionError> {
         let res: Result<Vec<u8>, _> = s.into_iter().map(<u8 as TryFrom<char>>::try_from).collect();
         Ok(ScVal::Symbol(
             res.map_err(|_| ConversionError)?
@@ -450,7 +450,7 @@ impl TryFrom<SymbolSmall> for ScVal {
 #[cfg(feature = "std")]
 impl TryFrom<&SymbolSmall> for ScVal {
     type Error = ConversionError;
-    fn try_from(s: &SymbolSmall) -> Result<Self, Self::Error> {
+    fn try_from(s: &SymbolSmall) -> Result<Self, ConversionError> {
         (*s).try_into()
     }
 }
@@ -458,7 +458,7 @@ impl TryFrom<&SymbolSmall> for ScVal {
 #[cfg(feature = "std")]
 impl<E: Env> TryFromVal<E, Symbol> for ScVal {
     type Error = ConversionError;
-    fn try_from_val(e: &E, s: &Symbol) -> Result<Self, Self::Error> {
+    fn try_from_val(e: &E, s: &Symbol) -> Result<Self, ConversionError> {
         let sstr = SymbolStr::try_from_val(e, s)?;
         Ok(ScVal::Symbol(ScSymbol(sstr.0.as_slice().try_into()?)))
     }

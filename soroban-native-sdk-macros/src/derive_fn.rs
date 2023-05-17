@@ -32,7 +32,7 @@ pub fn derive_contract_function_set<'a>(
                         #(let #args: #arg_types = args.get(#arg_indices).cloned().ok_or(soroban_env_common::ConversionError)?.try_into_val(host)?;)*
                         Ok(Self::#ident(host, #(#args,)*)?.try_into_val(host)?)
                     } else {
-                        Err(host.err_general("wrong number of args"))
+                        Err(host.err(crate::xdr::ScErrorType::Context, crate::xdr::ScErrorCode::UnexpectedSize, "wrong number of args to func", &[func.into()]))
                     }
                 }
             };
@@ -57,7 +57,7 @@ pub fn derive_contract_function_set<'a>(
                     const FNS: &'static [&'static str] = &[#(&#str_lits),*];
                     match u32::from(host.symbol_index_in_strs(*func, FNS)?) as usize {
                         #(#func_calls)*
-                        _ => Err(host.err_general("function doesn't exist"))
+                        _ => Err(host.err(crate::xdr::ScErrorType::Context, crate::xdr::ScErrorCode::MissingValue, "function does not exist", &[func.into()]))
                     }
                 }
             }

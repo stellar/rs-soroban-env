@@ -9,10 +9,11 @@
 
 use std::rc::Rc;
 
+use soroban_env_common::xdr::{ScErrorCode, ScErrorType};
 use soroban_env_common::Compare;
 
 use crate::budget::Budget;
-use crate::xdr::{LedgerEntry, LedgerKey, ScHostStorageErrorCode};
+use crate::xdr::{LedgerEntry, LedgerKey};
 use crate::Host;
 use crate::{host::metered_map::MeteredOrdMap, HostError};
 
@@ -102,13 +103,13 @@ impl Footprint {
             match (existing, ty) {
                 (AccessType::ReadOnly, AccessType::ReadOnly) => Ok(()),
                 (AccessType::ReadOnly, AccessType::ReadWrite) => {
-                    Err(ScHostStorageErrorCode::ReadwriteAccessToReadonlyEntry.into())
+                    Err((ScErrorType::Storage, ScErrorCode::InvalidAction).into())
                 }
                 (AccessType::ReadWrite, AccessType::ReadOnly) => Ok(()),
                 (AccessType::ReadWrite, AccessType::ReadWrite) => Ok(()),
             }
         } else {
-            Err(ScHostStorageErrorCode::AccessToUnknownEntry.into())
+            Err((ScErrorType::Storage, ScErrorCode::MissingValue).into())
         }
     }
 }
@@ -197,8 +198,7 @@ impl Storage {
             }
         };
         match self.map.get::<Rc<LedgerKey>>(key, budget)? {
-            None => Err(ScHostStorageErrorCode::MissingKeyInGet.into()),
-            Some(None) => Err(ScHostStorageErrorCode::GetOnDeletedKey.into()),
+            None | Some(None) => Err((ScErrorType::Storage, ScErrorCode::MissingValue).into()),
             Some(Some(val)) => Ok(Rc::clone(val)),
         }
     }
@@ -356,9 +356,9 @@ mod test_footprint {
             key: ScVal::I32(0),
         }));
         let res = fp.enforce_access(&key, AccessType::ReadOnly, &budget);
-        assert!(HostError::result_matches_err_status(
+        assert!(HostError::result_matches_err(
             res,
-            ScHostStorageErrorCode::AccessToUnknownEntry
+            (ScErrorType::Storage, ScErrorCode::MissingValue)
         ));
         Ok(())
     }
@@ -375,9 +375,9 @@ mod test_footprint {
         let mom = MeteredOrdMap::from_map(om, &budget)?;
         let mut fp = Footprint(mom);
         let res = fp.enforce_access(&key, AccessType::ReadWrite, &budget);
-        assert!(HostError::result_matches_err_status(
+        assert!(HostError::result_matches_err(
             res,
-            ScHostStorageErrorCode::ReadwriteAccessToReadonlyEntry
+            (ScErrorType::Storage, ScErrorCode::InvalidAction)
         ));
         Ok(())
     }
@@ -387,7 +387,7 @@ mod test_footprint {
 pub(crate) mod test_storage {
     use std::collections::BTreeMap;
 
-    use soroban_env_common::xdr::ScUnknownErrorCode;
+    use soroban_env_common::Error;
 
     use super::*;
     #[allow(dead_code)]
@@ -403,7 +403,10 @@ pub(crate) mod test_storage {
             if let Some(val) = self.0.get(key) {
                 Ok(Rc::clone(&val))
             } else {
-                Err(ScUnknownErrorCode::General.into())
+                Err(
+                    Error::from_type_and_code(ScErrorType::Storage, ScErrorCode::MissingValue)
+                        .into(),
+                )
             }
         }
 

@@ -4,11 +4,10 @@ use std::{
     rc::Rc,
 };
 
+use soroban_env_common::xdr::{ScErrorCode, ScErrorType};
+
 use crate::{
-    xdr::{
-        ContractCostParamEntry, ContractCostParams, ContractCostType, ExtensionPoint,
-        ScUnknownErrorCode, ScVmErrorCode,
-    },
+    xdr::{ContractCostParamEntry, ContractCostParams, ContractCostType, ExtensionPoint},
     Host, HostError,
 };
 
@@ -42,8 +41,8 @@ pub trait HostCostModel {
 impl HostCostModel for ContractCostParamEntry {
     fn evaluate(&self, input: Option<u64>) -> Result<u64, HostError> {
         if self.const_term < 0 || self.linear_term < 0 {
-            // TODO: consider more concrete error code "malformed xdr input"
-            return Err(ScUnknownErrorCode::Xdr.into());
+            // TODO: consider more concrete error code "invalid input"
+            return Err((ScErrorType::Context, ScErrorCode::InvalidInput).into());
         }
 
         let const_term = self.const_term as u64;
@@ -69,8 +68,6 @@ impl HostCostModel for ContractCostParamEntry {
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct BudgetDimension {
-    trapcode: ScVmErrorCode,
-
     /// A set of cost models that map input values (eg. event counts, object
     /// sizes) from some CostType to whatever concrete resource type is being
     /// tracked by this dimension (eg. cpu or memory). CostType enum values are
@@ -107,9 +104,8 @@ impl Debug for BudgetDimension {
 }
 
 impl BudgetDimension {
-    pub fn new(trapcode: ScVmErrorCode) -> Self {
+    pub fn new() -> Self {
         let mut bd = Self {
-            trapcode,
             cost_models: Default::default(),
             limit: Default::default(),
             counts: Default::default(),
@@ -126,9 +122,8 @@ impl BudgetDimension {
         bd
     }
 
-    pub fn from_config(trapcode: ScVmErrorCode, cost_params: ContractCostParams) -> Self {
+    pub fn from_config(cost_params: ContractCostParams) -> Self {
         Self {
-            trapcode,
             cost_models: cost_params.0.to_vec(),
             limit: Default::default(),
             counts: vec![0; cost_params.0.len()],
@@ -184,8 +179,7 @@ impl BudgetDimension {
         self.counts[ty as usize] = self.counts[ty as usize].saturating_add(amount);
         self.total_count = self.total_count.saturating_add(amount);
         if self.is_over_budget() {
-            // TODO: convert this to a proper error code type.
-            Err(self.trapcode.into())
+            Err((ScErrorType::Budget, ScErrorCode::ExceededLimit).into())
         } else {
             Ok(())
         }
@@ -219,14 +213,8 @@ impl BudgetImpl {
         mem_cost_params: ContractCostParams,
     ) -> Self {
         let mut b = Self {
-            cpu_insns: BudgetDimension::from_config(
-                ScVmErrorCode::TrapCpuLimitExceeded,
-                cpu_cost_params,
-            ),
-            mem_bytes: BudgetDimension::from_config(
-                ScVmErrorCode::TrapMemLimitExceeded,
-                mem_cost_params,
-            ),
+            cpu_insns: BudgetDimension::from_config(cpu_cost_params),
+            mem_bytes: BudgetDimension::from_config(mem_cost_params),
             tracker: vec![(0, None); ContractCostType::variants().len()],
             enabled: true,
         };
@@ -433,8 +421,8 @@ impl Budget {
                     *t = t.saturating_add(i.saturating_mul(iterations));
                     Ok(())
                 }
-                // TODO: improve error code "unexpected cost model input"
-                _ => Err(ScUnknownErrorCode::General.into()),
+                // TODO: improve error code "internal error"
+                _ => Err((ScErrorType::Context, ScErrorCode::InternalError).into()),
             }
         })?;
         self.get_tracker_mut(ContractCostType::ChargeBudget, |(t_iters, _)| {
@@ -481,7 +469,9 @@ impl Budget {
     where
         F: FnOnce() -> Result<T, HostError>,
     {
+        let mut prev = false;
         self.mut_budget(|mut b| {
+            prev = b.enabled;
             b.enabled = false;
             Ok(())
         })?;
@@ -489,7 +479,7 @@ impl Budget {
         let res = f();
 
         self.mut_budget(|mut b| {
-            b.enabled = true;
+            b.enabled = prev;
             Ok(())
         })?;
         res
@@ -575,8 +565,8 @@ impl Budget {
 impl Default for BudgetImpl {
     fn default() -> Self {
         let mut b = Self {
-            cpu_insns: BudgetDimension::new(ScVmErrorCode::TrapCpuLimitExceeded),
-            mem_bytes: BudgetDimension::new(ScVmErrorCode::TrapMemLimitExceeded),
+            cpu_insns: BudgetDimension::new(),
+            mem_bytes: BudgetDimension::new(),
             tracker: vec![(0, None); ContractCostType::variants().len()],
             enabled: true,
         };

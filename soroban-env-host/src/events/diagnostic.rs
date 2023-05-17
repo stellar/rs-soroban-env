@@ -1,12 +1,13 @@
+use std::rc::Rc;
+
 use soroban_env_common::{
-    xdr::{ContractEventType, Hash, ScBytes},
-    BytesObject, EnvBase, Symbol, SymbolSmall, VecObject,
+    xdr::{ContractEventType, Hash},
+    Error, Symbol, SymbolSmall, VecObject,
 };
 
-use crate::host_object::HostVec;
 use crate::{budget::AsBudget, host::Frame, Host, HostError, RawVal};
 
-use super::{InternalContractEvent, InternalEvent};
+use super::{internal::InternalDiagnosticEvent, InternalEvent, InternalEventsBuffer};
 
 #[derive(Clone, Default)]
 pub enum DiagnosticLevel {
@@ -21,12 +22,13 @@ impl Host {
         *self.0.diagnostic_level.borrow_mut() = diagnostic_level;
     }
 
-    pub fn is_debug(&self) -> bool {
-        matches!(*self.0.diagnostic_level.borrow(), DiagnosticLevel::Debug)
+    // As above, avoids having to import DiagnosticLevel.
+    pub fn enable_debug(&self) {
+        self.set_diagnostic_level(DiagnosticLevel::Debug)
     }
 
-    fn hash_to_bytesobj(&self, hash: &Hash) -> Result<BytesObject, HostError> {
-        self.add_host_object::<ScBytes>(hash.as_slice().to_vec().try_into()?)
+    pub fn is_debug(&self) -> bool {
+        matches!(*self.0.diagnostic_level.borrow(), DiagnosticLevel::Debug)
     }
 
     /// Records a `System` contract event. `topics` is expected to be a `SCVec`
@@ -36,21 +38,21 @@ impl Host {
         Ok(())
     }
 
-    fn record_system_debug_contract_event(
+    pub(crate) fn record_system_debug_contract_event(
         &self,
-        type_: ContractEventType,
-        contract_id: Option<BytesObject>,
-        topics: VecObject,
-        data: RawVal,
+        contract_id: Option<Hash>,
+        topics: Vec<RawVal>,
+        msg: Option<String>,
+        data: Vec<RawVal>,
     ) -> Result<(), HostError> {
-        let ce = InternalContractEvent {
-            type_,
+        let de = Rc::new(InternalDiagnosticEvent {
             contract_id,
             topics,
+            msg,
             data,
-        };
+        });
         self.with_events_mut(|events| {
-            Ok(events.record(InternalEvent::StructuredDebug(ce), self.as_budget()))
+            Ok(events.record(InternalEvent::StructuredDebug(de), self.as_budget()))
         })?
     }
 
@@ -65,6 +67,54 @@ impl Host {
             None => Ok(None),
         })
     }
+
+    pub fn debug_diagnostics(&self, msg: &str, args: &[RawVal]) -> Result<(), HostError> {
+        if !self.is_debug() {
+            return Ok(());
+        }
+        let calling_contract = self.get_current_contract_id_unmetered()?;
+        self.as_budget().with_free_budget(|| {
+            let debug_sym: SymbolSmall = SymbolSmall::try_from_str("debug")?;
+            let topics: Vec<RawVal> = vec![debug_sym.to_raw()];
+            self.record_system_debug_contract_event(
+                calling_contract,
+                topics,
+                Some(msg.to_string()),
+                args.to_vec(),
+            )
+        })
+    }
+
+    pub(crate) fn err_diagnostics(
+        &self,
+        events: &mut InternalEventsBuffer,
+        error: Error,
+        msg: &str,
+        args: &[RawVal],
+    ) -> Result<(), HostError> {
+        if !self.is_debug() {
+            return Ok(());
+        }
+
+        self.as_budget().with_free_budget(|| {
+            let error_sym: SymbolSmall = SymbolSmall::try_from_str("error")?;
+            let contract_id = self.get_current_contract_id_unmetered()?;
+            let topics: Vec<RawVal> = vec![error_sym.to_raw(), error.to_raw()];
+
+            // We do the event-recording ourselves here rather than calling
+            // self.record_system_debug_contract_event because we can/should
+            // only be called with an already-borrowed events buffer (to
+            // insulate against double-faulting).
+            let ce = Rc::new(InternalDiagnosticEvent {
+                contract_id,
+                topics,
+                msg: Some(msg.to_string()),
+                data: args.to_vec(),
+            });
+            events.record(InternalEvent::StructuredDebug(ce), self.as_budget())
+        })
+    }
+
     // Emits an event with topic = ["fn_call", called_contract_id, function_name] and
     // data = [arg1, args2, ...]
     // Should called prior to opening a frame for the next call so the calling contract can be inferred correctly
@@ -78,23 +128,19 @@ impl Host {
             return Ok(());
         }
 
-        let mut calling_contract: Option<BytesObject> = None;
-        if let Some(calling_hash) = self.get_current_contract_id_unmetered()? {
-            calling_contract = Some(self.hash_to_bytesobj(&calling_hash)?);
-        }
+        let calling_contract = self.get_current_contract_id_unmetered()?;
 
         self.as_budget().with_free_budget(|| {
-            let topics: Vec<RawVal> = vec![
-                SymbolSmall::try_from_str("fn_call")?.into(),
-                self.hash_to_bytesobj(called_contract_id)?.into(),
-                func.into(),
-            ];
+            let topics: Vec<RawVal> =
+                vec![SymbolSmall::try_from_str("fn_call")?.into(), func.into()];
+
+            let msg = format!("called contract: {}", called_contract_id);
 
             self.record_system_debug_contract_event(
-                ContractEventType::Diagnostic,
                 calling_contract,
-                self.add_host_object(HostVec::from_vec(topics)?)?,
-                self.vec_new_from_slice(args)?.into(),
+                topics,
+                Some(msg),
+                args.to_vec(),
             )
         })
     }
@@ -116,10 +162,10 @@ impl Host {
                 vec![SymbolSmall::try_from_str("fn_return")?.into(), func.into()];
 
             self.record_system_debug_contract_event(
-                ContractEventType::Diagnostic,
-                Some(self.hash_to_bytesobj(contract_id)?),
-                self.add_host_object(HostVec::from_vec(topics)?)?,
-                *res,
+                Some(contract_id.clone()),
+                topics,
+                None,
+                vec![*res],
             )
         })
     }

@@ -1,13 +1,21 @@
-mod debug;
 pub(crate) mod diagnostic;
 mod internal;
 pub(crate) mod system_events;
 
-pub use debug::{DebugArg, DebugError, DebugEvent};
 pub(crate) use internal::InternalEventsBuffer;
 // expose them as pub use for benches
 pub use internal::{InternalContractEvent, InternalEvent};
-use soroban_env_common::{xdr::ContractEventType, RawVal, VecObject};
+use soroban_env_common::{
+    num::{i256_from_pieces, u256_from_pieces},
+    xdr::{
+        ContractEventBody, ContractEventType,
+        PublicKey::PublicKeyTypeEd25519,
+        ScAddress,
+        ScContractExecutable::{Token, WasmRef},
+        ScVal,
+    },
+    RawVal, VecObject,
+};
 
 use crate::{budget::AsBudget, Host, HostError};
 
@@ -23,10 +31,108 @@ pub struct HostEvent {
 #[derive(Clone, Debug)]
 pub enum Event {
     Contract(crate::xdr::ContractEvent),
-    // Debug events are metered and will not be reported in tx meta
-    Debug(DebugEvent),
     // StructuredDebug should not affect metering
     StructuredDebug(crate::xdr::ContractEvent),
+}
+
+fn display_address(addr: &ScAddress, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    match addr {
+        ScAddress::Account(acct) => match &acct.0 {
+            PublicKeyTypeEd25519(e) => write!(f, "Address(Account({}))", e),
+        },
+        ScAddress::Contract(hash) => write!(f, "Address(Contract({}))", hash),
+    }
+}
+
+fn display_scval(scv: &ScVal, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    match scv {
+        ScVal::Bool(v) => write!(f, "{}", v),
+        ScVal::Void => write!(f, "Void"),
+        ScVal::Error(e) => write!(f, "Error({},{})", e.type_, e.code),
+        ScVal::U32(v) => write!(f, "{}", v),
+        ScVal::I32(v) => write!(f, "{}", v),
+        ScVal::U64(v) => write!(f, "{}", v),
+        ScVal::I64(v) => write!(f, "{}", v),
+        ScVal::Timepoint(v) => write!(f, "TimePoint({})", v.0),
+        ScVal::Duration(v) => write!(f, "Duration({})", v.0),
+        ScVal::U128(v) => write!(f, "{}", u128::from(v)),
+        ScVal::I128(v) => write!(f, "{}", i128::from(v)),
+        ScVal::U256(v) => write!(
+            f,
+            "{}",
+            u256_from_pieces(v.hi_hi, v.hi_lo, v.lo_hi, v.lo_lo)
+        ),
+        ScVal::I256(v) => write!(
+            f,
+            "{}",
+            i256_from_pieces(v.hi_hi, v.hi_lo, v.lo_hi, v.lo_lo)
+        ),
+        ScVal::Bytes(v) => write!(f, "Bytes({})", v.0),
+        ScVal::String(v) => write!(f, "\"{}\"", v.0),
+        ScVal::Symbol(v) => write!(f, "{}", v.0),
+        ScVal::Vec(None) => write!(f, "[]"),
+        ScVal::Vec(Some(vec)) => {
+            write!(f, "[")?;
+            for (i, e) in vec.0.iter().enumerate() {
+                if i != 0 {
+                    write!(f, ", ")?;
+                }
+                display_scval(e, f)?;
+            }
+            write!(f, "]")
+        }
+        ScVal::Map(None) => write!(f, "{{}}"),
+        ScVal::Map(Some(pairs)) => {
+            write!(f, "{{")?;
+            for (i, e) in pairs.0.iter().enumerate() {
+                if i != 0 {
+                    write!(f, ", ")?;
+                }
+                display_scval(&e.key, f)?;
+                write!(f, ": ")?;
+                display_scval(&e.val, f)?;
+            }
+            write!(f, "}}")
+        }
+        ScVal::ContractExecutable(WasmRef(hash)) => {
+            write!(f, "ContractExecutable(WasmRef({}))", hash)
+        }
+        ScVal::ContractExecutable(Token) => write!(f, "ContractExecutable(Token)"),
+        ScVal::Address(addr) => display_address(addr, f),
+        ScVal::LedgerKeyContractExecutable => write!(f, "LedgerKeyContractExecutable"),
+        ScVal::LedgerKeyNonce(n) => {
+            write!(f, "LedgerKeyNonce(")?;
+            display_address(&n.nonce_address, f)?;
+            write!(f, ")")
+        }
+    }
+}
+
+impl core::fmt::Display for Event {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let ce = match self {
+            Event::Contract(ce) => ce,
+            Event::StructuredDebug(ce) => ce,
+        };
+        write!(f, "[{} Event] ", ce.type_)?;
+        match &ce.contract_id {
+            None => (),
+            Some(hash) => write!(f, "contract:{} ,", *hash)?,
+        }
+        match &ce.body {
+            ContractEventBody::V0(ceb) => {
+                write!(f, "topics:[")?;
+                for (i, topic) in ceb.topics.0.iter().enumerate() {
+                    if i != 0 {
+                        write!(f, ", ")?;
+                    }
+                    display_scval(topic, f)?;
+                }
+                write!(f, "], data:")?;
+                display_scval(&ceb.data, f)
+            }
+        }
+    }
 }
 
 /// The external representation of events in the chronological order.
@@ -49,30 +155,6 @@ impl Host {
 
     pub fn get_events(&self) -> Result<Events, HostError> {
         self.0.events.borrow().externalize(self)
-    }
-
-    /// Records a debug event. This in itself is not necessarily an error; it
-    /// might just be some contextual event we want to put in a debug log for
-    /// diagnostic purpopses. The return value from this is therefore () when
-    /// the event is recorded successfully, even if the event itself
-    /// _represented_ some other error. This function only returns Err(...) when
-    /// there was a failure to record the event, such as when budget is
-    /// exceeded.
-    pub fn record_debug_event<T>(&self, src: T) -> Result<(), HostError>
-    where
-        DebugEvent: From<T>,
-    {
-        // We want to record an event _before_ we charge the budget, to maximize
-        // the chance we return "what the contract was doing when it ran out of
-        // gas" in cases it does. This does mean in that one case we'll exceed
-        // the gas limit a tiny amount (one event-worth) but it's not something
-        // users can harm us with nor does it observably effect the order the
-        // contract runs out of gas in; this is an atomic action from the
-        // contract's perspective.
-        let event: DebugEvent = src.into();
-        self.with_events_mut(|events| {
-            Ok(events.record(InternalEvent::Debug(event), self.as_budget()))
-        })?
     }
 
     // Records a contract event.

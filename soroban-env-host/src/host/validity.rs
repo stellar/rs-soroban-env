@@ -1,7 +1,9 @@
 use std::ops::Range;
 
-use crate::events::{DebugError, CONTRACT_EVENT_TOPICS_LIMIT, TOPIC_BYTES_LENGTH_LIMIT};
-use crate::xdr::{ScHostFnErrorCode, ScHostObjErrorCode};
+use soroban_env_common::xdr::{ScErrorCode, ScErrorType};
+use soroban_env_common::U32Val;
+
+use crate::events::{CONTRACT_EVENT_TOPICS_LIMIT, TOPIC_BYTES_LENGTH_LIMIT};
 use crate::{host_object::HostObject, Host, HostError, Object, RawVal, VecObject};
 
 impl Host {
@@ -12,9 +14,11 @@ impl Host {
         bound: usize,
     ) -> Result<(), HostError> {
         if index as usize >= bound {
-            return Err(self.err_status_msg(
-                ScHostObjErrorCode::VecIndexOutOfBound, // TODO: need to reconcile between InputArgsInvalid and VecIndexOutOfBound
-                "start index out of bound",
+            return Err(self.err(
+                ScErrorType::Object,
+                ScErrorCode::IndexBounds,
+                "index out of bound",
+                &[U32Val::from(index).to_raw()],
             ));
         }
         Ok(())
@@ -27,9 +31,11 @@ impl Host {
         bound: usize,
     ) -> Result<(), HostError> {
         if index as usize > bound {
-            return Err(self.err_status_msg(
-                ScHostObjErrorCode::VecIndexOutOfBound, // TODO: need to reconcile between InputArgsInvalid and VecIndexOutOfBound
-                "start index out of bound",
+            return Err(self.err(
+                ScErrorType::Object,
+                ScErrorCode::IndexBounds,
+                "index out of bound",
+                &[U32Val::from(index).to_raw()],
             ));
         }
         Ok(())
@@ -43,42 +49,33 @@ impl Host {
         bound: usize,
     ) -> Result<Range<usize>, HostError> {
         if start as usize > bound {
-            return Err(self.err_status_msg(
-                ScHostObjErrorCode::VecIndexOutOfBound,
+            return Err(self.err(
+                ScErrorType::Object,
+                ScErrorCode::IndexBounds,
                 "start index out of bound",
+                &[U32Val::from(start).to_raw()],
             ));
         }
         if end as usize > bound {
-            return Err(self.err_status_msg(
-                ScHostObjErrorCode::VecIndexOutOfBound,
+            return Err(self.err(
+                ScErrorType::Object,
+                ScErrorCode::IndexBounds,
                 "end index out of bound",
+                &[U32Val::from(end).to_raw()],
             ));
         }
         if start > end {
             return Err(self.err(
-                DebugError::new(ScHostFnErrorCode::InputArgsInvalid)
-                    .msg("index starts at {} but ends at {}")
-                    .arg(RawVal::from_u32(start).to_raw())
-                    .arg(RawVal::from_u32(end).to_raw()),
+                ScErrorType::Object,
+                ScErrorCode::InvalidInput,
+                "start index greater than end index",
+                &[U32Val::from(start).to_raw(), U32Val::from(end).to_raw()],
             ));
         }
         Ok(Range {
             start: start as usize,
             end: end as usize,
         })
-    }
-
-    // Notes on metering: free
-    pub(crate) fn valid_range_from_start_span_bound(
-        &self,
-        start: u32,
-        span: u32,
-        bound: usize,
-    ) -> Result<Range<usize>, HostError> {
-        let end = start.checked_add(span).ok_or_else(|| {
-            self.err_status_msg(ScHostFnErrorCode::InputArgsInvalid, "u32 overflow")
-        })?;
-        self.valid_range_from_start_end_bound(start, end, bound)
     }
 
     // Metering: covered by components
@@ -88,16 +85,29 @@ impl Host {
             unsafe {
                 self.unchecked_visit_val_obj(topic, |ob| {
                     match ob {
-                        None => Err(self.err_status(ScHostObjErrorCode::UnknownReference)),
+                        None => Err(self.err(
+                            ScErrorType::Object,
+                            ScErrorCode::MissingValue,
+                            "topic is an unknown object",
+                            &[],
+                        )),
                         Some(ho) => match ho {
-                            HostObject::ContractExecutable(_) => {
-                                Err(self.err_status(ScHostObjErrorCode::UnexpectedType))
-                            }
+                            HostObject::ContractExecutable(_) => Err(self.err(
+                                ScErrorType::Object,
+                                ScErrorCode::UnexpectedType,
+                                "contract executable used as topic",
+                                &[topic.to_raw()],
+                            )),
                             HostObject::Bytes(b) => {
                                 if b.len() > TOPIC_BYTES_LENGTH_LIMIT {
                                     // TODO: use more event-specific error codes than `UnexpectedType`.
                                     // Something like "topic bytes exceeds length limit"
-                                    Err(self.err_status(ScHostObjErrorCode::UnexpectedType))
+                                    Err(self.err(
+                                        ScErrorType::Object,
+                                        ScErrorCode::ExceededLimit,
+                                        "topic exceeds length limit",
+                                        &[topic.to_raw()],
+                                    ))
                                 } else {
                                     Ok(())
                                 }
@@ -119,19 +129,34 @@ impl Host {
         unsafe {
             self.unchecked_visit_val_obj(topics, |ob| {
                 match ob {
-                    None => Err(self.err_status(ScHostObjErrorCode::UnknownReference)),
+                    None => Err(self.err(
+                        ScErrorType::Object,
+                        ScErrorCode::MissingValue,
+                        "topic is an unknown object",
+                        &[],
+                    )),
                     Some(ho) => match ho {
                         HostObject::Vec(vv) => {
                             if vv.len() > CONTRACT_EVENT_TOPICS_LIMIT {
                                 // TODO: proper error code "event topics exceeds count limit"
-                                return Err(self.err_status(ScHostObjErrorCode::UnknownError));
+                                return Err(self.err(
+                                    ScErrorType::Object,
+                                    ScErrorCode::ExceededLimit,
+                                    "topic vector exceeds length limit",
+                                    &[topics.to_raw()],
+                                ));
                             }
                             for &topic in vv.iter() {
                                 self.validate_topic(topic)?;
                             }
                             Ok(())
                         }
-                        _ => Err(self.err_status(ScHostObjErrorCode::UnexpectedType)),
+                        _ => Err(self.err(
+                            ScErrorType::Object,
+                            ScErrorCode::UnexpectedType,
+                            "topics-vector was unexpected type",
+                            &[topics.to_raw()],
+                        )),
                     },
                 }
             })

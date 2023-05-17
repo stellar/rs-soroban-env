@@ -102,26 +102,27 @@ pub(crate) fn check_account_authentication(
         return Err(err!(
             host,
             ContractError::AuthenticationError,
-            "incorrect number of signature args: {} != 1",
-            signature_args.len() as u32
+            "incorrect number of signature args",
+            signature_args.len()
         ));
     }
     let sigs: HostVec = signature_args[0].try_into_val(host).map_err(|_| {
-        host.err_status_msg(
-            ContractError::AuthenticationError,
+        host.error(
+            ContractError::AuthenticationError.into(),
             "incompatible signature format",
+            &[],
         )
     })?;
 
     // Check if there is too many signatures: there shouldn't be more
     // signatures then the amount of account signers.
-    if sigs.len()? > MAX_ACCOUNT_SIGNATURES {
+    let len = sigs.len()?;
+    if len > MAX_ACCOUNT_SIGNATURES {
         return Err(err!(
             host,
             ContractError::AuthenticationError,
-            "too many account signers: {} > {}",
-            sigs.len()?,
-            MAX_ACCOUNT_SIGNATURES
+            "too many account signers",
+            len
         ));
     }
     let payload_obj = host.bytes_new_from_slice(payload)?;
@@ -136,7 +137,7 @@ pub(crate) fn check_account_authentication(
                 return Err(err!(
                     host,
                     ContractError::AuthenticationError,
-                    "public keys are not ordered: {} >= {}",
+                    "public keys are not ordered",
                     prev,
                     sig.public_key
                 ));
@@ -158,7 +159,7 @@ pub(crate) fn check_account_authentication(
             return Err(err!(
                 host,
                 ContractError::AuthenticationError,
-                "signer '{}' does not belong to account",
+                "signer does not belong to account",
                 sig.public_key
             ));
         }
@@ -172,7 +173,7 @@ pub(crate) fn check_account_authentication(
         Err(err!(
             host,
             ContractError::AuthenticationError,
-            "signature weight is lower than threshold: {} < {}",
+            "signature weight is lower than threshold",
             weight,
             threshold as u32
         ))

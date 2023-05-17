@@ -37,7 +37,7 @@ impl Contract {
         hash.copy_into_slice(&mut buf);
         let vec_with_half_hash = Vec::from_slice(&e, &[Bytes::from_slice(&e, &buf[0..16])]);
         e.events().publish((data.clone(),), hash);
-        e.log_value(vec_with_half_hash);
+        e.logger().log("vec with half hash", &[vec_with_half_hash.to_raw()]);
         e.storage().set(&data, &my_ledger);
     }
 }

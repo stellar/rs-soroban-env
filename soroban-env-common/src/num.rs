@@ -214,7 +214,7 @@ impl TryFrom<I256> for I256Small {
 
 impl TryFrom<U256Small> for ScVal {
     type Error = ConversionError;
-    fn try_from(value: U256Small) -> Result<Self, Self::Error> {
+    fn try_from(value: U256Small) -> Result<Self, ConversionError> {
         let val = U256::new(value.as_raw().get_body() as u128);
         let (hi_hi, hi_lo, lo_hi, lo_lo) = u256_into_pieces(val);
         Ok(ScVal::U256(UInt256Parts {
@@ -228,14 +228,14 @@ impl TryFrom<U256Small> for ScVal {
 
 impl TryFrom<&U256Small> for ScVal {
     type Error = ConversionError;
-    fn try_from(value: &U256Small) -> Result<Self, Self::Error> {
+    fn try_from(value: &U256Small) -> Result<Self, ConversionError> {
         (*value).try_into()
     }
 }
 
 impl TryFrom<I256Small> for ScVal {
     type Error = ConversionError;
-    fn try_from(value: I256Small) -> Result<Self, Self::Error> {
+    fn try_from(value: I256Small) -> Result<Self, ConversionError> {
         let val = I256::new(value.as_raw().get_signed_body() as i128);
         let (hi_hi, hi_lo, lo_hi, lo_lo) = i256_into_pieces(val);
         Ok(ScVal::I256(Int256Parts {
@@ -249,7 +249,7 @@ impl TryFrom<I256Small> for ScVal {
 
 impl TryFrom<&I256Small> for ScVal {
     type Error = ConversionError;
-    fn try_from(value: &I256Small) -> Result<Self, Self::Error> {
+    fn try_from(value: &I256Small) -> Result<Self, ConversionError> {
         (*value).try_into()
     }
 }

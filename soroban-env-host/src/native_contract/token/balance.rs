@@ -58,18 +58,20 @@ fn write_balance(e: &Host, addr: Address, balance: BalanceValue) -> Result<(), H
 // Metering: covered by components.
 pub fn receive_balance(e: &Host, addr: Address, amount: i128) -> Result<(), HostError> {
     if !is_authorized(e, addr.clone())? {
-        return Err(e.err_status_msg(
-            ContractError::BalanceDeauthorizedError,
+        return Err(e.error(
+            ContractError::BalanceDeauthorizedError.into(),
             "balance is deauthorized",
+            &[],
         ));
     }
 
     match addr.to_sc_address()? {
         ScAddress::Account(acc_id) => {
             let i64_amount = i64::try_from(amount).map_err(|_| {
-                e.err_status_msg(
-                    ContractError::OverflowError,
+                e.error(
+                    ContractError::OverflowError.into(),
                     "received amount is too large for an i64",
+                    &[],
                 )
             })?;
             Ok(transfer_classic_balance(e, acc_id, i64_amount)?)
@@ -87,10 +89,13 @@ pub fn receive_balance(e: &Host, addr: Address, amount: i128) -> Result<(), Host
                 }
             };
 
-            let new_balance = balance
-                .amount
-                .checked_add(amount)
-                .ok_or_else(|| e.err_status(ContractError::OverflowError))?;
+            let new_balance = balance.amount.checked_add(amount).ok_or_else(|| {
+                e.error(
+                    ContractError::OverflowError.into(),
+                    "balance overflow in receive_balance",
+                    &[],
+                )
+            })?;
 
             balance.amount = new_balance;
             write_balance(e, addr, balance)
@@ -107,9 +112,10 @@ pub fn spend_balance_no_authorization_check(
     match addr.to_sc_address()? {
         ScAddress::Account(acc_id) => {
             let i64_amount = i64::try_from(amount).map_err(|_| {
-                e.err_status_msg(
-                    ContractError::OverflowError,
+                e.error(
+                    ContractError::OverflowError.into(),
                     "spent amount is too large for an i64",
+                    &[],
                 )
             })?;
             transfer_classic_balance(e, acc_id, -i64_amount)
@@ -124,15 +130,18 @@ pub fn spend_balance_no_authorization_check(
                     return Err(err!(
                         e,
                         ContractError::BalanceError,
-                        "balance is not sufficient to spend: {} < {}",
+                        "balance is not sufficient to spend",
                         balance,
                         amount
                     ));
                 } else {
-                    let new_balance = balance
-                        .amount
-                        .checked_sub(amount)
-                        .ok_or_else(|| e.err_status(ContractError::OverflowError))?;
+                    let new_balance = balance.amount.checked_sub(amount).ok_or_else(|| {
+                        e.error(
+                            ContractError::OverflowError.into(),
+                            "balance overflow in spend_balance_no_authorization_check",
+                            &[],
+                        )
+                    })?;
                     balance.amount = new_balance;
 
                     write_balance(e, addr, balance)?
@@ -141,7 +150,7 @@ pub fn spend_balance_no_authorization_check(
                 return Err(err!(
                     e,
                     ContractError::BalanceError,
-                    "balance is not sufficient to spend: 0 < {}",
+                    "zero balance is not sufficient to spend",
                     amount
                 ));
             }
@@ -153,9 +162,10 @@ pub fn spend_balance_no_authorization_check(
 // Metering: covered by components.
 pub fn spend_balance(e: &Host, addr: Address, amount: i128) -> Result<(), HostError> {
     if !is_authorized(e, addr.clone())? {
-        return Err(e.err_status_msg(
-            ContractError::BalanceDeauthorizedError,
+        return Err(e.error(
+            ContractError::BalanceDeauthorizedError.into(),
             "balance is deauthorized",
+            &[],
         ));
     }
 
@@ -207,25 +217,29 @@ pub fn check_clawbackable(e: &Host, addr: Address) -> Result<(), HostError> {
     let validate_trustline =
         |asset: TrustLineAsset, issuer: AccountId, account: AccountId| -> Result<(), HostError> {
             if issuer == account {
-                return Err(e.err_status_msg(
-                    ContractError::OperationNotSupportedError,
+                return Err(e.error(
+                    ContractError::OperationNotSupportedError.into(),
                     "cannot clawback from issuer",
+                    &[],
                 ));
             }
             let tl_flags = get_trustline_flags(e, account, asset)?;
             if tl_flags & (TrustLineFlags::TrustlineClawbackEnabledFlag as u32) == 0 {
-                return Err(
-                    e.err_status_msg(ContractError::BalanceError, "trustline isn't clawbackable")
-                );
+                return Err(e.error(
+                    ContractError::BalanceError.into(),
+                    "trustline isn't clawbackable",
+                    &[],
+                ));
             }
             Ok(())
         };
 
     match addr.to_sc_address()? {
         ScAddress::Account(acc_id) => match read_asset_info(e)? {
-            AssetInfo::Native => Err(e.err_status_msg(
-                ContractError::OperationNotSupportedError,
+            AssetInfo::Native => Err(e.error(
+                ContractError::OperationNotSupportedError.into(),
                 "cannot clawback native asset",
+                &[],
             )),
             AssetInfo::AlphaNum4(asset) => {
                 let issuer_account_id = e.account_id_from_bytesobj(asset.issuer.into())?;
@@ -249,16 +263,21 @@ pub fn check_clawbackable(e: &Host, addr: Address) -> Result<(), HostError> {
             if let Ok(raw_balance) = e.get_contract_data(key.try_into_val(e)?) {
                 let balance: BalanceValue = raw_balance.try_into_val(e)?;
                 if !balance.clawback {
-                    return Err(e.err_status_msg(
-                        ContractError::BalanceError,
+                    return Err(e.error(
+                        ContractError::BalanceError.into(),
                         "balance isn't clawbackable",
+                        &[],
                     ));
                 }
             } else {
                 // We fail even if the clawback amount is 0. This is a better alternative than
                 // checking the issuer to make sure clawback is enabled and then succeeding
                 // in the 0 clawback case.
-                return Err(e.err_status_msg(ContractError::BalanceError, "no balance to clawback"));
+                return Err(e.error(
+                    ContractError::BalanceError.into(),
+                    "no balance to clawback",
+                    &[],
+                ));
             }
 
             Ok(())
@@ -342,17 +361,17 @@ fn transfer_account_balance(e: &Host, account_id: AccountId, amount: i64) -> Res
     e.with_mut_storage(|storage| {
         let mut le = storage
             .get(&lk, e.as_budget())
-            .map_err(|_| e.err_status_msg(ContractError::AccountMissingError, "account missing"))?;
+            .map_err(|_| e.error(ContractError::AccountMissingError.into(), "account missing", &[]))?;
 
         let mut ae = match &le.data {
             LedgerEntryData::Account(ae) => Ok(ae.clone()),
-            _ => Err(e.err_status_msg(ContractError::InternalError, "unexpected entry found")),
+            _ => Err(e.error(ContractError::InternalError.into(), "unexpected entry found", &[])),
         }?;
 
         let (min_balance, max_balance) = get_min_max_account_balance(e, &ae)?;
 
         let Some(new_balance) = ae.balance.checked_add(amount) else {
-            return Err(e.err_status_msg(ContractError::BalanceError, "resulting balance overflow"));
+            return Err(e.error(ContractError::BalanceError.into(), "resulting balance overflow", &[]));
         };
         if new_balance >= min_balance && new_balance <= max_balance {
             ae.balance = new_balance;
@@ -381,18 +400,18 @@ fn transfer_trustline_balance(
     let lk = e.to_trustline_key(account_id, asset);
     e.with_mut_storage(|storage| {
         let mut le = storage.get(&lk, e.as_budget()).map_err(|_| {
-            e.err_status_msg(ContractError::TrustlineMissingError, "trustline missing")
+            e.error(ContractError::TrustlineMissingError.into(), "trustline missing", &[])
         })?;
 
         let mut tl = match &le.data {
             LedgerEntryData::Trustline(tl) => Ok(tl.clone()),
-            _ => Err(e.err_status_msg(ContractError::InternalError, "unexpected entry found")),
+            _ => Err(e.error(ContractError::InternalError.into(), "unexpected entry found", &[])),
         }?;
 
         let (min_balance, max_balance) = get_min_max_trustline_balance(e, &tl)?;
 
         let Some(new_balance) = tl.balance.checked_add(amount) else {
-            return Err(e.err_status_msg(ContractError::BalanceError, "resulting balance overflow"));
+            return Err(e.error(ContractError::BalanceError.into(), "resulting balance overflow", &[]));
         };
         if new_balance >= min_balance && new_balance <= max_balance {
             tl.balance = new_balance;
@@ -417,20 +436,29 @@ fn get_account_balance(e: &Host, account_id: AccountId) -> Result<(i64, i64), Ho
     let lk = e.to_account_key(account_id);
 
     e.with_mut_storage(|storage| {
-        let le = storage
-            .get(&lk, e.as_budget())
-            .map_err(|_| e.err_status_msg(ContractError::AccountMissingError, "account missing"))?;
+        let le = storage.get(&lk, e.as_budget()).map_err(|_| {
+            e.error(
+                ContractError::AccountMissingError.into(),
+                "account missing",
+                &[],
+            )
+        })?;
 
         let ae = match &le.data {
             LedgerEntryData::Account(ae) => Ok(ae),
-            _ => Err(e.err_status_msg(ContractError::InternalError, "unexpected entry found")),
+            _ => Err(e.error(
+                ContractError::InternalError.into(),
+                "unexpected entry found",
+                &[],
+            )),
         }?;
 
         let min = get_min_max_account_balance(e, ae)?.0;
         if ae.balance < min {
-            return Err(e.err_status_msg(
-                ContractError::InternalError,
+            return Err(e.error(
+                ContractError::InternalError.into(),
                 "account has balance < spendable_balance",
+                &[],
             ));
         }
         Ok((ae.balance, ae.balance - min))
@@ -440,7 +468,11 @@ fn get_account_balance(e: &Host, account_id: AccountId) -> Result<(i64, i64), Ho
 // TODO: Metering analysis
 fn get_min_max_account_balance(e: &Host, ae: &AccountEntry) -> Result<(i64, i64), HostError> {
     if ae.balance < 0 {
-        return Err(e.err_status_msg(ContractError::InternalError, "initial balance is negative"));
+        return Err(e.error(
+            ContractError::InternalError.into(),
+            "initial balance is negative",
+            &[],
+        ));
     }
 
     let base_reserve = e.with_ledger_info(|li| Ok(li.base_reserve))? as i64;
@@ -472,19 +504,28 @@ fn get_trustline_balance(
     let lk = e.to_trustline_key(account_id, asset);
     e.with_mut_storage(|storage| {
         let le = storage.get(&lk, e.as_budget()).map_err(|_| {
-            e.err_status_msg(ContractError::TrustlineMissingError, "trustline missing")
+            e.error(
+                ContractError::TrustlineMissingError.into(),
+                "trustline missing",
+                &[],
+            )
         })?;
 
         let tl = match &le.data {
             LedgerEntryData::Trustline(tl) => Ok(tl.clone()),
-            _ => Err(e.err_status_msg(ContractError::InternalError, "unexpected entry found")),
+            _ => Err(e.error(
+                ContractError::InternalError.into(),
+                "unexpected entry found",
+                &[],
+            )),
         }?;
 
         let min = get_min_max_trustline_balance(e, &tl)?.0;
         if tl.balance < min {
-            return Err(e.err_status_msg(
-                ContractError::InternalError,
+            return Err(e.error(
+                ContractError::InternalError.into(),
                 "trustline has balance < spendable_balance",
+                &[],
             ));
         }
         Ok((tl.balance, tl.balance - min))
@@ -494,15 +535,20 @@ fn get_trustline_balance(
 // TODO: Metering analysis
 fn get_min_max_trustline_balance(e: &Host, tl: &TrustLineEntry) -> Result<(i64, i64), HostError> {
     if tl.balance < 0 {
-        return Err(e.err_status_msg(ContractError::InternalError, "initial balance is negative"));
+        return Err(e.error(
+            ContractError::InternalError.into(),
+            "initial balance is negative",
+            &[],
+        ));
     }
 
     if let TrustLineEntryExt::V1(ext1) = &tl.ext {
         let min_balance = ext1.liabilities.selling;
         if tl.limit < ext1.liabilities.buying {
-            return Err(e.err_status_msg(
-                ContractError::InternalError,
+            return Err(e.error(
+                ContractError::InternalError.into(),
                 "limit is lower than liabilities",
+                &[],
             ));
         }
         let max_balance = tl.limit - ext1.liabilities.buying;
@@ -554,12 +600,20 @@ fn get_trustline_flags(
     let lk = e.to_trustline_key(account_id, asset);
     e.with_mut_storage(|storage| {
         let le = storage.get(&lk, e.as_budget()).map_err(|_| {
-            e.err_status_msg(ContractError::TrustlineMissingError, "trustline missing")
+            e.error(
+                ContractError::TrustlineMissingError.into(),
+                "trustline missing",
+                &[],
+            )
         })?;
 
         let tl = match &le.data {
             LedgerEntryData::Trustline(tl) => Ok(tl),
-            _ => Err(e.err_status_msg(ContractError::InternalError, "unexpected entry found")),
+            _ => Err(e.error(
+                ContractError::InternalError.into(),
+                "unexpected entry found",
+                &[],
+            )),
         }?;
 
         Ok(tl.flags)
@@ -580,18 +634,20 @@ fn set_authorization(e: &Host, to_key: AccountId, authorize: bool) -> Result<(),
     let set_trustline_authorization_safe =
         |asset: TrustLineAsset, issuer: AccountId, to: AccountId| -> Result<(), HostError> {
             if issuer == to {
-                return Err(e.err_status_msg(
-                    ContractError::OperationNotSupportedError,
+                return Err(e.error(
+                    ContractError::OperationNotSupportedError.into(),
                     "issuer doesn't have a trustline",
+                    &[],
                 ));
             }
 
             let issuer_acc = e.load_account(issuer)?;
 
             if !authorize && (issuer_acc.flags & (AccountFlags::RevocableFlag as u32) == 0) {
-                return Err(e.err_status_msg(
-                    ContractError::OperationNotSupportedError,
+                return Err(e.error(
+                    ContractError::OperationNotSupportedError.into(),
                     "issuer does not have AUTH_REVOCABLE set",
+                    &[],
                 ));
             }
 
@@ -599,9 +655,10 @@ fn set_authorization(e: &Host, to_key: AccountId, authorize: bool) -> Result<(),
         };
 
     match read_asset_info(e)? {
-        AssetInfo::Native => Err(e.err_status_msg(
-            ContractError::OperationNotSupportedError,
+        AssetInfo::Native => Err(e.error(
+            ContractError::OperationNotSupportedError.into(),
             "expected trustline asset",
+            &[],
         )),
         AssetInfo::AlphaNum4(asset) => {
             let issuer_account_id = e.account_id_from_bytesobj(asset.issuer.into())?;
@@ -632,12 +689,20 @@ fn set_trustline_authorization(
     let lk = e.to_trustline_key(account_id, asset);
     e.with_mut_storage(|storage| {
         let mut le = storage.get(&lk, e.as_budget()).map_err(|_| {
-            e.err_status_msg(ContractError::TrustlineMissingError, "trustline missing")
+            e.error(
+                ContractError::TrustlineMissingError.into(),
+                "trustline missing",
+                &[],
+            )
         })?;
 
         let mut tl = match &le.data {
             LedgerEntryData::Trustline(tl) => Ok(tl.clone()),
-            _ => Err(e.err_status_msg(ContractError::InternalError, "unexpected entry found")),
+            _ => Err(e.error(
+                ContractError::InternalError.into(),
+                "unexpected entry found",
+                &[],
+            )),
         }?;
 
         if authorize {

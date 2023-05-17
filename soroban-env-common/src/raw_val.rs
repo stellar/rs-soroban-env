@@ -3,9 +3,9 @@ use crate::{
     impl_tryfroms_and_tryfromvals_delegating_to_rawvalconvertible, Compare, I32Val, SymbolSmall,
     SymbolStr, U32Val,
 };
-use stellar_xdr::{ScStatus, ScStatusType, ScValType};
+use stellar_xdr::{ScError, ScValType};
 
-use super::{Env, Status, TryFromVal};
+use super::{Env, Error, TryFromVal};
 use core::{cmp::Ordering, convert::Infallible, fmt::Debug};
 
 extern crate static_assertions as sa;
@@ -56,7 +56,7 @@ pub enum Tag {
     Void = 2,
 
     /// Tag for a [RawVal] that is contains an error code.
-    Status = 3,
+    Error = 3,
 
     /// Tag for a [RawVal] that contains a [u32] number.
     U32Val = 4,
@@ -197,7 +197,7 @@ impl Tag {
             Tag::False => Some(ScValType::Bool),
             Tag::True => Some(ScValType::Bool),
             Tag::Void => Some(ScValType::Void),
-            Tag::Status => Some(ScValType::Status),
+            Tag::Error => Some(ScValType::Error),
             Tag::U32Val => Some(ScValType::U32),
             Tag::I32Val => Some(ScValType::I32),
             Tag::U64Small => Some(ScValType::U64),
@@ -380,7 +380,7 @@ impl_tryfroms_and_tryfromvals_delegating_to_rawvalconvertible!(());
 impl_tryfroms_and_tryfromvals_delegating_to_rawvalconvertible!(bool);
 impl_tryfroms_and_tryfromvals_delegating_to_rawvalconvertible!(u32);
 impl_tryfroms_and_tryfromvals_delegating_to_rawvalconvertible!(i32);
-impl_tryfroms_and_tryfromvals_delegating_to_rawvalconvertible!(Status);
+impl_tryfroms_and_tryfromvals_delegating_to_rawvalconvertible!(Error);
 
 #[cfg(feature = "wasmi")]
 impl wasmi::core::FromValue for RawVal {
@@ -504,41 +504,17 @@ impl From<&i32> for RawVal {
     }
 }
 
-impl From<ScStatus> for RawVal {
-    fn from(st: ScStatus) -> Self {
-        let ty = st.discriminant();
-        let code = match st {
-            ScStatus::Ok => ScStatusType::Ok as u32,
-            ScStatus::UnknownError(e) => e as u32,
-            ScStatus::HostValueError(e) => e as u32,
-            ScStatus::HostObjectError(e) => e as u32,
-            ScStatus::HostFunctionError(e) => e as u32,
-            ScStatus::HostStorageError(e) => e as u32,
-            ScStatus::HostContextError(e) => e as u32,
-            ScStatus::HostAuthError(e) => e as u32,
-            ScStatus::VmError(e) => e as u32,
-            ScStatus::ContractError(e) => e,
-        };
-        Status::from_type_and_code(ty, code).to_raw()
+impl From<ScError> for RawVal {
+    fn from(er: ScError) -> Self {
+        let e: Error = er.into();
+        e.to_raw()
     }
 }
 
-impl From<&ScStatus> for RawVal {
-    fn from(st: &ScStatus) -> Self {
-        let ty = st.discriminant();
-        let code = match *st {
-            ScStatus::Ok => ScStatusType::Ok as u32,
-            ScStatus::UnknownError(e) => e as u32,
-            ScStatus::HostValueError(e) => e as u32,
-            ScStatus::HostObjectError(e) => e as u32,
-            ScStatus::HostFunctionError(e) => e as u32,
-            ScStatus::HostStorageError(e) => e as u32,
-            ScStatus::HostContextError(e) => e as u32,
-            ScStatus::HostAuthError(e) => e as u32,
-            ScStatus::VmError(e) => e as u32,
-            ScStatus::ContractError(e) => e,
-        };
-        Status::from_type_and_code(ty, code).to_raw()
+impl From<&ScError> for RawVal {
+    fn from(er: &ScError) -> Self {
+        let e: Error = er.clone().into();
+        e.to_raw()
     }
 }
 
@@ -616,6 +592,11 @@ impl RawVal {
     }
 
     #[inline(always)]
+    pub(crate) const fn has_major(self, major: u32) -> bool {
+        self.get_major() == major
+    }
+
+    #[inline(always)]
     pub(crate) const fn get_minor(self) -> u32 {
         (self.get_body() & MINOR_MASK) as u32
     }
@@ -686,9 +667,7 @@ impl Debug for RawVal {
             Tag::False => write!(f, "False"),
             Tag::True => write!(f, "True"),
             Tag::Void => write!(f, "Void"),
-            Tag::Status => {
-                unsafe { <Status as RawValConvertible>::unchecked_from_val(*self) }.fmt(f)
-            }
+            Tag::Error => unsafe { <Error as RawValConvertible>::unchecked_from_val(*self) }.fmt(f),
             Tag::U64Small => write!(f, "U64({})", self.get_body()),
             Tag::I64Small => write!(f, "I64({})", self.get_signed_body()),
             Tag::TimepointSmall => write!(f, "Timepoint({})", self.get_body()),
@@ -742,9 +721,9 @@ impl Debug for RawVal {
 #[test]
 #[cfg(feature = "std")]
 fn test_debug() {
-    use super::{Object, Status, SymbolSmall};
+    use super::{Error, Object, SymbolSmall};
     use crate::{
-        xdr::{ScHostValErrorCode, ScStatus},
+        xdr::{ScError, ScErrorCode, ScErrorType},
         I64Small, U64Small,
     };
     assert_eq!(format!("{:?}", RawVal::from_void()), "Void");
@@ -770,11 +749,12 @@ fn test_debug() {
     assert_eq!(
         format!(
             "{:?}",
-            Status::from_status(ScStatus::HostValueError(
-                ScHostValErrorCode::ReservedTagValue
-            ),)
+            Error::from_scerror(ScError {
+                type_: ScErrorType::Value,
+                code: ScErrorCode::InvalidInput
+            })
         ),
-        "Status(HostValueError(ReservedTagValue))"
+        "Error(Value, InvalidInput)"
     );
 }
 

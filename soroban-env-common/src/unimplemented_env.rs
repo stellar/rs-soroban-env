@@ -1,7 +1,7 @@
 use super::{call_macro_with_all_host_functions, Env, EnvBase, Symbol};
 use super::{
-    AddressObject, Bool, BytesObject, I128Object, I256Object, I64Object, MapObject, Object, RawVal,
-    Status, StringObject, SymbolObject, U128Object, U256Object, U32Val, U64Object, U64Val,
+    AddressObject, Bool, BytesObject, Error, I128Object, I256Object, I64Object, MapObject, Object,
+    RawVal, StringObject, SymbolObject, U128Object, U256Object, U32Val, U64Object, U64Val,
     VecObject, Void,
 };
 use core::{any, convert::Infallible};
@@ -110,33 +110,7 @@ impl EnvBase for UnimplementedEnv {
         unimplemented!()
     }
 
-    fn log_static_fmt_val(&self, _fmt: &'static str, _v: RawVal) -> Result<(), Self::Error> {
-        unimplemented!()
-    }
-
-    fn log_static_fmt_static_str(
-        &self,
-        _fmt: &'static str,
-        _s: &'static str,
-    ) -> Result<(), Self::Error> {
-        unimplemented!()
-    }
-
-    fn log_static_fmt_val_static_str(
-        &self,
-        _fmt: &'static str,
-        _v: RawVal,
-        _s: &'static str,
-    ) -> Result<(), Self::Error> {
-        unimplemented!()
-    }
-
-    fn log_static_fmt_general(
-        &self,
-        _fmt: &'static str,
-        _vals: &[RawVal],
-        _strs: &[&'static str],
-    ) -> Result<(), Self::Error> {
+    fn log_from_slice(&self, _msg: &str, _vals: &[RawVal]) -> Result<Void, Self::Error> {
         unimplemented!()
     }
 }

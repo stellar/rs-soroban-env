@@ -2,8 +2,8 @@ use soroban_env_macros::generate_call_macro_with_all_host_functions;
 
 use super::Symbol;
 use super::{
-    AddressObject, Bool, BytesObject, I128Object, I256Object, I64Object, MapObject, Object, RawVal,
-    Status, StringObject, SymbolObject, U128Object, U256Object, U32Val, U64Object, U64Val,
+    AddressObject, Bool, BytesObject, Error, I128Object, I256Object, I64Object, MapObject, Object,
+    RawVal, StringObject, SymbolObject, U128Object, U256Object, U32Val, U64Object, U64Val,
     VecObject, Void,
 };
 use core::any;
@@ -28,9 +28,9 @@ pub trait EnvBase: Sized + Clone {
     /// conversion routines for each (as was attempted in earlier iterations).
     ///
     /// This type is _not_ the same as an error intended to make it to the
-    /// user-facing API: user-facing errors should return `Ok(Status)` at the
+    /// user-facing API: user-facing errors should return `Ok(Error)` at the
     /// environment-interface level, and then either directly handle or escalate
-    /// the contained `Status` code to the user as a `Status` or `Result<>` of
+    /// the contained `Error` code to the user as a `Error` or `Result<>` of
     /// some other type, depending on the API.
     type Error: core::fmt::Debug;
 
@@ -137,65 +137,10 @@ pub trait EnvBase: Sized + Clone {
     /// Return the index of a `Symbol` in an array of &strs, or error if not found.
     fn symbol_index_in_strs(&self, key: Symbol, strs: &[&str]) -> Result<U32Val, Self::Error>;
 
-    // As with the bytes functions above, these take _slices_ with definite
-    // lifetimes. The first slice is interpreted as a (very restricted)
-    // format-string -- containing literal text interspersed with some number of
-    // `{}` markers which must match the number of other args passed -- with
-    // actual formatting delayed until someone asks to see the event (which may
-    // never happen). Other args may be static strings, [RawVal]s, or a mix.
-    //
-    // When the SDK is built with Env = Host, both the format string slice and
-    // all static string slice args (and any [RawVal] args) will be passed
-    // through into the debug-event subsystem of the host and _stored_
-    // unformatted in the debug buffer, until/unless someone dumps some portion
-    // of that buffer out. They are therefore quite cheap -- just pushing static
-    // pointers and numbers into the debug buffer -- and can be called fairly
-    // ubiquitously to provide details on any interesting diagnostic events
-    // and/or errors that occur in either SDK or contract code.
-    //
-    // When Env = Guest, these currently compile as no-ops. We may change this
-    // to record a VM-relative guest static string pointer (similar to how the
-    // bytes functions above work) into the debug buffer in the future, but it
-    // is a little involved to do so and we assume that VM code probably does
-    // not want to be carrying static strings at all.
-
-    /// Log a formatted debugging message to the debug log (if present), passing
-    /// a simplified format string (supporting only positional `{}` markers) and
-    /// a single [RawVal] argument that will be inserted at the marker in the
-    /// format string.
-    fn log_static_fmt_val(&self, fmt: &'static str, v: RawVal) -> Result<(), Self::Error>;
-
-    /// Log a formatted debugging message to the debug log (if present), passing
-    /// a simplified format string (supporting only positional `{}` markers) and
-    /// a single string-slice argument that will be inserted at the marker in
-    /// the format string.
-    fn log_static_fmt_static_str(
-        &self,
-        fmt: &'static str,
-        s: &'static str,
-    ) -> Result<(), Self::Error>;
-
-    /// Log a formatted debugging message to the debug log (if present), passing
-    /// a simplified format string (supporting only positional `{}` markers) and
-    /// both a [RawVal] and a string-slice argument, that will each be inserted
-    /// at markers in the format string.
-    fn log_static_fmt_val_static_str(
-        &self,
-        fmt: &'static str,
-        v: RawVal,
-        s: &'static str,
-    ) -> Result<(), Self::Error>;
-
-    /// Log a formatted debugging message to the debug log (if present), passing
-    /// a simplified format string (supporting only positional `{}` markers) and
-    /// both a slice of [RawVal]s and a slice of string-slice argument, that
-    /// will be sequentially inserted at markers in the format string.
-    fn log_static_fmt_general(
-        &self,
-        fmt: &'static str,
-        vals: &[RawVal],
-        strs: &[&'static str],
-    ) -> Result<(), Self::Error>;
+    /// Log a string and set of values as a diagnostic event, if diagnostic
+    /// events are enabled. When running on host, logs directly; when running on
+    /// guest, redirects through log_from_linear_memory.
+    fn log_from_slice(&self, msg: &str, vals: &[RawVal]) -> Result<Void, Self::Error>;
 }
 
 ///////////////////////////////////////////////////////////////////////////////

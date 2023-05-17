@@ -1,5 +1,5 @@
 use soroban_env_common::{
-    xdr::{ScHostObjErrorCode, ScHostValErrorCode},
+    xdr::{ScErrorCode, ScErrorType},
     U32Val,
 };
 
@@ -22,7 +22,12 @@ impl Host {
                 let vm = vm.clone();
                 Ok(VmSlice { vm, pos, len })
             }
-            _ => Err(self.err_general("attempt to access guest bytes in non-VM frame")),
+            _ => Err(self.err(
+                ScErrorType::WasmVm,
+                ScErrorCode::InvalidAction,
+                "attempt to access guest bytes in non-VM frame",
+                &[],
+            )),
         })
     }
 
@@ -64,27 +69,32 @@ impl Host {
         buf: &[VAL],
         to_le_bytes: impl Fn(&VAL) -> [u8; VAL_SZ],
     ) -> Result<(), HostError> {
-        use soroban_env_common::xdr::ScVmErrorCode;
-
         let val_sz = self.usize_to_u32(VAL_SZ)?;
         let len = self.usize_to_u32(buf.len())?;
         let byte_len: u32 = len
             .checked_mul(val_sz)
-            .ok_or(ScHostValErrorCode::U32OutOfRange)?;
+            .ok_or_else(|| self.err_arith_overflow())?;
 
         let mem_end = mem_pos
             .checked_add(byte_len)
-            .ok_or(ScHostValErrorCode::U32OutOfRange)?;
+            .ok_or_else(|| self.err_arith_overflow())?;
         let mem_range = (mem_pos as usize)..(mem_end as usize);
 
         let mem_data = vm.get_memory(self)?.data_mut(vmcaller.try_mut()?);
-        let mem_slice = mem_data.get_mut(mem_range).ok_or(ScVmErrorCode::Memory)?;
+        let mem_slice = mem_data
+            .get_mut(mem_range)
+            .ok_or_else(|| self.err_oob_linear_memory())?;
 
         self.charge_budget(ContractCostType::VmMemWrite, Some(byte_len as u64))?;
         for (src, dst) in buf.iter().zip(mem_slice.chunks_mut(VAL_SZ)) {
             if dst.len() != VAL_SZ {
                 // This should be impossible unless there's an error above, but just in case.
-                return Err(ScHostObjErrorCode::VecIndexOutOfBound.into());
+                return Err(self.err(
+                    ScErrorType::Context,
+                    ScErrorCode::InternalError,
+                    "chunks_mut produced chunk of unexpected length",
+                    &[],
+                ));
             }
             let tmp: [u8; VAL_SZ] = to_le_bytes(src);
             dst.copy_from_slice(&tmp);
@@ -100,21 +110,21 @@ impl Host {
         buf: &mut [VAL],
         from_le_bytes: impl Fn(&[u8; VAL_SZ]) -> VAL,
     ) -> Result<(), HostError> {
-        use soroban_env_common::xdr::ScVmErrorCode;
-
         let val_sz = self.usize_to_u32(VAL_SZ)?;
         let len = self.usize_to_u32(buf.len())?;
         let byte_len: u32 = len
             .checked_mul(val_sz)
-            .ok_or(ScHostValErrorCode::U32OutOfRange)?;
+            .ok_or_else(|| self.err_arith_overflow())?;
 
         let mem_end = mem_pos
             .checked_add(byte_len)
-            .ok_or(ScHostValErrorCode::U32OutOfRange)?;
+            .ok_or_else(|| self.err_arith_overflow())?;
         let mem_range = (mem_pos as usize)..(mem_end as usize);
 
         let mem_data = vm.get_memory(self)?.data(vmcaller.try_mut()?);
-        let mem_slice = mem_data.get(mem_range).ok_or(ScVmErrorCode::Memory)?;
+        let mem_slice = mem_data
+            .get(mem_range)
+            .ok_or_else(|| self.err_oob_linear_memory())?;
 
         self.charge_budget(ContractCostType::VmMemRead, Some(byte_len as u64))?;
         let mut tmp: [u8; VAL_SZ] = [0u8; VAL_SZ];
@@ -124,7 +134,12 @@ impl Host {
                 *dst = from_le_bytes(&tmp);
             } else {
                 // This should be impossible unless there's an error above, but just in case.
-                return Err(ScHostObjErrorCode::VecIndexOutOfBound.into());
+                return Err(self.err(
+                    ScErrorType::Context,
+                    ScErrorCode::InternalError,
+                    "chunks produced chunk of unexpected length",
+                    &[],
+                ));
             }
         }
         Ok(())
@@ -149,8 +164,6 @@ impl Host {
         num_slices: usize,
         mut callback: impl FnMut(usize, &[u8]) -> Result<(), HostError>,
     ) -> Result<(), HostError> {
-        use soroban_env_common::xdr::ScVmErrorCode;
-
         let mem_data = vm.get_memory(self)?.data(vmcaller.try_mut()?);
         self.charge_budget(
             ContractCostType::VmMemRead,
@@ -163,9 +176,11 @@ impl Host {
 
             let next_pos = mem_pos
                 .checked_add(8)
-                .ok_or(ScHostValErrorCode::U32OutOfRange)?;
+                .ok_or_else(|| self.err_arith_overflow())?;
             let slice_ref_range = mem_pos as usize..next_pos as usize;
-            let slice_ref_slice = mem_data.get(slice_ref_range).ok_or(ScVmErrorCode::Memory)?;
+            let slice_ref_slice = mem_data
+                .get(slice_ref_range)
+                .ok_or_else(|| self.err_oob_linear_memory())?;
             mem_pos = next_pos;
 
             if let Ok(s) = TryInto::<&[u8; 8]>::try_into(slice_ref_slice) {
@@ -175,13 +190,20 @@ impl Host {
                 let slice_len = u32::from_le_bytes(len_bytes);
                 let slice_end = slice_ptr
                     .checked_add(slice_len)
-                    .ok_or(ScHostValErrorCode::U32OutOfRange)?;
+                    .ok_or_else(|| self.err_arith_overflow())?;
                 let slice_range = slice_ptr as usize..slice_end as usize;
-                let slice = mem_data.get(slice_range).ok_or(ScVmErrorCode::Memory)?;
+                let slice = mem_data
+                    .get(slice_range)
+                    .ok_or_else(|| self.err_oob_linear_memory())?;
                 callback(i, slice)?
             } else {
                 // This should be impossible unless there's an error above, but just in case.
-                return Err(ScHostObjErrorCode::VecIndexOutOfBound.into());
+                return Err(self.err(
+                    ScErrorType::Context,
+                    ScErrorCode::InternalError,
+                    "slice-scan produced slice of unexpected length",
+                    &[],
+                ));
             }
         }
         Ok(())
@@ -202,7 +224,12 @@ impl Host {
         if src.len() != dst.len() {
             // This should be impossible on all caller codepaths, but we check just in case
             // since copy_from_slice below will panic if there's a size mismatch.
-            return Err(ScHostObjErrorCode::VecIndexOutOfBound.into());
+            return Err(self.err(
+                ScErrorType::Context,
+                ScErrorCode::InternalError,
+                "byte-slice copy src and dst lengths differ",
+                &[],
+            ));
         }
         self.charge_budget(ContractCostType::HostMemCpy, Some(dst.len() as u64))?;
         dst.copy_from_slice(src);
@@ -221,12 +248,16 @@ impl Host {
         self.visit_obj(obj, move |hob: &HOT| {
             let obj_end = obj_pos
                 .checked_add(len)
-                .ok_or(ScHostValErrorCode::U32OutOfRange)?;
+                .ok_or_else(|| self.err_arith_overflow())?;
             let obj_range = obj_pos as usize..obj_end as usize;
-            let obj_buf = hob
-                .as_byte_slice()
-                .get(obj_range)
-                .ok_or(ScHostObjErrorCode::VecIndexOutOfBound)?;
+            let obj_buf = hob.as_byte_slice().get(obj_range).ok_or_else(|| {
+                self.err(
+                    ScErrorType::Object,
+                    ScErrorCode::IndexBounds,
+                    "out-of-bounds read from memory-like host object",
+                    &[],
+                )
+            })?;
             copy_bytes_out(obj_buf)
         })
     }
@@ -271,7 +302,7 @@ impl Host {
             .into();
         let obj_end = obj_pos
             .checked_add(len)
-            .ok_or(ScHostValErrorCode::U32OutOfRange)? as usize;
+            .ok_or_else(|| self.err_arith_overflow())? as usize;
         // TODO: we currently grow the destination vec if it's not big enough,
         // make sure this is desirable behaviour.
         if obj_new.len() < obj_end {
@@ -282,10 +313,14 @@ impl Host {
             obj_new.resize(obj_end, 0);
         }
         let obj_range = obj_pos as usize..obj_end;
-        let obj_buf: &mut [u8] = obj_new
-            .as_mut_slice()
-            .get_mut(obj_range)
-            .ok_or(ScHostObjErrorCode::VecIndexOutOfBound)?;
+        let obj_buf: &mut [u8] = obj_new.as_mut_slice().get_mut(obj_range).ok_or_else(|| {
+            self.err(
+                ScErrorType::Object,
+                ScErrorCode::IndexBounds,
+                "out-of-bounds write to memory-like host object",
+                &[],
+            )
+        })?;
         copy_bytes_in(obj_buf)?;
         self.add_host_object(HOT::try_from(obj_new)?)
     }

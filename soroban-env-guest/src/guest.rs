@@ -6,8 +6,8 @@ use core::convert::Infallible;
 use soroban_env_common::call_macro_with_all_host_functions;
 
 use super::{
-    AddressObject, Bool, BytesObject, I128Object, I256Object, I64Object, MapObject, Object, RawVal,
-    Status, StringObject, SymbolObject, U128Object, U256Object, U32Val, U64Object, U64Val,
+    AddressObject, Bool, BytesObject, Error, I128Object, I256Object, I64Object, MapObject, Object,
+    RawVal, StringObject, SymbolObject, U128Object, U256Object, U32Val, U64Object, U64Val,
     VecObject, Void,
 };
 use super::{Env, EnvBase, Symbol};
@@ -133,33 +133,7 @@ impl EnvBase for Guest {
         unimplemented!()
     }
 
-    fn log_static_fmt_val(&self, fmt: &'static str, v: RawVal) -> Result<(), Self::Error> {
-        unimplemented!()
-    }
-
-    fn log_static_fmt_static_str(
-        &self,
-        fmt: &'static str,
-        s: &'static str,
-    ) -> Result<(), Self::Error> {
-        unimplemented!()
-    }
-
-    fn log_static_fmt_val_static_str(
-        &self,
-        fmt: &'static str,
-        v: RawVal,
-        s: &'static str,
-    ) -> Result<(), Self::Error> {
-        unimplemented!()
-    }
-
-    fn log_static_fmt_general(
-        &self,
-        fmt: &'static str,
-        vals: &[RawVal],
-        strs: &[&'static str],
-    ) -> Result<(), Self::Error> {
+    fn log_from_slice(&self, msg: &str, vals: &[RawVal]) -> Result<Void, Self::Error> {
         unimplemented!()
     }
 }
@@ -323,48 +297,14 @@ impl EnvBase for Guest {
         self.symbol_index_in_linear_memory(key, strs_lm_pos, len)
     }
 
-    fn log_static_fmt_val(&self, fmt: &'static str, v: RawVal) -> Result<(), Self::Error> {
-        // TODO: It's possible we might want to do something in the wasm
-        // case with static strings similar to the bytes functions above,
-        // eg. decay the strings to u32 values and pass them to the host as linear
-        // memory locations for capture into the debug-events buffer,
-        // but for the time being we're going to _not_ do that because
-        // we assume users building for wasm want their static strings
-        // _removed_ from the bytes statically (it's also somewhat annoying
-        // to implement the capture of static strings into the debug buffer,
-        // it makes the debug buffer into non-Send+Sync and then we need
-        // to remove it from the HostError, report separately from HostError's
-        // Debug impl)
-        Ok(())
-    }
-
-    fn log_static_fmt_static_str(
-        &self,
-        fmt: &'static str,
-        s: &'static str,
-    ) -> Result<(), Self::Error> {
-        // Intentionally a no-op in this cfg. See above.
-        Ok(())
-    }
-
-    fn log_static_fmt_val_static_str(
-        &self,
-        fmt: &'static str,
-        v: RawVal,
-        s: &'static str,
-    ) -> Result<(), Self::Error> {
-        // Intentionally a no-op in this cfg. See above.
-        Ok(())
-    }
-
-    fn log_static_fmt_general(
-        &self,
-        fmt: &'static str,
-        vals: &[RawVal],
-        strs: &[&'static str],
-    ) -> Result<(), Self::Error> {
-        // Intentionally a no-op in this cfg. See above.
-        Ok(())
+    fn log_from_slice(&self, msg: &str, vals: &[RawVal]) -> Result<Void, Self::Error> {
+        sa::assert_eq_size!(u32, *const u8);
+        sa::assert_eq_size!(u32, usize);
+        let msg_lm_pos: U32Val = RawVal::from_u32(msg.as_ptr() as u32);
+        let msg_lm_len: U32Val = RawVal::from_u32(msg.len() as u32);
+        let vals_lm_pos: U32Val = RawVal::from_u32(vals.as_ptr() as u32);
+        let vals_lm_len: U32Val = RawVal::from_u32(vals.len() as u32);
+        self.log_from_linear_memory(msg_lm_pos, msg_lm_len, vals_lm_pos, vals_lm_len)
     }
 }
 
@@ -512,7 +452,7 @@ macro_rules! generate_extern_modules {
             $(#[$mod_attr])*
             mod $mod_id {
                 #[allow(unused_imports)]
-                use crate::{RawVal,Object,Symbol,Status,MapObject,VecObject,BytesObject};
+                use crate::{RawVal,Object,Symbol,Error,MapObject,VecObject,BytesObject};
                 #[allow(unused_imports)]
                 use crate::{I128Object, I256Object, I64Object, I64Val, U128Object, U256Object, U32Val, U64Object, U64Val};
                 #[allow(unused_imports)]

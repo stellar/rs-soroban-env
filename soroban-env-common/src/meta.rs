@@ -42,7 +42,7 @@ pub const ENV_META_V0_SECTION_NAME: &str = "contractenvmetav0";
 
 soroban_env_macros::generate_env_meta_consts!(
     ledger_protocol_version: 20,
-    pre_release_version: 38,
+    pre_release_version: 39,
 );
 
 pub fn get_ledger_protocol_version(interface_version: u64) -> u32 {

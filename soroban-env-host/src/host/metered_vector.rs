@@ -1,12 +1,17 @@
-use soroban_env_common::{xdr::ScHostFnErrorCode, Compare};
+use soroban_env_common::{
+    xdr::{ScErrorCode, ScErrorType},
+    Compare, Error,
+};
 
 use super::{declared_size::DeclaredSizeForMetering, MeteredClone};
 use crate::{
     budget::{AsBudget, Budget},
-    xdr::{ContractCostType, ScHostObjErrorCode},
+    xdr::ContractCostType,
     Host, HostError,
 };
 use std::{cmp::Ordering, ops::Range};
+
+const VEC_OOB: Error = Error::from_type_and_code(ScErrorType::Object, ScErrorCode::IndexBounds);
 
 #[derive(Clone, Default)]
 pub struct MeteredVector<A> {
@@ -82,27 +87,22 @@ where
             vec.charge_deep_clone(budget)?;
             Self::from_vec(vec)
         } else {
-            // TODO use a better error code for "unbounded input iterators"
-            Err(ScHostFnErrorCode::UnknownError.into())
+            // This is a logic error, we should never get here.
+            Err((ScErrorType::Object, ScErrorCode::InternalError).into())
         }
     }
 
     pub fn set(&self, index: usize, value: A, budget: &Budget) -> Result<Self, HostError> {
         let mut new = self.metered_clone(budget)?;
         new.charge_access(1, budget)?;
-        let cell: Result<&mut A, HostError> = new
-            .vec
-            .get_mut(index)
-            .ok_or_else(|| ScHostObjErrorCode::VecIndexOutOfBound.into());
+        let cell: Result<&mut A, HostError> = new.vec.get_mut(index).ok_or_else(|| VEC_OOB.into());
         *(cell?) = value;
         Ok(new)
     }
 
     pub fn get(&self, index: usize, budget: &Budget) -> Result<&A, HostError> {
         self.charge_access(1, budget)?;
-        self.vec
-            .get(index)
-            .ok_or_else(|| ScHostObjErrorCode::VecIndexOutOfBound.into())
+        self.vec.get(index).ok_or_else(|| VEC_OOB.into())
     }
 
     pub fn len(&self) -> usize {
@@ -116,7 +116,7 @@ where
 
     pub fn pop_front(&self, budget: &Budget) -> Result<Self, HostError> {
         if self.vec.is_empty() {
-            Err(ScHostObjErrorCode::VecIndexOutOfBound.into())
+            Err(VEC_OOB.into())
         } else {
             let iter = self.vec.iter().skip(1).cloned();
             Self::from_exact_iter(iter, budget)
@@ -129,8 +129,7 @@ where
     }
 
     fn err_overflow() -> HostError {
-        // TODO: need a better overflow code.
-        ScHostFnErrorCode::UnknownError.into()
+        (ScErrorType::Value, ScErrorCode::ArithDomain).into()
     }
 
     fn add_or_overflow(x: usize, y: usize) -> Result<usize, HostError> {
@@ -143,7 +142,7 @@ where
 
     pub fn pop_back(&self, budget: &Budget) -> Result<Self, HostError> {
         if self.vec.is_empty() {
-            Err(ScHostObjErrorCode::VecIndexOutOfBound.into())
+            Err(VEC_OOB.into())
         } else {
             let count = Self::sub_or_overflow(self.vec.len(), 1)?;
             let iter = self.vec.iter().take(count).cloned();
@@ -153,7 +152,7 @@ where
 
     pub fn remove(&self, idx: usize, budget: &Budget) -> Result<Self, HostError> {
         if idx >= self.vec.len() || idx == usize::MAX - 1 {
-            Err(ScHostObjErrorCode::VecIndexOutOfBound.into())
+            Err(VEC_OOB.into())
         } else {
             // [0, 1, 2]
             // del 1 => take(1) + skip(2)
@@ -166,22 +165,18 @@ where
 
     pub fn front(&self, budget: &Budget) -> Result<&A, HostError> {
         self.charge_access(1, budget)?;
-        self.vec
-            .first()
-            .ok_or_else(|| ScHostObjErrorCode::VecIndexOutOfBound.into())
+        self.vec.first().ok_or_else(|| VEC_OOB.into())
     }
 
     pub fn back(&self, budget: &Budget) -> Result<&A, HostError> {
         self.charge_access(1, budget)?;
-        self.vec
-            .last()
-            .ok_or_else(|| ScHostObjErrorCode::VecIndexOutOfBound.into())
+        self.vec.last().ok_or_else(|| VEC_OOB.into())
     }
 
     pub fn insert(&self, index: usize, value: A, budget: &Budget) -> Result<Self, HostError> {
         let len = self.vec.len();
         if index > len {
-            Err(ScHostObjErrorCode::VecIndexOutOfBound.into())
+            Err(VEC_OOB.into())
         } else if index == len {
             self.push_back(value, budget)
         } else if index == 0 {
@@ -202,7 +197,7 @@ where
     pub fn slice(&self, range: Range<usize>, budget: &Budget) -> Result<Self, HostError> {
         match self.vec.get(range) {
             Some(slice) => Self::from_exact_iter(slice.iter().cloned(), budget),
-            None => Err(ScHostObjErrorCode::VecIndexOutOfBound.into()),
+            None => Err(VEC_OOB.into()),
         }
     }
 

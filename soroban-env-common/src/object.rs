@@ -130,7 +130,7 @@ impl<'a> ScValObjRef<'a> {
             // Always-small values are never ScValObject
             ScVal::Bool(_)
             | ScVal::Void
-            | ScVal::Status(_)
+            | ScVal::Error(_)
             | ScVal::U32(_)
             | ScVal::I32(_)
             | ScVal::LedgerKeyContractExecutable => None,

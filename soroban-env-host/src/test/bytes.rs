@@ -1,9 +1,11 @@
-use crate::xdr::ScHostFnErrorCode;
 use crate::{
-    xdr::{ScHostObjErrorCode, ScStatus, ScVal},
+    xdr::{ScError, ScVal},
     Env, Host, HostError, RawVal,
 };
-use soroban_env_common::{Compare, EnvBase};
+use soroban_env_common::{
+    xdr::{ScErrorCode, ScErrorType},
+    Compare, EnvBase, Error,
+};
 
 use crate::Symbol;
 use soroban_test_wasms::LINEAR_MEMORY;
@@ -19,7 +21,9 @@ fn bytes_suite_of_tests() -> Result<(), HostError> {
     if let ScVal::Bytes(b) = host.from_host_val(obj.into())? {
         assert_eq!((0..32).collect::<Vec<u8>>().as_slice(), b.as_slice());
     } else {
-        return Err(host.err_general("Type error"));
+        return Err(
+            Error::from_type_and_code(ScErrorType::Object, ScErrorCode::UnexpectedType).into(),
+        );
     }
     // pop and len
     for _ in 0..24 {
@@ -40,13 +44,17 @@ fn bytes_suite_of_tests() -> Result<(), HostError> {
     if let ScVal::Bytes(b) = host.from_host_val(obj0.into())? {
         assert_eq!((0..3).collect::<Vec<u8>>().as_slice(), b.as_slice());
     } else {
-        return Err(host.err_general("Type error"));
+        return Err(
+            Error::from_type_and_code(ScErrorType::Object, ScErrorCode::InternalError).into(),
+        );
     }
     let obj1 = host.bytes_slice(obj, 3_u32.into(), 8_u32.into())?; // [3,4,5,6,7]
     if let ScVal::Bytes(b) = host.from_host_val(obj1.into())? {
         assert_eq!((3..8).collect::<Vec<u8>>().as_slice(), b.as_slice());
     } else {
-        return Err(host.err_general("Type error"));
+        return Err(
+            Error::from_type_and_code(ScErrorType::Object, ScErrorCode::InternalError).into(),
+        );
     }
     let obj_back = host.bytes_append(obj0, obj1)?;
     assert_eq!(host.obj_cmp(obj.into(), obj_back.into())?, 0);
@@ -59,8 +67,8 @@ fn bytes_put_out_of_bound() -> Result<(), HostError> {
     let host = Host::default();
     let obj = host.bytes_new()?;
     let res = host.bytes_put(obj, 0u32.into(), 1u32.into());
-    let code = ScHostObjErrorCode::VecIndexOutOfBound;
-    assert!(HostError::result_matches_err_status(res, code));
+    let code = (ScErrorType::Object, ScErrorCode::IndexBounds);
+    assert!(HostError::result_matches_err(res, code));
     Ok(())
 }
 
@@ -69,8 +77,8 @@ fn bytes_slice_start_greater_than_end() -> Result<(), HostError> {
     let host = Host::default();
     let obj = host.bytes_new_from_slice(&[1, 2, 3, 4])?;
     let res = host.bytes_slice(obj, 2_u32.into(), 1_u32.into());
-    let code = ScHostFnErrorCode::InputArgsInvalid;
-    assert!(HostError::result_matches_err_status(res, code));
+    let code = (ScErrorType::Object, ScErrorCode::InvalidInput);
+    assert!(HostError::result_matches_err(res, code));
     Ok(())
 }
 
@@ -88,8 +96,8 @@ fn bytes_slice_start_greater_than_len() -> Result<(), HostError> {
     let host = Host::default();
     let obj = host.bytes_new_from_slice(&[1, 2, 3, 4])?;
     let res = host.bytes_slice(obj, 5_u32.into(), 10_u32.into());
-    let code = ScHostObjErrorCode::VecIndexOutOfBound;
-    assert!(HostError::result_matches_err_status(res, code));
+    let code = (ScErrorType::Object, ScErrorCode::IndexBounds);
+    assert!(HostError::result_matches_err(res, code));
     Ok(())
 }
 
@@ -122,10 +130,11 @@ fn bytes_xdr_roundtrip() -> Result<(), HostError> {
     roundtrip(ScVal::Symbol(crate::xdr::ScSymbol(
         host.map_err("stellar".to_string().try_into())?,
     )))?;
-    // status
-    roundtrip(ScVal::Status(ScStatus::HostObjectError(
-        ScHostObjErrorCode::UnknownError,
-    )))?;
+    // error
+    roundtrip(ScVal::Error(ScError {
+        type_: ScErrorType::Context,
+        code: ScErrorCode::InternalError,
+    }))?;
 
     Ok(())
 }

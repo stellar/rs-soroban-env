@@ -7,7 +7,8 @@ use std::rc::Rc;
 use crate::{
     auth::{AuthorizationManager, RecordedAuthPayload},
     budget::{AsBudget, Budget},
-    events::{diagnostic::DiagnosticLevel, DebugEvent, Events, InternalEventsBuffer},
+    err,
+    events::{diagnostic::DiagnosticLevel, Events, InternalEventsBuffer},
     host_object::{HostMap, HostObject, HostVec},
     num::{i256_from_pieces, i256_into_pieces, u256_from_pieces, u256_into_pieces},
     storage::Storage,
@@ -15,11 +16,9 @@ use crate::{
         int128_helpers, AccountId, Asset, ContractCodeEntry, ContractCostType, ContractDataEntry,
         ContractEventType, ContractId, CreateContractArgs, ExtensionPoint, Hash, HashIdPreimage,
         LedgerEntryData, LedgerKey, LedgerKeyContractCode, PublicKey, ScAddress, ScBytes,
-        ScContractExecutable, ScHostFnErrorCode, ScHostObjErrorCode, ScHostStorageErrorCode,
-        ScHostValErrorCode, ScStatusType, ScString, ScSymbol, ScUnknownErrorCode, ScVal,
-        UploadContractWasmArgs,
+        ScContractExecutable, ScErrorType, ScString, ScSymbol, ScVal, UploadContractWasmArgs,
     },
-    AddressObject, Bool, BytesObject, I128Object, I256Object, I64Object, MapObject, Status,
+    AddressObject, Bool, BytesObject, Error, I128Object, I256Object, I64Object, MapObject,
     StringObject, SymbolObject, SymbolSmall, SymbolStr, TryFromVal, U128Object, U256Object, U32Val,
     U64Object, U64Val, VecObject, VmCaller, VmCallerEnv, Void, I256, U256,
 };
@@ -31,7 +30,7 @@ pub(crate) mod comparison;
 mod conversion;
 mod data_helper;
 pub(crate) mod declared_size;
-mod error;
+pub(crate) mod error;
 pub(crate) mod frame;
 pub(crate) mod invoker_type;
 mod mem_helper;
@@ -41,6 +40,7 @@ pub(crate) mod metered_vector;
 pub(crate) mod metered_xdr;
 mod validity;
 pub use error::HostError;
+use soroban_env_common::xdr::ScErrorCode;
 
 use self::{frame::ContractReentryMode, metered_vector::MeteredVector};
 use self::{invoker_type::InvokerType, metered_clone::MeteredClone};
@@ -174,7 +174,12 @@ impl Host {
         F: FnOnce(&LedgerInfo) -> Result<T, HostError>,
     {
         match self.0.ledger.borrow().as_ref() {
-            None => Err(self.err_general("missing ledger info")),
+            None => Err(self.err(
+                ScErrorType::Context,
+                ScErrorCode::InternalError,
+                "missing ledger info",
+                &[],
+            )),
             Some(li) => f(li),
         }
     }
@@ -184,7 +189,12 @@ impl Host {
         F: FnMut(&mut LedgerInfo),
     {
         match self.0.ledger.borrow_mut().as_mut() {
-            None => Err(self.err_general("missing ledger info")),
+            None => Err(self.err(
+                ScErrorType::Context,
+                ScErrorCode::InternalError,
+                "missing ledger info",
+                &[],
+            )),
             Some(li) => {
                 f(li);
                 Ok(())
@@ -241,7 +251,13 @@ impl Host {
                 let budget = host_impl.budget;
                 (storage, budget, events)
             })
-            .map_err(|e| (Host(e), ScUnknownErrorCode::General.into()))
+            .map_err(|e| {
+                (
+                    Host(e),
+                    Error::from_type_and_code(ScErrorType::Context, ScErrorCode::InternalError)
+                        .into(),
+                )
+            })
     }
 
     /// Invokes the reserved `__check_auth` function on a provided contract.
@@ -267,10 +283,10 @@ impl Host {
             true,
         );
         if let Err(e) = &res {
-            let evt = DebugEvent::new()
-                .msg("check auth invocation for a custom account contract resulted in error {}")
-                .arg::<RawVal>(e.status.into());
-            self.record_debug_event(evt)?;
+            self.debug_diagnostics(
+                "check auth invocation for a custom account contract resulted in error",
+                &[e.error.into()],
+            )?;
         }
         res
     }
@@ -295,14 +311,24 @@ impl Host {
             .borrow_mut()
             .has(&storage_key, self.as_budget())?
         {
-            return Err(self.err_general("Contract already exists"));
+            return Err(self.err(
+                ScErrorType::Storage,
+                ScErrorCode::ExistingValue,
+                "contract already exists",
+                &[contract_id.to_raw()],
+            ));
         }
         // Make sure the contract code exists. Without this check it would be
         // possible to accidentally create a contract that never may be invoked
         // (just by providing a bad hash).
         if let ScContractExecutable::WasmRef(wasm_hash) = &contract_source {
             if !self.contract_code_exists(wasm_hash)? {
-                return Err(self.err_general("Wasm does not exist"));
+                return Err(err!(
+                    self,
+                    (ScErrorType::Storage, ScErrorCode::MissingValue),
+                    "WASM does not exist",
+                    *wasm_hash
+                ));
             }
         }
         self.store_contract_executable(contract_source, new_contract_id, &storage_key)?;
@@ -394,7 +420,12 @@ impl Host {
             .borrow_mut()
             .as_mut()
             .ok_or_else(|| {
-                self.err_general("previous invocation is missing - no auth data to get")
+                self.err(
+                    ScErrorType::Auth,
+                    ScErrorCode::InternalError,
+                    "previous invocation is missing - no auth data to get",
+                    &[],
+                )
             })?
             .get_authenticated_top_authorizations())
     }
@@ -416,7 +447,12 @@ impl Host {
             .borrow_mut()
             .as_mut()
             .ok_or_else(|| {
-                self.err_general("previous invocation is missing - no auth data to get")
+                self.err(
+                    ScErrorType::Auth,
+                    ScErrorCode::InternalError,
+                    "previous invocation is missing - no auth data to get",
+                    &[],
+                )
             })?
             .get_authenticated_authorizations())
     }
@@ -484,9 +520,14 @@ impl Host {
             ContractCostType::VerifyEd25519Sig,
             Some(payload.len() as u64),
         )?;
-        public_key
-            .verify(payload, sig)
-            .map_err(|_| self.err_general("Failed ED25519 verification"))
+        public_key.verify(payload, sig).map_err(|_| {
+            self.err(
+                ScErrorType::Crypto,
+                ScErrorCode::InvalidInput,
+                "failed ED25519 verification",
+                &[],
+            )
+        })
     }
 
     // Returns the recorded per-address authorization payloads that would cover the
@@ -507,7 +548,14 @@ impl Host {
                 .previous_authorization_manager
                 .borrow()
                 .as_ref()
-                .ok_or(self.err_general("previous invocation is missing - no payloads recorded"))?
+                .ok_or_else(|| {
+                    self.err(
+                        ScErrorType::Auth,
+                        ScErrorCode::InternalError,
+                        "previous invocation is missing - no auth data to get",
+                        &[],
+                    )
+                })?
                 .get_recorded_auth_payloads()
         }
     }
@@ -533,11 +581,16 @@ impl Host {
         if self.symbol_matches(s, sym)? {
             Ok(())
         } else {
-            Err(self.err_general("symbol mismatch"))
+            Err(self.err(
+                ScErrorType::Value,
+                ScErrorCode::InvalidInput,
+                "symbol mismatch",
+                &[sym.to_raw()],
+            ))
         }
     }
 
-    // Metering: mostly free or already covered by components (e.g. err_general)
+    // Metering: mostly free or already covered by components (e.g. err)
     fn get_invoker_type(&self) -> Result<u64, HostError> {
         let frames = self.0.context.borrow();
         // If the previous frame exists and is a contract, return its ID, otherwise return
@@ -554,7 +607,12 @@ impl Host {
             // In tests contracts are executed with a single frame.
             // TODO: Investigate this discrepancy: https://github.com/stellar/rs-soroban-env/issues/485.
             [f1] => Ok(InvokerType::Account),
-            _ => Err(self.err_general("no frames to derive the invoker from")),
+            _ => Err(self.err(
+                ScErrorType::Context,
+                ScErrorCode::InternalError,
+                "no frames to derive the invoker from",
+                &[],
+            )),
         }?;
         Ok(st as u64)
     }
@@ -588,12 +646,12 @@ impl EnvBase for Host {
     //
     // When such a "rejected error" occurs, we do panic, but only after checking
     // to see if we're in a `TestContract` invocation, and if so storing the
-    // error's Status value in that frame, such that `Host::call_n` above can
-    // recover the Status when it _catches_ the panic and converts it back to an
+    // error's Error value in that frame, such that `Host::call_n` above can
+    // recover the Error when it _catches_ the panic and converts it back to an
     // error.
     //
     // It might seem like we ought to `std::panic::panic_any(e)` here, making
-    // the panic carry a `HostError` or `Status` and catching it by dynamic type
+    // the panic carry a `HostError` or `Error` and catching it by dynamic type
     // inspection in the `call_n` catch logic. The reason we don't do so is that
     // `panic_any` will not provide a nice printable value to the `PanicInfo`,
     // it constructs, so when/if the panic makes it to a top-level printout it
@@ -609,11 +667,11 @@ impl EnvBase for Host {
     fn escalate_error_to_panic(&self, e: Self::Error) -> ! {
         let _ = self.with_current_frame_opt(|f| {
             if let Some(Frame::TestContract(frame)) = f {
-                *frame.panic.borrow_mut() = Some(e.status);
+                *frame.panic.borrow_mut() = Some(e.error);
             }
             Ok(())
         });
-        let escalation = self.err_status_msg(e.status, "escalating error '{}' to panic");
+        let escalation = self.error(e.error, "escalating error to panic", &[]);
         panic!("{:?}", escalation)
     }
 
@@ -709,11 +767,21 @@ impl EnvBase for Host {
         // we charge shallow copy of the values.
         metered_clone::charge_shallow_copy::<RawVal>(keys.len() as u64, self.as_budget())?;
         if keys.len() != vals.len() {
-            return Err(self.err_status(ScHostFnErrorCode::InputArgsWrongLength));
+            return Err(self.err(
+                ScErrorType::Object,
+                ScErrorCode::UnexpectedSize,
+                "differing key and value vector lengths when unpacking map to slice",
+                &[],
+            ));
         }
         self.visit_obj(map, |hm: &HostMap| {
             if hm.len() != vals.len() {
-                return Err(self.err_status(ScHostFnErrorCode::InputArgsWrongLength));
+                return Err(self.err(
+                    ScErrorType::Object,
+                    ScErrorCode::UnexpectedSize,
+                    "differing host map and output vector lengths when unpacking map to slice",
+                    &[],
+                ));
             }
 
             for (ik, mk) in keys.iter().zip(hm.keys(self)?) {
@@ -741,7 +809,12 @@ impl EnvBase for Host {
     ) -> Result<Void, Self::Error> {
         self.visit_obj(vec, |hv: &HostVec| {
             if hv.len() != vals.len() {
-                return Err(self.err_status(ScHostFnErrorCode::InputArgsWrongLength));
+                return Err(self.err(
+                    ScErrorType::Object,
+                    ScErrorCode::UnexpectedSize,
+                    "differing host vector and output vector lengths when unpacking vec to slice",
+                    &[],
+                ));
             }
             metered_clone::charge_shallow_copy::<RawVal>(hv.len() as u64, self.as_budget())?;
             vals.copy_from_slice(hv.as_slice());
@@ -759,46 +832,18 @@ impl EnvBase for Host {
             Ok(())
         })?;
         match found {
-            None => Err(self.err_status(ScHostFnErrorCode::InputArgsInvalid)),
+            None => Err(self.err(
+                ScErrorType::Value,
+                ScErrorCode::InvalidInput,
+                "symbol not found in slice of strs",
+                &[sym.to_raw()],
+            )),
             Some(idx) => Ok(U32Val::from(self.usize_to_u32(idx)?)),
         }
     }
 
-    fn log_static_fmt_val(&self, fmt: &'static str, v: RawVal) -> Result<(), HostError> {
-        self.record_debug_event(DebugEvent::new().msg(fmt).arg(v))
-    }
-
-    fn log_static_fmt_static_str(
-        &self,
-        fmt: &'static str,
-        s: &'static str,
-    ) -> Result<(), HostError> {
-        self.record_debug_event(DebugEvent::new().msg(fmt).arg(s))
-    }
-
-    fn log_static_fmt_val_static_str(
-        &self,
-        fmt: &'static str,
-        v: RawVal,
-        s: &'static str,
-    ) -> Result<(), HostError> {
-        self.record_debug_event(DebugEvent::new().msg(fmt).arg(v).arg(s))
-    }
-
-    fn log_static_fmt_general(
-        &self,
-        fmt: &'static str,
-        vals: &[RawVal],
-        strs: &[&'static str],
-    ) -> Result<(), HostError> {
-        let mut evt = DebugEvent::new().msg(fmt);
-        for v in vals {
-            evt = evt.arg(*v)
-        }
-        for s in strs {
-            evt = evt.arg(*s)
-        }
-        self.record_debug_event(evt)
+    fn log_from_slice(&self, msg: &str, vals: &[RawVal]) -> Result<Void, HostError> {
+        self.debug_diagnostics(msg, vals).map(|_| Void::from(()))
     }
 }
 
@@ -806,27 +851,33 @@ impl VmCallerEnv for Host {
     type VmUserState = Host;
 
     // Notes on metering: covered by the components
-    fn log_value(&self, _vmcaller: &mut VmCaller<Host>, v: RawVal) -> Result<Void, HostError> {
-        self.record_debug_event(DebugEvent::new().arg(v))?;
-        Ok(RawVal::VOID)
-    }
-
-    fn log_fmt_values(
+    fn log_from_linear_memory(
         &self,
-        _vmcaller: &mut VmCaller<Host>,
-        fmt: StringObject,
-        args: VecObject,
+        vmcaller: &mut VmCaller<Host>,
+        msg_pos: U32Val,
+        msg_len: U32Val,
+        vals_pos: U32Val,
+        vals_len: U32Val,
     ) -> Result<Void, HostError> {
         if self.is_debug() {
-            let fmt: String = self
-                .visit_obj(fmt, move |hv: &ScString| {
-                    Ok(String::from_utf8(hv.clone().into()))
-                })?
-                .map_err(|_| {
-                    self.err_general("log_fmt_values fmt string contains is invalid utf8")
-                })?;
-            let args: HostVec = self.visit_obj(args, move |hv: &HostVec| Ok(hv.clone()))?;
-            self.record_debug_event(DebugEvent::new().msg(fmt).args(args.iter().cloned()))?;
+            self.as_budget().with_free_budget(|| {
+                let VmSlice { vm, pos, len } = self.decode_vmslice(msg_pos, msg_len)?;
+                let mut msg: Vec<u8> = vec![0u8; len as usize];
+                self.metered_vm_read_bytes_from_linear_memory(vmcaller, &vm, pos, &mut msg)?;
+                let msg = String::from_utf8_lossy(&msg);
+
+                let VmSlice { vm, pos, len } = self.decode_vmslice(vals_pos, vals_len)?;
+                let mut vals: Vec<RawVal> = vec![RawVal::VOID.to_raw(); len as usize];
+                self.metered_vm_read_vals_from_linear_memory::<8, RawVal>(
+                    vmcaller,
+                    &vm,
+                    pos,
+                    vals.as_mut_slice(),
+                    |buf| RawVal::from_payload(u64::from_le_bytes(*buf)),
+                )?;
+
+                self.debug_diagnostics(&msg, &vals)
+            })?;
         }
         Ok(RawVal::VOID)
     }
@@ -873,7 +924,14 @@ impl VmCallerEnv for Host {
                     }),
                 })?,
                 // We should have been given at least one object.
-                (Err(_), Err(_)) => return Err(self.err_general("two non-object args to obj_cmp")),
+                (Err(_), Err(_)) => {
+                    return Err(self.err(
+                        ScErrorType::Value,
+                        ScErrorCode::UnexpectedType,
+                        "two non-object args to obj_cmp",
+                        &[a, b],
+                    ))
+                }
             }
         } {
             // If any of the above got us a result, great, use it.
@@ -886,9 +944,12 @@ impl VmCallerEnv for Host {
                 let btype = b.get_tag().get_scval_type();
                 if atype == btype {
                     // This shouldn't have happened, but if it does there's a logic error.
-                    return Err(
-                        self.err_general("equal-tagged values rejected by small-value obj_cmp")
-                    );
+                    return Err(self.err(
+                        ScErrorType::Value,
+                        ScErrorCode::InternalError,
+                        "equal-tagged values rejected by small-value obj_cmp",
+                        &[a, b],
+                    ));
                 }
                 atype.cmp(&btype)
             }
@@ -1123,9 +1184,14 @@ impl VmCallerEnv for Host {
         k: RawVal,
     ) -> Result<RawVal, HostError> {
         self.visit_obj(m, move |hm: &HostMap| {
-            hm.get(&k, self)?
-                .copied()
-                .ok_or_else(|| self.err_general("map key not found")) // FIXME: need error code
+            hm.get(&k, self)?.copied().ok_or_else(|| {
+                self.err(
+                    ScErrorType::Object,
+                    ScErrorCode::MissingValue,
+                    "map key not found",
+                    &[m.to_raw(), k],
+                )
+            })
         })
     }
 
@@ -1137,7 +1203,12 @@ impl VmCallerEnv for Host {
     ) -> Result<MapObject, HostError> {
         match self.visit_obj(m, |hm: &HostMap| hm.remove(&k, self))? {
             Some((mnew, _)) => Ok(self.add_host_object(mnew)?),
-            None => Err(self.err_general("map key not found")),
+            None => Err(self.err(
+                ScErrorType::Object,
+                ScErrorCode::MissingValue,
+                "map key not found",
+                &[m.to_raw(), k],
+            )),
         }
     }
 
@@ -1165,7 +1236,11 @@ impl VmCallerEnv for Host {
             if let Some((pk, _)) = hm.get_prev(&k, self)? {
                 Ok(*pk)
             } else {
-                Ok(Status::UNKNOWN_ERROR.to_raw())
+                // We return Ok(error) here to indicate "the end of iteration".
+                Ok(
+                    Error::from_type_and_code(ScErrorType::Object, ScErrorCode::IndexBounds)
+                        .to_raw(),
+                )
             }
         })
     }
@@ -1180,7 +1255,11 @@ impl VmCallerEnv for Host {
             if let Some((pk, _)) = hm.get_next(&k, self)? {
                 Ok(*pk)
             } else {
-                Ok(Status::UNKNOWN_ERROR.to_raw())
+                // We return Ok(error) here to indicate "the end of iteration".
+                Ok(
+                    Error::from_type_and_code(ScErrorType::Object, ScErrorCode::IndexBounds)
+                        .to_raw(),
+                )
             }
         })
     }
@@ -1190,11 +1269,11 @@ impl VmCallerEnv for Host {
         _vmcaller: &mut VmCaller<Host>,
         m: MapObject,
     ) -> Result<RawVal, HostError> {
-        self.visit_obj(m, |hm: &HostMap| {
-            match hm.get_min(self)? {
-                Some((pk, pv)) => Ok(*pk),
-                None => Ok(Status::UNKNOWN_ERROR.to_raw()), //FIXME: replace with the actual status code
-            }
+        self.visit_obj(m, |hm: &HostMap| match hm.get_min(self)? {
+            Some((pk, pv)) => Ok(*pk),
+            None => Ok(
+                Error::from_type_and_code(ScErrorType::Object, ScErrorCode::IndexBounds).to_raw(),
+            ),
         })
     }
 
@@ -1203,11 +1282,11 @@ impl VmCallerEnv for Host {
         _vmcaller: &mut VmCaller<Host>,
         m: MapObject,
     ) -> Result<RawVal, HostError> {
-        self.visit_obj(m, |hm: &HostMap| {
-            match hm.get_max(self)? {
-                Some((pk, pv)) => Ok(*pk),
-                None => Ok(Status::UNKNOWN_ERROR.to_raw()), //FIXME: replace with the actual status code
-            }
+        self.visit_obj(m, |hm: &HostMap| match hm.get_max(self)? {
+            Some((pk, pv)) => Ok(*pk),
+            None => Ok(
+                Error::from_type_and_code(ScErrorType::Object, ScErrorCode::IndexBounds).to_raw(),
+            ),
         })
     }
 
@@ -1315,7 +1394,14 @@ impl VmCallerEnv for Host {
                         mapobj
                             .map
                             .get(n)
-                            .ok_or(ScHostObjErrorCode::VecIndexOutOfBound)?
+                            .ok_or_else(|| {
+                                self.err(
+                                    ScErrorType::Object,
+                                    ScErrorCode::IndexBounds,
+                                    "vector out of bounds while unpacking map to linear memory",
+                                    &[],
+                                )
+                            })?
                             .0,
                     )?;
                     self.check_symbol_matches(slice, sym)?;
@@ -1467,7 +1553,7 @@ impl VmCallerEnv for Host {
         let vnew = self.visit_obj(v1, |hv1: &HostVec| {
             self.visit_obj(v2, |hv2: &HostVec| {
                 if hv1.len() > u32::MAX as usize - hv2.len() {
-                    Err(self.err_status_msg(ScHostFnErrorCode::InputArgsInvalid, "u32 overflow"))
+                    Err(self.err_arith_overflow())
                 } else {
                     hv1.append(hv2, self.as_budget())
                 }
@@ -1624,9 +1710,11 @@ impl VmCallerEnv for Host {
                 key,
                 val,
             }) => Ok(self.to_host_val(val)?),
-            _ => Err(self.err_status_msg(
-                ScHostStorageErrorCode::ExpectContractData,
-                "expected contract data",
+            _ => Err(self.err(
+                ScErrorType::Storage,
+                ScErrorCode::UnexpectedType,
+                "expected contract data ledger entry",
+                &[],
             )),
         }
     }
@@ -1665,7 +1753,12 @@ impl VmCallerEnv for Host {
     ) -> Result<Void, HostError> {
         let wasm_hash = self.hash_from_bytesobj_input("wasm_hash", hash)?;
         if !self.contract_code_exists(&wasm_hash)? {
-            return Err(self.err_general("Wasm does not exist"));
+            return Err(self.err(
+                ScErrorType::Storage,
+                ScErrorCode::MissingValue,
+                "WASM does not exist",
+                &[hash.to_raw()],
+            ));
         }
         let curr_contract_id = self.get_current_contract_id_internal()?;
         let key = self.contract_executable_ledger_key(&curr_contract_id)?;
@@ -1684,20 +1777,20 @@ impl VmCallerEnv for Host {
         func: Symbol,
         args: VecObject,
     ) -> Result<RawVal, HostError> {
-        let args = self.call_args_from_obj(args)?;
+        let argvec = self.call_args_from_obj(args)?;
         // this is the recommended path of calling a contract, with `reentry`
         // always set `ContractReentryMode::Prohibited`
         let res = self.call_n(
             contract,
             func,
-            args.as_slice(),
+            argvec.as_slice(),
             ContractReentryMode::Prohibited,
         );
         if let Err(e) = &res {
-            let evt = DebugEvent::new()
-                .msg("contract call invocation resulted in error {}")
-                .arg::<RawVal>(e.status.into());
-            self.record_debug_event(evt)?;
+            self.debug_diagnostics(
+                "contract call resulted in error",
+                &[func.to_raw(), args.to_raw(), e.error.to_raw()],
+            )?;
         }
         res
     }
@@ -1710,7 +1803,7 @@ impl VmCallerEnv for Host {
         func: Symbol,
         args: VecObject,
     ) -> Result<RawVal, HostError> {
-        let args = self.call_args_from_obj(args)?;
+        let argvec = self.call_args_from_obj(args)?;
         // this is the "loosened" path of calling a contract.
         // TODO: A `reentry` flag will be passed from `try_call` into here.
         // For now, we are passing in `ContractReentryMode::Prohibited` to disable
@@ -1718,18 +1811,17 @@ impl VmCallerEnv for Host {
         let res = self.call_n(
             contract,
             func,
-            args.as_slice(),
+            argvec.as_slice(),
             ContractReentryMode::Prohibited,
         );
         match res {
             Ok(rv) => Ok(rv),
             Err(e) => {
-                let status: RawVal = e.status.into();
-                let evt = DebugEvent::new()
-                    .msg("contract call invocation resulted in error {}")
-                    .arg(status);
-                self.record_debug_event(evt)?;
-                Ok(status)
+                self.debug_diagnostics(
+                    "contract try_call resulted in error",
+                    &[func.to_raw(), args.to_raw(), e.error.to_raw()],
+                )?;
+                Ok(e.error.to_raw())
             }
         }
     }
@@ -1856,7 +1948,12 @@ impl VmCallerEnv for Host {
             },
         )?;
         match found {
-            None => Err(self.err_status(ScHostFnErrorCode::InputArgsInvalid)),
+            None => Err(self.err(
+                ScErrorType::Value,
+                ScErrorCode::InvalidInput,
+                "symbol not found in linear memory slices",
+                &[sym.to_raw()],
+            )),
             Some(idx) => Ok(U32Val::from(idx)),
         }
     }
@@ -1871,15 +1968,20 @@ impl VmCallerEnv for Host {
         &self,
         _vmcaller: &mut VmCaller<Host>,
         b: BytesObject,
-        i: U32Val,
+        iv: U32Val,
         u: U32Val,
     ) -> Result<BytesObject, HostError> {
-        let i: u32 = i.into();
+        let i: u32 = iv.into();
         let u = self.u8_from_u32val_input("u", u)?;
         let vnew = self.visit_obj(b, move |hv: &ScBytes| {
             let mut vnew: Vec<u8> = hv.metered_clone(&self.0.budget)?.into();
             match vnew.get_mut(i as usize) {
-                None => Err(self.err_status(ScHostObjErrorCode::VecIndexOutOfBound)),
+                None => Err(self.err(
+                    ScErrorType::Object,
+                    ScErrorCode::IndexBounds,
+                    "bytes_put out of bounds",
+                    &[iv.to_raw()],
+                )),
                 Some(v) => {
                     *v = u;
                     Ok(ScBytes(vnew.try_into()?))
@@ -1894,13 +1996,20 @@ impl VmCallerEnv for Host {
         &self,
         _vmcaller: &mut VmCaller<Host>,
         b: BytesObject,
-        i: U32Val,
+        iv: U32Val,
     ) -> Result<U32Val, HostError> {
-        let i: u32 = i.into();
+        let i: u32 = iv.into();
         self.visit_obj(b, |hv: &ScBytes| {
             hv.get(i as usize)
                 .map(|u| Into::<U32Val>::into(Into::<u32>::into(*u)))
-                .ok_or_else(|| self.err_status(ScHostObjErrorCode::VecIndexOutOfBound))
+                .ok_or_else(|| {
+                    self.err(
+                        ScErrorType::Object,
+                        ScErrorCode::IndexBounds,
+                        "bytes_get out of bounds",
+                        &[iv.to_raw()],
+                    )
+                })
         })
     }
 
@@ -1988,7 +2097,12 @@ impl VmCallerEnv for Host {
             // Popping will not trigger reallocation. Here we don't charge anything since this is
             // just a `len` reduction.
             if vnew.pop().is_none() {
-                return Err(self.err_status(ScHostObjErrorCode::VecIndexOutOfBound));
+                return Err(self.err(
+                    ScErrorType::Object,
+                    ScErrorCode::IndexBounds,
+                    "bytes_pop out of bounds",
+                    &[],
+                ));
             }
             Ok(ScBytes(vnew.try_into()?))
         })?;
@@ -2004,7 +2118,14 @@ impl VmCallerEnv for Host {
         self.visit_obj(b, |hv: &ScBytes| {
             hv.first()
                 .map(|u| Into::<U32Val>::into(Into::<u32>::into(*u)))
-                .ok_or_else(|| self.err_status(ScHostObjErrorCode::VecIndexOutOfBound))
+                .ok_or_else(|| {
+                    self.err(
+                        ScErrorType::Object,
+                        ScErrorCode::IndexBounds,
+                        "bytes_front out of bounds",
+                        &[],
+                    )
+                })
         })
     }
 
@@ -2017,7 +2138,14 @@ impl VmCallerEnv for Host {
         self.visit_obj(b, |hv: &ScBytes| {
             hv.last()
                 .map(|u| Into::<U32Val>::into(Into::<u32>::into(*u)))
-                .ok_or_else(|| self.err_status(ScHostObjErrorCode::VecIndexOutOfBound))
+                .ok_or_else(|| {
+                    self.err(
+                        ScErrorType::Object,
+                        ScErrorCode::IndexBounds,
+                        "bytes_back out of bounds",
+                        &[],
+                    )
+                })
         })
     }
 
@@ -2056,9 +2184,7 @@ impl VmCallerEnv for Host {
         let vnew = self.visit_obj(b1, |sb1: &ScBytes| {
             self.visit_obj(b2, |sb2: &ScBytes| {
                 if sb2.len() > u32::MAX as usize - sb1.len() {
-                    return Err(
-                        self.err_status_msg(ScHostFnErrorCode::InputArgsInvalid, "u32 overflow")
-                    );
+                    return Err(self.err_arith_overflow());
                 }
                 // we allocate large enough memory to hold the new combined vector, so that
                 // allocation only happens once, and charge for it upfront.
@@ -2170,17 +2296,23 @@ impl VmCallerEnv for Host {
         self.add_host_object(HostVec::from_vec(outer)?)
     }
 
-    fn fail_with_status(
+    fn fail_with_error(
         &self,
         vmcaller: &mut VmCaller<Self::VmUserState>,
-        status: Status,
+        error: Error,
     ) -> Result<Void, Self::Error> {
-        if status.is_type(ScStatusType::ContractError) {
-            Err(self.err_status_msg(status, "failing with contract error status code '{}'"))
+        if error.is_type(ScErrorType::Contract) {
+            Err(self.error(
+                error,
+                "failing with contract error",
+                &[U32Val::from(error.get_code()).to_raw()],
+            ))
         } else {
-            Err(self.err_status_msg(
-                ScHostValErrorCode::UnexpectedValType,
+            Err(self.err(
+                ScErrorType::Context,
+                ScErrorCode::UnexpectedType,
                 "contract attempted to fail with non-ContractError status code",
+                &[error.to_raw()],
             ))
         }
     }
@@ -2220,13 +2352,18 @@ impl VmCallerEnv for Host {
             let args = match f {
                 Frame::ContractVM(_, _, args) => args,
                 Frame::HostFunction(_) => {
-                    return Err(self.err_general("require_auth is not suppported for host fns"))
+                    return Err(self.err(
+                        ScErrorType::Context,
+                        ScErrorCode::InvalidAction,
+                        "require_auth is not suppported for host fns",
+                        &[],
+                    ))
                 }
                 Frame::Token(_, _, args) => args,
                 #[cfg(any(test, feature = "testutils"))]
                 Frame::TestContract(c) => &c.args,
             };
-            self.rawvals_to_scvec(args.iter())
+            self.rawvals_to_scvec(&args)
         })?;
 
         Ok(self

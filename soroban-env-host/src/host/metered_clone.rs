@@ -1,10 +1,10 @@
 use std::{mem, rc::Rc};
 
-use soroban_env_common::xdr::ScUnknownErrorCode;
+use soroban_env_common::xdr::{ScErrorCode, ScErrorType};
 
 use crate::{
     budget::Budget,
-    events::{DebugArg, DebugEvent, Event, HostEvent, InternalContractEvent, InternalEvent},
+    events::{Event, HostEvent, InternalContractEvent, InternalEvent},
     host::Events,
     host_object::HostObject,
     storage::AccessType,
@@ -14,13 +14,13 @@ use crate::{
         Hash, LedgerEntryExt, LedgerKeyAccount, LedgerKeyClaimableBalance, LedgerKeyConfigSetting,
         LedgerKeyContractCode, LedgerKeyData, LedgerKeyLiquidityPool, LedgerKeyOffer,
         LedgerKeyTrustLine, LiquidityPoolEntry, OfferEntry, PublicKey, ScAddress, ScBytes,
-        ScContractExecutable, ScHostValErrorCode, ScMap, ScMapEntry, ScNonceKey, ScString,
-        ScSymbol, ScVal, ScVec, StringM, TimePoint, TrustLineAsset, TrustLineEntry, Uint256,
+        ScContractExecutable, ScMap, ScMapEntry, ScNonceKey, ScString, ScSymbol, ScVal, ScVec,
+        StringM, TimePoint, TrustLineAsset, TrustLineEntry, Uint256,
     },
     AddressObject, Bool, BytesObject, ContractExecutableObject, DurationObject, DurationSmall,
-    DurationVal, HostError, I128Object, I128Small, I128Val, I256Object, I256Small, I256Val, I32Val,
-    I64Object, I64Small, I64Val, LedgerKeyNonceObject, MapObject, Object, RawVal, ScValObject,
-    Status, StringObject, Symbol, SymbolObject, SymbolSmall, SymbolSmallIter, SymbolStr,
+    DurationVal, Error, HostError, I128Object, I128Small, I128Val, I256Object, I256Small, I256Val,
+    I32Val, I64Object, I64Small, I64Val, LedgerKeyNonceObject, MapObject, Object, RawVal,
+    ScValObject, StringObject, Symbol, SymbolObject, SymbolSmall, SymbolSmallIter, SymbolStr,
     TimepointObject, TimepointSmall, TimepointVal, U128Object, U128Small, U128Val, U256Object,
     U256Small, U256Val, U32Val, U64Object, U64Small, U64Val, VecObject, Void, I256, U256,
 };
@@ -171,7 +171,7 @@ impl MeteredClone for I256Val {}
 impl MeteredClone for I256Small {}
 impl MeteredClone for I256Object {}
 impl MeteredClone for Object {}
-impl MeteredClone for Status {}
+impl MeteredClone for Error {}
 impl MeteredClone for StringObject {}
 impl MeteredClone for Symbol {}
 impl MeteredClone for SymbolSmall {}
@@ -211,7 +211,6 @@ impl MeteredClone for LiquidityPoolEntry {}
 impl MeteredClone for ContractCodeEntry {}
 impl MeteredClone for ConfigSettingEntry {}
 impl MeteredClone for AccessType {}
-impl MeteredClone for DebugArg {}
 impl MeteredClone for InternalContractEvent {}
 // composite types
 impl<T> MeteredClone for Rc<T> {}
@@ -238,7 +237,9 @@ impl MeteredClone for ScVal {
         match self {
             ScVal::Vec(Some(v)) => ScVec::charge_for_substructure(v, budget),
             ScVal::Map(Some(m)) => ScMap::charge_for_substructure(m, budget),
-            ScVal::Vec(None) | ScVal::Map(None) => Err(ScHostValErrorCode::MissingObject.into()),
+            ScVal::Vec(None) | ScVal::Map(None) => {
+                Err((ScErrorType::Value, ScErrorCode::MissingValue).into())
+            }
             ScVal::Bytes(b) => BytesM::charge_for_substructure(b, budget),
             ScVal::String(s) => StringM::charge_for_substructure(s, budget),
             ScVal::Symbol(s) => StringM::charge_for_substructure(s, budget),
@@ -251,7 +252,7 @@ impl MeteredClone for ScVal {
             | ScVal::Address(_)
             | ScVal::U32(_)
             | ScVal::I32(_)
-            | ScVal::Status(_)
+            | ScVal::Error(_)
             | ScVal::Bool(_)
             | ScVal::Void
             | ScVal::Timepoint(_)
@@ -374,23 +375,6 @@ impl<C: MeteredClone> MeteredClone for Option<C> {
     }
 }
 
-impl MeteredClone for DebugEvent {
-    const IS_SHALLOW: bool = false;
-
-    fn charge_for_substructure(&self, budget: &Budget) -> Result<(), HostError> {
-        if self.args.is_heap() {
-            // equivalent to charging for a `Vec` clone except we already know there is no
-            // substructure. `TinyVec` doesn't let us retrieve the `Vec` directly.
-            charge_heap_alloc::<Vec<DebugArg>>(self.args.len() as u64, budget)?;
-            charge_shallow_copy::<Vec<DebugArg>>(self.args.len() as u64, budget)
-        } else {
-            // equivalent to charging for a slice clone.
-            // Here the size is limited to the `tiny_vec`'s limit we defined.
-            DebugArg::bulk_charge_for_substructure(self.args.as_slice(), budget)
-        }
-    }
-}
-
 impl MeteredClone for ContractEvent {
     const IS_SHALLOW: bool = false;
 
@@ -407,8 +391,10 @@ impl MeteredClone for HostEvent {
     fn charge_for_substructure(&self, budget: &Budget) -> Result<(), HostError> {
         match &self.event {
             Event::Contract(c) => c.charge_for_substructure(budget),
-            Event::Debug(d) => d.charge_for_substructure(budget),
-            Event::StructuredDebug(_) => Err(ScUnknownErrorCode::General.into()), // StructuredDEbug events shouldn't be metered
+            // StructuredDebug events shouldn't be metered
+            Event::StructuredDebug(_) => {
+                Err((ScErrorType::Events, ScErrorCode::InvalidAction).into())
+            }
         }
     }
 }
@@ -427,8 +413,9 @@ impl MeteredClone for InternalEvent {
     fn charge_for_substructure(&self, budget: &Budget) -> Result<(), HostError> {
         match self {
             InternalEvent::Contract(c) => c.charge_for_substructure(budget),
-            InternalEvent::Debug(d) => d.charge_for_substructure(budget),
-            InternalEvent::StructuredDebug(_) => Err(ScUnknownErrorCode::General.into()),
+            InternalEvent::StructuredDebug(_) => {
+                Err((ScErrorType::Events, ScErrorCode::InvalidAction).into())
+            }
         }
     }
 }

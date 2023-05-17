@@ -3,7 +3,7 @@ use core::cmp::Ordering;
 use soroban_env_common::{xdr::ScVal, Compare, U32Val, VecObject};
 
 use crate::{
-    xdr::{ScHostFnErrorCode, ScHostObjErrorCode},
+    xdr::{ScErrorCode, ScErrorType},
     Env, Host, HostError, Object, RawVal, RawValConvertible,
 };
 
@@ -32,11 +32,11 @@ fn vec_new_with_capacity() -> Result<(), HostError> {
     let host = Host::default();
     host.vec_new(RawVal::from_void().to_raw())?;
     host.vec_new(5_u32.into())?;
-    let code = ScHostFnErrorCode::InputArgsWrongType;
+    let code = (ScErrorType::Value, ScErrorCode::UnexpectedType);
     let res = host.vec_new(5_i32.into());
-    assert!(HostError::result_matches_err_status(res, code));
+    assert!(HostError::result_matches_err(res, code));
     let res = host.vec_new(RawVal::from_bool(true).to_raw());
-    assert!(HostError::result_matches_err_status(res, code));
+    assert!(HostError::result_matches_err(res, code));
     Ok(())
 }
 
@@ -56,8 +56,8 @@ fn empty_vec_front() -> Result<(), HostError> {
     let host = Host::default();
     let obj = host.test_vec_obj::<u32>(&[])?;
     let res = host.vec_front(obj);
-    let code = ScHostObjErrorCode::VecIndexOutOfBound;
-    assert!(HostError::result_matches_err_status(res, code));
+    let code = (ScErrorType::Object, ScErrorCode::IndexBounds);
+    assert!(HostError::result_matches_err(res, code));
     Ok(())
 }
 
@@ -66,8 +66,8 @@ fn empty_vec_back() -> Result<(), HostError> {
     let host = Host::default();
     let obj = host.test_vec_obj::<u32>(&[])?;
     let res = host.vec_back(obj);
-    let code = ScHostObjErrorCode::VecIndexOutOfBound;
-    assert!(HostError::result_matches_err_status(res, code));
+    let code = (ScErrorType::Object, ScErrorCode::IndexBounds);
+    assert!(HostError::result_matches_err(res, code));
     Ok(())
 }
 
@@ -107,8 +107,8 @@ fn vec_pop_empty_vec() -> Result<(), HostError> {
     let host = Host::default();
     let obj = host.test_vec_obj::<u32>(&[])?;
     let res = host.vec_pop_back(obj);
-    let code = ScHostObjErrorCode::VecIndexOutOfBound;
-    assert!(HostError::result_matches_err_status(res, code));
+    let code = (ScErrorType::Object, ScErrorCode::IndexBounds);
+    assert!(HostError::result_matches_err(res, code));
     Ok(())
 }
 
@@ -127,8 +127,8 @@ fn vec_push_pop_front() -> Result<(), HostError> {
     vec = host.vec_pop_front(vec)?;
     vec = host.vec_pop_front(vec)?;
     let res = host.vec_pop_front(vec);
-    let code = ScHostObjErrorCode::VecIndexOutOfBound;
-    assert!(HostError::result_matches_err_status(res, code));
+    let code = (ScErrorType::Object, ScErrorCode::IndexBounds);
+    assert!(HostError::result_matches_err(res, code));
     Ok(())
 }
 
@@ -137,8 +137,8 @@ fn vec_get_out_of_bound() -> Result<(), HostError> {
     let host = Host::default();
     let obj = host.test_vec_obj::<u32>(&[1, 2, 3])?;
     let res = host.vec_get(obj, 3_u32.into());
-    let code = ScHostObjErrorCode::VecIndexOutOfBound;
-    assert!(HostError::result_matches_err_status(res, code));
+    let code = (ScErrorType::Object, ScErrorCode::IndexBounds);
+    assert!(HostError::result_matches_err(res, code));
     Ok(())
 }
 
@@ -157,8 +157,8 @@ fn vec_del_out_of_bound() -> Result<(), HostError> {
     let host = Host::default();
     let obj = host.test_vec_obj::<u32>(&[1, 2, 3])?;
     let res = host.vec_del(obj, 3_u32.into());
-    let code = ScHostObjErrorCode::VecIndexOutOfBound;
-    assert!(HostError::result_matches_err_status(res, code));
+    let code = (ScErrorType::Object, ScErrorCode::IndexBounds);
+    assert!(HostError::result_matches_err(res, code));
     Ok(())
 }
 
@@ -193,8 +193,8 @@ fn vec_slice_start_greater_than_end() -> Result<(), HostError> {
     let host = Host::default();
     let obj = host.test_vec_obj::<u32>(&[1, 2, 3])?;
     let res = host.vec_slice(obj, 2_u32.into(), 1_u32.into());
-    let code = ScHostFnErrorCode::InputArgsInvalid;
-    assert!(HostError::result_matches_err_status(res, code));
+    let code = (ScErrorType::Object, ScErrorCode::InvalidInput);
+    assert!(HostError::result_matches_err(res, code));
     Ok(())
 }
 
@@ -203,8 +203,8 @@ fn vec_slice_start_out_of_bound() -> Result<(), HostError> {
     let host = Host::default();
     let obj = host.test_vec_obj::<u32>(&[1, 2, 3])?;
     let res = host.vec_slice(obj, 0_u32.into(), 4_u32.into());
-    let code = ScHostObjErrorCode::VecIndexOutOfBound;
-    assert!(HostError::result_matches_err_status(res, code));
+    let code = (ScErrorType::Object, ScErrorCode::IndexBounds);
+    assert!(HostError::result_matches_err(res, code));
     Ok(())
 }
 
@@ -213,8 +213,8 @@ fn vec_slice_end_out_of_bound() -> Result<(), HostError> {
     let host = Host::default();
     let obj = host.test_vec_obj::<u32>(&[1, 2, 3])?;
     let res = host.vec_slice(obj, 0_u32.into(), 4_u32.into());
-    let code = ScHostObjErrorCode::VecIndexOutOfBound;
-    assert!(HostError::result_matches_err_status(res, code));
+    let code = (ScErrorType::Object, ScErrorCode::IndexBounds);
+    assert!(HostError::result_matches_err(res, code));
     Ok(())
 }
 
@@ -237,8 +237,8 @@ fn vec_insert_out_of_bound() -> Result<(), HostError> {
     let host = Host::default();
     let obj = host.test_vec_obj::<u32>(&[1, 2, 3])?;
     let res = host.vec_insert(obj, 4_u32.into(), 9u32.into());
-    let code = ScHostObjErrorCode::VecIndexOutOfBound;
-    assert!(HostError::result_matches_err_status(res, code));
+    let code = (ScErrorType::Object, ScErrorCode::IndexBounds);
+    assert!(HostError::result_matches_err(res, code));
     Ok(())
 }
 

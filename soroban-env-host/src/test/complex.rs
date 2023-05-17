@@ -6,13 +6,13 @@ use crate::{
     xdr::Hash,
     Host, HostError, MeteredOrdMap, Vm,
 };
-use soroban_env_common::xdr::{LedgerEntry, LedgerKey, ScHostStorageErrorCode, ScVec};
+use soroban_env_common::xdr::{LedgerEntry, LedgerKey, ScErrorCode, ScErrorType, ScVec};
 use soroban_test_wasms::COMPLEX;
 
 struct EmptySnap;
 impl SnapshotSource for EmptySnap {
     fn get(&self, _key: &Rc<LedgerKey>) -> Result<Rc<LedgerEntry>, HostError> {
-        Err(ScHostStorageErrorCode::AccessToUnknownEntry.into())
+        Err((ScErrorType::Storage, ScErrorCode::MissingValue).into())
     }
 
     fn has(&self, _key: &Rc<LedgerKey>) -> Result<bool, HostError> {

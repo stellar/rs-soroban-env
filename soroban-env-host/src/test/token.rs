@@ -23,7 +23,7 @@ use soroban_env_common::{
     xdr::{self, AccountFlags, ScAddress, ScVal, ScVec},
     xdr::{
         AccountId, AlphaNum12, AlphaNum4, Asset, AssetCode12, AssetCode4, Hash, HostFunctionType,
-        LedgerEntryData, LedgerKey, Liabilities, PublicKey, ScHostAuthErrorCode, ScStatusType,
+        LedgerEntryData, LedgerKey, Liabilities, PublicKey, ScErrorCode, ScErrorType,
         TrustLineEntry, TrustLineEntryExt, TrustLineEntryV1, TrustLineEntryV1Ext, TrustLineFlags,
     },
     EnvBase, RawVal,
@@ -297,8 +297,8 @@ impl TokenTest {
 }
 
 fn to_contract_err(e: HostError) -> ContractError {
-    assert!(e.status.is_type(ScStatusType::ContractError));
-    num_traits::FromPrimitive::from_u32(e.status.get_code()).unwrap()
+    assert!(e.error.is_type(ScErrorType::Contract));
+    num_traits::FromPrimitive::from_u32(e.error.get_code()).unwrap()
 }
 
 #[test]
@@ -1014,40 +1014,40 @@ fn test_set_admin() {
             .set_admin(&admin, new_admin.address(&test.host),)
             .err()
             .unwrap()
-            .status,
-        ScHostAuthErrorCode::NotAuthorized.into()
+            .error,
+        (ScErrorType::Auth, ScErrorCode::InvalidAction).into()
     );
     assert_eq!(
         token
             .mint(&admin, new_admin.address(&test.host), 1)
             .err()
             .unwrap()
-            .status,
-        ScHostAuthErrorCode::NotAuthorized.into()
+            .error,
+        (ScErrorType::Auth, ScErrorCode::InvalidAction).into()
     );
     assert_eq!(
         token
             .clawback(&admin, new_admin.address(&test.host), 1)
             .err()
             .unwrap()
-            .status,
-        ScHostAuthErrorCode::NotAuthorized.into()
+            .error,
+        (ScErrorType::Auth, ScErrorCode::InvalidAction).into()
     );
     assert_eq!(
         token
             .set_authorized(&admin, new_admin.address(&test.host), false,)
             .err()
             .unwrap()
-            .status,
-        ScHostAuthErrorCode::NotAuthorized.into()
+            .error,
+        (ScErrorType::Auth, ScErrorCode::InvalidAction).into()
     );
     assert_eq!(
         token
             .set_authorized(&admin, new_admin.address(&test.host), true)
             .err()
             .unwrap()
-            .status,
-        ScHostAuthErrorCode::NotAuthorized.into()
+            .error,
+        (ScErrorType::Auth, ScErrorCode::InvalidAction).into()
     );
 
     // The admin functions are now available to the new admin.
@@ -1336,8 +1336,8 @@ fn test_account_invoker_auth_with_issuer_admin() {
         })
         .err()
         .unwrap()
-        .status,
-        ScHostAuthErrorCode::NotAuthorized.into()
+        .error,
+        (ScErrorType::Auth, ScErrorCode::InvalidAction).into()
     );
     // Invoke a transaction with non-matching address - this will fail in host
     // due to invoker mismatching with admin.
@@ -1390,8 +1390,8 @@ fn test_account_invoker_auth_with_issuer_admin() {
         })
         .err()
         .unwrap()
-        .status,
-        ScHostAuthErrorCode::NotAuthorized.into()
+        .error,
+        (ScErrorType::Auth, ScErrorCode::InvalidAction).into()
     );
 }
 
@@ -1442,8 +1442,8 @@ fn test_contract_invoker_auth() {
         })
         .err()
         .unwrap()
-        .status,
-        ScHostAuthErrorCode::NotAuthorized.into()
+        .error,
+        (ScErrorType::Auth, ScErrorCode::InvalidAction).into()
     );
 
     // Also don't allow an incorrect contract invoker (not a contract error, should
@@ -1476,8 +1476,8 @@ fn test_contract_invoker_auth() {
         })
         .err()
         .unwrap()
-        .status,
-        ScHostAuthErrorCode::NotAuthorized.into()
+        .error,
+        (ScErrorType::Auth, ScErrorCode::InvalidAction).into()
     );
 }
 

@@ -1,16 +1,18 @@
+use soroban_env_common::xdr::{ScErrorCode, ScErrorType};
+
 use crate::{
     auth::AuthorizationManagerSnapshot,
-    events::DebugError,
+    err,
     storage::StorageMap,
     xdr::{
         ContractCostType, Hash, HostFunction, HostFunctionArgs, HostFunctionType,
-        ScContractExecutable, ScHostContextErrorCode, ScHostFnErrorCode, ScVal,
+        ScContractExecutable, ScVal,
     },
-    BytesObject, Host, HostError, RawVal, Status, Symbol, SymbolStr, TryFromVal, TryIntoVal,
+    BytesObject, Error, Host, HostError, RawVal, Symbol, SymbolStr, TryFromVal, TryIntoVal,
 };
 
 #[cfg(any(test, feature = "testutils"))]
-use crate::{events::DebugEvent, host::testutils, xdr::ScUnknownErrorCode};
+use crate::host::testutils;
 #[cfg(any(test, feature = "testutils"))]
 use core::cell::RefCell;
 use std::rc::Rc;
@@ -56,7 +58,7 @@ pub struct TestContractFrame {
     pub id: Hash,
     pub func: Symbol,
     pub args: Vec<RawVal>,
-    pub(super) panic: Rc<RefCell<Option<Status>>>,
+    pub(super) panic: Rc<RefCell<Option<Error>>>,
 }
 
 #[cfg(any(test, feature = "testutils"))]
@@ -171,12 +173,14 @@ impl Host {
     where
         F: FnOnce(&Frame) -> Result<U, HostError>,
     {
-        f(self
-            .0
-            .context
-            .borrow()
-            .last()
-            .ok_or_else(|| self.err(DebugError::new(ScHostContextErrorCode::NoContractRunning)))?)
+        f(self.0.context.borrow().last().ok_or_else(|| {
+            self.err(
+                ScErrorType::Context,
+                ScErrorCode::MissingValue,
+                "no contract running",
+                &[],
+            )
+        })?)
     }
 
     /// Same as [`Self::with_current_frame`] but passes `None` when there is no current
@@ -202,18 +206,14 @@ impl Host {
         let start_depth = self.0.context.borrow().len();
         let rp = self.push_frame(frame)?;
         let res = f();
-        let res = match res {
-            Ok(v) if v.is::<Status>() => {
-                let st: Status = v.try_into()?;
-                if st.is_ok() {
-                    // Transform Status::OK => Ok(())
-                    Ok(RawVal::VOID.into())
-                } else {
-                    // All other Status::N => Err(N)
-                    Err(self.err_status(st))
-                }
+        let res = if let Ok(v) = res {
+            if let Ok(err) = Error::try_from(v) {
+                Err(self.error(err, "escalating Ok(Error) frame-exit to Err(Error)", &[]))
+            } else {
+                Ok(v)
             }
-            res => res,
+        } else {
+            res
         };
         if res.is_err() {
             // Pop and rollback on error.
@@ -248,7 +248,12 @@ impl Host {
         if let Some(id) = self.get_current_contract_id_opt_internal()? {
             Ok(id)
         } else {
-            Err(self.err_general("Current context has no contract ID"))
+            Err(self.err(
+                ScErrorType::Context,
+                ScErrorCode::MissingValue,
+                "Current context has no contract ID",
+                &[],
+            ))
         }
     }
 
@@ -258,12 +263,22 @@ impl Host {
         let hash = match frames.as_slice() {
             [.., f2, _] => match f2 {
                 Frame::ContractVM(vm, _, _) => Ok(vm.contract_id.metered_clone(&self.0.budget)?),
-                Frame::HostFunction(_) => Err(self.err_general("invoker is not a contract")),
+                Frame::HostFunction(_) => Err(self.err(
+                    ScErrorType::Context,
+                    ScErrorCode::UnexpectedType,
+                    "invoker is not a contract",
+                    &[],
+                )),
                 Frame::Token(id, _, _) => Ok(id.clone()),
                 #[cfg(any(test, feature = "testutils"))]
                 Frame::TestContract(tc) => Ok(tc.id.clone()), // no metering
             },
-            _ => Err(self.err_general("no frames to derive the invoker from")),
+            _ => Err(self.err(
+                ScErrorType::Context,
+                ScErrorCode::MissingValue,
+                "no frames to derive the invoker from",
+                &[],
+            )),
         }?;
         Ok(hash)
     }
@@ -344,9 +359,11 @@ impl Host {
                 .as_str()
                 .starts_with(RESERVED_CONTRACT_FN_PREFIX)
         {
-            return Err(self.err_status_msg(
-                ScHostContextErrorCode::UnknownError,
+            return Err(self.err(
+                ScErrorType::Context,
+                ScErrorCode::InvalidAction,
                 "can't invoke a reserved function directly",
+                &[func.to_raw()],
             ));
         }
         if !matches!(reentry_mode, ContractReentryMode::Allowed) {
@@ -366,10 +383,11 @@ impl Host {
                         is_last_non_host_frame = false;
                         continue;
                     }
-                    return Err(self.err_status_msg(
-                        // TODO: proper error code
-                        ScHostContextErrorCode::UnknownError,
+                    return Err(self.err(
+                        ScErrorType::Context,
+                        ScErrorCode::InvalidAction,
                         "Contract re-entry is not allowed",
+                        &[],
                     ));
                 }
                 is_last_non_host_frame = false;
@@ -415,45 +433,54 @@ impl Host {
                     // building a host for production use, so we're willing to
                     // be a bit forgiving.
                     let closure = AssertUnwindSafe(move || cfs.call(&func, self, args));
-                    let res: Result<Option<RawVal>, PanicVal> = testutils::call_with_suppressed_panic_hook(closure);
+                    let res: Result<Option<RawVal>, PanicVal> =
+                        testutils::call_with_suppressed_panic_hook(closure);
                     match res {
                         Ok(Some(rawval)) => {
                             self.fn_return_diagnostics(id, &func, &rawval)?;
                             Ok(rawval)
-                        },
+                        }
                         Ok(None) => Err(self.err(
-                            DebugError::general()
-                                .msg("error '{}': calling unknown contract function '{}'")
-                                .arg::<RawVal>(func.into()),
+                            ScErrorType::Context,
+                            ScErrorCode::MissingValue,
+                            "calling unknown contract function",
+                            &[func.to_raw()],
                         )),
                         Err(panic_payload) => {
                             // Return an error indicating the contract function
                             // panicked. If if was a panic generated by a
                             // Env-upgraded HostError, it had its status
                             // captured by VmCallerEnv::escalate_error_to_panic:
-                            // fish the Status stored in the frame back out and
+                            // fish the Error stored in the frame back out and
                             // propagate it.
                             let func: RawVal = func.into();
-                            let mut status: Status = ScUnknownErrorCode::General.into();
-                            let mut event = DebugEvent::new().msg("caught panic from contract function '{}'").arg(func);
+                            let mut error: Error = Error::from_type_and_code(
+                                ScErrorType::Context,
+                                ScErrorCode::InternalError,
+                            );
 
-                            if let Some(st) = *panic.borrow() {
-                                status = st;
-                                event = DebugEvent::new().msg("caught panic from contract function '{}', propagating escalated error '{}'").arg(func).arg(st.to_raw());
+                            if let Some(err) = *panic.borrow() {
+                                error = err;
                             }
-                            // If we're allowed to record dynamic strings (which happens 
+                            // If we're allowed to record dynamic strings (which happens
                             // when diagnostics are active), also log the panic payload into
                             // the Debug buffer.
                             else if self.is_debug() {
                                 if let Some(str) = panic_payload.downcast_ref::<&str>() {
-                                    let msg: String = format!("caught panic '{}' from contract function '{:?}'", str, func);
-                                    event = DebugEvent::new().msg(msg);
+                                    let msg: String = format!(
+                                        "caught panic '{}' from contract function '{:?}'",
+                                        str, func
+                                    );
+                                    let _ = self.debug_diagnostics(&msg, args);
                                 } else if let Some(str) = panic_payload.downcast_ref::<String>() {
-                                    let msg: String = format!("caught panic '{}' from contract function '{:?}'", str, func);
-                                    event = DebugEvent::new().msg(msg);
+                                    let msg: String = format!(
+                                        "caught panic '{}' from contract function '{:?}'",
+                                        str, func
+                                    );
+                                    let _ = self.debug_diagnostics(&msg, args);
                                 }
                             }
-                            Err(self.err(DebugError{event, status}))
+                            Err(self.error(error, "caught error from function", &[]))
                         }
                     }
                 });
@@ -489,9 +516,11 @@ impl Host {
                         self.call_n(object, symbol, &args[..], ContractReentryMode::Prohibited)
                     })
                 } else {
-                    Err(self.err_status_msg(
-                        ScHostFnErrorCode::InputArgsWrongLength,
-                        "unexpected arguments to 'call' host function",
+                    Err(err!(
+                        self,
+                        (ScErrorType::Context, ScErrorCode::UnexpectedSize),
+                        "unexpected number of arguments to 'call' host function",
+                        args.len()
                     ))
                 }
             }
