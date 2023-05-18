@@ -1,13 +1,16 @@
 use std::rc::Rc;
 
 use soroban_env_common::{
-    xdr::{ContractEventType, Hash},
+    xdr::{ContractEventType, Hash, ScBytes, ScString, ScVal, StringM},
     Error, Symbol, SymbolSmall, VecObject,
 };
 
 use crate::{budget::AsBudget, host::Frame, Host, HostError, RawVal};
 
-use super::{internal::InternalDiagnosticEvent, InternalEvent, InternalEventsBuffer};
+use super::{
+    internal::{InternalDiagnosticArg, InternalDiagnosticEvent},
+    InternalEvent, InternalEventsBuffer,
+};
 
 #[derive(Clone, Default)]
 pub enum DiagnosticLevel {
@@ -38,21 +41,19 @@ impl Host {
         Ok(())
     }
 
-    pub(crate) fn record_system_debug_contract_event(
+    pub(crate) fn record_diagnostic_event(
         &self,
         contract_id: Option<Hash>,
-        topics: Vec<RawVal>,
-        msg: Option<String>,
-        data: Vec<RawVal>,
+        topics: Vec<InternalDiagnosticArg>,
+        args: Vec<InternalDiagnosticArg>,
     ) -> Result<(), HostError> {
         let de = Rc::new(InternalDiagnosticEvent {
             contract_id,
             topics,
-            msg,
-            data,
+            args,
         });
         self.with_events_mut(|events| {
-            Ok(events.record(InternalEvent::StructuredDebug(de), self.as_budget()))
+            Ok(events.record(InternalEvent::Diagnostic(de), self.as_budget()))
         })?
     }
 
@@ -68,20 +69,19 @@ impl Host {
         })
     }
 
-    pub fn debug_diagnostics(&self, msg: &str, args: &[RawVal]) -> Result<(), HostError> {
+    pub fn log_diagnostics(&self, msg: &str, args: &[RawVal]) -> Result<(), HostError> {
         if !self.is_debug() {
             return Ok(());
         }
         let calling_contract = self.get_current_contract_id_unmetered()?;
         self.as_budget().with_free_budget(|| {
-            let debug_sym: SymbolSmall = SymbolSmall::try_from_str("debug")?;
-            let topics: Vec<RawVal> = vec![debug_sym.to_raw()];
-            self.record_system_debug_contract_event(
-                calling_contract,
-                topics,
-                Some(msg.to_string()),
-                args.to_vec(),
-            )
+            let log_sym = SymbolSmall::try_from_str("log")?;
+            let topics = vec![InternalDiagnosticArg::HostVal(log_sym.to_raw())];
+            let msg = ScVal::String(ScString::from(StringM::try_from(msg.as_bytes().to_vec())?));
+            let args: Vec<_> = std::iter::once(InternalDiagnosticArg::XdrVal(msg))
+                .chain(args.iter().map(|rv| InternalDiagnosticArg::HostVal(*rv)))
+                .collect();
+            self.record_diagnostic_event(calling_contract, topics, args)
         })
     }
 
@@ -97,9 +97,16 @@ impl Host {
         }
 
         self.as_budget().with_free_budget(|| {
-            let error_sym: SymbolSmall = SymbolSmall::try_from_str("error")?;
+            let error_sym = SymbolSmall::try_from_str("error")?;
             let contract_id = self.get_current_contract_id_unmetered()?;
-            let topics: Vec<RawVal> = vec![error_sym.to_raw(), error.to_raw()];
+            let topics = vec![
+                InternalDiagnosticArg::HostVal(error_sym.to_raw()),
+                InternalDiagnosticArg::HostVal(error.to_raw()),
+            ];
+            let msg = ScVal::String(ScString::from(StringM::try_from(msg.as_bytes().to_vec())?));
+            let args: Vec<_> = std::iter::once(InternalDiagnosticArg::XdrVal(msg))
+                .chain(args.iter().map(|rv| InternalDiagnosticArg::HostVal(*rv)))
+                .collect();
 
             // We do the event-recording ourselves here rather than calling
             // self.record_system_debug_contract_event because we can/should
@@ -108,10 +115,9 @@ impl Host {
             let ce = Rc::new(InternalDiagnosticEvent {
                 contract_id,
                 topics,
-                msg: Some(msg.to_string()),
-                data: args.to_vec(),
+                args,
             });
-            events.record(InternalEvent::StructuredDebug(ce), self.as_budget())
+            events.record(InternalEvent::Diagnostic(ce), self.as_budget())
         })
     }
 
@@ -131,21 +137,24 @@ impl Host {
         let calling_contract = self.get_current_contract_id_unmetered()?;
 
         self.as_budget().with_free_budget(|| {
-            let topics: Vec<RawVal> =
-                vec![SymbolSmall::try_from_str("fn_call")?.into(), func.into()];
-
-            let msg = format!("called contract: {}", called_contract_id);
-
-            self.record_system_debug_contract_event(
+            let topics = vec![
+                InternalDiagnosticArg::HostVal(SymbolSmall::try_from_str("fn_call")?.into()),
+                InternalDiagnosticArg::XdrVal(ScVal::Bytes(ScBytes::try_from(
+                    called_contract_id.as_slice().to_vec(),
+                )?)),
+                InternalDiagnosticArg::HostVal(func.into()),
+            ];
+            self.record_diagnostic_event(
                 calling_contract,
                 topics,
-                Some(msg),
-                args.to_vec(),
+                args.iter()
+                    .map(|rv| InternalDiagnosticArg::HostVal(*rv))
+                    .collect(),
             )
         })
     }
 
-    // Emits an event with topic = ["fn_return", contract_id, function_name] and
+    // Emits an event with topic = ["fn_return", function_name] and
     // data = [return_val]
     pub fn fn_return_diagnostics(
         &self,
@@ -158,14 +167,15 @@ impl Host {
         }
 
         self.as_budget().with_free_budget(|| {
-            let topics: Vec<RawVal> =
-                vec![SymbolSmall::try_from_str("fn_return")?.into(), func.into()];
+            let topics = vec![
+                InternalDiagnosticArg::HostVal(SymbolSmall::try_from_str("fn_return")?.into()),
+                InternalDiagnosticArg::HostVal(func.into()),
+            ];
 
-            self.record_system_debug_contract_event(
+            self.record_diagnostic_event(
                 Some(contract_id.clone()),
                 topics,
-                None,
-                vec![*res],
+                vec![InternalDiagnosticArg::HostVal(*res)],
             )
         })
     }

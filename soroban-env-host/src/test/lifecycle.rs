@@ -1,4 +1,3 @@
-use crate::events::{Event, HostEvent};
 use crate::native_contract::testutils::HostVec;
 use crate::{
     budget::{AsBudget, Budget},
@@ -314,13 +313,10 @@ fn test_contract_wasm_update() {
         )
         .unwrap();
     match events.last() {
-        Some(HostEvent {
-            event: Event::Contract(ce),
-            failed_call: _,
-        }) => {
+        Some(he) => {
             assert_eq!(
-                ce,
-                &ContractEvent {
+                he.event,
+                ContractEvent {
                     ext: ExtensionPoint::V0,
                     contract_id: Some(contract_id),
                     type_: ContractEventType::System,

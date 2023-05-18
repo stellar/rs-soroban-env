@@ -283,10 +283,14 @@ impl Host {
             true,
         );
         if let Err(e) = &res {
-            self.debug_diagnostics(
-                "check auth invocation for a custom account contract resulted in error",
-                &[e.error.into()],
-            )?;
+            self.with_events_mut(|events| {
+                self.err_diagnostics(
+                    events,
+                    e.error,
+                    "check auth invocation for a custom account contract failed",
+                    &[],
+                )
+            })?;
         }
         res
     }
@@ -843,7 +847,7 @@ impl EnvBase for Host {
     }
 
     fn log_from_slice(&self, msg: &str, vals: &[RawVal]) -> Result<Void, HostError> {
-        self.debug_diagnostics(msg, vals).map(|_| Void::from(()))
+        self.log_diagnostics(msg, vals).map(|_| Void::from(()))
     }
 }
 
@@ -876,7 +880,7 @@ impl VmCallerEnv for Host {
                     |buf| RawVal::from_payload(u64::from_le_bytes(*buf)),
                 )?;
 
-                self.debug_diagnostics(&msg, &vals)
+                self.log_diagnostics(&msg, &vals)
             })?;
         }
         Ok(RawVal::VOID)
@@ -1787,10 +1791,14 @@ impl VmCallerEnv for Host {
             ContractReentryMode::Prohibited,
         );
         if let Err(e) = &res {
-            self.debug_diagnostics(
-                "contract call resulted in error",
-                &[func.to_raw(), args.to_raw(), e.error.to_raw()],
-            )?;
+            self.with_events_mut(|events| {
+                self.err_diagnostics(
+                    events,
+                    e.error,
+                    "contract call failed",
+                    &[func.to_raw(), args.to_raw()],
+                )
+            })?;
         }
         res
     }
@@ -1817,10 +1825,14 @@ impl VmCallerEnv for Host {
         match res {
             Ok(rv) => Ok(rv),
             Err(e) => {
-                self.debug_diagnostics(
-                    "contract try_call resulted in error",
-                    &[func.to_raw(), args.to_raw(), e.error.to_raw()],
-                )?;
+                self.with_events_mut(|events| {
+                    self.err_diagnostics(
+                        events,
+                        e.error,
+                        "contract try_call failed",
+                        &[func.to_raw(), args.to_raw()],
+                    )
+                })?;
                 Ok(e.error.to_raw())
             }
         }

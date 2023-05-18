@@ -78,10 +78,10 @@ impl Debug for HostError {
                     writeln!(f, "Event log (newest first):")?;
                     wrote_heading = true;
                 }
-                writeln!(f, "   {:?}: {}", i, e.event)?;
+                writeln!(f, "   {}: {}", i, e)?;
             }
             if info.events.0.len() > MAX_EVENTS {
-                writeln!(f, "   {:?}: ... elided ...", MAX_EVENTS)?;
+                writeln!(f, "   {}: ... elided ...", MAX_EVENTS)?;
             }
             writeln!(f)?;
             writeln!(f, "Backtrace (newest first):")?;

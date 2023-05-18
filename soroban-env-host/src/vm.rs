@@ -293,7 +293,7 @@ impl Vm {
                         wasmi::Error::Trap(trap) if trap.is_host() => {
                             if let Some(he) = trap.into_host() {
                                 if let Ok(he) = he.downcast::<HostError>() {
-                                    host.debug_diagnostics(
+                                    host.log_diagnostics(
                                         "VM call trapped with HostError",
                                         &[func_sym.to_raw(), he.error.to_raw()],
                                     )?;

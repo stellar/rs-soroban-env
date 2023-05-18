@@ -471,13 +471,13 @@ impl Host {
                                         "caught panic '{}' from contract function '{:?}'",
                                         str, func
                                     );
-                                    let _ = self.debug_diagnostics(&msg, args);
+                                    let _ = self.log_diagnostics(&msg, args);
                                 } else if let Some(str) = panic_payload.downcast_ref::<String>() {
                                     let msg: String = format!(
                                         "caught panic '{}' from contract function '{:?}'",
                                         str, func
                                     );
-                                    let _ = self.debug_diagnostics(&msg, args);
+                                    let _ = self.log_diagnostics(&msg, args);
                                 }
                             }
                             Err(self.error(error, "caught error from function", &[]))
