@@ -1,10 +1,10 @@
 use std::{mem, rc::Rc};
 
-use soroban_env_common::xdr::{ScErrorCode, ScErrorType};
+use soroban_env_common::xdr::{ContractEventType, ScErrorCode, ScErrorType};
 
 use crate::{
     budget::Budget,
-    events::{Event, HostEvent, InternalContractEvent, InternalEvent},
+    events::{HostEvent, InternalContractEvent, InternalEvent},
     host::Events,
     host_object::HostObject,
     storage::AccessType,
@@ -379,9 +379,15 @@ impl MeteredClone for ContractEvent {
     const IS_SHALLOW: bool = false;
 
     fn charge_for_substructure(&self, budget: &Budget) -> Result<(), HostError> {
-        let ContractEventBody::V0(event) = &self.body;
-        event.topics.charge_for_substructure(budget)?;
-        event.data.charge_for_substructure(budget)
+        if let ContractEventType::Diagnostic = self.type_ {
+            // Diagnostic events shouldn't be `metered_clone`d
+            Err((ScErrorType::Events, ScErrorCode::InternalError).into())
+        } else {
+            self.contract_id.charge_for_substructure(budget)?;
+            let ContractEventBody::V0(event) = &self.body;
+            event.topics.charge_for_substructure(budget)?;
+            event.data.charge_for_substructure(budget)
+        }
     }
 }
 
@@ -389,13 +395,7 @@ impl MeteredClone for HostEvent {
     const IS_SHALLOW: bool = false;
 
     fn charge_for_substructure(&self, budget: &Budget) -> Result<(), HostError> {
-        match &self.event {
-            Event::Contract(c) => c.charge_for_substructure(budget),
-            // StructuredDebug events shouldn't be metered
-            Event::StructuredDebug(_) => {
-                Err((ScErrorType::Events, ScErrorCode::InvalidAction).into())
-            }
-        }
+        self.event.charge_for_substructure(budget)
     }
 }
 
@@ -413,8 +413,8 @@ impl MeteredClone for InternalEvent {
     fn charge_for_substructure(&self, budget: &Budget) -> Result<(), HostError> {
         match self {
             InternalEvent::Contract(c) => c.charge_for_substructure(budget),
-            InternalEvent::StructuredDebug(_) => {
-                Err((ScErrorType::Events, ScErrorCode::InvalidAction).into())
+            InternalEvent::Diagnostic(_) => {
+                Err((ScErrorType::Events, ScErrorCode::InternalError).into())
             }
         }
     }

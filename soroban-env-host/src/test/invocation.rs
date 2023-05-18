@@ -80,9 +80,9 @@ fn invoke_cross_contract_with_err() -> Result<(), HostError> {
     let last_event: &HostEvent = events.last().unwrap();
     // run `UPDATE_EXPECT=true cargo test` to update this.
     let expected = expect![[
-        r#"[Diagnostic Event] topics:[debug], data:["contract try_call resulted in error", vec_err, [1], Error(Object,IndexBounds)]"#
+        r#"[Diagnostic Event] topics:[error, Error(Object, IndexBounds)], data:["contract try_call failed", vec_err, [1]]"#
     ]];
-    let actual = format!("{}", last_event.event);
+    let actual = format!("{}", last_event);
     expected.assert_eq(&actual);
 
     // call
@@ -94,9 +94,9 @@ fn invoke_cross_contract_with_err() -> Result<(), HostError> {
     let last_event = events.last().unwrap();
     // run `UPDATE_EXPECT=true cargo test` to update this.
     let expected = expect![[
-        r#"[Diagnostic Event] topics:[debug], data:["contract call resulted in error", vec_err, [1], Error(Object,IndexBounds)]"#
+        r#"[Diagnostic Event] topics:[error, Error(Object, IndexBounds)], data:["contract call failed", vec_err, [1]]"#
     ]];
-    let actual = format!("{}", last_event.event);
+    let actual = format!("{}", last_event);
     expected.assert_eq(&actual);
 
     Ok(())
@@ -138,9 +138,9 @@ fn invoke_cross_contract_indirect_err() -> Result<(), HostError> {
     let last_event = events.last().unwrap();
     // run `UPDATE_EXPECT=true cargo test` to update this.
     let expected = expect![[
-        r#"[Diagnostic Event] topics:[debug], data:["contract try_call resulted in error", add_with, [2147483647, 1, Bytes()], Error(WasmVm,InternalError)]"#
+        r#"[Diagnostic Event] topics:[error, Error(WasmVm, InternalError)], data:["contract try_call failed", add_with, [2147483647, 1, Bytes()]]"#
     ]];
-    let actual = format!("{}", last_event.event);
+    let actual = format!("{}", last_event);
     expected.assert_eq(&actual);
 
     // call
@@ -152,9 +152,9 @@ fn invoke_cross_contract_indirect_err() -> Result<(), HostError> {
     let last_event = events.last().unwrap();
     // run `UPDATE_EXPECT=true cargo test` to update this.
     let expected = expect![[
-        r#"[Diagnostic Event] topics:[debug], data:["contract call resulted in error", add_with, [2147483647, 1, Bytes()], Error(WasmVm,InternalError)]"#
+        r#"[Diagnostic Event] topics:[error, Error(WasmVm, InternalError)], data:["contract call failed", add_with, [2147483647, 1, Bytes()]]"#
     ]];
-    let actual = format!("{}", last_event.event);
+    let actual = format!("{}", last_event);
     expected.assert_eq(&actual);
 
     Ok(())

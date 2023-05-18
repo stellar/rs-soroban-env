@@ -14,25 +14,17 @@ use soroban_env_common::{
         ScContractExecutable::{Token, WasmRef},
         ScVal,
     },
-    RawVal, VecObject,
+    Error, RawVal, VecObject,
 };
 
 use crate::{budget::AsBudget, Host, HostError};
 
 /// The external representation of a host event.
-// TODO: optimize storage on this to use pools / bumpalo / etc.
 #[derive(Clone, Debug)]
 pub struct HostEvent {
-    pub event: Event,
+    pub event: crate::xdr::ContractEvent,
     // failed_call keeps track of if the call this event was emitted in failed
     pub failed_call: bool,
-}
-
-#[derive(Clone, Debug)]
-pub enum Event {
-    Contract(crate::xdr::ContractEvent),
-    // StructuredDebug should not affect metering
-    StructuredDebug(crate::xdr::ContractEvent),
 }
 
 fn display_address(addr: &ScAddress, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -48,7 +40,7 @@ fn display_scval(scv: &ScVal, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Resu
     match scv {
         ScVal::Bool(v) => write!(f, "{}", v),
         ScVal::Void => write!(f, "Void"),
-        ScVal::Error(e) => write!(f, "Error({},{})", e.type_, e.code),
+        ScVal::Error(e) => write!(f, "{:?}", Error::from_scerror(e.clone())),
         ScVal::U32(v) => write!(f, "{}", v),
         ScVal::I32(v) => write!(f, "{}", v),
         ScVal::U64(v) => write!(f, "{}", v),
@@ -108,18 +100,18 @@ fn display_scval(scv: &ScVal, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Resu
     }
 }
 
-impl core::fmt::Display for Event {
+impl core::fmt::Display for HostEvent {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let ce = match self {
-            Event::Contract(ce) => ce,
-            Event::StructuredDebug(ce) => ce,
-        };
-        write!(f, "[{} Event] ", ce.type_)?;
-        match &ce.contract_id {
-            None => (),
-            Some(hash) => write!(f, "contract:{} ,", *hash)?,
+        if self.failed_call {
+            write!(f, "[Failed {} Event (not emitted)] ", self.event.type_)?;
+        } else {
+            write!(f, "[{} Event] ", self.event.type_)?;
         }
-        match &ce.body {
+        match &self.event.contract_id {
+            None => (),
+            Some(hash) => write!(f, "contract:{}, ", *hash)?,
+        }
+        match &self.event.body {
             ContractEventBody::V0(ceb) => {
                 write!(f, "topics:[")?;
                 for (i, topic) in ceb.topics.0.iter().enumerate() {

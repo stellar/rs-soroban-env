@@ -49,8 +49,7 @@ fn debug_log() {
     let events = host.get_events().unwrap().0;
     let last_event = &events.last().unwrap();
     // run `UPDATE_EXPECT=true cargo test` to update this.
-    let expected =
-        expect![[r#"[Diagnostic Event] topics:[debug], data:["can't convert value", 1]"#]];
-    let actual = format!("{}", last_event.event);
+    let expected = expect![[r#"[Diagnostic Event] topics:[log], data:["can't convert value", 1]"#]];
+    let actual = format!("{}", last_event);
     expected.assert_eq(&actual);
 }

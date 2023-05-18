@@ -379,12 +379,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "dyn-fmt"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c2a0836c9bd73a9d3ca55b0effc5b1eedf96dd13ef994389bcac6d4d33c46188"
-
-[[package]]
 name = "ed25519"
 version = "1.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1138,7 +1132,6 @@ dependencies = [
  "backtrace",
  "bytes-lit",
  "curve25519-dalek",
- "dyn-fmt",
  "ed25519-dalek",
  "env_logger",
  "expect-test",
@@ -1162,7 +1155,6 @@ dependencies = [
  "tabwriter",
  "textplots",
  "thousands",
- "tinyvec",
  "tracking-allocator",
  "wasmprinter",
 ]
@@ -1429,21 +1421,6 @@ checksum = "65bb801831d812c562ae7d2bfb531f26e66e4e1f6b17307ba4149c5064710e5b"
 dependencies = [
  "time-core",
 ]
-
-[[package]]
-name = "tinyvec"
-version = "1.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "87cc5ceb3875bb20c2890005a4e226a4651264a5c75edb2421b52861a0a0cb50"
-dependencies = [
- "tinyvec_macros",
-]
-
-[[package]]
-name = "tinyvec_macros"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cda74da7e1a664f795bb1f8a87ec406fb89a02522cf6e50620d016add6dbbf5c"
 
 [[package]]
 name = "toml_datetime"

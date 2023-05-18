@@ -5,7 +5,7 @@ use soroban_env_common::{
     BytesObject, VecObject,
 };
 
-use super::{Event, Events, HostEvent};
+use super::{Events, HostEvent};
 use crate::{
     budget::{AsBudget, Budget},
     xdr,
@@ -54,12 +54,13 @@ impl InternalContractEvent {
 /// Internal representation of a structured debug message which is logically
 /// similar to an InternalContractEvent (and will project to a ContractEvent the
 /// same way when we externalize it to XDR) but internally is different: it
-/// stores "plain" rust data values -- String and Vec -- capturing the input to
-/// diagnostics, rather than interacting with the host object system. It does
-/// this for two reasons:
+/// stores "plain" rust data values -- String and Vec as well as XDR types like
+/// ScVal -- capturing the input to diagnostics, rather than interacting with
+/// the host object system. It does this for two reasons:
 ///
 ///   1. to avoid to avoid perturbing object numbering when debug-mode is
-///      enabled
+///      enabled -- this could potentially cause hosts running on watcher nodes
+///      with debug enabled to diverge from validators with debug disabled.
 ///
 ///   2. to avoid re-entering the host object management code by adding (say)
 ///      host objects for the contract ID, topics vector or such in the middle
@@ -69,26 +70,45 @@ impl InternalContractEvent {
 #[derive(Clone, Debug)]
 pub struct InternalDiagnosticEvent {
     pub contract_id: Option<crate::xdr::Hash>,
-    pub topics: Vec<RawVal>,
-    pub msg: Option<String>,
-    pub data: Vec<RawVal>,
+    pub topics: Vec<InternalDiagnosticArg>,
+    pub args: Vec<InternalDiagnosticArg>,
+}
+
+// As mentioned above, we want to support storing "plain" rust datatypes as
+// arguments to diagnostic events (in the form of ScVals), but in certain cases
+// the user will be providing an _existing_ host object reference in which case
+// we allow storing that as an argument too. We avoid eagerly converting it to
+// an ScVal to avoid wasting CPU in the standard case where nobody is going to
+// observe the event anyway.
+#[derive(Clone, Debug)]
+pub enum InternalDiagnosticArg {
+    HostVal(RawVal),
+    XdrVal(ScVal),
+}
+
+fn externalize_args(host: &Host, args: &[InternalDiagnosticArg]) -> Result<Vec<ScVal>, HostError> {
+    let mut scargs: Vec<ScVal> = Vec::new();
+    for arg in args.iter() {
+        match arg {
+            InternalDiagnosticArg::HostVal(h) => scargs.push(host.from_host_val(*h)?),
+            InternalDiagnosticArg::XdrVal(v) => scargs.push(v.clone()),
+        }
+    }
+    Ok(scargs)
 }
 
 impl InternalDiagnosticEvent {
     pub fn to_xdr(&self, host: &Host) -> Result<xdr::ContractEvent, HostError> {
-        let topics: Result<Vec<ScVal>, HostError> =
-            self.topics.iter().map(|t| host.from_host_val(*t)).collect();
-        let topics = xdr::ScVec::from(xdr::VecM::try_from(topics?)?);
-        let data: Result<Vec<ScVal>, HostError> =
-            self.data.iter().map(|d| host.from_host_val(*d)).collect();
-        let mut data = data?;
-        if let Some(msg) = &self.msg {
-            data.insert(
-                0,
-                ScVal::String(xdr::ScString::from(xdr::StringM::try_from(msg)?)),
-            );
-        }
-        let data = ScVal::Vec(Some(xdr::ScVec::from(xdr::VecM::try_from(data)?)));
+        let topics: Vec<ScVal> = externalize_args(host, &self.topics)?;
+        let topics = xdr::ScVec::from(xdr::VecM::try_from(topics)?);
+        let args = externalize_args(host, &self.args)?;
+        let data = if args.len() > 1 {
+            ScVal::Vec(Some(xdr::ScVec::from(xdr::VecM::try_from(args)?)))
+        } else if let Some(arg) = args.into_iter().next() {
+            arg
+        } else {
+            ScVal::Void
+        };
         Ok(xdr::ContractEvent {
             ext: xdr::ExtensionPoint::V0,
             contract_id: self.contract_id.clone(),
@@ -103,7 +123,7 @@ impl InternalDiagnosticEvent {
 #[derive(Clone, Debug)]
 pub enum InternalEvent {
     Contract(InternalContractEvent),
-    StructuredDebug(Rc<InternalDiagnosticEvent>),
+    Diagnostic(Rc<InternalDiagnosticEvent>),
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -144,7 +164,7 @@ impl InternalEventsBuffer {
         for e in self.vec.iter() {
             match &e.0 {
                 InternalEvent::Contract(c) => debug!("Contract event: {:?}", c),
-                InternalEvent::StructuredDebug(c) => debug!("StructuredDebug event: {:?}", c),
+                InternalEvent::Diagnostic(c) => debug!("Diagnostic event: {:?}", c),
             }
         }
         debug!("========End of events========")
@@ -159,12 +179,12 @@ impl InternalEventsBuffer {
             .iter()
             .map(|e| match &e.0 {
                 InternalEvent::Contract(c) => Ok(HostEvent {
-                    event: Event::Contract(c.to_xdr(host)?),
+                    event: c.to_xdr(host)?,
                     failed_call: e.1 == EventError::FromFailedCall,
                 }),
-                InternalEvent::StructuredDebug(c) => host.as_budget().with_free_budget(|| {
+                InternalEvent::Diagnostic(c) => host.as_budget().with_free_budget(|| {
                     Ok(HostEvent {
-                        event: Event::StructuredDebug(c.to_xdr(host)?),
+                        event: c.to_xdr(host)?,
                         failed_call: e.1 == EventError::FromFailedCall,
                     })
                 }),
