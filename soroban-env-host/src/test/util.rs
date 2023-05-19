@@ -70,7 +70,9 @@ impl Host {
         self.with_budget(|budget| {
             budget.reset_limits(cpu, mem); // something big but finite that we may exceed
             budget.reset_models();
-        });
+            Ok(())
+        })
+        .unwrap();
         self
     }
 
@@ -108,7 +110,9 @@ impl Host {
                 .mem_bytes
                 .get_cost_model_mut(ty)
                 .linear_term = lin_mem as i64;
-        });
+            Ok(())
+        })
+        .unwrap();
         self
     }
 

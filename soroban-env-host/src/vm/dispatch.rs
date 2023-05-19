@@ -1,4 +1,4 @@
-use crate::{xdr::ContractCostType, Host, HostError, VmCaller, VmCallerEnv};
+use crate::{xdr::ContractCostType, Host, HostError, Vm, VmCaller, VmCallerEnv};
 use crate::{
     AddressObject, BytesObject, Error, I128Object, I256Object, I64Object, MapObject, RawVal,
     StringObject, Symbol, SymbolObject, U128Object, U256Object, U32Val, U64Object, VecObject,
@@ -71,8 +71,13 @@ macro_rules! generate_dispatch_functions {
                     // This does not account for the actual work being done in those functions,
                     // which are accounted for individually at the operation level.
                     let host = caller.data().clone();
-                    host.charge_budget(ContractCostType::InvokeHostFunction, None)?;
                     let mut vmcaller = VmCaller(Some(caller));
+
+                    // This is where the VM -> Host boundary is crossed.
+                    // We first transfer the budget accounting to the host.
+                    Vm::apply_fuel_consumption_from_caller(&mut vmcaller)?;
+
+                    host.charge_budget(ContractCostType::InvokeHostFunction, None)?;
                     // The odd / seemingly-redundant use of `wasmi::Value` here
                     // as intermediates -- rather than just passing RawVals --
                     // has to do with the fact that some host functions are
@@ -83,8 +88,16 @@ macro_rules! generate_dispatch_functions {
                     // conversions to and from both RawVal and i64 / u64 for
                     // wasmi::Value.
                     let res: Result<_, HostError> = host.$fn_id(&mut vmcaller, $(<$type>::try_marshal_from_value(Value::I64($arg)).ok_or(BadSignature)?),*);
-                    let res: Value = match res {
-                        Ok(ok) => ok.marshal_from_self(),
+
+                    let res = match res {
+                        Ok(ok) => {
+                            let val: Value = ok.marshal_from_self();
+                            if let Value::I64(v) = val {
+                                Ok((v,))
+                            } else {
+                                Err(BadSignature.into())
+                            }
+                        },
                         Err(hosterr) => {
                             // We make a new HostError here to capture the escalation event itself.
                             let escalation: HostError =
@@ -92,14 +105,14 @@ macro_rules! generate_dispatch_functions {
                                            concat!("escalating error to VM trap from failed host function call: ",
                                                    stringify!($fn_id)), &[]);
                             let trap: Trap = escalation.into();
-                            return Err(trap)
+                            Err(trap)
                         }
                     };
-                    if let Value::I64(v) = res {
-                        Ok((v,))
-                    } else {
-                        Err(BadSignature.into())
-                    }
+
+                    // This is where the Host->VM boundary is crossed.
+                    // We supply the remaining host budget as fuel to the VM.
+                    Vm::supply_fuel_to_caller(&mut vmcaller)?;
+                    res
                 }
             )*
         )*

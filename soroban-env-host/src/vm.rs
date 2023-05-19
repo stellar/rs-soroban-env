@@ -11,7 +11,7 @@
 mod dispatch;
 mod func_info;
 
-use crate::{err, host::Frame, xdr::ContractCostType, HostError};
+use crate::{budget::AsBudget, err, host::Frame, xdr::ContractCostType, HostError, VmCaller};
 use std::{cell::RefCell, io::Cursor, rc::Rc};
 
 use super::{xdr::Hash, Host, RawVal, Symbol};
@@ -22,13 +22,18 @@ use soroban_env_common::{
     ConversionError, SymbolStr, TryIntoVal, WasmiMarshal,
 };
 
-use wasmi::{Engine, Instance, Linker, Memory, Module, Store, Value};
+use wasmi::{
+    core::Trap, errors::FuelError, Engine, FuelConsumptionMode, Func, Instance, Linker, Memory,
+    Module, Store, Value,
+};
 
 #[cfg(any(test, feature = "testutils"))]
 use soroban_env_common::{
     xdr::{ScVal, ScVec},
-    TryFromVal, VmCaller,
+    TryFromVal,
 };
+#[cfg(any(test, feature = "testutils"))]
+use wasmi::{Caller, StoreContextMut};
 
 impl wasmi::core::HostError for HostError {}
 
@@ -142,14 +147,18 @@ impl Vm {
         )?;
 
         let mut config = wasmi::Config::default();
+        let fuel_costs = host.as_budget().wasmi_fuel_costs();
 
         // Turn off all optional wasm features.
-        config.wasm_multi_value(false);
-        config.wasm_mutable_global(false);
-        config.wasm_saturating_float_to_int(false);
-        config.wasm_sign_extension(false);
-        config.floats(false);
-        config.consume_fuel(true);
+        config
+            .wasm_multi_value(false)
+            .wasm_mutable_global(false)
+            .wasm_saturating_float_to_int(false)
+            .wasm_sign_extension(false)
+            .floats(false)
+            .consume_fuel(true)
+            .fuel_consumption_mode(FuelConsumptionMode::Eager)
+            .set_fuel_costs(fuel_costs);
 
         let engine = Engine::new(&config);
         let module = host.map_err(Module::new(&engine, module_wasm_code))?;
@@ -182,11 +191,13 @@ impl Vm {
             None
         };
 
-        let store = RefCell::new(store);
+        // Here we do _not_ supply the store with any fuel. Fuel is supplied
+        // right before the VM is being run, i.e., before crossing the host->VM
+        // boundary.
         Ok(Rc::new(Self {
             contract_id,
             module,
-            store,
+            store: RefCell::new(store),
             instance,
             memory,
         }))
@@ -204,6 +215,155 @@ impl Vm {
         }
     }
 
+    // atomic transfer the cpu and memory budget from the vm to the host
+    fn supply_fuel_to_vm(self: &Rc<Self>) -> Result<(), HostError> {
+        // we check the invariant that fuel tank must be clean before we supply
+        // it with fuel.
+        assert!(
+            self.store.borrow().fuel_consumed() == Some(0)
+                && self.store.borrow().fuel_total() == Some(0)
+                && self.store.borrow().mem_fuel_consumed() == Some(0)
+                && self.store.borrow().mem_fuel_total() == Some(0)
+        );
+
+        let mut store = self.store.borrow_mut();
+        let host = store.data();
+        let (cpu, mem) = host.as_budget().get_fuels_budget()?;
+        store
+            .add_fuel(cpu)
+            .map_err(|fe| HostError::from(wasmi::Error::Store(fe)))?;
+        store
+            .add_mem_fuel(mem)
+            .map_err(|fe| wasmi::Error::Store(fe).into())
+    }
+
+    fn supply_fuel_to_caller(vmcaller: &mut VmCaller<Host>) -> Result<(), Trap> {
+        // this routine can only be called if we are in the VM mode
+        assert!(vmcaller.0.is_some());
+        let caller = vmcaller.try_mut().map_err(|e| HostError::from(e))?;
+        // we check the invariant that fuel tank must be clean before we supply
+        // it with fuel.
+        assert!(
+            caller.fuel_consumed() == Some(0)
+                && caller.fuel_total() == Some(0)
+                && caller.mem_fuel_consumed() == Some(0)
+                && caller.mem_fuel_total() == Some(0)
+        );
+        let host = caller.data().clone();
+        let (cpu, mem) = host.as_budget().get_fuels_budget()?;
+        caller
+            .add_fuel(cpu)
+            .map_err(|_| Trap::from(host.err_wasmi_fuel_metering_disabled()))?;
+        caller
+            .add_mem_fuel(mem)
+            .map_err(|_| host.err_wasmi_fuel_metering_disabled().into())
+    }
+
+    // atomic transfer the cpu and memory budget from the host to the vm
+    fn apply_fuel_consumption_to_budget(self: &Rc<Self>) -> Result<(), HostError> {
+        let mut store = self.store.borrow_mut();
+        let host = store.data();
+        let cpu = store
+            .fuel_consumed()
+            .ok_or_else(|| HostError::from(wasmi::Error::Store(FuelError::FuelMeteringDisabled)))?;
+        let mem = store
+            .mem_fuel_consumed()
+            .ok_or_else(|| HostError::from(wasmi::Error::Store(FuelError::FuelMeteringDisabled)))?;
+        host.as_budget().apply_wasmi_fuels(cpu, mem)?;
+        // we close the tab by clearing the fuel amounts in the VM
+        store
+            .reset_fuel()
+            .map_err(|fe| HostError::from(wasmi::Error::Store(fe)))?;
+        store
+            .reset_mem_fuel()
+            .map_err(|fe| wasmi::Error::Store(fe).into())
+    }
+
+    fn apply_fuel_consumption_from_caller(vmcaller: &mut VmCaller<Host>) -> Result<(), Trap> {
+        // this routine can only be called if we are in the VM mode
+        assert!(vmcaller.0.is_some());
+        let caller = vmcaller
+            .try_mut()
+            .map_err(|e| Trap::from(HostError::from(e)))?;
+        let host = caller.data().clone();
+        let cpu = caller
+            .fuel_consumed()
+            .ok_or_else(|| Trap::from(host.err_wasmi_fuel_metering_disabled()))?;
+        let mem = caller
+            .mem_fuel_consumed()
+            .ok_or_else(|| Trap::from(host.err_wasmi_fuel_metering_disabled()))?;
+        host.as_budget()
+            .apply_wasmi_fuels(cpu, mem)
+            .map_err(|he| Trap::from(he))?;
+        // we close the tab by clearing the fuel amounts in the VM
+        caller
+            .reset_fuel()
+            .map_err(|_| Trap::from(host.err_wasmi_fuel_metering_disabled()))?;
+        caller
+            .reset_mem_fuel()
+            .map_err(|_| host.err_wasmi_fuel_metering_disabled().into())
+    }
+
+    // Wrapper for the [`Func`] call, mostly taking care of fuel supply from
+    // host to the VM and applying VM fuel consumption back to the host budget.
+    // This is where the host->VM->host boundaries are crossed.
+    fn wrapped_func_call(
+        self: &Rc<Self>,
+        host: &Host,
+        func_sym: &Symbol,
+        func: &Func,
+        inputs: &[Value],
+    ) -> Result<RawVal, HostError> {
+        let mut wasm_ret: [Value; 1] = [Value::I64(0)];
+        self.supply_fuel_to_vm()?;
+        let res = func.call(&mut *self.store.borrow_mut(), inputs, &mut wasm_ret);
+        // TODO: Due to the way wasmi's fuel metering works (it does `remaining.checked_sub(delta).ok_or(Trap)`),
+        // there will always be a small amount of fuel remaining when the `OutOfFuel` trap occurs.
+        // This can be confusing to the user if get an "out of budget" error but there is still budget
+        // remaining. We could consider setting budget to "limit+1" when we encounter the `OutOfFuel` trap.
+        // Or file an issue to the wasmi team to change how their fuel charging works.
+        self.apply_fuel_consumption_to_budget()?;
+
+        if let Err(e) = res {
+            // When a call fails with a wasmi::Error::Trap that carries a HostError
+            // we propagate that HostError as is, rather than producing something new.
+
+            match e {
+                wasmi::Error::Trap(trap) => {
+                    if let Some(code) = trap.trap_code() {
+                        return Err(code.into());
+                    }
+                    if let Some(he) = trap.downcast::<HostError>() {
+                        host.log_diagnostics(
+                            "VM call trapped with HostError",
+                            &[func_sym.to_raw(), he.error.to_raw()],
+                        )?;
+                        return Err(he);
+                    }
+                    return Err(host.err(
+                        ScErrorType::WasmVm,
+                        ScErrorCode::InternalError,
+                        "VM trapped with HostError but propagation failed",
+                        &[],
+                    ));
+                }
+                e => {
+                    return Err(if host.is_debug() {
+                        // With diagnostics on: log as much detail as we can from wasmi.
+                        let msg = format!("VM call failed: {:?}", &e);
+                        host.error(e.into(), &msg, &[func_sym.to_raw()])
+                    } else {
+                        host.error(e.into(), "VM call failed", &[func_sym.to_raw()])
+                    });
+                }
+            }
+        }
+        Ok(
+            <_ as WasmiMarshal>::try_marshal_from_value(wasm_ret[0].clone())
+                .ok_or(ConversionError)?,
+        )
+    }
+
     pub(crate) fn invoke_function_raw(
         self: &Rc<Self>,
         host: &Host,
@@ -218,7 +378,6 @@ impl Vm {
                     .iter()
                     .map(|i| Value::I64(i.get_payload() as i64))
                     .collect();
-                let mut wasm_ret: [Value; 1] = [Value::I64(0)];
                 let func_ss: SymbolStr = func_sym.try_into_val(host)?;
                 let ext = match self
                     .instance
@@ -246,47 +405,7 @@ impl Vm {
                     Some(e) => e,
                 };
 
-                let res = func.call(
-                    &mut *self.store.borrow_mut(),
-                    wasm_args.as_slice(),
-                    &mut wasm_ret,
-                );
-
-                if let Err(e) = res {
-                    // When a call fails with a wasmi::Error::Trap that carries a HostError
-                    // we propagate that HostError as is, rather than producing something new.
-
-                    match e {
-                        wasmi::Error::Trap(trap) => {
-                            if let Some(he) = trap.downcast::<HostError>() {
-                                host.log_diagnostics(
-                                    "VM call trapped with HostError",
-                                    &[func_sym.to_raw(), he.error.to_raw()],
-                                )?;
-                                return Err(he);
-                            }
-                            return Err(host.err(
-                                ScErrorType::WasmVm,
-                                ScErrorCode::InternalError,
-                                "VM trapped with HostError but propagation failed",
-                                &[],
-                            ));
-                        }
-                        e => {
-                            return Err(if host.is_debug() {
-                                // With diagnostics on: log as much detail as we can from wasmi.
-                                let msg = format!("VM call failed: {:?}", &e);
-                                host.error(e.into(), &msg, &[func_sym.to_raw()])
-                            } else {
-                                host.error(e.into(), "VM call failed", &[func_sym.to_raw()])
-                            });
-                        }
-                    }
-                }
-                Ok(
-                    <_ as WasmiMarshal>::try_marshal_from_value(wasm_ret[0].clone())
-                        .ok_or(ConversionError)?,
-                )
+                self.wrapped_func_call(host, func_sym, &func, wasm_args.as_slice())
             },
         )
     }
@@ -332,9 +451,7 @@ impl Vm {
         res
     }
 
-    fn module_custom_section(_m: &Module, _name: impl AsRef<str>) -> Option<&[u8]> {
-        todo!()
-        /*
+    fn module_custom_section(m: &Module, name: impl AsRef<str>) -> Option<&[u8]> {
         m.custom_sections().iter().find_map(|s| {
             if &*s.name == name.as_ref() {
                 Some(&*s.data)
@@ -342,7 +459,6 @@ impl Vm {
                 None
             }
         })
-        */
     }
 
     /// Returns the raw bytes content of a named custom section from the WASM
@@ -351,20 +467,18 @@ impl Vm {
         Self::module_custom_section(&self.module, name)
     }
 
-    // Utility function that synthesizes a `VmCaller<Host>` configured to point
-    // to this VM's `Store` and `Instance`, and calls the provided function
-    // back with it. Mainly used for testing.
+    /// Utility function that synthesizes a `VmCaller<Host>` configured to point
+    /// to this VM's `Store` and `Instance`, and calls the provided function
+    /// back with it. Mainly used for testing.
     #[cfg(any(test, feature = "testutils"))]
-    pub fn with_vmcaller<F, T>(&self, _f: F) -> T
+    pub fn with_vmcaller<F, T>(&self, f: F) -> T
     where
         F: FnOnce(&mut VmCaller<Host>) -> T,
     {
-        // let store: &mut Store<Host> = &mut self.store.borrow_mut();
-        // let mut ctx: StoreContextMut<Host> = store.into();
-        // let caller: Caller<Host> = Caller::new(&mut ctx, Some(&self.instance));
-        // let mut vmcaller: VmCaller<Host> = VmCaller(Some(caller));
-        // f(&mut vmcaller)
-        // TODO: they have made the Caller::new private. Need fork.
-        todo!()
+        let store: &mut Store<Host> = &mut self.store.borrow_mut();
+        let mut ctx: StoreContextMut<Host> = store.into();
+        let caller: Caller<Host> = Caller::new(&mut ctx, Some(&self.instance));
+        let mut vmcaller: VmCaller<Host> = VmCaller(Some(caller));
+        f(&mut vmcaller)
     }
 }

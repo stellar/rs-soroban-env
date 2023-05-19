@@ -35,9 +35,10 @@ fn xdr_object_conversion() -> Result<(), HostError> {
         // we wind up double-counting the conversion of "objects".
         // Possibly this should be improved in the future.
         assert_eq!(budget.get_tracker(ContractCostType::ValXdrConv).0, 6);
-        assert_eq!(budget.get_cpu_insns_count(), 60);
-        assert_eq!(budget.get_mem_bytes_count(), 6);
-    });
+        assert_eq!(budget.get_cpu_insns_consumed(), 60);
+        assert_eq!(budget.get_mem_bytes_consumed(), 6);
+        Ok(())
+    })?;
     Ok(())
 }
 
@@ -63,9 +64,10 @@ fn vm_hostfn_invocation() -> Result<(), HostError> {
             budget.get_tracker(ContractCostType::InvokeHostFunction).0,
             2
         );
-        assert_eq!(budget.get_cpu_insns_count(), 30);
-        assert_eq!(budget.get_mem_bytes_count(), 3);
-    });
+        assert_eq!(budget.get_cpu_insns_consumed(), 30);
+        assert_eq!(budget.get_mem_bytes_consumed(), 3);
+        Ok(())
+    })?;
 
     Ok(())
 }
@@ -96,7 +98,8 @@ fn metered_xdr() -> Result<(), HostError> {
             budget.get_tracker(ContractCostType::ValSer).1,
             Some(w.len() as u64)
         );
-    });
+        Ok(())
+    })?;
 
     host.metered_from_xdr::<ScMap>(w.as_slice())?;
     host.with_budget(|budget| {
@@ -104,7 +107,8 @@ fn metered_xdr() -> Result<(), HostError> {
             budget.get_tracker(ContractCostType::ValDeser).1,
             Some(w.len() as u64)
         );
-    });
+        Ok(())
+    })?;
     Ok(())
 }
 
@@ -155,7 +159,8 @@ fn map_insert_key_vec_obj() -> Result<(), HostError> {
         assert_eq!(budget.get_tracker(ContractCostType::VisitObject).0, 4);
         // upper bound of number of map-accesses, counting both binary-search and point-access.
         assert_eq!(budget.get_tracker(ContractCostType::MapEntry).0, 5);
-    });
+        Ok(())
+    })?;
 
     Ok(())
 }
@@ -221,7 +226,7 @@ fn total_amount_charged_from_random_inputs() -> Result<(), HostError> {
     let host = Host::default();
 
     let tracker: Vec<(u64, Option<u64>)> = vec![
-        (246, None),
+        (1, Some(246)),
         (1, Some(184)),
         (1, Some(152)),
         (1, Some(65)),
@@ -250,12 +255,12 @@ fn total_amount_charged_from_random_inputs() -> Result<(), HostError> {
     let actual = format!("{:?}", host.as_budget());
     expect![[r#"
         =====================================================================================================================================================================
-        Cpu limit: 40000000; used: 8426807
+        Cpu limit: 40000000; used: 8426286
         Mem limit: 52428800; used: 1219916
         =====================================================================================================================================================================
         CostType                 iterations     input          cpu_insns      mem_bytes      const_term_cpu      lin_term_cpu        const_term_mem      lin_term_mem        
-        WasmInsnExec             246            None           5412           0              22                  0                   0                   0                   
-        WasmMemAlloc             1              Some(184)      521            66320          521                 0                   66136               1                   
+        WasmInsnExec             1              Some(246)      5412           0              0                   22                  0                   0                   
+        WasmMemAlloc             1              Some(184)      0              66320          0                   0                   66136               1                   
         HostMemAlloc             1              Some(152)      883            160            883                 0                   8                   1                   
         HostMemCpy               1              Some(65)       24             0              24                  0                   0                   0                   
         HostMemCmp               1              Some(74)       116            0              42                  1                   0                   0                   

@@ -89,8 +89,8 @@ fn hostile_objs_traps() -> Result<(), HostError> {
     let args: ScVec = host.test_scvec::<i32>(&[])?;
 
     host.set_diagnostic_level(crate::DiagnosticLevel::Debug);
-    host.with_budget(|b| b.reset_default());
-    host.with_budget(|b| b.reset_unlimited_cpu());
+    host.with_budget(|b| Ok(b.reset_default()))?;
+    host.with_budget(|b| Ok(b.reset_unlimited_cpu()))?;
 
     // This one should just run out of memory
     let res = vm.invoke_function(&host, "objs", &args);

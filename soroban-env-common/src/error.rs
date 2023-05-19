@@ -135,32 +135,37 @@ impl From<stellar_xdr::Error> for Error {
 }
 
 #[cfg(feature = "wasmi")]
+impl From<wasmi::core::TrapCode> for Error {
+    fn from(code: wasmi::core::TrapCode) -> Self {
+        let ec = match code {
+            wasmi::core::TrapCode::UnreachableCodeReached => ScErrorCode::InternalError,
+
+            wasmi::core::TrapCode::MemoryOutOfBounds | wasmi::core::TrapCode::TableOutOfBounds => {
+                ScErrorCode::IndexBounds
+            }
+
+            wasmi::core::TrapCode::IndirectCallToNull => ScErrorCode::MissingValue,
+
+            wasmi::core::TrapCode::IntegerDivisionByZero
+            | wasmi::core::TrapCode::IntegerOverflow
+            | wasmi::core::TrapCode::BadConversionToInteger => ScErrorCode::ArithDomain,
+
+            wasmi::core::TrapCode::BadSignature => ScErrorCode::UnexpectedType,
+
+            wasmi::core::TrapCode::StackOverflow | wasmi::core::TrapCode::OutOfFuel => {
+                return Error::from_type_and_code(ScErrorType::Budget, ScErrorCode::ExceededLimit)
+            }
+        };
+        return Error::from_type_and_code(ScErrorType::WasmVm, ec);
+    }
+}
+
+#[cfg(feature = "wasmi")]
 impl From<wasmi::Error> for Error {
     fn from(e: wasmi::Error) -> Self {
         if let wasmi::Error::Trap(trap) = e {
             if let Some(code) = trap.trap_code() {
-                let ec = match code {
-                    wasmi::core::TrapCode::UnreachableCodeReached => ScErrorCode::InternalError,
-
-                    wasmi::core::TrapCode::MemoryOutOfBounds
-                    | wasmi::core::TrapCode::TableOutOfBounds => ScErrorCode::IndexBounds,
-
-                    wasmi::core::TrapCode::IndirectCallToNull => ScErrorCode::MissingValue,
-
-                    wasmi::core::TrapCode::IntegerDivisionByZero
-                    | wasmi::core::TrapCode::IntegerOverflow
-                    | wasmi::core::TrapCode::BadConversionToInteger => ScErrorCode::ArithDomain,
-
-                    wasmi::core::TrapCode::BadSignature => ScErrorCode::UnexpectedType,
-
-                    wasmi::core::TrapCode::StackOverflow | wasmi::core::TrapCode::OutOfFuel => {
-                        return Error::from_type_and_code(
-                            ScErrorType::Budget,
-                            ScErrorCode::ExceededLimit,
-                        )
-                    }
-                };
-                return Error::from_type_and_code(ScErrorType::WasmVm, ec);
+                return code.into();
             }
         }
         Error::from_type_and_code(ScErrorType::WasmVm, ScErrorCode::InternalError)
