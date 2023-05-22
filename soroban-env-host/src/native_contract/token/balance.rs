@@ -191,9 +191,10 @@ pub fn is_authorized(e: &Host, addr: Address) -> Result<bool, HostError> {
 // Metering: *mostly* covered by components. Not sure about `try_into_val`.
 pub fn write_authorization(e: &Host, addr: Address, authorize: bool) -> Result<(), HostError> {
     if !authorize && !is_asset_auth_revocable(e)? {
-        return Err(e.err_status_msg(
-            ContractError::OperationNotSupportedError,
+        return Err(e.error(
+            ContractError::OperationNotSupportedError.into(),
             "issuer does not have AUTH_REVOCABLE set",
+            &[],
         ));
     }
 
