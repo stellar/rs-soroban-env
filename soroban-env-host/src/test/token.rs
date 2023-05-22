@@ -992,6 +992,56 @@ fn test_clawback_on_contract() {
 }
 
 #[test]
+fn test_auth_revocable_on_contract() {
+    let test = TokenTest::setup();
+    let admin = TestSigner::account(&test.issuer_key);
+    let token = test.default_token();
+
+    let issuer_ledger_key = test
+        .host
+        .to_account_key(keypair_to_account_id(&test.issuer_key));
+
+    let user_1 = generate_bytes_array();
+    let user_1_addr = contract_id_to_address(&test.host, user_1);
+
+    // contract is authorized by default
+    assert!(token.authorized(user_1_addr.clone()).unwrap());
+
+    // clear all flags
+    test.update_account_flags(&issuer_ledger_key, 0);
+
+    // can't deauthorize because issuer does not have auth revocable set
+    assert_eq!(
+        to_contract_err(
+            token
+                .set_authorized(&admin, user_1_addr.clone(), false)
+                .err()
+                .unwrap()
+        ),
+        ContractError::OperationNotSupportedError
+    );
+
+    // set auth revocable
+    test.update_account_flags(&issuer_ledger_key, AccountFlags::RevocableFlag as u32);
+
+    // Now auth can be revoked
+    token
+        .set_authorized(&admin, user_1_addr.clone(), false)
+        .unwrap();
+
+    assert!(!token.authorized(user_1_addr.clone()).unwrap());
+
+    // clear auth revocable and authorize contract, testing that auth
+    // revocable only affects deauthorization
+    test.update_account_flags(&issuer_ledger_key, 0);
+
+    token
+        .set_authorized(&admin, user_1_addr.clone(), true)
+        .unwrap();
+    assert!(token.authorized(user_1_addr.clone()).unwrap());
+}
+
+#[test]
 fn test_set_admin() {
     let test = TokenTest::setup();
     let admin = TestSigner::account(&test.issuer_key);
