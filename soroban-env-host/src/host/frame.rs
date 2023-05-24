@@ -2,13 +2,14 @@ use soroban_env_common::xdr::{ScErrorCode, ScErrorType};
 
 use crate::{
     auth::AuthorizationManagerSnapshot,
+    budget::AsBudget,
     err,
     storage::StorageMap,
     xdr::{
         ContractCostType, Hash, HostFunction, HostFunctionArgs, HostFunctionType,
         ScContractExecutable, ScVal,
     },
-    BytesObject, Error, Host, HostError, RawVal, Symbol, SymbolStr, TryFromVal, TryIntoVal, budget::AsBudget,
+    BytesObject, Error, Host, HostError, RawVal, Symbol, SymbolStr, TryFromVal, TryIntoVal,
 };
 
 #[cfg(any(test, feature = "testutils"))]
@@ -78,7 +79,7 @@ impl TestContractFrame {
 #[derive(Clone)]
 pub(crate) struct Context {
     pub(crate) frame: Frame,
-    prng: Prng,
+    prng: Option<Prng>,
 }
 
 /// Holds contextual information about a single invocation, either
@@ -107,7 +108,6 @@ impl Host {
     /// operation fails, it can be used to roll the [`Host`] back to the state
     /// it had before its associated [`Frame`] was pushed.
     pub(super) fn push_frame(&self, frame: Frame) -> Result<RollbackPoint, HostError> {
-        let prng = self.0.base_prng.borrow_mut().sub_prng(self.as_budget())?;
         // This is a bit hacky, as it relies on re-borrow to occur only during
         // the account contract invocations. Instead we should probably call it
         // in more explicitly different fashion and check if we're calling it
@@ -117,7 +117,7 @@ impl Host {
             auth_manager.push_frame(self, &frame)?;
             auth_snapshot = Some(auth_manager.snapshot());
         }
-        let ctx = Context { frame, prng };
+        let ctx = Context { frame, prng: None };
         self.0.context.borrow_mut().push(ctx);
         Ok(RollbackPoint {
             storage: self.0.storage.borrow().map.clone(),
@@ -187,12 +187,14 @@ impl Host {
             .context
             .borrow()
             .last()
-            .ok_or_else(|| self.err(
-                ScErrorType::Context,
-                ScErrorCode::MissingValue,
-                "no contract running",
-                &[],
-            ))?
+            .ok_or_else(|| {
+                self.err(
+                    ScErrorType::Context,
+                    ScErrorCode::MissingValue,
+                    "no contract running",
+                    &[],
+                )
+            })?
             .frame)
     }
 
@@ -209,13 +211,36 @@ impl Host {
     where
         F: FnOnce(&mut Prng) -> Result<U, HostError>,
     {
-        f(&mut self
-            .0
-            .context
-            .borrow_mut()
+        let mut ctx_guard = self.0.context.borrow_mut();
+        let prng: &mut Option<Prng> = &mut ctx_guard
             .last_mut()
-            .ok_or_else(|| self.err(ScErrorType::Context, ScErrorCode::MissingValue, "no contract running", &[]))?
-            .prng)
+            .ok_or_else(|| {
+                self.err(
+                    ScErrorType::Context,
+                    ScErrorCode::MissingValue,
+                    "no contract running",
+                    &[],
+                )
+            })?
+            .prng;
+        if let Some(p) = prng {
+            f(p)
+        } else {
+            let mut base_guard = self.0.base_prng.borrow_mut();
+            if let Some(base) = base_guard.as_mut() {
+                let mut p = base.sub_prng(self.as_budget())?;
+                let res = f(&mut p);
+                *prng = Some(p);
+                res
+            } else {
+                Err(self.err(
+                    ScErrorType::Context,
+                    ScErrorCode::MissingValue,
+                    "host base PRNG was not seeded",
+                    &[],
+                ))
+            }
+        }
     }
 
     /// Pushes a [`Frame`], runs a closure, and then pops the frame, rolling back

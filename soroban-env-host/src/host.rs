@@ -89,7 +89,7 @@ pub(crate) struct HostImpl {
     pub(crate) events: RefCell<InternalEventsBuffer>,
     authorization_manager: RefCell<AuthorizationManager>,
     pub(crate) diagnostic_level: RefCell<DiagnosticLevel>,
-    pub(crate) base_prng: RefCell<Prng>,
+    pub(crate) base_prng: RefCell<Option<Prng>>,
     // Note: we're not going to charge metering for testutils because it's out of the scope
     // of what users will be charged for in production -- it's scaffolding for testing a contract,
     // but shouldn't be charged to the contract itself (and will never be compiled-in to
@@ -138,7 +138,7 @@ impl Host {
                 AuthorizationManager::new_enforcing_without_authorizations(budget),
             ),
             diagnostic_level: Default::default(),
-            base_prng: RefCell::new(Prng::default()),
+            base_prng: RefCell::new(None),
             #[cfg(any(test, feature = "testutils"))]
             contracts: Default::default(),
             #[cfg(any(test, feature = "testutils"))]
@@ -174,7 +174,7 @@ impl Host {
     }
 
     pub fn set_base_prng_seed(&self, seed: prng::Seed) {
-        self.0.base_prng.borrow_mut().reseed(seed)
+        *self.0.base_prng.borrow_mut() = Some(Prng::new_from_seed(seed))
     }
 
     pub fn set_ledger_info(&self, info: LedgerInfo) {
@@ -2435,7 +2435,7 @@ impl VmCallerEnv for Host {
             self.charge_budget(ContractCostType::HostMemCpy, Some(prng::SEED_BYTES as u64))?;
             if let Ok(seed32) = slice.try_into() {
                 self.with_current_prng(|prng| {
-                    prng.reseed(seed32);
+                    *prng = Prng::new_from_seed(seed32);
                     Ok(())
                 })?;
                 Ok(RawVal::VOID)

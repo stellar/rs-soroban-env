@@ -83,20 +83,14 @@ pub type Seed = <rand_chacha::ChaCha20Rng as rand::SeedableRng>::Seed;
 pub const SEED_BYTES: usize = core::mem::size_of::<Seed>();
 static_assertions::const_assert_eq!(SEED_BYTES, 32);
 
-impl Default for Prng {
-    fn default() -> Self {
-        Self(ChaCha20Rng::from_seed([0; SEED_BYTES]))
-    }
-}
-
 impl Prng {
     fn charge_prng_bytes(&self, budget: &Budget, count: u64) -> Result<(), HostError> {
         // TODO: add a ContractCostType for drawing PRNG bytes
         Ok(())
     }
 
-    pub(crate) fn reseed(&mut self, seed: Seed) {
-        self.0 = ChaCha20Rng::from_seed(seed);
+    pub fn new_from_seed(seed: Seed) -> Self {
+        Self(ChaCha20Rng::from_seed(seed))
     }
 
     pub(crate) fn u64_in_inclusive_range(
