@@ -267,6 +267,7 @@ impl MeteredClone for ScVal {
             | ScVal::U256(_)
             | ScVal::I256(_)
             | ScVal::LedgerKeyContractExecutable
+            | ScVal::StorageType(_)
             | ScVal::LedgerKeyNonce(_) => Ok(()),
         }
     }

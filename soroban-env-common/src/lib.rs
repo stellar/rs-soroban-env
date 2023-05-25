@@ -47,6 +47,7 @@ mod object;
 mod option;
 mod raw_val;
 mod result;
+mod storage_type;
 mod string;
 mod symbol;
 mod tuple;
@@ -68,6 +69,8 @@ pub use num::{
     DurationVal, I128Val, I256Val, I32Val, I64Val, TimepointVal, U128Val, U256Val, U32Val, U64Val,
 };
 pub use num::{I256, U256};
+
+pub use storage_type::StorageType;
 
 // Re-export the XDR definitions
 pub use stellar_xdr as xdr;

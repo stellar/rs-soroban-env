@@ -10,7 +10,7 @@ use soroban_env_common::xdr::{
     AccountEntry, AccountEntryExt, AccountEntryExtensionV1Ext, AccountFlags, AccountId,
     LedgerEntryData, ScAddress, TrustLineAsset, TrustLineEntry, TrustLineEntryExt, TrustLineFlags,
 };
-use soroban_env_common::{Env, TryIntoVal};
+use soroban_env_common::{Env, StorageType, TryIntoVal};
 
 use super::public_types::BytesN;
 use super::storage_types::BalanceValue;
@@ -31,7 +31,9 @@ pub fn read_balance(e: &Host, addr: Address) -> Result<i128, HostError> {
         ScAddress::Account(acc_id) => Ok(get_classic_balance(e, acc_id)?.0.into()),
         ScAddress::Contract(_) => {
             let key = DataKey::Balance(addr);
-            if let Ok(raw_balance) = e.get_contract_data(key.try_into_val(e)?) {
+            if let Ok(raw_balance) =
+                e.get_contract_data(key.try_into_val(e)?, StorageType::RECREATABLE)
+            {
                 let balance: BalanceValue = raw_balance.try_into_val(e)?;
                 Ok(balance.amount)
             } else {
@@ -51,7 +53,12 @@ pub fn get_spendable_balance(e: &Host, addr: Address) -> Result<i128, HostError>
 
 fn write_balance(e: &Host, addr: Address, balance: BalanceValue) -> Result<(), HostError> {
     let key = DataKey::Balance(addr);
-    e.put_contract_data(key.try_into_val(e)?, balance.try_into_val(e)?)?;
+    e.put_contract_data(
+        key.try_into_val(e)?,
+        balance.try_into_val(e)?,
+        StorageType::RECREATABLE,
+        ().into(),
+    )?;
     Ok(())
 }
 
@@ -78,7 +85,9 @@ pub fn receive_balance(e: &Host, addr: Address, amount: i128) -> Result<(), Host
         }
         ScAddress::Contract(_) => {
             let key = DataKey::Balance(addr.clone());
-            let mut balance = if let Ok(raw_balance) = e.get_contract_data(key.try_into_val(e)?) {
+            let mut balance = if let Ok(raw_balance) =
+                e.get_contract_data(key.try_into_val(e)?, StorageType::RECREATABLE)
+            {
                 raw_balance.try_into_val(e)?
             } else {
                 // balance passed the authorization check at the top of this function, so write true.
@@ -124,7 +133,9 @@ pub fn spend_balance_no_authorization_check(
             // If a balance exists, calculate new amount and write the existing authorized state as is because
             // this can be used to clawback when deauthorized.
             let key = DataKey::Balance(addr.clone());
-            if let Ok(raw_balance) = e.get_contract_data(key.try_into_val(e)?) {
+            if let Ok(raw_balance) =
+                e.get_contract_data(key.try_into_val(e)?, StorageType::RECREATABLE)
+            {
                 let mut balance: BalanceValue = raw_balance.try_into_val(e)?;
                 if balance.amount < amount {
                     return Err(err!(
@@ -178,7 +189,9 @@ pub fn is_authorized(e: &Host, addr: Address) -> Result<bool, HostError> {
         ScAddress::Account(acc_id) => is_account_authorized(e, acc_id),
         ScAddress::Contract(_) => {
             let key = DataKey::Balance(addr);
-            if let Ok(raw_balance) = e.get_contract_data(key.try_into_val(e)?) {
+            if let Ok(raw_balance) =
+                e.get_contract_data(key.try_into_val(e)?, StorageType::RECREATABLE)
+            {
                 let balance: BalanceValue = raw_balance.try_into_val(e)?;
                 Ok(balance.authorized)
             } else {
@@ -202,7 +215,9 @@ pub fn write_authorization(e: &Host, addr: Address, authorize: bool) -> Result<(
         ScAddress::Account(acc_id) => set_authorization(e, acc_id, authorize),
         ScAddress::Contract(_) => {
             let key = DataKey::Balance(addr.clone());
-            if let Ok(raw_balance) = e.get_contract_data(key.try_into_val(e)?) {
+            if let Ok(raw_balance) =
+                e.get_contract_data(key.try_into_val(e)?, StorageType::RECREATABLE)
+            {
                 let mut balance: BalanceValue = raw_balance.try_into_val(e)?;
                 balance.authorized = authorize;
                 write_balance(e, addr, balance)
@@ -268,7 +283,9 @@ pub fn check_clawbackable(e: &Host, addr: Address) -> Result<(), HostError> {
         },
         ScAddress::Contract(_) => {
             let key = DataKey::Balance(addr);
-            if let Ok(raw_balance) = e.get_contract_data(key.try_into_val(e)?) {
+            if let Ok(raw_balance) =
+                e.get_contract_data(key.try_into_val(e)?, StorageType::RECREATABLE)
+            {
                 let balance: BalanceValue = raw_balance.try_into_val(e)?;
                 if !balance.clawback {
                     return Err(e.error(

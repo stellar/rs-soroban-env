@@ -13,7 +13,7 @@ use soroban_env_common::xdr::{ScErrorCode, ScErrorType};
 use soroban_env_common::Compare;
 
 use crate::budget::Budget;
-use crate::xdr::{LedgerEntry, LedgerKey};
+use crate::xdr::{LedgerEntry, LedgerEntryData, LedgerKey};
 use crate::Host;
 use crate::{host::metered_map::MeteredOrdMap, HostError};
 
@@ -242,6 +242,46 @@ impl Storage {
         self.put_opt(key, Some(val), budget)
     }
 
+    pub fn bump(
+        &mut self,
+        key: &Rc<LedgerKey>,
+        min_ledgers_to_live: u32,
+        ledger_num: u32,
+        budget: &Budget,
+    ) -> Result<(), HostError> {
+        // A expiration ledger bump is considered to be a read only operation. When
+        // concurrent Soroban transactions are added conflicts will be reconciled upstream.
+        let ty = AccessType::ReadOnly;
+        match self.mode {
+            FootprintMode::Recording(_) => {
+                self.footprint.record_access(key, ty, budget)?;
+            }
+            FootprintMode::Enforcing => {
+                self.footprint.enforce_access(key, ty, budget)?;
+            }
+        };
+
+        let mut current = (*self.get(&key, budget)?).clone();
+        match current.data {
+            LedgerEntryData::ContractData(ref mut entry) => {
+                let min_seq = ledger_num
+                    .checked_add(min_ledgers_to_live)
+                    .unwrap_or(u32::MAX);
+                if min_seq > entry.expiration_ledger_seq {
+                    entry.expiration_ledger_seq = min_seq;
+                } else {
+                    return Ok(());
+                }
+            }
+            _ => return Err((ScErrorType::Storage, ScErrorCode::UnexpectedType).into()),
+        }
+
+        self.map = self
+            .map
+            .insert(Rc::clone(key), Some(Rc::new(current)), budget)?;
+        Ok(())
+    }
+
     /// Attempts to delete the [LedgerEntry] associated with a given [LedgerKey]
     /// in the [Storage].
     ///
@@ -294,7 +334,7 @@ mod test_footprint {
 
     use super::*;
     use crate::budget::Budget;
-    use crate::xdr::{LedgerKeyContractData, ScVal};
+    use crate::xdr::{ContractDataType, ContractLedgerEntryType, LedgerKeyContractData, ScVal};
 
     #[test]
     fn footprint_record_access() -> Result<(), HostError> {
@@ -303,9 +343,12 @@ mod test_footprint {
         let mut fp = Footprint::default();
         // record when key not exist
         let contract_id = [0; 32].into();
+
         let key = Rc::new(LedgerKey::ContractData(LedgerKeyContractData {
             contract_id,
             key: ScVal::I32(0),
+            type_: ContractDataType::Recreatable,
+            le_type: ContractLedgerEntryType::DataEntry,
         }));
         fp.record_access(&key, AccessType::ReadOnly, &budget)?;
         assert_eq!(fp.0.contains_key::<LedgerKey>(&key, &budget)?, true);
@@ -334,6 +377,8 @@ mod test_footprint {
         let key = Rc::new(LedgerKey::ContractData(LedgerKeyContractData {
             contract_id,
             key: ScVal::I32(0),
+            type_: ContractDataType::Recreatable,
+            le_type: ContractLedgerEntryType::DataEntry,
         }));
         let om = [(Rc::clone(&key), AccessType::ReadOnly)].into();
         let mom = MeteredOrdMap::from_map(om, &budget)?;
@@ -354,6 +399,8 @@ mod test_footprint {
         let key = Rc::new(LedgerKey::ContractData(LedgerKeyContractData {
             contract_id,
             key: ScVal::I32(0),
+            type_: ContractDataType::Recreatable,
+            le_type: ContractLedgerEntryType::DataEntry,
         }));
         let res = fp.enforce_access(&key, AccessType::ReadOnly, &budget);
         assert!(HostError::result_matches_err(
@@ -370,6 +417,8 @@ mod test_footprint {
         let key = Rc::new(LedgerKey::ContractData(LedgerKeyContractData {
             contract_id,
             key: ScVal::I32(0),
+            type_: ContractDataType::Recreatable,
+            le_type: ContractLedgerEntryType::DataEntry,
         }));
         let om = [(Rc::clone(&key), AccessType::ReadOnly)].into();
         let mom = MeteredOrdMap::from_map(om, &budget)?;

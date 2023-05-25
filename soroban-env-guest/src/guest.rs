@@ -7,8 +7,8 @@ use soroban_env_common::call_macro_with_all_host_functions;
 
 use super::{
     AddressObject, Bool, BytesObject, Error, I128Object, I256Object, I64Object, MapObject, Object,
-    RawVal, StringObject, SymbolObject, U128Object, U256Object, U32Val, U64Object, U64Val,
-    VecObject, Void,
+    RawVal, StorageType, StringObject, SymbolObject, U128Object, U256Object, U32Val, U64Object,
+    U64Val, VecObject, Void,
 };
 use super::{Env, EnvBase, Symbol};
 #[cfg(target_family = "wasm")]
@@ -454,7 +454,7 @@ macro_rules! generate_extern_modules {
                 #[allow(unused_imports)]
                 use crate::{RawVal,Object,Symbol,Error,MapObject,VecObject,BytesObject};
                 #[allow(unused_imports)]
-                use crate::{I128Object, I256Object, I64Object, I64Val, U128Object, U256Object, U32Val, U64Object, U64Val};
+                use crate::{I128Object, I256Object, I64Object, I64Val, U128Object, U256Object, U32Val, U64Object, U64Val, StorageType};
                 #[allow(unused_imports)]
                 use crate::{Void,AddressObject,SymbolObject,StringObject,Bool};
                 #[link(wasm_import_module = $mod_str)]

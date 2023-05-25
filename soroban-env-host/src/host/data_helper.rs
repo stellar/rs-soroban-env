@@ -2,16 +2,18 @@ use core::cmp::min;
 use std::rc::Rc;
 
 use soroban_env_common::xdr::{
-    ContractIdPreimage, HashIdPreimageContractId, ScAddress, ScErrorCode, ScErrorType,
+    BytesM, ContractCodeEntryBody, ContractDataEntryBody, ContractDataEntryData, ContractDataType,
+    ContractIdPreimage, ContractLedgerEntryType, HashIdPreimageContractId, ScAddress, ScErrorCode,
+    ScErrorType,
 };
 use soroban_env_common::{AddressObject, Env, U32Val};
 
 use crate::budget::AsBudget;
 use crate::xdr::{
-    AccountEntry, AccountId, ContractCodeEntry, ContractDataEntry, Hash, HashIdPreimage,
-    LedgerEntry, LedgerEntryData, LedgerEntryExt, LedgerKey, LedgerKeyAccount,
-    LedgerKeyContractCode, LedgerKeyContractData, LedgerKeyTrustLine, PublicKey,
-    ScContractExecutable, ScVal, Signer, SignerKey, ThresholdIndexes, TrustLineAsset, Uint256,
+    AccountEntry, AccountId, ContractDataEntry, Hash, HashIdPreimage, LedgerEntry, LedgerEntryData,
+    LedgerEntryExt, LedgerKey, LedgerKeyAccount, LedgerKeyContractCode, LedgerKeyContractData,
+    LedgerKeyTrustLine, PublicKey, ScContractExecutable, ScVal, Signer, SignerKey,
+    ThresholdIndexes, TrustLineAsset, Uint256,
 };
 use crate::{err, Host, HostError};
 
@@ -27,6 +29,8 @@ impl Host {
         Ok(Rc::new(LedgerKey::ContractData(LedgerKeyContractData {
             contract_id,
             key: ScVal::LedgerKeyContractExecutable,
+            type_: ContractDataType::Recreatable,
+            le_type: ContractLedgerEntryType::DataEntry,
         })))
     }
 
@@ -37,13 +41,20 @@ impl Host {
     ) -> Result<ScContractExecutable, HostError> {
         let entry = self.0.storage.borrow_mut().get(key, self.as_budget())?;
         match &entry.data {
-            LedgerEntryData::ContractData(ContractDataEntry { val, .. }) => match val {
-                ScVal::ContractExecutable(code) => Ok(code.clone()),
-                other => Err(err!(
+            LedgerEntryData::ContractData(ContractDataEntry { body, .. }) => match body {
+                ContractDataEntryBody::DataEntry(data) => match &data.val {
+                    ScVal::ContractExecutable(code) => Ok(code.clone()),
+                    other => Err(err!(
+                        self,
+                        (ScErrorType::Storage, ScErrorCode::UnexpectedType),
+                        "ledger entry for contract code does not contain contract executable",
+                        *other
+                    )),
+                },
+                _ => Err(err!(
                     self,
                     (ScErrorType::Storage, ScErrorCode::UnexpectedType),
-                    "ledger entry for contract code does not contain contract executable",
-                    *other
+                    "expected DataEntry",
                 )),
             },
             _ => Err(self.err(
@@ -59,13 +70,11 @@ impl Host {
         let wasm_hash = wasm_hash.metered_clone(self.as_budget())?;
         Ok(Rc::new(LedgerKey::ContractCode(LedgerKeyContractCode {
             hash: wasm_hash,
+            le_type: ContractLedgerEntryType::DataEntry,
         })))
     }
 
-    pub(crate) fn retrieve_wasm_from_storage(
-        &self,
-        wasm_hash: &Hash,
-    ) -> Result<ContractCodeEntry, HostError> {
+    pub(crate) fn retrieve_wasm_from_storage(&self, wasm_hash: &Hash) -> Result<BytesM, HostError> {
         let key = self.wasm_ledger_key(wasm_hash)?;
         match &self
             .0
@@ -74,8 +83,15 @@ impl Host {
             .get(&key, self.as_budget())?
             .data
         {
-            LedgerEntryData::ContractCode(e) => Ok(e.clone()),
-            e => Err(err!(
+            LedgerEntryData::ContractCode(e) => match &e.body {
+                ContractCodeEntryBody::DataEntry(code) => Ok(code.clone()),
+                _ => Err(err!(
+                    self,
+                    (ScErrorType::Storage, ScErrorCode::UnexpectedType),
+                    "expected DataEntry",
+                )),
+            },
+            _ => Err(err!(
                 self,
                 (ScErrorType::Storage, ScErrorCode::UnexpectedType),
                 "expected ContractCode ledger entry",
@@ -96,10 +112,16 @@ impl Host {
         contract_id: Hash,
         key: &Rc<LedgerKey>,
     ) -> Result<(), HostError> {
+        let body = ContractDataEntryBody::DataEntry(ContractDataEntryData {
+            val: ScVal::ContractExecutable(executable),
+            flags: 0,
+        });
         let data = LedgerEntryData::ContractData(ContractDataEntry {
             contract_id,
             key: ScVal::LedgerKeyContractExecutable,
-            val: ScVal::ContractExecutable(executable),
+            body,
+            type_: ContractDataType::Recreatable,
+            expiration_ledger_seq: self.with_ledger_info(|li| Ok(li.sequence_number))? + 4096, //TODO: use constant? Ideally we'd use the settings
         });
         self.0.storage.borrow_mut().put(
             key,

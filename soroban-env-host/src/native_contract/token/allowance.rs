@@ -3,12 +3,12 @@ use crate::native_contract::base_types::Address;
 use crate::native_contract::contract_error::ContractError;
 use crate::native_contract::token::storage_types::{AllowanceDataKey, DataKey};
 use crate::{err, HostError};
-use soroban_env_common::{Env, TryIntoVal};
+use soroban_env_common::{Env, StorageType, TryIntoVal};
 
 // Metering: covered by components
 pub fn read_allowance(e: &Host, from: Address, spender: Address) -> Result<i128, HostError> {
     let key = DataKey::Allowance(AllowanceDataKey { from, spender });
-    if let Ok(allowance) = e.get_contract_data(key.try_into_val(e)?) {
+    if let Ok(allowance) = e.get_contract_data(key.try_into_val(e)?, StorageType::RECREATABLE) {
         Ok(allowance.try_into_val(e)?)
     } else {
         Ok(0)
@@ -23,7 +23,12 @@ pub fn write_allowance(
     amount: i128,
 ) -> Result<(), HostError> {
     let key = DataKey::Allowance(AllowanceDataKey { from, spender });
-    e.put_contract_data(key.try_into_val(e)?, amount.try_into_val(e)?)?;
+    e.put_contract_data(
+        key.try_into_val(e)?,
+        amount.try_into_val(e)?,
+        StorageType::RECREATABLE,
+        ().into(),
+    )?;
     Ok(())
 }
 

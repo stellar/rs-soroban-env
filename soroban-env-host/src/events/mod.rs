@@ -97,6 +97,9 @@ fn display_scval(scv: &ScVal, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Resu
             display_address(&n.nonce_address, f)?;
             write!(f, ")")
         }
+        ScVal::StorageType(t) => {
+            write!(f, "StorageType{}", t)
+        }
     }
 }
 

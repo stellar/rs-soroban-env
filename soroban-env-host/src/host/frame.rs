@@ -436,7 +436,7 @@ impl Host {
                 let vm = Vm::new(
                     self,
                     id.metered_clone(&self.0.budget)?,
-                    code_entry.code.as_slice(),
+                    code_entry.as_slice(),
                 )?;
                 vm.invoke_function_raw(self, func, args)
             }
