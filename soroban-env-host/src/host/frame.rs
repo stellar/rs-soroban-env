@@ -176,26 +176,54 @@ impl Host {
     /// Applies a function to the top [`Frame`] of the context stack. Returns
     /// [`HostError`] if the context stack is empty, otherwise returns result of
     /// function call.
+    //
     // Notes on metering: aquiring the current frame is cheap and not charged.
-    /// Metering happens in the passed-in closure where actual work is being done.
+    // Metering happens in the passed-in closure where actual work is being done.
     pub(super) fn with_current_frame<F, U>(&self, f: F) -> Result<U, HostError>
     where
         F: FnOnce(&Frame) -> Result<U, HostError>,
     {
-        f(&self
-            .0
-            .context
-            .borrow()
-            .last()
-            .ok_or_else(|| {
-                self.err(
-                    ScErrorType::Context,
-                    ScErrorCode::MissingValue,
-                    "no contract running",
-                    &[],
-                )
-            })?
-            .frame)
+        let Ok(context_guard) = self.0.context.try_borrow() else {
+            return Err(self.err(ScErrorType::Context, ScErrorCode::InternalError, "context is already borrowed", &[]));
+        };
+
+        if let Some(context) = context_guard.last() {
+            f(&context.frame)
+        } else {
+            drop(context_guard);
+            Err(self.err(
+                ScErrorType::Context,
+                ScErrorCode::MissingValue,
+                "no contract running",
+                &[],
+            ))
+        }
+    }
+
+    /// Applies a function to a mutable reference to the top [`Context`] of the
+    /// context stack. Returns [`HostError`] if the context stack is empty,
+    /// otherwise returns result of function call.
+    //
+    // Notes on metering: aquiring the current frame is cheap and not charged.
+    // Metering happens in the passed-in closure where actual work is being done.
+    pub(super) fn with_current_context_mut<F, U>(&self, f: F) -> Result<U, HostError>
+    where
+        F: FnOnce(&mut Context) -> Result<U, HostError>,
+    {
+        let Ok(mut context_guard) = self.0.context.try_borrow_mut() else {
+            return Err(self.err(ScErrorType::Context, ScErrorCode::InternalError, "context is already borrowed", &[]));
+        };
+        if let Some(context) = context_guard.last_mut() {
+            f(context)
+        } else {
+            drop(context_guard);
+            Err(self.err(
+                ScErrorType::Context,
+                ScErrorCode::MissingValue,
+                "no contract running",
+                &[],
+            ))
+        }
     }
 
     /// Same as [`Self::with_current_frame`] but passes `None` when there is no current
@@ -204,36 +232,42 @@ impl Host {
     where
         F: FnOnce(Option<&Frame>) -> Result<U, HostError>,
     {
-        f(self.0.context.borrow().last().map(|ctx| &ctx.frame))
+        let Ok(context_guard) = self.0.context.try_borrow() else {
+            return Err(self.err(ScErrorType::Context, ScErrorCode::InternalError, "context is already borrowed", &[]));
+        };
+        if let Some(context) = context_guard.last() {
+            f(Some(&context.frame))
+        } else {
+            drop(context_guard);
+            f(None)
+        }
     }
 
     pub(crate) fn with_current_prng<F, U>(&self, f: F) -> Result<U, HostError>
     where
         F: FnOnce(&mut Prng) -> Result<U, HostError>,
     {
-        let mut ctx_guard = self.0.context.borrow_mut();
-        let prng: &mut Option<Prng> = &mut ctx_guard
-            .last_mut()
-            .ok_or_else(|| {
-                self.err(
-                    ScErrorType::Context,
-                    ScErrorCode::MissingValue,
-                    "no contract running",
-                    &[],
-                )
-            })?
-            .prng;
-        if let Some(p) = prng {
-            f(p)
+        // We need to not hold the context borrow-guard over multiple
+        // error-generating calls here, since they will re-borrow the context to
+        // report any error. Instead we mem::take the context's PRNG into a
+        // local variable, and then put it back when we're done.
+        let mut curr_prng_opt =
+            self.with_current_context_mut(|ctx| Ok(std::mem::take(&mut ctx.prng)))?;
+        let res: Result<U, HostError>;
+        if let Some(p) = &mut curr_prng_opt {
+            res = f(p)
         } else {
             let mut base_guard = self.0.base_prng.borrow_mut();
             if let Some(base) = base_guard.as_mut() {
-                let mut p = base.sub_prng(self.as_budget())?;
-                let res = f(&mut p);
-                *prng = Some(p);
-                res
+                match base.sub_prng(self.as_budget()) {
+                    Ok(mut sub_prng) => {
+                        res = f(&mut sub_prng);
+                        curr_prng_opt = Some(sub_prng);
+                    }
+                    Err(e) => res = Err(e),
+                }
             } else {
-                Err(self.err(
+                res = Err(self.err(
                     ScErrorType::Context,
                     ScErrorCode::MissingValue,
                     "host base PRNG was not seeded",
@@ -241,6 +275,12 @@ impl Host {
                 ))
             }
         }
+        // Put the (possibly newly-initialized frame PRNG-option back)
+        self.with_current_context_mut(|ctx| {
+            ctx.prng = curr_prng_opt;
+            Ok(())
+        })?;
+        res
     }
 
     /// Pushes a [`Frame`], runs a closure, and then pops the frame, rolling back
