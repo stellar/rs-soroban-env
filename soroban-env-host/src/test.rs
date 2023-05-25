@@ -19,5 +19,6 @@ mod event;
 mod hostile;
 mod invocation;
 mod lifecycle;
+mod prng;
 mod token;
 mod tuple;

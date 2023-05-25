@@ -12,4 +12,3 @@ doctest = false
 
 [dependencies]
 soroban-sdk = { workspace = true }
-soroban-auth = { workspace = true }

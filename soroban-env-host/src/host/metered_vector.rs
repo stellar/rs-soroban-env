@@ -70,6 +70,10 @@ where
         self.vec.as_slice()
     }
 
+    pub fn as_mut_slice(&mut self) -> &mut [A] {
+        self.vec.as_mut_slice()
+    }
+
     // This doesn't take ExactSizeIterator since that is not implemented for Chain
     // (see https://github.com/rust-lang/rust/issues/34433) but it only works
     // with iterators that report an exact size_hint, and it constructs a new

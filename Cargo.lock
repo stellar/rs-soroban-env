@@ -1145,6 +1145,7 @@ dependencies = [
  "num-traits",
  "perf-event",
  "rand",
+ "rand_chacha",
  "sha2",
  "soroban-env-common",
  "soroban-native-sdk-macros",
