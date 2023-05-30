@@ -1127,7 +1127,7 @@ impl Host {
         if self.with_mut_storage(|storage| storage.has(&nonce_key, self.budget_ref()))? {
             let mut entry = (*self
                 .with_mut_storage(|storage| storage.get(&nonce_key, self.budget_ref()))?)
-            .clone();
+            .metered_clone(&self.0.budget)?;
             match entry.data {
                 LedgerEntryData::ContractData(ref mut data_entry) => match data_entry.body {
                     ContractDataEntryBody::DataEntry(ref mut data) => match &mut data.val {

@@ -9,7 +9,7 @@ use crate::{
     storage::AccessType,
     xdr::{
         AccountEntry, AccountId, BytesM, ClaimableBalanceEntry, ConfigSettingEntry,
-        ContractCodeEntry, ContractEvent, DataEntry, Duration, Hash, LedgerEntryExt,
+        ContractCodeEntry, ContractEvent, DataEntry, Duration, Hash, LedgerEntry, LedgerEntryExt,
         LedgerKeyAccount, LedgerKeyClaimableBalance, LedgerKeyConfigSetting, LedgerKeyContractCode,
         LedgerKeyData, LedgerKeyLiquidityPool, LedgerKeyOffer, LedgerKeyTrustLine,
         LiquidityPoolEntry, OfferEntry, PublicKey, ScAddress, ScBytes, ScContractExecutable, ScMap,
@@ -130,6 +130,7 @@ impl_declared_size_type!(ClaimableBalanceEntry, 120);
 impl_declared_size_type!(LiquidityPoolEntry, 160);
 impl_declared_size_type!(ContractCodeEntry, 64);
 impl_declared_size_type!(ConfigSettingEntry, 104);
+impl_declared_size_type!(LedgerEntry, 264);
 impl_declared_size_type!(AccessType, 1);
 impl_declared_size_type!(InternalContractEvent, 40);
 impl_declared_size_type!(ContractEvent, 104);
@@ -291,8 +292,9 @@ mod test {
         expect!["80"].assert_eq(size_of::<DataEntry>().to_string().as_str());
         expect!["120"].assert_eq(size_of::<ClaimableBalanceEntry>().to_string().as_str());
         expect!["160"].assert_eq(size_of::<LiquidityPoolEntry>().to_string().as_str());
-        expect!["56"].assert_eq(size_of::<ContractCodeEntry>().to_string().as_str());
+        expect!["64"].assert_eq(size_of::<ContractCodeEntry>().to_string().as_str());
         expect!["104"].assert_eq(size_of::<ConfigSettingEntry>().to_string().as_str());
+        expect!["264"].assert_eq(size_of::<LedgerEntry>().to_string().as_str());
         expect!["1"].assert_eq(size_of::<AccessType>().to_string().as_str());
         expect!["40"].assert_eq(size_of::<InternalContractEvent>().to_string().as_str());
         expect!["104"].assert_eq(size_of::<ContractEvent>().to_string().as_str());

@@ -11,7 +11,7 @@ use crate::{
     xdr::{
         AccountEntry, AccountId, BytesM, ClaimableBalanceEntry, ConfigSettingEntry,
         ContractCodeEntry, ContractCostType, ContractEvent, ContractEventBody, CreateContractArgs,
-        DataEntry, Duration, Hash, LedgerEntryExt, LedgerKeyAccount, LedgerKeyClaimableBalance,
+        DataEntry, Duration, Hash, LedgerEntry, LedgerEntryExt, LedgerKeyAccount, LedgerKeyClaimableBalance,
         LedgerKeyConfigSetting, LedgerKeyContractCode, LedgerKeyData, LedgerKeyLiquidityPool,
         LedgerKeyOffer, LedgerKeyTrustLine, LiquidityPoolEntry, OfferEntry, PublicKey, ScAddress,
         ScBytes, ScContractExecutable, ScMap, ScMapEntry, ScNonceKey, ScString, ScSymbol, ScVal,
@@ -215,6 +215,7 @@ impl MeteredClone for ClaimableBalanceEntry {}
 impl MeteredClone for LiquidityPoolEntry {}
 impl MeteredClone for ContractCodeEntry {}
 impl MeteredClone for ConfigSettingEntry {}
+impl MeteredClone for LedgerEntry {}
 impl MeteredClone for AccessType {}
 impl MeteredClone for InternalContractEvent {}
 impl MeteredClone for CreateContractArgs {}

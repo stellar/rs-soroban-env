@@ -15,7 +15,7 @@ use soroban_env_common::Compare;
 use crate::budget::Budget;
 use crate::xdr::{LedgerEntry, LedgerEntryData, LedgerKey};
 use crate::Host;
-use crate::{host::metered_map::MeteredOrdMap, HostError};
+use crate::{host::metered_clone::MeteredClone, host::metered_map::MeteredOrdMap, HostError};
 
 pub type FootprintMap = MeteredOrdMap<Rc<LedgerKey>, AccessType, Budget>;
 pub type StorageMap = MeteredOrdMap<Rc<LedgerKey>, Option<Rc<LedgerEntry>>, Budget>;
@@ -261,7 +261,7 @@ impl Storage {
             }
         };
 
-        let mut current = (*self.get(&key, budget)?).clone();
+        let mut current = (*self.get(&key, budget)?).metered_clone(budget)?;
         match current.data {
             LedgerEntryData::ContractData(ref mut entry) => {
                 let min_seq = ledger_num

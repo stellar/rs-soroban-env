@@ -1714,7 +1714,8 @@ impl VmCallerEnv for Host {
         let storage_type: ContractDataType = t.try_into()?;
         let key = self.contract_data_key_from_rawval(k, storage_type)?;
         if self.0.storage.borrow_mut().has(&key, self.as_budget())? {
-            let mut current = (*self.0.storage.borrow_mut().get(&key, self.as_budget())?).clone();
+            let mut current = (*self.0.storage.borrow_mut().get(&key, self.as_budget())?)
+                .metered_clone(&self.0.budget)?;
 
             match current.data {
                 LedgerEntryData::ContractData(ref mut entry) => match entry.body {
