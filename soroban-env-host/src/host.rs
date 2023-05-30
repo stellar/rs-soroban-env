@@ -546,8 +546,7 @@ impl Host {
                     hash: Hash(hash_bytes),
                     body,
                     ext: ExtensionPoint::V0,
-                    expiration_ledger_seq: self.with_ledger_info(|li| Ok(li.sequence_number))?
-                        + 4096, //TODO: use constant? Ideally we'd use the settings
+                    expiration_ledger_seq: 0,
                 });
                 storage.put(
                     &code_key,
@@ -1759,7 +1758,7 @@ impl VmCallerEnv for Host {
                 contract_id: self.get_current_contract_id_internal()?,
                 key: self.from_host_val(k)?,
                 body,
-                expiration_ledger_seq: self.with_ledger_info(|li| Ok(li.sequence_number))?,
+                expiration_ledger_seq: 0,
                 type_: storage_type,
             });
             self.0.storage.borrow_mut().put(

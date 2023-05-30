@@ -1177,7 +1177,7 @@ impl Host {
                 contract_id: contract_id.metered_clone(self.budget_ref())?,
                 key: nonce_key_scval,
                 body,
-                expiration_ledger_seq: self.with_ledger_info(|li| Ok(li.sequence_number))? + 4096, //TODO: use constant? Ideally we'd use the settings
+                expiration_ledger_seq: 0,
                 type_: xdr::ContractDataType::Unique,
             });
             let entry = LedgerEntry {

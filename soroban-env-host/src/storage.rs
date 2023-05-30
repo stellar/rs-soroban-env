@@ -264,9 +264,7 @@ impl Storage {
         let mut current = (*self.get(&key, budget)?).metered_clone(budget)?;
         match current.data {
             LedgerEntryData::ContractData(ref mut entry) => {
-                let min_seq = ledger_num
-                    .checked_add(min_ledgers_to_live)
-                    .unwrap_or(u32::MAX);
+                let min_seq = ledger_num.saturating_add(min_ledgers_to_live);
                 if min_seq > entry.expiration_ledger_seq {
                     entry.expiration_ledger_seq = min_seq;
                 } else {

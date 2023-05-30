@@ -29,7 +29,7 @@ impl Host {
         Ok(Rc::new(LedgerKey::ContractData(LedgerKeyContractData {
             contract_id,
             key: ScVal::LedgerKeyContractExecutable,
-            type_: ContractDataType::Recreatable,
+            type_: ContractDataType::Unique,
             le_type: ContractLedgerEntryType::DataEntry,
         })))
     }
@@ -120,8 +120,8 @@ impl Host {
             contract_id,
             key: ScVal::LedgerKeyContractExecutable,
             body,
-            type_: ContractDataType::Recreatable,
-            expiration_ledger_seq: self.with_ledger_info(|li| Ok(li.sequence_number))? + 4096, //TODO: use constant? Ideally we'd use the settings
+            type_: ContractDataType::Unique,
+            expiration_ledger_seq: 0,
         });
         self.0.storage.borrow_mut().put(
             key,
