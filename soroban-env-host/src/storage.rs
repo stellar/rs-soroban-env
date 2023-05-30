@@ -31,6 +31,9 @@ pub enum AccessType {
     /// When in [FootprintMode::Recording], indicates that the [LedgerKey] is written (and also possibly read)
     /// When in [FootprintMode::Enforcing], indicates that the [LedgerKey] is _allowed_ to be written (and also allowed to be read).
     ReadWrite,
+    /// The same as ReadWrite, but upstream consumers should be able to do concurrent writes
+    /// and reconcile the differences. Used for expiration_ledger_seq bumps.
+    CommutativeWrite,
 }
 
 impl Compare<AccessType> for Host {
@@ -78,14 +81,18 @@ impl Footprint {
         if let Some(existing) = self.0.get::<Rc<LedgerKey>>(key, budget)? {
             match (existing, ty.clone()) {
                 (AccessType::ReadOnly, AccessType::ReadOnly) => Ok(()),
-                (AccessType::ReadOnly, AccessType::ReadWrite) => {
-                    // The only interesting case is an upgrade
-                    // from previously-read-only to read-write.
+                (AccessType::ReadOnly, AccessType::ReadWrite)
+                | (AccessType::CommutativeWrite, AccessType::ReadWrite)
+                | (AccessType::ReadOnly, AccessType::CommutativeWrite) => {
+                    // An upgrade (ReadOnly -> CommutativeWrite -> ReadWrite) requires a rewrite.
                     self.0 = self.0.insert(Rc::clone(key), ty, budget)?;
                     Ok(())
                 }
                 (AccessType::ReadWrite, AccessType::ReadOnly) => Ok(()),
                 (AccessType::ReadWrite, AccessType::ReadWrite) => Ok(()),
+                (AccessType::ReadWrite, AccessType::CommutativeWrite) => Ok(()),
+                (AccessType::CommutativeWrite, AccessType::ReadOnly) => Ok(()),
+                (AccessType::CommutativeWrite, AccessType::CommutativeWrite) => Ok(()),
             }
         } else {
             self.0 = self.0.insert(Rc::clone(key), ty, budget)?;
@@ -102,11 +109,16 @@ impl Footprint {
         if let Some(existing) = self.0.get::<Rc<LedgerKey>>(key, budget)? {
             match (existing, ty) {
                 (AccessType::ReadOnly, AccessType::ReadOnly) => Ok(()),
-                (AccessType::ReadOnly, AccessType::ReadWrite) => {
+                (AccessType::ReadOnly, AccessType::ReadWrite)
+                | (AccessType::CommutativeWrite, AccessType::ReadWrite) => {
                     Err((ScErrorType::Storage, ScErrorCode::InvalidAction).into())
                 }
                 (AccessType::ReadWrite, AccessType::ReadOnly) => Ok(()),
                 (AccessType::ReadWrite, AccessType::ReadWrite) => Ok(()),
+                (AccessType::ReadOnly, AccessType::CommutativeWrite) => Ok(()),
+                (AccessType::ReadWrite, AccessType::CommutativeWrite) => Ok(()),
+                (AccessType::CommutativeWrite, AccessType::ReadOnly) => Ok(()),
+                (AccessType::CommutativeWrite, AccessType::CommutativeWrite) => Ok(()),
             }
         } else {
             Err((ScErrorType::Storage, ScErrorCode::MissingValue).into())
@@ -251,7 +263,7 @@ impl Storage {
     ) -> Result<(), HostError> {
         // A expiration ledger bump is considered to be a read only operation. When
         // concurrent Soroban transactions are added conflicts will be reconciled upstream.
-        let ty = AccessType::ReadOnly;
+        let ty = AccessType::CommutativeWrite;
         match self.mode {
             FootprintMode::Recording(_) => {
                 self.footprint.record_access(key, ty, budget)?;
