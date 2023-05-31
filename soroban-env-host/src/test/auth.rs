@@ -2,19 +2,19 @@ use std::collections::HashMap;
 
 use ed25519_dalek::Keypair;
 use soroban_env_common::xdr::{
-    AccountId, AddressWithNonce, AuthorizedInvocation, ContractAuth, HashIdPreimage,
-    HashIdPreimageContractAuth, PublicKey, ScAddress, ScSymbol, ScVec, Uint256,
+    AccountId, HashIdPreimage, HashIdPreimageSorobanAuthorization, PublicKey, ScAddress, ScSymbol,
+    ScVec, SorobanAddressCredentials, SorobanAuthorizationEntry, SorobanAuthorizedContractFunction,
+    SorobanAuthorizedFunction, SorobanAuthorizedInvocation, SorobanCredentials, Uint256,
 };
 use soroban_native_sdk_macros::contracttype;
 use soroban_test_wasms::AUTH_TEST_CONTRACT;
 
-use crate::auth::RecordedAuthPayload;
+use crate::auth::{AuthorizedFunction, ContractFunction, RecordedAuthPayload};
 use crate::budget::AsBudget;
-use crate::native_contract::base_types::BytesN;
+use crate::native_contract::base_types::Address;
 use crate::native_contract::testutils::{
     create_account, generate_keypair, sign_payload_for_account,
 };
-use crate::xdr::Hash;
 use crate::{host_vec, Host, LedgerInfo};
 use soroban_env_common::{AddressObject, Env, Symbol, SymbolStr, TryIntoVal};
 
@@ -23,7 +23,7 @@ use crate::native_contract::base_types::Vec as HostVec;
 #[derive(Clone)]
 #[contracttype]
 pub struct ContractTreeNode {
-    pub id: BytesN<32>,
+    pub addr: Address,
     pub need_auth: HostVec,
     pub children: HostVec,
 }
@@ -31,27 +31,27 @@ pub struct ContractTreeNode {
 struct AuthTest {
     host: Host,
     keys: Vec<Keypair>,
-    contracts: Vec<BytesN<32>>,
-    last_nonces: HashMap<(Vec<u8>, Vec<u8>), u64>,
+    contracts: Vec<Address>,
+    last_nonces: HashMap<(ScAddress, Vec<u8>), u64>,
 }
 
 struct SetupNode {
-    contract_id: BytesN<32>,
+    contract_address: Address,
     need_auth: Vec<bool>,
     children: Vec<SetupNode>,
 }
 
 struct SignNode {
-    contract_id: BytesN<32>,
+    contract_address: Address,
     fn_name: Symbol,
     args: ScVec,
     children: Vec<SignNode>,
 }
 
 impl SetupNode {
-    fn new(contract_id: &BytesN<32>, need_auth: Vec<bool>, children: Vec<SetupNode>) -> Self {
+    fn new(contract_address: &Address, need_auth: Vec<bool>, children: Vec<SetupNode>) -> Self {
         Self {
-            contract_id: contract_id.clone(),
+            contract_address: contract_address.clone(),
             need_auth,
             children,
         }
@@ -60,22 +60,22 @@ impl SetupNode {
 
 impl SignNode {
     fn new(
-        contract_id: &BytesN<32>,
+        contract_address: &Address,
         fn_name: Symbol,
         args: ScVec,
         children: Vec<SignNode>,
     ) -> Self {
         Self {
-            contract_id: contract_id.clone(),
+            contract_address: contract_address.clone(),
             fn_name,
             args,
             children,
         }
     }
 
-    fn tree_fn(contract_id: &BytesN<32>, children: Vec<SignNode>) -> Self {
+    fn tree_fn(contract_id: &Address, children: Vec<SignNode>) -> Self {
         Self {
-            contract_id: contract_id.clone(),
+            contract_address: contract_id.clone(),
             children,
             fn_name: Symbol::try_from_small_str("tree_fn").unwrap(),
             args: ScVec::default(),
@@ -112,9 +112,7 @@ impl AuthTest {
         }
         let mut contracts = vec![];
         for _ in 0..contract_cnt {
-            let contract_id_obj = host
-                .register_test_contract_wasm(AUTH_TEST_CONTRACT)
-                .unwrap();
+            let contract_id_obj = host.register_test_contract_wasm(AUTH_TEST_CONTRACT);
             contracts.push(contract_id_obj.try_into_val(&host).unwrap());
         }
         Self {
@@ -127,7 +125,7 @@ impl AuthTest {
 
     // Runs the test for the given setup in enforcing mode. `sign_payloads`
     // contain should contain a vec of `SignNode` inputs for every signer in the
-    // setup. The nodes then are mapped to the respective `ContractAuth` entries.
+    // setup. The nodes then are mapped to the respective `SorobanAuthorizationEntry` entries.
     fn tree_test_enforcing(
         &mut self,
         root: &SetupNode,
@@ -135,7 +133,7 @@ impl AuthTest {
         success: bool,
     ) {
         self.test_enforcing(
-            root.contract_id.clone(),
+            root.contract_address.clone(),
             Symbol::try_from_small_str("tree_fn").unwrap(),
             host_vec![
                 &self.host,
@@ -149,7 +147,7 @@ impl AuthTest {
 
     fn test_enforcing(
         &mut self,
-        contract_id: BytesN<32>,
+        contract_address: Address,
         fn_name: Symbol,
         args: HostVec,
         sign_payloads: Vec<Vec<SignNode>>,
@@ -161,40 +159,45 @@ impl AuthTest {
 
         for address_id in 0..self.keys.len() {
             let sc_address = self.key_to_sc_address(&self.keys[address_id]);
-            let mut next_nonce = HashMap::<Vec<u8>, u64>::new();
+            let mut next_nonce = HashMap::<ScAddress, u64>::new();
             for sign_root in &sign_payloads[address_id] {
-                let contract_id_vec = sign_root.contract_id.to_vec();
-                let nonce = if let Some(nonce) = next_nonce.get(&contract_id_vec) {
+                let contract_address = sign_root.contract_address.to_sc_address().unwrap();
+                let nonce = if let Some(nonce) = next_nonce.get(&contract_address) {
                     *nonce
                 } else {
                     let nonce = self
                         .host
                         .read_nonce(
-                            &Hash(contract_id_vec.clone().try_into().unwrap()),
-                            &sc_address,
+                            sc_address.clone(),
+                            &AuthorizedFunction::ContractFn(ContractFunction {
+                                contract_address: contract_address.clone(),
+                                function_name: Default::default(),
+                                args: Default::default(),
+                            }),
                         )
                         .unwrap();
                     self.last_nonces.insert(
                         (
-                            contract_id_vec.clone(),
+                            contract_address.clone(),
                             self.keys[address_id].public.as_bytes().to_vec(),
                         ),
                         nonce,
                     );
                     nonce
                 };
-                next_nonce.insert(contract_id_vec, nonce + 1);
+                next_nonce.insert(contract_address, nonce + 1);
                 let root_invocation = self.convert_sign_node(sign_root);
-                let payload_preimage = HashIdPreimage::ContractAuth(HashIdPreimageContractAuth {
-                    network_id: self
-                        .host
-                        .with_ledger_info(|li: &LedgerInfo| Ok(li.network_id))
-                        .unwrap()
-                        .try_into()
-                        .unwrap(),
-                    invocation: root_invocation.clone(),
-                    nonce,
-                });
+                let payload_preimage =
+                    HashIdPreimage::SorobanAuthorization(HashIdPreimageSorobanAuthorization {
+                        network_id: self
+                            .host
+                            .with_ledger_info(|li: &LedgerInfo| Ok(li.network_id))
+                            .unwrap()
+                            .try_into()
+                            .unwrap(),
+                        invocation: root_invocation.clone(),
+                        nonce,
+                    });
                 let payload = self.host.metered_hash_xdr(&payload_preimage).unwrap();
                 let signature_args = host_vec![
                     &self.host,
@@ -203,13 +206,16 @@ impl AuthTest {
                         sign_payload_for_account(&self.host, &self.keys[address_id], &payload)
                     ]
                 ];
-                contract_auth.push(ContractAuth {
-                    address_with_nonce: Some(AddressWithNonce {
+                contract_auth.push(SorobanAuthorizationEntry {
+                    credentials: SorobanCredentials::Address(SorobanAddressCredentials {
                         address: sc_address.clone(),
                         nonce,
+                        signature_args: self
+                            .host
+                            .call_args_to_scvec(signature_args.into())
+                            .unwrap(),
                     }),
                     root_invocation,
-                    signature_args: self.host.call_args_to_scvec(signature_args.into()).unwrap(),
                 });
             }
         }
@@ -217,7 +223,7 @@ impl AuthTest {
         self.host.set_authorization_entries(contract_auth).unwrap();
         assert_eq!(
             self.host
-                .call(contract_id.into(), fn_name, args.into(),)
+                .call(contract_address.into(), fn_name, args.into(),)
                 .is_ok(),
             success
         );
@@ -225,17 +231,21 @@ impl AuthTest {
 
     // Verifies that nonces for the given contract_id+signer pairs are increased
     // by the expected value.
-    fn verify_nonce_increments(&self, expected_increments: Vec<(&BytesN<32>, &Keypair, u64)>) {
-        for (contract_id, key, expected_increment) in expected_increments {
-            let nonce_increment = if let Some(last_nonce) = self
-                .last_nonces
-                .get(&(contract_id.to_vec().clone(), key.public.as_bytes().to_vec()))
-            {
+    fn verify_nonce_increments(&self, expected_increments: Vec<(&Address, &Keypair, u64)>) {
+        for (contract_address, key, expected_increment) in expected_increments {
+            let nonce_increment = if let Some(last_nonce) = self.last_nonces.get(&(
+                contract_address.to_sc_address().unwrap(),
+                key.public.as_bytes().to_vec(),
+            )) {
                 let curr_nonce = self
                     .host
                     .read_nonce(
-                        &Hash(contract_id.to_vec().try_into().unwrap()),
-                        &self.key_to_sc_address(key),
+                        self.key_to_sc_address(key),
+                        &AuthorizedFunction::ContractFn(ContractFunction {
+                            contract_address: contract_address.to_sc_address().unwrap(),
+                            function_name: Default::default(),
+                            args: Default::default(),
+                        }),
                     )
                     .unwrap();
                 curr_nonce - last_nonce
@@ -252,7 +262,7 @@ impl AuthTest {
         let addresses = self.get_addresses();
         let tree = self.convert_setup_tree(&root);
         self.run_recording(
-            &root.contract_id,
+            &root.contract_address,
             Symbol::try_from_small_str("tree_fn").unwrap(),
             host_vec![&self.host, addresses, tree],
         )
@@ -260,13 +270,13 @@ impl AuthTest {
 
     fn run_recording(
         &self,
-        contract_id: &BytesN<32>,
+        contract_address: &Address,
         fn_name: Symbol,
         args: HostVec,
     ) -> Vec<RecordedAuthPayload> {
         self.host.switch_to_recording_auth();
         self.host
-            .call(contract_id.clone().into(), fn_name, args.into())
+            .call(contract_address.clone().into(), fn_name, args.into())
             .unwrap();
         self.host.get_recorded_auth_payloads().unwrap()
     }
@@ -293,20 +303,22 @@ impl AuthTest {
         addresses
     }
 
-    fn convert_sign_node(&self, root: &SignNode) -> AuthorizedInvocation {
+    fn convert_sign_node(&self, root: &SignNode) -> SorobanAuthorizedInvocation {
         let mut sub_invocations = vec![];
         for c in &root.children {
             sub_invocations.push(self.convert_sign_node(c));
         }
 
-        // FIXME: more and better Symbol<->SymbolStr<->ScSymbol conversions.
+        // TODO: more and better Symbol<->SymbolStr<->ScSymbol conversions.
         let function_name: SymbolStr = root.fn_name.try_into_val(&self.host).unwrap();
         let function_name: ScSymbol = ScSymbol(function_name.to_string().try_into().unwrap());
 
-        AuthorizedInvocation {
-            contract_id: root.contract_id.to_vec().try_into().unwrap(),
-            function_name,
-            args: root.args.clone(),
+        SorobanAuthorizedInvocation {
+            function: SorobanAuthorizedFunction::ContractFn(SorobanAuthorizedContractFunction {
+                contract_address: root.contract_address.to_sc_address().unwrap(),
+                function_name,
+                args: root.args.clone(),
+            }),
             sub_invocations: sub_invocations.try_into().unwrap(),
         }
     }
@@ -321,7 +333,7 @@ impl AuthTest {
             need_auth.push(n).unwrap();
         }
         ContractTreeNode {
-            id: root.contract_id.clone(),
+            addr: root.contract_address.clone(),
             need_auth,
             children,
         }
@@ -345,6 +357,15 @@ fn test_single_authorized_call() {
     // Correct call
     test.tree_test_enforcing(&setup, expected_sign_payloads, true);
     test.verify_nonce_increments(vec![(&test.contracts[0], &test.keys[0], 1)]);
+
+    assert_eq!(
+        test.tree_run_recording(&setup),
+        vec![RecordedAuthPayload {
+            address: Some(test.key_to_sc_address(&test.keys[0])),
+            nonce: Some(2),
+            invocation: test.convert_sign_node(&SignNode::tree_fn(&test.contracts[0], vec![]))
+        }]
+    );
 
     // Correct call with an extra top-level payload
     test.tree_test_enforcing(

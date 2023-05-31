@@ -7,35 +7,31 @@ use crate::{
     Host, HostError,
 };
 use soroban_env_common::{
-    xdr::{
-        Asset, ContractId, CreateContractArgs, HostFunction, HostFunctionArgs, ScContractExecutable,
-    },
-    Env, RawVal,
+    xdr::{Asset, WriteXdr},
+    Env,
 };
 use soroban_env_common::{Symbol, TryFromVal, TryIntoVal};
 
-use crate::native_contract::base_types::{Bytes, BytesN};
+use crate::native_contract::base_types::Bytes;
 
 pub(crate) struct TestToken<'a> {
-    pub(crate) id: BytesN<32>,
+    pub(crate) address: Address,
     host: &'a Host,
 }
 
 impl<'a> TestToken<'a> {
     pub(crate) fn new_from_asset(host: &'a Host, asset: Asset) -> Self {
-        let id_obj: RawVal = host
-            .invoke_functions(vec![HostFunction {
-                args: HostFunctionArgs::CreateContract(CreateContractArgs {
-                    contract_id: ContractId::Asset(asset),
-                    executable: ScContractExecutable::Token,
-                }),
-                auth: Default::default(),
-            }])
-            .unwrap()[0]
-            .try_into_val(host)
+        let mut asset_bytes_vec = vec![];
+        asset.write_xdr(&mut asset_bytes_vec).unwrap();
+        let address_obj = host
+            .create_asset_contract(
+                Bytes::from_slice(host, &asset_bytes_vec.as_slice())
+                    .unwrap()
+                    .into(),
+            )
             .unwrap();
         Self {
-            id: BytesN::<32>::try_from_val(host, &id_obj).unwrap(),
+            address: Address::try_from_val(host, &address_obj).unwrap(),
             host,
         }
     }
@@ -44,7 +40,7 @@ impl<'a> TestToken<'a> {
         Ok(self
             .host
             .call(
-                self.id.clone().into(),
+                self.address.clone().into(),
                 Symbol::try_from_val(self.host, &"allowance")?,
                 host_vec![self.host, from, spender].into(),
             )?
@@ -57,11 +53,17 @@ impl<'a> TestToken<'a> {
         function_name: &str,
         args: HostVec,
     ) -> Result<(), HostError> {
-        authorize_single_invocation(self.host, signer, &self.id, function_name, args.clone());
+        authorize_single_invocation(
+            self.host,
+            signer,
+            &self.address,
+            function_name,
+            args.clone(),
+        );
         Ok(self
             .host
             .call(
-                self.id.clone().into(),
+                self.address.clone().into(),
                 Symbol::try_from_val(self.host, &function_name)?,
                 args.into(),
             )?
@@ -98,7 +100,7 @@ impl<'a> TestToken<'a> {
         Ok(self
             .host
             .call(
-                self.id.clone().into(),
+                self.address.clone().into(),
                 Symbol::try_from_val(self.host, &"balance")?,
                 host_vec![self.host, addr].into(),
             )?
@@ -109,7 +111,7 @@ impl<'a> TestToken<'a> {
         Ok(self
             .host
             .call(
-                self.id.clone().into(),
+                self.address.clone().into(),
                 Symbol::try_from_val(self.host, &"spendable_balance")?,
                 host_vec![self.host, addr].into(),
             )?
@@ -120,7 +122,7 @@ impl<'a> TestToken<'a> {
         Ok(self
             .host
             .call(
-                self.id.clone().into(),
+                self.address.clone().into(),
                 Symbol::try_from_val(self.host, &"authorized")?,
                 host_vec![self.host, addr].into(),
             )?
@@ -218,7 +220,7 @@ impl<'a> TestToken<'a> {
         Ok(self
             .host
             .call(
-                self.id.clone().into(),
+                self.address.clone().into(),
                 Symbol::try_from_val(self.host, &"decimals")?,
                 host_vec![self.host].into(),
             )?
@@ -228,7 +230,7 @@ impl<'a> TestToken<'a> {
     pub(crate) fn name(&self) -> Result<Bytes, HostError> {
         self.host
             .call(
-                self.id.clone().into(),
+                self.address.clone().into(),
                 Symbol::try_from_val(self.host, &"name")?,
                 host_vec![self.host].into(),
             )?
@@ -238,7 +240,7 @@ impl<'a> TestToken<'a> {
     pub(crate) fn symbol(&self) -> Result<Bytes, HostError> {
         self.host
             .call(
-                self.id.clone().into(),
+                self.address.clone().into(),
                 Symbol::try_from_val(self.host, &"symbol")?,
                 host_vec![self.host].into(),
             )?
