@@ -49,10 +49,6 @@ soroban-env-common = { path = "../../soroban-env-common" }
 soroban-env-guest = { path = "../../soroban-env-guest" }
 soroban-env-host = { path = "../../soroban-env-host" }
 
-[workspace.dependencies.soroban-env-common]
-version = "0.0.16"
-git = "https://github.com/stellar/rs-soroban-env"
-
 [workspace.dependencies.soroban-sdk]
 version = "0.8.0"
 git = "https://github.com/stellar/rs-soroban-sdk"
@@ -62,5 +58,5 @@ git = "https://github.com/stellar/rs-soroban-sdk"
 [patch."https://github.com/stellar/rs-soroban-sdk"]
 soroban-sdk = { path = "../../../rs-soroban-sdk/soroban-sdk" }
 
-#[patch."https://github.com/stellar/rs-stellar-xdr"]
-#stellar-xdr = { path = "../../../rs-stellar-xdr/" }
+[patch."https://github.com/stellar/rs-stellar-xdr"]
+stellar-xdr = { path = "../../../rs-stellar-xdr/" }
