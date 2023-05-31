@@ -28,7 +28,7 @@ impl CostRunner for VmInstantiationRun {
         _iter: u64,
         sample: Self::SampleType,
     ) -> Self::RecycledType {
-        black_box(host.charge_budget(Self::COST_TYPE, None).unwrap());
+        black_box(host.charge_budget(Self::COST_TYPE, Some(0)).unwrap());
         black_box((None, sample.wasm))
     }
 }

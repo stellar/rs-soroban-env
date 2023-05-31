@@ -251,7 +251,7 @@ impl BudgetImpl {
                 ContractCostType::VerifyEd25519Sig => self.tracker[i].1 = Some(0), // length of the signature buffer
                 ContractCostType::VmMemRead => self.tracker[i].1 = Some(0), // number of bytes in the linear memory to read
                 ContractCostType::VmMemWrite => self.tracker[i].1 = Some(0), // number of bytes in the linear memory to write
-                ContractCostType::VmInstantiation => (),
+                ContractCostType::VmInstantiation => self.tracker[i].1 = Some(0), // length of the wasm bytes,
                 ContractCostType::InvokeVmFunction => (),
                 ContractCostType::ChargeBudget => (),
             }
@@ -580,19 +580,19 @@ impl Default for BudgetImpl {
                     cpu.linear_term = 0;
                 }
                 ContractCostType::WasmMemAlloc => {
-                    cpu.const_term = 300;
+                    cpu.const_term = 0;
                     cpu.linear_term = 0;
                 }
                 ContractCostType::HostMemAlloc => {
-                    cpu.const_term = 3280;
+                    cpu.const_term = 2850;
                     cpu.linear_term = 0;
                 }
                 ContractCostType::HostMemCpy => {
-                    cpu.const_term = 25;
+                    cpu.const_term = 24;
                     cpu.linear_term = 0;
                 }
                 ContractCostType::HostMemCmp => {
-                    cpu.const_term = 41;
+                    cpu.const_term = 42;
                     cpu.linear_term = 1;
                 }
                 ContractCostType::InvokeHostFunction => {
@@ -600,7 +600,7 @@ impl Default for BudgetImpl {
                     cpu.linear_term = 0;
                 }
                 ContractCostType::VisitObject => {
-                    cpu.const_term = 28;
+                    cpu.const_term = 22;
                     cpu.linear_term = 0;
                 }
                 ContractCostType::ValXdrConv => {
@@ -608,19 +608,19 @@ impl Default for BudgetImpl {
                     cpu.linear_term = 0;
                 }
                 ContractCostType::ValSer => {
-                    cpu.const_term = 658;
+                    cpu.const_term = 640;
                     cpu.linear_term = 1;
                 }
                 ContractCostType::ValDeser => {
-                    cpu.const_term = 850;
+                    cpu.const_term = 853;
                     cpu.linear_term = 0;
                 }
                 ContractCostType::ComputeSha256Hash => {
-                    cpu.const_term = 1887;
+                    cpu.const_term = 1904;
                     cpu.linear_term = 33;
                 }
                 ContractCostType::ComputeEd25519PubKey => {
-                    cpu.const_term = 25777;
+                    cpu.const_term = 25761;
                     cpu.linear_term = 0;
                 }
                 ContractCostType::MapEntry => {
@@ -628,19 +628,19 @@ impl Default for BudgetImpl {
                     cpu.linear_term = 0;
                 }
                 ContractCostType::VecEntry => {
-                    cpu.const_term = 7;
+                    cpu.const_term = 8;
                     cpu.linear_term = 0;
                 }
                 ContractCostType::GuardFrame => {
-                    cpu.const_term = 4972;
+                    cpu.const_term = 4971;
                     cpu.linear_term = 0;
                 }
                 ContractCostType::VerifyEd25519Sig => {
-                    cpu.const_term = 368456;
+                    cpu.const_term = 368393;
                     cpu.linear_term = 20;
                 }
                 ContractCostType::VmMemRead => {
-                    cpu.const_term = 117;
+                    cpu.const_term = 77;
                     cpu.linear_term = 0;
                 }
                 ContractCostType::VmMemWrite => {
@@ -648,8 +648,8 @@ impl Default for BudgetImpl {
                     cpu.linear_term = 0;
                 }
                 ContractCostType::VmInstantiation => {
-                    cpu.const_term = 1194637;
-                    cpu.linear_term = 0;
+                    cpu.const_term = 772061;
+                    cpu.linear_term = 119;
                 }
                 ContractCostType::InvokeVmFunction => {
                     cpu.const_term = 6178;
@@ -737,8 +737,8 @@ impl Default for BudgetImpl {
                     mem.linear_term = 0;
                 }
                 ContractCostType::VmInstantiation => {
-                    mem.const_term = 1158029;
-                    mem.linear_term = 0;
+                    mem.const_term = 121941;
+                    mem.linear_term = 32;
                 }
                 ContractCostType::InvokeVmFunction => {
                     mem.const_term = 280;
