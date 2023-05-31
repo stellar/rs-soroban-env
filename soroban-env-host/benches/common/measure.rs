@@ -450,6 +450,7 @@ where
     loop {
         // prepare the measurement
         let host = Host::default();
+        host.as_budget().reset_unlimited(); // it is possible to exceed the default limits
         let sample = match next_sample(&host) {
             Some(s) => s,
             None => break,
