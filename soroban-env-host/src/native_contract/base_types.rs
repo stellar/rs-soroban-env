@@ -450,7 +450,7 @@ impl Address {
 
     pub(crate) fn to_sc_address(&self) -> Result<ScAddress, HostError> {
         self.host.visit_obj(self.object, |addr: &ScAddress| {
-            Ok(addr.metered_clone(self.host.budget_ref())?)
+            addr.metered_clone(self.host.budget_ref())
         })
     }
 
