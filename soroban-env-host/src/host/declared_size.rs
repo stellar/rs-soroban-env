@@ -1,5 +1,7 @@
 use std::rc::Rc;
 
+use soroban_env_common::xdr::{ContractIdPreimage, CreateContractArgs};
+
 use crate::{
     events::{HostEvent, InternalContractEvent, InternalEvent},
     host::Events,
@@ -94,7 +96,7 @@ impl_declared_size_type!(SymbolStr, SCSYMBOL_LIMIT);
 impl_declared_size_type!(SymbolSmallIter, 8);
 impl_declared_size_type!(U256, 32);
 impl_declared_size_type!(I256, 32);
-impl_declared_size_type!(HostObject, 48);
+impl_declared_size_type!(HostObject, 40);
 // xdr types
 impl_declared_size_type!(TimePoint, 8);
 impl_declared_size_type!(Duration, 8);
@@ -131,12 +133,14 @@ impl_declared_size_type!(ConfigSettingEntry, 104);
 impl_declared_size_type!(AccessType, 1);
 impl_declared_size_type!(InternalContractEvent, 40);
 impl_declared_size_type!(ContractEvent, 104);
-impl_declared_size_type!(HostEvent, 120);
+impl_declared_size_type!(HostEvent, 112);
 impl_declared_size_type!(Events, 24);
-impl_declared_size_type!(InternalEvent, 80);
+impl_declared_size_type!(InternalEvent, 40);
 impl_declared_size_type!(ScBytes, 24);
 impl_declared_size_type!(ScString, 24);
 impl_declared_size_type!(ScSymbol, 24);
+impl_declared_size_type!(CreateContractArgs, 99);
+impl_declared_size_type!(ContractIdPreimage, 66);
 
 // composite types
 
@@ -255,7 +259,7 @@ mod test {
         expect!["8"].assert_eq(size_of::<SymbolSmallIter>().to_string().as_str());
         expect!["32"].assert_eq(size_of::<U256>().to_string().as_str());
         expect!["32"].assert_eq(size_of::<I256>().to_string().as_str());
-        expect!["48"].assert_eq(size_of::<HostObject>().to_string().as_str());
+        expect!["40"].assert_eq(size_of::<HostObject>().to_string().as_str());
         // xdr types
         expect!["8"].assert_eq(size_of::<TimePoint>().to_string().as_str());
         expect!["8"].assert_eq(size_of::<Duration>().to_string().as_str());
@@ -288,16 +292,18 @@ mod test {
         expect!["120"].assert_eq(size_of::<ClaimableBalanceEntry>().to_string().as_str());
         expect!["160"].assert_eq(size_of::<LiquidityPoolEntry>().to_string().as_str());
         expect!["56"].assert_eq(size_of::<ContractCodeEntry>().to_string().as_str());
-        expect!["8"].assert_eq(size_of::<ConfigSettingEntry>().to_string().as_str());
+        expect!["104"].assert_eq(size_of::<ConfigSettingEntry>().to_string().as_str());
         expect!["1"].assert_eq(size_of::<AccessType>().to_string().as_str());
         expect!["40"].assert_eq(size_of::<InternalContractEvent>().to_string().as_str());
         expect!["104"].assert_eq(size_of::<ContractEvent>().to_string().as_str());
-        expect!["120"].assert_eq(size_of::<HostEvent>().to_string().as_str());
+        expect!["112"].assert_eq(size_of::<HostEvent>().to_string().as_str());
         expect!["24"].assert_eq(size_of::<Events>().to_string().as_str());
-        expect!["80"].assert_eq(size_of::<InternalEvent>().to_string().as_str());
+        expect!["40"].assert_eq(size_of::<InternalEvent>().to_string().as_str());
         expect!["24"].assert_eq(size_of::<ScBytes>().to_string().as_str());
         expect!["24"].assert_eq(size_of::<ScString>().to_string().as_str());
         expect!["24"].assert_eq(size_of::<ScSymbol>().to_string().as_str());
+        expect!["99"].assert_eq(size_of::<CreateContractArgs>().to_string().as_str());
+        expect!["66"].assert_eq(size_of::<ContractIdPreimage>().to_string().as_str());
         // composite types
         expect!["16"].assert_eq(size_of::<&[ScVal]>().to_string().as_str());
         expect!["48"].assert_eq(size_of::<(RawVal, ScVal)>().to_string().as_str());
@@ -425,6 +431,7 @@ mod test {
         assert_mem_size_le_declared_size!(ScBytes);
         assert_mem_size_le_declared_size!(ScString);
         assert_mem_size_le_declared_size!(ScSymbol);
+        assert_mem_size_le_declared_size!(CreateContractArgs);
         // composite types
         assert_mem_size_le_declared_size!(&[ScVal]);
         assert_mem_size_le_declared_size!((RawVal, ScVal));
