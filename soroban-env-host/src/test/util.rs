@@ -33,6 +33,12 @@ impl AsScVal for i32 {
     }
 }
 
+impl AsScVal for ScVec {
+    fn as_scval(&self) -> ScVal {
+        ScVal::Vec(Some(self.clone()))
+    }
+}
+
 pub(crate) fn generate_account_id() -> AccountId {
     AccountId(PublicKey::PublicKeyTypeEd25519(Uint256(
         generate_bytes_array(),

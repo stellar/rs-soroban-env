@@ -1038,7 +1038,7 @@ fn test_auth_revocable_on_contract() {
     token
         .set_authorized(&admin, user_1_addr.clone(), true)
         .unwrap();
-    assert!(token.authorized(user_1_addr.clone()).unwrap());
+    assert!(token.authorized(user_1_addr).unwrap());
 }
 
 #[test]
