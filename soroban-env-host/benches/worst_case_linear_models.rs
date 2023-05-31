@@ -1,7 +1,7 @@
 // Run this with
-// $ cargo bench --features vm,testutils --bench worst_case_linear_models -- --nocapture
+// $ cargo bench --features wasmi,testutils --bench worst_case_linear_models -- --nocapture
 // You can optionally pass in args listing the {`ContractCostType`, `WasmInsnType`} combination to run with, e.g.
-// $ cargo bench --features vm,testutils --bench worst_case_linear_models -- VecNew I64Rotr --nocapture
+// $ cargo bench --features wasmi,testutils --bench worst_case_linear_models -- VecNew I64Rotr --nocapture
 mod common;
 use common::*;
 use soroban_env_host::{cost_runner::WasmInsnType, xdr::ContractCostType};
@@ -47,7 +47,7 @@ fn write_budget_params_code(params: BTreeMap<ContractCostType, (FPCostModel, FPC
         .map(|(ty, (cpu, mem))| (ty, (cpu.params_as_u64(), mem.params_as_u64())))
     {
         println!(
-            "CostType::{:?} => {{ cpu.const_param = {}; cpu.lin_param = {}; }}",
+            "ContractCostType::{:?} => {{ cpu.const_term = {}; cpu.linear_term = {}; }}",
             ty, cpu.0, cpu.1
         );
     }
@@ -58,7 +58,7 @@ fn write_budget_params_code(params: BTreeMap<ContractCostType, (FPCostModel, FPC
         .map(|(ty, (cpu, mem))| (ty, (cpu.params_as_u64(), mem.params_as_u64())))
     {
         println!(
-            "CostType::{:?} => {{ mem.const_param = {}; mem.lin_param = {}; }}",
+            "ContractCostType::{:?} => {{ mem.const_term = {}; mem.linear_term = {}; }}",
             ty, mem.0, mem.1
         );
     }

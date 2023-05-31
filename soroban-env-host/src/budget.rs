@@ -167,7 +167,7 @@ impl BudgetDimension {
     /// If the input is `Some`, then the total input charged is iterations *
     /// input, assuming all batched units have the same input size. If input
     /// is `None`, the input is ignored and the model is treated as a constant
-    /// model, and amount charged is iterations * const_param.
+    /// model, and amount charged is iterations * const_term.
     pub fn charge(
         &mut self,
         ty: ContractCostType,
@@ -251,7 +251,7 @@ impl BudgetImpl {
                 ContractCostType::VerifyEd25519Sig => self.tracker[i].1 = Some(0), // length of the signature buffer
                 ContractCostType::VmMemRead => self.tracker[i].1 = Some(0), // number of bytes in the linear memory to read
                 ContractCostType::VmMemWrite => self.tracker[i].1 = Some(0), // number of bytes in the linear memory to write
-                ContractCostType::VmInstantiation => self.tracker[i].1 = Some(0), // length of the wasm bytes
+                ContractCostType::VmInstantiation => (),
                 ContractCostType::InvokeVmFunction => (),
                 ContractCostType::ChargeBudget => (),
             }
@@ -580,86 +580,83 @@ impl Default for BudgetImpl {
                     cpu.linear_term = 0;
                 }
                 ContractCostType::WasmMemAlloc => {
-                    cpu.const_term = 521;
+                    cpu.const_term = 300;
                     cpu.linear_term = 0;
                 }
                 ContractCostType::HostMemAlloc => {
-                    cpu.const_term = 883;
+                    cpu.const_term = 3280;
                     cpu.linear_term = 0;
                 }
                 ContractCostType::HostMemCpy => {
-                    cpu.const_term = 24;
+                    cpu.const_term = 25;
                     cpu.linear_term = 0;
                 }
                 ContractCostType::HostMemCmp => {
-                    cpu.const_term = 42;
+                    cpu.const_term = 41;
                     cpu.linear_term = 1;
                 }
                 ContractCostType::InvokeHostFunction => {
-                    cpu.const_term = 759;
+                    cpu.const_term = 621;
                     cpu.linear_term = 0;
                 }
                 ContractCostType::VisitObject => {
-                    cpu.const_term = 29;
+                    cpu.const_term = 28;
                     cpu.linear_term = 0;
                 }
                 ContractCostType::ValXdrConv => {
-                    cpu.const_term = 177;
+                    cpu.const_term = 134;
                     cpu.linear_term = 0;
                 }
                 ContractCostType::ValSer => {
-                    cpu.const_term = 741;
-                    cpu.linear_term = 0;
+                    cpu.const_term = 658;
+                    cpu.linear_term = 1;
                 }
                 ContractCostType::ValDeser => {
-                    cpu.const_term = 846;
+                    cpu.const_term = 850;
                     cpu.linear_term = 0;
                 }
                 ContractCostType::ComputeSha256Hash => {
-                    cpu.const_term = 1912;
-                    cpu.linear_term = 32;
+                    cpu.const_term = 1887;
+                    cpu.linear_term = 33;
                 }
                 ContractCostType::ComputeEd25519PubKey => {
-                    cpu.const_term = 25766;
+                    cpu.const_term = 25777;
                     cpu.linear_term = 0;
                 }
                 ContractCostType::MapEntry => {
-                    cpu.const_term = 59;
+                    cpu.const_term = 55;
                     cpu.linear_term = 0;
                 }
                 ContractCostType::VecEntry => {
-                    cpu.const_term = 14;
+                    cpu.const_term = 7;
                     cpu.linear_term = 0;
                 }
                 ContractCostType::GuardFrame => {
-                    cpu.const_term = 4512;
+                    cpu.const_term = 4972;
                     cpu.linear_term = 0;
                 }
                 ContractCostType::VerifyEd25519Sig => {
-                    cpu.const_term = 368361;
+                    cpu.const_term = 368456;
                     cpu.linear_term = 20;
                 }
                 ContractCostType::VmMemRead => {
-                    cpu.const_term = 95;
+                    cpu.const_term = 117;
                     cpu.linear_term = 0;
                 }
                 ContractCostType::VmMemWrite => {
-                    cpu.const_term = 97;
+                    cpu.const_term = 118;
                     cpu.linear_term = 0;
                 }
-                // This (as well as its mem model params), are not taken from calibration results.
-                // if we want to do that we need more sample contracts of various sizes. Right now
-                // this is just an eye-balled upperbound.
                 ContractCostType::VmInstantiation => {
-                    cpu.const_term = 1_000_000;
+                    cpu.const_term = 1194637;
                     cpu.linear_term = 0;
                 }
                 ContractCostType::InvokeVmFunction => {
-                    cpu.const_term = 6212;
+                    cpu.const_term = 6178;
                     cpu.linear_term = 0;
                 }
                 ContractCostType::ChargeBudget => {
-                    cpu.const_term = 198;
+                    cpu.const_term = 131;
                     cpu.linear_term = 0;
                 }
             }
@@ -672,7 +669,7 @@ impl Default for BudgetImpl {
                     mem.linear_term = 0;
                 }
                 ContractCostType::WasmMemAlloc => {
-                    mem.const_term = 66136;
+                    mem.const_term = 67416;
                     mem.linear_term = 1;
                 }
                 ContractCostType::HostMemAlloc => {
@@ -724,7 +721,7 @@ impl Default for BudgetImpl {
                     mem.linear_term = 0;
                 }
                 ContractCostType::GuardFrame => {
-                    mem.const_term = 267;
+                    mem.const_term = 280;
                     mem.linear_term = 0;
                 }
                 ContractCostType::VerifyEd25519Sig => {
@@ -739,15 +736,12 @@ impl Default for BudgetImpl {
                     mem.const_term = 0;
                     mem.linear_term = 0;
                 }
-                // This (as well as its cpu model params), are not taken from calibration results.
-                // if we want to do that we need more sample contracts of various sizes. Right now
-                // this is just an eye-balled upperbound.
                 ContractCostType::VmInstantiation => {
-                    mem.const_term = 1100000;
+                    mem.const_term = 1158029;
                     mem.linear_term = 0;
                 }
                 ContractCostType::InvokeVmFunction => {
-                    mem.const_term = 267;
+                    mem.const_term = 280;
                     mem.linear_term = 0;
                 }
                 ContractCostType::ChargeBudget => {
