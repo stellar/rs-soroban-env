@@ -615,7 +615,7 @@ impl Host {
                     self.with_frame(Frame::HostFunction(hf_type), || {
                         // Metering: conversions to host objects are covered. Cost of collecting
                         // RawVals into Vec is ignored. Since 1. RawVals are cheap to clone 2. the
-                        // max number of args is faikrly limited.
+                        // max number of args is fairly limited.
 
                         let symbol: Symbol = scsym.as_slice().try_into_val(self)?;
                         let args = self.scvals_to_rawvals(rest)?;
