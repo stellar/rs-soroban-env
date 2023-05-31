@@ -81,16 +81,17 @@ impl Footprint {
         if let Some(existing) = self.0.get::<Rc<LedgerKey>>(key, budget)? {
             match (existing, ty.clone()) {
                 (AccessType::ReadOnly, AccessType::ReadOnly) => Ok(()),
-                (AccessType::ReadOnly, AccessType::ReadWrite)
-                | (AccessType::CommutativeWrite, AccessType::ReadWrite)
-                | (AccessType::ReadOnly, AccessType::CommutativeWrite) => {
-                    // An upgrade (ReadOnly -> CommutativeWrite -> ReadWrite) requires a rewrite.
+                (AccessType::ReadOnly, AccessType::CommutativeWrite) => Ok(()),
+                (AccessType::ReadOnly, AccessType::ReadWrite) => {
+                    // The only interesting case is an upgrade
+                    // from previously-read-only to read-write.
                     self.0 = self.0.insert(Rc::clone(key), ty, budget)?;
                     Ok(())
                 }
                 (AccessType::ReadWrite, AccessType::ReadOnly) => Ok(()),
                 (AccessType::ReadWrite, AccessType::ReadWrite) => Ok(()),
                 (AccessType::ReadWrite, AccessType::CommutativeWrite) => Ok(()),
+                (AccessType::CommutativeWrite, AccessType::ReadWrite) => Ok(()),
                 (AccessType::CommutativeWrite, AccessType::ReadOnly) => Ok(()),
                 (AccessType::CommutativeWrite, AccessType::CommutativeWrite) => Ok(()),
             }
@@ -107,7 +108,7 @@ impl Footprint {
         budget: &Budget,
     ) -> Result<(), HostError> {
         if let Some(existing) = self.0.get::<Rc<LedgerKey>>(key, budget)? {
-            match (existing, ty) {
+            match (existing, ty.clone()) {
                 (AccessType::ReadOnly, AccessType::ReadOnly) => Ok(()),
                 (AccessType::ReadOnly, AccessType::ReadWrite)
                 | (AccessType::CommutativeWrite, AccessType::ReadWrite) => {
@@ -115,7 +116,12 @@ impl Footprint {
                 }
                 (AccessType::ReadWrite, AccessType::ReadOnly) => Ok(()),
                 (AccessType::ReadWrite, AccessType::ReadWrite) => Ok(()),
-                (AccessType::ReadOnly, AccessType::CommutativeWrite) => Ok(()),
+                (AccessType::ReadOnly, AccessType::CommutativeWrite) => {
+                    // We upgrade ReadOnly to CommutativeWrite here so consumers of
+                    // storage are made aware that a ReadOnly entry was modified.
+                    self.0 = self.0.insert(Rc::clone(key), ty, budget)?;
+                    Ok(())
+                }
                 (AccessType::ReadWrite, AccessType::CommutativeWrite) => Ok(()),
                 (AccessType::CommutativeWrite, AccessType::ReadOnly) => Ok(()),
                 (AccessType::CommutativeWrite, AccessType::CommutativeWrite) => Ok(()),
@@ -263,13 +269,16 @@ impl Storage {
     ) -> Result<(), HostError> {
         // A expiration ledger bump is considered to be a read only operation. When
         // concurrent Soroban transactions are added conflicts will be reconciled upstream.
-        let ty = AccessType::CommutativeWrite;
+        // Note that in recording mode, we record it as ReadOnly since it can be treated as such
+        // for the purposes of transaction submission.
         match self.mode {
             FootprintMode::Recording(_) => {
-                self.footprint.record_access(key, ty, budget)?;
+                self.footprint
+                    .record_access(key, AccessType::ReadOnly, budget)?;
             }
             FootprintMode::Enforcing => {
-                self.footprint.enforce_access(key, ty, budget)?;
+                self.footprint
+                    .enforce_access(key, AccessType::CommutativeWrite, budget)?;
             }
         };
 
