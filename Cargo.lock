@@ -1138,7 +1138,7 @@ dependencies = [
  "expect-test",
  "soroban-env-common",
  "wasm-encoder",
- "wasmparser 0.92.0",
+ "wasmparser",
  "wasmprinter",
 ]
 
@@ -1560,15 +1560,6 @@ dependencies = [
 
 [[package]]
 name = "wasmparser"
-version = "0.92.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7da34cec2a8c23db906cdf8b26e988d7a7f0d549eb5d51299129647af61a1b37"
-dependencies = [
- "indexmap",
-]
-
-[[package]]
-name = "wasmparser"
 version = "0.106.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d014e33793cab91655fa6349b0bc974984de106b2e0f6b0dfe6f6594b260624d"
@@ -1593,7 +1584,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3c520299a0b5999adef4f063add9689e4559b3e4eb2688dbd63cc36ebb595841"
 dependencies = [
  "anyhow",
- "wasmparser 0.106.0",
+ "wasmparser",
 ]
 
 [[package]]
