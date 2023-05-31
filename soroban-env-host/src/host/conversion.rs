@@ -162,7 +162,6 @@ impl Host {
     }
 
     pub(crate) fn ed25519_pub_key_from_bytes(&self, bytes: &[u8]) -> Result<PublicKey, HostError> {
-        debug_assert!(bytes.len() == 32);
         self.charge_budget(ContractCostType::ComputeEd25519PubKey, None)?;
         PublicKey::from_bytes(bytes).map_err(|_| {
             err!(
