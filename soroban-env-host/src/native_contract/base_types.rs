@@ -1,3 +1,4 @@
+use crate::host::metered_clone::MeteredClone;
 use crate::host::{Host, HostError};
 
 use core::cmp::Ordering;
@@ -75,6 +76,14 @@ impl Bytes {
     pub fn append(&mut self, other: Bytes) -> Result<(), HostError> {
         self.object = self.host.bytes_append(self.object, other.object)?;
         Ok(())
+    }
+
+    #[inline(always)]
+    pub fn from_slice(env: &Host, items: &[u8]) -> Result<Bytes, HostError> {
+        Ok(Bytes {
+            host: env.clone(),
+            object: env.bytes_new_from_slice(items)?,
+        })
     }
 
     #[cfg(test)]
@@ -172,11 +181,6 @@ impl<const N: usize> BytesN<N> {
             host: env.clone(),
             object: env.bytes_new_from_slice(items)?,
         })
-    }
-
-    #[cfg(test)]
-    pub(crate) fn to_vec(&self) -> std::vec::Vec<u8> {
-        Bytes::from(self.clone()).to_vec()
     }
 }
 
@@ -438,13 +442,16 @@ impl Address {
     pub(crate) fn from_account(env: &Host, account_id: &AccountId) -> Result<Self, HostError> {
         Address::try_from_val(
             env,
-            &env.add_host_object(ScAddress::Account(account_id.clone()))?,
+            &env.add_host_object(ScAddress::Account(
+                account_id.metered_clone(env.budget_ref())?,
+            ))?,
         )
     }
 
     pub(crate) fn to_sc_address(&self) -> Result<ScAddress, HostError> {
-        self.host
-            .visit_obj(self.object, |addr: &ScAddress| Ok(addr.clone()))
+        self.host.visit_obj(self.object, |addr: &ScAddress| {
+            addr.metered_clone(self.host.budget_ref())
+        })
     }
 
     pub(crate) fn require_auth(&self) -> Result<(), HostError> {

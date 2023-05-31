@@ -1,21 +1,20 @@
 use core::cmp::min;
 use std::rc::Rc;
 
-use soroban_env_common::xdr::{ScErrorCode, ScErrorType};
-use soroban_env_common::{Env, U32Val};
+use soroban_env_common::xdr::{
+    ContractIdPreimage, HashIdPreimageContractId, ScAddress, ScErrorCode, ScErrorType,
+};
+use soroban_env_common::{AddressObject, Env, U32Val};
 
 use crate::budget::AsBudget;
 use crate::xdr::{
-    AccountEntry, AccountId, Asset, ContractCodeEntry, ContractDataEntry, Hash, HashIdPreimage,
-    HashIdPreimageContractId, HashIdPreimageCreateContractArgs, HashIdPreimageEd25519ContractId,
-    HashIdPreimageFromAsset, HashIdPreimageSourceAccountContractId, LedgerEntry, LedgerEntryData,
-    LedgerEntryExt, LedgerKey, LedgerKeyAccount, LedgerKeyContractCode, LedgerKeyContractData,
-    LedgerKeyTrustLine, PublicKey, ScContractExecutable, ScVal, Signer, SignerKey,
-    ThresholdIndexes, TrustLineAsset, Uint256,
+    AccountEntry, AccountId, ContractCodeEntry, ContractDataEntry, Hash, HashIdPreimage,
+    LedgerEntry, LedgerEntryData, LedgerEntryExt, LedgerKey, LedgerKeyAccount,
+    LedgerKeyContractCode, LedgerKeyContractData, LedgerKeyTrustLine, PublicKey,
+    ScContractExecutable, ScVal, Signer, SignerKey, ThresholdIndexes, TrustLineAsset, Uint256,
 };
 use crate::{err, Host, HostError};
 
-use super::invoker_type::InvokerType;
 use super::metered_clone::MeteredClone;
 
 impl Host {
@@ -110,95 +109,16 @@ impl Host {
         Ok(())
     }
 
-    // notes on metering: covers the key and salt. Rest are free.
-    pub fn id_preimage_from_ed25519(
-        &self,
-        key: Uint256,
-        salt: Uint256,
-    ) -> Result<HashIdPreimage, HostError> {
-        Ok(HashIdPreimage::ContractIdFromEd25519(
-            HashIdPreimageEd25519ContractId {
-                network_id: self
-                    .hash_from_bytesobj_input("network_id", self.get_ledger_network_id()?)?,
-                ed25519: key,
-                salt,
-            },
-        ))
-    }
-
     // metering: covered by components
-    pub fn id_preimage_from_contract(
+    pub fn get_full_contract_id_preimage(
         &self,
-        contract_id: Hash,
-        salt: Uint256,
+        init_preimage: ContractIdPreimage,
     ) -> Result<HashIdPreimage, HostError> {
-        Ok(HashIdPreimage::ContractIdFromContract(
-            HashIdPreimageContractId {
-                network_id: self
-                    .hash_from_bytesobj_input("network_id", self.get_ledger_network_id()?)?,
-                contract_id,
-                salt,
-            },
-        ))
-    }
-
-    // metering: covered by components
-    pub fn id_preimage_from_asset(&self, asset: Asset) -> Result<HashIdPreimage, HostError> {
-        Ok(HashIdPreimage::ContractIdFromAsset(
-            HashIdPreimageFromAsset {
-                network_id: self
-                    .hash_from_bytesobj_input("network_id", self.get_ledger_network_id()?)?,
-                asset,
-            },
-        ))
-    }
-
-    // metering: covered by components
-    pub fn id_preimage_from_source_account(
-        &self,
-        salt: Uint256,
-    ) -> Result<HashIdPreimage, HostError> {
-        if self.get_invoker_type()? != InvokerType::Account as u64 {
-            return Err(self.err(
-                ScErrorType::Context,
-                ScErrorCode::UnexpectedType,
-                "invoker is not an account",
-                &[],
-            ));
-        }
-
-        let source_account = self.source_account().ok_or_else(|| {
-            self.err(
-                ScErrorType::Context,
-                ScErrorCode::MissingValue,
-                "unexpected missing invoker in id preimage",
-                &[],
-            )
-        })?;
-        Ok(HashIdPreimage::ContractIdFromSourceAccount(
-            HashIdPreimageSourceAccountContractId {
-                network_id: self
-                    .hash_from_bytesobj_input("network_id", self.get_ledger_network_id()?)?,
-                source_account,
-                salt,
-            },
-        ))
-    }
-
-    // metering: covered by components
-    pub fn create_contract_args_hash_preimage(
-        &self,
-        executable: ScContractExecutable,
-        salt: Uint256,
-    ) -> Result<HashIdPreimage, HostError> {
-        Ok(HashIdPreimage::CreateContractArgs(
-            HashIdPreimageCreateContractArgs {
-                network_id: self
-                    .hash_from_bytesobj_input("network_id", self.get_ledger_network_id()?)?,
-                executable,
-                salt,
-            },
-        ))
+        Ok(HashIdPreimage::ContractId(HashIdPreimageContractId {
+            network_id: self
+                .hash_from_bytesobj_input("network_id", self.get_ledger_network_id()?)?,
+            contract_id_preimage: init_preimage,
+        }))
     }
 
     // notes on metering: `get` from storage is covered. Rest are free.
@@ -298,6 +218,27 @@ impl Host {
             last_modified_ledger_seq: 0,
             data,
             ext: LedgerEntryExt::V0,
+        })
+    }
+
+    pub(crate) fn contract_id_from_scaddress(&self, address: ScAddress) -> Result<Hash, HostError> {
+        match address {
+            ScAddress::Account(_) => Err(self.err(
+                ScErrorType::Object,
+                ScErrorCode::InvalidInput,
+                "not a contract address",
+                &[],
+            )),
+            ScAddress::Contract(contract_id) => Ok(contract_id),
+        }
+    }
+
+    pub(crate) fn contract_id_from_address(
+        &self,
+        address: AddressObject,
+    ) -> Result<Hash, HostError> {
+        self.visit_obj(address, |addr: &ScAddress| {
+            self.contract_id_from_scaddress(addr.metered_clone(self.budget_ref())?)
         })
     }
 }

@@ -3,10 +3,10 @@ use core::cmp::{min, Ordering};
 use soroban_env_common::{
     xdr::{
         AccountEntry, AccountId, ClaimableBalanceEntry, ConfigSettingEntry, ContractCodeEntry,
-        ContractCostType, DataEntry, Duration, Hash, LedgerEntry, LedgerEntryData, LedgerEntryExt,
-        LedgerKey, LedgerKeyAccount, LedgerKeyClaimableBalance, LedgerKeyConfigSetting,
-        LedgerKeyContractCode, LedgerKeyData, LedgerKeyLiquidityPool, LedgerKeyOffer,
-        LedgerKeyTrustLine, LiquidityPoolEntry, OfferEntry, PublicKey, ScAddress,
+        ContractCostType, CreateContractArgs, DataEntry, Duration, Hash, LedgerEntry,
+        LedgerEntryData, LedgerEntryExt, LedgerKey, LedgerKeyAccount, LedgerKeyClaimableBalance,
+        LedgerKeyConfigSetting, LedgerKeyContractCode, LedgerKeyData, LedgerKeyLiquidityPool,
+        LedgerKeyOffer, LedgerKeyTrustLine, LiquidityPoolEntry, OfferEntry, PublicKey, ScAddress,
         ScContractExecutable, ScErrorCode, ScErrorType, ScMap, ScMapEntry, ScNonceKey, ScVal,
         ScVec, TimePoint, TrustLineAsset, TrustLineEntry, Uint256,
     },
@@ -142,7 +142,10 @@ impl<T: Ord + DeclaredSizeForMetering> Compare<FixedSizeOrdType<'_, T>> for Budg
         // Here we make a runtime assertion that the type's size is below its promised element
         // size for budget charging.
         debug_assert!(
-            std::mem::size_of::<T>() as u64 <= <T as DeclaredSizeForMetering>::DECLARED_SIZE
+            std::mem::size_of::<T>() as u64 <= <T as DeclaredSizeForMetering>::DECLARED_SIZE,
+            "mem size: {}, declared: {}",
+            std::mem::size_of::<T>(),
+            <T as DeclaredSizeForMetering>::DECLARED_SIZE
         );
         self.charge(
             ContractCostType::HostMemCmp,
@@ -209,6 +212,8 @@ impl_compare_fixed_size_ord_type!(ClaimableBalanceEntry);
 impl_compare_fixed_size_ord_type!(LiquidityPoolEntry);
 impl_compare_fixed_size_ord_type!(ContractCodeEntry);
 impl_compare_fixed_size_ord_type!(ConfigSettingEntry);
+
+impl_compare_fixed_size_ord_type!(CreateContractArgs);
 
 impl Compare<SymbolStr> for Budget {
     type Error = HostError;

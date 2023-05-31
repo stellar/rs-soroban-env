@@ -1,5 +1,5 @@
 use crate::{
-    xdr::{ScVal, ScVec},
+    xdr::{Hash, ScAddress, ScVal, ScVec},
     BytesObject, ContractFunctionSet, Env, EnvBase, Host, HostError, RawVal, Symbol, SymbolSmall,
     U32Val, U64Object, VecObject,
 };
@@ -64,7 +64,8 @@ fn prng_test() -> Result<(), HostError> {
     host.set_base_prng_seed([0; 32]);
 
     let dummy_id = [0; 32];
-    let id = host.bytes_new_from_slice(&dummy_id)?;
+    let dummy_address = ScAddress::Contract(Hash(dummy_id.clone()));
+    let id = host.add_host_object(dummy_address)?;
 
     host.register_test_contract(id, std::rc::Rc::new(PRNGUsingTest))?;
     let args = host.test_vec_obj::<i32>(&[1, 2])?;

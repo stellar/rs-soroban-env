@@ -6,7 +6,7 @@ use soroban_test_wasms::CONTRACT_STORAGE;
 #[test]
 fn test_peristent_storage() {
     let host = Host::test_host_with_recording_footprint();
-    let contract_id = host.register_test_contract_wasm(CONTRACT_STORAGE).unwrap();
+    let contract_id = host.register_test_contract_wasm(CONTRACT_STORAGE);
     let key_1 = Symbol::try_from_small_str("key_1").unwrap();
     let key_2 = Symbol::try_from_val(&host, &"this_is_key_2").unwrap();
     // Check that the key is not in the storage yet

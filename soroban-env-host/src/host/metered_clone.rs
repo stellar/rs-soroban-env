@@ -1,6 +1,6 @@
 use std::{mem, rc::Rc};
 
-use soroban_env_common::xdr::{ContractEventType, ScErrorCode, ScErrorType};
+use soroban_env_common::xdr::{ContractEventType, ContractIdPreimage, ScErrorCode, ScErrorType};
 
 use crate::{
     budget::Budget,
@@ -10,12 +10,12 @@ use crate::{
     storage::AccessType,
     xdr::{
         AccountEntry, AccountId, BytesM, ClaimableBalanceEntry, ConfigSettingEntry,
-        ContractCodeEntry, ContractCostType, ContractEvent, ContractEventBody, DataEntry, Duration,
-        Hash, LedgerEntryExt, LedgerKeyAccount, LedgerKeyClaimableBalance, LedgerKeyConfigSetting,
-        LedgerKeyContractCode, LedgerKeyData, LedgerKeyLiquidityPool, LedgerKeyOffer,
-        LedgerKeyTrustLine, LiquidityPoolEntry, OfferEntry, PublicKey, ScAddress, ScBytes,
-        ScContractExecutable, ScMap, ScMapEntry, ScNonceKey, ScString, ScSymbol, ScVal, ScVec,
-        StringM, TimePoint, TrustLineAsset, TrustLineEntry, Uint256,
+        ContractCodeEntry, ContractCostType, ContractEvent, ContractEventBody, CreateContractArgs,
+        DataEntry, Duration, Hash, LedgerEntryExt, LedgerKeyAccount, LedgerKeyClaimableBalance,
+        LedgerKeyConfigSetting, LedgerKeyContractCode, LedgerKeyData, LedgerKeyLiquidityPool,
+        LedgerKeyOffer, LedgerKeyTrustLine, LiquidityPoolEntry, OfferEntry, PublicKey, ScAddress,
+        ScBytes, ScContractExecutable, ScMap, ScMapEntry, ScNonceKey, ScString, ScSymbol, ScVal,
+        ScVec, StringM, TimePoint, TrustLineAsset, TrustLineEntry, Uint256,
     },
     AddressObject, Bool, BytesObject, ContractExecutableObject, DurationObject, DurationSmall,
     DurationVal, Error, HostError, I128Object, I128Small, I128Val, I256Object, I256Small, I256Val,
@@ -40,7 +40,12 @@ pub(crate) fn charge_shallow_copy<T: MeteredClone>(
     // that the type's size is below its promised element size for budget charging. This assertion
     // only happens in debug build. In optimized build, not satisfying the asserted condition just
     // means an underestimation of the cost.
-    debug_assert!(mem::size_of::<T>() as u64 <= T::DECLARED_SIZE);
+    debug_assert!(
+        mem::size_of::<T>() as u64 <= T::DECLARED_SIZE,
+        "mem size: {}, declared: {}",
+        std::mem::size_of::<T>(),
+        T::DECLARED_SIZE
+    );
     budget.charge(
         ContractCostType::HostMemCpy,
         Some(n_elts.saturating_mul(T::DECLARED_SIZE)),
@@ -212,6 +217,8 @@ impl MeteredClone for ContractCodeEntry {}
 impl MeteredClone for ConfigSettingEntry {}
 impl MeteredClone for AccessType {}
 impl MeteredClone for InternalContractEvent {}
+impl MeteredClone for CreateContractArgs {}
+impl MeteredClone for ContractIdPreimage {}
 // composite types
 impl<T> MeteredClone for Rc<T> {}
 impl<T> MeteredClone for &[T] {}

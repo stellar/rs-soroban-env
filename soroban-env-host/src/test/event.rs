@@ -3,9 +3,10 @@ use crate::{
         ContractEvent, ContractEventBody, ContractEventType, ContractEventV0, ExtensionPoint, Hash,
         ScMap, ScMapEntry, ScVal,
     },
-    ContractFunctionSet, Env, EnvBase, Host, HostError, RawVal, Symbol,
+    ContractFunctionSet, Env, Host, HostError, RawVal, Symbol,
 };
 use expect_test::expect;
+use soroban_env_common::xdr::ScAddress;
 use std::rc::Rc;
 
 pub struct ContractWithSingleEvent;
@@ -26,7 +27,8 @@ impl ContractFunctionSet for ContractWithSingleEvent {
 fn contract_event() -> Result<(), HostError> {
     let host = Host::default();
     let dummy_id = [0; 32];
-    let id = host.bytes_new_from_slice(&dummy_id)?;
+    let dummy_address = ScAddress::Contract(Hash(dummy_id.clone()));
+    let id = host.add_host_object(dummy_address)?;
     let test_contract = Rc::new(ContractWithSingleEvent {});
     let sym = Symbol::try_from_small_str("add").unwrap();
     let args = host.test_vec_obj::<i32>(&[1, 2])?;
@@ -79,8 +81,8 @@ impl ContractFunctionSet for ContractWithMultipleEvents {
 #[test]
 fn test_event_rollback() -> Result<(), HostError> {
     let host = Host::default();
-    let dummy_id = [0; 32];
-    let id = host.bytes_new_from_slice(&dummy_id)?;
+    let dummy_address = ScAddress::Contract(Hash([0; 32]));
+    let id = host.add_host_object(dummy_address)?;
     let test_contract = Rc::new(ContractWithMultipleEvents {});
     let sym = Symbol::try_from_small_str("add").unwrap();
     let args = host.test_vec_obj::<i32>(&[1, 2])?;

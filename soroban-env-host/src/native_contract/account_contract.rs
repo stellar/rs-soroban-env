@@ -1,4 +1,4 @@
-use crate::auth::AuthorizedInvocation;
+use crate::auth::{AuthorizedFunction, AuthorizedInvocation};
 // This is a built-in account 'contract'. This is not actually a contract, as
 // it doesn't need to be directly invoked. But semantically this is analagous
 // to a generic smart wallet contract that supports authentication and blanket
@@ -8,7 +8,10 @@ use crate::host::{frame::ContractReentryMode, Host};
 use crate::native_contract::{base_types::BytesN, contract_error::ContractError};
 use crate::{err, HostError};
 use core::cmp::Ordering;
-use soroban_env_common::xdr::{Hash, ThresholdIndexes, Uint256};
+use soroban_env_common::xdr::{
+    ContractIdPreimage, Hash, ScContractExecutable, ScErrorCode, ScErrorType, ThresholdIndexes,
+    Uint256,
+};
 use soroban_env_common::{Env, EnvBase, RawVal, Symbol, TryFromVal, TryIntoVal};
 
 use crate::native_contract::base_types::Vec as HostVec;
@@ -18,14 +21,36 @@ const MAX_ACCOUNT_SIGNATURES: u32 = 20;
 use soroban_env_common::xdr::{AccountId, ScVal};
 use soroban_native_sdk_macros::contracttype;
 
+use super::base_types::Address;
+
 pub const ACCOUNT_CONTRACT_CHECK_AUTH_FN_NAME: &str = "__check_auth";
 
 #[derive(Clone)]
 #[contracttype]
-pub struct AuthorizationContext {
-    pub contract: BytesN<32>,
+pub struct ContractAuthorizationContext {
+    pub contract: Address,
     pub fn_name: Symbol,
     pub args: HostVec,
+}
+
+#[derive(Clone)]
+#[contracttype]
+pub enum ContractExecutable {
+    Wasm(BytesN<32>),
+}
+
+#[derive(Clone)]
+#[contracttype]
+pub struct CreateContractHostFnContext {
+    pub executable: ContractExecutable,
+    pub salt: BytesN<32>,
+}
+
+#[derive(Clone)]
+#[contracttype]
+enum AuthorizationContext {
+    Contract(ContractAuthorizationContext),
+    CreateContractHostFn(CreateContractHostFnContext),
 }
 
 #[derive(Clone)]
@@ -36,19 +61,66 @@ pub struct AccountEd25519Signature {
 }
 
 impl AuthorizationContext {
-    fn from_invocation(host: &Host, invocation: &AuthorizedInvocation) -> Result<Self, HostError> {
-        let args =
-            HostVec::try_from_val(host, &host.scvals_to_rawvals(invocation.args.0.as_slice())?)?;
-        let fn_name =
-            Symbol::try_from(host.to_host_val(&ScVal::Symbol(invocation.function_name.clone()))?)?;
-        Ok(Self {
-            contract: BytesN::try_from_val(
-                host,
-                &host.bytes_new_from_slice(invocation.contract_id.0.as_slice())?,
-            )?,
-            fn_name,
-            args,
-        })
+    fn from_authorized_fn(host: &Host, function: &AuthorizedFunction) -> Result<Self, HostError> {
+        match function {
+            AuthorizedFunction::ContractFn(contract_fn) => {
+                let fn_name = Symbol::try_from(host.to_host_val(&ScVal::Symbol(
+                    contract_fn.function_name.metered_clone(host.budget_ref())?,
+                ))?)?;
+                let args = HostVec::try_from_val(
+                    host,
+                    &host.scvals_to_rawvals(contract_fn.args.0.as_slice())?,
+                )?;
+                Ok(AuthorizationContext::Contract(
+                    ContractAuthorizationContext {
+                        contract: Address::try_from_val(
+                            host,
+                            &host.add_host_object(
+                                contract_fn
+                                    .contract_address
+                                    .metered_clone(host.budget_ref())?,
+                            )?,
+                        )?,
+                        fn_name,
+                        args,
+                    },
+                ))
+            }
+            AuthorizedFunction::CreateContractHostFn(args) => {
+                let wasm_hash = match &args.executable {
+                    ScContractExecutable::WasmRef(wasm_hash) => {
+                        BytesN::<32>::from_slice(host, wasm_hash.as_slice())?
+                    }
+                    ScContractExecutable::Token => {
+                        return Err(host.err(
+                            ScErrorType::Auth,
+                            ScErrorCode::InternalError,
+                            "unexpected auth context for create contract host fn",
+                            &[],
+                        ))
+                    }
+                };
+                let salt = match &args.contract_id_preimage {
+                    ContractIdPreimage::Address(id_from_addr) => {
+                        BytesN::<32>::from_slice(host, id_from_addr.salt.as_slice())?
+                    }
+                    ContractIdPreimage::Asset(_) => {
+                        return Err(host.err(
+                            ScErrorType::Auth,
+                            ScErrorCode::InternalError,
+                            "unexpected auth context for create contract host fn",
+                            &[],
+                        ))
+                    }
+                };
+                Ok(AuthorizationContext::CreateContractHostFn(
+                    CreateContractHostFnContext {
+                        executable: ContractExecutable::Wasm(wasm_hash),
+                        salt,
+                    },
+                ))
+            }
+        }
     }
 }
 
@@ -57,7 +129,10 @@ fn invocation_tree_to_auth_contexts(
     invocation: &AuthorizedInvocation,
     out_contexts: &mut HostVec,
 ) -> Result<(), HostError> {
-    out_contexts.push(&AuthorizationContext::from_invocation(host, invocation)?)?;
+    out_contexts.push(&AuthorizationContext::from_authorized_fn(
+        host,
+        &invocation.function,
+    )?)?;
     for sub_invocation in &invocation.sub_invocations {
         invocation_tree_to_auth_contexts(host, sub_invocation, out_contexts)?;
     }

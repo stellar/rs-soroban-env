@@ -1,12 +1,14 @@
+use crate::auth::{AuthorizedFunction, ContractFunction};
 use crate::{Host, LedgerInfo};
 use ed25519_dalek::{Keypair, Signer};
 use rand::thread_rng;
 use soroban_env_common::xdr::{
     AccountEntry, AccountEntryExt, AccountEntryExtensionV1, AccountEntryExtensionV1Ext,
-    AccountEntryExtensionV2, AccountEntryExtensionV2Ext, AccountId, AddressWithNonce,
-    AuthorizedInvocation, ContractAuth, Hash, HashIdPreimage, HashIdPreimageContractAuth,
-    LedgerEntryData, LedgerKey, Liabilities, PublicKey, ScAddress, ScVec, SequenceNumber,
-    SignerKey, Thresholds, Uint256,
+    AccountEntryExtensionV2, AccountEntryExtensionV2Ext, AccountId, Hash, HashIdPreimage,
+    HashIdPreimageSorobanAuthorization, LedgerEntryData, LedgerKey, Liabilities, PublicKey,
+    ScAddress, ScSymbol, ScVec, SequenceNumber, SignerKey, SorobanAddressCredentials,
+    SorobanAuthorizationEntry, SorobanAuthorizedContractFunction, SorobanAuthorizedFunction,
+    SorobanAuthorizedInvocation, SorobanCredentials, Thresholds, Uint256,
 };
 use soroban_env_common::{EnvBase, TryFromVal, TryIntoVal};
 
@@ -66,7 +68,7 @@ pub(crate) enum TestSigner<'a> {
 }
 
 pub(crate) struct AccountContractSigner<'a> {
-    pub(crate) id: Hash,
+    pub(crate) address: Address,
     #[allow(clippy::type_complexity)]
     pub(crate) sign: Box<dyn Fn(&[u8]) -> HostVec + 'a>,
 }
@@ -129,7 +131,7 @@ impl<'a> TestSigner<'a> {
         let sc_address = match self {
             TestSigner::AccountInvoker(acc_id) => ScAddress::Account(acc_id.clone()),
             TestSigner::Account(acc) => ScAddress::Account(acc.account_id.clone()),
-            TestSigner::AccountContract(signer) => ScAddress::Contract(signer.id.clone()),
+            TestSigner::AccountContract(signer) => signer.address.to_sc_address().unwrap(),
             TestSigner::ContractInvoker(contract_id) => ScAddress::Contract(contract_id.clone()),
         };
         Address::try_from_val(host, &host.add_host_object(sc_address).unwrap()).unwrap()
@@ -139,51 +141,53 @@ impl<'a> TestSigner<'a> {
 pub(crate) fn authorize_single_invocation_with_nonce(
     host: &Host,
     signer: &TestSigner,
-    contract_id: &BytesN<32>,
+    contract_address: &Address,
     function_name: &str,
     args: HostVec,
     nonce: Option<u64>,
 ) {
     let sc_address = signer.address(host).to_sc_address().unwrap();
-    let address_with_nonce = match signer {
-        TestSigner::AccountInvoker(_) => None,
-        TestSigner::Account(_) | TestSigner::AccountContract(_) => Some(AddressWithNonce {
-            address: sc_address,
-            nonce: nonce.unwrap(),
-        }),
+    let mut credentials = match signer {
+        TestSigner::AccountInvoker(_) => SorobanCredentials::SourceAccount,
+        TestSigner::Account(_) | TestSigner::AccountContract(_) => {
+            SorobanCredentials::Address(SorobanAddressCredentials {
+                address: sc_address,
+                nonce: nonce.unwrap(),
+                signature_args: Default::default(),
+            })
+        }
         TestSigner::ContractInvoker(_) => {
             // Nothing need to be authorized for contract invoker here.
             return;
         }
     };
 
-    let root_invocation = AuthorizedInvocation {
-        contract_id: contract_id.to_vec().try_into().unwrap(),
-        function_name: crate::xdr::ScSymbol(function_name.try_into().unwrap()),
-        args: host.call_args_to_scvec(args.into()).unwrap(),
+    let root_invocation = SorobanAuthorizedInvocation {
+        function: SorobanAuthorizedFunction::ContractFn(SorobanAuthorizedContractFunction {
+            contract_address: contract_address.to_sc_address().unwrap(),
+            function_name: ScSymbol(function_name.try_into().unwrap()),
+            args: host.call_args_to_scvec(args.into()).unwrap(),
+        }),
         sub_invocations: Default::default(),
     };
 
-    let signature_payload = if let Some(addr_with_nonce) = &address_with_nonce {
-        let signature_payload_preimage = HashIdPreimage::ContractAuth(HashIdPreimageContractAuth {
-            network_id: host
-                .with_ledger_info(|li: &LedgerInfo| Ok(li.network_id))
-                .unwrap()
-                .try_into()
-                .unwrap(),
-            invocation: root_invocation.clone(),
-            nonce: addr_with_nonce.nonce,
-        });
-        host.metered_hash_xdr(&signature_payload_preimage).unwrap()
-    } else {
-        [0; 32]
-    };
-
-    let signature_args = signer.sign(host, &signature_payload);
-    let auth_entry = ContractAuth {
-        address_with_nonce,
+    if let SorobanCredentials::Address(address_credentials) = &mut credentials {
+        let signature_payload_preimage =
+            HashIdPreimage::SorobanAuthorization(HashIdPreimageSorobanAuthorization {
+                network_id: host
+                    .with_ledger_info(|li: &LedgerInfo| Ok(li.network_id))
+                    .unwrap()
+                    .try_into()
+                    .unwrap(),
+                invocation: root_invocation.clone(),
+                nonce: address_credentials.nonce,
+            });
+        let signature_payload = host.metered_hash_xdr(&signature_payload_preimage).unwrap();
+        address_credentials.signature_args = signer.sign(host, &signature_payload);
+    }
+    let auth_entry = SorobanAuthorizationEntry {
+        credentials,
         root_invocation,
-        signature_args,
     };
 
     host.set_authorization_entries(vec![auth_entry]).unwrap();
@@ -192,7 +196,7 @@ pub(crate) fn authorize_single_invocation_with_nonce(
 pub(crate) fn authorize_single_invocation(
     host: &Host,
     signer: &TestSigner,
-    contract_id: &BytesN<32>,
+    contract_address: &Address,
     function_name: &str,
     args: HostVec,
 ) {
@@ -200,8 +204,12 @@ pub(crate) fn authorize_single_invocation(
         TestSigner::AccountInvoker(_) => None,
         TestSigner::Account(_) | TestSigner::AccountContract(_) => Some(
             host.read_nonce(
-                &Hash(contract_id.to_vec().try_into().unwrap()),
-                &signer.address(host).to_sc_address().unwrap(),
+                signer.address(host).to_sc_address().unwrap(),
+                &AuthorizedFunction::ContractFn(ContractFunction {
+                    contract_address: contract_address.to_sc_address().unwrap(),
+                    function_name: Default::default(),
+                    args: Default::default(),
+                }),
             )
             .unwrap(),
         ),
@@ -209,7 +217,14 @@ pub(crate) fn authorize_single_invocation(
             return;
         }
     };
-    authorize_single_invocation_with_nonce(host, signer, contract_id, function_name, args, nonce);
+    authorize_single_invocation_with_nonce(
+        host,
+        signer,
+        contract_address,
+        function_name,
+        args,
+        nonce,
+    );
 }
 
 pub(crate) fn sign_payload_for_account(

@@ -3,11 +3,12 @@ use std::rc::Rc;
 use rand::{thread_rng, RngCore};
 use soroban_env_common::{
     xdr::{
-        AccountEntry, AccountId, ContractCostType, ContractId, CreateContractArgs, HostFunction,
-        HostFunctionArgs, LedgerEntry, LedgerEntryData, LedgerKey, PublicKey, ScContractExecutable,
-        ScErrorCode, ScErrorType, ScVal, ScVec, Uint256, UploadContractWasmArgs,
+        AccountEntry, AccountId, ContractCostType, ContractIdPreimage,
+        ContractIdPreimageFromAddress, CreateContractArgs, HostFunction, LedgerEntry,
+        LedgerEntryData, LedgerKey, PublicKey, ScAddress, ScContractExecutable, ScVal, ScVec,
+        Uint256,
     },
-    BytesObject, RawVal, TryIntoVal, VecObject,
+    AddressObject, BytesObject, RawVal, TryIntoVal, VecObject,
 };
 
 use crate::{
@@ -167,39 +168,35 @@ impl Host {
     }
 
     // Registers a contract with provided WASM source and returns the registered
-    // contract ID.
+    // contract's address.
     // This relies on the host to have no footprint enforcement.
-    pub(crate) fn register_test_contract_wasm(
-        &self,
-        contract_wasm: &[u8],
-    ) -> Result<BytesObject, HostError> {
-        self.set_source_account(generate_account_id());
+    pub(crate) fn register_test_contract_wasm(&self, contract_wasm: &[u8]) -> AddressObject {
+        let prev_auth_manager = self.snapshot_auth_manager();
+        self.switch_to_recording_auth();
 
-        let wasm_id: RawVal = self.invoke_functions(vec![HostFunction {
-            args: HostFunctionArgs::UploadContractWasm(UploadContractWasmArgs {
-                code: contract_wasm.to_vec().try_into().map_err(|_| {
-                    self.err(
-                        ScErrorType::Context,
-                        ScErrorCode::ExceededLimit,
-                        "too large wasm",
-                        &[],
-                    )
-                })?,
-            }),
-            auth: Default::default(),
-        }])?[0]
-            .try_into_val(self)?;
+        let wasm_id: RawVal = self
+            .invoke_function(HostFunction::UploadContractWasm(
+                contract_wasm.to_vec().try_into().unwrap(),
+            ))
+            .unwrap()
+            .try_into_val(self)
+            .unwrap();
 
-        let wasm_id = self.hash_from_bytesobj_input("wasm_hash", wasm_id.try_into()?)?;
-        let id_obj: RawVal = self.invoke_functions(vec![HostFunction {
-            args: HostFunctionArgs::CreateContract(CreateContractArgs {
-                contract_id: ContractId::SourceAccount(Uint256(generate_bytes_array())),
+        let wasm_id = self
+            .hash_from_bytesobj_input("wasm_hash", wasm_id.try_into().unwrap())
+            .unwrap();
+        let address_obj: RawVal = self
+            .invoke_function(HostFunction::CreateContract(CreateContractArgs {
+                contract_id_preimage: ContractIdPreimage::Address(ContractIdPreimageFromAddress {
+                    address: ScAddress::Contract(xdr::Hash(generate_bytes_array())),
+                    salt: Uint256(generate_bytes_array()),
+                }),
                 executable: ScContractExecutable::WasmRef(wasm_id),
-            }),
-            auth: Default::default(),
-        }])?[0]
-            .try_into_val(self)?;
-        self.remove_source_account();
-        Ok(id_obj.try_into()?)
+            }))
+            .unwrap()
+            .try_into_val(self)
+            .unwrap();
+        self.set_auth_manager(prev_auth_manager);
+        address_obj.try_into().unwrap()
     }
 }

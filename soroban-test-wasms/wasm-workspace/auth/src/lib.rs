@@ -1,13 +1,12 @@
 #![no_std]
-use soroban_env_common::{AddressObject, Env as _, TryFromVal};
-use soroban_sdk::{contractimpl, contracttype, vec, Address, BytesN, Env, IntoVal, Symbol, Vec};
+use soroban_sdk::{contractimpl, contracttype, vec, Address, Env, IntoVal, Symbol, Vec};
 
 struct AuthContract;
 
 #[derive(Clone)]
 #[contracttype]
 pub struct TreeNode {
-    pub id: BytesN<32>,
+    pub addr: Address,
     pub need_auth: Vec<bool>,
     pub children: Vec<TreeNode>,
 }
@@ -30,19 +29,17 @@ impl AuthContract {
         }
         for child in tree.children.iter() {
             let child = child.unwrap();
-            let child_ao: AddressObject = env.contract_id_to_address(child.id.to_object()).unwrap();
             env.invoke_contract::<()>(
-                &Address::try_from_val(&env, &child_ao).unwrap(),
+                &child.addr.clone(),
                 &Symbol::short("tree_fn"),
                 (addresses.clone(), child).into_val(&env),
             );
         }
     }
 
-    pub fn order_fn(env: Env, addr: Address, child_id: BytesN<32>) {
-        let child_ao: AddressObject = env.contract_id_to_address(child_id.to_object()).unwrap();
+    pub fn order_fn(env: Env, addr: Address, child_id: Address) {
         env.invoke_contract::<()>(
-            &Address::try_from_val(&env, &child_ao).unwrap(),
+            &child_id,
             &Symbol::short("do_auth"),
             (&addr, 10_u32).into_val(&env),
         );

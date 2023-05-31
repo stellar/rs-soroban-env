@@ -20,7 +20,10 @@ use crate::{
 };
 use ed25519_dalek::Keypair;
 use soroban_env_common::{
-    xdr::{self, AccountFlags, ScAddress, ScVal, ScVec},
+    xdr::{
+        self, AccountFlags, ScAddress, ScSymbol, ScVal, ScVec, SorobanAuthorizedContractFunction,
+        SorobanAuthorizedFunction, SorobanAuthorizedInvocation,
+    },
     xdr::{
         AccountId, AlphaNum12, AlphaNum4, Asset, AssetCode12, AssetCode4, Hash, HostFunctionType,
         LedgerEntryData, LedgerKey, Liabilities, PublicKey, ScErrorCode, ScErrorType,
@@ -317,9 +320,13 @@ fn test_native_token_smart_roundtrip() {
         0,
     );
     let token = TestToken::new_from_asset(&test.host, Asset::Native);
-    let expected_token_id = test.host.get_contract_id_from_asset(Asset::Native).unwrap();
+    let expected_token_address =
+        ScAddress::Contract(test.host.get_contract_id_from_asset(Asset::Native).unwrap());
 
-    assert_eq!(token.id.to_vec(), expected_token_id.0.to_vec());
+    assert_eq!(
+        token.address.to_sc_address().unwrap(),
+        expected_token_address
+    );
 
     assert_eq!(token.symbol().unwrap().to_vec(), b"native".to_vec());
     assert_eq!(token.decimals().unwrap(), 7);
@@ -379,8 +386,12 @@ fn test_asset_init(asset_code: &[u8]) {
         })
     };
     let token = TestToken::new_from_asset(&test.host, asset.clone());
-    let expected_token_id = test.host.get_contract_id_from_asset(asset).unwrap();
-    assert_eq!(token.id.to_vec(), expected_token_id.0.to_vec());
+    let expected_token_address =
+        ScAddress::Contract(test.host.get_contract_id_from_asset(asset).unwrap());
+    assert_eq!(
+        token.address.to_sc_address().unwrap(),
+        expected_token_address
+    );
 
     assert_eq!(token.symbol().unwrap().to_vec(), asset_code.to_vec());
     assert_eq!(token.decimals().unwrap(), 7);
@@ -1546,7 +1557,7 @@ fn test_auth_rejected_for_incorrect_nonce() {
     authorize_single_invocation_with_nonce(
         &test.host,
         &admin,
-        &token.id,
+        &token.address,
         "mint",
         args.clone(),
         Some(1),
@@ -1554,7 +1565,7 @@ fn test_auth_rejected_for_incorrect_nonce() {
     assert!(test
         .host
         .call(
-            token.id.clone().into(),
+            token.address.clone().into(),
             Symbol::try_from_small_str("mint").unwrap(),
             args.clone().into(),
         )
@@ -1564,14 +1575,14 @@ fn test_auth_rejected_for_incorrect_nonce() {
     authorize_single_invocation_with_nonce(
         &test.host,
         &admin,
-        &token.id,
+        &token.address,
         "mint",
         args.clone(),
         Some(0),
     );
     test.host
         .call(
-            token.id.clone().into(),
+            token.address.clone().into(),
             Symbol::try_from_small_str("mint").unwrap(),
             args.clone().into(),
         )
@@ -1581,7 +1592,7 @@ fn test_auth_rejected_for_incorrect_nonce() {
     authorize_single_invocation_with_nonce(
         &test.host,
         &admin,
-        &token.id,
+        &token.address,
         "mint",
         args.clone(),
         Some(0),
@@ -1589,7 +1600,7 @@ fn test_auth_rejected_for_incorrect_nonce() {
     assert!(test
         .host
         .call(
-            token.id.clone().into(),
+            token.address.clone().into(),
             Symbol::try_from_small_str("mint").unwrap(),
             args.clone().into(),
         )
@@ -1599,14 +1610,14 @@ fn test_auth_rejected_for_incorrect_nonce() {
     authorize_single_invocation_with_nonce(
         &test.host,
         &admin,
-        &token.id,
+        &token.address,
         "mint",
         args.clone(),
         Some(1),
     );
     test.host
         .call(
-            token.id.into(),
+            token.address.into(),
             Symbol::try_from_small_str("mint").unwrap(),
             args.into(),
         )
@@ -1625,22 +1636,22 @@ fn test_auth_rejected_for_incorrect_payload() {
     let args = host_vec![&test.host, user.address(&test.host), 100_i128];
 
     // Incorrect signer.
-    authorize_single_invocation(&test.host, &user, &token.id, "mint", args.clone());
+    authorize_single_invocation(&test.host, &user, &token.address, "mint", args.clone());
     assert!(test
         .host
         .call(
-            token.id.clone().into(),
+            token.address.clone().into(),
             Symbol::try_from_small_str("mint").unwrap(),
             args.clone().into(),
         )
         .is_err());
 
     // Incorrect function.
-    authorize_single_invocation(&test.host, &admin, &token.id, "burn", args.clone());
+    authorize_single_invocation(&test.host, &admin, &token.address, "burn", args.clone());
     assert!(test
         .host
         .call(
-            token.id.clone().into(),
+            token.address.clone().into(),
             Symbol::try_from_small_str("mint").unwrap(),
             args.clone().into(),
         )
@@ -1650,7 +1661,7 @@ fn test_auth_rejected_for_incorrect_payload() {
     authorize_single_invocation(
         &test.host,
         &admin,
-        &token.id,
+        &token.address,
         "mint",
         host_vec![
             &test.host,
@@ -1662,7 +1673,7 @@ fn test_auth_rejected_for_incorrect_payload() {
     assert!(test
         .host
         .call(
-            token.id.clone().into(),
+            token.address.clone().into(),
             Symbol::try_from_small_str("mint").unwrap(),
             args.clone().into(),
         )
@@ -1672,7 +1683,7 @@ fn test_auth_rejected_for_incorrect_payload() {
     authorize_single_invocation(
         &test.host,
         &admin,
-        &token.id,
+        &token.address,
         "mint",
         host_vec![
             &test.host,
@@ -1684,18 +1695,18 @@ fn test_auth_rejected_for_incorrect_payload() {
     assert!(test
         .host
         .call(
-            token.id.clone().into(),
+            token.address.clone().into(),
             Symbol::try_from_small_str("mint").unwrap(),
             args.clone().into(),
         )
         .is_err());
 
     // Correct signer and payload result in success.
-    authorize_single_invocation(&test.host, &admin, &token.id, "mint", args.clone());
+    authorize_single_invocation(&test.host, &admin, &token.address, "mint", args.clone());
 
     test.host
         .call(
-            token.id.into(),
+            token.address.into(),
             Symbol::try_from_small_str("mint").unwrap(),
             args.into(),
         )
@@ -2559,17 +2570,13 @@ fn test_custom_account_auth() {
 
     let test = TokenTest::setup();
     let admin_kp = generate_keypair();
-    let account_contract_id_obj = test
+    let account_contract_addr_obj = test
         .host
-        .register_test_contract_wasm(SIMPLE_ACCOUNT_CONTRACT)
-        .unwrap();
-    let account_contract_id = test
-        .host
-        .hash_from_bytesobj_input("account_contract_id", account_contract_id_obj)
-        .unwrap();
-
+        .register_test_contract_wasm(SIMPLE_ACCOUNT_CONTRACT);
+    let account_contract_addr: Address =
+        account_contract_addr_obj.try_into_val(&test.host).unwrap();
     let admin = TestSigner::AccountContract(AccountContractSigner {
-        id: account_contract_id.clone(),
+        address: account_contract_addr.clone(),
         sign: simple_account_sign_fn(&test.host, &admin_kp),
     });
 
@@ -2584,7 +2591,7 @@ fn test_custom_account_auth() {
     // Initialize the admin account
     test.host
         .call(
-            account_contract_id_obj,
+            account_contract_addr_obj,
             Symbol::try_from_small_str("init").unwrap(),
             host_vec![&test.host, admin_public_key].into(),
         )
@@ -2603,7 +2610,7 @@ fn test_custom_account_auth() {
     // owner.
     let new_admin_kp = generate_keypair();
     let new_admin = TestSigner::AccountContract(AccountContractSigner {
-        id: account_contract_id,
+        address: account_contract_addr,
         sign: simple_account_sign_fn(&test.host, &new_admin_kp),
     });
     let new_admin_public_key = BytesN::<32>::try_from_val(
@@ -2621,7 +2628,7 @@ fn test_custom_account_auth() {
     authorize_single_invocation(
         &test.host,
         &admin,
-        &account_contract_id_obj.try_into_val(&test.host).unwrap(),
+        &account_contract_addr_obj.try_into_val(&test.host).unwrap(),
         "set_owner",
         host_vec![&test.host, new_admin_public_key],
     );
@@ -2629,7 +2636,7 @@ fn test_custom_account_auth() {
     // Change the owner of the account.
     test.host
         .call(
-            account_contract_id_obj,
+            account_contract_addr_obj,
             Symbol::try_from_small_str("set_owner").unwrap(),
             host_vec![&test.host, new_admin_public_key].into(),
         )
@@ -2659,7 +2666,7 @@ fn test_recording_auth_for_token() {
     let args = host_vec![&test.host, user.address(&test.host), 100_i128];
     test.host
         .call(
-            token.id.clone().into(),
+            token.address.clone().into(),
             Symbol::try_from_small_str("mint").unwrap(),
             args.clone().into(),
         )
@@ -2671,24 +2678,29 @@ fn test_recording_auth_for_token() {
         vec![RecordedAuthPayload {
             address: Some(admin.address(&test.host).to_sc_address().unwrap()),
             nonce: Some(0),
-            invocation: xdr::AuthorizedInvocation {
-                contract_id: Hash(token.id.to_array().unwrap()),
-                function_name: xdr::ScSymbol("mint".try_into().unwrap()),
-                args: ScVec(
-                    vec![
-                        ScVal::try_from_val(
-                            &test.host,
-                            &RawVal::try_from_val(&test.host, &user.address(&test.host)).unwrap()
-                        )
-                        .unwrap(),
-                        ScVal::try_from_val(
-                            &test.host,
-                            &RawVal::try_from_val(&test.host, &100_i128).unwrap()
-                        )
-                        .unwrap()
-                    ]
-                    .try_into()
-                    .unwrap()
+            invocation: SorobanAuthorizedInvocation {
+                function: SorobanAuthorizedFunction::ContractFn(
+                    SorobanAuthorizedContractFunction {
+                        contract_address: token.address.to_sc_address().unwrap(),
+                        function_name: xdr::ScSymbol("mint".try_into().unwrap()),
+                        args: ScVec(
+                            vec![
+                                ScVal::try_from_val(
+                                    &test.host,
+                                    &RawVal::try_from_val(&test.host, &user.address(&test.host))
+                                        .unwrap()
+                                )
+                                .unwrap(),
+                                ScVal::try_from_val(
+                                    &test.host,
+                                    &RawVal::try_from_val(&test.host, &100_i128).unwrap()
+                                )
+                                .unwrap()
+                            ]
+                            .try_into()
+                            .unwrap()
+                        ),
+                    }
                 ),
                 sub_invocations: Default::default(),
             }
@@ -2696,16 +2708,23 @@ fn test_recording_auth_for_token() {
     );
 
     assert_eq!(
-        test.host.get_authenticated_top_authorizations().unwrap(),
+        test.host.get_authenticated_authorizations().unwrap(),
         vec![(
             test.host
                 .visit_obj(admin.address(&test.host).into(), |addr: &ScAddress| Ok(
                     addr.clone()
                 ))
                 .unwrap(),
-            Hash(token.id.to_array().unwrap()),
-            xdr::ScSymbol("mint".try_into().unwrap()),
-            test.host.call_args_to_scvec(args.into()).unwrap()
+            SorobanAuthorizedInvocation {
+                function: SorobanAuthorizedFunction::ContractFn(
+                    SorobanAuthorizedContractFunction {
+                        contract_address: token.address.to_sc_address().unwrap(),
+                        function_name: ScSymbol("mint".try_into().unwrap()),
+                        args: test.host.call_args_to_scvec(args.into()).unwrap()
+                    }
+                ),
+                sub_invocations: Default::default()
+            }
         )]
     );
 }
