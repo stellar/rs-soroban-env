@@ -44,7 +44,7 @@ fn xdr_object_conversion() -> Result<(), HostError> {
 #[test]
 fn vm_hostfn_invocation() -> Result<(), HostError> {
     let host = Host::test_host_with_recording_footprint();
-    let id_obj = host.register_test_contract_wasm(VEC)?;
+    let id_obj = host.register_test_contract_wasm(VEC);
     let host = host
         .test_budget(100_000, 100_000)
         .enable_model(ContractCostType::InvokeVmFunction, 10, 0, 1, 0)
