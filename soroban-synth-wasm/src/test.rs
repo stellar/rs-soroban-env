@@ -46,7 +46,7 @@ fn test_synth_wasm() {
             i64.and
             i64.const 14
             i64.ne
-            if  ;; label = @1
+            if ;; label = @1
               unreachable
             end
             local.get 0
@@ -239,10 +239,10 @@ fn br() {
         (module
           (type (;0;) (func (result i64)))
           (func (;0;) (type 0) (result i64)
-            block  ;; label = @1
-              block  ;; label = @2
-                block  ;; label = @3
-                  block  ;; label = @4
+            block ;; label = @1
+              block ;; label = @2
+                block ;; label = @3
+                  block ;; label = @4
                     br 0 (;@4;)
                   end
                   br 0 (;@3;)
@@ -289,10 +289,10 @@ fn br_table() {
         (module
           (type (;0;) (func (result i64)))
           (func (;0;) (type 0) (result i64)
-            block  ;; label = @1
-              block  ;; label = @2
-                block  ;; label = @3
-                  block  ;; label = @4
+            block ;; label = @1
+              block ;; label = @2
+                block ;; label = @3
+                  block ;; label = @4
                     i32.const 10
                     br_table 0 (;@4;) 1 (;@3;) 2 (;@2;) 3 (;@1;) 3 (;@1;)
                   end

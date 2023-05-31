@@ -14,9 +14,9 @@ use crate::{
     storage::Storage,
     xdr::{
         int128_helpers, AccountId, Asset, ContractCodeEntry, ContractCostType, ContractDataEntry,
-        ContractEventType, ContractId, CreateContractArgs, ExtensionPoint, Hash, HashIdPreimage,
-        LedgerEntryData, LedgerKey, LedgerKeyContractCode, PublicKey, ScAddress, ScBytes,
-        ScContractExecutable, ScErrorType, ScString, ScSymbol, ScVal, UploadContractWasmArgs,
+        ContractEventType, CreateContractArgs, ExtensionPoint, Hash, LedgerEntryData, LedgerKey,
+        LedgerKeyContractCode, PublicKey, ScAddress, ScBytes, ScContractExecutable, ScErrorType,
+        ScString, ScSymbol, ScVal,
     },
     AddressObject, Bool, BytesObject, Error, I128Object, I256Object, I64Object, MapObject,
     StringObject, SymbolObject, SymbolSmall, SymbolStr, TryFromVal, U128Object, U256Object, U32Val,
@@ -42,7 +42,7 @@ mod prng;
 pub use prng::{Seed, SEED_BYTES};
 mod validity;
 pub use error::HostError;
-use soroban_env_common::xdr::ScErrorCode;
+use soroban_env_common::xdr::{ContractIdPreimage, ContractIdPreimageFromAddress, ScErrorCode};
 
 use self::metered_clone::MeteredClone;
 use self::{
@@ -52,10 +52,12 @@ use self::{
 };
 use crate::Compare;
 #[cfg(any(test, feature = "testutils"))]
-use crate::{xdr::ScVec, TryIntoVal};
+use crate::TryIntoVal;
 pub(crate) use frame::Frame;
 #[cfg(any(test, feature = "testutils"))]
 pub use frame::{ContractFunctionSet, TestContractFrame};
+#[cfg(any(test, feature = "testutils"))]
+use soroban_env_common::xdr::SorobanAuthorizedInvocation;
 
 /// Temporary helper for denoting a slice of guest memory, as formed by
 /// various bytes operations.
@@ -100,8 +102,8 @@ pub(crate) struct HostImpl {
     // invocation. In order to emulate the production behavior in tests, we reset
     // authorization manager after every invocation (as it's not meant to be
     // shared between invocations).
-    // This enables test-only functions like `verify_top_authorization`
-    // that allow checking if the authorization has been recorded.
+    // This enables test-only functions that allow checking if the authorization
+    // has happened or has been recorded.
     #[cfg(any(test, feature = "testutils"))]
     previous_authorization_manager: RefCell<Option<AuthorizationManager>>,
 }
@@ -166,7 +168,7 @@ impl Host {
 
     pub fn set_authorization_entries(
         &self,
-        auth_entries: Vec<soroban_env_common::xdr::ContractAuth>,
+        auth_entries: Vec<soroban_env_common::xdr::SorobanAuthorizationEntry>,
     ) -> Result<(), HostError> {
         let new_auth_manager = AuthorizationManager::new_enforcing(self, auth_entries)?;
         *self.0.authorization_manager.borrow_mut() = new_auth_manager;
@@ -307,6 +309,26 @@ impl Host {
         res
     }
 
+    #[cfg(any(test, feature = "testutils"))]
+    /// Returns the current state of the authorization manager.
+    ///
+    /// Use this in conjunction with `set_auth_manager` to do authorized
+    /// operations without breaking the current authorization state (useful for
+    /// preserving the auth state while doing the generic test setup).
+    pub fn snapshot_auth_manager(&self) -> AuthorizationManager {
+        self.0.authorization_manager.borrow().clone()
+    }
+
+    /// Replaces authorization manager with the provided new instance.
+    ///
+    /// Use this in conjunction with `snapshot_auth_manager` to do authorized
+    /// operations without breaking the current authorization state (useful for
+    /// preserving the auth state while doing the generic test setup).
+    #[cfg(any(test, feature = "testutils"))]
+    pub fn set_auth_manager(&self, auth_manager: AuthorizationManager) {
+        *self.0.authorization_manager.borrow_mut() = auth_manager;
+    }
+
     // Testing interface to create values directly for later use via Env functions.
     // It needs to be a `pub` method because benches are considered a separate crate.
     pub fn inject_val(&self, v: &ScVal) -> Result<RawVal, HostError> {
@@ -316,11 +338,10 @@ impl Host {
     // Notes on metering: this is covered by the called components.
     fn create_contract_with_id(
         &self,
-        contract_id: BytesObject,
-        contract_source: ScContractExecutable,
+        contract_id: Hash,
+        contract_executable: ScContractExecutable,
     ) -> Result<(), HostError> {
-        let new_contract_id = self.hash_from_bytesobj_input("id_obj", contract_id)?;
-        let storage_key = self.contract_executable_ledger_key(&new_contract_id)?;
+        let storage_key = self.contract_executable_ledger_key(&contract_id)?;
         if self
             .0
             .storage
@@ -331,41 +352,44 @@ impl Host {
                 ScErrorType::Storage,
                 ScErrorCode::ExistingValue,
                 "contract already exists",
-                &[contract_id.to_raw()],
+                &[self
+                    .add_host_object(self.scbytes_from_hash(&contract_id)?)?
+                    .into()],
             ));
         }
         // Make sure the contract code exists. Without this check it would be
         // possible to accidentally create a contract that never may be invoked
         // (just by providing a bad hash).
-        if let ScContractExecutable::WasmRef(wasm_hash) = &contract_source {
+        if let ScContractExecutable::WasmRef(wasm_hash) = &contract_executable {
             if !self.contract_code_exists(wasm_hash)? {
                 return Err(err!(
                     self,
                     (ScErrorType::Storage, ScErrorCode::MissingValue),
-                    "WASM does not exist",
+                    "Wasm does not exist",
                     *wasm_hash
                 ));
             }
         }
-        self.store_contract_executable(contract_source, new_contract_id, &storage_key)?;
+        self.store_contract_executable(contract_executable, contract_id, &storage_key)?;
         Ok(())
     }
 
     fn maybe_initialize_asset_token(
         &self,
-        contract_id: BytesObject,
-        id_preimage: HashIdPreimage,
+        contract_id: &Hash,
+        id_preimage: &ContractIdPreimage,
     ) -> Result<(), HostError> {
-        if let HashIdPreimage::ContractIdFromAsset(asset_preimage) = id_preimage {
+        if let ContractIdPreimage::Asset(asset) = id_preimage {
             let mut asset_bytes: Vec<u8> = Default::default();
-            self.metered_write_xdr(&asset_preimage.asset, &mut asset_bytes)?;
-            self.call_n(
+            self.metered_write_xdr(asset, &mut asset_bytes)?;
+            self.call_n_internal(
                 contract_id,
                 Symbol::try_from_val(self, &"init_asset")?,
                 &[self
                     .add_host_object(self.scbytes_from_vec(asset_bytes)?)?
                     .into()],
                 ContractReentryMode::Prohibited,
+                false,
             )?;
             Ok(())
         } else {
@@ -373,20 +397,59 @@ impl Host {
         }
     }
 
-    fn create_contract_with_id_preimage(
+    fn create_contract_internal(
         &self,
-        contract_source: ScContractExecutable,
-        id_preimage: HashIdPreimage,
-    ) -> Result<BytesObject, HostError> {
-        let id_arr: [u8; 32] = self.metered_hash_xdr(&id_preimage)?;
-        let id_obj = self.add_host_object(self.scbytes_from_hash(&Hash(id_arr))?)?;
-        self.create_contract_with_id(id_obj, contract_source.metered_clone(self.budget_ref())?)?;
-        self.maybe_initialize_asset_token(id_obj, id_preimage)?;
-        Ok(id_obj)
+        deployer: Option<AddressObject>,
+        args: CreateContractArgs,
+    ) -> Result<AddressObject, HostError> {
+        let has_deployer = deployer.is_some();
+        if has_deployer {
+            self.0
+                .authorization_manager
+                .borrow_mut()
+                .push_create_contract_host_fn_frame(args.metered_clone(self.budget_ref())?);
+        }
+        // Make sure that even in case of operation failure we still pop the
+        // stack frame.
+        // This is hacky, but currently this is the only instance where we need
+        // to manually manage auth manager frames (we don't need to authorize
+        // any other host fns and it doesn't seem useful to create extra frames
+        // for them just to make auth work in a single case).
+        let res = self.create_contract_with_optional_auth(deployer, args);
+        if has_deployer {
+            self.0.authorization_manager.borrow_mut().pop_frame();
+        }
+        res
+    }
+
+    fn create_contract_with_optional_auth(
+        &self,
+        deployer: Option<AddressObject>,
+        args: CreateContractArgs,
+    ) -> Result<AddressObject, HostError> {
+        if let Some(deployer_address) = deployer {
+            let sc_addr = self.visit_obj(deployer_address, |addr: &ScAddress| {
+                addr.metered_clone(self.budget_ref())
+            })?;
+            self.0.authorization_manager.borrow_mut().require_auth(
+                self,
+                deployer_address.get_handle(),
+                sc_addr,
+                Default::default(),
+            )?;
+        }
+
+        let id_preimage = self.get_full_contract_id_preimage(
+            args.contract_id_preimage.metered_clone(self.budget_ref())?,
+        )?;
+        let hash_id = Hash(self.metered_hash_xdr(&id_preimage)?);
+        self.create_contract_with_id(hash_id.metered_clone(self.budget_ref())?, args.executable)?;
+        self.maybe_initialize_asset_token(&hash_id, &args.contract_id_preimage)?;
+        self.add_host_object(ScAddress::Contract(hash_id))
     }
 
     pub(crate) fn get_contract_id_from_asset(&self, asset: Asset) -> Result<Hash, HostError> {
-        let id_preimage = self.id_preimage_from_asset(asset)?;
+        let id_preimage = self.get_full_contract_id_preimage(ContractIdPreimage::Asset(asset))?;
         let id_arr: [u8; 32] = self.metered_hash_xdr(&id_preimage)?;
         Ok(Hash(id_arr))
     }
@@ -395,10 +458,10 @@ impl Host {
     #[cfg(any(test, feature = "testutils"))]
     pub fn register_test_contract(
         &self,
-        contract_id: BytesObject,
+        contract_address: AddressObject,
         contract_fns: Rc<dyn ContractFunctionSet>,
     ) -> Result<(), HostError> {
-        let hash = self.hash_from_bytesobj_input("contract_id", contract_id)?;
+        let hash = self.contract_id_from_address(contract_address)?;
         let mut contracts = self.0.contracts.borrow_mut();
         contracts.insert(hash, contract_fns);
         Ok(())
@@ -415,37 +478,6 @@ impl Host {
         self.with_mut_storage(|storage| storage.put(key, val, self.as_budget()))
     }
 
-    // Returns the top-level authorizations that have been authenticated for the
-    // last contract invocation.
-    //
-    // Authenticated means that either the authorization was authenticated using
-    // the actual authorization logic for that authorization in enforced mode,
-    // or that it was recorded in recording mode and authorization was assumed
-    // successful.
-    //
-    // More technically, 'top-level' means that these invocations were the first
-    // in the call tree to have called `require_auth` (i.e. they're not
-    // necessarily invocations of the top-level contract that has been invoked).
-    #[cfg(any(test, feature = "testutils"))]
-    pub fn get_authenticated_top_authorizations(
-        &self,
-    ) -> Result<Vec<(ScAddress, Hash, ScSymbol, ScVec)>, HostError> {
-        Ok(self
-            .0
-            .previous_authorization_manager
-            .borrow_mut()
-            .as_mut()
-            .ok_or_else(|| {
-                self.err(
-                    ScErrorType::Auth,
-                    ScErrorCode::InternalError,
-                    "previous invocation is missing - no auth data to get",
-                    &[],
-                )
-            })?
-            .get_authenticated_top_authorizations())
-    }
-
     // Returns the authorizations that have been authenticated for the last
     // contract invocation.
     //
@@ -456,7 +488,7 @@ impl Host {
     #[cfg(any(test, feature = "testutils"))]
     pub fn get_authenticated_authorizations(
         &self,
-    ) -> Result<Vec<(ScAddress, Hash, ScSymbol, ScVec)>, HostError> {
+    ) -> Result<Vec<(ScAddress, SorobanAuthorizedInvocation)>, HostError> {
         Ok(self
             .0
             .previous_authorization_manager
@@ -473,33 +505,19 @@ impl Host {
             .get_authenticated_authorizations())
     }
 
-    fn create_contract(&self, args: CreateContractArgs) -> Result<BytesObject, HostError> {
-        let id_preimage = match args.contract_id {
-            ContractId::Asset(asset) => self.id_preimage_from_asset(asset)?,
-            ContractId::SourceAccount(salt) => self.id_preimage_from_source_account(salt)?,
-            ContractId::Ed25519PublicKey(key_with_signature) => {
-                let signature_payload_preimage = self.create_contract_args_hash_preimage(
-                    args.executable.metered_clone(self.budget_ref())?,
-                    key_with_signature.salt.metered_clone(self.budget_ref())?,
-                )?;
-                let signature_payload = self.metered_hash_xdr(&signature_payload_preimage)?;
-                self.verify_sig_ed25519_internal(
-                    &signature_payload,
-                    &self.ed25519_pub_key_from_bytes(&key_with_signature.key.0)?,
-                    &self.signature_from_bytes(
-                        "create_contract_sig",
-                        &key_with_signature.signature.0,
-                    )?,
-                )?;
-                self.id_preimage_from_ed25519(key_with_signature.key, key_with_signature.salt)?
-            }
-        };
-        self.create_contract_with_id_preimage(args.executable, id_preimage)
-    }
-
-    fn install_contract(&self, args: UploadContractWasmArgs) -> Result<BytesObject, HostError> {
-        let hash_bytes = self.metered_hash_xdr(&args)?;
-        let hash_obj = self.add_host_object(self.scbytes_from_hash(&Hash(hash_bytes))?)?;
+    fn upload_contract_wasm(&self, wasm: Vec<u8>) -> Result<BytesObject, HostError> {
+        let hash_bytes: [u8; 32] = self
+            .sha256_hash_from_bytes(wasm.as_slice())?
+            .try_into()
+            .map_err(|_| {
+                self.err(
+                    ScErrorType::Value,
+                    ScErrorCode::InternalError,
+                    "unexpected hash length",
+                    &[],
+                )
+            })?;
+        let hash_obj = self.add_host_object(self.scbytes_from_slice(hash_bytes.as_slice())?)?;
         let code_key = Rc::new(LedgerKey::ContractCode(LedgerKeyContractCode {
             hash: Hash(hash_bytes.metered_clone(self.budget_ref())?),
         }));
@@ -512,7 +530,14 @@ impl Host {
             self.with_mut_storage(|storage| {
                 let data = LedgerEntryData::ContractCode(ContractCodeEntry {
                     hash: Hash(hash_bytes),
-                    code: args.code,
+                    code: wasm.try_into().map_err(|_| {
+                        self.err(
+                            ScErrorType::Value,
+                            ScErrorCode::ExceededLimit,
+                            "Wasm code is too large",
+                            &[],
+                        )
+                    })?,
                     ext: ExtensionPoint::V0,
                 });
                 storage.put(
@@ -1720,19 +1745,55 @@ impl VmCallerEnv for Host {
     }
 
     // Notes on metering: covered by the components.
-    fn create_contract_from_contract(
+    fn create_contract(
         &self,
         _vmcaller: &mut VmCaller<Host>,
+        deployer: AddressObject,
         wasm_hash: BytesObject,
         salt: BytesObject,
-    ) -> Result<BytesObject, HostError> {
-        let contract_id = self.get_current_contract_id_internal()?;
-        let salt = self.uint256_from_bytesobj_input("salt", salt)?;
-
-        let code =
+    ) -> Result<AddressObject, HostError> {
+        let contract_id_preimage = ContractIdPreimage::Address(ContractIdPreimageFromAddress {
+            address: self.visit_obj(deployer, |addr: &ScAddress| {
+                addr.metered_clone(self.budget_ref())
+            })?,
+            salt: self.uint256_from_bytesobj_input("contract_id_salt", salt)?,
+        });
+        let executable =
             ScContractExecutable::WasmRef(self.hash_from_bytesobj_input("wasm_hash", wasm_hash)?);
-        let id_preimage = self.id_preimage_from_contract(contract_id, salt)?;
-        self.create_contract_with_id_preimage(code, id_preimage)
+        let args = CreateContractArgs {
+            contract_id_preimage,
+            executable,
+        };
+        self.create_contract_internal(Some(deployer), args)
+    }
+
+    // Notes on metering: covered by the components.
+    fn create_asset_contract(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        serialized_asset: BytesObject,
+    ) -> Result<AddressObject, HostError> {
+        let asset: Asset = self.metered_from_xdr_obj(serialized_asset)?;
+        let contract_id_preimage = ContractIdPreimage::Asset(asset);
+        let executable = ScContractExecutable::Token;
+        let args = CreateContractArgs {
+            contract_id_preimage,
+            executable,
+        };
+        // Asset contracts don't need any deployer authorization (they're tied
+        // to the asset issuers instead).
+        self.create_contract_internal(None, args)
+    }
+
+    fn upload_wasm(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        wasm: BytesObject,
+    ) -> Result<BytesObject, HostError> {
+        let wasm_vec = self.visit_obj(wasm, |bytes: &ScBytes| {
+            bytes.as_vec().metered_clone(self.budget_ref())
+        })?;
+        self.upload_contract_wasm(wasm_vec)
     }
 
     fn update_current_contract_wasm(
@@ -1762,18 +1823,19 @@ impl VmCallerEnv for Host {
     fn call(
         &self,
         _vmcaller: &mut VmCaller<Host>,
-        contract: BytesObject,
+        contract_address: AddressObject,
         func: Symbol,
         args: VecObject,
     ) -> Result<RawVal, HostError> {
         let argvec = self.call_args_from_obj(args)?;
         // this is the recommended path of calling a contract, with `reentry`
         // always set `ContractReentryMode::Prohibited`
-        let res = self.call_n(
-            contract,
+        let res = self.call_n_internal(
+            &self.contract_id_from_address(contract_address)?,
             func,
             argvec.as_slice(),
             ContractReentryMode::Prohibited,
+            false,
         );
         if let Err(e) = &res {
             self.with_events_mut(|events| {
@@ -1792,7 +1854,7 @@ impl VmCallerEnv for Host {
     fn try_call(
         &self,
         vmcaller: &mut VmCaller<Host>,
-        contract: BytesObject,
+        contract_address: AddressObject,
         func: Symbol,
         args: VecObject,
     ) -> Result<RawVal, HostError> {
@@ -1801,11 +1863,12 @@ impl VmCallerEnv for Host {
         // TODO: A `reentry` flag will be passed from `try_call` into here.
         // For now, we are passing in `ContractReentryMode::Prohibited` to disable
         // reentry.
-        let res = self.call_n(
-            contract,
+        let res = self.call_n_internal(
+            &self.contract_id_from_address(contract_address)?,
             func,
             argvec.as_slice(),
             ContractReentryMode::Prohibited,
+            false,
         );
         match res {
             Ok(rv) => Ok(rv),
@@ -2324,7 +2387,9 @@ impl VmCallerEnv for Host {
         address: AddressObject,
         args: VecObject,
     ) -> Result<RawVal, Self::Error> {
-        let addr = self.visit_obj(address, |addr: &ScAddress| Ok(addr.clone()))?;
+        let sc_addr = self.visit_obj(address, |addr: &ScAddress| {
+            addr.metered_clone(self.budget_ref())
+        })?;
 
         Ok(self
             .0
@@ -2333,7 +2398,7 @@ impl VmCallerEnv for Host {
             .require_auth(
                 self,
                 address.get_handle(),
-                addr,
+                sc_addr,
                 self.call_args_to_scvec(args)?,
             )?
             .into())

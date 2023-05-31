@@ -4,16 +4,20 @@ use crate::{
     host_vec,
     storage::{AccessType, Footprint, Storage, StorageMap},
     xdr::{
-        self, ContractEvent, ContractEventBody, ContractEventType, ContractEventV0, ContractId,
+        self, ContractEvent, ContractEventBody, ContractEventType, ContractEventV0,
         CreateContractArgs, ExtensionPoint, Hash, HashIdPreimage, HashIdPreimageContractId,
-        HashIdPreimageSourceAccountContractId, HostFunction, LedgerEntryData, ScContractExecutable,
-        ScSymbol, ScVal, ScVec, Uint256, UploadContractWasmArgs,
+        LedgerEntryData, ScContractExecutable, ScSymbol, ScVal, ScVec, Uint256,
     },
     Env, Host, LedgerInfo, Symbol,
 };
 use sha2::{Digest, Sha256};
-use soroban_env_common::xdr::HostFunctionArgs;
-use soroban_env_common::{xdr::ScBytes, RawVal, TryIntoVal, VecObject};
+use soroban_env_common::xdr::{
+    ContractIdPreimage, ContractIdPreimageFromAddress, HostFunction, ScAddress,
+    SorobanAuthorizationEntry, SorobanAuthorizedFunction, SorobanAuthorizedInvocation,
+    SorobanCredentials,
+};
+use soroban_env_common::VecObject;
+use soroban_env_common::{xdr::ScBytes, RawVal, TryIntoVal};
 use soroban_test_wasms::{ADD_I32, CREATE_CONTRACT, UPDATEABLE_CONTRACT};
 
 use super::util::{generate_account_id, generate_bytes_array};
@@ -67,27 +71,25 @@ fn test_host() -> Host {
     host
 }
 
-fn test_create_contract_from_source_account(host: &Host, code: &[u8]) -> Hash {
+fn test_create_contract_from_source_account(host: &Host, wasm: &[u8]) -> Hash {
     let source_account = generate_account_id();
     let salt = generate_bytes_array();
     host.set_source_account(source_account.clone());
+    let contract_id_preimage = ContractIdPreimage::Address(ContractIdPreimageFromAddress {
+        address: ScAddress::Account(source_account.clone()),
+        salt: Uint256(salt.to_vec().try_into().unwrap()),
+    });
     // Make contractID so we can include it in the footprint
-    let id_pre_image =
-        HashIdPreimage::ContractIdFromSourceAccount(HashIdPreimageSourceAccountContractId {
-            source_account: source_account,
-            salt: Uint256(salt.to_vec().try_into().unwrap()),
-            network_id: host
-                .hash_from_bytesobj_input("network_id", host.get_ledger_network_id().unwrap())
-                .unwrap(),
-        });
+    let full_id_preimage = HashIdPreimage::ContractId(HashIdPreimageContractId {
+        network_id: host
+            .hash_from_bytesobj_input("network_id", host.get_ledger_network_id().unwrap())
+            .unwrap(),
+        contract_id_preimage: contract_id_preimage.clone(),
+    });
 
-    let contract_id = sha256_hash_id_preimage(id_pre_image);
+    let contract_id = sha256_hash_id_preimage(full_id_preimage);
 
-    let upload_args = xdr::UploadContractWasmArgs {
-        code: code.to_vec().try_into().unwrap(),
-    };
-
-    let wasm_hash = sha256_hash_id_preimage(upload_args.clone());
+    let wasm_hash = Hash(Sha256::digest(wasm).try_into().unwrap());
 
     host.with_mut_storage(|s: &mut Storage| {
         s.footprint
@@ -108,39 +110,40 @@ fn test_create_contract_from_source_account(host: &Host, code: &[u8]) -> Hash {
     })
     .unwrap();
 
-    // Upload & create contract
-    let res = host
-        .invoke_functions(vec![
-            HostFunction {
-                args: HostFunctionArgs::UploadContractWasm(upload_args),
-                auth: Default::default(),
-            },
-            HostFunction {
-                args: HostFunctionArgs::CreateContract(CreateContractArgs {
-                    contract_id: ContractId::SourceAccount(Uint256(
-                        salt.to_vec().try_into().unwrap(),
-                    )),
-                    executable: ScContractExecutable::WasmRef(wasm_hash.clone()),
-                }),
-                auth: Default::default(),
-            },
-        ])
+    // Create contract
+    let created_wasm_hash: RawVal = host
+        .invoke_function(HostFunction::UploadContractWasm(wasm.try_into().unwrap()))
+        .unwrap()
+        .try_into_val(host)
         .unwrap();
-    assert_eq!(res.len(), 2);
+    let created_wasm_hash = host
+        .hash_from_bytesobj_input("wasm_hash", created_wasm_hash.try_into().unwrap())
+        .unwrap();
+    let create_contract_args = CreateContractArgs {
+        contract_id_preimage,
+        executable: ScContractExecutable::WasmRef(created_wasm_hash.clone()),
+    };
+    host.set_authorization_entries(vec![SorobanAuthorizationEntry {
+        credentials: SorobanCredentials::SourceAccount,
+        root_invocation: SorobanAuthorizedInvocation {
+            function: SorobanAuthorizedFunction::CreateContractHostFn(create_contract_args.clone()),
+            sub_invocations: Default::default(),
+        },
+    }])
+    .unwrap();
+    let created_id_sc_val = host
+        .invoke_function(HostFunction::CreateContract(create_contract_args))
+        .unwrap();
+
     assert_eq!(
-        wasm_hash.as_slice(),
-        get_bytes_from_sc_val(&res[0]).as_slice()
+        ScVal::Address(ScAddress::Contract(contract_id.clone())),
+        created_id_sc_val
     );
     assert_eq!(
-        wasm_hash.as_slice(),
+        created_wasm_hash.as_slice(),
         get_contract_wasm_ref(&host, contract_id.clone()).as_slice()
     );
-    assert_eq!(
-        contract_id.as_slice(),
-        get_bytes_from_sc_val(&res[1]).as_slice()
-    );
-
-    assert_eq!(code, get_contract_wasm(&host, wasm_hash));
+    assert_eq!(wasm, get_contract_wasm(&host, wasm_hash));
 
     contract_id
 }
@@ -150,23 +153,25 @@ fn test_create_contract_from_source_account(host: &Host, code: &[u8]) -> Hash {
 fn create_contract_using_parent_id_test() {
     let host = test_host();
     let parent_contract_id = test_create_contract_from_source_account(&host, CREATE_CONTRACT);
+    let parent_contract_address = host
+        .add_host_object(ScAddress::Contract(parent_contract_id.clone()))
+        .unwrap();
     let salt = generate_bytes_array();
-    let child_pre_image = HashIdPreimage::ContractIdFromContract(HashIdPreimageContractId {
-        contract_id: parent_contract_id.clone(),
-        salt: Uint256(salt),
+    let child_pre_image = HashIdPreimage::ContractId(HashIdPreimageContractId {
         network_id: host
             .hash_from_bytesobj_input("network_id", host.get_ledger_network_id().unwrap())
             .unwrap(),
+        contract_id_preimage: ContractIdPreimage::Address(ContractIdPreimageFromAddress {
+            address: ScAddress::Contract(parent_contract_id.clone()),
+            salt: Uint256(salt),
+        }),
     });
 
     let child_id = sha256_hash_id_preimage(child_pre_image);
     let child_wasm: &[u8] = b"70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4";
-    let upload_args = xdr::UploadContractWasmArgs {
-        code: child_wasm.to_vec().try_into().unwrap(),
-    };
 
     // Install the code for the child contract.
-    let wasm_hash = sha256_hash_id_preimage(upload_args);
+    let wasm_hash = xdr::Hash(Sha256::digest(&child_wasm).try_into().unwrap());
     // Add the contract code and code reference access to the footprint.
     host.with_mut_storage(|s: &mut Storage| {
         s.footprint
@@ -199,10 +204,10 @@ fn create_contract_using_parent_id_test() {
         .unwrap()
         .try_into()
         .unwrap();
-    // Can't create the contract yet, as the code hasn't been installed yet.
+    // Can't create the contract yet, as the code hasn't been uploaded yet.
     assert!(host
         .call(
-            host.test_bin_obj(&parent_contract_id.0).unwrap(),
+            parent_contract_address.clone(),
             Symbol::try_from_small_str("create").unwrap(),
             args,
         )
@@ -210,13 +215,10 @@ fn create_contract_using_parent_id_test() {
 
     // Install the code of the child contract.
     let wasm_hash_sc_val = host
-        .invoke_functions(vec![HostFunction {
-            args: HostFunctionArgs::UploadContractWasm(UploadContractWasmArgs {
-                code: child_wasm.try_into().unwrap(),
-            }),
-            auth: Default::default(),
-        }])
-        .unwrap()[0]
+        .invoke_function(HostFunction::UploadContractWasm(
+            child_wasm.try_into().unwrap(),
+        ))
+        .unwrap()
         .clone();
     assert_eq!(
         wasm_hash.as_slice(),
@@ -226,7 +228,7 @@ fn create_contract_using_parent_id_test() {
 
     // Now successfully create the child contract itself.
     host.call(
-        host.test_bin_obj(&parent_contract_id.0).unwrap(),
+        parent_contract_address,
         Symbol::try_from_small_str("create").unwrap(),
         args,
     )
@@ -257,40 +259,27 @@ pub(crate) fn sha256_hash_id_preimage<T: xdr::WriteXdr>(pre_image: T) -> xdr::Ha
 fn test_contract_wasm_update() {
     let host = Host::test_host_with_recording_footprint();
 
-    let old_upload_args = xdr::UploadContractWasmArgs {
-        code: UPDATEABLE_CONTRACT.to_vec().try_into().unwrap(),
-    };
     let old_wasm_hash_obj: RawVal = host
-        .invoke_functions(vec![HostFunction {
-            args: HostFunctionArgs::UploadContractWasm(old_upload_args),
-            auth: Default::default(),
-        }])
-        .unwrap()[0]
+        .invoke_function(HostFunction::UploadContractWasm(
+            UPDATEABLE_CONTRACT.to_vec().try_into().unwrap(),
+        ))
+        .unwrap()
         .try_into_val(&host)
         .unwrap();
 
-    let contract_id_obj = host
-        .register_test_contract_wasm(UPDATEABLE_CONTRACT)
-        .unwrap();
-    let contract_id = host
-        .hash_from_bytesobj_input("contract_id", contract_id_obj)
-        .unwrap();
+    let contract_addr_obj = host.register_test_contract_wasm(UPDATEABLE_CONTRACT);
     let updated_wasm = ADD_I32;
-    let upload_args = xdr::UploadContractWasmArgs {
-        code: updated_wasm.to_vec().try_into().unwrap(),
-    };
 
     let updated_wasm_hash_obj: RawVal = host
-        .invoke_functions(vec![HostFunction {
-            args: HostFunctionArgs::UploadContractWasm(upload_args),
-            auth: Default::default(),
-        }])
-        .unwrap()[0]
+        .invoke_function(HostFunction::UploadContractWasm(
+            updated_wasm.to_vec().try_into().unwrap(),
+        ))
+        .unwrap()
         .try_into_val(&host)
         .unwrap();
     let res: i32 = host
         .call(
-            contract_id_obj,
+            contract_addr_obj,
             Symbol::try_from_small_str("update").unwrap(),
             host_vec![&host, &updated_wasm_hash_obj].into(),
         )
@@ -318,7 +307,7 @@ fn test_contract_wasm_update() {
                 he.event,
                 ContractEvent {
                     ext: ExtensionPoint::V0,
-                    contract_id: Some(contract_id),
+                    contract_id: Some(host.contract_id_from_address(contract_addr_obj).unwrap()),
                     type_: ContractEventType::System,
                     body: ContractEventBody::V0(ContractEventV0 {
                         topics: vec![
@@ -354,7 +343,7 @@ fn test_contract_wasm_update() {
     // numbers.
     let updated_res: i32 = host
         .call(
-            contract_id_obj,
+            contract_addr_obj,
             Symbol::try_from_small_str("add").unwrap(),
             host_vec![&host, 10_i32, 20_i32].into(),
         )

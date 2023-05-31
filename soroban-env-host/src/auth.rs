@@ -2,9 +2,10 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 use soroban_env_common::xdr::{
-    ContractAuth, ContractDataEntry, HashIdPreimage, HashIdPreimageContractAuth, LedgerEntry,
-    LedgerEntryData, LedgerEntryExt, ScAddress, ScErrorCode, ScErrorType, ScNonceKey, ScSymbol,
-    ScVal,
+    ContractDataEntry, CreateContractArgs, HashIdPreimage, HashIdPreimageSorobanAuthorization,
+    LedgerEntry, LedgerEntryData, LedgerEntryExt, ScAddress, ScErrorCode, ScErrorType, ScNonceKey,
+    ScSymbol, ScVal, SorobanAuthorizationEntry, SorobanAuthorizedContractFunction,
+    SorobanAuthorizedFunction, SorobanCredentials,
 };
 use soroban_env_common::RawVal;
 
@@ -25,7 +26,7 @@ use super::xdr::{Hash, ScVec};
 // invocation trees as well as recording the authorization requirements in
 // simulated environments (such as tests or preflight).
 #[derive(Clone)]
-pub(crate) struct AuthorizationManager {
+pub struct AuthorizationManager {
     // Mode of operation of this AuthorizationManager. This can't be changed; in
     // order to switch the mode a new instance of AuthorizationManager has to
     // be created.
@@ -36,7 +37,7 @@ pub(crate) struct AuthorizationManager {
     trackers: Vec<AuthorizationTracker>,
     // Current call stack consisting only of the contract invocations (i.e. not
     // the host functions).
-    call_stack: Vec<ContractInvocation>,
+    call_stack: Vec<AuthStackFrame>,
     budget: Budget,
 }
 
@@ -46,7 +47,7 @@ pub(crate) struct AuthorizationManager {
 pub struct RecordedAuthPayload {
     pub address: Option<ScAddress>,
     pub nonce: Option<u64>,
-    pub invocation: xdr::AuthorizedInvocation,
+    pub invocation: xdr::SorobanAuthorizedInvocation,
 }
 
 // Snapshot of `AuthorizationManager` to use when performing the callstack
@@ -116,64 +117,144 @@ struct AuthorizationTracker {
     nonce: Option<u64>,
 }
 
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub(crate) struct ContractInvocation {
-    pub(crate) contract_id: Hash,
+#[derive(Clone)]
+enum AuthStackFrame {
+    Contract(ContractInvocation),
+    CreateContractHostFn(CreateContractArgs),
+}
+
+#[derive(Clone)]
+struct ContractInvocation {
+    pub(crate) contract_address: ScAddress,
     pub(crate) function_name: ScSymbol,
+}
+
+#[derive(Clone, Eq, PartialEq)]
+pub(crate) struct ContractFunction {
+    pub(crate) contract_address: ScAddress,
+    pub(crate) function_name: ScSymbol,
+    pub(crate) args: ScVec,
+}
+
+#[derive(Clone, Eq, PartialEq)]
+pub(crate) enum AuthorizedFunction {
+    ContractFn(ContractFunction),
+    CreateContractHostFn(CreateContractArgs),
 }
 
 // A single node in the authorized invocation tree.
 // This represents an invocation and all it's authorized sub-invocations.
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone)]
 pub(crate) struct AuthorizedInvocation {
-    pub(crate) contract_id: Hash,
-    pub(crate) function_name: ScSymbol,
-    pub(crate) args: ScVec,
+    pub(crate) function: AuthorizedFunction,
     pub(crate) sub_invocations: Vec<AuthorizedInvocation>,
     // Indicates that this invocation has been already used in the
     // enforcing mode. Exhausted authorizations can't be reused.
     // In the recording mode this is immediately set to `true` (as the
-    // authorizations are recorded when the actually happen).
+    // authorizations are recorded when they actually happen).
     is_exhausted: bool,
 }
 
+impl AuthStackFrame {
+    fn to_authorized_function(
+        &self,
+        args: ScVec,
+        budget: &Budget,
+    ) -> Result<AuthorizedFunction, HostError> {
+        match self {
+            AuthStackFrame::Contract(contract_frame) => {
+                Ok(AuthorizedFunction::ContractFn(ContractFunction {
+                    contract_address: contract_frame.contract_address.metered_clone(budget)?,
+                    function_name: contract_frame.function_name.metered_clone(budget)?,
+                    args,
+                }))
+            }
+            AuthStackFrame::CreateContractHostFn(args) => Ok(
+                AuthorizedFunction::CreateContractHostFn(args.metered_clone(budget)?),
+            ),
+        }
+    }
+}
+
+impl AuthorizedFunction {
+    fn from_xdr(xdr_fn: SorobanAuthorizedFunction) -> Self {
+        match xdr_fn {
+            SorobanAuthorizedFunction::ContractFn(xdr_contract_fn) => {
+                AuthorizedFunction::ContractFn(ContractFunction {
+                    contract_address: xdr_contract_fn.contract_address,
+                    function_name: xdr_contract_fn.function_name,
+                    args: xdr_contract_fn.args,
+                })
+            }
+            SorobanAuthorizedFunction::CreateContractHostFn(xdr_args) => {
+                AuthorizedFunction::CreateContractHostFn(xdr_args)
+            }
+        }
+    }
+
+    fn to_xdr(&self, budget: &Budget) -> Result<SorobanAuthorizedFunction, HostError> {
+        match self {
+            AuthorizedFunction::ContractFn(contract_fn) => Ok(
+                SorobanAuthorizedFunction::ContractFn(SorobanAuthorizedContractFunction {
+                    contract_address: contract_fn.contract_address.metered_clone(budget)?,
+                    function_name: contract_fn.function_name.metered_clone(budget)?,
+                    args: contract_fn.args.metered_clone(budget)?,
+                }),
+            ),
+            AuthorizedFunction::CreateContractHostFn(create_contract_args) => {
+                Ok(SorobanAuthorizedFunction::CreateContractHostFn(
+                    create_contract_args.metered_clone(budget)?,
+                ))
+            }
+        }
+    }
+
+    fn to_xdr_non_metered(&self) -> xdr::SorobanAuthorizedFunction {
+        match self {
+            AuthorizedFunction::ContractFn(contract_fn) => {
+                SorobanAuthorizedFunction::ContractFn(SorobanAuthorizedContractFunction {
+                    contract_address: contract_fn.contract_address.clone(),
+                    function_name: contract_fn.function_name.clone(),
+                    args: contract_fn.args.clone(),
+                })
+            }
+            AuthorizedFunction::CreateContractHostFn(create_contract_args) => {
+                SorobanAuthorizedFunction::CreateContractHostFn(create_contract_args.clone())
+            }
+        }
+    }
+}
+
 impl AuthorizedInvocation {
-    fn from_xdr(xdr_invocation: xdr::AuthorizedInvocation) -> Result<Self, HostError> {
+    fn from_xdr(xdr_invocation: xdr::SorobanAuthorizedInvocation) -> Result<Self, HostError> {
         let sub_invocations_xdr = xdr_invocation.sub_invocations.into_vec();
         let sub_invocations = sub_invocations_xdr
             .into_iter()
             .map(AuthorizedInvocation::from_xdr)
             .collect::<Result<Vec<_>, _>>()?;
         Ok(Self {
-            contract_id: xdr_invocation.contract_id,
-            function_name: xdr_invocation.function_name,
-            args: xdr_invocation.args,
+            function: AuthorizedFunction::from_xdr(xdr_invocation.function),
             sub_invocations,
             is_exhausted: false,
         })
     }
 
-    fn to_xdr(&self, budget: &Budget) -> Result<xdr::AuthorizedInvocation, HostError> {
-        Ok(xdr::AuthorizedInvocation {
-            contract_id: self.contract_id.metered_clone(budget)?,
-            // This ideally should be infallible
-            function_name: self.function_name.clone(),
-            args: self.args.metered_clone(budget)?,
+    fn to_xdr(&self, budget: &Budget) -> Result<xdr::SorobanAuthorizedInvocation, HostError> {
+        Ok(xdr::SorobanAuthorizedInvocation {
+            function: self.function.to_xdr(budget)?,
             sub_invocations: self
                 .sub_invocations
                 .iter()
                 .map(|i| i.to_xdr(budget))
-                .collect::<Result<Vec<xdr::AuthorizedInvocation>, HostError>>()?
+                .collect::<Result<Vec<xdr::SorobanAuthorizedInvocation>, HostError>>()?
                 .try_into()
                 .map_err(|_| HostError::from((ScErrorType::Auth, ScErrorCode::InternalError)))?,
         })
     }
 
-    fn new_recording(contract_id: &Hash, function_name: &ScSymbol, args: ScVec) -> Self {
+    fn new_recording(function: AuthorizedFunction) -> Self {
         Self {
-            contract_id: contract_id.clone(),
-            function_name: function_name.clone(),
-            args,
+            function,
             sub_invocations: vec![],
             is_exhausted: true,
         }
@@ -181,17 +262,14 @@ impl AuthorizedInvocation {
 
     // Non-metered conversion should only be used for the recording preflight
     // runs.
-    fn to_xdr_non_metered(&self) -> Result<xdr::AuthorizedInvocation, HostError> {
-        Ok(xdr::AuthorizedInvocation {
-            contract_id: self.contract_id.clone(),
-            // This ideally should be infallible
-            function_name: self.function_name.clone(),
-            args: self.args.clone(),
+    fn to_xdr_non_metered(&self) -> Result<xdr::SorobanAuthorizedInvocation, HostError> {
+        Ok(xdr::SorobanAuthorizedInvocation {
+            function: self.function.to_xdr_non_metered(),
             sub_invocations: self
                 .sub_invocations
                 .iter()
                 .map(|i| i.to_xdr_non_metered())
-                .collect::<Result<Vec<xdr::AuthorizedInvocation>, HostError>>()?
+                .collect::<Result<Vec<xdr::SorobanAuthorizedInvocation>, HostError>>()?
                 .try_into()
                 .map_err(|_| HostError::from((ScErrorType::Auth, ScErrorCode::InternalError)))?,
         })
@@ -230,10 +308,10 @@ impl Default for AuthorizationManager {
 impl AuthorizationManager {
     // Creates a new enforcing `AuthorizationManager` from the given
     // authorization entries.
-    // This should be created once per top-level contract invocation.
+    // This should be created once per top-level invocation.
     pub(crate) fn new_enforcing(
         host: &Host,
-        auth_entries: Vec<ContractAuth>,
+        auth_entries: Vec<SorobanAuthorizationEntry>,
     ) -> Result<Self, HostError> {
         let mut trackers = vec![];
         for auth_entry in auth_entries {
@@ -275,10 +353,6 @@ impl AuthorizationManager {
         }
     }
 
-    pub(crate) fn is_recording(&self) -> bool {
-        matches!(self.mode, AuthorizationMode::Recording(_))
-    }
-
     // Require the `address` to have authorized the current contract invocation
     // with provided args and within the current context (i.e. the current
     // authorized call stack and for the current network).
@@ -291,115 +365,135 @@ impl AuthorizationManager {
         address: ScAddress,
         args: ScVec,
     ) -> Result<(), HostError> {
-        if let ScAddress::Contract(contract_addr) = &address {
-            // For now we give a blanket approval of the invoker contract to any
-            // calls it made, but never to the deeper calls. It's possible
-            // to eventually add a capability to pre-authorize arbitrary call
-            // stacks on behalf of the contract.
-            if let Ok(invoker_contract) = host.get_invoking_contract_internal() {
-                if &invoker_contract == contract_addr {
-                    return Ok(());
-                }
+        let curr_invocation = self.call_stack.last().ok_or_else(|| {
+            host.err(
+                ScErrorType::Auth,
+                ScErrorCode::InternalError,
+                "unexpected require_auth outside of contract",
+                &[],
+            )
+        })?;
+        self.require_auth_internal(
+            host,
+            address_obj_handle,
+            address,
+            curr_invocation.to_authorized_function(args, &self.budget)?,
+        )
+    }
+
+    fn verify_contract_invoker_auth(&self, contract_id: &ScAddress) -> bool {
+        if self.call_stack.len() < 2 {
+            return false;
+        }
+        let invoker_frame = &self.call_stack[self.call_stack.len() - 2];
+        if let AuthStackFrame::Contract(invoker_contract) = invoker_frame {
+            return contract_id == &invoker_contract.contract_address;
+        }
+        return false;
+    }
+
+    fn require_auth_enforcing(
+        &mut self,
+        host: &Host,
+        address: &ScAddress,
+        function: &AuthorizedFunction,
+    ) -> Result<(), HostError> {
+        // Iterate all the trackers and try to find one that
+        // fullfills the authorization requirement.
+        for tracker in &mut self.trackers {
+            let address_matches = if let Some(addr) = &tracker.address {
+                addr == address
+            } else {
+                // Lazily fill the address for the invoker trackers,
+                // so that it's possible to create the auth manager
+                // without knowing the invoker beforehand and also
+                // to not keep calling into `source_account` function.
+                let source_addr = ScAddress::Account(host.source_account().ok_or_else(|| {
+                    host.err(
+                        ScErrorType::Auth,
+                        ScErrorCode::InternalError,
+                        "unexpected missing invoker in auth manager",
+                        &[],
+                    )
+                })?);
+                let source_matches = &source_addr == address;
+                tracker.address = Some(source_addr);
+                source_matches
+            };
+            // If address doesn't match, just skip the tracker.
+            if !address_matches {
+                continue;
+            }
+            match tracker.maybe_authorize_invocation(host, function) {
+                // If tracker doesn't have a matching invocation,
+                // just skip it (there could still be another
+                // tracker  that matches it).
+                Ok(false) => continue,
+                // Found a matching authorization.
+                Ok(true) => return Ok(()),
+                // Found a matching authorization, but another
+                // requirement hasn't been fullfilled (for
+                // example, incorrect authentication or nonce).
+                Err(e) => return Err(e),
             }
         }
+        // No matching tracker found, hence the invocation isn't
+        // authorized.
+        Err(HostError::from((
+            ScErrorType::Auth,
+            ScErrorCode::InvalidAction,
+        )))
+    }
 
-        if let Some(curr_invocation) = self.call_stack.last() {
-            match &mut self.mode {
-                AuthorizationMode::Enforcing => {
-                    // Iterate all the trackers and try to find one that
-                    // fullfills the authorization requirement.
-                    for tracker in &mut self.trackers {
-                        let address_matches = if let Some(addr) = &tracker.address {
-                            addr == &address
-                        } else {
-                            // Lazily fill the address for the invoker trackers,
-                            // so that it's possible to create the auth manager
-                            // without knowing the invoker beforehand and also
-                            // to not keep calling into `source_account` function.
-                            let source_addr =
-                                ScAddress::Account(host.source_account().ok_or_else(|| {
-                                    host.err(
-                                        ScErrorType::Auth,
-                                        ScErrorCode::InternalError,
-                                        "unexpected missing invoker in auth manager",
-                                        &[],
-                                    )
-                                })?);
-                            let source_matches = source_addr == address;
-                            tracker.address = Some(source_addr);
-                            source_matches
-                        };
-                        // If address doesn't match, just skip the tracker.
-                        if address_matches {
-                            match tracker.maybe_authorize_invocation(
-                                host,
-                                &curr_invocation.contract_id,
-                                &curr_invocation.function_name,
-                                &args,
-                            ) {
-                                // If tracker doesn't have a matching invocation,
-                                // just skip it (there could still be another
-                                // tracker  that matches it).
-                                Ok(false) => continue,
-                                // Found a matching authorization.
-                                Ok(true) => return Ok(()),
-                                // Found a matching authorization, but another
-                                // requirement hasn't been fullfilled (for
-                                // example, incorrect authentication or nonce).
-                                Err(e) => return Err(e),
-                            }
-                        }
+    fn require_auth_internal(
+        &mut self,
+        host: &Host,
+        address_obj_handle: u32,
+        address: ScAddress,
+        function: AuthorizedFunction,
+    ) -> Result<(), HostError> {
+        // For now we give a blanket approval of the invoker contract to any
+        // calls it made, but never to the deeper calls. It's possible
+        // to eventually add a capability to pre-authorize arbitrary call
+        // stacks on behalf of the contract.
+        if self.verify_contract_invoker_auth(&address) {
+            return Ok(());
+        }
+
+        match &mut self.mode {
+            AuthorizationMode::Enforcing => self.require_auth_enforcing(host, &address, &function),
+            AuthorizationMode::Recording(recording_info) => {
+                if let Some(tracker_id) = recording_info
+                    .tracker_by_address_handle
+                    .get(&address_obj_handle)
+                {
+                    let tracker = &mut self.trackers[*tracker_id];
+                    // The recording invariant is that trackers are created
+                    // with the first authorized invocation, which means
+                    // that when their stack no longer has authorized
+                    // invocation, then we've popped frames past its root
+                    // and hence need to create a new tracker.
+                    if !tracker.has_authorized_invocations_in_stack() {
+                        recording_info
+                            .tracker_by_address_handle
+                            .remove(&address_obj_handle);
+                    } else {
+                        return self.trackers[*tracker_id].record_invocation(host, function);
                     }
-                    // No matching tracker found, hence the invocation isn't
-                    // authorized.
-                    Err(HostError::from((
-                        ScErrorType::Auth,
-                        ScErrorCode::InvalidAction,
-                    )))
                 }
-                AuthorizationMode::Recording(recording_info) => {
-                    if let Some(tracker_id) = recording_info
-                        .tracker_by_address_handle
-                        .get(&address_obj_handle)
-                    {
-                        let tracker = &mut self.trackers[*tracker_id];
-                        // The recording invariant is that trackers are created
-                        // with the first authorized invocation, which means
-                        // that when their stack no longer has authorized
-                        // invocation, then we've popped frames past its root
-                        // and hence need to create a new tracker.
-                        if !tracker.has_authorized_invocations_in_stack() {
-                            recording_info
-                                .tracker_by_address_handle
-                                .remove(&address_obj_handle);
-                        } else {
-                            return self.trackers[*tracker_id].record_invocation(
-                                host,
-                                &curr_invocation.contract_id,
-                                &curr_invocation.function_name,
-                                args,
-                            );
-                        }
-                    }
-                    // If a tracker for the new tree doesn't exist yet, create
-                    // it and initialize with the current invocation.
-                    self.trackers.push(AuthorizationTracker::new_recording(
-                        host,
-                        address,
-                        &curr_invocation.contract_id,
-                        &curr_invocation.function_name,
-                        args,
-                        self.call_stack.len(),
-                    )?);
-                    recording_info
-                        .tracker_by_address_handle
-                        .insert(address_obj_handle, self.trackers.len() - 1);
-                    Ok(())
-                }
+                // If a tracker for the new tree doesn't exist yet, create
+                // it and initialize with the current invocation.
+                self.trackers.push(AuthorizationTracker::new_recording(
+                    host,
+                    address,
+                    function,
+                    self.call_stack.len(),
+                )?);
+                recording_info
+                    .tracker_by_address_handle
+                    .insert(address_obj_handle, self.trackers.len() - 1);
+                Ok(())
             }
-        } else {
-            // This would be a bug
-            Err((ScErrorType::Auth, ScErrorCode::InternalError).into())
         }
     }
 
@@ -430,6 +524,14 @@ impl AuthorizationManager {
         }
     }
 
+    pub(crate) fn push_create_contract_host_fn_frame(&mut self, args: CreateContractArgs) {
+        self.call_stack
+            .push(AuthStackFrame::CreateContractHostFn(args));
+        for tracker in &mut self.trackers {
+            tracker.push_frame();
+        }
+    }
+
     // Records a new call stack frame.
     // This should be called for every `Host` `push_frame`.
     pub(crate) fn push_frame(&mut self, host: &Host, frame: &Frame) -> Result<(), HostError> {
@@ -437,21 +539,26 @@ impl AuthorizationManager {
             Frame::ContractVM(vm, fn_name, _) => {
                 (vm.contract_id.metered_clone(&self.budget)?, *fn_name)
             }
-            // Just skip the host function stack frames for now.
-            // We could also make this included into the authorized stack to
-            // generalize all the host function invocations.
+            // Skip the top-level host function stack frames as they don't
+            // contain all the necessary information.
+            // Use the respective push (like
+            // `push_create_contract_host_fn_frame`) functions instead to push
+            // the frame with the required info.
             Frame::HostFunction(_) => return Ok(()),
             Frame::Token(id, fn_name, _) => (id.metered_clone(&self.budget)?, *fn_name),
             #[cfg(any(test, feature = "testutils"))]
             Frame::TestContract(tc) => (tc.id.clone(), tc.func),
         };
+        // Currently only contracts might appear in the call stack.
+        let contract_address = ScAddress::Contract(contract_id);
         let Ok(ScVal::Symbol(function_name)) = host.from_host_val(function_name.to_raw()) else {
             return Err(host.err(ScErrorType::Auth, ScErrorCode::InternalError, "frame function name conversion failed", &[]))
         };
-        self.call_stack.push(ContractInvocation {
-            contract_id,
-            function_name,
-        });
+        self.call_stack
+            .push(AuthStackFrame::Contract(ContractInvocation {
+                contract_address,
+                function_name,
+            }));
         for tracker in &mut self.trackers {
             tracker.push_frame();
         }
@@ -523,35 +630,12 @@ impl AuthorizationManager {
         }
     }
 
-    // Returns the top-level authorizations that have been authenticated for the
-    // last contract invocation.
-    #[cfg(any(test, feature = "testutils"))]
-    pub(crate) fn get_authenticated_top_authorizations(
-        &self,
-    ) -> Vec<(ScAddress, Hash, ScSymbol, ScVec)> {
-        self.trackers
-            .iter()
-            .filter(|t| t.authenticated)
-            .filter_map(|t| {
-                // Ignore authorizations without an address as they are implied,
-                // less useful as a test utility, and not succinctly capturable
-                // in the list of tuples. This is a tradeoff between offering up
-                // all authorizations vs the authorizations developers will
-                // mostly care about at the benefit of making this list easier
-                // to use.
-                t.address.as_ref().map(|a| {
-                    AuthorizationManager::invocation_to_tuple(a, &t.root_authorized_invocation)
-                })
-            })
-            .collect()
-    }
-
     // Returns all authorizations that have been authenticated for the
     // last contract invocation.
     #[cfg(any(test, feature = "testutils"))]
     pub(crate) fn get_authenticated_authorizations(
         &self,
-    ) -> Vec<(ScAddress, Hash, ScSymbol, ScVec)> {
+    ) -> Vec<(ScAddress, xdr::SorobanAuthorizedInvocation)> {
         self.trackers
             .iter()
             .filter(|t| t.authenticated)
@@ -565,13 +649,13 @@ impl AuthorizationManager {
                 t.address.as_ref().map(|a| {
                     fn add_recursively_to_auths(
                         a: &ScAddress,
-                        auths: &mut Vec<(ScAddress, Hash, ScSymbol, ScVec)>,
+                        auths: &mut Vec<(ScAddress, xdr::SorobanAuthorizedInvocation)>,
                         i: &AuthorizedInvocation,
                     ) {
                         // Is exhausted indicates if the auth was in fact
                         // consumed by a call to require_auth.
                         if i.is_exhausted {
-                            auths.push(AuthorizationManager::invocation_to_tuple(a, i));
+                            auths.push((a.clone(), i.to_xdr_non_metered().unwrap()));
                         }
                         for sub in &i.sub_invocations {
                             add_recursively_to_auths(a, auths, sub);
@@ -585,38 +669,26 @@ impl AuthorizationManager {
             .flatten()
             .collect()
     }
-
-    #[cfg(any(test, feature = "testutils"))]
-    // Builds a tuple containing the common details exposed from the
-    // AuthorizationManager about authenticated authorizations.
-    fn invocation_to_tuple(
-        address: &ScAddress,
-        authorized_invocation: &AuthorizedInvocation,
-    ) -> (ScAddress, Hash, ScSymbol, ScVec) {
-        (
-            address.clone(),
-            authorized_invocation.contract_id.clone(),
-            authorized_invocation.function_name.clone(),
-            authorized_invocation.args.clone(),
-        )
-    }
 }
 
 impl AuthorizationTracker {
-    fn from_authorization_entry(host: &Host, auth_entry: ContractAuth) -> Result<Self, HostError> {
-        let is_invoker = auth_entry.address_with_nonce.is_none();
-        let (address, nonce) = if let Some(address_with_nonce) = auth_entry.address_with_nonce {
-            (
-                Some(address_with_nonce.address),
-                Some(address_with_nonce.nonce),
-            )
-        } else {
-            (None, None)
+    fn from_authorization_entry(
+        host: &Host,
+        auth_entry: SorobanAuthorizationEntry,
+    ) -> Result<Self, HostError> {
+        let (address, nonce, signature_args) = match auth_entry.credentials {
+            SorobanCredentials::SourceAccount => (None, None, vec![]),
+            SorobanCredentials::Address(address_creds) => (
+                Some(address_creds.address),
+                Some(address_creds.nonce),
+                host.scvals_to_rawvals(address_creds.signature_args.0.as_slice())?,
+            ),
         };
+        let is_invoker = address.is_none();
         Ok(Self {
             address,
             root_authorized_invocation: AuthorizedInvocation::from_xdr(auth_entry.root_invocation)?,
-            signature_args: host.scvals_to_rawvals(auth_entry.signature_args.0.as_slice())?,
+            signature_args,
             authenticated: false,
             need_nonce: !is_invoker,
             is_invoker,
@@ -629,9 +701,7 @@ impl AuthorizationTracker {
     fn new_recording(
         host: &Host,
         address: ScAddress,
-        contract_id: &Hash,
-        function_name: &ScSymbol,
-        args: ScVec,
+        function: AuthorizedFunction,
         current_stack_len: usize,
     ) -> Result<Self, HostError> {
         if current_stack_len == 0 {
@@ -652,7 +722,7 @@ impl AuthorizationTracker {
             false
         };
         let nonce = if !is_invoker {
-            Some(host.read_and_consume_nonce(contract_id, &address)?)
+            Some(host.read_and_consume_nonce(address.metered_clone(host.budget_ref())?, &function)?)
         } else {
             None
         };
@@ -664,11 +734,7 @@ impl AuthorizationTracker {
         invocation_id_in_call_stack.push(Some(0));
         Ok(Self {
             address: Some(address),
-            root_authorized_invocation: AuthorizedInvocation::new_recording(
-                contract_id,
-                function_name,
-                args,
-            ),
+            root_authorized_invocation: AuthorizedInvocation::new_recording(function),
             invocation_id_in_call_stack,
             signature_args: Default::default(),
             is_valid: true,
@@ -690,9 +756,7 @@ impl AuthorizationTracker {
     fn maybe_authorize_invocation(
         &mut self,
         host: &Host,
-        contract_id: &Hash,
-        function_name: &ScSymbol,
-        args: &ScVec,
+        function: &AuthorizedFunction,
     ) -> Result<bool, HostError> {
         if !self.is_valid {
             return Ok(false);
@@ -701,9 +765,7 @@ impl AuthorizationTracker {
             Some(Some(_)) => true,
             _ => false,
         };
-        if frame_is_already_authorized
-            || !self.maybe_push_matching_invocation_frame(contract_id, function_name, args)
-        {
+        if frame_is_already_authorized || !self.maybe_push_matching_invocation_frame(function) {
             // The call isn't found in the currently tracked tree or is already
             // authorized in it.
             // That doesn't necessarily mean it's unauthorized (it can be
@@ -730,9 +792,7 @@ impl AuthorizationTracker {
     fn record_invocation(
         &mut self,
         host: &Host,
-        contract_id: &Hash,
-        function_name: &ScSymbol,
-        args: ScVec,
+        function: AuthorizedFunction,
     ) -> Result<(), HostError> {
         let frame_is_already_authorized = match self.invocation_id_in_call_stack.last() {
             Some(Some(_)) => true,
@@ -749,11 +809,7 @@ impl AuthorizationTracker {
         if let Some(curr_invocation) = self.last_authorized_invocation_mut() {
             curr_invocation
                 .sub_invocations
-                .push(AuthorizedInvocation::new_recording(
-                    contract_id,
-                    function_name,
-                    args,
-                ));
+                .push(AuthorizedInvocation::new_recording(function));
             *self.invocation_id_in_call_stack.last_mut().unwrap() =
                 Some(curr_invocation.sub_invocations.len() - 1);
         } else {
@@ -788,7 +844,10 @@ impl AuthorizationTracker {
         self.invocation_id_in_call_stack.iter().any(|i| i.is_some())
     }
 
-    fn invocation_to_xdr(&self, budget: &Budget) -> Result<xdr::AuthorizedInvocation, HostError> {
+    fn invocation_to_xdr(
+        &self,
+        budget: &Budget,
+    ) -> Result<xdr::SorobanAuthorizedInvocation, HostError> {
         self.root_authorized_invocation.to_xdr(budget)
     }
 
@@ -810,8 +869,8 @@ impl AuthorizationTracker {
         self.need_nonce = false;
         if let Some(addr) = &self.address {
             Ok(Some(host.read_and_consume_nonce(
-                &self.root_authorized_invocation.contract_id,
-                addr,
+                addr.metered_clone(host.budget_ref())?,
+                &self.root_authorized_invocation.function,
             )?))
         } else {
             Ok(None)
@@ -835,30 +894,21 @@ impl AuthorizationTracker {
     // Tries to match the provided invocation to the authorized sub-invocation
     // of the current tree and push it to the call stack.
     // Returns `true` if the match has been found.
-    fn maybe_push_matching_invocation_frame(
-        &mut self,
-        contract_id: &Hash,
-        function_name: &ScSymbol,
-        args: &ScVec,
-    ) -> bool {
+    fn maybe_push_matching_invocation_frame(&mut self, function: &AuthorizedFunction) -> bool {
         let mut frame_index = None;
         if let Some(curr_invocation) = self.last_authorized_invocation_mut() {
             for i in 0..curr_invocation.sub_invocations.len() {
                 let sub_invocation = &mut curr_invocation.sub_invocations[i];
-                if !sub_invocation.is_exhausted
-                    && &sub_invocation.contract_id == contract_id
-                    && &sub_invocation.function_name == function_name
-                    && &sub_invocation.args == args
-                {
+                // TODO: the equality comparison should be metered.
+                if !sub_invocation.is_exhausted && &sub_invocation.function == function {
                     frame_index = Some(i);
                     sub_invocation.is_exhausted = true;
                     break;
                 }
             }
         } else if !self.root_authorized_invocation.is_exhausted
-            && &self.root_authorized_invocation.contract_id == contract_id
-            && &self.root_authorized_invocation.function_name == function_name
-            && &self.root_authorized_invocation.args == args
+            // TODO: the equality comparison should be metered.
+            && &self.root_authorized_invocation.function == function
         {
             frame_index = Some(0);
             self.root_authorized_invocation.is_exhausted = true;
@@ -897,20 +947,21 @@ impl AuthorizationTracker {
     // Computes the payload that has to be signed in order to authenticate
     // the authorized invocation tree corresponding to this tracker.
     fn get_signature_payload(&self, host: &Host) -> Result<[u8; 32], HostError> {
-        let payload_preimage = HashIdPreimage::ContractAuth(HashIdPreimageContractAuth {
-            network_id: Hash(
-                host.with_ledger_info(|li| li.network_id.metered_clone(host.budget_ref()))?,
-            ),
-            invocation: self.invocation_to_xdr(host.budget_ref())?,
-            nonce: self.nonce.ok_or_else(|| {
-                host.err(
-                    ScErrorType::Auth,
-                    ScErrorCode::InternalError,
-                    "unexpected missing nonce",
-                    &[],
-                )
-            })?,
-        });
+        let payload_preimage =
+            HashIdPreimage::SorobanAuthorization(HashIdPreimageSorobanAuthorization {
+                network_id: Hash(
+                    host.with_ledger_info(|li| li.network_id.metered_clone(host.budget_ref()))?,
+                ),
+                invocation: self.invocation_to_xdr(host.budget_ref())?,
+                nonce: self.nonce.ok_or_else(|| {
+                    host.err(
+                        ScErrorType::Auth,
+                        ScErrorCode::InternalError,
+                        "unexpected missing nonce",
+                        &[],
+                    )
+                })?,
+            });
 
         host.metered_hash_xdr(&payload_preimage)
     }
@@ -980,15 +1031,28 @@ impl Host {
     #[cfg(test)]
     pub(crate) fn read_nonce(
         &self,
-        contract_id: &Hash,
-        address: &ScAddress,
+        address: ScAddress,
+        function: &AuthorizedFunction,
     ) -> Result<u64, HostError> {
         let nonce_key_scval = ScVal::LedgerKeyNonce(ScNonceKey {
-            nonce_address: address.metered_clone(self.budget_ref())?,
+            nonce_address: address,
         });
+        let contract_id = match function {
+            AuthorizedFunction::ContractFn(contract_fn) => self.contract_id_from_scaddress(
+                contract_fn
+                    .contract_address
+                    .metered_clone(self.budget_ref())?,
+            )?,
+            AuthorizedFunction::CreateContractHostFn(_) => {
+                // Use the special contract id for all the host fn nonces for
+                // now. This should soon be replaced by non-autoincrement nonce
+                // that is independent of the authorized function.
+                Hash([255; 32])
+            }
+        };
         let nonce_key = self.storage_key_for_contract(
-            contract_id.metered_clone(self.budget_ref())?,
-            nonce_key_scval,
+            contract_id,
+            nonce_key_scval.metered_clone(self.budget_ref())?,
         );
         let curr_nonce: u64 =
             if self.with_mut_storage(|storage| storage.has(&nonce_key, self.budget_ref()))? {
@@ -1023,15 +1087,28 @@ impl Host {
 
     fn read_and_consume_nonce(
         &self,
-        contract_id: &Hash,
-        address: &ScAddress,
+        address: ScAddress,
+        function: &AuthorizedFunction,
     ) -> Result<u64, HostError> {
         let nonce_key_scval = ScVal::LedgerKeyNonce(ScNonceKey {
-            nonce_address: address.metered_clone(self.budget_ref())?,
+            nonce_address: address,
         });
+        let contract_id = match function {
+            AuthorizedFunction::ContractFn(contract_fn) => self.contract_id_from_scaddress(
+                contract_fn
+                    .contract_address
+                    .metered_clone(self.budget_ref())?,
+            )?,
+            AuthorizedFunction::CreateContractHostFn(_) => {
+                // Use the special contract id for all the host fn nonces for
+                // now. This should soon be replaced by non-autoincrement nonce
+                // that is independent of the authorized function.
+                Hash([255; 32])
+            }
+        };
         let nonce_key = self.storage_key_for_contract(
             contract_id.metered_clone(self.budget_ref())?,
-            nonce_key_scval.clone(),
+            nonce_key_scval.metered_clone(self.budget_ref())?,
         );
         let curr_nonce: u64 =
             if self.with_mut_storage(|storage| storage.has(&nonce_key, self.budget_ref()))? {
@@ -1062,7 +1139,7 @@ impl Host {
                 0
             };
         let data = LedgerEntryData::ContractData(ContractDataEntry {
-            contract_id: contract_id.metered_clone(self.budget_ref())?,
+            contract_id,
             key: nonce_key_scval,
             val: ScVal::U64(curr_nonce + 1),
         });

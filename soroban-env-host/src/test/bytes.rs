@@ -144,7 +144,7 @@ fn linear_memory_operations() -> Result<(), HostError> {
     use soroban_env_common::BytesObject;
 
     let host = Host::test_host_with_recording_footprint();
-    let id_obj = host.register_test_contract_wasm(LINEAR_MEMORY)?;
+    let id_obj = host.register_test_contract_wasm(LINEAR_MEMORY);
     // tests bytes_new_from_linear_memory
     {
         let args = host.test_vec_obj::<u32>(&[0xaabbccdd])?;
