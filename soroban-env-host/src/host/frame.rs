@@ -1,15 +1,15 @@
-use soroban_env_common::xdr::{ScErrorCode, ScErrorType};
+use soroban_env_common::{
+    xdr::{ContractIdPreimage, ScAddress, ScErrorCode, ScErrorType},
+    AddressObject,
+};
 
 use crate::{
     auth::AuthorizationManagerSnapshot,
     budget::AsBudget,
     err,
     storage::StorageMap,
-    xdr::{
-        ContractCostType, Hash, HostFunction, HostFunctionArgs, HostFunctionType,
-        ScContractExecutable, ScVal,
-    },
-    BytesObject, Error, Host, HostError, RawVal, Symbol, SymbolStr, TryFromVal, TryIntoVal,
+    xdr::{ContractCostType, Hash, HostFunction, HostFunctionType, ScContractExecutable, ScVal},
+    Error, Host, HostError, RawVal, Symbol, SymbolStr, TryFromVal, TryIntoVal,
 };
 
 #[cfg(any(test, feature = "testutils"))]
@@ -449,17 +449,6 @@ impl Host {
         }
     }
 
-    pub(crate) fn call_n(
-        &self,
-        id: BytesObject,
-        func: Symbol,
-        args: &[RawVal],
-        reentry_mode: ContractReentryMode,
-    ) -> Result<RawVal, HostError> {
-        let id = self.hash_from_bytesobj_input("contract", id)?;
-        self.call_n_internal(&id, func, args, reentry_mode, false)
-    }
-
     // Notes on metering: this is covered by the called components.
     pub(crate) fn call_n_internal(
         &self,
@@ -616,22 +605,29 @@ impl Host {
     }
 
     // Notes on metering: covered by the called components.
-    fn invoke_function_raw(&self, hf: HostFunctionArgs) -> Result<RawVal, HostError> {
+    fn invoke_function_raw(&self, hf: HostFunction) -> Result<RawVal, HostError> {
         let hf_type = hf.discriminant();
-        //TODO: should the create_* methods below return a RawVal instead of Object to avoid this conversion?
         match hf {
-            HostFunctionArgs::InvokeContract(args) => {
-                if let [ScVal::Bytes(scbytes), ScVal::Symbol(scsym), rest @ ..] = args.as_slice() {
+            HostFunction::InvokeContract(args) => {
+                if let [ScVal::Address(ScAddress::Contract(contract_id)), ScVal::Symbol(scsym), rest @ ..] =
+                    args.as_slice()
+                {
                     self.with_frame(Frame::HostFunction(hf_type), || {
                         // Metering: conversions to host objects are covered. Cost of collecting
                         // RawVals into Vec is ignored. Since 1. RawVals are cheap to clone 2. the
-                        // max number of args is fairly limited.
-                        let object = self.add_host_object(scbytes.clone())?;
+                        // max number of args is faikrly limited.
+
                         let symbol: Symbol = scsym.as_slice().try_into_val(self)?;
                         let args = self.scvals_to_rawvals(rest)?;
                         // since the `HostFunction` frame must be the bottom of the call stack,
                         // reentry is irrelevant, we always pass in `ContractReentryMode::Prohibited`.
-                        self.call_n(object, symbol, &args[..], ContractReentryMode::Prohibited)
+                        self.call_n_internal(
+                            contract_id,
+                            symbol,
+                            &args[..],
+                            ContractReentryMode::Prohibited,
+                            false,
+                        )
                     })
                 } else {
                     Err(err!(
@@ -642,28 +638,32 @@ impl Host {
                     ))
                 }
             }
-            HostFunctionArgs::CreateContract(args) => self
+            HostFunction::CreateContract(args) => {
+                self.with_frame(Frame::HostFunction(hf_type), || {
+                    let deployer: Option<AddressObject> = match &args.contract_id_preimage {
+                        ContractIdPreimage::Address(preimage_from_addr) => Some(
+                            self.add_host_object(
+                                preimage_from_addr
+                                    .address
+                                    .metered_clone(self.budget_ref())?,
+                            )?,
+                        ),
+                        ContractIdPreimage::Asset(_) => None,
+                    };
+                    self.create_contract_internal(deployer, args)
+                        .map(<RawVal>::from)
+                })
+            }
+            HostFunction::UploadContractWasm(wasm) => self
                 .with_frame(Frame::HostFunction(hf_type), || {
-                    self.create_contract(args).map(<RawVal>::from)
-                }),
-            HostFunctionArgs::UploadContractWasm(args) => self
-                .with_frame(Frame::HostFunction(hf_type), || {
-                    self.install_contract(args).map(<RawVal>::from)
+                    self.upload_contract_wasm(wasm.to_vec()).map(<RawVal>::from)
                 }),
         }
     }
 
     // Notes on metering: covered by the called components.
-    pub fn invoke_functions(&self, host_fns: Vec<HostFunction>) -> Result<Vec<ScVal>, HostError> {
-        let is_recording_auth = self.0.authorization_manager.borrow().is_recording();
-        let mut res = vec![];
-        for hf in host_fns {
-            if !is_recording_auth {
-                self.set_authorization_entries(hf.auth.to_vec())?;
-            }
-            let rv = self.invoke_function_raw(hf.args)?;
-            res.push(self.from_host_val(rv)?);
-        }
-        Ok(res)
+    pub fn invoke_function(&self, hf: HostFunction) -> Result<ScVal, HostError> {
+        let rv = self.invoke_function_raw(hf)?;
+        self.from_host_val(rv)
     }
 }
