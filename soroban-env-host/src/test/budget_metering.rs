@@ -239,7 +239,7 @@ fn total_amount_charged_from_random_inputs() -> Result<(), HostError> {
         (1, Some(227)),
         (1, Some(69)),
         (1, Some(160)),
-        (1, Some(147)),
+        (1, None),
         (47, None),
         (263, None),
     ];
@@ -250,31 +250,31 @@ fn total_amount_charged_from_random_inputs() -> Result<(), HostError> {
     let actual = format!("{:?}", host.as_budget());
     expect![[r#"
         =====================================================================================================================================================================
-        Cpu limit: 40000000; used: 8426807
-        Mem limit: 52428800; used: 1219916
+        Cpu limit: 40000000; used: 8642625
+        Mem limit: 52428800; used: 1281812
         =====================================================================================================================================================================
         CostType                 iterations     input          cpu_insns      mem_bytes      const_term_cpu      lin_term_cpu        const_term_mem      lin_term_mem        
         WasmInsnExec             246            None           5412           0              22                  0                   0                   0                   
-        WasmMemAlloc             1              Some(184)      521            66320          521                 0                   66136               1                   
-        HostMemAlloc             1              Some(152)      883            160            883                 0                   8                   1                   
-        HostMemCpy               1              Some(65)       24             0              24                  0                   0                   0                   
-        HostMemCmp               1              Some(74)       116            0              42                  1                   0                   0                   
-        InvokeHostFunction       176            None           133584         0              759                 0                   0                   0                   
-        VisitObject              97             None           2813           0              29                  0                   0                   0                   
-        ValXdrConv               148            None           26196          0              177                 0                   0                   0                   
-        ValSer                   1              Some(49)       741            156            741                 0                   9                   3                   
-        ValDeser                 1              Some(103)      846            107            846                 0                   4                   1                   
-        ComputeSha256Hash        1              Some(193)      8088           40             1912                32                  40                  0                   
-        ComputeEd25519PubKey     226            None           5823116        0              25766               0                   0                   0                   
-        MapEntry                 250            None           14750          0              59                  0                   0                   0                   
-        VecEntry                 186            None           2604           0              14                  0                   0                   0                   
-        GuardFrame               152            None           685824         40584          4512                0                   267                 0                   
-        VerifyEd25519Sig         1              Some(227)      372901         0              368361              20                  0                   0                   
-        VmMemRead                1              Some(69)       95             0              95                  0                   0                   0                   
-        VmMemWrite               1              Some(160)      97             0              97                  0                   0                   0                   
-        VmInstantiation          1              Some(147)      1000000        1100000        1000000             0                   1100000             0                   
-        InvokeVmFunction         47             None           291964         12549          6212                0                   267                 0                   
-        ChargeBudget             284            None           56232          0              198                 0                   0                   0                   
+        WasmMemAlloc             1              Some(184)      300            67600          300                 0                   67416               1                   
+        HostMemAlloc             1              Some(152)      3280           160            3280                0                   8                   1                   
+        HostMemCpy               1              Some(65)       25             0              25                  0                   0                   0                   
+        HostMemCmp               1              Some(74)       115            0              41                  1                   0                   0                   
+        InvokeHostFunction       176            None           109296         0              621                 0                   0                   0                   
+        VisitObject              97             None           2716           0              28                  0                   0                   0                   
+        ValXdrConv               148            None           19832          0              134                 0                   0                   0                   
+        ValSer                   1              Some(49)       707            156            658                 1                   9                   3                   
+        ValDeser                 1              Some(103)      850            107            850                 0                   4                   1                   
+        ComputeSha256Hash        1              Some(193)      8256           40             1887                33                  40                  0                   
+        ComputeEd25519PubKey     226            None           5825602        0              25777               0                   0                   0                   
+        MapEntry                 250            None           13750          0              55                  0                   0                   0                   
+        VecEntry                 186            None           1302           0              7                   0                   0                   0                   
+        GuardFrame               152            None           755744         42560          4972                0                   280                 0                   
+        VerifyEd25519Sig         1              Some(227)      372996         0              368456              20                  0                   0                   
+        VmMemRead                1              Some(69)       117            0              117                 0                   0                   0                   
+        VmMemWrite               1              Some(160)      118            0              118                 0                   0                   0                   
+        VmInstantiation          1              None           1194637        1158029        1194637             0                   1158029             0                   
+        InvokeVmFunction         47             None           290366         13160          6178                0                   280                 0                   
+        ChargeBudget             284            None           37204          0              131                 0                   0                   0                   
         =====================================================================================================================================================================
 
     "#]]
