@@ -12,9 +12,9 @@ use crate::{
 };
 use sha2::{Digest, Sha256};
 use soroban_env_common::xdr::{
-    ContractIdPreimage, ContractIdPreimageFromAddress, HostFunction, ScAddress,
-    SorobanAuthorizationEntry, SorobanAuthorizedFunction, SorobanAuthorizedInvocation,
-    SorobanCredentials,
+    ContractCodeEntryBody, ContractDataEntry, ContractDataEntryBody, ContractIdPreimage,
+    ContractIdPreimageFromAddress, HostFunction, ScAddress, SorobanAuthorizationEntry,
+    SorobanAuthorizedFunction, SorobanAuthorizedInvocation, SorobanCredentials,
 };
 use soroban_env_common::VecObject;
 use soroban_env_common::{xdr::ScBytes, RawVal, TryIntoVal};
