@@ -8,7 +8,7 @@ pub fn write_asset_info(e: &Host, asset_info: AssetInfo) -> Result<(), HostError
     e.put_contract_data(
         key.try_into_val(e)?,
         asset_info.try_into_val(e)?,
-        StorageType::RECREATABLE,
+        StorageType::MERGEABLE,
         ().into(),
     )?;
     Ok(())
@@ -16,12 +16,12 @@ pub fn write_asset_info(e: &Host, asset_info: AssetInfo) -> Result<(), HostError
 
 pub fn read_asset_info(e: &Host) -> Result<AssetInfo, HostError> {
     let key = DataKey::AssetInfo;
-    let rv = e.get_contract_data(key.try_into_val(e)?, StorageType::RECREATABLE)?;
+    let rv = e.get_contract_data(key.try_into_val(e)?, StorageType::MERGEABLE)?;
     rv.try_into_val(e)
 }
 
 pub fn has_asset_info(e: &Host) -> Result<bool, HostError> {
     let key = DataKey::AssetInfo;
-    let rv = e.has_contract_data(key.try_into_val(e)?, StorageType::RECREATABLE)?;
+    let rv = e.has_contract_data(key.try_into_val(e)?, StorageType::MERGEABLE)?;
     Ok(rv.try_into()?)
 }

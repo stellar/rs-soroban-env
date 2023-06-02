@@ -412,7 +412,7 @@ impl Compare<ContractDataEntryBody> for Budget {
                 self.compare(&(a), &(b))
             }
             (ContractDataEntryBody::DataEntry(_), _)
-            | (ContractDataEntryBody::LifetimeExtension, _) => Ok(a.cmp(b)),
+            | (ContractDataEntryBody::ExpirationExtension, _) => Ok(a.cmp(b)),
         }
     }
 }
@@ -777,7 +777,7 @@ mod tests {
                 &ScVal::Address(xdr::ScAddress::Contract(xdr::Hash([0; 32]))),
             )
             .unwrap(),
-            Tag::StorageType => RawVal::from(StorageType::RECREATABLE),
+            Tag::StorageType => RawVal::from(StorageType::MERGEABLE),
             Tag::LedgerKeyNonceObject => panic!(),
             Tag::ObjectCodeUpperBound => panic!(),
             Tag::Bad => panic!(),

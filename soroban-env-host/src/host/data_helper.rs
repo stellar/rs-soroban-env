@@ -29,7 +29,7 @@ impl Host {
         Ok(Rc::new(LedgerKey::ContractData(LedgerKeyContractData {
             contract_id,
             key: ScVal::LedgerKeyContractExecutable,
-            type_: ContractDataType::Unique,
+            type_: ContractDataType::Exclusive,
             le_type: ContractLedgerEntryType::DataEntry,
         })))
     }
@@ -120,7 +120,7 @@ impl Host {
             contract_id,
             key: ScVal::LedgerKeyContractExecutable,
             body,
-            type_: ContractDataType::Unique,
+            type_: ContractDataType::Exclusive,
             expiration_ledger_seq: 0,
         });
         self.0.storage.borrow_mut().put(

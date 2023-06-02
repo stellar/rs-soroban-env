@@ -1054,7 +1054,7 @@ impl Host {
         let nonce_key = self.storage_key_for_contract(
             contract_id,
             nonce_key_scval.metered_clone(self.budget_ref())?,
-            xdr::ContractDataType::Unique,
+            xdr::ContractDataType::Exclusive,
         );
         let curr_nonce: u64 =
             if self.with_mut_storage(|storage| storage.has(&nonce_key, self.budget_ref()))? {
@@ -1121,7 +1121,7 @@ impl Host {
         let nonce_key = self.storage_key_for_contract(
             contract_id.metered_clone(self.budget_ref())?,
             nonce_key_scval.metered_clone(self.budget_ref())?,
-            xdr::ContractDataType::Unique,
+            xdr::ContractDataType::Exclusive,
         );
 
         if self.with_mut_storage(|storage| storage.has(&nonce_key, self.budget_ref()))? {
@@ -1178,7 +1178,7 @@ impl Host {
                 key: nonce_key_scval,
                 body,
                 expiration_ledger_seq: 0,
-                type_: xdr::ContractDataType::Unique,
+                type_: xdr::ContractDataType::Exclusive,
             });
             let entry = LedgerEntry {
                 last_modified_ledger_seq: 0,

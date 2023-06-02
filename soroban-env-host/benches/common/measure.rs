@@ -245,7 +245,7 @@ impl Measurements {
 /// subtracted away and we get `N * (a + b * Option<x>)` where `N == N_r * N_x`
 /// is the number of `iterations` reported by the host for the `CostModel`.
 pub trait HostCostMeasurement: Sized {
-    /// The type of host runner we're using. Uniquely identifies a `CostType`.
+    /// The type of host runner we're using. Exclusively identifies a `CostType`.
     type Runner: CostRunner;
 
     /// Step size of the measurement to scale the input by. For a short-running measurement,

@@ -18,11 +18,11 @@ impl StorageType {
     pub const TEMPORARY: StorageType =
         unsafe { StorageType::from_major_minor(ContractDataType::Temporary as u32, 0) };
 
-    pub const RECREATABLE: StorageType =
-        unsafe { StorageType::from_major_minor(ContractDataType::Recreatable as u32, 0) };
+    pub const MERGEABLE: StorageType =
+        unsafe { StorageType::from_major_minor(ContractDataType::Mergeable as u32, 0) };
 
-    pub const UNIQUE: StorageType =
-        unsafe { StorageType::from_major_minor(ContractDataType::Unique as u32, 0) };
+    pub const EXCLUSIVE: StorageType =
+        unsafe { StorageType::from_major_minor(ContractDataType::Exclusive as u32, 0) };
 }
 
 impl TryFrom<StorageType> for ContractDataType {
