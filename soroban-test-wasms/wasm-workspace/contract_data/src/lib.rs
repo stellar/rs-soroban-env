@@ -5,23 +5,23 @@ pub struct Contract;
 
 #[contractimpl]
 impl Contract {
-    pub fn put_unique(e: Env, key: Symbol, val: u64, flags: Option<u32>) {
+    pub fn put_exclusive(e: Env, key: Symbol, val: u64, flags: Option<u32>) {
         e.storage().exclusive().set(&key, &val, flags)
     }
 
-    pub fn del_unique(e: Env, key: Symbol) {
+    pub fn del_exclusive(e: Env, key: Symbol) {
         e.storage().exclusive().remove(&key)
     }
 
-    pub fn has_unique(e: Env, key: Symbol) -> bool {
+    pub fn has_exclusive(e: Env, key: Symbol) -> bool {
         e.storage().exclusive().has(&key)
     }
 
-    pub fn get_unique(e: Env, key: Symbol) -> u64 {
+    pub fn get_exclusive(e: Env, key: Symbol) -> u64 {
         e.storage().exclusive().get(&key).unwrap().unwrap()
     }
 
-    pub fn bump_unique(e: Env, key: Symbol, min_to_live: u32) {
+    pub fn bump_exclusive(e: Env, key: Symbol, min_to_live: u32) {
         e.storage().exclusive().bump(&key, min_to_live)
     }
 
