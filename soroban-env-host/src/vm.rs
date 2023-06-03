@@ -9,12 +9,14 @@
 //! the [wasmi](https://github.com/paritytech/wasmi) project.
 
 mod dispatch;
+mod fuel_refillable;
 mod func_info;
 
-use crate::{budget::AsBudget, err, host::Frame, xdr::ContractCostType, HostError, VmCaller};
+use crate::{budget::AsBudget, err, host::Frame, xdr::ContractCostType, HostError};
 use std::{cell::RefCell, io::Cursor, rc::Rc};
 
 use super::{xdr::Hash, Host, RawVal, Symbol};
+use fuel_refillable::FuelRefillable;
 use func_info::HOST_FUNCTIONS;
 use soroban_env_common::{
     meta::{self, get_ledger_protocol_version, get_pre_release_version},
@@ -22,15 +24,12 @@ use soroban_env_common::{
     ConversionError, SymbolStr, TryIntoVal, WasmiMarshal,
 };
 
-use wasmi::{
-    core::Trap, errors::FuelError, Engine, FuelConsumptionMode, Func, Instance, Linker, Memory,
-    Module, Store, Value,
-};
+use wasmi::{Engine, FuelConsumptionMode, Func, Instance, Linker, Memory, Module, Store, Value};
 
 #[cfg(any(test, feature = "testutils"))]
-use soroban_env_common::{
+use crate::{
     xdr::{ScVal, ScVec},
-    TryFromVal,
+    TryFromVal, VmCaller,
 };
 #[cfg(any(test, feature = "testutils"))]
 use wasmi::{Caller, StoreContextMut};
@@ -215,95 +214,6 @@ impl Vm {
         }
     }
 
-    // atomic transfer the cpu and memory budget from the vm to the host
-    fn supply_fuel_to_vm(self: &Rc<Self>) -> Result<(), HostError> {
-        // we check the invariant that fuel tank must be clean before we supply
-        // it with fuel.
-        assert!(
-            self.store.borrow().fuel_consumed() == Some(0)
-                && self.store.borrow().fuel_total() == Some(0)
-                && self.store.borrow().mem_fuel_consumed() == Some(0)
-                && self.store.borrow().mem_fuel_total() == Some(0)
-        );
-
-        let mut store = self.store.borrow_mut();
-        let host = store.data();
-        let (cpu, mem) = host.as_budget().get_fuels_budget()?;
-        store
-            .add_fuel(cpu)
-            .map_err(|fe| HostError::from(wasmi::Error::Store(fe)))?;
-        store
-            .add_mem_fuel(mem)
-            .map_err(|fe| wasmi::Error::Store(fe).into())
-    }
-
-    fn supply_fuel_to_caller(vmcaller: &mut VmCaller<Host>) -> Result<(), Trap> {
-        // this routine can only be called if we are in the VM mode
-        assert!(vmcaller.0.is_some());
-        let caller = vmcaller.try_mut().map_err(|e| HostError::from(e))?;
-        // we check the invariant that fuel tank must be clean before we supply
-        // it with fuel.
-        assert!(
-            caller.fuel_consumed() == Some(0)
-                && caller.fuel_total() == Some(0)
-                && caller.mem_fuel_consumed() == Some(0)
-                && caller.mem_fuel_total() == Some(0)
-        );
-        let host = caller.data().clone();
-        let (cpu, mem) = host.as_budget().get_fuels_budget()?;
-        caller
-            .add_fuel(cpu)
-            .map_err(|_| Trap::from(host.err_wasmi_fuel_metering_disabled()))?;
-        caller
-            .add_mem_fuel(mem)
-            .map_err(|_| host.err_wasmi_fuel_metering_disabled().into())
-    }
-
-    // atomic transfer the cpu and memory budget from the host to the vm
-    fn apply_fuel_consumption_to_budget(self: &Rc<Self>) -> Result<(), HostError> {
-        let mut store = self.store.borrow_mut();
-        let host = store.data();
-        let cpu = store
-            .fuel_consumed()
-            .ok_or_else(|| HostError::from(wasmi::Error::Store(FuelError::FuelMeteringDisabled)))?;
-        let mem = store
-            .mem_fuel_consumed()
-            .ok_or_else(|| HostError::from(wasmi::Error::Store(FuelError::FuelMeteringDisabled)))?;
-        host.as_budget().apply_wasmi_fuels(cpu, mem)?;
-        // we close the tab by clearing the fuel amounts in the VM
-        store
-            .reset_fuel()
-            .map_err(|fe| HostError::from(wasmi::Error::Store(fe)))?;
-        store
-            .reset_mem_fuel()
-            .map_err(|fe| wasmi::Error::Store(fe).into())
-    }
-
-    fn apply_fuel_consumption_from_caller(vmcaller: &mut VmCaller<Host>) -> Result<(), Trap> {
-        // this routine can only be called if we are in the VM mode
-        assert!(vmcaller.0.is_some());
-        let caller = vmcaller
-            .try_mut()
-            .map_err(|e| Trap::from(HostError::from(e)))?;
-        let host = caller.data().clone();
-        let cpu = caller
-            .fuel_consumed()
-            .ok_or_else(|| Trap::from(host.err_wasmi_fuel_metering_disabled()))?;
-        let mem = caller
-            .mem_fuel_consumed()
-            .ok_or_else(|| Trap::from(host.err_wasmi_fuel_metering_disabled()))?;
-        host.as_budget()
-            .apply_wasmi_fuels(cpu, mem)
-            .map_err(|he| Trap::from(he))?;
-        // we close the tab by clearing the fuel amounts in the VM
-        caller
-            .reset_fuel()
-            .map_err(|_| Trap::from(host.err_wasmi_fuel_metering_disabled()))?;
-        caller
-            .reset_mem_fuel()
-            .map_err(|_| host.err_wasmi_fuel_metering_disabled().into())
-    }
-
     // Wrapper for the [`Func`] call, mostly taking care of fuel supply from
     // host to the VM and applying VM fuel consumption back to the host budget.
     // This is where the host->VM->host boundaries are crossed.
@@ -315,14 +225,14 @@ impl Vm {
         inputs: &[Value],
     ) -> Result<RawVal, HostError> {
         let mut wasm_ret: [Value; 1] = [Value::I64(0)];
-        self.supply_fuel_to_vm()?;
+        self.store.borrow_mut().fill_fuels(host)?;
         let res = func.call(&mut *self.store.borrow_mut(), inputs, &mut wasm_ret);
-        // TODO: Due to the way wasmi's fuel metering works (it does `remaining.checked_sub(delta).ok_or(Trap)`),
-        // there will always be a small amount of fuel remaining when the `OutOfFuel` trap occurs.
-        // This can be confusing to the user if get an "out of budget" error but there is still budget
-        // remaining. We could consider setting budget to "limit+1" when we encounter the `OutOfFuel` trap.
-        // Or file an issue to the wasmi team to change how their fuel charging works.
-        self.apply_fuel_consumption_to_budget()?;
+        // Due to the way wasmi's fuel metering works (it does `remaining.checked_sub(delta).ok_or(Trap)`),
+        // there may be a small amount of fuel (less than delta -- the fuel cost of that failing
+        // wasmi instruction) remaining when the `OutOfFuel` trap occurs. This is only observable
+        // if the contract traps with `OutOfFuel`, which may appear confusing if they look closely
+        // at the budget amount consumed. So it should be fine.
+        self.store.borrow_mut().return_fuels(host)?;
 
         if let Err(e) = res {
             // When a call fails with a wasmi::Error::Trap that carries a HostError

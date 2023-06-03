@@ -226,10 +226,6 @@ impl Host {
         f(self.0.budget.clone())
     }
 
-    // pub (crate) fn with_mut_budget<T, F>(&self, mut f: F) -> Result<T, HostError>
-    // where
-    //     F: FnMut()
-
     pub(crate) fn budget_ref(&self) -> &Budget {
         &self.0.budget
     }

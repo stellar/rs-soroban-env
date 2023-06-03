@@ -594,6 +594,16 @@ impl Budget {
             return Err((ScErrorType::Context, ScErrorCode::InvalidInput).into());
         }
         let cpu_per_fuel = (cpu_per_fuel as u64).max(1);
+        // Due to rounding, the amount of cpu converted to fuel will be slightly
+        // less than the total cpu available. This is okay because 1. that rounded-off
+        // amount should be very small (less than the cpu_per_fuel) 2. it does
+        // not cumulate over host function calls (each time the Vm returns back
+        // to the host, the host gets back the unspent fuel amount converged
+        // back to the cpu). The only way this rounding difference is observable
+        // is if the Vm traps due to `OutOfFuel`, this tiny amount would still
+        // be withheld from the host. And this may not be the only source of
+        // unspendable residual budget (see the other comment in `vm::wrapped_func_call`).
+        // So it should be okay.
         Ok(cpu_remaining / cpu_per_fuel)
     }
 
@@ -610,6 +620,7 @@ impl Budget {
             return Err((ScErrorType::Context, ScErrorCode::InvalidInput).into());
         }
         let bytes_per_fuel = (bytes_per_fuel as u64).max(1);
+        // See comment about rounding above.
         Ok(bytes_remaining / bytes_per_fuel)
     }
 

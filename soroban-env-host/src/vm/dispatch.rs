@@ -1,4 +1,5 @@
-use crate::{xdr::ContractCostType, Host, HostError, Vm, VmCaller, VmCallerEnv};
+use super::FuelRefillable;
+use crate::{xdr::ContractCostType, Host, HostError, VmCaller, VmCallerEnv};
 use crate::{
     AddressObject, BytesObject, Error, I128Object, I256Object, I64Object, MapObject, RawVal,
     StringObject, Symbol, SymbolObject, U128Object, U256Object, U32Val, U64Object, VecObject,
@@ -64,20 +65,21 @@ macro_rules! generate_dispatch_functions {
                 // expansion, flattening all functions from all 'mod' blocks
                 // into a set of functions.
                 $(#[$fn_attr])*
-                pub(crate) fn $fn_id(caller: wasmi::Caller<Host>, $($arg:i64),*) ->
+                pub(crate) fn $fn_id(mut caller: wasmi::Caller<Host>, $($arg:i64),*) ->
                     Result<(i64,), Trap>
                 {
                     // Notes on metering: a flat charge per host function invocation.
                     // This does not account for the actual work being done in those functions,
                     // which are accounted for individually at the operation level.
                     let host = caller.data().clone();
-                    let mut vmcaller = VmCaller(Some(caller));
 
                     // This is where the VM -> Host boundary is crossed.
-                    // We first transfer the budget accounting to the host.
-                    Vm::apply_fuel_consumption_from_caller(&mut vmcaller)?;
+                    // We first return all fuels from the VM back to the host such that
+                    // the host maintains control of the budget.
+                    FuelRefillable::return_fuels(&mut caller, &host).map_err(|he| Trap::from(he))?;
 
                     host.charge_budget(ContractCostType::InvokeHostFunction, None)?;
+                    let mut vmcaller = VmCaller(Some(caller));
                     // The odd / seemingly-redundant use of `wasmi::Value` here
                     // as intermediates -- rather than just passing RawVals --
                     // has to do with the fact that some host functions are
@@ -111,7 +113,9 @@ macro_rules! generate_dispatch_functions {
 
                     // This is where the Host->VM boundary is crossed.
                     // We supply the remaining host budget as fuel to the VM.
-                    Vm::supply_fuel_to_caller(&mut vmcaller)?;
+                    let caller = vmcaller.try_mut().map_err(|e| Trap::from(HostError::from(e)))?;
+                    FuelRefillable::fill_fuels(caller, &host).map_err(|he| Trap::from(he))?;
+
                     res
                 }
             )*

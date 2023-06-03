@@ -77,7 +77,6 @@ fn tuple_roundtrip() -> Result<(), HostError> {
     Ok(())
 }
 
-#[cfg(feature = "wasmi")]
 #[test]
 fn f32_does_not_work() -> Result<(), HostError> {
     use soroban_env_common::xdr::Hash;
