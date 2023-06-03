@@ -223,9 +223,9 @@ impl Host {
     /// Helper for mutating the [`Budget`] held in this [`Host`], either to
     /// allocate it on contract creation or to deplete it on callbacks from
     /// the VM or host functions.
-    pub fn with_budget<T, F>(&self, f: F) -> T
+    pub(crate) fn with_budget<T, F>(&self, f: F) -> Result<T, HostError>
     where
-        F: FnOnce(Budget) -> T,
+        F: FnOnce(Budget) -> Result<T, HostError>,
     {
         f(self.0.budget.clone())
     }
