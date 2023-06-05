@@ -18,7 +18,7 @@ impl Contract {
     }
 
     pub fn get_exclusive(e: Env, key: Symbol) -> u64 {
-        e.storage().exclusive().get(&key).unwrap().unwrap()
+        e.storage().exclusive().get(&key).unwrap()
     }
 
     pub fn bump_exclusive(e: Env, key: Symbol, min_to_live: u32) {
@@ -38,7 +38,7 @@ impl Contract {
     }
 
     pub fn get_mergeable(e: Env, key: Symbol) -> u64 {
-        e.storage().mergeable().get(&key).unwrap().unwrap()
+        e.storage().mergeable().get(&key).unwrap()
     }
 
     pub fn bump_mergeable(e: Env, key: Symbol, min_to_live: u32) {
@@ -58,7 +58,7 @@ impl Contract {
     }
 
     pub fn get_temporary(e: Env, key: Symbol) -> u64 {
-        e.storage().temporary().get(&key).unwrap().unwrap()
+        e.storage().temporary().get(&key).unwrap()
     }
 
     pub fn bump_temporary(e: Env, key: Symbol, min_to_live: u32) {
