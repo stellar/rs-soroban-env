@@ -769,7 +769,7 @@ impl AuthorizationTracker {
                 .authenticate(host)
                 .map_err(|err| {
                     // Convert any contract errors to auth errors so that it's
-                    // not possible to confuse them for the errors of the 
+                    // not possible to confuse them for the errors of the
                     // contract that has called `require_auth`.
                     if err.error.is_type(ScErrorType::Contract) {
                         host.err(
