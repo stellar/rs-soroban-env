@@ -1796,109 +1796,88 @@ fn test_classic_account_multisig_auth() {
         .unwrap();
 
     // Failure: only account weight (40)
-    assert_eq!(
-        to_contract_err(
-            token
-                .transfer(
-                    &TestSigner::account_with_multisig(&account_id, vec![&test.user_key]),
-                    receiver.clone(),
-                    100,
-                )
-                .err()
-                .unwrap()
-        ),
-        ContractError::AuthenticationError
-    );
+    assert!(token
+        .transfer(
+            &TestSigner::account_with_multisig(&account_id, vec![&test.user_key]),
+            receiver.clone(),
+            100,
+        )
+        .err()
+        .unwrap()
+        .error
+        .is_type(ScErrorType::Auth));
 
     // Failure: 40 + 59 < 100
-    assert_eq!(
-        to_contract_err(
-            token
-                .transfer(
-                    &TestSigner::account_with_multisig(
-                        &account_id,
-                        vec![&test.user_key, &test.user_key_4]
-                    ),
-                    receiver.clone(),
-                    100,
-                )
-                .err()
-                .unwrap()
-        ),
-        ContractError::AuthenticationError
-    );
+    assert!(token
+        .transfer(
+            &TestSigner::account_with_multisig(&account_id, vec![&test.user_key, &test.user_key_4]),
+            receiver.clone(),
+            100,
+        )
+        .err()
+        .unwrap()
+        .error
+        .is_type(ScErrorType::Auth));
 
     // Failure: 60 < 100, duplicate signatures
-    assert_eq!(
-        to_contract_err(
-            token
-                .transfer(
-                    &TestSigner::account_with_multisig(
-                        &account_id,
-                        vec![&test.user_key_3, &test.user_key_3]
-                    ),
-                    receiver.clone(),
-                    100,
-                )
-                .err()
-                .unwrap()
-        ),
-        ContractError::AuthenticationError
-    );
+    assert!(token
+        .transfer(
+            &TestSigner::account_with_multisig(
+                &account_id,
+                vec![&test.user_key_3, &test.user_key_3]
+            ),
+            receiver.clone(),
+            100,
+        )
+        .err()
+        .unwrap()
+        .error
+        .is_type(ScErrorType::Auth));
 
     // Failure: 60 + 59 > 100, duplicate signatures
-    assert_eq!(
-        to_contract_err(
-            token
-                .transfer(
-                    &TestSigner::account_with_multisig(
-                        &account_id,
-                        vec![&test.user_key_3, &test.user_key_4, &test.user_key_3],
-                    ),
-                    receiver.clone(),
-                    100,
-                )
-                .err()
-                .unwrap()
-        ),
-        ContractError::AuthenticationError
-    );
+    assert!(token
+        .transfer(
+            &TestSigner::account_with_multisig(
+                &account_id,
+                vec![&test.user_key_3, &test.user_key_4, &test.user_key_3],
+            ),
+            receiver.clone(),
+            100,
+        )
+        .err()
+        .unwrap()
+        .error
+        .is_type(ScErrorType::Auth));
 
     // Failure: 60 < 100 and incorrect signer
-    assert_eq!(
-        to_contract_err(
-            token
-                .transfer(
-                    &TestSigner::account_with_multisig(
-                        &account_id,
-                        vec![&test.user_key_3, &test.issuer_key],
-                    ),
-                    receiver.clone(),
-                    100,
-                )
-                .err()
-                .unwrap()
-        ),
-        ContractError::AuthenticationError
-    );
+    assert!(token
+        .transfer(
+            &TestSigner::account_with_multisig(
+                &account_id,
+                vec![&test.user_key_3, &test.issuer_key],
+            ),
+            receiver.clone(),
+            100,
+        )
+        .err()
+        .unwrap()
+        .error
+        .is_type(ScErrorType::Auth));
 
     // Failure: 60 + 59 > 100, but have incorrect signer
-    assert_eq!(
-        to_contract_err(
-            token
-                .transfer(
-                    &TestSigner::account_with_multisig(
-                        &account_id,
-                        vec![&test.user_key_3, &test.user_key_4, &test.issuer_key],
-                    ),
-                    receiver.clone(),
-                    100,
-                )
-                .err()
-                .unwrap()
-        ),
-        ContractError::AuthenticationError
-    );
+    assert!(token
+        .transfer(
+            &TestSigner::account_with_multisig(
+                &account_id,
+                vec![&test.user_key_3, &test.user_key_4, &test.issuer_key],
+            ),
+            receiver.clone(),
+            100,
+        )
+        .err()
+        .unwrap()
+        .error
+        .is_type(ScErrorType::Auth));
 
     // Failure: too many signatures (even though weight would be enough after
     // deduplication).
@@ -1906,19 +1885,16 @@ fn test_classic_account_multisig_auth() {
     for _ in 0..21 {
         too_many_sigs.push(&test.user_key_2);
     }
-    assert_eq!(
-        to_contract_err(
-            token
-                .transfer(
-                    &TestSigner::account_with_multisig(&account_id, too_many_sigs,),
-                    receiver.clone(),
-                    100,
-                )
-                .err()
-                .unwrap()
-        ),
-        ContractError::AuthenticationError
-    );
+    assert!(token
+        .transfer(
+            &TestSigner::account_with_multisig(&account_id, too_many_sigs,),
+            receiver.clone(),
+            100,
+        )
+        .err()
+        .unwrap()
+        .error
+        .is_type(ScErrorType::Auth));
 
     // Failure: out of order signers
     let mut out_of_order_signers = vec![
@@ -1929,22 +1905,19 @@ fn test_classic_account_multisig_auth() {
     ];
     out_of_order_signers.sort_by_key(|k| k.public.as_bytes());
     out_of_order_signers.swap(1, 2);
-    assert_eq!(
-        to_contract_err(
-            token
-                .transfer(
-                    &TestSigner::Account(AccountSigner {
-                        account_id: account_id,
-                        signers: out_of_order_signers,
-                    }),
-                    receiver,
-                    100,
-                )
-                .err()
-                .unwrap()
-        ),
-        ContractError::AuthenticationError
-    );
+    assert!(token
+        .transfer(
+            &TestSigner::Account(AccountSigner {
+                account_id: account_id,
+                signers: out_of_order_signers,
+            }),
+            receiver,
+            100,
+        )
+        .err()
+        .unwrap()
+        .error
+        .is_type(ScErrorType::Auth));
 }
 
 #[test]

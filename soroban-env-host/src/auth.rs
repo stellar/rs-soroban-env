@@ -767,6 +767,21 @@ impl AuthorizationTracker {
         if !self.authenticated {
             let authenticate_res = self
                 .authenticate(host)
+                .map_err(|err| {
+                    // Convert any contract errors to auth errors so that it's
+                    // not possible to confuse them for the errors of the
+                    // contract that has called `require_auth`.
+                    if err.error.is_type(ScErrorType::Contract) {
+                        host.err(
+                            ScErrorType::Auth,
+                            ScErrorCode::InvalidAction,
+                            "failed account authentication",
+                            &[err.error.to_raw()],
+                        )
+                    } else {
+                        err
+                    }
+                })
                 .and_then(|_| self.verify_nonce(host));
             if let Some(err) = authenticate_res.err() {
                 self.is_valid = false;
