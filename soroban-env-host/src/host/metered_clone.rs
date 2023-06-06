@@ -1,6 +1,8 @@
 use std::{mem, rc::Rc};
 
-use soroban_env_common::xdr::{ContractEventType, ContractIdPreimage, ScErrorCode, ScErrorType};
+use soroban_env_common::xdr::{
+    ContractEventType, ContractIdPreimage, ScErrorCode, ScErrorType, SorobanAuthorizedInvocation,
+};
 
 use crate::{
     budget::Budget,
@@ -219,6 +221,7 @@ impl MeteredClone for AccessType {}
 impl MeteredClone for InternalContractEvent {}
 impl MeteredClone for CreateContractArgs {}
 impl MeteredClone for ContractIdPreimage {}
+impl MeteredClone for SorobanAuthorizedInvocation {}
 // composite types
 impl<T> MeteredClone for Rc<T> {}
 impl<T> MeteredClone for &[T] {}

@@ -64,24 +64,11 @@ impl AuthorizationContext {
     fn from_authorized_fn(host: &Host, function: &AuthorizedFunction) -> Result<Self, HostError> {
         match function {
             AuthorizedFunction::ContractFn(contract_fn) => {
-                let fn_name = Symbol::try_from(host.to_host_val(&ScVal::Symbol(
-                    contract_fn.function_name.metered_clone(host.budget_ref())?,
-                ))?)?;
-                let args = HostVec::try_from_val(
-                    host,
-                    &host.scvals_to_rawvals(contract_fn.args.0.as_slice())?,
-                )?;
+                let args = HostVec::try_from_val(host, &contract_fn.args)?;
                 Ok(AuthorizationContext::Contract(
                     ContractAuthorizationContext {
-                        contract: Address::try_from_val(
-                            host,
-                            &host.add_host_object(
-                                contract_fn
-                                    .contract_address
-                                    .metered_clone(host.budget_ref())?,
-                            )?,
-                        )?,
-                        fn_name,
+                        contract: contract_fn.contract_address.try_into_val(host)?,
+                        fn_name: contract_fn.function_name,
                         args,
                     },
                 ))
@@ -169,7 +156,7 @@ pub(crate) fn check_account_contract_auth(
 
 pub(crate) fn check_account_authentication(
     host: &Host,
-    account_id: &AccountId,
+    account_id: AccountId,
     payload: &[u8],
     signature_args: &Vec<RawVal>,
 ) -> Result<(), HostError> {
@@ -201,7 +188,7 @@ pub(crate) fn check_account_authentication(
         ));
     }
     let payload_obj = host.bytes_new_from_slice(payload)?;
-    let account = host.load_account(account_id.metered_clone(host.budget_ref())?)?;
+    let account = host.load_account(account_id)?;
     let mut prev_pk: Option<BytesN<32>> = None;
     let mut weight = 0u32;
     for i in 0..sigs.len()? {

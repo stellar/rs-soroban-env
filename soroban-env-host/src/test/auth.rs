@@ -161,8 +161,8 @@ impl AuthTest {
             let sc_address = self.key_to_sc_address(&self.keys[address_id]);
             let mut next_nonce = HashMap::<ScAddress, u64>::new();
             for sign_root in &sign_payloads[address_id] {
-                let contract_address = sign_root.contract_address.to_sc_address().unwrap();
-                let nonce = if let Some(nonce) = next_nonce.get(&contract_address) {
+                let sign_root_contract = sign_root.contract_address.to_sc_address().unwrap();
+                let nonce = if let Some(nonce) = next_nonce.get(&sign_root_contract) {
                     *nonce
                 } else {
                     let nonce = self
@@ -170,22 +170,22 @@ impl AuthTest {
                         .read_nonce(
                             sc_address.clone(),
                             &AuthorizedFunction::ContractFn(ContractFunction {
-                                contract_address: contract_address.clone(),
-                                function_name: Default::default(),
+                                contract_address: sign_root.contract_address.clone().into(),
+                                function_name: Symbol::try_from_small_str("").unwrap(),
                                 args: Default::default(),
                             }),
                         )
                         .unwrap();
                     self.last_nonces.insert(
                         (
-                            contract_address.clone(),
+                            sign_root_contract.clone(),
                             self.keys[address_id].public.as_bytes().to_vec(),
                         ),
                         nonce,
                     );
                     nonce
                 };
-                next_nonce.insert(contract_address, nonce + 1);
+                next_nonce.insert(sign_root_contract, nonce + 1);
                 let root_invocation = self.convert_sign_node(sign_root);
                 let payload_preimage =
                     HashIdPreimage::SorobanAuthorization(HashIdPreimageSorobanAuthorization {
@@ -242,8 +242,8 @@ impl AuthTest {
                     .read_nonce(
                         self.key_to_sc_address(key),
                         &AuthorizedFunction::ContractFn(ContractFunction {
-                            contract_address: contract_address.to_sc_address().unwrap(),
-                            function_name: Default::default(),
+                            contract_address: contract_address.clone().into(),
+                            function_name: Symbol::try_from_small_str("").unwrap(),
                             args: Default::default(),
                         }),
                     )

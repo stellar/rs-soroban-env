@@ -4,6 +4,7 @@ use super::metered_clone::{self, charge_container_bulk_init_with_elts, MeteredCl
 use crate::budget::AsBudget;
 use crate::err;
 use crate::host_object::{HostMap, HostObject, HostVec};
+use crate::native_contract::base_types::Address;
 use crate::xdr::{Hash, LedgerKey, LedgerKeyContractData, ScVal, ScVec, Uint256};
 use crate::{xdr::ContractCostType, Host, HostError, RawVal};
 use ed25519_dalek::{PublicKey, Signature, SIGNATURE_LENGTH};
@@ -12,12 +13,12 @@ use soroban_env_common::num::{
     i256_from_pieces, i256_into_pieces, u256_from_pieces, u256_into_pieces,
 };
 use soroban_env_common::xdr::{
-    self, int128_helpers, AccountId, Int128Parts, Int256Parts, ScBytes, ScErrorCode, ScErrorType,
-    ScMap, ScMapEntry, UInt128Parts, UInt256Parts,
+    self, int128_helpers, AccountId, Int128Parts, Int256Parts, ScAddress, ScBytes, ScErrorCode,
+    ScErrorType, ScMap, ScMapEntry, UInt128Parts, UInt256Parts,
 };
 use soroban_env_common::{
-    BytesObject, Convert, Object, ScValObjRef, ScValObject, TryFromVal, TryIntoVal, U32Val,
-    VecObject,
+    AddressObject, BytesObject, Convert, Object, ScValObjRef, ScValObject, TryFromVal, TryIntoVal,
+    U32Val, VecObject,
 };
 
 impl Host {
@@ -294,7 +295,28 @@ impl Host {
         Ok(ScVec(
             raw_vals
                 .iter()
-                .map(|v| ScVal::try_from_val(self, v).map_err(|e| e.into()))
+                .map(|v| self.from_host_val(*v))
+                .collect::<Result<Vec<ScVal>, HostError>>()?
+                .try_into()
+                .map_err(|_| {
+                    err!(
+                        self,
+                        (ScErrorType::Object, ScErrorCode::ExceededLimit),
+                        "vector size limit exceeded",
+                        raw_vals.len()
+                    )
+                })?,
+        ))
+    }
+
+    pub(crate) fn rawvals_to_scvec_non_metered(
+        &self,
+        raw_vals: &[RawVal],
+    ) -> Result<ScVec, HostError> {
+        Ok(ScVec(
+            raw_vals
+                .iter()
+                .map(|v| v.try_into_val(self)?)
                 .collect::<Result<Vec<ScVal>, HostError>>()?
                 .try_into()
                 .map_err(|_| {
@@ -309,6 +331,10 @@ impl Host {
     }
 
     pub(crate) fn scvals_to_rawvals(&self, sc_vals: &[ScVal]) -> Result<Vec<RawVal>, HostError> {
+        charge_container_bulk_init_with_elts::<Vec<RawVal>, RawVal>(
+            sc_vals.len() as u64,
+            self.as_budget(),
+        )?;
         sc_vals
             .iter()
             .map(|scv| self.to_host_val(scv))
@@ -336,6 +362,15 @@ impl Host {
 
     pub(crate) fn scbytes_from_hash(&self, hash: &Hash) -> Result<ScBytes, HostError> {
         self.scbytes_from_slice(hash.as_slice())
+    }
+
+    pub(crate) fn scaddress_from_address(
+        &self,
+        address: AddressObject,
+    ) -> Result<ScAddress, HostError> {
+        self.visit_obj(address, |addr: &ScAddress| {
+            addr.metered_clone(self.budget_ref())
+        })
     }
 }
 

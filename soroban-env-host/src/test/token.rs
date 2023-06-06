@@ -2683,11 +2683,7 @@ fn test_recording_auth_for_token() {
     assert_eq!(
         test.host.get_authenticated_authorizations().unwrap(),
         vec![(
-            test.host
-                .visit_obj(admin.address(&test.host).into(), |addr: &ScAddress| Ok(
-                    addr.clone()
-                ))
-                .unwrap(),
+            admin.address(&test.host).to_sc_address().unwrap(),
             SorobanAuthorizedInvocation {
                 function: SorobanAuthorizedFunction::ContractFn(
                     SorobanAuthorizedContractFunction {

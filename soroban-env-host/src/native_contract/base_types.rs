@@ -449,9 +449,7 @@ impl Address {
     }
 
     pub(crate) fn to_sc_address(&self) -> Result<ScAddress, HostError> {
-        self.host.visit_obj(self.object, |addr: &ScAddress| {
-            addr.metered_clone(self.host.budget_ref())
-        })
+        self.host.scaddress_from_address(self.object)
     }
 
     pub(crate) fn require_auth(&self) -> Result<(), HostError> {

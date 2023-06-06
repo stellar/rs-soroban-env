@@ -137,7 +137,7 @@ impl Host {
             budget: budget.clone(),
             events: Default::default(),
             authorization_manager: RefCell::new(
-                AuthorizationManager::new_enforcing_without_authorizations(budget),
+                AuthorizationManager::new_enforcing_without_authorizations(),
             ),
             diagnostic_level: Default::default(),
             base_prng: RefCell::new(None),
@@ -157,13 +157,18 @@ impl Host {
         *self.0.source_account.borrow_mut() = None;
     }
 
-    pub fn source_account(&self) -> Option<AccountId> {
-        self.0.source_account.borrow().clone()
+    pub fn source_account_address(&self) -> Result<Option<AddressObject>, HostError> {
+        if let Some(acc) = self.0.source_account.borrow().as_ref() {
+            Ok(Some(self.add_host_object(ScAddress::Account(
+                acc.metered_clone(self.budget_ref())?,
+            ))?))
+        } else {
+            Ok(None)
+        }
     }
 
     pub fn switch_to_recording_auth(&self) {
-        *self.0.authorization_manager.borrow_mut() =
-            AuthorizationManager::new_recording(self.budget_cloned());
+        *self.0.authorization_manager.borrow_mut() = AuthorizationManager::new_recording();
     }
 
     pub fn set_authorization_entries(
@@ -428,13 +433,9 @@ impl Host {
         args: CreateContractArgs,
     ) -> Result<AddressObject, HostError> {
         if let Some(deployer_address) = deployer {
-            let sc_addr = self.visit_obj(deployer_address, |addr: &ScAddress| {
-                addr.metered_clone(self.budget_ref())
-            })?;
             self.0.authorization_manager.borrow_mut().require_auth(
                 self,
-                deployer_address.get_handle(),
-                sc_addr,
+                deployer_address,
                 Default::default(),
             )?;
         }
@@ -502,7 +503,7 @@ impl Host {
                     &[],
                 )
             })?
-            .get_authenticated_authorizations())
+            .get_authenticated_authorizations(self))
     }
 
     fn upload_contract_wasm(&self, wasm: Vec<u8>) -> Result<BytesObject, HostError> {
@@ -581,7 +582,7 @@ impl Host {
             self.0
                 .authorization_manager
                 .borrow()
-                .get_recorded_auth_payloads()
+                .get_recorded_auth_payloads(self)
         }
         #[cfg(any(test, feature = "testutils"))]
         {
@@ -597,7 +598,7 @@ impl Host {
                         &[],
                     )
                 })?
-                .get_recorded_auth_payloads()
+                .get_recorded_auth_payloads(self)
         }
     }
 
@@ -2387,20 +2388,12 @@ impl VmCallerEnv for Host {
         address: AddressObject,
         args: VecObject,
     ) -> Result<RawVal, Self::Error> {
-        let sc_addr = self.visit_obj(address, |addr: &ScAddress| {
-            addr.metered_clone(self.budget_ref())
-        })?;
-
+        let args = self.visit_obj(args, |a: &HostVec| a.to_vec(self.budget_ref()))?;
         Ok(self
             .0
             .authorization_manager
             .borrow_mut()
-            .require_auth(
-                self,
-                address.get_handle(),
-                sc_addr,
-                self.call_args_to_scvec(args)?,
-            )?
+            .require_auth(self, address, args)?
             .into())
     }
 
@@ -2409,7 +2402,6 @@ impl VmCallerEnv for Host {
         vmcaller: &mut VmCaller<Self::VmUserState>,
         address: AddressObject,
     ) -> Result<RawVal, Self::Error> {
-        let addr = self.visit_obj(address, |addr: &ScAddress| Ok(addr.clone()))?;
         let args = self.with_current_frame(|f| {
             let args = match f {
                 Frame::ContractVM(_, _, args) => args,
@@ -2425,14 +2417,14 @@ impl VmCallerEnv for Host {
                 #[cfg(any(test, feature = "testutils"))]
                 Frame::TestContract(c) => &c.args,
             };
-            self.rawvals_to_scvec(&args)
+            args.metered_clone(self.budget_ref())
         })?;
 
         Ok(self
             .0
             .authorization_manager
             .borrow_mut()
-            .require_auth(self, address.get_handle(), addr, args)?
+            .require_auth(self, address, args)?
             .into())
     }
 
