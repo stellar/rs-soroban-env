@@ -11,6 +11,8 @@ use crate::{
     Host, HostError,
 };
 
+use wasmi::FuelCosts;
+
 /// We provide a "cost model" object that evaluates a linear expression:
 ///
 ///    f(x) = a + b * Option<x>
@@ -41,7 +43,6 @@ pub trait HostCostModel {
 impl HostCostModel for ContractCostParamEntry {
     fn evaluate(&self, input: Option<u64>) -> Result<u64, HostError> {
         if self.const_term < 0 || self.linear_term < 0 {
-            // TODO: consider more concrete error code "invalid input"
             return Err((ScErrorType::Context, ScErrorCode::InvalidInput).into());
         }
 
@@ -151,6 +152,10 @@ impl BudgetDimension {
         self.limit
     }
 
+    pub fn get_remaining(&self) -> u64 {
+        self.limit.saturating_sub(self.total_count)
+    }
+
     pub fn reset(&mut self, limit: u64) {
         self.limit = limit;
         self.total_count = 0;
@@ -233,8 +238,8 @@ impl BudgetImpl {
             // type -- we leave the input as `None`, otherwise, we initialize the input to 0.
             let i = ct as usize;
             match ct {
-                ContractCostType::WasmInsnExec => (),
-                ContractCostType::WasmMemAlloc => self.tracker[i].1 = Some(0), // number of pages in wasm linear memory to allocate (each page is 64kB)
+                ContractCostType::WasmInsnExec => self.tracker[i].1 = Some(0), // number of "fuel" units wasmi consumes
+                ContractCostType::WasmMemAlloc => self.tracker[i].1 = Some(0), // number of "memory fuel" units wasmi consumes
                 ContractCostType::HostMemAlloc => self.tracker[i].1 = Some(0), // number of bytes in host memory to allocate
                 ContractCostType::HostMemCpy => self.tracker[i].1 = Some(0), // number of bytes in host to copy
                 ContractCostType::HostMemCmp => self.tracker[i].1 = Some(0), // number of bytes in host to compare
@@ -450,6 +455,15 @@ impl Budget {
         self.charge_in_bulk(ty, 1, input)
     }
 
+    pub fn apply_wasmi_fuels(&self, cpu_fuel: u64, mem_fuel: u64) -> Result<(), HostError> {
+        self.mut_budget(|mut b| {
+            b.cpu_insns
+                .charge(ContractCostType::WasmInsnExec, 1, Some(cpu_fuel))?;
+            b.mem_bytes
+                .charge(ContractCostType::WasmMemAlloc, 1, Some(mem_fuel))
+        })
+    }
+
     /// Performs a bulk charge to the budget under the specified [`CostType`].
     /// The `iterations` is the batch size. The caller needs to ensure:
     /// 1. the batched charges have identical costs (having the same
@@ -496,12 +510,20 @@ impl Budget {
         f(&mut self.0.borrow_mut().tracker[ty as usize])
     }
 
-    pub fn get_cpu_insns_count(&self) -> u64 {
+    pub fn get_cpu_insns_consumed(&self) -> u64 {
         self.0.borrow().cpu_insns.get_total_count()
     }
 
-    pub fn get_mem_bytes_count(&self) -> u64 {
+    pub fn get_mem_bytes_consumed(&self) -> u64 {
         self.0.borrow().mem_bytes.get_total_count()
+    }
+
+    pub fn get_cpu_insns_remaining(&self) -> u64 {
+        self.0.borrow().cpu_insns.get_remaining()
+    }
+
+    pub fn get_mem_bytes_remaining(&self) -> u64 {
+        self.0.borrow().mem_bytes.get_remaining()
     }
 
     pub fn reset_default(&self) {
@@ -558,6 +580,65 @@ impl Budget {
         })
         .unwrap(); // impossible to panic
     }
+
+    fn get_cpu_insns_remaining_as_fuel(&self) -> Result<u64, HostError> {
+        let cpu_remaining = self.get_cpu_insns_remaining();
+        let cpu_per_fuel = self
+            .0
+            .borrow()
+            .cpu_insns
+            .get_cost_model(ContractCostType::WasmInsnExec)
+            .linear_term;
+
+        if cpu_per_fuel < 0 {
+            return Err((ScErrorType::Context, ScErrorCode::InvalidInput).into());
+        }
+        let cpu_per_fuel = (cpu_per_fuel as u64).max(1);
+        // Due to rounding, the amount of cpu converted to fuel will be slightly
+        // less than the total cpu available. This is okay because 1. that rounded-off
+        // amount should be very small (less than the cpu_per_fuel) 2. it does
+        // not cumulate over host function calls (each time the Vm returns back
+        // to the host, the host gets back the unspent fuel amount converged
+        // back to the cpu). The only way this rounding difference is observable
+        // is if the Vm traps due to `OutOfFuel`, this tiny amount would still
+        // be withheld from the host. And this may not be the only source of
+        // unspendable residual budget (see the other comment in `vm::wrapped_func_call`).
+        // So it should be okay.
+        Ok(cpu_remaining / cpu_per_fuel)
+    }
+
+    fn get_mem_bytes_remaining_as_fuel(&self) -> Result<u64, HostError> {
+        let bytes_remaining = self.get_mem_bytes_remaining();
+        let bytes_per_fuel = self
+            .0
+            .borrow()
+            .mem_bytes
+            .get_cost_model(ContractCostType::WasmMemAlloc)
+            .linear_term;
+
+        if bytes_per_fuel < 0 {
+            return Err((ScErrorType::Context, ScErrorCode::InvalidInput).into());
+        }
+        let bytes_per_fuel = (bytes_per_fuel as u64).max(1);
+        // See comment about rounding above.
+        Ok(bytes_remaining / bytes_per_fuel)
+    }
+
+    pub fn get_fuels_budget(&self) -> Result<(u64, u64), HostError> {
+        let cpu_fuel = self.get_cpu_insns_remaining_as_fuel()?;
+        let mem_fuel = self.get_mem_bytes_remaining_as_fuel()?;
+        Ok((cpu_fuel, mem_fuel))
+    }
+
+    // generate a wasmi fuel cost schedule based on our calibration
+    pub fn wasmi_fuel_costs(&self) -> FuelCosts {
+        let mut costs = FuelCosts::default();
+        costs.base = 1;
+        costs.entity = 1;
+        costs.store = 1;
+        costs.call = 10;
+        costs
+    }
 }
 
 /// Default settings for local/sandbox testing only. The actual operations will use parameters
@@ -575,10 +656,19 @@ impl Default for BudgetImpl {
             // define the cpu cost model parameters
             let cpu = &mut b.cpu_insns.get_cost_model_mut(ct);
             match ct {
+                // This is the host cpu insn cost per wasm "fuel". Every "base" wasm
+                // instruction costs 1 fuel (by default), and some particular types of
+                // instructions may cost additional amount of fuel based on
+                // wasmi's config setting.
                 ContractCostType::WasmInsnExec => {
-                    cpu.const_term = 22;
-                    cpu.linear_term = 0;
+                    cpu.const_term = 0;
+                    cpu.linear_term = 22; // this is calibrated
                 }
+                // Host cpu insns per wasm "memory fuel". This has to be zero since
+                // the fuel (representing cpu cost) has been covered by `WasmInsnExec`.
+                // The extra cost of mem processing is accounted for by wasmi's
+                // `config.memory_bytes_per_fuel` parameter.
+                // This type is designated to the mem cost.
                 ContractCostType::WasmMemAlloc => {
                     cpu.const_term = 0;
                     cpu.linear_term = 0;
@@ -664,13 +754,15 @@ impl Default for BudgetImpl {
             // define the memory cost model parameters
             let mem = b.mem_bytes.get_cost_model_mut(ct);
             match ct {
+                // This type is designated to the cpu cost.
                 ContractCostType::WasmInsnExec => {
                     mem.const_term = 0;
                     mem.linear_term = 0;
                 }
+                // Bytes per wasmi "memory fuel".
                 ContractCostType::WasmMemAlloc => {
-                    mem.const_term = 67608;
-                    mem.linear_term = 1;
+                    mem.const_term = 66136; // TODO: this seems to be 1 page overhead?
+                    mem.linear_term = 1; // this is always 1 (1-to-1 between bytes in the host and in Wasmi)
                 }
                 ContractCostType::HostMemAlloc => {
                     mem.const_term = 8;

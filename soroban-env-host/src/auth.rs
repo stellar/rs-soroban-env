@@ -261,14 +261,18 @@ impl AuthorizedInvocation {
     }
 
     // Non-metered conversion should only be used for the recording preflight
-    // runs.
-    fn to_xdr_non_metered(&self) -> Result<xdr::SorobanAuthorizedInvocation, HostError> {
+    // runs or testing.
+    fn to_xdr_non_metered(
+        &self,
+        exhausted_sub_invocations_only: bool,
+    ) -> Result<xdr::SorobanAuthorizedInvocation, HostError> {
         Ok(xdr::SorobanAuthorizedInvocation {
             function: self.function.to_xdr_non_metered(),
             sub_invocations: self
                 .sub_invocations
                 .iter()
-                .map(|i| i.to_xdr_non_metered())
+                .filter(|i| i.is_exhausted || !exhausted_sub_invocations_only)
+                .map(|i| i.to_xdr_non_metered(exhausted_sub_invocations_only))
                 .collect::<Result<Vec<xdr::SorobanAuthorizedInvocation>, HostError>>()?
                 .try_into()
                 .map_err(|_| HostError::from((ScErrorType::Auth, ScErrorCode::InternalError)))?,
@@ -638,7 +642,7 @@ impl AuthorizationManager {
     ) -> Vec<(ScAddress, xdr::SorobanAuthorizedInvocation)> {
         self.trackers
             .iter()
-            .filter(|t| t.authenticated)
+            .filter(|t| t.authenticated && t.root_authorized_invocation.is_exhausted)
             .filter_map(|t| {
                 // Ignore authorizations without an address as they are implied,
                 // less useful as a test utility, and not succinctly capturable
@@ -647,26 +651,14 @@ impl AuthorizationManager {
                 // mostly care about at the benefit of making this list easier
                 // to use.
                 t.address.as_ref().map(|a| {
-                    fn add_recursively_to_auths(
-                        a: &ScAddress,
-                        auths: &mut Vec<(ScAddress, xdr::SorobanAuthorizedInvocation)>,
-                        i: &AuthorizedInvocation,
-                    ) {
-                        // Is exhausted indicates if the auth was in fact
-                        // consumed by a call to require_auth.
-                        if i.is_exhausted {
-                            auths.push((a.clone(), i.to_xdr_non_metered().unwrap()));
-                        }
-                        for sub in &i.sub_invocations {
-                            add_recursively_to_auths(a, auths, sub);
-                        }
-                    }
-                    let mut auths = vec![];
-                    add_recursively_to_auths(a, &mut auths, &t.root_authorized_invocation);
-                    auths
+                    (
+                        a.clone(),
+                        t.root_authorized_invocation
+                            .to_xdr_non_metered(true)
+                            .unwrap(),
+                    )
                 })
             })
-            .flatten()
             .collect()
     }
 }
@@ -775,6 +767,21 @@ impl AuthorizationTracker {
         if !self.authenticated {
             let authenticate_res = self
                 .authenticate(host)
+                .map_err(|err| {
+                    // Convert any contract errors to auth errors so that it's
+                    // not possible to confuse them for the errors of the
+                    // contract that has called `require_auth`.
+                    if err.error.is_type(ScErrorType::Contract) {
+                        host.err(
+                            ScErrorType::Auth,
+                            ScErrorCode::InvalidAction,
+                            "failed account authentication",
+                            &[err.error.to_raw()],
+                        )
+                    } else {
+                        err
+                    }
+                })
                 .and_then(|_| self.verify_nonce(host));
             if let Some(err) = authenticate_res.err() {
                 self.is_valid = false;
@@ -833,7 +840,7 @@ impl AuthorizationTracker {
             } else {
                 self.address.clone()
             },
-            invocation: self.root_authorized_invocation.to_xdr_non_metered()?,
+            invocation: self.root_authorized_invocation.to_xdr_non_metered(false)?,
             nonce: self.nonce,
         })
     }

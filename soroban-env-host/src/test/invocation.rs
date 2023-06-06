@@ -134,7 +134,7 @@ fn invoke_cross_contract_indirect_err() -> Result<(), HostError> {
     assert_eq!(status.get_payload(), exp.to_raw().get_payload());
 
     let events = host.get_events()?.0;
-    assert_eq!(events.len(), 3);
+    assert_eq!(events.len(), 2);
     let last_event = events.last().unwrap();
     // run `UPDATE_EXPECT=true cargo test` to update this.
     let expected = expect![[
@@ -148,7 +148,7 @@ fn invoke_cross_contract_indirect_err() -> Result<(), HostError> {
     assert!(HostError::result_matches_err(res, code));
 
     let events = host.get_events()?.0;
-    assert_eq!(events.len(), 6);
+    assert_eq!(events.len(), 4);
     let last_event = events.last().unwrap();
     // run `UPDATE_EXPECT=true cargo test` to update this.
     let expected = expect![[
