@@ -116,22 +116,46 @@ impl Host {
             val: ScVal::ContractExecutable(executable),
             flags: 0,
         });
-        let data = LedgerEntryData::ContractData(ContractDataEntry {
-            contract_id,
-            key: ScVal::LedgerKeyContractExecutable,
-            body,
-            type_: ContractDataType::Exclusive,
-            expiration_ledger_seq: self.with_ledger_info(|li| {
-                Ok(li
-                    .sequence_number
-                    .saturating_add(li.min_restorable_entry_expiration))
-            })?,
-        });
-        self.0.storage.borrow_mut().put(
-            key,
-            &Host::ledger_entry_from_data(data),
-            self.as_budget(),
-        )?;
+
+        if self.0.storage.borrow_mut().has(&key, self.as_budget())? {
+            let mut current = (*self.0.storage.borrow_mut().get(&key, self.as_budget())?)
+                .metered_clone(&self.0.budget)?;
+
+            match current.data {
+                LedgerEntryData::ContractData(ref mut entry) => {
+                    entry.body = body;
+                }
+                _ => {
+                    return Err(self.err(
+                        ScErrorType::Storage,
+                        ScErrorCode::UnexpectedType,
+                        "expected DataEntry",
+                        &[],
+                    ));
+                }
+            }
+            self.0
+                .storage
+                .borrow_mut()
+                .put(&key, &Rc::new(current), self.as_budget())?;
+        } else {
+            let data = LedgerEntryData::ContractData(ContractDataEntry {
+                contract_id,
+                key: ScVal::LedgerKeyContractExecutable,
+                body,
+                type_: ContractDataType::Exclusive,
+                expiration_ledger_seq: self.with_ledger_info(|li| {
+                    Ok(li
+                        .sequence_number
+                        .saturating_add(li.min_restorable_entry_expiration))
+                })?,
+            });
+            self.0.storage.borrow_mut().put(
+                key,
+                &Host::ledger_entry_from_data(data),
+                self.as_budget(),
+            )?;
+        }
         Ok(())
     }
 
