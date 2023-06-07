@@ -13,9 +13,9 @@ use soroban_env_common::xdr::{ScErrorCode, ScErrorType};
 use soroban_env_common::Compare;
 
 use crate::budget::Budget;
-use crate::xdr::{LedgerEntry, LedgerEntryData, LedgerKey};
+use crate::xdr::{LedgerEntry, LedgerKey};
 use crate::Host;
-use crate::{host::metered_clone::MeteredClone, host::metered_map::MeteredOrdMap, HostError};
+use crate::{host::metered_map::MeteredOrdMap, HostError};
 
 pub type FootprintMap = MeteredOrdMap<Rc<LedgerKey>, AccessType, Budget>;
 pub type StorageMap = MeteredOrdMap<Rc<LedgerKey>, Option<Rc<LedgerEntry>>, Budget>;
@@ -31,9 +31,6 @@ pub enum AccessType {
     /// When in [FootprintMode::Recording], indicates that the [LedgerKey] is written (and also possibly read)
     /// When in [FootprintMode::Enforcing], indicates that the [LedgerKey] is _allowed_ to be written (and also allowed to be read).
     ReadWrite,
-    /// The same as ReadWrite, but upstream consumers should be able to do concurrent writes
-    /// and reconcile the differences. Used for expiration_ledger_seq bumps.
-    CommutativeWrite,
 }
 
 impl Compare<AccessType> for Host {
@@ -81,7 +78,6 @@ impl Footprint {
         if let Some(existing) = self.0.get::<Rc<LedgerKey>>(key, budget)? {
             match (existing, ty.clone()) {
                 (AccessType::ReadOnly, AccessType::ReadOnly) => Ok(()),
-                (AccessType::ReadOnly, AccessType::CommutativeWrite) => Ok(()),
                 (AccessType::ReadOnly, AccessType::ReadWrite) => {
                     // The only interesting case is an upgrade
                     // from previously-read-only to read-write.
@@ -90,10 +86,6 @@ impl Footprint {
                 }
                 (AccessType::ReadWrite, AccessType::ReadOnly) => Ok(()),
                 (AccessType::ReadWrite, AccessType::ReadWrite) => Ok(()),
-                (AccessType::ReadWrite, AccessType::CommutativeWrite) => Ok(()),
-                (AccessType::CommutativeWrite, AccessType::ReadWrite) => Ok(()),
-                (AccessType::CommutativeWrite, AccessType::ReadOnly) => Ok(()),
-                (AccessType::CommutativeWrite, AccessType::CommutativeWrite) => Ok(()),
             }
         } else {
             self.0 = self.0.insert(Rc::clone(key), ty, budget)?;
@@ -108,23 +100,13 @@ impl Footprint {
         budget: &Budget,
     ) -> Result<(), HostError> {
         if let Some(existing) = self.0.get::<Rc<LedgerKey>>(key, budget)? {
-            match (existing, ty.clone()) {
+            match (existing, ty) {
                 (AccessType::ReadOnly, AccessType::ReadOnly) => Ok(()),
-                (AccessType::ReadOnly, AccessType::ReadWrite)
-                | (AccessType::CommutativeWrite, AccessType::ReadWrite) => {
+                (AccessType::ReadOnly, AccessType::ReadWrite) => {
                     Err((ScErrorType::Storage, ScErrorCode::InvalidAction).into())
                 }
                 (AccessType::ReadWrite, AccessType::ReadOnly) => Ok(()),
                 (AccessType::ReadWrite, AccessType::ReadWrite) => Ok(()),
-                (AccessType::ReadOnly, AccessType::CommutativeWrite) => {
-                    // We upgrade ReadOnly to CommutativeWrite here so consumers of
-                    // storage are made aware that a ReadOnly entry was modified.
-                    self.0 = self.0.insert(Rc::clone(key), ty, budget)?;
-                    Ok(())
-                }
-                (AccessType::ReadWrite, AccessType::CommutativeWrite) => Ok(()),
-                (AccessType::CommutativeWrite, AccessType::ReadOnly) => Ok(()),
-                (AccessType::CommutativeWrite, AccessType::CommutativeWrite) => Ok(()),
             }
         } else {
             Err((ScErrorType::Storage, ScErrorCode::MissingValue).into())
@@ -258,47 +240,6 @@ impl Storage {
         budget: &Budget,
     ) -> Result<(), HostError> {
         self.put_opt(key, Some(val), budget)
-    }
-
-    pub fn bump(
-        &mut self,
-        key: &Rc<LedgerKey>,
-        min_ledgers_to_live: u32,
-        ledger_num: u32,
-        budget: &Budget,
-    ) -> Result<(), HostError> {
-        // A expiration ledger bump is considered to be a read only operation. When
-        // concurrent Soroban transactions are added conflicts will be reconciled upstream.
-        // Note that in recording mode, we record it as ReadOnly since it can be treated as such
-        // for the purposes of transaction submission.
-        match self.mode {
-            FootprintMode::Recording(_) => {
-                self.footprint
-                    .record_access(key, AccessType::ReadOnly, budget)?;
-            }
-            FootprintMode::Enforcing => {
-                self.footprint
-                    .enforce_access(key, AccessType::CommutativeWrite, budget)?;
-            }
-        };
-
-        let mut current = (*self.get(&key, budget)?).metered_clone(budget)?;
-        match current.data {
-            LedgerEntryData::ContractData(ref mut entry) => {
-                let min_seq = ledger_num.saturating_add(min_ledgers_to_live);
-                if min_seq > entry.expiration_ledger_seq {
-                    entry.expiration_ledger_seq = min_seq;
-                } else {
-                    return Ok(());
-                }
-            }
-            _ => return Err((ScErrorType::Storage, ScErrorCode::UnexpectedType).into()),
-        }
-
-        self.map = self
-            .map
-            .insert(Rc::clone(key), Some(Rc::new(current)), budget)?;
-        Ok(())
     }
 
     /// Attempts to delete the [LedgerEntry] associated with a given [LedgerKey]

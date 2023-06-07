@@ -1831,18 +1831,12 @@ impl VmCallerEnv for Host {
         t: StorageType,
         min: U32Val,
     ) -> Result<Void, HostError> {
-        let min_ledgers_to_live: u32 = min.into();
-
-        let key = self.storage_key_from_rawval(k, t.try_into()?)?;
-
-        let ledger_num = self.with_ledger_info(|li| Ok(li.sequence_number))?;
-        self.0.storage.borrow_mut().bump(
-            &key,
-            min_ledgers_to_live,
-            ledger_num,
-            self.as_budget(),
-        )?;
-        Ok(RawVal::VOID)
+        return Err(self.err(
+            ScErrorType::Storage,
+            ScErrorCode::InvalidAction,
+            "bump_contract_data not implemented",
+            &[],
+        ));
     }
 
     // Notes on metering: covered by the components.
