@@ -78,6 +78,8 @@ pub struct LedgerInfo {
     pub timestamp: u64,
     pub network_id: [u8; 32],
     pub base_reserve: u32,
+    pub min_temp_entry_expiration: u32,
+    pub min_restorable_entry_expiration: u32,
 }
 
 #[derive(Clone, Default)]
@@ -546,7 +548,11 @@ impl Host {
                     hash: Hash(hash_bytes),
                     body,
                     ext: ExtensionPoint::V0,
-                    expiration_ledger_seq: 0,
+                    expiration_ledger_seq: self.with_ledger_info(|li| {
+                        Ok(li
+                            .sequence_number
+                            .saturating_add(li.min_restorable_entry_expiration))
+                    })?,
                 });
                 storage.put(
                     &code_key,
@@ -1754,11 +1760,21 @@ impl VmCallerEnv for Host {
                 flags,
             });
 
+            let ledger_seq = self.with_ledger_info(|li| Ok(li.sequence_number))?;
+            let min_lifetime = match storage_type {
+                ContractDataType::Temporary => {
+                    self.with_ledger_info(|li| Ok(li.min_temp_entry_expiration))?
+                }
+                ContractDataType::Mergeable | ContractDataType::Exclusive => {
+                    self.with_ledger_info(|li: &LedgerInfo| Ok(li.min_restorable_entry_expiration))?
+                }
+            };
+
             let data = LedgerEntryData::ContractData(ContractDataEntry {
                 contract_id: self.get_current_contract_id_internal()?,
                 key: self.from_host_val(k)?,
                 body,
-                expiration_ledger_seq: 0,
+                expiration_ledger_seq: ledger_seq.saturating_add(min_lifetime),
                 type_: storage_type,
             });
             self.0.storage.borrow_mut().put(

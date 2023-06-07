@@ -1184,7 +1184,11 @@ impl Host {
                 contract_id: contract_id.metered_clone(self.budget_ref())?,
                 key: nonce_key_scval,
                 body,
-                expiration_ledger_seq: 0,
+                expiration_ledger_seq: self.with_ledger_info(|li| {
+                    Ok(li
+                        .sequence_number
+                        .saturating_add(li.min_restorable_entry_expiration))
+                })?,
                 type_: xdr::ContractDataType::Exclusive,
             });
             let entry = LedgerEntry {

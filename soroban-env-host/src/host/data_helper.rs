@@ -121,7 +121,11 @@ impl Host {
             key: ScVal::LedgerKeyContractExecutable,
             body,
             type_: ContractDataType::Exclusive,
-            expiration_ledger_seq: 0,
+            expiration_ledger_seq: self.with_ledger_info(|li| {
+                Ok(li
+                    .sequence_number
+                    .saturating_add(li.min_restorable_entry_expiration))
+            })?,
         });
         self.0.storage.borrow_mut().put(
             key,
