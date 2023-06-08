@@ -160,11 +160,16 @@ where
     K: DeclaredSizeForMetering,
     V: DeclaredSizeForMetering,
 {
+    // Their sum plus an 8 bytes of max possible alignment-mismatch overhead. If we need to handle
+    // types with larger alignment mismatches, we need to increase the overhead.
     const DECLARED_SIZE: u64 = <K as DeclaredSizeForMetering>::DECLARED_SIZE
-        .saturating_add(<V as DeclaredSizeForMetering>::DECLARED_SIZE);
+        .saturating_add(<V as DeclaredSizeForMetering>::DECLARED_SIZE)
+        .saturating_add(8);
 }
 
 impl<C: DeclaredSizeForMetering, const N: usize> DeclaredSizeForMetering for [C; N] {
+    // no additional alignment needed since `C::DECLARED_SIZE` is at least `size_of::<C>`
+    // which is already multiple of the alignment
     const DECLARED_SIZE: u64 = C::DECLARED_SIZE.saturating_mul(N as u64);
 }
 
@@ -259,7 +264,10 @@ mod test {
         expect!["8"].assert_eq(size_of::<SymbolSmallIter>().to_string().as_str());
         expect!["32"].assert_eq(size_of::<U256>().to_string().as_str());
         expect!["32"].assert_eq(size_of::<I256>().to_string().as_str());
+        #[cfg(target_arch = "x86_64")]
         expect!["40"].assert_eq(size_of::<HostObject>().to_string().as_str());
+        #[cfg(target_arch = "aarch64")]
+        expect!["48"].assert_eq(size_of::<HostObject>().to_string().as_str());
         // xdr types
         expect!["8"].assert_eq(size_of::<TimePoint>().to_string().as_str());
         expect!["8"].assert_eq(size_of::<Duration>().to_string().as_str());

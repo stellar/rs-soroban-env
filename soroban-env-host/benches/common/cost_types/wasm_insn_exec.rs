@@ -17,7 +17,19 @@ struct WasmModule {
     overhead: u64,
 }
 
-fn wasm_module_with_4n_insns(n: usize) -> Vec<u8> {
+pub fn wasm_module_with_n_internal_funcs(n: usize) -> Vec<u8> {
+    let mut me = ModEmitter::new();
+    for _ in 0..n {
+        let mut fe = me.func(Arity(0), 0);
+        fe.push(Symbol::try_from_small_str("pass").unwrap());
+        (me, _) = fe.finish();
+    }
+    let mut fe = me.func(Arity(0), 0);
+    fe.push(Symbol::try_from_small_str("pass").unwrap());
+    fe.finish_and_export("test").finish()
+}
+
+pub fn wasm_module_with_4n_insns(n: usize) -> Vec<u8> {
     let mut fe = ModEmitter::new().func(Arity(1), 0);
     let arg = fe.args[0];
     fe.push(Operand::Const64(1));
