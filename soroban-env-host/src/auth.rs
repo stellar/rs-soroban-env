@@ -1179,17 +1179,13 @@ impl Host {
                 val: ScVal::U64(1),
                 flags: 0,
             });
-
+            let storage_type = xdr::ContractDataType::Exclusive;
             let data = LedgerEntryData::ContractData(ContractDataEntry {
                 contract_id: contract_id.metered_clone(self.budget_ref())?,
                 key: nonce_key_scval,
                 body,
-                expiration_ledger_seq: self.with_ledger_info(|li| {
-                    Ok(li
-                        .sequence_number
-                        .saturating_add(li.min_restorable_entry_expiration))
-                })?,
-                type_: xdr::ContractDataType::Exclusive,
+                expiration_ledger_seq: self.get_min_expiration_ledger(storage_type)?,
+                type_: storage_type,
             });
             let entry = LedgerEntry {
                 last_modified_ledger_seq: 0,

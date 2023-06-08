@@ -33,6 +33,7 @@ pub(crate) mod declared_size;
 pub(crate) mod error;
 pub(crate) mod frame;
 pub(crate) mod invoker_type;
+mod ledger_info_helper;
 mod mem_helper;
 pub(crate) mod metered_clone;
 pub(crate) mod metered_map;
@@ -548,11 +549,8 @@ impl Host {
                     hash: Hash(hash_bytes),
                     body,
                     ext: ExtensionPoint::V0,
-                    expiration_ledger_seq: self.with_ledger_info(|li| {
-                        Ok(li
-                            .sequence_number
-                            .saturating_add(li.min_restorable_entry_expiration))
-                    })?,
+                    expiration_ledger_seq: self
+                        .get_min_expiration_ledger(ContractDataType::Mergeable)?,
                 });
                 storage.put(
                     &code_key,
@@ -1759,22 +1757,11 @@ impl VmCallerEnv for Host {
                 val: self.from_host_val(v)?,
                 flags,
             });
-
-            let ledger_seq = self.with_ledger_info(|li| Ok(li.sequence_number))?;
-            let min_lifetime = match storage_type {
-                ContractDataType::Temporary => {
-                    self.with_ledger_info(|li| Ok(li.min_temp_entry_expiration))?
-                }
-                ContractDataType::Mergeable | ContractDataType::Exclusive => {
-                    self.with_ledger_info(|li: &LedgerInfo| Ok(li.min_restorable_entry_expiration))?
-                }
-            };
-
             let data = LedgerEntryData::ContractData(ContractDataEntry {
                 contract_id: self.get_current_contract_id_internal()?,
                 key: self.from_host_val(k)?,
                 body,
-                expiration_ledger_seq: ledger_seq.saturating_add(min_lifetime),
+                expiration_ledger_seq: self.get_min_expiration_ledger(storage_type)?,
                 type_: storage_type,
             });
             self.0.storage.borrow_mut().put(
