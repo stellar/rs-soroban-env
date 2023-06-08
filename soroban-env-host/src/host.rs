@@ -1699,20 +1699,20 @@ impl VmCallerEnv for Host {
         t: StorageType,
         f: RawVal,
     ) -> Result<Void, HostError> {
-        let flags = if f.is_void() {
-            0
+        let flags: Option<u32> = if f.is_void() {
+            None
         } else {
-            self.u32_from_rawval_input("f", f)?
+            let val = self.u32_from_rawval_input("f", f)?;
+            if ((val as u64) & !MASK_CONTRACT_DATA_FLAGS_V20) != 0 {
+                return Err(self.err(
+                    ScErrorType::Value,
+                    ScErrorCode::InvalidInput,
+                    "invalid flags",
+                    &[],
+                ));
+            }
+            Some(val)
         };
-
-        if ((flags as u64) & !MASK_CONTRACT_DATA_FLAGS_V20) != 0 {
-            return Err(self.err(
-                ScErrorType::Value,
-                ScErrorCode::InvalidInput,
-                "invalid flags",
-                &[],
-            ));
-        }
 
         let storage_type: ContractDataType = t.try_into()?;
         let key = self.contract_data_key_from_rawval(k, storage_type)?;
@@ -1724,10 +1724,8 @@ impl VmCallerEnv for Host {
                 LedgerEntryData::ContractData(ref mut entry) => match entry.body {
                     ContractDataEntryBody::DataEntry(ref mut data) => {
                         data.val = self.from_host_val(v)?;
-                        if flags == 0 {
-                            data.flags = 0;
-                        } else {
-                            data.flags |= flags;
+                        if let Some(new_flags) = flags {
+                            data.flags = new_flags;
                         }
                     }
                     _ => {
@@ -1755,7 +1753,7 @@ impl VmCallerEnv for Host {
         } else {
             let body = ContractDataEntryBody::DataEntry(ContractDataEntryData {
                 val: self.from_host_val(v)?,
-                flags,
+                flags: flags.unwrap_or(0),
             });
             let data = LedgerEntryData::ContractData(ContractDataEntry {
                 contract_id: self.get_current_contract_id_internal()?,
