@@ -134,7 +134,7 @@ impl Host {
             objects: Default::default(),
             storage: RefCell::new(storage),
             context: Default::default(),
-            budget: budget.clone(),
+            budget,
             events: Default::default(),
             authorization_manager: RefCell::new(
                 AuthorizationManager::new_enforcing_without_authorizations(),
