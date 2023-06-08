@@ -9,6 +9,7 @@ use crate::{
     budget::{AsBudget, Budget},
     err,
     events::{diagnostic::DiagnosticLevel, Events, InternalEventsBuffer},
+    expiration_ledger_bumps::{ExpirationLedgerBumps, LedgerBump},
     host_object::{HostMap, HostObject, HostVec},
     num::{i256_from_pieces, i256_into_pieces, u256_from_pieces, u256_into_pieces},
     storage::Storage,
@@ -99,6 +100,7 @@ pub(crate) struct HostImpl {
     authorization_manager: RefCell<AuthorizationManager>,
     pub(crate) diagnostic_level: RefCell<DiagnosticLevel>,
     pub(crate) base_prng: RefCell<Option<Prng>>,
+    expiration_bumps: RefCell<ExpirationLedgerBumps>,
     // Note: we're not going to charge metering for testutils because it's out of the scope
     // of what users will be charged for in production -- it's scaffolding for testing a contract,
     // but shouldn't be charged to the contract itself (and will never be compiled-in to
@@ -152,6 +154,7 @@ impl Host {
             contracts: Default::default(),
             #[cfg(any(test, feature = "testutils"))]
             previous_authorization_manager: RefCell::new(None),
+            expiration_bumps: Default::default(),
         }))
     }
 
@@ -256,7 +259,9 @@ impl Host {
     /// underlying [`HostImpl`], returning its constituent components to the
     /// caller as a tuple wrapped in `Ok(...)`. If the provided host reference
     /// is not unique, returns `Err(self)`.
-    pub fn try_finish(self) -> Result<(Storage, Budget, Events), (Self, HostError)> {
+    pub fn try_finish(
+        self,
+    ) -> Result<(Storage, Budget, Events, ExpirationLedgerBumps), (Self, HostError)> {
         let events = self
             .0
             .events
@@ -270,7 +275,8 @@ impl Host {
             .map(|host_impl| {
                 let storage = host_impl.storage.into_inner();
                 let budget = host_impl.budget;
-                (storage, budget, events)
+                let bumps = host_impl.expiration_bumps.into_inner();
+                (storage, budget, events, bumps)
             })
             .map_err(|e| {
                 (
@@ -1832,12 +1838,14 @@ impl VmCallerEnv for Host {
         t: StorageType,
         min: U32Val,
     ) -> Result<Void, HostError> {
-        return Err(self.err(
-            ScErrorType::Storage,
-            ScErrorCode::InvalidAction,
-            "bump_contract_data not implemented",
-            &[],
-        ));
+        let key = self.contract_data_key_from_rawval(k, t.try_into()?)?;
+        let min_expiration =
+            self.with_ledger_info(|li| Ok(li.sequence_number.saturating_add(min.into())))?;
+        self.0.expiration_bumps.borrow_mut().0.push(LedgerBump {
+            key,
+            min_expiration,
+        });
+        Ok(RawVal::VOID)
     }
 
     // Notes on metering: covered by the components.
