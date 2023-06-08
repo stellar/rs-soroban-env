@@ -4,7 +4,6 @@ use super::metered_clone::{self, charge_container_bulk_init_with_elts, MeteredCl
 use crate::budget::AsBudget;
 use crate::err;
 use crate::host_object::{HostMap, HostObject, HostVec};
-use crate::native_contract::base_types::Address;
 use crate::xdr::{Hash, LedgerKey, LedgerKeyContractData, ScVal, ScVec, Uint256};
 use crate::{xdr::ContractCostType, Host, HostError, RawVal};
 use ed25519_dalek::{PublicKey, Signature, SIGNATURE_LENGTH};

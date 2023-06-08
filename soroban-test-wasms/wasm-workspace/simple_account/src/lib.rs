@@ -31,7 +31,7 @@ impl SimpleAccount {
         if signature_args.len() != 1 {
             panic!("incorrect number of signature args");
         }
-        let public_key: BytesN<32> = env.storage().get(&DataKey::Owner).unwrap().unwrap();
+        let public_key: BytesN<32> = env.storage().get(&DataKey::Owner).unwrap();
         env.crypto().ed25519_verify(
             &public_key,
             &signature_payload.into(),

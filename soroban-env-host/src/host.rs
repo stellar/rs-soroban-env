@@ -2387,7 +2387,7 @@ impl VmCallerEnv for Host {
         vmcaller: &mut VmCaller<Self::VmUserState>,
         address: AddressObject,
         args: VecObject,
-    ) -> Result<RawVal, Self::Error> {
+    ) -> Result<Void, Self::Error> {
         let args = self.visit_obj(args, |a: &HostVec| a.to_vec(self.budget_ref()))?;
         Ok(self
             .0
@@ -2401,7 +2401,7 @@ impl VmCallerEnv for Host {
         &self,
         vmcaller: &mut VmCaller<Self::VmUserState>,
         address: AddressObject,
-    ) -> Result<RawVal, Self::Error> {
+    ) -> Result<Void, Self::Error> {
         let args = self.with_current_frame(|f| {
             let args = match f {
                 Frame::ContractVM(_, _, args) => args,
@@ -2428,12 +2428,17 @@ impl VmCallerEnv for Host {
             .into())
     }
 
-    fn get_current_contract_id(
+    fn authorize_as_curr_contract(
         &self,
         vmcaller: &mut VmCaller<Self::VmUserState>,
-    ) -> Result<BytesObject, Self::Error> {
-        let id = self.get_current_contract_id_internal()?;
-        self.add_host_object(ScBytes(id.0.to_vec().try_into()?))
+        auth_entries: VecObject,
+    ) -> Result<Void, HostError> {
+        Ok(self
+            .0
+            .authorization_manager
+            .borrow_mut()
+            .add_invoker_contract_auth(self, auth_entries)?
+            .into())
     }
 
     fn account_public_key_to_address(

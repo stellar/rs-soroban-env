@@ -96,6 +96,10 @@ impl Bytes {
             .unwrap();
         res
     }
+
+    pub fn as_object(&self) -> BytesObject {
+        self.object
+    }
 }
 
 #[derive(Clone)]
@@ -181,6 +185,10 @@ impl<const N: usize> BytesN<N> {
             host: env.clone(),
             object: env.bytes_new_from_slice(items)?,
         })
+    }
+
+    pub fn as_object(&self) -> BytesObject {
+        self.object
     }
 }
 
@@ -387,6 +395,10 @@ impl Vec {
         self.object = self.host.vec_push_back(self.object, x)?;
         Ok(())
     }
+
+    pub fn as_object(&self) -> VecObject {
+        self.object
+    }
 }
 
 #[derive(Clone)]
@@ -453,6 +465,11 @@ impl Address {
     }
 
     pub(crate) fn require_auth(&self) -> Result<(), HostError> {
-        Ok(self.host.require_auth(self.object)?.try_into()?)
+        self.host.require_auth(self.object)?;
+        Ok(())
+    }
+
+    pub(crate) fn as_object(&self) -> AddressObject {
+        self.object
     }
 }

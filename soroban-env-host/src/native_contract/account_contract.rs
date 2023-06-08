@@ -3,7 +3,6 @@ use crate::auth::{AuthorizedFunction, AuthorizedInvocation};
 // it doesn't need to be directly invoked. But semantically this is analagous
 // to a generic smart wallet contract that supports authentication and blanket
 // context authorization.
-use crate::host::metered_clone::MeteredClone;
 use crate::host::{frame::ContractReentryMode, Host};
 use crate::native_contract::{base_types::BytesN, contract_error::ContractError};
 use crate::{err, HostError};
@@ -18,7 +17,7 @@ use crate::native_contract::base_types::Vec as HostVec;
 
 const MAX_ACCOUNT_SIGNATURES: u32 = 20;
 
-use soroban_env_common::xdr::{AccountId, ScVal};
+use soroban_env_common::xdr::AccountId;
 use soroban_native_sdk_macros::contracttype;
 
 use super::base_types::Address;
@@ -158,28 +157,12 @@ pub(crate) fn check_account_authentication(
     host: &Host,
     account_id: AccountId,
     payload: &[u8],
-    signature_args: &Vec<RawVal>,
+    signatures: &Vec<RawVal>,
 ) -> Result<(), HostError> {
-    if signature_args.len() != 1 {
-        return Err(err!(
-            host,
-            ContractError::AuthenticationError,
-            "incorrect number of signature args",
-            signature_args.len()
-        ));
-    }
-    let sigs: HostVec = signature_args[0].try_into_val(host).map_err(|_| {
-        host.error(
-            ContractError::AuthenticationError.into(),
-            "incompatible signature format",
-            &[],
-        )
-    })?;
-
     // Check if there is too many signatures: there shouldn't be more
     // signatures then the amount of account signers.
-    let len = sigs.len()?;
-    if len > MAX_ACCOUNT_SIGNATURES {
+    let len = signatures.len();
+    if len > MAX_ACCOUNT_SIGNATURES as usize {
         return Err(err!(
             host,
             ContractError::AuthenticationError,
@@ -191,8 +174,8 @@ pub(crate) fn check_account_authentication(
     let account = host.load_account(account_id)?;
     let mut prev_pk: Option<BytesN<32>> = None;
     let mut weight = 0u32;
-    for i in 0..sigs.len()? {
-        let sig: AccountEd25519Signature = sigs.get(i)?;
+    for sig in signatures {
+        let sig = AccountEd25519Signature::try_from_val(host, sig)?;
         // Cannot take multiple signatures from the same key
         if let Some(prev) = prev_pk {
             if prev.compare(&sig.public_key)? != Ordering::Less {

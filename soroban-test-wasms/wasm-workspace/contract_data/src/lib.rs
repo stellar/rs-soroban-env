@@ -18,6 +18,6 @@ impl Contract {
     }
 
     pub fn get(e: Env, key: Symbol) -> u64 {
-        e.storage().get(&key).unwrap().unwrap()
+        e.storage().get(&key).unwrap()
     }
 }
