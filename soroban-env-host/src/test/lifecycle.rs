@@ -12,9 +12,9 @@ use crate::{
 };
 use sha2::{Digest, Sha256};
 use soroban_env_common::xdr::{
-    ContractIdPreimage, ContractIdPreimageFromAddress, HostFunction, ScAddress,
-    SorobanAuthorizationEntry, SorobanAuthorizedFunction, SorobanAuthorizedInvocation,
-    SorobanCredentials,
+    ContractCodeEntryBody, ContractDataEntry, ContractDataEntryBody, ContractIdPreimage,
+    ContractIdPreimageFromAddress, HostFunction, ScAddress, SorobanAuthorizationEntry,
+    SorobanAuthorizedFunction, SorobanAuthorizedInvocation, SorobanCredentials,
 };
 use soroban_env_common::VecObject;
 use soroban_env_common::{xdr::ScBytes, RawVal, TryIntoVal};
@@ -28,9 +28,12 @@ fn get_contract_wasm_ref(host: &Host, contract_id: Hash) -> Hash {
         assert!(s.has(&storage_key, host.as_budget()).unwrap());
 
         match &s.get(&storage_key, host.as_budget()).unwrap().data {
-            LedgerEntryData::ContractData(cde) => match &cde.val {
-                ScVal::ContractExecutable(ScContractExecutable::WasmRef(h)) => Ok(h.clone()),
-                _ => panic!("expected ScContractExecutable"),
+            LedgerEntryData::ContractData(ContractDataEntry { body, .. }) => match body {
+                ContractDataEntryBody::DataEntry(data) => match &data.val {
+                    ScVal::ContractExecutable(ScContractExecutable::WasmRef(h)) => Ok(h.clone()),
+                    _ => panic!("expected ScContractExecutable"),
+                },
+                _ => panic!("expected DataEntry"),
             },
             _ => panic!("expected contract data"),
         }
@@ -44,7 +47,10 @@ fn get_contract_wasm(host: &Host, wasm_hash: Hash) -> Vec<u8> {
         assert!(s.has(&storage_key, host.as_budget()).unwrap());
 
         match &s.get(&storage_key, host.as_budget()).unwrap().data {
-            LedgerEntryData::ContractCode(code_entry) => Ok(code_entry.code.to_vec()),
+            LedgerEntryData::ContractCode(code_entry) => match &code_entry.body {
+                ContractCodeEntryBody::DataEntry(code) => Ok(code.to_vec()),
+                _ => panic!("expected DataEntry"),
+            },
             _ => panic!("expected contract WASM code"),
         }
     })

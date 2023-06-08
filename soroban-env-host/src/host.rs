@@ -19,8 +19,8 @@ use crate::{
         ScString, ScSymbol, ScVal,
     },
     AddressObject, Bool, BytesObject, Error, I128Object, I256Object, I64Object, MapObject,
-    StringObject, SymbolObject, SymbolSmall, SymbolStr, TryFromVal, U128Object, U256Object, U32Val,
-    U64Object, U64Val, VecObject, VmCaller, VmCallerEnv, Void, I256, U256,
+    StorageType, StringObject, SymbolObject, SymbolSmall, SymbolStr, TryFromVal, U128Object,
+    U256Object, U32Val, U64Object, U64Val, VecObject, VmCaller, VmCallerEnv, Void, I256, U256,
 };
 
 use crate::Vm;
@@ -33,6 +33,7 @@ pub(crate) mod declared_size;
 pub(crate) mod error;
 pub(crate) mod frame;
 pub(crate) mod invoker_type;
+mod ledger_info_helper;
 mod mem_helper;
 pub(crate) mod metered_clone;
 pub(crate) mod metered_map;
@@ -42,7 +43,11 @@ mod prng;
 pub use prng::{Seed, SEED_BYTES};
 mod validity;
 pub use error::HostError;
-use soroban_env_common::xdr::{ContractIdPreimage, ContractIdPreimageFromAddress, ScErrorCode};
+use soroban_env_common::xdr::{
+    ContractCodeEntryBody, ContractDataEntryBody, ContractDataEntryData, ContractDataType,
+    ContractIdPreimage, ContractIdPreimageFromAddress, ContractLedgerEntryType, ScErrorCode,
+    MASK_CONTRACT_DATA_FLAGS_V20,
+};
 
 use self::metered_clone::MeteredClone;
 use self::{
@@ -74,6 +79,8 @@ pub struct LedgerInfo {
     pub timestamp: u64,
     pub network_id: [u8; 32],
     pub base_reserve: u32,
+    pub min_temp_entry_expiration: u32,
+    pub min_restorable_entry_expiration: u32,
 }
 
 #[derive(Clone, Default)]
@@ -520,6 +527,7 @@ impl Host {
         let hash_obj = self.add_host_object(self.scbytes_from_slice(hash_bytes.as_slice())?)?;
         let code_key = Rc::new(LedgerKey::ContractCode(LedgerKeyContractCode {
             hash: Hash(hash_bytes.metered_clone(self.budget_ref())?),
+            le_type: ContractLedgerEntryType::DataEntry,
         }));
         if !self
             .0
@@ -527,18 +535,22 @@ impl Host {
             .borrow_mut()
             .has(&code_key, self.as_budget())?
         {
+            let body = ContractCodeEntryBody::DataEntry(wasm.try_into().map_err(|_| {
+                self.err(
+                    ScErrorType::Value,
+                    ScErrorCode::ExceededLimit,
+                    "Wasm code is too large",
+                    &[],
+                )
+            })?);
+
             self.with_mut_storage(|storage| {
                 let data = LedgerEntryData::ContractCode(ContractCodeEntry {
                     hash: Hash(hash_bytes),
-                    code: wasm.try_into().map_err(|_| {
-                        self.err(
-                            ScErrorType::Value,
-                            ScErrorCode::ExceededLimit,
-                            "Wasm code is too large",
-                            &[],
-                        )
-                    })?,
+                    body,
                     ext: ExtensionPoint::V0,
+                    expiration_ledger_seq: self
+                        .get_min_expiration_ledger(ContractDataType::Mergeable)?,
                 });
                 storage.put(
                     &code_key,
@@ -1684,18 +1696,79 @@ impl VmCallerEnv for Host {
         _vmcaller: &mut VmCaller<Host>,
         k: RawVal,
         v: RawVal,
+        t: StorageType,
+        f: RawVal,
     ) -> Result<Void, HostError> {
-        let key = self.contract_data_key_from_rawval(k)?;
-        let data = LedgerEntryData::ContractData(ContractDataEntry {
-            contract_id: self.get_current_contract_id_internal()?,
-            key: self.from_host_val(k)?,
-            val: self.from_host_val(v)?,
-        });
-        self.0.storage.borrow_mut().put(
-            &key,
-            &Host::ledger_entry_from_data(data),
-            self.as_budget(),
-        )?;
+        let flags: Option<u32> = if f.is_void() {
+            None
+        } else {
+            let val = self.u32_from_rawval_input("f", f)?;
+            if ((val as u64) & !MASK_CONTRACT_DATA_FLAGS_V20) != 0 {
+                return Err(self.err(
+                    ScErrorType::Value,
+                    ScErrorCode::InvalidInput,
+                    "invalid flags",
+                    &[],
+                ));
+            }
+            Some(val)
+        };
+
+        let storage_type: ContractDataType = t.try_into()?;
+        let key = self.contract_data_key_from_rawval(k, storage_type)?;
+        if self.0.storage.borrow_mut().has(&key, self.as_budget())? {
+            let mut current = (*self.0.storage.borrow_mut().get(&key, self.as_budget())?)
+                .metered_clone(&self.0.budget)?;
+
+            match current.data {
+                LedgerEntryData::ContractData(ref mut entry) => match entry.body {
+                    ContractDataEntryBody::DataEntry(ref mut data) => {
+                        data.val = self.from_host_val(v)?;
+                        if let Some(new_flags) = flags {
+                            data.flags = new_flags;
+                        }
+                    }
+                    _ => {
+                        return Err(self.err(
+                            ScErrorType::Storage,
+                            ScErrorCode::UnexpectedType,
+                            "expected DataEntry",
+                            &[],
+                        ));
+                    }
+                },
+                _ => {
+                    return Err(self.err(
+                        ScErrorType::Storage,
+                        ScErrorCode::UnexpectedType,
+                        "expected DataEntry",
+                        &[],
+                    ));
+                }
+            }
+            self.0
+                .storage
+                .borrow_mut()
+                .put(&key, &Rc::new(current), self.as_budget())?;
+        } else {
+            let body = ContractDataEntryBody::DataEntry(ContractDataEntryData {
+                val: self.from_host_val(v)?,
+                flags: flags.unwrap_or(0),
+            });
+            let data = LedgerEntryData::ContractData(ContractDataEntry {
+                contract_id: self.get_current_contract_id_internal()?,
+                key: self.from_host_val(k)?,
+                body,
+                expiration_ledger_seq: self.get_min_expiration_ledger(storage_type)?,
+                type_: storage_type,
+            });
+            self.0.storage.borrow_mut().put(
+                &key,
+                &Host::ledger_entry_from_data(data),
+                self.as_budget(),
+            )?;
+        }
+
         Ok(RawVal::VOID)
     }
 
@@ -1704,8 +1777,9 @@ impl VmCallerEnv for Host {
         &self,
         _vmcaller: &mut VmCaller<Host>,
         k: RawVal,
+        t: StorageType,
     ) -> Result<Bool, HostError> {
-        let key = self.storage_key_from_rawval(k)?;
+        let key = self.storage_key_from_rawval(k, t.try_into()?)?;
         let res = self.0.storage.borrow_mut().has(&key, self.as_budget())?;
         Ok(RawVal::from_bool(res))
     }
@@ -1715,15 +1789,20 @@ impl VmCallerEnv for Host {
         &self,
         _vmcaller: &mut VmCaller<Host>,
         k: RawVal,
+        t: StorageType,
     ) -> Result<RawVal, HostError> {
-        let key = self.storage_key_from_rawval(k)?;
+        let key = self.storage_key_from_rawval(k, t.try_into()?)?;
         let entry = self.0.storage.borrow_mut().get(&key, self.as_budget())?;
         match &entry.data {
-            LedgerEntryData::ContractData(ContractDataEntry {
-                contract_id,
-                key,
-                val,
-            }) => Ok(self.to_host_val(val)?),
+            LedgerEntryData::ContractData(ContractDataEntry { body, .. }) => match body {
+                ContractDataEntryBody::DataEntry(data) => Ok(self.to_host_val(&data.val)?),
+                _ => Err(self.err(
+                    ScErrorType::Storage,
+                    ScErrorCode::UnexpectedType,
+                    "expected DataEntry",
+                    &[],
+                )),
+            },
             _ => Err(self.err(
                 ScErrorType::Storage,
                 ScErrorCode::UnexpectedType,
@@ -1738,10 +1817,27 @@ impl VmCallerEnv for Host {
         &self,
         _vmcaller: &mut VmCaller<Host>,
         k: RawVal,
+        t: StorageType,
     ) -> Result<Void, HostError> {
-        let key = self.contract_data_key_from_rawval(k)?;
+        let key = self.contract_data_key_from_rawval(k, t.try_into()?)?;
         self.0.storage.borrow_mut().del(&key, self.as_budget())?;
         Ok(RawVal::VOID)
+    }
+
+    // Notes on metering: covered by components
+    fn bump_contract_data(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        k: RawVal,
+        t: StorageType,
+        min: U32Val,
+    ) -> Result<Void, HostError> {
+        return Err(self.err(
+            ScErrorType::Storage,
+            ScErrorCode::InvalidAction,
+            "bump_contract_data not implemented",
+            &[],
+        ));
     }
 
     // Notes on metering: covered by the components.

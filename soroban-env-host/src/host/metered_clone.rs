@@ -11,11 +11,12 @@ use crate::{
     xdr::{
         AccountEntry, AccountId, BytesM, ClaimableBalanceEntry, ConfigSettingEntry,
         ContractCodeEntry, ContractCostType, ContractEvent, ContractEventBody, CreateContractArgs,
-        DataEntry, Duration, Hash, LedgerEntryExt, LedgerKeyAccount, LedgerKeyClaimableBalance,
-        LedgerKeyConfigSetting, LedgerKeyContractCode, LedgerKeyData, LedgerKeyLiquidityPool,
-        LedgerKeyOffer, LedgerKeyTrustLine, LiquidityPoolEntry, OfferEntry, PublicKey, ScAddress,
-        ScBytes, ScContractExecutable, ScMap, ScMapEntry, ScNonceKey, ScString, ScSymbol, ScVal,
-        ScVec, StringM, TimePoint, TrustLineAsset, TrustLineEntry, Uint256,
+        DataEntry, Duration, Hash, LedgerEntry, LedgerEntryExt, LedgerKeyAccount,
+        LedgerKeyClaimableBalance, LedgerKeyConfigSetting, LedgerKeyContractCode, LedgerKeyData,
+        LedgerKeyLiquidityPool, LedgerKeyOffer, LedgerKeyTrustLine, LiquidityPoolEntry, OfferEntry,
+        PublicKey, ScAddress, ScBytes, ScContractExecutable, ScMap, ScMapEntry, ScNonceKey,
+        ScString, ScSymbol, ScVal, ScVec, StringM, TimePoint, TrustLineAsset, TrustLineEntry,
+        Uint256,
     },
     AddressObject, Bool, BytesObject, ContractExecutableObject, DurationObject, DurationSmall,
     DurationVal, Error, HostError, I128Object, I128Small, I128Val, I256Object, I256Small, I256Val,
@@ -215,6 +216,7 @@ impl MeteredClone for ClaimableBalanceEntry {}
 impl MeteredClone for LiquidityPoolEntry {}
 impl MeteredClone for ContractCodeEntry {}
 impl MeteredClone for ConfigSettingEntry {}
+impl MeteredClone for LedgerEntry {}
 impl MeteredClone for AccessType {}
 impl MeteredClone for InternalContractEvent {}
 impl MeteredClone for CreateContractArgs {}
@@ -267,6 +269,7 @@ impl MeteredClone for ScVal {
             | ScVal::U256(_)
             | ScVal::I256(_)
             | ScVal::LedgerKeyContractExecutable
+            | ScVal::StorageType(_)
             | ScVal::LedgerKeyNonce(_) => Ok(()),
         }
     }
