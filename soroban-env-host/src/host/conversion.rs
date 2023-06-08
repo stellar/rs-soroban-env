@@ -6,8 +6,6 @@ use crate::err;
 use crate::host_object::{HostMap, HostObject, HostVec};
 use crate::xdr::{Hash, LedgerKey, LedgerKeyContractData, ScVal, ScVec, Uint256};
 use crate::{xdr::ContractCostType, Host, HostError, RawVal};
-use ed25519_dalek::{PublicKey, Signature, SIGNATURE_LENGTH};
-use sha2::{Digest, Sha256};
 use soroban_env_common::num::{
     i256_from_pieces, i256_into_pieces, u256_from_pieces, u256_into_pieces,
 };
@@ -66,10 +64,7 @@ impl Host {
         }
     }
 
-    pub(crate) fn to_u256_from_account(
-        &self,
-        account_id: &AccountId,
-    ) -> Result<Uint256, HostError> {
+    pub(crate) fn u256_from_account(&self, account_id: &AccountId) -> Result<Uint256, HostError> {
         let crate::xdr::PublicKey::PublicKeyTypeEd25519(ed25519) =
             account_id.metered_clone(&self.0.budget)?.0;
         Ok(ed25519)
@@ -101,7 +96,7 @@ impl Host {
         self.fixed_length_bytes_from_bytesobj_input::<Hash, 32>(name, hash)
     }
 
-    pub(crate) fn uint256_from_bytesobj_input(
+    pub(crate) fn u256_from_bytesobj_input(
         &self,
         name: &'static str,
         u256: BytesObject,
@@ -109,23 +104,7 @@ impl Host {
         self.fixed_length_bytes_from_bytesobj_input::<Uint256, 32>(name, u256)
     }
 
-    pub(crate) fn signature_from_bytes(
-        &self,
-        name: &'static str,
-        bytes: &[u8],
-    ) -> Result<Signature, HostError> {
-        self.fixed_length_bytes_from_slice::<Signature, SIGNATURE_LENGTH>(name, bytes)
-    }
-
-    pub(crate) fn signature_from_bytesobj_input(
-        &self,
-        name: &'static str,
-        sig: BytesObject,
-    ) -> Result<Signature, HostError> {
-        self.fixed_length_bytes_from_bytesobj_input::<Signature, SIGNATURE_LENGTH>(name, sig)
-    }
-
-    fn fixed_length_bytes_from_slice<T, const N: usize>(
+    pub(crate) fn fixed_length_bytes_from_slice<T, const N: usize>(
         &self,
         name: &'static str,
         bytes_arr: &[u8],
@@ -149,7 +128,7 @@ impl Host {
         }
     }
 
-    fn fixed_length_bytes_from_bytesobj_input<T, const N: usize>(
+    pub(crate) fn fixed_length_bytes_from_bytesobj_input<T, const N: usize>(
         &self,
         name: &'static str,
         obj: BytesObject,
@@ -162,55 +141,11 @@ impl Host {
         })
     }
 
-    pub(crate) fn ed25519_pub_key_from_bytes(&self, bytes: &[u8]) -> Result<PublicKey, HostError> {
-        self.charge_budget(ContractCostType::ComputeEd25519PubKey, None)?;
-        PublicKey::from_bytes(bytes).map_err(|_| {
-            err!(
-                self,
-                (ScErrorType::Crypto, ScErrorCode::InvalidInput),
-                "invalid ed25519 public key",
-                bytes
-            )
-        })
-    }
-
-    pub fn ed25519_pub_key_from_bytesobj_input(
-        &self,
-        k: BytesObject,
-    ) -> Result<PublicKey, HostError> {
-        self.visit_obj(k, |bytes: &ScBytes| {
-            self.ed25519_pub_key_from_bytes(bytes.as_slice())
-        })
-    }
-
     pub(crate) fn account_id_from_bytesobj(&self, k: BytesObject) -> Result<AccountId, HostError> {
         self.visit_obj(k, |bytes: &ScBytes| {
             Ok(AccountId(xdr::PublicKey::PublicKeyTypeEd25519(
                 self.fixed_length_bytes_from_slice("account_id", bytes.as_slice())?,
             )))
-        })
-    }
-
-    pub(crate) fn sha256_hash_from_bytes(&self, bytes: &[u8]) -> Result<Vec<u8>, HostError> {
-        self.charge_budget(
-            ContractCostType::ComputeSha256Hash,
-            Some(bytes.len() as u64),
-        )?;
-        Ok(Sha256::digest(bytes).as_slice().to_vec())
-    }
-
-    pub fn sha256_hash_from_bytesobj_input(&self, x: BytesObject) -> Result<Vec<u8>, HostError> {
-        self.visit_obj(x, |bytes: &ScBytes| {
-            let hash = self.sha256_hash_from_bytes(bytes.as_slice())?;
-            if hash.len() != 32 {
-                return Err(err!(
-                    self,
-                    (ScErrorType::Object, ScErrorCode::UnexpectedSize),
-                    "expected 32-byte BytesObject for hash, got different size",
-                    hash.len()
-                ));
-            }
-            Ok(hash)
         })
     }
 
