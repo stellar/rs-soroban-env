@@ -43,7 +43,7 @@ fn run_complex() -> Result<(), HostError> {
             let args: ScVec = host.test_scvec::<i32>(&[])?;
             vm.invoke_function(&host, "go", &args)?;
         }
-        let (store, _, _) = host.try_finish().unwrap();
+        let (store, _, _, _) = host.try_finish().unwrap();
         store.footprint
     };
 
