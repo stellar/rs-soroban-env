@@ -6,4 +6,4 @@ The `soroban-env-common` crate contains elements of the shared environment-inter
 
 The `soroban-env-guest` crate contains the guest-side _stub implementation_ of the environment interface called `Guest` dependent on extern fns provided by the host implementation. This can be used in a WASM runtime that provides the extern fns.
 
-The `soroban-env-host` crate contains the host-side _full implementation_ of the environment interface called `Host`. This can be used either in the real blockchain host or for local testing in the SDK.
+The `soroban-env-host` crate contains the host-side _full implementation_ of the environment interface called `Host`. This can be used either in the real blockchain host, or for local testing in the SDK.
