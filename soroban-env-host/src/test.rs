@@ -17,6 +17,7 @@ mod budget_metering;
 mod complex;
 mod event;
 mod hostile;
+mod hostile2;
 mod invocation;
 mod lifecycle;
 mod prng;
