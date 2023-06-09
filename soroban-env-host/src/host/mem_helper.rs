@@ -37,19 +37,18 @@ impl Host {
                     let memdata = vm.get_memory(self)?.data(vmcaller.try_ref()?);
                     let pos = pos as usize;
                     let len = len as usize;
-                    let in_range = memdata.get(pos..)
+                    let in_range = memdata
+                        .get(pos..)
                         .map(|memdata| memdata.get(..len))
                         .flatten()
                         .is_some();
                     if !in_range {
-                        return Err(
-                            self.err(
-                                ScErrorType::WasmVm,
-                                ScErrorCode::IndexBounds,
-                                "attempt to access guest bytes outside of linear memory",
-                                &[]
-                            )
-                        );
+                        return Err(self.err(
+                            ScErrorType::WasmVm,
+                            ScErrorCode::IndexBounds,
+                            "attempt to access guest bytes outside of linear memory",
+                            &[],
+                        ));
                     }
                 }
                 Ok(VmSlice { vm, pos, len })

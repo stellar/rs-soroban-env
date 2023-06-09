@@ -1,8 +1,8 @@
 use soroban_env_common::xdr::{ScErrorCode, ScErrorType};
 use soroban_test_wasms::HOSTILE2;
 
-use crate::{Host, Symbol, HostError};
 use crate::native_contract::base_types::Vec as HostVec;
+use crate::{Host, HostError, Symbol};
 use soroban_env_common::Env;
 
 // Regression test for debug-level logging outside of memory range.
