@@ -13,13 +13,45 @@ use crate::{
 };
 
 impl Host {
+    /// Gets a slice to linear memory within the VM of the current frame.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the current frame is not a VM frame.
+    /// Returns an error if the slice is not in the range of the VM's linear memory.
     // Notes on metering: free
-    pub(crate) fn decode_vmslice(&self, pos: U32Val, len: U32Val) -> Result<VmSlice, HostError> {
+    pub(crate) fn decode_vmslice(
+        &self,
+        vmcaller: &VmCaller<Host>,
+        pos: U32Val,
+        len: U32Val,
+    ) -> Result<VmSlice, HostError> {
         let pos: u32 = pos.into();
         let len: u32 = len.into();
         self.with_current_frame(|frame| match frame {
             Frame::ContractVM(vm, _, _) => {
                 let vm = vm.clone();
+                // Do not create slices beyond the memory range so that callers
+                // do not have to account for the possibility on their own.
+                {
+                    let memdata = vm.get_memory(self)?.data(vmcaller.try_ref()?);
+                    let pos = pos as usize;
+                    let len = len as usize;
+                    let in_range = memdata.get(pos..)
+                        .map(|memdata| memdata.get(..len))
+                        .flatten()
+                        .is_some();
+                    if !in_range {
+                        return Err(
+                            self.err(
+                                ScErrorType::WasmVm,
+                                ScErrorCode::IndexBounds,
+                                "attempt to access guest bytes outside of linear memory",
+                                &[]
+                            )
+                        );
+                    }
+                }
                 Ok(VmSlice { vm, pos, len })
             }
             _ => Err(self.err(
@@ -282,7 +314,7 @@ impl Host {
         lm_pos: U32Val,
         len: U32Val,
     ) -> Result<(), HostError> {
-        let VmSlice { vm, pos, len } = self.decode_vmslice(lm_pos, len)?;
+        let VmSlice { vm, pos, len } = self.decode_vmslice(vmcaller, lm_pos, len)?;
         self.memobj_visit_and_copy_bytes_out::<HOT>(obj, obj_pos, len, |obj_buf| {
             self.metered_vm_write_bytes_to_linear_memory(vmcaller, &vm, pos, obj_buf)
         })
@@ -345,7 +377,7 @@ impl Host {
         lm_pos: U32Val,
         len: U32Val,
     ) -> Result<HOT::Wrapper, HostError> {
-        let VmSlice { vm, pos, len } = self.decode_vmslice(lm_pos, len)?;
+        let VmSlice { vm, pos, len } = self.decode_vmslice(vmcaller, lm_pos, len)?;
         self.memobj_clone_resize_and_copy_bytes_in::<HOT>(obj, obj_pos, len, |obj_buf| {
             self.metered_vm_read_bytes_from_linear_memory(vmcaller, &vm, pos, obj_buf)
         })
@@ -357,7 +389,7 @@ impl Host {
         lm_pos: U32Val,
         len: U32Val,
     ) -> Result<HOT::Wrapper, HostError> {
-        let VmSlice { vm, pos, len } = self.decode_vmslice(lm_pos, len)?;
+        let VmSlice { vm, pos, len } = self.decode_vmslice(vmcaller, lm_pos, len)?;
         self.charge_budget(ContractCostType::HostMemAlloc, Some(len as u64))?;
         let mut vnew: Vec<u8> = vec![0; len as usize];
         self.metered_vm_read_bytes_from_linear_memory(vmcaller, &vm, pos, &mut vnew)?;

@@ -875,12 +875,12 @@ impl VmCallerEnv for Host {
     ) -> Result<Void, HostError> {
         if self.is_debug() {
             self.as_budget().with_free_budget(|| {
-                let VmSlice { vm, pos, len } = self.decode_vmslice(msg_pos, msg_len)?;
+                let VmSlice { vm, pos, len } = self.decode_vmslice(vmcaller, msg_pos, msg_len)?;
                 let mut msg: Vec<u8> = vec![0u8; len as usize];
                 self.metered_vm_read_bytes_from_linear_memory(vmcaller, &vm, pos, &mut msg)?;
                 let msg = String::from_utf8_lossy(&msg);
 
-                let VmSlice { vm, pos, len } = self.decode_vmslice(vals_pos, vals_len)?;
+                let VmSlice { vm, pos, len } = self.decode_vmslice(vmcaller, vals_pos, vals_len)?;
                 let mut vals: Vec<RawVal> = vec![RawVal::VOID.to_raw(); len as usize];
                 self.metered_vm_read_vals_from_linear_memory::<8, RawVal>(
                     vmcaller,
@@ -1338,7 +1338,7 @@ impl VmCallerEnv for Host {
             vm,
             pos: keys_pos,
             len,
-        } = self.decode_vmslice(keys_pos, len)?;
+        } = self.decode_vmslice(vmcaller, keys_pos, len)?;
         // covers `Vec::with_capacity` and `len` pushes
         metered_clone::charge_container_bulk_init_with_elts::<Vec<Symbol>, Symbol>(
             len as u64,
@@ -1395,7 +1395,7 @@ impl VmCallerEnv for Host {
             vm,
             pos: keys_pos,
             len,
-        } = self.decode_vmslice(keys_pos, len)?;
+        } = self.decode_vmslice(vmcaller, keys_pos, len)?;
         self.visit_obj(map, |mapobj: &HostMap| {
             // Step 1: check all key symbols.
             self.metered_vm_scan_slices_in_linear_memory(
@@ -1642,7 +1642,7 @@ impl VmCallerEnv for Host {
         vals_pos: U32Val,
         len: U32Val,
     ) -> Result<VecObject, HostError> {
-        let VmSlice { vm, pos, len } = self.decode_vmslice(vals_pos, len)?;
+        let VmSlice { vm, pos, len } = self.decode_vmslice(vmcaller, vals_pos, len)?;
         metered_clone::charge_container_bulk_init_with_elts::<Vec<Symbol>, Symbol>(
             len as u64,
             self.as_budget(),
@@ -1665,7 +1665,7 @@ impl VmCallerEnv for Host {
         vals_pos: U32Val,
         len: U32Val,
     ) -> Result<Void, HostError> {
-        let VmSlice { vm, pos, len } = self.decode_vmslice(vals_pos, len)?;
+        let VmSlice { vm, pos, len } = self.decode_vmslice(vmcaller, vals_pos, len)?;
         self.visit_obj(vec, |vecobj: &HostVec| {
             self.metered_vm_write_vals_to_linear_memory(
                 vmcaller,
@@ -1991,7 +1991,7 @@ impl VmCallerEnv for Host {
         lm_pos: U32Val,
         len: U32Val,
     ) -> Result<U32Val, HostError> {
-        let VmSlice { vm, pos, len } = self.decode_vmslice(lm_pos, len)?;
+        let VmSlice { vm, pos, len } = self.decode_vmslice(vmcaller, lm_pos, len)?;
         let mut found = None;
         self.metered_vm_scan_slices_in_linear_memory(
             vmcaller,
