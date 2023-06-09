@@ -54,6 +54,7 @@ pub const VEC: &[u8] = include_bytes!("../wasm-workspace/opt/example_vec.wasm").
 pub const INVOKE_CONTRACT: &[u8] =
     include_bytes!("../wasm-workspace/opt/example_invoke_contract.wasm").as_slice();
 pub const HOSTILE: &[u8] = include_bytes!("../wasm-workspace/opt/example_hostile.wasm").as_slice();
+pub const HOSTILE2: &[u8] = include_bytes!("../wasm-workspace/opt/example_hostile2.wasm").as_slice();
 pub const FIB: &[u8] = include_bytes!("../wasm-workspace/opt/example_fib.wasm").as_slice();
 pub const FANNKUCH: &[u8] =
     include_bytes!("../wasm-workspace/opt/example_fannkuch.wasm").as_slice();

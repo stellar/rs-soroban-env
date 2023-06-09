@@ -27,6 +27,7 @@ members = [
     "linear_memory",
     "vec",
     "hostile",
+    "hostile2",
     "complex",
     "fannkuch",
     "simple_account",
