@@ -1,9 +1,4 @@
-use crate::{
-    cost_runner::CostRunner,
-    xdr::ContractCostType,
-    xdr::{ScVal, ScVec},
-    RawVal, Symbol, Vm,
-};
+use crate::{cost_runner::CostRunner, xdr::ContractCostType, xdr::ScVec, RawVal, Symbol, Vm};
 use std::{hint::black_box, rc::Rc};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -20,7 +15,11 @@ pub enum WasmInsnType {
     BrTable,
     Unreachable,
     Return,
-    Call,
+    // Both `CallLocal` and `CallImport` invokes the same underneath Wasm instruction
+    // `Call` but one calls a local function the other calls the imported one. Their
+    // costs are slightly different.
+    CallLocal,
+    CallImport,
     CallIndirect,
     Drop,
     Select,
@@ -74,7 +73,8 @@ impl WasmInsnType {
             WasmInsnType::BrTable,
             WasmInsnType::Unreachable,
             WasmInsnType::Return,
-            WasmInsnType::Call,
+            WasmInsnType::CallLocal,
+            WasmInsnType::CallImport,
             WasmInsnType::CallIndirect,
             WasmInsnType::Drop,
             WasmInsnType::Select,
@@ -131,63 +131,10 @@ pub struct WasmInsnExecSample {
     pub vm: Rc<Vm>,
 }
 
-pub struct WasmInsnExecRun;
-impl CostRunner for WasmInsnExecRun {
-    const COST_TYPE: ContractCostType = ContractCostType::WasmInsnExec;
-
-    type SampleType = WasmInsnExecSample;
-
-    type RecycledType = (Option<ScVal>, Self::SampleType);
-
-    fn run_iter(host: &crate::Host, _iter: u64, sample: Self::SampleType) -> Self::RecycledType {
-        let scval = black_box(
-            sample
-                .vm
-                .invoke_function(host, "test", &sample.args)
-                .unwrap(),
-        );
-        (Some(scval), sample)
-    }
-
-    fn run_baseline_iter(
-        host: &crate::Host,
-        _iter: u64,
-        sample: Self::SampleType,
-    ) -> Self::RecycledType {
-        black_box(host.charge_budget(Self::COST_TYPE, None).unwrap());
-        black_box((None, sample))
-    }
-}
-
 const TEST_SYM: Symbol = match Symbol::try_from_small_str("test") {
     Ok(s) => s,
     _ => panic!(),
 };
-
-pub struct WasmMemAllocRun;
-impl CostRunner for WasmMemAllocRun {
-    const COST_TYPE: ContractCostType = ContractCostType::WasmMemAlloc;
-
-    const RUN_ITERATIONS: u64 = 1;
-
-    type SampleType = Rc<Vm>;
-
-    type RecycledType = (Option<RawVal>, Self::SampleType);
-
-    fn run_iter(host: &crate::Host, _iter: u64, sample: Self::SampleType) -> Self::RecycledType {
-        let rv = black_box(sample.invoke_function_raw(host, &TEST_SYM, &[]).unwrap());
-        (Some(rv), sample)
-    }
-
-    fn run_baseline_iter(
-        host: &crate::Host,
-        _iter: u64,
-        sample: Self::SampleType,
-    ) -> Self::RecycledType {
-        black_box(host.charge_budget(Self::COST_TYPE, Some(0)).unwrap());
-        black_box((None, sample))
-    }
-}
 
 macro_rules! impl_wasm_insn_runner {
     ($runner:ident, $insn:ident) => {
@@ -241,7 +188,8 @@ impl_wasm_insn_runner!(BrTableRun, BrTable);
 impl_wasm_insn_runner!(LocalGetRun, LocalGet);
 impl_wasm_insn_runner!(LocalSetRun, LocalSet);
 impl_wasm_insn_runner!(LocalTeeRun, LocalTee);
-impl_wasm_insn_runner!(CallRun, Call);
+impl_wasm_insn_runner!(CallLocalRun, CallLocal);
+impl_wasm_insn_runner!(CallImportRun, CallImport);
 impl_wasm_insn_runner!(CallIndirectRun, CallIndirect);
 impl_wasm_insn_runner!(GlobalGetRun, GlobalGet);
 impl_wasm_insn_runner!(GlobalSetRun, GlobalSet);
