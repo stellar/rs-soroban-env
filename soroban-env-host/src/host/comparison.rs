@@ -3,12 +3,11 @@ use core::cmp::{min, Ordering};
 use soroban_env_common::{
     xdr::{
         AccountEntry, AccountId, ClaimableBalanceEntry, ConfigSettingEntry, ContractCodeEntry,
-        ContractCostType, ContractDataEntry, ContractDataEntryBody, ContractDataEntryData,
-        ContractDataType, ContractLedgerEntryType, CreateContractArgs, DataEntry, Duration, Hash,
-        LedgerEntry, LedgerEntryData, LedgerEntryExt, LedgerKey, LedgerKeyAccount,
-        LedgerKeyClaimableBalance, LedgerKeyConfigSetting, LedgerKeyContractCode,
-        LedgerKeyContractData, LedgerKeyData, LedgerKeyLiquidityPool, LedgerKeyOffer,
-        LedgerKeyTrustLine, LiquidityPoolEntry, OfferEntry, PublicKey, ScAddress,
+        ContractCostType, ContractDataEntryBody, ContractDataEntryData, ContractDataType,
+        ContractLedgerEntryType, CreateContractArgs, DataEntry, Duration, Hash, LedgerEntry,
+        LedgerEntryData, LedgerEntryExt, LedgerKey, LedgerKeyAccount, LedgerKeyClaimableBalance,
+        LedgerKeyConfigSetting, LedgerKeyContractCode, LedgerKeyData, LedgerKeyLiquidityPool,
+        LedgerKeyOffer, LedgerKeyTrustLine, LiquidityPoolEntry, OfferEntry, PublicKey, ScAddress,
         ScContractExecutable, ScErrorCode, ScErrorType, ScMap, ScMapEntry, ScNonceKey, ScVal,
         ScVec, TimePoint, TrustLineAsset, TrustLineEntry, Uint256,
     },
@@ -204,7 +203,6 @@ impl_compare_fixed_size_ord_type!(LedgerKeyData);
 impl_compare_fixed_size_ord_type!(LedgerKeyClaimableBalance);
 impl_compare_fixed_size_ord_type!(LedgerKeyLiquidityPool);
 impl_compare_fixed_size_ord_type!(LedgerKeyContractCode);
-impl_compare_fixed_size_ord_type!(LedgerKeyContractData);
 impl_compare_fixed_size_ord_type!(LedgerKeyConfigSetting);
 
 impl_compare_fixed_size_ord_type!(LedgerEntryExt);
@@ -217,7 +215,6 @@ impl_compare_fixed_size_ord_type!(ClaimableBalanceEntry);
 impl_compare_fixed_size_ord_type!(LiquidityPoolEntry);
 impl_compare_fixed_size_ord_type!(ContractCodeEntry);
 impl_compare_fixed_size_ord_type!(ConfigSettingEntry);
-impl_compare_fixed_size_ord_type!(ContractDataEntry);
 
 impl_compare_fixed_size_ord_type!(CreateContractArgs);
 
@@ -327,7 +324,10 @@ impl Compare<LedgerKey> for Budget {
             (Data(a), Data(b)) => self.compare(&a, &b),
             (ClaimableBalance(a), ClaimableBalance(b)) => self.compare(&a, &b),
             (LiquidityPool(a), LiquidityPool(b)) => self.compare(&a, &b),
-            (ContractData(a), ContractData(b)) => self.compare(&a, &b),
+            (ContractData(a), ContractData(b)) => self.compare(
+                &(&a.contract_id, &a.key, &a.type_, &a.le_type),
+                &(&b.contract_id, &b.key, &b.type_, &b.le_type),
+            ),
             (ContractCode(a), ContractCode(b)) => self.compare(&a, &b),
             (ConfigSetting(a), ConfigSetting(b)) => self.compare(&a, &b),
 
@@ -370,7 +370,22 @@ impl Compare<LedgerEntryData> for Budget {
             (Data(a), Data(b)) => self.compare(&a, &b),
             (ClaimableBalance(a), ClaimableBalance(b)) => self.compare(&a, &b),
             (LiquidityPool(a), LiquidityPool(b)) => self.compare(&a, &b),
-            (ContractData(a), ContractData(b)) => self.compare(&a, &b),
+            (ContractData(a), ContractData(b)) => self.compare(
+                &(
+                    &a.contract_id,
+                    &a.key,
+                    &a.type_,
+                    &a.body,
+                    &a.expiration_ledger_seq,
+                ),
+                &(
+                    &b.contract_id,
+                    &b.key,
+                    &b.type_,
+                    &b.body,
+                    &b.expiration_ledger_seq,
+                ),
+            ),
             (ContractCode(a), ContractCode(b)) => self.compare(&a, &b),
             (ConfigSetting(a), ConfigSetting(b)) => self.compare(&a, &b),
 

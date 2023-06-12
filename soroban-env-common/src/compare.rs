@@ -41,36 +41,33 @@ impl<T, C: Compare<T>> Compare<Option<T>> for C {
     }
 }
 
-impl<T, U, V, E, C> Compare<(T, U, V)> for C
-where
-    C: Compare<T, Error = E> + Compare<U, Error = E> + Compare<V, Error = E>,
-{
-    type Error = E;
+macro_rules! impl_compare_for_tuple {
+    ( $($idx:tt $T:ident),+) => {
+        impl<$($T,)+ E, C> Compare<($($T,)+)> for C
+        where
+            $(C: Compare<$T, Error = E>,)+
+        {
+            type Error = E;
 
-    fn compare(&self, a: &(T, U, V), b: &(T, U, V)) -> Result<Ordering, Self::Error> {
-        match <C as Compare<T>>::compare(self, &a.0, &b.0)? {
-            Ordering::Equal => match <C as Compare<U>>::compare(self, &a.1, &b.1)? {
-                Ordering::Equal => <C as Compare<V>>::compare(self, &a.2, &b.2),
-                unequal => Ok(unequal),
-            },
-            unequal => Ok(unequal),
+            fn compare(&self, a: &($($T,)+), b: &($($T,)+)) -> Result<Ordering, Self::Error> {
+                $(
+                    if let Ordering::Less = <C as Compare<$T>>::compare(self, &a.$idx, &b.$idx)? {
+                        return Ok(Ordering::Less)
+                    }
+                    if let Ordering::Greater = <C as Compare<$T>>::compare(self, &a.$idx, &b.$idx)? {
+                        return Ok(Ordering::Greater)
+                    }
+                )*
+                Ok(Ordering::Equal)
+            }
         }
-    }
+    };
 }
 
-impl<T, U, E, C> Compare<(T, U)> for C
-where
-    C: Compare<T, Error = E> + Compare<U, Error = E>,
-{
-    type Error = E;
-
-    fn compare(&self, a: &(T, U), b: &(T, U)) -> Result<Ordering, Self::Error> {
-        match <C as Compare<T>>::compare(self, &a.0, &b.0)? {
-            Ordering::Equal => <C as Compare<U>>::compare(self, &a.1, &b.1),
-            unequal => Ok(unequal),
-        }
-    }
-}
+impl_compare_for_tuple!(0 T, 1 U);
+impl_compare_for_tuple!(0 T, 1 U, 2 V);
+impl_compare_for_tuple!(0 T, 1 U, 2 V, 3 W);
+impl_compare_for_tuple!(0 T, 1 U, 2 V, 3 W, 4 X);
 
 #[cfg(feature = "std")]
 impl<T, C: Compare<T>> Compare<Vec<T>> for C {

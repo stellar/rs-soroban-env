@@ -1,7 +1,5 @@
 use std::{mem, rc::Rc};
 
-use soroban_env_common::xdr::{ContractEventType, ContractIdPreimage, ScErrorCode, ScErrorType};
-
 use crate::{
     budget::Budget,
     events::{HostEvent, InternalContractEvent, InternalEvent},
@@ -10,13 +8,14 @@ use crate::{
     storage::AccessType,
     xdr::{
         AccountEntry, AccountId, BytesM, ClaimableBalanceEntry, ConfigSettingEntry,
-        ContractCodeEntry, ContractCostType, ContractEvent, ContractEventBody, CreateContractArgs,
-        DataEntry, Duration, Hash, LedgerEntry, LedgerEntryExt, LedgerKeyAccount,
+        ContractCodeEntry, ContractCostType, ContractDataEntryBody, ContractEvent,
+        ContractEventBody, ContractEventType, ContractIdPreimage, CreateContractArgs, DataEntry,
+        Duration, Hash, LedgerEntry, LedgerEntryData, LedgerEntryExt, LedgerKey, LedgerKeyAccount,
         LedgerKeyClaimableBalance, LedgerKeyConfigSetting, LedgerKeyContractCode, LedgerKeyData,
         LedgerKeyLiquidityPool, LedgerKeyOffer, LedgerKeyTrustLine, LiquidityPoolEntry, OfferEntry,
-        PublicKey, ScAddress, ScBytes, ScContractExecutable, ScMap, ScMapEntry, ScNonceKey,
-        ScString, ScSymbol, ScVal, ScVec, StringM, TimePoint, TrustLineAsset, TrustLineEntry,
-        Uint256,
+        PublicKey, ScAddress, ScBytes, ScContractExecutable, ScErrorCode, ScErrorType, ScMap,
+        ScMapEntry, ScNonceKey, ScString, ScSymbol, ScVal, ScVec, StringM, TimePoint,
+        TrustLineAsset, TrustLineEntry, Uint256,
     },
     AddressObject, Bool, BytesObject, ContractExecutableObject, DurationObject, DurationSmall,
     DurationVal, Error, HostError, I128Object, I128Small, I128Val, I256Object, I256Small, I256Val,
@@ -216,7 +215,6 @@ impl MeteredClone for ClaimableBalanceEntry {}
 impl MeteredClone for LiquidityPoolEntry {}
 impl MeteredClone for ContractCodeEntry {}
 impl MeteredClone for ConfigSettingEntry {}
-impl MeteredClone for LedgerEntry {}
 impl MeteredClone for AccessType {}
 impl MeteredClone for InternalContractEvent {}
 impl MeteredClone for CreateContractArgs {}
@@ -426,6 +424,42 @@ impl MeteredClone for InternalEvent {
             InternalEvent::Diagnostic(_) => {
                 Err((ScErrorType::Events, ScErrorCode::InternalError).into())
             }
+        }
+    }
+}
+
+impl MeteredClone for LedgerKey {
+    const IS_SHALLOW: bool = false;
+
+    fn charge_for_substructure(&self, budget: &Budget) -> Result<(), HostError> {
+        match self {
+            LedgerKey::ContractData(d) => d.key.charge_for_substructure(budget),
+            LedgerKey::Account(_)
+            | LedgerKey::Trustline(_)
+            | LedgerKey::Offer(_)
+            | LedgerKey::Data(_)
+            | LedgerKey::ClaimableBalance(_)
+            | LedgerKey::LiquidityPool(_)
+            | LedgerKey::ContractCode(_)
+            | LedgerKey::ConfigSetting(_) => Ok(()),
+        }
+    }
+}
+
+impl MeteredClone for LedgerEntry {
+    const IS_SHALLOW: bool = false;
+
+    fn charge_for_substructure(&self, budget: &Budget) -> Result<(), HostError> {
+        use LedgerEntryData::*;
+        match &self.data {
+            ContractData(d) => {
+                if let ContractDataEntryBody::DataEntry(e) = &d.body {
+                    e.val.charge_for_substructure(budget)?;
+                }
+                d.key.charge_for_substructure(budget)
+            }
+            Account(_) | Trustline(_) | Offer(_) | Data(_) | ClaimableBalance(_)
+            | LiquidityPool(_) | ContractCode(_) | ConfigSetting(_) => Ok(()),
         }
     }
 }
