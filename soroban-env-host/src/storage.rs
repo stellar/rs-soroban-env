@@ -292,6 +292,8 @@ impl Storage {
 #[cfg(test)]
 mod test_footprint {
 
+    use soroban_env_common::xdr::Hash;
+
     use super::*;
     use crate::budget::Budget;
     use crate::xdr::{ContractDataType, ContractLedgerEntryType, LedgerKeyContractData, ScVal};
@@ -333,16 +335,40 @@ mod test_footprint {
     #[test]
     fn footprint_enforce_access() -> Result<(), HostError> {
         let budget = Budget::default();
-        let contract_id = [0; 32].into();
+        let contract_id: Hash = [0; 32].into();
         let key = Rc::new(LedgerKey::ContractData(LedgerKeyContractData {
-            contract_id,
+            contract_id: contract_id.clone(),
             key: ScVal::I32(0),
             type_: ContractDataType::Mergeable,
             le_type: ContractLedgerEntryType::DataEntry,
         }));
+
+        // Key not in footprint. Only difference is type_
+        let key2 = Rc::new(LedgerKey::ContractData(LedgerKeyContractData {
+            contract_id: contract_id.clone(),
+            key: ScVal::I32(0),
+            type_: ContractDataType::Temporary,
+            le_type: ContractLedgerEntryType::DataEntry,
+        }));
+
+        // Key not in footprint. Only difference is le_type
+        let key3 = Rc::new(LedgerKey::ContractData(LedgerKeyContractData {
+            contract_id: contract_id.clone(),
+            key: ScVal::I32(0),
+            type_: ContractDataType::Mergeable,
+            le_type: ContractLedgerEntryType::ExpirationExtension,
+        }));
+
         let om = [(Rc::clone(&key), AccessType::ReadOnly)].into();
         let mom = MeteredOrdMap::from_map(om, &budget)?;
         let mut fp = Footprint(mom);
+        assert!(fp
+            .enforce_access(&key2, AccessType::ReadOnly, &budget)
+            .is_err());
+        assert!(fp
+            .enforce_access(&key3, AccessType::ReadOnly, &budget)
+            .is_err());
+
         fp.enforce_access(&key, AccessType::ReadOnly, &budget)?;
         fp.0 =
             fp.0.insert(Rc::clone(&key), AccessType::ReadWrite, &budget)?;

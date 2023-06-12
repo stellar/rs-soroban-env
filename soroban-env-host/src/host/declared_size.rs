@@ -1,6 +1,8 @@
 use std::rc::Rc;
 
-use soroban_env_common::xdr::{ContractIdPreimage, CreateContractArgs};
+use soroban_env_common::xdr::{
+    ContractIdPreimage, ContractLedgerEntryType, CreateContractArgs, LedgerKeyContractData,
+};
 
 use crate::{
     events::{HostEvent, InternalContractEvent, InternalEvent},
@@ -9,12 +11,12 @@ use crate::{
     storage::AccessType,
     xdr::{
         AccountEntry, AccountId, BytesM, ClaimableBalanceEntry, ConfigSettingEntry,
-        ContractCodeEntry, ContractEvent, DataEntry, Duration, Hash, LedgerEntry, LedgerEntryExt,
-        LedgerKeyAccount, LedgerKeyClaimableBalance, LedgerKeyConfigSetting, LedgerKeyContractCode,
-        LedgerKeyData, LedgerKeyLiquidityPool, LedgerKeyOffer, LedgerKeyTrustLine,
-        LiquidityPoolEntry, OfferEntry, PublicKey, ScAddress, ScBytes, ScContractExecutable, ScMap,
-        ScMapEntry, ScNonceKey, ScString, ScSymbol, ScVal, ScVec, StringM, TimePoint,
-        TrustLineAsset, TrustLineEntry, Uint256, SCSYMBOL_LIMIT,
+        ContractCodeEntry, ContractDataEntry, ContractDataType, ContractEvent, DataEntry, Duration,
+        Hash, LedgerEntry, LedgerEntryExt, LedgerKeyAccount, LedgerKeyClaimableBalance,
+        LedgerKeyConfigSetting, LedgerKeyContractCode, LedgerKeyData, LedgerKeyLiquidityPool,
+        LedgerKeyOffer, LedgerKeyTrustLine, LiquidityPoolEntry, OfferEntry, PublicKey, ScAddress,
+        ScBytes, ScContractExecutable, ScMap, ScMapEntry, ScNonceKey, ScString, ScSymbol, ScVal,
+        ScVec, StringM, TimePoint, TrustLineAsset, TrustLineEntry, Uint256, SCSYMBOL_LIMIT,
     },
     AddressObject, Bool, BytesObject, ContractExecutableObject, DurationObject, DurationSmall,
     DurationVal, Error, I128Object, I128Small, I128Val, I256Object, I256Small, I256Val, I32Val,
@@ -121,6 +123,7 @@ impl_declared_size_type!(LedgerKeyClaimableBalance, 32);
 impl_declared_size_type!(LedgerKeyLiquidityPool, 32);
 impl_declared_size_type!(LedgerKeyContractCode, 36);
 impl_declared_size_type!(LedgerKeyConfigSetting, 4);
+impl_declared_size_type!(LedgerKeyContractData, 80);
 impl_declared_size_type!(LedgerEntryExt, 33);
 impl_declared_size_type!(AccountEntry, 216);
 impl_declared_size_type!(TrustLineEntry, 128);
@@ -142,6 +145,9 @@ impl_declared_size_type!(ScString, 24);
 impl_declared_size_type!(ScSymbol, 24);
 impl_declared_size_type!(CreateContractArgs, 99);
 impl_declared_size_type!(ContractIdPreimage, 66);
+impl_declared_size_type!(ContractDataType, 4);
+impl_declared_size_type!(ContractLedgerEntryType, 66);
+impl_declared_size_type!(ContractDataEntry, 128);
 
 // composite types
 
@@ -293,6 +299,7 @@ mod test {
         expect!["32"].assert_eq(size_of::<LedgerKeyLiquidityPool>().to_string().as_str());
         expect!["36"].assert_eq(size_of::<LedgerKeyContractCode>().to_string().as_str());
         expect!["4"].assert_eq(size_of::<LedgerKeyConfigSetting>().to_string().as_str());
+        expect!["80"].assert_eq(size_of::<LedgerKeyContractData>().to_string().as_str());
         expect!["33"].assert_eq(size_of::<LedgerEntryExt>().to_string().as_str());
         expect!["216"].assert_eq(size_of::<AccountEntry>().to_string().as_str());
         expect!["128"].assert_eq(size_of::<TrustLineEntry>().to_string().as_str());
@@ -314,6 +321,9 @@ mod test {
         expect!["24"].assert_eq(size_of::<ScSymbol>().to_string().as_str());
         expect!["99"].assert_eq(size_of::<CreateContractArgs>().to_string().as_str());
         expect!["66"].assert_eq(size_of::<ContractIdPreimage>().to_string().as_str());
+        expect!["4"].assert_eq(size_of::<ContractDataType>().to_string().as_str());
+        expect!["4"].assert_eq(size_of::<ContractLedgerEntryType>().to_string().as_str());
+        expect!["128"].assert_eq(size_of::<ContractDataEntry>().to_string().as_str());
         // composite types
         expect!["16"].assert_eq(size_of::<&[ScVal]>().to_string().as_str());
         expect!["48"].assert_eq(size_of::<(RawVal, ScVal)>().to_string().as_str());
