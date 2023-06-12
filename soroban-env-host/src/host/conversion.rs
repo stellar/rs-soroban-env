@@ -13,7 +13,8 @@ use soroban_env_common::num::{
 };
 use soroban_env_common::xdr::{
     self, int128_helpers, AccountId, ContractDataType, ContractLedgerEntryType, Int128Parts,
-    Int256Parts, ScBytes, ScErrorCode, ScErrorType, ScMap, ScMapEntry, UInt128Parts, UInt256Parts,
+    Int256Parts, ScAddress, ScBytes, ScErrorCode, ScErrorType, ScMap, ScMapEntry, UInt128Parts,
+    UInt256Parts,
 };
 use soroban_env_common::{
     BytesObject, Convert, Object, ScValObjRef, ScValObject, TryFromVal, TryIntoVal, U32Val,
@@ -221,12 +222,7 @@ impl Host {
         k: RawVal,
         data_type: ContractDataType,
     ) -> Result<Rc<LedgerKey>, HostError> {
-        Ok(Rc::new(LedgerKey::ContractData(LedgerKeyContractData {
-            contract_id: self.get_current_contract_id_internal()?,
-            key: self.from_host_val(k)?,
-            type_: data_type,
-            le_type: ContractLedgerEntryType::DataEntry,
-        })))
+        self.storage_key_from_scval(self.from_host_val(k)?, data_type)
     }
 
     pub(crate) fn storage_key_for_contract(
@@ -235,8 +231,17 @@ impl Host {
         key: ScVal,
         data_type: ContractDataType,
     ) -> Rc<LedgerKey> {
+        self.storage_key_for_address(ScAddress::Contract(contract_id), key, data_type)
+    }
+
+    pub(crate) fn storage_key_for_address(
+        &self,
+        contract_address: ScAddress,
+        key: ScVal,
+        data_type: ContractDataType,
+    ) -> Rc<LedgerKey> {
         Rc::new(LedgerKey::ContractData(LedgerKeyContractData {
-            contract_id,
+            contract: contract_address,
             key,
             type_: data_type,
             le_type: ContractLedgerEntryType::DataEntry,
@@ -248,12 +253,7 @@ impl Host {
         key: ScVal,
         data_type: ContractDataType,
     ) -> Result<Rc<LedgerKey>, HostError> {
-        Ok(Rc::new(LedgerKey::ContractData(LedgerKeyContractData {
-            contract_id: self.get_current_contract_id_internal()?,
-            key,
-            type_: data_type,
-            le_type: ContractLedgerEntryType::DataEntry,
-        })))
+        Ok(self.storage_key_for_contract(self.get_current_contract_id_internal()?, key, data_type))
     }
 
     // Notes on metering: covered by components.

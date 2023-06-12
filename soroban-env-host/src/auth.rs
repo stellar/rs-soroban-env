@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::rc::Rc;
 
+use rand::Rng;
 use soroban_env_common::xdr::{
     ContractDataEntry, ContractDataEntryBody, ContractDataEntryData, CreateContractArgs,
     HashIdPreimage, HashIdPreimageSorobanAuthorization, LedgerEntry, LedgerEntryData,
@@ -44,10 +45,10 @@ pub struct AuthorizationManager {
 
 // The authorization payload recorded for an address in the recording
 // authorization mode.
-#[derive(Eq, PartialEq, Debug)]
+#[derive(Debug)]
 pub struct RecordedAuthPayload {
     pub address: Option<ScAddress>,
-    pub nonce: Option<u64>,
+    pub nonce: Option<i64>,
     pub invocation: xdr::SorobanAuthorizedInvocation,
 }
 
@@ -113,9 +114,9 @@ struct AuthorizationTracker {
     authenticated: bool,
     // Indicates whether nonce still needs to be verified and consumed.
     need_nonce: bool,
-    // The value of nonce authorized by the address. Must match the stored
-    // nonce value.
-    nonce: Option<u64>,
+    // The value of nonce authorized by the address with its expiration ledger.
+    // Must not exist in the ledger.
+    nonce: Option<(i64, u32)>,
 }
 
 #[derive(Clone)]
@@ -673,7 +674,10 @@ impl AuthorizationTracker {
             SorobanCredentials::SourceAccount => (None, None, vec![]),
             SorobanCredentials::Address(address_creds) => (
                 Some(address_creds.address),
-                Some(address_creds.nonce),
+                Some((
+                    address_creds.nonce,
+                    address_creds.signature_expiration_ledger,
+                )),
                 host.scvals_to_rawvals(address_creds.signature_args.0.as_slice())?,
             ),
         };
@@ -715,7 +719,9 @@ impl AuthorizationTracker {
             false
         };
         let nonce = if !is_invoker {
-            Some(host.read_and_consume_nonce(address.metered_clone(host.budget_ref())?, &function)?)
+            let random_nonce: i64 = rand::thread_rng().gen_range(0, i64::MAX);
+            host.consume_nonce(address.metered_clone(host.budget_ref())?, random_nonce, 0)?;
+            Some((random_nonce, 0))
         } else {
             None
         };
@@ -842,7 +848,7 @@ impl AuthorizationTracker {
                 self.address.clone()
             },
             invocation: self.root_authorized_invocation.to_xdr_non_metered(false)?,
-            nonce: self.nonce,
+            nonce: self.nonce.map(|(nonce, _)| nonce),
         })
     }
 
@@ -865,24 +871,6 @@ impl AuthorizationTracker {
 
     fn pop_frame(&mut self) {
         self.invocation_id_in_call_stack.pop();
-    }
-
-    // Consumes nonce if the nonce check is still needed.
-    // Returns nonce if it has been consumed.
-    // Note, that for the invoker nonce is never needed.
-    fn maybe_consume_nonce(&mut self, host: &Host) -> Result<Option<u64>, HostError> {
-        if !self.need_nonce {
-            return Ok(None);
-        }
-        self.need_nonce = false;
-        if let Some(addr) = &self.address {
-            Ok(Some(host.read_and_consume_nonce(
-                addr.metered_clone(host.budget_ref())?,
-                &self.root_authorized_invocation.function,
-            )?))
-        } else {
-            Ok(None)
-        }
     }
 
     // Walks a path in the tree defined by `invocation_id_in_call_stack` and
@@ -928,47 +916,54 @@ impl AuthorizationTracker {
     }
 
     fn verify_nonce(&mut self, host: &Host) -> Result<(), HostError> {
-        let nonce_is_correct = if let Some(nonce) = self.maybe_consume_nonce(host)? {
-            if let Some(tracker_nonce) = self.nonce {
-                tracker_nonce == nonce
-            } else {
-                // If the nonce isn't set in the tracker, but is required, then
-                // it's incorrect.
-                false
-            }
-        } else {
-            // Nonce is either already checked or not needed in the first place.
-            true
-        };
-        if nonce_is_correct {
-            Ok(())
-        } else {
-            Err(host.err(
-                ScErrorType::Auth,
-                ScErrorCode::InvalidInput,
-                "nonce is incorrect",
-                &[],
-            ))
+        if !self.need_nonce {
+            return Ok(());
         }
+        self.need_nonce = false;
+        if let Some((nonce, expiration_ledger)) = &self.nonce {
+            if host.with_ledger_info(|li| Ok(li.sequence_number))? > *expiration_ledger {
+                return Err(host.err(
+                    ScErrorType::Auth,
+                    ScErrorCode::InvalidInput,
+                    "signature has expired",
+                    &[],
+                ));
+            }
+            if let Some(addr) = &self.address {
+                return host.consume_nonce(
+                    addr.metered_clone(host.budget_ref())?,
+                    *nonce,
+                    *expiration_ledger,
+                );
+            }
+        }
+        Err(host.err(
+            ScErrorType::Auth,
+            ScErrorCode::InternalError,
+            "unexpected nonce verification state",
+            &[],
+        ))
     }
 
     // Computes the payload that has to be signed in order to authenticate
     // the authorized invocation tree corresponding to this tracker.
     fn get_signature_payload(&self, host: &Host) -> Result<[u8; 32], HostError> {
+        let (nonce, expiration_ledger) = self.nonce.ok_or_else(|| {
+            host.err(
+                ScErrorType::Auth,
+                ScErrorCode::InternalError,
+                "unexpected missing nonce",
+                &[],
+            )
+        })?;
         let payload_preimage =
             HashIdPreimage::SorobanAuthorization(HashIdPreimageSorobanAuthorization {
                 network_id: Hash(
                     host.with_ledger_info(|li| li.network_id.metered_clone(host.budget_ref()))?,
                 ),
+                nonce,
+                signature_expiration_ledger: expiration_ledger,
                 invocation: self.invocation_to_xdr(host.budget_ref())?,
-                nonce: self.nonce.ok_or_else(|| {
-                    host.err(
-                        ScErrorType::Auth,
-                        ScErrorCode::InternalError,
-                        "unexpected missing nonce",
-                        &[],
-                    )
-                })?,
             });
 
         host.metered_hash_xdr(&payload_preimage)
@@ -1036,167 +1031,55 @@ impl AuthorizationTracker {
 }
 
 impl Host {
-    #[cfg(test)]
-    pub(crate) fn read_nonce(
+    fn consume_nonce(
         &self,
         address: ScAddress,
-        function: &AuthorizedFunction,
-    ) -> Result<u64, HostError> {
-        let nonce_key_scval = ScVal::LedgerKeyNonce(ScNonceKey {
-            nonce_address: address,
-        });
-        let contract_id = match function {
-            AuthorizedFunction::ContractFn(contract_fn) => self.contract_id_from_scaddress(
-                contract_fn
-                    .contract_address
-                    .metered_clone(self.budget_ref())?,
-            )?,
-            AuthorizedFunction::CreateContractHostFn(_) => {
-                // Use the special contract id for all the host fn nonces for
-                // now. This should soon be replaced by non-autoincrement nonce
-                // that is independent of the authorized function.
-                Hash([255; 32])
-            }
-        };
-        let nonce_key = self.storage_key_for_contract(
-            contract_id,
+        nonce: i64,
+        expiration_ledger: u32,
+    ) -> Result<(), HostError> {
+        let nonce_key_scval = ScVal::LedgerKeyNonce(ScNonceKey { nonce });
+        let nonce_key = self.storage_key_for_address(
+            address.metered_clone(self.budget_ref())?,
             nonce_key_scval.metered_clone(self.budget_ref())?,
-            xdr::ContractDataType::Exclusive,
+            xdr::ContractDataType::Temporary,
         );
-        let curr_nonce: u64 =
-            if self.with_mut_storage(|storage| storage.has(&nonce_key, self.budget_ref()))? {
-                let entry =
-                    self.with_mut_storage(|storage| storage.get(&nonce_key, self.budget_ref()))?;
-                match &entry.data {
-                    LedgerEntryData::ContractData(data_entry) => match &data_entry.body {
-                        ContractDataEntryBody::DataEntry(data) => match data.val {
-                            ScVal::U64(val) => val,
-                            _ => {
-                                return Err(self.err(
-                                    ScErrorType::Auth,
-                                    ScErrorCode::UnexpectedType,
-                                    "unexpected nonce entry type",
-                                    &[],
-                                ));
-                            }
-                        },
-                        _ => {
-                            return Err(self.err(
-                                ScErrorType::Auth,
-                                ScErrorCode::UnexpectedType,
-                                "expected DataEntry type",
-                                &[],
-                            ));
-                        }
-                    },
-                    _ => {
-                        return Err(self.err(
-                            ScErrorType::Auth,
-                            ScErrorCode::InternalError,
-                            "unexpected missing nonce entry",
-                            &[],
-                        ))
-                    }
-                }
-            } else {
-                0
-            };
-        Ok(curr_nonce)
-    }
-
-    fn read_and_consume_nonce(
-        &self,
-        address: ScAddress,
-        function: &AuthorizedFunction,
-    ) -> Result<u64, HostError> {
-        let nonce_key_scval = ScVal::LedgerKeyNonce(ScNonceKey {
-            nonce_address: address,
-        });
-        let contract_id = match function {
-            AuthorizedFunction::ContractFn(contract_fn) => self.contract_id_from_scaddress(
-                contract_fn
-                    .contract_address
-                    .metered_clone(self.budget_ref())?,
-            )?,
-            AuthorizedFunction::CreateContractHostFn(_) => {
-                // Use the special contract id for all the host fn nonces for
-                // now. This should soon be replaced by non-autoincrement nonce
-                // that is independent of the authorized function.
-                Hash([255; 32])
+        self.with_mut_storage(|storage| {
+            if storage.has(&nonce_key, self.budget_ref())? {
+                return Err(self.err(
+                    ScErrorType::Auth,
+                    ScErrorCode::ExistingValue,
+                    "nonce already exists",
+                    &[],
+                ));
             }
-        };
-        let nonce_key = self.storage_key_for_contract(
-            contract_id.metered_clone(self.budget_ref())?,
-            nonce_key_scval.metered_clone(self.budget_ref())?,
-            xdr::ContractDataType::Exclusive,
-        );
-
-        if self.with_mut_storage(|storage| storage.has(&nonce_key, self.budget_ref()))? {
-            let mut entry = (*self
-                .with_mut_storage(|storage| storage.get(&nonce_key, self.budget_ref()))?)
-            .metered_clone(&self.0.budget)?;
-            match entry.data {
-                LedgerEntryData::ContractData(ref mut data_entry) => match data_entry.body {
-                    ContractDataEntryBody::DataEntry(ref mut data) => match &mut data.val {
-                        ScVal::U64(v) => {
-                            let curr_nonce = *v;
-                            *v = *v + 1;
-
-                            self.with_mut_storage(|storage| {
-                                storage.put(&nonce_key, &Rc::new(entry), self.budget_ref())
-                            })?;
-                            Ok(curr_nonce)
-                        }
-                        _ => {
-                            return Err(self.err(
-                                ScErrorType::Auth,
-                                ScErrorCode::UnexpectedType,
-                                "unexpected nonce entry type",
-                                &[],
-                            ));
-                        }
-                    },
-                    _ => {
-                        return Err(self.err(
-                            ScErrorType::Auth,
-                            ScErrorCode::InternalError,
-                            "expected DataEntry",
-                            &[],
-                        ))
-                    }
-                },
-                _ => {
-                    return Err(self.err(
-                        ScErrorType::Auth,
-                        ScErrorCode::InternalError,
-                        "unexpected missing nonce entry",
-                        &[],
-                    ))
-                }
-            }
-        } else {
             let body = ContractDataEntryBody::DataEntry(ContractDataEntryData {
-                val: ScVal::U64(1),
+                val: ScVal::Void,
                 flags: 0,
             });
-            let storage_type = xdr::ContractDataType::Exclusive;
             let data = LedgerEntryData::ContractData(ContractDataEntry {
-                contract_id: contract_id.metered_clone(self.budget_ref())?,
+                contract: address,
                 key: nonce_key_scval,
                 body,
-                expiration_ledger_seq: self.get_min_expiration_ledger(storage_type)?,
-                type_: storage_type,
+                expiration_ledger_seq: expiration_ledger,
+                type_: xdr::ContractDataType::Temporary,
             });
             let entry = LedgerEntry {
                 last_modified_ledger_seq: 0,
                 data,
                 ext: LedgerEntryExt::V0,
             };
-            self.with_mut_storage(|storage| {
-                storage.put(&nonce_key, &Rc::new(entry), self.budget_ref())
-            })?;
+            storage.put(&nonce_key, &Rc::new(entry), self.budget_ref())
+        })
+    }
+}
 
-            Ok(0)
-        }
+#[cfg(any(test, feature = "testutils"))]
+impl PartialEq for RecordedAuthPayload {
+    fn eq(&self, other: &Self) -> bool {
+        self.address == other.address
+            && self.invocation == other.invocation
+            // Compare nonces only by presence of the value - recording mode
+            // generates random nonces.
+            && self.nonce.is_some() == other.nonce.is_some()
     }
 }
