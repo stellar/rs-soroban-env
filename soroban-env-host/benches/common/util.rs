@@ -1,4 +1,11 @@
-use soroban_env_host::RawVal;
+use soroban_env_host::{budget::AsBudget, Host, RawVal};
+
+pub(crate) fn test_host() -> Host {
+    let host = Host::default();
+    host.as_budget().reset_unlimited();
+    host.as_budget().reset_fuel_config();
+    host
+}
 
 pub(crate) const TEST_WASMS: [&'static [u8]; 10] = [
     soroban_test_wasms::ADD_I32,

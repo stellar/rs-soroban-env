@@ -68,8 +68,6 @@ pub(crate) fn for_each_host_cost_measurement<B: Benchmark>(
     call_bench::<B, VmInstantiationMeasure>(&mut params)?;
     call_bench::<B, VmMemReadMeasure>(&mut params)?;
     call_bench::<B, VmMemWriteMeasure>(&mut params)?;
-    call_bench::<B, WasmInsnExecMeasure>(&mut params)?;
-    call_bench::<B, WasmMemAllocMeasure>(&mut params)?;
     call_bench::<B, VisitObjectMeasure>(&mut params)?;
     call_bench::<B, GuardFrameMeasure>(&mut params)?;
     call_bench::<B, ValXdrConvMeasure>(&mut params)?;
@@ -127,7 +125,8 @@ run_wasm_insn_measurement!(
     WasmLocalGetMeasure,
     WasmLocalSetMeasure,
     WasmLocalTeeMeasure,
-    WasmCallMeasure,
+    WasmCallLocalMeasure,
+    WasmCallImportMeasure,
     WasmCallIndirectMeasure,
     WasmGlobalGetMeasure,
     WasmGlobalSetMeasure,
@@ -164,3 +163,71 @@ run_wasm_insn_measurement!(
     WasmI64RotlMeasure,
     WasmI64RotrMeasure
 );
+
+#[derive(Debug, PartialEq, PartialOrd, Eq, Ord)]
+pub(crate) enum WasmInsnTier {
+    BASE = 0,
+    ENTITY = 1,
+    LOAD = 2,
+    STORE = 3,
+    CALL = 4,
+}
+
+pub(crate) const WASM_INSN_BASE: [WasmInsnType; 30] = [
+    WasmInsnType::LocalGet,
+    WasmInsnType::LocalSet,
+    WasmInsnType::LocalTee,
+    WasmInsnType::Br,
+    WasmInsnType::BrTable,
+    WasmInsnType::Drop,
+    WasmInsnType::Select,
+    WasmInsnType::Const,
+    WasmInsnType::I64Eqz,
+    WasmInsnType::I64Eq,
+    WasmInsnType::I64Ne,
+    WasmInsnType::I64LtS,
+    WasmInsnType::I64GtS,
+    WasmInsnType::I64LeS,
+    WasmInsnType::I64GeS,
+    WasmInsnType::I64Clz,
+    WasmInsnType::I64Ctz,
+    WasmInsnType::I64Popcnt,
+    WasmInsnType::I64Add,
+    WasmInsnType::I64Sub,
+    WasmInsnType::I64Mul,
+    WasmInsnType::I64DivS,
+    WasmInsnType::I64RemS,
+    WasmInsnType::I64And,
+    WasmInsnType::I64Or,
+    WasmInsnType::I64Xor,
+    WasmInsnType::I64Shl,
+    WasmInsnType::I64ShrS,
+    WasmInsnType::I64Rotl,
+    WasmInsnType::I64Rotr,
+];
+
+pub(crate) const WASM_INSN_ENTITY: [WasmInsnType; 3] = [
+    WasmInsnType::GlobalGet,
+    WasmInsnType::GlobalSet,
+    WasmInsnType::MemorySize,
+];
+
+pub(crate) const WASM_INSN_LOAD: [WasmInsnType; 4] = [
+    WasmInsnType::I64Load,
+    WasmInsnType::I64Load8S,
+    WasmInsnType::I64Load16S,
+    WasmInsnType::I64Load32S,
+];
+
+pub(crate) const WASM_INSN_STORE: [WasmInsnType; 4] = [
+    WasmInsnType::I64Store,
+    WasmInsnType::I64Store8,
+    WasmInsnType::I64Store16,
+    WasmInsnType::I64Store32,
+];
+
+pub(crate) const WASM_INSN_CALL: [WasmInsnType; 3] = [
+    WasmInsnType::CallLocal,
+    WasmInsnType::CallImport,
+    WasmInsnType::CallIndirect,
+];
