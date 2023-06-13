@@ -1848,6 +1848,14 @@ impl VmCallerEnv for Host {
         Ok(RawVal::VOID)
     }
 
+    fn pop_mergeable(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        k: RawVal,
+    ) -> Result<RawVal, HostError> {
+        Ok(RawVal::from_void().into())
+    }
+
     // Notes on metering: covered by the components.
     fn create_contract(
         &self,
