@@ -1,5 +1,7 @@
 use std::rc::Rc;
 
+use soroban_env_common::xdr::ExtensionPoint;
+
 use crate::{
     events::{HostEvent, InternalContractEvent, InternalEvent},
     host::Events,
@@ -144,6 +146,7 @@ impl_declared_size_type!(CreateContractArgs, 99);
 impl_declared_size_type!(ContractIdPreimage, 66);
 impl_declared_size_type!(ContractDataType, 4);
 impl_declared_size_type!(ContractLedgerEntryType, 4);
+impl_declared_size_type!(ExtensionPoint, 0);
 
 // composite types
 
@@ -319,6 +322,7 @@ mod test {
         expect!["66"].assert_eq(size_of::<ContractIdPreimage>().to_string().as_str());
         expect!["4"].assert_eq(size_of::<ContractDataType>().to_string().as_str());
         expect!["4"].assert_eq(size_of::<ContractLedgerEntryType>().to_string().as_str());
+        expect!["0"].assert_eq(size_of::<ExtensionPoint>().to_string().as_str());
         // composite types
         expect!["16"].assert_eq(size_of::<&[ScVal]>().to_string().as_str());
         expect!["48"].assert_eq(size_of::<(RawVal, ScVal)>().to_string().as_str());
@@ -451,6 +455,7 @@ mod test {
         assert_mem_size_le_declared_size!(CreateContractArgs);
         assert_mem_size_le_declared_size!(ContractDataType);
         assert_mem_size_le_declared_size!(ContractLedgerEntryType);
+        assert_mem_size_le_declared_size!(ExtensionPoint);
         // composite types
         assert_mem_size_le_declared_size!(&[ScVal]);
         assert_mem_size_le_declared_size!((RawVal, ScVal));

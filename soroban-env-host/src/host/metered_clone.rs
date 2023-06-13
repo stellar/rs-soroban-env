@@ -8,14 +8,15 @@ use crate::{
     storage::AccessType,
     xdr::{
         AccountEntry, AccountId, BytesM, ClaimableBalanceEntry, ConfigSettingEntry,
-        ContractCodeEntry, ContractCostType, ContractDataEntryBody, ContractEvent,
-        ContractEventBody, ContractEventType, ContractIdPreimage, CreateContractArgs, DataEntry,
-        Duration, Hash, LedgerEntry, LedgerEntryData, LedgerEntryExt, LedgerKey, LedgerKeyAccount,
-        LedgerKeyClaimableBalance, LedgerKeyConfigSetting, LedgerKeyContractCode, LedgerKeyData,
-        LedgerKeyLiquidityPool, LedgerKeyOffer, LedgerKeyTrustLine, LiquidityPoolEntry, OfferEntry,
-        PublicKey, ScAddress, ScBytes, ScContractExecutable, ScErrorCode, ScErrorType, ScMap,
-        ScMapEntry, ScNonceKey, ScString, ScSymbol, ScVal, ScVec, StringM, TimePoint,
-        TrustLineAsset, TrustLineEntry, Uint256,
+        ContractCodeEntry, ContractCodeEntryBody, ContractCostType, ContractDataEntryBody,
+        ContractEvent, ContractEventBody, ContractEventType, ContractIdPreimage,
+        CreateContractArgs, DataEntry, Duration, Hash, LedgerEntry, LedgerEntryData,
+        LedgerEntryExt, LedgerKey, LedgerKeyAccount, LedgerKeyClaimableBalance,
+        LedgerKeyConfigSetting, LedgerKeyContractCode, LedgerKeyData, LedgerKeyLiquidityPool,
+        LedgerKeyOffer, LedgerKeyTrustLine, LiquidityPoolEntry, OfferEntry, PublicKey, ScAddress,
+        ScBytes, ScContractExecutable, ScErrorCode, ScErrorType, ScMap, ScMapEntry, ScNonceKey,
+        ScString, ScSymbol, ScVal, ScVec, StringM, TimePoint, TrustLineAsset, TrustLineEntry,
+        Uint256,
     },
     AddressObject, Bool, BytesObject, ContractExecutableObject, DurationObject, DurationSmall,
     DurationVal, Error, HostError, I128Object, I128Small, I128Val, I256Object, I256Small, I256Val,
@@ -458,8 +459,14 @@ impl MeteredClone for LedgerEntry {
                 }
                 d.key.charge_for_substructure(budget)
             }
+            ContractCode(c) => {
+                if let ContractCodeEntryBody::DataEntry(d) = &c.body {
+                    d.charge_for_substructure(budget)?;
+                }
+                Ok(())
+            }
             Account(_) | Trustline(_) | Offer(_) | Data(_) | ClaimableBalance(_)
-            | LiquidityPool(_) | ContractCode(_) | ConfigSetting(_) => Ok(()),
+            | LiquidityPool(_) | ConfigSetting(_) => Ok(()),
         }
     }
 }

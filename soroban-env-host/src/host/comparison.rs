@@ -2,14 +2,14 @@ use core::cmp::{min, Ordering};
 
 use soroban_env_common::{
     xdr::{
-        AccountEntry, AccountId, ClaimableBalanceEntry, ConfigSettingEntry, ContractCodeEntry,
+        AccountEntry, AccountId, ClaimableBalanceEntry, ConfigSettingEntry, ContractCodeEntryBody,
         ContractCostType, ContractDataEntryBody, ContractDataEntryData, ContractDataType,
-        ContractLedgerEntryType, CreateContractArgs, DataEntry, Duration, Hash, LedgerEntry,
-        LedgerEntryData, LedgerEntryExt, LedgerKey, LedgerKeyAccount, LedgerKeyClaimableBalance,
-        LedgerKeyConfigSetting, LedgerKeyContractCode, LedgerKeyData, LedgerKeyLiquidityPool,
-        LedgerKeyOffer, LedgerKeyTrustLine, LiquidityPoolEntry, OfferEntry, PublicKey, ScAddress,
-        ScContractExecutable, ScErrorCode, ScErrorType, ScMap, ScMapEntry, ScNonceKey, ScVal,
-        ScVec, TimePoint, TrustLineAsset, TrustLineEntry, Uint256,
+        ContractLedgerEntryType, CreateContractArgs, DataEntry, Duration, ExtensionPoint, Hash,
+        LedgerEntry, LedgerEntryData, LedgerEntryExt, LedgerKey, LedgerKeyAccount,
+        LedgerKeyClaimableBalance, LedgerKeyConfigSetting, LedgerKeyContractCode, LedgerKeyData,
+        LedgerKeyLiquidityPool, LedgerKeyOffer, LedgerKeyTrustLine, LiquidityPoolEntry, OfferEntry,
+        PublicKey, ScAddress, ScContractExecutable, ScErrorCode, ScErrorType, ScMap, ScMapEntry,
+        ScNonceKey, ScVal, ScVec, TimePoint, TrustLineAsset, TrustLineEntry, Uint256,
     },
     Compare, SymbolStr, I256, U256,
 };
@@ -213,10 +213,9 @@ impl_compare_fixed_size_ord_type!(OfferEntry);
 impl_compare_fixed_size_ord_type!(DataEntry);
 impl_compare_fixed_size_ord_type!(ClaimableBalanceEntry);
 impl_compare_fixed_size_ord_type!(LiquidityPoolEntry);
-impl_compare_fixed_size_ord_type!(ContractCodeEntry);
 impl_compare_fixed_size_ord_type!(ConfigSettingEntry);
-
 impl_compare_fixed_size_ord_type!(CreateContractArgs);
+impl_compare_fixed_size_ord_type!(ExtensionPoint);
 
 impl Compare<SymbolStr> for Budget {
     type Error = HostError;
@@ -386,7 +385,10 @@ impl Compare<LedgerEntryData> for Budget {
                     &b.expiration_ledger_seq,
                 ),
             ),
-            (ContractCode(a), ContractCode(b)) => self.compare(&a, &b),
+            (ContractCode(a), ContractCode(b)) => self.compare(
+                &(&a.ext, &a.hash, &a.body, &a.expiration_ledger_seq),
+                &(&b.ext, &b.hash, &b.body, &b.expiration_ledger_seq),
+            ),
             (ConfigSetting(a), ConfigSetting(b)) => self.compare(&a, &b),
 
             (Account(_), _)
@@ -428,6 +430,24 @@ impl Compare<ContractDataEntryBody> for Budget {
             }
             (ContractDataEntryBody::DataEntry(_), _)
             | (ContractDataEntryBody::ExpirationExtension, _) => Ok(a.cmp(b)),
+        }
+    }
+}
+
+impl Compare<ContractCodeEntryBody> for Budget {
+    type Error = HostError;
+
+    fn compare(
+        &self,
+        a: &ContractCodeEntryBody,
+        b: &ContractCodeEntryBody,
+    ) -> Result<Ordering, Self::Error> {
+        match (a, b) {
+            (ContractCodeEntryBody::DataEntry(a), ContractCodeEntryBody::DataEntry(b)) => {
+                <Self as Compare<&[u8]>>::compare(self, &a.as_ref(), &b.as_ref())
+            }
+            (ContractCodeEntryBody::DataEntry(_), _)
+            | (ContractCodeEntryBody::ExpirationExtension, _) => Ok(a.cmp(b)),
         }
     }
 }
