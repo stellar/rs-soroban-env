@@ -1,16 +1,12 @@
-use std::rc::Rc;
-
 use crate::common::HostCostMeasurement;
 use rand::{rngs::StdRng, RngCore};
-use soroban_env_host::{
-    cost_runner::*,
-    xdr::{Hash, ScVal, ScVec},
-    Host, Symbol, Vm,
-};
+use soroban_env_host::{cost_runner::*, xdr::Hash, Host, Symbol, Vm};
 use soroban_synth_wasm::{Arity, GlobalRef, ModEmitter, Operand};
 
-const INSNS_OVERHEAD_CONST: u64 = 21; // measured by `push_const`
-const INSNS_OVERHEAD_DROP: u64 = 17; // measured by `drop`
+// These are fp numbers to minimize rounding during overhead calculation.
+// The fact they both turned out to be "whole" numbers is pure luck.
+const INSNS_OVERHEAD_CONST: f64 = 10.0; // measured by `push_const`
+const INSNS_OVERHEAD_DROP: f64 = 3.0; // 17; // measured by `drop`
 
 struct WasmModule {
     wasm: Vec<u8>,
@@ -56,7 +52,7 @@ fn wasm_module_with_mem_grow(n_pages: usize) -> Vec<u8> {
 }
 
 // A wasm module with a single const to serve as the baseline
-fn wasm_module_baseline() -> WasmModule {
+fn wasm_module_baseline_pass() -> WasmModule {
     let mut fe = ModEmitter::new().func(Arity(0), 0);
     fe.push(Symbol::try_from_small_str("pass").unwrap());
     let wasm = fe.finish_and_export("test").finish();
@@ -67,26 +63,20 @@ fn wasm_module_baseline() -> WasmModule {
 fn wasm_module_baseline_trap() -> WasmModule {
     let mut fe = ModEmitter::new().func(Arity(0), 0);
     fe.trap();
-    fe.push(Symbol::try_from_small_str("pass").unwrap());
     let wasm = fe.finish_and_export("test").finish();
     WasmModule { wasm, overhead: 0 }
 }
 
-// 21 insns / input
 fn push_const(n: u64, _rng: &mut StdRng) -> WasmModule {
     let mut fe = ModEmitter::new().func(Arity(0), 0);
     for i in 0..n {
         fe.i32_const(i as i32);
     }
-    // The unreachable insn will send a trap back to the host which triggers the whole
-    // error reporting and debug event machinary, resulting in a huge overhead ~65000 insns.
-    // Make sure to scale the input size large enough to average it out.
     fe.trap();
     let wasm = fe.finish_and_export("test").finish();
     WasmModule { wasm, overhead: 0 }
 }
 
-// 17 insns / input
 // The last fe.push(Const) is not counted as overhead since it's already been included
 // in the baseline. This applies to all following instruction generators.
 fn drop(n: u64, _rng: &mut StdRng) -> WasmModule {
@@ -96,12 +86,11 @@ fn drop(n: u64, _rng: &mut StdRng) -> WasmModule {
         fe.drop();
     }
     fe.push(Symbol::try_from_small_str("pass").unwrap());
-    let overhead = INSNS_OVERHEAD_CONST * n;
+    let overhead = (INSNS_OVERHEAD_CONST * n as f64) as u64;
     let wasm = fe.finish_and_export("test").finish();
     WasmModule { wasm, overhead }
 }
 
-// 63 insns / input
 fn select(n: u64, rng: &mut StdRng) -> WasmModule {
     let mut fe = ModEmitter::new().func(Arity(0), 0);
     for i in 0..n {
@@ -112,12 +101,14 @@ fn select(n: u64, rng: &mut StdRng) -> WasmModule {
         fe.drop();
     }
     fe.push(Symbol::try_from_small_str("pass").unwrap());
-    let overhead = INSNS_OVERHEAD_CONST * (3 * n) - INSNS_OVERHEAD_DROP * n;
+    let overhead = INSNS_OVERHEAD_CONST * (3.0 * n as f64) - INSNS_OVERHEAD_DROP * n as f64;
     let wasm = fe.finish_and_export("test").finish();
-    WasmModule { wasm, overhead }
+    WasmModule {
+        wasm,
+        overhead: overhead as u64,
+    }
 }
 
-// 13 insns / input
 fn block_br_sequential(n: u64, _rng: &mut StdRng) -> WasmModule {
     let mut fe = ModEmitter::new().func(Arity(0), 0);
     for _i in 0..n {
@@ -130,7 +121,6 @@ fn block_br_sequential(n: u64, _rng: &mut StdRng) -> WasmModule {
     WasmModule { wasm, overhead: 0 }
 }
 
-// 13 insns / input
 fn block_br_nested(n: u64, _rng: &mut StdRng) -> WasmModule {
     let mut fe = ModEmitter::new().func(Arity(0), 0);
     for _i in 0..n {
@@ -145,7 +135,6 @@ fn block_br_nested(n: u64, _rng: &mut StdRng) -> WasmModule {
     WasmModule { wasm, overhead: 0 }
 }
 
-// 39 insns / input
 fn br_table_nested(n: u64, _rng: &mut StdRng) -> WasmModule {
     let mut fe = ModEmitter::new().func(Arity(0), 0);
     for _i in 0..n {
@@ -158,25 +147,21 @@ fn br_table_nested(n: u64, _rng: &mut StdRng) -> WasmModule {
     }
     fe.push(Symbol::try_from_small_str("pass").unwrap());
     let wasm = fe.finish_and_export("test").finish();
-    let overhead = INSNS_OVERHEAD_CONST * n;
+    let overhead = (INSNS_OVERHEAD_CONST * n as f64) as u64;
     WasmModule { wasm, overhead }
 }
 
-// 24 insns / input
 fn local_get(n: u64, _rng: &mut StdRng) -> WasmModule {
     let mut fe = ModEmitter::new().func(Arity(0), 1);
     let s = fe.locals[0];
     for _i in 0..n {
         fe.local_get(s);
-        fe.drop();
     }
-    fe.push(Symbol::try_from_small_str("pass").unwrap());
-    let overhead = INSNS_OVERHEAD_DROP * n;
+    fe.trap();
     let wasm = fe.finish_and_export("test").finish();
-    WasmModule { wasm, overhead }
+    WasmModule { wasm, overhead: 0 }
 }
 
-// 24 insns / input
 fn local_set(n: u64, _rng: &mut StdRng) -> WasmModule {
     let mut fe = ModEmitter::new().func(Arity(0), 1);
     let s = fe.locals[0];
@@ -185,12 +170,11 @@ fn local_set(n: u64, _rng: &mut StdRng) -> WasmModule {
         fe.local_set(s);
     }
     fe.push(Symbol::try_from_small_str("pass").unwrap());
-    let overhead = INSNS_OVERHEAD_CONST * n;
+    let overhead = (INSNS_OVERHEAD_CONST * n as f64) as u64;
     let wasm = fe.finish_and_export("test").finish();
     WasmModule { wasm, overhead }
 }
 
-// 22 insns / input
 fn local_tee(n: u64, _rng: &mut StdRng) -> WasmModule {
     let mut fe = ModEmitter::new().func(Arity(0), 1);
     let s = fe.locals[0];
@@ -200,12 +184,14 @@ fn local_tee(n: u64, _rng: &mut StdRng) -> WasmModule {
         fe.drop();
     }
     fe.push(Symbol::try_from_small_str("pass").unwrap());
-    let overhead = INSNS_OVERHEAD_CONST * n + INSNS_OVERHEAD_DROP * n;
+    let overhead = INSNS_OVERHEAD_CONST * n as f64 + INSNS_OVERHEAD_DROP * n as f64;
     let wasm = fe.finish_and_export("test").finish();
-    WasmModule { wasm, overhead }
+    WasmModule {
+        wasm,
+        overhead: overhead as u64,
+    }
 }
 
-// 670 insns / input
 fn call_local(n: u64, _rng: &mut StdRng) -> WasmModule {
     // a local wasm function -- the callee
     let mut fe = ModEmitter::new().func(Arity(0), 0);
@@ -215,15 +201,12 @@ fn call_local(n: u64, _rng: &mut StdRng) -> WasmModule {
     fe = m0.func(Arity(0), 0);
     for _ in 0..n {
         fe.call_func(f0);
-        fe.drop();
     }
-    fe.push(Symbol::try_from_small_str("pass").unwrap());
-    let overhead = INSNS_OVERHEAD_DROP * n; // overhead is only for the caller
+    fe.trap();
     let wasm = fe.finish_and_export("test").finish();
-    WasmModule { wasm, overhead }
+    WasmModule { wasm, overhead: 0 }
 }
 
-// 645 insns / input
 fn call_import(n: u64, _rng: &mut StdRng) -> WasmModule {
     let mut me = ModEmitter::new();
     // import the function -- the callee
@@ -232,15 +215,12 @@ fn call_import(n: u64, _rng: &mut StdRng) -> WasmModule {
     let mut fe = me.func(Arity(0), 0);
     for _ in 0..n {
         fe.call_func(f0);
-        fe.drop();
     }
-    fe.push(Symbol::try_from_small_str("pass").unwrap());
-    let overhead = INSNS_OVERHEAD_DROP * n; // overhead is only for the caller
+    fe.trap();
     let wasm = fe.finish_and_export("test").finish();
-    WasmModule { wasm, overhead }
+    WasmModule { wasm, overhead: 0 }
 }
 
-// 753 insns / input
 fn call_indirect(n: u64, _rng: &mut StdRng) -> WasmModule {
     let mut me = ModEmitter::new();
     // an imported function
@@ -264,25 +244,24 @@ fn call_indirect(n: u64, _rng: &mut StdRng) -> WasmModule {
         fe.drop();
     }
     fe.push(Symbol::try_from_small_str("pass").unwrap());
-    let overhead = INSNS_OVERHEAD_DROP * n + INSNS_OVERHEAD_CONST * n; // overhead is only for the caller
+    let overhead = INSNS_OVERHEAD_DROP * n as f64 + INSNS_OVERHEAD_CONST * n as f64; // overhead is only for the caller
     let wasm = fe.finish_and_export("test").finish();
-    WasmModule { wasm, overhead }
+    WasmModule {
+        wasm,
+        overhead: overhead as u64,
+    }
 }
 
-// 74 insns / input
 fn global_get(n: u64, _rng: &mut StdRng) -> WasmModule {
     let mut fe = ModEmitter::new().func(Arity(0), 0);
     for _ in 0..n {
         fe.global_get(GlobalRef(0));
-        fe.drop();
     }
-    fe.push(Symbol::try_from_small_str("pass").unwrap());
-    let overhead = INSNS_OVERHEAD_DROP * n;
+    fe.trap();
     let wasm = fe.finish_and_export("test").finish();
-    WasmModule { wasm, overhead }
+    WasmModule { wasm, overhead: 0 }
 }
 
-// 88 insns / input
 fn global_set(n: u64, _rng: &mut StdRng) -> WasmModule {
     let mut fe = ModEmitter::new().func(Arity(0), 0);
     for i in 0..n {
@@ -290,7 +269,7 @@ fn global_set(n: u64, _rng: &mut StdRng) -> WasmModule {
         fe.global_set(GlobalRef(0));
     }
     fe.push(Symbol::try_from_small_str("pass").unwrap());
-    let overhead = INSNS_OVERHEAD_CONST * n;
+    let overhead = (INSNS_OVERHEAD_CONST * n as f64) as u64;
     let wasm = fe.finish_and_export("test").finish();
     WasmModule { wasm, overhead }
 }
@@ -300,25 +279,26 @@ fn memory_grow(n: u64, _rng: &mut StdRng) -> WasmModule {
     for _ in 0..n {
         fe.i32_const(1);
         fe.memory_grow();
+        // memory_grow returns number of new pages, here we drop the value
         fe.drop();
     }
     fe.push(Symbol::try_from_small_str("pass").unwrap());
-    let overhead = INSNS_OVERHEAD_DROP * n + INSNS_OVERHEAD_CONST * n;
+    let overhead = INSNS_OVERHEAD_DROP * n as f64 + INSNS_OVERHEAD_CONST * n as f64;
     let wasm = fe.finish_and_export("test").finish();
-    WasmModule { wasm, overhead }
+    WasmModule {
+        wasm,
+        overhead: overhead as u64,
+    }
 }
 
-// 50 insns / input
 fn memory_size(n: u64, _rng: &mut StdRng) -> WasmModule {
     let mut fe = ModEmitter::new().func(Arity(0), 0);
     for _i in 0..n {
         fe.memory_size();
-        fe.drop();
     }
-    fe.push(Symbol::try_from_small_str("pass").unwrap());
-    let overhead = INSNS_OVERHEAD_DROP * n;
+    fe.trap();
     let wasm = fe.finish_and_export("test").finish();
-    WasmModule { wasm, overhead }
+    WasmModule { wasm, overhead: 0 }
 }
 
 macro_rules! generate_i64_store_insn_code {
@@ -334,9 +314,9 @@ macro_rules! generate_i64_store_insn_code {
                     fe.$func_name(0);
                 }
                 fe.push(Symbol::try_from_small_str("pass").unwrap());
-                let overhead = INSNS_OVERHEAD_CONST * (2 * n);
+                let overhead = INSNS_OVERHEAD_CONST * (2 * n) as f64;
                 let wasm = fe.finish_and_export("test").finish();
-                WasmModule { wasm, overhead }
+                WasmModule { wasm, overhead: overhead as u64 }
             }
         )*
     };
@@ -353,12 +333,11 @@ macro_rules! generate_i64_load_insn_code {
                 for _ in 0..n {
                     fe.i32_const(0);
                     fe.$func_name(0);
-                    fe.drop();
                 }
-                fe.push(Symbol::try_from_small_str("pass").unwrap());
-                let overhead = INSNS_OVERHEAD_DROP * n + INSNS_OVERHEAD_CONST * n;
+                fe.trap();
+                let overhead = INSNS_OVERHEAD_CONST * n as f64;
                 let wasm = fe.finish_and_export("test").finish();
-                WasmModule { wasm, overhead }
+                WasmModule { wasm, overhead: overhead as u64 }
             }
         )*
     };
@@ -378,9 +357,9 @@ macro_rules! generate_unary_insn_code {
                 fe.drop();
             }
             fe.push(Symbol::try_from_small_str("pass").unwrap());
-            let overhead = INSNS_OVERHEAD_DROP * n + INSNS_OVERHEAD_CONST * n;
+            let overhead = INSNS_OVERHEAD_DROP * n as f64 + INSNS_OVERHEAD_CONST * n as f64;
             let wasm = fe.finish_and_export("test").finish();
-            WasmModule { wasm, overhead }
+            WasmModule { wasm, overhead: overhead as u64 }
         }
         )*
     };
@@ -401,9 +380,9 @@ macro_rules! generate_binary_insn_code {
                 fe.drop();
             }
             fe.push(Symbol::try_from_small_str("pass").unwrap());
-            let overhead = INSNS_OVERHEAD_DROP * n + INSNS_OVERHEAD_CONST * (2 * n);
+            let overhead = INSNS_OVERHEAD_DROP * n as f64 + INSNS_OVERHEAD_CONST * (2 * n) as f64;
             let wasm = fe.finish_and_export("test").finish();
-            WasmModule { wasm, overhead }
+            WasmModule { wasm, overhead: overhead as u64 }
         }
         )*
     };
@@ -413,39 +392,42 @@ generate_binary_insn_code!(
     i64_rem_s, i64_and, i64_or, i64_xor, i64_shl, i64_shr_s, i64_rotl, i64_rotr
 );
 
-// Const measure requires a different baseline (with trapping), that's why we treat it separately
-pub(crate) struct WasmConstMeasure;
-impl HostCostMeasurement for WasmConstMeasure {
-    type Runner = ConstRun;
-    fn new_random_case(host: &Host, rng: &mut StdRng, step: u64) -> WasmInsnSample {
-        let insns = 1 + step * Self::STEP_SIZE;
-        let id: Hash = [0; 32].into();
-        let module = push_const(insns, rng);
-        let vm = Vm::new(&host, id, &module.wasm).unwrap();
-        WasmInsnSample {
-            vm,
-            insns,
-            overhead: module.overhead,
-        }
-    }
+macro_rules! impl_wasm_insn_measure_with_baseline_trap {
+    ($measure: ident, $runner: ident, $wasm_gen: ident) => {
+        pub(crate) struct $measure;
+        impl HostCostMeasurement for $measure {
+            type Runner = $runner;
+            fn new_random_case(host: &Host, rng: &mut StdRng, step: u64) -> WasmInsnSample {
+                let insns = 1 + step * Self::STEP_SIZE;
+                let id: Hash = [0; 32].into();
+                let module = $wasm_gen(insns, rng);
+                let vm = Vm::new(&host, id, &module.wasm).unwrap();
+                WasmInsnSample {
+                    vm,
+                    insns,
+                    overhead: module.overhead,
+                }
+            }
 
-    fn new_baseline_case(host: &Host, _rng: &mut StdRng) -> WasmInsnSample {
-        let module = wasm_module_baseline_trap();
-        let id: Hash = [0; 32].into();
-        let vm = Vm::new(&host, id, &module.wasm).unwrap();
-        WasmInsnSample {
-            vm,
-            insns: 0,
-            overhead: module.overhead,
-        }
-    }
+            fn new_baseline_case(host: &Host, _rng: &mut StdRng) -> WasmInsnSample {
+                let module = wasm_module_baseline_trap();
+                let id: Hash = [0; 32].into();
+                let vm = Vm::new(&host, id, &module.wasm).unwrap();
+                WasmInsnSample {
+                    vm,
+                    insns: 0,
+                    overhead: module.overhead,
+                }
+            }
 
-    fn get_insns_overhead_per_sample(_host: &Host, sample: &WasmInsnSample) -> u64 {
-        sample.overhead
-    }
+            fn get_insns_overhead_per_sample(_host: &Host, sample: &WasmInsnSample) -> u64 {
+                sample.overhead
+            }
+        }
+    };
 }
 
-macro_rules! impl_wasm_insn_measure {
+macro_rules! impl_wasm_insn_measure_with_baseline_pass {
     ($measure: ident, $runner: ident, $wasm_gen: ident $(,$grow: literal ,$shrink: literal)? ) => {
         pub(crate) struct $measure;
         impl HostCostMeasurement for $measure {
@@ -462,7 +444,7 @@ macro_rules! impl_wasm_insn_measure {
             }
 
             fn new_baseline_case(host: &Host, _rng: &mut StdRng) -> WasmInsnSample {
-                let module = wasm_module_baseline();
+                let module = wasm_module_baseline_pass();
                 let id: Hash = [0; 32].into();
                 let vm = Vm::new(&host, id, &module.wasm).unwrap();
                 WasmInsnSample { vm, insns: 0, overhead: module.overhead }
@@ -475,96 +457,85 @@ macro_rules! impl_wasm_insn_measure {
     };
 }
 
-impl_wasm_insn_measure!(WasmDropMeasure, DropRun, drop);
-impl_wasm_insn_measure!(WasmSelectMeasure, SelectRun, select);
-impl_wasm_insn_measure!(WasmBrMeasure, BrRun, block_br_nested);
-impl_wasm_insn_measure!(WasmBrTableMeasure, BrTableRun, br_table_nested);
-impl_wasm_insn_measure!(WasmLocalGetMeasure, LocalGetRun, local_get);
-impl_wasm_insn_measure!(WasmLocalSetMeasure, LocalSetRun, local_set);
-impl_wasm_insn_measure!(WasmLocalTeeMeasure, LocalTeeRun, local_tee);
-impl_wasm_insn_measure!(WasmCallMeasure, CallRun, call_local);
-impl_wasm_insn_measure!(WasmCallIndirectMeasure, CallIndirectRun, call_indirect);
-impl_wasm_insn_measure!(WasmGlobalGetMeasure, GlobalGetRun, global_get);
-impl_wasm_insn_measure!(WasmGlobalSetMeasure, GlobalSetRun, global_set);
-impl_wasm_insn_measure!(WasmI64StoreMeasure, I64StoreRun, i64_store);
-impl_wasm_insn_measure!(WasmI64Store8Measure, I64Store8Run, i64_store8);
-impl_wasm_insn_measure!(WasmI64Store16Measure, I64Store16Run, i64_store16);
-impl_wasm_insn_measure!(WasmI64Store32Measure, I64Store32Run, i64_store32);
-impl_wasm_insn_measure!(WasmI64LoadMeasure, I64LoadRun, i64_load);
-impl_wasm_insn_measure!(WasmI64Load8Measure, I64Load8SRun, i64_load8_s);
-impl_wasm_insn_measure!(WasmI64Load16Measure, I64Load16SRun, i64_load16_s);
-impl_wasm_insn_measure!(WasmI64Load32Measure, I64Load32SRun, i64_load32_s);
-impl_wasm_insn_measure!(WasmMemorySizeMeasure, MemorySizeRun, memory_size);
-impl_wasm_insn_measure!(WasmMemoryGrowMeasure, MemoryGrowRun, memory_grow, 1, 1000);
-impl_wasm_insn_measure!(WasmI64ClzMeasure, I64ClzRun, i64_clz);
-impl_wasm_insn_measure!(WasmI64CtzMeasure, I64CtzRun, i64_ctz);
-impl_wasm_insn_measure!(WasmI64PopcntMeasure, I64PopcntRun, i64_popcnt);
-impl_wasm_insn_measure!(WasmI64EqzMeasure, I64EqzRun, i64_eqz);
-impl_wasm_insn_measure!(WasmI64EqMeasure, I64EqRun, i64_eq);
-impl_wasm_insn_measure!(WasmI64NeMeasure, I64NeRun, i64_ne);
-impl_wasm_insn_measure!(WasmI64LtSMeasure, I64LtSRun, i64_lt_s);
-impl_wasm_insn_measure!(WasmI64GtSMeasure, I64GtSRun, i64_gt_s);
-impl_wasm_insn_measure!(WasmI64LeSMeasure, I64LeSRun, i64_le_s);
-impl_wasm_insn_measure!(WasmI64GeSMeasure, I64GeSRun, i64_ge_s);
-impl_wasm_insn_measure!(WasmI64AddMeasure, I64AddRun, i64_add);
-impl_wasm_insn_measure!(WasmI64SubMeasure, I64SubRun, i64_sub);
-impl_wasm_insn_measure!(WasmI64MulMeasure, I64MulRun, i64_mul);
-impl_wasm_insn_measure!(WasmI64DivSMeasure, I64DivSRun, i64_div_s);
-impl_wasm_insn_measure!(WasmI64RemSMeasure, I64RemSRun, i64_rem_s);
-impl_wasm_insn_measure!(WasmI64AndMeasure, I64AndRun, i64_and);
-impl_wasm_insn_measure!(WasmI64OrMeasure, I64OrRun, i64_or);
-impl_wasm_insn_measure!(WasmI64XorMeasure, I64XorRun, i64_xor);
-impl_wasm_insn_measure!(WasmI64ShlMeasure, I64ShlRun, i64_shl);
-impl_wasm_insn_measure!(WasmI64ShrSMeasure, I64ShrSRun, i64_shr_s);
-impl_wasm_insn_measure!(WasmI64RotlMeasure, I64RotlRun, i64_rotl);
-impl_wasm_insn_measure!(WasmI64RotrMeasure, I64RotrRun, i64_rotr);
+// The `WasmInsnExec` run has been replaced by individual Wasm instruction measurements below.
+// The wasm instructions are catagorized into one of the `WasmInsnTier`. The `BASE` tier wasm
+// insn by definition costs 1 fuel. Other tiers `ENTITY`, `LOAD`, `STORE`, `CALL` may cost more
+// fuels. The goal of wasm_insn_measure is to 1. obtain the average cpu cost of a BASE tier insn
+// (i.e. per fuel) and 2. the relative cost ratio of various tiers which determines the FuelConfig
+// (will serve as input to the `wasmi::Engine`).
 
-pub(crate) struct WasmInsnExecMeasure;
+// The implementation is divided into two catagories based on how baseline cost is captured
+// and eliminated. A Wasm file cannot contain just the instruction we are interested in measuring,
+// it must contain setup code. To deduce the cost of the target instruction, we need to measure
+// and eliminate the baseline.
 
-// This measures the cost of executing a block of WASM instructions. The
-// input value is the length of the instruction block. The CPU cost should
-// be linear in the length and the memory should be zero.
-impl HostCostMeasurement for WasmInsnExecMeasure {
-    type Runner = WasmInsnExecRun;
+// These below uses a trapping baseline. The code typically contains a bunch of target instructions
+// plus a trap. Trap exists such that it doesn't need to clear the stack (by e.g. adding more `drop`s)
+// The trap cost is constant although it is a bit large and sometimes noisy, so its effect can be
+// averaged out over large number of target instructions.
+impl_wasm_insn_measure_with_baseline_trap!(WasmConstMeasure, ConstRun, push_const);
+impl_wasm_insn_measure_with_baseline_trap!(WasmLocalGetMeasure, LocalGetRun, local_get);
+impl_wasm_insn_measure_with_baseline_trap!(WasmCallLocalMeasure, CallLocalRun, call_local);
+impl_wasm_insn_measure_with_baseline_trap!(WasmCallImportMeasure, CallImportRun, call_import);
+impl_wasm_insn_measure_with_baseline_trap!(WasmGlobalGetMeasure, GlobalGetRun, global_get);
+impl_wasm_insn_measure_with_baseline_trap!(WasmI64LoadMeasure, I64LoadRun, i64_load);
+impl_wasm_insn_measure_with_baseline_trap!(WasmI64Load8Measure, I64Load8SRun, i64_load8_s);
+impl_wasm_insn_measure_with_baseline_trap!(WasmI64Load16Measure, I64Load16SRun, i64_load16_s);
+impl_wasm_insn_measure_with_baseline_trap!(WasmI64Load32Measure, I64Load32SRun, i64_load32_s);
+impl_wasm_insn_measure_with_baseline_trap!(WasmMemorySizeMeasure, MemorySizeRun, memory_size);
 
-    fn new_random_case(host: &Host, _rng: &mut StdRng, step: u64) -> WasmInsnExecSample {
-        let insns = 1 + step * Self::STEP_SIZE;
-        let args = ScVec(vec![ScVal::U64(5)].try_into().unwrap());
-        let id: Hash = [0; 32].into();
-        let code = wasm_module_with_4n_insns(insns as usize);
-        let vm = Vm::new(&host, id, &code).unwrap();
-        WasmInsnExecSample { args, vm }
-    }
+// These below uses a passing baseline. They normally require clearing the stack or setting it up for
+// the next iteration. To subtract the baseline requires using prefitted baseline instruction costs
+// -- `Const` and `Drop`. It's an iterative process: Fit Const --> use Const to fit `Drop`
+// --> Use both of them as the baseline cost of other measurements.
+impl_wasm_insn_measure_with_baseline_pass!(WasmDropMeasure, DropRun, drop);
+impl_wasm_insn_measure_with_baseline_pass!(WasmSelectMeasure, SelectRun, select);
+impl_wasm_insn_measure_with_baseline_pass!(WasmBrMeasure, BrRun, block_br_nested);
+impl_wasm_insn_measure_with_baseline_pass!(WasmBrTableMeasure, BrTableRun, br_table_nested);
+impl_wasm_insn_measure_with_baseline_pass!(WasmLocalSetMeasure, LocalSetRun, local_set);
+impl_wasm_insn_measure_with_baseline_pass!(WasmLocalTeeMeasure, LocalTeeRun, local_tee);
+impl_wasm_insn_measure_with_baseline_pass!(WasmCallIndirectMeasure, CallIndirectRun, call_indirect);
+impl_wasm_insn_measure_with_baseline_pass!(WasmGlobalSetMeasure, GlobalSetRun, global_set);
+impl_wasm_insn_measure_with_baseline_pass!(WasmI64StoreMeasure, I64StoreRun, i64_store);
+impl_wasm_insn_measure_with_baseline_pass!(WasmI64Store8Measure, I64Store8Run, i64_store8);
+impl_wasm_insn_measure_with_baseline_pass!(WasmI64Store16Measure, I64Store16Run, i64_store16);
+impl_wasm_insn_measure_with_baseline_pass!(WasmI64Store32Measure, I64Store32Run, i64_store32);
+// Note this is running the `WasmInsnExec` (cpu) cost of a MemeoryGrow operation.
+// The iter/input corresponds to the cpu model. Also, Wasmi internally compensates
+// extra fuels for memory operations (1 fuel per 64 bytes), so the iter/input
+// will be different from an expected "normal" operation.
+impl_wasm_insn_measure_with_baseline_pass!(
+    WasmMemoryGrowMeasure,
+    MemoryGrowRun,
+    memory_grow,
+    1,
+    1000
+);
+impl_wasm_insn_measure_with_baseline_pass!(WasmI64ClzMeasure, I64ClzRun, i64_clz);
+impl_wasm_insn_measure_with_baseline_pass!(WasmI64CtzMeasure, I64CtzRun, i64_ctz);
+impl_wasm_insn_measure_with_baseline_pass!(WasmI64PopcntMeasure, I64PopcntRun, i64_popcnt);
+impl_wasm_insn_measure_with_baseline_pass!(WasmI64EqzMeasure, I64EqzRun, i64_eqz);
+impl_wasm_insn_measure_with_baseline_pass!(WasmI64EqMeasure, I64EqRun, i64_eq);
+impl_wasm_insn_measure_with_baseline_pass!(WasmI64NeMeasure, I64NeRun, i64_ne);
+impl_wasm_insn_measure_with_baseline_pass!(WasmI64LtSMeasure, I64LtSRun, i64_lt_s);
+impl_wasm_insn_measure_with_baseline_pass!(WasmI64GtSMeasure, I64GtSRun, i64_gt_s);
+impl_wasm_insn_measure_with_baseline_pass!(WasmI64LeSMeasure, I64LeSRun, i64_le_s);
+impl_wasm_insn_measure_with_baseline_pass!(WasmI64GeSMeasure, I64GeSRun, i64_ge_s);
+impl_wasm_insn_measure_with_baseline_pass!(WasmI64AddMeasure, I64AddRun, i64_add);
+impl_wasm_insn_measure_with_baseline_pass!(WasmI64SubMeasure, I64SubRun, i64_sub);
+impl_wasm_insn_measure_with_baseline_pass!(WasmI64MulMeasure, I64MulRun, i64_mul);
+impl_wasm_insn_measure_with_baseline_pass!(WasmI64DivSMeasure, I64DivSRun, i64_div_s);
+impl_wasm_insn_measure_with_baseline_pass!(WasmI64RemSMeasure, I64RemSRun, i64_rem_s);
+impl_wasm_insn_measure_with_baseline_pass!(WasmI64AndMeasure, I64AndRun, i64_and);
+impl_wasm_insn_measure_with_baseline_pass!(WasmI64OrMeasure, I64OrRun, i64_or);
+impl_wasm_insn_measure_with_baseline_pass!(WasmI64XorMeasure, I64XorRun, i64_xor);
+impl_wasm_insn_measure_with_baseline_pass!(WasmI64ShlMeasure, I64ShlRun, i64_shl);
+impl_wasm_insn_measure_with_baseline_pass!(WasmI64ShrSMeasure, I64ShrSRun, i64_shr_s);
+impl_wasm_insn_measure_with_baseline_pass!(WasmI64RotlMeasure, I64RotlRun, i64_rotl);
+impl_wasm_insn_measure_with_baseline_pass!(WasmI64RotrMeasure, I64RotrRun, i64_rotr);
 
-    fn new_baseline_case(host: &Host, _rng: &mut StdRng) -> WasmInsnExecSample {
-        let args = ScVec(vec![ScVal::U64(5)].try_into().unwrap());
-        let id: Hash = [0; 32].into();
-        let code = wasm_module_with_4n_insns(0);
-        let vm = Vm::new(&host, id, &code).unwrap();
-        WasmInsnExecSample { args, vm }
-    }
-}
-
-// Measures the cost of growing VM's linear memory. The input value is the number of pages
-// to grow the memory by, where each pages is 64kB (65536). The memory cost should
-// be linear and the CPU cost should be constant.
-pub(crate) struct WasmMemAllocMeasure;
-impl HostCostMeasurement for WasmMemAllocMeasure {
-    type Runner = WasmMemAllocRun;
-
-    // The input unit is number of pages (64kb) so we don't scale the input further
-    const STEP_SIZE: u64 = 1;
-
-    fn new_random_case(host: &Host, _rng: &mut StdRng, input: u64) -> Rc<Vm> {
-        let id: Hash = [0; 32].into();
-        let pages = 1 + input * Self::STEP_SIZE;
-        let code = wasm_module_with_mem_grow(pages as usize);
-        Vm::new(&host, id, &code).unwrap()
-    }
-
-    fn new_baseline_case(host: &Host, _rng: &mut StdRng) -> Rc<Vm> {
-        let id: Hash = [0; 32].into();
-        let code = wasm_module_with_mem_grow(0);
-        Vm::new(&host, id, &code).unwrap()
-    }
-}
+// Note we no longer run the `WasmMemAllocRun` because memory metering has been moved entirely
+// to inside wasmi, with a 1-to-1 correspondence between 1 memory fuel and 1 host byte, assuming
+// `WasmMemAlloc` measures the growth of the linear memory via `memory_grow` operation.
+// There is no point in doing any host calibration, otherwise we will be measuring noise of
+// the internal memory allocator usage of the wasmi interpreter.
