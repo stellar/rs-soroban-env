@@ -32,8 +32,7 @@ pub fn set_metadata(e: &Host) -> Result<(), HostError> {
             let symbol: String = asset.asset_code;
             let mut name = symbol.copy_to_rust_string(e)?;
             name.push(':');
-            let k = ed25519::PublicKey::from_payload(asset.issuer.to_array()?.as_slice())
-                .map_err(|_| ConversionError)?;
+            let k = ed25519::PublicKey(asset.issuer.to_array()?);
             name.push_str(k.to_string().as_str());
             (
                 String::try_from_val(e, &e.string_new_from_slice(name.as_str())?)?,
@@ -44,8 +43,7 @@ pub fn set_metadata(e: &Host) -> Result<(), HostError> {
             let symbol: String = asset.asset_code;
             let mut name = symbol.copy_to_rust_string(e)?;
             name.push(':');
-            let k = ed25519::PublicKey::from_payload(asset.issuer.to_array()?.as_slice())
-                .map_err(|_| ConversionError)?;
+            let k = ed25519::PublicKey(asset.issuer.to_array()?);
             name.push_str(k.to_string().as_str());
             (
                 String::try_from_val(e, &e.string_new_from_slice(name.as_str())?)?,

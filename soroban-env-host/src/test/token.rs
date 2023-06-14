@@ -405,7 +405,7 @@ fn test_asset_init(asset_code: &[u8]) {
 
     let mut expected = String::from_utf8(asset_code.to_vec()).unwrap();
     expected.push(':');
-    let k = ed25519::PublicKey::from_payload(test.issuer_key.public.to_bytes().as_slice()).unwrap();
+    let k = ed25519::PublicKey(test.issuer_key.public.to_bytes());
     expected.push_str(k.to_string().as_str());
 
     assert_eq!(name, expected);
