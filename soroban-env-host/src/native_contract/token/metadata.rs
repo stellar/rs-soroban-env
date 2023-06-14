@@ -2,9 +2,7 @@ use soroban_native_sdk_macros::contracttype;
 use stellar_strkey::ed25519;
 
 use crate::{host::Host, HostError};
-use soroban_env_common::{
-    ConversionError, Env, EnvBase, StorageType, SymbolSmall, TryFromVal, TryIntoVal,
-};
+use soroban_env_common::{Env, EnvBase, StorageType, SymbolSmall, TryFromVal, TryIntoVal};
 
 use crate::native_contract::base_types::String;
 
