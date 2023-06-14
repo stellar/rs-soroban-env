@@ -2,9 +2,10 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 use soroban_env_common::xdr::{
-    ContractDataEntry, CreateContractArgs, HashIdPreimage, HashIdPreimageSorobanAuthorization,
-    LedgerEntry, LedgerEntryData, LedgerEntryExt, ScAddress, ScErrorCode, ScErrorType, ScNonceKey,
-    ScVal, SorobanAuthorizationEntry, SorobanAuthorizedContractFunction, SorobanAuthorizedFunction,
+    ContractDataEntry, ContractDataEntryBody, ContractDataEntryData, CreateContractArgs,
+    HashIdPreimage, HashIdPreimageSorobanAuthorization, LedgerEntry, LedgerEntryData,
+    LedgerEntryExt, ScAddress, ScErrorCode, ScErrorType, ScNonceKey, ScVal,
+    SorobanAuthorizationEntry, SorobanAuthorizedContractFunction, SorobanAuthorizedFunction,
     SorobanCredentials,
 };
 use soroban_env_common::{

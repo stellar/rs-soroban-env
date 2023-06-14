@@ -12,8 +12,9 @@ use soroban_env_common::num::{
     i256_from_pieces, i256_into_pieces, u256_from_pieces, u256_into_pieces,
 };
 use soroban_env_common::xdr::{
-    self, int128_helpers, AccountId, Int128Parts, Int256Parts, ScAddress, ScBytes, ScErrorCode,
-    ScErrorType, ScMap, ScMapEntry, UInt128Parts, UInt256Parts,
+    self, int128_helpers, AccountId, ContractDataType, ContractLedgerEntryType, Int128Parts,
+    Int256Parts, ScAddress, ScBytes, ScErrorCode, ScErrorType, ScMap, ScMapEntry, UInt128Parts,
+    UInt256Parts,
 };
 use soroban_env_common::{
     AddressObject, BytesObject, Convert, Object, ScValObjRef, ScValObject, TryFromVal, TryIntoVal,

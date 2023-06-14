@@ -1,6 +1,6 @@
 #![no_std]
 use soroban_sdk::{
-    auth::{Context, ContractContext, InvokerContractAuthEntry, SubContractInvocation},
+    auth::{ContractContext, InvokerContractAuthEntry, SubContractInvocation},
     contractimpl, contracttype, vec, Address, Env, IntoVal, Symbol, Vec,
 };
 
