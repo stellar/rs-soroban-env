@@ -10,7 +10,7 @@ use soroban_env_common::xdr::{
     SorobanAuthorizationEntry, SorobanAuthorizedContractFunction, SorobanAuthorizedFunction,
     SorobanAuthorizedInvocation, SorobanCredentials, Thresholds, Uint256,
 };
-use soroban_env_common::{EnvBase, TryFromVal, TryIntoVal};
+use soroban_env_common::{EnvBase, Symbol, TryFromVal};
 
 use crate::native_contract::base_types::BytesN;
 
@@ -119,7 +119,7 @@ impl<'a> TestSigner<'a> {
                         .push(&sign_payload_for_account(host, key, payload))
                         .unwrap();
                 }
-                host_vec![host, signatures]
+                signatures
             }
             TestSigner::AccountContract(signer) => (signer.sign)(payload),
             TestSigner::ContractInvoker(_) => host_vec![host],
@@ -206,8 +206,8 @@ pub(crate) fn authorize_single_invocation(
             host.read_nonce(
                 signer.address(host).to_sc_address().unwrap(),
                 &AuthorizedFunction::ContractFn(ContractFunction {
-                    contract_address: contract_address.to_sc_address().unwrap(),
-                    function_name: Default::default(),
+                    contract_address: contract_address.clone().into(),
+                    function_name: Symbol::try_from_small_str("").unwrap(),
                     args: Default::default(),
                 }),
             )
