@@ -147,10 +147,12 @@ impl InternalEventsBuffer {
         // `Vec.push(event)`. Because the buffer length may be different on different instances
         // due to diagnostic events and we need a deterministic cost across all instances,
         // the cost needs to be amortized and buffer size-independent.
-        metered_clone::charge_container_bulk_init_with_elts::<
-            Vec<(InternalEvent, EventError)>,
-            (InternalEvent, EventError),
-        >(1, budget)?;
+        if let InternalEvent::Contract(_) = e {
+            metered_clone::charge_container_bulk_init_with_elts::<
+                Vec<(InternalEvent, EventError)>,
+                (InternalEvent, EventError),
+            >(1, budget)?;
+        }
 
         self.vec.push((e, EventError::FromSuccessfulCall));
         Ok(())
