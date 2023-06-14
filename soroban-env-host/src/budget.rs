@@ -199,6 +199,55 @@ impl BudgetDimension {
     }
 }
 
+/// This is a subset of `wasmi::FuelCosts` which are configurable, because it
+/// doesn't derive all the traits we want. These fields (coarsely) define the
+/// relative costs of different wasm instruction types and are for wasmi internal
+/// fuel metering use only. Units are in "fuels".
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub(crate) struct FuelConfig {
+    /// The base fuel costs for all instructions.
+    pub base: u64,
+    /// The fuel cost for instruction operating on Wasm entities.
+    ///
+    /// # Note
+    ///
+    /// A Wasm entitiy is one of `func`, `global`, `memory` or `table`.
+    /// Those instructions are usually a bit more costly since they need
+    /// multiplie indirect accesses through the Wasm instance and store.
+    pub entity: u64,
+    /// The fuel cost offset for `memory.load` instructions.
+    pub load: u64,
+    /// The fuel cost offset for `memory.store` instructions.
+    pub store: u64,
+    /// The fuel cost offset for `call` and `call_indirect` instructions.
+    pub call: u64,
+}
+
+// These values are calibrated and set by us.
+impl Default for FuelConfig {
+    fn default() -> Self {
+        FuelConfig {
+            base: 1,
+            entity: 2,
+            load: 1,
+            store: 1,
+            call: 49,
+        }
+    }
+}
+
+impl FuelConfig {
+    // These values are the "factory default" and used for calibration.
+    #[cfg(any(test, feature = "testutils"))]
+    fn reset(&mut self) {
+        self.base = 1;
+        self.entity = 1;
+        self.load = 1;
+        self.store = 1;
+        self.call = 1;
+    }
+}
+
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub(crate) struct BudgetImpl {
     pub cpu_insns: BudgetDimension,
@@ -207,6 +256,7 @@ pub(crate) struct BudgetImpl {
     /// calibration and reporting; not used for budget-limiting per se.
     tracker: Vec<(u64, Option<u64>)>,
     enabled: bool,
+    fuel_config: FuelConfig,
 }
 
 impl BudgetImpl {
@@ -222,6 +272,7 @@ impl BudgetImpl {
             mem_bytes: BudgetDimension::from_config(mem_cost_params),
             tracker: vec![(0, None); ContractCostType::variants().len()],
             enabled: true,
+            fuel_config: Default::default(),
         };
 
         b.init_tracker();
@@ -238,8 +289,8 @@ impl BudgetImpl {
             // type -- we leave the input as `None`, otherwise, we initialize the input to 0.
             let i = ct as usize;
             match ct {
-                ContractCostType::WasmInsnExec => self.tracker[i].1 = Some(0), // number of "fuel" units wasmi consumes
-                ContractCostType::WasmMemAlloc => self.tracker[i].1 = Some(0), // number of "memory fuel" units wasmi consumes
+                ContractCostType::WasmInsnExec => (),
+                ContractCostType::WasmMemAlloc => (),
                 ContractCostType::HostMemAlloc => self.tracker[i].1 = Some(0), // number of bytes in host memory to allocate
                 ContractCostType::HostMemCpy => self.tracker[i].1 = Some(0), // number of bytes in host to copy
                 ContractCostType::HostMemCmp => self.tracker[i].1 = Some(0), // number of bytes in host to compare
@@ -456,12 +507,8 @@ impl Budget {
     }
 
     pub fn apply_wasmi_fuels(&self, cpu_fuel: u64, mem_fuel: u64) -> Result<(), HostError> {
-        self.mut_budget(|mut b| {
-            b.cpu_insns
-                .charge(ContractCostType::WasmInsnExec, 1, Some(cpu_fuel))?;
-            b.mem_bytes
-                .charge(ContractCostType::WasmMemAlloc, 1, Some(mem_fuel))
-        })
+        self.charge_in_bulk(ContractCostType::WasmInsnExec, cpu_fuel, None)?;
+        self.charge_in_bulk(ContractCostType::WasmMemAlloc, mem_fuel, None)
     }
 
     /// Performs a bulk charge to the budget under the specified [`CostType`].
@@ -581,6 +628,11 @@ impl Budget {
         .unwrap(); // impossible to panic
     }
 
+    #[cfg(any(test, feature = "testutils"))]
+    pub fn reset_fuel_config(&self) {
+        self.0.borrow_mut().fuel_config.reset()
+    }
+
     fn get_cpu_insns_remaining_as_fuel(&self) -> Result<u64, HostError> {
         let cpu_remaining = self.get_cpu_insns_remaining();
         let cpu_per_fuel = self
@@ -632,11 +684,13 @@ impl Budget {
 
     // generate a wasmi fuel cost schedule based on our calibration
     pub fn wasmi_fuel_costs(&self) -> FuelCosts {
+        let config = &self.0.borrow().fuel_config;
         let mut costs = FuelCosts::default();
-        costs.base = 1;
-        costs.entity = 1;
-        costs.store = 1;
-        costs.call = 10;
+        costs.base = config.base;
+        costs.entity = config.entity;
+        costs.load = config.load;
+        costs.store = config.store;
+        costs.call = config.call;
         costs
     }
 }
@@ -650,6 +704,7 @@ impl Default for BudgetImpl {
             mem_bytes: BudgetDimension::new(),
             tracker: vec![(0, None); ContractCostType::variants().len()],
             enabled: true,
+            fuel_config: Default::default(),
         };
 
         for ct in ContractCostType::variants() {
@@ -661,8 +716,8 @@ impl Default for BudgetImpl {
                 // instructions may cost additional amount of fuel based on
                 // wasmi's config setting.
                 ContractCostType::WasmInsnExec => {
-                    cpu.const_term = 0;
-                    cpu.linear_term = 22; // this is calibrated
+                    cpu.const_term = 7;
+                    cpu.linear_term = 0;
                 }
                 // Host cpu insns per wasm "memory fuel". This has to be zero since
                 // the fuel (representing cpu cost) has been covered by `WasmInsnExec`.
@@ -674,7 +729,7 @@ impl Default for BudgetImpl {
                     cpu.linear_term = 0;
                 }
                 ContractCostType::HostMemAlloc => {
-                    cpu.const_term = 220;
+                    cpu.const_term = 2350;
                     cpu.linear_term = 0;
                 }
                 ContractCostType::HostMemCpy => {
@@ -682,15 +737,15 @@ impl Default for BudgetImpl {
                     cpu.linear_term = 0;
                 }
                 ContractCostType::HostMemCmp => {
-                    cpu.const_term = 41;
+                    cpu.const_term = 43;
                     cpu.linear_term = 1;
                 }
                 ContractCostType::InvokeHostFunction => {
-                    cpu.const_term = 621;
+                    cpu.const_term = 928;
                     cpu.linear_term = 0;
                 }
                 ContractCostType::VisitObject => {
-                    cpu.const_term = 22;
+                    cpu.const_term = 19;
                     cpu.linear_term = 0;
                 }
                 ContractCostType::ValXdrConv => {
@@ -698,55 +753,55 @@ impl Default for BudgetImpl {
                     cpu.linear_term = 0;
                 }
                 ContractCostType::ValSer => {
-                    cpu.const_term = 639;
+                    cpu.const_term = 587;
                     cpu.linear_term = 1;
                 }
                 ContractCostType::ValDeser => {
-                    cpu.const_term = 706;
+                    cpu.const_term = 870;
                     cpu.linear_term = 0;
                 }
                 ContractCostType::ComputeSha256Hash => {
-                    cpu.const_term = 1900;
+                    cpu.const_term = 1725;
                     cpu.linear_term = 33;
                 }
                 ContractCostType::ComputeEd25519PubKey => {
-                    cpu.const_term = 25760;
+                    cpu.const_term = 25551;
                     cpu.linear_term = 0;
                 }
                 ContractCostType::MapEntry => {
-                    cpu.const_term = 55;
+                    cpu.const_term = 53;
                     cpu.linear_term = 0;
                 }
                 ContractCostType::VecEntry => {
-                    cpu.const_term = 7;
+                    cpu.const_term = 5;
                     cpu.linear_term = 0;
                 }
                 ContractCostType::GuardFrame => {
-                    cpu.const_term = 4538;
+                    cpu.const_term = 4050;
                     cpu.linear_term = 0;
                 }
                 ContractCostType::VerifyEd25519Sig => {
-                    cpu.const_term = 368371;
-                    cpu.linear_term = 20;
+                    cpu.const_term = 369634;
+                    cpu.linear_term = 21;
                 }
                 ContractCostType::VmMemRead => {
-                    cpu.const_term = 119;
+                    cpu.const_term = 0;
                     cpu.linear_term = 0;
                 }
                 ContractCostType::VmMemWrite => {
-                    cpu.const_term = 118;
+                    cpu.const_term = 124;
                     cpu.linear_term = 0;
                 }
                 ContractCostType::VmInstantiation => {
-                    cpu.const_term = 736049;
-                    cpu.linear_term = 684;
+                    cpu.const_term = 600447;
+                    cpu.linear_term = 484;
                 }
                 ContractCostType::InvokeVmFunction => {
-                    cpu.const_term = 5752;
+                    cpu.const_term = 5926;
                     cpu.linear_term = 0;
                 }
                 ContractCostType::ChargeBudget => {
-                    cpu.const_term = 131;
+                    cpu.const_term = 130;
                     cpu.linear_term = 0;
                 }
             }
@@ -754,15 +809,17 @@ impl Default for BudgetImpl {
             // define the memory cost model parameters
             let mem = b.mem_bytes.get_cost_model_mut(ct);
             match ct {
-                // This type is designated to the cpu cost.
+                // This type is designated to the cpu cost. By definition, the memory cost
+                // of a (cpu) fuel is zero.
                 ContractCostType::WasmInsnExec => {
                     mem.const_term = 0;
                     mem.linear_term = 0;
                 }
-                // Bytes per wasmi "memory fuel".
+                // Bytes per wasmi "memory fuel". By definition this has to be a const = 1
+                // because of the 1-to-1 equivalence of the Wasm mem fuel and a host byte.
                 ContractCostType::WasmMemAlloc => {
-                    mem.const_term = 66136; // TODO: this seems to be 1 page overhead?
-                    mem.linear_term = 1; // this is always 1 (1-to-1 between bytes in the host and in Wasmi)
+                    mem.const_term = 1;
+                    mem.linear_term = 0;
                 }
                 ContractCostType::HostMemAlloc => {
                     mem.const_term = 8;
@@ -829,11 +886,11 @@ impl Default for BudgetImpl {
                     mem.linear_term = 0;
                 }
                 ContractCostType::VmInstantiation => {
-                    mem.const_term = 107854;
-                    mem.linear_term = 49;
+                    mem.const_term = 117871;
+                    mem.linear_term = 40;
                 }
                 ContractCostType::InvokeVmFunction => {
-                    mem.const_term = 472;
+                    mem.const_term = 486;
                     mem.linear_term = 0;
                 }
                 ContractCostType::ChargeBudget => {
