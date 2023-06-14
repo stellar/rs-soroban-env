@@ -3,6 +3,8 @@ mod internal;
 pub(crate) mod system_events;
 
 pub(crate) use internal::{EventError, InternalEventsBuffer};
+#[cfg(test)]
+pub(crate) use internal::{InternalDiagnosticArg, InternalDiagnosticEvent};
 // expose them as pub use for benches
 pub use internal::{InternalContractEvent, InternalEvent};
 use soroban_env_common::{
