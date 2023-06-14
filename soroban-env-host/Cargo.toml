@@ -13,6 +13,7 @@ rust-version = "1.70"
 [dependencies]
 soroban-native-sdk-macros = { workspace = true }
 soroban-env-common = { workspace = true, features = ["std", "wasmi"] }
+stellar-strkey = { workspace = true }
 wasmi = { workspace = true }
 static_assertions = "1.1.0"
 sha2 = "0.9.0"

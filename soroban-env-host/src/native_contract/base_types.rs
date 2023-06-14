@@ -2,11 +2,119 @@ use crate::host::metered_clone::MeteredClone;
 use crate::host::{Host, HostError};
 
 use core::cmp::Ordering;
-use soroban_env_common::xdr::{AccountId, ScAddress};
+use soroban_env_common::xdr::{AccountId, ScAddress, ScErrorCode, ScErrorType};
 use soroban_env_common::{
     AddressObject, BytesObject, Compare, ConversionError, Env, EnvBase, MapObject, RawVal,
-    TryFromVal, VecObject,
+    StringObject, TryFromVal, VecObject,
 };
+
+#[derive(Clone)]
+pub struct String {
+    host: Host,
+    object: StringObject,
+}
+
+impl Compare<String> for Host {
+    type Error = HostError;
+
+    fn compare(&self, a: &String, b: &String) -> Result<Ordering, Self::Error> {
+        self.compare(&a.object.to_raw(), &b.object.to_raw())
+    }
+}
+
+impl TryFromVal<Host, StringObject> for String {
+    type Error = HostError;
+
+    fn try_from_val(env: &Host, val: &StringObject) -> Result<Self, Self::Error> {
+        Ok(String {
+            host: env.clone(),
+            object: *val,
+        })
+    }
+}
+
+impl TryFromVal<Host, RawVal> for String {
+    type Error = HostError;
+
+    fn try_from_val(env: &Host, val: &RawVal) -> Result<Self, Self::Error> {
+        let val = *val;
+        let obj: StringObject = val.try_into()?;
+        String::try_from_val(env, &obj)
+    }
+}
+
+impl TryFromVal<Host, String> for RawVal {
+    type Error = HostError;
+
+    fn try_from_val(_env: &Host, val: &String) -> Result<RawVal, Self::Error> {
+        Ok(val.object.into())
+    }
+}
+
+impl From<String> for StringObject {
+    fn from(b: String) -> Self {
+        b.object
+    }
+}
+
+impl String {
+    pub fn copy_to_rust_string(&self, env: &Host) -> Result<std::string::String, HostError> {
+        let len: u32 = env
+            .string_len(self.object)
+            .map_err(|_| ConversionError)?
+            .into();
+        let len = len as usize;
+        let mut vec = std::vec![0; len];
+        env.string_copy_to_slice(self.object, RawVal::U32_ZERO, &mut vec)
+            .map_err(|_| ConversionError)?;
+        std::string::String::from_utf8(vec).map_err(|_| ConversionError.into())
+    }
+
+    pub fn to_array_4(&self, env: &Host) -> Result<[u8; 4], HostError> {
+        let len: u32 = env
+            .string_len(self.object)
+            .map_err(|_| ConversionError)?
+            .into();
+        if len != 4 {
+            return Err(HostError::from((
+                ScErrorType::Object,
+                ScErrorCode::InternalError,
+            )));
+        }
+        let mut slice = [0_u8; 4];
+        self.host
+            .string_copy_to_slice(self.object, RawVal::U32_ZERO, &mut slice)?;
+        Ok(slice)
+    }
+
+    pub fn to_array_12(&self, env: &Host) -> Result<[u8; 12], HostError> {
+        let len: u32 = env
+            .string_len(self.object)
+            .map_err(|_| ConversionError)?
+            .into();
+        if len != 12 {
+            return Err(HostError::from((
+                ScErrorType::Object,
+                ScErrorCode::InternalError,
+            )));
+        }
+        let mut slice = [0_u8; 12];
+        self.host
+            .string_copy_to_slice(self.object, RawVal::U32_ZERO, &mut slice)?;
+        Ok(slice)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn to_vec(&self) -> std::vec::Vec<u8> {
+        let mut res = std::vec::Vec::<u8>::new();
+        let size: u32 = self.host.string_len(self.object).unwrap().into();
+        res.resize(size as usize, 0);
+        self.host
+            .string_copy_to_slice(self.object, RawVal::U32_ZERO, &mut res[..])
+            .unwrap();
+        res
+    }
+}
 
 #[derive(Clone)]
 pub struct Bytes {
@@ -84,17 +192,6 @@ impl Bytes {
             host: env.clone(),
             object: env.bytes_new_from_slice(items)?,
         })
-    }
-
-    #[cfg(test)]
-    pub(crate) fn to_vec(&self) -> std::vec::Vec<u8> {
-        let mut res = std::vec::Vec::<u8>::new();
-        let size: u32 = self.host.bytes_len(self.object).unwrap().into();
-        res.resize(size as usize, 0);
-        self.host
-            .bytes_copy_to_slice(self.object, RawVal::U32_ZERO, &mut res[..])
-            .unwrap();
-        res
     }
 }
 

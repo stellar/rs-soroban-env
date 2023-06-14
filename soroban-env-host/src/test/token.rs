@@ -32,6 +32,7 @@ use soroban_env_common::{
     EnvBase, RawVal,
 };
 use soroban_env_common::{Env, Symbol, TryFromVal, TryIntoVal};
+use stellar_strkey::ed25519;
 
 use crate::native_contract::base_types::BytesN;
 
@@ -397,16 +398,14 @@ fn test_asset_init(asset_code: &[u8]) {
 
     assert_eq!(token.symbol().unwrap().to_vec(), asset_code.to_vec());
     assert_eq!(token.decimals().unwrap(), 7);
-    assert_eq!(
-        token.name().unwrap().to_vec(),
-        [
-            asset_code.to_vec(),
-            b":".to_vec(),
-            test.issuer_key.public.to_bytes().to_vec()
-        ]
-        .concat()
-        .to_vec()
-    );
+    let name = String::from_utf8(token.name().unwrap().to_vec()).unwrap();
+
+    let mut expected = String::from_utf8(asset_code.to_vec()).unwrap();
+    expected.push(':');
+    let k = ed25519::PublicKey::from_payload(test.issuer_key.public.to_bytes().as_slice()).unwrap();
+    expected.push_str(k.to_string().as_str());
+
+    assert_eq!(name, expected);
 
     let user = TestSigner::account_with_multisig(&account_id, vec![&test.user_key]);
 
@@ -416,12 +415,14 @@ fn test_asset_init(asset_code: &[u8]) {
 
 #[test]
 fn test_asset4_smart_init() {
-    test_asset_init(&[0, b'a', b'b', 255]);
+    test_asset_init(&[b'z', b'a', b'b', 100]);
 }
 
 #[test]
 fn test_asset12_smart_init() {
-    test_asset_init(&[255, 0, 0, 127, b'a', b'b', b'c', 1, 2, 3, 4, 5]);
+    test_asset_init(&[
+        65, 76, b'a', b'b', b'a', b'b', b'c', b'a', b'b', b'a', b'b', b'c',
+    ]);
 }
 
 #[test]
@@ -2310,7 +2311,7 @@ fn test_wrapped_asset_classic_balance_boundaries(
     let trustline_key = test.create_trustline(
         &account_id,
         &issuer_id,
-        &[255; 12],
+        &[100; 12],
         init_balance,
         limit,
         TrustLineFlags::AuthorizedFlag as u32,
@@ -2320,7 +2321,7 @@ fn test_wrapped_asset_classic_balance_boundaries(
     let trustline_key2 = test.create_trustline(
         &account_id2,
         &issuer_id,
-        &[255; 12],
+        &[100; 12],
         0,
         limit,
         TrustLineFlags::AuthorizedFlag as u32,
@@ -2330,7 +2331,7 @@ fn test_wrapped_asset_classic_balance_boundaries(
     let token = TestToken::new_from_asset(
         &test.host,
         Asset::CreditAlphanum12(AlphaNum12 {
-            asset_code: AssetCode12([255; 12]),
+            asset_code: AssetCode12([100; 12]),
             issuer: AccountId(PublicKey::PublicKeyTypeEd25519(
                 test.host.to_u256_from_account(&issuer_id).unwrap(),
             )),
@@ -2475,7 +2476,7 @@ fn test_classic_transfers_not_possible_for_unauthorized_asset() {
     let trustline_key = test.create_trustline(
         &account_id,
         &issuer_id,
-        &[255; 4],
+        &[99; 4],
         100_000_000,
         i64::MAX,
         TrustLineFlags::AuthorizedFlag as u32,
@@ -2487,7 +2488,7 @@ fn test_classic_transfers_not_possible_for_unauthorized_asset() {
     let token = TestToken::new_from_asset(
         &test.host,
         Asset::CreditAlphanum4(AlphaNum4 {
-            asset_code: AssetCode4([255; 4]),
+            asset_code: AssetCode4([99; 4]),
             issuer: AccountId(PublicKey::PublicKeyTypeEd25519(
                 test.host.to_u256_from_account(&issuer_id).unwrap(),
             )),
@@ -2503,7 +2504,7 @@ fn test_classic_transfers_not_possible_for_unauthorized_asset() {
     let trustline_key = test.create_trustline(
         &account_id,
         &issuer_id,
-        &[255; 4],
+        &[99; 4],
         100_000_000,
         i64::MAX,
         0,
