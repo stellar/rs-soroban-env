@@ -2,7 +2,7 @@ use crate::host::metered_clone::MeteredClone;
 use crate::host::{Host, HostError};
 
 use core::cmp::Ordering;
-use soroban_env_common::xdr::{AccountId, ScAddress, ScErrorCode, ScErrorType};
+use soroban_env_common::xdr::{AccountId, ScAddress};
 use soroban_env_common::{
     AddressObject, BytesObject, Compare, ConversionError, Env, EnvBase, MapObject, RawVal,
     StringObject, TryFromVal, VecObject,
@@ -70,49 +70,22 @@ impl String {
         std::string::String::from_utf8(vec).map_err(|_| ConversionError.into())
     }
 
-    pub fn to_array_4(&self, env: &Host) -> Result<[u8; 4], HostError> {
-        let len: u32 = env
-            .string_len(self.object)
-            .map_err(|_| ConversionError)?
-            .into();
-        if len != 4 {
-            return Err(HostError::from((
-                ScErrorType::Object,
-                ScErrorCode::InternalError,
-            )));
-        }
-        let mut slice = [0_u8; 4];
-        self.host
-            .string_copy_to_slice(self.object, RawVal::U32_ZERO, &mut slice)?;
-        Ok(slice)
-    }
-
-    pub fn to_array_12(&self, env: &Host) -> Result<[u8; 12], HostError> {
-        let len: u32 = env
-            .string_len(self.object)
-            .map_err(|_| ConversionError)?
-            .into();
-        if len != 12 {
-            return Err(HostError::from((
-                ScErrorType::Object,
-                ScErrorCode::InternalError,
-            )));
-        }
-        let mut slice = [0_u8; 12];
+    pub fn to_array<const N: usize>(&self) -> Result<[u8; N], HostError> {
+        let mut slice = [0_u8; N];
         self.host
             .string_copy_to_slice(self.object, RawVal::U32_ZERO, &mut slice)?;
         Ok(slice)
     }
 
     #[cfg(test)]
-    pub(crate) fn to_vec(&self) -> std::vec::Vec<u8> {
+    pub(crate) fn to_string(&self) -> std::string::String {
         let mut res = std::vec::Vec::<u8>::new();
         let size: u32 = self.host.string_len(self.object).unwrap().into();
         res.resize(size as usize, 0);
         self.host
             .string_copy_to_slice(self.object, RawVal::U32_ZERO, &mut res[..])
             .unwrap();
-        res
+        std::string::String::from_utf8(res).unwrap()
     }
 }
 

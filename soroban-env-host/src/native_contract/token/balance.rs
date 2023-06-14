@@ -267,7 +267,7 @@ pub fn check_clawbackable(e: &Host, addr: Address) -> Result<(), HostError> {
             AssetInfo::AlphaNum4(asset) => {
                 let issuer_account_id = e.account_id_from_bytesobj(asset.issuer.into())?;
                 validate_trustline(
-                    e.create_asset_4(asset.asset_code.to_array_4(e)?, issuer_account_id.clone()),
+                    e.create_asset_4(asset.asset_code.to_array()?, issuer_account_id.clone()),
                     issuer_account_id,
                     acc_id,
                 )
@@ -275,7 +275,7 @@ pub fn check_clawbackable(e: &Host, addr: Address) -> Result<(), HostError> {
             AssetInfo::AlphaNum12(asset) => {
                 let issuer_account_id = e.account_id_from_bytesobj(asset.issuer.into())?;
                 validate_trustline(
-                    e.create_asset_12(asset.asset_code.to_array_12(e)?, issuer_account_id.clone()),
+                    e.create_asset_12(asset.asset_code.to_array()?, issuer_account_id.clone()),
                     issuer_account_id,
                     acc_id,
                 )
@@ -326,7 +326,7 @@ pub fn transfer_classic_balance(e: &Host, to_key: AccountId, amount: i64) -> Res
         AssetInfo::AlphaNum4(asset) => {
             let issuer_account_id = e.account_id_from_bytesobj(asset.issuer.into())?;
             transfer_trustline_balance_safe(
-                e.create_asset_4(asset.asset_code.to_array_4(e)?, issuer_account_id.clone()),
+                e.create_asset_4(asset.asset_code.to_array()?, issuer_account_id.clone()),
                 issuer_account_id,
                 to_key,
             )?
@@ -334,7 +334,7 @@ pub fn transfer_classic_balance(e: &Host, to_key: AccountId, amount: i64) -> Res
         AssetInfo::AlphaNum12(asset) => {
             let issuer_account_id = e.account_id_from_bytesobj(asset.issuer.into())?;
             transfer_trustline_balance_safe(
-                e.create_asset_12(asset.asset_code.to_array_12(e)?, issuer_account_id.clone()),
+                e.create_asset_12(asset.asset_code.to_array()?, issuer_account_id.clone()),
                 issuer_account_id,
                 to_key,
             )?
@@ -362,7 +362,7 @@ fn get_classic_balance(e: &Host, to_key: AccountId) -> Result<(i64, i64), HostEr
         AssetInfo::AlphaNum4(asset) => {
             let issuer_account_id = e.account_id_from_bytesobj(asset.issuer.into())?;
             get_trustline_balance_safe(
-                e.create_asset_4(asset.asset_code.to_array_4(e)?, issuer_account_id.clone()),
+                e.create_asset_4(asset.asset_code.to_array()?, issuer_account_id.clone()),
                 issuer_account_id,
                 to_key,
             )
@@ -371,7 +371,7 @@ fn get_classic_balance(e: &Host, to_key: AccountId) -> Result<(i64, i64), HostEr
         AssetInfo::AlphaNum12(asset) => {
             let issuer_account_id = e.account_id_from_bytesobj(asset.issuer.into())?;
             get_trustline_balance_safe(
-                e.create_asset_12(asset.asset_code.to_array_12(e)?, issuer_account_id.clone()),
+                e.create_asset_12(asset.asset_code.to_array()?, issuer_account_id.clone()),
                 issuer_account_id,
                 to_key,
             )
@@ -600,7 +600,7 @@ fn is_account_authorized(e: &Host, account_id: AccountId) -> Result<bool, HostEr
         AssetInfo::AlphaNum4(asset) => {
             let issuer_account_id = e.account_id_from_bytesobj(asset.issuer.into())?;
             is_trustline_authorized_safe(
-                e.create_asset_4(asset.asset_code.to_array_4(e)?, issuer_account_id.clone()),
+                e.create_asset_4(asset.asset_code.to_array()?, issuer_account_id.clone()),
                 issuer_account_id,
                 account_id,
             )
@@ -608,7 +608,7 @@ fn is_account_authorized(e: &Host, account_id: AccountId) -> Result<bool, HostEr
         AssetInfo::AlphaNum12(asset) => {
             let issuer_account_id = e.account_id_from_bytesobj(asset.issuer.into())?;
             is_trustline_authorized_safe(
-                e.create_asset_12(asset.asset_code.to_array_12(e)?, issuer_account_id.clone()),
+                e.create_asset_12(asset.asset_code.to_array()?, issuer_account_id.clone()),
                 issuer_account_id,
                 account_id,
             )
@@ -678,7 +678,7 @@ fn set_authorization(e: &Host, to_key: AccountId, authorize: bool) -> Result<(),
         AssetInfo::AlphaNum4(asset) => {
             let issuer_account_id = e.account_id_from_bytesobj(asset.issuer.into())?;
             set_trustline_authorization_safe(
-                e.create_asset_4(asset.asset_code.to_array_4(e)?, issuer_account_id.clone()),
+                e.create_asset_4(asset.asset_code.to_array()?, issuer_account_id.clone()),
                 issuer_account_id,
                 to_key,
             )
@@ -686,7 +686,7 @@ fn set_authorization(e: &Host, to_key: AccountId, authorize: bool) -> Result<(),
         AssetInfo::AlphaNum12(asset) => {
             let issuer_account_id = e.account_id_from_bytesobj(asset.issuer.into())?;
             set_trustline_authorization_safe(
-                e.create_asset_12(asset.asset_code.to_array_12(e)?, issuer_account_id.clone()),
+                e.create_asset_12(asset.asset_code.to_array()?, issuer_account_id.clone()),
                 issuer_account_id,
                 to_key,
             )

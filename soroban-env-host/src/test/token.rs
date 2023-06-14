@@ -331,9 +331,9 @@ fn test_native_token_smart_roundtrip() {
         expected_token_address
     );
 
-    assert_eq!(token.symbol().unwrap().to_vec(), b"native".to_vec());
+    assert_eq!(token.symbol().unwrap().to_string(), "native");
     assert_eq!(token.decimals().unwrap(), 7);
-    assert_eq!(token.name().unwrap().to_vec(), b"native".to_vec());
+    assert_eq!(token.name().unwrap().to_string(), "native");
 
     let user = TestSigner::account_with_multisig(&account_id, vec![&test.user_key]);
 
@@ -396,9 +396,12 @@ fn test_asset_init(asset_code: &[u8]) {
         expected_token_address
     );
 
-    assert_eq!(token.symbol().unwrap().to_vec(), asset_code.to_vec());
+    assert_eq!(
+        token.symbol().unwrap().to_string(),
+        String::from_utf8(asset_code.to_vec()).unwrap()
+    );
     assert_eq!(token.decimals().unwrap(), 7);
-    let name = String::from_utf8(token.name().unwrap().to_vec()).unwrap();
+    let name = token.name().unwrap().to_string();
 
     let mut expected = String::from_utf8(asset_code.to_vec()).unwrap();
     expected.push(':');
