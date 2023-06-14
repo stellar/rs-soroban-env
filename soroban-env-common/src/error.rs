@@ -104,6 +104,13 @@ impl TryFrom<Error> for ScVal {
     }
 }
 
+impl TryFrom<&Error> for ScVal {
+    type Error = stellar_xdr::Error;
+    fn try_from(value: &Error) -> Result<Self, stellar_xdr::Error> {
+        (*value).try_into()
+    }
+}
+
 impl From<ScError> for Error {
     fn from(er: ScError) -> Self {
         Error::from_scerror(er)
