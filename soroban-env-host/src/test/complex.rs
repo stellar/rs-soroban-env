@@ -28,6 +28,8 @@ fn run_complex() -> Result<(), HostError> {
         timestamp: 1234,
         network_id: [7; 32],
         base_reserve: 1,
+        min_restorable_entry_expiration: 4096,
+        min_temp_entry_expiration: 16,
     };
     let id: Hash = [0; 32].into();
 
@@ -41,7 +43,7 @@ fn run_complex() -> Result<(), HostError> {
             let args: ScVec = host.test_scvec::<i32>(&[])?;
             vm.invoke_function(&host, "go", &args)?;
         }
-        let (store, _, _) = host.try_finish().unwrap();
+        let (store, _, _, _) = host.try_finish().unwrap();
         store.footprint
     };
 

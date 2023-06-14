@@ -1,7 +1,7 @@
 use soroban_native_sdk_macros::contracttype;
 
 use crate::{host::Host, HostError};
-use soroban_env_common::{Env, EnvBase, SymbolSmall, TryFromVal, TryIntoVal};
+use soroban_env_common::{Env, EnvBase, StorageType, SymbolSmall, TryFromVal, TryIntoVal};
 
 use crate::native_contract::base_types::Bytes;
 
@@ -48,18 +48,27 @@ pub fn set_metadata(e: &Host) -> Result<(), HostError> {
     };
 
     let key = SymbolSmall::try_from_str(METADATA_KEY)?;
-    e.put_contract_data(key.try_into_val(e)?, metadata.try_into_val(e)?)?;
+    e.put_contract_data(
+        key.try_into_val(e)?,
+        metadata.try_into_val(e)?,
+        StorageType::MERGEABLE,
+        ().into(),
+    )?;
     Ok(())
 }
 
 pub fn read_name(e: &Host) -> Result<Bytes, HostError> {
     let key = SymbolSmall::try_from_str(METADATA_KEY)?;
-    let metadata: TokenMetadata = e.get_contract_data(key.try_into_val(e)?)?.try_into_val(e)?;
+    let metadata: TokenMetadata = e
+        .get_contract_data(key.try_into_val(e)?, StorageType::MERGEABLE)?
+        .try_into_val(e)?;
     Ok(metadata.name)
 }
 
 pub fn read_symbol(e: &Host) -> Result<Bytes, HostError> {
     let key = SymbolSmall::try_from_str(METADATA_KEY)?;
-    let metadata: TokenMetadata = e.get_contract_data(key.try_into_val(e)?)?.try_into_val(e)?;
+    let metadata: TokenMetadata = e
+        .get_contract_data(key.try_into_val(e)?, StorageType::MERGEABLE)?
+        .try_into_val(e)?;
     Ok(metadata.symbol)
 }

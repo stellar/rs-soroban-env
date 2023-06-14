@@ -27,9 +27,11 @@ use soroban_env_common::{
 use wasmi::{Engine, FuelConsumptionMode, Func, Instance, Linker, Memory, Module, Store, Value};
 
 #[cfg(any(test, feature = "testutils"))]
+use crate::VmCaller;
+#[cfg(test)]
 use crate::{
     xdr::{ScVal, ScVec},
-    TryFromVal, VmCaller,
+    TryFromVal,
 };
 #[cfg(any(test, feature = "testutils"))]
 use wasmi::{Caller, StoreContextMut};
@@ -329,7 +331,7 @@ impl Vm {
     //
     // NB: This function has to take self by [Rc] because it stores self in
     // a new Frame
-    #[cfg(any(test, feature = "testutils"))]
+    #[cfg(test)]
     pub(crate) fn invoke_function(
         self: &Rc<Self>,
         host: &Host,

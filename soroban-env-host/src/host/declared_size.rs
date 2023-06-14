@@ -11,7 +11,7 @@ use crate::{
     storage::AccessType,
     xdr::{
         AccountEntry, AccountId, BytesM, ClaimableBalanceEntry, ConfigSettingEntry,
-        ContractCodeEntry, ContractEvent, DataEntry, Duration, Hash, LedgerEntryExt,
+        ContractCodeEntry, ContractEvent, DataEntry, Duration, Hash, LedgerEntry, LedgerEntryExt,
         LedgerKeyAccount, LedgerKeyClaimableBalance, LedgerKeyConfigSetting, LedgerKeyContractCode,
         LedgerKeyData, LedgerKeyLiquidityPool, LedgerKeyOffer, LedgerKeyTrustLine,
         LiquidityPoolEntry, OfferEntry, PublicKey, ScAddress, ScBytes, ScContractExecutable, ScMap,
@@ -121,7 +121,7 @@ impl_declared_size_type!(LedgerKeyOffer, 40);
 impl_declared_size_type!(LedgerKeyData, 56);
 impl_declared_size_type!(LedgerKeyClaimableBalance, 32);
 impl_declared_size_type!(LedgerKeyLiquidityPool, 32);
-impl_declared_size_type!(LedgerKeyContractCode, 32);
+impl_declared_size_type!(LedgerKeyContractCode, 36);
 impl_declared_size_type!(LedgerKeyConfigSetting, 4);
 impl_declared_size_type!(LedgerEntryExt, 33);
 impl_declared_size_type!(AccountEntry, 216);
@@ -130,8 +130,9 @@ impl_declared_size_type!(OfferEntry, 152);
 impl_declared_size_type!(DataEntry, 80);
 impl_declared_size_type!(ClaimableBalanceEntry, 120);
 impl_declared_size_type!(LiquidityPoolEntry, 160);
-impl_declared_size_type!(ContractCodeEntry, 56);
+impl_declared_size_type!(ContractCodeEntry, 64);
 impl_declared_size_type!(ConfigSettingEntry, 104);
+impl_declared_size_type!(LedgerEntry, 264);
 impl_declared_size_type!(AccessType, 1);
 impl_declared_size_type!(InternalContractEvent, 40);
 impl_declared_size_type!(ContractEvent, 104);
@@ -293,7 +294,7 @@ mod test {
         expect!["56"].assert_eq(size_of::<LedgerKeyData>().to_string().as_str());
         expect!["32"].assert_eq(size_of::<LedgerKeyClaimableBalance>().to_string().as_str());
         expect!["32"].assert_eq(size_of::<LedgerKeyLiquidityPool>().to_string().as_str());
-        expect!["32"].assert_eq(size_of::<LedgerKeyContractCode>().to_string().as_str());
+        expect!["36"].assert_eq(size_of::<LedgerKeyContractCode>().to_string().as_str());
         expect!["4"].assert_eq(size_of::<LedgerKeyConfigSetting>().to_string().as_str());
         expect!["33"].assert_eq(size_of::<LedgerEntryExt>().to_string().as_str());
         expect!["216"].assert_eq(size_of::<AccountEntry>().to_string().as_str());
@@ -302,8 +303,9 @@ mod test {
         expect!["80"].assert_eq(size_of::<DataEntry>().to_string().as_str());
         expect!["120"].assert_eq(size_of::<ClaimableBalanceEntry>().to_string().as_str());
         expect!["160"].assert_eq(size_of::<LiquidityPoolEntry>().to_string().as_str());
-        expect!["56"].assert_eq(size_of::<ContractCodeEntry>().to_string().as_str());
+        expect!["64"].assert_eq(size_of::<ContractCodeEntry>().to_string().as_str());
         expect!["104"].assert_eq(size_of::<ConfigSettingEntry>().to_string().as_str());
+        expect!["264"].assert_eq(size_of::<LedgerEntry>().to_string().as_str());
         expect!["1"].assert_eq(size_of::<AccessType>().to_string().as_str());
         expect!["40"].assert_eq(size_of::<InternalContractEvent>().to_string().as_str());
         expect!["104"].assert_eq(size_of::<ContractEvent>().to_string().as_str());

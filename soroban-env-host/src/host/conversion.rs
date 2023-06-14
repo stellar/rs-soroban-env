@@ -216,29 +216,52 @@ impl Host {
     /// Converts a [`RawVal`] to an [`ScVal`] and combines it with the currently-executing
     /// [`ContractID`] to produce a [`Key`], that can be used to access ledger [`Storage`].
     // Notes on metering: covered by components.
-    pub fn storage_key_from_rawval(&self, k: RawVal) -> Result<Rc<LedgerKey>, HostError> {
+    pub fn storage_key_from_rawval(
+        &self,
+        k: RawVal,
+        data_type: ContractDataType,
+    ) -> Result<Rc<LedgerKey>, HostError> {
         Ok(Rc::new(LedgerKey::ContractData(LedgerKeyContractData {
             contract_id: self.get_current_contract_id_internal()?,
             key: self.from_host_val(k)?,
+            type_: data_type,
+            le_type: ContractLedgerEntryType::DataEntry,
         })))
     }
 
-    pub(crate) fn storage_key_for_contract(&self, contract_id: Hash, key: ScVal) -> Rc<LedgerKey> {
+    pub(crate) fn storage_key_for_contract(
+        &self,
+        contract_id: Hash,
+        key: ScVal,
+        data_type: ContractDataType,
+    ) -> Rc<LedgerKey> {
         Rc::new(LedgerKey::ContractData(LedgerKeyContractData {
             contract_id,
             key,
+            type_: data_type,
+            le_type: ContractLedgerEntryType::DataEntry,
         }))
     }
 
-    pub fn storage_key_from_scval(&self, key: ScVal) -> Result<Rc<LedgerKey>, HostError> {
+    pub fn storage_key_from_scval(
+        &self,
+        key: ScVal,
+        data_type: ContractDataType,
+    ) -> Result<Rc<LedgerKey>, HostError> {
         Ok(Rc::new(LedgerKey::ContractData(LedgerKeyContractData {
             contract_id: self.get_current_contract_id_internal()?,
             key,
+            type_: data_type,
+            le_type: ContractLedgerEntryType::DataEntry,
         })))
     }
 
     // Notes on metering: covered by components.
-    pub fn contract_data_key_from_rawval(&self, k: RawVal) -> Result<Rc<LedgerKey>, HostError> {
+    pub fn contract_data_key_from_rawval(
+        &self,
+        k: RawVal,
+        data_type: ContractDataType,
+    ) -> Result<Rc<LedgerKey>, HostError> {
         let key_scval = self.from_host_val(k)?;
         if let ScVal::LedgerKeyContractExecutable | ScVal::LedgerKeyNonce(_) = key_scval {
             return Err(self.err(
@@ -248,7 +271,7 @@ impl Host {
                 &[k],
             ));
         }
-        self.storage_key_from_scval(key_scval)
+        self.storage_key_from_scval(key_scval, data_type)
     }
 
     /// Converts a binary search result into a u64. `res` is `Some(index)`
@@ -609,6 +632,7 @@ impl Host {
             | ScVal::Error(_)
             | ScVal::U32(_)
             | ScVal::I32(_)
+            | ScVal::StorageType(_)
             | ScVal::LedgerKeyNonce(_)
             | ScVal::LedgerKeyContractExecutable => Err(err!(
                 self,
