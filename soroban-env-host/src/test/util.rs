@@ -163,14 +163,6 @@ impl Host {
         Ok(rawval.try_into()?)
     }
 
-    pub(crate) fn raw_val_vec_to_sc_vec(&self, v: Vec<RawVal>) -> ScVec {
-        let mut res = Vec::<ScVal>::new();
-        for val in v {
-            res.push(val.try_into_val(self).unwrap());
-        }
-        res.try_into().unwrap()
-    }
-
     // Registers a contract with provided WASM source and returns the registered
     // contract's address.
     // This relies on the host to have no footprint enforcement.
