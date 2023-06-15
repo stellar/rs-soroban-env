@@ -166,6 +166,10 @@ impl Bytes {
             object: env.bytes_new_from_slice(items)?,
         })
     }
+
+    pub fn as_object(&self) -> BytesObject {
+        self.object
+    }
 }
 
 #[derive(Clone)]
@@ -251,6 +255,10 @@ impl<const N: usize> BytesN<N> {
             host: env.clone(),
             object: env.bytes_new_from_slice(items)?,
         })
+    }
+
+    pub fn as_object(&self) -> BytesObject {
+        self.object
     }
 }
 
@@ -457,6 +465,10 @@ impl Vec {
         self.object = self.host.vec_push_back(self.object, x)?;
         Ok(())
     }
+
+    pub fn as_object(&self) -> VecObject {
+        self.object
+    }
 }
 
 #[derive(Clone)]
@@ -519,12 +531,15 @@ impl Address {
     }
 
     pub(crate) fn to_sc_address(&self) -> Result<ScAddress, HostError> {
-        self.host.visit_obj(self.object, |addr: &ScAddress| {
-            addr.metered_clone(self.host.budget_ref())
-        })
+        self.host.scaddress_from_address(self.object)
     }
 
     pub(crate) fn require_auth(&self) -> Result<(), HostError> {
-        Ok(self.host.require_auth(self.object)?.try_into()?)
+        self.host.require_auth(self.object)?;
+        Ok(())
+    }
+
+    pub(crate) fn as_object(&self) -> AddressObject {
+        self.object
     }
 }
