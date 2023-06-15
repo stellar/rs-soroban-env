@@ -1,12 +1,16 @@
 use crate::{
-    xdr::{
-        ContractEvent, ContractEventBody, ContractEventType, ContractEventV0, ExtensionPoint, Hash,
-        ScMap, ScMapEntry, ScVal,
+    budget::AsBudget,
+    events::{
+        InternalContractEvent, InternalDiagnosticArg, InternalDiagnosticEvent, InternalEvent,
     },
-    ContractFunctionSet, Env, Host, HostError, RawVal, Symbol,
+    test::util::AsScVal,
+    xdr::{
+        ContractCostType, ContractEvent, ContractEventBody, ContractEventType, ContractEventV0,
+        ExtensionPoint, Hash, ScAddress, ScMap, ScMapEntry, ScVal,
+    },
+    ContractFunctionSet, Env, Host, HostError, RawVal, Symbol, SymbolSmall,
 };
 use expect_test::expect;
-use soroban_env_common::xdr::ScAddress;
 use std::rc::Rc;
 
 pub struct ContractWithSingleEvent;
@@ -96,5 +100,66 @@ fn test_event_rollback() -> Result<(), HostError> {
     let expected = expect!["[HostEvent { event: ContractEvent { ext: V0, contract_id: Some(Hash(0000000000000000000000000000000000000000000000000000000000000000)), type_: Contract, body: V0(ContractEventV0 { topics: ScVec(VecM([I32(0), I32(1)])), data: U32(0) }) }, failed_call: false }, HostEvent { event: ContractEvent { ext: V0, contract_id: Some(Hash(0000000000000000000000000000000000000000000000000000000000000000)), type_: System, body: V0(ContractEventV0 { topics: ScVec(VecM([I32(0), I32(1)])), data: U32(0) }) }, failed_call: true }]"];
     let actual = format!("{:?}", host.0.events.borrow().externalize(&host)?.0);
     expected.assert_eq(&actual);
+    Ok(())
+}
+
+#[test]
+fn test_internal_contract_events_metering_not_free() -> Result<(), HostError> {
+    let host = Host::test_host();
+    let dummy_id = [0; 32];
+    let ce = InternalContractEvent {
+        type_: ContractEventType::Contract,
+        contract_id: Some(host.test_bin_obj(&dummy_id)?),
+        topics: host.test_vec_obj(&[0, 1, 2, 3])?,
+        data: RawVal::from_void().to_raw(),
+    };
+
+    let host = host
+        .test_budget(100000, 100000)
+        .enable_model(ContractCostType::HostMemAlloc, 10, 0, 1, 0)
+        .enable_model(ContractCostType::HostMemCpy, 10, 0, 1, 0);
+
+    let _ = host.with_events_mut(|events| {
+        Ok(events.record(InternalEvent::Contract(ce), host.as_budget()))
+    })?;
+    assert_eq!(host.as_budget().get_cpu_insns_consumed(), 30);
+    assert_eq!(host.as_budget().get_mem_bytes_consumed(), 3);
+
+    let _ = host.0.events.borrow().externalize(&host)?;
+    assert_eq!(host.as_budget().get_cpu_insns_consumed(), 80);
+    assert_eq!(host.as_budget().get_mem_bytes_consumed(), 8);
+    Ok(())
+}
+
+#[test]
+fn test_internal_diagnostic_event_metering_free() -> Result<(), HostError> {
+    let host = Host::test_host();
+    let dummy_id = [0; 32];
+    let contract_id = Some(Hash(dummy_id));
+    let topics = vec![
+        InternalDiagnosticArg::HostVal(SymbolSmall::try_from_str("error")?.to_raw()),
+        InternalDiagnosticArg::HostVal(RawVal::from_i32(0).to_raw()),
+    ];
+    let args = vec![InternalDiagnosticArg::XdrVal(1_i32.as_scval())];
+    let de = Rc::new(InternalDiagnosticEvent {
+        contract_id,
+        topics,
+        args,
+    });
+
+    let host = host
+        .test_budget(100000, 100000)
+        .enable_model(ContractCostType::HostMemAlloc, 10, 0, 1, 0)
+        .enable_model(ContractCostType::HostMemCpy, 10, 0, 1, 0);
+
+    let _ = host.with_events_mut(|events| {
+        Ok(events.record(InternalEvent::Diagnostic(de), host.as_budget()))
+    })?;
+    assert_eq!(host.as_budget().get_cpu_insns_consumed(), 0);
+    assert_eq!(host.as_budget().get_mem_bytes_consumed(), 0);
+
+    let _ = host.0.events.borrow().externalize(&host)?;
+    assert_eq!(host.as_budget().get_cpu_insns_consumed(), 0);
+    assert_eq!(host.as_budget().get_mem_bytes_consumed(), 0);
     Ok(())
 }

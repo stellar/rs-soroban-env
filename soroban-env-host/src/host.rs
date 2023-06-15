@@ -1763,7 +1763,7 @@ impl VmCallerEnv for Host {
                 flags: flags.unwrap_or(0),
             });
             let data = LedgerEntryData::ContractData(ContractDataEntry {
-                contract_id: self.get_current_contract_id_internal()?,
+                contract: ScAddress::Contract(self.get_current_contract_id_internal()?),
                 key: self.from_host_val(k)?,
                 body,
                 expiration_ledger_seq: self.get_min_expiration_ledger(storage_type)?,

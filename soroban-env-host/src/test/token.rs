@@ -1559,32 +1559,14 @@ fn test_auth_rejected_for_incorrect_nonce() {
 
     let args = host_vec![&test.host, user.address(&test.host), 100_i128];
 
-    // Incorrect value of nonce
+    // Correct call to consume nonce.
     authorize_single_invocation_with_nonce(
         &test.host,
         &admin,
         &token.address,
         "mint",
         args.clone(),
-        Some(1),
-    );
-    assert!(test
-        .host
-        .call(
-            token.address.clone().into(),
-            Symbol::try_from_small_str("mint").unwrap(),
-            args.clone().into(),
-        )
-        .is_err());
-
-    // Correct call to bump nonce.
-    authorize_single_invocation_with_nonce(
-        &test.host,
-        &admin,
-        &token.address,
-        "mint",
-        args.clone(),
-        Some(0),
+        Some((12345, 1000)),
     );
     test.host
         .call(
@@ -1594,14 +1576,14 @@ fn test_auth_rejected_for_incorrect_nonce() {
         )
         .unwrap();
 
-    // Repeat the previous nonce
+    // Try using the consumed nonce
     authorize_single_invocation_with_nonce(
         &test.host,
         &admin,
         &token.address,
         "mint",
         args.clone(),
-        Some(0),
+        Some((12345, 200)),
     );
     assert!(test
         .host
@@ -1611,23 +1593,6 @@ fn test_auth_rejected_for_incorrect_nonce() {
             args.clone().into(),
         )
         .is_err());
-
-    // Correct call with bumped nonce.
-    authorize_single_invocation_with_nonce(
-        &test.host,
-        &admin,
-        &token.address,
-        "mint",
-        args.clone(),
-        Some(1),
-    );
-    test.host
-        .call(
-            token.address.into(),
-            Symbol::try_from_small_str("mint").unwrap(),
-            args.into(),
-        )
-        .unwrap();
 }
 
 #[test]
