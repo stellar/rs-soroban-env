@@ -23,15 +23,13 @@ impl AuthContract {
     // counts.
     pub fn tree_fn(env: Env, addresses: Vec<Address>, tree: TreeNode) {
         for i in 0..addresses.len() {
-            if tree.need_auth.get_unchecked(i).unwrap() {
+            if tree.need_auth.get_unchecked(i) {
                 addresses
                     .get_unchecked(i)
-                    .unwrap()
                     .require_auth_for_args(vec![&env]);
             }
         }
         for child in tree.children.iter() {
-            let child = child.unwrap();
             env.invoke_contract::<()>(
                 &child.contract.clone(),
                 &Symbol::short("tree_fn"),
@@ -58,9 +56,9 @@ impl AuthContract {
         // automatically.
         let mut auth_entries = vec![&env];
         for child in tree.children.iter() {
-            auth_entries.push_back(tree_to_invoker_contract_auth(&env, &child.unwrap()));
+            auth_entries.push_back(tree_to_invoker_contract_auth(&env, &child));
         }
-        env.authorize_as_curr_contract(auth_entries);
+        env.authorize_as_current_contract(auth_entries);
         let curr_address = env.current_contract_address();
         env.invoke_contract::<()>(
             &tree.contract,
@@ -75,7 +73,7 @@ impl AuthContract {
 fn tree_to_invoker_contract_auth(env: &Env, tree: &TreeNode) -> InvokerContractAuthEntry {
     let mut sub_invocations = vec![env];
     for c in tree.children.iter() {
-        sub_invocations.push_back(tree_to_invoker_contract_auth(env, &c.unwrap()));
+        sub_invocations.push_back(tree_to_invoker_contract_auth(env, &c));
     }
     InvokerContractAuthEntry::Contract(SubContractInvocation {
         context: ContractContext {

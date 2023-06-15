@@ -35,7 +35,7 @@ impl SimpleAccount {
         env.crypto().ed25519_verify(
             &public_key,
             &signature_payload.into(),
-            &signature_args.get(0).unwrap().unwrap(),
+            &signature_args.get(0).unwrap(),
         );
     }
 }
