@@ -310,6 +310,11 @@ impl BudgetImpl {
                 ContractCostType::VmInstantiation => self.tracker[i].1 = Some(0), // length of the wasm bytes,
                 ContractCostType::InvokeVmFunction => (),
                 ContractCostType::ChargeBudget => (),
+                ContractCostType::ComputeKeccak256Hash => (),
+                ContractCostType::ComputeEcdsaSecp256k1Key => (),
+                ContractCostType::ComputeEcdsaSecp256k1Sig => (),
+                ContractCostType::VerifyEcdsaSecp256k1Sig => (),
+                ContractCostType::RecoverEcdsaSecp256k1Key => (),
             }
         }
     }
@@ -804,6 +809,26 @@ impl Default for BudgetImpl {
                     cpu.const_term = 130;
                     cpu.linear_term = 0;
                 }
+                ContractCostType::ComputeKeccak256Hash => {
+                    cpu.const_term = 0;
+                    cpu.linear_term = 0;
+                }
+                ContractCostType::ComputeEcdsaSecp256k1Key => {
+                    cpu.const_term = 0;
+                    cpu.linear_term = 0;
+                }
+                ContractCostType::ComputeEcdsaSecp256k1Sig => {
+                    cpu.const_term = 0;
+                    cpu.linear_term = 0;
+                }
+                ContractCostType::VerifyEcdsaSecp256k1Sig => {
+                    cpu.const_term = 0;
+                    cpu.linear_term = 0;
+                }
+                ContractCostType::RecoverEcdsaSecp256k1Key => {
+                    cpu.const_term = 0;
+                    cpu.linear_term = 0;
+                }
             }
 
             // define the memory cost model parameters
@@ -896,6 +921,26 @@ impl Default for BudgetImpl {
                 ContractCostType::ChargeBudget => {
                     mem.const_term = 0;
                     mem.linear_term = 0;
+                }
+                ContractCostType::ComputeKeccak256Hash => {
+                    cpu.const_term = 0;
+                    cpu.linear_term = 0;
+                }
+                ContractCostType::ComputeEcdsaSecp256k1Key => {
+                    cpu.const_term = 0;
+                    cpu.linear_term = 0;
+                }
+                ContractCostType::ComputeEcdsaSecp256k1Sig => {
+                    cpu.const_term = 0;
+                    cpu.linear_term = 0;
+                }
+                ContractCostType::VerifyEcdsaSecp256k1Sig => {
+                    cpu.const_term = 0;
+                    cpu.linear_term = 0;
+                }
+                ContractCostType::RecoverEcdsaSecp256k1Key => {
+                    cpu.const_term = 0;
+                    cpu.linear_term = 0;
                 }
             }
 

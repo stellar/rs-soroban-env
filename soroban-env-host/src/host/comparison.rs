@@ -324,8 +324,8 @@ impl Compare<LedgerKey> for Budget {
             (ClaimableBalance(a), ClaimableBalance(b)) => self.compare(&a, &b),
             (LiquidityPool(a), LiquidityPool(b)) => self.compare(&a, &b),
             (ContractData(a), ContractData(b)) => self.compare(
-                &(&a.contract_id, &a.key, &a.type_, &a.le_type),
-                &(&b.contract_id, &b.key, &b.type_, &b.le_type),
+                &(&a.contract, &a.key, &a.type_, &a.le_type),
+                &(&b.contract, &b.key, &b.type_, &b.le_type),
             ),
             (ContractCode(a), ContractCode(b)) => self.compare(&a, &b),
             (ConfigSetting(a), ConfigSetting(b)) => self.compare(&a, &b),
@@ -371,14 +371,14 @@ impl Compare<LedgerEntryData> for Budget {
             (LiquidityPool(a), LiquidityPool(b)) => self.compare(&a, &b),
             (ContractData(a), ContractData(b)) => self.compare(
                 &(
-                    &a.contract_id,
+                    &a.contract,
                     &a.key,
                     &a.type_,
                     &a.body,
                     &a.expiration_ledger_seq,
                 ),
                 &(
-                    &b.contract_id,
+                    &b.contract,
                     &b.key,
                     &b.type_,
                     &b.body,

@@ -1,7 +1,6 @@
-use crate::auth::{AuthorizedFunction, ContractFunction};
 use crate::{Host, LedgerInfo};
 use ed25519_dalek::{Keypair, Signer};
-use rand::thread_rng;
+use rand::{thread_rng, Rng};
 use soroban_env_common::xdr::{
     AccountEntry, AccountEntryExt, AccountEntryExtensionV1, AccountEntryExtensionV1Ext,
     AccountEntryExtensionV2, AccountEntryExtensionV2Ext, AccountId, Hash, HashIdPreimage,
@@ -10,7 +9,7 @@ use soroban_env_common::xdr::{
     SorobanAuthorizationEntry, SorobanAuthorizedContractFunction, SorobanAuthorizedFunction,
     SorobanAuthorizedInvocation, SorobanCredentials, Thresholds, Uint256,
 };
-use soroban_env_common::{EnvBase, TryFromVal, TryIntoVal};
+use soroban_env_common::{EnvBase, TryFromVal};
 
 use crate::native_contract::base_types::BytesN;
 
@@ -119,7 +118,7 @@ impl<'a> TestSigner<'a> {
                         .push(&sign_payload_for_account(host, key, payload))
                         .unwrap();
                 }
-                host_vec![host, signatures]
+                signatures
             }
             TestSigner::AccountContract(signer) => (signer.sign)(payload),
             TestSigner::ContractInvoker(_) => host_vec![host],
@@ -144,7 +143,7 @@ pub(crate) fn authorize_single_invocation_with_nonce(
     contract_address: &Address,
     function_name: &str,
     args: HostVec,
-    nonce: Option<u64>,
+    nonce: Option<(i64, u32)>,
 ) {
     let sc_address = signer.address(host).to_sc_address().unwrap();
     let mut credentials = match signer {
@@ -152,7 +151,8 @@ pub(crate) fn authorize_single_invocation_with_nonce(
         TestSigner::Account(_) | TestSigner::AccountContract(_) => {
             SorobanCredentials::Address(SorobanAddressCredentials {
                 address: sc_address,
-                nonce: nonce.unwrap(),
+                nonce: nonce.unwrap().0,
+                signature_expiration_ledger: nonce.unwrap().1,
                 signature_args: Default::default(),
             })
         }
@@ -181,6 +181,7 @@ pub(crate) fn authorize_single_invocation_with_nonce(
                     .unwrap(),
                 invocation: root_invocation.clone(),
                 nonce: address_credentials.nonce,
+                signature_expiration_ledger: address_credentials.signature_expiration_ledger,
             });
         let signature_payload = host.metered_hash_xdr(&signature_payload_preimage).unwrap();
         address_credentials.signature_args = signer.sign(host, &signature_payload);
@@ -202,17 +203,9 @@ pub(crate) fn authorize_single_invocation(
 ) {
     let nonce = match signer {
         TestSigner::AccountInvoker(_) => None,
-        TestSigner::Account(_) | TestSigner::AccountContract(_) => Some(
-            host.read_nonce(
-                signer.address(host).to_sc_address().unwrap(),
-                &AuthorizedFunction::ContractFn(ContractFunction {
-                    contract_address: contract_address.to_sc_address().unwrap(),
-                    function_name: Default::default(),
-                    args: Default::default(),
-                }),
-            )
-            .unwrap(),
-        ),
+        TestSigner::Account(_) | TestSigner::AccountContract(_) => {
+            Some((thread_rng().gen_range(0, i64::MAX), 10000))
+        }
         TestSigner::ContractInvoker(_) => {
             return;
         }

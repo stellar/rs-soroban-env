@@ -15,8 +15,8 @@ use crate::{
         LedgerKeyConfigSetting, LedgerKeyContractCode, LedgerKeyData, LedgerKeyLiquidityPool,
         LedgerKeyOffer, LedgerKeyTrustLine, LiquidityPoolEntry, OfferEntry, PublicKey, ScAddress,
         ScBytes, ScContractExecutable, ScErrorCode, ScErrorType, ScMap, ScMapEntry, ScNonceKey,
-        ScString, ScSymbol, ScVal, ScVec, StringM, TimePoint, TrustLineAsset, TrustLineEntry,
-        Uint256,
+        ScString, ScSymbol, ScVal, ScVec, SorobanAuthorizedInvocation, StringM, TimePoint,
+        TrustLineAsset, TrustLineEntry, Uint256,
     },
     AddressObject, Bool, BytesObject, ContractExecutableObject, DurationObject, DurationSmall,
     DurationVal, Error, HostError, I128Object, I128Small, I128Val, I256Object, I256Small, I256Val,
@@ -220,6 +220,7 @@ impl MeteredClone for AccessType {}
 impl MeteredClone for InternalContractEvent {}
 impl MeteredClone for CreateContractArgs {}
 impl MeteredClone for ContractIdPreimage {}
+impl MeteredClone for SorobanAuthorizedInvocation {}
 // composite types
 impl<T> MeteredClone for Rc<T> {}
 impl<T> MeteredClone for &[T] {}
