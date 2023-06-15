@@ -12,8 +12,8 @@ impl Host {
             ContractDataType::Temporary => {
                 self.with_ledger_info(|li| Ok(li.min_temp_entry_expiration))?
             }
-            ContractDataType::Mergeable | ContractDataType::Exclusive => {
-                self.with_ledger_info(|li: &LedgerInfo| Ok(li.min_restorable_entry_expiration))?
+            ContractDataType::Persistent => {
+                self.with_ledger_info(|li: &LedgerInfo| Ok(li.min_persistent_entry_expiration))?
             }
         };
         Ok(ledger_seq.saturating_add(min_expiration))

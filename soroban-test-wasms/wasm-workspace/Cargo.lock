@@ -775,7 +775,7 @@ dependencies = [
  "soroban-env-macros",
  "soroban-wasmi",
  "static_assertions",
- "stellar-xdr 0.0.16 (git+https://github.com/stellar/rs-stellar-xdr?rev=134a6f1809c41ce250e605dae7614cfe1d691679)",
+ "stellar-xdr",
 ]
 
 [[package]]
@@ -816,7 +816,7 @@ dependencies = [
  "quote",
  "serde",
  "serde_json",
- "stellar-xdr 0.0.16 (git+https://github.com/stellar/rs-stellar-xdr?rev=134a6f1809c41ce250e605dae7614cfe1d691679)",
+ "stellar-xdr",
  "syn 2.0.16",
  "thiserror",
 ]
@@ -867,7 +867,8 @@ dependencies = [
  "sha2",
  "soroban-env-common",
  "soroban-spec",
- "stellar-xdr 0.0.16 (git+https://github.com/stellar/rs-stellar-xdr?rev=ba1ff9231ae81793d470db93815ead664eb21fb2)",
+ "soroban-spec-rust",
+ "stellar-xdr",
  "syn 2.0.16",
 ]
 
@@ -876,19 +877,23 @@ name = "soroban-spec"
 version = "0.8.4"
 dependencies = [
  "base64 0.13.1",
- "darling",
- "itertools",
+ "stellar-xdr",
+ "thiserror",
+ "wasmparser",
+]
+
+[[package]]
+name = "soroban-spec-rust"
+version = "0.8.4"
+dependencies = [
  "prettyplease",
  "proc-macro2",
  "quote",
- "serde",
- "serde_derive",
- "serde_json",
  "sha2",
- "stellar-xdr 0.0.16 (git+https://github.com/stellar/rs-stellar-xdr?rev=ba1ff9231ae81793d470db93815ead664eb21fb2)",
+ "soroban-spec",
+ "stellar-xdr",
  "syn 2.0.16",
  "thiserror",
- "wasmparser",
 ]
 
 [[package]]
@@ -939,21 +944,10 @@ dependencies = [
 [[package]]
 name = "stellar-xdr"
 version = "0.0.16"
-source = "git+https://github.com/stellar/rs-stellar-xdr?rev=134a6f1809c41ce250e605dae7614cfe1d691679#134a6f1809c41ce250e605dae7614cfe1d691679"
+source = "git+https://github.com/stellar/rs-stellar-xdr?rev=f64c17cb4e88df34200ba4b3ff79527df17bdd78#f64c17cb4e88df34200ba4b3ff79527df17bdd78"
 dependencies = [
  "arbitrary",
  "base64 0.13.1",
- "crate-git-revision",
- "hex",
- "serde",
- "serde_with",
-]
-
-[[package]]
-name = "stellar-xdr"
-version = "0.0.16"
-source = "git+https://github.com/stellar/rs-stellar-xdr?rev=ba1ff9231ae81793d470db93815ead664eb21fb2#ba1ff9231ae81793d470db93815ead664eb21fb2"
-dependencies = [
  "crate-git-revision",
  "hex",
  "serde",

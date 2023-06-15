@@ -19,7 +19,7 @@ fn ledger_network_id() -> Result<(), HostError> {
         timestamp: 0,
         network_id: [7; 32],
         base_reserve: 0,
-        min_restorable_entry_expiration: 4096,
+        min_persistent_entry_expiration: 4096,
         min_temp_entry_expiration: 16,
     });
     let obj = host.get_ledger_network_id()?;

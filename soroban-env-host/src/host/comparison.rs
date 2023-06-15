@@ -777,7 +777,7 @@ mod tests {
                 &ScVal::Address(xdr::ScAddress::Contract(xdr::Hash([0; 32]))),
             )
             .unwrap(),
-            Tag::StorageType => RawVal::from(StorageType::MERGEABLE),
+            Tag::StorageType => RawVal::from(StorageType::PERSISTENT),
             Tag::LedgerKeyNonceObject => panic!(),
             Tag::ObjectCodeUpperBound => panic!(),
             Tag::Bad => panic!(),

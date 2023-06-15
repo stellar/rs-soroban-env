@@ -13,12 +13,12 @@ pub enum DataKey {
 #[contractimpl]
 impl SimpleAccount {
     pub fn init(env: Env, public_key: BytesN<32>) {
-        env.storage().exclusive().set(&DataKey::Owner, &public_key, None);
+        env.storage().persistent().set(&DataKey::Owner, &public_key, None);
     }
 
     pub fn set_owner(env: Env, new_owner: BytesN<32>) {
         env.current_contract_address().require_auth();
-        env.storage().exclusive().set(&DataKey::Owner, &new_owner, None);
+        env.storage().persistent().set(&DataKey::Owner, &new_owner, None);
     }
 
     #[allow(non_snake_case)]
@@ -31,7 +31,7 @@ impl SimpleAccount {
         if signature_args.len() != 1 {
             panic!("incorrect number of signature args");
         }
-        let public_key: BytesN<32> = env.storage().exclusive().get(&DataKey::Owner).unwrap();
+        let public_key: BytesN<32> = env.storage().persistent().get(&DataKey::Owner).unwrap();
         env.crypto().ed25519_verify(
             &public_key,
             &signature_payload.into(),
