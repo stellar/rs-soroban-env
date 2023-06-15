@@ -16,14 +16,14 @@ use crate::native_contract::testutils::{
     create_account, generate_keypair, sign_payload_for_account,
 };
 use crate::{host_vec, Host, LedgerInfo};
-use soroban_env_common::{AddressObject, Env, Symbol, SymbolStr, TryIntoVal};
+use soroban_env_common::{AddressObject, Env, Symbol, SymbolStr, TryFromVal, TryIntoVal};
 
 use crate::native_contract::base_types::Vec as HostVec;
 
 #[derive(Clone)]
 #[contracttype]
 pub struct ContractTreeNode {
-    pub addr: Address,
+    pub contract: Address,
     pub need_auth: HostVec,
     pub children: HostVec,
 }
@@ -177,10 +177,7 @@ impl AuthTest {
                 let payload = self.host.metered_hash_xdr(&payload_preimage).unwrap();
                 let signature_args = host_vec![
                     &self.host,
-                    host_vec![
-                        &self.host,
-                        sign_payload_for_account(&self.host, &self.keys[address_id], &payload)
-                    ]
+                    sign_payload_for_account(&self.host, &self.keys[address_id], &payload)
                 ];
                 contract_auth.push(SorobanAuthorizationEntry {
                     credentials: SorobanCredentials::Address(SorobanAddressCredentials {
@@ -307,7 +304,7 @@ impl AuthTest {
             need_auth.push(n).unwrap();
         }
         ContractTreeNode {
-            addr: root.contract_address.clone(),
+            contract: root.contract_address.clone(),
             need_auth,
             children,
         }
@@ -1236,4 +1233,98 @@ fn test_out_of_order_auth() {
         )]],
         false,
     );
+}
+
+#[test]
+fn test_invoker_subcontract_auth() {
+    let mut test = AuthTest::setup(0, 6);
+
+    let setup = SetupNode::new(
+        &test.contracts[0],
+        vec![true],
+        vec![
+            SetupNode::new(
+                &test.contracts[1],
+                vec![true],
+                vec![
+                    SetupNode::new(&test.contracts[3], vec![true], vec![]),
+                    SetupNode::new(&test.contracts[2], vec![true], vec![]),
+                ],
+            ),
+            SetupNode::new(
+                &test.contracts[2],
+                vec![true],
+                vec![
+                    SetupNode::new(
+                        &test.contracts[4],
+                        vec![true],
+                        vec![SetupNode::new(&test.contracts[3], vec![true], vec![])],
+                    ),
+                    // Contract will authorize this, but `require_auth` isn't
+                    // called - that's fine as we don't require exhausting
+                    // every authorization.
+                    SetupNode::new(&test.contracts[3], vec![false], vec![]),
+                ],
+            ),
+        ],
+    );
+
+    let tree = test.convert_setup_tree(&setup);
+    let args = host_vec![&test.host, tree];
+    let fn_name = Symbol::try_from_val(&test.host, &"invoker_auth_fn").unwrap();
+    assert_eq!(
+        test.run_recording(&test.contracts[5], fn_name.clone(), args.clone(),),
+        vec![]
+    );
+
+    test.test_enforcing(
+        test.contracts[5].clone(),
+        fn_name.clone(),
+        args.clone(),
+        vec![],
+        true,
+    )
+}
+
+#[test]
+fn test_invoker_subcontract_with_gaps() {
+    let mut test = AuthTest::setup(0, 4);
+
+    // The direct contract call doesn't need to require auth - the contract
+    // still authorizes the following sub-contract calls only.
+    let top_gap_setup = SetupNode::new(
+        &test.contracts[0],
+        vec![false],
+        vec![SetupNode::new(&test.contracts[1], vec![true], vec![])],
+    );
+
+    let fn_name = Symbol::try_from_val(&test.host, &"invoker_auth_fn").unwrap();
+
+    test.test_enforcing(
+        test.contracts[3].clone(),
+        fn_name.clone(),
+        host_vec![&test.host, test.convert_setup_tree(&top_gap_setup)],
+        vec![],
+        true,
+    );
+
+    // Gap in the middle is not allowed (contract authorizes 1->2, while we
+    // require auth only for 2).
+    let mid_gap_setup = SetupNode::new(
+        &test.contracts[0],
+        vec![true],
+        vec![SetupNode::new(
+            &test.contracts[1],
+            vec![false],
+            vec![SetupNode::new(&test.contracts[2], vec![true], vec![])],
+        )],
+    );
+
+    test.test_enforcing(
+        test.contracts[3].clone(),
+        fn_name.clone(),
+        host_vec![&test.host, test.convert_setup_tree(&mid_gap_setup)],
+        vec![],
+        false,
+    )
 }

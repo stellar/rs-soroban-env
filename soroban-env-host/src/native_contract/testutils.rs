@@ -9,7 +9,7 @@ use soroban_env_common::xdr::{
     SorobanAuthorizationEntry, SorobanAuthorizedContractFunction, SorobanAuthorizedFunction,
     SorobanAuthorizedInvocation, SorobanCredentials, Thresholds, Uint256,
 };
-use soroban_env_common::{EnvBase, TryFromVal, TryIntoVal};
+use soroban_env_common::{EnvBase, Symbol, TryFromVal};
 
 use crate::native_contract::base_types::BytesN;
 
@@ -118,7 +118,7 @@ impl<'a> TestSigner<'a> {
                         .push(&sign_payload_for_account(host, key, payload))
                         .unwrap();
                 }
-                host_vec![host, signatures]
+                signatures
             }
             TestSigner::AccountContract(signer) => (signer.sign)(payload),
             TestSigner::ContractInvoker(_) => host_vec![host],
