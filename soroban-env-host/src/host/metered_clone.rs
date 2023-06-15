@@ -2,7 +2,7 @@ use std::{mem, rc::Rc};
 
 use crate::{
     budget::Budget,
-    events::{HostEvent, InternalContractEvent, InternalEvent},
+    events::{EventError, HostEvent, InternalContractEvent, InternalEvent},
     host::Events,
     host_object::HostObject,
     storage::AccessType,
@@ -218,6 +218,7 @@ impl MeteredClone for ContractCodeEntry {}
 impl MeteredClone for ConfigSettingEntry {}
 impl MeteredClone for AccessType {}
 impl MeteredClone for InternalContractEvent {}
+impl MeteredClone for EventError {}
 impl MeteredClone for CreateContractArgs {}
 impl MeteredClone for ContractIdPreimage {}
 impl MeteredClone for SorobanAuthorizedInvocation {}

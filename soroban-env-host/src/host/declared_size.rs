@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use crate::{
-    events::{HostEvent, InternalContractEvent, InternalEvent},
+    events::{EventError, HostEvent, InternalContractEvent, InternalEvent},
     host::Events,
     host_object::HostObject,
     storage::AccessType,
@@ -138,6 +138,7 @@ impl_declared_size_type!(ContractEvent, 104);
 impl_declared_size_type!(HostEvent, 112);
 impl_declared_size_type!(Events, 24);
 impl_declared_size_type!(InternalEvent, 40);
+impl_declared_size_type!(EventError, 1);
 impl_declared_size_type!(ScBytes, 24);
 impl_declared_size_type!(ScString, 24);
 impl_declared_size_type!(ScSymbol, 24);
@@ -315,6 +316,7 @@ mod test {
         expect!["112"].assert_eq(size_of::<HostEvent>().to_string().as_str());
         expect!["24"].assert_eq(size_of::<Events>().to_string().as_str());
         expect!["40"].assert_eq(size_of::<InternalEvent>().to_string().as_str());
+        expect!["1"].assert_eq(size_of::<EventError>().to_string().as_str());
         expect!["24"].assert_eq(size_of::<ScBytes>().to_string().as_str());
         expect!["24"].assert_eq(size_of::<ScString>().to_string().as_str());
         expect!["24"].assert_eq(size_of::<ScSymbol>().to_string().as_str());
