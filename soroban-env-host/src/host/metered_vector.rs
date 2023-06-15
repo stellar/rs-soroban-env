@@ -290,6 +290,10 @@ where
     pub fn iter_mut(&mut self) -> std::slice::IterMut<'_, A> {
         self.vec.iter_mut()
     }
+
+    pub fn to_vec(&self, budget: &Budget) -> Result<Vec<A>, HostError> {
+        self.vec.metered_clone(budget)
+    }
 }
 
 impl<A> DeclaredSizeForMetering for MeteredVector<A>

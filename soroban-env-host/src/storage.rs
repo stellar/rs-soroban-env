@@ -292,6 +292,8 @@ impl Storage {
 #[cfg(test)]
 mod test_footprint {
 
+    use soroban_env_common::xdr::ScAddress;
+
     use super::*;
     use crate::budget::Budget;
     use crate::xdr::{ContractDataType, ContractLedgerEntryType, LedgerKeyContractData, ScVal};
@@ -302,10 +304,8 @@ mod test_footprint {
         budget.reset_unlimited();
         let mut fp = Footprint::default();
         // record when key not exist
-        let contract_id = [0; 32].into();
-
         let key = Rc::new(LedgerKey::ContractData(LedgerKeyContractData {
-            contract_id,
+            contract: ScAddress::Contract([0; 32].into()),
             key: ScVal::I32(0),
             type_: ContractDataType::Mergeable,
             le_type: ContractLedgerEntryType::DataEntry,
@@ -333,9 +333,8 @@ mod test_footprint {
     #[test]
     fn footprint_enforce_access() -> Result<(), HostError> {
         let budget = Budget::default();
-        let contract_id = [0; 32].into();
         let key = Rc::new(LedgerKey::ContractData(LedgerKeyContractData {
-            contract_id,
+            contract: ScAddress::Contract([0; 32].into()),
             key: ScVal::I32(0),
             type_: ContractDataType::Mergeable,
             le_type: ContractLedgerEntryType::DataEntry,
@@ -355,9 +354,8 @@ mod test_footprint {
     fn footprint_enforce_access_not_exist() -> Result<(), HostError> {
         let budget = Budget::default();
         let mut fp = Footprint::default();
-        let contract_id = [0; 32].into();
         let key = Rc::new(LedgerKey::ContractData(LedgerKeyContractData {
-            contract_id,
+            contract: ScAddress::Contract([0; 32].into()),
             key: ScVal::I32(0),
             type_: ContractDataType::Mergeable,
             le_type: ContractLedgerEntryType::DataEntry,
@@ -373,9 +371,8 @@ mod test_footprint {
     #[test]
     fn footprint_attempt_to_write_readonly_entry() -> Result<(), HostError> {
         let budget = Budget::default();
-        let contract_id = [0; 32].into();
         let key = Rc::new(LedgerKey::ContractData(LedgerKeyContractData {
-            contract_id,
+            contract: ScAddress::Contract([0; 32].into()),
             key: ScVal::I32(0),
             type_: ContractDataType::Mergeable,
             le_type: ContractLedgerEntryType::DataEntry,

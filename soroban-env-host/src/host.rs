@@ -143,10 +143,10 @@ impl Host {
             objects: Default::default(),
             storage: RefCell::new(storage),
             context: Default::default(),
-            budget: budget.clone(),
+            budget,
             events: Default::default(),
             authorization_manager: RefCell::new(
-                AuthorizationManager::new_enforcing_without_authorizations(budget),
+                AuthorizationManager::new_enforcing_without_authorizations(),
             ),
             diagnostic_level: Default::default(),
             base_prng: RefCell::new(None),
@@ -167,13 +167,18 @@ impl Host {
         *self.0.source_account.borrow_mut() = None;
     }
 
-    pub fn source_account(&self) -> Option<AccountId> {
-        self.0.source_account.borrow().clone()
+    pub fn source_account_address(&self) -> Result<Option<AddressObject>, HostError> {
+        if let Some(acc) = self.0.source_account.borrow().as_ref() {
+            Ok(Some(self.add_host_object(ScAddress::Account(
+                acc.metered_clone(self.budget_ref())?,
+            ))?))
+        } else {
+            Ok(None)
+        }
     }
 
     pub fn switch_to_recording_auth(&self) {
-        *self.0.authorization_manager.borrow_mut() =
-            AuthorizationManager::new_recording(self.budget_cloned());
+        *self.0.authorization_manager.borrow_mut() = AuthorizationManager::new_recording();
     }
 
     pub fn set_authorization_entries(
@@ -441,13 +446,9 @@ impl Host {
         args: CreateContractArgs,
     ) -> Result<AddressObject, HostError> {
         if let Some(deployer_address) = deployer {
-            let sc_addr = self.visit_obj(deployer_address, |addr: &ScAddress| {
-                addr.metered_clone(self.budget_ref())
-            })?;
             self.0.authorization_manager.borrow_mut().require_auth(
                 self,
-                deployer_address.get_handle(),
-                sc_addr,
+                deployer_address,
                 Default::default(),
             )?;
         }
@@ -515,7 +516,7 @@ impl Host {
                     &[],
                 )
             })?
-            .get_authenticated_authorizations())
+            .get_authenticated_authorizations(self))
     }
 
     fn upload_contract_wasm(&self, wasm: Vec<u8>) -> Result<BytesObject, HostError> {
@@ -599,7 +600,7 @@ impl Host {
             self.0
                 .authorization_manager
                 .borrow()
-                .get_recorded_auth_payloads()
+                .get_recorded_auth_payloads(self)
         }
         #[cfg(any(test, feature = "testutils"))]
         {
@@ -615,7 +616,7 @@ impl Host {
                         &[],
                     )
                 })?
-                .get_recorded_auth_payloads()
+                .get_recorded_auth_payloads(self)
         }
     }
 
@@ -1762,7 +1763,7 @@ impl VmCallerEnv for Host {
                 flags: flags.unwrap_or(0),
             });
             let data = LedgerEntryData::ContractData(ContractDataEntry {
-                contract_id: self.get_current_contract_id_internal()?,
+                contract: ScAddress::Contract(self.get_current_contract_id_internal()?),
                 key: self.from_host_val(k)?,
                 body,
                 expiration_ledger_seq: self.get_min_expiration_ledger(storage_type)?,
@@ -2490,21 +2491,13 @@ impl VmCallerEnv for Host {
         vmcaller: &mut VmCaller<Self::VmUserState>,
         address: AddressObject,
         args: VecObject,
-    ) -> Result<RawVal, Self::Error> {
-        let sc_addr = self.visit_obj(address, |addr: &ScAddress| {
-            addr.metered_clone(self.budget_ref())
-        })?;
-
+    ) -> Result<Void, Self::Error> {
+        let args = self.visit_obj(args, |a: &HostVec| a.to_vec(self.budget_ref()))?;
         Ok(self
             .0
             .authorization_manager
             .borrow_mut()
-            .require_auth(
-                self,
-                address.get_handle(),
-                sc_addr,
-                self.call_args_to_scvec(args)?,
-            )?
+            .require_auth(self, address, args)?
             .into())
     }
 
@@ -2512,8 +2505,7 @@ impl VmCallerEnv for Host {
         &self,
         vmcaller: &mut VmCaller<Self::VmUserState>,
         address: AddressObject,
-    ) -> Result<RawVal, Self::Error> {
-        let addr = self.visit_obj(address, |addr: &ScAddress| Ok(addr.clone()))?;
+    ) -> Result<Void, Self::Error> {
         let args = self.with_current_frame(|f| {
             let args = match f {
                 Frame::ContractVM(_, _, args) => args,
@@ -2529,23 +2521,28 @@ impl VmCallerEnv for Host {
                 #[cfg(any(test, feature = "testutils"))]
                 Frame::TestContract(c) => &c.args,
             };
-            self.rawvals_to_scvec(&args)
+            args.metered_clone(self.budget_ref())
         })?;
 
         Ok(self
             .0
             .authorization_manager
             .borrow_mut()
-            .require_auth(self, address.get_handle(), addr, args)?
+            .require_auth(self, address, args)?
             .into())
     }
 
-    fn get_current_contract_id(
+    fn authorize_as_curr_contract(
         &self,
         vmcaller: &mut VmCaller<Self::VmUserState>,
-    ) -> Result<BytesObject, Self::Error> {
-        let id = self.get_current_contract_id_internal()?;
-        self.add_host_object(ScBytes(id.0.to_vec().try_into()?))
+        auth_entries: VecObject,
+    ) -> Result<Void, HostError> {
+        Ok(self
+            .0
+            .authorization_manager
+            .borrow_mut()
+            .add_invoker_contract_auth(self, auth_entries)?
+            .into())
     }
 
     fn account_public_key_to_address(

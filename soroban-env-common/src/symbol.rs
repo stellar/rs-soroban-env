@@ -459,8 +459,16 @@ impl TryFrom<&SymbolSmall> for ScVal {
 impl<E: Env> TryFromVal<E, Symbol> for ScVal {
     type Error = ConversionError;
     fn try_from_val(e: &E, s: &Symbol) -> Result<Self, ConversionError> {
+        Ok(ScVal::Symbol(ScSymbol::try_from_val(e, s)?))
+    }
+}
+
+#[cfg(feature = "std")]
+impl<E: Env> TryFromVal<E, Symbol> for ScSymbol {
+    type Error = ConversionError;
+    fn try_from_val(e: &E, s: &Symbol) -> Result<Self, ConversionError> {
         let sstr = SymbolStr::try_from_val(e, s)?;
-        Ok(ScVal::Symbol(ScSymbol(sstr.0.as_slice().try_into()?)))
+        Ok(ScSymbol(sstr.0.as_slice()[0..sstr.len()].try_into()?))
     }
 }
 

@@ -1,6 +1,8 @@
 use std::rc::Rc;
 
-use soroban_env_common::xdr::{ContractIdPreimage, CreateContractArgs};
+use soroban_env_common::xdr::{
+    ContractIdPreimage, CreateContractArgs, SorobanAuthorizedInvocation,
+};
 
 use crate::{
     events::{EventError, HostEvent, InternalContractEvent, InternalEvent},
@@ -143,6 +145,7 @@ impl_declared_size_type!(ScString, 24);
 impl_declared_size_type!(ScSymbol, 24);
 impl_declared_size_type!(CreateContractArgs, 99);
 impl_declared_size_type!(ContractIdPreimage, 66);
+impl_declared_size_type!(SorobanAuthorizedInvocation, 128);
 
 // composite types
 
@@ -316,6 +319,11 @@ mod test {
         expect!["24"].assert_eq(size_of::<ScSymbol>().to_string().as_str());
         expect!["99"].assert_eq(size_of::<CreateContractArgs>().to_string().as_str());
         expect!["66"].assert_eq(size_of::<ContractIdPreimage>().to_string().as_str());
+        expect!["128"].assert_eq(
+            size_of::<SorobanAuthorizedInvocation>()
+                .to_string()
+                .as_str(),
+        );
         // composite types
         expect!["16"].assert_eq(size_of::<&[ScVal]>().to_string().as_str());
         expect!["48"].assert_eq(size_of::<(RawVal, ScVal)>().to_string().as_str());
@@ -444,6 +452,7 @@ mod test {
         assert_mem_size_le_declared_size!(ScString);
         assert_mem_size_le_declared_size!(ScSymbol);
         assert_mem_size_le_declared_size!(CreateContractArgs);
+        assert_mem_size_le_declared_size!(SorobanAuthorizedInvocation);
         // composite types
         assert_mem_size_le_declared_size!(&[ScVal]);
         assert_mem_size_le_declared_size!((RawVal, ScVal));

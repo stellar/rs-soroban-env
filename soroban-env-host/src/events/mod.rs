@@ -95,9 +95,7 @@ fn display_scval(scv: &ScVal, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Resu
         ScVal::Address(addr) => display_address(addr, f),
         ScVal::LedgerKeyContractExecutable => write!(f, "LedgerKeyContractExecutable"),
         ScVal::LedgerKeyNonce(n) => {
-            write!(f, "LedgerKeyNonce(")?;
-            display_address(&n.nonce_address, f)?;
-            write!(f, ")")
+            write!(f, "LedgerKeyNonce({})", n.nonce)
         }
         ScVal::StorageType(t) => {
             write!(f, "StorageType{}", t)
