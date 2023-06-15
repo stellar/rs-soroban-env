@@ -1908,7 +1908,7 @@ impl VmCallerEnv for Host {
     }
 
     // Notes on metering: covered by the components.
-    fn compute_contract_id(
+    fn get_contract_id(
         &self,
         _vmcaller: &mut VmCaller<Host>,
         deployer: AddressObject,
@@ -1919,7 +1919,7 @@ impl VmCallerEnv for Host {
     }
 
     // Notes on metering: covered by the components.
-    fn compute_asset_contract_id(
+    fn get_asset_contract_id(
         &self,
         _vmcaller: &mut VmCaller<Host>,
         serialized_asset: BytesObject,
