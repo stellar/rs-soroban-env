@@ -9,7 +9,7 @@ use soroban_env_common::xdr::{
     SorobanAuthorizationEntry, SorobanAuthorizedContractFunction, SorobanAuthorizedFunction,
     SorobanAuthorizedInvocation, SorobanCredentials, Thresholds, Uint256,
 };
-use soroban_env_common::{EnvBase, Symbol, TryFromVal};
+use soroban_env_common::{EnvBase, TryFromVal};
 
 use crate::native_contract::base_types::BytesN;
 

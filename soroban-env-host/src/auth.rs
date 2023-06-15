@@ -1178,12 +1178,8 @@ impl AccountAuthorizationTracker {
                     &[],
                 ));
             }
-            if let Some(addr) = &self.address {
-                return host.consume_nonce(
-                    addr.metered_clone(host.budget_ref())?,
-                    *nonce,
-                    *expiration_ledger,
-                );
+            if let Some(addr) = self.address {
+                return host.consume_nonce(addr, *nonce, *expiration_ledger);
             }
         }
         Err(host.err(
@@ -1212,7 +1208,7 @@ impl AccountAuthorizationTracker {
                 ),
                 nonce,
                 signature_expiration_ledger: expiration_ledger,
-                invocation: self.invocation_to_xdr(host.budget_ref())?,
+                invocation: self.root_invocation_to_xdr(host)?,
             });
 
         host.metered_hash_xdr(&payload_preimage)
@@ -1331,13 +1327,14 @@ impl InvokerContractAuthorizationTracker {
 impl Host {
     fn consume_nonce(
         &self,
-        address: ScAddress,
+        address: AddressObject,
         nonce: i64,
         expiration_ledger: u32,
     ) -> Result<(), HostError> {
         let nonce_key_scval = ScVal::LedgerKeyNonce(ScNonceKey { nonce });
+        let sc_address = self.scaddress_from_address(address)?;
         let nonce_key = self.storage_key_for_address(
-            address.metered_clone(self.budget_ref())?,
+            sc_address.metered_clone(self.budget_ref())?,
             nonce_key_scval.metered_clone(self.budget_ref())?,
             xdr::ContractDataType::Temporary,
         );
@@ -1355,7 +1352,7 @@ impl Host {
                 flags: 0,
             });
             let data = LedgerEntryData::ContractData(ContractDataEntry {
-                contract: address,
+                contract: sc_address,
                 key: nonce_key_scval,
                 body,
                 expiration_ledger_seq: expiration_ledger,
