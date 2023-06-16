@@ -5,44 +5,24 @@ pub struct Contract;
 
 #[contractimpl]
 impl Contract {
-    pub fn put_exclusive(e: Env, key: Symbol, val: u64, flags: Option<u32>) {
-        e.storage().exclusive().set(&key, &val, flags)
+    pub fn put_persistent(e: Env, key: Symbol, val: u64, flags: Option<u32>) {
+        e.storage().persistent().set(&key, &val, flags)
     }
 
-    pub fn del_exclusive(e: Env, key: Symbol) {
-        e.storage().exclusive().remove(&key)
+    pub fn del_persistent(e: Env, key: Symbol) {
+        e.storage().persistent().remove(&key)
     }
 
-    pub fn has_exclusive(e: Env, key: Symbol) -> bool {
-        e.storage().exclusive().has(&key)
+    pub fn has_persistent(e: Env, key: Symbol) -> bool {
+        e.storage().persistent().has(&key)
     }
 
-    pub fn get_exclusive(e: Env, key: Symbol) -> u64 {
-        e.storage().exclusive().get(&key).unwrap()
+    pub fn get_persistent(e: Env, key: Symbol) -> u64 {
+        e.storage().persistent().get(&key).unwrap()
     }
 
-    pub fn bump_exclusive(e: Env, key: Symbol, min_to_live: u32) {
-        e.storage().exclusive().bump(&key, min_to_live)
-    }
-
-    pub fn put_mergeable(e: Env, key: Symbol, val: u64, flags: Option<u32>) {
-        e.storage().mergeable().set(&key, &val, flags)
-    }
-
-    pub fn del_mergeable(e: Env, key: Symbol) {
-        e.storage().mergeable().remove(&key)
-    }
-
-    pub fn has_mergeable(e: Env, key: Symbol) -> bool {
-        e.storage().mergeable().has(&key)
-    }
-
-    pub fn get_mergeable(e: Env, key: Symbol) -> u64 {
-        e.storage().mergeable().get(&key).unwrap()
-    }
-
-    pub fn bump_mergeable(e: Env, key: Symbol, min_to_live: u32) {
-        e.storage().mergeable().bump(&key, min_to_live)
+    pub fn bump_persistent(e: Env, key: Symbol, min_to_live: u32) {
+        e.storage().persistent().bump(&key, min_to_live)
     }
 
     pub fn put_temporary(e: Env, key: Symbol, val: u64, flags: Option<u32>) {

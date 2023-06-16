@@ -7,7 +7,7 @@ use soroban_env_common::{Env, StorageType, TryIntoVal};
 // Metering: covered by components
 pub fn read_administrator(e: &Host) -> Result<Address, HostError> {
     let key = DataKey::Admin;
-    let rv = e.get_contract_data(key.try_into_val(e)?, StorageType::MERGEABLE)?;
+    let rv = e.get_contract_data(key.try_into_val(e)?, StorageType::PERSISTENT)?;
     rv.try_into_val(e)
 }
 
@@ -17,7 +17,7 @@ pub fn write_administrator(e: &Host, id: Address) -> Result<(), HostError> {
     e.put_contract_data(
         key.try_into_val(e)?,
         id.try_into_val(e)?,
-        StorageType::MERGEABLE,
+        StorageType::PERSISTENT,
         ().into(),
     )?;
     Ok(())

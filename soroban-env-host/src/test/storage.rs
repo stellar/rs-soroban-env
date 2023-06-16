@@ -16,7 +16,7 @@ fn test_persistent_storage() {
             &host
                 .call(
                     contract_id,
-                    Symbol::try_from_val(&host, &"has_mergeable").unwrap(),
+                    Symbol::try_from_val(&host, &"has_persistent").unwrap(),
                     host_vec![&host, key_1].into(),
                 )
                 .unwrap()
@@ -27,7 +27,7 @@ fn test_persistent_storage() {
     // Put a key to storage and verify it's there
     host.call(
         contract_id,
-        Symbol::try_from_val(&host, &"put_mergeable").unwrap(),
+        Symbol::try_from_val(&host, &"put_persistent").unwrap(),
         host_vec![&host, key_1, 1234_u64, ()].into(),
     )
     .unwrap();
@@ -38,7 +38,7 @@ fn test_persistent_storage() {
             &host
                 .call(
                     contract_id,
-                    Symbol::try_from_val(&host, &"has_mergeable").unwrap(),
+                    Symbol::try_from_val(&host, &"has_persistent").unwrap(),
                     host_vec![&host, key_1].into(),
                 )
                 .unwrap()
@@ -50,7 +50,7 @@ fn test_persistent_storage() {
     // Put anothrer key and verify it's there
     host.call(
         contract_id,
-        Symbol::try_from_val(&host, &"put_mergeable").unwrap(),
+        Symbol::try_from_val(&host, &"put_persistent").unwrap(),
         host_vec![&host, key_2, u64::MAX, ()].into(),
     )
     .unwrap();
@@ -60,7 +60,7 @@ fn test_persistent_storage() {
             &host
                 .call(
                     contract_id,
-                    Symbol::try_from_val(&host, &"has_mergeable").unwrap(),
+                    Symbol::try_from_val(&host, &"has_persistent").unwrap(),
                     host_vec![
                         &host,
                         // Use a new object to sanity-check that comparison
@@ -83,7 +83,7 @@ fn test_persistent_storage() {
             &host
                 .call(
                     contract_id,
-                    Symbol::try_from_val(&host, &"get_mergeable").unwrap(),
+                    Symbol::try_from_val(&host, &"get_persistent").unwrap(),
                     host_vec![&host, key_1].into(),
                 )
                 .unwrap()
@@ -97,7 +97,7 @@ fn test_persistent_storage() {
             &host
                 .call(
                     contract_id,
-                    Symbol::try_from_val(&host, &"get_mergeable").unwrap(),
+                    Symbol::try_from_val(&host, &"get_persistent").unwrap(),
                     host_vec![&host, key_2].into(),
                 )
                 .unwrap()
@@ -109,7 +109,7 @@ fn test_persistent_storage() {
     // Update value for key 2 and check it
     host.call(
         contract_id,
-        Symbol::try_from_val(&host, &"put_mergeable").unwrap(),
+        Symbol::try_from_val(&host, &"put_persistent").unwrap(),
         host_vec![&host, key_2, 4321_u64, ()].into(),
     )
     .unwrap();
@@ -119,7 +119,7 @@ fn test_persistent_storage() {
             &host
                 .call(
                     contract_id,
-                    Symbol::try_from_val(&host, &"get_mergeable").unwrap(),
+                    Symbol::try_from_val(&host, &"get_persistent").unwrap(),
                     host_vec![&host, key_2].into(),
                 )
                 .unwrap()
@@ -131,7 +131,7 @@ fn test_persistent_storage() {
     // Delete entry for key 1
     host.call(
         contract_id,
-        Symbol::try_from_val(&host, &"del_mergeable").unwrap(),
+        Symbol::try_from_val(&host, &"del_persistent").unwrap(),
         host_vec![&host, key_1].into(),
     )
     .unwrap();
@@ -142,7 +142,7 @@ fn test_persistent_storage() {
             &host
                 .call(
                     contract_id,
-                    Symbol::try_from_val(&host, &"has_mergeable").unwrap(),
+                    Symbol::try_from_val(&host, &"has_persistent").unwrap(),
                     host_vec![&host, key_1].into(),
                 )
                 .unwrap()
@@ -156,7 +156,7 @@ fn test_persistent_storage() {
             &host
                 .call(
                     contract_id,
-                    Symbol::try_from_val(&host, &"has_mergeable").unwrap(),
+                    Symbol::try_from_val(&host, &"has_persistent").unwrap(),
                     host_vec![&host, key_2].into(),
                 )
                 .unwrap()

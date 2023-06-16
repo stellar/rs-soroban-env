@@ -307,7 +307,7 @@ mod test_footprint {
         let key = Rc::new(LedgerKey::ContractData(LedgerKeyContractData {
             contract: ScAddress::Contract([0; 32].into()),
             key: ScVal::I32(0),
-            type_: ContractDataType::Mergeable,
+            type_: ContractDataType::Persistent,
             le_type: ContractLedgerEntryType::DataEntry,
         }));
         fp.record_access(&key, AccessType::ReadOnly, &budget)?;
@@ -336,7 +336,7 @@ mod test_footprint {
         let key = Rc::new(LedgerKey::ContractData(LedgerKeyContractData {
             contract: ScAddress::Contract([0; 32].into()),
             key: ScVal::I32(0),
-            type_: ContractDataType::Mergeable,
+            type_: ContractDataType::Persistent,
             le_type: ContractLedgerEntryType::DataEntry,
         }));
 
@@ -381,7 +381,7 @@ mod test_footprint {
         let key = Rc::new(LedgerKey::ContractData(LedgerKeyContractData {
             contract: ScAddress::Contract([0; 32].into()),
             key: ScVal::I32(0),
-            type_: ContractDataType::Mergeable,
+            type_: ContractDataType::Persistent,
             le_type: ContractLedgerEntryType::DataEntry,
         }));
         let res = fp.enforce_access(&key, AccessType::ReadOnly, &budget);
@@ -398,7 +398,7 @@ mod test_footprint {
         let key = Rc::new(LedgerKey::ContractData(LedgerKeyContractData {
             contract: ScAddress::Contract([0; 32].into()),
             key: ScVal::I32(0),
-            type_: ContractDataType::Mergeable,
+            type_: ContractDataType::Persistent,
             le_type: ContractLedgerEntryType::DataEntry,
         }));
         let om = [(Rc::clone(&key), AccessType::ReadOnly)].into();
