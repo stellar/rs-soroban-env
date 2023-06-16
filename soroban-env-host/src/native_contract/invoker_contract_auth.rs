@@ -73,7 +73,7 @@ impl InvokerContractAuthEntry {
                     contract_id_preimage: ContractIdPreimage::Address(
                         ContractIdPreimageFromAddress {
                             address: invoker_contract_addr.metered_clone(host.budget_ref())?,
-                            salt: host.uint256_from_bytesobj_input(
+                            salt: host.u256_from_bytesobj_input(
                                 "salt",
                                 create_contract_fn.salt.as_object(),
                             )?,

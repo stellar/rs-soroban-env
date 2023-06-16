@@ -62,8 +62,12 @@ pub(crate) fn for_each_host_cost_measurement<B: Benchmark>(
 ) -> std::io::Result<BTreeMap<ContractCostType, (FPCostModel, FPCostModel)>> {
     let mut params: BTreeMap<ContractCostType, (FPCostModel, FPCostModel)> = BTreeMap::new();
 
+    call_bench::<B, ComputeEcdsaSecp256k1PubKeyMeasure>(&mut params)?;
+    call_bench::<B, ComputeEcdsaSecp256k1SigMeasure>(&mut params)?;
     call_bench::<B, ComputeEd25519PubKeyMeasure>(&mut params)?;
+    call_bench::<B, ComputeKeccak256HashMeasure>(&mut params)?;
     call_bench::<B, ComputeSha256HashMeasure>(&mut params)?;
+    call_bench::<B, RecoverEcdsaSecp256k1KeyMeasure>(&mut params)?;
     call_bench::<B, VerifyEd25519SigMeasure>(&mut params)?;
     call_bench::<B, VmInstantiationMeasure>(&mut params)?;
     call_bench::<B, VmMemReadMeasure>(&mut params)?;
