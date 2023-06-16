@@ -1,4 +1,4 @@
-use soroban_env_host::{budget::AsBudget, Host, RawVal};
+use soroban_env_host::{budget::AsBudget, Host, RawVal, I256};
 
 pub(crate) fn test_host() -> Host {
     let host = Host::default();
@@ -22,4 +22,11 @@ pub(crate) const TEST_WASMS: [&'static [u8]; 10] = [
 
 pub(crate) fn to_rawval_u32<I: Iterator<Item = u32>>(vals: I) -> impl Iterator<Item = RawVal> {
     vals.map(move |v| RawVal::from_u32(v).into())
+}
+
+pub(crate) fn repeating_byte_i256(byte: u8, input: u64) -> I256 {
+    let buf: Vec<u8> = (0..input.min(32)).map(|_| byte).collect();
+    let mut res = vec![0u8; 32 - input as usize];
+    res.extend_from_slice(buf.as_slice());
+    I256::from_be_bytes(res.try_into().unwrap())
 }

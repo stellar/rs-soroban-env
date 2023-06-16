@@ -1,7 +1,7 @@
 use soroban_env_common::{
     num::*,
     xdr::{ScErrorCode, ScErrorType, ScVal},
-    Compare, Env, Object, TryFromVal, TryIntoVal, I256,
+    Compare, Env, EnvBase, Object, TryFromVal, TryIntoVal, I256,
 };
 
 use crate::{budget::AsBudget, host_object::HostObjectType, Host, HostError, RawVal};
@@ -387,5 +387,35 @@ fn test_i256_arith() -> Result<(), HostError> {
     check_num_arith_rhs_u32_ok(&host, I256::new(0x10), 4, Host::i256_shr, I256::new(0x1))?;
     check_num_arith_rhs_u32_expect_err(&host, I256::new(0x10), 256, Host::i256_shr)?;
 
+    Ok(())
+}
+
+#[test]
+fn test_i256_bytes_roundtrip() -> Result<(), HostError> {
+    let host = Host::default();
+    let num = I256::from_words(-4353239472894, 6576786237846);
+    let bo = host.bytes_new_from_slice(num.to_be_bytes().as_slice())?;
+    let obj = host.i256_obj_from_be_bytes(bo)?;
+    let bo_back = host.i256_obj_to_be_bytes(obj)?;
+
+    let mut buf = [0; 32];
+    host.bytes_copy_to_slice(bo_back, U32Val::from(0), buf.as_mut_slice())?;
+    let num_back = I256::from_be_bytes(buf);
+    assert_eq!(num, num_back);
+    Ok(())
+}
+
+#[test]
+fn test_u256_bytes_roundtrip() -> Result<(), HostError> {
+    let host = Host::default();
+    let num = U256::from_words(4353239472894, 6576786237846);
+    let bo = host.bytes_new_from_slice(num.to_be_bytes().as_slice())?;
+    let obj = host.u256_obj_from_be_bytes(bo)?;
+    let bo_back = host.u256_obj_to_be_bytes(obj)?;
+
+    let mut buf = [0; 32];
+    host.bytes_copy_to_slice(bo_back, U32Val::from(0), buf.as_mut_slice())?;
+    let num_back = U256::from_be_bytes(buf);
+    assert_eq!(num, num_back);
     Ok(())
 }

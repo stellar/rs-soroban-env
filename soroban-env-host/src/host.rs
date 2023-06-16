@@ -1098,6 +1098,31 @@ impl VmCallerEnv for Host {
         self.add_host_object(u256_from_pieces(hi_hi, hi_lo, lo_hi, lo_lo))
     }
 
+    fn u256_obj_from_be_bytes(
+        &self,
+        vmcaller: &mut VmCaller<Self::VmUserState>,
+        bytes: BytesObject,
+    ) -> Result<U256Object, HostError> {
+        let num = self.visit_obj(bytes, move |b: &ScBytes| {
+            Ok(U256::from_be_bytes(self.fixed_length_bytes_from_slice(
+                "U256 bytes",
+                b.as_slice(),
+            )?))
+        })?;
+        self.add_host_object(num)
+    }
+
+    fn u256_obj_to_be_bytes(
+        &self,
+        vmcaller: &mut VmCaller<Self::VmUserState>,
+        obj: U256Object,
+    ) -> Result<BytesObject, HostError> {
+        let scb = self.visit_obj(obj, move |u: &U256| {
+            self.scbytes_from_slice(&u.to_be_bytes())
+        })?;
+        self.add_host_object(scb)
+    }
+
     fn obj_to_u256_hi_hi(
         &self,
         vmcaller: &mut VmCaller<Self::VmUserState>,
@@ -1153,6 +1178,31 @@ impl VmCallerEnv for Host {
         self.add_host_object(i256_from_pieces(hi_hi, hi_lo, lo_hi, lo_lo))
     }
 
+    fn i256_obj_from_be_bytes(
+        &self,
+        vmcaller: &mut VmCaller<Self::VmUserState>,
+        bytes: BytesObject,
+    ) -> Result<I256Object, HostError> {
+        let num = self.visit_obj(bytes, move |b: &ScBytes| {
+            Ok(I256::from_be_bytes(self.fixed_length_bytes_from_slice(
+                "I256 bytes",
+                b.as_slice(),
+            )?))
+        })?;
+        self.add_host_object(num)
+    }
+
+    fn i256_obj_to_be_bytes(
+        &self,
+        vmcaller: &mut VmCaller<Self::VmUserState>,
+        obj: I256Object,
+    ) -> Result<BytesObject, HostError> {
+        let scb = self.visit_obj(obj, move |i: &I256| {
+            self.scbytes_from_slice(&i.to_be_bytes())
+        })?;
+        self.add_host_object(scb)
+    }
+
     fn obj_to_i256_hi_hi(
         &self,
         vmcaller: &mut VmCaller<Self::VmUserState>,
@@ -1197,21 +1247,21 @@ impl VmCallerEnv for Host {
         })
     }
 
-    impl_bignum_host_fns!(u256_add, checked_add, U256);
-    impl_bignum_host_fns!(u256_sub, checked_sub, U256);
-    impl_bignum_host_fns!(u256_mul, checked_mul, U256);
-    impl_bignum_host_fns!(u256_div, checked_div, U256);
-    impl_bignum_host_fns_rhs_u32!(u256_pow, checked_pow, U256);
-    impl_bignum_host_fns_rhs_u32!(u256_shl, checked_shl, U256);
-    impl_bignum_host_fns_rhs_u32!(u256_shr, checked_shr, U256);
+    impl_bignum_host_fns!(u256_add, checked_add, U256, Int256AddSub);
+    impl_bignum_host_fns!(u256_sub, checked_sub, U256, Int256AddSub);
+    impl_bignum_host_fns!(u256_mul, checked_mul, U256, Int256Mul);
+    impl_bignum_host_fns!(u256_div, checked_div, U256, Int256Div);
+    impl_bignum_host_fns_rhs_u32!(u256_pow, checked_pow, U256, Int256Pow);
+    impl_bignum_host_fns_rhs_u32!(u256_shl, checked_shl, U256, Int256Shift);
+    impl_bignum_host_fns_rhs_u32!(u256_shr, checked_shr, U256, Int256Shift);
 
-    impl_bignum_host_fns!(i256_add, checked_add, I256);
-    impl_bignum_host_fns!(i256_sub, checked_sub, I256);
-    impl_bignum_host_fns!(i256_mul, checked_mul, I256);
-    impl_bignum_host_fns!(i256_div, checked_div, I256);
-    impl_bignum_host_fns_rhs_u32!(i256_pow, checked_pow, I256);
-    impl_bignum_host_fns_rhs_u32!(i256_shl, checked_shl, I256);
-    impl_bignum_host_fns_rhs_u32!(i256_shr, checked_shr, I256);
+    impl_bignum_host_fns!(i256_add, checked_add, I256, Int256AddSub);
+    impl_bignum_host_fns!(i256_sub, checked_sub, I256, Int256AddSub);
+    impl_bignum_host_fns!(i256_mul, checked_mul, I256, Int256Mul);
+    impl_bignum_host_fns!(i256_div, checked_div, I256, Int256Div);
+    impl_bignum_host_fns_rhs_u32!(i256_pow, checked_pow, I256, Int256Pow);
+    impl_bignum_host_fns_rhs_u32!(i256_shl, checked_shl, I256, Int256Shift);
+    impl_bignum_host_fns_rhs_u32!(i256_shr, checked_shr, I256, Int256Shift);
 
     fn map_new(&self, _vmcaller: &mut VmCaller<Host>) -> Result<MapObject, HostError> {
         self.add_host_object(HostMap::new()?)
