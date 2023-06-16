@@ -45,13 +45,13 @@ mod env_val;
 mod error;
 mod object;
 mod option;
-mod raw_val;
 mod result;
 mod storage_type;
 mod string;
 mod symbol;
 mod tuple;
 mod unimplemented_env;
+mod val;
 mod vmcaller_env;
 
 // We have some types that we don't re-export everything
@@ -77,12 +77,12 @@ pub use stellar_xdr as xdr;
 
 // Val is the 64-bit transparent type.
 #[cfg(feature = "wasmi")]
-pub use raw_val::WasmiMarshal;
-pub use raw_val::{
+pub use val::WasmiMarshal;
+pub use val::{
     AddressObject, ContractExecutableObject, LedgerKeyNonceObject, MapObject, VecObject,
 };
-pub use raw_val::{Bool, Void};
-pub use raw_val::{ConversionError, Tag, Val};
+pub use val::{Bool, Void};
+pub use val::{ConversionError, Tag, Val};
 
 pub use compare::Compare;
 pub use convert::Convert;

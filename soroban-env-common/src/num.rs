@@ -3,8 +3,8 @@ use core::cmp::Ordering;
 use crate::{
     declare_tag_based_signed_small_and_object_wrappers,
     declare_tag_based_small_and_object_wrappers,
-    declare_tag_based_unsigned_small_and_object_wrappers, declare_tag_based_wrapper,
-    raw_val::TAG_BITS, Compare, ConversionError, Env, Tag, Val,
+    declare_tag_based_unsigned_small_and_object_wrappers, declare_tag_based_wrapper, val::TAG_BITS,
+    Compare, ConversionError, Env, Tag, Val,
 };
 pub use ethnum::{AsI256, AsU256, I256, U256};
 use stellar_xdr::{Int256Parts, ScVal, UInt256Parts};

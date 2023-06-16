@@ -8,7 +8,7 @@ use stellar_xdr::int128_helpers;
 
 #[cfg(feature = "std")]
 use crate::{
-    num, object::ScValObjRef, raw_val::ValConvert, Error, Object, ScValObject, SymbolSmall, Tag,
+    num, object::ScValObjRef, val::ValConvert, Error, Object, ScValObject, SymbolSmall, Tag,
 };
 #[cfg(feature = "std")]
 use stellar_xdr::{

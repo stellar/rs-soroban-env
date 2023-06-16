@@ -5,7 +5,7 @@ macro_rules! impl_wrapper_tag_based_rawvalconvertible {
         // A ValConvert impl for types where the wrapper _has the same
         // name_ as a Tag::case and being-that-wrapper is identical to
         // having-that-tag.
-        impl $crate::raw_val::ValConvert for $tagname {
+        impl $crate::val::ValConvert for $tagname {
             #[inline(always)]
             fn is_val_type(v: $crate::Val) -> bool {
                 v.has_tag($crate::Tag::$tagname)
@@ -47,7 +47,7 @@ macro_rules! impl_tryfroms_and_tryfromvals_delegating_to_rawvalconvertible {
             type Error = $crate::ConversionError;
             #[inline(always)]
             fn try_from(v: $crate::Val) -> Result<Self, Self::Error> {
-                if let Some(c) = <Self as $crate::raw_val::ValConvert>::try_convert(v) {
+                if let Some(c) = <Self as $crate::val::ValConvert>::try_convert(v) {
                     Ok(c)
                 } else {
                     Err($crate::ConversionError)
@@ -87,9 +87,9 @@ macro_rules! impl_wrapper_wasmi_conversions {
             fn try_marshal_from_value(v: wasmi::Value) -> Option<Self> {
                 if let wasmi::Value::I64(i) = v {
                     let raw = $crate::Val::from_payload(i as u64);
-                    if <Self as $crate::raw_val::ValConvert>::is_val_type(raw) {
+                    if <Self as $crate::val::ValConvert>::is_val_type(raw) {
                         return Some(unsafe {
-                            <Self as $crate::raw_val::ValConvert>::unchecked_from_val(raw)
+                            <Self as $crate::val::ValConvert>::unchecked_from_val(raw)
                         });
                     }
                 }
@@ -250,7 +250,7 @@ macro_rules! declare_tag_based_small_and_object_wrappers {
         pub struct $GENERAL($crate::Val);
         $crate::impl_rawval_wrapper_base!($GENERAL);
 
-        impl $crate::raw_val::ValConvert for $GENERAL {
+        impl $crate::val::ValConvert for $GENERAL {
             fn is_val_type(v: $crate::Val) -> bool {
                 v.has_tag($crate::Tag::$SMALL) || v.has_tag($crate::Tag::$OBJECT)
             }

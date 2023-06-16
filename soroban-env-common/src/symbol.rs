@@ -1,5 +1,5 @@
 use crate::{
-    declare_tag_based_small_and_object_wrappers, raw_val::ValConvert, require, Compare,
+    declare_tag_based_small_and_object_wrappers, require, val::ValConvert, Compare,
     ConversionError, Env, Tag, TryFromVal, Val,
 };
 use core::{cmp::Ordering, fmt::Debug, hash::Hash, str};
@@ -38,7 +38,7 @@ impl From<SymbolError> for ConversionError {
 
 extern crate static_assertions as sa;
 
-use super::raw_val::BODY_BITS;
+use super::val::BODY_BITS;
 
 // Small symbols admit 9 6-bit chars for 54 bits.
 

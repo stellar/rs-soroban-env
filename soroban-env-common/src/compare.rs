@@ -1,7 +1,7 @@
 #[cfg(feature = "std")]
 use std::rc::Rc;
 
-use crate::{raw_val::ValConvert, Env, Tag, Val};
+use crate::{val::ValConvert, Env, Tag, Val};
 use core::cmp::Ordering;
 
 /// General trait representing the ability to compare two values of some type.

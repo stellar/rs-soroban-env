@@ -1,6 +1,6 @@
 use crate::{
-    impl_rawval_wrapper_base, num, raw_val::ValConvert, Compare, ConversionError, Convert, Env,
-    Tag, TryFromVal, Val,
+    impl_rawval_wrapper_base, num, val::ValConvert, Compare, ConversionError, Convert, Env, Tag,
+    TryFromVal, Val,
 };
 use core::{cmp::Ordering, fmt::Debug};
 use stellar_xdr::{Duration, ScVal, TimePoint};
