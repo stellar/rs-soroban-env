@@ -1839,6 +1839,11 @@ impl VmCallerEnv for Host {
         min: U32Val,
     ) -> Result<Void, HostError> {
         let key = self.contract_data_key_from_rawval(k, t.try_into()?)?;
+        self.0
+            .storage
+            .borrow_mut()
+            .mark_as_read_only(&key, self.as_budget())?;
+
         let min_expiration =
             self.with_ledger_info(|li| Ok(li.sequence_number.saturating_add(min.into())))?;
         self.0.expiration_bumps.borrow_mut().0.push(LedgerBump {
