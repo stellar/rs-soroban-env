@@ -4,8 +4,8 @@ use crate::host::{Host, HostError};
 use core::cmp::Ordering;
 use soroban_env_common::xdr::{AccountId, ScAddress};
 use soroban_env_common::{
-    AddressObject, BytesObject, Compare, ConversionError, Env, EnvBase, MapObject, RawVal,
-    StringObject, TryFromVal, VecObject,
+    AddressObject, BytesObject, Compare, ConversionError, Env, EnvBase, MapObject, StringObject,
+    TryFromVal, Val, VecObject,
 };
 
 #[derive(Clone)]
@@ -33,20 +33,20 @@ impl TryFromVal<Host, StringObject> for String {
     }
 }
 
-impl TryFromVal<Host, RawVal> for String {
+impl TryFromVal<Host, Val> for String {
     type Error = HostError;
 
-    fn try_from_val(env: &Host, val: &RawVal) -> Result<Self, Self::Error> {
+    fn try_from_val(env: &Host, val: &Val) -> Result<Self, Self::Error> {
         let val = *val;
         let obj: StringObject = val.try_into()?;
         String::try_from_val(env, &obj)
     }
 }
 
-impl TryFromVal<Host, String> for RawVal {
+impl TryFromVal<Host, String> for Val {
     type Error = HostError;
 
-    fn try_from_val(_env: &Host, val: &String) -> Result<RawVal, Self::Error> {
+    fn try_from_val(_env: &Host, val: &String) -> Result<Val, Self::Error> {
         Ok(val.object.into())
     }
 }
@@ -65,7 +65,7 @@ impl String {
             .into();
         let len = len as usize;
         let mut vec = std::vec![0; len];
-        env.string_copy_to_slice(self.object, RawVal::U32_ZERO, &mut vec)
+        env.string_copy_to_slice(self.object, Val::U32_ZERO, &mut vec)
             .map_err(|_| ConversionError)?;
         std::string::String::from_utf8(vec).map_err(|_| ConversionError.into())
     }
@@ -73,7 +73,7 @@ impl String {
     pub fn to_array<const N: usize>(&self) -> Result<[u8; N], HostError> {
         let mut slice = [0_u8; N];
         self.host
-            .string_copy_to_slice(self.object, RawVal::U32_ZERO, &mut slice)?;
+            .string_copy_to_slice(self.object, Val::U32_ZERO, &mut slice)?;
         Ok(slice)
     }
 
@@ -83,7 +83,7 @@ impl String {
         let size: u32 = self.host.string_len(self.object).unwrap().into();
         res.resize(size as usize, 0);
         self.host
-            .string_copy_to_slice(self.object, RawVal::U32_ZERO, &mut res[..])
+            .string_copy_to_slice(self.object, Val::U32_ZERO, &mut res[..])
             .unwrap();
         std::string::String::from_utf8(res).unwrap()
     }
@@ -114,20 +114,20 @@ impl TryFromVal<Host, BytesObject> for Bytes {
     }
 }
 
-impl TryFromVal<Host, RawVal> for Bytes {
+impl TryFromVal<Host, Val> for Bytes {
     type Error = HostError;
 
-    fn try_from_val(env: &Host, val: &RawVal) -> Result<Self, Self::Error> {
+    fn try_from_val(env: &Host, val: &Val) -> Result<Self, Self::Error> {
         let val = *val;
         let obj: BytesObject = val.try_into()?;
         Bytes::try_from_val(env, &obj)
     }
 }
 
-impl TryFromVal<Host, Bytes> for RawVal {
+impl TryFromVal<Host, Bytes> for Val {
     type Error = HostError;
 
-    fn try_from_val(_env: &Host, val: &Bytes) -> Result<RawVal, Self::Error> {
+    fn try_from_val(_env: &Host, val: &Bytes) -> Result<Val, Self::Error> {
         Ok(val.object.into())
     }
 }
@@ -203,25 +203,25 @@ impl<const N: usize> Compare<BytesN<N>> for Host {
     }
 }
 
-impl<const N: usize> TryFromVal<Host, RawVal> for BytesN<N> {
+impl<const N: usize> TryFromVal<Host, Val> for BytesN<N> {
     type Error = HostError;
 
-    fn try_from_val(env: &Host, val: &RawVal) -> Result<Self, Self::Error> {
+    fn try_from_val(env: &Host, val: &Val) -> Result<Self, Self::Error> {
         let val = *val;
         let obj: BytesObject = val.try_into()?;
         <BytesN<N>>::try_from_val(env, &obj)
     }
 }
 
-impl<const N: usize> TryFromVal<Host, BytesN<N>> for RawVal {
+impl<const N: usize> TryFromVal<Host, BytesN<N>> for Val {
     type Error = HostError;
 
-    fn try_from_val(_env: &Host, val: &BytesN<N>) -> Result<RawVal, Self::Error> {
+    fn try_from_val(_env: &Host, val: &BytesN<N>) -> Result<Val, Self::Error> {
         Ok(val.object.into())
     }
 }
 
-impl<const N: usize> From<BytesN<N>> for RawVal {
+impl<const N: usize> From<BytesN<N>> for Val {
     fn from(val: BytesN<N>) -> Self {
         val.object.into()
     }
@@ -245,7 +245,7 @@ impl<const N: usize> BytesN<N> {
     pub fn to_array(&self) -> Result<[u8; N], HostError> {
         let mut slice = [0_u8; N];
         self.host
-            .bytes_copy_to_slice(self.object, RawVal::U32_ZERO, &mut slice)?;
+            .bytes_copy_to_slice(self.object, Val::U32_ZERO, &mut slice)?;
         Ok(slice)
     }
 
@@ -288,20 +288,20 @@ impl Compare<Map> for Host {
     }
 }
 
-impl TryFromVal<Host, RawVal> for Map {
+impl TryFromVal<Host, Val> for Map {
     type Error = HostError;
 
-    fn try_from_val(env: &Host, val: &RawVal) -> Result<Self, Self::Error> {
+    fn try_from_val(env: &Host, val: &Val) -> Result<Self, Self::Error> {
         let val = *val;
         let obj: MapObject = val.try_into()?;
         Map::try_from_val(env, &obj)
     }
 }
 
-impl TryFromVal<Host, Map> for RawVal {
+impl TryFromVal<Host, Map> for Val {
     type Error = HostError;
 
-    fn try_from_val(_env: &Host, val: &Map) -> Result<RawVal, Self::Error> {
+    fn try_from_val(_env: &Host, val: &Map) -> Result<Val, Self::Error> {
         Ok(val.object.into())
     }
 }
@@ -323,25 +323,25 @@ impl Map {
 
     pub fn get<K, V>(&self, k: &K) -> Result<V, HostError>
     where
-        RawVal: TryFromVal<Host, K>,
-        V: TryFromVal<Host, RawVal>,
-        HostError: From<<RawVal as TryFromVal<Host, K>>::Error>,
-        HostError: From<<V as TryFromVal<Host, RawVal>>::Error>,
+        Val: TryFromVal<Host, K>,
+        V: TryFromVal<Host, Val>,
+        HostError: From<<Val as TryFromVal<Host, K>>::Error>,
+        HostError: From<<V as TryFromVal<Host, Val>>::Error>,
     {
-        let k_rv = RawVal::try_from_val(&self.host, k)?;
+        let k_rv = Val::try_from_val(&self.host, k)?;
         let v_rv = self.host.map_get(self.object, k_rv)?;
         Ok(V::try_from_val(&self.host, &v_rv)?)
     }
 
     pub fn set<K, V>(&mut self, k: &K, v: &V) -> Result<(), HostError>
     where
-        RawVal: TryFromVal<Host, K>,
-        RawVal: TryFromVal<Host, V>,
-        HostError: From<<RawVal as TryFromVal<Host, K>>::Error>,
-        HostError: From<<RawVal as TryFromVal<Host, V>>::Error>,
+        Val: TryFromVal<Host, K>,
+        Val: TryFromVal<Host, V>,
+        HostError: From<<Val as TryFromVal<Host, K>>::Error>,
+        HostError: From<<Val as TryFromVal<Host, V>>::Error>,
     {
-        let k_rv = RawVal::try_from_val(&self.host, k)?;
-        let v_rv = RawVal::try_from_val(&self.host, v)?;
+        let k_rv = Val::try_from_val(&self.host, k)?;
+        let v_rv = Val::try_from_val(&self.host, v)?;
         self.object = self.host.map_put(self.object, k_rv, v_rv)?;
         Ok(())
     }
@@ -373,25 +373,25 @@ impl TryFromVal<Host, VecObject> for Vec {
     }
 }
 
-impl TryFromVal<Host, RawVal> for Vec {
+impl TryFromVal<Host, Val> for Vec {
     type Error = HostError;
 
-    fn try_from_val(env: &Host, val: &RawVal) -> Result<Self, Self::Error> {
+    fn try_from_val(env: &Host, val: &Val) -> Result<Self, Self::Error> {
         let val = *val;
         let obj: VecObject = val.try_into()?;
         Vec::try_from_val(env, &obj)
     }
 }
 
-impl TryFromVal<Host, Vec> for RawVal {
+impl TryFromVal<Host, Vec> for Val {
     type Error = HostError;
 
-    fn try_from_val(_env: &Host, val: &Vec) -> Result<RawVal, Self::Error> {
+    fn try_from_val(_env: &Host, val: &Vec) -> Result<Val, Self::Error> {
         Ok(val.object.into())
     }
 }
 
-impl From<Vec> for RawVal {
+impl From<Vec> for Val {
     fn from(val: Vec) -> Self {
         val.object.into()
     }
@@ -403,10 +403,10 @@ impl From<Vec> for VecObject {
     }
 }
 
-impl TryFromVal<Host, std::vec::Vec<RawVal>> for Vec {
+impl TryFromVal<Host, std::vec::Vec<Val>> for Vec {
     type Error = HostError;
 
-    fn try_from_val(env: &Host, vals: &std::vec::Vec<RawVal>) -> Result<Self, Self::Error> {
+    fn try_from_val(env: &Host, vals: &std::vec::Vec<Val>) -> Result<Self, Self::Error> {
         let mut v = Vec::new(env)?;
         for rv in vals {
             v.push_raw(*rv)?
@@ -415,10 +415,10 @@ impl TryFromVal<Host, std::vec::Vec<RawVal>> for Vec {
     }
 }
 
-impl TryFromVal<Host, &std::vec::Vec<RawVal>> for Vec {
+impl TryFromVal<Host, &std::vec::Vec<Val>> for Vec {
     type Error = HostError;
 
-    fn try_from_val(env: &Host, vals: &&std::vec::Vec<RawVal>) -> Result<Self, Self::Error> {
+    fn try_from_val(env: &Host, vals: &&std::vec::Vec<Val>) -> Result<Self, Self::Error> {
         Vec::try_from_val(env, *vals)
     }
 }
@@ -432,7 +432,7 @@ impl Vec {
         })
     }
 
-    pub fn from_slice(env: &Host, slice: &[RawVal]) -> Result<Self, HostError> {
+    pub fn from_slice(env: &Host, slice: &[Val]) -> Result<Self, HostError> {
         let vec = env.vec_new_from_slice(slice)?;
         Ok(Self {
             host: env.clone(),
@@ -440,9 +440,9 @@ impl Vec {
         })
     }
 
-    pub fn get<T: TryFromVal<Host, RawVal>>(&self, i: u32) -> Result<T, HostError>
+    pub fn get<T: TryFromVal<Host, Val>>(&self, i: u32) -> Result<T, HostError>
     where
-        HostError: From<<T as TryFromVal<Host, RawVal>>::Error>,
+        HostError: From<<T as TryFromVal<Host, Val>>::Error>,
     {
         let rv = self.host.vec_get(self.object, i.into())?;
         Ok(T::try_from_val(&self.host, &rv)?)
@@ -454,14 +454,14 @@ impl Vec {
 
     pub fn push<T>(&mut self, x: &T) -> Result<(), HostError>
     where
-        RawVal: TryFromVal<Host, T>,
-        HostError: From<<RawVal as TryFromVal<Host, T>>::Error>,
+        Val: TryFromVal<Host, T>,
+        HostError: From<<Val as TryFromVal<Host, T>>::Error>,
     {
-        let rv = RawVal::try_from_val(&self.host, x)?;
+        let rv = Val::try_from_val(&self.host, x)?;
         self.push_raw(rv)
     }
 
-    pub fn push_raw(&mut self, x: RawVal) -> Result<(), HostError> {
+    pub fn push_raw(&mut self, x: Val) -> Result<(), HostError> {
         self.object = self.host.vec_push_back(self.object, x)?;
         Ok(())
     }
@@ -488,20 +488,20 @@ impl TryFromVal<Host, AddressObject> for Address {
     }
 }
 
-impl TryFromVal<Host, RawVal> for Address {
+impl TryFromVal<Host, Val> for Address {
     type Error = HostError;
 
-    fn try_from_val(env: &Host, val: &RawVal) -> Result<Self, Self::Error> {
+    fn try_from_val(env: &Host, val: &Val) -> Result<Self, Self::Error> {
         let val = *val;
         let obj: AddressObject = val.try_into()?;
         Address::try_from_val(env, &obj)
     }
 }
 
-impl TryFromVal<Host, Address> for RawVal {
+impl TryFromVal<Host, Address> for Val {
     type Error = HostError;
 
-    fn try_from_val(_env: &Host, val: &Address) -> Result<RawVal, Self::Error> {
+    fn try_from_val(_env: &Host, val: &Address) -> Result<Val, Self::Error> {
         Ok(val.object.into())
     }
 }

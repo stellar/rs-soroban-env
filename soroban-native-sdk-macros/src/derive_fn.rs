@@ -50,8 +50,8 @@ pub fn derive_contract_function_set<'a>(
                     &self,
                     func: &soroban_env_common::Symbol,
                     host: &crate::Host,
-                    args: &[soroban_env_common::RawVal],
-                ) -> Result<soroban_env_common::RawVal, crate::HostError> {
+                    args: &[soroban_env_common::Val],
+                ) -> Result<soroban_env_common::Val, crate::HostError> {
                     use soroban_env_common::EnvBase;
                     use super::*;
                     const FNS: &'static [&'static str] = &[#(&#str_lits),*];

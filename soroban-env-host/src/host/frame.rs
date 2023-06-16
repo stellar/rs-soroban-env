@@ -9,7 +9,7 @@ use crate::{
     err,
     storage::StorageMap,
     xdr::{ContractCostType, Hash, HostFunction, HostFunctionType, ScContractExecutable, ScVal},
-    Error, Host, HostError, RawVal, Symbol, SymbolStr, TryFromVal, TryIntoVal,
+    Error, Host, HostError, Symbol, SymbolStr, TryFromVal, TryIntoVal, Val,
 };
 
 #[cfg(any(test, feature = "testutils"))]
@@ -50,7 +50,7 @@ pub(super) struct RollbackPoint {
 
 #[cfg(any(test, feature = "testutils"))]
 pub trait ContractFunctionSet {
-    fn call(&self, func: &Symbol, host: &Host, args: &[RawVal]) -> Option<RawVal>;
+    fn call(&self, func: &Symbol, host: &Host, args: &[Val]) -> Option<Val>;
 }
 
 #[cfg(any(test, feature = "testutils"))]
@@ -58,13 +58,13 @@ pub trait ContractFunctionSet {
 pub struct TestContractFrame {
     pub id: Hash,
     pub func: Symbol,
-    pub args: Vec<RawVal>,
+    pub args: Vec<Val>,
     pub(super) panic: Rc<RefCell<Option<Error>>>,
 }
 
 #[cfg(any(test, feature = "testutils"))]
 impl TestContractFrame {
-    pub fn new(id: Hash, func: Symbol, args: Vec<RawVal>) -> Self {
+    pub fn new(id: Hash, func: Symbol, args: Vec<Val>) -> Self {
         Self {
             id,
             func,
@@ -95,9 +95,9 @@ pub(crate) struct Context {
 /// commit or roll back that state when it pops the stack.
 #[derive(Clone)]
 pub(crate) enum Frame {
-    ContractVM(Rc<Vm>, Symbol, Vec<RawVal>),
+    ContractVM(Rc<Vm>, Symbol, Vec<Val>),
     HostFunction(HostFunctionType),
-    Token(Hash, Symbol, Vec<RawVal>),
+    Token(Hash, Symbol, Vec<Val>),
     #[cfg(any(test, feature = "testutils"))]
     TestContract(TestContractFrame),
 }
@@ -289,9 +289,9 @@ impl Host {
     // Notes on metering: `GuardFrame` charges on the work done on protecting the `context`.
     // It does not cover the cost of the actual closure call. The closure needs to be
     // metered separately.
-    pub(crate) fn with_frame<F>(&self, frame: Frame, f: F) -> Result<RawVal, HostError>
+    pub(crate) fn with_frame<F>(&self, frame: Frame, f: F) -> Result<Val, HostError>
     where
-        F: FnOnce() -> Result<RawVal, HostError>,
+        F: FnOnce() -> Result<Val, HostError>,
     {
         self.charge_budget(ContractCostType::GuardFrame, None)?;
         let start_depth = self.0.context.borrow().len();
@@ -411,9 +411,9 @@ impl Host {
         id: Hash,
         func: Symbol,
         f: F,
-    ) -> Result<RawVal, HostError>
+    ) -> Result<Val, HostError>
     where
-        F: FnOnce() -> Result<RawVal, HostError>,
+        F: FnOnce() -> Result<Val, HostError>,
     {
         self.with_frame(
             Frame::TestContract(TestContractFrame::new(id, func, vec![])),
@@ -422,12 +422,7 @@ impl Host {
     }
 
     // Notes on metering: this is covered by the called components.
-    fn call_contract_fn(
-        &self,
-        id: &Hash,
-        func: &Symbol,
-        args: &[RawVal],
-    ) -> Result<RawVal, HostError> {
+    fn call_contract_fn(&self, id: &Hash, func: &Symbol, args: &[Val]) -> Result<Val, HostError> {
         // Create key for storage
         let storage_key = self.contract_executable_ledger_key(id)?;
         match self.retrieve_contract_executable_from_storage(&storage_key)? {
@@ -454,10 +449,10 @@ impl Host {
         &self,
         id: &Hash,
         func: Symbol,
-        args: &[RawVal],
+        args: &[Val],
         reentry_mode: ContractReentryMode,
         internal_host_call: bool,
-    ) -> Result<RawVal, HostError> {
+    ) -> Result<Val, HostError> {
         // Internal host calls may call some special functions that otherwise
         // aren't allowed to be called.
         if !internal_host_call
@@ -540,7 +535,7 @@ impl Host {
                     // building a host for production use, so we're willing to
                     // be a bit forgiving.
                     let closure = AssertUnwindSafe(move || cfs.call(&func, self, args));
-                    let res: Result<Option<RawVal>, PanicVal> =
+                    let res: Result<Option<Val>, PanicVal> =
                         testutils::call_with_suppressed_panic_hook(closure);
                     match res {
                         Ok(Some(rawval)) => {
@@ -560,7 +555,7 @@ impl Host {
                             // captured by VmCallerEnv::escalate_error_to_panic:
                             // fish the Error stored in the frame back out and
                             // propagate it.
-                            let func: RawVal = func.into();
+                            let func: Val = func.into();
                             let mut error: Error = Error::from_type_and_code(
                                 ScErrorType::Context,
                                 ScErrorCode::InternalError,
@@ -605,7 +600,7 @@ impl Host {
     }
 
     // Notes on metering: covered by the called components.
-    fn invoke_function_raw(&self, hf: HostFunction) -> Result<RawVal, HostError> {
+    fn invoke_function_raw(&self, hf: HostFunction) -> Result<Val, HostError> {
         let hf_type = hf.discriminant();
         match hf {
             HostFunction::InvokeContract(args) => {
@@ -614,7 +609,7 @@ impl Host {
                 {
                     self.with_frame(Frame::HostFunction(hf_type), || {
                         // Metering: conversions to host objects are covered. Cost of collecting
-                        // RawVals into Vec is ignored. Since 1. RawVals are cheap to clone 2. the
+                        // Vals into Vec is ignored. Since 1. Vals are cheap to clone 2. the
                         // max number of args is fairly limited.
 
                         let symbol: Symbol = scsym.as_slice().try_into_val(self)?;
@@ -651,12 +646,12 @@ impl Host {
                         ContractIdPreimage::Asset(_) => None,
                     };
                     self.create_contract_internal(deployer, args)
-                        .map(<RawVal>::from)
+                        .map(<Val>::from)
                 })
             }
             HostFunction::UploadContractWasm(wasm) => self
                 .with_frame(Frame::HostFunction(hf_type), || {
-                    self.upload_contract_wasm(wasm.to_vec()).map(<RawVal>::from)
+                    self.upload_contract_wasm(wasm.to_vec()).map(<Val>::from)
                 }),
         }
     }

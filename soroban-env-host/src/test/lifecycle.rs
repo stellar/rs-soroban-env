@@ -17,7 +17,7 @@ use soroban_env_common::xdr::{
     SorobanAuthorizedFunction, SorobanAuthorizedInvocation, SorobanCredentials,
 };
 use soroban_env_common::VecObject;
-use soroban_env_common::{xdr::ScBytes, RawVal, TryIntoVal};
+use soroban_env_common::{xdr::ScBytes, TryIntoVal, Val};
 use soroban_test_wasms::{ADD_I32, CREATE_CONTRACT, UPDATEABLE_CONTRACT};
 
 use super::util::{generate_account_id, generate_bytes_array};
@@ -117,7 +117,7 @@ fn test_create_contract_from_source_account(host: &Host, wasm: &[u8]) -> Hash {
     .unwrap();
 
     // Create contract
-    let created_wasm_hash: RawVal = host
+    let created_wasm_hash: Val = host
         .invoke_function(HostFunction::UploadContractWasm(wasm.try_into().unwrap()))
         .unwrap()
         .try_into_val(host)
@@ -265,7 +265,7 @@ pub(crate) fn sha256_hash_id_preimage<T: xdr::WriteXdr>(pre_image: T) -> xdr::Ha
 fn test_contract_wasm_update() {
     let host = Host::test_host_with_recording_footprint();
 
-    let old_wasm_hash_obj: RawVal = host
+    let old_wasm_hash_obj: Val = host
         .invoke_function(HostFunction::UploadContractWasm(
             UPDATEABLE_CONTRACT.to_vec().try_into().unwrap(),
         ))
@@ -276,7 +276,7 @@ fn test_contract_wasm_update() {
     let contract_addr_obj = host.register_test_contract_wasm(UPDATEABLE_CONTRACT);
     let updated_wasm = ADD_I32;
 
-    let updated_wasm_hash_obj: RawVal = host
+    let updated_wasm_hash_obj: Val = host
         .invoke_function(HostFunction::UploadContractWasm(
             updated_wasm.to_vec().try_into().unwrap(),
         ))

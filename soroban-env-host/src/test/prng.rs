@@ -1,7 +1,7 @@
 use crate::{
     xdr::{Hash, ScAddress, ScVal, ScVec},
-    BytesObject, ContractFunctionSet, Env, EnvBase, Host, HostError, RawVal, Symbol, SymbolSmall,
-    U32Val, U64Object, VecObject,
+    BytesObject, ContractFunctionSet, Env, EnvBase, Host, HostError, Symbol, SymbolSmall, U32Val,
+    U64Object, Val, VecObject,
 };
 
 /// prng tests
@@ -27,7 +27,7 @@ const HI: u64 = 78910;
 pub struct PRNGUsingTest;
 
 impl ContractFunctionSet for PRNGUsingTest {
-    fn call(&self, func: &Symbol, host: &Host, args: &[RawVal]) -> Option<RawVal> {
+    fn call(&self, func: &Symbol, host: &Host, args: &[Val]) -> Option<Val> {
         let Ok(func) = SymbolSmall::try_from(func.to_raw()) else {
             return None
         };

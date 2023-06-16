@@ -9,9 +9,7 @@ use soroban_env_common::xdr::{
     SorobanAuthorizationEntry, SorobanAuthorizedContractFunction, SorobanAuthorizedFunction,
     SorobanCredentials,
 };
-use soroban_env_common::{
-    AddressObject, Compare, RawVal, Symbol, TryFromVal, TryIntoVal, VecObject,
-};
+use soroban_env_common::{AddressObject, Compare, Symbol, TryFromVal, TryIntoVal, Val, VecObject};
 
 use crate::host::metered_clone::{charge_container_bulk_init_with_elts, MeteredClone};
 use crate::host::Frame;
@@ -120,7 +118,7 @@ struct AccountAuthorizationTracker {
     invocation_tracker: InvocationTracker,
     // Arguments representing the signature(s) made by the address to authorize
     // the invocations tracked here.
-    signature_args: Vec<RawVal>,
+    signature_args: Vec<Val>,
     // Indicates whether this tracker is still valid. If invalidated once, this
     // can't be used to authorize anything anymore
     is_valid: bool,
@@ -158,7 +156,7 @@ struct ContractInvocation {
 pub(crate) struct ContractFunction {
     pub(crate) contract_address: AddressObject,
     pub(crate) function_name: Symbol,
-    pub(crate) args: Vec<RawVal>,
+    pub(crate) args: Vec<Val>,
 }
 
 #[derive(Clone)]
@@ -230,7 +228,7 @@ impl AuthStackFrame {
     fn to_authorized_function(
         &self,
         host: &Host,
-        args: Vec<RawVal>,
+        args: Vec<Val>,
     ) -> Result<AuthorizedFunction, HostError> {
         match self {
             AuthStackFrame::Contract(contract_frame) => {
@@ -477,7 +475,7 @@ impl AuthorizationManager {
         &mut self,
         host: &Host,
         address: AddressObject,
-        args: Vec<RawVal>,
+        args: Vec<Val>,
     ) -> Result<(), HostError> {
         let curr_invocation = self.call_stack.last().ok_or_else(|| {
             host.err(
@@ -1286,7 +1284,7 @@ impl AccountAuthorizationTracker {
 }
 
 impl InvokerContractAuthorizationTracker {
-    fn new(host: &Host, invoker_auth_entry: RawVal) -> Result<Self, HostError> {
+    fn new(host: &Host, invoker_auth_entry: Val) -> Result<Self, HostError> {
         let invoker_sc_addr = ScAddress::Contract(host.get_current_contract_id_internal()?);
         let authorized_invocation = invoker_contract_auth_to_authorized_invocation(
             host,

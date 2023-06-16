@@ -11,7 +11,7 @@ use soroban_env_common::xdr::{
     ContractIdPreimage, Hash, ScContractExecutable, ScErrorCode, ScErrorType, ThresholdIndexes,
     Uint256,
 };
-use soroban_env_common::{Env, EnvBase, RawVal, Symbol, TryFromVal, TryIntoVal};
+use soroban_env_common::{Env, EnvBase, Symbol, TryFromVal, TryIntoVal, Val};
 
 use crate::native_contract::base_types::Vec as HostVec;
 
@@ -129,7 +129,7 @@ pub(crate) fn check_account_contract_auth(
     host: &Host,
     account_contract: &Hash,
     signature_payload: &[u8; 32],
-    signature_args: &Vec<RawVal>,
+    signature_args: &Vec<Val>,
     invocation: &AuthorizedInvocation,
 ) -> Result<(), HostError> {
     let payload_obj = host.bytes_new_from_slice(signature_payload)?;
@@ -157,7 +157,7 @@ pub(crate) fn check_account_authentication(
     host: &Host,
     account_id: AccountId,
     payload: &[u8],
-    signatures: &Vec<RawVal>,
+    signatures: &Vec<Val>,
 ) -> Result<(), HostError> {
     // Check if there is too many signatures: there shouldn't be more
     // signatures then the amount of account signers.

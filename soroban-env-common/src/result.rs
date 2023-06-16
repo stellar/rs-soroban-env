@@ -1,14 +1,14 @@
-use crate::{ConversionError, Env, Error, RawVal, TryFromVal, TryIntoVal};
+use crate::{ConversionError, Env, Error, TryFromVal, TryIntoVal, Val};
 
-impl<E: Env, T, R> TryFromVal<E, RawVal> for Result<T, R>
+impl<E: Env, T, R> TryFromVal<E, Val> for Result<T, R>
 where
-    T: TryFromVal<E, RawVal>,
+    T: TryFromVal<E, Val>,
     R: TryFrom<Error>,
 {
     type Error = ConversionError;
 
     #[inline(always)]
-    fn try_from_val(env: &E, val: &RawVal) -> Result<Self, Self::Error> {
+    fn try_from_val(env: &E, val: &Val) -> Result<Self, Self::Error> {
         let val = *val;
         if let Ok(status) = Error::try_from_val(env, &val) {
             Ok(Err(status.try_into().map_err(|_| ConversionError)?))
@@ -19,9 +19,9 @@ where
     }
 }
 
-impl<E: Env, T, R> TryFromVal<E, Result<T, R>> for RawVal
+impl<E: Env, T, R> TryFromVal<E, Result<T, R>> for Val
 where
-    RawVal: TryFromVal<E, T>,
+    Val: TryFromVal<E, T>,
     Error: for<'a> TryFrom<&'a R>,
 {
     type Error = ConversionError;

@@ -16,7 +16,7 @@ use soroban_env_common::{
         ScContractExecutable::{Token, WasmRef},
         ScVal,
     },
-    Error, RawVal, VecObject,
+    Error, Val, VecObject,
 };
 
 use crate::{budget::AsBudget, Host, HostError};
@@ -157,7 +157,7 @@ impl Host {
         &self,
         type_: ContractEventType,
         topics: VecObject,
-        data: RawVal,
+        data: Val,
     ) -> Result<(), HostError> {
         self.validate_contract_event_topics(topics)?;
         let ce = InternalContractEvent {

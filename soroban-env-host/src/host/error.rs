@@ -8,7 +8,7 @@ use backtrace::{Backtrace, BacktraceFrame};
 use core::fmt::Debug;
 use soroban_env_common::{
     xdr::{ScErrorCode, ScErrorType},
-    ConversionError, RawVal, TryFromVal, U32Val,
+    ConversionError, TryFromVal, U32Val, Val,
 };
 use std::ops::DerefMut;
 
@@ -144,7 +144,7 @@ impl Host {
         &self,
         error: Error,
         msg: &str,
-        debug_args: impl FnOnce() -> &'a [RawVal] + 'a,
+        debug_args: impl FnOnce() -> &'a [Val] + 'a,
     ) -> HostError {
         if self.is_debug() {
             self.error(error, msg, debug_args())
@@ -154,13 +154,7 @@ impl Host {
     }
 
     /// Convenience function to construct an [Error] and pass to [Host::error].
-    pub fn err(
-        &self,
-        type_: ScErrorType,
-        code: ScErrorCode,
-        msg: &str,
-        args: &[RawVal],
-    ) -> HostError {
+    pub fn err(&self, type_: ScErrorType, code: ScErrorCode, msg: &str, args: &[Val]) -> HostError {
         let error = Error::from_type_and_code(type_, code);
         self.error(error, msg, args)
     }
@@ -170,7 +164,7 @@ impl Host {
     /// records a diagnostic event with the provided `msg` and `args` and then
     /// enriches the returned [Error] with [DebugInfo] in the form of a
     /// [Backtrace] and snapshot of the [Events] buffer.
-    pub fn error(&self, error: Error, msg: &str, args: &[RawVal]) -> HostError {
+    pub fn error(&self, error: Error, msg: &str, args: &[Val]) -> HostError {
         if self.is_debug() {
             // We _try_ to take a mutable borrow of the events buffer refcell
             // while building up the event we're going to emit into the events
@@ -261,7 +255,7 @@ impl Host {
 }
 
 pub(crate) trait DebugArg {
-    fn debug_arg(host: &Host, arg: &Self) -> RawVal {
+    fn debug_arg(host: &Host, arg: &Self) -> Val {
         // We similarly guard against double-faulting here by try-acquiring the event buffer,
         // which will fail if we're re-entering error reporting _while_ forming a debug argument.
         if let Ok(guard) = host.0.events.try_borrow_mut() {
@@ -275,33 +269,33 @@ pub(crate) trait DebugArg {
             Error::from_type_and_code(ScErrorType::Events, ScErrorCode::InternalError).into()
         }
     }
-    fn debug_arg_maybe_expensive_or_fallible(host: &Host, arg: &Self) -> Result<RawVal, HostError>;
+    fn debug_arg_maybe_expensive_or_fallible(host: &Host, arg: &Self) -> Result<Val, HostError>;
 }
 
 impl<T> DebugArg for T
 where
-    RawVal: TryFromVal<Host, T>,
-    HostError: From<<RawVal as TryFromVal<Host, T>>::Error>,
+    Val: TryFromVal<Host, T>,
+    HostError: From<<Val as TryFromVal<Host, T>>::Error>,
 {
-    fn debug_arg_maybe_expensive_or_fallible(host: &Host, arg: &Self) -> Result<RawVal, HostError> {
-        RawVal::try_from_val(host, arg).map_err(|e| e.into())
+    fn debug_arg_maybe_expensive_or_fallible(host: &Host, arg: &Self) -> Result<Val, HostError> {
+        Val::try_from_val(host, arg).map_err(|e| e.into())
     }
 }
 
 impl DebugArg for xdr::Hash {
-    fn debug_arg_maybe_expensive_or_fallible(host: &Host, arg: &Self) -> Result<RawVal, HostError> {
+    fn debug_arg_maybe_expensive_or_fallible(host: &Host, arg: &Self) -> Result<Val, HostError> {
         host.bytes_new_from_slice(arg.as_slice()).map(|b| b.into())
     }
 }
 
 impl DebugArg for str {
-    fn debug_arg_maybe_expensive_or_fallible(host: &Host, arg: &Self) -> Result<RawVal, HostError> {
+    fn debug_arg_maybe_expensive_or_fallible(host: &Host, arg: &Self) -> Result<Val, HostError> {
         host.string_new_from_slice(arg).map(|s| s.into())
     }
 }
 
 impl DebugArg for usize {
-    fn debug_arg_maybe_expensive_or_fallible(host: &Host, arg: &Self) -> Result<RawVal, HostError> {
+    fn debug_arg_maybe_expensive_or_fallible(host: &Host, arg: &Self) -> Result<Val, HostError> {
         u32::try_from(*arg)
             .map(|x| U32Val::from(x).into())
             .map_err(|_| HostError::from(ConversionError))
@@ -313,7 +307,7 @@ impl DebugArg for usize {
 /// ```ignore
 /// err!(host, error, "message", arg1, arg2);
 /// ```
-/// All arguments must be convertible to [RawVal] with [TryIntoVal]. This is
+/// All arguments must be convertible to [Val] with [TryIntoVal]. This is
 /// expected to be called from within a function that returns
 /// `Result<_, HostError>`. If these requirements can't be fulfilled, use
 /// the [Host::error] or [Host::error_lazy] functions directly.
