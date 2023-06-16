@@ -288,17 +288,13 @@ impl Storage {
         }
     }
 
-    /// Marks the key as read only if we expect the host consumer to read this entry
+    /// Marks the key as a read if we expect the host consumer to read this key.
     ///
     /// In [FootprintMode::Recording] mode, records the access.
     ///
     /// In [FootprintMode::Enforcing] mode, succeeds only if the access has been
     /// declared in the [Footprint].
-    pub fn mark_as_read_only(
-        &mut self,
-        key: &Rc<LedgerKey>,
-        budget: &Budget,
-    ) -> Result<(), HostError> {
+    pub fn touch_key(&mut self, key: &Rc<LedgerKey>, budget: &Budget) -> Result<(), HostError> {
         let ty = AccessType::ReadOnly;
         match self.mode {
             FootprintMode::Recording(_) => self.footprint.record_access(key, ty, budget),

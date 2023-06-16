@@ -1839,10 +1839,12 @@ impl VmCallerEnv for Host {
         min: U32Val,
     ) -> Result<Void, HostError> {
         let key = self.contract_data_key_from_rawval(k, t.try_into()?)?;
+
+        // We don't load this key, but we want to make sure that it's in the footprint.
         self.0
             .storage
             .borrow_mut()
-            .mark_as_read_only(&key, self.as_budget())?;
+            .touch_key(&key, self.as_budget())?;
 
         let min_expiration =
             self.with_ledger_info(|li| Ok(li.sequence_number.saturating_add(min.into())))?;
