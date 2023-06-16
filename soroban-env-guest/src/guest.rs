@@ -6,9 +6,9 @@ use core::convert::Infallible;
 use soroban_env_common::call_macro_with_all_host_functions;
 
 use super::{
-    AddressObject, Bool, BytesObject, Error, I128Object, I256Object, I64Object, MapObject, RawVal,
+    AddressObject, Bool, BytesObject, Error, I128Object, I256Object, I64Object, MapObject,
     StorageType, StringObject, SymbolObject, U128Object, U256Object, U32Val, U64Object, U64Val,
-    VecObject, Void,
+    Val, VecObject, Void,
 };
 use super::{Env, EnvBase, Symbol};
 #[cfg(target_family = "wasm")]
@@ -100,11 +100,7 @@ impl EnvBase for Guest {
         unimplemented!()
     }
 
-    fn map_new_from_slices(
-        &self,
-        _keys: &[&str],
-        _vals: &[RawVal],
-    ) -> Result<MapObject, Self::Error> {
+    fn map_new_from_slices(&self, _keys: &[&str], _vals: &[Val]) -> Result<MapObject, Self::Error> {
         unimplemented!()
     }
 
@@ -112,20 +108,16 @@ impl EnvBase for Guest {
         &self,
         _map: MapObject,
         _keys: &[&str],
-        _vals: &mut [RawVal],
+        _vals: &mut [Val],
     ) -> Result<Void, Self::Error> {
         unimplemented!()
     }
 
-    fn vec_new_from_slice(&self, _vals: &[RawVal]) -> Result<VecObject, Self::Error> {
+    fn vec_new_from_slice(&self, _vals: &[Val]) -> Result<VecObject, Self::Error> {
         unimplemented!()
     }
 
-    fn vec_unpack_to_slice(
-        &self,
-        _vec: VecObject,
-        _vals: &mut [RawVal],
-    ) -> Result<Void, Self::Error> {
+    fn vec_unpack_to_slice(&self, _vec: VecObject, _vals: &mut [Val]) -> Result<Void, Self::Error> {
         unimplemented!()
     }
 
@@ -133,7 +125,7 @@ impl EnvBase for Guest {
         unimplemented!()
     }
 
-    fn log_from_slice(&self, msg: &str, vals: &[RawVal]) -> Result<Void, Self::Error> {
+    fn log_from_slice(&self, msg: &str, vals: &[Val]) -> Result<Void, Self::Error> {
         unimplemented!()
     }
 }
@@ -167,8 +159,8 @@ impl EnvBase for Guest {
     ) -> Result<BytesObject, Self::Error> {
         sa::assert_eq_size!(u32, *const u8);
         sa::assert_eq_size!(u32, usize);
-        let lm_pos: U32Val = RawVal::from_u32(slice.as_ptr() as u32);
-        let len: U32Val = RawVal::from_u32(slice.len() as u32);
+        let lm_pos: U32Val = Val::from_u32(slice.as_ptr() as u32);
+        let len: U32Val = Val::from_u32(slice.len() as u32);
         // NB: any failure in the host function here will trap the guest,
         // not return, so we only have to code the happy path.
         self.bytes_copy_from_linear_memory(b, b_pos, lm_pos, len)
@@ -182,8 +174,8 @@ impl EnvBase for Guest {
     ) -> Result<(), Self::Error> {
         sa::assert_eq_size!(u32, *const u8);
         sa::assert_eq_size!(u32, usize);
-        let lm_pos: U32Val = RawVal::from_u32(slice.as_ptr() as u32);
-        let len: U32Val = RawVal::from_u32(slice.len() as u32);
+        let lm_pos: U32Val = Val::from_u32(slice.as_ptr() as u32);
+        let len: U32Val = Val::from_u32(slice.len() as u32);
         self.bytes_copy_to_linear_memory(b, b_pos, lm_pos, len)?;
         Ok(())
     }
@@ -196,8 +188,8 @@ impl EnvBase for Guest {
     ) -> Result<(), Self::Error> {
         sa::assert_eq_size!(u32, *const u8);
         sa::assert_eq_size!(u32, usize);
-        let lm_pos: U32Val = RawVal::from_u32(slice.as_ptr() as u32);
-        let len: U32Val = RawVal::from_u32(slice.len() as u32);
+        let lm_pos: U32Val = Val::from_u32(slice.as_ptr() as u32);
+        let len: U32Val = Val::from_u32(slice.len() as u32);
         self.string_copy_to_linear_memory(b, b_pos, lm_pos, len)?;
         Ok(())
     }
@@ -210,8 +202,8 @@ impl EnvBase for Guest {
     ) -> Result<(), Self::Error> {
         sa::assert_eq_size!(u32, *const u8);
         sa::assert_eq_size!(u32, usize);
-        let lm_pos: U32Val = RawVal::from_u32(slice.as_ptr() as u32);
-        let len: U32Val = RawVal::from_u32(slice.len() as u32);
+        let lm_pos: U32Val = Val::from_u32(slice.as_ptr() as u32);
+        let len: U32Val = Val::from_u32(slice.len() as u32);
         self.symbol_copy_to_linear_memory(b, b_pos, lm_pos, len)?;
         Ok(())
     }
@@ -219,38 +211,34 @@ impl EnvBase for Guest {
     fn bytes_new_from_slice(&self, slice: &[u8]) -> Result<BytesObject, Self::Error> {
         sa::assert_eq_size!(u32, *const u8);
         sa::assert_eq_size!(u32, usize);
-        let lm_pos: U32Val = RawVal::from_u32(slice.as_ptr() as u32);
-        let len: U32Val = RawVal::from_u32(slice.len() as u32);
+        let lm_pos: U32Val = Val::from_u32(slice.as_ptr() as u32);
+        let len: U32Val = Val::from_u32(slice.len() as u32);
         self.bytes_new_from_linear_memory(lm_pos, len)
     }
 
     fn string_new_from_slice(&self, slice: &str) -> Result<StringObject, Self::Error> {
         sa::assert_eq_size!(u32, *const u8);
         sa::assert_eq_size!(u32, usize);
-        let lm_pos: U32Val = RawVal::from_u32(slice.as_ptr() as u32);
-        let len: U32Val = RawVal::from_u32(slice.len() as u32);
+        let lm_pos: U32Val = Val::from_u32(slice.as_ptr() as u32);
+        let len: U32Val = Val::from_u32(slice.len() as u32);
         self.string_new_from_linear_memory(lm_pos, len)
     }
 
     fn symbol_new_from_slice(&self, slice: &str) -> Result<SymbolObject, Self::Error> {
         sa::assert_eq_size!(u32, *const u8);
         sa::assert_eq_size!(u32, usize);
-        let lm_pos: U32Val = RawVal::from_u32(slice.as_ptr() as u32);
-        let len: U32Val = RawVal::from_u32(slice.len() as u32);
+        let lm_pos: U32Val = Val::from_u32(slice.as_ptr() as u32);
+        let len: U32Val = Val::from_u32(slice.len() as u32);
         self.symbol_new_from_linear_memory(lm_pos, len)
     }
 
-    fn map_new_from_slices(
-        &self,
-        keys: &[&str],
-        vals: &[RawVal],
-    ) -> Result<MapObject, Self::Error> {
+    fn map_new_from_slices(&self, keys: &[&str], vals: &[Val]) -> Result<MapObject, Self::Error> {
         sa::assert_eq_size!(u32, *const u8);
         sa::assert_eq_size!(u32, usize);
         soroban_env_common::require(keys.len() == vals.len());
-        let keys_lm_pos: U32Val = RawVal::from_u32(keys.as_ptr() as u32);
-        let vals_lm_pos: U32Val = RawVal::from_u32(vals.as_ptr() as u32);
-        let len: U32Val = RawVal::from_u32(keys.len() as u32);
+        let keys_lm_pos: U32Val = Val::from_u32(keys.as_ptr() as u32);
+        let vals_lm_pos: U32Val = Val::from_u32(vals.as_ptr() as u32);
+        let len: U32Val = Val::from_u32(keys.len() as u32);
         self.map_new_from_linear_memory(keys_lm_pos, vals_lm_pos, len)
     }
 
@@ -258,52 +246,48 @@ impl EnvBase for Guest {
         &self,
         map: MapObject,
         keys: &[&str],
-        vals: &mut [RawVal],
+        vals: &mut [Val],
     ) -> Result<Void, Self::Error> {
         sa::assert_eq_size!(u32, *const u8);
         sa::assert_eq_size!(u32, usize);
         soroban_env_common::require(keys.len() == vals.len());
-        let keys_lm_pos: U32Val = RawVal::from_u32(keys.as_ptr() as u32);
-        let vals_lm_pos: U32Val = RawVal::from_u32(vals.as_ptr() as u32);
-        let len: U32Val = RawVal::from_u32(keys.len() as u32);
+        let keys_lm_pos: U32Val = Val::from_u32(keys.as_ptr() as u32);
+        let vals_lm_pos: U32Val = Val::from_u32(vals.as_ptr() as u32);
+        let len: U32Val = Val::from_u32(keys.len() as u32);
         self.map_unpack_to_linear_memory(map, keys_lm_pos, vals_lm_pos, len)
     }
 
-    fn vec_new_from_slice(&self, vals: &[RawVal]) -> Result<VecObject, Self::Error> {
+    fn vec_new_from_slice(&self, vals: &[Val]) -> Result<VecObject, Self::Error> {
         sa::assert_eq_size!(u32, *const u8);
         sa::assert_eq_size!(u32, usize);
-        let vals_lm_pos: U32Val = RawVal::from_u32(vals.as_ptr() as u32);
-        let len: U32Val = RawVal::from_u32(vals.len() as u32);
+        let vals_lm_pos: U32Val = Val::from_u32(vals.as_ptr() as u32);
+        let len: U32Val = Val::from_u32(vals.len() as u32);
         self.vec_new_from_linear_memory(vals_lm_pos, len)
     }
 
-    fn vec_unpack_to_slice(
-        &self,
-        vec: VecObject,
-        vals: &mut [RawVal],
-    ) -> Result<Void, Self::Error> {
+    fn vec_unpack_to_slice(&self, vec: VecObject, vals: &mut [Val]) -> Result<Void, Self::Error> {
         sa::assert_eq_size!(u32, *const u8);
         sa::assert_eq_size!(u32, usize);
-        let vals_lm_pos: U32Val = RawVal::from_u32(vals.as_ptr() as u32);
-        let len: U32Val = RawVal::from_u32(vals.len() as u32);
+        let vals_lm_pos: U32Val = Val::from_u32(vals.as_ptr() as u32);
+        let len: U32Val = Val::from_u32(vals.len() as u32);
         self.vec_unpack_to_linear_memory(vec, vals_lm_pos, len)
     }
 
     fn symbol_index_in_strs(&self, key: Symbol, strs: &[&str]) -> Result<U32Val, Self::Error> {
         sa::assert_eq_size!(u32, *const u8);
         sa::assert_eq_size!(u32, usize);
-        let strs_lm_pos: U32Val = RawVal::from_u32(strs.as_ptr() as u32);
-        let len: U32Val = RawVal::from_u32(strs.len() as u32);
+        let strs_lm_pos: U32Val = Val::from_u32(strs.as_ptr() as u32);
+        let len: U32Val = Val::from_u32(strs.len() as u32);
         self.symbol_index_in_linear_memory(key, strs_lm_pos, len)
     }
 
-    fn log_from_slice(&self, msg: &str, vals: &[RawVal]) -> Result<Void, Self::Error> {
+    fn log_from_slice(&self, msg: &str, vals: &[Val]) -> Result<Void, Self::Error> {
         sa::assert_eq_size!(u32, *const u8);
         sa::assert_eq_size!(u32, usize);
-        let msg_lm_pos: U32Val = RawVal::from_u32(msg.as_ptr() as u32);
-        let msg_lm_len: U32Val = RawVal::from_u32(msg.len() as u32);
-        let vals_lm_pos: U32Val = RawVal::from_u32(vals.as_ptr() as u32);
-        let vals_lm_len: U32Val = RawVal::from_u32(vals.len() as u32);
+        let msg_lm_pos: U32Val = Val::from_u32(msg.as_ptr() as u32);
+        let msg_lm_len: U32Val = Val::from_u32(msg.len() as u32);
+        let vals_lm_pos: U32Val = Val::from_u32(vals.as_ptr() as u32);
+        let vals_lm_len: U32Val = Val::from_u32(vals.len() as u32);
         self.log_from_linear_memory(msg_lm_pos, msg_lm_len, vals_lm_pos, vals_lm_len)
     }
 }
@@ -452,7 +436,7 @@ macro_rules! generate_extern_modules {
             $(#[$mod_attr])*
             mod $mod_id {
                 #[allow(unused_imports)]
-                use crate::{RawVal,Object,Symbol,Error,MapObject,VecObject,BytesObject};
+                use crate::{Val,Object,Symbol,Error,MapObject,VecObject,BytesObject};
                 #[allow(unused_imports)]
                 use crate::{I128Object, I256Object, I64Object, I64Val, U128Object, U256Object, U32Val, U64Object, U64Val, StorageType};
                 #[allow(unused_imports)]

@@ -1,18 +1,18 @@
 use expect_test::expect;
 use soroban_env_common::EnvBase;
-use soroban_env_host::{Compare, DiagnosticLevel, Env, Host, HostError, MapObject, RawVal};
+use soroban_env_host::{Compare, DiagnosticLevel, Env, Host, HostError, MapObject, Val};
 
 #[test]
 fn vec_as_seen_by_user() -> Result<(), HostError> {
     let host = Host::default();
     let int1 = host.obj_from_i64(5)?;
 
-    let vec1a = host.vec_new(RawVal::from_void().into())?;
+    let vec1a = host.vec_new(Val::from_void().into())?;
     let vec1b = host.vec_push_back(vec1a, *int1.as_ref())?;
 
     assert_ne!(vec1a.as_raw().get_payload(), vec1b.as_raw().get_payload());
 
-    let vec2a = host.vec_new(RawVal::from_void().into())?;
+    let vec2a = host.vec_new(Val::from_void().into())?;
     let vec2b = host.vec_push_back(vec2a, *int1.as_ref())?;
 
     assert_ne!(vec2a.as_raw().get_payload(), vec2b.as_raw().get_payload());
@@ -32,7 +32,7 @@ fn vec_as_seen_by_user() -> Result<(), HostError> {
 fn vec_host_fn() -> Result<(), HostError> {
     let host = Host::default();
     let m = host.map_new()?;
-    assert!(m.as_raw().is::<MapObject>());
+    assert_eq!(m.as_raw().get_tag(), Tag::MapObject);
     Ok(())
 }
 
@@ -41,7 +41,7 @@ fn debug_log() {
     let host = Host::default();
     host.set_diagnostic_level(DiagnosticLevel::Debug);
     // Call a debug-log helper.
-    host.log_from_slice("can't convert value", &[RawVal::from_i32(1).to_raw()])
+    host.log_from_slice("can't convert value", &[Val::from_i32(1).to_raw()])
         .unwrap();
 
     // Fish out the last debug event and check that it is

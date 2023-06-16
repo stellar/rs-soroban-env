@@ -7,7 +7,7 @@
 //!
 //!   - [`FuncEmitter`] which provides helper methods for encoding calls to
 //!     the soroban host functions, as defined in [`soroban_env_common::Env`],
-//!     as well as working with the [`soroban_env_common::RawVal`] type.
+//!     as well as working with the [`soroban_env_common::Val`] type.
 
 mod func_emitter;
 mod host_funcs;

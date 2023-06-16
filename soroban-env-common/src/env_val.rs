@@ -1,14 +1,14 @@
 use crate::{
     num::{i256_from_pieces, i256_into_pieces, u256_from_pieces, u256_into_pieces},
-    ConversionError, Env, I128Small, I256Small, I64Small, RawVal, U128Small, U256Small, U64Small,
-    U64Val, I256, U256,
+    ConversionError, Env, I128Small, I256Small, I64Small, U128Small, U256Small, U64Small, U64Val,
+    Val, I256, U256,
 };
 use core::fmt::Debug;
 use stellar_xdr::int128_helpers;
 
 #[cfg(feature = "std")]
 use crate::{
-    num, object::ScValObjRef, Error, Object, RawValConvertible, ScValObject, SymbolSmall, Tag,
+    num, object::ScValObjRef, raw_val::ValConvert, Error, Object, ScValObject, SymbolSmall, Tag,
 };
 #[cfg(feature = "std")]
 use stellar_xdr::{
@@ -40,10 +40,10 @@ where
 
 // i64 conversions
 
-impl<E: Env> TryFromVal<E, RawVal> for i64 {
+impl<E: Env> TryFromVal<E, Val> for i64 {
     type Error = ConversionError;
 
-    fn try_from_val(env: &E, val: &RawVal) -> Result<Self, Self::Error> {
+    fn try_from_val(env: &E, val: &Val) -> Result<Self, Self::Error> {
         let val = *val;
         if let Ok(so) = I64Small::try_from(val) {
             Ok(so.into())
@@ -54,7 +54,7 @@ impl<E: Env> TryFromVal<E, RawVal> for i64 {
     }
 }
 
-impl<E: Env> TryFromVal<E, i64> for RawVal {
+impl<E: Env> TryFromVal<E, i64> for Val {
     type Error = ConversionError;
 
     fn try_from_val(env: &E, v: &i64) -> Result<Self, Self::Error> {
@@ -69,10 +69,10 @@ impl<E: Env> TryFromVal<E, i64> for RawVal {
 
 // u64 conversions
 
-impl<E: Env> TryFromVal<E, RawVal> for u64 {
+impl<E: Env> TryFromVal<E, Val> for u64 {
     type Error = ConversionError;
 
-    fn try_from_val(env: &E, val: &RawVal) -> Result<Self, Self::Error> {
+    fn try_from_val(env: &E, val: &Val) -> Result<Self, Self::Error> {
         let val = *val;
         if let Ok(so) = U64Small::try_from(val) {
             Ok(so.into())
@@ -83,7 +83,7 @@ impl<E: Env> TryFromVal<E, RawVal> for u64 {
     }
 }
 
-impl<E: Env> TryFromVal<E, u64> for RawVal {
+impl<E: Env> TryFromVal<E, u64> for Val {
     type Error = ConversionError;
 
     fn try_from_val(env: &E, v: &u64) -> Result<Self, Self::Error> {
@@ -125,10 +125,10 @@ impl<E: Env> TryFromVal<E, u64> for U64Val {
 
 // i128 conversions
 
-impl<E: Env> TryFromVal<E, RawVal> for i128 {
+impl<E: Env> TryFromVal<E, Val> for i128 {
     type Error = ConversionError;
 
-    fn try_from_val(env: &E, v: &RawVal) -> Result<Self, Self::Error> {
+    fn try_from_val(env: &E, v: &Val) -> Result<Self, Self::Error> {
         let v = *v;
         if let Ok(so) = I128Small::try_from(v) {
             Ok(so.into())
@@ -140,7 +140,7 @@ impl<E: Env> TryFromVal<E, RawVal> for i128 {
         }
     }
 }
-impl<E: Env> TryFromVal<E, i128> for RawVal {
+impl<E: Env> TryFromVal<E, i128> for Val {
     type Error = ConversionError;
 
     fn try_from_val(env: &E, v: &i128) -> Result<Self, Self::Error> {
@@ -158,10 +158,10 @@ impl<E: Env> TryFromVal<E, i128> for RawVal {
 
 // u128 conversions
 
-impl<E: Env> TryFromVal<E, RawVal> for u128 {
+impl<E: Env> TryFromVal<E, Val> for u128 {
     type Error = ConversionError;
 
-    fn try_from_val(env: &E, v: &RawVal) -> Result<Self, Self::Error> {
+    fn try_from_val(env: &E, v: &Val) -> Result<Self, Self::Error> {
         let v = *v;
         if let Ok(so) = U128Small::try_from(v) {
             Ok(so.into())
@@ -173,7 +173,7 @@ impl<E: Env> TryFromVal<E, RawVal> for u128 {
         }
     }
 }
-impl<E: Env> TryFromVal<E, u128> for RawVal {
+impl<E: Env> TryFromVal<E, u128> for Val {
     type Error = ConversionError;
 
     fn try_from_val(env: &E, v: &u128) -> Result<Self, Self::Error> {
@@ -190,10 +190,10 @@ impl<E: Env> TryFromVal<E, u128> for RawVal {
 }
 
 // i256 conversions
-impl<E: Env> TryFromVal<E, RawVal> for I256 {
+impl<E: Env> TryFromVal<E, Val> for I256 {
     type Error = ConversionError;
 
-    fn try_from_val(env: &E, v: &RawVal) -> Result<Self, Self::Error> {
+    fn try_from_val(env: &E, v: &Val) -> Result<Self, Self::Error> {
         let v = *v;
         if let Ok(so) = I256Small::try_from(v) {
             Ok(so.into())
@@ -207,7 +207,7 @@ impl<E: Env> TryFromVal<E, RawVal> for I256 {
         }
     }
 }
-impl<E: Env> TryFromVal<E, I256> for RawVal {
+impl<E: Env> TryFromVal<E, I256> for Val {
     type Error = ConversionError;
 
     fn try_from_val(env: &E, v: &I256) -> Result<Self, Self::Error> {
@@ -225,10 +225,10 @@ impl<E: Env> TryFromVal<E, I256> for RawVal {
 }
 
 // u256 conversions
-impl<E: Env> TryFromVal<E, RawVal> for U256 {
+impl<E: Env> TryFromVal<E, Val> for U256 {
     type Error = ConversionError;
 
-    fn try_from_val(env: &E, v: &RawVal) -> Result<Self, Self::Error> {
+    fn try_from_val(env: &E, v: &Val) -> Result<Self, Self::Error> {
         let v = *v;
         if let Ok(so) = U256Small::try_from(v) {
             Ok(so.into())
@@ -242,7 +242,7 @@ impl<E: Env> TryFromVal<E, RawVal> for U256 {
         }
     }
 }
-impl<E: Env> TryFromVal<E, U256> for RawVal {
+impl<E: Env> TryFromVal<E, U256> for Val {
     type Error = ConversionError;
 
     fn try_from_val(env: &E, v: &U256) -> Result<Self, Self::Error> {
@@ -262,13 +262,13 @@ impl<E: Env> TryFromVal<E, U256> for RawVal {
 // ScVal conversions (that require Object conversions)
 
 #[cfg(feature = "std")]
-impl<E: Env> TryFromVal<E, RawVal> for ScVal
+impl<E: Env> TryFromVal<E, Val> for ScVal
 where
     ScValObject: TryFromVal<E, Object>,
 {
     type Error = ConversionError;
 
-    fn try_from_val(env: &E, val: &RawVal) -> Result<Self, ConversionError> {
+    fn try_from_val(env: &E, val: &Val) -> Result<Self, ConversionError> {
         if let Ok(object) = Object::try_from(val) {
             // FIXME: it's not really great to be dropping the error from the other
             // TryFromVal here, we should really switch to taking errors from E.
@@ -281,8 +281,7 @@ where
             Tag::True => Ok(ScVal::Bool(true)),
             Tag::Void => Ok(ScVal::Void),
             Tag::Error => {
-                let status: Error =
-                    unsafe { <Error as RawValConvertible>::unchecked_from_val(val) };
+                let status: Error = unsafe { <Error as ValConvert>::unchecked_from_val(val) };
                 Ok(status.try_into()?)
             }
             Tag::U32Val => Ok(ScVal::U32(val.get_major())),
@@ -320,7 +319,7 @@ where
             }
             Tag::SymbolSmall => {
                 let sym: SymbolSmall =
-                    unsafe { <SymbolSmall as RawValConvertible>::unchecked_from_val(val) };
+                    unsafe { <SymbolSmall as ValConvert>::unchecked_from_val(val) };
                 let str: String = sym.into_iter().collect();
                 Ok(ScVal::Symbol(crate::xdr::ScSymbol(
                     str.as_bytes().try_into()?,
@@ -356,56 +355,56 @@ where
 }
 
 #[cfg(feature = "std")]
-impl<E: Env> TryFromVal<E, ScVal> for RawVal
+impl<E: Env> TryFromVal<E, ScVal> for Val
 where
     Object: for<'a> TryFromVal<E, ScValObjRef<'a>, Error = ConversionError>,
 {
     type Error = ConversionError;
-    fn try_from_val(env: &E, val: &ScVal) -> Result<RawVal, Self::Error> {
+    fn try_from_val(env: &E, val: &ScVal) -> Result<Val, Self::Error> {
         if let Some(scvo) = ScValObjRef::classify(val) {
             let obj = Object::try_from_val(env, &scvo)?;
             return Ok(obj.into());
         }
 
         Ok(match val {
-            ScVal::Bool(b) => RawVal::from_bool(*b).into(),
-            ScVal::Void => RawVal::from_void().into(),
+            ScVal::Bool(b) => Val::from_bool(*b).into(),
+            ScVal::Void => Val::from_void().into(),
             ScVal::Error(e) => e.into(),
             ScVal::U32(u) => (*u).into(),
             ScVal::I32(i) => (*i).into(),
             ScVal::U64(u) => {
                 assert!(num::is_small_u64(*u));
-                unsafe { RawVal::from_body_and_tag(*u, Tag::U64Small) }
+                unsafe { Val::from_body_and_tag(*u, Tag::U64Small) }
             }
             ScVal::I64(i) => {
                 assert!(num::is_small_i64(*i));
-                unsafe { RawVal::from_body_and_tag(*i as u64, Tag::I64Small) }
+                unsafe { Val::from_body_and_tag(*i as u64, Tag::I64Small) }
             }
             ScVal::Timepoint(TimePoint(u)) => {
                 assert!(num::is_small_u64(*u));
-                unsafe { RawVal::from_body_and_tag(*u, Tag::TimepointSmall) }
+                unsafe { Val::from_body_and_tag(*u, Tag::TimepointSmall) }
             }
             ScVal::Duration(Duration(u)) => {
                 assert!(num::is_small_u64(*u));
-                unsafe { RawVal::from_body_and_tag(*u, Tag::DurationSmall) }
+                unsafe { Val::from_body_and_tag(*u, Tag::DurationSmall) }
             }
             ScVal::U128(u) => {
                 let u: u128 = u.into();
                 assert!(num::is_small_u128(u));
-                unsafe { RawVal::from_body_and_tag(u as u64, Tag::U128Small) }
+                unsafe { Val::from_body_and_tag(u as u64, Tag::U128Small) }
             }
             ScVal::I128(i) => {
                 let i: i128 = i.into();
                 assert!(num::is_small_i128(i));
-                unsafe { RawVal::from_body_and_tag((i as i64) as u64, Tag::I128Small) }
+                unsafe { Val::from_body_and_tag((i as i64) as u64, Tag::I128Small) }
             }
             ScVal::U256(u) => {
                 assert!(num::is_small_u256_parts(u));
-                unsafe { RawVal::from_body_and_tag(u.lo_lo, Tag::U256Small) }
+                unsafe { Val::from_body_and_tag(u.lo_lo, Tag::U256Small) }
             }
             ScVal::I256(i) => {
                 assert!(num::is_small_i256_parts(i));
-                unsafe { RawVal::from_body_and_tag(i.lo_lo, Tag::I256Small) }
+                unsafe { Val::from_body_and_tag(i.lo_lo, Tag::I256Small) }
             }
             ScVal::Symbol(bytes) => {
                 let ss = match std::str::from_utf8(bytes.as_slice()) {
@@ -415,11 +414,11 @@ where
                 SymbolSmall::try_from_str(ss)?.into()
             }
             ScVal::LedgerKeyContractExecutable => unsafe {
-                RawVal::from_body_and_tag(0, Tag::LedgerKeyContractExecutable)
+                Val::from_body_and_tag(0, Tag::LedgerKeyContractExecutable)
             },
             ScVal::StorageType(_storage_type) => unsafe {
                 let major: i32 = (*_storage_type).into();
-                RawVal::from_major_minor_and_tag(major as u32, 0, Tag::StorageType)
+                Val::from_major_minor_and_tag(major as u32, 0, Tag::StorageType)
             },
 
             ScVal::Bytes(_)

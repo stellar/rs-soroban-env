@@ -8,7 +8,7 @@ use crate::{
         ContractCostType, ContractEvent, ContractEventBody, ContractEventType, ContractEventV0,
         ExtensionPoint, Hash, ScAddress, ScMap, ScMapEntry, ScVal,
     },
-    ContractFunctionSet, Env, Host, HostError, RawVal, Symbol, SymbolSmall,
+    ContractFunctionSet, Env, Host, HostError, Symbol, SymbolSmall, Val,
 };
 use expect_test::expect;
 use std::rc::Rc;
@@ -16,7 +16,7 @@ use std::rc::Rc;
 pub struct ContractWithSingleEvent;
 
 impl ContractFunctionSet for ContractWithSingleEvent {
-    fn call(&self, _func: &Symbol, host: &Host, _args: &[RawVal]) -> Option<RawVal> {
+    fn call(&self, _func: &Symbol, host: &Host, _args: &[Val]) -> Option<Val> {
         // Add a contract event
         let mut data = host.map_new().unwrap();
         data = host.map_put(data, 1_u32.into(), 2_u32.into()).unwrap();
@@ -39,7 +39,7 @@ fn contract_event() -> Result<(), HostError> {
     host.register_test_contract(id, test_contract)?;
     assert_eq!(
         host.call(id, sym, args)?.get_payload(),
-        RawVal::from_void().to_raw().get_payload()
+        Val::from_void().to_raw().get_payload()
     );
 
     let event_ref = ContractEvent {
@@ -70,9 +70,9 @@ fn contract_event() -> Result<(), HostError> {
 pub struct ContractWithMultipleEvents;
 
 impl ContractFunctionSet for ContractWithMultipleEvents {
-    fn call(&self, _func: &Symbol, host: &Host, _args: &[RawVal]) -> Option<RawVal> {
+    fn call(&self, _func: &Symbol, host: &Host, _args: &[Val]) -> Option<Val> {
         let topics = host.test_vec_obj(&[0, 1]).unwrap();
-        let data = RawVal::from(0u32);
+        let data = Val::from(0u32);
         host.record_contract_event(ContractEventType::Contract, topics, data)
             .unwrap();
         host.log_diagnostics("debug event 0", &[]).unwrap();
@@ -93,7 +93,7 @@ fn test_event_rollback() -> Result<(), HostError> {
     host.register_test_contract(id, test_contract)?;
     assert_eq!(
         host.call(id, sym, args)?.get_payload(),
-        RawVal::from_void().to_raw().get_payload()
+        Val::from_void().to_raw().get_payload()
     );
     host.0.events.borrow_mut().rollback(1)?;
     // run `UPDATE_EXPECT=true cargo test` to update this.
@@ -111,7 +111,7 @@ fn test_internal_contract_events_metering_not_free() -> Result<(), HostError> {
         type_: ContractEventType::Contract,
         contract_id: Some(host.test_bin_obj(&dummy_id)?),
         topics: host.test_vec_obj(&[0, 1, 2, 3])?,
-        data: RawVal::from_void().to_raw(),
+        data: Val::from_void().to_raw(),
     };
 
     let host = host
@@ -138,7 +138,7 @@ fn test_internal_diagnostic_event_metering_free() -> Result<(), HostError> {
     let contract_id = Some(Hash(dummy_id));
     let topics = vec![
         InternalDiagnosticArg::HostVal(SymbolSmall::try_from_str("error")?.to_raw()),
-        InternalDiagnosticArg::HostVal(RawVal::from_i32(0).to_raw()),
+        InternalDiagnosticArg::HostVal(Val::from_i32(0).to_raw()),
     ];
     let args = vec![InternalDiagnosticArg::XdrVal(1_i32.as_scval())];
     let de = Rc::new(InternalDiagnosticEvent {

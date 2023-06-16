@@ -5,7 +5,7 @@ use soroban_env_common::{
     Error, Symbol, SymbolSmall, VecObject,
 };
 
-use crate::{budget::AsBudget, host::Frame, Host, HostError, RawVal};
+use crate::{budget::AsBudget, host::Frame, Host, HostError, Val};
 
 use super::{
     internal::{InternalDiagnosticArg, InternalDiagnosticEvent},
@@ -36,7 +36,7 @@ impl Host {
 
     /// Records a `System` contract event. `topics` is expected to be a `SCVec`
     /// length <= 4 that cannot contain `Vec`, `Map`, or `Bytes` with length > 32
-    pub fn system_event(&self, topics: VecObject, data: RawVal) -> Result<(), HostError> {
+    pub fn system_event(&self, topics: VecObject, data: Val) -> Result<(), HostError> {
         self.record_contract_event(ContractEventType::System, topics, data)?;
         Ok(())
     }
@@ -69,7 +69,7 @@ impl Host {
         })
     }
 
-    pub fn log_diagnostics(&self, msg: &str, args: &[RawVal]) -> Result<(), HostError> {
+    pub fn log_diagnostics(&self, msg: &str, args: &[Val]) -> Result<(), HostError> {
         if !self.is_debug() {
             return Ok(());
         }
@@ -90,7 +90,7 @@ impl Host {
         events: &mut InternalEventsBuffer,
         error: Error,
         msg: &str,
-        args: &[RawVal],
+        args: &[Val],
     ) -> Result<(), HostError> {
         if !self.is_debug() {
             return Ok(());
@@ -128,7 +128,7 @@ impl Host {
         &self,
         called_contract_id: &Hash,
         func: &Symbol,
-        args: &[RawVal],
+        args: &[Val],
     ) -> Result<(), HostError> {
         if !self.is_debug() {
             return Ok(());
@@ -160,7 +160,7 @@ impl Host {
         &self,
         contract_id: &Hash,
         func: &Symbol,
-        res: &RawVal,
+        res: &Val,
     ) -> Result<(), HostError> {
         if !self.is_debug() {
             return Ok(());

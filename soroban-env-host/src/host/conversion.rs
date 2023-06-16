@@ -5,7 +5,7 @@ use crate::budget::AsBudget;
 use crate::err;
 use crate::host_object::{HostMap, HostObject, HostVec};
 use crate::xdr::{Hash, LedgerKey, LedgerKeyContractData, ScVal, ScVec, Uint256};
-use crate::{xdr::ContractCostType, Host, HostError, RawVal};
+use crate::{xdr::ContractCostType, Host, HostError, Val};
 use soroban_env_common::num::{
     i256_from_pieces, i256_into_pieces, u256_from_pieces, u256_into_pieces,
 };
@@ -42,7 +42,7 @@ impl Host {
     pub(crate) fn usize_from_rawval_u32_input(
         &self,
         name: &'static str,
-        r: RawVal,
+        r: Val,
     ) -> Result<usize, HostError> {
         self.u32_from_rawval_input(name, r).map(|u| u as usize)
     }
@@ -51,7 +51,7 @@ impl Host {
     pub(crate) fn u32_from_rawval_input(
         &self,
         name: &'static str,
-        r: RawVal,
+        r: Val,
     ) -> Result<u32, HostError> {
         match u32::try_from(r) {
             Ok(v) => Ok(v),
@@ -149,12 +149,12 @@ impl Host {
         })
     }
 
-    /// Converts a [`RawVal`] to an [`ScVal`] and combines it with the currently-executing
+    /// Converts a [`Val`] to an [`ScVal`] and combines it with the currently-executing
     /// [`ContractID`] to produce a [`Key`], that can be used to access ledger [`Storage`].
     // Notes on metering: covered by components.
     pub fn storage_key_from_rawval(
         &self,
-        k: RawVal,
+        k: Val,
         data_type: ContractDataType,
     ) -> Result<Rc<LedgerKey>, HostError> {
         self.storage_key_from_scval(self.from_host_val(k)?, data_type)
@@ -194,7 +194,7 @@ impl Host {
     // Notes on metering: covered by components.
     pub fn contract_data_key_from_rawval(
         &self,
-        k: RawVal,
+        k: Val,
         data_type: ContractDataType,
     ) -> Result<Rc<LedgerKey>, HostError> {
         let key_scval = self.from_host_val(k)?;
@@ -232,7 +232,7 @@ impl Host {
         }
     }
 
-    pub(crate) fn call_args_from_obj(&self, args: VecObject) -> Result<Vec<RawVal>, HostError> {
+    pub(crate) fn call_args_from_obj(&self, args: VecObject) -> Result<Vec<Val>, HostError> {
         self.visit_obj(args, |hv: &HostVec| {
             // Metering: free
             Ok(hv.iter().cloned().collect())
@@ -244,8 +244,8 @@ impl Host {
         self.visit_obj(args, |hv: &HostVec| self.rawvals_to_scvec(hv.as_slice()))
     }
 
-    pub(crate) fn rawvals_to_scvec(&self, raw_vals: &[RawVal]) -> Result<ScVec, HostError> {
-        charge_container_bulk_init_with_elts::<Vec<RawVal>, RawVal>(
+    pub(crate) fn rawvals_to_scvec(&self, raw_vals: &[Val]) -> Result<ScVec, HostError> {
+        charge_container_bulk_init_with_elts::<Vec<Val>, Val>(
             raw_vals.len() as u64,
             self.as_budget(),
         )?;
@@ -268,7 +268,7 @@ impl Host {
 
     pub(crate) fn rawvals_to_scvec_non_metered(
         &self,
-        raw_vals: &[RawVal],
+        raw_vals: &[Val],
     ) -> Result<ScVec, HostError> {
         Ok(ScVec(
             raw_vals
@@ -287,15 +287,15 @@ impl Host {
         ))
     }
 
-    pub(crate) fn scvals_to_rawvals(&self, sc_vals: &[ScVal]) -> Result<Vec<RawVal>, HostError> {
-        charge_container_bulk_init_with_elts::<Vec<RawVal>, RawVal>(
+    pub(crate) fn scvals_to_rawvals(&self, sc_vals: &[ScVal]) -> Result<Vec<Val>, HostError> {
+        charge_container_bulk_init_with_elts::<Vec<Val>, Val>(
             sc_vals.len() as u64,
             self.as_budget(),
         )?;
         sc_vals
             .iter()
             .map(|scv| self.to_host_val(scv))
-            .collect::<Result<Vec<RawVal>, HostError>>()
+            .collect::<Result<Vec<Val>, HostError>>()
     }
 
     pub(crate) fn bytesobj_from_internal_contract_id(
@@ -360,8 +360,8 @@ impl<'a> Convert<ScValObjRef<'a>, Object> for Host {
 }
 
 impl Host {
-    pub(crate) fn from_host_val(&self, val: RawVal) -> Result<ScVal, HostError> {
-        // Charges a single unit to for the RawVal -> ScVal conversion.
+    pub(crate) fn from_host_val(&self, val: Val) -> Result<ScVal, HostError> {
+        // Charges a single unit to for the Val -> ScVal conversion.
         // The actual conversion logic occurs in the `common` crate, which
         // translates a u64 into another form defined by the xdr.
         // For an `Object`, the actual structural conversion (such as byte
@@ -377,7 +377,7 @@ impl Host {
         })
     }
 
-    pub(crate) fn to_host_val(&self, v: &ScVal) -> Result<RawVal, HostError> {
+    pub(crate) fn to_host_val(&self, v: &ScVal) -> Result<Val, HostError> {
         // `ValXdrConv` is const cost in both cpu and mem. The input=0 will be ignored.
         self.charge_budget(ContractCostType::ValXdrConv, None)?;
         v.try_into_val(self).map_err(|_| {
@@ -494,7 +494,7 @@ impl Host {
         let val: &ScVal = (*ob).into();
         match val {
             ScVal::Vec(Some(v)) => {
-                metered_clone::charge_heap_alloc::<RawVal>(v.len() as u64, self.as_budget())?;
+                metered_clone::charge_heap_alloc::<Val>(v.len() as u64, self.as_budget())?;
                 let mut vv = Vec::with_capacity(v.len());
                 for e in v.iter() {
                     vv.push(self.to_host_val(e)?)
@@ -502,10 +502,7 @@ impl Host {
                 Ok(self.add_host_object(HostVec::from_vec(vv)?)?.into())
             }
             ScVal::Map(Some(m)) => {
-                metered_clone::charge_heap_alloc::<(RawVal, RawVal)>(
-                    m.len() as u64,
-                    self.as_budget(),
-                )?;
+                metered_clone::charge_heap_alloc::<(Val, Val)>(m.len() as u64, self.as_budget())?;
                 let mut mm = Vec::with_capacity(m.len());
                 for pair in m.iter() {
                     let k = self.to_host_val(&pair.key)?;

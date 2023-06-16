@@ -18,10 +18,10 @@ use crate::{
     },
     AddressObject, Bool, BytesObject, ContractExecutableObject, DurationObject, DurationSmall,
     DurationVal, Error, I128Object, I128Small, I128Val, I256Object, I256Small, I256Val, I32Val,
-    I64Object, I64Small, I64Val, LedgerKeyNonceObject, MapObject, Object, RawVal, ScValObject,
+    I64Object, I64Small, I64Val, LedgerKeyNonceObject, MapObject, Object, ScValObject,
     StringObject, Symbol, SymbolObject, SymbolSmall, SymbolSmallIter, SymbolStr, TimepointObject,
     TimepointSmall, TimepointVal, U128Object, U128Small, U128Val, U256Object, U256Small, U256Val,
-    U32Val, U64Object, U64Small, U64Val, VecObject, Void, I256, U256,
+    U32Val, U64Object, U64Small, U64Val, Val, VecObject, Void, I256, U256,
 };
 
 // Declared size (bytes) of a single element. This value determines the metering input for clone
@@ -49,8 +49,8 @@ impl_declared_size_type!(u64, 8);
 impl_declared_size_type!(i64, 8);
 impl_declared_size_type!(u128, 16);
 impl_declared_size_type!(i128, 16);
-// RawVal-wrapping types
-impl_declared_size_type!(RawVal, 8);
+// Val-wrapping types
+impl_declared_size_type!(Val, 8);
 impl_declared_size_type!(Void, 8);
 impl_declared_size_type!(Bool, 8);
 impl_declared_size_type!(VecObject, 8);
@@ -224,8 +224,8 @@ mod test {
         expect!["8"].assert_eq(size_of::<i64>().to_string().as_str());
         expect!["16"].assert_eq(size_of::<u128>().to_string().as_str());
         expect!["16"].assert_eq(size_of::<i128>().to_string().as_str());
-        // RawVal-wrapping types
-        expect!["8"].assert_eq(size_of::<RawVal>().to_string().as_str());
+        // Val-wrapping types
+        expect!["8"].assert_eq(size_of::<Val>().to_string().as_str());
         expect!["8"].assert_eq(size_of::<Void>().to_string().as_str());
         expect!["8"].assert_eq(size_of::<Bool>().to_string().as_str());
         expect!["8"].assert_eq(size_of::<VecObject>().to_string().as_str());
@@ -332,7 +332,7 @@ mod test {
         );
         // composite types
         expect!["16"].assert_eq(size_of::<&[ScVal]>().to_string().as_str());
-        expect!["48"].assert_eq(size_of::<(RawVal, ScVal)>().to_string().as_str());
+        expect!["48"].assert_eq(size_of::<(Val, ScVal)>().to_string().as_str());
         expect!["200"].assert_eq(size_of::<[ScVal; 5]>().to_string().as_str());
         expect!["24"].assert_eq(size_of::<BytesM<10000>>().to_string().as_str());
         expect!["24"].assert_eq(size_of::<StringM<10000>>().to_string().as_str());
@@ -367,8 +367,8 @@ mod test {
         assert_mem_size_le_declared_size!(i64);
         assert_mem_size_le_declared_size!(u128);
         assert_mem_size_le_declared_size!(i128);
-        // RawVal-wrapping types
-        assert_mem_size_le_declared_size!(RawVal);
+        // Val-wrapping types
+        assert_mem_size_le_declared_size!(Val);
         assert_mem_size_le_declared_size!(Void);
         assert_mem_size_le_declared_size!(Bool);
         assert_mem_size_le_declared_size!(VecObject);
@@ -466,7 +466,7 @@ mod test {
         assert_mem_size_le_declared_size!(SorobanAuthorizedInvocation);
         // composite types
         assert_mem_size_le_declared_size!(&[ScVal]);
-        assert_mem_size_le_declared_size!((RawVal, ScVal));
+        assert_mem_size_le_declared_size!((Val, ScVal));
         assert_mem_size_le_declared_size!([ScVal; 5]);
         assert_mem_size_le_declared_size!(BytesM<10000>);
         assert_mem_size_le_declared_size!(StringM<10000>);

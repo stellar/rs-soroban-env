@@ -2,9 +2,9 @@ use soroban_env_macros::generate_call_macro_with_all_host_functions;
 
 use super::Symbol;
 use super::{
-    AddressObject, Bool, BytesObject, Error, I128Object, I256Object, I64Object, MapObject, RawVal,
+    AddressObject, Bool, BytesObject, Error, I128Object, I256Object, I64Object, MapObject,
     StorageType, StringObject, SymbolObject, U128Object, U256Object, U32Val, U64Object, U64Val,
-    VecObject, Void,
+    Val, VecObject, Void,
 };
 use core::any;
 
@@ -113,26 +113,24 @@ pub trait EnvBase: Sized + Clone {
 
     /// Form a new `Map` host object from a slice of symbol-names and a slice of values.
     /// Keys must be in sorted order.
-    fn map_new_from_slices(&self, keys: &[&str], vals: &[RawVal])
-        -> Result<MapObject, Self::Error>;
+    fn map_new_from_slices(&self, keys: &[&str], vals: &[Val]) -> Result<MapObject, Self::Error>;
 
     /// Unpack a `Map` host object with a specified set of keys to a slice of
-    /// `RawVal`s. Keys must be in sorted order and must match the key set of
+    /// `Val`s. Keys must be in sorted order and must match the key set of
     /// the unpacked object exactly.
     fn map_unpack_to_slice(
         &self,
         map: MapObject,
         keys: &[&str],
-        vals: &mut [RawVal],
+        vals: &mut [Val],
     ) -> Result<Void, Self::Error>;
 
     /// Form a new `Vec` host object from a slice of values.
-    fn vec_new_from_slice(&self, vals: &[RawVal]) -> Result<VecObject, Self::Error>;
+    fn vec_new_from_slice(&self, vals: &[Val]) -> Result<VecObject, Self::Error>;
 
     /// Form a new `Vec` host object from a slice of values. The values slice must
     /// be the same length as the host object.
-    fn vec_unpack_to_slice(&self, vec: VecObject, vals: &mut [RawVal])
-        -> Result<Void, Self::Error>;
+    fn vec_unpack_to_slice(&self, vec: VecObject, vals: &mut [Val]) -> Result<Void, Self::Error>;
 
     /// Return the index of a `Symbol` in an array of &strs, or error if not found.
     fn symbol_index_in_strs(&self, key: Symbol, strs: &[&str]) -> Result<U32Val, Self::Error>;
@@ -140,7 +138,7 @@ pub trait EnvBase: Sized + Clone {
     /// Log a string and set of values as a diagnostic event, if diagnostic
     /// events are enabled. When running on host, logs directly; when running on
     /// guest, redirects through log_from_linear_memory.
-    fn log_from_slice(&self, msg: &str, vals: &[RawVal]) -> Result<Void, Self::Error>;
+    fn log_from_slice(&self, msg: &str, vals: &[Val]) -> Result<Void, Self::Error>;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -231,7 +229,7 @@ macro_rules! generate_env_trait {
         /// This trait represents the interface between Host and Guest, used by
         /// client contract code and implemented (via [Env](crate::Env)) by the host.
         /// It consists of functions that take or return only 64-bit values such
-        /// as [RawVal] or [u64].
+        /// as [Val] or [u64].
         pub trait Env: EnvBase
         {
             $(

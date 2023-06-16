@@ -1,5 +1,5 @@
 use expect_test::expect;
-use soroban_env_common::{xdr::ScErrorCode, RawVal};
+use soroban_env_common::{xdr::ScErrorCode, Val};
 
 use crate::{
     events::HostEvent,
@@ -42,8 +42,7 @@ fn invoke_cross_contract(diagnostics: bool) -> Result<(), HostError> {
     let sym = Symbol::try_from_small_str("add").unwrap();
     let args = host.test_vec_obj::<i32>(&[1, 2])?;
     let res = host.call(id_obj, sym, args)?;
-    assert!(res.is::<i32>());
-    assert!(res.get_tag() == Tag::I32Val);
+    assert_eq!(res.get_tag(), Tag::I32Val);
     let i: i32 = res.try_into()?;
     assert_eq!(i, 3);
     Ok(())
@@ -113,7 +112,7 @@ fn invoke_cross_contract_indirect() -> Result<(), HostError> {
     let args = host.vec_push_back(args, id1_obj.to_raw())?;
     // try call
     let val = host.call(id0_obj, sym, args)?;
-    let exp: RawVal = 11i32.into();
+    let exp: Val = 11i32.into();
     assert_eq!(val.get_payload(), exp.get_payload());
     Ok(())
 }

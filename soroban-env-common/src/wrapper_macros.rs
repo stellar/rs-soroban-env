@@ -2,16 +2,16 @@
 #[macro_export]
 macro_rules! impl_wrapper_tag_based_rawvalconvertible {
     ($tagname:ident) => {
-        // A RawValConvertible impl for types where the wrapper _has the same
+        // A ValConvert impl for types where the wrapper _has the same
         // name_ as a Tag::case and being-that-wrapper is identical to
         // having-that-tag.
-        impl $crate::RawValConvertible for $tagname {
+        impl $crate::raw_val::ValConvert for $tagname {
             #[inline(always)]
-            fn is_val_type(v: $crate::RawVal) -> bool {
+            fn is_val_type(v: $crate::Val) -> bool {
                 v.has_tag($crate::Tag::$tagname)
             }
             #[inline(always)]
-            unsafe fn unchecked_from_val(v: $crate::RawVal) -> Self {
+            unsafe fn unchecked_from_val(v: $crate::Val) -> Self {
                 $tagname(v)
             }
         }
@@ -26,14 +26,13 @@ macro_rules! impl_wrapper_tag_based_constructors {
         impl $tagname {
             #[inline(always)]
             pub(crate) const unsafe fn from_body(body: u64) -> $tagname {
-                let rv = $crate::RawVal::from_body_and_tag(body, $crate::Tag::$tagname);
+                let rv = $crate::Val::from_body_and_tag(body, $crate::Tag::$tagname);
                 Self(rv)
             }
 
             #[inline(always)]
             pub(crate) const unsafe fn from_major_minor(major: u32, minor: u32) -> $tagname {
-                let rv =
-                    $crate::RawVal::from_major_minor_and_tag(major, minor, $crate::Tag::$tagname);
+                let rv = $crate::Val::from_major_minor_and_tag(major, minor, $crate::Tag::$tagname);
                 Self(rv)
             }
         }
@@ -44,32 +43,32 @@ macro_rules! impl_wrapper_tag_based_constructors {
 #[macro_export]
 macro_rules! impl_tryfroms_and_tryfromvals_delegating_to_rawvalconvertible {
     ($T:ty) => {
-        impl TryFrom<$crate::RawVal> for $T {
+        impl TryFrom<$crate::Val> for $T {
             type Error = $crate::ConversionError;
             #[inline(always)]
-            fn try_from(v: $crate::RawVal) -> Result<Self, Self::Error> {
-                if let Some(c) = <Self as $crate::RawValConvertible>::try_convert(v) {
+            fn try_from(v: $crate::Val) -> Result<Self, Self::Error> {
+                if let Some(c) = <Self as $crate::raw_val::ValConvert>::try_convert(v) {
                     Ok(c)
                 } else {
                     Err($crate::ConversionError)
                 }
             }
         }
-        impl TryFrom<&$crate::RawVal> for $T {
+        impl TryFrom<&$crate::Val> for $T {
             type Error = $crate::ConversionError;
             #[inline(always)]
-            fn try_from(v: &$crate::RawVal) -> Result<Self, Self::Error> {
+            fn try_from(v: &$crate::Val) -> Result<Self, Self::Error> {
                 Self::try_from(*v)
             }
         }
-        impl<E: $crate::Env> $crate::TryFromVal<E, $crate::RawVal> for $T {
+        impl<E: $crate::Env> $crate::TryFromVal<E, $crate::Val> for $T {
             type Error = $crate::ConversionError;
             #[inline(always)]
-            fn try_from_val(_env: &E, val: &$crate::RawVal) -> Result<Self, Self::Error> {
+            fn try_from_val(_env: &E, val: &$crate::Val) -> Result<Self, Self::Error> {
                 Self::try_from(*val)
             }
         }
-        impl<E: $crate::Env> $crate::TryFromVal<E, $T> for $crate::RawVal {
+        impl<E: $crate::Env> $crate::TryFromVal<E, $T> for $crate::Val {
             type Error = $crate::ConversionError;
             fn try_from_val(_env: &E, val: &$T) -> Result<Self, Self::Error> {
                 Ok((*val).into())
@@ -87,10 +86,10 @@ macro_rules! impl_wrapper_wasmi_conversions {
         impl $crate::WasmiMarshal for $wrapper {
             fn try_marshal_from_value(v: wasmi::Value) -> Option<Self> {
                 if let wasmi::Value::I64(i) = v {
-                    let raw = $crate::RawVal::from_payload(i as u64);
-                    if <Self as $crate::RawValConvertible>::is_val_type(raw) {
+                    let raw = $crate::Val::from_payload(i as u64);
+                    if <Self as $crate::raw_val::ValConvert>::is_val_type(raw) {
                         return Some(unsafe {
-                            <Self as $crate::RawValConvertible>::unchecked_from_val(raw)
+                            <Self as $crate::raw_val::ValConvert>::unchecked_from_val(raw)
                         });
                     }
                 }
@@ -108,25 +107,25 @@ macro_rules! impl_wrapper_wasmi_conversions {
 #[macro_export]
 macro_rules! impl_wrapper_as_and_to_rawval {
     ($wrapper:ty) => {
-        // AsRef / AsMut to RawVal.
-        impl AsRef<$crate::RawVal> for $wrapper {
-            fn as_ref(&self) -> &$crate::RawVal {
+        // AsRef / AsMut to Val.
+        impl AsRef<$crate::Val> for $wrapper {
+            fn as_ref(&self) -> &$crate::Val {
                 &self.0
             }
         }
-        impl AsMut<$crate::RawVal> for $wrapper {
-            fn as_mut(&mut self) -> &mut $crate::RawVal {
+        impl AsMut<$crate::Val> for $wrapper {
+            fn as_mut(&mut self) -> &mut $crate::Val {
                 &mut self.0
             }
         }
         // Basic conversion support: wrapper to raw, and try-into helper.
-        impl From<$wrapper> for $crate::RawVal {
+        impl From<$wrapper> for $crate::Val {
             fn from(b: $wrapper) -> Self {
                 b.0
             }
         }
 
-        impl From<&$wrapper> for $crate::RawVal {
+        impl From<&$wrapper> for $crate::Val {
             fn from(b: &$wrapper) -> Self {
                 b.0
             }
@@ -136,11 +135,11 @@ macro_rules! impl_wrapper_as_and_to_rawval {
         // may or may-not ever get used per-type, so allowed-dead.
         #[allow(dead_code)]
         impl $wrapper {
-            pub const fn as_raw(&self) -> &$crate::RawVal {
+            pub const fn as_raw(&self) -> &$crate::Val {
                 &self.0
             }
 
-            pub const fn to_raw(&self) -> $crate::RawVal {
+            pub const fn to_raw(&self) -> $crate::Val {
                 self.0
             }
         }
@@ -166,7 +165,7 @@ macro_rules! impl_wrapper_from_other_type {
     };
 }
 
-/// Macro for base implementation of a type wrapping a [`RawVal`]
+/// Macro for base implementation of a type wrapping a [`Val`]
 #[doc(hidden)]
 #[macro_export]
 macro_rules! impl_rawval_wrapper_base {
@@ -182,7 +181,7 @@ macro_rules! impl_rawval_wrapper_base {
     };
 }
 
-/// Declares [`RawVal`]-wrapping type [`Tag`] where the wrapper _has the same
+/// Declares [`Val`]-wrapping type [`Tag`] where the wrapper _has the same
 /// name_ as a Tag::case and being-that-wrapper is identical to having-that-tag.
 #[doc(hidden)]
 #[macro_export]
@@ -190,7 +189,7 @@ macro_rules! declare_tag_based_wrapper {
     ($T:ident) => {
         #[repr(transparent)]
         #[derive(Copy, Clone)]
-        pub struct $T($crate::RawVal);
+        pub struct $T($crate::Val);
 
         $crate::impl_rawval_wrapper_base!($T);
         $crate::impl_wrapper_tag_based_rawvalconvertible!($T);
@@ -248,15 +247,15 @@ macro_rules! declare_tag_based_small_and_object_wrappers {
 
         #[repr(transparent)]
         #[derive(Copy, Clone)]
-        pub struct $GENERAL($crate::RawVal);
+        pub struct $GENERAL($crate::Val);
         $crate::impl_rawval_wrapper_base!($GENERAL);
 
-        impl $crate::RawValConvertible for $GENERAL {
-            fn is_val_type(v: $crate::RawVal) -> bool {
+        impl $crate::raw_val::ValConvert for $GENERAL {
+            fn is_val_type(v: $crate::Val) -> bool {
                 v.has_tag($crate::Tag::$SMALL) || v.has_tag($crate::Tag::$OBJECT)
             }
 
-            unsafe fn unchecked_from_val(v: $crate::RawVal) -> Self {
+            unsafe fn unchecked_from_val(v: $crate::Val) -> Self {
                 Self(v)
             }
         }

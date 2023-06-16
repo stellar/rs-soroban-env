@@ -1,5 +1,5 @@
 use crate::{
-    declare_tag_based_object_wrapper, ConversionError, Env, Error, RawVal, TryFromVal, TryIntoVal,
+    declare_tag_based_object_wrapper, ConversionError, Env, Error, TryFromVal, TryIntoVal, Val,
 };
 
 declare_tag_based_object_wrapper!(BytesObject);
@@ -14,16 +14,16 @@ impl<E: Env, const N: usize> TryFromVal<E, BytesObject> for [u8; N] {
             return Err(ConversionError.into());
         }
         let mut arr = [0u8; N];
-        env.bytes_copy_to_slice(*val, RawVal::U32_ZERO, &mut arr)
+        env.bytes_copy_to_slice(*val, Val::U32_ZERO, &mut arr)
             .map_err(|_| ConversionError)?;
         Ok(arr)
     }
 }
 
-impl<E: Env, const N: usize> TryFromVal<E, RawVal> for [u8; N] {
+impl<E: Env, const N: usize> TryFromVal<E, Val> for [u8; N] {
     type Error = Error;
 
-    fn try_from_val(env: &E, val: &RawVal) -> Result<Self, Self::Error> {
+    fn try_from_val(env: &E, val: &Val) -> Result<Self, Self::Error> {
         let bo: BytesObject = val.try_into()?;
         bo.try_into_val(env)
     }
@@ -37,17 +37,17 @@ impl<E: Env> TryFromVal<E, BytesObject> for Vec<u8> {
         let len: u32 = env.bytes_len(*val).map_err(|_| ConversionError)?.into();
         let len = len as usize;
         let mut vec = vec![0u8; len];
-        env.bytes_copy_to_slice(*val, RawVal::U32_ZERO, &mut vec)
+        env.bytes_copy_to_slice(*val, Val::U32_ZERO, &mut vec)
             .map_err(|_| ConversionError)?;
         Ok(vec)
     }
 }
 
 #[cfg(feature = "std")]
-impl<E: Env> TryFromVal<E, RawVal> for Vec<u8> {
+impl<E: Env> TryFromVal<E, Val> for Vec<u8> {
     type Error = Error;
 
-    fn try_from_val(env: &E, val: &RawVal) -> Result<Self, Self::Error> {
+    fn try_from_val(env: &E, val: &Val) -> Result<Self, Self::Error> {
         let bo: BytesObject = val.try_into()?;
         bo.try_into_val(env)
     }
@@ -61,10 +61,10 @@ impl<E: Env> TryFromVal<E, &[u8]> for BytesObject {
     }
 }
 
-impl<E: Env> TryFromVal<E, &[u8]> for RawVal {
+impl<E: Env> TryFromVal<E, &[u8]> for Val {
     type Error = Error;
     #[inline(always)]
-    fn try_from_val(env: &E, v: &&[u8]) -> Result<RawVal, Self::Error> {
+    fn try_from_val(env: &E, v: &&[u8]) -> Result<Val, Self::Error> {
         Ok(BytesObject::try_from_val(env, v)?.into())
     }
 }
@@ -77,7 +77,7 @@ impl<E: Env, const N: usize> TryFromVal<E, [u8; N]> for BytesObject {
     }
 }
 
-impl<E: Env, const N: usize> TryFromVal<E, [u8; N]> for RawVal {
+impl<E: Env, const N: usize> TryFromVal<E, [u8; N]> for Val {
     type Error = Error;
 
     fn try_from_val(env: &E, v: &[u8; N]) -> Result<Self, Self::Error> {
@@ -95,7 +95,7 @@ impl<E: Env> TryFromVal<E, Vec<u8>> for BytesObject {
 }
 
 #[cfg(feature = "std")]
-impl<E: Env> TryFromVal<E, Vec<u8>> for RawVal {
+impl<E: Env> TryFromVal<E, Vec<u8>> for Val {
     type Error = Error;
 
     fn try_from_val(env: &E, v: &Vec<u8>) -> Result<Self, Self::Error> {

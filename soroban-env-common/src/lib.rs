@@ -1,21 +1,21 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 //! The environment-common crate contains three families of types:
 //!
-//!   - The [RawVal] type, a 64-bit value type that is a union between several
+//!   - The [Val] type, a 64-bit value type that is a union between several
 //!     different types (numbers, booleans, symbols, object references), encoded
 //!     via careful bit-packing.
 //!   - Wrapper types ([Object], [Symbol], [Error]) that
-//!     contain [RawVal] in a specific, known union state. These are also 64-bit
+//!     contain [Val] in a specific, known union state. These are also 64-bit
 //!     values, but offer methods specific to the union state (eg. [Symbol] will
 //!     interconvert with Rust strings).
 //!   - The [Env] trait, which describes the _interface_ between guest and host
 //!     code. In other words, `Env` describes a set of _host functions_ that
 //!     must be implemented in a contract host, and can be called from a guest
 //!     (or by the SDK). Methods on the [Env] trait can only pass 64-bit values,
-//!     which are usually [RawVal] or one of the wrapper types.
+//!     which are usually [Val] or one of the wrapper types.
 //!
 //! The crate additionally contains functions for interconversion between the
-//! [RawVal] type and XDR types, and re-exports the XDR definitions from
+//! [Val] type and XDR types, and re-exports the XDR definitions from
 //! [stellar_xdr] under the module [xdr].
 
 #[derive(Clone, Debug, Eq, PartialEq, PartialOrd, Ord, Hash)]
@@ -75,14 +75,14 @@ pub use storage_type::StorageType;
 // Re-export the XDR definitions
 pub use stellar_xdr as xdr;
 
-// RawVal is the 64-bit transparent type.
+// Val is the 64-bit transparent type.
 #[cfg(feature = "wasmi")]
 pub use raw_val::WasmiMarshal;
 pub use raw_val::{
     AddressObject, ContractExecutableObject, LedgerKeyNonceObject, MapObject, VecObject,
 };
 pub use raw_val::{Bool, Void};
-pub use raw_val::{ConversionError, RawVal, RawValConvertible, Tag};
+pub use raw_val::{ConversionError, Tag, Val};
 
 pub use compare::Compare;
 pub use convert::Convert;

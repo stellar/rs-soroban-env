@@ -1,6 +1,6 @@
 use crate::{
-    declare_tag_based_small_and_object_wrappers, require, Compare, ConversionError, Env, RawVal,
-    RawValConvertible, Tag, TryFromVal,
+    declare_tag_based_small_and_object_wrappers, raw_val::ValConvert, require, Compare,
+    ConversionError, Env, Tag, TryFromVal, Val,
 };
 use core::{cmp::Ordering, fmt::Debug, hash::Hash, str};
 
@@ -285,7 +285,7 @@ impl<E: Env> TryFromVal<E, Symbol> for SymbolStr {
         } else {
             let obj: SymbolObject = unsafe { SymbolObject::unchecked_from_val(v.0) };
             let mut arr = [0u8; SCSYMBOL_LIMIT as usize];
-            env.symbol_copy_to_slice(obj, RawVal::U32_ZERO, &mut arr)
+            env.symbol_copy_to_slice(obj, Val::U32_ZERO, &mut arr)
                 .map_err(|_| ConversionError)?;
             Ok(SymbolStr(arr))
         }

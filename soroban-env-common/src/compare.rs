@@ -1,7 +1,7 @@
 #[cfg(feature = "std")]
 use std::rc::Rc;
 
-use crate::{Env, RawVal, RawValConvertible, Tag};
+use crate::{raw_val::ValConvert, Env, Tag, Val};
 use core::cmp::Ordering;
 
 /// General trait representing the ability to compare two values of some type.
@@ -9,7 +9,7 @@ use core::cmp::Ordering;
 /// fallible, and is provided by some external type implementing `Compare`
 /// rather than the compared type itself.
 ///
-/// This trait exists to support comparing `RawVal`s with help from the
+/// This trait exists to support comparing `Val`s with help from the
 /// environment in which object handles are defined, and allowing for the
 /// possibility of erroneous inputs like invalid object handles, as well as the
 /// possibility of running over budget during the comparison. It is also used
@@ -122,10 +122,10 @@ macro_rules! delegate_compare_to_wrapper {
 }
 
 #[allow(clippy::comparison_chain)]
-impl<E: Env> Compare<RawVal> for E {
+impl<E: Env> Compare<Val> for E {
     type Error = E::Error;
 
-    fn compare(&self, a: &RawVal, b: &RawVal) -> Result<Ordering, Self::Error> {
+    fn compare(&self, a: &Val, b: &Val) -> Result<Ordering, Self::Error> {
         if a.get_payload() == b.get_payload() {
             // Fast-path exactly-equal values.
             return Ok(Ordering::Equal);

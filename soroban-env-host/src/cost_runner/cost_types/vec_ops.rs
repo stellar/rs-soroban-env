@@ -1,9 +1,9 @@
 use std::hint::black_box;
 
 use crate::budget::AsBudget;
-use crate::{cost_runner::CostRunner, xdr::ContractCostType, Host, MeteredVector, RawVal};
+use crate::{cost_runner::CostRunner, xdr::ContractCostType, Host, MeteredVector, Val};
 
-type HostVec = MeteredVector<RawVal>;
+type HostVec = MeteredVector<Val>;
 
 pub struct VecEntryRun;
 

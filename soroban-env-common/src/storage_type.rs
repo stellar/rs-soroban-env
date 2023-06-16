@@ -6,7 +6,7 @@ use crate::{declare_tag_based_wrapper, Compare, Env};
 
 declare_tag_based_wrapper!(StorageType);
 
-/// Wrapper for a [RawVal] that is tagged with [Tag::StorageType].
+/// Wrapper for a [Val] that is tagged with [Tag::StorageType].
 /// The major value corresponds to the integer representation of the
 /// [stellar_xdr::ContractDataType] enum.
 impl StorageType {

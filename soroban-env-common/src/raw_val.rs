@@ -37,102 +37,102 @@ sa::const_assert!(MINOR_MASK == 0x00ff_ffff);
 sa::const_assert!(MAJOR_BITS + MINOR_BITS == BODY_BITS);
 
 /// Code values for the 8 `tag` bits in the bit-packed representation
-/// of [RawVal]. These don't coincide with tag numbers in the SCVal XDR
+/// of [Val]. These don't coincide with tag numbers in the SCVal XDR
 /// but cover all those cases as well as some optimized refinements for
 /// special cases (boolean true and false, small-value forms).
 #[repr(u8)]
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 #[cfg_attr(test, derive(int_enum::IntEnum))]
 pub enum Tag {
-    /// Tag for a [RawVal] that encodes [bool] `false`. The bool type is refined to
+    /// Tag for a [Val] that encodes [bool] `false`. The bool type is refined to
     /// two single-value subtypes in order for each tag number to coincides with
     /// the WASM encoding of a boolean.
     False = 0,
 
-    /// Tag for a [RawVal] that encodes [bool] `true`.
+    /// Tag for a [Val] that encodes [bool] `true`.
     True = 1,
 
-    /// Tag for a [RawVal] that is empty/absent (eg. void, null, nil, undefined, None)
+    /// Tag for a [Val] that is empty/absent (eg. void, null, nil, undefined, None)
     Void = 2,
 
-    /// Tag for a [RawVal] that is contains an error code.
+    /// Tag for a [Val] that is contains an error code.
     Error = 3,
 
-    /// Tag for a [RawVal] that contains a [u32] number.
+    /// Tag for a [Val] that contains a [u32] number.
     U32Val = 4,
 
-    /// Tag for a [RawVal] that contains an [i32] number.
+    /// Tag for a [Val] that contains an [i32] number.
     I32Val = 5,
 
-    /// Tag for a [RawVal] that contains a [u64] small enough to fit in 56 bits.
+    /// Tag for a [Val] that contains a [u64] small enough to fit in 56 bits.
     U64Small = 6,
 
-    /// Tag for a [RawVal] that contains an [i64] small enough to fit in 56 bits.
+    /// Tag for a [Val] that contains an [i64] small enough to fit in 56 bits.
     I64Small = 7,
 
-    /// Tag for a [RawVal] that contains a [u64] timepoint small enough to fit
+    /// Tag for a [Val] that contains a [u64] timepoint small enough to fit
     /// in 56 bits.
     TimepointSmall = 8,
 
-    /// Tag for a [RawVal] that contains a [u64] duration small enough to fit in
+    /// Tag for a [Val] that contains a [u64] duration small enough to fit in
     /// 56 bits.
     DurationSmall = 9,
 
-    /// Tag for a [RawVal] that contains a [u128] small enough to fit in 56 bits.
+    /// Tag for a [Val] that contains a [u128] small enough to fit in 56 bits.
     U128Small = 10,
 
-    /// Tag for a [RawVal] that contains a [i128] small enough to fit in 56 bits.
+    /// Tag for a [Val] that contains a [i128] small enough to fit in 56 bits.
     I128Small = 11,
 
-    /// Tag for a [RawVal] that contains a [u256] small enough to fit in 56 bits.
+    /// Tag for a [Val] that contains a [u256] small enough to fit in 56 bits.
     U256Small = 12,
 
-    /// Tag for a [RawVal] that contains a [i256] small enough to fit in 56 bits.
+    /// Tag for a [Val] that contains a [i256] small enough to fit in 56 bits.
     I256Small = 13,
 
-    /// Tag for a [RawVal] that contains up to 9 character symbols.
+    /// Tag for a [Val] that contains up to 9 character symbols.
     SymbolSmall = 14,
 
-    /// Tag for a [RawVal] that corresponds to
+    /// Tag for a [Val] that corresponds to
     /// [stellar_xdr::ScVal::LedgerKeyContractExecutable]
     LedgerKeyContractExecutable = 15,
 
-    /// Tag for a [RawVal] that corresponds to [stellar_xdr::ScVal::StorageType]
+    /// Tag for a [Val] that corresponds to [stellar_xdr::ScVal::StorageType]
     StorageType = 16,
 
     /// Code delimiting the upper boundary of "small" types.
     SmallCodeUpperBound = 17,
 
     /// Tag reserved to indicate boundary between tags for "small" types with
-    /// their payload packed into the remaining 56 bits of the [RawVal] and
+    /// their payload packed into the remaining 56 bits of the [Val] and
     /// "object" types that are stored as host objects and referenced by
     /// [Object] handle.
     ObjectCodeLowerBound = 63,
 
-    /// Tag for a [RawVal] that refers to a host-side [u64] number.
+    /// Tag for a [Val] that refers to a host-side [u64] number.
     U64Object = 64,
 
-    /// Tag for a [RawVal] that refers to a host-side [i64] number.
+    /// Tag for a [Val] that refers to a host-side [i64] number.
     I64Object = 65,
 
-    /// Tag for a [RawVal] that refers to a host-side [u64] number encoding a
+    /// Tag for a [Val] that refers to a host-side [u64] number encoding a
     /// time-point (a count of seconds since the Unix epoch, Jan 1 1970 UTC).
     TimepointObject = 66,
 
-    /// Tag for a [RawVal] that refers to a host-side [i64] number encoding a
+    /// Tag for a [Val] that refers to a host-side [i64] number encoding a
     /// duration (a count of seconds).
     DurationObject = 67,
 
-    /// Tag for a [RawVal] that refers to a host-side [u128] number.
+    /// Tag for a [Val] that refers to a host-side [u128] number.
     U128Object = 68,
 
-    /// Tag for a [RawVal] that refers to a host-side [i128] number.
+    /// Tag for a [Val] that refers to a host-side [i128] number.
     I128Object = 69,
 
-    /// Tag for a [RawVal] that refers to a host-side [u256] number.
+    /// Tag for a [Val] that refers to a host-side [u256] number.
     U256Object = 70,
 
-    /// Tag for a [RawVal] that refers to a host-side [i256] number.
+    /// Tag for a [Val] that refers to a host-side [i256] number.
     I256Object = 71,
 
     BytesObject = 72,
@@ -145,7 +145,7 @@ pub enum Tag {
     ContractExecutableObject = 77,
     AddressObject = 78,
 
-    /// Tag for a [RawVal] that corresponds to
+    /// Tag for a [Val] that corresponds to
     /// [stellar_xdr::ScVal::LedgerKeyNonce] and refers to a host-side
     /// address object that specifies which address it's the nonce for.
     LedgerKeyNonceObject = 79,
@@ -240,31 +240,31 @@ impl Tag {
 
 #[repr(transparent)]
 #[derive(Copy, Clone)]
-pub struct RawVal(u64);
+pub struct Val(u64);
 
-impl Default for RawVal {
+impl Default for Val {
     fn default() -> Self {
         Self::from_void().into()
     }
 }
 
-// Impl AsRef/AsMut and TryFromVal<RawVal> so that clients can abstract over a
-// wrapper-or-RawVal because all wrappers also impl these.
-impl AsRef<RawVal> for RawVal {
-    fn as_ref(&self) -> &RawVal {
+// Impl AsRef/AsMut and TryFromVal<Val> so that clients can abstract over a
+// wrapper-or-Val because all wrappers also impl these.
+impl AsRef<Val> for Val {
+    fn as_ref(&self) -> &Val {
         self
     }
 }
 
-impl AsMut<RawVal> for RawVal {
-    fn as_mut(&mut self) -> &mut RawVal {
+impl AsMut<Val> for Val {
+    fn as_mut(&mut self) -> &mut Val {
         self
     }
 }
 
-impl<E: Env> TryFromVal<E, RawVal> for RawVal {
+impl<E: Env> TryFromVal<E, Val> for Val {
     type Error = ConversionError;
-    fn try_from_val(_env: &E, val: &RawVal) -> Result<Self, Self::Error> {
+    fn try_from_val(_env: &E, val: &Val) -> Result<Self, Self::Error> {
         Ok(*val)
     }
 }
@@ -274,7 +274,7 @@ declare_tag_based_wrapper!(Void);
 
 impl From<()> for Void {
     fn from(_value: ()) -> Self {
-        RawVal::VOID
+        Val::VOID
     }
 }
 
@@ -287,12 +287,12 @@ impl<E: Env> Compare<Void> for E {
 
 #[repr(transparent)]
 #[derive(Copy, Clone)]
-pub struct Bool(RawVal);
+pub struct Bool(Val);
 impl_rawval_wrapper_base!(Bool);
 
 impl From<bool> for Bool {
     fn from(value: bool) -> Self {
-        RawVal::from_bool(value)
+        Val::from_bool(value)
     }
 }
 impl From<Bool> for bool {
@@ -301,12 +301,12 @@ impl From<Bool> for bool {
     }
 }
 
-impl RawValConvertible for Bool {
-    fn is_val_type(v: RawVal) -> bool {
+impl ValConvert for Bool {
+    fn is_val_type(v: Val) -> bool {
         v.is_true() || v.is_false()
     }
 
-    unsafe fn unchecked_from_val(v: RawVal) -> Self {
+    unsafe fn unchecked_from_val(v: Val) -> Self {
         Self(v)
     }
 }
@@ -348,13 +348,13 @@ impl From<stellar_xdr::Error> for ConversionError {
     }
 }
 
-/// Trait abstracting over types that can be converted into [RawVal], similar to
+/// Trait abstracting over types that can be converted into [Val], similar to
 /// [TryFrom] but with a different signature that enables generating slightly
 /// more efficient conversion code. An implementation of `TryFrom<Val>` is also
-/// provided for any type that implements `ValConvertible`.
-pub trait RawValConvertible: Into<RawVal> + TryFrom<RawVal> {
+/// provided for any type that implements `ValConvert`.
+pub(crate) trait ValConvert: Into<Val> + TryFrom<Val> {
     /// Returns `true` if `v` is in a union state compatible with `Self`.
-    fn is_val_type(v: RawVal) -> bool;
+    fn is_val_type(v: Val) -> bool;
 
     /// Converts the bits making up a `Val` into `Self` _without_ checking
     /// that the `Val` is tagged correctly, assuming that such a check has
@@ -362,7 +362,7 @@ pub trait RawValConvertible: Into<RawVal> + TryFrom<RawVal> {
     /// that such checks have occurred before calling `unchecked_from_val`,
     /// which is why it is marked as `unsafe` (it does not represent a risk of
     /// memory-unsafety, merely "serious logic errors").
-    unsafe fn unchecked_from_val(v: RawVal) -> Self;
+    unsafe fn unchecked_from_val(v: Val) -> Self;
 
     /// Attempt a conversion from `Val` to `Self`, returning `None` if the
     /// provided `Val` is not tagged correctly. By default this calls
@@ -371,7 +371,7 @@ pub trait RawValConvertible: Into<RawVal> + TryFrom<RawVal> {
     /// produce more efficient code, as it is done for `Static` values like
     /// `bool`.
     #[inline(always)]
-    fn try_convert(v: RawVal) -> Option<Self> {
+    fn try_convert(v: Val) -> Option<Self> {
         if Self::is_val_type(v) {
             Some(unsafe { Self::unchecked_from_val(v) })
         } else {
@@ -393,10 +393,10 @@ pub trait WasmiMarshal: Sized {
 }
 
 #[cfg(feature = "wasmi")]
-impl WasmiMarshal for RawVal {
+impl WasmiMarshal for Val {
     fn try_marshal_from_value(v: wasmi::Value) -> Option<Self> {
         if let wasmi::Value::I64(i) = v {
-            Some(RawVal::from_payload(i as u64))
+            Some(Val::from_payload(i as u64))
         } else {
             None
         }
@@ -437,29 +437,29 @@ impl WasmiMarshal for i64 {
     }
 }
 
-// Manually implement all the residual pieces: RawValConvertibles
+// Manually implement all the residual pieces: ValConverts
 // and Froms.
 
-impl RawValConvertible for () {
+impl ValConvert for () {
     #[inline(always)]
-    fn is_val_type(v: RawVal) -> bool {
+    fn is_val_type(v: Val) -> bool {
         v.has_tag(Tag::Void)
     }
     #[inline(always)]
-    unsafe fn unchecked_from_val(_v: RawVal) -> Self {}
+    unsafe fn unchecked_from_val(_v: Val) -> Self {}
 }
 
-impl RawValConvertible for bool {
+impl ValConvert for bool {
     #[inline(always)]
-    fn is_val_type(v: RawVal) -> bool {
+    fn is_val_type(v: Val) -> bool {
         v.has_tag(Tag::True) || v.has_tag(Tag::False)
     }
     #[inline(always)]
-    unsafe fn unchecked_from_val(v: RawVal) -> Self {
+    unsafe fn unchecked_from_val(v: Val) -> Self {
         v.has_tag(Tag::True)
     }
     #[inline(always)]
-    fn try_convert(v: RawVal) -> Option<Self> {
+    fn try_convert(v: Val) -> Option<Self> {
         if v.has_tag(Tag::True) {
             Some(true)
         } else if v.has_tag(Tag::False) {
@@ -470,85 +470,85 @@ impl RawValConvertible for bool {
     }
 }
 
-impl RawValConvertible for u32 {
+impl ValConvert for u32 {
     #[inline(always)]
-    fn is_val_type(v: RawVal) -> bool {
+    fn is_val_type(v: Val) -> bool {
         v.has_tag(Tag::U32Val)
     }
     #[inline(always)]
-    unsafe fn unchecked_from_val(v: RawVal) -> Self {
+    unsafe fn unchecked_from_val(v: Val) -> Self {
         v.get_major()
     }
 }
 
-impl RawValConvertible for i32 {
+impl ValConvert for i32 {
     #[inline(always)]
-    fn is_val_type(v: RawVal) -> bool {
+    fn is_val_type(v: Val) -> bool {
         v.has_tag(Tag::I32Val)
     }
     #[inline(always)]
-    unsafe fn unchecked_from_val(v: RawVal) -> Self {
+    unsafe fn unchecked_from_val(v: Val) -> Self {
         v.get_major() as i32
     }
 }
 
-impl From<bool> for RawVal {
+impl From<bool> for Val {
     #[inline(always)]
     fn from(b: bool) -> Self {
-        RawVal::from_bool(b).into()
+        Val::from_bool(b).into()
     }
 }
 
-impl From<()> for RawVal {
+impl From<()> for Val {
     #[inline(always)]
     fn from(_: ()) -> Self {
-        RawVal::from_void().into()
+        Val::from_void().into()
     }
 }
 
-impl From<&()> for RawVal {
+impl From<&()> for Val {
     #[inline(always)]
     fn from(_: &()) -> Self {
-        RawVal::from_void().into()
+        Val::from_void().into()
     }
 }
 
-impl From<u32> for RawVal {
+impl From<u32> for Val {
     #[inline(always)]
     fn from(u: u32) -> Self {
-        RawVal::from_u32(u).into()
+        Val::from_u32(u).into()
     }
 }
 
-impl From<&u32> for RawVal {
+impl From<&u32> for Val {
     #[inline(always)]
     fn from(u: &u32) -> Self {
-        RawVal::from_u32(*u).into()
+        Val::from_u32(*u).into()
     }
 }
 
-impl From<i32> for RawVal {
+impl From<i32> for Val {
     #[inline(always)]
     fn from(i: i32) -> Self {
-        RawVal::from_i32(i).into()
+        Val::from_i32(i).into()
     }
 }
 
-impl From<&i32> for RawVal {
+impl From<&i32> for Val {
     #[inline(always)]
     fn from(i: &i32) -> Self {
-        RawVal::from_i32(*i).into()
+        Val::from_i32(*i).into()
     }
 }
 
-impl From<ScError> for RawVal {
+impl From<ScError> for Val {
     fn from(er: ScError) -> Self {
         let e: Error = er.into();
         e.to_raw()
     }
 }
 
-impl From<&ScError> for RawVal {
+impl From<&ScError> for Val {
     fn from(er: &ScError) -> Self {
         let e: Error = er.clone().into();
         e.to_raw()
@@ -557,7 +557,7 @@ impl From<&ScError> for RawVal {
 
 // Utility methods
 
-impl RawVal {
+impl Val {
     #[inline(always)]
     pub const fn get_payload(self) -> u64 {
         self.0
@@ -600,24 +600,15 @@ impl RawVal {
     }
 
     #[inline(always)]
-    pub fn is<T: RawValConvertible>(self) -> bool {
-        T::is_val_type(self)
-    }
-
-    #[inline(always)]
     // This does no checking, so it can be used in const fns
     // below; it should not be made public.
-    pub(crate) const unsafe fn from_body_and_tag(body: u64, tag: Tag) -> RawVal {
-        RawVal((body << TAG_BITS) | (tag as u64))
+    pub(crate) const unsafe fn from_body_and_tag(body: u64, tag: Tag) -> Val {
+        Val((body << TAG_BITS) | (tag as u64))
     }
 
     #[inline(always)]
     // This also does not checking, is a crate-local helper.
-    pub(crate) const unsafe fn from_major_minor_and_tag(
-        major: u32,
-        minor: u32,
-        tag: Tag,
-    ) -> RawVal {
+    pub(crate) const unsafe fn from_major_minor_and_tag(major: u32, minor: u32, tag: Tag) -> Val {
         let major = major as u64;
         let minor = minor as u64;
         Self::from_body_and_tag((major << MINOR_BITS) | minor, tag)
@@ -651,13 +642,13 @@ impl RawVal {
 
     #[inline(always)]
     pub const fn from_void() -> Void {
-        unsafe { Void(RawVal::from_body_and_tag(0, Tag::Void)) }
+        unsafe { Void(Val::from_body_and_tag(0, Tag::Void)) }
     }
 
     #[inline(always)]
     pub const fn from_bool(b: bool) -> Bool {
         let tag = if b { Tag::True } else { Tag::False };
-        unsafe { Bool(RawVal::from_body_and_tag(0, tag)) }
+        unsafe { Bool(Val::from_body_and_tag(0, tag)) }
     }
 
     #[inline(always)]
@@ -676,25 +667,25 @@ impl RawVal {
     }
 }
 
-impl RawVal {
-    pub const I32_ZERO: I32Val = RawVal::from_i32(0);
-    pub const I32_MIN: I32Val = RawVal::from_i32(i32::MIN);
-    pub const I32_MAX: I32Val = RawVal::from_i32(i32::MAX);
+impl Val {
+    pub const I32_ZERO: I32Val = Val::from_i32(0);
+    pub const I32_MIN: I32Val = Val::from_i32(i32::MIN);
+    pub const I32_MAX: I32Val = Val::from_i32(i32::MAX);
 
-    pub const U32_ZERO: U32Val = RawVal::from_u32(0);
-    pub const U32_ONE: U32Val = RawVal::from_u32(1);
-    pub const U32_MIN: U32Val = RawVal::from_u32(u32::MIN);
-    pub const U32_MAX: U32Val = RawVal::from_u32(u32::MAX);
+    pub const U32_ZERO: U32Val = Val::from_u32(0);
+    pub const U32_ONE: U32Val = Val::from_u32(1);
+    pub const U32_MIN: U32Val = Val::from_u32(u32::MIN);
+    pub const U32_MAX: U32Val = Val::from_u32(u32::MAX);
 
-    pub const VOID: Void = RawVal::from_void();
+    pub const VOID: Void = Val::from_void();
 
-    pub const TRUE: Bool = RawVal::from_bool(true);
-    pub const FALSE: Bool = RawVal::from_bool(false);
+    pub const TRUE: Bool = Val::from_bool(true);
+    pub const FALSE: Bool = Val::from_bool(false);
 }
 
-impl Debug for RawVal {
+impl Debug for Val {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        fn fmt_obj(name: &str, r: &RawVal, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        fn fmt_obj(name: &str, r: &Val, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
             write!(f, "{}(obj#{})", name, r.get_major())
         }
 
@@ -704,7 +695,7 @@ impl Debug for RawVal {
             Tag::False => write!(f, "False"),
             Tag::True => write!(f, "True"),
             Tag::Void => write!(f, "Void"),
-            Tag::Error => unsafe { <Error as RawValConvertible>::unchecked_from_val(*self) }.fmt(f),
+            Tag::Error => unsafe { <Error as ValConvert>::unchecked_from_val(*self) }.fmt(f),
             Tag::U64Small => write!(f, "U64({})", self.get_body()),
             Tag::I64Small => write!(f, "I64({})", self.get_signed_body()),
             Tag::TimepointSmall => write!(f, "Timepoint({})", self.get_body()),
@@ -717,7 +708,7 @@ impl Debug for RawVal {
             Tag::I256Small => write!(f, "I256({})", { self.get_signed_body() }),
             Tag::SymbolSmall => {
                 let ss: SymbolStr =
-                    unsafe { <SymbolSmall as RawValConvertible>::unchecked_from_val(*self) }.into();
+                    unsafe { <SymbolSmall as ValConvert>::unchecked_from_val(*self) }.into();
                 let s: &str = ss.as_ref();
                 write!(f, "Symbol({s})")
             }
@@ -764,12 +755,12 @@ fn test_debug() {
         xdr::{ScError, ScErrorCode, ScErrorType},
         I64Small, U64Small,
     };
-    assert_eq!(format!("{:?}", RawVal::from_void()), "Void");
-    assert_eq!(format!("{:?}", RawVal::from_bool(true)), "True");
-    assert_eq!(format!("{:?}", RawVal::from_bool(false)), "False");
-    assert_eq!(format!("{:?}", RawVal::from_i32(10)), "I32(10)");
-    assert_eq!(format!("{:?}", RawVal::from_i32(-10)), "I32(-10)");
-    assert_eq!(format!("{:?}", RawVal::from_u32(10)), "U32(10)");
+    assert_eq!(format!("{:?}", Val::from_void()), "Void");
+    assert_eq!(format!("{:?}", Val::from_bool(true)), "True");
+    assert_eq!(format!("{:?}", Val::from_bool(false)), "False");
+    assert_eq!(format!("{:?}", Val::from_i32(10)), "I32(10)");
+    assert_eq!(format!("{:?}", Val::from_i32(-10)), "I32(-10)");
+    assert_eq!(format!("{:?}", Val::from_u32(10)), "U32(10)");
     assert_eq!(format!("{:?}", I64Small::try_from(10).unwrap()), "I64(10)");
     assert_eq!(
         format!("{:?}", I64Small::try_from(-10).unwrap()),
