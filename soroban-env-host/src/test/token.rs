@@ -55,7 +55,7 @@ impl TokenTest {
             timestamp: 123456,
             network_id: [5; 32],
             base_reserve: 5_000_000,
-            min_restorable_entry_expiration: 4096,
+            min_persistent_entry_expiration: 4096,
             min_temp_entry_expiration: 16,
         });
         Self {
