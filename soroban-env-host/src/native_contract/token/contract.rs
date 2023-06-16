@@ -1,5 +1,5 @@
 use crate::host::Host;
-use crate::native_contract::base_types::{Address, Bytes, BytesN};
+use crate::native_contract::base_types::{Address, Bytes, BytesN, String};
 use crate::native_contract::contract_error::ContractError;
 use crate::native_contract::token::allowance::{read_allowance, spend_allowance, write_allowance};
 use crate::native_contract::token::asset_info::{has_asset_info, write_asset_info};
@@ -11,7 +11,7 @@ use crate::native_contract::token::public_types::AssetInfo;
 use crate::{err, HostError};
 
 use soroban_env_common::xdr::Asset;
-use soroban_env_common::{EnvBase, TryFromVal, TryIntoVal};
+use soroban_env_common::{ConversionError, EnvBase, TryFromVal, TryIntoVal};
 use soroban_native_sdk_macros::contractimpl;
 
 use super::admin::{read_administrator, write_administrator};
@@ -79,9 +79,9 @@ pub trait TokenTrait {
 
     fn decimals(e: &Host) -> Result<u32, HostError>;
 
-    fn name(e: &Host) -> Result<Bytes, HostError>;
+    fn name(e: &Host) -> Result<String, HostError>;
 
-    fn symbol(e: &Host) -> Result<Bytes, HostError>;
+    fn symbol(e: &Host) -> Result<String, HostError>;
 }
 
 pub struct Token;
@@ -143,9 +143,12 @@ impl TokenTrait for Token {
                 write_asset_info(
                     e,
                     AssetInfo::AlphaNum4(AlphaNum4AssetInfo {
-                        asset_code: BytesN::<4>::try_from_val(
+                        asset_code: String::try_from_val(
                             e,
-                            &e.bytes_new_from_slice(&asset4.asset_code.0)?,
+                            &e.string_new_from_slice(
+                                core::str::from_utf8(&asset4.asset_code.0)
+                                    .map_err(|_| ConversionError)?,
+                            )?,
                         )?,
                         issuer: BytesN::<32>::try_from_val(
                             e,
@@ -159,9 +162,12 @@ impl TokenTrait for Token {
                 write_asset_info(
                     e,
                     AssetInfo::AlphaNum12(AlphaNum12AssetInfo {
-                        asset_code: BytesN::<12>::try_from_val(
+                        asset_code: String::try_from_val(
                             e,
-                            &e.bytes_new_from_slice(&asset12.asset_code.0)?,
+                            &e.string_new_from_slice(
+                                core::str::from_utf8(&asset12.asset_code.0)
+                                    .map_err(|_| ConversionError)?,
+                            )?,
                         )?,
                         issuer: BytesN::<32>::try_from_val(
                             e,
@@ -327,11 +333,11 @@ impl TokenTrait for Token {
         Ok(DECIMAL)
     }
 
-    fn name(e: &Host) -> Result<Bytes, HostError> {
+    fn name(e: &Host) -> Result<String, HostError> {
         read_name(e)
     }
 
-    fn symbol(e: &Host) -> Result<Bytes, HostError> {
+    fn symbol(e: &Host) -> Result<String, HostError> {
         read_symbol(e)
     }
 }

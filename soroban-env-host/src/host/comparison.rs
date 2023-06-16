@@ -323,7 +323,7 @@ impl Compare<LedgerKey> for Budget {
             (ClaimableBalance(a), ClaimableBalance(b)) => self.compare(&a, &b),
             (LiquidityPool(a), LiquidityPool(b)) => self.compare(&a, &b),
             (ContractData(a), ContractData(b)) => {
-                self.compare(&(&a.contract_id, &a.key), &(&b.contract_id, &b.key))
+                self.compare(&(&a.contract, &a.key), &(&b.contract, &b.key))
             }
             (ContractCode(a), ContractCode(b)) => self.compare(&a, &b),
             (ConfigSetting(a), ConfigSetting(b)) => self.compare(&a, &b),
@@ -368,8 +368,8 @@ impl Compare<LedgerEntryData> for Budget {
             (ClaimableBalance(a), ClaimableBalance(b)) => self.compare(&a, &b),
             (LiquidityPool(a), LiquidityPool(b)) => self.compare(&a, &b),
             (ContractData(a), ContractData(b)) => self.compare(
-                &(&a.contract_id, &a.key, &a.body),
-                &(&b.contract_id, &b.key, &b.body),
+                &(&a.contract, &a.key, &a.body),
+                &(&b.contract, &b.key, &b.body),
             ),
             (ContractCode(a), ContractCode(b)) => self.compare(&a, &b),
             (ConfigSetting(a), ConfigSetting(b)) => self.compare(&a, &b),
@@ -777,7 +777,7 @@ mod tests {
                 &ScVal::Address(xdr::ScAddress::Contract(xdr::Hash([0; 32]))),
             )
             .unwrap(),
-            Tag::StorageType => RawVal::from(StorageType::MERGEABLE),
+            Tag::StorageType => RawVal::from(StorageType::PERSISTENT),
             Tag::LedgerKeyNonceObject => panic!(),
             Tag::ObjectCodeUpperBound => panic!(),
             Tag::Bad => panic!(),

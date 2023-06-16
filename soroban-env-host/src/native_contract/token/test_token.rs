@@ -12,7 +12,7 @@ use soroban_env_common::{
 };
 use soroban_env_common::{Symbol, TryFromVal, TryIntoVal};
 
-use crate::native_contract::base_types::Bytes;
+use crate::native_contract::base_types::{Bytes, String};
 
 pub(crate) struct TestToken<'a> {
     pub(crate) address: Address,
@@ -227,7 +227,7 @@ impl<'a> TestToken<'a> {
             .try_into()?)
     }
 
-    pub(crate) fn name(&self) -> Result<Bytes, HostError> {
+    pub(crate) fn name(&self) -> Result<String, HostError> {
         self.host
             .call(
                 self.address.clone().into(),
@@ -237,7 +237,7 @@ impl<'a> TestToken<'a> {
             .try_into_val(self.host)
     }
 
-    pub(crate) fn symbol(&self) -> Result<Bytes, HostError> {
+    pub(crate) fn symbol(&self) -> Result<String, HostError> {
         self.host
             .call(
                 self.address.clone().into(),

@@ -81,7 +81,7 @@ pub struct LedgerInfo {
     pub network_id: [u8; 32],
     pub base_reserve: u32,
     pub min_temp_entry_expiration: u32,
-    pub min_restorable_entry_expiration: u32,
+    pub min_persistent_entry_expiration: u32,
 }
 
 #[derive(Clone, Default)]
@@ -575,7 +575,7 @@ impl Host {
                     body,
                     ext: ExtensionPoint::V0,
                     expiration_ledger_seq: self
-                        .get_min_expiration_ledger(ContractDataType::Mergeable)?,
+                        .get_min_expiration_ledger(ContractDataType::Persistent)?,
                 });
                 storage.put(
                     &code_key,
@@ -1781,7 +1781,7 @@ impl VmCallerEnv for Host {
                 flags: flags.unwrap_or(0),
             });
             let data = LedgerEntryData::ContractData(ContractDataEntry {
-                contract_id: self.get_current_contract_id_internal()?,
+                contract: ScAddress::Contract(self.get_current_contract_id_internal()?),
                 key: self.from_host_val(k)?,
                 body,
                 expiration_ledger_seq: self.get_min_expiration_ledger(storage_type)?,

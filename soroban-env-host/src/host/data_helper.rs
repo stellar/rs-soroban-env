@@ -27,10 +27,10 @@ impl Host {
     ) -> Result<Rc<LedgerKey>, HostError> {
         let contract_id = contract_id.metered_clone(self.as_budget())?;
         Ok(Rc::new(LedgerKey::ContractData(LedgerKeyContractData {
-            contract_id,
             key: ScVal::LedgerKeyContractExecutable,
-            type_: ContractDataType::Exclusive,
+            type_: ContractDataType::Persistent,
             le_type: ContractLedgerEntryType::DataEntry,
+            contract: ScAddress::Contract(contract_id),
         })))
     }
 
@@ -140,14 +140,14 @@ impl Host {
                 .put(&key, &Rc::new(current), self.as_budget())?;
         } else {
             let data = LedgerEntryData::ContractData(ContractDataEntry {
-                contract_id,
+                contract: ScAddress::Contract(contract_id),
                 key: ScVal::LedgerKeyContractExecutable,
                 body,
-                type_: ContractDataType::Exclusive,
+                type_: ContractDataType::Persistent,
                 expiration_ledger_seq: self.with_ledger_info(|li| {
                     Ok(li
                         .sequence_number
-                        .saturating_add(li.min_restorable_entry_expiration))
+                        .saturating_add(li.min_persistent_entry_expiration))
                 })?,
             });
             self.0.storage.borrow_mut().put(
