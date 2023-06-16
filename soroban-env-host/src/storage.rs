@@ -352,7 +352,7 @@ mod test_footprint {
         let key3 = Rc::new(LedgerKey::ContractData(LedgerKeyContractData {
             contract: ScAddress::Contract([0; 32].into()),
             key: ScVal::I32(0),
-            type_: ContractDataType::Mergeable,
+            type_: ContractDataType::Persistent,
             le_type: ContractLedgerEntryType::ExpirationExtension,
         }));
 
