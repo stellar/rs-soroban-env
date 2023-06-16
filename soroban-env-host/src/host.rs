@@ -1840,7 +1840,9 @@ impl VmCallerEnv for Host {
     ) -> Result<Void, HostError> {
         let key = self.contract_data_key_from_rawval(k, t.try_into()?)?;
 
-        // We don't load this key, but we want to make sure that it's in the footprint.
+        // The host doesn't load the key, but we want to make sure that
+        // it's in the footprint, because the system embedding the host
+        // (e.g. stellar-core) will to perform the bump.
         self.0
             .storage
             .borrow_mut()
