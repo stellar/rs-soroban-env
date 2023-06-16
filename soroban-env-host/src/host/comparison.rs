@@ -456,7 +456,7 @@ impl Compare<ContractCodeEntryBody> for Budget {
 mod tests {
     use super::*;
     use crate::xdr::ScVal;
-    use crate::{Compare, Host, RawVal, Tag, TryFromVal};
+    use crate::{Compare, Host, Tag, TryFromVal, Val};
     use itertools::Itertools;
     use soroban_env_common::StorageType;
 
@@ -660,7 +660,7 @@ mod tests {
     ///
     /// This is a test of the Host::obj_cmp and Tag::get_scval_type methods.
     ///
-    /// It works by generating an "example" RawVal for every possible tag,
+    /// It works by generating an "example" Val for every possible tag,
     /// with a match on Tag that ensures it will be updated as Tag changes.
     ///
     /// Those examples are then converted to an array of ScVal.
@@ -669,7 +669,7 @@ mod tests {
     #[test]
     fn compare_obj_to_small() {
         let host = Host::default();
-        let rawvals: Vec<RawVal> = all_tags()
+        let rawvals: Vec<Val> = all_tags()
             .into_iter()
             .map(|t| example_for_tag(&host, t))
             .collect();
@@ -704,30 +704,30 @@ mod tests {
             .collect()
     }
 
-    fn example_for_tag(host: &Host, tag: Tag) -> RawVal {
+    fn example_for_tag(host: &Host, tag: Tag) -> Val {
         use crate::{xdr, Error};
 
         let ex = match tag {
-            Tag::False => RawVal::from(false),
-            Tag::True => RawVal::from(true),
-            Tag::Void => RawVal::from(()),
-            Tag::Error => RawVal::from(Error::from_type_and_code(
+            Tag::False => Val::from(false),
+            Tag::True => Val::from(true),
+            Tag::Void => Val::from(()),
+            Tag::Error => Val::from(Error::from_type_and_code(
                 ScErrorType::Context,
                 ScErrorCode::InternalError,
             )),
-            Tag::U32Val => RawVal::from(u32::MAX),
-            Tag::I32Val => RawVal::from(i32::MAX),
-            Tag::U64Small => RawVal::try_from_val(host, &0_u64).unwrap(),
-            Tag::I64Small => RawVal::try_from_val(host, &0_i64).unwrap(),
+            Tag::U32Val => Val::from(u32::MAX),
+            Tag::I32Val => Val::from(i32::MAX),
+            Tag::U64Small => Val::try_from_val(host, &0_u64).unwrap(),
+            Tag::I64Small => Val::try_from_val(host, &0_i64).unwrap(),
             Tag::TimepointSmall => {
-                RawVal::try_from_val(host, &ScVal::Timepoint(xdr::TimePoint(0))).unwrap()
+                Val::try_from_val(host, &ScVal::Timepoint(xdr::TimePoint(0))).unwrap()
             }
             Tag::DurationSmall => {
-                RawVal::try_from_val(host, &ScVal::Duration(xdr::Duration(0))).unwrap()
+                Val::try_from_val(host, &ScVal::Duration(xdr::Duration(0))).unwrap()
             }
-            Tag::U128Small => RawVal::try_from_val(host, &0_u128).unwrap(),
-            Tag::I128Small => RawVal::try_from_val(host, &0_i128).unwrap(),
-            Tag::U256Small => RawVal::try_from_val(
+            Tag::U128Small => Val::try_from_val(host, &0_u128).unwrap(),
+            Tag::I128Small => Val::try_from_val(host, &0_i128).unwrap(),
+            Tag::U256Small => Val::try_from_val(
                 host,
                 &ScVal::U256(xdr::UInt256Parts {
                     hi_hi: 0,
@@ -737,7 +737,7 @@ mod tests {
                 }),
             )
             .unwrap(),
-            Tag::I256Small => RawVal::try_from_val(
+            Tag::I256Small => Val::try_from_val(
                 host,
                 &ScVal::I256(xdr::Int256Parts {
                     hi_hi: 0,
@@ -748,25 +748,25 @@ mod tests {
             )
             .unwrap(),
             Tag::SymbolSmall => {
-                RawVal::try_from_val(host, &ScVal::Symbol(xdr::ScSymbol::try_from("").unwrap()))
+                Val::try_from_val(host, &ScVal::Symbol(xdr::ScSymbol::try_from("").unwrap()))
                     .unwrap()
             }
             Tag::LedgerKeyContractExecutable => {
-                RawVal::try_from_val(host, &ScVal::LedgerKeyContractExecutable).unwrap()
+                Val::try_from_val(host, &ScVal::LedgerKeyContractExecutable).unwrap()
             }
             Tag::SmallCodeUpperBound => panic!(),
             Tag::ObjectCodeLowerBound => panic!(),
-            Tag::U64Object => RawVal::try_from_val(host, &u64::MAX).unwrap(),
-            Tag::I64Object => RawVal::try_from_val(host, &i64::MAX).unwrap(),
+            Tag::U64Object => Val::try_from_val(host, &u64::MAX).unwrap(),
+            Tag::I64Object => Val::try_from_val(host, &i64::MAX).unwrap(),
             Tag::TimepointObject => {
-                RawVal::try_from_val(host, &ScVal::Timepoint(xdr::TimePoint(u64::MAX))).unwrap()
+                Val::try_from_val(host, &ScVal::Timepoint(xdr::TimePoint(u64::MAX))).unwrap()
             }
             Tag::DurationObject => {
-                RawVal::try_from_val(host, &ScVal::Duration(xdr::Duration(u64::MAX))).unwrap()
+                Val::try_from_val(host, &ScVal::Duration(xdr::Duration(u64::MAX))).unwrap()
             }
-            Tag::U128Object => RawVal::try_from_val(host, &u128::MAX).unwrap(),
-            Tag::I128Object => RawVal::try_from_val(host, &i128::MAX).unwrap(),
-            Tag::U256Object => RawVal::try_from_val(
+            Tag::U128Object => Val::try_from_val(host, &u128::MAX).unwrap(),
+            Tag::I128Object => Val::try_from_val(host, &i128::MAX).unwrap(),
+            Tag::U256Object => Val::try_from_val(
                 host,
                 &ScVal::U256(xdr::UInt256Parts {
                     hi_hi: u64::MAX,
@@ -776,7 +776,7 @@ mod tests {
                 }),
             )
             .unwrap(),
-            Tag::I256Object => RawVal::try_from_val(
+            Tag::I256Object => Val::try_from_val(
                 host,
                 &ScVal::I256(xdr::Int256Parts {
                     hi_hi: i64::MIN,
@@ -786,33 +786,33 @@ mod tests {
                 }),
             )
             .unwrap(),
-            Tag::BytesObject => RawVal::try_from_val(host, &vec![1]).unwrap(),
-            Tag::StringObject => RawVal::try_from_val(host, &"foo").unwrap(),
-            Tag::SymbolObject => RawVal::try_from_val(
+            Tag::BytesObject => Val::try_from_val(host, &vec![1]).unwrap(),
+            Tag::StringObject => Val::try_from_val(host, &"foo").unwrap(),
+            Tag::SymbolObject => Val::try_from_val(
                 host,
                 &ScVal::Symbol(xdr::ScSymbol::try_from("a-big-symbol").unwrap()),
             )
             .unwrap(),
             Tag::VecObject => {
-                RawVal::try_from_val(host, &ScVal::Vec(Some(xdr::ScVec::try_from((0,)).unwrap())))
+                Val::try_from_val(host, &ScVal::Vec(Some(xdr::ScVec::try_from((0,)).unwrap())))
                     .unwrap()
             }
-            Tag::MapObject => RawVal::try_from_val(
+            Tag::MapObject => Val::try_from_val(
                 host,
                 &ScVal::Map(Some(xdr::ScMap::try_from(vec![]).unwrap())),
             )
             .unwrap(),
-            Tag::ContractExecutableObject => RawVal::try_from_val(
+            Tag::ContractExecutableObject => Val::try_from_val(
                 host,
                 &ScVal::ContractExecutable(xdr::ScContractExecutable::Token),
             )
             .unwrap(),
-            Tag::AddressObject => RawVal::try_from_val(
+            Tag::AddressObject => Val::try_from_val(
                 host,
                 &ScVal::Address(xdr::ScAddress::Contract(xdr::Hash([0; 32]))),
             )
             .unwrap(),
-            Tag::StorageType => RawVal::from(StorageType::PERSISTENT),
+            Tag::StorageType => Val::from(StorageType::PERSISTENT),
             Tag::LedgerKeyNonceObject => panic!(),
             Tag::ObjectCodeUpperBound => panic!(),
             Tag::Bad => panic!(),

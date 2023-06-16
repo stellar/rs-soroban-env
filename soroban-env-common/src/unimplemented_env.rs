@@ -1,8 +1,8 @@
 use super::{call_macro_with_all_host_functions, Env, EnvBase, Symbol};
 use super::{
-    AddressObject, Bool, BytesObject, Error, I128Object, I256Object, I64Object, MapObject, RawVal,
+    AddressObject, Bool, BytesObject, Error, I128Object, I256Object, I64Object, MapObject,
     StorageType, StringObject, SymbolObject, U128Object, U256Object, U32Val, U64Object, U64Val,
-    VecObject, Void,
+    Val, VecObject, Void,
 };
 use core::{any, convert::Infallible};
 
@@ -77,11 +77,7 @@ impl EnvBase for UnimplementedEnv {
         unimplemented!()
     }
 
-    fn map_new_from_slices(
-        &self,
-        _keys: &[&str],
-        _vals: &[RawVal],
-    ) -> Result<MapObject, Self::Error> {
+    fn map_new_from_slices(&self, _keys: &[&str], _vals: &[Val]) -> Result<MapObject, Self::Error> {
         unimplemented!()
     }
 
@@ -89,20 +85,16 @@ impl EnvBase for UnimplementedEnv {
         &self,
         _map: MapObject,
         _keys: &[&str],
-        _vals: &mut [RawVal],
+        _vals: &mut [Val],
     ) -> Result<Void, Self::Error> {
         unimplemented!()
     }
 
-    fn vec_new_from_slice(&self, _vals: &[RawVal]) -> Result<VecObject, Self::Error> {
+    fn vec_new_from_slice(&self, _vals: &[Val]) -> Result<VecObject, Self::Error> {
         unimplemented!()
     }
 
-    fn vec_unpack_to_slice(
-        &self,
-        _vec: VecObject,
-        _vals: &mut [RawVal],
-    ) -> Result<Void, Self::Error> {
+    fn vec_unpack_to_slice(&self, _vec: VecObject, _vals: &mut [Val]) -> Result<Void, Self::Error> {
         unimplemented!()
     }
 
@@ -110,7 +102,7 @@ impl EnvBase for UnimplementedEnv {
         unimplemented!()
     }
 
-    fn log_from_slice(&self, _msg: &str, _vals: &[RawVal]) -> Result<Void, Self::Error> {
+    fn log_from_slice(&self, _msg: &str, _vals: &[Val]) -> Result<Void, Self::Error> {
         unimplemented!()
     }
 }

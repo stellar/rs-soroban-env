@@ -1,24 +1,24 @@
 use crate::{
-    impl_rawval_wrapper_base, num, Compare, ConversionError, Convert, Env, RawVal,
-    RawValConvertible, Tag, TryFromVal,
+    impl_rawval_wrapper_base, num, val::ValConvert, Compare, ConversionError, Convert, Env, Tag,
+    TryFromVal, Val,
 };
 use core::{cmp::Ordering, fmt::Debug};
 use stellar_xdr::{Duration, ScVal, TimePoint};
 
-/// Wrapper for a [RawVal] that is tagged with one of the object types,
-/// interpreting the [RawVal]'s body as containing a 32-bit object-code handle
+/// Wrapper for a [Val] that is tagged with one of the object types,
+/// interpreting the [Val]'s body as containing a 32-bit object-code handle
 /// to a host object of the object-type.
 #[repr(transparent)]
 #[derive(Copy, Clone)]
-pub struct Object(pub(crate) RawVal);
+pub struct Object(pub(crate) Val);
 impl_rawval_wrapper_base!(Object);
 
-impl RawValConvertible for Object {
-    fn is_val_type(v: RawVal) -> bool {
+impl ValConvert for Object {
+    fn is_val_type(v: Val) -> bool {
         v.is_object()
     }
 
-    unsafe fn unchecked_from_val(v: RawVal) -> Self {
+    unsafe fn unchecked_from_val(v: Val) -> Self {
         Object(v)
     }
 }
@@ -32,7 +32,7 @@ impl Object {
     #[inline(always)]
     pub const fn from_handle_and_tag(handle: u32, tag: Tag) -> Self {
         debug_assert!(tag.is_object());
-        unsafe { Object(RawVal::from_major_minor_and_tag(handle, 0, tag)) }
+        unsafe { Object(Val::from_major_minor_and_tag(handle, 0, tag)) }
     }
 }
 
@@ -47,8 +47,8 @@ impl<E: Env> Compare<Object> for E {
 /// `ScValObject` (and its reference-based type `ScValObjRef`) is a small
 /// wrapper type that does _not_ have its own XDR definition, it just denotes
 /// (as a type) the subset of `ScVal` values that need to be represented in
-/// `RawVal` by one of the cases that can be an `Object`. In other words
-/// `RawVal::try_from_val(&v, e).is_object()` will be true iff
+/// `Val` by one of the cases that can be an `Object`. In other words
+/// `Val::try_from_val(&v, e).is_object()` will be true iff
 /// `ScValObject::classify(v)` is `Ok(ScValObject(v))`.
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]

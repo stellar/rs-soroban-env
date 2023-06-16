@@ -1,9 +1,8 @@
 use super::FuelRefillable;
 use crate::{xdr::ContractCostType, Host, HostError, VmCaller, VmCallerEnv};
 use crate::{
-    AddressObject, BytesObject, Error, I128Object, I256Object, I64Object, MapObject, RawVal,
-    StorageType, StringObject, Symbol, SymbolObject, U128Object, U256Object, U32Val, U64Object,
-    VecObject,
+    AddressObject, BytesObject, Error, I128Object, I256Object, I64Object, MapObject, StorageType,
+    StringObject, Symbol, SymbolObject, U128Object, U256Object, U32Val, U64Object, Val, VecObject,
 };
 use soroban_env_common::{call_macro_with_all_host_functions, WasmiMarshal};
 use wasmi::{
@@ -52,8 +51,8 @@ macro_rules! generate_dispatch_functions {
                 // This defines a "dispatch function" that does several things:
                 //
                 //  1. charges the budget for the call, failing if over budget.
-                //  2. attempts to convert incoming wasmi i64 args to RawVals or
-                //     RawVal-wrappers expected by host functions, failing if
+                //  2. attempts to convert incoming wasmi i64 args to Vals or
+                //     Val-wrappers expected by host functions, failing if
                 //     any conversions fail.
                 //  3. calls the host function
                 //  4. checks the result is Ok, or traps the VM on Err
@@ -82,13 +81,13 @@ macro_rules! generate_dispatch_functions {
                     host.charge_budget(ContractCostType::InvokeHostFunction, None)?;
                     let mut vmcaller = VmCaller(Some(caller));
                     // The odd / seemingly-redundant use of `wasmi::Value` here
-                    // as intermediates -- rather than just passing RawVals --
+                    // as intermediates -- rather than just passing Vals --
                     // has to do with the fact that some host functions are
                     // typed as receiving or returning plain _non-Rawval_ i64 or
                     // u64 values. So the call here has to be able to massage
                     // both types into and out of i64, and `wasmi::Value`
                     // happens to be a natural switching point for that: we have
-                    // conversions to and from both RawVal and i64 / u64 for
+                    // conversions to and from both Val and i64 / u64 for
                     // wasmi::Value.
                     let res: Result<_, HostError> = host.$fn_id(&mut vmcaller, $(<$type>::try_marshal_from_value(Value::I64($arg)).ok_or(BadSignature)?),*);
 

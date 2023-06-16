@@ -12,7 +12,7 @@ use soroban_env_common::xdr::{
     ContractIdPreimage, ContractIdPreimageFromAddress, CreateContractArgs, ScAddress,
     ScContractExecutable,
 };
-use soroban_env_common::{RawVal, TryFromVal, TryIntoVal};
+use soroban_env_common::{TryFromVal, TryIntoVal, Val};
 use soroban_native_sdk_macros::contracttype;
 
 #[derive(Clone)]
@@ -90,7 +90,7 @@ impl InvokerContractAuthEntry {
 pub(crate) fn invoker_contract_auth_to_authorized_invocation(
     host: &Host,
     invoker_contract_addr: &ScAddress,
-    invoker_auth_entry: RawVal,
+    invoker_auth_entry: Val,
 ) -> Result<AuthorizedInvocation, HostError> {
     let entry = InvokerContractAuthEntry::try_from_val(host, &invoker_auth_entry)?;
     entry.to_authorized_invocation(host, invoker_contract_addr)

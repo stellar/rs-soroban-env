@@ -1,4 +1,4 @@
-use crate::{cost_runner::CostRunner, xdr::ContractCostType, xdr::ScVec, RawVal, Symbol, Vm};
+use crate::{cost_runner::CostRunner, xdr::ContractCostType, xdr::ScVec, Symbol, Val, Vm};
 use std::{hint::black_box, rc::Rc};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -147,7 +147,7 @@ macro_rules! impl_wasm_insn_runner {
         impl CostRunner for $runner {
             const COST_TYPE: ContractCostType = ContractCostType::WasmInsnExec;
             type SampleType = WasmInsnSample;
-            type RecycledType = (Option<RawVal>, Self::SampleType);
+            type RecycledType = (Option<Val>, Self::SampleType);
 
             fn run_iter(
                 host: &crate::Host,

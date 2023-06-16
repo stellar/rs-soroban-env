@@ -4,20 +4,18 @@ use soroban_env_common::{
     Compare, Env, EnvBase, Object, TryFromVal, TryIntoVal, I256,
 };
 
-use crate::{budget::AsBudget, host_object::HostObjectType, Host, HostError, RawVal};
+use crate::{budget::AsBudget, host_object::HostObjectType, Host, HostError, Val};
 use core::fmt::Debug;
 use std::cmp::Ordering;
 
-fn check_roundtrip_ok<
-    T: Eq + Debug + Copy + TryIntoVal<Host, RawVal> + TryFromVal<Host, RawVal>,
->(
+fn check_roundtrip_ok<T: Eq + Debug + Copy + TryIntoVal<Host, Val> + TryFromVal<Host, Val>>(
     h: &Host,
     input: T,
     expect_object: bool,
 ) {
-    let raw1: RawVal = input.try_into_val(h).unwrap();
+    let raw1: Val = input.try_into_val(h).unwrap();
     let sc1: ScVal = raw1.try_into_val(h).unwrap();
-    let raw2: RawVal = sc1.try_into_val(h).unwrap();
+    let raw2: Val = sc1.try_into_val(h).unwrap();
     let output: T = raw2.try_into_val(h).unwrap();
     assert_eq!(input, output);
     assert_eq!(h.compare(&raw1, &raw2).unwrap(), Ordering::Equal);
@@ -32,15 +30,15 @@ fn check_roundtrip_ok<
 }
 
 fn check_roundtrip_compare_ok<
-    T: Eq + Debug + Copy + Ord + TryIntoVal<Host, RawVal> + TryFromVal<Host, RawVal>,
+    T: Eq + Debug + Copy + Ord + TryIntoVal<Host, Val> + TryFromVal<Host, Val>,
 >(
     h: &Host,
     input_vec: Vec<T>,
 ) {
-    let pairs: Vec<((RawVal, ScVal), &T)> = input_vec
+    let pairs: Vec<((Val, ScVal), &T)> = input_vec
         .iter()
         .map(|v| {
-            let raw: RawVal = v.try_into_val(h).unwrap();
+            let raw: Val = v.try_into_val(h).unwrap();
             let scv: ScVal = raw.try_into_val(h).unwrap();
             (raw, scv)
         })

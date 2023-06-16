@@ -4,10 +4,10 @@ pub(crate) mod invoker_contract_auth;
 pub(crate) mod token;
 
 use crate::host::{Host, HostError};
-use soroban_env_common::{RawVal, Symbol};
+use soroban_env_common::{Symbol, Val};
 
 pub trait NativeContract {
-    fn call(&self, func: &Symbol, host: &Host, args: &[RawVal]) -> Result<RawVal, HostError>;
+    fn call(&self, func: &Symbol, host: &Host, args: &[Val]) -> Result<Val, HostError>;
 }
 
 pub use token::Token;

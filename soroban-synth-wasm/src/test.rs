@@ -1,6 +1,6 @@
 use crate::{Arity, GlobalRef, ModEmitter, Operand};
 use expect_test::expect;
-use soroban_env_common::{RawVal, Symbol, Tag};
+use soroban_env_common::{Symbol, Tag, Val};
 use wasmprinter::print_bytes;
 
 #[test]
@@ -20,7 +20,7 @@ fn test_synth_wasm() {
     // StackTop here is just a convenient way to pass the `m:Object` parameter. Instead of passing
     // it in explicitly, we just drop it on the stack and tell the instruction to pick up
     // "whatever is on top of the stack"
-    fe.map_put(Operand::StackTop, s, RawVal::from_u32(123).to_raw());
+    fe.map_put(Operand::StackTop, s, Val::from_u32(123).to_raw());
     fe.map_get(Operand::StackTop, s);
 
     let bytes = fe.finish_and_export("test_map").finish();

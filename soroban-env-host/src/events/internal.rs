@@ -11,7 +11,7 @@ use crate::{
     host::metered_clone,
     xdr,
     xdr::ScVal,
-    Host, HostError, RawVal,
+    Host, HostError, Val,
 };
 
 /// The internal representation of a `ContractEvent` that is stored in the events buffer
@@ -22,7 +22,7 @@ pub struct InternalContractEvent {
     pub type_: xdr::ContractEventType,
     pub contract_id: Option<BytesObject>,
     pub topics: VecObject,
-    pub data: RawVal,
+    pub data: Val,
 }
 
 impl InternalContractEvent {
@@ -83,7 +83,7 @@ pub struct InternalDiagnosticEvent {
 // observe the event anyway.
 #[derive(Clone, Debug)]
 pub enum InternalDiagnosticArg {
-    HostVal(RawVal),
+    HostVal(Val),
     XdrVal(ScVal),
 }
 

@@ -3,7 +3,7 @@
 //! the [Env](crate::Env) interface implemented by [Host].
 //!
 //! It also contains helper methods to look up and call into contract functions
-//! in terms of [ScVal] and [RawVal] arguments.
+//! in terms of [ScVal] and [Val] arguments.
 //!
 //! The implementation of WASM types and the WASM bytecode interpreter come from
 //! the [wasmi](https://github.com/paritytech/wasmi) project.
@@ -15,7 +15,7 @@ mod func_info;
 use crate::{budget::AsBudget, err, host::Frame, xdr::ContractCostType, HostError};
 use std::{cell::RefCell, io::Cursor, rc::Rc};
 
-use super::{xdr::Hash, Host, RawVal, Symbol};
+use super::{xdr::Hash, Host, Symbol, Val};
 use fuel_refillable::FuelRefillable;
 use func_info::HOST_FUNCTIONS;
 use soroban_env_common::{
@@ -224,7 +224,7 @@ impl Vm {
         func_sym: &Symbol,
         func: &Func,
         inputs: &[Value],
-    ) -> Result<RawVal, HostError> {
+    ) -> Result<Val, HostError> {
         let mut wasm_ret: [Value; 1] = [Value::I64(0)];
         self.store.borrow_mut().fill_fuels(host)?;
         let res = func.call(&mut *self.store.borrow_mut(), inputs, &mut wasm_ret);
@@ -279,8 +279,8 @@ impl Vm {
         self: &Rc<Self>,
         host: &Host,
         func_sym: &Symbol,
-        args: &[RawVal],
-    ) -> Result<RawVal, HostError> {
+        args: &[Val],
+    ) -> Result<Val, HostError> {
         host.charge_budget(ContractCostType::InvokeVmFunction, None)?;
         host.with_frame(
             Frame::ContractVM(self.clone(), *func_sym, args.to_vec()),
@@ -322,8 +322,8 @@ impl Vm {
     }
 
     /// Invokes a function in the VM's module, converting externally stable XDR
-    /// [ScVal] arguments into [Host]-specific [RawVal]s and converting the
-    /// [RawVal] returned from the invocation back to an [ScVal].
+    /// [ScVal] arguments into [Host]-specific [Val]s and converting the
+    /// [Val] returned from the invocation back to an [ScVal].
     ///
     /// This function, like [Vm::new], is called as part of
     /// [Host::invoke_function], and does not usually need to be called manually
@@ -339,7 +339,7 @@ impl Vm {
         args: &ScVec,
     ) -> Result<ScVal, HostError> {
         let func_sym = Symbol::try_from_val(host, &func)?;
-        let mut raw_args: Vec<RawVal> = Vec::new();
+        let mut raw_args: Vec<Val> = Vec::new();
         for scv in args.0.iter() {
             raw_args.push(host.to_host_val(scv)?);
         }

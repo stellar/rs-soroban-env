@@ -29,7 +29,7 @@ use soroban_env_common::{
         LedgerEntryData, LedgerKey, Liabilities, PublicKey, ScErrorCode, ScErrorType,
         TrustLineEntry, TrustLineEntryExt, TrustLineEntryV1, TrustLineEntryV1Ext, TrustLineFlags,
     },
-    EnvBase, RawVal,
+    EnvBase, Val,
 };
 use soroban_env_common::{Env, Symbol, TryFromVal, TryIntoVal};
 use stellar_strkey::ed25519;
@@ -262,9 +262,9 @@ impl TokenTest {
         &self,
         contract_id_bytes: &BytesN<32>,
         f: F,
-    ) -> Result<RawVal, HostError>
+    ) -> Result<Val, HostError>
     where
-        T: Into<RawVal>,
+        T: Into<Val>,
         F: FnOnce() -> Result<T, HostError>,
     {
         self.host.with_frame(
@@ -283,9 +283,9 @@ impl TokenTest {
         )
     }
 
-    fn run_from_account<T, F>(&self, account_id: AccountId, f: F) -> Result<RawVal, HostError>
+    fn run_from_account<T, F>(&self, account_id: AccountId, f: F) -> Result<Val, HostError>
     where
-        T: Into<RawVal>,
+        T: Into<Val>,
         F: FnOnce() -> Result<T, HostError>,
     {
         self.host.set_source_account(account_id);
@@ -2631,13 +2631,13 @@ fn test_recording_auth_for_token() {
                             vec![
                                 ScVal::try_from_val(
                                     &test.host,
-                                    &RawVal::try_from_val(&test.host, &user.address(&test.host))
+                                    &Val::try_from_val(&test.host, &user.address(&test.host))
                                         .unwrap()
                                 )
                                 .unwrap(),
                                 ScVal::try_from_val(
                                     &test.host,
-                                    &RawVal::try_from_val(&test.host, &100_i128).unwrap()
+                                    &Val::try_from_val(&test.host, &100_i128).unwrap()
                                 )
                                 .unwrap()
                             ]

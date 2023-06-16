@@ -1,15 +1,15 @@
 use std::hint::black_box;
 
-use crate::{cost_runner::CostRunner, xdr::ContractCostType, xdr::ScVal, RawVal};
+use crate::{cost_runner::CostRunner, xdr::ContractCostType, xdr::ScVal, Val};
 
 pub struct ValXdrConvRun;
 
 impl CostRunner for ValXdrConvRun {
     const COST_TYPE: ContractCostType = ContractCostType::ValXdrConv;
 
-    type SampleType = (Option<RawVal>, ScVal);
+    type SampleType = (Option<Val>, ScVal);
 
-    type RecycledType = (Option<(ScVal, RawVal)>, ScVal);
+    type RecycledType = (Option<(ScVal, Val)>, ScVal);
 
     fn run_iter(host: &crate::Host, _iter: u64, sample: Self::SampleType) -> Self::RecycledType {
         let sv = black_box(host.from_host_val(sample.0.unwrap()).unwrap());
