@@ -125,7 +125,7 @@ impl TokenTrait for Token {
         let asset: Asset = e.metered_from_xdr_obj(asset_bytes.into())?;
 
         let curr_contract_id = e.get_current_contract_id_internal()?;
-        let expected_contract_id = e.get_contract_id_from_asset(asset.clone())?;
+        let expected_contract_id = e.get_asset_contract_id_hash(asset.clone())?;
         if curr_contract_id != expected_contract_id {
             return Err(e.error(
                 ContractError::InternalError.into(),
