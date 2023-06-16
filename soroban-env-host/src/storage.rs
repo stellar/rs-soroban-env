@@ -339,9 +339,33 @@ mod test_footprint {
             type_: ContractDataType::Persistent,
             le_type: ContractLedgerEntryType::DataEntry,
         }));
+
+        // Key not in footprint. Only difference is type_
+        let key2 = Rc::new(LedgerKey::ContractData(LedgerKeyContractData {
+            contract: ScAddress::Contract([0; 32].into()),
+            key: ScVal::I32(0),
+            type_: ContractDataType::Temporary,
+            le_type: ContractLedgerEntryType::DataEntry,
+        }));
+
+        // Key not in footprint. Only difference is le_type
+        let key3 = Rc::new(LedgerKey::ContractData(LedgerKeyContractData {
+            contract: ScAddress::Contract([0; 32].into()),
+            key: ScVal::I32(0),
+            type_: ContractDataType::Persistent,
+            le_type: ContractLedgerEntryType::ExpirationExtension,
+        }));
+
         let om = [(Rc::clone(&key), AccessType::ReadOnly)].into();
         let mom = MeteredOrdMap::from_map(om, &budget)?;
         let mut fp = Footprint(mom);
+        assert!(fp
+            .enforce_access(&key2, AccessType::ReadOnly, &budget)
+            .is_err());
+        assert!(fp
+            .enforce_access(&key3, AccessType::ReadOnly, &budget)
+            .is_err());
+
         fp.enforce_access(&key, AccessType::ReadOnly, &budget)?;
         fp.0 =
             fp.0.insert(Rc::clone(&key), AccessType::ReadWrite, &budget)?;
