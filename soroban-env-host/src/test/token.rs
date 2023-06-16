@@ -324,7 +324,7 @@ fn test_native_token_smart_roundtrip() {
     );
     let token = TestToken::new_from_asset(&test.host, Asset::Native);
     let expected_token_address =
-        ScAddress::Contract(test.host.get_contract_id_from_asset(Asset::Native).unwrap());
+        ScAddress::Contract(test.host.get_asset_contract_id_hash(Asset::Native).unwrap());
 
     assert_eq!(
         token.address.to_sc_address().unwrap(),
@@ -390,7 +390,7 @@ fn test_asset_init(asset_code: &[u8]) {
     };
     let token = TestToken::new_from_asset(&test.host, asset.clone());
     let expected_token_address =
-        ScAddress::Contract(test.host.get_contract_id_from_asset(asset).unwrap());
+        ScAddress::Contract(test.host.get_asset_contract_id_hash(asset).unwrap());
     assert_eq!(
         token.address.to_sc_address().unwrap(),
         expected_token_address

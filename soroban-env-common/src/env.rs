@@ -2,9 +2,9 @@ use soroban_env_macros::generate_call_macro_with_all_host_functions;
 
 use super::Symbol;
 use super::{
-    AddressObject, Bool, BytesObject, Error, I128Object, I256Object, I64Object, MapObject, Object,
-    RawVal, StorageType, StringObject, SymbolObject, U128Object, U256Object, U32Val, U64Object,
-    U64Val, VecObject, Void,
+    AddressObject, Bool, BytesObject, Error, I128Object, I256Object, I64Object, MapObject, RawVal,
+    StorageType, StringObject, SymbolObject, U128Object, U256Object, U32Val, U64Object, U64Val,
+    VecObject, Void,
 };
 use core::any;
 

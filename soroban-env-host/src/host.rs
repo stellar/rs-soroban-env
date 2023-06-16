@@ -463,7 +463,25 @@ impl Host {
         self.add_host_object(ScAddress::Contract(hash_id))
     }
 
-    pub(crate) fn get_contract_id_from_asset(&self, asset: Asset) -> Result<Hash, HostError> {
+    pub(crate) fn get_contract_id_hash(
+        &self,
+        deployer: AddressObject,
+        salt: BytesObject,
+    ) -> Result<Hash, HostError> {
+        let contract_id_preimage = ContractIdPreimage::Address(ContractIdPreimageFromAddress {
+            address: self.visit_obj(deployer, |addr: &ScAddress| {
+                addr.metered_clone(self.budget_ref())
+            })?,
+            salt: self.u256_from_bytesobj_input("contract_id_salt", salt)?,
+        });
+
+        let id_preimage = self.get_full_contract_id_preimage(
+            contract_id_preimage.metered_clone(self.budget_ref())?,
+        )?;
+        Ok(Hash(self.metered_hash_xdr(&id_preimage)?))
+    }
+
+    pub(crate) fn get_asset_contract_id_hash(&self, asset: Asset) -> Result<Hash, HostError> {
         let id_preimage = self.get_full_contract_id_preimage(ContractIdPreimage::Asset(asset))?;
         let id_arr: [u8; 32] = self.metered_hash_xdr(&id_preimage)?;
         Ok(Hash(id_arr))
@@ -896,11 +914,12 @@ impl VmCallerEnv for Host {
     }
 
     // Notes on metering: covered by the components
-    fn get_invoking_contract(&self, _vmcaller: &mut VmCaller<Host>) -> Result<Object, HostError> {
+    fn get_invoking_contract(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+    ) -> Result<AddressObject, HostError> {
         let invoking_contract_hash = self.get_invoking_contract_internal()?;
-        Ok(self
-            .add_host_object(self.scbytes_from_hash(&invoking_contract_hash)?)?
-            .into())
+        self.add_host_object(ScAddress::Contract(invoking_contract_hash))
     }
 
     // Metered: covered by `visit` and `metered_cmp`.
@@ -1868,6 +1887,28 @@ impl VmCallerEnv for Host {
         // Asset contracts don't need any deployer authorization (they're tied
         // to the asset issuers instead).
         self.create_contract_internal(None, args)
+    }
+
+    // Notes on metering: covered by the components.
+    fn get_contract_id(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        deployer: AddressObject,
+        salt: BytesObject,
+    ) -> Result<AddressObject, HostError> {
+        let hash_id = self.get_contract_id_hash(deployer, salt)?;
+        self.add_host_object(ScAddress::Contract(hash_id))
+    }
+
+    // Notes on metering: covered by the components.
+    fn get_asset_contract_id(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        serialized_asset: BytesObject,
+    ) -> Result<AddressObject, HostError> {
+        let asset: Asset = self.metered_from_xdr_obj(serialized_asset)?;
+        let hash_id = self.get_asset_contract_id_hash(asset)?;
+        self.add_host_object(ScAddress::Contract(hash_id))
     }
 
     fn upload_wasm(
