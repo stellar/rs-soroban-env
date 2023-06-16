@@ -1,4 +1,4 @@
-use soroban_env_common::{TryIntoVal, Val, Void};
+use soroban_env_common::{Tag, TryIntoVal, Val};
 use soroban_env_host::{Host, HostError};
 
 #[test]

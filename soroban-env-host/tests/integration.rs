@@ -1,6 +1,6 @@
 use expect_test::expect;
 use soroban_env_common::EnvBase;
-use soroban_env_host::{Compare, DiagnosticLevel, Env, Host, HostError, MapObject, Val};
+use soroban_env_host::{Compare, DiagnosticLevel, Env, Host, HostError, Tag, Val};
 
 #[test]
 fn vec_as_seen_by_user() -> Result<(), HostError> {
@@ -29,7 +29,7 @@ fn vec_as_seen_by_user() -> Result<(), HostError> {
 }
 
 #[test]
-fn vec_host_fn() -> Result<(), HostError> {
+fn map_host_fn() -> Result<(), HostError> {
     let host = Host::default();
     let m = host.map_new()?;
     assert_eq!(m.as_raw().get_tag(), Tag::MapObject);

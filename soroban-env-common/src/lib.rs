@@ -41,7 +41,6 @@ mod bytes;
 mod compare;
 mod convert;
 mod env;
-mod env_val;
 mod error;
 mod object;
 mod option;
@@ -85,9 +84,8 @@ pub use val::{Bool, Void};
 pub use val::{ConversionError, Tag, Val};
 
 pub use compare::Compare;
-pub use convert::Convert;
+pub use convert::{Convert, TryFromVal, TryIntoVal};
 pub use env::{call_macro_with_all_host_functions, Env, EnvBase};
-pub use env_val::{TryFromVal, TryIntoVal};
 pub use unimplemented_env::UnimplementedEnv;
 pub use vmcaller_env::{VmCaller, VmCallerEnv};
 

@@ -44,8 +44,8 @@ fn vec_new_with_capacity() -> Result<(), HostError> {
 fn vec_front_and_back() -> Result<(), HostError> {
     let host = Host::default();
     let obj = host.test_vec_obj::<u32>(&[1, 2, 3])?;
-    let front = i32::try_from(host.vec_front(obj)?)?;
-    let back = i32::try_from(host.vec_back(obj)?)?;
+    let front = u32::try_from(host.vec_front(obj)?)?;
+    let back = u32::try_from(host.vec_back(obj)?)?;
     assert_eq!(front, 1);
     assert_eq!(back, 3);
     Ok(())
