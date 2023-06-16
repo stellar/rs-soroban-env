@@ -1,6 +1,10 @@
-use soroban_env_common::{num::*, xdr::ScVal, Compare, TryFromVal, TryIntoVal, I256};
+use soroban_env_common::{
+    num::*,
+    xdr::{ScErrorCode, ScErrorType, ScVal},
+    Compare, Env, Object, TryFromVal, TryIntoVal, I256,
+};
 
-use crate::{budget::AsBudget, Host, RawVal};
+use crate::{budget::AsBudget, host_object::HostObjectType, Host, HostError, RawVal};
 use core::fmt::Debug;
 use std::cmp::Ordering;
 
@@ -196,4 +200,192 @@ fn test_num_rawval_scval_roundtrip_ordering() {
         }
     }
     check_roundtrip_compare_ok::<I256>(&host, input_vec);
+}
+
+fn check_num_arith_ok<T, F>(host: &Host, lhs: T, rhs: T, f: F, expected: T) -> Result<(), HostError>
+where
+    T: HostObjectType,
+    F: FnOnce(
+        &Host,
+        <T as HostObjectType>::Wrapper,
+        <T as HostObjectType>::Wrapper,
+    ) -> Result<<T as HostObjectType>::Wrapper, HostError>,
+{
+    let res: Object = host.add_host_object(expected)?.into();
+    let res_back: Object = f(host, host.add_host_object(lhs)?, host.add_host_object(rhs)?)?.into();
+    assert_eq!(
+        host.compare(res.as_raw(), res_back.as_raw()).unwrap(),
+        Ordering::Equal
+    );
+    Ok(())
+}
+
+fn check_num_arith_rhs_u32_ok<T, F>(
+    host: &Host,
+    lhs: T,
+    rhs: u32,
+    f: F,
+    expected: T,
+) -> Result<(), HostError>
+where
+    T: HostObjectType,
+    F: FnOnce(
+        &Host,
+        <T as HostObjectType>::Wrapper,
+        U32Val,
+    ) -> Result<<T as HostObjectType>::Wrapper, HostError>,
+{
+    let res: Object = host.add_host_object(expected)?.into();
+    let res_back: Object = f(host, host.add_host_object(lhs)?, U32Val::from(rhs))?.into();
+    assert_eq!(
+        host.compare(res.as_raw(), res_back.as_raw()).unwrap(),
+        Ordering::Equal
+    );
+    Ok(())
+}
+
+fn check_num_arith_expect_err<T, F>(host: &Host, lhs: T, rhs: T, f: F) -> Result<(), HostError>
+where
+    T: HostObjectType,
+    F: FnOnce(
+        &Host,
+        <T as HostObjectType>::Wrapper,
+        <T as HostObjectType>::Wrapper,
+    ) -> Result<<T as HostObjectType>::Wrapper, HostError>,
+{
+    let res_back = f(host, host.add_host_object(lhs)?, host.add_host_object(rhs)?);
+    let code = (ScErrorType::Object, ScErrorCode::ArithDomain);
+    assert!(HostError::result_matches_err(res_back, code));
+    Ok(())
+}
+
+fn check_num_arith_rhs_u32_expect_err<T, F>(
+    host: &Host,
+    lhs: T,
+    rhs: u32,
+    f: F,
+) -> Result<(), HostError>
+where
+    T: HostObjectType,
+    F: FnOnce(
+        &Host,
+        <T as HostObjectType>::Wrapper,
+        U32Val,
+    ) -> Result<<T as HostObjectType>::Wrapper, HostError>,
+{
+    let res_back = f(host, host.add_host_object(lhs)?, U32Val::from(rhs));
+    let code = (ScErrorType::Object, ScErrorCode::ArithDomain);
+    assert!(HostError::result_matches_err(res_back, code));
+    Ok(())
+}
+
+#[test]
+fn test_u256_arith() -> Result<(), HostError> {
+    let host = Host::default();
+    // add
+    check_num_arith_ok(
+        &host,
+        U256::MAX - 2,
+        U256::new(1),
+        Host::u256_add,
+        U256::MAX - 1,
+    )?;
+    check_num_arith_expect_err(&host, U256::MAX - 2, U256::new(3), Host::u256_add)?;
+
+    // sub
+    check_num_arith_ok(
+        &host,
+        U256::new(1),
+        U256::new(1),
+        Host::u256_sub,
+        U256::ZERO,
+    )?;
+    check_num_arith_expect_err(&host, U256::ZERO, U256::new(1), Host::u256_sub)?;
+
+    // mul
+    check_num_arith_ok(
+        &host,
+        U256::new(5),
+        U256::new(1),
+        Host::u256_mul,
+        U256::new(5),
+    )?;
+    check_num_arith_expect_err(&host, U256::MAX, U256::new(2), Host::u256_mul)?;
+
+    // div
+    check_num_arith_ok(
+        &host,
+        U256::new(128),
+        U256::new(2),
+        Host::u256_div,
+        U256::new(64),
+    )?;
+    check_num_arith_expect_err(&host, U256::new(1), U256::ZERO, Host::u256_div)?;
+
+    // pow
+    check_num_arith_rhs_u32_ok(&host, U256::new(2), 5, Host::u256_pow, U256::new(32))?;
+    check_num_arith_rhs_u32_expect_err(&host, U256::MAX, 2, Host::u256_pow)?;
+
+    // shl
+    check_num_arith_rhs_u32_ok(&host, U256::new(0x1), 4, Host::u256_shl, U256::new(0x10))?;
+    check_num_arith_rhs_u32_expect_err(&host, U256::new(0x10), 257, Host::u256_shl)?;
+
+    // shr
+    check_num_arith_rhs_u32_ok(&host, U256::new(0x10), 4, Host::u256_shr, U256::new(0x1))?;
+    check_num_arith_rhs_u32_expect_err(&host, U256::new(0x10), 257, Host::u256_shr)?;
+
+    Ok(())
+}
+
+#[test]
+fn test_i256_arith() -> Result<(), HostError> {
+    let host = Host::default();
+    // add
+    check_num_arith_ok(
+        &host,
+        I256::MAX - 2,
+        I256::new(1),
+        Host::i256_add,
+        I256::MAX - 1,
+    )?;
+    check_num_arith_expect_err(&host, I256::MAX - 2, I256::new(3), Host::i256_add)?;
+
+    // sub
+    check_num_arith_ok(
+        &host,
+        I256::MIN + 2,
+        I256::new(1),
+        Host::i256_sub,
+        I256::MIN + 1,
+    )?;
+    check_num_arith_expect_err(&host, I256::MIN + 2, I256::new(3), Host::i256_sub)?;
+
+    // mul
+    check_num_arith_ok(&host, I256::MAX, I256::new(1), Host::i256_mul, I256::MAX)?;
+    check_num_arith_expect_err(&host, I256::MAX, I256::new(2), Host::i256_mul)?;
+
+    // div
+    check_num_arith_ok(
+        &host,
+        I256::MIN + 1,
+        I256::new(-1),
+        Host::i256_div,
+        I256::MAX,
+    )?;
+    check_num_arith_expect_err(&host, I256::MIN, I256::new(-1), Host::i256_div)?;
+    check_num_arith_expect_err(&host, I256::new(1), I256::new(0), Host::i256_div)?;
+
+    // pow
+    check_num_arith_rhs_u32_ok(&host, I256::new(8), 2, Host::i256_pow, I256::new(64))?;
+    check_num_arith_rhs_u32_expect_err(&host, I256::MAX, 2, Host::i256_pow)?;
+
+    // shl
+    check_num_arith_rhs_u32_ok(&host, I256::new(0x1), 4, Host::i256_shl, I256::new(0x10))?;
+    check_num_arith_rhs_u32_expect_err(&host, I256::new(0x1), 257, Host::i256_shl)?;
+
+    // shr
+    check_num_arith_rhs_u32_ok(&host, I256::new(0x10), 4, Host::i256_shr, I256::new(0x1))?;
+    check_num_arith_rhs_u32_expect_err(&host, I256::new(0x10), 256, Host::i256_shr)?;
+
+    Ok(())
 }

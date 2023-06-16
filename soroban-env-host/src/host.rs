@@ -10,7 +10,8 @@ use crate::{
     err,
     events::{diagnostic::DiagnosticLevel, Events, InternalEventsBuffer},
     expiration_ledger_bumps::{ExpirationLedgerBumps, LedgerBump},
-    host_object::{HostMap, HostObject, HostVec},
+    host_object::{HostMap, HostObject, HostObjectType, HostVec},
+    impl_bignum_host_fns_rhs_u32,
     num::{i256_from_pieces, i256_into_pieces, u256_from_pieces, u256_into_pieces},
     storage::Storage,
     xdr::{
@@ -40,6 +41,7 @@ pub(crate) mod metered_clone;
 pub(crate) mod metered_map;
 pub(crate) mod metered_vector;
 pub(crate) mod metered_xdr;
+mod num;
 mod prng;
 pub use prng::{Seed, SEED_BYTES};
 mod validity;
@@ -56,6 +58,7 @@ use self::{
     metered_vector::MeteredVector,
     prng::Prng,
 };
+use crate::impl_bignum_host_fns;
 use crate::Compare;
 #[cfg(any(test, feature = "testutils"))]
 use crate::TryIntoVal;
@@ -1194,6 +1197,22 @@ impl VmCallerEnv for Host {
             Ok(lo_lo)
         })
     }
+
+    impl_bignum_host_fns!(u256_add, checked_add, U256);
+    impl_bignum_host_fns!(u256_sub, checked_sub, U256);
+    impl_bignum_host_fns!(u256_mul, checked_mul, U256);
+    impl_bignum_host_fns!(u256_div, checked_div, U256);
+    impl_bignum_host_fns_rhs_u32!(u256_pow, checked_pow, U256);
+    impl_bignum_host_fns_rhs_u32!(u256_shl, checked_shl, U256);
+    impl_bignum_host_fns_rhs_u32!(u256_shr, checked_shr, U256);
+
+    impl_bignum_host_fns!(i256_add, checked_add, I256);
+    impl_bignum_host_fns!(i256_sub, checked_sub, I256);
+    impl_bignum_host_fns!(i256_mul, checked_mul, I256);
+    impl_bignum_host_fns!(i256_div, checked_div, I256);
+    impl_bignum_host_fns_rhs_u32!(i256_pow, checked_pow, I256);
+    impl_bignum_host_fns_rhs_u32!(i256_shl, checked_shl, I256);
+    impl_bignum_host_fns_rhs_u32!(i256_shr, checked_shr, I256);
 
     fn map_new(&self, _vmcaller: &mut VmCaller<Host>) -> Result<MapObject, HostError> {
         self.add_host_object(HostMap::new()?)
