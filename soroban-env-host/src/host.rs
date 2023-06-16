@@ -472,7 +472,7 @@ impl Host {
             address: self.visit_obj(deployer, |addr: &ScAddress| {
                 addr.metered_clone(self.budget_ref())
             })?,
-            salt: self.uint256_from_bytesobj_input("contract_id_salt", salt)?,
+            salt: self.u256_from_bytesobj_input("contract_id_salt", salt)?,
         });
 
         let id_preimage = self.get_full_contract_id_preimage(
