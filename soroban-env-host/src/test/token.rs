@@ -2301,7 +2301,7 @@ fn test_wrapped_asset_classic_balance_boundaries(
         Asset::CreditAlphanum12(AlphaNum12 {
             asset_code: AssetCode12([100; 12]),
             issuer: AccountId(PublicKey::PublicKeyTypeEd25519(
-                test.host.to_u256_from_account(&issuer_id).unwrap(),
+                test.host.u256_from_account(&issuer_id).unwrap(),
             )),
         }),
     );
@@ -2458,7 +2458,7 @@ fn test_classic_transfers_not_possible_for_unauthorized_asset() {
         Asset::CreditAlphanum4(AlphaNum4 {
             asset_code: AssetCode4([99; 4]),
             issuer: AccountId(PublicKey::PublicKeyTypeEd25519(
-                test.host.to_u256_from_account(&issuer_id).unwrap(),
+                test.host.u256_from_account(&issuer_id).unwrap(),
             )),
         }),
     );

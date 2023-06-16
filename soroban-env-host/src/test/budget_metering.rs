@@ -247,11 +247,10 @@ fn total_amount_charged_from_random_inputs() -> Result<(), HostError> {
         (1, Some(147)),
         (47, None),
         (263, None),
-        (0, None),
-        (0, None),
-        (0, None),
-        (0, None),
-        (0, None),
+        (1, Some(1)),
+        (1, None),
+        (1, None),
+        (1, None),
     ];
 
     for ty in ContractCostType::variants() {
@@ -260,8 +259,8 @@ fn total_amount_charged_from_random_inputs() -> Result<(), HostError> {
     let actual = format!("{:?}", host.as_budget());
     expect![[r#"
         =====================================================================================================================================================================
-        Cpu limit: 40000000; used: 7965333
-        Mem limit: 52428800; used: 218984
+        Cpu limit: 40000000; used: 10344986
+        Mem limit: 52428800; used: 219205
         =====================================================================================================================================================================
         CostType                 iterations     input          cpu_insns      mem_bytes      const_term_cpu      lin_term_cpu        const_term_mem      lin_term_mem        
         WasmInsnExec             246            None           1722           0              7                   0                   0                   0                   
@@ -284,12 +283,11 @@ fn total_amount_charged_from_random_inputs() -> Result<(), HostError> {
         VmMemWrite               1              Some(160)      124            0              124                 0                   0                   0                   
         VmInstantiation          1              Some(147)      671595         123751         600447              484                 117871              40                  
         InvokeVmFunction         47             None           278522         22842          5926                0                   486                 0                   
-        ChargeBudget             289            None           37570          0              130                 0                   0                   0                   
-        ComputeKeccak256Hash     0              None           0              0              0                   0                   0                   0                   
-        ComputeEcdsaSecp256k1Key 0              None           0              0              0                   0                   0                   0                   
-        ComputeEcdsaSecp256k1Sig 0              None           0              0              0                   0                   0                   0                   
-        VerifyEcdsaSecp256k1Sig  0              None           0              0              0                   0                   0                   0                   
-        RecoverEcdsaSecp256k1Key 0              None           0              0              0                   0                   0                   0                   
+        ChargeBudget             288            None           37440          0              130                 0                   0                   0                   
+        ComputeKeccak256Hash     1              Some(1)        3368           40             3322                46                  40                  0                   
+        ComputeEcdsaSecp256k1Key 1              None           56525          0              56525               0                   0                   0                   
+        ComputeEcdsaSecp256k1Sig 1              None           250            0              250                 0                   0                   0                   
+        RecoverEcdsaSecp256k1Key 1              None           2319640        181            2319640             0                   181                 0                   
         =====================================================================================================================================================================
 
     "#]]

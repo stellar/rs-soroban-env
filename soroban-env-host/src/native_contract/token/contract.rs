@@ -152,7 +152,7 @@ impl TokenTrait for Token {
                         )?,
                         issuer: BytesN::<32>::try_from_val(
                             e,
-                            &e.bytes_new_from_slice(&e.to_u256_from_account(&asset4.issuer)?.0)?,
+                            &e.bytes_new_from_slice(&e.u256_from_account(&asset4.issuer)?.0)?,
                         )?,
                     }),
                 )?;
@@ -171,7 +171,7 @@ impl TokenTrait for Token {
                         )?,
                         issuer: BytesN::<32>::try_from_val(
                             e,
-                            &e.bytes_new_from_slice(&e.to_u256_from_account(&asset12.issuer)?.0)?,
+                            &e.bytes_new_from_slice(&e.u256_from_account(&asset12.issuer)?.0)?,
                         )?,
                     }),
                 )?;

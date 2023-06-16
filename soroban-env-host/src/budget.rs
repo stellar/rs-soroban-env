@@ -304,16 +304,15 @@ impl BudgetImpl {
                 ContractCostType::MapEntry => (),
                 ContractCostType::VecEntry => (),
                 ContractCostType::GuardFrame => (),
-                ContractCostType::VerifyEd25519Sig => self.tracker[i].1 = Some(0), // length of the signature buffer
+                ContractCostType::VerifyEd25519Sig => self.tracker[i].1 = Some(0), // length of the signed message
                 ContractCostType::VmMemRead => self.tracker[i].1 = Some(0), // number of bytes in the linear memory to read
                 ContractCostType::VmMemWrite => self.tracker[i].1 = Some(0), // number of bytes in the linear memory to write
                 ContractCostType::VmInstantiation => self.tracker[i].1 = Some(0), // length of the wasm bytes,
                 ContractCostType::InvokeVmFunction => (),
                 ContractCostType::ChargeBudget => (),
-                ContractCostType::ComputeKeccak256Hash => (),
+                ContractCostType::ComputeKeccak256Hash => self.tracker[i].1 = Some(0), // number of bytes in the buffer
                 ContractCostType::ComputeEcdsaSecp256k1Key => (),
                 ContractCostType::ComputeEcdsaSecp256k1Sig => (),
-                ContractCostType::VerifyEcdsaSecp256k1Sig => (),
                 ContractCostType::RecoverEcdsaSecp256k1Key => (),
             }
         }
@@ -810,23 +809,19 @@ impl Default for BudgetImpl {
                     cpu.linear_term = 0;
                 }
                 ContractCostType::ComputeKeccak256Hash => {
-                    cpu.const_term = 0;
-                    cpu.linear_term = 0;
+                    cpu.const_term = 3322;
+                    cpu.linear_term = 46;
                 }
                 ContractCostType::ComputeEcdsaSecp256k1Key => {
-                    cpu.const_term = 0;
+                    cpu.const_term = 56525;
                     cpu.linear_term = 0;
                 }
                 ContractCostType::ComputeEcdsaSecp256k1Sig => {
-                    cpu.const_term = 0;
-                    cpu.linear_term = 0;
-                }
-                ContractCostType::VerifyEcdsaSecp256k1Sig => {
-                    cpu.const_term = 0;
+                    cpu.const_term = 250;
                     cpu.linear_term = 0;
                 }
                 ContractCostType::RecoverEcdsaSecp256k1Key => {
-                    cpu.const_term = 0;
+                    cpu.const_term = 2319640;
                     cpu.linear_term = 0;
                 }
             }
@@ -923,24 +918,20 @@ impl Default for BudgetImpl {
                     mem.linear_term = 0;
                 }
                 ContractCostType::ComputeKeccak256Hash => {
-                    cpu.const_term = 0;
-                    cpu.linear_term = 0;
+                    mem.const_term = 40;
+                    mem.linear_term = 0;
                 }
                 ContractCostType::ComputeEcdsaSecp256k1Key => {
-                    cpu.const_term = 0;
-                    cpu.linear_term = 0;
+                    mem.const_term = 0;
+                    mem.linear_term = 0;
                 }
                 ContractCostType::ComputeEcdsaSecp256k1Sig => {
-                    cpu.const_term = 0;
-                    cpu.linear_term = 0;
-                }
-                ContractCostType::VerifyEcdsaSecp256k1Sig => {
-                    cpu.const_term = 0;
-                    cpu.linear_term = 0;
+                    mem.const_term = 0;
+                    mem.linear_term = 0;
                 }
                 ContractCostType::RecoverEcdsaSecp256k1Key => {
-                    cpu.const_term = 0;
-                    cpu.linear_term = 0;
+                    mem.const_term = 181;
+                    mem.linear_term = 0;
                 }
             }
 
