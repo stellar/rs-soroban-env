@@ -934,11 +934,12 @@ impl VmCallerEnv for Host {
     }
 
     // Notes on metering: covered by the components
-    fn get_invoking_contract(&self, _vmcaller: &mut VmCaller<Host>) -> Result<Object, HostError> {
+    fn get_invoking_contract(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+    ) -> Result<AddressObject, HostError> {
         let invoking_contract_hash = self.get_invoking_contract_internal()?;
-        Ok(self
-            .add_host_object(self.scbytes_from_hash(&invoking_contract_hash)?)?
-            .into())
+        self.add_host_object(ScAddress::Contract(invoking_contract_hash))
     }
 
     // Metered: covered by `visit` and `metered_cmp`.
