@@ -43,7 +43,7 @@ impl Host {
         match &entry.data {
             LedgerEntryData::ContractData(ContractDataEntry { body, .. }) => match body {
                 ContractDataEntryBody::DataEntry(data) => match &data.val {
-                    ScVal::ContractExecutable(code) => Ok(code.clone()),
+                    ScVal::ContractExecutable(code) => code.metered_clone(self.as_budget()),
                     other => Err(err!(
                         self,
                         (ScErrorType::Storage, ScErrorCode::UnexpectedType),
@@ -84,7 +84,7 @@ impl Host {
             .data
         {
             LedgerEntryData::ContractCode(e) => match &e.body {
-                ContractCodeEntryBody::DataEntry(code) => Ok(code.clone()),
+                ContractCodeEntryBody::DataEntry(code) => code.metered_clone(self.as_budget()),
                 _ => Err(err!(
                     self,
                     (ScErrorType::Storage, ScErrorCode::UnexpectedType),

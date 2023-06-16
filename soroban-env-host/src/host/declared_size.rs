@@ -1,9 +1,5 @@
 use std::rc::Rc;
 
-use soroban_env_common::xdr::{
-    ContractIdPreimage, CreateContractArgs, SorobanAuthorizedInvocation,
-};
-
 use crate::{
     events::{EventError, HostEvent, InternalContractEvent, InternalEvent},
     host::Events,
@@ -11,12 +7,14 @@ use crate::{
     storage::AccessType,
     xdr::{
         AccountEntry, AccountId, BytesM, ClaimableBalanceEntry, ConfigSettingEntry,
-        ContractCodeEntry, ContractEvent, DataEntry, Duration, Hash, LedgerEntry, LedgerEntryExt,
-        LedgerKeyAccount, LedgerKeyClaimableBalance, LedgerKeyConfigSetting, LedgerKeyContractCode,
-        LedgerKeyData, LedgerKeyLiquidityPool, LedgerKeyOffer, LedgerKeyTrustLine,
-        LiquidityPoolEntry, OfferEntry, PublicKey, ScAddress, ScBytes, ScContractExecutable, ScMap,
-        ScMapEntry, ScNonceKey, ScString, ScSymbol, ScVal, ScVec, StringM, TimePoint,
-        TrustLineAsset, TrustLineEntry, Uint256, SCSYMBOL_LIMIT,
+        ContractCodeEntry, ContractDataType, ContractEvent, ContractIdPreimage,
+        ContractLedgerEntryType, CreateContractArgs, DataEntry, Duration, ExtensionPoint, Hash,
+        LedgerEntry, LedgerEntryExt, LedgerKey, LedgerKeyAccount, LedgerKeyClaimableBalance,
+        LedgerKeyConfigSetting, LedgerKeyContractCode, LedgerKeyData, LedgerKeyLiquidityPool,
+        LedgerKeyOffer, LedgerKeyTrustLine, LiquidityPoolEntry, OfferEntry, PublicKey, ScAddress,
+        ScBytes, ScContractExecutable, ScMap, ScMapEntry, ScNonceKey, ScString, ScSymbol, ScVal,
+        ScVec, SorobanAuthorizedInvocation, StringM, TimePoint, TrustLineAsset, TrustLineEntry,
+        Uint256, SCSYMBOL_LIMIT,
     },
     AddressObject, Bool, BytesObject, ContractExecutableObject, DurationObject, DurationSmall,
     DurationVal, Error, I128Object, I128Small, I128Val, I256Object, I256Small, I256Val, I32Val,
@@ -132,6 +130,7 @@ impl_declared_size_type!(ClaimableBalanceEntry, 120);
 impl_declared_size_type!(LiquidityPoolEntry, 160);
 impl_declared_size_type!(ContractCodeEntry, 64);
 impl_declared_size_type!(ConfigSettingEntry, 104);
+impl_declared_size_type!(LedgerKey, 96);
 impl_declared_size_type!(LedgerEntry, 264);
 impl_declared_size_type!(AccessType, 1);
 impl_declared_size_type!(InternalContractEvent, 40);
@@ -145,6 +144,9 @@ impl_declared_size_type!(ScString, 24);
 impl_declared_size_type!(ScSymbol, 24);
 impl_declared_size_type!(CreateContractArgs, 99);
 impl_declared_size_type!(ContractIdPreimage, 66);
+impl_declared_size_type!(ContractDataType, 4);
+impl_declared_size_type!(ContractLedgerEntryType, 4);
+impl_declared_size_type!(ExtensionPoint, 0);
 impl_declared_size_type!(SorobanAuthorizedInvocation, 128);
 
 // composite types
@@ -306,6 +308,7 @@ mod test {
         expect!["160"].assert_eq(size_of::<LiquidityPoolEntry>().to_string().as_str());
         expect!["64"].assert_eq(size_of::<ContractCodeEntry>().to_string().as_str());
         expect!["104"].assert_eq(size_of::<ConfigSettingEntry>().to_string().as_str());
+        expect!["96"].assert_eq(size_of::<LedgerKey>().to_string().as_str());
         expect!["264"].assert_eq(size_of::<LedgerEntry>().to_string().as_str());
         expect!["1"].assert_eq(size_of::<AccessType>().to_string().as_str());
         expect!["40"].assert_eq(size_of::<InternalContractEvent>().to_string().as_str());
@@ -319,6 +322,9 @@ mod test {
         expect!["24"].assert_eq(size_of::<ScSymbol>().to_string().as_str());
         expect!["99"].assert_eq(size_of::<CreateContractArgs>().to_string().as_str());
         expect!["66"].assert_eq(size_of::<ContractIdPreimage>().to_string().as_str());
+        expect!["4"].assert_eq(size_of::<ContractDataType>().to_string().as_str());
+        expect!["4"].assert_eq(size_of::<ContractLedgerEntryType>().to_string().as_str());
+        expect!["0"].assert_eq(size_of::<ExtensionPoint>().to_string().as_str());
         expect!["128"].assert_eq(
             size_of::<SorobanAuthorizedInvocation>()
                 .to_string()
@@ -442,6 +448,8 @@ mod test {
         assert_mem_size_le_declared_size!(LiquidityPoolEntry);
         assert_mem_size_le_declared_size!(ContractCodeEntry);
         assert_mem_size_le_declared_size!(ConfigSettingEntry);
+        assert_mem_size_le_declared_size!(LedgerKey);
+        assert_mem_size_le_declared_size!(LedgerEntry);
         assert_mem_size_le_declared_size!(AccessType);
         assert_mem_size_le_declared_size!(InternalContractEvent);
         assert_mem_size_le_declared_size!(ContractEvent);
@@ -452,6 +460,9 @@ mod test {
         assert_mem_size_le_declared_size!(ScString);
         assert_mem_size_le_declared_size!(ScSymbol);
         assert_mem_size_le_declared_size!(CreateContractArgs);
+        assert_mem_size_le_declared_size!(ContractDataType);
+        assert_mem_size_le_declared_size!(ContractLedgerEntryType);
+        assert_mem_size_le_declared_size!(ExtensionPoint);
         assert_mem_size_le_declared_size!(SorobanAuthorizedInvocation);
         // composite types
         assert_mem_size_le_declared_size!(&[ScVal]);

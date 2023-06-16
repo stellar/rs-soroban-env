@@ -30,6 +30,7 @@ use crate::{EnvBase, Object, RawVal, Symbol};
 
 pub(crate) mod comparison;
 mod conversion;
+mod crypto;
 mod data_helper;
 pub(crate) mod declared_size;
 pub(crate) mod error;
@@ -465,7 +466,25 @@ impl Host {
         self.add_host_object(ScAddress::Contract(hash_id))
     }
 
-    pub(crate) fn get_contract_id_from_asset(&self, asset: Asset) -> Result<Hash, HostError> {
+    pub(crate) fn get_contract_id_hash(
+        &self,
+        deployer: AddressObject,
+        salt: BytesObject,
+    ) -> Result<Hash, HostError> {
+        let contract_id_preimage = ContractIdPreimage::Address(ContractIdPreimageFromAddress {
+            address: self.visit_obj(deployer, |addr: &ScAddress| {
+                addr.metered_clone(self.budget_ref())
+            })?,
+            salt: self.u256_from_bytesobj_input("contract_id_salt", salt)?,
+        });
+
+        let id_preimage = self.get_full_contract_id_preimage(
+            contract_id_preimage.metered_clone(self.budget_ref())?,
+        )?;
+        Ok(Hash(self.metered_hash_xdr(&id_preimage)?))
+    }
+
+    pub(crate) fn get_asset_contract_id_hash(&self, asset: Asset) -> Result<Hash, HostError> {
         let id_preimage = self.get_full_contract_id_preimage(ContractIdPreimage::Asset(asset))?;
         let id_arr: [u8; 32] = self.metered_hash_xdr(&id_preimage)?;
         Ok(Hash(id_arr))
@@ -570,27 +589,6 @@ impl Host {
             })?;
         }
         Ok(hash_obj)
-    }
-
-    pub(crate) fn verify_sig_ed25519_internal(
-        &self,
-        payload: &[u8],
-        public_key: &ed25519_dalek::PublicKey,
-        sig: &ed25519_dalek::Signature,
-    ) -> Result<(), HostError> {
-        use ed25519_dalek::Verifier;
-        self.charge_budget(
-            ContractCostType::VerifyEd25519Sig,
-            Some(payload.len() as u64),
-        )?;
-        public_key.verify(payload, sig).map_err(|_| {
-            self.err(
-                ScErrorType::Crypto,
-                ScErrorCode::InvalidInput,
-                "failed ED25519 verification",
-                &[],
-            )
-        })
     }
 
     // Returns the recorded per-address authorization payloads that would cover the
@@ -919,11 +917,12 @@ impl VmCallerEnv for Host {
     }
 
     // Notes on metering: covered by the components
-    fn get_invoking_contract(&self, _vmcaller: &mut VmCaller<Host>) -> Result<Object, HostError> {
+    fn get_invoking_contract(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+    ) -> Result<AddressObject, HostError> {
         let invoking_contract_hash = self.get_invoking_contract_internal()?;
-        Ok(self
-            .add_host_object(self.scbytes_from_hash(&invoking_contract_hash)?)?
-            .into())
+        self.add_host_object(ScAddress::Contract(invoking_contract_hash))
     }
 
     // Metered: covered by `visit` and `metered_cmp`.
@@ -1880,7 +1879,7 @@ impl VmCallerEnv for Host {
             address: self.visit_obj(deployer, |addr: &ScAddress| {
                 addr.metered_clone(self.budget_ref())
             })?,
-            salt: self.uint256_from_bytesobj_input("contract_id_salt", salt)?,
+            salt: self.u256_from_bytesobj_input("contract_id_salt", salt)?,
         });
         let executable =
             ScContractExecutable::WasmRef(self.hash_from_bytesobj_input("wasm_hash", wasm_hash)?);
@@ -1907,6 +1906,28 @@ impl VmCallerEnv for Host {
         // Asset contracts don't need any deployer authorization (they're tied
         // to the asset issuers instead).
         self.create_contract_internal(None, args)
+    }
+
+    // Notes on metering: covered by the components.
+    fn get_contract_id(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        deployer: AddressObject,
+        salt: BytesObject,
+    ) -> Result<AddressObject, HostError> {
+        let hash_id = self.get_contract_id_hash(deployer, salt)?;
+        self.add_host_object(ScAddress::Contract(hash_id))
+    }
+
+    // Notes on metering: covered by the components.
+    fn get_asset_contract_id(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        serialized_asset: BytesObject,
+    ) -> Result<AddressObject, HostError> {
+        let asset: Asset = self.metered_from_xdr_obj(serialized_asset)?;
+        let hash_id = self.get_asset_contract_id_hash(asset)?;
+        self.add_host_object(ScAddress::Contract(hash_id))
     }
 
     fn upload_wasm(
@@ -2415,6 +2436,16 @@ impl VmCallerEnv for Host {
     }
 
     // Notes on metering: covered by components.
+    fn compute_hash_keccak256(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        x: BytesObject,
+    ) -> Result<BytesObject, HostError> {
+        let hash = self.keccak256_hash_from_bytesobj_input(x)?;
+        self.add_host_object(self.scbytes_from_vec(hash)?)
+    }
+
+    // Notes on metering: covered by components.
     fn verify_sig_ed25519(
         &self,
         _vmcaller: &mut VmCaller<Host>,
@@ -2423,11 +2454,24 @@ impl VmCallerEnv for Host {
         s: BytesObject,
     ) -> Result<Void, HostError> {
         let public_key = self.ed25519_pub_key_from_bytesobj_input(k)?;
-        let sig = self.signature_from_bytesobj_input("sig", s)?;
+        let sig = self.ed25519_signature_from_bytesobj_input("sig", s)?;
         let res = self.visit_obj(x, |payload: &ScBytes| {
             self.verify_sig_ed25519_internal(payload.as_slice(), &public_key, &sig)
         });
         Ok(res?.into())
+    }
+
+    fn recover_key_ecdsa_secp256k1(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        msg_digest: BytesObject,
+        signature: BytesObject,
+        recovery_id: U32Val,
+    ) -> Result<BytesObject, HostError> {
+        let sig = self.secp256k1_signature_from_bytesobj_input(signature)?;
+        let rid = self.secp256k1_recovery_id_from_u32val(recovery_id)?;
+        let hash = self.hash_from_bytesobj_input("msg_digest", msg_digest)?;
+        self.recover_key_ecdsa_secp256k1_internal(&hash, &sig, rid)
     }
 
     fn get_ledger_version(&self, _vmcaller: &mut VmCaller<Host>) -> Result<U32Val, Self::Error> {
