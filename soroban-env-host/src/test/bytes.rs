@@ -1,6 +1,6 @@
 use crate::{
     xdr::{ScError, ScVal},
-    Env, Host, HostError, RawVal,
+    Env, Host, HostError, Val,
 };
 use soroban_env_common::{
     xdr::{ScErrorCode, ScErrorType},
@@ -105,7 +105,7 @@ fn bytes_slice_start_greater_than_len() -> Result<(), HostError> {
 fn bytes_xdr_roundtrip() -> Result<(), HostError> {
     let host = Host::default();
     let roundtrip = |v: ScVal| -> Result<(), HostError> {
-        let rv: RawVal = host.to_host_val(&v)?;
+        let rv: Val = host.to_host_val(&v)?;
         let bo = host.serialize_to_bytes(rv)?;
         let rv_back = host.deserialize_from_bytes(bo)?;
         assert_eq!(host.compare(&rv, &rv_back)?, core::cmp::Ordering::Equal);
@@ -164,7 +164,7 @@ fn linear_memory_operations() -> Result<(), HostError> {
     // tests bytes_copy_{to,from}_linear_memory
     {
         let obj0 = host.test_bin_obj(&[1, 2, 3, 4])?;
-        let mut args = host.vec_new(RawVal::from_void().into())?;
+        let mut args = host.vec_new(Val::from_void().into())?;
         args = host.vec_push_back(args, obj0.to_raw())?;
         let obj: BytesObject = host
             .call(id_obj, Symbol::try_from_small_str("bin_inc").unwrap(), args)?

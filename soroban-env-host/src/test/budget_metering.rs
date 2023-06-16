@@ -2,7 +2,7 @@ use crate::{
     budget::AsBudget,
     host::metered_clone::MeteredClone,
     xdr::{ContractCostType, ScMap, ScMapEntry, ScVal},
-    Env, Host, HostError, RawVal, Symbol,
+    Env, Host, HostError, Symbol, Val,
 };
 use expect_test::{self, expect};
 use soroban_env_common::xdr::{ScErrorCode, ScErrorType};
@@ -143,9 +143,9 @@ fn map_insert_key_vec_obj() -> Result<(), HostError> {
     let mut host = Host::test_host().test_budget(1000, 1000);
     let mut m = host.map_new()?;
     let k0 = host.test_vec_obj(&[2, 3])?;
-    let v0: RawVal = 6_u32.into();
+    let v0: Val = 6_u32.into();
     let k1 = host.test_vec_obj(&[5, 6, 7])?;
-    let v1: RawVal = 8_u32.into();
+    let v1: Val = 8_u32.into();
     m = host.map_put(m, k0.into(), v0)?;
 
     // now we enable various cost models

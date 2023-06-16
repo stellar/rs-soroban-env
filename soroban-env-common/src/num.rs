@@ -3,8 +3,8 @@ use core::cmp::Ordering;
 use crate::{
     declare_tag_based_signed_small_and_object_wrappers,
     declare_tag_based_small_and_object_wrappers,
-    declare_tag_based_unsigned_small_and_object_wrappers, declare_tag_based_wrapper,
-    raw_val::TAG_BITS, Compare, ConversionError, Env, RawVal, Tag,
+    declare_tag_based_unsigned_small_and_object_wrappers, declare_tag_based_wrapper, val::TAG_BITS,
+    Compare, ConversionError, Env, Tag, Val,
 };
 pub use ethnum::{AsI256, AsU256, I256, U256};
 use stellar_xdr::{Int256Parts, ScVal, UInt256Parts};
@@ -12,15 +12,15 @@ use stellar_xdr::{Int256Parts, ScVal, UInt256Parts};
 declare_tag_based_wrapper!(U32Val);
 declare_tag_based_wrapper!(I32Val);
 
-impl RawVal {
+impl Val {
     #[inline(always)]
     pub const fn from_u32(u: u32) -> U32Val {
-        unsafe { U32Val(RawVal::from_major_minor_and_tag(u, 0, Tag::U32Val)) }
+        unsafe { U32Val(Val::from_major_minor_and_tag(u, 0, Tag::U32Val)) }
     }
 
     #[inline(always)]
     pub const fn from_i32(i: i32) -> I32Val {
-        unsafe { I32Val(RawVal::from_major_minor_and_tag(i as u32, 0, Tag::I32Val)) }
+        unsafe { I32Val(Val::from_major_minor_and_tag(i as u32, 0, Tag::I32Val)) }
     }
 
     #[inline(always)]
@@ -139,7 +139,7 @@ impl TryFrom<u64> for U64Small {
     fn try_from(value: u64) -> Result<Self, Self::Error> {
         if is_small_u64(value) {
             Ok(Self(unsafe {
-                RawVal::from_body_and_tag(value, Tag::U64Small)
+                Val::from_body_and_tag(value, Tag::U64Small)
             }))
         } else {
             Err(ConversionError)
@@ -152,7 +152,7 @@ impl TryFrom<i64> for I64Small {
     fn try_from(value: i64) -> Result<Self, Self::Error> {
         if is_small_i64(value) {
             Ok(Self(unsafe {
-                RawVal::from_body_and_tag(value as u64, Tag::I64Small)
+                Val::from_body_and_tag(value as u64, Tag::I64Small)
             }))
         } else {
             Err(ConversionError)
@@ -165,7 +165,7 @@ impl TryFrom<u128> for U128Small {
     fn try_from(value: u128) -> Result<Self, Self::Error> {
         if is_small_u128(value) {
             Ok(Self(unsafe {
-                RawVal::from_body_and_tag(value as u64, Tag::U128Small)
+                Val::from_body_and_tag(value as u64, Tag::U128Small)
             }))
         } else {
             Err(ConversionError)
@@ -178,7 +178,7 @@ impl TryFrom<i128> for I128Small {
     fn try_from(value: i128) -> Result<Self, Self::Error> {
         if is_small_i128(value) {
             Ok(Self(unsafe {
-                RawVal::from_body_and_tag((value as u128) as u64, Tag::I128Small)
+                Val::from_body_and_tag((value as u128) as u64, Tag::I128Small)
             }))
         } else {
             Err(ConversionError)
@@ -191,7 +191,7 @@ impl TryFrom<U256> for U256Small {
     fn try_from(value: U256) -> Result<Self, Self::Error> {
         if is_small_u256(&value) {
             Ok(Self(unsafe {
-                RawVal::from_body_and_tag(value.as_u64(), Tag::U256Small)
+                Val::from_body_and_tag(value.as_u64(), Tag::U256Small)
             }))
         } else {
             Err(ConversionError)
@@ -204,7 +204,7 @@ impl TryFrom<I256> for I256Small {
     fn try_from(value: I256) -> Result<Self, Self::Error> {
         if is_small_i256(&value) {
             Ok(Self(unsafe {
-                RawVal::from_body_and_tag(value.as_i64() as u64, Tag::I256Small)
+                Val::from_body_and_tag(value.as_i64() as u64, Tag::I256Small)
             }))
         } else {
             Err(ConversionError)

@@ -10,7 +10,7 @@ use soroban_env_common::{
 
 use crate::{
     xdr::{ScMap, ScMapEntry, ScVal, ScVec},
-    Env, Error, Host, HostError, RawVal, RawValConvertible, Symbol,
+    Env, Error, Host, HostError, Symbol, Val,
 };
 
 #[test]
@@ -30,13 +30,13 @@ fn map_put_has_and_get() -> Result<(), HostError> {
         .try_into(),
     )?;
     let obj: MapObject = host.to_host_val(&ScVal::Map(Some(scmap)))?.try_into()?;
-    let k: RawVal = 3_u32.into();
-    let v: RawVal = 6_u32.into();
+    let k: Val = 3_u32.into();
+    let v: Val = 6_u32.into();
     assert!(!bool::try_from(host.map_has(obj, k)?)?);
     let obj1 = host.map_put(obj, k, v)?;
     assert!(bool::try_from(host.map_has(obj1, k)?)?);
     let rv = host.map_get(obj1, k)?;
-    let v = unsafe { <u32 as RawValConvertible>::unchecked_from_val(rv) };
+    let v: u32 = rv.try_into()?;
     assert_eq!(v, 6);
     Ok(())
 }
@@ -134,15 +134,15 @@ fn map_prev_and_next() -> Result<(), HostError> {
         );
         assert_eq!(
             host.map_prev_key(obj, 2_u32.into())?.get_payload(),
-            RawVal::from_u32(1).to_raw().get_payload()
+            Val::from_u32(1).to_raw().get_payload()
         );
         assert_eq!(
             host.map_prev_key(obj, 4_u32.into())?.get_payload(),
-            RawVal::from_u32(1).to_raw().get_payload()
+            Val::from_u32(1).to_raw().get_payload()
         );
         assert_eq!(
             host.map_prev_key(obj, 5_u32.into())?.get_payload(),
-            RawVal::from_u32(4).to_raw().get_payload()
+            Val::from_u32(4).to_raw().get_payload()
         );
     }
     // next
@@ -161,15 +161,15 @@ fn map_prev_and_next() -> Result<(), HostError> {
         );
         assert_eq!(
             host.map_next_key(obj, 3_u32.into())?.get_payload(),
-            RawVal::from_u32(4).to_raw().get_payload()
+            Val::from_u32(4).to_raw().get_payload()
         );
         assert_eq!(
             host.map_next_key(obj, 1_u32.into())?.get_payload(),
-            RawVal::from_u32(4).to_raw().get_payload()
+            Val::from_u32(4).to_raw().get_payload()
         );
         assert_eq!(
             host.map_next_key(obj, 0_u32.into())?.get_payload(),
-            RawVal::from_u32(1).to_raw().get_payload()
+            Val::from_u32(1).to_raw().get_payload()
         );
     }
     Ok(())
@@ -210,11 +210,11 @@ fn map_prev_and_next_heterogeneous() -> Result<(), HostError> {
         );
         assert_eq!(
             host.map_prev_key(test_map, 4_u32.into())?.get_payload(),
-            RawVal::from_u32(2).to_raw().get_payload()
+            Val::from_u32(2).to_raw().get_payload()
         );
         assert_eq!(
             host.map_prev_key(test_map, sym.into())?.get_payload(),
-            RawVal::from_u32(2).to_raw().get_payload()
+            Val::from_u32(2).to_raw().get_payload()
         );
         assert_eq!(
             host.map_prev_key(test_map, obj_vec)?.get_payload(),
@@ -229,7 +229,7 @@ fn map_prev_and_next_heterogeneous() -> Result<(), HostError> {
     {
         assert_eq!(
             host.map_next_key(test_map, 0_u32.into())?.get_payload(),
-            RawVal::from_u32(2).to_raw().get_payload()
+            Val::from_u32(2).to_raw().get_payload()
         );
         assert_eq!(
             host.map_next_key(test_map, 4_u32.into())?.get_payload(),

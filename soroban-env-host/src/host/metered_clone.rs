@@ -20,10 +20,10 @@ use crate::{
     },
     AddressObject, Bool, BytesObject, ContractExecutableObject, DurationObject, DurationSmall,
     DurationVal, Error, HostError, I128Object, I128Small, I128Val, I256Object, I256Small, I256Val,
-    I32Val, I64Object, I64Small, I64Val, LedgerKeyNonceObject, MapObject, Object, RawVal,
-    ScValObject, StringObject, Symbol, SymbolObject, SymbolSmall, SymbolSmallIter, SymbolStr,
-    TimepointObject, TimepointSmall, TimepointVal, U128Object, U128Small, U128Val, U256Object,
-    U256Small, U256Val, U32Val, U64Object, U64Small, U64Val, VecObject, Void, I256, U256,
+    I32Val, I64Object, I64Small, I64Val, LedgerKeyNonceObject, MapObject, Object, ScValObject,
+    StringObject, Symbol, SymbolObject, SymbolSmall, SymbolSmallIter, SymbolStr, TimepointObject,
+    TimepointSmall, TimepointVal, U128Object, U128Small, U128Val, U256Object, U256Small, U256Val,
+    U32Val, U64Object, U64Small, U64Val, Val, VecObject, Void, I256, U256,
 };
 
 use super::declared_size::DeclaredSizeForMetering;
@@ -140,8 +140,8 @@ impl MeteredClone for u64 {}
 impl MeteredClone for i64 {}
 impl MeteredClone for u128 {}
 impl MeteredClone for i128 {}
-// RawVal-wrapping types
-impl MeteredClone for RawVal {}
+// Val-wrapping types
+impl MeteredClone for Val {}
 impl MeteredClone for Void {}
 impl MeteredClone for Bool {}
 impl MeteredClone for VecObject {}

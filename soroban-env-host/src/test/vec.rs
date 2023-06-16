@@ -1,10 +1,10 @@
 use core::cmp::Ordering;
 
-use soroban_env_common::{xdr::ScVal, Compare, U32Val, VecObject};
+use soroban_env_common::{xdr::ScVal, Compare, Tag, U32Val};
 
 use crate::{
     xdr::{ScErrorCode, ScErrorType},
-    Env, Host, HostError, Object, RawVal, RawValConvertible,
+    Env, Host, HostError, Object, Val,
 };
 
 #[test]
@@ -12,14 +12,14 @@ fn vec_as_seen_by_host() -> Result<(), HostError> {
     let host = Host::default();
     let val0 = host.test_vec_val(&[1u32])?;
     let val1 = host.test_vec_val(&[1u32])?;
-    assert!(val0.is::<Object>());
-    assert!(val1.is::<Object>());
+    assert_eq!(val0.get_tag(), Tag::VecObject);
+    assert_eq!(val1.get_tag(), Tag::VecObject);
     let obj0: Object = val0.try_into()?;
     let obj1: Object = val1.try_into()?;
     assert_eq!(obj0.get_handle(), 0);
     assert_eq!(obj1.get_handle(), 1);
-    assert!(obj0.as_raw().is::<VecObject>());
-    assert!(obj1.as_raw().is::<VecObject>());
+    assert_eq!(obj0.as_raw().get_tag(), Tag::VecObject);
+    assert_eq!(obj1.as_raw().get_tag(), Tag::VecObject);
     // Check that we got 2 distinct Vec objects
     assert_ne!(val0.get_payload(), val1.get_payload());
     // But also that they compare deep-equal.
@@ -30,12 +30,12 @@ fn vec_as_seen_by_host() -> Result<(), HostError> {
 #[test]
 fn vec_new_with_capacity() -> Result<(), HostError> {
     let host = Host::default();
-    host.vec_new(RawVal::from_void().to_raw())?;
+    host.vec_new(Val::from_void().to_raw())?;
     host.vec_new(5_u32.into())?;
     let code = (ScErrorType::Value, ScErrorCode::UnexpectedType);
     let res = host.vec_new(5_i32.into());
     assert!(HostError::result_matches_err(res, code));
-    let res = host.vec_new(RawVal::from_bool(true).to_raw());
+    let res = host.vec_new(Val::from_bool(true).to_raw());
     assert!(HostError::result_matches_err(res, code));
     Ok(())
 }
@@ -44,8 +44,8 @@ fn vec_new_with_capacity() -> Result<(), HostError> {
 fn vec_front_and_back() -> Result<(), HostError> {
     let host = Host::default();
     let obj = host.test_vec_obj::<u32>(&[1, 2, 3])?;
-    let front = unsafe { <i32 as RawValConvertible>::unchecked_from_val(host.vec_front(obj)?) };
-    let back = unsafe { <i32 as RawValConvertible>::unchecked_from_val(host.vec_back(obj)?) };
+    let front = u32::try_from(host.vec_front(obj)?)?;
+    let back = u32::try_from(host.vec_back(obj)?)?;
     assert_eq!(front, 1);
     assert_eq!(back, 3);
     Ok(())
@@ -78,7 +78,7 @@ fn vec_put_and_get() -> Result<(), HostError> {
     let i: U32Val = 1_u32.into();
     let obj1 = host.vec_put(obj, i, 9_u32.into())?;
     let rv = host.vec_get(obj1, i)?;
-    let v = unsafe { <u32 as RawValConvertible>::unchecked_from_val(rv) };
+    let v = u32::try_from(rv)?;
     assert_eq!(v, 9);
     Ok(())
 }
@@ -268,19 +268,13 @@ fn vec_index_of() -> Result<(), HostError> {
     let host = Host::default();
     let obj0 = host.test_vec_obj::<u32>(&[3, 4, 2, 2, 2, 5])?;
     let mut idx = host.vec_first_index_of(obj0, 2u32.into())?;
-    assert_eq!(idx.get_payload(), RawVal::from(2u32).get_payload());
+    assert_eq!(idx.get_payload(), Val::from(2u32).get_payload());
     idx = host.vec_last_index_of(obj0, 2u32.into())?;
-    assert_eq!(idx.get_payload(), RawVal::from(4u32).get_payload());
+    assert_eq!(idx.get_payload(), Val::from(4u32).get_payload());
     idx = host.vec_first_index_of(obj0, 1u32.into())?;
-    assert_eq!(
-        idx.get_payload(),
-        RawVal::from_void().to_raw().get_payload()
-    );
+    assert_eq!(idx.get_payload(), Val::from_void().to_raw().get_payload());
     idx = host.vec_last_index_of(obj0, 1u32.into())?;
-    assert_eq!(
-        idx.get_payload(),
-        RawVal::from_void().to_raw().get_payload()
-    );
+    assert_eq!(idx.get_payload(), Val::from_void().to_raw().get_payload());
     Ok(())
 }
 

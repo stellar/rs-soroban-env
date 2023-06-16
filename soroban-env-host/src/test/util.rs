@@ -8,7 +8,7 @@ use soroban_env_common::{
         LedgerEntryData, LedgerKey, PublicKey, ScAddress, ScContractExecutable, ScVal, ScVec,
         Uint256,
     },
-    AddressObject, BytesObject, RawVal, TryIntoVal, VecObject,
+    AddressObject, BytesObject, TryIntoVal, Val, VecObject,
 };
 
 use crate::{
@@ -148,7 +148,7 @@ impl Host {
         Ok(self.to_host_val(&ScVal::Vec(Some(v)))?.try_into()?)
     }
 
-    pub(crate) fn test_vec_val<T: AsScVal>(&self, vals: &[T]) -> Result<RawVal, HostError> {
+    pub(crate) fn test_vec_val<T: AsScVal>(&self, vals: &[T]) -> Result<Val, HostError> {
         let v = self.test_scvec(vals)?;
         self.to_host_val(&ScVal::Vec(Some(v)))
     }
@@ -159,7 +159,7 @@ impl Host {
 
     pub(crate) fn test_bin_obj(&self, vals: &[u8]) -> Result<BytesObject, HostError> {
         let scval: ScVal = self.test_bin_scobj(vals)?;
-        let rawval: RawVal = self.to_host_val(&scval)?;
+        let rawval: Val = self.to_host_val(&scval)?;
         Ok(rawval.try_into()?)
     }
 
@@ -170,7 +170,7 @@ impl Host {
         let prev_auth_manager = self.snapshot_auth_manager();
         self.switch_to_recording_auth();
 
-        let wasm_id: RawVal = self
+        let wasm_id: Val = self
             .invoke_function(HostFunction::UploadContractWasm(
                 contract_wasm.to_vec().try_into().unwrap(),
             ))
@@ -181,7 +181,7 @@ impl Host {
         let wasm_id = self
             .hash_from_bytesobj_input("wasm_hash", wasm_id.try_into().unwrap())
             .unwrap();
-        let address_obj: RawVal = self
+        let address_obj: Val = self
             .invoke_function(HostFunction::CreateContract(CreateContractArgs {
                 contract_id_preimage: ContractIdPreimage::Address(ContractIdPreimageFromAddress {
                     address: ScAddress::Contract(xdr::Hash(generate_bytes_array())),

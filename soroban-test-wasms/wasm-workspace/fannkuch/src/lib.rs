@@ -1,5 +1,5 @@
 #![no_std]
-use soroban_sdk::{contractimpl, Env, RawVal};
+use soroban_sdk::{contractimpl, Env, Val};
 
 pub struct Contract;
 
@@ -55,10 +55,10 @@ fn fannkuchredux<const N: usize>(env: Env) -> usize {
         loop {
             if r == N {
                 env.logger()
-                    .log("checksum", &[RawVal::from_u32(checksum as u32).to_raw()]);
+                    .log("checksum", &[Val::from_u32(checksum as u32).to_raw()]);
                 env.logger().log(
                     "max_flips",
-                    &[RawVal::from_u32(max_flips_count as u32).to_raw()],
+                    &[Val::from_u32(max_flips_count as u32).to_raw()],
                 );
                 return max_flips_count;
             }

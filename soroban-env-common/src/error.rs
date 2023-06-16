@@ -1,7 +1,7 @@
 use crate::{
     impl_wrapper_as_and_to_rawval, impl_wrapper_tag_based_constructors,
     impl_wrapper_tag_based_rawvalconvertible, impl_wrapper_wasmi_conversions, Compare,
-    ConversionError, Env, RawVal, SymbolError,
+    ConversionError, Env, SymbolError, Val,
 };
 use core::{
     cmp::Ordering,
@@ -11,14 +11,14 @@ use core::{
 };
 use stellar_xdr::{ScError, ScErrorCode, ScErrorType, ScVal};
 
-/// Wrapper for a [RawVal] that is tagged with [Tag::Error], interpreting the
-/// [RawVal]'s body as a pair of a 28-bit status-type code and a 32-bit status
+/// Wrapper for a [Val] that is tagged with [Tag::Error], interpreting the
+/// [Val]'s body as a pair of a 28-bit status-type code and a 32-bit status
 /// code. The status-type codes correspond to the enumerated cases of
 /// [ScErrorType], and the status codes correspond to the code values stored in
 /// each variant of the [ScError] union.
 #[repr(transparent)]
 #[derive(Copy, Clone)]
-pub struct Error(RawVal);
+pub struct Error(Val);
 
 impl_wrapper_tag_based_rawvalconvertible!(Error);
 impl_wrapper_tag_based_constructors!(Error);

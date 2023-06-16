@@ -30,7 +30,7 @@ fn test_account_address_conversions() {
         account_pk.to_vec()
     );
     // Verify that the trying to get the contract id returns the unit type.
-    // As RawVals aren't comparable, we use `try_into_val` to do the verification
+    // As Vals aren't comparable, we use `try_into_val` to do the verification
     // instead.
     let _: () = host
         .address_to_contract_id(address_obj)
@@ -63,7 +63,7 @@ fn test_contract_address_conversions() {
         contract_id.to_vec()
     );
     // Verify that the trying to get the account key returns the unit type.
-    // As RawVals aren't comparable, we use `try_into_val` to do the verification
+    // As Vals aren't comparable, we use `try_into_val` to do the verification
     // instead.
     let _: () = host
         .address_to_account_public_key(address_obj)

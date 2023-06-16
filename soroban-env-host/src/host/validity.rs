@@ -4,7 +4,7 @@ use soroban_env_common::xdr::{ScErrorCode, ScErrorType};
 use soroban_env_common::U32Val;
 
 use crate::events::{CONTRACT_EVENT_TOPICS_LIMIT, TOPIC_BYTES_LENGTH_LIMIT};
-use crate::{host_object::HostObject, Host, HostError, Object, RawVal, VecObject};
+use crate::{host_object::HostObject, Host, HostError, Object, Val, VecObject};
 
 impl Host {
     // Notes on metering: free
@@ -80,7 +80,7 @@ impl Host {
 
     // Metering: covered by components
     // TODO: the validation is incomplete. Need to further restrict Map, Vec sizes.
-    fn validate_topic(&self, topic: RawVal) -> Result<(), HostError> {
+    fn validate_topic(&self, topic: Val) -> Result<(), HostError> {
         if let Ok(topic) = Object::try_from(topic) {
             unsafe {
                 self.unchecked_visit_val_obj(topic, |ob| {

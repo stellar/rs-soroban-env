@@ -1,4 +1,4 @@
-use crate::{cost_runner::CostRunner, xdr::ContractCostType, RawVal, Symbol, Vm};
+use crate::{cost_runner::CostRunner, xdr::ContractCostType, Symbol, Val, Vm};
 use std::{hint::black_box, rc::Rc};
 
 pub struct InvokeVmFunctionRun;
@@ -13,7 +13,7 @@ impl CostRunner for InvokeVmFunctionRun {
 
     type SampleType = Rc<Vm>;
 
-    type RecycledType = (Option<RawVal>, Rc<Vm>);
+    type RecycledType = (Option<Val>, Rc<Vm>);
 
     const RUN_ITERATIONS: u64 = 100;
 
@@ -41,7 +41,7 @@ impl CostRunner for InvokeHostFunctionRun {
 
     type SampleType = Rc<Vm>;
 
-    type RecycledType = (Option<RawVal>, Rc<Vm>);
+    type RecycledType = (Option<Val>, Rc<Vm>);
 
     fn run_iter(host: &crate::Host, _iter: u64, sample: Self::SampleType) -> Self::RecycledType {
         let rv = black_box(sample.invoke_function_raw(host, &TEST_SYM, &[]).unwrap());

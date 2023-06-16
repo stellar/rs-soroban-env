@@ -14,12 +14,12 @@ use super::{
     host::metered_vector::MeteredVector,
     num::{I256, U256},
     xdr, AddressObject, BytesObject, ContractExecutableObject, DurationObject, Host, I128Object,
-    I256Object, I64Object, LedgerKeyNonceObject, MapObject, Object, RawVal, StringObject,
-    SymbolObject, TimepointObject, U128Object, U256Object, U64Object, VecObject,
+    I256Object, I64Object, LedgerKeyNonceObject, MapObject, Object, StringObject, SymbolObject,
+    TimepointObject, U128Object, U256Object, U64Object, Val, VecObject,
 };
 
-pub(crate) type HostMap = MeteredOrdMap<RawVal, RawVal, Host>;
-pub(crate) type HostVec = MeteredVector<RawVal>;
+pub(crate) type HostMap = MeteredOrdMap<Val, Val, Host>;
+pub(crate) type HostVec = MeteredVector<Val>;
 
 #[derive(Clone)]
 pub(crate) enum HostObject {
@@ -42,13 +42,13 @@ pub(crate) enum HostObject {
 }
 
 impl HostObject {
-    // Temporarily performs a shallow comparison against a RawVal of the
-    // associated small value type, returning None if the RawVal is of
+    // Temporarily performs a shallow comparison against a Val of the
+    // associated small value type, returning None if the Val is of
     // the wrong type.
     pub(crate) fn try_compare_to_small(
         &self,
         budget: &Budget,
-        rv: RawVal,
+        rv: Val,
     ) -> Result<Option<core::cmp::Ordering>, HostError> {
         let res = match self {
             HostObject::U64(u) => {

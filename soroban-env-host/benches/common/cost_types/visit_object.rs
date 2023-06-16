@@ -1,5 +1,5 @@
 use crate::common::HostCostMeasurement;
-use soroban_env_host::{cost_runner::VisitObjectRun, xdr::ScVal, Host, Object, RawVal};
+use soroban_env_host::{cost_runner::VisitObjectRun, xdr::ScVal, Host, Object, Val};
 
 pub(crate) struct VisitObjectMeasure;
 
@@ -15,7 +15,7 @@ impl HostCostMeasurement for VisitObjectMeasure {
         let mut vec: Vec<Object> = Vec::with_capacity(size as usize);
         let val = ScVal::I64(i64::MAX);
         for _ in 0..size {
-            let rv: RawVal = host.inject_val(&val).unwrap();
+            let rv: Val = host.inject_val(&val).unwrap();
             vec.push(rv.try_into().unwrap());
         }
         vec

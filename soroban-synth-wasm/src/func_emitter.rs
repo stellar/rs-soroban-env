@@ -1,5 +1,5 @@
 use crate::{Arity, FuncRef, GlobalRef, ModEmitter, TypeRef};
-use soroban_env_common::{xdr::ScError, Error, RawVal, Symbol, Tag};
+use soroban_env_common::{xdr::ScError, Error, Symbol, Tag, Val};
 use wasm_encoder::{BlockType, Function, Instruction, MemArg, ValType};
 
 /// An index into the _locals_ for the current function, which may refer
@@ -10,7 +10,7 @@ pub struct LocalRef(pub u32);
 /// An abstraction over inputs to WASM operations: locals, constants, and/or the
 /// implicit value already on the top of the WASM stack machine. Primarily used
 /// as an [`Into`] target type for the [`FuncEmitter::push`] method, allowing
-/// various types such as [`RawVal`] or [`Symbol`] to be passed to host function
+/// various types such as [`Val`] or [`Symbol`] to be passed to host function
 /// call emitters, which in turn pass them to [`FuncEmitter::push`].
 ///
 /// The [`Operand::StackTop`] case can only be provided as the first argument to
@@ -29,29 +29,29 @@ impl From<LocalRef> for Operand {
     }
 }
 
-impl From<RawVal> for Operand {
-    fn from(r: RawVal) -> Self {
+impl From<Val> for Operand {
+    fn from(r: Val) -> Self {
         Operand::Const64(r.get_payload() as i64)
     }
 }
 
 impl From<Symbol> for Operand {
     fn from(s: Symbol) -> Self {
-        let r: RawVal = s.into();
+        let r: Val = s.into();
         r.into()
     }
 }
 
 impl From<Error> for Operand {
     fn from(s: Error) -> Self {
-        let r: RawVal = s.into();
+        let r: Val = s.into();
         r.into()
     }
 }
 
 impl From<ScError> for Operand {
     fn from(s: ScError) -> Self {
-        let r: RawVal = s.into();
+        let r: Val = s.into();
         r.into()
     }
 }

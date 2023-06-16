@@ -1,4 +1,4 @@
-use soroban_env_host::{budget::AsBudget, Host, RawVal};
+use soroban_env_host::{budget::AsBudget, Host, Val};
 
 pub(crate) fn test_host() -> Host {
     let host = Host::default();
@@ -20,6 +20,6 @@ pub(crate) const TEST_WASMS: [&'static [u8]; 10] = [
     soroban_test_wasms::COMPLEX,
 ];
 
-pub(crate) fn to_rawval_u32<I: Iterator<Item = u32>>(vals: I) -> impl Iterator<Item = RawVal> {
-    vals.map(move |v| RawVal::from_u32(v).into())
+pub(crate) fn to_rawval_u32<I: Iterator<Item = u32>>(vals: I) -> impl Iterator<Item = Val> {
+    vals.map(move |v| Val::from_u32(v).into())
 }
