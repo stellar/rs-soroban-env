@@ -314,6 +314,11 @@ impl BudgetImpl {
                 ContractCostType::ComputeEcdsaSecp256k1Key => (),
                 ContractCostType::ComputeEcdsaSecp256k1Sig => (),
                 ContractCostType::RecoverEcdsaSecp256k1Key => (),
+                ContractCostType::Int256AddSub => (),
+                ContractCostType::Int256Mul => (),
+                ContractCostType::Int256Div => (),
+                ContractCostType::Int256Pow => (),
+                ContractCostType::Int256Shift => (),
             }
         }
     }
@@ -824,6 +829,26 @@ impl Default for BudgetImpl {
                     cpu.const_term = 2319640;
                     cpu.linear_term = 0;
                 }
+                ContractCostType::Int256AddSub => {
+                    cpu.const_term = 735;
+                    cpu.linear_term = 0;
+                }
+                ContractCostType::Int256Mul => {
+                    cpu.const_term = 1224;
+                    cpu.linear_term = 0;
+                }
+                ContractCostType::Int256Div => {
+                    cpu.const_term = 1347;
+                    cpu.linear_term = 0;
+                }
+                ContractCostType::Int256Pow => {
+                    cpu.const_term = 5350;
+                    cpu.linear_term = 0;
+                }
+                ContractCostType::Int256Shift => {
+                    cpu.const_term = 538;
+                    cpu.linear_term = 0;
+                }
             }
 
             // define the memory cost model parameters
@@ -931,6 +956,26 @@ impl Default for BudgetImpl {
                 }
                 ContractCostType::RecoverEcdsaSecp256k1Key => {
                     mem.const_term = 181;
+                    mem.linear_term = 0;
+                }
+                ContractCostType::Int256AddSub => {
+                    mem.const_term = 119;
+                    mem.linear_term = 0;
+                }
+                ContractCostType::Int256Mul => {
+                    mem.const_term = 119;
+                    mem.linear_term = 0;
+                }
+                ContractCostType::Int256Div => {
+                    mem.const_term = 119;
+                    mem.linear_term = 0;
+                }
+                ContractCostType::Int256Pow => {
+                    mem.const_term = 119;
+                    mem.linear_term = 0;
+                }
+                ContractCostType::Int256Shift => {
+                    mem.const_term = 119;
                     mem.linear_term = 0;
                 }
             }

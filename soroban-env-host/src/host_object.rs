@@ -22,7 +22,7 @@ pub(crate) type HostMap = MeteredOrdMap<Val, Val, Host>;
 pub(crate) type HostVec = MeteredVector<Val>;
 
 #[derive(Clone)]
-pub(crate) enum HostObject {
+pub enum HostObject {
     Vec(HostVec),
     Map(HostMap),
     U64(u64),
@@ -110,7 +110,7 @@ impl HostObject {
     }
 }
 
-pub(crate) trait HostObjectType: MeteredClone {
+pub trait HostObjectType: MeteredClone {
     type Wrapper: Into<Object>;
     fn new_from_handle(handle: u32) -> Self::Wrapper;
     fn inject(self) -> HostObject;
