@@ -1891,6 +1891,15 @@ impl VmCallerEnv for Host {
         min: U32Val,
     ) -> Result<Void, HostError> {
         let key = self.contract_data_key_from_rawval(k, t.try_into()?)?;
+
+        // The host doesn't load the key, but we want to make sure that
+        // it's in the footprint, because the system embedding the host
+        // (e.g. stellar-core) will to perform the bump.
+        self.0
+            .storage
+            .borrow_mut()
+            .touch_key(&key, self.as_budget())?;
+
         let min_expiration =
             self.with_ledger_info(|li| Ok(li.sequence_number.saturating_add(min.into())))?;
         self.0.expiration_bumps.borrow_mut().0.push(LedgerBump {
