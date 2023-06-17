@@ -15,7 +15,7 @@ macro_rules! impl_bignum_host_fns {
                             ScErrorType::Object,
                             ScErrorCode::ArithDomain,
                             "overflow has occured",
-                            &[lhs_obj.to_raw(), rhs_obj.to_raw()],
+                            &[lhs_obj.to_val(), rhs_obj.to_val()],
                         )
                     })
                 })
@@ -41,7 +41,7 @@ macro_rules! impl_bignum_host_fns_rhs_u32 {
                         ScErrorType::Object,
                         ScErrorCode::ArithDomain,
                         "overflow has occured",
-                        &[lhs_obj.to_raw(), rhs_val.to_raw()],
+                        &[lhs_obj.to_val(), rhs_val.to_val()],
                     )
                 })
             })?;

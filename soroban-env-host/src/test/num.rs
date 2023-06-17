@@ -38,9 +38,9 @@ fn check_roundtrip_compare_ok<
     let pairs: Vec<((Val, ScVal), &T)> = input_vec
         .iter()
         .map(|v| {
-            let raw: Val = v.try_into_val(h).unwrap();
-            let scv: ScVal = raw.try_into_val(h).unwrap();
-            (raw, scv)
+            let val: Val = v.try_into_val(h).unwrap();
+            let scv: ScVal = val.try_into_val(h).unwrap();
+            (val, scv)
         })
         .zip(input_vec.iter())
         .collect();
@@ -212,7 +212,7 @@ where
     let res: Object = host.add_host_object(expected)?.into();
     let res_back: Object = f(host, host.add_host_object(lhs)?, host.add_host_object(rhs)?)?.into();
     assert_eq!(
-        host.compare(res.as_raw(), res_back.as_raw()).unwrap(),
+        host.compare(res.as_val(), res_back.as_val()).unwrap(),
         Ordering::Equal
     );
     Ok(())
@@ -236,7 +236,7 @@ where
     let res: Object = host.add_host_object(expected)?.into();
     let res_back: Object = f(host, host.add_host_object(lhs)?, U32Val::from(rhs))?.into();
     assert_eq!(
-        host.compare(res.as_raw(), res_back.as_raw()).unwrap(),
+        host.compare(res.as_val(), res_back.as_val()).unwrap(),
         Ordering::Equal
     );
     Ok(())

@@ -144,7 +144,7 @@ impl Host {
                 ScErrorType::Crypto,
                 ScErrorCode::InvalidInput,
                 "invalid ECDSA-secp256k1 recovery ID",
-                &[recovery_id.to_raw()],
+                &[recovery_id.to_val()],
             ));
         }
         k256::ecdsa::RecoveryId::try_from(rid32 as u8).map_err(|_| {
@@ -152,7 +152,7 @@ impl Host {
                 ScErrorType::Crypto,
                 ScErrorCode::InvalidInput,
                 "invalid ECDSA-secp256k1 recovery ID",
-                &[recovery_id.to_raw()],
+                &[recovery_id.to_val()],
             )
         })
     }

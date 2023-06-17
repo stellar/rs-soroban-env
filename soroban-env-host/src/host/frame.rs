@@ -465,7 +465,7 @@ impl Host {
                 ScErrorType::Context,
                 ScErrorCode::InvalidAction,
                 "can't invoke a reserved function directly",
-                &[func.to_raw()],
+                &[func.to_val()],
             ));
         }
         if !matches!(reentry_mode, ContractReentryMode::Allowed) {
@@ -546,7 +546,7 @@ impl Host {
                             ScErrorType::Context,
                             ScErrorCode::MissingValue,
                             "calling unknown contract function",
-                            &[func.to_raw()],
+                            &[func.to_val()],
                         )),
                         Err(panic_payload) => {
                             // Return an error indicating the contract function

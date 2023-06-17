@@ -71,7 +71,7 @@ fn invoke_cross_contract_with_err() -> Result<(), HostError> {
     let sv = host.try_call(id_obj, sym, args)?;
     let code = (ScErrorType::Object, ScErrorCode::IndexBounds);
     let exp_st: Error = code.into();
-    assert_eq!(sv.get_payload(), exp_st.to_raw().get_payload());
+    assert_eq!(sv.get_payload(), exp_st.to_val().get_payload());
 
     let events = host.get_events()?.0;
     dbg!(&events);
@@ -109,7 +109,7 @@ fn invoke_cross_contract_indirect() -> Result<(), HostError> {
     // prepare arguments
     let sym = Symbol::try_from_small_str("add_with").unwrap();
     let args = host.test_vec_obj::<i32>(&[5, 6])?;
-    let args = host.vec_push_back(args, id1_obj.to_raw())?;
+    let args = host.vec_push_back(args, id1_obj.to_val())?;
     // try call
     let val = host.call(id0_obj, sym, args)?;
     let exp: Val = 11i32.into();
@@ -124,13 +124,13 @@ fn invoke_cross_contract_indirect_err() -> Result<(), HostError> {
     let id0_obj = host.register_test_contract_wasm(INVOKE_CONTRACT);
     let sym = Symbol::try_from_small_str("add_with").unwrap();
     let args = host.test_vec_obj::<i32>(&[i32::MAX, 1])?;
-    let args = host.vec_push_back(args, host.bytes_new()?.to_raw())?;
+    let args = host.vec_push_back(args, host.bytes_new()?.to_val())?;
 
     // try call -- add will trap, and add_with will trap, but we will get a status
     let status = host.try_call(id0_obj, sym, args)?;
     let code = (ScErrorType::WasmVm, ScErrorCode::InternalError);
     let exp: Error = code.into();
-    assert_eq!(status.get_payload(), exp.to_raw().get_payload());
+    assert_eq!(status.get_payload(), exp.to_val().get_payload());
 
     let events = host.get_events()?.0;
     assert_eq!(events.len(), 2);

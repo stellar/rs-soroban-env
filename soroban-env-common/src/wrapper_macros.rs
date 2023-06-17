@@ -86,10 +86,10 @@ macro_rules! impl_wrapper_wasmi_conversions {
         impl $crate::WasmiMarshal for $wrapper {
             fn try_marshal_from_value(v: wasmi::Value) -> Option<Self> {
                 if let wasmi::Value::I64(i) = v {
-                    let raw = $crate::Val::from_payload(i as u64);
-                    if <Self as $crate::val::ValConvert>::is_val_type(raw) {
+                    let val = $crate::Val::from_payload(i as u64);
+                    if <Self as $crate::val::ValConvert>::is_val_type(val) {
                         return Some(unsafe {
-                            <Self as $crate::val::ValConvert>::unchecked_from_val(raw)
+                            <Self as $crate::val::ValConvert>::unchecked_from_val(val)
                         });
                     }
                 }
@@ -97,7 +97,7 @@ macro_rules! impl_wrapper_wasmi_conversions {
             }
 
             fn marshal_from_self(self) -> wasmi::Value {
-                wasmi::Value::I64(self.as_raw().get_payload() as i64)
+                wasmi::Value::I64(self.as_val().get_payload() as i64)
             }
         }
     };
@@ -118,7 +118,7 @@ macro_rules! impl_wrapper_as_and_to_rawval {
                 &mut self.0
             }
         }
-        // Basic conversion support: wrapper to raw, and try-into helper.
+        // Basic conversion support: wrapper to val, and try-into helper.
         impl From<$wrapper> for $crate::Val {
             fn from(b: $wrapper) -> Self {
                 b.0
@@ -135,11 +135,11 @@ macro_rules! impl_wrapper_as_and_to_rawval {
         // may or may-not ever get used per-type, so allowed-dead.
         #[allow(dead_code)]
         impl $wrapper {
-            pub const fn as_raw(&self) -> &$crate::Val {
+            pub const fn as_val(&self) -> &$crate::Val {
                 &self.0
             }
 
-            pub const fn to_raw(&self) -> $crate::Val {
+            pub const fn to_val(&self) -> $crate::Val {
                 self.0
             }
         }
@@ -159,7 +159,7 @@ macro_rules! impl_wrapper_from_other_type {
             type Error = $crate::ConversionError;
             #[inline(always)]
             fn try_from_val(_env: &E, val: &$wrapper) -> Result<Self, Self::Error> {
-                Self::try_from((*val).to_raw())
+                Self::try_from((*val).to_val())
             }
         }
     };
@@ -210,7 +210,7 @@ macro_rules! declare_tag_based_object_wrapper {
         impl TryFrom<$crate::Object> for $T {
             type Error = $crate::ConversionError;
             fn try_from(x: $crate::Object) -> Result<Self, Self::Error> {
-                if x.as_raw().has_tag($crate::Tag::$T) {
+                if x.as_val().has_tag($crate::Tag::$T) {
                     Ok($T(x.0))
                 } else {
                     Err($crate::ConversionError)
@@ -222,7 +222,7 @@ macro_rules! declare_tag_based_object_wrapper {
             #[inline(always)]
             pub const unsafe fn from_handle(handle: u32) -> Self {
                 let rv = $crate::Object::from_handle_and_tag(handle, $crate::Tag::$T);
-                Self(rv.to_raw())
+                Self(rv.to_val())
             }
             #[inline(always)]
             pub const fn get_handle(&self) -> u32 {
@@ -288,20 +288,20 @@ macro_rules! declare_tag_based_small_and_object_wrappers {
 
         impl $GENERAL {
             pub const fn from_small(s: $SMALL) -> Self {
-                Self(s.to_raw())
+                Self(s.to_val())
             }
         }
 
         impl core::hash::Hash for $SMALL {
             fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
-                self.as_raw().get_payload().hash(state);
+                self.as_val().get_payload().hash(state);
             }
         }
 
         impl core::cmp::PartialEq for $SMALL {
             #[inline(always)]
             fn eq(&self, other: &Self) -> bool {
-                self.as_raw().get_payload() == other.as_raw().get_payload()
+                self.as_val().get_payload() == other.as_val().get_payload()
             }
         }
 

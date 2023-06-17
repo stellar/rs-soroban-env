@@ -18,8 +18,8 @@ fn vec_as_seen_by_host() -> Result<(), HostError> {
     let obj1: Object = val1.try_into()?;
     assert_eq!(obj0.get_handle(), 0);
     assert_eq!(obj1.get_handle(), 1);
-    assert_eq!(obj0.as_raw().get_tag(), Tag::VecObject);
-    assert_eq!(obj1.as_raw().get_tag(), Tag::VecObject);
+    assert_eq!(obj0.as_val().get_tag(), Tag::VecObject);
+    assert_eq!(obj1.as_val().get_tag(), Tag::VecObject);
     // Check that we got 2 distinct Vec objects
     assert_ne!(val0.get_payload(), val1.get_payload());
     // But also that they compare deep-equal.
@@ -30,12 +30,12 @@ fn vec_as_seen_by_host() -> Result<(), HostError> {
 #[test]
 fn vec_new_with_capacity() -> Result<(), HostError> {
     let host = Host::default();
-    host.vec_new(Val::from_void().to_raw())?;
+    host.vec_new(Val::from_void().to_val())?;
     host.vec_new(5_u32.into())?;
     let code = (ScErrorType::Value, ScErrorCode::UnexpectedType);
     let res = host.vec_new(5_i32.into());
     assert!(HostError::result_matches_err(res, code));
-    let res = host.vec_new(Val::from_bool(true).to_raw());
+    let res = host.vec_new(Val::from_bool(true).to_val());
     assert!(HostError::result_matches_err(res, code));
     Ok(())
 }
@@ -171,7 +171,7 @@ fn vec_slice_and_cmp() -> Result<(), HostError> {
     assert_eq!(host.obj_cmp(obj1.into(), obj_ref.into())?, 0);
 
     let obj2 = host.vec_slice(obj, 0u32.into(), 3u32.into())?;
-    assert_ne!(obj2.as_raw().get_payload(), obj.as_raw().get_payload());
+    assert_ne!(obj2.as_val().get_payload(), obj.as_val().get_payload());
     assert_eq!(host.obj_cmp(obj2.into(), obj.into())?, 0);
     Ok(())
 }
@@ -258,7 +258,7 @@ fn vec_append_empty() -> Result<(), HostError> {
     let host = Host::default();
     let obj0 = host.test_vec_obj::<u32>(&[])?;
     let obj1 = host.vec_append(obj0, obj0)?;
-    assert_ne!(obj0.as_raw().get_payload(), obj1.as_raw().get_payload());
+    assert_ne!(obj0.as_val().get_payload(), obj1.as_val().get_payload());
     assert_eq!(host.obj_cmp(obj0.into(), obj1.into())?, 0);
     Ok(())
 }
@@ -272,9 +272,9 @@ fn vec_index_of() -> Result<(), HostError> {
     idx = host.vec_last_index_of(obj0, 2u32.into())?;
     assert_eq!(idx.get_payload(), Val::from(4u32).get_payload());
     idx = host.vec_first_index_of(obj0, 1u32.into())?;
-    assert_eq!(idx.get_payload(), Val::from_void().to_raw().get_payload());
+    assert_eq!(idx.get_payload(), Val::from_void().to_val().get_payload());
     idx = host.vec_last_index_of(obj0, 1u32.into())?;
-    assert_eq!(idx.get_payload(), Val::from_void().to_raw().get_payload());
+    assert_eq!(idx.get_payload(), Val::from_void().to_val().get_payload());
     Ok(())
 }
 

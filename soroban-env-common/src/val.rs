@@ -544,14 +544,14 @@ impl From<&i32> for Val {
 impl From<ScError> for Val {
     fn from(er: ScError) -> Self {
         let e: Error = er.into();
-        e.to_raw()
+        e.to_val()
     }
 }
 
 impl From<&ScError> for Val {
     fn from(er: &ScError) -> Self {
         let e: Error = er.clone().into();
-        e.to_raw()
+        e.to_val()
     }
 }
 

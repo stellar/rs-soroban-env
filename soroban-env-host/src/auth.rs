@@ -1086,7 +1086,7 @@ impl AccountAuthorizationTracker {
                             ScErrorType::Auth,
                             ScErrorCode::InvalidAction,
                             "failed account authentication",
-                            &[err.error.to_raw()],
+                            &[err.error.to_val()],
                         )
                     } else {
                         err

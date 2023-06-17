@@ -250,7 +250,7 @@ impl Host {
                                 ScErrorType::Auth,
                                 ScErrorCode::ArithDomain,
                                 "signer weight does not fit in u8",
-                                &[U32Val::from(weight).to_raw()],
+                                &[U32Val::from(weight).to_val()],
                             )
                         });
                     }

@@ -123,26 +123,26 @@ fn map_prev_and_next() -> Result<(), HostError> {
         assert_eq!(
             host.map_prev_key(obj, 0_u32.into())?.get_payload(),
             Error::from_type_and_code(ScErrorType::Object, ScErrorCode::IndexBounds)
-                .to_raw()
+                .to_val()
                 .get_payload()
         );
         assert_eq!(
             host.map_prev_key(obj, 1_u32.into())?.get_payload(),
             Error::from_type_and_code(ScErrorType::Object, ScErrorCode::IndexBounds)
-                .to_raw()
+                .to_val()
                 .get_payload()
         );
         assert_eq!(
             host.map_prev_key(obj, 2_u32.into())?.get_payload(),
-            Val::from_u32(1).to_raw().get_payload()
+            Val::from_u32(1).to_val().get_payload()
         );
         assert_eq!(
             host.map_prev_key(obj, 4_u32.into())?.get_payload(),
-            Val::from_u32(1).to_raw().get_payload()
+            Val::from_u32(1).to_val().get_payload()
         );
         assert_eq!(
             host.map_prev_key(obj, 5_u32.into())?.get_payload(),
-            Val::from_u32(4).to_raw().get_payload()
+            Val::from_u32(4).to_val().get_payload()
         );
     }
     // next
@@ -150,26 +150,26 @@ fn map_prev_and_next() -> Result<(), HostError> {
         assert_eq!(
             host.map_next_key(obj, 5_u32.into())?.get_payload(),
             Error::from_type_and_code(ScErrorType::Object, ScErrorCode::IndexBounds)
-                .to_raw()
+                .to_val()
                 .get_payload()
         );
         assert_eq!(
             host.map_next_key(obj, 4_u32.into())?.get_payload(),
             Error::from_type_and_code(ScErrorType::Object, ScErrorCode::IndexBounds)
-                .to_raw()
+                .to_val()
                 .get_payload()
         );
         assert_eq!(
             host.map_next_key(obj, 3_u32.into())?.get_payload(),
-            Val::from_u32(4).to_raw().get_payload()
+            Val::from_u32(4).to_val().get_payload()
         );
         assert_eq!(
             host.map_next_key(obj, 1_u32.into())?.get_payload(),
-            Val::from_u32(4).to_raw().get_payload()
+            Val::from_u32(4).to_val().get_payload()
         );
         assert_eq!(
             host.map_next_key(obj, 0_u32.into())?.get_payload(),
-            Val::from_u32(1).to_raw().get_payload()
+            Val::from_u32(1).to_val().get_payload()
         );
     }
     Ok(())
@@ -205,20 +205,20 @@ fn map_prev_and_next_heterogeneous() -> Result<(), HostError> {
         assert_eq!(
             host.map_prev_key(test_map, 0_u32.into())?.get_payload(),
             Error::from_type_and_code(ScErrorType::Object, ScErrorCode::IndexBounds)
-                .to_raw()
+                .to_val()
                 .get_payload()
         );
         assert_eq!(
             host.map_prev_key(test_map, 4_u32.into())?.get_payload(),
-            Val::from_u32(2).to_raw().get_payload()
+            Val::from_u32(2).to_val().get_payload()
         );
         assert_eq!(
             host.map_prev_key(test_map, sym.into())?.get_payload(),
-            Val::from_u32(2).to_raw().get_payload()
+            Val::from_u32(2).to_val().get_payload()
         );
         assert_eq!(
             host.map_prev_key(test_map, obj_vec)?.get_payload(),
-            sym.as_raw().get_payload()
+            sym.as_val().get_payload()
         );
         assert_eq!(
             host.map_prev_key(test_map, obj_map)?.get_payload(),
@@ -229,11 +229,11 @@ fn map_prev_and_next_heterogeneous() -> Result<(), HostError> {
     {
         assert_eq!(
             host.map_next_key(test_map, 0_u32.into())?.get_payload(),
-            Val::from_u32(2).to_raw().get_payload()
+            Val::from_u32(2).to_val().get_payload()
         );
         assert_eq!(
             host.map_next_key(test_map, 4_u32.into())?.get_payload(),
-            sym.as_raw().get_payload()
+            sym.as_val().get_payload()
         );
         assert_eq!(
             host.map_next_key(test_map, sym.into())?.get_payload(),
@@ -246,7 +246,7 @@ fn map_prev_and_next_heterogeneous() -> Result<(), HostError> {
         assert_eq!(
             host.map_next_key(test_map, obj_map)?.get_payload(),
             Error::from_type_and_code(ScErrorType::Object, ScErrorCode::IndexBounds)
-                .to_raw()
+                .to_val()
                 .get_payload()
         );
     }

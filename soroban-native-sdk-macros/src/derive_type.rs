@@ -53,7 +53,7 @@ pub fn derive_type_struct(ident: &Ident, data: &DataStruct) -> TokenStream2 {
             fn try_from_val(env: &crate::Host, val: &soroban_env_common::MapObject) -> Result<Self, Self::Error> {
                 use soroban_env_common::EnvBase;
                 const KEYS: [&'static str; #len] = [#(#str_lits),*];
-                let mut vals: [soroban_env_common::Val; #len] = [soroban_env_common::Val::VOID.to_raw(); #len];
+                let mut vals: [soroban_env_common::Val; #len] = [soroban_env_common::Val::VOID.to_val(); #len];
                 env.map_unpack_to_slice(*val, &KEYS, &mut vals)?;
                 Ok(Self {
                     #(#idents: vals[#idx_lits].try_into_val(env)?,)*

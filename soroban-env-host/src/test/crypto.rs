@@ -9,7 +9,7 @@ fn sha256_test() -> Result<(), HostError> {
     let obj0 = host.test_bin_obj(&[1])?;
     let hash_obj = host.compute_hash_sha256(obj0)?;
 
-    let v = host.from_host_val(hash_obj.to_raw())?;
+    let v = host.from_host_val(hash_obj.to_val())?;
     let ScVal::Bytes(bytes) = v else {
         panic!("Wrong type")
     };
@@ -34,7 +34,7 @@ fn keccak256_test() -> Result<(), HostError> {
     let obj0 = host.test_bin_obj(b"test vector for soroban")?;
     let hash_obj = host.compute_hash_keccak256(obj0)?;
 
-    let v = host.from_host_val(hash_obj.to_raw())?;
+    let v = host.from_host_val(hash_obj.to_val())?;
     let ScVal::Bytes(bytes) = v else {
         panic!("Wrong type")
     };
@@ -102,6 +102,6 @@ fn recover_ecdsa_secp256k1_key_test() -> Result<(), HostError> {
     assert_eq!(u32::from(host.bytes_len(pk_obj_2)?), 65);
     host.bytes_copy_to_slice(pk_obj_2, U32Val::from(0), &mut buf)?;
     assert_eq!(pk.as_slice(), buf.as_slice());
-    assert_eq!(host.obj_cmp(pk_obj.to_raw(), pk_obj_2.to_raw())?, 0);
+    assert_eq!(host.obj_cmp(pk_obj.to_val(), pk_obj_2.to_val())?, 0);
     Ok(())
 }

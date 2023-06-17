@@ -324,7 +324,7 @@ impl IntoIterator for SymbolSmall {
     type Item = char;
     type IntoIter = SymbolSmallIter;
     fn into_iter(self) -> Self::IntoIter {
-        SymbolSmallIter(self.as_raw().get_body())
+        SymbolSmallIter(self.as_val().get_body())
     }
 }
 

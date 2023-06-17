@@ -157,7 +157,7 @@ fn linear_memory_operations() -> Result<(), HostError> {
             .try_into()?;
         let obj_ref: BytesObject = host.test_bin_obj(&[0xaa, 0xbb, 0xcc, 0xdd])?;
         assert_eq!(
-            host.compare(&obj.to_raw(), &obj_ref.to_raw())?,
+            host.compare(&obj.to_val(), &obj_ref.to_val())?,
             core::cmp::Ordering::Equal
         );
     }
@@ -165,13 +165,13 @@ fn linear_memory_operations() -> Result<(), HostError> {
     {
         let obj0 = host.test_bin_obj(&[1, 2, 3, 4])?;
         let mut args = host.vec_new(Val::from_void().into())?;
-        args = host.vec_push_back(args, obj0.to_raw())?;
+        args = host.vec_push_back(args, obj0.to_val())?;
         let obj: BytesObject = host
             .call(id_obj, Symbol::try_from_small_str("bin_inc").unwrap(), args)?
             .try_into()?;
         let obj_ref = host.test_bin_obj(&[2, 3, 4, 5])?;
         assert_eq!(
-            host.compare(&obj.to_raw(), &obj_ref.to_raw())?,
+            host.compare(&obj.to_val(), &obj_ref.to_val())?,
             core::cmp::Ordering::Equal
         );
     }

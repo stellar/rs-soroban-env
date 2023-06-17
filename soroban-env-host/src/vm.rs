@@ -247,7 +247,7 @@ impl Vm {
                     if let Some(he) = trap.downcast::<HostError>() {
                         host.log_diagnostics(
                             "VM call trapped with HostError",
-                            &[func_sym.to_raw(), he.error.to_raw()],
+                            &[func_sym.to_val(), he.error.to_val()],
                         )?;
                         return Err(he);
                     }
@@ -262,9 +262,9 @@ impl Vm {
                     return Err(if host.is_debug() {
                         // With diagnostics on: log as much detail as we can from wasmi.
                         let msg = format!("VM call failed: {:?}", &e);
-                        host.error(e.into(), &msg, &[func_sym.to_raw()])
+                        host.error(e.into(), &msg, &[func_sym.to_val()])
                     } else {
-                        host.error(e.into(), "VM call failed", &[func_sym.to_raw()])
+                        host.error(e.into(), "VM call failed", &[func_sym.to_val()])
                     });
                 }
             }
@@ -299,7 +299,7 @@ impl Vm {
                             ScErrorType::WasmVm,
                             ScErrorCode::MissingValue,
                             "invoking unknown export",
-                            &[func_sym.to_raw()],
+                            &[func_sym.to_val()],
                         ))
                     }
                     Some(e) => e,
@@ -310,7 +310,7 @@ impl Vm {
                             ScErrorType::WasmVm,
                             ScErrorCode::UnexpectedType,
                             "export is not a function",
-                            &[func_sym.to_raw()],
+                            &[func_sym.to_val()],
                         ))
                     }
                     Some(e) => e,

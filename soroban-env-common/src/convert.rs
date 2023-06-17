@@ -69,7 +69,7 @@ impl<E: Env> TryFromVal<E, i64> for Val {
         if let Ok(so) = I64Small::try_from(v) {
             Ok(so.into())
         } else {
-            Ok(env.obj_from_i64(v).map_err(|_| ConversionError)?.to_raw())
+            Ok(env.obj_from_i64(v).map_err(|_| ConversionError)?.to_val())
         }
     }
 }
@@ -98,7 +98,7 @@ impl<E: Env> TryFromVal<E, u64> for Val {
         if let Ok(so) = U64Small::try_from(v) {
             Ok(so.into())
         } else {
-            Ok(env.obj_from_u64(v).map_err(|_| ConversionError)?.to_raw())
+            Ok(env.obj_from_u64(v).map_err(|_| ConversionError)?.to_val())
         }
     }
 }

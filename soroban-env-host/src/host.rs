@@ -646,7 +646,7 @@ impl Host {
                 ScErrorType::Value,
                 ScErrorCode::InvalidInput,
                 "symbol mismatch",
-                &[sym.to_raw()],
+                &[sym.to_val()],
             ))
         }
     }
@@ -785,7 +785,7 @@ impl EnvBase for Host {
         }
         let pair_iter = key_syms
             .iter()
-            .map(|s| s.to_raw())
+            .map(|s| s.to_val())
             .zip(vals.iter().cloned());
         let map = HostMap::from_exact_iter(pair_iter, self)?;
         self.add_host_object(map)
@@ -866,7 +866,7 @@ impl EnvBase for Host {
                 ScErrorType::Value,
                 ScErrorCode::InvalidInput,
                 "symbol not found in slice of strs",
-                &[sym.to_raw()],
+                &[sym.to_val()],
             )),
             Some(idx) => Ok(U32Val::from(self.usize_to_u32(idx)?)),
         }
@@ -897,7 +897,7 @@ impl VmCallerEnv for Host {
                 let msg = String::from_utf8_lossy(&msg);
 
                 let VmSlice { vm, pos, len } = self.decode_vmslice(vals_pos, vals_len)?;
-                let mut vals: Vec<Val> = vec![Val::VOID.to_raw(); len as usize];
+                let mut vals: Vec<Val> = vec![Val::VOID.to_val(); len as usize];
                 self.metered_vm_read_vals_from_linear_memory::<8, Val>(
                     vmcaller,
                     &vm,
@@ -1281,7 +1281,7 @@ impl VmCallerEnv for Host {
                     ScErrorType::Object,
                     ScErrorCode::MissingValue,
                     "map key not found",
-                    &[m.to_raw(), k],
+                    &[m.to_val(), k],
                 )
             })
         })
@@ -1299,7 +1299,7 @@ impl VmCallerEnv for Host {
                 ScErrorType::Object,
                 ScErrorCode::MissingValue,
                 "map key not found",
-                &[m.to_raw(), k],
+                &[m.to_val(), k],
             )),
         }
     }
@@ -1331,7 +1331,7 @@ impl VmCallerEnv for Host {
                 // We return Ok(error) here to indicate "the end of iteration".
                 Ok(
                     Error::from_type_and_code(ScErrorType::Object, ScErrorCode::IndexBounds)
-                        .to_raw(),
+                        .to_val(),
                 )
             }
         })
@@ -1350,7 +1350,7 @@ impl VmCallerEnv for Host {
                 // We return Ok(error) here to indicate "the end of iteration".
                 Ok(
                     Error::from_type_and_code(ScErrorType::Object, ScErrorCode::IndexBounds)
-                        .to_raw(),
+                        .to_val(),
                 )
             }
         })
@@ -1360,7 +1360,7 @@ impl VmCallerEnv for Host {
         self.visit_obj(m, |hm: &HostMap| match hm.get_min(self)? {
             Some((pk, pv)) => Ok(*pk),
             None => Ok(
-                Error::from_type_and_code(ScErrorType::Object, ScErrorCode::IndexBounds).to_raw(),
+                Error::from_type_and_code(ScErrorType::Object, ScErrorCode::IndexBounds).to_val(),
             ),
         })
     }
@@ -1369,7 +1369,7 @@ impl VmCallerEnv for Host {
         self.visit_obj(m, |hm: &HostMap| match hm.get_max(self)? {
             Some((pk, pv)) => Ok(*pk),
             None => Ok(
-                Error::from_type_and_code(ScErrorType::Object, ScErrorCode::IndexBounds).to_raw(),
+                Error::from_type_and_code(ScErrorType::Object, ScErrorCode::IndexBounds).to_val(),
             ),
         })
     }
@@ -1447,7 +1447,7 @@ impl VmCallerEnv for Host {
         // Step 3: turn pairs into a map.
         let pair_iter = key_syms
             .iter()
-            .map(|s| s.to_raw())
+            .map(|s| s.to_val())
             .zip(vals.iter().cloned());
         let map = HostMap::from_exact_iter(pair_iter, self)?;
         self.add_host_object(map)
@@ -1717,7 +1717,7 @@ impl VmCallerEnv for Host {
             len as u64,
             self.as_budget(),
         )?;
-        let mut vals: Vec<Val> = vec![Val::VOID.to_raw(); len as usize];
+        let mut vals: Vec<Val> = vec![Val::VOID.to_val(); len as usize];
         self.metered_vm_read_vals_from_linear_memory::<8, Val>(
             vmcaller,
             &vm,
@@ -1994,7 +1994,7 @@ impl VmCallerEnv for Host {
                 ScErrorType::Storage,
                 ScErrorCode::MissingValue,
                 "WASM does not exist",
-                &[hash.to_raw()],
+                &[hash.to_val()],
             ));
         }
         let curr_contract_id = self.get_current_contract_id_internal()?;
@@ -2030,7 +2030,7 @@ impl VmCallerEnv for Host {
                     events,
                     e.error,
                     "contract call failed",
-                    &[func.to_raw(), args.to_raw()],
+                    &[func.to_val(), args.to_val()],
                 )
             })?;
         }
@@ -2065,10 +2065,10 @@ impl VmCallerEnv for Host {
                         events,
                         e.error,
                         "contract try_call failed",
-                        &[func.to_raw(), args.to_raw()],
+                        &[func.to_val(), args.to_val()],
                     )
                 })?;
-                Ok(e.error.to_raw())
+                Ok(e.error.to_val())
             }
         }
     }
@@ -2199,7 +2199,7 @@ impl VmCallerEnv for Host {
                 ScErrorType::Value,
                 ScErrorCode::InvalidInput,
                 "symbol not found in linear memory slices",
-                &[sym.to_raw()],
+                &[sym.to_val()],
             )),
             Some(idx) => Ok(U32Val::from(idx)),
         }
@@ -2227,7 +2227,7 @@ impl VmCallerEnv for Host {
                     ScErrorType::Object,
                     ScErrorCode::IndexBounds,
                     "bytes_put out of bounds",
-                    &[iv.to_raw()],
+                    &[iv.to_val()],
                 )),
                 Some(v) => {
                     *v = u;
@@ -2254,7 +2254,7 @@ impl VmCallerEnv for Host {
                         ScErrorType::Object,
                         ScErrorCode::IndexBounds,
                         "bytes_get out of bounds",
-                        &[iv.to_raw()],
+                        &[iv.to_val()],
                     )
                 })
         })
@@ -2575,14 +2575,14 @@ impl VmCallerEnv for Host {
             Err(self.error(
                 error,
                 "failing with contract error",
-                &[U32Val::from(error.get_code()).to_raw()],
+                &[U32Val::from(error.get_code()).to_val()],
             ))
         } else {
             Err(self.err(
                 ScErrorType::Context,
                 ScErrorCode::UnexpectedType,
                 "contract attempted to fail with non-ContractError status code",
-                &[error.to_raw()],
+                &[error.to_val()],
             ))
         }
     }
@@ -2715,7 +2715,7 @@ impl VmCallerEnv for Host {
                     ScErrorType::Value,
                     ScErrorCode::UnexpectedSize,
                     "Unexpected size of BytesObject in prng_reseed",
-                    &[U32Val::from(len).to_raw()],
+                    &[U32Val::from(len).to_val()],
                 ))
             } else {
                 Err(self.err(

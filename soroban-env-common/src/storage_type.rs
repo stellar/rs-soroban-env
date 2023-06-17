@@ -12,7 +12,7 @@ declare_tag_based_wrapper!(StorageType);
 impl StorageType {
     #[inline(always)]
     pub const fn get_code(&self) -> u32 {
-        self.as_raw().get_major()
+        self.as_val().get_major()
     }
 
     pub const TEMPORARY: StorageType =
@@ -32,7 +32,7 @@ impl TryFrom<StorageType> for ContractDataType {
 impl PartialEq for StorageType {
     #[inline(always)]
     fn eq(&self, other: &Self) -> bool {
-        self.as_raw().get_payload() == other.as_raw().get_payload()
+        self.as_val().get_payload() == other.as_val().get_payload()
     }
 }
 
@@ -48,8 +48,8 @@ impl PartialOrd for StorageType {
 impl Ord for StorageType {
     #[inline(always)]
     fn cmp(&self, other: &Self) -> Ordering {
-        let self_major = self.as_raw().get_major();
-        let other_major = other.as_raw().get_major();
+        let self_major = self.as_val().get_major();
+        let other_major = other.as_val().get_major();
         self_major.cmp(&other_major)
     }
 }

@@ -13,7 +13,7 @@ macro_rules! impl_for_tuple {
 
             fn try_from_val(env: &E, val: &Val) -> Result<Self, Self::Error> {
                 let vec: VecObject = val.try_into()?;
-                let mut tmp: [Val; $count as usize] = [Val::VOID.to_raw(); $count as usize];
+                let mut tmp: [Val; $count as usize] = [Val::VOID.to_val(); $count as usize];
                 env.vec_unpack_to_slice(vec, &mut tmp).map_err(|_| ConversionError)?;
                 Ok(($($typ::try_from_val(env, &tmp[$idx]).map_err(|_| ConversionError)?,)*))
             }
@@ -29,7 +29,7 @@ macro_rules! impl_for_tuple {
                     $(v.$idx.try_into_val(&env).map_err(|_| ConversionError)?,)*
                 ];
                 let vec = env.vec_new_from_slice(&tmp).map_err(|_| ConversionError)?;
-                Ok(vec.to_raw())
+                Ok(vec.to_val())
             }
         }
 
