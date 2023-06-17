@@ -76,7 +76,7 @@ impl Host {
         let calling_contract = self.get_current_contract_id_unmetered()?;
         self.as_budget().with_free_budget(|| {
             let log_sym = SymbolSmall::try_from_str("log")?;
-            let topics = vec![InternalDiagnosticArg::HostVal(log_sym.to_raw())];
+            let topics = vec![InternalDiagnosticArg::HostVal(log_sym.to_val())];
             let msg = ScVal::String(ScString::from(StringM::try_from(msg.as_bytes().to_vec())?));
             let args: Vec<_> = std::iter::once(InternalDiagnosticArg::XdrVal(msg))
                 .chain(args.iter().map(|rv| InternalDiagnosticArg::HostVal(*rv)))
@@ -100,8 +100,8 @@ impl Host {
             let error_sym = SymbolSmall::try_from_str("error")?;
             let contract_id = self.get_current_contract_id_unmetered()?;
             let topics = vec![
-                InternalDiagnosticArg::HostVal(error_sym.to_raw()),
-                InternalDiagnosticArg::HostVal(error.to_raw()),
+                InternalDiagnosticArg::HostVal(error_sym.to_val()),
+                InternalDiagnosticArg::HostVal(error.to_val()),
             ];
             let msg = ScVal::String(ScString::from(StringM::try_from(msg.as_bytes().to_vec())?));
             let args: Vec<_> = std::iter::once(InternalDiagnosticArg::XdrVal(msg))

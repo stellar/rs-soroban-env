@@ -35,7 +35,7 @@ impl InternalContractEvent {
                 ScErrorType::Events,
                 ScErrorCode::InvalidInput,
                 "converting event topics to vector",
-                &[self.topics.to_raw()],
+                &[self.topics.to_val()],
             ))
         }?;
         let data = host.from_host_val(self.data)?;

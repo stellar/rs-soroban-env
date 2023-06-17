@@ -18,7 +18,7 @@ impl Compare<String> for Host {
     type Error = HostError;
 
     fn compare(&self, a: &String, b: &String) -> Result<Ordering, Self::Error> {
-        self.compare(&a.object.to_raw(), &b.object.to_raw())
+        self.compare(&a.object.to_val(), &b.object.to_val())
     }
 }
 
@@ -99,7 +99,7 @@ impl Compare<Bytes> for Host {
     type Error = HostError;
 
     fn compare(&self, a: &Bytes, b: &Bytes) -> Result<Ordering, Self::Error> {
-        self.compare(&a.object.to_raw(), &b.object.to_raw())
+        self.compare(&a.object.to_val(), &b.object.to_val())
     }
 }
 
@@ -199,7 +199,7 @@ impl<const N: usize> Compare<BytesN<N>> for Host {
     type Error = HostError;
 
     fn compare(&self, a: &BytesN<N>, b: &BytesN<N>) -> Result<Ordering, Self::Error> {
-        self.compare(&a.object.to_raw(), &b.object.to_raw())
+        self.compare(&a.object.to_val(), &b.object.to_val())
     }
 }
 
@@ -284,7 +284,7 @@ impl Compare<Map> for Host {
     type Error = HostError;
 
     fn compare(&self, a: &Map, b: &Map) -> Result<Ordering, Self::Error> {
-        self.compare(&a.object.to_raw(), &b.object.to_raw())
+        self.compare(&a.object.to_val(), &b.object.to_val())
     }
 }
 
@@ -357,7 +357,7 @@ impl Compare<Vec> for Host {
     type Error = HostError;
 
     fn compare(&self, a: &Vec, b: &Vec) -> Result<Ordering, Self::Error> {
-        self.compare(&a.object.as_raw(), &b.object.as_raw())
+        self.compare(&a.object.as_val(), &b.object.as_val())
     }
 }
 
@@ -510,7 +510,7 @@ impl Compare<Address> for Host {
     type Error = HostError;
 
     fn compare(&self, a: &Address, b: &Address) -> Result<Ordering, Self::Error> {
-        self.compare(&a.object.to_raw(), &b.object.to_raw())
+        self.compare(&a.object.to_val(), &b.object.to_val())
     }
 }
 

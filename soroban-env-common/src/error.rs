@@ -28,14 +28,14 @@ impl_wrapper_wasmi_conversions!(Error);
 impl Hash for Error {
     #[inline(always)]
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.as_raw().get_payload().hash(state);
+        self.as_val().get_payload().hash(state);
     }
 }
 
 impl PartialEq for Error {
     #[inline(always)]
     fn eq(&self, other: &Self) -> bool {
-        self.as_raw().get_payload() == other.as_raw().get_payload()
+        self.as_val().get_payload() == other.as_val().get_payload()
     }
 }
 
@@ -51,8 +51,8 @@ impl PartialOrd for Error {
 impl Ord for Error {
     #[inline(always)]
     fn cmp(&self, other: &Self) -> Ordering {
-        let self_tup = (self.as_raw().get_minor(), self.as_raw().get_major());
-        let other_tup = (other.as_raw().get_minor(), other.as_raw().get_major());
+        let self_tup = (self.as_val().get_minor(), self.as_val().get_major());
+        let other_tup = (other.as_val().get_minor(), other.as_val().get_major());
         self_tup.cmp(&other_tup)
     }
 }
@@ -67,8 +67,8 @@ impl<E: Env> Compare<Error> for E {
 impl Debug for Error {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         let (min, maj) = (
-            self.as_raw().get_minor() as i32,
-            self.as_raw().get_major() as i32,
+            self.as_val().get_minor() as i32,
+            self.as_val().get_major() as i32,
         );
         if let Ok(type_) = ScErrorType::try_from(min) {
             if type_ == ScErrorType::Contract {
@@ -91,8 +91,8 @@ impl Debug for Error {
 impl TryFrom<Error> for ScError {
     type Error = stellar_xdr::Error;
     fn try_from(er: Error) -> Result<Self, Self::Error> {
-        let type_: ScErrorType = (er.as_raw().get_minor() as i32).try_into()?;
-        let code: ScErrorCode = (er.as_raw().get_major() as i32).try_into()?;
+        let type_: ScErrorType = (er.as_val().get_minor() as i32).try_into()?;
+        let code: ScErrorCode = (er.as_val().get_major() as i32).try_into()?;
         Ok(ScError { type_, code })
     }
 }
@@ -185,17 +185,17 @@ impl Error {
     // bit-pattern.
     #[inline(always)]
     pub const fn is_type(&self, type_: ScErrorType) -> bool {
-        self.as_raw().has_minor(type_ as u32)
+        self.as_val().has_minor(type_ as u32)
     }
 
     #[inline(always)]
     pub const fn is_code(&self, code: ScErrorCode) -> bool {
-        self.as_raw().has_major(code as u32)
+        self.as_val().has_major(code as u32)
     }
 
     #[inline(always)]
     pub const fn get_code(&self) -> u32 {
-        self.as_raw().get_major()
+        self.as_val().get_major()
     }
 
     #[inline(always)]

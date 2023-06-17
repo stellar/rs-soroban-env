@@ -28,27 +28,27 @@ pub struct PRNGUsingTest;
 
 impl ContractFunctionSet for PRNGUsingTest {
     fn call(&self, func: &Symbol, host: &Host, args: &[Val]) -> Option<Val> {
-        let Ok(func) = SymbolSmall::try_from(func.to_raw()) else {
+        let Ok(func) = SymbolSmall::try_from(func.to_val()) else {
             return None
         };
         let val = if func == BYTES_NEW {
             host.prng_bytes_new(U32Val::from(SEED_LEN))
                 .unwrap()
-                .to_raw()
+                .to_val()
         } else if func == U64_RANGE {
             host.obj_from_u64(host.prng_u64_in_inclusive_range(LO, HI).unwrap())
                 .unwrap()
-                .to_raw()
+                .to_val()
         } else if func == SHUFFLE {
             host.prng_vec_shuffle(args[0].try_into().unwrap())
                 .unwrap()
-                .to_raw()
+                .to_val()
         } else if func == RESEED {
             // The reseed method reseeds and then returns the result of bytes_new
             let _ = host.prng_reseed(args[0].try_into().unwrap()).unwrap();
             host.prng_bytes_new(U32Val::from(SEED_LEN))
                 .unwrap()
-                .to_raw()
+                .to_val()
         } else {
             return None;
         };
@@ -72,7 +72,7 @@ fn prng_test() -> Result<(), HostError> {
 
     let bytes0: BytesObject = host.call(id, BYTES_NEW.into(), args)?.try_into()?;
     let bytes1: BytesObject = host.call(id, BYTES_NEW.into(), args)?.try_into()?;
-    assert_ne!(0, host.obj_cmp(bytes0.to_raw(), bytes1.to_raw())?);
+    assert_ne!(0, host.obj_cmp(bytes0.to_val(), bytes1.to_val())?);
 
     // prng_bytes_new
     let mut buf0 = [0u8; SEED_LEN as usize];
@@ -118,10 +118,10 @@ fn prng_test() -> Result<(), HostError> {
     // provided with the same seed input, produce the same output -- even though
     // they're in different frames, and _unlike_ previous repeated calls to
     // prngs in different frames.
-    let args = host.vec_new_from_slice(&[bytes0.to_raw()])?;
+    let args = host.vec_new_from_slice(&[bytes0.to_val()])?;
     let res0: BytesObject = host.call(id, RESEED.into(), args)?.try_into()?;
     let res1: BytesObject = host.call(id, RESEED.into(), args)?.try_into()?;
-    assert_eq!(0, host.obj_cmp(res0.to_raw(), res1.to_raw())?);
+    assert_eq!(0, host.obj_cmp(res0.to_val(), res1.to_val())?);
 
     Ok(())
 }

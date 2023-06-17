@@ -14,7 +14,7 @@ impl CostRunner for GuardFrameRun {
     fn run_iter(host: &crate::Host, _iter: u64, sample: Self::SampleType) -> Self::RecycledType {
         black_box(
             host.with_frame(Frame::Token(sample.0, sample.1, vec![]), || {
-                Ok(Val::VOID.to_raw())
+                Ok(Val::VOID.to_val())
             })
             .unwrap(),
         );

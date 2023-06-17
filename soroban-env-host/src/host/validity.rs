@@ -18,7 +18,7 @@ impl Host {
                 ScErrorType::Object,
                 ScErrorCode::IndexBounds,
                 "index out of bound",
-                &[U32Val::from(index).to_raw()],
+                &[U32Val::from(index).to_val()],
             ));
         }
         Ok(())
@@ -35,7 +35,7 @@ impl Host {
                 ScErrorType::Object,
                 ScErrorCode::IndexBounds,
                 "index out of bound",
-                &[U32Val::from(index).to_raw()],
+                &[U32Val::from(index).to_val()],
             ));
         }
         Ok(())
@@ -53,7 +53,7 @@ impl Host {
                 ScErrorType::Object,
                 ScErrorCode::IndexBounds,
                 "start index out of bound",
-                &[U32Val::from(start).to_raw()],
+                &[U32Val::from(start).to_val()],
             ));
         }
         if end as usize > bound {
@@ -61,7 +61,7 @@ impl Host {
                 ScErrorType::Object,
                 ScErrorCode::IndexBounds,
                 "end index out of bound",
-                &[U32Val::from(end).to_raw()],
+                &[U32Val::from(end).to_val()],
             ));
         }
         if start > end {
@@ -69,7 +69,7 @@ impl Host {
                 ScErrorType::Object,
                 ScErrorCode::InvalidInput,
                 "start index greater than end index",
-                &[U32Val::from(start).to_raw(), U32Val::from(end).to_raw()],
+                &[U32Val::from(start).to_val(), U32Val::from(end).to_val()],
             ));
         }
         Ok(Range {
@@ -96,7 +96,7 @@ impl Host {
                                 ScErrorType::Object,
                                 ScErrorCode::UnexpectedType,
                                 "contract executable used as topic",
-                                &[topic.to_raw()],
+                                &[topic.to_val()],
                             )),
                             HostObject::Bytes(b) => {
                                 if b.len() > TOPIC_BYTES_LENGTH_LIMIT {
@@ -106,7 +106,7 @@ impl Host {
                                         ScErrorType::Object,
                                         ScErrorCode::ExceededLimit,
                                         "topic exceeds length limit",
-                                        &[topic.to_raw()],
+                                        &[topic.to_val()],
                                     ))
                                 } else {
                                     Ok(())
@@ -143,7 +143,7 @@ impl Host {
                                     ScErrorType::Object,
                                     ScErrorCode::ExceededLimit,
                                     "topic vector exceeds length limit",
-                                    &[topics.to_raw()],
+                                    &[topics.to_val()],
                                 ));
                             }
                             for &topic in vv.iter() {
@@ -155,7 +155,7 @@ impl Host {
                             ScErrorType::Object,
                             ScErrorCode::UnexpectedType,
                             "topics-vector was unexpected type",
-                            &[topics.to_raw()],
+                            &[topics.to_val()],
                         )),
                     },
                 }

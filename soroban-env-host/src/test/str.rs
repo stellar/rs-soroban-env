@@ -13,7 +13,7 @@ fn str_conversions() -> Result<(), HostError> {
     }
     let ss = "abcdefghijklmnopqrstuvwxyz";
     let so = host.string_new_from_slice(ss)?;
-    let raw = so.to_raw();
+    let raw = so.to_val();
     let s: String = raw.try_into_val(&host)?;
     assert_eq!(s, ss);
 

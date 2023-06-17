@@ -55,10 +55,10 @@ fn fannkuchredux<const N: usize>(env: Env) -> usize {
         loop {
             if r == N {
                 env.logger()
-                    .log("checksum", &[Val::from_u32(checksum as u32).to_raw()]);
+                    .log("checksum", &[Val::from_u32(checksum as u32).to_val()]);
                 env.logger().log(
                     "max_flips",
-                    &[Val::from_u32(max_flips_count as u32).to_raw()],
+                    &[Val::from_u32(max_flips_count as u32).to_val()],
                 );
                 return max_flips_count;
             }

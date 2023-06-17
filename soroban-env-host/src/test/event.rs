@@ -23,7 +23,7 @@ impl ContractFunctionSet for ContractWithSingleEvent {
         let mut topics = host.vec_new(().into()).unwrap();
         topics = host.vec_push_back(topics, 0u32.into()).unwrap();
         topics = host.vec_push_back(topics, 1u32.into()).unwrap();
-        Some(host.contract_event(topics, data.to_raw()).unwrap().into())
+        Some(host.contract_event(topics, data.to_val()).unwrap().into())
     }
 }
 
@@ -39,7 +39,7 @@ fn contract_event() -> Result<(), HostError> {
     host.register_test_contract(id, test_contract)?;
     assert_eq!(
         host.call(id, sym, args)?.get_payload(),
-        Val::from_void().to_raw().get_payload()
+        Val::from_void().to_val().get_payload()
     );
 
     let event_ref = ContractEvent {
@@ -93,7 +93,7 @@ fn test_event_rollback() -> Result<(), HostError> {
     host.register_test_contract(id, test_contract)?;
     assert_eq!(
         host.call(id, sym, args)?.get_payload(),
-        Val::from_void().to_raw().get_payload()
+        Val::from_void().to_val().get_payload()
     );
     host.0.events.borrow_mut().rollback(1)?;
     // run `UPDATE_EXPECT=true cargo test` to update this.
@@ -111,7 +111,7 @@ fn test_internal_contract_events_metering_not_free() -> Result<(), HostError> {
         type_: ContractEventType::Contract,
         contract_id: Some(host.test_bin_obj(&dummy_id)?),
         topics: host.test_vec_obj(&[0, 1, 2, 3])?,
-        data: Val::from_void().to_raw(),
+        data: Val::from_void().to_val(),
     };
 
     let host = host
@@ -137,8 +137,8 @@ fn test_internal_diagnostic_event_metering_free() -> Result<(), HostError> {
     let dummy_id = [0; 32];
     let contract_id = Some(Hash(dummy_id));
     let topics = vec![
-        InternalDiagnosticArg::HostVal(SymbolSmall::try_from_str("error")?.to_raw()),
-        InternalDiagnosticArg::HostVal(Val::from_i32(0).to_raw()),
+        InternalDiagnosticArg::HostVal(SymbolSmall::try_from_str("error")?.to_val()),
+        InternalDiagnosticArg::HostVal(Val::from_i32(0).to_val()),
     ];
     let args = vec![InternalDiagnosticArg::XdrVal(1_i32.as_scval())];
     let de = Rc::new(InternalDiagnosticEvent {

@@ -83,7 +83,7 @@ impl Host {
                 ScErrorType::Value,
                 ScErrorCode::InvalidInput,
                 "expecting U32Val less than 256",
-                &[r.to_raw()],
+                &[r.to_val()],
             )),
         }
     }
@@ -406,7 +406,7 @@ impl Host {
                             ScErrorType::Object,
                             ScErrorCode::MissingValue,
                             "object handle references nonexistent object",
-                            &[U32Val::from(objref.get_handle()).to_raw()],
+                            &[U32Val::from(objref.get_handle()).to_val()],
                         ));
                     }
                     Some(ho) => match ho {

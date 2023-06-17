@@ -26,7 +26,7 @@ impl ValConvert for Object {
 impl Object {
     #[inline(always)]
     pub const fn get_handle(&self) -> u32 {
-        self.as_raw().get_major()
+        self.as_val().get_major()
     }
 
     #[inline(always)]
@@ -40,7 +40,7 @@ impl<E: Env> Compare<Object> for E {
     type Error = E::Error;
 
     fn compare(&self, a: &Object, b: &Object) -> Result<Ordering, Self::Error> {
-        self.compare(&a.to_raw(), &b.to_raw())
+        self.compare(&a.to_val(), &b.to_val())
     }
 }
 
