@@ -13,12 +13,12 @@ fn str_conversions() -> Result<(), HostError> {
     }
     let ss = "abcdefghijklmnopqrstuvwxyz";
     let so = host.string_new_from_slice(ss)?;
-    let raw = so.to_val();
-    let s: String = raw.try_into_val(&host)?;
+    let val = so.to_val();
+    let s: String = val.try_into_val(&host)?;
     assert_eq!(s, ss);
 
-    let raw: Val = s.try_into_val(&host)?;
-    let obj: StringObject = raw.try_into()?;
+    let val: Val = s.try_into_val(&host)?;
+    let obj: StringObject = val.try_into()?;
     let mut slice: Vec<u8> = vec![0; ss.len()];
     host.string_copy_to_slice(obj, 0_u32.into(), slice.as_mut())?;
     let bytes = host.bytes_new_from_slice(slice.as_slice())?;

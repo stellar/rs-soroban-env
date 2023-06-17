@@ -267,7 +267,7 @@ impl AuthTest {
         let mut addresses = HostVec::new(&self.host).unwrap();
         for key in &self.keys {
             addresses
-                .push_raw(self.key_to_address(key).to_val())
+                .push_val(self.key_to_address(key).to_val())
                 .unwrap();
         }
 

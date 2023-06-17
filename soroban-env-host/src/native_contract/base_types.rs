@@ -409,7 +409,7 @@ impl TryFromVal<Host, std::vec::Vec<Val>> for Vec {
     fn try_from_val(env: &Host, vals: &std::vec::Vec<Val>) -> Result<Self, Self::Error> {
         let mut v = Vec::new(env)?;
         for rv in vals {
-            v.push_raw(*rv)?
+            v.push_val(*rv)?
         }
         Ok(v)
     }
@@ -458,10 +458,10 @@ impl Vec {
         HostError: From<<Val as TryFromVal<Host, T>>::Error>,
     {
         let rv = Val::try_from_val(&self.host, x)?;
-        self.push_raw(rv)
+        self.push_val(rv)
     }
 
-    pub fn push_raw(&mut self, x: Val) -> Result<(), HostError> {
+    pub fn push_val(&mut self, x: Val) -> Result<(), HostError> {
         self.object = self.host.vec_push_back(self.object, x)?;
         Ok(())
     }

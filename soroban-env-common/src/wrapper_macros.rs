@@ -86,10 +86,10 @@ macro_rules! impl_wrapper_wasmi_conversions {
         impl $crate::WasmiMarshal for $wrapper {
             fn try_marshal_from_value(v: wasmi::Value) -> Option<Self> {
                 if let wasmi::Value::I64(i) = v {
-                    let raw = $crate::Val::from_payload(i as u64);
-                    if <Self as $crate::val::ValConvert>::is_val_type(raw) {
+                    let val = $crate::Val::from_payload(i as u64);
+                    if <Self as $crate::val::ValConvert>::is_val_type(val) {
                         return Some(unsafe {
-                            <Self as $crate::val::ValConvert>::unchecked_from_val(raw)
+                            <Self as $crate::val::ValConvert>::unchecked_from_val(val)
                         });
                     }
                 }
@@ -118,7 +118,7 @@ macro_rules! impl_wrapper_as_and_to_rawval {
                 &mut self.0
             }
         }
-        // Basic conversion support: wrapper to raw, and try-into helper.
+        // Basic conversion support: wrapper to val, and try-into helper.
         impl From<$wrapper> for $crate::Val {
             fn from(b: $wrapper) -> Self {
                 b.0

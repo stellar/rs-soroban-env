@@ -38,9 +38,9 @@ fn check_roundtrip_compare_ok<
     let pairs: Vec<((Val, ScVal), &T)> = input_vec
         .iter()
         .map(|v| {
-            let raw: Val = v.try_into_val(h).unwrap();
-            let scv: ScVal = raw.try_into_val(h).unwrap();
-            (raw, scv)
+            let val: Val = v.try_into_val(h).unwrap();
+            let scv: ScVal = val.try_into_val(h).unwrap();
+            (val, scv)
         })
         .zip(input_vec.iter())
         .collect();
