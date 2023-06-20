@@ -11,18 +11,18 @@ use crate::{
     events::{diagnostic::DiagnosticLevel, Events, InternalEventsBuffer},
     expiration_ledger_bumps::{ExpirationLedgerBumps, LedgerBump},
     host_object::{HostMap, HostObject, HostObjectType, HostVec},
-    impl_bignum_host_fns_rhs_u32,
-    num::{i256_from_pieces, i256_into_pieces, u256_from_pieces, u256_into_pieces},
+    impl_bignum_host_fns_rhs_u32, impl_wrapping_obj_from_num, impl_wrapping_obj_to_num,
+    num::*,
     storage::Storage,
     xdr::{
         int128_helpers, AccountId, Asset, ContractCodeEntry, ContractCostType, ContractDataEntry,
-        ContractEventType, CreateContractArgs, ExtensionPoint, Hash, LedgerEntryData, LedgerKey,
-        LedgerKeyContractCode, PublicKey, ScAddress, ScBytes, ScContractExecutable, ScErrorType,
-        ScString, ScSymbol, ScVal,
+        ContractEventType, CreateContractArgs, Duration, ExtensionPoint, Hash, LedgerEntryData,
+        LedgerKey, LedgerKeyContractCode, PublicKey, ScAddress, ScBytes, ScContractExecutable,
+        ScErrorType, ScString, ScSymbol, ScVal, TimePoint,
     },
-    AddressObject, Bool, BytesObject, Error, I128Object, I256Object, I64Object, MapObject,
-    StorageType, StringObject, SymbolObject, SymbolSmall, SymbolStr, TryFromVal, U128Object,
-    U256Object, U32Val, U64Object, U64Val, VecObject, VmCaller, VmCallerEnv, Void, I256, U256,
+    AddressObject, Bool, BytesObject, Error, I128Object, I256Object, MapObject, StorageType,
+    StringObject, SymbolObject, SymbolSmall, SymbolStr, TryFromVal, U128Object, U256Object, U32Val,
+    U64Val, VecObject, VmCaller, VmCallerEnv, Void, I256, U256,
 };
 
 use crate::Vm;
@@ -1008,25 +1008,14 @@ impl VmCallerEnv for Host {
         ))
     }
 
-    // Notes on metering: covered by `add_host_object`.
-    fn obj_from_u64(&self, _vmcaller: &mut VmCaller<Host>, u: u64) -> Result<U64Object, HostError> {
-        self.add_host_object(u)
-    }
-
-    // Notes on metering: covered by `visit_obj`.
-    fn obj_to_u64(&self, _vmcaller: &mut VmCaller<Host>, obj: U64Object) -> Result<u64, HostError> {
-        self.visit_obj(obj, |u: &u64| Ok(*u))
-    }
-
-    // Notes on metering: covered by `add_host_object`.
-    fn obj_from_i64(&self, _vmcaller: &mut VmCaller<Host>, i: i64) -> Result<I64Object, HostError> {
-        self.add_host_object(i)
-    }
-
-    // Notes on metering: covered by `visit_obj`.
-    fn obj_to_i64(&self, _vmcaller: &mut VmCaller<Host>, obj: I64Object) -> Result<i64, HostError> {
-        self.visit_obj(obj, |i: &i64| Ok(*i))
-    }
+    impl_wrapping_obj_from_num!(obj_from_u64, u64, u64);
+    impl_wrapping_obj_to_num!(obj_to_u64, u64, u64);
+    impl_wrapping_obj_from_num!(obj_from_i64, i64, i64);
+    impl_wrapping_obj_to_num!(obj_to_i64, i64, i64);
+    impl_wrapping_obj_from_num!(timepoint_obj_from_u64, TimePoint, u64);
+    impl_wrapping_obj_to_num!(timepoint_obj_to_u64, TimePoint, u64);
+    impl_wrapping_obj_from_num!(duration_obj_from_u64, Duration, u64);
+    impl_wrapping_obj_to_num!(duration_obj_to_u64, Duration, u64);
 
     fn obj_from_u128_pieces(
         &self,

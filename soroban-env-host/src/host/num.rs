@@ -1,4 +1,30 @@
 #[macro_export]
+macro_rules! impl_wrapping_obj_from_num {
+    ($host_fn: ident, $hot: ty, $num: ty) => {
+        fn $host_fn(
+            &self,
+            _vmcaller: &mut VmCaller<Host>,
+            u: $num,
+        ) -> Result<<$hot as HostObjectType>::Wrapper, HostError> {
+            self.add_host_object(<$hot>::from(u))
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! impl_wrapping_obj_to_num {
+    ($host_fn: ident, $data: ty, $num: ty) => {
+        fn $host_fn(
+            &self,
+            _vmcaller: &mut VmCaller<Host>,
+            obj: <$data as HostObjectType>::Wrapper,
+        ) -> Result<$num, HostError> {
+            self.visit_obj(obj, |t: &$data| Ok(t.clone().into()))
+        }
+    };
+}
+
+#[macro_export]
 macro_rules! impl_bignum_host_fns {
     ($host_fn: ident, $method: ident, $num: ty, $cost: ident) => {
         fn $host_fn(
