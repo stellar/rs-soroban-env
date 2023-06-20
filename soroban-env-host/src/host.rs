@@ -16,8 +16,8 @@ use crate::{
     storage::Storage,
     xdr::{
         int128_helpers, AccountId, Asset, ContractCodeEntry, ContractCostType, ContractDataEntry,
-        ContractEventType, CreateContractArgs, Duration, ExtensionPoint, Hash, LedgerEntryData,
-        LedgerKey, LedgerKeyContractCode, PublicKey, ScAddress, ScBytes, ScContractExecutable,
+        ContractEventType, ContractExecutable, CreateContractArgs, Duration, ExtensionPoint, Hash,
+        LedgerEntryData, LedgerKey, LedgerKeyContractCode, PublicKey, ScAddress, ScBytes,
         ScErrorType, ScString, ScSymbol, ScVal, TimePoint,
     },
     AddressObject, Bool, BytesObject, Error, I128Object, I256Object, MapObject, StorageType,
@@ -49,8 +49,8 @@ mod validity;
 pub use error::HostError;
 use soroban_env_common::xdr::{
     ContractCodeEntryBody, ContractDataEntryBody, ContractDataEntryData, ContractDataType,
-    ContractIdPreimage, ContractIdPreimageFromAddress, ContractLedgerEntryType, ScErrorCode,
-    MASK_CONTRACT_DATA_FLAGS_V20,
+    ContractIdPreimage, ContractIdPreimageFromAddress, ContractLedgerEntryType, ScContractInstance,
+    ScErrorCode, MASK_CONTRACT_DATA_FLAGS_V20,
 };
 
 use self::metered_clone::MeteredClone;
@@ -361,9 +361,9 @@ impl Host {
     fn create_contract_with_id(
         &self,
         contract_id: Hash,
-        contract_executable: ScContractExecutable,
+        contract_executable: ContractExecutable,
     ) -> Result<(), HostError> {
-        let storage_key = self.contract_executable_ledger_key(&contract_id)?;
+        let storage_key = self.contract_instance_ledger_key(&contract_id)?;
         if self
             .0
             .storage
@@ -382,8 +382,8 @@ impl Host {
         // Make sure the contract code exists. Without this check it would be
         // possible to accidentally create a contract that never may be invoked
         // (just by providing a bad hash).
-        if let ScContractExecutable::WasmRef(wasm_hash) = &contract_executable {
-            if !self.contract_code_exists(wasm_hash)? {
+        if let ContractExecutable::Wasm(wasm_hash) = &contract_executable {
+            if !self.wasm_exists(wasm_hash)? {
                 return Err(err!(
                     self,
                     (ScErrorType::Storage, ScErrorCode::MissingValue),
@@ -392,7 +392,11 @@ impl Host {
                 ));
             }
         }
-        self.store_contract_executable(contract_executable, contract_id, &storage_key)?;
+        let instance = ScContractInstance {
+            executable: contract_executable,
+            storage: Default::default(),
+        };
+        self.store_contract_instance(instance, contract_id, &storage_key)?;
         Ok(())
     }
 
@@ -1913,7 +1917,7 @@ impl VmCallerEnv for Host {
             salt: self.u256_from_bytesobj_input("contract_id_salt", salt)?,
         });
         let executable =
-            ScContractExecutable::WasmRef(self.hash_from_bytesobj_input("wasm_hash", wasm_hash)?);
+            ContractExecutable::Wasm(self.hash_from_bytesobj_input("wasm_hash", wasm_hash)?);
         let args = CreateContractArgs {
             contract_id_preimage,
             executable,
@@ -1929,7 +1933,7 @@ impl VmCallerEnv for Host {
     ) -> Result<AddressObject, HostError> {
         let asset: Asset = self.metered_from_xdr_obj(serialized_asset)?;
         let contract_id_preimage = ContractIdPreimage::Asset(asset);
-        let executable = ScContractExecutable::Token;
+        let executable = ContractExecutable::Token;
         let args = CreateContractArgs {
             contract_id_preimage,
             executable,
@@ -1978,20 +1982,21 @@ impl VmCallerEnv for Host {
         hash: BytesObject,
     ) -> Result<Void, HostError> {
         let wasm_hash = self.hash_from_bytesobj_input("wasm_hash", hash)?;
-        if !self.contract_code_exists(&wasm_hash)? {
+        if !self.wasm_exists(&wasm_hash)? {
             return Err(self.err(
                 ScErrorType::Storage,
                 ScErrorCode::MissingValue,
-                "WASM does not exist",
+                "Wasm does not exist",
                 &[hash.to_val()],
             ));
         }
         let curr_contract_id = self.get_current_contract_id_internal()?;
-        let key = self.contract_executable_ledger_key(&curr_contract_id)?;
-        let old_executable = self.retrieve_contract_executable_from_storage(&key)?;
-        let new_executable = ScContractExecutable::WasmRef(wasm_hash);
-        self.emit_update_contract_event(&old_executable, &new_executable)?;
-        self.store_contract_executable(new_executable, curr_contract_id, &key)?;
+        let key = self.contract_instance_ledger_key(&curr_contract_id)?;
+        let mut instance = self.retrieve_contract_instance_from_storage(&key)?;
+        let new_executable = ContractExecutable::Wasm(wasm_hash);
+        self.emit_update_contract_event(&instance.executable, &new_executable)?;
+        instance.executable = new_executable;
+        self.store_contract_instance(instance, curr_contract_id, &key)?;
         Ok(Val::VOID)
     }
 

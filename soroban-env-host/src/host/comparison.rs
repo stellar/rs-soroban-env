@@ -4,12 +4,12 @@ use soroban_env_common::{
     xdr::{
         AccountEntry, AccountId, ClaimableBalanceEntry, ConfigSettingEntry, ContractCodeEntryBody,
         ContractCostType, ContractDataEntryBody, ContractDataEntryData, ContractDataType,
-        ContractLedgerEntryType, CreateContractArgs, DataEntry, Duration, ExtensionPoint, Hash,
-        LedgerEntry, LedgerEntryData, LedgerEntryExt, LedgerKey, LedgerKeyAccount,
-        LedgerKeyClaimableBalance, LedgerKeyConfigSetting, LedgerKeyContractCode, LedgerKeyData,
-        LedgerKeyLiquidityPool, LedgerKeyOffer, LedgerKeyTrustLine, LiquidityPoolEntry, OfferEntry,
-        PublicKey, ScAddress, ScContractExecutable, ScErrorCode, ScErrorType, ScMap, ScMapEntry,
-        ScNonceKey, ScVal, ScVec, TimePoint, TrustLineAsset, TrustLineEntry, Uint256,
+        ContractExecutable, ContractLedgerEntryType, CreateContractArgs, DataEntry, Duration,
+        ExtensionPoint, Hash, LedgerEntry, LedgerEntryData, LedgerEntryExt, LedgerKey,
+        LedgerKeyAccount, LedgerKeyClaimableBalance, LedgerKeyConfigSetting, LedgerKeyContractCode,
+        LedgerKeyData, LedgerKeyLiquidityPool, LedgerKeyOffer, LedgerKeyTrustLine,
+        LiquidityPoolEntry, OfferEntry, PublicKey, ScAddress, ScErrorCode, ScErrorType, ScMap,
+        ScMapEntry, ScNonceKey, ScVal, ScVec, TimePoint, TrustLineAsset, TrustLineEntry, Uint256,
     },
     Compare, SymbolStr, I256, U256,
 };
@@ -43,9 +43,7 @@ fn host_obj_discriminant(ho: &HostObject) -> usize {
         HostObject::Symbol(_) => 10,
         HostObject::Vec(_) => 11,
         HostObject::Map(_) => 12,
-        HostObject::ContractExecutable(_) => 13,
-        HostObject::Address(_) => 14,
-        HostObject::NonceKey(_) => 15,
+        HostObject::Address(_) => 13,
     }
 }
 
@@ -68,9 +66,7 @@ impl Compare<HostObject> for Host {
             (Bytes(a), Bytes(b)) => self.as_budget().compare(&a.as_slice(), &b.as_slice()),
             (String(a), String(b)) => self.as_budget().compare(&a.as_slice(), &b.as_slice()),
             (Symbol(a), Symbol(b)) => self.as_budget().compare(&a.as_slice(), &b.as_slice()),
-            (ContractExecutable(a), ContractExecutable(b)) => self.as_budget().compare(a, b),
             (Address(a), Address(b)) => self.as_budget().compare(a, b),
-            (NonceKey(a), NonceKey(b)) => self.as_budget().compare(a, b),
 
             // List out at least one side of all the remaining cases here so
             // we don't accidentally forget to update this when/if a new
@@ -88,9 +84,7 @@ impl Compare<HostObject> for Host {
             | (Bytes(_), _)
             | (String(_), _)
             | (Symbol(_), _)
-            | (ContractExecutable(_), _)
-            | (Address(_), _)
-            | (NonceKey(_), _) => {
+            | (Address(_), _) => {
                 let a = host_obj_discriminant(a);
                 let b = host_obj_discriminant(b);
                 Ok(a.cmp(&b))
@@ -187,7 +181,7 @@ impl_compare_fixed_size_ord_type!(TimePoint);
 impl_compare_fixed_size_ord_type!(Duration);
 impl_compare_fixed_size_ord_type!(Hash);
 impl_compare_fixed_size_ord_type!(Uint256);
-impl_compare_fixed_size_ord_type!(ScContractExecutable);
+impl_compare_fixed_size_ord_type!(ContractExecutable);
 impl_compare_fixed_size_ord_type!(AccountId);
 impl_compare_fixed_size_ord_type!(ScAddress);
 impl_compare_fixed_size_ord_type!(ScNonceKey);
@@ -284,6 +278,15 @@ impl Compare<ScVal> for Budget {
                 <Self as Compare<&[u8]>>::compare(self, &a.as_slice(), &b.as_slice())
             }
 
+            (ContractInstance(a), ContractInstance(b)) => {
+                let cmp = self.compare(&a.executable, &b.executable)?;
+                if cmp.is_eq() {
+                    self.compare(&a.storage, &b.storage)
+                } else {
+                    Ok(cmp)
+                }
+            }
+
             (Bool(_), _)
             | (Void, _)
             | (Error(_), _)
@@ -302,11 +305,11 @@ impl Compare<ScVal> for Budget {
             | (Symbol(_), _)
             | (Vec(_), _)
             | (Map(_), _)
-            | (ContractExecutable(_), _)
             | (Address(_), _)
-            | (LedgerKeyContractExecutable, _)
+            | (LedgerKeyContractInstance, _)
             | (StorageType(_), _)
-            | (LedgerKeyNonce(_), _) => Ok(a.cmp(b)),
+            | (LedgerKeyNonce(_), _)
+            | (ContractInstance(_), _) => Ok(a.cmp(b)),
         }
     }
 }
@@ -615,7 +618,6 @@ mod tests {
             ScVal::Symbol(xdr::ScSymbol::try_from("big-symbol").unwrap()),
             ScVal::Vec(Some(xdr::ScVec::try_from((0,)).unwrap())),
             ScVal::Map(Some(xdr::ScMap::try_from(vec![]).unwrap())),
-            ScVal::ContractExecutable(xdr::ScContractExecutable::Token),
             ScVal::Address(xdr::ScAddress::Contract(xdr::Hash([0; 32]))),
         ];
 
@@ -697,10 +699,6 @@ mod tests {
                 // bad tags can't be converted to ScVal
                 !matches!(t, Tag::Bad)
             })
-            .filter(|t| {
-                // objects of this type can't be instantiated
-                !matches!(t, Tag::LedgerKeyNonceObject)
-            })
             .collect()
     }
 
@@ -751,8 +749,8 @@ mod tests {
                 Val::try_from_val(host, &ScVal::Symbol(xdr::ScSymbol::try_from("").unwrap()))
                     .unwrap()
             }
-            Tag::LedgerKeyContractExecutable => {
-                Val::try_from_val(host, &ScVal::LedgerKeyContractExecutable).unwrap()
+            Tag::LedgerKeyContractInstance => {
+                Val::try_from_val(host, &ScVal::LedgerKeyContractInstance).unwrap()
             }
             Tag::SmallCodeUpperBound => panic!(),
             Tag::ObjectCodeLowerBound => panic!(),
@@ -802,18 +800,12 @@ mod tests {
                 &ScVal::Map(Some(xdr::ScMap::try_from(vec![]).unwrap())),
             )
             .unwrap(),
-            Tag::ContractExecutableObject => Val::try_from_val(
-                host,
-                &ScVal::ContractExecutable(xdr::ScContractExecutable::Token),
-            )
-            .unwrap(),
             Tag::AddressObject => Val::try_from_val(
                 host,
                 &ScVal::Address(xdr::ScAddress::Contract(xdr::Hash([0; 32]))),
             )
             .unwrap(),
             Tag::StorageType => Val::from(StorageType::PERSISTENT),
-            Tag::LedgerKeyNonceObject => panic!(),
             Tag::ObjectCodeUpperBound => panic!(),
             Tag::Bad => panic!(),
             // NB: do not add a fallthrough case here if new Tag variants are added.

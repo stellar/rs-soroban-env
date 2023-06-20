@@ -7,21 +7,21 @@ use crate::{
     storage::AccessType,
     xdr::{
         AccountEntry, AccountId, BytesM, ClaimableBalanceEntry, ConfigSettingEntry,
-        ContractCodeEntry, ContractDataType, ContractEvent, ContractIdPreimage,
+        ContractCodeEntry, ContractDataType, ContractEvent, ContractExecutable, ContractIdPreimage,
         ContractLedgerEntryType, CreateContractArgs, DataEntry, Duration, ExtensionPoint, Hash,
         LedgerEntry, LedgerEntryExt, LedgerKey, LedgerKeyAccount, LedgerKeyClaimableBalance,
         LedgerKeyConfigSetting, LedgerKeyContractCode, LedgerKeyData, LedgerKeyLiquidityPool,
         LedgerKeyOffer, LedgerKeyTrustLine, LiquidityPoolEntry, OfferEntry, PublicKey, ScAddress,
-        ScBytes, ScContractExecutable, ScMap, ScMapEntry, ScNonceKey, ScString, ScSymbol, ScVal,
+        ScBytes, ScContractInstance, ScMap, ScMapEntry, ScNonceKey, ScString, ScSymbol, ScVal,
         ScVec, SorobanAuthorizedInvocation, StringM, TimePoint, TrustLineAsset, TrustLineEntry,
         Uint256, SCSYMBOL_LIMIT,
     },
-    AddressObject, Bool, BytesObject, ContractExecutableObject, DurationObject, DurationSmall,
-    DurationVal, Error, I128Object, I128Small, I128Val, I256Object, I256Small, I256Val, I32Val,
-    I64Object, I64Small, I64Val, LedgerKeyNonceObject, MapObject, Object, ScValObject,
-    StringObject, Symbol, SymbolObject, SymbolSmall, SymbolSmallIter, SymbolStr, TimepointObject,
-    TimepointSmall, TimepointVal, U128Object, U128Small, U128Val, U256Object, U256Small, U256Val,
-    U32Val, U64Object, U64Small, U64Val, Val, VecObject, Void, I256, U256,
+    AddressObject, Bool, BytesObject, DurationObject, DurationSmall, DurationVal, Error,
+    I128Object, I128Small, I128Val, I256Object, I256Small, I256Val, I32Val, I64Object, I64Small,
+    I64Val, MapObject, Object, ScValObject, StringObject, Symbol, SymbolObject, SymbolSmall,
+    SymbolSmallIter, SymbolStr, TimepointObject, TimepointSmall, TimepointVal, U128Object,
+    U128Small, U128Val, U256Object, U256Small, U256Val, U32Val, U64Object, U64Small, U64Val, Val,
+    VecObject, Void, I256, U256,
 };
 
 // Declared size (bytes) of a single element. This value determines the metering input for clone
@@ -55,8 +55,6 @@ impl_declared_size_type!(Void, 8);
 impl_declared_size_type!(Bool, 8);
 impl_declared_size_type!(VecObject, 8);
 impl_declared_size_type!(MapObject, 8);
-impl_declared_size_type!(ContractExecutableObject, 8);
-impl_declared_size_type!(LedgerKeyNonceObject, 8);
 impl_declared_size_type!(AddressObject, 8);
 impl_declared_size_type!(BytesObject, 8);
 impl_declared_size_type!(U32Val, 8);
@@ -100,14 +98,14 @@ impl_declared_size_type!(HostObject, 48);
 // xdr types
 impl_declared_size_type!(TimePoint, 8);
 impl_declared_size_type!(Duration, 8);
-impl_declared_size_type!(ScVal, 40);
-impl_declared_size_type!(ScValObject, 40);
-impl_declared_size_type!(ScMapEntry, 80);
+impl_declared_size_type!(ScVal, 64);
+impl_declared_size_type!(ScValObject, 64);
+impl_declared_size_type!(ScMapEntry, 128);
 impl_declared_size_type!(ScVec, 24);
 impl_declared_size_type!(ScMap, 24);
 impl_declared_size_type!(Hash, 32);
 impl_declared_size_type!(Uint256, 32);
-impl_declared_size_type!(ScContractExecutable, 33);
+impl_declared_size_type!(ContractExecutable, 33);
 impl_declared_size_type!(AccountId, 32);
 impl_declared_size_type!(ScAddress, 33);
 impl_declared_size_type!(ScNonceKey, 33);
@@ -130,12 +128,12 @@ impl_declared_size_type!(ClaimableBalanceEntry, 120);
 impl_declared_size_type!(LiquidityPoolEntry, 160);
 impl_declared_size_type!(ContractCodeEntry, 64);
 impl_declared_size_type!(ConfigSettingEntry, 104);
-impl_declared_size_type!(LedgerKey, 96);
+impl_declared_size_type!(LedgerKey, 120);
 impl_declared_size_type!(LedgerEntry, 264);
 impl_declared_size_type!(AccessType, 1);
 impl_declared_size_type!(InternalContractEvent, 40);
-impl_declared_size_type!(ContractEvent, 104);
-impl_declared_size_type!(HostEvent, 112);
+impl_declared_size_type!(ContractEvent, 128);
+impl_declared_size_type!(HostEvent, 136);
 impl_declared_size_type!(Events, 24);
 impl_declared_size_type!(InternalEvent, 40);
 impl_declared_size_type!(EventError, 1);
@@ -148,6 +146,7 @@ impl_declared_size_type!(ContractDataType, 4);
 impl_declared_size_type!(ContractLedgerEntryType, 4);
 impl_declared_size_type!(ExtensionPoint, 0);
 impl_declared_size_type!(SorobanAuthorizedInvocation, 128);
+impl_declared_size_type!(ScContractInstance, 64);
 
 // composite types
 
@@ -230,8 +229,6 @@ mod test {
         expect!["8"].assert_eq(size_of::<Bool>().to_string().as_str());
         expect!["8"].assert_eq(size_of::<VecObject>().to_string().as_str());
         expect!["8"].assert_eq(size_of::<MapObject>().to_string().as_str());
-        expect!["8"].assert_eq(size_of::<ContractExecutableObject>().to_string().as_str());
-        expect!["8"].assert_eq(size_of::<LedgerKeyNonceObject>().to_string().as_str());
         expect!["8"].assert_eq(size_of::<AddressObject>().to_string().as_str());
         expect!["8"].assert_eq(size_of::<BytesObject>().to_string().as_str());
         expect!["8"].assert_eq(size_of::<U32Val>().to_string().as_str());
@@ -278,17 +275,17 @@ mod test {
         // xdr types
         expect!["8"].assert_eq(size_of::<TimePoint>().to_string().as_str());
         expect!["8"].assert_eq(size_of::<Duration>().to_string().as_str());
-        expect!["40"].assert_eq(size_of::<ScVal>().to_string().as_str());
-        expect!["40"].assert_eq(size_of::<ScValObject>().to_string().as_str());
-        expect!["80"].assert_eq(size_of::<ScMapEntry>().to_string().as_str());
+        expect!["64"].assert_eq(size_of::<ScVal>().to_string().as_str());
+        expect!["64"].assert_eq(size_of::<ScValObject>().to_string().as_str());
+        expect!["128"].assert_eq(size_of::<ScMapEntry>().to_string().as_str());
         expect!["24"].assert_eq(size_of::<ScVec>().to_string().as_str());
         expect!["24"].assert_eq(size_of::<ScMap>().to_string().as_str());
         expect!["32"].assert_eq(size_of::<Hash>().to_string().as_str());
         expect!["32"].assert_eq(size_of::<Uint256>().to_string().as_str());
-        expect!["33"].assert_eq(size_of::<ScContractExecutable>().to_string().as_str());
+        expect!["33"].assert_eq(size_of::<ContractExecutable>().to_string().as_str());
         expect!["32"].assert_eq(size_of::<AccountId>().to_string().as_str());
         expect!["33"].assert_eq(size_of::<ScAddress>().to_string().as_str());
-        expect!["33"].assert_eq(size_of::<ScNonceKey>().to_string().as_str());
+        expect!["8"].assert_eq(size_of::<ScNonceKey>().to_string().as_str());
         expect!["32"].assert_eq(size_of::<PublicKey>().to_string().as_str());
         expect!["45"].assert_eq(size_of::<TrustLineAsset>().to_string().as_str());
         expect!["32"].assert_eq(size_of::<LedgerKeyAccount>().to_string().as_str());
@@ -308,12 +305,12 @@ mod test {
         expect!["160"].assert_eq(size_of::<LiquidityPoolEntry>().to_string().as_str());
         expect!["64"].assert_eq(size_of::<ContractCodeEntry>().to_string().as_str());
         expect!["104"].assert_eq(size_of::<ConfigSettingEntry>().to_string().as_str());
-        expect!["96"].assert_eq(size_of::<LedgerKey>().to_string().as_str());
+        expect!["120"].assert_eq(size_of::<LedgerKey>().to_string().as_str());
         expect!["264"].assert_eq(size_of::<LedgerEntry>().to_string().as_str());
         expect!["1"].assert_eq(size_of::<AccessType>().to_string().as_str());
         expect!["40"].assert_eq(size_of::<InternalContractEvent>().to_string().as_str());
-        expect!["104"].assert_eq(size_of::<ContractEvent>().to_string().as_str());
-        expect!["112"].assert_eq(size_of::<HostEvent>().to_string().as_str());
+        expect!["128"].assert_eq(size_of::<ContractEvent>().to_string().as_str());
+        expect!["136"].assert_eq(size_of::<HostEvent>().to_string().as_str());
         expect!["24"].assert_eq(size_of::<Events>().to_string().as_str());
         expect!["40"].assert_eq(size_of::<InternalEvent>().to_string().as_str());
         expect!["1"].assert_eq(size_of::<EventError>().to_string().as_str());
@@ -332,14 +329,15 @@ mod test {
         );
         // composite types
         expect!["16"].assert_eq(size_of::<&[ScVal]>().to_string().as_str());
-        expect!["48"].assert_eq(size_of::<(Val, ScVal)>().to_string().as_str());
-        expect!["200"].assert_eq(size_of::<[ScVal; 5]>().to_string().as_str());
+        expect!["72"].assert_eq(size_of::<(Val, ScVal)>().to_string().as_str());
+        expect!["320"].assert_eq(size_of::<[ScVal; 5]>().to_string().as_str());
         expect!["24"].assert_eq(size_of::<BytesM<10000>>().to_string().as_str());
         expect!["24"].assert_eq(size_of::<StringM<10000>>().to_string().as_str());
         expect!["24"].assert_eq(size_of::<Vec<ScVal>>().to_string().as_str());
         expect!["8"].assert_eq(size_of::<Box<ScVal>>().to_string().as_str());
         expect!["8"].assert_eq(size_of::<Rc<ScVal>>().to_string().as_str());
-        expect!["40"].assert_eq(size_of::<Option<ScVal>>().to_string().as_str());
+        expect!["64"].assert_eq(size_of::<Option<ScVal>>().to_string().as_str());
+        expect!["64"].assert_eq(size_of::<ScContractInstance>().to_string().as_str());
     }
 
     // This is the actual test.
@@ -373,8 +371,6 @@ mod test {
         assert_mem_size_le_declared_size!(Bool);
         assert_mem_size_le_declared_size!(VecObject);
         assert_mem_size_le_declared_size!(MapObject);
-        assert_mem_size_le_declared_size!(ContractExecutableObject);
-        assert_mem_size_le_declared_size!(LedgerKeyNonceObject);
         assert_mem_size_le_declared_size!(AddressObject);
         assert_mem_size_le_declared_size!(BytesObject);
         assert_mem_size_le_declared_size!(U32Val);
@@ -425,7 +421,7 @@ mod test {
         assert_mem_size_le_declared_size!(ScMap);
         assert_mem_size_le_declared_size!(Hash);
         assert_mem_size_le_declared_size!(Uint256);
-        assert_mem_size_le_declared_size!(ScContractExecutable);
+        assert_mem_size_le_declared_size!(ContractExecutable);
         assert_mem_size_le_declared_size!(AccountId);
         assert_mem_size_le_declared_size!(ScAddress);
         assert_mem_size_le_declared_size!(ScNonceKey);

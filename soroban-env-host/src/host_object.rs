@@ -13,9 +13,9 @@ use super::{
     host::metered_map::MeteredOrdMap,
     host::metered_vector::MeteredVector,
     num::{I256, U256},
-    xdr, AddressObject, BytesObject, ContractExecutableObject, DurationObject, Host, I128Object,
-    I256Object, I64Object, LedgerKeyNonceObject, MapObject, Object, StringObject, SymbolObject,
-    TimepointObject, U128Object, U256Object, U64Object, Val, VecObject,
+    xdr, AddressObject, BytesObject, DurationObject, Host, I128Object, I256Object, I64Object,
+    MapObject, Object, StringObject, SymbolObject, TimepointObject, U128Object, U256Object,
+    U64Object, Val, VecObject,
 };
 
 pub(crate) type HostMap = MeteredOrdMap<Val, Val, Host>;
@@ -36,9 +36,7 @@ pub enum HostObject {
     Bytes(xdr::ScBytes),
     String(xdr::ScString),
     Symbol(xdr::ScSymbol),
-    ContractExecutable(xdr::ScContractExecutable),
     Address(xdr::ScAddress),
-    NonceKey(xdr::ScNonceKey),
 }
 
 impl HostObject {
@@ -102,9 +100,7 @@ impl HostObject {
             | HostObject::Map(_)
             | HostObject::Bytes(_)
             | HostObject::String(_)
-            | HostObject::ContractExecutable(_)
-            | HostObject::Address(_)
-            | HostObject::NonceKey(_) => None,
+            | HostObject::Address(_) => None,
         };
         Ok(res)
     }
@@ -171,13 +167,7 @@ declare_host_object_type!(I256, I256Object, I256);
 declare_mem_host_object_type!(xdr::ScBytes, BytesObject, Bytes);
 declare_mem_host_object_type!(xdr::ScString, StringObject, String);
 declare_mem_host_object_type!(xdr::ScSymbol, SymbolObject, Symbol);
-declare_host_object_type!(
-    xdr::ScContractExecutable,
-    ContractExecutableObject,
-    ContractExecutable
-);
 declare_host_object_type!(xdr::ScAddress, AddressObject, Address);
-declare_host_object_type!(xdr::ScNonceKey, LedgerKeyNonceObject, NonceKey);
 
 impl Host {
     /// Moves a value of some type implementing [`HostObjectType`] into the host's

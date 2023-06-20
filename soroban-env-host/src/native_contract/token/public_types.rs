@@ -1,4 +1,4 @@
-pub(crate) use crate::native_contract::base_types::{BytesN, String};
+use crate::native_contract::base_types::{BytesN, String};
 use soroban_env_common::TryIntoVal;
 use soroban_native_sdk_macros::contracttype;
 

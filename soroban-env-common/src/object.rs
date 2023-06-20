@@ -134,16 +134,16 @@ impl<'a> ScValObjRef<'a> {
             | ScVal::U32(_)
             | ScVal::I32(_)
             | ScVal::StorageType(_)
-            | ScVal::LedgerKeyContractExecutable => None,
+            | ScVal::LedgerKeyContractInstance => None,
 
             // Always-large values are always ScValObject
             ScVal::Bytes(_)
             | ScVal::String(_)
             | ScVal::Vec(_)
             | ScVal::Map(_)
-            | ScVal::ContractExecutable(_)
             | ScVal::Address(_)
-            | ScVal::LedgerKeyNonce(_) => Some(ScValObjRef(value)),
+            | ScVal::LedgerKeyNonce(_)
+            | ScVal::ContractInstance(_) => Some(ScValObjRef(value)),
 
             // Other values are small or large depending on
             // their actual scalar value.

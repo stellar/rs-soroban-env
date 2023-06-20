@@ -395,7 +395,7 @@ where
                 )))
             }
 
-            Tag::LedgerKeyContractExecutable => Ok(ScVal::LedgerKeyContractExecutable),
+            Tag::LedgerKeyContractInstance => Ok(ScVal::LedgerKeyContractInstance),
 
             Tag::StorageType => Ok(ScVal::StorageType((val.get_major() as i32).try_into()?)),
 
@@ -412,9 +412,7 @@ where
             | Tag::SymbolObject
             | Tag::VecObject
             | Tag::MapObject
-            | Tag::ContractExecutableObject
-            | Tag::AddressObject
-            | Tag::LedgerKeyNonceObject => unreachable!(),
+            | Tag::AddressObject => unreachable!(),
             Tag::SmallCodeUpperBound
             | Tag::ObjectCodeLowerBound
             | Tag::ObjectCodeUpperBound
@@ -482,8 +480,8 @@ where
                 };
                 SymbolSmall::try_from_str(ss)?.into()
             }
-            ScVal::LedgerKeyContractExecutable => unsafe {
-                Val::from_body_and_tag(0, Tag::LedgerKeyContractExecutable)
+            ScVal::LedgerKeyContractInstance => unsafe {
+                Val::from_body_and_tag(0, Tag::LedgerKeyContractInstance)
             },
             ScVal::StorageType(_storage_type) => unsafe {
                 let major: i32 = (*_storage_type).into();
@@ -494,9 +492,9 @@ where
             | ScVal::String(_)
             | ScVal::Vec(_)
             | ScVal::Map(_)
-            | ScVal::ContractExecutable(_)
             | ScVal::Address(_)
-            | ScVal::LedgerKeyNonce(_) => unreachable!(),
+            | ScVal::LedgerKeyNonce(_)
+            | ScVal::ContractInstance(_) => unreachable!(),
         })
     }
 }

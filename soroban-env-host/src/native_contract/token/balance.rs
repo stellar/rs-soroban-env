@@ -1,6 +1,6 @@
 use crate::budget::AsBudget;
 use crate::host::Host;
-use crate::native_contract::base_types::Address;
+use crate::native_contract::base_types::{Address, BytesN};
 use crate::native_contract::contract_error::ContractError;
 use crate::native_contract::token::asset_info::read_asset_info;
 use crate::native_contract::token::public_types::AssetInfo;
@@ -12,7 +12,6 @@ use soroban_env_common::xdr::{
 };
 use soroban_env_common::{Env, StorageType, TryIntoVal};
 
-use super::public_types::BytesN;
 use super::storage_types::BalanceValue;
 
 /// This module handles all balance and authorization related logic for both

@@ -173,7 +173,7 @@ impl<E: Env> Compare<Val> for E {
 
                 Tag::SymbolSmall => delegate_compare_to_wrapper!(SymbolSmall, a, b, self),
 
-                Tag::LedgerKeyContractExecutable => Ok(Ordering::Equal),
+                Tag::LedgerKeyContractInstance => Ok(Ordering::Equal),
 
                 Tag::SmallCodeUpperBound => Ok(Ordering::Equal),
                 Tag::ObjectCodeLowerBound => Ok(Ordering::Equal),
@@ -196,9 +196,7 @@ impl<E: Env> Compare<Val> for E {
                 | Tag::SymbolObject
                 | Tag::VecObject
                 | Tag::MapObject
-                | Tag::ContractExecutableObject
-                | Tag::AddressObject
-                | Tag::LedgerKeyNonceObject => unreachable!(),
+                | Tag::AddressObject => unreachable!(),
 
                 Tag::ObjectCodeUpperBound => Ok(Ordering::Equal),
                 Tag::Bad => Ok(Ordering::Equal),

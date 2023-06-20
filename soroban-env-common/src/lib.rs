@@ -77,9 +77,7 @@ pub use stellar_xdr as xdr;
 // Val is the 64-bit transparent type.
 #[cfg(feature = "wasmi")]
 pub use val::WasmiMarshal;
-pub use val::{
-    AddressObject, ContractExecutableObject, LedgerKeyNonceObject, MapObject, VecObject,
-};
+pub use val::{AddressObject, MapObject, VecObject};
 pub use val::{Bool, Void};
 pub use val::{ConversionError, Tag, Val};
 

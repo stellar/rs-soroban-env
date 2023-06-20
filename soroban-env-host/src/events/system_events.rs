@@ -1,26 +1,7 @@
-use soroban_env_common::{xdr::ScContractExecutable, EnvBase, Symbol, TryFromVal, TryIntoVal};
-use soroban_native_sdk_macros::contracttype;
-
-use crate::{native_contract::base_types::BytesN, Host, HostError};
+use crate::{native_contract::common_types::ContractExecutable, Host, HostError};
+use soroban_env_common::{xdr, EnvBase, Symbol, TryFromVal, TryIntoVal};
 
 const CONTRACT_EXECUTABLE_UPDATE_TOPIC: &str = "executable_update";
-
-#[contracttype]
-enum ContractExecutable {
-    WasmRef(BytesN<32>),
-    Token,
-}
-
-impl ContractExecutable {
-    fn from_xdr(host: &Host, xdr: &ScContractExecutable) -> Result<Self, HostError> {
-        match xdr {
-            ScContractExecutable::WasmRef(wasm_hash) => Ok(ContractExecutable::WasmRef(
-                BytesN::<32>::from_slice(host, &wasm_hash.0)?,
-            )),
-            ScContractExecutable::Token => Ok(ContractExecutable::Token),
-        }
-    }
-}
 
 impl Host {
     // Emits a system event for updating the contract executable.
@@ -29,8 +10,8 @@ impl Host {
     // (`ContractExecutable` above).
     pub(crate) fn emit_update_contract_event(
         &self,
-        old_executable: &ScContractExecutable,
-        new_executable: &ScContractExecutable,
+        old_executable: &xdr::ContractExecutable,
+        new_executable: &xdr::ContractExecutable,
     ) -> Result<(), HostError> {
         self.system_event(
             self.vec_new_from_slice(&[
