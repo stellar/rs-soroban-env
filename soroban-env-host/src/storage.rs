@@ -10,7 +10,7 @@
 use std::rc::Rc;
 
 use soroban_env_common::xdr::{ScErrorCode, ScErrorType};
-use soroban_env_common::Compare;
+use soroban_env_common::{Compare, Val};
 
 use crate::budget::Budget;
 use crate::xdr::{LedgerEntry, LedgerKey};
@@ -19,6 +19,20 @@ use crate::{host::metered_map::MeteredOrdMap, HostError};
 
 pub type FootprintMap = MeteredOrdMap<Rc<LedgerKey>, AccessType, Budget>;
 pub type StorageMap = MeteredOrdMap<Rc<LedgerKey>, Option<Rc<LedgerEntry>>, Budget>;
+#[derive(Clone)]
+pub struct InstanceStorageMap {
+    pub map: MeteredOrdMap<Val, Val, Host>,
+    pub is_modified: bool,
+}
+
+impl InstanceStorageMap {
+    pub fn from_map(map: Vec<(Val, Val)>, host: &Host) -> Result<Self, HostError> {
+        Ok(Self {
+            map: MeteredOrdMap::from_map(map, host)?,
+            is_modified: false,
+        })
+    }
+}
 
 /// A helper type used by [Footprint] to designate which ways
 /// a given [LedgerKey] is accessed, or is allowed to be accessed,

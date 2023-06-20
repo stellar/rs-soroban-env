@@ -1,7 +1,7 @@
 use num_derive::FromPrimitive;
 use stellar_xdr::ContractDataDurability;
 
-use crate::declare_wasmi_marshal_for_enum;
+use crate::{declare_wasmi_marshal_for_enum, ConversionError};
 
 /// This is just a distinct enum local to the env interface that is used as
 /// an argument to storage functions. It doesn't correspond to any [`Val`] types,
@@ -14,11 +14,14 @@ pub enum StorageType {
     Instance = 2,
 }
 
-impl From<StorageType> for ContractDataDurability {
-    fn from(value: StorageType) -> Self {
+impl TryFrom<StorageType> for ContractDataDurability {
+    type Error = ConversionError;
+
+    fn try_from(value: StorageType) -> Result<Self, Self::Error> {
         match value {
-            StorageType::Temporary => ContractDataDurability::Temporary,
-            StorageType::Persistent | StorageType::Instance => ContractDataDurability::Persistent,
+            StorageType::Temporary => Ok(ContractDataDurability::Temporary),
+            StorageType::Persistent => Ok(ContractDataDurability::Persistent),
+            StorageType::Instance => Err(ConversionError {}),
         }
     }
 }

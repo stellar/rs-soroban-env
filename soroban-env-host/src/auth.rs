@@ -692,7 +692,7 @@ impl AuthorizationManager {
     // This should be called for every `Host` `push_frame`.
     pub(crate) fn push_frame(&mut self, host: &Host, frame: &Frame) -> Result<(), HostError> {
         let (contract_id, function_name) = match frame {
-            Frame::ContractVM(vm, fn_name, _) => {
+            Frame::ContractVM(vm, fn_name, ..) => {
                 (vm.contract_id.metered_clone(host.budget_ref())?, *fn_name)
             }
             // Skip the top-level host function stack frames as they don't
@@ -701,7 +701,7 @@ impl AuthorizationManager {
             // `push_create_contract_host_fn_frame`) functions instead to push
             // the frame with the required info.
             Frame::HostFunction(_) => return Ok(()),
-            Frame::Token(id, fn_name, _) => (id.metered_clone(host.budget_ref())?, *fn_name),
+            Frame::Token(id, fn_name, ..) => (id.metered_clone(host.budget_ref())?, *fn_name),
             #[cfg(any(test, feature = "testutils"))]
             Frame::TestContract(tc) => (tc.id.clone(), tc.func),
         };

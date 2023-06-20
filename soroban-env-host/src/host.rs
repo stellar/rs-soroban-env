@@ -13,7 +13,7 @@ use crate::{
     host_object::{HostMap, HostObject, HostObjectType, HostVec},
     impl_bignum_host_fns_rhs_u32, impl_wrapping_obj_from_num, impl_wrapping_obj_to_num,
     num::*,
-    storage::Storage,
+    storage::{InstanceStorageMap, Storage},
     xdr::{
         int128_helpers, AccountId, Asset, ContractCodeEntry, ContractCostType, ContractDataEntry,
         ContractEventType, ContractExecutable, CreateContractArgs, Duration, ExtensionPoint, Hash,
@@ -63,9 +63,9 @@ use crate::impl_bignum_host_fns;
 use crate::Compare;
 #[cfg(any(test, feature = "testutils"))]
 use crate::TryIntoVal;
-pub(crate) use frame::Frame;
 #[cfg(any(test, feature = "testutils"))]
-pub use frame::{ContractFunctionSet, TestContractFrame};
+pub use frame::ContractFunctionSet;
+pub(crate) use frame::Frame;
 #[cfg(any(test, feature = "testutils"))]
 use soroban_env_common::xdr::SorobanAuthorizedInvocation;
 
@@ -171,6 +171,11 @@ impl Host {
         *self.0.source_account.borrow_mut() = None;
     }
 
+    #[cfg(test)]
+    pub(crate) fn source_account_id(&self) -> Option<AccountId> {
+        self.0.source_account.borrow().clone()
+    }
+
     pub fn source_account_address(&self) -> Result<Option<AddressObject>, HostError> {
         if let Some(acc) = self.0.source_account.borrow().as_ref() {
             Ok(Some(self.add_host_object(ScAddress::Account(
@@ -262,6 +267,53 @@ impl Host {
         F: FnOnce(&mut Storage) -> Result<U, HostError>,
     {
         f(&mut self.0.storage.borrow_mut())
+    }
+
+    /// Immutable accessor to the instance storage of the currently running
+    /// contract.
+    /// Performs lazy initialization of instance storage on access.
+    pub fn with_instance_storage<F, U>(&self, f: F) -> Result<U, HostError>
+    where
+        F: FnOnce(&InstanceStorageMap) -> Result<U, HostError>,
+    {
+        // f(&mut self.0.storage.borrow_mut())
+        self.with_current_context_mut(|ctx| {
+            self.maybe_init_instance_storage(ctx)?;
+            f(ctx.storage.as_ref().ok_or_else(|| {
+                self.err(
+                    ScErrorType::Context,
+                    ScErrorCode::InternalError,
+                    "missing instance storage",
+                    &[],
+                )
+            })?)
+        })
+    }
+
+    /// Mutable accessor to the instance storage of the currently running
+    /// contract.
+    /// Performs lazy initialization of instance storage on access.
+    pub fn with_mut_instance_storage<F, U>(&self, f: F) -> Result<U, HostError>
+    where
+        F: FnOnce(&mut InstanceStorageMap) -> Result<U, HostError>,
+    {
+        self.with_current_context_mut(|ctx| {
+            self.maybe_init_instance_storage(ctx)?;
+            let storage = ctx.storage.as_mut().ok_or_else(|| {
+                self.err(
+                    ScErrorType::Context,
+                    ScErrorCode::InternalError,
+                    "missing instance storage",
+                    &[],
+                )
+            })?;
+            // Consider any mutable access to be modifying the instance storage.
+            // This way we would provide consistent footprint (RO for read-only
+            // ops using `with_instance_storage` and RW for potentially
+            // mutating ops using `with_mut_instance_storage`).
+            storage.is_modified = true;
+            f(storage)
+        })
     }
 
     /// Accept a _unique_ (refcount = 1) host reference and destroy the
@@ -653,6 +705,86 @@ impl Host {
                 &[sym.to_val()],
             ))
         }
+    }
+
+    fn put_contract_data_into_ledger(
+        &self,
+        k: Val,
+        v: Val,
+        t: StorageType,
+        f: Val,
+    ) -> Result<(), HostError> {
+        let flags: Option<u32> = if f.is_void() {
+            None
+        } else {
+            let val = self.u32_from_rawval_input("f", f)?;
+            if ((val as u64) & !MASK_CONTRACT_DATA_FLAGS_V20) != 0 {
+                return Err(self.err(
+                    ScErrorType::Value,
+                    ScErrorCode::InvalidInput,
+                    "invalid flags",
+                    &[],
+                ));
+            }
+            Some(val)
+        };
+
+        let durability: ContractDataDurability = t.try_into()?;
+        let key = self.contract_data_key_from_rawval(k, durability)?;
+        if self.0.storage.borrow_mut().has(&key, self.as_budget())? {
+            let mut current = (*self.0.storage.borrow_mut().get(&key, self.as_budget())?)
+                .metered_clone(&self.0.budget)?;
+
+            match current.data {
+                LedgerEntryData::ContractData(ref mut entry) => match entry.body {
+                    ContractDataEntryBody::DataEntry(ref mut data) => {
+                        data.val = self.from_host_val(v)?;
+                        if let Some(new_flags) = flags {
+                            data.flags = new_flags;
+                        }
+                    }
+                    _ => {
+                        return Err(self.err(
+                            ScErrorType::Storage,
+                            ScErrorCode::UnexpectedType,
+                            "expected DataEntry",
+                            &[],
+                        ));
+                    }
+                },
+                _ => {
+                    return Err(self.err(
+                        ScErrorType::Storage,
+                        ScErrorCode::UnexpectedType,
+                        "expected DataEntry",
+                        &[],
+                    ));
+                }
+            }
+            self.0
+                .storage
+                .borrow_mut()
+                .put(&key, &Rc::new(current), self.as_budget())?;
+        } else {
+            let body = ContractDataEntryBody::DataEntry(ContractDataEntryData {
+                val: self.from_host_val(v)?,
+                flags: flags.unwrap_or(0),
+            });
+            let data = LedgerEntryData::ContractData(ContractDataEntry {
+                contract: ScAddress::Contract(self.get_current_contract_id_internal()?),
+                key: self.from_host_val(k)?,
+                body,
+                expiration_ledger_seq: self.get_min_expiration_ledger(durability)?,
+                durability,
+            });
+            self.0.storage.borrow_mut().put(
+                &key,
+                &Host::ledger_entry_from_data(data),
+                self.as_budget(),
+            )?;
+        }
+
+        Ok(())
     }
 }
 
@@ -1750,75 +1882,15 @@ impl VmCallerEnv for Host {
         t: StorageType,
         f: Val,
     ) -> Result<Void, HostError> {
-        let flags: Option<u32> = if f.is_void() {
-            None
-        } else {
-            let val = self.u32_from_rawval_input("f", f)?;
-            if ((val as u64) & !MASK_CONTRACT_DATA_FLAGS_V20) != 0 {
-                return Err(self.err(
-                    ScErrorType::Value,
-                    ScErrorCode::InvalidInput,
-                    "invalid flags",
-                    &[],
-                ));
+        match t {
+            StorageType::Temporary | StorageType::Persistent => {
+                self.put_contract_data_into_ledger(k, v, t, f)?
             }
-            Some(val)
+            StorageType::Instance => self.with_mut_instance_storage(|s| {
+                s.map = s.map.insert(k, v, self)?;
+                Ok(())
+            })?,
         };
-
-        let durability: ContractDataDurability = t.try_into()?;
-        let key = self.contract_data_key_from_rawval(k, durability)?;
-        if self.0.storage.borrow_mut().has(&key, self.as_budget())? {
-            let mut current = (*self.0.storage.borrow_mut().get(&key, self.as_budget())?)
-                .metered_clone(&self.0.budget)?;
-
-            match current.data {
-                LedgerEntryData::ContractData(ref mut entry) => match entry.body {
-                    ContractDataEntryBody::DataEntry(ref mut data) => {
-                        data.val = self.from_host_val(v)?;
-                        if let Some(new_flags) = flags {
-                            data.flags = new_flags;
-                        }
-                    }
-                    _ => {
-                        return Err(self.err(
-                            ScErrorType::Storage,
-                            ScErrorCode::UnexpectedType,
-                            "expected DataEntry",
-                            &[],
-                        ));
-                    }
-                },
-                _ => {
-                    return Err(self.err(
-                        ScErrorType::Storage,
-                        ScErrorCode::UnexpectedType,
-                        "expected DataEntry",
-                        &[],
-                    ));
-                }
-            }
-            self.0
-                .storage
-                .borrow_mut()
-                .put(&key, &Rc::new(current), self.as_budget())?;
-        } else {
-            let body = ContractDataEntryBody::DataEntry(ContractDataEntryData {
-                val: self.from_host_val(v)?,
-                flags: flags.unwrap_or(0),
-            });
-            let data = LedgerEntryData::ContractData(ContractDataEntry {
-                contract: ScAddress::Contract(self.get_current_contract_id_internal()?),
-                key: self.from_host_val(k)?,
-                body,
-                expiration_ledger_seq: self.get_min_expiration_ledger(durability)?,
-                durability,
-            });
-            self.0.storage.borrow_mut().put(
-                &key,
-                &Host::ledger_entry_from_data(data),
-                self.as_budget(),
-            )?;
-        }
 
         Ok(Val::VOID)
     }
@@ -1830,8 +1902,16 @@ impl VmCallerEnv for Host {
         k: Val,
         t: StorageType,
     ) -> Result<Bool, HostError> {
-        let key = self.storage_key_from_rawval(k, t.try_into()?)?;
-        let res = self.0.storage.borrow_mut().has(&key, self.as_budget())?;
+        let res = match t {
+            StorageType::Temporary | StorageType::Persistent => {
+                let key = self.storage_key_from_rawval(k, t.try_into()?)?;
+                self.0.storage.borrow_mut().has(&key, self.as_budget())?
+            }
+            StorageType::Instance => {
+                self.with_instance_storage(|s| Ok(s.map.get(&k, self)?.is_some()))?
+            }
+        };
+
         Ok(Val::from_bool(res))
     }
 
@@ -1842,24 +1922,41 @@ impl VmCallerEnv for Host {
         k: Val,
         t: StorageType,
     ) -> Result<Val, HostError> {
-        let key = self.storage_key_from_rawval(k, t.try_into()?)?;
-        let entry = self.0.storage.borrow_mut().get(&key, self.as_budget())?;
-        match &entry.data {
-            LedgerEntryData::ContractData(ContractDataEntry { body, .. }) => match body {
-                ContractDataEntryBody::DataEntry(data) => Ok(self.to_host_val(&data.val)?),
-                _ => Err(self.err(
-                    ScErrorType::Storage,
-                    ScErrorCode::UnexpectedType,
-                    "expected DataEntry",
-                    &[],
-                )),
-            },
-            _ => Err(self.err(
-                ScErrorType::Storage,
-                ScErrorCode::UnexpectedType,
-                "expected contract data ledger entry",
-                &[],
-            )),
+        match t {
+            StorageType::Temporary | StorageType::Persistent => {
+                let key = self.storage_key_from_rawval(k, t.try_into()?)?;
+                let entry = self.0.storage.borrow_mut().get(&key, self.as_budget())?;
+                match &entry.data {
+                    LedgerEntryData::ContractData(ContractDataEntry { body, .. }) => match body {
+                        ContractDataEntryBody::DataEntry(data) => Ok(self.to_host_val(&data.val)?),
+                        _ => Err(self.err(
+                            ScErrorType::Storage,
+                            ScErrorCode::UnexpectedType,
+                            "expected DataEntry",
+                            &[],
+                        )),
+                    },
+                    _ => Err(self.err(
+                        ScErrorType::Storage,
+                        ScErrorCode::UnexpectedType,
+                        "expected contract data ledger entry",
+                        &[],
+                    )),
+                }
+            }
+            StorageType::Instance => self.with_instance_storage(|s| {
+                s.map
+                    .get(&k, self)?
+                    .ok_or_else(|| {
+                        self.err(
+                            ScErrorType::Storage,
+                            ScErrorCode::MissingValue,
+                            "key is missing from instance storage",
+                            &[k],
+                        )
+                    })
+                    .copied()
+            }),
         }
     }
 
@@ -1870,8 +1967,30 @@ impl VmCallerEnv for Host {
         k: Val,
         t: StorageType,
     ) -> Result<Void, HostError> {
-        let key = self.contract_data_key_from_rawval(k, t.try_into()?)?;
-        self.0.storage.borrow_mut().del(&key, self.as_budget())?;
+        match t {
+            StorageType::Temporary | StorageType::Persistent => {
+                let key = self.contract_data_key_from_rawval(k, t.try_into()?)?;
+                self.0.storage.borrow_mut().del(&key, self.as_budget())?;
+            }
+            StorageType::Instance => {
+                self.with_mut_instance_storage(|s| {
+                    s.map = s
+                        .map
+                        .remove(&k, self)?
+                        .ok_or_else(|| {
+                            self.err(
+                                ScErrorType::Storage,
+                                ScErrorCode::MissingValue,
+                                "key is missing from instance storage",
+                                &[k],
+                            )
+                        })?
+                        .0;
+                    Ok(())
+                })?;
+            }
+        }
+
         Ok(Val::VOID)
     }
 
@@ -1883,6 +2002,15 @@ impl VmCallerEnv for Host {
         t: StorageType,
         min: U32Val,
     ) -> Result<Void, HostError> {
+        if matches!(t, StorageType::Instance) {
+            return Err(self.err(
+                ScErrorType::Storage,
+                ScErrorCode::InvalidAction,
+                "instance storage should be bumped via `bump_instance` function only",
+                &[],
+            ))?;
+        }
+
         let key = self.contract_data_key_from_rawval(k, t.try_into()?)?;
 
         // The host doesn't load the key, but we want to make sure that
@@ -2548,11 +2676,11 @@ impl VmCallerEnv for Host {
         let mut outer = Vec::with_capacity(contexts.len());
         for context in contexts.iter() {
             let vals = match &context.frame {
-                Frame::ContractVM(vm, function, _) => {
+                Frame::ContractVM(vm, function, ..) => {
                     get_host_val_tuple(&vm.contract_id, &function)?
                 }
                 Frame::HostFunction(_) => continue,
-                Frame::Token(id, function, _) => get_host_val_tuple(id, function)?,
+                Frame::Token(id, function, ..) => get_host_val_tuple(id, function)?,
                 #[cfg(any(test, feature = "testutils"))]
                 Frame::TestContract(tc) => get_host_val_tuple(&tc.id, &tc.func)?,
             };
@@ -2609,7 +2737,7 @@ impl VmCallerEnv for Host {
     ) -> Result<Void, Self::Error> {
         let args = self.with_current_frame(|f| {
             let args = match f {
-                Frame::ContractVM(_, _, args) => args,
+                Frame::ContractVM(_, _, args, _) => args,
                 Frame::HostFunction(_) => {
                     return Err(self.err(
                         ScErrorType::Context,
@@ -2618,7 +2746,7 @@ impl VmCallerEnv for Host {
                         &[],
                     ))
                 }
-                Frame::Token(_, _, args) => args,
+                Frame::Token(_, _, args, _) => args,
                 #[cfg(any(test, feature = "testutils"))]
                 Frame::TestContract(c) => &c.args,
             };

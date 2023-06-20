@@ -12,7 +12,7 @@ mod dispatch;
 mod fuel_refillable;
 mod func_info;
 
-use crate::{budget::AsBudget, err, host::Frame, xdr::ContractCostType, HostError};
+use crate::{budget::AsBudget, err, xdr::ContractCostType, HostError};
 use std::{cell::RefCell, io::Cursor, rc::Rc};
 
 use super::{xdr::Hash, Host, Symbol, Val};
@@ -28,11 +28,6 @@ use wasmi::{Engine, FuelConsumptionMode, Func, Instance, Linker, Memory, Module,
 
 #[cfg(any(test, feature = "testutils"))]
 use crate::VmCaller;
-#[cfg(test)]
-use crate::{
-    xdr::{ScVal, ScVec},
-    TryFromVal,
-};
 #[cfg(any(test, feature = "testutils"))]
 use wasmi::{Caller, StoreContextMut};
 
@@ -281,85 +276,38 @@ impl Vm {
         func_sym: &Symbol,
         args: &[Val],
     ) -> Result<Val, HostError> {
-        host.charge_budget(ContractCostType::InvokeVmFunction, None)?;
-        host.with_frame(
-            Frame::ContractVM(self.clone(), *func_sym, args.to_vec()),
-            || {
-                let wasm_args: Vec<Value> = args
-                    .iter()
-                    .map(|i| Value::I64(i.get_payload() as i64))
-                    .collect();
-                let func_ss: SymbolStr = func_sym.try_into_val(host)?;
-                let ext = match self
-                    .instance
-                    .get_export(&*self.store.borrow(), func_ss.as_ref())
-                {
-                    None => {
-                        return Err(host.err(
-                            ScErrorType::WasmVm,
-                            ScErrorCode::MissingValue,
-                            "invoking unknown export",
-                            &[func_sym.to_val()],
-                        ))
-                    }
-                    Some(e) => e,
-                };
-                let func = match ext.into_func() {
-                    None => {
-                        return Err(host.err(
-                            ScErrorType::WasmVm,
-                            ScErrorCode::UnexpectedType,
-                            "export is not a function",
-                            &[func_sym.to_val()],
-                        ))
-                    }
-                    Some(e) => e,
-                };
-
-                self.wrapped_func_call(host, func_sym, &func, wasm_args.as_slice())
-            },
-        )
-    }
-
-    /// Invokes a function in the VM's module, converting externally stable XDR
-    /// [ScVal] arguments into [Host]-specific [Val]s and converting the
-    /// [Val] returned from the invocation back to an [ScVal].
-    ///
-    /// This function, like [Vm::new], is called as part of
-    /// [Host::invoke_function], and does not usually need to be called manually
-    /// from outside the crate.
-    //
-    // NB: This function has to take self by [Rc] because it stores self in
-    // a new Frame
-    #[cfg(test)]
-    pub(crate) fn invoke_function(
-        self: &Rc<Self>,
-        host: &Host,
-        func: &str,
-        args: &ScVec,
-    ) -> Result<ScVal, HostError> {
-        let func_sym = Symbol::try_from_val(host, &func)?;
-        let mut raw_args: Vec<Val> = Vec::new();
-        for scv in args.0.iter() {
-            raw_args.push(host.to_host_val(scv)?);
-        }
-        let raw_res = self.invoke_function_raw(host, &func_sym, raw_args.as_slice())?;
-        host.from_host_val(raw_res)
-    }
-
-    /// Returns a list of functions in the WASM module loaded into the [Vm].
-    pub fn functions(&self) -> Vec<VmFunction> {
-        let mut res = Vec::new();
-        for e in self.module.exports() {
-            if let wasmi::ExternType::Func(f) = e.ty() {
-                res.push(VmFunction {
-                    name: e.name().to_string(),
-                    param_count: f.params().len(),
-                    result_count: f.results().len(),
-                })
+        let wasm_args: Vec<Value> = args
+            .iter()
+            .map(|i| Value::I64(i.get_payload() as i64))
+            .collect();
+        let func_ss: SymbolStr = func_sym.try_into_val(host)?;
+        let ext = match self
+            .instance
+            .get_export(&*self.store.borrow(), func_ss.as_ref())
+        {
+            None => {
+                return Err(host.err(
+                    ScErrorType::WasmVm,
+                    ScErrorCode::MissingValue,
+                    "invoking unknown export",
+                    &[func_sym.to_val()],
+                ))
             }
-        }
-        res
+            Some(e) => e,
+        };
+        let func = match ext.into_func() {
+            None => {
+                return Err(host.err(
+                    ScErrorType::WasmVm,
+                    ScErrorCode::UnexpectedType,
+                    "export is not a function",
+                    &[func_sym.to_val()],
+                ))
+            }
+            Some(e) => e,
+        };
+
+        self.wrapped_func_call(host, func_sym, &func, wasm_args.as_slice())
     }
 
     fn module_custom_section(m: &Module, name: impl AsRef<str>) -> Option<&[u8]> {

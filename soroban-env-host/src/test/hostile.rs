@@ -1,19 +1,21 @@
-use soroban_env_common::xdr::{ScErrorCode, ScErrorType};
+use soroban_env_common::{
+    xdr::{ScErrorCode, ScErrorType},
+    Env, Symbol,
+};
 use soroban_test_wasms::HOSTILE;
 
-use crate::{
-    xdr::{Hash, ScVec},
-    Host, HostError, Vm,
-};
+use crate::{host_object::HostVec, Host, HostError};
 
 #[test]
 fn hostile_iloop_traps() -> Result<(), HostError> {
-    let host = Host::default();
-    let id: Hash = [0; 32].into();
-    let vm = Vm::new(&host, id, HOSTILE)?;
-    let args: ScVec = host.test_scvec::<i32>(&[])?;
+    let host = Host::test_host_with_recording_footprint();
+    let contract_id_obj = host.register_test_contract_wasm(HOSTILE);
 
-    let res = vm.invoke_function(&host, "iloop", &args);
+    let res = host.call(
+        contract_id_obj,
+        Symbol::try_from_small_str("iloop")?,
+        host.add_host_object(HostVec::new()?)?,
+    );
     assert!(HostError::result_matches_err(
         res,
         (ScErrorType::Budget, ScErrorCode::ExceededLimit)
@@ -23,12 +25,15 @@ fn hostile_iloop_traps() -> Result<(), HostError> {
 
 #[test]
 fn hostile_badack_traps() -> Result<(), HostError> {
-    let host = Host::default();
-    let id: Hash = [0; 32].into();
-    let vm = Vm::new(&host, id, HOSTILE)?;
-    let args: ScVec = host.test_scvec::<i32>(&[])?;
+    let host = Host::test_host_with_recording_footprint();
+    let contract_id_obj = host.register_test_contract_wasm(HOSTILE);
 
-    let res = vm.invoke_function(&host, "badack", &args);
+    let res = host.call(
+        contract_id_obj,
+        Symbol::try_from_small_str("badack")?,
+        host.add_host_object(HostVec::new()?)?,
+    );
+
     assert!(HostError::result_matches_err(
         res,
         (ScErrorType::Budget, ScErrorCode::ExceededLimit)
@@ -38,12 +43,15 @@ fn hostile_badack_traps() -> Result<(), HostError> {
 
 #[test]
 fn hostile_ssmash_traps() -> Result<(), HostError> {
-    let host = Host::default();
-    let id: Hash = [0; 32].into();
-    let vm = Vm::new(&host, id, HOSTILE)?;
-    let args: ScVec = host.test_scvec::<i32>(&[])?;
+    let host = Host::test_host_with_recording_footprint();
+    let contract_id_obj = host.register_test_contract_wasm(HOSTILE);
 
-    let res = vm.invoke_function(&host, "ssmash", &args);
+    let res = host.call(
+        contract_id_obj,
+        Symbol::try_from_small_str("ssmash")?,
+        host.add_host_object(HostVec::new()?)?,
+    );
+
     assert!(HostError::result_matches_err(
         res,
         (ScErrorType::WasmVm, ScErrorCode::InternalError)
@@ -53,12 +61,15 @@ fn hostile_ssmash_traps() -> Result<(), HostError> {
 
 #[test]
 fn hostile_oob1_traps() -> Result<(), HostError> {
-    let host = Host::default();
-    let id: Hash = [0; 32].into();
-    let vm = Vm::new(&host, id, HOSTILE)?;
-    let args: ScVec = host.test_scvec::<i32>(&[])?;
+    let host = Host::test_host_with_recording_footprint();
+    let contract_id_obj = host.register_test_contract_wasm(HOSTILE);
 
-    let res = vm.invoke_function(&host, "oob1", &args);
+    let res = host.call(
+        contract_id_obj,
+        Symbol::try_from_small_str("oob1")?,
+        host.add_host_object(HostVec::new()?)?,
+    );
+
     assert!(HostError::result_matches_err(
         res,
         (ScErrorType::WasmVm, ScErrorCode::InternalError)
@@ -68,12 +79,14 @@ fn hostile_oob1_traps() -> Result<(), HostError> {
 
 #[test]
 fn hostile_oob2_traps() -> Result<(), HostError> {
-    let host = Host::default();
-    let id: Hash = [0; 32].into();
-    let vm = Vm::new(&host, id, HOSTILE)?;
-    let args: ScVec = host.test_scvec::<i32>(&[])?;
+    let host = Host::test_host_with_recording_footprint();
+    let contract_id_obj = host.register_test_contract_wasm(HOSTILE);
 
-    let res = vm.invoke_function(&host, "oob2", &args);
+    let res = host.call(
+        contract_id_obj,
+        Symbol::try_from_small_str("oob2")?,
+        host.add_host_object(HostVec::new()?)?,
+    );
     assert!(HostError::result_matches_err(
         res,
         (ScErrorType::WasmVm, ScErrorCode::InternalError)
@@ -83,17 +96,20 @@ fn hostile_oob2_traps() -> Result<(), HostError> {
 
 #[test]
 fn hostile_objs_traps() -> Result<(), HostError> {
-    let host = Host::default();
-    let id: Hash = [0; 32].into();
-    let vm = Vm::new(&host, id, HOSTILE)?;
-    let args: ScVec = host.test_scvec::<i32>(&[])?;
+    let host = Host::test_host_with_recording_footprint();
+    let contract_id_obj = host.register_test_contract_wasm(HOSTILE);
 
     host.set_diagnostic_level(crate::DiagnosticLevel::Debug);
     host.with_budget(|b| Ok(b.reset_default()))?;
     host.with_budget(|b| Ok(b.reset_unlimited_cpu()))?;
 
     // This one should just run out of memory
-    let res = vm.invoke_function(&host, "objs", &args);
+    let res = host.call(
+        contract_id_obj,
+        Symbol::try_from_small_str("objs")?,
+        host.add_host_object(HostVec::new()?)?,
+    );
+
     assert!(HostError::result_matches_err(
         res,
         (ScErrorType::Budget, ScErrorCode::ExceededLimit)
