@@ -1,7 +1,7 @@
 use crate::{
     num::{i256_from_pieces, i256_into_pieces, u256_from_pieces, u256_into_pieces},
-    ConversionError, Env, I128Small, I256Small, I64Small, U128Small, U256Small, U64Small, U64Val,
-    Val, I256, U256,
+    ConversionError, DurationSmall, DurationVal, Env, I128Small, I256Small, I64Small,
+    TimepointSmall, TimepointVal, U128Small, U256Small, U64Small, U64Val, Val, I256, U256,
 };
 use core::fmt::Debug;
 use stellar_xdr::int128_helpers;
@@ -126,6 +126,68 @@ impl<E: Env> TryFromVal<E, u64> for U64Val {
             Ok(so.into())
         } else {
             Ok(env.obj_from_u64(v).map_err(|_| ConversionError)?.into())
+        }
+    }
+}
+
+// {Timepoint, Duration} <-> u64 conversions
+
+impl<E: Env> TryFromVal<E, TimepointVal> for u64 {
+    type Error = ConversionError;
+
+    fn try_from_val(env: &E, val: &TimepointVal) -> Result<Self, Self::Error> {
+        let val = *val;
+        if let Ok(so) = TimepointSmall::try_from(val) {
+            Ok(so.into())
+        } else {
+            let obj = val.try_into()?;
+            Ok(env.timepoint_obj_to_u64(obj).map_err(|_| ConversionError)?)
+        }
+    }
+}
+
+impl<E: Env> TryFromVal<E, u64> for TimepointVal {
+    type Error = ConversionError;
+
+    fn try_from_val(env: &E, v: &u64) -> Result<Self, Self::Error> {
+        let v = *v;
+        if let Ok(so) = TimepointSmall::try_from(v) {
+            Ok(so.into())
+        } else {
+            Ok(env
+                .timepoint_obj_from_u64(v)
+                .map_err(|_| ConversionError)?
+                .into())
+        }
+    }
+}
+
+impl<E: Env> TryFromVal<E, DurationVal> for u64 {
+    type Error = ConversionError;
+
+    fn try_from_val(env: &E, val: &DurationVal) -> Result<Self, Self::Error> {
+        let val = *val;
+        if let Ok(so) = DurationSmall::try_from(val) {
+            Ok(so.into())
+        } else {
+            let obj = val.try_into()?;
+            Ok(env.duration_obj_to_u64(obj).map_err(|_| ConversionError)?)
+        }
+    }
+}
+
+impl<E: Env> TryFromVal<E, u64> for DurationVal {
+    type Error = ConversionError;
+
+    fn try_from_val(env: &E, v: &u64) -> Result<Self, Self::Error> {
+        let v = *v;
+        if let Ok(so) = DurationSmall::try_from(v) {
+            Ok(so.into())
+        } else {
+            Ok(env
+                .duration_obj_from_u64(v)
+                .map_err(|_| ConversionError)?
+                .into())
         }
     }
 }

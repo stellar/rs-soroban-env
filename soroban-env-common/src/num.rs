@@ -160,6 +160,60 @@ impl TryFrom<i64> for I64Small {
     }
 }
 
+impl TryFrom<u64> for TimepointSmall {
+    type Error = ConversionError;
+    fn try_from(value: u64) -> Result<Self, Self::Error> {
+        if is_small_u64(value) {
+            Ok(Self(unsafe {
+                Val::from_body_and_tag(value, Tag::TimepointSmall)
+            }))
+        } else {
+            Err(ConversionError)
+        }
+    }
+}
+
+impl TryFrom<u64> for DurationSmall {
+    type Error = ConversionError;
+    fn try_from(value: u64) -> Result<Self, Self::Error> {
+        if is_small_u64(value) {
+            Ok(Self(unsafe {
+                Val::from_body_and_tag(value, Tag::DurationSmall)
+            }))
+        } else {
+            Err(ConversionError)
+        }
+    }
+}
+
+impl TryFrom<TimepointSmall> for ScVal {
+    type Error = ConversionError;
+    fn try_from(value: TimepointSmall) -> Result<Self, ConversionError> {
+        Ok(ScVal::Timepoint(value.as_val().get_body().into()))
+    }
+}
+
+impl TryFrom<&TimepointSmall> for ScVal {
+    type Error = ConversionError;
+    fn try_from(value: &TimepointSmall) -> Result<Self, ConversionError> {
+        (*value).try_into()
+    }
+}
+
+impl TryFrom<DurationSmall> for ScVal {
+    type Error = ConversionError;
+    fn try_from(value: DurationSmall) -> Result<Self, ConversionError> {
+        Ok(ScVal::Duration(value.as_val().get_body().into()))
+    }
+}
+
+impl TryFrom<&DurationSmall> for ScVal {
+    type Error = ConversionError;
+    fn try_from(value: &DurationSmall) -> Result<Self, ConversionError> {
+        (*value).try_into()
+    }
+}
+
 impl TryFrom<u128> for U128Small {
     type Error = ConversionError;
     fn try_from(value: u128) -> Result<Self, Self::Error> {
