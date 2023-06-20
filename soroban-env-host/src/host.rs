@@ -2533,9 +2533,11 @@ impl VmCallerEnv for Host {
         let contexts = self.0.context.borrow();
 
         let get_host_val_tuple = |id: &Hash, function: &Symbol| -> Result<[Val; 2], HostError> {
-            let id_val = self.add_host_object(self.scbytes_from_hash(id)?)?.into();
+            let addr_val = self
+                .add_host_object(ScAddress::Contract(id.metered_clone(self.as_budget())?))?
+                .into();
             let function_val = (*function).into();
-            Ok([id_val, function_val])
+            Ok([addr_val, function_val])
         };
 
         let mut outer = Vec::with_capacity(contexts.len());
