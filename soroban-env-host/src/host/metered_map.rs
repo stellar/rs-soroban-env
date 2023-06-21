@@ -115,10 +115,8 @@ where
             // the clone into one (when A::IS_SHALLOW==true).
             let map: Vec<(K, V)> = iter.collect();
             map.charge_deep_clone(ctx.as_budget())?;
-            Ok(Self {
-                map,
-                ctx: Default::default(),
-            })
+            // Delegate to from_map here to recheck sort order.
+            Self::from_map(map, ctx)
         } else {
             // This is a logic error, we should never get here.
             Err((ScErrorType::Object, ScErrorCode::InternalError).into())
