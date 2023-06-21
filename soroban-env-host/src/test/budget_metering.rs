@@ -155,10 +155,11 @@ fn map_insert_key_vec_obj() -> Result<(), HostError> {
     host.map_put(m, k1.into(), v1)?;
 
     host.with_budget(|budget| {
-        // 4 = 1 visit map + 1 visit k1 + (obj_comp which needs to) 1 visit both k0 and k1
-        assert_eq!(budget.get_tracker(ContractCostType::VisitObject).0, 4);
-        // upper bound of number of map-accesses, counting both binary-search and point-access.
-        assert_eq!(budget.get_tracker(ContractCostType::MapEntry).0, 5);
+        // 6 = 1 visit map + 1 visit k1 + (obj_cmp which needs to) 1 visit both k0 and k1 during lookup,
+        // and then 2 more to validate order of resulting map.
+        assert_eq!(budget.get_tracker(ContractCostType::VisitObject).0, 6);
+        // upper bound of number of map-accesses, counting both binary-search, point-access and validate-scan.
+        assert_eq!(budget.get_tracker(ContractCostType::MapEntry).0, 8);
         Ok(())
     })?;
 
