@@ -560,7 +560,6 @@ impl Host {
             | ScVal::Error(_)
             | ScVal::U32(_)
             | ScVal::I32(_)
-            | ScVal::StorageType(_)
             | ScVal::LedgerKeyNonce(_)
             | ScVal::ContractInstance(_)
             | ScVal::LedgerKeyContractInstance => Err(err!(

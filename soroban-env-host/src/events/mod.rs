@@ -90,9 +90,6 @@ fn display_scval(scv: &ScVal, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Resu
         ScVal::LedgerKeyNonce(n) => {
             write!(f, "LedgerKeyNonce({})", n.nonce)
         }
-        ScVal::StorageType(t) => {
-            write!(f, "StorageType({})", t)
-        }
         ScVal::ContractInstance(ScContractInstance {
             executable: ContractExecutable::Wasm(hash),
             ..

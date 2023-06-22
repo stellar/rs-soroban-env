@@ -487,7 +487,8 @@ where
             | ScVal::Vec(_)
             | ScVal::Map(_)
             | ScVal::Address(_)
-            | ScVal::LedgerKeyNonce(_) => unreachable!(),
+            | ScVal::LedgerKeyNonce(_)
+            | ScVal::ContractInstance(_) => unreachable!(),
         })
     }
 }

@@ -307,7 +307,6 @@ impl Compare<ScVal> for Budget {
             | (Map(_), _)
             | (Address(_), _)
             | (LedgerKeyContractInstance, _)
-            | (StorageType(_), _)
             | (LedgerKeyNonce(_), _)
             | (ContractInstance(_), _) => Ok(a.cmp(b)),
         }
@@ -327,8 +326,8 @@ impl Compare<LedgerKey> for Budget {
             (ClaimableBalance(a), ClaimableBalance(b)) => self.compare(&a, &b),
             (LiquidityPool(a), LiquidityPool(b)) => self.compare(&a, &b),
             (ContractData(a), ContractData(b)) => self.compare(
-                &(&a.contract, &a.key, &a.type_, &a.body_type),
-                &(&b.contract, &b.key, &b.type_, &b.body_type),
+                &(&a.contract, &a.key, &a.durability, &a.body_type),
+                &(&b.contract, &b.key, &b.durability, &b.body_type),
             ),
             (ContractCode(a), ContractCode(b)) => self.compare(&a, &b),
             (ConfigSetting(a), ConfigSetting(b)) => self.compare(&a, &b),
@@ -376,14 +375,14 @@ impl Compare<LedgerEntryData> for Budget {
                 &(
                     &a.contract,
                     &a.key,
-                    &a.type_,
+                    &a.durability,
                     &a.body,
                     &a.expiration_ledger_seq,
                 ),
                 &(
                     &b.contract,
                     &b.key,
-                    &b.type_,
+                    &b.durability,
                     &b.body,
                     &b.expiration_ledger_seq,
                 ),
