@@ -48,8 +48,8 @@ pub use prng::{Seed, SEED_BYTES};
 mod validity;
 pub use error::HostError;
 use soroban_env_common::xdr::{
-    ContractCodeEntryBody, ContractDataEntryBody, ContractDataEntryData, ContractDataType,
-    ContractIdPreimage, ContractIdPreimageFromAddress, ContractLedgerEntryType, ScContractInstance,
+    ContractCodeEntryBody, ContractDataDurability, ContractDataEntryBody, ContractDataEntryData,
+    ContractEntryBodyType, ContractIdPreimage, ContractIdPreimageFromAddress, ScContractInstance,
     ScErrorCode, MASK_CONTRACT_DATA_FLAGS_V20,
 };
 
@@ -560,7 +560,7 @@ impl Host {
         let hash_obj = self.add_host_object(self.scbytes_from_slice(hash_bytes.as_slice())?)?;
         let code_key = Rc::new(LedgerKey::ContractCode(LedgerKeyContractCode {
             hash: Hash(hash_bytes.metered_clone(self.budget_ref())?),
-            le_type: ContractLedgerEntryType::DataEntry,
+            body_type: ContractEntryBodyType::DataEntry,
         }));
         if !self
             .0
@@ -583,7 +583,7 @@ impl Host {
                     body,
                     ext: ExtensionPoint::V0,
                     expiration_ledger_seq: self
-                        .get_min_expiration_ledger(ContractDataType::Persistent)?,
+                        .get_min_expiration_ledger(ContractDataDurability::Persistent)?,
                 });
                 storage.put(
                     &code_key,
@@ -1765,8 +1765,8 @@ impl VmCallerEnv for Host {
             Some(val)
         };
 
-        let storage_type: ContractDataType = t.try_into()?;
-        let key = self.contract_data_key_from_rawval(k, storage_type)?;
+        let durability: ContractDataDurability = t.try_into()?;
+        let key = self.contract_data_key_from_rawval(k, durability)?;
         if self.0.storage.borrow_mut().has(&key, self.as_budget())? {
             let mut current = (*self.0.storage.borrow_mut().get(&key, self.as_budget())?)
                 .metered_clone(&self.0.budget)?;
@@ -1810,8 +1810,8 @@ impl VmCallerEnv for Host {
                 contract: ScAddress::Contract(self.get_current_contract_id_internal()?),
                 key: self.from_host_val(k)?,
                 body,
-                expiration_ledger_seq: self.get_min_expiration_ledger(storage_type)?,
-                type_: storage_type,
+                expiration_ledger_seq: self.get_min_expiration_ledger(durability)?,
+                durability,
             });
             self.0.storage.borrow_mut().put(
                 &key,

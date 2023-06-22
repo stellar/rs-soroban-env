@@ -1019,6 +1019,9 @@ dependencies = [
  "arbitrary",
  "crate-git-revision",
  "ethnum",
+ "num-derive",
+ "num-integer",
+ "num-traits",
  "serde",
  "soroban-env-macros",
  "soroban-wasmi",
@@ -1207,6 +1210,7 @@ dependencies = [
 [[package]]
 name = "stellar-xdr"
 version = "0.0.16"
+source = "git+https://github.com/stellar/rs-stellar-xdr?rev=518171b12025283cac1233c7de8e4c20088d95b5#518171b12025283cac1233c7de8e4c20088d95b5"
 dependencies = [
  "arbitrary",
  "base64 0.13.1",

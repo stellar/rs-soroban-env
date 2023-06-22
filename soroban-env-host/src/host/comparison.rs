@@ -3,8 +3,8 @@ use core::cmp::{min, Ordering};
 use soroban_env_common::{
     xdr::{
         AccountEntry, AccountId, ClaimableBalanceEntry, ConfigSettingEntry, ContractCodeEntryBody,
-        ContractCostType, ContractDataEntryBody, ContractDataEntryData, ContractDataType,
-        ContractExecutable, ContractLedgerEntryType, CreateContractArgs, DataEntry, Duration,
+        ContractCostType, ContractDataDurability, ContractDataEntryBody, ContractDataEntryData,
+        ContractEntryBodyType, ContractExecutable, CreateContractArgs, DataEntry, Duration,
         ExtensionPoint, Hash, LedgerEntry, LedgerEntryData, LedgerEntryExt, LedgerKey,
         LedgerKeyAccount, LedgerKeyClaimableBalance, LedgerKeyConfigSetting, LedgerKeyContractCode,
         LedgerKeyData, LedgerKeyLiquidityPool, LedgerKeyOffer, LedgerKeyTrustLine,
@@ -187,8 +187,8 @@ impl_compare_fixed_size_ord_type!(ScAddress);
 impl_compare_fixed_size_ord_type!(ScNonceKey);
 impl_compare_fixed_size_ord_type!(PublicKey);
 impl_compare_fixed_size_ord_type!(TrustLineAsset);
-impl_compare_fixed_size_ord_type!(ContractDataType);
-impl_compare_fixed_size_ord_type!(ContractLedgerEntryType);
+impl_compare_fixed_size_ord_type!(ContractDataDurability);
+impl_compare_fixed_size_ord_type!(ContractEntryBodyType);
 
 impl_compare_fixed_size_ord_type!(LedgerKeyAccount);
 impl_compare_fixed_size_ord_type!(LedgerKeyTrustLine);
@@ -307,7 +307,6 @@ impl Compare<ScVal> for Budget {
             | (Map(_), _)
             | (Address(_), _)
             | (LedgerKeyContractInstance, _)
-            | (StorageType(_), _)
             | (LedgerKeyNonce(_), _)
             | (ContractInstance(_), _) => Ok(a.cmp(b)),
         }
@@ -327,8 +326,8 @@ impl Compare<LedgerKey> for Budget {
             (ClaimableBalance(a), ClaimableBalance(b)) => self.compare(&a, &b),
             (LiquidityPool(a), LiquidityPool(b)) => self.compare(&a, &b),
             (ContractData(a), ContractData(b)) => self.compare(
-                &(&a.contract, &a.key, &a.type_, &a.le_type),
-                &(&b.contract, &b.key, &b.type_, &b.le_type),
+                &(&a.contract, &a.key, &a.durability, &a.body_type),
+                &(&b.contract, &b.key, &b.durability, &b.body_type),
             ),
             (ContractCode(a), ContractCode(b)) => self.compare(&a, &b),
             (ConfigSetting(a), ConfigSetting(b)) => self.compare(&a, &b),
@@ -376,14 +375,14 @@ impl Compare<LedgerEntryData> for Budget {
                 &(
                     &a.contract,
                     &a.key,
-                    &a.type_,
+                    &a.durability,
                     &a.body,
                     &a.expiration_ledger_seq,
                 ),
                 &(
                     &b.contract,
                     &b.key,
-                    &b.type_,
+                    &b.durability,
                     &b.body,
                     &b.expiration_ledger_seq,
                 ),
@@ -461,7 +460,6 @@ mod tests {
     use crate::xdr::ScVal;
     use crate::{Compare, Host, Tag, TryFromVal, Val};
     use itertools::Itertools;
-    use soroban_env_common::StorageType;
 
     #[test]
     fn test_scvec_unequal_lengths() {
@@ -805,7 +803,6 @@ mod tests {
                 &ScVal::Address(xdr::ScAddress::Contract(xdr::Hash([0; 32]))),
             )
             .unwrap(),
-            Tag::StorageType => Val::from(StorageType::PERSISTENT),
             Tag::ObjectCodeUpperBound => panic!(),
             Tag::Bad => panic!(),
             // NB: do not add a fallthrough case here if new Tag variants are added.

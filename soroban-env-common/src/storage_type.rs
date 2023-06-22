@@ -1,62 +1,26 @@
-use core::cmp::Ordering;
+use num_derive::FromPrimitive;
+use stellar_xdr::ContractDataDurability;
 
-use stellar_xdr::ContractDataType;
+use crate::declare_wasmi_marshal_for_enum;
 
-use crate::{declare_tag_based_wrapper, Compare, Env};
-
-declare_tag_based_wrapper!(StorageType);
-
-/// Wrapper for a [Val] that is tagged with [Tag::StorageType].
-/// The major value corresponds to the integer representation of the
-/// [stellar_xdr::ContractDataType] enum.
-impl StorageType {
-    #[inline(always)]
-    pub const fn get_code(&self) -> u32 {
-        self.as_val().get_major()
-    }
-
-    pub const TEMPORARY: StorageType =
-        unsafe { StorageType::from_major_minor(ContractDataType::Temporary as u32, 0) };
-
-    pub const PERSISTENT: StorageType =
-        unsafe { StorageType::from_major_minor(ContractDataType::Persistent as u32, 0) };
+/// This is just a distinct enum local to the env interface that is used as
+/// an argument to storage functions. It doesn't correspond to any [`Val`] types,
+/// and is passed by direct marshalling as a u64.
+#[repr(u64)]
+#[derive(Debug, FromPrimitive, PartialEq, Eq, Clone)]
+pub enum StorageType {
+    Temporary = 0,
+    Persistent = 1,
+    Instance = 2,
 }
 
-impl TryFrom<StorageType> for ContractDataType {
-    type Error = stellar_xdr::Error;
-    fn try_from(st: StorageType) -> Result<Self, Self::Error> {
-        ContractDataType::try_from(st.get_code() as i32)
+impl From<StorageType> for ContractDataDurability {
+    fn from(value: StorageType) -> Self {
+        match value {
+            StorageType::Temporary => ContractDataDurability::Temporary,
+            StorageType::Persistent | StorageType::Instance => ContractDataDurability::Persistent,
+        }
     }
 }
 
-impl PartialEq for StorageType {
-    #[inline(always)]
-    fn eq(&self, other: &Self) -> bool {
-        self.as_val().get_payload() == other.as_val().get_payload()
-    }
-}
-
-impl Eq for StorageType {}
-
-impl PartialOrd for StorageType {
-    #[inline(always)]
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for StorageType {
-    #[inline(always)]
-    fn cmp(&self, other: &Self) -> Ordering {
-        let self_major = self.as_val().get_major();
-        let other_major = other.as_val().get_major();
-        self_major.cmp(&other_major)
-    }
-}
-
-impl<E: Env> Compare<StorageType> for E {
-    type Error = E::Error;
-    fn compare(&self, a: &StorageType, b: &StorageType) -> Result<Ordering, Self::Error> {
-        Ok(a.cmp(&b))
-    }
-}
+declare_wasmi_marshal_for_enum!(StorageType);

@@ -1,8 +1,8 @@
 use ed25519_dalek::Keypair;
 use rand::{thread_rng, Rng};
 use soroban_env_common::xdr::{
-    AccountId, ContractDataType, HashIdPreimage, HashIdPreimageSorobanAuthorization, PublicKey,
-    ScAddress, ScNonceKey, ScSymbol, ScVal, ScVec, SorobanAddressCredentials,
+    AccountId, ContractDataDurability, HashIdPreimage, HashIdPreimageSorobanAuthorization,
+    PublicKey, ScAddress, ScNonceKey, ScSymbol, ScVal, ScVec, SorobanAddressCredentials,
     SorobanAuthorizationEntry, SorobanAuthorizedContractFunction, SorobanAuthorizedFunction,
     SorobanAuthorizedInvocation, SorobanCredentials, Uint256,
 };
@@ -209,7 +209,7 @@ impl AuthTest {
         let nonce_key = self.host.storage_key_for_address(
             address.to_sc_address().unwrap(),
             nonce_key_scval,
-            ContractDataType::Temporary,
+            ContractDataDurability::Temporary,
         );
         self.host
             .with_mut_storage(|storage| {

@@ -310,7 +310,7 @@ mod test_footprint {
 
     use super::*;
     use crate::budget::Budget;
-    use crate::xdr::{ContractDataType, ContractLedgerEntryType, LedgerKeyContractData, ScVal};
+    use crate::xdr::{ContractDataDurability, ContractEntryBodyType, LedgerKeyContractData, ScVal};
 
     #[test]
     fn footprint_record_access() -> Result<(), HostError> {
@@ -321,8 +321,8 @@ mod test_footprint {
         let key = Rc::new(LedgerKey::ContractData(LedgerKeyContractData {
             contract: ScAddress::Contract([0; 32].into()),
             key: ScVal::I32(0),
-            type_: ContractDataType::Persistent,
-            le_type: ContractLedgerEntryType::DataEntry,
+            durability: ContractDataDurability::Persistent,
+            body_type: ContractEntryBodyType::DataEntry,
         }));
         fp.record_access(&key, AccessType::ReadOnly, &budget)?;
         assert_eq!(fp.0.contains_key::<LedgerKey>(&key, &budget)?, true);
@@ -350,24 +350,24 @@ mod test_footprint {
         let key = Rc::new(LedgerKey::ContractData(LedgerKeyContractData {
             contract: ScAddress::Contract([0; 32].into()),
             key: ScVal::I32(0),
-            type_: ContractDataType::Persistent,
-            le_type: ContractLedgerEntryType::DataEntry,
+            durability: ContractDataDurability::Persistent,
+            body_type: ContractEntryBodyType::DataEntry,
         }));
 
         // Key not in footprint. Only difference is type_
         let key2 = Rc::new(LedgerKey::ContractData(LedgerKeyContractData {
             contract: ScAddress::Contract([0; 32].into()),
             key: ScVal::I32(0),
-            type_: ContractDataType::Temporary,
-            le_type: ContractLedgerEntryType::DataEntry,
+            durability: ContractDataDurability::Temporary,
+            body_type: ContractEntryBodyType::DataEntry,
         }));
 
-        // Key not in footprint. Only difference is le_type
+        // Key not in footprint. Only difference is body_type
         let key3 = Rc::new(LedgerKey::ContractData(LedgerKeyContractData {
             contract: ScAddress::Contract([0; 32].into()),
             key: ScVal::I32(0),
-            type_: ContractDataType::Persistent,
-            le_type: ContractLedgerEntryType::ExpirationExtension,
+            durability: ContractDataDurability::Persistent,
+            body_type: ContractEntryBodyType::ExpirationExtension,
         }));
 
         let om = [(Rc::clone(&key), AccessType::ReadOnly)].into();
@@ -395,8 +395,8 @@ mod test_footprint {
         let key = Rc::new(LedgerKey::ContractData(LedgerKeyContractData {
             contract: ScAddress::Contract([0; 32].into()),
             key: ScVal::I32(0),
-            type_: ContractDataType::Persistent,
-            le_type: ContractLedgerEntryType::DataEntry,
+            durability: ContractDataDurability::Persistent,
+            body_type: ContractEntryBodyType::DataEntry,
         }));
         let res = fp.enforce_access(&key, AccessType::ReadOnly, &budget);
         assert!(HostError::result_matches_err(
@@ -412,8 +412,8 @@ mod test_footprint {
         let key = Rc::new(LedgerKey::ContractData(LedgerKeyContractData {
             contract: ScAddress::Contract([0; 32].into()),
             key: ScVal::I32(0),
-            type_: ContractDataType::Persistent,
-            le_type: ContractLedgerEntryType::DataEntry,
+            durability: ContractDataDurability::Persistent,
+            body_type: ContractEntryBodyType::DataEntry,
         }));
         let om = [(Rc::clone(&key), AccessType::ReadOnly)].into();
         let mom = MeteredOrdMap::from_map(om, &budget)?;

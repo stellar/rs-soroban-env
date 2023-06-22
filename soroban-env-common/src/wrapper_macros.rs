@@ -181,6 +181,30 @@ macro_rules! impl_rawval_wrapper_base {
     };
 }
 
+/// Declares wasmi-marshalling code for on an enum that derives
+/// [`num_traits::FromPrimitive`].
+#[doc(hidden)]
+#[macro_export]
+macro_rules! declare_wasmi_marshal_for_enum {
+    ($ENUM:ident) => {
+        #[cfg(feature = "wasmi")]
+        impl $crate::WasmiMarshal for $ENUM {
+            fn try_marshal_from_value(v: wasmi::Value) -> Option<Self> {
+                if let wasmi::Value::I64(i) = v {
+                    use num_traits::FromPrimitive;
+                    $ENUM::from_i64(i)
+                } else {
+                    None
+                }
+            }
+
+            fn marshal_from_self(self) -> wasmi::Value {
+                wasmi::Value::I64(self as i64)
+            }
+        }
+    };
+}
+
 /// Declares [`Val`]-wrapping type [`Tag`] where the wrapper _has the same
 /// name_ as a Tag::case and being-that-wrapper is identical to having-that-tag.
 #[doc(hidden)]

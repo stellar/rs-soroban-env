@@ -1334,7 +1334,7 @@ impl Host {
         let nonce_key = self.storage_key_for_address(
             sc_address.metered_clone(self.budget_ref())?,
             nonce_key_scval.metered_clone(self.budget_ref())?,
-            xdr::ContractDataType::Temporary,
+            xdr::ContractDataDurability::Temporary,
         );
         self.with_mut_storage(|storage| {
             if storage.has(&nonce_key, self.budget_ref())? {
@@ -1354,7 +1354,7 @@ impl Host {
                 key: nonce_key_scval,
                 body,
                 expiration_ledger_seq: expiration_ledger,
-                type_: xdr::ContractDataType::Temporary,
+                durability: xdr::ContractDataDurability::Temporary,
             });
             let entry = LedgerEntry {
                 last_modified_ledger_seq: 0,

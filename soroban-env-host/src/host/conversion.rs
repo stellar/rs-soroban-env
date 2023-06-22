@@ -10,7 +10,7 @@ use soroban_env_common::num::{
     i256_from_pieces, i256_into_pieces, u256_from_pieces, u256_into_pieces,
 };
 use soroban_env_common::xdr::{
-    self, int128_helpers, AccountId, ContractDataType, ContractLedgerEntryType, Int128Parts,
+    self, int128_helpers, AccountId, ContractDataDurability, ContractEntryBodyType, Int128Parts,
     Int256Parts, ScAddress, ScBytes, ScErrorCode, ScErrorType, ScMap, ScMapEntry, UInt128Parts,
     UInt256Parts,
 };
@@ -155,47 +155,53 @@ impl Host {
     pub fn storage_key_from_rawval(
         &self,
         k: Val,
-        data_type: ContractDataType,
+        durability: ContractDataDurability,
     ) -> Result<Rc<LedgerKey>, HostError> {
-        self.storage_key_from_scval(self.from_host_val(k)?, data_type)
+        self.storage_key_from_scval(self.from_host_val(k)?, durability)
     }
 
     pub(crate) fn storage_key_for_contract(
         &self,
         contract_id: Hash,
         key: ScVal,
-        data_type: ContractDataType,
+        durability: ContractDataDurability,
     ) -> Rc<LedgerKey> {
-        self.storage_key_for_address(ScAddress::Contract(contract_id), key, data_type)
+        self.storage_key_for_address(ScAddress::Contract(contract_id), key, durability)
     }
 
     pub(crate) fn storage_key_for_address(
         &self,
         contract_address: ScAddress,
         key: ScVal,
-        data_type: ContractDataType,
+        durability: ContractDataDurability,
     ) -> Rc<LedgerKey> {
         Rc::new(LedgerKey::ContractData(LedgerKeyContractData {
             contract: contract_address,
             key,
-            type_: data_type,
-            le_type: ContractLedgerEntryType::DataEntry,
+            durability: durability,
+            body_type: ContractEntryBodyType::DataEntry,
         }))
     }
 
     pub fn storage_key_from_scval(
         &self,
         key: ScVal,
-        data_type: ContractDataType,
+        durability: ContractDataDurability,
     ) -> Result<Rc<LedgerKey>, HostError> {
-        Ok(self.storage_key_for_contract(self.get_current_contract_id_internal()?, key, data_type))
+        Ok(
+            self.storage_key_for_contract(
+                self.get_current_contract_id_internal()?,
+                key,
+                durability,
+            ),
+        )
     }
 
     // Notes on metering: covered by components.
     pub fn contract_data_key_from_rawval(
         &self,
         k: Val,
-        data_type: ContractDataType,
+        durability: ContractDataDurability,
     ) -> Result<Rc<LedgerKey>, HostError> {
         let key_scval = self.from_host_val(k)?;
         if let ScVal::LedgerKeyContractInstance | ScVal::LedgerKeyNonce(_) = key_scval {
@@ -206,7 +212,7 @@ impl Host {
                 &[k],
             ));
         }
-        self.storage_key_from_scval(key_scval, data_type)
+        self.storage_key_from_scval(key_scval, durability)
     }
 
     /// Converts a binary search result into a u64. `res` is `Some(index)`
@@ -554,7 +560,6 @@ impl Host {
             | ScVal::Error(_)
             | ScVal::U32(_)
             | ScVal::I32(_)
-            | ScVal::StorageType(_)
             | ScVal::LedgerKeyNonce(_)
             | ScVal::ContractInstance(_)
             | ScVal::LedgerKeyContractInstance => Err(err!(

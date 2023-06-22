@@ -97,11 +97,8 @@ pub enum Tag {
     /// [stellar_xdr::ScVal::LedgerKeyContractInstance]
     LedgerKeyContractInstance = 15,
 
-    /// Tag for a [Val] that corresponds to [stellar_xdr::ScVal::StorageType]
-    StorageType = 16,
-
     /// Code delimiting the upper boundary of "small" types.
-    SmallCodeUpperBound = 17,
+    SmallCodeUpperBound = 16,
 
     /// Tag reserved to indicate boundary between tags for "small" types with
     /// their payload packed into the remaining 56 bits of the [Val] and
@@ -224,7 +221,6 @@ impl Tag {
             Tag::MapObject => Some(ScValType::Map),
             Tag::AddressObject => Some(ScValType::Address),
             Tag::ObjectCodeUpperBound => None,
-            Tag::StorageType => Some(ScValType::StorageType),
             Tag::Bad => None,
         }
     }
@@ -718,7 +714,6 @@ impl Debug for Val {
             Tag::VecObject => fmt_obj("Vec", self, f),
             Tag::MapObject => fmt_obj("Map", self, f),
             Tag::AddressObject => fmt_obj("Address", self, f),
-            Tag::StorageType => write!(f, "StorageType({})", self.get_body()),
 
             Tag::Bad
             | Tag::SmallCodeUpperBound

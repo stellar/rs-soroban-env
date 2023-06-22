@@ -7,14 +7,14 @@ use crate::{
     storage::AccessType,
     xdr::{
         AccountEntry, AccountId, BytesM, ClaimableBalanceEntry, ConfigSettingEntry,
-        ContractCodeEntry, ContractDataType, ContractEvent, ContractExecutable, ContractIdPreimage,
-        ContractLedgerEntryType, CreateContractArgs, DataEntry, Duration, ExtensionPoint, Hash,
-        LedgerEntry, LedgerEntryExt, LedgerKey, LedgerKeyAccount, LedgerKeyClaimableBalance,
-        LedgerKeyConfigSetting, LedgerKeyContractCode, LedgerKeyData, LedgerKeyLiquidityPool,
-        LedgerKeyOffer, LedgerKeyTrustLine, LiquidityPoolEntry, OfferEntry, PublicKey, ScAddress,
-        ScBytes, ScContractInstance, ScMap, ScMapEntry, ScNonceKey, ScString, ScSymbol, ScVal,
-        ScVec, SorobanAuthorizedInvocation, StringM, TimePoint, TrustLineAsset, TrustLineEntry,
-        Uint256, SCSYMBOL_LIMIT,
+        ContractCodeEntry, ContractDataDurability, ContractEntryBodyType, ContractEvent,
+        ContractExecutable, ContractIdPreimage, CreateContractArgs, DataEntry, Duration,
+        ExtensionPoint, Hash, LedgerEntry, LedgerEntryExt, LedgerKey, LedgerKeyAccount,
+        LedgerKeyClaimableBalance, LedgerKeyConfigSetting, LedgerKeyContractCode, LedgerKeyData,
+        LedgerKeyLiquidityPool, LedgerKeyOffer, LedgerKeyTrustLine, LiquidityPoolEntry, OfferEntry,
+        PublicKey, ScAddress, ScBytes, ScContractInstance, ScMap, ScMapEntry, ScNonceKey, ScString,
+        ScSymbol, ScVal, ScVec, SorobanAuthorizedInvocation, StringM, TimePoint, TrustLineAsset,
+        TrustLineEntry, Uint256, SCSYMBOL_LIMIT,
     },
     AddressObject, Bool, BytesObject, DurationObject, DurationSmall, DurationVal, Error,
     I128Object, I128Small, I128Val, I256Object, I256Small, I256Val, I32Val, I64Object, I64Small,
@@ -142,8 +142,8 @@ impl_declared_size_type!(ScString, 24);
 impl_declared_size_type!(ScSymbol, 24);
 impl_declared_size_type!(CreateContractArgs, 99);
 impl_declared_size_type!(ContractIdPreimage, 66);
-impl_declared_size_type!(ContractDataType, 4);
-impl_declared_size_type!(ContractLedgerEntryType, 4);
+impl_declared_size_type!(ContractDataDurability, 4);
+impl_declared_size_type!(ContractEntryBodyType, 4);
 impl_declared_size_type!(ExtensionPoint, 0);
 impl_declared_size_type!(SorobanAuthorizedInvocation, 128);
 impl_declared_size_type!(ScContractInstance, 64);
@@ -319,8 +319,8 @@ mod test {
         expect!["24"].assert_eq(size_of::<ScSymbol>().to_string().as_str());
         expect!["99"].assert_eq(size_of::<CreateContractArgs>().to_string().as_str());
         expect!["66"].assert_eq(size_of::<ContractIdPreimage>().to_string().as_str());
-        expect!["4"].assert_eq(size_of::<ContractDataType>().to_string().as_str());
-        expect!["4"].assert_eq(size_of::<ContractLedgerEntryType>().to_string().as_str());
+        expect!["4"].assert_eq(size_of::<ContractDataDurability>().to_string().as_str());
+        expect!["4"].assert_eq(size_of::<ContractEntryBodyType>().to_string().as_str());
         expect!["0"].assert_eq(size_of::<ExtensionPoint>().to_string().as_str());
         expect!["128"].assert_eq(
             size_of::<SorobanAuthorizedInvocation>()
@@ -456,8 +456,8 @@ mod test {
         assert_mem_size_le_declared_size!(ScString);
         assert_mem_size_le_declared_size!(ScSymbol);
         assert_mem_size_le_declared_size!(CreateContractArgs);
-        assert_mem_size_le_declared_size!(ContractDataType);
-        assert_mem_size_le_declared_size!(ContractLedgerEntryType);
+        assert_mem_size_le_declared_size!(ContractDataDurability);
+        assert_mem_size_le_declared_size!(ContractEntryBodyType);
         assert_mem_size_le_declared_size!(ExtensionPoint);
         assert_mem_size_le_declared_size!(SorobanAuthorizedInvocation);
         // composite types

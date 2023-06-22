@@ -2,9 +2,9 @@ use core::cmp::min;
 use std::rc::Rc;
 
 use soroban_env_common::xdr::{
-    BytesM, ContractCodeEntryBody, ContractDataEntryBody, ContractDataEntryData, ContractDataType,
-    ContractIdPreimage, ContractLedgerEntryType, HashIdPreimageContractId, ScAddress,
-    ScContractInstance, ScErrorCode, ScErrorType,
+    BytesM, ContractCodeEntryBody, ContractDataDurability, ContractDataEntryBody,
+    ContractDataEntryData, ContractEntryBodyType, ContractIdPreimage, HashIdPreimageContractId,
+    ScAddress, ScContractInstance, ScErrorCode, ScErrorType,
 };
 use soroban_env_common::{AddressObject, Env, U32Val};
 
@@ -28,8 +28,8 @@ impl Host {
         let contract_id = contract_id.metered_clone(self.as_budget())?;
         Ok(Rc::new(LedgerKey::ContractData(LedgerKeyContractData {
             key: ScVal::LedgerKeyContractInstance,
-            type_: ContractDataType::Persistent,
-            le_type: ContractLedgerEntryType::DataEntry,
+            durability: ContractDataDurability::Persistent,
+            body_type: ContractEntryBodyType::DataEntry,
             contract: ScAddress::Contract(contract_id),
         })))
     }
@@ -70,7 +70,7 @@ impl Host {
         let wasm_hash = wasm_hash.metered_clone(self.as_budget())?;
         Ok(Rc::new(LedgerKey::ContractCode(LedgerKeyContractCode {
             hash: wasm_hash,
-            le_type: ContractLedgerEntryType::DataEntry,
+            body_type: ContractEntryBodyType::DataEntry,
         })))
     }
 
@@ -143,7 +143,7 @@ impl Host {
                 contract: ScAddress::Contract(contract_id),
                 key: ScVal::LedgerKeyContractInstance,
                 body,
-                type_: ContractDataType::Persistent,
+                durability: ContractDataDurability::Persistent,
                 expiration_ledger_seq: self.with_ledger_info(|li| {
                     Ok(li
                         .sequence_number
