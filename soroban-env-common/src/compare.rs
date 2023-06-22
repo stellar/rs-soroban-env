@@ -178,8 +178,6 @@ impl<E: Env> Compare<Val> for E {
                 Tag::SmallCodeUpperBound => Ok(Ordering::Equal),
                 Tag::ObjectCodeLowerBound => Ok(Ordering::Equal),
 
-                Tag::StorageType => delegate_compare_to_wrapper!(StorageType, a, b, self),
-
                 // None of the object cases should be reachable, they
                 // should all have been handled by the is_object() branch
                 // above.

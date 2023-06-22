@@ -8,7 +8,7 @@ use soroban_env_common::{Env, StorageType, TryIntoVal};
 // Metering: covered by components
 pub fn read_allowance(e: &Host, from: Address, spender: Address) -> Result<i128, HostError> {
     let key = DataKey::Allowance(AllowanceDataKey { from, spender });
-    if let Ok(allowance) = e.get_contract_data(key.try_into_val(e)?, StorageType::PERSISTENT) {
+    if let Ok(allowance) = e.get_contract_data(key.try_into_val(e)?, StorageType::Persistent) {
         Ok(allowance.try_into_val(e)?)
     } else {
         Ok(0)
@@ -26,7 +26,7 @@ pub fn write_allowance(
     e.put_contract_data(
         key.try_into_val(e)?,
         amount.try_into_val(e)?,
-        StorageType::PERSISTENT,
+        StorageType::Persistent,
         ().into(),
     )?;
     Ok(())

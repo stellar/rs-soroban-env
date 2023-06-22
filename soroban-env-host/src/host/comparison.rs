@@ -461,7 +461,6 @@ mod tests {
     use crate::xdr::ScVal;
     use crate::{Compare, Host, Tag, TryFromVal, Val};
     use itertools::Itertools;
-    use soroban_env_common::StorageType;
 
     #[test]
     fn test_scvec_unequal_lengths() {
@@ -805,7 +804,6 @@ mod tests {
                 &ScVal::Address(xdr::ScAddress::Contract(xdr::Hash([0; 32]))),
             )
             .unwrap(),
-            Tag::StorageType => Val::from(StorageType::PERSISTENT),
             Tag::ObjectCodeUpperBound => panic!(),
             Tag::Bad => panic!(),
             // NB: do not add a fallthrough case here if new Tag variants are added.
