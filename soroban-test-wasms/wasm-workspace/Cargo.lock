@@ -1210,6 +1210,7 @@ dependencies = [
 [[package]]
 name = "stellar-xdr"
 version = "0.0.16"
+source = "git+https://github.com/stellar/rs-stellar-xdr?rev=50c7a57e55603bc57719b1d096091b3239ea6859#50c7a57e55603bc57719b1d096091b3239ea6859"
 dependencies = [
  "crate-git-revision",
  "hex",
