@@ -160,15 +160,6 @@ impl Host {
         self.storage_key_from_scval(self.from_host_val(k)?, durability)
     }
 
-    pub(crate) fn storage_key_for_contract(
-        &self,
-        contract_id: Hash,
-        key: ScVal,
-        durability: ContractDataDurability,
-    ) -> Rc<LedgerKey> {
-        self.storage_key_for_address(ScAddress::Contract(contract_id), key, durability)
-    }
-
     pub(crate) fn storage_key_for_address(
         &self,
         contract_address: ScAddress,
@@ -183,22 +174,17 @@ impl Host {
         }))
     }
 
-    pub fn storage_key_from_scval(
+    pub(crate) fn storage_key_from_scval(
         &self,
         key: ScVal,
         durability: ContractDataDurability,
     ) -> Result<Rc<LedgerKey>, HostError> {
-        Ok(
-            self.storage_key_for_contract(
-                self.get_current_contract_id_internal()?,
-                key,
-                durability,
-            ),
-        )
+        let contract_id = self.get_current_contract_id_internal()?;
+        Ok(self.storage_key_for_address(ScAddress::Contract(contract_id), key, durability))
     }
 
     // Notes on metering: covered by components.
-    pub fn contract_data_key_from_rawval(
+    pub(crate) fn contract_data_key_from_rawval(
         &self,
         k: Val,
         durability: ContractDataDurability,

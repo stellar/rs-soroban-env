@@ -1902,6 +1902,37 @@ impl VmCallerEnv for Host {
         Ok(Val::VOID)
     }
 
+    fn bump_current_contract_instance_and_code(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        min: U32Val,
+    ) -> Result<Void, HostError> {
+        let min_expiration =
+            self.with_ledger_info(|li| Ok(li.sequence_number.saturating_add(min.into())))?;
+
+        let contract_id = self.get_current_contract_id_internal()?;
+        let key = self.contract_instance_ledger_key(&contract_id)?;
+        self.0.expiration_bumps.borrow_mut().0.push(LedgerBump {
+            key: key.metered_clone(self.as_budget())?,
+            min_expiration,
+        });
+
+        match self
+            .retrieve_contract_instance_from_storage(&key)?
+            .executable
+        {
+            ContractExecutable::Wasm(wasm_hash) => {
+                let key = self.contract_code_ledger_key(&wasm_hash)?;
+                self.0.expiration_bumps.borrow_mut().0.push(LedgerBump {
+                    key,
+                    min_expiration,
+                });
+            }
+            ContractExecutable::Token => {}
+        }
+        Ok(Val::VOID)
+    }
+
     // Notes on metering: covered by the components.
     fn create_contract(
         &self,
