@@ -1,5 +1,5 @@
 use num_derive::FromPrimitive;
-use stellar_xdr::ContractDataType;
+use stellar_xdr::ContractDataDurability;
 
 use crate::declare_wasmi_marshal_for_enum;
 
@@ -13,11 +13,11 @@ pub enum StorageType {
     Instance = 2,
 }
 
-impl From<StorageType> for ContractDataType {
+impl From<StorageType> for ContractDataDurability {
     fn from(value: StorageType) -> Self {
         match value {
-            StorageType::Temporary => ContractDataType::Temporary,
-            StorageType::Persistent | StorageType::Instance => ContractDataType::Persistent,
+            StorageType::Temporary => ContractDataDurability::Temporary,
+            StorageType::Persistent | StorageType::Instance => ContractDataDurability::Persistent,
         }
     }
 }

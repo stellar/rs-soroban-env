@@ -3,8 +3,8 @@ use core::cmp::{min, Ordering};
 use soroban_env_common::{
     xdr::{
         AccountEntry, AccountId, ClaimableBalanceEntry, ConfigSettingEntry, ContractCodeEntryBody,
-        ContractCostType, ContractDataEntryBody, ContractDataEntryData, ContractDataType,
-        ContractExecutable, ContractLedgerEntryType, CreateContractArgs, DataEntry, Duration,
+        ContractCostType, ContractDataDurability, ContractDataEntryBody, ContractDataEntryData,
+        ContractEntryBodyType, ContractExecutable, CreateContractArgs, DataEntry, Duration,
         ExtensionPoint, Hash, LedgerEntry, LedgerEntryData, LedgerEntryExt, LedgerKey,
         LedgerKeyAccount, LedgerKeyClaimableBalance, LedgerKeyConfigSetting, LedgerKeyContractCode,
         LedgerKeyData, LedgerKeyLiquidityPool, LedgerKeyOffer, LedgerKeyTrustLine,
@@ -187,8 +187,8 @@ impl_compare_fixed_size_ord_type!(ScAddress);
 impl_compare_fixed_size_ord_type!(ScNonceKey);
 impl_compare_fixed_size_ord_type!(PublicKey);
 impl_compare_fixed_size_ord_type!(TrustLineAsset);
-impl_compare_fixed_size_ord_type!(ContractDataType);
-impl_compare_fixed_size_ord_type!(ContractLedgerEntryType);
+impl_compare_fixed_size_ord_type!(ContractDataDurability);
+impl_compare_fixed_size_ord_type!(ContractEntryBodyType);
 
 impl_compare_fixed_size_ord_type!(LedgerKeyAccount);
 impl_compare_fixed_size_ord_type!(LedgerKeyTrustLine);
@@ -327,8 +327,8 @@ impl Compare<LedgerKey> for Budget {
             (ClaimableBalance(a), ClaimableBalance(b)) => self.compare(&a, &b),
             (LiquidityPool(a), LiquidityPool(b)) => self.compare(&a, &b),
             (ContractData(a), ContractData(b)) => self.compare(
-                &(&a.contract, &a.key, &a.type_, &a.le_type),
-                &(&b.contract, &b.key, &b.type_, &b.le_type),
+                &(&a.contract, &a.key, &a.type_, &a.body_type),
+                &(&b.contract, &b.key, &b.type_, &b.body_type),
             ),
             (ContractCode(a), ContractCode(b)) => self.compare(&a, &b),
             (ConfigSetting(a), ConfigSetting(b)) => self.compare(&a, &b),
