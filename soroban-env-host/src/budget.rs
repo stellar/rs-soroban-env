@@ -308,6 +308,7 @@ impl BudgetImpl {
                 ContractCostType::VmMemRead => self.tracker[i].1 = Some(0), // number of bytes in the linear memory to read
                 ContractCostType::VmMemWrite => self.tracker[i].1 = Some(0), // number of bytes in the linear memory to write
                 ContractCostType::VmInstantiation => self.tracker[i].1 = Some(0), // length of the wasm bytes,
+                ContractCostType::VmCachedInstantiation => self.tracker[i].1 = Some(0), // length of the wasm bytes,
                 ContractCostType::InvokeVmFunction => (),
                 ContractCostType::ChargeBudget => (),
                 ContractCostType::ComputeKeccak256Hash => self.tracker[i].1 = Some(0), // number of bytes in the buffer
@@ -805,6 +806,10 @@ impl Default for BudgetImpl {
                     cpu.const_term = 600447;
                     cpu.linear_term = 484;
                 }
+                ContractCostType::VmCachedInstantiation => {
+                    cpu.const_term = 600447;
+                    cpu.linear_term = 484;
+                }
                 ContractCostType::InvokeVmFunction => {
                     cpu.const_term = 5926;
                     cpu.linear_term = 0;
@@ -931,6 +936,10 @@ impl Default for BudgetImpl {
                     mem.linear_term = 0;
                 }
                 ContractCostType::VmInstantiation => {
+                    mem.const_term = 117871;
+                    mem.linear_term = 40;
+                }
+                ContractCostType::VmCachedInstantiation => {
                     mem.const_term = 117871;
                     mem.linear_term = 40;
                 }

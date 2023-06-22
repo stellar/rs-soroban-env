@@ -10,11 +10,8 @@ pub use internal::{InternalContractEvent, InternalEvent};
 use soroban_env_common::{
     num::{i256_from_pieces, u256_from_pieces},
     xdr::{
-        ContractEventBody, ContractEventType,
-        PublicKey::PublicKeyTypeEd25519,
-        ScAddress,
-        ScContractExecutable::{Token, WasmRef},
-        ScVal,
+        ContractEventBody, ContractEventType, ContractExecutable, PublicKey::PublicKeyTypeEd25519,
+        ScAddress, ScContractInstance, ScVal,
     },
     Error, Val, VecObject,
 };
@@ -88,18 +85,24 @@ fn display_scval(scv: &ScVal, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Resu
             }
             write!(f, "}}")
         }
-        ScVal::ContractExecutable(WasmRef(hash)) => {
-            write!(f, "ContractExecutable(WasmRef({}))", hash)
-        }
-        ScVal::ContractExecutable(Token) => write!(f, "ContractExecutable(Token)"),
         ScVal::Address(addr) => display_address(addr, f),
-        ScVal::LedgerKeyContractExecutable => write!(f, "LedgerKeyContractExecutable"),
+        ScVal::LedgerKeyContractInstance => write!(f, "LedgerKeyContractInstance"),
         ScVal::LedgerKeyNonce(n) => {
             write!(f, "LedgerKeyNonce({})", n.nonce)
         }
         ScVal::StorageType(t) => {
-            write!(f, "StorageType{}", t)
+            write!(f, "StorageType({})", t)
         }
+        ScVal::ContractInstance(ScContractInstance {
+            executable: ContractExecutable::Wasm(hash),
+            ..
+        }) => {
+            write!(f, "ContractInstance(Wasm({}))", hash)
+        }
+        ScVal::ContractInstance(ScContractInstance {
+            executable: ContractExecutable::Token,
+            ..
+        }) => write!(f, "ContractInstance(Token)"),
     }
 }
 

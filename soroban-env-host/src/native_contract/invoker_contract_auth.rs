@@ -1,6 +1,5 @@
-use super::account_contract::{
-    ContractAuthorizationContext, ContractExecutable, CreateContractHostFnContext,
-};
+use super::account_contract::{ContractAuthorizationContext, CreateContractHostFnContext};
+use super::common_types::ContractExecutable;
 use crate::host::metered_clone::MeteredClone;
 use crate::host_object::HostVec;
 use crate::{
@@ -9,8 +8,8 @@ use crate::{
     Host, HostError,
 };
 use soroban_env_common::xdr::{
-    ContractIdPreimage, ContractIdPreimageFromAddress, CreateContractArgs, ScAddress,
-    ScContractExecutable,
+    self, ContractIdPreimage, ContractIdPreimageFromAddress, CreateContractArgs, ScAddress,
+    ScErrorCode, ScErrorType,
 };
 use soroban_env_common::{TryFromVal, TryIntoVal, Val};
 use soroban_native_sdk_macros::contracttype;
@@ -68,6 +67,14 @@ impl InvokerContractAuthEntry {
                     ContractExecutable::Wasm(b) => {
                         host.hash_from_bytesobj_input("wasm_ref", b.as_object())?
                     }
+                    ContractExecutable::Token => {
+                        return Err(host.err(
+                            ScErrorType::Auth,
+                            ScErrorCode::InternalError,
+                            "unexpected authorized token creation",
+                            &[],
+                        ));
+                    }
                 };
                 let function = AuthorizedFunction::CreateContractHostFn(CreateContractArgs {
                     contract_id_preimage: ContractIdPreimage::Address(
@@ -79,7 +86,7 @@ impl InvokerContractAuthEntry {
                             )?,
                         },
                     ),
-                    executable: ScContractExecutable::WasmRef(wasm_hash),
+                    executable: xdr::ContractExecutable::Wasm(wasm_hash),
                 });
                 Ok(AuthorizedInvocation::new(function, vec![]))
             }

@@ -194,11 +194,11 @@ fn test_recursive_type_clone() -> Result<(), HostError> {
     v.metered_clone(host.as_budget())?;
 
     //*********************************************************************************************************************************************/
-    /* Type(size, count) | Vec(24,1) ---> Box(8,3) ----> ScMap(24,3) --> Vec(24,3) ----> ScMapEntry(80,6) --> ScVal(40, 12) --> U32(4, 12)        */
-    /* MemAlloc          |            8x3      +    24x3              +             80x6                                                    = 576 */
-    /* MemCpy            |  24    +   8x3      +    24x3              +             80x6                                                    = 600 */
+    /* Type(size, count) | Vec(24,1) ---> Box(8,3) ----> ScMap(24,3) --> Vec(24,3) ----> ScMapEntry(128,6) --> ScVal(64, 12) --> U32(4, 12)        */
+    /* MemAlloc          |            8x3      +    24x3              +             128x6                                                    = 864 */
+    /* MemCpy            |  24    +   8x3      +    24x3              +             128x6                                                    = 888 */
     //*********************************************************************************************************************************************/
-    expect!["576"].assert_eq(
+    expect!["864"].assert_eq(
         host.as_budget()
             .get_tracker(ContractCostType::HostMemAlloc)
             .1
@@ -208,7 +208,7 @@ fn test_recursive_type_clone() -> Result<(), HostError> {
     );
     // 600 = 576 + 24 is correct because we need to copy all the memory allocated, as well as the
     // memory layout of the top level type (Vec).
-    expect!["600"].assert_eq(
+    expect!["888"].assert_eq(
         host.as_budget()
             .get_tracker(ContractCostType::HostMemCpy)
             .1
@@ -246,6 +246,7 @@ fn total_amount_charged_from_random_inputs() -> Result<(), HostError> {
         (1, Some(69)),
         (1, Some(160)),
         (1, Some(147)),
+        (1, Some(147)),
         (47, None),
         (263, None),
         (1, Some(1)),
@@ -265,8 +266,8 @@ fn total_amount_charged_from_random_inputs() -> Result<(), HostError> {
     let actual = format!("{:?}", host.as_budget());
     expect![[r#"
         =====================================================================================================================================================================
-        Cpu limit: 40000000; used: 10354830
-        Mem limit: 52428800; used: 219800
+        Cpu limit: 40000000; used: 11026555
+        Mem limit: 52428800; used: 343551
         =====================================================================================================================================================================
         CostType                 iterations     input          cpu_insns      mem_bytes      const_term_cpu      lin_term_cpu        const_term_mem      lin_term_mem        
         WasmInsnExec             246            None           1722           0              7                   0                   0                   0                   
@@ -288,8 +289,9 @@ fn total_amount_charged_from_random_inputs() -> Result<(), HostError> {
         VmMemRead                1              Some(69)       0              0              0                   0                   0                   0                   
         VmMemWrite               1              Some(160)      124            0              124                 0                   0                   0                   
         VmInstantiation          1              Some(147)      671595         123751         600447              484                 117871              40                  
+        VmCachedInstantiation    1              Some(147)      671595         123751         600447              484                 117871              40                  
         InvokeVmFunction         47             None           278522         22842          5926                0                   486                 0                   
-        ChargeBudget             293            None           38090          0              130                 0                   0                   0                   
+        ChargeBudget             294            None           38220          0              130                 0                   0                   0                   
         ComputeKeccak256Hash     1              Some(1)        3368           40             3322                46                  40                  0                   
         ComputeEcdsaSecp256k1Key 1              None           56525          0              56525               0                   0                   0                   
         ComputeEcdsaSecp256k1Sig 1              None           250            0              250                 0                   0                   0                   

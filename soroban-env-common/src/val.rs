@@ -94,8 +94,8 @@ pub enum Tag {
     SymbolSmall = 14,
 
     /// Tag for a [Val] that corresponds to
-    /// [stellar_xdr::ScVal::LedgerKeyContractExecutable]
-    LedgerKeyContractExecutable = 15,
+    /// [stellar_xdr::ScVal::LedgerKeyContractInstance]
+    LedgerKeyContractInstance = 15,
 
     /// Tag for a [Val] that corresponds to [stellar_xdr::ScVal::StorageType]
     StorageType = 16,
@@ -142,15 +142,9 @@ pub enum Tag {
     VecObject = 75,
     MapObject = 76,
 
-    ContractExecutableObject = 77,
-    AddressObject = 78,
+    AddressObject = 77,
 
-    /// Tag for a [Val] that corresponds to
-    /// [stellar_xdr::ScVal::LedgerKeyNonce] and refers to a host-side
-    /// address object that specifies which address it's the nonce for.
-    LedgerKeyNonceObject = 79,
-
-    ObjectCodeUpperBound = 80,
+    ObjectCodeUpperBound = 78,
 
     Bad = 0x7f,
 }
@@ -212,7 +206,7 @@ impl Tag {
             Tag::U256Small => Some(ScValType::U256),
             Tag::I256Small => Some(ScValType::I256),
             Tag::SymbolSmall => Some(ScValType::Symbol),
-            Tag::LedgerKeyContractExecutable => Some(ScValType::LedgerKeyContractExecutable),
+            Tag::LedgerKeyContractInstance => Some(ScValType::LedgerKeyContractInstance),
             Tag::SmallCodeUpperBound => None,
             Tag::ObjectCodeLowerBound => None,
             Tag::U64Object => Some(ScValType::U64),
@@ -228,9 +222,7 @@ impl Tag {
             Tag::SymbolObject => Some(ScValType::Symbol),
             Tag::VecObject => Some(ScValType::Vec),
             Tag::MapObject => Some(ScValType::Map),
-            Tag::ContractExecutableObject => Some(ScValType::ContractExecutable),
             Tag::AddressObject => Some(ScValType::Address),
-            Tag::LedgerKeyNonceObject => Some(ScValType::LedgerKeyNonce),
             Tag::ObjectCodeUpperBound => None,
             Tag::StorageType => Some(ScValType::StorageType),
             Tag::Bad => None,
@@ -323,8 +315,6 @@ impl<E: Env> Compare<Bool> for E {
 // Declare a few extra object wrapper types that don't live anywhere else.
 declare_tag_based_object_wrapper!(VecObject);
 declare_tag_based_object_wrapper!(MapObject);
-declare_tag_based_object_wrapper!(ContractExecutableObject);
-declare_tag_based_object_wrapper!(LedgerKeyNonceObject);
 declare_tag_based_object_wrapper!(AddressObject);
 
 // This is a 0-arg struct rather than an enum to ensure it completely compiles
@@ -712,7 +702,7 @@ impl Debug for Val {
                 let s: &str = ss.as_ref();
                 write!(f, "Symbol({s})")
             }
-            Tag::LedgerKeyContractExecutable => write!(f, "LedgerKeyContractCode"),
+            Tag::LedgerKeyContractInstance => write!(f, "LedgerKeyContractCode"),
 
             Tag::U64Object => fmt_obj("U64", self, f),
             Tag::I64Object => fmt_obj("I64", self, f),
@@ -727,9 +717,7 @@ impl Debug for Val {
             Tag::SymbolObject => fmt_obj("Symbol", self, f),
             Tag::VecObject => fmt_obj("Vec", self, f),
             Tag::MapObject => fmt_obj("Map", self, f),
-            Tag::ContractExecutableObject => fmt_obj("ContractCode", self, f),
             Tag::AddressObject => fmt_obj("Address", self, f),
-            Tag::LedgerKeyNonceObject => fmt_obj("LedgerKeyAddressNonce", self, f),
             Tag::StorageType => write!(f, "StorageType({})", self.get_body()),
 
             Tag::Bad

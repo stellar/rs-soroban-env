@@ -1,5 +1,7 @@
 use std::{mem, rc::Rc};
 
+use soroban_env_common::xdr::ScContractInstance;
+
 use crate::{
     budget::Budget,
     events::{EventError, HostEvent, InternalContractEvent, InternalEvent},
@@ -9,21 +11,21 @@ use crate::{
     xdr::{
         AccountEntry, AccountId, BytesM, ClaimableBalanceEntry, ConfigSettingEntry,
         ContractCodeEntry, ContractCodeEntryBody, ContractCostType, ContractDataEntryBody,
-        ContractEvent, ContractEventBody, ContractEventType, ContractIdPreimage,
-        CreateContractArgs, DataEntry, Duration, Hash, LedgerEntry, LedgerEntryData,
-        LedgerEntryExt, LedgerKey, LedgerKeyAccount, LedgerKeyClaimableBalance,
+        ContractEvent, ContractEventBody, ContractEventType, ContractExecutable,
+        ContractIdPreimage, CreateContractArgs, DataEntry, Duration, Hash, LedgerEntry,
+        LedgerEntryData, LedgerEntryExt, LedgerKey, LedgerKeyAccount, LedgerKeyClaimableBalance,
         LedgerKeyConfigSetting, LedgerKeyContractCode, LedgerKeyData, LedgerKeyLiquidityPool,
         LedgerKeyOffer, LedgerKeyTrustLine, LiquidityPoolEntry, OfferEntry, PublicKey, ScAddress,
-        ScBytes, ScContractExecutable, ScErrorCode, ScErrorType, ScMap, ScMapEntry, ScNonceKey,
-        ScString, ScSymbol, ScVal, ScVec, SorobanAuthorizedInvocation, StringM, TimePoint,
-        TrustLineAsset, TrustLineEntry, Uint256,
+        ScBytes, ScErrorCode, ScErrorType, ScMap, ScMapEntry, ScNonceKey, ScString, ScSymbol,
+        ScVal, ScVec, SorobanAuthorizedInvocation, StringM, TimePoint, TrustLineAsset,
+        TrustLineEntry, Uint256,
     },
-    AddressObject, Bool, BytesObject, ContractExecutableObject, DurationObject, DurationSmall,
-    DurationVal, Error, HostError, I128Object, I128Small, I128Val, I256Object, I256Small, I256Val,
-    I32Val, I64Object, I64Small, I64Val, LedgerKeyNonceObject, MapObject, Object, ScValObject,
-    StringObject, Symbol, SymbolObject, SymbolSmall, SymbolSmallIter, SymbolStr, TimepointObject,
-    TimepointSmall, TimepointVal, U128Object, U128Small, U128Val, U256Object, U256Small, U256Val,
-    U32Val, U64Object, U64Small, U64Val, Val, VecObject, Void, I256, U256,
+    AddressObject, Bool, BytesObject, DurationObject, DurationSmall, DurationVal, Error, HostError,
+    I128Object, I128Small, I128Val, I256Object, I256Small, I256Val, I32Val, I64Object, I64Small,
+    I64Val, MapObject, Object, ScValObject, StringObject, Symbol, SymbolObject, SymbolSmall,
+    SymbolSmallIter, SymbolStr, TimepointObject, TimepointSmall, TimepointVal, U128Object,
+    U128Small, U128Val, U256Object, U256Small, U256Val, U32Val, U64Object, U64Small, U64Val, Val,
+    VecObject, Void, I256, U256,
 };
 
 use super::declared_size::DeclaredSizeForMetering;
@@ -61,7 +63,12 @@ pub(crate) fn charge_heap_alloc<T: MeteredClone>(
 ) -> Result<(), HostError> {
     // Here we make a runtime assertion that the type's size is below its promised element size for
     // budget charging.
-    debug_assert!(mem::size_of::<T>() as u64 <= T::DECLARED_SIZE);
+    debug_assert!(
+        mem::size_of::<T>() as u64 <= T::DECLARED_SIZE,
+        "mem size: {}, declared: {}",
+        std::mem::size_of::<T>(),
+        T::DECLARED_SIZE
+    );
     budget.charge(
         ContractCostType::HostMemAlloc,
         Some(n_elts.saturating_mul(T::DECLARED_SIZE)),
@@ -146,8 +153,6 @@ impl MeteredClone for Void {}
 impl MeteredClone for Bool {}
 impl MeteredClone for VecObject {}
 impl MeteredClone for MapObject {}
-impl MeteredClone for ContractExecutableObject {}
-impl MeteredClone for LedgerKeyNonceObject {}
 impl MeteredClone for AddressObject {}
 impl MeteredClone for BytesObject {}
 impl MeteredClone for U32Val {}
@@ -193,7 +198,7 @@ impl MeteredClone for TimePoint {}
 impl MeteredClone for Duration {}
 impl MeteredClone for Hash {}
 impl MeteredClone for Uint256 {}
-impl MeteredClone for ScContractExecutable {}
+impl MeteredClone for ContractExecutable {}
 impl MeteredClone for AccountId {}
 impl MeteredClone for ScAddress {}
 impl MeteredClone for ScNonceKey {}
@@ -253,12 +258,12 @@ impl MeteredClone for ScVal {
             ScVal::Bytes(b) => BytesM::charge_for_substructure(b, budget),
             ScVal::String(s) => StringM::charge_for_substructure(s, budget),
             ScVal::Symbol(s) => StringM::charge_for_substructure(s, budget),
+            ScVal::ContractInstance(i) => ScContractInstance::charge_for_substructure(i, budget),
             // Everything else was handled by the memcpy above.
             ScVal::U64(_)
             | ScVal::I64(_)
             | ScVal::U128(_)
             | ScVal::I128(_)
-            | ScVal::ContractExecutable(_)
             | ScVal::Address(_)
             | ScVal::U32(_)
             | ScVal::I32(_)
@@ -269,7 +274,7 @@ impl MeteredClone for ScVal {
             | ScVal::Duration(_)
             | ScVal::U256(_)
             | ScVal::I256(_)
-            | ScVal::LedgerKeyContractExecutable
+            | ScVal::LedgerKeyContractInstance
             | ScVal::StorageType(_)
             | ScVal::LedgerKeyNonce(_) => Ok(()),
         }
@@ -428,6 +433,14 @@ impl MeteredClone for InternalEvent {
                 Err((ScErrorType::Events, ScErrorCode::InternalError).into())
             }
         }
+    }
+}
+
+impl MeteredClone for ScContractInstance {
+    const IS_SHALLOW: bool = false;
+
+    fn charge_for_substructure(&self, budget: &Budget) -> Result<(), HostError> {
+        self.storage.charge_for_substructure(budget)
     }
 }
 

@@ -8,8 +8,7 @@ use crate::native_contract::{base_types::BytesN, contract_error::ContractError};
 use crate::{err, HostError};
 use core::cmp::Ordering;
 use soroban_env_common::xdr::{
-    ContractIdPreimage, Hash, ScContractExecutable, ScErrorCode, ScErrorType, ThresholdIndexes,
-    Uint256,
+    self, ContractIdPreimage, Hash, ScErrorCode, ScErrorType, ThresholdIndexes, Uint256,
 };
 use soroban_env_common::{Env, EnvBase, Symbol, TryFromVal, TryIntoVal, Val};
 
@@ -21,6 +20,7 @@ use soroban_env_common::xdr::AccountId;
 use soroban_native_sdk_macros::contracttype;
 
 use super::base_types::Address;
+use super::common_types::ContractExecutable;
 
 pub const ACCOUNT_CONTRACT_CHECK_AUTH_FN_NAME: &str = "__check_auth";
 
@@ -30,12 +30,6 @@ pub struct ContractAuthorizationContext {
     pub contract: Address,
     pub fn_name: Symbol,
     pub args: HostVec,
-}
-
-#[derive(Clone)]
-#[contracttype]
-pub enum ContractExecutable {
-    Wasm(BytesN<32>),
 }
 
 #[derive(Clone)]
@@ -74,10 +68,10 @@ impl AuthorizationContext {
             }
             AuthorizedFunction::CreateContractHostFn(args) => {
                 let wasm_hash = match &args.executable {
-                    ScContractExecutable::WasmRef(wasm_hash) => {
+                    xdr::ContractExecutable::Wasm(wasm_hash) => {
                         BytesN::<32>::from_slice(host, wasm_hash.as_slice())?
                     }
-                    ScContractExecutable::Token => {
+                    xdr::ContractExecutable::Token => {
                         return Err(host.err(
                             ScErrorType::Auth,
                             ScErrorCode::InternalError,

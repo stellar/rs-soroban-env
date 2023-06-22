@@ -8,7 +8,7 @@ use crate::{
     budget::AsBudget,
     err,
     storage::StorageMap,
-    xdr::{ContractCostType, Hash, HostFunction, HostFunctionType, ScContractExecutable, ScVal},
+    xdr::{ContractCostType, ContractExecutable, Hash, HostFunction, HostFunctionType, ScVal},
     Error, Host, HostError, Symbol, SymbolStr, TryFromVal, TryIntoVal, Val,
 };
 
@@ -424,9 +424,12 @@ impl Host {
     // Notes on metering: this is covered by the called components.
     fn call_contract_fn(&self, id: &Hash, func: &Symbol, args: &[Val]) -> Result<Val, HostError> {
         // Create key for storage
-        let storage_key = self.contract_executable_ledger_key(id)?;
-        match self.retrieve_contract_executable_from_storage(&storage_key)? {
-            ScContractExecutable::WasmRef(wasm_hash) => {
+        let storage_key = self.contract_instance_ledger_key(id)?;
+        match self
+            .retrieve_contract_instance_from_storage(&storage_key)?
+            .executable
+        {
+            ContractExecutable::Wasm(wasm_hash) => {
                 let code_entry = self.retrieve_wasm_from_storage(&wasm_hash)?;
                 let vm = Vm::new(
                     self,
@@ -435,7 +438,7 @@ impl Host {
                 )?;
                 vm.invoke_function_raw(self, func, args)
             }
-            ScContractExecutable::Token => {
+            ContractExecutable::Token => {
                 self.with_frame(Frame::Token(id.clone(), *func, args.to_vec()), || {
                     use crate::native_contract::{NativeContract, Token};
                     Token.call(func, self, args)

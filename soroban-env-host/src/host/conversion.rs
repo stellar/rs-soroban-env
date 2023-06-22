@@ -198,7 +198,7 @@ impl Host {
         data_type: ContractDataType,
     ) -> Result<Rc<LedgerKey>, HostError> {
         let key_scval = self.from_host_val(k)?;
-        if let ScVal::LedgerKeyContractExecutable | ScVal::LedgerKeyNonce(_) = key_scval {
+        if let ScVal::LedgerKeyContractInstance | ScVal::LedgerKeyNonce(_) = key_scval {
             return Err(self.err(
                 ScErrorType::Storage,
                 ScErrorCode::InvalidInput,
@@ -472,14 +472,8 @@ impl Host {
                         HostObject::Bytes(b) => ScVal::Bytes(b.metered_clone(self.as_budget())?),
                         HostObject::String(s) => ScVal::String(s.metered_clone(self.as_budget())?),
                         HostObject::Symbol(s) => ScVal::Symbol(s.metered_clone(self.as_budget())?),
-                        HostObject::ContractExecutable(cc) => {
-                            ScVal::ContractExecutable(cc.metered_clone(self.as_budget())?)
-                        }
                         HostObject::Address(addr) => {
                             ScVal::Address(addr.metered_clone(self.as_budget())?)
-                        }
-                        HostObject::NonceKey(nk) => {
-                            ScVal::LedgerKeyNonce(nk.metered_clone(self.as_budget())?)
                         }
                     },
                 };
@@ -552,13 +546,9 @@ impl Host {
             ScVal::Symbol(s) => Ok(self
                 .add_host_object(s.metered_clone(self.as_budget())?)?
                 .into()),
-            ScVal::ContractExecutable(cc) => Ok(self
-                .add_host_object(cc.metered_clone(self.as_budget())?)?
-                .into()),
             ScVal::Address(addr) => Ok(self
                 .add_host_object(addr.metered_clone(self.as_budget())?)?
                 .into()),
-
             ScVal::Bool(_)
             | ScVal::Void
             | ScVal::Error(_)
@@ -566,7 +556,8 @@ impl Host {
             | ScVal::I32(_)
             | ScVal::StorageType(_)
             | ScVal::LedgerKeyNonce(_)
-            | ScVal::LedgerKeyContractExecutable => Err(err!(
+            | ScVal::ContractInstance(_)
+            | ScVal::LedgerKeyContractInstance => Err(err!(
                 self,
                 (ScErrorType::Object, ScErrorCode::InvalidInput),
                 "converting unsupported value to object",

@@ -1098,6 +1098,7 @@ dependencies = [
 name = "soroban-sdk"
 version = "0.8.4"
 dependencies = [
+ "arbitrary",
  "bytes-lit",
  "ed25519-dalek",
  "rand",
@@ -1206,7 +1207,6 @@ dependencies = [
 [[package]]
 name = "stellar-xdr"
 version = "0.0.16"
-source = "git+https://github.com/stellar/rs-stellar-xdr?rev=50c7a57e55603bc57719b1d096091b3239ea6859#50c7a57e55603bc57719b1d096091b3239ea6859"
 dependencies = [
  "arbitrary",
  "base64 0.13.1",

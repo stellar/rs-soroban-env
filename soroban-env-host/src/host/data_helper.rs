@@ -3,8 +3,8 @@ use std::rc::Rc;
 
 use soroban_env_common::xdr::{
     BytesM, ContractCodeEntryBody, ContractDataEntryBody, ContractDataEntryData, ContractDataType,
-    ContractIdPreimage, ContractLedgerEntryType, HashIdPreimageContractId, ScAddress, ScErrorCode,
-    ScErrorType,
+    ContractIdPreimage, ContractLedgerEntryType, HashIdPreimageContractId, ScAddress,
+    ScContractInstance, ScErrorCode, ScErrorType,
 };
 use soroban_env_common::{AddressObject, Env, U32Val};
 
@@ -12,8 +12,8 @@ use crate::budget::AsBudget;
 use crate::xdr::{
     AccountEntry, AccountId, ContractDataEntry, Hash, HashIdPreimage, LedgerEntry, LedgerEntryData,
     LedgerEntryExt, LedgerKey, LedgerKeyAccount, LedgerKeyContractCode, LedgerKeyContractData,
-    LedgerKeyTrustLine, PublicKey, ScContractExecutable, ScVal, Signer, SignerKey,
-    ThresholdIndexes, TrustLineAsset, Uint256,
+    LedgerKeyTrustLine, PublicKey, ScVal, Signer, SignerKey, ThresholdIndexes, TrustLineAsset,
+    Uint256,
 };
 use crate::{err, Host, HostError};
 
@@ -21,13 +21,13 @@ use super::metered_clone::MeteredClone;
 
 impl Host {
     // Notes on metering: free
-    pub fn contract_executable_ledger_key(
+    pub fn contract_instance_ledger_key(
         &self,
         contract_id: &Hash,
     ) -> Result<Rc<LedgerKey>, HostError> {
         let contract_id = contract_id.metered_clone(self.as_budget())?;
         Ok(Rc::new(LedgerKey::ContractData(LedgerKeyContractData {
-            key: ScVal::LedgerKeyContractExecutable,
+            key: ScVal::LedgerKeyContractInstance,
             type_: ContractDataType::Persistent,
             le_type: ContractLedgerEntryType::DataEntry,
             contract: ScAddress::Contract(contract_id),
@@ -35,31 +35,31 @@ impl Host {
     }
 
     // Notes on metering: retrieving from storage covered. Rest are free.
-    pub(crate) fn retrieve_contract_executable_from_storage(
+    pub(crate) fn retrieve_contract_instance_from_storage(
         &self,
         key: &Rc<LedgerKey>,
-    ) -> Result<ScContractExecutable, HostError> {
+    ) -> Result<ScContractInstance, HostError> {
         let entry = self.0.storage.borrow_mut().get(key, self.as_budget())?;
         match &entry.data {
             LedgerEntryData::ContractData(ContractDataEntry { body, .. }) => match body {
                 ContractDataEntryBody::DataEntry(data) => match &data.val {
-                    ScVal::ContractExecutable(code) => code.metered_clone(self.as_budget()),
+                    ScVal::ContractInstance(instance) => instance.metered_clone(self.as_budget()),
                     other => Err(err!(
                         self,
-                        (ScErrorType::Storage, ScErrorCode::UnexpectedType),
-                        "ledger entry for contract code does not contain contract executable",
+                        (ScErrorType::Storage, ScErrorCode::InternalError),
+                        "ledger entry for contract instance does not contain contract instance",
                         *other
                     )),
                 },
                 _ => Err(err!(
                     self,
-                    (ScErrorType::Storage, ScErrorCode::UnexpectedType),
+                    (ScErrorType::Storage, ScErrorCode::InternalError),
                     "expected DataEntry",
                 )),
             },
             _ => Err(self.err(
                 ScErrorType::Storage,
-                ScErrorCode::UnexpectedType,
+                ScErrorCode::InternalError,
                 "expected ContractData ledger entry",
                 &[],
             )),
@@ -100,20 +100,20 @@ impl Host {
         }
     }
 
-    pub(crate) fn contract_code_exists(&self, wasm_hash: &Hash) -> Result<bool, HostError> {
+    pub(crate) fn wasm_exists(&self, wasm_hash: &Hash) -> Result<bool, HostError> {
         let key = self.wasm_ledger_key(wasm_hash)?;
         self.0.storage.borrow_mut().has(&key, self.as_budget())
     }
 
     // Notes on metering: `from_host_obj` and `put` to storage covered, rest are free.
-    pub(crate) fn store_contract_executable(
+    pub(crate) fn store_contract_instance(
         &self,
-        executable: ScContractExecutable,
+        instance: ScContractInstance,
         contract_id: Hash,
         key: &Rc<LedgerKey>,
     ) -> Result<(), HostError> {
         let body = ContractDataEntryBody::DataEntry(ContractDataEntryData {
-            val: ScVal::ContractExecutable(executable),
+            val: ScVal::ContractInstance(instance),
             flags: 0,
         });
 
@@ -141,7 +141,7 @@ impl Host {
         } else {
             let data = LedgerEntryData::ContractData(ContractDataEntry {
                 contract: ScAddress::Contract(contract_id),
-                key: ScVal::LedgerKeyContractExecutable,
+                key: ScVal::LedgerKeyContractInstance,
                 body,
                 type_: ContractDataType::Persistent,
                 expiration_ledger_seq: self.with_ledger_info(|li| {

@@ -5,8 +5,8 @@ use crate::{
     storage::{AccessType, Footprint, Storage, StorageMap},
     xdr::{
         self, ContractEvent, ContractEventBody, ContractEventType, ContractEventV0,
-        CreateContractArgs, ExtensionPoint, Hash, HashIdPreimage, HashIdPreimageContractId,
-        LedgerEntryData, ScContractExecutable, ScSymbol, ScVal, ScVec, Uint256,
+        ContractExecutable, CreateContractArgs, ExtensionPoint, Hash, HashIdPreimage,
+        HashIdPreimageContractId, LedgerEntryData, ScSymbol, ScVal, ScVec, Uint256,
     },
     Env, Host, LedgerInfo, Symbol,
 };
@@ -23,15 +23,18 @@ use soroban_test_wasms::{ADD_I32, CREATE_CONTRACT, UPDATEABLE_CONTRACT};
 use super::util::{generate_account_id, generate_bytes_array};
 
 fn get_contract_wasm_ref(host: &Host, contract_id: Hash) -> Hash {
-    let storage_key = host.contract_executable_ledger_key(&contract_id).unwrap();
+    let storage_key = host.contract_instance_ledger_key(&contract_id).unwrap();
     host.with_mut_storage(|s: &mut Storage| {
         assert!(s.has(&storage_key, host.as_budget()).unwrap());
 
         match &s.get(&storage_key, host.as_budget()).unwrap().data {
             LedgerEntryData::ContractData(ContractDataEntry { body, .. }) => match body {
                 ContractDataEntryBody::DataEntry(data) => match &data.val {
-                    ScVal::ContractExecutable(ScContractExecutable::WasmRef(h)) => Ok(h.clone()),
-                    _ => panic!("expected ScContractExecutable"),
+                    ScVal::ContractInstance(i) => match &i.executable {
+                        ContractExecutable::Wasm(h) => Ok(h.clone()),
+                        _ => panic!("expectecd Wasm executable"),
+                    },
+                    _ => panic!("expected ContractInstance"),
                 },
                 _ => panic!("expected DataEntry"),
             },
@@ -100,7 +103,7 @@ fn test_create_contract_from_source_account(host: &Host, wasm: &[u8]) -> Hash {
     host.with_mut_storage(|s: &mut Storage| {
         s.footprint
             .record_access(
-                &host.contract_executable_ledger_key(&contract_id).unwrap(),
+                &host.contract_instance_ledger_key(&contract_id).unwrap(),
                 AccessType::ReadWrite,
                 host.as_budget(),
             )
@@ -127,7 +130,7 @@ fn test_create_contract_from_source_account(host: &Host, wasm: &[u8]) -> Hash {
         .unwrap();
     let create_contract_args = CreateContractArgs {
         contract_id_preimage,
-        executable: ScContractExecutable::WasmRef(created_wasm_hash.clone()),
+        executable: ContractExecutable::Wasm(created_wasm_hash.clone()),
     };
     host.set_authorization_entries(vec![SorobanAuthorizationEntry {
         credentials: SorobanCredentials::SourceAccount,
@@ -182,7 +185,7 @@ fn create_contract_using_parent_id_test() {
     host.with_mut_storage(|s: &mut Storage| {
         s.footprint
             .record_access(
-                &host.contract_executable_ledger_key(&child_id).unwrap(),
+                &host.contract_instance_ledger_key(&child_id).unwrap(),
                 AccessType::ReadWrite,
                 host.as_budget(),
             )
@@ -320,7 +323,7 @@ fn test_contract_wasm_update() {
                             ScVal::Symbol(ScSymbol("executable_update".try_into().unwrap())),
                             ScVal::Vec(Some(ScVec(
                                 vec![
-                                    ScVal::Symbol(ScSymbol("WasmRef".try_into().unwrap())),
+                                    ScVal::Symbol(ScSymbol("Wasm".try_into().unwrap())),
                                     ScVal::Bytes(ScBytes(old_wasm_hash.0.try_into().unwrap()))
                                 ]
                                 .try_into()
@@ -328,7 +331,7 @@ fn test_contract_wasm_update() {
                             ))),
                             ScVal::Vec(Some(ScVec(
                                 vec![
-                                    ScVal::Symbol(ScSymbol("WasmRef".try_into().unwrap())),
+                                    ScVal::Symbol(ScSymbol("Wasm".try_into().unwrap())),
                                     ScVal::Bytes(ScBytes(updated_wasm_hash.0.try_into().unwrap()))
                                 ]
                                 .try_into()

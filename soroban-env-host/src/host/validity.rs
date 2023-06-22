@@ -92,12 +92,6 @@ impl Host {
                             &[],
                         )),
                         Some(ho) => match ho {
-                            HostObject::ContractExecutable(_) => Err(self.err(
-                                ScErrorType::Object,
-                                ScErrorCode::UnexpectedType,
-                                "contract executable used as topic",
-                                &[topic.to_val()],
-                            )),
                             HostObject::Bytes(b) => {
                                 if b.len() > TOPIC_BYTES_LENGTH_LIMIT {
                                     // TODO: use more event-specific error codes than `UnexpectedType`.

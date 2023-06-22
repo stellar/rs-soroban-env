@@ -1,4 +1,5 @@
 pub(crate) mod base_types;
+pub(crate) mod common_types;
 pub(crate) mod contract_error;
 pub(crate) mod invoker_contract_auth;
 pub(crate) mod token;
