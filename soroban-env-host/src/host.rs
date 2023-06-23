@@ -1918,7 +1918,7 @@ impl VmCallerEnv for Host {
         self.0.expiration_bumps.borrow_mut().metered_push(
             self,
             LedgerBump {
-                key: key.metered_clone(self.as_budget())?,
+                key: Rc::clone(&key),
                 min_expiration,
             },
         )?;
