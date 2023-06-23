@@ -101,7 +101,12 @@ pub fn write_allowance(
 }
 
 // allowance is expected to exist
-fn write_amount(e: &Host, from: Address, spender: Address, amount: i128) -> Result<(), HostError> {
+fn write_allowance_amount(
+    e: &Host,
+    from: Address,
+    spender: Address,
+    amount: i128,
+) -> Result<(), HostError> {
     let key = DataKey::Allowance(AllowanceDataKey {
         from: from.clone(),
         spender: spender.clone(),
@@ -137,7 +142,7 @@ pub fn spend_allowance(
                 &[],
             )
         })?;
-        write_amount(e, from, spender, new_allowance)?;
+        write_allowance_amount(e, from, spender, new_allowance)?;
     }
     Ok(())
 }
