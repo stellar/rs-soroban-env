@@ -58,7 +58,7 @@ pub fn write_allowance(
 
     // Returns the allowance to write and the previous expiration of the existing allowance.
     // If an allowance didn't exist, then the previous expiration will be None.
-    let allowance_value: Option<(AllowanceValue, Option<u32>)> =
+    let allowance_with_old_expiration_option: Option<(AllowanceValue, Option<u32>)> =
         if let Ok(allowance) = e.get_contract_data(key.try_into_val(e)?, StorageType::Temporary) {
             let mut updated_allowance: AllowanceValue = allowance.try_into_val(e)?;
             updated_allowance.amount = amount;
@@ -78,16 +78,18 @@ pub fn write_allowance(
             None
         };
 
-    match allowance_value {
-        Some(val) => {
+    match allowance_with_old_expiration_option {
+        Some(allowance_with_old_expiration) => {
             e.put_contract_data(
                 key.try_into_val(e)?,
-                val.0.try_into_val(e)?,
+                allowance_with_old_expiration.0.try_into_val(e)?,
                 StorageType::Temporary,
                 ().into(),
             )?;
 
-            if val.0.amount > 0 && val.1.unwrap_or(0) < expiration {
+            if allowance_with_old_expiration.0.amount > 0
+                && allowance_with_old_expiration.1.unwrap_or(0) < expiration
+            {
                 e.bump_contract_data(
                     key.try_into_val(e)?,
                     StorageType::Temporary,
