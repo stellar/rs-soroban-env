@@ -272,7 +272,7 @@ impl Host {
     /// Immutable accessor to the instance storage of the currently running
     /// contract.
     /// Performs lazy initialization of instance storage on access.
-    pub fn with_instance_storage<F, U>(&self, f: F) -> Result<U, HostError>
+    pub(crate) fn with_instance_storage<F, U>(&self, f: F) -> Result<U, HostError>
     where
         F: FnOnce(&InstanceStorageMap) -> Result<U, HostError>,
     {
@@ -293,7 +293,7 @@ impl Host {
     /// Mutable accessor to the instance storage of the currently running
     /// contract.
     /// Performs lazy initialization of instance storage on access.
-    pub fn with_mut_instance_storage<F, U>(&self, f: F) -> Result<U, HostError>
+    pub(crate) fn with_mut_instance_storage<F, U>(&self, f: F) -> Result<U, HostError>
     where
         F: FnOnce(&mut InstanceStorageMap) -> Result<U, HostError>,
     {

@@ -20,13 +20,13 @@ use crate::{host::metered_map::MeteredOrdMap, HostError};
 pub type FootprintMap = MeteredOrdMap<Rc<LedgerKey>, AccessType, Budget>;
 pub type StorageMap = MeteredOrdMap<Rc<LedgerKey>, Option<Rc<LedgerEntry>>, Budget>;
 #[derive(Clone)]
-pub struct InstanceStorageMap {
-    pub map: MeteredOrdMap<Val, Val, Host>,
-    pub is_modified: bool,
+pub(crate) struct InstanceStorageMap {
+    pub(crate) map: MeteredOrdMap<Val, Val, Host>,
+    pub(crate) is_modified: bool,
 }
 
 impl InstanceStorageMap {
-    pub fn from_map(map: Vec<(Val, Val)>, host: &Host) -> Result<Self, HostError> {
+    pub(crate) fn from_map(map: Vec<(Val, Val)>, host: &Host) -> Result<Self, HostError> {
         Ok(Self {
             map: MeteredOrdMap::from_map(map, host)?,
             is_modified: false,
