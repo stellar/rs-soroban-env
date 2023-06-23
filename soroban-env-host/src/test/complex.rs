@@ -30,6 +30,7 @@ fn run_complex() -> Result<(), HostError> {
         base_reserve: 1,
         min_persistent_entry_expiration: 4096,
         min_temp_entry_expiration: 16,
+        max_entry_expiration: 6312000,
     };
     let id: Hash = [0; 32].into();
 

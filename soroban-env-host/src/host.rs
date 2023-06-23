@@ -86,6 +86,7 @@ pub struct LedgerInfo {
     pub base_reserve: u32,
     pub min_temp_entry_expiration: u32,
     pub min_persistent_entry_expiration: u32,
+    pub max_entry_expiration: u32,
 }
 
 #[derive(Clone, Default)]

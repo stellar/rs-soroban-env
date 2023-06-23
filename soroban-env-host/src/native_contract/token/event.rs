@@ -5,33 +5,23 @@ use soroban_env_common::{Env, Symbol, TryFromVal, TryIntoVal};
 
 use super::metadata::read_name;
 
-pub(crate) fn increase_allowance(
+pub(crate) fn approve(
     e: &Host,
     from: Address,
     to: Address,
     amount: i128,
+    expiration_ledger: u32,
 ) -> Result<(), HostError> {
     let mut topics = Vec::new(e)?;
-    topics.push(&Symbol::try_from_val(e, &"increase_allowance")?)?;
+    topics.push(&Symbol::try_from_val(e, &"approve")?)?;
     topics.push(&from)?;
     topics.push(&to)?;
     topics.push(&read_name(e)?)?;
-    e.contract_event(topics.into(), amount.try_into_val(e)?)?;
-    Ok(())
-}
 
-pub(crate) fn decrease_allowance(
-    e: &Host,
-    from: Address,
-    to: Address,
-    amount: i128,
-) -> Result<(), HostError> {
-    let mut topics = Vec::new(e)?;
-    topics.push(&Symbol::try_from_val(e, &"decrease_allowance")?)?;
-    topics.push(&from)?;
-    topics.push(&to)?;
-    topics.push(&read_name(e)?)?;
-    e.contract_event(topics.into(), amount.try_into_val(e)?)?;
+    let mut data = Vec::new(e)?;
+    data.push(&amount)?;
+    data.push(&expiration_ledger)?;
+    e.contract_event(topics.into(), data.into())?;
     Ok(())
 }
 
