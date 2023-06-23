@@ -76,11 +76,11 @@ where
     V: MeteredClone,
     Ctx: AsBudget + Compare<K, Error = HostError>,
 {
-    pub fn new() -> Result<Self, HostError> {
-        Ok(MeteredOrdMap {
+    pub fn new() -> Self {
+        MeteredOrdMap {
             map: Vec::new(),
             ctx: Default::default(),
-        })
+        }
     }
 
     pub fn from_map(map: Vec<(K, V)>, ctx: &Ctx) -> Result<Self, HostError> {

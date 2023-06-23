@@ -1249,7 +1249,7 @@ impl VmCallerEnv for Host {
     impl_bignum_host_fns_rhs_u32!(i256_shr, checked_shr, I256, Int256Shift);
 
     fn map_new(&self, _vmcaller: &mut VmCaller<Host>) -> Result<MapObject, HostError> {
-        self.add_host_object(HostMap::new()?)
+        self.add_host_object(HostMap::new())
     }
 
     fn map_put(
@@ -1508,7 +1508,7 @@ impl VmCallerEnv for Host {
             self.usize_from_rawval_u32_input("c", c)?
         };
         // TODO: optimize the vector based on capacity
-        self.add_host_object(HostVec::new()?)
+        self.add_host_object(HostVec::new())
     }
 
     fn vec_put(
@@ -1719,7 +1719,7 @@ impl VmCallerEnv for Host {
             vals.as_mut_slice(),
             |buf| Val::from_payload(u64::from_le_bytes(*buf)),
         )?;
-        self.add_host_object(HostVec::from_vec(vals)?)
+        self.add_host_object(HostVec::from_vec(vals))
     }
 
     fn vec_unpack_to_linear_memory(
@@ -1896,10 +1896,50 @@ impl VmCallerEnv for Host {
 
         let min_expiration =
             self.with_ledger_info(|li| Ok(li.sequence_number.saturating_add(min.into())))?;
-        self.0.expiration_bumps.borrow_mut().0.push(LedgerBump {
-            key,
-            min_expiration,
-        });
+        self.0.expiration_bumps.borrow_mut().metered_push(
+            self,
+            LedgerBump {
+                key,
+                min_expiration,
+            },
+        )?;
+        Ok(Val::VOID)
+    }
+
+    fn bump_current_contract_instance_and_code(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+        min: U32Val,
+    ) -> Result<Void, HostError> {
+        let min_expiration =
+            self.with_ledger_info(|li| Ok(li.sequence_number.saturating_add(min.into())))?;
+
+        let contract_id = self.get_current_contract_id_internal()?;
+        let key = self.contract_instance_ledger_key(&contract_id)?;
+        self.0.expiration_bumps.borrow_mut().metered_push(
+            self,
+            LedgerBump {
+                key: Rc::clone(&key),
+                min_expiration,
+            },
+        )?;
+
+        match self
+            .retrieve_contract_instance_from_storage(&key)?
+            .executable
+        {
+            ContractExecutable::Wasm(wasm_hash) => {
+                let key = self.contract_code_ledger_key(&wasm_hash)?;
+                self.0.expiration_bumps.borrow_mut().metered_push(
+                    self,
+                    LedgerBump {
+                        key,
+                        min_expiration,
+                    },
+                )?;
+            }
+            ContractExecutable::Token => {}
+        }
         Ok(Val::VOID)
     }
 
@@ -2560,7 +2600,7 @@ impl VmCallerEnv for Host {
             let inner = MeteredVector::from_array(&vals, self.as_budget())?;
             outer.push(self.add_host_object(inner)?.into());
         }
-        self.add_host_object(HostVec::from_vec(outer)?)
+        self.add_host_object(HostVec::from_vec(outer))
     }
 
     fn fail_with_error(
