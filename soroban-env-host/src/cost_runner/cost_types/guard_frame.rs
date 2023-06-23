@@ -1,6 +1,6 @@
 use std::hint::black_box;
 
-use soroban_env_common::xdr::{ContractExecutable, ScContractInstance};
+use soroban_env_common::xdr::ScContractInstance;
 
 use crate::{cost_runner::CostRunner, host::Frame, xdr::ContractCostType, xdr::Hash, Symbol, Val};
 
@@ -9,20 +9,15 @@ pub struct GuardFrameRun;
 impl CostRunner for GuardFrameRun {
     const COST_TYPE: ContractCostType = ContractCostType::GuardFrame;
 
-    type SampleType = (Hash, Symbol);
+    type SampleType = (Hash, Symbol, ScContractInstance);
 
     type RecycledType = Option<Self::SampleType>;
 
     fn run_iter(host: &crate::Host, _iter: u64, sample: Self::SampleType) -> Self::RecycledType {
-        let empty_instance = ScContractInstance {
-            executable: ContractExecutable::Token,
-            storage: None,
-        };
         black_box(
-            host.with_frame(
-                Frame::Token(sample.0, sample.1, vec![], empty_instance),
-                || Ok(Val::VOID.to_val()),
-            )
+            host.with_frame(Frame::Token(sample.0, sample.1, vec![], sample.2), || {
+                Ok(Val::VOID.to_val())
+            })
             .unwrap(),
         );
         black_box(None)
