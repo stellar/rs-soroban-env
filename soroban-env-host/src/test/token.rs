@@ -538,7 +538,6 @@ fn test_direct_transfer() {
 #[test]
 fn test_transfer_with_allowance() {
     let test = TokenTest::setup();
-    test.host.enable_debug();
     let admin = TestSigner::account(&test.issuer_key);
     let token = test.default_token();
 
