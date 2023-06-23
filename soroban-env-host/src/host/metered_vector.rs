@@ -13,9 +13,17 @@ use std::{cmp::Ordering, ops::Range};
 
 const VEC_OOB: Error = Error::from_type_and_code(ScErrorType::Object, ScErrorCode::IndexBounds);
 
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct MeteredVector<A> {
     vec: Vec<A>,
+}
+
+impl<A> Default for MeteredVector<A> {
+    fn default() -> Self {
+        Self {
+            vec: Default::default(),
+        }
+    }
 }
 
 impl<A> MeteredVector<A>
@@ -40,7 +48,8 @@ impl<A> MeteredVector<A>
 where
     A: MeteredClone,
 {
-    pub fn new() -> Result<Self, HostError> {
+    // Constructs a empty new `MeteredVector`.
+    pub fn new() -> Self {
         Self::from_vec(Vec::new())
     }
 
@@ -51,19 +60,19 @@ where
     #[cfg(any(test, feature = "testutils"))]
     pub fn with_capacity(capacity: usize, budget: &Budget) -> Result<Self, HostError> {
         super::metered_clone::charge_heap_alloc::<A>(capacity as u64, budget)?;
-        Self::from_vec(Vec::with_capacity(capacity))
+        Ok(Self::from_vec(Vec::with_capacity(capacity)))
     }
 
     pub fn from_array(buf: &[A], budget: &Budget) -> Result<Self, HostError> {
         // we may temporarily go over budget here.
         let vec: Vec<A> = buf.into();
         vec.charge_deep_clone(budget)?;
-        Self::from_vec(vec)
+        Ok(Self::from_vec(vec))
     }
 
     // No meter charge, assuming allocation cost has been covered by the caller from the outside.
-    pub fn from_vec(vec: Vec<A>) -> Result<Self, HostError> {
-        Ok(Self { vec })
+    pub fn from_vec(vec: Vec<A>) -> Self {
+        Self { vec }
     }
 
     pub fn as_slice(&self) -> &[A] {
@@ -89,7 +98,7 @@ where
             // the clone into one (when A::IS_SHALLOW==true).
             let vec: Vec<A> = iter.collect();
             vec.charge_deep_clone(budget)?;
-            Self::from_vec(vec)
+            Ok(Self::from_vec(vec))
         } else {
             // This is a logic error, we should never get here.
             Err((ScErrorType::Object, ScErrorCode::InternalError).into())
@@ -280,7 +289,7 @@ where
             }
         }
         vec.charge_deep_clone(budget)?;
-        Self::from_vec(vec)
+        Ok(Self::from_vec(vec))
     }
 
     pub fn iter(&self) -> std::slice::Iter<'_, A> {

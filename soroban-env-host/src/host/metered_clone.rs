@@ -5,6 +5,7 @@ use soroban_env_common::xdr::ScContractInstance;
 use crate::{
     budget::Budget,
     events::{EventError, HostEvent, InternalContractEvent, InternalEvent},
+    expiration_ledger_bumps::LedgerBump,
     host::Events,
     host_object::HostObject,
     storage::AccessType,
@@ -193,6 +194,7 @@ impl MeteredClone for SymbolSmallIter {}
 impl MeteredClone for U256 {}
 impl MeteredClone for I256 {}
 impl MeteredClone for HostObject {}
+impl MeteredClone for LedgerBump {}
 // xdr types
 impl MeteredClone for TimePoint {}
 impl MeteredClone for Duration {}

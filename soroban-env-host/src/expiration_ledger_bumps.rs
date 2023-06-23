@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use crate::xdr::LedgerKey;
+use crate::{xdr::LedgerKey, MeteredVector};
 
 #[derive(Clone)]
 pub struct LedgerBump {
@@ -9,4 +9,4 @@ pub struct LedgerBump {
 }
 
 #[derive(Clone, Default)]
-pub struct ExpirationLedgerBumps(pub Vec<LedgerBump>);
+pub struct ExpirationLedgerBumps(pub MeteredVector<LedgerBump>);
