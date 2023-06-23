@@ -66,7 +66,10 @@ impl Host {
         }
     }
 
-    pub(crate) fn wasm_ledger_key(&self, wasm_hash: &Hash) -> Result<Rc<LedgerKey>, HostError> {
+    pub(crate) fn contract_code_ledger_key(
+        &self,
+        wasm_hash: &Hash,
+    ) -> Result<Rc<LedgerKey>, HostError> {
         let wasm_hash = wasm_hash.metered_clone(self.as_budget())?;
         Ok(Rc::new(LedgerKey::ContractCode(LedgerKeyContractCode {
             hash: wasm_hash,
@@ -75,7 +78,7 @@ impl Host {
     }
 
     pub(crate) fn retrieve_wasm_from_storage(&self, wasm_hash: &Hash) -> Result<BytesM, HostError> {
-        let key = self.wasm_ledger_key(wasm_hash)?;
+        let key = self.contract_code_ledger_key(wasm_hash)?;
         match &self
             .0
             .storage
@@ -101,7 +104,7 @@ impl Host {
     }
 
     pub(crate) fn wasm_exists(&self, wasm_hash: &Hash) -> Result<bool, HostError> {
-        let key = self.wasm_ledger_key(wasm_hash)?;
+        let key = self.contract_code_ledger_key(wasm_hash)?;
         self.0.storage.borrow_mut().has(&key, self.as_budget())
     }
 
