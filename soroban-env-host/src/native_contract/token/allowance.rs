@@ -56,45 +56,46 @@ pub fn write_allowance(
         }
     })?;
 
-    if let Ok(allowance) = e.get_contract_data(key.try_into_val(e)?, StorageType::Temporary) {
-        let mut updated_allowance: AllowanceValue = allowance.try_into_val(e)?;
+    // Returns the allowance to write and the previous expiration of the existing allowance.
+    // If an allowance didn't exist, then the previous expiration will be None.
+    let allowance_value: Option<(AllowanceValue, Option<u32>)> =
+        if let Ok(allowance) = e.get_contract_data(key.try_into_val(e)?, StorageType::Temporary) {
+            let mut updated_allowance: AllowanceValue = allowance.try_into_val(e)?;
+            updated_allowance.amount = amount;
 
-        updated_allowance.amount = amount;
-        let old_expiration = updated_allowance.expiration_ledger;
-        updated_allowance.expiration_ledger = expiration;
-
-        e.put_contract_data(
-            key.try_into_val(e)?,
-            updated_allowance.try_into_val(e)?,
-            StorageType::Temporary,
-            ().into(),
-        )?;
-
-        if old_expiration < expiration && amount > 0 {
-            e.bump_contract_data(
-                key.try_into_val(e)?,
-                StorageType::Temporary,
-                (expiration - ledger_seq).into(),
-            )?;
-        }
-    } else if amount > 0 {
-        //New allowance
-        let val = AllowanceValue {
-            amount,
-            expiration_ledger: expiration,
+            let old_expiration = updated_allowance.expiration_ledger;
+            updated_allowance.expiration_ledger = expiration;
+            Some((updated_allowance, Some(old_expiration)))
+        } else if amount > 0 {
+            Some((
+                AllowanceValue {
+                    amount,
+                    expiration_ledger: expiration,
+                },
+                None,
+            ))
+        } else {
+            None
         };
-        e.put_contract_data(
-            key.try_into_val(e)?,
-            val.try_into_val(e)?,
-            StorageType::Temporary,
-            ().into(),
-        )?;
 
-        e.bump_contract_data(
-            key.try_into_val(e)?,
-            StorageType::Temporary,
-            (expiration - ledger_seq).into(),
-        )?;
+    match allowance_value {
+        Some(val) => {
+            e.put_contract_data(
+                key.try_into_val(e)?,
+                val.0.try_into_val(e)?,
+                StorageType::Temporary,
+                ().into(),
+            )?;
+
+            if val.0.amount > 0 && val.1.unwrap_or(0) < expiration {
+                e.bump_contract_data(
+                    key.try_into_val(e)?,
+                    StorageType::Temporary,
+                    (expiration - ledger_seq).into(),
+                )?;
+            }
+        }
+        None => {}
     }
 
     Ok(())
