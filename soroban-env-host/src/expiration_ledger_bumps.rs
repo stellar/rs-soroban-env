@@ -24,6 +24,7 @@ impl ExpirationLedgerBumps {
             1,
             b.as_budget(),
         )?;
-        Ok(self.0.push(elem))
+        self.0.push(elem);
+        Ok(())
     }
 }
