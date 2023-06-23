@@ -276,7 +276,6 @@ impl Host {
     where
         F: FnOnce(&InstanceStorageMap) -> Result<U, HostError>,
     {
-        // f(&mut self.0.storage.borrow_mut())
         self.with_current_context_mut(|ctx| {
             self.maybe_init_instance_storage(ctx)?;
             f(ctx.storage.as_ref().ok_or_else(|| {
