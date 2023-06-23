@@ -438,6 +438,12 @@ impl AsBudget for Host {
     }
 }
 
+impl AsBudget for &Host {
+    fn as_budget(&self) -> &Budget {
+        self.budget_ref()
+    }
+}
+
 impl Budget {
     /// Initializes the budget from network configuration settings.
     pub fn from_configs(

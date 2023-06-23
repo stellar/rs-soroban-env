@@ -1895,12 +1895,12 @@ impl VmCallerEnv for Host {
 
         let min_expiration =
             self.with_ledger_info(|li| Ok(li.sequence_number.saturating_add(min.into())))?;
-        self.0.expiration_bumps.borrow_mut().0.push_back(
+        self.0.expiration_bumps.borrow_mut().metered_push(
+            self,
             LedgerBump {
                 key,
                 min_expiration,
             },
-            self.as_budget(),
         )?;
         Ok(Val::VOID)
     }
@@ -1915,12 +1915,12 @@ impl VmCallerEnv for Host {
 
         let contract_id = self.get_current_contract_id_internal()?;
         let key = self.contract_instance_ledger_key(&contract_id)?;
-        self.0.expiration_bumps.borrow_mut().0.push_back(
+        self.0.expiration_bumps.borrow_mut().metered_push(
+            self,
             LedgerBump {
                 key: key.metered_clone(self.as_budget())?,
                 min_expiration,
             },
-            self.as_budget(),
         )?;
 
         match self
@@ -1929,12 +1929,12 @@ impl VmCallerEnv for Host {
         {
             ContractExecutable::Wasm(wasm_hash) => {
                 let key = self.contract_code_ledger_key(&wasm_hash)?;
-                self.0.expiration_bumps.borrow_mut().0.push_back(
+                self.0.expiration_bumps.borrow_mut().metered_push(
+                    self,
                     LedgerBump {
                         key,
                         min_expiration,
                     },
-                    self.as_budget(),
                 )?;
             }
             ContractExecutable::Token => {}
