@@ -45,7 +45,7 @@ fn get_contract_wasm_ref(host: &Host, contract_id: Hash) -> Hash {
 }
 
 fn get_contract_wasm(host: &Host, wasm_hash: Hash) -> Vec<u8> {
-    let storage_key = host.wasm_ledger_key(&wasm_hash).unwrap();
+    let storage_key = host.contract_code_ledger_key(&wasm_hash).unwrap();
     host.with_mut_storage(|s: &mut Storage| {
         assert!(s.has(&storage_key, host.as_budget()).unwrap());
 
@@ -70,7 +70,7 @@ fn get_bytes_from_sc_val(val: &ScVal) -> Vec<u8> {
 fn test_host() -> Host {
     let budget = Budget::default();
     let storage =
-        Storage::with_enforcing_footprint_and_map(Footprint::default(), StorageMap::new().unwrap());
+        Storage::with_enforcing_footprint_and_map(Footprint::default(), StorageMap::new());
     let host = Host::with_storage_and_budget(storage, budget);
     host.set_ledger_info(LedgerInfo {
         network_id: generate_bytes_array(),
@@ -110,7 +110,7 @@ fn test_create_contract_from_source_account(host: &Host, wasm: &[u8]) -> Hash {
             .unwrap();
         s.footprint
             .record_access(
-                &host.wasm_ledger_key(&wasm_hash).unwrap(),
+                &host.contract_code_ledger_key(&wasm_hash).unwrap(),
                 AccessType::ReadWrite,
                 host.as_budget(),
             )
@@ -192,7 +192,7 @@ fn create_contract_using_parent_id_test() {
             .unwrap();
         s.footprint
             .record_access(
-                &host.wasm_ledger_key(&wasm_hash).unwrap(),
+                &host.contract_code_ledger_key(&wasm_hash).unwrap(),
                 AccessType::ReadWrite,
                 host.as_budget(),
             )
