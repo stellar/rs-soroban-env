@@ -1,9 +1,10 @@
 #![no_std]
 use soroban_sdk::{
     auth::{ContractContext, InvokerContractAuthEntry, SubContractInvocation},
-    contractimpl, contracttype, vec, Address, Env, IntoVal, Symbol, Vec,
+    contract, contractimpl, contracttype, vec, Address, Env, IntoVal, Symbol, Vec,
 };
 
+#[contract]
 struct AuthContract;
 
 #[derive(Clone)]
@@ -24,9 +25,7 @@ impl AuthContract {
     pub fn tree_fn(env: Env, addresses: Vec<Address>, tree: TreeNode) {
         for i in 0..addresses.len() {
             if tree.need_auth.get_unchecked(i) {
-                addresses
-                    .get_unchecked(i)
-                    .require_auth_for_args(vec![&env]);
+                addresses.get_unchecked(i).require_auth_for_args(vec![&env]);
             }
         }
         for child in tree.children.iter() {

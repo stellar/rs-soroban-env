@@ -1,5 +1,5 @@
 #![no_std]
-use soroban_sdk::{contractimpl, contracttype, Bytes, BytesN, Env, Symbol, Vec};
+use soroban_sdk::{contract, contractimpl, contracttype, Bytes, BytesN, Env, Symbol, Vec};
 
 // This is a "complex" contract that uses a nontrivial amount of the host
 // interface from the guest: UDTs (thus maps), vectors, byte arrays and linear
@@ -11,6 +11,7 @@ use soroban_sdk::{contractimpl, contracttype, Bytes, BytesN, Env, Symbol, Vec};
 //
 // It should run to completion, write an LE, log a value, and emit an event.
 
+#[contract]
 pub struct Contract;
 
 #[contracttype]

@@ -48,6 +48,19 @@ fn test_storage(host: &Host, contract_id: AddressObject, storage: &str) {
         true
     );
 
+    // Smoke test bump
+    let bump_args = if storage == "instance" {
+        host_vec![host, 6000_u32]
+    } else {
+        host_vec![host, key_1, 6000_u32]
+    };
+    host.call(
+        contract_id,
+        storage_fn_name(host, "bump", storage),
+        bump_args.into(),
+    )
+    .unwrap();
+
     // Put anothrer key and verify it's there
     host.call(
         contract_id,

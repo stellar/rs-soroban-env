@@ -14,7 +14,7 @@ fn hostile_iloop_traps() -> Result<(), HostError> {
     let res = host.call(
         contract_id_obj,
         Symbol::try_from_small_str("iloop")?,
-        host.add_host_object(HostVec::new()?)?,
+        host.add_host_object(HostVec::new())?,
     );
     assert!(HostError::result_matches_err(
         res,
@@ -31,7 +31,7 @@ fn hostile_badack_traps() -> Result<(), HostError> {
     let res = host.call(
         contract_id_obj,
         Symbol::try_from_small_str("badack")?,
-        host.add_host_object(HostVec::new()?)?,
+        host.add_host_object(HostVec::new())?,
     );
 
     assert!(HostError::result_matches_err(
@@ -49,7 +49,7 @@ fn hostile_ssmash_traps() -> Result<(), HostError> {
     let res = host.call(
         contract_id_obj,
         Symbol::try_from_small_str("ssmash")?,
-        host.add_host_object(HostVec::new()?)?,
+        host.add_host_object(HostVec::new())?,
     );
 
     assert!(HostError::result_matches_err(
@@ -67,7 +67,7 @@ fn hostile_oob1_traps() -> Result<(), HostError> {
     let res = host.call(
         contract_id_obj,
         Symbol::try_from_small_str("oob1")?,
-        host.add_host_object(HostVec::new()?)?,
+        host.add_host_object(HostVec::new())?,
     );
 
     assert!(HostError::result_matches_err(
@@ -85,7 +85,7 @@ fn hostile_oob2_traps() -> Result<(), HostError> {
     let res = host.call(
         contract_id_obj,
         Symbol::try_from_small_str("oob2")?,
-        host.add_host_object(HostVec::new()?)?,
+        host.add_host_object(HostVec::new())?,
     );
     assert!(HostError::result_matches_err(
         res,
@@ -107,7 +107,7 @@ fn hostile_objs_traps() -> Result<(), HostError> {
     let res = host.call(
         contract_id_obj,
         Symbol::try_from_small_str("objs")?,
-        host.add_host_object(HostVec::new()?)?,
+        host.add_host_object(HostVec::new())?,
     );
 
     assert!(HostError::result_matches_err(

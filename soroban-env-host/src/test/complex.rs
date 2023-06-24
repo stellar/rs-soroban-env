@@ -32,7 +32,7 @@ fn run_complex() -> Result<(), HostError> {
         host.call(
             contract_id_obj,
             Symbol::try_from_small_str("go")?,
-            host.add_host_object(HostVec::new()?)?,
+            host.add_host_object(HostVec::new())?,
         )?;
         let (store, _, _, _) = host.try_finish().unwrap();
         store.footprint
@@ -48,7 +48,7 @@ fn run_complex() -> Result<(), HostError> {
         host.call(
             contract_id_obj,
             Symbol::try_from_small_str("go")?,
-            host.add_host_object(HostVec::new()?)?,
+            host.add_host_object(HostVec::new())?,
         )?;
     }
     Ok(())

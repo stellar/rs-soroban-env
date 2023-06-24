@@ -1,12 +1,13 @@
 #![no_std]
-use soroban_sdk::{contractimpl, Env, Symbol};
+use soroban_sdk::{contract, contractimpl, Env, Symbol};
 
+#[contract]
 pub struct Contract;
 
 #[contractimpl]
 impl Contract {
     pub fn put_persistent(e: Env, key: Symbol, val: u64, flags: Option<u32>) {
-        e.storage().persistent().set(&key, &val, flags)
+        e.storage().persistent().set(&key, &val, flags);
     }
 
     pub fn del_persistent(e: Env, key: Symbol) {
@@ -59,5 +60,9 @@ impl Contract {
 
     pub fn get_instance(e: Env, key: Symbol) -> u64 {
         e.storage().instance().get(&key).unwrap()
+    }
+
+    pub fn bump_instance(e: Env, min_to_live: u32) {
+        e.storage().instance().bump(min_to_live)
     }
 }

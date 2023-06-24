@@ -1,8 +1,8 @@
 #![no_std]
+use soroban_sdk::{auth::Context, contract, contractimpl, contracttype, BytesN, Env, Vec};
 
+#[contract]
 struct SimpleAccount;
-
-use soroban_sdk::{auth::Context, contractimpl, contracttype, BytesN, Env, Vec};
 
 #[derive(Clone)]
 #[contracttype]
@@ -13,12 +13,16 @@ pub enum DataKey {
 #[contractimpl]
 impl SimpleAccount {
     pub fn init(env: Env, public_key: BytesN<32>) {
-        env.storage().persistent().set(&DataKey::Owner, &public_key, None);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Owner, &public_key, None);
     }
 
     pub fn set_owner(env: Env, new_owner: BytesN<32>) {
         env.current_contract_address().require_auth();
-        env.storage().persistent().set(&DataKey::Owner, &new_owner, None);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Owner, &new_owner, None);
     }
 
     #[allow(non_snake_case)]
