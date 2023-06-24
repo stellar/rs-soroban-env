@@ -1,6 +1,7 @@
 #![no_std]
-use soroban_sdk::{contractimpl, BytesN, Env};
+use soroban_sdk::{contract, contractimpl, BytesN, Env};
 
+#[contract]
 pub struct Contract;
 
 #[contractimpl]

@@ -15,10 +15,16 @@ pub struct BalanceValue {
     pub clawback: bool,
 }
 
+/// Keys for the persistent data associated with token users.
 #[contracttype]
 pub enum DataKey {
     Allowance(AllowanceDataKey),
     Balance(Address),
+}
+
+/// Keys for token instance data.
+#[contracttype]
+pub enum InstanceDataKey {
     Admin,
     AssetInfo,
 }

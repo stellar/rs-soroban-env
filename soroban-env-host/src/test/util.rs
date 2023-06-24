@@ -3,11 +3,10 @@ use std::rc::Rc;
 use rand::{thread_rng, RngCore};
 use soroban_env_common::{
     xdr::{
-        AccountEntry, AccountId, ContractCostType, ContractExecutable, ContractIdPreimage,
-        ContractIdPreimageFromAddress, CreateContractArgs, HostFunction, LedgerEntry,
-        LedgerEntryData, LedgerKey, PublicKey, ScAddress, ScVal, ScVec, Uint256,
+        AccountEntry, AccountId, ContractCostType, LedgerEntry, LedgerEntryData, LedgerKey,
+        PublicKey, ScAddress, ScVal, ScVec, Uint256,
     },
-    AddressObject, BytesObject, TryIntoVal, Val, VecObject,
+    AddressObject, BytesObject, Env, EnvBase, Val, VecObject,
 };
 
 use crate::{
@@ -162,36 +161,52 @@ impl Host {
         Ok(rawval.try_into()?)
     }
 
-    // Registers a contract with provided WASM source and returns the registered
+    // Registers a contract with provided Wasm code and returns the registered
     // contract's address.
-    // This relies on the host to have no footprint enforcement.
-    pub(crate) fn register_test_contract_wasm(&self, contract_wasm: &[u8]) -> AddressObject {
+    // The contract address deterministically depends on the input account and
+    // salt, so this can be used with enforcing ledger footprint (but the
+    // footprint still has to be specified outside of this).
+    pub(crate) fn register_test_contract_wasm_from_source_account(
+        &self,
+        contract_wasm: &[u8],
+        account: AccountId,
+        salt: [u8; 32],
+    ) -> AddressObject {
+        // Use source account-based auth in order to avoid using nonces which
+        // won't work well with enforcing ledger footprint.
+        let prev_source_account = self.source_account_id();
+        // Use recording auth to skip specifying the auth payload.
         let prev_auth_manager = self.snapshot_auth_manager();
         self.switch_to_recording_auth();
 
-        let wasm_id: Val = self
-            .invoke_function(HostFunction::UploadContractWasm(
-                contract_wasm.to_vec().try_into().unwrap(),
-            ))
-            .unwrap()
-            .try_into_val(self)
+        let wasm_hash = self
+            .upload_wasm(self.bytes_new_from_slice(contract_wasm).unwrap())
             .unwrap();
-
-        let wasm_id = self
-            .hash_from_bytesobj_input("wasm_hash", wasm_id.try_into().unwrap())
+        self.set_source_account(account.clone());
+        let contract_address = self
+            .create_contract(
+                self.add_host_object(ScAddress::Account(account.clone()))
+                    .unwrap(),
+                wasm_hash,
+                self.bytes_new_from_slice(&salt).unwrap(),
+            )
             .unwrap();
-        let address_obj: Val = self
-            .invoke_function(HostFunction::CreateContract(CreateContractArgs {
-                contract_id_preimage: ContractIdPreimage::Address(ContractIdPreimageFromAddress {
-                    address: ScAddress::Contract(xdr::Hash(generate_bytes_array())),
-                    salt: Uint256(generate_bytes_array()),
-                }),
-                executable: ContractExecutable::Wasm(wasm_id),
-            }))
-            .unwrap()
-            .try_into_val(self)
-            .unwrap();
+        if let Some(prev_account) = prev_source_account {
+            self.set_source_account(prev_account);
+        }
         self.set_auth_manager(prev_auth_manager);
-        address_obj.try_into().unwrap()
+        contract_address
+    }
+
+    // Registers a contract with provided Wasm code and returns the registered
+    // contract's address.
+    // The contract address will be generated randomly, so this won't work with
+    // enforcing ledger footprint.
+    pub(crate) fn register_test_contract_wasm(&self, contract_wasm: &[u8]) -> AddressObject {
+        self.register_test_contract_wasm_from_source_account(
+            contract_wasm,
+            generate_account_id(),
+            generate_bytes_array(),
+        )
     }
 }

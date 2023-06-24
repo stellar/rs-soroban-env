@@ -3,7 +3,7 @@ use std::{convert::TryInto, rc::Rc};
 use crate::{
     auth::RecordedAuthPayload,
     budget::AsBudget,
-    host::{Frame, TestContractFrame},
+    host::{frame::TestContractFrame, Frame},
     host_vec,
     native_contract::{
         base_types::Address,
@@ -272,6 +272,7 @@ impl TokenTest {
                 Hash(contract_id_bytes.to_array().unwrap()),
                 Symbol::try_from_small_str("foo").unwrap(),
                 vec![],
+                None,
             )),
             || {
                 let res = f();

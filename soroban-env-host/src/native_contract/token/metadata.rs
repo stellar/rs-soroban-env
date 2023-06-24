@@ -60,7 +60,7 @@ pub fn set_metadata(e: &Host) -> Result<(), HostError> {
     e.put_contract_data(
         key.try_into_val(e)?,
         metadata.try_into_val(e)?,
-        StorageType::Persistent,
+        StorageType::Instance,
         ().into(),
     )?;
     Ok(())
@@ -69,7 +69,7 @@ pub fn set_metadata(e: &Host) -> Result<(), HostError> {
 pub fn read_name(e: &Host) -> Result<String, HostError> {
     let key = SymbolSmall::try_from_str(METADATA_KEY)?;
     let metadata: TokenMetadata = e
-        .get_contract_data(key.try_into_val(e)?, StorageType::Persistent)?
+        .get_contract_data(key.try_into_val(e)?, StorageType::Instance)?
         .try_into_val(e)?;
     Ok(metadata.name)
 }
@@ -77,7 +77,7 @@ pub fn read_name(e: &Host) -> Result<String, HostError> {
 pub fn read_symbol(e: &Host) -> Result<String, HostError> {
     let key = SymbolSmall::try_from_str(METADATA_KEY)?;
     let metadata: TokenMetadata = e
-        .get_contract_data(key.try_into_val(e)?, StorageType::Persistent)?
+        .get_contract_data(key.try_into_val(e)?, StorageType::Instance)?
         .try_into_val(e)?;
     Ok(metadata.symbol)
 }

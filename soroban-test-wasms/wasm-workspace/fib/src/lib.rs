@@ -1,6 +1,7 @@
 #![no_std]
-use soroban_sdk::contractimpl;
+use soroban_sdk::{contract, contractimpl};
 
+#[contract]
 pub struct Contract;
 
 fn fib(n: u32) -> u32 {

@@ -12,7 +12,11 @@ impl HostCostMeasurement for GuardFrameMeasure {
     ) -> (Hash, Symbol) {
         let id: Hash = [0; 32].into();
         let fun: Symbol = Symbol::try_from_small_str("add").unwrap();
-        (id, fun)
+        let empty_instance = ScContractInstance {
+            executable: ContractExecutable::Token,
+            storage: None,
+        };
+        (id, fun, empty_instance)
     }
 
     fn new_random_case(

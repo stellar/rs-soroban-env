@@ -321,6 +321,17 @@ impl Host {
             addr.metered_clone(self.budget_ref())
         })
     }
+
+    pub(crate) fn host_map_to_scmap(&self, map: &HostMap) -> Result<ScMap, HostError> {
+        metered_clone::charge_heap_alloc::<ScMapEntry>(map.len() as u64, self.as_budget())?;
+        let mut mv = Vec::with_capacity(map.len());
+        for (k, v) in map.iter(self)? {
+            let key = self.from_host_val(*k)?;
+            let val = self.from_host_val(*v)?;
+            mv.push(ScMapEntry { key, val });
+        }
+        Ok(ScMap(self.map_err(mv.try_into())?))
+    }
 }
 
 impl Convert<&Object, ScValObject> for Host {
@@ -414,19 +425,7 @@ impl Host {
                             )?;
                             ScVal::Vec(Some(ScVec(self.map_err(sv.try_into())?)))
                         }
-                        HostObject::Map(mm) => {
-                            metered_clone::charge_heap_alloc::<ScMapEntry>(
-                                mm.len() as u64,
-                                self.as_budget(),
-                            )?;
-                            let mut mv = Vec::with_capacity(mm.len());
-                            for (k, v) in mm.iter(self)? {
-                                let key = self.from_host_val(*k)?;
-                                let val = self.from_host_val(*v)?;
-                                mv.push(ScMapEntry { key, val });
-                            }
-                            ScVal::Map(Some(ScMap(self.map_err(mv.try_into())?)))
-                        }
+                        HostObject::Map(mm) => ScVal::Map(Some(self.host_map_to_scmap(mm)?)),
                         HostObject::U64(u) => ScVal::U64(*u),
                         HostObject::I64(i) => ScVal::I64(*i),
                         HostObject::TimePoint(tp) => {
