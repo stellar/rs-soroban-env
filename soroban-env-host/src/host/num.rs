@@ -26,52 +26,51 @@ macro_rules! impl_wrapping_obj_to_num {
 
 #[macro_export]
 macro_rules! impl_bignum_host_fns {
-    ($host_fn: ident, $method: ident, $num: ty, $cost: ident) => {
+    ($host_fn: ident, $method: ident, $num: ty, $valty: ty, $cost: ident) => {
         fn $host_fn(
             &self,
             vmcaller: &mut VmCaller<Self::VmUserState>,
-            lhs_obj: <$num as HostObjectType>::Wrapper,
-            rhs_obj: <$num as HostObjectType>::Wrapper,
-        ) -> Result<<$num as HostObjectType>::Wrapper, Self::Error> {
+            lhs_val: $valty,
+            rhs_val: $valty,
+        ) -> Result<$valty, Self::Error> {
+            use soroban_env_common::TryIntoVal;
             self.charge_budget(ContractCostType::$cost, None)?;
-            let res = self.visit_obj(lhs_obj, move |lhs: &$num| {
-                self.visit_obj(rhs_obj, move |rhs: &$num| {
-                    lhs.$method(*rhs).ok_or_else(|| {
-                        self.err(
-                            ScErrorType::Object,
-                            ScErrorCode::ArithDomain,
-                            "overflow has occured",
-                            &[lhs_obj.to_val(), rhs_obj.to_val()],
-                        )
-                    })
-                })
+            let lhs: $num = lhs_val.to_val().try_into_val(self)?;
+            let rhs: $num = rhs_val.to_val().try_into_val(self)?;
+            let res: $num = lhs.$method(rhs).ok_or_else(|| {
+                self.err(
+                    ScErrorType::Object,
+                    ScErrorCode::ArithDomain,
+                    "overflow has occured",
+                    &[lhs_val.to_val(), rhs_val.to_val()],
+                )
             })?;
-            self.add_host_object(res)
+            Ok(res.try_into_val(self)?)
         }
     };
 }
 
 #[macro_export]
 macro_rules! impl_bignum_host_fns_rhs_u32 {
-    ($host_fn: ident, $method: ident, $num: ty, $cost: ident) => {
+    ($host_fn: ident, $method: ident, $num: ty, $valty: ty, $cost: ident) => {
         fn $host_fn(
             &self,
             vmcaller: &mut VmCaller<Self::VmUserState>,
-            lhs_obj: <$num as HostObjectType>::Wrapper,
+            lhs_val: $valty,
             rhs_val: U32Val,
-        ) -> Result<<$num as HostObjectType>::Wrapper, Self::Error> {
+        ) -> Result<$valty, Self::Error> {
+            use soroban_env_common::TryIntoVal;
             self.charge_budget(ContractCostType::$cost, None)?;
-            let res = self.visit_obj(lhs_obj, move |lhs: &$num| {
-                lhs.$method(rhs_val.into()).ok_or_else(|| {
-                    self.err(
-                        ScErrorType::Object,
-                        ScErrorCode::ArithDomain,
-                        "overflow has occured",
-                        &[lhs_obj.to_val(), rhs_val.to_val()],
-                    )
-                })
+            let lhs: $num = lhs_val.to_val().try_into_val(self)?;
+            let res = lhs.$method(rhs_val.into()).ok_or_else(|| {
+                self.err(
+                    ScErrorType::Object,
+                    ScErrorCode::ArithDomain,
+                    "overflow has occured",
+                    &[lhs_val.to_val(), rhs_val.to_val()],
+                )
             })?;
-            self.add_host_object(res)
+            Ok(res.try_into_val(self)?)
         }
     };
 }

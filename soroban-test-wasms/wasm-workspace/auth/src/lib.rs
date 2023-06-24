@@ -1,7 +1,7 @@
 #![no_std]
 use soroban_sdk::{
     auth::{ContractContext, InvokerContractAuthEntry, SubContractInvocation},
-    contract, contractimpl, contracttype, vec, Address, Env, IntoVal, Symbol, Vec,
+    contract, contractimpl, contracttype, vec, Address, Env, IntoVal, symbol_short, Vec,
 };
 
 #[contract]
@@ -31,7 +31,7 @@ impl AuthContract {
         for child in tree.children.iter() {
             env.invoke_contract::<()>(
                 &child.contract.clone(),
-                &Symbol::short("tree_fn"),
+                &symbol_short!("tree_fn"),
                 (addresses.clone(), child).into_val(&env),
             );
         }
@@ -40,7 +40,7 @@ impl AuthContract {
     pub fn order_fn(env: Env, addr: Address, child_id: Address) {
         env.invoke_contract::<()>(
             &child_id,
-            &Symbol::short("do_auth"),
+            &symbol_short!("do_auth"),
             (&addr, 10_u32).into_val(&env),
         );
         addr.require_auth();
@@ -61,7 +61,7 @@ impl AuthContract {
         let curr_address = env.current_contract_address();
         env.invoke_contract::<()>(
             &tree.contract,
-            &Symbol::short("tree_fn"),
+            &symbol_short!("tree_fn"),
             (vec![&env, curr_address], tree.clone()).into_val(&env),
         );
     }
@@ -77,7 +77,7 @@ fn tree_to_invoker_contract_auth(env: &Env, tree: &TreeNode) -> InvokerContractA
     InvokerContractAuthEntry::Contract(SubContractInvocation {
         context: ContractContext {
             contract: tree.contract.clone(),
-            fn_name: Symbol::short("tree_fn"),
+            fn_name: symbol_short!("tree_fn"),
             args: vec![&env],
         },
         sub_invocations,

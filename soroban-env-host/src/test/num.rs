@@ -1,10 +1,10 @@
 use soroban_env_common::{
     num::*,
     xdr::{ScErrorCode, ScErrorType, ScVal},
-    Compare, Env, EnvBase, Object, TryFromVal, TryIntoVal, I256,
+    Compare, Env, EnvBase, TryFromVal, TryIntoVal, I256,
 };
 
-use crate::{budget::AsBudget, host_object::HostObjectType, Host, HostError, Val};
+use crate::{budget::AsBudget, Host, HostError, Val};
 use core::fmt::Debug;
 use std::cmp::Ordering;
 
@@ -200,25 +200,30 @@ fn test_num_rawval_scval_roundtrip_ordering() {
     check_roundtrip_compare_ok::<I256>(&host, input_vec);
 }
 
-fn check_num_arith_ok<T, F>(host: &Host, lhs: T, rhs: T, f: F, expected: T) -> Result<(), HostError>
+fn check_num_arith_ok<T, V, F>(
+    host: &Host,
+    lhs: T,
+    rhs: T,
+    f: F,
+    expected: T,
+) -> Result<(), HostError>
 where
-    T: HostObjectType,
-    F: FnOnce(
-        &Host,
-        <T as HostObjectType>::Wrapper,
-        <T as HostObjectType>::Wrapper,
-    ) -> Result<<T as HostObjectType>::Wrapper, HostError>,
+    V: TryFromVal<Host, T> + Into<Val>,
+    HostError: From<<V as TryFromVal<Host, T>>::Error>,
+    F: FnOnce(&Host, V, V) -> Result<V, HostError>,
 {
-    let res: Object = host.add_host_object(expected)?.into();
-    let res_back: Object = f(host, host.add_host_object(lhs)?, host.add_host_object(rhs)?)?.into();
+    let res: V = V::try_from_val(host, &expected)?;
+    let lhs: V = V::try_from_val(host, &lhs)?;
+    let rhs: V = V::try_from_val(host, &rhs)?;
+    let res_back: V = f(host, lhs, rhs)?;
     assert_eq!(
-        host.compare(res.as_val(), res_back.as_val()).unwrap(),
+        host.compare(&res.into(), &res_back.into()).unwrap(),
         Ordering::Equal
     );
     Ok(())
 }
 
-fn check_num_arith_rhs_u32_ok<T, F>(
+fn check_num_arith_rhs_u32_ok<T, V, F>(
     host: &Host,
     lhs: T,
     rhs: u32,
@@ -226,52 +231,47 @@ fn check_num_arith_rhs_u32_ok<T, F>(
     expected: T,
 ) -> Result<(), HostError>
 where
-    T: HostObjectType,
-    F: FnOnce(
-        &Host,
-        <T as HostObjectType>::Wrapper,
-        U32Val,
-    ) -> Result<<T as HostObjectType>::Wrapper, HostError>,
+    V: TryFromVal<Host, T> + Into<Val>,
+    HostError: From<<V as TryFromVal<Host, T>>::Error>,
+    F: FnOnce(&Host, V, U32Val) -> Result<V, HostError>,
 {
-    let res: Object = host.add_host_object(expected)?.into();
-    let res_back: Object = f(host, host.add_host_object(lhs)?, U32Val::from(rhs))?.into();
+    let res: V = V::try_from_val(host, &expected)?;
+    let lhs: V = V::try_from_val(host, &lhs)?;
+    let res_back: V = f(host, lhs, U32Val::from(rhs))?;
     assert_eq!(
-        host.compare(res.as_val(), res_back.as_val()).unwrap(),
+        host.compare(&res.into(), &res_back.into()).unwrap(),
         Ordering::Equal
     );
     Ok(())
 }
 
-fn check_num_arith_expect_err<T, F>(host: &Host, lhs: T, rhs: T, f: F) -> Result<(), HostError>
+fn check_num_arith_expect_err<T, V, F>(host: &Host, lhs: T, rhs: T, f: F) -> Result<(), HostError>
 where
-    T: HostObjectType,
-    F: FnOnce(
-        &Host,
-        <T as HostObjectType>::Wrapper,
-        <T as HostObjectType>::Wrapper,
-    ) -> Result<<T as HostObjectType>::Wrapper, HostError>,
+    V: TryFromVal<Host, T> + Into<Val>,
+    HostError: From<<V as TryFromVal<Host, T>>::Error>,
+    F: FnOnce(&Host, V, V) -> Result<V, HostError>,
 {
-    let res_back = f(host, host.add_host_object(lhs)?, host.add_host_object(rhs)?);
+    let lhs: V = V::try_from_val(host, &lhs)?;
+    let rhs: V = V::try_from_val(host, &rhs)?;
+    let res_back: Result<V, HostError> = f(host, lhs, rhs);
     let code = (ScErrorType::Object, ScErrorCode::ArithDomain);
     assert!(HostError::result_matches_err(res_back, code));
     Ok(())
 }
 
-fn check_num_arith_rhs_u32_expect_err<T, F>(
+fn check_num_arith_rhs_u32_expect_err<T, V, F>(
     host: &Host,
     lhs: T,
     rhs: u32,
     f: F,
 ) -> Result<(), HostError>
 where
-    T: HostObjectType,
-    F: FnOnce(
-        &Host,
-        <T as HostObjectType>::Wrapper,
-        U32Val,
-    ) -> Result<<T as HostObjectType>::Wrapper, HostError>,
+    V: TryFromVal<Host, T> + Into<Val>,
+    HostError: From<<V as TryFromVal<Host, T>>::Error>,
+    F: FnOnce(&Host, V, U32Val) -> Result<V, HostError>,
 {
-    let res_back = f(host, host.add_host_object(lhs)?, U32Val::from(rhs));
+    let lhs: V = V::try_from_val(host, &lhs)?;
+    let res_back: Result<V, HostError> = f(host, lhs, U32Val::from(rhs));
     let code = (ScErrorType::Object, ScErrorCode::ArithDomain);
     assert!(HostError::result_matches_err(res_back, code));
     Ok(())

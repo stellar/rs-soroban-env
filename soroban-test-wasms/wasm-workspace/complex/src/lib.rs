@@ -1,5 +1,5 @@
 #![no_std]
-use soroban_sdk::{contract, contractimpl, contracttype, Bytes, BytesN, Env, Symbol, Vec};
+use soroban_sdk::{contract, contractimpl, contracttype, Bytes, BytesN, Env, symbol_short, Vec};
 
 // This is a "complex" contract that uses a nontrivial amount of the host
 // interface from the guest: UDTs (thus maps), vectors, byte arrays and linear
@@ -32,7 +32,7 @@ impl Contract {
             seq: ledger.sequence(),
             time: ledger.timestamp(),
         };
-        let data = Symbol::short("data");
+        let data = symbol_short!("data");
         let hash = e.crypto().sha256(&my_ledger.network_id.clone().into());
         let mut buf: [u8; 32] = [0; 32];
         hash.copy_into_slice(&mut buf);
