@@ -1,6 +1,6 @@
 use std::hint::black_box;
 
-use crate::{cost_runner::CostRunner, xdr::ContractCostType, Env, I256Object, U32Val};
+use crate::{cost_runner::CostRunner, xdr::ContractCostType, Env, I256Val, U32Val};
 
 macro_rules! impl_int256_cost_runner {
     ($runner:ident, $method:ident, $cost:ident, $sample_type: ty) => {
@@ -11,7 +11,7 @@ macro_rules! impl_int256_cost_runner {
 
             type SampleType = $sample_type;
 
-            type RecycledType = Option<I256Object>;
+            type RecycledType = Option<I256Val>;
 
             fn run_iter(
                 host: &crate::Host,
@@ -33,13 +33,8 @@ macro_rules! impl_int256_cost_runner {
         }
     };
 }
-impl_int256_cost_runner!(
-    Int256AddSubRun,
-    i256_add,
-    Int256AddSub,
-    (I256Object, I256Object)
-);
-impl_int256_cost_runner!(Int256MulRun, i256_mul, Int256Mul, (I256Object, I256Object));
-impl_int256_cost_runner!(Int256DivRun, i256_div, Int256Div, (I256Object, I256Object));
-impl_int256_cost_runner!(Int256PowRun, i256_pow, Int256Pow, (I256Object, U32Val));
-impl_int256_cost_runner!(Int256ShiftRun, i256_shl, Int256Shift, (I256Object, U32Val));
+impl_int256_cost_runner!(Int256AddSubRun, i256_add, Int256AddSub, (I256Val, I256Val));
+impl_int256_cost_runner!(Int256MulRun, i256_mul, Int256Mul, (I256Val, I256Val));
+impl_int256_cost_runner!(Int256DivRun, i256_div, Int256Div, (I256Val, I256Val));
+impl_int256_cost_runner!(Int256PowRun, i256_pow, Int256Pow, (I256Val, U32Val));
+impl_int256_cost_runner!(Int256ShiftRun, i256_shl, Int256Shift, (I256Val, U32Val));

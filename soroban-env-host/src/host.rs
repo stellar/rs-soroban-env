@@ -1362,21 +1362,21 @@ impl VmCallerEnv for Host {
         })
     }
 
-    impl_bignum_host_fns!(u256_add, checked_add, U256, Int256AddSub);
-    impl_bignum_host_fns!(u256_sub, checked_sub, U256, Int256AddSub);
-    impl_bignum_host_fns!(u256_mul, checked_mul, U256, Int256Mul);
-    impl_bignum_host_fns!(u256_div, checked_div, U256, Int256Div);
-    impl_bignum_host_fns_rhs_u32!(u256_pow, checked_pow, U256, Int256Pow);
-    impl_bignum_host_fns_rhs_u32!(u256_shl, checked_shl, U256, Int256Shift);
-    impl_bignum_host_fns_rhs_u32!(u256_shr, checked_shr, U256, Int256Shift);
+    impl_bignum_host_fns!(u256_add, checked_add, U256, U256Val, Int256AddSub);
+    impl_bignum_host_fns!(u256_sub, checked_sub, U256, U256Val, Int256AddSub);
+    impl_bignum_host_fns!(u256_mul, checked_mul, U256, U256Val, Int256Mul);
+    impl_bignum_host_fns!(u256_div, checked_div, U256, U256Val, Int256Div);
+    impl_bignum_host_fns_rhs_u32!(u256_pow, checked_pow, U256, U256Val, Int256Pow);
+    impl_bignum_host_fns_rhs_u32!(u256_shl, checked_shl, U256, U256Val, Int256Shift);
+    impl_bignum_host_fns_rhs_u32!(u256_shr, checked_shr, U256, U256Val, Int256Shift);
 
-    impl_bignum_host_fns!(i256_add, checked_add, I256, Int256AddSub);
-    impl_bignum_host_fns!(i256_sub, checked_sub, I256, Int256AddSub);
-    impl_bignum_host_fns!(i256_mul, checked_mul, I256, Int256Mul);
-    impl_bignum_host_fns!(i256_div, checked_div, I256, Int256Div);
-    impl_bignum_host_fns_rhs_u32!(i256_pow, checked_pow, I256, Int256Pow);
-    impl_bignum_host_fns_rhs_u32!(i256_shl, checked_shl, I256, Int256Shift);
-    impl_bignum_host_fns_rhs_u32!(i256_shr, checked_shr, I256, Int256Shift);
+    impl_bignum_host_fns!(i256_add, checked_add, I256, I256Val, Int256AddSub);
+    impl_bignum_host_fns!(i256_sub, checked_sub, I256, I256Val, Int256AddSub);
+    impl_bignum_host_fns!(i256_mul, checked_mul, I256, I256Val, Int256Mul);
+    impl_bignum_host_fns!(i256_div, checked_div, I256, I256Val, Int256Div);
+    impl_bignum_host_fns_rhs_u32!(i256_pow, checked_pow, I256, I256Val, Int256Pow);
+    impl_bignum_host_fns_rhs_u32!(i256_shl, checked_shl, I256, I256Val, Int256Shift);
+    impl_bignum_host_fns_rhs_u32!(i256_shr, checked_shr, I256, I256Val, Int256Shift);
 
     fn map_new(&self, _vmcaller: &mut VmCaller<Host>) -> Result<MapObject, HostError> {
         self.add_host_object(HostMap::new())
