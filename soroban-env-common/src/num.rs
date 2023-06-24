@@ -308,6 +308,87 @@ impl TryFrom<&I256Small> for ScVal {
     }
 }
 
+// Some explicit convenience "small" constructors that take 32-bit inputs in
+// order to remain infallible and are also `const fn`.
+
+impl I64Small {
+    pub const fn from_i32(small: i32) -> Self {
+        let extended = small as i64;
+        unsafe { I64Small::from_body(extended as u64) }
+    }
+}
+
+impl I64Val {
+    pub const fn from_i32(small: i32) -> Self {
+        Self::from_small(I64Small::from_i32(small))
+    }
+}
+
+impl U64Small {
+    pub const fn from_u32(small: u32) -> Self {
+        let extended = small as u64;
+        unsafe { U64Small::from_body(extended) }
+    }
+}
+
+impl U64Val {
+    pub const fn from_u32(small: u32) -> Self {
+        Self::from_small(U64Small::from_u32(small))
+    }
+}
+
+impl I128Small {
+    pub const fn from_i32(small: i32) -> Self {
+        let extended = small as i64;
+        unsafe { I128Small::from_body(extended as u64) }
+    }
+}
+
+impl I128Val {
+    pub const fn from_i32(small: i32) -> Self {
+        Self::from_small(I128Small::from_i32(small))
+    }
+}
+
+impl U128Small {
+    pub const fn from_u32(small: u32) -> Self {
+        let extended = small as u64;
+        unsafe { U128Small::from_body(extended) }
+    }
+}
+
+impl U128Val {
+    pub const fn from_u32(small: u32) -> Self {
+        Self::from_small(U128Small::from_u32(small))
+    }
+}
+
+impl I256Small {
+    pub const fn from_i32(small: i32) -> Self {
+        let extended = small as i64;
+        unsafe { I256Small::from_body(extended as u64) }
+    }
+}
+
+impl I256Val {
+    pub const fn from_i32(small: i32) -> Self {
+        Self::from_small(I256Small::from_i32(small))
+    }
+}
+
+impl U256Small {
+    pub const fn from_u32(small: u32) -> Self {
+        let extended = small as u64;
+        unsafe { U256Small::from_body(extended) }
+    }
+}
+
+impl U256Val {
+    pub const fn from_u32(small: u32) -> Self {
+        Self::from_small(U256Small::from_u32(small))
+    }
+}
+
 pub const fn is_small_u64(u: u64) -> bool {
     u == ((u << TAG_BITS) >> TAG_BITS)
 }
