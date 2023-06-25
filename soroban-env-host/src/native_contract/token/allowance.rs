@@ -12,7 +12,7 @@ pub fn read_allowance(e: &Host, from: Address, spender: Address) -> Result<i128,
     let key = DataKey::Allowance(AllowanceDataKey { from, spender });
     if let Ok(allowance) = e.get_contract_data(key.try_into_val(e)?, StorageType::Temporary) {
         let val: AllowanceValue = allowance.try_into_val(e)?;
-        if val.expiration_ledger <= e.get_ledger_sequence()?.into() {
+        if val.expiration_ledger < e.get_ledger_sequence()?.into() {
             Ok(0)
         } else {
             Ok(val.amount)
@@ -43,11 +43,11 @@ pub fn write_allowance(
                 expiration,
                 li.max_entry_expiration
             ))
-        } else if amount > 0 && expiration <= li.sequence_number {
+        } else if amount > 0 && expiration < li.sequence_number {
             Err(err!(
                 e,
                 ContractError::AllowanceError,
-                "expiration must be greater than ledger sequence: {} <= {}",
+                "expiration must be >= ledger sequence: {} < {}",
                 expiration,
                 li.sequence_number
             ))

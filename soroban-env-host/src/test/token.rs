@@ -720,9 +720,9 @@ fn test_allowance_expiration() {
     );
     assert_eq!(token.balance(user_2.address(&test.host)).unwrap(), 10);
 
-    // advance the ledger to the expiration of the allowance. Allowance is no longer usable
+    // advance the ledger past the expiration of the allowance. Allowance is no longer usable
     test.host
-        .with_mut_ledger_info(|li| li.sequence_number = 200)
+        .with_mut_ledger_info(|li| li.sequence_number = 201)
         .unwrap();
     assert_eq!(
         token
@@ -757,9 +757,9 @@ fn test_allowance_expiration() {
         ContractError::AllowanceError
     );
 
-    // set new allowance with higher expiration
+    // set new allowance with expiration == ledger sequence_number
     token
-        .approve(&user, user_2.address(&test.host), 10_000, 210)
+        .approve(&user, user_2.address(&test.host), 10_000, 201)
         .unwrap();
 
     assert_eq!(
