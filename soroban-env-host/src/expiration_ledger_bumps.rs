@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::{rc::Rc, slice::Iter};
 
 use crate::{budget::AsBudget, host::metered_clone, xdr::LedgerKey, HostError};
 
@@ -26,5 +26,9 @@ impl ExpirationLedgerBumps {
         )?;
         self.0.push(elem);
         Ok(())
+    }
+
+    pub fn iter(&self) -> Iter<'_, LedgerBump> {
+        self.0.iter()
     }
 }
