@@ -1,6 +1,7 @@
 #![no_std]
-use soroban_sdk::{contractimpl, Bytes, Env};
+use soroban_sdk::{contract, contractimpl, Bytes, Env};
 
+#[contract]
 pub struct Contract;
 
 // The Ackermann function

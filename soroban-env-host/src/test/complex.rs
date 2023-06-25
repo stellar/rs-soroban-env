@@ -1,24 +1,10 @@
-use std::rc::Rc;
-
 use crate::{
-    budget::Budget,
-    storage::{SnapshotSource, Storage},
-    xdr::Hash,
-    Host, HostError, MeteredOrdMap, Vm,
+    budget::Budget, host_object::HostVec, storage::Storage, Host, HostError, MeteredOrdMap,
 };
-use soroban_env_common::xdr::{LedgerEntry, LedgerKey, ScErrorCode, ScErrorType, ScVec};
+use soroban_env_common::{Env, Symbol};
 use soroban_test_wasms::COMPLEX;
 
-struct EmptySnap;
-impl SnapshotSource for EmptySnap {
-    fn get(&self, _key: &Rc<LedgerKey>) -> Result<Rc<LedgerEntry>, HostError> {
-        Err((ScErrorType::Storage, ScErrorCode::MissingValue).into())
-    }
-
-    fn has(&self, _key: &Rc<LedgerKey>) -> Result<bool, HostError> {
-        Ok(false)
-    }
-}
+use super::util::{generate_account_id, generate_bytes_array};
 
 #[test]
 fn run_complex() -> Result<(), HostError> {
@@ -32,18 +18,23 @@ fn run_complex() -> Result<(), HostError> {
         min_temp_entry_expiration: 16,
         max_entry_expiration: 6312000,
     };
-    let id: Hash = [0; 32].into();
+    let account_id = generate_account_id();
+    let salt = generate_bytes_array();
 
     // Run 1: record footprint, emulating "preflight".
     let foot = {
-        let store = Storage::with_recording_footprint(Rc::new(EmptySnap));
-        let host = Host::with_storage_and_budget(store, Budget::default());
+        let host = Host::test_host_with_recording_footprint();
         host.set_ledger_info(info.clone());
-        {
-            let vm = Vm::new(&host, id.clone(), COMPLEX)?;
-            let args: ScVec = host.test_scvec::<i32>(&[])?;
-            vm.invoke_function(&host, "go", &args)?;
-        }
+        let contract_id_obj = host.register_test_contract_wasm_from_source_account(
+            COMPLEX,
+            account_id.clone(),
+            salt.clone(),
+        );
+        host.call(
+            contract_id_obj,
+            Symbol::try_from_small_str("go")?,
+            host.add_host_object(HostVec::new())?,
+        )?;
         let (store, _, _, _) = host.try_finish().unwrap();
         store.footprint
     };
@@ -53,9 +44,13 @@ fn run_complex() -> Result<(), HostError> {
         let store = Storage::with_enforcing_footprint_and_map(foot, MeteredOrdMap::default());
         let host = Host::with_storage_and_budget(store, Budget::default());
         host.set_ledger_info(info);
-        let vm = Vm::new(&host, id, COMPLEX)?;
-        let args: ScVec = host.test_scvec::<i32>(&[])?;
-        vm.invoke_function(&host, "go", &args)?;
+        let contract_id_obj =
+            host.register_test_contract_wasm_from_source_account(COMPLEX, account_id, salt);
+        host.call(
+            contract_id_obj,
+            Symbol::try_from_small_str("go")?,
+            host.add_host_object(HostVec::new())?,
+        )?;
     }
     Ok(())
 }

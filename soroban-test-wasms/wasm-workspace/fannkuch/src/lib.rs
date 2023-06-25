@@ -1,6 +1,7 @@
 #![no_std]
-use soroban_sdk::{contractimpl, Env, Val};
+use soroban_sdk::{contract, contractimpl, Env, Val};
 
+#[contract]
 pub struct Contract;
 
 fn fannkuchredux<const N: usize>(env: Env) -> usize {

@@ -1,31 +1,29 @@
 use expect_test::expect;
-use soroban_env_common::{xdr::ScErrorCode, Val};
+use soroban_env_common::{xdr::ScErrorCode, Env, TryFromVal, Val};
 
-use crate::{
-    events::HostEvent,
-    vm::Vm,
-    xdr::{Hash, ScErrorType, ScVal, ScVec},
-    Env, Error, Host, HostError, Symbol, Tag,
-};
+use crate::{events::HostEvent, xdr::ScErrorType, Error, Host, HostError, Symbol, Tag};
 use soroban_test_wasms::{ADD_I32, INVOKE_CONTRACT, VEC};
 
 #[test]
 fn invoke_single_contract_function() -> Result<(), HostError> {
-    let host = Host::default();
-    let id: Hash = [0; 32].into();
-    let vm = Vm::new(&host, id, ADD_I32)?;
+    let host = Host::test_host_with_recording_footprint();
+    let contract_id_obj = host.register_test_contract_wasm(ADD_I32);
     let a = 4i32;
     let b = 7i32;
     let c = 0x7fffffff_i32;
-    let scvec0: ScVec = host.test_scvec::<i32>(&[a, b])?;
-    let res = vm.invoke_function(&host, "add", &scvec0)?;
-    match res {
-        ScVal::I32(v) => assert_eq!(v, a + b),
-        _ => panic!("Wrong result type"),
-    }
+
+    let res = host.call(
+        contract_id_obj,
+        Symbol::try_from_small_str("add")?,
+        host.test_vec_obj(&[a, b])?,
+    )?;
+    assert_eq!(i32::try_from_val(&host, &res)?, a + b);
     // overflow
-    let scvec0: ScVec = host.test_scvec::<i32>(&[a, c])?;
-    let res = vm.invoke_function(&host, "add", &scvec0);
+    let res = host.call(
+        contract_id_obj,
+        Symbol::try_from_small_str("add")?,
+        host.test_vec_obj(&[a, c])?,
+    );
     let code = (ScErrorType::WasmVm, ScErrorCode::InternalError);
     assert!(HostError::result_matches_err(res, code));
     Ok(())

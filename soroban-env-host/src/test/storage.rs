@@ -1,23 +1,24 @@
 use crate::native_contract::testutils::HostVec;
 use crate::{host_vec, Host};
-use soroban_env_common::{Env, Symbol, TryFromVal, TryIntoVal};
+use soroban_env_common::{AddressObject, Env, Symbol, TryFromVal, TryIntoVal};
 use soroban_test_wasms::CONTRACT_STORAGE;
 
-#[test]
-fn test_persistent_storage() {
-    let host = Host::test_host_with_recording_footprint();
-    let contract_id = host.register_test_contract_wasm(CONTRACT_STORAGE);
+fn storage_fn_name(host: &Host, fn_name: &str, storage: &str) -> Symbol {
+    Symbol::try_from_val(host, &format!("{}_{}", fn_name, storage).as_str()).unwrap()
+}
+
+fn test_storage(host: &Host, contract_id: AddressObject, storage: &str) {
     let key_1 = Symbol::try_from_small_str("key_1").unwrap();
-    let key_2 = Symbol::try_from_val(&host, &"this_is_key_2").unwrap();
+    let key_2 = Symbol::try_from_val(host, &"this_is_key_2").unwrap();
     // Check that the key is not in the storage yet
     assert_eq!(
         bool::try_from_val(
-            &host,
+            host,
             &host
                 .call(
                     contract_id,
-                    Symbol::try_from_val(&host, &"has_persistent").unwrap(),
-                    host_vec![&host, key_1].into(),
+                    storage_fn_name(&host, "has", storage),
+                    host_vec![host, key_1].into(),
                 )
                 .unwrap()
         )
@@ -27,19 +28,19 @@ fn test_persistent_storage() {
     // Put a key to storage and verify it's there
     host.call(
         contract_id,
-        Symbol::try_from_val(&host, &"put_persistent").unwrap(),
-        host_vec![&host, key_1, 1234_u64, ()].into(),
+        storage_fn_name(host, "put", storage),
+        host_vec![host, key_1, 1234_u64, ()].into(),
     )
     .unwrap();
 
     assert_eq!(
         bool::try_from_val(
-            &host,
+            host,
             &host
                 .call(
                     contract_id,
-                    Symbol::try_from_val(&host, &"has_persistent").unwrap(),
-                    host_vec![&host, key_1].into(),
+                    storage_fn_name(host, "has", storage),
+                    host_vec![host, key_1].into(),
                 )
                 .unwrap()
         )
@@ -47,25 +48,38 @@ fn test_persistent_storage() {
         true
     );
 
+    // Smoke test bump
+    let bump_args = if storage == "instance" {
+        host_vec![host, 6000_u32]
+    } else {
+        host_vec![host, key_1, 6000_u32]
+    };
+    host.call(
+        contract_id,
+        storage_fn_name(host, "bump", storage),
+        bump_args.into(),
+    )
+    .unwrap();
+
     // Put anothrer key and verify it's there
     host.call(
         contract_id,
-        Symbol::try_from_val(&host, &"put_persistent").unwrap(),
-        host_vec![&host, key_2, u64::MAX, ()].into(),
+        storage_fn_name(host, "put", storage),
+        host_vec![host, key_2, u64::MAX, ()].into(),
     )
     .unwrap();
     assert_eq!(
         bool::try_from_val(
-            &host,
+            host,
             &host
                 .call(
                     contract_id,
-                    Symbol::try_from_val(&host, &"has_persistent").unwrap(),
+                    storage_fn_name(host, "has", storage),
                     host_vec![
-                        &host,
+                        host,
                         // Use a new object to sanity-check that comparison
                         // happens based on value.
-                        Symbol::try_from_val(&host, &"this_is_key_2").unwrap(),
+                        Symbol::try_from_val(host, &"this_is_key_2").unwrap(),
                     ]
                     .into(),
                 )
@@ -79,12 +93,12 @@ fn test_persistent_storage() {
 
     assert_eq!(
         u64::try_from_val(
-            &host,
+            host,
             &host
                 .call(
                     contract_id,
-                    Symbol::try_from_val(&host, &"get_persistent").unwrap(),
-                    host_vec![&host, key_1].into(),
+                    storage_fn_name(host, "get", storage),
+                    host_vec![host, key_1].into(),
                 )
                 .unwrap()
         )
@@ -93,12 +107,12 @@ fn test_persistent_storage() {
     );
     assert_eq!(
         u64::try_from_val(
-            &host,
+            host,
             &host
                 .call(
                     contract_id,
-                    Symbol::try_from_val(&host, &"get_persistent").unwrap(),
-                    host_vec![&host, key_2].into(),
+                    storage_fn_name(host, "get", storage),
+                    host_vec![host, key_2].into(),
                 )
                 .unwrap()
         )
@@ -109,18 +123,18 @@ fn test_persistent_storage() {
     // Update value for key 2 and check it
     host.call(
         contract_id,
-        Symbol::try_from_val(&host, &"put_persistent").unwrap(),
-        host_vec![&host, key_2, 4321_u64, ()].into(),
+        storage_fn_name(host, "put", storage),
+        host_vec![host, key_2, 4321_u64, ()].into(),
     )
     .unwrap();
     assert_eq!(
         u64::try_from_val(
-            &host,
+            host,
             &host
                 .call(
                     contract_id,
-                    Symbol::try_from_val(&host, &"get_persistent").unwrap(),
-                    host_vec![&host, key_2].into(),
+                    storage_fn_name(host, "get", storage),
+                    host_vec![host, key_2].into(),
                 )
                 .unwrap()
         )
@@ -131,19 +145,19 @@ fn test_persistent_storage() {
     // Delete entry for key 1
     host.call(
         contract_id,
-        Symbol::try_from_val(&host, &"del_persistent").unwrap(),
-        host_vec![&host, key_1].into(),
+        storage_fn_name(host, "del", storage),
+        host_vec![host, key_1].into(),
     )
     .unwrap();
     // Only the second key is now present
     assert_eq!(
         bool::try_from_val(
-            &host,
+            host,
             &host
                 .call(
                     contract_id,
-                    Symbol::try_from_val(&host, &"has_persistent").unwrap(),
-                    host_vec![&host, key_1].into(),
+                    storage_fn_name(host, "has", storage),
+                    host_vec![host, key_1].into(),
                 )
                 .unwrap()
         )
@@ -152,16 +166,52 @@ fn test_persistent_storage() {
     );
     assert_eq!(
         bool::try_from_val(
-            &host,
+            host,
             &host
                 .call(
                     contract_id,
-                    Symbol::try_from_val(&host, &"has_persistent").unwrap(),
-                    host_vec![&host, key_2].into(),
+                    storage_fn_name(host, "has", storage),
+                    host_vec![host, key_2].into(),
                 )
                 .unwrap()
         )
         .unwrap(),
         true
     );
+}
+
+#[test]
+fn test_persistent_storage() {
+    let host = Host::test_host_with_recording_footprint();
+    let contract_id = host.register_test_contract_wasm(CONTRACT_STORAGE);
+    test_storage(&host, contract_id, "persistent");
+}
+
+#[test]
+fn test_temp_storage() {
+    let host = Host::test_host_with_recording_footprint();
+    let contract_id = host.register_test_contract_wasm(CONTRACT_STORAGE);
+    test_storage(&host, contract_id, "temporary");
+}
+
+#[test]
+fn test_instance_storage() {
+    let host = Host::test_host_with_recording_footprint();
+    let contract_id = host.register_test_contract_wasm(CONTRACT_STORAGE);
+    test_storage(&host, contract_id, "instance");
+}
+
+#[test]
+fn test_storage_mix() {
+    // This makes sure the keyspaces are not mixed between storage types.
+    let host = Host::test_host_with_recording_footprint();
+    host.with_budget(|b| {
+        b.reset_unlimited();
+        Ok(())
+    })
+    .unwrap();
+    let contract_id = host.register_test_contract_wasm(CONTRACT_STORAGE);
+    test_storage(&host, contract_id, "persistent");
+    test_storage(&host, contract_id, "temporary");
+    test_storage(&host, contract_id, "instance");
 }

@@ -1,5 +1,5 @@
 use soroban_env_common::{
-    xdr::{ContractIdPreimage, ScAddress, ScErrorCode, ScErrorType},
+    xdr::{ContractIdPreimage, ScAddress, ScContractInstance, ScErrorCode, ScErrorType},
     AddressObject,
 };
 
@@ -7,7 +7,7 @@ use crate::{
     auth::AuthorizationManagerSnapshot,
     budget::AsBudget,
     err,
-    storage::StorageMap,
+    storage::{InstanceStorageMap, StorageMap},
     xdr::{ContractCostType, ContractExecutable, Hash, HostFunction, HostFunctionType, ScVal},
     Error, Host, HostError, Symbol, SymbolStr, TryFromVal, TryIntoVal, Val,
 };
@@ -16,11 +16,17 @@ use crate::{
 use crate::host::testutils;
 #[cfg(any(test, feature = "testutils"))]
 use core::cell::RefCell;
+#[cfg(any(test, feature = "testutils"))]
+use soroban_env_common::xdr::ScMap;
 use std::rc::Rc;
 
 use crate::Vm;
 
-use super::{invoker_type::InvokerType, metered_clone::MeteredClone, prng::Prng};
+use super::{
+    invoker_type::InvokerType,
+    metered_clone::{self, MeteredClone},
+    prng::Prng,
+};
 
 /// Determines the re-entry mode for calling a contract.
 pub(crate) enum ContractReentryMode {
@@ -55,21 +61,23 @@ pub trait ContractFunctionSet {
 
 #[cfg(any(test, feature = "testutils"))]
 #[derive(Debug, Clone)]
-pub struct TestContractFrame {
-    pub id: Hash,
-    pub func: Symbol,
-    pub args: Vec<Val>,
-    pub(super) panic: Rc<RefCell<Option<Error>>>,
+pub(crate) struct TestContractFrame {
+    pub(crate) id: Hash,
+    pub(crate) func: Symbol,
+    pub(crate) args: Vec<Val>,
+    pub(crate) panic: Rc<RefCell<Option<Error>>>,
+    pub(crate) storage: Option<ScMap>,
 }
 
 #[cfg(any(test, feature = "testutils"))]
 impl TestContractFrame {
-    pub fn new(id: Hash, func: Symbol, args: Vec<Val>) -> Self {
+    pub fn new(id: Hash, func: Symbol, args: Vec<Val>, storage: Option<ScMap>) -> Self {
         Self {
             id,
             func,
             args,
             panic: Rc::new(RefCell::new(None)),
+            storage,
         }
     }
 }
@@ -80,6 +88,7 @@ impl TestContractFrame {
 pub(crate) struct Context {
     pub(crate) frame: Frame,
     prng: Option<Prng>,
+    pub(crate) storage: Option<InstanceStorageMap>,
 }
 
 /// Holds contextual information about a single invocation, either
@@ -95,9 +104,9 @@ pub(crate) struct Context {
 /// commit or roll back that state when it pops the stack.
 #[derive(Clone)]
 pub(crate) enum Frame {
-    ContractVM(Rc<Vm>, Symbol, Vec<Val>),
+    ContractVM(Rc<Vm>, Symbol, Vec<Val>, ScContractInstance),
     HostFunction(HostFunctionType),
-    Token(Hash, Symbol, Vec<Val>),
+    Token(Hash, Symbol, Vec<Val>, ScContractInstance),
     #[cfg(any(test, feature = "testutils"))]
     TestContract(TestContractFrame),
 }
@@ -117,7 +126,11 @@ impl Host {
             auth_manager.push_frame(self, &frame)?;
             auth_snapshot = Some(auth_manager.snapshot());
         }
-        let ctx = Context { frame, prng: None };
+        let ctx = Context {
+            frame,
+            prng: None,
+            storage: None,
+        };
         self.0.context.borrow_mut().push(ctx);
         Ok(RollbackPoint {
             storage: self.0.storage.borrow().map.clone(),
@@ -130,6 +143,12 @@ impl Host {
     /// the current context and optionally rolls back the [`Host`]'s objects
     /// and storage map to the state in the provided [`RollbackPoint`].
     pub(super) fn pop_frame(&self, orp: Option<RollbackPoint>) -> Result<(), HostError> {
+        // Instance storage is tied to the frame and only exists in-memory. So
+        // instead of snapshotting it and rolling it back, we jsut flush the
+        // changes only when rollback is not needed.
+        if orp.is_none() {
+            self.flush_instance_storage()?;
+        }
         self.0
             .context
             .borrow_mut()
@@ -324,9 +343,9 @@ impl Host {
     /// frame at its top.
     pub(crate) fn get_current_contract_id_opt_internal(&self) -> Result<Option<Hash>, HostError> {
         self.with_current_frame(|frame| match frame {
-            Frame::ContractVM(vm, _, _) => Ok(Some(vm.contract_id.metered_clone(&self.0.budget)?)),
+            Frame::ContractVM(vm, ..) => Ok(Some(vm.contract_id.metered_clone(&self.0.budget)?)),
             Frame::HostFunction(_) => Ok(None),
-            Frame::Token(id, _, _) => Ok(Some(id.metered_clone(&self.0.budget)?)),
+            Frame::Token(id, ..) => Ok(Some(id.metered_clone(&self.0.budget)?)),
             #[cfg(any(test, feature = "testutils"))]
             Frame::TestContract(tc) => Ok(Some(tc.id.clone())),
         })
@@ -353,14 +372,14 @@ impl Host {
         // the previous frame must exist and must be a contract
         let hash = match frames.as_slice() {
             [.., c2, _] => match &c2.frame {
-                Frame::ContractVM(vm, _, _) => Ok(vm.contract_id.metered_clone(&self.0.budget)?),
+                Frame::ContractVM(vm, ..) => Ok(vm.contract_id.metered_clone(&self.0.budget)?),
                 Frame::HostFunction(_) => Err(self.err(
                     ScErrorType::Context,
                     ScErrorCode::UnexpectedType,
                     "invoker is not a contract",
                     &[],
                 )),
-                Frame::Token(id, _, _) => Ok(id.clone()),
+                Frame::Token(id, ..) => Ok(id.clone()),
                 #[cfg(any(test, feature = "testutils"))]
                 Frame::TestContract(tc) => Ok(tc.id.clone()), // no metering
             },
@@ -382,9 +401,9 @@ impl Host {
         let st = match frames.as_slice() {
             // There are always two frames when WASM is executed in the VM.
             [.., c2, _] => match &c2.frame {
-                Frame::ContractVM(_, _, _) => Ok(InvokerType::Contract),
+                Frame::ContractVM(..) => Ok(InvokerType::Contract),
                 Frame::HostFunction(_) => Ok(InvokerType::Account),
-                Frame::Token(id, _, _) => Ok(InvokerType::Contract),
+                Frame::Token(..) => Ok(InvokerType::Contract),
                 #[cfg(any(test, feature = "testutils"))]
                 Frame::TestContract(_) => Ok(InvokerType::Contract),
             },
@@ -416,7 +435,7 @@ impl Host {
         F: FnOnce() -> Result<Val, HostError>,
     {
         self.with_frame(
-            Frame::TestContract(TestContractFrame::new(id, func, vec![])),
+            Frame::TestContract(TestContractFrame::new(id, func, vec![], None)),
             f,
         )
     }
@@ -425,10 +444,8 @@ impl Host {
     fn call_contract_fn(&self, id: &Hash, func: &Symbol, args: &[Val]) -> Result<Val, HostError> {
         // Create key for storage
         let storage_key = self.contract_instance_ledger_key(id)?;
-        match self
-            .retrieve_contract_instance_from_storage(&storage_key)?
-            .executable
-        {
+        let contract_instance = self.retrieve_contract_instance_from_storage(&storage_key)?;
+        match &contract_instance.executable {
             ContractExecutable::Wasm(wasm_hash) => {
                 let code_entry = self.retrieve_wasm_from_storage(&wasm_hash)?;
                 let vm = Vm::new(
@@ -436,14 +453,19 @@ impl Host {
                     id.metered_clone(&self.0.budget)?,
                     code_entry.as_slice(),
                 )?;
-                vm.invoke_function_raw(self, func, args)
+                self.charge_budget(ContractCostType::InvokeVmFunction, None)?;
+                self.with_frame(
+                    Frame::ContractVM(vm.clone(), *func, args.to_vec(), contract_instance),
+                    || vm.invoke_function_raw(self, func, args),
+                )
             }
-            ContractExecutable::Token => {
-                self.with_frame(Frame::Token(id.clone(), *func, args.to_vec()), || {
+            ContractExecutable::Token => self.with_frame(
+                Frame::Token(id.clone(), *func, args.to_vec(), contract_instance),
+                || {
                     use crate::native_contract::{NativeContract, Token};
                     Token.call(func, self, args)
-                })
-            }
+                },
+            ),
         }
     }
 
@@ -475,8 +497,8 @@ impl Host {
             let mut is_last_non_host_frame = true;
             for ctx in self.0.context.borrow().iter().rev() {
                 let exist_id = match &ctx.frame {
-                    Frame::ContractVM(vm, _, _) => &vm.contract_id,
-                    Frame::Token(id, _, _) => id,
+                    Frame::ContractVM(vm, ..) => &vm.contract_id,
+                    Frame::Token(id, ..) => id,
                     #[cfg(any(test, feature = "testutils"))]
                     Frame::TestContract(tc) => &tc.id,
                     Frame::HostFunction(_) => continue,
@@ -512,7 +534,11 @@ impl Host {
             // maintains a borrow of self.0.contracts, which can cause borrow errors.
             let cfs_option = self.0.contracts.borrow().get(&id).cloned();
             if let Some(cfs) = cfs_option {
-                let frame = TestContractFrame::new(id.clone(), func, args.to_vec());
+                let instance_key = self.contract_instance_ledger_key(&id)?;
+                let storage = self
+                    .retrieve_contract_instance_from_storage(&instance_key)
+                    .map_or(None, |i| i.storage);
+                let frame = TestContractFrame::new(id.clone(), func, args.to_vec(), storage);
                 let panic = frame.panic.clone();
                 return self.with_frame(Frame::TestContract(frame), || {
                     use std::any::Any;
@@ -663,5 +689,96 @@ impl Host {
     pub fn invoke_function(&self, hf: HostFunction) -> Result<ScVal, HostError> {
         let rv = self.invoke_function_raw(hf)?;
         self.from_host_val(rv)
+    }
+
+    pub(crate) fn maybe_init_instance_storage(&self, ctx: &mut Context) -> Result<(), HostError> {
+        // Lazily initialize the storage on first access - it's not free and
+        // not every contract will use it.
+        if ctx.storage.is_some() {
+            return Ok(());
+        }
+        let storage_map = match &ctx.frame {
+            Frame::ContractVM(_, _, _, instance) => &instance.storage,
+            Frame::HostFunction(_) => {
+                return Err(self.err(
+                    ScErrorType::Context,
+                    ScErrorCode::InvalidAction,
+                    "can't access instance storage from host function",
+                    &[],
+                ))
+            }
+            Frame::Token(_, _, _, instance) => &instance.storage,
+            #[cfg(any(test, feature = "testutils"))]
+            Frame::TestContract(t) => &t.storage,
+        };
+
+        ctx.storage = Some(InstanceStorageMap::from_map(
+            storage_map.as_ref().map_or_else(
+                || Ok(vec![]),
+                |m| {
+                    metered_clone::charge_heap_alloc::<(Val, Val)>(
+                        m.len() as u64,
+                        self.budget_ref(),
+                    )?;
+                    m.iter()
+                        .map(|i| Ok((self.to_host_val(&i.key)?, self.to_host_val(&i.val)?)))
+                        .collect::<Result<Vec<(Val, Val)>, HostError>>()
+                },
+            )?,
+            self,
+        )?);
+        Ok(())
+    }
+
+    fn flush_instance_storage(&self) -> Result<(), HostError> {
+        let updated_instance = self.with_current_context_mut(|ctx| {
+            if let Some(storage) = &ctx.storage {
+                if !storage.is_modified {
+                    return Ok(None);
+                }
+                let executable = match &ctx.frame {
+                    Frame::ContractVM(_, _, _, instance) => {
+                        instance.executable.metered_clone(self.budget_ref())?
+                    }
+                    Frame::HostFunction(_) => {
+                        return Err(self.err(
+                            ScErrorType::Context,
+                            ScErrorCode::InternalError,
+                            "unexpected storage for host fn",
+                            &[],
+                        ))
+                    }
+                    Frame::Token(_, _, _, instance) => {
+                        instance.executable.metered_clone(self.budget_ref())?
+                    }
+                    // Mock executable for test contract 'instances'. This is
+                    // just a placeholder - it's not used for actually calling
+                    // the test contracts.
+                    #[cfg(any(test, feature = "testutils"))]
+                    Frame::TestContract(t) => ContractExecutable::Wasm(Hash(Default::default())),
+                };
+                Ok(Some(ScContractInstance {
+                    executable,
+                    storage: Some(self.host_map_to_scmap(&storage.map)?),
+                }))
+            } else {
+                Ok(None)
+            }
+        })?;
+        if let Some(updated_instance) = updated_instance {
+            let contract_id = self
+                .get_current_contract_id_opt_internal()?
+                .ok_or_else(|| {
+                    self.err(
+                        ScErrorType::Context,
+                        ScErrorCode::InternalError,
+                        "unexpected missing contract for instance storage",
+                        &[],
+                    )
+                })?;
+            let key = self.contract_instance_ledger_key(&contract_id)?;
+            self.store_contract_instance(updated_instance, contract_id, &key)?;
+        }
+        Ok(())
     }
 }
