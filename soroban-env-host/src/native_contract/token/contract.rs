@@ -35,18 +35,12 @@ pub trait TokenTrait {
 
     fn allowance(e: &Host, from: Address, spender: Address) -> Result<i128, HostError>;
 
-    fn increase_allowance(
+    fn approve(
         e: &Host,
         from: Address,
         spender: Address,
         amount: i128,
-    ) -> Result<(), HostError>;
-
-    fn decrease_allowance(
-        e: &Host,
-        from: Address,
-        spender: Address,
-        amount: i128,
+        expiration_ledger: u32,
     ) -> Result<(), HostError>;
 
     fn balance(e: &Host, addr: Address) -> Result<i128, HostError>;
@@ -188,42 +182,17 @@ impl TokenTrait for Token {
     }
 
     // Metering: covered by components
-    fn increase_allowance(
+    fn approve(
         e: &Host,
         from: Address,
         spender: Address,
         amount: i128,
+        expiration_ledger: u32,
     ) -> Result<(), HostError> {
         check_nonnegative_amount(e, amount)?;
         from.require_auth()?;
-        let allowance = read_allowance(e, from.clone(), spender.clone())?;
-        let new_allowance = allowance.checked_add(amount).ok_or_else(|| {
-            e.error(
-                ContractError::OverflowError.into(),
-                "allowance overflow in increase_allowance",
-                &[],
-            )
-        })?;
-        write_allowance(e, from.clone(), spender.clone(), new_allowance)?;
-        event::increase_allowance(e, from, spender, amount)?;
-        Ok(())
-    }
-
-    fn decrease_allowance(
-        e: &Host,
-        from: Address,
-        spender: Address,
-        amount: i128,
-    ) -> Result<(), HostError> {
-        check_nonnegative_amount(e, amount)?;
-        from.require_auth()?;
-        let allowance = read_allowance(e, from.clone(), spender.clone())?;
-        if amount >= allowance {
-            write_allowance(e, from.clone(), spender.clone(), 0)?;
-        } else {
-            write_allowance(e, from.clone(), spender.clone(), allowance - amount)?;
-        }
-        event::decrease_allowance(e, from, spender, amount)?;
+        write_allowance(e, from.clone(), spender.clone(), amount, expiration_ledger)?;
+        event::approve(e, from, spender, amount, expiration_ledger)?;
         Ok(())
     }
 

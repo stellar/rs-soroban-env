@@ -70,29 +70,23 @@ impl<'a> TestToken<'a> {
             .try_into()?)
     }
 
-    pub(crate) fn increase_allowance(
+    pub(crate) fn approve(
         &self,
         from: &TestSigner,
         spender: Address,
         amount: i128,
+        expiration_ledger: u32,
     ) -> Result<(), HostError> {
         self.call_with_single_signer(
             from,
-            "increase_allowance",
-            host_vec![self.host, from.address(self.host), spender, amount],
-        )
-    }
-
-    pub(crate) fn decrease_allowance(
-        &self,
-        from: &TestSigner,
-        spender: Address,
-        amount: i128,
-    ) -> Result<(), HostError> {
-        self.call_with_single_signer(
-            from,
-            "decrease_allowance",
-            host_vec![self.host, from.address(self.host), spender, amount],
+            "approve",
+            host_vec![
+                self.host,
+                from.address(self.host),
+                spender,
+                amount,
+                expiration_ledger
+            ],
         )
     }
 

@@ -57,6 +57,7 @@ impl TokenTest {
             base_reserve: 5_000_000,
             min_persistent_entry_expiration: 4096,
             min_temp_entry_expiration: 16,
+            max_entry_expiration: 6312000,
         });
         Self {
             host,
@@ -568,7 +569,7 @@ fn test_transfer_with_allowance() {
 
     // Allow 10_000_000 units of token to be transferred from user by user 3.
     token
-        .increase_allowance(&user, user_3.address(&test.host), 10_000_000)
+        .approve(&user, user_3.address(&test.host), 10_000_000, 200)
         .unwrap();
 
     assert_eq!(
@@ -615,9 +616,9 @@ fn test_transfer_with_allowance() {
         ),
         ContractError::AllowanceError
     );
-    // Decrease allow by more than what's left. This will set the allowance to 0
+    // Set allowance to 0
     token
-        .decrease_allowance(&user, user_3.address(&test.host), 10_000_000)
+        .approve(&user, user_3.address(&test.host), 0, 0)
         .unwrap();
 
     assert_eq!(
@@ -628,7 +629,7 @@ fn test_transfer_with_allowance() {
     );
 
     token
-        .increase_allowance(&user, user_3.address(&test.host), 4_000_000)
+        .approve(&user, user_3.address(&test.host), 4_000_000, 200)
         .unwrap();
     // Transfer the remaining allowance to user 3.
     token
@@ -674,8 +675,105 @@ fn test_transfer_with_allowance() {
 }
 
 #[test]
+fn test_allowance_expiration() {
+    let test = TokenTest::setup();
+
+    let admin = TestSigner::account(&test.issuer_key);
+    let token = test.default_token();
+
+    let user = TestSigner::account(&test.user_key);
+    let user_2 = TestSigner::account(&test.user_key_2);
+    test.create_default_account(&user);
+    test.create_default_account(&user_2);
+    test.create_default_trustline(&user);
+    test.create_default_trustline(&user_2);
+
+    token.mint(&admin, user.address(&test.host), 1000).unwrap();
+    assert_eq!(token.balance(user.address(&test.host)).unwrap(), 1000);
+
+    // Allow 10_000_000 units of token to be transferred from user by user 3.
+    token
+        .approve(&user, user_2.address(&test.host), 1000, 200)
+        .unwrap();
+
+    assert_eq!(
+        token
+            .allowance(user.address(&test.host), user_2.address(&test.host))
+            .unwrap(),
+        1000
+    );
+
+    //transfer 10
+    token
+        .transfer_from(
+            &user_2,
+            user.address(&test.host),
+            user_2.address(&test.host),
+            10,
+        )
+        .unwrap();
+
+    assert_eq!(
+        token
+            .allowance(user.address(&test.host), user_2.address(&test.host))
+            .unwrap(),
+        990
+    );
+    assert_eq!(token.balance(user_2.address(&test.host)).unwrap(), 10);
+
+    // advance the ledger past the expiration of the allowance. Allowance is no longer usable
+    test.host
+        .with_mut_ledger_info(|li| li.sequence_number = 201)
+        .unwrap();
+    assert_eq!(
+        token
+            .allowance(user.address(&test.host), user_2.address(&test.host))
+            .unwrap(),
+        0
+    );
+
+    assert_eq!(
+        to_contract_err(
+            token
+                .transfer_from(
+                    &user_2,
+                    user.address(&test.host),
+                    user_2.address(&test.host),
+                    1,
+                )
+                .err()
+                .unwrap()
+        ),
+        ContractError::AllowanceError
+    );
+
+    // expiration ledger is too low
+    assert_eq!(
+        to_contract_err(
+            token
+                .approve(&user, user_2.address(&test.host), 1000, 200)
+                .err()
+                .unwrap()
+        ),
+        ContractError::AllowanceError
+    );
+
+    // set new allowance with expiration == ledger sequence_number
+    token
+        .approve(&user, user_2.address(&test.host), 10_000, 201)
+        .unwrap();
+
+    assert_eq!(
+        token
+            .allowance(user.address(&test.host), user_2.address(&test.host))
+            .unwrap(),
+        10_000
+    );
+}
+#[test]
 fn test_burn() {
     let test = TokenTest::setup();
+
     let admin = TestSigner::account(&test.issuer_key);
     let token = test.default_token();
 
@@ -703,7 +801,7 @@ fn test_burn() {
 
     // Allow 10_000_000 units of token to be transferred from user by user 3.
     token
-        .increase_allowance(&user, user_2.address(&test.host), 10_000_000)
+        .approve(&user, user_2.address(&test.host), 10_000_000, 200)
         .unwrap();
 
     assert_eq!(
@@ -809,7 +907,7 @@ fn test_cannot_burn_native() {
     );
 
     token
-        .increase_allowance(&user, user2.address(&test.host), 100)
+        .approve(&user, user2.address(&test.host), 100, 200)
         .unwrap();
 
     assert_eq!(
@@ -1278,7 +1376,7 @@ fn test_trustline_auth() {
 
     // Balance operations are possible now.
     token
-        .increase_allowance(&user, admin.address(&test.host), 500)
+        .approve(&user, admin.address(&test.host), 500, 200)
         .unwrap();
     token
         .transfer_from(
@@ -1942,17 +2040,7 @@ fn test_negative_amounts_are_not_allowed() {
     assert_eq!(
         to_contract_err(
             token
-                .increase_allowance(&user, user_2.address(&test.host), -1)
-                .err()
-                .unwrap()
-        ),
-        ContractError::NegativeAmountError
-    );
-
-    assert_eq!(
-        to_contract_err(
-            token
-                .decrease_allowance(&user, user_2.address(&test.host), -1)
+                .approve(&user, user_2.address(&test.host), -1, 200)
                 .err()
                 .unwrap()
         ),
@@ -1961,7 +2049,7 @@ fn test_negative_amounts_are_not_allowed() {
 
     // Approve some balance before doing the negative transfer_from.
     token
-        .increase_allowance(&user, user_2.address(&test.host), 10_000)
+        .approve(&user, user_2.address(&test.host), 10_000, 200)
         .unwrap();
 
     assert_eq!(
