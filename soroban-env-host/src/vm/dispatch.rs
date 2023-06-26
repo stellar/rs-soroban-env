@@ -1,9 +1,9 @@
 use super::FuelRefillable;
 use crate::{xdr::ContractCostType, Host, HostError, VmCaller, VmCallerEnv};
 use crate::{
-    AddressObject, BytesObject, DurationObject, Error, I128Object, I256Object, I256Val, I64Object,
-    MapObject, StorageType, StringObject, Symbol, SymbolObject, TimepointObject, U128Object,
-    U256Object, U256Val, U32Val, U64Object, Val, VecObject,
+    AddressObject, BytesObject, DurationObject, Error, I128Object, I256Val, I64Object, MapObject,
+    StorageType, StringObject, Symbol, SymbolObject, TimepointObject, U128Object, U256Val, U32Val,
+    U64Object, Val, VecObject,
 };
 use soroban_env_common::{call_macro_with_all_host_functions, WasmiMarshal};
 use wasmi::{

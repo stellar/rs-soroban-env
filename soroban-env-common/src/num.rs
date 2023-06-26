@@ -270,7 +270,7 @@ impl TryFrom<U256Small> for ScVal {
     type Error = ConversionError;
     fn try_from(value: U256Small) -> Result<Self, ConversionError> {
         let val = U256::new(value.as_val().get_body() as u128);
-        let (hi_hi, hi_lo, lo_hi, lo_lo) = u256_into_pieces(val);
+        let (hi_hi, hi_lo, lo_hi, lo_lo) = u256_into_parts(val);
         Ok(ScVal::U256(UInt256Parts {
             hi_hi,
             hi_lo,
@@ -291,7 +291,7 @@ impl TryFrom<I256Small> for ScVal {
     type Error = ConversionError;
     fn try_from(value: I256Small) -> Result<Self, ConversionError> {
         let val = I256::new(value.as_val().get_signed_body() as i128);
-        let (hi_hi, hi_lo, lo_hi, lo_lo) = i256_into_pieces(val);
+        let (hi_hi, hi_lo, lo_hi, lo_lo) = i256_into_parts(val);
         Ok(ScVal::I256(Int256Parts {
             hi_hi,
             hi_lo,
@@ -422,30 +422,30 @@ pub fn is_small_u256_parts(u: &UInt256Parts) -> bool {
 }
 
 pub fn is_small_i256_parts(i: &Int256Parts) -> bool {
-    let i = i256_from_pieces(i.hi_hi, i.hi_lo, i.lo_hi, i.lo_lo);
+    let i = i256_from_parts(i.hi_hi, i.hi_lo, i.lo_hi, i.lo_lo);
     is_small_i256(&i)
 }
 
-pub fn u256_from_pieces(hi_hi: u64, hi_lo: u64, lo_hi: u64, lo_lo: u64) -> U256 {
+pub fn u256_from_parts(hi_hi: u64, hi_lo: u64, lo_hi: u64, lo_lo: u64) -> U256 {
     let high = (u128::from(hi_hi)) << 64 | u128::from(hi_lo);
     let low = (u128::from(lo_hi)) << 64 | u128::from(lo_lo);
     U256::from_words(high, low)
 }
 
-pub fn u256_into_pieces(u: U256) -> (u64, u64, u64, u64) {
+pub fn u256_into_parts(u: U256) -> (u64, u64, u64, u64) {
     let (high, low) = u.into_words();
     let (hi_hi, hi_lo) = ((high >> 64) as u64, high as u64);
     let (lo_hi, lo_lo) = ((low >> 64) as u64, low as u64);
     (hi_hi, hi_lo, lo_hi, lo_lo)
 }
 
-pub fn i256_from_pieces(hi_hi: i64, hi_lo: u64, lo_hi: u64, lo_lo: u64) -> I256 {
+pub fn i256_from_parts(hi_hi: i64, hi_lo: u64, lo_hi: u64, lo_lo: u64) -> I256 {
     let high = ((u128::from(hi_hi as u64) << 64) | u128::from(hi_lo)) as i128;
     let low = ((u128::from(lo_hi) << 64) | u128::from(lo_lo)) as i128;
     I256::from_words(high, low)
 }
 
-pub fn i256_into_pieces(i: I256) -> (i64, u64, u64, u64) {
+pub fn i256_into_parts(i: I256) -> (i64, u64, u64, u64) {
     let (high, low) = i.into_words();
     let (hi_hi, hi_lo) = ((high >> 64) as i64, high as u64);
     let (lo_hi, lo_lo) = ((low >> 64) as u64, low as u64);

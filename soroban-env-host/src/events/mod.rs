@@ -8,7 +8,7 @@ pub(crate) use internal::{InternalDiagnosticArg, InternalDiagnosticEvent};
 // expose them as pub use for benches
 pub use internal::{InternalContractEvent, InternalEvent};
 use soroban_env_common::{
-    num::{i256_from_pieces, u256_from_pieces},
+    num::{i256_from_parts, u256_from_parts},
     xdr::{
         ContractEventBody, ContractEventType, ContractExecutable, PublicKey::PublicKeyTypeEd25519,
         ScAddress, ScContractInstance, ScVal,
@@ -48,16 +48,8 @@ fn display_scval(scv: &ScVal, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Resu
         ScVal::Duration(v) => write!(f, "Duration({})", v.0),
         ScVal::U128(v) => write!(f, "{}", u128::from(v)),
         ScVal::I128(v) => write!(f, "{}", i128::from(v)),
-        ScVal::U256(v) => write!(
-            f,
-            "{}",
-            u256_from_pieces(v.hi_hi, v.hi_lo, v.lo_hi, v.lo_lo)
-        ),
-        ScVal::I256(v) => write!(
-            f,
-            "{}",
-            i256_from_pieces(v.hi_hi, v.hi_lo, v.lo_hi, v.lo_lo)
-        ),
+        ScVal::U256(v) => write!(f, "{}", u256_from_parts(v.hi_hi, v.hi_lo, v.lo_hi, v.lo_lo)),
+        ScVal::I256(v) => write!(f, "{}", i256_from_parts(v.hi_hi, v.hi_lo, v.lo_hi, v.lo_lo)),
         ScVal::Bytes(v) => write!(f, "Bytes({})", v.0),
         ScVal::String(v) => write!(f, "\"{}\"", v.0),
         ScVal::Symbol(v) => write!(f, "{}", v.0),

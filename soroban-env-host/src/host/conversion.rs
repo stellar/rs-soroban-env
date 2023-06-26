@@ -6,9 +6,7 @@ use crate::err;
 use crate::host_object::{HostMap, HostObject, HostVec};
 use crate::xdr::{Hash, LedgerKey, LedgerKeyContractData, ScVal, ScVec, Uint256};
 use crate::{xdr::ContractCostType, Host, HostError, Val};
-use soroban_env_common::num::{
-    i256_from_pieces, i256_into_pieces, u256_from_pieces, u256_into_pieces,
-};
+use soroban_env_common::num::{i256_from_parts, i256_into_parts, u256_from_parts, u256_into_parts};
 use soroban_env_common::xdr::{
     self, int128_helpers, AccountId, ContractDataDurability, ContractEntryBodyType, Int128Parts,
     Int256Parts, ScAddress, ScBytes, ScErrorCode, ScErrorType, ScMap, ScMapEntry, UInt128Parts,
@@ -443,7 +441,7 @@ impl Host {
                             lo: int128_helpers::i128_lo(*i),
                         }),
                         HostObject::U256(u) => {
-                            let (hi_hi, hi_lo, lo_hi, lo_lo) = u256_into_pieces(*u);
+                            let (hi_hi, hi_lo, lo_hi, lo_lo) = u256_into_parts(*u);
                             ScVal::U256(UInt256Parts {
                                 hi_hi,
                                 hi_lo,
@@ -452,7 +450,7 @@ impl Host {
                             })
                         }
                         HostObject::I256(i) => {
-                            let (hi_hi, hi_lo, lo_hi, lo_lo) = i256_into_pieces(*i);
+                            let (hi_hi, hi_lo, lo_hi, lo_lo) = i256_into_parts(*i);
                             ScVal::I256(Int256Parts {
                                 hi_hi,
                                 hi_lo,
@@ -523,10 +521,10 @@ impl Host {
                 .add_host_object(int128_helpers::i128_from_pieces(i.hi, i.lo))?
                 .into()),
             ScVal::U256(u) => Ok(self
-                .add_host_object(u256_from_pieces(u.hi_hi, u.hi_lo, u.lo_hi, u.lo_lo))?
+                .add_host_object(u256_from_parts(u.hi_hi, u.hi_lo, u.lo_hi, u.lo_lo))?
                 .into()),
             ScVal::I256(i) => Ok(self
-                .add_host_object(i256_from_pieces(i.hi_hi, i.hi_lo, i.lo_hi, i.lo_lo))?
+                .add_host_object(i256_from_parts(i.hi_hi, i.hi_lo, i.lo_hi, i.lo_lo))?
                 .into()),
             ScVal::Bytes(b) => Ok(self
                 .add_host_object(b.metered_clone(self.as_budget())?)?

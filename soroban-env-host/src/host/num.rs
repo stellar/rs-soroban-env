@@ -1,3 +1,8 @@
+use crate::{
+    num::{i256_into_parts, u256_into_parts},
+    Host, HostError, I256Object, I256Small, I256Val, U256Object, U256Small, U256Val, I256, U256,
+};
+
 #[macro_export]
 macro_rules! impl_wrapping_obj_from_num {
     ($host_fn: ident, $hot: ty, $num: ty) => {
@@ -73,4 +78,30 @@ macro_rules! impl_bignum_host_fns_rhs_u32 {
             Ok(res.try_into_val(self)?)
         }
     };
+}
+
+impl Host {
+    pub(crate) fn u256_val_to_parts(
+        &self,
+        val: U256Val,
+    ) -> Result<(u64, u64, u64, u64), HostError> {
+        if let Ok(so) = U256Small::try_from(val) {
+            Ok(u256_into_parts(U256::from(so)))
+        } else {
+            let obj = U256Object::try_from(val)?;
+            self.visit_obj(obj, move |u: &U256| Ok(u256_into_parts(*u)))
+        }
+    }
+
+    pub(crate) fn i256_val_to_parts(
+        &self,
+        val: I256Val,
+    ) -> Result<(i64, u64, u64, u64), HostError> {
+        if let Ok(so) = I256Small::try_from(val) {
+            Ok(i256_into_parts(I256::from(so)))
+        } else {
+            let obj = I256Object::try_from(val)?;
+            self.visit_obj(obj, move |i: &I256| Ok(i256_into_parts(*i)))
+        }
+    }
 }

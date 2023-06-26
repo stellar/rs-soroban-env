@@ -1,5 +1,5 @@
 use crate::{
-    num::{i256_from_pieces, i256_into_pieces, u256_from_pieces, u256_into_pieces},
+    num::{i256_from_parts, i256_into_parts, u256_from_parts, u256_into_parts},
     ConversionError, DurationSmall, DurationVal, Env, I128Small, I128Val, I256Small, I256Val,
     I64Small, TimepointSmall, TimepointVal, U128Small, U128Val, U256Small, U256Val, U64Small,
     U64Val, Val, I256, U256,
@@ -281,12 +281,12 @@ impl<E: Env> TryFromVal<E, Val> for I256 {
         if let Ok(so) = I256Small::try_from(v) {
             Ok(so.into())
         } else {
-            let obj = v.try_into()?;
-            let hi_hi = env.obj_to_i256_hi_hi(obj).map_err(|_| ConversionError)?;
-            let hi_lo = env.obj_to_i256_hi_lo(obj).map_err(|_| ConversionError)?;
-            let lo_hi = env.obj_to_i256_lo_hi(obj).map_err(|_| ConversionError)?;
-            let lo_lo = env.obj_to_i256_lo_lo(obj).map_err(|_| ConversionError)?;
-            Ok(i256_from_pieces(hi_hi, hi_lo, lo_hi, lo_lo))
+            let val: I256Val = v.try_into()?;
+            let hi_hi = env.i256_val_hi_hi(val).map_err(|_| ConversionError)?;
+            let hi_lo = env.i256_val_hi_lo(val).map_err(|_| ConversionError)?;
+            let lo_hi = env.i256_val_lo_hi(val).map_err(|_| ConversionError)?;
+            let lo_lo = env.i256_val_lo_lo(val).map_err(|_| ConversionError)?;
+            Ok(i256_from_parts(hi_hi, hi_lo, lo_hi, lo_lo))
         }
     }
 }
@@ -303,16 +303,9 @@ impl<E: Env> TryFromVal<E, I256> for I256Val {
     type Error = ConversionError;
 
     fn try_from_val(env: &E, v: &I256) -> Result<Self, Self::Error> {
-        let v = *v;
-        if let Ok(so) = I256Small::try_from(v) {
-            Ok(so.into())
-        } else {
-            let (hi_hi, hi_lo, lo_hi, lo_lo) = i256_into_pieces(v);
-            Ok(env
-                .obj_from_i256_pieces(hi_hi, hi_lo, lo_hi, lo_lo)
-                .map_err(|_| ConversionError)?
-                .into())
-        }
+        let (hi_hi, hi_lo, lo_hi, lo_lo) = i256_into_parts(*v);
+        env.i256_val_from_parts(hi_hi, hi_lo, lo_hi, lo_lo)
+            .map_err(|_| ConversionError)
     }
 }
 
@@ -325,12 +318,12 @@ impl<E: Env> TryFromVal<E, Val> for U256 {
         if let Ok(so) = U256Small::try_from(v) {
             Ok(so.into())
         } else {
-            let obj = v.try_into()?;
-            let hi_hi = env.obj_to_u256_hi_hi(obj).map_err(|_| ConversionError)?;
-            let hi_lo = env.obj_to_u256_hi_lo(obj).map_err(|_| ConversionError)?;
-            let lo_hi = env.obj_to_u256_lo_hi(obj).map_err(|_| ConversionError)?;
-            let lo_lo = env.obj_to_u256_lo_lo(obj).map_err(|_| ConversionError)?;
-            Ok(u256_from_pieces(hi_hi, hi_lo, lo_hi, lo_lo))
+            let val: U256Val = v.try_into()?;
+            let hi_hi = env.u256_val_hi_hi(val).map_err(|_| ConversionError)?;
+            let hi_lo = env.u256_val_hi_lo(val).map_err(|_| ConversionError)?;
+            let lo_hi = env.u256_val_lo_hi(val).map_err(|_| ConversionError)?;
+            let lo_lo = env.u256_val_lo_lo(val).map_err(|_| ConversionError)?;
+            Ok(u256_from_parts(hi_hi, hi_lo, lo_hi, lo_lo))
         }
     }
 }
@@ -347,16 +340,9 @@ impl<E: Env> TryFromVal<E, U256> for U256Val {
     type Error = ConversionError;
 
     fn try_from_val(env: &E, v: &U256) -> Result<Self, Self::Error> {
-        let v = *v;
-        if let Ok(so) = U256Small::try_from(v) {
-            Ok(so.into())
-        } else {
-            let (hi_hi, hi_lo, lo_hi, lo_lo) = u256_into_pieces(v);
-            Ok(env
-                .obj_from_u256_pieces(hi_hi, hi_lo, lo_hi, lo_lo)
-                .map_err(|_| ConversionError)?
-                .into())
-        }
+        let (hi_hi, hi_lo, lo_hi, lo_lo) = u256_into_parts(*v);
+        env.u256_val_from_parts(hi_hi, hi_lo, lo_hi, lo_lo)
+            .map_err(|_| ConversionError)
     }
 }
 
@@ -410,7 +396,7 @@ where
             })),
             Tag::I256Small => {
                 let body = val.get_signed_body() as i128;
-                let (hi_hi, hi_lo, lo_hi, lo_lo) = i256_into_pieces(I256::from(body));
+                let (hi_hi, hi_lo, lo_hi, lo_lo) = i256_into_parts(I256::from(body));
                 Ok(ScVal::I256(Int256Parts {
                     hi_hi,
                     hi_lo,

@@ -6,9 +6,9 @@ use core::convert::Infallible;
 use soroban_env_common::call_macro_with_all_host_functions;
 
 use super::{
-    AddressObject, Bool, BytesObject, DurationObject, Error, I128Object, I256Object, I256Val,
-    I64Object, MapObject, StorageType, StringObject, SymbolObject, TimepointObject, U128Object,
-    U256Object, U256Val, U32Val, U64Object, U64Val, Val, VecObject, Void,
+    AddressObject, Bool, BytesObject, DurationObject, Error, I128Object, I256Val, I64Object,
+    MapObject, StorageType, StringObject, SymbolObject, TimepointObject, U128Object, U256Val,
+    U32Val, U64Object, U64Val, Val, VecObject, Void,
 };
 use super::{Env, EnvBase, Symbol};
 #[cfg(target_family = "wasm")]
