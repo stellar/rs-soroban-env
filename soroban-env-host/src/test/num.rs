@@ -393,8 +393,8 @@ fn test_i256_bytes_roundtrip() -> Result<(), HostError> {
     let host = Host::default();
     let num = I256::from_words(-4353239472894, 6576786237846);
     let bo = host.bytes_new_from_slice(num.to_be_bytes().as_slice())?;
-    let obj = host.i256_obj_from_be_bytes(bo)?;
-    let bo_back = host.i256_obj_to_be_bytes(obj)?;
+    let val = host.i256_val_from_be_bytes(bo)?;
+    let bo_back = host.i256_val_to_be_bytes(val)?;
 
     let mut buf = [0; 32];
     host.bytes_copy_to_slice(bo_back, U32Val::from(0), buf.as_mut_slice())?;
@@ -408,8 +408,8 @@ fn test_u256_bytes_roundtrip() -> Result<(), HostError> {
     let host = Host::default();
     let num = U256::from_words(4353239472894, 6576786237846);
     let bo = host.bytes_new_from_slice(num.to_be_bytes().as_slice())?;
-    let obj = host.u256_obj_from_be_bytes(bo)?;
-    let bo_back = host.u256_obj_to_be_bytes(obj)?;
+    let val = host.u256_val_from_be_bytes(bo)?;
+    let bo_back = host.u256_val_to_be_bytes(val)?;
 
     let mut buf = [0; 32];
     host.bytes_copy_to_slice(bo_back, U32Val::from(0), buf.as_mut_slice())?;
