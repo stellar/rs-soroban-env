@@ -223,7 +223,7 @@ impl<E: Env> TryFromVal<E, i128> for I128Val {
             Ok(so.into())
         } else {
             Ok(env
-                .obj_from_i128_pieces(int128_helpers::i128_hi(v), int128_helpers::i128_lo(v))
+                .obj_from_i128_parts(int128_helpers::i128_hi(v), int128_helpers::i128_lo(v))
                 .map_err(|_| ConversionError)?
                 .into())
         }
@@ -265,7 +265,7 @@ impl<E: Env> TryFromVal<E, u128> for U128Val {
             Ok(so.into())
         } else {
             Ok(env
-                .obj_from_u128_pieces(int128_helpers::u128_hi(v), int128_helpers::u128_lo(v))
+                .obj_from_u128_parts(int128_helpers::u128_hi(v), int128_helpers::u128_lo(v))
                 .map_err(|_| ConversionError)?
                 .into())
         }

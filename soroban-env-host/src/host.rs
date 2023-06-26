@@ -1157,7 +1157,7 @@ impl VmCallerEnv for Host {
     impl_wrapping_obj_from_num!(duration_obj_from_u64, Duration, u64);
     impl_wrapping_obj_to_num!(duration_obj_to_u64, Duration, u64);
 
-    fn obj_from_u128_pieces(
+    fn obj_from_u128_parts(
         &self,
         vmcaller: &mut VmCaller<Self::VmUserState>,
         hi: u64,
@@ -1182,7 +1182,7 @@ impl VmCallerEnv for Host {
         self.visit_obj(obj, move |u: &u128| Ok(int128_helpers::u128_hi(*u)))
     }
 
-    fn obj_from_i128_pieces(
+    fn obj_from_i128_parts(
         &self,
         vmcaller: &mut VmCaller<Self::VmUserState>,
         hi: i64,
