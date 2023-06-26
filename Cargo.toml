@@ -34,7 +34,7 @@ default-features = false
 package = "soroban-wasmi"
 version = "0.30.0-soroban"
 git = "https://github.com/stellar/wasmi"
-rev = "1a2bc7f"
+rev = "3dc639fde3bebf0bf364a9fa4ac2f0efb7ee9995"
 
 [workspace.dependencies.stellar-strkey]
 version = "0.0.7"
