@@ -1,5 +1,9 @@
 use crate::common::HostCostMeasurement;
-use soroban_env_host::{cost_runner::GuardFrameRun, xdr::Hash, Symbol};
+use soroban_env_host::{
+    cost_runner::GuardFrameRun,
+    xdr::{ContractExecutable, Hash, ScContractInstance},
+    Symbol,
+};
 
 pub(crate) struct GuardFrameMeasure;
 
@@ -9,7 +13,7 @@ impl HostCostMeasurement for GuardFrameMeasure {
     fn new_best_case(
         _host: &soroban_env_host::Host,
         _rng: &mut rand::prelude::StdRng,
-    ) -> (Hash, Symbol) {
+    ) -> (Hash, Symbol, ScContractInstance) {
         let id: Hash = [0; 32].into();
         let fun: Symbol = Symbol::try_from_small_str("add").unwrap();
         let empty_instance = ScContractInstance {
@@ -23,7 +27,7 @@ impl HostCostMeasurement for GuardFrameMeasure {
         host: &soroban_env_host::Host,
         rng: &mut rand::prelude::StdRng,
         _input: u64,
-    ) -> (Hash, Symbol) {
+    ) -> (Hash, Symbol, ScContractInstance) {
         Self::new_best_case(host, rng)
     }
 }

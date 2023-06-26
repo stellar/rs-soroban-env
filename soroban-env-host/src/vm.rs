@@ -276,6 +276,7 @@ impl Vm {
         func_sym: &Symbol,
         args: &[Val],
     ) -> Result<Val, HostError> {
+        host.charge_budget(ContractCostType::InvokeVmFunction, None)?;
         let wasm_args: Vec<Value> = args
             .iter()
             .map(|i| Value::I64(i.get_payload() as i64))

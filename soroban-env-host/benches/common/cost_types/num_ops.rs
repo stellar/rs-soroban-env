@@ -3,7 +3,7 @@ use rand::{rngs::StdRng, RngCore};
 use soroban_env_common::{Env, EnvBase};
 use soroban_env_host::{
     cost_runner::{Int256AddSubRun, Int256DivRun, Int256MulRun, Int256PowRun, Int256ShiftRun},
-    Host, I256Object, U32Val, I256,
+    Host, I256Val, U32Val, I256,
 };
 
 // These are best guesses.
@@ -33,11 +33,7 @@ macro_rules! impl_int256_measure {
         impl HostCostMeasurement for $measure {
             type Runner = $runner;
 
-            fn new_worst_case(
-                host: &Host,
-                _rng: &mut StdRng,
-                _input: u64,
-            ) -> (I256Object, I256Object) {
+            fn new_worst_case(host: &Host, _rng: &mut StdRng, _input: u64) -> (I256Val, I256Val) {
                 let (lhs, rhs) = $worst();
                 let bytes = host
                     .bytes_new_from_slice(lhs.to_be_bytes().as_slice())
@@ -47,14 +43,10 @@ macro_rules! impl_int256_measure {
                     .bytes_new_from_slice(rhs.to_be_bytes().as_slice())
                     .unwrap();
                 let rhs_obj = host.i256_obj_from_be_bytes(bytes).unwrap();
-                (lhs_obj, rhs_obj)
+                (lhs_obj.into(), rhs_obj.into())
             }
 
-            fn new_random_case(
-                host: &Host,
-                rng: &mut StdRng,
-                _input: u64,
-            ) -> (I256Object, I256Object) {
+            fn new_random_case(host: &Host, rng: &mut StdRng, _input: u64) -> (I256Val, I256Val) {
                 let mut bytes = [0; 32];
                 rng.fill_bytes(bytes.as_mut_slice());
                 let bo = host.bytes_new_from_slice(bytes.as_slice()).unwrap();
@@ -62,7 +54,7 @@ macro_rules! impl_int256_measure {
                 rng.fill_bytes(bytes.as_mut_slice());
                 let bo = host.bytes_new_from_slice(bytes.as_slice()).unwrap();
                 let rhs_obj = host.i256_obj_from_be_bytes(bo).unwrap();
-                (lhs_obj, rhs_obj)
+                (lhs_obj.into(), rhs_obj.into())
             }
         }
     };
@@ -78,21 +70,21 @@ macro_rules! impl_int256_measure_rhs_u32 {
         impl HostCostMeasurement for $measure {
             type Runner = $runner;
 
-            fn new_worst_case(host: &Host, _rng: &mut StdRng, _input: u64) -> (I256Object, U32Val) {
+            fn new_worst_case(host: &Host, _rng: &mut StdRng, _input: u64) -> (I256Val, U32Val) {
                 let (lhs, rhs) = $worst();
                 let bytes = host
                     .bytes_new_from_slice(lhs.to_be_bytes().as_slice())
                     .unwrap();
                 let lhs_obj = host.i256_obj_from_be_bytes(bytes).unwrap();
-                (lhs_obj, U32Val::from(rhs))
+                (lhs_obj.into(), U32Val::from(rhs))
             }
 
-            fn new_random_case(host: &Host, rng: &mut StdRng, _input: u64) -> (I256Object, U32Val) {
+            fn new_random_case(host: &Host, rng: &mut StdRng, _input: u64) -> (I256Val, U32Val) {
                 let mut bytes = [0; 32];
                 rng.fill_bytes(bytes.as_mut_slice());
                 let bo = host.bytes_new_from_slice(bytes.as_slice()).unwrap();
                 let lhs_obj = host.i256_obj_from_be_bytes(bo).unwrap();
-                (lhs_obj, U32Val::from(rng.next_u32()))
+                (lhs_obj.into(), U32Val::from(rng.next_u32()))
             }
         }
     };
