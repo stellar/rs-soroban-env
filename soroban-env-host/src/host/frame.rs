@@ -453,7 +453,6 @@ impl Host {
                     id.metered_clone(&self.0.budget)?,
                     code_entry.as_slice(),
                 )?;
-                self.charge_budget(ContractCostType::InvokeVmFunction, None)?;
                 self.with_frame(
                     Frame::ContractVM(vm.clone(), *func, args.to_vec(), contract_instance),
                     || vm.invoke_function_raw(self, func, args),
