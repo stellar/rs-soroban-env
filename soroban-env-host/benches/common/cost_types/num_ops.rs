@@ -38,23 +38,23 @@ macro_rules! impl_int256_measure {
                 let bytes = host
                     .bytes_new_from_slice(lhs.to_be_bytes().as_slice())
                     .unwrap();
-                let lhs_obj = host.i256_obj_from_be_bytes(bytes).unwrap();
+                let lhs_val = host.i256_val_from_be_bytes(bytes).unwrap();
                 let bytes = host
                     .bytes_new_from_slice(rhs.to_be_bytes().as_slice())
                     .unwrap();
-                let rhs_obj = host.i256_obj_from_be_bytes(bytes).unwrap();
-                (lhs_obj.into(), rhs_obj.into())
+                let rhs_val = host.i256_val_from_be_bytes(bytes).unwrap();
+                (lhs_val, rhs_val)
             }
 
             fn new_random_case(host: &Host, rng: &mut StdRng, _input: u64) -> (I256Val, I256Val) {
                 let mut bytes = [0; 32];
                 rng.fill_bytes(bytes.as_mut_slice());
                 let bo = host.bytes_new_from_slice(bytes.as_slice()).unwrap();
-                let lhs_obj = host.i256_obj_from_be_bytes(bo).unwrap();
+                let lhs_val = host.i256_val_from_be_bytes(bo).unwrap();
                 rng.fill_bytes(bytes.as_mut_slice());
                 let bo = host.bytes_new_from_slice(bytes.as_slice()).unwrap();
-                let rhs_obj = host.i256_obj_from_be_bytes(bo).unwrap();
-                (lhs_obj.into(), rhs_obj.into())
+                let rhs_val = host.i256_val_from_be_bytes(bo).unwrap();
+                (lhs_val, rhs_val)
             }
         }
     };
@@ -75,16 +75,16 @@ macro_rules! impl_int256_measure_rhs_u32 {
                 let bytes = host
                     .bytes_new_from_slice(lhs.to_be_bytes().as_slice())
                     .unwrap();
-                let lhs_obj = host.i256_obj_from_be_bytes(bytes).unwrap();
-                (lhs_obj.into(), U32Val::from(rhs))
+                let lhs_val = host.i256_val_from_be_bytes(bytes).unwrap();
+                (lhs_val, U32Val::from(rhs))
             }
 
             fn new_random_case(host: &Host, rng: &mut StdRng, _input: u64) -> (I256Val, U32Val) {
                 let mut bytes = [0; 32];
                 rng.fill_bytes(bytes.as_mut_slice());
                 let bo = host.bytes_new_from_slice(bytes.as_slice()).unwrap();
-                let lhs_obj = host.i256_obj_from_be_bytes(bo).unwrap();
-                (lhs_obj.into(), U32Val::from(rng.next_u32()))
+                let lhs_val = host.i256_val_from_be_bytes(bo).unwrap();
+                (lhs_val, U32Val::from(rng.next_u32()))
             }
         }
     };

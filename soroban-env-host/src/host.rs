@@ -20,9 +20,9 @@ use crate::{
         LedgerEntryData, LedgerKey, LedgerKeyContractCode, PublicKey, ScAddress, ScBytes,
         ScErrorType, ScString, ScSymbol, ScVal, TimePoint,
     },
-    AddressObject, Bool, BytesObject, Error, I128Object, I256Object, MapObject, StorageType,
-    StringObject, SymbolObject, SymbolSmall, SymbolStr, TryFromVal, U128Object, U256Object, U32Val,
-    U64Val, VecObject, VmCaller, VmCallerEnv, Void, I256, U256,
+    AddressObject, Bool, BytesObject, ConversionError, Error, I128Object, I256Object, MapObject,
+    StorageType, StringObject, SymbolObject, SymbolSmall, SymbolStr, TryFromVal, U128Object,
+    U256Object, U32Val, U64Val, VecObject, VmCaller, VmCallerEnv, Void, I256, U256,
 };
 
 use crate::Vm;
@@ -1214,29 +1214,34 @@ impl VmCallerEnv for Host {
         self.add_host_object(u256_from_pieces(hi_hi, hi_lo, lo_hi, lo_lo))
     }
 
-    fn u256_obj_from_be_bytes(
+    fn u256_val_from_be_bytes(
         &self,
         vmcaller: &mut VmCaller<Self::VmUserState>,
         bytes: BytesObject,
-    ) -> Result<U256Object, HostError> {
+    ) -> Result<U256Val, HostError> {
         let num = self.visit_obj(bytes, move |b: &ScBytes| {
             Ok(U256::from_be_bytes(self.fixed_length_bytes_from_slice(
                 "U256 bytes",
                 b.as_slice(),
             )?))
         })?;
-        self.add_host_object(num)
+        U256Val::try_from_val(self, &num).map_err(|_| ConversionError.into())
     }
 
-    fn u256_obj_to_be_bytes(
+    fn u256_val_to_be_bytes(
         &self,
         vmcaller: &mut VmCaller<Self::VmUserState>,
-        obj: U256Object,
+        val: U256Val,
     ) -> Result<BytesObject, HostError> {
-        let scb = self.visit_obj(obj, move |u: &U256| {
-            self.scbytes_from_slice(&u.to_be_bytes())
-        })?;
-        self.add_host_object(scb)
+        if let Ok(so) = U256Small::try_from(val) {
+            self.add_host_object(self.scbytes_from_slice(&U256::from(so).to_be_bytes())?)
+        } else {
+            let obj = val.try_into()?;
+            let scb = self.visit_obj(obj, move |u: &U256| {
+                self.scbytes_from_slice(&u.to_be_bytes())
+            })?;
+            self.add_host_object(scb)
+        }
     }
 
     fn obj_to_u256_hi_hi(
@@ -1294,29 +1299,34 @@ impl VmCallerEnv for Host {
         self.add_host_object(i256_from_pieces(hi_hi, hi_lo, lo_hi, lo_lo))
     }
 
-    fn i256_obj_from_be_bytes(
+    fn i256_val_from_be_bytes(
         &self,
         vmcaller: &mut VmCaller<Self::VmUserState>,
         bytes: BytesObject,
-    ) -> Result<I256Object, HostError> {
+    ) -> Result<I256Val, HostError> {
         let num = self.visit_obj(bytes, move |b: &ScBytes| {
             Ok(I256::from_be_bytes(self.fixed_length_bytes_from_slice(
                 "I256 bytes",
                 b.as_slice(),
             )?))
         })?;
-        self.add_host_object(num)
+        I256Val::try_from_val(self, &num).map_err(|_| ConversionError.into())
     }
 
-    fn i256_obj_to_be_bytes(
+    fn i256_val_to_be_bytes(
         &self,
         vmcaller: &mut VmCaller<Self::VmUserState>,
-        obj: I256Object,
+        val: I256Val,
     ) -> Result<BytesObject, HostError> {
-        let scb = self.visit_obj(obj, move |i: &I256| {
-            self.scbytes_from_slice(&i.to_be_bytes())
-        })?;
-        self.add_host_object(scb)
+        if let Ok(so) = I256Small::try_from(val) {
+            self.add_host_object(self.scbytes_from_slice(&I256::from(so).to_be_bytes())?)
+        } else {
+            let obj = val.try_into()?;
+            let scb = self.visit_obj(obj, move |i: &I256| {
+                self.scbytes_from_slice(&i.to_be_bytes())
+            })?;
+            self.add_host_object(scb)
+        }
     }
 
     fn obj_to_i256_hi_hi(
