@@ -1168,12 +1168,32 @@ impl AccountAuthorizationTracker {
         }
         self.need_nonce = false;
         if let Some((nonce, expiration_ledger)) = &self.nonce {
-            if host.with_ledger_info(|li| Ok(li.sequence_number))? > *expiration_ledger {
+            let (ledger_seq, max_entry_expiration) =
+                host.with_ledger_info(|li| Ok((li.sequence_number, li.max_entry_expiration)))?;
+            if ledger_seq > *expiration_ledger {
                 return Err(host.err(
                     ScErrorType::Auth,
                     ScErrorCode::InvalidInput,
                     "signature has expired",
-                    &[],
+                    &[
+                        ledger_seq.try_into_val(host)?,
+                        expiration_ledger.try_into_val(host)?,
+                    ],
+                ));
+            }
+            if *expiration_ledger
+                > ledger_seq
+                    .saturating_sub(1)
+                    .saturating_add(max_entry_expiration)
+            {
+                return Err(host.err(
+                    ScErrorType::Auth,
+                    ScErrorCode::InvalidInput,
+                    "signature expiration is too late",
+                    &[
+                        (ledger_seq + max_entry_expiration).try_into_val(host)?,
+                        expiration_ledger.try_into_val(host)?,
+                    ],
                 ));
             }
             if let Some(addr) = self.address {
