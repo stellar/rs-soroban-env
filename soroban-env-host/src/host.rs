@@ -2031,8 +2031,12 @@ impl VmCallerEnv for Host {
             .borrow_mut()
             .touch_key(&key, self.as_budget())?;
 
-        let min_expiration =
-            self.with_ledger_info(|li| Ok(li.sequence_number.saturating_add(min.into())))?;
+        let min_expiration = self.with_ledger_info(|li| {
+            Ok(li
+                .sequence_number
+                .saturating_sub(1)
+                .saturating_add(min.into()))
+        })?;
         self.0.expiration_bumps.borrow_mut().metered_push(
             self,
             LedgerBump {
@@ -2048,8 +2052,12 @@ impl VmCallerEnv for Host {
         _vmcaller: &mut VmCaller<Host>,
         min: U32Val,
     ) -> Result<Void, HostError> {
-        let min_expiration =
-            self.with_ledger_info(|li| Ok(li.sequence_number.saturating_add(min.into())))?;
+        let min_expiration = self.with_ledger_info(|li| {
+            Ok(li
+                .sequence_number
+                .saturating_sub(1)
+                .saturating_add(min.into()))
+        })?;
 
         let contract_id = self.get_current_contract_id_internal()?;
         let key = self.contract_instance_ledger_key(&contract_id)?;
