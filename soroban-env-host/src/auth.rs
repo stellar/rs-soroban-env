@@ -1119,7 +1119,11 @@ impl AccountAuthorizationTracker {
     fn get_recorded_auth_payload(&self, host: &Host) -> Result<RecordedAuthPayload, HostError> {
         Ok(RecordedAuthPayload {
             address: if let Some(addr) = self.address {
-                Some(host.visit_obj(addr, |a: &ScAddress| Ok(a.clone()))?)
+                if !self.is_invoker {
+                    Some(host.visit_obj(addr, |a: &ScAddress| Ok(a.clone()))?)
+                } else {
+                    None
+                }
             } else {
                 if !self.is_invoker {
                     return Err(host.err(
