@@ -1356,6 +1356,8 @@ impl Host {
             nonce_key_scval.metered_clone(self.budget_ref())?,
             xdr::ContractDataDurability::Temporary,
         );
+        let expiration_ledger = expiration_ledger
+            .max(self.get_min_expiration_ledger(xdr::ContractDataDurability::Temporary)?);
         self.with_mut_storage(|storage| {
             if storage.has(&nonce_key, self.budget_ref())? {
                 return Err(self.err(
