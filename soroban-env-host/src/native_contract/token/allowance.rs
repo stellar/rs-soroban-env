@@ -97,7 +97,7 @@ pub fn write_allowance(
                 e.bump_contract_data(
                     key.try_into_val(e)?,
                     StorageType::Temporary,
-                    (expiration - ledger_seq).into(),
+                    (expiration - ledger_seq + 1).into(),
                 )?;
             }
         }
