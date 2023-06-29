@@ -11,7 +11,7 @@ edition = "2021"
 rust-version = "1.70"
 
 [build_dependencies]
-crate-git-revision = "0.0.4"
+crate-git-revision = "0.0.6"
 
 [dependencies]
 soroban-env-macros = { workspace = true }
