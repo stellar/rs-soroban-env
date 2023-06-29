@@ -35,7 +35,11 @@ pub fn write_allowance(
     // validates the expiration and then returns the ledger seq
     // The expiration can be less than ledger seq if clearing an allowance
     let ledger_seq = e.with_ledger_info(|li| {
-        if expiration > li.sequence_number.saturating_add(li.max_entry_expiration) {
+        if expiration
+            > li.sequence_number
+                .saturating_sub(1)
+                .saturating_add(li.max_entry_expiration)
+        {
             Err(err!(
                 e,
                 ContractError::AllowanceError,
@@ -93,7 +97,7 @@ pub fn write_allowance(
                 e.bump_contract_data(
                     key.try_into_val(e)?,
                     StorageType::Temporary,
-                    (expiration - ledger_seq).into(),
+                    (expiration - ledger_seq + 1).into(),
                 )?;
             }
         }

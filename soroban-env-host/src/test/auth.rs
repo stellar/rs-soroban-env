@@ -91,6 +91,12 @@ impl AuthTest {
         // to respect the budget limit.
         host.as_budget().reset_unlimited();
         host.enable_debug();
+
+        host.with_mut_ledger_info(|li| {
+            li.sequence_number = 100;
+            li.max_entry_expiration = 10000;
+        })
+        .unwrap();
         let mut accounts = vec![];
         for _ in 0..signer_cnt {
             accounts.push(generate_keypair());

@@ -57,7 +57,7 @@ impl TokenTest {
             base_reserve: 5_000_000,
             min_persistent_entry_expiration: 4096,
             min_temp_entry_expiration: 16,
-            max_entry_expiration: 6312000,
+            max_entry_expiration: 10000,
         });
         Self {
             host,
@@ -1658,14 +1658,68 @@ fn test_auth_rejected_for_incorrect_nonce() {
 
     let args = host_vec![&test.host, user.address(&test.host), 100_i128];
 
-    // Correct call to consume nonce.
+    // Expired nonce
     authorize_single_invocation_with_nonce(
         &test.host,
         &admin,
         &token.address,
         "mint",
         args.clone(),
-        Some((12345, 1000)),
+        Some((12345, 122)),
+    );
+    assert!(test
+        .host
+        .call(
+            token.address.clone().into(),
+            Symbol::try_from_small_str("mint").unwrap(),
+            args.clone().into(),
+        )
+        .is_err());
+
+    // Too early for nonce
+    authorize_single_invocation_with_nonce(
+        &test.host,
+        &admin,
+        &token.address,
+        "mint",
+        args.clone(),
+        Some((12345, 123 + 10000)),
+    );
+    assert!(test
+        .host
+        .call(
+            token.address.clone().into(),
+            Symbol::try_from_small_str("mint").unwrap(),
+            args.clone().into(),
+        )
+        .is_err());
+
+    // Correct call to consume nonce that expires on the current ledger.
+    authorize_single_invocation_with_nonce(
+        &test.host,
+        &admin,
+        &token.address,
+        "mint",
+        args.clone(),
+        Some((12345, 123)),
+    );
+    test.host
+        .call(
+            token.address.clone().into(),
+            Symbol::try_from_small_str("mint").unwrap(),
+            args.clone().into(),
+        )
+        .unwrap();
+
+    // Correct call to consume nonce that expires at the maximum possible entry
+    // lifetime.
+    authorize_single_invocation_with_nonce(
+        &test.host,
+        &admin,
+        &token.address,
+        "mint",
+        args.clone(),
+        Some((123456, 123 + 10000 - 1)),
     );
     test.host
         .call(
