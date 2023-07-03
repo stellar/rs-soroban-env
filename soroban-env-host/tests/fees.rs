@@ -1,6 +1,6 @@
 use soroban_env_host::fees::{
-    compute_rent_fee, compute_transaction_resource_fee, FeeConfiguration,
-    LedgerEntryRentChange, RentFeeConfiguration, TransactionResources,
+    compute_rent_fee, compute_transaction_resource_fee, FeeConfiguration, LedgerEntryRentChange,
+    RentFeeConfiguration, TransactionResources,
 };
 
 #[test]

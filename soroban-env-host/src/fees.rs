@@ -55,7 +55,7 @@ pub struct FeeConfiguration {
 
 /// Change in a single ledger entry with parameters relevant for rent fee
 /// computations.
-/// 
+///
 /// This represents the entry state before and after transaction has been
 /// applied.
 pub struct LedgerEntryRentChange {
@@ -81,14 +81,14 @@ pub struct RentFeeConfiguration {
     /// This is the same field as in `FeeConfiguration`.
     pub fee_per_write_1kb: i64,
     /// Denominator for the total rent fee for persistent storage.
-    /// 
+    ///
     /// This can be thought of as the number of ledgers of rent that costs as
     /// much, as writing the entry for the first time (i.e. if the value is
     /// `1000`, then we would charge the entry write fee for every 1000 ledgers
     /// of rent).
     pub persistent_rent_rate_denomniator: i64,
     /// Denominator for the total rent fee for temporary storage.
-    /// 
+    ///
     /// This has the same semantics as `persistent_rent_rate_denomniator`.
     pub temporary_rent_rate_denomniator: i64,
 }
@@ -97,7 +97,7 @@ pub struct RentFeeConfiguration {
 /// consumption and the fee-related network configuration.
 ///
 /// This can handle unsantized user inputs.
-/// 
+///
 /// Returns a pair of `(non_refundable_fee, refundable_fee)` that represent
 /// non-refundable and refundable resource fee components respectively.
 pub fn compute_transaction_resource_fee(
@@ -162,10 +162,10 @@ pub fn compute_transaction_resource_fee(
 }
 
 /// Computes the total rent-related fee for the provided ledger entry changes.
-/// 
-/// The rent-related fees consist of the fees for rent bumps and fees for 
+///
+/// The rent-related fees consist of the fees for rent bumps and fees for
 /// increasing the entry size (with or without rent bump).
-/// 
+///
 /// This cannot handle unsantized inputs and relies on sane configuration and
 /// ledger changes. This is due to the fact that rent is managed automatically
 /// wihtout user-provided inputs.
@@ -193,7 +193,7 @@ fn rent_fee_per_entry_change(
             entry_change.is_persistent,
             // New portion of rent is payed for the new size of the entry.
             entry_change.new_size_bytes,
-            // Rent should be covered until `old_expiration_ledger` (or start 
+            // Rent should be covered until `old_expiration_ledger` (or start
             // from the current ledger for new entries), so don't include it
             // into the number of rent ledgers.
             entry_change.new_expiration_ledger
