@@ -227,7 +227,7 @@ fn rent_fee_for_size_and_ledgers(
     // Multiplication can overflow here - unlike fee computation this can rely
     // on sane input parameters as rent fee computation does not depend on any
     // user inputs.
-    let num = entry_size as i64 * fee_config.fee_per_write_1kb as i64 * rent_ledgers as i64;
+    let num = entry_size as i64 * fee_config.fee_per_write_1kb * rent_ledgers as i64;
     let storage_coef = if is_persistent {
         fee_config.persistent_rent_rate_denomniator
     } else {
