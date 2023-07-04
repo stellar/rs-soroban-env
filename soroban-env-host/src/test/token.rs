@@ -58,7 +58,8 @@ impl TokenTest {
             min_persistent_entry_expiration: 4096,
             min_temp_entry_expiration: 16,
             max_entry_expiration: 10000,
-        });
+        })
+        .unwrap();
         Self {
             host,
             issuer_key: generate_keypair(),
@@ -290,7 +291,7 @@ impl TokenTest {
         T: Into<Val>,
         F: FnOnce() -> Result<T, HostError>,
     {
-        self.host.set_source_account(account_id);
+        self.host.set_source_account(account_id)?;
         self.host.with_frame(
             Frame::HostFunction(HostFunctionType::InvokeContract),
             || {
@@ -2748,7 +2749,7 @@ fn test_recording_auth_for_token() {
     let user = TestSigner::account(&test.user_key);
     test.create_default_account(&user);
     test.create_default_trustline(&user);
-    test.host.switch_to_recording_auth();
+    test.host.switch_to_recording_auth().unwrap();
 
     let args = host_vec![&test.host, user.address(&test.host), 100_i128];
     test.host

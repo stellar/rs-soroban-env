@@ -99,9 +99,9 @@ fn hostile_objs_traps() -> Result<(), HostError> {
     let host = Host::test_host_with_recording_footprint();
     let contract_id_obj = host.register_test_contract_wasm(HOSTILE);
 
-    host.set_diagnostic_level(crate::DiagnosticLevel::Debug);
-    host.with_budget(|b| Ok(b.reset_default()))?;
-    host.with_budget(|b| Ok(b.reset_unlimited_cpu()))?;
+    host.set_diagnostic_level(crate::DiagnosticLevel::Debug)?;
+    host.with_budget(|b| b.reset_default())?;
+    host.with_budget(|b| b.reset_unlimited_cpu())?;
 
     // This one should just run out of memory
     let res = host.call(

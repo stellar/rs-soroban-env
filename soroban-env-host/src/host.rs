@@ -125,6 +125,94 @@ pub(crate) struct HostImpl {
 #[derive(Default, Clone)]
 pub struct Host(pub(crate) Rc<HostImpl>);
 
+macro_rules! impl_checked_borrow_helpers {
+    ($field:ident, $t:ty, $borrow:ident, $borrow_mut:ident) => {
+        impl Host {
+            pub(crate) fn $borrow(&self) -> Result<std::cell::Ref<'_, $t>, HostError> {
+                use crate::host::error::TryBorrowOrErr;
+                self.0.$field.try_borrow_or_err_with(
+                    self,
+                    concat!("host.0.", stringify!($field), ".try_borrow failed"),
+                )
+            }
+            pub(crate) fn $borrow_mut(&self) -> Result<std::cell::RefMut<'_, $t>, HostError> {
+                use crate::host::error::TryBorrowOrErr;
+                self.0.$field.try_borrow_mut_or_err_with(
+                    self,
+                    concat!("host.0.", stringify!($field), ".try_borrow_mut failed"),
+                )
+            }
+        }
+    };
+}
+
+impl_checked_borrow_helpers!(
+    source_account,
+    Option<AccountId>,
+    try_borrow_source_account,
+    try_borrow_source_account_mut
+);
+impl_checked_borrow_helpers!(
+    ledger,
+    Option<LedgerInfo>,
+    try_borrow_ledger,
+    try_borrow_ledger_mut
+);
+impl_checked_borrow_helpers!(
+    objects,
+    Vec<HostObject>,
+    try_borrow_objects,
+    try_borrow_objects_mut
+);
+impl_checked_borrow_helpers!(storage, Storage, try_borrow_storage, try_borrow_storage_mut);
+impl_checked_borrow_helpers!(
+    context,
+    Vec<Context>,
+    try_borrow_context,
+    try_borrow_context_mut
+);
+impl_checked_borrow_helpers!(
+    events,
+    InternalEventsBuffer,
+    try_borrow_events,
+    try_borrow_events_mut
+);
+impl_checked_borrow_helpers!(
+    authorization_manager,
+    AuthorizationManager,
+    try_borrow_authorization_manager,
+    try_borrow_authorization_manager_mut
+);
+impl_checked_borrow_helpers!(
+    diagnostic_level,
+    DiagnosticLevel,
+    try_borrow_diagnostic_level,
+    try_borrow_diagnostic_level_mut
+);
+impl_checked_borrow_helpers!(
+    base_prng,
+    Option<Prng>,
+    try_borrow_base_prng,
+    try_borrow_base_prng_mut
+);
+impl_checked_borrow_helpers!(
+    expiration_bumps,
+    ExpirationLedgerBumps,
+    try_borrow_expiration_bumps,
+    try_borrow_expiration_bumps_mut
+);
+
+#[cfg(any(test, feature = "testutils"))]
+impl_checked_borrow_helpers!(contracts, std::collections::HashMap<Hash, Rc<dyn ContractFunctionSet>>, try_borrow_contracts, try_borrow_contracts_mut);
+
+#[cfg(any(test, feature = "testutils"))]
+impl_checked_borrow_helpers!(
+    previous_authorization_manager,
+    Option<AuthorizationManager>,
+    try_borrow_previous_authorization_manager,
+    try_borrow_previous_authorization_manager_mut
+);
+
 impl Debug for HostImpl {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "HostImpl(...)")
@@ -163,22 +251,24 @@ impl Host {
         }))
     }
 
-    pub fn set_source_account(&self, source_account: AccountId) {
-        *self.0.source_account.borrow_mut() = Some(source_account);
+    pub fn set_source_account(&self, source_account: AccountId) -> Result<(), HostError> {
+        *self.try_borrow_source_account_mut()? = Some(source_account);
+        Ok(())
     }
 
     #[cfg(any(test, feature = "testutils"))]
-    pub fn remove_source_account(&self) {
-        *self.0.source_account.borrow_mut() = None;
+    pub fn remove_source_account(&self) -> Result<(), HostError> {
+        *self.try_borrow_source_account_mut()? = None;
+        Ok(())
     }
 
     #[cfg(test)]
-    pub(crate) fn source_account_id(&self) -> Option<AccountId> {
-        self.0.source_account.borrow().clone()
+    pub(crate) fn source_account_id(&self) -> Result<Option<AccountId>, HostError> {
+        Ok(self.try_borrow_source_account()?.clone())
     }
 
     pub fn source_account_address(&self) -> Result<Option<AddressObject>, HostError> {
-        if let Some(acc) = self.0.source_account.borrow().as_ref() {
+        if let Some(acc) = self.try_borrow_source_account()?.as_ref() {
             Ok(Some(self.add_host_object(ScAddress::Account(
                 acc.metered_clone(self.budget_ref())?,
             ))?))
@@ -187,8 +277,9 @@ impl Host {
         }
     }
 
-    pub fn switch_to_recording_auth(&self) {
-        *self.0.authorization_manager.borrow_mut() = AuthorizationManager::new_recording();
+    pub fn switch_to_recording_auth(&self) -> Result<(), HostError> {
+        *self.try_borrow_authorization_manager_mut()? = AuthorizationManager::new_recording();
+        Ok(())
     }
 
     pub fn set_authorization_entries(
@@ -196,23 +287,25 @@ impl Host {
         auth_entries: Vec<soroban_env_common::xdr::SorobanAuthorizationEntry>,
     ) -> Result<(), HostError> {
         let new_auth_manager = AuthorizationManager::new_enforcing(self, auth_entries)?;
-        *self.0.authorization_manager.borrow_mut() = new_auth_manager;
+        *self.try_borrow_authorization_manager_mut()? = new_auth_manager;
         Ok(())
     }
 
-    pub fn set_base_prng_seed(&self, seed: prng::Seed) {
-        *self.0.base_prng.borrow_mut() = Some(Prng::new_from_seed(seed))
+    pub fn set_base_prng_seed(&self, seed: prng::Seed) -> Result<(), HostError> {
+        *self.try_borrow_base_prng_mut()? = Some(Prng::new_from_seed(seed));
+        Ok(())
     }
 
-    pub fn set_ledger_info(&self, info: LedgerInfo) {
-        *self.0.ledger.borrow_mut() = Some(info)
+    pub fn set_ledger_info(&self, info: LedgerInfo) -> Result<(), HostError> {
+        *self.try_borrow_ledger_mut()? = Some(info);
+        Ok(())
     }
 
     pub fn with_ledger_info<F, T>(&self, f: F) -> Result<T, HostError>
     where
         F: FnOnce(&LedgerInfo) -> Result<T, HostError>,
     {
-        match self.0.ledger.borrow().as_ref() {
+        match self.try_borrow_ledger()?.as_ref() {
             None => Err(self.err(
                 ScErrorType::Context,
                 ScErrorCode::InternalError,
@@ -227,7 +320,7 @@ impl Host {
     where
         F: FnMut(&mut LedgerInfo),
     {
-        match self.0.ledger.borrow_mut().as_mut() {
+        match self.try_borrow_ledger_mut()?.as_mut() {
             None => Err(self.err(
                 ScErrorType::Context,
                 ScErrorCode::InternalError,
@@ -267,7 +360,7 @@ impl Host {
     where
         F: FnOnce(&mut Storage) -> Result<U, HostError>,
     {
-        f(&mut self.0.storage.borrow_mut())
+        f(&mut *self.try_borrow_storage_mut()?)
     }
 
     /// Immutable accessor to the instance storage of the currently running
@@ -324,9 +417,8 @@ impl Host {
         self,
     ) -> Result<(Storage, Budget, Events, ExpirationLedgerBumps), (Self, HostError)> {
         let events = self
-            .0
-            .events
-            .borrow()
+            .try_borrow_events()
+            .map_err(|e| (self.clone(), e))?
             .externalize(&self)
             .map_err(|e| (self.clone(), e))?;
 
@@ -389,8 +481,8 @@ impl Host {
     /// Use this in conjunction with `set_auth_manager` to do authorized
     /// operations without breaking the current authorization state (useful for
     /// preserving the auth state while doing the generic test setup).
-    pub fn snapshot_auth_manager(&self) -> AuthorizationManager {
-        self.0.authorization_manager.borrow().clone()
+    pub fn snapshot_auth_manager(&self) -> Result<AuthorizationManager, HostError> {
+        Ok(self.try_borrow_authorization_manager()?.clone())
     }
 
     /// Replaces authorization manager with the provided new instance.
@@ -399,8 +491,9 @@ impl Host {
     /// operations without breaking the current authorization state (useful for
     /// preserving the auth state while doing the generic test setup).
     #[cfg(any(test, feature = "testutils"))]
-    pub fn set_auth_manager(&self, auth_manager: AuthorizationManager) {
-        *self.0.authorization_manager.borrow_mut() = auth_manager;
+    pub fn set_auth_manager(&self, auth_manager: AuthorizationManager) -> Result<(), HostError> {
+        *self.try_borrow_authorization_manager_mut()? = auth_manager;
+        Ok(())
     }
 
     // Testing interface to create values directly for later use via Env functions.
@@ -417,9 +510,7 @@ impl Host {
     ) -> Result<(), HostError> {
         let storage_key = self.contract_instance_ledger_key(&contract_id)?;
         if self
-            .0
-            .storage
-            .borrow_mut()
+            .try_borrow_storage_mut()?
             .has(&storage_key, self.as_budget())?
         {
             return Err(self.err(
@@ -482,9 +573,7 @@ impl Host {
     ) -> Result<AddressObject, HostError> {
         let has_deployer = deployer.is_some();
         if has_deployer {
-            self.0
-                .authorization_manager
-                .borrow_mut()
+            self.try_borrow_authorization_manager_mut()?
                 .push_create_contract_host_fn_frame(args.metered_clone(self.budget_ref())?);
         }
         // Make sure that even in case of operation failure we still pop the
@@ -495,7 +584,7 @@ impl Host {
         // for them just to make auth work in a single case).
         let res = self.create_contract_with_optional_auth(deployer, args);
         if has_deployer {
-            self.0.authorization_manager.borrow_mut().pop_frame();
+            self.try_borrow_authorization_manager_mut()?.pop_frame();
         }
         res
     }
@@ -506,7 +595,7 @@ impl Host {
         args: CreateContractArgs,
     ) -> Result<AddressObject, HostError> {
         if let Some(deployer_address) = deployer {
-            self.0.authorization_manager.borrow_mut().require_auth(
+            self.try_borrow_authorization_manager_mut()?.require_auth(
                 self,
                 deployer_address,
                 Default::default(),
@@ -554,7 +643,7 @@ impl Host {
         contract_fns: Rc<dyn ContractFunctionSet>,
     ) -> Result<(), HostError> {
         let hash = self.contract_id_from_address(contract_address)?;
-        let mut contracts = self.0.contracts.borrow_mut();
+        let mut contracts = self.try_borrow_contracts_mut()?;
         contracts.insert(hash, contract_fns);
         Ok(())
     }
@@ -582,9 +671,7 @@ impl Host {
         &self,
     ) -> Result<Vec<(ScAddress, SorobanAuthorizedInvocation)>, HostError> {
         Ok(self
-            .0
-            .previous_authorization_manager
-            .borrow_mut()
+            .try_borrow_previous_authorization_manager_mut()?
             .as_mut()
             .ok_or_else(|| {
                 self.err(
@@ -615,9 +702,7 @@ impl Host {
             body_type: ContractEntryBodyType::DataEntry,
         }));
         if !self
-            .0
-            .storage
-            .borrow_mut()
+            .try_borrow_storage_mut()?
             .has(&code_key, self.as_budget())?
         {
             let body = ContractCodeEntryBody::DataEntry(wasm.try_into().map_err(|_| {
@@ -654,16 +739,12 @@ impl Host {
     pub fn get_recorded_auth_payloads(&self) -> Result<Vec<RecordedAuthPayload>, HostError> {
         #[cfg(not(any(test, feature = "testutils")))]
         {
-            self.0
-                .authorization_manager
-                .borrow()
+            self.try_borrow_authorization_manager()?
                 .get_recorded_auth_payloads(self)
         }
         #[cfg(any(test, feature = "testutils"))]
         {
-            self.0
-                .previous_authorization_manager
-                .borrow()
+            self.try_borrow_previous_authorization_manager()?
                 .as_ref()
                 .ok_or_else(|| {
                     self.err(
@@ -731,8 +812,8 @@ impl Host {
 
         let durability: ContractDataDurability = t.try_into()?;
         let key = self.contract_data_key_from_rawval(k, durability)?;
-        if self.0.storage.borrow_mut().has(&key, self.as_budget())? {
-            let mut current = (*self.0.storage.borrow_mut().get(&key, self.as_budget())?)
+        if self.try_borrow_storage_mut()?.has(&key, self.as_budget())? {
+            let mut current = (*self.try_borrow_storage_mut()?.get(&key, self.as_budget())?)
                 .metered_clone(&self.0.budget)?;
 
             match current.data {
@@ -761,9 +842,7 @@ impl Host {
                     ));
                 }
             }
-            self.0
-                .storage
-                .borrow_mut()
+            self.try_borrow_storage_mut()?
                 .put(&key, &Rc::new(current), self.as_budget())?;
         } else {
             let body = ContractDataEntryBody::DataEntry(ContractDataEntryData {
@@ -777,7 +856,7 @@ impl Host {
                 expiration_ledger_seq: self.get_min_expiration_ledger(durability)?,
                 durability,
             });
-            self.0.storage.borrow_mut().put(
+            self.try_borrow_storage_mut()?.put(
                 &key,
                 &Host::ledger_entry_from_data(data),
                 self.as_budget(),
@@ -837,7 +916,9 @@ impl EnvBase for Host {
     fn escalate_error_to_panic(&self, e: Self::Error) -> ! {
         let _ = self.with_current_frame_opt(|f| {
             if let Some(Frame::TestContract(frame)) = f {
-                *frame.panic.borrow_mut() = Some(e.error);
+                if let Ok(mut panic) = frame.panic.try_borrow_mut() {
+                    *panic = Some(e.error);
+                }
             }
             Ok(())
         });
@@ -1025,7 +1106,7 @@ impl VmCallerEnv for Host {
         vals_pos: U32Val,
         vals_len: U32Val,
     ) -> Result<Void, HostError> {
-        if self.is_debug() {
+        if self.is_debug()? {
             self.as_budget().with_free_budget(|| {
                 let VmSlice { vm, pos, len } = self.decode_vmslice(msg_pos, msg_len)?;
                 let mut msg: Vec<u8> = vec![0u8; len as usize];
@@ -1915,7 +1996,7 @@ impl VmCallerEnv for Host {
         let res = match t {
             StorageType::Temporary | StorageType::Persistent => {
                 let key = self.storage_key_from_rawval(k, t.try_into()?)?;
-                self.0.storage.borrow_mut().has(&key, self.as_budget())?
+                self.try_borrow_storage_mut()?.has(&key, self.as_budget())?
             }
             StorageType::Instance => {
                 self.with_instance_storage(|s| Ok(s.map.get(&k, self)?.is_some()))?
@@ -1935,7 +2016,7 @@ impl VmCallerEnv for Host {
         match t {
             StorageType::Temporary | StorageType::Persistent => {
                 let key = self.storage_key_from_rawval(k, t.try_into()?)?;
-                let entry = self.0.storage.borrow_mut().get(&key, self.as_budget())?;
+                let entry = self.try_borrow_storage_mut()?.get(&key, self.as_budget())?;
                 match &entry.data {
                     LedgerEntryData::ContractData(ContractDataEntry { body, .. }) => match body {
                         ContractDataEntryBody::DataEntry(data) => Ok(self.to_host_val(&data.val)?),
@@ -1980,7 +2061,7 @@ impl VmCallerEnv for Host {
         match t {
             StorageType::Temporary | StorageType::Persistent => {
                 let key = self.contract_data_key_from_rawval(k, t.try_into()?)?;
-                self.0.storage.borrow_mut().del(&key, self.as_budget())?;
+                self.try_borrow_storage_mut()?.del(&key, self.as_budget())?;
             }
             StorageType::Instance => {
                 self.with_mut_instance_storage(|s| {
@@ -2026,9 +2107,7 @@ impl VmCallerEnv for Host {
         // The host doesn't load the key, but we want to make sure that
         // it's in the footprint, because the system embedding the host
         // (e.g. stellar-core) will to perform the bump.
-        self.0
-            .storage
-            .borrow_mut()
+        self.try_borrow_storage_mut()?
             .touch_key(&key, self.as_budget())?;
 
         let min_expiration = self.with_ledger_info(|li| {
@@ -2037,7 +2116,7 @@ impl VmCallerEnv for Host {
                 .saturating_sub(1)
                 .saturating_add(min.into()))
         })?;
-        self.0.expiration_bumps.borrow_mut().metered_push(
+        self.try_borrow_expiration_bumps_mut()?.metered_push(
             self,
             LedgerBump {
                 key,
@@ -2061,7 +2140,7 @@ impl VmCallerEnv for Host {
 
         let contract_id = self.get_current_contract_id_internal()?;
         let key = self.contract_instance_ledger_key(&contract_id)?;
-        self.0.expiration_bumps.borrow_mut().metered_push(
+        self.try_borrow_expiration_bumps_mut()?.metered_push(
             self,
             LedgerBump {
                 key: Rc::clone(&key),
@@ -2075,7 +2154,7 @@ impl VmCallerEnv for Host {
         {
             ContractExecutable::Wasm(wasm_hash) => {
                 let key = self.contract_code_ledger_key(&wasm_hash)?;
-                self.0.expiration_bumps.borrow_mut().metered_push(
+                self.try_borrow_expiration_bumps_mut()?.metered_push(
                     self,
                     LedgerBump {
                         key,
@@ -2721,7 +2800,7 @@ impl VmCallerEnv for Host {
         &self,
         _vmcaller: &mut VmCaller<Host>,
     ) -> Result<VecObject, HostError> {
-        let contexts = self.0.context.borrow();
+        let contexts = self.try_borrow_context()?;
 
         let get_host_val_tuple = |id: &Hash, function: &Symbol| -> Result<[Val; 2], HostError> {
             let addr_val = self
@@ -2781,9 +2860,7 @@ impl VmCallerEnv for Host {
     ) -> Result<Void, Self::Error> {
         let args = self.visit_obj(args, |a: &HostVec| a.to_vec(self.budget_ref()))?;
         Ok(self
-            .0
-            .authorization_manager
-            .borrow_mut()
+            .try_borrow_authorization_manager_mut()?
             .require_auth(self, address, args)?
             .into())
     }
@@ -2812,9 +2889,7 @@ impl VmCallerEnv for Host {
         })?;
 
         Ok(self
-            .0
-            .authorization_manager
-            .borrow_mut()
+            .try_borrow_authorization_manager_mut()?
             .require_auth(self, address, args)?
             .into())
     }
@@ -2825,9 +2900,7 @@ impl VmCallerEnv for Host {
         auth_entries: VecObject,
     ) -> Result<Void, HostError> {
         Ok(self
-            .0
-            .authorization_manager
-            .borrow_mut()
+            .try_borrow_authorization_manager_mut()?
             .add_invoker_contract_auth(self, auth_entries)?
             .into())
     }

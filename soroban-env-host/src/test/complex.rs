@@ -24,7 +24,7 @@ fn run_complex() -> Result<(), HostError> {
     // Run 1: record footprint, emulating "preflight".
     let foot = {
         let host = Host::test_host_with_recording_footprint();
-        host.set_ledger_info(info.clone());
+        host.set_ledger_info(info.clone())?;
         let contract_id_obj = host.register_test_contract_wasm_from_source_account(
             COMPLEX,
             account_id.clone(),
@@ -43,7 +43,7 @@ fn run_complex() -> Result<(), HostError> {
     {
         let store = Storage::with_enforcing_footprint_and_map(foot, MeteredOrdMap::default());
         let host = Host::with_storage_and_budget(store, Budget::default());
-        host.set_ledger_info(info);
+        host.set_ledger_info(info)?;
         let contract_id_obj =
             host.register_test_contract_wasm_from_source_account(COMPLEX, account_id, salt);
         host.call(

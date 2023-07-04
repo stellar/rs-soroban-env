@@ -39,7 +39,7 @@ impl Host {
         &self,
         key: &Rc<LedgerKey>,
     ) -> Result<ScContractInstance, HostError> {
-        let entry = self.0.storage.borrow_mut().get(key, self.as_budget())?;
+        let entry = self.try_borrow_storage_mut()?.get(key, self.as_budget())?;
         match &entry.data {
             LedgerEntryData::ContractData(ContractDataEntry { body, .. }) => match body {
                 ContractDataEntryBody::DataEntry(data) => match &data.val {
@@ -80,9 +80,7 @@ impl Host {
     pub(crate) fn retrieve_wasm_from_storage(&self, wasm_hash: &Hash) -> Result<BytesM, HostError> {
         let key = self.contract_code_ledger_key(wasm_hash)?;
         match &self
-            .0
-            .storage
-            .borrow_mut()
+            .try_borrow_storage_mut()?
             .get(&key, self.as_budget())?
             .data
         {
@@ -105,7 +103,7 @@ impl Host {
 
     pub(crate) fn wasm_exists(&self, wasm_hash: &Hash) -> Result<bool, HostError> {
         let key = self.contract_code_ledger_key(wasm_hash)?;
-        self.0.storage.borrow_mut().has(&key, self.as_budget())
+        self.try_borrow_storage_mut()?.has(&key, self.as_budget())
     }
 
     // Notes on metering: `from_host_obj` and `put` to storage covered, rest are free.
@@ -120,8 +118,8 @@ impl Host {
             flags: 0,
         });
 
-        if self.0.storage.borrow_mut().has(&key, self.as_budget())? {
-            let mut current = (*self.0.storage.borrow_mut().get(&key, self.as_budget())?)
+        if self.try_borrow_storage_mut()?.has(&key, self.as_budget())? {
+            let mut current = (*self.try_borrow_storage_mut()?.get(&key, self.as_budget())?)
                 .metered_clone(&self.0.budget)?;
 
             match current.data {
@@ -137,9 +135,7 @@ impl Host {
                     ));
                 }
             }
-            self.0
-                .storage
-                .borrow_mut()
+            self.try_borrow_storage_mut()?
                 .put(&key, &Rc::new(current), self.as_budget())?;
         } else {
             let data = LedgerEntryData::ContractData(ContractDataEntry {
@@ -153,7 +149,7 @@ impl Host {
                         .saturating_add(li.min_persistent_entry_expiration))
                 })?,
             });
-            self.0.storage.borrow_mut().put(
+            self.try_borrow_storage_mut()?.put(
                 key,
                 &Host::ledger_entry_from_data(data),
                 self.as_budget(),

@@ -22,7 +22,7 @@ fn ledger_network_id() -> Result<(), HostError> {
         min_persistent_entry_expiration: 4096,
         min_temp_entry_expiration: 16,
         max_entry_expiration: 6312000,
-    });
+    })?;
     let obj = host.get_ledger_network_id()?;
     let np = host.visit_obj(obj, |np: &ScBytes| Ok(np.to_vec()))?;
     assert_eq!(np, vec![7; 32],);

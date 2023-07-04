@@ -10,7 +10,10 @@ use soroban_env_common::{
     xdr::{ScErrorCode, ScErrorType},
     ConversionError, TryFromVal, U32Val, Val,
 };
-use std::ops::DerefMut;
+use std::{
+    cell::{Ref, RefCell, RefMut},
+    ops::DerefMut,
+};
 
 #[derive(Clone)]
 pub(crate) struct DebugInfo {
@@ -137,6 +140,37 @@ impl From<HostError> for std::io::Error {
     }
 }
 
+pub(crate) trait TryBorrowOrErr<T> {
+    fn try_borrow_or_err(&self) -> Result<Ref<'_, T>, Error>;
+    fn try_borrow_mut_or_err(&self) -> Result<RefMut<'_, T>, Error>;
+    fn try_borrow_or_err_with(&self, host: &Host, msg: &str) -> Result<Ref<'_, T>, HostError> {
+        self.try_borrow_or_err()
+            .map_err(|e| host.error(e, msg, &[]))
+    }
+    fn try_borrow_mut_or_err_with(
+        &self,
+        host: &Host,
+        msg: &str,
+    ) -> Result<RefMut<'_, T>, HostError> {
+        self.try_borrow_mut_or_err()
+            .map_err(|e| host.error(e, msg, &[]))
+    }
+}
+
+impl<T> TryBorrowOrErr<T> for RefCell<T> {
+    fn try_borrow_or_err(&self) -> Result<Ref<'_, T>, Error> {
+        self.try_borrow().map_err(|_| {
+            Error::from_type_and_code(ScErrorType::Context, ScErrorCode::InternalError)
+        })
+    }
+
+    fn try_borrow_mut_or_err(&self) -> Result<RefMut<'_, T>, Error> {
+        self.try_borrow_mut().map_err(|_| {
+            Error::from_type_and_code(ScErrorType::Context, ScErrorCode::InternalError)
+        })
+    }
+}
+
 impl Host {
     /// Convenience function that only evaluates the auxiliary debug arguments
     /// to [Host::error] when [Host::is_debug] is `true`.
@@ -146,7 +180,7 @@ impl Host {
         msg: &str,
         debug_args: impl FnOnce() -> &'a [Val] + 'a,
     ) -> HostError {
-        if self.is_debug() {
+        if let Ok(true) = self.is_debug() {
             self.error(error, msg, debug_args())
         } else {
             self.error(error, msg, &[])
@@ -165,7 +199,7 @@ impl Host {
     /// enriches the returned [Error] with [DebugInfo] in the form of a
     /// [Backtrace] and snapshot of the [Events] buffer.
     pub fn error(&self, error: Error, msg: &str, args: &[Val]) -> HostError {
-        if self.is_debug() {
+        if let Ok(true) = self.is_debug() {
             // We _try_ to take a mutable borrow of the events buffer refcell
             // while building up the event we're going to emit into the events
             // log, failing gracefully (just emitting a no-debug-info
@@ -244,7 +278,7 @@ impl Host {
         E: Debug,
     {
         res.map_err(|e| {
-            if self.is_debug() {
+            if let Ok(true) = self.is_debug() {
                 let msg = format!("{:?}", e);
                 self.error(e.into(), &msg, &[])
             } else {
@@ -315,10 +349,10 @@ impl DebugArg for usize {
 macro_rules! err {
     ($host:expr, $error:expr, $msg:literal, $($args:expr),*) => {
         {
-            if $host.is_debug() {
-                $host.error($error.into(), $msg, &[])
-            } else {
+            if let Ok(true) = $host.is_debug() {
                 $host.error($error.into(), $msg, &[$(<_ as $crate::host::error::DebugArg>::debug_arg($host, &$args)),*])
+            } else {
+                $host.error($error.into(), $msg, &[])
             }
         }
     };
