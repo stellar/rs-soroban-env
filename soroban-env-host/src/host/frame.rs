@@ -131,10 +131,10 @@ impl Host {
             prng: None,
             storage: None,
         };
-        self.0.context.borrow_mut().push(ctx);
+        self.try_borrow_context_mut()?.push(ctx);
         Ok(RollbackPoint {
-            storage: self.0.storage.borrow().map.clone(),
-            events: self.0.events.borrow().vec.len(),
+            storage: self.try_borrow_storage()?.map.clone(),
+            events: self.try_borrow_events()?.vec.len(),
             auth: auth_snapshot,
         })
     }
@@ -149,9 +149,7 @@ impl Host {
         if orp.is_none() {
             self.flush_instance_storage()?;
         }
-        self.0
-            .context
-            .borrow_mut()
+        self.try_borrow_context_mut()?
             .pop()
             .expect("unmatched host frame push/pop");
         // This is a bit hacky, as it relies on re-borrow to occur only doing
@@ -162,12 +160,10 @@ impl Host {
             auth_manager.pop_frame();
         }
 
-        if self.0.context.borrow().is_empty() {
+        if self.try_borrow_context()?.is_empty() {
             // When there are no frames left, emulate authentication for the
             // recording auth mode. This is a no-op for the enforcing mode.
-            self.0
-                .authorization_manager
-                .borrow_mut()
+            self.try_borrow_authorization_manager_mut()?
                 .maybe_emulate_authentication(self)?;
             // Empty call stack in tests means that some contract function call
             // has been finished and hence the authorization manager can be reset.
@@ -176,17 +172,18 @@ impl Host {
             // shared between the contract invocations.
             #[cfg(any(test, feature = "testutils"))]
             {
-                *self.0.previous_authorization_manager.borrow_mut() =
-                    Some(self.0.authorization_manager.borrow().clone());
-                self.0.authorization_manager.borrow_mut().reset();
+                *self.try_borrow_previous_authorization_manager_mut()? =
+                    Some(self.try_borrow_authorization_manager()?.clone());
+                self.try_borrow_authorization_manager_mut()?.reset();
             }
         }
 
         if let Some(rp) = orp {
-            self.0.storage.borrow_mut().map = rp.storage;
-            self.0.events.borrow_mut().rollback(rp.events)?;
+            self.try_borrow_storage_mut()?.map = rp.storage;
+            self.try_borrow_events_mut()?.rollback(rp.events)?;
             if let Some(auth_rp) = rp.auth {
-                self.0.authorization_manager.borrow_mut().rollback(auth_rp);
+                self.try_borrow_authorization_manager_mut()?
+                    .rollback(auth_rp);
             }
         }
         Ok(())
@@ -276,7 +273,7 @@ impl Host {
         if let Some(p) = &mut curr_prng_opt {
             res = f(p)
         } else {
-            let mut base_guard = self.0.base_prng.borrow_mut();
+            let mut base_guard = self.try_borrow_base_prng_mut()?;
             if let Some(base) = base_guard.as_mut() {
                 match base.sub_prng(self.as_budget()) {
                     Ok(mut sub_prng) => {
@@ -313,7 +310,7 @@ impl Host {
         F: FnOnce() -> Result<Val, HostError>,
     {
         self.charge_budget(ContractCostType::GuardFrame, None)?;
-        let start_depth = self.0.context.borrow().len();
+        let start_depth = self.try_borrow_context()?.len();
         let rp = self.push_frame(frame)?;
         let res = f();
         let res = if let Ok(v) = res {
@@ -333,7 +330,7 @@ impl Host {
             self.pop_frame(None)?;
         }
         // Every push and pop should be matched; if not there is a bug.
-        let end_depth = self.0.context.borrow().len();
+        let end_depth = self.try_borrow_context()?.len();
         assert_eq!(start_depth, end_depth);
         res
     }
@@ -368,7 +365,7 @@ impl Host {
     }
 
     pub(crate) fn get_invoking_contract_internal(&self) -> Result<Hash, HostError> {
-        let frames = self.0.context.borrow();
+        let frames = self.try_borrow_context()?;
         // the previous frame must exist and must be a contract
         let hash = match frames.as_slice() {
             [.., c2, _] => match &c2.frame {
@@ -395,7 +392,7 @@ impl Host {
 
     // Metering: mostly free or already covered by components (e.g. err_general)
     pub(super) fn get_invoker_type(&self) -> Result<u64, HostError> {
-        let frames = self.0.context.borrow();
+        let frames = self.try_borrow_context()?;
         // If the previous frame exists and is a contract, return its ID, otherwise return
         // the account invoking.
         let st = match frames.as_slice() {
@@ -494,7 +491,7 @@ impl Host {
         }
         if !matches!(reentry_mode, ContractReentryMode::Allowed) {
             let mut is_last_non_host_frame = true;
-            for ctx in self.0.context.borrow().iter().rev() {
+            for ctx in self.try_borrow_context()?.iter().rev() {
                 let exist_id = match &ctx.frame {
                     Frame::ContractVM(vm, ..) => &vm.contract_id,
                     Frame::Token(id, ..) => id,
@@ -528,10 +525,10 @@ impl Host {
             // This looks a little un-idiomatic, but this avoids maintaining a borrow of
             // self.0.contracts. Implementing it as
             //
-            //     if let Some(cfs) = self.0.contracts.borrow().get(&id).cloned() { ... }
+            //     if let Some(cfs) = self.try_borrow_contracts()?.get(&id).cloned() { ... }
             //
             // maintains a borrow of self.0.contracts, which can cause borrow errors.
-            let cfs_option = self.0.contracts.borrow().get(&id).cloned();
+            let cfs_option = self.try_borrow_contracts()?.get(&id).cloned();
             if let Some(cfs) = cfs_option {
                 let instance_key = self.contract_instance_ledger_key(&id)?;
                 let storage = self
@@ -589,13 +586,15 @@ impl Host {
                                 ScErrorCode::InternalError,
                             );
 
-                            if let Some(err) = *panic.borrow() {
-                                error = err;
+                            if let Ok(panic) = panic.try_borrow() {
+                                if let Some(err) = *panic {
+                                    error = err;
+                                }
                             }
                             // If we're allowed to record dynamic strings (which happens
                             // when diagnostics are active), also log the panic payload into
                             // the Debug buffer.
-                            else if self.is_debug() {
+                            else if self.is_debug()? {
                                 if let Some(str) = panic_payload.downcast_ref::<&str>() {
                                     let msg: String = format!(
                                         "caught panic '{}' from contract function '{:?}'",

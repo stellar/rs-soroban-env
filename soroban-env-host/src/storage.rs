@@ -329,7 +329,7 @@ mod test_footprint {
     #[test]
     fn footprint_record_access() -> Result<(), HostError> {
         let budget = Budget::default();
-        budget.reset_unlimited();
+        budget.reset_unlimited()?;
         let mut fp = Footprint::default();
         // record when key not exist
         let key = Rc::new(LedgerKey::ContractData(LedgerKeyContractData {

@@ -145,11 +145,11 @@ impl Host {
     where
         F: FnOnce(&mut InternalEventsBuffer) -> Result<U, HostError>,
     {
-        f(&mut self.0.events.borrow_mut())
+        f(&mut *self.try_borrow_events_mut()?)
     }
 
     pub fn get_events(&self) -> Result<Events, HostError> {
-        self.0.events.borrow().externalize(self)
+        self.try_borrow_events()?.externalize(self)
     }
 
     // Records a contract event.

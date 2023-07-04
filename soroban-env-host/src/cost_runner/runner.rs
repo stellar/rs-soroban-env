@@ -66,6 +66,6 @@ pub trait CostRunner: Sized {
     /// actual input from the host's perspective. So use it carefully. This should be
     /// after the `run`, outside of the CPU-and-memory tracking machineary.
     fn get_tracker(host: &Host) -> (u64, Option<u64>) {
-        host.0.budget.get_tracker(Self::COST_TYPE)
+        host.0.budget.get_tracker(Self::COST_TYPE).unwrap()
     }
 }

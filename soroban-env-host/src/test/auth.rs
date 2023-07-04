@@ -89,8 +89,8 @@ impl AuthTest {
         let host = Host::test_host_with_recording_footprint();
         // TODO: remove the `reset_unlimited` and instead reset inputs wherever appropriate
         // to respect the budget limit.
-        host.as_budget().reset_unlimited();
-        host.enable_debug();
+        host.as_budget().reset_unlimited().unwrap();
+        host.enable_debug().unwrap();
 
         host.with_mut_ledger_info(|li| {
             li.sequence_number = 100;
@@ -251,7 +251,7 @@ impl AuthTest {
         fn_name: Symbol,
         args: HostVec,
     ) -> Vec<RecordedAuthPayload> {
-        self.host.switch_to_recording_auth();
+        self.host.switch_to_recording_auth().unwrap();
         self.host
             .call(contract_address.clone().into(), fn_name, args.into())
             .unwrap();

@@ -75,7 +75,8 @@ fn test_host() -> Host {
     host.set_ledger_info(LedgerInfo {
         network_id: generate_bytes_array(),
         ..Default::default()
-    });
+    })
+    .unwrap();
 
     host
 }
@@ -83,7 +84,7 @@ fn test_host() -> Host {
 fn test_create_contract_from_source_account(host: &Host, wasm: &[u8]) -> Hash {
     let source_account = generate_account_id();
     let salt = generate_bytes_array();
-    host.set_source_account(source_account.clone());
+    host.set_source_account(source_account.clone()).unwrap();
     let contract_id_preimage = ContractIdPreimage::Address(ContractIdPreimageFromAddress {
         address: ScAddress::Account(source_account.clone()),
         salt: Uint256(salt.to_vec().try_into().unwrap()),

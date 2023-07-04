@@ -95,10 +95,10 @@ fn test_event_rollback() -> Result<(), HostError> {
         host.call(id, sym, args)?.get_payload(),
         Val::from_void().to_val().get_payload()
     );
-    host.0.events.borrow_mut().rollback(1)?;
+    host.try_borrow_events_mut()?.rollback(1)?;
     // run `UPDATE_EXPECT=true cargo test` to update this.
     let expected = expect!["[HostEvent { event: ContractEvent { ext: V0, contract_id: Some(Hash(0000000000000000000000000000000000000000000000000000000000000000)), type_: Contract, body: V0(ContractEventV0 { topics: ScVec(VecM([I32(0), I32(1)])), data: U32(0) }) }, failed_call: false }, HostEvent { event: ContractEvent { ext: V0, contract_id: Some(Hash(0000000000000000000000000000000000000000000000000000000000000000)), type_: System, body: V0(ContractEventV0 { topics: ScVec(VecM([I32(0), I32(1)])), data: U32(0) }) }, failed_call: true }]"];
-    let actual = format!("{:?}", host.0.events.borrow().externalize(&host)?.0);
+    let actual = format!("{:?}", host.try_borrow_events()?.externalize(&host)?.0);
     expected.assert_eq(&actual);
     Ok(())
 }
@@ -122,12 +122,12 @@ fn test_internal_contract_events_metering_not_free() -> Result<(), HostError> {
     let _ = host.with_events_mut(|events| {
         Ok(events.record(InternalEvent::Contract(ce), host.as_budget()))
     })?;
-    assert_eq!(host.as_budget().get_cpu_insns_consumed(), 30);
-    assert_eq!(host.as_budget().get_mem_bytes_consumed(), 3);
+    assert_eq!(host.as_budget().get_cpu_insns_consumed()?, 30);
+    assert_eq!(host.as_budget().get_mem_bytes_consumed()?, 3);
 
-    let _ = host.0.events.borrow().externalize(&host)?;
-    assert_eq!(host.as_budget().get_cpu_insns_consumed(), 80);
-    assert_eq!(host.as_budget().get_mem_bytes_consumed(), 8);
+    let _ = host.try_borrow_events()?.externalize(&host)?;
+    assert_eq!(host.as_budget().get_cpu_insns_consumed()?, 80);
+    assert_eq!(host.as_budget().get_mem_bytes_consumed()?, 8);
     Ok(())
 }
 
@@ -155,11 +155,11 @@ fn test_internal_diagnostic_event_metering_free() -> Result<(), HostError> {
     let _ = host.with_events_mut(|events| {
         Ok(events.record(InternalEvent::Diagnostic(de), host.as_budget()))
     })?;
-    assert_eq!(host.as_budget().get_cpu_insns_consumed(), 0);
-    assert_eq!(host.as_budget().get_mem_bytes_consumed(), 0);
+    assert_eq!(host.as_budget().get_cpu_insns_consumed()?, 0);
+    assert_eq!(host.as_budget().get_mem_bytes_consumed()?, 0);
 
-    let _ = host.0.events.borrow().externalize(&host)?;
-    assert_eq!(host.as_budget().get_cpu_insns_consumed(), 0);
-    assert_eq!(host.as_budget().get_mem_bytes_consumed(), 0);
+    let _ = host.try_borrow_events()?.externalize(&host)?;
+    assert_eq!(host.as_budget().get_cpu_insns_consumed()?, 0);
+    assert_eq!(host.as_budget().get_mem_bytes_consumed()?, 0);
     Ok(())
 }
