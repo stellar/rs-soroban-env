@@ -1000,6 +1000,9 @@ impl EnvBase for Host {
         for k in keys.iter() {
             key_syms.push(Symbol::try_from_val(self, k)?);
         }
+        for v in vals.iter() {
+            self.check_val_integrity(*v)?;
+        }
         let pair_iter = key_syms
             .iter()
             .map(|s| s.to_val())
@@ -1049,8 +1052,11 @@ impl EnvBase for Host {
     }
 
     fn vec_new_from_slice(&self, vals: &[Val]) -> Result<VecObject, Self::Error> {
-        let map = HostVec::from_exact_iter(vals.iter().cloned(), self.budget_ref())?;
-        self.add_host_object(map)
+        let vec = HostVec::from_exact_iter(vals.iter().cloned(), self.budget_ref())?;
+        for v in vec.iter() {
+            self.check_val_integrity(*v)?;
+        }
+        self.add_host_object(vec)
     }
 
     fn vec_unpack_to_slice(&self, vec: VecObject, vals: &mut [Val]) -> Result<Void, Self::Error> {
@@ -1481,6 +1487,8 @@ impl VmCallerEnv for Host {
         k: Val,
         v: Val,
     ) -> Result<MapObject, HostError> {
+        self.check_val_integrity(k)?;
+        self.check_val_integrity(v)?;
         let mnew = self.visit_obj(m, |hm: &HostMap| hm.insert(k, v, self))?;
         self.add_host_object(mnew)
     }
@@ -1659,6 +1667,9 @@ impl VmCallerEnv for Host {
             vals.as_mut_slice(),
             |buf| Val::from_payload(u64::from_le_bytes(*buf)),
         )?;
+        for v in vals.iter() {
+            self.check_val_integrity(*v)?;
+        }
 
         // Step 3: turn pairs into a map.
         let pair_iter = key_syms
@@ -1741,6 +1752,7 @@ impl VmCallerEnv for Host {
         x: Val,
     ) -> Result<VecObject, HostError> {
         let i: u32 = i.into();
+        self.check_val_integrity(x)?;
         let vnew = self.visit_obj(v, move |hv: &HostVec| {
             self.validate_index_lt_bound(i, hv.len())?;
             hv.set(i as usize, x, self.as_budget())
@@ -1785,6 +1797,7 @@ impl VmCallerEnv for Host {
         v: VecObject,
         x: Val,
     ) -> Result<VecObject, HostError> {
+        self.check_val_integrity(x)?;
         let vnew = self.visit_obj(v, move |hv: &HostVec| hv.push_front(x, self.as_budget()))?;
         self.add_host_object(vnew)
     }
@@ -1804,6 +1817,7 @@ impl VmCallerEnv for Host {
         v: VecObject,
         x: Val,
     ) -> Result<VecObject, HostError> {
+        self.check_val_integrity(x)?;
         let vnew = self.visit_obj(v, move |hv: &HostVec| hv.push_back(x, self.as_budget()))?;
         self.add_host_object(vnew)
     }
@@ -1837,6 +1851,7 @@ impl VmCallerEnv for Host {
         x: Val,
     ) -> Result<VecObject, HostError> {
         let i: u32 = i.into();
+        self.check_val_integrity(x)?;
         let vnew = self.visit_obj(v, move |hv: &HostVec| {
             self.validate_index_le_bound(i, hv.len())?;
             hv.insert(i as usize, x, self.as_budget())
@@ -1941,6 +1956,9 @@ impl VmCallerEnv for Host {
             vals.as_mut_slice(),
             |buf| Val::from_payload(u64::from_le_bytes(*buf)),
         )?;
+        for v in vals.iter() {
+            self.check_val_integrity(*v)?;
+        }
         self.add_host_object(HostVec::from_vec(vals))
     }
 
@@ -1973,6 +1991,8 @@ impl VmCallerEnv for Host {
         t: StorageType,
         f: Val,
     ) -> Result<Void, HostError> {
+        self.check_val_integrity(k)?;
+        self.check_val_integrity(v)?;
         match t {
             StorageType::Temporary | StorageType::Persistent => {
                 self.put_contract_data_into_ledger(k, v, t, f)?
