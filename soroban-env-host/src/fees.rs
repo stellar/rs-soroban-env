@@ -89,7 +89,7 @@ pub struct RentFeeConfiguration {
     pub persistent_rent_rate_denominator: i64,
     /// Denominator for the total rent fee for temporary storage.
     ///
-    /// This has the same semantics as `persistent_rent_rate_denomniator`.
+    /// This has the same semantics as `persistent_rent_rate_denominator`.
     pub temporary_rent_rate_denominator: i64,
 }
 
