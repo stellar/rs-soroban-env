@@ -86,7 +86,7 @@ pub struct RentFeeConfiguration {
     /// much, as writing the entry for the first time (i.e. if the value is
     /// `1000`, then we would charge the entry write fee for every 1000 ledgers
     /// of rent).
-    pub persistent_rent_rate_denomniator: i64,
+    pub persistent_rent_rate_denominator: i64,
     /// Denominator for the total rent fee for temporary storage.
     ///
     /// This has the same semantics as `persistent_rent_rate_denomniator`.
