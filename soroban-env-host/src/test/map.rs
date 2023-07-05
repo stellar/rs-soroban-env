@@ -9,8 +9,8 @@ use soroban_env_common::{
 };
 
 use crate::{
-    xdr::{ScMap, ScMapEntry, ScVal, ScVec},
-    Env, Error, Host, HostError, Symbol, Val,
+    xdr::{ScMap, ScMapEntry, ScVal, ScVec, VecM},
+    Env, Error, Host, HostError, Symbol, TryFromVal, Val,
 };
 
 #[test]
@@ -301,4 +301,27 @@ fn map_stack_no_overflow_65536_boxed_keys_and_vals() {
             map.push((Rc::new(key), None));
         }
     }
+}
+
+#[test]
+fn scmap_out_of_order() {
+    let host = Host::default();
+    let bad_scmap = ScVal::Map(Some(ScMap(
+        VecM::try_from(vec![
+            ScMapEntry {
+                key: ScVal::U32(2),
+                val: ScVal::U32(0),
+            },
+            ScMapEntry {
+                key: ScVal::U32(3),
+                val: ScVal::U32(0),
+            },
+            ScMapEntry {
+                key: ScVal::U32(1),
+                val: ScVal::U32(0),
+            },
+        ])
+        .unwrap(),
+    )));
+    assert!(Val::try_from_val(&host, &bad_scmap).is_err());
 }
