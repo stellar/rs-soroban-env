@@ -484,7 +484,7 @@ impl Host {
                 for e in v.iter() {
                     vv.push(self.to_host_val(e)?)
                 }
-                Ok(self.add_host_object(HostVec::from_vec(vv))?.into())
+                Ok(self.add_host_object(HostVec::from_vec(vv)?)?.into())
             }
             ScVal::Map(Some(m)) => {
                 metered_clone::charge_heap_alloc::<(Val, Val)>(m.len() as u64, self.as_budget())?;

@@ -2,8 +2,8 @@ use soroban_env_host::{budget::AsBudget, Host, Val, I256};
 
 pub(crate) fn test_host() -> Host {
     let host = Host::default();
-    host.as_budget().reset_unlimited();
-    host.as_budget().reset_fuel_config();
+    host.as_budget().reset_unlimited().unwrap();
+    host.as_budget().reset_fuel_config().unwrap();
     host
 }
 
