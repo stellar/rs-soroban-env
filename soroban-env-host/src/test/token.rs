@@ -293,7 +293,7 @@ impl TokenTest {
     {
         self.host.set_source_account(account_id)?;
         self.host.with_frame(
-            Frame::HostFunction(HostFunctionType::InvokeContract),
+            Frame::InitialInvokeHostFunctionOp(HostFunctionType::InvokeContract, vec![]),
             || {
                 let res = f();
                 match res {

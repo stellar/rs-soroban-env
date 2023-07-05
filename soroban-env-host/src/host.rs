@@ -10,7 +10,7 @@ use crate::{
     err,
     events::{diagnostic::DiagnosticLevel, Events, InternalEventsBuffer},
     expiration_ledger_bumps::{ExpirationLedgerBumps, LedgerBump},
-    host_object::{HostMap, HostObject, HostObjectType, HostVec},
+    host_object::{HostMap, HostObject, HostObjectType, HostVec, Ticket},
     impl_bignum_host_fns_rhs_u32, impl_wrapping_obj_from_num, impl_wrapping_obj_to_num,
     num::*,
     storage::{InstanceStorageMap, Storage},
@@ -94,6 +94,7 @@ pub(crate) struct HostImpl {
     source_account: RefCell<Option<AccountId>>,
     ledger: RefCell<Option<LedgerInfo>>,
     pub(crate) objects: RefCell<Vec<HostObject>>,
+    pub(crate) ticket: RefCell<Ticket>,
     storage: RefCell<Storage>,
     pub(crate) context: RefCell<Vec<Context>>,
     // Note: budget is refcounted and is _not_ deep-cloned when you call HostImpl::deep_clone,
@@ -164,6 +165,7 @@ impl_checked_borrow_helpers!(
     try_borrow_objects,
     try_borrow_objects_mut
 );
+impl_checked_borrow_helpers!(ticket, Ticket, try_borrow_ticket, try_borrow_ticket_mut);
 impl_checked_borrow_helpers!(storage, Storage, try_borrow_storage, try_borrow_storage_mut);
 impl_checked_borrow_helpers!(
     context,
@@ -234,6 +236,7 @@ impl Host {
             source_account: RefCell::new(None),
             ledger: RefCell::new(None),
             objects: Default::default(),
+            ticket: Default::default(),
             storage: RefCell::new(storage),
             context: Default::default(),
             budget,
@@ -1499,7 +1502,7 @@ impl VmCallerEnv for Host {
         m: MapObject,
         k: Val,
     ) -> Result<Val, HostError> {
-        self.visit_obj(m, move |hm: &HostMap| {
+        self.visit_obj_propagating_tickets(m, move |hm: &HostMap| {
             hm.get(&k, self)?.copied().ok_or_else(|| {
                 self.err(
                     ScErrorType::Object,
@@ -1548,7 +1551,7 @@ impl VmCallerEnv for Host {
         m: MapObject,
         k: Val,
     ) -> Result<Val, HostError> {
-        self.visit_obj(m, |hm: &HostMap| {
+        self.visit_obj_propagating_tickets(m, |hm: &HostMap| {
             if let Some((pk, _)) = hm.get_prev(&k, self)? {
                 Ok(*pk)
             } else {
@@ -1567,7 +1570,7 @@ impl VmCallerEnv for Host {
         m: MapObject,
         k: Val,
     ) -> Result<Val, HostError> {
-        self.visit_obj(m, |hm: &HostMap| {
+        self.visit_obj_propagating_tickets(m, |hm: &HostMap| {
             if let Some((pk, _)) = hm.get_next(&k, self)? {
                 Ok(*pk)
             } else {
@@ -1581,7 +1584,7 @@ impl VmCallerEnv for Host {
     }
 
     fn map_min_key(&self, _vmcaller: &mut VmCaller<Host>, m: MapObject) -> Result<Val, HostError> {
-        self.visit_obj(m, |hm: &HostMap| match hm.get_min(self)? {
+        self.visit_obj_propagating_tickets(m, |hm: &HostMap| match hm.get_min(self)? {
             Some((pk, pv)) => Ok(*pk),
             None => Ok(
                 Error::from_type_and_code(ScErrorType::Object, ScErrorCode::IndexBounds).to_val(),
@@ -1590,7 +1593,7 @@ impl VmCallerEnv for Host {
     }
 
     fn map_max_key(&self, _vmcaller: &mut VmCaller<Host>, m: MapObject) -> Result<Val, HostError> {
-        self.visit_obj(m, |hm: &HostMap| match hm.get_max(self)? {
+        self.visit_obj_propagating_tickets(m, |hm: &HostMap| match hm.get_max(self)? {
             Some((pk, pv)) => Ok(*pk),
             None => Ok(
                 Error::from_type_and_code(ScErrorType::Object, ScErrorCode::IndexBounds).to_val(),
@@ -1768,7 +1771,7 @@ impl VmCallerEnv for Host {
         i: U32Val,
     ) -> Result<Val, HostError> {
         let i: u32 = i.into();
-        self.visit_obj(v, move |hv: &HostVec| {
+        self.visit_obj_propagating_tickets(v, move |hv: &HostVec| {
             hv.get(i as usize, self.as_budget()).map(|r| *r)
         })
     }
@@ -1833,13 +1836,13 @@ impl VmCallerEnv for Host {
     }
 
     fn vec_front(&self, _vmcaller: &mut VmCaller<Host>, v: VecObject) -> Result<Val, HostError> {
-        self.visit_obj(v, |hv: &HostVec| {
+        self.visit_obj_propagating_tickets(v, |hv: &HostVec| {
             hv.front(self.as_budget()).map(|hval| *hval)
         })
     }
 
     fn vec_back(&self, _vmcaller: &mut VmCaller<Host>, v: VecObject) -> Result<Val, HostError> {
-        self.visit_obj(v, |hv: &HostVec| {
+        self.visit_obj_propagating_tickets(v, |hv: &HostVec| {
             hv.back(self.as_budget()).map(|hval| *hval)
         })
     }
@@ -2837,7 +2840,7 @@ impl VmCallerEnv for Host {
                 Frame::ContractVM(vm, function, ..) => {
                     get_host_val_tuple(&vm.contract_id, &function)?
                 }
-                Frame::HostFunction(_) => continue,
+                Frame::InitialInvokeHostFunctionOp(..) => continue,
                 Frame::Token(id, function, ..) => get_host_val_tuple(id, function)?,
                 #[cfg(any(test, feature = "testutils"))]
                 Frame::TestContract(tc) => get_host_val_tuple(&tc.id, &tc.func)?,
@@ -2894,7 +2897,7 @@ impl VmCallerEnv for Host {
         let args = self.with_current_frame(|f| {
             let args = match f {
                 Frame::ContractVM(_, _, args, _) => args,
-                Frame::HostFunction(_) => {
+                Frame::InitialInvokeHostFunctionOp(..) => {
                     return Err(self.err(
                         ScErrorType::Context,
                         ScErrorCode::InvalidAction,

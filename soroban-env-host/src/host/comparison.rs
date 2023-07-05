@@ -16,7 +16,7 @@ use soroban_env_common::{
 
 use crate::{
     budget::{AsBudget, Budget},
-    host_object::HostObject,
+    host_object::HostObjectBody,
     Host, HostError,
 };
 
@@ -28,30 +28,30 @@ use super::declared_size::DeclaredSizeForMetering;
 //
 // Note that these must have the same order as the impl
 // of Ord for ScVal, re https://github.com/stellar/rs-soroban-env/issues/743
-fn host_obj_discriminant(ho: &HostObject) -> usize {
+fn host_obj_discriminant(ho: &HostObjectBody) -> usize {
     match ho {
-        HostObject::U64(_) => 0,
-        HostObject::I64(_) => 1,
-        HostObject::TimePoint(_) => 2,
-        HostObject::Duration(_) => 3,
-        HostObject::U128(_) => 4,
-        HostObject::I128(_) => 5,
-        HostObject::U256(_) => 6,
-        HostObject::I256(_) => 7,
-        HostObject::Bytes(_) => 8,
-        HostObject::String(_) => 9,
-        HostObject::Symbol(_) => 10,
-        HostObject::Vec(_) => 11,
-        HostObject::Map(_) => 12,
-        HostObject::Address(_) => 13,
+        HostObjectBody::U64(_) => 0,
+        HostObjectBody::I64(_) => 1,
+        HostObjectBody::TimePoint(_) => 2,
+        HostObjectBody::Duration(_) => 3,
+        HostObjectBody::U128(_) => 4,
+        HostObjectBody::I128(_) => 5,
+        HostObjectBody::U256(_) => 6,
+        HostObjectBody::I256(_) => 7,
+        HostObjectBody::Bytes(_) => 8,
+        HostObjectBody::String(_) => 9,
+        HostObjectBody::Symbol(_) => 10,
+        HostObjectBody::Vec(_) => 11,
+        HostObjectBody::Map(_) => 12,
+        HostObjectBody::Address(_) => 13,
     }
 }
 
-impl Compare<HostObject> for Host {
+impl Compare<HostObjectBody> for Host {
     type Error = HostError;
 
-    fn compare(&self, a: &HostObject, b: &HostObject) -> Result<Ordering, Self::Error> {
-        use HostObject::*;
+    fn compare(&self, a: &HostObjectBody, b: &HostObjectBody) -> Result<Ordering, Self::Error> {
+        use HostObjectBody::*;
         match (a, b) {
             (U64(a), U64(b)) => self.as_budget().compare(a, b),
             (I64(a), I64(b)) => self.as_budget().compare(a, b),

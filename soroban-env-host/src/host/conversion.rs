@@ -3,7 +3,7 @@ use std::rc::Rc;
 use super::metered_clone::{self, charge_container_bulk_init_with_elts, MeteredClone};
 use crate::budget::AsBudget;
 use crate::err;
-use crate::host_object::{HostMap, HostObject, HostVec};
+use crate::host_object::{HostMap, HostObjectBody, HostVec};
 use crate::xdr::{Hash, LedgerKey, LedgerKeyContractData, ScVal, ScVec, Uint256};
 use crate::{xdr::ContractCostType, Host, HostError, Val};
 use soroban_env_common::num::{
@@ -413,7 +413,7 @@ impl Host {
                         ));
                     }
                     Some(ho) => match ho {
-                        HostObject::Vec(vv) => {
+                        HostObjectBody::Vec(vv) => {
                             metered_clone::charge_heap_alloc::<ScVal>(
                                 vv.len() as u64,
                                 self.as_budget(),
@@ -425,24 +425,24 @@ impl Host {
                             )?;
                             ScVal::Vec(Some(ScVec(self.map_err(sv.try_into())?)))
                         }
-                        HostObject::Map(mm) => ScVal::Map(Some(self.host_map_to_scmap(mm)?)),
-                        HostObject::U64(u) => ScVal::U64(*u),
-                        HostObject::I64(i) => ScVal::I64(*i),
-                        HostObject::TimePoint(tp) => {
+                        HostObjectBody::Map(mm) => ScVal::Map(Some(self.host_map_to_scmap(mm)?)),
+                        HostObjectBody::U64(u) => ScVal::U64(*u),
+                        HostObjectBody::I64(i) => ScVal::I64(*i),
+                        HostObjectBody::TimePoint(tp) => {
                             ScVal::Timepoint(tp.metered_clone(self.as_budget())?)
                         }
-                        HostObject::Duration(d) => {
+                        HostObjectBody::Duration(d) => {
                             ScVal::Duration(d.metered_clone(self.as_budget())?)
                         }
-                        HostObject::U128(u) => ScVal::U128(UInt128Parts {
+                        HostObjectBody::U128(u) => ScVal::U128(UInt128Parts {
                             hi: int128_helpers::u128_hi(*u),
                             lo: int128_helpers::u128_lo(*u),
                         }),
-                        HostObject::I128(i) => ScVal::I128(Int128Parts {
+                        HostObjectBody::I128(i) => ScVal::I128(Int128Parts {
                             hi: int128_helpers::i128_hi(*i),
                             lo: int128_helpers::i128_lo(*i),
                         }),
-                        HostObject::U256(u) => {
+                        HostObjectBody::U256(u) => {
                             let (hi_hi, hi_lo, lo_hi, lo_lo) = u256_into_pieces(*u);
                             ScVal::U256(UInt256Parts {
                                 hi_hi,
@@ -451,7 +451,7 @@ impl Host {
                                 lo_lo,
                             })
                         }
-                        HostObject::I256(i) => {
+                        HostObjectBody::I256(i) => {
                             let (hi_hi, hi_lo, lo_hi, lo_lo) = i256_into_pieces(*i);
                             ScVal::I256(Int256Parts {
                                 hi_hi,
@@ -460,10 +460,16 @@ impl Host {
                                 lo_lo,
                             })
                         }
-                        HostObject::Bytes(b) => ScVal::Bytes(b.metered_clone(self.as_budget())?),
-                        HostObject::String(s) => ScVal::String(s.metered_clone(self.as_budget())?),
-                        HostObject::Symbol(s) => ScVal::Symbol(s.metered_clone(self.as_budget())?),
-                        HostObject::Address(addr) => {
+                        HostObjectBody::Bytes(b) => {
+                            ScVal::Bytes(b.metered_clone(self.as_budget())?)
+                        }
+                        HostObjectBody::String(s) => {
+                            ScVal::String(s.metered_clone(self.as_budget())?)
+                        }
+                        HostObjectBody::Symbol(s) => {
+                            ScVal::Symbol(s.metered_clone(self.as_budget())?)
+                        }
+                        HostObjectBody::Address(addr) => {
                             ScVal::Address(addr.metered_clone(self.as_budget())?)
                         }
                     },

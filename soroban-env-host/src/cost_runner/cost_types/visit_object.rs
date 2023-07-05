@@ -1,6 +1,6 @@
 use std::hint::black_box;
 
-use crate::{cost_runner::CostRunner, host_object::HostObject, xdr::ContractCostType, Object};
+use crate::{cost_runner::CostRunner, host_object::HostObjectBody, xdr::ContractCostType, Object};
 
 pub struct VisitObjectRun;
 
@@ -17,7 +17,7 @@ impl CostRunner for VisitObjectRun {
                 host.unchecked_visit_val_obj(sample[iter as usize % sample.len()], |obj| match obj
                     .unwrap()
                 {
-                    HostObject::I64(i) => Ok(*i),
+                    HostObjectBody::I64(i) => Ok(*i),
                     _ => panic!("unexpected type, check HCM"),
                 })
                 .unwrap(),

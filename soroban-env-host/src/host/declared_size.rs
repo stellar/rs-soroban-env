@@ -95,7 +95,7 @@ impl_declared_size_type!(SymbolStr, SCSYMBOL_LIMIT);
 impl_declared_size_type!(SymbolSmallIter, 8);
 impl_declared_size_type!(U256, 32);
 impl_declared_size_type!(I256, 32);
-impl_declared_size_type!(HostObject, 48);
+impl_declared_size_type!(HostObject, 72);
 impl_declared_size_type!(LedgerBump, 20);
 // xdr types
 impl_declared_size_type!(TimePoint, 8);

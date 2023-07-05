@@ -4,7 +4,7 @@ use soroban_env_common::xdr::{ScErrorCode, ScErrorType};
 use soroban_env_common::U32Val;
 
 use crate::events::{CONTRACT_EVENT_TOPICS_LIMIT, TOPIC_BYTES_LENGTH_LIMIT};
-use crate::{host_object::HostObject, Host, HostError, Object, Val, VecObject};
+use crate::{host_object::HostObjectBody, Host, HostError, Object, Val, VecObject};
 
 impl Host {
     // Notes on metering: free
@@ -92,7 +92,7 @@ impl Host {
                             &[],
                         )),
                         Some(ho) => match ho {
-                            HostObject::Bytes(b) => {
+                            HostObjectBody::Bytes(b) => {
                                 if b.len() > TOPIC_BYTES_LENGTH_LIMIT {
                                     // TODO: use more event-specific error codes than `UnexpectedType`.
                                     // Something like "topic bytes exceeds length limit"
@@ -130,7 +130,7 @@ impl Host {
                         &[],
                     )),
                     Some(ho) => match ho {
-                        HostObject::Vec(vv) => {
+                        HostObjectBody::Vec(vv) => {
                             if vv.len() > CONTRACT_EVENT_TOPICS_LIMIT {
                                 // TODO: proper error code "event topics exceeds count limit"
                                 return Err(self.err(

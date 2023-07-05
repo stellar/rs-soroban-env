@@ -702,7 +702,7 @@ impl AuthorizationManager {
             // Use the respective push (like
             // `push_create_contract_host_fn_frame`) functions instead to push
             // the frame with the required info.
-            Frame::HostFunction(_) => return Ok(()),
+            Frame::InitialInvokeHostFunctionOp(..) => return Ok(()),
             Frame::Token(id, fn_name, ..) => (id.metered_clone(host.budget_ref())?, *fn_name),
             #[cfg(any(test, feature = "testutils"))]
             Frame::TestContract(tc) => (tc.id.clone(), tc.func),
