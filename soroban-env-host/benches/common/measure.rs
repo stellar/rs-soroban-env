@@ -397,7 +397,7 @@ where
     ),
 {
     let mut recycled_samples = Vec::with_capacity(samples.len());
-    host.as_budget().reset_unlimited();
+    host.as_budget().reset_unlimited().unwrap();
 
     // start the cpu and mem measurement
     mem_tracker.0.store(0, Ordering::SeqCst);

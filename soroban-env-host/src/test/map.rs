@@ -9,8 +9,8 @@ use soroban_env_common::{
 };
 
 use crate::{
-    xdr::{ScMap, ScMapEntry, ScVal, ScVec},
-    Env, Error, Host, HostError, Symbol, Val,
+    xdr::{ScMap, ScMapEntry, ScVal, ScVec, VecM},
+    Env, Error, Host, HostError, Symbol, TryFromVal, Val,
 };
 
 #[test]
@@ -301,4 +301,62 @@ fn map_stack_no_overflow_65536_boxed_keys_and_vals() {
             map.push((Rc::new(key), None));
         }
     }
+}
+
+#[test]
+fn scmap_out_of_order() {
+    let host = Host::default();
+    let bad_scmap = ScVal::Map(Some(ScMap(
+        VecM::try_from(vec![
+            ScMapEntry {
+                key: ScVal::U32(2),
+                val: ScVal::U32(0),
+            },
+            ScMapEntry {
+                key: ScVal::U32(3),
+                val: ScVal::U32(0),
+            },
+            ScMapEntry {
+                key: ScVal::U32(1),
+                val: ScVal::U32(0),
+            },
+        ])
+        .unwrap(),
+    )));
+    assert!(Val::try_from_val(&host, &bad_scmap).is_err());
+}
+
+#[test]
+fn map_build_bad_element_integrity() -> Result<(), HostError> {
+    use crate::EnvBase;
+    let host = Host::default();
+    let obj = host.map_new()?;
+
+    let ok_val = obj.to_val();
+    let payload = ok_val.get_payload();
+
+    // The low 8 bits of an object-handle payload are the
+    // tag indicating its type. We just add one to the
+    // object type here, corrupting it.
+    let bad_tag = Val::from_payload(payload + 1);
+
+    // the high 32 bits of an object-handle payload are the
+    // index number of the handle. We corrupt those here with
+    // an object index far greater than any allocated.
+    let bad_handle = Val::from_payload(payload | 0xff_u64 << 48);
+
+    // Inserting ok object referejces into maps should work.
+    assert!(host.map_put(obj, ok_val, ok_val).is_ok());
+    assert!(host.map_new_from_slices(&["hi"], &[ok_val]).is_ok());
+
+    // Inserting corrupt object references into maps should fail.
+    assert!(host.map_put(obj, ok_val, bad_tag).is_err());
+    assert!(host.map_put(obj, bad_tag, ok_val).is_err());
+    assert!(host.map_new_from_slices(&["hi"], &[bad_tag]).is_err());
+
+    assert!(host.map_put(obj, ok_val, bad_handle).is_err());
+    assert!(host.map_put(obj, bad_handle, ok_val).is_err());
+    assert!(host.map_new_from_slices(&["hi"], &[bad_handle]).is_err());
+
+    Ok(())
 }

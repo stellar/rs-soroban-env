@@ -84,6 +84,9 @@ where
     }
 
     pub fn from_map(map: Vec<(K, V)>, ctx: &Ctx) -> Result<Self, HostError> {
+        if u32::try_from(map.len()).is_err() {
+            return Err((ScErrorType::Object, ScErrorCode::ExceededLimit).into());
+        }
         // Allocation cost already paid for by caller, here just checks that input
         // has sorted and unique keys.
         let m = MeteredOrdMap {

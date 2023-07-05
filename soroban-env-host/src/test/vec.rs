@@ -294,3 +294,43 @@ fn vec_binary_search() -> Result<(), HostError> {
     assert_eq!(u64::from(4u32), res);
     Ok(())
 }
+
+#[test]
+fn vec_build_bad_element_integrity() -> Result<(), HostError> {
+    use crate::EnvBase;
+    let host = Host::default();
+    let obj = host.test_vec_obj::<u32>(&[1, 2, 3])?;
+    let i = U32Val::from(1);
+
+    let ok_val = obj.to_val();
+    let payload = ok_val.get_payload();
+
+    // The low 8 bits of an object-handle payload are the
+    // tag indicating its type. We just add one to the
+    // object type here, corrupting it.
+    let bad_tag = Val::from_payload(payload + 1);
+
+    // the high 32 bits of an object-handle payload are the
+    // index number of the handle. We corrupt those here with
+    // an object index far greater than any allocated.
+    let bad_handle = Val::from_payload(payload | 0xff_u64 << 48);
+
+    // Inserting ok object referejces into vectors should work.
+    assert!(host.vec_put(obj, i, ok_val).is_ok());
+    assert!(host.vec_push_front(obj, ok_val).is_ok());
+    assert!(host.vec_push_back(obj, ok_val).is_ok());
+    assert!(host.vec_new_from_slice(&[ok_val]).is_ok());
+
+    // Inserting corrupt object references into vectors should fail.
+    assert!(host.vec_put(obj, i, bad_tag).is_err());
+    assert!(host.vec_push_front(obj, bad_tag).is_err());
+    assert!(host.vec_push_back(obj, bad_tag).is_err());
+    assert!(host.vec_new_from_slice(&[bad_tag]).is_err());
+
+    assert!(host.vec_put(obj, i, bad_handle).is_err());
+    assert!(host.vec_push_front(obj, bad_handle).is_err());
+    assert!(host.vec_push_back(obj, bad_handle).is_err());
+    assert!(host.vec_new_from_slice(&[bad_handle]).is_err());
+
+    Ok(())
+}

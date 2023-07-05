@@ -50,7 +50,7 @@ where
 {
     // Constructs a empty new `MeteredVector`.
     pub fn new() -> Self {
-        Self::from_vec(Vec::new())
+        Self { vec: Vec::new() }
     }
 
     // Constructs a new, empty `MeteredVector` with at least the specified capacity.
@@ -60,19 +60,22 @@ where
     #[cfg(any(test, feature = "testutils"))]
     pub fn with_capacity(capacity: usize, budget: &Budget) -> Result<Self, HostError> {
         super::metered_clone::charge_heap_alloc::<A>(capacity as u64, budget)?;
-        Ok(Self::from_vec(Vec::with_capacity(capacity)))
+        Self::from_vec(Vec::with_capacity(capacity))
     }
 
     pub fn from_array(buf: &[A], budget: &Budget) -> Result<Self, HostError> {
         // we may temporarily go over budget here.
         let vec: Vec<A> = buf.into();
         vec.charge_deep_clone(budget)?;
-        Ok(Self::from_vec(vec))
+        Self::from_vec(vec)
     }
 
     // No meter charge, assuming allocation cost has been covered by the caller from the outside.
-    pub fn from_vec(vec: Vec<A>) -> Self {
-        Self { vec }
+    pub fn from_vec(vec: Vec<A>) -> Result<Self, HostError> {
+        if u32::try_from(vec.len()).is_err() {
+            return Err((ScErrorType::Object, ScErrorCode::ExceededLimit).into());
+        }
+        Ok(Self { vec })
     }
 
     pub fn as_slice(&self) -> &[A] {
@@ -98,7 +101,7 @@ where
             // the clone into one (when A::IS_SHALLOW==true).
             let vec: Vec<A> = iter.collect();
             vec.charge_deep_clone(budget)?;
-            Ok(Self::from_vec(vec))
+            Self::from_vec(vec)
         } else {
             // This is a logic error, we should never get here.
             Err((ScErrorType::Object, ScErrorCode::InternalError).into())
@@ -289,7 +292,7 @@ where
             }
         }
         vec.charge_deep_clone(budget)?;
-        Ok(Self::from_vec(vec))
+        Self::from_vec(vec)
     }
 
     pub fn iter(&self) -> std::slice::Iter<'_, A> {
