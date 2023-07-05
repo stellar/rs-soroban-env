@@ -229,9 +229,9 @@ fn rent_fee_for_size_and_ledgers(
     // user inputs.
     let num = entry_size as i64 * fee_config.fee_per_write_1kb * rent_ledgers as i64;
     let storage_coef = if is_persistent {
-        fee_config.persistent_rent_rate_denomniator
+        fee_config.persistent_rent_rate_denominator
     } else {
-        fee_config.temporary_rent_rate_denomniator
+        fee_config.temporary_rent_rate_denominator
     };
     let denom = DATA_SIZE_1KB_INCREMENT * storage_coef;
     num_integer::div_ceil(num, denom)
