@@ -18,7 +18,7 @@ impl HostCostMeasurement for VecEntryMeasure {
     fn new_random_case(_host: &Host, rng: &mut StdRng, input: u64) -> VecEntrySample {
         let input = 1 + input * Self::STEP_SIZE;
         let ov = util::to_rawval_u32(0..(input as u32)).collect();
-        let vec: MeteredVector<_> = MeteredVector::from_vec(ov);
+        let vec: MeteredVector<_> = MeteredVector::from_vec(ov).unwrap();
         let mut idxs: Vec<usize> = (0..input as usize).collect();
         idxs.shuffle(rng);
         VecEntrySample { vec, idxs }

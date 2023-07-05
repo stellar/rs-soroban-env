@@ -167,7 +167,7 @@ impl Host {
         let mem_data = vm.get_memory(self)?.data(vmcaller.try_mut()?);
         self.charge_budget(
             ContractCostType::VmMemRead,
-            Some(num_slices.saturating_mul(8) as u64),
+            Some((num_slices as u64).saturating_mul(8)),
         )?;
 
         for i in 0..num_slices {

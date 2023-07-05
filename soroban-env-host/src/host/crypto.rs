@@ -55,12 +55,11 @@ impl Host {
         public_key: &ed25519_dalek::PublicKey,
         sig: &ed25519_dalek::Signature,
     ) -> Result<(), HostError> {
-        use ed25519_dalek::Verifier;
         self.charge_budget(
             ContractCostType::VerifyEd25519Sig,
             Some(payload.len() as u64),
         )?;
-        public_key.verify(payload, sig).map_err(|_| {
+        public_key.verify_strict(payload, sig).map_err(|_| {
             self.err(
                 ScErrorType::Crypto,
                 ScErrorCode::InvalidInput,
