@@ -67,7 +67,7 @@ pub struct LedgerEntryRentChange {
     /// Size of the entry in bytes after it has been modified.
     pub new_size_bytes: u32,
     /// Expiration ledger of the entry before it has been modified.
-    /// `0` for newly-created entires.
+    /// Should be less than the current ledger for newly-created entires.
     pub old_expiration_ledger: u32,
     /// Expiration ledger of the entry after it has been modified.
     pub new_expiration_ledger: u32,
