@@ -177,14 +177,14 @@ impl Host {
         &self,
         hot: HOT,
     ) -> Result<HOT::Wrapper, HostError> {
-        let prev_len = self.0.objects.borrow().len();
+        let prev_len = self.try_borrow_objects()?.len();
         if prev_len > u32::MAX as usize {
             return Err(self.err_arith_overflow());
         }
         // charge for the new host object, which is just the amortized cost of a single
         // `HostObject` allocation
         metered_clone::charge_heap_alloc::<HostObject>(1, self.as_budget())?;
-        self.0.objects.borrow_mut().push(HOT::inject(hot));
+        self.try_borrow_objects_mut()?.push(HOT::inject(hot));
         let handle = prev_len as u32;
         Ok(HOT::new_from_handle(handle))
     }
@@ -200,7 +200,7 @@ impl Host {
         F: FnOnce(Option<&HostObject>) -> Result<U, HostError>,
     {
         self.charge_budget(ContractCostType::VisitObject, None)?;
-        let r = self.0.objects.borrow();
+        let r = self.try_borrow_objects()?;
         let obj: Object = obj.into();
         let handle: u32 = obj.get_handle();
         f(r.get(handle as usize))

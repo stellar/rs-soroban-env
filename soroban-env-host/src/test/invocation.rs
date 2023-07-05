@@ -32,7 +32,7 @@ fn invoke_single_contract_function() -> Result<(), HostError> {
 fn invoke_cross_contract(diagnostics: bool) -> Result<(), HostError> {
     let host = Host::test_host_with_recording_footprint();
     if diagnostics {
-        host.set_diagnostic_level(crate::DiagnosticLevel::Debug);
+        host.set_diagnostic_level(crate::DiagnosticLevel::Debug)?;
     }
 
     let id_obj = host.register_test_contract_wasm(ADD_I32);
@@ -59,7 +59,7 @@ fn invoke_cross_contract_with_diagnostics() -> Result<(), HostError> {
 #[test]
 fn invoke_cross_contract_with_err() -> Result<(), HostError> {
     let host = Host::test_host_with_recording_footprint();
-    host.enable_debug();
+    host.enable_debug()?;
     let id_obj = host.register_test_contract_wasm(VEC);
     // prepare arguments
     let sym = Symbol::try_from_small_str("vec_err").unwrap();
@@ -118,7 +118,7 @@ fn invoke_cross_contract_indirect() -> Result<(), HostError> {
 #[test]
 fn invoke_cross_contract_indirect_err() -> Result<(), HostError> {
     let host = Host::test_host_with_recording_footprint();
-    host.enable_debug();
+    host.enable_debug()?;
     let id0_obj = host.register_test_contract_wasm(INVOKE_CONTRACT);
     let sym = Symbol::try_from_small_str("add_with").unwrap();
     let args = host.test_vec_obj::<i32>(&[i32::MAX, 1])?;

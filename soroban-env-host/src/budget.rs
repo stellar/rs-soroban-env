@@ -7,6 +7,7 @@ use std::{
 use soroban_env_common::xdr::{ScErrorCode, ScErrorType};
 
 use crate::{
+    host::error::TryBorrowOrErr,
     xdr::{ContractCostParamEntry, ContractCostParams, ContractCostType, ExtensionPoint},
     Host, HostError,
 };
@@ -412,13 +413,13 @@ pub struct Budget(pub(crate) Rc<RefCell<BudgetImpl>>);
 
 impl Debug for Budget {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "{:?}", self.0.borrow())
+        writeln!(f, "{:?}", self.0.try_borrow().map_err(|_| std::fmt::Error)?)
     }
 }
 
 impl Display for Budget {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "{}", self.0.borrow())
+        writeln!(f, "{}", self.0.try_borrow().map_err(|_| std::fmt::Error)?)
     }
 }
 
@@ -465,7 +466,7 @@ impl Budget {
     where
         F: FnOnce(RefMut<BudgetImpl>) -> Result<T, HostError>,
     {
-        f(self.0.borrow_mut())
+        f(self.0.try_borrow_mut_or_err()?)
     }
 
     fn charge_in_bulk(
@@ -474,7 +475,7 @@ impl Budget {
         iterations: u64,
         input: Option<u64>,
     ) -> Result<(), HostError> {
-        if !self.0.borrow().enabled {
+        if !self.0.try_borrow_or_err()?.enabled {
             return Ok(());
         }
 
@@ -562,98 +563,97 @@ impl Budget {
         res
     }
 
-    pub fn get_tracker(&self, ty: ContractCostType) -> (u64, Option<u64>) {
-        self.0.borrow().tracker[ty as usize]
+    pub fn get_tracker(&self, ty: ContractCostType) -> Result<(u64, Option<u64>), HostError> {
+        Ok(self.0.try_borrow_or_err()?.tracker[ty as usize])
     }
 
     pub(crate) fn get_tracker_mut<F>(&self, ty: ContractCostType, f: F) -> Result<(), HostError>
     where
         F: FnOnce(&mut (u64, Option<u64>)) -> Result<(), HostError>,
     {
-        f(&mut self.0.borrow_mut().tracker[ty as usize])
+        f(&mut self.0.try_borrow_mut_or_err()?.tracker[ty as usize])
     }
 
-    pub fn get_cpu_insns_consumed(&self) -> u64 {
-        self.0.borrow().cpu_insns.get_total_count()
+    pub fn get_cpu_insns_consumed(&self) -> Result<u64, HostError> {
+        Ok(self.0.try_borrow_or_err()?.cpu_insns.get_total_count())
     }
 
-    pub fn get_mem_bytes_consumed(&self) -> u64 {
-        self.0.borrow().mem_bytes.get_total_count()
+    pub fn get_mem_bytes_consumed(&self) -> Result<u64, HostError> {
+        Ok(self.0.try_borrow_or_err()?.mem_bytes.get_total_count())
     }
 
-    pub fn get_cpu_insns_remaining(&self) -> u64 {
-        self.0.borrow().cpu_insns.get_remaining()
+    pub fn get_cpu_insns_remaining(&self) -> Result<u64, HostError> {
+        Ok(self.0.try_borrow_or_err()?.cpu_insns.get_remaining())
     }
 
-    pub fn get_mem_bytes_remaining(&self) -> u64 {
-        self.0.borrow().mem_bytes.get_remaining()
+    pub fn get_mem_bytes_remaining(&self) -> Result<u64, HostError> {
+        Ok(self.0.try_borrow_or_err()?.mem_bytes.get_remaining())
     }
 
-    pub fn reset_default(&self) {
-        *self.0.borrow_mut() = BudgetImpl::default()
+    pub fn reset_default(&self) -> Result<(), HostError> {
+        *self.0.try_borrow_mut_or_err()? = BudgetImpl::default();
+        Ok(())
     }
 
-    pub fn reset_unlimited(&self) {
-        self.reset_unlimited_cpu();
-        self.reset_unlimited_mem();
+    pub fn reset_unlimited(&self) -> Result<(), HostError> {
+        self.reset_unlimited_cpu()?;
+        self.reset_unlimited_mem()?;
+        Ok(())
     }
 
-    pub fn reset_unlimited_cpu(&self) {
+    pub fn reset_unlimited_cpu(&self) -> Result<(), HostError> {
         self.mut_budget(|mut b| {
             b.cpu_insns.reset(u64::MAX);
             Ok(())
-        })
-        .unwrap(); // panic means multiple-mut-borrow bug
+        })?; // panic means multiple-mut-borrow bug
         self.reset_tracker()
     }
 
-    pub fn reset_unlimited_mem(&self) {
+    pub fn reset_unlimited_mem(&self) -> Result<(), HostError> {
         self.mut_budget(|mut b| {
             b.mem_bytes.reset(u64::MAX);
             Ok(())
-        })
-        .unwrap(); // panic means multiple-mut-borrow bug
+        })?;
         self.reset_tracker()
     }
 
-    pub fn reset_tracker(&self) {
-        for tracker in self.0.borrow_mut().tracker.iter_mut() {
+    pub fn reset_tracker(&self) -> Result<(), HostError> {
+        for tracker in self.0.try_borrow_mut_or_err()?.tracker.iter_mut() {
             tracker.0 = 0;
             tracker.1 = tracker.1.map(|_| 0);
         }
+        Ok(())
     }
 
-    pub fn reset_limits(&self, cpu: u64, mem: u64) {
+    pub fn reset_limits(&self, cpu: u64, mem: u64) -> Result<(), HostError> {
         self.mut_budget(|mut b| {
             b.cpu_insns.reset(cpu);
             b.mem_bytes.reset(mem);
             Ok(())
-        })
-        .unwrap(); // impossible to panic
-
+        })?;
         self.reset_tracker()
     }
 
     #[cfg(test)]
-    pub fn reset_models(&self) {
+    pub fn reset_models(&self) -> Result<(), HostError> {
         self.mut_budget(|mut b| {
             b.cpu_insns.reset_models();
             b.mem_bytes.reset_models();
             Ok(())
         })
-        .unwrap(); // impossible to panic
     }
 
     #[cfg(any(test, feature = "testutils"))]
-    pub fn reset_fuel_config(&self) {
-        self.0.borrow_mut().fuel_config.reset()
+    pub fn reset_fuel_config(&self) -> Result<(), HostError> {
+        self.0.try_borrow_mut_or_err()?.fuel_config.reset();
+        Ok(())
     }
 
     fn get_cpu_insns_remaining_as_fuel(&self) -> Result<u64, HostError> {
-        let cpu_remaining = self.get_cpu_insns_remaining();
+        let cpu_remaining = self.get_cpu_insns_remaining()?;
         let cpu_per_fuel = self
             .0
-            .borrow()
+            .try_borrow_or_err()?
             .cpu_insns
             .get_cost_model(ContractCostType::WasmInsnExec)
             .linear_term;
@@ -676,10 +676,10 @@ impl Budget {
     }
 
     fn get_mem_bytes_remaining_as_fuel(&self) -> Result<u64, HostError> {
-        let bytes_remaining = self.get_mem_bytes_remaining();
+        let bytes_remaining = self.get_mem_bytes_remaining()?;
         let bytes_per_fuel = self
             .0
-            .borrow()
+            .try_borrow_or_err()?
             .mem_bytes
             .get_cost_model(ContractCostType::WasmMemAlloc)
             .linear_term;
@@ -699,15 +699,15 @@ impl Budget {
     }
 
     // generate a wasmi fuel cost schedule based on our calibration
-    pub fn wasmi_fuel_costs(&self) -> FuelCosts {
-        let config = &self.0.borrow().fuel_config;
+    pub fn wasmi_fuel_costs(&self) -> Result<FuelCosts, HostError> {
+        let config = &self.0.try_borrow_or_err()?.fuel_config;
         let mut costs = FuelCosts::default();
         costs.base = config.base;
         costs.entity = config.entity;
         costs.load = config.load;
         costs.store = config.store;
         costs.call = config.call;
-        costs
+        Ok(costs)
     }
 }
 

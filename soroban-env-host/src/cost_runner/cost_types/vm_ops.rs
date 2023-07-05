@@ -52,10 +52,19 @@ impl CostRunner for VmMemReadRun {
         _iter: u64,
         mut sample: Self::SampleType,
     ) -> Self::RecycledType {
-        black_box(sample.vm.with_vmcaller(|caller| {
-            host.metered_vm_read_bytes_from_linear_memory(caller, &sample.vm, 0, &mut sample.buf)
-                .unwrap()
-        }));
+        black_box(
+            sample
+                .vm
+                .with_vmcaller(|caller| {
+                    host.metered_vm_read_bytes_from_linear_memory(
+                        caller,
+                        &sample.vm,
+                        0,
+                        &mut sample.buf,
+                    )
+                })
+                .unwrap(),
+        );
         sample
     }
 
@@ -82,10 +91,19 @@ impl CostRunner for VmMemWriteRun {
         _iter: u64,
         mut sample: Self::SampleType,
     ) -> Self::RecycledType {
-        black_box(sample.vm.with_vmcaller(|caller| {
-            host.metered_vm_write_bytes_to_linear_memory(caller, &sample.vm, 0, &mut sample.buf)
-                .unwrap()
-        }));
+        black_box(
+            sample
+                .vm
+                .with_vmcaller(|caller| {
+                    host.metered_vm_write_bytes_to_linear_memory(
+                        caller,
+                        &sample.vm,
+                        0,
+                        &mut sample.buf,
+                    )
+                })
+                .unwrap(),
+        );
         sample
     }
 

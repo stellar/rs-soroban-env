@@ -11,6 +11,7 @@ use soroban_env_common::{
 
 use crate::{
     budget::Budget,
+    host::error::TryBorrowOrErr,
     storage::{test_storage::MockSnapshotSource, Storage},
     xdr, Host, HostError,
 };
@@ -60,14 +61,14 @@ impl Host {
         let snapshot_source = Rc::<MockSnapshotSource>::new(MockSnapshotSource::new());
         let storage = Storage::with_recording_footprint(snapshot_source);
         let host = Host::with_storage_and_budget(storage, Budget::default());
-        host.set_ledger_info(Default::default());
+        host.set_ledger_info(Default::default()).unwrap();
         host
     }
 
     pub(crate) fn test_budget(self, cpu: u64, mem: u64) -> Self {
         self.with_budget(|budget| {
-            budget.reset_limits(cpu, mem); // something big but finite that we may exceed
-            budget.reset_models();
+            budget.reset_limits(cpu, mem)?; // something big but finite that we may exceed
+            budget.reset_models()?;
             Ok(())
         })
         .unwrap();
@@ -85,26 +86,26 @@ impl Host {
         self.with_budget(|budget| {
             budget
                 .0
-                .borrow_mut()
+                .try_borrow_mut_or_err()?
                 .cpu_insns
                 .get_cost_model_mut(ty)
                 .const_term = const_cpu as i64;
             budget
                 .0
-                .borrow_mut()
+                .try_borrow_mut_or_err()?
                 .cpu_insns
                 .get_cost_model_mut(ty)
                 .linear_term = lin_cpu as i64;
 
             budget
                 .0
-                .borrow_mut()
+                .try_borrow_mut_or_err()?
                 .mem_bytes
                 .get_cost_model_mut(ty)
                 .const_term = const_mem as i64;
             budget
                 .0
-                .borrow_mut()
+                .try_borrow_mut_or_err()?
                 .mem_bytes
                 .get_cost_model_mut(ty)
                 .linear_term = lin_mem as i64;
@@ -174,15 +175,15 @@ impl Host {
     ) -> AddressObject {
         // Use source account-based auth in order to avoid using nonces which
         // won't work well with enforcing ledger footprint.
-        let prev_source_account = self.source_account_id();
+        let prev_source_account = self.source_account_id().unwrap();
         // Use recording auth to skip specifying the auth payload.
-        let prev_auth_manager = self.snapshot_auth_manager();
-        self.switch_to_recording_auth();
+        let prev_auth_manager = self.snapshot_auth_manager().unwrap();
+        self.switch_to_recording_auth().unwrap();
 
         let wasm_hash = self
             .upload_wasm(self.bytes_new_from_slice(contract_wasm).unwrap())
             .unwrap();
-        self.set_source_account(account.clone());
+        self.set_source_account(account.clone()).unwrap();
         let contract_address = self
             .create_contract(
                 self.add_host_object(ScAddress::Account(account.clone()))
@@ -192,9 +193,9 @@ impl Host {
             )
             .unwrap();
         if let Some(prev_account) = prev_source_account {
-            self.set_source_account(prev_account);
+            self.set_source_account(prev_account).unwrap();
         }
-        self.set_auth_manager(prev_auth_manager);
+        self.set_auth_manager(prev_auth_manager).unwrap();
         contract_address
     }
 

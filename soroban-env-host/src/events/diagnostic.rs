@@ -21,17 +21,21 @@ pub enum DiagnosticLevel {
 
 /// None of these functions are metered, which is why they're behind the is_debug check
 impl Host {
-    pub fn set_diagnostic_level(&self, diagnostic_level: DiagnosticLevel) {
-        *self.0.diagnostic_level.borrow_mut() = diagnostic_level;
+    pub fn set_diagnostic_level(&self, diagnostic_level: DiagnosticLevel) -> Result<(), HostError> {
+        *self.try_borrow_diagnostic_level_mut()? = diagnostic_level;
+        Ok(())
     }
 
     // As above, avoids having to import DiagnosticLevel.
-    pub fn enable_debug(&self) {
+    pub fn enable_debug(&self) -> Result<(), HostError> {
         self.set_diagnostic_level(DiagnosticLevel::Debug)
     }
 
-    pub fn is_debug(&self) -> bool {
-        matches!(*self.0.diagnostic_level.borrow(), DiagnosticLevel::Debug)
+    pub fn is_debug(&self) -> Result<bool, HostError> {
+        Ok(matches!(
+            *self.try_borrow_diagnostic_level()?,
+            DiagnosticLevel::Debug
+        ))
     }
 
     /// Records a `System` contract event. `topics` is expected to be a `SCVec`
@@ -70,7 +74,7 @@ impl Host {
     }
 
     pub fn log_diagnostics(&self, msg: &str, args: &[Val]) -> Result<(), HostError> {
-        if !self.is_debug() {
+        if !self.is_debug()? {
             return Ok(());
         }
         let calling_contract = self.get_current_contract_id_unmetered()?;
@@ -92,7 +96,7 @@ impl Host {
         msg: &str,
         args: &[Val],
     ) -> Result<(), HostError> {
-        if !self.is_debug() {
+        if !self.is_debug()? {
             return Ok(());
         }
 
@@ -130,7 +134,7 @@ impl Host {
         func: &Symbol,
         args: &[Val],
     ) -> Result<(), HostError> {
-        if !self.is_debug() {
+        if !self.is_debug()? {
             return Ok(());
         }
 
@@ -162,7 +166,7 @@ impl Host {
         func: &Symbol,
         res: &Val,
     ) -> Result<(), HostError> {
-        if !self.is_debug() {
+        if !self.is_debug()? {
             return Ok(());
         }
 

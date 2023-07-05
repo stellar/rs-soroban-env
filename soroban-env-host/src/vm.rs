@@ -12,7 +12,7 @@ mod dispatch;
 mod fuel_refillable;
 mod func_info;
 
-use crate::{budget::AsBudget, err, xdr::ContractCostType, HostError};
+use crate::{budget::AsBudget, err, host::error::TryBorrowOrErr, xdr::ContractCostType, HostError};
 use std::{cell::RefCell, io::Cursor, rc::Rc};
 
 use super::{xdr::Hash, Host, Symbol, Val};
@@ -142,7 +142,7 @@ impl Vm {
         )?;
 
         let mut config = wasmi::Config::default();
-        let fuel_costs = host.as_budget().wasmi_fuel_costs();
+        let fuel_costs = host.as_budget().wasmi_fuel_costs()?;
 
         // Turn off all optional wasm features.
         config
@@ -221,14 +221,18 @@ impl Vm {
         inputs: &[Value],
     ) -> Result<Val, HostError> {
         let mut wasm_ret: [Value; 1] = [Value::I64(0)];
-        self.store.borrow_mut().fill_fuels(host)?;
-        let res = func.call(&mut *self.store.borrow_mut(), inputs, &mut wasm_ret);
+        self.store.try_borrow_mut_or_err()?.fill_fuels(host)?;
+        let res = func.call(
+            &mut *self.store.try_borrow_mut_or_err()?,
+            inputs,
+            &mut wasm_ret,
+        );
         // Due to the way wasmi's fuel metering works (it does `remaining.checked_sub(delta).ok_or(Trap)`),
         // there may be a small amount of fuel (less than delta -- the fuel cost of that failing
         // wasmi instruction) remaining when the `OutOfFuel` trap occurs. This is only observable
         // if the contract traps with `OutOfFuel`, which may appear confusing if they look closely
         // at the budget amount consumed. So it should be fine.
-        self.store.borrow_mut().return_fuels(host)?;
+        self.store.try_borrow_mut_or_err()?.return_fuels(host)?;
 
         if let Err(e) = res {
             // When a call fails with a wasmi::Error::Trap that carries a HostError
@@ -254,7 +258,7 @@ impl Vm {
                     ));
                 }
                 e => {
-                    return Err(if host.is_debug() {
+                    return Err(if host.is_debug()? {
                         // With diagnostics on: log as much detail as we can from wasmi.
                         let msg = format!("VM call failed: {:?}", &e);
                         host.error(e.into(), &msg, &[func_sym.to_val()])
@@ -284,7 +288,7 @@ impl Vm {
         let func_ss: SymbolStr = func_sym.try_into_val(host)?;
         let ext = match self
             .instance
-            .get_export(&*self.store.borrow(), func_ss.as_ref())
+            .get_export(&*self.store.try_borrow_or_err()?, func_ss.as_ref())
         {
             None => {
                 return Err(host.err(
@@ -331,11 +335,11 @@ impl Vm {
     /// to this VM's `Store` and `Instance`, and calls the provided function
     /// back with it. Mainly used for testing.
     #[cfg(any(test, feature = "testutils"))]
-    pub fn with_vmcaller<F, T>(&self, f: F) -> T
+    pub fn with_vmcaller<F, T>(&self, f: F) -> Result<T, HostError>
     where
-        F: FnOnce(&mut VmCaller<Host>) -> T,
+        F: FnOnce(&mut VmCaller<Host>) -> Result<T, HostError>,
     {
-        let store: &mut Store<Host> = &mut self.store.borrow_mut();
+        let store: &mut Store<Host> = &mut *self.store.try_borrow_mut_or_err()?;
         let mut ctx: StoreContextMut<Host> = store.into();
         let caller: Caller<Host> = Caller::new(&mut ctx, Some(&self.instance));
         let mut vmcaller: VmCaller<Host> = VmCaller(Some(caller));

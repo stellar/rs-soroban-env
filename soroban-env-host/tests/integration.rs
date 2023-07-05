@@ -39,7 +39,7 @@ fn map_host_fn() -> Result<(), HostError> {
 #[test]
 fn debug_log() {
     let host = Host::default();
-    host.set_diagnostic_level(DiagnosticLevel::Debug);
+    host.set_diagnostic_level(DiagnosticLevel::Debug).unwrap();
     // Call a debug-log helper.
     host.log_from_slice("can't convert value", &[Val::from_i32(1).to_val()])
         .unwrap();

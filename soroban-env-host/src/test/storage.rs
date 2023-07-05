@@ -206,7 +206,7 @@ fn test_storage_mix() {
     // This makes sure the keyspaces are not mixed between storage types.
     let host = Host::test_host_with_recording_footprint();
     host.with_budget(|b| {
-        b.reset_unlimited();
+        b.reset_unlimited().unwrap();
         Ok(())
     })
     .unwrap();

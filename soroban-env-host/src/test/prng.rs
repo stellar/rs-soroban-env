@@ -60,8 +60,8 @@ impl ContractFunctionSet for PRNGUsingTest {
 fn prng_test() -> Result<(), HostError> {
     let host = Host::default();
 
-    host.enable_debug();
-    host.set_base_prng_seed([0; 32]);
+    host.enable_debug()?;
+    host.set_base_prng_seed([0; 32])?;
 
     let dummy_id = [0; 32];
     let dummy_address = ScAddress::Contract(Hash(dummy_id.clone()));
