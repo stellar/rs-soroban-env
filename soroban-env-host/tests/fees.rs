@@ -121,8 +121,8 @@ fn resource_fee_computation() {
 fn test_rent_bump_fees_with_only_bump() {
     let fee_config = RentFeeConfiguration {
         fee_per_write_1kb: 1000,
-        persistent_rent_rate_denomniator: 10_000,
-        temporary_rent_rate_denomniator: 100_000,
+        persistent_rent_rate_denominator: 10_000,
+        temporary_rent_rate_denominator: 100_000,
     };
 
     // Minimal size
@@ -272,8 +272,8 @@ fn test_rent_bump_fees_with_only_bump() {
 fn test_rent_bump_fees_with_only_size_change() {
     let fee_config = RentFeeConfiguration {
         fee_per_write_1kb: 1000,
-        persistent_rent_rate_denomniator: 10_000,
-        temporary_rent_rate_denomniator: 100_000,
+        persistent_rent_rate_denominator: 10_000,
+        temporary_rent_rate_denominator: 100_000,
     };
 
     // Large size increase
@@ -375,8 +375,8 @@ fn test_rent_bump_fees_with_only_size_change() {
 fn test_rent_bump_with_size_change_and_bump() {
     let fee_config = RentFeeConfiguration {
         fee_per_write_1kb: 1000,
-        persistent_rent_rate_denomniator: 10_000,
-        temporary_rent_rate_denomniator: 100_000,
+        persistent_rent_rate_denominator: 10_000,
+        temporary_rent_rate_denominator: 100_000,
     };
 
     // Persistent entry
@@ -464,8 +464,8 @@ fn test_rent_bump_with_size_change_and_bump() {
 fn test_rent_bump_without_old_entry() {
     let fee_config = RentFeeConfiguration {
         fee_per_write_1kb: 1000,
-        persistent_rent_rate_denomniator: 10_000,
-        temporary_rent_rate_denomniator: 100_000,
+        persistent_rent_rate_denominator: 10_000,
+        temporary_rent_rate_denominator: 100_000,
     };
 
     // Persistent storage
