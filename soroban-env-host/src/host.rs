@@ -1735,12 +1735,13 @@ impl VmCallerEnv for Host {
     }
 
     fn vec_new(&self, _vmcaller: &mut VmCaller<Host>, c: Val) -> Result<VecObject, HostError> {
-        let capacity: usize = if c.is_void() {
+        // NB: we ignore capacity because vectors are immutable
+        // and there's no reuse, we always size them exactly.
+        let _capacity: usize = if c.is_void() {
             0
         } else {
             self.usize_from_rawval_u32_input("c", c)?
         };
-        // TODO: optimize the vector based on capacity
         self.add_host_object(HostVec::new())
     }
 
@@ -1959,7 +1960,7 @@ impl VmCallerEnv for Host {
         for v in vals.iter() {
             self.check_val_integrity(*v)?;
         }
-        self.add_host_object(HostVec::from_vec(vals))
+        self.add_host_object(HostVec::from_vec(vals)?)
     }
 
     fn vec_unpack_to_linear_memory(
@@ -2844,7 +2845,7 @@ impl VmCallerEnv for Host {
             let inner = MeteredVector::from_array(&vals, self.as_budget())?;
             outer.push(self.add_host_object(inner)?.into());
         }
-        self.add_host_object(HostVec::from_vec(outer))
+        self.add_host_object(HostVec::from_vec(outer)?)
     }
 
     fn fail_with_error(
