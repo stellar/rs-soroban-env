@@ -53,11 +53,53 @@ pub struct FeeConfiguration {
     pub fee_per_propagate_1kb: i64,
 }
 
+/// Change in a single ledger entry with parameters relevant for rent fee
+/// computations.
+///
+/// This represents the entry state before and after transaction has been
+/// applied.
+pub struct LedgerEntryRentChange {
+    /// Whether this is persistent or temporary entry.
+    pub is_persistent: bool,
+    /// Size of the entry in bytes before it has been modified.
+    /// `0` for newly-created entires.
+    pub old_size_bytes: u32,
+    /// Size of the entry in bytes after it has been modified.
+    pub new_size_bytes: u32,
+    /// Expiration ledger of the entry before it has been modified.
+    /// Should be less than the current ledger for newly-created entires.
+    pub old_expiration_ledger: u32,
+    /// Expiration ledger of the entry after it has been modified.
+    pub new_expiration_ledger: u32,
+}
+
+/// Rent fee-related network configuration.
+///
+/// This should be normally loaded from the ledger.
+pub struct RentFeeConfiguration {
+    /// Fee per 1KB written to ledger.
+    /// This is the same field as in `FeeConfiguration`.
+    pub fee_per_write_1kb: i64,
+    /// Denominator for the total rent fee for persistent storage.
+    ///
+    /// This can be thought of as the number of ledgers of rent that costs as
+    /// much, as writing the entry for the first time (i.e. if the value is
+    /// `1000`, then we would charge the entry write fee for every 1000 ledgers
+    /// of rent).
+    pub persistent_rent_rate_denominator: i64,
+    /// Denominator for the total rent fee for temporary storage.
+    ///
+    /// This has the same semantics as `persistent_rent_rate_denominator`.
+    pub temporary_rent_rate_denominator: i64,
+}
+
 /// Computes the resource fee for a transaction based on the resource
 /// consumption and the fee-related network configuration.
 ///
-/// Returns a pair of `(fee, refundable_fee)`, where refundable fee is also
-/// included into the final fee.
+/// This can handle unsantized user inputs.
+///
+/// Returns a pair of `(non_refundable_fee, refundable_fee)` that represent
+/// non-refundable and refundable resource fee components respectively.
 pub fn compute_transaction_resource_fee(
     tx_resources: &TransactionResources,
     fee_config: &FeeConfiguration,
@@ -116,10 +158,83 @@ pub fn compute_transaction_resource_fee(
         .saturating_add(historical_fee)
         .saturating_add(bandwidth_fee);
 
-    (
-        refundable_fee.saturating_add(non_refundable_fee),
-        refundable_fee,
-    )
+    (non_refundable_fee, refundable_fee)
+}
+
+/// Computes the total rent-related fee for the provided ledger entry changes.
+///
+/// The rent-related fees consist of the fees for rent bumps and fees for
+/// increasing the entry size (with or without rent bump).
+///
+/// This cannot handle unsantized inputs and relies on sane configuration and
+/// ledger changes. This is due to the fact that rent is managed automatically
+/// wihtout user-provided inputs.
+pub fn compute_rent_fee(
+    changed_entries: &Vec<LedgerEntryRentChange>,
+    fee_config: &RentFeeConfiguration,
+    current_ledger_seq: u32,
+) -> i64 {
+    let mut fee = 0;
+    for e in changed_entries {
+        fee += rent_fee_per_entry_change(e, fee_config, current_ledger_seq);
+    }
+    fee
+}
+
+fn rent_fee_per_entry_change(
+    entry_change: &LedgerEntryRentChange,
+    fee_config: &RentFeeConfiguration,
+    current_ledger: u32,
+) -> i64 {
+    let mut fee = 0;
+    // Pay for the rent extension (if any).
+    if entry_change.new_expiration_ledger > entry_change.old_expiration_ledger {
+        fee += rent_fee_for_size_and_ledgers(
+            entry_change.is_persistent,
+            // New portion of rent is payed for the new size of the entry.
+            entry_change.new_size_bytes,
+            // Rent should be covered until `old_expiration_ledger` (or start
+            // from the current ledger for new entries), so don't include it
+            // into the number of rent ledgers.
+            entry_change.new_expiration_ledger
+                - entry_change.old_expiration_ledger.max(current_ledger - 1),
+            fee_config,
+        );
+    }
+    // Pay for the entry size increase (if any).
+    if entry_change.new_size_bytes > entry_change.old_size_bytes && entry_change.old_size_bytes > 0
+    {
+        fee += rent_fee_for_size_and_ledgers(
+            entry_change.is_persistent,
+            // Pay only for the size increase.
+            entry_change.new_size_bytes - entry_change.old_size_bytes,
+            // Cover ledger interval [current; old], as (old, new] is already
+            // covered above for the whole new size.
+            entry_change.old_expiration_ledger - current_ledger + 1,
+            fee_config,
+        );
+    }
+
+    fee
+}
+
+fn rent_fee_for_size_and_ledgers(
+    is_persistent: bool,
+    entry_size: u32,
+    rent_ledgers: u32,
+    fee_config: &RentFeeConfiguration,
+) -> i64 {
+    // Multiplication can overflow here - unlike fee computation this can rely
+    // on sane input parameters as rent fee computation does not depend on any
+    // user inputs.
+    let num = entry_size as i64 * fee_config.fee_per_write_1kb * rent_ledgers as i64;
+    let storage_coef = if is_persistent {
+        fee_config.persistent_rent_rate_denominator
+    } else {
+        fee_config.temporary_rent_rate_denominator
+    };
+    let denom = DATA_SIZE_1KB_INCREMENT * storage_coef;
+    num_integer::div_ceil(num, denom)
 }
 
 fn compute_fee_per_increment(resource_value: u32, fee_rate: i64, increment: i64) -> i64 {
