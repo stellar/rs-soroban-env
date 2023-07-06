@@ -1,3 +1,5 @@
+use std::cmp::Ordering;
+
 use crate::host::Host;
 use crate::native_contract::base_types::{Address, Bytes, BytesN, String};
 use crate::native_contract::contract_error::ContractError;
@@ -11,7 +13,7 @@ use crate::native_contract::token::public_types::AssetInfo;
 use crate::{err, HostError};
 
 use soroban_env_common::xdr::Asset;
-use soroban_env_common::{ConversionError, EnvBase, TryFromVal, TryIntoVal};
+use soroban_env_common::{Compare, ConversionError, EnvBase, TryFromVal, TryIntoVal};
 use soroban_native_sdk_macros::contractimpl;
 
 use super::admin::{read_administrator, write_administrator};
@@ -70,6 +72,8 @@ pub trait TokenTrait {
     fn clawback(e: &Host, from: Address, amount: i128) -> Result<(), HostError>;
 
     fn set_admin(e: &Host, new_admin: Address) -> Result<(), HostError>;
+
+    fn is_admin(e: &Host, addres: Address) -> Result<bool, HostError>;
 
     fn decimals(e: &Host) -> Result<u32, HostError>;
 
@@ -295,6 +299,14 @@ impl TokenTrait for Token {
         write_administrator(e, new_admin.clone())?;
         event::set_admin(e, admin, new_admin)?;
         Ok(())
+    }
+
+    fn is_admin(e: &Host, address: Address) -> Result<bool, HostError> {
+        let current_admin = read_administrator(e);
+        match current_admin {
+            Ok(admin) => return Ok(e.compare(&admin, &address)? == Ordering::Equal),
+            Err(_) => Ok(false),
+        }
     }
 
     fn decimals(_e: &Host) -> Result<u32, HostError> {

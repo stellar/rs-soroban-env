@@ -210,6 +210,17 @@ impl<'a> TestToken<'a> {
         self.call_with_single_signer(admin, "set_admin", host_vec![self.host, new_admin])
     }
 
+    pub(crate) fn is_admin(&self, address: Address) -> Result<bool, HostError> {
+        Ok(self
+            .host
+            .call(
+                self.address.clone().into(),
+                Symbol::try_from_val(self.host, &"is_admin")?,
+                host_vec![self.host, address].into(),
+            )?
+            .try_into()?)
+    }
+
     pub(crate) fn decimals(&self) -> Result<u32, HostError> {
         Ok(self
             .host
