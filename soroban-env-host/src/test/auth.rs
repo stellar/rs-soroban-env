@@ -2,12 +2,12 @@ use ed25519_dalek::Keypair;
 use rand::{thread_rng, Rng};
 use soroban_env_common::xdr::{
     AccountId, ContractDataDurability, HashIdPreimage, HashIdPreimageSorobanAuthorization,
-    PublicKey, ScAddress, ScNonceKey, ScSymbol, ScVal, ScVec, SorobanAddressCredentials,
-    SorobanAuthorizationEntry, SorobanAuthorizedContractFunction, SorobanAuthorizedFunction,
-    SorobanAuthorizedInvocation, SorobanCredentials, Uint256,
+    PublicKey, ScAddress, ScBytes, ScErrorCode, ScErrorType, ScNonceKey, ScSymbol, ScVal, ScVec,
+    SorobanAddressCredentials, SorobanAuthorizationEntry, SorobanAuthorizedContractFunction,
+    SorobanAuthorizedFunction, SorobanAuthorizedInvocation, SorobanCredentials, Uint256, VecM,
 };
 use soroban_native_sdk_macros::contracttype;
-use soroban_test_wasms::AUTH_TEST_CONTRACT;
+use soroban_test_wasms::{AUTH_TEST_CONTRACT, DELEGATED_ACCOUNT_TEST_CONTRACT};
 
 use crate::auth::RecordedAuthPayload;
 use crate::budget::AsBudget;
@@ -85,7 +85,7 @@ impl SignNode {
 
 // This test uses `AuthContract::tree_fn` to build various authorization trees.
 impl AuthTest {
-    fn setup(signer_cnt: usize, contract_cnt: usize) -> Self {
+    fn setup_with_contract(signer_cnt: usize, contract_cnt: usize, contract_wasm: &[u8]) -> Self {
         let host = Host::test_host_with_recording_footprint();
         // TODO: remove the `reset_unlimited` and instead reset inputs wherever appropriate
         // to respect the budget limit.
@@ -118,7 +118,7 @@ impl AuthTest {
         }
         let mut contracts = vec![];
         for _ in 0..contract_cnt {
-            let contract_id_obj = host.register_test_contract_wasm(AUTH_TEST_CONTRACT);
+            let contract_id_obj = host.register_test_contract_wasm(contract_wasm);
             contracts.push(contract_id_obj.try_into_val(&host).unwrap());
         }
         Self {
@@ -127,6 +127,10 @@ impl AuthTest {
             contracts,
             last_nonces: vec![],
         }
+    }
+
+    fn setup(signer_cnt: usize, contract_cnt: usize) -> Self {
+        Self::setup_with_contract(signer_cnt, contract_cnt, AUTH_TEST_CONTRACT)
     }
 
     // Runs the test for the given setup in enforcing mode. `sign_payloads`
@@ -1333,4 +1337,273 @@ fn test_invoker_subcontract_with_gaps() {
         vec![],
         false,
     )
+}
+
+#[test]
+fn test_require_auth_within_check_auth() {
+    let test = AuthTest::setup_with_contract(1, 2, DELEGATED_ACCOUNT_TEST_CONTRACT);
+    let auth_contract: Address = test
+        .host
+        .register_test_contract_wasm(AUTH_TEST_CONTRACT)
+        .try_into_val(&test.host)
+        .unwrap();
+
+    // Account 1 is used to authorize calls on behalf of account 0.
+    test.host
+        .call(
+            test.contracts[0].as_object(),
+            Symbol::try_from_small_str("init").unwrap(),
+            host_vec![&test.host, test.contracts[1]].as_object(),
+        )
+        .unwrap();
+    // Classic account is used to authorize calls on behalf of account 1.
+    test.host
+        .call(
+            test.contracts[1].as_object(),
+            Symbol::try_from_small_str("init").unwrap(),
+            host_vec![&test.host, test.key_to_address(&test.keys[0])].as_object(),
+        )
+        .unwrap();
+    let network_id: crate::xdr::Hash = test
+        .host
+        .with_ledger_info(|li: &LedgerInfo| Ok(li.network_id))
+        .unwrap()
+        .try_into()
+        .unwrap();
+
+    let mut auth_entries = vec![];
+    // Payload for account 0 is just the normal contract call payload.
+    let account_0_invocation = SorobanAuthorizedInvocation {
+        function: SorobanAuthorizedFunction::ContractFn(SorobanAuthorizedContractFunction {
+            contract_address: auth_contract.to_sc_address().unwrap(),
+            function_name: "do_auth".try_into().unwrap(),
+            args: ScVec(
+                vec![
+                    ScVal::Address(test.contracts[0].to_sc_address().unwrap()),
+                    ScVal::U32(123),
+                ]
+                .try_into()
+                .unwrap(),
+            ),
+        }),
+        sub_invocations: VecM::default(),
+    };
+    let payload_preimage_for_account_0 =
+        HashIdPreimage::SorobanAuthorization(HashIdPreimageSorobanAuthorization {
+            network_id: network_id.clone(),
+            invocation: account_0_invocation.clone(),
+            nonce: 1111,
+            signature_expiration_ledger: 1000,
+        });
+    auth_entries.push(SorobanAuthorizationEntry {
+        credentials: SorobanCredentials::Address(SorobanAddressCredentials {
+            address: test.contracts[0].to_sc_address().unwrap(),
+            nonce: 1111,
+            signature_args: ScVec(VecM::default()),
+            signature_expiration_ledger: 1000,
+        }),
+        root_invocation: account_0_invocation,
+    });
+    let account_0_payload_hash = test
+        .host
+        .metered_hash_xdr(&payload_preimage_for_account_0)
+        .unwrap();
+
+    // Account 1 needs to authorize `__check_auth` for account 0 with its
+    // payload hash.
+    let account_1_invocation = SorobanAuthorizedInvocation {
+        function: SorobanAuthorizedFunction::ContractFn(SorobanAuthorizedContractFunction {
+            contract_address: test.contracts[0].to_sc_address().unwrap(),
+            function_name: "__check_auth".try_into().unwrap(),
+            args: ScVec(
+                vec![ScVal::Bytes(ScBytes(
+                    account_0_payload_hash.try_into().unwrap(),
+                ))]
+                .try_into()
+                .unwrap(),
+            ),
+        }),
+        sub_invocations: VecM::default(),
+    };
+    let payload_preimage_for_account_1 =
+        HashIdPreimage::SorobanAuthorization(HashIdPreimageSorobanAuthorization {
+            network_id: network_id.clone(),
+            invocation: account_1_invocation.clone(),
+            nonce: 2222,
+            signature_expiration_ledger: 2000,
+        });
+
+    auth_entries.push(SorobanAuthorizationEntry {
+        credentials: SorobanCredentials::Address(SorobanAddressCredentials {
+            address: test.contracts[1].to_sc_address().unwrap(),
+            nonce: 2222,
+            signature_args: ScVec(VecM::default()),
+            signature_expiration_ledger: 2000,
+        }),
+        root_invocation: account_1_invocation,
+    });
+
+    let account_1_payload_hash = test
+        .host
+        .metered_hash_xdr(&payload_preimage_for_account_1)
+        .unwrap();
+    // Classic account needs to authorize `__check_auth` for account 1 with its
+    // payload hash.
+    let classic_account_invocation = SorobanAuthorizedInvocation {
+        function: SorobanAuthorizedFunction::ContractFn(SorobanAuthorizedContractFunction {
+            contract_address: test.contracts[1].to_sc_address().unwrap(),
+            function_name: "__check_auth".try_into().unwrap(),
+            args: ScVec(
+                vec![ScVal::Bytes(ScBytes(
+                    account_1_payload_hash.try_into().unwrap(),
+                ))]
+                .try_into()
+                .unwrap(),
+            ),
+        }),
+        sub_invocations: VecM::default(),
+    };
+    let payload_preimage_for_classic_account =
+        HashIdPreimage::SorobanAuthorization(HashIdPreimageSorobanAuthorization {
+            network_id: network_id.clone(),
+            invocation: classic_account_invocation.clone(),
+            nonce: 3333,
+            signature_expiration_ledger: 3000,
+        });
+
+    let classic_account_payload_hash = test
+        .host
+        .metered_hash_xdr(&payload_preimage_for_classic_account)
+        .unwrap();
+
+    // Only one actual signature is needed (for the classic account).
+    let signature_args = host_vec![
+        &test.host,
+        sign_payload_for_account(&test.host, &test.keys[0], &classic_account_payload_hash)
+    ];
+    // Push an auth entry with bad nonce to fail auth at the deepest level.
+    auth_entries.push(SorobanAuthorizationEntry {
+        credentials: SorobanCredentials::Address(SorobanAddressCredentials {
+            address: test.key_to_sc_address(&test.keys[0]),
+            nonce: 4444,
+            signature_args: test
+                .host
+                .call_args_to_scvec(signature_args.clone().into())
+                .unwrap(),
+            signature_expiration_ledger: 3000,
+        }),
+        root_invocation: classic_account_invocation.clone(),
+    });
+
+    test.host
+        .set_authorization_entries(auth_entries.clone())
+        .unwrap();
+    let err = test
+        .host
+        .call(
+            auth_contract.as_object(),
+            Symbol::try_from_small_str("do_auth").unwrap(),
+            host_vec![&test.host, test.contracts[0], 123_u32].as_object(),
+        )
+        .err()
+        .unwrap();
+    assert!(err.error.is_type(ScErrorType::Crypto));
+    assert!(err.error.is_code(ScErrorCode::InvalidInput));
+
+    // Add the correct entry - now the call should pass
+    auth_entries.pop();
+    auth_entries.push(SorobanAuthorizationEntry {
+        credentials: SorobanCredentials::Address(SorobanAddressCredentials {
+            address: test.key_to_sc_address(&test.keys[0]),
+            nonce: 3333,
+            signature_args: test.host.call_args_to_scvec(signature_args.into()).unwrap(),
+            signature_expiration_ledger: 3000,
+        }),
+        root_invocation: classic_account_invocation,
+    });
+
+    test.host.set_authorization_entries(auth_entries).unwrap();
+    test.host
+        .call(
+            auth_contract.as_object(),
+            Symbol::try_from_small_str("do_auth").unwrap(),
+            host_vec![&test.host, test.contracts[0], 123_u32].as_object(),
+        )
+        .unwrap();
+    assert_eq!(
+        test.read_nonce_expiration(&test.contracts[0], 1111),
+        Some(1000)
+    );
+    assert_eq!(
+        test.read_nonce_expiration(&test.contracts[1], 2222),
+        Some(2000)
+    );
+    assert_eq!(
+        test.read_nonce_expiration(
+            &test
+                .key_to_address(&test.keys[0])
+                .try_into_val(&test.host)
+                .unwrap(),
+            3333
+        ),
+        Some(3000)
+    );
+}
+
+#[test]
+fn test_require_auth_for_self_within_check_auth() {
+    let test = AuthTest::setup_with_contract(1, 1, DELEGATED_ACCOUNT_TEST_CONTRACT);
+    let auth_contract: Address = test
+        .host
+        .register_test_contract_wasm(AUTH_TEST_CONTRACT)
+        .try_into_val(&test.host)
+        .unwrap();
+
+    // Use account as its own owner.
+    test.host
+        .call(
+            test.contracts[0].as_object(),
+            Symbol::try_from_small_str("init").unwrap(),
+            host_vec![&test.host, test.contracts[0]].as_object(),
+        )
+        .unwrap();
+
+    let mut auth_entries = vec![];
+    // Add a single auth entry.
+    auth_entries.push(SorobanAuthorizationEntry {
+        credentials: SorobanCredentials::Address(SorobanAddressCredentials {
+            address: test.contracts[0].to_sc_address().unwrap(),
+            nonce: 1111,
+            signature_args: ScVec(VecM::default()),
+            signature_expiration_ledger: 1000,
+        }),
+        root_invocation: SorobanAuthorizedInvocation {
+            function: SorobanAuthorizedFunction::ContractFn(SorobanAuthorizedContractFunction {
+                contract_address: auth_contract.to_sc_address().unwrap(),
+                function_name: "do_auth".try_into().unwrap(),
+                args: ScVec(
+                    vec![
+                        ScVal::Address(test.contracts[0].to_sc_address().unwrap()),
+                        ScVal::U32(123),
+                    ]
+                    .try_into()
+                    .unwrap(),
+                ),
+            }),
+            sub_invocations: VecM::default(),
+        },
+    });
+    let err = test
+        .host
+        .call(
+            auth_contract.as_object(),
+            Symbol::try_from_small_str("do_auth").unwrap(),
+            host_vec![&test.host, test.contracts[0], 123_u32].as_object(),
+        )
+        .err()
+        .unwrap();
+    // Make sure we're just getting an auth error and not ending up in some
+    // context/recursion error states.
+    assert!(err.error.is_type(ScErrorType::Auth));
+    assert!(err.error.is_code(ScErrorCode::InvalidAction));
 }

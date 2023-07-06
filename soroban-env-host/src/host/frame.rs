@@ -47,11 +47,11 @@ const RESERVED_CONTRACT_FN_PREFIX: &str = "__";
 /// Saves host state (storage and objects) for rolling back a (sub-)transaction
 /// on error. A helper type used by [`FrameGuard`].
 // Notes on metering: `RollbackPoint` are metered under Frame operations
-#[derive(Clone)]
+// #[derive(Clone)]
 pub(super) struct RollbackPoint {
     storage: StorageMap,
     events: usize,
-    auth: Option<AuthorizationManagerSnapshot>,
+    auth: AuthorizationManagerSnapshot,
 }
 
 #[cfg(any(test, feature = "testutils"))]
@@ -117,15 +117,10 @@ impl Host {
     /// operation fails, it can be used to roll the [`Host`] back to the state
     /// it had before its associated [`Frame`] was pushed.
     pub(super) fn push_frame(&self, frame: Frame) -> Result<RollbackPoint, HostError> {
-        // This is a bit hacky, as it relies on re-borrow to occur only during
-        // the account contract invocations. Instead we should probably call it
-        // in more explicitly different fashion and check if we're calling it
-        // instead of a borrow check.
-        let mut auth_snapshot = None;
-        if let Ok(mut auth_manager) = self.0.authorization_manager.try_borrow_mut() {
-            auth_manager.push_frame(self, &frame)?;
-            auth_snapshot = Some(auth_manager.snapshot());
-        }
+        let auth_manager = self.try_borrow_authorization_manager()?;
+        let auth_snapshot = auth_manager.snapshot(self)?;
+        auth_manager.push_frame(self, &frame)?;
+
         let ctx = Context {
             frame,
             prng: None,
@@ -144,7 +139,7 @@ impl Host {
     /// and storage map to the state in the provided [`RollbackPoint`].
     pub(super) fn pop_frame(&self, orp: Option<RollbackPoint>) -> Result<(), HostError> {
         // Instance storage is tied to the frame and only exists in-memory. So
-        // instead of snapshotting it and rolling it back, we jsut flush the
+        // instead of snapshotting it and rolling it back, we just flush the
         // changes only when rollback is not needed.
         if orp.is_none() {
             self.flush_instance_storage()?;
@@ -152,39 +147,31 @@ impl Host {
         self.try_borrow_context_mut()?
             .pop()
             .expect("unmatched host frame push/pop");
-        // This is a bit hacky, as it relies on re-borrow to occur only doing
-        // the account contract invocations. Instead we should probably call it
-        // in more explicitly different fashion and check if we're calling it
-        // instead of a borrow check.
-        if let Ok(mut auth_manager) = self.0.authorization_manager.try_borrow_mut() {
-            auth_manager.pop_frame();
-        }
+        self.try_borrow_authorization_manager()?.pop_frame(self)?;
 
         if self.try_borrow_context()?.is_empty() {
             // When there are no frames left, emulate authentication for the
             // recording auth mode. This is a no-op for the enforcing mode.
-            self.try_borrow_authorization_manager_mut()?
+            self.try_borrow_authorization_manager()?
                 .maybe_emulate_authentication(self)?;
-            // Empty call stack in tests means that some contract function call
-            // has been finished and hence the authorization manager can be reset.
-            // In non-test scenarios, there should be no need to ever reset
-            // the authorization manager as the host instance shouldn't be
-            // shared between the contract invocations.
-            #[cfg(any(test, feature = "testutils"))]
-            {
-                *self.try_borrow_previous_authorization_manager_mut()? =
-                    Some(self.try_borrow_authorization_manager()?.clone());
-                self.try_borrow_authorization_manager_mut()?.reset();
-            }
         }
 
         if let Some(rp) = orp {
             self.try_borrow_storage_mut()?.map = rp.storage;
             self.try_borrow_events_mut()?.rollback(rp.events)?;
-            if let Some(auth_rp) = rp.auth {
-                self.try_borrow_authorization_manager_mut()?
-                    .rollback(auth_rp);
-            }
+            self.try_borrow_authorization_manager()?
+                .rollback(self, rp.auth)?;
+        }
+        // Empty call stack in tests means that some contract function call
+        // has been finished and hence the authorization manager can be reset.
+        // In non-test scenarios, there should be no need to ever reset
+        // the authorization manager as the host instance shouldn't be
+        // shared between the contract invocations.
+        #[cfg(any(test, feature = "testutils"))]
+        if self.try_borrow_context()?.is_empty() {
+            *self.try_borrow_previous_authorization_manager_mut()? =
+                Some(self.try_borrow_authorization_manager()?.clone());
+            self.try_borrow_authorization_manager_mut()?.reset();
         }
         Ok(())
     }
