@@ -2,6 +2,7 @@ pub(crate) mod base_types;
 pub(crate) mod common_types;
 pub(crate) mod contract_error;
 pub(crate) mod invoker_contract_auth;
+pub(crate) mod storage_utils;
 pub(crate) mod token;
 
 use crate::host::{Host, HostError};

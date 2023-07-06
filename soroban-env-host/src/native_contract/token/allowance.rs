@@ -1,6 +1,7 @@
 use crate::host::Host;
 use crate::native_contract::base_types::Address;
 use crate::native_contract::contract_error::ContractError;
+use crate::native_contract::storage_utils::StorageUtils;
 use crate::native_contract::token::storage_types::{AllowanceDataKey, DataKey};
 use crate::{err, HostError};
 use soroban_env_common::{Env, StorageType, TryIntoVal};
@@ -10,15 +11,17 @@ use super::storage_types::AllowanceValue;
 // Metering: covered by components
 pub fn read_allowance(e: &Host, from: Address, spender: Address) -> Result<i128, HostError> {
     let key = DataKey::Allowance(AllowanceDataKey { from, spender });
-    if let Ok(allowance) = e.get_contract_data(key.try_into_val(e)?, StorageType::Temporary) {
-        let val: AllowanceValue = allowance.try_into_val(e)?;
-        if val.expiration_ledger < e.get_ledger_sequence()?.into() {
-            Ok(0)
-        } else {
-            Ok(val.amount)
+    let res = StorageUtils::try_get(e, key.try_into_val(e)?, StorageType::Temporary)?;
+    match res {
+        Some(allowance) => {
+            let val: AllowanceValue = allowance.try_into_val(e)?;
+            if val.expiration_ledger < e.get_ledger_sequence()?.into() {
+                Ok(0)
+            } else {
+                Ok(val.amount)
+            }
         }
-    } else {
-        Ok(0)
+        None => Ok(0),
     }
 }
 
@@ -63,23 +66,28 @@ pub fn write_allowance(
     // Returns the allowance to write and the previous expiration of the existing allowance.
     // If an allowance didn't exist, then the previous expiration will be None.
     let allowance_with_old_expiration_option: Option<(AllowanceValue, Option<u32>)> =
-        if let Ok(allowance) = e.get_contract_data(key.try_into_val(e)?, StorageType::Temporary) {
-            let mut updated_allowance: AllowanceValue = allowance.try_into_val(e)?;
-            updated_allowance.amount = amount;
+        match StorageUtils::try_get(e, key.try_into_val(e)?, StorageType::Temporary)? {
+            Some(allowance) => {
+                let mut updated_allowance: AllowanceValue = allowance.try_into_val(e)?;
+                updated_allowance.amount = amount;
 
-            let old_expiration = updated_allowance.expiration_ledger;
-            updated_allowance.expiration_ledger = expiration;
-            Some((updated_allowance, Some(old_expiration)))
-        } else if amount > 0 {
-            Some((
-                AllowanceValue {
-                    amount,
-                    expiration_ledger: expiration,
-                },
-                None,
-            ))
-        } else {
-            None
+                let old_expiration = updated_allowance.expiration_ledger;
+                updated_allowance.expiration_ledger = expiration;
+                Some((updated_allowance, Some(old_expiration)))
+            }
+            None => {
+                if amount > 0 {
+                    Some((
+                        AllowanceValue {
+                            amount,
+                            expiration_ledger: expiration,
+                        },
+                        None,
+                    ))
+                } else {
+                    None
+                }
+            }
         };
 
     match allowance_with_old_expiration_option {

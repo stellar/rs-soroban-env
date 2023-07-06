@@ -2,6 +2,7 @@ use crate::budget::AsBudget;
 use crate::host::Host;
 use crate::native_contract::base_types::{Address, BytesN};
 use crate::native_contract::contract_error::ContractError;
+use crate::native_contract::storage_utils::StorageUtils;
 use crate::native_contract::token::asset_info::read_asset_info;
 use crate::native_contract::token::public_types::AssetInfo;
 use crate::native_contract::token::storage_types::DataKey;
@@ -30,13 +31,13 @@ pub fn read_balance(e: &Host, addr: Address) -> Result<i128, HostError> {
         ScAddress::Account(acc_id) => Ok(get_classic_balance(e, acc_id)?.0.into()),
         ScAddress::Contract(_) => {
             let key = DataKey::Balance(addr);
-            if let Ok(raw_balance) =
-                e.get_contract_data(key.try_into_val(e)?, StorageType::Persistent)
-            {
-                let balance: BalanceValue = raw_balance.try_into_val(e)?;
-                Ok(balance.amount)
-            } else {
-                Ok(0)
+            let res = StorageUtils::try_get(e, key.try_into_val(e)?, StorageType::Persistent)?;
+            match res {
+                Some(raw_balance) => {
+                    let balance: BalanceValue = raw_balance.try_into_val(e)?;
+                    Ok(balance.amount)
+                }
+                None => Ok(0),
             }
         }
     }
@@ -84,16 +85,16 @@ pub fn receive_balance(e: &Host, addr: Address, amount: i128) -> Result<(), Host
         }
         ScAddress::Contract(_) => {
             let key = DataKey::Balance(addr.clone());
-            let mut balance = if let Ok(raw_balance) =
-                e.get_contract_data(key.try_into_val(e)?, StorageType::Persistent)
-            {
-                raw_balance.try_into_val(e)?
-            } else {
-                // balance passed the authorization check at the top of this function, so write true.
-                BalanceValue {
-                    amount: 0,
-                    authorized: true,
-                    clawback: is_asset_clawback_enabled(e)?,
+            let res = StorageUtils::try_get(e, key.try_into_val(e)?, StorageType::Persistent)?;
+            let mut balance = match res {
+                Some(raw_balance) => raw_balance.try_into_val(e)?,
+                None => {
+                    // balance passed the authorization check at the top of this function, so write true.
+                    BalanceValue {
+                        amount: 0,
+                        authorized: true,
+                        clawback: is_asset_clawback_enabled(e)?,
+                    }
                 }
             };
 
@@ -132,37 +133,41 @@ pub fn spend_balance_no_authorization_check(
             // If a balance exists, calculate new amount and write the existing authorized state as is because
             // this can be used to clawback when deauthorized.
             let key = DataKey::Balance(addr.clone());
-            if let Ok(raw_balance) =
-                e.get_contract_data(key.try_into_val(e)?, StorageType::Persistent)
-            {
-                let mut balance: BalanceValue = raw_balance.try_into_val(e)?;
-                if balance.amount < amount {
-                    return Err(err!(
-                        e,
-                        ContractError::BalanceError,
-                        "balance is not sufficient to spend",
-                        balance,
-                        amount
-                    ));
-                } else {
-                    let new_balance = balance.amount.checked_sub(amount).ok_or_else(|| {
-                        e.error(
-                            ContractError::OverflowError.into(),
-                            "balance overflow in spend_balance_no_authorization_check",
-                            &[],
-                        )
-                    })?;
-                    balance.amount = new_balance;
+            let res = StorageUtils::try_get(e, key.try_into_val(e)?, StorageType::Persistent)?;
+            match res {
+                Some(raw_balance) => {
+                    let mut balance: BalanceValue = raw_balance.try_into_val(e)?;
+                    if balance.amount < amount {
+                        return Err(err!(
+                            e,
+                            ContractError::BalanceError,
+                            "balance is not sufficient to spend",
+                            balance,
+                            amount
+                        ));
+                    } else {
+                        let new_balance = balance.amount.checked_sub(amount).ok_or_else(|| {
+                            e.error(
+                                ContractError::OverflowError.into(),
+                                "balance overflow in spend_balance_no_authorization_check",
+                                &[],
+                            )
+                        })?;
+                        balance.amount = new_balance;
 
-                    write_balance(e, addr, balance)?
+                        write_balance(e, addr, balance)?
+                    }
                 }
-            } else if amount > 0 {
-                return Err(err!(
-                    e,
-                    ContractError::BalanceError,
-                    "zero balance is not sufficient to spend",
-                    amount
-                ));
+                None => {
+                    if amount > 0 {
+                        return Err(err!(
+                            e,
+                            ContractError::BalanceError,
+                            "zero balance is not sufficient to spend",
+                            amount
+                        ));
+                    }
+                }
             }
             Ok(())
         }
@@ -188,13 +193,13 @@ pub fn is_authorized(e: &Host, addr: Address) -> Result<bool, HostError> {
         ScAddress::Account(acc_id) => is_account_authorized(e, acc_id),
         ScAddress::Contract(_) => {
             let key = DataKey::Balance(addr);
-            if let Ok(raw_balance) =
-                e.get_contract_data(key.try_into_val(e)?, StorageType::Persistent)
-            {
-                let balance: BalanceValue = raw_balance.try_into_val(e)?;
-                Ok(balance.authorized)
-            } else {
-                Ok(!is_asset_auth_required(e)?)
+            let res = StorageUtils::try_get(e, key.try_into_val(e)?, StorageType::Persistent)?;
+            match res {
+                Some(raw_balance) => {
+                    let balance: BalanceValue = raw_balance.try_into_val(e)?;
+                    Ok(balance.authorized)
+                }
+                None => Ok(!is_asset_auth_required(e)?),
             }
         }
     }
@@ -214,21 +219,24 @@ pub fn write_authorization(e: &Host, addr: Address, authorize: bool) -> Result<(
         ScAddress::Account(acc_id) => set_authorization(e, acc_id, authorize),
         ScAddress::Contract(_) => {
             let key = DataKey::Balance(addr.clone());
-            if let Ok(raw_balance) =
-                e.get_contract_data(key.try_into_val(e)?, StorageType::Persistent)
-            {
-                let mut balance: BalanceValue = raw_balance.try_into_val(e)?;
-                balance.authorized = authorize;
-                write_balance(e, addr, balance)
-            } else {
-                // Balance does not exist, so write a 0 amount along with the authorization flag.
-                // No need to check auth_required because this function can only be called by the admin.
-                let balance = BalanceValue {
-                    amount: 0,
-                    authorized: authorize,
-                    clawback: is_asset_clawback_enabled(e)?,
-                };
-                write_balance(e, addr, balance)
+
+            let res = StorageUtils::try_get(e, key.try_into_val(e)?, StorageType::Persistent)?;
+            match res {
+                Some(raw_balance) => {
+                    let mut balance: BalanceValue = raw_balance.try_into_val(e)?;
+                    balance.authorized = authorize;
+                    write_balance(e, addr, balance)
+                }
+                None => {
+                    // Balance does not exist, so write a 0 amount along with the authorization flag.
+                    // No need to check auth_required because this function can only be called by the admin.
+                    let balance = BalanceValue {
+                        amount: 0,
+                        authorized: authorize,
+                        clawback: is_asset_clawback_enabled(e)?,
+                    };
+                    write_balance(e, addr, balance)
+                }
             }
         }
     }
@@ -282,28 +290,30 @@ pub fn check_clawbackable(e: &Host, addr: Address) -> Result<(), HostError> {
         },
         ScAddress::Contract(_) => {
             let key = DataKey::Balance(addr);
-            if let Ok(raw_balance) =
-                e.get_contract_data(key.try_into_val(e)?, StorageType::Persistent)
-            {
-                let balance: BalanceValue = raw_balance.try_into_val(e)?;
-                if !balance.clawback {
+
+            let res = StorageUtils::try_get(e, key.try_into_val(e)?, StorageType::Persistent)?;
+            match res {
+                Some(raw_balance) => {
+                    let balance: BalanceValue = raw_balance.try_into_val(e)?;
+                    if !balance.clawback {
+                        return Err(e.error(
+                            ContractError::BalanceError.into(),
+                            "balance isn't clawbackable",
+                            &[],
+                        ));
+                    }
+                }
+                None => {
+                    // We fail even if the clawback amount is 0. This is a better alternative than
+                    // checking the issuer to make sure clawback is enabled and then succeeding
+                    // in the 0 clawback case.
                     return Err(e.error(
                         ContractError::BalanceError.into(),
-                        "balance isn't clawbackable",
+                        "no balance to clawback",
                         &[],
                     ));
                 }
-            } else {
-                // We fail even if the clawback amount is 0. This is a better alternative than
-                // checking the issuer to make sure clawback is enabled and then succeeding
-                // in the 0 clawback case.
-                return Err(e.error(
-                    ContractError::BalanceError.into(),
-                    "no balance to clawback",
-                    &[],
-                ));
             }
-
             Ok(())
         }
     }
