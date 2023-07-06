@@ -595,7 +595,7 @@ impl AuthorizationManager {
             ScErrorType::Auth,
             ScErrorCode::InvalidAction,
             "Unauthorized function call for address",
-            &[],
+            &[address.to_val()],
         ))
     }
 
