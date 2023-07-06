@@ -591,10 +591,12 @@ impl AuthorizationManager {
         }
         // No matching tracker found, hence the invocation isn't
         // authorized.
-        Err(HostError::from((
+        Err(host.err(
             ScErrorType::Auth,
             ScErrorCode::InvalidAction,
-        )))
+            "Unauthorized function call for address",
+            &[address.to_val()],
+        ))
     }
 
     fn require_auth_internal(
