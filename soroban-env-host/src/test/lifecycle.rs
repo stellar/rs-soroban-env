@@ -1,3 +1,4 @@
+use crate::auth::RecordedAuthPayload;
 use crate::native_contract::testutils::HostVec;
 use crate::{
     budget::{AsBudget, Budget},
@@ -14,7 +15,7 @@ use sha2::{Digest, Sha256};
 use soroban_env_common::xdr::{
     ContractCodeEntryBody, ContractDataEntry, ContractDataEntryBody, ContractIdPreimage,
     ContractIdPreimageFromAddress, HostFunction, ScAddress, SorobanAuthorizationEntry,
-    SorobanAuthorizedFunction, SorobanAuthorizedInvocation, SorobanCredentials,
+    SorobanAuthorizedFunction, SorobanAuthorizedInvocation, SorobanCredentials, VecM,
 };
 use soroban_env_common::VecObject;
 use soroban_env_common::{xdr::ScBytes, TryIntoVal, Val};
@@ -361,4 +362,48 @@ fn test_contract_wasm_update() {
         .try_into_val(&host)
         .unwrap();
     assert_eq!(updated_res, 30);
+}
+
+#[test]
+
+fn test_create_contract_from_source_account_recording_auth() {
+    let host = Host::test_host_with_recording_footprint();
+    let source_account = generate_account_id();
+    let salt = generate_bytes_array();
+    host.set_source_account(source_account.clone()).unwrap();
+    host.switch_to_recording_auth().unwrap();
+    let contract_id_preimage = ContractIdPreimage::Address(ContractIdPreimageFromAddress {
+        address: ScAddress::Account(source_account.clone()),
+        salt: Uint256(salt.to_vec().try_into().unwrap()),
+    });
+
+    let created_wasm_hash: Val = host
+        .invoke_function(HostFunction::UploadContractWasm(
+            CREATE_CONTRACT.try_into().unwrap(),
+        ))
+        .unwrap()
+        .try_into_val(&host)
+        .unwrap();
+    let created_wasm_hash = host
+        .hash_from_bytesobj_input("wasm_hash", created_wasm_hash.try_into().unwrap())
+        .unwrap();
+    let create_contract_args = CreateContractArgs {
+        contract_id_preimage,
+        executable: ContractExecutable::Wasm(created_wasm_hash.clone()),
+    };
+    let _ = host
+        .invoke_function(HostFunction::CreateContract(create_contract_args.clone()))
+        .unwrap();
+
+    assert_eq!(
+        host.get_recorded_auth_payloads().unwrap(),
+        vec![RecordedAuthPayload {
+            address: None,
+            nonce: None,
+            invocation: SorobanAuthorizedInvocation {
+                function: SorobanAuthorizedFunction::CreateContractHostFn(create_contract_args),
+                sub_invocations: VecM::default()
+            }
+        }]
+    );
 }
