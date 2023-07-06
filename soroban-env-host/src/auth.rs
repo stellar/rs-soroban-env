@@ -594,7 +594,7 @@ impl AuthorizationManager {
         Err(host.err(
             ScErrorType::Auth,
             ScErrorCode::InvalidAction,
-            "Not authorized",
+            "Unauthorized function call for address",
             &[],
         ))
     }
