@@ -2,6 +2,7 @@ use crate::budget::AsBudget;
 use crate::host::Host;
 use crate::native_contract::base_types::{Address, BytesN};
 use crate::native_contract::contract_error::ContractError;
+use crate::native_contract::storage_utils::StorageUtils;
 use crate::native_contract::token::asset_info::read_asset_info;
 use crate::native_contract::token::public_types::AssetInfo;
 use crate::native_contract::token::storage_types::DataKey;
@@ -30,8 +31,8 @@ pub fn read_balance(e: &Host, addr: Address) -> Result<i128, HostError> {
         ScAddress::Account(acc_id) => Ok(get_classic_balance(e, acc_id)?.0.into()),
         ScAddress::Contract(_) => {
             let key = DataKey::Balance(addr);
-            if let Ok(raw_balance) =
-                e.get_contract_data(key.try_into_val(e)?, StorageType::Persistent)
+            if let Some(raw_balance) =
+                StorageUtils::try_get(e, key.try_into_val(e)?, StorageType::Persistent)?
             {
                 let balance: BalanceValue = raw_balance.try_into_val(e)?;
                 Ok(balance.amount)
@@ -84,8 +85,8 @@ pub fn receive_balance(e: &Host, addr: Address, amount: i128) -> Result<(), Host
         }
         ScAddress::Contract(_) => {
             let key = DataKey::Balance(addr.clone());
-            let mut balance = if let Ok(raw_balance) =
-                e.get_contract_data(key.try_into_val(e)?, StorageType::Persistent)
+            let mut balance = if let Some(raw_balance) =
+                StorageUtils::try_get(e, key.try_into_val(e)?, StorageType::Persistent)?
             {
                 raw_balance.try_into_val(e)?
             } else {
@@ -132,8 +133,8 @@ pub fn spend_balance_no_authorization_check(
             // If a balance exists, calculate new amount and write the existing authorized state as is because
             // this can be used to clawback when deauthorized.
             let key = DataKey::Balance(addr.clone());
-            if let Ok(raw_balance) =
-                e.get_contract_data(key.try_into_val(e)?, StorageType::Persistent)
+            if let Some(raw_balance) =
+                StorageUtils::try_get(e, key.try_into_val(e)?, StorageType::Persistent)?
             {
                 let mut balance: BalanceValue = raw_balance.try_into_val(e)?;
                 if balance.amount < amount {
@@ -188,8 +189,8 @@ pub fn is_authorized(e: &Host, addr: Address) -> Result<bool, HostError> {
         ScAddress::Account(acc_id) => is_account_authorized(e, acc_id),
         ScAddress::Contract(_) => {
             let key = DataKey::Balance(addr);
-            if let Ok(raw_balance) =
-                e.get_contract_data(key.try_into_val(e)?, StorageType::Persistent)
+            if let Some(raw_balance) =
+                StorageUtils::try_get(e, key.try_into_val(e)?, StorageType::Persistent)?
             {
                 let balance: BalanceValue = raw_balance.try_into_val(e)?;
                 Ok(balance.authorized)
@@ -214,8 +215,8 @@ pub fn write_authorization(e: &Host, addr: Address, authorize: bool) -> Result<(
         ScAddress::Account(acc_id) => set_authorization(e, acc_id, authorize),
         ScAddress::Contract(_) => {
             let key = DataKey::Balance(addr.clone());
-            if let Ok(raw_balance) =
-                e.get_contract_data(key.try_into_val(e)?, StorageType::Persistent)
+            if let Some(raw_balance) =
+                StorageUtils::try_get(e, key.try_into_val(e)?, StorageType::Persistent)?
             {
                 let mut balance: BalanceValue = raw_balance.try_into_val(e)?;
                 balance.authorized = authorize;
@@ -282,8 +283,8 @@ pub fn check_clawbackable(e: &Host, addr: Address) -> Result<(), HostError> {
         },
         ScAddress::Contract(_) => {
             let key = DataKey::Balance(addr);
-            if let Ok(raw_balance) =
-                e.get_contract_data(key.try_into_val(e)?, StorageType::Persistent)
+            if let Some(raw_balance) =
+                StorageUtils::try_get(e, key.try_into_val(e)?, StorageType::Persistent)?
             {
                 let balance: BalanceValue = raw_balance.try_into_val(e)?;
                 if !balance.clawback {
