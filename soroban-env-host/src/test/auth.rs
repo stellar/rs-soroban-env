@@ -1336,7 +1336,52 @@ fn test_invoker_subcontract_with_gaps() {
         host_vec![&test.host, test.convert_setup_tree(&mid_gap_setup)],
         vec![],
         false,
-    )
+    );
+}
+
+#[test]
+fn test_nvoker_subcontract_auth_without_subcontract_calls() {
+    let mut test = AuthTest::setup(0, 6);
+
+    let setup = SetupNode::new(
+        &test.contracts[0],
+        vec![true],
+        vec![
+            SetupNode::new(
+                &test.contracts[1],
+                vec![true],
+                vec![
+                    SetupNode::new(&test.contracts[3], vec![true], vec![]),
+                    SetupNode::new(&test.contracts[2], vec![true], vec![]),
+                ],
+            ),
+            SetupNode::new(
+                &test.contracts[2],
+                vec![true],
+                vec![SetupNode::new(
+                    &test.contracts[4],
+                    vec![true],
+                    vec![SetupNode::new(&test.contracts[3], vec![true], vec![])],
+                )],
+            ),
+        ],
+    );
+
+    let tree = test.convert_setup_tree(&setup);
+    let args = host_vec![&test.host, tree];
+    let fn_name = Symbol::try_from_val(&test.host, &"invoker_auth_fn_no_call").unwrap();
+    assert_eq!(
+        test.run_recording(&test.contracts[5], fn_name.clone(), args.clone(),),
+        vec![]
+    );
+
+    test.test_enforcing(
+        test.contracts[5].clone(),
+        fn_name.clone(),
+        args.clone(),
+        vec![],
+        true,
+    );
 }
 
 #[test]
