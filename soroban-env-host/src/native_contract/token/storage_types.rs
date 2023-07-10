@@ -2,6 +2,8 @@ use crate::native_contract::base_types::Address;
 use soroban_env_common::TryIntoVal;
 use soroban_native_sdk_macros::contracttype;
 
+pub(crate) const BUMP_AMOUNT: u32 = 1000;
+
 #[contracttype]
 pub struct AllowanceDataKey {
     pub from: Address,
