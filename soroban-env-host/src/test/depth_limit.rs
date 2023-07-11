@@ -10,7 +10,7 @@ use crate::{
 #[test]
 fn deep_scval_to_host_val() -> Result<(), HostError> {
     let host = Host::default();
-    host.as_budget().reset_unlimited();
+    host.as_budget().reset_unlimited()?;
 
     let mut v = ScVec::default();
     // Having a large value here, e.g. 1000, will still cause a stack overflow,
@@ -31,7 +31,7 @@ fn deep_scval_to_host_val() -> Result<(), HostError> {
 #[test]
 fn deep_host_val_to_scval() -> Result<(), HostError> {
     let host = Host::default();
-    host.as_budget().reset_unlimited();
+    host.as_budget().reset_unlimited()?;
 
     let mut hv = host.test_vec_obj::<u32>(&[])?;
     for _ in 0..1000 {
@@ -47,7 +47,7 @@ fn deep_host_val_to_scval() -> Result<(), HostError> {
 #[test]
 fn deep_host_obj_clone() -> Result<(), HostError> {
     let host = Host::default();
-    host.as_budget().reset_unlimited();
+    host.as_budget().reset_unlimited()?;
 
     let mut v = ScVec::default();
     for _ in 0..1000 {
@@ -64,7 +64,7 @@ fn deep_host_obj_clone() -> Result<(), HostError> {
 #[test]
 fn deep_host_obj_cmp() -> Result<(), HostError> {
     let host = Host::default();
-    host.as_budget().reset_unlimited();
+    host.as_budget().reset_unlimited()?;
 
     let mut hv = host.test_vec_obj::<u32>(&[])?;
     for _ in 0..1000 {

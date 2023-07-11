@@ -14,9 +14,9 @@ use crate::{
 use sha2::{Digest, Sha256};
 use soroban_env_common::xdr::{
     ContractCodeEntryBody, ContractDataEntry, ContractDataEntryBody, ContractIdPreimage,
-    ContractIdPreimageFromAddress, HostFunction, ScAddress, SorobanAuthorizationEntry,
-    SorobanAuthorizedFunction, SorobanAuthorizedInvocation, SorobanCredentials, VecM,
-    DEFAULT_XDR_RW_DEPTH_LIMIT,
+    ContractIdPreimageFromAddress, DepthLimitedWrite, HostFunction, ScAddress,
+    SorobanAuthorizationEntry, SorobanAuthorizedFunction, SorobanAuthorizedInvocation,
+    SorobanCredentials, VecM, DEFAULT_XDR_RW_DEPTH_LIMIT,
 };
 use soroban_env_common::VecObject;
 use soroban_env_common::{xdr::ScBytes, TryIntoVal, Val};
