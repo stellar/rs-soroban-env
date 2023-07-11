@@ -31,7 +31,9 @@ pub struct TransactionResources {
 
 /// Fee-related network configuration.
 ///
-/// This should be normally loaded from the ledger.
+/// This should be normally loaded from the ledger, with exception of the
+/// `fee_per_write_1kb`, that has to be computed via `compute_write_fee_per_1kb`
+/// function.
 pub struct FeeConfiguration {
     /// Fee per `INSTRUCTIONS_INCREMENT=10000` instructions.
     pub fee_per_instruction_increment: i64,
@@ -41,7 +43,8 @@ pub struct FeeConfiguration {
     pub fee_per_write_entry: i64,
     /// Fee per 1KB read from ledger.
     pub fee_per_read_1kb: i64,
-    /// Fee per 1KB written to ledger.
+    /// Fee per 1KB written to ledger. This has to be computed via
+    /// `compute_write_fee_per_1kb`.
     pub fee_per_write_1kb: i64,
     /// Fee per 1KB written to history (the history write size is based on
     /// transaction size and `TX_BASE_RESULT_SIZE`).
@@ -51,6 +54,22 @@ pub struct FeeConfiguration {
     /// Fee per 1KB propagate to the network (the propagated size is equal to
     /// the transaction size).
     pub fee_per_propagate_1kb: i64,
+}
+
+/// Network configuration used to determine the ledger write fee.
+///
+/// This should be normally loaded from the ledger.
+pub struct WriteFeeConfiguration {
+    // Write fee grows linearly until bucket list reaches this size.
+    pub bucket_list_target_size_bytes: i64,
+    // Fee per 1KB write when the bucket list is empty.
+    pub write_fee_1kb_bucket_list_low: i64,
+    // Fee per 1KB write when the bucket list has reached
+    // `bucket_list_target_size_bytes`.
+    pub write_fee_1kb_bucket_list_high: i64,
+    // Write fee multiplier for any additional data past the first
+    // `bucket_list_target_size_bytes`.
+    pub bucket_list_write_fee_growth_factor: u32,
 }
 
 /// Change in a single ledger entry with parameters relevant for rent fee
@@ -75,10 +94,13 @@ pub struct LedgerEntryRentChange {
 
 /// Rent fee-related network configuration.
 ///
-/// This should be normally loaded from the ledger.
+/// This should be normally loaded from the ledger, with exception of the
+/// `fee_per_write_1kb`, that has to be computed via `compute_write_fee_per_1kb`
+/// function.
 pub struct RentFeeConfiguration {
     /// Fee per 1KB written to ledger.
-    /// This is the same field as in `FeeConfiguration`.
+    /// This is the same field as in `FeeConfiguration` and it has to be
+    /// computed via `compute_write_fee_per_1kb`.
     pub fee_per_write_1kb: i64,
     /// Denominator for the total rent fee for persistent storage.
     ///
@@ -96,7 +118,8 @@ pub struct RentFeeConfiguration {
 /// Computes the resource fee for a transaction based on the resource
 /// consumption and the fee-related network configuration.
 ///
-/// This can handle unsantized user inputs.
+/// This can handle unsantized user inputs for `tx_resources`, but expects
+/// sane configuration.
 ///
 /// Returns a pair of `(non_refundable_fee, refundable_fee)` that represent
 /// non-refundable and refundable resource fee components respectively.
@@ -159,6 +182,46 @@ pub fn compute_transaction_resource_fee(
         .saturating_add(bandwidth_fee);
 
     (non_refundable_fee, refundable_fee)
+}
+
+/// Computes the effective write fee per 1 KB of data written to ledger.
+///
+/// The computed fee should be used in fee configuration for
+/// `compute_transaction_resource_fee` function.
+///
+/// This depends only on the current ledger (more specifically, bucket list)
+/// size.
+pub fn compute_write_fee_per_1kb(
+    bucket_list_size_bytes: i64,
+    fee_config: &WriteFeeConfiguration,
+) -> i64 {
+    let fee_rate_multiplier =
+        fee_config.write_fee_1kb_bucket_list_high - fee_config.write_fee_1kb_bucket_list_low;
+    let bucket_list_size_before_reaching_target =
+        bucket_list_size_bytes.min(fee_config.bucket_list_target_size_bytes);
+    // Convert multipliers to i128 to make sure we can handle large bucket list
+    // sizes.
+    let mut write_fee_per_1kb = num_integer::div_ceil(
+        (fee_rate_multiplier as i128) * (bucket_list_size_before_reaching_target as i128),
+        fee_config.bucket_list_target_size_bytes as i128,
+    )
+    // The fee should be way less than i64::MAX, we do the truncation just in
+    // case.
+    .min(i64::MAX as i128) as i64;
+    write_fee_per_1kb = write_fee_per_1kb.saturating_add(fee_config.write_fee_1kb_bucket_list_low);
+    if bucket_list_size_bytes > fee_config.bucket_list_target_size_bytes {
+        let bucket_list_size_after_reaching_target =
+            bucket_list_size_bytes - fee_config.bucket_list_target_size_bytes;
+        let post_target_fee = num_integer::div_ceil(
+            (fee_rate_multiplier as i128)
+                * (bucket_list_size_after_reaching_target as i128)
+                * (fee_config.bucket_list_write_fee_growth_factor as i128),
+            fee_config.bucket_list_target_size_bytes as i128,
+        )
+        .min(i64::MAX as i128) as i64;
+        write_fee_per_1kb = write_fee_per_1kb.saturating_add(post_target_fee);
+    }
+    write_fee_per_1kb
 }
 
 /// Computes the total rent-related fee for the provided ledger entry changes.
