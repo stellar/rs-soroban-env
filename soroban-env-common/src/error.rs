@@ -136,8 +136,13 @@ impl From<ConversionError> for Error {
 }
 
 impl From<stellar_xdr::Error> for Error {
-    fn from(_: stellar_xdr::Error) -> Self {
-        Error::from_type_and_code(ScErrorType::Value, ScErrorCode::InvalidInput)
+    fn from(e: stellar_xdr::Error) -> Self {
+        match e {
+            stellar_xdr::Error::DepthLimitExceeded => {
+                Error::from_type_and_code(ScErrorType::Context, ScErrorCode::ExceededLimit)
+            }
+            _ => Error::from_type_and_code(ScErrorType::Value, ScErrorCode::InvalidInput),
+        }
     }
 }
 

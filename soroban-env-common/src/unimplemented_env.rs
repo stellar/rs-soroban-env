@@ -1,3 +1,5 @@
+use stellar_xdr::DepthLimiter;
+
 use super::{call_macro_with_all_host_functions, Env, EnvBase, Symbol};
 use super::{
     AddressObject, Bool, BytesObject, DurationObject, Error, I128Object, I256Object, I256Val,
@@ -10,6 +12,16 @@ use core::{any, convert::Infallible};
 /// all functions. Useful for certain testing scenarios.
 #[derive(Clone, Default)]
 pub struct UnimplementedEnv;
+
+impl DepthLimiter for UnimplementedEnv {
+    type DepthError = <Self as EnvBase>::Error;
+
+    fn enter(&self) -> Result<(), Self::DepthError> {
+        Ok(())
+    }
+
+    fn leave(&self) {}
+}
 
 impl EnvBase for UnimplementedEnv {
     type Error = Infallible;

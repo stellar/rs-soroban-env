@@ -16,6 +16,7 @@ use soroban_env_common::xdr::{
     ContractCodeEntryBody, ContractDataEntry, ContractDataEntryBody, ContractIdPreimage,
     ContractIdPreimageFromAddress, HostFunction, ScAddress, SorobanAuthorizationEntry,
     SorobanAuthorizedFunction, SorobanAuthorizedInvocation, SorobanCredentials, VecM,
+    DEFAULT_XDR_RW_DEPTH_LIMIT,
 };
 use soroban_env_common::VecObject;
 use soroban_env_common::{xdr::ScBytes, TryIntoVal, Val};
@@ -258,12 +259,16 @@ fn create_contract_from_source_account() {
 }
 
 pub(crate) fn sha256_hash_id_preimage<T: xdr::WriteXdr>(pre_image: T) -> xdr::Hash {
-    let mut buf = Vec::new();
+    let mut buf = DepthLimitedWrite::new(Vec::new(), DEFAULT_XDR_RW_DEPTH_LIMIT);
     pre_image
         .write_xdr(&mut buf)
         .expect("preimage write failed");
 
-    xdr::Hash(Sha256::digest(&buf).try_into().expect("invalid hash"))
+    xdr::Hash(
+        Sha256::digest(&buf.inner.as_slice())
+            .try_into()
+            .expect("invalid hash"),
+    )
 }
 
 #[test]

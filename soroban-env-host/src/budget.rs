@@ -8,8 +8,10 @@ use soroban_env_common::xdr::{ScErrorCode, ScErrorType};
 
 use crate::{
     host::error::TryBorrowOrErr,
-    xdr::{ContractCostParamEntry, ContractCostParams, ContractCostType, ExtensionPoint},
-    Host, HostError,
+    xdr::{
+        ContractCostParamEntry, ContractCostParams, ContractCostType, DepthLimiter, ExtensionPoint,
+    },
+    Error, Host, HostError, DEFAULT_HOST_DEPTH_LIMIT,
 };
 
 use wasmi::FuelCosts;
@@ -249,7 +251,7 @@ impl FuelConfig {
     }
 }
 
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) struct BudgetImpl {
     pub cpu_insns: BudgetDimension,
     pub mem_bytes: BudgetDimension,
@@ -258,6 +260,7 @@ pub(crate) struct BudgetImpl {
     tracker: Vec<(u64, Option<u64>)>,
     enabled: bool,
     fuel_config: FuelConfig,
+    depth_limit: u32,
 }
 
 impl BudgetImpl {
@@ -274,6 +277,7 @@ impl BudgetImpl {
             tracker: vec![(0, None); ContractCostType::variants().len()],
             enabled: true,
             fuel_config: Default::default(),
+            depth_limit: DEFAULT_HOST_DEPTH_LIMIT,
         };
 
         b.init_tracker();
@@ -442,6 +446,29 @@ impl AsBudget for Host {
 impl AsBudget for &Host {
     fn as_budget(&self) -> &Budget {
         self.budget_ref()
+    }
+}
+
+impl DepthLimiter for Budget {
+    type DepthError = HostError;
+
+    fn enter(&self) -> Result<(), HostError> {
+        let depth = self.0.borrow().depth_limit;
+        if depth == 0 {
+            return Err(Error::from_type_and_code(
+                ScErrorType::Context,
+                ScErrorCode::ExceededLimit,
+            )
+            .into());
+        }
+        self.0.borrow_mut().depth_limit -= 1;
+        Ok(())
+    }
+
+    fn leave(&self) {
+        // no need to do saturating_add because `leave` must be called after `enter`,
+        // thus the `depth_limit` cannot exceed the initial value.
+        self.0.borrow_mut().depth_limit += 1;
     }
 }
 
@@ -721,6 +748,7 @@ impl Default for BudgetImpl {
             tracker: vec![(0, None); ContractCostType::variants().len()],
             enabled: true,
             fuel_config: Default::default(),
+            depth_limit: DEFAULT_HOST_DEPTH_LIMIT,
         };
 
         for ct in ContractCostType::variants() {

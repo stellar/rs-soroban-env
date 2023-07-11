@@ -11,7 +11,7 @@ use soroban_env_common::{
         LiquidityPoolEntry, OfferEntry, PublicKey, ScAddress, ScErrorCode, ScErrorType, ScMap,
         ScMapEntry, ScNonceKey, ScVal, ScVec, TimePoint, TrustLineAsset, TrustLineEntry, Uint256,
     },
-    Compare, SymbolStr, I256, U256,
+    Compare, DepthGuard, SymbolStr, I256, U256,
 };
 
 use crate::{
@@ -52,6 +52,7 @@ impl Compare<HostObject> for Host {
 
     fn compare(&self, a: &HostObject, b: &HostObject) -> Result<Ordering, Self::Error> {
         use HostObject::*;
+        let dg = DepthGuard::new(self)?;
         match (a, b) {
             (U64(a), U64(b)) => self.as_budget().compare(a, b),
             (I64(a), I64(b)) => self.as_budget().compare(a, b),
@@ -258,6 +259,7 @@ impl Compare<ScVal> for Budget {
 
     fn compare(&self, a: &ScVal, b: &ScVal) -> Result<Ordering, Self::Error> {
         use ScVal::*;
+        let dg = DepthGuard::new(self)?;
         match (a, b) {
             (Vec(Some(a)), Vec(Some(b))) => self.compare(a, b),
             (Map(Some(a)), Map(Some(b))) => self.compare(a, b),

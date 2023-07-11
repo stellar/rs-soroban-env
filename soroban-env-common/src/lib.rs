@@ -40,6 +40,7 @@ mod arbitrary;
 mod bytes;
 mod compare;
 mod convert;
+mod depth_guard;
 mod env;
 mod error;
 mod object;
@@ -83,6 +84,7 @@ pub use val::{ConversionError, Tag, Val};
 
 pub use compare::Compare;
 pub use convert::{Convert, TryFromVal, TryIntoVal};
+pub use depth_guard::DepthGuard;
 pub use env::{call_macro_with_all_host_functions, Env, EnvBase};
 pub use unimplemented_env::UnimplementedEnv;
 pub use vmcaller_env::{VmCaller, VmCallerEnv};

@@ -1,7 +1,5 @@
 use std::{mem, rc::Rc};
 
-use soroban_env_common::xdr::ScContractInstance;
-
 use crate::{
     budget::Budget,
     events::{EventError, HostEvent, InternalContractEvent, InternalEvent},
@@ -17,16 +15,16 @@ use crate::{
         LedgerEntryData, LedgerEntryExt, LedgerKey, LedgerKeyAccount, LedgerKeyClaimableBalance,
         LedgerKeyConfigSetting, LedgerKeyContractCode, LedgerKeyData, LedgerKeyLiquidityPool,
         LedgerKeyOffer, LedgerKeyTrustLine, LiquidityPoolEntry, OfferEntry, PublicKey, ScAddress,
-        ScBytes, ScErrorCode, ScErrorType, ScMap, ScMapEntry, ScNonceKey, ScString, ScSymbol,
-        ScVal, ScVec, SorobanAuthorizedInvocation, StringM, TimePoint, TrustLineAsset,
-        TrustLineEntry, Uint256,
+        ScBytes, ScContractInstance, ScErrorCode, ScErrorType, ScMap, ScMapEntry, ScNonceKey,
+        ScString, ScSymbol, ScVal, ScVec, SorobanAuthorizedInvocation, StringM, TimePoint,
+        TrustLineAsset, TrustLineEntry, Uint256,
     },
-    AddressObject, Bool, BytesObject, DurationObject, DurationSmall, DurationVal, Error, HostError,
-    I128Object, I128Small, I128Val, I256Object, I256Small, I256Val, I32Val, I64Object, I64Small,
-    I64Val, MapObject, Object, ScValObject, StringObject, Symbol, SymbolObject, SymbolSmall,
-    SymbolSmallIter, SymbolStr, TimepointObject, TimepointSmall, TimepointVal, U128Object,
-    U128Small, U128Val, U256Object, U256Small, U256Val, U32Val, U64Object, U64Small, U64Val, Val,
-    VecObject, Void, I256, U256,
+    AddressObject, Bool, BytesObject, DepthGuard, DurationObject, DurationSmall, DurationVal,
+    Error, HostError, I128Object, I128Small, I128Val, I256Object, I256Small, I256Val, I32Val,
+    I64Object, I64Small, I64Val, MapObject, Object, ScValObject, StringObject, Symbol,
+    SymbolObject, SymbolSmall, SymbolSmallIter, SymbolStr, TimepointObject, TimepointSmall,
+    TimepointVal, U128Object, U128Small, U128Val, U256Object, U256Small, U256Val, U32Val,
+    U64Object, U64Small, U64Val, Val, VecObject, Void, I256, U256,
 };
 
 use super::declared_size::DeclaredSizeForMetering;
@@ -251,6 +249,7 @@ impl MeteredClone for ScVal {
     const IS_SHALLOW: bool = false;
 
     fn charge_for_substructure(&self, budget: &Budget) -> Result<(), HostError> {
+        let dg = DepthGuard::new(budget)?;
         match self {
             ScVal::Vec(Some(v)) => ScVec::charge_for_substructure(v, budget),
             ScVal::Map(Some(m)) => ScMap::charge_for_substructure(m, budget),

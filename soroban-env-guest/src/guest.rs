@@ -3,7 +3,7 @@
 
 use core::convert::Infallible;
 
-use soroban_env_common::call_macro_with_all_host_functions;
+use soroban_env_common::{call_macro_with_all_host_functions, xdr::DepthLimiter};
 
 use super::{
     AddressObject, Bool, BytesObject, DurationObject, Error, I128Object, I256Object, I256Val,
@@ -21,6 +21,17 @@ use static_assertions as sa;
 /// implementation is automatically generated and has no interesting content.
 #[derive(Copy, Clone, Default)]
 pub struct Guest;
+
+#[cfg(not(target_family = "wasm"))]
+impl DepthLimiter for Guest {
+    type DepthError = <Self as EnvBase>::Error;
+
+    fn enter(&self) -> Result<(), Self::DepthError> {
+        Ok(())
+    }
+
+    fn leave(&self) {}
+}
 
 // The Guest struct is only meaningful when compiling for the WASM target. All
 // these fns should not be called at all because the SDK's choice of Env should be

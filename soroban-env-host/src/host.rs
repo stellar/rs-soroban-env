@@ -20,9 +20,9 @@ use crate::{
         LedgerEntryData, LedgerKey, LedgerKeyContractCode, PublicKey, ScAddress, ScBytes,
         ScErrorType, ScString, ScSymbol, ScVal, TimePoint,
     },
-    AddressObject, Bool, BytesObject, ConversionError, Error, I128Object, I256Object, MapObject,
-    StorageType, StringObject, SymbolObject, SymbolSmall, SymbolStr, TryFromVal, U128Object,
-    U256Object, U32Val, U64Val, VecObject, VmCaller, VmCallerEnv, Void, I256, U256,
+    AddressObject, Bool, BytesObject, ConversionError, DepthGuard, Error, I128Object, I256Object,
+    MapObject, StorageType, StringObject, SymbolObject, SymbolSmall, SymbolStr, TryFromVal,
+    U128Object, U256Object, U32Val, U64Val, VecObject, VmCaller, VmCallerEnv, Void, I256, U256,
 };
 
 use crate::Vm;
@@ -49,8 +49,8 @@ mod validity;
 pub use error::HostError;
 use soroban_env_common::xdr::{
     ContractCodeEntryBody, ContractDataDurability, ContractDataEntryBody, ContractDataEntryData,
-    ContractEntryBodyType, ContractIdPreimage, ContractIdPreimageFromAddress, ScContractInstance,
-    ScErrorCode, MASK_CONTRACT_DATA_FLAGS_V20,
+    ContractEntryBodyType, ContractIdPreimage, ContractIdPreimageFromAddress, DepthLimiter,
+    ScContractInstance, ScErrorCode, MASK_CONTRACT_DATA_FLAGS_V20,
 };
 
 use self::metered_clone::MeteredClone;
@@ -68,6 +68,20 @@ pub use frame::ContractFunctionSet;
 pub(crate) use frame::Frame;
 #[cfg(any(test, feature = "testutils"))]
 use soroban_env_common::xdr::SorobanAuthorizedInvocation;
+
+/// Defines the maximum depth for recursive calls in the host, i.e. `Val` conversion, comparison,
+/// and deep clone, to prevent stack overflow.
+///
+/// Similar to the `xdr::DEFAULT_XDR_RW_DEPTH_LIMIT`, `DEFAULT_HOST_DEPTH_LIMIT` is also a proxy
+/// to the stack depth limit, and its purpose is to prevent the program from
+/// hitting the maximum stack size allowed by Rust, which would result in an unrecoverable `SIGABRT`.
+///
+/// The difference is the `DEFAULT_HOST_DEPTH_LIMIT`guards the recursion paths via the `Env` and
+/// the `Budget`, i.e., conversion, comparison and deep clone. The limit is checked at specific
+/// points of the recursion path, e.g. when `Val` is encountered, to minimize noise. So the
+/// "actual stack depth"/"host depth" factor will typically be larger, and thus the
+/// `DEFAULT_HOST_DEPTH_LIMIT` here is set to a smaller value.
+pub const DEFAULT_HOST_DEPTH_LIMIT: u32 = 100;
 
 /// Temporary helper for denoting a slice of guest memory, as formed by
 /// various bytes operations.
@@ -212,6 +226,18 @@ impl_checked_borrow_helpers!(
     try_borrow_previous_authorization_manager,
     try_borrow_previous_authorization_manager_mut
 );
+
+impl DepthLimiter for Host {
+    type DepthError = HostError;
+
+    fn enter(&self) -> Result<(), HostError> {
+        self.0.budget.enter()
+    }
+
+    fn leave(&self) {
+        self.0.budget.leave()
+    }
+}
 
 impl Debug for HostImpl {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -1146,6 +1172,7 @@ impl VmCallerEnv for Host {
 
     // Metered: covered by `visit` and `metered_cmp`.
     fn obj_cmp(&self, _vmcaller: &mut VmCaller<Host>, a: Val, b: Val) -> Result<i64, HostError> {
+        let dg = DepthGuard::new(self);
         let res = match unsafe {
             match (Object::try_from(a), Object::try_from(b)) {
                 // We were given two objects: compare them.

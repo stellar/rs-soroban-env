@@ -61,14 +61,14 @@ macro_rules! impl_tryfroms_and_tryfromvals_delegating_to_rawvalconvertible {
                 Self::try_from(*v)
             }
         }
-        impl<E: $crate::Env> $crate::TryFromVal<E, $crate::Val> for $T {
+        impl<E: $crate::Env + stellar_xdr::DepthLimiter> $crate::TryFromVal<E, $crate::Val> for $T {
             type Error = $crate::ConversionError;
             #[inline(always)]
             fn try_from_val(_env: &E, val: &$crate::Val) -> Result<Self, Self::Error> {
                 Self::try_from(*val)
             }
         }
-        impl<E: $crate::Env> $crate::TryFromVal<E, $T> for $crate::Val {
+        impl<E: $crate::Env + stellar_xdr::DepthLimiter> $crate::TryFromVal<E, $T> for $crate::Val {
             type Error = $crate::ConversionError;
             fn try_from_val(_env: &E, val: &$T) -> Result<Self, Self::Error> {
                 Ok((*val).into())

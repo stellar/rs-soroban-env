@@ -20,7 +20,10 @@ use fuel_refillable::FuelRefillable;
 use func_info::HOST_FUNCTIONS;
 use soroban_env_common::{
     meta::{self, get_ledger_protocol_version, get_pre_release_version},
-    xdr::{ReadXdr, ScEnvMetaEntry, ScErrorCode, ScErrorType},
+    xdr::{
+        DepthLimitedRead, ReadXdr, ScEnvMetaEntry, ScErrorCode, ScErrorType,
+        DEFAULT_XDR_RW_DEPTH_LIMIT,
+    },
     ConversionError, SymbolStr, TryIntoVal, WasmiMarshal,
 };
 
@@ -69,7 +72,8 @@ impl Vm {
         // us as well as a protocol that's less than or equal to our protocol.
 
         if let Some(env_meta) = Self::module_custom_section(m, meta::ENV_META_V0_SECTION_NAME) {
-            let mut cursor = Cursor::new(env_meta);
+            let mut cursor =
+                DepthLimitedRead::new(Cursor::new(env_meta), DEFAULT_XDR_RW_DEPTH_LIMIT);
             if let Some(env_meta_entry) = ScEnvMetaEntry::read_xdr_iter(&mut cursor).next() {
                 let ScEnvMetaEntry::ScEnvMetaKindInterfaceVersion(v) =
                     host.map_err(env_meta_entry)?;

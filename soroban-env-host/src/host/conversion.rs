@@ -15,8 +15,8 @@ use soroban_env_common::xdr::{
     UInt256Parts,
 };
 use soroban_env_common::{
-    AddressObject, BytesObject, Convert, Object, ScValObjRef, ScValObject, TryFromVal, TryIntoVal,
-    U32Val, VecObject,
+    AddressObject, BytesObject, Convert, DepthGuard, Object, ScValObjRef, ScValObject, TryFromVal,
+    TryIntoVal, U32Val, VecObject,
 };
 
 impl Host {
@@ -369,6 +369,7 @@ impl Host {
         // translates a u64 into another form defined by the xdr.
         // For an `Object`, the actual structural conversion (such as byte
         // cloning) occurs in `from_host_obj` and is metered there.
+        let dg = DepthGuard::new(self)?;
         self.charge_budget(ContractCostType::ValXdrConv, None)?;
         ScVal::try_from_val(self, &val).map_err(|_| {
             self.err(
@@ -382,6 +383,7 @@ impl Host {
 
     pub(crate) fn to_host_val(&self, v: &ScVal) -> Result<Val, HostError> {
         // `ValXdrConv` is const cost in both cpu and mem. The input=0 will be ignored.
+        let dg = DepthGuard::new(self)?;
         self.charge_budget(ContractCostType::ValXdrConv, None)?;
         v.try_into_val(self).map_err(|_| {
             self.err(
