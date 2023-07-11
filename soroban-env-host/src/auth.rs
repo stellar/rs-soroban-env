@@ -189,6 +189,12 @@ struct InvocationTracker {
     // parent's `sub_invocations` vector or 0 for the
     // `root_authorized_invocation`.
     invocation_id_in_call_stack: Vec<Option<usize>>,
+    // If root invocation is exhuasted, the index of the stack frame where it
+    // was exhausted (i.e. index in `invocation_id_in_call_stack`).
+    root_exhausted_frame: Option<usize>,
+    // Indicates whether this tracker is fully processed, i.e. the authorized
+    // root frame has been exhausted and then popped from the stack.
+    is_fully_processed: bool,
 }
 
 // Stores all the authorizations that are authorized by an address.
@@ -198,9 +204,8 @@ struct InvocationTracker {
 // on behalf of the address.
 #[derive(Clone)]
 struct AccountAuthorizationTracker {
-    // Tracked address. If `None`, then lazily set to the transaction source
-    // account's (i.e. invoker's) address is used.
-    address: Option<AddressObject>,
+    // Tracked address.
+    address: AddressObject,
     // Helper for matching the tree that address authorized to the invocation
     // tree.
     invocation_tracker: InvocationTracker,
@@ -672,6 +677,25 @@ impl AuthorizationManager {
         address: AddressObject,
         function: &AuthorizedFunction,
     ) -> Result<(), HostError> {
+        // Find if there is already an active tracker for this address that has
+        // not been matched for the current frame. If there is such tracker,
+        // this authorization has to be matched with an already active tracker.
+        // This prevents matching sets of disjoint authorization entries to
+        // a tree of calls.
+        let mut has_active_tracker = false;
+        for tracker in self.try_borrow_account_trackers(host)?.iter() {
+            if let Ok(tracker) = tracker.try_borrow() {
+                // If address doesn't match, just skip the tracker.
+                if host.compare(&tracker.address, &address)?.is_eq()
+                    && tracker.is_active()
+                    && !tracker.current_frame_is_already_matched()
+                {
+                    has_active_tracker = true;
+                    break;
+                }
+            }
+        }
+
         // Iterate all the trackers and try to find one that
         // fullfills the authorization requirement.
         for tracker in self.try_borrow_account_trackers(host)?.iter() {
@@ -686,30 +710,11 @@ impl AuthorizationManager {
             // ->address.require_auth(). Thus we simply skip the trackers that
             // have already been borrowed.
             if let Ok(mut tracker) = tracker.try_borrow_mut() {
-                let address_matches = if let Some(addr) = &tracker.address {
-                    host.compare(addr, &address)?.is_eq()
-                } else {
-                    // Lazily fill the address for the invoker trackers,
-                    // so that it's possible to create the auth manager
-                    // without knowing the invoker beforehand and also
-                    // to not keep calling into `source_account` function.
-                    let source_addr = host.source_account_address()?.ok_or_else(|| {
-                        host.err(
-                            ScErrorType::Auth,
-                            ScErrorCode::InternalError,
-                            "unexpected missing invoker in auth manager",
-                            &[],
-                        )
-                    })?;
-                    let source_matches = host.compare(&source_addr, &address)?.is_eq();
-                    tracker.address = Some(source_addr);
-                    source_matches
-                };
                 // If address doesn't match, just skip the tracker.
-                if !address_matches {
+                if !host.compare(&tracker.address, &address)?.is_eq() {
                     continue;
                 }
-                match tracker.maybe_authorize_invocation(host, function) {
+                match tracker.maybe_authorize_invocation(host, function, !has_active_tracker) {
                     // If tracker doesn't have a matching invocation,
                     // just skip it (there could still be another
                     // tracker  that matches it).
@@ -1065,9 +1070,7 @@ impl AuthorizationManager {
             .filter(|t| t.borrow().authenticated)
             .map(|t| {
                 (
-                    // Authenticated trackers must have the address already set.
-                    host.scaddress_from_address(t.borrow().address.unwrap())
-                        .unwrap(),
+                    host.scaddress_from_address(t.borrow().address).unwrap(),
                     t.borrow()
                         .invocation_tracker
                         .root_authorized_invocation
@@ -1087,6 +1090,8 @@ impl InvocationTracker {
         Ok(Self {
             root_authorized_invocation: AuthorizedInvocation::from_xdr(host, root_invocation)?,
             invocation_id_in_call_stack: vec![],
+            root_exhausted_frame: None,
+            is_fully_processed: false,
         })
     }
 
@@ -1094,6 +1099,8 @@ impl InvocationTracker {
         Self {
             root_authorized_invocation,
             invocation_id_in_call_stack: vec![],
+            root_exhausted_frame: None,
+            is_fully_processed: false,
         }
     }
 
@@ -1104,9 +1111,12 @@ impl InvocationTracker {
         let mut invocation_id_in_call_stack = vec![None; current_stack_len - 1];
         // Add the id for the current(root) invocation.
         invocation_id_in_call_stack.push(Some(0));
+        let root_exhausted_frame = Some(invocation_id_in_call_stack.len() - 1);
         Self {
             root_authorized_invocation: AuthorizedInvocation::new_recording(function),
             invocation_id_in_call_stack,
+            root_exhausted_frame,
+            is_fully_processed: false,
         }
     }
 
@@ -1130,10 +1140,26 @@ impl InvocationTracker {
 
     fn pop_frame(&mut self) {
         self.invocation_id_in_call_stack.pop();
+        if let Some(root_exhausted_frame) = self.root_exhausted_frame {
+            if root_exhausted_frame >= self.invocation_id_in_call_stack.len() {
+                self.is_fully_processed = true;
+            }
+        }
     }
 
     fn is_empty(&self) -> bool {
         self.invocation_id_in_call_stack.is_empty()
+    }
+
+    fn is_active(&self) -> bool {
+        self.root_authorized_invocation.is_exhausted && !self.is_fully_processed
+    }
+
+    fn current_frame_is_already_matched(&self) -> bool {
+        match self.invocation_id_in_call_stack.last() {
+            Some(Some(_)) => true,
+            _ => false,
+        }
     }
 
     // Tries to match the provided invocation to the authorized sub-invocation
@@ -1144,12 +1170,9 @@ impl InvocationTracker {
         &mut self,
         host: &Host,
         function: &AuthorizedFunction,
+        allow_matching_root: bool,
     ) -> Result<bool, HostError> {
-        let frame_is_already_matched = match self.invocation_id_in_call_stack.last() {
-            Some(Some(_)) => true,
-            _ => false,
-        };
-        if frame_is_already_matched {
+        if self.current_frame_is_already_matched() {
             return Ok(false);
         }
         let mut frame_index = None;
@@ -1165,12 +1188,14 @@ impl InvocationTracker {
                 }
             }
         } else if !self.root_authorized_invocation.is_exhausted
+            && allow_matching_root
             && host
                 .compare(&self.root_authorized_invocation.function, &function)?
                 .is_eq()
         {
             frame_index = Some(0);
             self.root_authorized_invocation.is_exhausted = true;
+            self.root_exhausted_frame = Some(self.invocation_id_in_call_stack.len() - 1);
         }
         if frame_index.is_some() {
             *self.invocation_id_in_call_stack.last_mut().unwrap() = frame_index;
@@ -1220,6 +1245,22 @@ impl InvocationTracker {
     fn has_matched_invocations_in_stack(&self) -> bool {
         self.invocation_id_in_call_stack.iter().any(|i| i.is_some())
     }
+
+    fn snapshot(&self) -> AuthorizedInvocationSnapshot {
+        self.root_authorized_invocation.snapshot()
+    }
+
+    fn rollback(&mut self, snapshot: &AuthorizedInvocationSnapshot) -> Result<(), HostError> {
+        self.root_authorized_invocation.rollback(snapshot)?;
+        // Invocation can only be rolled back from 'exhausted' to
+        // 'non-exhausted' state (as there is no other way to go from
+        // 'exhausted' state back to 'non-exhausted' state).
+        if !self.root_authorized_invocation.is_exhausted {
+            self.root_exhausted_frame = None;
+            self.is_fully_processed = false;
+        }
+        Ok(())
+    }
 }
 
 impl AccountAuthorizationTracker {
@@ -1228,9 +1269,20 @@ impl AccountAuthorizationTracker {
         auth_entry: SorobanAuthorizationEntry,
     ) -> Result<Self, HostError> {
         let (address, nonce, signature_args) = match auth_entry.credentials {
-            SorobanCredentials::SourceAccount => (None, None, vec![]),
+            SorobanCredentials::SourceAccount => (
+                host.source_account_address()?.ok_or_else(|| {
+                    host.err(
+                        ScErrorType::Auth,
+                        ScErrorCode::InvalidInput,
+                        "source account is missing when setting auth entries",
+                        &[],
+                    )
+                })?,
+                None,
+                vec![],
+            ),
             SorobanCredentials::Address(address_creds) => (
-                Some(host.add_host_object(address_creds.address)?),
+                host.add_host_object(address_creds.address)?,
                 Some((
                     address_creds.nonce,
                     address_creds.signature_expiration_ledger,
@@ -1238,7 +1290,7 @@ impl AccountAuthorizationTracker {
                 host.scvals_to_rawvals(address_creds.signature_args.0.as_slice())?,
             ),
         };
-        let is_invoker = address.is_none();
+        let is_invoker = nonce.is_none();
         Ok(Self {
             address,
             invocation_tracker: InvocationTracker::from_xdr(host, auth_entry.root_invocation)?,
@@ -1288,7 +1340,7 @@ impl AccountAuthorizationTracker {
         // Add the id for the current(root) invocation.
         invocation_id_in_call_stack.push(Some(0));
         Ok(Self {
-            address: Some(address),
+            address,
             invocation_tracker: InvocationTracker::new_recording(function, current_stack_len),
             signature_args: Default::default(),
             is_valid: true,
@@ -1311,13 +1363,14 @@ impl AccountAuthorizationTracker {
         &mut self,
         host: &Host,
         function: &AuthorizedFunction,
+        allow_matching_root: bool,
     ) -> Result<bool, HostError> {
         if !self.is_valid {
             return Ok(false);
         }
         if !self
             .invocation_tracker
-            .maybe_push_matching_invocation_frame(host, function)?
+            .maybe_push_matching_invocation_frame(host, function, allow_matching_root)?
         {
             // The call isn't found in the currently tracked tree or is already
             // authorized in it.
@@ -1369,21 +1422,9 @@ impl AccountAuthorizationTracker {
     // tracker.
     fn get_recorded_auth_payload(&self, host: &Host) -> Result<RecordedAuthPayload, HostError> {
         Ok(RecordedAuthPayload {
-            address: if let Some(addr) = self.address {
-                if !self.is_invoker {
-                    Some(host.visit_obj(addr, |a: &ScAddress| Ok(a.clone()))?)
-                } else {
-                    None
-                }
+            address: if !self.is_invoker {
+                Some(host.visit_obj(self.address, |a: &ScAddress| Ok(a.clone()))?)
             } else {
-                if !self.is_invoker {
-                    return Err(host.err(
-                        ScErrorType::Auth,
-                        ScErrorCode::InternalError,
-                        "unexpected missing address for non-invoker",
-                        &[],
-                    ));
-                }
                 None
             },
             invocation: self
@@ -1451,9 +1492,8 @@ impl AccountAuthorizationTracker {
                     ],
                 ));
             }
-            if let Some(addr) = self.address {
-                return host.consume_nonce(addr, *nonce, *expiration_ledger);
-            }
+
+            return host.consume_nonce(self.address, *nonce, *expiration_ledger);
         }
         Err(host.err(
             ScErrorType::Auth,
@@ -1492,34 +1532,25 @@ impl AccountAuthorizationTracker {
             return Ok(());
         }
 
-        if let Some(address) = &self.address {
-            let sc_addr = host.scaddress_from_address(*address)?;
-            // TODO: there should also be a mode where a dummy payload is used
-            // instead (for enforcing mode preflight).
-            let payload = self.get_signature_payload(host)?;
-            match sc_addr {
-                ScAddress::Account(acc) => {
-                    check_account_authentication(host, acc, &payload, &self.signature_args)?;
-                }
-                ScAddress::Contract(acc_contract) => {
-                    check_account_contract_auth(
-                        host,
-                        &acc_contract,
-                        &payload,
-                        &self.signature_args,
-                        &self.invocation_tracker.root_authorized_invocation,
-                    )?;
-                }
+        let sc_addr = host.scaddress_from_address(self.address)?;
+        // TODO: there should also be a mode where a dummy payload is used
+        // instead (for enforcing mode preflight).
+        let payload = self.get_signature_payload(host)?;
+        match sc_addr {
+            ScAddress::Account(acc) => {
+                check_account_authentication(host, acc, &payload, &self.signature_args)?;
             }
-            Ok(())
-        } else {
-            Err(host.err(
-                ScErrorType::Auth,
-                ScErrorCode::InternalError,
-                "unexpected missing address to authenticate",
-                &[],
-            ))
+            ScAddress::Contract(acc_contract) => {
+                check_account_contract_auth(
+                    host,
+                    &acc_contract,
+                    &payload,
+                    &self.signature_args,
+                    &self.invocation_tracker.root_authorized_invocation,
+                )?;
+            }
         }
+        Ok(())
     }
 
     // Emulates authentication for the recording mode.
@@ -1527,35 +1558,23 @@ impl AccountAuthorizationTracker {
         if self.is_invoker {
             return Ok(());
         }
-        if let Some(address) = &self.address {
-            let sc_addr = host.scaddress_from_address(*address)?;
-            // Compute the real payload for the sake of metering, but don't use it.
-            let _payload = self.get_signature_payload(host)?;
-            match sc_addr {
-                ScAddress::Account(acc) => {
-                    let _account = host.load_account(acc)?;
-                }
-                // Skip custom accounts for now - emulating authentication for
-                // them requires a dummy signature.
-                ScAddress::Contract(_) => (),
+        let sc_addr = host.scaddress_from_address(self.address)?;
+        // Compute the real payload for the sake of metering, but don't use it.
+        let _payload = self.get_signature_payload(host)?;
+        match sc_addr {
+            ScAddress::Account(acc) => {
+                let _account = host.load_account(acc)?;
             }
-            Ok(())
-        } else {
-            Err(host.err(
-                ScErrorType::Auth,
-                ScErrorCode::InternalError,
-                "unexpected missing address to emulate authentication",
-                &[],
-            ))
+            // Skip custom accounts for now - emulating authentication for
+            // them requires a dummy signature.
+            ScAddress::Contract(_) => (),
         }
+        Ok(())
     }
 
     fn snapshot(&self) -> AccountAuthorizationTrackerSnapshot {
         AccountAuthorizationTrackerSnapshot {
-            invocation_tracker_root_snapshot: self
-                .invocation_tracker
-                .root_authorized_invocation
-                .snapshot(),
+            invocation_tracker_root_snapshot: self.invocation_tracker.snapshot(),
             // We need to snapshot authenctioncation and nocne-related fields as
             // during the rollback the nonce might be 'un-consumed' during
             // the storage rollback. We don't snapshot `is_valid` since this is
@@ -1571,11 +1590,18 @@ impl AccountAuthorizationTracker {
         snapshot: &AccountAuthorizationTrackerSnapshot,
     ) -> Result<(), HostError> {
         self.invocation_tracker
-            .root_authorized_invocation
             .rollback(&snapshot.invocation_tracker_root_snapshot)?;
         self.authenticated = snapshot.authenticated;
         self.need_nonce = snapshot.need_nonce;
         Ok(())
+    }
+
+    fn is_active(&self) -> bool {
+        self.is_valid && self.invocation_tracker.is_active()
+    }
+
+    fn current_frame_is_already_matched(&self) -> bool {
+        self.invocation_tracker.current_frame_is_already_matched()
     }
 }
 
@@ -1614,7 +1640,7 @@ impl InvokerContractAuthorizationTracker {
         // Authorization is successful if function is just matched by the
         // tracker. No authentication is needed.
         self.invocation_tracker
-            .maybe_push_matching_invocation_frame(host, function)
+            .maybe_push_matching_invocation_frame(host, function, true)
     }
 }
 
