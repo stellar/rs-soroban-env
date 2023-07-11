@@ -227,6 +227,10 @@ impl Host {
     pub(crate) fn call_args_from_obj(&self, args: VecObject) -> Result<Vec<Val>, HostError> {
         self.visit_obj(args, |hv: &HostVec| {
             // Metering: free
+            for arg in hv.iter() {
+                // Propagate reachability (this is an implicit vector-unpack). FIXME: maybe meter?
+                self.allow_val(*arg)?;
+            }
             Ok(hv.iter().cloned().collect())
         })
     }
@@ -326,6 +330,8 @@ impl Host {
         metered_clone::charge_heap_alloc::<ScMapEntry>(map.len() as u64, self.as_budget())?;
         let mut mv = Vec::with_capacity(map.len());
         for (k, v) in map.iter(self)? {
+            self.allow_val(*k)?;
+            self.allow_val(*v)?;
             let key = self.from_host_val(*k)?;
             let val = self.from_host_val(*v)?;
             mv.push(ScMapEntry { key, val });
@@ -418,6 +424,9 @@ impl Host {
                                 vv.len() as u64,
                                 self.as_budget(),
                             )?;
+                            for v in vv.iter() {
+                                self.allow_val(*v)?;
+                            }
                             let sv = vv.iter().map(|e| self.from_host_val(*e)).collect::<Result<
                                 Vec<ScVal>,
                                 HostError,

@@ -44,6 +44,7 @@ pub(crate) mod metered_vector;
 pub(crate) mod metered_xdr;
 mod num;
 mod prng;
+use bit_set::BitSet;
 pub use prng::{Seed, SEED_BYTES};
 mod validity;
 pub use error::HostError;
@@ -94,6 +95,8 @@ pub(crate) struct HostImpl {
     source_account: RefCell<Option<AccountId>>,
     ledger: RefCell<Option<LedgerInfo>>,
     pub(crate) objects: RefCell<Vec<HostObject>>,
+    system_mode: RefCell<bool>,
+    system_objects: RefCell<BitSet>,
     storage: RefCell<Storage>,
     pub(crate) context: RefCell<Vec<Context>>,
     // Note: budget is refcounted and is _not_ deep-cloned when you call HostImpl::deep_clone,
@@ -163,6 +166,18 @@ impl_checked_borrow_helpers!(
     Vec<HostObject>,
     try_borrow_objects,
     try_borrow_objects_mut
+);
+impl_checked_borrow_helpers!(
+    system_mode,
+    bool,
+    try_borrow_system_mode,
+    try_borrow_system_mode_mut
+);
+impl_checked_borrow_helpers!(
+    system_objects,
+    BitSet,
+    try_borrow_system_objects,
+    try_borrow_system_objects_mut
 );
 impl_checked_borrow_helpers!(storage, Storage, try_borrow_storage, try_borrow_storage_mut);
 impl_checked_borrow_helpers!(
@@ -234,6 +249,8 @@ impl Host {
             source_account: RefCell::new(None),
             ledger: RefCell::new(None),
             objects: Default::default(),
+            system_mode: RefCell::new(false),
+            system_objects: Default::default(),
             storage: RefCell::new(storage),
             context: Default::default(),
             budget,
@@ -370,17 +387,34 @@ impl Host {
     where
         F: FnOnce(&InstanceStorageMap) -> Result<U, HostError>,
     {
-        self.with_current_context_mut(|ctx| {
-            self.maybe_init_instance_storage(ctx)?;
-            f(ctx.storage.as_ref().ok_or_else(|| {
+        // To allow f to mutate other parts of the context, we take-and-return the
+        // instance storage map. If anyone writes it while we have it taken, an error
+        // is signalled.
+        self.maybe_init_instance_storage()?;
+        let storage = self.with_current_context_mut(|ctx| {
+            ctx.storage.take().ok_or_else(|| {
                 self.err(
                     ScErrorType::Context,
                     ScErrorCode::InternalError,
                     "missing instance storage",
                     &[],
                 )
-            })?)
-        })
+            })
+        })?;
+
+        let res = f(&storage);
+        self.with_current_context_mut(|ctx| {
+            if ctx.storage.is_some() {
+                return Err(self.err(
+                    ScErrorType::Context,
+                    ScErrorCode::InternalError,
+                    "instance storage read-write-collision",
+                    &[],
+                ));
+            }
+            Ok(ctx.storage.replace(storage))
+        })?;
+        res
     }
 
     /// Mutable accessor to the instance storage of the currently running
@@ -390,23 +424,39 @@ impl Host {
     where
         F: FnOnce(&mut InstanceStorageMap) -> Result<U, HostError>,
     {
-        self.with_current_context_mut(|ctx| {
-            self.maybe_init_instance_storage(ctx)?;
-            let storage = ctx.storage.as_mut().ok_or_else(|| {
+        // To allow f to mutate other parts of the context, we take-and-return the
+        // instance storage map. If anyone writes it while we have it taken, an error
+        // is signalled.
+        self.maybe_init_instance_storage()?;
+        let mut storage = self.with_current_context_mut(|ctx| {
+            ctx.storage.take().ok_or_else(|| {
                 self.err(
                     ScErrorType::Context,
                     ScErrorCode::InternalError,
                     "missing instance storage",
                     &[],
                 )
-            })?;
-            // Consider any mutable access to be modifying the instance storage.
-            // This way we would provide consistent footprint (RO for read-only
-            // ops using `with_instance_storage` and RW for potentially
-            // mutating ops using `with_mut_instance_storage`).
-            storage.is_modified = true;
-            f(storage)
-        })
+            })
+        })?;
+
+        let res = f(&mut storage);
+        // Consider any mutable access to be modifying the instance storage.
+        // This way we would provide consistent footprint (RO for read-only
+        // ops using `with_instance_storage` and RW for potentially
+        // mutating ops using `with_mut_instance_storage`).
+        storage.is_modified = true;
+        self.with_current_context_mut(|ctx| {
+            if ctx.storage.is_some() {
+                return Err(self.err(
+                    ScErrorType::Context,
+                    ScErrorCode::InternalError,
+                    "instance storage write-collision",
+                    &[],
+                ));
+            }
+            Ok(ctx.storage.replace(storage))
+        })?;
+        res
     }
 
     /// Accept a _unique_ (refcount = 1) host reference and destroy the
@@ -1043,6 +1093,11 @@ impl EnvBase for Host {
                 self.check_symbol_matches(ik.as_bytes(), sym)?;
             }
 
+            // Propagate reachability. FIXME: maybe meter this?
+            for v in vals.iter() {
+                self.allow_val(*v)?;
+            }
+
             for (iv, mv) in vals.iter_mut().zip(hm.values(self)?) {
                 *iv = *mv;
             }
@@ -1070,6 +1125,10 @@ impl EnvBase for Host {
                 ));
             }
             metered_clone::charge_shallow_copy::<Val>(hv.len() as u64, self.as_budget())?;
+            // Propagate reachability. FIXME: maybe meter this?
+            for val in vals.iter() {
+                self.allow_val(*val)?;
+            }
             vals.copy_from_slice(hv.as_slice());
             Ok(())
         })?;
@@ -1499,7 +1558,7 @@ impl VmCallerEnv for Host {
         m: MapObject,
         k: Val,
     ) -> Result<Val, HostError> {
-        self.visit_obj(m, move |hm: &HostMap| {
+        let v = self.visit_obj(m, move |hm: &HostMap| {
             hm.get(&k, self)?.copied().ok_or_else(|| {
                 self.err(
                     ScErrorType::Object,
@@ -1508,7 +1567,9 @@ impl VmCallerEnv for Host {
                     &[m.to_val(), k],
                 )
             })
-        })
+        })?;
+        self.allow_val(v)?;
+        Ok(v)
     }
 
     fn map_del(
@@ -1548,7 +1609,7 @@ impl VmCallerEnv for Host {
         m: MapObject,
         k: Val,
     ) -> Result<Val, HostError> {
-        self.visit_obj(m, |hm: &HostMap| {
+        let v = self.visit_obj(m, |hm: &HostMap| {
             if let Some((pk, _)) = hm.get_prev(&k, self)? {
                 Ok(*pk)
             } else {
@@ -1558,7 +1619,9 @@ impl VmCallerEnv for Host {
                         .to_val(),
                 )
             }
-        })
+        })?;
+        self.allow_val(v)?;
+        Ok(v)
     }
 
     fn map_next_key(
@@ -1567,7 +1630,7 @@ impl VmCallerEnv for Host {
         m: MapObject,
         k: Val,
     ) -> Result<Val, HostError> {
-        self.visit_obj(m, |hm: &HostMap| {
+        let v = self.visit_obj(m, |hm: &HostMap| {
             if let Some((pk, _)) = hm.get_next(&k, self)? {
                 Ok(*pk)
             } else {
@@ -1577,25 +1640,31 @@ impl VmCallerEnv for Host {
                         .to_val(),
                 )
             }
-        })
+        })?;
+        self.allow_val(v)?;
+        Ok(v)
     }
 
     fn map_min_key(&self, _vmcaller: &mut VmCaller<Host>, m: MapObject) -> Result<Val, HostError> {
-        self.visit_obj(m, |hm: &HostMap| match hm.get_min(self)? {
+        let v = self.visit_obj(m, |hm: &HostMap| match hm.get_min(self)? {
             Some((pk, pv)) => Ok(*pk),
             None => Ok(
                 Error::from_type_and_code(ScErrorType::Object, ScErrorCode::IndexBounds).to_val(),
             ),
-        })
+        })?;
+        self.allow_val(v)?;
+        Ok(v)
     }
 
     fn map_max_key(&self, _vmcaller: &mut VmCaller<Host>, m: MapObject) -> Result<Val, HostError> {
-        self.visit_obj(m, |hm: &HostMap| match hm.get_max(self)? {
+        let v = self.visit_obj(m, |hm: &HostMap| match hm.get_max(self)? {
             Some((pk, pv)) => Ok(*pk),
             None => Ok(
                 Error::from_type_and_code(ScErrorType::Object, ScErrorCode::IndexBounds).to_val(),
             ),
-        })
+        })?;
+        self.allow_val(v)?;
+        Ok(v)
     }
 
     fn map_keys(
@@ -1720,7 +1789,12 @@ impl VmCallerEnv for Host {
                 },
             )?;
 
-            // Step 2: write all vals.
+            // Step 2: propagate reachability to all vals. FIXME: maybe meter this?
+            for (_, v) in mapobj.map.iter() {
+                self.allow_val(*v)?;
+            }
+
+            // Step 3: write all vals.
             self.metered_vm_write_vals_to_linear_memory(
                 vmcaller,
                 &vm,
@@ -1768,9 +1842,11 @@ impl VmCallerEnv for Host {
         i: U32Val,
     ) -> Result<Val, HostError> {
         let i: u32 = i.into();
-        self.visit_obj(v, move |hv: &HostVec| {
+        let vres = self.visit_obj(v, move |hv: &HostVec| {
             hv.get(i as usize, self.as_budget()).map(|r| *r)
-        })
+        })?;
+        self.allow_val(vres)?;
+        Ok(vres)
     }
 
     fn vec_del(
@@ -1833,15 +1909,19 @@ impl VmCallerEnv for Host {
     }
 
     fn vec_front(&self, _vmcaller: &mut VmCaller<Host>, v: VecObject) -> Result<Val, HostError> {
-        self.visit_obj(v, |hv: &HostVec| {
+        let vres = self.visit_obj(v, |hv: &HostVec| {
             hv.front(self.as_budget()).map(|hval| *hval)
-        })
+        })?;
+        self.allow_val(vres)?;
+        Ok(vres)
     }
 
     fn vec_back(&self, _vmcaller: &mut VmCaller<Host>, v: VecObject) -> Result<Val, HostError> {
-        self.visit_obj(v, |hv: &HostVec| {
+        let vres = self.visit_obj(v, |hv: &HostVec| {
             hv.back(self.as_budget()).map(|hval| *hval)
-        })
+        })?;
+        self.allow_val(vres)?;
+        Ok(vres)
     }
 
     fn vec_insert(
@@ -1972,6 +2052,11 @@ impl VmCallerEnv for Host {
     ) -> Result<Void, HostError> {
         let VmSlice { vm, pos, len } = self.decode_vmslice(vals_pos, len)?;
         self.visit_obj(vec, |vecobj: &HostVec| {
+            // Propagate reachability. FIXME: maybe meter this?
+            for v in vecobj.iter() {
+                self.allow_val(*v)?;
+            }
+
             self.metered_vm_write_vals_to_linear_memory(
                 vmcaller,
                 &vm,

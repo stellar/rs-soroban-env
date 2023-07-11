@@ -9,8 +9,9 @@ use crate::{
     err,
     storage::{InstanceStorageMap, StorageMap},
     xdr::{ContractCostType, ContractExecutable, Hash, HostFunction, HostFunctionType, ScVal},
-    Error, Host, HostError, Symbol, SymbolStr, TryFromVal, TryIntoVal, Val,
+    Error, Host, HostError, Object, Symbol, SymbolStr, TryFromVal, TryIntoVal, Val,
 };
+use bit_set::BitSet;
 
 #[cfg(any(test, feature = "testutils"))]
 use crate::host::testutils;
@@ -89,6 +90,7 @@ pub(crate) struct Context {
     pub(crate) frame: Frame,
     prng: Option<Prng>,
     pub(crate) storage: Option<InstanceStorageMap>,
+    pub(crate) acl: BitSet,
 }
 
 /// Holds contextual information about a single invocation, either
@@ -111,6 +113,29 @@ pub(crate) enum Frame {
     TestContract(TestContractFrame),
 }
 
+impl Frame {
+    fn acl_for_args(&self) -> BitSet {
+        let mut bs = BitSet::new();
+        let (sym, args) = match self {
+            Frame::ContractVM(_, sym, args, _) => (sym, args),
+            Frame::HostFunction(_) => return bs,
+            Frame::Token(_, sym, args, _) => (sym, args),
+            #[cfg(any(test, feature = "testutils"))]
+            Frame::TestContract(tc) => (&tc.func, &tc.args),
+        };
+        if let Ok(obj) = Object::try_from(sym.to_val()) {
+            bs.insert(obj.get_handle() as usize);
+        }
+        for v in args.iter() {
+            if let Ok(obj) = Object::try_from(*v) {
+                bs.insert(obj.get_handle() as usize);
+            }
+        }
+
+        bs
+    }
+}
+
 impl Host {
     /// Helper function for [`Host::with_frame`] below. Pushes a new [`Frame`]
     /// on the context stack, returning a [`RollbackPoint`] such that if
@@ -121,10 +146,12 @@ impl Host {
         let auth_snapshot = auth_manager.snapshot(self)?;
         auth_manager.push_frame(self, &frame)?;
 
+        let acl = frame.acl_for_args();
         let ctx = Context {
             frame,
             prng: None,
             storage: None,
+            acl,
         };
         self.try_borrow_context_mut()?.push(ctx);
         Ok(RollbackPoint {
@@ -229,6 +256,26 @@ impl Host {
         }
     }
 
+    pub(crate) fn with_current_context<F, U>(&self, f: F) -> Result<U, HostError>
+    where
+        F: FnOnce(&Context) -> Result<U, HostError>,
+    {
+        let Ok(context_guard) = self.0.context.try_borrow() else {
+            return Err(self.err(ScErrorType::Context, ScErrorCode::InternalError, "context is already borrowed", &[]));
+        };
+        if let Some(context) = context_guard.last() {
+            f(context)
+        } else {
+            drop(context_guard);
+            Err(self.err(
+                ScErrorType::Context,
+                ScErrorCode::MissingValue,
+                "no contract running",
+                &[],
+            ))
+        }
+    }
+
     /// Same as [`Self::with_current_frame`] but passes `None` when there is no current
     /// frame, rather than logging an error.
     pub(crate) fn with_current_frame_opt<F, U>(&self, f: F) -> Result<U, HostError>
@@ -240,6 +287,40 @@ impl Host {
         };
         if let Some(context) = context_guard.last() {
             f(Some(&context.frame))
+        } else {
+            drop(context_guard);
+            f(None)
+        }
+    }
+
+    /// Same as [`Self::with_current_context_mut`] but passes `None` when there is no current
+    /// frame, rather than logging an error.
+    pub(crate) fn with_current_context_mut_opt<F, U>(&self, f: F) -> Result<U, HostError>
+    where
+        F: FnOnce(Option<&mut Context>) -> Result<U, HostError>,
+    {
+        let Ok(mut context_guard) = self.0.context.try_borrow_mut() else {
+            return Err(self.err(ScErrorType::Context, ScErrorCode::InternalError, "context is already borrowed", &[]));
+        };
+        if let Some(context) = context_guard.last_mut() {
+            f(Some(context))
+        } else {
+            drop(context_guard);
+            f(None)
+        }
+    }
+
+    /// Same as [`Self::with_current_context`] but passes `None` when there is no current
+    /// frame, rather than logging an error.
+    pub(crate) fn with_current_context_opt<F, U>(&self, f: F) -> Result<U, HostError>
+    where
+        F: FnOnce(Option<&Context>) -> Result<U, HostError>,
+    {
+        let Ok(context_guard) = self.0.context.try_borrow() else {
+            return Err(self.err(ScErrorType::Context, ScErrorCode::InternalError, "context is already borrowed", &[]));
+        };
+        if let Some(context) = context_guard.last() {
+            f(Some(context))
         } else {
             drop(context_guard);
             f(None)
@@ -309,12 +390,14 @@ impl Host {
         } else {
             res
         };
-        if res.is_err() {
+        if let Ok(ret) = res {
+            // Pop on success.
+            self.pop_frame(None)?;
+            // And let caller-context read the result.
+            self.allow_val(ret)?;
+        } else {
             // Pop and rollback on error.
             self.pop_frame(Some(rp))?;
-        } else {
-            // Just pop on success.
-            self.pop_frame(None)?;
         }
         // Every push and pop should be matched; if not there is a bug.
         let end_depth = self.try_borrow_context()?.len();
@@ -676,14 +759,16 @@ impl Host {
         self.from_host_val(rv)
     }
 
-    pub(crate) fn maybe_init_instance_storage(&self, ctx: &mut Context) -> Result<(), HostError> {
+    pub(crate) fn maybe_init_instance_storage(&self) -> Result<(), HostError> {
         // Lazily initialize the storage on first access - it's not free and
         // not every contract will use it.
-        if ctx.storage.is_some() {
+        if self.with_current_context(|ctx| Ok(ctx.storage.is_some()))? {
             return Ok(());
         }
-        let storage_map = match &ctx.frame {
-            Frame::ContractVM(_, _, _, instance) => &instance.storage,
+        let storage_map = self.with_current_context(|ctx| match &ctx.frame {
+            Frame::ContractVM(_, _, _, instance) => {
+                instance.storage.metered_clone(self.as_budget())
+            }
             Frame::HostFunction(_) => {
                 return Err(self.err(
                     ScErrorType::Context,
@@ -692,12 +777,12 @@ impl Host {
                     &[],
                 ))
             }
-            Frame::Token(_, _, _, instance) => &instance.storage,
+            Frame::Token(_, _, _, instance) => instance.storage.metered_clone(self.as_budget()),
             #[cfg(any(test, feature = "testutils"))]
-            Frame::TestContract(t) => &t.storage,
-        };
+            Frame::TestContract(t) => t.storage.metered_clone(self.as_budget()),
+        })?;
 
-        ctx.storage = Some(InstanceStorageMap::from_map(
+        let storage_obj = InstanceStorageMap::from_map(
             storage_map.as_ref().map_or_else(
                 || Ok(vec![]),
                 |m| {
@@ -711,14 +796,19 @@ impl Host {
                 },
             )?,
             self,
-        )?);
+        )?;
+        self.with_current_context_mut(|ctx| Ok(ctx.storage.replace(storage_obj)))?;
         Ok(())
     }
 
     fn flush_instance_storage(&self) -> Result<(), HostError> {
-        let updated_instance = self.with_current_context_mut(|ctx| {
-            if let Some(storage) = &ctx.storage {
+        // The call to host_map_to_scmap needs mutable access to the context
+        // while it's converting, so we take-and-return the storage map
+        // rather than converting it while borrowed.
+        let executable_and_storage_opt = self.with_current_context_mut(|ctx| {
+            if let Some(storage) = ctx.storage.take() {
                 if !storage.is_modified {
+                    ctx.storage.replace(storage);
                     return Ok(None);
                 }
                 let executable = match &ctx.frame {
@@ -742,15 +832,16 @@ impl Host {
                     #[cfg(any(test, feature = "testutils"))]
                     Frame::TestContract(t) => ContractExecutable::Wasm(Hash(Default::default())),
                 };
-                Ok(Some(ScContractInstance {
-                    executable,
-                    storage: Some(self.host_map_to_scmap(&storage.map)?),
-                }))
+                Ok(Some((executable, storage)))
             } else {
                 Ok(None)
             }
         })?;
-        if let Some(updated_instance) = updated_instance {
+        if let Some((executable, storage)) = executable_and_storage_opt {
+            let updated_instance = ScContractInstance {
+                executable,
+                storage: Some(self.host_map_to_scmap(&storage.map)?),
+            };
             let contract_id = self
                 .get_current_contract_id_opt_internal()?
                 .ok_or_else(|| {
@@ -763,6 +854,7 @@ impl Host {
                 })?;
             let key = self.contract_instance_ledger_key(&contract_id)?;
             self.store_contract_instance(updated_instance, contract_id, &key)?;
+            self.with_current_context_mut(|ctx| Ok(ctx.storage.replace(storage)))?;
         }
         Ok(())
     }
