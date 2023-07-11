@@ -6,8 +6,8 @@ pub struct Contract;
 
 #[contractimpl]
 impl Contract {
-    pub fn put_persistent(e: Env, key: Symbol, val: u64, flags: Option<u32>) {
-        e.storage().persistent().set(&key, &val, flags);
+    pub fn put_persistent(e: Env, key: Symbol, val: u64) {
+        e.storage().persistent().set(&key, &val);
     }
 
     pub fn del_persistent(e: Env, key: Symbol) {
@@ -26,8 +26,8 @@ impl Contract {
         e.storage().persistent().bump(&key, min_to_live)
     }
 
-    pub fn put_temporary(e: Env, key: Symbol, val: u64, flags: Option<u32>) {
-        e.storage().temporary().set(&key, &val, flags)
+    pub fn put_temporary(e: Env, key: Symbol, val: u64) {
+        e.storage().temporary().set(&key, &val)
     }
 
     pub fn del_temporary(e: Env, key: Symbol) {
@@ -46,8 +46,8 @@ impl Contract {
         e.storage().temporary().bump(&key, min_to_live)
     }
 
-    pub fn put_instance(e: Env, key: Symbol, val: u64, flags: Option<u32>) {
-        e.storage().instance().set(&key, &val, flags)
+    pub fn put_instance(e: Env, key: Symbol, val: u64) {
+        e.storage().instance().set(&key, &val)
     }
 
     pub fn del_instance(e: Env, key: Symbol) {

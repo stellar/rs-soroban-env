@@ -25,9 +25,9 @@ use soroban_env_common::{
         SorobanAuthorizedFunction, SorobanAuthorizedInvocation,
     },
     xdr::{
-        AccountId, AlphaNum12, AlphaNum4, Asset, AssetCode12, AssetCode4, Hash, HostFunctionType,
-        LedgerEntryData, LedgerKey, Liabilities, PublicKey, ScErrorCode, ScErrorType,
-        TrustLineEntry, TrustLineEntryExt, TrustLineEntryV1, TrustLineEntryV1Ext, TrustLineFlags,
+        AccountId, AlphaNum12, AlphaNum4, Asset, AssetCode12, AssetCode4, Hash, LedgerEntryData,
+        LedgerKey, Liabilities, PublicKey, ScErrorCode, ScErrorType, TrustLineEntry,
+        TrustLineEntryExt, TrustLineEntryV1, TrustLineEntryV1Ext, TrustLineFlags,
     },
     EnvBase, Val,
 };
@@ -286,22 +286,18 @@ impl TokenTest {
         )
     }
 
-    fn run_from_account<T, F>(&self, account_id: AccountId, f: F) -> Result<Val, HostError>
+    fn run_from_account<T, F>(&self, account_id: AccountId, f: F) -> Result<T, HostError>
     where
         T: Into<Val>,
         F: FnOnce() -> Result<T, HostError>,
     {
+        let prev_source_account = self.host.source_account_id()?;
         self.host.set_source_account(account_id)?;
-        self.host.with_frame(
-            Frame::HostFunction(HostFunctionType::InvokeContract),
-            || {
-                let res = f();
-                match res {
-                    Ok(v) => Ok(v.into()),
-                    Err(e) => Err(e),
-                }
-            },
-        )
+        let res = f();
+        if let Some(acc) = prev_source_account {
+            self.host.set_source_account(acc)?;
+        }
+        res
     }
 }
 
