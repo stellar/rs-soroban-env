@@ -1340,7 +1340,7 @@ fn test_invoker_subcontract_with_gaps() {
 }
 
 #[test]
-fn test_nvoker_subcontract_auth_without_subcontract_calls() {
+fn test_invoker_subcontract_auth_without_subcontract_calls() {
     let mut test = AuthTest::setup(0, 6);
 
     let setup = SetupNode::new(
