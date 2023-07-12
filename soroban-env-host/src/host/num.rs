@@ -5,7 +5,7 @@ macro_rules! impl_wrapping_obj_from_num {
             &self,
             _vmcaller: &mut VmCaller<Host>,
             u: $num,
-        ) -> Result<<$hot as HostObjectType>::Wrapper, Self::Error> {
+        ) -> Result<<$hot as HostObjectType>::Wrapper, HostError> {
             self.add_host_object(<$hot>::from(u))
         }
     };
@@ -18,7 +18,7 @@ macro_rules! impl_wrapping_obj_to_num {
             &self,
             _vmcaller: &mut VmCaller<Host>,
             obj: <$data as HostObjectType>::Wrapper,
-        ) -> Result<$num, Self::Error> {
+        ) -> Result<$num, HostError> {
             self.visit_obj(obj, |t: &$data| Ok(t.clone().into()))
         }
     };
