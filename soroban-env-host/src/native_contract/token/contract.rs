@@ -1,5 +1,3 @@
-use std::cmp::Ordering;
-
 use crate::host::Host;
 use crate::native_contract::base_types::{Address, Bytes, BytesN, String};
 use crate::native_contract::contract_error::ContractError;
@@ -302,11 +300,11 @@ impl TokenTrait for Token {
     }
 
     fn is_admin(e: &Host, address: Address) -> Result<bool, HostError> {
-        let current_admin = read_administrator(e);
-        match current_admin {
-            Ok(admin) => return Ok(e.compare(&admin, &address)? == Ordering::Equal),
-            Err(_) => Ok(false),
+        if matches!(read_asset_info(e)?, AssetInfo::Native) {
+            return Ok(false);
         }
+
+        Ok(e.compare(&read_administrator(e)?, &address)?.is_eq())
     }
 
     fn decimals(_e: &Host) -> Result<u32, HostError> {
