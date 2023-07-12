@@ -573,8 +573,8 @@ impl Host {
     ) -> Result<AddressObject, HostError> {
         let has_deployer = deployer.is_some();
         if has_deployer {
-            self.try_borrow_authorization_manager_mut()?
-                .push_create_contract_host_fn_frame(args.metered_clone(self.budget_ref())?);
+            self.try_borrow_authorization_manager()?
+                .push_create_contract_host_fn_frame(self, args.metered_clone(self.budget_ref())?)?;
         }
         // Make sure that even in case of operation failure we still pop the
         // stack frame.
@@ -584,7 +584,7 @@ impl Host {
         // for them just to make auth work in a single case).
         let res = self.create_contract_with_optional_auth(deployer, args);
         if has_deployer {
-            self.try_borrow_authorization_manager_mut()?.pop_frame();
+            self.try_borrow_authorization_manager()?.pop_frame(self)?;
         }
         res
     }
@@ -595,7 +595,7 @@ impl Host {
         args: CreateContractArgs,
     ) -> Result<AddressObject, HostError> {
         if let Some(deployer_address) = deployer {
-            self.try_borrow_authorization_manager_mut()?.require_auth(
+            self.try_borrow_authorization_manager()?.require_auth(
                 self,
                 deployer_address,
                 Default::default(),
@@ -2881,7 +2881,7 @@ impl VmCallerEnv for Host {
     ) -> Result<Void, Self::Error> {
         let args = self.visit_obj(args, |a: &HostVec| a.to_vec(self.budget_ref()))?;
         Ok(self
-            .try_borrow_authorization_manager_mut()?
+            .try_borrow_authorization_manager()?
             .require_auth(self, address, args)?
             .into())
     }
@@ -2910,7 +2910,7 @@ impl VmCallerEnv for Host {
         })?;
 
         Ok(self
-            .try_borrow_authorization_manager_mut()?
+            .try_borrow_authorization_manager()?
             .require_auth(self, address, args)?
             .into())
     }
@@ -2921,7 +2921,7 @@ impl VmCallerEnv for Host {
         auth_entries: VecObject,
     ) -> Result<Void, HostError> {
         Ok(self
-            .try_borrow_authorization_manager_mut()?
+            .try_borrow_authorization_manager()?
             .add_invoker_contract_auth(self, auth_entries)?
             .into())
     }

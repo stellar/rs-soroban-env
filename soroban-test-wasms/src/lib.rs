@@ -64,3 +64,5 @@ pub const AUTH_TEST_CONTRACT: &[u8] =
     include_bytes!("../wasm-workspace/opt/auth_test_contract.wasm").as_slice();
 pub const UPDATEABLE_CONTRACT: &[u8] =
     include_bytes!("../wasm-workspace/opt/example_updateable_contract.wasm").as_slice();
+pub const DELEGATED_ACCOUNT_TEST_CONTRACT: &[u8] =
+    include_bytes!("../wasm-workspace/opt/test_delegated_account.wasm").as_slice();

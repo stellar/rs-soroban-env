@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
@@ -11,6 +12,7 @@ use soroban_env_common::xdr::{
 };
 use soroban_env_common::{AddressObject, Compare, Symbol, TryFromVal, TryIntoVal, Val, VecObject};
 
+use crate::host::error::TryBorrowOrErr;
 use crate::host::metered_clone::{charge_container_bulk_init_with_elts, MeteredClone};
 use crate::host::Frame;
 use crate::host_object::HostVec;
@@ -37,16 +39,70 @@ pub struct AuthorizationManager {
     // Per-address trackers of authorized invocations.
     // Every tracker takes care about a single rooted invocation tree for some
     // address. There can be multiple trackers per address.
-    account_trackers: Vec<AccountAuthorizationTracker>,
+    // The internal structure of this field is build in such a way that trackers
+    // can be borrowed mutably independently, while still allowing for
+    // modification of the `account_trackers` vec itself.
+    account_trackers: RefCell<Vec<RefCell<AccountAuthorizationTracker>>>,
     // Per-address trackers for authorization performed by the contracts at
     // execution time (as opposed to signature-based authorization for accounts).
     // Contract authorizations are always enforced independently of the `mode`,
     // as they are self-contained and fully defined by the contract logic.
-    invoker_contract_trackers: Vec<InvokerContractAuthorizationTracker>,
+    invoker_contract_trackers: RefCell<Vec<InvokerContractAuthorizationTracker>>,
     // Current call stack consisting only of the contract invocations (i.e. not
     // the host functions).
-    call_stack: Vec<AuthStackFrame>,
+    call_stack: RefCell<Vec<AuthStackFrame>>,
 }
+
+macro_rules! impl_checked_borrow_helpers {
+    ($field:ident, $t:ty, $borrow:ident, $borrow_mut:ident) => {
+        impl AuthorizationManager {
+            #[allow(dead_code)]
+            fn $borrow(&self, host: &Host) -> Result<std::cell::Ref<'_, $t>, HostError> {
+                use crate::host::error::TryBorrowOrErr;
+                self.$field.try_borrow_or_err_with(
+                    host,
+                    concat!(
+                        "authorization_manager.",
+                        stringify!($field),
+                        ".try_borrow failed"
+                    ),
+                )
+            }
+            fn $borrow_mut(&self, host: &Host) -> Result<std::cell::RefMut<'_, $t>, HostError> {
+                use crate::host::error::TryBorrowOrErr;
+                self.$field.try_borrow_mut_or_err_with(
+                    host,
+                    concat!(
+                        "authorization_manager.",
+                        stringify!($field),
+                        ".try_borrow_mut failed"
+                    ),
+                )
+            }
+        }
+    };
+}
+
+impl_checked_borrow_helpers!(
+    account_trackers,
+    Vec<RefCell<AccountAuthorizationTracker>>,
+    try_borrow_account_trackers,
+    try_borrow_account_trackers_mut
+);
+
+impl_checked_borrow_helpers!(
+    invoker_contract_trackers,
+    Vec<InvokerContractAuthorizationTracker>,
+    try_borrow_invoker_contract_trackers,
+    try_borrow_invoker_contract_trackers_mut
+);
+
+impl_checked_borrow_helpers!(
+    call_stack,
+    Vec<AuthStackFrame>,
+    try_borrow_call_stack,
+    try_borrow_call_stack_mut
+);
 
 // The authorization payload recorded for an address in the recording
 // authorization mode.
@@ -59,15 +115,24 @@ pub struct RecordedAuthPayload {
 
 // Snapshot of `AuthorizationManager` to use when performing the callstack
 // rollbacks.
-#[derive(Clone)]
 pub struct AuthorizationManagerSnapshot {
-    // AccountAuthorizationTracker has some immutable parts, but it is safer to
-    // just rollback everything. If this is an issue, then the
-    // AccountAuthorizationTracker should probably be separated into 'mutable'
-    // and 'immutable' parts.
-    account_trackers: Vec<AccountAuthorizationTracker>,
-    invoker_contract_trackers: Vec<InvokerContractAuthorizationTracker>,
+    account_trackers_snapshot: AccountTrackersSnapshot,
+    invoker_contract_tracker_root_snapshots: Vec<AuthorizedInvocationSnapshot>,
+    // This is set only for the recording mode.
     tracker_by_address_handle: Option<HashMap<u32, usize>>,
+}
+
+// Snapshot of the `account_trackers` in `AuthorizationManager`.
+enum AccountTrackersSnapshot {
+    // In enforcing mode we only need to snapshot the mutable part of the
+    // trackers.
+    // `None` means that the tracker is currently in authentication process and
+    // shouldn't be modified (as the tracker can't be used to authenticate
+    // itself).
+    Enforcing(Vec<Option<AccountAuthorizationTrackerSnapshot>>),
+    // In recording mode snapshot the whole vector, as we create trackers
+    // lazily and hence the outer vector itself might change.
+    Recording(Vec<RefCell<AccountAuthorizationTracker>>),
 }
 
 #[derive(Clone)]
@@ -84,7 +149,28 @@ struct RecordingAuthInfo {
     // This allows to disambiguate between the addresses that have the same
     // value, but are specified as two different objects (e.g. as two different
     // contract function inputs).
-    tracker_by_address_handle: HashMap<u32, usize>,
+    tracker_by_address_handle: RefCell<HashMap<u32, usize>>,
+}
+
+impl RecordingAuthInfo {
+    fn try_borrow_tracker_by_address_handle(
+        &self,
+        host: &Host,
+    ) -> Result<std::cell::Ref<'_, HashMap<u32, usize>>, HostError> {
+        self.tracker_by_address_handle.try_borrow_or_err_with(
+            host,
+            "recording_auth_info.tracker_by_address_handle.try_borrow failed",
+        )
+    }
+    fn try_borrow_tracker_by_address_handle_mut(
+        &self,
+        host: &Host,
+    ) -> Result<std::cell::RefMut<'_, HashMap<u32, usize>>, HostError> {
+        self.tracker_by_address_handle.try_borrow_mut_or_err_with(
+            host,
+            "recording_auth_info.tracker_by_address_handle.try_borrow_mut failed",
+        )
+    }
 }
 
 // Helper for matching the 'sparse' tree of authorized invocations to the actual
@@ -115,6 +201,8 @@ struct AccountAuthorizationTracker {
     // Tracked address. If `None`, then lazily set to the transaction source
     // account's (i.e. invoker's) address is used.
     address: Option<AddressObject>,
+    // Helper for matching the tree that address authorized to the invocation
+    // tree.
     invocation_tracker: InvocationTracker,
     // Arguments representing the signature(s) made by the address to authorize
     // the invocations tracked here.
@@ -131,6 +219,12 @@ struct AccountAuthorizationTracker {
     // The value of nonce authorized by the address with its expiration ledger.
     // Must not exist in the ledger.
     nonce: Option<(i64, u32)>,
+}
+
+struct AccountAuthorizationTrackerSnapshot {
+    invocation_tracker_root_snapshot: AuthorizedInvocationSnapshot,
+    authenticated: bool,
+    need_nonce: bool,
 }
 
 // Stores all the authorizations peformed by contracts at runtime.
@@ -176,6 +270,12 @@ pub(crate) struct AuthorizedInvocation {
     // In the recording mode this is immediately set to `true` (as the
     // authorizations are recorded when they actually happen).
     is_exhausted: bool,
+}
+
+// Snapshot of `AuthorizedInvocation` that contains only mutable fields.
+struct AuthorizedInvocationSnapshot {
+    is_exhausted: bool,
+    sub_invocations: Vec<AuthorizedInvocationSnapshot>,
 }
 
 impl Compare<ContractFunction> for Host {
@@ -233,9 +333,7 @@ impl AuthStackFrame {
         match self {
             AuthStackFrame::Contract(contract_frame) => {
                 Ok(AuthorizedFunction::ContractFn(ContractFunction {
-                    contract_address: contract_frame
-                        .contract_address
-                        .metered_clone(host.budget_ref())?,
+                    contract_address: contract_frame.contract_address,
                     function_name: contract_frame
                         .function_name
                         .metered_clone(host.budget_ref())?,
@@ -410,6 +508,25 @@ impl AuthorizedInvocation {
         }
         self
     }
+
+    fn snapshot(&self) -> AuthorizedInvocationSnapshot {
+        AuthorizedInvocationSnapshot {
+            is_exhausted: self.is_exhausted,
+            sub_invocations: self.sub_invocations.iter().map(|i| i.snapshot()).collect(),
+        }
+    }
+
+    fn rollback(&mut self, snapshot: &AuthorizedInvocationSnapshot) -> Result<(), HostError> {
+        self.is_exhausted = snapshot.is_exhausted;
+        if self.sub_invocations.len() != snapshot.sub_invocations.len() {
+            // This would be a bug.
+            return Err((ScErrorType::Auth, ScErrorCode::InternalError).into());
+        }
+        for i in 0..self.sub_invocations.len() {
+            self.sub_invocations[i].rollback(&snapshot.sub_invocations[i])?;
+        }
+        Ok(())
+    }
 }
 
 impl Default for AuthorizationManager {
@@ -428,15 +545,15 @@ impl AuthorizationManager {
     ) -> Result<Self, HostError> {
         let mut trackers = vec![];
         for auth_entry in auth_entries {
-            trackers.push(AccountAuthorizationTracker::from_authorization_entry(
-                host, auth_entry,
-            )?);
+            trackers.push(RefCell::new(
+                AccountAuthorizationTracker::from_authorization_entry(host, auth_entry)?,
+            ));
         }
         Ok(Self {
             mode: AuthorizationMode::Enforcing,
-            call_stack: vec![],
-            account_trackers: trackers,
-            invoker_contract_trackers: vec![],
+            call_stack: RefCell::new(vec![]),
+            account_trackers: RefCell::new(trackers),
+            invoker_contract_trackers: RefCell::new(vec![]),
         })
     }
 
@@ -446,9 +563,9 @@ impl AuthorizationManager {
     pub(crate) fn new_enforcing_without_authorizations() -> Self {
         Self {
             mode: AuthorizationMode::Enforcing,
-            call_stack: vec![],
-            account_trackers: vec![],
-            invoker_contract_trackers: vec![],
+            call_stack: RefCell::new(vec![]),
+            account_trackers: RefCell::new(vec![]),
+            invoker_contract_trackers: RefCell::new(vec![]),
         }
     }
 
@@ -460,9 +577,9 @@ impl AuthorizationManager {
             mode: AuthorizationMode::Recording(RecordingAuthInfo {
                 tracker_by_address_handle: Default::default(),
             }),
-            call_stack: vec![],
-            account_trackers: vec![],
-            invoker_contract_trackers: vec![],
+            call_stack: RefCell::new(vec![]),
+            account_trackers: RefCell::new(vec![]),
+            invoker_contract_trackers: RefCell::new(vec![]),
         }
     }
 
@@ -472,68 +589,73 @@ impl AuthorizationManager {
     // In the recording mode this stores the auth requirement instead of
     // verifying it.
     pub(crate) fn require_auth(
-        &mut self,
+        &self,
         host: &Host,
         address: AddressObject,
         args: Vec<Val>,
     ) -> Result<(), HostError> {
-        let curr_invocation = self.call_stack.last().ok_or_else(|| {
-            host.err(
-                ScErrorType::Auth,
-                ScErrorCode::InternalError,
-                "unexpected require_auth outside of valid frame",
-                &[],
-            )
-        })?;
-        self.require_auth_internal(
-            host,
-            address,
-            curr_invocation.to_authorized_function(host, args)?,
-        )
+        let authorized_function = self
+            .try_borrow_call_stack(host)?
+            .last()
+            .ok_or_else(|| {
+                host.err(
+                    ScErrorType::Auth,
+                    ScErrorCode::InternalError,
+                    "unexpected require_auth outside of valid frame",
+                    &[],
+                )
+            })?
+            .to_authorized_function(host, args)?;
+
+        self.require_auth_internal(host, address, authorized_function)
     }
 
     pub(crate) fn add_invoker_contract_auth(
-        &mut self,
+        &self,
         host: &Host,
         auth_entries: VecObject,
     ) -> Result<(), HostError> {
         let auth_entries =
             host.visit_obj(auth_entries, |e: &HostVec| e.to_vec(host.budget_ref()))?;
+        let mut trackers = self.try_borrow_invoker_contract_trackers_mut(host)?;
         for e in auth_entries {
-            self.invoker_contract_trackers
-                .push(InvokerContractAuthorizationTracker::new(host, e)?)
+            trackers.push(InvokerContractAuthorizationTracker::new(host, e)?)
         }
         Ok(())
     }
 
     fn verify_contract_invoker_auth(
-        &mut self,
+        &self,
         host: &Host,
         address: AddressObject,
         function: &AuthorizedFunction,
     ) -> Result<bool, HostError> {
-        // If stack has just one call there can't be invoker.
-        if self.call_stack.len() < 2 {
-            return Ok(false);
-        }
+        {
+            let call_stack = self.try_borrow_call_stack(host)?;
+            // If stack has just one call there can't be invoker.
+            if call_stack.len() < 2 {
+                return Ok(false);
+            }
 
-        // Try matching the direct invoker contract first. It is considered to
-        // have authorized any direct calls.
-        let invoker_frame = &self.call_stack[self.call_stack.len() - 2];
-        if let AuthStackFrame::Contract(invoker_contract) = invoker_frame {
-            if host
-                .compare(&invoker_contract.contract_address, &address)?
-                .is_eq()
-            {
-                return Ok(true);
+            // Try matching the direct invoker contract first. It is considered to
+            // have authorized any direct calls.
+            let invoker_frame = &call_stack[call_stack.len() - 2];
+            if let AuthStackFrame::Contract(invoker_contract) = invoker_frame {
+                if host
+                    .compare(&invoker_contract.contract_address, &address)?
+                    .is_eq()
+                {
+                    return Ok(true);
+                }
             }
         }
+        let mut invoker_contract_trackers = self.try_borrow_invoker_contract_trackers_mut(host)?;
         // If there is no direct invoker, there still might be a valid
         // sub-contract call authorization from another invoker higher up the
         // stack. Note, that invoker contract trackers consider the direct frame
         // to never require auth (any `require_auth` calls would be matched by
         // logic above).
-        for tracker in &mut self.invoker_contract_trackers {
+        for tracker in invoker_contract_trackers.iter_mut() {
             if host.compare(&tracker.contract_address, &address)?.is_eq()
                 && tracker.maybe_authorize_invocation(host, function)?
             {
@@ -545,48 +667,60 @@ impl AuthorizationManager {
     }
 
     fn require_auth_enforcing(
-        &mut self,
+        &self,
         host: &Host,
         address: AddressObject,
         function: &AuthorizedFunction,
     ) -> Result<(), HostError> {
         // Iterate all the trackers and try to find one that
         // fullfills the authorization requirement.
-        for tracker in &mut self.account_trackers {
-            let address_matches = if let Some(addr) = &tracker.address {
-                host.compare(addr, &address)?.is_eq()
-            } else {
-                // Lazily fill the address for the invoker trackers,
-                // so that it's possible to create the auth manager
-                // without knowing the invoker beforehand and also
-                // to not keep calling into `source_account` function.
-                let source_addr = host.source_account_address()?.ok_or_else(|| {
-                    host.err(
-                        ScErrorType::Auth,
-                        ScErrorCode::InternalError,
-                        "unexpected missing invoker in auth manager",
-                        &[],
-                    )
-                })?;
-                let source_matches = host.compare(&source_addr, &address)?.is_eq();
-                tracker.address = Some(source_addr);
-                source_matches
-            };
-            // If address doesn't match, just skip the tracker.
-            if !address_matches {
-                continue;
-            }
-            match tracker.maybe_authorize_invocation(host, function) {
-                // If tracker doesn't have a matching invocation,
-                // just skip it (there could still be another
-                // tracker  that matches it).
-                Ok(false) => continue,
-                // Found a matching authorization.
-                Ok(true) => return Ok(()),
-                // Found a matching authorization, but another
-                // requirement hasn't been fullfilled (for
-                // example, incorrect authentication or nonce).
-                Err(e) => return Err(e),
+        for tracker in self.try_borrow_account_trackers(host)?.iter() {
+            // Tracker can only be borrowed by the authorization manager itself.
+            // The only scenario in which re-borrow might occur is when
+            // `require_auth` is called within `__check_auth` call. The tracker
+            // that called `__check_auth` would be already borrowed in such
+            // scenario.
+            // We allow such call patterns in general, but we don't allow using
+            // tracker to verify auth for itself, i.e. we don't allow something
+            // like address.require_auth()->address_contract.__check_auth()
+            // ->address.require_auth(). Thus we simply skip the trackers that
+            // have already been borrowed.
+            if let Ok(mut tracker) = tracker.try_borrow_mut() {
+                let address_matches = if let Some(addr) = &tracker.address {
+                    host.compare(addr, &address)?.is_eq()
+                } else {
+                    // Lazily fill the address for the invoker trackers,
+                    // so that it's possible to create the auth manager
+                    // without knowing the invoker beforehand and also
+                    // to not keep calling into `source_account` function.
+                    let source_addr = host.source_account_address()?.ok_or_else(|| {
+                        host.err(
+                            ScErrorType::Auth,
+                            ScErrorCode::InternalError,
+                            "unexpected missing invoker in auth manager",
+                            &[],
+                        )
+                    })?;
+                    let source_matches = host.compare(&source_addr, &address)?.is_eq();
+                    tracker.address = Some(source_addr);
+                    source_matches
+                };
+                // If address doesn't match, just skip the tracker.
+                if !address_matches {
+                    continue;
+                }
+                match tracker.maybe_authorize_invocation(host, function) {
+                    // If tracker doesn't have a matching invocation,
+                    // just skip it (there could still be another
+                    // tracker  that matches it).
+                    Ok(false) => continue,
+                    // Found a matching authorization.
+                    Ok(true) => return Ok(()),
+                    // Found a matching authorization, but another
+                    // requirement hasn't been fullfilled (for
+                    // example, incorrect authentication or nonce).
+                    Err(e) => return Err(e),
+                }
             }
         }
         // No matching tracker found, hence the invocation isn't
@@ -600,7 +734,7 @@ impl AuthorizationManager {
     }
 
     fn require_auth_internal(
-        &mut self,
+        &self,
         host: &Host,
         address: AddressObject,
         function: AuthorizedFunction,
@@ -613,86 +747,196 @@ impl AuthorizationManager {
             return Ok(());
         }
 
-        match &mut self.mode {
+        match &self.mode {
             AuthorizationMode::Enforcing => self.require_auth_enforcing(host, address, &function),
             AuthorizationMode::Recording(recording_info) => {
                 let address_obj_handle = address.get_handle();
-                if let Some(tracker_id) = recording_info
-                    .tracker_by_address_handle
+                let existing_tracker_id = recording_info
+                    .try_borrow_tracker_by_address_handle(host)?
                     .get(&address_obj_handle)
-                {
-                    let tracker = &mut self.account_trackers[*tracker_id];
-                    // The recording invariant is that trackers are created
-                    // with the first authorized invocation, which means
-                    // that when their stack no longer has authorized
-                    // invocation, then we've popped frames past its root
-                    // and hence need to create a new tracker.
-                    if !tracker.has_authorized_invocations_in_stack() {
-                        recording_info
-                            .tracker_by_address_handle
-                            .remove(&address_obj_handle);
+                    .copied();
+                if let Some(tracker_id) = existing_tracker_id {
+                    // The tracker should not be borrowed recursively in
+                    // recording mode, as we don't call `__check_auth` in this
+                    // flow.
+                    if let Ok(mut tracker) =
+                        self.try_borrow_account_trackers(host)?[tracker_id].try_borrow_mut()
+                    {
+                        // The recording invariant is that trackers are created
+                        // with the first authorized invocation, which means
+                        // that when their stack no longer has authorized
+                        // invocation, then we've popped frames past its root
+                        // and hence need to create a new tracker.
+                        if !tracker.has_authorized_invocations_in_stack() {
+                            recording_info
+                                .try_borrow_tracker_by_address_handle_mut(host)?
+                                .remove(&address_obj_handle);
+                        } else {
+                            return tracker.record_invocation(host, function);
+                        }
                     } else {
-                        return self.account_trackers[*tracker_id]
-                            .record_invocation(host, function);
+                        return Err(host.err(
+                            ScErrorType::Auth,
+                            ScErrorCode::InternalError,
+                            "unexpected recursive tracker borrow in recording mode",
+                            &[],
+                        ));
                     }
                 }
                 // If a tracker for the new tree doesn't exist yet, create
                 // it and initialize with the current invocation.
-                self.account_trackers
-                    .push(AccountAuthorizationTracker::new_recording(
+                self.try_borrow_account_trackers_mut(host)?
+                    .push(RefCell::new(AccountAuthorizationTracker::new_recording(
                         host,
                         address,
                         function,
-                        self.call_stack.len(),
-                    )?);
+                        self.try_borrow_call_stack(host)?.len(),
+                    )?));
                 recording_info
-                    .tracker_by_address_handle
-                    .insert(address_obj_handle, self.account_trackers.len() - 1);
+                    .try_borrow_tracker_by_address_handle_mut(host)?
+                    .insert(
+                        address_obj_handle,
+                        self.try_borrow_account_trackers(host)?.len() - 1,
+                    );
                 Ok(())
             }
         }
     }
 
     // Returns a snapshot of `AuthorizationManager` to use for rollback.
-    pub(crate) fn snapshot(&self) -> AuthorizationManagerSnapshot {
-        let tracker_by_address_handle = match &self.mode {
-            AuthorizationMode::Enforcing => None,
-            AuthorizationMode::Recording(recording_info) => {
-                Some(recording_info.tracker_by_address_handle.clone())
+    pub(crate) fn snapshot(&self, host: &Host) -> Result<AuthorizationManagerSnapshot, HostError> {
+        let account_trackers_snapshot = match &self.mode {
+            AuthorizationMode::Enforcing => AccountTrackersSnapshot::Enforcing(
+                self.try_borrow_account_trackers(host)?
+                    .iter()
+                    .map(|t| {
+                        if let Ok(tracker) = t.try_borrow() {
+                            Some(tracker.snapshot())
+                        } else {
+                            // If tracker is borrowed, snapshotting it is a no-op
+                            // (it can't change until we release it higher up the
+                            // stack).
+                            None
+                        }
+                    })
+                    .collect(),
+            ),
+            AuthorizationMode::Recording(_) => {
+                // All trackers should be avaialable to borrow for copy as in
+                // recording mode we can't have recursive authorization.
+                AccountTrackersSnapshot::Recording(self.try_borrow_account_trackers(host)?.clone())
             }
         };
-        AuthorizationManagerSnapshot {
-            account_trackers: self.account_trackers.clone(),
-            invoker_contract_trackers: self.invoker_contract_trackers.clone(),
+        let invoker_contract_tracker_root_snapshots = self
+            .try_borrow_invoker_contract_trackers(host)?
+            .iter()
+            .map(|t| t.invocation_tracker.root_authorized_invocation.snapshot())
+            .collect();
+        let tracker_by_address_handle = match &self.mode {
+            AuthorizationMode::Enforcing => None,
+            AuthorizationMode::Recording(recording_info) => Some(
+                recording_info
+                    .try_borrow_tracker_by_address_handle(host)?
+                    .clone(),
+            ),
+        };
+        Ok(AuthorizationManagerSnapshot {
+            account_trackers_snapshot,
+            invoker_contract_tracker_root_snapshots,
             tracker_by_address_handle,
-        }
+        })
     }
 
     // Rolls back this `AuthorizationManager` to the snapshot state.
-    pub(crate) fn rollback(&mut self, snapshot: AuthorizationManagerSnapshot) {
-        self.account_trackers = snapshot.account_trackers;
-        self.invoker_contract_trackers = snapshot.invoker_contract_trackers;
+    pub(crate) fn rollback(
+        &self,
+        host: &Host,
+        snapshot: AuthorizationManagerSnapshot,
+    ) -> Result<(), HostError> {
+        match snapshot.account_trackers_snapshot {
+            AccountTrackersSnapshot::Enforcing(trackers_snapshot) => {
+                let trackers = self.try_borrow_account_trackers(host)?;
+                if trackers.len() != trackers_snapshot.len() {
+                    return Err(host.err(
+                        ScErrorType::Auth,
+                        ScErrorCode::InternalError,
+                        "unexpected bad auth snapshot",
+                        &[],
+                    ));
+                }
+                for i in 0..trackers.len() {
+                    if let Some(tracker_snapshot) = &trackers_snapshot[i] {
+                        trackers[i]
+                            .try_borrow_mut()
+                            .map_err(|_| {
+                                host.err(
+                                    ScErrorType::Auth,
+                                    ScErrorCode::InternalError,
+                                    "unexpected bad auth snapshot",
+                                    &[],
+                                )
+                            })?
+                            .rollback(&tracker_snapshot)?;
+                    }
+                }
+            }
+            AccountTrackersSnapshot::Recording(s) => {
+                *self.try_borrow_account_trackers_mut(host)? = s;
+            }
+        }
+
+        let invoker_trackers = self.try_borrow_invoker_contract_trackers_mut(host)?;
+        if invoker_trackers.len() != snapshot.invoker_contract_tracker_root_snapshots.len() {
+            return Err(host.err(
+                ScErrorType::Auth,
+                ScErrorCode::InternalError,
+                "unexpected bad auth snapshot",
+                &[],
+            ));
+        }
+
         if let Some(tracker_by_address_handle) = snapshot.tracker_by_address_handle {
-            match &mut self.mode {
+            match &self.mode {
                 AuthorizationMode::Recording(recording_info) => {
-                    recording_info.tracker_by_address_handle = tracker_by_address_handle;
+                    *recording_info.try_borrow_tracker_by_address_handle_mut(host)? =
+                        tracker_by_address_handle;
                 }
                 AuthorizationMode::Enforcing => (),
             }
         }
+        Ok(())
     }
 
-    pub(crate) fn push_create_contract_host_fn_frame(&mut self, args: CreateContractArgs) {
-        self.call_stack
-            .push(AuthStackFrame::CreateContractHostFn(args));
-        for tracker in &mut self.account_trackers {
+    fn push_tracker_frame(&self, host: &Host) -> Result<(), HostError> {
+        for tracker in self.try_borrow_account_trackers(host)?.iter() {
+            // Skip already borrowed trackers, these must be in the middle of
+            // authentication and hence don't need stack to be updated.
+            if let Ok(mut tracker) = tracker.try_borrow_mut() {
+                tracker.push_frame();
+            }
+        }
+        for tracker in self
+            .try_borrow_invoker_contract_trackers_mut(host)?
+            .iter_mut()
+        {
             tracker.push_frame();
         }
+        Ok(())
+    }
+
+    pub(crate) fn push_create_contract_host_fn_frame(
+        &self,
+        host: &Host,
+        args: CreateContractArgs,
+    ) -> Result<(), HostError> {
+        self.try_borrow_call_stack_mut(host)?
+            .push(AuthStackFrame::CreateContractHostFn(args));
+        self.push_tracker_frame(host)
     }
 
     // Records a new call stack frame.
     // This should be called for every `Host` `push_frame`.
-    pub(crate) fn push_frame(&mut self, host: &Host, frame: &Frame) -> Result<(), HostError> {
+    pub(crate) fn push_frame(&self, host: &Host, frame: &Frame) -> Result<(), HostError> {
         let (contract_id, function_name) = match frame {
             Frame::ContractVM(vm, fn_name, ..) => {
                 (vm.contract_id.metered_clone(host.budget_ref())?, *fn_name)
@@ -709,45 +953,52 @@ impl AuthorizationManager {
         };
         // Currently only contracts might appear in the call stack.
         let contract_address = host.add_host_object(ScAddress::Contract(contract_id))?;
-        self.call_stack
+        self.try_borrow_call_stack_mut(host)?
             .push(AuthStackFrame::Contract(ContractInvocation {
                 contract_address,
                 function_name,
             }));
-        for tracker in &mut self.account_trackers {
-            tracker.push_frame();
-        }
-        for tracker in &mut self.invoker_contract_trackers {
-            tracker.push_frame();
-        }
-        Ok(())
+
+        self.push_tracker_frame(host)
     }
 
     // Pops a call stack frame.
     // This should be called for every `Host` `pop_frame`.
-    pub(crate) fn pop_frame(&mut self) {
-        // Currently we don't push host function call frames, hence this may be
-        // called with empty stack. We trust the Host to keep things correct,
-        // i.e. that only host function frames are ignored this way.
-        // Eventually we may want to also authorize host fns via this, so this
-        // won't be needed.
-        if self.call_stack.is_empty() {
-            return;
+    pub(crate) fn pop_frame(&self, host: &Host) -> Result<(), HostError> {
+        {
+            let mut call_stack = self.try_borrow_call_stack_mut(host)?;
+            // Currently we don't push host function call frames, hence this may be
+            // called with empty stack. We trust the Host to keep things correct,
+            // i.e. that only host function frames are ignored this way.
+            if call_stack.is_empty() {
+                return Ok(());
+            }
+            call_stack.pop();
         }
-        self.call_stack.pop();
-        for tracker in &mut self.account_trackers {
-            tracker.pop_frame();
-        }
-
-        let mut i = 0;
-        while i < self.invoker_contract_trackers.len() {
-            self.invoker_contract_trackers[i].pop_frame();
-            if self.invoker_contract_trackers[i].is_out_of_scope() {
-                self.invoker_contract_trackers.swap_remove(i);
-            } else {
-                i += 1;
+        for tracker in self.try_borrow_account_trackers(host)?.iter() {
+            // Skip already borrowed trackers, these must be in the middle of
+            // authentication and hence don't need stack to be updated.
+            if let Ok(mut tracker) = tracker.try_borrow_mut() {
+                tracker.pop_frame();
             }
         }
+
+        let mut invoker_contract_trackers = self.try_borrow_invoker_contract_trackers_mut(host)?;
+        for tracker in invoker_contract_trackers.iter_mut() {
+            tracker.pop_frame();
+        }
+        // Pop invoker contract trackers that went out of scope. The invariant
+        // is that tracker only exists for the next sub-contract call (or until
+        // the tracker's frame itself is popped). Thus trackers form a stack
+        // where the shorter lifetime trackers are at the top.
+        while let Some(last) = invoker_contract_trackers.last() {
+            if last.is_out_of_scope() {
+                invoker_contract_trackers.pop();
+            } else {
+                break;
+            }
+        }
+        Ok(())
     }
 
     // Returns the recorded per-address authorization payloads that would cover the
@@ -763,9 +1014,9 @@ impl AuthorizationManager {
                 ScErrorCode::InternalError,
             ))),
             AuthorizationMode::Recording(_) => Ok(self
-                .account_trackers
+                .try_borrow_account_trackers(host)?
                 .iter()
-                .map(|tracker| tracker.get_recorded_auth_payload(host))
+                .map(|tracker| tracker.try_borrow_or_err()?.get_recorded_auth_payload(host))
                 .collect::<Result<Vec<RecordedAuthPayload>, HostError>>()?),
         }
     }
@@ -779,8 +1030,10 @@ impl AuthorizationManager {
         match &self.mode {
             AuthorizationMode::Enforcing => Ok(()),
             AuthorizationMode::Recording(_) => {
-                for tracker in &self.account_trackers {
-                    tracker.emulate_authentication(host)?;
+                for tracker in self.try_borrow_account_trackers(host)?.iter() {
+                    tracker
+                        .try_borrow_mut_or_err()?
+                        .emulate_authentication(host)?;
                 }
                 Ok(())
             }
@@ -807,24 +1060,20 @@ impl AuthorizationManager {
         host: &Host,
     ) -> Vec<(ScAddress, xdr::SorobanAuthorizedInvocation)> {
         self.account_trackers
+            .borrow()
             .iter()
-            .filter(|t| t.authenticated && t.is_exhausted())
-            .filter_map(|t| {
-                // Ignore authorizations without an address as they are implied,
-                // less useful as a test utility, and not succinctly capturable
-                // in the list of tuples. This is a tradeoff between offering up
-                // all authorizations vs the authorizations developers will
-                // mostly care about at the benefit of making this list easier
-                // to use.
-                t.address.as_ref().map(|a| {
-                    (
-                        host.scaddress_from_address(*a).unwrap(),
-                        t.invocation_tracker
-                            .root_authorized_invocation
-                            .to_xdr_non_metered(host, true)
-                            .unwrap(),
-                    )
-                })
+            .filter(|t| t.borrow().authenticated)
+            .map(|t| {
+                (
+                    // Authenticated trackers must have the address already set.
+                    host.scaddress_from_address(t.borrow().address.unwrap())
+                        .unwrap(),
+                    t.borrow()
+                        .invocation_tracker
+                        .root_authorized_invocation
+                        .to_xdr_non_metered(host, true)
+                        .unwrap(),
+                )
             })
             .collect()
     }
@@ -1027,7 +1276,7 @@ impl AccountAuthorizationTracker {
         };
         let nonce = if !is_invoker {
             let random_nonce: i64 = rand::thread_rng().gen_range(0, i64::MAX);
-            host.consume_nonce(address.metered_clone(host.budget_ref())?, random_nonce, 0)?;
+            host.consume_nonce(address, random_nonce, 0)?;
             Some((random_nonce, 0))
         } else {
             None
@@ -1094,7 +1343,7 @@ impl AccountAuthorizationTracker {
                         err
                     }
                 })
-                .and_then(|_| self.verify_nonce(host));
+                .and_then(|_| self.verify_and_consume_nonce(host));
             if let Some(err) = authenticate_res.err() {
                 self.is_valid = false;
                 return Err(err);
@@ -1168,7 +1417,7 @@ impl AccountAuthorizationTracker {
         self.invocation_tracker.pop_frame();
     }
 
-    fn verify_nonce(&mut self, host: &Host) -> Result<(), HostError> {
+    fn verify_and_consume_nonce(&mut self, host: &Host) -> Result<(), HostError> {
         if !self.need_nonce {
             return Ok(());
         }
@@ -1301,11 +1550,32 @@ impl AccountAuthorizationTracker {
         }
     }
 
-    #[cfg(any(test, feature = "testutils"))]
-    fn is_exhausted(&self) -> bool {
+    fn snapshot(&self) -> AccountAuthorizationTrackerSnapshot {
+        AccountAuthorizationTrackerSnapshot {
+            invocation_tracker_root_snapshot: self
+                .invocation_tracker
+                .root_authorized_invocation
+                .snapshot(),
+            // We need to snapshot authenctioncation and nocne-related fields as
+            // during the rollback the nonce might be 'un-consumed' during
+            // the storage rollback. We don't snapshot `is_valid` since this is
+            // not recoverable and nonce is never consumed for invalid
+            // authorizations.
+            authenticated: self.authenticated,
+            need_nonce: self.need_nonce,
+        }
+    }
+
+    fn rollback(
+        &mut self,
+        snapshot: &AccountAuthorizationTrackerSnapshot,
+    ) -> Result<(), HostError> {
         self.invocation_tracker
             .root_authorized_invocation
-            .is_exhausted
+            .rollback(&snapshot.invocation_tracker_root_snapshot)?;
+        self.authenticated = snapshot.authenticated;
+        self.need_nonce = snapshot.need_nonce;
+        Ok(())
     }
 }
 
