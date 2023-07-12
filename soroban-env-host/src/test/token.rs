@@ -342,7 +342,7 @@ fn test_native_token_smart_roundtrip() {
 
     // Also can't set a new admin (and there is no admin in the first place).
     assert!(token.set_admin(&user, user.address(&test.host)).is_err());
-    assert!(!token.is_admin(user.address(&test.host)).unwrap());
+    assert!(token.admin().is_err());
 
     assert_eq!(test.get_native_balance(&account_id), 100_000_000);
     assert_eq!(
@@ -1171,16 +1171,20 @@ fn test_set_admin() {
     test.create_default_account(&user);
     test.create_default_trustline(&user);
 
-    assert!(token.is_admin(admin.address(&test.host)).unwrap());
-    assert!(!token.is_admin(new_admin.address(&test.host)).unwrap());
+    assert_eq!(
+        token.admin().unwrap().to_sc_address().unwrap(),
+        admin.address(&test.host).to_sc_address().unwrap()
+    );
 
     // Give admin rights to the new admin.
     token
         .set_admin(&admin, new_admin.address(&test.host))
         .unwrap();
 
-    assert!(!token.is_admin(admin.address(&test.host)).unwrap());
-    assert!(token.is_admin(new_admin.address(&test.host)).unwrap());
+    assert_eq!(
+        token.admin().unwrap().to_sc_address().unwrap(),
+        new_admin.address(&test.host).to_sc_address().unwrap()
+    );
 
     // Make sure admin functions are unavailable to the old admin.
     assert_eq!(

@@ -11,7 +11,7 @@ use crate::native_contract::token::public_types::AssetInfo;
 use crate::{err, HostError};
 
 use soroban_env_common::xdr::Asset;
-use soroban_env_common::{Compare, ConversionError, EnvBase, TryFromVal, TryIntoVal};
+use soroban_env_common::{ConversionError, EnvBase, TryFromVal, TryIntoVal};
 use soroban_native_sdk_macros::contractimpl;
 
 use super::admin::{read_administrator, write_administrator};
@@ -71,7 +71,7 @@ pub trait TokenTrait {
 
     fn set_admin(e: &Host, new_admin: Address) -> Result<(), HostError>;
 
-    fn is_admin(e: &Host, addres: Address) -> Result<bool, HostError>;
+    fn admin(e: &Host) -> Result<Address, HostError>;
 
     fn decimals(e: &Host) -> Result<u32, HostError>;
 
@@ -299,12 +299,8 @@ impl TokenTrait for Token {
         Ok(())
     }
 
-    fn is_admin(e: &Host, address: Address) -> Result<bool, HostError> {
-        if matches!(read_asset_info(e)?, AssetInfo::Native) {
-            return Ok(false);
-        }
-
-        Ok(e.compare(&read_administrator(e)?, &address)?.is_eq())
+    fn admin(e: &Host) -> Result<Address, HostError> {
+        read_administrator(e)
     }
 
     fn decimals(_e: &Host) -> Result<u32, HostError> {
