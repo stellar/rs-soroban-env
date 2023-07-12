@@ -65,6 +65,17 @@ impl AuthContract {
             (vec![&env, curr_address], tree.clone()).into_val(&env),
         );
     }
+
+    // Just authorize the call tree, but don't call anything.
+    pub fn invoker_auth_fn_no_call(env: Env, tree: TreeNode) {
+        // Build auth entries from children - tree root auth works
+        // automatically.
+        let mut auth_entries = vec![&env];
+        for child in tree.children.iter() {
+            auth_entries.push_back(tree_to_invoker_contract_auth(&env, &child));
+        }
+        env.authorize_as_current_contract(auth_entries);
+    }
 }
 
 // Converts the whole provided tree to invoker auth entries, ignoring

@@ -29,7 +29,7 @@ fn test_storage(host: &Host, contract_id: AddressObject, storage: &str) {
     host.call(
         contract_id,
         storage_fn_name(host, "put", storage),
-        host_vec![host, key_1, 1234_u64, ()].into(),
+        host_vec![host, key_1, 1234_u64].into(),
     )
     .unwrap();
 
@@ -61,11 +61,11 @@ fn test_storage(host: &Host, contract_id: AddressObject, storage: &str) {
     )
     .unwrap();
 
-    // Put anothrer key and verify it's there
+    // Put another key and verify it's there
     host.call(
         contract_id,
         storage_fn_name(host, "put", storage),
-        host_vec![host, key_2, u64::MAX, ()].into(),
+        host_vec![host, key_2, u64::MAX].into(),
     )
     .unwrap();
     assert_eq!(
@@ -124,7 +124,7 @@ fn test_storage(host: &Host, contract_id: AddressObject, storage: &str) {
     host.call(
         contract_id,
         storage_fn_name(host, "put", storage),
-        host_vec![host, key_2, 4321_u64, ()].into(),
+        host_vec![host, key_2, 4321_u64].into(),
     )
     .unwrap();
     assert_eq!(
