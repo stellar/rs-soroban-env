@@ -51,14 +51,26 @@ impl Host {
         topics: Vec<InternalDiagnosticArg>,
         args: Vec<InternalDiagnosticArg>,
     ) -> Result<(), HostError> {
-        let de = Rc::new(InternalDiagnosticEvent {
-            contract_id,
-            topics,
-            args,
-        });
-        self.with_events_mut(|events| {
-            Ok(events.record(InternalEvent::Diagnostic(de), self.as_budget()))
-        })?
+        self.with_system_mode(|| {
+            for t in topics.iter() {
+                if let InternalDiagnosticArg::HostVal(v) = t {
+                    self.allow_val(*v)?;
+                }
+            }
+            for a in args.iter() {
+                if let InternalDiagnosticArg::HostVal(v) = a {
+                    self.allow_val(*v)?;
+                }
+            }
+            let de = Rc::new(InternalDiagnosticEvent {
+                contract_id,
+                topics,
+                args,
+            });
+            self.with_events_mut(|events| {
+                Ok(events.record(InternalEvent::Diagnostic(de), self.as_budget()))
+            })?
+        })
     }
 
     // Will not return error if frame is missing
@@ -77,15 +89,21 @@ impl Host {
         if !self.is_debug()? {
             return Ok(());
         }
-        let calling_contract = self.get_current_contract_id_unmetered()?;
-        self.as_budget().with_free_budget(|| {
-            let log_sym = SymbolSmall::try_from_str("log")?;
-            let topics = vec![InternalDiagnosticArg::HostVal(log_sym.to_val())];
-            let msg = ScVal::String(ScString::from(StringM::try_from(msg.as_bytes().to_vec())?));
-            let args: Vec<_> = std::iter::once(InternalDiagnosticArg::XdrVal(msg))
-                .chain(args.iter().map(|rv| InternalDiagnosticArg::HostVal(*rv)))
-                .collect();
-            self.record_diagnostic_event(calling_contract, topics, args)
+        self.with_system_mode(|| {
+            for v in args.iter() {
+                self.allow_val(*v)?;
+            }
+            let calling_contract = self.get_current_contract_id_unmetered()?;
+            self.as_budget().with_free_budget(|| {
+                let log_sym = SymbolSmall::try_from_str("log")?;
+                let topics = vec![InternalDiagnosticArg::HostVal(log_sym.to_val())];
+                let msg =
+                    ScVal::String(ScString::from(StringM::try_from(msg.as_bytes().to_vec())?));
+                let args: Vec<_> = std::iter::once(InternalDiagnosticArg::XdrVal(msg))
+                    .chain(args.iter().map(|rv| InternalDiagnosticArg::HostVal(*rv)))
+                    .collect();
+                self.record_diagnostic_event(calling_contract, topics, args)
+            })
         })
     }
 
@@ -99,29 +117,34 @@ impl Host {
         if !self.is_debug()? {
             return Ok(());
         }
+        self.with_system_mode(|| {
+            for v in args.iter() {
+                self.allow_val(*v)?;
+            }
+            self.as_budget().with_free_budget(|| {
+                let error_sym = SymbolSmall::try_from_str("error")?;
+                let contract_id = self.get_current_contract_id_unmetered()?;
+                let topics = vec![
+                    InternalDiagnosticArg::HostVal(error_sym.to_val()),
+                    InternalDiagnosticArg::HostVal(error.to_val()),
+                ];
+                let msg =
+                    ScVal::String(ScString::from(StringM::try_from(msg.as_bytes().to_vec())?));
+                let args: Vec<_> = std::iter::once(InternalDiagnosticArg::XdrVal(msg))
+                    .chain(args.iter().map(|rv| InternalDiagnosticArg::HostVal(*rv)))
+                    .collect();
 
-        self.as_budget().with_free_budget(|| {
-            let error_sym = SymbolSmall::try_from_str("error")?;
-            let contract_id = self.get_current_contract_id_unmetered()?;
-            let topics = vec![
-                InternalDiagnosticArg::HostVal(error_sym.to_val()),
-                InternalDiagnosticArg::HostVal(error.to_val()),
-            ];
-            let msg = ScVal::String(ScString::from(StringM::try_from(msg.as_bytes().to_vec())?));
-            let args: Vec<_> = std::iter::once(InternalDiagnosticArg::XdrVal(msg))
-                .chain(args.iter().map(|rv| InternalDiagnosticArg::HostVal(*rv)))
-                .collect();
-
-            // We do the event-recording ourselves here rather than calling
-            // self.record_system_debug_contract_event because we can/should
-            // only be called with an already-borrowed events buffer (to
-            // insulate against double-faulting).
-            let ce = Rc::new(InternalDiagnosticEvent {
-                contract_id,
-                topics,
-                args,
-            });
-            events.record(InternalEvent::Diagnostic(ce), self.as_budget())
+                // We do the event-recording ourselves here rather than calling
+                // self.record_system_debug_contract_event because we can/should
+                // only be called with an already-borrowed events buffer (to
+                // insulate against double-faulting).
+                let ce = Rc::new(InternalDiagnosticEvent {
+                    contract_id,
+                    topics,
+                    args,
+                });
+                events.record(InternalEvent::Diagnostic(ce), self.as_budget())
+            })
         })
     }
 
@@ -138,23 +161,29 @@ impl Host {
             return Ok(());
         }
 
-        let calling_contract = self.get_current_contract_id_unmetered()?;
+        self.with_system_mode(|| {
+            let calling_contract = self.get_current_contract_id_unmetered()?;
+            self.allow_val(func.to_val())?;
+            for v in args.iter() {
+                self.allow_val(*v)?;
+            }
 
-        self.as_budget().with_free_budget(|| {
-            let topics = vec![
-                InternalDiagnosticArg::HostVal(SymbolSmall::try_from_str("fn_call")?.into()),
-                InternalDiagnosticArg::XdrVal(ScVal::Bytes(ScBytes::try_from(
-                    called_contract_id.as_slice().to_vec(),
-                )?)),
-                InternalDiagnosticArg::HostVal(func.into()),
-            ];
-            self.record_diagnostic_event(
-                calling_contract,
-                topics,
-                args.iter()
-                    .map(|rv| InternalDiagnosticArg::HostVal(*rv))
-                    .collect(),
-            )
+            self.as_budget().with_free_budget(|| {
+                let topics = vec![
+                    InternalDiagnosticArg::HostVal(SymbolSmall::try_from_str("fn_call")?.into()),
+                    InternalDiagnosticArg::XdrVal(ScVal::Bytes(ScBytes::try_from(
+                        called_contract_id.as_slice().to_vec(),
+                    )?)),
+                    InternalDiagnosticArg::HostVal(func.into()),
+                ];
+                self.record_diagnostic_event(
+                    calling_contract,
+                    topics,
+                    args.iter()
+                        .map(|rv| InternalDiagnosticArg::HostVal(*rv))
+                        .collect(),
+                )
+            })
         })
     }
 
@@ -170,17 +199,21 @@ impl Host {
             return Ok(());
         }
 
-        self.as_budget().with_free_budget(|| {
-            let topics = vec![
-                InternalDiagnosticArg::HostVal(SymbolSmall::try_from_str("fn_return")?.into()),
-                InternalDiagnosticArg::HostVal(func.into()),
-            ];
+        self.with_system_mode(|| {
+            self.as_budget().with_free_budget(|| {
+                self.allow_val(func.to_val())?;
+                self.allow_val(*res)?;
+                let topics = vec![
+                    InternalDiagnosticArg::HostVal(SymbolSmall::try_from_str("fn_return")?.into()),
+                    InternalDiagnosticArg::HostVal(func.into()),
+                ];
 
-            self.record_diagnostic_event(
-                Some(contract_id.clone()),
-                topics,
-                vec![InternalDiagnosticArg::HostVal(*res)],
-            )
+                self.record_diagnostic_event(
+                    Some(contract_id.clone()),
+                    topics,
+                    vec![InternalDiagnosticArg::HostVal(*res)],
+                )
+            })
         })
     }
 }

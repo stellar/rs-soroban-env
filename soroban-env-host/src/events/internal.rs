@@ -88,33 +88,37 @@ pub enum InternalDiagnosticArg {
 }
 
 fn externalize_args(host: &Host, args: &[InternalDiagnosticArg]) -> Result<Vec<ScVal>, HostError> {
-    let mut scargs: Vec<ScVal> = Vec::new();
-    for arg in args.iter() {
-        match arg {
-            InternalDiagnosticArg::HostVal(h) => scargs.push(host.from_host_val(*h)?),
-            InternalDiagnosticArg::XdrVal(v) => scargs.push(v.clone()),
+    host.with_system_mode(|| {
+        let mut scargs: Vec<ScVal> = Vec::new();
+        for arg in args.iter() {
+            match arg {
+                InternalDiagnosticArg::HostVal(h) => scargs.push(host.from_host_val(*h)?),
+                InternalDiagnosticArg::XdrVal(v) => scargs.push(v.clone()),
+            }
         }
-    }
-    Ok(scargs)
+        Ok(scargs)
+    })
 }
 
 impl InternalDiagnosticEvent {
     pub fn to_xdr(&self, host: &Host) -> Result<xdr::ContractEvent, HostError> {
-        let topics: Vec<ScVal> = externalize_args(host, &self.topics)?;
-        let topics = xdr::ScVec::from(xdr::VecM::try_from(topics)?);
-        let args = externalize_args(host, &self.args)?;
-        let data = if args.len() > 1 {
-            ScVal::Vec(Some(xdr::ScVec::from(xdr::VecM::try_from(args)?)))
-        } else if let Some(arg) = args.into_iter().next() {
-            arg
-        } else {
-            ScVal::Void
-        };
-        Ok(xdr::ContractEvent {
-            ext: xdr::ExtensionPoint::V0,
-            contract_id: self.contract_id.clone(),
-            type_: xdr::ContractEventType::Diagnostic,
-            body: xdr::ContractEventBody::V0(xdr::ContractEventV0 { topics, data }),
+        host.with_system_mode(|| {
+            let topics: Vec<ScVal> = externalize_args(host, &self.topics)?;
+            let topics = xdr::ScVec::from(xdr::VecM::try_from(topics)?);
+            let args = externalize_args(host, &self.args)?;
+            let data = if args.len() > 1 {
+                ScVal::Vec(Some(xdr::ScVec::from(xdr::VecM::try_from(args)?)))
+            } else if let Some(arg) = args.into_iter().next() {
+                arg
+            } else {
+                ScVal::Void
+            };
+            Ok(xdr::ContractEvent {
+                ext: xdr::ExtensionPoint::V0,
+                contract_id: self.contract_id.clone(),
+                type_: xdr::ContractEventType::Diagnostic,
+                body: xdr::ContractEventBody::V0(xdr::ContractEventV0 { topics, data }),
+            })
         })
     }
 }
@@ -185,8 +189,9 @@ impl InternalEventsBuffer {
     /// Converts the internal events into their external representation. This should only be called
     /// either when the host is finished (via `try_finish`), or when an error occurs.
     pub fn externalize(&self, host: &Host) -> Result<Events, HostError> {
-        let vec: Result<Vec<HostEvent>, HostError> =
-            self.vec
+        host.with_system_mode(|| {
+            let vec: Result<Vec<HostEvent>, HostError> = self
+                .vec
                 .iter()
                 .map(|e| match &e.0 {
                     InternalEvent::Contract(c) => {
@@ -212,6 +217,7 @@ impl InternalEventsBuffer {
                     }),
                 })
                 .collect();
-        Ok(Events(vec?))
+            Ok(Events(vec?))
+        })
     }
 }

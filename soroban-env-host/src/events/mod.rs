@@ -159,15 +159,17 @@ impl Host {
         topics: VecObject,
         data: Val,
     ) -> Result<(), HostError> {
-        self.validate_contract_event_topics(topics)?;
-        let ce = InternalContractEvent {
-            type_,
-            contract_id: self.bytesobj_from_internal_contract_id()?,
-            topics,
-            data,
-        };
-        self.with_events_mut(|events| {
-            Ok(events.record(InternalEvent::Contract(ce), self.as_budget()))
-        })?
+        self.with_system_mode(|| {
+            self.validate_contract_event_topics(topics)?;
+            let ce = InternalContractEvent {
+                type_,
+                contract_id: self.bytesobj_from_internal_contract_id()?,
+                topics,
+                data,
+            };
+            self.with_events_mut(|events| {
+                Ok(events.record(InternalEvent::Contract(ce), self.as_budget()))
+            })?
+        })
     }
 }

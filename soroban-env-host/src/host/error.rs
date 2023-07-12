@@ -312,19 +312,19 @@ where
     HostError: From<<Val as TryFromVal<Host, T>>::Error>,
 {
     fn debug_arg_maybe_expensive_or_fallible(host: &Host, arg: &Self) -> Result<Val, HostError> {
-        Val::try_from_val(host, arg).map_err(|e| e.into())
+        host.with_system_mode(|| Val::try_from_val(host, arg).map_err(|e| e.into()))
     }
 }
 
 impl DebugArg for xdr::Hash {
     fn debug_arg_maybe_expensive_or_fallible(host: &Host, arg: &Self) -> Result<Val, HostError> {
-        host.bytes_new_from_slice(arg.as_slice()).map(|b| b.into())
+        host.with_system_mode(|| host.bytes_new_from_slice(arg.as_slice()).map(|b| b.into()))
     }
 }
 
 impl DebugArg for str {
     fn debug_arg_maybe_expensive_or_fallible(host: &Host, arg: &Self) -> Result<Val, HostError> {
-        host.string_new_from_slice(arg).map(|s| s.into())
+        host.with_system_mode(|| host.string_new_from_slice(arg).map(|s| s.into()))
     }
 }
 
