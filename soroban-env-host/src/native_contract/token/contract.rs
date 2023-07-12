@@ -72,6 +72,8 @@ pub trait TokenTrait {
 
     fn set_admin(e: &Host, new_admin: Address) -> Result<(), HostError>;
 
+    fn admin(e: &Host) -> Result<Address, HostError>;
+
     fn decimals(e: &Host) -> Result<u32, HostError>;
 
     fn name(e: &Host) -> Result<String, HostError>;
@@ -327,6 +329,10 @@ impl TokenTrait for Token {
         write_administrator(e, new_admin.clone())?;
         event::set_admin(e, admin, new_admin)?;
         Ok(())
+    }
+
+    fn admin(e: &Host) -> Result<Address, HostError> {
+        read_administrator(e)
     }
 
     fn decimals(_e: &Host) -> Result<u32, HostError> {
