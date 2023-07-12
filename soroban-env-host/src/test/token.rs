@@ -263,6 +263,7 @@ impl TokenTest {
     fn run_from_contract<T, F>(
         &self,
         contract_id_bytes: &BytesN<32>,
+        allowed_args: &[Val],
         f: F,
     ) -> Result<Val, HostError>
     where
@@ -273,7 +274,7 @@ impl TokenTest {
             Frame::TestContract(TestContractFrame::new(
                 Hash(contract_id_bytes.to_array().unwrap()),
                 Symbol::try_from_small_str("foo").unwrap(),
-                vec![],
+                allowed_args.to_vec(),
                 None,
             )),
             || {
@@ -286,9 +287,8 @@ impl TokenTest {
         )
     }
 
-    fn run_from_account<T, F>(&self, account_id: AccountId, f: F) -> Result<T, HostError>
+    fn run_from_account<F, T>(&self, account_id: AccountId, f: F) -> Result<T, HostError>
     where
-        T: Into<Val>,
         F: FnOnce() -> Result<T, HostError>,
     {
         let prev_source_account = self.host.source_account_id()?;
@@ -1462,6 +1462,13 @@ fn test_account_invoker_auth_with_issuer_admin() {
     let admin_address = account_to_address(&test.host, admin_acc.clone());
     let user_address = account_to_address(&test.host, user_acc.clone());
     let token = test.default_token_with_admin_id(&admin_address);
+
+    // Allowed-argument lists to pass into run_from_contract, to populate frame object-ACLs.
+    let token_and_user = &[
+        token.address.as_object().into(),
+        user_address.as_object().into(),
+    ];
+
     // create a trustline for user_acc so the issuer can mint into it
     test.create_trustline(
         &user_acc,
@@ -1559,7 +1566,7 @@ fn test_account_invoker_auth_with_issuer_admin() {
     )
     .unwrap();
     assert_eq!(
-        test.run_from_contract(&contract_id_bytes, || {
+        test.run_from_contract(&contract_id_bytes, token_and_user, || {
             token.mint(&contract_invoker, user_address.clone(), 1000)
         })
         .err()
@@ -1591,13 +1598,23 @@ fn test_contract_invoker_auth() {
     .unwrap();
     let token = test.default_token_with_admin_id(&admin_contract_address);
 
-    test.run_from_contract(&admin_contract_id_bytes, || {
+    // Allowed-argument lists to pass into run_from_contract, to populate frame object-ACLs.
+    let token_and_user = &[
+        token.address.as_object().into(),
+        user_contract_address.as_object().into(),
+    ];
+    let token_and_admin = &[
+        token.address.as_object().into(),
+        admin_contract_address.as_object().into(),
+    ];
+
+    test.run_from_contract(&admin_contract_id_bytes, token_and_user, || {
         token.mint(&admin_contract_invoker, user_contract_address.clone(), 1000)
     })
     .unwrap();
 
     // Make another succesful call
-    test.run_from_contract(&admin_contract_id_bytes, || {
+    test.run_from_contract(&admin_contract_id_bytes, token_and_admin, || {
         token.mint(
             &admin_contract_invoker,
             admin_contract_address.clone(),
@@ -1611,7 +1628,7 @@ fn test_contract_invoker_auth() {
 
     // User contract invoker can't perform admin operation.
     assert_eq!(
-        test.run_from_contract(&user_contract_id_bytes, || {
+        test.run_from_contract(&user_contract_id_bytes, token_and_user, || {
             token.mint(&user_contract_invoker, user_contract_address.clone(), 1000)
         })
         .err()
@@ -1623,18 +1640,18 @@ fn test_contract_invoker_auth() {
     // Also don't allow an incorrect contract invoker (not a contract error, should
     // be some auth error)
     assert!(test
-        .run_from_contract(&user_contract_id_bytes, || {
+        .run_from_contract(&user_contract_id_bytes, token_and_user, || {
             token.mint(&admin_contract_invoker, user_contract_address.clone(), 1000)
         })
         .is_err());
 
     // Perform transfers based on the invoker id.
-    test.run_from_contract(&user_contract_id_bytes, || {
+    test.run_from_contract(&user_contract_id_bytes, token_and_admin, || {
         token.transfer(&user_contract_invoker, admin_contract_address.clone(), 500)
     })
     .unwrap();
 
-    test.run_from_contract(&admin_contract_id_bytes, || {
+    test.run_from_contract(&admin_contract_id_bytes, token_and_user, || {
         token.transfer(&admin_contract_invoker, user_contract_address.clone(), 800)
     })
     .unwrap();
