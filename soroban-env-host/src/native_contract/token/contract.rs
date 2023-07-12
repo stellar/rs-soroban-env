@@ -11,7 +11,7 @@ use crate::native_contract::token::public_types::AssetInfo;
 use crate::{err, HostError};
 
 use soroban_env_common::xdr::Asset;
-use soroban_env_common::{ConversionError, EnvBase, TryFromVal, TryIntoVal};
+use soroban_env_common::{ConversionError, Env, EnvBase, TryFromVal, TryIntoVal};
 use soroban_native_sdk_macros::contractimpl;
 
 use super::admin::{read_administrator, write_administrator};
@@ -21,6 +21,7 @@ use super::balance::{
 };
 use super::metadata::{read_name, read_symbol, set_metadata, DECIMAL};
 use super::public_types::{AlphaNum12AssetInfo, AlphaNum4AssetInfo};
+use super::storage_types::INSTANCE_BUMP_AMOUNT;
 
 pub trait TokenTrait {
     /// init_asset can create a contract for a wrapped classic asset
@@ -178,6 +179,7 @@ impl TokenTrait for Token {
     }
 
     fn allowance(e: &Host, from: Address, spender: Address) -> Result<i128, HostError> {
+        e.bump_current_contract_instance_and_code(INSTANCE_BUMP_AMOUNT.into())?;
         read_allowance(e, from, spender)
     }
 
@@ -191,6 +193,9 @@ impl TokenTrait for Token {
     ) -> Result<(), HostError> {
         check_nonnegative_amount(e, amount)?;
         from.require_auth()?;
+
+        e.bump_current_contract_instance_and_code(INSTANCE_BUMP_AMOUNT.into())?;
+
         write_allowance(e, from.clone(), spender.clone(), amount, expiration_ledger)?;
         event::approve(e, from, spender, amount, expiration_ledger)?;
         Ok(())
@@ -198,15 +203,18 @@ impl TokenTrait for Token {
 
     // Metering: covered by components
     fn balance(e: &Host, addr: Address) -> Result<i128, HostError> {
+        e.bump_current_contract_instance_and_code(INSTANCE_BUMP_AMOUNT.into())?;
         read_balance(e, addr)
     }
 
     fn spendable_balance(e: &Host, addr: Address) -> Result<i128, HostError> {
+        e.bump_current_contract_instance_and_code(INSTANCE_BUMP_AMOUNT.into())?;
         get_spendable_balance(e, addr)
     }
 
     // Metering: covered by components
     fn authorized(e: &Host, addr: Address) -> Result<bool, HostError> {
+        e.bump_current_contract_instance_and_code(INSTANCE_BUMP_AMOUNT.into())?;
         is_authorized(e, addr)
     }
 
@@ -214,6 +222,9 @@ impl TokenTrait for Token {
     fn transfer(e: &Host, from: Address, to: Address, amount: i128) -> Result<(), HostError> {
         check_nonnegative_amount(e, amount)?;
         from.require_auth()?;
+
+        e.bump_current_contract_instance_and_code(INSTANCE_BUMP_AMOUNT.into())?;
+
         spend_balance(e, from.clone(), amount)?;
         receive_balance(e, to.clone(), amount)?;
         event::transfer(e, from, to, amount)?;
@@ -230,6 +241,9 @@ impl TokenTrait for Token {
     ) -> Result<(), HostError> {
         check_nonnegative_amount(e, amount)?;
         spender.require_auth()?;
+
+        e.bump_current_contract_instance_and_code(INSTANCE_BUMP_AMOUNT.into())?;
+
         spend_allowance(e, from.clone(), spender, amount)?;
         spend_balance(e, from.clone(), amount)?;
         receive_balance(e, to.clone(), amount)?;
@@ -242,6 +256,9 @@ impl TokenTrait for Token {
         check_nonnegative_amount(e, amount)?;
         check_non_native(e)?;
         from.require_auth()?;
+
+        e.bump_current_contract_instance_and_code(INSTANCE_BUMP_AMOUNT.into())?;
+
         spend_balance(e, from.clone(), amount)?;
         event::burn(e, from, amount)?;
         Ok(())
@@ -252,6 +269,9 @@ impl TokenTrait for Token {
         check_nonnegative_amount(e, amount)?;
         check_non_native(e)?;
         spender.require_auth()?;
+
+        e.bump_current_contract_instance_and_code(INSTANCE_BUMP_AMOUNT.into())?;
+
         spend_allowance(e, from.clone(), spender, amount)?;
         spend_balance(e, from.clone(), amount)?;
         event::burn(e, from, amount)?;
@@ -264,6 +284,9 @@ impl TokenTrait for Token {
         check_clawbackable(e, from.clone())?;
         let admin = read_administrator(e)?;
         admin.require_auth()?;
+
+        e.bump_current_contract_instance_and_code(INSTANCE_BUMP_AMOUNT.into())?;
+
         spend_balance_no_authorization_check(e, from.clone(), amount)?;
         event::clawback(e, admin, from, amount)?;
         Ok(())
@@ -273,6 +296,9 @@ impl TokenTrait for Token {
     fn set_authorized(e: &Host, addr: Address, authorize: bool) -> Result<(), HostError> {
         let admin = read_administrator(e)?;
         admin.require_auth()?;
+
+        e.bump_current_contract_instance_and_code(INSTANCE_BUMP_AMOUNT.into())?;
+
         write_authorization(e, addr.clone(), authorize)?;
         event::set_authorized(e, admin, addr, authorize)?;
         Ok(())
@@ -283,6 +309,9 @@ impl TokenTrait for Token {
         check_nonnegative_amount(e, amount)?;
         let admin = read_administrator(e)?;
         admin.require_auth()?;
+
+        e.bump_current_contract_instance_and_code(INSTANCE_BUMP_AMOUNT.into())?;
+
         receive_balance(e, to.clone(), amount)?;
         event::mint(e, admin, to, amount)?;
         Ok(())
@@ -292,6 +321,9 @@ impl TokenTrait for Token {
     fn set_admin(e: &Host, new_admin: Address) -> Result<(), HostError> {
         let admin = read_administrator(e)?;
         admin.require_auth()?;
+
+        e.bump_current_contract_instance_and_code(INSTANCE_BUMP_AMOUNT.into())?;
+
         write_administrator(e, new_admin.clone())?;
         event::set_admin(e, admin, new_admin)?;
         Ok(())
