@@ -1,6 +1,7 @@
 use soroban_env_host::fees::{
-    compute_rent_fee, compute_transaction_resource_fee, FeeConfiguration, LedgerEntryRentChange,
-    RentFeeConfiguration, TransactionResources,
+    compute_rent_fee, compute_transaction_resource_fee, compute_write_fee_per_1kb,
+    FeeConfiguration, LedgerEntryRentChange, RentFeeConfiguration, TransactionResources,
+    WriteFeeConfiguration,
 };
 
 #[test]
@@ -500,5 +501,52 @@ fn test_rent_bump_without_old_entry() {
         ),
         // 100_000 * 1000 * (100_000 - 25_000) / (10_000 * 1024)
         73_244
+    );
+}
+
+#[test]
+fn test_compute_write_fee() {
+    let fee_config = WriteFeeConfiguration {
+        bucket_list_target_size_bytes: 100_000,
+        write_fee_1kb_bucket_list_low: 100,
+        write_fee_1kb_bucket_list_high: 10_000,
+        bucket_list_write_fee_growth_factor: 50,
+    };
+    // Empty bucket list
+    assert_eq!(compute_write_fee_per_1kb(0, &fee_config), 100);
+    // Partially filled bucket list
+    assert_eq!(
+        compute_write_fee_per_1kb(50_000, &fee_config),
+        100 + (10_000 - 100) / 2
+    );
+    assert_eq!(compute_write_fee_per_1kb(56_789, &fee_config), 5723);
+    // Full bucket list
+    assert_eq!(compute_write_fee_per_1kb(100_000, &fee_config), 10_000);
+    // Bucket list bigger than target
+    assert_eq!(
+        compute_write_fee_per_1kb(150_000, &fee_config),
+        10_000 + 50 * (10_000 - 100) / 2
+    );
+    // Bucket list several times bigger than target
+    assert_eq!(
+        compute_write_fee_per_1kb(580_000, &fee_config),
+        10_000 + 2_376_000
+    );
+
+    let large_fee_config = WriteFeeConfiguration {
+        bucket_list_target_size_bytes: 100_000_000_000_000,
+        write_fee_1kb_bucket_list_low: 1_000_000,
+        write_fee_1kb_bucket_list_high: 1_000_000_000,
+        bucket_list_write_fee_growth_factor: 50,
+    };
+    // Large bucket list size and fees, half-filled bucket list
+    assert_eq!(
+        compute_write_fee_per_1kb(50_000_000_000_000, &large_fee_config),
+        1_000_000 + (1_000_000_000 - 1_000_000) / 2
+    );
+    // Large bucket list size and fees, over target bucket list
+    assert_eq!(
+        compute_write_fee_per_1kb(150_000_000_000_000, &large_fee_config),
+        1_000_000_000 + 50 * (1_000_000_000 - 1_000_000) / 2
     );
 }
