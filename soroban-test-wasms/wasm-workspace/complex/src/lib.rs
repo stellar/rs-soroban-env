@@ -1,5 +1,5 @@
 #![no_std]
-use soroban_sdk::{contract, contractimpl, contracttype, Bytes, BytesN, Env, symbol_short, Vec};
+use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Bytes, BytesN, Env, Vec};
 
 // This is a "complex" contract that uses a nontrivial amount of the host
 // interface from the guest: UDTs (thus maps), vectors, byte arrays and linear
@@ -40,6 +40,6 @@ impl Contract {
         e.events().publish((data.clone(),), hash);
         e.logs()
             .add("vec with half hash", &[vec_with_half_hash.to_val()]);
-        e.storage().temporary().set(&data, &my_ledger, None);
+        e.storage().temporary().set(&data, &my_ledger);
     }
 }
