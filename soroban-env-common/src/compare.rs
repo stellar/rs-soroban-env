@@ -1,7 +1,7 @@
 #[cfg(feature = "std")]
 use std::rc::Rc;
 
-use crate::{val::ValConvert, DepthGuard, Env, Error, Tag, Val};
+use crate::{val::ValConvert, Env, Tag, Val};
 use core::cmp::Ordering;
 
 /// General trait representing the ability to compare two values of some type.
@@ -126,12 +126,6 @@ impl<E: Env> Compare<Val> for E {
     type Error = E::Error;
 
     fn compare(&self, a: &Val, b: &Val) -> Result<Ordering, Self::Error> {
-        let _dg = DepthGuard::new(self).map_err(|_| {
-            Error::from_type_and_code(
-                stellar_xdr::ScErrorType::Context,
-                stellar_xdr::ScErrorCode::ExceededLimit,
-            )
-        });
         if a.get_payload() == b.get_payload() {
             // Fast-path exactly-equal values.
             return Ok(Ordering::Equal);

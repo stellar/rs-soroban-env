@@ -20,9 +20,9 @@ use crate::{
         LedgerEntryData, LedgerKey, LedgerKeyContractCode, PublicKey, ScAddress, ScBytes,
         ScErrorType, ScString, ScSymbol, ScVal, TimePoint,
     },
-    AddressObject, Bool, BytesObject, ConversionError, DepthGuard, Error, I128Object, I256Object,
-    MapObject, StorageType, StringObject, SymbolObject, SymbolSmall, SymbolStr, TryFromVal,
-    U128Object, U256Object, U32Val, U64Val, VecObject, VmCaller, VmCallerEnv, Void, I256, U256,
+    AddressObject, Bool, BytesObject, ConversionError, Error, I128Object, I256Object, MapObject,
+    StorageType, StringObject, SymbolObject, SymbolSmall, SymbolStr, TryFromVal, U128Object,
+    U256Object, U32Val, U64Val, VecObject, VmCaller, VmCallerEnv, Void, I256, U256,
 };
 
 use crate::Vm;
@@ -49,8 +49,8 @@ mod validity;
 pub use error::HostError;
 use soroban_env_common::xdr::{
     ContractCodeEntryBody, ContractDataDurability, ContractDataEntryBody, ContractDataEntryData,
-    ContractEntryBodyType, ContractIdPreimage, ContractIdPreimageFromAddress, DepthLimiter,
-    ScContractInstance, ScErrorCode, MASK_CONTRACT_DATA_FLAGS_V20,
+    ContractEntryBodyType, ContractIdPreimage, ContractIdPreimageFromAddress, ScContractInstance,
+    ScErrorCode, MASK_CONTRACT_DATA_FLAGS_V20,
 };
 
 use self::metered_clone::MeteredClone;
@@ -226,18 +226,6 @@ impl_checked_borrow_helpers!(
     try_borrow_previous_authorization_manager,
     try_borrow_previous_authorization_manager_mut
 );
-
-impl DepthLimiter for Host {
-    type DepthError = HostError;
-
-    fn enter(&self) -> Result<(), HostError> {
-        self.0.budget.enter()
-    }
-
-    fn leave(&self) {
-        self.0.budget.leave()
-    }
-}
 
 impl Debug for HostImpl {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -1172,7 +1160,6 @@ impl VmCallerEnv for Host {
 
     // Metered: covered by `visit` and `metered_cmp`.
     fn obj_cmp(&self, _vmcaller: &mut VmCaller<Host>, a: Val, b: Val) -> Result<i64, HostError> {
-        let dg = DepthGuard::new(self);
         let res = match unsafe {
             match (Object::try_from(a), Object::try_from(b)) {
                 // We were given two objects: compare them.

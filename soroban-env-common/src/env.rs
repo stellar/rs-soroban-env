@@ -1,5 +1,4 @@
 use soroban_env_macros::generate_call_macro_with_all_host_functions;
-use stellar_xdr::DepthLimiter;
 
 use super::Symbol;
 use super::{
@@ -11,7 +10,7 @@ use core::any;
 
 /// Base trait extended by the [Env](crate::Env) trait, providing various special-case
 /// functions that do _not_ simply call across cross the guest/host interface.
-pub trait EnvBase: Sized + Clone + DepthLimiter {
+pub trait EnvBase: Sized + Clone {
     /// The type of error returned from the environment when the environment
     /// itself fails "unrecoverably", or at least in a way that the user is not
     /// expected to be able to recover from, such as an internal logic error,

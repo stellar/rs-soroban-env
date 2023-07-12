@@ -3,7 +3,7 @@ use crate::{
     TryFromVal, Val,
 };
 use core::{cmp::Ordering, fmt::Debug};
-use stellar_xdr::{DepthLimiter, Duration, ScVal, TimePoint};
+use stellar_xdr::{Duration, ScVal, TimePoint};
 
 /// Wrapper for a [Val] that is tagged with one of the object types,
 /// interpreting the [Val]'s body as containing a 32-bit object-code handle
@@ -61,7 +61,7 @@ impl From<ScValObject> for ScVal {
 
 impl<E> TryFromVal<E, Object> for ScValObject
 where
-    E: Env + Convert<Object, ScValObject> + DepthLimiter,
+    E: Env + Convert<Object, ScValObject>,
 {
     type Error = <E as Convert<Object, ScValObject>>::Error;
     fn try_from_val(env: &E, val: &Object) -> Result<Self, Self::Error> {
@@ -71,7 +71,7 @@ where
 
 impl<'a, E> TryFromVal<E, ScValObjRef<'a>> for Object
 where
-    E: Env + Convert<ScValObjRef<'a>, Object> + DepthLimiter,
+    E: Env + Convert<ScValObjRef<'a>, Object>,
 {
     type Error = ConversionError;
 

@@ -4,12 +4,11 @@ use std::{
     rc::Rc,
 };
 
-use soroban_env_common::xdr::{ScErrorCode, ScErrorType};
-
 use crate::{
     host::error::TryBorrowOrErr,
     xdr::{
         ContractCostParamEntry, ContractCostParams, ContractCostType, DepthLimiter, ExtensionPoint,
+        ScErrorCode, ScErrorType,
     },
     Error, Host, HostError, DEFAULT_HOST_DEPTH_LIMIT,
 };
@@ -412,6 +411,30 @@ impl Display for BudgetImpl {
     }
 }
 
+impl DepthLimiter for BudgetImpl {
+    type DepthLimiterError = HostError;
+
+    fn enter(&mut self) -> Result<(), HostError> {
+        if let Some(depth) = self.depth_limit.checked_sub(1) {
+            self.depth_limit = depth;
+        } else {
+            return Err(Error::from_type_and_code(
+                ScErrorType::Context,
+                ScErrorCode::ExceededLimit,
+            )
+            .into());
+        }
+        Ok(())
+    }
+
+    // `leave` should be called in tandem with `enter` such that the depth
+    // doesn't exceed the initial depth limit.
+    fn leave(&mut self) -> Result<(), HostError> {
+        self.depth_limit = self.depth_limit.saturating_add(1);
+        Ok(())
+    }
+}
+
 #[derive(Default, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Budget(pub(crate) Rc<RefCell<BudgetImpl>>);
 
@@ -450,25 +473,14 @@ impl AsBudget for &Host {
 }
 
 impl DepthLimiter for Budget {
-    type DepthError = HostError;
+    type DepthLimiterError = HostError;
 
-    fn enter(&self) -> Result<(), HostError> {
-        let depth = self.0.borrow().depth_limit;
-        if depth == 0 {
-            return Err(Error::from_type_and_code(
-                ScErrorType::Context,
-                ScErrorCode::ExceededLimit,
-            )
-            .into());
-        }
-        self.0.borrow_mut().depth_limit -= 1;
-        Ok(())
+    fn enter(&mut self) -> Result<(), HostError> {
+        self.0.try_borrow_mut_or_err()?.enter()
     }
 
-    fn leave(&self) {
-        // no need to do saturating_add because `leave` must be called after `enter`,
-        // thus the `depth_limit` cannot exceed the initial value.
-        self.0.borrow_mut().depth_limit += 1;
+    fn leave(&mut self) -> Result<(), HostError> {
+        self.0.try_borrow_mut_or_err()?.leave()
     }
 }
 
