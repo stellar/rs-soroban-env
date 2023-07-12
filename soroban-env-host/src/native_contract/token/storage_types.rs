@@ -2,7 +2,7 @@ use crate::native_contract::base_types::Address;
 use soroban_env_common::TryIntoVal;
 use soroban_native_sdk_macros::contracttype;
 
-pub(crate) const INSTANCE_BUMP_AMOUNT: u32 = 34560; // 2 hours
+pub(crate) const INSTANCE_BUMP_AMOUNT: u32 = 34560; // 2 days
 pub(crate) const BALANCE_BUMP_AMOUNT: u32 = 518400; // 30 days
 
 #[contracttype]
