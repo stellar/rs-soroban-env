@@ -44,7 +44,6 @@ pub(crate) mod metered_vector;
 pub(crate) mod metered_xdr;
 mod num;
 mod prng;
-use bit_set::BitSet;
 pub use prng::{Seed, SEED_BYTES};
 mod validity;
 pub use error::HostError;
@@ -96,7 +95,7 @@ pub(crate) struct HostImpl {
     ledger: RefCell<Option<LedgerInfo>>,
     pub(crate) objects: RefCell<Vec<HostObject>>,
     system_mode: RefCell<bool>,
-    system_objects: RefCell<BitSet>,
+    system_objects: RefCell<Vec<HostObject>>,
     storage: RefCell<Storage>,
     pub(crate) context: RefCell<Vec<Context>>,
     // Note: budget is refcounted and is _not_ deep-cloned when you call HostImpl::deep_clone,
@@ -175,7 +174,7 @@ impl_checked_borrow_helpers!(
 );
 impl_checked_borrow_helpers!(
     system_objects,
-    BitSet,
+    Vec<HostObject>,
     try_borrow_system_objects,
     try_borrow_system_objects_mut
 );

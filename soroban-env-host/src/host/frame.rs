@@ -6,7 +6,7 @@ use soroban_env_common::{
 use crate::{
     auth::AuthorizationManagerSnapshot,
     budget::AsBudget,
-    err,
+    err, host_object,
     storage::{InstanceStorageMap, StorageMap},
     xdr::{ContractCostType, ContractExecutable, Hash, HostFunction, HostFunctionType, ScVal},
     Error, Host, HostError, Object, Symbol, SymbolStr, TryFromVal, TryIntoVal, Val,
@@ -124,11 +124,11 @@ impl Frame {
             Frame::TestContract(tc) => (&tc.func, &tc.args),
         };
         if let Ok(obj) = Object::try_from(sym.to_val()) {
-            bs.insert(obj.get_handle() as usize);
+            bs.insert(host_object::handle_to_index(obj.get_handle()));
         }
         for v in args.iter() {
             if let Ok(obj) = Object::try_from(*v) {
-                bs.insert(obj.get_handle() as usize);
+                bs.insert(host_object::handle_to_index(obj.get_handle()));
             }
         }
 

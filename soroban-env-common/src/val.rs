@@ -376,6 +376,9 @@ impl_tryfroms_and_tryfromvals_delegating_to_rawvalconvertible!(Error);
 pub trait WasmiMarshal: Sized {
     fn try_marshal_from_value(v: wasmi::Value) -> Option<Self>;
     fn marshal_from_self(self) -> wasmi::Value;
+    fn try_to_val(&self) -> Option<Val> {
+        None
+    }
 }
 
 #[cfg(feature = "wasmi")]
@@ -390,6 +393,10 @@ impl WasmiMarshal for Val {
 
     fn marshal_from_self(self) -> wasmi::Value {
         wasmi::Value::I64(self.get_payload() as i64)
+    }
+
+    fn try_to_val(&self) -> Option<Val> {
+        Some(*self)
     }
 }
 

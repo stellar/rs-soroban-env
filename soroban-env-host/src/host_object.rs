@@ -1,6 +1,7 @@
 use soroban_env_common::{
-    xdr::ContractCostType, Compare, DurationSmall, I128Small, I256Small, I64Small, SymbolSmall,
-    SymbolStr, Tag, TimepointSmall, U128Small, U256Small, U64Small,
+    xdr::{ContractCostType, ScErrorCode, ScErrorType},
+    Compare, DurationSmall, I128Small, I256Small, I64Small, SymbolSmall, SymbolStr, Tag,
+    TimepointSmall, U128Small, U256Small, U64Small,
 };
 
 use crate::{
@@ -190,16 +191,82 @@ declare_mem_host_object_type!(xdr::ScString, StringObject, String);
 declare_mem_host_object_type!(xdr::ScSymbol, SymbolObject, Symbol);
 declare_host_object_type!(xdr::ScAddress, AddressObject, Address);
 
+// We store system objects in a separate Vec from user objects, and
+// differentiate handles to them by the low bit of the handle: 1 means system
+// objects, 0 means user objects. This way user code is literally unaffected by
+// system-object allocation -- won't even change the handles users get -- and we
+// can also check that system objects are never leaking out of the host.
+pub fn is_system_object_handle(handle: u32) -> bool {
+    handle & 1 == 1
+}
+
+pub fn is_system_object(obj: Object) -> bool {
+    is_system_object_handle(obj.get_handle())
+}
+
+pub fn is_system_object_value(val: Val) -> bool {
+    if let Ok(obj) = Object::try_from(val) {
+        is_system_object(obj)
+    } else {
+        false
+    }
+}
+
+pub fn handle_to_index(handle: u32) -> usize {
+    (handle as usize) >> 1
+}
+
+pub fn index_to_handle(host: &Host, index: usize, system_mode: bool) -> Result<u32, HostError> {
+    if let Ok(smaller) = u32::try_from(index) {
+        if let Some(shifted) = smaller.checked_shl(1) {
+            if system_mode {
+                return Ok(shifted | 1);
+            } else {
+                return Ok(shifted | 0);
+            }
+        }
+    }
+    Err(host.err_arith_overflow())
+}
+
 impl Host {
+    pub fn check_value_is_non_system_object(&self, val: Val) -> Result<(), HostError> {
+        if is_system_object_value(val) {
+            Err(self.err(
+                ScErrorType::Context,
+                ScErrorCode::InternalError,
+                "unexpected system value",
+                &[val],
+            ))
+        } else {
+            Ok(())
+        }
+    }
+
     // Execute `f` in system mode, restoring the state of the flag on exit (and allowing re-entry of system-mode).
     pub(crate) fn with_system_mode<T>(
         &self,
         f: impl FnOnce() -> Result<T, HostError>,
     ) -> Result<T, HostError> {
+        self.with_system_mode_flag(true, f)
+    }
+
+    pub(crate) fn with_user_mode<T>(
+        &self,
+        f: impl FnOnce() -> Result<T, HostError>,
+    ) -> Result<T, HostError> {
+        self.with_system_mode_flag(false, f)
+    }
+
+    pub(crate) fn with_system_mode_flag<T>(
+        &self,
+        new_flag: bool,
+        f: impl FnOnce() -> Result<T, HostError>,
+    ) -> Result<T, HostError> {
         let saved_flag = {
             let mut flag = self.try_borrow_system_mode_mut()?;
             let saved_flag = *flag;
-            *flag = true;
+            *flag = new_flag;
             saved_flag
         };
         let res = f();
@@ -212,43 +279,52 @@ impl Host {
         Ok(*self.try_borrow_system_mode()?)
     }
 
-    fn system_obj_allowed(&self, obj: Object) -> Result<bool, HostError> {
-        if !self.in_system_mode()? {
-            return Ok(false);
-        }
-        let objs = self.try_borrow_system_objects()?;
-        Ok(objs.contains(obj.get_handle() as usize))
-    }
-
-    fn allow_system_obj(&self, obj: Object) -> Result<(), HostError> {
-        let mut objs = self.try_borrow_system_objects_mut()?;
-        objs.insert(obj.get_handle() as usize);
-        Ok(())
+    pub(crate) fn system_to_user(&self, val: Val) -> Result<Val, HostError> {
+        let scval = self.with_system_mode(|| self.from_host_val(val))?;
+        self.with_user_mode(|| self.to_host_val(&scval))
     }
 
     fn obj_allowed(&self, obj: Object) -> Result<bool, HostError> {
-        if self.system_obj_allowed(obj)? {
+        if self.in_system_mode()? {
+            // System mode can read all objects.
             return Ok(true);
         }
         self.with_current_context_opt(|ctx| {
             Ok(if let Some(ctx) = ctx {
-                ctx.acl.contains(obj.get_handle() as usize)
+                // If we're in a specific context, there is an ACL
+                // restricting which objects can be seen.
+                if is_system_object(obj) {
+                    // ACLs never allow access to system objects.
+                    false
+                } else {
+                    ctx.acl.contains(handle_to_index(obj.get_handle()))
+                }
             } else {
                 // When there's no context, it means we're accessing the
                 // host from outside of a contract or anything (eg. in the
-                // embedding program or a test) so all objects are allowed.
+                // embedding program, or a test) so all objects are allowed.
                 true
             })
         })
     }
 
     fn allow_obj(&self, obj: Object) -> Result<(), HostError> {
-        if self.in_system_mode()? {
-            return self.allow_system_obj(obj);
+        if is_system_object(obj) {
+            if !self.in_system_mode()? {
+                return Err(self.err(
+                    ScErrorType::Context,
+                    ScErrorCode::InternalError,
+                    "allow_obj on system object in non-system mode",
+                    &[obj.to_val()],
+                ));
+            }
+            // Allowing a system object in system mode is a no-op,
+            // they're always allowed.
+            return Ok(());
         }
         self.with_current_context_mut_opt(|ctx| {
             if let Some(ctx) = ctx {
-                ctx.acl.insert(obj.get_handle() as usize);
+                ctx.acl.insert(handle_to_index(obj.get_handle()));
             }
             Ok(())
         })
@@ -269,15 +345,18 @@ impl Host {
         &self,
         hot: HOT,
     ) -> Result<HOT::Wrapper, HostError> {
-        let prev_len = self.try_borrow_objects()?.len();
-        if prev_len > u32::MAX as usize {
-            return Err(self.err_arith_overflow());
-        }
+        let system_mode = self.in_system_mode()?;
+        let mut objects = if system_mode {
+            self.try_borrow_system_objects_mut()?
+        } else {
+            self.try_borrow_objects_mut()?
+        };
+        let index = objects.len();
         // charge for the new host object, which is just the amortized cost of a single
         // `HostObject` allocation
         metered_clone::charge_heap_alloc::<HostObject>(1, self.as_budget())?;
-        self.try_borrow_objects_mut()?.push(HOT::inject(hot));
-        let handle = prev_len as u32;
+        objects.push(HOT::inject(hot));
+        let handle = index_to_handle(self, index, system_mode)?;
         let wrapper = HOT::new_from_handle(handle);
         // Any object we _create_ we're implicitly allowed to access.
         self.allow_obj(wrapper.clone().into())?;
@@ -295,22 +374,18 @@ impl Host {
         F: FnOnce(Option<&HostObject>) -> Result<U, HostError>,
     {
         self.charge_budget(ContractCostType::VisitObject, None)?;
-        let r = self.try_borrow_objects()?;
         let obj: Object = obj.into();
-        if self.obj_allowed(obj)? {
-            let handle: u32 = obj.get_handle();
-            f(r.get(handle as usize))
+        let handle: u32 = obj.get_handle();
+        let index = handle_to_index(handle);
+        let objects = if is_system_object_handle(handle) {
+            self.try_borrow_system_objects()?
         } else {
-            eprintln!(
-                "access denied to object {:?} = {:?}",
-                obj,
-                r.get(obj.get_handle() as usize)
-            );
-            eprintln!(
-                "context ACL: {:?}",
-                self.with_current_context(|ctx| Ok(ctx.acl.clone()))?
-            );
-            eprintln!("system ACL: {:?}", self.try_borrow_system_objects()?);
+            self.try_borrow_objects()?
+        };
+        if self.obj_allowed(obj)? {
+            f(objects.get(index))
+        } else {
+            self.log_diagnostics("denied access to object", &[obj.to_val()])?;
             f(None)
         }
     }

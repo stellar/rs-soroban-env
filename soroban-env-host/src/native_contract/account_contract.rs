@@ -126,25 +126,34 @@ pub(crate) fn check_account_contract_auth(
     signature_args: &Vec<Val>,
     invocation: &AuthorizedInvocation,
 ) -> Result<(), HostError> {
-    let payload_obj = host.bytes_new_from_slice(signature_payload)?;
-    let signature_args_vec = HostVec::try_from_val(host, signature_args)?;
+    let signature_args_vec = HostVec::try_from_val(host, &signature_args)?;
     let mut auth_context_vec = HostVec::new(host)?;
     invocation_tree_to_auth_contexts(host, invocation, &mut auth_context_vec)?;
-    Ok(host
-        .call_n_internal(
-            account_contract,
-            ACCOUNT_CONTRACT_CHECK_AUTH_FN_NAME.try_into_val(host)?,
-            &[
-                payload_obj.into(),
-                signature_args_vec.into(),
-                auth_context_vec.into(),
-            ],
-            // Allow self reentry for this function in order to be able to do
-            // wallet admin ops using the auth framework itself.
-            ContractReentryMode::SelfAllowed,
-            true,
-        )?
-        .try_into()?)
+
+    // Copy structured object types to user objects, to allow access by user code.
+    let signature_args_vec =
+        HostVec::try_from_val(host, &host.system_to_user(signature_args_vec.into())?)?;
+    let auth_context_vec =
+        HostVec::try_from_val(host, &host.system_to_user(auth_context_vec.into())?)?;
+
+    host.with_user_mode(|| {
+        let payload_obj = host.bytes_new_from_slice(signature_payload)?;
+        Ok(host
+            .call_n_internal(
+                account_contract,
+                ACCOUNT_CONTRACT_CHECK_AUTH_FN_NAME.try_into_val(host)?,
+                &[
+                    payload_obj.into(),
+                    signature_args_vec.into(),
+                    auth_context_vec.into(),
+                ],
+                // Allow self reentry for this function in order to be able to do
+                // wallet admin ops using the auth framework itself.
+                ContractReentryMode::SelfAllowed,
+                true,
+            )?
+            .try_into()?)
+    })
 }
 
 pub(crate) fn check_account_authentication(

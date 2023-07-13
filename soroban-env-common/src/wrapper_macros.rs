@@ -99,6 +99,10 @@ macro_rules! impl_wrapper_wasmi_conversions {
             fn marshal_from_self(self) -> wasmi::Value {
                 wasmi::Value::I64(self.as_val().get_payload() as i64)
             }
+
+            fn try_to_val(&self) -> Option<Val> {
+                Some(*self.as_val())
+            }
         }
     };
 }

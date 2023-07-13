@@ -94,8 +94,11 @@ macro_rules! generate_dispatch_functions {
 
                     let res = match res {
                         Ok(ok) => {
-                            let val: Value = ok.marshal_from_self();
-                            if let Value::I64(v) = val {
+                            if let Some(val) = ok.try_to_val() {
+                                host.check_value_is_non_system_object(val)?;
+                            }
+                            let value: Value = ok.marshal_from_self();
+                            if let Value::I64(v) = value {
                                 Ok((v,))
                             } else {
                                 Err(BadSignature.into())
