@@ -109,6 +109,32 @@ impl HostError {
             }
         }
     }
+
+    /// Identifies whether the error can be meaningfully recovered from.
+    ///
+    /// We consider errors that occur due to broken execution preconditions (
+    /// such as incorrect footprint) non-recoverable.
+    pub fn is_recoverable(&self) -> bool {
+        // All internal errors that originate from the host can be considered 
+        // non-recoverable (they should only appear if there is some bug in the 
+        // host implementation or setup).
+        if !self.error.is_type(ScErrorType::Contract)
+            && !self.error.is_type(ScErrorType::WasmVm)
+            && self.error.is_code(ScErrorCode::InternalError)
+        {
+            return false;
+        }
+        // Exceeding the budget or storage limit is non-recoverable. Exceeding
+        // storage 'limit' is basically accessing entries outside of the
+        // supplied footprint.
+        if self.error.is_code(ScErrorCode::ExceededLimit)
+            && (self.error.is_type(ScErrorType::Storage) || self.error.is_type(ScErrorType::Budget))
+        {
+            return false;
+        }
+
+        true
+    }
 }
 
 impl<T> From<T> for HostError
