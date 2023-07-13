@@ -36,7 +36,7 @@ use wasmi::{Caller, StoreContextMut};
 
 impl wasmi::core::HostError for HostError {}
 
-pub const WASM_LINEAR_MEMORY_SIZE_LIMIT_BYTES: usize = 0x200000; // 20MB
+pub const WASM_LINEAR_MEMORY_SIZE_LIMIT_BYTES: usize = 0x200000; // 2MB
 pub const WASM_TABLE_ELEMENTS_LIMIT_COUNT: u32 = 1000;
 
 /// A [Vm] is a thin wrapper around an instance of [wasmi::Module]. Multiple
