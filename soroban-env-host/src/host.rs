@@ -1140,7 +1140,7 @@ impl VmCallerEnv for Host {
                     &vm,
                     pos,
                     vals.as_mut_slice(),
-                    |buf| Val::from_payload(u64::from_le_bytes(*buf)),
+                    |buf| self.relative_to_absolute(Val::from_payload(u64::from_le_bytes(*buf))),
                 )?;
 
                 self.log_diagnostics(&msg, &vals)
@@ -1679,7 +1679,7 @@ impl VmCallerEnv for Host {
             &vm,
             vals_pos,
             vals.as_mut_slice(),
-            |buf| Val::from_payload(u64::from_le_bytes(*buf)),
+            |buf| self.relative_to_absolute(Val::from_payload(u64::from_le_bytes(*buf))),
         )?;
         for v in vals.iter() {
             self.check_val_integrity(*v)?;
@@ -1740,7 +1740,11 @@ impl VmCallerEnv for Host {
                 &vm,
                 vals_pos.into(),
                 mapobj.map.as_slice(),
-                |pair| u64::to_le_bytes(pair.1.get_payload()),
+                |pair| {
+                    Ok(u64::to_le_bytes(
+                        self.absolute_to_relative(pair.1)?.get_payload(),
+                    ))
+                },
             )?;
             Ok(())
         })?;
@@ -1969,7 +1973,7 @@ impl VmCallerEnv for Host {
             &vm,
             pos,
             vals.as_mut_slice(),
-            |buf| Val::from_payload(u64::from_le_bytes(*buf)),
+            |buf| self.relative_to_absolute(Val::from_payload(u64::from_le_bytes(*buf))),
         )?;
         for v in vals.iter() {
             self.check_val_integrity(*v)?;
@@ -1991,7 +1995,11 @@ impl VmCallerEnv for Host {
                 &vm,
                 vals_pos.into(),
                 vecobj.as_slice(),
-                |x| u64::to_le_bytes(x.get_payload()),
+                |x| {
+                    Ok(u64::to_le_bytes(
+                        self.absolute_to_relative(*x)?.get_payload(),
+                    ))
+                },
             )
         })?;
         Ok(Val::VOID)
@@ -2848,8 +2856,8 @@ impl VmCallerEnv for Host {
         let mut outer = Vec::with_capacity(contexts.len());
         for context in contexts.iter() {
             let vals = match &context.frame {
-                Frame::ContractVM(vm, function, ..) => {
-                    get_host_val_tuple(&vm.contract_id, &function)?
+                Frame::ContractVM { vm, fn_name, .. } => {
+                    get_host_val_tuple(&vm.contract_id, fn_name)?
                 }
                 Frame::HostFunction(_) => continue,
                 Frame::Token(id, function, ..) => get_host_val_tuple(id, function)?,
@@ -2907,7 +2915,7 @@ impl VmCallerEnv for Host {
     ) -> Result<Void, Self::Error> {
         let args = self.with_current_frame(|f| {
             let args = match f {
-                Frame::ContractVM(_, _, args, _) => args,
+                Frame::ContractVM { args, .. } => args,
                 Frame::HostFunction(_) => {
                     return Err(self.err(
                         ScErrorType::Context,

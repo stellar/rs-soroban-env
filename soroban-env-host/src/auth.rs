@@ -943,7 +943,7 @@ impl AuthorizationManager {
     // This should be called for every `Host` `push_frame`.
     pub(crate) fn push_frame(&self, host: &Host, frame: &Frame) -> Result<(), HostError> {
         let (contract_id, function_name) = match frame {
-            Frame::ContractVM(vm, fn_name, ..) => {
+            Frame::ContractVM { vm, fn_name, .. } => {
                 (vm.contract_id.metered_clone(host.budget_ref())?, *fn_name)
             }
             // Skip the top-level host function stack frames as they don't
