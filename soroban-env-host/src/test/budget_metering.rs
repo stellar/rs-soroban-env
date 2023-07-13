@@ -262,7 +262,7 @@ fn total_amount_charged_from_random_inputs() -> Result<(), HostError> {
     ];
 
     for ty in ContractCostType::variants() {
-        host.with_budget(|b| b.batched_charge(ty, tracker[ty as usize].0, tracker[ty as usize].1))?;
+        host.with_budget(|b| b.bulk_charge(ty, tracker[ty as usize].0, tracker[ty as usize].1))?;
     }
     let actual = format!("{:?}", host.as_budget());
     expect![[r#"

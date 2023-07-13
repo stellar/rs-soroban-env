@@ -695,12 +695,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "intx"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f6f38a50a899dc47a6d0ed5508e7f601a2e34c3a85303514b5d137f3c10a0c75"
-
-[[package]]
 name = "itertools"
 version = "0.10.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1412,9 +1406,8 @@ version = "0.0.17"
 [[package]]
 name = "soroban-wasmi"
 version = "0.30.0-soroban"
-source = "git+https://github.com/stellar/wasmi?rev=3dc639fde3bebf0bf364a9fa4ac2f0efb7ee9995#3dc639fde3bebf0bf364a9fa4ac2f0efb7ee9995"
+source = "git+https://github.com/jayz22/wasmi?rev=284c963ba080703061797e2a3cba0853edee0dd4#284c963ba080703061797e2a3cba0853edee0dd4"
 dependencies = [
- "intx",
  "smallvec",
  "spin",
  "wasmi_arena",
@@ -1840,12 +1833,12 @@ dependencies = [
 [[package]]
 name = "wasmi_arena"
 version = "0.4.0"
-source = "git+https://github.com/stellar/wasmi?rev=3dc639fde3bebf0bf364a9fa4ac2f0efb7ee9995#3dc639fde3bebf0bf364a9fa4ac2f0efb7ee9995"
+source = "git+https://github.com/jayz22/wasmi?rev=284c963ba080703061797e2a3cba0853edee0dd4#284c963ba080703061797e2a3cba0853edee0dd4"
 
 [[package]]
 name = "wasmi_core"
 version = "0.12.0"
-source = "git+https://github.com/stellar/wasmi?rev=3dc639fde3bebf0bf364a9fa4ac2f0efb7ee9995#3dc639fde3bebf0bf364a9fa4ac2f0efb7ee9995"
+source = "git+https://github.com/jayz22/wasmi?rev=284c963ba080703061797e2a3cba0853edee0dd4#284c963ba080703061797e2a3cba0853edee0dd4"
 dependencies = [
  "downcast-rs",
  "libm",

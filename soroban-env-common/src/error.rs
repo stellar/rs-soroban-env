@@ -159,7 +159,9 @@ impl From<wasmi::core::TrapCode> for Error {
 
             wasmi::core::TrapCode::BadSignature => ScErrorCode::UnexpectedType,
 
-            wasmi::core::TrapCode::StackOverflow | wasmi::core::TrapCode::OutOfFuel => {
+            wasmi::core::TrapCode::StackOverflow
+            | wasmi::core::TrapCode::OutOfFuel
+            | wasmi::core::TrapCode::GrowthOperationLimited => {
                 return Error::from_type_and_code(ScErrorType::Budget, ScErrorCode::ExceededLimit)
             }
         };

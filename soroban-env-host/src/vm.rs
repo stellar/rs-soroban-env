@@ -24,7 +24,10 @@ use soroban_env_common::{
     ConversionError, SymbolStr, TryIntoVal, WasmiMarshal,
 };
 
-use wasmi::{Engine, FuelConsumptionMode, Func, Instance, Linker, Memory, Module, Store, Value};
+use wasmi::{
+    Engine, FuelConsumptionMode, Func, Instance, Linker, Memory, Module, Store, StoreLimits,
+    StoreLimitsBuilder, Value,
+};
 
 #[cfg(any(test, feature = "testutils"))]
 use crate::VmCaller;
@@ -32,6 +35,9 @@ use crate::VmCaller;
 use wasmi::{Caller, StoreContextMut};
 
 impl wasmi::core::HostError for HostError {}
+
+pub const WASM_LINEAR_MEMORY_SIZE_LIMIT_BYTES: usize = 0x200000; // 20MB
+pub const WASM_TABLE_ELEMENTS_LIMIT_COUNT: u32 = 1000;
 
 /// A [Vm] is a thin wrapper around an instance of [wasmi::Module]. Multiple
 /// [Vm]s may be held in a single [Host], and each contains a single WASM module
@@ -50,7 +56,7 @@ pub struct Vm {
     // TODO: consider moving store and possibly module to Host so they can be
     // recycled across calls. Or possibly beyond, to be recycled across txs.
     module: Module,
-    store: RefCell<Store<Host>>,
+    store: RefCell<Store<StoreData>>,
     instance: Instance,
     memory: Option<Memory>,
 }
@@ -61,6 +67,30 @@ pub struct VmFunction {
     pub name: String,
     pub param_count: usize,
     pub result_count: usize,
+}
+
+#[derive(Clone)]
+pub struct StoreData {
+    pub(crate) host: Host,
+    pub(crate) limits: StoreLimits,
+}
+
+impl StoreData {
+    fn new(host: &Host) -> Self {
+        let limits = StoreLimitsBuilder::new()
+            .memory_size(WASM_LINEAR_MEMORY_SIZE_LIMIT_BYTES)
+            .table_elements(WASM_TABLE_ELEMENTS_LIMIT_COUNT)
+            .instances(1)
+            .tables(1)
+            .memories(1)
+            .trap_on_grow_failure(true)
+            .build();
+
+        StoreData {
+            host: host.clone(),
+            limits,
+        }
+    }
 }
 
 impl Vm {
@@ -113,6 +143,19 @@ impl Vm {
         }
     }
 
+    fn instantiate_store(host: &Host, engine: &Engine) -> Result<Store<StoreData>, HostError> {
+        let data = StoreData::new(host);
+        let mut store = Store::new(&engine, data);
+        store.limiter(|data| &mut data.limits);
+        // charge maximum linear memory size up-front, memory growth will not be metered
+        host.as_budget().bulk_charge(
+            ContractCostType::WasmMemAlloc,
+            WASM_LINEAR_MEMORY_SIZE_LIMIT_BYTES as u64,
+            None,
+        )?;
+        Ok(store)
+    }
+
     /// Constructs a new instance of a [Vm] within the provided [Host],
     /// establishing a new execution context for a contract identified by
     /// `contract_id` with WASM bytecode provided in `module_wasm_code`.
@@ -160,8 +203,9 @@ impl Vm {
 
         Self::check_meta_section(host, &module)?;
 
-        let mut store = Store::new(&engine, host.clone());
-        let mut linker = <Linker<Host>>::new(&engine);
+        let mut store = Self::instantiate_store(host, &engine)?;
+
+        let mut linker = <Linker<StoreData>>::new(&engine);
 
         for hf in HOST_FUNCTIONS {
             let func = (hf.wrap)(&mut store);
@@ -221,7 +265,7 @@ impl Vm {
         inputs: &[Value],
     ) -> Result<Val, HostError> {
         let mut wasm_ret: [Value; 1] = [Value::I64(0)];
-        self.store.try_borrow_mut_or_err()?.fill_fuels(host)?;
+        self.store.try_borrow_mut_or_err()?.add_fuel_to_vm(host)?;
         let res = func.call(
             &mut *self.store.try_borrow_mut_or_err()?,
             inputs,
@@ -232,7 +276,9 @@ impl Vm {
         // wasmi instruction) remaining when the `OutOfFuel` trap occurs. This is only observable
         // if the contract traps with `OutOfFuel`, which may appear confusing if they look closely
         // at the budget amount consumed. So it should be fine.
-        self.store.try_borrow_mut_or_err()?.return_fuels(host)?;
+        self.store
+            .try_borrow_mut_or_err()?
+            .return_fuel_to_host(host)?;
 
         if let Err(e) = res {
             // When a call fails with a wasmi::Error::Trap that carries a HostError
@@ -331,18 +377,18 @@ impl Vm {
         Self::module_custom_section(&self.module, name)
     }
 
-    /// Utility function that synthesizes a `VmCaller<Host>` configured to point
+    /// Utility function that synthesizes a `VmCaller<StoreData>` configured to point
     /// to this VM's `Store` and `Instance`, and calls the provided function
     /// back with it. Mainly used for testing.
     #[cfg(any(test, feature = "testutils"))]
     pub fn with_vmcaller<F, T>(&self, f: F) -> Result<T, HostError>
     where
-        F: FnOnce(&mut VmCaller<Host>) -> Result<T, HostError>,
+        F: FnOnce(&mut VmCaller<StoreData>) -> Result<T, HostError>,
     {
-        let store: &mut Store<Host> = &mut *self.store.try_borrow_mut_or_err()?;
-        let mut ctx: StoreContextMut<Host> = store.into();
-        let caller: Caller<Host> = Caller::new(&mut ctx, Some(&self.instance));
-        let mut vmcaller: VmCaller<Host> = VmCaller(Some(caller));
+        let store: &mut Store<StoreData> = &mut *self.store.try_borrow_mut_or_err()?;
+        let mut ctx: StoreContextMut<StoreData> = store.into();
+        let caller: Caller<StoreData> = Caller::new(&mut ctx, Some(&self.instance));
+        let mut vmcaller: VmCaller<StoreData> = VmCaller(Some(caller));
         f(&mut vmcaller)
     }
 }

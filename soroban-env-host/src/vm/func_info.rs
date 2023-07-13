@@ -1,5 +1,5 @@
 use super::dispatch;
-use crate::Host;
+use crate::StoreData;
 use soroban_env_common::call_macro_with_all_host_functions;
 use wasmi::{Func, Store};
 
@@ -14,7 +14,7 @@ pub(crate) struct HostFuncInfo {
     /// Function that takes a wasmi::Store and _wraps_ a dispatch function
     /// for this host function, with the specific type of the dispatch function,
     /// into a Func in the Store.
-    pub(crate) wrap: fn(&mut Store<Host>) -> Func,
+    pub(crate) wrap: fn(&mut Store<StoreData>) -> Func,
 }
 
 ///////////////////////////////////////////////////////////////////////////////

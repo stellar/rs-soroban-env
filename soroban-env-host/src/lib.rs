@@ -34,7 +34,7 @@ mod native_contract;
 
 pub mod auth;
 pub mod vm;
-pub use vm::Vm;
+pub use vm::{StoreData, Vm};
 #[cfg(any(test, feature = "testutils"))]
 pub mod cost_runner;
 pub mod storage;
