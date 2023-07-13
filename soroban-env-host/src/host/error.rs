@@ -115,8 +115,8 @@ impl HostError {
     /// We consider errors that occur due to broken execution preconditions (
     /// such as incorrect footprint) non-recoverable.
     pub fn is_recoverable(&self) -> bool {
-        // All internal errors that originate from the host can be considered 
-        // non-recoverable (they should only appear if there is some bug in the 
+        // All internal errors that originate from the host can be considered
+        // non-recoverable (they should only appear if there is some bug in the
         // host implementation or setup).
         if !self.error.is_type(ScErrorType::Contract)
             && !self.error.is_type(ScErrorType::WasmVm)

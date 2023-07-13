@@ -2348,14 +2348,14 @@ impl VmCallerEnv for Host {
                         &[func.to_val(), args.to_val()],
                     )
                 })?;
-                // Only allow to gracefully handle the recoverable errors. 
+                // Only allow to gracefully handle the recoverable errors.
                 // Non-recoverable errors should still cause guest to panic and
                 // abort execution.
                 if e.is_recoverable() {
                     Ok(e.error.to_val())
                 } else {
                     Err(e)
-                }                
+                }
             }
         }
     }
