@@ -230,17 +230,37 @@ impl Host {
             let handle = obj.get_handle();
             return if is_relative_object_handle(handle) {
                 let index = handle_to_index(handle);
-                self.with_current_frame_relative_object_table(|table| match table.get(index) {
-                    Some(abs) => Ok(abs.into()),
+                let abs_opt = self.with_current_frame_relative_object_table(|table| {
+                    Ok(table.get(index).map(|x| x.clone()))
+                })?;
+                match abs_opt {
+                    Some(abs) if abs.to_val().get_tag() == val.get_tag() => Ok(abs.into()),
+                    // User forged a type tag. This is _relatively_ harmless
+                    // since we converted from relative to absolute and
+                    // literally changed object references altogether while
+                    // doing so -- i.e. we now have a correctly-typed absolute
+                    // object reference we _could_ proceed to use as requested
+                    // -- but a user passing an ill-typed relative object
+                    // reference is probably either a bug or part of some
+                    // strange type of attack, and in any case we _would_ signal
+                    // this as an object-integrity type mismatch if we hadn't
+                    // done the translation (eg. in native testing mode), so for
+                    // symmetry sake we will return the same error here.
+                    Some(_) => Err(self.err(
+                        ScErrorType::Object,
+                        ScErrorCode::UnexpectedType,
+                        "relative and absolute object types differ",
+                        &[],
+                    )),
                     // User is referring to something outside the bounds of
                     // their relative table, erroneously.
                     None => Err(self.err(
                         ScErrorType::Context,
                         ScErrorCode::InvalidInput,
                         "unknown relative object reference",
-                        &[val],
+                        &[Val::from_u32(handle).to_val()],
                     )),
-                })
+                }
             } else {
                 // This also gets "invalid input" because it came from the user
                 // VM: they tried to forge an absolute.
@@ -248,7 +268,7 @@ impl Host {
                     ScErrorType::Context,
                     ScErrorCode::InvalidInput,
                     "relative_to_absolute given an absolute reference",
-                    &[val],
+                    &[Val::from_u32(handle).to_val()],
                 ))
             };
         }
@@ -266,15 +286,21 @@ impl Host {
                     ScErrorType::Context,
                     ScErrorCode::InternalError,
                     "absolute_to_relative given a relative reference",
-                    &[val],
+                    // NB: we convert to a U32Val here otherwise the _events_ system
+                    // will fault when trying to look up this argument as a relative
+                    // object reference.
+                    &[Val::from_u32(handle).to_val()],
                 ))
             } else {
-                self.with_current_frame_relative_object_table(|table| {
+                // Push a new entry into the relative-objects vector.
+                metered_clone::charge_heap_alloc::<Object>(1, self.as_budget())?;
+                let index = self.with_current_frame_relative_object_table(|table| {
                     let index = table.len();
-                    let handle = index_to_handle(self, index, true)?;
                     table.push(obj);
-                    Ok(Object::from_handle_and_tag(handle, val.get_tag()).into())
-                })
+                    Ok(index)
+                })?;
+                let handle = index_to_handle(self, index, true)?;
+                Ok(Object::from_handle_and_tag(handle, val.get_tag()).into())
             };
         }
         Ok(val)
@@ -315,7 +341,7 @@ impl Host {
                 ScErrorType::Context,
                 ScErrorCode::InternalError,
                 "looking up relative object",
-                &[obj.to_val()],
+                &[Val::from_u32(handle).to_val()],
             ))
         } else {
             f(r.get(handle_to_index(handle)))
