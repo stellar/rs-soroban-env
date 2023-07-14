@@ -27,7 +27,7 @@ soroban-native-sdk-macros = { version = "0.0.17", path = "soroban-native-sdk-mac
 [workspace.dependencies.stellar-xdr]
 version = "0.0.17"
 git = "https://github.com/stellar/rs-stellar-xdr"
-rev = "a49a739d2af0d75814b62004a5c301ac2fd77036"
+rev = "54c183e91573d8a5882ff1dda21d444ef42cc426"
 default-features = false
 
 [workspace.dependencies.wasmi]

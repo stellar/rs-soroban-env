@@ -10,9 +10,9 @@ use soroban_env_common::num::{
     i256_from_pieces, i256_into_pieces, u256_from_pieces, u256_into_pieces,
 };
 use soroban_env_common::xdr::{
-    self, int128_helpers, AccountId, ContractDataDurability, ContractEntryBodyType, Int128Parts,
-    Int256Parts, ScAddress, ScBytes, ScErrorCode, ScErrorType, ScMap, ScMapEntry, UInt128Parts,
-    UInt256Parts,
+    self, int128_helpers, AccountId, ContractDataDurability, ContractEntryBodyType, DepthLimiter,
+    Int128Parts, Int256Parts, ScAddress, ScBytes, ScErrorCode, ScErrorType, ScMap, ScMapEntry,
+    UInt128Parts, UInt256Parts,
 };
 use soroban_env_common::{
     AddressObject, BytesObject, Convert, Object, ScValObjRef, ScValObject, TryFromVal, TryIntoVal,
@@ -369,27 +369,32 @@ impl Host {
         // translates a u64 into another form defined by the xdr.
         // For an `Object`, the actual structural conversion (such as byte
         // cloning) occurs in `from_host_obj` and is metered there.
-        self.charge_budget(ContractCostType::ValXdrConv, None)?;
-        ScVal::try_from_val(self, &val).map_err(|_| {
-            self.err(
-                ScErrorType::Value,
-                ScErrorCode::InvalidInput,
-                "failed to convert host value to ScVal",
-                &[val],
-            )
+        // This is the depth limit checkpoint for `Val`->`ScVal` conversion.
+        self.budget_cloned().with_limited_depth(|_| {
+            self.charge_budget(ContractCostType::ValXdrConv, None)?;
+            ScVal::try_from_val(self, &val).map_err(|_| {
+                self.err(
+                    ScErrorType::Value,
+                    ScErrorCode::InvalidInput,
+                    "failed to convert host value to ScVal",
+                    &[val],
+                )
+            })
         })
     }
 
     pub(crate) fn to_host_val(&self, v: &ScVal) -> Result<Val, HostError> {
-        // `ValXdrConv` is const cost in both cpu and mem. The input=0 will be ignored.
-        self.charge_budget(ContractCostType::ValXdrConv, None)?;
-        v.try_into_val(self).map_err(|_| {
-            self.err(
-                ScErrorType::Value,
-                ScErrorCode::InternalError,
-                "failed to convert ScVal to host value",
-                &[],
-            )
+        // This is the depth limit checkpoint for `ScVal`->`Val` conversion.
+        self.budget_cloned().with_limited_depth(|_| {
+            self.charge_budget(ContractCostType::ValXdrConv, None)?;
+            v.try_into_val(self).map_err(|_| {
+                self.err(
+                    ScErrorType::Value,
+                    ScErrorCode::InternalError,
+                    "failed to convert ScVal to host value",
+                    &[],
+                )
+            })
         })
     }
 

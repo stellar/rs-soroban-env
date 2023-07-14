@@ -69,6 +69,20 @@ pub(crate) use frame::Frame;
 #[cfg(any(test, feature = "testutils"))]
 use soroban_env_common::xdr::SorobanAuthorizedInvocation;
 
+/// Defines the maximum depth for recursive calls in the host, i.e. `Val` conversion, comparison,
+/// and deep clone, to prevent stack overflow.
+///
+/// Similar to the `xdr::DEFAULT_XDR_RW_DEPTH_LIMIT`, `DEFAULT_HOST_DEPTH_LIMIT` is also a proxy
+/// to the stack depth limit, and its purpose is to prevent the program from
+/// hitting the maximum stack size allowed by Rust, which would result in an unrecoverable `SIGABRT`.
+///
+/// The difference is the `DEFAULT_HOST_DEPTH_LIMIT`guards the recursion paths via the `Env` and
+/// the `Budget`, i.e., conversion, comparison and deep clone. The limit is checked at specific
+/// points of the recursion path, e.g. when `Val` is encountered, to minimize noise. So the
+/// "actual stack depth"/"host depth" factor will typically be larger, and thus the
+/// `DEFAULT_HOST_DEPTH_LIMIT` here is set to a smaller value.
+pub const DEFAULT_HOST_DEPTH_LIMIT: u32 = 100;
+
 /// Temporary helper for denoting a slice of guest memory, as formed by
 /// various bytes operations.
 pub(crate) struct VmSlice {

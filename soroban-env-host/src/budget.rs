@@ -4,12 +4,13 @@ use std::{
     rc::Rc,
 };
 
-use soroban_env_common::xdr::{ScErrorCode, ScErrorType};
-
 use crate::{
     host::error::TryBorrowOrErr,
-    xdr::{ContractCostParamEntry, ContractCostParams, ContractCostType, ExtensionPoint},
-    Host, HostError,
+    xdr::{
+        ContractCostParamEntry, ContractCostParams, ContractCostType, DepthLimiter, ExtensionPoint,
+        ScErrorCode, ScErrorType,
+    },
+    Error, Host, HostError, DEFAULT_HOST_DEPTH_LIMIT,
 };
 
 use wasmi::FuelCosts;
@@ -249,7 +250,7 @@ impl FuelConfig {
     }
 }
 
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) struct BudgetImpl {
     pub cpu_insns: BudgetDimension,
     pub mem_bytes: BudgetDimension,
@@ -258,6 +259,7 @@ pub(crate) struct BudgetImpl {
     tracker: Vec<(u64, Option<u64>)>,
     enabled: bool,
     fuel_config: FuelConfig,
+    depth_limit: u32,
 }
 
 impl BudgetImpl {
@@ -274,6 +276,7 @@ impl BudgetImpl {
             tracker: vec![(0, None); ContractCostType::variants().len()],
             enabled: true,
             fuel_config: Default::default(),
+            depth_limit: DEFAULT_HOST_DEPTH_LIMIT,
         };
 
         b.init_tracker();
@@ -408,6 +411,30 @@ impl Display for BudgetImpl {
     }
 }
 
+impl DepthLimiter for BudgetImpl {
+    type DepthLimiterError = HostError;
+
+    fn enter(&mut self) -> Result<(), HostError> {
+        if let Some(depth) = self.depth_limit.checked_sub(1) {
+            self.depth_limit = depth;
+        } else {
+            return Err(Error::from_type_and_code(
+                ScErrorType::Context,
+                ScErrorCode::ExceededLimit,
+            )
+            .into());
+        }
+        Ok(())
+    }
+
+    // `leave` should be called in tandem with `enter` such that the depth
+    // doesn't exceed the initial depth limit.
+    fn leave(&mut self) -> Result<(), HostError> {
+        self.depth_limit = self.depth_limit.saturating_add(1);
+        Ok(())
+    }
+}
+
 #[derive(Default, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Budget(pub(crate) Rc<RefCell<BudgetImpl>>);
 
@@ -442,6 +469,18 @@ impl AsBudget for Host {
 impl AsBudget for &Host {
     fn as_budget(&self) -> &Budget {
         self.budget_ref()
+    }
+}
+
+impl DepthLimiter for Budget {
+    type DepthLimiterError = HostError;
+
+    fn enter(&mut self) -> Result<(), HostError> {
+        self.0.try_borrow_mut_or_err()?.enter()
+    }
+
+    fn leave(&mut self) -> Result<(), HostError> {
+        self.0.try_borrow_mut_or_err()?.leave()
     }
 }
 
@@ -721,6 +760,7 @@ impl Default for BudgetImpl {
             tracker: vec![(0, None); ContractCostType::variants().len()],
             enabled: true,
             fuel_config: Default::default(),
+            depth_limit: DEFAULT_HOST_DEPTH_LIMIT,
         };
 
         for ct in ContractCostType::variants() {

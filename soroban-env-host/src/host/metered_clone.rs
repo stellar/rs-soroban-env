@@ -1,6 +1,6 @@
 use std::{mem, rc::Rc};
 
-use soroban_env_common::xdr::ScContractInstance;
+use soroban_env_common::xdr::DepthLimiter;
 
 use crate::{
     budget::Budget,
@@ -17,9 +17,9 @@ use crate::{
         LedgerEntryData, LedgerEntryExt, LedgerKey, LedgerKeyAccount, LedgerKeyClaimableBalance,
         LedgerKeyConfigSetting, LedgerKeyContractCode, LedgerKeyData, LedgerKeyLiquidityPool,
         LedgerKeyOffer, LedgerKeyTrustLine, LiquidityPoolEntry, OfferEntry, PublicKey, ScAddress,
-        ScBytes, ScErrorCode, ScErrorType, ScMap, ScMapEntry, ScNonceKey, ScString, ScSymbol,
-        ScVal, ScVec, SorobanAuthorizedInvocation, StringM, TimePoint, TrustLineAsset,
-        TrustLineEntry, Uint256,
+        ScBytes, ScContractInstance, ScErrorCode, ScErrorType, ScMap, ScMapEntry, ScNonceKey,
+        ScString, ScSymbol, ScVal, ScVec, SorobanAuthorizedInvocation, StringM, TimePoint,
+        TrustLineAsset, TrustLineEntry, Uint256,
     },
     AddressObject, Bool, BytesObject, DurationObject, DurationSmall, DurationVal, Error, HostError,
     I128Object, I128Small, I128Val, I256Object, I256Small, I256Val, I32Val, I64Object, I64Small,
@@ -251,34 +251,39 @@ impl MeteredClone for ScVal {
     const IS_SHALLOW: bool = false;
 
     fn charge_for_substructure(&self, budget: &Budget) -> Result<(), HostError> {
-        match self {
-            ScVal::Vec(Some(v)) => ScVec::charge_for_substructure(v, budget),
-            ScVal::Map(Some(m)) => ScMap::charge_for_substructure(m, budget),
-            ScVal::Vec(None) | ScVal::Map(None) => {
-                Err((ScErrorType::Value, ScErrorCode::MissingValue).into())
+        // This is the depth limit checkpoint for `ScVal` cloning.
+        budget.clone().with_limited_depth(|_| {
+            match self {
+                ScVal::Vec(Some(v)) => ScVec::charge_for_substructure(v, budget),
+                ScVal::Map(Some(m)) => ScMap::charge_for_substructure(m, budget),
+                ScVal::Vec(None) | ScVal::Map(None) => {
+                    Err((ScErrorType::Value, ScErrorCode::MissingValue).into())
+                }
+                ScVal::Bytes(b) => BytesM::charge_for_substructure(b, budget),
+                ScVal::String(s) => StringM::charge_for_substructure(s, budget),
+                ScVal::Symbol(s) => StringM::charge_for_substructure(s, budget),
+                ScVal::ContractInstance(i) => {
+                    ScContractInstance::charge_for_substructure(i, budget)
+                }
+                // Everything else was handled by the memcpy above.
+                ScVal::U64(_)
+                | ScVal::I64(_)
+                | ScVal::U128(_)
+                | ScVal::I128(_)
+                | ScVal::Address(_)
+                | ScVal::U32(_)
+                | ScVal::I32(_)
+                | ScVal::Error(_)
+                | ScVal::Bool(_)
+                | ScVal::Void
+                | ScVal::Timepoint(_)
+                | ScVal::Duration(_)
+                | ScVal::U256(_)
+                | ScVal::I256(_)
+                | ScVal::LedgerKeyContractInstance
+                | ScVal::LedgerKeyNonce(_) => Ok(()),
             }
-            ScVal::Bytes(b) => BytesM::charge_for_substructure(b, budget),
-            ScVal::String(s) => StringM::charge_for_substructure(s, budget),
-            ScVal::Symbol(s) => StringM::charge_for_substructure(s, budget),
-            ScVal::ContractInstance(i) => ScContractInstance::charge_for_substructure(i, budget),
-            // Everything else was handled by the memcpy above.
-            ScVal::U64(_)
-            | ScVal::I64(_)
-            | ScVal::U128(_)
-            | ScVal::I128(_)
-            | ScVal::Address(_)
-            | ScVal::U32(_)
-            | ScVal::I32(_)
-            | ScVal::Error(_)
-            | ScVal::Bool(_)
-            | ScVal::Void
-            | ScVal::Timepoint(_)
-            | ScVal::Duration(_)
-            | ScVal::U256(_)
-            | ScVal::I256(_)
-            | ScVal::LedgerKeyContractInstance
-            | ScVal::LedgerKeyNonce(_) => Ok(()),
-        }
+        })
     }
 }
 

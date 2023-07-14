@@ -48,7 +48,7 @@ pub use host::testutils::call_with_suppressed_panic_hook;
 pub use host::ContractFunctionSet;
 pub use host::{
     metered_map::MeteredOrdMap, metered_vector::MeteredVector, Host, HostError, LedgerInfo, Seed,
-    SEED_BYTES,
+    DEFAULT_HOST_DEPTH_LIMIT, SEED_BYTES,
 };
 pub use soroban_env_common::*;
 
