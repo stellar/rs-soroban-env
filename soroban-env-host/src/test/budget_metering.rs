@@ -46,8 +46,9 @@ fn xdr_object_conversion() -> Result<(), HostError> {
 fn vm_hostfn_invocation() -> Result<(), HostError> {
     let host = Host::test_host_with_recording_footprint();
     let id_obj = host.register_test_contract_wasm(VEC);
+    // this contract requests initial pages = 16 worth of linear memory, not sure why
     let host = host
-        .test_budget(100_000, 100_000)
+        .test_budget(100_000, 1_048_576)
         .enable_model(ContractCostType::InvokeVmFunction, 10, 0, 1, 0)
         .enable_model(ContractCostType::InvokeHostFunction, 10, 0, 1, 0);
 
