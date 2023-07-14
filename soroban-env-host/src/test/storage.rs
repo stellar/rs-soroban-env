@@ -149,7 +149,7 @@ fn test_storage(host: &Host, contract_id: AddressObject, storage: &str) {
         host_vec![host, key_1].into(),
     )
     .unwrap();
-    // Delete again - that's a no-op, but it should fail either.
+    // Delete again - that's a no-op, but it shouldn't fail either.
     host.call(
         contract_id,
         storage_fn_name(host, "del", storage),
