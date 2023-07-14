@@ -231,7 +231,7 @@ impl Host {
             return if is_relative_object_handle(handle) {
                 let index = handle_to_index(handle);
                 let abs_opt = self.with_current_frame_relative_object_table(|table| {
-                    Ok(table.get(index).map(|x| x.clone()))
+                    Ok(table.get(index).map(|x| *x))
                 })?;
                 match abs_opt {
                     Some(abs) if abs.to_val().get_tag() == val.get_tag() => Ok(abs.into()),
