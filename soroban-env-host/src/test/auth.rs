@@ -708,6 +708,36 @@ fn test_single_authorized_call_tree() {
 }
 
 #[test]
+fn test_disjoint_tree_not_allowed() {
+    let mut test = AuthTest::setup(1, 2);
+    let setup = SetupNode::new(
+        &test.contracts[0],
+        vec![true],
+        vec![SetupNode::new(&test.contracts[1], vec![true], vec![])],
+    );
+    // Correct call
+    test.tree_test_enforcing(
+        &setup,
+        vec![vec![SignNode::tree_fn(
+            &test.contracts[0],
+            vec![SignNode::tree_fn(&test.contracts[1], vec![])],
+        )]],
+        true,
+    );
+    test.verify_nonces_consumed(vec![1]);
+
+    // Incorrect call - tree has been split into two separate nodes.
+    test.tree_test_enforcing(
+        &setup,
+        vec![vec![
+            SignNode::tree_fn(&test.contracts[0], vec![]),
+            SignNode::tree_fn(&test.contracts[1], vec![]),
+        ]],
+        false,
+    );
+}
+
+#[test]
 fn test_two_authorized_trees() {
     let mut test = AuthTest::setup(1, 5);
     let setup = SetupNode::new(
