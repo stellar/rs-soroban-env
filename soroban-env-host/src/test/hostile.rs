@@ -1,10 +1,11 @@
 use soroban_env_common::{
-    xdr::{ScErrorCode, ScErrorType},
+    xdr::{ContractCostType, ScErrorCode, ScErrorType},
     Env, EnvBase, Symbol, Val, VecObject,
 };
+use soroban_synth_wasm::{Arity, ModEmitter, Operand};
 use soroban_test_wasms::HOSTILE;
 
-use crate::{host_object::HostVec, Host, HostError};
+use crate::{budget::AsBudget, host_object::HostVec, Host, HostError};
 
 #[test]
 fn hostile_iloop_traps() -> Result<(), HostError> {
@@ -187,6 +188,60 @@ fn hostile_forged_objects_trap() -> Result<(), HostError> {
         res.clone(),
         (ScErrorType::Object, ScErrorCode::UnexpectedType)
     ));
+
+    Ok(())
+}
+
+fn wasm_module_with_mem_grow(n_pages: usize) -> Vec<u8> {
+    let mut fe = ModEmitter::new().func(Arity(0), 0);
+    fe.push(Operand::Const32(n_pages as i32));
+    fe.memory_grow();
+    fe.drop();
+    fe.push(Symbol::try_from_small_str("pass").unwrap());
+    fe.finish_and_export("test").finish()
+}
+
+#[test]
+fn excessive_memory_growth() -> Result<(), HostError> {
+    // not sure why calling `memory_grow(32)`, wasmi requests 33 pages of memory
+    let wasm = wasm_module_with_mem_grow(32);
+    let host = Host::test_host_with_recording_footprint()
+        .test_budget(0, 0)
+        .enable_model(ContractCostType::WasmMemAlloc, 0, 0, 1, 0);
+    let contract_id_obj = host.register_test_contract_wasm(wasm.as_slice());
+    host.set_diagnostic_level(crate::DiagnosticLevel::Debug)?;
+
+    // This one should just run out of memory
+    {
+        let mem_budget = 33 * 0x10_000;
+        host.as_budget().reset_limits(40_000, mem_budget)?;
+        let res = host.call(
+            contract_id_obj,
+            Symbol::try_from_small_str("test")?,
+            host.add_host_object(HostVec::new())?,
+        );
+        assert!(HostError::result_matches_err(
+            res,
+            (ScErrorType::Budget, ScErrorCode::ExceededLimit)
+        ));
+    }
+
+    // allowing one extra page should be okay
+    {
+        let mem_budget = 34 * 0x10_000;
+        // Note on requiring non-zero cpu limit: even though no cpu instruction
+        // is consumed, wasmi does require checking internally there is enough fuel
+        // to finish the task. memory_grow is a special instruction that requires extra
+        // fuel (64 bytes per fuel), so we would roughly require `requested memory size / 64`
+        // cpu instructions to satisfy wasmi.
+        host.as_budget().reset_limits(40_000, mem_budget)?;
+        let res = host.call(
+            contract_id_obj,
+            Symbol::try_from_small_str("test")?,
+            host.add_host_object(HostVec::new())?,
+        );
+        assert!(res.is_ok());
+    }
 
     Ok(())
 }

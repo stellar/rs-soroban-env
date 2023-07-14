@@ -13,7 +13,7 @@ use crate::{
     Error, Host, HostError, DEFAULT_HOST_DEPTH_LIMIT,
 };
 
-use wasmi::FuelCosts;
+use wasmi::{errors, FuelCosts, ResourceLimiter};
 
 /// We provide a "cost model" object that evaluates a linear expression:
 ///
@@ -69,7 +69,7 @@ impl HostCostModel for ContractCostParamEntry {
     }
 }
 
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone)]
 pub struct BudgetDimension {
     /// A set of cost models that map input values (eg. event counts, object
     /// sizes) from some CostType to whatever concrete resource type is being
@@ -205,7 +205,7 @@ impl BudgetDimension {
 /// doesn't derive all the traits we want. These fields (coarsely) define the
 /// relative costs of different wasm instruction types and are for wasmi internal
 /// fuel metering use only. Units are in "fuels".
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone)]
 pub(crate) struct FuelConfig {
     /// The base fuel costs for all instructions.
     pub base: u64,
@@ -250,7 +250,21 @@ impl FuelConfig {
     }
 }
 
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) struct WasmiLimits {
+    pub table_elements: u32,
+    pub instances: usize,
+    pub tables: usize,
+    pub memories: usize,
+}
+
+pub(crate) const WASMI_LIMITS_CONFIG: WasmiLimits = WasmiLimits {
+    table_elements: 1000,
+    instances: 1,
+    tables: 1,
+    memories: 1,
+};
+
+#[derive(Clone)]
 pub(crate) struct BudgetImpl {
     pub cpu_insns: BudgetDimension,
     pub mem_bytes: BudgetDimension,
@@ -435,7 +449,7 @@ impl DepthLimiter for BudgetImpl {
     }
 }
 
-#[derive(Default, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Default, Clone)]
 pub struct Budget(pub(crate) Rc<RefCell<BudgetImpl>>);
 
 impl Debug for Budget {
@@ -508,7 +522,13 @@ impl Budget {
         f(self.0.try_borrow_mut_or_err()?)
     }
 
-    fn charge_in_bulk(
+    /// Performs a bulk charge to the budget under the specified [`CostType`].
+    /// The `iterations` is the batch size. The caller needs to ensure:
+    /// 1. the batched charges have identical costs (having the same
+    /// [`CostType`] and `input`)
+    /// 2. The input passed in (Some/None) is consistent with the [`CostModel`]
+    /// underneath the [`CostType`] (linear/constant).
+    pub fn bulk_charge(
         &self,
         ty: ContractCostType,
         iterations: u64,
@@ -559,27 +579,7 @@ impl Budget {
     /// Otherwise it is a linear model.  The caller needs to ensure the input
     /// passed is consistent with the inherent model underneath.
     pub fn charge(&self, ty: ContractCostType, input: Option<u64>) -> Result<(), HostError> {
-        self.charge_in_bulk(ty, 1, input)
-    }
-
-    pub fn apply_wasmi_fuels(&self, cpu_fuel: u64, mem_fuel: u64) -> Result<(), HostError> {
-        self.charge_in_bulk(ContractCostType::WasmInsnExec, cpu_fuel, None)?;
-        self.charge_in_bulk(ContractCostType::WasmMemAlloc, mem_fuel, None)
-    }
-
-    /// Performs a bulk charge to the budget under the specified [`CostType`].
-    /// The `iterations` is the batch size. The caller needs to ensure:
-    /// 1. the batched charges have identical costs (having the same
-    /// [`CostType`] and `input`)
-    /// 2. The input passed in (Some/None) is consistent with the [`CostModel`]
-    /// underneath the [`CostType`] (linear/constant).
-    pub fn batched_charge(
-        &self,
-        ty: ContractCostType,
-        iterations: u64,
-        input: Option<u64>,
-    ) -> Result<(), HostError> {
-        self.charge_in_bulk(ty, iterations, input)
+        self.bulk_charge(ty, 1, input)
     }
 
     pub fn with_free_budget<F, T>(&self, f: F) -> Result<T, HostError>
@@ -688,7 +688,7 @@ impl Budget {
         Ok(())
     }
 
-    fn get_cpu_insns_remaining_as_fuel(&self) -> Result<u64, HostError> {
+    pub(crate) fn get_cpu_insns_remaining_as_fuel(&self) -> Result<u64, HostError> {
         let cpu_remaining = self.get_cpu_insns_remaining()?;
         let cpu_per_fuel = self
             .0
@@ -712,29 +712,6 @@ impl Budget {
         // unspendable residual budget (see the other comment in `vm::wrapped_func_call`).
         // So it should be okay.
         Ok(cpu_remaining / cpu_per_fuel)
-    }
-
-    fn get_mem_bytes_remaining_as_fuel(&self) -> Result<u64, HostError> {
-        let bytes_remaining = self.get_mem_bytes_remaining()?;
-        let bytes_per_fuel = self
-            .0
-            .try_borrow_or_err()?
-            .mem_bytes
-            .get_cost_model(ContractCostType::WasmMemAlloc)
-            .linear_term;
-
-        if bytes_per_fuel < 0 {
-            return Err((ScErrorType::Context, ScErrorCode::InvalidInput).into());
-        }
-        let bytes_per_fuel = (bytes_per_fuel as u64).max(1);
-        // See comment about rounding above.
-        Ok(bytes_remaining / bytes_per_fuel)
-    }
-
-    pub fn get_fuels_budget(&self) -> Result<(u64, u64), HostError> {
-        let cpu_fuel = self.get_cpu_insns_remaining_as_fuel()?;
-        let mem_fuel = self.get_mem_bytes_remaining_as_fuel()?;
-        Ok((cpu_fuel, mem_fuel))
     }
 
     // generate a wasmi fuel cost schedule based on our calibration
@@ -1052,5 +1029,74 @@ impl Default for BudgetImpl {
         b.cpu_insns.reset(40_000_000); // 100x the estimation above which corresponds to 10ms
         b.mem_bytes.reset(0x320_0000); // 50MB of memory
         b
+    }
+}
+
+impl ResourceLimiter for Host {
+    fn memory_growing(
+        &mut self,
+        _current: usize,
+        desired: usize,
+        maximum: Option<usize>,
+    ) -> Result<bool, errors::MemoryError> {
+        let host_limit = self
+            .as_budget()
+            .get_mem_bytes_remaining()
+            .map_err(|_| errors::MemoryError::OutOfBoundsGrowth)?;
+
+        let allow = if desired as u64 > host_limit {
+            false
+        } else {
+            match maximum {
+                Some(max) => desired <= max,
+                None => true,
+            }
+        };
+
+        if allow {
+            self.as_budget()
+                .bulk_charge(ContractCostType::WasmMemAlloc, desired as u64, None)
+                .map(|_| true)
+                .map_err(|_| errors::MemoryError::OutOfBoundsGrowth)
+        } else {
+            Err(errors::MemoryError::OutOfBoundsGrowth)
+        }
+    }
+
+    fn table_growing(
+        &mut self,
+        current: u32,
+        desired: u32,
+        maximum: Option<u32>,
+    ) -> Result<bool, errors::TableError> {
+        let allow = if desired > WASMI_LIMITS_CONFIG.table_elements {
+            false
+        } else {
+            match maximum {
+                Some(max) => desired <= max,
+                None => true,
+            }
+        };
+        if allow {
+            Ok(allow)
+        } else {
+            Err(errors::TableError::GrowOutOfBounds {
+                maximum: maximum.unwrap_or(u32::MAX),
+                current,
+                delta: desired - current,
+            })
+        }
+    }
+
+    fn instances(&self) -> usize {
+        WASMI_LIMITS_CONFIG.instances
+    }
+
+    fn tables(&self) -> usize {
+        WASMI_LIMITS_CONFIG.tables
+    }
+
+    fn memories(&self) -> usize {
+        WASMI_LIMITS_CONFIG.memories
     }
 }
