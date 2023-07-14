@@ -165,6 +165,8 @@ impl Vm {
         Self::check_meta_section(host, &module)?;
 
         let mut store = Store::new(&engine, host.clone());
+        store.limiter(|host| host);
+
         let mut linker = <Linker<Host>>::new(&engine);
 
         for hf in HOST_FUNCTIONS {
@@ -225,7 +227,7 @@ impl Vm {
         inputs: &[Value],
     ) -> Result<Val, HostError> {
         let mut wasm_ret: [Value; 1] = [Value::I64(0)];
-        self.store.try_borrow_mut_or_err()?.fill_fuels(host)?;
+        self.store.try_borrow_mut_or_err()?.add_fuel_to_vm(host)?;
         let res = func.call(
             &mut *self.store.try_borrow_mut_or_err()?,
             inputs,
@@ -236,7 +238,9 @@ impl Vm {
         // wasmi instruction) remaining when the `OutOfFuel` trap occurs. This is only observable
         // if the contract traps with `OutOfFuel`, which may appear confusing if they look closely
         // at the budget amount consumed. So it should be fine.
-        self.store.try_borrow_mut_or_err()?.return_fuels(host)?;
+        self.store
+            .try_borrow_mut_or_err()?
+            .return_fuel_to_host(host)?;
 
         if let Err(e) = res {
             // When a call fails with a wasmi::Error::Trap that carries a HostError
