@@ -119,7 +119,6 @@ impl HostError {
         // non-recoverable (they should only appear if there is some bug in the
         // host implementation or setup).
         if !self.error.is_type(ScErrorType::Contract)
-            && !self.error.is_type(ScErrorType::WasmVm)
             && self.error.is_code(ScErrorCode::InternalError)
         {
             return false;

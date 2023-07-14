@@ -145,7 +145,7 @@ impl From<stellar_xdr::Error> for Error {
 impl From<wasmi::core::TrapCode> for Error {
     fn from(code: wasmi::core::TrapCode) -> Self {
         let ec = match code {
-            wasmi::core::TrapCode::UnreachableCodeReached => ScErrorCode::InternalError,
+            wasmi::core::TrapCode::UnreachableCodeReached => ScErrorCode::InvalidAction,
 
             wasmi::core::TrapCode::MemoryOutOfBounds | wasmi::core::TrapCode::TableOutOfBounds => {
                 ScErrorCode::IndexBounds
