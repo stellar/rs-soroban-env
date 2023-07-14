@@ -2108,18 +2108,9 @@ impl VmCallerEnv for Host {
             }
             StorageType::Instance => {
                 self.with_mut_instance_storage(|s| {
-                    s.map = s
-                        .map
-                        .remove(&k, self)?
-                        .ok_or_else(|| {
-                            self.err(
-                                ScErrorType::Storage,
-                                ScErrorCode::MissingValue,
-                                "key is missing from instance storage",
-                                &[k],
-                            )
-                        })?
-                        .0;
+                    if let Some((new_map, _)) = s.map.remove(&k, self)? {
+                        s.map = new_map;
+                    }
                     Ok(())
                 })?;
             }

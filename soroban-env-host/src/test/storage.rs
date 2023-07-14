@@ -149,6 +149,13 @@ fn test_storage(host: &Host, contract_id: AddressObject, storage: &str) {
         host_vec![host, key_1].into(),
     )
     .unwrap();
+    // Delete again - that's a no-op, but it shouldn't fail either.
+    host.call(
+        contract_id,
+        storage_fn_name(host, "del", storage),
+        host_vec![host, key_1].into(),
+    )
+    .unwrap();
     // Only the second key is now present
     assert_eq!(
         bool::try_from_val(
