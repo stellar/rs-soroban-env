@@ -165,6 +165,8 @@ impl Vm {
         Self::check_meta_section(host, &module)?;
 
         let mut store = Store::new(&engine, host.clone());
+        store.limiter(|host| host);
+
         let mut linker = <Linker<Host>>::new(&engine);
 
         for hf in HOST_FUNCTIONS {

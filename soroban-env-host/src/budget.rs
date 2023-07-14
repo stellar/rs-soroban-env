@@ -13,7 +13,7 @@ use crate::{
     Error, Host, HostError, DEFAULT_HOST_DEPTH_LIMIT,
 };
 
-use wasmi::FuelCosts;
+use wasmi::{errors, FuelCosts, ResourceLimiter};
 
 /// We provide a "cost model" object that evaluates a linear expression:
 ///
@@ -249,6 +249,20 @@ impl FuelConfig {
         self.call = 1;
     }
 }
+
+pub(crate) struct WasmiLimits {
+    pub table_elements: u32,
+    pub instances: usize,
+    pub tables: usize,
+    pub memories: usize,
+}
+
+pub(crate) const WASMI_LIMITS_CONFIG: WasmiLimits = WasmiLimits {
+    table_elements: 1000,
+    instances: 1,
+    tables: 1,
+    memories: 1,
+};
 
 #[derive(Clone)]
 pub(crate) struct BudgetImpl {
@@ -1015,5 +1029,74 @@ impl Default for BudgetImpl {
         b.cpu_insns.reset(40_000_000); // 100x the estimation above which corresponds to 10ms
         b.mem_bytes.reset(0x320_0000); // 50MB of memory
         b
+    }
+}
+
+impl ResourceLimiter for Host {
+    fn memory_growing(
+        &mut self,
+        _current: usize,
+        desired: usize,
+        maximum: Option<usize>,
+    ) -> Result<bool, errors::MemoryError> {
+        let host_limit = self
+            .as_budget()
+            .get_mem_bytes_remaining()
+            .map_err(|_| errors::MemoryError::OutOfBoundsGrowth)?;
+
+        let allow = if desired as u64 > host_limit {
+            false
+        } else {
+            match maximum {
+                Some(max) => desired <= max,
+                None => true,
+            }
+        };
+
+        if allow {
+            self.as_budget()
+                .bulk_charge(ContractCostType::WasmMemAlloc, desired as u64, None)
+                .map(|_| true)
+                .map_err(|_| errors::MemoryError::OutOfBoundsGrowth)
+        } else {
+            Err(errors::MemoryError::OutOfBoundsGrowth)
+        }
+    }
+
+    fn table_growing(
+        &mut self,
+        current: u32,
+        desired: u32,
+        maximum: Option<u32>,
+    ) -> Result<bool, errors::TableError> {
+        let allow = if desired > WASMI_LIMITS_CONFIG.table_elements {
+            false
+        } else {
+            match maximum {
+                Some(max) => desired <= max,
+                None => true,
+            }
+        };
+        if allow {
+            Ok(allow)
+        } else {
+            Err(errors::TableError::GrowOutOfBounds {
+                maximum: maximum.unwrap_or(u32::MAX),
+                current,
+                delta: desired - current,
+            })
+        }
+    }
+
+    fn instances(&self) -> usize {
+        WASMI_LIMITS_CONFIG.instances
+    }
+
+    fn tables(&self) -> usize {
+        WASMI_LIMITS_CONFIG.tables
+    }
+
+    fn memories(&self) -> usize {
+        WASMI_LIMITS_CONFIG.memories
     }
 }
