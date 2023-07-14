@@ -1,5 +1,5 @@
 #![no_std]
-use soroban_sdk::{contract, contractimpl, Bytes, Env};
+use soroban_sdk::{contract, contractimpl, Bytes, Env, Val, Vec, FromVal};
 
 #[contract]
 pub struct Contract;
@@ -56,5 +56,11 @@ impl Contract {
         for _ in 0..100000 {
             Bytes::from_slice(&env, &local_buf);
         }
+    }
+
+    pub fn forge(env: Env, lo: u32, hi: u32) -> u32 {
+        let payload: u64 = lo as u64 | ((hi as u64) << 32);
+        let v: Vec<u32> = Vec::from_val(&env, &Val::from_payload(payload));
+        v.get(0).unwrap()
     }
 }
