@@ -1,6 +1,9 @@
+#![allow(dead_code)]
+
 use soroban_env_common::{
-    xdr::ContractCostType, Compare, DurationSmall, I128Small, I256Small, I64Small, SymbolSmall,
-    SymbolStr, Tag, TimepointSmall, U128Small, U256Small, U64Small,
+    xdr::{ContractCostType, ScErrorCode, ScErrorType},
+    Compare, DurationSmall, I128Small, I256Small, I64Small, SymbolSmall, SymbolStr, Tag,
+    TimepointSmall, U128Small, U256Small, U64Small,
 };
 
 use crate::{
@@ -169,7 +172,140 @@ declare_mem_host_object_type!(xdr::ScString, StringObject, String);
 declare_mem_host_object_type!(xdr::ScSymbol, SymbolObject, Symbol);
 declare_host_object_type!(xdr::ScAddress, AddressObject, Address);
 
+// Objects come in two flavors: relative and absolute. They are differentiated
+// by the low bit of the object handle: relative objects have 0, absolutes have
+// 1. The remaining bits (left shifted by 1) are the index in a corresponding
+// relative or absolute object table.
+//
+// Relative objects are the ones we pass to and from wasm/VM code, and are
+// looked up in a per-VM-frame "relative objects" indirection table, to find an
+// absolute object. Absolute objects are the underlying context-insensitive
+// handles that point into the host object table (and so absolutes can also be
+// used outside contexts, eg. in fields held in host objects themselves or while
+// setting-up the host). Relative-to-absolute translation is done very close to
+// the VM, when marshalling call args and return values (and host-function calls
+// and returns). Host code should never see relative object handles, and if you
+// ever try to look one up in the host object table, it will fail.
+//
+// The point of relative object handles is to isolate the objects seen by one VM
+// from those seen by any other (and secondarily to avoid "system objects" like
+// those allocated by the auth and event subsystems from perturbing object
+// numbers seen by user code). User code should not perceive any objects other
+// than ones they are specifically passed (or reachable through them). So their
+// view of the world is limited to objects that made it into their relative
+// object table.
+//
+// Also note: the relative/absolute object reference translation is _not_ done
+// when running native contracts, either builtin or in local-testing mode, so
+// you will not get identical object numbers in those cases. Since there is no
+// real isolation between native contracts -- they can even dereference unsafe
+// pointers if they want -- there's no point bothering with the translation (and
+// there's no really obvious place to perform it systematically, like in the
+// wasm marshalling path).
+
+pub fn is_relative_object_handle(handle: u32) -> bool {
+    handle & 1 == 0
+}
+
+pub fn handle_to_index(handle: u32) -> usize {
+    (handle as usize) >> 1
+}
+
+pub fn index_to_handle(host: &Host, index: usize, relative: bool) -> Result<u32, HostError> {
+    if let Ok(smaller) = u32::try_from(index) {
+        if let Some(shifted) = smaller.checked_shl(1) {
+            if relative {
+                return Ok(shifted);
+            } else {
+                return Ok(shifted | 1);
+            }
+        }
+    }
+    Err(host.err_arith_overflow())
+}
+
 impl Host {
+    pub(crate) fn relative_to_absolute(&self, val: Val) -> Result<Val, HostError> {
+        if let Ok(obj) = Object::try_from(val) {
+            let handle = obj.get_handle();
+            return if is_relative_object_handle(handle) {
+                let index = handle_to_index(handle);
+                let abs_opt = self.with_current_frame_relative_object_table(|table| {
+                    Ok(table.get(index).map(|x| *x))
+                })?;
+                match abs_opt {
+                    Some(abs) if abs.to_val().get_tag() == val.get_tag() => Ok(abs.into()),
+                    // User forged a type tag. This is _relatively_ harmless
+                    // since we converted from relative to absolute and
+                    // literally changed object references altogether while
+                    // doing so -- i.e. we now have a correctly-typed absolute
+                    // object reference we _could_ proceed to use as requested
+                    // -- but a user passing an ill-typed relative object
+                    // reference is probably either a bug or part of some
+                    // strange type of attack, and in any case we _would_ signal
+                    // this as an object-integrity type mismatch if we hadn't
+                    // done the translation (eg. in native testing mode), so for
+                    // symmetry sake we will return the same error here.
+                    Some(_) => Err(self.err(
+                        ScErrorType::Object,
+                        ScErrorCode::UnexpectedType,
+                        "relative and absolute object types differ",
+                        &[],
+                    )),
+                    // User is referring to something outside the bounds of
+                    // their relative table, erroneously.
+                    None => Err(self.err(
+                        ScErrorType::Context,
+                        ScErrorCode::InvalidInput,
+                        "unknown relative object reference",
+                        &[Val::from_u32(handle).to_val()],
+                    )),
+                }
+            } else {
+                // This also gets "invalid input" because it came from the user
+                // VM: they tried to forge an absolute.
+                Err(self.err(
+                    ScErrorType::Context,
+                    ScErrorCode::InvalidInput,
+                    "relative_to_absolute given an absolute reference",
+                    &[Val::from_u32(handle).to_val()],
+                ))
+            };
+        }
+        Ok(val)
+    }
+
+    pub(crate) fn absolute_to_relative(&self, val: Val) -> Result<Val, HostError> {
+        if let Ok(obj) = Object::try_from(val) {
+            let handle = obj.get_handle();
+            return if is_relative_object_handle(handle) {
+                // This gets "internal error" because we should never have found
+                // ourselves in posession of a relative reference to return to
+                // the user VM in the first place. Logic bug.
+                Err(self.err(
+                    ScErrorType::Context,
+                    ScErrorCode::InternalError,
+                    "absolute_to_relative given a relative reference",
+                    // NB: we convert to a U32Val here otherwise the _events_ system
+                    // will fault when trying to look up this argument as a relative
+                    // object reference.
+                    &[Val::from_u32(handle).to_val()],
+                ))
+            } else {
+                // Push a new entry into the relative-objects vector.
+                metered_clone::charge_heap_alloc::<Object>(1, self.as_budget())?;
+                let index = self.with_current_frame_relative_object_table(|table| {
+                    let index = table.len();
+                    table.push(obj);
+                    Ok(index)
+                })?;
+                let handle = index_to_handle(self, index, true)?;
+                Ok(Object::from_handle_and_tag(handle, val.get_tag()).into())
+            };
+        }
+        Ok(val)
+    }
+
     /// Moves a value of some type implementing [`HostObjectType`] into the host's
     /// object array, returning a [`HostObj`] containing the new object's array
     /// index, tagged with the [`xdr::ScObjectType`].
@@ -177,15 +313,12 @@ impl Host {
         &self,
         hot: HOT,
     ) -> Result<HOT::Wrapper, HostError> {
-        let prev_len = self.try_borrow_objects()?.len();
-        if prev_len > u32::MAX as usize {
-            return Err(self.err_arith_overflow());
-        }
+        let index = self.try_borrow_objects()?.len();
+        let handle = index_to_handle(self, index, false)?;
         // charge for the new host object, which is just the amortized cost of a single
         // `HostObject` allocation
         metered_clone::charge_heap_alloc::<HostObject>(1, self.as_budget())?;
         self.try_borrow_objects_mut()?.push(HOT::inject(hot));
-        let handle = prev_len as u32;
         Ok(HOT::new_from_handle(handle))
     }
 
@@ -203,7 +336,16 @@ impl Host {
         let r = self.try_borrow_objects()?;
         let obj: Object = obj.into();
         let handle: u32 = obj.get_handle();
-        f(r.get(handle as usize))
+        if is_relative_object_handle(handle) {
+            Err(self.err(
+                ScErrorType::Context,
+                ScErrorCode::InternalError,
+                "looking up relative object",
+                &[Val::from_u32(handle).to_val()],
+            ))
+        } else {
+            f(r.get(handle_to_index(handle)))
+        }
     }
 
     pub(crate) fn check_val_integrity(&self, val: Val) -> Result<(), HostError> {

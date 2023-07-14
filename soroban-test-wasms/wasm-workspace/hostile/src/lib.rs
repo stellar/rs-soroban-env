@@ -1,5 +1,6 @@
 #![no_std]
-use soroban_sdk::{contract, contractimpl, Bytes, Env};
+use soroban_env_common::BytesObject;
+use soroban_sdk::{contract, contractimpl, Bytes, Env, FromVal, Val, Vec};
 
 #[contract]
 pub struct Contract;
@@ -56,5 +57,30 @@ impl Contract {
         for _ in 0..100000 {
             Bytes::from_slice(&env, &local_buf);
         }
+    }
+
+    pub fn forgeref(env: Env, lo: u32, hi: u32) -> u32 {
+        let payload: u64 = lo as u64 | ((hi as u64) << 32);
+        let v: Vec<u32> = Vec::from_val(&env, &Val::from_payload(payload));
+        v.get(0).unwrap()
+    }
+
+    // Forge a type and call a method on it.
+    pub fn forgety1(env: Env, v: Vec<u32>) -> u32 {
+        let b = Bytes::from_val(
+            &env,
+            &unsafe { BytesObject::from_handle(v.to_object().get_handle()) }.to_val(),
+        );
+        b.get(0).unwrap() as u32
+    }
+
+    // Forge a type and pass it as an argument.
+    #[allow(unused_mut)]
+    pub fn forgety2(env: Env, mut v: Vec<Bytes>) {
+        let b = Bytes::from_val(
+            &env,
+            &unsafe { BytesObject::from_handle(v.to_object().get_handle()) }.to_val(),
+        );
+        v.push_back(b)
     }
 }

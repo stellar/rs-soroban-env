@@ -16,7 +16,7 @@ fn u64_roundtrip() -> Result<(), HostError> {
     let v2: Val = u2.try_into_val(&host)?;
     assert_eq!(v2.get_tag(), Tag::U64Object);
     let obj: Object = v2.try_into()?;
-    assert_eq!(obj.get_handle(), 0);
+    assert_eq!(obj.get_handle(), 1);
     let k = u64::try_from_val(&host, &v2)?;
     assert_eq!(u2, k);
     Ok(())
@@ -35,7 +35,7 @@ fn i64_roundtrip() -> Result<(), HostError> {
     let v2: Val = i2.try_into_val(&host)?;
     assert_eq!(v2.get_tag(), Tag::I64Object);
     let obj: Object = v2.try_into()?;
-    assert_eq!(obj.get_handle(), 0);
+    assert_eq!(obj.get_handle(), 1);
     let k = i64::try_from_val(&host, &v2)?;
     assert_eq!(i2, k);
     Ok(())

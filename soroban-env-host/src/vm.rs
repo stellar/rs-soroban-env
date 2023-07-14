@@ -272,9 +272,8 @@ impl Vm {
                 }
             }
         }
-        Ok(
-            <_ as WasmiMarshal>::try_marshal_from_value(wasm_ret[0].clone())
-                .ok_or(ConversionError)?,
+        host.relative_to_absolute(
+            Val::try_marshal_from_value(wasm_ret[0].clone()).ok_or(ConversionError)?,
         )
     }
 
@@ -287,8 +286,8 @@ impl Vm {
         host.charge_budget(ContractCostType::InvokeVmFunction, None)?;
         let wasm_args: Vec<Value> = args
             .iter()
-            .map(|i| Value::I64(i.get_payload() as i64))
-            .collect();
+            .map(|i| host.absolute_to_relative(*i).map(|v| v.marshal_from_self()))
+            .collect::<Result<Vec<Value>, HostError>>()?;
         let func_ss: SymbolStr = func_sym.try_into_val(host)?;
         let ext = match self
             .instance

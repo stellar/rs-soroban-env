@@ -64,7 +64,7 @@ impl Host {
     // Will not return error if frame is missing
     pub(crate) fn get_current_contract_id_unmetered(&self) -> Result<Option<Hash>, HostError> {
         self.with_current_frame_opt(|frame| match frame {
-            Some(Frame::ContractVM(vm, ..)) => Ok(Some(vm.contract_id.clone())),
+            Some(Frame::ContractVM { vm, .. }) => Ok(Some(vm.contract_id.clone())),
             Some(Frame::HostFunction(_)) => Ok(None),
             Some(Frame::Token(id, ..)) => Ok(Some(id.clone())),
             #[cfg(any(test, feature = "testutils"))]
