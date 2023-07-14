@@ -31,16 +31,16 @@ where
     A: DeclaredSizeForMetering,
 {
     fn charge_access(&self, count: usize, budget: &Budget) -> Result<(), HostError> {
-        budget.batched_charge(ContractCostType::VecEntry, count as u64, None)
+        budget.bulk_charge(ContractCostType::VecEntry, count as u64, None)
     }
 
     fn charge_scan(&self, budget: &Budget) -> Result<(), HostError> {
-        budget.batched_charge(ContractCostType::VecEntry, self.vec.len() as u64, None)
+        budget.bulk_charge(ContractCostType::VecEntry, self.vec.len() as u64, None)
     }
 
     fn charge_binsearch(&self, budget: &Budget) -> Result<(), HostError> {
         let mag = 64 - (self.vec.len() as u64).leading_zeros();
-        budget.batched_charge(ContractCostType::VecEntry, 1 + mag as u64, None)
+        budget.bulk_charge(ContractCostType::VecEntry, 1 + mag as u64, None)
     }
 }
 
@@ -335,7 +335,7 @@ where
         a: &MeteredVector<Elt>,
         b: &MeteredVector<Elt>,
     ) -> Result<Ordering, Self::Error> {
-        self.as_budget().batched_charge(
+        self.as_budget().bulk_charge(
             ContractCostType::VecEntry,
             a.vec.len().min(b.vec.len()) as u64,
             None,
@@ -355,7 +355,7 @@ where
         a: &MeteredVector<Elt>,
         b: &MeteredVector<Elt>,
     ) -> Result<Ordering, Self::Error> {
-        self.as_budget().batched_charge(
+        self.as_budget().bulk_charge(
             ContractCostType::VecEntry,
             a.vec.len().min(b.vec.len()) as u64,
             None,
