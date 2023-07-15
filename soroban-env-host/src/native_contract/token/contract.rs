@@ -111,6 +111,7 @@ fn check_non_native(e: &Host) -> Result<(), HostError> {
 // Metering: *mostly* covered by components.
 impl TokenTrait for Token {
     fn init_asset(e: &Host, asset_bytes: Bytes) -> Result<(), HostError> {
+        let _span = tracy_span!("native token init_asset");
         if has_asset_info(e)? {
             return Err(e.error(
                 ContractError::AlreadyInitializedError.into(),
@@ -181,6 +182,7 @@ impl TokenTrait for Token {
     }
 
     fn allowance(e: &Host, from: Address, spender: Address) -> Result<i128, HostError> {
+        let _span = tracy_span!("native token allowance");
         e.bump_current_contract_instance_and_code(INSTANCE_BUMP_AMOUNT.into())?;
         read_allowance(e, from, spender)
     }
@@ -193,6 +195,7 @@ impl TokenTrait for Token {
         amount: i128,
         expiration_ledger: u32,
     ) -> Result<(), HostError> {
+        let _span = tracy_span!("native token approve");
         check_nonnegative_amount(e, amount)?;
         from.require_auth()?;
 
@@ -205,23 +208,27 @@ impl TokenTrait for Token {
 
     // Metering: covered by components
     fn balance(e: &Host, addr: Address) -> Result<i128, HostError> {
+        let _span = tracy_span!("native token balance");
         e.bump_current_contract_instance_and_code(INSTANCE_BUMP_AMOUNT.into())?;
         read_balance(e, addr)
     }
 
     fn spendable_balance(e: &Host, addr: Address) -> Result<i128, HostError> {
+        let _span = tracy_span!("native token spendable balance");
         e.bump_current_contract_instance_and_code(INSTANCE_BUMP_AMOUNT.into())?;
         get_spendable_balance(e, addr)
     }
 
     // Metering: covered by components
     fn authorized(e: &Host, addr: Address) -> Result<bool, HostError> {
+        let _span = tracy_span!("native token authorized");
         e.bump_current_contract_instance_and_code(INSTANCE_BUMP_AMOUNT.into())?;
         is_authorized(e, addr)
     }
 
     // Metering: covered by components
     fn transfer(e: &Host, from: Address, to: Address, amount: i128) -> Result<(), HostError> {
+        let _span = tracy_span!("native token transfer");
         check_nonnegative_amount(e, amount)?;
         from.require_auth()?;
 
@@ -241,6 +248,7 @@ impl TokenTrait for Token {
         to: Address,
         amount: i128,
     ) -> Result<(), HostError> {
+        let _span = tracy_span!("native token transfer_from");
         check_nonnegative_amount(e, amount)?;
         spender.require_auth()?;
 
@@ -255,6 +263,7 @@ impl TokenTrait for Token {
 
     // Metering: covered by components
     fn burn(e: &Host, from: Address, amount: i128) -> Result<(), HostError> {
+        let _span = tracy_span!("native token burn");
         check_nonnegative_amount(e, amount)?;
         check_non_native(e)?;
         from.require_auth()?;
@@ -268,6 +277,7 @@ impl TokenTrait for Token {
 
     // Metering: covered by components
     fn burn_from(e: &Host, spender: Address, from: Address, amount: i128) -> Result<(), HostError> {
+        let _span = tracy_span!("native token burn_from");
         check_nonnegative_amount(e, amount)?;
         check_non_native(e)?;
         spender.require_auth()?;
@@ -282,6 +292,7 @@ impl TokenTrait for Token {
 
     // Metering: covered by components
     fn clawback(e: &Host, from: Address, amount: i128) -> Result<(), HostError> {
+        let _span = tracy_span!("native token clawback");
         check_nonnegative_amount(e, amount)?;
         check_clawbackable(e, from.clone())?;
         let admin = read_administrator(e)?;
@@ -296,6 +307,7 @@ impl TokenTrait for Token {
 
     // Metering: covered by components
     fn set_authorized(e: &Host, addr: Address, authorize: bool) -> Result<(), HostError> {
+        let _span = tracy_span!("native token set_authorized");
         let admin = read_administrator(e)?;
         admin.require_auth()?;
 
@@ -308,6 +320,7 @@ impl TokenTrait for Token {
 
     // Metering: covered by components
     fn mint(e: &Host, to: Address, amount: i128) -> Result<(), HostError> {
+        let _span = tracy_span!("native token mint");
         check_nonnegative_amount(e, amount)?;
         let admin = read_administrator(e)?;
         admin.require_auth()?;
@@ -321,6 +334,7 @@ impl TokenTrait for Token {
 
     // Metering: covered by components
     fn set_admin(e: &Host, new_admin: Address) -> Result<(), HostError> {
+        let _span = tracy_span!("native token set_admin");
         let admin = read_administrator(e)?;
         admin.require_auth()?;
 
@@ -332,19 +346,23 @@ impl TokenTrait for Token {
     }
 
     fn admin(e: &Host) -> Result<Address, HostError> {
+        let _span = tracy_span!("native token admin");
         read_administrator(e)
     }
 
     fn decimals(_e: &Host) -> Result<u32, HostError> {
+        let _span = tracy_span!("native token decimals");
         // no need to load metadata since this is fixed for all SAC tokens
         Ok(DECIMAL)
     }
 
     fn name(e: &Host) -> Result<String, HostError> {
+        let _span = tracy_span!("native token name");
         read_name(e)
     }
 
     fn symbol(e: &Host) -> Result<String, HostError> {
+        let _span = tracy_span!("native token symbol");
         read_symbol(e)
     }
 }

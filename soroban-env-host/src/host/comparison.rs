@@ -52,6 +52,7 @@ impl Compare<HostObject> for Host {
 
     fn compare(&self, a: &HostObject, b: &HostObject) -> Result<Ordering, Self::Error> {
         use HostObject::*;
+        let _span = tracy_span!("Compare<HostObject>");
         // This is the depth limit checkpoint for `Val` comparison.
         self.budget_cloned().with_limited_depth(|_| {
             match (a, b) {

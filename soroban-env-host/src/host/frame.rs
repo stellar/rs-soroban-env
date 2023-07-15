@@ -123,6 +123,7 @@ impl Host {
     /// operation fails, it can be used to roll the [`Host`] back to the state
     /// it had before its associated [`Frame`] was pushed.
     pub(super) fn push_frame(&self, frame: Frame) -> Result<RollbackPoint, HostError> {
+        let _span = tracy_span!("push frame");
         let auth_manager = self.try_borrow_authorization_manager()?;
         let auth_snapshot = auth_manager.snapshot(self)?;
         auth_manager.push_frame(self, &frame)?;
@@ -144,6 +145,7 @@ impl Host {
     /// the current context and optionally rolls back the [`Host`]'s objects
     /// and storage map to the state in the provided [`RollbackPoint`].
     pub(super) fn pop_frame(&self, orp: Option<RollbackPoint>) -> Result<(), HostError> {
+        let _span = tracy_span!("pop frame");
         // Instance storage is tied to the frame and only exists in-memory. So
         // instead of snapshotting it and rolling it back, we just flush the
         // changes only when rollback is not needed.

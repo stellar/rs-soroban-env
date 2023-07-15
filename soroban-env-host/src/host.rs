@@ -136,8 +136,17 @@ pub(crate) struct HostImpl {
     previous_authorization_manager: RefCell<Option<AuthorizationManager>>,
 }
 // Host is a newtype on Rc<HostImpl> so we can impl Env for it below.
-#[derive(Default, Clone)]
+#[derive(Clone)]
 pub struct Host(pub(crate) Rc<HostImpl>);
+
+#[allow(clippy::derivable_impls)]
+impl Default for Host {
+    fn default() -> Self {
+        #[cfg(all(not(target_family = "wasm"), feature = "tracy"))]
+        let _client = tracy_client::Client::start();
+        Self(Default::default())
+    }
+}
 
 macro_rules! impl_checked_borrow_helpers {
     ($field:ident, $t:ty, $borrow:ident, $borrow_mut:ident) => {
@@ -244,6 +253,8 @@ impl Host {
     /// contract-data access functions such as
     /// [`Env::get_contract_data`].
     pub fn with_storage_and_budget(storage: Storage, budget: Budget) -> Self {
+        #[cfg(all(not(target_family = "wasm"), feature = "tracy"))]
+        let _client = tracy_client::Client::start();
         Self(Rc::new(HostImpl {
             source_account: RefCell::new(None),
             ledger: RefCell::new(None),

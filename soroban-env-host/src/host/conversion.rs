@@ -370,6 +370,7 @@ impl Host {
         // For an `Object`, the actual structural conversion (such as byte
         // cloning) occurs in `from_host_obj` and is metered there.
         // This is the depth limit checkpoint for `Val`->`ScVal` conversion.
+        let _span = tracy_span!("Val to ScVal");
         self.budget_cloned().with_limited_depth(|_| {
             self.charge_budget(ContractCostType::ValXdrConv, None)?;
             ScVal::try_from_val(self, &val).map_err(|_| {
@@ -384,6 +385,7 @@ impl Host {
     }
 
     pub(crate) fn to_host_val(&self, v: &ScVal) -> Result<Val, HostError> {
+        let _span = tracy_span!("ScVal to Val");
         // This is the depth limit checkpoint for `ScVal`->`Val` conversion.
         self.budget_cloned().with_limited_depth(|_| {
             self.charge_budget(ContractCostType::ValXdrConv, None)?;

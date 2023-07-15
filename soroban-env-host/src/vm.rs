@@ -33,7 +33,6 @@ use wasmi::{Engine, FuelConsumptionMode, Func, Instance, Linker, Memory, Module,
 use crate::VmCaller;
 #[cfg(any(test, feature = "testutils"))]
 use wasmi::{Caller, StoreContextMut};
-
 impl wasmi::core::HostError for HostError {}
 
 /// A [Vm] is a thin wrapper around an instance of [wasmi::Module]. Multiple
@@ -140,6 +139,8 @@ impl Vm {
         contract_id: Hash,
         module_wasm_code: &[u8],
     ) -> Result<Rc<Self>, HostError> {
+        let _span = tracy_span!("Vm::new");
+
         host.charge_budget(
             ContractCostType::VmInstantiation,
             Some(module_wasm_code.len() as u64),
@@ -160,7 +161,10 @@ impl Vm {
             .set_fuel_costs(fuel_costs);
 
         let engine = Engine::new(&config);
-        let module = host.map_err(Module::new(&engine, module_wasm_code))?;
+        let module = {
+            let _span0 = tracy_span!("parse module");
+            host.map_err(Module::new(&engine, module_wasm_code))?
+        };
 
         Self::check_meta_section(host, &module)?;
 
@@ -169,16 +173,22 @@ impl Vm {
 
         let mut linker = <Linker<Host>>::new(&engine);
 
-        for hf in HOST_FUNCTIONS {
-            let func = (hf.wrap)(&mut store);
-            host.map_err(
-                linker
-                    .define(hf.mod_str, hf.fn_str, func)
-                    .map_err(|le| wasmi::Error::Linker(le)),
-            )?;
+        {
+            let _span0 = tracy_span!("define host functions");
+            for hf in HOST_FUNCTIONS {
+                let func = (hf.wrap)(&mut store);
+                host.map_err(
+                    linker
+                        .define(hf.mod_str, hf.fn_str, func)
+                        .map_err(|le| wasmi::Error::Linker(le)),
+                )?;
+            }
         }
 
-        let not_started_instance = host.map_err(linker.instantiate(&mut store, &module))?;
+        let not_started_instance = {
+            let _span0 = tracy_span!("instantiate module");
+            host.map_err(linker.instantiate(&mut store, &module))?
+        };
 
         let instance = host.map_err(
             not_started_instance
@@ -287,6 +297,7 @@ impl Vm {
         func_sym: &Symbol,
         args: &[Val],
     ) -> Result<Val, HostError> {
+        let _span = tracy_span!("Vm::invoke_function_raw");
         host.charge_budget(ContractCostType::InvokeVmFunction, None)?;
         let wasm_args: Vec<Value> = args
             .iter()

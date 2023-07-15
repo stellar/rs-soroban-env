@@ -111,6 +111,7 @@ where
         iter: I,
         ctx: &Ctx,
     ) -> Result<Self, HostError> {
+        let _span = tracy_span!("new map");
         if let (_, Some(sz)) = iter.size_hint() {
             // It's possible we temporarily go over-budget here before charging, but
             // only by the cost of temporarily allocating twice the size of our largest
@@ -131,6 +132,7 @@ where
         K: Borrow<Q>,
         Ctx: Compare<Q, Error = HostError>,
     {
+        let _span = tracy_span!("map lookup");
         self.charge_binsearch(ctx)?;
         let mut err: Option<HostError> = None;
         let res = self.map.binary_search_by(|probe| {

@@ -313,6 +313,7 @@ impl Host {
         &self,
         hot: HOT,
     ) -> Result<HOT::Wrapper, HostError> {
+        let _span = tracy_span!("add host object");
         let index = self.try_borrow_objects()?.len();
         let handle = index_to_handle(self, index, false)?;
         // charge for the new host object, which is just the amortized cost of a single
@@ -332,6 +333,7 @@ impl Host {
     where
         F: FnOnce(Option<&HostObject>) -> Result<U, HostError>,
     {
+        let _span = tracy_span!("visit host object");
         self.charge_budget(ContractCostType::VisitObject, None)?;
         let r = self.try_borrow_objects()?;
         let obj: Object = obj.into();
