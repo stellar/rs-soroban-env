@@ -246,7 +246,7 @@ impl Host {
             raw_vals.len() as u64,
             self.as_budget(),
         )?;
-        Ok(raw_vals
+        raw_vals
             .iter()
             .map(|v| self.from_host_val(*v))
             .collect::<Result<Vec<ScVal>, HostError>>()?
@@ -258,14 +258,14 @@ impl Host {
                     "vector size limit exceeded",
                     raw_vals.len()
                 )
-            })?)
+            })
     }
 
     pub(crate) fn rawvals_to_sc_val_vec_non_metered(
         &self,
         raw_vals: &[Val],
     ) -> Result<VecM<ScVal>, HostError> {
-        Ok(raw_vals
+        raw_vals
             .iter()
             .map(|v| v.try_into_val(self)?)
             .collect::<Result<Vec<ScVal>, HostError>>()?
@@ -277,7 +277,7 @@ impl Host {
                     "vector size limit exceeded",
                     raw_vals.len()
                 )
-            })?)
+            })
     }
 
     pub(crate) fn scvals_to_rawvals(&self, sc_vals: &[ScVal]) -> Result<Vec<Val>, HostError> {
