@@ -599,6 +599,7 @@ impl AuthorizationManager {
         address: AddressObject,
         args: Vec<Val>,
     ) -> Result<(), HostError> {
+        let _span = tracy_span!("require auth");
         let authorized_function = self
             .try_borrow_call_stack(host)?
             .last()
@@ -810,6 +811,7 @@ impl AuthorizationManager {
 
     // Returns a snapshot of `AuthorizationManager` to use for rollback.
     pub(crate) fn snapshot(&self, host: &Host) -> Result<AuthorizationManagerSnapshot, HostError> {
+        let _span = tracy_span!("snapshot auth");
         let account_trackers_snapshot = match &self.mode {
             AuthorizationMode::Enforcing => AccountTrackersSnapshot::Enforcing(
                 self.try_borrow_account_trackers(host)?
@@ -858,6 +860,7 @@ impl AuthorizationManager {
         host: &Host,
         snapshot: AuthorizationManagerSnapshot,
     ) -> Result<(), HostError> {
+        let _span = tracy_span!("rollback auth");
         match snapshot.account_trackers_snapshot {
             AccountTrackersSnapshot::Enforcing(trackers_snapshot) => {
                 let trackers = self.try_borrow_account_trackers(host)?;
@@ -942,6 +945,7 @@ impl AuthorizationManager {
     // Records a new call stack frame.
     // This should be called for every `Host` `push_frame`.
     pub(crate) fn push_frame(&self, host: &Host, frame: &Frame) -> Result<(), HostError> {
+        let _span = tracy_span!("push auth frame");
         let (contract_id, function_name) = match frame {
             Frame::ContractVM { vm, fn_name, .. } => {
                 (vm.contract_id.metered_clone(host.budget_ref())?, *fn_name)
@@ -970,6 +974,7 @@ impl AuthorizationManager {
     // Pops a call stack frame.
     // This should be called for every `Host` `pop_frame`.
     pub(crate) fn pop_frame(&self, host: &Host) -> Result<(), HostError> {
+        let _span = tracy_span!("pop auth frame");
         {
             let mut call_stack = self.try_borrow_call_stack_mut(host)?;
             // Currently we don't push host function call frames, hence this may be

@@ -37,6 +37,7 @@ impl Host {
         obj: &impl WriteXdr,
         w: &mut Vec<u8>,
     ) -> Result<(), HostError> {
+        let _span = tracy_span!("write xdr");
         let mw = MeteredWrite { host: self, w };
         let mut w = DepthLimitedWrite::new(mw, DEFAULT_XDR_RW_DEPTH_LIMIT);
         // MeteredWrite above turned any budget failure into an IO error; we turn it
@@ -47,6 +48,7 @@ impl Host {
     }
 
     pub(crate) fn metered_hash_xdr(&self, obj: &impl WriteXdr) -> Result<[u8; 32], HostError> {
+        let _span = tracy_span!("hash xdr");
         let mut buf = vec![];
         self.metered_write_xdr(obj, &mut buf)?;
         self.charge_budget(ContractCostType::ComputeSha256Hash, Some(buf.len() as u64))?;
@@ -54,6 +56,7 @@ impl Host {
     }
 
     pub(crate) fn metered_from_xdr<T: ReadXdr>(&self, bytes: &[u8]) -> Result<T, HostError> {
+        let _span = tracy_span!("read xdr");
         self.charge_budget(ContractCostType::ValDeser, Some(bytes.len() as u64))?;
         self.map_err(T::from_xdr(bytes))
     }

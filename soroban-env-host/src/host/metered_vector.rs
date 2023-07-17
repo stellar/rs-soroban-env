@@ -94,6 +94,7 @@ where
         iter: I,
         budget: &Budget,
     ) -> Result<Self, HostError> {
+        let _span = tracy_span!("new vec");
         if let (_, Some(sz)) = iter.size_hint() {
             // It's possible we temporarily go over-budget here before charging, but
             // only by the cost of temporarily allocating twice the size of our largest

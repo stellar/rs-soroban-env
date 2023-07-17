@@ -449,8 +449,17 @@ impl DepthLimiter for BudgetImpl {
     }
 }
 
-#[derive(Default, Clone)]
+#[derive(Clone)]
 pub struct Budget(pub(crate) Rc<RefCell<BudgetImpl>>);
+
+#[allow(clippy::derivable_impls)]
+impl Default for Budget {
+    fn default() -> Self {
+        #[cfg(all(not(target_family = "wasm"), feature = "tracy"))]
+        let _client = tracy_client::Client::start();
+        Self(Default::default())
+    }
+}
 
 impl Debug for Budget {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
