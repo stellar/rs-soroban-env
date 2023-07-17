@@ -131,11 +131,7 @@ fn bytes_xdr_roundtrip() -> Result<(), HostError> {
         host.map_err("stellar".to_string().try_into())?,
     )))?;
     // error
-    roundtrip(ScVal::Error(ScError {
-        type_: ScErrorType::Context,
-        code: ScErrorCode::InternalError,
-    }))?;
-
+    roundtrip(ScVal::Error(ScError::Context(ScErrorCode::InternalError)))?;
     Ok(())
 }
 
