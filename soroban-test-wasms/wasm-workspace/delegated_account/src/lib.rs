@@ -22,11 +22,11 @@ impl DelegatedAccount {
     pub fn __check_auth(
         env: Env,
         signature_payload: BytesN<32>,
-        signature_args: Vec<Val>,
+        signature: Val,
         _auth_context: Vec<Context>,
     ) {
-        if signature_args.len() != 0 {
-            panic!("incorrect number of signature args");
+        if !signature.is_void() {
+            panic!("Unexpected signature provided");
         }
         env.storage()
             .persistent()

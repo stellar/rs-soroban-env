@@ -2,8 +2,8 @@ use ed25519_dalek::Keypair;
 use rand::{thread_rng, Rng};
 use soroban_env_common::xdr::{
     AccountId, ContractDataDurability, HashIdPreimage, HashIdPreimageSorobanAuthorization,
-    PublicKey, ScAddress, ScBytes, ScErrorCode, ScErrorType, ScNonceKey, ScSymbol, ScVal, ScVec,
-    SorobanAddressCredentials, SorobanAuthorizationEntry, SorobanAuthorizedContractFunction,
+    InvokeContractArgs, PublicKey, ScAddress, ScBytes, ScErrorCode, ScErrorType, ScNonceKey,
+    ScSymbol, ScVal, SorobanAddressCredentials, SorobanAuthorizationEntry,
     SorobanAuthorizedFunction, SorobanAuthorizedInvocation, SorobanCredentials, Uint256, VecM,
 };
 use soroban_native_sdk_macros::contracttype;
@@ -44,7 +44,7 @@ struct SetupNode {
 struct SignNode {
     contract_address: Address,
     fn_name: Symbol,
-    args: ScVec,
+    args: VecM<ScVal>,
     children: Vec<SignNode>,
 }
 
@@ -62,7 +62,7 @@ impl SignNode {
     fn new(
         contract_address: &Address,
         fn_name: Symbol,
-        args: ScVec,
+        args: VecM<ScVal>,
         children: Vec<SignNode>,
     ) -> Self {
         Self {
@@ -78,7 +78,7 @@ impl SignNode {
             contract_address: contract_id.clone(),
             children,
             fn_name: Symbol::try_from_small_str("tree_fn").unwrap(),
-            args: ScVec::default(),
+            args: VecM::default(),
         }
     }
 }
@@ -193,10 +193,12 @@ impl AuthTest {
                     credentials: SorobanCredentials::Address(SorobanAddressCredentials {
                         address: sc_address.clone(),
                         nonce,
-                        signature_args: self
-                            .host
-                            .call_args_to_scvec(signature_args.into())
-                            .unwrap(),
+                        signature: ScVal::Vec(Some(
+                            self.host
+                                .call_args_to_sc_val_vec(signature_args.into())
+                                .unwrap()
+                                .into(),
+                        )),
                         signature_expiration_ledger: 1000,
                     }),
                     root_invocation,
@@ -295,7 +297,7 @@ impl AuthTest {
         let function_name: ScSymbol = ScSymbol(function_name.to_string().try_into().unwrap());
 
         SorobanAuthorizedInvocation {
-            function: SorobanAuthorizedFunction::ContractFn(SorobanAuthorizedContractFunction {
+            function: SorobanAuthorizedFunction::ContractFn(InvokeContractArgs {
                 contract_address: root.contract_address.to_sc_address().unwrap(),
                 function_name,
                 args: root.args.clone(),
@@ -1176,7 +1178,7 @@ fn test_out_of_order_auth() {
                     &test.contracts[1],
                     Symbol::try_from_small_str("do_auth").unwrap(),
                     test.host
-                        .call_args_to_scvec(
+                        .call_args_to_sc_val_vec(
                             host_vec![&test.host, test.key_to_address(&test.keys[0]), 10_u32]
                                 .into(),
                         )
@@ -1191,7 +1193,7 @@ fn test_out_of_order_auth() {
                     &test.contracts[0],
                     Symbol::try_from_small_str("order_fn").unwrap(),
                     test.host
-                        .call_args_to_scvec(
+                        .call_args_to_sc_val_vec(
                             host_vec![
                                 &test.host,
                                 test.key_to_address(&test.keys[0]),
@@ -1217,7 +1219,7 @@ fn test_out_of_order_auth() {
                 &test.contracts[0],
                 Symbol::try_from_small_str("order_fn").unwrap(),
                 test.host
-                    .call_args_to_scvec(
+                    .call_args_to_sc_val_vec(
                         host_vec![
                             &test.host,
                             test.key_to_address(&test.keys[0]),
@@ -1232,7 +1234,7 @@ fn test_out_of_order_auth() {
                 &test.contracts[1],
                 Symbol::try_from_small_str("do_auth").unwrap(),
                 test.host
-                    .call_args_to_scvec(
+                    .call_args_to_sc_val_vec(
                         host_vec![&test.host, test.key_to_address(&test.keys[0]), 10_u32].into(),
                     )
                     .unwrap(),
@@ -1251,7 +1253,7 @@ fn test_out_of_order_auth() {
             &test.contracts[0],
             Symbol::try_from_small_str("order_fn").unwrap(),
             test.host
-                .call_args_to_scvec(
+                .call_args_to_sc_val_vec(
                     host_vec![
                         &test.host,
                         test.key_to_address(&test.keys[0]),
@@ -1264,7 +1266,7 @@ fn test_out_of_order_auth() {
                 &test.contracts[1],
                 Symbol::try_from_small_str("do_auth").unwrap(),
                 test.host
-                    .call_args_to_scvec(
+                    .call_args_to_sc_val_vec(
                         host_vec![&test.host, test.key_to_address(&test.keys[0]), 10_u32].into(),
                     )
                     .unwrap(),
@@ -1449,17 +1451,15 @@ fn test_require_auth_within_check_auth() {
     let mut auth_entries = vec![];
     // Payload for account 0 is just the normal contract call payload.
     let account_0_invocation = SorobanAuthorizedInvocation {
-        function: SorobanAuthorizedFunction::ContractFn(SorobanAuthorizedContractFunction {
+        function: SorobanAuthorizedFunction::ContractFn(InvokeContractArgs {
             contract_address: auth_contract.to_sc_address().unwrap(),
             function_name: "do_auth".try_into().unwrap(),
-            args: ScVec(
-                vec![
-                    ScVal::Address(test.contracts[0].to_sc_address().unwrap()),
-                    ScVal::U32(123),
-                ]
-                .try_into()
-                .unwrap(),
-            ),
+            args: vec![
+                ScVal::Address(test.contracts[0].to_sc_address().unwrap()),
+                ScVal::U32(123),
+            ]
+            .try_into()
+            .unwrap(),
         }),
         sub_invocations: VecM::default(),
     };
@@ -1474,7 +1474,7 @@ fn test_require_auth_within_check_auth() {
         credentials: SorobanCredentials::Address(SorobanAddressCredentials {
             address: test.contracts[0].to_sc_address().unwrap(),
             nonce: 1111,
-            signature_args: ScVec(VecM::default()),
+            signature: ScVal::Void,
             signature_expiration_ledger: 1000,
         }),
         root_invocation: account_0_invocation,
@@ -1487,16 +1487,14 @@ fn test_require_auth_within_check_auth() {
     // Account 1 needs to authorize `__check_auth` for account 0 with its
     // payload hash.
     let account_1_invocation = SorobanAuthorizedInvocation {
-        function: SorobanAuthorizedFunction::ContractFn(SorobanAuthorizedContractFunction {
+        function: SorobanAuthorizedFunction::ContractFn(InvokeContractArgs {
             contract_address: test.contracts[0].to_sc_address().unwrap(),
             function_name: "__check_auth".try_into().unwrap(),
-            args: ScVec(
-                vec![ScVal::Bytes(ScBytes(
-                    account_0_payload_hash.try_into().unwrap(),
-                ))]
-                .try_into()
-                .unwrap(),
-            ),
+            args: vec![ScVal::Bytes(ScBytes(
+                account_0_payload_hash.try_into().unwrap(),
+            ))]
+            .try_into()
+            .unwrap(),
         }),
         sub_invocations: VecM::default(),
     };
@@ -1512,7 +1510,7 @@ fn test_require_auth_within_check_auth() {
         credentials: SorobanCredentials::Address(SorobanAddressCredentials {
             address: test.contracts[1].to_sc_address().unwrap(),
             nonce: 2222,
-            signature_args: ScVec(VecM::default()),
+            signature: ScVal::Void,
             signature_expiration_ledger: 2000,
         }),
         root_invocation: account_1_invocation,
@@ -1525,16 +1523,14 @@ fn test_require_auth_within_check_auth() {
     // Classic account needs to authorize `__check_auth` for account 1 with its
     // payload hash.
     let classic_account_invocation = SorobanAuthorizedInvocation {
-        function: SorobanAuthorizedFunction::ContractFn(SorobanAuthorizedContractFunction {
+        function: SorobanAuthorizedFunction::ContractFn(InvokeContractArgs {
             contract_address: test.contracts[1].to_sc_address().unwrap(),
             function_name: "__check_auth".try_into().unwrap(),
-            args: ScVec(
-                vec![ScVal::Bytes(ScBytes(
-                    account_1_payload_hash.try_into().unwrap(),
-                ))]
-                .try_into()
-                .unwrap(),
-            ),
+            args: vec![ScVal::Bytes(ScBytes(
+                account_1_payload_hash.try_into().unwrap(),
+            ))]
+            .try_into()
+            .unwrap(),
         }),
         sub_invocations: VecM::default(),
     };
@@ -1561,10 +1557,12 @@ fn test_require_auth_within_check_auth() {
         credentials: SorobanCredentials::Address(SorobanAddressCredentials {
             address: test.key_to_sc_address(&test.keys[0]),
             nonce: 4444,
-            signature_args: test
-                .host
-                .call_args_to_scvec(signature_args.clone().into())
-                .unwrap(),
+            signature: ScVal::Vec(Some(
+                test.host
+                    .call_args_to_sc_val_vec(signature_args.clone().into())
+                    .unwrap()
+                    .into(),
+            )),
             signature_expiration_ledger: 3000,
         }),
         root_invocation: classic_account_invocation.clone(),
@@ -1591,7 +1589,12 @@ fn test_require_auth_within_check_auth() {
         credentials: SorobanCredentials::Address(SorobanAddressCredentials {
             address: test.key_to_sc_address(&test.keys[0]),
             nonce: 3333,
-            signature_args: test.host.call_args_to_scvec(signature_args.into()).unwrap(),
+            signature: ScVal::Vec(Some(
+                test.host
+                    .call_args_to_sc_val_vec(signature_args.into())
+                    .unwrap()
+                    .into(),
+            )),
             signature_expiration_ledger: 3000,
         }),
         root_invocation: classic_account_invocation,
@@ -1649,21 +1652,19 @@ fn test_require_auth_for_self_within_check_auth() {
         credentials: SorobanCredentials::Address(SorobanAddressCredentials {
             address: test.contracts[0].to_sc_address().unwrap(),
             nonce: 1111,
-            signature_args: ScVec(VecM::default()),
+            signature: ScVal::Void,
             signature_expiration_ledger: 1000,
         }),
         root_invocation: SorobanAuthorizedInvocation {
-            function: SorobanAuthorizedFunction::ContractFn(SorobanAuthorizedContractFunction {
+            function: SorobanAuthorizedFunction::ContractFn(InvokeContractArgs {
                 contract_address: auth_contract.to_sc_address().unwrap(),
                 function_name: "do_auth".try_into().unwrap(),
-                args: ScVec(
-                    vec![
-                        ScVal::Address(test.contracts[0].to_sc_address().unwrap()),
-                        ScVal::U32(123),
-                    ]
-                    .try_into()
-                    .unwrap(),
-                ),
+                args: vec![
+                    ScVal::Address(test.contracts[0].to_sc_address().unwrap()),
+                    ScVal::U32(123),
+                ]
+                .try_into()
+                .unwrap(),
             }),
             sub_invocations: VecM::default(),
         },

@@ -4,12 +4,12 @@ use rand::{thread_rng, Rng};
 use soroban_env_common::xdr::{
     AccountEntry, AccountEntryExt, AccountEntryExtensionV1, AccountEntryExtensionV1Ext,
     AccountEntryExtensionV2, AccountEntryExtensionV2Ext, AccountId, Hash, HashIdPreimage,
-    HashIdPreimageSorobanAuthorization, LedgerEntryData, LedgerKey, Liabilities, PublicKey,
-    ScAddress, ScSymbol, ScVec, SequenceNumber, SignerKey, SorobanAddressCredentials,
-    SorobanAuthorizationEntry, SorobanAuthorizedContractFunction, SorobanAuthorizedFunction,
+    HashIdPreimageSorobanAuthorization, InvokeContractArgs, LedgerEntryData, LedgerKey,
+    Liabilities, PublicKey, ScAddress, ScSymbol, ScVal, SequenceNumber, SignerKey,
+    SorobanAddressCredentials, SorobanAuthorizationEntry, SorobanAuthorizedFunction,
     SorobanAuthorizedInvocation, SorobanCredentials, Thresholds, Uint256,
 };
-use soroban_env_common::{EnvBase, TryFromVal};
+use soroban_env_common::{EnvBase, TryFromVal, Val};
 
 use crate::native_contract::base_types::BytesN;
 
@@ -62,14 +62,13 @@ pub(crate) enum TestSigner<'a> {
     AccountInvoker(AccountId),
     ContractInvoker(Hash),
     Account(AccountSigner<'a>),
-    #[allow(dead_code)]
     AccountContract(AccountContractSigner<'a>),
 }
 
 pub(crate) struct AccountContractSigner<'a> {
     pub(crate) address: Address,
     #[allow(clippy::type_complexity)]
-    pub(crate) sign: Box<dyn Fn(&[u8]) -> HostVec + 'a>,
+    pub(crate) sign: Box<dyn Fn(&[u8]) -> Val + 'a>,
 }
 
 pub(crate) struct AccountSigner<'a> {
@@ -108,9 +107,9 @@ impl<'a> TestSigner<'a> {
         }
     }
 
-    fn sign(&self, host: &Host, payload: &[u8]) -> ScVec {
-        let signature_args = match self {
-            TestSigner::AccountInvoker(_) => host_vec![host],
+    fn sign(&self, host: &Host, payload: &[u8]) -> ScVal {
+        let signature: Val = match self {
+            TestSigner::AccountInvoker(_) | TestSigner::ContractInvoker(_) => Val::VOID.into(),
             TestSigner::Account(account_signer) => {
                 let mut signatures = HostVec::new(&host).unwrap();
                 for key in &account_signer.signers {
@@ -118,12 +117,11 @@ impl<'a> TestSigner<'a> {
                         .push(&sign_payload_for_account(host, key, payload))
                         .unwrap();
                 }
-                signatures
+                signatures.into()
             }
             TestSigner::AccountContract(signer) => (signer.sign)(payload),
-            TestSigner::ContractInvoker(_) => host_vec![host],
         };
-        host.call_args_to_scvec(signature_args.into()).unwrap()
+        host.from_host_val(signature).unwrap()
     }
 
     pub(crate) fn address(&self, host: &Host) -> Address {
@@ -153,7 +151,7 @@ pub(crate) fn authorize_single_invocation_with_nonce(
                 address: sc_address,
                 nonce: nonce.unwrap().0,
                 signature_expiration_ledger: nonce.unwrap().1,
-                signature_args: Default::default(),
+                signature: ScVal::Void,
             })
         }
         TestSigner::ContractInvoker(_) => {
@@ -163,10 +161,10 @@ pub(crate) fn authorize_single_invocation_with_nonce(
     };
 
     let root_invocation = SorobanAuthorizedInvocation {
-        function: SorobanAuthorizedFunction::ContractFn(SorobanAuthorizedContractFunction {
+        function: SorobanAuthorizedFunction::ContractFn(InvokeContractArgs {
             contract_address: contract_address.to_sc_address().unwrap(),
             function_name: ScSymbol(function_name.try_into().unwrap()),
-            args: host.call_args_to_scvec(args.into()).unwrap(),
+            args: host.call_args_to_sc_val_vec(args.into()).unwrap(),
         }),
         sub_invocations: Default::default(),
     };
@@ -184,7 +182,7 @@ pub(crate) fn authorize_single_invocation_with_nonce(
                 signature_expiration_ledger: address_credentials.signature_expiration_ledger,
             });
         let signature_payload = host.metered_hash_xdr(&signature_payload_preimage).unwrap();
-        address_credentials.signature_args = signer.sign(host, &signature_payload);
+        address_credentials.signature = signer.sign(host, &signature_payload);
     }
     let auth_entry = SorobanAuthorizationEntry {
         credentials,
