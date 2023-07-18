@@ -4,7 +4,7 @@ use std::{
         atomic::{AtomicU64, Ordering},
         Arc,
     },
-    time::Instant,
+    time::Instant, rc::Rc,
 };
 use tracking_allocator::{
     AllocationGroupToken, AllocationGuard, AllocationRegistry, AllocationTracker, Allocator,
@@ -105,44 +105,42 @@ pub struct HostTracker<'a> {
     cpu_insn_counter: InstructionCounter,
     mem_tracker: MemTracker,
     start_time: Instant,
-    alloc_guard: Option<AllocationGuard<'a>>,
+    token: Box<AllocationGroupToken>,
+    alloc_guard: AllocationGuard<'a>,
 }
 
 impl<'a> HostTracker<'a> {
-    pub fn start(token: Option<&'a mut AllocationGroupToken>) -> Self {
+    pub fn start() -> Self {
         // Setup the instrumentation
         let mut cpu_insn_counter = cpu::InstructionCounter::new();
-        let mem_tracker = MemTracker(Arc::new(AtomicU64::new(0)));
+        let mut mem_tracker = MemTracker(Arc::new(AtomicU64::new(0)));
+
         AllocationRegistry::set_global_tracker(mem_tracker.clone())
             .expect("no other global tracker should be set yet");
         AllocationRegistry::enable_tracking();
 
-        // start the cpu and mem measurement
-        mem_tracker.0.store(0, Ordering::SeqCst);
-        let alloc_guard: Option<AllocationGuard> = if let Some(t) = token {
-            Some(t.enter())
-        } else {
-            None
-        };
+        let mut token = Box::new(AllocationGroupToken::register().expect("failed to register allocation group"));
+        // let alloc_guard = token.enter();    
 
+        // start the cpu and mem measurement
         let start_time = Instant::now();
         cpu_insn_counter.begin();
+        mem_tracker.0.store(0, Ordering::SeqCst);
 
         HostTracker {
             cpu_insn_counter,
             mem_tracker,
             start_time,
-            alloc_guard,
+            token,
+            alloc_guard: token.enter(),
         }
     }
 
-    pub fn stop(&mut self) -> (u64, u64, u64) {
+    pub fn stop(mut self) -> (u64, u64, u64) {
         // collect the metrics
         let cpu_insns = self.cpu_insn_counter.end_and_count();
         let stop_time = Instant::now();
-        if let Some(g) = &self.alloc_guard {
-            drop(g)
-        }
+        drop(self.alloc_guard);
 
         let mem_bytes = self.mem_tracker.0.load(Ordering::SeqCst);
         let time_nsecs = stop_time.duration_since(self.start_time).as_nanos() as u64;
@@ -153,23 +151,5 @@ impl<'a> HostTracker<'a> {
         }
 
         (cpu_insns, mem_bytes, time_nsecs)
-    }
-}
-
-pub struct TrackerGuard<'a>(pub HostTracker<'a>);
-
-impl<'a> TrackerGuard<'a> {
-    pub fn new(token: Option<&'a mut AllocationGroupToken>) -> Self {
-        Self(HostTracker::start(token))
-    }
-}
-
-impl<'a> Drop for TrackerGuard<'a> {
-    fn drop(&mut self) {
-        let (cpu_insns, mem_bytes, time_nsecs) = self.0.stop();
-        println!(
-            "cpu: {:?}, mem: {:?}, time: {:?}",
-            cpu_insns, mem_bytes, time_nsecs
-        );
     }
 }
