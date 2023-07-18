@@ -57,8 +57,6 @@ pub mod vm;
 pub use vm::Vm;
 #[cfg(any(test, feature = "testutils"))]
 pub mod cost_runner;
-#[cfg(any(test, feature = "testutils"))]
-pub mod instrumentation;
 pub mod storage;
 #[cfg(test)]
 mod test;

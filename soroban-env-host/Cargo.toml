@@ -36,7 +36,6 @@ k256 = {version = "0.13.1", features=["ecdsa", "arithmetic"]}
 # is needed to build the host for wasm (a rare but supported config).
 getrandom = { version = "0.2", features=["js"] }
 sha3 = "0.10.8"
-tracking-allocator = "0.4.0"
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
 tracy-client = { version = "=0.15.2", features = ["enable", "timer-fallback"], default-features = false, optional = true }
@@ -49,6 +48,7 @@ tabwriter = "1.2.1"
 thousands = "0.2.0"
 soroban-test-wasms = { package = "soroban-test-wasms", path = "../soroban-test-wasms" }
 soroban-synth-wasm = { package = "soroban-synth-wasm", path = "../soroban-synth-wasm" }
+soroban-bench-utils = { package = "soroban-bench-utils", path = "../soroban-bench-utils" }
 bytes-lit = "0.0.5"
 textplots = "0.8.0"
 wasmprinter = "0.2.41"
@@ -59,9 +59,6 @@ linregress = "0.5.1"
 [features]
 testutils = ["soroban-env-common/testutils"]
 tracy = ["dep:tracy-client"]
-
-[target.'cfg(target_os = "linux")'.dependencies]
-perf-event = "0.4.7"
 
 [[bench]]
 required-features = ["testutils"]

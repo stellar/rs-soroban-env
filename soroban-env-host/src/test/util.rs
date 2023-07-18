@@ -16,6 +16,8 @@ use crate::{
     xdr, Host, HostError,
 };
 
+use soroban_bench_utils::HostTracker;
+
 // Test utilities for the host, used in various tests in sub-modules.
 pub(crate) trait AsScVal {
     fn as_scval(&self) -> ScVal;
@@ -211,15 +213,12 @@ impl Host {
         )
     }
 
-    #[cfg(any(target_os = "linux", target_os = "macos"))]
     pub(crate) fn measured_call(
         &self,
         contract: AddressObject,
         func: Symbol,
         args: VecObject,
     ) -> Result<Val, HostError> {
-        use crate::instrumentation::HostTracker;
-
         let budget = self.as_budget();
         budget.reset_unlimited()?;
         let ht = HostTracker::start(None);

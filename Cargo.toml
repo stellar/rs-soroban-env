@@ -10,6 +10,7 @@ members = [
     "soroban-native-sdk-macros",
     "soroban-test-wasms",
     "soroban-synth-wasm",
+    "soroban-bench-utils",
 ]
 
 exclude = ["soroban-test-wasms/wasm-workspace"]

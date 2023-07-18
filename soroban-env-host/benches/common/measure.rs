@@ -1,10 +1,8 @@
 use rand::{rngs::StdRng, Rng, SeedableRng};
-use soroban_env_host::{
-    budget::AsBudget, cost_runner::CostRunner, instrumentation::HostTracker, Host,
-};
+use soroban_bench_utils::{tracking_allocator::AllocationGroupToken, HostTracker};
+use soroban_env_host::{budget::AsBudget, cost_runner::CostRunner, Host};
 use std::ops::Range;
 use tabwriter::{Alignment, TabWriter};
-use tracking_allocator::{AllocationGroupToken, AllocationRegistry};
 
 use super::{fit_model, FPCostModel};
 

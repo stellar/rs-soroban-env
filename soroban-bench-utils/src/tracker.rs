@@ -101,6 +101,20 @@ mod cpu {
     }
 }
 
+#[cfg(not(any(target_os = "macos", target_os = "linix")))]
+mod cpu {
+    pub struct InstructionCounter(u64);
+    impl InstructionCounter {
+        pub fn new() -> Self {
+            InstructionCounter(0)
+        }
+        pub fn begin(&mut self) {}
+        pub fn end_and_count(&mut self) -> u64 {
+            0
+        }
+    }
+}
+
 pub struct HostTracker<'a> {
     cpu_insn_counter: InstructionCounter,
     mem_tracker: MemTracker,
