@@ -6,10 +6,9 @@ use soroban_env_common::{
 use crate::{
     auth::AuthorizationManagerSnapshot,
     budget::AsBudget,
-    err,
     storage::{InstanceStorageMap, StorageMap},
     xdr::{ContractCostType, ContractExecutable, Hash, HostFunction, HostFunctionType, ScVal},
-    Error, Host, HostError, Symbol, SymbolStr, TryFromVal, TryIntoVal, Val,
+    Error, Host, HostError, Object, Symbol, SymbolStr, TryFromVal, TryIntoVal, Val,
 };
 
 #[cfg(any(test, feature = "testutils"))]
@@ -104,7 +103,13 @@ pub(crate) struct Context {
 /// commit or roll back that state when it pops the stack.
 #[derive(Clone)]
 pub(crate) enum Frame {
-    ContractVM(Rc<Vm>, Symbol, Vec<Val>, ScContractInstance),
+    ContractVM {
+        vm: Rc<Vm>,
+        fn_name: Symbol,
+        args: Vec<Val>,
+        instance: ScContractInstance,
+        relative_objects: Vec<Object>,
+    },
     HostFunction(HostFunctionType),
     Token(Hash, Symbol, Vec<Val>, ScContractInstance),
     #[cfg(any(test, feature = "testutils"))]
@@ -117,6 +122,7 @@ impl Host {
     /// operation fails, it can be used to roll the [`Host`] back to the state
     /// it had before its associated [`Frame`] was pushed.
     pub(super) fn push_frame(&self, frame: Frame) -> Result<RollbackPoint, HostError> {
+        let _span = tracy_span!("push frame");
         let auth_manager = self.try_borrow_authorization_manager()?;
         let auth_snapshot = auth_manager.snapshot(self)?;
         auth_manager.push_frame(self, &frame)?;
@@ -138,6 +144,7 @@ impl Host {
     /// the current context and optionally rolls back the [`Host`]'s objects
     /// and storage map to the state in the provided [`RollbackPoint`].
     pub(super) fn pop_frame(&self, orp: Option<RollbackPoint>) -> Result<(), HostError> {
+        let _span = tracy_span!("pop frame");
         // Instance storage is tied to the frame and only exists in-memory. So
         // instead of snapshotting it and rolling it back, we just flush the
         // changes only when rollback is not needed.
@@ -246,6 +253,30 @@ impl Host {
         }
     }
 
+    pub(crate) fn with_current_frame_relative_object_table<F, U>(
+        &self,
+        f: F,
+    ) -> Result<U, HostError>
+    where
+        F: FnOnce(&mut Vec<Object>) -> Result<U, HostError>,
+    {
+        self.with_current_context_mut(|ctx| {
+            if let Frame::ContractVM {
+                relative_objects, ..
+            } = &mut ctx.frame
+            {
+                f(relative_objects)
+            } else {
+                Err(self.err(
+                    ScErrorType::Context,
+                    ScErrorCode::InternalError,
+                    "accessing relative object table in non-VM frame",
+                    &[],
+                ))
+            }
+        })
+    }
+
     pub(crate) fn with_current_prng<F, U>(&self, f: F) -> Result<U, HostError>
     where
         F: FnOnce(&mut Prng) -> Result<U, HostError>,
@@ -327,7 +358,7 @@ impl Host {
     /// frame at its top.
     pub(crate) fn get_current_contract_id_opt_internal(&self) -> Result<Option<Hash>, HostError> {
         self.with_current_frame(|frame| match frame {
-            Frame::ContractVM(vm, ..) => Ok(Some(vm.contract_id.metered_clone(&self.0.budget)?)),
+            Frame::ContractVM { vm, .. } => Ok(Some(vm.contract_id.metered_clone(&self.0.budget)?)),
             Frame::HostFunction(_) => Ok(None),
             Frame::Token(id, ..) => Ok(Some(id.metered_clone(&self.0.budget)?)),
             #[cfg(any(test, feature = "testutils"))]
@@ -356,7 +387,7 @@ impl Host {
         // the previous frame must exist and must be a contract
         let hash = match frames.as_slice() {
             [.., c2, _] => match &c2.frame {
-                Frame::ContractVM(vm, ..) => Ok(vm.contract_id.metered_clone(&self.0.budget)?),
+                Frame::ContractVM { vm, .. } => Ok(vm.contract_id.metered_clone(&self.0.budget)?),
                 Frame::HostFunction(_) => Err(self.err(
                     ScErrorType::Context,
                     ScErrorCode::UnexpectedType,
@@ -385,7 +416,7 @@ impl Host {
         let st = match frames.as_slice() {
             // There are always two frames when WASM is executed in the VM.
             [.., c2, _] => match &c2.frame {
-                Frame::ContractVM(..) => Ok(InvokerType::Contract),
+                Frame::ContractVM { .. } => Ok(InvokerType::Contract),
                 Frame::HostFunction(_) => Ok(InvokerType::Account),
                 Frame::Token(..) => Ok(InvokerType::Contract),
                 #[cfg(any(test, feature = "testutils"))]
@@ -428,8 +459,8 @@ impl Host {
     fn call_contract_fn(&self, id: &Hash, func: &Symbol, args: &[Val]) -> Result<Val, HostError> {
         // Create key for storage
         let storage_key = self.contract_instance_ledger_key(id)?;
-        let contract_instance = self.retrieve_contract_instance_from_storage(&storage_key)?;
-        match &contract_instance.executable {
+        let instance = self.retrieve_contract_instance_from_storage(&storage_key)?;
+        match &instance.executable {
             ContractExecutable::Wasm(wasm_hash) => {
                 let code_entry = self.retrieve_wasm_from_storage(&wasm_hash)?;
                 let vm = Vm::new(
@@ -437,13 +468,20 @@ impl Host {
                     id.metered_clone(&self.0.budget)?,
                     code_entry.as_slice(),
                 )?;
+                let relative_objects = Vec::new();
                 self.with_frame(
-                    Frame::ContractVM(vm.clone(), *func, args.to_vec(), contract_instance),
+                    Frame::ContractVM {
+                        vm: vm.clone(),
+                        fn_name: *func,
+                        args: args.to_vec(),
+                        instance,
+                        relative_objects,
+                    },
                     || vm.invoke_function_raw(self, func, args),
                 )
             }
             ContractExecutable::Token => self.with_frame(
-                Frame::Token(id.clone(), *func, args.to_vec(), contract_instance),
+                Frame::Token(id.clone(), *func, args.to_vec(), instance),
                 || {
                     use crate::native_contract::{NativeContract, Token};
                     Token.call(func, self, args)
@@ -480,7 +518,7 @@ impl Host {
             let mut is_last_non_host_frame = true;
             for ctx in self.try_borrow_context()?.iter().rev() {
                 let exist_id = match &ctx.frame {
-                    Frame::ContractVM(vm, ..) => &vm.contract_id,
+                    Frame::ContractVM { vm, .. } => &vm.contract_id,
                     Frame::Token(id, ..) => id,
                     #[cfg(any(test, feature = "testutils"))]
                     Frame::TestContract(tc) => &tc.id,
@@ -617,35 +655,24 @@ impl Host {
     fn invoke_function_raw(&self, hf: HostFunction) -> Result<Val, HostError> {
         let hf_type = hf.discriminant();
         match hf {
-            HostFunction::InvokeContract(args) => {
-                if let [ScVal::Address(ScAddress::Contract(contract_id)), ScVal::Symbol(scsym), rest @ ..] =
-                    args.as_slice()
-                {
-                    self.with_frame(Frame::HostFunction(hf_type), || {
-                        // Metering: conversions to host objects are covered. Cost of collecting
-                        // Vals into Vec is ignored. Since 1. Vals are cheap to clone 2. the
-                        // max number of args is fairly limited.
-
-                        let symbol: Symbol = scsym.as_slice().try_into_val(self)?;
-                        let args = self.scvals_to_rawvals(rest)?;
-                        // since the `HostFunction` frame must be the bottom of the call stack,
-                        // reentry is irrelevant, we always pass in `ContractReentryMode::Prohibited`.
-                        self.call_n_internal(
-                            contract_id,
-                            symbol,
-                            &args[..],
-                            ContractReentryMode::Prohibited,
-                            false,
-                        )
-                    })
-                } else {
-                    Err(err!(
-                        self,
-                        (ScErrorType::Context, ScErrorCode::UnexpectedSize),
-                        "unexpected number of arguments to 'call' host function",
-                        args.len()
-                    ))
-                }
+            HostFunction::InvokeContract(invoke_args) => {
+                self.with_frame(Frame::HostFunction(hf_type), || {
+                    // Metering: conversions to host objects are covered.
+                    let ScAddress::Contract(ref contract_id) = invoke_args.contract_address else {
+                        return Err(self.err(ScErrorType::Value, ScErrorCode::UnexpectedType, "invoked address doesn't belong to a contract", &[]));
+                    };
+                    let function_name: Symbol = invoke_args.function_name.try_into_val(self)?;
+                    let args = self.scvals_to_rawvals(invoke_args.args.as_slice())?;
+                    // since the `HostFunction` frame must be the bottom of the call stack,
+                    // reentry is irrelevant, we always pass in `ContractReentryMode::Prohibited`.
+                    self.call_n_internal(
+                        contract_id,
+                        function_name,
+                        args.as_slice(),
+                        ContractReentryMode::Prohibited,
+                        false,
+                    )
+                })
             }
             HostFunction::CreateContract(args) => {
                 self.with_frame(Frame::HostFunction(hf_type), || {
@@ -683,7 +710,7 @@ impl Host {
             return Ok(());
         }
         let storage_map = match &ctx.frame {
-            Frame::ContractVM(_, _, _, instance) => &instance.storage,
+            Frame::ContractVM { instance, .. } => &instance.storage,
             Frame::HostFunction(_) => {
                 return Err(self.err(
                     ScErrorType::Context,
@@ -722,7 +749,7 @@ impl Host {
                     return Ok(None);
                 }
                 let executable = match &ctx.frame {
-                    Frame::ContractVM(_, _, _, instance) => {
+                    Frame::ContractVM { instance, .. } => {
                         instance.executable.metered_clone(self.budget_ref())?
                     }
                     Frame::HostFunction(_) => {

@@ -1,15 +1,85 @@
 use super::FuelRefillable;
 use crate::{xdr::ContractCostType, Host, HostError, VmCaller, VmCallerEnv};
 use crate::{
-    AddressObject, BytesObject, DurationObject, Error, I128Object, I256Object, I256Val, I64Object,
-    MapObject, StorageType, StringObject, Symbol, SymbolObject, TimepointObject, U128Object,
-    U256Object, U256Val, U32Val, U64Object, Val, VecObject,
+    AddressObject, Bool, BytesObject, DurationObject, Error, I128Object, I256Object, I256Val,
+    I32Val, I64Object, MapObject, StorageType, StringObject, Symbol, SymbolObject, TimepointObject,
+    U128Object, U256Object, U256Val, U32Val, U64Object, U64Val, Val, VecObject, Void,
 };
 use soroban_env_common::{call_macro_with_all_host_functions, WasmiMarshal};
 use wasmi::{
     core::{Trap, TrapCode::BadSignature},
     Value,
 };
+
+pub(crate) trait RelativeObjectConversion: WasmiMarshal {
+    fn absolute_to_relative(self, _host: &Host) -> Result<Self, HostError> {
+        Ok(self)
+    }
+    fn relative_to_absolute(self, _host: &Host) -> Result<Self, HostError> {
+        Ok(self)
+    }
+    fn try_marshal_from_relative_value(v: wasmi::Value, host: &Host) -> Result<Self, Trap> {
+        let val = Self::try_marshal_from_value(v).ok_or(BadSignature)?;
+        Ok(val.relative_to_absolute(host)?)
+    }
+    fn marshal_relative_from_self(self, host: &Host) -> Result<wasmi::Value, Trap> {
+        let rel = self.absolute_to_relative(host)?;
+        Ok(Self::marshal_from_self(rel))
+    }
+}
+
+macro_rules! impl_relative_object_conversion {
+    ($T:ty) => {
+        impl RelativeObjectConversion for $T {
+            fn absolute_to_relative(self, host: &Host) -> Result<Self, HostError> {
+                Ok(Self::try_from(host.absolute_to_relative(self.into())?)?)
+            }
+
+            fn relative_to_absolute(self, host: &Host) -> Result<Self, HostError> {
+                Ok(Self::try_from(host.relative_to_absolute(self.into())?)?)
+            }
+        }
+    };
+}
+
+// Define a relative-to-absolute impl for any type that is (a) mentioned
+// in a host function type signature in env and (b) might possibly carry an
+// object reference. If you miss one, this file won't compile, so it's safe.
+impl_relative_object_conversion!(Val);
+impl_relative_object_conversion!(Symbol);
+
+impl_relative_object_conversion!(AddressObject);
+impl_relative_object_conversion!(BytesObject);
+impl_relative_object_conversion!(DurationObject);
+
+impl_relative_object_conversion!(TimepointObject);
+impl_relative_object_conversion!(SymbolObject);
+impl_relative_object_conversion!(StringObject);
+
+impl_relative_object_conversion!(VecObject);
+impl_relative_object_conversion!(MapObject);
+
+impl_relative_object_conversion!(I64Object);
+impl_relative_object_conversion!(I128Object);
+impl_relative_object_conversion!(I256Object);
+
+impl_relative_object_conversion!(U64Object);
+impl_relative_object_conversion!(U128Object);
+impl_relative_object_conversion!(U256Object);
+
+impl_relative_object_conversion!(U64Val);
+impl_relative_object_conversion!(U256Val);
+impl_relative_object_conversion!(I256Val);
+
+// Trivial / non-relativizing impls are ok for types that can't carry objects.
+impl RelativeObjectConversion for i64 {}
+impl RelativeObjectConversion for u64 {}
+impl RelativeObjectConversion for Void {}
+impl RelativeObjectConversion for Bool {}
+impl RelativeObjectConversion for Error {}
+impl RelativeObjectConversion for StorageType {}
+impl RelativeObjectConversion for U32Val {}
+impl RelativeObjectConversion for I32Val {}
 
 ///////////////////////////////////////////////////////////////////////////////
 /// X-macro use: dispatch functions
@@ -69,6 +139,8 @@ macro_rules! generate_dispatch_functions {
                 pub(crate) fn $fn_id(mut caller: wasmi::Caller<Host>, $($arg:i64),*) ->
                     Result<(i64,), Trap>
                 {
+                    let _span = tracy_span!(std::stringify!($fn_id));
+
                     // Notes on metering: a flat charge per host function invocation.
                     // This does not account for the actual work being done in those functions,
                     // which are accounted for individually at the operation level.
@@ -77,7 +149,7 @@ macro_rules! generate_dispatch_functions {
                     // This is where the VM -> Host boundary is crossed.
                     // We first return all fuels from the VM back to the host such that
                     // the host maintains control of the budget.
-                    FuelRefillable::return_fuels(&mut caller, &host).map_err(|he| Trap::from(he))?;
+                    FuelRefillable::return_fuel_to_host(&mut caller, &host).map_err(|he| Trap::from(he))?;
 
                     host.charge_budget(ContractCostType::InvokeHostFunction, None)?;
                     let mut vmcaller = VmCaller(Some(caller));
@@ -90,11 +162,11 @@ macro_rules! generate_dispatch_functions {
                     // happens to be a natural switching point for that: we have
                     // conversions to and from both Val and i64 / u64 for
                     // wasmi::Value.
-                    let res: Result<_, HostError> = host.$fn_id(&mut vmcaller, $(<$type>::try_marshal_from_value(Value::I64($arg)).ok_or(BadSignature)?),*);
+                    let res: Result<_, HostError> = host.$fn_id(&mut vmcaller, $(<$type>::try_marshal_from_relative_value(Value::I64($arg), &host)?),*);
 
                     let res = match res {
                         Ok(ok) => {
-                            let val: Value = ok.marshal_from_self();
+                            let val: Value = ok.marshal_relative_from_self(&host)?;
                             if let Value::I64(v) = val {
                                 Ok((v,))
                             } else {
@@ -115,7 +187,7 @@ macro_rules! generate_dispatch_functions {
                     // This is where the Host->VM boundary is crossed.
                     // We supply the remaining host budget as fuel to the VM.
                     let caller = vmcaller.try_mut().map_err(|e| Trap::from(HostError::from(e)))?;
-                    FuelRefillable::fill_fuels(caller, &host).map_err(|he| Trap::from(he))?;
+                    FuelRefillable::add_fuel_to_vm(caller, &host).map_err(|he| Trap::from(he))?;
 
                     res
                 }

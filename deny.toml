@@ -49,7 +49,15 @@ exclude = [
    "num-derive",
    "zeroize_derive",
    # also a not upgraded to syn 2, but just a dev-dep anyway
-   "int-enum"
+   "int-enum",
+   # the dep specs of tracy-client are weird and include "loom" which it
+   # totally doesn't depend on but in any case it's compiled-out in real
+   # production builds we care about.
+   "tracy-client",
+   # Somehow the tracking machinery of two different dev-dep tracing
+   # subsystems also winds up pulling in conflicts, but again, just
+   # dev-deps or non-produciton configs.
+   "tracking-allocator"
 ]
 
 # If true, metadata will be collected with `--all-features`. Note that this can't

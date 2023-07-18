@@ -117,7 +117,7 @@ impl core::fmt::Display for HostEvent {
         match &self.event.body {
             ContractEventBody::V0(ceb) => {
                 write!(f, "topics:[")?;
-                for (i, topic) in ceb.topics.0.iter().enumerate() {
+                for (i, topic) in ceb.topics.iter().enumerate() {
                     if i != 0 {
                         write!(f, ", ")?;
                     }

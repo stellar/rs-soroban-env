@@ -69,6 +69,20 @@ pub(crate) use frame::Frame;
 #[cfg(any(test, feature = "testutils"))]
 use soroban_env_common::xdr::SorobanAuthorizedInvocation;
 
+/// Defines the maximum depth for recursive calls in the host, i.e. `Val` conversion, comparison,
+/// and deep clone, to prevent stack overflow.
+///
+/// Similar to the `xdr::DEFAULT_XDR_RW_DEPTH_LIMIT`, `DEFAULT_HOST_DEPTH_LIMIT` is also a proxy
+/// to the stack depth limit, and its purpose is to prevent the program from
+/// hitting the maximum stack size allowed by Rust, which would result in an unrecoverable `SIGABRT`.
+///
+/// The difference is the `DEFAULT_HOST_DEPTH_LIMIT`guards the recursion paths via the `Env` and
+/// the `Budget`, i.e., conversion, comparison and deep clone. The limit is checked at specific
+/// points of the recursion path, e.g. when `Val` is encountered, to minimize noise. So the
+/// "actual stack depth"/"host depth" factor will typically be larger, and thus the
+/// `DEFAULT_HOST_DEPTH_LIMIT` here is set to a smaller value.
+pub const DEFAULT_HOST_DEPTH_LIMIT: u32 = 100;
+
 /// Temporary helper for denoting a slice of guest memory, as formed by
 /// various bytes operations.
 pub(crate) struct VmSlice {
@@ -122,8 +136,17 @@ pub(crate) struct HostImpl {
     previous_authorization_manager: RefCell<Option<AuthorizationManager>>,
 }
 // Host is a newtype on Rc<HostImpl> so we can impl Env for it below.
-#[derive(Default, Clone)]
+#[derive(Clone)]
 pub struct Host(pub(crate) Rc<HostImpl>);
+
+#[allow(clippy::derivable_impls)]
+impl Default for Host {
+    fn default() -> Self {
+        #[cfg(all(not(target_family = "wasm"), feature = "tracy"))]
+        let _client = tracy_client::Client::start();
+        Self(Default::default())
+    }
+}
 
 macro_rules! impl_checked_borrow_helpers {
     ($field:ident, $t:ty, $borrow:ident, $borrow_mut:ident) => {
@@ -230,6 +253,8 @@ impl Host {
     /// contract-data access functions such as
     /// [`Env::get_contract_data`].
     pub fn with_storage_and_budget(storage: Storage, budget: Budget) -> Self {
+        #[cfg(all(not(target_family = "wasm"), feature = "tracy"))]
+        let _client = tracy_client::Client::start();
         Self(Rc::new(HostImpl {
             source_account: RefCell::new(None),
             ledger: RefCell::new(None),
@@ -1126,7 +1151,7 @@ impl VmCallerEnv for Host {
                     &vm,
                     pos,
                     vals.as_mut_slice(),
-                    |buf| Val::from_payload(u64::from_le_bytes(*buf)),
+                    |buf| self.relative_to_absolute(Val::from_payload(u64::from_le_bytes(*buf))),
                 )?;
 
                 self.log_diagnostics(&msg, &vals)
@@ -1665,7 +1690,7 @@ impl VmCallerEnv for Host {
             &vm,
             vals_pos,
             vals.as_mut_slice(),
-            |buf| Val::from_payload(u64::from_le_bytes(*buf)),
+            |buf| self.relative_to_absolute(Val::from_payload(u64::from_le_bytes(*buf))),
         )?;
         for v in vals.iter() {
             self.check_val_integrity(*v)?;
@@ -1726,7 +1751,11 @@ impl VmCallerEnv for Host {
                 &vm,
                 vals_pos.into(),
                 mapobj.map.as_slice(),
-                |pair| u64::to_le_bytes(pair.1.get_payload()),
+                |pair| {
+                    Ok(u64::to_le_bytes(
+                        self.absolute_to_relative(pair.1)?.get_payload(),
+                    ))
+                },
             )?;
             Ok(())
         })?;
@@ -1955,7 +1984,7 @@ impl VmCallerEnv for Host {
             &vm,
             pos,
             vals.as_mut_slice(),
-            |buf| Val::from_payload(u64::from_le_bytes(*buf)),
+            |buf| self.relative_to_absolute(Val::from_payload(u64::from_le_bytes(*buf))),
         )?;
         for v in vals.iter() {
             self.check_val_integrity(*v)?;
@@ -1977,7 +2006,11 @@ impl VmCallerEnv for Host {
                 &vm,
                 vals_pos.into(),
                 vecobj.as_slice(),
-                |x| u64::to_le_bytes(x.get_payload()),
+                |x| {
+                    Ok(u64::to_le_bytes(
+                        self.absolute_to_relative(*x)?.get_payload(),
+                    ))
+                },
             )
         })?;
         Ok(Val::VOID)
@@ -2086,18 +2119,9 @@ impl VmCallerEnv for Host {
             }
             StorageType::Instance => {
                 self.with_mut_instance_storage(|s| {
-                    s.map = s
-                        .map
-                        .remove(&k, self)?
-                        .ok_or_else(|| {
-                            self.err(
-                                ScErrorType::Storage,
-                                ScErrorCode::MissingValue,
-                                "key is missing from instance storage",
-                                &[k],
-                            )
-                        })?
-                        .0;
+                    if let Some((new_map, _)) = s.map.remove(&k, self)? {
+                        s.map = new_map;
+                    }
                     Ok(())
                 })?;
             }
@@ -2834,8 +2858,8 @@ impl VmCallerEnv for Host {
         let mut outer = Vec::with_capacity(contexts.len());
         for context in contexts.iter() {
             let vals = match &context.frame {
-                Frame::ContractVM(vm, function, ..) => {
-                    get_host_val_tuple(&vm.contract_id, &function)?
+                Frame::ContractVM { vm, fn_name, .. } => {
+                    get_host_val_tuple(&vm.contract_id, fn_name)?
                 }
                 Frame::HostFunction(_) => continue,
                 Frame::Token(id, function, ..) => get_host_val_tuple(id, function)?,
@@ -2893,7 +2917,7 @@ impl VmCallerEnv for Host {
     ) -> Result<Void, Self::Error> {
         let args = self.with_current_frame(|f| {
             let args = match f {
-                Frame::ContractVM(_, _, args, _) => args,
+                Frame::ContractVM { args, .. } => args,
                 Frame::HostFunction(_) => {
                     return Err(self.err(
                         ScErrorType::Context,
