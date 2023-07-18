@@ -225,8 +225,12 @@ impl Host {
         let ht = HostTracker::start(None);
 
         let val = self.call(contract, func, args);
-        let cpu_consumed = budget.get_cpu_insns_consumed().expect("unable to retrieve cpu consumed");
-        let mem_consumed = budget.get_mem_bytes_consumed().expect("unable to retrieve mem consumed");
+        let cpu_consumed = budget
+            .get_cpu_insns_consumed()
+            .expect("unable to retrieve cpu consumed");
+        let mem_consumed = budget
+            .get_mem_bytes_consumed()
+            .expect("unable to retrieve mem consumed");
 
         let (cpu_insns, mem_bytes, _) = ht.stop();
         println!(

@@ -7,8 +7,8 @@ use soroban_test_wasms::{ADD_I32, COMPLEX};
 
 use super::util::{generate_account_id, generate_bytes_array};
 
-// The follow tests enables resource (cpu and mem) trackers, their main purpose is to evaluate 
-// metering accuracy by comparing modeled resource usage from the budget vs actual resource usage. 
+// The follow tests enables resource (cpu and mem) trackers, their main purpose is to evaluate
+// metering accuracy by comparing modeled resource usage from the budget vs actual resource usage.
 // They should be run with release profile, i.e. `cargo test --release` to get a fair comparison.
 //
 // These tests should be disabled by default, due to two reasons
