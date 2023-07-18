@@ -7,8 +7,16 @@ use soroban_test_wasms::{ADD_I32, COMPLEX};
 
 use super::util::{generate_account_id, generate_bytes_array};
 
-// The follow tests should be run with release profile, e.g.:
-// cargo test --release --package soroban-env-host --lib -- test::metering_benchmark::run_complex --exact --nocapture
+// The follow tests enables resource (cpu and mem) trackers, their main purpose is to evaluate 
+// metering accuracy by comparing modeled resource usage from the budget vs actual resource usage. 
+// They should be run with release profile, i.e. `cargo test --release` to get a fair comparison.
+//
+// These tests should be disabled by default, due to two reasons
+// 1. it needs to be run with the release profile whereas normal tests run with the test profile.
+// 2. they cannot be run in parallel with multiple threads, due to contention of the `global_tracker`.
+//
+// Run with the following command:
+// RUST_TEST_THREADS=1  cargo test --release --package soroban-env-host --lib -- test::metering_benchmark  --nocapture --ignored
 
 const LEDGER_INFO: LedgerInfo = LedgerInfo {
     protocol_version: 21,
@@ -21,6 +29,7 @@ const LEDGER_INFO: LedgerInfo = LedgerInfo {
     max_entry_expiration: 6312000,
 };
 
+#[ignore]
 #[test]
 fn run_add_i32() -> Result<(), HostError> {
     let account_id = generate_account_id();
@@ -61,6 +70,7 @@ fn run_add_i32() -> Result<(), HostError> {
     Ok(())
 }
 
+#[ignore]
 #[test]
 fn run_complex() -> Result<(), HostError> {
     let account_id = generate_account_id();

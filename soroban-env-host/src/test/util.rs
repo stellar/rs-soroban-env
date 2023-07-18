@@ -224,16 +224,16 @@ impl Host {
         budget.reset_unlimited()?;
         let ht = HostTracker::start(None);
 
-        let val = self.call(contract, func, args)?;
-        let cpu_consumed = budget.get_cpu_insns_consumed()?;
-        let mem_consumed = budget.get_mem_bytes_consumed()?;
+        let val = self.call(contract, func, args);
+        let cpu_consumed = budget.get_cpu_insns_consumed().expect("unable to retrieve cpu consumed");
+        let mem_consumed = budget.get_mem_bytes_consumed().expect("unable to retrieve mem consumed");
 
         let (cpu_insns, mem_bytes, _) = ht.stop();
         println!(
-                "model cpu consumed: {}, actual cpu insns {} \nmodel mem consumed: {}, actual mem bytes {}",
+                "\nmodel cpu consumed: {}, actual cpu insns {} \nmodel mem consumed: {}, actual mem bytes {}",
                 cpu_consumed, cpu_insns, mem_consumed, mem_bytes
             );
 
-        Ok(val)
+        val
     }
 }
