@@ -6,11 +6,11 @@ use soroban_env_common::{
         AccountEntry, AccountId, ContractCostType, LedgerEntry, LedgerEntryData, LedgerKey,
         PublicKey, ScAddress, ScVal, ScVec, Uint256,
     },
-    AddressObject, BytesObject, Env, EnvBase, Val, VecObject,
+    AddressObject, BytesObject, Env, EnvBase, Symbol, Val, VecObject,
 };
 
 use crate::{
-    budget::Budget,
+    budget::{AsBudget, Budget},
     host::error::TryBorrowOrErr,
     storage::{test_storage::MockSnapshotSource, Storage},
     xdr, Host, HostError,
@@ -209,5 +209,31 @@ impl Host {
             generate_account_id(),
             generate_bytes_array(),
         )
+    }
+
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    pub(crate) fn measured_call(
+        &self,
+        contract: AddressObject,
+        func: Symbol,
+        args: VecObject,
+    ) -> Result<Val, HostError> {
+        use crate::instrumentation::HostTracker;
+
+        let budget = self.as_budget();
+        budget.reset_unlimited()?;
+        let mut ht = HostTracker::start(None);
+
+        let val = self.call(contract, func, args)?;
+        let cpu_consumed = budget.get_cpu_insns_consumed()?;
+        let mem_consumed = budget.get_mem_bytes_consumed()?;
+
+        let (cpu_insns, mem_bytes, _) = ht.stop();
+        println!(
+                "model cpu consumed: {}, actual cpu insns {} \nmodel mem consumed: {}, actual mem bytes {}",
+                cpu_consumed, cpu_insns, mem_consumed, mem_bytes
+            );
+
+        Ok(val)
     }
 }
