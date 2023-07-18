@@ -222,7 +222,7 @@ impl Host {
 
         let budget = self.as_budget();
         budget.reset_unlimited()?;
-        let mut ht = HostTracker::start();
+        let mut ht = HostTracker::start(None);
 
         let val = self.call(contract, func, args)?;
         let cpu_consumed = budget.get_cpu_insns_consumed()?;
