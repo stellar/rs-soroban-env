@@ -5,10 +5,9 @@ use std::rc::Rc;
 use rand::Rng;
 use soroban_env_common::xdr::{
     ContractDataEntry, ContractDataEntryBody, ContractDataEntryData, CreateContractArgs,
-    HashIdPreimage, HashIdPreimageSorobanAuthorization, LedgerEntry, LedgerEntryData,
-    LedgerEntryExt, ScAddress, ScErrorCode, ScErrorType, ScNonceKey, ScVal,
-    SorobanAuthorizationEntry, SorobanAuthorizedContractFunction, SorobanAuthorizedFunction,
-    SorobanCredentials,
+    HashIdPreimage, HashIdPreimageSorobanAuthorization, InvokeContractArgs, LedgerEntry,
+    LedgerEntryData, LedgerEntryExt, ScAddress, ScErrorCode, ScErrorType, ScNonceKey, ScVal,
+    SorobanAuthorizationEntry, SorobanAuthorizedFunction, SorobanCredentials,
 };
 use soroban_env_common::{AddressObject, Compare, Symbol, TryFromVal, TryIntoVal, Val, VecObject};
 
@@ -209,9 +208,9 @@ struct AccountAuthorizationTracker {
     // Helper for matching the tree that address authorized to the invocation
     // tree.
     invocation_tracker: InvocationTracker,
-    // Arguments representing the signature(s) made by the address to authorize
+    // Value representing the signature created by the address to authorize
     // the invocations tracked here.
-    signature_args: Vec<Val>,
+    signature: Val,
     // Indicates whether this tracker is still valid. If invalidated once, this
     // can't be used to authorize anything anymore
     is_valid: bool,
@@ -382,14 +381,11 @@ impl AuthorizedFunction {
                         &[],
                     ));
                 };
-                Ok(SorobanAuthorizedFunction::ContractFn(
-                    SorobanAuthorizedContractFunction {
-                        contract_address: host
-                            .scaddress_from_address(contract_fn.contract_address)?,
-                        function_name,
-                        args: host.rawvals_to_scvec(contract_fn.args.as_slice())?,
-                    },
-                ))
+                Ok(SorobanAuthorizedFunction::ContractFn(InvokeContractArgs {
+                    contract_address: host.scaddress_from_address(contract_fn.contract_address)?,
+                    function_name,
+                    args: host.rawvals_to_sc_val_vec(contract_fn.args.as_slice())?,
+                }))
             }
             AuthorizedFunction::CreateContractHostFn(create_contract_args) => {
                 Ok(SorobanAuthorizedFunction::CreateContractHostFn(
@@ -401,16 +397,16 @@ impl AuthorizedFunction {
 
     fn to_xdr_non_metered(&self, host: &Host) -> Result<xdr::SorobanAuthorizedFunction, HostError> {
         match self {
-            AuthorizedFunction::ContractFn(contract_fn) => Ok(
-                SorobanAuthorizedFunction::ContractFn(SorobanAuthorizedContractFunction {
+            AuthorizedFunction::ContractFn(contract_fn) => {
+                Ok(SorobanAuthorizedFunction::ContractFn(InvokeContractArgs {
                     contract_address: host
                         .visit_obj(contract_fn.contract_address, |addr: &ScAddress| {
                             Ok(addr.clone())
                         })?,
                     function_name: contract_fn.function_name.try_into_val(host)?,
-                    args: host.rawvals_to_scvec_non_metered(contract_fn.args.as_slice())?,
-                }),
-            ),
+                    args: host.rawvals_to_sc_val_vec_non_metered(contract_fn.args.as_slice())?,
+                }))
+            }
             AuthorizedFunction::CreateContractHostFn(create_contract_args) => Ok(
                 SorobanAuthorizedFunction::CreateContractHostFn(create_contract_args.clone()),
             ),
@@ -1273,7 +1269,7 @@ impl AccountAuthorizationTracker {
         host: &Host,
         auth_entry: SorobanAuthorizationEntry,
     ) -> Result<Self, HostError> {
-        let (address, nonce, signature_args) = match auth_entry.credentials {
+        let (address, nonce, signature) = match auth_entry.credentials {
             SorobanCredentials::SourceAccount => (
                 host.source_account_address()?.ok_or_else(|| {
                     host.err(
@@ -1284,7 +1280,7 @@ impl AccountAuthorizationTracker {
                     )
                 })?,
                 None,
-                vec![],
+                Val::VOID.into(),
             ),
             SorobanCredentials::Address(address_creds) => (
                 host.add_host_object(address_creds.address)?,
@@ -1292,14 +1288,14 @@ impl AccountAuthorizationTracker {
                     address_creds.nonce,
                     address_creds.signature_expiration_ledger,
                 )),
-                host.scvals_to_rawvals(address_creds.signature_args.0.as_slice())?,
+                host.to_host_val(&address_creds.signature)?,
             ),
         };
         let is_invoker = nonce.is_none();
         Ok(Self {
             address,
             invocation_tracker: InvocationTracker::from_xdr(host, auth_entry.root_invocation)?,
-            signature_args,
+            signature,
             authenticated: false,
             need_nonce: !is_invoker,
             is_invoker,
@@ -1347,7 +1343,7 @@ impl AccountAuthorizationTracker {
         Ok(Self {
             address,
             invocation_tracker: InvocationTracker::new_recording(function, current_stack_len),
-            signature_args: Default::default(),
+            signature: Val::VOID.into(),
             is_valid: true,
             authenticated: true,
             need_nonce: false,
@@ -1543,14 +1539,14 @@ impl AccountAuthorizationTracker {
         let payload = self.get_signature_payload(host)?;
         match sc_addr {
             ScAddress::Account(acc) => {
-                check_account_authentication(host, acc, &payload, &self.signature_args)?;
+                check_account_authentication(host, acc, &payload, self.signature)?;
             }
             ScAddress::Contract(acc_contract) => {
                 check_account_contract_auth(
                     host,
                     &acc_contract,
                     &payload,
-                    &self.signature_args,
+                    self.signature,
                     &self.invocation_tracker.root_authorized_invocation,
                 )?;
             }

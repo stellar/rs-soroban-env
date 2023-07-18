@@ -1,9 +1,6 @@
 use std::rc::Rc;
 
-use soroban_env_common::{
-    xdr::{ScErrorCode, ScErrorType},
-    BytesObject, VecObject,
-};
+use soroban_env_common::{BytesObject, VecObject};
 
 use super::{Events, HostEvent};
 use crate::{
@@ -28,16 +25,7 @@ pub struct InternalContractEvent {
 impl InternalContractEvent {
     // Metering: covered by components
     pub fn to_xdr(&self, host: &Host) -> Result<xdr::ContractEvent, HostError> {
-        let topics = if let ScVal::Vec(Some(v)) = host.from_host_obj(self.topics)?.into() {
-            Ok(v)
-        } else {
-            Err(host.err(
-                ScErrorType::Events,
-                ScErrorCode::InvalidInput,
-                "converting event topics to vector",
-                &[self.topics.to_val()],
-            ))
-        }?;
+        let topics = host.call_args_to_sc_val_vec(self.topics)?;
         let data = host.from_host_val(self.data)?;
         let contract_id = match self.contract_id {
             Some(id) => Some(host.hash_from_bytesobj_input("contract_id", id)?),
@@ -100,8 +88,7 @@ fn externalize_args(host: &Host, args: &[InternalDiagnosticArg]) -> Result<Vec<S
 
 impl InternalDiagnosticEvent {
     pub fn to_xdr(&self, host: &Host) -> Result<xdr::ContractEvent, HostError> {
-        let topics: Vec<ScVal> = externalize_args(host, &self.topics)?;
-        let topics = xdr::ScVec::from(xdr::VecM::try_from(topics)?);
+        let topics: xdr::VecM<ScVal> = externalize_args(host, &self.topics)?.try_into()?;
         let args = externalize_args(host, &self.args)?;
         let data = if args.len() > 1 {
             ScVal::Vec(Some(xdr::ScVec::from(xdr::VecM::try_from(args)?)))

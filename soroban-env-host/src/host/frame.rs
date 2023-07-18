@@ -6,7 +6,6 @@ use soroban_env_common::{
 use crate::{
     auth::AuthorizationManagerSnapshot,
     budget::AsBudget,
-    err,
     storage::{InstanceStorageMap, StorageMap},
     xdr::{ContractCostType, ContractExecutable, Hash, HostFunction, HostFunctionType, ScVal},
     Error, Host, HostError, Object, Symbol, SymbolStr, TryFromVal, TryIntoVal, Val,
@@ -656,35 +655,24 @@ impl Host {
     fn invoke_function_raw(&self, hf: HostFunction) -> Result<Val, HostError> {
         let hf_type = hf.discriminant();
         match hf {
-            HostFunction::InvokeContract(args) => {
-                if let [ScVal::Address(ScAddress::Contract(contract_id)), ScVal::Symbol(scsym), rest @ ..] =
-                    args.as_slice()
-                {
-                    self.with_frame(Frame::HostFunction(hf_type), || {
-                        // Metering: conversions to host objects are covered. Cost of collecting
-                        // Vals into Vec is ignored. Since 1. Vals are cheap to clone 2. the
-                        // max number of args is fairly limited.
-
-                        let symbol: Symbol = scsym.as_slice().try_into_val(self)?;
-                        let args = self.scvals_to_rawvals(rest)?;
-                        // since the `HostFunction` frame must be the bottom of the call stack,
-                        // reentry is irrelevant, we always pass in `ContractReentryMode::Prohibited`.
-                        self.call_n_internal(
-                            contract_id,
-                            symbol,
-                            &args[..],
-                            ContractReentryMode::Prohibited,
-                            false,
-                        )
-                    })
-                } else {
-                    Err(err!(
-                        self,
-                        (ScErrorType::Context, ScErrorCode::UnexpectedSize),
-                        "unexpected number of arguments to 'call' host function",
-                        args.len()
-                    ))
-                }
+            HostFunction::InvokeContract(invoke_args) => {
+                self.with_frame(Frame::HostFunction(hf_type), || {
+                    // Metering: conversions to host objects are covered.
+                    let ScAddress::Contract(ref contract_id) = invoke_args.contract_address else {
+                        return Err(self.err(ScErrorType::Value, ScErrorCode::UnexpectedType, "invoked address doesn't belong to a contract", &[]));
+                    };
+                    let function_name: Symbol = invoke_args.function_name.try_into_val(self)?;
+                    let args = self.scvals_to_rawvals(invoke_args.args.as_slice())?;
+                    // since the `HostFunction` frame must be the bottom of the call stack,
+                    // reentry is irrelevant, we always pass in `ContractReentryMode::Prohibited`.
+                    self.call_n_internal(
+                        contract_id,
+                        function_name,
+                        args.as_slice(),
+                        ContractReentryMode::Prohibited,
+                        false,
+                    )
+                })
             }
             HostFunction::CreateContract(args) => {
                 self.with_frame(Frame::HostFunction(hf_type), || {

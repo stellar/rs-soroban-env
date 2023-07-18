@@ -12,7 +12,7 @@ use soroban_env_common::num::{
 use soroban_env_common::xdr::{
     self, int128_helpers, AccountId, ContractDataDurability, ContractEntryBodyType, DepthLimiter,
     Int128Parts, Int256Parts, ScAddress, ScBytes, ScErrorCode, ScErrorType, ScMap, ScMapEntry,
-    UInt128Parts, UInt256Parts,
+    UInt128Parts, UInt256Parts, VecM,
 };
 use soroban_env_common::{
     AddressObject, BytesObject, Convert, Object, ScValObjRef, ScValObject, TryFromVal, TryIntoVal,
@@ -231,52 +231,53 @@ impl Host {
         })
     }
 
-    // Metering: free?
-    pub(crate) fn call_args_to_scvec(&self, args: VecObject) -> Result<ScVec, HostError> {
-        self.visit_obj(args, |hv: &HostVec| self.rawvals_to_scvec(hv.as_slice()))
+    // Metering: covered by rawvals_to_vec
+    pub(crate) fn call_args_to_sc_val_vec(
+        &self,
+        args: VecObject,
+    ) -> Result<VecM<ScVal>, HostError> {
+        self.visit_obj(args, |hv: &HostVec| {
+            self.rawvals_to_sc_val_vec(hv.as_slice())
+        })
     }
 
-    pub(crate) fn rawvals_to_scvec(&self, raw_vals: &[Val]) -> Result<ScVec, HostError> {
+    pub(crate) fn rawvals_to_sc_val_vec(&self, raw_vals: &[Val]) -> Result<VecM<ScVal>, HostError> {
         charge_container_bulk_init_with_elts::<Vec<Val>, Val>(
             raw_vals.len() as u64,
             self.as_budget(),
         )?;
-        Ok(ScVec(
-            raw_vals
-                .iter()
-                .map(|v| self.from_host_val(*v))
-                .collect::<Result<Vec<ScVal>, HostError>>()?
-                .try_into()
-                .map_err(|_| {
-                    err!(
-                        self,
-                        (ScErrorType::Object, ScErrorCode::ExceededLimit),
-                        "vector size limit exceeded",
-                        raw_vals.len()
-                    )
-                })?,
-        ))
+        raw_vals
+            .iter()
+            .map(|v| self.from_host_val(*v))
+            .collect::<Result<Vec<ScVal>, HostError>>()?
+            .try_into()
+            .map_err(|_| {
+                err!(
+                    self,
+                    (ScErrorType::Object, ScErrorCode::ExceededLimit),
+                    "vector size limit exceeded",
+                    raw_vals.len()
+                )
+            })
     }
 
-    pub(crate) fn rawvals_to_scvec_non_metered(
+    pub(crate) fn rawvals_to_sc_val_vec_non_metered(
         &self,
         raw_vals: &[Val],
-    ) -> Result<ScVec, HostError> {
-        Ok(ScVec(
-            raw_vals
-                .iter()
-                .map(|v| v.try_into_val(self)?)
-                .collect::<Result<Vec<ScVal>, HostError>>()?
-                .try_into()
-                .map_err(|_| {
-                    err!(
-                        self,
-                        (ScErrorType::Object, ScErrorCode::ExceededLimit),
-                        "vector size limit exceeded",
-                        raw_vals.len()
-                    )
-                })?,
-        ))
+    ) -> Result<VecM<ScVal>, HostError> {
+        raw_vals
+            .iter()
+            .map(|v| v.try_into_val(self)?)
+            .collect::<Result<Vec<ScVal>, HostError>>()?
+            .try_into()
+            .map_err(|_| {
+                err!(
+                    self,
+                    (ScErrorType::Object, ScErrorCode::ExceededLimit),
+                    "vector size limit exceeded",
+                    raw_vals.len()
+                )
+            })
     }
 
     pub(crate) fn scvals_to_rawvals(&self, sc_vals: &[ScVal]) -> Result<Vec<Val>, HostError> {
