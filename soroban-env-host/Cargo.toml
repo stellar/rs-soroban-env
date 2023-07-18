@@ -60,7 +60,7 @@ linregress = "0.5.1"
 testutils = ["soroban-env-common/testutils"]
 tracy = ["dep:tracy-client"]
 
-[target.'cfg(target_os = "linux")'.dev-dependencies]
+[target.'cfg(target_os = "linux")'.dependencies]
 perf-event = "0.4.7"
 
 [[bench]]
