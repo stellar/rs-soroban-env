@@ -101,7 +101,7 @@ mod cpu {
     }
 }
 
-#[cfg(all(not(target_os = "macos"), not(target_os = "linix")))]
+#[cfg(not(any(target_os = "linux", target_os = "macos")))]
 mod cpu {
     pub struct InstructionCounter(u64);
     impl InstructionCounter {
