@@ -136,11 +136,11 @@ impl<'a> HostTracker<'a> {
         }
     }
 
-    pub fn stop(&mut self) -> (u64, u64, u64) {
+    pub fn stop(mut self) -> (u64, u64, u64) {
         // collect the metrics
         let cpu_insns = self.cpu_insn_counter.end_and_count();
         let stop_time = Instant::now();
-        if let Some(g) = &self.alloc_guard {
+        if let Some(g) = self.alloc_guard {
             drop(g)
         }
 
@@ -153,23 +153,5 @@ impl<'a> HostTracker<'a> {
         }
 
         (cpu_insns, mem_bytes, time_nsecs)
-    }
-}
-
-pub struct TrackerGuard<'a>(pub HostTracker<'a>);
-
-impl<'a> TrackerGuard<'a> {
-    pub fn new(token: Option<&'a mut AllocationGroupToken>) -> Self {
-        Self(HostTracker::start(token))
-    }
-}
-
-impl<'a> Drop for TrackerGuard<'a> {
-    fn drop(&mut self) {
-        let (cpu_insns, mem_bytes, time_nsecs) = self.0.stop();
-        println!(
-            "cpu: {:?}, mem: {:?}, time: {:?}",
-            cpu_insns, mem_bytes, time_nsecs
-        );
     }
 }

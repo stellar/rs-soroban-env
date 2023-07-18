@@ -302,7 +302,7 @@ where
     let mut recycled_samples = Vec::with_capacity(samples.len());
     host.as_budget().reset_unlimited().unwrap();
 
-    let mut ht = HostTracker::start(alloc_group_token);
+    let ht = HostTracker::start(alloc_group_token);
 
     runner(host, samples, &mut recycled_samples);
 
@@ -359,10 +359,6 @@ where
         mes.cpu_insns -= samples_cpu_insns_overhead;
         // the return result contains `N_r * (f(x) + Overhead_b)` (see equation [2])
         ret.push(mes);
-    }
-    AllocationRegistry::disable_tracking();
-    unsafe {
-        AllocationRegistry::clear_global_tracker();
     }
     Ok(ret)
 }
