@@ -220,7 +220,7 @@ impl Measurements {
 ///
 ///     f(x) = N_x * (a + b * Option<x>)                                    [1]
 ///
-/// The `N_x` here is batch size if the host is doing `batched_charge` for the
+/// The `N_x` here is batch size if the host is doing `bulk_charge` for the
 /// corresponding `x`.  The goal of the HCM is to record the relation of x and
 /// f(x) in order for  a, b -- the constant and linear cost parameters -- to be
 /// extracted. In the ideal setup, we pass in an array of samples with various

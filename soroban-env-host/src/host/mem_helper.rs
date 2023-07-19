@@ -18,7 +18,7 @@ impl Host {
         let pos: u32 = pos.into();
         let len: u32 = len.into();
         self.with_current_frame(|frame| match frame {
-            Frame::ContractVM(vm, ..) => {
+            Frame::ContractVM { vm, .. } => {
                 let vm = vm.clone();
                 Ok(VmSlice { vm, pos, len })
             }
@@ -67,7 +67,7 @@ impl Host {
         vm: &Rc<Vm>,
         mem_pos: u32,
         buf: &[VAL],
-        to_le_bytes: impl Fn(&VAL) -> [u8; VAL_SZ],
+        to_le_bytes: impl Fn(&VAL) -> Result<[u8; VAL_SZ], HostError>,
     ) -> Result<(), HostError> {
         let val_sz = self.usize_to_u32(VAL_SZ)?;
         let len = self.usize_to_u32(buf.len())?;
@@ -96,7 +96,7 @@ impl Host {
                     &[],
                 ));
             }
-            let tmp: [u8; VAL_SZ] = to_le_bytes(src);
+            let tmp: [u8; VAL_SZ] = to_le_bytes(src)?;
             dst.copy_from_slice(&tmp);
         }
         Ok(())
@@ -108,7 +108,7 @@ impl Host {
         vm: &Rc<Vm>,
         mem_pos: u32,
         buf: &mut [VAL],
-        from_le_bytes: impl Fn(&[u8; VAL_SZ]) -> VAL,
+        from_le_bytes: impl Fn(&[u8; VAL_SZ]) -> Result<VAL, HostError>,
     ) -> Result<(), HostError> {
         let val_sz = self.usize_to_u32(VAL_SZ)?;
         let len = self.usize_to_u32(buf.len())?;
@@ -131,7 +131,7 @@ impl Host {
         for (dst, src) in buf.iter_mut().zip(mem_slice.chunks(VAL_SZ)) {
             if let Ok(src) = TryInto::<&[u8; VAL_SZ]>::try_into(src) {
                 tmp.copy_from_slice(src);
-                *dst = from_le_bytes(&tmp);
+                *dst = from_le_bytes(&tmp)?;
             } else {
                 // This should be impossible unless there's an error above, but just in case.
                 return Err(self.err(

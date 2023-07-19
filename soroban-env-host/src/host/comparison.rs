@@ -4,8 +4,8 @@ use soroban_env_common::{
     xdr::{
         AccountEntry, AccountId, ClaimableBalanceEntry, ConfigSettingEntry, ContractCodeEntryBody,
         ContractCostType, ContractDataDurability, ContractDataEntryBody, ContractDataEntryData,
-        ContractEntryBodyType, ContractExecutable, CreateContractArgs, DataEntry, Duration,
-        ExtensionPoint, Hash, LedgerEntry, LedgerEntryData, LedgerEntryExt, LedgerKey,
+        ContractEntryBodyType, ContractExecutable, CreateContractArgs, DataEntry, DepthLimiter,
+        Duration, ExtensionPoint, Hash, LedgerEntry, LedgerEntryData, LedgerEntryExt, LedgerKey,
         LedgerKeyAccount, LedgerKeyClaimableBalance, LedgerKeyConfigSetting, LedgerKeyContractCode,
         LedgerKeyData, LedgerKeyLiquidityPool, LedgerKeyOffer, LedgerKeyTrustLine,
         LiquidityPoolEntry, OfferEntry, PublicKey, ScAddress, ScErrorCode, ScErrorType, ScMap,
@@ -52,44 +52,48 @@ impl Compare<HostObject> for Host {
 
     fn compare(&self, a: &HostObject, b: &HostObject) -> Result<Ordering, Self::Error> {
         use HostObject::*;
-        match (a, b) {
-            (U64(a), U64(b)) => self.as_budget().compare(a, b),
-            (I64(a), I64(b)) => self.as_budget().compare(a, b),
-            (TimePoint(a), TimePoint(b)) => self.as_budget().compare(a, b),
-            (Duration(a), Duration(b)) => self.as_budget().compare(a, b),
-            (U128(a), U128(b)) => self.as_budget().compare(a, b),
-            (I128(a), I128(b)) => self.as_budget().compare(a, b),
-            (U256(a), U256(b)) => self.as_budget().compare(a, b),
-            (I256(a), I256(b)) => self.as_budget().compare(a, b),
-            (Vec(a), Vec(b)) => self.compare(a, b),
-            (Map(a), Map(b)) => self.compare(a, b),
-            (Bytes(a), Bytes(b)) => self.as_budget().compare(&a.as_slice(), &b.as_slice()),
-            (String(a), String(b)) => self.as_budget().compare(&a.as_slice(), &b.as_slice()),
-            (Symbol(a), Symbol(b)) => self.as_budget().compare(&a.as_slice(), &b.as_slice()),
-            (Address(a), Address(b)) => self.as_budget().compare(a, b),
+        let _span = tracy_span!("Compare<HostObject>");
+        // This is the depth limit checkpoint for `Val` comparison.
+        self.budget_cloned().with_limited_depth(|_| {
+            match (a, b) {
+                (U64(a), U64(b)) => self.as_budget().compare(a, b),
+                (I64(a), I64(b)) => self.as_budget().compare(a, b),
+                (TimePoint(a), TimePoint(b)) => self.as_budget().compare(a, b),
+                (Duration(a), Duration(b)) => self.as_budget().compare(a, b),
+                (U128(a), U128(b)) => self.as_budget().compare(a, b),
+                (I128(a), I128(b)) => self.as_budget().compare(a, b),
+                (U256(a), U256(b)) => self.as_budget().compare(a, b),
+                (I256(a), I256(b)) => self.as_budget().compare(a, b),
+                (Vec(a), Vec(b)) => self.compare(a, b),
+                (Map(a), Map(b)) => self.compare(a, b),
+                (Bytes(a), Bytes(b)) => self.as_budget().compare(&a.as_slice(), &b.as_slice()),
+                (String(a), String(b)) => self.as_budget().compare(&a.as_slice(), &b.as_slice()),
+                (Symbol(a), Symbol(b)) => self.as_budget().compare(&a.as_slice(), &b.as_slice()),
+                (Address(a), Address(b)) => self.as_budget().compare(a, b),
 
-            // List out at least one side of all the remaining cases here so
-            // we don't accidentally forget to update this when/if a new
-            // HostObject type is added.
-            (U64(_), _)
-            | (TimePoint(_), _)
-            | (Duration(_), _)
-            | (I64(_), _)
-            | (U128(_), _)
-            | (I128(_), _)
-            | (U256(_), _)
-            | (I256(_), _)
-            | (Vec(_), _)
-            | (Map(_), _)
-            | (Bytes(_), _)
-            | (String(_), _)
-            | (Symbol(_), _)
-            | (Address(_), _) => {
-                let a = host_obj_discriminant(a);
-                let b = host_obj_discriminant(b);
-                Ok(a.cmp(&b))
+                // List out at least one side of all the remaining cases here so
+                // we don't accidentally forget to update this when/if a new
+                // HostObject type is added.
+                (U64(_), _)
+                | (TimePoint(_), _)
+                | (Duration(_), _)
+                | (I64(_), _)
+                | (U128(_), _)
+                | (I128(_), _)
+                | (U256(_), _)
+                | (I256(_), _)
+                | (Vec(_), _)
+                | (Map(_), _)
+                | (Bytes(_), _)
+                | (String(_), _)
+                | (Symbol(_), _)
+                | (Address(_), _) => {
+                    let a = host_obj_discriminant(a);
+                    let b = host_obj_discriminant(b);
+                    Ok(a.cmp(&b))
+                }
             }
-        }
+        })
     }
 }
 
@@ -258,7 +262,8 @@ impl Compare<ScVal> for Budget {
 
     fn compare(&self, a: &ScVal, b: &ScVal) -> Result<Ordering, Self::Error> {
         use ScVal::*;
-        match (a, b) {
+        // This is the depth limit checkpoint for `ScVal` comparison.
+        self.clone().with_limited_depth(|_| match (a, b) {
             (Vec(Some(a)), Vec(Some(b))) => self.compare(a, b),
             (Map(Some(a)), Map(Some(b))) => self.compare(a, b),
 
@@ -309,7 +314,7 @@ impl Compare<ScVal> for Budget {
             | (LedgerKeyContractInstance, _)
             | (LedgerKeyNonce(_), _)
             | (ContractInstance(_), _) => Ok(a.cmp(b)),
-        }
+        })
     }
 }
 

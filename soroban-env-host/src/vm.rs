@@ -20,7 +20,10 @@ use fuel_refillable::FuelRefillable;
 use func_info::HOST_FUNCTIONS;
 use soroban_env_common::{
     meta::{self, get_ledger_protocol_version, get_pre_release_version},
-    xdr::{ReadXdr, ScEnvMetaEntry, ScErrorCode, ScErrorType},
+    xdr::{
+        DepthLimitedRead, ReadXdr, ScEnvMetaEntry, ScErrorCode, ScErrorType,
+        DEFAULT_XDR_RW_DEPTH_LIMIT,
+    },
     ConversionError, SymbolStr, TryIntoVal, WasmiMarshal,
 };
 
@@ -30,7 +33,6 @@ use wasmi::{Engine, FuelConsumptionMode, Func, Instance, Linker, Memory, Module,
 use crate::VmCaller;
 #[cfg(any(test, feature = "testutils"))]
 use wasmi::{Caller, StoreContextMut};
-
 impl wasmi::core::HostError for HostError {}
 
 /// A [Vm] is a thin wrapper around an instance of [wasmi::Module]. Multiple
@@ -69,7 +71,8 @@ impl Vm {
         // us as well as a protocol that's less than or equal to our protocol.
 
         if let Some(env_meta) = Self::module_custom_section(m, meta::ENV_META_V0_SECTION_NAME) {
-            let mut cursor = Cursor::new(env_meta);
+            let mut cursor =
+                DepthLimitedRead::new(Cursor::new(env_meta), DEFAULT_XDR_RW_DEPTH_LIMIT);
             if let Some(env_meta_entry) = ScEnvMetaEntry::read_xdr_iter(&mut cursor).next() {
                 let ScEnvMetaEntry::ScEnvMetaKindInterfaceVersion(v) =
                     host.map_err(env_meta_entry)?;
@@ -136,6 +139,8 @@ impl Vm {
         contract_id: Hash,
         module_wasm_code: &[u8],
     ) -> Result<Rc<Self>, HostError> {
+        let _span = tracy_span!("Vm::new");
+
         host.charge_budget(
             ContractCostType::VmInstantiation,
             Some(module_wasm_code.len() as u64),
@@ -156,23 +161,34 @@ impl Vm {
             .set_fuel_costs(fuel_costs);
 
         let engine = Engine::new(&config);
-        let module = host.map_err(Module::new(&engine, module_wasm_code))?;
+        let module = {
+            let _span0 = tracy_span!("parse module");
+            host.map_err(Module::new(&engine, module_wasm_code))?
+        };
 
         Self::check_meta_section(host, &module)?;
 
         let mut store = Store::new(&engine, host.clone());
+        store.limiter(|host| host);
+
         let mut linker = <Linker<Host>>::new(&engine);
 
-        for hf in HOST_FUNCTIONS {
-            let func = (hf.wrap)(&mut store);
-            host.map_err(
-                linker
-                    .define(hf.mod_str, hf.fn_str, func)
-                    .map_err(|le| wasmi::Error::Linker(le)),
-            )?;
+        {
+            let _span0 = tracy_span!("define host functions");
+            for hf in HOST_FUNCTIONS {
+                let func = (hf.wrap)(&mut store);
+                host.map_err(
+                    linker
+                        .define(hf.mod_str, hf.fn_str, func)
+                        .map_err(|le| wasmi::Error::Linker(le)),
+                )?;
+            }
         }
 
-        let not_started_instance = host.map_err(linker.instantiate(&mut store, &module))?;
+        let not_started_instance = {
+            let _span0 = tracy_span!("instantiate module");
+            host.map_err(linker.instantiate(&mut store, &module))?
+        };
 
         let instance = host.map_err(
             not_started_instance
@@ -221,7 +237,7 @@ impl Vm {
         inputs: &[Value],
     ) -> Result<Val, HostError> {
         let mut wasm_ret: [Value; 1] = [Value::I64(0)];
-        self.store.try_borrow_mut_or_err()?.fill_fuels(host)?;
+        self.store.try_borrow_mut_or_err()?.add_fuel_to_vm(host)?;
         let res = func.call(
             &mut *self.store.try_borrow_mut_or_err()?,
             inputs,
@@ -232,7 +248,9 @@ impl Vm {
         // wasmi instruction) remaining when the `OutOfFuel` trap occurs. This is only observable
         // if the contract traps with `OutOfFuel`, which may appear confusing if they look closely
         // at the budget amount consumed. So it should be fine.
-        self.store.try_borrow_mut_or_err()?.return_fuels(host)?;
+        self.store
+            .try_borrow_mut_or_err()?
+            .return_fuel_to_host(host)?;
 
         if let Err(e) = res {
             // When a call fails with a wasmi::Error::Trap that carries a HostError
@@ -268,9 +286,8 @@ impl Vm {
                 }
             }
         }
-        Ok(
-            <_ as WasmiMarshal>::try_marshal_from_value(wasm_ret[0].clone())
-                .ok_or(ConversionError)?,
+        host.relative_to_absolute(
+            Val::try_marshal_from_value(wasm_ret[0].clone()).ok_or(ConversionError)?,
         )
     }
 
@@ -280,11 +297,12 @@ impl Vm {
         func_sym: &Symbol,
         args: &[Val],
     ) -> Result<Val, HostError> {
+        let _span = tracy_span!("Vm::invoke_function_raw");
         host.charge_budget(ContractCostType::InvokeVmFunction, None)?;
         let wasm_args: Vec<Value> = args
             .iter()
-            .map(|i| Value::I64(i.get_payload() as i64))
-            .collect();
+            .map(|i| host.absolute_to_relative(*i).map(|v| v.marshal_from_self()))
+            .collect::<Result<Vec<Value>, HostError>>()?;
         let func_ss: SymbolStr = func_sym.try_into_val(host)?;
         let ext = match self
             .instance

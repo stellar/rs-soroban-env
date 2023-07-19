@@ -16,8 +16,8 @@ fn vec_as_seen_by_host() -> Result<(), HostError> {
     assert_eq!(val1.get_tag(), Tag::VecObject);
     let obj0: Object = val0.try_into()?;
     let obj1: Object = val1.try_into()?;
-    assert_eq!(obj0.get_handle(), 0);
-    assert_eq!(obj1.get_handle(), 1);
+    assert_eq!(obj0.get_handle(), 1);
+    assert_eq!(obj1.get_handle(), 3);
     assert_eq!(obj0.as_val().get_tag(), Tag::VecObject);
     assert_eq!(obj1.as_val().get_tag(), Tag::VecObject);
     // Check that we got 2 distinct Vec objects

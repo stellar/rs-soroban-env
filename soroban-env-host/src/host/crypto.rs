@@ -55,6 +55,7 @@ impl Host {
         public_key: &ed25519_dalek::PublicKey,
         sig: &ed25519_dalek::Signature,
     ) -> Result<(), HostError> {
+        let _span = tracy_span!("ed25519 verify");
         self.charge_budget(
             ContractCostType::VerifyEd25519Sig,
             Some(payload.len() as u64),
@@ -162,6 +163,7 @@ impl Host {
         sig: &k256::ecdsa::Signature,
         rid: k256::ecdsa::RecoveryId,
     ) -> Result<BytesObject, HostError> {
+        let _span = tracy_span!("secp256k1 recover");
         self.charge_budget(ContractCostType::RecoverEcdsaSecp256k1Key, None)?;
         let recovered_key =
             k256::ecdsa::VerifyingKey::recover_from_prehash(hash.as_slice(), &sig, rid).map_err(
@@ -183,6 +185,7 @@ impl Host {
     // SHA256 functions
 
     pub(crate) fn sha256_hash_from_bytes(&self, bytes: &[u8]) -> Result<Vec<u8>, HostError> {
+        let _span = tracy_span!("sha256");
         self.charge_budget(
             ContractCostType::ComputeSha256Hash,
             Some(bytes.len() as u64),
@@ -208,6 +211,7 @@ impl Host {
     // Keccak256/SHA3 functions
 
     pub(crate) fn keccak256_hash_from_bytes(&self, bytes: &[u8]) -> Result<Vec<u8>, HostError> {
+        let _span = tracy_span!("keccak256");
         self.charge_budget(
             ContractCostType::ComputeKeccak256Hash,
             Some(bytes.len() as u64),

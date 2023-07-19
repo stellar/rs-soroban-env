@@ -23,6 +23,26 @@
 //!     between contracts and their durable storage.
 //!
 
+#[cfg(all(not(target_family = "wasm"), feature = "tracy"))]
+macro_rules! tracy_span {
+    () => {
+        tracy_client::span!()
+    };
+    ($name:expr) => {
+        tracy_client::span!($name)
+    };
+}
+
+#[cfg(any(target_family = "wasm", not(feature = "tracy")))]
+macro_rules! tracy_span {
+    () => {
+        ()
+    };
+    ($name:expr) => {
+        ()
+    };
+}
+
 pub mod budget;
 pub mod events;
 pub use events::diagnostic::DiagnosticLevel;
@@ -48,7 +68,7 @@ pub use host::testutils::call_with_suppressed_panic_hook;
 pub use host::ContractFunctionSet;
 pub use host::{
     metered_map::MeteredOrdMap, metered_vector::MeteredVector, Host, HostError, LedgerInfo, Seed,
-    SEED_BYTES,
+    DEFAULT_HOST_DEPTH_LIMIT, SEED_BYTES,
 };
 pub use soroban_env_common::*;
 

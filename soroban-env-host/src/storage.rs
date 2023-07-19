@@ -201,6 +201,7 @@ impl Storage {
         key: &Rc<LedgerKey>,
         budget: &Budget,
     ) -> Result<Rc<LedgerEntry>, HostError> {
+        let _span = tracy_span!("storage get");
         let ty = AccessType::ReadOnly;
         match self.mode {
             FootprintMode::Recording(ref src) => {
@@ -259,6 +260,7 @@ impl Storage {
         val: &Rc<LedgerEntry>,
         budget: &Budget,
     ) -> Result<(), HostError> {
+        let _span = tracy_span!("storage put");
         self.put_opt(key, Some(val), budget)
     }
 
@@ -272,6 +274,7 @@ impl Storage {
     /// [LedgerKey] has been declared in the [Footprint] as
     /// [AccessType::ReadWrite].
     pub fn del(&mut self, key: &Rc<LedgerKey>, budget: &Budget) -> Result<(), HostError> {
+        let _span = tracy_span!("storage del");
         self.put_opt(key, None, budget)
     }
 
@@ -285,6 +288,7 @@ impl Storage {
     /// In [FootprintMode::Enforcing] mode, succeeds only if the access has been
     /// declared in the [Footprint].
     pub fn has(&mut self, key: &Rc<LedgerKey>, budget: &Budget) -> Result<bool, HostError> {
+        let _span = tracy_span!("storage has");
         let ty = AccessType::ReadOnly;
         match self.mode {
             FootprintMode::Recording(ref src) => {
@@ -315,6 +319,7 @@ impl Storage {
     /// In [FootprintMode::Enforcing] mode, succeeds only if the access has been
     /// declared in the [Footprint].
     pub fn touch_key(&mut self, key: &Rc<LedgerKey>, budget: &Budget) -> Result<(), HostError> {
+        let _span = tracy_span!("touch key");
         let ty = AccessType::ReadOnly;
         match self.mode {
             FootprintMode::Recording(_) => self.footprint.record_access(key, ty, budget),

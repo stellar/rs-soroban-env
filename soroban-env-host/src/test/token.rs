@@ -21,7 +21,7 @@ use crate::{
 use ed25519_dalek::Keypair;
 use soroban_env_common::{
     xdr::{
-        self, AccountFlags, ScAddress, ScSymbol, ScVal, ScVec, SorobanAuthorizedContractFunction,
+        self, AccountFlags, InvokeContractArgs, ScAddress, ScSymbol, ScVal,
         SorobanAuthorizedFunction, SorobanAuthorizedInvocation,
     },
     xdr::{
@@ -2646,15 +2646,9 @@ fn test_classic_transfers_not_possible_for_unauthorized_asset() {
 }
 
 #[allow(clippy::type_complexity)]
-fn simple_account_sign_fn<'a>(
-    host: &'a Host,
-    kp: &'a Keypair,
-) -> Box<dyn Fn(&[u8]) -> HostVec + 'a> {
+fn simple_account_sign_fn<'a>(host: &'a Host, kp: &'a Keypair) -> Box<dyn Fn(&[u8]) -> Val + 'a> {
     use crate::native_contract::testutils::sign_payload_for_ed25519;
-    Box::new(|payload: &[u8]| -> HostVec {
-        let signature = sign_payload_for_ed25519(host, kp, payload);
-        host_vec![host, signature]
-    })
+    Box::new(|payload: &[u8]| -> Val { sign_payload_for_ed25519(host, kp, payload).into() })
 }
 
 #[test]
@@ -2774,29 +2768,24 @@ fn test_recording_auth_for_token() {
             address: Some(admin.address(&test.host).to_sc_address().unwrap()),
             nonce: Some(0),
             invocation: SorobanAuthorizedInvocation {
-                function: SorobanAuthorizedFunction::ContractFn(
-                    SorobanAuthorizedContractFunction {
-                        contract_address: token.address.to_sc_address().unwrap(),
-                        function_name: xdr::ScSymbol("mint".try_into().unwrap()),
-                        args: ScVec(
-                            vec![
-                                ScVal::try_from_val(
-                                    &test.host,
-                                    &Val::try_from_val(&test.host, &user.address(&test.host))
-                                        .unwrap()
-                                )
-                                .unwrap(),
-                                ScVal::try_from_val(
-                                    &test.host,
-                                    &Val::try_from_val(&test.host, &100_i128).unwrap()
-                                )
-                                .unwrap()
-                            ]
-                            .try_into()
-                            .unwrap()
-                        ),
-                    }
-                ),
+                function: SorobanAuthorizedFunction::ContractFn(InvokeContractArgs {
+                    contract_address: token.address.to_sc_address().unwrap(),
+                    function_name: xdr::ScSymbol("mint".try_into().unwrap()),
+                    args: vec![
+                        ScVal::try_from_val(
+                            &test.host,
+                            &Val::try_from_val(&test.host, &user.address(&test.host)).unwrap()
+                        )
+                        .unwrap(),
+                        ScVal::try_from_val(
+                            &test.host,
+                            &Val::try_from_val(&test.host, &100_i128).unwrap()
+                        )
+                        .unwrap()
+                    ]
+                    .try_into()
+                    .unwrap(),
+                }),
                 sub_invocations: Default::default(),
             }
         }]
@@ -2807,13 +2796,11 @@ fn test_recording_auth_for_token() {
         vec![(
             admin.address(&test.host).to_sc_address().unwrap(),
             SorobanAuthorizedInvocation {
-                function: SorobanAuthorizedFunction::ContractFn(
-                    SorobanAuthorizedContractFunction {
-                        contract_address: token.address.to_sc_address().unwrap(),
-                        function_name: ScSymbol("mint".try_into().unwrap()),
-                        args: test.host.call_args_to_scvec(args.into()).unwrap()
-                    }
-                ),
+                function: SorobanAuthorizedFunction::ContractFn(InvokeContractArgs {
+                    contract_address: token.address.to_sc_address().unwrap(),
+                    function_name: ScSymbol("mint".try_into().unwrap()),
+                    args: test.host.call_args_to_sc_val_vec(args.into()).unwrap()
+                }),
                 sub_invocations: Default::default()
             }
         )]

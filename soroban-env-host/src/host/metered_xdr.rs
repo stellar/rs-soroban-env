@@ -6,7 +6,9 @@ use crate::{
 use std::io::Write;
 
 use sha2::{Digest, Sha256};
-use soroban_env_common::xdr::{ScErrorCode, ScErrorType};
+use soroban_env_common::xdr::{
+    DepthLimitedWrite, ScErrorCode, ScErrorType, DEFAULT_XDR_RW_DEPTH_LIMIT,
+};
 
 struct MeteredWrite<'a, W: Write> {
     host: &'a Host,
@@ -35,7 +37,9 @@ impl Host {
         obj: &impl WriteXdr,
         w: &mut Vec<u8>,
     ) -> Result<(), HostError> {
-        let mut w = MeteredWrite { host: self, w };
+        let _span = tracy_span!("write xdr");
+        let mw = MeteredWrite { host: self, w };
+        let mut w = DepthLimitedWrite::new(mw, DEFAULT_XDR_RW_DEPTH_LIMIT);
         // MeteredWrite above turned any budget failure into an IO error; we turn it
         // back to a budget failure here, since there's really no "IO error" that can
         // occur when writing to a Vec<u8>.
@@ -44,6 +48,7 @@ impl Host {
     }
 
     pub(crate) fn metered_hash_xdr(&self, obj: &impl WriteXdr) -> Result<[u8; 32], HostError> {
+        let _span = tracy_span!("hash xdr");
         let mut buf = vec![];
         self.metered_write_xdr(obj, &mut buf)?;
         self.charge_budget(ContractCostType::ComputeSha256Hash, Some(buf.len() as u64))?;
@@ -51,6 +56,7 @@ impl Host {
     }
 
     pub(crate) fn metered_from_xdr<T: ReadXdr>(&self, bytes: &[u8]) -> Result<T, HostError> {
+        let _span = tracy_span!("read xdr");
         self.charge_budget(ContractCostType::ValDeser, Some(bytes.len() as u64))?;
         self.map_err(T::from_xdr(bytes))
     }

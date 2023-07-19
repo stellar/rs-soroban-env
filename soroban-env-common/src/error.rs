@@ -92,8 +92,19 @@ impl TryFrom<Error> for ScError {
     type Error = stellar_xdr::Error;
     fn try_from(er: Error) -> Result<Self, Self::Error> {
         let type_: ScErrorType = (er.as_val().get_minor() as i32).try_into()?;
-        let code: ScErrorCode = (er.as_val().get_major() as i32).try_into()?;
-        Ok(ScError { type_, code })
+        let u: u32 = er.as_val().get_major();
+        Ok(match type_ {
+            ScErrorType::Contract => ScError::Contract(u),
+            ScErrorType::WasmVm => ScError::WasmVm((u as i32).try_into()?),
+            ScErrorType::Context => ScError::Context((u as i32).try_into()?),
+            ScErrorType::Storage => ScError::Storage((u as i32).try_into()?),
+            ScErrorType::Object => ScError::Object((u as i32).try_into()?),
+            ScErrorType::Crypto => ScError::Crypto((u as i32).try_into()?),
+            ScErrorType::Events => ScError::Events((u as i32).try_into()?),
+            ScErrorType::Budget => ScError::Budget((u as i32).try_into()?),
+            ScErrorType::Value => ScError::Value((u as i32).try_into()?),
+            ScErrorType::Auth => ScError::Auth((u as i32).try_into()?),
+        })
     }
 }
 
@@ -136,8 +147,13 @@ impl From<ConversionError> for Error {
 }
 
 impl From<stellar_xdr::Error> for Error {
-    fn from(_: stellar_xdr::Error) -> Self {
-        Error::from_type_and_code(ScErrorType::Value, ScErrorCode::InvalidInput)
+    fn from(e: stellar_xdr::Error) -> Self {
+        match e {
+            stellar_xdr::Error::DepthLimitExceeded => {
+                Error::from_type_and_code(ScErrorType::Context, ScErrorCode::ExceededLimit)
+            }
+            _ => Error::from_type_and_code(ScErrorType::Value, ScErrorCode::InvalidInput),
+        }
     }
 }
 
@@ -159,7 +175,9 @@ impl From<wasmi::core::TrapCode> for Error {
 
             wasmi::core::TrapCode::BadSignature => ScErrorCode::UnexpectedType,
 
-            wasmi::core::TrapCode::StackOverflow | wasmi::core::TrapCode::OutOfFuel => {
+            wasmi::core::TrapCode::StackOverflow
+            | wasmi::core::TrapCode::OutOfFuel
+            | wasmi::core::TrapCode::GrowthOperationLimited => {
                 return Error::from_type_and_code(ScErrorType::Budget, ScErrorCode::ExceededLimit)
             }
         };
@@ -210,7 +228,18 @@ impl Error {
 
     #[inline(always)]
     pub const fn from_scerror(sc: ScError) -> Error {
-        Self::from_type_and_code(sc.type_, sc.code)
+        match sc {
+            ScError::Contract(u) => Self::from_contract_error(u),
+            ScError::WasmVm(code) => Self::from_type_and_code(ScErrorType::WasmVm, code),
+            ScError::Context(code) => Self::from_type_and_code(ScErrorType::Context, code),
+            ScError::Storage(code) => Self::from_type_and_code(ScErrorType::Storage, code),
+            ScError::Object(code) => Self::from_type_and_code(ScErrorType::Object, code),
+            ScError::Crypto(code) => Self::from_type_and_code(ScErrorType::Crypto, code),
+            ScError::Events(code) => Self::from_type_and_code(ScErrorType::Events, code),
+            ScError::Budget(code) => Self::from_type_and_code(ScErrorType::Budget, code),
+            ScError::Value(code) => Self::from_type_and_code(ScErrorType::Value, code),
+            ScError::Auth(code) => Self::from_type_and_code(ScErrorType::Auth, code),
+        }
     }
 }
 
@@ -234,9 +263,58 @@ mod tests {
         // then checks that both lists are sorted the same.
 
         let mut xdr_vals = Vec::new();
-        for code in crate::xdr::ScErrorCode::VARIANTS {
-            for type_ in crate::xdr::ScErrorType::VARIANTS {
-                xdr_vals.push(ScError { type_, code })
+        for type_ in crate::xdr::ScErrorType::VARIANTS {
+            match type_ {
+                ScErrorType::Contract => {
+                    for i in 0..=512 {
+                        xdr_vals.push(ScError::Contract(i))
+                    }
+                }
+                ScErrorType::WasmVm => {
+                    for code in crate::xdr::ScErrorCode::VARIANTS {
+                        xdr_vals.push(ScError::WasmVm(code))
+                    }
+                }
+                ScErrorType::Context => {
+                    for code in crate::xdr::ScErrorCode::VARIANTS {
+                        xdr_vals.push(ScError::Context(code))
+                    }
+                }
+                ScErrorType::Storage => {
+                    for code in crate::xdr::ScErrorCode::VARIANTS {
+                        xdr_vals.push(ScError::Storage(code))
+                    }
+                }
+                ScErrorType::Object => {
+                    for code in crate::xdr::ScErrorCode::VARIANTS {
+                        xdr_vals.push(ScError::Object(code))
+                    }
+                }
+                ScErrorType::Crypto => {
+                    for code in crate::xdr::ScErrorCode::VARIANTS {
+                        xdr_vals.push(ScError::Crypto(code))
+                    }
+                }
+                ScErrorType::Events => {
+                    for code in crate::xdr::ScErrorCode::VARIANTS {
+                        xdr_vals.push(ScError::Events(code))
+                    }
+                }
+                ScErrorType::Budget => {
+                    for code in crate::xdr::ScErrorCode::VARIANTS {
+                        xdr_vals.push(ScError::Budget(code))
+                    }
+                }
+                ScErrorType::Value => {
+                    for code in crate::xdr::ScErrorCode::VARIANTS {
+                        xdr_vals.push(ScError::Value(code))
+                    }
+                }
+                ScErrorType::Auth => {
+                    for code in crate::xdr::ScErrorCode::VARIANTS {
+                        xdr_vals.push(ScError::Auth(code))
+                    }
+                }
             }
         }
 

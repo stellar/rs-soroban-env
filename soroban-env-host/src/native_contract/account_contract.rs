@@ -123,22 +123,17 @@ pub(crate) fn check_account_contract_auth(
     host: &Host,
     account_contract: &Hash,
     signature_payload: &[u8; 32],
-    signature_args: &Vec<Val>,
+    signature: Val,
     invocation: &AuthorizedInvocation,
 ) -> Result<(), HostError> {
     let payload_obj = host.bytes_new_from_slice(signature_payload)?;
-    let signature_args_vec = HostVec::try_from_val(host, signature_args)?;
     let mut auth_context_vec = HostVec::new(host)?;
     invocation_tree_to_auth_contexts(host, invocation, &mut auth_context_vec)?;
     Ok(host
         .call_n_internal(
             account_contract,
             ACCOUNT_CONTRACT_CHECK_AUTH_FN_NAME.try_into_val(host)?,
-            &[
-                payload_obj.into(),
-                signature_args_vec.into(),
-                auth_context_vec.into(),
-            ],
+            &[payload_obj.into(), signature, auth_context_vec.into()],
             // Allow self reentry for this function in order to be able to do
             // wallet admin ops using the auth framework itself.
             ContractReentryMode::SelfAllowed,
@@ -151,12 +146,13 @@ pub(crate) fn check_account_authentication(
     host: &Host,
     account_id: AccountId,
     payload: &[u8],
-    signatures: &Vec<Val>,
+    signature: Val,
 ) -> Result<(), HostError> {
+    let signatures: HostVec = signature.try_into_val(host)?;
     // Check if there is too many signatures: there shouldn't be more
     // signatures then the amount of account signers.
-    let len = signatures.len();
-    if len > MAX_ACCOUNT_SIGNATURES as usize {
+    let len = signatures.len()?;
+    if len > MAX_ACCOUNT_SIGNATURES {
         return Err(err!(
             host,
             ContractError::AuthenticationError,
@@ -168,8 +164,8 @@ pub(crate) fn check_account_authentication(
     let account = host.load_account(account_id)?;
     let mut prev_pk: Option<BytesN<32>> = None;
     let mut weight = 0u32;
-    for sig in signatures {
-        let sig = AccountEd25519Signature::try_from_val(host, sig)?;
+    for i in 0..len {
+        let sig: AccountEd25519Signature = signatures.get(i)?;
         // Cannot take multiple signatures from the same key
         if let Some(prev) = prev_pk {
             if prev.compare(&sig.public_key)? != Ordering::Less {
