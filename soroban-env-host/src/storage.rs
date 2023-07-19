@@ -9,10 +9,11 @@
 
 use std::rc::Rc;
 
-use soroban_env_common::xdr::{ScErrorCode, ScErrorType};
+use soroban_env_common::xdr::{LedgerEntryData, ScErrorCode, ScErrorType};
 use soroban_env_common::{Compare, Val};
 
 use crate::budget::Budget;
+use crate::host::metered_clone::MeteredClone;
 use crate::xdr::{LedgerEntry, LedgerKey};
 use crate::Host;
 use crate::{host::metered_map::MeteredOrdMap, HostError};
@@ -312,19 +313,59 @@ impl Storage {
         }
     }
 
-    /// Marks the key as a read if we expect the host consumer to read this key.
+    /// Bumps `key` to live for at least `bump_by_ledgers` from now (not
+    /// counting the current ledger).
     ///
-    /// In [FootprintMode::Recording] mode, records the access.
+    /// This operation is only defined within a host as it relies on ledger
+    /// state.
     ///
-    /// In [FootprintMode::Enforcing] mode, succeeds only if the access has been
-    /// declared in the [Footprint].
-    pub fn touch_key(&mut self, key: &Rc<LedgerKey>, budget: &Budget) -> Result<(), HostError> {
-        let _span = tracy_span!("touch key");
-        let ty = AccessType::ReadOnly;
-        match self.mode {
-            FootprintMode::Recording(_) => self.footprint.record_access(key, ty, budget),
-            FootprintMode::Enforcing => self.footprint.enforce_access(key, ty, budget),
+    /// This is always considered a 'read-only' operation, even though it might
+    /// modify the internal storage state.
+    pub fn bump(
+        &mut self,
+        host: &Host,
+        key: Rc<LedgerKey>,
+        bump_by_ledgers: u32,
+    ) -> Result<(), HostError> {
+        let _span = tracy_span!("bump key");
+        let new_expiration = host.with_ledger_info(|li| {
+            Ok(li
+                .sequence_number
+                .saturating_add(bump_by_ledgers)
+                .min(li.max_entry_expiration))
+        })?;
+        // Bumping deleted/non-existing/out-of-footprint entries will result in
+        // an error.
+        let old_entry = self.get(&key, host.budget_ref())?;
+        let old_expiration = match &old_entry.data {
+            LedgerEntryData::ContractData(d) => d.expiration_ledger_seq,
+            LedgerEntryData::ContractCode(c) => c.expiration_ledger_seq,
+            _ => {
+                return Err(host.err(
+                    ScErrorType::Storage,
+                    ScErrorCode::InternalError,
+                    "trying to bump unexpected ledger entry type",
+                    &[],
+                ));
+            }
+        };
+
+        if new_expiration > old_expiration {
+            let mut new_entry = (*old_entry).metered_clone(host.budget_ref())?;
+            match &mut new_entry.data {
+                LedgerEntryData::ContractData(data) => {
+                    data.expiration_ledger_seq = new_expiration;
+                }
+                LedgerEntryData::ContractCode(code) => {
+                    code.expiration_ledger_seq = new_expiration;
+                }
+                _ => (),
+            }
+            self.map = self
+                .map
+                .insert(key, Some(Rc::new(new_entry)), host.budget_ref())?;
         }
+        Ok(())
     }
 }
 

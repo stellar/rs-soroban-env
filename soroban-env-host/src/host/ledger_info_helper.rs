@@ -16,6 +16,6 @@ impl Host {
                 self.with_ledger_info(|li: &LedgerInfo| Ok(li.min_persistent_entry_expiration))?
             }
         };
-        Ok(ledger_seq.saturating_add(min_expiration))
+        Ok(ledger_seq.saturating_add(min_expiration).saturating_sub(1))
     }
 }

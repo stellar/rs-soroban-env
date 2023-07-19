@@ -9,7 +9,6 @@ use crate::{
     budget::{AsBudget, Budget},
     err,
     events::{diagnostic::DiagnosticLevel, Events, InternalEventsBuffer},
-    expiration_ledger_bumps::{ExpirationLedgerBumps, LedgerBump},
     host_object::{HostMap, HostObject, HostObjectType, HostVec},
     impl_bignum_host_fns_rhs_u32, impl_wrapping_obj_from_num, impl_wrapping_obj_to_num,
     num::*,
@@ -101,6 +100,7 @@ pub struct LedgerInfo {
     pub min_temp_entry_expiration: u32,
     pub min_persistent_entry_expiration: u32,
     pub max_entry_expiration: u32,
+    pub autobump_ledgers: u32,
 }
 
 #[derive(Clone, Default)]
@@ -119,7 +119,6 @@ pub(crate) struct HostImpl {
     authorization_manager: RefCell<AuthorizationManager>,
     pub(crate) diagnostic_level: RefCell<DiagnosticLevel>,
     pub(crate) base_prng: RefCell<Option<Prng>>,
-    expiration_bumps: RefCell<ExpirationLedgerBumps>,
     // Note: we're not going to charge metering for testutils because it's out of the scope
     // of what users will be charged for in production -- it's scaffolding for testing a contract,
     // but shouldn't be charged to the contract itself (and will never be compiled-in to
@@ -218,12 +217,6 @@ impl_checked_borrow_helpers!(
     try_borrow_base_prng,
     try_borrow_base_prng_mut
 );
-impl_checked_borrow_helpers!(
-    expiration_bumps,
-    ExpirationLedgerBumps,
-    try_borrow_expiration_bumps,
-    try_borrow_expiration_bumps_mut
-);
 
 #[cfg(any(test, feature = "testutils"))]
 impl_checked_borrow_helpers!(contracts, std::collections::HashMap<Hash, Rc<dyn ContractFunctionSet>>, try_borrow_contracts, try_borrow_contracts_mut);
@@ -272,7 +265,6 @@ impl Host {
             contracts: Default::default(),
             #[cfg(any(test, feature = "testutils"))]
             previous_authorization_manager: RefCell::new(None),
-            expiration_bumps: Default::default(),
         }))
     }
 
@@ -436,32 +428,18 @@ impl Host {
 
     /// Accept a _unique_ (refcount = 1) host reference and destroy the
     /// underlying [`HostImpl`], returning its constituent components to the
-    /// caller as a tuple wrapped in `Ok(...)`. If the provided host reference
-    /// is not unique, returns `Err(self)`.
-    pub fn try_finish(
-        self,
-    ) -> Result<(Storage, Budget, Events, ExpirationLedgerBumps), (Self, HostError)> {
-        let events = self
-            .try_borrow_events()
-            .map_err(|e| (self.clone(), e))?
-            .externalize(&self)
-            .map_err(|e| (self.clone(), e))?;
-
-        // TODO: find a better error status to represent "internal logic error". Here the error
-        // means the Rc does not have a unique strong reference.
+    /// caller as a tuple wrapped in `Ok(...)`.
+    pub fn try_finish(self) -> Result<(Storage, Budget, Events), HostError> {
+        let events = self.try_borrow_events()?.externalize(&self)?;
+        self.maybe_autobump_expiration()?;
         Rc::try_unwrap(self.0)
             .map(|host_impl| {
                 let storage = host_impl.storage.into_inner();
                 let budget = host_impl.budget;
-                let bumps = host_impl.expiration_bumps.into_inner();
-                (storage, budget, events, bumps)
+                (storage, budget, events)
             })
-            .map_err(|e| {
-                (
-                    Host(e),
-                    Error::from_type_and_code(ScErrorType::Context, ScErrorCode::InternalError)
-                        .into(),
-                )
+            .map_err(|_| {
+                Error::from_type_and_code(ScErrorType::Context, ScErrorCode::InternalError).into()
             })
     }
 
@@ -888,6 +866,34 @@ impl Host {
             )?;
         }
 
+        Ok(())
+    }
+
+    // If autobump enabled, autobumps all the entries in the footprint.
+    fn maybe_autobump_expiration(&self) -> Result<(), HostError> {
+        let Some(autobump_ledgers) = self.with_ledger_info(|li| {
+            if li.autobump_ledgers > 0 {
+                Ok(Some(li.autobump_ledgers))
+            } else {
+                Ok(None)
+            }
+        })? else {
+            return Ok(());
+        };
+        // Need to copy the footprint out of the storage to allow mut borrow of
+        // storage.
+        let footprint = self.try_borrow_storage()?.footprint.clone();
+        for (key, _) in footprint.0.iter(self.budget_ref())? {
+            match key.as_ref() {
+                LedgerKey::ContractData(_) | LedgerKey::ContractCode(_) => {
+                    if self.try_borrow_storage_mut()?.has(key, self.budget_ref())? {
+                        self.try_borrow_storage_mut()?
+                            .bump(self, key.clone(), autobump_ledgers)?;
+                    }
+                }
+                _ => (),
+            }
+        }
         Ok(())
     }
 }
@@ -2142,32 +2148,12 @@ impl VmCallerEnv for Host {
             return Err(self.err(
                 ScErrorType::Storage,
                 ScErrorCode::InvalidAction,
-                "instance storage should be bumped via `bump_instance` function only",
+                "instance storage should be bumped via `bump_current_contract_instance_and_code` function only",
                 &[],
             ))?;
         }
-
         let key = self.contract_data_key_from_rawval(k, t.try_into()?)?;
-
-        // The host doesn't load the key, but we want to make sure that
-        // it's in the footprint, because the system embedding the host
-        // (e.g. stellar-core) will to perform the bump.
-        self.try_borrow_storage_mut()?
-            .touch_key(&key, self.as_budget())?;
-
-        let min_expiration = self.with_ledger_info(|li| {
-            Ok(li
-                .sequence_number
-                .saturating_sub(1)
-                .saturating_add(min.into()))
-        })?;
-        self.try_borrow_expiration_bumps_mut()?.metered_push(
-            self,
-            LedgerBump {
-                key,
-                min_expiration,
-            },
-        )?;
+        self.try_borrow_storage_mut()?.bump(self, key, min.into())?;
         Ok(Val::VOID)
     }
 
@@ -2176,36 +2162,40 @@ impl VmCallerEnv for Host {
         _vmcaller: &mut VmCaller<Host>,
         min: U32Val,
     ) -> Result<Void, HostError> {
-        let min_expiration = self.with_ledger_info(|li| {
-            Ok(li
-                .sequence_number
-                .saturating_sub(1)
-                .saturating_add(min.into()))
-        })?;
-
         let contract_id = self.get_current_contract_id_internal()?;
         let key = self.contract_instance_ledger_key(&contract_id)?;
-        self.try_borrow_expiration_bumps_mut()?.metered_push(
-            self,
-            LedgerBump {
-                key: Rc::clone(&key),
-                min_expiration,
-            },
-        )?;
-
+        self.try_borrow_storage_mut()?
+            .bump(self, key.clone(), min.into())?;
         match self
             .retrieve_contract_instance_from_storage(&key)?
             .executable
         {
             ContractExecutable::Wasm(wasm_hash) => {
                 let key = self.contract_code_ledger_key(&wasm_hash)?;
-                self.try_borrow_expiration_bumps_mut()?.metered_push(
-                    self,
-                    LedgerBump {
-                        key,
-                        min_expiration,
-                    },
-                )?;
+                self.try_borrow_storage_mut()?.bump(self, key, min.into())?;
+            }
+            ContractExecutable::Token => {}
+        }
+        Ok(Val::VOID)
+    }
+
+    fn bump_contract_instance_and_code(
+        &self,
+        vmcaller: &mut VmCaller<Self::VmUserState>,
+        contract: AddressObject,
+        min: U32Val,
+    ) -> Result<Void, Self::Error> {
+        let contract_id = self.contract_id_from_address(contract)?;
+        let key = self.contract_instance_ledger_key(&contract_id)?;
+        self.try_borrow_storage_mut()?
+            .bump(self, key.clone(), min.into())?;
+        match self
+            .retrieve_contract_instance_from_storage(&key)?
+            .executable
+        {
+            ContractExecutable::Wasm(wasm_hash) => {
+                let key = self.contract_code_ledger_key(&wasm_hash)?;
+                self.try_borrow_storage_mut()?.bump(self, key, min.into())?;
             }
             ContractExecutable::Token => {}
         }

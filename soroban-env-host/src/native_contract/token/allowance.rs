@@ -39,8 +39,8 @@ pub fn write_allowance(
     let ledger_seq = e.with_ledger_info(|li| {
         if expiration
             > li.sequence_number
-                .saturating_sub(1)
                 .saturating_add(li.max_entry_expiration)
+                .saturating_sub(1)
         {
             Err(err!(
                 e,
