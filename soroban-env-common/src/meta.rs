@@ -41,7 +41,7 @@
 pub const ENV_META_V0_SECTION_NAME: &str = "contractenvmetav0";
 
 soroban_env_macros::generate_env_meta_consts!(
-    ledger_protocol_version: 20,
+    ledger_protocol_version: 21,
     pre_release_version: 51,
 );
 
