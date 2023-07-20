@@ -24,7 +24,7 @@ fn invoke_single_contract_function() -> Result<(), HostError> {
         Symbol::try_from_small_str("add")?,
         host.test_vec_obj(&[a, c])?,
     );
-    let code = (ScErrorType::WasmVm, ScErrorCode::InternalError);
+    let code = (ScErrorType::WasmVm, ScErrorCode::InvalidAction);
     assert!(HostError::result_matches_err(res, code));
     Ok(())
 }
@@ -126,7 +126,7 @@ fn invoke_cross_contract_indirect_err() -> Result<(), HostError> {
 
     // try call -- add will trap, and add_with will trap, but we will get a status
     let status = host.try_call(id0_obj, sym, args)?;
-    let code = (ScErrorType::WasmVm, ScErrorCode::InternalError);
+    let code = (ScErrorType::WasmVm, ScErrorCode::InvalidAction);
     let exp: Error = code.into();
     assert_eq!(status.get_payload(), exp.to_val().get_payload());
 
@@ -135,7 +135,7 @@ fn invoke_cross_contract_indirect_err() -> Result<(), HostError> {
     let last_event = events.last().unwrap();
     // run `UPDATE_EXPECT=true cargo test` to update this.
     let expected = expect![[
-        r#"[Diagnostic Event] topics:[error, Error(WasmVm, InternalError)], data:["contract try_call failed", add_with, [2147483647, 1, Bytes()]]"#
+        r#"[Diagnostic Event] topics:[error, Error(WasmVm, InvalidAction)], data:["contract try_call failed", add_with, [2147483647, 1, Bytes()]]"#
     ]];
     let actual = format!("{}", last_event);
     expected.assert_eq(&actual);
@@ -149,7 +149,7 @@ fn invoke_cross_contract_indirect_err() -> Result<(), HostError> {
     let last_event = events.last().unwrap();
     // run `UPDATE_EXPECT=true cargo test` to update this.
     let expected = expect![[
-        r#"[Diagnostic Event] topics:[error, Error(WasmVm, InternalError)], data:["contract call failed", add_with, [2147483647, 1, Bytes()]]"#
+        r#"[Diagnostic Event] topics:[error, Error(WasmVm, InvalidAction)], data:["contract call failed", add_with, [2147483647, 1, Bytes()]]"#
     ]];
     let actual = format!("{}", last_event);
     expected.assert_eq(&actual);

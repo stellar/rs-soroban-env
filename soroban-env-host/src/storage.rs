@@ -113,17 +113,23 @@ impl Footprint {
         ty: AccessType,
         budget: &Budget,
     ) -> Result<(), HostError> {
+        // `ExceededLimit` is not the most precise term here, but footprint has
+        // to be externally supplied in a similar fashion to budget and it's
+        // also representing an execution resource limit (number of ledger
+        // entries to access), so it might be considered 'exceeded'.
+        // This also helps distinguish access errors from the values simply
+        // being  missing from storage (but with a valid footprint).
         if let Some(existing) = self.0.get::<Rc<LedgerKey>>(key, budget)? {
             match (existing, ty) {
                 (AccessType::ReadOnly, AccessType::ReadOnly) => Ok(()),
                 (AccessType::ReadOnly, AccessType::ReadWrite) => {
-                    Err((ScErrorType::Storage, ScErrorCode::InvalidAction).into())
+                    Err((ScErrorType::Storage, ScErrorCode::ExceededLimit).into())
                 }
                 (AccessType::ReadWrite, AccessType::ReadOnly) => Ok(()),
                 (AccessType::ReadWrite, AccessType::ReadWrite) => Ok(()),
             }
         } else {
-            Err((ScErrorType::Storage, ScErrorCode::MissingValue).into())
+            Err((ScErrorType::Storage, ScErrorCode::ExceededLimit).into())
         }
     }
 }
@@ -420,7 +426,7 @@ mod test_footprint {
         let res = fp.enforce_access(&key, AccessType::ReadOnly, &budget);
         assert!(HostError::result_matches_err(
             res,
-            (ScErrorType::Storage, ScErrorCode::MissingValue)
+            (ScErrorType::Storage, ScErrorCode::ExceededLimit)
         ));
         Ok(())
     }
@@ -440,7 +446,7 @@ mod test_footprint {
         let res = fp.enforce_access(&key, AccessType::ReadWrite, &budget);
         assert!(HostError::result_matches_err(
             res,
-            (ScErrorType::Storage, ScErrorCode::InvalidAction)
+            (ScErrorType::Storage, ScErrorCode::ExceededLimit)
         ));
         Ok(())
     }
