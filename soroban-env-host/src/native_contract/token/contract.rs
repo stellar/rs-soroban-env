@@ -88,7 +88,7 @@ fn check_nonnegative_amount(e: &Host, amount: i128) -> Result<(), HostError> {
         Err(err!(
             e,
             ContractError::NegativeAmountError,
-            "negative amount is not allowed: {}",
+            "negative amount is not allowed",
             amount
         ))
     } else {
