@@ -1,5 +1,7 @@
 use std::rc::Rc;
 
+use soroban_env_common::xdr::SorobanAuthorizationEntry;
+
 use crate::{
     events::{EventError, HostEvent, InternalContractEvent, InternalEvent},
     host::Events,
@@ -147,7 +149,7 @@ impl_declared_size_type!(ContractEntryBodyType, 4);
 impl_declared_size_type!(ExtensionPoint, 0);
 impl_declared_size_type!(SorobanAuthorizedInvocation, 128);
 impl_declared_size_type!(ScContractInstance, 64);
-
+impl_declared_size_type!(SorobanAuthorizationEntry, 240);
 // composite types
 
 // Rc is an exception, nothing is being cloned. We approximate ref counter bump with the cost of
@@ -338,6 +340,11 @@ mod test {
         expect!["8"].assert_eq(size_of::<Rc<ScVal>>().to_string().as_str());
         expect!["64"].assert_eq(size_of::<Option<ScVal>>().to_string().as_str());
         expect!["64"].assert_eq(size_of::<ScContractInstance>().to_string().as_str());
+        expect!["240"].assert_eq(
+            size_of::<SorobanAuthorizedInvocation>()
+                .to_string()
+                .as_str(),
+        );
     }
 
     // This is the actual test.
@@ -460,6 +467,7 @@ mod test {
         assert_mem_size_le_declared_size!(ContractEntryBodyType);
         assert_mem_size_le_declared_size!(ExtensionPoint);
         assert_mem_size_le_declared_size!(SorobanAuthorizedInvocation);
+        assert_mem_size_le_declared_size!(SorobanAuthorizationEntry);
         // composite types
         assert_mem_size_le_declared_size!(&[ScVal]);
         assert_mem_size_le_declared_size!((Val, ScVal));

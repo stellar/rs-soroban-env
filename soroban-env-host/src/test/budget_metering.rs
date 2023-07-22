@@ -1,6 +1,6 @@
 use crate::{
     budget::AsBudget,
-    host::metered_clone::MeteredClone,
+    host::{metered_clone::MeteredClone, metered_xdr::metered_write_xdr},
     xdr::{ContractCostType, ScMap, ScMapEntry, ScVal},
     Env, Host, HostError, Symbol, Val,
 };
@@ -93,7 +93,7 @@ fn metered_xdr() -> Result<(), HostError> {
         .try_into(),
     )?;
     let mut w = Vec::<u8>::new();
-    host.metered_write_xdr(&scmap, &mut w)?;
+    metered_write_xdr(host.budget_ref(), &scmap, &mut w)?;
     host.with_budget(|budget| {
         assert_eq!(
             budget.get_tracker(ContractCostType::ValSer)?.1,
@@ -133,7 +133,7 @@ fn metered_xdr_out_of_budget() -> Result<(), HostError> {
         .try_into(),
     )?;
     let mut w = Vec::<u8>::new();
-    let res = host.metered_write_xdr(&scmap, &mut w);
+    let res = metered_write_xdr(host.budget_ref(), &scmap, &mut w);
     let code = (ScErrorType::Budget, ScErrorCode::ExceededLimit);
     assert!(HostError::result_matches_err(res, code));
     Ok(())

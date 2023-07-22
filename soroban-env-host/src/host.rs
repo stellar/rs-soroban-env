@@ -52,12 +52,12 @@ use soroban_env_common::xdr::{
     ScErrorCode, MASK_CONTRACT_DATA_FLAGS_V20,
 };
 
-use self::metered_clone::MeteredClone;
 use self::{
     frame::{Context, ContractReentryMode},
     metered_vector::MeteredVector,
     prng::Prng,
 };
+use self::{metered_clone::MeteredClone, metered_xdr::metered_write_xdr};
 use crate::impl_bignum_host_fns;
 use crate::Compare;
 #[cfg(any(test, feature = "testutils"))]
@@ -427,15 +427,14 @@ impl Host {
     }
 
     /// Accept a _unique_ (refcount = 1) host reference and destroy the
-    /// underlying [`HostImpl`], returning its constituent components to the
-    /// caller as a tuple wrapped in `Ok(...)`.
-    pub fn try_finish(self) -> Result<(Storage, Budget, Events), HostError> {
+    /// underlying [`HostImpl`], returning its finalized components containing
+    /// processing side effects  to the caller as a tuple wrapped in `Ok(...)`.
+    pub fn try_finish(self) -> Result<(Storage, Events), HostError> {
         let events = self.try_borrow_events()?.externalize(&self)?;
         Rc::try_unwrap(self.0)
             .map(|host_impl| {
                 let storage = host_impl.storage.into_inner();
-                let budget = host_impl.budget;
-                (storage, budget, events)
+                (storage, events)
             })
             .map_err(|_| {
                 Error::from_type_and_code(ScErrorType::Context, ScErrorCode::InternalError).into()
@@ -552,7 +551,7 @@ impl Host {
     ) -> Result<(), HostError> {
         if let ContractIdPreimage::Asset(asset) = id_preimage {
             let mut asset_bytes: Vec<u8> = Default::default();
-            self.metered_write_xdr(asset, &mut asset_bytes)?;
+            metered_write_xdr(self.budget_ref(), asset, &mut asset_bytes)?;
             self.call_n_internal(
                 contract_id,
                 Symbol::try_from_val(self, &"init_asset")?,
@@ -2389,7 +2388,7 @@ impl VmCallerEnv for Host {
     ) -> Result<BytesObject, HostError> {
         let scv = self.from_host_val(v)?;
         let mut buf = Vec::<u8>::new();
-        self.metered_write_xdr(&scv, &mut buf)?;
+        metered_write_xdr(self.budget_ref(), &scv, &mut buf)?;
         self.add_host_object(self.scbytes_from_vec(buf)?)
     }
 
