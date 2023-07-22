@@ -1465,8 +1465,7 @@ impl AccountAuthorizationTracker {
         }
         self.need_nonce = false;
         if let Some((nonce, expiration_ledger)) = &self.nonce {
-            let (ledger_seq, max_entry_expiration) =
-                host.with_ledger_info(|li| Ok((li.sequence_number, li.max_entry_expiration)))?;
+            let ledger_seq = host.with_ledger_info(|li| Ok(li.sequence_number))?;
             if ledger_seq > *expiration_ledger {
                 return Err(host.err(
                     ScErrorType::Auth,
@@ -1478,17 +1477,14 @@ impl AccountAuthorizationTracker {
                     ],
                 ));
             }
-            if *expiration_ledger
-                > ledger_seq
-                    .saturating_sub(1)
-                    .saturating_add(max_entry_expiration)
-            {
+            let max_expiration_ledger = host.max_expiration_ledger()?;
+            if *expiration_ledger > max_expiration_ledger {
                 return Err(host.err(
                     ScErrorType::Auth,
                     ScErrorCode::InvalidInput,
                     "signature expiration is too late",
                     &[
-                        (ledger_seq + max_entry_expiration).try_into_val(host)?,
+                        max_expiration_ledger.try_into_val(host)?,
                         expiration_ledger.try_into_val(host)?,
                     ],
                 ));

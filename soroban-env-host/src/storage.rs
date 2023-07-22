@@ -7,12 +7,14 @@
 //!   - [Env::put_contract_data](crate::Env::put_contract_data)
 //!   - [Env::del_contract_data](crate::Env::del_contract_data)
 
+use std::cmp::min;
 use std::rc::Rc;
 
-use soroban_env_common::xdr::{LedgerEntryData, ScErrorCode, ScErrorType};
+use soroban_env_common::xdr::{ScErrorCode, ScErrorType};
 use soroban_env_common::{Compare, Val};
 
 use crate::budget::Budget;
+use crate::host::ledger_info_helper::{get_entry_expiration, set_entry_expiration};
 use crate::host::metered_clone::MeteredClone;
 use crate::xdr::{LedgerEntry, LedgerKey};
 use crate::Host;
@@ -38,7 +40,7 @@ impl InstanceStorageMap {
 /// A helper type used by [Footprint] to designate which ways
 /// a given [LedgerKey] is accessed, or is allowed to be accessed,
 /// in a given transaction.
-#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub enum AccessType {
     /// When in [FootprintMode::Recording], indicates that the [LedgerKey] is only read.
     /// When in [FootprintMode::Enforcing], indicates that the [LedgerKey] is only _allowed_ to be read.
@@ -91,7 +93,7 @@ impl Footprint {
         budget: &Budget,
     ) -> Result<(), HostError> {
         if let Some(existing) = self.0.get::<Rc<LedgerKey>>(key, budget)? {
-            match (existing, ty.clone()) {
+            match (existing, ty) {
                 (AccessType::ReadOnly, AccessType::ReadOnly) => Ok(()),
                 (AccessType::ReadOnly, AccessType::ReadWrite) => {
                     // The only interesting case is an upgrade
@@ -328,39 +330,70 @@ impl Storage {
         bump_by_ledgers: u32,
     ) -> Result<(), HostError> {
         let _span = tracy_span!("bump key");
-        let new_expiration = host.with_ledger_info(|li| {
-            Ok(li
-                .sequence_number
-                .saturating_add(bump_by_ledgers)
-                .min(li.max_entry_expiration))
-        })?;
+        let new_expiration = host
+            .with_ledger_info(|li| Ok(li.sequence_number.saturating_add(bump_by_ledgers)))?
+            .min(host.max_expiration_ledger()?);
         // Bumping deleted/non-existing/out-of-footprint entries will result in
         // an error.
         let old_entry = self.get(&key, host.budget_ref())?;
-        let old_expiration = match &old_entry.data {
-            LedgerEntryData::ContractData(d) => d.expiration_ledger_seq,
-            LedgerEntryData::ContractCode(c) => c.expiration_ledger_seq,
-            _ => {
-                return Err(host.err(
-                    ScErrorType::Storage,
-                    ScErrorCode::InternalError,
-                    "trying to bump unexpected ledger entry type",
-                    &[],
-                ));
-            }
-        };
+        let old_expiration = get_entry_expiration(old_entry.as_ref()).ok_or_else(|| {
+            host.err(
+                ScErrorType::Storage,
+                ScErrorCode::InternalError,
+                "trying to bump non-expirable entry",
+                &[],
+            )
+        })?;
 
         if new_expiration > old_expiration {
             let mut new_entry = (*old_entry).metered_clone(host.budget_ref())?;
-            match &mut new_entry.data {
-                LedgerEntryData::ContractData(data) => {
-                    data.expiration_ledger_seq = new_expiration;
-                }
-                LedgerEntryData::ContractCode(code) => {
-                    code.expiration_ledger_seq = new_expiration;
-                }
-                _ => (),
-            }
+            set_entry_expiration(&mut new_entry, new_expiration);
+            self.map = self
+                .map
+                .insert(key, Some(Rc::new(new_entry)), host.budget_ref())?;
+        }
+        Ok(())
+    }
+
+    /// Bumps `key` to live for at least `bump_by_ledgers` from the current
+    /// expiration of the entry.
+    ///
+    /// This should only be used for internal autobumps.
+    ///  
+    /// This operation is only defined within a host as it relies on ledger
+    /// state.
+    ///
+    /// This is always considered a 'read-only' operation, even though it might
+    /// modify the internal storage state.
+    pub(crate) fn bump_relative_to_entry_expiration(
+        &mut self,
+        host: &Host,
+        key: Rc<LedgerKey>,
+        bump_by_ledgers: u32,
+    ) -> Result<(), HostError> {
+        let _span = tracy_span!("bump key relative");
+        // Bumping deleted/non-existing/out-of-footprint entries will result in
+        // an error.
+        let old_entry = self.get(&key, host.budget_ref())?;
+        let old_expiration = get_entry_expiration(old_entry.as_ref()).ok_or_else(|| {
+            host.err(
+                ScErrorType::Storage,
+                ScErrorCode::InternalError,
+                "trying to bump non-expirable entry",
+                &[],
+            )
+        })?;
+        let new_expiration = min(
+            old_expiration.saturating_add(bump_by_ledgers),
+            host.max_expiration_ledger()?,
+        );
+
+        if new_expiration > old_expiration {
+            let mut new_entry = (*old_entry).metered_clone(host.budget_ref())?;
+            set_entry_expiration(
+                &mut new_entry,
+                old_expiration.saturating_add(bump_by_ledgers),
+            );
             self.map = self
                 .map
                 .insert(key, Some(Rc::new(new_entry)), host.budget_ref())?;

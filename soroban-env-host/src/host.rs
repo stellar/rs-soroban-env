@@ -35,7 +35,7 @@ pub(crate) mod declared_size;
 pub(crate) mod error;
 pub(crate) mod frame;
 pub(crate) mod invoker_type;
-mod ledger_info_helper;
+pub(crate) mod ledger_info_helper;
 mod mem_helper;
 pub(crate) mod metered_clone;
 pub(crate) mod metered_map;
@@ -431,7 +431,6 @@ impl Host {
     /// caller as a tuple wrapped in `Ok(...)`.
     pub fn try_finish(self) -> Result<(Storage, Budget, Events), HostError> {
         let events = self.try_borrow_events()?.externalize(&self)?;
-        self.maybe_autobump_expiration()?;
         Rc::try_unwrap(self.0)
             .map(|host_impl| {
                 let storage = host_impl.storage.into_inner();
@@ -888,7 +887,11 @@ impl Host {
                 LedgerKey::ContractData(_) | LedgerKey::ContractCode(_) => {
                     if self.try_borrow_storage_mut()?.has(key, self.budget_ref())? {
                         self.try_borrow_storage_mut()?
-                            .bump(self, key.clone(), autobump_ledgers)?;
+                            .bump_relative_to_entry_expiration(
+                                self,
+                                key.clone(),
+                                autobump_ledgers,
+                            )?;
                     }
                 }
                 _ => (),
