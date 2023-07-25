@@ -1387,6 +1387,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a507befe795404456341dfab10cef66ead4c041f62b8b11bbb92bffe5d0953e0"
 
 [[package]]
+name = "soroban-bench-utils"
+version = "0.0.17"
+dependencies = [
+ "perf-event",
+ "soroban-env-common",
+ "tracking-allocator",
+]
+
+[[package]]
 name = "soroban-env-common"
 version = "0.0.17"
 dependencies = [
@@ -1432,11 +1441,11 @@ dependencies = [
  "num-derive",
  "num-integer",
  "num-traits",
- "perf-event",
  "rand",
  "rand_chacha",
  "sha2 0.9.9",
  "sha3",
+ "soroban-bench-utils",
  "soroban-env-common",
  "soroban-native-sdk-macros",
  "soroban-synth-wasm",
@@ -1447,7 +1456,6 @@ dependencies = [
  "tabwriter",
  "textplots",
  "thousands",
- "tracking-allocator",
  "tracy-client",
  "wasmprinter",
 ]
