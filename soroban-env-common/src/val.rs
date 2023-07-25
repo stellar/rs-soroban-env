@@ -735,7 +735,7 @@ impl Debug for Val {
 fn test_debug() {
     use super::{Error, Object, SymbolSmall};
     use crate::{
-        xdr::{ScError, ScErrorCode, ScErrorType},
+        xdr::{ScError, ScErrorCode},
         I64Small, U64Small,
     };
     assert_eq!(format!("{:?}", Val::from_void()), "Void");
@@ -761,10 +761,7 @@ fn test_debug() {
     assert_eq!(
         format!(
             "{:?}",
-            Error::from_scerror(ScError {
-                type_: ScErrorType::Value,
-                code: ScErrorCode::InvalidInput
-            })
+            Error::from_scerror(ScError::Value(ScErrorCode::InvalidInput))
         ),
         "Error(Value, InvalidInput)"
     );

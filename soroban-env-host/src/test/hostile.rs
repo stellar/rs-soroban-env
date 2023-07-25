@@ -55,7 +55,7 @@ fn hostile_ssmash_traps() -> Result<(), HostError> {
 
     assert!(HostError::result_matches_err(
         res,
-        (ScErrorType::WasmVm, ScErrorCode::InternalError)
+        (ScErrorType::WasmVm, ScErrorCode::InvalidAction)
     ));
     Ok(())
 }
@@ -73,7 +73,7 @@ fn hostile_oob1_traps() -> Result<(), HostError> {
 
     assert!(HostError::result_matches_err(
         res,
-        (ScErrorType::WasmVm, ScErrorCode::InternalError)
+        (ScErrorType::WasmVm, ScErrorCode::InvalidAction)
     ));
     Ok(())
 }
@@ -90,7 +90,7 @@ fn hostile_oob2_traps() -> Result<(), HostError> {
     );
     assert!(HostError::result_matches_err(
         res,
-        (ScErrorType::WasmVm, ScErrorCode::InternalError)
+        (ScErrorType::WasmVm, ScErrorCode::InvalidAction)
     ));
     Ok(())
 }
