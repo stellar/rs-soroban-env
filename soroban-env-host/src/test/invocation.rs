@@ -1,8 +1,15 @@
-use expect_test::expect;
-use soroban_env_common::{xdr::ScErrorCode, Env, TryFromVal, Val};
+use std::rc::Rc;
 
-use crate::{events::HostEvent, xdr::ScErrorType, Error, Host, HostError, Symbol, Tag};
-use soroban_test_wasms::{ADD_I32, INVOKE_CONTRACT, VEC};
+use expect_test::expect;
+use soroban_env_common::{
+    xdr::{self, ScErrorCode},
+    Env, EnvBase, TryFromVal, Val,
+};
+
+use crate::{
+    events::HostEvent, xdr::ScErrorType, ContractFunctionSet, Error, Host, HostError, Symbol, Tag,
+};
+use soroban_test_wasms::{ADD_I32, ERR, INVOKE_CONTRACT, VEC};
 
 #[test]
 fn invoke_single_contract_function() -> Result<(), HostError> {
@@ -72,7 +79,6 @@ fn invoke_cross_contract_with_err() -> Result<(), HostError> {
     assert_eq!(sv.get_payload(), exp_st.to_val().get_payload());
 
     let events = host.get_events()?.0;
-    dbg!(&events);
     assert_eq!(events.len(), 5);
     let last_event: &HostEvent = events.last().unwrap();
     // run `UPDATE_EXPECT=true cargo test` to update this.
@@ -177,5 +183,65 @@ fn invoke_contract_with_reentry() -> Result<(), HostError> {
     let try_call_err = Error::try_from(try_call_val)?;
     assert_eq!(try_call_err, err);
 
+    Ok(())
+}
+
+struct ReturnContractError;
+impl ReturnContractError {
+    const ERR: Error = Error::from_contract_error(12345);
+}
+impl ContractFunctionSet for ReturnContractError {
+    fn call(&self, _func: &Symbol, _host: &Host, _args: &[Val]) -> Option<Val> {
+        Some(Self::ERR.into())
+    }
+}
+
+#[test]
+fn native_invoke_return_err_variants() -> Result<(), HostError> {
+    let host = Host::test_host_with_recording_footprint();
+    let addr = host.add_host_object(xdr::ScAddress::Contract(xdr::Hash([0; 32])))?;
+    host.register_test_contract(addr, Rc::new(ReturnContractError))?;
+
+    let sym = Symbol::try_from_small_str("go")?;
+    let args = host.vec_new(Val::VOID.into())?;
+    let err = ReturnContractError::ERR;
+
+    // We want a call to return `Err(Error)` not `Ok(Error)`
+    let call_res = host.call(addr, sym, args);
+    assert!(HostError::result_matches_err(call_res, err));
+
+    // We want a try_call to return `Ok(Error)`
+    let try_call_val = host.try_call(addr, sym, args)?;
+    assert!(try_call_val.shallow_eq(&err.into()));
+
+    Ok(())
+}
+
+#[test]
+fn wasm_invoke_return_err_variants() -> Result<(), HostError> {
+    // Here we test several variants of returning-a-Val-that-is-an-Error
+    // causes Err(Error) from call and Ok(Error) from try_call.
+    for fname in ["err_eek", "err_err", "ok_err", "ok_val_err", "err", "val"].iter() {
+        let expected_err = Error::from_contract_error(12345);
+        let host = Host::test_host_with_recording_footprint();
+        host.enable_debug()?;
+        let addr = host.register_test_contract_wasm(ERR);
+        let sym = Symbol::try_from_val(&host, fname)?;
+        let args = host.vec_new_from_slice(&[])?;
+        let call_res = host.call(addr, sym, args);
+        let try_call_res = host.try_call(addr, sym, args);
+        if let Err(got_err) = call_res {
+            assert_eq!(got_err.error, expected_err)
+        } else {
+            dbg!(&call_res);
+            panic!("got Ok when expected Err from call({})", fname)
+        }
+        if let Ok(got_err) = try_call_res {
+            assert!(got_err.shallow_eq(&expected_err.to_val()))
+        } else {
+            dbg!(&try_call_res);
+            panic!("got Err when expected Ok from try_call({})", fname)
+        }
+    }
     Ok(())
 }
