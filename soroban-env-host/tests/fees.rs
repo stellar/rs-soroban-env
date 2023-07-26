@@ -15,7 +15,7 @@ fn resource_fee_computation() {
                 write_entries: 0,
                 read_bytes: 0,
                 write_bytes: 0,
-                metadata_size_bytes: 0,
+                contract_events_size_bytes: 0,
                 transaction_size_bytes: 0,
             },
             &FeeConfiguration {
@@ -25,8 +25,8 @@ fn resource_fee_computation() {
                 fee_per_read_1kb: 100,
                 fee_per_write_1kb: 100,
                 fee_per_historical_1kb: 100,
-                fee_per_metadata_1kb: 100,
-                fee_per_propagate_1kb: 100,
+                fee_per_contract_event_1kb: 100,
+                fee_per_transaction_size_1kb: 100,
             },
         ),
         // 30 comes from TX_BASE_RESULT_SIZE
@@ -42,7 +42,7 @@ fn resource_fee_computation() {
                 write_entries: 1,
                 read_bytes: 1,
                 write_bytes: 1,
-                metadata_size_bytes: 1,
+                contract_events_size_bytes: 1,
                 transaction_size_bytes: 1,
             },
             &FeeConfiguration {
@@ -52,8 +52,8 @@ fn resource_fee_computation() {
                 fee_per_read_1kb: 100,
                 fee_per_write_1kb: 100,
                 fee_per_historical_1kb: 100,
-                fee_per_metadata_1kb: 100,
-                fee_per_propagate_1kb: 100,
+                fee_per_contract_event_1kb: 100,
+                fee_per_transaction_size_1kb: 100,
             },
         ),
         // 2 entry read + 1 write + 30 from TX_BASE_RESULT_SIZE + 1 for
@@ -70,7 +70,7 @@ fn resource_fee_computation() {
                 write_entries: 10,
                 read_bytes: 25_600,
                 write_bytes: 10_340,
-                metadata_size_bytes: 321_654,
+                contract_events_size_bytes: 321_654,
                 transaction_size_bytes: 35_721,
             },
             &FeeConfiguration {
@@ -80,8 +80,8 @@ fn resource_fee_computation() {
                 fee_per_read_1kb: 1500,
                 fee_per_write_1kb: 3000,
                 fee_per_historical_1kb: 300,
-                fee_per_metadata_1kb: 200,
-                fee_per_propagate_1kb: 900,
+                fee_per_contract_event_1kb: 200,
+                fee_per_transaction_size_1kb: 900,
             },
         ),
         (1_242_089, 62824)
@@ -96,7 +96,7 @@ fn resource_fee_computation() {
                 write_entries: u32::MAX,
                 read_bytes: u32::MAX,
                 write_bytes: u32::MAX,
-                metadata_size_bytes: u32::MAX,
+                contract_events_size_bytes: u32::MAX,
                 transaction_size_bytes: u32::MAX,
             },
             &FeeConfiguration {
@@ -106,11 +106,11 @@ fn resource_fee_computation() {
                 fee_per_read_1kb: i64::MAX,
                 fee_per_write_1kb: i64::MAX,
                 fee_per_historical_1kb: i64::MAX,
-                fee_per_metadata_1kb: i64::MAX,
-                fee_per_propagate_1kb: i64::MAX,
+                fee_per_contract_event_1kb: i64::MAX,
+                fee_per_transaction_size_1kb: i64::MAX,
             },
         ),
-        // The refundable (metadata) fee is not i64::MAX because we do division
+        // The refundable (events) fee is not i64::MAX because we do division
         // after multiplication and hence it's i64::MAX / 1024.
         // Hitting the integer size limits shouldn't be an issue in practice;
         // we need to just make sure there are no overflows.
