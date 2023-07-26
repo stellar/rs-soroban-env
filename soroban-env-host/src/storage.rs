@@ -324,9 +324,9 @@ impl Storage {
     /// This is always considered a 'read-only' operation, even though it might
     /// modify the internal storage state. The only fields of the 'read-only'
     /// entries it modifies are their expiry ledgers, and the higher level logic
-    /// that processes the side effects of a transaction is supposed to 
+    /// that processes the side effects of a transaction is supposed to
     /// separately extract and write back to stable storage just the changed
-    /// expiry times of "read-only" entries, not even considering the 
+    /// expiry times of "read-only" entries, not even considering the
     /// possibility of anything else about them changing.
     pub fn bump(
         &mut self,
