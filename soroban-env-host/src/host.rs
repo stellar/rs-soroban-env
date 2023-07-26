@@ -869,7 +869,7 @@ impl Host {
     }
 
     // If autobump enabled, autobumps all the entries in the footprint.
-    fn maybe_autobump_expiration(&self) -> Result<(), HostError> {
+    fn maybe_autobump_expiration_of_footprint_entries(&self) -> Result<(), HostError> {
         let Some(autobump_ledgers) = self.with_ledger_info(|li| {
             if li.autobump_ledgers > 0 {
                 Ok(Some(li.autobump_ledgers))
@@ -881,8 +881,12 @@ impl Host {
         };
         // Need to copy the footprint out of the storage to allow mut borrow of
         // storage.
-        let footprint = self.try_borrow_storage()?.footprint.clone();
-        for (key, _) in footprint.0.iter(self.budget_ref())? {
+        let footprint_map = self
+            .try_borrow_storage()?
+            .footprint
+            .0
+            .metered_clone(self.budget_ref())?;
+        for (key, _) in footprint_map.iter(self.budget_ref())? {
             match key.as_ref() {
                 LedgerKey::ContractData(_) | LedgerKey::ContractCode(_) => {
                     if self.try_borrow_storage_mut()?.has(key, self.budget_ref())? {
