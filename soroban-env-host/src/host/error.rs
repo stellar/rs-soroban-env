@@ -311,59 +311,6 @@ impl Host {
             }
         })
     }
-
-    // When a `Val` enters the host from the guest, say as an incoming argument
-    // to a host function, it is _usually_ typechecked at some specific type
-    // other than just `Val`. So if a contract passes a `Val` that is an `Error`
-    // it will _usually_ be caught as an unexpected type, and that will turn
-    // into a `Err(HostError)` (albeit a weird "wrong type" error, that loses
-    // the original error code).
-    //
-    // There are two cases where this is not sufficient to exclude Errors
-    // though:
-    //
-    //   - When passing `Error` as an argument to a host function taking
-    //     polymorphic argument types that are typed simply as `Val`, such as
-    //     the third argument to `vec_put(VecObject, I32Val, Val)`
-    //
-    //   - When passing or returning values to _contract functions_ themselves,
-    //     which are (as far as the host is concerned) superficially just typed
-    //     as polymorphic N-ary functions `(Val,Val,...,Val) -> Val`.
-    //
-    // In both these cases we _could_ allow passing `Error` as a legitimate type
-    // of `Val`, but we instead take a more conservative approach: `Error` is
-    // simply not allowed to cross the host-to-guest boundary as a `Val` at all
-    // (eg. inside `Ok(Val)`).
-    //
-    // We do make some exceptions to this strict rule, specifically to allow
-    // returning `Error` from a host function that's intended to be _fallible_
-    // from the guest's perspective, i.e. the host returns `Ok(Error)` to the
-    // guest so that the guest VM does not trap but continues running and can
-    // turn `Error` into `Result::Err`, and pass it to user code typed as
-    // `Result<Val,Error>`. An example host function that works this way is
-    // `try_call`.
-    //
-    // All other cases, including "inserting or extracting values in a
-    // polymorphic container", will turn an `Ok(Error)` into `Err(HostError)`,
-    // which will usually trap the guest (or panic if native). To enforce this
-    // even more strictly, we define `Error` as an invalid element of a `Vec`,
-    // and an invalid key or value of a `Map`, as well.
-    //
-    // Put differently: `Error` is mostly not considered a legitimate payload
-    // for values that are conceptually `Ok(..)` at the host/guest interface
-    // layer; it's _only_ allowed to be used to express `Err(..)`. This does
-    // cause a few cases to not-work the way users might want, but the
-    // alternative -- letting `Ok(Error)` cross the boundary and hoping users do
-    // a tag-test on their `Val`s -- is too likely to hide user errors they are
-    // expecting to ultimately result in transaction aborts.
-    //
-    pub fn escalate_val_error_to_hosterror(&self, val: Val) -> Result<Val, HostError> {
-        if let Ok(err) = Error::try_from(val) {
-            Err(self.error(err, "escalating Error Val to Err(HostError)", &[]))
-        } else {
-            Ok(val)
-        }
-    }
 }
 
 pub(crate) trait DebugArg {
