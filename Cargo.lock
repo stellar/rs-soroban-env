@@ -1387,6 +1387,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a507befe795404456341dfab10cef66ead4c041f62b8b11bbb92bffe5d0953e0"
 
 [[package]]
+name = "soroban-bench-utils"
+version = "0.0.17"
+dependencies = [
+ "perf-event",
+ "soroban-env-common",
+ "tracking-allocator",
+]
+
+[[package]]
 name = "soroban-env-common"
 version = "0.0.17"
 dependencies = [
@@ -1432,11 +1441,11 @@ dependencies = [
  "num-derive",
  "num-integer",
  "num-traits",
- "perf-event",
  "rand",
  "rand_chacha",
  "sha2 0.9.9",
  "sha3",
+ "soroban-bench-utils",
  "soroban-env-common",
  "soroban-native-sdk-macros",
  "soroban-synth-wasm",
@@ -1447,7 +1456,6 @@ dependencies = [
  "tabwriter",
  "textplots",
  "thousands",
- "tracking-allocator",
  "tracy-client",
  "wasmprinter",
 ]
@@ -1537,7 +1545,7 @@ dependencies = [
 [[package]]
 name = "stellar-xdr"
 version = "0.0.17"
-source = "git+https://github.com/stellar/rs-stellar-xdr?rev=4eaf2388c1de6fc295ed5f7df8174c199923df5b#4eaf2388c1de6fc295ed5f7df8174c199923df5b"
+source = "git+https://github.com/stellar/rs-stellar-xdr?rev=1c357fc76a03247234f27edad4de6f81f0e157ee#1c357fc76a03247234f27edad4de6f81f0e157ee"
 dependencies = [
  "arbitrary",
  "base64 0.13.1",

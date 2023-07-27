@@ -701,7 +701,7 @@ impl Host {
             .ok_or_else(|| {
                 self.err(
                     ScErrorType::Auth,
-                    ScErrorCode::InternalError,
+                    ScErrorCode::InvalidAction,
                     "previous invocation is missing - no auth data to get",
                     &[],
                 )
@@ -774,7 +774,7 @@ impl Host {
                 .ok_or_else(|| {
                     self.err(
                         ScErrorType::Auth,
-                        ScErrorCode::InternalError,
+                        ScErrorCode::InvalidAction,
                         "previous invocation is missing - no auth data to get",
                         &[],
                     )
@@ -2372,7 +2372,14 @@ impl VmCallerEnv for Host {
                         &[func.to_val(), args.to_val()],
                     )
                 })?;
-                Ok(e.error.to_val())
+                // Only allow to gracefully handle the recoverable errors.
+                // Non-recoverable errors should still cause guest to panic and
+                // abort execution.
+                if e.is_recoverable() {
+                    Ok(e.error.to_val())
+                } else {
+                    Err(e)
+                }
             }
         }
     }
@@ -2921,7 +2928,7 @@ impl VmCallerEnv for Host {
                 Frame::HostFunction(_) => {
                     return Err(self.err(
                         ScErrorType::Context,
-                        ScErrorCode::InvalidAction,
+                        ScErrorCode::InternalError,
                         "require_auth is not suppported for host fns",
                         &[],
                     ))

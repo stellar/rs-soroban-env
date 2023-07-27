@@ -20,11 +20,8 @@ pub struct TransactionResources {
     pub read_bytes: u32,
     /// Number of bytes written to ledger.
     pub write_bytes: u32,
-    /// Size of the metadata that transaction emits. Consists of the size of
-    /// the events XDR, the size of writeable entries XDR before the transaction
-    /// is applied, the size of writeable entries XDR after the transaction is
-    /// applied.
-    pub metadata_size_bytes: u32,
+    /// Size of the contract events XDR.
+    pub contract_events_size_bytes: u32,
     /// Size of the transaction XDR.
     pub transaction_size_bytes: u32,
 }
@@ -49,11 +46,10 @@ pub struct FeeConfiguration {
     /// Fee per 1KB written to history (the history write size is based on
     /// transaction size and `TX_BASE_RESULT_SIZE`).
     pub fee_per_historical_1kb: i64,
-    /// Fee per 1KB of metadata written.
-    pub fee_per_metadata_1kb: i64,
-    /// Fee per 1KB propagate to the network (the propagated size is equal to
-    /// the transaction size).
-    pub fee_per_propagate_1kb: i64,
+    /// Fee per 1KB of contract events written.
+    pub fee_per_contract_event_1kb: i64,
+    /// Fee per 1KB of transaction size.
+    pub fee_per_transaction_size_1kb: i64,
 }
 
 /// Network configuration used to determine the ledger write fee.
@@ -160,19 +156,19 @@ pub fn compute_transaction_resource_fee(
         DATA_SIZE_1KB_INCREMENT,
     );
 
-    let meta_data_fee = compute_fee_per_increment(
-        tx_resources.metadata_size_bytes,
-        fee_config.fee_per_metadata_1kb,
+    let events_fee = compute_fee_per_increment(
+        tx_resources.contract_events_size_bytes,
+        fee_config.fee_per_contract_event_1kb,
         DATA_SIZE_1KB_INCREMENT,
     );
 
     let bandwidth_fee = compute_fee_per_increment(
         tx_resources.transaction_size_bytes,
-        fee_config.fee_per_propagate_1kb,
+        fee_config.fee_per_transaction_size_1kb,
         DATA_SIZE_1KB_INCREMENT,
     );
 
-    let refundable_fee = meta_data_fee;
+    let refundable_fee = events_fee;
     let non_refundable_fee = compute_fee
         .saturating_add(ledger_read_entry_fee)
         .saturating_add(ledger_write_entry_fee)

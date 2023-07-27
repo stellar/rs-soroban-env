@@ -44,11 +44,11 @@ tracy-client = { version = "=0.15.2", features = ["enable", "timer-fallback"], d
 env_logger = "0.9.0"
 itertools = "0.10.3"
 log = "0.4.17"
-tracking-allocator = "0.4.0"
 tabwriter = "1.2.1"
 thousands = "0.2.0"
 soroban-test-wasms = { package = "soroban-test-wasms", path = "../soroban-test-wasms" }
 soroban-synth-wasm = { package = "soroban-synth-wasm", path = "../soroban-synth-wasm" }
+soroban-bench-utils = { package = "soroban-bench-utils", path = "../soroban-bench-utils" }
 bytes-lit = "0.0.5"
 textplots = "0.8.0"
 wasmprinter = "0.2.41"
@@ -59,9 +59,6 @@ linregress = "0.5.1"
 [features]
 testutils = ["soroban-env-common/testutils"]
 tracy = ["dep:tracy-client"]
-
-[target.'cfg(target_os = "linux")'.dev-dependencies]
-perf-event = "0.4.7"
 
 [[bench]]
 required-features = ["testutils"]
