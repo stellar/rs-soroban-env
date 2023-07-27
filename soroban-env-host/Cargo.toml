@@ -30,15 +30,18 @@ num-integer = "0.1.45"
 num-derive = "0.3.3"
 log = "0.4.17"
 backtrace = "0.3"
-k256 = {version = "0.13.1", features=["ecdsa", "arithmetic"]}
+k256 = { version = "0.13.1", features = ["ecdsa", "arithmetic"] }
 # NB: getrandom is a transitive dependency of k256 which we're not using directly
 # but we have to specify it here in order to enable its 'js' feature which
 # is needed to build the host for wasm (a rare but supported config).
-getrandom = { version = "0.2", features=["js"] }
+getrandom = { version = "0.2", features = ["js"] }
 sha3 = "0.10.8"
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
-tracy-client = { version = "=0.15.2", features = ["enable", "timer-fallback"], default-features = false, optional = true }
+tracy-client = { version = "=0.15.2", features = [
+    "enable",
+    "timer-fallback",
+], default-features = false, optional = true }
 
 [dev-dependencies]
 env_logger = "0.9.0"
@@ -55,6 +58,7 @@ wasmprinter = "0.2.41"
 expect-test = "1.4.0"
 more-asserts = "0.3.1"
 linregress = "0.5.1"
+wasmparser = "0.106.0"
 
 [features]
 testutils = ["soroban-env-common/testutils"]

@@ -2,7 +2,7 @@ use expect_test::expect;
 use soroban_env_common::{xdr::ScErrorCode, Env, TryFromVal, Val};
 
 use crate::{events::HostEvent, xdr::ScErrorType, Error, Host, HostError, Symbol, Tag};
-use soroban_test_wasms::{ADD_I32, INVOKE_CONTRACT, VEC};
+use soroban_test_wasms::{ADD_I32, ALLOC, INVOKE_CONTRACT, VEC};
 
 #[test]
 fn invoke_single_contract_function() -> Result<(), HostError> {
@@ -26,6 +26,24 @@ fn invoke_single_contract_function() -> Result<(), HostError> {
     );
     let code = (ScErrorType::WasmVm, ScErrorCode::InvalidAction);
     assert!(HostError::result_matches_err(res, code));
+    Ok(())
+}
+
+#[test]
+fn invoke_alloc() -> Result<(), HostError> {
+    let host = Host::test_host_with_recording_footprint();
+    host.enable_debug()?;
+    let contract_id_obj = host.register_test_contract_wasm(ALLOC);
+    println!("total bytes: {:?}", ALLOC.len());
+    // let a = 0u32;
+    wasmparser::validate(ALLOC).unwrap();
+
+    let res = host.call(
+        contract_id_obj,
+        Symbol::try_from_small_str("sum")?,
+        host.test_vec_obj::<u32>(&[])?,
+    )?;
+    println!("{:?}", res);
     Ok(())
 }
 

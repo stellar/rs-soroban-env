@@ -19,6 +19,7 @@ resolver = "2"
 members = [
     "add_i32",
     "add_f32",
+    "alloc",
     "auth",
     "fib",
     "contract_data",
@@ -31,7 +32,7 @@ members = [
     "fannkuch",
     "simple_account",
     "update",
-    "delegated_account"
+    "delegated_account",
 ]
 [profile.release]
 opt-level = "z"
