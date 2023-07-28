@@ -46,7 +46,6 @@ macro_rules! tracy_span {
 pub mod budget;
 pub mod events;
 pub use events::diagnostic::DiagnosticLevel;
-pub mod expiration_ledger_bumps;
 mod host;
 pub(crate) mod host_object;
 

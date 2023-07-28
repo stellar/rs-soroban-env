@@ -143,11 +143,8 @@ impl Host {
                 key: ScVal::LedgerKeyContractInstance,
                 body,
                 durability: ContractDataDurability::Persistent,
-                expiration_ledger_seq: self.with_ledger_info(|li| {
-                    Ok(li
-                        .sequence_number
-                        .saturating_add(li.min_persistent_entry_expiration))
-                })?,
+                expiration_ledger_seq: self
+                    .get_min_expiration_ledger(ContractDataDurability::Persistent)?,
             });
             self.try_borrow_storage_mut()?.put(
                 key,

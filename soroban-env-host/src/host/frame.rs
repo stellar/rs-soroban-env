@@ -670,6 +670,7 @@ impl Host {
 
     // Notes on metering: covered by the called components.
     fn invoke_function_raw(&self, hf: HostFunction) -> Result<Val, HostError> {
+        self.maybe_autobump_expiration_of_footprint_entries()?;
         let hf_type = hf.discriminant();
         match hf {
             HostFunction::InvokeContract(invoke_args) => {

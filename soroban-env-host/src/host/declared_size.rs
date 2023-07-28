@@ -2,7 +2,6 @@ use std::rc::Rc;
 
 use crate::{
     events::{EventError, HostEvent, InternalContractEvent, InternalEvent},
-    expiration_ledger_bumps::LedgerBump,
     host::Events,
     host_object::HostObject,
     storage::AccessType,
@@ -96,7 +95,6 @@ impl_declared_size_type!(SymbolSmallIter, 8);
 impl_declared_size_type!(U256, 32);
 impl_declared_size_type!(I256, 32);
 impl_declared_size_type!(HostObject, 48);
-impl_declared_size_type!(LedgerBump, 20);
 // xdr types
 impl_declared_size_type!(TimePoint, 8);
 impl_declared_size_type!(Duration, 8);
@@ -274,7 +272,6 @@ mod test {
         expect!["40"].assert_eq(size_of::<HostObject>().to_string().as_str());
         #[cfg(target_arch = "aarch64")]
         expect!["48"].assert_eq(size_of::<HostObject>().to_string().as_str());
-        expect!["20"].assert_eq(size_of::<LedgerBump>().to_string().as_str());
         // xdr types
         expect!["8"].assert_eq(size_of::<TimePoint>().to_string().as_str());
         expect!["8"].assert_eq(size_of::<Duration>().to_string().as_str());
@@ -414,7 +411,6 @@ mod test {
         assert_mem_size_le_declared_size!(U256);
         assert_mem_size_le_declared_size!(I256);
         assert_mem_size_le_declared_size!(HostObject);
-        assert_mem_size_le_declared_size!(LedgerBump);
         // xdr types
         assert_mem_size_le_declared_size!(TimePoint);
         assert_mem_size_le_declared_size!(Duration);
