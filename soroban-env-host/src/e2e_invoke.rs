@@ -235,6 +235,7 @@ pub fn extract_rent_changes(ledger_changes: &Vec<LedgerEntryChange>) -> Vec<Ledg
 ///
 /// When diagnostics are enabled, we try to populate `diagnostic_events`
 /// even if the `InvokeHostFunctionResult` fails for any reason.
+#[allow(clippy::too_many_arguments)]
 pub fn invoke_host_function<T: AsRef<[u8]>, I: ExactSizeIterator<Item = T>>(
     budget: &Budget,
     enable_diagnostics: bool,
@@ -262,7 +263,7 @@ pub fn invoke_host_function<T: AsRef<[u8]>, I: ExactSizeIterator<Item = T>>(
     let host_function: HostFunction = host.metered_from_xdr(encoded_host_fn.as_ref())?;
     let source_account: AccountId = host.metered_from_xdr(encoded_source_account.as_ref())?;
     host.set_source_account(source_account)?;
-    host.set_ledger_info(ledger_info.into())?;
+    host.set_ledger_info(ledger_info)?;
     host.set_authorization_entries(auth_entries)?;
     let seed32: [u8; 32] = base_prng_seed.as_ref().try_into().map_err(|_| {
         host.err(
