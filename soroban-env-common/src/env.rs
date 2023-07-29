@@ -41,6 +41,18 @@ pub trait EnvBase: Sized + Clone {
     #[cfg(feature = "testutils")]
     fn escalate_error_to_panic(&self, e: Self::Error) -> !;
 
+    /// If `x` is `Err(...)`, ensure as much debug information as possible is
+    /// attached to that error; in any case return "essentially the same" `x` --
+    /// either `Ok(...)` or `Err(...)` -- just with extra error context.
+    ///
+    /// This is called on a best-effort basis while propagating errors in the
+    /// host, to attach context "as soon as possible", and is necessary because
+    /// some errors are generated in contexts that do not have access to a Host,
+    /// and so cannot attach error context at the site of error generation.
+    fn augment_err_result<T>(&self, x: Result<T, Self::Error>) -> Result<T, Self::Error> {
+        x
+    }
+
     /// Used for recovering the concrete type of the Host.
     fn as_mut_any(&mut self) -> &mut dyn any::Any;
 

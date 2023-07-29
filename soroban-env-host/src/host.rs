@@ -966,6 +966,15 @@ impl EnvBase for Host {
         panic!("{:?}", escalation)
     }
 
+    fn augment_err_result<T>(&self, mut x: Result<T, Self::Error>) -> Result<T, Self::Error> {
+        if let Err(e) = &mut x {
+            if e.info.is_none() {
+                e.info = self.maybe_get_debug_info()
+            }
+        }
+        x
+    }
+
     fn as_mut_any(&mut self) -> &mut dyn std::any::Any {
         todo!()
     }

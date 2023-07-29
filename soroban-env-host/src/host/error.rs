@@ -57,7 +57,7 @@ impl Debug for HostError {
                 || frame_name_matches(frame, "host::err")
                 || frame_name_matches(frame, "Host::err")
                 || frame_name_matches(frame, "Host>::err")
-                || frame_name_matches(frame, "::map_err")
+                || frame_name_matches(frame, "::augment_err_result")
         }
 
         writeln!(f, "HostError: {:?}", self.error)?;
@@ -236,19 +236,28 @@ impl Host {
                 if let Err(e) = self.err_diagnostics(events_refmut.deref_mut(), error, msg, args) {
                     return e;
                 }
-                let events = match self
-                    .as_budget()
-                    .with_free_budget(|| events_refmut.externalize(self))
-                {
-                    Ok(events) => events,
-                    Err(e) => return e,
-                };
-                let backtrace = Backtrace::new_unresolved();
-                let info = Some(Box::new(DebugInfo { backtrace, events }));
-                return HostError { error, info };
             }
+            let info = self.maybe_get_debug_info();
+            return HostError { error, info };
         }
         error.into()
+    }
+
+    pub(crate) fn maybe_get_debug_info(&self) -> Option<Box<DebugInfo>> {
+        if let Ok(true) = self.is_debug() {
+            if let Ok(events_ref) = self.0.events.try_borrow() {
+                let events = match self
+                    .as_budget()
+                    .with_free_budget(|| events_ref.externalize(self))
+                {
+                    Ok(events) => events,
+                    Err(e) => return None,
+                };
+                let backtrace = Backtrace::new_unresolved();
+                return Some(Box::new(DebugInfo { backtrace, events }));
+            }
+        }
+        None
     }
 
     // Some common error patterns here.
