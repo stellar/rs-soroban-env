@@ -31,7 +31,8 @@ members = [
     "fannkuch",
     "simple_account",
     "update",
-    "delegated_account"
+    "delegated_account",
+    "err"
 ]
 [profile.release]
 opt-level = "z"
