@@ -36,7 +36,7 @@ fn run_complex() -> Result<(), HostError> {
             Symbol::try_from_small_str("go")?,
             host.add_host_object(HostVec::new())?,
         )?;
-        let (store, _, _) = host.try_finish().unwrap();
+        let (store, _) = host.try_finish().unwrap();
         store.footprint
     };
 

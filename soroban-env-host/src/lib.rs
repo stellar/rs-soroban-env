@@ -22,7 +22,7 @@
 //!   - The [storage] module which is responsible for providing an interface
 //!     between contracts and their durable storage.
 //!
-
+#![recursion_limit = "256"]
 #[cfg(all(not(target_family = "wasm"), feature = "tracy"))]
 macro_rules! tracy_span {
     () => {
@@ -71,4 +71,5 @@ pub use host::{
 };
 pub use soroban_env_common::*;
 
+pub mod e2e_invoke;
 pub mod fees;

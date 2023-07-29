@@ -1,6 +1,6 @@
 use std::{mem, rc::Rc};
 
-use soroban_env_common::xdr::DepthLimiter;
+use soroban_env_common::xdr::{DepthLimiter, SorobanAuthorizationEntry};
 
 use crate::{
     budget::Budget,
@@ -227,6 +227,7 @@ impl MeteredClone for EventError {}
 impl MeteredClone for CreateContractArgs {}
 impl MeteredClone for ContractIdPreimage {}
 impl MeteredClone for SorobanAuthorizedInvocation {}
+impl MeteredClone for SorobanAuthorizationEntry {}
 // composite types
 impl<T> MeteredClone for Rc<T> {}
 impl<T> MeteredClone for &[T] {}
