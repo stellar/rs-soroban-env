@@ -2530,6 +2530,24 @@ fn test_wrapped_asset_classic_balance_boundaries(
         expected_max_balance
     );
     assert_eq!(test.get_trustline_balance(&trustline_key2), 0);
+
+    token
+        .mint(&issuer, user2.address(&test.host), 1.into())
+        .unwrap();
+
+    assert_eq!(
+        to_contract_err(
+            token
+                .transfer(
+                    &user,
+                    user2.address(&test.host),
+                    (expected_max_balance).into(),
+                )
+                .err()
+                .unwrap()
+        ),
+        ContractError::BalanceError
+    );
 }
 
 #[test]
