@@ -3,6 +3,10 @@ use std::rc::Rc;
 use soroban_env_common::xdr::SorobanAuthorizationEntry;
 
 use crate::{
+    auth::{
+        AccountAuthorizationTracker, AccountAuthorizationTrackerSnapshot, AuthorizedInvocation,
+        AuthorizedInvocationSnapshot, ContractInvocation, InvokerContractAuthorizationTracker,
+    },
     events::{EventError, HostEvent, InternalContractEvent, InternalEvent},
     host::Events,
     host_object::HostObject,
@@ -18,7 +22,7 @@ use crate::{
         ScSymbol, ScVal, ScVec, SorobanAuthorizedInvocation, StringM, TimePoint, TrustLineAsset,
         TrustLineEntry, Uint256, SCSYMBOL_LIMIT,
     },
-    AddressObject, Bool, BytesObject, DurationObject, DurationSmall, DurationVal, Error,
+    AddressObject, Bool, BytesObject, DurationObject, DurationSmall, DurationVal, Error, HostError,
     I128Object, I128Small, I128Val, I256Object, I256Small, I256Val, I32Val, I64Object, I64Small,
     I64Val, MapObject, Object, ScValObject, StringObject, Symbol, SymbolObject, SymbolSmall,
     SymbolSmallIter, SymbolStr, TimepointObject, TimepointSmall, TimepointVal, U128Object,
@@ -51,6 +55,7 @@ impl_declared_size_type!(u64, 8);
 impl_declared_size_type!(i64, 8);
 impl_declared_size_type!(u128, 16);
 impl_declared_size_type!(i128, 16);
+impl_declared_size_type!(usize, 8);
 // Val-wrapping types
 impl_declared_size_type!(Val, 8);
 impl_declared_size_type!(Void, 8);
@@ -97,6 +102,7 @@ impl_declared_size_type!(SymbolSmallIter, 8);
 impl_declared_size_type!(U256, 32);
 impl_declared_size_type!(I256, 32);
 impl_declared_size_type!(HostObject, 48);
+impl_declared_size_type!(HostError, 16);
 // xdr types
 impl_declared_size_type!(TimePoint, 8);
 impl_declared_size_type!(Duration, 8);
@@ -129,9 +135,9 @@ impl_declared_size_type!(DataEntry, 80);
 impl_declared_size_type!(ClaimableBalanceEntry, 120);
 impl_declared_size_type!(LiquidityPoolEntry, 160);
 impl_declared_size_type!(ContractCodeEntry, 64);
-impl_declared_size_type!(ConfigSettingEntry, 104);
+impl_declared_size_type!(ConfigSettingEntry, 96);
 impl_declared_size_type!(LedgerKey, 120);
-impl_declared_size_type!(LedgerEntry, 264);
+impl_declared_size_type!(LedgerEntry, 256);
 impl_declared_size_type!(AccessType, 1);
 impl_declared_size_type!(InternalContractEvent, 40);
 impl_declared_size_type!(ContractEvent, 128);
@@ -142,14 +148,21 @@ impl_declared_size_type!(EventError, 1);
 impl_declared_size_type!(ScBytes, 24);
 impl_declared_size_type!(ScString, 24);
 impl_declared_size_type!(ScSymbol, 24);
-impl_declared_size_type!(CreateContractArgs, 99);
-impl_declared_size_type!(ContractIdPreimage, 66);
+impl_declared_size_type!(CreateContractArgs, 98);
+impl_declared_size_type!(ContractIdPreimage, 65);
 impl_declared_size_type!(ContractDataDurability, 4);
 impl_declared_size_type!(ContractEntryBodyType, 4);
 impl_declared_size_type!(ExtensionPoint, 0);
-impl_declared_size_type!(SorobanAuthorizedInvocation, 128);
 impl_declared_size_type!(ScContractInstance, 64);
 impl_declared_size_type!(SorobanAuthorizationEntry, 240);
+impl_declared_size_type!(SorobanAuthorizedInvocation, 128);
+impl_declared_size_type!(AuthorizedInvocation, 136);
+impl_declared_size_type!(AuthorizedInvocationSnapshot, 32);
+impl_declared_size_type!(AccountAuthorizationTracker, 232);
+impl_declared_size_type!(InvokerContractAuthorizationTracker, 192);
+impl_declared_size_type!(AccountAuthorizationTrackerSnapshot, 40);
+impl_declared_size_type!(ContractInvocation, 16);
+
 // composite types
 
 // Rc is an exception, nothing is being cloned. We approximate ref counter bump with the cost of
@@ -203,6 +216,12 @@ impl<C: DeclaredSizeForMetering> DeclaredSizeForMetering for Option<C> {
     const DECLARED_SIZE: u64 = C::DECLARED_SIZE.saturating_add(8);
 }
 
+impl<C: DeclaredSizeForMetering, E: DeclaredSizeForMetering> DeclaredSizeForMetering
+    for Result<C, E>
+{
+    const DECLARED_SIZE: u64 = C::DECLARED_SIZE + E::DECLARED_SIZE;
+}
+
 mod test {
     #[allow(unused)]
     use super::*;
@@ -225,6 +244,7 @@ mod test {
         expect!["8"].assert_eq(size_of::<i64>().to_string().as_str());
         expect!["16"].assert_eq(size_of::<u128>().to_string().as_str());
         expect!["16"].assert_eq(size_of::<i128>().to_string().as_str());
+        expect!["8"].assert_eq(size_of::<usize>().to_string().as_str());
         // Val-wrapping types
         expect!["8"].assert_eq(size_of::<Val>().to_string().as_str());
         expect!["8"].assert_eq(size_of::<Void>().to_string().as_str());
@@ -274,6 +294,7 @@ mod test {
         expect!["40"].assert_eq(size_of::<HostObject>().to_string().as_str());
         #[cfg(target_arch = "aarch64")]
         expect!["48"].assert_eq(size_of::<HostObject>().to_string().as_str());
+        expect!["16"].assert_eq(size_of::<HostError>().to_string().as_str());
         // xdr types
         expect!["8"].assert_eq(size_of::<TimePoint>().to_string().as_str());
         expect!["8"].assert_eq(size_of::<Duration>().to_string().as_str());
@@ -306,9 +327,9 @@ mod test {
         expect!["120"].assert_eq(size_of::<ClaimableBalanceEntry>().to_string().as_str());
         expect!["160"].assert_eq(size_of::<LiquidityPoolEntry>().to_string().as_str());
         expect!["64"].assert_eq(size_of::<ContractCodeEntry>().to_string().as_str());
-        expect!["104"].assert_eq(size_of::<ConfigSettingEntry>().to_string().as_str());
+        expect!["96"].assert_eq(size_of::<ConfigSettingEntry>().to_string().as_str());
         expect!["120"].assert_eq(size_of::<LedgerKey>().to_string().as_str());
-        expect!["264"].assert_eq(size_of::<LedgerEntry>().to_string().as_str());
+        expect!["256"].assert_eq(size_of::<LedgerEntry>().to_string().as_str());
         expect!["1"].assert_eq(size_of::<AccessType>().to_string().as_str());
         expect!["40"].assert_eq(size_of::<InternalContractEvent>().to_string().as_str());
         expect!["128"].assert_eq(size_of::<ContractEvent>().to_string().as_str());
@@ -319,8 +340,8 @@ mod test {
         expect!["24"].assert_eq(size_of::<ScBytes>().to_string().as_str());
         expect!["24"].assert_eq(size_of::<ScString>().to_string().as_str());
         expect!["24"].assert_eq(size_of::<ScSymbol>().to_string().as_str());
-        expect!["99"].assert_eq(size_of::<CreateContractArgs>().to_string().as_str());
-        expect!["66"].assert_eq(size_of::<ContractIdPreimage>().to_string().as_str());
+        expect!["98"].assert_eq(size_of::<CreateContractArgs>().to_string().as_str());
+        expect!["65"].assert_eq(size_of::<ContractIdPreimage>().to_string().as_str());
         expect!["4"].assert_eq(size_of::<ContractDataDurability>().to_string().as_str());
         expect!["4"].assert_eq(size_of::<ContractEntryBodyType>().to_string().as_str());
         expect!["0"].assert_eq(size_of::<ExtensionPoint>().to_string().as_str());
@@ -329,6 +350,28 @@ mod test {
                 .to_string()
                 .as_str(),
         );
+        expect!["136"].assert_eq(size_of::<AuthorizedInvocation>().to_string().as_str());
+        expect!["32"].assert_eq(
+            size_of::<AuthorizedInvocationSnapshot>()
+                .to_string()
+                .as_str(),
+        );
+        expect!["232"].assert_eq(
+            size_of::<AccountAuthorizationTracker>()
+                .to_string()
+                .as_str(),
+        );
+        expect!["192"].assert_eq(
+            size_of::<InvokerContractAuthorizationTracker>()
+                .to_string()
+                .as_str(),
+        );
+        expect!["40"].assert_eq(
+            size_of::<AccountAuthorizationTrackerSnapshot>()
+                .to_string()
+                .as_str(),
+        );
+        expect!["16"].assert_eq(size_of::<ContractInvocation>().to_string().as_str());
         // composite types
         expect!["16"].assert_eq(size_of::<&[ScVal]>().to_string().as_str());
         expect!["72"].assert_eq(size_of::<(Val, ScVal)>().to_string().as_str());
@@ -372,6 +415,7 @@ mod test {
         assert_mem_size_le_declared_size!(i64);
         assert_mem_size_le_declared_size!(u128);
         assert_mem_size_le_declared_size!(i128);
+        assert_mem_size_le_declared_size!(usize);
         // Val-wrapping types
         assert_mem_size_le_declared_size!(Val);
         assert_mem_size_le_declared_size!(Void);
@@ -468,6 +512,12 @@ mod test {
         assert_mem_size_le_declared_size!(ExtensionPoint);
         assert_mem_size_le_declared_size!(SorobanAuthorizedInvocation);
         assert_mem_size_le_declared_size!(SorobanAuthorizationEntry);
+        assert_mem_size_le_declared_size!(AuthorizedInvocation);
+        assert_mem_size_le_declared_size!(AuthorizedInvocationSnapshot);
+        assert_mem_size_le_declared_size!(AccountAuthorizationTracker);
+        assert_mem_size_le_declared_size!(InvokerContractAuthorizationTracker);
+        assert_mem_size_le_declared_size!(AccountAuthorizationTrackerSnapshot);
+        assert_mem_size_le_declared_size!(ContractInvocation);
         // composite types
         assert_mem_size_le_declared_size!(&[ScVal]);
         assert_mem_size_le_declared_size!((Val, ScVal));

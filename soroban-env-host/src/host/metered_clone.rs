@@ -1,4 +1,4 @@
-use std::{mem, rc::Rc};
+use std::{iter::FromIterator, mem, rc::Rc};
 
 use soroban_env_common::xdr::{DepthLimiter, SorobanAuthorizationEntry};
 
@@ -34,7 +34,7 @@ use super::declared_size::DeclaredSizeForMetering;
 // unit is number of elements `n_elts` multiplied by a declared size of each element. In a better
 // world we would multiply by `size_of<Self>` instead but that's not guaranteed to be stable, which
 // might cause metering to differ across compilations, causing problems in concensus and replay.
-pub(crate) fn charge_shallow_copy<T: MeteredClone>(
+pub(crate) fn charge_shallow_copy<T: DeclaredSizeForMetering>(
     n_elts: u64,
     budget: &Budget,
 ) -> Result<(), HostError> {
@@ -57,7 +57,7 @@ pub(crate) fn charge_shallow_copy<T: MeteredClone>(
 
 // Let it be a free function instead of a trait because charge_heap_alloc maybe called elsewhere,
 // not just metered clone, e.g. Box::<T>::new().
-pub(crate) fn charge_heap_alloc<T: MeteredClone>(
+pub(crate) fn charge_heap_alloc<T: DeclaredSizeForMetering>(
     n_elts: u64,
     budget: &Budget,
 ) -> Result<(), HostError> {
@@ -75,16 +75,58 @@ pub(crate) fn charge_heap_alloc<T: MeteredClone>(
     )
 }
 
-// A convenience method for a container bulk initialization with elements, e.g. a
-// `Vec::with_capacity(N)` immediately followed by N element pushes.
-pub(crate) fn charge_container_bulk_init_with_elts<C: MeteredClone, T: MeteredClone>(
-    n_elts: u64,
-    budget: &Budget,
-) -> Result<(), HostError> {
-    debug_assert!(!C::IS_SHALLOW);
-    charge_shallow_copy::<C>(1, budget)?;
-    charge_heap_alloc::<T>(n_elts, budget)?;
-    charge_shallow_copy::<T>(n_elts, budget)
+/// Represents a collection type which can be created from an iterator, and provides
+/// a method for bulk charging its initalization cost.
+pub trait MeteredContainer: FromIterator<Self::Item> + DeclaredSizeForMetering
+where
+    Self: Sized,
+{
+    type Item: DeclaredSizeForMetering;
+
+    fn charge_bulk_init(len: u64, budget: &Budget) -> Result<(), HostError> {
+        charge_shallow_copy::<Self>(1, budget)?;
+        charge_heap_alloc::<Self::Item>(len, budget)?;
+        charge_shallow_copy::<Self::Item>(len, budget)
+    }
+}
+
+impl<T: DeclaredSizeForMetering> MeteredContainer for Vec<T> {
+    type Item = T;
+}
+
+impl<T: DeclaredSizeForMetering, E: DeclaredSizeForMetering> MeteredContainer
+    for Result<Vec<T>, E>
+{
+    type Item = Result<T, E>;
+}
+
+/// Represents an iterator which can collect its elements into a `MeteredContainer`
+/// and automatically account for the metering cost.
+///
+/// Returns:
+///   Err - if either the budget was exceeded or the iterator lacks the size hint
+///   Ok - otherwise
+pub trait MeteredCollect: Iterator
+where
+    Self::Item: DeclaredSizeForMetering,
+    Self: Sized,
+{
+    fn metered_collect<B: MeteredContainer<Item = Self::Item>>(
+        self,
+        budget: &Budget,
+    ) -> Result<B, HostError> {
+        if let (_, Some(ub)) = self.size_hint() {
+            B::charge_bulk_init(ub as u64, budget)?;
+            Ok(self.collect())
+        } else {
+            Err((ScErrorType::Object, ScErrorCode::InternalError).into())
+        }
+    }
+}
+
+impl<T: DeclaredSizeForMetering, I: Iterator, F> MeteredCollect for std::iter::Map<I, F> where
+    F: FnMut(I::Item) -> T
+{
 }
 
 pub trait MeteredClone: Clone + DeclaredSizeForMetering {
