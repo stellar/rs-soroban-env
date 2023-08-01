@@ -31,7 +31,7 @@ impl ContractFunctionSet for ContractWithSingleEvent {
 fn contract_event() -> Result<(), HostError> {
     let host = Host::default();
     let dummy_id = [0; 32];
-    let dummy_address = ScAddress::Contract(Hash(dummy_id.clone()));
+    let dummy_address = ScAddress::Contract(Hash(dummy_id));
     let id = host.add_host_object(dummy_address)?;
     let test_contract = Rc::new(ContractWithSingleEvent {});
     let sym = Symbol::try_from_small_str("add").unwrap();

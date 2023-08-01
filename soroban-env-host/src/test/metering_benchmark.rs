@@ -42,11 +42,8 @@ fn run_add_i32() -> Result<(), HostError> {
     let foot = {
         let host = Host::test_host_with_recording_footprint();
         host.set_ledger_info(LEDGER_INFO.clone())?;
-        let contract_id_obj = host.register_test_contract_wasm_from_source_account(
-            ADD_I32,
-            account_id.clone(),
-            salt.clone(),
-        );
+        let contract_id_obj =
+            host.register_test_contract_wasm_from_source_account(ADD_I32, account_id.clone(), salt);
         host.call(
             contract_id_obj,
             Symbol::try_from_small_str("add")?,
@@ -81,11 +78,8 @@ fn run_complex() -> Result<(), HostError> {
     let foot = {
         let host = Host::test_host_with_recording_footprint();
         host.set_ledger_info(LEDGER_INFO.clone())?;
-        let contract_id_obj = host.register_test_contract_wasm_from_source_account(
-            COMPLEX,
-            account_id.clone(),
-            salt.clone(),
-        );
+        let contract_id_obj =
+            host.register_test_contract_wasm_from_source_account(COMPLEX, account_id.clone(), salt);
         host.call(
             contract_id_obj,
             Symbol::try_from_small_str("go")?,

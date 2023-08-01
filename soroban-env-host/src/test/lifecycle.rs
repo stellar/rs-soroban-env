@@ -219,7 +219,7 @@ fn create_contract_using_parent_id_test() {
     // Can't create the contract yet, as the code hasn't been uploaded yet.
     assert!(host
         .call(
-            parent_contract_address.clone(),
+            parent_contract_address,
             Symbol::try_from_small_str("create").unwrap(),
             args,
         )

@@ -64,7 +64,7 @@ fn prng_test() -> Result<(), HostError> {
     host.set_base_prng_seed([0; 32])?;
 
     let dummy_id = [0; 32];
-    let dummy_address = ScAddress::Contract(Hash(dummy_id.clone()));
+    let dummy_address = ScAddress::Contract(Hash(dummy_id));
     let id = host.add_host_object(dummy_address)?;
 
     host.register_test_contract(id, std::rc::Rc::new(PRNGUsingTest))?;
