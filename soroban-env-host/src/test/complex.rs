@@ -26,11 +26,8 @@ fn run_complex() -> Result<(), HostError> {
     let foot = {
         let host = Host::test_host_with_recording_footprint();
         host.set_ledger_info(info.clone())?;
-        let contract_id_obj = host.register_test_contract_wasm_from_source_account(
-            COMPLEX,
-            account_id.clone(),
-            salt,
-        );
+        let contract_id_obj =
+            host.register_test_contract_wasm_from_source_account(COMPLEX, account_id.clone(), salt);
         host.call(
             contract_id_obj,
             Symbol::try_from_small_str("go")?,
