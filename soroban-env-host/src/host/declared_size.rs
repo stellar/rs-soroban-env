@@ -8,7 +8,7 @@ use crate::{
         AuthorizedInvocationSnapshot, ContractInvocation, InvokerContractAuthorizationTracker,
     },
     events::{EventError, HostEvent, InternalContractEvent, InternalEvent},
-    host::Events,
+    host::{frame::Context, Events},
     host_object::HostObject,
     storage::AccessType,
     xdr::{
@@ -103,6 +103,7 @@ impl_declared_size_type!(U256, 32);
 impl_declared_size_type!(I256, 32);
 impl_declared_size_type!(HostObject, 48);
 impl_declared_size_type!(HostError, 16);
+impl_declared_size_type!(Context, 512);
 // xdr types
 impl_declared_size_type!(TimePoint, 8);
 impl_declared_size_type!(Duration, 8);
@@ -295,6 +296,10 @@ mod test {
         #[cfg(target_arch = "aarch64")]
         expect!["48"].assert_eq(size_of::<HostObject>().to_string().as_str());
         expect!["16"].assert_eq(size_of::<HostError>().to_string().as_str());
+        #[cfg(target_arch = "x86_64")]
+        expect!["512"].assert_eq(size_of::<Context>().to_string().as_str());
+        #[cfg(target_arch = "aarch64")]
+        expect!["488"].assert_eq(size_of::<Context>().to_string().as_str());
         // xdr types
         expect!["8"].assert_eq(size_of::<TimePoint>().to_string().as_str());
         expect!["8"].assert_eq(size_of::<Duration>().to_string().as_str());
@@ -383,11 +388,6 @@ mod test {
         expect!["8"].assert_eq(size_of::<Rc<ScVal>>().to_string().as_str());
         expect!["64"].assert_eq(size_of::<Option<ScVal>>().to_string().as_str());
         expect!["64"].assert_eq(size_of::<ScContractInstance>().to_string().as_str());
-        expect!["240"].assert_eq(
-            size_of::<SorobanAuthorizedInvocation>()
-                .to_string()
-                .as_str(),
-        );
     }
 
     // This is the actual test.
@@ -462,6 +462,8 @@ mod test {
         assert_mem_size_le_declared_size!(U256);
         assert_mem_size_le_declared_size!(I256);
         assert_mem_size_le_declared_size!(HostObject);
+        assert_mem_size_le_declared_size!(HostError);
+        assert_mem_size_le_declared_size!(Context);
         // xdr types
         assert_mem_size_le_declared_size!(TimePoint);
         assert_mem_size_le_declared_size!(Duration);
