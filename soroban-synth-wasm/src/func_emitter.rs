@@ -349,5 +349,7 @@ i64_numeric_insn!(
     (i64_shr_s, I64ShrS),
     (i64_shr_u, I64ShrU),
     (i64_rotl, I64Rotl),
-    (i64_rotr, I64Rotr)
+    (i64_rotr, I64Rotr),
+    // post-MVP instructions
+    (i64_extend32s, I64Extend32S)
 );
