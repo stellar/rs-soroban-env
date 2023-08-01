@@ -230,7 +230,6 @@ mod test {
     // This section is for outputting the actual size of types. They are for informational use.
     // They might become outdated due to Rust type changes, and numbers may differ between
     // platforms. Run `UPDATE_EXPECT=true cargo test` to update this.
-    #[ignore]
     #[test]
     fn test_expected_size() {
         use expect_test::expect;
