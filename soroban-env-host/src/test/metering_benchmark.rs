@@ -45,7 +45,7 @@ fn run_add_i32() -> Result<(), HostError> {
         let contract_id_obj = host.register_test_contract_wasm_from_source_account(
             ADD_I32,
             account_id.clone(),
-            salt.clone(),
+            salt,
         );
         host.call(
             contract_id_obj,
@@ -84,7 +84,7 @@ fn run_complex() -> Result<(), HostError> {
         let contract_id_obj = host.register_test_contract_wasm_from_source_account(
             COMPLEX,
             account_id.clone(),
-            salt.clone(),
+            salt,
         );
         host.call(
             contract_id_obj,
