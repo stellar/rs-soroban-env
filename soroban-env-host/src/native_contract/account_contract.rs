@@ -100,6 +100,7 @@ impl AuthorizationContext {
     }
 }
 
+// metering: covered
 fn invocation_tree_to_auth_contexts(
     host: &Host,
     invocation: &AuthorizedInvocation,
@@ -115,6 +116,7 @@ fn invocation_tree_to_auth_contexts(
     Ok(())
 }
 
+// metering: covered
 pub(crate) fn check_account_contract_auth(
     host: &Host,
     account_contract: &Hash,
@@ -138,6 +140,7 @@ pub(crate) fn check_account_contract_auth(
         .try_into()?)
 }
 
+// metering: covered
 pub(crate) fn check_account_authentication(
     host: &Host,
     account_id: AccountId,
