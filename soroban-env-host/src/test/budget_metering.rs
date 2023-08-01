@@ -1,6 +1,7 @@
 use crate::{
-    budget::AsBudget,
-    host::{metered_clone::MeteredClone, metered_xdr::metered_write_xdr},
+    budget::{AsBudget, Budget},
+    host::metered_clone::{MeteredClone, MeteredCollect},
+    host::metered_xdr::metered_write_xdr,
     xdr::{ContractCostType, ScMap, ScMapEntry, ScVal},
     Env, Host, HostError, Symbol, Val,
 };
@@ -218,6 +219,19 @@ fn test_recursive_type_clone() -> Result<(), HostError> {
             .to_string()
             .as_str(),
     );
+    Ok(())
+}
+
+#[test]
+fn test_metered_collection() -> Result<(), HostError> {
+    let budget = Budget::default();
+    let v: Vec<i32> = vec![1, 2, -3, 4, -6, -11];
+    let res = v
+        .iter()
+        .filter(|i| i.abs() > 3)
+        .map(|i| Ok(i.abs() as u64))
+        .metered_collect::<Result<Vec<u64>, HostError>>(&budget)??;
+    assert_eq!(res, vec![4, 6, 11]);
     Ok(())
 }
 

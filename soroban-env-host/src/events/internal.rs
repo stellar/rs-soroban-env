@@ -5,7 +5,7 @@ use soroban_env_common::{BytesObject, VecObject};
 use super::{Events, HostEvent};
 use crate::{
     budget::{AsBudget, Budget},
-    host::metered_clone,
+    host::metered_clone::MeteredContainer,
     xdr,
     xdr::ScVal,
     Host, HostError, Val,
@@ -134,13 +134,10 @@ impl InternalEventsBuffer {
         // `Vec.push(event)`. Because the buffer length may be different on different instances
         // due to diagnostic events and we need a deterministic cost across all instances,
         // the cost needs to be amortized and buffer size-independent.
-        if let InternalEvent::Contract(_) = e {
-            metered_clone::charge_container_bulk_init_with_elts::<
-                Vec<(InternalEvent, EventError)>,
-                (InternalEvent, EventError),
-            >(1, budget)?;
-        }
 
+        if let InternalEvent::Contract(_) = e {
+            Vec::<(InternalEvent, EventError)>::charge_bulk_init(1, budget)?;
+        }
         self.vec.push((e, EventError::FromSuccessfulCall));
         Ok(())
     }
@@ -172,33 +169,30 @@ impl InternalEventsBuffer {
     /// Converts the internal events into their external representation. This should only be called
     /// either when the host is finished (via `try_finish`), or when an error occurs.
     pub fn externalize(&self, host: &Host) -> Result<Events, HostError> {
-        let vec: Result<Vec<HostEvent>, HostError> =
-            self.vec
-                .iter()
-                .map(|e| match &e.0 {
-                    InternalEvent::Contract(c) => {
-                        // Metering: we use the cost of instantiating a size=1 `Vec` as an estimate
-                        // for the cost collecting 1 `HostEvent` into the events buffer. Because
-                        // the resulting buffer length may be different on different instances
-                        // (due to diagnostic events) and we need a deterministic cost across all
-                        // instances, the cost needs to be amortized and buffer size-independent.
-                        metered_clone::charge_container_bulk_init_with_elts::<
-                            Vec<HostEvent>,
-                            HostEvent,
-                        >(1, host.as_budget())?;
-                        Ok(HostEvent {
-                            event: c.to_xdr(host)?,
-                            failed_call: e.1 == EventError::FromFailedCall,
-                        })
-                    }
-                    InternalEvent::Diagnostic(c) => host.as_budget().with_free_budget(|| {
-                        Ok(HostEvent {
-                            event: c.to_xdr(host)?,
-                            failed_call: e.1 == EventError::FromFailedCall,
-                        })
-                    }),
-                })
-                .collect();
+        let vec: Result<Vec<HostEvent>, HostError> = self
+            .vec
+            .iter()
+            .map(|e| match &e.0 {
+                InternalEvent::Contract(c) => {
+                    // Metering: we use the cost of instantiating a size=1 `Vec` as an estimate
+                    // for the cost collecting 1 `HostEvent` into the events buffer. Because
+                    // the resulting buffer length may be different on different instances
+                    // (due to diagnostic events) and we need a deterministic cost across all
+                    // instances, the cost needs to be amortized and buffer size-independent.
+                    Vec::<HostEvent>::charge_bulk_init(1, host.as_budget())?;
+                    Ok(HostEvent {
+                        event: c.to_xdr(host)?,
+                        failed_call: e.1 == EventError::FromFailedCall,
+                    })
+                }
+                InternalEvent::Diagnostic(c) => host.as_budget().with_free_budget(|| {
+                    Ok(HostEvent {
+                        event: c.to_xdr(host)?,
+                        failed_call: e.1 == EventError::FromFailedCall,
+                    })
+                }),
+            })
+            .collect();
         Ok(Events(vec?))
     }
 }
