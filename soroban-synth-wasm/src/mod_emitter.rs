@@ -1,9 +1,9 @@
 use crate::FuncEmitter;
 use std::collections::HashMap;
 use wasm_encoder::{
-    CodeSection, ConstExpr, CustomSection, ElementSection, Elements, EntityType, ExportSection,
-    Function, FunctionSection, GlobalSection, GlobalType, ImportSection, MemorySection, MemoryType,
-    Module, TableSection, TableType, TypeSection, ValType,
+    CodeSection, ConstExpr, CustomSection, ElementSection, Elements, EntityType, ExportKind,
+    ExportSection, Function, FunctionSection, GlobalSection, GlobalType, ImportSection,
+    MemorySection, MemoryType, Module, TableSection, TableType, TypeSection, ValType,
 };
 
 /// Wrapper for a u32 that defines the arity of a function -- that is, the number of
@@ -185,6 +185,20 @@ impl ModEmitter {
         let functions = Elements::Functions(ids.as_slice());
         self.elements
             .active(Some(table_index), &offset, element_type, functions);
+    }
+
+    pub fn define_global_i64(&mut self, val: i64, mutable: bool, export: Option<&str>) {
+        let idx = self.globals.len();
+        self.globals.global(
+            GlobalType {
+                val_type: ValType::I64,
+                mutable,
+            },
+            &ConstExpr::i64_const(val),
+        );
+        if let Some(name) = export {
+            self.exports.export(name, ExportKind::Global, idx);
+        }
     }
 
     /// Finish emitting code, consuming the `self`, serializing a WASM binary
