@@ -7,8 +7,9 @@ use crate::{
     auth::AuthorizationManagerSnapshot,
     budget::AsBudget,
     storage::{InstanceStorageMap, StorageMap},
-    xdr::{ContractCostType, ContractExecutable, Hash, HostFunction, HostFunctionType, ScVal},
+    xdr::{ContractExecutable, Hash, HostFunction, HostFunctionType, ScVal},
     Error, Host, HostError, Object, Symbol, SymbolStr, TryFromVal, TryIntoVal, Val,
+    DEFAULT_HOST_DEPTH_LIMIT,
 };
 
 #[cfg(any(test, feature = "testutils"))]
@@ -23,7 +24,7 @@ use crate::Vm;
 
 use super::{
     invoker_type::InvokerType,
-    metered_clone::{self, MeteredClone},
+    metered_clone::{self, MeteredClone, MeteredContainer},
     prng::Prng,
 };
 
@@ -132,6 +133,7 @@ impl Host {
             prng: None,
             storage: None,
         };
+        Vec::<Context>::charge_bulk_init(1, self.as_budget())?;
         self.try_borrow_context_mut()?.push(ctx);
         Ok(RollbackPoint {
             storage: self.try_borrow_storage()?.map.clone(),
@@ -320,15 +322,18 @@ impl Host {
     /// Pushes a [`Frame`], runs a closure, and then pops the frame, rolling back
     /// if the closure returned an error. Returns the result that the closure
     /// returned (or any error caused during the frame push/pop).
-    // Notes on metering: `GuardFrame` charges on the work done on protecting the `context`.
-    // It does not cover the cost of the actual closure call. The closure needs to be
-    // metered separately.
     pub(crate) fn with_frame<F>(&self, frame: Frame, f: F) -> Result<Val, HostError>
     where
         F: FnOnce() -> Result<Val, HostError>,
     {
-        self.charge_budget(ContractCostType::GuardFrame, None)?;
         let start_depth = self.try_borrow_context()?.len();
+        if start_depth as u32 == DEFAULT_HOST_DEPTH_LIMIT {
+            return Err(Error::from_type_and_code(
+                ScErrorType::Context,
+                ScErrorCode::ExceededLimit,
+            )
+            .into());
+        }
         let rp = self.push_frame(frame)?;
         let res = f();
         let res = if let Ok(v) = res {

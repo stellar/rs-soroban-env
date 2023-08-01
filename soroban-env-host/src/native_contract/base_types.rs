@@ -57,6 +57,7 @@ impl From<String> for StringObject {
     }
 }
 
+// TODO: check metering
 impl String {
     pub fn copy_to_rust_string(&self, env: &Host) -> Result<std::string::String, HostError> {
         let len: u32 = env
@@ -147,6 +148,7 @@ impl<const N: usize> From<BytesN<N>> for Bytes {
     }
 }
 
+// TODO: check metering
 impl Bytes {
     pub fn push(&mut self, x: u8) -> Result<(), HostError> {
         let x32: u32 = x.into();

@@ -57,7 +57,10 @@ use self::{
     metered_vector::MeteredVector,
     prng::Prng,
 };
-use self::{metered_clone::MeteredClone, metered_xdr::metered_write_xdr};
+use self::{
+    metered_clone::{MeteredClone, MeteredContainer},
+    metered_xdr::metered_write_xdr,
+};
 use crate::impl_bignum_host_fns;
 use crate::Compare;
 #[cfg(any(test, feature = "testutils"))]
@@ -1017,21 +1020,22 @@ impl EnvBase for Host {
     }
 
     fn string_new_from_slice(&self, s: &str) -> Result<StringObject, HostError> {
-        self.add_host_object(ScString(s.as_bytes().to_vec().try_into()?))
+        self.add_host_object(ScString(
+            self.metered_slice_to_vec(s.as_bytes())?.try_into()?,
+        ))
     }
 
     fn symbol_new_from_slice(&self, s: &str) -> Result<SymbolObject, HostError> {
         for ch in s.chars() {
             SymbolSmall::validate_char(ch)?;
         }
-        self.add_host_object(ScSymbol(s.as_bytes().to_vec().try_into()?))
+        self.add_host_object(ScSymbol(
+            self.metered_slice_to_vec(s.as_bytes())?.try_into()?,
+        ))
     }
 
     fn map_new_from_slices(&self, keys: &[&str], vals: &[Val]) -> Result<MapObject, HostError> {
-        metered_clone::charge_container_bulk_init_with_elts::<Vec<Symbol>, Symbol>(
-            keys.len() as u64,
-            self.as_budget(),
-        )?;
+        Vec::<Symbol>::charge_bulk_init(keys.len() as u64, self.as_budget())?;
         // If only fallible iterators worked better in Rust, we would not need this Vec<...>.
         let mut key_syms: Vec<Symbol> = Vec::with_capacity(keys.len());
         for k in keys.iter() {
@@ -1670,11 +1674,7 @@ impl VmCallerEnv for Host {
             pos: keys_pos,
             len,
         } = self.decode_vmslice(keys_pos, len)?;
-        // covers `Vec::with_capacity` and `len` pushes
-        metered_clone::charge_container_bulk_init_with_elts::<Vec<Symbol>, Symbol>(
-            len as u64,
-            self.as_budget(),
-        )?;
+        Vec::<Symbol>::charge_bulk_init(len as u64, self.as_budget())?;
         let mut key_syms: Vec<Symbol> = Vec::with_capacity(len as usize);
         self.metered_vm_scan_slices_in_linear_memory(
             vmcaller,
@@ -1692,10 +1692,7 @@ impl VmCallerEnv for Host {
 
         // Step 2: extract all val Vals.
         let vals_pos: u32 = vals_pos.into();
-        metered_clone::charge_container_bulk_init_with_elts::<Vec<Symbol>, Symbol>(
-            len as u64,
-            self.as_budget(),
-        )?;
+        Vec::<Val>::charge_bulk_init(len as u64, self.as_budget())?;
         let mut vals: Vec<Val> = vec![Val::VOID.into(); len as usize];
         self.metered_vm_read_vals_from_linear_memory::<8, Val>(
             vmcaller,
@@ -1986,10 +1983,7 @@ impl VmCallerEnv for Host {
         len: U32Val,
     ) -> Result<VecObject, HostError> {
         let VmSlice { vm, pos, len } = self.decode_vmslice(vals_pos, len)?;
-        metered_clone::charge_container_bulk_init_with_elts::<Vec<Symbol>, Symbol>(
-            len as u64,
-            self.as_budget(),
-        )?;
+        Vec::<Val>::charge_bulk_init(len as u64, self.as_budget())?;
         let mut vals: Vec<Val> = vec![Val::VOID.to_val(); len as usize];
         self.metered_vm_read_vals_from_linear_memory::<8, Val>(
             vmcaller,
@@ -2767,9 +2761,7 @@ impl VmCallerEnv for Host {
         let end: u32 = end.into();
         let vnew = self.visit_obj(b, move |hv: &ScBytes| {
             let range = self.valid_range_from_start_end_bound(start, end, hv.len())?;
-            metered_clone::charge_heap_alloc::<u8>(range.len() as u64, self.as_budget())?;
-            metered_clone::charge_shallow_copy::<u8>(range.len() as u64, self.as_budget())?;
-            Ok(hv.as_slice()[range].to_vec())
+            self.metered_slice_to_vec(&hv.as_slice()[range])
         })?;
         self.add_host_object(self.scbytes_from_vec(vnew)?)
     }
@@ -2979,7 +2971,7 @@ impl VmCallerEnv for Host {
         let addr = self.visit_obj(address, |addr: &ScAddress| Ok(addr.clone()))?;
         match addr {
             ScAddress::Account(AccountId(PublicKey::PublicKeyTypeEd25519(pk))) => Ok(self
-                .add_host_object(ScBytes(pk.0.to_vec().try_into()?))?
+                .add_host_object(ScBytes(self.metered_slice_to_vec(&pk.0)?.try_into()?))?
                 .into()),
             ScAddress::Contract(_) => Ok(().into()),
         }
@@ -2994,7 +2986,7 @@ impl VmCallerEnv for Host {
         match addr {
             ScAddress::Account(_) => Ok(().into()),
             ScAddress::Contract(Hash(h)) => Ok(self
-                .add_host_object(ScBytes(h.to_vec().try_into()?))?
+                .add_host_object(ScBytes(self.metered_slice_to_vec(&h)?.try_into()?))?
                 .into()),
         }
     }

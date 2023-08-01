@@ -16,12 +16,12 @@ use soroban_env_common::{
 };
 
 use crate::{
-    budget::Budget,
+    budget::{AsBudget, Budget},
     events::Events,
     fees::LedgerEntryRentChange,
     host::{
         ledger_info_helper::{get_entry_expiration, get_key_durability, set_entry_expiration},
-        metered_clone::{charge_container_bulk_init_with_elts, MeteredClone},
+        metered_clone::{MeteredClone, MeteredContainer},
         metered_xdr::{metered_from_xdr_with_budget, metered_write_xdr},
     },
     storage::{AccessType, Footprint, FootprintMap, SnapshotSource, Storage, StorageMap},
@@ -450,12 +450,9 @@ impl Host {
         &self,
         encoded_contract_auth_entries: I,
     ) -> Result<Vec<SorobanAuthorizationEntry>, HostError> {
-        charge_container_bulk_init_with_elts::<
-            Vec<SorobanAuthorizationEntry>,
-            SorobanAuthorizationEntry,
-        >(
+        Vec::<SorobanAuthorizationEntry>::charge_bulk_init(
             encoded_contract_auth_entries.len() as u64,
-            self.budget_ref(),
+            self.as_budget(),
         )?;
         encoded_contract_auth_entries
             .map(|buf| self.metered_from_xdr::<SorobanAuthorizationEntry>(buf.as_ref()))

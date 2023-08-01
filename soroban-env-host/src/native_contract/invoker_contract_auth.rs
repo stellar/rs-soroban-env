@@ -1,6 +1,7 @@
 use super::account_contract::{ContractAuthorizationContext, CreateContractHostFnContext};
 use super::common_types::ContractExecutable;
-use crate::host::metered_clone::MeteredClone;
+use crate::budget::AsBudget;
+use crate::host::metered_clone::{MeteredClone, MeteredContainer};
 use crate::host_object::HostVec;
 use crate::{
     auth::{AuthorizedFunction, AuthorizedInvocation, ContractFunction},
@@ -32,6 +33,7 @@ pub enum InvokerContractAuthEntry {
     CreateContractHostFn(CreateContractHostFnContext),
 }
 
+// metering: covered
 impl InvokerContractAuthEntry {
     fn to_authorized_invocation(
         &self,
@@ -48,18 +50,23 @@ impl InvokerContractAuthEntry {
                         |v: &HostVec| v.to_vec(host.budget_ref()),
                     )?,
                 });
-                let sub_invocations: Vec<InvokerContractAuthEntry> = host.visit_obj(
+                let mut sub_invocations: Vec<AuthorizedInvocation> = vec![];
+                host.visit_obj(
                     contract_invocation.sub_invocations.as_object(),
                     |v: &HostVec| {
-                        v.iter()
-                            .map(|val| InvokerContractAuthEntry::try_from_val(host, val))
-                            .collect::<Result<Vec<InvokerContractAuthEntry>, HostError>>()
+                        Vec::<AuthorizedInvocation>::charge_bulk_init(
+                            v.len() as u64,
+                            host.as_budget(),
+                        )?;
+                        sub_invocations.reserve(v.len());
+                        for val in v.iter() {
+                            let entry = InvokerContractAuthEntry::try_from_val(host, val)?;
+                            sub_invocations
+                                .push(entry.to_authorized_invocation(host, invoker_contract_addr)?);
+                        }
+                        Ok(())
                     },
                 )?;
-                let sub_invocations = sub_invocations
-                    .into_iter()
-                    .map(|i| i.to_authorized_invocation(host, invoker_contract_addr))
-                    .collect::<Result<Vec<AuthorizedInvocation>, HostError>>()?;
                 Ok(AuthorizedInvocation::new(function, sub_invocations))
             }
             InvokerContractAuthEntry::CreateContractHostFn(create_contract_fn) => {
@@ -94,6 +101,7 @@ impl InvokerContractAuthEntry {
     }
 }
 
+// metering: covered
 pub(crate) fn invoker_contract_auth_to_authorized_invocation(
     host: &Host,
     invoker_contract_addr: &ScAddress,

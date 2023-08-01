@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use super::metered_clone::{self, charge_container_bulk_init_with_elts, MeteredClone};
+use super::metered_clone::{self, MeteredClone, MeteredCollect, MeteredContainer};
 use crate::budget::AsBudget;
 use crate::err;
 use crate::host_object::{HostMap, HostObject, HostVec};
@@ -242,14 +242,10 @@ impl Host {
     }
 
     pub(crate) fn rawvals_to_sc_val_vec(&self, raw_vals: &[Val]) -> Result<VecM<ScVal>, HostError> {
-        charge_container_bulk_init_with_elts::<Vec<Val>, Val>(
-            raw_vals.len() as u64,
-            self.as_budget(),
-        )?;
         raw_vals
             .iter()
             .map(|v| self.from_host_val(*v))
-            .collect::<Result<Vec<ScVal>, HostError>>()?
+            .metered_collect::<Result<Vec<ScVal>, HostError>>(self.as_budget())??
             .try_into()
             .map_err(|_| {
                 err!(
@@ -281,21 +277,19 @@ impl Host {
     }
 
     pub(crate) fn scvals_to_rawvals(&self, sc_vals: &[ScVal]) -> Result<Vec<Val>, HostError> {
-        charge_container_bulk_init_with_elts::<Vec<Val>, Val>(
-            sc_vals.len() as u64,
-            self.as_budget(),
-        )?;
         sc_vals
             .iter()
             .map(|scv| self.to_host_val(scv))
-            .collect::<Result<Vec<Val>, HostError>>()
+            .metered_collect::<Result<Vec<Val>, HostError>>(self.as_budget())?
     }
 
     pub(crate) fn bytesobj_from_internal_contract_id(
         &self,
     ) -> Result<Option<BytesObject>, HostError> {
         if let Some(id) = self.get_current_contract_id_opt_internal()? {
-            let obj = self.add_host_object::<ScBytes>(id.as_slice().to_vec().try_into()?)?;
+            let obj = self.add_host_object::<ScBytes>(
+                self.metered_slice_to_vec(id.as_slice())?.try_into()?,
+            )?;
             Ok(Some(obj))
         } else {
             Ok(None)
@@ -306,8 +300,14 @@ impl Host {
         Ok(ScBytes(v.try_into()?))
     }
 
-    pub(crate) fn scbytes_from_slice(&self, slice: &[u8]) -> Result<ScBytes, HostError> {
-        self.scbytes_from_vec(slice.to_vec())
+    pub(crate) fn metered_slice_to_vec(&self, s: &[u8]) -> Result<Vec<u8>, HostError> {
+        Vec::<u8>::charge_bulk_init(s.len() as u64, self.as_budget())?;
+        Ok(s.to_vec())
+    }
+
+    // metering: covered
+    pub(crate) fn scbytes_from_slice(&self, s: &[u8]) -> Result<ScBytes, HostError> {
+        self.scbytes_from_vec(self.metered_slice_to_vec(s)?)
     }
 
     pub(crate) fn scbytes_from_hash(&self, hash: &Hash) -> Result<ScBytes, HostError> {

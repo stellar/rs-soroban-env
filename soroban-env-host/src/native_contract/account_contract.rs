@@ -71,27 +71,23 @@ impl AuthorizationContext {
                     xdr::ContractExecutable::Wasm(wasm_hash) => {
                         BytesN::<32>::from_slice(host, wasm_hash.as_slice())?
                     }
-                    xdr::ContractExecutable::Token => {
-                        return Err(host.err(
-                            ScErrorType::Auth,
-                            ScErrorCode::InternalError,
-                            "unexpected auth context for create contract host fn",
-                            &[],
-                        ))
-                    }
+                    xdr::ContractExecutable::Token => return Err(host.err(
+                        ScErrorType::Auth,
+                        ScErrorCode::InvalidInput,
+                        "token executable is not allowed when authorizing create_contract host fn",
+                        &[],
+                    )),
                 };
                 let salt = match &args.contract_id_preimage {
                     ContractIdPreimage::Address(id_from_addr) => {
                         BytesN::<32>::from_slice(host, id_from_addr.salt.as_slice())?
                     }
-                    ContractIdPreimage::Asset(_) => {
-                        return Err(host.err(
-                            ScErrorType::Auth,
-                            ScErrorCode::InternalError,
-                            "unexpected auth context for create contract host fn",
-                            &[],
-                        ))
-                    }
+                    ContractIdPreimage::Asset(_) => return Err(host.err(
+                        ScErrorType::Auth,
+                        ScErrorCode::InvalidInput,
+                        "asset preimage is not allowed when authorizing create_contract host fn",
+                        &[],
+                    )),
                 };
                 Ok(AuthorizationContext::CreateContractHostFn(
                     CreateContractHostFnContext {
@@ -104,6 +100,7 @@ impl AuthorizationContext {
     }
 }
 
+// metering: covered
 fn invocation_tree_to_auth_contexts(
     host: &Host,
     invocation: &AuthorizedInvocation,
@@ -119,6 +116,7 @@ fn invocation_tree_to_auth_contexts(
     Ok(())
 }
 
+// metering: covered
 pub(crate) fn check_account_contract_auth(
     host: &Host,
     account_contract: &Hash,
@@ -142,6 +140,7 @@ pub(crate) fn check_account_contract_auth(
         .try_into()?)
 }
 
+// metering: covered
 pub(crate) fn check_account_authentication(
     host: &Host,
     account_id: AccountId,
