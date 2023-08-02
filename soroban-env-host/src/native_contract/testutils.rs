@@ -1,5 +1,5 @@
 use crate::{Host, LedgerInfo};
-use ed25519_dalek::{Keypair, Signer};
+use ed25519_dalek::{Signer, SigningKey};
 use rand::{thread_rng, Rng};
 use soroban_env_common::xdr::{
     AccountEntry, AccountEntryExt, AccountEntryExtensionV1, AccountEntryExtensionV1Ext,
@@ -28,13 +28,13 @@ macro_rules! host_vec {
     };
 }
 
-pub(crate) fn generate_keypair() -> Keypair {
-    Keypair::generate(&mut thread_rng())
+pub(crate) fn generate_signing_key() -> SigningKey {
+    SigningKey::generate(&mut thread_rng())
 }
 
-pub(crate) fn keypair_to_account_id(key: &Keypair) -> AccountId {
+pub(crate) fn signing_key_to_account_id(key: &SigningKey) -> AccountId {
     AccountId(PublicKey::PublicKeyTypeEd25519(Uint256(
-        key.public.to_bytes(),
+        key.verifying_key().to_bytes(),
     )))
 }
 
@@ -73,22 +73,22 @@ pub(crate) struct AccountContractSigner<'a> {
 
 pub(crate) struct AccountSigner<'a> {
     pub(crate) account_id: AccountId,
-    pub(crate) signers: Vec<&'a Keypair>,
+    pub(crate) signers: Vec<&'a SigningKey>,
 }
 
 impl<'a> TestSigner<'a> {
-    pub(crate) fn account(kp: &'a Keypair) -> Self {
+    pub(crate) fn account(kp: &'a SigningKey) -> Self {
         TestSigner::Account(AccountSigner {
-            account_id: keypair_to_account_id(kp),
+            account_id: signing_key_to_account_id(kp),
             signers: vec![kp],
         })
     }
 
     pub(crate) fn account_with_multisig(
         account_id: &AccountId,
-        mut signers: Vec<&'a Keypair>,
+        mut signers: Vec<&'a SigningKey>,
     ) -> Self {
-        signers.sort_by_key(|k| k.public.as_bytes());
+        signers.sort_by_key(|k| k.verifying_key().as_bytes().clone());
         TestSigner::Account(AccountSigner {
             account_id: account_id.clone(),
             signers,
@@ -202,7 +202,7 @@ pub(crate) fn authorize_single_invocation(
     let nonce = match signer {
         TestSigner::AccountInvoker(_) => None,
         TestSigner::Account(_) | TestSigner::AccountContract(_) => {
-            Some((thread_rng().gen_range(0, i64::MAX), 10000))
+            Some((thread_rng().gen_range(0..=i64::MAX), 10000))
         }
         TestSigner::ContractInvoker(_) => {
             return;
@@ -220,14 +220,14 @@ pub(crate) fn authorize_single_invocation(
 
 pub(crate) fn sign_payload_for_account(
     host: &Host,
-    signer: &Keypair,
+    signer: &SigningKey,
     payload: &[u8],
 ) -> AccountEd25519Signature {
     AccountEd25519Signature {
         public_key: BytesN::<32>::try_from_val(
             host,
             &host
-                .bytes_new_from_slice(&signer.public.to_bytes())
+                .bytes_new_from_slice(&signer.verifying_key().to_bytes())
                 .unwrap(),
         )
         .unwrap(),
@@ -244,7 +244,7 @@ pub(crate) fn sign_payload_for_account(
 #[allow(dead_code)]
 pub(crate) fn sign_payload_for_ed25519(
     host: &Host,
-    signer: &Keypair,
+    signer: &SigningKey,
     payload: &[u8],
 ) -> BytesN<64> {
     BytesN::<64>::try_from_val(
@@ -260,7 +260,7 @@ pub(crate) fn sign_payload_for_ed25519(
 pub(crate) fn create_account(
     host: &Host,
     account_id: &AccountId,
-    signers: Vec<(&Keypair, u32)>,
+    signers: Vec<(&SigningKey, u32)>,
     balance: i64,
     num_sub_entries: u32,
     thresholds: [u8; 4],
@@ -278,7 +278,7 @@ pub(crate) fn create_account(
     let mut acc_signers = vec![];
     for (signer, weight) in signers {
         acc_signers.push(soroban_env_common::xdr::Signer {
-            key: SignerKey::Ed25519(Uint256(signer.public.to_bytes())),
+            key: SignerKey::Ed25519(Uint256(signer.verifying_key().to_bytes())),
             weight,
         });
     }

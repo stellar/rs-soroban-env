@@ -1,6 +1,6 @@
 use std::hint::black_box;
 
-use ed25519_dalek::PublicKey;
+use ed25519_dalek::VerifyingKey;
 
 use crate::{cost_runner::CostRunner, xdr::ContractCostType};
 
@@ -11,7 +11,7 @@ impl CostRunner for ComputeEd25519PubKeyRun {
 
     type SampleType = Vec<u8>;
 
-    type RecycledType = (Option<PublicKey>, Vec<u8>);
+    type RecycledType = (Option<VerifyingKey>, Vec<u8>);
 
     fn run_iter(host: &crate::Host, _iter: u64, sample: Self::SampleType) -> Self::RecycledType {
         let pk = black_box(
