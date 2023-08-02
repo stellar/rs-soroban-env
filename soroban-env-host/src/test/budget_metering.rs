@@ -1,6 +1,6 @@
 use crate::{
     budget::{AsBudget, Budget},
-    host::metered_clone::{MeteredClone, MeteredCollect},
+    host::metered_clone::{MeteredClone, MeteredIterator},
     host::metered_xdr::metered_write_xdr,
     xdr::{ContractCostType, ScMap, ScMapEntry, ScVal},
     Env, Host, HostError, Symbol, Val,
