@@ -15,6 +15,10 @@ use crate::{
 
 use wasmi::{errors, FuelCosts, ResourceLimiter};
 
+// These should match the default network config settings in core
+pub const DEFAULT_CPU_INSN_LIMIT: u64 = 100_000_000;
+pub const DEFAULT_MEM_BYTES_LIMIT: u64 = 100 * 1024 * 1024; // 100MB
+
 /// We provide a "cost model" object that evaluates a linear expression:
 ///
 ///    f(x) = a + b * Option<x>
@@ -1024,19 +1028,9 @@ impl Default for BudgetImpl {
             b.init_tracker();
         }
 
-        // For the time being we don't have "on chain" cost models
-        // so we just set some up here that we calibrated manually
-        // in the adjacent benchmarks.
-        //
-        // We don't run for a time unit thought, we run for an estimated
-        // (calibrated) number of CPU instructions.
-        //
-        // Assuming 2ghz chips at 2 instructions per cycle, we can guess about
-        // 4bn instructions / sec. So about 4000 instructions per usec, or 400k
-        // instructions in a 100usec time budget, or about 5479 wasm instructions
-        // using the calibration above (73 CPU insns per wasm insn). Very roughly!
-        b.cpu_insns.reset(40_000_000); // 100x the estimation above which corresponds to 10ms
-        b.mem_bytes.reset(0x320_0000); // 50MB of memory
+        // define the limits
+        b.cpu_insns.reset(DEFAULT_CPU_INSN_LIMIT);
+        b.mem_bytes.reset(DEFAULT_MEM_BYTES_LIMIT);
         b
     }
 }
