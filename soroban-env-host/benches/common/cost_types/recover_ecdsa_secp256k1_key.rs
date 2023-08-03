@@ -16,8 +16,6 @@ pub(crate) struct RecoverEcdsaSecp256k1KeyMeasure;
 impl HostCostMeasurement for RecoverEcdsaSecp256k1KeyMeasure {
     type Runner = RecoverEcdsaSecp256k1KeyRun;
 
-    const STEP_SIZE: u64 = 1000;
-
     fn new_random_case(
         _host: &Host,
         _rng: &mut StdRng,

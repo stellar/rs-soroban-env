@@ -12,8 +12,6 @@ pub(crate) struct VecEntryMeasure;
 impl HostCostMeasurement for VecEntryMeasure {
     type Runner = VecEntryRun;
 
-    const STEP_SIZE: u64 = 100;
-
     // Random case is worst case.
     fn new_random_case(_host: &Host, rng: &mut StdRng, input: u64) -> VecEntrySample {
         let input = 1 + input * Self::STEP_SIZE;

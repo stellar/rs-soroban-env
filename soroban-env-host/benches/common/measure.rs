@@ -1,6 +1,10 @@
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use soroban_bench_utils::{tracking_allocator::AllocationGroupToken, HostTracker};
-use soroban_env_host::{budget::AsBudget, cost_runner::CostRunner, Host};
+use soroban_env_host::{
+    budget::{AsBudget, COST_MODEL_LIN_TERM_SCALE_BITS},
+    cost_runner::CostRunner,
+    Host,
+};
 use std::ops::Range;
 use tabwriter::{Alignment, TabWriter};
 
@@ -147,8 +151,14 @@ impl Measurements {
         let (x, y): (Vec<_>, Vec<_>) = self
             .averaged_net_measurements
             .iter()
-            .skip(1) // for some reason first data point is often flakey, skip it
-            .map(|m| (m.inputs.unwrap_or(0), m.cpu_insns))
+            .map(|m| {
+                (
+                    // we've made sure the raw inputs have been conflated before via HCM::STEP_SIZE,
+                    // here we can safely scale it back
+                    m.inputs.unwrap_or(0) >> COST_MODEL_LIN_TERM_SCALE_BITS,
+                    m.cpu_insns,
+                )
+            })
             .unzip();
 
         fit_model(x, y)
@@ -164,8 +174,14 @@ impl Measurements {
         let (x, y): (Vec<_>, Vec<_>) = self
             .averaged_net_measurements
             .iter()
-            .skip(1) // for some reason first data point is often flakey, skip it
-            .map(|m| (m.inputs.unwrap_or(0), m.mem_bytes))
+            .map(|m| {
+                (
+                    // we've made sure the raw inputs have been conflated before via HCM::STEP_SIZE,
+                    // here we can safely scale it back
+                    m.inputs.unwrap_or(0) >> COST_MODEL_LIN_TERM_SCALE_BITS,
+                    m.mem_bytes,
+                )
+            })
             .unzip();
 
         fit_model(x, y)
@@ -206,10 +222,15 @@ pub trait HostCostMeasurement: Sized {
     /// The type of host runner we're using. Uniquely identifies a `CostType`.
     type Runner: CostRunner;
 
-    /// Step size of the measurement to scale the input by. For a short-running measurement,
-    /// setting this constant accumulates multiple runs into a single sample point, thus helps
-    /// distingushing the trend from measurement noise.
-    const STEP_SIZE: u64 = 1000;
+    /// The `input: u64` will be multiplied by the `STEP_SIZE` for two reasons:
+    /// 1. for fast-running linear components, setting the step size larger can
+    /// ensure each sample runs for longer (compared to measurement fluctuation),
+    /// thus helps extrapolating the linear coefficient.
+    /// 2. when fitting the linear model, the linear coefficient will be scaled
+    /// up by `factor = 2^COST_MODEL_LIN_TERM_SCALE_BITS`, by scaling down the
+    /// actual input size. Thus `STEP_SIZE` must be `>= factor` to account for
+    /// the input downscaling.
+    const STEP_SIZE: u64 = 1024;
 
     /// Initialize a new instance of a HostMeasurement at a given input _hint_, for
     /// the run; the HostMeasurement can choose a precise input for a given hint
