@@ -1,6 +1,9 @@
 use std::hint::black_box;
 
-use crate::{cost_runner::CostRunner, xdr::ContractCostType, xdr::ScVal};
+use crate::{
+    cost_runner::CostRunner, host::metered_xdr::metered_write_xdr, xdr::ContractCostType,
+    xdr::ScVal,
+};
 
 pub struct ValSerRun;
 
@@ -18,7 +21,7 @@ impl CostRunner for ValSerRun {
     ) -> Self::RecycledType {
         // Note the sample.1 is an empty vector, so metered_write_xdr includes allocation
         // cost. This is how it's typically used so we are setting it up this way.
-        black_box(host.metered_write_xdr(&sample.0, &mut sample.1).unwrap());
+        black_box(metered_write_xdr(host.budget_ref(), &sample.0, &mut sample.1).unwrap());
         sample
     }
 

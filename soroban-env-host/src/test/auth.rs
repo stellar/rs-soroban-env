@@ -1315,13 +1315,13 @@ fn test_invoker_subcontract_auth() {
     let args = host_vec![&test.host, tree];
     let fn_name = Symbol::try_from_val(&test.host, &"invoker_auth_fn").unwrap();
     assert_eq!(
-        test.run_recording(&test.contracts[5], fn_name.clone(), args.clone(),),
+        test.run_recording(&test.contracts[5], fn_name, args.clone(),),
         vec![]
     );
 
     test.test_enforcing(
         test.contracts[5].clone(),
-        fn_name.clone(),
+        fn_name,
         args.clone(),
         vec![],
         true,
@@ -1344,7 +1344,7 @@ fn test_invoker_subcontract_with_gaps() {
 
     test.test_enforcing(
         test.contracts[3].clone(),
-        fn_name.clone(),
+        fn_name,
         host_vec![&test.host, test.convert_setup_tree(&top_gap_setup)],
         vec![],
         true,
@@ -1364,7 +1364,7 @@ fn test_invoker_subcontract_with_gaps() {
 
     test.test_enforcing(
         test.contracts[3].clone(),
-        fn_name.clone(),
+        fn_name,
         host_vec![&test.host, test.convert_setup_tree(&mid_gap_setup)],
         vec![],
         false,
@@ -1403,13 +1403,13 @@ fn test_invoker_subcontract_auth_without_subcontract_calls() {
     let args = host_vec![&test.host, tree];
     let fn_name = Symbol::try_from_val(&test.host, &"invoker_auth_fn_no_call").unwrap();
     assert_eq!(
-        test.run_recording(&test.contracts[5], fn_name.clone(), args.clone(),),
+        test.run_recording(&test.contracts[5], fn_name, args.clone(),),
         vec![]
     );
 
     test.test_enforcing(
         test.contracts[5].clone(),
-        fn_name.clone(),
+        fn_name,
         args.clone(),
         vec![],
         true,

@@ -1,5 +1,5 @@
 use super::FuelRefillable;
-use crate::{xdr::ContractCostType, Host, HostError, VmCaller, VmCallerEnv};
+use crate::{xdr::ContractCostType, EnvBase, Host, HostError, VmCaller, VmCallerEnv};
 use crate::{
     AddressObject, Bool, BytesObject, DurationObject, Error, I128Object, I256Object, I256Val,
     I32Val, I64Object, MapObject, StorageType, StringObject, Symbol, SymbolObject, TimepointObject,
@@ -163,6 +163,12 @@ macro_rules! generate_dispatch_functions {
                     // conversions to and from both Val and i64 / u64 for
                     // wasmi::Value.
                     let res: Result<_, HostError> = host.$fn_id(&mut vmcaller, $(<$type>::try_marshal_from_relative_value(Value::I64($arg), &host)?),*);
+
+                    // On the off chance we got an error with no context, we can
+                    // at least attach some here "at each host function call",
+                    // fairly systematically. This will cause the context to
+                    // propagate back through wasmi to its caller.
+                    let res = host.augment_err_result(res);
 
                     let res = match res {
                         Ok(ok) => {

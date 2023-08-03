@@ -27,11 +27,11 @@ pub trait TokenTrait {
     /// init_asset can create a contract for a wrapped classic asset
     /// (Native, AlphaNum4, or AlphaNum12). It will fail if the contractID
     /// of this contract does not match the expected contractID for this asset
-    /// returned by Host::get_contract_id_from_asset. This function should only be
+    /// returned by Host::get_asset_contract_id_hash. This function should only be
     /// called internally by the host.
     ///
     /// No admin will be set for the Native token, so any function that checks the admin
-    /// (clawback, set_auth, mint, set_admin) will always fail
+    /// (clawback, set_auth, mint, set_admin, admin) will always fail
     fn init_asset(e: &Host, asset_bytes: Bytes) -> Result<(), HostError>;
 
     fn allowance(e: &Host, from: Address, spender: Address) -> Result<i128, HostError>;

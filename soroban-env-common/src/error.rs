@@ -88,6 +88,12 @@ impl Debug for Error {
     }
 }
 
+impl<'a> From<&'a Error> for Error {
+    fn from(value: &'a Error) -> Self {
+        *value
+    }
+}
+
 impl TryFrom<Error> for ScError {
     type Error = stellar_xdr::Error;
     fn try_from(er: Error) -> Result<Self, Self::Error> {

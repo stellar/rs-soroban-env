@@ -44,6 +44,7 @@
 
 pub const ADD_I32: &[u8] = include_bytes!("../wasm-workspace/opt/example_add_i32.wasm").as_slice();
 pub const ADD_F32: &[u8] = include_bytes!("../wasm-workspace/opt/example_add_f32.wasm").as_slice();
+pub const ALLOC: &[u8] = include_bytes!("../wasm-workspace/opt/example_alloc.wasm").as_slice();
 pub const CREATE_CONTRACT: &[u8] =
     include_bytes!("../wasm-workspace/opt/example_create_contract.wasm").as_slice();
 pub const CONTRACT_STORAGE: &[u8] =
@@ -66,3 +67,4 @@ pub const UPDATEABLE_CONTRACT: &[u8] =
     include_bytes!("../wasm-workspace/opt/example_updateable_contract.wasm").as_slice();
 pub const DELEGATED_ACCOUNT_TEST_CONTRACT: &[u8] =
     include_bytes!("../wasm-workspace/opt/test_delegated_account.wasm").as_slice();
+pub const ERR: &[u8] = include_bytes!("../wasm-workspace/opt/example_err.wasm").as_slice();

@@ -1,8 +1,8 @@
 use std::rc::Rc;
 
 use soroban_env_common::{
-    xdr::{ContractEventType, Hash, ScBytes, ScString, ScVal, StringM},
-    Error, Symbol, SymbolSmall, VecObject,
+    xdr::{Hash, ScBytes, ScString, ScVal, StringM},
+    Error, Symbol, SymbolSmall,
 };
 
 use crate::{budget::AsBudget, host::Frame, Host, HostError, Val};
@@ -36,13 +36,6 @@ impl Host {
             *self.try_borrow_diagnostic_level()?,
             DiagnosticLevel::Debug
         ))
-    }
-
-    /// Records a `System` contract event. `topics` is expected to be a `SCVec`
-    /// length <= 4 that cannot contain `Vec`, `Map`, or `Bytes` with length > 32
-    pub fn system_event(&self, topics: VecObject, data: Val) -> Result<(), HostError> {
-        self.record_contract_event(ContractEventType::System, topics, data)?;
-        Ok(())
     }
 
     pub(crate) fn record_diagnostic_event(

@@ -11,8 +11,9 @@ use soroban_env_common::xdr::{
 };
 use soroban_env_common::{AddressObject, Compare, Symbol, TryFromVal, TryIntoVal, Val, VecObject};
 
+use crate::budget::{AsBudget, Budget};
 use crate::host::error::TryBorrowOrErr;
-use crate::host::metered_clone::{charge_container_bulk_init_with_elts, MeteredClone};
+use crate::host::metered_clone::{MeteredClone, MeteredCollect, MeteredContainer};
 use crate::host::Frame;
 use crate::host_object::HostVec;
 use crate::native_contract::account_contract::{
@@ -202,7 +203,7 @@ struct InvocationTracker {
 // In the recording mode this will record the invocations that are authorized
 // on behalf of the address.
 #[derive(Clone)]
-struct AccountAuthorizationTracker {
+pub(crate) struct AccountAuthorizationTracker {
     // Tracked address.
     address: AddressObject,
     // Helper for matching the tree that address authorized to the invocation
@@ -225,7 +226,7 @@ struct AccountAuthorizationTracker {
     nonce: Option<(i64, u32)>,
 }
 
-struct AccountAuthorizationTrackerSnapshot {
+pub(crate) struct AccountAuthorizationTrackerSnapshot {
     invocation_tracker_root_snapshot: AuthorizedInvocationSnapshot,
     authenticated: bool,
     need_nonce: bool,
@@ -233,19 +234,19 @@ struct AccountAuthorizationTrackerSnapshot {
 
 // Stores all the authorizations peformed by contracts at runtime.
 #[derive(Clone)]
-struct InvokerContractAuthorizationTracker {
+pub(crate) struct InvokerContractAuthorizationTracker {
     contract_address: AddressObject,
     invocation_tracker: InvocationTracker,
 }
 
 #[derive(Clone)]
-enum AuthStackFrame {
+pub(crate) enum AuthStackFrame {
     Contract(ContractInvocation),
     CreateContractHostFn(CreateContractArgs),
 }
 
 #[derive(Clone)]
-struct ContractInvocation {
+pub(crate) struct ContractInvocation {
     pub(crate) contract_address: AddressObject,
     pub(crate) function_name: Symbol,
 }
@@ -277,7 +278,7 @@ pub(crate) struct AuthorizedInvocation {
 }
 
 // Snapshot of `AuthorizedInvocation` that contains only mutable fields.
-struct AuthorizedInvocationSnapshot {
+pub(crate) struct AuthorizedInvocationSnapshot {
     is_exhausted: bool,
     sub_invocations: Vec<AuthorizedInvocationSnapshot>,
 }
@@ -285,6 +286,7 @@ struct AuthorizedInvocationSnapshot {
 impl Compare<ContractFunction> for Host {
     type Error = HostError;
 
+    // metering: covered by host
     fn compare(
         &self,
         a: &ContractFunction,
@@ -305,6 +307,7 @@ impl Compare<ContractFunction> for Host {
 impl Compare<AuthorizedFunction> for Host {
     type Error = HostError;
 
+    // metering: covered by components
     fn compare(
         &self,
         a: &AuthorizedFunction,
@@ -329,6 +332,7 @@ impl Compare<AuthorizedFunction> for Host {
 }
 
 impl AuthStackFrame {
+    // metering: covered
     fn to_authorized_function(
         &self,
         host: &Host,
@@ -352,6 +356,7 @@ impl AuthStackFrame {
 }
 
 impl AuthorizedFunction {
+    // metering: covered by the host
     fn from_xdr(host: &Host, xdr_fn: SorobanAuthorizedFunction) -> Result<Self, HostError> {
         Ok(match xdr_fn {
             SorobanAuthorizedFunction::ContractFn(xdr_contract_fn) => {
@@ -367,6 +372,7 @@ impl AuthorizedFunction {
         })
     }
 
+    // metering: covered by the host
     fn to_xdr(&self, host: &Host) -> Result<SorobanAuthorizedFunction, HostError> {
         match self {
             AuthorizedFunction::ContractFn(contract_fn) => {
@@ -395,6 +401,7 @@ impl AuthorizedFunction {
         }
     }
 
+    // metering: free
     fn to_xdr_non_metered(&self, host: &Host) -> Result<xdr::SorobanAuthorizedFunction, HostError> {
         match self {
             AuthorizedFunction::ContractFn(contract_fn) => {
@@ -404,6 +411,7 @@ impl AuthorizedFunction {
                             Ok(addr.clone())
                         })?,
                     function_name: contract_fn.function_name.try_into_val(host)?,
+                    // why is this intentionally non-metered? the visit_obj above is metered.
                     args: host.rawvals_to_sc_val_vec_non_metered(contract_fn.args.as_slice())?,
                 }))
             }
@@ -415,6 +423,7 @@ impl AuthorizedFunction {
 }
 
 impl AuthorizedInvocation {
+    // metering: covered
     fn from_xdr(
         host: &Host,
         xdr_invocation: xdr::SorobanAuthorizedInvocation,
@@ -423,7 +432,7 @@ impl AuthorizedInvocation {
         let sub_invocations = sub_invocations_xdr
             .into_iter()
             .map(|a| AuthorizedInvocation::from_xdr(host, a))
-            .collect::<Result<Vec<_>, _>>()?;
+            .metered_collect::<Result<Vec<_>, _>>(host.as_budget())??;
         Ok(Self {
             function: AuthorizedFunction::from_xdr(host, xdr_invocation.function)?,
             sub_invocations,
@@ -431,6 +440,7 @@ impl AuthorizedInvocation {
         })
     }
 
+    // metering: free
     pub(crate) fn new(
         function: AuthorizedFunction,
         sub_invocations: Vec<AuthorizedInvocation>,
@@ -442,6 +452,7 @@ impl AuthorizedInvocation {
         }
     }
 
+    // metering: free
     fn new_recording(function: AuthorizedFunction) -> Self {
         Self {
             function,
@@ -450,18 +461,17 @@ impl AuthorizedInvocation {
         }
     }
 
+    // metering: covered
     fn to_xdr(&self, host: &Host) -> Result<xdr::SorobanAuthorizedInvocation, HostError> {
-        charge_container_bulk_init_with_elts::<
-            Vec<xdr::SorobanAuthorizedInvocation>,
-            xdr::SorobanAuthorizedInvocation,
-        >(self.sub_invocations.len() as u64, host.budget_ref())?;
         Ok(xdr::SorobanAuthorizedInvocation {
             function: self.function.to_xdr(host)?,
             sub_invocations: self
                 .sub_invocations
                 .iter()
                 .map(|i| i.to_xdr(host))
-                .collect::<Result<Vec<xdr::SorobanAuthorizedInvocation>, HostError>>()?
+                .metered_collect::<Result<Vec<xdr::SorobanAuthorizedInvocation>, HostError>>(
+                    host.as_budget(),
+                )??
                 .try_into()
                 .map_err(|_| HostError::from((ScErrorType::Auth, ScErrorCode::InternalError)))?,
         })
@@ -469,6 +479,7 @@ impl AuthorizedInvocation {
 
     // Non-metered conversion should only be used for the recording preflight
     // runs or testing.
+    // metering: free
     fn to_xdr_non_metered(
         &self,
         host: &Host,
@@ -489,6 +500,7 @@ impl AuthorizedInvocation {
 
     // Walks a path in the tree defined by `invocation_id_in_call_stack` and
     // returns the last visited authorized node.
+    // metering: free
     fn last_authorized_invocation_mut(
         &mut self,
         invocation_id_in_call_stack: &Vec<Option<usize>>,
@@ -498,11 +510,15 @@ impl AuthorizedInvocation {
         // hold the invariant that `invocation_id_in_call_stack[call_stack_id - 1]`
         // corresponds to this invocation tree, so that the next non-`None` child
         // corresponds to the child of the current tree.
-        for i in call_stack_id..invocation_id_in_call_stack.len() {
-            if let Some(id) = invocation_id_in_call_stack[i] {
+        for (i, id) in invocation_id_in_call_stack
+            .iter()
+            .enumerate()
+            .skip(call_stack_id)
+        {
+            if let Some(id) = id {
                 // We trust the caller to have the correct sub-invocation
                 // indices.
-                return self.sub_invocations[id]
+                return self.sub_invocations[*id]
                     .last_authorized_invocation_mut(invocation_id_in_call_stack, i + 1);
             }
             // Skip `None` invocations as they don't require authorization.
@@ -510,21 +526,29 @@ impl AuthorizedInvocation {
         self
     }
 
-    fn snapshot(&self) -> AuthorizedInvocationSnapshot {
-        AuthorizedInvocationSnapshot {
+    // metering: covered
+    fn snapshot(&self, budget: &Budget) -> Result<AuthorizedInvocationSnapshot, HostError> {
+        Ok(AuthorizedInvocationSnapshot {
             is_exhausted: self.is_exhausted,
-            sub_invocations: self.sub_invocations.iter().map(|i| i.snapshot()).collect(),
-        }
+            sub_invocations: self
+                .sub_invocations
+                .iter()
+                .map(|i| i.snapshot(budget))
+                .metered_collect::<Result<Vec<AuthorizedInvocationSnapshot>, HostError>>(
+                    budget,
+                )??,
+        })
     }
 
+    // metering: free
     fn rollback(&mut self, snapshot: &AuthorizedInvocationSnapshot) -> Result<(), HostError> {
         self.is_exhausted = snapshot.is_exhausted;
         if self.sub_invocations.len() != snapshot.sub_invocations.len() {
             // This would be a bug.
             return Err((ScErrorType::Auth, ScErrorCode::InternalError).into());
         }
-        for i in 0..self.sub_invocations.len() {
-            self.sub_invocations[i].rollback(&snapshot.sub_invocations[i])?;
+        for (i, sub_invocation) in self.sub_invocations.iter_mut().enumerate() {
+            sub_invocation.rollback(&snapshot.sub_invocations[i])?;
         }
         Ok(())
     }
@@ -540,11 +564,16 @@ impl AuthorizationManager {
     // Creates a new enforcing `AuthorizationManager` from the given
     // authorization entries.
     // This should be created once per top-level invocation.
+    // metering: covered
     pub(crate) fn new_enforcing(
         host: &Host,
         auth_entries: Vec<SorobanAuthorizationEntry>,
     ) -> Result<Self, HostError> {
-        let mut trackers = vec![];
+        Vec::<AccountAuthorizationTracker>::charge_bulk_init(
+            auth_entries.len() as u64,
+            host.as_budget(),
+        )?;
+        let mut trackers = Vec::with_capacity(auth_entries.len());
         for auth_entry in auth_entries {
             trackers.push(RefCell::new(
                 AccountAuthorizationTracker::from_authorization_entry(host, auth_entry)?,
@@ -561,6 +590,7 @@ impl AuthorizationManager {
     // Creates a new enforcing `AuthorizationManager` that doesn't allow any
     // authorizations.
     // This is useful as a safe default mode.
+    // metering: free
     pub(crate) fn new_enforcing_without_authorizations() -> Self {
         Self {
             mode: AuthorizationMode::Enforcing,
@@ -573,6 +603,7 @@ impl AuthorizationManager {
     // Creates a new recording `AuthorizationManager`.
     // All the authorization requirements will be recorded and can then be
     // retrieved using `get_recorded_auth_payloads`.
+    // metering: free
     pub(crate) fn new_recording() -> Self {
         Self {
             mode: AuthorizationMode::Recording(RecordingAuthInfo {
@@ -589,6 +620,7 @@ impl AuthorizationManager {
     // authorized call stack and for the current network).
     // In the recording mode this stores the auth requirement instead of
     // verifying it.
+    // metering: covered
     pub(crate) fn require_auth(
         &self,
         host: &Host,
@@ -612,6 +644,7 @@ impl AuthorizationManager {
         self.require_auth_internal(host, address, authorized_function)
     }
 
+    // metering: covered
     pub(crate) fn add_invoker_contract_auth(
         &self,
         host: &Host,
@@ -620,12 +653,15 @@ impl AuthorizationManager {
         let auth_entries =
             host.visit_obj(auth_entries, |e: &HostVec| e.to_vec(host.budget_ref()))?;
         let mut trackers = self.try_borrow_invoker_contract_trackers_mut(host)?;
+        Vec::<Val>::charge_bulk_init(auth_entries.len() as u64, host.as_budget())?;
+        trackers.reserve(auth_entries.len());
         for e in auth_entries {
             trackers.push(InvokerContractAuthorizationTracker::new(host, e)?)
         }
         Ok(())
     }
 
+    // metering: covered by components
     fn verify_contract_invoker_auth(
         &self,
         host: &Host,
@@ -668,6 +704,7 @@ impl AuthorizationManager {
         return Ok(false);
     }
 
+    // metering: covered by components
     fn require_auth_enforcing(
         &self,
         host: &Host,
@@ -735,6 +772,7 @@ impl AuthorizationManager {
         ))
     }
 
+    // metering: covered
     fn require_auth_internal(
         &self,
         host: &Host,
@@ -751,6 +789,7 @@ impl AuthorizationManager {
 
         match &self.mode {
             AuthorizationMode::Enforcing => self.require_auth_enforcing(host, address, &function),
+            // metering: free for recording
             AuthorizationMode::Recording(recording_info) => {
                 let address_obj_handle = address.get_handle();
                 let existing_tracker_id = recording_info
@@ -806,38 +845,52 @@ impl AuthorizationManager {
     }
 
     // Returns a snapshot of `AuthorizationManager` to use for rollback.
+    // metering: covered
     pub(crate) fn snapshot(&self, host: &Host) -> Result<AuthorizationManagerSnapshot, HostError> {
         let _span = tracy_span!("snapshot auth");
         let account_trackers_snapshot = match &self.mode {
-            AuthorizationMode::Enforcing => AccountTrackersSnapshot::Enforcing(
-                self.try_borrow_account_trackers(host)?
-                    .iter()
-                    .map(|t| {
-                        if let Ok(tracker) = t.try_borrow() {
-                            Some(tracker.snapshot())
-                        } else {
-                            // If tracker is borrowed, snapshotting it is a no-op
-                            // (it can't change until we release it higher up the
-                            // stack).
-                            None
-                        }
-                    })
-                    .collect(),
-            ),
+            AuthorizationMode::Enforcing => {
+                let len = self.try_borrow_account_trackers(host)?.len();
+                let mut snapshots = Vec::with_capacity(len);
+                Vec::<Option<AccountAuthorizationTrackerSnapshot>>::charge_bulk_init(
+                    len as u64,
+                    host.as_budget(),
+                )?;
+                for t in self.try_borrow_account_trackers(host)?.iter() {
+                    let sp = if let Ok(tracker) = t.try_borrow() {
+                        Some(tracker.snapshot(host.as_budget())?)
+                    } else {
+                        // If tracker is borrowed, snapshotting it is a no-op
+                        // (it can't change until we release it higher up the
+                        // stack).
+                        None
+                    };
+                    snapshots.push(sp);
+                }
+                AccountTrackersSnapshot::Enforcing(snapshots)
+            }
             AuthorizationMode::Recording(_) => {
                 // All trackers should be avaialable to borrow for copy as in
                 // recording mode we can't have recursive authorization.
+                // metering: free for recording
                 AccountTrackersSnapshot::Recording(self.try_borrow_account_trackers(host)?.clone())
             }
         };
         let invoker_contract_tracker_root_snapshots = self
             .try_borrow_invoker_contract_trackers(host)?
             .iter()
-            .map(|t| t.invocation_tracker.root_authorized_invocation.snapshot())
-            .collect();
+            .map(|t| {
+                t.invocation_tracker
+                    .root_authorized_invocation
+                    .snapshot(host.as_budget())
+            })
+            .metered_collect::<Result<Vec<AuthorizedInvocationSnapshot>, HostError>>(
+                host.as_budget(),
+            )??;
         let tracker_by_address_handle = match &self.mode {
             AuthorizationMode::Enforcing => None,
             AuthorizationMode::Recording(recording_info) => Some(
+                // metering: free for recording
                 recording_info
                     .try_borrow_tracker_by_address_handle(host)?
                     .clone(),
@@ -851,6 +904,7 @@ impl AuthorizationManager {
     }
 
     // Rolls back this `AuthorizationManager` to the snapshot state.
+    // metering: covered
     pub(crate) fn rollback(
         &self,
         host: &Host,
@@ -868,9 +922,9 @@ impl AuthorizationManager {
                         &[],
                     ));
                 }
-                for i in 0..trackers.len() {
+                for (i, tracker) in trackers.iter().enumerate() {
                     if let Some(tracker_snapshot) = &trackers_snapshot[i] {
-                        trackers[i]
+                        tracker
                             .try_borrow_mut()
                             .map_err(|_| {
                                 host.err(
@@ -911,28 +965,31 @@ impl AuthorizationManager {
         Ok(())
     }
 
+    // metering: covered
     fn push_tracker_frame(&self, host: &Host) -> Result<(), HostError> {
         for tracker in self.try_borrow_account_trackers(host)?.iter() {
             // Skip already borrowed trackers, these must be in the middle of
             // authentication and hence don't need stack to be updated.
             if let Ok(mut tracker) = tracker.try_borrow_mut() {
-                tracker.push_frame();
+                tracker.push_frame(host.as_budget())?;
             }
         }
         for tracker in self
             .try_borrow_invoker_contract_trackers_mut(host)?
             .iter_mut()
         {
-            tracker.push_frame();
+            tracker.push_frame(host.as_budget())?;
         }
         Ok(())
     }
 
+    // metering: covered
     pub(crate) fn push_create_contract_host_fn_frame(
         &self,
         host: &Host,
         args: CreateContractArgs,
     ) -> Result<(), HostError> {
+        Vec::<CreateContractArgs>::charge_bulk_init(1, host.as_budget())?;
         self.try_borrow_call_stack_mut(host)?
             .push(AuthStackFrame::CreateContractHostFn(args));
         self.push_tracker_frame(host)
@@ -940,6 +997,7 @@ impl AuthorizationManager {
 
     // Records a new call stack frame.
     // This should be called for every `Host` `push_frame`.
+    // metering: covered
     pub(crate) fn push_frame(&self, host: &Host, frame: &Frame) -> Result<(), HostError> {
         let _span = tracy_span!("push auth frame");
         let (contract_id, function_name) = match frame {
@@ -958,6 +1016,7 @@ impl AuthorizationManager {
         };
         // Currently only contracts might appear in the call stack.
         let contract_address = host.add_host_object(ScAddress::Contract(contract_id))?;
+        Vec::<ContractInvocation>::charge_bulk_init(1, host.as_budget())?;
         self.try_borrow_call_stack_mut(host)?
             .push(AuthStackFrame::Contract(ContractInvocation {
                 contract_address,
@@ -969,6 +1028,7 @@ impl AuthorizationManager {
 
     // Pops a call stack frame.
     // This should be called for every `Host` `pop_frame`.
+    // metering: covered
     pub(crate) fn pop_frame(&self, host: &Host) -> Result<(), HostError> {
         let _span = tracy_span!("pop auth frame");
         {
@@ -1010,6 +1070,7 @@ impl AuthorizationManager {
     // Returns the recorded per-address authorization payloads that would cover the
     // top-level contract function invocation in the enforcing mode.
     // Should only be called in the recording mode.
+    // metering: free, recording mode
     pub(crate) fn get_recorded_auth_payloads(
         &self,
         host: &Host,
@@ -1032,6 +1093,7 @@ impl AuthorizationManager {
     // This helps to build a more realistic footprint and produce more correct
     // meterting data for the recording mode.
     // No-op in the enforcing mode.
+    // metering: covered
     pub(crate) fn maybe_emulate_authentication(&self, host: &Host) -> Result<(), HostError> {
         match &self.mode {
             AuthorizationMode::Enforcing => Ok(()),
@@ -1048,6 +1110,7 @@ impl AuthorizationManager {
 
     // Returns a 'reset' instance of `AuthorizationManager` that has the same
     // mode, but no data.
+    // metering: free, testutils
     #[cfg(any(test, feature = "testutils"))]
     pub(crate) fn reset(&mut self) {
         *self = match self.mode {
@@ -1060,6 +1123,7 @@ impl AuthorizationManager {
 
     // Returns all authorizations that have been authenticated for the
     // last contract invocation.
+    // metering: free, testutils
     #[cfg(any(test, feature = "testutils"))]
     pub(crate) fn get_authenticated_authorizations(
         &self,
@@ -1084,6 +1148,7 @@ impl AuthorizationManager {
 }
 
 impl InvocationTracker {
+    // metering: covered by components
     fn from_xdr(
         host: &Host,
         root_invocation: xdr::SorobanAuthorizedInvocation,
@@ -1096,6 +1161,7 @@ impl InvocationTracker {
         })
     }
 
+    // metering: free
     fn new(root_authorized_invocation: AuthorizedInvocation) -> Self {
         Self {
             root_authorized_invocation,
@@ -1105,6 +1171,7 @@ impl InvocationTracker {
         }
     }
 
+    // metering: free for recording
     fn new_recording(function: AuthorizedFunction, current_stack_len: usize) -> Self {
         // Create the stack of `None` leading to the current invocation to
         // represent invocations that didn't need authorization on behalf of
@@ -1123,6 +1190,7 @@ impl InvocationTracker {
 
     // Walks a path in the tree defined by `invocation_id_in_call_stack` and
     // returns the last visited authorized node.
+    // metering: free
     fn last_authorized_invocation_mut(&mut self) -> Option<&mut AuthorizedInvocation> {
         for i in 0..self.invocation_id_in_call_stack.len() {
             if self.invocation_id_in_call_stack[i].is_some() {
@@ -1135,10 +1203,14 @@ impl InvocationTracker {
         None
     }
 
-    fn push_frame(&mut self) {
+    // metering: covered
+    fn push_frame(&mut self, budget: &Budget) -> Result<(), HostError> {
+        Vec::<usize>::charge_bulk_init(1, budget)?;
         self.invocation_id_in_call_stack.push(None);
+        Ok(())
     }
 
+    // metering: free
     fn pop_frame(&mut self) {
         self.invocation_id_in_call_stack.pop();
         if let Some(root_exhausted_frame) = self.root_exhausted_frame {
@@ -1148,14 +1220,17 @@ impl InvocationTracker {
         }
     }
 
+    // metering: free
     fn is_empty(&self) -> bool {
         self.invocation_id_in_call_stack.is_empty()
     }
 
+    // metering: free
     fn is_active(&self) -> bool {
         self.root_authorized_invocation.is_exhausted && !self.is_fully_processed
     }
 
+    // metering: free
     fn current_frame_is_already_matched(&self) -> bool {
         match self.invocation_id_in_call_stack.last() {
             Some(Some(_)) => true,
@@ -1167,6 +1242,7 @@ impl InvocationTracker {
     // of the current tree and push it to the call stack.
     // Returns `true` if the match has been found for the first time per current
     // frame.
+    // Metering: covered by components
     fn maybe_push_matching_invocation_frame(
         &mut self,
         host: &Host,
@@ -1178,8 +1254,7 @@ impl InvocationTracker {
         }
         let mut frame_index = None;
         if let Some(curr_invocation) = self.last_authorized_invocation_mut() {
-            for i in 0..curr_invocation.sub_invocations.len() {
-                let sub_invocation = &mut curr_invocation.sub_invocations[i];
+            for (i, sub_invocation) in curr_invocation.sub_invocations.iter_mut().enumerate() {
                 if !sub_invocation.is_exhausted
                     && host.compare(&sub_invocation.function, function)?.is_eq()
                 {
@@ -1208,6 +1283,7 @@ impl InvocationTracker {
     // This is needed for the recording mode only.
     // This assumes that the address matching is correctly performed before
     // calling this.
+    // metering: free for recording
     fn record_invocation(
         &mut self,
         host: &Host,
@@ -1243,14 +1319,17 @@ impl InvocationTracker {
         Ok(())
     }
 
+    // metering: free
     fn has_matched_invocations_in_stack(&self) -> bool {
         self.invocation_id_in_call_stack.iter().any(|i| i.is_some())
     }
 
-    fn snapshot(&self) -> AuthorizedInvocationSnapshot {
-        self.root_authorized_invocation.snapshot()
+    // metering: covered
+    fn snapshot(&self, budget: &Budget) -> Result<AuthorizedInvocationSnapshot, HostError> {
+        self.root_authorized_invocation.snapshot(budget)
     }
 
+    // metering: covered
     fn rollback(&mut self, snapshot: &AuthorizedInvocationSnapshot) -> Result<(), HostError> {
         self.root_authorized_invocation.rollback(snapshot)?;
         // Invocation can only be rolled back from 'exhausted' to
@@ -1265,6 +1344,7 @@ impl InvocationTracker {
 }
 
 impl AccountAuthorizationTracker {
+    // Metering: covered by the host and components
     fn from_authorization_entry(
         host: &Host,
         auth_entry: SorobanAuthorizationEntry,
@@ -1304,6 +1384,7 @@ impl AccountAuthorizationTracker {
         })
     }
 
+    // metering: free, since this is recording mode only
     fn new_recording(
         host: &Host,
         address: AddressObject,
@@ -1360,6 +1441,7 @@ impl AccountAuthorizationTracker {
     // Returns true/false based on whether the invocation is found in the
     // tracker. Returns error if invocation has been found, but the tracker
     // itself is not valid (failed authentication or nonce check).
+    // metering: covered
     fn maybe_authorize_invocation(
         &mut self,
         host: &Host,
@@ -1411,6 +1493,7 @@ impl AccountAuthorizationTracker {
     // This is needed for the recording mode only.
     // This assumes that the address matching is correctly performed before
     // calling this.
+    // metering: free for recording
     fn record_invocation(
         &mut self,
         host: &Host,
@@ -1421,6 +1504,7 @@ impl AccountAuthorizationTracker {
 
     // Build the authorization payload from the invocations recorded in this
     // tracker.
+    // metering: free for recording
     fn get_recorded_auth_payload(&self, host: &Host) -> Result<RecordedAuthPayload, HostError> {
         Ok(RecordedAuthPayload {
             address: if !self.is_invoker {
@@ -1438,10 +1522,12 @@ impl AccountAuthorizationTracker {
 
     // Checks if there is at least one authorized invocation in the current call
     // stack.
+    // metering: free
     fn has_authorized_invocations_in_stack(&self) -> bool {
         self.invocation_tracker.has_matched_invocations_in_stack()
     }
 
+    // metering: covered
     fn root_invocation_to_xdr(
         &self,
         host: &Host,
@@ -1451,22 +1537,24 @@ impl AccountAuthorizationTracker {
             .to_xdr(host)
     }
 
-    fn push_frame(&mut self) {
-        self.invocation_tracker.push_frame();
+    // metering: covered
+    fn push_frame(&mut self, budget: &Budget) -> Result<(), HostError> {
+        self.invocation_tracker.push_frame(budget)
     }
 
+    // metering: covered
     fn pop_frame(&mut self) {
         self.invocation_tracker.pop_frame();
     }
 
+    // metering: covered
     fn verify_and_consume_nonce(&mut self, host: &Host) -> Result<(), HostError> {
         if !self.need_nonce {
             return Ok(());
         }
         self.need_nonce = false;
         if let Some((nonce, expiration_ledger)) = &self.nonce {
-            let (ledger_seq, max_entry_expiration) =
-                host.with_ledger_info(|li| Ok((li.sequence_number, li.max_entry_expiration)))?;
+            let ledger_seq = host.with_ledger_info(|li| Ok(li.sequence_number))?;
             if ledger_seq > *expiration_ledger {
                 return Err(host.err(
                     ScErrorType::Auth,
@@ -1478,17 +1566,14 @@ impl AccountAuthorizationTracker {
                     ],
                 ));
             }
-            if *expiration_ledger
-                > ledger_seq
-                    .saturating_sub(1)
-                    .saturating_add(max_entry_expiration)
-            {
+            let max_expiration_ledger = host.max_expiration_ledger()?;
+            if *expiration_ledger > max_expiration_ledger {
                 return Err(host.err(
                     ScErrorType::Auth,
                     ScErrorCode::InvalidInput,
                     "signature expiration is too late",
                     &[
-                        (ledger_seq + max_entry_expiration).try_into_val(host)?,
+                        max_expiration_ledger.try_into_val(host)?,
                         expiration_ledger.try_into_val(host)?,
                     ],
                 ));
@@ -1506,6 +1591,7 @@ impl AccountAuthorizationTracker {
 
     // Computes the payload that has to be signed in order to authenticate
     // the authorized invocation tree corresponding to this tracker.
+    // metering: covered by components
     fn get_signature_payload(&self, host: &Host) -> Result<[u8; 32], HostError> {
         let (nonce, expiration_ledger) = self.nonce.ok_or_else(|| {
             host.err(
@@ -1528,6 +1614,7 @@ impl AccountAuthorizationTracker {
         host.metered_hash_xdr(&payload_preimage)
     }
 
+    // metering: covered by the hsot
     fn authenticate(&self, host: &Host) -> Result<(), HostError> {
         if self.is_invoker {
             return Ok(());
@@ -1555,6 +1642,7 @@ impl AccountAuthorizationTracker {
     }
 
     // Emulates authentication for the recording mode.
+    // metering: covered
     fn emulate_authentication(&self, host: &Host) -> Result<(), HostError> {
         if self.is_invoker {
             return Ok(());
@@ -1573,9 +1661,10 @@ impl AccountAuthorizationTracker {
         Ok(())
     }
 
-    fn snapshot(&self) -> AccountAuthorizationTrackerSnapshot {
-        AccountAuthorizationTrackerSnapshot {
-            invocation_tracker_root_snapshot: self.invocation_tracker.snapshot(),
+    // metering: covered
+    fn snapshot(&self, budget: &Budget) -> Result<AccountAuthorizationTrackerSnapshot, HostError> {
+        Ok(AccountAuthorizationTrackerSnapshot {
+            invocation_tracker_root_snapshot: self.invocation_tracker.snapshot(budget)?,
             // We need to snapshot authenctioncation and nocne-related fields as
             // during the rollback the nonce might be 'un-consumed' during
             // the storage rollback. We don't snapshot `is_valid` since this is
@@ -1583,9 +1672,10 @@ impl AccountAuthorizationTracker {
             // authorizations.
             authenticated: self.authenticated,
             need_nonce: self.need_nonce,
-        }
+        })
     }
 
+    // metering: covered
     fn rollback(
         &mut self,
         snapshot: &AccountAuthorizationTrackerSnapshot,
@@ -1597,16 +1687,19 @@ impl AccountAuthorizationTracker {
         Ok(())
     }
 
+    // metering: free
     fn is_active(&self) -> bool {
         self.is_valid && self.invocation_tracker.is_active()
     }
 
+    // metering: free
     fn current_frame_is_already_matched(&self) -> bool {
         self.invocation_tracker.current_frame_is_already_matched()
     }
 }
 
 impl InvokerContractAuthorizationTracker {
+    // metering: covered by components
     fn new(host: &Host, invoker_auth_entry: Val) -> Result<Self, HostError> {
         let invoker_sc_addr = ScAddress::Contract(host.get_current_contract_id_internal()?);
         let authorized_invocation = invoker_contract_auth_to_authorized_invocation(
@@ -1621,18 +1714,22 @@ impl InvokerContractAuthorizationTracker {
         })
     }
 
-    fn push_frame(&mut self) {
-        self.invocation_tracker.push_frame();
+    // metering: covered
+    fn push_frame(&mut self, budget: &Budget) -> Result<(), HostError> {
+        self.invocation_tracker.push_frame(budget)
     }
 
+    // metering: covered
     fn pop_frame(&mut self) {
         self.invocation_tracker.pop_frame();
     }
 
+    // metering: free
     fn is_out_of_scope(&self) -> bool {
         self.invocation_tracker.is_empty()
     }
 
+    // metering: covered
     fn maybe_authorize_invocation(
         &mut self,
         host: &Host,
@@ -1646,6 +1743,7 @@ impl InvokerContractAuthorizationTracker {
 }
 
 impl Host {
+    // metering: covered by components
     fn consume_nonce(
         &self,
         address: AddressObject,
@@ -1691,6 +1789,7 @@ impl Host {
     }
 }
 
+// metering: free for testutils
 #[cfg(any(test, feature = "testutils"))]
 impl PartialEq for RecordedAuthPayload {
     fn eq(&self, other: &Self) -> bool {

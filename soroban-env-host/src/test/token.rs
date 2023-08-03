@@ -58,6 +58,7 @@ impl TokenTest {
             min_persistent_entry_expiration: 4096,
             min_temp_entry_expiration: 16,
             max_entry_expiration: 10000,
+            autobump_ledgers: 0,
         })
         .unwrap();
         Self {
@@ -1153,6 +1154,61 @@ fn test_auth_revocable_on_contract() {
         .set_authorized(&admin, user_1_addr.clone(), true)
         .unwrap();
     assert!(token.authorized(user_1_addr).unwrap());
+}
+
+#[test]
+fn test_auth_required() {
+    let test = TokenTest::setup();
+    let admin = TestSigner::account(&test.issuer_key);
+    let token = test.default_token();
+
+    let issuer_ledger_key = test
+        .host
+        .to_account_key(keypair_to_account_id(&test.issuer_key));
+
+    let user_1 = generate_bytes_array();
+    let user_2 = generate_bytes_array();
+    let user_1_addr = contract_id_to_address(&test.host, user_1);
+    let user_2_addr = contract_id_to_address(&test.host, user_2);
+
+    let user_1_invoker = TestSigner::ContractInvoker(Hash(user_1));
+    let user_1_bytes = BytesN::<32>::try_from_val(
+        &test.host,
+        &test.host.bytes_new_from_slice(&user_1).unwrap(),
+    )
+    .unwrap();
+
+    token
+        .mint(&admin, user_1_addr.clone(), 100_000_000)
+        .unwrap();
+
+    // Set auth required on the issuer. New contract balances will need to be authorized manually
+    test.update_account_flags(&issuer_ledger_key, AccountFlags::RequiredFlag as u32);
+
+    // The user_2 balance needs to be authorized first
+    assert_eq!(
+        to_contract_err(
+            test.run_from_contract(&user_1_bytes, || {
+                token.transfer(&user_1_invoker, user_2_addr.clone(), 1)
+            })
+            .err()
+            .unwrap()
+        ),
+        ContractError::BalanceDeauthorizedError
+    );
+
+    // authorize user_2
+    token
+        .set_authorized(&admin, user_2_addr.clone(), true)
+        .unwrap();
+
+    test.run_from_contract(&user_1_bytes, || {
+        token.transfer(&user_1_invoker, user_2_addr.clone(), 1)
+    })
+    .unwrap();
+
+    assert_eq!(token.balance(user_1_addr.clone()).unwrap(), 99_999_999);
+    assert_eq!(token.balance(user_2_addr.clone()).unwrap(), 1);
 }
 
 #[test]
@@ -2529,6 +2585,24 @@ fn test_wrapped_asset_classic_balance_boundaries(
         expected_max_balance
     );
     assert_eq!(test.get_trustline_balance(&trustline_key2), 0);
+
+    token
+        .mint(&issuer, user2.address(&test.host), 1.into())
+        .unwrap();
+
+    assert_eq!(
+        to_contract_err(
+            token
+                .transfer(
+                    &user,
+                    user2.address(&test.host),
+                    (expected_max_balance).into(),
+                )
+                .err()
+                .unwrap()
+        ),
+        ContractError::BalanceError
+    );
 }
 
 #[test]

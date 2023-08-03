@@ -1,6 +1,7 @@
 use crate::{
-    budget::AsBudget,
-    host::metered_clone::MeteredClone,
+    budget::{AsBudget, Budget},
+    host::metered_clone::{MeteredClone, MeteredCollect},
+    host::metered_xdr::metered_write_xdr,
     xdr::{ContractCostType, ScMap, ScMapEntry, ScVal},
     Env, Host, HostError, Symbol, Val,
 };
@@ -93,7 +94,7 @@ fn metered_xdr() -> Result<(), HostError> {
         .try_into(),
     )?;
     let mut w = Vec::<u8>::new();
-    host.metered_write_xdr(&scmap, &mut w)?;
+    metered_write_xdr(host.budget_ref(), &scmap, &mut w)?;
     host.with_budget(|budget| {
         assert_eq!(
             budget.get_tracker(ContractCostType::ValSer)?.1,
@@ -133,7 +134,7 @@ fn metered_xdr_out_of_budget() -> Result<(), HostError> {
         .try_into(),
     )?;
     let mut w = Vec::<u8>::new();
-    let res = host.metered_write_xdr(&scmap, &mut w);
+    let res = metered_write_xdr(host.budget_ref(), &scmap, &mut w);
     let code = (ScErrorType::Budget, ScErrorCode::ExceededLimit);
     assert!(HostError::result_matches_err(res, code));
     Ok(())
@@ -218,6 +219,19 @@ fn test_recursive_type_clone() -> Result<(), HostError> {
             .to_string()
             .as_str(),
     );
+    Ok(())
+}
+
+#[test]
+fn test_metered_collection() -> Result<(), HostError> {
+    let budget = Budget::default();
+    let v: Vec<i32> = vec![1, 2, -3, 4, -6, -11];
+    let res = v
+        .iter()
+        .filter(|i| i.abs() > 3)
+        .map(|i| Ok(i.abs() as u64))
+        .metered_collect::<Result<Vec<u64>, HostError>>(&budget)??;
+    assert_eq!(res, vec![4, 6, 11]);
     Ok(())
 }
 

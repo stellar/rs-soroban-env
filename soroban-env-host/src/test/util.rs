@@ -6,15 +6,17 @@ use soroban_env_common::{
         AccountEntry, AccountId, ContractCostType, LedgerEntry, LedgerEntryData, LedgerKey,
         PublicKey, ScAddress, ScVal, ScVec, Uint256,
     },
-    AddressObject, BytesObject, Env, EnvBase, Val, VecObject,
+    AddressObject, BytesObject, Env, EnvBase, Symbol, Val, VecObject,
 };
 
 use crate::{
-    budget::Budget,
+    budget::{AsBudget, Budget},
     host::error::TryBorrowOrErr,
     storage::{test_storage::MockSnapshotSource, Storage},
     xdr, Host, HostError,
 };
+
+use soroban_bench_utils::HostTracker;
 
 // Test utilities for the host, used in various tests in sub-modules.
 pub(crate) trait AsScVal {
@@ -209,5 +211,32 @@ impl Host {
             generate_account_id(),
             generate_bytes_array(),
         )
+    }
+
+    pub(crate) fn measured_call(
+        &self,
+        contract: AddressObject,
+        func: Symbol,
+        args: VecObject,
+    ) -> Result<Val, HostError> {
+        let budget = self.as_budget();
+        budget.reset_unlimited()?;
+        let ht = HostTracker::start(None);
+
+        let val = self.call(contract, func, args);
+        let cpu_consumed = budget
+            .get_cpu_insns_consumed()
+            .expect("unable to retrieve cpu consumed");
+        let mem_consumed = budget
+            .get_mem_bytes_consumed()
+            .expect("unable to retrieve mem consumed");
+
+        let (cpu_insns, mem_bytes, _) = ht.stop();
+        println!(
+                "\nmodel cpu consumed: {}, actual cpu insns {} \nmodel mem consumed: {}, actual mem bytes {}",
+                cpu_consumed, cpu_insns, mem_consumed, mem_bytes
+            );
+
+        val
     }
 }

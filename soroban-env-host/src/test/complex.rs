@@ -17,6 +17,7 @@ fn run_complex() -> Result<(), HostError> {
         min_persistent_entry_expiration: 4096,
         min_temp_entry_expiration: 16,
         max_entry_expiration: 6312000,
+        autobump_ledgers: 0,
     };
     let account_id = generate_account_id();
     let salt = generate_bytes_array();
@@ -25,17 +26,14 @@ fn run_complex() -> Result<(), HostError> {
     let foot = {
         let host = Host::test_host_with_recording_footprint();
         host.set_ledger_info(info.clone())?;
-        let contract_id_obj = host.register_test_contract_wasm_from_source_account(
-            COMPLEX,
-            account_id.clone(),
-            salt.clone(),
-        );
+        let contract_id_obj =
+            host.register_test_contract_wasm_from_source_account(COMPLEX, account_id.clone(), salt);
         host.call(
             contract_id_obj,
             Symbol::try_from_small_str("go")?,
             host.add_host_object(HostVec::new())?,
         )?;
-        let (store, _, _, _) = host.try_finish().unwrap();
+        let (store, _) = host.try_finish().unwrap();
         store.footprint
     };
 

@@ -1,9 +1,14 @@
 use crate::{native_contract::common_types::ContractExecutable, Host, HostError};
-use soroban_env_common::{xdr, EnvBase, Symbol, TryFromVal, TryIntoVal};
+use soroban_env_common::{xdr, EnvBase, Symbol, TryFromVal, TryIntoVal, Val, VecObject};
 
 const CONTRACT_EXECUTABLE_UPDATE_TOPIC: &str = "executable_update";
 
 impl Host {
+    pub fn system_event(&self, topics: VecObject, data: Val) -> Result<(), HostError> {
+        self.record_contract_event(xdr::ContractEventType::System, topics, data)?;
+        Ok(())
+    }
+
     // Emits a system event for updating the contract executable.
     // The only event topic is "executable_update" and the data contains
     // a vector of [old_executable, new_executable] encoded as contract types
