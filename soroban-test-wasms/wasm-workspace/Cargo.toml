@@ -33,7 +33,8 @@ members = [
     "simple_account",
     "update",
     "delegated_account",
-    "err"
+    "err",
+    "write_upgrade_bytes"
 ]
 [profile.release]
 opt-level = "z"
