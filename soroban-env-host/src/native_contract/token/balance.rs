@@ -417,7 +417,7 @@ fn transfer_account_balance(e: &Host, account_id: AccountId, amount: i64) -> Res
             Err(err!(
                 e,
                 ContractError::BalanceError,
-                "resulting balance is not within the allowed range: {} < {} < {} does not hold",
+                "resulting balance is not within the allowed range",
                 min_balance,
                 new_balance,
                 max_balance
@@ -457,7 +457,7 @@ fn transfer_trustline_balance(
             Err(err!(
                 e,
                 ContractError::BalanceError,
-                "resulting balance is not within the allowed range: {} < {} < {} does not hold",
+                "resulting balance is not within the allowed range",
                 min_balance,
                 new_balance,
                 max_balance

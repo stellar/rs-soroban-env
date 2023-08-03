@@ -41,7 +41,7 @@ pub fn write_allowance(
             Err(err!(
                 e,
                 ContractError::AllowanceError,
-                "expiration is greater than max: {} > {}",
+                "expiration is greater than max",
                 expiration,
                 li.max_entry_expiration
             ))
@@ -49,7 +49,7 @@ pub fn write_allowance(
             Err(err!(
                 e,
                 ContractError::AllowanceError,
-                "expiration must be >= ledger sequence: {} < {}",
+                "expiration must be >= ledger sequence",
                 expiration,
                 li.sequence_number
             ))
@@ -137,7 +137,7 @@ pub fn spend_allowance(
         return Err(err!(
             e,
             ContractError::AllowanceError,
-            "not enough allowance to spend: {} < {}",
+            "not enough allowance to spend",
             allowance,
             amount
         ));
