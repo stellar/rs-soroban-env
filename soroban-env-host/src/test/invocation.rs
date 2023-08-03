@@ -9,7 +9,7 @@ use soroban_env_common::{
 use crate::{
     events::HostEvent, xdr::ScErrorType, ContractFunctionSet, Error, Host, HostError, Symbol, Tag,
 };
-use soroban_test_wasms::{ADD_I32, ERR, INVOKE_CONTRACT, VEC};
+use soroban_test_wasms::{ADD_I32, ALLOC, ERR, INVOKE_CONTRACT, VEC};
 
 #[test]
 fn invoke_single_contract_function() -> Result<(), HostError> {
@@ -33,6 +33,34 @@ fn invoke_single_contract_function() -> Result<(), HostError> {
     );
     let code = (ScErrorType::WasmVm, ScErrorCode::InvalidAction);
     assert!(HostError::result_matches_err(res, code));
+    Ok(())
+}
+
+#[test]
+fn invoke_alloc() -> Result<(), HostError> {
+    let host = Host::test_host_with_recording_footprint();
+    host.enable_debug()?;
+    let contract_id_obj = host.register_test_contract_wasm(ALLOC);
+    let res = host.call(
+        contract_id_obj,
+        Symbol::try_from_small_str("sum")?,
+        host.test_vec_obj::<u32>(&[128])?,
+    )?;
+    assert!(res.shallow_eq(&8128_u32.into()));
+    let used_bytes = host.budget_cloned().get_mem_bytes_consumed()?;
+    // The general pattern of memory growth in this contract will be a sequence
+    // of vector-doublings, but these are masked by the fact that we only see
+    // the calls that cause the backing vector of wasm linear memory to grow,
+    // which happens as the guest vector crosses 64k boundaries (and eventually
+    // starts growing in steps larger than 64k itself).
+    //
+    // So we wind up with a growth-sequence that's a bit irregular: +0x10000,
+    // +0x20000, +0x30000, +0x50000, +0x90000. Total is 1 + 2 + 3 + 5 + 9 = 20
+    // pages or about 1.3 MiB, plus the initial 17 pages (1.1MiB) plus some more
+    // slop from general host machinery allocations, we get around 2.5MiB. Call
+    // is "less than 3MiB".
+    assert!(used_bytes > (128 * 4096));
+    assert!(used_bytes < 0x30_0000);
     Ok(())
 }
 

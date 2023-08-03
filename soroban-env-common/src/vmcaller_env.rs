@@ -173,7 +173,7 @@ macro_rules! vmcaller_none_function_helper {
     =>
     {
         fn $fn_id(&self, $($arg:$type),*) -> Result<$ret, Self::Error> {
-            <Self as VmCallerEnv>::$fn_id(self, &mut VmCaller::none(), $($arg),*)
+            self.augment_err_result(<Self as VmCallerEnv>::$fn_id(self, &mut VmCaller::none(), $($arg),*))
         }
     };
 }

@@ -1044,7 +1044,7 @@ impl Default for BudgetImpl {
 impl ResourceLimiter for Host {
     fn memory_growing(
         &mut self,
-        _current: usize,
+        current: usize,
         desired: usize,
         maximum: Option<usize>,
     ) -> Result<bool, errors::MemoryError> {
@@ -1063,8 +1063,9 @@ impl ResourceLimiter for Host {
         };
 
         if allow {
+            let delta = (desired as u64).saturating_sub(current as u64);
             self.as_budget()
-                .bulk_charge(ContractCostType::WasmMemAlloc, desired as u64, None)
+                .bulk_charge(ContractCostType::WasmMemAlloc, delta, None)
                 .map(|_| true)
                 .map_err(|_| errors::MemoryError::OutOfBoundsGrowth)
         } else {
