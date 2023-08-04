@@ -48,18 +48,36 @@ fn test_storage(host: &Host, contract_id: AddressObject, storage: &str) {
         true
     );
 
+    let max_entry_expiration: u32 = host.get_max_entry_expiration().unwrap().into();
+    let max_bump = max_entry_expiration - 1;
+
     // Smoke test bump
     let bump_args = if storage == "instance" {
-        host_vec![host, 6000_u32]
+        host_vec![host, max_bump]
     } else {
-        host_vec![host, key_1, 6000_u32]
+        host_vec![host, key_1, max_bump]
     };
+
     host.call(
         contract_id,
         storage_fn_name(host, "bump", storage),
         bump_args.into(),
     )
     .unwrap();
+
+    let bump_args_past_max = if storage == "instance" {
+        host_vec![host, max_bump + 1]
+    } else {
+        host_vec![host, key_1, max_bump + 1]
+    };
+
+    assert!(host
+        .call(
+            contract_id,
+            storage_fn_name(host, "bump", storage),
+            bump_args_past_max.into(),
+        )
+        .is_err());
 
     // Put another key and verify it's there
     host.call(

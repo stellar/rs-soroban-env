@@ -13,7 +13,7 @@ use crate::{
     budget::{AsBudget, Budget},
     host::error::TryBorrowOrErr,
     storage::{test_storage::MockSnapshotSource, Storage},
-    xdr, Host, HostError,
+    xdr, Host, HostError, LedgerInfo,
 };
 
 use soroban_bench_utils::HostTracker;
@@ -63,7 +63,18 @@ impl Host {
         let snapshot_source = Rc::<MockSnapshotSource>::new(MockSnapshotSource::new());
         let storage = Storage::with_recording_footprint(snapshot_source);
         let host = Host::with_storage_and_budget(storage, Budget::default());
-        host.set_ledger_info(Default::default()).unwrap();
+        host.set_ledger_info(LedgerInfo {
+            protocol_version: 20,
+            sequence_number: 0,
+            timestamp: 0,
+            network_id: [0; 32],
+            base_reserve: 0,
+            min_persistent_entry_expiration: 4096,
+            min_temp_entry_expiration: 16,
+            max_entry_expiration: 6_312_000,
+            autobump_ledgers: 0,
+        })
+        .unwrap();
         host
     }
 

@@ -335,9 +335,19 @@ impl Storage {
         bump_by_ledgers: u32,
     ) -> Result<(), HostError> {
         let _span = tracy_span!("bump key");
-        let new_expiration = host
-            .with_ledger_info(|li| Ok(li.sequence_number.saturating_add(bump_by_ledgers)))?
-            .min(host.max_expiration_ledger()?);
+
+        let new_expiration =
+            host.with_ledger_info(|li| Ok(li.sequence_number.saturating_add(bump_by_ledgers)))?;
+
+        if new_expiration > host.max_expiration_ledger()? {
+            return Err(host.err(
+                ScErrorType::Storage,
+                ScErrorCode::InvalidAction,
+                "trying to bump past max expiration ledger",
+                &[],
+            ));
+        }
+
         // Bumping deleted/non-existing/out-of-footprint entries will result in
         // an error.
         let old_entry = self.get(&key, host.budget_ref())?;
