@@ -388,6 +388,302 @@ impl BudgetImpl {
     }
 }
 
+/// Default settings for local/sandbox testing only. The actual operations will use parameters
+/// read on-chain from network configuration via [`from_configs`] above.
+impl Default for BudgetImpl {
+    fn default() -> Self {
+        let mut b = Self {
+            cpu_insns: BudgetDimension::new(),
+            mem_bytes: BudgetDimension::new(),
+            tracker: vec![(0, None); ContractCostType::variants().len()],
+            enabled: true,
+            fuel_config: Default::default(),
+            depth_limit: DEFAULT_HOST_DEPTH_LIMIT,
+        };
+
+        for ct in ContractCostType::variants() {
+            // define the cpu cost model parameters
+            let cpu = &mut b.cpu_insns.get_cost_model_mut(ct);
+            match ct {
+                // This is the host cpu insn cost per wasm "fuel". Every "base" wasm
+                // instruction costs 1 fuel (by default), and some particular types of
+                // instructions may cost additional amount of fuel based on
+                // wasmi's config setting.
+                ContractCostType::WasmInsnExec => {
+                    cpu.const_term = 6;
+                    cpu.linear_term = 0;
+                }
+                // Host cpu insns per wasm "memory fuel". This has to be zero since
+                // the fuel (representing cpu cost) has been covered by `WasmInsnExec`.
+                // The extra cost of mem processing is accounted for by wasmi's
+                // `config.memory_bytes_per_fuel` parameter.
+                // This type is designated to the mem cost.
+                ContractCostType::WasmMemAlloc => {
+                    cpu.const_term = 0;
+                    cpu.linear_term = 0;
+                }
+                ContractCostType::HostMemAlloc => {
+                    cpu.const_term = 1131;
+                    cpu.linear_term = 1;
+                }
+                ContractCostType::HostMemCpy => {
+                    cpu.const_term = 28;
+                    cpu.linear_term = 24;
+                }
+                ContractCostType::HostMemCmp => {
+                    cpu.const_term = 24;
+                    cpu.linear_term = 64;
+                }
+                ContractCostType::InvokeHostFunction => {
+                    cpu.const_term = 698;
+                    cpu.linear_term = 0;
+                }
+                ContractCostType::VisitObject => {
+                    cpu.const_term = 27;
+                    cpu.linear_term = 0;
+                }
+                ContractCostType::ValXdrConv => {
+                    cpu.const_term = 170;
+                    cpu.linear_term = 0;
+                }
+                ContractCostType::ValSer => {
+                    cpu.const_term = 607;
+                    cpu.linear_term = 68;
+                }
+                ContractCostType::ValDeser => {
+                    cpu.const_term = 1233;
+                    cpu.linear_term = 33;
+                }
+                ContractCostType::ComputeSha256Hash => {
+                    cpu.const_term = 2391;
+                    cpu.linear_term = 4150;
+                }
+                ContractCostType::ComputeEd25519PubKey => {
+                    cpu.const_term = 25609;
+                    cpu.linear_term = 0;
+                }
+                ContractCostType::MapEntry => {
+                    cpu.const_term = 53;
+                    cpu.linear_term = 0;
+                }
+                ContractCostType::VecEntry => {
+                    cpu.const_term = 5;
+                    cpu.linear_term = 0;
+                }
+                // To be removed
+                ContractCostType::GuardFrame => {
+                    cpu.const_term = 4050;
+                    cpu.linear_term = 0;
+                }
+                ContractCostType::VerifyEd25519Sig => {
+                    cpu.const_term = 376859;
+                    cpu.linear_term = 2744;
+                }
+                ContractCostType::VmMemRead => {
+                    cpu.const_term = 138;
+                    cpu.linear_term = 24;
+                }
+                ContractCostType::VmMemWrite => {
+                    cpu.const_term = 140;
+                    cpu.linear_term = 24;
+                }
+                ContractCostType::VmInstantiation => {
+                    cpu.const_term = 992415;
+                    cpu.linear_term = 68905;
+                }
+                ContractCostType::VmCachedInstantiation => {
+                    cpu.const_term = 992415;
+                    cpu.linear_term = 68905;
+                }
+                ContractCostType::InvokeVmFunction => {
+                    cpu.const_term = 1200;
+                    cpu.linear_term = 0;
+                }
+                ContractCostType::ChargeBudget => {
+                    cpu.const_term = 104;
+                    cpu.linear_term = 0;
+                }
+                ContractCostType::ComputeKeccak256Hash => {
+                    cpu.const_term = 2886;
+                    cpu.linear_term = 3561;
+                }
+                ContractCostType::ComputeEcdsaSecp256k1Key => {
+                    cpu.const_term = 38418;
+                    cpu.linear_term = 0;
+                }
+                ContractCostType::ComputeEcdsaSecp256k1Sig => {
+                    cpu.const_term = 243;
+                    cpu.linear_term = 0;
+                }
+                ContractCostType::RecoverEcdsaSecp256k1Key => {
+                    cpu.const_term = 1666400;
+                    cpu.linear_term = 0;
+                }
+                ContractCostType::Int256AddSub => {
+                    cpu.const_term = 1959;
+                    cpu.linear_term = 0;
+                }
+                ContractCostType::Int256Mul => {
+                    cpu.const_term = 2473;
+                    cpu.linear_term = 0;
+                }
+                ContractCostType::Int256Div => {
+                    cpu.const_term = 2614;
+                    cpu.linear_term = 0;
+                }
+                ContractCostType::Int256Pow => {
+                    cpu.const_term = 5215;
+                    cpu.linear_term = 0;
+                }
+                ContractCostType::Int256Shift => {
+                    cpu.const_term = 384;
+                    cpu.linear_term = 0;
+                }
+            }
+
+            // define the memory cost model parameters
+            let mem = b.mem_bytes.get_cost_model_mut(ct);
+            match ct {
+                // This type is designated to the cpu cost. By definition, the memory cost
+                // of a (cpu) fuel is zero.
+                ContractCostType::WasmInsnExec => {
+                    mem.const_term = 0;
+                    mem.linear_term = 0;
+                }
+                // Bytes per wasmi "memory fuel". By definition this has to be a const = 1
+                // because of the 1-to-1 equivalence of the Wasm mem fuel and a host byte.
+                ContractCostType::WasmMemAlloc => {
+                    mem.const_term = 1;
+                    mem.linear_term = 0;
+                }
+                ContractCostType::HostMemAlloc => {
+                    mem.const_term = 16;
+                    mem.linear_term = 128;
+                }
+                ContractCostType::HostMemCpy => {
+                    mem.const_term = 0;
+                    mem.linear_term = 0;
+                }
+                ContractCostType::HostMemCmp => {
+                    mem.const_term = 0;
+                    mem.linear_term = 0;
+                }
+                ContractCostType::InvokeHostFunction => {
+                    mem.const_term = 1;
+                    mem.linear_term = 0;
+                }
+                ContractCostType::VisitObject => {
+                    mem.const_term = 0;
+                    mem.linear_term = 0;
+                }
+                ContractCostType::ValXdrConv => {
+                    mem.const_term = 0;
+                    mem.linear_term = 0;
+                }
+                ContractCostType::ValSer => {
+                    mem.const_term = 18;
+                    mem.linear_term = 384;
+                }
+                ContractCostType::ValDeser => {
+                    mem.const_term = 16;
+                    mem.linear_term = 128;
+                }
+                ContractCostType::ComputeSha256Hash => {
+                    mem.const_term = 40;
+                    mem.linear_term = 0;
+                }
+                ContractCostType::ComputeEd25519PubKey => {
+                    mem.const_term = 0;
+                    mem.linear_term = 0;
+                }
+                ContractCostType::MapEntry => {
+                    mem.const_term = 0;
+                    mem.linear_term = 0;
+                }
+                ContractCostType::VecEntry => {
+                    mem.const_term = 0;
+                    mem.linear_term = 0;
+                }
+                ContractCostType::GuardFrame => {
+                    mem.const_term = 472;
+                    mem.linear_term = 0;
+                }
+                ContractCostType::VerifyEd25519Sig => {
+                    mem.const_term = 0;
+                    mem.linear_term = 0;
+                }
+                ContractCostType::VmMemRead => {
+                    mem.const_term = 0;
+                    mem.linear_term = 0;
+                }
+                ContractCostType::VmMemWrite => {
+                    mem.const_term = 0;
+                    mem.linear_term = 0;
+                }
+                ContractCostType::VmInstantiation => {
+                    mem.const_term = 131031;
+                    mem.linear_term = 5080;
+                }
+                ContractCostType::VmCachedInstantiation => {
+                    mem.const_term = 131031;
+                    mem.linear_term = 5080;
+                }
+                ContractCostType::InvokeVmFunction => {
+                    mem.const_term = 14;
+                    mem.linear_term = 0;
+                }
+                ContractCostType::ChargeBudget => {
+                    mem.const_term = 0;
+                    mem.linear_term = 0;
+                }
+                ContractCostType::ComputeKeccak256Hash => {
+                    mem.const_term = 40;
+                    mem.linear_term = 0;
+                }
+                ContractCostType::ComputeEcdsaSecp256k1Key => {
+                    mem.const_term = 0;
+                    mem.linear_term = 0;
+                }
+                ContractCostType::ComputeEcdsaSecp256k1Sig => {
+                    mem.const_term = 0;
+                    mem.linear_term = 0;
+                }
+                ContractCostType::RecoverEcdsaSecp256k1Key => {
+                    mem.const_term = 201;
+                    mem.linear_term = 0;
+                }
+                ContractCostType::Int256AddSub => {
+                    mem.const_term = 119;
+                    mem.linear_term = 0;
+                }
+                ContractCostType::Int256Mul => {
+                    mem.const_term = 119;
+                    mem.linear_term = 0;
+                }
+                ContractCostType::Int256Div => {
+                    mem.const_term = 119;
+                    mem.linear_term = 0;
+                }
+                ContractCostType::Int256Pow => {
+                    mem.const_term = 119;
+                    mem.linear_term = 0;
+                }
+                ContractCostType::Int256Shift => {
+                    mem.const_term = 119;
+                    mem.linear_term = 0;
+                }
+            }
+
+            b.init_tracker();
+        }
+
+        // define the limits
+        b.cpu_insns.reset(DEFAULT_CPU_INSN_LIMIT);
+        b.mem_bytes.reset(DEFAULT_MEM_BYTES_LIMIT);
+        b
+    }
+}
+
 impl Debug for BudgetImpl {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "{:=<165}", "")?;
@@ -745,302 +1041,6 @@ impl Budget {
         costs.store = config.store;
         costs.call = config.call;
         Ok(costs)
-    }
-}
-
-/// Default settings for local/sandbox testing only. The actual operations will use parameters
-/// read on-chain from network configuration via [`from_configs`] above.
-impl Default for BudgetImpl {
-    fn default() -> Self {
-        let mut b = Self {
-            cpu_insns: BudgetDimension::new(),
-            mem_bytes: BudgetDimension::new(),
-            tracker: vec![(0, None); ContractCostType::variants().len()],
-            enabled: true,
-            fuel_config: Default::default(),
-            depth_limit: DEFAULT_HOST_DEPTH_LIMIT,
-        };
-
-        for ct in ContractCostType::variants() {
-            // define the cpu cost model parameters
-            let cpu = &mut b.cpu_insns.get_cost_model_mut(ct);
-            match ct {
-                // This is the host cpu insn cost per wasm "fuel". Every "base" wasm
-                // instruction costs 1 fuel (by default), and some particular types of
-                // instructions may cost additional amount of fuel based on
-                // wasmi's config setting.
-                ContractCostType::WasmInsnExec => {
-                    cpu.const_term = 6;
-                    cpu.linear_term = 0;
-                }
-                // Host cpu insns per wasm "memory fuel". This has to be zero since
-                // the fuel (representing cpu cost) has been covered by `WasmInsnExec`.
-                // The extra cost of mem processing is accounted for by wasmi's
-                // `config.memory_bytes_per_fuel` parameter.
-                // This type is designated to the mem cost.
-                ContractCostType::WasmMemAlloc => {
-                    cpu.const_term = 0;
-                    cpu.linear_term = 0;
-                }
-                ContractCostType::HostMemAlloc => {
-                    cpu.const_term = 1131;
-                    cpu.linear_term = 1;
-                }
-                ContractCostType::HostMemCpy => {
-                    cpu.const_term = 28;
-                    cpu.linear_term = 24;
-                }
-                ContractCostType::HostMemCmp => {
-                    cpu.const_term = 24;
-                    cpu.linear_term = 64;
-                }
-                ContractCostType::InvokeHostFunction => {
-                    cpu.const_term = 698;
-                    cpu.linear_term = 0;
-                }
-                ContractCostType::VisitObject => {
-                    cpu.const_term = 27;
-                    cpu.linear_term = 0;
-                }
-                ContractCostType::ValXdrConv => {
-                    cpu.const_term = 170;
-                    cpu.linear_term = 0;
-                }
-                ContractCostType::ValSer => {
-                    cpu.const_term = 607;
-                    cpu.linear_term = 68;
-                }
-                ContractCostType::ValDeser => {
-                    cpu.const_term = 1233;
-                    cpu.linear_term = 33;
-                }
-                ContractCostType::ComputeSha256Hash => {
-                    cpu.const_term = 2391;
-                    cpu.linear_term = 4150;
-                }
-                ContractCostType::ComputeEd25519PubKey => {
-                    cpu.const_term = 25609;
-                    cpu.linear_term = 0;
-                }
-                ContractCostType::MapEntry => {
-                    cpu.const_term = 53;
-                    cpu.linear_term = 0;
-                }
-                ContractCostType::VecEntry => {
-                    cpu.const_term = 5;
-                    cpu.linear_term = 0;
-                }
-                // To be removed
-                ContractCostType::GuardFrame => {
-                    cpu.const_term = 4050;
-                    cpu.linear_term = 0;
-                }
-                ContractCostType::VerifyEd25519Sig => {
-                    cpu.const_term = 376859;
-                    cpu.linear_term = 2744;
-                }
-                ContractCostType::VmMemRead => {
-                    cpu.const_term = 138;
-                    cpu.linear_term = 24;
-                }
-                ContractCostType::VmMemWrite => {
-                    cpu.const_term = 140;
-                    cpu.linear_term = 24;
-                }
-                ContractCostType::VmInstantiation => {
-                    cpu.const_term = 992415;
-                    cpu.linear_term = 68905;
-                }
-                ContractCostType::VmCachedInstantiation => {
-                    cpu.const_term = 992415;
-                    cpu.linear_term = 68905;
-                }
-                ContractCostType::InvokeVmFunction => {
-                    cpu.const_term = 1200;
-                    cpu.linear_term = 0;
-                }
-                ContractCostType::ChargeBudget => {
-                    cpu.const_term = 104;
-                    cpu.linear_term = 0;
-                }
-                ContractCostType::ComputeKeccak256Hash => {
-                    cpu.const_term = 2886;
-                    cpu.linear_term = 3561;
-                }
-                ContractCostType::ComputeEcdsaSecp256k1Key => {
-                    cpu.const_term = 38418;
-                    cpu.linear_term = 0;
-                }
-                ContractCostType::ComputeEcdsaSecp256k1Sig => {
-                    cpu.const_term = 243;
-                    cpu.linear_term = 0;
-                }
-                ContractCostType::RecoverEcdsaSecp256k1Key => {
-                    cpu.const_term = 1666400;
-                    cpu.linear_term = 0;
-                }
-                ContractCostType::Int256AddSub => {
-                    cpu.const_term = 1959;
-                    cpu.linear_term = 0;
-                }
-                ContractCostType::Int256Mul => {
-                    cpu.const_term = 2473;
-                    cpu.linear_term = 0;
-                }
-                ContractCostType::Int256Div => {
-                    cpu.const_term = 2614;
-                    cpu.linear_term = 0;
-                }
-                ContractCostType::Int256Pow => {
-                    cpu.const_term = 5215;
-                    cpu.linear_term = 0;
-                }
-                ContractCostType::Int256Shift => {
-                    cpu.const_term = 384;
-                    cpu.linear_term = 0;
-                }
-            }
-
-            // define the memory cost model parameters
-            let mem = b.mem_bytes.get_cost_model_mut(ct);
-            match ct {
-                // This type is designated to the cpu cost. By definition, the memory cost
-                // of a (cpu) fuel is zero.
-                ContractCostType::WasmInsnExec => {
-                    mem.const_term = 0;
-                    mem.linear_term = 0;
-                }
-                // Bytes per wasmi "memory fuel". By definition this has to be a const = 1
-                // because of the 1-to-1 equivalence of the Wasm mem fuel and a host byte.
-                ContractCostType::WasmMemAlloc => {
-                    mem.const_term = 1;
-                    mem.linear_term = 0;
-                }
-                ContractCostType::HostMemAlloc => {
-                    mem.const_term = 16;
-                    mem.linear_term = 128;
-                }
-                ContractCostType::HostMemCpy => {
-                    mem.const_term = 0;
-                    mem.linear_term = 0;
-                }
-                ContractCostType::HostMemCmp => {
-                    mem.const_term = 0;
-                    mem.linear_term = 0;
-                }
-                ContractCostType::InvokeHostFunction => {
-                    mem.const_term = 1;
-                    mem.linear_term = 0;
-                }
-                ContractCostType::VisitObject => {
-                    mem.const_term = 0;
-                    mem.linear_term = 0;
-                }
-                ContractCostType::ValXdrConv => {
-                    mem.const_term = 0;
-                    mem.linear_term = 0;
-                }
-                ContractCostType::ValSer => {
-                    mem.const_term = 18;
-                    mem.linear_term = 384;
-                }
-                ContractCostType::ValDeser => {
-                    mem.const_term = 16;
-                    mem.linear_term = 128;
-                }
-                ContractCostType::ComputeSha256Hash => {
-                    mem.const_term = 40;
-                    mem.linear_term = 0;
-                }
-                ContractCostType::ComputeEd25519PubKey => {
-                    mem.const_term = 0;
-                    mem.linear_term = 0;
-                }
-                ContractCostType::MapEntry => {
-                    mem.const_term = 0;
-                    mem.linear_term = 0;
-                }
-                ContractCostType::VecEntry => {
-                    mem.const_term = 0;
-                    mem.linear_term = 0;
-                }
-                ContractCostType::GuardFrame => {
-                    mem.const_term = 472;
-                    mem.linear_term = 0;
-                }
-                ContractCostType::VerifyEd25519Sig => {
-                    mem.const_term = 0;
-                    mem.linear_term = 0;
-                }
-                ContractCostType::VmMemRead => {
-                    mem.const_term = 0;
-                    mem.linear_term = 0;
-                }
-                ContractCostType::VmMemWrite => {
-                    mem.const_term = 0;
-                    mem.linear_term = 0;
-                }
-                ContractCostType::VmInstantiation => {
-                    mem.const_term = 131031;
-                    mem.linear_term = 5080;
-                }
-                ContractCostType::VmCachedInstantiation => {
-                    mem.const_term = 131031;
-                    mem.linear_term = 5080;
-                }
-                ContractCostType::InvokeVmFunction => {
-                    mem.const_term = 14;
-                    mem.linear_term = 0;
-                }
-                ContractCostType::ChargeBudget => {
-                    mem.const_term = 0;
-                    mem.linear_term = 0;
-                }
-                ContractCostType::ComputeKeccak256Hash => {
-                    mem.const_term = 40;
-                    mem.linear_term = 0;
-                }
-                ContractCostType::ComputeEcdsaSecp256k1Key => {
-                    mem.const_term = 0;
-                    mem.linear_term = 0;
-                }
-                ContractCostType::ComputeEcdsaSecp256k1Sig => {
-                    mem.const_term = 0;
-                    mem.linear_term = 0;
-                }
-                ContractCostType::RecoverEcdsaSecp256k1Key => {
-                    mem.const_term = 201;
-                    mem.linear_term = 0;
-                }
-                ContractCostType::Int256AddSub => {
-                    mem.const_term = 119;
-                    mem.linear_term = 0;
-                }
-                ContractCostType::Int256Mul => {
-                    mem.const_term = 119;
-                    mem.linear_term = 0;
-                }
-                ContractCostType::Int256Div => {
-                    mem.const_term = 119;
-                    mem.linear_term = 0;
-                }
-                ContractCostType::Int256Pow => {
-                    mem.const_term = 119;
-                    mem.linear_term = 0;
-                }
-                ContractCostType::Int256Shift => {
-                    mem.const_term = 119;
-                    mem.linear_term = 0;
-                }
-            }
-
-            b.init_tracker();
-        }
-
-        // define the limits
-        b.cpu_insns.reset(DEFAULT_CPU_INSN_LIMIT);
-        b.mem_bytes.reset(DEFAULT_MEM_BYTES_LIMIT);
-        b
     }
 }
 
