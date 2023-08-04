@@ -282,7 +282,7 @@ fn total_amount_charged_from_random_inputs() -> Result<(), HostError> {
     let actual = format!("{:?}", host.as_budget());
     expect![[r#"
         =====================================================================================================================================================================
-        Cpu limit: 100000000; used: 10914026
+        Cpu limit: 100000000; used: 10910802
         Mem limit: 104857600; used: 347820
         =====================================================================================================================================================================
         CostType                 iterations     input          cpu_insns      mem_bytes      const_term_cpu      lin_term_cpu        const_term_mem      lin_term_mem        
@@ -307,7 +307,7 @@ fn total_amount_charged_from_random_inputs() -> Result<(), HostError> {
         VmInstantiation          1              Some(147)      1071548        136865         992415              68905               131031              5080                
         VmCachedInstantiation    1              Some(147)      1071548        136865         992415              68905               131031              5080                
         InvokeVmFunction         47             None           56400          658            1200                0                   14                  0                   
-        ChargeBudget             294            None           30576          0              104                 0                   0                   0                   
+        ChargeBudget             263            None           27352          0              104                 0                   0                   0                   
         ComputeKeccak256Hash     1              Some(1)        2913           40             2886                3561                40                  0                   
         ComputeEcdsaSecp256k1Key 1              None           38418          0              38418               0                   0                   0                   
         ComputeEcdsaSecp256k1Sig 1              None           243            0              243                 0                   0                   0                   
@@ -318,6 +318,7 @@ fn total_amount_charged_from_random_inputs() -> Result<(), HostError> {
         Int256Pow                1              None           5215           119            5215                0                   119                 0                   
         Int256Shift              1              None           384            119            384                 0                   119                 0                   
         =====================================================================================================================================================================
+        Total # times meter was called: 31
 
     "#]]
     .assert_eq(&actual);

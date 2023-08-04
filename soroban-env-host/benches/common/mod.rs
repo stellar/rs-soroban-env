@@ -81,7 +81,6 @@ pub(crate) fn for_each_host_cost_measurement<B: Benchmark>(
     call_bench::<B, HostMemCmpMeasure>(&mut params)?;
     call_bench::<B, InvokeVmFunctionMeasure>(&mut params)?;
     call_bench::<B, InvokeHostFunctionMeasure>(&mut params)?;
-    call_bench::<B, ChargeBudgetMeasure>(&mut params)?;
     call_bench::<B, HostMemAllocMeasure>(&mut params)?;
     call_bench::<B, HostMemCpyMeasure>(&mut params)?;
     call_bench::<B, Int256AddSubMeasure>(&mut params)?;

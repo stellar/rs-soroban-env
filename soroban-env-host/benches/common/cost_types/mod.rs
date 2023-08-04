@@ -1,4 +1,3 @@
-mod charge_budget;
 mod compute_ecdsa_secp256k1_pubkey;
 mod compute_ecdsa_secp256k1_sig;
 mod compute_ed25519_pubkey;
@@ -20,7 +19,6 @@ mod visit_object;
 mod vm_ops;
 mod wasm_insn_exec;
 
-pub(crate) use charge_budget::*;
 pub(crate) use compute_ecdsa_secp256k1_pubkey::*;
 pub(crate) use compute_ecdsa_secp256k1_sig::*;
 pub(crate) use compute_ed25519_pubkey::*;
