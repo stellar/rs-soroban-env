@@ -13,7 +13,7 @@ use soroban_test_wasms::VEC;
 fn xdr_object_conversion() -> Result<(), HostError> {
     let host = Host::test_host()
         .test_budget(100_000, 100_000)
-        .enable_model(ContractCostType::ValXdrConv, 10, 0, 1, 0);
+        .enable_model(ContractCostType::HostMemCpy, 1, 0, 1, 0);
     let scmap: ScMap = host.map_err(
         vec![
             ScMapEntry {
@@ -28,16 +28,14 @@ fn xdr_object_conversion() -> Result<(), HostError> {
         .try_into(),
     )?;
     host.to_host_val(&ScVal::Map(Some(scmap)))?;
-
     host.with_budget(|budget| {
-        // NB: It might seem like this should be 5 rather han 6
-        // but due to the fact that one can convert an "object" or
-        // a "value" on separate paths that both need metering,
-        // we wind up double-counting the conversion of "objects".
-        // Possibly this should be improved in the future.
-        assert_eq!(budget.get_tracker(ContractCostType::ValXdrConv)?.0, 6);
-        assert_eq!(budget.get_cpu_insns_consumed()?, 60);
-        assert_eq!(budget.get_mem_bytes_consumed()?, 6);
+        // 2 iterations, 1 for the vec cpy, 1 for the bulk bytes cpy
+        assert_eq!(budget.get_tracker(ContractCostType::HostMemCpy)?.0, 2);
+        // 72 bytes copied for the ScVal->Val conversion: 24 (Vec bytes) + 2 (map entries) x (8 (padding bytes) + 8 (key bytes) + 8 (val bytes))
+        assert_eq!(
+            budget.get_tracker(ContractCostType::HostMemCpy)?.1,
+            Some(72)
+        );
         Ok(())
     })?;
     Ok(())
