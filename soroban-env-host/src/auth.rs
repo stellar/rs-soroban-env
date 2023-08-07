@@ -13,7 +13,7 @@ use soroban_env_common::{AddressObject, Compare, Symbol, TryFromVal, TryIntoVal,
 
 use crate::budget::{AsBudget, Budget};
 use crate::host::error::TryBorrowOrErr;
-use crate::host::metered_clone::{MeteredClone, MeteredCollect, MeteredContainer};
+use crate::host::metered_clone::{MeteredClone, MeteredContainer, MeteredIterator};
 use crate::host::Frame;
 use crate::host_object::HostVec;
 use crate::native_contract::account_contract::{
@@ -569,7 +569,7 @@ impl AuthorizationManager {
         host: &Host,
         auth_entries: Vec<SorobanAuthorizationEntry>,
     ) -> Result<Self, HostError> {
-        Vec::<AccountAuthorizationTracker>::charge_bulk_init(
+        Vec::<AccountAuthorizationTracker>::charge_bulk_init_cpy(
             auth_entries.len() as u64,
             host.as_budget(),
         )?;
@@ -653,7 +653,7 @@ impl AuthorizationManager {
         let auth_entries =
             host.visit_obj(auth_entries, |e: &HostVec| e.to_vec(host.budget_ref()))?;
         let mut trackers = self.try_borrow_invoker_contract_trackers_mut(host)?;
-        Vec::<Val>::charge_bulk_init(auth_entries.len() as u64, host.as_budget())?;
+        Vec::<Val>::charge_bulk_init_cpy(auth_entries.len() as u64, host.as_budget())?;
         trackers.reserve(auth_entries.len());
         for e in auth_entries {
             trackers.push(InvokerContractAuthorizationTracker::new(host, e)?)
@@ -852,7 +852,7 @@ impl AuthorizationManager {
             AuthorizationMode::Enforcing => {
                 let len = self.try_borrow_account_trackers(host)?.len();
                 let mut snapshots = Vec::with_capacity(len);
-                Vec::<Option<AccountAuthorizationTrackerSnapshot>>::charge_bulk_init(
+                Vec::<Option<AccountAuthorizationTrackerSnapshot>>::charge_bulk_init_cpy(
                     len as u64,
                     host.as_budget(),
                 )?;
@@ -989,7 +989,7 @@ impl AuthorizationManager {
         host: &Host,
         args: CreateContractArgs,
     ) -> Result<(), HostError> {
-        Vec::<CreateContractArgs>::charge_bulk_init(1, host.as_budget())?;
+        Vec::<CreateContractArgs>::charge_bulk_init_cpy(1, host.as_budget())?;
         self.try_borrow_call_stack_mut(host)?
             .push(AuthStackFrame::CreateContractHostFn(args));
         self.push_tracker_frame(host)
@@ -1016,7 +1016,7 @@ impl AuthorizationManager {
         };
         // Currently only contracts might appear in the call stack.
         let contract_address = host.add_host_object(ScAddress::Contract(contract_id))?;
-        Vec::<ContractInvocation>::charge_bulk_init(1, host.as_budget())?;
+        Vec::<ContractInvocation>::charge_bulk_init_cpy(1, host.as_budget())?;
         self.try_borrow_call_stack_mut(host)?
             .push(AuthStackFrame::Contract(ContractInvocation {
                 contract_address,
@@ -1205,7 +1205,7 @@ impl InvocationTracker {
 
     // metering: covered
     fn push_frame(&mut self, budget: &Budget) -> Result<(), HostError> {
-        Vec::<usize>::charge_bulk_init(1, budget)?;
+        Vec::<usize>::charge_bulk_init_cpy(1, budget)?;
         self.invocation_id_in_call_stack.push(None);
         Ok(())
     }

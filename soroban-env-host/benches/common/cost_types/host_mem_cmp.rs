@@ -12,6 +12,8 @@ pub struct HostMemCmpMeasure;
 impl HostCostMeasurement for HostMemCmpMeasure {
     type Runner = HostMemCmpRun;
 
+    const STEP_SIZE: u64 = 4096;
+
     fn new_random_case(
         _host: &Host,
         rng: &mut StdRng,

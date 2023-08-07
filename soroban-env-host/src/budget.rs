@@ -15,6 +15,16 @@ use crate::{
 
 use wasmi::{errors, FuelCosts, ResourceLimiter};
 
+// These should match the default network config settings in core
+pub const DEFAULT_CPU_INSN_LIMIT: u64 = 100_000_000;
+pub const DEFAULT_MEM_BYTES_LIMIT: u64 = 100 * 1024 * 1024; // 100MB
+
+/// The number of bits to scale the linear term by. The linear coefficient has
+/// been scaled by this factor during parameter fitting to retain more significant
+/// digits. Thus to get the cost from the raw input, we need to scale the result
+/// back by the same factor.
+pub const COST_MODEL_LIN_TERM_SCALE_BITS: u32 = 7;
+
 /// We provide a "cost model" object that evaluates a linear expression:
 ///
 ///    f(x) = a + b * Option<x>
@@ -53,8 +63,9 @@ impl HostCostModel for ContractCostParamEntry {
         match input {
             Some(input) => {
                 let mut res = const_term;
-                if self.linear_term != 0 {
-                    res = res.saturating_add(lin_term.saturating_mul(input));
+                if lin_term != 0 {
+                    let lin_cost = lin_term.saturating_mul(input) >> COST_MODEL_LIN_TERM_SCALE_BITS;
+                    res = res.saturating_add(lin_cost);
                 }
                 Ok(res)
             }
@@ -305,31 +316,34 @@ impl BudgetImpl {
             // Define what inputs actually mean. For any constant-cost types -- whether it is a
             // true constant unit cost type, or empirically assigned (via measurement) constant
             // type -- we leave the input as `None`, otherwise, we initialize the input to 0.
+            let mut init_input = |i: usize| {
+                self.tracker[i].1 = Some(0);
+            };
             let i = ct as usize;
             match ct {
                 ContractCostType::WasmInsnExec => (),
                 ContractCostType::WasmMemAlloc => (),
-                ContractCostType::HostMemAlloc => self.tracker[i].1 = Some(0), // number of bytes in host memory to allocate
-                ContractCostType::HostMemCpy => self.tracker[i].1 = Some(0), // number of bytes in host to copy
-                ContractCostType::HostMemCmp => self.tracker[i].1 = Some(0), // number of bytes in host to compare
+                ContractCostType::HostMemAlloc => init_input(i), // number of bytes in host memory to allocate
+                ContractCostType::HostMemCpy => init_input(i),   // number of bytes in host to copy
+                ContractCostType::HostMemCmp => init_input(i), // number of bytes in host to compare
                 ContractCostType::InvokeHostFunction => (),
                 ContractCostType::VisitObject => (),
                 ContractCostType::ValXdrConv => (),
-                ContractCostType::ValSer => self.tracker[i].1 = Some(0), // number of bytes in the result buffer
-                ContractCostType::ValDeser => self.tracker[i].1 = Some(0), // number of bytes in the buffer
-                ContractCostType::ComputeSha256Hash => self.tracker[i].1 = Some(0), // number of bytes in the buffer
+                ContractCostType::ValSer => init_input(i), // number of bytes in the result buffer
+                ContractCostType::ValDeser => init_input(i), // number of bytes in the buffer
+                ContractCostType::ComputeSha256Hash => init_input(i), // number of bytes in the buffer
                 ContractCostType::ComputeEd25519PubKey => (),
                 ContractCostType::MapEntry => (),
                 ContractCostType::VecEntry => (),
                 ContractCostType::GuardFrame => (),
-                ContractCostType::VerifyEd25519Sig => self.tracker[i].1 = Some(0), // length of the signed message
-                ContractCostType::VmMemRead => self.tracker[i].1 = Some(0), // number of bytes in the linear memory to read
-                ContractCostType::VmMemWrite => self.tracker[i].1 = Some(0), // number of bytes in the linear memory to write
-                ContractCostType::VmInstantiation => self.tracker[i].1 = Some(0), // length of the wasm bytes,
-                ContractCostType::VmCachedInstantiation => self.tracker[i].1 = Some(0), // length of the wasm bytes,
+                ContractCostType::VerifyEd25519Sig => init_input(i), // length of the signed message
+                ContractCostType::VmMemRead => init_input(i), // number of bytes in the linear memory to read
+                ContractCostType::VmMemWrite => init_input(i), // number of bytes in the linear memory to write
+                ContractCostType::VmInstantiation => init_input(i), // length of the wasm bytes,
+                ContractCostType::VmCachedInstantiation => init_input(i), // length of the wasm bytes,
                 ContractCostType::InvokeVmFunction => (),
                 ContractCostType::ChargeBudget => (),
-                ContractCostType::ComputeKeccak256Hash => self.tracker[i].1 = Some(0), // number of bytes in the buffer
+                ContractCostType::ComputeKeccak256Hash => init_input(i), // number of bytes in the buffer
                 ContractCostType::ComputeEcdsaSecp256k1Key => (),
                 ContractCostType::ComputeEcdsaSecp256k1Sig => (),
                 ContractCostType::RecoverEcdsaSecp256k1Key => (),
@@ -340,6 +354,37 @@ impl BudgetImpl {
                 ContractCostType::Int256Shift => (),
             }
         }
+    }
+
+    pub fn charge(
+        &mut self,
+        ty: ContractCostType,
+        iterations: u64,
+        input: Option<u64>,
+    ) -> Result<(), HostError> {
+        if !self.enabled {
+            return Ok(());
+        }
+
+        // update tracker for reporting
+        let (t_iters, t_inputs) = &mut self.tracker[ty as usize];
+        *t_iters = t_iters.saturating_add(iterations);
+        match (t_inputs, input) {
+            (None, None) => (),
+            (Some(t), Some(i)) => *t = t.saturating_add(i.saturating_mul(iterations)),
+            // internal logic error, a wrong cost type has been passed in
+            _ => return Err((ScErrorType::Context, ScErrorCode::InternalError).into()),
+        };
+        // we already know `ChargeBudget` is constant cost, so here we just add 1 iteration.
+        let t_bi = &mut self.tracker[ContractCostType::ChargeBudget as usize].0;
+        *t_bi = t_bi.saturating_add(1);
+
+        // do the actual budget charging
+        // we already know `ChargeBudget` only affects the cpu budget
+        self.cpu_insns
+            .charge(ContractCostType::ChargeBudget, 1, None)?;
+        self.cpu_insns.charge(ty, iterations, input)?;
+        self.mem_bytes.charge(ty, iterations, input)
     }
 }
 
@@ -543,43 +588,9 @@ impl Budget {
         iterations: u64,
         input: Option<u64>,
     ) -> Result<(), HostError> {
-        if !self.0.try_borrow_or_err()?.enabled {
-            return Ok(());
-        }
-
-        // NB: charging a cost-amount to the budgeting machinery itself seems to
-        // cost a similar amount as a single WASM instruction; so it's quite
-        // important to buffer WASM step counts before flushing to budgeting,
-        // and we add a constant charge here for "the cost of budget-counting"
-        // itself.
-
-        // update tracker for reporting
-        self.get_tracker_mut(ty, |(t_iters, t_inputs)| {
-            *t_iters = t_iters.saturating_add(iterations);
-            match (t_inputs, input) {
-                (None, None) => Ok(()),
-                (Some(t), Some(i)) => {
-                    *t = t.saturating_add(i.saturating_mul(iterations));
-                    Ok(())
-                }
-                // TODO: improve error code "internal error"
-                _ => Err((ScErrorType::Context, ScErrorCode::InternalError).into()),
-            }
-        })?;
-        self.get_tracker_mut(ContractCostType::ChargeBudget, |(t_iters, _)| {
-            // we already know `ChargeBudget` has undefined input, so here we just add 1 iteration.
-            *t_iters = t_iters.saturating_add(1);
-            Ok(())
-        })?;
-
-        // do the actual budget charging
-        self.mut_budget(|mut b| {
-            // we already know `ChargeBudget` only affects the cpu budget
-            b.cpu_insns
-                .charge(ContractCostType::ChargeBudget, 1, None)?;
-            b.cpu_insns.charge(ty, iterations, input)?;
-            b.mem_bytes.charge(ty, iterations, input)
-        })
+        self.0
+            .try_borrow_mut_or_err()?
+            .charge(ty, iterations, input)
     }
 
     /// Charges the budget under the specified [`CostType`]. The actual amount
@@ -588,7 +599,7 @@ impl Budget {
     /// Otherwise it is a linear model.  The caller needs to ensure the input
     /// passed is consistent with the inherent model underneath.
     pub fn charge(&self, ty: ContractCostType, input: Option<u64>) -> Result<(), HostError> {
-        self.bulk_charge(ty, 1, input)
+        self.0.try_borrow_mut_or_err()?.charge(ty, 1, input)
     }
 
     pub fn with_free_budget<F, T>(&self, f: F) -> Result<T, HostError>
@@ -615,6 +626,7 @@ impl Budget {
         Ok(self.0.try_borrow_or_err()?.tracker[ty as usize])
     }
 
+    #[cfg(any(test, feature = "testutils"))]
     pub(crate) fn get_tracker_mut<F>(&self, ty: ContractCostType, f: F) -> Result<(), HostError>
     where
         F: FnOnce(&mut (u64, Option<u64>)) -> Result<(), HostError>,
@@ -758,7 +770,7 @@ impl Default for BudgetImpl {
                 // instructions may cost additional amount of fuel based on
                 // wasmi's config setting.
                 ContractCostType::WasmInsnExec => {
-                    cpu.const_term = 7;
+                    cpu.const_term = 6;
                     cpu.linear_term = 0;
                 }
                 // Host cpu insns per wasm "memory fuel". This has to be zero since
@@ -771,43 +783,43 @@ impl Default for BudgetImpl {
                     cpu.linear_term = 0;
                 }
                 ContractCostType::HostMemAlloc => {
-                    cpu.const_term = 2350;
-                    cpu.linear_term = 0;
-                }
-                ContractCostType::HostMemCpy => {
-                    cpu.const_term = 23;
-                    cpu.linear_term = 0;
-                }
-                ContractCostType::HostMemCmp => {
-                    cpu.const_term = 43;
+                    cpu.const_term = 1131;
                     cpu.linear_term = 1;
                 }
+                ContractCostType::HostMemCpy => {
+                    cpu.const_term = 28;
+                    cpu.linear_term = 24;
+                }
+                ContractCostType::HostMemCmp => {
+                    cpu.const_term = 24;
+                    cpu.linear_term = 64;
+                }
                 ContractCostType::InvokeHostFunction => {
-                    cpu.const_term = 928;
+                    cpu.const_term = 698;
                     cpu.linear_term = 0;
                 }
                 ContractCostType::VisitObject => {
-                    cpu.const_term = 19;
+                    cpu.const_term = 27;
                     cpu.linear_term = 0;
                 }
                 ContractCostType::ValXdrConv => {
-                    cpu.const_term = 134;
+                    cpu.const_term = 170;
                     cpu.linear_term = 0;
                 }
                 ContractCostType::ValSer => {
-                    cpu.const_term = 587;
-                    cpu.linear_term = 1;
+                    cpu.const_term = 607;
+                    cpu.linear_term = 68;
                 }
                 ContractCostType::ValDeser => {
-                    cpu.const_term = 870;
-                    cpu.linear_term = 0;
-                }
-                ContractCostType::ComputeSha256Hash => {
-                    cpu.const_term = 1725;
+                    cpu.const_term = 1233;
                     cpu.linear_term = 33;
                 }
+                ContractCostType::ComputeSha256Hash => {
+                    cpu.const_term = 2391;
+                    cpu.linear_term = 4150;
+                }
                 ContractCostType::ComputeEd25519PubKey => {
-                    cpu.const_term = 25551;
+                    cpu.const_term = 25609;
                     cpu.linear_term = 0;
                 }
                 ContractCostType::MapEntry => {
@@ -818,72 +830,73 @@ impl Default for BudgetImpl {
                     cpu.const_term = 5;
                     cpu.linear_term = 0;
                 }
+                // To be removed
                 ContractCostType::GuardFrame => {
                     cpu.const_term = 4050;
                     cpu.linear_term = 0;
                 }
                 ContractCostType::VerifyEd25519Sig => {
-                    cpu.const_term = 369634;
-                    cpu.linear_term = 21;
+                    cpu.const_term = 376859;
+                    cpu.linear_term = 2744;
                 }
                 ContractCostType::VmMemRead => {
-                    cpu.const_term = 0;
-                    cpu.linear_term = 0;
+                    cpu.const_term = 138;
+                    cpu.linear_term = 24;
                 }
                 ContractCostType::VmMemWrite => {
-                    cpu.const_term = 124;
-                    cpu.linear_term = 0;
+                    cpu.const_term = 140;
+                    cpu.linear_term = 24;
                 }
                 ContractCostType::VmInstantiation => {
-                    cpu.const_term = 600447;
-                    cpu.linear_term = 484;
+                    cpu.const_term = 992415;
+                    cpu.linear_term = 68905;
                 }
                 ContractCostType::VmCachedInstantiation => {
-                    cpu.const_term = 600447;
-                    cpu.linear_term = 484;
+                    cpu.const_term = 992415;
+                    cpu.linear_term = 68905;
                 }
                 ContractCostType::InvokeVmFunction => {
-                    cpu.const_term = 5926;
+                    cpu.const_term = 1200;
                     cpu.linear_term = 0;
                 }
                 ContractCostType::ChargeBudget => {
-                    cpu.const_term = 130;
+                    cpu.const_term = 104;
                     cpu.linear_term = 0;
                 }
                 ContractCostType::ComputeKeccak256Hash => {
-                    cpu.const_term = 3322;
-                    cpu.linear_term = 46;
+                    cpu.const_term = 2886;
+                    cpu.linear_term = 3561;
                 }
                 ContractCostType::ComputeEcdsaSecp256k1Key => {
-                    cpu.const_term = 56525;
+                    cpu.const_term = 38418;
                     cpu.linear_term = 0;
                 }
                 ContractCostType::ComputeEcdsaSecp256k1Sig => {
-                    cpu.const_term = 250;
+                    cpu.const_term = 243;
                     cpu.linear_term = 0;
                 }
                 ContractCostType::RecoverEcdsaSecp256k1Key => {
-                    cpu.const_term = 2319640;
+                    cpu.const_term = 1666400;
                     cpu.linear_term = 0;
                 }
                 ContractCostType::Int256AddSub => {
-                    cpu.const_term = 735;
+                    cpu.const_term = 1959;
                     cpu.linear_term = 0;
                 }
                 ContractCostType::Int256Mul => {
-                    cpu.const_term = 1224;
+                    cpu.const_term = 2473;
                     cpu.linear_term = 0;
                 }
                 ContractCostType::Int256Div => {
-                    cpu.const_term = 1347;
+                    cpu.const_term = 2614;
                     cpu.linear_term = 0;
                 }
                 ContractCostType::Int256Pow => {
-                    cpu.const_term = 5350;
+                    cpu.const_term = 5215;
                     cpu.linear_term = 0;
                 }
                 ContractCostType::Int256Shift => {
-                    cpu.const_term = 538;
+                    cpu.const_term = 384;
                     cpu.linear_term = 0;
                 }
             }
@@ -904,8 +917,8 @@ impl Default for BudgetImpl {
                     mem.linear_term = 0;
                 }
                 ContractCostType::HostMemAlloc => {
-                    mem.const_term = 8;
-                    mem.linear_term = 1;
+                    mem.const_term = 16;
+                    mem.linear_term = 128;
                 }
                 ContractCostType::HostMemCpy => {
                     mem.const_term = 0;
@@ -916,7 +929,7 @@ impl Default for BudgetImpl {
                     mem.linear_term = 0;
                 }
                 ContractCostType::InvokeHostFunction => {
-                    mem.const_term = 0;
+                    mem.const_term = 1;
                     mem.linear_term = 0;
                 }
                 ContractCostType::VisitObject => {
@@ -928,12 +941,12 @@ impl Default for BudgetImpl {
                     mem.linear_term = 0;
                 }
                 ContractCostType::ValSer => {
-                    mem.const_term = 9;
-                    mem.linear_term = 3;
+                    mem.const_term = 18;
+                    mem.linear_term = 384;
                 }
                 ContractCostType::ValDeser => {
-                    mem.const_term = 4;
-                    mem.linear_term = 1;
+                    mem.const_term = 16;
+                    mem.linear_term = 128;
                 }
                 ContractCostType::ComputeSha256Hash => {
                     mem.const_term = 40;
@@ -968,15 +981,15 @@ impl Default for BudgetImpl {
                     mem.linear_term = 0;
                 }
                 ContractCostType::VmInstantiation => {
-                    mem.const_term = 117871;
-                    mem.linear_term = 40;
+                    mem.const_term = 131031;
+                    mem.linear_term = 5080;
                 }
                 ContractCostType::VmCachedInstantiation => {
-                    mem.const_term = 117871;
-                    mem.linear_term = 40;
+                    mem.const_term = 131031;
+                    mem.linear_term = 5080;
                 }
                 ContractCostType::InvokeVmFunction => {
-                    mem.const_term = 486;
+                    mem.const_term = 14;
                     mem.linear_term = 0;
                 }
                 ContractCostType::ChargeBudget => {
@@ -996,7 +1009,7 @@ impl Default for BudgetImpl {
                     mem.linear_term = 0;
                 }
                 ContractCostType::RecoverEcdsaSecp256k1Key => {
-                    mem.const_term = 181;
+                    mem.const_term = 201;
                     mem.linear_term = 0;
                 }
                 ContractCostType::Int256AddSub => {
@@ -1024,19 +1037,9 @@ impl Default for BudgetImpl {
             b.init_tracker();
         }
 
-        // For the time being we don't have "on chain" cost models
-        // so we just set some up here that we calibrated manually
-        // in the adjacent benchmarks.
-        //
-        // We don't run for a time unit thought, we run for an estimated
-        // (calibrated) number of CPU instructions.
-        //
-        // Assuming 2ghz chips at 2 instructions per cycle, we can guess about
-        // 4bn instructions / sec. So about 4000 instructions per usec, or 400k
-        // instructions in a 100usec time budget, or about 5479 wasm instructions
-        // using the calibration above (73 CPU insns per wasm insn). Very roughly!
-        b.cpu_insns.reset(40_000_000); // 100x the estimation above which corresponds to 10ms
-        b.mem_bytes.reset(0x320_0000); // 50MB of memory
+        // define the limits
+        b.cpu_insns.reset(DEFAULT_CPU_INSN_LIMIT);
+        b.mem_bytes.reset(DEFAULT_MEM_BYTES_LIMIT);
         b
     }
 }

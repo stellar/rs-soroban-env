@@ -10,7 +10,7 @@ use soroban_env_common::{
 };
 
 use crate::{
-    budget::{AsBudget, Budget},
+    budget::{AsBudget, Budget, COST_MODEL_LIN_TERM_SCALE_BITS},
     host::error::TryBorrowOrErr,
     storage::{test_storage::MockSnapshotSource, Storage},
     xdr, Host, HostError,
@@ -97,7 +97,7 @@ impl Host {
                 .try_borrow_mut_or_err()?
                 .cpu_insns
                 .get_cost_model_mut(ty)
-                .linear_term = lin_cpu as i64;
+                .linear_term = (lin_cpu << COST_MODEL_LIN_TERM_SCALE_BITS) as i64;
 
             budget
                 .0
@@ -110,7 +110,7 @@ impl Host {
                 .try_borrow_mut_or_err()?
                 .mem_bytes
                 .get_cost_model_mut(ty)
-                .linear_term = lin_mem as i64;
+                .linear_term = (lin_mem << COST_MODEL_LIN_TERM_SCALE_BITS) as i64;
             Ok(())
         })
         .unwrap();
