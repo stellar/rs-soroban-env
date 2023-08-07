@@ -15,16 +15,6 @@ fn wasm_module_with_empty_invoke() -> Vec<u8> {
     fe.finish_and_export("test").finish()
 }
 
-fn wasm_module_with_dummy_hostfn_invoke(repeat: u64) -> Vec<u8> {
-    let mut fe = ModEmitter::new().func(Arity(0), 0);
-    for _ in 0..repeat {
-        fe.dummy0();
-        fe.drop();
-    }
-    fe.push(Symbol::try_from_small_str("pass").unwrap());
-    fe.finish_and_export("test").finish()
-}
-
 pub(crate) struct InvokeVmFunctionMeasure;
 
 // This measures the roundtrip cost of invoking a VM (guest) function from the host.
@@ -50,10 +40,7 @@ pub(crate) struct InvokeHostFunctionMeasure;
 impl HostCostMeasurement for InvokeHostFunctionMeasure {
     type Runner = InvokeHostFunctionRun;
 
-    fn new_random_case(host: &Host, _rng: &mut StdRng, input: u64) -> Rc<Vm> {
-        let input = 1 + input * Self::STEP_SIZE;
-        let id: Hash = [0; 32].into();
-        let code = wasm_module_with_dummy_hostfn_invoke(input);
-        Vm::new(&host, id, &code).unwrap()
+    fn new_random_case(host: &Host, rng: &mut StdRng, input: u64) -> Rc<Vm> {
+        InvokeVmFunctionMeasure::new_random_case(host, rng, input)
     }
 }

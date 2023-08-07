@@ -12,7 +12,16 @@ mod dispatch;
 mod fuel_refillable;
 mod func_info;
 
-use crate::{budget::AsBudget, err, host::error::TryBorrowOrErr, xdr::ContractCostType, HostError};
+#[cfg(any(test, feature = "testutils"))]
+pub(crate) use dispatch::dummy0;
+
+use crate::{
+    budget::AsBudget,
+    err,
+    host::{error::TryBorrowOrErr, metered_clone::MeteredContainer},
+    xdr::ContractCostType,
+    HostError,
+};
 use std::{cell::RefCell, io::Cursor, rc::Rc};
 
 use super::{xdr::Hash, Host, Symbol, Val};
@@ -27,7 +36,7 @@ use soroban_env_common::{
     ConversionError, SymbolStr, TryIntoVal, WasmiMarshal,
 };
 
-use wasmi::{Engine, FuelConsumptionMode, Func, Instance, Linker, Memory, Module, Store, Value};
+use wasmi::{Engine, FuelConsumptionMode, Instance, Linker, Memory, Module, Store, Value};
 
 #[cfg(any(test, feature = "testutils"))]
 use crate::VmCaller;
@@ -226,18 +235,52 @@ impl Vm {
         }
     }
 
-    // Wrapper for the [`Func`] call, mostly taking care of fuel supply from
-    // host to the VM and applying VM fuel consumption back to the host budget.
-    // This is where the host->VM->host boundaries are crossed.
-    fn wrapped_func_call(
+    // Wrapper for the [`Func`] call which is metered as a component.
+    // Resolves the function entity, and takes care the conversion between and
+    // tranfering of the host budget / VM fuel. This is where the host->VM->host
+    // boundaries are crossed.
+    pub(crate) fn metered_func_call(
         self: &Rc<Self>,
         host: &Host,
         func_sym: &Symbol,
-        func: &Func,
         inputs: &[Value],
     ) -> Result<Val, HostError> {
+        host.charge_budget(ContractCostType::InvokeVmFunction, None)?;
+
+        // resolve the function entity to be called
+        let func_ss: SymbolStr = func_sym.try_into_val(host)?;
+        let ext = match self
+            .instance
+            .get_export(&*self.store.try_borrow_or_err()?, func_ss.as_ref())
+        {
+            None => {
+                return Err(host.err(
+                    ScErrorType::WasmVm,
+                    ScErrorCode::MissingValue,
+                    "invoking unknown export",
+                    &[func_sym.to_val()],
+                ))
+            }
+            Some(e) => e,
+        };
+        let func = match ext.into_func() {
+            None => {
+                return Err(host.err(
+                    ScErrorType::WasmVm,
+                    ScErrorCode::UnexpectedType,
+                    "export is not a function",
+                    &[func_sym.to_val()],
+                ))
+            }
+            Some(e) => e,
+        };
+
+        // call the function
         let mut wasm_ret: [Value; 1] = [Value::I64(0)];
         self.store.try_borrow_mut_or_err()?.add_fuel_to_vm(host)?;
+        // Metering: the `func.call` will trigger `wasmi::Call` (or `CallIndirect`) instruction,
+        // which is technically covered by wasmi fuel metering. So we are double charging a bit
+        // here (by a few 100s cpu insns). It is better to be safe.
         let res = func.call(
             &mut *self.store.try_borrow_mut_or_err()?,
             inputs,
@@ -298,39 +341,12 @@ impl Vm {
         args: &[Val],
     ) -> Result<Val, HostError> {
         let _span = tracy_span!("Vm::invoke_function_raw");
-        host.charge_budget(ContractCostType::InvokeVmFunction, None)?;
+        Vec::<Value>::charge_bulk_init_cpy(args.len() as u64, host.as_budget())?;
         let wasm_args: Vec<Value> = args
             .iter()
             .map(|i| host.absolute_to_relative(*i).map(|v| v.marshal_from_self()))
             .collect::<Result<Vec<Value>, HostError>>()?;
-        let func_ss: SymbolStr = func_sym.try_into_val(host)?;
-        let ext = match self
-            .instance
-            .get_export(&*self.store.try_borrow_or_err()?, func_ss.as_ref())
-        {
-            None => {
-                return Err(host.err(
-                    ScErrorType::WasmVm,
-                    ScErrorCode::MissingValue,
-                    "invoking unknown export",
-                    &[func_sym.to_val()],
-                ))
-            }
-            Some(e) => e,
-        };
-        let func = match ext.into_func() {
-            None => {
-                return Err(host.err(
-                    ScErrorType::WasmVm,
-                    ScErrorCode::UnexpectedType,
-                    "export is not a function",
-                    &[func_sym.to_val()],
-                ))
-            }
-            Some(e) => e,
-        };
-
-        self.wrapped_func_call(host, func_sym, &func, wasm_args.as_slice())
+        self.metered_func_call(host, func_sym, wasm_args.as_slice())
     }
 
     fn module_custom_section(m: &Module, name: impl AsRef<str>) -> Option<&[u8]> {
@@ -353,7 +369,7 @@ impl Vm {
     /// to this VM's `Store` and `Instance`, and calls the provided function
     /// back with it. Mainly used for testing.
     #[cfg(any(test, feature = "testutils"))]
-    pub fn with_vmcaller<F, T>(&self, f: F) -> Result<T, HostError>
+    pub(crate) fn with_vmcaller<F, T>(&self, f: F) -> Result<T, HostError>
     where
         F: FnOnce(&mut VmCaller<Host>) -> Result<T, HostError>,
     {
@@ -362,5 +378,16 @@ impl Vm {
         let caller: Caller<Host> = Caller::new(&mut ctx, Some(&self.instance));
         let mut vmcaller: VmCaller<Host> = VmCaller(Some(caller));
         f(&mut vmcaller)
+    }
+
+    #[cfg(any(test, feature = "testutils"))]
+    pub(crate) fn with_caller<F, T>(&self, f: F) -> Result<T, HostError>
+    where
+        F: FnOnce(Caller<Host>) -> Result<T, HostError>,
+    {
+        let store: &mut Store<Host> = &mut *self.store.try_borrow_mut_or_err()?;
+        let mut ctx: StoreContextMut<Host> = store.into();
+        let caller: Caller<Host> = Caller::new(&mut ctx, Some(&self.instance));
+        f(caller)
     }
 }
