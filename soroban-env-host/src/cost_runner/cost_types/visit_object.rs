@@ -7,13 +7,15 @@ pub struct VisitObjectRun;
 impl CostRunner for VisitObjectRun {
     const COST_TYPE: ContractCostType = ContractCostType::VisitObject;
 
+    const RUN_ITERATIONS: u64 = 1000;
+
     type SampleType = Vec<Object>;
 
-    type RecycledType = (Option<i64>, Self::SampleType);
+    type RecycledType = Self::SampleType;
 
     fn run_iter(host: &crate::Host, iter: u64, sample: Self::SampleType) -> Self::RecycledType {
         unsafe {
-            let i = black_box(
+            let _ = black_box(
                 host.unchecked_visit_val_obj(sample[iter as usize % sample.len()], |obj| match obj
                     .unwrap()
                 {
@@ -22,7 +24,7 @@ impl CostRunner for VisitObjectRun {
                 })
                 .unwrap(),
             );
-            (Some(i), sample)
+            black_box(sample)
         }
     }
 
@@ -32,6 +34,6 @@ impl CostRunner for VisitObjectRun {
         sample: Self::SampleType,
     ) -> Self::RecycledType {
         black_box(host.charge_budget(Self::COST_TYPE, None).unwrap());
-        black_box((None, sample))
+        black_box(sample)
     }
 }
