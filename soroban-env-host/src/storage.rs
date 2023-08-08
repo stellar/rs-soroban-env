@@ -344,7 +344,7 @@ impl Storage {
                 ScErrorType::Storage,
                 ScErrorCode::InvalidAction,
                 "trying to bump past max expiration ledger",
-                &[],
+                &[new_expiration.into()],
             ));
         }
 
