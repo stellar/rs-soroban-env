@@ -2836,6 +2836,13 @@ impl VmCallerEnv for Host {
         self.with_ledger_info(|li| Ok(self.add_host_object(li.timestamp)?.into()))
     }
 
+    fn get_max_expiration_ledger(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+    ) -> Result<U32Val, Self::Error> {
+        Ok(self.max_expiration_ledger()?.into())
+    }
+
     fn get_ledger_network_id(
         &self,
         _vmcaller: &mut VmCaller<Host>,

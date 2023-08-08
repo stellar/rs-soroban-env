@@ -57,7 +57,7 @@ impl TokenTest {
             base_reserve: 5_000_000,
             min_persistent_entry_expiration: 4096,
             min_temp_entry_expiration: 16,
-            max_entry_expiration: 10000,
+            max_entry_expiration: 6_312_000,
             autobump_ledgers: 0,
         })
         .unwrap();
@@ -1747,7 +1747,7 @@ fn test_auth_rejected_for_incorrect_nonce() {
         &token.address,
         "mint",
         args.clone(),
-        Some((12345, 123 + 10000)),
+        Some((12345, 123 + 6_312_000)),
     );
     assert!(test
         .host
