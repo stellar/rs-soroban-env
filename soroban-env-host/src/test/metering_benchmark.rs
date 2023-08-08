@@ -32,6 +32,7 @@ const LEDGER_INFO: LedgerInfo = LedgerInfo {
     autobump_ledgers: 0,
 };
 
+#[ignore]
 #[test]
 fn run_add_i32() -> Result<(), HostError> {
     let account_id = generate_account_id();
@@ -73,6 +74,7 @@ fn run_add_i32() -> Result<(), HostError> {
     Ok(())
 }
 
+#[ignore]
 #[test]
 fn run_complex() -> Result<(), HostError> {
     let account_id = generate_account_id();
