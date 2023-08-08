@@ -6,8 +6,6 @@ pub(crate) struct VisitObjectMeasure;
 impl HostCostMeasurement for VisitObjectMeasure {
     type Runner = VisitObjectRun;
 
-    const STEP_SIZE: u64 = 100;
-
     fn new_random_case(host: &Host, _rng: &mut rand::prelude::StdRng, input: u64) -> Vec<Object> {
         // During setup we inject a bunch of copies of the object to make
         // the host object array large.

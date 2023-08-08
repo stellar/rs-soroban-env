@@ -1,6 +1,6 @@
-use std::collections::HashSet;
-
 use log::info;
+use std::collections::HashSet;
+use std::str::FromStr;
 
 use linregress::{FormulaRegressionBuilder, RegressionDataBuilder};
 
@@ -33,9 +33,14 @@ impl FPCostModel {
     }
     // Extract the parameters from FPs to integers
     pub fn params_as_u64(&self) -> (u64, u64) {
+        let extract_param = |f: f64| -> u64 {
+            // clamp the float to 1 digit (to filter noise) then take the ceil
+            let f = f64::from_str(format!("{:.1}", f).as_str()).unwrap();
+            f.ceil() as u64
+        };
         (
-            self.const_param.max(0.0).round() as u64,
-            self.lin_param.max(0.0).round() as u64,
+            extract_param(self.const_param),
+            extract_param(self.lin_param),
         )
     }
 }

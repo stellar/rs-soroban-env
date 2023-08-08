@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use super::metered_clone::{self, MeteredClone, MeteredCollect, MeteredContainer};
+use super::metered_clone::{self, MeteredClone, MeteredContainer, MeteredIterator};
 use crate::budget::AsBudget;
 use crate::err;
 use crate::host_object::{HostMap, HostObject, HostVec};
@@ -301,7 +301,7 @@ impl Host {
     }
 
     pub(crate) fn metered_slice_to_vec(&self, s: &[u8]) -> Result<Vec<u8>, HostError> {
-        Vec::<u8>::charge_bulk_init(s.len() as u64, self.as_budget())?;
+        Vec::<u8>::charge_bulk_init_cpy(s.len() as u64, self.as_budget())?;
         Ok(s.to_vec())
     }
 

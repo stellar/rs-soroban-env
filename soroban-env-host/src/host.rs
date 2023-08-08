@@ -1044,7 +1044,7 @@ impl EnvBase for Host {
     }
 
     fn map_new_from_slices(&self, keys: &[&str], vals: &[Val]) -> Result<MapObject, HostError> {
-        Vec::<Symbol>::charge_bulk_init(keys.len() as u64, self.as_budget())?;
+        Vec::<Symbol>::charge_bulk_init_cpy(keys.len() as u64, self.as_budget())?;
         // If only fallible iterators worked better in Rust, we would not need this Vec<...>.
         let mut key_syms: Vec<Symbol> = Vec::with_capacity(keys.len());
         for k in keys.iter() {
@@ -1683,7 +1683,7 @@ impl VmCallerEnv for Host {
             pos: keys_pos,
             len,
         } = self.decode_vmslice(keys_pos, len)?;
-        Vec::<Symbol>::charge_bulk_init(len as u64, self.as_budget())?;
+        Vec::<Symbol>::charge_bulk_init_cpy(len as u64, self.as_budget())?;
         let mut key_syms: Vec<Symbol> = Vec::with_capacity(len as usize);
         self.metered_vm_scan_slices_in_linear_memory(
             vmcaller,
@@ -1701,7 +1701,7 @@ impl VmCallerEnv for Host {
 
         // Step 2: extract all val Vals.
         let vals_pos: u32 = vals_pos.into();
-        Vec::<Val>::charge_bulk_init(len as u64, self.as_budget())?;
+        Vec::<Val>::charge_bulk_init_cpy(len as u64, self.as_budget())?;
         let mut vals: Vec<Val> = vec![Val::VOID.into(); len as usize];
         self.metered_vm_read_vals_from_linear_memory::<8, Val>(
             vmcaller,
@@ -1992,7 +1992,7 @@ impl VmCallerEnv for Host {
         len: U32Val,
     ) -> Result<VecObject, HostError> {
         let VmSlice { vm, pos, len } = self.decode_vmslice(vals_pos, len)?;
-        Vec::<Val>::charge_bulk_init(len as u64, self.as_budget())?;
+        Vec::<Val>::charge_bulk_init_cpy(len as u64, self.as_budget())?;
         let mut vals: Vec<Val> = vec![Val::VOID.to_val(); len as usize];
         self.metered_vm_read_vals_from_linear_memory::<8, Val>(
             vmcaller,

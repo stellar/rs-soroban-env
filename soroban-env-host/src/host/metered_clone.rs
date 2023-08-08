@@ -76,14 +76,15 @@ pub(crate) fn charge_heap_alloc<T: DeclaredSizeForMetering>(
 }
 
 /// Represents a collection type which can be created from an iterator, and provides
-/// a method for bulk charging its initalization cost.
+/// a method for bulk charging its creation cost.
 pub trait MeteredContainer: FromIterator<Self::Item> + DeclaredSizeForMetering
 where
     Self: Sized,
 {
     type Item: DeclaredSizeForMetering;
-
-    fn charge_bulk_init(len: u64, budget: &Budget) -> Result<(), HostError> {
+    /// Charges the cost for bulk initializing the container and copying `len` elements
+    /// into it.
+    fn charge_bulk_init_cpy(len: u64, budget: &Budget) -> Result<(), HostError> {
         charge_shallow_copy::<Self>(1, budget)?;
         charge_heap_alloc::<Self::Item>(len, budget)?;
         charge_shallow_copy::<Self::Item>(len, budget)
@@ -106,7 +107,7 @@ impl<T: DeclaredSizeForMetering, E: DeclaredSizeForMetering> MeteredContainer
 /// Returns:
 ///   Err - if either the budget was exceeded or the iterator lacks the size hint
 ///   Ok - otherwise
-pub trait MeteredCollect: Iterator
+pub trait MeteredIterator: Iterator
 where
     Self::Item: DeclaredSizeForMetering,
     Self: Sized,
@@ -116,7 +117,7 @@ where
         budget: &Budget,
     ) -> Result<B, HostError> {
         if let (_, Some(ub)) = self.size_hint() {
-            B::charge_bulk_init(ub as u64, budget)?;
+            B::charge_bulk_init_cpy(ub as u64, budget)?;
             Ok(self.collect())
         } else {
             Err((ScErrorType::Object, ScErrorCode::InternalError).into())
@@ -124,7 +125,7 @@ where
     }
 }
 
-impl<T: DeclaredSizeForMetering, I: Iterator, F> MeteredCollect for std::iter::Map<I, F> where
+impl<T: DeclaredSizeForMetering, I: Iterator, F> MeteredIterator for std::iter::Map<I, F> where
     F: FnMut(I::Item) -> T
 {
 }

@@ -1202,6 +1202,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "soroban-write-upgrade-bytes-contract"
+version = "0.0.0"
+dependencies = [
+ "soroban-sdk",
+]
+
+[[package]]
 name = "spin"
 version = "0.9.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"

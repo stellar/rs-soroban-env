@@ -9,6 +9,8 @@ pub(crate) struct HostMemCpyMeasure;
 impl HostCostMeasurement for HostMemCpyMeasure {
     type Runner = HostMemCpyRun;
 
+    const STEP_SIZE: u64 = 4096;
+
     fn new_random_case(_host: &Host, rng: &mut StdRng, input: u64) -> (Vec<u8>, Vec<u8>) {
         let len = 1 + input * Self::STEP_SIZE;
         let mut a = vec![0; len as usize];

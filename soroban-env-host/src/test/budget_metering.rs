@@ -1,6 +1,6 @@
 use crate::{
     budget::{AsBudget, Budget},
-    host::metered_clone::{MeteredClone, MeteredCollect},
+    host::metered_clone::{MeteredClone, MeteredIterator},
     host::metered_xdr::metered_write_xdr,
     xdr::{ContractCostType, ScMap, ScMapEntry, ScVal},
     Env, Host, HostError, Symbol, Val,
@@ -282,41 +282,41 @@ fn total_amount_charged_from_random_inputs() -> Result<(), HostError> {
     let actual = format!("{:?}", host.as_budget());
     expect![[r#"
         =====================================================================================================================================================================
-        Cpu limit: 40000000; used: 11026555
-        Mem limit: 52428800; used: 343551
+        Cpu limit: 100000000; used: 10914026
+        Mem limit: 104857600; used: 347820
         =====================================================================================================================================================================
         CostType                 iterations     input          cpu_insns      mem_bytes      const_term_cpu      lin_term_cpu        const_term_mem      lin_term_mem        
-        WasmInsnExec             246            None           1722           0              7                   0                   0                   0                   
+        WasmInsnExec             246            None           1476           0              6                   0                   0                   0                   
         WasmMemAlloc             184            None           0              184            0                   0                   1                   0                   
-        HostMemAlloc             1              Some(152)      2350           160            2350                0                   8                   1                   
-        HostMemCpy               1              Some(65)       23             0              23                  0                   0                   0                   
-        HostMemCmp               1              Some(74)       117            0              43                  1                   0                   0                   
-        InvokeHostFunction       176            None           163328         0              928                 0                   0                   0                   
-        VisitObject              97             None           1843           0              19                  0                   0                   0                   
-        ValXdrConv               148            None           19832          0              134                 0                   0                   0                   
-        ValSer                   1              Some(49)       636            156            587                 1                   9                   3                   
-        ValDeser                 1              Some(103)      870            107            870                 0                   4                   1                   
-        ComputeSha256Hash        1              Some(193)      8094           40             1725                33                  40                  0                   
-        ComputeEd25519PubKey     226            None           5774526        0              25551               0                   0                   0                   
+        HostMemAlloc             1              Some(152)      1132           168            1131                1                   16                  128                 
+        HostMemCpy               1              Some(65)       40             0              28                  24                  0                   0                   
+        HostMemCmp               1              Some(74)       61             0              24                  64                  0                   0                   
+        InvokeHostFunction       176            None           122848         176            698                 0                   1                   0                   
+        VisitObject              97             None           2619           0              27                  0                   0                   0                   
+        ValXdrConv               148            None           25160          0              170                 0                   0                   0                   
+        ValSer                   1              Some(49)       633            165            607                 68                  18                  384                 
+        ValDeser                 1              Some(103)      1259           119            1233                33                  16                  128                 
+        ComputeSha256Hash        1              Some(193)      8648           40             2391                4150                40                  0                   
+        ComputeEd25519PubKey     226            None           5787634        0              25609               0                   0                   0                   
         MapEntry                 250            None           13250          0              53                  0                   0                   0                   
         VecEntry                 186            None           930            0              5                   0                   0                   0                   
         GuardFrame               152            None           615600         71744          4050                0                   472                 0                   
-        VerifyEd25519Sig         1              Some(227)      374401         0              369634              21                  0                   0                   
-        VmMemRead                1              Some(69)       0              0              0                   0                   0                   0                   
-        VmMemWrite               1              Some(160)      124            0              124                 0                   0                   0                   
-        VmInstantiation          1              Some(147)      671595         123751         600447              484                 117871              40                  
-        VmCachedInstantiation    1              Some(147)      671595         123751         600447              484                 117871              40                  
-        InvokeVmFunction         47             None           278522         22842          5926                0                   486                 0                   
-        ChargeBudget             294            None           38220          0              130                 0                   0                   0                   
-        ComputeKeccak256Hash     1              Some(1)        3368           40             3322                46                  40                  0                   
-        ComputeEcdsaSecp256k1Key 1              None           56525          0              56525               0                   0                   0                   
-        ComputeEcdsaSecp256k1Sig 1              None           250            0              250                 0                   0                   0                   
-        RecoverEcdsaSecp256k1Key 1              None           2319640        181            2319640             0                   181                 0                   
-        Int256AddSub             1              None           735            119            735                 0                   119                 0                   
-        Int256Mul                1              None           1224           119            1224                0                   119                 0                   
-        Int256Div                1              None           1347           119            1347                0                   119                 0                   
-        Int256Pow                1              None           5350           119            5350                0                   119                 0                   
-        Int256Shift              1              None           538            119            538                 0                   119                 0                   
+        VerifyEd25519Sig         1              Some(227)      381725         0              376859              2744                0                   0                   
+        VmMemRead                1              Some(69)       150            0              138                 24                  0                   0                   
+        VmMemWrite               1              Some(160)      170            0              140                 24                  0                   0                   
+        VmInstantiation          1              Some(147)      1071548        136865         992415              68905               131031              5080                
+        VmCachedInstantiation    1              Some(147)      1071548        136865         992415              68905               131031              5080                
+        InvokeVmFunction         47             None           56400          658            1200                0                   14                  0                   
+        ChargeBudget             294            None           30576          0              104                 0                   0                   0                   
+        ComputeKeccak256Hash     1              Some(1)        2913           40             2886                3561                40                  0                   
+        ComputeEcdsaSecp256k1Key 1              None           38418          0              38418               0                   0                   0                   
+        ComputeEcdsaSecp256k1Sig 1              None           243            0              243                 0                   0                   0                   
+        RecoverEcdsaSecp256k1Key 1              None           1666400        201            1666400             0                   201                 0                   
+        Int256AddSub             1              None           1959           119            1959                0                   119                 0                   
+        Int256Mul                1              None           2473           119            2473                0                   119                 0                   
+        Int256Div                1              None           2614           119            2614                0                   119                 0                   
+        Int256Pow                1              None           5215           119            5215                0                   119                 0                   
+        Int256Shift              1              None           384            119            384                 0                   119                 0                   
         =====================================================================================================================================================================
 
     "#]]

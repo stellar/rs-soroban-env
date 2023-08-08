@@ -450,7 +450,7 @@ impl Host {
         &self,
         encoded_contract_auth_entries: I,
     ) -> Result<Vec<SorobanAuthorizationEntry>, HostError> {
-        Vec::<SorobanAuthorizationEntry>::charge_bulk_init(
+        Vec::<SorobanAuthorizationEntry>::charge_bulk_init_cpy(
             encoded_contract_auth_entries.len() as u64,
             self.as_budget(),
         )?;

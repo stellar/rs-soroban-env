@@ -54,7 +54,7 @@ impl InvokerContractAuthEntry {
                 host.visit_obj(
                     contract_invocation.sub_invocations.as_object(),
                     |v: &HostVec| {
-                        Vec::<AuthorizedInvocation>::charge_bulk_init(
+                        Vec::<AuthorizedInvocation>::charge_bulk_init_cpy(
                             v.len() as u64,
                             host.as_budget(),
                         )?;

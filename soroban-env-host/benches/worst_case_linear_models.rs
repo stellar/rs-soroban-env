@@ -11,7 +11,7 @@ use tabwriter::{Alignment, TabWriter};
 struct WorstCaseLinearModels;
 impl Benchmark for WorstCaseLinearModels {
     fn bench<HCM: HostCostMeasurement>() -> std::io::Result<(FPCostModel, FPCostModel)> {
-        let mut measurements = measure_worst_case_costs::<HCM>(0..20)?;
+        let mut measurements = measure_worst_case_costs::<HCM>(1..20)?;
 
         measurements.preprocess();
         measurements.report_table();

@@ -133,7 +133,7 @@ impl Host {
             prng: None,
             storage: None,
         };
-        Vec::<Context>::charge_bulk_init(1, self.as_budget())?;
+        Vec::<Context>::charge_bulk_init_cpy(1, self.as_budget())?;
         self.try_borrow_context_mut()?.push(ctx);
         Ok(RollbackPoint {
             storage: self.try_borrow_storage()?.map.clone(),
