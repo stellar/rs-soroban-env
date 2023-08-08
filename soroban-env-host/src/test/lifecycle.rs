@@ -103,23 +103,17 @@ fn test_create_contract_from_source_account(host: &Host, wasm: &[u8]) -> Hash {
 
     let wasm_hash = Hash(Sha256::digest(wasm).try_into().unwrap());
 
-    host.with_mut_storage(|s: &mut Storage| {
-        s.footprint
-            .record_access(
-                &host.contract_instance_ledger_key(&contract_id).unwrap(),
-                AccessType::ReadWrite,
-                host.as_budget(),
-            )
-            .unwrap();
-        s.footprint
-            .record_access(
-                &host.contract_code_ledger_key(&wasm_hash).unwrap(),
-                AccessType::ReadWrite,
-                host.as_budget(),
-            )
-            .unwrap();
-        Ok(())
-    })
+    host.setup_storage_entry(
+        host.contract_instance_ledger_key(&contract_id).unwrap(),
+        None,
+        AccessType::ReadWrite,
+    )
+    .unwrap();
+    host.setup_storage_entry(
+        host.contract_code_ledger_key(&wasm_hash).unwrap(),
+        None,
+        AccessType::ReadWrite,
+    )
     .unwrap();
 
     // Create contract
@@ -185,23 +179,17 @@ fn create_contract_using_parent_id_test() {
     // Install the code for the child contract.
     let wasm_hash = xdr::Hash(Sha256::digest(&child_wasm).try_into().unwrap());
     // Add the contract code and code reference access to the footprint.
-    host.with_mut_storage(|s: &mut Storage| {
-        s.footprint
-            .record_access(
-                &host.contract_instance_ledger_key(&child_id).unwrap(),
-                AccessType::ReadWrite,
-                host.as_budget(),
-            )
-            .unwrap();
-        s.footprint
-            .record_access(
-                &host.contract_code_ledger_key(&wasm_hash).unwrap(),
-                AccessType::ReadWrite,
-                host.as_budget(),
-            )
-            .unwrap();
-        Ok(())
-    })
+    host.setup_storage_entry(
+        host.contract_instance_ledger_key(&child_id).unwrap(),
+        None,
+        AccessType::ReadWrite,
+    )
+    .unwrap();
+    host.setup_storage_entry(
+        host.contract_code_ledger_key(&wasm_hash).unwrap(),
+        None,
+        AccessType::ReadWrite,
+    )
     .unwrap();
 
     // Prepare arguments for the factory contract call.

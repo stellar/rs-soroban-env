@@ -205,22 +205,7 @@ impl Storage {
         budget: &Budget,
     ) -> Result<Rc<LedgerEntry>, HostError> {
         let _span = tracy_span!("storage get");
-        let ty = AccessType::ReadOnly;
-        match self.mode {
-            FootprintMode::Recording(ref src) => {
-                self.footprint.record_access(key, ty, budget)?;
-                // In recording mode we treat the map as a cache
-                // that misses read-through to the underlying src.
-                if !self.map.contains_key::<Rc<LedgerKey>>(key, budget)? {
-                    self.map = self
-                        .map
-                        .insert(Rc::clone(key), Some(src.get(key)?), budget)?;
-                }
-            }
-            FootprintMode::Enforcing => {
-                self.footprint.enforce_access(key, ty, budget)?;
-            }
-        };
+        self.prepare_read_only_access(key, budget)?;
         match self.map.get::<Rc<LedgerKey>>(key, budget)? {
             None | Some(None) => Err((ScErrorType::Storage, ScErrorCode::MissingValue).into()),
             Some(Some(val)) => Ok(Rc::clone(val)),
@@ -292,27 +277,14 @@ impl Storage {
     /// declared in the [Footprint].
     pub fn has(&mut self, key: &Rc<LedgerKey>, budget: &Budget) -> Result<bool, HostError> {
         let _span = tracy_span!("storage has");
-        let ty = AccessType::ReadOnly;
-        match self.mode {
-            FootprintMode::Recording(ref src) => {
-                self.footprint.record_access(key, ty, budget)?;
-                // We don't cache has() calls but we do
-                // consult the cache before answering them.
-                match self.map.get::<Rc<LedgerKey>>(key, budget)? {
-                    Some(None) => Ok(false),
-                    Some(Some(_)) => Ok(true),
-                    None => src.has(key),
-                }
-            }
-            FootprintMode::Enforcing => {
-                self.footprint.enforce_access(key, ty, budget)?;
-                match self.map.get::<Rc<LedgerKey>>(key, budget)? {
-                    Some(None) => Ok(false),
-                    Some(Some(_)) => Ok(true),
-                    None => Ok(false),
-                }
-            }
-        }
+        self.prepare_read_only_access(key, budget)?;
+        Ok(self
+            .map
+            .get::<Rc<LedgerKey>>(key, budget)?
+            // Key has to be present in storage at this point, so not having it
+            // would be an internal error.
+            .ok_or_else(|| HostError::from((ScErrorType::Storage, ScErrorCode::InternalError)))?
+            .is_some())
     }
 
     /// Bumps `key` to live for at least `bump_by_ledgers` from now (not
@@ -413,6 +385,33 @@ impl Storage {
                 .map
                 .insert(key, Some(Rc::new(new_entry)), host.budget_ref())?;
         }
+        Ok(())
+    }
+
+    fn prepare_read_only_access(
+        &mut self,
+        key: &Rc<LedgerKey>,
+        budget: &Budget,
+    ) -> Result<(), HostError> {
+        let ty = AccessType::ReadOnly;
+        match self.mode {
+            FootprintMode::Recording(ref src) => {
+                self.footprint.record_access(key, ty, budget)?;
+                // In recording mode we treat the map as a cache
+                // that misses read-through to the underlying src.
+                if !self.map.contains_key::<Rc<LedgerKey>>(key, budget)? {
+                    let value = if src.has(&key)? {
+                        Some(src.get(key)?)
+                    } else {
+                        None
+                    };
+                    self.map = self.map.insert(Rc::clone(key), value, budget)?;
+                }
+            }
+            FootprintMode::Enforcing => {
+                self.footprint.enforce_access(key, ty, budget)?;
+            }
+        };
         Ok(())
     }
 }

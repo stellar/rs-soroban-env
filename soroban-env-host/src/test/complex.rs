@@ -1,5 +1,8 @@
 use crate::{
-    budget::Budget, host_object::HostVec, storage::Storage, Host, HostError, MeteredOrdMap,
+    budget::Budget,
+    host_object::HostVec,
+    storage::{Footprint, Storage},
+    Host, HostError, MeteredOrdMap,
 };
 use soroban_env_common::{Env, Symbol};
 use soroban_test_wasms::COMPLEX;
@@ -39,9 +42,14 @@ fn run_complex() -> Result<(), HostError> {
 
     // Run 2: enforce preflight footprint, with empty map -- contract should only write.
     {
-        let store = Storage::with_enforcing_footprint_and_map(foot, MeteredOrdMap::default());
+        let store = Storage::with_enforcing_footprint_and_map(
+            Footprint::default(),
+            MeteredOrdMap::default(),
+        );
         let host = Host::with_storage_and_budget(store, Budget::default());
         host.set_ledger_info(info)?;
+        host.setup_storage_footprint(foot)?;
+
         let contract_id_obj =
             host.register_test_contract_wasm_from_source_account(COMPLEX, account_id, salt);
         host.call(
