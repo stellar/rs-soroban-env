@@ -73,6 +73,31 @@ fn vm_hostfn_invocation() -> Result<(), HostError> {
 }
 
 #[test]
+fn test_vm_fuel_metering() -> Result<(), HostError> {
+    use super::util::wasm_module_with_4n_insns;
+    let host = Host::test_host_with_recording_footprint();
+    let id_obj = host.register_test_contract_wasm(&wasm_module_with_4n_insns(1000));
+    let host = host
+        .test_budget(100_000, 1_048_576)
+        .enable_model(ContractCostType::WasmInsnExec, 6, 0, 0, 0)
+        .enable_model(ContractCostType::WasmMemAlloc, 0, 0, 1, 0);
+
+    let sym = Symbol::try_from_small_str("test").unwrap();
+    let args = host.test_vec_obj::<u32>(&[4375])?;
+
+    // try_call
+    host.call(id_obj, sym, args)?;
+    host.with_budget(|budget| {
+        assert_eq!(budget.get_tracker(ContractCostType::WasmInsnExec)?.0, 4005);
+        assert_eq!(budget.get_tracker(ContractCostType::WasmMemAlloc)?.0, 65536);
+        assert_eq!(budget.get_cpu_insns_consumed()?, 24030);
+        assert_eq!(budget.get_mem_bytes_consumed()?, 65536);
+        Ok(())
+    })?;
+    Ok(())
+}
+
+#[test]
 fn metered_xdr() -> Result<(), HostError> {
     let host = Host::test_host()
         .test_budget(100_000, 100_000)
