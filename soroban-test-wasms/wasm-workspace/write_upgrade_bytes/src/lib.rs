@@ -24,5 +24,3 @@ impl WriteBytesContract {
         hash
     }
 }
-
-mod test;
