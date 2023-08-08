@@ -62,6 +62,8 @@ use self::{
     metered_xdr::metered_write_xdr,
 };
 use crate::impl_bignum_host_fns;
+#[cfg(any(test, feature = "testutils"))]
+use crate::storage::{AccessType, Footprint};
 use crate::Compare;
 #[cfg(any(test, feature = "testutils"))]
 use crate::TryIntoVal;
@@ -653,14 +655,48 @@ impl Host {
     }
 
     // Writes an arbitrary ledger entry to storage.
-    // "testutils" is not covered by budget metering.
+    // "testutils" are not covered by budget metering.
     #[cfg(any(test, feature = "testutils"))]
     pub fn add_ledger_entry(
         &self,
         key: &Rc<LedgerKey>,
         val: &Rc<soroban_env_common::xdr::LedgerEntry>,
     ) -> Result<(), HostError> {
-        self.with_mut_storage(|storage| storage.put(key, val, self.as_budget()))
+        self.as_budget().with_free_budget(|| {
+            self.with_mut_storage(|storage| storage.put(key, val, self.as_budget()))
+        })
+    }
+
+    // Performs the necessary setup to access the provided ledger key/entry in
+    // enforcing storage mode.
+    // "testutils" are not covered by budget metering.
+    #[cfg(any(test, feature = "testutils"))]
+    pub fn setup_storage_entry(
+        &self,
+        key: Rc<LedgerKey>,
+        val: Option<Rc<soroban_env_common::xdr::LedgerEntry>>,
+        access_type: AccessType,
+    ) -> Result<(), HostError> {
+        self.as_budget().with_free_budget(|| {
+            self.with_mut_storage(|storage| {
+                storage
+                    .footprint
+                    .record_access(&key, access_type, self.as_budget())?;
+                storage.map = storage.map.insert(key, val, self.as_budget())?;
+                Ok(())
+            })
+        })
+    }
+
+    // Performs the necessary setup to access all the entries in provided
+    // footprint in enforcing mode.
+    // "testutils" are not covered by budget metering.
+    #[cfg(any(test, feature = "testutils"))]
+    pub fn setup_storage_footprint(&self, footprint: Footprint) -> Result<(), HostError> {
+        for (key, access_type) in footprint.0.map {
+            self.setup_storage_entry(key, None, access_type)?;
+        }
+        Ok(())
     }
 
     // Returns the authorizations that have been authenticated for the last
@@ -2091,14 +2127,14 @@ impl VmCallerEnv for Host {
                         ContractDataEntryBody::DataEntry(data) => Ok(self.to_host_val(&data.val)?),
                         _ => Err(self.err(
                             ScErrorType::Storage,
-                            ScErrorCode::UnexpectedType,
+                            ScErrorCode::InternalError,
                             "expected DataEntry",
                             &[],
                         )),
                     },
                     _ => Err(self.err(
                         ScErrorType::Storage,
-                        ScErrorCode::UnexpectedType,
+                        ScErrorCode::InternalError,
                         "expected contract data ledger entry",
                         &[],
                     )),

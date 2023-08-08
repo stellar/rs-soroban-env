@@ -1,6 +1,8 @@
 use crate::{
-    budget::Budget, host_object::HostVec, storage::Storage, Host, HostError, LedgerInfo,
-    MeteredOrdMap,
+    budget::Budget,
+    host_object::HostVec,
+    storage::{Footprint, Storage},
+    Host, HostError, LedgerInfo, MeteredOrdMap,
 };
 use soroban_env_common::{Env, Symbol};
 use soroban_test_wasms::{ADD_I32, COMPLEX};
@@ -30,7 +32,6 @@ const LEDGER_INFO: LedgerInfo = LedgerInfo {
     autobump_ledgers: 0,
 };
 
-#[ignore]
 #[test]
 fn run_add_i32() -> Result<(), HostError> {
     let account_id = generate_account_id();
@@ -54,9 +55,13 @@ fn run_add_i32() -> Result<(), HostError> {
     };
     // Run 2: enforce preflight footprint
     {
-        let store = Storage::with_enforcing_footprint_and_map(foot, MeteredOrdMap::default());
+        let store = Storage::with_enforcing_footprint_and_map(
+            Footprint::default(),
+            MeteredOrdMap::default(),
+        );
         let host = Host::with_storage_and_budget(store, Budget::default());
         host.set_ledger_info(LEDGER_INFO)?;
+        host.setup_storage_footprint(foot)?;
         let contract_id_obj =
             host.register_test_contract_wasm_from_source_account(ADD_I32, account_id, salt);
         host.measured_call(
@@ -68,7 +73,6 @@ fn run_add_i32() -> Result<(), HostError> {
     Ok(())
 }
 
-#[ignore]
 #[test]
 fn run_complex() -> Result<(), HostError> {
     let account_id = generate_account_id();
@@ -91,9 +95,13 @@ fn run_complex() -> Result<(), HostError> {
 
     // Run 2: enforce preflight footprint, with empty map -- contract should only write.
     {
-        let store = Storage::with_enforcing_footprint_and_map(foot, MeteredOrdMap::default());
+        let store = Storage::with_enforcing_footprint_and_map(
+            Footprint::default(),
+            MeteredOrdMap::default(),
+        );
         let host = Host::with_storage_and_budget(store, Budget::default());
         host.set_ledger_info(LEDGER_INFO)?;
+        host.setup_storage_footprint(foot)?;
         let contract_id_obj =
             host.register_test_contract_wasm_from_source_account(COMPLEX, account_id, salt);
         host.measured_call(
