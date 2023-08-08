@@ -48,8 +48,9 @@ fn test_storage(host: &Host, contract_id: AddressObject, storage: &str) {
         true
     );
 
-    let max_entry_expiration: u32 = host.get_max_entry_expiration().unwrap().into();
-    let max_bump = max_entry_expiration - 1;
+    let max_expiration_ledger: u32 = host.max_expiration_ledger().unwrap().into();
+    let ledger_seq: u32 = host.get_ledger_sequence().unwrap().into();
+    let max_bump = max_expiration_ledger - ledger_seq;
 
     // Smoke test bump
     let bump_args = if storage == "instance" {
