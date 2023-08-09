@@ -81,20 +81,21 @@ impl Host {
         let key = self.contract_code_ledger_key(wasm_hash)?;
         match &self
             .try_borrow_storage_mut()?
-            .get(&key, self.as_budget())?
+            .get(&key, self.as_budget())
+            .map_err(|e| self.decorate_contract_code_storage_error(e, wasm_hash))?
             .data
         {
             LedgerEntryData::ContractCode(e) => match &e.body {
                 ContractCodeEntryBody::DataEntry(code) => code.metered_clone(self.as_budget()),
                 _ => Err(err!(
                     self,
-                    (ScErrorType::Storage, ScErrorCode::UnexpectedType),
+                    (ScErrorType::Storage, ScErrorCode::InternalError),
                     "expected DataEntry",
                 )),
             },
             _ => Err(err!(
                 self,
-                (ScErrorType::Storage, ScErrorCode::UnexpectedType),
+                (ScErrorType::Storage, ScErrorCode::InternalError),
                 "expected ContractCode ledger entry",
                 *wasm_hash
             )),
@@ -103,7 +104,9 @@ impl Host {
 
     pub(crate) fn wasm_exists(&self, wasm_hash: &Hash) -> Result<bool, HostError> {
         let key = self.contract_code_ledger_key(wasm_hash)?;
-        self.try_borrow_storage_mut()?.has(&key, self.as_budget())
+        self.try_borrow_storage_mut()?
+            .has(&key, self.as_budget())
+            .map_err(|e| self.decorate_contract_code_storage_error(e, wasm_hash))
     }
 
     // Notes on metering: `from_host_obj` and `put` to storage covered, rest are free.
@@ -118,7 +121,11 @@ impl Host {
             flags: 0,
         });
 
-        if self.try_borrow_storage_mut()?.has(&key, self.as_budget())? {
+        if self
+            .try_borrow_storage_mut()?
+            .has(&key, self.as_budget())
+            .map_err(|e| self.decorate_contract_instance_storage_error(e, &contract_id))?
+        {
             let mut current = (*self.try_borrow_storage_mut()?.get(&key, self.as_budget())?)
                 .metered_clone(&self.0.budget)?;
 
@@ -129,28 +136,27 @@ impl Host {
                 _ => {
                     return Err(self.err(
                         ScErrorType::Storage,
-                        ScErrorCode::UnexpectedType,
+                        ScErrorCode::InternalError,
                         "expected DataEntry",
                         &[],
                     ));
                 }
             }
             self.try_borrow_storage_mut()?
-                .put(&key, &Rc::new(current), self.as_budget())?;
+                .put(&key, &Rc::new(current), self.as_budget())
+                .map_err(|e| self.decorate_contract_instance_storage_error(e, &contract_id))?;
         } else {
             let data = LedgerEntryData::ContractData(ContractDataEntry {
-                contract: ScAddress::Contract(contract_id),
+                contract: ScAddress::Contract(contract_id.metered_clone(self.as_budget())?),
                 key: ScVal::LedgerKeyContractInstance,
                 body,
                 durability: ContractDataDurability::Persistent,
                 expiration_ledger_seq: self
                     .get_min_expiration_ledger(ContractDataDurability::Persistent)?,
             });
-            self.try_borrow_storage_mut()?.put(
-                key,
-                &Host::ledger_entry_from_data(data),
-                self.as_budget(),
-            )?;
+            self.try_borrow_storage_mut()?
+                .put(key, &Host::ledger_entry_from_data(data), self.as_budget())
+                .map_err(|e| self.decorate_contract_instance_storage_error(e, &contract_id))?;
         }
         Ok(())
     }
@@ -174,7 +180,7 @@ impl Host {
             LedgerEntryData::Account(ae) => ae.metered_clone(self.as_budget()),
             e => Err(err!(
                 self,
-                (ScErrorType::Storage, ScErrorCode::UnexpectedType),
+                (ScErrorType::Storage, ScErrorCode::InternalError),
                 "ledger entry is not account",
                 e.name()
             )),
