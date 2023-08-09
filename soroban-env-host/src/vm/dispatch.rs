@@ -141,9 +141,6 @@ macro_rules! generate_dispatch_functions {
                 {
                     let _span = tracy_span!(std::stringify!($fn_id));
 
-                    // Notes on metering: a flat charge per host function invocation.
-                    // This does not account for the actual work being done in those functions,
-                    // which are accounted for individually at the operation level.
                     let host = caller.data().clone();
 
                     // This is where the VM -> Host boundary is crossed.
@@ -151,7 +148,10 @@ macro_rules! generate_dispatch_functions {
                     // the host maintains control of the budget.
                     FuelRefillable::return_fuel_to_host(&mut caller, &host).map_err(|he| Trap::from(he))?;
 
-                    host.charge_budget(ContractCostType::InvokeHostFunction, None)?;
+                    // Charge for the host function dispatching: conversion between VM fuel and
+                    // host budget, marshalling values. This does not account for the actual work
+                    // being done in those functions, which are metered individually by the implementation.
+                    host.charge_budget(ContractCostType::DispatchHostFunction, None)?;
                     let mut vmcaller = VmCaller(Some(caller));
                     // The odd / seemingly-redundant use of `wasmi::Value` here
                     // as intermediates -- rather than just passing Vals --

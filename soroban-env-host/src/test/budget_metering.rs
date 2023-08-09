@@ -13,7 +13,7 @@ use soroban_test_wasms::VEC;
 fn xdr_object_conversion() -> Result<(), HostError> {
     let host = Host::test_host()
         .test_budget(100_000, 100_000)
-        .enable_model(ContractCostType::ValXdrConv, 10, 0, 1, 0);
+        .enable_model(ContractCostType::HostMemCpy, 1, 0, 1, 0);
     let scmap: ScMap = host.map_err(
         vec![
             ScMapEntry {
@@ -28,16 +28,14 @@ fn xdr_object_conversion() -> Result<(), HostError> {
         .try_into(),
     )?;
     host.to_host_val(&ScVal::Map(Some(scmap)))?;
-
     host.with_budget(|budget| {
-        // NB: It might seem like this should be 5 rather han 6
-        // but due to the fact that one can convert an "object" or
-        // a "value" on separate paths that both need metering,
-        // we wind up double-counting the conversion of "objects".
-        // Possibly this should be improved in the future.
-        assert_eq!(budget.get_tracker(ContractCostType::ValXdrConv)?.0, 6);
-        assert_eq!(budget.get_cpu_insns_consumed()?, 60);
-        assert_eq!(budget.get_mem_bytes_consumed()?, 6);
+        // 2 iterations, 1 for the vec cpy, 1 for the bulk bytes cpy
+        assert_eq!(budget.get_tracker(ContractCostType::HostMemCpy)?.0, 2);
+        // 72 bytes copied for the ScVal->Val conversion: 24 (Vec bytes) + 2 (map entries) x (8 (padding bytes) + 8 (key bytes) + 8 (val bytes))
+        assert_eq!(
+            budget.get_tracker(ContractCostType::HostMemCpy)?.1,
+            Some(72)
+        );
         Ok(())
     })?;
     Ok(())
@@ -51,10 +49,10 @@ fn vm_hostfn_invocation() -> Result<(), HostError> {
     let host = host
         .test_budget(100_000, 1_048_576)
         .enable_model(ContractCostType::InvokeVmFunction, 10, 0, 1, 0)
-        .enable_model(ContractCostType::InvokeHostFunction, 10, 0, 1, 0);
+        .enable_model(ContractCostType::DispatchHostFunction, 10, 0, 1, 0);
 
     // `vec_err` is a test contract function which calls `vec_new` (1 call)
-    // and `vec_put` (1 call) so total input of 2 to the budget from `CostType::InvokeHostFunction`.
+    // and `vec_put` (1 call) so total input of 2 to the budget from `CostType::DispatchHostFunction`.
     let sym = Symbol::try_from_small_str("vec_err").unwrap();
     let args = host.test_vec_obj::<u32>(&[1])?;
 
@@ -63,11 +61,85 @@ fn vm_hostfn_invocation() -> Result<(), HostError> {
     host.with_budget(|budget| {
         assert_eq!(budget.get_tracker(ContractCostType::InvokeVmFunction)?.0, 1);
         assert_eq!(
-            budget.get_tracker(ContractCostType::InvokeHostFunction)?.0,
+            budget
+                .get_tracker(ContractCostType::DispatchHostFunction)?
+                .0,
             2
         );
         assert_eq!(budget.get_cpu_insns_consumed()?, 30);
         assert_eq!(budget.get_mem_bytes_consumed()?, 3);
+        Ok(())
+    })?;
+
+    Ok(())
+}
+
+#[test]
+fn test_vm_fuel_metering() -> Result<(), HostError> {
+    use super::util::wasm_module_with_4n_insns;
+    let host = Host::test_host_with_recording_footprint();
+    let id_obj = host.register_test_contract_wasm(&wasm_module_with_4n_insns(1000));
+    let sym = Symbol::try_from_small_str("test").unwrap();
+    let args = host.test_vec_obj::<u32>(&[4375])?;
+    let budget_err = (ScErrorType::Budget, ScErrorCode::ExceededLimit);
+
+    // successful call with sufficient budget
+    let host = host
+        .test_budget(100_000, 1_048_576)
+        .enable_model(ContractCostType::WasmInsnExec, 6, 0, 0, 0)
+        .enable_model(ContractCostType::WasmMemAlloc, 0, 0, 1, 0);
+    host.call(id_obj, sym, args)?;
+    let (cpu_count, mem_count, cpu_consumed, mem_consumed) = host.with_budget(|budget| {
+        Ok((
+            budget.get_tracker(ContractCostType::WasmInsnExec)?.0,
+            budget.get_tracker(ContractCostType::WasmMemAlloc)?.0,
+            budget.get_cpu_insns_consumed()?,
+            budget.get_mem_bytes_consumed()?,
+        ))
+    })?;
+    assert_eq!(
+        (cpu_count, mem_count, cpu_consumed, mem_consumed),
+        (4005, 65536, 24030, 65536)
+    );
+
+    // giving it the exact required amount will success
+    let (cpu_required, mem_required) = (cpu_consumed, mem_consumed);
+    let host = host
+        .test_budget(cpu_required, mem_required)
+        .enable_model(ContractCostType::WasmInsnExec, 6, 0, 0, 0)
+        .enable_model(ContractCostType::WasmMemAlloc, 0, 0, 1, 0);
+    host.call(id_obj, sym, args)?;
+    host.with_budget(|budget| {
+        assert_eq!(budget.get_cpu_insns_consumed()?, cpu_required);
+        assert_eq!(budget.get_mem_bytes_consumed()?, mem_required);
+        Ok(())
+    })?;
+
+    // give it one less cpu results in failure with no cpu consumption but full mem consumption
+    let (cpu_required, mem_required) = (cpu_consumed - 1, mem_consumed);
+    let host = host
+        .test_budget(cpu_required, mem_required)
+        .enable_model(ContractCostType::WasmInsnExec, 6, 0, 0, 0)
+        .enable_model(ContractCostType::WasmMemAlloc, 0, 0, 1, 0);
+    let res = host.try_call(id_obj, sym, args);
+    assert!(HostError::result_matches_err(res, budget_err));
+    host.with_budget(|budget| {
+        assert_eq!(budget.get_cpu_insns_consumed()?, 0);
+        assert_eq!(budget.get_mem_bytes_consumed()?, mem_consumed);
+        Ok(())
+    })?;
+
+    // give it one less mem results in failure with no cpu consumption or mem consumption
+    let (cpu_required, mem_required) = (cpu_consumed, mem_consumed - 1);
+    let host = host
+        .test_budget(cpu_required, mem_required)
+        .enable_model(ContractCostType::WasmInsnExec, 6, 0, 0, 0)
+        .enable_model(ContractCostType::WasmMemAlloc, 0, 0, 1, 0);
+    let res = host.try_call(id_obj, sym, args);
+    assert!(HostError::result_matches_err(res, budget_err));
+    host.with_budget(|budget| {
+        assert_eq!(budget.get_cpu_insns_consumed()?, 0);
+        assert_eq!(budget.get_mem_bytes_consumed()?, 0);
         Ok(())
     })?;
 
@@ -250,21 +322,18 @@ fn total_amount_charged_from_random_inputs() -> Result<(), HostError> {
         (1, Some(74)),
         (176, None),
         (97, None),
-        (148, None),
         (1, Some(49)),
         (1, Some(103)),
         (1, Some(193)),
         (226, None),
         (250, None),
         (186, None),
-        (152, None),
         (1, Some(227)),
         (1, Some(69)),
         (1, Some(160)),
         (1, Some(147)),
         (1, Some(147)),
         (47, None),
-        (263, None),
         (1, Some(1)),
         (1, None),
         (1, None),
@@ -282,42 +351,40 @@ fn total_amount_charged_from_random_inputs() -> Result<(), HostError> {
     let actual = format!("{:?}", host.as_budget());
     expect![[r#"
         =====================================================================================================================================================================
-        Cpu limit: 100000000; used: 10914026
-        Mem limit: 104857600; used: 347820
+        Cpu limit: 100000000; used: 10115314
+        Mem limit: 104857600; used: 276044
         =====================================================================================================================================================================
         CostType                 iterations     input          cpu_insns      mem_bytes      const_term_cpu      lin_term_cpu        const_term_mem      lin_term_mem        
         WasmInsnExec             246            None           1476           0              6                   0                   0                   0                   
         WasmMemAlloc             184            None           0              184            0                   0                   1                   0                   
-        HostMemAlloc             1              Some(152)      1132           168            1131                1                   16                  128                 
-        HostMemCpy               1              Some(65)       40             0              28                  24                  0                   0                   
-        HostMemCmp               1              Some(74)       61             0              24                  64                  0                   0                   
-        InvokeHostFunction       176            None           122848         176            698                 0                   1                   0                   
-        VisitObject              97             None           2619           0              27                  0                   0                   0                   
-        ValXdrConv               148            None           25160          0              170                 0                   0                   0                   
-        ValSer                   1              Some(49)       633            165            607                 68                  18                  384                 
-        ValDeser                 1              Some(103)      1259           119            1233                33                  16                  128                 
-        ComputeSha256Hash        1              Some(193)      8648           40             2391                4150                40                  0                   
-        ComputeEd25519PubKey     226            None           5787634        0              25609               0                   0                   0                   
+        HostMemAlloc             1              Some(152)      1142           168            1141                1                   16                  128                 
+        HostMemCpy               1              Some(65)       51             0              39                  24                  0                   0                   
+        HostMemCmp               1              Some(74)       57             0              20                  64                  0                   0                   
+        DispatchHostFunction     176            None           46288          0              263                 0                   0                   0                   
+        VisitObject              97             None           10476          0              108                 0                   0                   0                   
+        ValSer                   1              Some(49)       617            165            591                 69                  18                  384                 
+        ValDeser                 1              Some(103)      1139           119            1112                34                  16                  128                 
+        ComputeSha256Hash        1              Some(193)      9179           40             2924                4149                40                  0                   
+        ComputeEd25519PubKey     226            None           5781984        0              25584               0                   0                   0                   
         MapEntry                 250            None           13250          0              53                  0                   0                   0                   
-        VecEntry                 186            None           930            0              5                   0                   0                   0                   
-        GuardFrame               152            None           615600         71744          4050                0                   472                 0                   
-        VerifyEd25519Sig         1              Some(227)      381725         0              376859              2744                0                   0                   
-        VmMemRead                1              Some(69)       150            0              138                 24                  0                   0                   
-        VmMemWrite               1              Some(160)      170            0              140                 24                  0                   0                   
-        VmInstantiation          1              Some(147)      1071548        136865         992415              68905               131031              5080                
-        VmCachedInstantiation    1              Some(147)      1071548        136865         992415              68905               131031              5080                
-        InvokeVmFunction         47             None           56400          658            1200                0                   14                  0                   
-        ChargeBudget             294            None           30576          0              104                 0                   0                   0                   
-        ComputeKeccak256Hash     1              Some(1)        2913           40             2886                3561                40                  0                   
-        ComputeEcdsaSecp256k1Key 1              None           38418          0              38418               0                   0                   0                   
-        ComputeEcdsaSecp256k1Sig 1              None           243            0              243                 0                   0                   0                   
-        RecoverEcdsaSecp256k1Key 1              None           1666400        201            1666400             0                   201                 0                   
-        Int256AddSub             1              None           1959           119            1959                0                   119                 0                   
-        Int256Mul                1              None           2473           119            2473                0                   119                 0                   
-        Int256Div                1              None           2614           119            2614                0                   119                 0                   
-        Int256Pow                1              None           5215           119            5215                0                   119                 0                   
-        Int256Shift              1              None           384            119            384                 0                   119                 0                   
+        VecEntry                 186            None           0              0              0                   0                   0                   0                   
+        VerifyEd25519Sig         1              Some(227)      381748         0              376877              2747                0                   0                   
+        VmMemRead                1              Some(69)       194            0              182                 24                  0                   0                   
+        VmMemWrite               1              Some(160)      212            0              182                 24                  0                   0                   
+        VmInstantiation          1              Some(147)      1047534        136937         967154              69991               131103              5080                
+        VmCachedInstantiation    1              Some(147)      1047534        136937         967154              69991               131103              5080                
+        InvokeVmFunction         47             None           52875          658            1125                0                   14                  0                   
+        ComputeKeccak256Hash     1              Some(1)        2917           40             2890                3561                40                  0                   
+        ComputeEcdsaSecp256k1Key 1              None           38363          0              38363               0                   0                   0                   
+        ComputeEcdsaSecp256k1Sig 1              None           224            0              224                 0                   0                   0                   
+        RecoverEcdsaSecp256k1Key 1              None           1666155        201            1666155             0                   201                 0                   
+        Int256AddSub             1              None           1716           119            1716                0                   119                 0                   
+        Int256Mul                1              None           2226           119            2226                0                   119                 0                   
+        Int256Div                1              None           2333           119            2333                0                   119                 0                   
+        Int256Pow                1              None           5212           119            5212                0                   119                 0                   
+        Int256Shift              1              None           412            119            412                 0                   119                 0                   
         =====================================================================================================================================================================
+        Total # times meter was called: 28
 
     "#]]
     .assert_eq(&actual);

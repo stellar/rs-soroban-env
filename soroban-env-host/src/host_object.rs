@@ -323,8 +323,6 @@ impl Host {
         Ok(HOT::new_from_handle(handle))
     }
 
-    // Notes on metering: closure call needs to be metered separatedly. `VisitObject` only covers
-    // the cost of visiting an object.
     pub(crate) unsafe fn unchecked_visit_val_obj<F, U>(
         &self,
         obj: impl Into<Object>,
@@ -334,6 +332,11 @@ impl Host {
         F: FnOnce(Option<&HostObject>) -> Result<U, HostError>,
     {
         let _span = tracy_span!("visit host object");
+        // `VisitObject` covers the cost of visiting an object. The actual cost
+        // of the closure needs to be covered by the caller. Although each visit
+        // does small amount of work: getting the object handling and indexing
+        // into the host object buffer, it is ubiquitous and therefore we charge
+        // budget here for safety / future proofing.
         self.charge_budget(ContractCostType::VisitObject, None)?;
         let r = self.try_borrow_objects()?;
         let obj: Object = obj.into();
