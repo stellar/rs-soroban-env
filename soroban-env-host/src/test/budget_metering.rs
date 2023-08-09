@@ -9,6 +9,8 @@ use expect_test::{self, expect};
 use soroban_env_common::xdr::{ScErrorCode, ScErrorType};
 use soroban_test_wasms::VEC;
 
+const BUDGET_ERROR: (ScErrorType, ScErrorCode) = (ScErrorType::Budget, ScErrorCode::ExceededLimit);
+
 #[test]
 fn xdr_object_conversion() -> Result<(), HostError> {
     let host = Host::test_host()
@@ -79,23 +81,69 @@ fn test_vm_fuel_metering() -> Result<(), HostError> {
     use super::util::wasm_module_with_4n_insns;
     let host = Host::test_host_with_recording_footprint();
     let id_obj = host.register_test_contract_wasm(&wasm_module_with_4n_insns(1000));
+    let sym = Symbol::try_from_small_str("test").unwrap();
+    let args = host.test_vec_obj::<u32>(&[4375])?;
+
+    // successful call with sufficient budget
     let host = host
         .test_budget(100_000, 1_048_576)
         .enable_model(ContractCostType::WasmInsnExec, 6, 0, 0, 0)
         .enable_model(ContractCostType::WasmMemAlloc, 0, 0, 1, 0);
+    host.call(id_obj, sym, args)?;
+    let (cpu_count, mem_count, cpu_consumed, mem_consumed) = host.with_budget(|budget| {
+        Ok((
+            budget.get_tracker(ContractCostType::WasmInsnExec)?.0,
+            budget.get_tracker(ContractCostType::WasmMemAlloc)?.0,
+            budget.get_cpu_insns_consumed()?,
+            budget.get_mem_bytes_consumed()?,
+        ))
+    })?;
+    assert_eq!(
+        (cpu_count, mem_count, cpu_consumed, mem_consumed),
+        (4005, 65536, 24030, 65536)
+    );
 
-    let sym = Symbol::try_from_small_str("test").unwrap();
-    let args = host.test_vec_obj::<u32>(&[4375])?;
-
-    // try_call
+    // giving it the exact required amount will success
+    let (cpu_required, mem_required) = (cpu_consumed, mem_consumed);
+    let host = host
+        .test_budget(cpu_required, mem_required)
+        .enable_model(ContractCostType::WasmInsnExec, 6, 0, 0, 0)
+        .enable_model(ContractCostType::WasmMemAlloc, 0, 0, 1, 0);
     host.call(id_obj, sym, args)?;
     host.with_budget(|budget| {
-        assert_eq!(budget.get_tracker(ContractCostType::WasmInsnExec)?.0, 4005);
-        assert_eq!(budget.get_tracker(ContractCostType::WasmMemAlloc)?.0, 65536);
-        assert_eq!(budget.get_cpu_insns_consumed()?, 24030);
-        assert_eq!(budget.get_mem_bytes_consumed()?, 65536);
+        assert_eq!(budget.get_cpu_insns_consumed()?, cpu_required);
+        assert_eq!(budget.get_mem_bytes_consumed()?, mem_required);
         Ok(())
     })?;
+
+    // give it one less cpu results in failure with no cpu consumption but full mem consumption
+    let (cpu_required, mem_required) = (cpu_consumed - 1, mem_consumed);
+    let host = host
+        .test_budget(cpu_required, mem_required)
+        .enable_model(ContractCostType::WasmInsnExec, 6, 0, 0, 0)
+        .enable_model(ContractCostType::WasmMemAlloc, 0, 0, 1, 0);
+    let res = host.try_call(id_obj, sym, args);
+    assert!(HostError::result_matches_err(res, BUDGET_ERROR));
+    host.with_budget(|budget| {
+        assert_eq!(budget.get_cpu_insns_consumed()?, 0);
+        assert_eq!(budget.get_mem_bytes_consumed()?, mem_consumed);
+        Ok(())
+    })?;
+
+    // give it one less mem results in failure with no cpu consumption or mem consumption
+    let (cpu_required, mem_required) = (cpu_consumed, mem_consumed - 1);
+    let host = host
+        .test_budget(cpu_required, mem_required)
+        .enable_model(ContractCostType::WasmInsnExec, 6, 0, 0, 0)
+        .enable_model(ContractCostType::WasmMemAlloc, 0, 0, 1, 0);
+    let res = host.try_call(id_obj, sym, args);
+    assert!(HostError::result_matches_err(res, BUDGET_ERROR));
+    host.with_budget(|budget| {
+        assert_eq!(budget.get_cpu_insns_consumed()?, 0);
+        assert_eq!(budget.get_mem_bytes_consumed()?, 0);
+        Ok(())
+    })?;
+
     Ok(())
 }
 
@@ -160,8 +208,7 @@ fn metered_xdr_out_of_budget() -> Result<(), HostError> {
     )?;
     let mut w = Vec::<u8>::new();
     let res = metered_write_xdr(host.budget_ref(), &scmap, &mut w);
-    let code = (ScErrorType::Budget, ScErrorCode::ExceededLimit);
-    assert!(HostError::result_matches_err(res, code));
+    assert!(HostError::result_matches_err(res, BUDGET_ERROR));
     Ok(())
 }
 
