@@ -9,8 +9,6 @@ use expect_test::{self, expect};
 use soroban_env_common::xdr::{ScErrorCode, ScErrorType};
 use soroban_test_wasms::VEC;
 
-const BUDGET_ERROR: (ScErrorType, ScErrorCode) = (ScErrorType::Budget, ScErrorCode::ExceededLimit);
-
 #[test]
 fn xdr_object_conversion() -> Result<(), HostError> {
     let host = Host::test_host()
@@ -83,6 +81,7 @@ fn test_vm_fuel_metering() -> Result<(), HostError> {
     let id_obj = host.register_test_contract_wasm(&wasm_module_with_4n_insns(1000));
     let sym = Symbol::try_from_small_str("test").unwrap();
     let args = host.test_vec_obj::<u32>(&[4375])?;
+    let budget_err = (ScErrorType::Budget, ScErrorCode::ExceededLimit);
 
     // successful call with sufficient budget
     let host = host
@@ -123,7 +122,7 @@ fn test_vm_fuel_metering() -> Result<(), HostError> {
         .enable_model(ContractCostType::WasmInsnExec, 6, 0, 0, 0)
         .enable_model(ContractCostType::WasmMemAlloc, 0, 0, 1, 0);
     let res = host.try_call(id_obj, sym, args);
-    assert!(HostError::result_matches_err(res, BUDGET_ERROR));
+    assert!(HostError::result_matches_err(res, budget_err));
     host.with_budget(|budget| {
         assert_eq!(budget.get_cpu_insns_consumed()?, 0);
         assert_eq!(budget.get_mem_bytes_consumed()?, mem_consumed);
@@ -137,7 +136,7 @@ fn test_vm_fuel_metering() -> Result<(), HostError> {
         .enable_model(ContractCostType::WasmInsnExec, 6, 0, 0, 0)
         .enable_model(ContractCostType::WasmMemAlloc, 0, 0, 1, 0);
     let res = host.try_call(id_obj, sym, args);
-    assert!(HostError::result_matches_err(res, BUDGET_ERROR));
+    assert!(HostError::result_matches_err(res, budget_err));
     host.with_budget(|budget| {
         assert_eq!(budget.get_cpu_insns_consumed()?, 0);
         assert_eq!(budget.get_mem_bytes_consumed()?, 0);
@@ -208,7 +207,8 @@ fn metered_xdr_out_of_budget() -> Result<(), HostError> {
     )?;
     let mut w = Vec::<u8>::new();
     let res = metered_write_xdr(host.budget_ref(), &scmap, &mut w);
-    assert!(HostError::result_matches_err(res, BUDGET_ERROR));
+    let code = (ScErrorType::Budget, ScErrorCode::ExceededLimit);
+    assert!(HostError::result_matches_err(res, code));
     Ok(())
 }
 
