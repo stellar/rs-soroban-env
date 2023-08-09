@@ -151,7 +151,7 @@ macro_rules! generate_dispatch_functions {
                     // Charge for the host function dispatching: conversion between VM fuel and
                     // host budget, marshalling values. This does not account for the actual work
                     // being done in those functions, which are metered individually by the implementation.
-                    host.charge_budget(ContractCostType::InvokeHostFunction, None)?;
+                    host.charge_budget(ContractCostType::DispatchHostFunction, None)?;
                     let mut vmcaller = VmCaller(Some(caller));
                     // The odd / seemingly-redundant use of `wasmi::Value` here
                     // as intermediates -- rather than just passing Vals --

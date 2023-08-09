@@ -39,7 +39,7 @@ impl CostRunner for InvokeVmFunctionRun {
 pub struct InvokeHostFunctionRun;
 
 impl CostRunner for InvokeHostFunctionRun {
-    const COST_TYPE: ContractCostType = ContractCostType::InvokeHostFunction;
+    const COST_TYPE: ContractCostType = ContractCostType::DispatchHostFunction;
 
     const RUN_ITERATIONS: u64 = 1000;
 
