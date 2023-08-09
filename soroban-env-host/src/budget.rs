@@ -307,7 +307,7 @@ impl Default for FuelConfig {
             entity: 2,
             load: 1,
             store: 1,
-            call: 49,
+            call: 41,
         }
     }
 }
