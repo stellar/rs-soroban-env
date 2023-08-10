@@ -464,7 +464,9 @@ impl Host {
     fn call_contract_fn(&self, id: &Hash, func: &Symbol, args: &[Val]) -> Result<Val, HostError> {
         // Create key for storage
         let storage_key = self.contract_instance_ledger_key(id)?;
-        let instance = self.retrieve_contract_instance_from_storage(&storage_key)?;
+        let instance = self
+            .retrieve_contract_instance_from_storage(&storage_key)
+            .map_err(|e| self.decorate_contract_instance_storage_error(e, &id))?;
         match &instance.executable {
             ContractExecutable::Wasm(wasm_hash) => {
                 let code_entry = self.retrieve_wasm_from_storage(&wasm_hash)?;
