@@ -377,10 +377,7 @@ impl Storage {
 
         if new_expiration > old_expiration {
             let mut new_entry = (*old_entry).metered_clone(host.budget_ref())?;
-            set_entry_expiration(
-                &mut new_entry,
-                old_expiration.saturating_add(bump_by_ledgers),
-            );
+            set_entry_expiration(&mut new_entry, new_expiration);
             self.map = self
                 .map
                 .insert(key, Some(Rc::new(new_entry)), host.budget_ref())?;
