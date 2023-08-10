@@ -28,7 +28,7 @@ pub(crate) trait FuelRefillable {
                 &[],
             ));
         }
-        let fuel = host.as_budget().get_cpu_insns_remaining_as_fuel()?;
+        let fuel = host.as_budget().get_wasmi_fuel_remaining()?;
         self.add_fuel(fuel)
     }
 

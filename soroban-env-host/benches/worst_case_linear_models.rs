@@ -57,7 +57,7 @@ fn write_budget_params_code(
         // instruction costs 1 fuel (by default), and some particular types of
         // instructions may cost additional amount of fuel based on
         // wasmi's config setting. \n
-        ContractCostType::{:?} => {{ cpu.const_term = {}; cpu.linear_term = {}; }}",
+        ContractCostType::{:?} => {{ cpu.const_term = {}; cpu.lin_term = ScaledU64({}); }}",
         ContractCostType::WasmInsnExec,
         base_cpu_per_fuel,
         0
@@ -69,7 +69,7 @@ fn write_budget_params_code(
         // The extra cost of mem processing is accounted for by wasmi's
         // `config.memory_bytes_per_fuel` parameter.
         // This type is designated to the mem cost. \n
-        ContractCostType::{:?} => {{ cpu.const_term = {}; cpu.linear_term = {}; }}",
+        ContractCostType::{:?} => {{ cpu.const_term = {}; cpu.lin_term = ScaledU64({}); }}",
         ContractCostType::WasmMemAlloc,
         0,
         0
@@ -81,7 +81,7 @@ fn write_budget_params_code(
     {
         println!(
             "
-            ContractCostType::{:?} => {{ cpu.const_term = {}; cpu.linear_term = {}; }}",
+            ContractCostType::{:?} => {{ cpu.const_term = {}; cpu.lin_term = ScaledU64({}); }}",
             ty, cpu.0, cpu.1
         );
     }
@@ -92,7 +92,7 @@ fn write_budget_params_code(
         "
         // This type is designated to the cpu cost. By definition, the memory cost\n
         // of a (cpu) fuel is zero.\n
-        ContractCostType::{:?} => {{ mem.const_term = {}; mem.linear_term = {}; }}",
+        ContractCostType::{:?} => {{ mem.const_term = {}; mem.lin_term = ScaledU64({}); }}",
         ContractCostType::WasmInsnExec,
         0,
         0
@@ -101,7 +101,7 @@ fn write_budget_params_code(
         "
         // Bytes per wasmi \"memory fuel\". By definition this has to be a const = 1\n
         // because of the 1-to-1 equivalence of the Wasm mem fuel and a host byte.\n
-        ContractCostType::{:?} => {{ mem.const_term = {}; mem.linear_term = {}; }}",
+        ContractCostType::{:?} => {{ mem.const_term = {}; mem.lin_term = ScaledU64({}); }}",
         ContractCostType::WasmMemAlloc,
         1,
         0
@@ -112,7 +112,7 @@ fn write_budget_params_code(
     {
         println!(
             "
-            ContractCostType::{:?} => {{ mem.const_term = {}; mem.linear_term = {}; }}",
+            ContractCostType::{:?} => {{ mem.const_term = {}; mem.lin_term = ScaledU64({}); }}",
             ty, mem.0, mem.1
         );
     }

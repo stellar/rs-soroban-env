@@ -8,10 +8,10 @@ use soroban_env_common::{
     },
     AddressObject, BytesObject, Env, EnvBase, Symbol, Val, VecObject,
 };
+use soroban_synth_wasm::{Arity, ModEmitter, Operand};
 
 use crate::{
-    budget::{AsBudget, Budget, COST_MODEL_LIN_TERM_SCALE_BITS},
-    host::error::TryBorrowOrErr,
+    budget::{AsBudget, Budget},
     storage::{test_storage::MockSnapshotSource, Storage},
     xdr, Host, HostError, LedgerInfo,
 };
@@ -51,6 +51,21 @@ pub(crate) fn generate_bytes_array() -> [u8; 32] {
     let mut bytes: [u8; 32] = Default::default();
     thread_rng().fill_bytes(&mut bytes);
     bytes
+}
+
+pub(crate) fn wasm_module_with_4n_insns(n: usize) -> Vec<u8> {
+    let mut fe = ModEmitter::new().func(Arity(1), 0);
+    let arg = fe.args[0];
+    fe.push(Operand::Const64(1));
+    for i in 0..n {
+        fe.push(arg);
+        fe.push(Operand::Const64(i as i64));
+        fe.i64_mul();
+        fe.i64_add();
+    }
+    fe.drop();
+    fe.push(Symbol::try_from_small_str("pass").unwrap());
+    fe.finish_and_export("test").finish()
 }
 
 #[allow(dead_code)]
@@ -97,32 +112,7 @@ impl Host {
         lin_mem: u64,
     ) -> Self {
         self.with_budget(|budget| {
-            budget
-                .0
-                .try_borrow_mut_or_err()?
-                .cpu_insns
-                .get_cost_model_mut(ty)
-                .const_term = const_cpu as i64;
-            budget
-                .0
-                .try_borrow_mut_or_err()?
-                .cpu_insns
-                .get_cost_model_mut(ty)
-                .linear_term = (lin_cpu << COST_MODEL_LIN_TERM_SCALE_BITS) as i64;
-
-            budget
-                .0
-                .try_borrow_mut_or_err()?
-                .mem_bytes
-                .get_cost_model_mut(ty)
-                .const_term = const_mem as i64;
-            budget
-                .0
-                .try_borrow_mut_or_err()?
-                .mem_bytes
-                .get_cost_model_mut(ty)
-                .linear_term = (lin_mem << COST_MODEL_LIN_TERM_SCALE_BITS) as i64;
-            Ok(())
+            budget.override_model_with_unscaled_params(ty, const_cpu, lin_cpu, const_mem, lin_mem)
         })
         .unwrap();
         self

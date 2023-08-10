@@ -1,7 +1,3 @@
-use std::rc::Rc;
-
-use soroban_env_common::xdr::SorobanAuthorizationEntry;
-
 use crate::{
     auth::{
         AccountAuthorizationTracker, AccountAuthorizationTrackerSnapshot, AuthorizedInvocation,
@@ -19,8 +15,8 @@ use crate::{
         LedgerKeyClaimableBalance, LedgerKeyConfigSetting, LedgerKeyContractCode, LedgerKeyData,
         LedgerKeyLiquidityPool, LedgerKeyOffer, LedgerKeyTrustLine, LiquidityPoolEntry, OfferEntry,
         PublicKey, ScAddress, ScBytes, ScContractInstance, ScMap, ScMapEntry, ScNonceKey, ScString,
-        ScSymbol, ScVal, ScVec, SorobanAuthorizedInvocation, StringM, TimePoint, TrustLineAsset,
-        TrustLineEntry, Uint256, SCSYMBOL_LIMIT,
+        ScSymbol, ScVal, ScVec, SorobanAuthorizationEntry, SorobanAuthorizedInvocation, StringM,
+        TimePoint, TrustLineAsset, TrustLineEntry, Uint256, SCSYMBOL_LIMIT,
     },
     AddressObject, Bool, BytesObject, DurationObject, DurationSmall, DurationVal, Error, HostError,
     I128Object, I128Small, I128Val, I256Object, I256Small, I256Val, I32Val, I64Object, I64Small,
@@ -29,6 +25,8 @@ use crate::{
     U128Small, U128Val, U256Object, U256Small, U256Val, U32Val, U64Object, U64Small, U64Val, Val,
     VecObject, Void, I256, U256,
 };
+use std::rc::Rc;
+use wasmi::Value;
 
 // Declared size (bytes) of a single element. This value determines the metering input for clone
 // and comparison. It should be the upperbound (across various compilations and platforms) of the
@@ -96,6 +94,7 @@ impl_declared_size_type!(StringObject, 8);
 impl_declared_size_type!(Symbol, 8);
 impl_declared_size_type!(SymbolSmall, 8);
 impl_declared_size_type!(SymbolObject, 8);
+impl_declared_size_type!(Value, 16);
 // other common types
 impl_declared_size_type!(SymbolStr, SCSYMBOL_LIMIT);
 impl_declared_size_type!(SymbolSmallIter, 8);
@@ -285,6 +284,7 @@ mod test {
         expect!["8"].assert_eq(size_of::<Symbol>().to_string().as_str());
         expect!["8"].assert_eq(size_of::<SymbolSmall>().to_string().as_str());
         expect!["8"].assert_eq(size_of::<SymbolObject>().to_string().as_str());
+        expect!["16"].assert_eq(size_of::<Value>().to_string().as_str());
         // other common types
         expect!["32"].assert_eq(size_of::<SymbolStr>().to_string().as_str());
         expect!["8"].assert_eq(size_of::<SymbolSmallIter>().to_string().as_str());
@@ -455,6 +455,7 @@ mod test {
         assert_mem_size_le_declared_size!(Symbol);
         assert_mem_size_le_declared_size!(SymbolSmall);
         assert_mem_size_le_declared_size!(SymbolObject);
+        assert_mem_size_le_declared_size!(Value);
         // other common types
         assert_mem_size_le_declared_size!(SymbolStr);
         assert_mem_size_le_declared_size!(SymbolSmallIter);
