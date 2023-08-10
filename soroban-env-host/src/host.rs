@@ -517,7 +517,8 @@ impl Host {
         let storage_key = self.contract_instance_ledger_key(&contract_id)?;
         if self
             .try_borrow_storage_mut()?
-            .has(&storage_key, self.as_budget())?
+            .has(&storage_key, self.as_budget())
+            .map_err(|e| self.decorate_contract_instance_storage_error(e, &contract_id))?
         {
             return Err(self.err(
                 ScErrorType::Storage,
@@ -743,7 +744,8 @@ impl Host {
         }));
         if !self
             .try_borrow_storage_mut()?
-            .has(&code_key, self.as_budget())?
+            .has(&code_key, self.as_budget())
+            .map_err(|e| self.decorate_contract_code_storage_error(e, &Hash(hash_bytes)))?
         {
             let body = ContractCodeEntryBody::DataEntry(wasm.try_into().map_err(|_| {
                 self.err(
@@ -852,9 +854,20 @@ impl Host {
 
         let durability: ContractDataDurability = t.try_into()?;
         let key = self.contract_data_key_from_rawval(k, durability)?;
-        if self.try_borrow_storage_mut()?.has(&key, self.as_budget())? {
-            let mut current = (*self.try_borrow_storage_mut()?.get(&key, self.as_budget())?)
-                .metered_clone(&self.0.budget)?;
+        // Currently the storage stores the whole ledger entries, while this
+        // operation might only modify only the internal `ScVal` value. Thus we
+        // need to only overwrite the value in case if there is already an
+        // existing ledger entry value for the key in the storage.
+        if self
+            .try_borrow_storage_mut()?
+            .has(&key, self.as_budget())
+            .map_err(|e| self.decorate_contract_data_storage_error(e, k))?
+        {
+            let mut current = (*self
+                .try_borrow_storage_mut()?
+                .get(&key, self.as_budget())
+                .map_err(|e| self.decorate_contract_data_storage_error(e, k))?)
+            .metered_clone(self.as_budget())?;
 
             match current.data {
                 LedgerEntryData::ContractData(ref mut entry) => match entry.body {
@@ -867,7 +880,7 @@ impl Host {
                     _ => {
                         return Err(self.err(
                             ScErrorType::Storage,
-                            ScErrorCode::UnexpectedType,
+                            ScErrorCode::InternalError,
                             "expected DataEntry",
                             &[],
                         ));
@@ -876,14 +889,15 @@ impl Host {
                 _ => {
                     return Err(self.err(
                         ScErrorType::Storage,
-                        ScErrorCode::UnexpectedType,
+                        ScErrorCode::InternalError,
                         "expected DataEntry",
                         &[],
                     ));
                 }
             }
             self.try_borrow_storage_mut()?
-                .put(&key, &Rc::new(current), self.as_budget())?;
+                .put(&key, &Rc::new(current), self.as_budget())
+                .map_err(|e| self.decorate_contract_data_storage_error(e, k))?;
         } else {
             let body = ContractDataEntryBody::DataEntry(ContractDataEntryData {
                 val: self.from_host_val(v)?,
@@ -896,11 +910,9 @@ impl Host {
                 expiration_ledger_seq: self.get_min_expiration_ledger(durability)?,
                 durability,
             });
-            self.try_borrow_storage_mut()?.put(
-                &key,
-                &Host::ledger_entry_from_data(data),
-                self.as_budget(),
-            )?;
+            self.try_borrow_storage_mut()?
+                .put(&key, &Host::ledger_entry_from_data(data), self.as_budget())
+                .map_err(|e| self.decorate_contract_data_storage_error(e, k))?;
         }
 
         Ok(())
@@ -940,6 +952,73 @@ impl Host {
             }
         }
         Ok(())
+    }
+
+    fn decorate_contract_data_storage_error(&self, err: HostError, key: Val) -> HostError {
+        if !err.error.is_type(ScErrorType::Storage) {
+            return err;
+        }
+        if err.error.is_code(ScErrorCode::ExceededLimit) {
+            return self.err(
+                ScErrorType::Storage,
+                ScErrorCode::ExceededLimit,
+                "trying to access contract storage key outside of the correct footprint",
+                &[key],
+            );
+        }
+        if err.error.is_code(ScErrorCode::MissingValue) {
+            return self.err(
+                ScErrorType::Storage,
+                ScErrorCode::MissingValue,
+                "trying to get non-existing value for contract storage key",
+                &[key],
+            );
+        }
+        err
+    }
+
+    pub(crate) fn decorate_contract_instance_storage_error(
+        &self,
+        err: HostError,
+        contract_id: &Hash,
+    ) -> HostError {
+        if err.error.is_type(ScErrorType::Storage) && err.error.is_code(ScErrorCode::ExceededLimit)
+        {
+            return self.err(
+                ScErrorType::Storage,
+                ScErrorCode::ExceededLimit,
+                "trying to access contract instance key outside of the correct footprint",
+                // No need for metered clone here as we are on the unrecoverable
+                // error path.
+                &[self
+                    .add_host_object(ScAddress::Contract(contract_id.clone()))
+                    .map(|a| a.into())
+                    .unwrap_or(Val::VOID.into())],
+            );
+        }
+        err
+    }
+
+    pub(crate) fn decorate_contract_code_storage_error(
+        &self,
+        err: HostError,
+        wasm_hash: &Hash,
+    ) -> HostError {
+        if err.error.is_type(ScErrorType::Storage) && err.error.is_code(ScErrorCode::ExceededLimit)
+        {
+            return self.err(
+                ScErrorType::Storage,
+                ScErrorCode::ExceededLimit,
+                "trying to access contract code key outside of the correct footprint",
+                // No need for metered clone here as we are on the unrecoverable
+                // error path.
+                &[self
+                    .add_host_object(self.scbytes_from_hash(wasm_hash).unwrap_or_default())
+                    .map(|a| a.into())
+                    .unwrap_or(Val::VOID.into())],
+            );
+        }
+        err
     }
 }
 
@@ -2101,7 +2180,9 @@ impl VmCallerEnv for Host {
         let res = match t {
             StorageType::Temporary | StorageType::Persistent => {
                 let key = self.storage_key_from_rawval(k, t.try_into()?)?;
-                self.try_borrow_storage_mut()?.has(&key, self.as_budget())?
+                self.try_borrow_storage_mut()?
+                    .has(&key, self.as_budget())
+                    .map_err(|e| self.decorate_contract_data_storage_error(e, k))?
             }
             StorageType::Instance => {
                 self.with_instance_storage(|s| Ok(s.map.get(&k, self)?.is_some()))?
@@ -2121,7 +2202,10 @@ impl VmCallerEnv for Host {
         match t {
             StorageType::Temporary | StorageType::Persistent => {
                 let key = self.storage_key_from_rawval(k, t.try_into()?)?;
-                let entry = self.try_borrow_storage_mut()?.get(&key, self.as_budget())?;
+                let entry = self
+                    .try_borrow_storage_mut()?
+                    .get(&key, self.as_budget())
+                    .map_err(|e| self.decorate_contract_data_storage_error(e, k))?;
                 match &entry.data {
                     LedgerEntryData::ContractData(ContractDataEntry { body, .. }) => match body {
                         ContractDataEntryBody::DataEntry(data) => Ok(self.to_host_val(&data.val)?),
@@ -2166,7 +2250,9 @@ impl VmCallerEnv for Host {
         match t {
             StorageType::Temporary | StorageType::Persistent => {
                 let key = self.contract_data_key_from_rawval(k, t.try_into()?)?;
-                self.try_borrow_storage_mut()?.del(&key, self.as_budget())?;
+                self.try_borrow_storage_mut()?
+                    .del(&key, self.as_budget())
+                    .map_err(|e| self.decorate_contract_data_storage_error(e, k))?;
             }
             StorageType::Instance => {
                 self.with_mut_instance_storage(|s| {
@@ -2198,7 +2284,9 @@ impl VmCallerEnv for Host {
             ))?;
         }
         let key = self.contract_data_key_from_rawval(k, t.try_into()?)?;
-        self.try_borrow_storage_mut()?.bump(self, key, min.into())?;
+        self.try_borrow_storage_mut()?
+            .bump(self, key, min.into())
+            .map_err(|e| self.decorate_contract_data_storage_error(e, k))?;
         Ok(Val::VOID)
     }
 
@@ -2210,14 +2298,17 @@ impl VmCallerEnv for Host {
         let contract_id = self.get_current_contract_id_internal()?;
         let key = self.contract_instance_ledger_key(&contract_id)?;
         self.try_borrow_storage_mut()?
-            .bump(self, key.clone(), min.into())?;
+            .bump(self, key.clone(), min.into())
+            .map_err(|e| self.decorate_contract_instance_storage_error(e, &contract_id))?;
         match self
             .retrieve_contract_instance_from_storage(&key)?
             .executable
         {
             ContractExecutable::Wasm(wasm_hash) => {
                 let key = self.contract_code_ledger_key(&wasm_hash)?;
-                self.try_borrow_storage_mut()?.bump(self, key, min.into())?;
+                self.try_borrow_storage_mut()?
+                    .bump(self, key, min.into())
+                    .map_err(|e| self.decorate_contract_code_storage_error(e, &wasm_hash))?;
             }
             ContractExecutable::Token => {}
         }
@@ -2233,14 +2324,17 @@ impl VmCallerEnv for Host {
         let contract_id = self.contract_id_from_address(contract)?;
         let key = self.contract_instance_ledger_key(&contract_id)?;
         self.try_borrow_storage_mut()?
-            .bump(self, key.clone(), min.into())?;
+            .bump(self, key.clone(), min.into())
+            .map_err(|e| self.decorate_contract_instance_storage_error(e, &contract_id))?;
         match self
             .retrieve_contract_instance_from_storage(&key)?
             .executable
         {
             ContractExecutable::Wasm(wasm_hash) => {
                 let key = self.contract_code_ledger_key(&wasm_hash)?;
-                self.try_borrow_storage_mut()?.bump(self, key, min.into())?;
+                self.try_borrow_storage_mut()?
+                    .bump(self, key, min.into())
+                    .map_err(|e| self.decorate_contract_code_storage_error(e, &wasm_hash))?;
             }
             ContractExecutable::Token => {}
         }

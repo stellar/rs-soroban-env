@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use super::metered_clone::{self, MeteredClone, MeteredContainer, MeteredIterator};
+use super::metered_clone::{charge_shallow_copy, MeteredClone, MeteredContainer, MeteredIterator};
 use crate::budget::AsBudget;
 use crate::err;
 use crate::host_object::{HostMap, HostObject, HostVec};
@@ -324,7 +324,7 @@ impl Host {
     }
 
     pub(crate) fn host_map_to_scmap(&self, map: &HostMap) -> Result<ScMap, HostError> {
-        metered_clone::charge_heap_alloc::<ScMapEntry>(map.len() as u64, self.as_budget())?;
+        Vec::<ScMapEntry>::charge_bulk_init_cpy(map.len() as u64, self.as_budget())?;
         let mut mv = Vec::with_capacity(map.len());
         for (k, v) in map.iter(self)? {
             let key = self.from_host_val(*k)?;
@@ -365,15 +365,11 @@ impl<'a> Convert<ScValObjRef<'a>, Object> for Host {
 
 impl Host {
     pub(crate) fn from_host_val(&self, val: Val) -> Result<ScVal, HostError> {
-        // Charges a single unit to for the Val -> ScVal conversion.
-        // The actual conversion logic occurs in the `common` crate, which
-        // translates a u64 into another form defined by the xdr.
-        // For an `Object`, the actual structural conversion (such as byte
-        // cloning) occurs in `from_host_obj` and is metered there.
         // This is the depth limit checkpoint for `Val`->`ScVal` conversion.
+        // Metering of val conversion happens only if an object is encountered,
+        // and is done inside `from_host_obj`.
         let _span = tracy_span!("Val to ScVal");
         self.budget_cloned().with_limited_depth(|_| {
-            self.charge_budget(ContractCostType::ValXdrConv, None)?;
             ScVal::try_from_val(self, &val).map_err(|_| {
                 self.err(
                     ScErrorType::Value,
@@ -388,8 +384,9 @@ impl Host {
     pub(crate) fn to_host_val(&self, v: &ScVal) -> Result<Val, HostError> {
         let _span = tracy_span!("ScVal to Val");
         // This is the depth limit checkpoint for `ScVal`->`Val` conversion.
+        // Metering of val conversion happens only if an object is encountered,
+        // and is done inside `to_host_obj`.
         self.budget_cloned().with_limited_depth(|_| {
-            self.charge_budget(ContractCostType::ValXdrConv, None)?;
             v.try_into_val(self).map_err(|_| {
                 self.err(
                     ScErrorType::Value,
@@ -405,12 +402,6 @@ impl Host {
         unsafe {
             let objref: Object = ob.into();
             self.unchecked_visit_val_obj(objref, |ob| {
-                // This accounts for conversion of "primitive" objects (e.g U64)
-                // and the "shell" of a complex object (ScMap). Any non-trivial
-                // work such as byte cloning, has to be accounted for and
-                // metered in indivial match arms.
-                // `ValXdrConv` is const cost in both cpu and mem. The input=0 will be ignored.
-                self.charge_budget(ContractCostType::ValXdrConv, None)?;
                 let val = match ob {
                     None => {
                         return Err(self.err(
@@ -420,12 +411,12 @@ impl Host {
                             &[U32Val::from(objref.get_handle()).to_val()],
                         ));
                     }
+                    // Here we have to make sure host object conversion is charged in each variant
+                    // below. There is no otherwise ubiquitous metering for Val->ScVal conversion,
+                    // since most of them happens in the "common" crate with no access to the host.
                     Some(ho) => match ho {
                         HostObject::Vec(vv) => {
-                            metered_clone::charge_heap_alloc::<ScVal>(
-                                vv.len() as u64,
-                                self.as_budget(),
-                            )?;
+                            Vec::<ScVal>::charge_bulk_init_cpy(vv.len() as u64, self.as_budget())?;
                             let sv = vv.iter().map(|e| self.from_host_val(*e)).collect::<Result<
                                 Vec<ScVal>,
                                 HostError,
@@ -434,23 +425,36 @@ impl Host {
                             ScVal::Vec(Some(ScVec(self.map_err(sv.try_into())?)))
                         }
                         HostObject::Map(mm) => ScVal::Map(Some(self.host_map_to_scmap(mm)?)),
-                        HostObject::U64(u) => ScVal::U64(*u),
-                        HostObject::I64(i) => ScVal::I64(*i),
+                        HostObject::U64(u) => {
+                            charge_shallow_copy::<u64>(1, self.as_budget())?;
+                            ScVal::U64(*u)
+                        }
+                        HostObject::I64(i) => {
+                            charge_shallow_copy::<i64>(1, self.as_budget())?;
+                            ScVal::I64(*i)
+                        }
                         HostObject::TimePoint(tp) => {
                             ScVal::Timepoint(tp.metered_clone(self.as_budget())?)
                         }
                         HostObject::Duration(d) => {
                             ScVal::Duration(d.metered_clone(self.as_budget())?)
                         }
-                        HostObject::U128(u) => ScVal::U128(UInt128Parts {
-                            hi: int128_helpers::u128_hi(*u),
-                            lo: int128_helpers::u128_lo(*u),
-                        }),
-                        HostObject::I128(i) => ScVal::I128(Int128Parts {
-                            hi: int128_helpers::i128_hi(*i),
-                            lo: int128_helpers::i128_lo(*i),
-                        }),
+                        HostObject::U128(u) => {
+                            charge_shallow_copy::<u128>(1, self.as_budget())?;
+                            ScVal::U128(UInt128Parts {
+                                hi: int128_helpers::u128_hi(*u),
+                                lo: int128_helpers::u128_lo(*u),
+                            })
+                        }
+                        HostObject::I128(i) => {
+                            charge_shallow_copy::<i128>(1, self.as_budget())?;
+                            ScVal::I128(Int128Parts {
+                                hi: int128_helpers::i128_hi(*i),
+                                lo: int128_helpers::i128_lo(*i),
+                            })
+                        }
                         HostObject::U256(u) => {
+                            charge_shallow_copy::<u128>(2, self.as_budget())?;
                             let (hi_hi, hi_lo, lo_hi, lo_lo) = u256_into_pieces(*u);
                             ScVal::U256(UInt256Parts {
                                 hi_hi,
@@ -460,6 +464,7 @@ impl Host {
                             })
                         }
                         HostObject::I256(i) => {
+                            charge_shallow_copy::<i128>(2, self.as_budget())?;
                             let (hi_hi, hi_lo, lo_hi, lo_lo) = i256_into_pieces(*i);
                             ScVal::I256(Int256Parts {
                                 hi_hi,
@@ -473,7 +478,7 @@ impl Host {
                         HostObject::Symbol(s) => ScVal::Symbol(s.metered_clone(self.as_budget())?),
                         HostObject::Address(addr) => {
                             ScVal::Address(addr.metered_clone(self.as_budget())?)
-                        }
+                        } // For any future `HostObject` types we add, make sure to add some metering.
                     },
                 };
                 Ok(ScValObject::unchecked_from_val(val))
@@ -482,12 +487,13 @@ impl Host {
     }
 
     pub(crate) fn to_host_obj(&self, ob: &ScValObjRef<'_>) -> Result<Object, HostError> {
-        // `ValXdrConv` is const cost in both cpu and mem. The input=0 will be ignored.
-        self.charge_budget(ContractCostType::ValXdrConv, None)?;
         let val: &ScVal = (*ob).into();
         match val {
+            // Here we have to make sure host object conversion is charged in each variant
+            // below. There is no otherwise ubiquitous metering for ScVal->Val conversion,
+            // since most of them happens in the "common" crate with no access to the host.
             ScVal::Vec(Some(v)) => {
-                metered_clone::charge_heap_alloc::<Val>(v.len() as u64, self.as_budget())?;
+                Vec::<Val>::charge_bulk_init_cpy(v.len() as u64, self.as_budget())?;
                 let mut vv = Vec::with_capacity(v.len());
                 for e in v.iter() {
                     vv.push(self.to_host_val(e)?)
@@ -495,7 +501,7 @@ impl Host {
                 Ok(self.add_host_object(HostVec::from_vec(vv)?)?.into())
             }
             ScVal::Map(Some(m)) => {
-                metered_clone::charge_heap_alloc::<(Val, Val)>(m.len() as u64, self.as_budget())?;
+                Vec::<(Val, Val)>::charge_bulk_init_cpy(m.len() as u64, self.as_budget())?;
                 let mut mm = Vec::with_capacity(m.len());
                 for pair in m.iter() {
                     let k = self.to_host_val(&pair.key)?;
@@ -516,26 +522,44 @@ impl Host {
                 "map body missing",
                 &[],
             )),
-            ScVal::U64(u) => Ok(self.add_host_object(*u)?.into()),
-            ScVal::I64(i) => Ok(self.add_host_object(*i)?.into()),
+            ScVal::U64(u) => {
+                charge_shallow_copy::<u64>(1, self.as_budget())?;
+                Ok(self.add_host_object(*u)?.into())
+            }
+            ScVal::I64(i) => {
+                charge_shallow_copy::<i64>(1, self.as_budget())?;
+                Ok(self.add_host_object(*i)?.into())
+            }
             ScVal::Timepoint(t) => Ok(self
                 .add_host_object(t.metered_clone(self.as_budget())?)?
                 .into()),
             ScVal::Duration(d) => Ok(self
                 .add_host_object(d.metered_clone(self.as_budget())?)?
                 .into()),
-            ScVal::U128(u) => Ok(self
-                .add_host_object(int128_helpers::u128_from_pieces(u.hi, u.lo))?
-                .into()),
-            ScVal::I128(i) => Ok(self
-                .add_host_object(int128_helpers::i128_from_pieces(i.hi, i.lo))?
-                .into()),
-            ScVal::U256(u) => Ok(self
-                .add_host_object(u256_from_pieces(u.hi_hi, u.hi_lo, u.lo_hi, u.lo_lo))?
-                .into()),
-            ScVal::I256(i) => Ok(self
-                .add_host_object(i256_from_pieces(i.hi_hi, i.hi_lo, i.lo_hi, i.lo_lo))?
-                .into()),
+            ScVal::U128(u) => {
+                charge_shallow_copy::<u128>(1, self.as_budget())?;
+                Ok(self
+                    .add_host_object(int128_helpers::u128_from_pieces(u.hi, u.lo))?
+                    .into())
+            }
+            ScVal::I128(i) => {
+                charge_shallow_copy::<i128>(1, self.as_budget())?;
+                Ok(self
+                    .add_host_object(int128_helpers::i128_from_pieces(i.hi, i.lo))?
+                    .into())
+            }
+            ScVal::U256(u) => {
+                charge_shallow_copy::<u128>(2, self.as_budget())?;
+                Ok(self
+                    .add_host_object(u256_from_pieces(u.hi_hi, u.hi_lo, u.lo_hi, u.lo_lo))?
+                    .into())
+            }
+            ScVal::I256(i) => {
+                charge_shallow_copy::<i128>(2, self.as_budget())?;
+                Ok(self
+                    .add_host_object(i256_from_pieces(i.hi_hi, i.hi_lo, i.lo_hi, i.lo_lo))?
+                    .into())
+            }
             ScVal::Bytes(b) => Ok(self
                 .add_host_object(b.metered_clone(self.as_budget())?)?
                 .into()),
@@ -560,7 +584,7 @@ impl Host {
                 (ScErrorType::Object, ScErrorCode::InvalidInput),
                 "converting unsupported value to object",
                 *val
-            )),
+            )), // For any future `HostObject` types we add, make sure to add some metering.
         }
     }
 }

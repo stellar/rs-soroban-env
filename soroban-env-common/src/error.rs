@@ -194,11 +194,42 @@ impl From<wasmi::core::TrapCode> for Error {
 #[cfg(feature = "wasmi")]
 impl From<wasmi::Error> for Error {
     fn from(e: wasmi::Error) -> Self {
-        if let wasmi::Error::Trap(trap) = e {
-            if let Some(code) = trap.trap_code() {
-                return code.into();
+        const BUDGET_EXCEEDED_LIMIT: Error =
+            Error::from_type_and_code(ScErrorType::Budget, ScErrorCode::ExceededLimit);
+
+        match e {
+            wasmi::Error::Memory(e) => {
+                if let wasmi::errors::MemoryError::OutOfBoundsGrowth = e {
+                    return BUDGET_EXCEEDED_LIMIT;
+                }
             }
+            wasmi::Error::Table(e) => {
+                if let wasmi::errors::TableError::GrowOutOfBounds { .. } = e {
+                    return BUDGET_EXCEEDED_LIMIT;
+                }
+            }
+            wasmi::Error::Instantiation(e) => match e {
+                wasmi::errors::InstantiationError::Table(
+                    wasmi::errors::TableError::GrowOutOfBounds { .. },
+                )
+                | wasmi::errors::InstantiationError::Memory(
+                    wasmi::errors::MemoryError::OutOfBoundsGrowth,
+                ) => return BUDGET_EXCEEDED_LIMIT,
+                _ => (),
+            },
+            wasmi::Error::Store(e) => {
+                if let wasmi::errors::FuelError::OutOfFuel = e {
+                    return BUDGET_EXCEEDED_LIMIT;
+                }
+            }
+            wasmi::Error::Trap(trap) => {
+                if let Some(code) = trap.trap_code() {
+                    return code.into();
+                }
+            }
+            _ => (),
         }
+
         Error::from_type_and_code(ScErrorType::WasmVm, ScErrorCode::InternalError)
     }
 }
