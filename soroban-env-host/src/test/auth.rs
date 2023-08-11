@@ -257,7 +257,7 @@ impl AuthTest {
         fn_name: Symbol,
         args: HostVec,
     ) -> Vec<RecordedAuthPayload> {
-        self.host.switch_to_recording_auth().unwrap();
+        self.host.switch_to_recording_auth(false).unwrap();
         self.host
             .call(contract_address.clone().into(), fn_name, args.into())
             .unwrap();
@@ -841,6 +841,44 @@ fn test_two_authorized_trees() {
         )]],
         false,
     );
+}
+
+#[test]
+fn test_disable_non_root_recording_auth() {
+    let test = AuthTest::setup(1, 3);
+    test.host.switch_to_recording_auth(true).unwrap();
+    let setup = SetupNode::new(
+        &test.contracts[0],
+        vec![false],
+        vec![
+            SetupNode::new(&test.contracts[1], vec![true], vec![]),
+            SetupNode::new(&test.contracts[2], vec![true], vec![]),
+        ],
+    );
+    let addresses = test.get_addresses();
+    let tree = test.convert_setup_tree(&setup);
+    let err = test
+        .host
+        .call(
+            setup.contract_address.clone().into(),
+            Symbol::try_from_small_str("tree_fn").unwrap(),
+            host_vec![&test.host, addresses, tree].into(),
+        )
+        .err()
+        .unwrap();
+    assert!(err.error.is_type(ScErrorType::Auth));
+    assert!(err.error.is_code(ScErrorCode::InvalidAction));
+
+    // Now enable non root auth - the call should succeed.
+    test.host.switch_to_recording_auth(false).unwrap();
+    assert!(test
+        .host
+        .call(
+            setup.contract_address.into(),
+            Symbol::try_from_small_str("tree_fn").unwrap(),
+            host_vec![&test.host, addresses, tree].into(),
+        )
+        .is_ok());
 }
 
 #[test]

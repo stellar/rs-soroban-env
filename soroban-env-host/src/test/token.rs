@@ -2824,7 +2824,7 @@ fn test_recording_auth_for_token() {
     let user = TestSigner::account(&test.user_key);
     test.create_default_account(&user);
     test.create_default_trustline(&user);
-    test.host.switch_to_recording_auth().unwrap();
+    test.host.switch_to_recording_auth(true).unwrap();
 
     let args = host_vec![&test.host, user.address(&test.host), 100_i128];
     test.host
