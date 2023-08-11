@@ -1,3 +1,38 @@
+//! Ths `Symbol` type is designed for encoding short, unambiguous, single-word
+//! identifiers such as the names of contract functions or assets in the
+//! network. `Symbol`s only admit characters from the 63-character repertoire
+//! `[a-zA-Z0-9_]` -- latin-script alphabetic letters, digits, and underscores.
+//!
+//! There are two reasons for this type to be different from the general
+//! `String` type:
+//!
+//!   1. We provide a space-optimized "small" form (`SymbolSmall`) that uses
+//!      small 6-bit codes (since the character repertoire is only 63 characters
+//!      plus null) and bit-packs them into the body of a `Val` such that they
+//!      can be used to represent short identifiers (up to 9 characters long)
+//!      without allocating a host object at all, essentially as "machine
+//!      integers with a textual interpretation". This is an optimization, since
+//!      we expect contracts to use `Symbol`s heavily.
+//!
+//!   2. We expect (though do not require) `String` to usually be interpreted as
+//!      Unicode codepoints encoded in UTF-8. Unicode characters unfortunately
+//!      admit a wide variety of "confusables" or "homoglyphs": characters that
+//!      have different codes, but look the same when rendered in many common
+//!      fonts. In many contexts these represent a significant security risk to
+//!      end users -- for example by confusing an asset named `USD` (encoded as
+//!      the UTF-8 hex byte sequence `[55 53 44]`) with a similar-looking but
+//!      different asset named `ՍЅᎠ` (encoded as `[d5 8d d0 85 e1 8e a0]`) --
+//!      and so we provide `Symbol` as an alternative to `String` for use in
+//!      contexts where users wish to minimize such risks, by restricting the
+//!      possible characters that can occur.
+//!
+//! `SymbolSmall` values are packed into a 56 bits (the "body" part of a 64-bit
+//! `Val` word) with zero padding in the high-order bits rather than low-order
+//! bits. While this means that lexicographical ordering of `SymbolSmall` values
+//! does not coincide with simple integer ordering of `Val` bodies, it optimizes
+//! the space cost of `SymbolSmall` literals in WASM bytecode, where all integer
+//! literals are encoded as variable-length little-endian values, using ULEB128.
+
 use crate::{
     declare_tag_based_small_and_object_wrappers, require, val::ValConvert, Compare,
     ConversionError, Env, Tag, TryFromVal, Val,
@@ -504,16 +539,32 @@ mod test_without_string {
     }
 
     #[test]
+    fn test_enc() {
+        // Some exact test vectors to ensure the encoding is what we expect.
+        let vectors: &[(&str, u64)] = &[
+            ("a",           0b__000_000__000_000__000_000__000_000__000_000__000_000__000_000__000_000__100_110_u64),
+            ("ab",          0b__000_000__000_000__000_000__000_000__000_000__000_000__000_000__100_110__100_111_u64),
+            ("abc",         0b__000_000__000_000__000_000__000_000__000_000__000_000__100_110__100_111__101_000_u64),
+            ("ABC",         0b__000_000__000_000__000_000__000_000__000_000__000_000__001_100__001_101__001_110_u64),
+            ("____5678",    0b__000_000__000_001__000_001__000_001__000_001__000_111__001_000__001_001__001_010_u64),
+            ("____56789",   0b__000_001__000_001__000_001__000_001__000_111__001_000__001_001__001_010__001_011_u64),
+        ];
+        for (s, body) in vectors.iter() {
+            let sym = SymbolSmall::try_from_str(s).unwrap();
+            assert_eq!(unsafe { sym.get_body() }, *body);
+        }
+    }
+
+    #[test]
     fn test_ord() {
-        let a_in = "Hello";
-        let b_in = "hello";
-        let c_in = "hellos";
-        let a_sym = SymbolSmall::try_from_str(a_in).unwrap();
-        let b_sym = SymbolSmall::try_from_str(b_in).unwrap();
-        let c_sym = SymbolSmall::try_from_str(c_in).unwrap();
-        assert!(a_sym < b_sym);
-        assert!(b_sym < c_sym);
-        assert!(a_sym < c_sym);
+        let vals = ["Hello", "hello", "hellos", "", "_________", "________"];
+        for a in vals.iter() {
+            let a_sym = SymbolSmall::try_from_str(a).unwrap();
+            for b in vals.iter() {
+                let b_sym = SymbolSmall::try_from_str(b).unwrap();
+                assert_eq!(a.cmp(b), a_sym.cmp(&b_sym));
+            }
+        }
     }
 }
 
