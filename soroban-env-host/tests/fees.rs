@@ -121,6 +121,7 @@ fn resource_fee_computation() {
 #[test]
 fn test_rent_bump_fees_with_only_bump() {
     let fee_config = RentFeeConfiguration {
+        fee_per_write_entry: 10,
         fee_per_write_1kb: 1000,
         persistent_rent_rate_denominator: 10_000,
         temporary_rent_rate_denominator: 100_000,
@@ -139,8 +140,10 @@ fn test_rent_bump_fees_with_only_bump() {
             &fee_config,
             50_000,
         ),
-        // 1 * 1000 * 200_000 / (10_000 * 1024)
-        20
+        // Rent: ceil(1 * 1000 * 200_000 / (10_000 * 1024)) (=20) +
+        // Expiration entry write bytes: ceil(1000 * 68 / 1024) (=67) +
+        // Expiration entry write: 10
+        20 + 67 + 10
     );
 
     // Minimal ledgers
@@ -156,8 +159,9 @@ fn test_rent_bump_fees_with_only_bump() {
             &fee_config,
             50_000,
         ),
-        // ceil(10 * 1024 * 1000 * 1 / (10_000 * 1024))
-        1
+        // Rent: ceil(10 * 1024 * 1000 * 1 / (10_000 * 1024)) (=1) +
+        // Expiration entry write entry/bytes: 77
+        1 + 77
     );
 
     // Minimal ledgers & size
@@ -173,8 +177,9 @@ fn test_rent_bump_fees_with_only_bump() {
             &fee_config,
             50_000,
         ),
-        // ceil(1 * 1000 * 1 / (10_000 * 1024))
-        1
+        // Rent: ceil(1 * 1000 * 1 / (10_000 * 1024))
+        // Expiration entry write entry/bytes: 77
+        1 + 77
     );
 
     // No size change
@@ -190,8 +195,9 @@ fn test_rent_bump_fees_with_only_bump() {
             &fee_config,
             50_000,
         ),
-        // 10 * 1024 * 1000 * 200_000 / (10_000 * 1024)
-        200_000
+        // Rent: ceil(10 * 1024 * 1000 * 200_000 / (10_000 * 1024)) (=200_000)
+        // Expiration entry write entry/bytes: 77
+        200_000 + 77
     );
 
     // Size decrease
@@ -207,8 +213,9 @@ fn test_rent_bump_fees_with_only_bump() {
             &fee_config,
             50_000,
         ),
-        // 5 * 1024 * 1000 * 200_000 / (10_000 * 1024)
-        100_000
+        // Rent: ceil(5 * 1024 * 1000 * 200_000 / (10_000 * 1024)) (=100_000) +
+        // Expiration entry write entry/bytes: 77
+        100_000 + 77
     );
 
     // Temp storage rate
@@ -224,8 +231,9 @@ fn test_rent_bump_fees_with_only_bump() {
             &fee_config,
             50_000,
         ),
-        // 10 * 1024 * 1000 * 200_000 / (100_000 * 1024)
-        20_000
+        // Rent: ceil(10 * 1024 * 1000 * 200_000 / (100_000 * 1024)) (=20_000) +
+        // Expiration entry write entry/bytes: 77
+        20_000 + 77
     );
 
     // Multiple entries
@@ -259,19 +267,36 @@ fn test_rent_bump_fees_with_only_bump() {
                     new_size_bytes: 1,
                     old_expiration_ledger: 100_000,
                     new_expiration_ledger: 300_000,
+                },
+                LedgerEntryRentChange {
+                    is_persistent: true,
+                    old_size_bytes: 10 * 1024,
+                    new_size_bytes: 10 * 1024,
+                    old_expiration_ledger: 100_000,
+                    new_expiration_ledger: 300_000,
+                },
+                LedgerEntryRentChange {
+                    is_persistent: false,
+                    old_size_bytes: 10 * 1024,
+                    new_size_bytes: 10 * 1024,
+                    old_expiration_ledger: 100_000,
+                    new_expiration_ledger: 300_000,
                 }
             ],
             &fee_config,
             50_000,
         ),
-        // 20_000 + 200_000 + 1 + 20
-        220_021
+        // Rent: 20_000 + 200_000 + 1 + 20 + 200_000 + 20_000 (=440_021) +
+        // Expiration entry write bytes: ceil(6 * 1000 * 68 / 1024) (=399) +
+        // Expiration entry write: 10 * 6
+        440_021 + 399 + 60
     );
 }
 
 #[test]
 fn test_rent_bump_fees_with_only_size_change() {
     let fee_config = RentFeeConfiguration {
+        fee_per_write_entry: 100,
         fee_per_write_1kb: 1000,
         persistent_rent_rate_denominator: 10_000,
         temporary_rent_rate_denominator: 100_000,
@@ -375,6 +400,7 @@ fn test_rent_bump_fees_with_only_size_change() {
 #[test]
 fn test_rent_bump_with_size_change_and_bump() {
     let fee_config = RentFeeConfiguration {
+        fee_per_write_entry: 10,
         fee_per_write_1kb: 1000,
         persistent_rent_rate_denominator: 10_000,
         temporary_rent_rate_denominator: 100_000,
@@ -393,9 +419,10 @@ fn test_rent_bump_with_size_change_and_bump() {
             &fee_config,
             25_000,
         ),
-        // 100_000 * 1000 * 200_000 / (10_000 * 1024) +
+        // Rent: 100_000 * 1000 * 200_000 / (10_000 * 1024) +
         // 99_999 * 1000 * (100_000 - 25_000 + 1) / (10_000 * 1024)
-        2_685_550
+        // Expiration entry write entry/bytes: 77
+        2_685_550 + 77
     );
 
     // Temp entry
@@ -411,9 +438,10 @@ fn test_rent_bump_with_size_change_and_bump() {
             &fee_config,
             25_000,
         ),
-        // 100_000 * 1000 * 200_000 / (10_000 * 1024) +
+        // Rent: 100_000 * 1000 * 200_000 / (10_000 * 1024) +
         // 99_999 * 1000 * (100_000 - 25_000 + 1) / (10_000 * 1024)
-        268_556
+        // Expiration entry write entry/bytes: 77
+        268_556 + 77
     );
 
     // Multiple entries
@@ -438,8 +466,10 @@ fn test_rent_bump_with_size_change_and_bump() {
             &fee_config,
             25_000,
         ),
-        // 2_685_550 + 268_556
-        2_954_106
+        // Rent: 2_685_550 + 268_556
+        // Expiration entry write bytes: ceil(2 * 1000 * 68 / 1024) (=133) +
+        // Expiration entry write: 10 * 2
+        2_954_106 + 133 + 20
     );
 
     // Small increments
@@ -455,15 +485,17 @@ fn test_rent_bump_with_size_change_and_bump() {
             &fee_config,
             99_999,
         ),
-        // ceil(2 * 1000 * 1 / (10_000 * 1024)) +
-        // ceil(1 * 1000 * (100_000 - 99_999 + 1) / (10_000 * 1024))
-        2
+        // Rent: ceil(2 * 1000 * 1 / (10_000 * 1024)) +
+        //       ceil(1 * 1000 * (100_000 - 99_999 + 1) / (10_000 * 1024)) (=2)
+        // Expiration entry write entry/bytes: 77
+        2 + 77
     );
 }
 
 #[test]
 fn test_rent_bump_without_old_entry() {
     let fee_config = RentFeeConfiguration {
+        fee_per_write_entry: 10,
         fee_per_write_1kb: 1000,
         persistent_rent_rate_denominator: 10_000,
         temporary_rent_rate_denominator: 100_000,
@@ -482,8 +514,9 @@ fn test_rent_bump_without_old_entry() {
             &fee_config,
             25_000,
         ),
-        // 100_000 * 1000 * (100_000 - 25_000) / (10_000 * 1024)
-        732_432
+        // Rent: 100_000 * 1000 * (100_000 - 25_000) / (10_000 * 1024)
+        // Expiration entry write entry/bytes: 77
+        732_432 + 77
     );
 
     // Temp storage
@@ -499,8 +532,9 @@ fn test_rent_bump_without_old_entry() {
             &fee_config,
             25_000,
         ),
-        // 100_000 * 1000 * (100_000 - 25_000) / (10_000 * 1024)
-        73_244
+        // Rent: 100_000 * 1000 * (100_000 - 25_000) / (10_000 * 1024)
+        // Expiration entry write entry/bytes: 77
+        73_244 + 77
     );
 }
 
