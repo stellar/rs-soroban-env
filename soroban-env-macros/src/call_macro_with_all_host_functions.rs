@@ -1,8 +1,10 @@
+use itertools::iproduct;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use std::{
     collections::{hash_map::Entry, HashMap},
     fs::File,
+    iter,
 };
 use syn::{Error, LitStr};
 
@@ -30,15 +32,55 @@ pub fn generate(file_lit: LitStr) -> Result<TokenStream, Error> {
 
     let mut export_names = HashMap::<String, String>::new();
     for m in root.modules.iter() {
-        for f in m.functions.iter() {
+        // We expect each module in the env interface to label its function
+        // export names according to a simple scheme: _ 0-9 a-z A-Z.
+        let exp_chars = iter::once('_')
+            .chain('0'..='9')
+            .chain('a'..='z')
+            .chain('A'..='Z')
+            .map(|ch| ch.to_string())
+            .collect::<Vec<String>>();
+
+        // This forms the sequence of 1-char names above, followed by the 2-char
+        // names formed by the cartesian product of that sequence with itself;
+        // enough to cover 4032 functions per module, far more than we'll ever
+        // have.
+        let max_names = exp_chars.len() + (exp_chars.len() * exp_chars.len());
+        let expected_fn_export_names = exp_chars
+            .iter()
+            .map(|x| x.to_owned())
+            .chain(iproduct!(exp_chars.iter(), exp_chars.iter()).map(|(a, b)| a.to_owned() + b));
+
+        if m.functions.len() > max_names {
+            return Err(Error::new(
+                file_lit.span(),
+                format!(
+                    "too many functions in module '{}' in '{}': have {}, limit is {}",
+                    m.name,
+                    file_str,
+                    m.functions.len(),
+                    max_names
+                ),
+            ));
+        }
+
+        for (f, expected) in m.functions.iter().zip(expected_fn_export_names) {
             let path_name = format!("{}.{}", m.name, f.name);
             let export_name = format!("{}.{}", m.export, f.export);
+
+            if f.export != expected {
+                return Err(Error::new(
+                    file_lit.span(),
+                    format!("unexpected host function export-name in '{file_str}': {path_name} uses '{}' but expected '{}'", f.export, expected),
+                ));
+            }
+
             match export_names.entry(export_name.clone()) {
                 Entry::Occupied(existing) => {
                     let existing_name = existing.get();
                     return Err(Error::new(
                         file_lit.span(),
-                        format!("duplicate host function export-name in '{file_str}': {export_name} used by both {path_name} and {existing_name}"),
+                        format!("duplicate host function export-name in '{file_str}': '{export_name}' used by both '{path_name}' and '{existing_name}'"),
                     ));
                 }
                 Entry::Vacant(v) => {
