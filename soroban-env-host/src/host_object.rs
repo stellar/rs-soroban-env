@@ -323,13 +323,13 @@ impl Host {
         Ok(HOT::new_from_handle(handle))
     }
 
-    pub(crate) unsafe fn unchecked_visit_val_obj<F, U>(
+    pub(crate) fn visit_obj_untyped<F, U>(
         &self,
         obj: impl Into<Object>,
         f: F,
     ) -> Result<U, HostError>
     where
-        F: FnOnce(Option<&HostObject>) -> Result<U, HostError>,
+        F: FnOnce(&HostObject) -> Result<U, HostError>,
     {
         let _span = tracy_span!("visit host object");
         // `VisitObject` covers the cost of visiting an object. The actual cost
@@ -348,8 +348,15 @@ impl Host {
                 "looking up relative object",
                 &[Val::from_u32(handle).to_val()],
             ))
+        } else if let Some(obj) = r.get(handle_to_index(handle)) {
+            f(obj)
         } else {
-            f(r.get(handle_to_index(handle)))
+            Err(self.err(
+                ScErrorType::Object,
+                ScErrorCode::MissingValue,
+                "unknown object reference",
+                &[obj.to_val()],
+            ))
         }
     }
 
@@ -361,38 +368,28 @@ impl Host {
     }
 
     pub(crate) fn check_obj_integrity(&self, obj: Object) -> Result<(), HostError> {
-        unsafe {
-            self.unchecked_visit_val_obj(obj, |hopt| match hopt {
-                None => Err(self.err(
-                    xdr::ScErrorType::Object,
-                    xdr::ScErrorCode::MissingValue,
-                    "unknown object reference",
-                    &[],
-                )),
-                Some(hobj) => match (hobj, obj.to_val().get_tag()) {
-                    (HostObject::Vec(_), Tag::VecObject)
-                    | (HostObject::Map(_), Tag::MapObject)
-                    | (HostObject::U64(_), Tag::U64Object)
-                    | (HostObject::I64(_), Tag::I64Object)
-                    | (HostObject::TimePoint(_), Tag::TimepointObject)
-                    | (HostObject::Duration(_), Tag::DurationObject)
-                    | (HostObject::U128(_), Tag::U128Object)
-                    | (HostObject::I128(_), Tag::I128Object)
-                    | (HostObject::U256(_), Tag::U256Object)
-                    | (HostObject::I256(_), Tag::I256Object)
-                    | (HostObject::Bytes(_), Tag::BytesObject)
-                    | (HostObject::String(_), Tag::StringObject)
-                    | (HostObject::Symbol(_), Tag::SymbolObject)
-                    | (HostObject::Address(_), Tag::AddressObject) => Ok(()),
-                    _ => Err(self.err(
-                        xdr::ScErrorType::Object,
-                        xdr::ScErrorCode::UnexpectedType,
-                        "mis-tagged object reference",
-                        &[],
-                    )),
-                },
-            })
-        }
+        self.visit_obj_untyped(obj, |hobj| match (hobj, obj.to_val().get_tag()) {
+            (HostObject::Vec(_), Tag::VecObject)
+            | (HostObject::Map(_), Tag::MapObject)
+            | (HostObject::U64(_), Tag::U64Object)
+            | (HostObject::I64(_), Tag::I64Object)
+            | (HostObject::TimePoint(_), Tag::TimepointObject)
+            | (HostObject::Duration(_), Tag::DurationObject)
+            | (HostObject::U128(_), Tag::U128Object)
+            | (HostObject::I128(_), Tag::I128Object)
+            | (HostObject::U256(_), Tag::U256Object)
+            | (HostObject::I256(_), Tag::I256Object)
+            | (HostObject::Bytes(_), Tag::BytesObject)
+            | (HostObject::String(_), Tag::StringObject)
+            | (HostObject::Symbol(_), Tag::SymbolObject)
+            | (HostObject::Address(_), Tag::AddressObject) => Ok(()),
+            _ => Err(self.err(
+                xdr::ScErrorType::Object,
+                xdr::ScErrorCode::UnexpectedType,
+                "mis-tagged object reference",
+                &[],
+            )),
+        })
     }
 
     // Notes on metering: object visiting part is covered by unchecked_visit_val_obj. Closure function
@@ -405,24 +402,14 @@ impl Host {
     where
         F: FnOnce(&HOT) -> Result<U, HostError>,
     {
-        unsafe {
-            self.unchecked_visit_val_obj(obj, |hopt| match hopt {
-                None => Err(self.err(
-                    xdr::ScErrorType::Object,
-                    xdr::ScErrorCode::MissingValue,
-                    "unknown object reference",
-                    &[],
-                )),
-                Some(hobj) => match HOT::try_extract(hobj) {
-                    None => Err(self.err(
-                        xdr::ScErrorType::Object,
-                        xdr::ScErrorCode::UnexpectedType,
-                        "object reference type does not match tag",
-                        &[],
-                    )),
-                    Some(hot) => f(hot),
-                },
-            })
-        }
+        self.visit_obj_untyped(obj, |hobj| match HOT::try_extract(hobj) {
+            None => Err(self.err(
+                xdr::ScErrorType::Object,
+                xdr::ScErrorCode::UnexpectedType,
+                "object reference type does not match tag",
+                &[],
+            )),
+            Some(hot) => f(hot),
+        })
     }
 }

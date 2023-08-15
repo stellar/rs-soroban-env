@@ -638,11 +638,9 @@ mod tests {
 
         pairs_xdr_sorted.sort_by(|&(v1, _), &(v2, _)| v1.cmp(&v2));
 
-        pairs_host_sorted.sort_by(|&(_, v1), &(_, v2)| unsafe {
-            host.unchecked_visit_val_obj(v1, |v1| {
-                host.unchecked_visit_val_obj(v2, |v2| {
-                    let v1 = v1.unwrap();
-                    let v2 = v2.unwrap();
+        pairs_host_sorted.sort_by(|&(_, v1), &(_, v2)| {
+            host.visit_obj_untyped(v1, |v1| {
+                host.visit_obj_untyped(v2, |v2| {
                     let v1d = host_obj_discriminant(v1);
                     let v2d = host_obj_discriminant(v2);
                     Ok(v1d.cmp(&v2d))
