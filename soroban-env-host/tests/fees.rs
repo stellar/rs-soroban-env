@@ -121,6 +121,7 @@ fn resource_fee_computation() {
 #[test]
 fn test_rent_bump_fees_with_only_bump() {
     let fee_config = RentFeeConfiguration {
+        fee_per_write_entry: 10,
         fee_per_write_1kb: 1000,
         persistent_rent_rate_denominator: 10_000,
         temporary_rent_rate_denominator: 100_000,
@@ -130,6 +131,8 @@ fn test_rent_bump_fees_with_only_bump() {
     assert_eq!(
         compute_rent_fee(
             &vec![LedgerEntryRentChange {
+                read_only: false,
+                key_size: 1,
                 is_persistent: true,
                 old_size_bytes: 1,
                 new_size_bytes: 1,
@@ -147,6 +150,8 @@ fn test_rent_bump_fees_with_only_bump() {
     assert_eq!(
         compute_rent_fee(
             &vec![LedgerEntryRentChange {
+                read_only: false,
+                key_size: 100,
                 is_persistent: true,
                 old_size_bytes: 10 * 1024,
                 new_size_bytes: 10 * 1024,
@@ -164,6 +169,8 @@ fn test_rent_bump_fees_with_only_bump() {
     assert_eq!(
         compute_rent_fee(
             &vec![LedgerEntryRentChange {
+                read_only: false,
+                key_size: 1,
                 is_persistent: true,
                 old_size_bytes: 1,
                 new_size_bytes: 1,
@@ -181,6 +188,8 @@ fn test_rent_bump_fees_with_only_bump() {
     assert_eq!(
         compute_rent_fee(
             &vec![LedgerEntryRentChange {
+                read_only: false,
+                key_size: 10,
                 is_persistent: true,
                 old_size_bytes: 10 * 1024,
                 new_size_bytes: 10 * 1024,
@@ -194,10 +203,31 @@ fn test_rent_bump_fees_with_only_bump() {
         200_000
     );
 
+    // No size change, read-only
+    assert_eq!(
+        compute_rent_fee(
+            &vec![LedgerEntryRentChange {
+                read_only: true,
+                key_size: 1000,
+                is_persistent: true,
+                old_size_bytes: 10 * 1024,
+                new_size_bytes: 10 * 1024,
+                old_expiration_ledger: 100_000,
+                new_expiration_ledger: 300_000,
+            }],
+            &fee_config,
+            50_000,
+        ),
+        // 10 * 1024 * 1000 * 200_000 / (10_000 * 1024) + (10 + ceil(1000 * 1000 / 1024))
+        200_987
+    );
+
     // Size decrease
     assert_eq!(
         compute_rent_fee(
             &vec![LedgerEntryRentChange {
+                read_only: false,
+                key_size: 10,
                 is_persistent: true,
                 old_size_bytes: 10 * 1024,
                 new_size_bytes: 5 * 1024,
@@ -215,6 +245,8 @@ fn test_rent_bump_fees_with_only_bump() {
     assert_eq!(
         compute_rent_fee(
             &vec![LedgerEntryRentChange {
+                read_only: false,
+                key_size: 10,
                 is_persistent: false,
                 old_size_bytes: 10 * 1024,
                 new_size_bytes: 10 * 1024,
@@ -228,11 +260,32 @@ fn test_rent_bump_fees_with_only_bump() {
         20_000
     );
 
+    // Temp storage rate, read only
+    assert_eq!(
+        compute_rent_fee(
+            &vec![LedgerEntryRentChange {
+                read_only: true,
+                key_size: 500,
+                is_persistent: false,
+                old_size_bytes: 10 * 1024,
+                new_size_bytes: 10 * 1024,
+                old_expiration_ledger: 100_000,
+                new_expiration_ledger: 300_000,
+            }],
+            &fee_config,
+            50_000,
+        ),
+        // 10 * 1024 * 1000 * 200_000 / (100_000 * 1024) + (10 + ceil(500 * 1000 / 1024))
+        20_499
+    );
+
     // Multiple entries
     assert_eq!(
         compute_rent_fee(
             &vec![
                 LedgerEntryRentChange {
+                    read_only: false,
+                    key_size: 10,
                     is_persistent: false,
                     old_size_bytes: 10 * 1024,
                     new_size_bytes: 10 * 1024,
@@ -240,6 +293,8 @@ fn test_rent_bump_fees_with_only_bump() {
                     new_expiration_ledger: 300_000,
                 },
                 LedgerEntryRentChange {
+                    read_only: false,
+                    key_size: 10,
                     is_persistent: true,
                     old_size_bytes: 10 * 1024,
                     new_size_bytes: 10 * 1024,
@@ -247,6 +302,8 @@ fn test_rent_bump_fees_with_only_bump() {
                     new_expiration_ledger: 300_000,
                 },
                 LedgerEntryRentChange {
+                    read_only: false,
+                    key_size: 10,
                     is_persistent: true,
                     old_size_bytes: 1,
                     new_size_bytes: 1,
@@ -254,9 +311,29 @@ fn test_rent_bump_fees_with_only_bump() {
                     new_expiration_ledger: 100_001,
                 },
                 LedgerEntryRentChange {
+                    read_only: false,
+                    key_size: 10,
                     is_persistent: true,
                     old_size_bytes: 1,
                     new_size_bytes: 1,
+                    old_expiration_ledger: 100_000,
+                    new_expiration_ledger: 300_000,
+                },
+                LedgerEntryRentChange {
+                    read_only: true,
+                    key_size: 1000,
+                    is_persistent: true,
+                    old_size_bytes: 10 * 1024,
+                    new_size_bytes: 10 * 1024,
+                    old_expiration_ledger: 100_000,
+                    new_expiration_ledger: 300_000,
+                },
+                LedgerEntryRentChange {
+                    read_only: true,
+                    key_size: 500,
+                    is_persistent: false,
+                    old_size_bytes: 10 * 1024,
+                    new_size_bytes: 10 * 1024,
                     old_expiration_ledger: 100_000,
                     new_expiration_ledger: 300_000,
                 }
@@ -264,14 +341,15 @@ fn test_rent_bump_fees_with_only_bump() {
             &fee_config,
             50_000,
         ),
-        // 20_000 + 200_000 + 1 + 20
-        220_021
+        // 20_000 + 200_000 + 1 + 20 + 200_987 + 20_499 + (-1 due to rounding)
+        441_506
     );
 }
 
 #[test]
 fn test_rent_bump_fees_with_only_size_change() {
     let fee_config = RentFeeConfiguration {
+        fee_per_write_entry: 100,
         fee_per_write_1kb: 1000,
         persistent_rent_rate_denominator: 10_000,
         temporary_rent_rate_denominator: 100_000,
@@ -281,6 +359,8 @@ fn test_rent_bump_fees_with_only_size_change() {
     assert_eq!(
         compute_rent_fee(
             &vec![LedgerEntryRentChange {
+                read_only: false,
+                key_size: 10,
                 is_persistent: true,
                 old_size_bytes: 1,
                 new_size_bytes: 100_000,
@@ -298,6 +378,8 @@ fn test_rent_bump_fees_with_only_size_change() {
     assert_eq!(
         compute_rent_fee(
             &vec![LedgerEntryRentChange {
+                read_only: false,
+                key_size: 10,
                 is_persistent: false,
                 old_size_bytes: 1,
                 new_size_bytes: 100_000,
@@ -315,6 +397,8 @@ fn test_rent_bump_fees_with_only_size_change() {
     assert_eq!(
         compute_rent_fee(
             &vec![LedgerEntryRentChange {
+                read_only: false,
+                key_size: 10,
                 is_persistent: true,
                 old_size_bytes: 99_999,
                 new_size_bytes: 100_000,
@@ -332,6 +416,8 @@ fn test_rent_bump_fees_with_only_size_change() {
     assert_eq!(
         compute_rent_fee(
             &vec![LedgerEntryRentChange {
+                read_only: false,
+                key_size: 10,
                 is_persistent: true,
                 old_size_bytes: 1,
                 new_size_bytes: 100_000,
@@ -350,6 +436,8 @@ fn test_rent_bump_fees_with_only_size_change() {
         compute_rent_fee(
             &vec![
                 LedgerEntryRentChange {
+                    read_only: false,
+                    key_size: 10,
                     is_persistent: true,
                     old_size_bytes: 1,
                     new_size_bytes: 100_000,
@@ -357,6 +445,8 @@ fn test_rent_bump_fees_with_only_size_change() {
                     new_expiration_ledger: 100_000,
                 },
                 LedgerEntryRentChange {
+                    read_only: false,
+                    key_size: 10,
                     is_persistent: false,
                     old_size_bytes: 1,
                     new_size_bytes: 100_000,
@@ -375,6 +465,7 @@ fn test_rent_bump_fees_with_only_size_change() {
 #[test]
 fn test_rent_bump_with_size_change_and_bump() {
     let fee_config = RentFeeConfiguration {
+        fee_per_write_entry: 100,
         fee_per_write_1kb: 1000,
         persistent_rent_rate_denominator: 10_000,
         temporary_rent_rate_denominator: 100_000,
@@ -384,6 +475,8 @@ fn test_rent_bump_with_size_change_and_bump() {
     assert_eq!(
         compute_rent_fee(
             &vec![LedgerEntryRentChange {
+                read_only: false,
+                key_size: 10,
                 is_persistent: true,
                 old_size_bytes: 1,
                 new_size_bytes: 100_000,
@@ -402,6 +495,8 @@ fn test_rent_bump_with_size_change_and_bump() {
     assert_eq!(
         compute_rent_fee(
             &vec![LedgerEntryRentChange {
+                read_only: false,
+                key_size: 10,
                 is_persistent: false,
                 old_size_bytes: 1,
                 new_size_bytes: 100_000,
@@ -421,6 +516,8 @@ fn test_rent_bump_with_size_change_and_bump() {
         compute_rent_fee(
             &vec![
                 LedgerEntryRentChange {
+                    read_only: false,
+                    key_size: 10,
                     is_persistent: true,
                     old_size_bytes: 1,
                     new_size_bytes: 100_000,
@@ -428,6 +525,8 @@ fn test_rent_bump_with_size_change_and_bump() {
                     new_expiration_ledger: 300_000,
                 },
                 LedgerEntryRentChange {
+                    read_only: false,
+                    key_size: 10,
                     is_persistent: false,
                     old_size_bytes: 1,
                     new_size_bytes: 100_000,
@@ -446,6 +545,8 @@ fn test_rent_bump_with_size_change_and_bump() {
     assert_eq!(
         compute_rent_fee(
             &vec![LedgerEntryRentChange {
+                read_only: false,
+                key_size: 10,
                 is_persistent: true,
                 old_size_bytes: 1,
                 new_size_bytes: 2,
@@ -464,6 +565,7 @@ fn test_rent_bump_with_size_change_and_bump() {
 #[test]
 fn test_rent_bump_without_old_entry() {
     let fee_config = RentFeeConfiguration {
+        fee_per_write_entry: 100,
         fee_per_write_1kb: 1000,
         persistent_rent_rate_denominator: 10_000,
         temporary_rent_rate_denominator: 100_000,
@@ -473,6 +575,8 @@ fn test_rent_bump_without_old_entry() {
     assert_eq!(
         compute_rent_fee(
             &vec![LedgerEntryRentChange {
+                read_only: false,
+                key_size: 10,
                 is_persistent: true,
                 old_size_bytes: 0,
                 new_size_bytes: 100_000,
@@ -490,6 +594,8 @@ fn test_rent_bump_without_old_entry() {
     assert_eq!(
         compute_rent_fee(
             &vec![LedgerEntryRentChange {
+                read_only: false,
+                key_size: 10,
                 is_persistent: false,
                 old_size_bytes: 0,
                 new_size_bytes: 100_000,

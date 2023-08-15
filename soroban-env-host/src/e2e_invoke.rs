@@ -205,6 +205,8 @@ pub fn extract_rent_changes(ledger_changes: &Vec<LedgerEntryChange>) -> Vec<Ledg
                         expiration_change.durability,
                         ContractDataDurability::Persistent
                     ),
+                    read_only: entry_change.read_only,
+                    key_size,
                     old_size_bytes,
                     new_size_bytes: key_size.saturating_add(encoded_new_value.len() as u32),
                     old_expiration_ledger: expiration_change.old_expiration_ledger,

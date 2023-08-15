@@ -76,10 +76,16 @@ pub struct WriteFeeConfiguration {
 pub struct LedgerEntryRentChange {
     /// Whether this is persistent or temporary entry.
     pub is_persistent: bool,
-    /// Size of the entry in bytes before it has been modified.
+    // Whether a bump is performed on a read-only entry.
+    pub read_only: bool,
+    // Size of the entry key.
+    pub key_size: u32,
+    /// Size of the entry in bytes before it has been modified, including the
+    /// key.
     /// `0` for newly-created entires.
     pub old_size_bytes: u32,
-    /// Size of the entry in bytes after it has been modified.
+    /// Size of the entry in bytes after it has been modified, including the
+    /// key.
     pub new_size_bytes: u32,
     /// Expiration ledger of the entry before it has been modified.
     /// Should be less than the current ledger for newly-created entires.
@@ -98,6 +104,9 @@ pub struct RentFeeConfiguration {
     /// This is the same field as in `FeeConfiguration` and it has to be
     /// computed via `compute_write_fee_per_1kb`.
     pub fee_per_write_1kb: i64,
+    /// Fee per 1 entry written to ledger.
+    /// This is the same field as in `FeeConfiguration`.
+    pub fee_per_write_entry: i64,
     /// Denominator for the total rent fee for persistent storage.
     ///
     /// This can be thought of as the number of ledgers of rent that costs as
@@ -234,9 +243,25 @@ pub fn compute_rent_fee(
     current_ledger_seq: u32,
 ) -> i64 {
     let mut fee = 0;
+    let mut bumped_read_only_entries = 0;
+    let mut bumped_read_only_key_size_bytes = 0;
     for e in changed_entries {
         fee += rent_fee_per_entry_change(e, fee_config, current_ledger_seq);
+        if e.read_only && e.old_expiration_ledger < e.new_expiration_ledger {
+            bumped_read_only_entries += 1;
+            bumped_read_only_key_size_bytes += e.key_size;
+        }
     }
+    // The read-only entry bumps need to be written to the ledger. Here we
+    // charge for the minimum necessary amount of information written,
+    // approximated as sum of the bumped read-only key sizes.
+    fee += fee_config.fee_per_write_entry * bumped_read_only_entries;
+    fee += compute_fee_per_increment(
+        bumped_read_only_key_size_bytes,
+        fee_config.fee_per_write_1kb,
+        DATA_SIZE_1KB_INCREMENT,
+    );
+
     fee
 }
 
