@@ -1,7 +1,7 @@
 use crate::{
     err,
     xdr::{ContractCostType, Hash, ScBytes, ScErrorCode, ScErrorType},
-    BytesObject, Host, HostError, U32Val,
+    BytesObject, Host, HostError, U32Val, Val,
 };
 use sha2::Sha256;
 use sha3::Keccak256;
@@ -28,9 +28,17 @@ impl Host {
     pub(crate) fn ed25519_pub_key_from_bytes(
         &self,
         bytes: &[u8],
-    ) -> Result<ed25519_dalek::PublicKey, HostError> {
+    ) -> Result<ed25519_dalek::VerifyingKey, HostError> {
         self.charge_budget(ContractCostType::ComputeEd25519PubKey, None)?;
-        ed25519_dalek::PublicKey::from_bytes(bytes).map_err(|_| {
+        let vk_bytes = bytes.try_into().map_err(|_| {
+            self.err(
+                ScErrorType::Crypto,
+                ScErrorCode::InvalidInput,
+                "invalid length of ed25519 public key",
+                &[Val::from_u32(bytes.len() as u32).into()],
+            )
+        })?;
+        ed25519_dalek::VerifyingKey::from_bytes(vk_bytes).map_err(|_| {
             err!(
                 self,
                 (ScErrorType::Crypto, ScErrorCode::InvalidInput),
@@ -43,7 +51,7 @@ impl Host {
     pub fn ed25519_pub_key_from_bytesobj_input(
         &self,
         k: BytesObject,
-    ) -> Result<ed25519_dalek::PublicKey, HostError> {
+    ) -> Result<ed25519_dalek::VerifyingKey, HostError> {
         self.visit_obj(k, |bytes: &ScBytes| {
             self.ed25519_pub_key_from_bytes(bytes.as_slice())
         })
@@ -52,7 +60,7 @@ impl Host {
     pub(crate) fn verify_sig_ed25519_internal(
         &self,
         payload: &[u8],
-        public_key: &ed25519_dalek::PublicKey,
+        public_key: &ed25519_dalek::VerifyingKey,
         sig: &ed25519_dalek::Signature,
     ) -> Result<(), HostError> {
         let _span = tracy_span!("ed25519 verify");

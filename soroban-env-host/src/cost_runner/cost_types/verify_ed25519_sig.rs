@@ -1,13 +1,13 @@
 use std::hint::black_box;
 
 use crate::{cost_runner::CostRunner, xdr::ContractCostType};
-use ed25519_dalek::{PublicKey, Signature};
+use ed25519_dalek::{Signature, VerifyingKey};
 
 pub struct VerifyEd25519SigRun;
 
 #[derive(Clone)]
 pub struct VerifyEd25519SigSample {
-    pub key: PublicKey,
+    pub key: VerifyingKey,
     pub msg: Vec<u8>,
     pub sig: Signature,
 }
