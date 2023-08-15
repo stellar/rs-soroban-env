@@ -1,6 +1,9 @@
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
-use std::fs::File;
+use std::{
+    collections::{hash_map::Entry, HashMap},
+    fs::File,
+};
 use syn::{Error, LitStr};
 
 use serde::{Deserialize, Serialize};
@@ -24,6 +27,26 @@ pub fn generate(file_lit: LitStr) -> Result<TokenStream, Error> {
             format!("error parsing file '{file_str}': {e}"),
         )
     })?;
+
+    let mut export_names = HashMap::<String, String>::new();
+    for m in root.modules.iter() {
+        for f in m.functions.iter() {
+            let path_name = format!("{}.{}", m.name, f.name);
+            let export_name = format!("{}.{}", m.export, f.export);
+            match export_names.entry(export_name.clone()) {
+                Entry::Occupied(existing) => {
+                    let existing_name = existing.get();
+                    return Err(Error::new(
+                        file_lit.span(),
+                        format!("duplicate host function export-name in '{file_str}': {export_name} used by both {path_name} and {existing_name}"),
+                    ));
+                }
+                Entry::Vacant(v) => {
+                    v.insert(path_name);
+                }
+            }
+        }
+    }
 
     // Build the 'mod' sections.
     let modules = root.modules.iter().map(|m| {
