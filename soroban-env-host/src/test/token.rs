@@ -11,14 +11,14 @@ use crate::{
         testutils::{
             account_to_address, authorize_single_invocation,
             authorize_single_invocation_with_nonce, contract_id_to_address, create_account,
-            generate_keypair, keypair_to_account_id, AccountSigner, HostVec, TestSigner,
+            generate_signing_key, signing_key_to_account_id, AccountSigner, HostVec, TestSigner,
         },
         token::test_token::TestToken,
     },
     test::util::generate_bytes_array,
     Host, HostError, LedgerInfo,
 };
-use ed25519_dalek::Keypair;
+use ed25519_dalek::SigningKey;
 use soroban_env_common::{
     xdr::{
         self, AccountFlags, InvokeContractArgs, ScAddress, ScSymbol, ScVal,
@@ -38,11 +38,11 @@ use crate::native_contract::base_types::BytesN;
 
 struct TokenTest {
     host: Host,
-    issuer_key: Keypair,
-    user_key: Keypair,
-    user_key_2: Keypair,
-    user_key_3: Keypair,
-    user_key_4: Keypair,
+    issuer_key: SigningKey,
+    user_key: SigningKey,
+    user_key_2: SigningKey,
+    user_key_3: SigningKey,
+    user_key_4: SigningKey,
     asset_code: [u8; 4],
 }
 
@@ -63,11 +63,11 @@ impl TokenTest {
         .unwrap();
         Self {
             host,
-            issuer_key: generate_keypair(),
-            user_key: generate_keypair(),
-            user_key_2: generate_keypair(),
-            user_key_3: generate_keypair(),
-            user_key_4: generate_keypair(),
+            issuer_key: generate_signing_key(),
+            user_key: generate_signing_key(),
+            user_key_2: generate_signing_key(),
+            user_key_3: generate_signing_key(),
+            user_key_4: generate_signing_key(),
             asset_code: [0_u8; 4],
         }
     }
@@ -80,7 +80,7 @@ impl TokenTest {
     }
 
     fn default_token(&self) -> TestToken {
-        let issuer_id = keypair_to_account_id(&self.issuer_key);
+        let issuer_id = signing_key_to_account_id(&self.issuer_key);
         self.create_account(
             &issuer_id,
             vec![(&self.issuer_key, 100)],
@@ -121,7 +121,7 @@ impl TokenTest {
     fn create_default_trustline(&self, user: &TestSigner) -> Rc<LedgerKey> {
         self.create_trustline(
             &user.account_id(),
-            &keypair_to_account_id(&self.issuer_key),
+            &signing_key_to_account_id(&self.issuer_key),
             &self.asset_code,
             0,
             i64::MAX,
@@ -148,7 +148,7 @@ impl TokenTest {
     fn create_account(
         &self,
         account_id: &AccountId,
-        signers: Vec<(&Keypair, u32)>,
+        signers: Vec<(&SigningKey, u32)>,
         balance: i64,
         num_sub_entries: u32,
         thresholds: [u8; 4],
@@ -311,7 +311,7 @@ fn to_contract_err(e: HostError) -> ContractError {
 fn test_native_token_smart_roundtrip() {
     let test = TokenTest::setup();
 
-    let account_id = keypair_to_account_id(&test.user_key);
+    let account_id = signing_key_to_account_id(&test.user_key);
     test.create_account(
         &account_id,
         vec![(&test.user_key, 100)],
@@ -351,8 +351,8 @@ fn test_native_token_smart_roundtrip() {
 fn test_asset_init(asset_code: &[u8]) {
     let test = TokenTest::setup();
 
-    let account_id = keypair_to_account_id(&test.user_key);
-    let issuer_id = keypair_to_account_id(&test.issuer_key);
+    let account_id = signing_key_to_account_id(&test.user_key);
+    let issuer_id = signing_key_to_account_id(&test.issuer_key);
 
     test.create_account(
         &account_id,
@@ -406,7 +406,7 @@ fn test_asset_init(asset_code: &[u8]) {
 
     let mut expected = String::from_utf8(asset_code.to_vec()).unwrap();
     expected.push(':');
-    let k = ed25519::PublicKey(test.issuer_key.public.to_bytes());
+    let k = ed25519::PublicKey(test.issuer_key.verifying_key().to_bytes());
     expected.push_str(k.to_string().as_str());
 
     assert_eq!(name, expected);
@@ -879,7 +879,7 @@ fn test_burn() {
 fn test_cannot_burn_native() {
     let test = TokenTest::setup();
     let token = TestToken::new_from_asset(&test.host, Asset::Native);
-    let user_acc_id = keypair_to_account_id(&test.user_key);
+    let user_acc_id = signing_key_to_account_id(&test.user_key);
 
     let user = TestSigner::account_with_multisig(&user_acc_id, vec![&test.user_key]);
     let user2 = TestSigner::account(&test.user_key_2);
@@ -1048,7 +1048,7 @@ fn test_clawback_on_contract() {
 
     let issuer_ledger_key = test
         .host
-        .to_account_key(keypair_to_account_id(&test.issuer_key));
+        .to_account_key(signing_key_to_account_id(&test.issuer_key));
 
     let user_1 = generate_bytes_array();
     let user_2 = generate_bytes_array();
@@ -1114,7 +1114,7 @@ fn test_auth_revocable_on_contract() {
 
     let issuer_ledger_key = test
         .host
-        .to_account_key(keypair_to_account_id(&test.issuer_key));
+        .to_account_key(signing_key_to_account_id(&test.issuer_key));
 
     let user_1 = generate_bytes_array();
     let user_1_addr = contract_id_to_address(&test.host, user_1);
@@ -1164,7 +1164,7 @@ fn test_auth_required() {
 
     let issuer_ledger_key = test
         .host
-        .to_account_key(keypair_to_account_id(&test.issuer_key));
+        .to_account_key(signing_key_to_account_id(&test.issuer_key));
 
     let user_1 = generate_bytes_array();
     let user_2 = generate_bytes_array();
@@ -1304,7 +1304,7 @@ fn test_set_admin() {
 fn test_account_spendable_balance() {
     let test = TokenTest::setup();
     let token = TestToken::new_from_asset(&test.host, Asset::Native);
-    let user_acc_id = keypair_to_account_id(&test.user_key);
+    let user_acc_id = signing_key_to_account_id(&test.user_key);
     let user_addr = account_to_address(&test.host, user_acc_id.clone());
 
     test.create_account(
@@ -1328,8 +1328,8 @@ fn test_account_spendable_balance() {
 fn test_trustline_auth() {
     let test = TokenTest::setup();
     // the admin is the issuer_key
-    let admin_acc_id = keypair_to_account_id(&test.issuer_key);
-    let user_acc_id = keypair_to_account_id(&test.user_key);
+    let admin_acc_id = signing_key_to_account_id(&test.issuer_key);
+    let user_acc_id = signing_key_to_account_id(&test.user_key);
 
     let admin = TestSigner::account_with_multisig(&admin_acc_id, vec![&test.issuer_key]);
     let user = TestSigner::account_with_multisig(&user_acc_id, vec![&test.user_key]);
@@ -1491,8 +1491,8 @@ fn test_trustline_auth() {
 #[test]
 fn test_account_invoker_auth_with_issuer_admin() {
     let test = TokenTest::setup();
-    let admin_acc = keypair_to_account_id(&test.issuer_key);
-    let user_acc = keypair_to_account_id(&test.user_key);
+    let admin_acc = signing_key_to_account_id(&test.issuer_key);
+    let user_acc = signing_key_to_account_id(&test.user_key);
 
     test.create_account(
         &admin_acc,
@@ -1699,9 +1699,9 @@ fn test_contract_invoker_auth() {
     assert_eq!(token.balance(admin_contract_address.clone()).unwrap(), 1700);
 
     // Account invoker can't perform unauthorized admin operation.
-    let acc_invoker = TestSigner::AccountInvoker(keypair_to_account_id(&test.issuer_key));
+    let acc_invoker = TestSigner::AccountInvoker(signing_key_to_account_id(&test.issuer_key));
     assert_eq!(
-        test.run_from_account(keypair_to_account_id(&test.issuer_key), || {
+        test.run_from_account(signing_key_to_account_id(&test.issuer_key), || {
             token.mint(&acc_invoker, user_contract_address.clone(), 1000)
         })
         .err()
@@ -1905,7 +1905,7 @@ fn test_auth_rejected_for_incorrect_payload() {
 fn test_classic_account_multisig_auth() {
     let test = TokenTest::setup();
 
-    let account_id = keypair_to_account_id(&test.user_key);
+    let account_id = signing_key_to_account_id(&test.user_key);
     test.create_account(
         &account_id,
         vec![
@@ -2091,7 +2091,7 @@ fn test_classic_account_multisig_auth() {
         &test.user_key_3,
         &test.user_key_4,
     ];
-    out_of_order_signers.sort_by_key(|k| k.public.as_bytes());
+    out_of_order_signers.sort_by_key(|k| k.verifying_key().as_bytes().clone());
     out_of_order_signers.swap(1, 2);
     assert!(token
         .transfer(
@@ -2196,8 +2196,8 @@ fn test_native_token_classic_balance_boundaries(
 ) {
     let token = TestToken::new_from_asset(&test.host, Asset::Native);
 
-    let new_balance_key = generate_keypair();
-    let new_balance_acc = keypair_to_account_id(&new_balance_key);
+    let new_balance_key = generate_signing_key();
+    let new_balance_acc = signing_key_to_account_id(&new_balance_key);
     let new_balance_signer =
         TestSigner::account_with_multisig(&new_balance_acc, vec![&new_balance_key]);
     test.create_account(
@@ -2249,8 +2249,8 @@ fn test_native_token_classic_balance_boundaries(
     // to the account being tested. That's not a realistic scenario
     // given limited XLM supply, but that's the only way to
     // cover max_balance.
-    let large_balance_key = generate_keypair();
-    let large_balance_acc = keypair_to_account_id(&large_balance_key);
+    let large_balance_key = generate_signing_key();
+    let large_balance_acc = signing_key_to_account_id(&large_balance_key);
     let large_balance_signer =
         TestSigner::account_with_multisig(&large_balance_acc, vec![&large_balance_key]);
     test.create_account(
@@ -2297,7 +2297,7 @@ fn test_native_token_classic_balance_boundaries(
 fn test_native_token_classic_balance_boundaries_simple() {
     let test = TokenTest::setup();
 
-    let account_id = keypair_to_account_id(&test.user_key);
+    let account_id = signing_key_to_account_id(&test.user_key);
     let user = TestSigner::account_with_multisig(&account_id, vec![&test.user_key]);
     // Account with no liabilities/sponsorships.
     test.create_account(
@@ -2325,7 +2325,7 @@ fn test_native_token_classic_balance_boundaries_simple() {
 #[test]
 fn test_native_token_classic_balance_boundaries_with_liabilities() {
     let test = TokenTest::setup();
-    let account_id = keypair_to_account_id(&test.user_key);
+    let account_id = signing_key_to_account_id(&test.user_key);
     let user = TestSigner::account_with_multisig(&account_id, vec![&test.user_key]);
     test.create_account(
         &account_id,
@@ -2354,7 +2354,7 @@ fn test_native_token_classic_balance_boundaries_with_liabilities() {
 #[test]
 fn test_native_token_classic_balance_boundaries_with_sponsorships() {
     let test = TokenTest::setup();
-    let account_id = keypair_to_account_id(&test.user_key);
+    let account_id = signing_key_to_account_id(&test.user_key);
     let user = TestSigner::account_with_multisig(&account_id, vec![&test.user_key]);
     test.create_account(
         &account_id,
@@ -2382,7 +2382,7 @@ fn test_native_token_classic_balance_boundaries_with_sponsorships() {
 #[test]
 fn test_native_token_classic_balance_boundaries_with_sponsorships_and_liabilities() {
     let test = TokenTest::setup();
-    let account_id = keypair_to_account_id(&test.user_key);
+    let account_id = signing_key_to_account_id(&test.user_key);
     let user = TestSigner::account_with_multisig(&account_id, vec![&test.user_key]);
     test.create_account(
         &account_id,
@@ -2411,7 +2411,7 @@ fn test_native_token_classic_balance_boundaries_with_sponsorships_and_liabilitie
 #[test]
 fn test_native_token_classic_balance_boundaries_with_large_values() {
     let test = TokenTest::setup();
-    let account_id = keypair_to_account_id(&test.user_key);
+    let account_id = signing_key_to_account_id(&test.user_key);
     let user = TestSigner::account_with_multisig(&account_id, vec![&test.user_key]);
     test.create_account(
         &account_id,
@@ -2444,7 +2444,7 @@ fn test_wrapped_asset_classic_balance_boundaries(
     limit: i64,
 ) {
     let test = TokenTest::setup();
-    let account_id = keypair_to_account_id(&test.user_key);
+    let account_id = signing_key_to_account_id(&test.user_key);
     let user = TestSigner::account_with_multisig(&account_id, vec![&test.user_key]);
     test.create_account(
         &account_id,
@@ -2457,7 +2457,7 @@ fn test_wrapped_asset_classic_balance_boundaries(
         0,
     );
 
-    let account_id2 = keypair_to_account_id(&test.user_key_2);
+    let account_id2 = signing_key_to_account_id(&test.user_key_2);
     let user2 = TestSigner::account_with_multisig(&account_id2, vec![&test.user_key_2]);
     test.create_account(
         &account_id2,
@@ -2470,7 +2470,7 @@ fn test_wrapped_asset_classic_balance_boundaries(
         0,
     );
 
-    let issuer_id = keypair_to_account_id(&test.issuer_key);
+    let issuer_id = signing_key_to_account_id(&test.issuer_key);
     let issuer = TestSigner::account_with_multisig(&issuer_id, vec![&test.issuer_key]);
     test.create_account(
         &issuer_id,
@@ -2651,7 +2651,7 @@ fn test_asset_token_classic_balance_boundaries_large_values() {
 #[test]
 fn test_classic_transfers_not_possible_for_unauthorized_asset() {
     let test = TokenTest::setup();
-    let account_id = keypair_to_account_id(&test.user_key);
+    let account_id = signing_key_to_account_id(&test.user_key);
     let user = TestSigner::account(&test.user_key);
     test.create_account(
         &account_id,
@@ -2664,7 +2664,7 @@ fn test_classic_transfers_not_possible_for_unauthorized_asset() {
         0,
     );
 
-    let issuer_id = keypair_to_account_id(&test.issuer_key);
+    let issuer_id = signing_key_to_account_id(&test.issuer_key);
 
     let trustline_key = test.create_trustline(
         &account_id,
@@ -2720,7 +2720,10 @@ fn test_classic_transfers_not_possible_for_unauthorized_asset() {
 }
 
 #[allow(clippy::type_complexity)]
-fn simple_account_sign_fn<'a>(host: &'a Host, kp: &'a Keypair) -> Box<dyn Fn(&[u8]) -> Val + 'a> {
+fn simple_account_sign_fn<'a>(
+    host: &'a Host,
+    kp: &'a SigningKey,
+) -> Box<dyn Fn(&[u8]) -> Val + 'a> {
     use crate::native_contract::testutils::sign_payload_for_ed25519;
     Box::new(|payload: &[u8]| -> Val { sign_payload_for_ed25519(host, kp, payload).into() })
 }
@@ -2732,7 +2735,7 @@ fn test_custom_account_auth() {
     use soroban_test_wasms::SIMPLE_ACCOUNT_CONTRACT;
 
     let test = TokenTest::setup();
-    let admin_kp = generate_keypair();
+    let admin_kp = generate_signing_key();
     let account_contract_addr_obj = test
         .host
         .register_test_contract_wasm(SIMPLE_ACCOUNT_CONTRACT);
@@ -2747,7 +2750,7 @@ fn test_custom_account_auth() {
         &test.host,
         &test
             .host
-            .bytes_new_from_slice(admin_kp.public.as_bytes().as_slice())
+            .bytes_new_from_slice(admin_kp.verifying_key().as_bytes().as_slice())
             .unwrap(),
     )
     .unwrap();
@@ -2771,7 +2774,7 @@ fn test_custom_account_auth() {
 
     // Create a signer for the new admin, but not yet set its key as the account
     // owner.
-    let new_admin_kp = generate_keypair();
+    let new_admin_kp = generate_signing_key();
     let new_admin = TestSigner::AccountContract(AccountContractSigner {
         address: account_contract_addr,
         sign: simple_account_sign_fn(&test.host, &new_admin_kp),
@@ -2780,7 +2783,7 @@ fn test_custom_account_auth() {
         &test.host,
         &test
             .host
-            .bytes_new_from_slice(new_admin_kp.public.as_bytes().as_slice())
+            .bytes_new_from_slice(new_admin_kp.verifying_key().as_bytes().as_slice())
             .unwrap(),
     )
     .unwrap();

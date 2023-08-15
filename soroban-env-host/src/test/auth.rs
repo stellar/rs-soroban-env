@@ -1,4 +1,4 @@
-use ed25519_dalek::Keypair;
+use ed25519_dalek::SigningKey;
 use rand::{thread_rng, Rng};
 use soroban_env_common::xdr::{
     AccountId, ContractDataDurability, HashIdPreimage, HashIdPreimageSorobanAuthorization,
@@ -13,7 +13,7 @@ use crate::auth::RecordedAuthPayload;
 use crate::budget::AsBudget;
 use crate::native_contract::base_types::Address;
 use crate::native_contract::testutils::{
-    create_account, generate_keypair, sign_payload_for_account,
+    create_account, generate_signing_key, sign_payload_for_account, signing_key_to_account_id,
 };
 use crate::{host_vec, Host, LedgerInfo};
 use soroban_env_common::{AddressObject, Env, Symbol, SymbolStr, TryFromVal, TryIntoVal};
@@ -30,7 +30,7 @@ pub struct ContractTreeNode {
 
 struct AuthTest {
     host: Host,
-    keys: Vec<Keypair>,
+    keys: Vec<SigningKey>,
     contracts: Vec<Address>,
     last_nonces: Vec<Vec<i64>>,
 }
@@ -99,15 +99,13 @@ impl AuthTest {
         .unwrap();
         let mut accounts = vec![];
         for _ in 0..signer_cnt {
-            accounts.push(generate_keypair());
+            accounts.push(generate_signing_key());
         }
-        for account in &accounts {
+        for signing_key in &accounts {
             create_account(
                 &host,
-                &AccountId(PublicKey::PublicKeyTypeEd25519(Uint256(
-                    account.public.to_bytes(),
-                ))),
-                vec![(&account, 1)],
+                &signing_key_to_account_id(signing_key),
+                vec![(&signing_key, 1)],
                 100_000_000,
                 1,
                 [1, 0, 0, 0],
@@ -169,7 +167,7 @@ impl AuthTest {
             let sc_address = self.key_to_sc_address(&self.keys[address_id]);
             let mut curr_nonces = vec![];
             for sign_root in &sign_payloads[address_id] {
-                let nonce = thread_rng().gen_range(0, i64::MAX);
+                let nonce = thread_rng().gen_range(0..=i64::MAX);
                 curr_nonces.push(nonce);
                 let root_invocation = self.convert_sign_node(sign_root);
                 let payload_preimage =
@@ -264,13 +262,13 @@ impl AuthTest {
         self.host.get_recorded_auth_payloads().unwrap()
     }
 
-    fn key_to_sc_address(&self, key: &Keypair) -> ScAddress {
+    fn key_to_sc_address(&self, key: &SigningKey) -> ScAddress {
         ScAddress::Account(AccountId(PublicKey::PublicKeyTypeEd25519(Uint256(
-            key.public.to_bytes(),
+            key.verifying_key().to_bytes(),
         ))))
     }
 
-    fn key_to_address(&self, key: &Keypair) -> AddressObject {
+    fn key_to_address(&self, key: &SigningKey) -> AddressObject {
         let sc_address = self.key_to_sc_address(key);
         self.host.add_host_object(sc_address).unwrap()
     }

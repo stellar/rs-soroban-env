@@ -1427,7 +1427,7 @@ impl AccountAuthorizationTracker {
             false
         };
         let nonce = if !is_invoker {
-            let random_nonce: i64 = rand::thread_rng().gen_range(0, i64::MAX);
+            let random_nonce: i64 = rand::thread_rng().gen_range(0..=i64::MAX);
             host.consume_nonce(address, random_nonce, 0)?;
             Some((random_nonce, 0))
         } else {
