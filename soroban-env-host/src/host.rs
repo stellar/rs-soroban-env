@@ -1312,31 +1312,25 @@ impl VmCallerEnv for Host {
 
     // Metered: covered by `visit` and `metered_cmp`.
     fn obj_cmp(&self, _vmcaller: &mut VmCaller<Host>, a: Val, b: Val) -> Result<i64, HostError> {
-        let res = match unsafe {
+        let res = match {
             match (Object::try_from(a), Object::try_from(b)) {
                 // We were given two objects: compare them.
-                (Ok(a), Ok(b)) => self.unchecked_visit_val_obj(a, |ao| {
+                (Ok(a), Ok(b)) => self.visit_obj_untyped(a, |ao| {
                     // They might each be None but that's ok, None compares less than Some.
-                    self.unchecked_visit_val_obj(b, |bo| Ok(Some(self.compare(&ao, &bo)?)))
+                    self.visit_obj_untyped(b, |bo| Ok(Some(self.compare(&ao, &bo)?)))
                 })?,
 
-                // We were given an object and a non-object: first fetch the object.
-                (Ok(a), Err(_)) => self.unchecked_visit_val_obj(a, |ao| match ao {
-                    // If the object is actually missing, it's less than any non-object.
-                    None => Ok(Some(Ordering::Less)),
-                    // If the object is present, try a small-value comparison.
-                    Some(aobj) => aobj.try_compare_to_small(self.as_budget(), b),
-                })?,
-                // Same as previous case, but reversed.
-                (Err(_), Ok(b)) => self.unchecked_visit_val_obj(b, |bo| match bo {
-                    // So we reverse the relative order of the "missing object" case.
-                    None => Ok(Some(Ordering::Greater)),
-                    // And reverse the result of a successful small-value comparison.
-                    Some(bobj) => Ok(match bobj.try_compare_to_small(self.as_budget(), a)? {
+                // We were given an object and a non-object: try a small-value comparison.
+                (Ok(a), Err(_)) => self
+                    .visit_obj_untyped(a, |aobj| aobj.try_compare_to_small(self.as_budget(), b))?,
+                // Same as previous case, but reversing the resulting order.
+                (Err(_), Ok(b)) => self.visit_obj_untyped(b, |bobj| {
+                    let ord = bobj.try_compare_to_small(self.as_budget(), a)?;
+                    Ok(match ord {
                         Some(Ordering::Less) => Some(Ordering::Greater),
                         Some(Ordering::Greater) => Some(Ordering::Less),
                         other => other,
-                    }),
+                    })
                 })?,
                 // We should have been given at least one object.
                 (Err(_), Err(_)) => {
