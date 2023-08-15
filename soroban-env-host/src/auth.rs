@@ -150,6 +150,9 @@ struct RecordingAuthInfo {
     // value, but are specified as two different objects (e.g. as two different
     // contract function inputs).
     tracker_by_address_handle: RefCell<HashMap<u32, usize>>,
+    // Whether to allow root authorized invocation to not match the root
+    // contract invocation.
+    disable_non_root_auth: bool,
 }
 
 impl RecordingAuthInfo {
@@ -604,10 +607,11 @@ impl AuthorizationManager {
     // All the authorization requirements will be recorded and can then be
     // retrieved using `get_recorded_auth_payloads`.
     // metering: free
-    pub(crate) fn new_recording() -> Self {
+    pub(crate) fn new_recording(allow_non_root_auth: bool) -> Self {
         Self {
             mode: AuthorizationMode::Recording(RecordingAuthInfo {
                 tracker_by_address_handle: Default::default(),
+                disable_non_root_auth: allow_non_root_auth,
             }),
             call_stack: RefCell::new(vec![]),
             account_trackers: RefCell::new(vec![]),
@@ -823,6 +827,18 @@ impl AuthorizationManager {
                             &[],
                         ));
                     }
+                }
+                if recording_info.disable_non_root_auth
+                    && self.try_borrow_call_stack(host)?.len() != 1
+                {
+                    return Err(host.err(
+                        ScErrorType::Auth,
+                        ScErrorCode::InvalidAction,
+                        "[recording authorization only] encountered authorization not tied \
+                        to the root contract invocation for an address. Use `require_auth()` \
+                        in the top invocation or enable non-root authorization.",
+                        &[address.into()],
+                    ));
                 }
                 // If a tracker for the new tree doesn't exist yet, create
                 // it and initialize with the current invocation.
@@ -1113,11 +1129,13 @@ impl AuthorizationManager {
     // metering: free, testutils
     #[cfg(any(test, feature = "testutils"))]
     pub(crate) fn reset(&mut self) {
-        *self = match self.mode {
+        *self = match &self.mode {
             AuthorizationMode::Enforcing => {
                 AuthorizationManager::new_enforcing_without_authorizations()
             }
-            AuthorizationMode::Recording(_) => AuthorizationManager::new_recording(),
+            AuthorizationMode::Recording(rec_info) => {
+                AuthorizationManager::new_recording(rec_info.disable_non_root_auth)
+            }
         }
     }
 
@@ -1354,7 +1372,7 @@ impl AccountAuthorizationTracker {
                 host.source_account_address()?.ok_or_else(|| {
                     host.err(
                         ScErrorType::Auth,
-                        ScErrorCode::InvalidInput,
+                        ScErrorCode::InternalError,
                         "source account is missing when setting auth entries",
                         &[],
                     )
@@ -1473,7 +1491,7 @@ impl AccountAuthorizationTracker {
                             ScErrorType::Auth,
                             ScErrorCode::InvalidAction,
                             "failed account authentication",
-                            &[err.error.to_val()],
+                            &[self.address.into(), err.error.to_val()],
                         )
                     } else {
                         err
@@ -1561,6 +1579,7 @@ impl AccountAuthorizationTracker {
                     ScErrorCode::InvalidInput,
                     "signature has expired",
                     &[
+                        self.address.into(),
                         ledger_seq.try_into_val(host)?,
                         expiration_ledger.try_into_val(host)?,
                     ],
@@ -1573,6 +1592,7 @@ impl AccountAuthorizationTracker {
                     ScErrorCode::InvalidInput,
                     "signature expiration is too late",
                     &[
+                        self.address.into(),
                         max_expiration_ledger.try_into_val(host)?,
                         expiration_ledger.try_into_val(host)?,
                     ],
@@ -1764,8 +1784,8 @@ impl Host {
                 return Err(self.err(
                     ScErrorType::Auth,
                     ScErrorCode::ExistingValue,
-                    "nonce already exists",
-                    &[],
+                    "nonce already exists for address",
+                    &[address.into()],
                 ));
             }
             let body = ContractDataEntryBody::DataEntry(ContractDataEntryData {

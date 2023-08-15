@@ -181,7 +181,7 @@ impl Host {
         let prev_source_account = self.source_account_id().unwrap();
         // Use recording auth to skip specifying the auth payload.
         let prev_auth_manager = self.snapshot_auth_manager().unwrap();
-        self.switch_to_recording_auth().unwrap();
+        self.switch_to_recording_auth(true).unwrap();
 
         let wasm_hash = self
             .upload_wasm(self.bytes_new_from_slice(contract_wasm).unwrap())
