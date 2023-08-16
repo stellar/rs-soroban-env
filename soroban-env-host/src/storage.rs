@@ -309,6 +309,15 @@ impl Storage {
     ) -> Result<(), HostError> {
         let _span = tracy_span!("bump key");
 
+        if bump_by_ledgers < threshold {
+            return Err(host.err(
+                ScErrorType::Storage,
+                ScErrorCode::InvalidAction,
+                "bump_by_ledgers must be greater than or equal to threshold",
+                &[bump_by_ledgers.into(), threshold.into()],
+            ));
+        }
+
         let new_expiration =
             host.with_ledger_info(|li| Ok(li.sequence_number.saturating_add(bump_by_ledgers)))?;
 
