@@ -14,18 +14,14 @@ impl CostRunner for VisitObjectRun {
     type RecycledType = Self::SampleType;
 
     fn run_iter(host: &crate::Host, iter: u64, sample: Self::SampleType) -> Self::RecycledType {
-        unsafe {
-            let _ = black_box(
-                host.unchecked_visit_val_obj(sample[iter as usize % sample.len()], |obj| match obj
-                    .unwrap()
-                {
-                    HostObject::I64(i) => Ok(*i),
-                    _ => panic!("unexpected type, check HCM"),
-                })
-                .unwrap(),
-            );
-            black_box(sample)
-        }
+        let _ = black_box(
+            host.visit_obj_untyped(sample[iter as usize % sample.len()], |obj| match obj {
+                HostObject::I64(i) => Ok(*i),
+                _ => panic!("unexpected type, check HCM"),
+            })
+            .unwrap(),
+        );
+        black_box(sample)
     }
 
     fn run_baseline_iter(

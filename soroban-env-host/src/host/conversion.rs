@@ -401,85 +401,70 @@ impl Host {
     pub(crate) fn from_host_obj(&self, ob: impl Into<Object>) -> Result<ScValObject, HostError> {
         unsafe {
             let objref: Object = ob.into();
-            self.unchecked_visit_val_obj(objref, |ob| {
-                let val = match ob {
-                    None => {
-                        return Err(self.err(
-                            ScErrorType::Object,
-                            ScErrorCode::MissingValue,
-                            "object handle references nonexistent object",
-                            &[U32Val::from(objref.get_handle()).to_val()],
-                        ));
+            self.visit_obj_untyped(objref, |ho| {
+                let val = match ho {
+                    HostObject::Vec(vv) => {
+                        Vec::<ScVal>::charge_bulk_init_cpy(vv.len() as u64, self.as_budget())?;
+                        let sv = vv.iter().map(|e| self.from_host_val(*e)).collect::<Result<
+                            Vec<ScVal>,
+                            HostError,
+                        >>(
+                        )?;
+                        ScVal::Vec(Some(ScVec(self.map_err(sv.try_into())?)))
                     }
-                    // Here we have to make sure host object conversion is charged in each variant
-                    // below. There is no otherwise ubiquitous metering for Val->ScVal conversion,
-                    // since most of them happens in the "common" crate with no access to the host.
-                    Some(ho) => match ho {
-                        HostObject::Vec(vv) => {
-                            Vec::<ScVal>::charge_bulk_init_cpy(vv.len() as u64, self.as_budget())?;
-                            let sv = vv.iter().map(|e| self.from_host_val(*e)).collect::<Result<
-                                Vec<ScVal>,
-                                HostError,
-                            >>(
-                            )?;
-                            ScVal::Vec(Some(ScVec(self.map_err(sv.try_into())?)))
-                        }
-                        HostObject::Map(mm) => ScVal::Map(Some(self.host_map_to_scmap(mm)?)),
-                        HostObject::U64(u) => {
-                            charge_shallow_copy::<u64>(1, self.as_budget())?;
-                            ScVal::U64(*u)
-                        }
-                        HostObject::I64(i) => {
-                            charge_shallow_copy::<i64>(1, self.as_budget())?;
-                            ScVal::I64(*i)
-                        }
-                        HostObject::TimePoint(tp) => {
-                            ScVal::Timepoint(tp.metered_clone(self.as_budget())?)
-                        }
-                        HostObject::Duration(d) => {
-                            ScVal::Duration(d.metered_clone(self.as_budget())?)
-                        }
-                        HostObject::U128(u) => {
-                            charge_shallow_copy::<u128>(1, self.as_budget())?;
-                            ScVal::U128(UInt128Parts {
-                                hi: int128_helpers::u128_hi(*u),
-                                lo: int128_helpers::u128_lo(*u),
-                            })
-                        }
-                        HostObject::I128(i) => {
-                            charge_shallow_copy::<i128>(1, self.as_budget())?;
-                            ScVal::I128(Int128Parts {
-                                hi: int128_helpers::i128_hi(*i),
-                                lo: int128_helpers::i128_lo(*i),
-                            })
-                        }
-                        HostObject::U256(u) => {
-                            charge_shallow_copy::<u128>(2, self.as_budget())?;
-                            let (hi_hi, hi_lo, lo_hi, lo_lo) = u256_into_pieces(*u);
-                            ScVal::U256(UInt256Parts {
-                                hi_hi,
-                                hi_lo,
-                                lo_hi,
-                                lo_lo,
-                            })
-                        }
-                        HostObject::I256(i) => {
-                            charge_shallow_copy::<i128>(2, self.as_budget())?;
-                            let (hi_hi, hi_lo, lo_hi, lo_lo) = i256_into_pieces(*i);
-                            ScVal::I256(Int256Parts {
-                                hi_hi,
-                                hi_lo,
-                                lo_hi,
-                                lo_lo,
-                            })
-                        }
-                        HostObject::Bytes(b) => ScVal::Bytes(b.metered_clone(self.as_budget())?),
-                        HostObject::String(s) => ScVal::String(s.metered_clone(self.as_budget())?),
-                        HostObject::Symbol(s) => ScVal::Symbol(s.metered_clone(self.as_budget())?),
-                        HostObject::Address(addr) => {
-                            ScVal::Address(addr.metered_clone(self.as_budget())?)
-                        } // For any future `HostObject` types we add, make sure to add some metering.
-                    },
+                    HostObject::Map(mm) => ScVal::Map(Some(self.host_map_to_scmap(mm)?)),
+                    HostObject::U64(u) => {
+                        charge_shallow_copy::<u64>(1, self.as_budget())?;
+                        ScVal::U64(*u)
+                    }
+                    HostObject::I64(i) => {
+                        charge_shallow_copy::<i64>(1, self.as_budget())?;
+                        ScVal::I64(*i)
+                    }
+                    HostObject::TimePoint(tp) => {
+                        ScVal::Timepoint(tp.metered_clone(self.as_budget())?)
+                    }
+                    HostObject::Duration(d) => ScVal::Duration(d.metered_clone(self.as_budget())?),
+                    HostObject::U128(u) => {
+                        charge_shallow_copy::<u128>(1, self.as_budget())?;
+                        ScVal::U128(UInt128Parts {
+                            hi: int128_helpers::u128_hi(*u),
+                            lo: int128_helpers::u128_lo(*u),
+                        })
+                    }
+                    HostObject::I128(i) => {
+                        charge_shallow_copy::<i128>(1, self.as_budget())?;
+                        ScVal::I128(Int128Parts {
+                            hi: int128_helpers::i128_hi(*i),
+                            lo: int128_helpers::i128_lo(*i),
+                        })
+                    }
+                    HostObject::U256(u) => {
+                        charge_shallow_copy::<u128>(2, self.as_budget())?;
+                        let (hi_hi, hi_lo, lo_hi, lo_lo) = u256_into_pieces(*u);
+                        ScVal::U256(UInt256Parts {
+                            hi_hi,
+                            hi_lo,
+                            lo_hi,
+                            lo_lo,
+                        })
+                    }
+                    HostObject::I256(i) => {
+                        charge_shallow_copy::<i128>(2, self.as_budget())?;
+                        let (hi_hi, hi_lo, lo_hi, lo_lo) = i256_into_pieces(*i);
+                        ScVal::I256(Int256Parts {
+                            hi_hi,
+                            hi_lo,
+                            lo_hi,
+                            lo_lo,
+                        })
+                    }
+                    HostObject::Bytes(b) => ScVal::Bytes(b.metered_clone(self.as_budget())?),
+                    HostObject::String(s) => ScVal::String(s.metered_clone(self.as_budget())?),
+                    HostObject::Symbol(s) => ScVal::Symbol(s.metered_clone(self.as_budget())?),
+                    HostObject::Address(addr) => {
+                        ScVal::Address(addr.metered_clone(self.as_budget())?)
+                    } // For any future `HostObject` types we add, make sure to add some metering.
                 };
                 Ok(ScValObject::unchecked_from_val(val))
             })
