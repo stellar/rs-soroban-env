@@ -248,7 +248,7 @@ pub fn compute_rent_fee(
     for e in changed_entries {
         fee = fee.saturating_add(rent_fee_per_entry_change(e, fee_config, current_ledger_seq));
         if e.read_only && e.old_expiration_ledger < e.new_expiration_ledger {
-            bumped_read_only_entries += 1;
+            bumped_read_only_entries = bumped_read_only_entries.saturating_add(1);
             bumped_read_only_key_size_bytes =
                 bumped_read_only_key_size_bytes.saturating_add(e.key_size);
         }
