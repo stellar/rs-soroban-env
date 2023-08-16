@@ -13,7 +13,7 @@ use soroban_env_common::xdr::{
 };
 use soroban_env_common::{Env, StorageType, TryIntoVal};
 
-use super::storage_types::{BalanceValue, BALANCE_BUMP_AMOUNT};
+use super::storage_types::{BalanceValue, BALANCE_BUMP_AMOUNT, BUMP_THRESHOLD};
 
 /// This module handles all balance and authorization related logic for both
 /// Accounts and non-Accounts. For Accounts, a trustline is expected (unless this
@@ -38,6 +38,7 @@ pub fn read_balance(e: &Host, addr: Address) -> Result<i128, HostError> {
                     key.try_into_val(e)?,
                     StorageType::Persistent,
                     BALANCE_BUMP_AMOUNT.into(),
+                    BUMP_THRESHOLD.into(),
                 )?;
                 let balance: BalanceValue = raw_balance.try_into_val(e)?;
                 Ok(balance.amount)
@@ -69,6 +70,7 @@ fn write_balance(e: &Host, addr: Address, balance: BalanceValue) -> Result<(), H
         key.try_into_val(e)?,
         StorageType::Persistent,
         BALANCE_BUMP_AMOUNT.into(),
+        BUMP_THRESHOLD.into(),
     )?;
     Ok(())
 }

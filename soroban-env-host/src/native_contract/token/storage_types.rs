@@ -4,6 +4,7 @@ use soroban_native_sdk_macros::contracttype;
 
 pub(crate) const INSTANCE_BUMP_AMOUNT: u32 = 34560; // 2 days
 pub(crate) const BALANCE_BUMP_AMOUNT: u32 = 518400; // 30 days
+pub(crate) const BUMP_THRESHOLD: u32 = 17280; // 1 day
 
 #[contracttype]
 pub struct AllowanceDataKey {

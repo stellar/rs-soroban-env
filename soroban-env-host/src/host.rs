@@ -2268,7 +2268,8 @@ impl VmCallerEnv for Host {
         _vmcaller: &mut VmCaller<Host>,
         k: Val,
         t: StorageType,
-        min: U32Val,
+        live_for: U32Val,
+        threshold: U32Val,
     ) -> Result<Void, HostError> {
         if matches!(t, StorageType::Instance) {
             return Err(self.err(
@@ -2280,7 +2281,7 @@ impl VmCallerEnv for Host {
         }
         let key = self.contract_data_key_from_rawval(k, t.try_into()?)?;
         self.try_borrow_storage_mut()?
-            .bump(self, key, min.into())
+            .bump(self, key, live_for.into(), threshold.into())
             .map_err(|e| self.decorate_contract_data_storage_error(e, k))?;
         Ok(Val::VOID)
     }
@@ -2288,12 +2289,13 @@ impl VmCallerEnv for Host {
     fn bump_current_contract_instance_and_code(
         &self,
         _vmcaller: &mut VmCaller<Host>,
-        min: U32Val,
+        live_for: U32Val,
+        threshold: U32Val,
     ) -> Result<Void, HostError> {
         let contract_id = self.get_current_contract_id_internal()?;
         let key = self.contract_instance_ledger_key(&contract_id)?;
         self.try_borrow_storage_mut()?
-            .bump(self, key.clone(), min.into())
+            .bump(self, key.clone(), live_for.into(), threshold.into())
             .map_err(|e| self.decorate_contract_instance_storage_error(e, &contract_id))?;
         match self
             .retrieve_contract_instance_from_storage(&key)?
@@ -2302,7 +2304,7 @@ impl VmCallerEnv for Host {
             ContractExecutable::Wasm(wasm_hash) => {
                 let key = self.contract_code_ledger_key(&wasm_hash)?;
                 self.try_borrow_storage_mut()?
-                    .bump(self, key, min.into())
+                    .bump(self, key, live_for.into(), threshold.into())
                     .map_err(|e| self.decorate_contract_code_storage_error(e, &wasm_hash))?;
             }
             ContractExecutable::Token => {}
@@ -2314,12 +2316,13 @@ impl VmCallerEnv for Host {
         &self,
         vmcaller: &mut VmCaller<Self::VmUserState>,
         contract: AddressObject,
-        min: U32Val,
+        live_for: U32Val,
+        threshold: U32Val,
     ) -> Result<Void, Self::Error> {
         let contract_id = self.contract_id_from_address(contract)?;
         let key = self.contract_instance_ledger_key(&contract_id)?;
         self.try_borrow_storage_mut()?
-            .bump(self, key.clone(), min.into())
+            .bump(self, key.clone(), live_for.into(), threshold.into())
             .map_err(|e| self.decorate_contract_instance_storage_error(e, &contract_id))?;
         match self
             .retrieve_contract_instance_from_storage(&key)?
@@ -2328,7 +2331,7 @@ impl VmCallerEnv for Host {
             ContractExecutable::Wasm(wasm_hash) => {
                 let key = self.contract_code_ledger_key(&wasm_hash)?;
                 self.try_borrow_storage_mut()?
-                    .bump(self, key, min.into())
+                    .bump(self, key, live_for.into(), threshold.into())
                     .map_err(|e| self.decorate_contract_code_storage_error(e, &wasm_hash))?;
             }
             ContractExecutable::Token => {}

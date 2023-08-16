@@ -305,6 +305,7 @@ impl Storage {
         host: &Host,
         key: Rc<LedgerKey>,
         bump_by_ledgers: u32,
+        threshold: u32,
     ) -> Result<(), HostError> {
         let _span = tracy_span!("bump key");
 
@@ -332,7 +333,7 @@ impl Storage {
             )
         })?;
 
-        if new_expiration > old_expiration {
+        if new_expiration > old_expiration && new_expiration - old_expiration >= threshold {
             let mut new_entry = (*old_entry).metered_clone(host.budget_ref())?;
             set_entry_expiration(&mut new_entry, new_expiration);
             self.map = self

@@ -98,6 +98,7 @@ pub fn write_allowance(
                     key.try_into_val(e)?,
                     StorageType::Temporary,
                     (expiration - ledger_seq + 1).into(),
+                    0.into(),
                 )?;
             }
         }
