@@ -242,7 +242,7 @@ pub fn compute_rent_fee(
     fee_config: &RentFeeConfiguration,
     current_ledger_seq: u32,
 ) -> i64 {
-    let mut fee = 0;
+    let mut fee: i64 = 0;
     let mut bumped_read_only_entries: i64 = 0;
     let mut bumped_read_only_key_size_bytes: u32 = 0;
     for e in changed_entries {
