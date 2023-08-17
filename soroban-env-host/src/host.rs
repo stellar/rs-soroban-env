@@ -1859,14 +1859,7 @@ impl VmCallerEnv for Host {
         Ok(Val::VOID)
     }
 
-    fn vec_new(&self, _vmcaller: &mut VmCaller<Host>, c: Val) -> Result<VecObject, HostError> {
-        // NB: we ignore capacity because vectors are immutable
-        // and there's no reuse, we always size them exactly.
-        let _capacity: usize = if c.is_void() {
-            0
-        } else {
-            self.usize_from_rawval_u32_input("c", c)?
-        };
+    fn vec_new(&self, _vmcaller: &mut VmCaller<Host>) -> Result<VecObject, HostError> {
         self.add_host_object(HostVec::new())
     }
 

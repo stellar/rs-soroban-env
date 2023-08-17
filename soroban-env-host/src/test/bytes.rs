@@ -160,7 +160,7 @@ fn linear_memory_operations() -> Result<(), HostError> {
     // tests bytes_copy_{to,from}_linear_memory
     {
         let obj0 = host.test_bin_obj(&[1, 2, 3, 4])?;
-        let mut args = host.vec_new(Val::from_void().into())?;
+        let mut args = host.vec_new()?;
         args = host.vec_push_back(args, obj0.to_val())?;
         let obj: BytesObject = host
             .call(id_obj, Symbol::try_from_small_str("bin_inc").unwrap(), args)?

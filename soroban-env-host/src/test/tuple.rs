@@ -8,7 +8,7 @@ fn tuple_conversions() -> Result<(), HostError> {
 
     let val: Val = (1u32, 1i32).try_into_val(&host)?;
 
-    let mut obj = host.vec_new(Val::VOID.into())?;
+    let mut obj = host.vec_new()?;
     obj = host.vec_push_back(obj, (1u32).into())?;
     obj = host.vec_push_back(obj, (1i32).into())?;
 
