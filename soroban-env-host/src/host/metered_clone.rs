@@ -140,11 +140,14 @@ pub trait MeteredClone: Clone + DeclaredSizeForMetering {
     // Called to clone the substructures of Self. The default implementation is a no-op and is
     // _only_ appropriate when Self is a shallow type (with no substructure). If you override
     // Self::IS_SHALLOW and set it to false, you should override this method also (it will actually
-    // panic if you don't). This charge does not include shallow copying of `Self` because that
+    // Err if you don't). This charge does not include shallow copying of `Self` because that
     // should be taken care of by the caller beforehand, e.g. in `metered_clone`.
     fn charge_for_substructure(&self, budget: &Budget) -> Result<(), HostError> {
-        assert!(Self::IS_SHALLOW);
-        Ok(())
+        if Self::IS_SHALLOW {
+            Ok(())
+        } else {
+            Err((ScErrorType::Object, ScErrorCode::InternalError).into())
+        }
     }
 
     // Called when cloning the substructures of a slice of Self. When Self::IS_SHALLOW, this is a
@@ -164,9 +167,12 @@ pub trait MeteredClone: Clone + DeclaredSizeForMetering {
 
     // Convenience method for charging for a deep clone knowing the type is not shallow.
     fn charge_deep_clone(&self, budget: &Budget) -> Result<(), HostError> {
-        debug_assert!(!Self::IS_SHALLOW);
-        charge_shallow_copy::<Self>(1, budget)?;
-        self.charge_for_substructure(budget)
+        if Self::IS_SHALLOW {
+            Err((ScErrorType::Object, ScErrorCode::InternalError).into())
+        } else {
+            charge_shallow_copy::<Self>(1, budget)?;
+            self.charge_for_substructure(budget)
+        }
     }
 
     // Composite helper handles metering before clone. It first charges for the shallow footprint
@@ -272,13 +278,27 @@ impl MeteredClone for ContractIdPreimage {}
 impl MeteredClone for SorobanAuthorizedInvocation {}
 impl MeteredClone for SorobanAuthorizationEntry {}
 // composite types
+// cloning Rc is just a ref-count bump
 impl<T> MeteredClone for Rc<T> {}
+// cloning a slice is just cloning the reference
 impl<T> MeteredClone for &[T] {}
+
 impl<K, V> MeteredClone for (K, V)
 where
     K: MeteredClone,
     V: MeteredClone,
 {
+    const IS_SHALLOW: bool = K::IS_SHALLOW && V::IS_SHALLOW;
+
+    fn charge_for_substructure(&self, budget: &Budget) -> Result<(), HostError> {
+        if !K::IS_SHALLOW {
+            K::charge_for_substructure(&self.0, budget)?;
+        }
+        if !V::IS_SHALLOW {
+            V::charge_for_substructure(&self.1, budget)?;
+        }
+        Ok(())
+    }
 }
 
 impl<C: MeteredClone, const N: usize> MeteredClone for [C; N] {
