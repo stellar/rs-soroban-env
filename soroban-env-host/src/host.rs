@@ -1702,59 +1702,27 @@ impl VmCallerEnv for Host {
         self.visit_obj(m, move |hm: &HostMap| Ok(hm.contains_key(&k, self)?.into()))
     }
 
-    fn map_prev_key(
+    fn map_key_by_pos(
         &self,
         _vmcaller: &mut VmCaller<Host>,
         m: MapObject,
-        k: Val,
+        i: U32Val,
     ) -> Result<Val, HostError> {
+        let i: u32 = i.into();
         self.visit_obj(m, |hm: &HostMap| {
-            if let Some((pk, _)) = hm.get_prev(&k, self)? {
-                Ok(*pk)
-            } else {
-                // We return Ok(error) here to indicate "the end of iteration".
-                Ok(
-                    Error::from_type_and_code(ScErrorType::Object, ScErrorCode::IndexBounds)
-                        .to_val(),
-                )
-            }
+            hm.get_at_index(i as usize, self).map(|r| r.0)
         })
     }
 
-    fn map_next_key(
+    fn map_val_by_pos(
         &self,
         _vmcaller: &mut VmCaller<Host>,
         m: MapObject,
-        k: Val,
+        i: U32Val,
     ) -> Result<Val, HostError> {
+        let i: u32 = i.into();
         self.visit_obj(m, |hm: &HostMap| {
-            if let Some((pk, _)) = hm.get_next(&k, self)? {
-                Ok(*pk)
-            } else {
-                // We return Ok(error) here to indicate "the end of iteration".
-                Ok(
-                    Error::from_type_and_code(ScErrorType::Object, ScErrorCode::IndexBounds)
-                        .to_val(),
-                )
-            }
-        })
-    }
-
-    fn map_min_key(&self, _vmcaller: &mut VmCaller<Host>, m: MapObject) -> Result<Val, HostError> {
-        self.visit_obj(m, |hm: &HostMap| match hm.get_min(self)? {
-            Some((pk, pv)) => Ok(*pk),
-            None => Ok(
-                Error::from_type_and_code(ScErrorType::Object, ScErrorCode::IndexBounds).to_val(),
-            ),
-        })
-    }
-
-    fn map_max_key(&self, _vmcaller: &mut VmCaller<Host>, m: MapObject) -> Result<Val, HostError> {
-        self.visit_obj(m, |hm: &HostMap| match hm.get_max(self)? {
-            Some((pk, pv)) => Ok(*pk),
-            None => Ok(
-                Error::from_type_and_code(ScErrorType::Object, ScErrorCode::IndexBounds).to_val(),
-            ),
+            hm.get_at_index(i as usize, self).map(|r| r.1)
         })
     }
 

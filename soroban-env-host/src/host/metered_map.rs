@@ -4,7 +4,7 @@ use super::{declared_size::DeclaredSizeForMetering, MeteredClone};
 use crate::{
     budget::{AsBudget, Budget},
     xdr::ContractCostType,
-    Compare, Host, HostError,
+    Compare, Error, Host, HostError,
 };
 use std::{borrow::Borrow, cmp::Ordering, marker::PhantomData};
 
@@ -194,6 +194,13 @@ where
             }
             _ => Ok(None),
         }
+    }
+
+    pub fn get_at_index(&self, index: usize, ctx: &Ctx) -> Result<&(K, V), HostError> {
+        self.charge_access(1, ctx)?;
+        self.map.get(index).ok_or_else(|| {
+            Error::from_type_and_code(ScErrorType::Object, ScErrorCode::IndexBounds).into()
+        })
     }
 
     /// Returns a `Some((new_self, val))` pair where `new_self` no longer
