@@ -42,7 +42,7 @@ sa::const_assert!(MAJOR_BITS + MINOR_BITS == BODY_BITS);
 /// special cases (boolean true and false, small-value forms).
 #[repr(u8)]
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
-#[cfg_attr(test, derive(int_enum::IntEnum))]
+#[cfg_attr(test, derive(num_enum::TryFromPrimitive))]
 pub enum Tag {
     /// Tag for a [Val] that encodes [bool] `false`. The bool type is refined to
     /// two single-value subtypes in order for each tag number to coincides with
@@ -770,14 +770,14 @@ fn test_debug() {
 // `Tag::from_u8` is implemented by hand unsafely.
 //
 // This test ensures that all cases are correct by comparing to the
-// macro-generated results of the int-enum crate, which is only enabled as a
+// macro-generated results of the num_enum crate, which is only enabled as a
 // dev-dependency.
 #[test]
 fn test_tag_from_u8() {
-    use int_enum::IntEnum;
+    use num_enum::TryFromPrimitive;
 
     for i in 0_u8..=255 {
-        let expected_tag = Tag::from_int(i);
+        let expected_tag = Tag::try_from_primitive(i);
         let actual_tag = Tag::from_u8(i);
         match expected_tag {
             Ok(

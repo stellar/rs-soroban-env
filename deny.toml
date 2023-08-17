@@ -44,13 +44,6 @@ exclude = [
    "ansi_term",
    "textplots",
    "linregress",
-   # for the time being some metaprogramming crates haven't updated to syn 2. The
-   # only way to deal with these is to prune them from the tree.
-   "derive_arbitrary",
-   "num-derive",
-   "zeroize_derive",
-   # also a not upgraded to syn 2, but just a dev-dep anyway
-   "int-enum",
    # the dep specs of tracy-client are weird and include "loom" which it
    # totally doesn't depend on but in any case it's compiled-out in real
    # production builds we care about.
