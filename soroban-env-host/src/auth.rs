@@ -607,11 +607,11 @@ impl AuthorizationManager {
     // All the authorization requirements will be recorded and can then be
     // retrieved using `get_recorded_auth_payloads`.
     // metering: free
-    pub(crate) fn new_recording(allow_non_root_auth: bool) -> Self {
+    pub(crate) fn new_recording(disable_non_root_auth: bool) -> Self {
         Self {
             mode: AuthorizationMode::Recording(RecordingAuthInfo {
                 tracker_by_address_handle: Default::default(),
-                disable_non_root_auth: allow_non_root_auth,
+                disable_non_root_auth,
             }),
             call_stack: RefCell::new(vec![]),
             account_trackers: RefCell::new(vec![]),
