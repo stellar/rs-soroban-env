@@ -289,7 +289,7 @@ impl Host {
 
     #[cfg(test)]
     pub(crate) fn source_account_id(&self) -> Result<Option<AccountId>, HostError> {
-        Ok(self.try_borrow_source_account()?.clone())
+        Ok(self.try_borrow_source_account()?.metered_clone(self)?)
     }
 
     pub fn source_account_address(&self) -> Result<Option<AddressObject>, HostError> {
@@ -946,7 +946,7 @@ impl Host {
                         self.try_borrow_storage_mut()?
                             .bump_relative_to_entry_expiration(
                                 self,
-                                key.clone(),
+                                key.metered_clone(self)?,
                                 autobump_ledgers,
                             )?;
                     }
@@ -2256,7 +2256,7 @@ impl VmCallerEnv for Host {
         let contract_id = self.get_current_contract_id_internal()?;
         let key = self.contract_instance_ledger_key(&contract_id)?;
         self.try_borrow_storage_mut()?
-            .bump(self, key.clone(), min.into())
+            .bump(self, key.metered_clone(self)?, min.into())
             .map_err(|e| self.decorate_contract_instance_storage_error(e, &contract_id))?;
         match self
             .retrieve_contract_instance_from_storage(&key)?
@@ -2282,7 +2282,7 @@ impl VmCallerEnv for Host {
         let contract_id = self.contract_id_from_address(contract)?;
         let key = self.contract_instance_ledger_key(&contract_id)?;
         self.try_borrow_storage_mut()?
-            .bump(self, key.clone(), min.into())
+            .bump(self, key.metered_clone(self)?, min.into())
             .map_err(|e| self.decorate_contract_instance_storage_error(e, &contract_id))?;
         match self
             .retrieve_contract_instance_from_storage(&key)?
@@ -3064,7 +3064,7 @@ impl VmCallerEnv for Host {
         _vmcaller: &mut VmCaller<Self::VmUserState>,
         address: AddressObject,
     ) -> Result<Val, Self::Error> {
-        let addr = self.visit_obj(address, |addr: &ScAddress| Ok(addr.clone()))?;
+        let addr = self.visit_obj(address, |addr: &ScAddress| addr.metered_clone(self))?;
         match addr {
             ScAddress::Account(AccountId(PublicKey::PublicKeyTypeEd25519(pk))) => Ok(self
                 .add_host_object(ScBytes(self.metered_slice_to_vec(&pk.0)?.try_into()?))?
@@ -3078,7 +3078,7 @@ impl VmCallerEnv for Host {
         _vmcaller: &mut VmCaller<Self::VmUserState>,
         address: AddressObject,
     ) -> Result<Val, Self::Error> {
-        let addr = self.visit_obj(address, |addr: &ScAddress| Ok(addr.clone()))?;
+        let addr = self.visit_obj(address, |addr: &ScAddress| addr.metered_clone(self))?;
         match addr {
             ScAddress::Account(_) => Ok(().into()),
             ScAddress::Contract(Hash(h)) => Ok(self

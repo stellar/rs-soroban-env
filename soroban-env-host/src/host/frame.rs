@@ -136,7 +136,7 @@ impl Host {
         Vec::<Context>::charge_bulk_init_cpy(1, self.as_budget())?;
         self.try_borrow_context_mut()?.push(ctx);
         Ok(RollbackPoint {
-            storage: self.try_borrow_storage()?.map.clone(),
+            storage: self.try_borrow_storage()?.map.metered_clone(self)?,
             events: self.try_borrow_events()?.vec.len(),
             auth: auth_snapshot,
         })
@@ -367,7 +367,7 @@ impl Host {
             Frame::HostFunction(_) => Ok(None),
             Frame::Token(id, ..) => Ok(Some(id.metered_clone(self)?)),
             #[cfg(any(test, feature = "testutils"))]
-            Frame::TestContract(tc) => Ok(Some(tc.id.clone())),
+            Frame::TestContract(tc) => Ok(Some(tc.id.metered_clone(self)?)),
         })
     }
 
@@ -399,9 +399,9 @@ impl Host {
                     "invoker is not a contract",
                     &[],
                 )),
-                Frame::Token(id, ..) => Ok(id.clone()),
+                Frame::Token(id, ..) => Ok(id.metered_clone(self)?),
                 #[cfg(any(test, feature = "testutils"))]
-                Frame::TestContract(tc) => Ok(tc.id.clone()), // no metering
+                Frame::TestContract(tc) => Ok(tc.id.metered_clone(self)?), // no metering
             },
             _ => Err(self.err(
                 ScErrorType::Context,
@@ -476,7 +476,7 @@ impl Host {
                 let relative_objects = Vec::new();
                 self.with_frame(
                     Frame::ContractVM {
-                        vm: vm.clone(),
+                        vm: Rc::clone(&vm),
                         fn_name: *func,
                         args: args_vec,
                         instance,
@@ -485,12 +485,13 @@ impl Host {
                     || vm.invoke_function_raw(self, func, args),
                 )
             }
-            ContractExecutable::Token => {
-                self.with_frame(Frame::Token(id.clone(), *func, args_vec, instance), || {
+            ContractExecutable::Token => self.with_frame(
+                Frame::Token(id.metered_clone(self)?, *func, args_vec, instance),
+                || {
                     use crate::native_contract::{NativeContract, Token};
                     Token.call(func, self, args)
-                })
-            }
+                },
+            ),
         }
     }
 

@@ -1,24 +1,23 @@
 use std::{iter::FromIterator, mem, rc::Rc};
 
-use soroban_env_common::xdr::{DepthLimiter, SorobanAuthorizationEntry};
-
 use crate::{
     budget::AsBudget,
     events::{EventError, HostEvent, InternalContractEvent, InternalEvent},
     host::Events,
     host_object::HostObject,
+    native_contract::base_types::Address,
     storage::AccessType,
     xdr::{
-        AccountEntry, AccountId, BytesM, ClaimableBalanceEntry, ConfigSettingEntry,
+        AccountEntry, AccountId, Asset, BytesM, ClaimableBalanceEntry, ConfigSettingEntry,
         ContractCodeEntry, ContractCodeEntryBody, ContractCostType, ContractDataEntryBody,
         ContractEvent, ContractEventBody, ContractEventType, ContractExecutable,
-        ContractIdPreimage, CreateContractArgs, DataEntry, Duration, Hash, LedgerEntry,
-        LedgerEntryData, LedgerEntryExt, LedgerKey, LedgerKeyAccount, LedgerKeyClaimableBalance,
-        LedgerKeyConfigSetting, LedgerKeyContractCode, LedgerKeyData, LedgerKeyLiquidityPool,
-        LedgerKeyOffer, LedgerKeyTrustLine, LiquidityPoolEntry, OfferEntry, PublicKey, ScAddress,
-        ScBytes, ScContractInstance, ScErrorCode, ScErrorType, ScMap, ScMapEntry, ScNonceKey,
-        ScString, ScSymbol, ScVal, ScVec, SorobanAuthorizedInvocation, StringM, TimePoint,
-        TrustLineAsset, TrustLineEntry, Uint256,
+        ContractIdPreimage, CreateContractArgs, DataEntry, DepthLimiter, Duration, Hash,
+        LedgerEntry, LedgerEntryData, LedgerEntryExt, LedgerKey, LedgerKeyAccount,
+        LedgerKeyClaimableBalance, LedgerKeyConfigSetting, LedgerKeyContractCode, LedgerKeyData,
+        LedgerKeyLiquidityPool, LedgerKeyOffer, LedgerKeyTrustLine, LiquidityPoolEntry, OfferEntry,
+        PublicKey, ScAddress, ScBytes, ScContractInstance, ScErrorCode, ScErrorType, ScMap,
+        ScMapEntry, ScNonceKey, ScString, ScSymbol, ScVal, ScVec, SorobanAuthorizationEntry,
+        SorobanAuthorizedInvocation, StringM, TimePoint, TrustLineAsset, TrustLineEntry, Uint256,
     },
     AddressObject, Bool, BytesObject, DurationObject, DurationSmall, DurationVal, Error, HostError,
     I128Object, I128Small, I128Val, I256Object, I256Small, I256Val, I32Val, I64Object, I64Small,
@@ -262,6 +261,7 @@ impl MeteredClone for SymbolSmallIter {}
 impl MeteredClone for U256 {}
 impl MeteredClone for I256 {}
 impl MeteredClone for HostObject {}
+impl MeteredClone for Address {}
 // xdr types
 impl MeteredClone for TimePoint {}
 impl MeteredClone for Duration {}
@@ -297,6 +297,7 @@ impl MeteredClone for CreateContractArgs {}
 impl MeteredClone for ContractIdPreimage {}
 impl MeteredClone for SorobanAuthorizedInvocation {}
 impl MeteredClone for SorobanAuthorizationEntry {}
+impl MeteredClone for Asset {}
 // composite types
 // cloning Rc is just a ref-count bump
 impl<T> MeteredClone for Rc<T> {}

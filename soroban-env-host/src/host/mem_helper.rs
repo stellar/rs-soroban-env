@@ -19,7 +19,7 @@ impl Host {
         let len: u32 = len.into();
         self.with_current_frame(|frame| match frame {
             Frame::ContractVM { vm, .. } => {
-                let vm = vm.clone();
+                let vm = Rc::clone(&vm);
                 Ok(VmSlice { vm, pos, len })
             }
             _ => Err(self.err(

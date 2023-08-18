@@ -1018,7 +1018,7 @@ impl AuthorizationManager {
             Frame::HostFunction(_) => return Ok(()),
             Frame::Token(id, fn_name, ..) => (id.metered_clone(host)?, *fn_name),
             #[cfg(any(test, feature = "testutils"))]
-            Frame::TestContract(tc) => (tc.id.clone(), tc.func),
+            Frame::TestContract(tc) => (tc.id.metered_clone(host)?, tc.func),
         };
         // Currently only contracts might appear in the call stack.
         let contract_address = host.add_host_object(ScAddress::Contract(contract_id))?;

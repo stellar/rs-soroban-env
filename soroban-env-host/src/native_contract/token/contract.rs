@@ -1,4 +1,4 @@
-use crate::host::Host;
+use crate::host::{metered_clone::MeteredClone, Host};
 use crate::native_contract::base_types::{Address, Bytes, BytesN, String};
 use crate::native_contract::contract_error::ContractError;
 use crate::native_contract::token::allowance::{read_allowance, spend_allowance, write_allowance};
@@ -123,7 +123,7 @@ impl TokenTrait for Token {
         let asset: Asset = e.metered_from_xdr_obj(asset_bytes.into())?;
 
         let curr_contract_id = e.get_current_contract_id_internal()?;
-        let expected_contract_id = e.get_asset_contract_id_hash(asset.clone())?;
+        let expected_contract_id = e.get_asset_contract_id_hash(asset.metered_clone(e)?)?;
         if curr_contract_id != expected_contract_id {
             return Err(e.error(
                 ContractError::InternalError.into(),
@@ -201,7 +201,13 @@ impl TokenTrait for Token {
 
         e.bump_current_contract_instance_and_code(INSTANCE_BUMP_AMOUNT.into())?;
 
-        write_allowance(e, from.clone(), spender.clone(), amount, expiration_ledger)?;
+        write_allowance(
+            e,
+            from.metered_clone(e)?,
+            spender.metered_clone(e)?,
+            amount,
+            expiration_ledger,
+        )?;
         event::approve(e, from, spender, amount, expiration_ledger)?;
         Ok(())
     }
@@ -234,8 +240,8 @@ impl TokenTrait for Token {
 
         e.bump_current_contract_instance_and_code(INSTANCE_BUMP_AMOUNT.into())?;
 
-        spend_balance(e, from.clone(), amount)?;
-        receive_balance(e, to.clone(), amount)?;
+        spend_balance(e, from.metered_clone(e)?, amount)?;
+        receive_balance(e, to.metered_clone(e)?, amount)?;
         event::transfer(e, from, to, amount)?;
         Ok(())
     }
@@ -254,9 +260,9 @@ impl TokenTrait for Token {
 
         e.bump_current_contract_instance_and_code(INSTANCE_BUMP_AMOUNT.into())?;
 
-        spend_allowance(e, from.clone(), spender, amount)?;
-        spend_balance(e, from.clone(), amount)?;
-        receive_balance(e, to.clone(), amount)?;
+        spend_allowance(e, from.metered_clone(e)?, spender, amount)?;
+        spend_balance(e, from.metered_clone(e)?, amount)?;
+        receive_balance(e, to.metered_clone(e)?, amount)?;
         event::transfer(e, from, to, amount)?;
         Ok(())
     }
@@ -270,7 +276,7 @@ impl TokenTrait for Token {
 
         e.bump_current_contract_instance_and_code(INSTANCE_BUMP_AMOUNT.into())?;
 
-        spend_balance(e, from.clone(), amount)?;
+        spend_balance(e, from.metered_clone(e)?, amount)?;
         event::burn(e, from, amount)?;
         Ok(())
     }
@@ -284,8 +290,8 @@ impl TokenTrait for Token {
 
         e.bump_current_contract_instance_and_code(INSTANCE_BUMP_AMOUNT.into())?;
 
-        spend_allowance(e, from.clone(), spender, amount)?;
-        spend_balance(e, from.clone(), amount)?;
+        spend_allowance(e, from.metered_clone(e)?, spender, amount)?;
+        spend_balance(e, from.metered_clone(e)?, amount)?;
         event::burn(e, from, amount)?;
         Ok(())
     }
@@ -294,13 +300,13 @@ impl TokenTrait for Token {
     fn clawback(e: &Host, from: Address, amount: i128) -> Result<(), HostError> {
         let _span = tracy_span!("native token clawback");
         check_nonnegative_amount(e, amount)?;
-        check_clawbackable(e, from.clone())?;
+        check_clawbackable(e, from.metered_clone(e)?)?;
         let admin = read_administrator(e)?;
         admin.require_auth()?;
 
         e.bump_current_contract_instance_and_code(INSTANCE_BUMP_AMOUNT.into())?;
 
-        spend_balance_no_authorization_check(e, from.clone(), amount)?;
+        spend_balance_no_authorization_check(e, from.metered_clone(e)?, amount)?;
         event::clawback(e, admin, from, amount)?;
         Ok(())
     }
@@ -313,7 +319,7 @@ impl TokenTrait for Token {
 
         e.bump_current_contract_instance_and_code(INSTANCE_BUMP_AMOUNT.into())?;
 
-        write_authorization(e, addr.clone(), authorize)?;
+        write_authorization(e, addr.metered_clone(e)?, authorize)?;
         event::set_authorized(e, admin, addr, authorize)?;
         Ok(())
     }
@@ -327,7 +333,7 @@ impl TokenTrait for Token {
 
         e.bump_current_contract_instance_and_code(INSTANCE_BUMP_AMOUNT.into())?;
 
-        receive_balance(e, to.clone(), amount)?;
+        receive_balance(e, to.metered_clone(e)?, amount)?;
         event::mint(e, admin, to, amount)?;
         Ok(())
     }
@@ -340,7 +346,7 @@ impl TokenTrait for Token {
 
         e.bump_current_contract_instance_and_code(INSTANCE_BUMP_AMOUNT.into())?;
 
-        write_administrator(e, new_admin.clone())?;
+        write_administrator(e, new_admin.metered_clone(e)?)?;
         event::set_admin(e, admin, new_admin)?;
         Ok(())
     }

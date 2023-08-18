@@ -374,7 +374,7 @@ fn ledger_entry_to_ledger_key(le: &LedgerEntry, budget: &Budget) -> Result<Ledge
             },
         })),
         LedgerEntryData::ContractCode(code) => Ok(LedgerKey::ContractCode(LedgerKeyContractCode {
-            hash: code.hash.clone(),
+            hash: code.hash.metered_clone(budget)?,
             body_type: match &code.body {
                 ContractCodeEntryBody::DataEntry(_) => ContractEntryBodyType::DataEntry,
                 ContractCodeEntryBody::ExpirationExtension => {
@@ -447,7 +447,7 @@ fn build_storage_map_from_xdr_ledger_entries<T: AsRef<[u8]>, I: ExactSizeIterato
     // Add non-existing entries from the footprint to the storage.
     for k in footprint.0.keys(budget)? {
         if !map.contains_key::<LedgerKey>(k, budget)? {
-            map = map.insert(k.clone(), None, budget)?;
+            map = map.insert(Rc::clone(k), None, budget)?;
         }
     }
     Ok(map)
@@ -474,7 +474,7 @@ struct StorageMapSnapshotSource<'a> {
 impl<'a> SnapshotSource for StorageMapSnapshotSource<'a> {
     fn get(&self, key: &Rc<LedgerKey>) -> Result<Rc<LedgerEntry>, HostError> {
         if let Some(Some(value)) = self.map.get::<Rc<LedgerKey>>(key, self.budget)? {
-            Ok(value.clone())
+            Ok(Rc::clone(value))
         } else {
             Err(Error::from_type_and_code(ScErrorType::Storage, ScErrorCode::InternalError).into())
         }
