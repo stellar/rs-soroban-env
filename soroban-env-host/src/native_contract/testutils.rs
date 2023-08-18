@@ -270,7 +270,7 @@ pub(crate) fn create_account(
     sponsorships: Option<(u32, u32)>,
     flags: u32,
 ) {
-    let key = host.to_account_key(account_id.clone());
+    let key = host.to_account_key(account_id.clone()).unwrap();
     let account_id = match key.as_ref() {
         LedgerKey::Account(acc) => acc.account_id.clone(),
         _ => unreachable!(),
@@ -321,7 +321,7 @@ pub(crate) fn create_account(
 
     host.add_ledger_entry(
         &key,
-        &Host::ledger_entry_from_data(LedgerEntryData::Account(acc_entry)),
+        &Host::ledger_entry_from_data(host, LedgerEntryData::Account(acc_entry)).unwrap(),
     )
     .unwrap();
 }

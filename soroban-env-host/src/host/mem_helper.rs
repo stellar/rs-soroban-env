@@ -19,7 +19,7 @@ impl Host {
         let len: u32 = len.into();
         self.with_current_frame(|frame| match frame {
             Frame::ContractVM { vm, .. } => {
-                let vm = vm.clone();
+                let vm = Rc::clone(&vm);
                 Ok(VmSlice { vm, pos, len })
             }
             _ => Err(self.err(
@@ -298,7 +298,7 @@ impl Host {
     ) -> Result<HOT::Wrapper, HostError> {
         let obj_pos: u32 = obj_pos.into();
         let mut obj_new: Vec<u8> = self
-            .visit_obj(obj, move |hv: &HOT| hv.metered_clone(&self.0.budget))?
+            .visit_obj(obj, move |hv: &HOT| hv.metered_clone(self))?
             .into();
         let obj_end = obj_pos
             .checked_add(len)

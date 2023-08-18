@@ -28,15 +28,13 @@ fn vec_as_seen_by_host() -> Result<(), HostError> {
 }
 
 #[test]
-fn vec_new_with_capacity() -> Result<(), HostError> {
+fn vec_new() -> Result<(), HostError> {
     let host = Host::default();
-    host.vec_new(Val::from_void().to_val())?;
-    host.vec_new(5_u32.into())?;
-    let code = (ScErrorType::Value, ScErrorCode::UnexpectedType);
-    let res = host.vec_new(5_i32.into());
-    assert!(HostError::result_matches_err(res, code));
-    let res = host.vec_new(Val::from_bool(true).to_val());
-    assert!(HostError::result_matches_err(res, code));
+    let v = host.vec_new()?;
+    assert_eq!(
+        host.vec_len(v)?.to_val().get_payload(),
+        U32Val::from(0).to_val().get_payload()
+    );
     Ok(())
 }
 

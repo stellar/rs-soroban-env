@@ -20,7 +20,7 @@ impl ContractFunctionSet for ContractWithSingleEvent {
         // Add a contract event
         let mut data = host.map_new().unwrap();
         data = host.map_put(data, 1_u32.into(), 2_u32.into()).unwrap();
-        let mut topics = host.vec_new(().into()).unwrap();
+        let mut topics = host.vec_new().unwrap();
         topics = host.vec_push_back(topics, 0u32.into()).unwrap();
         topics = host.vec_push_back(topics, 1u32.into()).unwrap();
         Some(host.contract_event(topics, data.to_val()).unwrap().into())

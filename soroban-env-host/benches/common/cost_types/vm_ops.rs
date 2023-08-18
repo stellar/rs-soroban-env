@@ -40,7 +40,7 @@ impl HostCostMeasurement for VmInstantiationMeasure {
 
     fn new_random_case(_host: &Host, rng: &mut StdRng, _input: u64) -> VmInstantiationSample {
         let id: xdr::Hash = [0; 32].into();
-        let idx = rng.gen_range(0, 10) % util::TEST_WASMS.len();
+        let idx = rng.gen_range(0..10) % util::TEST_WASMS.len();
         let wasm = util::TEST_WASMS[idx].into();
         VmInstantiationSample { id: Some(id), wasm }
     }

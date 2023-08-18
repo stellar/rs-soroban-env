@@ -882,11 +882,17 @@ impl Display for Budget {
     }
 }
 
-pub trait AsBudget {
+pub trait AsBudget: Clone {
     fn as_budget(&self) -> &Budget;
 }
 
 impl AsBudget for Budget {
+    fn as_budget(&self) -> &Budget {
+        self
+    }
+}
+
+impl AsBudget for &Budget {
     fn as_budget(&self) -> &Budget {
         self
     }

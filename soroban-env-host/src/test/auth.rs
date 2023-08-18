@@ -216,11 +216,14 @@ impl AuthTest {
 
     fn read_nonce_expiration(&self, address: &Address, nonce: i64) -> Option<u32> {
         let nonce_key_scval = ScVal::LedgerKeyNonce(ScNonceKey { nonce });
-        let nonce_key = self.host.storage_key_for_address(
-            address.to_sc_address().unwrap(),
-            nonce_key_scval,
-            ContractDataDurability::Temporary,
-        );
+        let nonce_key = self
+            .host
+            .storage_key_for_address(
+                address.to_sc_address().unwrap(),
+                nonce_key_scval,
+                ContractDataDurability::Temporary,
+            )
+            .unwrap();
         self.host
             .with_mut_storage(|storage| {
                 if !storage.has(&nonce_key, self.host.budget_ref())? {
