@@ -295,7 +295,7 @@ impl Host {
     pub fn source_account_address(&self) -> Result<Option<AddressObject>, HostError> {
         if let Some(acc) = self.try_borrow_source_account()?.as_ref() {
             Ok(Some(self.add_host_object(ScAddress::Account(
-                acc.metered_clone(self.budget_ref())?,
+                acc.metered_clone(self)?,
             ))?))
         } else {
             Ok(None)
@@ -585,7 +585,7 @@ impl Host {
         let has_deployer = deployer.is_some();
         if has_deployer {
             self.try_borrow_authorization_manager()?
-                .push_create_contract_host_fn_frame(self, args.metered_clone(self.budget_ref())?)?;
+                .push_create_contract_host_fn_frame(self, args.metered_clone(self)?)?;
         }
         // Make sure that even in case of operation failure we still pop the
         // stack frame.
@@ -613,11 +613,10 @@ impl Host {
             )?;
         }
 
-        let id_preimage = self.get_full_contract_id_preimage(
-            args.contract_id_preimage.metered_clone(self.budget_ref())?,
-        )?;
+        let id_preimage =
+            self.get_full_contract_id_preimage(args.contract_id_preimage.metered_clone(self)?)?;
         let hash_id = Hash(self.metered_hash_xdr(&id_preimage)?);
-        self.create_contract_with_id(hash_id.metered_clone(self.budget_ref())?, args.executable)?;
+        self.create_contract_with_id(hash_id.metered_clone(self)?, args.executable)?;
         self.maybe_initialize_asset_token(&hash_id, &args.contract_id_preimage)?;
         self.add_host_object(ScAddress::Contract(hash_id))
     }
@@ -628,15 +627,12 @@ impl Host {
         salt: BytesObject,
     ) -> Result<Hash, HostError> {
         let contract_id_preimage = ContractIdPreimage::Address(ContractIdPreimageFromAddress {
-            address: self.visit_obj(deployer, |addr: &ScAddress| {
-                addr.metered_clone(self.budget_ref())
-            })?,
+            address: self.visit_obj(deployer, |addr: &ScAddress| addr.metered_clone(self))?,
             salt: self.u256_from_bytesobj_input("contract_id_salt", salt)?,
         });
 
-        let id_preimage = self.get_full_contract_id_preimage(
-            contract_id_preimage.metered_clone(self.budget_ref())?,
-        )?;
+        let id_preimage =
+            self.get_full_contract_id_preimage(contract_id_preimage.metered_clone(self)?)?;
         Ok(Hash(self.metered_hash_xdr(&id_preimage)?))
     }
 
@@ -744,7 +740,7 @@ impl Host {
         let hash_obj = self.add_host_object(self.scbytes_from_slice(hash_bytes.as_slice())?)?;
         let code_key = Rc::metered_new(
             LedgerKey::ContractCode(LedgerKeyContractCode {
-                hash: Hash(hash_bytes.metered_clone(self.budget_ref())?),
+                hash: Hash(hash_bytes.metered_clone(self)?),
                 body_type: ContractEntryBodyType::DataEntry,
             }),
             self,
@@ -874,7 +870,7 @@ impl Host {
                 .try_borrow_storage_mut()?
                 .get(&key, self.as_budget())
                 .map_err(|e| self.decorate_contract_data_storage_error(e, k))?)
-            .metered_clone(self.as_budget())?;
+            .metered_clone(self)?;
 
             match current.data {
                 LedgerEntryData::ContractData(ref mut entry) => match entry.body {
@@ -942,11 +938,7 @@ impl Host {
         };
         // Need to copy the footprint out of the storage to allow mut borrow of
         // storage.
-        let footprint_map = self
-            .try_borrow_storage()?
-            .footprint
-            .0
-            .metered_clone(self.budget_ref())?;
+        let footprint_map = self.try_borrow_storage()?.footprint.0.metered_clone(self)?;
         for (key, _) in footprint_map.iter(self.budget_ref())? {
             match key.as_ref() {
                 LedgerKey::ContractData(_) | LedgerKey::ContractCode(_) => {
@@ -1172,7 +1164,7 @@ impl EnvBase for Host {
     }
 
     fn map_new_from_slices(&self, keys: &[&str], vals: &[Val]) -> Result<MapObject, HostError> {
-        Vec::<Symbol>::charge_bulk_init_cpy(keys.len() as u64, self.as_budget())?;
+        Vec::<Symbol>::charge_bulk_init_cpy(keys.len() as u64, self)?;
         // If only fallible iterators worked better in Rust, we would not need this Vec<...>.
         let mut key_syms: Vec<Symbol> = Vec::with_capacity(keys.len());
         for k in keys.iter() {
@@ -1218,7 +1210,7 @@ impl EnvBase for Host {
                 self.check_symbol_matches(ik.as_bytes(), sym)?;
             }
 
-            metered_clone::charge_shallow_copy::<Val>(keys.len() as u64, self.as_budget())?;
+            metered_clone::charge_shallow_copy::<Val>(keys.len() as u64, self)?;
             for (iv, mv) in vals.iter_mut().zip(hm.values(self)?) {
                 *iv = *mv;
             }
@@ -1245,7 +1237,7 @@ impl EnvBase for Host {
                     &[],
                 ));
             }
-            metered_clone::charge_shallow_copy::<Val>(hv.len() as u64, self.as_budget())?;
+            metered_clone::charge_shallow_copy::<Val>(hv.len() as u64, self)?;
             vals.copy_from_slice(hv.as_slice());
             Ok(())
         })?;
@@ -1771,7 +1763,7 @@ impl VmCallerEnv for Host {
             pos: keys_pos,
             len,
         } = self.decode_vmslice(keys_pos, len)?;
-        Vec::<Symbol>::charge_bulk_init_cpy(len as u64, self.as_budget())?;
+        Vec::<Symbol>::charge_bulk_init_cpy(len as u64, self)?;
         let mut key_syms: Vec<Symbol> = Vec::with_capacity(len as usize);
         self.metered_vm_scan_slices_in_linear_memory(
             vmcaller,
@@ -1789,7 +1781,7 @@ impl VmCallerEnv for Host {
 
         // Step 2: extract all val Vals.
         let vals_pos: u32 = vals_pos.into();
-        Vec::<Val>::charge_bulk_init_cpy(len as u64, self.as_budget())?;
+        Vec::<Val>::charge_bulk_init_cpy(len as u64, self)?;
         let mut vals: Vec<Val> = vec![Val::VOID.into(); len as usize];
         self.metered_vm_read_vals_from_linear_memory::<8, Val>(
             vmcaller,
@@ -2073,7 +2065,7 @@ impl VmCallerEnv for Host {
         len: U32Val,
     ) -> Result<VecObject, HostError> {
         let VmSlice { vm, pos, len } = self.decode_vmslice(vals_pos, len)?;
-        Vec::<Val>::charge_bulk_init_cpy(len as u64, self.as_budget())?;
+        Vec::<Val>::charge_bulk_init_cpy(len as u64, self)?;
         let mut vals: Vec<Val> = vec![Val::VOID.to_val(); len as usize];
         self.metered_vm_read_vals_from_linear_memory::<8, Val>(
             vmcaller,
@@ -2316,9 +2308,7 @@ impl VmCallerEnv for Host {
         salt: BytesObject,
     ) -> Result<AddressObject, HostError> {
         let contract_id_preimage = ContractIdPreimage::Address(ContractIdPreimageFromAddress {
-            address: self.visit_obj(deployer, |addr: &ScAddress| {
-                addr.metered_clone(self.budget_ref())
-            })?,
+            address: self.visit_obj(deployer, |addr: &ScAddress| addr.metered_clone(self))?,
             salt: self.u256_from_bytesobj_input("contract_id_salt", salt)?,
         });
         let executable =
@@ -2375,9 +2365,8 @@ impl VmCallerEnv for Host {
         _vmcaller: &mut VmCaller<Host>,
         wasm: BytesObject,
     ) -> Result<BytesObject, HostError> {
-        let wasm_vec = self.visit_obj(wasm, |bytes: &ScBytes| {
-            bytes.as_vec().metered_clone(self.budget_ref())
-        })?;
+        let wasm_vec =
+            self.visit_obj(wasm, |bytes: &ScBytes| bytes.as_vec().metered_clone(self))?;
         self.upload_contract_wasm(wasm_vec)
     }
 
@@ -2627,7 +2616,7 @@ impl VmCallerEnv for Host {
         let i: u32 = iv.into();
         let u = self.u8_from_u32val_input("u", u)?;
         let vnew = self.visit_obj(b, move |hv: &ScBytes| {
-            let mut vnew: Vec<u8> = hv.metered_clone(&self.0.budget)?.into();
+            let mut vnew: Vec<u8> = hv.metered_clone(self)?.into();
             match vnew.get_mut(i as usize) {
                 None => Err(self.err(
                     ScErrorType::Object,
@@ -2675,12 +2664,12 @@ impl VmCallerEnv for Host {
         let i: u32 = i.into();
         let vnew = self.visit_obj(b, move |hv: &ScBytes| {
             self.validate_index_lt_bound(i, hv.len())?;
-            let mut vnew: Vec<u8> = hv.metered_clone(&self.0.budget)?.into();
+            let mut vnew: Vec<u8> = hv.metered_clone(self)?.into();
             // len > i has been verified above but use saturating_sub just in case
             let n_elts = (hv.len() as u64).saturating_sub(i as u64);
             // remove elements incurs the cost of moving bytes, it does not incur
             // allocation/deallocation
-            metered_clone::charge_shallow_copy::<u8>(n_elts, self.as_budget())?;
+            metered_clone::charge_shallow_copy::<u8>(n_elts, self)?;
             vnew.remove(i as usize);
             Ok(ScBytes(vnew.try_into()?))
         })?;
@@ -2729,7 +2718,7 @@ impl VmCallerEnv for Host {
             // we allocate the new vector to be able to hold `len + 1` bytes, so that the push
             // will not trigger a reallocation, causing data to be cloned twice.
             let len = hv.len().saturating_add(1);
-            Vec::<u8>::charge_bulk_init_cpy(len as u64, self.as_budget())?;
+            Vec::<u8>::charge_bulk_init_cpy(len as u64, self)?;
             let mut vnew: Vec<u8> = Vec::with_capacity(len);
             vnew.extend_from_slice(hv.as_slice());
             vnew.push(u);
@@ -2745,7 +2734,7 @@ impl VmCallerEnv for Host {
         b: BytesObject,
     ) -> Result<BytesObject, HostError> {
         let vnew = self.visit_obj(b, move |hv: &ScBytes| {
-            let mut vnew: Vec<u8> = hv.metered_clone(self.as_budget())?.into();
+            let mut vnew: Vec<u8> = hv.metered_clone(self)?.into();
             // Popping will not trigger reallocation. Here we don't charge anything since this is
             // just a `len` reduction.
             if vnew.pop().is_none() {
@@ -2815,7 +2804,7 @@ impl VmCallerEnv for Host {
             // we allocate the new vector to be able to hold `len + 1` bytes, so that the push
             // will not trigger a reallocation, causing data to be cloned twice.
             let len = hv.len().saturating_add(1);
-            Vec::<u8>::charge_bulk_init_cpy(len as u64, self.as_budget())?;
+            Vec::<u8>::charge_bulk_init_cpy(len as u64, self)?;
             let mut vnew: Vec<u8> = Vec::with_capacity(len);
             vnew.extend_from_slice(hv.as_slice());
             vnew.insert(i as usize, u);
@@ -2840,7 +2829,7 @@ impl VmCallerEnv for Host {
                 // we already checked above that `len` will not overflow, here using
                 // saturating_add just in case.
                 let len = sb1.len().saturating_add(sb2.len());
-                Vec::<u8>::charge_bulk_init_cpy(len as u64, self.as_budget())?;
+                Vec::<u8>::charge_bulk_init_cpy(len as u64, self)?;
                 let mut vnew: Vec<u8> = Vec::with_capacity(len);
                 vnew.extend_from_slice(sb1.as_slice());
                 vnew.extend_from_slice(sb2.as_slice());
@@ -2951,7 +2940,7 @@ impl VmCallerEnv for Host {
 
         let get_host_val_tuple = |id: &Hash, function: &Symbol| -> Result<[Val; 2], HostError> {
             let addr_val = self
-                .add_host_object(ScAddress::Contract(id.metered_clone(self.as_budget())?))?
+                .add_host_object(ScAddress::Contract(id.metered_clone(self)?))?
                 .into();
             let function_val = (*function).into();
             Ok([addr_val, function_val])
@@ -3032,7 +3021,7 @@ impl VmCallerEnv for Host {
                 #[cfg(any(test, feature = "testutils"))]
                 Frame::TestContract(c) => &c.args,
             };
-            args.metered_clone(self.budget_ref())
+            args.metered_clone(self)
         })?;
 
         Ok(self

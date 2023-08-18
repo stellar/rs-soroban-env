@@ -342,7 +342,7 @@ impl<A> MeteredClone for MeteredVector<A>
 where
     A: MeteredClone,
 {
-    fn charge_for_substructure(&self, budget: &Budget) -> Result<(), HostError> {
+    fn charge_for_substructure(&self, budget: impl AsBudget) -> Result<(), HostError> {
         self.vec.charge_for_substructure(budget)
     }
 }

@@ -340,7 +340,7 @@ where
     V: MeteredClone,
     Ctx: AsBudget,
 {
-    fn charge_for_substructure(&self, budget: &Budget) -> Result<(), HostError> {
+    fn charge_for_substructure(&self, budget: impl AsBudget) -> Result<(), HostError> {
         self.map.charge_for_substructure(budget)
     }
 }

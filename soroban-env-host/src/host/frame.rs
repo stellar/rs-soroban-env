@@ -363,9 +363,9 @@ impl Host {
     /// frame at its top.
     pub(crate) fn get_current_contract_id_opt_internal(&self) -> Result<Option<Hash>, HostError> {
         self.with_current_frame(|frame| match frame {
-            Frame::ContractVM { vm, .. } => Ok(Some(vm.contract_id.metered_clone(&self.0.budget)?)),
+            Frame::ContractVM { vm, .. } => Ok(Some(vm.contract_id.metered_clone(self)?)),
             Frame::HostFunction(_) => Ok(None),
-            Frame::Token(id, ..) => Ok(Some(id.metered_clone(&self.0.budget)?)),
+            Frame::Token(id, ..) => Ok(Some(id.metered_clone(self)?)),
             #[cfg(any(test, feature = "testutils"))]
             Frame::TestContract(tc) => Ok(Some(tc.id.clone())),
         })
@@ -392,7 +392,7 @@ impl Host {
         // the previous frame must exist and must be a contract
         let hash = match frames.as_slice() {
             [.., c2, _] => match &c2.frame {
-                Frame::ContractVM { vm, .. } => Ok(vm.contract_id.metered_clone(&self.0.budget)?),
+                Frame::ContractVM { vm, .. } => Ok(vm.contract_id.metered_clone(self)?),
                 Frame::HostFunction(_) => Err(self.err(
                     ScErrorType::Context,
                     ScErrorCode::UnexpectedType,
@@ -472,11 +472,7 @@ impl Host {
         match &instance.executable {
             ContractExecutable::Wasm(wasm_hash) => {
                 let code_entry = self.retrieve_wasm_from_storage(&wasm_hash)?;
-                let vm = Vm::new(
-                    self,
-                    id.metered_clone(&self.0.budget)?,
-                    code_entry.as_slice(),
-                )?;
+                let vm = Vm::new(self, id.metered_clone(self)?, code_entry.as_slice())?;
                 let relative_objects = Vec::new();
                 self.with_frame(
                     Frame::ContractVM {
@@ -704,11 +700,7 @@ impl Host {
                 self.with_frame(Frame::HostFunction(hf_type), || {
                     let deployer: Option<AddressObject> = match &args.contract_id_preimage {
                         ContractIdPreimage::Address(preimage_from_addr) => Some(
-                            self.add_host_object(
-                                preimage_from_addr
-                                    .address
-                                    .metered_clone(self.budget_ref())?,
-                            )?,
+                            self.add_host_object(preimage_from_addr.address.metered_clone(self)?)?,
                         ),
                         ContractIdPreimage::Asset(_) => None,
                     };
@@ -756,7 +748,7 @@ impl Host {
                 |m| {
                     m.iter()
                         .map(|i| Ok((self.to_host_val(&i.key)?, self.to_host_val(&i.val)?)))
-                        .metered_collect::<Result<Vec<(Val, Val)>, HostError>>(self.as_budget())?
+                        .metered_collect::<Result<Vec<(Val, Val)>, HostError>>(self)?
                 },
             )?,
             self,
@@ -772,7 +764,7 @@ impl Host {
                 }
                 let executable = match &ctx.frame {
                     Frame::ContractVM { instance, .. } => {
-                        instance.executable.metered_clone(self.budget_ref())?
+                        instance.executable.metered_clone(self)?
                     }
                     Frame::HostFunction(_) => {
                         return Err(self.err(
@@ -782,9 +774,7 @@ impl Host {
                             &[],
                         ))
                     }
-                    Frame::Token(_, _, _, instance) => {
-                        instance.executable.metered_clone(self.budget_ref())?
-                    }
+                    Frame::Token(_, _, _, instance) => instance.executable.metered_clone(self)?,
                     // Mock executable for test contract 'instances'. This is
                     // just a placeholder - it's not used for actually calling
                     // the test contracts.

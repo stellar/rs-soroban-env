@@ -255,7 +255,7 @@ pub fn invoke_host_function<T: AsRef<[u8]>, I: ExactSizeIterator<Item = T>>(
     let footprint = build_storage_footprint_from_xdr(&budget, resources.footprint)?;
     let map =
         build_storage_map_from_xdr_ledger_entries(&budget, &footprint, encoded_ledger_entries)?;
-    let init_storage_map = map.metered_clone(&budget)?;
+    let init_storage_map = map.metered_clone(budget)?;
 
     let storage = Storage::with_enforcing_footprint_and_map(footprint, map);
     let host = Host::with_storage_and_budget(storage, budget.clone());

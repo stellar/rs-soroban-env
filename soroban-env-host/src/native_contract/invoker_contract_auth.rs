@@ -86,7 +86,7 @@ impl InvokerContractAuthEntry {
                 let function = AuthorizedFunction::CreateContractHostFn(CreateContractArgs {
                     contract_id_preimage: ContractIdPreimage::Address(
                         ContractIdPreimageFromAddress {
-                            address: invoker_contract_addr.metered_clone(host.budget_ref())?,
+                            address: invoker_contract_addr.metered_clone(host)?,
                             salt: host.u256_from_bytesobj_input(
                                 "salt",
                                 create_contract_fn.salt.as_object(),

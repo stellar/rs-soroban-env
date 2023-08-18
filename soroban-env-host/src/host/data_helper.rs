@@ -24,7 +24,7 @@ impl Host {
         &self,
         contract_id: &Hash,
     ) -> Result<Rc<LedgerKey>, HostError> {
-        let contract_id = contract_id.metered_clone(self.as_budget())?;
+        let contract_id = contract_id.metered_clone(self)?;
         Rc::metered_new(
             LedgerKey::ContractData(LedgerKeyContractData {
                 key: ScVal::LedgerKeyContractInstance,
@@ -45,7 +45,7 @@ impl Host {
         match &entry.data {
             LedgerEntryData::ContractData(ContractDataEntry { body, .. }) => match body {
                 ContractDataEntryBody::DataEntry(data) => match &data.val {
-                    ScVal::ContractInstance(instance) => instance.metered_clone(self.as_budget()),
+                    ScVal::ContractInstance(instance) => instance.metered_clone(self),
                     other => Err(err!(
                         self,
                         (ScErrorType::Storage, ScErrorCode::InternalError),
@@ -72,7 +72,7 @@ impl Host {
         &self,
         wasm_hash: &Hash,
     ) -> Result<Rc<LedgerKey>, HostError> {
-        let wasm_hash = wasm_hash.metered_clone(self.as_budget())?;
+        let wasm_hash = wasm_hash.metered_clone(self)?;
         Rc::metered_new(
             LedgerKey::ContractCode(LedgerKeyContractCode {
                 hash: wasm_hash,
@@ -91,7 +91,7 @@ impl Host {
             .data
         {
             LedgerEntryData::ContractCode(e) => match &e.body {
-                ContractCodeEntryBody::DataEntry(code) => code.metered_clone(self.as_budget()),
+                ContractCodeEntryBody::DataEntry(code) => code.metered_clone(self),
                 _ => Err(err!(
                     self,
                     (ScErrorType::Storage, ScErrorCode::InternalError),
@@ -132,7 +132,7 @@ impl Host {
             .map_err(|e| self.decorate_contract_instance_storage_error(e, &contract_id))?
         {
             let mut current = (*self.try_borrow_storage_mut()?.get(&key, self.as_budget())?)
-                .metered_clone(&self.0.budget)?;
+                .metered_clone(self)?;
 
             match current.data {
                 LedgerEntryData::ContractData(ref mut entry) => {
@@ -152,7 +152,7 @@ impl Host {
                 .map_err(|e| self.decorate_contract_instance_storage_error(e, &contract_id))?;
         } else {
             let data = LedgerEntryData::ContractData(ContractDataEntry {
-                contract: ScAddress::Contract(contract_id.metered_clone(self.as_budget())?),
+                contract: ScAddress::Contract(contract_id.metered_clone(self)?),
                 key: ScVal::LedgerKeyContractInstance,
                 body,
                 durability: ContractDataDurability::Persistent,
@@ -186,7 +186,7 @@ impl Host {
     pub fn load_account(&self, account_id: AccountId) -> Result<AccountEntry, HostError> {
         let acc = self.to_account_key(account_id)?;
         self.with_mut_storage(|storage| match &storage.get(&acc, self.as_budget())?.data {
-            LedgerEntryData::Account(ae) => ae.metered_clone(self.as_budget()),
+            LedgerEntryData::Account(ae) => ae.metered_clone(self),
             e => Err(err!(
                 self,
                 (ScErrorType::Storage, ScErrorCode::InternalError),
@@ -238,7 +238,7 @@ impl Host {
     ) -> Result<u8, HostError> {
         if account.account_id
             == AccountId(PublicKey::PublicKeyTypeEd25519(
-                target_signer.metered_clone(&self.0.budget)?,
+                target_signer.metered_clone(self)?,
             ))
         {
             // Target signer is the master key, so return the master weight
@@ -305,7 +305,7 @@ impl Host {
         address: AddressObject,
     ) -> Result<Hash, HostError> {
         self.visit_obj(address, |addr: &ScAddress| {
-            self.contract_id_from_scaddress(addr.metered_clone(self.budget_ref())?)
+            self.contract_id_from_scaddress(addr.metered_clone(self)?)
         })
     }
 }

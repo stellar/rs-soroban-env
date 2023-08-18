@@ -333,7 +333,7 @@ impl Storage {
         })?;
 
         if new_expiration > old_expiration {
-            let mut new_entry = (*old_entry).metered_clone(host.budget_ref())?;
+            let mut new_entry = (*old_entry).metered_clone(host)?;
             set_entry_expiration(&mut new_entry, new_expiration);
             self.map = self.map.insert(
                 key,
@@ -378,7 +378,7 @@ impl Storage {
         );
 
         if new_expiration > old_expiration {
-            let mut new_entry = (*old_entry).metered_clone(host.budget_ref())?;
+            let mut new_entry = (*old_entry).metered_clone(host)?;
             set_entry_expiration(&mut new_entry, new_expiration);
             self.map = self.map.insert(
                 key,
