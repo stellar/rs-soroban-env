@@ -13,7 +13,7 @@ use soroban_env_common::{AddressObject, Compare, Symbol, TryFromVal, TryIntoVal,
 
 use crate::budget::{AsBudget, Budget};
 use crate::host::error::TryBorrowOrErr;
-use crate::host::metered_clone::{MeteredClone, MeteredContainer, MeteredIterator};
+use crate::host::metered_clone::{MeteredAlloc, MeteredClone, MeteredContainer, MeteredIterator};
 use crate::host::Frame;
 use crate::host_object::HostVec;
 use crate::native_contract::account_contract::{
@@ -1776,7 +1776,7 @@ impl Host {
             sc_address.metered_clone(self.budget_ref())?,
             nonce_key_scval.metered_clone(self.budget_ref())?,
             xdr::ContractDataDurability::Temporary,
-        );
+        )?;
         let expiration_ledger = expiration_ledger
             .max(self.get_min_expiration_ledger(xdr::ContractDataDurability::Temporary)?);
         self.with_mut_storage(|storage| {
@@ -1804,7 +1804,11 @@ impl Host {
                 data,
                 ext: LedgerEntryExt::V0,
             };
-            storage.put(&nonce_key, &Rc::new(entry), self.budget_ref())
+            storage.put(
+                &nonce_key,
+                &Rc::metered_new(entry, self)?,
+                self.budget_ref(),
+            )
         })
     }
 }

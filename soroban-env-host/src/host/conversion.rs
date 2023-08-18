@@ -1,6 +1,8 @@
 use std::rc::Rc;
 
-use super::metered_clone::{charge_shallow_copy, MeteredClone, MeteredContainer, MeteredIterator};
+use super::metered_clone::{
+    charge_shallow_copy, MeteredAlloc, MeteredClone, MeteredContainer, MeteredIterator,
+};
 use crate::budget::AsBudget;
 use crate::err;
 use crate::host_object::{HostMap, HostObject, HostVec};
@@ -165,13 +167,16 @@ impl Host {
         contract_address: ScAddress,
         key: ScVal,
         durability: ContractDataDurability,
-    ) -> Rc<LedgerKey> {
-        Rc::new(LedgerKey::ContractData(LedgerKeyContractData {
-            contract: contract_address,
-            key,
-            durability: durability,
-            body_type: ContractEntryBodyType::DataEntry,
-        }))
+    ) -> Result<Rc<LedgerKey>, HostError> {
+        Rc::metered_new(
+            LedgerKey::ContractData(LedgerKeyContractData {
+                contract: contract_address,
+                key,
+                durability: durability,
+                body_type: ContractEntryBodyType::DataEntry,
+            }),
+            self,
+        )
     }
 
     pub(crate) fn storage_key_from_scval(
@@ -180,7 +185,7 @@ impl Host {
         durability: ContractDataDurability,
     ) -> Result<Rc<LedgerKey>, HostError> {
         let contract_id = self.get_current_contract_id_internal()?;
-        Ok(self.storage_key_for_address(ScAddress::Contract(contract_id), key, durability))
+        Ok(self.storage_key_for_address(ScAddress::Contract(contract_id), key, durability)?)
     }
 
     // Notes on metering: covered by components.
@@ -225,10 +230,7 @@ impl Host {
     }
 
     pub(crate) fn call_args_from_obj(&self, args: VecObject) -> Result<Vec<Val>, HostError> {
-        self.visit_obj(args, |hv: &HostVec| {
-            // Metering: free
-            Ok(hv.iter().cloned().collect())
-        })
+        self.visit_obj(args, |hv: &HostVec| hv.to_vec(self.as_budget()))
     }
 
     // Metering: covered by rawvals_to_vec

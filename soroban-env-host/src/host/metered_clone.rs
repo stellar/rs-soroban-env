@@ -3,7 +3,7 @@ use std::{iter::FromIterator, mem, rc::Rc};
 use soroban_env_common::xdr::{DepthLimiter, SorobanAuthorizationEntry};
 
 use crate::{
-    budget::Budget,
+    budget::{AsBudget, Budget},
     events::{EventError, HostEvent, InternalContractEvent, InternalEvent},
     host::Events,
     host_object::HostObject,
@@ -73,6 +73,23 @@ pub(crate) fn charge_heap_alloc<T: DeclaredSizeForMetering>(
         ContractCostType::HostMemAlloc,
         Some(n_elts.saturating_mul(T::DECLARED_SIZE)),
     )
+}
+
+pub trait MeteredAlloc<T: MeteredClone>: Sized {
+    fn metered_new(value: T, budget: impl AsBudget) -> Result<Self, HostError>;
+
+    fn metered_new_from_ref(value: &T, budget: impl AsBudget) -> Result<Self, HostError>;
+}
+
+impl<T: MeteredClone> MeteredAlloc<T> for Rc<T> {
+    fn metered_new(value: T, budget: impl AsBudget) -> Result<Self, HostError> {
+        charge_heap_alloc::<T>(1, budget.as_budget())?;
+        Ok(Rc::new(value))
+    }
+
+    fn metered_new_from_ref(value: &T, budget: impl AsBudget) -> Result<Self, HostError> {
+        Self::metered_new(value.metered_clone(budget.as_budget())?, budget)
+    }
 }
 
 /// Represents a collection type which can be created from an iterator, and provides

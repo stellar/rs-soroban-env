@@ -21,7 +21,7 @@ use crate::{
     fees::LedgerEntryRentChange,
     host::{
         ledger_info_helper::{get_entry_expiration, get_key_durability, set_entry_expiration},
-        metered_clone::{MeteredClone, MeteredContainer},
+        metered_clone::{MeteredAlloc, MeteredClone, MeteredIterator},
         metered_xdr::{metered_from_xdr_with_budget, metered_write_xdr},
     },
     storage::{AccessType, Footprint, FootprintMap, SnapshotSource, Storage, StorageMap},
@@ -322,7 +322,7 @@ pub fn encode_contract_events(budget: &Budget, events: &Events) -> Result<Vec<Ve
             metered_write_xdr(budget, &e.event, &mut buf)?;
             Ok(buf)
         })
-        .collect()
+        .metered_collect::<Result<Vec<Vec<u8>>, HostError>>(budget)?
 }
 
 fn extract_diagnostic_events(events: &Events, diagnostic_events: &mut Vec<DiagnosticEvent>) {
@@ -402,14 +402,22 @@ fn build_storage_footprint_from_xdr(
 ) -> Result<Footprint, HostError> {
     let mut footprint_map = FootprintMap::new();
 
-    for key in footprint.read_write.to_vec() {
+    for key in footprint.read_write.as_vec() {
         validate_footprint_key(&key)?;
-        footprint_map = footprint_map.insert(Rc::new(key), AccessType::ReadWrite, budget)?;
+        footprint_map = footprint_map.insert(
+            Rc::metered_new_from_ref(key, budget)?,
+            AccessType::ReadWrite,
+            budget,
+        )?;
     }
 
-    for key in footprint.read_only.to_vec() {
+    for key in footprint.read_only.as_vec() {
         validate_footprint_key(&key)?;
-        footprint_map = footprint_map.insert(Rc::new(key), AccessType::ReadOnly, budget)?;
+        footprint_map = footprint_map.insert(
+            Rc::metered_new_from_ref(key, budget)?,
+            AccessType::ReadOnly,
+            budget,
+        )?;
     }
     Ok(Footprint(footprint_map))
 }
@@ -421,11 +429,11 @@ fn build_storage_map_from_xdr_ledger_entries<T: AsRef<[u8]>, I: ExactSizeIterato
 ) -> Result<StorageMap, HostError> {
     let mut map = StorageMap::new();
     for buf in encoded_ledger_entries {
-        let le = Rc::new(metered_from_xdr_with_budget::<LedgerEntry>(
-            buf.as_ref(),
-            &budget,
-        )?);
-        let key = Rc::new(ledger_entry_to_ledger_key(&le, budget)?);
+        let le = Rc::metered_new(
+            metered_from_xdr_with_budget::<LedgerEntry>(buf.as_ref(), budget)?,
+            budget,
+        )?;
+        let key = Rc::metered_new(ledger_entry_to_ledger_key(&le, budget)?, budget)?;
         if !footprint.0.contains_key::<LedgerKey>(&key, budget)? {
             return Err(Error::from_type_and_code(
                 ScErrorType::Storage,
@@ -450,13 +458,11 @@ impl Host {
         &self,
         encoded_contract_auth_entries: I,
     ) -> Result<Vec<SorobanAuthorizationEntry>, HostError> {
-        Vec::<SorobanAuthorizationEntry>::charge_bulk_init_cpy(
-            encoded_contract_auth_entries.len() as u64,
-            self.as_budget(),
-        )?;
         encoded_contract_auth_entries
             .map(|buf| self.metered_from_xdr::<SorobanAuthorizationEntry>(buf.as_ref()))
-            .collect()
+            .metered_collect::<Result<Vec<SorobanAuthorizationEntry>, HostError>>(
+                self.as_budget(),
+            )?
     }
 }
 

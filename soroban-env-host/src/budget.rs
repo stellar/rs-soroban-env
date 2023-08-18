@@ -892,6 +892,12 @@ impl AsBudget for Budget {
     }
 }
 
+impl AsBudget for &Budget {
+    fn as_budget(&self) -> &Budget {
+        self
+    }
+}
+
 impl AsBudget for Host {
     fn as_budget(&self) -> &Budget {
         self.budget_ref()

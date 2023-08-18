@@ -54,6 +54,7 @@ use soroban_env_common::xdr::{
 
 use self::{
     frame::{Context, ContractReentryMode},
+    metered_clone::MeteredAlloc,
     metered_vector::MeteredVector,
     prng::Prng,
 };
@@ -253,6 +254,8 @@ impl Host {
     pub fn with_storage_and_budget(storage: Storage, budget: Budget) -> Self {
         #[cfg(all(not(target_family = "wasm"), feature = "tracy"))]
         let _client = tracy_client::Client::start();
+        // Here we are missing charge for the Rc::new but that is once for the
+        // lifetime of the host, so that should be okay.
         Self(Rc::new(HostImpl {
             source_account: RefCell::new(None),
             ledger: RefCell::new(None),
@@ -739,10 +742,13 @@ impl Host {
                 )
             })?;
         let hash_obj = self.add_host_object(self.scbytes_from_slice(hash_bytes.as_slice())?)?;
-        let code_key = Rc::new(LedgerKey::ContractCode(LedgerKeyContractCode {
-            hash: Hash(hash_bytes.metered_clone(self.budget_ref())?),
-            body_type: ContractEntryBodyType::DataEntry,
-        }));
+        let code_key = Rc::metered_new(
+            LedgerKey::ContractCode(LedgerKeyContractCode {
+                hash: Hash(hash_bytes.metered_clone(self.budget_ref())?),
+                body_type: ContractEntryBodyType::DataEntry,
+            }),
+            self,
+        )?;
         if !self
             .try_borrow_storage_mut()?
             .has(&code_key, self.as_budget())
@@ -767,7 +773,7 @@ impl Host {
                 });
                 storage.put(
                     &code_key,
-                    &Host::ledger_entry_from_data(data),
+                    &Host::ledger_entry_from_data(self, data)?,
                     self.as_budget(),
                 )
             })?;
@@ -897,7 +903,7 @@ impl Host {
                 }
             }
             self.try_borrow_storage_mut()?
-                .put(&key, &Rc::new(current), self.as_budget())
+                .put(&key, &Rc::metered_new(current, self)?, self.as_budget())
                 .map_err(|e| self.decorate_contract_data_storage_error(e, k))?;
         } else {
             let body = ContractDataEntryBody::DataEntry(ContractDataEntryData {
@@ -912,7 +918,11 @@ impl Host {
                 durability,
             });
             self.try_borrow_storage_mut()?
-                .put(&key, &Host::ledger_entry_from_data(data), self.as_budget())
+                .put(
+                    &key,
+                    &Host::ledger_entry_from_data(self, data)?,
+                    self.as_budget(),
+                )
                 .map_err(|e| self.decorate_contract_data_storage_error(e, k))?;
         }
 
@@ -1099,6 +1109,8 @@ impl EnvBase for Host {
         assert!(Rc::ptr_eq(&self.0, &other.0));
     }
 
+    // This function is not being metered, it's not used anywhere so it's okay
+    // for now
     fn deep_clone(&self) -> Self {
         Host(Rc::new((*self.0).clone()))
     }
@@ -1183,9 +1195,6 @@ impl EnvBase for Host {
         keys: &[&str],
         vals: &mut [Val],
     ) -> Result<Void, HostError> {
-        // Main costs are already covered by `visit_obj` and `check_symbol_matches`. Here
-        // we charge shallow copy of the values.
-        metered_clone::charge_shallow_copy::<Val>(keys.len() as u64, self.as_budget())?;
         if keys.len() != vals.len() {
             return Err(self.err(
                 ScErrorType::Object,
@@ -1209,6 +1218,7 @@ impl EnvBase for Host {
                 self.check_symbol_matches(ik.as_bytes(), sym)?;
             }
 
+            metered_clone::charge_shallow_copy::<Val>(keys.len() as u64, self.as_budget())?;
             for (iv, mv) in vals.iter_mut().zip(hm.values(self)?) {
                 *iv = *mv;
             }
@@ -1310,7 +1320,7 @@ impl VmCallerEnv for Host {
         self.add_host_object(ScAddress::Contract(invoking_contract_hash))
     }
 
-    // Metered: covered by `visit` and `metered_cmp`.
+    // Metered: covered by `visit`.
     fn obj_cmp(&self, _vmcaller: &mut VmCaller<Host>, a: Val, b: Val) -> Result<i64, HostError> {
         let res = match {
             match (Object::try_from(a), Object::try_from(b)) {
@@ -2719,8 +2729,7 @@ impl VmCallerEnv for Host {
             // we allocate the new vector to be able to hold `len + 1` bytes, so that the push
             // will not trigger a reallocation, causing data to be cloned twice.
             let len = hv.len().saturating_add(1);
-            metered_clone::charge_heap_alloc::<u8>(len as u64, self.as_budget())?;
-            metered_clone::charge_shallow_copy::<u8>(len as u64, self.as_budget())?;
+            Vec::<u8>::charge_bulk_init_cpy(len as u64, self.as_budget())?;
             let mut vnew: Vec<u8> = Vec::with_capacity(len);
             vnew.extend_from_slice(hv.as_slice());
             vnew.push(u);
@@ -2806,12 +2815,9 @@ impl VmCallerEnv for Host {
             // we allocate the new vector to be able to hold `len + 1` bytes, so that the push
             // will not trigger a reallocation, causing data to be cloned twice.
             let len = hv.len().saturating_add(1);
-            metered_clone::charge_heap_alloc::<u8>(len as u64, self.as_budget())?;
-            metered_clone::charge_shallow_copy::<u8>(len as u64, self.as_budget())?;
+            Vec::<u8>::charge_bulk_init_cpy(len as u64, self.as_budget())?;
             let mut vnew: Vec<u8> = Vec::with_capacity(len);
             vnew.extend_from_slice(hv.as_slice());
-            // insert will cause the memcpy by shifting all the values at and after `i`.
-            metered_clone::charge_shallow_copy::<u8>(len as u64, self.as_budget())?;
             vnew.insert(i as usize, u);
             Ok(ScBytes(vnew.try_into()?))
         })?;
@@ -2834,8 +2840,7 @@ impl VmCallerEnv for Host {
                 // we already checked above that `len` will not overflow, here using
                 // saturating_add just in case.
                 let len = sb1.len().saturating_add(sb2.len());
-                metered_clone::charge_heap_alloc::<u8>(len as u64, self.as_budget())?;
-                metered_clone::charge_shallow_copy::<u8>(len as u64, self.as_budget())?;
+                Vec::<u8>::charge_bulk_init_cpy(len as u64, self.as_budget())?;
                 let mut vnew: Vec<u8> = Vec::with_capacity(len);
                 vnew.extend_from_slice(sb1.as_slice());
                 vnew.extend_from_slice(sb2.as_slice());

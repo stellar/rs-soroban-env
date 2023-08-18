@@ -24,7 +24,7 @@ use crate::Vm;
 
 use super::{
     invoker_type::InvokerType,
-    metered_clone::{self, MeteredClone, MeteredContainer},
+    metered_clone::{MeteredClone, MeteredContainer, MeteredIterator},
     prng::Prng,
 };
 
@@ -467,6 +467,8 @@ impl Host {
         let instance = self
             .retrieve_contract_instance_from_storage(&storage_key)
             .map_err(|e| self.decorate_contract_instance_storage_error(e, &id))?;
+        Vec::<Val>::charge_bulk_init_cpy(args.len() as u64, self.as_budget())?;
+        let args_vec = args.to_vec();
         match &instance.executable {
             ContractExecutable::Wasm(wasm_hash) => {
                 let code_entry = self.retrieve_wasm_from_storage(&wasm_hash)?;
@@ -480,20 +482,19 @@ impl Host {
                     Frame::ContractVM {
                         vm: vm.clone(),
                         fn_name: *func,
-                        args: args.to_vec(),
+                        args: args_vec,
                         instance,
                         relative_objects,
                     },
                     || vm.invoke_function_raw(self, func, args),
                 )
             }
-            ContractExecutable::Token => self.with_frame(
-                Frame::Token(id.clone(), *func, args.to_vec(), instance),
-                || {
+            ContractExecutable::Token => {
+                self.with_frame(Frame::Token(id.clone(), *func, args_vec, instance), || {
                     use crate::native_contract::{NativeContract, Token};
                     Token.call(func, self, args)
-                },
-            ),
+                })
+            }
         }
     }
 
@@ -753,13 +754,9 @@ impl Host {
             storage_map.as_ref().map_or_else(
                 || Ok(vec![]),
                 |m| {
-                    metered_clone::charge_heap_alloc::<(Val, Val)>(
-                        m.len() as u64,
-                        self.budget_ref(),
-                    )?;
                     m.iter()
                         .map(|i| Ok((self.to_host_val(&i.key)?, self.to_host_val(&i.val)?)))
-                        .collect::<Result<Vec<(Val, Val)>, HostError>>()
+                        .metered_collect::<Result<Vec<(Val, Val)>, HostError>>(self.as_budget())?
                 },
             )?,
             self,
