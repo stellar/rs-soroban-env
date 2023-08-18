@@ -185,7 +185,7 @@ impl Host {
         durability: ContractDataDurability,
     ) -> Result<Rc<LedgerKey>, HostError> {
         let contract_id = self.get_current_contract_id_internal()?;
-        Ok(self.storage_key_for_address(ScAddress::Contract(contract_id), key, durability)?)
+        self.storage_key_for_address(ScAddress::Contract(contract_id), key, durability)
     }
 
     // Notes on metering: covered by components.
