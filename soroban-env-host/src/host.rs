@@ -650,9 +650,27 @@ impl Host {
         contract_address: AddressObject,
         contract_fns: Rc<dyn ContractFunctionSet>,
     ) -> Result<(), HostError> {
-        let hash = self.contract_id_from_address(contract_address)?;
+        let contract_id = self.contract_id_from_address(contract_address)?;
+        let instance_key = self.contract_instance_ledger_key(&contract_id)?;
+        // Test contract might be overriding an already registered Wasm
+        // contract, in which case we should preserve the instance entry.
+        if self
+            .retrieve_contract_instance_from_storage(&instance_key)
+            .is_err()
+        {
+            // Use empty Wasm as default executable. It shouldn't be observable,
+            // but allows exercising bump logic and make operations like Wasm
+            // update more meaningful.
+            let wasm_hash_obj = self.upload_contract_wasm(vec![])?;
+            let wasm_hash = self.hash_from_bytesobj_input("wasm_hash", wasm_hash_obj)?;
+            let instance = ScContractInstance {
+                executable: ContractExecutable::Wasm(wasm_hash),
+                storage: None,
+            };
+            self.store_contract_instance(instance, contract_id.clone(), &instance_key)?;
+        };
         let mut contracts = self.try_borrow_contracts_mut()?;
-        contracts.insert(hash, contract_fns);
+        contracts.insert(contract_id, contract_fns);
         Ok(())
     }
 

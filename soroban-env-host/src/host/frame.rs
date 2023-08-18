@@ -16,8 +16,6 @@ use crate::{
 use crate::host::testutils;
 #[cfg(any(test, feature = "testutils"))]
 use core::cell::RefCell;
-#[cfg(any(test, feature = "testutils"))]
-use soroban_env_common::xdr::ScMap;
 use std::rc::Rc;
 
 use crate::Vm;
@@ -66,18 +64,18 @@ pub(crate) struct TestContractFrame {
     pub(crate) func: Symbol,
     pub(crate) args: Vec<Val>,
     pub(crate) panic: Rc<RefCell<Option<Error>>>,
-    pub(crate) storage: Option<ScMap>,
+    pub(crate) instance: ScContractInstance,
 }
 
 #[cfg(any(test, feature = "testutils"))]
 impl TestContractFrame {
-    pub fn new(id: Hash, func: Symbol, args: Vec<Val>, storage: Option<ScMap>) -> Self {
+    pub fn new(id: Hash, func: Symbol, args: Vec<Val>, instance: ScContractInstance) -> Self {
         Self {
             id,
             func,
             args,
             panic: Rc::new(RefCell::new(None)),
-            storage,
+            instance,
         }
     }
 }
@@ -455,9 +453,26 @@ impl Host {
         F: FnOnce() -> Result<Val, HostError>,
     {
         self.with_frame(
-            Frame::TestContract(TestContractFrame::new(id, func, vec![], None)),
+            Frame::TestContract(self.create_test_contract_frame(id, func, vec![])?),
             f,
         )
+    }
+
+    #[cfg(any(test, feature = "testutils"))]
+    fn create_test_contract_frame(
+        &self,
+        id: Hash,
+        func: Symbol,
+        args: Vec<Val>,
+    ) -> Result<TestContractFrame, HostError> {
+        let instance_key = self.contract_instance_ledger_key(&id)?;
+        let instance = self.retrieve_contract_instance_from_storage(&instance_key)?;
+        Ok(TestContractFrame::new(
+            id.clone(),
+            func,
+            args.to_vec(),
+            instance,
+        ))
     }
 
     // Notes on metering: this is covered by the called components.
@@ -562,11 +577,7 @@ impl Host {
             // maintains a borrow of self.0.contracts, which can cause borrow errors.
             let cfs_option = self.try_borrow_contracts()?.get(&id).cloned();
             if let Some(cfs) = cfs_option {
-                let instance_key = self.contract_instance_ledger_key(&id)?;
-                let storage = self
-                    .retrieve_contract_instance_from_storage(&instance_key)
-                    .map_or(None, |i| i.storage);
-                let frame = TestContractFrame::new(id.clone(), func, args.to_vec(), storage);
+                let frame = self.create_test_contract_frame(id.clone(), func, args.to_vec())?;
                 let panic = frame.panic.clone();
                 return self.with_frame(Frame::TestContract(frame), || {
                     use std::any::Any;
@@ -746,7 +757,7 @@ impl Host {
             }
             Frame::Token(_, _, _, instance) => &instance.storage,
             #[cfg(any(test, feature = "testutils"))]
-            Frame::TestContract(t) => &t.storage,
+            Frame::TestContract(t) => &t.instance.storage,
         };
 
         ctx.storage = Some(InstanceStorageMap::from_map(
@@ -792,7 +803,7 @@ impl Host {
                     // just a placeholder - it's not used for actually calling
                     // the test contracts.
                     #[cfg(any(test, feature = "testutils"))]
-                    Frame::TestContract(t) => ContractExecutable::Wasm(Hash(Default::default())),
+                    Frame::TestContract(t) => t.instance.executable.clone(),
                 };
                 Ok(Some(ScContractInstance {
                     executable,

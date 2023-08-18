@@ -21,8 +21,8 @@ use crate::{
 use ed25519_dalek::SigningKey;
 use soroban_env_common::{
     xdr::{
-        self, AccountFlags, InvokeContractArgs, ScAddress, ScSymbol, ScVal,
-        SorobanAuthorizedFunction, SorobanAuthorizedInvocation,
+        self, AccountFlags, ContractExecutable, InvokeContractArgs, ScAddress, ScContractInstance,
+        ScSymbol, ScVal, SorobanAuthorizedFunction, SorobanAuthorizedInvocation,
     },
     xdr::{
         AccountId, AlphaNum12, AlphaNum4, Asset, AssetCode12, AssetCode4, Hash, LedgerEntryData,
@@ -275,7 +275,10 @@ impl TokenTest {
                 Hash(contract_id_bytes.to_array().unwrap()),
                 Symbol::try_from_small_str("foo").unwrap(),
                 vec![],
-                None,
+                ScContractInstance {
+                    executable: ContractExecutable::Wasm(Hash(Default::default())),
+                    storage: None,
+                },
             )),
             || {
                 let res = f();
