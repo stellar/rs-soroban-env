@@ -153,9 +153,11 @@ impl Tag {
     pub fn rawval_const(&self) -> i64 {
         *self as i64
     }
+
+    #[inline(always)]
     pub const fn is_object(self) -> bool {
         let tu8 = self as u8;
-        tu8 > (Tag::ObjectCodeLowerBound as u8) || tu8 < (Tag::ObjectCodeUpperBound as u8)
+        tu8 > (Tag::ObjectCodeLowerBound as u8) && tu8 < (Tag::ObjectCodeUpperBound as u8)
     }
 
     #[inline(always)]
@@ -622,8 +624,7 @@ impl Val {
 
     #[inline(always)]
     pub const fn is_object(self) -> bool {
-        let tag = self.get_tag_u8();
-        tag > (Tag::ObjectCodeLowerBound as u8) && tag < (Tag::ObjectCodeUpperBound as u8)
+        self.get_tag().is_object()
     }
 
     #[inline(always)]
