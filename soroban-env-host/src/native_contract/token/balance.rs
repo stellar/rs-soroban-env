@@ -1,4 +1,5 @@
 use crate::budget::AsBudget;
+use crate::host::metered_clone::MeteredClone;
 use crate::host::Host;
 use crate::native_contract::base_types::{Address, BytesN};
 use crate::native_contract::contract_error::ContractError;
@@ -75,7 +76,7 @@ fn write_balance(e: &Host, addr: Address, balance: BalanceValue) -> Result<(), H
 
 // Metering: covered by components.
 pub fn receive_balance(e: &Host, addr: Address, amount: i128) -> Result<(), HostError> {
-    if !is_authorized(e, addr.clone())? {
+    if !is_authorized(e, addr.metered_clone(e)?)? {
         return Err(e.error(
             ContractError::BalanceDeauthorizedError.into(),
             "balance is deauthorized",
@@ -95,7 +96,7 @@ pub fn receive_balance(e: &Host, addr: Address, amount: i128) -> Result<(), Host
             Ok(transfer_classic_balance(e, acc_id, i64_amount)?)
         }
         ScAddress::Contract(_) => {
-            let key = DataKey::Balance(addr.clone());
+            let key = DataKey::Balance(addr.metered_clone(e)?);
             let mut balance = if let Some(raw_balance) =
                 StorageUtils::try_get(e, key.try_into_val(e)?, StorageType::Persistent)?
             {
@@ -143,7 +144,7 @@ pub fn spend_balance_no_authorization_check(
         ScAddress::Contract(_) => {
             // If a balance exists, calculate new amount and write the existing authorized state as is because
             // this can be used to clawback when deauthorized.
-            let key = DataKey::Balance(addr.clone());
+            let key = DataKey::Balance(addr.metered_clone(e)?);
             if let Some(raw_balance) =
                 StorageUtils::try_get(e, key.try_into_val(e)?, StorageType::Persistent)?
             {
@@ -183,7 +184,7 @@ pub fn spend_balance_no_authorization_check(
 
 // Metering: covered by components.
 pub fn spend_balance(e: &Host, addr: Address, amount: i128) -> Result<(), HostError> {
-    if !is_authorized(e, addr.clone())? {
+    if !is_authorized(e, addr.metered_clone(e)?)? {
         return Err(e.error(
             ContractError::BalanceDeauthorizedError.into(),
             "balance is deauthorized",
@@ -225,7 +226,7 @@ pub fn write_authorization(e: &Host, addr: Address, authorize: bool) -> Result<(
     match addr.to_sc_address()? {
         ScAddress::Account(acc_id) => set_authorization(e, acc_id, authorize),
         ScAddress::Contract(_) => {
-            let key = DataKey::Balance(addr.clone());
+            let key = DataKey::Balance(addr.metered_clone(e)?);
             if let Some(raw_balance) =
                 StorageUtils::try_get(e, key.try_into_val(e)?, StorageType::Persistent)?
             {
@@ -278,7 +279,10 @@ pub fn check_clawbackable(e: &Host, addr: Address) -> Result<(), HostError> {
             AssetInfo::AlphaNum4(asset) => {
                 let issuer_account_id = e.account_id_from_bytesobj(asset.issuer.into())?;
                 validate_trustline(
-                    e.create_asset_4(asset.asset_code.to_array()?, issuer_account_id.clone()),
+                    e.create_asset_4(
+                        asset.asset_code.to_array()?,
+                        issuer_account_id.metered_clone(e)?,
+                    ),
                     issuer_account_id,
                     acc_id,
                 )
@@ -286,7 +290,10 @@ pub fn check_clawbackable(e: &Host, addr: Address) -> Result<(), HostError> {
             AssetInfo::AlphaNum12(asset) => {
                 let issuer_account_id = e.account_id_from_bytesobj(asset.issuer.into())?;
                 validate_trustline(
-                    e.create_asset_12(asset.asset_code.to_array()?, issuer_account_id.clone()),
+                    e.create_asset_12(
+                        asset.asset_code.to_array()?,
+                        issuer_account_id.metered_clone(e)?,
+                    ),
                     issuer_account_id,
                     acc_id,
                 )
@@ -337,7 +344,10 @@ pub fn transfer_classic_balance(e: &Host, to_key: AccountId, amount: i64) -> Res
         AssetInfo::AlphaNum4(asset) => {
             let issuer_account_id = e.account_id_from_bytesobj(asset.issuer.into())?;
             transfer_trustline_balance_safe(
-                e.create_asset_4(asset.asset_code.to_array()?, issuer_account_id.clone()),
+                e.create_asset_4(
+                    asset.asset_code.to_array()?,
+                    issuer_account_id.metered_clone(e)?,
+                ),
                 issuer_account_id,
                 to_key,
             )?
@@ -345,7 +355,10 @@ pub fn transfer_classic_balance(e: &Host, to_key: AccountId, amount: i64) -> Res
         AssetInfo::AlphaNum12(asset) => {
             let issuer_account_id = e.account_id_from_bytesobj(asset.issuer.into())?;
             transfer_trustline_balance_safe(
-                e.create_asset_12(asset.asset_code.to_array()?, issuer_account_id.clone()),
+                e.create_asset_12(
+                    asset.asset_code.to_array()?,
+                    issuer_account_id.metered_clone(e)?,
+                ),
                 issuer_account_id,
                 to_key,
             )?
@@ -373,7 +386,10 @@ fn get_classic_balance(e: &Host, to_key: AccountId) -> Result<(i64, i64), HostEr
         AssetInfo::AlphaNum4(asset) => {
             let issuer_account_id = e.account_id_from_bytesobj(asset.issuer.into())?;
             get_trustline_balance_safe(
-                e.create_asset_4(asset.asset_code.to_array()?, issuer_account_id.clone()),
+                e.create_asset_4(
+                    asset.asset_code.to_array()?,
+                    issuer_account_id.metered_clone(e)?,
+                ),
                 issuer_account_id,
                 to_key,
             )
@@ -382,7 +398,10 @@ fn get_classic_balance(e: &Host, to_key: AccountId) -> Result<(i64, i64), HostEr
         AssetInfo::AlphaNum12(asset) => {
             let issuer_account_id = e.account_id_from_bytesobj(asset.issuer.into())?;
             get_trustline_balance_safe(
-                e.create_asset_12(asset.asset_code.to_array()?, issuer_account_id.clone()),
+                e.create_asset_12(
+                    asset.asset_code.to_array()?,
+                    issuer_account_id.metered_clone(e)?,
+                ),
                 issuer_account_id,
                 to_key,
             )
@@ -392,7 +411,7 @@ fn get_classic_balance(e: &Host, to_key: AccountId) -> Result<(i64, i64), HostEr
 
 // Metering: *mostly* covered by components. The arithmetics are free.
 fn transfer_account_balance(e: &Host, account_id: AccountId, amount: i64) -> Result<(), HostError> {
-    let lk = e.to_account_key(account_id);
+    let lk = e.to_account_key(account_id)?;
 
     e.with_mut_storage(|storage| {
         let mut le = storage
@@ -400,7 +419,7 @@ fn transfer_account_balance(e: &Host, account_id: AccountId, amount: i64) -> Res
             .map_err(|_| e.error(ContractError::AccountMissingError.into(), "account missing", &[]))?;
 
         let mut ae = match &le.data {
-            LedgerEntryData::Account(ae) => Ok(ae.clone()),
+            LedgerEntryData::Account(ae) => Ok(ae.metered_clone(e)?),
             _ => Err(e.error(ContractError::InternalError.into(), "unexpected entry found", &[])),
         }?;
 
@@ -411,7 +430,7 @@ fn transfer_account_balance(e: &Host, account_id: AccountId, amount: i64) -> Res
         };
         if new_balance >= min_balance && new_balance <= max_balance {
             ae.balance = new_balance;
-            le = Host::ledger_entry_from_data(LedgerEntryData::Account(ae));
+            le = Host::ledger_entry_from_data(e, LedgerEntryData::Account(ae))?;
             storage.put(&lk, &le, e.as_budget())
         } else {
             Err(err!(
@@ -433,14 +452,14 @@ fn transfer_trustline_balance(
     asset: TrustLineAsset,
     amount: i64,
 ) -> Result<(), HostError> {
-    let lk = e.to_trustline_key(account_id, asset);
+    let lk = e.to_trustline_key(account_id, asset)?;
     e.with_mut_storage(|storage| {
         let mut le = storage.get(&lk, e.as_budget()).map_err(|_| {
             e.error(ContractError::TrustlineMissingError.into(), "trustline missing", &[])
         })?;
 
         let mut tl = match &le.data {
-            LedgerEntryData::Trustline(tl) => Ok(tl.clone()),
+            LedgerEntryData::Trustline(tl) => Ok(tl.metered_clone(e)?),
             _ => Err(e.error(ContractError::InternalError.into(), "unexpected entry found", &[])),
         }?;
 
@@ -451,7 +470,7 @@ fn transfer_trustline_balance(
         };
         if new_balance >= min_balance && new_balance <= max_balance {
             tl.balance = new_balance;
-            le = Host::ledger_entry_from_data(LedgerEntryData::Trustline(tl));
+            le = Host::ledger_entry_from_data(e, LedgerEntryData::Trustline(tl))?;
             storage.put(&lk, &le, e.as_budget())
         } else {
             Err(err!(
@@ -469,7 +488,7 @@ fn transfer_trustline_balance(
 // TODO: Metering analysis
 //returns (total balance, spendable balance)
 fn get_account_balance(e: &Host, account_id: AccountId) -> Result<(i64, i64), HostError> {
-    let lk = e.to_account_key(account_id);
+    let lk = e.to_account_key(account_id)?;
 
     e.with_mut_storage(|storage| {
         let le = storage.get(&lk, e.as_budget()).map_err(|_| {
@@ -537,7 +556,7 @@ fn get_trustline_balance(
     account_id: AccountId,
     asset: TrustLineAsset,
 ) -> Result<(i64, i64), HostError> {
-    let lk = e.to_trustline_key(account_id, asset);
+    let lk = e.to_trustline_key(account_id, asset)?;
     e.with_mut_storage(|storage| {
         let le = storage.get(&lk, e.as_budget()).map_err(|_| {
             e.error(
@@ -548,7 +567,7 @@ fn get_trustline_balance(
         })?;
 
         let tl = match &le.data {
-            LedgerEntryData::Trustline(tl) => Ok(tl.clone()),
+            LedgerEntryData::Trustline(tl) => Ok(tl.metered_clone(e)?),
             _ => Err(e.error(
                 ContractError::InternalError.into(),
                 "unexpected entry found",
@@ -611,7 +630,10 @@ fn is_account_authorized(e: &Host, account_id: AccountId) -> Result<bool, HostEr
         AssetInfo::AlphaNum4(asset) => {
             let issuer_account_id = e.account_id_from_bytesobj(asset.issuer.into())?;
             is_trustline_authorized_safe(
-                e.create_asset_4(asset.asset_code.to_array()?, issuer_account_id.clone()),
+                e.create_asset_4(
+                    asset.asset_code.to_array()?,
+                    issuer_account_id.metered_clone(e)?,
+                ),
                 issuer_account_id,
                 account_id,
             )
@@ -619,7 +641,10 @@ fn is_account_authorized(e: &Host, account_id: AccountId) -> Result<bool, HostEr
         AssetInfo::AlphaNum12(asset) => {
             let issuer_account_id = e.account_id_from_bytesobj(asset.issuer.into())?;
             is_trustline_authorized_safe(
-                e.create_asset_12(asset.asset_code.to_array()?, issuer_account_id.clone()),
+                e.create_asset_12(
+                    asset.asset_code.to_array()?,
+                    issuer_account_id.metered_clone(e)?,
+                ),
                 issuer_account_id,
                 account_id,
             )
@@ -633,7 +658,7 @@ fn get_trustline_flags(
     account_id: AccountId,
     asset: TrustLineAsset,
 ) -> Result<u32, HostError> {
-    let lk = e.to_trustline_key(account_id, asset);
+    let lk = e.to_trustline_key(account_id, asset)?;
     e.with_mut_storage(|storage| {
         let le = storage.get(&lk, e.as_budget()).map_err(|_| {
             e.error(
@@ -689,7 +714,10 @@ fn set_authorization(e: &Host, to_key: AccountId, authorize: bool) -> Result<(),
         AssetInfo::AlphaNum4(asset) => {
             let issuer_account_id = e.account_id_from_bytesobj(asset.issuer.into())?;
             set_trustline_authorization_safe(
-                e.create_asset_4(asset.asset_code.to_array()?, issuer_account_id.clone()),
+                e.create_asset_4(
+                    asset.asset_code.to_array()?,
+                    issuer_account_id.metered_clone(e)?,
+                ),
                 issuer_account_id,
                 to_key,
             )
@@ -697,7 +725,10 @@ fn set_authorization(e: &Host, to_key: AccountId, authorize: bool) -> Result<(),
         AssetInfo::AlphaNum12(asset) => {
             let issuer_account_id = e.account_id_from_bytesobj(asset.issuer.into())?;
             set_trustline_authorization_safe(
-                e.create_asset_12(asset.asset_code.to_array()?, issuer_account_id.clone()),
+                e.create_asset_12(
+                    asset.asset_code.to_array()?,
+                    issuer_account_id.metered_clone(e)?,
+                ),
                 issuer_account_id,
                 to_key,
             )
@@ -712,7 +743,7 @@ fn set_trustline_authorization(
     asset: TrustLineAsset,
     authorize: bool,
 ) -> Result<(), HostError> {
-    let lk = e.to_trustline_key(account_id, asset);
+    let lk = e.to_trustline_key(account_id, asset)?;
     e.with_mut_storage(|storage| {
         let mut le = storage.get(&lk, e.as_budget()).map_err(|_| {
             e.error(
@@ -723,7 +754,7 @@ fn set_trustline_authorization(
         })?;
 
         let mut tl = match &le.data {
-            LedgerEntryData::Trustline(tl) => Ok(tl.clone()),
+            LedgerEntryData::Trustline(tl) => Ok(tl.metered_clone(e)?),
             _ => Err(e.error(
                 ContractError::InternalError.into(),
                 "unexpected entry found",
@@ -740,7 +771,7 @@ fn set_trustline_authorization(
             tl.flags &= !(TrustLineFlags::AuthorizedFlag as u32);
             tl.flags |= TrustLineFlags::AuthorizedToMaintainLiabilitiesFlag as u32;
         }
-        le = Host::ledger_entry_from_data(LedgerEntryData::Trustline(tl));
+        le = Host::ledger_entry_from_data(e, LedgerEntryData::Trustline(tl))?;
         storage.put(&lk, &le, e.as_budget())
     })
 }

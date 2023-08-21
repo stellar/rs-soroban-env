@@ -19,7 +19,7 @@ macro_rules! impl_wrapping_obj_to_num {
             _vmcaller: &mut VmCaller<Host>,
             obj: <$data as HostObjectType>::Wrapper,
         ) -> Result<$num, HostError> {
-            self.visit_obj(obj, |t: &$data| Ok(t.clone().into()))
+            self.visit_obj(obj, |t: &$data| Ok(t.metered_clone(self)?.into()))
         }
     };
 }

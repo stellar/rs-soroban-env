@@ -7,12 +7,12 @@ fn vec_as_seen_by_user() -> Result<(), HostError> {
     let host = Host::default();
     let int1 = host.obj_from_i64(5)?;
 
-    let vec1a = host.vec_new(Val::from_void().into())?;
+    let vec1a = host.vec_new()?;
     let vec1b = host.vec_push_back(vec1a, *int1.as_ref())?;
 
     assert_ne!(vec1a.as_val().get_payload(), vec1b.as_val().get_payload());
 
-    let vec2a = host.vec_new(Val::from_void().into())?;
+    let vec2a = host.vec_new()?;
     let vec2b = host.vec_push_back(vec2a, *int1.as_ref())?;
 
     assert_ne!(vec2a.as_val().get_payload(), vec2b.as_val().get_payload());

@@ -6,9 +6,10 @@ use crate::{
     events::{EventError, HostEvent, InternalContractEvent, InternalEvent},
     host::{frame::Context, Events},
     host_object::HostObject,
+    native_contract::base_types::Address,
     storage::AccessType,
     xdr::{
-        AccountEntry, AccountId, BytesM, ClaimableBalanceEntry, ConfigSettingEntry,
+        AccountEntry, AccountId, Asset, BytesM, ClaimableBalanceEntry, ConfigSettingEntry,
         ContractCodeEntry, ContractDataDurability, ContractEntryBodyType, ContractEvent,
         ContractExecutable, ContractIdPreimage, CreateContractArgs, DataEntry, Duration,
         ExtensionPoint, Hash, LedgerEntry, LedgerEntryExt, LedgerKey, LedgerKeyAccount,
@@ -103,6 +104,7 @@ impl_declared_size_type!(I256, 32);
 impl_declared_size_type!(HostObject, 48);
 impl_declared_size_type!(HostError, 16);
 impl_declared_size_type!(Context, 512);
+impl_declared_size_type!(Address, 16);
 // xdr types
 impl_declared_size_type!(TimePoint, 8);
 impl_declared_size_type!(Duration, 8);
@@ -162,6 +164,7 @@ impl_declared_size_type!(AccountAuthorizationTracker, 232);
 impl_declared_size_type!(InvokerContractAuthorizationTracker, 192);
 impl_declared_size_type!(AccountAuthorizationTrackerSnapshot, 40);
 impl_declared_size_type!(ContractInvocation, 16);
+impl_declared_size_type!(Asset, 45);
 
 // composite types
 
@@ -299,6 +302,7 @@ mod test {
         expect!["512"].assert_eq(size_of::<Context>().to_string().as_str());
         #[cfg(target_arch = "aarch64")]
         expect!["488"].assert_eq(size_of::<Context>().to_string().as_str());
+        expect!["16"].assert_eq(size_of::<Address>().to_string().as_str());
         // xdr types
         expect!["8"].assert_eq(size_of::<TimePoint>().to_string().as_str());
         expect!["8"].assert_eq(size_of::<Duration>().to_string().as_str());
@@ -376,6 +380,7 @@ mod test {
                 .as_str(),
         );
         expect!["16"].assert_eq(size_of::<ContractInvocation>().to_string().as_str());
+        expect!["45"].assert_eq(size_of::<Asset>().to_string().as_str());
         // composite types
         expect!["16"].assert_eq(size_of::<&[ScVal]>().to_string().as_str());
         expect!["72"].assert_eq(size_of::<(Val, ScVal)>().to_string().as_str());
@@ -464,6 +469,7 @@ mod test {
         assert_mem_size_le_declared_size!(HostObject);
         assert_mem_size_le_declared_size!(HostError);
         assert_mem_size_le_declared_size!(Context);
+        assert_mem_size_le_declared_size!(Address);
         // xdr types
         assert_mem_size_le_declared_size!(TimePoint);
         assert_mem_size_le_declared_size!(Duration);
@@ -520,6 +526,7 @@ mod test {
         assert_mem_size_le_declared_size!(InvokerContractAuthorizationTracker);
         assert_mem_size_le_declared_size!(AccountAuthorizationTrackerSnapshot);
         assert_mem_size_le_declared_size!(ContractInvocation);
+        assert_mem_size_le_declared_size!(Asset);
         // composite types
         assert_mem_size_le_declared_size!(&[ScVal]);
         assert_mem_size_le_declared_size!((Val, ScVal));

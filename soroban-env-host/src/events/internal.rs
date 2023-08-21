@@ -179,7 +179,7 @@ impl InternalEventsBuffer {
                     // the resulting buffer length may be different on different instances
                     // (due to diagnostic events) and we need a deterministic cost across all
                     // instances, the cost needs to be amortized and buffer size-independent.
-                    Vec::<HostEvent>::charge_bulk_init_cpy(1, host.as_budget())?;
+                    Vec::<HostEvent>::charge_bulk_init_cpy(1, host)?;
                     Ok(HostEvent {
                         event: c.to_xdr(host)?,
                         failed_call: e.1 == EventError::FromFailedCall,

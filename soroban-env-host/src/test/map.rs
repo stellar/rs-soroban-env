@@ -5,13 +5,15 @@ use soroban_env_common::{
         AccountId, LedgerEntry, LedgerKey, LedgerKeyAccount, PublicKey, ScErrorCode, ScErrorType,
         Uint256,
     },
-    MapObject,
+    MapObject, U32Val,
 };
 
 use crate::{
     xdr::{ScMap, ScMapEntry, ScVal, ScVec, VecM},
     Env, Error, Host, HostError, Symbol, TryFromVal, Val,
 };
+
+const MAP_OOB: Error = Error::from_type_and_code(ScErrorType::Object, ScErrorCode::IndexBounds);
 
 #[test]
 fn map_put_has_and_get() -> Result<(), HostError> {
@@ -101,7 +103,7 @@ fn map_put_insert_and_remove() -> Result<(), HostError> {
 }
 
 #[test]
-fn map_prev_and_next() -> Result<(), HostError> {
+fn map_iter_by_index() -> Result<(), HostError> {
     let host = Host::default();
     let scmap: ScMap = host.map_err(
         vec![
@@ -118,65 +120,38 @@ fn map_prev_and_next() -> Result<(), HostError> {
     )?;
     let scobj = ScVal::Map(Some(scmap));
     let obj: MapObject = host.to_host_val(&scobj)?.try_into()?;
-    // prev
-    {
-        assert_eq!(
-            host.map_prev_key(obj, 0_u32.into())?.get_payload(),
-            Error::from_type_and_code(ScErrorType::Object, ScErrorCode::IndexBounds)
-                .to_val()
-                .get_payload()
-        );
-        assert_eq!(
-            host.map_prev_key(obj, 1_u32.into())?.get_payload(),
-            Error::from_type_and_code(ScErrorType::Object, ScErrorCode::IndexBounds)
-                .to_val()
-                .get_payload()
-        );
-        assert_eq!(
-            host.map_prev_key(obj, 2_u32.into())?.get_payload(),
-            Val::from_u32(1).to_val().get_payload()
-        );
-        assert_eq!(
-            host.map_prev_key(obj, 4_u32.into())?.get_payload(),
-            Val::from_u32(1).to_val().get_payload()
-        );
-        assert_eq!(
-            host.map_prev_key(obj, 5_u32.into())?.get_payload(),
-            Val::from_u32(4).to_val().get_payload()
-        );
-    }
-    // next
-    {
-        assert_eq!(
-            host.map_next_key(obj, 5_u32.into())?.get_payload(),
-            Error::from_type_and_code(ScErrorType::Object, ScErrorCode::IndexBounds)
-                .to_val()
-                .get_payload()
-        );
-        assert_eq!(
-            host.map_next_key(obj, 4_u32.into())?.get_payload(),
-            Error::from_type_and_code(ScErrorType::Object, ScErrorCode::IndexBounds)
-                .to_val()
-                .get_payload()
-        );
-        assert_eq!(
-            host.map_next_key(obj, 3_u32.into())?.get_payload(),
-            Val::from_u32(4).to_val().get_payload()
-        );
-        assert_eq!(
-            host.map_next_key(obj, 1_u32.into())?.get_payload(),
-            Val::from_u32(4).to_val().get_payload()
-        );
-        assert_eq!(
-            host.map_next_key(obj, 0_u32.into())?.get_payload(),
-            Val::from_u32(1).to_val().get_payload()
-        );
-    }
+    // get keys
+    assert_eq!(
+        host.map_key_by_pos(obj, U32Val::from(0))?.get_payload(),
+        U32Val::from(1).to_val().get_payload()
+    );
+    assert_eq!(
+        host.map_key_by_pos(obj, U32Val::from(1))?.get_payload(),
+        U32Val::from(4).to_val().get_payload()
+    );
+    assert!(HostError::result_matches_err(
+        host.map_key_by_pos(obj, U32Val::from(2)),
+        MAP_OOB
+    ));
+    // get vals
+    assert_eq!(
+        host.map_val_by_pos(obj, U32Val::from(0))?.get_payload(),
+        U32Val::from(2).to_val().get_payload()
+    );
+    assert_eq!(
+        host.map_val_by_pos(obj, U32Val::from(1))?.get_payload(),
+        U32Val::from(8).to_val().get_payload()
+    );
+    assert!(HostError::result_matches_err(
+        host.map_val_by_pos(obj, U32Val::from(2)),
+        MAP_OOB
+    ));
+
     Ok(())
 }
 
 #[test]
-fn map_prev_and_next_heterogeneous() -> Result<(), HostError> {
+fn hetro_map_iter_by_index() -> Result<(), HostError> {
     let host = Host::default();
     let scmap: ScMap = host.map_err(
         vec![ScMapEntry {
@@ -195,59 +170,62 @@ fn map_prev_and_next_heterogeneous() -> Result<(), HostError> {
     let obj_vec = host.to_host_val(&scobj_vec)?;
 
     let mut test_map = host.map_new()?;
-    test_map = host.map_put(test_map, 2u32.into(), 4u32.into())?;
-    test_map = host.map_put(test_map, obj_map, 4u32.into())?;
-    test_map = host.map_put(test_map, obj_vec, 4u32.into())?;
+    test_map = host.map_put(test_map, 2u32.into(), 1u32.into())?;
+    test_map = host.map_put(test_map, obj_map, 2u32.into())?;
+    test_map = host.map_put(test_map, obj_vec, 3u32.into())?;
     test_map = host.map_put(test_map, sym.into(), 4u32.into())?;
     // The key ordering should be [u32, symbol, vec, map]
-    // prev
     {
+        assert!(HostError::result_matches_err(
+            host.map_key_by_pos(test_map, U32Val::from(4)),
+            MAP_OOB
+        ));
         assert_eq!(
-            host.map_prev_key(test_map, 0_u32.into())?.get_payload(),
-            Error::from_type_and_code(ScErrorType::Object, ScErrorCode::IndexBounds)
-                .to_val()
-                .get_payload()
-        );
-        assert_eq!(
-            host.map_prev_key(test_map, 4_u32.into())?.get_payload(),
+            host.map_key_by_pos(test_map, U32Val::from(0))?
+                .get_payload(),
             Val::from_u32(2).to_val().get_payload()
         );
         assert_eq!(
-            host.map_prev_key(test_map, sym.into())?.get_payload(),
-            Val::from_u32(2).to_val().get_payload()
-        );
-        assert_eq!(
-            host.map_prev_key(test_map, obj_vec)?.get_payload(),
+            host.map_key_by_pos(test_map, U32Val::from(1))?
+                .get_payload(),
             sym.as_val().get_payload()
         );
         assert_eq!(
-            host.map_prev_key(test_map, obj_map)?.get_payload(),
-            obj_vec.get_payload()
-        );
-    }
-    // next
-    {
-        assert_eq!(
-            host.map_next_key(test_map, 0_u32.into())?.get_payload(),
-            Val::from_u32(2).to_val().get_payload()
-        );
-        assert_eq!(
-            host.map_next_key(test_map, 4_u32.into())?.get_payload(),
-            sym.as_val().get_payload()
-        );
-        assert_eq!(
-            host.map_next_key(test_map, sym.into())?.get_payload(),
+            host.map_key_by_pos(test_map, U32Val::from(2))?
+                .get_payload(),
             obj_vec.get_payload()
         );
         assert_eq!(
-            host.map_next_key(test_map, obj_vec)?.get_payload(),
+            host.map_key_by_pos(test_map, U32Val::from(3))?
+                .get_payload(),
             obj_map.get_payload()
         );
+    }
+    // The val ordering should be [1u32, 4u32, 3u32, 2u32]
+    {
+        assert!(HostError::result_matches_err(
+            host.map_val_by_pos(test_map, U32Val::from(4)),
+            MAP_OOB
+        ));
         assert_eq!(
-            host.map_next_key(test_map, obj_map)?.get_payload(),
-            Error::from_type_and_code(ScErrorType::Object, ScErrorCode::IndexBounds)
-                .to_val()
-                .get_payload()
+            host.map_val_by_pos(test_map, U32Val::from(0))?
+                .get_payload(),
+            Val::from_u32(1).to_val().get_payload()
+        );
+        assert_eq!(
+            host.map_val_by_pos(test_map, U32Val::from(1))?
+                .get_payload(),
+            Val::from_u32(4).to_val().get_payload()
+        );
+        assert_eq!(
+            host.map_val_by_pos(test_map, U32Val::from(2))?
+                .get_payload(),
+            Val::from_u32(3).to_val().get_payload()
+        );
+        assert_eq!(
+            host.map_val_by_pos(test_map, U32Val::from(3))?
+                .get_payload(),
+            Val::from_u32(2).to_val().get_payload()
         );
     }
 

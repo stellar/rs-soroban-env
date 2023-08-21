@@ -22,7 +22,7 @@ use crate::Vm;
 
 use super::{
     invoker_type::InvokerType,
-    metered_clone::{self, MeteredClone, MeteredContainer},
+    metered_clone::{MeteredClone, MeteredContainer, MeteredIterator},
     prng::Prng,
 };
 
@@ -134,7 +134,7 @@ impl Host {
         Vec::<Context>::charge_bulk_init_cpy(1, self.as_budget())?;
         self.try_borrow_context_mut()?.push(ctx);
         Ok(RollbackPoint {
-            storage: self.try_borrow_storage()?.map.clone(),
+            storage: self.try_borrow_storage()?.map.metered_clone(self)?,
             events: self.try_borrow_events()?.vec.len(),
             auth: auth_snapshot,
         })
@@ -361,11 +361,11 @@ impl Host {
     /// frame at its top.
     pub(crate) fn get_current_contract_id_opt_internal(&self) -> Result<Option<Hash>, HostError> {
         self.with_current_frame(|frame| match frame {
-            Frame::ContractVM { vm, .. } => Ok(Some(vm.contract_id.metered_clone(&self.0.budget)?)),
+            Frame::ContractVM { vm, .. } => Ok(Some(vm.contract_id.metered_clone(self)?)),
             Frame::HostFunction(_) => Ok(None),
-            Frame::Token(id, ..) => Ok(Some(id.metered_clone(&self.0.budget)?)),
+            Frame::Token(id, ..) => Ok(Some(id.metered_clone(self)?)),
             #[cfg(any(test, feature = "testutils"))]
-            Frame::TestContract(tc) => Ok(Some(tc.id.clone())),
+            Frame::TestContract(tc) => Ok(Some(tc.id.metered_clone(self)?)),
         })
     }
 
@@ -390,16 +390,16 @@ impl Host {
         // the previous frame must exist and must be a contract
         let hash = match frames.as_slice() {
             [.., c2, _] => match &c2.frame {
-                Frame::ContractVM { vm, .. } => Ok(vm.contract_id.metered_clone(&self.0.budget)?),
+                Frame::ContractVM { vm, .. } => Ok(vm.contract_id.metered_clone(self)?),
                 Frame::HostFunction(_) => Err(self.err(
                     ScErrorType::Context,
                     ScErrorCode::UnexpectedType,
                     "invoker is not a contract",
                     &[],
                 )),
-                Frame::Token(id, ..) => Ok(id.clone()),
+                Frame::Token(id, ..) => Ok(id.metered_clone(self)?),
                 #[cfg(any(test, feature = "testutils"))]
-                Frame::TestContract(tc) => Ok(tc.id.clone()), // no metering
+                Frame::TestContract(tc) => Ok(tc.id.metered_clone(self)?), // no metering
             },
             _ => Err(self.err(
                 ScErrorType::Context,
@@ -482,20 +482,18 @@ impl Host {
         let instance = self
             .retrieve_contract_instance_from_storage(&storage_key)
             .map_err(|e| self.decorate_contract_instance_storage_error(e, &id))?;
+        Vec::<Val>::charge_bulk_init_cpy(args.len() as u64, self.as_budget())?;
+        let args_vec = args.to_vec();
         match &instance.executable {
             ContractExecutable::Wasm(wasm_hash) => {
                 let code_entry = self.retrieve_wasm_from_storage(&wasm_hash)?;
-                let vm = Vm::new(
-                    self,
-                    id.metered_clone(&self.0.budget)?,
-                    code_entry.as_slice(),
-                )?;
+                let vm = Vm::new(self, id.metered_clone(self)?, code_entry.as_slice())?;
                 let relative_objects = Vec::new();
                 self.with_frame(
                     Frame::ContractVM {
-                        vm: vm.clone(),
+                        vm: Rc::clone(&vm),
                         fn_name: *func,
-                        args: args.to_vec(),
+                        args: args_vec,
                         instance,
                         relative_objects,
                     },
@@ -503,7 +501,7 @@ impl Host {
                 )
             }
             ContractExecutable::Token => self.with_frame(
-                Frame::Token(id.clone(), *func, args.to_vec(), instance),
+                Frame::Token(id.metered_clone(self)?, *func, args_vec, instance),
                 || {
                     use crate::native_contract::{NativeContract, Token};
                     Token.call(func, self, args)
@@ -714,11 +712,7 @@ impl Host {
                 self.with_frame(Frame::HostFunction(hf_type), || {
                     let deployer: Option<AddressObject> = match &args.contract_id_preimage {
                         ContractIdPreimage::Address(preimage_from_addr) => Some(
-                            self.add_host_object(
-                                preimage_from_addr
-                                    .address
-                                    .metered_clone(self.budget_ref())?,
-                            )?,
+                            self.add_host_object(preimage_from_addr.address.metered_clone(self)?)?,
                         ),
                         ContractIdPreimage::Asset(_) => None,
                     };
@@ -764,13 +758,9 @@ impl Host {
             storage_map.as_ref().map_or_else(
                 || Ok(vec![]),
                 |m| {
-                    metered_clone::charge_heap_alloc::<(Val, Val)>(
-                        m.len() as u64,
-                        self.budget_ref(),
-                    )?;
                     m.iter()
                         .map(|i| Ok((self.to_host_val(&i.key)?, self.to_host_val(&i.val)?)))
-                        .collect::<Result<Vec<(Val, Val)>, HostError>>()
+                        .metered_collect::<Result<Vec<(Val, Val)>, HostError>>(self)?
                 },
             )?,
             self,
@@ -786,7 +776,7 @@ impl Host {
                 }
                 let executable = match &ctx.frame {
                     Frame::ContractVM { instance, .. } => {
-                        instance.executable.metered_clone(self.budget_ref())?
+                        instance.executable.metered_clone(self)?
                     }
                     Frame::HostFunction(_) => {
                         return Err(self.err(
@@ -796,9 +786,7 @@ impl Host {
                             &[],
                         ))
                     }
-                    Frame::Token(_, _, _, instance) => {
-                        instance.executable.metered_clone(self.budget_ref())?
-                    }
+                    Frame::Token(_, _, _, instance) => instance.executable.metered_clone(self)?,
                     // Mock executable for test contract 'instances'. This is
                     // just a placeholder - it's not used for actually calling
                     // the test contracts.

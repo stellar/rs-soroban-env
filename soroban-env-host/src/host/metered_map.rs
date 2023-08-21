@@ -4,9 +4,11 @@ use super::{declared_size::DeclaredSizeForMetering, MeteredClone};
 use crate::{
     budget::{AsBudget, Budget},
     xdr::ContractCostType,
-    Compare, Host, HostError,
+    Compare, Error, Host, HostError,
 };
 use std::{borrow::Borrow, cmp::Ordering, marker::PhantomData};
+
+const MAP_OOB: Error = Error::from_type_and_code(ScErrorType::Object, ScErrorCode::IndexBounds);
 
 pub struct MeteredOrdMap<K, V, Ctx> {
     pub(crate) map: Vec<(K, V)>,
@@ -85,7 +87,7 @@ where
 
     pub fn from_map(map: Vec<(K, V)>, ctx: &Ctx) -> Result<Self, HostError> {
         if u32::try_from(map.len()).is_err() {
-            return Err((ScErrorType::Object, ScErrorCode::ExceededLimit).into());
+            return Err(MAP_OOB.into());
         }
         // Allocation cost already paid for by caller, here just checks that input
         // has sorted and unique keys.
@@ -113,14 +115,18 @@ where
     ) -> Result<Self, HostError> {
         let _span = tracy_span!("new map");
         if let (_, Some(sz)) = iter.size_hint() {
-            // It's possible we temporarily go over-budget here before charging, but
-            // only by the cost of temporarily allocating twice the size of our largest
-            // possible object. In exchange we get to batch all charges associated with
-            // the clone into one (when A::IS_SHALLOW==true).
-            let map: Vec<(K, V)> = iter.collect();
-            map.charge_deep_clone(ctx.as_budget())?;
-            // Delegate to from_map here to recheck sort order.
-            Self::from_map(map, ctx)
+            if u32::try_from(sz).is_err() {
+                Err(MAP_OOB.into())
+            } else {
+                // It's possible we temporarily go over-budget here before charging, but
+                // only by the cost of temporarily allocating twice the size of our largest
+                // possible object. In exchange we get to batch all charges associated with
+                // the clone into one (when A::IS_SHALLOW==true).
+                let map: Vec<(K, V)> = iter.collect();
+                map.charge_deep_clone(ctx.as_budget())?;
+                // Delegate to from_map here to recheck sort order.
+                Self::from_map(map, ctx)
+            }
         } else {
             // This is a logic error, we should never get here.
             Err((ScErrorType::Object, ScErrorCode::InternalError).into())
@@ -163,7 +169,7 @@ where
                 // take(1) + new + skip(2)
                 // [0] + new + [2]
                 if replace_pos == usize::MAX - 1 {
-                    return Err((ScErrorType::Value, ScErrorCode::ArithDomain).into());
+                    return Err(MAP_OOB.into());
                 }
                 let init = self.map.iter().take(replace_pos).cloned();
                 let fini = self.map.iter().skip(replace_pos + 1).cloned();
@@ -174,10 +180,14 @@ where
                 // [0,1,2] insert_pos == 1
                 // take(1) + new + skip(1)
                 // [0] new [1, 2]
-                let init = self.map.iter().take(insert_pos).cloned();
-                let fini = self.map.iter().skip(insert_pos).cloned();
-                let iter = init.chain([(key, value)].into_iter()).chain(fini);
-                Self::from_exact_iter(iter, ctx)
+                if self.len() == u32::MAX as usize {
+                    return Err(MAP_OOB.into());
+                } else {
+                    let init = self.map.iter().take(insert_pos).cloned();
+                    let fini = self.map.iter().skip(insert_pos).cloned();
+                    let iter = init.chain([(key, value)].into_iter()).chain(fini);
+                    Self::from_exact_iter(iter, ctx)
+                }
             }
         }
     }
@@ -194,6 +204,13 @@ where
             }
             _ => Ok(None),
         }
+    }
+
+    pub fn get_at_index(&self, index: usize, ctx: &Ctx) -> Result<&(K, V), HostError> {
+        self.charge_access(1, ctx)?;
+        self.map.get(index).ok_or_else(|| {
+            Error::from_type_and_code(ScErrorType::Object, ScErrorCode::IndexBounds).into()
+        })
     }
 
     /// Returns a `Some((new_self, val))` pair where `new_self` no longer
@@ -323,7 +340,7 @@ where
     V: MeteredClone,
     Ctx: AsBudget,
 {
-    fn charge_for_substructure(&self, budget: &Budget) -> Result<(), HostError> {
+    fn charge_for_substructure(&self, budget: impl AsBudget) -> Result<(), HostError> {
         self.map.charge_for_substructure(budget)
     }
 }

@@ -1,4 +1,4 @@
-use crate::host::Host;
+use crate::host::{metered_clone::MeteredClone, Host};
 use crate::native_contract::base_types::Address;
 use crate::native_contract::contract_error::ContractError;
 use crate::native_contract::storage_utils::StorageUtils;
@@ -115,8 +115,8 @@ fn write_allowance_amount(
     amount: i128,
 ) -> Result<(), HostError> {
     let key = DataKey::Allowance(AllowanceDataKey {
-        from: from.clone(),
-        spender: spender.clone(),
+        from: from.metered_clone(e)?,
+        spender: spender.metered_clone(e)?,
     });
 
     let allowance: AllowanceValue = e
@@ -132,7 +132,7 @@ pub fn spend_allowance(
     spender: Address,
     amount: i128,
 ) -> Result<(), HostError> {
-    let allowance = read_allowance(e, from.clone(), spender.clone())?;
+    let allowance = read_allowance(e, from.metered_clone(e)?, spender.metered_clone(e)?)?;
     if allowance < amount {
         return Err(err!(
             e,

@@ -64,18 +64,23 @@ where
     }
 
     pub fn from_array(buf: &[A], budget: &Budget) -> Result<Self, HostError> {
-        // we may temporarily go over budget here.
-        let vec: Vec<A> = buf.into();
-        vec.charge_deep_clone(budget)?;
-        Self::from_vec(vec)
+        if u32::try_from(buf.len()).is_err() {
+            Err(VEC_OOB.into())
+        } else {
+            // we may temporarily go over budget here.
+            let vec: Vec<A> = buf.into();
+            vec.charge_deep_clone(budget)?;
+            Self::from_vec(vec)
+        }
     }
 
     // No meter charge, assuming allocation cost has been covered by the caller from the outside.
     pub fn from_vec(vec: Vec<A>) -> Result<Self, HostError> {
         if u32::try_from(vec.len()).is_err() {
-            return Err((ScErrorType::Object, ScErrorCode::ExceededLimit).into());
+            Err(VEC_OOB.into())
+        } else {
+            Ok(Self { vec })
         }
-        Ok(Self { vec })
     }
 
     pub fn as_slice(&self) -> &[A] {
@@ -96,13 +101,17 @@ where
     ) -> Result<Self, HostError> {
         let _span = tracy_span!("new vec");
         if let (_, Some(sz)) = iter.size_hint() {
-            // It's possible we temporarily go over-budget here before charging, but
-            // only by the cost of temporarily allocating twice the size of our largest
-            // possible object. In exchange we get to batch all charges associated with
-            // the clone into one (when A::IS_SHALLOW==true).
-            let vec: Vec<A> = iter.collect();
-            vec.charge_deep_clone(budget)?;
-            Self::from_vec(vec)
+            if u32::try_from(sz).is_err() {
+                Err(VEC_OOB.into())
+            } else {
+                // It's possible we temporarily go over-budget here before charging, but
+                // only by the cost of temporarily allocating twice the size of our largest
+                // possible object. In exchange we get to batch all charges associated with
+                // the clone into one (when A::IS_SHALLOW==true).
+                let vec: Vec<A> = iter.collect();
+                vec.charge_deep_clone(budget)?;
+                Self::from_vec(vec)
+            }
         } else {
             // This is a logic error, we should never get here.
             Err((ScErrorType::Object, ScErrorCode::InternalError).into())
@@ -127,8 +136,12 @@ where
     }
 
     pub fn push_front(&self, value: A, budget: &Budget) -> Result<Self, HostError> {
-        let iter = [value].into_iter().chain(self.vec.iter().cloned());
-        Self::from_exact_iter(iter, budget)
+        if self.len() == u32::MAX as usize {
+            Err(VEC_OOB.into())
+        } else {
+            let iter = [value].into_iter().chain(self.vec.iter().cloned());
+            Self::from_exact_iter(iter, budget)
+        }
     }
 
     pub fn pop_front(&self, budget: &Budget) -> Result<Self, HostError> {
@@ -141,27 +154,36 @@ where
     }
 
     pub fn push_back(&self, value: A, budget: &Budget) -> Result<Self, HostError> {
-        let iter = self.vec.iter().cloned().chain([value].into_iter());
-        Self::from_exact_iter(iter, budget)
+        if self.len() == u32::MAX as usize {
+            Err(VEC_OOB.into())
+        } else {
+            let iter = self.vec.iter().cloned().chain([value].into_iter());
+            Self::from_exact_iter(iter, budget)
+        }
     }
 
-    fn err_overflow() -> HostError {
-        (ScErrorType::Value, ScErrorCode::ArithDomain).into()
+    fn err_oob() -> HostError {
+        VEC_OOB.into()
     }
 
-    fn add_or_overflow(x: usize, y: usize) -> Result<usize, HostError> {
-        x.checked_add(y).ok_or_else(|| Self::err_overflow())
+    fn add_or_err(x: usize, y: usize) -> Result<usize, HostError> {
+        let sz = x.checked_add(y).ok_or_else(|| Self::err_oob())?;
+        if u32::try_from(sz).is_err() {
+            Err(Self::err_oob())
+        } else {
+            Ok(sz)
+        }
     }
 
-    fn sub_or_overflow(x: usize, y: usize) -> Result<usize, HostError> {
-        x.checked_sub(y).ok_or_else(|| Self::err_overflow())
+    fn sub_or_err(x: usize, y: usize) -> Result<usize, HostError> {
+        x.checked_sub(y).ok_or_else(|| Self::err_oob())
     }
 
     pub fn pop_back(&self, budget: &Budget) -> Result<Self, HostError> {
         if self.vec.is_empty() {
             Err(VEC_OOB.into())
         } else {
-            let count = Self::sub_or_overflow(self.vec.len(), 1)?;
+            let count = Self::sub_or_err(self.vec.len(), 1)?;
             let iter = self.vec.iter().take(count).cloned();
             Self::from_exact_iter(iter, budget)
         }
@@ -173,7 +195,7 @@ where
         } else {
             // [0, 1, 2]
             // del 1 => take(1) + skip(2)
-            let skip = Self::add_or_overflow(idx, 1)?;
+            let skip = Self::add_or_err(idx, 1)?;
             let init = self.vec.iter().take(idx).cloned();
             let fini = self.vec.iter().skip(skip).cloned();
             Self::from_exact_iter(init.chain(fini), budget)
@@ -191,6 +213,9 @@ where
     }
 
     pub fn insert(&self, index: usize, value: A, budget: &Budget) -> Result<Self, HostError> {
+        if self.vec.len() == u32::MAX as usize {
+            return Err(VEC_OOB.into());
+        }
         let len = self.vec.len();
         if index > len {
             Err(VEC_OOB.into())
@@ -207,6 +232,7 @@ where
     }
 
     pub fn append(&self, other: &Self, budget: &Budget) -> Result<Self, HostError> {
+        Self::add_or_err(self.len(), other.len())?;
         let iter = self.vec.iter().cloned().chain(other.vec.iter().cloned());
         Self::from_exact_iter(iter, budget)
     }
@@ -223,9 +249,8 @@ where
         F: Fn(&A) -> Result<Ordering, HostError>,
     {
         self.charge_scan(budget)?;
-        let iter = self.vec.iter();
         // this is similar logic to `iter.position(f)` but is fallible
-        for (i, val) in iter.enumerate() {
+        for (i, val) in self.vec.iter().enumerate() {
             if f(val)? == Ordering::Equal {
                 return Ok(Some(i));
             }
@@ -238,11 +263,8 @@ where
         F: Fn(&A) -> Result<Ordering, HostError>,
     {
         self.charge_scan(budget)?;
-        let mut i = self.vec.len();
-        let mut iter = self.vec.iter();
         // this is similar logic to `iter.rposition(f)` but is fallible
-        while let Some(val) = iter.next_back() {
-            i -= 1;
+        for (i, val) in self.vec.iter().enumerate().rev() {
             if f(val)? == Ordering::Equal {
                 return Ok(Some(i));
             }
@@ -286,13 +308,13 @@ where
     {
         // The closure evaluation is not metered here, it is assumed to be taken care of outside.
         // Here just covers the cost of cloning a Vec.
+        self.charge_deep_clone(budget)?;
         let mut vec = Vec::with_capacity(self.len());
         for (i, v) in self.vec.iter_mut().enumerate() {
             if f(i, v)? {
                 vec.push(v.clone());
             }
         }
-        vec.charge_deep_clone(budget)?;
         Self::from_vec(vec)
     }
 
@@ -320,7 +342,7 @@ impl<A> MeteredClone for MeteredVector<A>
 where
     A: MeteredClone,
 {
-    fn charge_for_substructure(&self, budget: &Budget) -> Result<(), HostError> {
+    fn charge_for_substructure(&self, budget: impl AsBudget) -> Result<(), HostError> {
         self.vec.charge_for_substructure(budget)
     }
 }

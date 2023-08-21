@@ -136,7 +136,11 @@ impl Host {
             signers: Default::default(),
             ext: xdr::AccountEntryExt::V0,
         };
-        let le = Host::ledger_entry_from_data(LedgerEntryData::Account(account_entry));
+        let le = Rc::new(LedgerEntry {
+            last_modified_ledger_seq: 0,
+            data: LedgerEntryData::Account(account_entry),
+            ext: xdr::LedgerEntryExt::V0,
+        });
         (lk, le)
     }
 

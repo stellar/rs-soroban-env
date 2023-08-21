@@ -231,7 +231,7 @@ fn native_invoke_return_err_variants() -> Result<(), HostError> {
     host.register_test_contract(addr, Rc::new(ReturnContractError))?;
 
     let sym = Symbol::try_from_small_str("go")?;
-    let args = host.vec_new(Val::VOID.into())?;
+    let args = host.vec_new()?;
     let err = ReturnContractError::ERR;
 
     // We want a call to return `Err(Error)` not `Ok(Error)`

@@ -427,7 +427,7 @@ impl TryFromVal<Host, &std::vec::Vec<Val>> for Vec {
 
 impl Vec {
     pub fn new(env: &Host) -> Result<Self, HostError> {
-        let vec = env.vec_new(().into())?;
+        let vec = env.vec_new()?;
         Ok(Self {
             host: env.clone(),
             object: vec,

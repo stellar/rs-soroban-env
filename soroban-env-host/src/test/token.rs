@@ -178,8 +178,10 @@ impl TokenTest {
                 match entry.data.clone() {
                     LedgerEntryData::Account(mut account) => {
                         account.flags = new_flags;
-                        let update =
-                            Host::ledger_entry_from_data(LedgerEntryData::Account(account));
+                        let update = Host::ledger_entry_from_data(
+                            &self.host,
+                            LedgerEntryData::Account(account),
+                        )?;
                         s.put(key, &update, self.host.as_budget())
                     }
                     _ => unreachable!(),
@@ -214,7 +216,8 @@ impl TokenTest {
         };
         let key = self
             .host
-            .to_trustline_key(account_id.clone(), asset.clone());
+            .to_trustline_key(account_id.clone(), asset.clone())
+            .unwrap();
         let ext = if let Some((buying, selling)) = liabilities {
             TrustLineEntryExt::V1({
                 TrustLineEntryV1 {
@@ -237,7 +240,11 @@ impl TokenTest {
         self.host
             .add_ledger_entry(
                 &key,
-                &Host::ledger_entry_from_data(LedgerEntryData::Trustline(trustline_entry)),
+                &Host::ledger_entry_from_data(
+                    &self.host,
+                    LedgerEntryData::Trustline(trustline_entry),
+                )
+                .unwrap(),
             )
             .unwrap();
 
@@ -251,8 +258,10 @@ impl TokenTest {
                 match entry.data.clone() {
                     LedgerEntryData::Trustline(mut trustline) => {
                         trustline.flags = new_flags;
-                        let update =
-                            Host::ledger_entry_from_data(LedgerEntryData::Trustline(trustline));
+                        let update = Host::ledger_entry_from_data(
+                            &self.host,
+                            LedgerEntryData::Trustline(trustline),
+                        )?;
                         s.put(key, &update, self.host.as_budget())
                     }
                     _ => unreachable!(),
@@ -1051,7 +1060,8 @@ fn test_clawback_on_contract() {
 
     let issuer_ledger_key = test
         .host
-        .to_account_key(signing_key_to_account_id(&test.issuer_key));
+        .to_account_key(signing_key_to_account_id(&test.issuer_key))
+        .unwrap();
 
     let user_1 = generate_bytes_array();
     let user_2 = generate_bytes_array();
@@ -1117,7 +1127,8 @@ fn test_auth_revocable_on_contract() {
 
     let issuer_ledger_key = test
         .host
-        .to_account_key(signing_key_to_account_id(&test.issuer_key));
+        .to_account_key(signing_key_to_account_id(&test.issuer_key))
+        .unwrap();
 
     let user_1 = generate_bytes_array();
     let user_1_addr = contract_id_to_address(&test.host, user_1);
@@ -1167,7 +1178,8 @@ fn test_auth_required() {
 
     let issuer_ledger_key = test
         .host
-        .to_account_key(signing_key_to_account_id(&test.issuer_key));
+        .to_account_key(signing_key_to_account_id(&test.issuer_key))
+        .unwrap();
 
     let user_1 = generate_bytes_array();
     let user_2 = generate_bytes_array();

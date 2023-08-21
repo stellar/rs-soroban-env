@@ -15,7 +15,7 @@ use soroban_env_common::{Compare, Val};
 
 use crate::budget::Budget;
 use crate::host::ledger_info_helper::{get_entry_expiration, set_entry_expiration};
-use crate::host::metered_clone::MeteredClone;
+use crate::host::metered_clone::{MeteredAlloc, MeteredClone};
 use crate::xdr::{LedgerEntry, LedgerKey};
 use crate::Host;
 use crate::{host::metered_map::MeteredOrdMap, HostError};
@@ -333,11 +333,13 @@ impl Storage {
         })?;
 
         if new_expiration > old_expiration {
-            let mut new_entry = (*old_entry).metered_clone(host.budget_ref())?;
+            let mut new_entry = (*old_entry).metered_clone(host)?;
             set_entry_expiration(&mut new_entry, new_expiration);
-            self.map = self
-                .map
-                .insert(key, Some(Rc::new(new_entry)), host.budget_ref())?;
+            self.map = self.map.insert(
+                key,
+                Some(Rc::metered_new(new_entry, host)?),
+                host.budget_ref(),
+            )?;
         }
         Ok(())
     }
@@ -376,11 +378,13 @@ impl Storage {
         );
 
         if new_expiration > old_expiration {
-            let mut new_entry = (*old_entry).metered_clone(host.budget_ref())?;
+            let mut new_entry = (*old_entry).metered_clone(host)?;
             set_entry_expiration(&mut new_entry, new_expiration);
-            self.map = self
-                .map
-                .insert(key, Some(Rc::new(new_entry)), host.budget_ref())?;
+            self.map = self.map.insert(
+                key,
+                Some(Rc::metered_new(new_entry, host)?),
+                host.budget_ref(),
+            )?;
         }
         Ok(())
     }
@@ -428,12 +432,15 @@ mod test_footprint {
         budget.reset_unlimited()?;
         let mut fp = Footprint::default();
         // record when key not exist
-        let key = Rc::new(LedgerKey::ContractData(LedgerKeyContractData {
-            contract: ScAddress::Contract([0; 32].into()),
-            key: ScVal::I32(0),
-            durability: ContractDataDurability::Persistent,
-            body_type: ContractEntryBodyType::DataEntry,
-        }));
+        let key = Rc::metered_new(
+            LedgerKey::ContractData(LedgerKeyContractData {
+                contract: ScAddress::Contract([0; 32].into()),
+                key: ScVal::I32(0),
+                durability: ContractDataDurability::Persistent,
+                body_type: ContractEntryBodyType::DataEntry,
+            }),
+            &budget,
+        )?;
         fp.record_access(&key, AccessType::ReadOnly, &budget)?;
         assert_eq!(fp.0.contains_key::<LedgerKey>(&key, &budget)?, true);
         assert_eq!(
@@ -457,28 +464,37 @@ mod test_footprint {
     #[test]
     fn footprint_enforce_access() -> Result<(), HostError> {
         let budget = Budget::default();
-        let key = Rc::new(LedgerKey::ContractData(LedgerKeyContractData {
-            contract: ScAddress::Contract([0; 32].into()),
-            key: ScVal::I32(0),
-            durability: ContractDataDurability::Persistent,
-            body_type: ContractEntryBodyType::DataEntry,
-        }));
+        let key = Rc::metered_new(
+            LedgerKey::ContractData(LedgerKeyContractData {
+                contract: ScAddress::Contract([0; 32].into()),
+                key: ScVal::I32(0),
+                durability: ContractDataDurability::Persistent,
+                body_type: ContractEntryBodyType::DataEntry,
+            }),
+            &budget,
+        )?;
 
         // Key not in footprint. Only difference is type_
-        let key2 = Rc::new(LedgerKey::ContractData(LedgerKeyContractData {
-            contract: ScAddress::Contract([0; 32].into()),
-            key: ScVal::I32(0),
-            durability: ContractDataDurability::Temporary,
-            body_type: ContractEntryBodyType::DataEntry,
-        }));
+        let key2 = Rc::metered_new(
+            LedgerKey::ContractData(LedgerKeyContractData {
+                contract: ScAddress::Contract([0; 32].into()),
+                key: ScVal::I32(0),
+                durability: ContractDataDurability::Temporary,
+                body_type: ContractEntryBodyType::DataEntry,
+            }),
+            &budget,
+        )?;
 
         // Key not in footprint. Only difference is body_type
-        let key3 = Rc::new(LedgerKey::ContractData(LedgerKeyContractData {
-            contract: ScAddress::Contract([0; 32].into()),
-            key: ScVal::I32(0),
-            durability: ContractDataDurability::Persistent,
-            body_type: ContractEntryBodyType::ExpirationExtension,
-        }));
+        let key3 = Rc::metered_new(
+            LedgerKey::ContractData(LedgerKeyContractData {
+                contract: ScAddress::Contract([0; 32].into()),
+                key: ScVal::I32(0),
+                durability: ContractDataDurability::Persistent,
+                body_type: ContractEntryBodyType::ExpirationExtension,
+            }),
+            &budget,
+        )?;
 
         let om = [(Rc::clone(&key), AccessType::ReadOnly)].into();
         let mom = MeteredOrdMap::from_map(om, &budget)?;
@@ -502,12 +518,15 @@ mod test_footprint {
     fn footprint_enforce_access_not_exist() -> Result<(), HostError> {
         let budget = Budget::default();
         let mut fp = Footprint::default();
-        let key = Rc::new(LedgerKey::ContractData(LedgerKeyContractData {
-            contract: ScAddress::Contract([0; 32].into()),
-            key: ScVal::I32(0),
-            durability: ContractDataDurability::Persistent,
-            body_type: ContractEntryBodyType::DataEntry,
-        }));
+        let key = Rc::metered_new(
+            LedgerKey::ContractData(LedgerKeyContractData {
+                contract: ScAddress::Contract([0; 32].into()),
+                key: ScVal::I32(0),
+                durability: ContractDataDurability::Persistent,
+                body_type: ContractEntryBodyType::DataEntry,
+            }),
+            &budget,
+        )?;
         let res = fp.enforce_access(&key, AccessType::ReadOnly, &budget);
         assert!(HostError::result_matches_err(
             res,
@@ -519,12 +538,15 @@ mod test_footprint {
     #[test]
     fn footprint_attempt_to_write_readonly_entry() -> Result<(), HostError> {
         let budget = Budget::default();
-        let key = Rc::new(LedgerKey::ContractData(LedgerKeyContractData {
-            contract: ScAddress::Contract([0; 32].into()),
-            key: ScVal::I32(0),
-            durability: ContractDataDurability::Persistent,
-            body_type: ContractEntryBodyType::DataEntry,
-        }));
+        let key = Rc::metered_new(
+            LedgerKey::ContractData(LedgerKeyContractData {
+                contract: ScAddress::Contract([0; 32].into()),
+                key: ScVal::I32(0),
+                durability: ContractDataDurability::Persistent,
+                body_type: ContractEntryBodyType::DataEntry,
+            }),
+            &budget,
+        )?;
         let om = [(Rc::clone(&key), AccessType::ReadOnly)].into();
         let mom = MeteredOrdMap::from_map(om, &budget)?;
         let mut fp = Footprint(mom);
