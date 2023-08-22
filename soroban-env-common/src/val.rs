@@ -155,7 +155,7 @@ impl Tag {
     }
     pub const fn is_object(self) -> bool {
         let tu8 = self as u8;
-        tu8 > (Tag::ObjectCodeLowerBound as u8) || tu8 < (Tag::ObjectCodeUpperBound as u8)
+        tu8 > (Tag::ObjectCodeLowerBound as u8) && tu8 < (Tag::ObjectCodeUpperBound as u8)
     }
 
     #[inline(always)]
