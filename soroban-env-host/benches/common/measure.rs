@@ -447,7 +447,7 @@ pub fn measure_cost_variation<HCM: HostCostMeasurement>(
                 1 => Some(HCM::new_best_case(host, &mut rng)),
                 2 => Some(HCM::new_worst_case(host, &mut rng, large_input)),
                 n if n < count => {
-                    let input = rng.gen_range(1..2 + large_input);
+                    let input = rng.gen_range(1..=2 + large_input);
                     Some(HCM::new_random_case(host, &mut rng, input))
                 }
                 _ => None,

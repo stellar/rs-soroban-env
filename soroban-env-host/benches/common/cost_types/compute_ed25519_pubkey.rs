@@ -1,5 +1,5 @@
 use crate::common::HostCostMeasurement;
-use ed25519_dalek::{PublicKey, SecretKey};
+use ed25519_dalek::SigningKey;
 use rand::rngs::StdRng;
 use soroban_env_host::{cost_runner::ComputeEd25519PubKeyRun, Host};
 
@@ -13,8 +13,7 @@ impl HostCostMeasurement for ComputeEd25519PubKeyMeasure {
     type Runner = ComputeEd25519PubKeyRun;
 
     fn new_random_case(_host: &Host, rng: &mut StdRng, _input: u64) -> Vec<u8> {
-        let secret = SecretKey::generate(rng);
-        let public: PublicKey = (&secret).into();
-        public.as_bytes().as_slice().into()
+        let key = SigningKey::generate(rng);
+        key.verifying_key().to_bytes().into()
     }
 }
