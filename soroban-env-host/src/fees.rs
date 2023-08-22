@@ -3,9 +3,16 @@
 /// This is technically not part of the Soroban host and is provided here for
 /// the sake of sharing between the systems that run Soroban host (such as
 /// Stellar core or Soroban RPC service).
+
+/// Rough estimate of the base size of any transaction result in the archives
+/// (independent of the transaction envelope size).
+pub const TX_BASE_RESULT_SIZE: u32 = 300;
+/// Estimate for any `ExpirationEntry` ledger entry, consisting of a 32-byte
+/// key and entry with key and 4 bytes for expiration ledger.
+pub const EXPIRATION_ENTRY_SIZE: u32 = 2 * 32 + 4;
+
 const INSTRUCTIONS_INCREMENT: i64 = 10000;
 const DATA_SIZE_1KB_INCREMENT: i64 = 1024;
-const TX_BASE_RESULT_SIZE: u32 = 300;
 
 /// These are the resource upper bounds specified by the Soroban transaction.
 pub struct TransactionResources {
@@ -76,10 +83,12 @@ pub struct WriteFeeConfiguration {
 pub struct LedgerEntryRentChange {
     /// Whether this is persistent or temporary entry.
     pub is_persistent: bool,
-    /// Size of the entry in bytes before it has been modified.
+    /// Size of the entry in bytes before it has been modified, including the
+    /// key.
     /// `0` for newly-created entires.
     pub old_size_bytes: u32,
-    /// Size of the entry in bytes after it has been modified.
+    /// Size of the entry in bytes after it has been modified, including the
+    /// key.
     pub new_size_bytes: u32,
     /// Expiration ledger of the entry before it has been modified.
     /// Should be less than the current ledger for newly-created entires.
@@ -98,6 +107,9 @@ pub struct RentFeeConfiguration {
     /// This is the same field as in `FeeConfiguration` and it has to be
     /// computed via `compute_write_fee_per_1kb`.
     pub fee_per_write_1kb: i64,
+    /// Fee per 1 entry written to ledger.
+    /// This is the same field as in `FeeConfiguration`.
+    pub fee_per_write_entry: i64,
     /// Denominator for the total rent fee for persistent storage.
     ///
     /// This can be thought of as the number of ledgers of rent that costs as
@@ -233,10 +245,31 @@ pub fn compute_rent_fee(
     fee_config: &RentFeeConfiguration,
     current_ledger_seq: u32,
 ) -> i64 {
-    let mut fee = 0;
+    let mut fee: i64 = 0;
+    let mut bumped_entries: i64 = 0;
+    let mut bumped_entry_key_size_bytes: u32 = 0;
     for e in changed_entries {
-        fee += rent_fee_per_entry_change(e, fee_config, current_ledger_seq);
+        fee = fee.saturating_add(rent_fee_per_entry_change(e, fee_config, current_ledger_seq));
+        if e.old_expiration_ledger < e.new_expiration_ledger {
+            bumped_entries = bumped_entries.saturating_add(1);
+            bumped_entry_key_size_bytes =
+                bumped_entry_key_size_bytes.saturating_add(EXPIRATION_ENTRY_SIZE);
+        }
     }
+    // The expiration bumps need to be written to the ledger. As they have
+    // constant size, we can charge for writing them independently of the actual
+    // entry size.
+    fee = fee.saturating_add(
+        fee_config
+            .fee_per_write_entry
+            .saturating_mul(bumped_entries),
+    );
+    fee = fee.saturating_add(compute_fee_per_increment(
+        bumped_entry_key_size_bytes,
+        fee_config.fee_per_write_1kb,
+        DATA_SIZE_1KB_INCREMENT,
+    ));
+
     fee
 }
 
@@ -245,10 +278,10 @@ fn rent_fee_per_entry_change(
     fee_config: &RentFeeConfiguration,
     current_ledger: u32,
 ) -> i64 {
-    let mut fee = 0;
+    let mut fee: i64 = 0;
     // Pay for the rent extension (if any).
     if entry_change.new_expiration_ledger > entry_change.old_expiration_ledger {
-        fee += rent_fee_for_size_and_ledgers(
+        fee = fee.saturating_add(rent_fee_for_size_and_ledgers(
             entry_change.is_persistent,
             // New portion of rent is payed for the new size of the entry.
             entry_change.new_size_bytes,
@@ -258,12 +291,12 @@ fn rent_fee_per_entry_change(
             entry_change.new_expiration_ledger
                 - entry_change.old_expiration_ledger.max(current_ledger - 1),
             fee_config,
-        );
+        ));
     }
     // Pay for the entry size increase (if any).
     if entry_change.new_size_bytes > entry_change.old_size_bytes && entry_change.old_size_bytes > 0
     {
-        fee += rent_fee_for_size_and_ledgers(
+        fee = fee.saturating_add(rent_fee_for_size_and_ledgers(
             entry_change.is_persistent,
             // Pay only for the size increase.
             entry_change.new_size_bytes - entry_change.old_size_bytes,
@@ -271,7 +304,7 @@ fn rent_fee_per_entry_change(
             // covered above for the whole new size.
             entry_change.old_expiration_ledger - current_ledger + 1,
             fee_config,
-        );
+        ));
     }
 
     fee
@@ -286,13 +319,15 @@ fn rent_fee_for_size_and_ledgers(
     // Multiplication can overflow here - unlike fee computation this can rely
     // on sane input parameters as rent fee computation does not depend on any
     // user inputs.
-    let num = entry_size as i64 * fee_config.fee_per_write_1kb * rent_ledgers as i64;
+    let num = (entry_size as i64)
+        .saturating_mul(fee_config.fee_per_write_1kb)
+        .saturating_mul(rent_ledgers as i64);
     let storage_coef = if is_persistent {
         fee_config.persistent_rent_rate_denominator
     } else {
         fee_config.temporary_rent_rate_denominator
     };
-    let denom = DATA_SIZE_1KB_INCREMENT * storage_coef;
+    let denom = DATA_SIZE_1KB_INCREMENT.saturating_mul(storage_coef);
     num_integer::div_ceil(num, denom)
 }
 
