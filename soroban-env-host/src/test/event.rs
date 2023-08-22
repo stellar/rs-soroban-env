@@ -29,7 +29,7 @@ impl ContractFunctionSet for ContractWithSingleEvent {
 
 #[test]
 fn contract_event() -> Result<(), HostError> {
-    let host = Host::default();
+    let host = Host::test_host_with_recording_footprint();
     let dummy_id = [0; 32];
     let dummy_address = ScAddress::Contract(Hash(dummy_id));
     let id = host.add_host_object(dummy_address)?;
@@ -84,7 +84,7 @@ impl ContractFunctionSet for ContractWithMultipleEvents {
 
 #[test]
 fn test_event_rollback() -> Result<(), HostError> {
-    let host = Host::default();
+    let host = Host::test_host_with_recording_footprint();
     let dummy_address = ScAddress::Contract(Hash([0; 32]));
     let id = host.add_host_object(dummy_address)?;
     let test_contract = Rc::new(ContractWithMultipleEvents {});
