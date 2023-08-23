@@ -93,10 +93,12 @@ pub fn write_allowance(
             if allowance_with_old_expiration.0.amount > 0
                 && allowance_with_old_expiration.1.unwrap_or(0) < expiration
             {
+                let live_for = expiration - ledger_seq + 1;
                 e.bump_contract_data(
                     key.try_into_val(e)?,
                     StorageType::Temporary,
-                    (expiration - ledger_seq + 1).into(),
+                    live_for.into(),
+                    live_for.into(),
                 )?;
             }
         }

@@ -21,7 +21,7 @@ use super::balance::{
 };
 use super::metadata::{read_name, read_symbol, set_metadata, DECIMAL};
 use super::public_types::{AlphaNum12AssetInfo, AlphaNum4AssetInfo};
-use super::storage_types::INSTANCE_BUMP_AMOUNT;
+use super::storage_types::{INSTANCE_BUMP_AMOUNT, INSTANCE_LIFETIME_THRESHOLD};
 
 pub trait TokenTrait {
     /// init_asset can create a contract for a wrapped classic asset
@@ -183,7 +183,10 @@ impl TokenTrait for Token {
 
     fn allowance(e: &Host, from: Address, spender: Address) -> Result<i128, HostError> {
         let _span = tracy_span!("native token allowance");
-        e.bump_current_contract_instance_and_code(INSTANCE_BUMP_AMOUNT.into())?;
+        e.bump_current_contract_instance_and_code(
+            INSTANCE_LIFETIME_THRESHOLD.into(),
+            INSTANCE_BUMP_AMOUNT.into(),
+        )?;
         read_allowance(e, from, spender)
     }
 
@@ -199,7 +202,10 @@ impl TokenTrait for Token {
         check_nonnegative_amount(e, amount)?;
         from.require_auth()?;
 
-        e.bump_current_contract_instance_and_code(INSTANCE_BUMP_AMOUNT.into())?;
+        e.bump_current_contract_instance_and_code(
+            INSTANCE_LIFETIME_THRESHOLD.into(),
+            INSTANCE_BUMP_AMOUNT.into(),
+        )?;
 
         write_allowance(
             e,
@@ -215,20 +221,29 @@ impl TokenTrait for Token {
     // Metering: covered by components
     fn balance(e: &Host, addr: Address) -> Result<i128, HostError> {
         let _span = tracy_span!("native token balance");
-        e.bump_current_contract_instance_and_code(INSTANCE_BUMP_AMOUNT.into())?;
+        e.bump_current_contract_instance_and_code(
+            INSTANCE_LIFETIME_THRESHOLD.into(),
+            INSTANCE_BUMP_AMOUNT.into(),
+        )?;
         read_balance(e, addr)
     }
 
     fn spendable_balance(e: &Host, addr: Address) -> Result<i128, HostError> {
         let _span = tracy_span!("native token spendable balance");
-        e.bump_current_contract_instance_and_code(INSTANCE_BUMP_AMOUNT.into())?;
+        e.bump_current_contract_instance_and_code(
+            INSTANCE_LIFETIME_THRESHOLD.into(),
+            INSTANCE_BUMP_AMOUNT.into(),
+        )?;
         get_spendable_balance(e, addr)
     }
 
     // Metering: covered by components
     fn authorized(e: &Host, addr: Address) -> Result<bool, HostError> {
         let _span = tracy_span!("native token authorized");
-        e.bump_current_contract_instance_and_code(INSTANCE_BUMP_AMOUNT.into())?;
+        e.bump_current_contract_instance_and_code(
+            INSTANCE_LIFETIME_THRESHOLD.into(),
+            INSTANCE_BUMP_AMOUNT.into(),
+        )?;
         is_authorized(e, addr)
     }
 
@@ -238,7 +253,10 @@ impl TokenTrait for Token {
         check_nonnegative_amount(e, amount)?;
         from.require_auth()?;
 
-        e.bump_current_contract_instance_and_code(INSTANCE_BUMP_AMOUNT.into())?;
+        e.bump_current_contract_instance_and_code(
+            INSTANCE_LIFETIME_THRESHOLD.into(),
+            INSTANCE_BUMP_AMOUNT.into(),
+        )?;
 
         spend_balance(e, from.metered_clone(e)?, amount)?;
         receive_balance(e, to.metered_clone(e)?, amount)?;
@@ -258,7 +276,10 @@ impl TokenTrait for Token {
         check_nonnegative_amount(e, amount)?;
         spender.require_auth()?;
 
-        e.bump_current_contract_instance_and_code(INSTANCE_BUMP_AMOUNT.into())?;
+        e.bump_current_contract_instance_and_code(
+            INSTANCE_LIFETIME_THRESHOLD.into(),
+            INSTANCE_BUMP_AMOUNT.into(),
+        )?;
 
         spend_allowance(e, from.metered_clone(e)?, spender, amount)?;
         spend_balance(e, from.metered_clone(e)?, amount)?;
@@ -274,7 +295,10 @@ impl TokenTrait for Token {
         check_non_native(e)?;
         from.require_auth()?;
 
-        e.bump_current_contract_instance_and_code(INSTANCE_BUMP_AMOUNT.into())?;
+        e.bump_current_contract_instance_and_code(
+            INSTANCE_LIFETIME_THRESHOLD.into(),
+            INSTANCE_BUMP_AMOUNT.into(),
+        )?;
 
         spend_balance(e, from.metered_clone(e)?, amount)?;
         event::burn(e, from, amount)?;
@@ -288,7 +312,10 @@ impl TokenTrait for Token {
         check_non_native(e)?;
         spender.require_auth()?;
 
-        e.bump_current_contract_instance_and_code(INSTANCE_BUMP_AMOUNT.into())?;
+        e.bump_current_contract_instance_and_code(
+            INSTANCE_LIFETIME_THRESHOLD.into(),
+            INSTANCE_BUMP_AMOUNT.into(),
+        )?;
 
         spend_allowance(e, from.metered_clone(e)?, spender, amount)?;
         spend_balance(e, from.metered_clone(e)?, amount)?;
@@ -304,7 +331,10 @@ impl TokenTrait for Token {
         let admin = read_administrator(e)?;
         admin.require_auth()?;
 
-        e.bump_current_contract_instance_and_code(INSTANCE_BUMP_AMOUNT.into())?;
+        e.bump_current_contract_instance_and_code(
+            INSTANCE_LIFETIME_THRESHOLD.into(),
+            INSTANCE_BUMP_AMOUNT.into(),
+        )?;
 
         spend_balance_no_authorization_check(e, from.metered_clone(e)?, amount)?;
         event::clawback(e, admin, from, amount)?;
@@ -317,7 +347,10 @@ impl TokenTrait for Token {
         let admin = read_administrator(e)?;
         admin.require_auth()?;
 
-        e.bump_current_contract_instance_and_code(INSTANCE_BUMP_AMOUNT.into())?;
+        e.bump_current_contract_instance_and_code(
+            INSTANCE_LIFETIME_THRESHOLD.into(),
+            INSTANCE_BUMP_AMOUNT.into(),
+        )?;
 
         write_authorization(e, addr.metered_clone(e)?, authorize)?;
         event::set_authorized(e, admin, addr, authorize)?;
@@ -331,7 +364,10 @@ impl TokenTrait for Token {
         let admin = read_administrator(e)?;
         admin.require_auth()?;
 
-        e.bump_current_contract_instance_and_code(INSTANCE_BUMP_AMOUNT.into())?;
+        e.bump_current_contract_instance_and_code(
+            INSTANCE_LIFETIME_THRESHOLD.into(),
+            INSTANCE_BUMP_AMOUNT.into(),
+        )?;
 
         receive_balance(e, to.metered_clone(e)?, amount)?;
         event::mint(e, admin, to, amount)?;
@@ -344,7 +380,10 @@ impl TokenTrait for Token {
         let admin = read_administrator(e)?;
         admin.require_auth()?;
 
-        e.bump_current_contract_instance_and_code(INSTANCE_BUMP_AMOUNT.into())?;
+        e.bump_current_contract_instance_and_code(
+            INSTANCE_LIFETIME_THRESHOLD.into(),
+            INSTANCE_BUMP_AMOUNT.into(),
+        )?;
 
         write_administrator(e, new_admin.metered_clone(e)?)?;
         event::set_admin(e, admin, new_admin)?;
