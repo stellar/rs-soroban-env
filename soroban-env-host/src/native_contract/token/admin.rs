@@ -19,7 +19,6 @@ pub fn write_administrator(e: &Host, id: Address) -> Result<(), HostError> {
         key.try_into_val(e)?,
         id.try_into_val(e)?,
         StorageType::Instance,
-        ().into(),
     )?;
     Ok(())
 }

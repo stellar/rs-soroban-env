@@ -4,10 +4,10 @@ use std::rc::Rc;
 
 use rand::Rng;
 use soroban_env_common::xdr::{
-    ContractDataEntry, ContractDataEntryBody, ContractDataEntryData, CreateContractArgs,
-    HashIdPreimage, HashIdPreimageSorobanAuthorization, InvokeContractArgs, LedgerEntry,
-    LedgerEntryData, LedgerEntryExt, ScAddress, ScErrorCode, ScErrorType, ScNonceKey, ScVal,
-    SorobanAuthorizationEntry, SorobanAuthorizedFunction, SorobanCredentials,
+    ContractDataEntry, CreateContractArgs, HashIdPreimage, HashIdPreimageSorobanAuthorization,
+    InvokeContractArgs, LedgerEntry, LedgerEntryData, LedgerEntryExt, ScAddress, ScErrorCode,
+    ScErrorType, ScNonceKey, ScVal, SorobanAuthorizationEntry, SorobanAuthorizedFunction,
+    SorobanCredentials,
 };
 use soroban_env_common::{AddressObject, Compare, Symbol, TryFromVal, TryIntoVal, Val, VecObject};
 
@@ -1776,16 +1776,12 @@ impl Host {
                     &[address.into()],
                 ));
             }
-            let body = ContractDataEntryBody::DataEntry(ContractDataEntryData {
-                val: ScVal::Void,
-                flags: 0,
-            });
             let data = LedgerEntryData::ContractData(ContractDataEntry {
                 contract: sc_address,
                 key: nonce_key_scval,
-                body,
-                expiration_ledger_seq: expiration_ledger,
+                val: ScVal::Void,
                 durability: xdr::ContractDataDurability::Temporary,
+                ext: xdr::ExtensionPoint::V0,
             });
             let entry = LedgerEntry {
                 last_modified_ledger_seq: 0,
@@ -1795,6 +1791,7 @@ impl Host {
             storage.put(
                 &nonce_key,
                 &Rc::metered_new(entry, self)?,
+                Some(expiration_ledger),
                 self.budget_ref(),
             )
         })

@@ -58,7 +58,6 @@ impl TokenTest {
             min_persistent_entry_expiration: 4096,
             min_temp_entry_expiration: 16,
             max_entry_expiration: 6_312_000,
-            autobump_ledgers: 0,
         })
         .unwrap();
         Self {
@@ -182,7 +181,7 @@ impl TokenTest {
                             &self.host,
                             LedgerEntryData::Account(account),
                         )?;
-                        s.put(key, &update, self.host.as_budget())
+                        s.put(key, &update, None, self.host.as_budget())
                     }
                     _ => unreachable!(),
                 }
@@ -245,6 +244,7 @@ impl TokenTest {
                     LedgerEntryData::Trustline(trustline_entry),
                 )
                 .unwrap(),
+                None,
             )
             .unwrap();
 
@@ -262,7 +262,7 @@ impl TokenTest {
                             &self.host,
                             LedgerEntryData::Trustline(trustline),
                         )?;
-                        s.put(key, &update, self.host.as_budget())
+                        s.put(key, &update, None, self.host.as_budget())
                     }
                     _ => unreachable!(),
                 }

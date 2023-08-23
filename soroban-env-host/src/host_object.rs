@@ -53,47 +53,65 @@ impl HostObject {
     ) -> Result<Option<core::cmp::Ordering>, HostError> {
         let res = match self {
             HostObject::U64(u) => {
-                let Ok(small) = U64Small::try_from(rv) else { return Ok(None) };
+                let Ok(small) = U64Small::try_from(rv) else {
+                    return Ok(None);
+                };
                 let small: u64 = small.into();
                 Some(budget.compare(u, &small)?)
             }
             HostObject::I64(i) => {
-                let Ok(small) = I64Small::try_from(rv) else { return Ok(None) };
+                let Ok(small) = I64Small::try_from(rv) else {
+                    return Ok(None);
+                };
                 let small: i64 = small.into();
                 Some(budget.compare(i, &small)?)
             }
             HostObject::TimePoint(tp) => {
-                let Ok(small) = TimepointSmall::try_from(rv) else { return Ok(None) };
+                let Ok(small) = TimepointSmall::try_from(rv) else {
+                    return Ok(None);
+                };
                 let small: u64 = small.into();
                 Some(budget.compare(&tp.0, &small)?)
             }
             HostObject::Duration(d) => {
-                let Ok(small) = DurationSmall::try_from(rv) else { return Ok(None) };
+                let Ok(small) = DurationSmall::try_from(rv) else {
+                    return Ok(None);
+                };
                 let small: u64 = small.into();
                 Some(budget.compare(&d.0, &small)?)
             }
             HostObject::U128(u) => {
-                let Ok(small) = U128Small::try_from(rv) else { return Ok(None) };
+                let Ok(small) = U128Small::try_from(rv) else {
+                    return Ok(None);
+                };
                 let small: u128 = small.into();
                 Some(budget.compare(u, &small)?)
             }
             HostObject::I128(i) => {
-                let Ok(small) = I128Small::try_from(rv) else { return Ok(None) };
+                let Ok(small) = I128Small::try_from(rv) else {
+                    return Ok(None);
+                };
                 let small: i128 = small.into();
                 Some(budget.compare(i, &small)?)
             }
             HostObject::U256(u) => {
-                let Ok(small) = U256Small::try_from(rv) else { return Ok(None) };
+                let Ok(small) = U256Small::try_from(rv) else {
+                    return Ok(None);
+                };
                 let small: U256 = small.into();
                 Some(budget.compare(u, &small)?)
             }
             HostObject::I256(i) => {
-                let Ok(small) = I256Small::try_from(rv) else { return Ok(None) };
+                let Ok(small) = I256Small::try_from(rv) else {
+                    return Ok(None);
+                };
                 let small: I256 = small.into();
                 Some(budget.compare(i, &small)?)
             }
             HostObject::Symbol(s) => {
-                let Ok(small) = SymbolSmall::try_from(rv) else { return Ok(None) };
+                let Ok(small) = SymbolSmall::try_from(rv) else {
+                    return Ok(None);
+                };
                 let small: SymbolStr = small.into();
                 let rhs: &[u8] = small.as_ref();
                 Some(budget.compare(&s.as_vec().as_slice(), &rhs)?)

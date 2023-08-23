@@ -2,9 +2,8 @@ use core::cmp::{min, Ordering};
 
 use soroban_env_common::{
     xdr::{
-        AccountEntry, AccountId, ClaimableBalanceEntry, ConfigSettingEntry, ContractCodeEntryBody,
-        ContractCostType, ContractDataDurability, ContractDataEntryBody, ContractDataEntryData,
-        ContractEntryBodyType, ContractExecutable, CreateContractArgs, DataEntry, DepthLimiter,
+        AccountEntry, AccountId, ClaimableBalanceEntry, ConfigSettingEntry, ContractCostType,
+        ContractDataDurability, ContractExecutable, CreateContractArgs, DataEntry, DepthLimiter,
         Duration, ExtensionPoint, Hash, LedgerEntry, LedgerEntryData, LedgerEntryExt, LedgerKey,
         LedgerKeyAccount, LedgerKeyClaimableBalance, LedgerKeyConfigSetting, LedgerKeyContractCode,
         LedgerKeyData, LedgerKeyLiquidityPool, LedgerKeyOffer, LedgerKeyTrustLine,
@@ -192,7 +191,6 @@ impl_compare_fixed_size_ord_type!(ScNonceKey);
 impl_compare_fixed_size_ord_type!(PublicKey);
 impl_compare_fixed_size_ord_type!(TrustLineAsset);
 impl_compare_fixed_size_ord_type!(ContractDataDurability);
-impl_compare_fixed_size_ord_type!(ContractEntryBodyType);
 
 impl_compare_fixed_size_ord_type!(LedgerKeyAccount);
 impl_compare_fixed_size_ord_type!(LedgerKeyTrustLine);
@@ -331,8 +329,8 @@ impl Compare<LedgerKey> for Budget {
             (ClaimableBalance(a), ClaimableBalance(b)) => self.compare(&a, &b),
             (LiquidityPool(a), LiquidityPool(b)) => self.compare(&a, &b),
             (ContractData(a), ContractData(b)) => self.compare(
-                &(&a.contract, &a.key, &a.durability, &a.body_type),
-                &(&b.contract, &b.key, &b.durability, &b.body_type),
+                &(&a.contract, &a.key, &a.durability),
+                &(&b.contract, &b.key, &b.durability),
             ),
             (ContractCode(a), ContractCode(b)) => self.compare(&a, &b),
             (ConfigSetting(a), ConfigSetting(b)) => self.compare(&a, &b),
@@ -348,7 +346,8 @@ impl Compare<LedgerKey> for Budget {
             | (LiquidityPool(_), _)
             | (ContractData(_), _)
             | (ContractCode(_), _)
-            | (ConfigSetting(_), _) => Ok(a.cmp(b)),
+            | (ConfigSetting(_), _)
+            | (Expiration(_), _) => Ok(a.cmp(b)),
         }
     }
 }
@@ -377,25 +376,12 @@ impl Compare<LedgerEntryData> for Budget {
             (ClaimableBalance(a), ClaimableBalance(b)) => self.compare(&a, &b),
             (LiquidityPool(a), LiquidityPool(b)) => self.compare(&a, &b),
             (ContractData(a), ContractData(b)) => self.compare(
-                &(
-                    &a.contract,
-                    &a.key,
-                    &a.durability,
-                    &a.body,
-                    &a.expiration_ledger_seq,
-                ),
-                &(
-                    &b.contract,
-                    &b.key,
-                    &b.durability,
-                    &b.body,
-                    &b.expiration_ledger_seq,
-                ),
+                &(&a.contract, &a.key, &a.durability, &a.val),
+                &(&b.contract, &b.key, &b.durability, &b.val),
             ),
-            (ContractCode(a), ContractCode(b)) => self.compare(
-                &(&a.ext, &a.hash, &a.body, &a.expiration_ledger_seq),
-                &(&b.ext, &b.hash, &b.body, &b.expiration_ledger_seq),
-            ),
+            (ContractCode(a), ContractCode(b)) => {
+                self.compare(&(&a.ext, &a.hash), &(&b.ext, &b.hash))
+            }
             (ConfigSetting(a), ConfigSetting(b)) => self.compare(&a, &b),
 
             (Account(_), _)
@@ -406,55 +392,8 @@ impl Compare<LedgerEntryData> for Budget {
             | (LiquidityPool(_), _)
             | (ContractData(_), _)
             | (ContractCode(_), _)
-            | (ConfigSetting(_), _) => Ok(a.cmp(b)),
-        }
-    }
-}
-
-impl Compare<ContractDataEntryData> for Budget {
-    type Error = HostError;
-
-    fn compare(
-        &self,
-        a: &ContractDataEntryData,
-        b: &ContractDataEntryData,
-    ) -> Result<Ordering, Self::Error> {
-        self.compare(&(a.flags, &a.val), &(b.flags, &b.val))
-    }
-}
-
-impl Compare<ContractDataEntryBody> for Budget {
-    type Error = HostError;
-
-    fn compare(
-        &self,
-        a: &ContractDataEntryBody,
-        b: &ContractDataEntryBody,
-    ) -> Result<Ordering, Self::Error> {
-        match (a, b) {
-            (ContractDataEntryBody::DataEntry(a), ContractDataEntryBody::DataEntry(b)) => {
-                self.compare(&(a), &(b))
-            }
-            (ContractDataEntryBody::DataEntry(_), _)
-            | (ContractDataEntryBody::ExpirationExtension, _) => Ok(a.cmp(b)),
-        }
-    }
-}
-
-impl Compare<ContractCodeEntryBody> for Budget {
-    type Error = HostError;
-
-    fn compare(
-        &self,
-        a: &ContractCodeEntryBody,
-        b: &ContractCodeEntryBody,
-    ) -> Result<Ordering, Self::Error> {
-        match (a, b) {
-            (ContractCodeEntryBody::DataEntry(a), ContractCodeEntryBody::DataEntry(b)) => {
-                <Self as Compare<&[u8]>>::compare(self, &a.as_ref(), &b.as_ref())
-            }
-            (ContractCodeEntryBody::DataEntry(_), _)
-            | (ContractCodeEntryBody::ExpirationExtension, _) => Ok(a.cmp(b)),
+            | (ConfigSetting(_), _)
+            | (Expiration(_), _) => Ok(a.cmp(b)),
         }
     }
 }
