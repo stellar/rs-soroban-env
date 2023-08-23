@@ -8,8 +8,8 @@
 /// (independent of the transaction envelope size).
 pub const TX_BASE_RESULT_SIZE: u32 = 300;
 /// Estimate for any `ExpirationEntry` ledger entry, consisting of a 32-byte
-/// key and entry with key and 4 bytes for expiration ledger.
-pub const EXPIRATION_ENTRY_SIZE: u32 = 2 * 32 + 4;
+/// hash of the corresponding entry and 4 bytes for expiration ledger.
+pub const EXPIRATION_ENTRY_SIZE: u32 = 32 + 4;
 
 const INSTRUCTIONS_INCREMENT: i64 = 10000;
 const DATA_SIZE_1KB_INCREMENT: i64 = 1024;
