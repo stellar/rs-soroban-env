@@ -10,7 +10,7 @@
 use std::rc::Rc;
 
 use soroban_env_common::xdr::{ScErrorCode, ScErrorType};
-use soroban_env_common::{Compare, Val};
+use soroban_env_common::{Compare, Env, Val};
 
 use crate::budget::Budget;
 use crate::xdr::{LedgerEntry, LedgerKey};
@@ -327,19 +327,20 @@ impl Storage {
         &mut self,
         host: &Host,
         key: Rc<LedgerKey>,
-        bump_by_ledgers: u32,
+        low_expiration_watermark: u32,
+        high_expiration_watermark: u32,
     ) -> Result<(), HostError> {
         let _span = tracy_span!("bump key");
 
-        let new_expiration =
-            host.with_ledger_info(|li| Ok(li.sequence_number.saturating_add(bump_by_ledgers)))?;
-
-        if new_expiration > host.max_expiration_ledger()? {
+        if low_expiration_watermark > high_expiration_watermark {
             return Err(host.err(
                 ScErrorType::Storage,
-                ScErrorCode::InvalidAction,
-                "trying to bump past max expiration ledger",
-                &[new_expiration.into()],
+                ScErrorCode::InvalidInput,
+                "low_expiration_watermark must be <= high_expiration_watermark",
+                &[
+                    low_expiration_watermark.into(),
+                    high_expiration_watermark.into(),
+                ],
             ));
         }
 
@@ -355,7 +356,32 @@ impl Storage {
             )
         })?;
 
-        if new_expiration > old_expiration {
+        let ledger_seq: u32 = host.get_ledger_sequence()?.into();
+        if old_expiration < ledger_seq {
+            return Err(host.err(
+                ScErrorType::Storage,
+                ScErrorCode::InternalError,
+                "accessing expired entry",
+                &[old_expiration.into(), ledger_seq.into()],
+            ));
+        }
+
+        let new_expiration = host.with_ledger_info(|li| {
+            Ok(li.sequence_number.saturating_add(high_expiration_watermark))
+        })?;
+
+        if new_expiration > host.max_expiration_ledger()? {
+            return Err(host.err(
+                ScErrorType::Storage,
+                ScErrorCode::InvalidAction,
+                "trying to bump past max expiration ledger",
+                &[new_expiration.into()],
+            ));
+        }
+
+        if new_expiration > old_expiration
+            && old_expiration.saturating_sub(ledger_seq) <= low_expiration_watermark
+        {
             self.map = self.map.insert(
                 key,
                 Some((entry.clone(), Some(new_expiration))),

@@ -688,6 +688,7 @@ fn test_transfer_with_allowance() {
 #[test]
 fn test_allowance_expiration() {
     let test = TokenTest::setup();
+    test.host.enable_debug().unwrap();
 
     let admin = TestSigner::account(&test.issuer_key);
     let token = test.default_token();

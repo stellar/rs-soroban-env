@@ -2,6 +2,7 @@
 use soroban_sdk::{contract, contractimpl, Env, Bytes, BytesN};
 
 pub(crate) const BUMP_AMOUNT: u32 = 518400; // 30 days
+pub(crate) const BALANCE_LIFETIME_THRESHOLD: u32 = BUMP_AMOUNT;
 
 #[contract]
 pub struct WriteBytesContract;
@@ -17,9 +18,9 @@ impl WriteBytesContract {
     pub fn write(env: Env, xdr_bytes: Bytes) -> BytesN<32> {
         let hash = env.crypto().sha256(&xdr_bytes);
         env.storage().temporary().set(&hash, &xdr_bytes);
-        env.storage().temporary().bump(&hash, BUMP_AMOUNT);
+        env.storage().temporary().bump(&hash, BALANCE_LIFETIME_THRESHOLD, BUMP_AMOUNT);
 
-        env.storage().instance().bump(BUMP_AMOUNT);
+        env.storage().instance().bump(BALANCE_LIFETIME_THRESHOLD, BUMP_AMOUNT);
 
         hash
     }
