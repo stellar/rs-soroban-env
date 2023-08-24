@@ -229,13 +229,9 @@ impl AuthTest {
                 if !storage.has(&nonce_key, self.host.budget_ref())? {
                     return Ok(None);
                 }
-                let entry = storage.get(&nonce_key, self.host.budget_ref())?;
-                match &entry.data {
-                    soroban_env_common::xdr::LedgerEntryData::ContractData(contract_data) => {
-                        Ok(Some(contract_data.expiration_ledger_seq))
-                    }
-                    _ => panic!("unexpected entry"),
-                }
+                let (_, expiration_ledger) =
+                    storage.get_with_expiration(&nonce_key, self.host.budget_ref())?;
+                Ok(expiration_ledger)
             })
             .unwrap()
     }

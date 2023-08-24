@@ -157,7 +157,7 @@ impl Symbol {
 
 impl Ord for SymbolSmall {
     fn cmp(&self, other: &Self) -> Ordering {
-        Iterator::cmp(self.into_iter(), other.into_iter())
+        Iterator::cmp(self.into_iter(), *other)
     }
 }
 

@@ -61,7 +61,6 @@ pub fn set_metadata(e: &Host) -> Result<(), HostError> {
         key.try_into_val(e)?,
         metadata.try_into_val(e)?,
         StorageType::Instance,
-        ().into(),
     )?;
     Ok(())
 }

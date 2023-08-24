@@ -194,7 +194,12 @@ impl Host {
         F: FnOnce(&Frame) -> Result<U, HostError>,
     {
         let Ok(context_guard) = self.0.context.try_borrow() else {
-            return Err(self.err(ScErrorType::Context, ScErrorCode::InternalError, "context is already borrowed", &[]));
+            return Err(self.err(
+                ScErrorType::Context,
+                ScErrorCode::InternalError,
+                "context is already borrowed",
+                &[],
+            ));
         };
 
         if let Some(context) = context_guard.last() {
@@ -221,7 +226,12 @@ impl Host {
         F: FnOnce(&mut Context) -> Result<U, HostError>,
     {
         let Ok(mut context_guard) = self.0.context.try_borrow_mut() else {
-            return Err(self.err(ScErrorType::Context, ScErrorCode::InternalError, "context is already borrowed", &[]));
+            return Err(self.err(
+                ScErrorType::Context,
+                ScErrorCode::InternalError,
+                "context is already borrowed",
+                &[],
+            ));
         };
         if let Some(context) = context_guard.last_mut() {
             f(context)
@@ -243,7 +253,12 @@ impl Host {
         F: FnOnce(Option<&Frame>) -> Result<U, HostError>,
     {
         let Ok(context_guard) = self.0.context.try_borrow() else {
-            return Err(self.err(ScErrorType::Context, ScErrorCode::InternalError, "context is already borrowed", &[]));
+            return Err(self.err(
+                ScErrorType::Context,
+                ScErrorCode::InternalError,
+                "context is already borrowed",
+                &[],
+            ));
         };
         if let Some(context) = context_guard.last() {
             f(Some(&context.frame))
@@ -686,14 +701,18 @@ impl Host {
 
     // Notes on metering: covered by the called components.
     fn invoke_function_raw(&self, hf: HostFunction) -> Result<Val, HostError> {
-        self.maybe_autobump_expiration_of_footprint_entries()?;
         let hf_type = hf.discriminant();
         match hf {
             HostFunction::InvokeContract(invoke_args) => {
                 self.with_frame(Frame::HostFunction(hf_type), || {
                     // Metering: conversions to host objects are covered.
                     let ScAddress::Contract(ref contract_id) = invoke_args.contract_address else {
-                        return Err(self.err(ScErrorType::Value, ScErrorCode::UnexpectedType, "invoked address doesn't belong to a contract", &[]));
+                        return Err(self.err(
+                            ScErrorType::Value,
+                            ScErrorCode::UnexpectedType,
+                            "invoked address doesn't belong to a contract",
+                            &[],
+                        ));
                     };
                     let function_name: Symbol = invoke_args.function_name.try_into_val(self)?;
                     let args = self.scvals_to_rawvals(invoke_args.args.as_slice())?;

@@ -13,8 +13,7 @@ use crate::{
 };
 use sha2::{Digest, Sha256};
 use soroban_env_common::xdr::{
-    ContractCodeEntryBody, ContractDataEntry, ContractDataEntryBody, ContractIdPreimage,
-    ContractIdPreimageFromAddress, DepthLimitedWrite, HostFunction, ScAddress,
+    ContractIdPreimage, ContractIdPreimageFromAddress, DepthLimitedWrite, HostFunction, ScAddress,
     SorobanAuthorizationEntry, SorobanAuthorizedFunction, SorobanAuthorizedInvocation,
     SorobanCredentials, VecM, DEFAULT_XDR_RW_DEPTH_LIMIT,
 };
@@ -30,15 +29,12 @@ fn get_contract_wasm_ref(host: &Host, contract_id: Hash) -> Hash {
         assert!(s.has(&storage_key, host.as_budget()).unwrap());
 
         match &s.get(&storage_key, host.as_budget()).unwrap().data {
-            LedgerEntryData::ContractData(ContractDataEntry { body, .. }) => match body {
-                ContractDataEntryBody::DataEntry(data) => match &data.val {
-                    ScVal::ContractInstance(i) => match &i.executable {
-                        ContractExecutable::Wasm(h) => Ok(h.clone()),
-                        _ => panic!("expectecd Wasm executable"),
-                    },
-                    _ => panic!("expected ContractInstance"),
+            LedgerEntryData::ContractData(e) => match &e.val {
+                ScVal::ContractInstance(i) => match &i.executable {
+                    ContractExecutable::Wasm(h) => Ok(h.clone()),
+                    _ => panic!("expectecd Wasm executable"),
                 },
-                _ => panic!("expected DataEntry"),
+                _ => panic!("expected ContractInstance"),
             },
             _ => panic!("expected contract data"),
         }
@@ -52,10 +48,7 @@ fn get_contract_wasm(host: &Host, wasm_hash: Hash) -> Vec<u8> {
         assert!(s.has(&storage_key, host.as_budget()).unwrap());
 
         match &s.get(&storage_key, host.as_budget()).unwrap().data {
-            LedgerEntryData::ContractCode(code_entry) => match &code_entry.body {
-                ContractCodeEntryBody::DataEntry(code) => Ok(code.to_vec()),
-                _ => panic!("expected DataEntry"),
-            },
+            LedgerEntryData::ContractCode(code_entry) => Ok(code_entry.code.to_vec()),
             _ => panic!("expected contract WASM code"),
         }
     })

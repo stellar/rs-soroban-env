@@ -29,7 +29,7 @@ pub struct PRNGUsingTest;
 impl ContractFunctionSet for PRNGUsingTest {
     fn call(&self, func: &Symbol, host: &Host, args: &[Val]) -> Option<Val> {
         let Ok(func) = SymbolSmall::try_from(func.to_val()) else {
-            return None
+            return None;
         };
         let val = if func == BYTES_NEW {
             host.prng_bytes_new(U32Val::from(SEED_LEN))

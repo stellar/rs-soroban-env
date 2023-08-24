@@ -7,21 +7,18 @@
 //!   - [Env::put_contract_data](crate::Env::put_contract_data)
 //!   - [Env::del_contract_data](crate::Env::del_contract_data)
 
-use std::cmp::min;
 use std::rc::Rc;
 
 use soroban_env_common::xdr::{ScErrorCode, ScErrorType};
 use soroban_env_common::{Compare, Val};
 
 use crate::budget::Budget;
-use crate::host::ledger_info_helper::{get_entry_expiration, set_entry_expiration};
-use crate::host::metered_clone::{MeteredAlloc, MeteredClone};
 use crate::xdr::{LedgerEntry, LedgerKey};
 use crate::Host;
 use crate::{host::metered_map::MeteredOrdMap, HostError};
 
 pub type FootprintMap = MeteredOrdMap<Rc<LedgerKey>, AccessType, Budget>;
-pub type StorageMap = MeteredOrdMap<Rc<LedgerKey>, Option<Rc<LedgerEntry>>, Budget>;
+pub type StorageMap = MeteredOrdMap<Rc<LedgerKey>, Option<(Rc<LedgerEntry>, Option<u32>)>, Budget>;
 #[derive(Clone)]
 pub(crate) struct InstanceStorageMap {
     pub(crate) map: MeteredOrdMap<Val, Val, Host>,
@@ -69,7 +66,8 @@ impl Compare<AccessType> for Budget {
 /// A helper type used by [FootprintMode::Recording] to provide access
 /// to a stable read-snapshot of a ledger.
 pub trait SnapshotSource {
-    fn get(&self, key: &Rc<LedgerKey>) -> Result<Rc<LedgerEntry>, HostError>;
+    // Returns the ledger entry for the key and its expiration.
+    fn get(&self, key: &Rc<LedgerKey>) -> Result<(Rc<LedgerEntry>, Option<u32>), HostError>;
     fn has(&self, key: &Rc<LedgerKey>) -> Result<bool, HostError>;
 }
 
@@ -208,14 +206,41 @@ impl Storage {
         self.prepare_read_only_access(key, budget)?;
         match self.map.get::<Rc<LedgerKey>>(key, budget)? {
             None | Some(None) => Err((ScErrorType::Storage, ScErrorCode::MissingValue).into()),
-            Some(Some(val)) => Ok(Rc::clone(val)),
+            Some(Some((val, _))) => Ok(Rc::clone(val)),
+        }
+    }
+
+    /// Attempts to retrieve the [LedgerEntry] associated with a given
+    /// [LedgerKey] and its expiration ledger (if applicable) in the [Storage],
+    /// returning an error if the key is not found.
+    ///
+    /// Expiration ledgers only exist for `ContractData` and `ContractCode`
+    /// ledger entries and are `None` for all the other entry kinds.
+    ///
+    /// In [FootprintMode::Recording] mode, records the read [LedgerKey] in the
+    /// [Footprint] as [AccessType::ReadOnly] (unless already recorded as
+    /// [AccessType::ReadWrite]) and reads through to the underlying
+    /// [SnapshotSource], if the [LedgerKey] has not yet been loaded.
+    ///
+    /// In [FootprintMode::Enforcing] mode, succeeds only if the read
+    /// [LedgerKey] has been declared in the [Footprint].
+    pub fn get_with_expiration(
+        &mut self,
+        key: &Rc<LedgerKey>,
+        budget: &Budget,
+    ) -> Result<(Rc<LedgerEntry>, Option<u32>), HostError> {
+        let _span = tracy_span!("storage get");
+        self.prepare_read_only_access(key, budget)?;
+        match self.map.get::<Rc<LedgerKey>>(key, budget)? {
+            None | Some(None) => Err((ScErrorType::Storage, ScErrorCode::MissingValue).into()),
+            Some(Some((val, expiration))) => Ok((Rc::clone(val), *expiration)),
         }
     }
 
     fn put_opt(
         &mut self,
         key: &Rc<LedgerKey>,
-        val: Option<&Rc<LedgerEntry>>,
+        val: Option<(&Rc<LedgerEntry>, Option<u32>)>,
         budget: &Budget,
     ) -> Result<(), HostError> {
         let ty = AccessType::ReadWrite;
@@ -227,9 +252,11 @@ impl Storage {
                 self.footprint.enforce_access(key, ty, budget)?;
             }
         };
-        self.map = self
-            .map
-            .insert(Rc::clone(key), val.map(Rc::clone), budget)?;
+        self.map = self.map.insert(
+            Rc::clone(key),
+            val.map(|(e, expiration)| (Rc::clone(e), expiration)),
+            budget,
+        )?;
         Ok(())
     }
 
@@ -246,10 +273,11 @@ impl Storage {
         &mut self,
         key: &Rc<LedgerKey>,
         val: &Rc<LedgerEntry>,
+        expiration_ledger: Option<u32>,
         budget: &Budget,
     ) -> Result<(), HostError> {
         let _span = tracy_span!("storage put");
-        self.put_opt(key, Some(val), budget)
+        self.put_opt(key, Some((val, expiration_ledger)), budget)
     }
 
     /// Attempts to delete the [LedgerEntry] associated with a given [LedgerKey]
@@ -293,13 +321,8 @@ impl Storage {
     /// This operation is only defined within a host as it relies on ledger
     /// state.
     ///
-    /// This is always considered a 'read-only' operation, even though it might
-    /// modify the internal storage state. The only fields of the 'read-only'
-    /// entries it modifies are their expiry ledgers, and the higher level logic
-    /// that processes the side effects of a transaction is supposed to
-    /// separately extract and write back to stable storage just the changed
-    /// expiry times of "read-only" entries, not even considering the
-    /// possibility of anything else about them changing.
+    /// This operation does not modify any ledger entries, but does change the
+    /// internal storage
     pub fn bump(
         &mut self,
         host: &Host,
@@ -322,8 +345,8 @@ impl Storage {
 
         // Bumping deleted/non-existing/out-of-footprint entries will result in
         // an error.
-        let old_entry = self.get(&key, host.budget_ref())?;
-        let old_expiration = get_entry_expiration(old_entry.as_ref()).ok_or_else(|| {
+        let (entry, old_expiration) = self.get_with_expiration(&key, host.budget_ref())?;
+        let old_expiration = old_expiration.ok_or_else(|| {
             host.err(
                 ScErrorType::Storage,
                 ScErrorCode::InternalError,
@@ -333,56 +356,9 @@ impl Storage {
         })?;
 
         if new_expiration > old_expiration {
-            let mut new_entry = (*old_entry).metered_clone(host)?;
-            set_entry_expiration(&mut new_entry, new_expiration);
             self.map = self.map.insert(
                 key,
-                Some(Rc::metered_new(new_entry, host)?),
-                host.budget_ref(),
-            )?;
-        }
-        Ok(())
-    }
-
-    /// Bumps `key` to live for at least `bump_by_ledgers` from the current
-    /// expiration of the entry.
-    ///
-    /// This should only be used for internal autobumps.
-    ///  
-    /// This operation is only defined within a host as it relies on ledger
-    /// state.
-    ///
-    /// This is always considered a 'read-only' operation, even though it might
-    /// modify the internal storage state.
-    pub(crate) fn bump_relative_to_entry_expiration(
-        &mut self,
-        host: &Host,
-        key: Rc<LedgerKey>,
-        bump_by_ledgers: u32,
-    ) -> Result<(), HostError> {
-        let _span = tracy_span!("bump key relative");
-        // Bumping deleted/non-existing/out-of-footprint entries will result in
-        // an error.
-        let old_entry = self.get(&key, host.budget_ref())?;
-        let old_expiration = get_entry_expiration(old_entry.as_ref()).ok_or_else(|| {
-            host.err(
-                ScErrorType::Storage,
-                ScErrorCode::InternalError,
-                "trying to bump non-expirable entry",
-                &[],
-            )
-        })?;
-        let new_expiration = min(
-            old_expiration.saturating_add(bump_by_ledgers),
-            host.max_expiration_ledger()?,
-        );
-
-        if new_expiration > old_expiration {
-            let mut new_entry = (*old_entry).metered_clone(host)?;
-            set_entry_expiration(&mut new_entry, new_expiration);
-            self.map = self.map.insert(
-                key,
-                Some(Rc::metered_new(new_entry, host)?),
+                Some((entry.clone(), Some(new_expiration))),
                 host.budget_ref(),
             )?;
         }
@@ -406,7 +382,7 @@ impl Storage {
                     } else {
                         None
                     };
-                    self.map = self.map.insert(Rc::clone(key), value, budget)?;
+                    self.map = self.map.insert(key.clone(), value, budget)?;
                 }
             }
             FootprintMode::Enforcing => {
@@ -424,7 +400,7 @@ mod test_footprint {
 
     use super::*;
     use crate::budget::Budget;
-    use crate::xdr::{ContractDataDurability, ContractEntryBodyType, LedgerKeyContractData, ScVal};
+    use crate::xdr::{ContractDataDurability, LedgerKeyContractData, ScVal};
 
     #[test]
     fn footprint_record_access() -> Result<(), HostError> {
@@ -432,15 +408,11 @@ mod test_footprint {
         budget.reset_unlimited()?;
         let mut fp = Footprint::default();
         // record when key not exist
-        let key = Rc::metered_new(
-            LedgerKey::ContractData(LedgerKeyContractData {
-                contract: ScAddress::Contract([0; 32].into()),
-                key: ScVal::I32(0),
-                durability: ContractDataDurability::Persistent,
-                body_type: ContractEntryBodyType::DataEntry,
-            }),
-            &budget,
-        )?;
+        let key = Rc::new(LedgerKey::ContractData(LedgerKeyContractData {
+            contract: ScAddress::Contract([0; 32].into()),
+            key: ScVal::I32(0),
+            durability: ContractDataDurability::Persistent,
+        }));
         fp.record_access(&key, AccessType::ReadOnly, &budget)?;
         assert_eq!(fp.0.contains_key::<LedgerKey>(&key, &budget)?, true);
         assert_eq!(
@@ -464,37 +436,18 @@ mod test_footprint {
     #[test]
     fn footprint_enforce_access() -> Result<(), HostError> {
         let budget = Budget::default();
-        let key = Rc::metered_new(
-            LedgerKey::ContractData(LedgerKeyContractData {
-                contract: ScAddress::Contract([0; 32].into()),
-                key: ScVal::I32(0),
-                durability: ContractDataDurability::Persistent,
-                body_type: ContractEntryBodyType::DataEntry,
-            }),
-            &budget,
-        )?;
+        let key = Rc::new(LedgerKey::ContractData(LedgerKeyContractData {
+            contract: ScAddress::Contract([0; 32].into()),
+            key: ScVal::I32(0),
+            durability: ContractDataDurability::Persistent,
+        }));
 
         // Key not in footprint. Only difference is type_
-        let key2 = Rc::metered_new(
-            LedgerKey::ContractData(LedgerKeyContractData {
-                contract: ScAddress::Contract([0; 32].into()),
-                key: ScVal::I32(0),
-                durability: ContractDataDurability::Temporary,
-                body_type: ContractEntryBodyType::DataEntry,
-            }),
-            &budget,
-        )?;
-
-        // Key not in footprint. Only difference is body_type
-        let key3 = Rc::metered_new(
-            LedgerKey::ContractData(LedgerKeyContractData {
-                contract: ScAddress::Contract([0; 32].into()),
-                key: ScVal::I32(0),
-                durability: ContractDataDurability::Persistent,
-                body_type: ContractEntryBodyType::ExpirationExtension,
-            }),
-            &budget,
-        )?;
+        let key2 = Rc::new(LedgerKey::ContractData(LedgerKeyContractData {
+            contract: ScAddress::Contract([0; 32].into()),
+            key: ScVal::I32(0),
+            durability: ContractDataDurability::Temporary,
+        }));
 
         let om = [(Rc::clone(&key), AccessType::ReadOnly)].into();
         let mom = MeteredOrdMap::from_map(om, &budget)?;
@@ -502,10 +455,6 @@ mod test_footprint {
         assert!(fp
             .enforce_access(&key2, AccessType::ReadOnly, &budget)
             .is_err());
-        assert!(fp
-            .enforce_access(&key3, AccessType::ReadOnly, &budget)
-            .is_err());
-
         fp.enforce_access(&key, AccessType::ReadOnly, &budget)?;
         fp.0 =
             fp.0.insert(Rc::clone(&key), AccessType::ReadWrite, &budget)?;
@@ -518,15 +467,11 @@ mod test_footprint {
     fn footprint_enforce_access_not_exist() -> Result<(), HostError> {
         let budget = Budget::default();
         let mut fp = Footprint::default();
-        let key = Rc::metered_new(
-            LedgerKey::ContractData(LedgerKeyContractData {
-                contract: ScAddress::Contract([0; 32].into()),
-                key: ScVal::I32(0),
-                durability: ContractDataDurability::Persistent,
-                body_type: ContractEntryBodyType::DataEntry,
-            }),
-            &budget,
-        )?;
+        let key = Rc::new(LedgerKey::ContractData(LedgerKeyContractData {
+            contract: ScAddress::Contract([0; 32].into()),
+            key: ScVal::I32(0),
+            durability: ContractDataDurability::Persistent,
+        }));
         let res = fp.enforce_access(&key, AccessType::ReadOnly, &budget);
         assert!(HostError::result_matches_err(
             res,
@@ -538,15 +483,11 @@ mod test_footprint {
     #[test]
     fn footprint_attempt_to_write_readonly_entry() -> Result<(), HostError> {
         let budget = Budget::default();
-        let key = Rc::metered_new(
-            LedgerKey::ContractData(LedgerKeyContractData {
-                contract: ScAddress::Contract([0; 32].into()),
-                key: ScVal::I32(0),
-                durability: ContractDataDurability::Persistent,
-                body_type: ContractEntryBodyType::DataEntry,
-            }),
-            &budget,
-        )?;
+        let key = Rc::new(LedgerKey::ContractData(LedgerKeyContractData {
+            contract: ScAddress::Contract([0; 32].into()),
+            key: ScVal::I32(0),
+            durability: ContractDataDurability::Persistent,
+        }));
         let om = [(Rc::clone(&key), AccessType::ReadOnly)].into();
         let mom = MeteredOrdMap::from_map(om, &budget)?;
         let mut fp = Footprint(mom);
@@ -567,17 +508,17 @@ pub(crate) mod test_storage {
 
     use super::*;
     #[allow(dead_code)]
-    pub(crate) struct MockSnapshotSource(BTreeMap<Rc<LedgerKey>, Rc<LedgerEntry>>);
+    pub(crate) struct MockSnapshotSource(BTreeMap<Rc<LedgerKey>, (Rc<LedgerEntry>, Option<u32>)>);
     #[allow(dead_code)]
     impl MockSnapshotSource {
         pub(crate) fn new() -> Self {
-            Self(BTreeMap::<Rc<LedgerKey>, Rc<LedgerEntry>>::new())
+            Self(BTreeMap::<Rc<LedgerKey>, (Rc<LedgerEntry>, Option<u32>)>::new())
         }
     }
     impl SnapshotSource for MockSnapshotSource {
-        fn get(&self, key: &Rc<LedgerKey>) -> Result<Rc<LedgerEntry>, HostError> {
+        fn get(&self, key: &Rc<LedgerKey>) -> Result<(Rc<LedgerEntry>, Option<u32>), HostError> {
             if let Some(val) = self.0.get(key) {
-                Ok(Rc::clone(&val))
+                Ok((Rc::clone(&val.0), val.1))
             } else {
                 Err(
                     Error::from_type_and_code(ScErrorType::Storage, ScErrorCode::MissingValue)

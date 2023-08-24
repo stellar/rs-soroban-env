@@ -63,7 +63,6 @@ fn write_balance(e: &Host, addr: Address, balance: BalanceValue) -> Result<(), H
         key.try_into_val(e)?,
         balance.try_into_val(e)?,
         StorageType::Persistent,
-        ().into(),
     )?;
 
     e.bump_contract_data(
@@ -414,24 +413,36 @@ fn transfer_account_balance(e: &Host, account_id: AccountId, amount: i64) -> Res
     let lk = e.to_account_key(account_id)?;
 
     e.with_mut_storage(|storage| {
-        let mut le = storage
-            .get(&lk, e.as_budget())
-            .map_err(|_| e.error(ContractError::AccountMissingError.into(), "account missing", &[]))?;
+        let mut le = storage.get(&lk, e.as_budget()).map_err(|_| {
+            e.error(
+                ContractError::AccountMissingError.into(),
+                "account missing",
+                &[],
+            )
+        })?;
 
         let mut ae = match &le.data {
             LedgerEntryData::Account(ae) => Ok(ae.metered_clone(e)?),
-            _ => Err(e.error(ContractError::InternalError.into(), "unexpected entry found", &[])),
+            _ => Err(e.error(
+                ContractError::InternalError.into(),
+                "unexpected entry found",
+                &[],
+            )),
         }?;
 
         let (min_balance, max_balance) = get_min_max_account_balance(e, &ae)?;
 
         let Some(new_balance) = ae.balance.checked_add(amount) else {
-            return Err(e.error(ContractError::BalanceError.into(), "resulting balance overflow", &[]));
+            return Err(e.error(
+                ContractError::BalanceError.into(),
+                "resulting balance overflow",
+                &[],
+            ));
         };
         if new_balance >= min_balance && new_balance <= max_balance {
             ae.balance = new_balance;
             le = Host::ledger_entry_from_data(e, LedgerEntryData::Account(ae))?;
-            storage.put(&lk, &le, e.as_budget())
+            storage.put(&lk, &le, None, e.as_budget())
         } else {
             Err(err!(
                 e,
@@ -455,23 +466,35 @@ fn transfer_trustline_balance(
     let lk = e.to_trustline_key(account_id, asset)?;
     e.with_mut_storage(|storage| {
         let mut le = storage.get(&lk, e.as_budget()).map_err(|_| {
-            e.error(ContractError::TrustlineMissingError.into(), "trustline missing", &[])
+            e.error(
+                ContractError::TrustlineMissingError.into(),
+                "trustline missing",
+                &[],
+            )
         })?;
 
         let mut tl = match &le.data {
             LedgerEntryData::Trustline(tl) => Ok(tl.metered_clone(e)?),
-            _ => Err(e.error(ContractError::InternalError.into(), "unexpected entry found", &[])),
+            _ => Err(e.error(
+                ContractError::InternalError.into(),
+                "unexpected entry found",
+                &[],
+            )),
         }?;
 
         let (min_balance, max_balance) = get_min_max_trustline_balance(e, &tl)?;
 
         let Some(new_balance) = tl.balance.checked_add(amount) else {
-            return Err(e.error(ContractError::BalanceError.into(), "resulting balance overflow", &[]));
+            return Err(e.error(
+                ContractError::BalanceError.into(),
+                "resulting balance overflow",
+                &[],
+            ));
         };
         if new_balance >= min_balance && new_balance <= max_balance {
             tl.balance = new_balance;
             le = Host::ledger_entry_from_data(e, LedgerEntryData::Trustline(tl))?;
-            storage.put(&lk, &le, e.as_budget())
+            storage.put(&lk, &le, None, e.as_budget())
         } else {
             Err(err!(
                 e,
@@ -772,7 +795,7 @@ fn set_trustline_authorization(
             tl.flags |= TrustLineFlags::AuthorizedToMaintainLiabilitiesFlag as u32;
         }
         le = Host::ledger_entry_from_data(e, LedgerEntryData::Trustline(tl))?;
-        storage.put(&lk, &le, e.as_budget())
+        storage.put(&lk, &le, None, e.as_budget())
     })
 }
 

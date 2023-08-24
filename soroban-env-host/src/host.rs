@@ -47,9 +47,8 @@ pub use prng::{Seed, SEED_BYTES};
 mod validity;
 pub use error::HostError;
 use soroban_env_common::xdr::{
-    ContractCodeEntryBody, ContractDataDurability, ContractDataEntryBody, ContractDataEntryData,
-    ContractEntryBodyType, ContractIdPreimage, ContractIdPreimageFromAddress, ScContractInstance,
-    ScErrorCode, MASK_CONTRACT_DATA_FLAGS_V20,
+    ContractDataDurability, ContractIdPreimage, ContractIdPreimageFromAddress, ScContractInstance,
+    ScErrorCode,
 };
 
 use self::{
@@ -106,7 +105,6 @@ pub struct LedgerInfo {
     pub min_temp_entry_expiration: u32,
     pub min_persistent_entry_expiration: u32,
     pub max_entry_expiration: u32,
-    pub autobump_ledgers: u32,
 }
 
 #[derive(Clone, Default)]
@@ -680,9 +678,12 @@ impl Host {
         &self,
         key: &Rc<LedgerKey>,
         val: &Rc<soroban_env_common::xdr::LedgerEntry>,
+        expiration_ledger: Option<u32>,
     ) -> Result<(), HostError> {
         self.as_budget().with_free_budget(|| {
-            self.with_mut_storage(|storage| storage.put(key, val, self.as_budget()))
+            self.with_mut_storage(|storage| {
+                storage.put(key, val, expiration_ledger, self.as_budget())
+            })
         })
     }
 
@@ -693,7 +694,7 @@ impl Host {
     pub fn setup_storage_entry(
         &self,
         key: Rc<LedgerKey>,
-        val: Option<Rc<soroban_env_common::xdr::LedgerEntry>>,
+        val: Option<(Rc<soroban_env_common::xdr::LedgerEntry>, Option<u32>)>,
         access_type: AccessType,
     ) -> Result<(), HostError> {
         self.as_budget().with_free_budget(|| {
@@ -759,7 +760,6 @@ impl Host {
         let code_key = Rc::metered_new(
             LedgerKey::ContractCode(LedgerKeyContractCode {
                 hash: Hash(hash_bytes.metered_clone(self)?),
-                body_type: ContractEntryBodyType::DataEntry,
             }),
             self,
         )?;
@@ -768,26 +768,23 @@ impl Host {
             .has(&code_key, self.as_budget())
             .map_err(|e| self.decorate_contract_code_storage_error(e, &Hash(hash_bytes)))?
         {
-            let body = ContractCodeEntryBody::DataEntry(wasm.try_into().map_err(|_| {
-                self.err(
-                    ScErrorType::Value,
-                    ScErrorCode::ExceededLimit,
-                    "Wasm code is too large",
-                    &[],
-                )
-            })?);
-
             self.with_mut_storage(|storage| {
                 let data = LedgerEntryData::ContractCode(ContractCodeEntry {
                     hash: Hash(hash_bytes),
-                    body,
                     ext: ExtensionPoint::V0,
-                    expiration_ledger_seq: self
-                        .get_min_expiration_ledger(ContractDataDurability::Persistent)?,
+                    code: wasm.try_into().map_err(|_| {
+                        self.err(
+                            ScErrorType::Value,
+                            ScErrorCode::ExceededLimit,
+                            "Wasm code is too large",
+                            &[],
+                        )
+                    })?,
                 });
                 storage.put(
                     &code_key,
                     &Host::ledger_entry_from_data(self, data)?,
+                    Some(self.get_min_expiration_ledger(ContractDataDurability::Persistent)?),
                     self.as_budget(),
                 )
             })?;
@@ -856,23 +853,7 @@ impl Host {
         k: Val,
         v: Val,
         t: StorageType,
-        f: Val,
     ) -> Result<(), HostError> {
-        let flags: Option<u32> = if f.is_void() {
-            None
-        } else {
-            let val = self.u32_from_rawval_input("f", f)?;
-            if ((val as u64) & !MASK_CONTRACT_DATA_FLAGS_V20) != 0 {
-                return Err(self.err(
-                    ScErrorType::Value,
-                    ScErrorCode::InvalidInput,
-                    "invalid flags",
-                    &[],
-                ));
-            }
-            Some(val)
-        };
-
         let durability: ContractDataDurability = t.try_into()?;
         let key = self.contract_data_key_from_rawval(k, durability)?;
         // Currently the storage stores the whole ledger entries, while this
@@ -884,29 +865,15 @@ impl Host {
             .has(&key, self.as_budget())
             .map_err(|e| self.decorate_contract_data_storage_error(e, k))?
         {
-            let mut current = (*self
+            let (current, expiration_ledger) = self
                 .try_borrow_storage_mut()?
-                .get(&key, self.as_budget())
-                .map_err(|e| self.decorate_contract_data_storage_error(e, k))?)
-            .metered_clone(self)?;
-
+                .get_with_expiration(&key, self.as_budget())
+                .map_err(|e| self.decorate_contract_data_storage_error(e, k))?;
+            let mut current = (*current).metered_clone(self)?;
             match current.data {
-                LedgerEntryData::ContractData(ref mut entry) => match entry.body {
-                    ContractDataEntryBody::DataEntry(ref mut data) => {
-                        data.val = self.from_host_val(v)?;
-                        if let Some(new_flags) = flags {
-                            data.flags = new_flags;
-                        }
-                    }
-                    _ => {
-                        return Err(self.err(
-                            ScErrorType::Storage,
-                            ScErrorCode::InternalError,
-                            "expected DataEntry",
-                            &[],
-                        ));
-                    }
-                },
+                LedgerEntryData::ContractData(ref mut entry) => {
+                    entry.val = self.from_host_val(v)?;
+                }
                 _ => {
                     return Err(self.err(
                         ScErrorType::Storage,
@@ -917,61 +884,31 @@ impl Host {
                 }
             }
             self.try_borrow_storage_mut()?
-                .put(&key, &Rc::metered_new(current, self)?, self.as_budget())
+                .put(
+                    &key,
+                    &Rc::metered_new(current, self)?,
+                    expiration_ledger,
+                    self.as_budget(),
+                )
                 .map_err(|e| self.decorate_contract_data_storage_error(e, k))?;
         } else {
-            let body = ContractDataEntryBody::DataEntry(ContractDataEntryData {
-                val: self.from_host_val(v)?,
-                flags: flags.unwrap_or(0),
-            });
             let data = LedgerEntryData::ContractData(ContractDataEntry {
                 contract: ScAddress::Contract(self.get_current_contract_id_internal()?),
                 key: self.from_host_val(k)?,
-                body,
-                expiration_ledger_seq: self.get_min_expiration_ledger(durability)?,
+                val: self.from_host_val(v)?,
                 durability,
+                ext: ExtensionPoint::V0,
             });
             self.try_borrow_storage_mut()?
                 .put(
                     &key,
                     &Host::ledger_entry_from_data(self, data)?,
+                    Some(self.get_min_expiration_ledger(durability)?),
                     self.as_budget(),
                 )
                 .map_err(|e| self.decorate_contract_data_storage_error(e, k))?;
         }
 
-        Ok(())
-    }
-
-    // If autobump enabled, autobumps all the entries in the footprint.
-    fn maybe_autobump_expiration_of_footprint_entries(&self) -> Result<(), HostError> {
-        let Some(autobump_ledgers) = self.with_ledger_info(|li| {
-            if li.autobump_ledgers > 0 {
-                Ok(Some(li.autobump_ledgers))
-            } else {
-                Ok(None)
-            }
-        })? else {
-            return Ok(());
-        };
-        // Need to copy the footprint out of the storage to allow mut borrow of
-        // storage.
-        let footprint_map = self.try_borrow_storage()?.footprint.0.metered_clone(self)?;
-        for (key, _) in footprint_map.iter(self.budget_ref())? {
-            match key.as_ref() {
-                LedgerKey::ContractData(_) | LedgerKey::ContractCode(_) => {
-                    if self.try_borrow_storage_mut()?.has(key, self.budget_ref())? {
-                        self.try_borrow_storage_mut()?
-                            .bump_relative_to_entry_expiration(
-                                self,
-                                key.metered_clone(self)?,
-                                autobump_ledgers,
-                            )?;
-                    }
-                }
-                _ => (),
-            }
-        }
         Ok(())
     }
 
@@ -2129,13 +2066,12 @@ impl VmCallerEnv for Host {
         k: Val,
         v: Val,
         t: StorageType,
-        f: Val,
     ) -> Result<Void, HostError> {
         self.check_val_integrity(k)?;
         self.check_val_integrity(v)?;
         match t {
             StorageType::Temporary | StorageType::Persistent => {
-                self.put_contract_data_into_ledger(k, v, t, f)?
+                self.put_contract_data_into_ledger(k, v, t)?
             }
             StorageType::Instance => self.with_mut_instance_storage(|s| {
                 s.map = s.map.insert(k, v, self)?;
@@ -2183,15 +2119,7 @@ impl VmCallerEnv for Host {
                     .get(&key, self.as_budget())
                     .map_err(|e| self.decorate_contract_data_storage_error(e, k))?;
                 match &entry.data {
-                    LedgerEntryData::ContractData(ContractDataEntry { body, .. }) => match body {
-                        ContractDataEntryBody::DataEntry(data) => Ok(self.to_host_val(&data.val)?),
-                        _ => Err(self.err(
-                            ScErrorType::Storage,
-                            ScErrorCode::InternalError,
-                            "expected DataEntry",
-                            &[],
-                        )),
-                    },
+                    LedgerEntryData::ContractData(e) => Ok(self.to_host_val(&e.val)?),
                     _ => Err(self.err(
                         ScErrorType::Storage,
                         ScErrorCode::InternalError,

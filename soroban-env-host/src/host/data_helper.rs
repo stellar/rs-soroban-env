@@ -2,8 +2,7 @@ use core::cmp::min;
 use std::rc::Rc;
 
 use soroban_env_common::xdr::{
-    BytesM, ContractCodeEntryBody, ContractDataDurability, ContractDataEntryBody,
-    ContractDataEntryData, ContractEntryBodyType, ContractIdPreimage, HashIdPreimageContractId,
+    BytesM, ContractDataDurability, ContractIdPreimage, ExtensionPoint, HashIdPreimageContractId,
     ScAddress, ScContractInstance, ScErrorCode, ScErrorType,
 };
 use soroban_env_common::{AddressObject, Env, U32Val};
@@ -29,7 +28,6 @@ impl Host {
             LedgerKey::ContractData(LedgerKeyContractData {
                 key: ScVal::LedgerKeyContractInstance,
                 durability: ContractDataDurability::Persistent,
-                body_type: ContractEntryBodyType::DataEntry,
                 contract: ScAddress::Contract(contract_id),
             }),
             self,
@@ -43,20 +41,13 @@ impl Host {
     ) -> Result<ScContractInstance, HostError> {
         let entry = self.try_borrow_storage_mut()?.get(key, self.as_budget())?;
         match &entry.data {
-            LedgerEntryData::ContractData(ContractDataEntry { body, .. }) => match body {
-                ContractDataEntryBody::DataEntry(data) => match &data.val {
-                    ScVal::ContractInstance(instance) => instance.metered_clone(self),
-                    other => Err(err!(
-                        self,
-                        (ScErrorType::Storage, ScErrorCode::InternalError),
-                        "ledger entry for contract instance does not contain contract instance",
-                        *other
-                    )),
-                },
-                _ => Err(err!(
+            LedgerEntryData::ContractData(e) => match &e.val {
+                ScVal::ContractInstance(instance) => instance.metered_clone(self),
+                other => Err(err!(
                     self,
                     (ScErrorType::Storage, ScErrorCode::InternalError),
-                    "expected DataEntry",
+                    "ledger entry for contract instance does not contain contract instance",
+                    *other
                 )),
             },
             _ => Err(self.err(
@@ -74,10 +65,7 @@ impl Host {
     ) -> Result<Rc<LedgerKey>, HostError> {
         let wasm_hash = wasm_hash.metered_clone(self)?;
         Rc::metered_new(
-            LedgerKey::ContractCode(LedgerKeyContractCode {
-                hash: wasm_hash,
-                body_type: ContractEntryBodyType::DataEntry,
-            }),
+            LedgerKey::ContractCode(LedgerKeyContractCode { hash: wasm_hash }),
             self,
         )
     }
@@ -90,14 +78,7 @@ impl Host {
             .map_err(|e| self.decorate_contract_code_storage_error(e, wasm_hash))?
             .data
         {
-            LedgerEntryData::ContractCode(e) => match &e.body {
-                ContractCodeEntryBody::DataEntry(code) => code.metered_clone(self),
-                _ => Err(err!(
-                    self,
-                    (ScErrorType::Storage, ScErrorCode::InternalError),
-                    "expected DataEntry",
-                )),
-            },
+            LedgerEntryData::ContractCode(e) => e.code.metered_clone(self),
             _ => Err(err!(
                 self,
                 (ScErrorType::Storage, ScErrorCode::InternalError),
@@ -121,22 +102,19 @@ impl Host {
         contract_id: Hash,
         key: &Rc<LedgerKey>,
     ) -> Result<(), HostError> {
-        let body = ContractDataEntryBody::DataEntry(ContractDataEntryData {
-            val: ScVal::ContractInstance(instance),
-            flags: 0,
-        });
-
         if self
             .try_borrow_storage_mut()?
-            .has(&key, self.as_budget())
+            .has(key, self.as_budget())
             .map_err(|e| self.decorate_contract_instance_storage_error(e, &contract_id))?
         {
-            let mut current = (*self.try_borrow_storage_mut()?.get(&key, self.as_budget())?)
-                .metered_clone(self)?;
+            let (current, expiration_ledger) = self
+                .try_borrow_storage_mut()?
+                .get_with_expiration(key, self.as_budget())?;
+            let mut current = (*current).metered_clone(self.as_budget())?;
 
             match current.data {
                 LedgerEntryData::ContractData(ref mut entry) => {
-                    entry.body = body;
+                    entry.val = ScVal::ContractInstance(instance);
                 }
                 _ => {
                     return Err(self.err(
@@ -148,21 +126,26 @@ impl Host {
                 }
             }
             self.try_borrow_storage_mut()?
-                .put(&key, &Rc::metered_new(current, self)?, self.as_budget())
+                .put(
+                    &key,
+                    &Rc::metered_new(current, self)?,
+                    expiration_ledger,
+                    self.as_budget(),
+                )
                 .map_err(|e| self.decorate_contract_instance_storage_error(e, &contract_id))?;
         } else {
             let data = LedgerEntryData::ContractData(ContractDataEntry {
                 contract: ScAddress::Contract(contract_id.metered_clone(self)?),
                 key: ScVal::LedgerKeyContractInstance,
-                body,
+                val: ScVal::ContractInstance(instance),
                 durability: ContractDataDurability::Persistent,
-                expiration_ledger_seq: self
-                    .get_min_expiration_ledger(ContractDataDurability::Persistent)?,
+                ext: ExtensionPoint::V0,
             });
             self.try_borrow_storage_mut()?
                 .put(
                     key,
                     &Host::ledger_entry_from_data(self, data)?,
+                    Some(self.get_min_expiration_ledger(ContractDataDurability::Persistent)?),
                     self.as_budget(),
                 )
                 .map_err(|e| self.decorate_contract_instance_storage_error(e, &contract_id))?;

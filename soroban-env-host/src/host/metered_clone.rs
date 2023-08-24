@@ -9,10 +9,9 @@ use crate::{
     storage::AccessType,
     xdr::{
         AccountEntry, AccountId, Asset, BytesM, ClaimableBalanceEntry, ConfigSettingEntry,
-        ContractCodeEntry, ContractCodeEntryBody, ContractCostType, ContractDataEntryBody,
-        ContractEvent, ContractEventBody, ContractEventType, ContractExecutable,
-        ContractIdPreimage, CreateContractArgs, DataEntry, DepthLimiter, Duration, Hash,
-        LedgerEntry, LedgerEntryData, LedgerEntryExt, LedgerKey, LedgerKeyAccount,
+        ContractCodeEntry, ContractCostType, ContractEvent, ContractEventBody, ContractEventType,
+        ContractExecutable, ContractIdPreimage, CreateContractArgs, DataEntry, DepthLimiter,
+        Duration, Hash, LedgerEntry, LedgerEntryData, LedgerEntryExt, LedgerKey, LedgerKeyAccount,
         LedgerKeyClaimableBalance, LedgerKeyConfigSetting, LedgerKeyContractCode, LedgerKeyData,
         LedgerKeyLiquidityPool, LedgerKeyOffer, LedgerKeyTrustLine, LiquidityPoolEntry, OfferEntry,
         PublicKey, ScAddress, ScBytes, ScContractInstance, ScErrorCode, ScErrorType, ScMap,
@@ -547,7 +546,8 @@ impl MeteredClone for LedgerKey {
             | LedgerKey::ClaimableBalance(_)
             | LedgerKey::LiquidityPool(_)
             | LedgerKey::ContractCode(_)
-            | LedgerKey::ConfigSetting(_) => Ok(()),
+            | LedgerKey::ConfigSetting(_)
+            | LedgerKey::Expiration(_) => Ok(()),
         }
     }
 }
@@ -559,19 +559,15 @@ impl MeteredClone for LedgerEntry {
         use LedgerEntryData::*;
         match &self.data {
             ContractData(d) => {
-                if let ContractDataEntryBody::DataEntry(e) = &d.body {
-                    e.val.charge_for_substructure(budget.clone())?;
-                }
+                d.val.charge_for_substructure(budget.clone())?;
                 d.key.charge_for_substructure(budget)
             }
             ContractCode(c) => {
-                if let ContractCodeEntryBody::DataEntry(d) = &c.body {
-                    d.charge_for_substructure(budget)?;
-                }
+                c.charge_for_substructure(budget)?;
                 Ok(())
             }
             Account(_) | Trustline(_) | Offer(_) | Data(_) | ClaimableBalance(_)
-            | LiquidityPool(_) | ConfigSetting(_) => Ok(()),
+            | LiquidityPool(_) | ConfigSetting(_) | Expiration(_) => Ok(()),
         }
     }
 }

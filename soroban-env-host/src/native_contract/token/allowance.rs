@@ -88,7 +88,6 @@ pub fn write_allowance(
                 key.try_into_val(e)?,
                 allowance_with_old_expiration.0.try_into_val(e)?,
                 StorageType::Temporary,
-                ().into(),
             )?;
 
             if allowance_with_old_expiration.0.amount > 0

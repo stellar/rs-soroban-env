@@ -9,7 +9,6 @@ pub fn write_asset_info(e: &Host, asset_info: AssetInfo) -> Result<(), HostError
         key.try_into_val(e)?,
         asset_info.try_into_val(e)?,
         StorageType::Instance,
-        ().into(),
     )?;
     Ok(())
 }

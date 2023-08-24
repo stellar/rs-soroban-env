@@ -12,9 +12,9 @@ use soroban_env_common::num::{
     i256_from_pieces, i256_into_pieces, u256_from_pieces, u256_into_pieces,
 };
 use soroban_env_common::xdr::{
-    self, int128_helpers, AccountId, ContractDataDurability, ContractEntryBodyType, DepthLimiter,
-    Int128Parts, Int256Parts, ScAddress, ScBytes, ScErrorCode, ScErrorType, ScMap, ScMapEntry,
-    UInt128Parts, UInt256Parts, VecM,
+    self, int128_helpers, AccountId, ContractDataDurability, DepthLimiter, Int128Parts,
+    Int256Parts, ScAddress, ScBytes, ScErrorCode, ScErrorType, ScMap, ScMapEntry, UInt128Parts,
+    UInt256Parts, VecM,
 };
 use soroban_env_common::{
     AddressObject, BytesObject, Convert, Object, ScValObjRef, ScValObject, TryFromVal, TryIntoVal,
@@ -172,8 +172,7 @@ impl Host {
             LedgerKey::ContractData(LedgerKeyContractData {
                 contract: contract_address,
                 key,
-                durability: durability,
-                body_type: ContractEntryBodyType::DataEntry,
+                durability,
             }),
             self,
         )
