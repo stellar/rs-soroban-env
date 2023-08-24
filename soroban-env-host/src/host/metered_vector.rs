@@ -157,7 +157,7 @@ where
         if self.len() == u32::MAX as usize {
             Err(VEC_OOB.into())
         } else {
-            let iter = self.vec.iter().cloned().chain([value].into_iter());
+            let iter = self.vec.iter().cloned().chain([value]);
             Self::from_exact_iter(iter, budget)
         }
     }
@@ -226,7 +226,7 @@ where
         } else {
             let init = self.vec.iter().take(index).cloned();
             let fini = self.vec.iter().skip(index).cloned();
-            let iter = init.chain([value].into_iter()).chain(fini);
+            let iter = init.chain([value]).chain(fini);
             Self::from_exact_iter(iter, budget)
         }
     }

@@ -173,7 +173,7 @@ where
                 }
                 let init = self.map.iter().take(replace_pos).cloned();
                 let fini = self.map.iter().skip(replace_pos + 1).cloned();
-                let iter = init.chain([(key, value)].into_iter()).chain(fini);
+                let iter = init.chain([(key, value)]).chain(fini);
                 Self::from_exact_iter(iter, ctx)
             }
             Err(insert_pos) => {
@@ -185,7 +185,7 @@ where
                 } else {
                     let init = self.map.iter().take(insert_pos).cloned();
                     let fini = self.map.iter().skip(insert_pos).cloned();
-                    let iter = init.chain([(key, value)].into_iter()).chain(fini);
+                    let iter = init.chain([(key, value)]).chain(fini);
                     Self::from_exact_iter(iter, ctx)
                 }
             }

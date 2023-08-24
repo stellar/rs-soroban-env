@@ -443,7 +443,7 @@ struct StorageMapSnapshotSource<'a> {
 impl<'a> SnapshotSource for StorageMapSnapshotSource<'a> {
     fn get(&self, key: &Rc<LedgerKey>) -> Result<(Rc<LedgerEntry>, Option<u32>), HostError> {
         if let Some(Some((entry, expiration))) = self.map.get::<Rc<LedgerKey>>(key, self.budget)? {
-            Ok((Rc::clone(entry), expiration.clone()))
+            Ok((Rc::clone(entry), *expiration))
         } else {
             Err(Error::from_type_and_code(ScErrorType::Storage, ScErrorCode::InternalError).into())
         }
