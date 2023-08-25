@@ -172,19 +172,13 @@ pub fn extract_rent_changes(ledger_changes: &Vec<LedgerEntryChange>) -> Vec<Ledg
                 {
                     return None;
                 }
-                let key_size = entry_change.encoded_key.len() as u32;
-                let old_size_bytes = if entry_change.old_entry_size_bytes > 0 {
-                    key_size.saturating_add(entry_change.old_entry_size_bytes)
-                } else {
-                    0
-                };
                 Some(LedgerEntryRentChange {
                     is_persistent: matches!(
                         expiration_change.durability,
                         ContractDataDurability::Persistent
                     ),
-                    old_size_bytes,
-                    new_size_bytes: key_size.saturating_add(encoded_new_value.len() as u32),
+                    old_size_bytes: entry_change.old_entry_size_bytes,
+                    new_size_bytes: encoded_new_value.len() as u32,
                     old_expiration_ledger: expiration_change.old_expiration_ledger,
                     new_expiration_ledger: expiration_change.new_expiration_ledger,
                 })
