@@ -29,7 +29,7 @@ use crate::{EnvBase, Object, Symbol, Val};
 
 pub(crate) mod comparison;
 mod conversion;
-mod crypto;
+pub(crate) mod crypto;
 mod data_helper;
 pub(crate) mod declared_size;
 pub(crate) mod error;

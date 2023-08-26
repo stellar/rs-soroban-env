@@ -11,13 +11,13 @@ use crate::{
     xdr::{
         AccountEntry, AccountId, Asset, BytesM, ClaimableBalanceEntry, ConfigSettingEntry,
         ContractCodeEntry, ContractDataDurability, ContractEvent, ContractExecutable,
-        ContractIdPreimage, CreateContractArgs, DataEntry, Duration, ExtensionPoint, Hash,
-        LedgerEntry, LedgerEntryExt, LedgerKey, LedgerKeyAccount, LedgerKeyClaimableBalance,
-        LedgerKeyConfigSetting, LedgerKeyContractCode, LedgerKeyData, LedgerKeyLiquidityPool,
-        LedgerKeyOffer, LedgerKeyTrustLine, LiquidityPoolEntry, OfferEntry, PublicKey, ScAddress,
-        ScBytes, ScContractInstance, ScMap, ScMapEntry, ScNonceKey, ScString, ScSymbol, ScVal,
-        ScVec, SorobanAuthorizationEntry, SorobanAuthorizedInvocation, StringM, TimePoint,
-        TrustLineAsset, TrustLineEntry, Uint256, SCSYMBOL_LIMIT,
+        ContractIdPreimage, CreateContractArgs, DataEntry, Duration, ExpirationEntry,
+        ExtensionPoint, Hash, LedgerEntry, LedgerEntryExt, LedgerKey, LedgerKeyAccount,
+        LedgerKeyClaimableBalance, LedgerKeyConfigSetting, LedgerKeyContractCode, LedgerKeyData,
+        LedgerKeyLiquidityPool, LedgerKeyOffer, LedgerKeyTrustLine, LiquidityPoolEntry, OfferEntry,
+        PublicKey, ScAddress, ScBytes, ScContractInstance, ScMap, ScMapEntry, ScNonceKey, ScString,
+        ScSymbol, ScVal, ScVec, SorobanAuthorizationEntry, SorobanAuthorizedInvocation, StringM,
+        TimePoint, TrustLineAsset, TrustLineEntry, Uint256, SCSYMBOL_LIMIT,
     },
     AddressObject, Bool, BytesObject, DurationObject, DurationSmall, DurationVal, Error, HostError,
     I128Object, I128Small, I128Val, I256Object, I256Small, I256Val, I32Val, I64Object, I64Small,
@@ -138,6 +138,7 @@ impl_declared_size_type!(ClaimableBalanceEntry, 120);
 impl_declared_size_type!(LiquidityPoolEntry, 160);
 impl_declared_size_type!(ContractCodeEntry, 64);
 impl_declared_size_type!(ConfigSettingEntry, 96);
+impl_declared_size_type!(ExpirationEntry, 36);
 impl_declared_size_type!(LedgerKey, 120);
 impl_declared_size_type!(LedgerEntry, 256);
 impl_declared_size_type!(AccessType, 1);

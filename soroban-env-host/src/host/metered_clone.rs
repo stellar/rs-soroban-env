@@ -1,5 +1,7 @@
 use std::{iter::FromIterator, mem, rc::Rc};
 
+use soroban_env_common::xdr::ExpirationEntry;
+
 use crate::{
     budget::AsBudget,
     events::{EventError, HostEvent, InternalContractEvent, InternalEvent},
@@ -289,6 +291,7 @@ impl MeteredClone for ClaimableBalanceEntry {}
 impl MeteredClone for LiquidityPoolEntry {}
 impl MeteredClone for ContractCodeEntry {}
 impl MeteredClone for ConfigSettingEntry {}
+impl MeteredClone for ExpirationEntry {}
 impl MeteredClone for AccessType {}
 impl MeteredClone for InternalContractEvent {}
 impl MeteredClone for EventError {}
