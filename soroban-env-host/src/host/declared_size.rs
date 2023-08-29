@@ -336,6 +336,7 @@ mod test {
         expect!["160"].assert_eq(size_of::<LiquidityPoolEntry>().to_string().as_str());
         expect!["56"].assert_eq(size_of::<ContractCodeEntry>().to_string().as_str());
         expect!["96"].assert_eq(size_of::<ConfigSettingEntry>().to_string().as_str());
+        expect!["36"].assert_eq(size_of::<ExpirationEntry>().to_string().as_str());
         expect!["112"].assert_eq(size_of::<LedgerKey>().to_string().as_str());
         expect!["256"].assert_eq(size_of::<LedgerEntry>().to_string().as_str());
         expect!["1"].assert_eq(size_of::<AccessType>().to_string().as_str());
@@ -502,6 +503,7 @@ mod test {
         assert_mem_size_le_declared_size!(LiquidityPoolEntry);
         assert_mem_size_le_declared_size!(ContractCodeEntry);
         assert_mem_size_le_declared_size!(ConfigSettingEntry);
+        assert_mem_size_le_declared_size!(ExpirationEntry);
         assert_mem_size_le_declared_size!(LedgerKey);
         assert_mem_size_le_declared_size!(LedgerEntry);
         assert_mem_size_le_declared_size!(AccessType);
