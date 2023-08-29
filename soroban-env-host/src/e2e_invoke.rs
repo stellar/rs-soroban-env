@@ -418,7 +418,12 @@ fn build_storage_map_from_xdr_ledger_entries<T: AsRef<[u8]>, I: ExactSizeIterato
     let mut storage_map = StorageMap::new();
     let mut expiration_map = ExpirationEntryMap::new();
 
-    // TODO: return error on length mismatch. Maybe even hash key to verify.
+    if encoded_ledger_entries.len() != encoded_expiration_entries.len() {
+        return Err(
+            Error::from_type_and_code(ScErrorType::Storage, ScErrorCode::InternalError).into(),
+        );
+    }
+
     for (entry_buf, expiration_buf) in encoded_ledger_entries.zip(encoded_expiration_entries) {
         let mut expiration_ledger: Option<u32> = None;
 
