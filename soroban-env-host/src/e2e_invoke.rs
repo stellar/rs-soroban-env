@@ -6,8 +6,8 @@ use std::{cmp::max, rc::Rc};
 
 use soroban_env_common::{
     xdr::{
-        AccountId, ContractDataDurability, ContractEventType, DiagnosticEvent, HostFunction,
-        LedgerEntry, LedgerEntryData, LedgerFootprint, LedgerKey, LedgerKeyAccount,
+        AccountId, ContractDataDurability, ContractEventType, DiagnosticEvent, ExpirationEntry,
+        HostFunction, LedgerEntry, LedgerEntryData, LedgerFootprint, LedgerKey, LedgerKeyAccount,
         LedgerKeyContractCode, LedgerKeyContractData, LedgerKeyTrustLine, ScErrorCode, ScErrorType,
         SorobanAuthorizationEntry, SorobanResources,
     },
@@ -19,13 +19,16 @@ use crate::{
     events::Events,
     fees::LedgerEntryRentChange,
     host::{
+        crypto::sha256_hash_from_bytes,
         ledger_info_helper::get_key_durability,
         metered_clone::{MeteredAlloc, MeteredClone, MeteredIterator},
         metered_xdr::{metered_from_xdr_with_budget, metered_write_xdr},
     },
     storage::{AccessType, Footprint, FootprintMap, SnapshotSource, Storage, StorageMap},
-    DiagnosticLevel, Host, HostError, LedgerInfo,
+    DiagnosticLevel, Host, HostError, LedgerInfo, MeteredOrdMap,
 };
+
+pub type ExpirationEntryMap = MeteredOrdMap<Rc<LedgerKey>, Rc<ExpirationEntry>, Budget>;
 
 /// Result of invoking a single host function prepared for embedder consumption.
 pub struct InvokeHostFunctionResult {
@@ -70,6 +73,8 @@ pub struct LedgerEntryChange {
 
 /// Represents of the expiration-related state of the entry.
 pub struct LedgerEntryExpirationChange {
+    /// Hash of the LedgerKey for the entry that this expiration change is tied to
+    pub key_hash: Vec<u8>,
     /// Durability of the entry.    
     pub durability: ContractDataDurability,
     /// Expiration ledger of the old entry.
@@ -86,6 +91,7 @@ pub fn get_ledger_changes<T: SnapshotSource>(
     budget: &Budget,
     storage: &Storage,
     init_storage_snapshot: &T,
+    init_expiration_entries: ExpirationEntryMap,
 ) -> Result<Vec<LedgerEntryChange>, HostError> {
     let mut changes = vec![];
     // Skip allocation metering for this for the sake of simplicity - the
@@ -102,8 +108,15 @@ pub fn get_ledger_changes<T: SnapshotSource>(
         let mut entry_change = LedgerEntryChange::default();
         metered_write_xdr(budget, key.as_ref(), &mut entry_change.encoded_key)?;
         let durability = get_key_durability(key);
+
         if let Some(durability) = durability {
+            let key_hash = match init_expiration_entries.get::<Rc<LedgerKey>>(key, budget)? {
+                Some(ee) => ee.key_hash.0.to_vec(),
+                None => sha256_hash_from_bytes(entry_change.encoded_key.as_slice(), budget)?,
+            };
+
             entry_change.expiration_change = Some(LedgerEntryExpirationChange {
+                key_hash,
                 durability,
                 old_expiration_ledger: 0,
                 new_expiration_ledger: 0,
@@ -208,11 +221,7 @@ pub fn extract_rent_changes(ledger_changes: &Vec<LedgerEntryChange>) -> Vec<Ledg
 /// When diagnostics are enabled, we try to populate `diagnostic_events`
 /// even if the `InvokeHostFunctionResult` fails for any reason.
 #[allow(clippy::too_many_arguments)]
-pub fn invoke_host_function<
-    T: AsRef<[u8]>,
-    I: ExactSizeIterator<Item = T>,
-    EntryIter: ExactSizeIterator<Item = (T, Option<u32>)>,
->(
+pub fn invoke_host_function<T: AsRef<[u8]>, I: ExactSizeIterator<Item = T>>(
     budget: &Budget,
     enable_diagnostics: bool,
     encoded_host_fn: T,
@@ -220,7 +229,8 @@ pub fn invoke_host_function<
     encoded_source_account: T,
     encoded_auth_entries: I,
     ledger_info: LedgerInfo,
-    encoded_ledger_entries: EntryIter,
+    encoded_ledger_entries: I,
+    encoded_expiration_entries: I,
     base_prng_seed: T,
     diagnostic_events: &mut Vec<DiagnosticEvent>,
 ) -> Result<InvokeHostFunctionResult, HostError> {
@@ -229,11 +239,17 @@ pub fn invoke_host_function<
     let resources: SorobanResources =
         metered_from_xdr_with_budget(encoded_resources.as_ref(), &budget)?;
     let footprint = build_storage_footprint_from_xdr(&budget, resources.footprint)?;
-    let map =
-        build_storage_map_from_xdr_ledger_entries(&budget, &footprint, encoded_ledger_entries)?;
-    let init_storage_map = map.metered_clone(budget)?;
+    let storage_and_expiration_maps = build_storage_map_from_xdr_ledger_entries(
+        &budget,
+        &footprint,
+        encoded_ledger_entries,
+        encoded_expiration_entries,
+    )?;
 
-    let storage = Storage::with_enforcing_footprint_and_map(footprint, map);
+    let storage_map = storage_and_expiration_maps.0;
+    let init_storage_map = storage_map.metered_clone(budget)?;
+
+    let storage = Storage::with_enforcing_footprint_and_map(footprint, storage_map);
     let host = Host::with_storage_and_budget(storage, budget.clone());
     let auth_entries = host.build_auth_entries_from_xdr(encoded_auth_entries)?;
     let host_function: HostFunction = host.metered_from_xdr(encoded_host_fn.as_ref())?;
@@ -271,7 +287,12 @@ pub fn invoke_host_function<
             budget: &budget,
             map: &init_storage_map,
         };
-        let ledger_changes = get_ledger_changes(&budget, &storage, &init_storage_snapshot)?;
+        let ledger_changes = get_ledger_changes(
+            &budget,
+            &storage,
+            &init_storage_snapshot,
+            storage_and_expiration_maps.1,
+        )?;
         let encoded_contract_events = encode_contract_events(budget, &events)?;
         Ok(InvokeHostFunctionResult {
             encoded_invoke_result,
@@ -382,21 +403,41 @@ fn build_storage_footprint_from_xdr(
     Ok(Footprint(footprint_map))
 }
 
-fn build_storage_map_from_xdr_ledger_entries<
-    T: AsRef<[u8]>,
-    I: ExactSizeIterator<Item = (T, Option<u32>)>,
->(
+fn build_storage_map_from_xdr_ledger_entries<T: AsRef<[u8]>, I: ExactSizeIterator<Item = T>>(
     budget: &Budget,
     footprint: &Footprint,
     encoded_ledger_entries: I,
-) -> Result<StorageMap, HostError> {
-    let mut map = StorageMap::new();
-    for (buf, expiration_ledger) in encoded_ledger_entries {
+    encoded_expiration_entries: I,
+) -> Result<(StorageMap, ExpirationEntryMap), HostError> {
+    let mut storage_map = StorageMap::new();
+    let mut expiration_map = ExpirationEntryMap::new();
+
+    if encoded_ledger_entries.len() != encoded_expiration_entries.len() {
+        return Err(
+            Error::from_type_and_code(ScErrorType::Storage, ScErrorCode::InternalError).into(),
+        );
+    }
+
+    for (entry_buf, expiration_buf) in encoded_ledger_entries.zip(encoded_expiration_entries) {
+        let mut expiration_ledger: Option<u32> = None;
+
         let le = Rc::metered_new(
-            metered_from_xdr_with_budget::<LedgerEntry>(buf.as_ref(), budget)?,
+            metered_from_xdr_with_budget::<LedgerEntry>(entry_buf.as_ref(), budget)?,
             budget,
         )?;
         let key = Rc::metered_new(ledger_entry_to_ledger_key(&le, budget)?, budget)?;
+
+        if !expiration_buf.as_ref().is_empty() {
+            let ee = Rc::metered_new(
+                metered_from_xdr_with_budget::<ExpirationEntry>(expiration_buf.as_ref(), budget)?,
+                budget,
+            )?;
+
+            expiration_ledger = Some(ee.expiration_ledger_seq);
+
+            expiration_map = expiration_map.insert(key.clone(), ee, budget)?;
+        }
+
         if !footprint.0.contains_key::<LedgerKey>(&key, budget)? {
             return Err(Error::from_type_and_code(
                 ScErrorType::Storage,
@@ -404,16 +445,16 @@ fn build_storage_map_from_xdr_ledger_entries<
             )
             .into());
         }
-        map = map.insert(key, Some((le, expiration_ledger)), budget)?;
+        storage_map = storage_map.insert(key, Some((le, expiration_ledger)), budget)?;
     }
 
     // Add non-existing entries from the footprint to the storage.
     for k in footprint.0.keys(budget)? {
-        if !map.contains_key::<LedgerKey>(k, budget)? {
-            map = map.insert(Rc::clone(k), None, budget)?;
+        if !storage_map.contains_key::<LedgerKey>(k, budget)? {
+            storage_map = storage_map.insert(Rc::clone(k), None, budget)?;
         }
     }
-    Ok(map)
+    Ok((storage_map, expiration_map))
 }
 
 impl Host {

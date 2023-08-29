@@ -1,4 +1,5 @@
 use crate::{
+    budget::Budget,
     err,
     xdr::{ContractCostType, Hash, ScBytes, ScErrorCode, ScErrorType},
     BytesObject, Host, HostError, U32Val, Val,
@@ -193,12 +194,7 @@ impl Host {
     // SHA256 functions
 
     pub(crate) fn sha256_hash_from_bytes(&self, bytes: &[u8]) -> Result<Vec<u8>, HostError> {
-        let _span = tracy_span!("sha256");
-        self.charge_budget(
-            ContractCostType::ComputeSha256Hash,
-            Some(bytes.len() as u64),
-        )?;
-        Ok(<Sha256 as sha2::Digest>::digest(bytes).as_slice().to_vec())
+        sha256_hash_from_bytes(bytes, self.budget_ref())
     }
 
     pub fn sha256_hash_from_bytesobj_input(&self, x: BytesObject) -> Result<Vec<u8>, HostError> {
@@ -246,4 +242,13 @@ impl Host {
             Ok(hash)
         })
     }
+}
+
+pub(crate) fn sha256_hash_from_bytes(bytes: &[u8], budget: &Budget) -> Result<Vec<u8>, HostError> {
+    let _span = tracy_span!("sha256");
+    budget.charge(
+        ContractCostType::ComputeSha256Hash,
+        Some(bytes.len() as u64),
+    )?;
+    Ok(<Sha256 as sha2::Digest>::digest(bytes).as_slice().to_vec())
 }
