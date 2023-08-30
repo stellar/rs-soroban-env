@@ -21,7 +21,7 @@ use crate::{
     host::{
         crypto::sha256_hash_from_bytes,
         ledger_info_helper::get_key_durability,
-        metered_clone::{MeteredAlloc, MeteredClone, MeteredIterator},
+        metered_clone::{MeteredAlloc, MeteredClone, MeteredContainer, MeteredIterator},
         metered_xdr::{metered_from_xdr_with_budget, metered_write_xdr},
     },
     storage::{AccessType, Footprint, FootprintMap, SnapshotSource, Storage, StorageMap},
@@ -310,7 +310,7 @@ pub fn invoke_host_function<T: AsRef<[u8]>, I: ExactSizeIterator<Item = T>>(
 
 /// Encodes host events as `ContractEvent` XDR.
 pub fn encode_contract_events(budget: &Budget, events: &Events) -> Result<Vec<Vec<u8>>, HostError> {
-    events
+    let ce = events
         .0
         .iter()
         .filter(|e| !e.failed_call && e.event.type_ != ContractEventType::Diagnostic)
@@ -319,7 +319,11 @@ pub fn encode_contract_events(budget: &Budget, events: &Events) -> Result<Vec<Ve
             metered_write_xdr(budget, &e.event, &mut buf)?;
             Ok(buf)
         })
-        .metered_collect::<Result<Vec<Vec<u8>>, HostError>>(budget)?
+        .collect::<Result<Vec<Vec<u8>>, HostError>>()?;
+    // Here we collect first then charge, so that the input size excludes the diagnostic events.
+    // This means we may temporarily go over the budget limit but should be okay.
+    Vec::<Vec<u8>>::charge_bulk_init_cpy(ce.len() as u64, budget)?;
+    Ok(ce)
 }
 
 fn extract_diagnostic_events(events: &Events, diagnostic_events: &mut Vec<DiagnosticEvent>) {
