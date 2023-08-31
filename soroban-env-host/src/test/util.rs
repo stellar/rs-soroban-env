@@ -228,18 +228,38 @@ impl Host {
         let ht = HostTracker::start(None);
 
         let val = self.call(contract, func, args);
-        let cpu_consumed = budget
+        let cpu_metered = budget
             .get_cpu_insns_consumed()
             .expect("unable to retrieve cpu consumed");
-        let mem_consumed = budget
+        let mem_metered = budget
             .get_mem_bytes_consumed()
             .expect("unable to retrieve mem consumed");
 
-        let (cpu_insns, mem_bytes, _) = ht.stop();
+        let (cpu_actual, mem_actual, time_nsecs) = ht.stop();
+        let cpu_diff = (cpu_metered - cpu_actual) as i64;
+        let cpu_metered_diff_percent = 100 * cpu_diff / (cpu_metered as i64).max(1);
+        let mem_diff = (mem_metered - mem_actual) as i64;
+        let mem_metered_diff_percent = 100 * mem_diff / (mem_metered as i64).max(1);
+        let metered_insn_nsecs_ratio: f64 = (cpu_metered as f64) / (time_nsecs as f64).max(1.0);
+        let actual_insn_nsecs_ratio: f64 = (cpu_actual as f64) / (time_nsecs as f64).max(1.0);
+        println!();
         println!(
-                "\nmodel cpu consumed: {}, actual cpu insns {} \nmodel mem consumed: {}, actual mem bytes {}",
-                cpu_consumed, cpu_insns, mem_consumed, mem_bytes
-            );
+            "metered cpu insns: {}, actual cpu insns {}, diff: {} ({}%) \n",
+            cpu_metered, cpu_actual, cpu_diff, cpu_metered_diff_percent
+        );
+        println!(
+            "metered mem bytes: {}, actual mem bytes {}, diff: {} ({}%) \n",
+            mem_metered, mem_actual, mem_diff, mem_metered_diff_percent
+        );
+        println!(
+            "metered cpu_insn/time_nsecs ratio: {} \n",
+            metered_insn_nsecs_ratio
+        );
+        println!(
+            "actual cpu_insn/time_nsecs ratio: {} \n",
+            actual_insn_nsecs_ratio
+        );
+        println!();
 
         val
     }
