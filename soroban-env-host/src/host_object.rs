@@ -369,11 +369,15 @@ impl Host {
         } else if let Some(obj) = r.get(handle_to_index(handle)) {
             f(obj)
         } else {
+            // Discard the broken object here instead of including
+            // it in the error to avoid further attempts to interpret it.
+            // e.g. if diagnostics are on, then this will immediately iloop
+            // attempting to externalize debug info for this very error.
             Err(self.err(
                 ScErrorType::Object,
                 ScErrorCode::MissingValue,
                 "unknown object reference",
-                &[obj.to_val()],
+                &[],
             ))
         }
     }

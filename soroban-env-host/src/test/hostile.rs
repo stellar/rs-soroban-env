@@ -1,11 +1,16 @@
 use soroban_env_common::{
     xdr::{ContractCostType, ScErrorCode, ScErrorType},
-    Env, EnvBase, Symbol, Val, VecObject,
+    Env, EnvBase, Symbol, Tag, Val, VecObject,
 };
 use soroban_synth_wasm::{Arity, ModEmitter, Operand};
 use soroban_test_wasms::HOSTILE;
 
-use crate::{budget::AsBudget, host_object::HostVec, Host, HostError};
+use crate::{
+    budget::{AsBudget, Budget},
+    host_object::HostVec,
+    storage::Storage,
+    DiagnosticLevel, Host, HostError,
+};
 
 #[test]
 fn hostile_iloop_traps() -> Result<(), HostError> {
@@ -244,4 +249,31 @@ fn excessive_memory_growth() -> Result<(), HostError> {
     }
 
     Ok(())
+}
+
+// Regression test for infinte loop / recursion
+// while externalizing diagnostics for objects
+// with invalid references.
+#[test]
+fn broken_object() {
+    fn val_from_body_and_tag(body: u64, tag: Tag) -> Val {
+        unsafe {
+            // Safety: Val is a repr(transparent) u64
+            const TAG_BITS: usize = 8;
+            std::mem::transmute((body << TAG_BITS) | (tag as u64))
+        }
+    }
+
+    let budget = Budget::default();
+    let storage = Storage::default();
+    let host = Host::with_storage_and_budget(storage, budget);
+
+    // Diagnostics must be on
+    host.set_diagnostic_level(DiagnosticLevel::Debug).unwrap();
+
+    // Bogus u256 object
+    let bad_val = val_from_body_and_tag(u64::MAX, Tag::U256Object);
+
+    // This iloops externalizing diagnostics for the error it is generating.
+    let _args = host.vec_new_from_slice(&[bad_val]);
 }
