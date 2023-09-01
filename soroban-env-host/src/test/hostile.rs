@@ -189,6 +189,18 @@ fn hostile_forged_objects_trap() -> Result<(), HostError> {
         (ScErrorType::Object, ScErrorCode::UnexpectedType)
     ));
 
+    // Here we call a function that passes an argument to a host function
+    // with a bad val tag. This should fail in check_val_integrity.
+    let res = host.call(
+        contract_id_obj,
+        Symbol::try_from_small_str("badtag")?,
+        host.vec_new_from_slice(&[absolute_vec.to_val()])?,
+    );
+    assert!(HostError::result_matches_err(
+        res.clone(),
+        (ScErrorType::Value, ScErrorCode::InvalidInput)
+    ));
+
     Ok(())
 }
 

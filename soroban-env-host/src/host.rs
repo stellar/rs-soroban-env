@@ -1269,6 +1269,8 @@ impl VmCallerEnv for Host {
 
     // Metered: covered by `visit`.
     fn obj_cmp(&self, _vmcaller: &mut VmCaller<Host>, a: Val, b: Val) -> Result<i64, HostError> {
+        self.check_val_integrity(a)?;
+        self.check_val_integrity(b)?;
         let res = match {
             match (Object::try_from(a), Object::try_from(b)) {
                 // We were given two objects: compare them.
@@ -1334,6 +1336,7 @@ impl VmCallerEnv for Host {
         topics: VecObject,
         data: Val,
     ) -> Result<Void, HostError> {
+        self.check_val_integrity(data)?;
         self.record_contract_event(ContractEventType::Contract, topics, data)?;
         Ok(Val::VOID)
     }
@@ -1616,6 +1619,7 @@ impl VmCallerEnv for Host {
         m: MapObject,
         k: Val,
     ) -> Result<Val, HostError> {
+        self.check_val_integrity(k)?;
         self.visit_obj(m, move |hm: &HostMap| {
             hm.get(&k, self)?.copied().ok_or_else(|| {
                 self.err(
@@ -1634,6 +1638,7 @@ impl VmCallerEnv for Host {
         m: MapObject,
         k: Val,
     ) -> Result<MapObject, HostError> {
+        self.check_val_integrity(k)?;
         match self.visit_obj(m, |hm: &HostMap| hm.remove(&k, self))? {
             Some((mnew, _)) => Ok(self.add_host_object(mnew)?),
             None => Err(self.err(
@@ -1656,6 +1661,7 @@ impl VmCallerEnv for Host {
         m: MapObject,
         k: Val,
     ) -> Result<Bool, HostError> {
+        self.check_val_integrity(k)?;
         self.visit_obj(m, move |hm: &HostMap| Ok(hm.contains_key(&k, self)?.into()))
     }
 
@@ -1975,6 +1981,7 @@ impl VmCallerEnv for Host {
         v: VecObject,
         x: Val,
     ) -> Result<Val, Self::Error> {
+        self.check_val_integrity(x)?;
         self.visit_obj(v, |hv: &HostVec| {
             Ok(
                 match hv.first_index_of(|other| self.compare(&x, other), self.as_budget())? {
@@ -1991,6 +1998,7 @@ impl VmCallerEnv for Host {
         v: VecObject,
         x: Val,
     ) -> Result<Val, Self::Error> {
+        self.check_val_integrity(x)?;
         self.visit_obj(v, |hv: &HostVec| {
             Ok(
                 match hv.last_index_of(|other| self.compare(&x, other), self.as_budget())? {
@@ -2007,6 +2015,7 @@ impl VmCallerEnv for Host {
         v: VecObject,
         x: Val,
     ) -> Result<u64, Self::Error> {
+        self.check_val_integrity(x)?;
         self.visit_obj(v, |hv: &HostVec| {
             let res = hv.binary_search_by(|probe| self.compare(probe, &x), self.as_budget())?;
             self.u64_from_binary_search_result(res)
@@ -2089,6 +2098,7 @@ impl VmCallerEnv for Host {
         k: Val,
         t: StorageType,
     ) -> Result<Bool, HostError> {
+        self.check_val_integrity(k)?;
         let res = match t {
             StorageType::Temporary | StorageType::Persistent => {
                 let key = self.storage_key_from_rawval(k, t.try_into()?)?;
@@ -2111,6 +2121,7 @@ impl VmCallerEnv for Host {
         k: Val,
         t: StorageType,
     ) -> Result<Val, HostError> {
+        self.check_val_integrity(k)?;
         match t {
             StorageType::Temporary | StorageType::Persistent => {
                 let key = self.storage_key_from_rawval(k, t.try_into()?)?;
@@ -2151,6 +2162,7 @@ impl VmCallerEnv for Host {
         k: Val,
         t: StorageType,
     ) -> Result<Void, HostError> {
+        self.check_val_integrity(k)?;
         match t {
             StorageType::Temporary | StorageType::Persistent => {
                 let key = self.contract_data_key_from_rawval(k, t.try_into()?)?;
@@ -2180,6 +2192,7 @@ impl VmCallerEnv for Host {
         low_expiration_watermark: U32Val,
         high_expiration_watermark: U32Val,
     ) -> Result<Void, HostError> {
+        self.check_val_integrity(k)?;
         if matches!(t, StorageType::Instance) {
             return Err(self.err(
                 ScErrorType::Storage,
@@ -2448,6 +2461,7 @@ impl VmCallerEnv for Host {
         _vmcaller: &mut VmCaller<Host>,
         v: Val,
     ) -> Result<BytesObject, HostError> {
+        self.check_val_integrity(v)?;
         let scv = self.from_host_val(v)?;
         let mut buf = Vec::<u8>::new();
         metered_write_xdr(self.budget_ref(), &scv, &mut buf)?;
