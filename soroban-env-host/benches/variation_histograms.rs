@@ -16,7 +16,6 @@ impl Benchmark for LinearModelTables {
 
 #[cfg(all(test, any(target_os = "linux", target_os = "macos")))]
 fn main() -> std::io::Result<()> {
-    env_logger::init();
     for_each_host_cost_measurement::<LinearModelTables>()?;
     Ok(())
 }

@@ -56,7 +56,7 @@ fn fit_linear_regression(x: Vec<f64>, y: Vec<f64>) -> FPCostModel {
         .unwrap();
     let params = model.parameters();
     let r2 = model.rsquared();
-    info!(
+    println!(
         "Linear regression found parameters {:?}, with R2 = {}",
         params, r2
     );
