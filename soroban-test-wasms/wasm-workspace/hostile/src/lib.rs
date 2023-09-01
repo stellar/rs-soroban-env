@@ -83,4 +83,11 @@ impl Contract {
         );
         v.push_back(b)
     }
+
+    // Pass a value with a bad tag.
+    #[allow(unused_mut)]
+    pub fn badtag(_env: Env, mut v: Vec<Val>) {
+        let bad = Val::from_payload((v.to_val().get_payload() & !0xff) | 32);
+        v.push_back(bad)
+    }
 }

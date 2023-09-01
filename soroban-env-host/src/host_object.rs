@@ -379,10 +379,18 @@ impl Host {
     }
 
     pub(crate) fn check_val_integrity(&self, val: Val) -> Result<(), HostError> {
-        if let Ok(obj) = Object::try_from(val) {
-            self.check_obj_integrity(obj)?;
+        if val.get_tag() == Tag::Bad {
+            Err(self.err(
+                ScErrorType::Value,
+                ScErrorCode::InvalidInput,
+                "bad value tag",
+                &[val],
+            ))
+        } else if let Ok(obj) = Object::try_from(val) {
+            self.check_obj_integrity(obj)
+        } else {
+            Ok(())
         }
-        Ok(())
     }
 
     pub(crate) fn check_obj_integrity(&self, obj: Object) -> Result<(), HostError> {
