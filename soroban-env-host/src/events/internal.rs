@@ -153,19 +153,6 @@ impl InternalEventsBuffer {
         Ok(())
     }
 
-    #[allow(unused)]
-    pub fn dump_to_debug_log(&self) {
-        use log::debug;
-        debug!("=======Start of events=======");
-        for e in self.vec.iter() {
-            match &e.0 {
-                InternalEvent::Contract(c) => debug!("Contract event: {:?}", c),
-                InternalEvent::Diagnostic(c) => debug!("Diagnostic event: {:?}", c),
-            }
-        }
-        debug!("========End of events========")
-    }
-
     /// Converts the internal events into their external representation. This should only be called
     /// either when the host is finished (via `try_finish`), or when an error occurs.
     pub fn externalize(&self, host: &Host) -> Result<Events, HostError> {

@@ -192,7 +192,6 @@ fn extract_wasmi_fuel_costs(
 
 #[cfg(all(test, any(target_os = "linux", target_os = "macos")))]
 fn main() -> std::io::Result<()> {
-    env_logger::init();
     let params = for_each_host_cost_measurement::<WorstCaseLinearModels>()?;
     let params_wasm = for_each_wasm_insn_measurement::<WorstCaseLinearModels>()?;
 

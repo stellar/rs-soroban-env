@@ -18,17 +18,13 @@ wasmi = { workspace = true }
 static_assertions = "1.1.0"
 sha2 = "0.10.0"
 ed25519-dalek = {version = "2.0.0", features = ["rand_core"] }
-# NB: this must match the same curve25519 version used by ed25519-dalek above
-curve25519-dalek = "4.0.0"
 # NB: this must match the same rand version used by ed25519-dalek above
 rand = "0.8.5"
 # NB: this must match the same rand_chacha version used by ed25519-dalek above
 rand_chacha = "0.3.1"
-hex = "0.4.3"
 num-traits = "0.2.15"
 num-integer = "0.1.45"
 num-derive = "0.4.0"
-log = "0.4.17"
 backtrace = "0.3"
 k256 = {version = "0.13.1", features=["ecdsa", "arithmetic"]}
 # NB: getrandom is a transitive dependency of k256 which we're not using directly
@@ -41,9 +37,8 @@ sha3 = "0.10.8"
 tracy-client = { version = "=0.15.2", features = ["enable", "timer-fallback"], default-features = false, optional = true }
 
 [dev-dependencies]
-env_logger = "0.9.0"
+hex = "0.4.3"
 itertools = "0.10.3"
-log = "0.4.17"
 tabwriter = "1.2.1"
 thousands = "0.2.0"
 soroban-test-wasms = { package = "soroban-test-wasms", path = "../soroban-test-wasms" }
