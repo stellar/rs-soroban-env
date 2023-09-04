@@ -7,9 +7,8 @@
 /// Rough estimate of the base size of any transaction result in the archives
 /// (independent of the transaction envelope size).
 pub const TX_BASE_RESULT_SIZE: u32 = 300;
-/// Estimate for any `ExpirationEntry` ledger entry, consisting of a 32-byte
-/// hash of the corresponding entry and 4 bytes for expiration ledger.
-pub const EXPIRATION_ENTRY_SIZE: u32 = 32 + 4;
+/// Estimate for any `ExpirationEntry` ledger entry
+pub const EXPIRATION_ENTRY_SIZE: u32 = 48;
 
 const INSTRUCTIONS_INCREMENT: i64 = 10000;
 const DATA_SIZE_1KB_INCREMENT: i64 = 1024;
