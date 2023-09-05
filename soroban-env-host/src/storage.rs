@@ -10,7 +10,7 @@
 use std::rc::Rc;
 
 use soroban_env_common::xdr::{ScErrorCode, ScErrorType};
-use soroban_env_common::{Compare, Env, Val};
+use soroban_env_common::{Env, Val};
 
 use crate::budget::Budget;
 use crate::xdr::{LedgerEntry, LedgerKey};
@@ -45,22 +45,6 @@ pub enum AccessType {
     /// When in [FootprintMode::Recording], indicates that the [LedgerKey] is written (and also possibly read)
     /// When in [FootprintMode::Enforcing], indicates that the [LedgerKey] is _allowed_ to be written (and also allowed to be read).
     ReadWrite,
-}
-
-impl Compare<AccessType> for Host {
-    type Error = HostError;
-
-    fn compare(&self, a: &AccessType, b: &AccessType) -> Result<core::cmp::Ordering, Self::Error> {
-        Ok(a.cmp(b))
-    }
-}
-
-impl Compare<AccessType> for Budget {
-    type Error = HostError;
-
-    fn compare(&self, a: &AccessType, b: &AccessType) -> Result<core::cmp::Ordering, Self::Error> {
-        Ok(a.cmp(b))
-    }
 }
 
 /// A helper type used by [FootprintMode::Recording] to provide access
@@ -224,7 +208,7 @@ impl Storage {
     ///
     /// In [FootprintMode::Enforcing] mode, succeeds only if the read
     /// [LedgerKey] has been declared in the [Footprint].
-    pub fn get_with_expiration(
+    pub(crate) fn get_with_expiration(
         &mut self,
         key: &Rc<LedgerKey>,
         budget: &Budget,
