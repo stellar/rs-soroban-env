@@ -1,8 +1,26 @@
+use soroban_env_common::xdr::{Hash, LedgerEntry, LedgerEntryData, LedgerEntryExt, WriteXdr};
 use soroban_env_host::fees::{
     compute_rent_fee, compute_transaction_resource_fee, compute_write_fee_per_1kb,
     FeeConfiguration, LedgerEntryRentChange, RentFeeConfiguration, TransactionResources,
-    WriteFeeConfiguration,
+    WriteFeeConfiguration, EXPIRATION_ENTRY_SIZE,
 };
+use soroban_env_host::xdr::ExpirationEntry;
+
+#[test]
+fn expiration_entry_size() {
+    let expiration_entry = LedgerEntry {
+        last_modified_ledger_seq: 0,
+        data: LedgerEntryData::Expiration(ExpirationEntry {
+            key_hash: Hash([0; 32]),
+            expiration_ledger_seq: 0,
+        }),
+        ext: LedgerEntryExt::V0,
+    };
+    assert_eq!(
+        EXPIRATION_ENTRY_SIZE,
+        expiration_entry.to_xdr().unwrap().len() as u32
+    );
+}
 
 #[test]
 fn resource_fee_computation() {
@@ -141,9 +159,9 @@ fn test_rent_bump_fees_with_only_bump() {
             50_000,
         ),
         // Rent: ceil(1 * 1000 * 200_000 / (10_000 * 1024)) (=20) +
-        // Expiration entry write bytes: ceil(1000 * 36 / 1024) (=36) +
+        // Expiration entry write bytes: ceil(1000 * 48 / 1024) (=47) +
         // Expiration entry write: 10
-        20 + 36 + 10
+        20 + 47 + 10
     );
 
     // Minimal ledgers
@@ -160,8 +178,8 @@ fn test_rent_bump_fees_with_only_bump() {
             50_000,
         ),
         // Rent: ceil(10 * 1024 * 1000 * 1 / (10_000 * 1024)) (=1) +
-        // Expiration entry write entry/bytes: 46
-        1 + 46
+        // Expiration entry write entry/bytes: 57
+        1 + 57
     );
 
     // Minimal ledgers & size
@@ -178,8 +196,8 @@ fn test_rent_bump_fees_with_only_bump() {
             50_000,
         ),
         // Rent: ceil(1 * 1000 * 1 / (10_000 * 1024))
-        // Expiration entry write entry/bytes: 46
-        1 + 46
+        // Expiration entry write entry/bytes: 57
+        1 + 57
     );
 
     // No size change
@@ -196,8 +214,8 @@ fn test_rent_bump_fees_with_only_bump() {
             50_000,
         ),
         // Rent: ceil(10 * 1024 * 1000 * 200_000 / (10_000 * 1024)) (=200_000)
-        // Expiration entry write entry/bytes: 46
-        200_000 + 46
+        // Expiration entry write entry/bytes: 57
+        200_000 + 57
     );
 
     // Size decrease
@@ -214,8 +232,8 @@ fn test_rent_bump_fees_with_only_bump() {
             50_000,
         ),
         // Rent: ceil(5 * 1024 * 1000 * 200_000 / (10_000 * 1024)) (=100_000) +
-        // Expiration entry write entry/bytes: 46
-        100_000 + 46
+        // Expiration entry write entry/bytes: 57
+        100_000 + 57
     );
 
     // Temp storage rate
@@ -232,8 +250,8 @@ fn test_rent_bump_fees_with_only_bump() {
             50_000,
         ),
         // Rent: ceil(10 * 1024 * 1000 * 200_000 / (100_000 * 1024)) (=20_000) +
-        // Expiration entry write entry/bytes: 46
-        20_000 + 46
+        // Expiration entry write entry/bytes: 57
+        20_000 + 57
     );
 
     // Multiple entries
@@ -287,9 +305,9 @@ fn test_rent_bump_fees_with_only_bump() {
             50_000,
         ),
         // Rent: 20_000 + 200_000 + 1 + 20 + 200_000 + 20_000 (=440_021) +
-        // Expiration entry write bytes: ceil(6 * 1000 * 36 / 1024) (=211) +
+        // Expiration entry write bytes: ceil(6 * 1000 * 48 / 1024) (=282) +
         // Expiration entry write: 10 * 6
-        440_021 + 211 + 60
+        440_021 + 282 + 60
     );
 }
 
@@ -421,8 +439,8 @@ fn test_rent_bump_with_size_change_and_bump() {
         ),
         // Rent: 100_000 * 1000 * 200_000 / (10_000 * 1024) +
         // 99_999 * 1000 * (100_000 - 25_000 + 1) / (10_000 * 1024)
-        // Expiration entry write entry/bytes: 46
-        2_685_550 + 46
+        // Expiration entry write entry/bytes: 57
+        2_685_550 + 57
     );
 
     // Temp entry
@@ -440,8 +458,8 @@ fn test_rent_bump_with_size_change_and_bump() {
         ),
         // Rent: 100_000 * 1000 * 200_000 / (10_000 * 1024) +
         // 99_999 * 1000 * (100_000 - 25_000 + 1) / (10_000 * 1024)
-        // Expiration entry write entry/bytes: 46
-        268_556 + 46
+        // Expiration entry write entry/bytes: 57
+        268_556 + 57
     );
 
     // Multiple entries
@@ -467,9 +485,9 @@ fn test_rent_bump_with_size_change_and_bump() {
             25_000,
         ),
         // Rent: 2_685_550 + 268_556
-        // Expiration entry write bytes: ceil(2 * 1000 * 36 / 1024) (=71) +
+        // Expiration entry write bytes: ceil(2 * 1000 * 48 / 1024) (=94) +
         // Expiration entry write: 10 * 2
-        2_954_106 + 71 + 20
+        2_954_106 + 94 + 20
     );
 
     // Small increments
@@ -487,8 +505,8 @@ fn test_rent_bump_with_size_change_and_bump() {
         ),
         // Rent: ceil(2 * 1000 * 1 / (10_000 * 1024)) +
         //       ceil(1 * 1000 * (100_000 - 99_999 + 1) / (10_000 * 1024)) (=2)
-        // Expiration entry write entry/bytes: 46
-        2 + 46
+        // Expiration entry write entry/bytes: 57
+        2 + 57
     );
 }
 
@@ -515,8 +533,8 @@ fn test_rent_bump_without_old_entry() {
             25_000,
         ),
         // Rent: 100_000 * 1000 * (100_000 - 25_000) / (10_000 * 1024)
-        // Expiration entry write entry/bytes: 46
-        732_432 + 46
+        // Expiration entry write entry/bytes: 57
+        732_432 + 57
     );
 
     // Temp storage
@@ -533,8 +551,8 @@ fn test_rent_bump_without_old_entry() {
             25_000,
         ),
         // Rent: 100_000 * 1000 * (100_000 - 25_000) / (10_000 * 1024)
-        // Expiration entry write entry/bytes: 46
-        73_244 + 46
+        // Expiration entry write entry/bytes: 57
+        73_244 + 57
     );
 }
 
