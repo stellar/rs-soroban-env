@@ -3,7 +3,7 @@
 use soroban_env_common::{
     xdr::{ContractCostType, ScErrorCode, ScErrorType},
     Compare, DurationSmall, I128Small, I256Small, I64Small, SymbolSmall, SymbolStr, Tag,
-    TimepointSmall, U128Small, U256Small, U64Small,
+    TimepointSmall, TryFromVal, U128Small, U256Small, U64Small,
 };
 
 use crate::{
@@ -369,11 +369,18 @@ impl Host {
         } else if let Some(obj) = r.get(handle_to_index(handle)) {
             f(obj)
         } else {
+            // Discard the broken object here instead of including
+            // it in the error to avoid further attempts to interpret it.
+            // e.g. if diagnostics are on, then this would immediately
+            // begin recursing, attempting and failing to externalize
+            // debug info for this very error. Store the u64 payload instead.
+            let obj_payload = obj.as_val().get_payload();
+            let payload_val = Val::try_from_val(self, &obj_payload)?;
             Err(self.err(
                 ScErrorType::Object,
                 ScErrorCode::MissingValue,
                 "unknown object reference",
-                &[obj.to_val()],
+                &[payload_val],
             ))
         }
     }
