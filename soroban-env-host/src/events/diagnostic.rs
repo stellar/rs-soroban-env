@@ -177,3 +177,20 @@ impl Host {
         })
     }
 }
+
+#[test]
+fn misc_coverage() -> Result<(), HostError> {
+    use crate::xdr::HostFunctionType;
+    let host = Host::default();
+
+    // cover get_current_contract_id_unmetered on HostFunctionType::InvokeContract
+    host.with_frame(
+        Frame::HostFunction(HostFunctionType::InvokeContract),
+        || {
+            assert_eq!(host.get_current_contract_id_unmetered()?, None);
+            Ok(Val::VOID.into())
+        },
+    )?;
+
+    Ok(())
+}
