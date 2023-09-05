@@ -23,3 +23,8 @@ publish:
 
 publish-dry-run:
 	./publish-dry-run.sh
+
+# Requires: cargo-install llvm-cov
+coverage:
+	rm -f lcov.info
+	cargo llvm-cov test --all-features --tests --lcov --output-path=lcov.info
