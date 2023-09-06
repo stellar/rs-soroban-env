@@ -22,8 +22,15 @@ impl Contract {
         e.storage().persistent().get(&key).unwrap()
     }
 
-    pub fn bump_persistent(e: Env, key: Symbol, low_expiration_watermark: u32, high_expiration_watermark: u32) {
-        e.storage().persistent().bump(&key, low_expiration_watermark, high_expiration_watermark)
+    pub fn bump_persistent(
+        e: Env,
+        key: Symbol,
+        low_expiration_watermark: u32,
+        high_expiration_watermark: u32,
+    ) {
+        e.storage()
+            .persistent()
+            .bump(&key, low_expiration_watermark, high_expiration_watermark)
     }
 
     pub fn put_temporary(e: Env, key: Symbol, val: u64) {
@@ -42,8 +49,15 @@ impl Contract {
         e.storage().temporary().get(&key).unwrap()
     }
 
-    pub fn bump_temporary(e: Env, key: Symbol, low_expiration_watermark: u32, high_expiration_watermark: u32) {
-        e.storage().temporary().bump(&key, low_expiration_watermark, high_expiration_watermark)
+    pub fn bump_temporary(
+        e: Env,
+        key: Symbol,
+        low_expiration_watermark: u32,
+        high_expiration_watermark: u32,
+    ) {
+        e.storage()
+            .temporary()
+            .bump(&key, low_expiration_watermark, high_expiration_watermark)
     }
 
     pub fn put_instance(e: Env, key: Symbol, val: u64) {
@@ -63,6 +77,13 @@ impl Contract {
     }
 
     pub fn bump_instance(e: Env, low_expiration_watermark: u32, high_expiration_watermark: u32) {
-        e.storage().instance().bump(low_expiration_watermark, high_expiration_watermark)
+        e.storage()
+            .instance()
+            .bump(low_expiration_watermark, high_expiration_watermark)
+    }
+
+    pub fn increase_entry_size(e: Env, key: Symbol) {
+        let u: u64 = e.storage().persistent().get(&key).unwrap();
+        e.storage().persistent().set(&key, &u128::from(u))
     }
 }
