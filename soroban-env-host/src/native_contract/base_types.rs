@@ -2,7 +2,7 @@ use crate::host::metered_clone::MeteredClone;
 use crate::host::{Host, HostError};
 
 use core::cmp::Ordering;
-use soroban_env_common::xdr::{AccountId, ScAddress};
+use soroban_env_common::xdr::{AccountId, ScAddress, ScErrorCode, ScErrorType};
 use soroban_env_common::{
     AddressObject, BytesObject, Compare, ConversionError, Env, EnvBase, MapObject, StringObject,
     TryFromVal, Val, VecObject,
@@ -57,22 +57,18 @@ impl From<String> for StringObject {
     }
 }
 
-// TODO: check metering
 impl String {
-    pub fn copy_to_rust_string(&self, env: &Host) -> Result<std::string::String, HostError> {
-        let len: u32 = env
-            .string_len(self.object)
-            .map_err(|_| ConversionError)?
-            .into();
-        let len = len as usize;
-        let mut vec = std::vec![0; len];
-        env.string_copy_to_slice(self.object, Val::U32_ZERO, &mut vec)
-            .map_err(|_| ConversionError)?;
-        std::string::String::from_utf8(vec).map_err(|_| ConversionError.into())
-    }
-
     pub fn to_array<const N: usize>(&self) -> Result<[u8; N], HostError> {
         let mut slice = [0_u8; N];
+        let len = self.host.string_len(self.object)?;
+        if u32::from(len) as usize != N {
+            return Err(self.host.err(
+                ScErrorType::Value,
+                ScErrorCode::UnexpectedSize,
+                "String had unexpected size",
+                &[len.to_val()],
+            ));
+        }
         self.host
             .string_copy_to_slice(self.object, Val::U32_ZERO, &mut slice)?;
         Ok(slice)
