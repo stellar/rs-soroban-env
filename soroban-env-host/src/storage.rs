@@ -19,6 +19,10 @@ use crate::{host::metered_map::MeteredOrdMap, HostError};
 
 pub type FootprintMap = MeteredOrdMap<Rc<LedgerKey>, AccessType, Budget>;
 pub type StorageMap = MeteredOrdMap<Rc<LedgerKey>, Option<(Rc<LedgerEntry>, Option<u32>)>, Budget>;
+
+/// The in-memory instance storage of the current running contract. Initially
+/// contains entries from the `ScMap` of the corresponding `ScContractInstance`
+/// contract data entry.
 #[derive(Clone)]
 pub(crate) struct InstanceStorageMap {
     pub(crate) map: MeteredOrdMap<Val, Val, Host>,

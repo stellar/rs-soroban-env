@@ -149,7 +149,7 @@ impl Host {
         // instead of snapshotting it and rolling it back, we just flush the
         // changes only when rollback is not needed.
         if orp.is_none() {
-            self.flush_instance_storage()?;
+            self.persist_instance_storage()?;
         }
         self.try_borrow_context_mut()?
             .pop()
@@ -787,7 +787,9 @@ impl Host {
         Ok(())
     }
 
-    fn flush_instance_storage(&self) -> Result<(), HostError> {
+    // Make the in-memory instance storage persist into the `Storage` by writing
+    // its updated contents into corresponding `ContractData` ledger entry.
+    fn persist_instance_storage(&self) -> Result<(), HostError> {
         let updated_instance = self.with_current_context_mut(|ctx| {
             if let Some(storage) = &ctx.storage {
                 if !storage.is_modified {

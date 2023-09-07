@@ -2220,32 +2220,11 @@ impl VmCallerEnv for Host {
         high_expiration_watermark: U32Val,
     ) -> Result<Void, HostError> {
         let contract_id = self.get_current_contract_id_internal()?;
-        let key = self.contract_instance_ledger_key(&contract_id)?;
-        self.try_borrow_storage_mut()?
-            .bump(
-                self,
-                key.metered_clone(self)?,
-                low_expiration_watermark.into(),
-                high_expiration_watermark.into(),
-            )
-            .map_err(|e| self.decorate_contract_instance_storage_error(e, &contract_id))?;
-        match self
-            .retrieve_contract_instance_from_storage(&key)?
-            .executable
-        {
-            ContractExecutable::Wasm(wasm_hash) => {
-                let key = self.contract_code_ledger_key(&wasm_hash)?;
-                self.try_borrow_storage_mut()?
-                    .bump(
-                        self,
-                        key,
-                        low_expiration_watermark.into(),
-                        high_expiration_watermark.into(),
-                    )
-                    .map_err(|e| self.decorate_contract_code_storage_error(e, &wasm_hash))?;
-            }
-            ContractExecutable::Token => {}
-        }
+        self.bump_contract_instance_and_code_from_contract_id(
+            &contract_id,
+            low_expiration_watermark.into(),
+            high_expiration_watermark.into(),
+        )?;
         Ok(Val::VOID)
     }
 
@@ -2257,32 +2236,11 @@ impl VmCallerEnv for Host {
         high_expiration_watermark: U32Val,
     ) -> Result<Void, Self::Error> {
         let contract_id = self.contract_id_from_address(contract)?;
-        let key = self.contract_instance_ledger_key(&contract_id)?;
-        self.try_borrow_storage_mut()?
-            .bump(
-                self,
-                key.metered_clone(self)?,
-                low_expiration_watermark.into(),
-                high_expiration_watermark.into(),
-            )
-            .map_err(|e| self.decorate_contract_instance_storage_error(e, &contract_id))?;
-        match self
-            .retrieve_contract_instance_from_storage(&key)?
-            .executable
-        {
-            ContractExecutable::Wasm(wasm_hash) => {
-                let key = self.contract_code_ledger_key(&wasm_hash)?;
-                self.try_borrow_storage_mut()?
-                    .bump(
-                        self,
-                        key,
-                        low_expiration_watermark.into(),
-                        high_expiration_watermark.into(),
-                    )
-                    .map_err(|e| self.decorate_contract_code_storage_error(e, &wasm_hash))?;
-            }
-            ContractExecutable::Token => {}
-        }
+        self.bump_contract_instance_and_code_from_contract_id(
+            &contract_id,
+            low_expiration_watermark.into(),
+            high_expiration_watermark.into(),
+        )?;
         Ok(Val::VOID)
     }
 
