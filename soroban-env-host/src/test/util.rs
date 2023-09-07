@@ -1,10 +1,10 @@
-use std::rc::Rc;
+use std::{collections::BTreeMap, rc::Rc};
 
 use rand::{thread_rng, RngCore};
 use soroban_env_common::{
     xdr::{
         AccountEntry, AccountId, ContractCostType, LedgerEntry, LedgerEntryData, LedgerKey,
-        PublicKey, ScAddress, ScVal, ScVec, Uint256,
+        PublicKey, ScAddress, ScErrorCode, ScErrorType, ScVal, ScVec, Uint256,
     },
     AddressObject, BytesObject, Env, EnvBase, Symbol, Val, VecObject,
 };
@@ -12,8 +12,8 @@ use soroban_synth_wasm::{Arity, ModEmitter, Operand};
 
 use crate::{
     budget::{AsBudget, Budget},
-    storage::{test_storage::MockSnapshotSource, Storage},
-    xdr, Host, HostError, LedgerInfo,
+    storage::{SnapshotSource, Storage},
+    xdr, Error, Host, HostError, LedgerInfo,
 };
 
 use soroban_bench_utils::HostTracker;
@@ -66,6 +66,27 @@ pub(crate) fn wasm_module_with_4n_insns(n: usize) -> Vec<u8> {
     fe.drop();
     fe.push(Symbol::try_from_small_str("pass").unwrap());
     fe.finish_and_export("test").finish()
+}
+
+pub(crate) struct MockSnapshotSource(BTreeMap<Rc<LedgerKey>, (Rc<LedgerEntry>, Option<u32>)>);
+
+impl MockSnapshotSource {
+    pub(crate) fn new() -> Self {
+        Self(BTreeMap::<Rc<LedgerKey>, (Rc<LedgerEntry>, Option<u32>)>::new())
+    }
+}
+impl SnapshotSource for MockSnapshotSource {
+    fn get(&self, key: &Rc<LedgerKey>) -> Result<(Rc<LedgerEntry>, Option<u32>), HostError> {
+        if let Some(val) = self.0.get(key) {
+            Ok((Rc::clone(&val.0), val.1))
+        } else {
+            Err(Error::from_type_and_code(ScErrorType::Storage, ScErrorCode::MissingValue).into())
+        }
+    }
+
+    fn has(&self, key: &Rc<LedgerKey>) -> Result<bool, HostError> {
+        Ok(self.0.contains_key(key))
+    }
 }
 
 #[allow(dead_code)]
