@@ -1,3 +1,6 @@
+// This permits globals prouced by derive(num_enum::TryFromPrimitive) below.
+#![cfg_attr(test, allow(non_upper_case_globals))]
+
 use crate::{
     declare_tag_based_object_wrapper, declare_tag_based_wrapper, impl_rawval_wrapper_base,
     impl_tryfroms_and_tryfromvals_delegating_to_rawvalconvertible, Compare, I32Val, SymbolSmall,
