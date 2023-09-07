@@ -1226,6 +1226,8 @@ impl EnvBase for Host {
 impl VmCallerEnv for Host {
     type VmUserState = Host;
 
+    // region: "context" module functions
+
     // Notes on metering: covered by the components
     fn log_from_linear_memory(
         &self,
@@ -1341,6 +1343,79 @@ impl VmCallerEnv for Host {
         Ok(Val::VOID)
     }
 
+    fn get_ledger_version(&self, _vmcaller: &mut VmCaller<Host>) -> Result<U32Val, Self::Error> {
+        self.with_ledger_info(|li| Ok(li.protocol_version.into()))
+    }
+
+    fn get_ledger_sequence(&self, _vmcaller: &mut VmCaller<Host>) -> Result<U32Val, Self::Error> {
+        self.with_ledger_info(|li| Ok(li.sequence_number.into()))
+    }
+
+    fn get_ledger_timestamp(&self, _vmcaller: &mut VmCaller<Host>) -> Result<U64Val, Self::Error> {
+        self.with_ledger_info(|li| Ok(self.add_host_object(li.timestamp)?.into()))
+    }
+
+    fn get_current_call_stack(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+    ) -> Result<VecObject, HostError> {
+        let contexts = self.try_borrow_context()?;
+
+        let get_host_val_tuple = |id: &Hash, function: &Symbol| -> Result<[Val; 2], HostError> {
+            let addr_val = self
+                .add_host_object(ScAddress::Contract(id.metered_clone(self)?))?
+                .into();
+            let function_val = (*function).into();
+            Ok([addr_val, function_val])
+        };
+
+        let mut outer = Vec::with_capacity(contexts.len());
+        for context in contexts.iter() {
+            let vals = match &context.frame {
+                Frame::ContractVM { vm, fn_name, .. } => {
+                    get_host_val_tuple(&vm.contract_id, fn_name)?
+                }
+                Frame::HostFunction(_) => continue,
+                Frame::Token(id, function, ..) => get_host_val_tuple(id, function)?,
+                #[cfg(any(test, feature = "testutils"))]
+                Frame::TestContract(tc) => get_host_val_tuple(&tc.id, &tc.func)?,
+            };
+            let inner = MeteredVector::from_array(&vals, self.as_budget())?;
+            outer.push(self.add_host_object(inner)?.into());
+        }
+        self.add_host_object(HostVec::from_vec(outer)?)
+    }
+
+    fn fail_with_error(
+        &self,
+        vmcaller: &mut VmCaller<Self::VmUserState>,
+        error: Error,
+    ) -> Result<Void, Self::Error> {
+        if error.is_type(ScErrorType::Contract) {
+            Err(self.error(
+                error,
+                "failing with contract error",
+                &[U32Val::from(error.get_code()).to_val()],
+            ))
+        } else {
+            Err(self.err(
+                ScErrorType::Context,
+                ScErrorCode::UnexpectedType,
+                "contract attempted to fail with non-ContractError status code",
+                &[error.to_val()],
+            ))
+        }
+    }
+
+    fn get_ledger_network_id(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+    ) -> Result<BytesObject, Self::Error> {
+        self.with_ledger_info(|li| {
+            self.add_host_object(self.scbytes_from_slice(li.network_id.as_slice())?)
+        })
+    }
+
     // Notes on metering: covered by the components.
     fn get_current_contract_address(
         &self,
@@ -1350,6 +1425,17 @@ impl VmCallerEnv for Host {
             self.get_current_contract_id_internal()?,
         ))
     }
+
+    fn get_max_expiration_ledger(
+        &self,
+        _vmcaller: &mut VmCaller<Host>,
+    ) -> Result<U32Val, Self::Error> {
+        Ok(self.max_expiration_ledger()?.into())
+    }
+
+    // endregion "context" module functions
+
+    // region: "int" module functions
 
     impl_wrapping_obj_from_num!(obj_from_u64, u64, u64);
     impl_wrapping_obj_to_num!(obj_to_u64, u64, u64);
@@ -1600,6 +1686,9 @@ impl VmCallerEnv for Host {
         self.add_host_object(HostMap::new())
     }
 
+    // endregion "int" module functions
+    // region: "map" module functions
+
     fn map_put(
         &self,
         _vmcaller: &mut VmCaller<Host>,
@@ -1821,6 +1910,9 @@ impl VmCallerEnv for Host {
 
         Ok(Val::VOID)
     }
+
+    // endregion "map" module functions
+    // region: "vec" module functions
 
     fn vec_new(&self, _vmcaller: &mut VmCaller<Host>) -> Result<VecObject, HostError> {
         self.add_host_object(HostVec::new())
@@ -2067,6 +2159,9 @@ impl VmCallerEnv for Host {
         })?;
         Ok(Val::VOID)
     }
+
+    // endregion "vec" module functions
+    // region: "ledger" module functions
 
     // Notes on metering: covered by components
     fn put_contract_data(
@@ -2381,6 +2476,9 @@ impl VmCallerEnv for Host {
         Ok(Val::VOID)
     }
 
+    // endregion "ledger" module functions
+    // region: "call" module functions
+
     // Notes on metering: here covers the args unpacking. The actual VM work is changed at lower layers.
     fn call(
         &self,
@@ -2454,6 +2552,9 @@ impl VmCallerEnv for Host {
             }
         }
     }
+
+    // endregion "call" module functions
+    // region: "buf" module functions
 
     // Notes on metering: covered by components
     fn serialize_to_bytes(
@@ -2843,6 +2944,9 @@ impl VmCallerEnv for Host {
         self.add_host_object(self.scbytes_from_vec(vnew)?)
     }
 
+    // endregion "buf" module functions
+    // region: "crypto" module functions
+
     // Notes on metering: covered by components.
     fn compute_hash_sha256(
         &self,
@@ -2892,89 +2996,15 @@ impl VmCallerEnv for Host {
         self.recover_key_ecdsa_secp256k1_internal(&hash, &sig, rid)
     }
 
-    fn get_ledger_version(&self, _vmcaller: &mut VmCaller<Host>) -> Result<U32Val, Self::Error> {
-        self.with_ledger_info(|li| Ok(li.protocol_version.into()))
-    }
-
-    fn get_ledger_sequence(&self, _vmcaller: &mut VmCaller<Host>) -> Result<U32Val, Self::Error> {
-        self.with_ledger_info(|li| Ok(li.sequence_number.into()))
-    }
-
-    fn get_ledger_timestamp(&self, _vmcaller: &mut VmCaller<Host>) -> Result<U64Val, Self::Error> {
-        self.with_ledger_info(|li| Ok(self.add_host_object(li.timestamp)?.into()))
-    }
-
-    fn get_max_expiration_ledger(
-        &self,
-        _vmcaller: &mut VmCaller<Host>,
-    ) -> Result<U32Val, Self::Error> {
-        Ok(self.max_expiration_ledger()?.into())
-    }
-
-    fn get_ledger_network_id(
-        &self,
-        _vmcaller: &mut VmCaller<Host>,
-    ) -> Result<BytesObject, Self::Error> {
-        self.with_ledger_info(|li| {
-            self.add_host_object(self.scbytes_from_slice(li.network_id.as_slice())?)
-        })
-    }
-
-    fn get_current_call_stack(
-        &self,
-        _vmcaller: &mut VmCaller<Host>,
-    ) -> Result<VecObject, HostError> {
-        let contexts = self.try_borrow_context()?;
-
-        let get_host_val_tuple = |id: &Hash, function: &Symbol| -> Result<[Val; 2], HostError> {
-            let addr_val = self
-                .add_host_object(ScAddress::Contract(id.metered_clone(self)?))?
-                .into();
-            let function_val = (*function).into();
-            Ok([addr_val, function_val])
-        };
-
-        let mut outer = Vec::with_capacity(contexts.len());
-        for context in contexts.iter() {
-            let vals = match &context.frame {
-                Frame::ContractVM { vm, fn_name, .. } => {
-                    get_host_val_tuple(&vm.contract_id, fn_name)?
-                }
-                Frame::HostFunction(_) => continue,
-                Frame::Token(id, function, ..) => get_host_val_tuple(id, function)?,
-                #[cfg(any(test, feature = "testutils"))]
-                Frame::TestContract(tc) => get_host_val_tuple(&tc.id, &tc.func)?,
-            };
-            let inner = MeteredVector::from_array(&vals, self.as_budget())?;
-            outer.push(self.add_host_object(inner)?.into());
-        }
-        self.add_host_object(HostVec::from_vec(outer)?)
-    }
-
-    fn fail_with_error(
-        &self,
-        vmcaller: &mut VmCaller<Self::VmUserState>,
-        error: Error,
-    ) -> Result<Void, Self::Error> {
-        if error.is_type(ScErrorType::Contract) {
-            Err(self.error(
-                error,
-                "failing with contract error",
-                &[U32Val::from(error.get_code()).to_val()],
-            ))
-        } else {
-            Err(self.err(
-                ScErrorType::Context,
-                ScErrorCode::UnexpectedType,
-                "contract attempted to fail with non-ContractError status code",
-                &[error.to_val()],
-            ))
-        }
-    }
+    // endregion "crypto" module functions
+    // region: "test" module functions
 
     fn dummy0(&self, vmcaller: &mut VmCaller<Self::VmUserState>) -> Result<Val, Self::Error> {
         Ok(().into())
     }
+
+    // endregion "test" module functions
+    // region: "address" module functions
 
     fn require_auth_for_args(
         &self,
@@ -3075,6 +3105,9 @@ impl VmCallerEnv for Host {
         }
     }
 
+    // endregion "address" module functions
+    // region: "prng" module functions
+
     fn prng_reseed(
         &self,
         vmcaller: &mut VmCaller<Self::VmUserState>,
@@ -3136,6 +3169,7 @@ impl VmCallerEnv for Host {
         })?;
         self.add_host_object(vnew)
     }
+    // endregion "prng" module functions
 }
 
 #[cfg(any(test, feature = "testutils"))]
