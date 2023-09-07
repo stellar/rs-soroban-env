@@ -32,7 +32,7 @@ pub trait EnvBase: Sized + Clone {
     /// environment-interface level, and then either directly handle or escalate
     /// the contained `Error` code to the user as a `Error` or `Result<>` of
     /// some other type, depending on the API.
-    type Error: core::fmt::Debug + Into<crate::Error>;
+    type Error: core::fmt::Debug + Into<crate::Error> + From<crate::Error>;
 
     /// Reject an error from the environment, turning it into a panic but on
     /// terms that the environment controls (eg. transforming or logging it).

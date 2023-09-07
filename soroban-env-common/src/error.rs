@@ -286,6 +286,12 @@ impl From<core::convert::Infallible> for crate::Error {
     }
 }
 
+impl From<crate::Error> for core::convert::Infallible {
+    fn from(_value: crate::Error) -> Self {
+        unreachable!()
+    }
+}
+
 #[cfg(all(test, feature = "std"))]
 mod tests {
     use super::*;
