@@ -163,6 +163,14 @@ impl From<stellar_xdr::Error> for Error {
     }
 }
 
+// This never happens, but it's needed for some impls of TryFromVal downstream
+// in the SDK that use the xdr::Error type.
+impl From<Error> for stellar_xdr::Error {
+    fn from(_value: Error) -> Self {
+        stellar_xdr::Error::Unsupported
+    }
+}
+
 #[cfg(feature = "wasmi")]
 impl From<wasmi::core::TrapCode> for Error {
     fn from(code: wasmi::core::TrapCode) -> Self {
