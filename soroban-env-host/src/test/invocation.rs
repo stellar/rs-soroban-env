@@ -6,7 +6,7 @@ use soroban_env_common::{
         self, ContractDataDurability, LedgerKey, LedgerKeyContractData, ScErrorCode, ScSymbol,
         ScVal,
     },
-    Env, EnvBase, TryFromVal, U64Small, Val,
+    Env, EnvBase, TryFromVal, U32Val, U64Small, Val,
 };
 
 use crate::{
@@ -291,13 +291,15 @@ fn invoke_single_contract_function2() -> Result<(), HostError> {
     let _res = host.call(contract_id_obj, func.into(), args)?;
 
     // increase_entry_size
-    let func = host.symbol_new_from_slice("increase_entry_size")?;
+    let func = host.symbol_new_from_slice("replace_with_bytes_and_bump")?;
     let mut args = host.vec_new()?;
     args = host.vec_push_back(args, key.into())?;
+    args = host.vec_push_back(args, U32Val::from(5).into())?;
+    args = host.vec_push_back(args, U32Val::from(0).into())?;
+    args = host.vec_push_back(args, U32Val::from(0).into())?;
     let _res = host.call(contract_id_obj, func.into(), args)?;
 
     // let v = host.get_contract_data(key.into(), soroban_env_common::StorageType::Persistent)?;
-    // println!("{:?}", v);
 
     let k = Rc::new(LedgerKey::ContractData(LedgerKeyContractData {
         key: ScVal::Symbol(ScSymbol::try_from("a").unwrap()),
@@ -305,7 +307,14 @@ fn invoke_single_contract_function2() -> Result<(), HostError> {
         contract: xdr::ScAddress::Contract(host.contract_id_from_address(contract_id_obj)?),
     }));
     let v = host.with_mut_storage(|s| s.get(&k, host.as_budget()))?;
-    println!("{:?}", v);
+    let l = match &v.data {
+        xdr::LedgerEntryData::ContractData(d) => match &d.val {
+            ScVal::Bytes(b) => b.len(),
+            _ => panic!(),
+        },
+        _ => panic!(),
+    };
+    println!("{:?}", l);
 
     Ok(())
 }

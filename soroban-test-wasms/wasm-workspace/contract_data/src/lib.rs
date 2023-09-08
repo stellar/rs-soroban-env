@@ -1,5 +1,5 @@
 #![no_std]
-use soroban_sdk::{contract, contractimpl, Env, Symbol};
+use soroban_sdk::{contract, contractimpl, Bytes, Env, Symbol};
 
 #[contract]
 pub struct Contract;
@@ -82,8 +82,21 @@ impl Contract {
             .bump(low_expiration_watermark, high_expiration_watermark)
     }
 
-    pub fn increase_entry_size(e: Env, key: Symbol) {
-        let u: u64 = e.storage().persistent().get(&key).unwrap();
-        e.storage().persistent().set(&key, &u128::from(u))
+    pub fn replace_with_bytes_and_bump(
+        e: Env,
+        key: Symbol,
+        num_kilo_bytes: u32,
+        low_expiration_watermark: u32,
+        high_expiration_watermark: u32,
+    ) {
+        let slice = [0_u8; 1024];
+        let mut bytes = Bytes::new(&e);
+        for _ in 0..num_kilo_bytes {
+            bytes.extend_from_slice(&slice);
+        }
+        e.storage().persistent().set(&key, &bytes);
+        e.storage()
+            .persistent()
+            .bump(&key, low_expiration_watermark, high_expiration_watermark)
     }
 }
