@@ -29,6 +29,12 @@ pub struct HostError {
 
 impl std::error::Error for HostError {}
 
+impl Into<Error> for HostError {
+    fn into(self) -> Error {
+        self.error
+    }
+}
+
 impl Debug for HostError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // We do a little trimming here, skipping the first two frames (which
@@ -346,7 +352,7 @@ where
     HostError: From<<Val as TryFromVal<Host, T>>::Error>,
 {
     fn debug_arg_maybe_expensive_or_fallible(host: &Host, arg: &Self) -> Result<Val, HostError> {
-        Val::try_from_val(host, arg).map_err(|e| e.into())
+        Val::try_from_val(host, arg).map_err(|e| HostError::from(e))
     }
 }
 

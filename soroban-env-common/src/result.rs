@@ -1,19 +1,23 @@
-use crate::{ConversionError, Env, Error, TryFromVal, TryIntoVal, Val};
+use crate::{Env, Error, TryFromVal, TryIntoVal, Val};
 
 impl<E: Env, T, R> TryFromVal<E, Val> for Result<T, R>
 where
     T: TryFromVal<E, Val>,
     R: TryFrom<Error>,
+    <R as TryFrom<Error>>::Error: Into<Error>,
 {
-    type Error = ConversionError;
+    type Error = crate::Error;
 
     #[inline(always)]
     fn try_from_val(env: &E, val: &Val) -> Result<Self, Self::Error> {
         let val = *val;
-        if let Ok(status) = Error::try_from_val(env, &val) {
-            Ok(Err(status.try_into().map_err(|_| ConversionError)?))
+        if let Ok(error) = Error::try_from_val(env, &val) {
+            match R::try_from(error) {
+                Ok(err) => Ok(Err(err)),
+                Err(err) => Err(err.into()),
+            }
         } else {
-            let converted = T::try_from_val(env, &val).map_err(|_| ConversionError)?;
+            let converted = T::try_from_val(env, &val).map_err(Into::into)?;
             Ok(Ok(converted))
         }
     }
@@ -22,17 +26,18 @@ where
 impl<E: Env, T, R> TryFromVal<E, Result<T, R>> for Val
 where
     Val: TryFromVal<E, T>,
-    Error: for<'a> TryFrom<&'a R>,
+    for<'a> &'a R: TryInto<Error>,
+    for<'a> <&'a R as TryInto<Error>>::Error: Into<Error>,
 {
-    type Error = ConversionError;
+    type Error = crate::Error;
 
     #[inline(always)]
     fn try_from_val(env: &E, v: &Result<T, R>) -> Result<Self, Self::Error> {
         match v {
-            Ok(t) => t.try_into_val(env).map_err(|_| ConversionError),
+            Ok(t) => t.try_into_val(env).map_err(Into::into),
             Err(r) => {
-                let status: Error = Error::try_from(r).map_err(|_| ConversionError)?;
-                Ok(status.into())
+                let error: Error = r.try_into().map_err(Into::into)?;
+                Ok(error.into())
             }
         }
     }

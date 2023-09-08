@@ -1,7 +1,11 @@
 #[cfg(feature = "std")]
 use std::rc::Rc;
 
-use crate::{val::ValConvert, Env, Tag, Val};
+use crate::{
+    val::ValConvert,
+    xdr::{ScErrorCode, ScErrorType},
+    Env, Error, Tag, Val,
+};
 use core::cmp::Ordering;
 
 /// General trait representing the ability to compare two values of some type.
@@ -51,11 +55,9 @@ macro_rules! impl_compare_for_tuple {
 
             fn compare(&self, a: &($($T,)+), b: &($($T,)+)) -> Result<Ordering, Self::Error> {
                 $(
-                    if let Ordering::Less = <C as Compare<$T>>::compare(self, &a.$idx, &b.$idx)? {
-                        return Ok(Ordering::Less)
-                    }
-                    if let Ordering::Greater = <C as Compare<$T>>::compare(self, &a.$idx, &b.$idx)? {
-                        return Ok(Ordering::Greater)
+                    match <C as Compare<$T>>::compare(self, &a.$idx, &b.$idx)? {
+                        unequal @ (Ordering::Less | Ordering::Greater) => return Ok(unequal),
+                        _ => ()
                     }
                 )*
                 Ok(Ordering::Equal)
@@ -194,7 +196,11 @@ impl<E: Env> Compare<Val> for E {
                 | Tag::SymbolObject
                 | Tag::VecObject
                 | Tag::MapObject
-                | Tag::AddressObject => unreachable!(),
+                | Tag::AddressObject => Err(Error::from_type_and_code(
+                    ScErrorType::Context,
+                    ScErrorCode::InternalError,
+                )
+                .into()),
 
                 Tag::ObjectCodeUpperBound => Ok(Ordering::Equal),
                 Tag::Bad => Ok(Ordering::Equal),

@@ -84,21 +84,20 @@ sa::const_assert!(CODE_MASK == 0x3f);
 sa::const_assert!(CODE_BITS * MAX_SMALL_CHARS + 2 == BODY_BITS);
 
 impl<E: Env> TryFromVal<E, &str> for Symbol {
-    type Error = ConversionError;
+    type Error = crate::Error;
 
     fn try_from_val(env: &E, v: &&str) -> Result<Self, Self::Error> {
         if let Ok(ss) = SymbolSmall::try_from_str(v) {
             Ok(Self(ss.0))
-        } else if let Ok(so) = env.symbol_new_from_slice(v) {
-            Ok(Self(so.0))
         } else {
-            Err(ConversionError)
+            let sobj = env.symbol_new_from_slice(v).map_err(Into::into)?;
+            Ok(Self(sobj.0))
         }
     }
 }
 
 impl<E: Env> TryFromVal<E, &[u8]> for Symbol {
-    type Error = ConversionError;
+    type Error = crate::Error;
 
     fn try_from_val(env: &E, v: &&[u8]) -> Result<Self, Self::Error> {
         // We don't know this byte-slice is actually utf-8 ...
@@ -312,7 +311,7 @@ impl From<SymbolSmall> for SymbolStr {
 }
 
 impl<E: Env> TryFromVal<E, Symbol> for SymbolStr {
-    type Error = ConversionError;
+    type Error = crate::Error;
 
     fn try_from_val(env: &E, v: &Symbol) -> Result<Self, Self::Error> {
         if let Ok(ss) = SymbolSmall::try_from(*v) {
@@ -321,7 +320,7 @@ impl<E: Env> TryFromVal<E, Symbol> for SymbolStr {
             let obj: SymbolObject = unsafe { SymbolObject::unchecked_from_val(v.0) };
             let mut arr = [0u8; SCSYMBOL_LIMIT as usize];
             env.symbol_copy_to_slice(obj, Val::U32_ZERO, &mut arr)
-                .map_err(|_| ConversionError)?;
+                .map_err(Into::into)?;
             Ok(SymbolStr(arr))
         }
     }
@@ -414,26 +413,26 @@ use crate::xdr::{ScSymbol, ScVal};
 
 #[cfg(feature = "std")]
 impl TryFrom<ScVal> for SymbolSmall {
-    type Error = ConversionError;
+    type Error = crate::Error;
     fn try_from(v: ScVal) -> Result<Self, Self::Error> {
         (&v).try_into()
     }
 }
 #[cfg(feature = "std")]
 impl TryFrom<&ScVal> for SymbolSmall {
-    type Error = ConversionError;
+    type Error = crate::Error;
     fn try_from(v: &ScVal) -> Result<Self, Self::Error> {
         if let ScVal::Symbol(crate::xdr::ScSymbol(vec)) = v {
-            vec.try_into().map_err(|_| ConversionError)
+            vec.try_into().map_err(Into::into)
         } else {
-            Err(ConversionError)
+            Err(ConversionError.into())
         }
     }
 }
 
 #[cfg(feature = "std")]
 impl<E: Env> TryFromVal<E, ScVal> for Symbol {
-    type Error = ConversionError;
+    type Error = crate::Error;
 
     fn try_from_val(env: &E, v: &ScVal) -> Result<Self, Self::Error> {
         Symbol::try_from_val(env, &v)
@@ -442,19 +441,19 @@ impl<E: Env> TryFromVal<E, ScVal> for Symbol {
 
 #[cfg(feature = "std")]
 impl<E: Env> TryFromVal<E, &ScVal> for Symbol {
-    type Error = ConversionError;
+    type Error = crate::Error;
     fn try_from_val(env: &E, v: &&ScVal) -> Result<Self, Self::Error> {
         if let ScVal::Symbol(sym) = v {
             Symbol::try_from_val(env, &sym)
         } else {
-            Err(ConversionError)
+            Err(ConversionError.into())
         }
     }
 }
 
 #[cfg(feature = "std")]
 impl<E: Env> TryFromVal<E, ScSymbol> for Symbol {
-    type Error = ConversionError;
+    type Error = crate::Error;
 
     fn try_from_val(env: &E, v: &ScSymbol) -> Result<Self, Self::Error> {
         Symbol::try_from_val(env, &v)
@@ -463,7 +462,7 @@ impl<E: Env> TryFromVal<E, ScSymbol> for Symbol {
 
 #[cfg(feature = "std")]
 impl<E: Env> TryFromVal<E, &ScSymbol> for Symbol {
-    type Error = ConversionError;
+    type Error = crate::Error;
     fn try_from_val(env: &E, v: &&ScSymbol) -> Result<Self, Self::Error> {
         Symbol::try_from_val(env, &v.0.as_slice())
     }
@@ -471,37 +470,39 @@ impl<E: Env> TryFromVal<E, &ScSymbol> for Symbol {
 
 #[cfg(feature = "std")]
 impl TryFrom<SymbolSmall> for ScVal {
-    type Error = ConversionError;
-    fn try_from(s: SymbolSmall) -> Result<Self, ConversionError> {
+    type Error = crate::Error;
+    fn try_from(s: SymbolSmall) -> Result<Self, crate::Error> {
         let res: Result<Vec<u8>, _> = s.into_iter().map(<u8 as TryFrom<char>>::try_from).collect();
-        Ok(ScVal::Symbol(
-            res.map_err(|_| ConversionError)?
-                .try_into()
-                .map_err(|_| ConversionError)?,
-        ))
+        let vec = res.map_err(|_| {
+            crate::Error::from_type_and_code(
+                crate::xdr::ScErrorType::Value,
+                crate::xdr::ScErrorCode::InvalidInput,
+            )
+        })?;
+        Ok(ScVal::Symbol(vec.try_into()?))
     }
 }
 
 #[cfg(feature = "std")]
 impl TryFrom<&SymbolSmall> for ScVal {
-    type Error = ConversionError;
-    fn try_from(s: &SymbolSmall) -> Result<Self, ConversionError> {
+    type Error = crate::Error;
+    fn try_from(s: &SymbolSmall) -> Result<Self, crate::Error> {
         (*s).try_into()
     }
 }
 
 #[cfg(feature = "std")]
 impl<E: Env> TryFromVal<E, Symbol> for ScVal {
-    type Error = ConversionError;
-    fn try_from_val(e: &E, s: &Symbol) -> Result<Self, ConversionError> {
+    type Error = crate::Error;
+    fn try_from_val(e: &E, s: &Symbol) -> Result<Self, crate::Error> {
         Ok(ScVal::Symbol(ScSymbol::try_from_val(e, s)?))
     }
 }
 
 #[cfg(feature = "std")]
 impl<E: Env> TryFromVal<E, Symbol> for ScSymbol {
-    type Error = ConversionError;
-    fn try_from_val(e: &E, s: &Symbol) -> Result<Self, ConversionError> {
+    type Error = crate::Error;
+    fn try_from_val(e: &E, s: &Symbol) -> Result<Self, crate::Error> {
         let sstr = SymbolStr::try_from_val(e, s)?;
         Ok(ScSymbol(sstr.0.as_slice()[0..sstr.len()].try_into()?))
     }

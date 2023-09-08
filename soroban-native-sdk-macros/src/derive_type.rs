@@ -153,7 +153,7 @@ pub fn derive_type_enum(ident: &Ident, data: &DataEnum) -> TokenStream2 {
         quote! {
 
             impl #ident {
-                fn discriminant_sym(&self, env: &crate::Host) -> Result<crate::Symbol, crate::ConversionError> {
+                fn discriminant_sym(&self, env: &crate::Host) -> Result<crate::Symbol, crate::Error> {
                     use soroban_env_common::TryFromVal;
                     match self {
                         #(#syms,)*

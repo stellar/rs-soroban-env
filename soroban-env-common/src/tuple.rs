@@ -1,4 +1,4 @@
-use crate::{ConversionError, Env, TryFromVal, TryIntoVal, Val, VecObject};
+use crate::{Env, TryFromVal, TryIntoVal, Val, VecObject};
 
 macro_rules! impl_for_tuple {
     ( $count:literal $count_usize:literal $($typ:ident $idx:tt)+ ) => {
@@ -9,13 +9,13 @@ macro_rules! impl_for_tuple {
         where
             $($typ: TryFromVal<E, Val>),*
         {
-            type Error = ConversionError;
+            type Error = crate::Error;
 
             fn try_from_val(env: &E, val: &Val) -> Result<Self, Self::Error> {
                 let vec: VecObject = val.try_into()?;
                 let mut tmp: [Val; $count as usize] = [Val::VOID.to_val(); $count as usize];
-                env.vec_unpack_to_slice(vec, &mut tmp).map_err(|_| ConversionError)?;
-                Ok(($($typ::try_from_val(env, &tmp[$idx]).map_err(|_| ConversionError)?,)*))
+                env.vec_unpack_to_slice(vec, &mut tmp).map_err(Into::into)?;
+                Ok(($($typ::try_from_val(env, &tmp[$idx]).map_err(Into::into)?,)*))
             }
         }
 
@@ -23,12 +23,12 @@ macro_rules! impl_for_tuple {
         where
             $($typ: TryIntoVal<E, Val>),*
         {
-            type Error = ConversionError;
+            type Error = crate::Error;
             fn try_from_val(env: &E, v: &($($typ,)*)) -> Result<Self, Self::Error> {
                 let tmp: [Val; $count as usize] = [
-                    $(v.$idx.try_into_val(&env).map_err(|_| ConversionError)?,)*
+                    $(v.$idx.try_into_val(&env).map_err(Into::into)?,)*
                 ];
-                let vec = env.vec_new_from_slice(&tmp).map_err(|_| ConversionError)?;
+                let vec = env.vec_new_from_slice(&tmp).map_err(Into::into)?;
                 Ok(vec.to_val())
             }
         }
@@ -40,12 +40,12 @@ macro_rules! impl_for_tuple {
         where
             $($typ: TryFromVal<E, Val>),*
         {
-            type Error = ConversionError;
+            type Error = crate::Error;
 
             fn try_from_val(env: &E, val: &[Val; N]) -> Result<Self, Self::Error> {
                 Ok((
                     $({
-                        $typ::try_from_val(&env, &val[$idx]).map_err(|_| ConversionError)?
+                        $typ::try_from_val(&env, &val[$idx]).map_err(Into::into)?
                     },)*
                 ))
             }
@@ -55,11 +55,11 @@ macro_rules! impl_for_tuple {
         where
             $(Val: TryFromVal<E, $typ>),*
         {
-            type Error = ConversionError;
+            type Error = crate::Error;
 
             fn try_from_val(env: &E, val: &($($typ,)*)) -> Result<Self, Self::Error> {
                 let mut arr: [Val; N] = [Val::VOID.into(); N];
-                $(arr[$idx] = val.$idx.try_into_val(env).map_err(|_| ConversionError)?;)*
+                $(arr[$idx] = val.$idx.try_into_val(env).map_err(Into::into)?;)*
                 Ok(arr)
             }
         }
@@ -87,7 +87,7 @@ impl_for_tuple! { 13_u32 13_usize T0 0 T1 1 T2 2 T3 3 T4 4 T5 5 T6 6 T7 7 T8 8 T
 // Val::VOID, see raw_val.rs for those conversions.
 
 impl<E: Env> TryFromVal<E, [Val; 0]> for () {
-    type Error = ConversionError;
+    type Error = crate::Error;
 
     fn try_from_val(_env: &E, _val: &[Val; 0]) -> Result<Self, Self::Error> {
         Ok(())
@@ -95,7 +95,7 @@ impl<E: Env> TryFromVal<E, [Val; 0]> for () {
 }
 
 impl<E: Env> TryFromVal<E, ()> for [Val; 0] {
-    type Error = ConversionError;
+    type Error = crate::Error;
 
     fn try_from_val(_env: &E, _v: &()) -> Result<Self, Self::Error> {
         Ok([Val::VOID.into(); 0])

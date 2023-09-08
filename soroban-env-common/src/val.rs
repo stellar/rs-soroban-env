@@ -1,3 +1,6 @@
+// This permits globals prouced by derive(num_enum::TryFromPrimitive) below.
+#![cfg_attr(test, allow(non_upper_case_globals))]
+
 use crate::{
     declare_tag_based_object_wrapper, declare_tag_based_wrapper, impl_rawval_wrapper_base,
     impl_tryfroms_and_tryfromvals_delegating_to_rawvalconvertible, Compare, I32Val, SymbolSmall,
@@ -317,8 +320,15 @@ declare_tag_based_object_wrapper!(AddressObject);
 // away, the same way `()` would, while remaining a separate type to allow
 // conversion to a more-structured error code at a higher level.
 
-/// Error type indicating a failure to convert some type to another; details
-/// of the failed conversion will typically be written to the debug log.
+/// Error type indicating a failure to convert some type to another; details of
+/// the failed conversion will typically be written to the debug log.
+///
+/// This is intentionally minimal and uninformative to minimize impact of its
+/// use on wasm codesize. It converts to `Error(ScErrorType::Value,
+/// ScErrorCode::UnexpectedType)` when converted to a full `Error`, and ideally
+/// it should only be used in ubiquitous cases that will occur in wasm, like
+/// small-number or tag conversions, where code size is paramount and the
+/// information-loss from using it is not too bad.
 #[derive(Debug, Eq, PartialEq)]
 pub struct ConversionError;
 
@@ -330,6 +340,12 @@ impl From<Infallible> for ConversionError {
 
 impl From<stellar_xdr::Error> for ConversionError {
     fn from(_: stellar_xdr::Error) -> Self {
+        ConversionError
+    }
+}
+
+impl From<crate::Error> for ConversionError {
+    fn from(_: crate::Error) -> Self {
         ConversionError
     }
 }
