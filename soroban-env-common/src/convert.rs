@@ -1,15 +1,16 @@
 use crate::{
     num::{i256_from_pieces, i256_into_pieces, u256_from_pieces, u256_into_pieces},
-    ConversionError, DurationSmall, DurationVal, Env, I128Small, I128Val, I256Small, I256Val,
-    I64Small, TimepointSmall, TimepointVal, U128Small, U128Val, U256Small, U256Val, U64Small,
-    U64Val, Val, I256, U256,
+    DurationSmall, DurationVal, Env, I128Small, I128Val, I256Small, I256Val, I64Small,
+    TimepointSmall, TimepointVal, U128Small, U128Val, U256Small, U256Val, U64Small, U64Val, Val,
+    I256, U256,
 };
 use core::fmt::Debug;
 use stellar_xdr::int128_helpers;
 
 #[cfg(feature = "std")]
 use crate::{
-    num, object::ScValObjRef, val::ValConvert, Error, Object, ScValObject, SymbolSmall, Tag,
+    num, object::ScValObjRef, val::ValConvert, ConversionError, Error, Object, ScValObject,
+    SymbolSmall, Tag,
 };
 #[cfg(feature = "std")]
 use stellar_xdr::{
@@ -59,7 +60,7 @@ where
 // i64 conversions
 
 impl<E: Env> TryFromVal<E, Val> for i64 {
-    type Error = ConversionError;
+    type Error = crate::Error;
 
     fn try_from_val(env: &E, val: &Val) -> Result<Self, Self::Error> {
         let val = *val;
@@ -67,20 +68,20 @@ impl<E: Env> TryFromVal<E, Val> for i64 {
             Ok(so.into())
         } else {
             let obj = val.try_into()?;
-            Ok(env.obj_to_i64(obj).map_err(|_| ConversionError)?)
+            Ok(env.obj_to_i64(obj).map_err(Into::into)?)
         }
     }
 }
 
 impl<E: Env> TryFromVal<E, i64> for Val {
-    type Error = ConversionError;
+    type Error = crate::Error;
 
     fn try_from_val(env: &E, v: &i64) -> Result<Self, Self::Error> {
         let v = *v;
         if let Ok(so) = I64Small::try_from(v) {
             Ok(so.into())
         } else {
-            Ok(env.obj_from_i64(v).map_err(|_| ConversionError)?.to_val())
+            Ok(env.obj_from_i64(v).map_err(Into::into)?.to_val())
         }
     }
 }
@@ -88,7 +89,7 @@ impl<E: Env> TryFromVal<E, i64> for Val {
 // u64 conversions
 
 impl<E: Env> TryFromVal<E, Val> for u64 {
-    type Error = ConversionError;
+    type Error = crate::Error;
 
     fn try_from_val(env: &E, val: &Val) -> Result<Self, Self::Error> {
         let val = *val;
@@ -96,13 +97,13 @@ impl<E: Env> TryFromVal<E, Val> for u64 {
             Ok(so.into())
         } else {
             let obj = val.try_into()?;
-            Ok(env.obj_to_u64(obj).map_err(|_| ConversionError)?)
+            Ok(env.obj_to_u64(obj).map_err(Into::into)?)
         }
     }
 }
 
 impl<E: Env> TryFromVal<E, u64> for Val {
-    type Error = ConversionError;
+    type Error = crate::Error;
 
     fn try_from_val(env: &E, v: &u64) -> Result<Self, Self::Error> {
         Ok(U64Val::try_from_val(env, v)?.to_val())
@@ -110,7 +111,7 @@ impl<E: Env> TryFromVal<E, u64> for Val {
 }
 
 impl<E: Env> TryFromVal<E, U64Val> for u64 {
-    type Error = ConversionError;
+    type Error = crate::Error;
 
     fn try_from_val(env: &E, val: &U64Val) -> Result<Self, Self::Error> {
         let val = *val;
@@ -118,20 +119,20 @@ impl<E: Env> TryFromVal<E, U64Val> for u64 {
             Ok(so.into())
         } else {
             let obj = val.try_into()?;
-            Ok(env.obj_to_u64(obj).map_err(|_| ConversionError)?)
+            Ok(env.obj_to_u64(obj).map_err(Into::into)?)
         }
     }
 }
 
 impl<E: Env> TryFromVal<E, u64> for U64Val {
-    type Error = ConversionError;
+    type Error = crate::Error;
 
     fn try_from_val(env: &E, v: &u64) -> Result<Self, Self::Error> {
         let v = *v;
         if let Ok(so) = U64Small::try_from(v) {
             Ok(so.into())
         } else {
-            Ok(env.obj_from_u64(v).map_err(|_| ConversionError)?.into())
+            Ok(env.obj_from_u64(v).map_err(Into::into)?.into())
         }
     }
 }
@@ -139,7 +140,7 @@ impl<E: Env> TryFromVal<E, u64> for U64Val {
 // {Timepoint, Duration} <-> u64 conversions
 
 impl<E: Env> TryFromVal<E, TimepointVal> for u64 {
-    type Error = ConversionError;
+    type Error = crate::Error;
 
     fn try_from_val(env: &E, val: &TimepointVal) -> Result<Self, Self::Error> {
         let val = *val;
@@ -147,29 +148,26 @@ impl<E: Env> TryFromVal<E, TimepointVal> for u64 {
             Ok(so.into())
         } else {
             let obj = val.try_into()?;
-            Ok(env.timepoint_obj_to_u64(obj).map_err(|_| ConversionError)?)
+            Ok(env.timepoint_obj_to_u64(obj).map_err(Into::into)?)
         }
     }
 }
 
 impl<E: Env> TryFromVal<E, u64> for TimepointVal {
-    type Error = ConversionError;
+    type Error = crate::Error;
 
     fn try_from_val(env: &E, v: &u64) -> Result<Self, Self::Error> {
         let v = *v;
         if let Ok(so) = TimepointSmall::try_from(v) {
             Ok(so.into())
         } else {
-            Ok(env
-                .timepoint_obj_from_u64(v)
-                .map_err(|_| ConversionError)?
-                .into())
+            Ok(env.timepoint_obj_from_u64(v).map_err(Into::into)?.into())
         }
     }
 }
 
 impl<E: Env> TryFromVal<E, DurationVal> for u64 {
-    type Error = ConversionError;
+    type Error = crate::Error;
 
     fn try_from_val(env: &E, val: &DurationVal) -> Result<Self, Self::Error> {
         let val = *val;
@@ -177,23 +175,20 @@ impl<E: Env> TryFromVal<E, DurationVal> for u64 {
             Ok(so.into())
         } else {
             let obj = val.try_into()?;
-            Ok(env.duration_obj_to_u64(obj).map_err(|_| ConversionError)?)
+            Ok(env.duration_obj_to_u64(obj).map_err(Into::into)?)
         }
     }
 }
 
 impl<E: Env> TryFromVal<E, u64> for DurationVal {
-    type Error = ConversionError;
+    type Error = crate::Error;
 
     fn try_from_val(env: &E, v: &u64) -> Result<Self, Self::Error> {
         let v = *v;
         if let Ok(so) = DurationSmall::try_from(v) {
             Ok(so.into())
         } else {
-            Ok(env
-                .duration_obj_from_u64(v)
-                .map_err(|_| ConversionError)?
-                .into())
+            Ok(env.duration_obj_from_u64(v).map_err(Into::into)?.into())
         }
     }
 }
@@ -201,7 +196,7 @@ impl<E: Env> TryFromVal<E, u64> for DurationVal {
 // i128 conversions
 
 impl<E: Env> TryFromVal<E, Val> for i128 {
-    type Error = ConversionError;
+    type Error = crate::Error;
 
     fn try_from_val(env: &E, v: &Val) -> Result<Self, Self::Error> {
         let v = *v;
@@ -209,15 +204,15 @@ impl<E: Env> TryFromVal<E, Val> for i128 {
             Ok(so.into())
         } else {
             let obj = v.try_into()?;
-            let hi = env.obj_to_i128_hi64(obj).map_err(|_| ConversionError)?;
-            let lo = env.obj_to_i128_lo64(obj).map_err(|_| ConversionError)?;
+            let hi = env.obj_to_i128_hi64(obj).map_err(Into::into)?;
+            let lo = env.obj_to_i128_lo64(obj).map_err(Into::into)?;
             Ok(int128_helpers::i128_from_pieces(hi, lo))
         }
     }
 }
 
 impl<E: Env> TryFromVal<E, i128> for Val {
-    type Error = ConversionError;
+    type Error = crate::Error;
 
     fn try_from_val(env: &E, v: &i128) -> Result<Self, Self::Error> {
         Ok(I128Val::try_from_val(env, v)?.to_val())
@@ -225,7 +220,7 @@ impl<E: Env> TryFromVal<E, i128> for Val {
 }
 
 impl<E: Env> TryFromVal<E, i128> for I128Val {
-    type Error = ConversionError;
+    type Error = crate::Error;
 
     fn try_from_val(env: &E, v: &i128) -> Result<Self, Self::Error> {
         let v = *v;
@@ -234,7 +229,7 @@ impl<E: Env> TryFromVal<E, i128> for I128Val {
         } else {
             Ok(env
                 .obj_from_i128_pieces(int128_helpers::i128_hi(v), int128_helpers::i128_lo(v))
-                .map_err(|_| ConversionError)?
+                .map_err(Into::into)?
                 .into())
         }
     }
@@ -243,7 +238,7 @@ impl<E: Env> TryFromVal<E, i128> for I128Val {
 // u128 conversions
 
 impl<E: Env> TryFromVal<E, Val> for u128 {
-    type Error = ConversionError;
+    type Error = crate::Error;
 
     fn try_from_val(env: &E, v: &Val) -> Result<Self, Self::Error> {
         let v = *v;
@@ -251,15 +246,15 @@ impl<E: Env> TryFromVal<E, Val> for u128 {
             Ok(so.into())
         } else {
             let obj = v.try_into()?;
-            let hi = env.obj_to_u128_hi64(obj).map_err(|_| ConversionError)?;
-            let lo = env.obj_to_u128_lo64(obj).map_err(|_| ConversionError)?;
+            let hi = env.obj_to_u128_hi64(obj).map_err(Into::into)?;
+            let lo = env.obj_to_u128_lo64(obj).map_err(Into::into)?;
             Ok(int128_helpers::u128_from_pieces(hi, lo))
         }
     }
 }
 
 impl<E: Env> TryFromVal<E, u128> for Val {
-    type Error = ConversionError;
+    type Error = crate::Error;
 
     fn try_from_val(env: &E, v: &u128) -> Result<Self, Self::Error> {
         Ok(U128Val::try_from_val(env, v)?.to_val())
@@ -267,7 +262,7 @@ impl<E: Env> TryFromVal<E, u128> for Val {
 }
 
 impl<E: Env> TryFromVal<E, u128> for U128Val {
-    type Error = ConversionError;
+    type Error = crate::Error;
 
     fn try_from_val(env: &E, v: &u128) -> Result<Self, Self::Error> {
         let v = *v;
@@ -276,7 +271,7 @@ impl<E: Env> TryFromVal<E, u128> for U128Val {
         } else {
             Ok(env
                 .obj_from_u128_pieces(int128_helpers::u128_hi(v), int128_helpers::u128_lo(v))
-                .map_err(|_| ConversionError)?
+                .map_err(Into::into)?
                 .into())
         }
     }
@@ -284,7 +279,7 @@ impl<E: Env> TryFromVal<E, u128> for U128Val {
 
 // i256 conversions
 impl<E: Env> TryFromVal<E, Val> for I256 {
-    type Error = ConversionError;
+    type Error = crate::Error;
 
     fn try_from_val(env: &E, v: &Val) -> Result<Self, Self::Error> {
         let v = *v;
@@ -292,17 +287,17 @@ impl<E: Env> TryFromVal<E, Val> for I256 {
             Ok(so.into())
         } else {
             let obj = v.try_into()?;
-            let hi_hi = env.obj_to_i256_hi_hi(obj).map_err(|_| ConversionError)?;
-            let hi_lo = env.obj_to_i256_hi_lo(obj).map_err(|_| ConversionError)?;
-            let lo_hi = env.obj_to_i256_lo_hi(obj).map_err(|_| ConversionError)?;
-            let lo_lo = env.obj_to_i256_lo_lo(obj).map_err(|_| ConversionError)?;
+            let hi_hi = env.obj_to_i256_hi_hi(obj).map_err(Into::into)?;
+            let hi_lo = env.obj_to_i256_hi_lo(obj).map_err(Into::into)?;
+            let lo_hi = env.obj_to_i256_lo_hi(obj).map_err(Into::into)?;
+            let lo_lo = env.obj_to_i256_lo_lo(obj).map_err(Into::into)?;
             Ok(i256_from_pieces(hi_hi, hi_lo, lo_hi, lo_lo))
         }
     }
 }
 
 impl<E: Env> TryFromVal<E, I256> for Val {
-    type Error = ConversionError;
+    type Error = crate::Error;
 
     fn try_from_val(env: &E, v: &I256) -> Result<Self, Self::Error> {
         Ok(I256Val::try_from_val(env, v)?.to_val())
@@ -310,7 +305,7 @@ impl<E: Env> TryFromVal<E, I256> for Val {
 }
 
 impl<E: Env> TryFromVal<E, I256> for I256Val {
-    type Error = ConversionError;
+    type Error = crate::Error;
 
     fn try_from_val(env: &E, v: &I256) -> Result<Self, Self::Error> {
         let v = *v;
@@ -320,7 +315,7 @@ impl<E: Env> TryFromVal<E, I256> for I256Val {
             let (hi_hi, hi_lo, lo_hi, lo_lo) = i256_into_pieces(v);
             Ok(env
                 .obj_from_i256_pieces(hi_hi, hi_lo, lo_hi, lo_lo)
-                .map_err(|_| ConversionError)?
+                .map_err(Into::into)?
                 .into())
         }
     }
@@ -328,7 +323,7 @@ impl<E: Env> TryFromVal<E, I256> for I256Val {
 
 // u256 conversions
 impl<E: Env> TryFromVal<E, Val> for U256 {
-    type Error = ConversionError;
+    type Error = crate::Error;
 
     fn try_from_val(env: &E, v: &Val) -> Result<Self, Self::Error> {
         let v = *v;
@@ -336,17 +331,17 @@ impl<E: Env> TryFromVal<E, Val> for U256 {
             Ok(so.into())
         } else {
             let obj = v.try_into()?;
-            let hi_hi = env.obj_to_u256_hi_hi(obj).map_err(|_| ConversionError)?;
-            let hi_lo = env.obj_to_u256_hi_lo(obj).map_err(|_| ConversionError)?;
-            let lo_hi = env.obj_to_u256_lo_hi(obj).map_err(|_| ConversionError)?;
-            let lo_lo = env.obj_to_u256_lo_lo(obj).map_err(|_| ConversionError)?;
+            let hi_hi = env.obj_to_u256_hi_hi(obj).map_err(Into::into)?;
+            let hi_lo = env.obj_to_u256_hi_lo(obj).map_err(Into::into)?;
+            let lo_hi = env.obj_to_u256_lo_hi(obj).map_err(Into::into)?;
+            let lo_lo = env.obj_to_u256_lo_lo(obj).map_err(Into::into)?;
             Ok(u256_from_pieces(hi_hi, hi_lo, lo_hi, lo_lo))
         }
     }
 }
 
 impl<E: Env> TryFromVal<E, U256> for Val {
-    type Error = ConversionError;
+    type Error = crate::Error;
 
     fn try_from_val(env: &E, v: &U256) -> Result<Self, Self::Error> {
         Ok(U256Val::try_from_val(env, v)?.to_val())
@@ -354,7 +349,7 @@ impl<E: Env> TryFromVal<E, U256> for Val {
 }
 
 impl<E: Env> TryFromVal<E, U256> for U256Val {
-    type Error = ConversionError;
+    type Error = crate::Error;
 
     fn try_from_val(env: &E, v: &U256) -> Result<Self, Self::Error> {
         let v = *v;
@@ -364,7 +359,7 @@ impl<E: Env> TryFromVal<E, U256> for U256Val {
             let (hi_hi, hi_lo, lo_hi, lo_lo) = u256_into_pieces(v);
             Ok(env
                 .obj_from_u256_pieces(hi_hi, hi_lo, lo_hi, lo_lo)
-                .map_err(|_| ConversionError)?
+                .map_err(Into::into)?
                 .into())
         }
     }
