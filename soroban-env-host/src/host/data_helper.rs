@@ -2,8 +2,8 @@ use core::cmp::min;
 use std::rc::Rc;
 
 use soroban_env_common::xdr::{
-    BytesM, ContractDataDurability, ContractIdPreimage, ExtensionPoint, HashIdPreimageContractId,
-    ScAddress, ScContractInstance, ScErrorCode, ScErrorType,
+    BytesM, ContractDataDurability, ContractExecutable, ContractIdPreimage, ExtensionPoint,
+    HashIdPreimageContractId, ScAddress, ScContractInstance, ScErrorCode, ScErrorType,
 };
 use soroban_env_common::{AddressObject, Env, U32Val};
 
@@ -110,7 +110,7 @@ impl Host {
             let (current, expiration_ledger) = self
                 .try_borrow_storage_mut()?
                 .get_with_expiration(key, self.as_budget())?;
-            let mut current = (*current).metered_clone(self.as_budget())?;
+            let mut current = (*current).metered_clone(self)?;
 
             match current.data {
                 LedgerEntryData::ContractData(ref mut entry) => {
@@ -149,6 +149,41 @@ impl Host {
                     self.as_budget(),
                 )
                 .map_err(|e| self.decorate_contract_instance_storage_error(e, &contract_id))?;
+        }
+        Ok(())
+    }
+
+    pub(crate) fn bump_contract_instance_and_code_from_contract_id(
+        &self,
+        contract_id: &Hash,
+        low_expiration_watermark: u32,
+        high_expiration_watermark: u32,
+    ) -> Result<(), HostError> {
+        let key = self.contract_instance_ledger_key(&contract_id)?;
+        self.try_borrow_storage_mut()?
+            .bump(
+                self,
+                key.metered_clone(self)?,
+                low_expiration_watermark,
+                high_expiration_watermark,
+            )
+            .map_err(|e| self.decorate_contract_instance_storage_error(e, &contract_id))?;
+        match self
+            .retrieve_contract_instance_from_storage(&key)?
+            .executable
+        {
+            ContractExecutable::Wasm(wasm_hash) => {
+                let key = self.contract_code_ledger_key(&wasm_hash)?;
+                self.try_borrow_storage_mut()?
+                    .bump(
+                        self,
+                        key,
+                        low_expiration_watermark,
+                        high_expiration_watermark,
+                    )
+                    .map_err(|e| self.decorate_contract_code_storage_error(e, &wasm_hash))?;
+            }
+            ContractExecutable::Token => {}
         }
         Ok(())
     }

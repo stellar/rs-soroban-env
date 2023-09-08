@@ -10,7 +10,7 @@
 use std::rc::Rc;
 
 use soroban_env_common::xdr::{ScErrorCode, ScErrorType};
-use soroban_env_common::{Compare, Env, Val};
+use soroban_env_common::{Env, Val};
 
 use crate::budget::Budget;
 use crate::xdr::{LedgerEntry, LedgerKey};
@@ -19,6 +19,10 @@ use crate::{host::metered_map::MeteredOrdMap, HostError};
 
 pub type FootprintMap = MeteredOrdMap<Rc<LedgerKey>, AccessType, Budget>;
 pub type StorageMap = MeteredOrdMap<Rc<LedgerKey>, Option<(Rc<LedgerEntry>, Option<u32>)>, Budget>;
+
+/// The in-memory instance storage of the current running contract. Initially
+/// contains entries from the `ScMap` of the corresponding `ScContractInstance`
+/// contract data entry.
 #[derive(Clone)]
 pub(crate) struct InstanceStorageMap {
     pub(crate) map: MeteredOrdMap<Val, Val, Host>,
@@ -45,22 +49,6 @@ pub enum AccessType {
     /// When in [FootprintMode::Recording], indicates that the [LedgerKey] is written (and also possibly read)
     /// When in [FootprintMode::Enforcing], indicates that the [LedgerKey] is _allowed_ to be written (and also allowed to be read).
     ReadWrite,
-}
-
-impl Compare<AccessType> for Host {
-    type Error = HostError;
-
-    fn compare(&self, a: &AccessType, b: &AccessType) -> Result<core::cmp::Ordering, Self::Error> {
-        Ok(a.cmp(b))
-    }
-}
-
-impl Compare<AccessType> for Budget {
-    type Error = HostError;
-
-    fn compare(&self, a: &AccessType, b: &AccessType) -> Result<core::cmp::Ordering, Self::Error> {
-        Ok(a.cmp(b))
-    }
 }
 
 /// A helper type used by [FootprintMode::Recording] to provide access
@@ -224,7 +212,7 @@ impl Storage {
     ///
     /// In [FootprintMode::Enforcing] mode, succeeds only if the read
     /// [LedgerKey] has been declared in the [Footprint].
-    pub fn get_with_expiration(
+    pub(crate) fn get_with_expiration(
         &mut self,
         key: &Rc<LedgerKey>,
         budget: &Budget,
@@ -416,145 +404,5 @@ impl Storage {
             }
         };
         Ok(())
-    }
-}
-
-#[cfg(test)]
-mod test_footprint {
-
-    use soroban_env_common::xdr::ScAddress;
-
-    use super::*;
-    use crate::budget::Budget;
-    use crate::xdr::{ContractDataDurability, LedgerKeyContractData, ScVal};
-
-    #[test]
-    fn footprint_record_access() -> Result<(), HostError> {
-        let budget = Budget::default();
-        budget.reset_unlimited()?;
-        let mut fp = Footprint::default();
-        // record when key not exist
-        let key = Rc::new(LedgerKey::ContractData(LedgerKeyContractData {
-            contract: ScAddress::Contract([0; 32].into()),
-            key: ScVal::I32(0),
-            durability: ContractDataDurability::Persistent,
-        }));
-        fp.record_access(&key, AccessType::ReadOnly, &budget)?;
-        assert_eq!(fp.0.contains_key::<LedgerKey>(&key, &budget)?, true);
-        assert_eq!(
-            fp.0.get::<LedgerKey>(&key, &budget)?,
-            Some(&AccessType::ReadOnly)
-        );
-        // record and change access
-        fp.record_access(&key, AccessType::ReadWrite, &budget)?;
-        assert_eq!(
-            fp.0.get::<LedgerKey>(&key, &budget)?,
-            Some(&AccessType::ReadWrite)
-        );
-        fp.record_access(&key, AccessType::ReadOnly, &budget)?;
-        assert_eq!(
-            fp.0.get::<LedgerKey>(&key, &budget)?,
-            Some(&AccessType::ReadWrite)
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn footprint_enforce_access() -> Result<(), HostError> {
-        let budget = Budget::default();
-        let key = Rc::new(LedgerKey::ContractData(LedgerKeyContractData {
-            contract: ScAddress::Contract([0; 32].into()),
-            key: ScVal::I32(0),
-            durability: ContractDataDurability::Persistent,
-        }));
-
-        // Key not in footprint. Only difference is type_
-        let key2 = Rc::new(LedgerKey::ContractData(LedgerKeyContractData {
-            contract: ScAddress::Contract([0; 32].into()),
-            key: ScVal::I32(0),
-            durability: ContractDataDurability::Temporary,
-        }));
-
-        let om = [(Rc::clone(&key), AccessType::ReadOnly)].into();
-        let mom = MeteredOrdMap::from_map(om, &budget)?;
-        let mut fp = Footprint(mom);
-        assert!(fp
-            .enforce_access(&key2, AccessType::ReadOnly, &budget)
-            .is_err());
-        fp.enforce_access(&key, AccessType::ReadOnly, &budget)?;
-        fp.0 =
-            fp.0.insert(Rc::clone(&key), AccessType::ReadWrite, &budget)?;
-        fp.enforce_access(&key, AccessType::ReadOnly, &budget)?;
-        fp.enforce_access(&key, AccessType::ReadWrite, &budget)?;
-        Ok(())
-    }
-
-    #[test]
-    fn footprint_enforce_access_not_exist() -> Result<(), HostError> {
-        let budget = Budget::default();
-        let mut fp = Footprint::default();
-        let key = Rc::new(LedgerKey::ContractData(LedgerKeyContractData {
-            contract: ScAddress::Contract([0; 32].into()),
-            key: ScVal::I32(0),
-            durability: ContractDataDurability::Persistent,
-        }));
-        let res = fp.enforce_access(&key, AccessType::ReadOnly, &budget);
-        assert!(HostError::result_matches_err(
-            res,
-            (ScErrorType::Storage, ScErrorCode::ExceededLimit)
-        ));
-        Ok(())
-    }
-
-    #[test]
-    fn footprint_attempt_to_write_readonly_entry() -> Result<(), HostError> {
-        let budget = Budget::default();
-        let key = Rc::new(LedgerKey::ContractData(LedgerKeyContractData {
-            contract: ScAddress::Contract([0; 32].into()),
-            key: ScVal::I32(0),
-            durability: ContractDataDurability::Persistent,
-        }));
-        let om = [(Rc::clone(&key), AccessType::ReadOnly)].into();
-        let mom = MeteredOrdMap::from_map(om, &budget)?;
-        let mut fp = Footprint(mom);
-        let res = fp.enforce_access(&key, AccessType::ReadWrite, &budget);
-        assert!(HostError::result_matches_err(
-            res,
-            (ScErrorType::Storage, ScErrorCode::ExceededLimit)
-        ));
-        Ok(())
-    }
-}
-
-#[cfg(test)]
-pub(crate) mod test_storage {
-    use std::collections::BTreeMap;
-
-    use soroban_env_common::Error;
-
-    use super::*;
-    #[allow(dead_code)]
-    pub(crate) struct MockSnapshotSource(BTreeMap<Rc<LedgerKey>, (Rc<LedgerEntry>, Option<u32>)>);
-    #[allow(dead_code)]
-    impl MockSnapshotSource {
-        pub(crate) fn new() -> Self {
-            Self(BTreeMap::<Rc<LedgerKey>, (Rc<LedgerEntry>, Option<u32>)>::new())
-        }
-    }
-    impl SnapshotSource for MockSnapshotSource {
-        fn get(&self, key: &Rc<LedgerKey>) -> Result<(Rc<LedgerEntry>, Option<u32>), HostError> {
-            if let Some(val) = self.0.get(key) {
-                Ok((Rc::clone(&val.0), val.1))
-            } else {
-                Err(
-                    Error::from_type_and_code(ScErrorType::Storage, ScErrorCode::MissingValue)
-                        .into(),
-                )
-            }
-        }
-
-        fn has(&self, key: &Rc<LedgerKey>) -> Result<bool, HostError> {
-            Ok(self.0.contains_key(key))
-        }
     }
 }

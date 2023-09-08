@@ -1,7 +1,112 @@
+use std::rc::Rc;
+
+use crate::budget::Budget;
 use crate::native_contract::testutils::HostVec;
-use crate::{host_vec, Host};
+use crate::storage::{AccessType, Footprint};
+use crate::xdr::{
+    ContractDataDurability, LedgerKey, LedgerKeyContractData, ScAddress, ScErrorCode, ScErrorType,
+    ScVal,
+};
+use crate::{host_vec, Host, HostError, MeteredOrdMap};
 use soroban_env_common::{AddressObject, Env, Symbol, TryFromVal, TryIntoVal};
 use soroban_test_wasms::CONTRACT_STORAGE;
+
+#[test]
+fn footprint_record_access() -> Result<(), HostError> {
+    let budget = Budget::default();
+    budget.reset_unlimited()?;
+    let mut fp = Footprint::default();
+    // record when key not exist
+    let key = Rc::new(LedgerKey::ContractData(LedgerKeyContractData {
+        contract: ScAddress::Contract([0; 32].into()),
+        key: ScVal::I32(0),
+        durability: ContractDataDurability::Persistent,
+    }));
+    fp.record_access(&key, AccessType::ReadOnly, &budget)?;
+    assert_eq!(fp.0.contains_key::<LedgerKey>(&key, &budget)?, true);
+    assert_eq!(
+        fp.0.get::<LedgerKey>(&key, &budget)?,
+        Some(&AccessType::ReadOnly)
+    );
+    // record and change access
+    fp.record_access(&key, AccessType::ReadWrite, &budget)?;
+    assert_eq!(
+        fp.0.get::<LedgerKey>(&key, &budget)?,
+        Some(&AccessType::ReadWrite)
+    );
+    fp.record_access(&key, AccessType::ReadOnly, &budget)?;
+    assert_eq!(
+        fp.0.get::<LedgerKey>(&key, &budget)?,
+        Some(&AccessType::ReadWrite)
+    );
+    Ok(())
+}
+
+#[test]
+fn footprint_enforce_access() -> Result<(), HostError> {
+    let budget = Budget::default();
+    let key = Rc::new(LedgerKey::ContractData(LedgerKeyContractData {
+        contract: ScAddress::Contract([0; 32].into()),
+        key: ScVal::I32(0),
+        durability: ContractDataDurability::Persistent,
+    }));
+
+    // Key not in footprint. Only difference is type_
+    let key2 = Rc::new(LedgerKey::ContractData(LedgerKeyContractData {
+        contract: ScAddress::Contract([0; 32].into()),
+        key: ScVal::I32(0),
+        durability: ContractDataDurability::Temporary,
+    }));
+
+    let om = [(Rc::clone(&key), AccessType::ReadOnly)].into();
+    let mom = MeteredOrdMap::from_map(om, &budget)?;
+    let mut fp = Footprint(mom);
+    assert!(fp
+        .enforce_access(&key2, AccessType::ReadOnly, &budget)
+        .is_err());
+    fp.enforce_access(&key, AccessType::ReadOnly, &budget)?;
+    fp.0 =
+        fp.0.insert(Rc::clone(&key), AccessType::ReadWrite, &budget)?;
+    fp.enforce_access(&key, AccessType::ReadOnly, &budget)?;
+    fp.enforce_access(&key, AccessType::ReadWrite, &budget)?;
+    Ok(())
+}
+
+#[test]
+fn footprint_enforce_access_not_exist() -> Result<(), HostError> {
+    let budget = Budget::default();
+    let mut fp = Footprint::default();
+    let key = Rc::new(LedgerKey::ContractData(LedgerKeyContractData {
+        contract: ScAddress::Contract([0; 32].into()),
+        key: ScVal::I32(0),
+        durability: ContractDataDurability::Persistent,
+    }));
+    let res = fp.enforce_access(&key, AccessType::ReadOnly, &budget);
+    assert!(HostError::result_matches_err(
+        res,
+        (ScErrorType::Storage, ScErrorCode::ExceededLimit)
+    ));
+    Ok(())
+}
+
+#[test]
+fn footprint_attempt_to_write_readonly_entry() -> Result<(), HostError> {
+    let budget = Budget::default();
+    let key = Rc::new(LedgerKey::ContractData(LedgerKeyContractData {
+        contract: ScAddress::Contract([0; 32].into()),
+        key: ScVal::I32(0),
+        durability: ContractDataDurability::Persistent,
+    }));
+    let om = [(Rc::clone(&key), AccessType::ReadOnly)].into();
+    let mom = MeteredOrdMap::from_map(om, &budget)?;
+    let mut fp = Footprint(mom);
+    let res = fp.enforce_access(&key, AccessType::ReadWrite, &budget);
+    assert!(HostError::result_matches_err(
+        res,
+        (ScErrorType::Storage, ScErrorCode::ExceededLimit)
+    ));
+    Ok(())
+}
 
 fn storage_fn_name(host: &Host, fn_name: &str, storage: &str) -> Symbol {
     Symbol::try_from_val(host, &format!("{}_{}", fn_name, storage).as_str()).unwrap()
