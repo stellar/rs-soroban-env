@@ -320,8 +320,15 @@ declare_tag_based_object_wrapper!(AddressObject);
 // away, the same way `()` would, while remaining a separate type to allow
 // conversion to a more-structured error code at a higher level.
 
-/// Error type indicating a failure to convert some type to another; details
-/// of the failed conversion will typically be written to the debug log.
+/// Error type indicating a failure to convert some type to another; details of
+/// the failed conversion will typically be written to the debug log.
+///
+/// This is intentionally minimal and uninformative to minimize impact of its
+/// use on wasm codesize. It converts to `Error(ScErrorType::Value,
+/// ScErrorCode::UnexpectedType)` when converted to a full `Error`, and ideally
+/// it should only be used in ubiquitous cases that will occur in wasm, like
+/// small-number or tag conversions, where code size is paramount and the
+/// information-loss from using it is not too bad.
 #[derive(Debug, Eq, PartialEq)]
 pub struct ConversionError;
 
