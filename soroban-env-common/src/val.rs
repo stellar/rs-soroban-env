@@ -337,6 +337,12 @@ impl From<stellar_xdr::Error> for ConversionError {
     }
 }
 
+impl From<crate::Error> for ConversionError {
+    fn from(_: crate::Error) -> Self {
+        ConversionError
+    }
+}
+
 /// Trait abstracting over types that can be converted into [Val], similar to
 /// [TryFrom] but with a different signature that enables generating slightly
 /// more efficient conversion code. An implementation of `TryFrom<Val>` is also
