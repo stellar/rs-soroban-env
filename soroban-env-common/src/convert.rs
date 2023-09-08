@@ -1,26 +1,27 @@
 use crate::{
     num::{i256_from_pieces, i256_into_pieces, u256_from_pieces, u256_into_pieces},
-    DurationSmall, DurationVal, Env, I128Small, I128Val, I256Small, I256Val,
-    I64Small, TimepointSmall, TimepointVal, U128Small, U128Val, U256Small, U256Val, U64Small,
-    U64Val, Val, I256, U256,
+    DurationSmall, DurationVal, Env, I128Small, I128Val, I256Small, I256Val, I64Small,
+    TimepointSmall, TimepointVal, U128Small, U128Val, U256Small, U256Val, U64Small, U64Val, Val,
+    I256, U256,
 };
 use core::fmt::Debug;
 use stellar_xdr::int128_helpers;
 
 #[cfg(feature = "std")]
 use crate::{
-    ConversionError,
-    num, object::ScValObjRef, val::ValConvert, Error, Object, ScValObject, SymbolSmall, Tag,
+    num, object::ScValObjRef, val::ValConvert, ConversionError, Error, Object, ScValObject,
+    SymbolSmall, Tag,
 };
 #[cfg(feature = "std")]
 use stellar_xdr::{
-    Duration, Int128Parts, Int256Parts, ScVal, TimePoint, UInt128Parts, UInt256Parts,
+    Duration, Int128Parts, Int256Parts, ScErrorCode, ScErrorType, ScVal, TimePoint, UInt128Parts,
+    UInt256Parts,
 };
 
 /// General trait representing a the ability of some object to perform a
 /// (possibly unsuccessful) conversion between two other types.
 pub trait Convert<F, T> {
-    type Error: Debug;
+    type Error: Debug + Into<crate::Error> + From<crate::Error>;
     fn convert(&self, f: F) -> Result<T, Self::Error>;
 }
 
@@ -29,7 +30,7 @@ pub trait Convert<F, T> {
 /// conversions via `.try_into_val(e)` or specifying convertability with a bound
 /// like `TryIntoVal<E,Other>`.
 pub trait TryIntoVal<E: Env, V> {
-    type Error: Debug;
+    type Error: Debug + Into<crate::Error> + From<crate::Error>;
     fn try_into_val(&self, env: &E) -> Result<V, Self::Error>;
 }
 
@@ -40,7 +41,7 @@ pub trait TryIntoVal<E: Env, V> {
 /// delegate to the environment to look up and extract the content of those
 /// handles.
 pub trait TryFromVal<E: Env, V: ?Sized>: Sized {
-    type Error: Debug;
+    type Error: Debug + Into<crate::Error> + From<crate::Error>;
     fn try_from_val(env: &E, v: &V) -> Result<Self, Self::Error>;
 }
 
@@ -161,10 +162,7 @@ impl<E: Env> TryFromVal<E, u64> for TimepointVal {
         if let Ok(so) = TimepointSmall::try_from(v) {
             Ok(so.into())
         } else {
-            Ok(env
-                .timepoint_obj_from_u64(v)
-                .map_err(Into::into)?
-                .into())
+            Ok(env.timepoint_obj_from_u64(v).map_err(Into::into)?.into())
         }
     }
 }
@@ -191,10 +189,7 @@ impl<E: Env> TryFromVal<E, u64> for DurationVal {
         if let Ok(so) = DurationSmall::try_from(v) {
             Ok(so.into())
         } else {
-            Ok(env
-                .duration_obj_from_u64(v)
-                .map_err(Into::into)?
-                .into())
+            Ok(env.duration_obj_from_u64(v).map_err(Into::into)?.into())
         }
     }
 }
@@ -377,10 +372,11 @@ impl<E: Env> TryFromVal<E, U256> for U256Val {
 impl<E: Env> TryFromVal<E, Val> for ScVal
 where
     ScValObject: TryFromVal<E, Object>,
+   // <ScValObject as TryFromVal<E, Object>>::Error: Into<crate::Error>
 {
-    type Error = ConversionError;
+    type Error = crate::Error;
 
-    fn try_from_val(env: &E, val: &Val) -> Result<Self, ConversionError> {
+    fn try_from_val(env: &E, val: &Val) -> Result<Self, crate::Error> {
         if let Ok(object) = Object::try_from(val) {
             // FIXME: it's not really great to be dropping the error from the other
             // TryFromVal here, we should really switch to taking errors from E.
@@ -393,8 +389,8 @@ where
             Tag::True => Ok(ScVal::Bool(true)),
             Tag::Void => Ok(ScVal::Void),
             Tag::Error => {
-                let status: Error = unsafe { <Error as ValConvert>::unchecked_from_val(val) };
-                Ok(status.try_into()?)
+                let error: Error = unsafe { <Error as ValConvert>::unchecked_from_val(val) };
+                Ok(error.try_into()?)
             }
             Tag::U32Val => Ok(ScVal::U32(val.get_major())),
             Tag::I32Val => Ok(ScVal::I32(val.get_major() as i32)),
@@ -453,11 +449,14 @@ where
             | Tag::SymbolObject
             | Tag::VecObject
             | Tag::MapObject
-            | Tag::AddressObject => unreachable!(),
+            | Tag::AddressObject => Err(crate::Error::from_type_and_code(
+                ScErrorType::Value,
+                ScErrorCode::InternalError,
+            )),
             Tag::SmallCodeUpperBound
             | Tag::ObjectCodeLowerBound
             | Tag::ObjectCodeUpperBound
-            | Tag::Bad => Err(ConversionError),
+            | Tag::Bad => Err(ConversionError.into()),
         }
     }
 }
@@ -465,9 +464,9 @@ where
 #[cfg(feature = "std")]
 impl<E: Env> TryFromVal<E, ScVal> for Val
 where
-    Object: for<'a> TryFromVal<E, ScValObjRef<'a>, Error = ConversionError>,
+    Object: for<'a> TryFromVal<E, ScValObjRef<'a>, Error = E::Error>,
 {
-    type Error = ConversionError;
+    type Error = E::Error;
     fn try_from_val(env: &E, val: &ScVal) -> Result<Val, Self::Error> {
         if let Some(scvo) = ScValObjRef::classify(val) {
             let obj = Object::try_from_val(env, &scvo)?;
@@ -517,9 +516,15 @@ where
             ScVal::Symbol(bytes) => {
                 let ss = match std::str::from_utf8(bytes.as_slice()) {
                     Ok(ss) => ss,
-                    Err(_) => return Err(ConversionError),
+                    Err(_) => {
+                        return Err(Error::from_type_and_code(
+                            ScErrorType::Value,
+                            ScErrorCode::InvalidInput,
+                        )
+                        .into())
+                    }
                 };
-                SymbolSmall::try_from_str(ss)?.into()
+                SymbolSmall::try_from_str(ss).map_err(Into::into)?.into()
             }
             ScVal::LedgerKeyContractInstance => unsafe {
                 Val::from_body_and_tag(0, Tag::LedgerKeyContractInstance)
@@ -531,7 +536,13 @@ where
             | ScVal::Map(_)
             | ScVal::Address(_)
             | ScVal::LedgerKeyNonce(_)
-            | ScVal::ContractInstance(_) => unreachable!(),
+            | ScVal::ContractInstance(_) => {
+                return Err(Error::from_type_and_code(
+                    ScErrorType::Value,
+                    ScErrorCode::InternalError,
+                )
+                .into())
+            }
         })
     }
 }

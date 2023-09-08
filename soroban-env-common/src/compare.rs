@@ -197,7 +197,7 @@ impl<E: Env> Compare<Val> for E {
                 | Tag::VecObject
                 | Tag::MapObject
                 | Tag::AddressObject => Err(Error::from_type_and_code(
-                    ScErrorType::Context,
+                    ScErrorType::Value,
                     ScErrorCode::InternalError,
                 )
                 .into()),

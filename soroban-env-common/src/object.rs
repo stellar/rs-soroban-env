@@ -1,6 +1,5 @@
 use crate::{
-    impl_rawval_wrapper_base, num, val::ValConvert, Compare, ConversionError, Convert, Env, Tag,
-    TryFromVal, Val,
+    impl_rawval_wrapper_base, num, val::ValConvert, Compare, Convert, Env, Tag, TryFromVal, Val,
 };
 use core::{cmp::Ordering, fmt::Debug};
 use stellar_xdr::{Duration, ScVal, TimePoint};
@@ -73,13 +72,10 @@ impl<'a, E> TryFromVal<E, ScValObjRef<'a>> for Object
 where
     E: Env + Convert<ScValObjRef<'a>, Object>,
 {
-    type Error = ConversionError;
+    type Error = <E as Convert<ScValObjRef<'a>, Object>>::Error;
 
     fn try_from_val(env: &E, v: &ScValObjRef<'a>) -> Result<Self, Self::Error> {
-        match env.convert(*v) {
-            Ok(obj) => Ok(obj),
-            Err(_) => Err(ConversionError),
-        }
+        env.convert(*v)
     }
 }
 
