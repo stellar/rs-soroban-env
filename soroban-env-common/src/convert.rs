@@ -23,11 +23,21 @@ pub trait Convert<F, T> {
     fn convert(&self, f: F) -> Result<T, Self::Error>;
 }
 
+/// The opposite trait to [`TryFromVal`], analogous to the way that [`TryInto`]
+/// exists as an opposite to [`TryFrom`]. Exists only for convenience of doing
+/// conversions via `.try_into_val(e)` or specifying convertability with a bound
+/// like `TryIntoVal<E,Other>`.
 pub trait TryIntoVal<E: Env, V> {
     type Error: Debug;
     fn try_into_val(&self, env: &E) -> Result<V, Self::Error>;
 }
 
+/// Trait for types that can be fallibly converted to another type `V`, analogous
+/// to the standard Rust type [`TryFrom`], but making use of the provided `Env`
+/// implementation `E` in order to convert parts of the type that require it.
+/// Mainly this exists because `Val` types that contain object handles need to
+/// delegate to the environment to look up and extract the content of those
+/// handles.
 pub trait TryFromVal<E: Env, V: ?Sized>: Sized {
     type Error: Debug;
     fn try_from_val(env: &E, v: &V) -> Result<Self, Self::Error>;
