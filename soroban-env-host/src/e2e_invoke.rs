@@ -179,9 +179,10 @@ pub fn extract_rent_changes(ledger_changes: &Vec<LedgerEntryChange>) -> Vec<Ledg
                 &entry_change.expiration_change,
                 &entry_change.encoded_new_value,
             ) {
-                // Skip non-bumped entries as well.
+                // Skip the entry if 1. it is not bumped and 2. the entry size has not increased
                 if expiration_change.old_expiration_ledger
                     >= expiration_change.new_expiration_ledger
+                    && entry_change.old_entry_size_bytes >= encoded_new_value.len() as u32
                 {
                     return None;
                 }

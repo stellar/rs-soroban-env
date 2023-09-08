@@ -1,5 +1,5 @@
 #![no_std]
-use soroban_sdk::{contract, contractimpl, Env, Symbol};
+use soroban_sdk::{contract, contractimpl, Bytes, Env, Symbol};
 
 #[contract]
 pub struct Contract;
@@ -22,8 +22,15 @@ impl Contract {
         e.storage().persistent().get(&key).unwrap()
     }
 
-    pub fn bump_persistent(e: Env, key: Symbol, low_expiration_watermark: u32, high_expiration_watermark: u32) {
-        e.storage().persistent().bump(&key, low_expiration_watermark, high_expiration_watermark)
+    pub fn bump_persistent(
+        e: Env,
+        key: Symbol,
+        low_expiration_watermark: u32,
+        high_expiration_watermark: u32,
+    ) {
+        e.storage()
+            .persistent()
+            .bump(&key, low_expiration_watermark, high_expiration_watermark)
     }
 
     pub fn put_temporary(e: Env, key: Symbol, val: u64) {
@@ -42,8 +49,15 @@ impl Contract {
         e.storage().temporary().get(&key).unwrap()
     }
 
-    pub fn bump_temporary(e: Env, key: Symbol, low_expiration_watermark: u32, high_expiration_watermark: u32) {
-        e.storage().temporary().bump(&key, low_expiration_watermark, high_expiration_watermark)
+    pub fn bump_temporary(
+        e: Env,
+        key: Symbol,
+        low_expiration_watermark: u32,
+        high_expiration_watermark: u32,
+    ) {
+        e.storage()
+            .temporary()
+            .bump(&key, low_expiration_watermark, high_expiration_watermark)
     }
 
     pub fn put_instance(e: Env, key: Symbol, val: u64) {
@@ -63,6 +77,26 @@ impl Contract {
     }
 
     pub fn bump_instance(e: Env, low_expiration_watermark: u32, high_expiration_watermark: u32) {
-        e.storage().instance().bump(low_expiration_watermark, high_expiration_watermark)
+        e.storage()
+            .instance()
+            .bump(low_expiration_watermark, high_expiration_watermark)
+    }
+
+    pub fn replace_with_bytes_and_bump(
+        e: Env,
+        key: Symbol,
+        num_kilo_bytes: u32,
+        low_expiration_watermark: u32,
+        high_expiration_watermark: u32,
+    ) {
+        let slice = [0_u8; 1024];
+        let mut bytes = Bytes::new(&e);
+        for _ in 0..num_kilo_bytes {
+            bytes.extend_from_slice(&slice);
+        }
+        e.storage().persistent().set(&key, &bytes);
+        e.storage()
+            .persistent()
+            .bump(&key, low_expiration_watermark, high_expiration_watermark)
     }
 }
