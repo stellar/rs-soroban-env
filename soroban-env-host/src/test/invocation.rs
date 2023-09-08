@@ -2,14 +2,18 @@ use std::rc::Rc;
 
 use expect_test::expect;
 use soroban_env_common::{
-    xdr::{self, ScErrorCode},
-    Env, EnvBase, TryFromVal, Val,
+    xdr::{
+        self, ContractDataDurability, LedgerKey, LedgerKeyContractData, ScErrorCode, ScSymbol,
+        ScVal,
+    },
+    Env, EnvBase, TryFromVal, U64Small, Val,
 };
 
 use crate::{
-    events::HostEvent, xdr::ScErrorType, ContractFunctionSet, Error, Host, HostError, Symbol, Tag,
+    budget::AsBudget, events::HostEvent, xdr::ScErrorType, ContractFunctionSet, Error, Host,
+    HostError, Symbol, Tag,
 };
-use soroban_test_wasms::{ADD_I32, ALLOC, ERR, INVOKE_CONTRACT, VEC};
+use soroban_test_wasms::{ADD_I32, ALLOC, CONTRACT_STORAGE, ERR, INVOKE_CONTRACT, VEC};
 
 #[test]
 fn invoke_single_contract_function() -> Result<(), HostError> {
@@ -271,5 +275,37 @@ fn wasm_invoke_return_err_variants() -> Result<(), HostError> {
             panic!("got Err when expected Ok from try_call({})", fname)
         }
     }
+    Ok(())
+}
+
+#[test]
+fn invoke_single_contract_function2() -> Result<(), HostError> {
+    let host = Host::test_host_with_recording_footprint();
+    let contract_id_obj = host.register_test_contract_wasm(CONTRACT_STORAGE);
+    // put_persistent
+    let func = host.symbol_new_from_slice("put_persistent")?;
+    let key = Symbol::try_from_small_str("a")?;
+    let mut args = host.vec_new()?;
+    args = host.vec_push_back(args, key.into())?;
+    args = host.vec_push_back(args, U64Small::try_from(1u64).unwrap().into())?;
+    let _res = host.call(contract_id_obj, func.into(), args)?;
+
+    // increase_entry_size
+    let func = host.symbol_new_from_slice("increase_entry_size")?;
+    let mut args = host.vec_new()?;
+    args = host.vec_push_back(args, key.into())?;
+    let _res = host.call(contract_id_obj, func.into(), args)?;
+
+    // let v = host.get_contract_data(key.into(), soroban_env_common::StorageType::Persistent)?;
+    // println!("{:?}", v);
+
+    let k = Rc::new(LedgerKey::ContractData(LedgerKeyContractData {
+        key: ScVal::Symbol(ScSymbol::try_from("a").unwrap()),
+        durability: ContractDataDurability::Persistent,
+        contract: xdr::ScAddress::Contract(host.contract_id_from_address(contract_id_obj)?),
+    }));
+    let v = host.with_mut_storage(|s| s.get(&k, host.as_budget()))?;
+    println!("{:?}", v);
+
     Ok(())
 }
