@@ -68,6 +68,7 @@ fn test_host() -> Host {
         Storage::with_enforcing_footprint_and_map(Footprint::default(), StorageMap::new());
     let host = Host::with_storage_and_budget(storage, budget);
     host.set_ledger_info(LedgerInfo {
+        protocol_version: crate::meta::get_ledger_protocol_version(crate::meta::INTERFACE_VERSION),
         network_id: generate_bytes_array(),
         ..Default::default()
     })
@@ -167,7 +168,7 @@ fn create_contract_using_parent_id_test() {
     });
 
     let child_id = sha256_hash_id_preimage(child_pre_image);
-    let child_wasm: &[u8] = b"70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4";
+    let child_wasm: &[u8] = &[];
 
     // Install the code for the child contract.
     let wasm_hash = xdr::Hash(Sha256::digest(&child_wasm).try_into().unwrap());
@@ -235,8 +236,7 @@ fn create_contract_using_parent_id_test() {
 
 #[test]
 fn create_contract_from_source_account() {
-    let code: &[u8] = b"70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4";
-    test_create_contract_from_source_account(&test_host(), code);
+    test_create_contract_from_source_account(&test_host(), &[]);
 }
 
 pub(crate) fn sha256_hash_id_preimage<T: xdr::WriteXdr>(pre_image: T) -> xdr::Hash {

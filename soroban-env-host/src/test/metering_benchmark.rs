@@ -21,7 +21,7 @@ use super::util::{generate_account_id, generate_bytes_array};
 // RUST_TEST_THREADS=1  cargo test --release --package soroban-env-host --lib -- test::metering_benchmark  --nocapture --ignored
 
 const LEDGER_INFO: LedgerInfo = LedgerInfo {
-    protocol_version: 21,
+    protocol_version: crate::meta::get_ledger_protocol_version(crate::meta::INTERFACE_VERSION),
     sequence_number: 1234,
     timestamp: 1234,
     network_id: [7; 32],

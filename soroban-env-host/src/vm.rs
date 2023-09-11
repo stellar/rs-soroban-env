@@ -75,6 +75,71 @@ pub struct VmFunction {
 }
 
 impl Vm {
+    fn check_contract_interface_version(
+        host: &Host,
+        interface_version: u64,
+    ) -> Result<(), HostError> {
+        let want_proto = {
+            let ledger_proto = host.get_ledger_protocol_version()?;
+            let env_proto = get_ledger_protocol_version(meta::INTERFACE_VERSION);
+            if ledger_proto <= env_proto {
+                // ledger proto should be before or equal to env proto
+                ledger_proto
+            } else {
+                return Err(err!(
+                    host,
+                    (ScErrorType::Context, ScErrorCode::InternalError),
+                    "ledger protocol number is ahead of supported env protocol number",
+                    ledger_proto,
+                    env_proto
+                ));
+            }
+        };
+
+        let got_pre = get_pre_release_version(interface_version);
+        let got_proto = get_ledger_protocol_version(interface_version);
+
+        if got_proto < want_proto {
+            // Old protocols are finalized, we only support contracts
+            // with similarly finalized (zero) prerelease numbers.
+            if got_pre != 0 {
+                return Err(err!(
+                    host,
+                    (ScErrorType::WasmVm, ScErrorCode::InvalidInput),
+                    "contract pre-release number for old protocol is nonzero",
+                    got_pre
+                ));
+            }
+        } else if got_proto == want_proto {
+            // Current protocol might have a nonzero prerelease number; we will
+            // allow it only if it matches the current prerelease exactly.
+            let want_pre = get_pre_release_version(meta::INTERFACE_VERSION);
+            if want_pre != got_pre {
+                return Err(err!(
+                    host,
+                    (ScErrorType::WasmVm, ScErrorCode::InvalidInput),
+                    "contract pre-release number for current protocol does not match host",
+                    got_pre,
+                    want_pre
+                ));
+            }
+        } else {
+            // Future protocols we don't allow. It might be nice (in the sense
+            // of "allowing uploads of a future-protocol contract that will go
+            // live as soon as the network upgrades to it") but there's a risk
+            // that the "future" protocol semantics baked in to a contract
+            // differ from the final semantics chosen by the network, so to be
+            // conservative we avoid even allowing this.
+            return Err(err!(
+                host,
+                (ScErrorType::WasmVm, ScErrorCode::InvalidInput),
+                "contract protocol number is newer than host",
+                got_proto
+            ));
+        }
+        Ok(())
+    }
+
     fn check_meta_section(host: &Host, m: &Module) -> Result<(), HostError> {
         // We check that the interface version number has the same pre-release number as
         // us as well as a protocol that's less than or equal to our protocol.
@@ -85,36 +150,15 @@ impl Vm {
             if let Some(env_meta_entry) = ScEnvMetaEntry::read_xdr_iter(&mut cursor).next() {
                 let ScEnvMetaEntry::ScEnvMetaKindInterfaceVersion(v) =
                     host.map_err(env_meta_entry)?;
-                let got_pre = get_pre_release_version(v);
-                let want_pre = get_pre_release_version(meta::INTERFACE_VERSION);
-                let got_proto = get_ledger_protocol_version(v);
-                let want_proto = get_ledger_protocol_version(meta::INTERFACE_VERSION);
-                if got_pre != want_pre {
-                    return Err(err!(
-                        host,
-                        (ScErrorType::WasmVm, ScErrorCode::InvalidInput),
-                        "contract pre-release number does not match host",
-                        got_pre,
-                        want_pre
-                    ));
-                } else if got_proto > want_proto {
-                    return Err(err!(
-                        host,
-                        (ScErrorType::WasmVm, ScErrorCode::InvalidInput),
-                        "contract ledger protocol number exceeds host",
-                        got_proto,
-                        want_proto
-                    ));
-                } else {
-                    return Ok(());
-                }
+                Vm::check_contract_interface_version(host, v)
+            } else {
+                Err(host.err(
+                    ScErrorType::WasmVm,
+                    ScErrorCode::InvalidInput,
+                    "contract missing environment interface version",
+                    &[],
+                ))
             }
-            Err(host.err(
-                ScErrorType::WasmVm,
-                ScErrorCode::InvalidInput,
-                "contract missing environment interface version",
-                &[],
-            ))
         } else {
             Err(host.err(
                 ScErrorType::WasmVm,

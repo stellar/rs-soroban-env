@@ -100,7 +100,9 @@ impl Host {
         let storage = Storage::with_recording_footprint(snapshot_source);
         let host = Host::with_storage_and_budget(storage, Budget::default());
         host.set_ledger_info(LedgerInfo {
-            protocol_version: 20,
+            protocol_version: crate::meta::get_ledger_protocol_version(
+                crate::meta::INTERFACE_VERSION,
+            ),
             sequence_number: 0,
             timestamp: 0,
             network_id: [0; 32],
