@@ -45,12 +45,12 @@ soroban_env_macros::generate_env_meta_consts!(
     pre_release_version: 57,
 );
 
-pub fn get_ledger_protocol_version(interface_version: u64) -> u32 {
+pub const fn get_ledger_protocol_version(interface_version: u64) -> u32 {
     // The ledger protocol version is the high 32 bits of INTERFACE_VERSION
     (interface_version >> 32) as u32
 }
 
-pub fn get_pre_release_version(interface_version: u64) -> u32 {
+pub const fn get_pre_release_version(interface_version: u64) -> u32 {
     // The pre-release version is the low 32 bits of INTERFACE_VERSION
     interface_version as u32
 }

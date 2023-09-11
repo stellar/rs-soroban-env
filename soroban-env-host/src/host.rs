@@ -358,6 +358,10 @@ impl Host {
         }
     }
 
+    pub fn get_ledger_protocol_version(&self) -> Result<u32, HostError> {
+        self.with_ledger_info(|li| Ok(li.protocol_version))
+    }
+
     /// Helper for mutating the [`Budget`] held in this [`Host`], either to
     /// allocate it on contract creation or to deplete it on callbacks from
     /// the VM or host functions.
@@ -756,6 +760,37 @@ impl Host {
                     &[],
                 )
             })?;
+
+        // Check size before instantiation.
+        let wasm_bytes_m: crate::xdr::BytesM = wasm.try_into().map_err(|_| {
+            self.err(
+                ScErrorType::Value,
+                ScErrorCode::ExceededLimit,
+                "Wasm code is too large",
+                &[],
+            )
+        })?;
+
+        // Instantiate a temporary / throwaway VM using this wasm. This will do
+        // both quick checks like "does this wasm have the right protocol number
+        // to run on this network" and also a full parse-and-link pass to check
+        // that the wasm is basically not garbage. It might still fail to run
+        // but it will at least instantiate. This might seem a bit heavyweight
+        // but really "instantiating a VM" is mostly just "parsing the module
+        // and doing those checks" anyway. Revisit in the future if you want to
+        // try to split these costs up some.
+        if cfg!(any(test, feature = "testutils")) && wasm_bytes_m.as_slice().is_empty() {
+            // Allow a zero-byte contract when testing, as this is used to make
+            // native test contracts behave like wasm. They will never be
+            // instantiated, this is just to exercise their storage logic.
+        } else {
+            let _check_vm = Vm::new(
+                self,
+                Hash(hash_bytes.metered_clone(self)?),
+                wasm_bytes_m.as_slice(),
+            )?;
+        }
+
         let hash_obj = self.add_host_object(self.scbytes_from_slice(hash_bytes.as_slice())?)?;
         let code_key = Rc::metered_new(
             LedgerKey::ContractCode(LedgerKeyContractCode {
@@ -772,14 +807,7 @@ impl Host {
                 let data = LedgerEntryData::ContractCode(ContractCodeEntry {
                     hash: Hash(hash_bytes),
                     ext: ExtensionPoint::V0,
-                    code: wasm.try_into().map_err(|_| {
-                        self.err(
-                            ScErrorType::Value,
-                            ScErrorCode::ExceededLimit,
-                            "Wasm code is too large",
-                            &[],
-                        )
-                    })?,
+                    code: wasm_bytes_m,
                 });
                 storage.put(
                     &code_key,
@@ -1344,7 +1372,7 @@ impl VmCallerEnv for Host {
     }
 
     fn get_ledger_version(&self, _vmcaller: &mut VmCaller<Host>) -> Result<U32Val, Self::Error> {
-        self.with_ledger_info(|li| Ok(li.protocol_version.into()))
+        Ok(self.get_ledger_protocol_version()?.into())
     }
 
     fn get_ledger_sequence(&self, _vmcaller: &mut VmCaller<Host>) -> Result<U32Val, Self::Error> {
