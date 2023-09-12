@@ -26,16 +26,16 @@ soroban-env-macros = { version = "20.0.0-rc1", path = "soroban-env-macros" }
 soroban-native-sdk-macros = { version = "20.0.0-rc1", path = "soroban-native-sdk-macros" }
 
 [workspace.dependencies.stellar-xdr]
-version = "0.0.17"
+version = "20.0.0-rc1"
 git = "https://github.com/stellar/rs-stellar-xdr"
-rev = "84d4d01f739b4f2c3f445f41bc7464a5621ba58c"
+rev = "d5ce0c9e7aa83461773a6e81662067f35d39e4c1"
 default-features = false
 
 [workspace.dependencies.wasmi]
 package = "soroban-wasmi"
-version = "0.31.0-soroban"
+version = "0.31.0-soroban1"
 git = "https://github.com/stellar/wasmi"
-rev = "fe21912143c1ec43b8fada4221253fc96520655c"
+rev = "7e63b4c9e08c4163f417d118d81f7ea34789d0be"
 
 [workspace.dependencies.stellar-strkey]
 version = "0.0.7"
