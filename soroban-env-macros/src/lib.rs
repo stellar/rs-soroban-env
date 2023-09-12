@@ -7,7 +7,13 @@ use proc_macro::TokenStream;
 use quote::{quote, ToTokens};
 use syn::{parse::Parse, parse_macro_input, Ident, LitInt, LitStr, Token};
 
-use stellar_xdr::{ScEnvMetaEntry, WriteXdr};
+// Import the XDR definitions of a specific version -- curr or next -- of the xdr crate.
+#[cfg(not(feature = "next"))]
+use stellar_xdr::curr as xdr;
+#[cfg(feature = "next")]
+use stellar_xdr::next as xdr;
+
+use crate::xdr::{ScEnvMetaEntry, WriteXdr};
 
 struct MetaInput {
     pub interface_version: u64,
@@ -55,7 +61,7 @@ impl ToTokens for MetaConstsOutput {
             .to_meta_entries()
             .into_iter()
             .map(|entry| entry.to_xdr())
-            .collect::<Result<Vec<Vec<u8>>, stellar_xdr::Error>>()
+            .collect::<Result<Vec<Vec<u8>>, crate::xdr::Error>>()
             .unwrap()
             .concat();
         let meta_xdr_len = meta_xdr.len();
