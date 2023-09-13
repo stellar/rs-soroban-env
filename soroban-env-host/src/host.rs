@@ -1147,6 +1147,14 @@ impl EnvBase for Host {
     }
 
     fn map_new_from_slices(&self, keys: &[&str], vals: &[Val]) -> Result<MapObject, HostError> {
+        if keys.len() != vals.len() {
+            return Err(self.err(
+                ScErrorType::Object,
+                ScErrorCode::UnexpectedSize,
+                "differing key and value slice lengths when creating map from slices",
+                &[],
+            ));
+        }
         Vec::<(Val, Val)>::charge_bulk_init_cpy(keys.len() as u64, self)?;
         let map_vec = keys
             .iter()
@@ -1171,7 +1179,7 @@ impl EnvBase for Host {
             return Err(self.err(
                 ScErrorType::Object,
                 ScErrorCode::UnexpectedSize,
-                "differing key and value vector lengths when unpacking map to slice",
+                "differing key and value slice lengths when unpacking map to slice",
                 &[],
             ));
         }
@@ -1180,7 +1188,7 @@ impl EnvBase for Host {
                 return Err(self.err(
                     ScErrorType::Object,
                     ScErrorCode::UnexpectedSize,
-                    "differing host map and output vector lengths when unpacking map to slice",
+                    "differing host map and output slice lengths when unpacking map to slice",
                     &[],
                 ));
             }
