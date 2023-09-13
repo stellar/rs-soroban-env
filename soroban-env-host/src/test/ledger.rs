@@ -14,7 +14,7 @@ fn ledger_network_id() -> Result<(), HostError> {
 
     let host = Host::with_storage_and_budget(storage, budget);
     host.set_ledger_info(LedgerInfo {
-        protocol_version: 0,
+        protocol_version: crate::meta::get_ledger_protocol_version(crate::meta::INTERFACE_VERSION),
         sequence_number: 0,
         timestamp: 0,
         network_id: [7; 32],

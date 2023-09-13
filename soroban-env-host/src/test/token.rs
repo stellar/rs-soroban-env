@@ -50,7 +50,9 @@ impl TokenTest {
     fn setup() -> Self {
         let host = Host::test_host_with_recording_footprint();
         host.set_ledger_info(LedgerInfo {
-            protocol_version: 20,
+            protocol_version: crate::meta::get_ledger_protocol_version(
+                crate::meta::INTERFACE_VERSION,
+            ),
             sequence_number: 123,
             timestamp: 123456,
             network_id: [5; 32],

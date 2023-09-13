@@ -222,10 +222,11 @@ fn wasm_module_with_mem_grow(n_pages: usize) -> Vec<u8> {
 fn excessive_memory_growth() -> Result<(), HostError> {
     // not sure why calling `memory_grow(32)`, wasmi requests 33 pages of memory
     let wasm = wasm_module_with_mem_grow(32);
-    let host = Host::test_host_with_recording_footprint()
+    let host = Host::test_host_with_recording_footprint();
+    let contract_id_obj = host.register_test_contract_wasm(wasm.as_slice());
+    let host = host
         .test_budget(0, 0)
         .enable_model(ContractCostType::WasmMemAlloc, 0, 0, 1, 0);
-    let contract_id_obj = host.register_test_contract_wasm(wasm.as_slice());
     host.set_diagnostic_level(crate::DiagnosticLevel::Debug)?;
 
     // This one should just run out of memory

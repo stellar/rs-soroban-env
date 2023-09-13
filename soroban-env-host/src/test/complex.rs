@@ -12,7 +12,7 @@ use super::util::{generate_account_id, generate_bytes_array};
 #[test]
 fn run_complex() -> Result<(), HostError> {
     let info = crate::LedgerInfo {
-        protocol_version: 21,
+        protocol_version: crate::meta::get_ledger_protocol_version(crate::meta::INTERFACE_VERSION),
         sequence_number: 1234,
         timestamp: 1234,
         network_id: [7; 32],
