@@ -1,3 +1,4 @@
+use crate::xdr::{ScError, ScErrorCode, ScErrorType, ScVal};
 use crate::{
     impl_wrapper_as_and_to_rawval, impl_wrapper_tag_based_constructors,
     impl_wrapper_tag_based_rawvalconvertible, impl_wrapper_wasmi_conversions, Compare,
@@ -9,7 +10,6 @@ use core::{
     fmt::Debug,
     hash::{Hash, Hasher},
 };
-use stellar_xdr::{ScError, ScErrorCode, ScErrorType, ScVal};
 
 /// Wrapper for a [Val] that is tagged with [Tag::Error], interpreting the
 /// [Val]'s body as a pair of a 28-bit status-type code and a 32-bit status
@@ -95,7 +95,7 @@ impl<'a> From<&'a Error> for Error {
 }
 
 impl TryFrom<Error> for ScError {
-    type Error = stellar_xdr::Error;
+    type Error = crate::xdr::Error;
     fn try_from(er: Error) -> Result<Self, Self::Error> {
         let type_: ScErrorType = (er.as_val().get_minor() as i32).try_into()?;
         let u: u32 = er.as_val().get_major();
@@ -115,15 +115,15 @@ impl TryFrom<Error> for ScError {
 }
 
 impl TryFrom<Error> for ScVal {
-    type Error = stellar_xdr::Error;
-    fn try_from(st: Error) -> Result<Self, stellar_xdr::Error> {
+    type Error = crate::xdr::Error;
+    fn try_from(st: Error) -> Result<Self, crate::xdr::Error> {
         Ok(ScVal::Error(<_ as TryInto<ScError>>::try_into(st)?))
     }
 }
 
 impl TryFrom<&Error> for ScVal {
-    type Error = stellar_xdr::Error;
-    fn try_from(value: &Error) -> Result<Self, stellar_xdr::Error> {
+    type Error = crate::xdr::Error;
+    fn try_from(value: &Error) -> Result<Self, crate::xdr::Error> {
         (*value).try_into()
     }
 }
@@ -152,10 +152,10 @@ impl From<ConversionError> for Error {
     }
 }
 
-impl From<stellar_xdr::Error> for Error {
-    fn from(e: stellar_xdr::Error) -> Self {
+impl From<crate::xdr::Error> for Error {
+    fn from(e: crate::xdr::Error) -> Self {
         match e {
-            stellar_xdr::Error::DepthLimitExceeded => {
+            crate::xdr::Error::DepthLimitExceeded => {
                 Error::from_type_and_code(ScErrorType::Context, ScErrorCode::ExceededLimit)
             }
             _ => Error::from_type_and_code(ScErrorType::Value, ScErrorCode::InvalidInput),
@@ -165,9 +165,9 @@ impl From<stellar_xdr::Error> for Error {
 
 // This never happens, but it's needed for some impls of TryFromVal downstream
 // in the SDK that use the xdr::Error type.
-impl From<Error> for stellar_xdr::Error {
+impl From<Error> for crate::xdr::Error {
     fn from(_value: Error) -> Self {
-        stellar_xdr::Error::Unsupported
+        crate::xdr::Error::Unsupported
     }
 }
 

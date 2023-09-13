@@ -33,6 +33,7 @@ std = ["stellar-xdr/std", "stellar-xdr/base64"]
 serde = ["dep:serde", "stellar-xdr/serde"]
 wasmi = ["dep:wasmi"]
 testutils = ["dep:arbitrary", "stellar-xdr/arbitrary"]
+next = ["stellar-xdr/next"]
 
 [package.metadata.docs.rs]
 all-features = true

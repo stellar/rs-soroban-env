@@ -19,3 +19,4 @@ all-features = true
 
 [features]
 testutils = ["soroban-env-common/testutils"]
+next = ["soroban-env-common/next"]

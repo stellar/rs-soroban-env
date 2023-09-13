@@ -169,8 +169,8 @@ impl TryFrom<&[u8]> for SymbolSmall {
 }
 
 #[cfg(feature = "std")]
-use stellar_xdr::StringM;
-use stellar_xdr::SCSYMBOL_LIMIT;
+use crate::xdr::StringM;
+use crate::xdr::SCSYMBOL_LIMIT;
 #[cfg(feature = "std")]
 impl<const N: u32> TryFrom<StringM<N>> for SymbolSmall {
     type Error = SymbolError;
@@ -319,9 +319,17 @@ impl<E: Env> TryFromVal<E, Symbol> for SymbolStr {
         } else {
             let obj: SymbolObject = unsafe { SymbolObject::unchecked_from_val(v.0) };
             let mut arr = [0u8; SCSYMBOL_LIMIT as usize];
-            env.symbol_copy_to_slice(obj, Val::U32_ZERO, &mut arr)
-                .map_err(Into::into)?;
-            Ok(SymbolStr(arr))
+            let len: u32 = env.symbol_len(obj).map_err(Into::into)?.into();
+            if let Some(slice) = arr.get_mut(..len as usize) {
+                env.symbol_copy_to_slice(obj, Val::U32_ZERO, slice)
+                    .map_err(Into::into)?;
+                Ok(SymbolStr(arr))
+            } else {
+                Err(crate::Error::from_type_and_code(
+                    crate::xdr::ScErrorType::Value,
+                    crate::xdr::ScErrorCode::InternalError,
+                ))
+            }
         }
     }
 }

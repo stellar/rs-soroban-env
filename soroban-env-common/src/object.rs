@@ -1,9 +1,9 @@
+use crate::xdr::{Duration, ScVal, TimePoint};
 use crate::{
     impl_rawval_wrapper_base, num, val::ValConvert, Compare, ConversionError, Convert, Env, Tag,
     TryFromVal, Val,
 };
 use core::{cmp::Ordering, fmt::Debug};
-use stellar_xdr::{Duration, ScVal, TimePoint};
 
 /// Wrapper for a [Val] that is tagged with one of the object types,
 /// interpreting the [Val]'s body as containing a 32-bit object-code handle

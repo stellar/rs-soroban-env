@@ -1,3 +1,4 @@
+use crate::xdr::int128_helpers;
 use crate::{
     num::{i256_from_pieces, i256_into_pieces, u256_from_pieces, u256_into_pieces},
     DurationSmall, DurationVal, Env, I128Small, I128Val, I256Small, I256Val, I64Small,
@@ -5,16 +6,15 @@ use crate::{
     I256, U256,
 };
 use core::fmt::Debug;
-use stellar_xdr::int128_helpers;
 
+#[cfg(feature = "std")]
+use crate::xdr::{
+    Duration, Int128Parts, Int256Parts, ScVal, TimePoint, UInt128Parts, UInt256Parts,
+};
 #[cfg(feature = "std")]
 use crate::{
     num, object::ScValObjRef, val::ValConvert, ConversionError, Error, Object, ScValObject,
     SymbolSmall, Tag,
-};
-#[cfg(feature = "std")]
-use stellar_xdr::{
-    Duration, Int128Parts, Int256Parts, ScVal, TimePoint, UInt128Parts, UInt256Parts,
 };
 
 /// General trait representing a the ability of some object to perform a
