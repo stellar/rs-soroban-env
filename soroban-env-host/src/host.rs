@@ -1147,20 +1147,17 @@ impl EnvBase for Host {
     }
 
     fn map_new_from_slices(&self, keys: &[&str], vals: &[Val]) -> Result<MapObject, HostError> {
-        Vec::<Symbol>::charge_bulk_init_cpy(keys.len() as u64, self)?;
-        // If only fallible iterators worked better in Rust, we would not need this Vec<...>.
-        let mut key_syms: Vec<Symbol> = Vec::with_capacity(keys.len());
-        for k in keys.iter() {
-            key_syms.push(Symbol::try_from_val(self, k)?);
-        }
-        for v in vals.iter() {
-            self.check_val_integrity(*v)?;
-        }
-        let pair_iter = key_syms
+        Vec::<(Val, Val)>::charge_bulk_init_cpy(keys.len() as u64, self)?;
+        let map_vec = keys
             .iter()
-            .map(|s| s.to_val())
-            .zip(vals.iter().cloned());
-        let map = HostMap::from_exact_iter(pair_iter, self)?;
+            .zip(vals.iter().copied())
+            .map(|(key_str, val)| {
+                let sym = Symbol::try_from_val(self, key_str)?;
+                self.check_val_integrity(val)?;
+                Ok((sym.to_val(), val))
+            })
+            .collect::<Result<Vec<(Val, Val)>, HostError>>()?;
+        let map = HostMap::from_map(map_vec, self)?;
         self.add_host_object(map)
     }
 
