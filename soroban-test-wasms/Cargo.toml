@@ -5,3 +5,6 @@ description = "crate full of precompiled test WASM binaries for soroban -- for u
 edition = "2021"
 publish = false
 rust-version = "1.71"
+
+[features]
+next = []

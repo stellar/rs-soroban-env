@@ -1,5 +1,6 @@
 use core::cmp::Ordering;
 
+use crate::xdr::{Int256Parts, ScVal, UInt256Parts};
 use crate::{
     declare_tag_based_signed_small_and_object_wrappers,
     declare_tag_based_small_and_object_wrappers,
@@ -7,7 +8,6 @@ use crate::{
     Compare, ConversionError, Env, Tag, Val,
 };
 pub use ethnum::{AsI256, AsU256, I256, U256};
-use stellar_xdr::{Int256Parts, ScVal, UInt256Parts};
 
 declare_tag_based_wrapper!(U32Val);
 declare_tag_based_wrapper!(I32Val);

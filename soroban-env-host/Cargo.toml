@@ -53,6 +53,7 @@ linregress = "0.5.1"
 
 [features]
 testutils = ["soroban-env-common/testutils"]
+next = ["soroban-env-common/next", "soroban-test-wasms/next"]
 tracy = ["dep:tracy-client"]
 
 [[bench]]

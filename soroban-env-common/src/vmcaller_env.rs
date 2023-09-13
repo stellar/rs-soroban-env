@@ -1,5 +1,5 @@
 #[cfg(feature = "wasmi")]
-use stellar_xdr::{ScErrorCode, ScErrorType};
+use crate::xdr::{ScErrorCode, ScErrorType};
 
 use super::{
     AddressObject, Bool, BytesObject, DurationObject, Error, I128Object, I256Object, I256Val,

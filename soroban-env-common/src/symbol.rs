@@ -169,8 +169,8 @@ impl TryFrom<&[u8]> for SymbolSmall {
 }
 
 #[cfg(feature = "std")]
-use stellar_xdr::StringM;
-use stellar_xdr::SCSYMBOL_LIMIT;
+use crate::xdr::StringM;
+use crate::xdr::SCSYMBOL_LIMIT;
 #[cfg(feature = "std")]
 impl<const N: u32> TryFrom<StringM<N>> for SymbolSmall {
     type Error = SymbolError;

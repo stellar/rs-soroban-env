@@ -15,6 +15,9 @@ wasm-encoder = "0.18.0"
 wasmparser = "0.106.0"
 soroban-env-common = { workspace = true }
 
+[features]
+next = ["soroban-env-common/next"]
+
 [dev-dependencies]
 expect-test = "1.4.0"
 wasmprinter = "0.2.41"
