@@ -209,7 +209,7 @@ impl Host {
         Ok(())
     }
 
-    pub(crate) fn metered_scan_slice_of_slices(
+    pub(crate) fn scan_slice_of_slices(
         &self,
         slices: &[&str],
         mut callback: impl FnMut(usize, &str) -> Result<(), HostError>,
