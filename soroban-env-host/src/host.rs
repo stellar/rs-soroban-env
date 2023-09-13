@@ -3032,7 +3032,7 @@ impl VmCallerEnv for Host {
     ) -> Result<Void, Self::Error> {
         self.visit_obj(seed, |bytes: &ScBytes| {
             let slice: &[u8] = bytes.as_ref();
-            self.charge_budget(ContractCostType::HostMemCpy, Some(prng::SEED_BYTES as u64))?;
+            self.charge_budget(ContractCostType::HostMemCpy, Some(prng::SEED_BYTES))?;
             if let Ok(seed32) = slice.try_into() {
                 self.with_current_prng(|prng| {
                     *prng = Prng::new_from_seed(seed32);
