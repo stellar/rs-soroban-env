@@ -34,7 +34,6 @@ mod data_helper;
 pub(crate) mod declared_size;
 pub(crate) mod error;
 pub(crate) mod frame;
-pub(crate) mod invoker_type;
 pub(crate) mod ledger_info_helper;
 mod mem_helper;
 pub(crate) mod metered_clone;
@@ -938,73 +937,6 @@ impl Host {
         }
 
         Ok(())
-    }
-
-    fn decorate_contract_data_storage_error(&self, err: HostError, key: Val) -> HostError {
-        if !err.error.is_type(ScErrorType::Storage) {
-            return err;
-        }
-        if err.error.is_code(ScErrorCode::ExceededLimit) {
-            return self.err(
-                ScErrorType::Storage,
-                ScErrorCode::ExceededLimit,
-                "trying to access contract storage key outside of the correct footprint",
-                &[key],
-            );
-        }
-        if err.error.is_code(ScErrorCode::MissingValue) {
-            return self.err(
-                ScErrorType::Storage,
-                ScErrorCode::MissingValue,
-                "trying to get non-existing value for contract storage key",
-                &[key],
-            );
-        }
-        err
-    }
-
-    pub(crate) fn decorate_contract_instance_storage_error(
-        &self,
-        err: HostError,
-        contract_id: &Hash,
-    ) -> HostError {
-        if err.error.is_type(ScErrorType::Storage) && err.error.is_code(ScErrorCode::ExceededLimit)
-        {
-            return self.err(
-                ScErrorType::Storage,
-                ScErrorCode::ExceededLimit,
-                "trying to access contract instance key outside of the correct footprint",
-                // No need for metered clone here as we are on the unrecoverable
-                // error path.
-                &[self
-                    .add_host_object(ScAddress::Contract(contract_id.clone()))
-                    .map(|a| a.into())
-                    .unwrap_or(Val::VOID.into())],
-            );
-        }
-        err
-    }
-
-    pub(crate) fn decorate_contract_code_storage_error(
-        &self,
-        err: HostError,
-        wasm_hash: &Hash,
-    ) -> HostError {
-        if err.error.is_type(ScErrorType::Storage) && err.error.is_code(ScErrorCode::ExceededLimit)
-        {
-            return self.err(
-                ScErrorType::Storage,
-                ScErrorCode::ExceededLimit,
-                "trying to access contract code key outside of the correct footprint",
-                // No need for metered clone here as we are on the unrecoverable
-                // error path.
-                &[self
-                    .add_host_object(self.scbytes_from_hash(wasm_hash).unwrap_or_default())
-                    .map(|a| a.into())
-                    .unwrap_or(Val::VOID.into())],
-            );
-        }
-        err
     }
 }
 

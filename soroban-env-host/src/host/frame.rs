@@ -21,7 +21,6 @@ use std::rc::Rc;
 use crate::Vm;
 
 use super::{
-    invoker_type::InvokerType,
     metered_clone::{MeteredClone, MeteredContainer, MeteredIterator},
     prng::Prng,
 };
@@ -424,33 +423,6 @@ impl Host {
             )),
         }?;
         Ok(hash)
-    }
-
-    // Metering: mostly free or already covered by components (e.g. err_general)
-    pub(super) fn get_invoker_type(&self) -> Result<u64, HostError> {
-        let frames = self.try_borrow_context()?;
-        // If the previous frame exists and is a contract, return its ID, otherwise return
-        // the account invoking.
-        let st = match frames.as_slice() {
-            // There are always two frames when WASM is executed in the VM.
-            [.., c2, _] => match &c2.frame {
-                Frame::ContractVM { .. } => Ok(InvokerType::Contract),
-                Frame::HostFunction(_) => Ok(InvokerType::Account),
-                Frame::Token(..) => Ok(InvokerType::Contract),
-                #[cfg(any(test, feature = "testutils"))]
-                Frame::TestContract(_) => Ok(InvokerType::Contract),
-            },
-            // In tests contracts are executed with a single frame.
-            // TODO: Investigate this discrepancy: https://github.com/stellar/rs-soroban-env/issues/485.
-            [_] => Ok(InvokerType::Account),
-            _ => Err(self.err(
-                ScErrorType::Context,
-                ScErrorCode::InternalError,
-                "no frames to derive the invoker from",
-                &[],
-            )),
-        }?;
-        Ok(st as u64)
     }
 
     /// Pushes a test contract [`Frame`], runs a closure, and then pops the
