@@ -1228,7 +1228,7 @@ impl EnvBase for Host {
 
     fn symbol_index_in_strs(&self, sym: Symbol, slices: &[&str]) -> Result<U32Val, Self::Error> {
         let mut found = None;
-        self.metered_scan_slice_of_slices(slices, |i, slice| {
+        self.scan_slice_of_slices(slices, |i, slice| {
             if self.symbol_matches(slice.as_bytes(), sym)? && found.is_none() {
                 found = Some(i)
             }
