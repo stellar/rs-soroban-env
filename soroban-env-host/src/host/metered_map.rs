@@ -260,56 +260,6 @@ where
         Ok(self.find(key, ctx)?.is_ok())
     }
 
-    pub fn get_prev<Q>(&self, key: &Q, ctx: &Ctx) -> Result<Option<&(K, V)>, HostError>
-    where
-        K: Borrow<Q>,
-        Ctx: Compare<Q, Error = HostError>,
-    {
-        match self.find(key, ctx)? {
-            Ok(hit) if hit == 0 => Ok(None),
-            Ok(hit) => Ok(Some(&self.map[hit - 1])),
-            // Err(miss) means you could insert key at miss
-            // to maintain sort order (meaning that the element
-            // currently at miss, if it exists, is > than key).
-            Err(miss) if miss == 0 => Ok(None),
-            Err(miss) if miss - 1 < self.map.len() => Ok(Some(&self.map[miss - 1])),
-            Err(_) => Ok(None),
-        }
-    }
-
-    pub fn get_next<Q>(&self, key: &Q, ctx: &Ctx) -> Result<Option<&(K, V)>, HostError>
-    where
-        K: Borrow<Q>,
-        Ctx: Compare<Q, Error = HostError>,
-    {
-        match self.find(key, ctx)? {
-            Ok(hit) if (hit < usize::MAX) && (hit + 1 < self.map.len()) => {
-                Ok(Some(&self.map[hit + 1]))
-            }
-            Ok(hit) => Ok(None),
-            Err(miss) if (miss < self.map.len()) => Ok(Some(&self.map[miss])),
-            Err(miss) => Ok(None),
-        }
-    }
-
-    pub fn get_min<Q>(&self, ctx: &Ctx) -> Result<Option<&(K, V)>, HostError>
-    where
-        K: Borrow<Q>,
-        Ctx: Compare<Q, Error = HostError>,
-    {
-        self.charge_access(1, ctx)?;
-        Ok(self.map.as_slice().first())
-    }
-
-    pub fn get_max<Q>(&self, ctx: &Ctx) -> Result<Option<&(K, V)>, HostError>
-    where
-        K: Borrow<Q>,
-        Ctx: Compare<Q, Error = HostError>,
-    {
-        self.charge_access(1, ctx)?;
-        Ok(self.map.as_slice().last())
-    }
-
     pub fn keys(&self, ctx: &Ctx) -> Result<impl Iterator<Item = &K>, HostError> {
         self.charge_scan(ctx)?;
         Ok(self.map.iter().map(|(k, _)| k))
