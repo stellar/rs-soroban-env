@@ -227,6 +227,10 @@ fn vec_insert_and_cmp() -> Result<(), HostError> {
     let obj2 = host.vec_insert(obj1, 2u32.into(), 3u32.into())?;
     let obj_ref = host.test_vec_obj::<u32>(&[1, 2, 3])?;
     assert_eq!(host.obj_cmp(obj2.into(), obj_ref.into())?, 0);
+
+    let obj3 = host.vec_insert(obj2, 2u32.into(), 4u32.into())?;
+    let obj_ref = host.test_vec_obj::<u32>(&[1, 2, 4, 3])?;
+    assert_eq!(host.obj_cmp(obj3.into(), obj_ref.into())?, 0);
     Ok(())
 }
 
