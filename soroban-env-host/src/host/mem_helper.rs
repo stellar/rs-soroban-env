@@ -209,7 +209,7 @@ impl Host {
         Ok(())
     }
 
-    pub(crate) fn metered_scan_slice_of_slices(
+    pub(crate) fn scan_slice_of_slices(
         &self,
         slices: &[&str],
         mut callback: impl FnMut(usize, &str) -> Result<(), HostError>,
@@ -303,8 +303,6 @@ impl Host {
         let obj_end = obj_pos
             .checked_add(len)
             .ok_or_else(|| self.err_arith_overflow())? as usize;
-        // TODO: we currently grow the destination vec if it's not big enough,
-        // make sure this is desirable behaviour.
         if obj_new.len() < obj_end {
             self.charge_budget(
                 ContractCostType::HostMemAlloc,
