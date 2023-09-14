@@ -1123,8 +1123,7 @@ impl EnvBase for Host {
         b_pos: U32Val,
         slice: &mut [u8],
     ) -> Result<(), HostError> {
-        let len = self.visit_obj(s, |sym: &ScSymbol| Ok(sym.len()))?;
-        self.memobj_copy_to_slice::<ScSymbol>(s, b_pos, &mut slice[..len])
+        self.memobj_copy_to_slice::<ScSymbol>(s, b_pos, slice)
     }
 
     fn bytes_new_from_slice(&self, mem: &[u8]) -> Result<BytesObject, HostError> {

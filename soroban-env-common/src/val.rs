@@ -1,12 +1,12 @@
 // This permits globals prouced by derive(num_enum::TryFromPrimitive) below.
 #![cfg_attr(test, allow(non_upper_case_globals))]
 
+use crate::xdr::{ScError, ScValType};
 use crate::{
     declare_tag_based_object_wrapper, declare_tag_based_wrapper, impl_rawval_wrapper_base,
     impl_tryfroms_and_tryfromvals_delegating_to_rawvalconvertible, Compare, I32Val, SymbolSmall,
     SymbolStr, U32Val,
 };
-use stellar_xdr::{ScError, ScValType};
 
 use super::{Env, Error, TryFromVal};
 use core::{cmp::Ordering, convert::Infallible, fmt::Debug};
@@ -97,7 +97,7 @@ pub enum Tag {
     SymbolSmall = 14,
 
     /// Tag for a [Val] that corresponds to
-    /// [stellar_xdr::ScVal::LedgerKeyContractInstance]
+    /// [crate::xdr::ScVal::LedgerKeyContractInstance]
     LedgerKeyContractInstance = 15,
 
     /// Code delimiting the upper boundary of "small" types.
@@ -338,8 +338,8 @@ impl From<Infallible> for ConversionError {
     }
 }
 
-impl From<stellar_xdr::Error> for ConversionError {
-    fn from(_: stellar_xdr::Error) -> Self {
+impl From<crate::xdr::Error> for ConversionError {
+    fn from(_: crate::xdr::Error) -> Self {
         ConversionError
     }
 }

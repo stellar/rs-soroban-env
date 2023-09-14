@@ -40,9 +40,25 @@
 
 pub const ENV_META_V0_SECTION_NAME: &str = "contractenvmetav0";
 
+// If the "next" feature is enabled, we're building from the "next" xdr
+// definitions branch and rust module, which contains experimental, unstable,
+// in-development definitions we aren't even close to ready to release to the
+// network. This is typically associated with a one-higher-than-released
+// protocol number for testing purposes.
+#[cfg(feature = "next")]
+soroban_env_macros::generate_env_meta_consts!(
+    ledger_protocol_version: 21,
+    pre_release_version: 1,
+);
+
+// If the "next" feature is _not_ enabled, it means we're building for a
+// nearly-current release to the network and are using the "curr" xdr branch and
+// module. This will therefore be associated with a current or nearly-current
+// network protocol number.
+#[cfg(not(feature = "next"))]
 soroban_env_macros::generate_env_meta_consts!(
     ledger_protocol_version: 20,
-    pre_release_version: 57,
+    pre_release_version: 58,
 );
 
 pub const fn get_ledger_protocol_version(interface_version: u64) -> u32 {
