@@ -21,8 +21,9 @@ use crate::{
 use ed25519_dalek::SigningKey;
 use soroban_env_common::{
     xdr::{
-        self, AccountFlags, ContractExecutable, InvokeContractArgs, ScAddress, ScContractInstance,
-        ScSymbol, ScVal, SorobanAuthorizedFunction, SorobanAuthorizedInvocation,
+        self, AccountFlags, ContractExecutable, InvokeContractArgs, LedgerEntryExt, ScAddress,
+        ScContractInstance, ScSymbol, ScVal, SorobanAuthorizedFunction,
+        SorobanAuthorizedInvocation,
     },
     xdr::{
         AccountId, AlphaNum12, AlphaNum4, Asset, AssetCode12, AssetCode4, Hash, LedgerEntryData,
@@ -182,6 +183,7 @@ impl TokenTest {
                         let update = Host::ledger_entry_from_data(
                             &self.host,
                             LedgerEntryData::Account(account),
+                            entry.ext.clone(),
                         )?;
                         s.put(key, &update, None, self.host.as_budget())
                     }
@@ -244,6 +246,7 @@ impl TokenTest {
                 &Host::ledger_entry_from_data(
                     &self.host,
                     LedgerEntryData::Trustline(trustline_entry),
+                    LedgerEntryExt::V0,
                 )
                 .unwrap(),
                 None,
@@ -263,6 +266,7 @@ impl TokenTest {
                         let update = Host::ledger_entry_from_data(
                             &self.host,
                             LedgerEntryData::Trustline(trustline),
+                            entry.ext.clone(),
                         )?;
                         s.put(key, &update, None, self.host.as_budget())
                     }

@@ -4,8 +4,8 @@ use rand::{thread_rng, Rng};
 use soroban_env_common::xdr::{
     AccountEntry, AccountEntryExt, AccountEntryExtensionV1, AccountEntryExtensionV1Ext,
     AccountEntryExtensionV2, AccountEntryExtensionV2Ext, AccountId, Hash, HashIdPreimage,
-    HashIdPreimageSorobanAuthorization, InvokeContractArgs, LedgerEntryData, LedgerKey,
-    Liabilities, PublicKey, ScAddress, ScSymbol, ScVal, SequenceNumber, SignerKey,
+    HashIdPreimageSorobanAuthorization, InvokeContractArgs, LedgerEntryData, LedgerEntryExt,
+    LedgerKey, Liabilities, PublicKey, ScAddress, ScSymbol, ScVal, SequenceNumber, SignerKey,
     SorobanAddressCredentials, SorobanAuthorizationEntry, SorobanAuthorizedFunction,
     SorobanAuthorizedInvocation, SorobanCredentials, Thresholds, Uint256,
 };
@@ -321,7 +321,12 @@ pub(crate) fn create_account(
 
     host.add_ledger_entry(
         &key,
-        &Host::ledger_entry_from_data(host, LedgerEntryData::Account(acc_entry)).unwrap(),
+        &Host::ledger_entry_from_data(
+            host,
+            LedgerEntryData::Account(acc_entry),
+            LedgerEntryExt::V0,
+        )
+        .unwrap(),
         None,
     )
     .unwrap();

@@ -443,7 +443,11 @@ fn transfer_account_balance(e: &Host, account_id: AccountId, amount: i64) -> Res
         };
         if new_balance >= min_balance && new_balance <= max_balance {
             ae.balance = new_balance;
-            le = Host::ledger_entry_from_data(e, LedgerEntryData::Account(ae))?;
+            le = Host::ledger_entry_from_data(
+                e,
+                LedgerEntryData::Account(ae),
+                le.ext.metered_clone(e)?,
+            )?;
             storage.put(&lk, &le, None, e.as_budget())
         } else {
             Err(err!(
@@ -495,7 +499,11 @@ fn transfer_trustline_balance(
         };
         if new_balance >= min_balance && new_balance <= max_balance {
             tl.balance = new_balance;
-            le = Host::ledger_entry_from_data(e, LedgerEntryData::Trustline(tl))?;
+            le = Host::ledger_entry_from_data(
+                e,
+                LedgerEntryData::Trustline(tl),
+                le.ext.metered_clone(e)?,
+            )?;
             storage.put(&lk, &le, None, e.as_budget())
         } else {
             Err(err!(
@@ -796,7 +804,11 @@ fn set_trustline_authorization(
             tl.flags &= !(TrustLineFlags::AuthorizedFlag as u32);
             tl.flags |= TrustLineFlags::AuthorizedToMaintainLiabilitiesFlag as u32;
         }
-        le = Host::ledger_entry_from_data(e, LedgerEntryData::Trustline(tl))?;
+        le = Host::ledger_entry_from_data(
+            e,
+            LedgerEntryData::Trustline(tl),
+            le.ext.metered_clone(e)?,
+        )?;
         storage.put(&lk, &le, None, e.as_budget())
     })
 }

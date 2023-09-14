@@ -144,7 +144,7 @@ impl Host {
             self.try_borrow_storage_mut()?
                 .put(
                     key,
-                    &Host::ledger_entry_from_data(self, data)?,
+                    &Host::ledger_entry_from_data(self, data, LedgerEntryExt::V0)?,
                     Some(self.get_min_expiration_ledger(ContractDataDurability::Persistent)?),
                     self.as_budget(),
                 )
@@ -293,6 +293,7 @@ impl Host {
     pub(crate) fn ledger_entry_from_data(
         &self,
         data: LedgerEntryData,
+        ext: LedgerEntryExt,
     ) -> Result<Rc<LedgerEntry>, HostError> {
         Rc::metered_new(
             LedgerEntry {
@@ -300,7 +301,7 @@ impl Host {
                 // commiting the ledger transaction.
                 last_modified_ledger_seq: 0,
                 data,
-                ext: LedgerEntryExt::V0,
+                ext,
             },
             self,
         )
