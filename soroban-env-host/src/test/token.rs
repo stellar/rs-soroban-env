@@ -180,10 +180,10 @@ impl TokenTest {
                 match entry.data.clone() {
                     LedgerEntryData::Account(mut account) => {
                         account.flags = new_flags;
-                        let update = Host::ledger_entry_from_data(
+                        let update = Host::modify_ledger_entry_data(
                             &self.host,
+                            &entry,
                             LedgerEntryData::Account(account),
-                            entry.ext.clone(),
                         )?;
                         s.put(key, &update, None, self.host.as_budget())
                     }
@@ -243,10 +243,9 @@ impl TokenTest {
         self.host
             .add_ledger_entry(
                 &key,
-                &Host::ledger_entry_from_data(
+                &Host::new_edger_entry_from_data(
                     &self.host,
                     LedgerEntryData::Trustline(trustline_entry),
-                    LedgerEntryExt::V0,
                 )
                 .unwrap(),
                 None,
@@ -263,10 +262,10 @@ impl TokenTest {
                 match entry.data.clone() {
                     LedgerEntryData::Trustline(mut trustline) => {
                         trustline.flags = new_flags;
-                        let update = Host::ledger_entry_from_data(
+                        let update = Host::modify_ledger_entry_data(
                             &self.host,
+                            &entry,
                             LedgerEntryData::Trustline(trustline),
-                            entry.ext.clone(),
                         )?;
                         s.put(key, &update, None, self.host.as_budget())
                     }

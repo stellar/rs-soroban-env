@@ -47,8 +47,8 @@ pub use prng::{Seed, SEED_BYTES};
 mod validity;
 pub use error::HostError;
 use soroban_env_common::xdr::{
-    ContractDataDurability, ContractIdPreimage, ContractIdPreimageFromAddress, LedgerEntryExt,
-    ScContractInstance, ScErrorCode,
+    ContractDataDurability, ContractIdPreimage, ContractIdPreimageFromAddress, ScContractInstance,
+    ScErrorCode,
 };
 
 use self::{
@@ -811,7 +811,7 @@ impl Host {
                 });
                 storage.put(
                     &code_key,
-                    &Host::ledger_entry_from_data(self, data, LedgerEntryExt::V0)?,
+                    &Host::new_ledger_entry_from_data(self, data)?,
                     Some(self.get_min_expiration_ledger(ContractDataDurability::Persistent)?),
                     self.as_budget(),
                 )
@@ -930,7 +930,7 @@ impl Host {
             self.try_borrow_storage_mut()?
                 .put(
                     &key,
-                    &Host::ledger_entry_from_data(self, data, LedgerEntryExt::V0)?,
+                    &Host::new_ledger_entry_from_data(self, data)?,
                     Some(self.get_min_expiration_ledger(durability)?),
                     self.as_budget(),
                 )
