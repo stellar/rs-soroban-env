@@ -302,22 +302,6 @@ where
         }
     }
 
-    pub fn retain_mut<F>(&mut self, mut f: F, budget: &Budget) -> Result<Self, HostError>
-    where
-        F: FnMut(usize, &mut A) -> Result<bool, HostError>,
-    {
-        // The closure evaluation is not metered here, it is assumed to be taken care of outside.
-        // Here just covers the cost of cloning a Vec.
-        self.charge_deep_clone(budget)?;
-        let mut vec = Vec::with_capacity(self.len());
-        for (i, v) in self.vec.iter_mut().enumerate() {
-            if f(i, v)? {
-                vec.push(v.clone());
-            }
-        }
-        Self::from_vec(vec)
-    }
-
     pub fn iter(&self) -> std::slice::Iter<'_, A> {
         self.vec.iter()
     }
