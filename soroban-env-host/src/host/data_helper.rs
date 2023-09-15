@@ -203,14 +203,26 @@ impl Host {
     // notes on metering: `get` from storage is covered. Rest are free.
     pub fn load_account(&self, account_id: AccountId) -> Result<AccountEntry, HostError> {
         let acc = self.to_account_key(account_id)?;
-        self.with_mut_storage(|storage| match &storage.get(&acc, self.as_budget())?.data {
-            LedgerEntryData::Account(ae) => ae.metered_clone(self),
-            e => Err(err!(
-                self,
-                (ScErrorType::Storage, ScErrorCode::InternalError),
-                "ledger entry is not account",
-                e.name()
-            )),
+        self.with_mut_storage(|storage| {
+            match &storage
+                .get(&acc, self.as_budget())
+                .map_err(|e| {
+                    self.decorate_account_footprint_error(
+                        e,
+                        &acc,
+                        "trying to access account entry outside of the footprint",
+                    )
+                })?
+                .data
+            {
+                LedgerEntryData::Account(ae) => ae.metered_clone(self),
+                e => Err(err!(
+                    self,
+                    (ScErrorType::Storage, ScErrorCode::InternalError),
+                    "ledger entry is not account",
+                    e.name()
+                )),
+            }
         })
     }
 

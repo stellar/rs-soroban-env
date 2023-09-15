@@ -1,7 +1,7 @@
 use crate::{
     budget::AsBudget,
     events::Events,
-    xdr::{self, Hash, ScAddress, ScError, ScErrorCode, ScErrorType},
+    xdr::{self, Hash, LedgerKey, ScAddress, ScError, ScErrorCode, ScErrorType},
     ConversionError, EnvBase, Error, Host, TryFromVal, U32Val, Val,
 };
 use backtrace::{Backtrace, BacktraceFrame};
@@ -9,7 +9,10 @@ use core::fmt::Debug;
 use std::{
     cell::{Ref, RefCell, RefMut},
     ops::DerefMut,
+    rc::Rc,
 };
+
+use super::metered_clone::MeteredClone;
 
 #[derive(Clone)]
 pub(crate) struct DebugInfo {
@@ -323,6 +326,49 @@ impl Host {
         })
     }
 
+    // Extracts the account id from the given ledger key as address object `Val`.
+    // Returns Void for unsupported entries.
+    // Useful as a helper for error reporting.
+    pub(crate) fn account_address_from_key(&self, lk: &Rc<LedgerKey>) -> Result<Val, HostError> {
+        let account_id = match lk.as_ref() {
+            LedgerKey::Account(e) => &e.account_id,
+            LedgerKey::Trustline(e) => &e.account_id,
+            _ => {
+                return Ok(Val::VOID.into());
+            }
+        };
+        self.add_host_object(ScAddress::Account(
+            account_id.metered_clone(self.as_budget())?,
+        ))
+        .map(|a| a.to_val())
+    }
+
+    pub(crate) fn decorate_account_footprint_error(
+        &self,
+        err: HostError,
+        lk: &Rc<LedgerKey>,
+        msg: &str,
+    ) -> HostError {
+        if err.error.is_type(ScErrorType::Storage) && err.error.is_code(ScErrorCode::ExceededLimit)
+        {
+            let account_address = self.account_address_from_key(lk);
+            match account_address {
+                Ok(account_address) => {
+                    return self.err(
+                        ScErrorType::Storage,
+                        ScErrorCode::ExceededLimit,
+                        msg,
+                        &[account_address],
+                    );
+                }
+                Err(e) => {
+                    return e;
+                }
+            }
+        }
+        err
+    }
+
     pub(crate) fn decorate_contract_data_storage_error(
         &self,
         err: HostError,
@@ -335,7 +381,7 @@ impl Host {
             return self.err(
                 ScErrorType::Storage,
                 ScErrorCode::ExceededLimit,
-                "trying to access contract storage key outside of the correct footprint",
+                "trying to access contract storage key outside of the footprint",
                 &[key],
             );
         }
@@ -360,7 +406,7 @@ impl Host {
             return self.err(
                 ScErrorType::Storage,
                 ScErrorCode::ExceededLimit,
-                "trying to access contract instance key outside of the correct footprint",
+                "trying to access contract instance key outside of the footprint",
                 // No need for metered clone here as we are on the unrecoverable
                 // error path.
                 &[self
@@ -382,7 +428,7 @@ impl Host {
             return self.err(
                 ScErrorType::Storage,
                 ScErrorCode::ExceededLimit,
-                "trying to access contract code key outside of the correct footprint",
+                "trying to access contract code key outside of the footprint",
                 // No need for metered clone here as we are on the unrecoverable
                 // error path.
                 &[self
