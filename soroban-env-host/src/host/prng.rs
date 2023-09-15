@@ -1,3 +1,4 @@
+use super::declared_size::DeclaredSizeForMetering;
 use crate::{
     budget::Budget,
     host::metered_clone::MeteredClone,
@@ -80,7 +81,7 @@ use std::ops::RangeInclusive;
 pub(crate) struct Prng(ChaCha20Rng);
 
 pub type Seed = <rand_chacha::ChaCha20Rng as rand::SeedableRng>::Seed;
-pub const SEED_BYTES: usize = core::mem::size_of::<Seed>();
+pub const SEED_BYTES: u64 = <Seed as DeclaredSizeForMetering>::DECLARED_SIZE;
 static_assertions::const_assert_eq!(SEED_BYTES, 32);
 
 impl Prng {
@@ -101,7 +102,7 @@ impl Prng {
         // We over-estimate the number of bytes drawn by a factor of 2, to
         // account for the fact that a range sample is rejection-sampling which
         // is expected to only do one draw but might do more than one.
-        self.charge_prng_bytes(budget, (2 * core::mem::size_of::<u64>()) as u64)?;
+        self.charge_prng_bytes(budget, 2 * <u64 as DeclaredSizeForMetering>::DECLARED_SIZE)?;
         let u = Uniform::from(range);
         Ok(u.sample(&mut self.0))
     }
@@ -136,10 +137,10 @@ impl Prng {
     }
 
     pub(crate) fn sub_prng(&mut self, budget: &Budget) -> Result<Prng, HostError> {
-        let mut new_seed: Seed = [0; SEED_BYTES];
-        self.charge_prng_bytes(budget, SEED_BYTES as u64)?;
+        let mut new_seed: Seed = [0; SEED_BYTES as usize];
+        self.charge_prng_bytes(budget, SEED_BYTES)?;
         self.0.fill_bytes(&mut new_seed);
-        budget.charge(ContractCostType::HostMemCpy, Some(SEED_BYTES as u64))?;
+        budget.charge(ContractCostType::HostMemCpy, Some(SEED_BYTES))?;
         Ok(Self(ChaCha20Rng::from_seed(new_seed)))
     }
 }
