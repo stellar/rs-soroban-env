@@ -1,12 +1,14 @@
+use std::rc::Rc;
+
 use crate::{Host, LedgerInfo};
 use ed25519_dalek::{Signer, SigningKey};
 use rand::{thread_rng, Rng};
 use soroban_env_common::xdr::{
     AccountEntry, AccountEntryExt, AccountEntryExtensionV1, AccountEntryExtensionV1Ext,
     AccountEntryExtensionV2, AccountEntryExtensionV2Ext, AccountId, Hash, HashIdPreimage,
-    HashIdPreimageSorobanAuthorization, InvokeContractArgs, LedgerEntryData, LedgerKey,
-    Liabilities, PublicKey, ScAddress, ScSymbol, ScVal, SequenceNumber, SignerKey,
-    SorobanAddressCredentials, SorobanAuthorizationEntry, SorobanAuthorizedFunction,
+    HashIdPreimageSorobanAuthorization, InvokeContractArgs, LedgerEntry, LedgerEntryData,
+    LedgerEntryExt, LedgerKey, Liabilities, PublicKey, ScAddress, ScSymbol, ScVal, SequenceNumber,
+    SignerKey, SorobanAddressCredentials, SorobanAuthorizationEntry, SorobanAuthorizedFunction,
     SorobanAuthorizedInvocation, SorobanCredentials, Thresholds, Uint256,
 };
 use soroban_env_common::{EnvBase, TryFromVal, Val};
@@ -321,8 +323,18 @@ pub(crate) fn create_account(
 
     host.add_ledger_entry(
         &key,
-        &Host::new_ledger_entry_from_data(host, LedgerEntryData::Account(acc_entry)).unwrap(),
+        &new_ledger_entry_from_data(LedgerEntryData::Account(acc_entry)),
         None,
     )
     .unwrap();
+}
+
+pub(crate) fn new_ledger_entry_from_data(data: LedgerEntryData) -> Rc<LedgerEntry> {
+    Rc::new(LedgerEntry {
+        // This is modified to the appropriate value on the core side during
+        // commiting the ledger transaction.
+        last_modified_ledger_seq: 0,
+        data,
+        ext: LedgerEntryExt::V0,
+    })
 }

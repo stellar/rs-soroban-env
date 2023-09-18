@@ -803,14 +803,14 @@ impl Host {
             .map_err(|e| self.decorate_contract_code_storage_error(e, &Hash(hash_bytes)))?
         {
             self.with_mut_storage(|storage| {
-                let data = LedgerEntryData::ContractCode(ContractCodeEntry {
+                let data = ContractCodeEntry {
                     hash: Hash(hash_bytes),
                     ext: ExtensionPoint::V0,
                     code: wasm_bytes_m,
-                });
+                };
                 storage.put(
                     &code_key,
-                    &Host::new_ledger_entry_from_data(self, data)?,
+                    &Host::new_contract_code(self, data)?,
                     Some(self.get_min_expiration_ledger(ContractDataDurability::Persistent)?),
                     self.as_budget(),
                 )
@@ -919,17 +919,17 @@ impl Host {
                 )
                 .map_err(|e| self.decorate_contract_data_storage_error(e, k))?;
         } else {
-            let data = LedgerEntryData::ContractData(ContractDataEntry {
+            let data = ContractDataEntry {
                 contract: ScAddress::Contract(self.get_current_contract_id_internal()?),
                 key: self.from_host_val(k)?,
                 val: self.from_host_val(v)?,
                 durability,
                 ext: ExtensionPoint::V0,
-            });
+            };
             self.try_borrow_storage_mut()?
                 .put(
                     &key,
-                    &Host::new_ledger_entry_from_data(self, data)?,
+                    &Host::new_contract_data(self, data)?,
                     Some(self.get_min_expiration_ledger(durability)?),
                     self.as_budget(),
                 )

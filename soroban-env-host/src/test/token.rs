@@ -11,7 +11,8 @@ use crate::{
         testutils::{
             account_to_address, authorize_single_invocation,
             authorize_single_invocation_with_nonce, contract_id_to_address, create_account,
-            generate_signing_key, signing_key_to_account_id, AccountSigner, HostVec, TestSigner,
+            generate_signing_key, new_ledger_entry_from_data, signing_key_to_account_id,
+            AccountSigner, HostVec, TestSigner,
         },
         token::test_token::TestToken,
     },
@@ -242,11 +243,7 @@ impl TokenTest {
         self.host
             .add_ledger_entry(
                 &key,
-                &Host::new_ledger_entry_from_data(
-                    &self.host,
-                    LedgerEntryData::Trustline(trustline_entry),
-                )
-                .unwrap(),
+                &new_ledger_entry_from_data(LedgerEntryData::Trustline(trustline_entry)),
                 None,
             )
             .unwrap();
