@@ -150,15 +150,24 @@ pub enum Tag {
 }
 
 impl Tag {
+    #[inline(always)]
     pub const fn rawval_mask() -> i64 {
         TAG_MASK as i64
     }
+
+    #[inline(always)]
     pub fn rawval_const(&self) -> i64 {
         *self as i64
     }
+
+    #[inline(always)]
+    pub(crate) const fn u8_is_object(x: u8) -> bool {
+        x > (Tag::ObjectCodeLowerBound as u8) && x < (Tag::ObjectCodeUpperBound as u8)
+    }
+
+    #[inline(always)]
     pub const fn is_object(self) -> bool {
-        let tu8 = self as u8;
-        tu8 > (Tag::ObjectCodeLowerBound as u8) && tu8 < (Tag::ObjectCodeUpperBound as u8)
+        Self::u8_is_object(self as u8)
     }
 
     #[inline(always)]
@@ -638,8 +647,7 @@ impl Val {
 
     #[inline(always)]
     pub const fn is_object(self) -> bool {
-        let tag = self.get_tag_u8();
-        tag > (Tag::ObjectCodeLowerBound as u8) && tag < (Tag::ObjectCodeUpperBound as u8)
+        Tag::u8_is_object(self.get_tag_u8())
     }
 
     #[inline(always)]
