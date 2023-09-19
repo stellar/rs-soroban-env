@@ -20,6 +20,8 @@ use soroban_env_common::{AddressObject, Env, Symbol, SymbolStr, TryFromVal, TryI
 
 use crate::native_contract::base_types::Vec as HostVec;
 
+use pretty_assertions::assert_eq;
+
 #[derive(Clone)]
 #[contracttype]
 pub struct ContractTreeNode {
@@ -78,6 +80,15 @@ impl SignNode {
             contract_address: contract_id.clone(),
             children,
             fn_name: Symbol::try_from_small_str("tree_fn").unwrap(),
+            args: VecM::default(),
+        }
+    }
+
+    fn tree_fn_stored(contract_id: &Address, children: Vec<SignNode>) -> Self {
+        Self {
+            contract_address: contract_id.clone(),
+            children,
+            fn_name: Symbol::try_from_small_str("stree_fn").unwrap(),
             args: VecM::default(),
         }
     }
@@ -140,9 +151,39 @@ impl AuthTest {
         sign_payloads: Vec<Vec<SignNode>>,
         success: bool,
     ) {
+        self.tree_test_enforcing_with_addresses(self.get_addresses(), root, sign_payloads, success);
+    }
+
+    fn tree_test_enforcing_with_addresses(
+        &mut self,
+        addresses: HostVec,
+        root: &SetupNode,
+        sign_payloads: Vec<Vec<SignNode>>,
+        success: bool,
+    ) {
         self.test_enforcing(
             root.contract_address.clone(),
             Symbol::try_from_small_str("tree_fn").unwrap(),
+            host_vec![&self.host, addresses, self.convert_setup_tree(&root)],
+            sign_payloads,
+            success,
+        );
+    }
+
+    // Like tree_test_enforcing, but read the set of the addreses from storage
+    // for the first authorization.
+    // Covers scenarios when `require_auth` is called for the addresses computed
+    // programmatically (as opposed to passing them as inputs);
+    fn tree_test_enforcing_with_stored_addresses(
+        &mut self,
+        root: &SetupNode,
+        sign_payloads: Vec<Vec<SignNode>>,
+        success: bool,
+    ) {
+        self.store_addresses(root);
+        self.test_enforcing(
+            root.contract_address.clone(),
+            Symbol::try_from_small_str("stree_fn").unwrap(),
             host_vec![
                 &self.host,
                 self.get_addresses(),
@@ -151,6 +192,16 @@ impl AuthTest {
             sign_payloads,
             success,
         );
+    }
+
+    fn store_addresses(&self, root: &SetupNode) {
+        self.host
+            .call(
+                root.contract_address.clone().into(),
+                Symbol::try_from_small_str("store").unwrap(),
+                host_vec![&self.host, self.get_addresses()].into(),
+            )
+            .unwrap();
     }
 
     fn test_enforcing(
@@ -238,13 +289,49 @@ impl AuthTest {
 
     // Runs `tree_fn` corresponding to the provided setup in recordind mode and
     // returns the recorded payloads.
-    fn tree_run_recording(&self, root: &SetupNode) -> Vec<RecordedAuthPayload> {
+    fn tree_run_recording(
+        &self,
+        root: &SetupNode,
+        disable_non_root_auth: bool,
+    ) -> Vec<RecordedAuthPayload> {
         let addresses = self.get_addresses();
         let tree = self.convert_setup_tree(&root);
         self.run_recording(
             &root.contract_address,
             Symbol::try_from_small_str("tree_fn").unwrap(),
             host_vec![&self.host, addresses, tree],
+            disable_non_root_auth,
+        )
+    }
+
+    fn tree_run_recording_with_stored_addresses(
+        &self,
+        root: &SetupNode,
+        disable_non_root_auth: bool,
+    ) -> Vec<RecordedAuthPayload> {
+        self.store_addresses(root);
+        let addresses = self.get_addresses();
+        let tree = self.convert_setup_tree(&root);
+        self.run_recording(
+            &root.contract_address,
+            Symbol::try_from_small_str("stree_fn").unwrap(),
+            host_vec![&self.host, addresses, tree],
+            disable_non_root_auth,
+        )
+    }
+
+    fn tree_run_recording_with_custom_addresses(
+        &self,
+        addresses: HostVec,
+        root: &SetupNode,
+        disable_non_root_auth: bool,
+    ) -> Vec<RecordedAuthPayload> {
+        let tree = self.convert_setup_tree(&root);
+        self.run_recording(
+            &root.contract_address,
+            Symbol::try_from_small_str("tree_fn").unwrap(),
+            host_vec![&self.host, addresses, tree],
+            disable_non_root_auth,
         )
     }
 
@@ -253,8 +340,11 @@ impl AuthTest {
         contract_address: &Address,
         fn_name: Symbol,
         args: HostVec,
+        disable_non_root_auth: bool,
     ) -> Vec<RecordedAuthPayload> {
-        self.host.switch_to_recording_auth(false).unwrap();
+        self.host
+            .switch_to_recording_auth(disable_non_root_auth)
+            .unwrap();
         self.host
             .call(contract_address.clone().into(), fn_name, args.into())
             .unwrap();
@@ -343,7 +433,7 @@ fn test_single_authorized_call() {
     let setup = SetupNode::new(&test.contracts[0], vec![true], vec![]);
     let expected_sign_payloads = vec![vec![SignNode::tree_fn(&test.contracts[0], vec![])]];
     assert_eq!(
-        test.tree_run_recording(&setup),
+        test.tree_run_recording(&setup, true),
         vec![RecordedAuthPayload {
             address: Some(test.key_to_sc_address(&test.keys[0])),
             nonce: Some(0),
@@ -356,7 +446,7 @@ fn test_single_authorized_call() {
     test.verify_nonces_consumed(vec![1]);
 
     assert_eq!(
-        test.tree_run_recording(&setup),
+        test.tree_run_recording(&setup, true),
         vec![RecordedAuthPayload {
             address: Some(test.key_to_sc_address(&test.keys[0])),
             nonce: Some(0),
@@ -418,7 +508,7 @@ fn test_single_authorized_call_for_multiple_addresses() {
         vec![SignNode::tree_fn(&test.contracts[0], vec![])],
     ];
     assert_eq!(
-        test.tree_run_recording(&setup),
+        test.tree_run_recording(&setup, true),
         vec![
             RecordedAuthPayload {
                 address: Some(test.key_to_sc_address(&test.keys[0])),
@@ -473,7 +563,7 @@ fn test_single_authorization_for_one_address_among_multiple() {
     let setup = SetupNode::new(&test.contracts[0], vec![false, true], vec![]);
     let expected_sign_payloads = vec![vec![], vec![SignNode::tree_fn(&test.contracts[0], vec![])]];
     assert_eq!(
-        test.tree_run_recording(&setup),
+        test.tree_run_recording(&setup, true),
         vec![RecordedAuthPayload {
             address: Some(test.key_to_sc_address(&test.keys[1])),
             nonce: Some(0),
@@ -541,7 +631,7 @@ fn test_single_authorized_call_tree() {
         ],
     );
     assert_eq!(
-        test.tree_run_recording(&setup),
+        test.tree_run_recording(&setup, true),
         vec![RecordedAuthPayload {
             address: Some(test.key_to_sc_address(&test.keys[0])),
             nonce: Some(0),
@@ -639,7 +729,7 @@ fn test_single_authorized_call_tree() {
                     &test.contracts[2],
                     vec![
                         SignNode::tree_fn(&test.contracts[3], vec![]),
-                        SignNode::tree_fn(&test.contracts[4], vec![]),
+                        SignNode::tree_fn(&test.contracts[2], vec![]),
                     ],
                 ),
             ],
@@ -656,8 +746,6 @@ fn test_single_authorized_call_tree() {
                 SignNode::tree_fn(
                     &test.contracts[4], // Should have been 1
                     vec![
-                        // Invocation order shouldn't matter here and purposely
-                        // doesn't match the call tree order
                         SignNode::tree_fn(&test.contracts[2], vec![]),
                         SignNode::tree_fn(&test.contracts[3], vec![]),
                     ],
@@ -686,8 +774,6 @@ fn test_single_authorized_call_tree() {
                     SignNode::tree_fn(
                         &test.contracts[1],
                         vec![
-                            // Invocation order shouldn't matter here and purposely
-                            // doesn't match the call tree order
                             SignNode::tree_fn(&test.contracts[2], vec![]),
                             SignNode::tree_fn(&test.contracts[3], vec![]),
                         ],
@@ -763,7 +849,8 @@ fn test_two_authorized_trees() {
     );
 
     assert_eq!(
-        test.tree_run_recording(&setup),
+        // Root call is not authorized, disable non-root auth check.
+        test.tree_run_recording(&setup, false),
         vec![
             RecordedAuthPayload {
                 address: Some(test.key_to_sc_address(&test.keys[0])),
@@ -906,7 +993,8 @@ fn test_three_authorized_trees() {
     );
 
     assert_eq!(
-        test.tree_run_recording(&setup),
+        // Root call is not authorized, disable non-root auth check.
+        test.tree_run_recording(&setup, false),
         vec![
             RecordedAuthPayload {
                 address: Some(test.key_to_sc_address(&test.keys[0])),
@@ -1048,7 +1136,8 @@ fn test_multi_address_trees() {
     );
 
     assert_eq!(
-        test.tree_run_recording(&setup),
+        // One of the root calls is not authorized, disable non-root auth check.
+        test.tree_run_recording(&setup, false),
         vec![
             RecordedAuthPayload {
                 address: Some(test.key_to_sc_address(&test.keys[0])),
@@ -1204,6 +1293,9 @@ fn test_out_of_order_auth() {
                 test.key_to_address(&test.keys[0]),
                 test.contracts[1]
             ],
+            // Root auth happens after the sub-contract call, so don't disable
+            // non-root auth.
+            false
         ),
         vec![
             RecordedAuthPayload {
@@ -1350,7 +1442,7 @@ fn test_invoker_subcontract_auth() {
     let args = host_vec![&test.host, tree];
     let fn_name = Symbol::try_from_val(&test.host, &"invoker_auth_fn").unwrap();
     assert_eq!(
-        test.run_recording(&test.contracts[5], fn_name, args.clone(),),
+        test.run_recording(&test.contracts[5], fn_name, args.clone(), true),
         vec![]
     );
 
@@ -1438,7 +1530,7 @@ fn test_invoker_subcontract_auth_without_subcontract_calls() {
     let args = host_vec![&test.host, tree];
     let fn_name = Symbol::try_from_val(&test.host, &"invoker_auth_fn_no_call").unwrap();
     assert_eq!(
-        test.run_recording(&test.contracts[5], fn_name, args.clone(),),
+        test.run_recording(&test.contracts[5], fn_name, args.clone(), true),
         vec![]
     );
 
@@ -1717,4 +1809,866 @@ fn test_require_auth_for_self_within_check_auth() {
     // context/recursion error states.
     assert!(err.error.is_type(ScErrorType::Auth));
     assert!(err.error.is_code(ScErrorCode::InvalidAction));
+}
+
+#[test]
+fn test_multi_address_auth_with_stored_addresses() {
+    let mut test = AuthTest::setup(3, 5);
+    let setup = SetupNode::new(
+        &test.contracts[0],
+        vec![true, true, true],
+        vec![
+            SetupNode::new(
+                &test.contracts[1],
+                vec![true, false, false],
+                vec![
+                    SetupNode::new(&test.contracts[3], vec![true, true, false], vec![]),
+                    SetupNode::new(&test.contracts[2], vec![true, true, false], vec![]),
+                ],
+            ),
+            SetupNode::new(
+                &test.contracts[2],
+                vec![true, true, false],
+                vec![
+                    SetupNode::new(&test.contracts[4], vec![false, false, false], vec![]),
+                    SetupNode::new(&test.contracts[3], vec![true, true, false], vec![]),
+                ],
+            ),
+            SetupNode::new(
+                &test.contracts[1],
+                vec![true, false, false],
+                vec![
+                    SetupNode::new(&test.contracts[3], vec![true, true, false], vec![]),
+                    SetupNode::new(&test.contracts[2], vec![true, true, false], vec![]),
+                ],
+            ),
+        ],
+    );
+    assert_eq!(
+        test.tree_run_recording_with_stored_addresses(&setup, true),
+        vec![
+            RecordedAuthPayload {
+                address: Some(test.key_to_sc_address(&test.keys[0])),
+                nonce: Some(0),
+                invocation: test.convert_sign_node(&SignNode::tree_fn_stored(
+                    &test.contracts[0],
+                    vec![
+                        SignNode::tree_fn(
+                            &test.contracts[1],
+                            vec![
+                                SignNode::tree_fn(&test.contracts[3], vec![]),
+                                SignNode::tree_fn(&test.contracts[2], vec![]),
+                            ],
+                        ),
+                        SignNode::tree_fn(
+                            &test.contracts[2],
+                            vec![SignNode::tree_fn(&test.contracts[3], vec![])],
+                        ),
+                        SignNode::tree_fn(
+                            &test.contracts[1],
+                            vec![
+                                SignNode::tree_fn(&test.contracts[3], vec![]),
+                                SignNode::tree_fn(&test.contracts[2], vec![]),
+                            ],
+                        ),
+                    ],
+                )),
+            },
+            RecordedAuthPayload {
+                address: Some(test.key_to_sc_address(&test.keys[1])),
+                nonce: Some(0),
+                invocation: test.convert_sign_node(&SignNode::tree_fn_stored(
+                    &test.contracts[0],
+                    vec![
+                        SignNode::tree_fn(&test.contracts[3], vec![]),
+                        SignNode::tree_fn(&test.contracts[2], vec![]),
+                        SignNode::tree_fn(
+                            &test.contracts[2],
+                            vec![SignNode::tree_fn(&test.contracts[3], vec![])],
+                        ),
+                        SignNode::tree_fn(&test.contracts[3], vec![]),
+                        SignNode::tree_fn(&test.contracts[2], vec![]),
+                    ],
+                )),
+            },
+            RecordedAuthPayload {
+                address: Some(test.key_to_sc_address(&test.keys[2])),
+                nonce: Some(0),
+                invocation: test
+                    .convert_sign_node(&SignNode::tree_fn_stored(&test.contracts[0], vec![])),
+            },
+        ]
+    );
+
+    // Correct call
+    test.tree_test_enforcing_with_stored_addresses(
+        &setup,
+        vec![
+            vec![SignNode::tree_fn_stored(
+                &test.contracts[0],
+                vec![
+                    SignNode::tree_fn(
+                        &test.contracts[1],
+                        vec![
+                            SignNode::tree_fn(&test.contracts[3], vec![]),
+                            SignNode::tree_fn(&test.contracts[2], vec![]),
+                        ],
+                    ),
+                    SignNode::tree_fn(
+                        &test.contracts[2],
+                        vec![SignNode::tree_fn(&test.contracts[3], vec![])],
+                    ),
+                    SignNode::tree_fn(
+                        &test.contracts[1],
+                        vec![
+                            SignNode::tree_fn(&test.contracts[3], vec![]),
+                            SignNode::tree_fn(&test.contracts[2], vec![]),
+                        ],
+                    ),
+                ],
+            )],
+            vec![SignNode::tree_fn_stored(
+                &test.contracts[0],
+                vec![
+                    SignNode::tree_fn(&test.contracts[3], vec![]),
+                    SignNode::tree_fn(&test.contracts[2], vec![]),
+                    SignNode::tree_fn(
+                        &test.contracts[2],
+                        vec![SignNode::tree_fn(&test.contracts[3], vec![])],
+                    ),
+                    SignNode::tree_fn(&test.contracts[3], vec![]),
+                    SignNode::tree_fn(&test.contracts[2], vec![]),
+                ],
+            )],
+            vec![SignNode::tree_fn_stored(&test.contracts[0], vec![])],
+        ],
+        true,
+    );
+    test.verify_nonces_consumed(vec![1, 1, 1]);
+
+    // Failing scenarios
+    // Disjoint sub-tree for the second account.
+    test.tree_test_enforcing_with_stored_addresses(
+        &setup,
+        vec![
+            vec![SignNode::tree_fn_stored(
+                &test.contracts[0],
+                vec![
+                    SignNode::tree_fn(
+                        &test.contracts[1],
+                        vec![
+                            SignNode::tree_fn(&test.contracts[3], vec![]),
+                            SignNode::tree_fn(&test.contracts[2], vec![]),
+                        ],
+                    ),
+                    SignNode::tree_fn(
+                        &test.contracts[2],
+                        vec![SignNode::tree_fn(&test.contracts[3], vec![])],
+                    ),
+                    SignNode::tree_fn(
+                        &test.contracts[1],
+                        vec![
+                            SignNode::tree_fn(&test.contracts[3], vec![]),
+                            SignNode::tree_fn(&test.contracts[2], vec![]),
+                        ],
+                    ),
+                ],
+            )],
+            vec![SignNode::tree_fn_stored(
+                &test.contracts[0],
+                vec![
+                    SignNode::tree_fn(&test.contracts[3], vec![]),
+                    SignNode::tree_fn(&test.contracts[2], vec![]),
+                    SignNode::tree_fn(&test.contracts[2], vec![]),
+                    SignNode::tree_fn(&test.contracts[3], vec![]),
+                    SignNode::tree_fn(&test.contracts[3], vec![]),
+                    SignNode::tree_fn(&test.contracts[2], vec![]),
+                ],
+            )],
+            vec![SignNode::tree_fn_stored(&test.contracts[0], vec![])],
+        ],
+        false,
+    );
+
+    // Disjoint top-level tree for the first account
+    test.tree_test_enforcing_with_stored_addresses(
+        &setup,
+        vec![
+            vec![
+                SignNode::tree_fn_stored(
+                    &test.contracts[0],
+                    vec![
+                        SignNode::tree_fn(
+                            &test.contracts[1],
+                            vec![
+                                SignNode::tree_fn(&test.contracts[3], vec![]),
+                                SignNode::tree_fn(&test.contracts[2], vec![]),
+                            ],
+                        ),
+                        SignNode::tree_fn(
+                            &test.contracts[2],
+                            vec![SignNode::tree_fn(&test.contracts[3], vec![])],
+                        ),
+                    ],
+                ),
+                SignNode::tree_fn(
+                    &test.contracts[1],
+                    vec![
+                        SignNode::tree_fn(&test.contracts[3], vec![]),
+                        SignNode::tree_fn(&test.contracts[2], vec![]),
+                    ],
+                ),
+            ],
+            vec![SignNode::tree_fn_stored(
+                &test.contracts[0],
+                vec![
+                    SignNode::tree_fn(&test.contracts[3], vec![]),
+                    SignNode::tree_fn(&test.contracts[2], vec![]),
+                    SignNode::tree_fn(
+                        &test.contracts[2],
+                        vec![SignNode::tree_fn(&test.contracts[3], vec![])],
+                    ),
+                    SignNode::tree_fn(&test.contracts[3], vec![]),
+                    SignNode::tree_fn(&test.contracts[2], vec![]),
+                ],
+            )],
+            vec![SignNode::tree_fn_stored(&test.contracts[0], vec![])],
+        ],
+        false,
+    );
+}
+
+#[test]
+fn test_same_auth_tree_with_duplicate_addresses() {
+    let mut test = AuthTest::setup(2, 5);
+    let setup = SetupNode::new(
+        &test.contracts[0],
+        vec![true, true, true, true],
+        vec![
+            SetupNode::new(
+                &test.contracts[1],
+                vec![true, true, true, true],
+                vec![
+                    SetupNode::new(&test.contracts[3], vec![true, true, true, true], vec![]),
+                    SetupNode::new(&test.contracts[2], vec![true, true, true, true], vec![]),
+                ],
+            ),
+            SetupNode::new(
+                &test.contracts[2],
+                vec![true, true, true, true],
+                vec![
+                    SetupNode::new(&test.contracts[4], vec![true, true, true, true], vec![]),
+                    SetupNode::new(&test.contracts[3], vec![true, true, true, true], vec![]),
+                ],
+            ),
+        ],
+    );
+
+    let addresses = host_vec![
+        &test.host,
+        test.key_to_address(&test.keys[0]).to_val(),
+        test.key_to_address(&test.keys[1]).to_val(),
+        test.key_to_address(&test.keys[1]).to_val(),
+        test.key_to_address(&test.keys[0]).to_val(),
+    ];
+    assert_eq!(
+        test.tree_run_recording_with_custom_addresses(addresses.clone(), &setup, true),
+        vec![
+            RecordedAuthPayload {
+                address: Some(test.key_to_sc_address(&test.keys[0])),
+                nonce: Some(0),
+                invocation: test.convert_sign_node(&SignNode::tree_fn(
+                    &test.contracts[0],
+                    vec![
+                        SignNode::tree_fn(
+                            &test.contracts[1],
+                            vec![
+                                SignNode::tree_fn(&test.contracts[3], vec![]),
+                                SignNode::tree_fn(&test.contracts[2], vec![]),
+                            ],
+                        ),
+                        SignNode::tree_fn(
+                            &test.contracts[2],
+                            vec![
+                                SignNode::tree_fn(&test.contracts[4], vec![]),
+                                SignNode::tree_fn(&test.contracts[3], vec![]),
+                            ],
+                        ),
+                    ],
+                )),
+            },
+            RecordedAuthPayload {
+                address: Some(test.key_to_sc_address(&test.keys[1])),
+                nonce: Some(0),
+                invocation: test.convert_sign_node(&SignNode::tree_fn(
+                    &test.contracts[0],
+                    vec![
+                        SignNode::tree_fn(
+                            &test.contracts[1],
+                            vec![
+                                SignNode::tree_fn(&test.contracts[3], vec![]),
+                                SignNode::tree_fn(&test.contracts[2], vec![]),
+                            ],
+                        ),
+                        SignNode::tree_fn(
+                            &test.contracts[2],
+                            vec![
+                                SignNode::tree_fn(&test.contracts[4], vec![]),
+                                SignNode::tree_fn(&test.contracts[3], vec![]),
+                            ],
+                        ),
+                    ],
+                )),
+            },
+            RecordedAuthPayload {
+                address: Some(test.key_to_sc_address(&test.keys[1])),
+                nonce: Some(0),
+                invocation: test.convert_sign_node(&SignNode::tree_fn(
+                    &test.contracts[0],
+                    vec![
+                        SignNode::tree_fn(
+                            &test.contracts[1],
+                            vec![
+                                SignNode::tree_fn(&test.contracts[3], vec![]),
+                                SignNode::tree_fn(&test.contracts[2], vec![]),
+                            ],
+                        ),
+                        SignNode::tree_fn(
+                            &test.contracts[2],
+                            vec![
+                                SignNode::tree_fn(&test.contracts[4], vec![]),
+                                SignNode::tree_fn(&test.contracts[3], vec![]),
+                            ],
+                        ),
+                    ],
+                )),
+            },
+            RecordedAuthPayload {
+                address: Some(test.key_to_sc_address(&test.keys[0])),
+                nonce: Some(0),
+                invocation: test.convert_sign_node(&SignNode::tree_fn(
+                    &test.contracts[0],
+                    vec![
+                        SignNode::tree_fn(
+                            &test.contracts[1],
+                            vec![
+                                SignNode::tree_fn(&test.contracts[3], vec![]),
+                                SignNode::tree_fn(&test.contracts[2], vec![]),
+                            ],
+                        ),
+                        SignNode::tree_fn(
+                            &test.contracts[2],
+                            vec![
+                                SignNode::tree_fn(&test.contracts[4], vec![]),
+                                SignNode::tree_fn(&test.contracts[3], vec![]),
+                            ],
+                        ),
+                    ],
+                )),
+            },
+        ]
+    );
+
+    // Correct call
+    test.tree_test_enforcing_with_addresses(
+        addresses.clone(),
+        &setup,
+        vec![
+            vec![
+                SignNode::tree_fn(
+                    &test.contracts[0],
+                    vec![
+                        SignNode::tree_fn(
+                            &test.contracts[1],
+                            vec![
+                                SignNode::tree_fn(&test.contracts[3], vec![]),
+                                SignNode::tree_fn(&test.contracts[2], vec![]),
+                            ],
+                        ),
+                        SignNode::tree_fn(
+                            &test.contracts[2],
+                            vec![
+                                SignNode::tree_fn(&test.contracts[4], vec![]),
+                                SignNode::tree_fn(&test.contracts[3], vec![]),
+                            ],
+                        ),
+                    ],
+                ),
+                SignNode::tree_fn(
+                    &test.contracts[0],
+                    vec![
+                        SignNode::tree_fn(
+                            &test.contracts[1],
+                            vec![
+                                SignNode::tree_fn(&test.contracts[3], vec![]),
+                                SignNode::tree_fn(&test.contracts[2], vec![]),
+                            ],
+                        ),
+                        SignNode::tree_fn(
+                            &test.contracts[2],
+                            vec![
+                                SignNode::tree_fn(&test.contracts[4], vec![]),
+                                SignNode::tree_fn(&test.contracts[3], vec![]),
+                            ],
+                        ),
+                    ],
+                ),
+            ],
+            vec![
+                SignNode::tree_fn(
+                    &test.contracts[0],
+                    vec![
+                        SignNode::tree_fn(
+                            &test.contracts[1],
+                            vec![
+                                SignNode::tree_fn(&test.contracts[3], vec![]),
+                                SignNode::tree_fn(&test.contracts[2], vec![]),
+                            ],
+                        ),
+                        SignNode::tree_fn(
+                            &test.contracts[2],
+                            vec![
+                                SignNode::tree_fn(&test.contracts[4], vec![]),
+                                SignNode::tree_fn(&test.contracts[3], vec![]),
+                            ],
+                        ),
+                    ],
+                ),
+                SignNode::tree_fn(
+                    &test.contracts[0],
+                    vec![
+                        SignNode::tree_fn(
+                            &test.contracts[1],
+                            vec![
+                                SignNode::tree_fn(&test.contracts[3], vec![]),
+                                SignNode::tree_fn(&test.contracts[2], vec![]),
+                            ],
+                        ),
+                        SignNode::tree_fn(
+                            &test.contracts[2],
+                            vec![
+                                SignNode::tree_fn(&test.contracts[4], vec![]),
+                                SignNode::tree_fn(&test.contracts[3], vec![]),
+                            ],
+                        ),
+                    ],
+                ),
+            ],
+        ],
+        true,
+    );
+    test.verify_nonces_consumed(vec![2, 2]);
+
+    // Failing scenarios
+    // Just one auth per address
+    test.tree_test_enforcing_with_addresses(
+        addresses.clone(),
+        &setup,
+        vec![
+            vec![SignNode::tree_fn(
+                &test.contracts[0],
+                vec![
+                    SignNode::tree_fn(
+                        &test.contracts[1],
+                        vec![
+                            SignNode::tree_fn(&test.contracts[3], vec![]),
+                            SignNode::tree_fn(&test.contracts[2], vec![]),
+                        ],
+                    ),
+                    SignNode::tree_fn(
+                        &test.contracts[2],
+                        vec![
+                            SignNode::tree_fn(&test.contracts[4], vec![]),
+                            SignNode::tree_fn(&test.contracts[3], vec![]),
+                        ],
+                    ),
+                ],
+            )],
+            vec![SignNode::tree_fn(
+                &test.contracts[0],
+                vec![
+                    SignNode::tree_fn(
+                        &test.contracts[1],
+                        vec![
+                            SignNode::tree_fn(&test.contracts[3], vec![]),
+                            SignNode::tree_fn(&test.contracts[2], vec![]),
+                        ],
+                    ),
+                    SignNode::tree_fn(
+                        &test.contracts[2],
+                        vec![
+                            SignNode::tree_fn(&test.contracts[4], vec![]),
+                            SignNode::tree_fn(&test.contracts[3], vec![]),
+                        ],
+                    ),
+                ],
+            )],
+        ],
+        false,
+    );
+
+    // Incorrectly merged trees - it's not allowed to use the same auth tree
+    // multiple times per frame
+    test.tree_test_enforcing_with_addresses(
+        addresses.clone(),
+        &setup,
+        vec![
+            vec![
+                SignNode::tree_fn(
+                    &test.contracts[0],
+                    vec![
+                        SignNode::tree_fn(
+                            &test.contracts[1],
+                            vec![
+                                SignNode::tree_fn(&test.contracts[3], vec![]),
+                                SignNode::tree_fn(&test.contracts[2], vec![]),
+                            ],
+                        ),
+                        SignNode::tree_fn(
+                            &test.contracts[2],
+                            vec![
+                                SignNode::tree_fn(&test.contracts[4], vec![]),
+                                SignNode::tree_fn(&test.contracts[3], vec![]),
+                            ],
+                        ),
+                        // Sub-tree calls from the second entry - while
+                        // technically the address has authorized the same call
+                        // tree twice, we don't allow matching it twice in the
+                        // same frame.
+                        SignNode::tree_fn(
+                            &test.contracts[1],
+                            vec![
+                                SignNode::tree_fn(&test.contracts[3], vec![]),
+                                SignNode::tree_fn(&test.contracts[2], vec![]),
+                            ],
+                        ),
+                        SignNode::tree_fn(
+                            &test.contracts[2],
+                            vec![
+                                SignNode::tree_fn(&test.contracts[4], vec![]),
+                                SignNode::tree_fn(&test.contracts[3], vec![]),
+                            ],
+                        ),
+                    ],
+                ),
+                SignNode::tree_fn(&test.contracts[0], vec![]),
+            ],
+            vec![
+                SignNode::tree_fn(
+                    &test.contracts[0],
+                    vec![
+                        SignNode::tree_fn(
+                            &test.contracts[1],
+                            vec![
+                                SignNode::tree_fn(&test.contracts[3], vec![]),
+                                SignNode::tree_fn(&test.contracts[2], vec![]),
+                            ],
+                        ),
+                        SignNode::tree_fn(
+                            &test.contracts[2],
+                            vec![
+                                SignNode::tree_fn(&test.contracts[4], vec![]),
+                                SignNode::tree_fn(&test.contracts[3], vec![]),
+                            ],
+                        ),
+                    ],
+                ),
+                SignNode::tree_fn(
+                    &test.contracts[0],
+                    vec![
+                        SignNode::tree_fn(
+                            &test.contracts[1],
+                            vec![
+                                SignNode::tree_fn(&test.contracts[3], vec![]),
+                                SignNode::tree_fn(&test.contracts[2], vec![]),
+                            ],
+                        ),
+                        SignNode::tree_fn(
+                            &test.contracts[2],
+                            vec![
+                                SignNode::tree_fn(&test.contracts[4], vec![]),
+                                SignNode::tree_fn(&test.contracts[3], vec![]),
+                            ],
+                        ),
+                    ],
+                ),
+            ],
+        ],
+        false,
+    );
+}
+
+#[test]
+fn test_different_auth_trees_with_duplicate_addresses() {
+    let mut test = AuthTest::setup(2, 5);
+    let setup = SetupNode::new(
+        &test.contracts[0],
+        vec![true, true, true, true],
+        vec![
+            SetupNode::new(
+                &test.contracts[1],
+                vec![true, false, true, false],
+                vec![
+                    SetupNode::new(&test.contracts[3], vec![false, true, true, true], vec![]),
+                    SetupNode::new(&test.contracts[2], vec![true, true, true, false], vec![]),
+                ],
+            ),
+            SetupNode::new(
+                &test.contracts[2],
+                vec![false, true, true, false],
+                vec![
+                    SetupNode::new(&test.contracts[4], vec![true, false, true, false], vec![]),
+                    SetupNode::new(&test.contracts[3], vec![false, false, true, true], vec![]),
+                ],
+            ),
+        ],
+    );
+
+    let addresses = host_vec![
+        &test.host,
+        test.key_to_address(&test.keys[0]).to_val(),
+        test.key_to_address(&test.keys[1]).to_val(),
+        test.key_to_address(&test.keys[1]).to_val(),
+        test.key_to_address(&test.keys[0]).to_val(),
+    ];
+    assert_eq!(
+        test.tree_run_recording_with_custom_addresses(addresses.clone(), &setup, true),
+        vec![
+            RecordedAuthPayload {
+                address: Some(test.key_to_sc_address(&test.keys[0])),
+                nonce: Some(0),
+                invocation: test.convert_sign_node(&SignNode::tree_fn(
+                    &test.contracts[0],
+                    vec![
+                        SignNode::tree_fn(
+                            &test.contracts[1],
+                            vec![SignNode::tree_fn(&test.contracts[2], vec![])],
+                        ),
+                        SignNode::tree_fn(&test.contracts[4], vec![]),
+                    ],
+                )),
+            },
+            RecordedAuthPayload {
+                address: Some(test.key_to_sc_address(&test.keys[1])),
+                nonce: Some(0),
+                invocation: test.convert_sign_node(&SignNode::tree_fn(
+                    &test.contracts[0],
+                    vec![
+                        SignNode::tree_fn(&test.contracts[3], vec![]),
+                        SignNode::tree_fn(&test.contracts[2], vec![]),
+                        SignNode::tree_fn(&test.contracts[2], vec![]),
+                    ],
+                )),
+            },
+            RecordedAuthPayload {
+                address: Some(test.key_to_sc_address(&test.keys[1])),
+                nonce: Some(0),
+                invocation: test.convert_sign_node(&SignNode::tree_fn(
+                    &test.contracts[0],
+                    vec![
+                        SignNode::tree_fn(
+                            &test.contracts[1],
+                            vec![
+                                SignNode::tree_fn(&test.contracts[3], vec![]),
+                                SignNode::tree_fn(&test.contracts[2], vec![]),
+                            ],
+                        ),
+                        SignNode::tree_fn(
+                            &test.contracts[2],
+                            vec![
+                                SignNode::tree_fn(&test.contracts[4], vec![]),
+                                SignNode::tree_fn(&test.contracts[3], vec![]),
+                            ],
+                        ),
+                    ],
+                )),
+            },
+            RecordedAuthPayload {
+                address: Some(test.key_to_sc_address(&test.keys[0])),
+                nonce: Some(0),
+                invocation: test.convert_sign_node(&SignNode::tree_fn(
+                    &test.contracts[0],
+                    vec![
+                        SignNode::tree_fn(&test.contracts[3], vec![]),
+                        SignNode::tree_fn(&test.contracts[3], vec![]),
+                    ],
+                )),
+            },
+        ]
+    );
+
+    // Correct call
+    test.tree_test_enforcing_with_addresses(
+        addresses.clone(),
+        &setup,
+        vec![
+            vec![
+                SignNode::tree_fn(
+                    &test.contracts[0],
+                    vec![
+                        SignNode::tree_fn(&test.contracts[3], vec![]),
+                        SignNode::tree_fn(&test.contracts[3], vec![]),
+                    ],
+                ),
+                SignNode::tree_fn(
+                    &test.contracts[0],
+                    vec![
+                        SignNode::tree_fn(
+                            &test.contracts[1],
+                            vec![SignNode::tree_fn(&test.contracts[2], vec![])],
+                        ),
+                        SignNode::tree_fn(&test.contracts[4], vec![]),
+                    ],
+                ),
+            ],
+            vec![
+                SignNode::tree_fn(
+                    &test.contracts[0],
+                    vec![
+                        SignNode::tree_fn(
+                            &test.contracts[1],
+                            vec![
+                                SignNode::tree_fn(&test.contracts[2], vec![]),
+                                SignNode::tree_fn(&test.contracts[3], vec![]),
+                            ],
+                        ),
+                        SignNode::tree_fn(
+                            &test.contracts[2],
+                            vec![
+                                SignNode::tree_fn(&test.contracts[3], vec![]),
+                                SignNode::tree_fn(&test.contracts[4], vec![]),
+                            ],
+                        ),
+                    ],
+                ),
+                SignNode::tree_fn(
+                    &test.contracts[0],
+                    vec![
+                        SignNode::tree_fn(&test.contracts[2], vec![]),
+                        SignNode::tree_fn(&test.contracts[3], vec![]),
+                        SignNode::tree_fn(&test.contracts[2], vec![]),
+                    ],
+                ),
+            ],
+        ],
+        true,
+    );
+    test.verify_nonces_consumed(vec![2, 2]);
+
+    // Failing scenarios
+    // Incorrectly merged trees
+    test.tree_test_enforcing_with_addresses(
+        addresses.clone(),
+        &setup,
+        vec![
+            vec![
+                SignNode::tree_fn(
+                    &test.contracts[0],
+                    vec![
+                        SignNode::tree_fn(&test.contracts[3], vec![]),
+                        SignNode::tree_fn(&test.contracts[3], vec![]),
+                        // We need to authorize both 0->[1 skipped]->3 and
+                        // 0->1->3 call stacks, where 1 is the same contract. As
+                        // it can't be authorized and not authorized at the same
+                        // time, this can't succeed.
+                        SignNode::tree_fn(
+                            &test.contracts[1],
+                            vec![SignNode::tree_fn(&test.contracts[2], vec![])],
+                        ),
+                    ],
+                ),
+                SignNode::tree_fn(
+                    &test.contracts[0],
+                    vec![SignNode::tree_fn(&test.contracts[4], vec![])],
+                ),
+            ],
+            vec![
+                SignNode::tree_fn(
+                    &test.contracts[0],
+                    vec![
+                        SignNode::tree_fn(
+                            &test.contracts[1],
+                            vec![
+                                SignNode::tree_fn(&test.contracts[2], vec![]),
+                                SignNode::tree_fn(&test.contracts[3], vec![]),
+                            ],
+                        ),
+                        SignNode::tree_fn(
+                            &test.contracts[2],
+                            vec![
+                                SignNode::tree_fn(&test.contracts[3], vec![]),
+                                SignNode::tree_fn(&test.contracts[4], vec![]),
+                            ],
+                        ),
+                    ],
+                ),
+                SignNode::tree_fn(
+                    &test.contracts[0],
+                    vec![
+                        SignNode::tree_fn(&test.contracts[2], vec![]),
+                        SignNode::tree_fn(&test.contracts[3], vec![]),
+                        SignNode::tree_fn(&test.contracts[2], vec![]),
+                    ],
+                ),
+            ],
+        ],
+        false,
+    );
+
+    // Another incorrect tree mix
+    test.tree_test_enforcing_with_addresses(
+        addresses.clone(),
+        &setup,
+        vec![
+            vec![
+                SignNode::tree_fn(
+                    &test.contracts[0],
+                    vec![
+                        SignNode::tree_fn(&test.contracts[3], vec![]),
+                        SignNode::tree_fn(&test.contracts[3], vec![]),
+                    ],
+                ),
+                SignNode::tree_fn(
+                    &test.contracts[0],
+                    vec![
+                        SignNode::tree_fn(
+                            &test.contracts[1],
+                            vec![SignNode::tree_fn(&test.contracts[2], vec![])],
+                        ),
+                        SignNode::tree_fn(&test.contracts[4], vec![]),
+                    ],
+                ),
+            ],
+            vec![
+                SignNode::tree_fn(
+                    &test.contracts[0],
+                    vec![SignNode::tree_fn(
+                        &test.contracts[1],
+                        vec![
+                            SignNode::tree_fn(&test.contracts[2], vec![]),
+                            SignNode::tree_fn(&test.contracts[3], vec![]),
+                        ],
+                    )],
+                ),
+                SignNode::tree_fn(
+                    &test.contracts[0],
+                    vec![
+                        SignNode::tree_fn(&test.contracts[2], vec![]),
+                        SignNode::tree_fn(&test.contracts[3], vec![]),
+                        SignNode::tree_fn(&test.contracts[2], vec![]),
+                        // That's the third auth for the contract 2 and we only
+                        // call 2 just twice.
+                        SignNode::tree_fn(
+                            &test.contracts[2],
+                            vec![
+                                SignNode::tree_fn(&test.contracts[3], vec![]),
+                                SignNode::tree_fn(&test.contracts[4], vec![]),
+                            ],
+                        ),
+                    ],
+                ),
+            ],
+        ],
+        false,
+    );
 }

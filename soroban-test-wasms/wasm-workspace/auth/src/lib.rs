@@ -1,7 +1,7 @@
 #![no_std]
 use soroban_sdk::{
     auth::{ContractContext, InvokerContractAuthEntry, SubContractInvocation},
-    contract, contractimpl, contracttype, vec, Address, Env, IntoVal, symbol_short, Vec,
+    contract, contractimpl, contracttype, symbol_short, vec, Address, Env, IntoVal, Vec,
 };
 
 #[contract]
@@ -75,6 +75,34 @@ impl AuthContract {
             auth_entries.push_back(tree_to_invoker_contract_auth(&env, &child));
         }
         env.authorize_as_current_contract(auth_entries);
+    }
+
+    pub fn store(env: Env, addresses: Vec<Address>) {
+        env.storage()
+            .persistent()
+            .set(&symbol_short!("addr"), &addresses);
+    }
+
+    pub fn stree_fn(env: Env, addresses: Vec<Address>, tree: TreeNode) {
+        let stored_addresses: Vec<Address> = env
+            .storage()
+            .persistent()
+            .get(&symbol_short!("addr"))
+            .unwrap();
+        for i in 0..addresses.len() {
+            if tree.need_auth.get_unchecked(i) {
+                stored_addresses
+                    .get_unchecked(i)
+                    .require_auth_for_args(vec![&env]);
+            }
+        }
+        for child in tree.children.iter() {
+            env.invoke_contract::<()>(
+                &child.contract.clone(),
+                &symbol_short!("tree_fn"),
+                (addresses.clone(), child).into_val(&env),
+            );
+        }
     }
 }
 
