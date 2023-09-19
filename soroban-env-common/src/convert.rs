@@ -434,6 +434,8 @@ where
 
             Tag::LedgerKeyContractInstance => Ok(ScVal::LedgerKeyContractInstance),
 
+            // The object types should all be handled above, and the other tag
+            // cases should never occur.
             Tag::U64Object
             | Tag::I64Object
             | Tag::TimepointObject
@@ -447,8 +449,8 @@ where
             | Tag::SymbolObject
             | Tag::VecObject
             | Tag::MapObject
-            | Tag::AddressObject => unreachable!(),
-            Tag::SmallCodeUpperBound
+            | Tag::AddressObject
+            | Tag::SmallCodeUpperBound
             | Tag::ObjectCodeLowerBound
             | Tag::ObjectCodeUpperBound
             | Tag::Bad => Err(ConversionError),
@@ -525,7 +527,7 @@ where
             | ScVal::Map(_)
             | ScVal::Address(_)
             | ScVal::LedgerKeyNonce(_)
-            | ScVal::ContractInstance(_) => unreachable!(),
+            | ScVal::ContractInstance(_) => return Err(ConversionError),
         })
     }
 }
