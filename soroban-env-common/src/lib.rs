@@ -36,6 +36,7 @@ pub const VERSION: Version = Version {
 
 mod wrapper_macros;
 
+#[cfg(feature = "testutils")]
 mod arbitrary;
 mod bytes;
 mod compare;
