@@ -2,8 +2,9 @@ use core::cmp::min;
 use std::rc::Rc;
 
 use soroban_env_common::xdr::{
-    BytesM, ContractDataDurability, ContractExecutable, ContractIdPreimage, ExtensionPoint,
-    HashIdPreimageContractId, ScAddress, ScContractInstance, ScErrorCode, ScErrorType,
+    BytesM, ContractCodeEntry, ContractDataDurability, ContractExecutable, ContractIdPreimage,
+    ExtensionPoint, HashIdPreimageContractId, ScAddress, ScContractInstance, ScErrorCode,
+    ScErrorType,
 };
 use soroban_env_common::{AddressObject, Env, U32Val};
 
@@ -134,17 +135,17 @@ impl Host {
                 )
                 .map_err(|e| self.decorate_contract_instance_storage_error(e, &contract_id))?;
         } else {
-            let data = LedgerEntryData::ContractData(ContractDataEntry {
+            let data = ContractDataEntry {
                 contract: ScAddress::Contract(contract_id.metered_clone(self)?),
                 key: ScVal::LedgerKeyContractInstance,
                 val: ScVal::ContractInstance(instance),
                 durability: ContractDataDurability::Persistent,
                 ext: ExtensionPoint::V0,
-            });
+            };
             self.try_borrow_storage_mut()?
                 .put(
                     key,
-                    &Host::ledger_entry_from_data(self, data)?,
+                    &Host::new_contract_data(self, data)?,
                     Some(self.get_min_expiration_ledger(ContractDataDurability::Persistent)?),
                     self.as_budget(),
                 )
@@ -290,17 +291,50 @@ impl Host {
         }
     }
 
-    pub(crate) fn ledger_entry_from_data(
+    pub(crate) fn new_contract_data(
         &self,
-        data: LedgerEntryData,
+        data: ContractDataEntry,
     ) -> Result<Rc<LedgerEntry>, HostError> {
         Rc::metered_new(
             LedgerEntry {
                 // This is modified to the appropriate value on the core side during
                 // commiting the ledger transaction.
                 last_modified_ledger_seq: 0,
-                data,
+                data: LedgerEntryData::ContractData(data),
                 ext: LedgerEntryExt::V0,
+            },
+            self,
+        )
+    }
+
+    pub(crate) fn new_contract_code(
+        &self,
+        data: ContractCodeEntry,
+    ) -> Result<Rc<LedgerEntry>, HostError> {
+        Rc::metered_new(
+            LedgerEntry {
+                // This is modified to the appropriate value on the core side during
+                // commiting the ledger transaction.
+                last_modified_ledger_seq: 0,
+                data: LedgerEntryData::ContractCode(data),
+                ext: LedgerEntryExt::V0,
+            },
+            self,
+        )
+    }
+
+    pub(crate) fn modify_ledger_entry_data(
+        &self,
+        original_entry: &LedgerEntry,
+        new_data: LedgerEntryData,
+    ) -> Result<Rc<LedgerEntry>, HostError> {
+        Rc::metered_new(
+            LedgerEntry {
+                // This is modified to the appropriate value on the core side during
+                // commiting the ledger transaction.
+                last_modified_ledger_seq: 0,
+                data: new_data,
+                ext: original_entry.ext.metered_clone(self)?,
             },
             self,
         )

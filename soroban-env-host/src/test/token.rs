@@ -11,7 +11,8 @@ use crate::{
         testutils::{
             account_to_address, authorize_single_invocation,
             authorize_single_invocation_with_nonce, contract_id_to_address, create_account,
-            generate_signing_key, signing_key_to_account_id, AccountSigner, HostVec, TestSigner,
+            generate_signing_key, new_ledger_entry_from_data, signing_key_to_account_id,
+            AccountSigner, HostVec, TestSigner,
         },
         token::test_token::TestToken,
     },
@@ -179,8 +180,9 @@ impl TokenTest {
                 match entry.data.clone() {
                     LedgerEntryData::Account(mut account) => {
                         account.flags = new_flags;
-                        let update = Host::ledger_entry_from_data(
+                        let update = Host::modify_ledger_entry_data(
                             &self.host,
+                            &entry,
                             LedgerEntryData::Account(account),
                         )?;
                         s.put(key, &update, None, self.host.as_budget())
@@ -241,11 +243,7 @@ impl TokenTest {
         self.host
             .add_ledger_entry(
                 &key,
-                &Host::ledger_entry_from_data(
-                    &self.host,
-                    LedgerEntryData::Trustline(trustline_entry),
-                )
-                .unwrap(),
+                &new_ledger_entry_from_data(LedgerEntryData::Trustline(trustline_entry)),
                 None,
             )
             .unwrap();
@@ -260,8 +258,9 @@ impl TokenTest {
                 match entry.data.clone() {
                     LedgerEntryData::Trustline(mut trustline) => {
                         trustline.flags = new_flags;
-                        let update = Host::ledger_entry_from_data(
+                        let update = Host::modify_ledger_entry_data(
                             &self.host,
+                            &entry,
                             LedgerEntryData::Trustline(trustline),
                         )?;
                         s.put(key, &update, None, self.host.as_budget())
