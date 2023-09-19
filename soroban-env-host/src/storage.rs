@@ -198,6 +198,24 @@ impl Storage {
         }
     }
 
+    // Like `get`, but distinguishes between missing values (return `Ok(None)`)
+    // and out-of-footprint values or errors (`Err(...)`).
+    pub(crate) fn try_get(
+        &mut self,
+        key: &Rc<LedgerKey>,
+        budget: &Budget,
+    ) -> Result<Option<Rc<LedgerEntry>>, HostError> {
+        let _span = tracy_span!("storage try_get");
+        self.prepare_read_only_access(key, budget)?;
+        match self.map.get::<Rc<LedgerKey>>(key, budget)? {
+            // Key has to be in the storage map at this point due to
+            // `prepare_read_only_access`.
+            None => Err((ScErrorType::Storage, ScErrorCode::InternalError).into()),
+            Some(None) => Ok(None),
+            Some(Some((val, _))) => Ok(Some(Rc::clone(val))),
+        }
+    }
+
     /// Attempts to retrieve the [LedgerEntry] associated with a given
     /// [LedgerKey] and its expiration ledger (if applicable) in the [Storage],
     /// returning an error if the key is not found.
