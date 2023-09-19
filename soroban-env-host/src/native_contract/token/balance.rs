@@ -478,7 +478,7 @@ fn read_account_entry(
             let account_address = host.account_address_from_key(lk);
             match account_address {
                 Ok(account_address) => host.error(
-                    ContractError::TrustlineMissingError.into(),
+                    ContractError::AccountMissingError.into(),
                     "account entry is missing",
                     &[account_address],
                 ),
