@@ -34,8 +34,8 @@
 //! literals are encoded as variable-length little-endian values, using ULEB128.
 
 use crate::{
-    declare_tag_based_small_and_object_wrappers, require, val::ValConvert, Compare,
-    ConversionError, Env, Tag, TryFromVal, Val,
+    declare_tag_based_small_and_object_wrappers, val::ValConvert, Compare, ConversionError, Env,
+    Tag, TryFromVal, Val,
 };
 use core::{cmp::Ordering, fmt::Debug, hash::Hash, str};
 
@@ -397,11 +397,14 @@ impl Iterator for SymbolSmallIter {
     }
 }
 
+#[cfg(feature = "testutils")]
 impl FromIterator<char> for SymbolSmall {
     fn from_iter<T: IntoIterator<Item = char>>(iter: T) -> Self {
         let mut accum: u64 = 0;
         for (n, i) in iter.into_iter().enumerate() {
-            require(n < MAX_SMALL_CHARS);
+            if n >= MAX_SMALL_CHARS {
+                panic!("too many chars for SymbolSmall");
+            }
             accum <<= CODE_BITS;
             let v = match i {
                 '_' => 1,
