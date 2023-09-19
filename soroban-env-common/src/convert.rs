@@ -376,8 +376,10 @@ where
 
     fn try_from_val(env: &E, val: &Val) -> Result<Self, ConversionError> {
         if let Ok(object) = Object::try_from(val) {
-            // FIXME: it's not really great to be dropping the error from the other
-            // TryFromVal here, we should really switch to taking errors from E.
+            // Bug https://github.com/stellar/rs-soroban-env/issues/1076: it's
+            // not really great to be dropping the error from the other
+            // TryFromVal here, we should really switch to taking errors from E
+            // or returning Error or something.
             let scvo: ScValObject = object.try_into_val(env).map_err(|_| ConversionError)?;
             return Ok(scvo.into());
         }
@@ -387,8 +389,8 @@ where
             Tag::True => Ok(ScVal::Bool(true)),
             Tag::Void => Ok(ScVal::Void),
             Tag::Error => {
-                let status: Error = unsafe { <Error as ValConvert>::unchecked_from_val(val) };
-                Ok(status.try_into()?)
+                let error: Error = unsafe { <Error as ValConvert>::unchecked_from_val(val) };
+                Ok(error.try_into()?)
             }
             Tag::U32Val => Ok(ScVal::U32(val.get_major())),
             Tag::I32Val => Ok(ScVal::I32(val.get_major() as i32)),
@@ -479,6 +481,7 @@ where
             return Ok(obj.into());
         }
 
+        // Remaining cases should only be "small" types.
         Ok(match val {
             ScVal::Bool(b) => Val::from_bool(*b).into(),
             ScVal::Void => Val::from_void().into(),
@@ -530,6 +533,7 @@ where
                 Val::from_body_and_tag(0, Tag::LedgerKeyContractInstance)
             },
 
+            // These should all have been classified as ScValObjRef above.
             ScVal::Bytes(_)
             | ScVal::String(_)
             | ScVal::Vec(_)
