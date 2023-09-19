@@ -96,14 +96,3 @@ pub use error::Error;
 pub use object::{Object, ScValObjRef, ScValObject};
 pub use string::StringObject;
 pub use symbol::{Symbol, SymbolError, SymbolObject, SymbolSmall, SymbolSmallIter, SymbolStr};
-
-#[inline(always)]
-// Awkward: this is a free function rather than a trait call because
-// you can't have const trait calls. It calls panic! rather than
-// rt::trap because trap can't be const because one of its versions
-// is the wasm unreachable intruction. Ideally this would be a function
-// that did panic! in a const context and rt::trap in a non-const
-// context but it's not clear how to actually do that.
-pub const fn require(b: bool) {
-    assert!(b,);
-}

@@ -14,6 +14,23 @@ use super::{Env, EnvBase, Symbol};
 #[cfg(target_family = "wasm")]
 use static_assertions as sa;
 
+// Just the smallest possible version of a runtime assertion-or-panic.
+#[inline(always)]
+#[cfg(not(target_family = "wasm"))]
+pub(crate) fn require(b: bool) {
+    if !b {
+        panic!()
+    }
+}
+
+#[inline(always)]
+#[cfg(target_family = "wasm")]
+pub(crate) fn require(b: bool) {
+    if !b {
+        core::arch::wasm32::unreachable()
+    }
+}
+
 /// The [Guest] is the implementation of the [Env] interface seen and used by
 /// contracts built into WASM for execution within a WASM VM. It is a 0-sized
 /// "stub" type implementation of the [Env] interface that forwards each [Env]
@@ -243,7 +260,7 @@ impl EnvBase for Guest {
     fn map_new_from_slices(&self, keys: &[&str], vals: &[Val]) -> Result<MapObject, Self::Error> {
         sa::assert_eq_size!(u32, *const u8);
         sa::assert_eq_size!(u32, usize);
-        soroban_env_common::require(keys.len() == vals.len());
+        require(keys.len() == vals.len());
         let keys_lm_pos: U32Val = Val::from_u32(keys.as_ptr() as u32);
         let vals_lm_pos: U32Val = Val::from_u32(vals.as_ptr() as u32);
         let len: U32Val = Val::from_u32(keys.len() as u32);
@@ -258,7 +275,7 @@ impl EnvBase for Guest {
     ) -> Result<Void, Self::Error> {
         sa::assert_eq_size!(u32, *const u8);
         sa::assert_eq_size!(u32, usize);
-        soroban_env_common::require(keys.len() == vals.len());
+        require(keys.len() == vals.len());
         let keys_lm_pos: U32Val = Val::from_u32(keys.as_ptr() as u32);
         let vals_lm_pos: U32Val = Val::from_u32(vals.as_ptr() as u32);
         let len: U32Val = Val::from_u32(keys.len() as u32);
