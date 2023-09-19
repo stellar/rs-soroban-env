@@ -289,14 +289,8 @@ impl Error {
 }
 
 impl From<core::convert::Infallible> for crate::Error {
-    fn from(_: core::convert::Infallible) -> Self {
-        unreachable!()
-    }
-}
-
-impl From<crate::Error> for core::convert::Infallible {
-    fn from(_value: crate::Error) -> Self {
-        unreachable!()
+    fn from(x: core::convert::Infallible) -> Self {
+        match x {}
     }
 }
 

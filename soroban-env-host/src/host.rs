@@ -944,6 +944,10 @@ impl Host {
 impl EnvBase for Host {
     type Error = HostError;
 
+    fn error_from_error_val(&self, e: soroban_env_common::Error) -> Self::Error {
+        self.error(e, "promoting Error to HostError", &[])
+    }
+
     // This function is somewhat subtle.
     //
     // It exists to allow the client of the (VmCaller)Env interface(s) to

@@ -29,6 +29,10 @@ pub struct Guest;
 impl EnvBase for Guest {
     type Error = Infallible;
 
+    fn error_from_error_val(&self, e: soroban_env_common::Error) -> Self::Error {
+        unimplemented!()
+    }
+
     #[cfg(feature = "testutils")]
     fn escalate_error_to_panic(&self, e: Self::Error) -> ! {
         unimplemented!()
@@ -133,6 +137,10 @@ impl EnvBase for Guest {
 #[cfg(target_family = "wasm")]
 impl EnvBase for Guest {
     type Error = Infallible;
+
+    fn error_from_error_val(&self, _e: crate::Error) -> Self::Error {
+        core::arch::wasm32::unreachable()
+    }
 
     #[cfg(feature = "testutils")]
     fn escalate_error_to_panic(&self, e: Self::Error) -> ! {

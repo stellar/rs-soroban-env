@@ -14,6 +14,10 @@ pub struct UnimplementedEnv;
 impl EnvBase for UnimplementedEnv {
     type Error = Infallible;
 
+    fn error_from_error_val(&self, _e: crate::Error) -> Self::Error {
+        unimplemented!()
+    }
+
     #[cfg(feature = "testutils")]
     fn escalate_error_to_panic(&self, _e: Self::Error) -> ! {
         unimplemented!()

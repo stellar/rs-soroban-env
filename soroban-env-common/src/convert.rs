@@ -20,7 +20,7 @@ use crate::{
 /// General trait representing a the ability of some object to perform a
 /// (possibly unsuccessful) conversion between two other types.
 pub trait Convert<F, T> {
-    type Error: Debug + Into<crate::Error> + From<crate::Error>;
+    type Error: Debug + Into<crate::Error>;
     fn convert(&self, f: F) -> Result<T, Self::Error>;
 }
 
@@ -29,7 +29,7 @@ pub trait Convert<F, T> {
 /// conversions via `.try_into_val(e)` or specifying convertability with a bound
 /// like `TryIntoVal<E,Other>`.
 pub trait TryIntoVal<E: Env, V> {
-    type Error: Debug + Into<crate::Error> + From<crate::Error>;
+    type Error: Debug + Into<crate::Error>;
     fn try_into_val(&self, env: &E) -> Result<V, Self::Error>;
 }
 
@@ -40,7 +40,7 @@ pub trait TryIntoVal<E: Env, V> {
 /// delegate to the environment to look up and extract the content of those
 /// handles.
 pub trait TryFromVal<E: Env, V: ?Sized>: Sized {
-    type Error: Debug + Into<crate::Error> + From<crate::Error>;
+    type Error: Debug + Into<crate::Error>;
     fn try_from_val(env: &E, v: &V) -> Result<Self, Self::Error>;
 }
 
