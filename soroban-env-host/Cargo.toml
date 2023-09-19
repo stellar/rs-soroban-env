@@ -50,6 +50,7 @@ wasmprinter = "0.2.41"
 expect-test = "1.4.0"
 more-asserts = "0.3.1"
 linregress = "0.5.1"
+pretty_assertions = "1.4.0"
 
 [features]
 testutils = ["soroban-env-common/testutils"]

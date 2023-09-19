@@ -741,7 +741,8 @@ impl AuthorizationManager {
             // ->address.require_auth(). Thus we simply skip the trackers that
             // have already been borrowed.
             if let Ok(mut tracker) = tracker.try_borrow_mut() {
-                // If address doesn't match, just skip the tracker.
+                // If tracker has already been used for this frame or the address
+                // doesn't match, just skip the tracker.
                 if !host.compare(&tracker.address, &address)?.is_eq() {
                     continue;
                 }
@@ -788,6 +789,11 @@ impl AuthorizationManager {
             AuthorizationMode::Enforcing => self.require_auth_enforcing(host, address, &function),
             // metering: free for recording
             AuthorizationMode::Recording(recording_info) => {
+                // At first, try to find the tracker for this exact address
+                // object.
+                // This is a best-effort heuristic to come up with a reasonably
+                // looking recording tree for cases when multiple instances of
+                // the same exact address are used.
                 let address_obj_handle = address.get_handle();
                 let existing_tracker_id = recording_info
                     .try_borrow_tracker_by_address_handle(host)?
@@ -821,6 +827,35 @@ impl AuthorizationManager {
                         ));
                     }
                 }
+                // If there is no active tracker for this exact address object,
+                // try to find any matching active tracker for the address.
+                for tracker in self.try_borrow_account_trackers(host)?.iter() {
+                    if let Ok(mut tracker) = tracker.try_borrow_mut() {
+                        if !host.compare(&tracker.address, &address)?.is_eq() {
+                            continue;
+                        }
+                        // Take the first tracker that is still active (i.e. has
+                        // active authorizations in the current call stack) and
+                        // hasn't been used for this stack frame yet.
+                        if tracker.has_authorized_invocations_in_stack()
+                            && !tracker.current_frame_is_already_matched()
+                        {
+                            return tracker.record_invocation(host, function);
+                        }
+                    } else {
+                        return Err(host.err(
+                            ScErrorType::Auth,
+                            ScErrorCode::InternalError,
+                            "unexpected borrowed tracker in recording auth mode",
+                            &[],
+                        ));
+                    }
+                }
+                // At this stage there is no active tracker to which we could
+                // match the current invocation, thus we need to create a new
+                // tracker.
+                // Alert the user in `disable_non_root_auth` mode if we're not
+                // in the root stack frame.
                 if recording_info.disable_non_root_auth
                     && self.try_borrow_call_stack(host)?.len() != 1
                 {
@@ -1297,11 +1332,7 @@ impl InvocationTracker {
         host: &Host,
         function: AuthorizedFunction,
     ) -> Result<(), HostError> {
-        let frame_is_already_authorized = match self.invocation_id_in_call_stack.last() {
-            Some(Some(_)) => true,
-            _ => false,
-        };
-        if frame_is_already_authorized {
+        if self.current_frame_is_already_matched() {
             return Err(host.err(
                 ScErrorType::Auth,
                 ScErrorCode::ExistingValue,
