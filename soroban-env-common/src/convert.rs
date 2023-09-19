@@ -459,6 +459,15 @@ where
 }
 
 #[cfg(feature = "std")]
+fn require_or_conversion_error(b: bool) -> Result<(), ConversionError> {
+    if !b {
+        Err(ConversionError)
+    } else {
+        Ok(())
+    }
+}
+
+#[cfg(feature = "std")]
 impl<E: Env> TryFromVal<E, ScVal> for Val
 where
     Object: for<'a> TryFromVal<E, ScValObjRef<'a>, Error = ConversionError>,
@@ -477,37 +486,37 @@ where
             ScVal::U32(u) => (*u).into(),
             ScVal::I32(i) => (*i).into(),
             ScVal::U64(u) => {
-                assert!(num::is_small_u64(*u));
+                require_or_conversion_error(num::is_small_u64(*u))?;
                 unsafe { Val::from_body_and_tag(*u, Tag::U64Small) }
             }
             ScVal::I64(i) => {
-                assert!(num::is_small_i64(*i));
+                require_or_conversion_error(num::is_small_i64(*i))?;
                 unsafe { Val::from_body_and_tag(*i as u64, Tag::I64Small) }
             }
             ScVal::Timepoint(TimePoint(u)) => {
-                assert!(num::is_small_u64(*u));
+                require_or_conversion_error(num::is_small_u64(*u))?;
                 unsafe { Val::from_body_and_tag(*u, Tag::TimepointSmall) }
             }
             ScVal::Duration(Duration(u)) => {
-                assert!(num::is_small_u64(*u));
+                require_or_conversion_error(num::is_small_u64(*u))?;
                 unsafe { Val::from_body_and_tag(*u, Tag::DurationSmall) }
             }
             ScVal::U128(u) => {
                 let u: u128 = u.into();
-                assert!(num::is_small_u128(u));
+                require_or_conversion_error(num::is_small_u128(u))?;
                 unsafe { Val::from_body_and_tag(u as u64, Tag::U128Small) }
             }
             ScVal::I128(i) => {
                 let i: i128 = i.into();
-                assert!(num::is_small_i128(i));
+                require_or_conversion_error(num::is_small_i128(i))?;
                 unsafe { Val::from_body_and_tag((i as i64) as u64, Tag::I128Small) }
             }
             ScVal::U256(u) => {
-                assert!(num::is_small_u256_parts(u));
+                require_or_conversion_error(num::is_small_u256_parts(u))?;
                 unsafe { Val::from_body_and_tag(u.lo_lo, Tag::U256Small) }
             }
             ScVal::I256(i) => {
-                assert!(num::is_small_i256_parts(i));
+                require_or_conversion_error(num::is_small_i256_parts(i))?;
                 unsafe { Val::from_body_and_tag(i.lo_lo, Tag::I256Small) }
             }
             ScVal::Symbol(bytes) => {
