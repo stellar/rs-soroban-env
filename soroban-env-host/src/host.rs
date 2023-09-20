@@ -117,6 +117,7 @@ pub(crate) struct HostImpl {
     // mainly because it's not really possible to achieve (the same budget is connected to many
     // metered sub-objects) but also because it's plausible that the person calling deep_clone
     // actually wants their clones to be metered by "the same" total budget
+    // FIXME: deep_clone is gone, maybe Budget should not be separately refcounted?
     pub(crate) budget: Budget,
     pub(crate) events: RefCell<InternalEventsBuffer>,
     authorization_manager: RefCell<AuthorizationManager>,
@@ -1012,18 +1013,8 @@ impl EnvBase for Host {
         x
     }
 
-    fn as_mut_any(&mut self) -> &mut dyn std::any::Any {
-        todo!()
-    }
-
     fn check_same_env(&self, other: &Self) {
         assert!(Rc::ptr_eq(&self.0, &other.0));
-    }
-
-    // This function is not being metered, it's not used anywhere so it's okay
-    // for now
-    fn deep_clone(&self) -> Self {
-        Host(Rc::new((*self.0).clone()))
     }
 
     fn bytes_copy_from_slice(

@@ -4,7 +4,7 @@ use super::{
     I64Object, MapObject, StorageType, StringObject, SymbolObject, TimepointObject, U128Object,
     U256Object, U256Val, U32Val, U64Object, U64Val, Val, VecObject, Void,
 };
-use core::{any, convert::Infallible};
+use core::convert::Infallible;
 
 /// A dummy implementation of the [Env] trait that fails with `unimplemented!()` in
 /// all functions. Useful for certain testing scenarios.
@@ -23,15 +23,7 @@ impl EnvBase for UnimplementedEnv {
         unimplemented!()
     }
 
-    fn as_mut_any(&mut self) -> &mut dyn any::Any {
-        self
-    }
-
     fn check_same_env(&self, _other: &Self) {}
-
-    fn deep_clone(&self) -> Self {
-        Self
-    }
 
     fn bytes_copy_from_slice(
         &self,

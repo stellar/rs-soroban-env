@@ -6,7 +6,6 @@ use super::{
     I64Object, MapObject, StorageType, StringObject, SymbolObject, TimepointObject, U128Object,
     U256Object, U256Val, U32Val, U64Object, U64Val, Val, VecObject, Void,
 };
-use core::any;
 
 /// Base trait extended by the [Env](crate::Env) trait, providing various special-case
 /// functions that do _not_ simply call across cross the guest/host interface.
@@ -62,14 +61,8 @@ pub trait EnvBase: Sized + Clone {
         x
     }
 
-    /// Used for recovering the concrete type of the Host.
-    fn as_mut_any(&mut self) -> &mut dyn any::Any;
-
     /// Used to check two environments are the same, trapping if not.
     fn check_same_env(&self, other: &Self);
-
-    /// Used to clone an environment deeply, not just a handle to it.
-    fn deep_clone(&self) -> Self;
 
     // Helpers for methods that wish to pass Rust lifetime-qualified _slices_
     // into the environment. These are _not_ done via Env trait methods to avoid

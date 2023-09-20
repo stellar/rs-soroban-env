@@ -55,15 +55,7 @@ impl EnvBase for Guest {
         unimplemented!()
     }
 
-    fn as_mut_any(&mut self) -> &mut dyn core::any::Any {
-        unimplemented!()
-    }
-
     fn check_same_env(&self, other: &Self) {
-        unimplemented!()
-    }
-
-    fn deep_clone(&self) -> Self {
         unimplemented!()
     }
 
@@ -164,16 +156,8 @@ impl EnvBase for Guest {
         core::arch::wasm32::unreachable()
     }
 
-    fn as_mut_any(&mut self) -> &mut dyn core::any::Any {
-        return self;
-    }
-
     fn check_same_env(&self, other: &Self) {
         ()
-    }
-
-    fn deep_clone(&self) -> Self {
-        Self
     }
 
     fn bytes_copy_from_slice(
