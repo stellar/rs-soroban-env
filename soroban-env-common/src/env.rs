@@ -61,8 +61,8 @@ pub trait EnvBase: Sized + Clone {
         x
     }
 
-    /// Used to check two environments are the same, trapping if not.
-    fn check_same_env(&self, other: &Self);
+    /// Used to check two environments are the same, returning Error if not.
+    fn check_same_env(&self, other: &Self) -> Result<(), Self::Error>;
 
     // Helpers for methods that wish to pass Rust lifetime-qualified _slices_
     // into the environment. These are _not_ done via Env trait methods to avoid

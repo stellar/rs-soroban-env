@@ -1013,8 +1013,17 @@ impl EnvBase for Host {
         x
     }
 
-    fn check_same_env(&self, other: &Self) {
-        assert!(Rc::ptr_eq(&self.0, &other.0));
+    fn check_same_env(&self, other: &Self) -> Result<(), Self::Error> {
+        if Rc::ptr_eq(&self.0, &other.0) {
+            Ok(())
+        } else {
+            Err(self.err(
+                ScErrorType::Context,
+                ScErrorCode::InternalError,
+                "check_same_env on different Hosts",
+                &[],
+            ))
+        }
     }
 
     fn bytes_copy_from_slice(
