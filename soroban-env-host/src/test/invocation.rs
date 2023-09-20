@@ -159,11 +159,11 @@ fn invoke_cross_contract_indirect_err() -> Result<(), HostError> {
     let args = host.test_vec_obj::<i32>(&[i32::MAX, 1])?;
     let args = host.vec_push_back(args, host.bytes_new()?.to_val())?;
 
-    // try call -- add will trap, and add_with will trap, but we will get a status
-    let status = host.try_call(id0_obj, sym, args)?;
+    // try call -- add will trap, and add_with will trap, but we will get an error
+    let error = host.try_call(id0_obj, sym, args)?;
     let code = (ScErrorType::WasmVm, ScErrorCode::InvalidAction);
     let exp: Error = code.into();
-    assert_eq!(status.get_payload(), exp.to_val().get_payload());
+    assert_eq!(error.get_payload(), exp.to_val().get_payload());
 
     let events = host.get_events()?.0;
     assert_eq!(events.len(), 2);

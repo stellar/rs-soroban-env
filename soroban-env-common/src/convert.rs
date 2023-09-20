@@ -20,7 +20,7 @@ use crate::{
 /// General trait representing a the ability of some object to perform a
 /// (possibly unsuccessful) conversion between two other types.
 pub trait Convert<F, T> {
-    type Error: Debug + Into<crate::Error> + From<crate::Error>;
+    type Error: Debug + Into<crate::Error>;
     fn convert(&self, f: F) -> Result<T, Self::Error>;
 }
 
@@ -29,7 +29,7 @@ pub trait Convert<F, T> {
 /// conversions via `.try_into_val(e)` or specifying convertability with a bound
 /// like `TryIntoVal<E,Other>`.
 pub trait TryIntoVal<E: Env, V> {
-    type Error: Debug + Into<crate::Error> + From<crate::Error>;
+    type Error: Debug + Into<crate::Error>;
     fn try_into_val(&self, env: &E) -> Result<V, Self::Error>;
 }
 
@@ -40,7 +40,7 @@ pub trait TryIntoVal<E: Env, V> {
 /// delegate to the environment to look up and extract the content of those
 /// handles.
 pub trait TryFromVal<E: Env, V: ?Sized>: Sized {
-    type Error: Debug + Into<crate::Error> + From<crate::Error>;
+    type Error: Debug + Into<crate::Error>;
     fn try_from_val(env: &E, v: &V) -> Result<Self, Self::Error>;
 }
 
@@ -376,8 +376,10 @@ where
 
     fn try_from_val(env: &E, val: &Val) -> Result<Self, ConversionError> {
         if let Ok(object) = Object::try_from(val) {
-            // FIXME: it's not really great to be dropping the error from the other
-            // TryFromVal here, we should really switch to taking errors from E.
+            // Bug https://github.com/stellar/rs-soroban-env/issues/1076: it's
+            // not really great to be dropping the error from the other
+            // TryFromVal here, we should really switch to taking errors from E
+            // or returning Error or something.
             let scvo: ScValObject = object.try_into_val(env).map_err(|_| ConversionError)?;
             return Ok(scvo.into());
         }
@@ -387,8 +389,8 @@ where
             Tag::True => Ok(ScVal::Bool(true)),
             Tag::Void => Ok(ScVal::Void),
             Tag::Error => {
-                let status: Error = unsafe { <Error as ValConvert>::unchecked_from_val(val) };
-                Ok(status.try_into()?)
+                let error: Error = unsafe { <Error as ValConvert>::unchecked_from_val(val) };
+                Ok(error.try_into()?)
             }
             Tag::U32Val => Ok(ScVal::U32(val.get_major())),
             Tag::I32Val => Ok(ScVal::I32(val.get_major() as i32)),
@@ -434,6 +436,8 @@ where
 
             Tag::LedgerKeyContractInstance => Ok(ScVal::LedgerKeyContractInstance),
 
+            // The object types should all be handled above, and the other tag
+            // cases should never occur.
             Tag::U64Object
             | Tag::I64Object
             | Tag::TimepointObject
@@ -447,12 +451,21 @@ where
             | Tag::SymbolObject
             | Tag::VecObject
             | Tag::MapObject
-            | Tag::AddressObject => unreachable!(),
-            Tag::SmallCodeUpperBound
+            | Tag::AddressObject
+            | Tag::SmallCodeUpperBound
             | Tag::ObjectCodeLowerBound
             | Tag::ObjectCodeUpperBound
             | Tag::Bad => Err(ConversionError),
         }
+    }
+}
+
+#[cfg(feature = "std")]
+fn require_or_conversion_error(b: bool) -> Result<(), ConversionError> {
+    if !b {
+        Err(ConversionError)
+    } else {
+        Ok(())
     }
 }
 
@@ -468,6 +481,7 @@ where
             return Ok(obj.into());
         }
 
+        // Remaining cases should only be "small" types.
         Ok(match val {
             ScVal::Bool(b) => Val::from_bool(*b).into(),
             ScVal::Void => Val::from_void().into(),
@@ -475,37 +489,37 @@ where
             ScVal::U32(u) => (*u).into(),
             ScVal::I32(i) => (*i).into(),
             ScVal::U64(u) => {
-                assert!(num::is_small_u64(*u));
+                require_or_conversion_error(num::is_small_u64(*u))?;
                 unsafe { Val::from_body_and_tag(*u, Tag::U64Small) }
             }
             ScVal::I64(i) => {
-                assert!(num::is_small_i64(*i));
+                require_or_conversion_error(num::is_small_i64(*i))?;
                 unsafe { Val::from_body_and_tag(*i as u64, Tag::I64Small) }
             }
             ScVal::Timepoint(TimePoint(u)) => {
-                assert!(num::is_small_u64(*u));
+                require_or_conversion_error(num::is_small_u64(*u))?;
                 unsafe { Val::from_body_and_tag(*u, Tag::TimepointSmall) }
             }
             ScVal::Duration(Duration(u)) => {
-                assert!(num::is_small_u64(*u));
+                require_or_conversion_error(num::is_small_u64(*u))?;
                 unsafe { Val::from_body_and_tag(*u, Tag::DurationSmall) }
             }
             ScVal::U128(u) => {
                 let u: u128 = u.into();
-                assert!(num::is_small_u128(u));
+                require_or_conversion_error(num::is_small_u128(u))?;
                 unsafe { Val::from_body_and_tag(u as u64, Tag::U128Small) }
             }
             ScVal::I128(i) => {
                 let i: i128 = i.into();
-                assert!(num::is_small_i128(i));
+                require_or_conversion_error(num::is_small_i128(i))?;
                 unsafe { Val::from_body_and_tag((i as i64) as u64, Tag::I128Small) }
             }
             ScVal::U256(u) => {
-                assert!(num::is_small_u256_parts(u));
+                require_or_conversion_error(num::is_small_u256_parts(u))?;
                 unsafe { Val::from_body_and_tag(u.lo_lo, Tag::U256Small) }
             }
             ScVal::I256(i) => {
-                assert!(num::is_small_i256_parts(i));
+                require_or_conversion_error(num::is_small_i256_parts(i))?;
                 unsafe { Val::from_body_and_tag(i.lo_lo, Tag::I256Small) }
             }
             ScVal::Symbol(bytes) => {
@@ -519,13 +533,14 @@ where
                 Val::from_body_and_tag(0, Tag::LedgerKeyContractInstance)
             },
 
+            // These should all have been classified as ScValObjRef above.
             ScVal::Bytes(_)
             | ScVal::String(_)
             | ScVal::Vec(_)
             | ScVal::Map(_)
             | ScVal::Address(_)
             | ScVal::LedgerKeyNonce(_)
-            | ScVal::ContractInstance(_) => unreachable!(),
+            | ScVal::ContractInstance(_) => return Err(ConversionError),
         })
     }
 }

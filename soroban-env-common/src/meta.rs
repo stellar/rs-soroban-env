@@ -14,10 +14,10 @@
 // within.
 //
 // Protocol numbers will be checked for ordered compatibility (a host will only
-// run protocols it's at least as new as) whereas pre-release numbers will be
-// checked for _exact_ identity. Any pre-release number is considered
-// incompatible with every other pre-release number, requires recompiling
-// contracts.
+// run contracts built for same-or-older protocol versions than its own) whereas
+// pre-release numbers will be checked for _exact_ identity. Any pre-release
+// number is considered incompatible with every other pre-release number,
+// requires recompiling contracts.
 //
 // Any change to the logical interface of a released version of soroban (with a
 // nonzero major version):

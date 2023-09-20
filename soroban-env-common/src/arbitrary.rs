@@ -1,7 +1,5 @@
 //! Implementations of [`Arbitrary`] for contract types.
 
-#![cfg(feature = "testutils")]
-
 extern crate alloc;
 
 use crate::xdr::ScError;

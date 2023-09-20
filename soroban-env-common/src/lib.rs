@@ -4,10 +4,10 @@
 //!   - The [Val] type, a 64-bit value type that is a union between several
 //!     different types (numbers, booleans, symbols, object references), encoded
 //!     via careful bit-packing.
-//!   - Wrapper types ([Object], [Symbol], [Error]) that
-//!     contain [Val] in a specific, known union state. These are also 64-bit
-//!     values, but offer methods specific to the union state (eg. [Symbol] will
-//!     interconvert with Rust strings).
+//!   - Wrapper types ([Object], [Symbol], [Error]) that contain [Val] in a
+//!     specific, known union state. These are also 64-bit values, but offer
+//!     methods specific to the union state (eg. [Symbol] will interconvert with
+//!     Rust string types).
 //!   - The [Env] trait, which describes the _interface_ between guest and host
 //!     code. In other words, `Env` describes a set of _host functions_ that
 //!     must be implemented in a contract host, and can be called from a guest
@@ -36,6 +36,7 @@ pub const VERSION: Version = Version {
 
 mod wrapper_macros;
 
+#[cfg(feature = "testutils")]
 mod arbitrary;
 mod bytes;
 mod compare;
@@ -49,11 +50,10 @@ mod storage_type;
 mod string;
 mod symbol;
 mod tuple;
-mod unimplemented_env;
 mod val;
 mod vmcaller_env;
 
-// We have some types that we don't re-export everything
+// We have some modules that we don't re-export everything
 // from because only specific users are likely to use them.
 pub mod meta;
 pub mod num;
@@ -78,16 +78,16 @@ pub use stellar_xdr::curr as xdr;
 pub use stellar_xdr::next as xdr;
 
 // Val is the 64-bit transparent type.
+pub use val::{ConversionError, Tag, Val};
+
 #[cfg(feature = "wasmi")]
 pub use val::WasmiMarshal;
 pub use val::{AddressObject, MapObject, VecObject};
 pub use val::{Bool, Void};
-pub use val::{ConversionError, Tag, Val};
 
 pub use compare::Compare;
 pub use convert::{Convert, TryFromVal, TryIntoVal};
 pub use env::{call_macro_with_all_host_functions, Env, EnvBase};
-pub use unimplemented_env::UnimplementedEnv;
 pub use vmcaller_env::{VmCaller, VmCallerEnv};
 
 pub use bytes::BytesObject;
@@ -95,14 +95,3 @@ pub use error::Error;
 pub use object::{Object, ScValObjRef, ScValObject};
 pub use string::StringObject;
 pub use symbol::{Symbol, SymbolError, SymbolObject, SymbolSmall, SymbolSmallIter, SymbolStr};
-
-#[inline(always)]
-// Awkward: this is a free function rather than a trait call because
-// you can't have const trait calls. It calls panic! rather than
-// rt::trap because trap can't be const because one of its versions
-// is the wasm unreachable intruction. Ideally this would be a function
-// that did panic! in a const context and rt::trap in a non-const
-// context but it's not clear how to actually do that.
-pub const fn require(b: bool) {
-    assert!(b,);
-}

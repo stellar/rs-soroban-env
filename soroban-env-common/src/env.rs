@@ -6,7 +6,6 @@ use super::{
     I64Object, MapObject, StorageType, StringObject, SymbolObject, TimepointObject, U128Object,
     U256Object, U256Val, U32Val, U64Object, U64Val, Val, VecObject, Void,
 };
-use core::any;
 
 /// Base trait extended by the [Env](crate::Env) trait, providing various special-case
 /// functions that do _not_ simply call across cross the guest/host interface.
@@ -32,11 +31,20 @@ pub trait EnvBase: Sized + Clone {
     /// environment-interface level, and then either directly handle or escalate
     /// the contained `Error` code to the user as a `Error` or `Result<>` of
     /// some other type, depending on the API.
-    type Error: core::fmt::Debug + Into<crate::Error> + From<crate::Error>;
+    type Error: core::fmt::Debug + Into<crate::Error>;
+
+    /// Convert a [`crate::Error`] into [`EnvBase::Error`]. This is similar to adding
+    /// `+ From<crate::Error>` to the associated type bound for `EnvBase::Error`
+    /// but it allows us to restrict that conversion in downstream crates, which
+    /// is desirable to keep "conversions that panic" (as the guest definition
+    /// of `EnvBase::Error` does) out of the common crate and avoid accidentally
+    /// triggering them in the host. It also gives the `Env` an opportunity to
+    /// log or enrich the error with context (both of which happen in `Host`).
+    fn error_from_error_val(&self, e: crate::Error) -> Self::Error;
 
     /// Reject an error from the environment, turning it into a panic but on
-    /// terms that the environment controls (eg. transforming or logging it).
-    /// This should only ever be called by client-side / SDK local-testing code,
+    /// terms that the environment controls (eg. enriching or logging it). This
+    /// should only ever be called by client-side / SDK local-testing code,
     /// never in the `Host`.
     #[cfg(feature = "testutils")]
     fn escalate_error_to_panic(&self, e: Self::Error) -> !;
@@ -53,14 +61,8 @@ pub trait EnvBase: Sized + Clone {
         x
     }
 
-    /// Used for recovering the concrete type of the Host.
-    fn as_mut_any(&mut self) -> &mut dyn any::Any;
-
-    /// Used to check two environments are the same, trapping if not.
-    fn check_same_env(&self, other: &Self);
-
-    /// Used to clone an environment deeply, not just a handle to it.
-    fn deep_clone(&self) -> Self;
+    /// Used to check two environments are the same, returning Error if not.
+    fn check_same_env(&self, other: &Self) -> Result<(), Self::Error>;
 
     // Helpers for methods that wish to pass Rust lifetime-qualified _slices_
     // into the environment. These are _not_ done via Env trait methods to avoid

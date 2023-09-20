@@ -12,9 +12,9 @@ use core::{
 };
 
 /// Wrapper for a [Val] that is tagged with [Tag::Error], interpreting the
-/// [Val]'s body as a pair of a 28-bit status-type code and a 32-bit status
-/// code. The status-type codes correspond to the enumerated cases of
-/// [ScErrorType], and the status codes correspond to the code values stored in
+/// [Val]'s body as a pair of a 28-bit error-type code and a 32-bit error
+/// code. The error-type codes correspond to the enumerated cases of
+/// [ScErrorType], and the error codes correspond to the code values stored in
 /// each variant of the [ScError] union.
 #[repr(transparent)]
 #[derive(Copy, Clone)]
@@ -289,14 +289,8 @@ impl Error {
 }
 
 impl From<core::convert::Infallible> for crate::Error {
-    fn from(_: core::convert::Infallible) -> Self {
-        unreachable!()
-    }
-}
-
-impl From<crate::Error> for core::convert::Infallible {
-    fn from(_value: crate::Error) -> Self {
-        unreachable!()
+    fn from(x: core::convert::Infallible) -> Self {
+        match x {}
     }
 }
 
@@ -305,7 +299,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn status_ord_same_as_scstatus() {
+    fn error_ord_same_as_scerror() {
         // The impl `Ord for Error` must agree with `Ord for ScError`,
         // re https://github.com/stellar/rs-soroban-env/issues/743.
         //

@@ -117,6 +117,7 @@ pub(crate) struct HostImpl {
     // mainly because it's not really possible to achieve (the same budget is connected to many
     // metered sub-objects) but also because it's plausible that the person calling deep_clone
     // actually wants their clones to be metered by "the same" total budget
+    // FIXME: deep_clone is gone, maybe Budget should not be separately refcounted?
     pub(crate) budget: Budget,
     pub(crate) events: RefCell<InternalEventsBuffer>,
     authorization_manager: RefCell<AuthorizationManager>,
@@ -944,6 +945,10 @@ impl Host {
 impl EnvBase for Host {
     type Error = HostError;
 
+    fn error_from_error_val(&self, e: soroban_env_common::Error) -> Self::Error {
+        self.error(e, "promoting Error to HostError", &[])
+    }
+
     // This function is somewhat subtle.
     //
     // It exists to allow the client of the (VmCaller)Env interface(s) to
@@ -979,7 +984,7 @@ impl EnvBase for Host {
     // it constructs, so when/if the panic makes it to a top-level printout it
     // will display a relatively ugly message like "thread panicked at Box<dyn
     // Any>" to stderr, when it is much more useful to the user if we have it
-    // print the result of HostError::Debug, with its glorious status code,
+    // print the result of HostError::Debug, with its glorious Error,
     // site-of-origin backtrace and debug log.
     //
     // To get it to do that, we have to call `panic!()`, not `panic_any`.
@@ -1008,18 +1013,17 @@ impl EnvBase for Host {
         x
     }
 
-    fn as_mut_any(&mut self) -> &mut dyn std::any::Any {
-        todo!()
-    }
-
-    fn check_same_env(&self, other: &Self) {
-        assert!(Rc::ptr_eq(&self.0, &other.0));
-    }
-
-    // This function is not being metered, it's not used anywhere so it's okay
-    // for now
-    fn deep_clone(&self) -> Self {
-        Host(Rc::new((*self.0).clone()))
+    fn check_same_env(&self, other: &Self) -> Result<(), Self::Error> {
+        if Rc::ptr_eq(&self.0, &other.0) {
+            Ok(())
+        } else {
+            Err(self.err(
+                ScErrorType::Context,
+                ScErrorCode::InternalError,
+                "check_same_env on different Hosts",
+                &[],
+            ))
+        }
     }
 
     fn bytes_copy_from_slice(
@@ -1365,7 +1369,7 @@ impl VmCallerEnv for Host {
             Err(self.err(
                 ScErrorType::Context,
                 ScErrorCode::UnexpectedType,
-                "contract attempted to fail with non-ContractError status code",
+                "contract attempted to fail with non-ContractError error code",
                 &[error.to_val()],
             ))
         }
