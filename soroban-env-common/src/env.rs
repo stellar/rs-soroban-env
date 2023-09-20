@@ -34,17 +34,18 @@ pub trait EnvBase: Sized + Clone {
     /// some other type, depending on the API.
     type Error: core::fmt::Debug + Into<crate::Error>;
 
-    /// Convert a crate::Error into `EnvBase::Error`. This is similar to adding
+    /// Convert a [`crate::Error`] into [`EnvBase::Error`]. This is similar to adding
     /// `+ From<crate::Error>` to the associated type bound for `EnvBase::Error`
     /// but it allows us to restrict that conversion in downstream crates, which
     /// is desirable to keep "conversions that panic" (as the guest definition
-    /// of EnvBase::Error does) out of the common crate and avoid accidentally
-    /// triggering them in the host.
+    /// of `EnvBase::Error` does) out of the common crate and avoid accidentally
+    /// triggering them in the host. It also gives the `Env` an opportunity to
+    /// log or enrich the error with context (both of which happen in `Host`).
     fn error_from_error_val(&self, e: crate::Error) -> Self::Error;
 
     /// Reject an error from the environment, turning it into a panic but on
-    /// terms that the environment controls (eg. transforming or logging it).
-    /// This should only ever be called by client-side / SDK local-testing code,
+    /// terms that the environment controls (eg. enriching or logging it). This
+    /// should only ever be called by client-side / SDK local-testing code,
     /// never in the `Host`.
     #[cfg(feature = "testutils")]
     fn escalate_error_to_panic(&self, e: Self::Error) -> !;
