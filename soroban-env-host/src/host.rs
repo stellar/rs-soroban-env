@@ -984,7 +984,7 @@ impl EnvBase for Host {
     // it constructs, so when/if the panic makes it to a top-level printout it
     // will display a relatively ugly message like "thread panicked at Box<dyn
     // Any>" to stderr, when it is much more useful to the user if we have it
-    // print the result of HostError::Debug, with its glorious status code,
+    // print the result of HostError::Debug, with its glorious Error,
     // site-of-origin backtrace and debug log.
     //
     // To get it to do that, we have to call `panic!()`, not `panic_any`.
@@ -1360,7 +1360,7 @@ impl VmCallerEnv for Host {
             Err(self.err(
                 ScErrorType::Context,
                 ScErrorCode::UnexpectedType,
-                "contract attempted to fail with non-ContractError status code",
+                "contract attempted to fail with non-ContractError error code",
                 &[error.to_val()],
             ))
         }
