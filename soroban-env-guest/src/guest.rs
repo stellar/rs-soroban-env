@@ -34,7 +34,7 @@ impl EnvBase for Guest {
     }
 
     #[cfg(feature = "testutils")]
-    fn escalate_error_to_panic(&self, e: Self::Error) -> ! {
+    fn escalate_error_to_panic(&self, _e: Self::Error) -> ! {
         core::arch::wasm32::unreachable()
     }
 
