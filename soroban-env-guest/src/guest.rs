@@ -1,6 +1,3 @@
-#![allow(dead_code)]
-#![allow(unused_variables)]
-
 use core::convert::Infallible;
 
 use soroban_env_common::call_macro_with_all_host_functions;
@@ -11,20 +8,10 @@ use super::{
     U256Object, U256Val, U32Val, U64Object, U64Val, Val, VecObject, Void,
 };
 use super::{Env, EnvBase, Symbol};
-#[cfg(target_family = "wasm")]
 use static_assertions as sa;
 
 // Just the smallest possible version of a runtime assertion-or-panic.
 #[inline(always)]
-#[cfg(not(target_family = "wasm"))]
-pub(crate) fn require(b: bool) {
-    if !b {
-        panic!()
-    }
-}
-
-#[inline(always)]
-#[cfg(target_family = "wasm")]
 pub(crate) fn require(b: bool) {
     if !b {
         core::arch::wasm32::unreachable()
@@ -39,111 +26,6 @@ pub(crate) fn require(b: bool) {
 #[derive(Copy, Clone, Default)]
 pub struct Guest;
 
-// The Guest struct is only meaningful when compiling for the WASM target. All
-// these fns should not be called at all because the SDK's choice of Env should be
-// Host for a non-WASM build.
-#[cfg(not(target_family = "wasm"))]
-impl EnvBase for Guest {
-    type Error = Infallible;
-
-    fn error_from_error_val(&self, e: soroban_env_common::Error) -> Self::Error {
-        unimplemented!()
-    }
-
-    #[cfg(feature = "testutils")]
-    fn escalate_error_to_panic(&self, e: Self::Error) -> ! {
-        unimplemented!()
-    }
-
-    fn check_same_env(&self, other: &Self) {
-        unimplemented!()
-    }
-
-    fn bytes_copy_from_slice(
-        &self,
-        b: BytesObject,
-        b_pos: U32Val,
-        slice: &[u8],
-    ) -> Result<BytesObject, Self::Error> {
-        unimplemented!()
-    }
-
-    fn bytes_copy_to_slice(
-        &self,
-        b: BytesObject,
-        b_pos: U32Val,
-        slice: &mut [u8],
-    ) -> Result<(), Self::Error> {
-        unimplemented!()
-    }
-
-    fn string_copy_to_slice(
-        &self,
-        b: soroban_env_common::StringObject,
-        b_pos: U32Val,
-        slice: &mut [u8],
-    ) -> Result<(), Self::Error> {
-        unimplemented!()
-    }
-
-    fn symbol_copy_to_slice(
-        &self,
-        b: soroban_env_common::SymbolObject,
-        b_pos: U32Val,
-        slice: &mut [u8],
-    ) -> Result<(), Self::Error> {
-        unimplemented!()
-    }
-
-    fn bytes_new_from_slice(&self, slice: &[u8]) -> Result<BytesObject, Self::Error> {
-        unimplemented!()
-    }
-
-    fn string_new_from_slice(
-        &self,
-        s: &str,
-    ) -> Result<soroban_env_common::StringObject, Self::Error> {
-        unimplemented!()
-    }
-
-    fn symbol_new_from_slice(
-        &self,
-        s: &str,
-    ) -> Result<soroban_env_common::SymbolObject, Self::Error> {
-        unimplemented!()
-    }
-
-    fn map_new_from_slices(&self, _keys: &[&str], _vals: &[Val]) -> Result<MapObject, Self::Error> {
-        unimplemented!()
-    }
-
-    fn map_unpack_to_slice(
-        &self,
-        _map: MapObject,
-        _keys: &[&str],
-        _vals: &mut [Val],
-    ) -> Result<Void, Self::Error> {
-        unimplemented!()
-    }
-
-    fn vec_new_from_slice(&self, _vals: &[Val]) -> Result<VecObject, Self::Error> {
-        unimplemented!()
-    }
-
-    fn vec_unpack_to_slice(&self, _vec: VecObject, _vals: &mut [Val]) -> Result<Void, Self::Error> {
-        unimplemented!()
-    }
-
-    fn symbol_index_in_strs(&self, _key: Symbol, _strs: &[&str]) -> Result<U32Val, Self::Error> {
-        unimplemented!()
-    }
-
-    fn log_from_slice(&self, msg: &str, vals: &[Val]) -> Result<Void, Self::Error> {
-        unimplemented!()
-    }
-}
-
-#[cfg(target_family = "wasm")]
 impl EnvBase for Guest {
     type Error = Infallible;
 
