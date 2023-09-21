@@ -1,8 +1,8 @@
 use crate::xdr::{ScError, ScErrorCode, ScErrorType, ScVal};
 use crate::{
     impl_wrapper_as_and_to_rawval, impl_wrapper_tag_based_constructors,
-    impl_wrapper_tag_based_rawvalconvertible, impl_wrapper_wasmi_conversions, Compare,
-    ConversionError, Env, SymbolError, Val,
+    impl_wrapper_tag_based_valconvert, impl_wrapper_wasmi_conversions, Compare, ConversionError,
+    Env, SymbolError, Val,
 };
 use core::{
     cmp::Ordering,
@@ -20,7 +20,7 @@ use core::{
 #[derive(Copy, Clone)]
 pub struct Error(Val);
 
-impl_wrapper_tag_based_rawvalconvertible!(Error);
+impl_wrapper_tag_based_valconvert!(Error);
 impl_wrapper_tag_based_constructors!(Error);
 impl_wrapper_as_and_to_rawval!(Error);
 impl_wrapper_wasmi_conversions!(Error);

@@ -81,10 +81,10 @@ impl_for_tuple! { 12_u32 12_usize T0 0 T1 1 T2 2 T3 3 T4 4 T5 5 T6 6 T7 7 T8 8 T
 impl_for_tuple! { 13_u32 13_usize T0 0 T1 1 T2 2 T3 3 T4 4 T5 5 T6 6 T7 7 T8 8 T9 9 T10 10 T11 11 T12 12 }
 
 // Unit types are not tuples, but when people write out what they think is an
-// empty tuple, it is a unit type. The following conversions have unit types
+// empty tuple, it is a unit type. The following conversions on unit types
 // behave like tuples in some conversions that are safe to do so, like
-// conversions to and from arrays. Note that unit typles convert to
-// Val::VOID, see raw_val.rs for those conversions.
+// conversions to and from arrays. Note that unit types directly convert to
+// Val::VOID, see val.rs for those conversions.
 
 impl<E: Env> TryFromVal<E, [Val; 0]> for () {
     type Error = crate::Error;

@@ -434,8 +434,6 @@ where
                 )))
             }
 
-            Tag::LedgerKeyContractInstance => Ok(ScVal::LedgerKeyContractInstance),
-
             // The object types should all be handled above, and the other tag
             // cases should never occur.
             Tag::U64Object
@@ -529,17 +527,16 @@ where
                 };
                 SymbolSmall::try_from_str(ss)?.into()
             }
-            ScVal::LedgerKeyContractInstance => unsafe {
-                Val::from_body_and_tag(0, Tag::LedgerKeyContractInstance)
-            },
 
-            // These should all have been classified as ScValObjRef above.
+            // These should all have been classified as ScValObjRef above, or are
+            // reserved ScVal types that are never passed as vals at all.
             ScVal::Bytes(_)
             | ScVal::String(_)
             | ScVal::Vec(_)
             | ScVal::Map(_)
             | ScVal::Address(_)
             | ScVal::LedgerKeyNonce(_)
+            | ScVal::LedgerKeyContractInstance
             | ScVal::ContractInstance(_) => return Err(ConversionError),
         })
     }

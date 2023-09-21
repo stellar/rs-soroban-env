@@ -22,16 +22,6 @@ impl Val {
     pub const fn from_i32(i: i32) -> I32Val {
         unsafe { I32Val(Val::from_major_minor_and_tag(i as u32, 0, Tag::I32Val)) }
     }
-
-    #[inline(always)]
-    pub const fn is_i32_zero(self) -> bool {
-        self.shallow_eq(&Self::I32_ZERO.0)
-    }
-
-    #[inline(always)]
-    pub const fn is_u32_zero(self) -> bool {
-        self.shallow_eq(&Self::U32_ZERO.0)
-    }
 }
 
 impl<E: Env> Compare<U32Val> for E {

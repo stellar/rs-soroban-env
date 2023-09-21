@@ -6,8 +6,8 @@ use crate::{
 use core::{cmp::Ordering, fmt::Debug};
 
 /// Wrapper for a [Val] that is tagged with one of the object types,
-/// interpreting the [Val]'s body as containing a 32-bit object-code handle
-/// to a host object of the object-type.
+/// interpreting the [Val]'s body as containing a 32-bit handle to a host
+/// object.
 #[repr(transparent)]
 #[derive(Copy, Clone)]
 pub struct Object(pub(crate) Val);
@@ -127,22 +127,23 @@ impl<'a> ScValObjRef<'a> {
     /// that needs to be stored as a host-side object, or else `None`.
     pub fn classify(value: &'a ScVal) -> Option<Self> {
         match value {
-            // Always-small values are never ScValObject
+            // Always-small values are never ScValObject, nor are
+            // ScVals that don't actually project into Vals at all.
             ScVal::Bool(_)
             | ScVal::Void
             | ScVal::Error(_)
             | ScVal::U32(_)
             | ScVal::I32(_)
-            | ScVal::LedgerKeyContractInstance => None,
+            | ScVal::LedgerKeyContractInstance
+            | ScVal::LedgerKeyNonce(_)
+            | ScVal::ContractInstance(_) => None,
 
             // Always-large values are always ScValObject
             ScVal::Bytes(_)
             | ScVal::String(_)
             | ScVal::Vec(_)
             | ScVal::Map(_)
-            | ScVal::Address(_)
-            | ScVal::LedgerKeyNonce(_)
-            | ScVal::ContractInstance(_) => Some(ScValObjRef(value)),
+            | ScVal::Address(_) => Some(ScValObjRef(value)),
 
             // Other values are small or large depending on
             // their actual scalar value.

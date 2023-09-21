@@ -1,6 +1,6 @@
 #[doc(hidden)]
 #[macro_export]
-macro_rules! impl_wrapper_tag_based_rawvalconvertible {
+macro_rules! impl_wrapper_tag_based_valconvert {
     ($tagname:ident) => {
         // A ValConvert impl for types where the wrapper _has the same
         // name_ as a Tag::case and being-that-wrapper is identical to
@@ -41,7 +41,7 @@ macro_rules! impl_wrapper_tag_based_constructors {
 
 #[doc(hidden)]
 #[macro_export]
-macro_rules! impl_tryfroms_and_tryfromvals_delegating_to_rawvalconvertible {
+macro_rules! impl_tryfroms_and_tryfromvals_delegating_to_valconvert {
     ($T:ty) => {
         impl TryFrom<$crate::Val> for $T {
             type Error = $crate::ConversionError;
@@ -177,7 +177,7 @@ macro_rules! impl_rawval_wrapper_base {
         }
         $crate::impl_wrapper_as_and_to_rawval!($T);
         $crate::impl_wrapper_wasmi_conversions!($T);
-        $crate::impl_tryfroms_and_tryfromvals_delegating_to_rawvalconvertible!($T);
+        $crate::impl_tryfroms_and_tryfromvals_delegating_to_valconvert!($T);
     };
 }
 
@@ -216,7 +216,7 @@ macro_rules! declare_tag_based_wrapper {
         pub struct $T($crate::Val);
 
         $crate::impl_rawval_wrapper_base!($T);
-        $crate::impl_wrapper_tag_based_rawvalconvertible!($T);
+        $crate::impl_wrapper_tag_based_valconvert!($T);
         $crate::impl_wrapper_tag_based_constructors!($T);
     };
 }
