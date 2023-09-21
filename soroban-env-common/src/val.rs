@@ -96,12 +96,8 @@ pub enum Tag {
     /// Tag for a [Val] that contains up to 9 character symbols.
     SymbolSmall = 14,
 
-    /// Tag for a [Val] that corresponds to
-    /// [crate::xdr::ScVal::LedgerKeyContractInstance]
-    LedgerKeyContractInstance = 15,
-
     /// Code delimiting the upper boundary of "small" types.
-    SmallCodeUpperBound = 16,
+    SmallCodeUpperBound = 15,
 
     /// Tag reserved to indicate boundary between tags for "small" types with
     /// their payload packed into the remaining 56 bits of the [Val] and
@@ -215,7 +211,6 @@ impl Tag {
             Tag::U256Small => Some(ScValType::U256),
             Tag::I256Small => Some(ScValType::I256),
             Tag::SymbolSmall => Some(ScValType::Symbol),
-            Tag::LedgerKeyContractInstance => Some(ScValType::LedgerKeyContractInstance),
             Tag::SmallCodeUpperBound => None,
             Tag::ObjectCodeLowerBound => None,
             Tag::U64Object => Some(ScValType::U64),
@@ -722,7 +717,6 @@ impl Debug for Val {
                 let s: &str = ss.as_ref();
                 write!(f, "Symbol({s})")
             }
-            Tag::LedgerKeyContractInstance => write!(f, "LedgerKeyContractCode"),
 
             Tag::U64Object => fmt_obj("U64", self, f),
             Tag::I64Object => fmt_obj("I64", self, f),

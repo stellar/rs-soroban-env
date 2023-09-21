@@ -689,9 +689,6 @@ mod tests {
                 Val::try_from_val(host, &ScVal::Symbol(xdr::ScSymbol::try_from("").unwrap()))
                     .unwrap()
             }
-            Tag::LedgerKeyContractInstance => {
-                Val::try_from_val(host, &ScVal::LedgerKeyContractInstance).unwrap()
-            }
             Tag::SmallCodeUpperBound => panic!(),
             Tag::ObjectCodeLowerBound => panic!(),
             Tag::U64Object => Val::try_from_val(host, &u64::MAX).unwrap(),

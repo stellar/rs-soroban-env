@@ -127,22 +127,23 @@ impl<'a> ScValObjRef<'a> {
     /// that needs to be stored as a host-side object, or else `None`.
     pub fn classify(value: &'a ScVal) -> Option<Self> {
         match value {
-            // Always-small values are never ScValObject
+            // Always-small values are never ScValObject, nor are
+            // ScVals that don't actually project into Vals at all.
             ScVal::Bool(_)
             | ScVal::Void
             | ScVal::Error(_)
             | ScVal::U32(_)
             | ScVal::I32(_)
-            | ScVal::LedgerKeyContractInstance => None,
+            | ScVal::LedgerKeyContractInstance
+            | ScVal::LedgerKeyNonce(_)
+            | ScVal::ContractInstance(_) => None,
 
             // Always-large values are always ScValObject
             ScVal::Bytes(_)
             | ScVal::String(_)
             | ScVal::Vec(_)
             | ScVal::Map(_)
-            | ScVal::Address(_)
-            | ScVal::LedgerKeyNonce(_)
-            | ScVal::ContractInstance(_) => Some(ScValObjRef(value)),
+            | ScVal::Address(_) => Some(ScValObjRef(value)),
 
             // Other values are small or large depending on
             // their actual scalar value.
