@@ -386,11 +386,11 @@ pub(crate) trait ValConvert: Into<Val> + TryFrom<Val> {
     }
 }
 
-impl_tryfroms_and_tryfromvals_delegating_to_rawvalconvertible!(());
-impl_tryfroms_and_tryfromvals_delegating_to_rawvalconvertible!(bool);
-impl_tryfroms_and_tryfromvals_delegating_to_rawvalconvertible!(u32);
-impl_tryfroms_and_tryfromvals_delegating_to_rawvalconvertible!(i32);
-impl_tryfroms_and_tryfromvals_delegating_to_rawvalconvertible!(Error);
+impl_tryfroms_and_tryfromvals_delegating_to_valconvert!(());
+impl_tryfroms_and_tryfromvals_delegating_to_valconvert!(bool);
+impl_tryfroms_and_tryfromvals_delegating_to_valconvert!(u32);
+impl_tryfroms_and_tryfromvals_delegating_to_valconvert!(i32);
+impl_tryfroms_and_tryfromvals_delegating_to_valconvert!(Error);
 
 #[cfg(feature = "wasmi")]
 pub trait WasmiMarshal: Sized {
