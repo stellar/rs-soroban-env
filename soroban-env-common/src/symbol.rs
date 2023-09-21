@@ -262,9 +262,10 @@ impl SymbolSmall {
     }
 
     pub fn to_str(&self) -> SymbolStr {
+        sa::const_assert!(SCSYMBOL_LIMIT as usize >= MAX_SMALL_CHARS);
         let mut chars = [b'\x00'; SCSYMBOL_LIMIT as usize];
-        for (i, ch) in self.into_iter().enumerate() {
-            chars[i] = ch as u8;
+        for (src, dst) in self.into_iter().zip(chars.iter_mut()) {
+            *dst = src as u8
         }
         SymbolStr(chars)
     }
