@@ -1,9 +1,11 @@
 use crate::{
-    budget::Budget,
+    budget::{AsBudget, Budget},
     err,
     xdr::{ContractCostType, Hash, ScBytes, ScErrorCode, ScErrorType},
     BytesObject, Host, HostError, U32Val, Val,
 };
+use rand::RngCore;
+use rand_chacha::ChaCha20Rng;
 use sha2::Sha256;
 use sha3::Keccak256;
 
@@ -251,4 +253,16 @@ pub(crate) fn sha256_hash_from_bytes(bytes: &[u8], budget: &Budget) -> Result<Ve
         Some(bytes.len() as u64),
     )?;
     Ok(<Sha256 as sha2::Digest>::digest(bytes).as_slice().to_vec())
+}
+
+pub(crate) fn chacha20_fill_bytes(
+    rng: &mut ChaCha20Rng,
+    dest: &mut [u8],
+    budget: impl AsBudget,
+) -> Result<(), HostError> {
+    budget
+        .as_budget()
+        .charge(ContractCostType::ChaCha20DrawBytes, Some(dest.len() as u64))?;
+    rng.fill_bytes(dest);
+    Ok(())
 }

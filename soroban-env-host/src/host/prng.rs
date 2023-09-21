@@ -1,4 +1,7 @@
-use super::declared_size::DeclaredSizeForMetering;
+use super::{
+    crypto::chacha20_fill_bytes, declared_size::DeclaredSizeForMetering,
+    metered_clone::MeteredContainer,
+};
 use crate::{
     budget::Budget,
     host::metered_clone::MeteredClone,
@@ -7,10 +10,7 @@ use crate::{
     HostError,
 };
 use rand::{distributions::Uniform, prelude::Distribution, seq::SliceRandom};
-use rand_chacha::{
-    rand_core::{RngCore, SeedableRng},
-    ChaCha20Rng,
-};
+use rand_chacha::{rand_core::SeedableRng, ChaCha20Rng};
 use std::ops::RangeInclusive;
 
 /// PRNG subsystem in the host, which provides best-effort pseudo-randomness to
@@ -86,8 +86,7 @@ static_assertions::const_assert_eq!(SEED_BYTES, 32);
 
 impl Prng {
     fn charge_prng_bytes(&self, budget: &Budget, count: u64) -> Result<(), HostError> {
-        // TODO: add a ContractCostType for drawing PRNG bytes
-        Ok(())
+        budget.charge(ContractCostType::ChaCha20DrawBytes, Some(count))
     }
 
     pub fn new_from_seed(seed: Seed) -> Self {
@@ -129,17 +128,15 @@ impl Prng {
     }
 
     pub(crate) fn bytes_new(&mut self, size: u32, budget: &Budget) -> Result<ScBytes, HostError> {
-        budget.charge(ContractCostType::HostMemAlloc, Some(size as u64))?;
-        self.charge_prng_bytes(budget, size as u64)?;
+        Vec::<u8>::charge_bulk_init_cpy(size as u64, budget)?;
         let mut vec = vec![0u8; size as usize];
-        self.0.fill_bytes(&mut vec);
+        chacha20_fill_bytes(&mut self.0, vec.as_mut_slice(), budget)?;
         Ok(ScBytes::try_from(vec)?)
     }
 
     pub(crate) fn sub_prng(&mut self, budget: &Budget) -> Result<Prng, HostError> {
         let mut new_seed: Seed = [0; SEED_BYTES as usize];
-        self.charge_prng_bytes(budget, SEED_BYTES)?;
-        self.0.fill_bytes(&mut new_seed);
+        chacha20_fill_bytes(&mut self.0, &mut new_seed, budget)?;
         budget.charge(ContractCostType::HostMemCpy, Some(SEED_BYTES))?;
         Ok(Self(ChaCha20Rng::from_seed(new_seed)))
     }

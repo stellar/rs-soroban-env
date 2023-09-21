@@ -87,6 +87,7 @@ pub(crate) fn for_each_host_cost_measurement<B: Benchmark>(
     call_bench::<B, Int256DivMeasure>(&mut params)?;
     call_bench::<B, Int256PowMeasure>(&mut params)?;
     call_bench::<B, Int256ShiftMeasure>(&mut params)?;
+    call_bench::<B, ChaCha20DrawBytesMeasure>(&mut params)?;
 
     if get_explicit_bench_names().is_none() {
         for cost in ContractCostType::variants() {

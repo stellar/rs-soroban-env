@@ -429,6 +429,7 @@ impl BudgetImpl {
                 ContractCostType::Int256Div => (),
                 ContractCostType::Int256Pow => (),
                 ContractCostType::Int256Shift => (),
+                ContractCostType::ChaCha20DrawBytes => init_input(i), // number of random bytes to draw
             }
         }
     }
@@ -618,6 +619,10 @@ impl Default for BudgetImpl {
                     cpu.const_term = 412;
                     cpu.lin_term = ScaledU64(0);
                 }
+                ContractCostType::ChaCha20DrawBytes => {
+                    cpu.const_term = 4907;
+                    cpu.lin_term = ScaledU64(2461);
+                }
             }
 
             // define the memory cost model parameters
@@ -737,6 +742,10 @@ impl Default for BudgetImpl {
                 }
                 ContractCostType::Int256Shift => {
                     mem.const_term = 119;
+                    mem.lin_term = ScaledU64(0);
+                }
+                ContractCostType::ChaCha20DrawBytes => {
+                    mem.const_term = 0;
                     mem.lin_term = ScaledU64(0);
                 }
             }

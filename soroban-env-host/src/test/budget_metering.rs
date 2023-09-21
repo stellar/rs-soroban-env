@@ -349,6 +349,7 @@ fn total_amount_charged_from_random_inputs() -> Result<(), HostError> {
         (1, None),
         (1, None),
         (1, None),
+        (1, Some(1)),
     ];
 
     for ty in ContractCostType::variants() {
@@ -357,7 +358,7 @@ fn total_amount_charged_from_random_inputs() -> Result<(), HostError> {
     let actual = format!("{:?}", host.as_budget());
     expect![[r#"
         =====================================================================================================================================================================
-        Cpu limit: 100000000; used: 10115314
+        Cpu limit: 100000000; used: 10120240
         Mem limit: 104857600; used: 276044
         =====================================================================================================================================================================
         CostType                 iterations     input          cpu_insns      mem_bytes      const_term_cpu      lin_term_cpu        const_term_mem      lin_term_mem        
@@ -389,8 +390,9 @@ fn total_amount_charged_from_random_inputs() -> Result<(), HostError> {
         Int256Div                1              None           2333           119            2333                0                   119                 0                   
         Int256Pow                1              None           5212           119            5212                0                   119                 0                   
         Int256Shift              1              None           412            119            412                 0                   119                 0                   
+        ChaCha20DrawBytes        1              Some(1)        4926           0              4907                2461                0                   0                   
         =====================================================================================================================================================================
-        Total # times meter was called: 28
+        Total # times meter was called: 29
 
     "#]]
     .assert_eq(&actual);
