@@ -4,7 +4,7 @@
 use crate::xdr::{ScError, ScValType};
 use crate::{
     declare_tag_based_object_wrapper, declare_tag_based_wrapper, impl_rawval_wrapper_base,
-    impl_tryfroms_and_tryfromvals_delegating_to_rawvalconvertible, Compare, I32Val, SymbolSmall,
+    impl_tryfroms_and_tryfromvals_delegating_to_valconvert, Compare, I32Val, SymbolSmall,
     SymbolStr, U32Val,
 };
 
@@ -48,7 +48,7 @@ sa::const_assert!(MAJOR_BITS + MINOR_BITS == BODY_BITS);
 #[cfg_attr(test, derive(num_enum::TryFromPrimitive))]
 pub enum Tag {
     /// Tag for a [Val] that encodes [bool] `false`. The bool type is refined to
-    /// two single-value subtypes in order for each tag number to coincides with
+    /// two single-value subtypes in order for each tag number to coincide with
     /// the WASM encoding of a boolean.
     False = 0,
 
@@ -84,13 +84,13 @@ pub enum Tag {
     /// Tag for a [Val] that contains a [u128] small enough to fit in 56 bits.
     U128Small = 10,
 
-    /// Tag for a [Val] that contains a [i128] small enough to fit in 56 bits.
+    /// Tag for a [Val] that contains an [i128] small enough to fit in 56 bits.
     I128Small = 11,
 
-    /// Tag for a [Val] that contains a [u256] small enough to fit in 56 bits.
+    /// Tag for a [Val] that contains a [u256](ethnum::u256) small enough to fit in 56 bits.
     U256Small = 12,
 
-    /// Tag for a [Val] that contains a [i256] small enough to fit in 56 bits.
+    /// Tag for a [Val] that contains an [i256](ethnum::i256) small enough to fit in 56 bits.
     I256Small = 13,
 
     /// Tag for a [Val] that contains up to 9 character symbols.
@@ -102,7 +102,7 @@ pub enum Tag {
     /// Tag reserved to indicate boundary between tags for "small" types with
     /// their payload packed into the remaining 56 bits of the [Val] and
     /// "object" types that are stored as host objects and referenced by
-    /// [Object] handle.
+    /// [Object](crate::Object) handle.
     ObjectCodeLowerBound = 63,
 
     /// Tag for a [Val] that refers to a host-side [u64] number.
@@ -125,23 +125,34 @@ pub enum Tag {
     /// Tag for a [Val] that refers to a host-side [i128] number.
     I128Object = 69,
 
-    /// Tag for a [Val] that refers to a host-side [u256] number.
+    /// Tag for a [Val] that refers to a host-side [u256](ethnum::u256) number.
     U256Object = 70,
 
-    /// Tag for a [Val] that refers to a host-side [i256] number.
+    /// Tag for a [Val] that refers to a host-side [i256](ethnum::i256) number.
     I256Object = 71,
 
+    /// Tag for a [Val] that refers to a host-side byte array.
     BytesObject = 72,
+
+    /// Tag for a [Val] that refers to a host-side string.
     StringObject = 73,
+
+    /// Tag for a [Val] that refers to a host-side symbol (see [`Symbol`](crate::Symbol)).
     SymbolObject = 74,
 
+    /// Tag for a [Val] that refers to a host-side vector of [Val]s.
     VecObject = 75,
+
+    /// Tag for a [Val] that refers to a host-side map from [Val]s to [Val]s.
     MapObject = 76,
 
+    /// Tag for a [Val] that refers to a host-side contract address.
     AddressObject = 77,
 
+    /// Code delimiting the upper boundary of "object" types.
     ObjectCodeUpperBound = 78,
 
+    /// Code reserved to indicate mis-tagged [`Val`]s.
     Bad = 0x7f,
 }
 
@@ -325,7 +336,7 @@ declare_tag_based_object_wrapper!(AddressObject);
 // conversion to a more-structured error code at a higher level.
 
 /// Error type indicating a failure to convert some type to another; details of
-/// the failed conversion will typically be written to the debug log.
+/// the failed conversion may be written to the debug log, when possible.
 ///
 /// This is intentionally minimal and uninformative to minimize impact of its
 /// use on wasm codesize. It converts to `Error(ScErrorType::Value,
@@ -356,8 +367,7 @@ impl From<crate::Error> for ConversionError {
 
 /// Trait abstracting over types that can be converted into [Val], similar to
 /// [TryFrom] but with a different signature that enables generating slightly
-/// more efficient conversion code. An implementation of `TryFrom<Val>` is also
-/// provided for any type that implements `ValConvert`.
+/// more efficient conversion code.
 pub(crate) trait ValConvert: Into<Val> + TryFrom<Val> {
     /// Returns `true` if `v` is in a union state compatible with `Self`.
     fn is_val_type(v: Val) -> bool;

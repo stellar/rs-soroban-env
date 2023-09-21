@@ -1,30 +1,45 @@
-//! Ths `Symbol` type is designed for encoding short, unambiguous, single-word
+//! The [`Symbol`] type is designed for encoding short, unambiguous, single-word
 //! identifiers such as the names of contract functions or assets in the
 //! network. `Symbol`s only admit characters from the 63-character repertoire
 //! `[a-zA-Z0-9_]` -- latin-script alphabetic letters, digits, and underscores.
 //!
-//! There are two reasons for this type to be different from the general
+//! There are three reasons for this type to be different from the general
 //! `String` type:
 //!
-//!   1. We provide a space-optimized "small" form (`SymbolSmall`) that uses
+//!   1. We provide a space-optimized "small" form ([`SymbolSmall`]) that uses
 //!      small 6-bit codes (since the character repertoire is only 63 characters
-//!      plus null) and bit-packs them into the body of a `Val` such that they
+//!      plus null) and bit-packs them into the body of a [`Val`] such that they
 //!      can be used to represent short identifiers (up to 9 characters long)
 //!      without allocating a host object at all, essentially as "machine
 //!      integers with a textual interpretation". This is an optimization, since
-//!      we expect contracts to use `Symbol`s heavily.
+//!      we expect contracts to use `Symbol`s heavily. When a `Symbol` is larger
+//!      than this, it overflows to a [`SymbolObject`] transparently, as with
+//!      the size-optiized small number types.
 //!
-//!   2. We expect (though do not require) `String` to usually be interpreted as
-//!      Unicode codepoints encoded in UTF-8. Unicode characters unfortunately
-//!      admit a wide variety of "confusables" or "homoglyphs": characters that
-//!      have different codes, but look the same when rendered in many common
-//!      fonts. In many contexts these represent a significant security risk to
-//!      end users -- for example by confusing an asset named `USD` (encoded as
-//!      the UTF-8 hex byte sequence `[55 53 44]`) with a similar-looking but
-//!      different asset named `ՍЅᎠ` (encoded as `[d5 8d d0 85 e1 8e a0]`) --
-//!      and so we provide `Symbol` as an alternative to `String` for use in
-//!      contexts where users wish to minimize such risks, by restricting the
-//!      possible characters that can occur.
+//!   2. Unlike [`StringObject`](crate::StringObject)s, there is a reasonably
+//!      small maximum size for [`SymbolObject`]s, given by
+//!      [`SCSYMBOL_LIMIT`](crate::xdr::SCSYMBOL_LIMIT) (currently 32 bytes).
+//!      Having such a modest maximum size allows working with `Symbol`s
+//!      entirely in guest WASM code without a heap allocator, using only
+//!      fixed-size buffers on the WASM shadow stack. The [`SymbolStr`] type is
+//!      a convenience wrapper around such a buffer, that can be directly
+//!      created from a [`Symbol`], copying its bytes from the host if the
+//!      `Symbol` is a `SymbolObject` or unpacking its 6-bit codes if the
+//!      `Symbol` is a `SymbolSmall`. [`SymbolStr`] can also yield a standard
+//!      Rust `&str` allowing its use with many Rust core library functions.
+//!
+//!   3. We expect (though do not require) [`StringObject`](crate::StringObject)
+//!      to usually be interpreted as Unicode codepoints encoded in UTF-8.
+//!      Unicode characters unfortunately admit a wide variety of "confusables"
+//!      or "homoglyphs": characters that have different codes, but look the
+//!      same when rendered in many common fonts. In many contexts these
+//!      represent a significant security risk to end users -- for example by
+//!      confusing an asset named `USD` (encoded as the UTF-8 hex byte sequence
+//!      `[55 53 44]`) with a similar-looking but different asset named `ՍЅᎠ`
+//!      (encoded as `[d5 8d d0 85 e1 8e a0]`) -- and so we provide `Symbol` as
+//!      an alternative to `String` for use in contexts where users wish to
+//!      minimize such risks, by restricting the possible characters that can
+//!      occur.
 //!
 //! `SymbolSmall` values are packed into a 56 bits (the "body" part of a 64-bit
 //! `Val` word) with zero padding in the high-order bits rather than low-order

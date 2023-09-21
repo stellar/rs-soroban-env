@@ -6,8 +6,8 @@ use crate::{
 use core::{cmp::Ordering, fmt::Debug};
 
 /// Wrapper for a [Val] that is tagged with one of the object types,
-/// interpreting the [Val]'s body as containing a 32-bit object-code handle
-/// to a host object of the object-type.
+/// interpreting the [Val]'s body as containing a 32-bit handle to a host
+/// object.
 #[repr(transparent)]
 #[derive(Copy, Clone)]
 pub struct Object(pub(crate) Val);
