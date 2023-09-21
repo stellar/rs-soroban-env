@@ -238,7 +238,7 @@ impl From<wasmi::Error> for Error {
             _ => (),
         }
 
-        Error::from_type_and_code(ScErrorType::WasmVm, ScErrorCode::InternalError)
+        Error::from_type_and_code(ScErrorType::WasmVm, ScErrorCode::InvalidAction)
     }
 }
 
