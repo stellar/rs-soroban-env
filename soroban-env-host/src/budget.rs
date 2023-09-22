@@ -1110,6 +1110,13 @@ impl Budget {
         )
     }
 
+    /// Resets the `FuelConfig` we pass into Wasmi before running calibration.
+    /// Wasmi instruction calibration requires running the same Wasmi insn
+    /// a fixed number of times, record their actual cpu and mem consumption, then
+    /// divide those numbers by the number of iterations, which is the fuel count.
+    /// Fuel count is kept tracked on the Wasmi side, based on the `FuelConfig`
+    /// of a specific fuel category. In order to get the correct, unscaled fuel
+    /// count, we have to preset all the `FuelConfig` entries to 1.
     #[cfg(any(test, feature = "testutils"))]
     pub fn reset_fuel_config(&self) -> Result<(), HostError> {
         self.0.try_borrow_mut_or_err()?.fuel_config.reset();
@@ -1121,7 +1128,7 @@ impl Budget {
     }
 
     // generate a wasmi fuel cost schedule based on our calibration
-    pub fn wasmi_fuel_costs(&self) -> Result<FuelCosts, HostError> {
+    pub(crate) fn wasmi_fuel_costs(&self) -> Result<FuelCosts, HostError> {
         let config = &self.0.try_borrow_or_err()?.fuel_config;
         let mut costs = FuelCosts::default();
         costs.base = config.base;
