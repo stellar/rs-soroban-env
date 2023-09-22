@@ -749,8 +749,7 @@ impl Host {
     }
 
     fn upload_contract_wasm(&self, wasm: Vec<u8>) -> Result<BytesObject, HostError> {
-        let hash_bytes: [u8; 32] = self
-            .sha256_hash_from_bytes(wasm.as_slice())?
+        let hash_bytes: [u8; 32] = crypto::sha256_hash_from_bytes(wasm.as_slice(), self)?
             .try_into()
             .map_err(|_| {
                 self.err(
