@@ -1,7 +1,12 @@
-use soroban_env_host::{budget::AsBudget, Host, Val, I256};
+use soroban_env_host::{budget::AsBudget, meta, Host, LedgerInfo, Val, I256};
 
 pub(crate) fn test_host() -> Host {
     let host = Host::default();
+    host.set_ledger_info(LedgerInfo {
+        protocol_version: meta::get_ledger_protocol_version(meta::INTERFACE_VERSION),
+        ..Default::default()
+    })
+    .unwrap();
     host.as_budget().reset_unlimited().unwrap();
     host.as_budget().reset_fuel_config().unwrap();
     host
