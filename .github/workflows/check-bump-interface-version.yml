@@ -22,4 +22,4 @@ jobs:
     - name: "check soroban-test-wasms/wasm-workspace/opt/*.wasm were modified"
       uses: brettcannon/check-for-changed-files@36aaa76474fc979db4e19e44c05e8e978759ac01
       with:
-        file-pattern: "soroban-test-wasms/wasm-workspace/opt/*.wasm"
+        file-pattern: "soroban-test-wasms/wasm-workspace/opt/curr/*.wasm"
