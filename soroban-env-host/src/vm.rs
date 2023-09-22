@@ -351,7 +351,7 @@ impl Vm {
                         return Err(if host.is_debug()? {
                             // With diagnostics on: log as much detail as we can from wasmi.
                             let msg = format!("VM call trapped: {:?}", &code);
-                            host.error(err, &msg, &[func_sym.to_val()])
+                            host.error(err, &msg, &[func_sym.to_val(), err.to_val()])
                         } else {
                             err.into()
                         });
