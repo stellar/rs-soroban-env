@@ -430,6 +430,7 @@ impl BudgetImpl {
                 ContractCostType::Int256Div => (),
                 ContractCostType::Int256Pow => (),
                 ContractCostType::Int256Shift => (),
+                ContractCostType::ChaCha20DrawBytes => init_input(i), // number of random bytes to draw
             }
         }
     }
@@ -619,6 +620,10 @@ impl Default for BudgetImpl {
                     cpu.const_term = 412;
                     cpu.lin_term = ScaledU64(0);
                 }
+                ContractCostType::ChaCha20DrawBytes => {
+                    cpu.const_term = 4907;
+                    cpu.lin_term = ScaledU64(2461);
+                }
             }
 
             // define the memory cost model parameters
@@ -738,6 +743,10 @@ impl Default for BudgetImpl {
                 }
                 ContractCostType::Int256Shift => {
                     mem.const_term = 119;
+                    mem.lin_term = ScaledU64(0);
+                }
+                ContractCostType::ChaCha20DrawBytes => {
+                    mem.const_term = 0;
                     mem.lin_term = ScaledU64(0);
                 }
             }
@@ -1102,6 +1111,13 @@ impl Budget {
         )
     }
 
+    /// Resets the `FuelConfig` we pass into Wasmi before running calibration.
+    /// Wasmi instruction calibration requires running the same Wasmi insn
+    /// a fixed number of times, record their actual cpu and mem consumption, then
+    /// divide those numbers by the number of iterations, which is the fuel count.
+    /// Fuel count is kept tracked on the Wasmi side, based on the `FuelConfig`
+    /// of a specific fuel category. In order to get the correct, unscaled fuel
+    /// count, we have to preset all the `FuelConfig` entries to 1.
     #[cfg(any(test, feature = "testutils"))]
     pub fn reset_fuel_config(&self) -> Result<(), HostError> {
         self.0.try_borrow_mut_or_err()?.fuel_config.reset();
@@ -1113,7 +1129,7 @@ impl Budget {
     }
 
     // generate a wasmi fuel cost schedule based on our calibration
-    pub fn wasmi_fuel_costs(&self) -> Result<FuelCosts, HostError> {
+    pub(crate) fn wasmi_fuel_costs(&self) -> Result<FuelCosts, HostError> {
         let config = &self.0.try_borrow_or_err()?.fuel_config;
         let mut costs = FuelCosts::default();
         costs.base = config.base;

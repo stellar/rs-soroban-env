@@ -1,9 +1,11 @@
 use crate::{
-    budget::Budget,
+    budget::AsBudget,
     err,
     xdr::{ContractCostType, Hash, ScBytes, ScErrorCode, ScErrorType},
     BytesObject, Host, HostError, U32Val, Val,
 };
+use rand::RngCore;
+use rand_chacha::ChaCha20Rng;
 use sha2::Sha256;
 use sha3::Keccak256;
 
@@ -193,13 +195,12 @@ impl Host {
 
     // SHA256 functions
 
-    pub(crate) fn sha256_hash_from_bytes(&self, bytes: &[u8]) -> Result<Vec<u8>, HostError> {
-        sha256_hash_from_bytes(bytes, self.budget_ref())
-    }
-
-    pub fn sha256_hash_from_bytesobj_input(&self, x: BytesObject) -> Result<Vec<u8>, HostError> {
+    pub(crate) fn sha256_hash_from_bytesobj_input(
+        &self,
+        x: BytesObject,
+    ) -> Result<Vec<u8>, HostError> {
         self.visit_obj(x, |bytes: &ScBytes| {
-            let hash = self.sha256_hash_from_bytes(bytes.as_slice())?;
+            let hash = sha256_hash_from_bytes(bytes.as_slice(), self)?;
             if hash.len() != 32 {
                 return Err(err!(
                     self,
@@ -244,11 +245,26 @@ impl Host {
     }
 }
 
-pub(crate) fn sha256_hash_from_bytes(bytes: &[u8], budget: &Budget) -> Result<Vec<u8>, HostError> {
+pub(crate) fn sha256_hash_from_bytes(
+    bytes: &[u8],
+    budget: impl AsBudget,
+) -> Result<Vec<u8>, HostError> {
     let _span = tracy_span!("sha256");
-    budget.charge(
+    budget.as_budget().charge(
         ContractCostType::ComputeSha256Hash,
         Some(bytes.len() as u64),
     )?;
     Ok(<Sha256 as sha2::Digest>::digest(bytes).as_slice().to_vec())
+}
+
+pub(crate) fn chacha20_fill_bytes(
+    rng: &mut ChaCha20Rng,
+    dest: &mut [u8],
+    budget: impl AsBudget,
+) -> Result<(), HostError> {
+    budget
+        .as_budget()
+        .charge(ContractCostType::ChaCha20DrawBytes, Some(dest.len() as u64))?;
+    rng.fill_bytes(dest);
+    Ok(())
 }
