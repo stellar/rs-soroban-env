@@ -359,7 +359,7 @@ fn total_amount_charged_from_random_inputs() -> Result<(), HostError> {
     expect![[r#"
         =====================================================================================================================================================================
         Cpu limit: 100000000; used: 10120240
-        Mem limit: 104857600; used: 276044
+        Mem limit: 41943040; used: 276044
         =====================================================================================================================================================================
         CostType                 iterations     input          cpu_insns      mem_bytes      const_term_cpu      lin_term_cpu        const_term_mem      lin_term_mem        
         WasmInsnExec             246            None           1476           0              6                   0                   0                   0                   
