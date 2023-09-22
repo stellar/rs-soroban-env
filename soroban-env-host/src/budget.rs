@@ -15,9 +15,10 @@ use crate::{
 
 use wasmi::{errors, FuelCosts, ResourceLimiter};
 
-// These should match the default network config settings in core
-pub const DEFAULT_CPU_INSN_LIMIT: u64 = 100_000_000;
-pub const DEFAULT_MEM_BYTES_LIMIT: u64 = 100 * 1024 * 1024; // 100MB
+// These are some sane values, however the embedder should typically customize
+// these to match the network config.
+const DEFAULT_CPU_INSN_LIMIT: u64 = 100_000_000;
+const DEFAULT_MEM_BYTES_LIMIT: u64 = 40 * 1024 * 1024; // 40MB
 
 /// The number of bits to scale the linear term by. The linear coefficient has
 /// been scaled by this factor during parameter fitting to retain more significant

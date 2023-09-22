@@ -200,6 +200,20 @@ impl From<wasmi::core::TrapCode> for Error {
 }
 
 #[cfg(feature = "wasmi")]
+impl From<wasmi::errors::FuncError> for Error {
+    fn from(err: wasmi::errors::FuncError) -> Self {
+        let ec = match err {
+            wasmi::errors::FuncError::ExportedFuncNotFound => ScErrorCode::MissingValue,
+            wasmi::errors::FuncError::MismatchingParameterType
+            | wasmi::errors::FuncError::MismatchingResultType => ScErrorCode::UnexpectedType,
+            wasmi::errors::FuncError::MismatchingParameterLen
+            | wasmi::errors::FuncError::MismatchingResultLen => ScErrorCode::UnexpectedSize,
+        };
+        return Error::from_type_and_code(ScErrorType::WasmVm, ec);
+    }
+}
+
+#[cfg(feature = "wasmi")]
 impl From<wasmi::Error> for Error {
     fn from(e: wasmi::Error) -> Self {
         const BUDGET_EXCEEDED_LIMIT: Error =
@@ -235,6 +249,18 @@ impl From<wasmi::Error> for Error {
                     return code.into();
                 }
             }
+            wasmi::Error::Func(e) => {
+                return e.into();
+            }
+            wasmi::Error::Global(e) => {
+                if matches!(e, wasmi::errors::GlobalError::TypeMismatch { .. }) {
+                    return Error::from_type_and_code(
+                        ScErrorType::WasmVm,
+                        ScErrorCode::UnexpectedType,
+                    );
+                }
+            }
+
             _ => (),
         }
 

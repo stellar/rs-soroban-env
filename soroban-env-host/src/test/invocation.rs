@@ -103,9 +103,8 @@ fn invoke_cross_contract_with_err() -> Result<(), HostError> {
 
     // try_call
     let sv = host.try_call(id_obj, sym, args)?;
-    let code = (ScErrorType::Object, ScErrorCode::IndexBounds);
-    let exp_st: Error = code.into();
-    assert_eq!(sv.get_payload(), exp_st.to_val().get_payload());
+    let generic_host_error: Error = (ScErrorType::Context, ScErrorCode::InvalidAction).into();
+    assert_eq!(sv.get_payload(), generic_host_error.to_val().get_payload());
 
     let events = host.get_events()?.0;
     assert_eq!(events.len(), 5);
@@ -119,7 +118,10 @@ fn invoke_cross_contract_with_err() -> Result<(), HostError> {
 
     // call
     let res = host.call(id_obj, sym, args);
-    assert!(HostError::result_matches_err(res, code));
+    assert!(HostError::result_matches_err(
+        res,
+        (ScErrorType::Object, ScErrorCode::IndexBounds)
+    ));
 
     let events = host.get_events()?.0;
     assert_eq!(events.len(), 10);
@@ -161,12 +163,14 @@ fn invoke_cross_contract_indirect_err() -> Result<(), HostError> {
 
     // try call -- add will trap, and add_with will trap, but we will get an error
     let error = host.try_call(id0_obj, sym, args)?;
-    let code = (ScErrorType::WasmVm, ScErrorCode::InvalidAction);
-    let exp: Error = code.into();
-    assert_eq!(error.get_payload(), exp.to_val().get_payload());
+    let generic_host_error: Error = (ScErrorType::Context, ScErrorCode::InvalidAction).into();
+    assert_eq!(
+        error.get_payload(),
+        generic_host_error.to_val().get_payload()
+    );
 
     let events = host.get_events()?.0;
-    assert_eq!(events.len(), 2);
+    assert_eq!(events.len(), 3);
     let last_event = events.last().unwrap();
     // run `UPDATE_EXPECT=true cargo test` to update this.
     let expected = expect![[
@@ -177,10 +181,13 @@ fn invoke_cross_contract_indirect_err() -> Result<(), HostError> {
 
     // call
     let res = host.call(id0_obj, sym, args);
-    assert!(HostError::result_matches_err(res, code));
+    assert!(HostError::result_matches_err(
+        res,
+        (ScErrorType::WasmVm, ScErrorCode::InvalidAction)
+    ));
 
     let events = host.get_events()?.0;
-    assert_eq!(events.len(), 4);
+    assert_eq!(events.len(), 6);
     let last_event = events.last().unwrap();
     // run `UPDATE_EXPECT=true cargo test` to update this.
     let expected = expect![[

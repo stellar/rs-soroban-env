@@ -466,23 +466,20 @@ impl Host {
         use crate::native_contract::account_contract::ACCOUNT_CONTRACT_CHECK_AUTH_FN_NAME;
 
         let contract_id = self.hash_from_bytesobj_input("contract", contract)?;
-        let args = self.call_args_from_obj(args)?;
+        let args_vec = self.call_args_from_obj(args)?;
         let res = self.call_n_internal(
             &contract_id,
             ACCOUNT_CONTRACT_CHECK_AUTH_FN_NAME.try_into_val(self)?,
-            args.as_slice(),
+            args_vec.as_slice(),
             ContractReentryMode::Prohibited,
             true,
         );
         if let Err(e) = &res {
-            self.with_events_mut(|events| {
-                self.err_diagnostics(
-                    events,
-                    e.error,
-                    "check auth invocation for a custom account contract failed",
-                    &[],
-                )
-            })?;
+            self.error(
+                e.error,
+                "check auth invocation for a custom account contract failed",
+                &[contract.to_val(), args.to_val()],
+            );
         }
         res
     }
@@ -2423,14 +2420,11 @@ impl VmCallerEnv for Host {
             false,
         );
         if let Err(e) = &res {
-            self.with_events_mut(|events| {
-                self.err_diagnostics(
-                    events,
-                    e.error,
-                    "contract call failed",
-                    &[func.to_val(), args.to_val()],
-                )
-            })?;
+            self.error(
+                e.error,
+                "contract call failed",
+                &[func.to_val(), args.to_val()],
+            );
         }
         res
     }
@@ -2458,19 +2452,34 @@ impl VmCallerEnv for Host {
         match res {
             Ok(rv) => Ok(rv),
             Err(e) => {
-                self.with_events_mut(|events| {
-                    self.err_diagnostics(
-                        events,
-                        e.error,
-                        "contract try_call failed",
-                        &[func.to_val(), args.to_val()],
-                    )
-                })?;
+                self.error(
+                    e.error,
+                    "contract try_call failed",
+                    &[func.to_val(), args.to_val()],
+                );
                 // Only allow to gracefully handle the recoverable errors.
                 // Non-recoverable errors should still cause guest to panic and
                 // abort execution.
                 if e.is_recoverable() {
-                    Ok(e.error.to_val())
+                    // Pass contract errors through.
+                    if e.error.is_type(ScErrorType::Contract) {
+                        Ok(e.error.to_val())
+                    } else {
+                        // Narrow all the remaining host errors down to a single
+                        // error type. We don't want to expose the granular host
+                        // errors to the guest, consistently with how every
+                        // other host function works. This reduces the risk of
+                        // implementation being 'locked' into specific error
+                        // codes due to them being exposed to the guest and
+                        // hashed into blockchain.
+                        // The granular error codes are still observable with
+                        // diagnostic events.
+                        Ok(Error::from_type_and_code(
+                            ScErrorType::Context,
+                            ScErrorCode::InvalidAction,
+                        )
+                        .to_val())
+                    }
                 } else {
                     Err(e)
                 }
