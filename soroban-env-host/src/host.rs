@@ -1904,6 +1904,7 @@ impl VmCallerEnv for Host {
     ) -> Result<Val, HostError> {
         let i: u32 = i.into();
         self.visit_obj(v, |hv: &HostVec| {
+            self.validate_index_lt_bound(i, hv.len())?;
             hv.get(i as usize, self.as_budget()).map(|r| *r)
         })
     }
