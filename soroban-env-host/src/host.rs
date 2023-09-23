@@ -53,7 +53,6 @@ use soroban_env_common::xdr::{
 use self::{
     frame::{Context, ContractReentryMode},
     metered_clone::MeteredAlloc,
-    metered_vector::MeteredVector,
     prng::Prng,
 };
 use self::{
