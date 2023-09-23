@@ -1484,7 +1484,7 @@ impl VmCallerEnv for Host {
                 b.as_slice(),
             )?))
         })?;
-        U256Val::try_from_val(self, &num).map_err(|_| ConversionError.into())
+        self.map_err(U256Val::try_from_val(self, &num))
     }
 
     fn u256_val_to_be_bytes(
