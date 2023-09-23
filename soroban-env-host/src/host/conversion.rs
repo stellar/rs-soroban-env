@@ -194,6 +194,7 @@ impl Host {
         durability: ContractDataDurability,
     ) -> Result<Rc<LedgerKey>, HostError> {
         let key_scval = self.from_host_val(k)?;
+        // FIXME: also check for ScVal::ContractInstance here?
         if let ScVal::LedgerKeyContractInstance | ScVal::LedgerKeyNonce(_) = key_scval {
             return Err(self.err(
                 ScErrorType::Storage,

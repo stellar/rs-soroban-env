@@ -1201,6 +1201,7 @@ impl VmCallerEnv for Host {
         vals_len: U32Val,
     ) -> Result<Void, HostError> {
         if self.is_debug()? {
+            // FIXME: change to a "debug budget" https://github.com/stellar/rs-soroban-env/issues/1061
             self.as_budget().with_free_budget(|| {
                 let VmSlice { vm, pos, len } = self.decode_vmslice(msg_pos, msg_len)?;
                 let mut msg: Vec<u8> = vec![0u8; len as usize];
@@ -1375,6 +1376,7 @@ impl VmCallerEnv for Host {
         _vmcaller: &mut VmCaller<Host>,
     ) -> Result<BytesObject, Self::Error> {
         self.with_ledger_info(|li| {
+            // FIXME: cache this and a few other such IDs: https://github.com/stellar/rs-soroban-env/issues/681
             self.add_host_object(self.scbytes_from_slice(li.network_id.as_slice())?)
         })
     }
@@ -1384,6 +1386,7 @@ impl VmCallerEnv for Host {
         &self,
         _vmcaller: &mut VmCaller<Host>,
     ) -> Result<AddressObject, HostError> {
+        // FIXME: cache this and a few other such IDs: https://github.com/stellar/rs-soroban-env/issues/681
         self.add_host_object(ScAddress::Contract(
             self.get_current_contract_id_internal()?,
         ))
