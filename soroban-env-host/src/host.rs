@@ -1676,7 +1676,7 @@ impl VmCallerEnv for Host {
                 self.err(
                     ScErrorType::Object,
                     ScErrorCode::MissingValue,
-                    "map key not found",
+                    "map key not found in map_get",
                     &[m.to_val(), k],
                 )
             })
@@ -1695,7 +1695,7 @@ impl VmCallerEnv for Host {
             None => Err(self.err(
                 ScErrorType::Object,
                 ScErrorCode::MissingValue,
-                "map key not found",
+                "map key not found in map_del",
                 &[m.to_val(), k],
             )),
         }
