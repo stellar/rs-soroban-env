@@ -1224,15 +1224,6 @@ impl VmCallerEnv for Host {
         Ok(Val::VOID)
     }
 
-    // Notes on metering: covered by the components
-    fn get_invoking_contract(
-        &self,
-        _vmcaller: &mut VmCaller<Host>,
-    ) -> Result<AddressObject, HostError> {
-        let invoking_contract_hash = self.get_invoking_contract_internal()?;
-        self.add_host_object(ScAddress::Contract(invoking_contract_hash))
-    }
-
     // Metered: covered by `visit`.
     fn obj_cmp(&self, _vmcaller: &mut VmCaller<Host>, a: Val, b: Val) -> Result<i64, HostError> {
         self.check_val_integrity(a)?;
@@ -1317,37 +1308,6 @@ impl VmCallerEnv for Host {
 
     fn get_ledger_timestamp(&self, _vmcaller: &mut VmCaller<Host>) -> Result<U64Val, Self::Error> {
         self.with_ledger_info(|li| Ok(U64Val::try_from_val(self, &li.timestamp)?))
-    }
-
-    fn get_current_call_stack(
-        &self,
-        _vmcaller: &mut VmCaller<Host>,
-    ) -> Result<VecObject, HostError> {
-        let contexts = self.try_borrow_context()?;
-
-        let get_host_val_tuple = |id: &Hash, function: &Symbol| -> Result<[Val; 2], HostError> {
-            let addr_val = self
-                .add_host_object(ScAddress::Contract(id.metered_clone(self)?))?
-                .into();
-            let function_val = (*function).into();
-            Ok([addr_val, function_val])
-        };
-
-        let mut outer = Vec::with_capacity(contexts.len());
-        for context in contexts.iter() {
-            let vals = match &context.frame {
-                Frame::ContractVM { vm, fn_name, .. } => {
-                    get_host_val_tuple(&vm.contract_id, fn_name)?
-                }
-                Frame::HostFunction(_) => continue,
-                Frame::Token(id, function, ..) => get_host_val_tuple(id, function)?,
-                #[cfg(any(test, feature = "testutils"))]
-                Frame::TestContract(tc) => get_host_val_tuple(&tc.id, &tc.func)?,
-            };
-            let inner = MeteredVector::from_array(&vals, self.as_budget())?;
-            outer.push(self.add_host_object(inner)?.into());
-        }
-        self.add_host_object(HostVec::from_vec(outer)?)
     }
 
     fn fail_with_error(

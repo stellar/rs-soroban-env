@@ -399,32 +399,6 @@ impl Host {
         }
     }
 
-    pub(crate) fn get_invoking_contract_internal(&self) -> Result<Hash, HostError> {
-        let frames = self.try_borrow_context()?;
-        // the previous frame must exist and must be a contract
-        let hash = match frames.as_slice() {
-            [.., c2, _] => match &c2.frame {
-                Frame::ContractVM { vm, .. } => Ok(vm.contract_id.metered_clone(self)?),
-                Frame::HostFunction(_) => Err(self.err(
-                    ScErrorType::Context,
-                    ScErrorCode::UnexpectedType,
-                    "invoker is not a contract",
-                    &[],
-                )),
-                Frame::Token(id, ..) => Ok(id.metered_clone(self)?),
-                #[cfg(any(test, feature = "testutils"))]
-                Frame::TestContract(tc) => Ok(tc.id.metered_clone(self)?), // no metering
-            },
-            _ => Err(self.err(
-                ScErrorType::Context,
-                ScErrorCode::MissingValue,
-                "no frames to derive the invoker from",
-                &[],
-            )),
-        }?;
-        Ok(hash)
-    }
-
     /// Pushes a test contract [`Frame`], runs a closure, and then pops the
     /// frame, rolling back if the closure returned an error. Returns the result
     /// that the closure returned (or any error caused during the frame
