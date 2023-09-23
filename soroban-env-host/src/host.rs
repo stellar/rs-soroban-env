@@ -957,9 +957,9 @@ impl EnvBase for Host {
     // of `Env::Error` as infallible by literally defining `Guest::Error` as the
     // `Infallible` type (which makes sense: we trap the user's VM on such
     // errors, don't resume it at all). But in a non-wasm, native build of a
-    // user contract, `Env=Host` and `Env::Error=HostError`, a real type you can
-    // observe. So the user might actually have a code path returning from such
-    // an error that is suddenly non-dead and receiving an
+    // user contract, `Env=Host` and `Env::Error=HostError`, an inhabited type
+    // you can observe. So the user might actually have a code path returning
+    // from such an error that is suddenly non-dead and receiving an
     // `Env::Error=HostError`, which (to maintain continuity with the VM case)
     // they then _want_ to treat as impossible-to-have-occurred just like
     // `Guest::Error`. They can panic, but that doesn't quite maintain the
@@ -968,9 +968,8 @@ impl EnvBase for Host {
     //
     // When such a "rejected error" occurs, we do panic, but only after checking
     // to see if we're in a `TestContract` invocation, and if so storing the
-    // error's Error value in that frame, such that `Host::call_n` above can
-    // recover the Error when it _catches_ the panic and converts it back to an
-    // error.
+    // error's Error value in that frame, such that `Host::call_n` can recover
+    // the Error when it _catches_ the panic and converts it back to an error.
     //
     // It might seem like we ought to `std::panic::panic_any(e)` here, making
     // the panic carry a `HostError` or `Error` and catching it by dynamic type
@@ -1642,12 +1641,12 @@ impl VmCallerEnv for Host {
     impl_bignum_host_fns_rhs_u32!(i256_shl, checked_shl, I256, I256Val, Int256Shift);
     impl_bignum_host_fns_rhs_u32!(i256_shr, checked_shr, I256, I256Val, Int256Shift);
 
+    // endregion "int" module functions
+    // region: "map" module functions
+
     fn map_new(&self, _vmcaller: &mut VmCaller<Host>) -> Result<MapObject, HostError> {
         self.add_host_object(HostMap::new())
     }
-
-    // endregion "int" module functions
-    // region: "map" module functions
 
     fn map_put(
         &self,
