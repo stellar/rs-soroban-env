@@ -194,6 +194,7 @@ impl Host {
         durability: ContractDataDurability,
     ) -> Result<Rc<LedgerKey>, HostError> {
         let key_scval = self.from_host_val(k)?;
+        // FIXME: also check for ScVal::ContractInstance here?
         if let ScVal::LedgerKeyContractInstance | ScVal::LedgerKeyNonce(_) = key_scval {
             return Err(self.err(
                 ScErrorType::Storage,
@@ -205,13 +206,14 @@ impl Host {
         self.storage_key_from_scval(key_scval, durability)
     }
 
-    /// Converts a binary search result into a u64. `res` is `Some(index)`
-    /// if the value was found at `index`, or `Err(index)` if the value was not found
-    /// and would've needed to be inserted at `index`.
-    /// Returns a Some(res_u64) where :
-    /// - the high-32 bits is 0x0001 if element existed or 0x0000 if it didn't
-    /// - the low-32 bits contains the u32 representation of the `index`
-    /// Err(_) if the `index` fails to be converted to an u32.
+    /// Converts a binary search result into a u64. `res` is `Some(index)` if
+    /// the value was found at `index`, or `Err(index)` if the value was not
+    /// found and would've needed to be inserted at `index`. Returns a
+    /// Some(res_u64) where :
+    /// - the high 32 bits is 0x0000_0001 if element existed or 0x0000_0000 if
+    ///   it didn't
+    /// - the low 32 bits contains the u32 representation of the `index` Err(_)
+    /// if the `index` fails to be converted to an u32.
     pub(crate) fn u64_from_binary_search_result(
         &self,
         res: Result<usize, usize>,

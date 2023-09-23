@@ -53,7 +53,6 @@ use soroban_env_common::xdr::{
 use self::{
     frame::{Context, ContractReentryMode},
     metered_clone::MeteredAlloc,
-    metered_vector::MeteredVector,
     prng::Prng,
 };
 use self::{
@@ -958,9 +957,9 @@ impl EnvBase for Host {
     // of `Env::Error` as infallible by literally defining `Guest::Error` as the
     // `Infallible` type (which makes sense: we trap the user's VM on such
     // errors, don't resume it at all). But in a non-wasm, native build of a
-    // user contract, `Env=Host` and `Env::Error=HostError`, a real type you can
-    // observe. So the user might actually have a code path returning from such
-    // an error that is suddenly non-dead and receiving an
+    // user contract, `Env=Host` and `Env::Error=HostError`, an inhabited type
+    // you can observe. So the user might actually have a code path returning
+    // from such an error that is suddenly non-dead and receiving an
     // `Env::Error=HostError`, which (to maintain continuity with the VM case)
     // they then _want_ to treat as impossible-to-have-occurred just like
     // `Guest::Error`. They can panic, but that doesn't quite maintain the
@@ -969,9 +968,8 @@ impl EnvBase for Host {
     //
     // When such a "rejected error" occurs, we do panic, but only after checking
     // to see if we're in a `TestContract` invocation, and if so storing the
-    // error's Error value in that frame, such that `Host::call_n` above can
-    // recover the Error when it _catches_ the panic and converts it back to an
-    // error.
+    // error's Error value in that frame, such that `Host::call_n` can recover
+    // the Error when it _catches_ the panic and converts it back to an error.
     //
     // It might seem like we ought to `std::panic::panic_any(e)` here, making
     // the panic carry a `HostError` or `Error` and catching it by dynamic type
@@ -1069,6 +1067,7 @@ impl EnvBase for Host {
     }
 
     fn symbol_new_from_slice(&self, s: &str) -> Result<SymbolObject, HostError> {
+        self.charge_budget(ContractCostType::HostMemCmp, Some(s.len() as u64))?;
         for ch in s.chars() {
             SymbolSmall::validate_char(ch)?;
         }
@@ -1202,6 +1201,7 @@ impl VmCallerEnv for Host {
         vals_len: U32Val,
     ) -> Result<Void, HostError> {
         if self.is_debug()? {
+            // FIXME: change to a "debug budget" https://github.com/stellar/rs-soroban-env/issues/1061
             self.as_budget().with_free_budget(|| {
                 let VmSlice { vm, pos, len } = self.decode_vmslice(msg_pos, msg_len)?;
                 let mut msg: Vec<u8> = vec![0u8; len as usize];
@@ -1222,15 +1222,6 @@ impl VmCallerEnv for Host {
             })?;
         }
         Ok(Val::VOID)
-    }
-
-    // Notes on metering: covered by the components
-    fn get_invoking_contract(
-        &self,
-        _vmcaller: &mut VmCaller<Host>,
-    ) -> Result<AddressObject, HostError> {
-        let invoking_contract_hash = self.get_invoking_contract_internal()?;
-        self.add_host_object(ScAddress::Contract(invoking_contract_hash))
     }
 
     // Metered: covered by `visit`.
@@ -1316,43 +1307,12 @@ impl VmCallerEnv for Host {
     }
 
     fn get_ledger_timestamp(&self, _vmcaller: &mut VmCaller<Host>) -> Result<U64Val, Self::Error> {
-        self.with_ledger_info(|li| Ok(self.add_host_object(li.timestamp)?.into()))
-    }
-
-    fn get_current_call_stack(
-        &self,
-        _vmcaller: &mut VmCaller<Host>,
-    ) -> Result<VecObject, HostError> {
-        let contexts = self.try_borrow_context()?;
-
-        let get_host_val_tuple = |id: &Hash, function: &Symbol| -> Result<[Val; 2], HostError> {
-            let addr_val = self
-                .add_host_object(ScAddress::Contract(id.metered_clone(self)?))?
-                .into();
-            let function_val = (*function).into();
-            Ok([addr_val, function_val])
-        };
-
-        let mut outer = Vec::with_capacity(contexts.len());
-        for context in contexts.iter() {
-            let vals = match &context.frame {
-                Frame::ContractVM { vm, fn_name, .. } => {
-                    get_host_val_tuple(&vm.contract_id, fn_name)?
-                }
-                Frame::HostFunction(_) => continue,
-                Frame::Token(id, function, ..) => get_host_val_tuple(id, function)?,
-                #[cfg(any(test, feature = "testutils"))]
-                Frame::TestContract(tc) => get_host_val_tuple(&tc.id, &tc.func)?,
-            };
-            let inner = MeteredVector::from_array(&vals, self.as_budget())?;
-            outer.push(self.add_host_object(inner)?.into());
-        }
-        self.add_host_object(HostVec::from_vec(outer)?)
+        self.with_ledger_info(|li| Ok(U64Val::try_from_val(self, &li.timestamp)?))
     }
 
     fn fail_with_error(
         &self,
-        vmcaller: &mut VmCaller<Self::VmUserState>,
+        _vmcaller: &mut VmCaller<Self::VmUserState>,
         error: Error,
     ) -> Result<Void, Self::Error> {
         if error.is_type(ScErrorType::Contract) {
@@ -1376,6 +1336,7 @@ impl VmCallerEnv for Host {
         _vmcaller: &mut VmCaller<Host>,
     ) -> Result<BytesObject, Self::Error> {
         self.with_ledger_info(|li| {
+            // FIXME: cache this and a few other such IDs: https://github.com/stellar/rs-soroban-env/issues/681
             self.add_host_object(self.scbytes_from_slice(li.network_id.as_slice())?)
         })
     }
@@ -1385,6 +1346,7 @@ impl VmCallerEnv for Host {
         &self,
         _vmcaller: &mut VmCaller<Host>,
     ) -> Result<AddressObject, HostError> {
+        // FIXME: cache this and a few other such IDs: https://github.com/stellar/rs-soroban-env/issues/681
         self.add_host_object(ScAddress::Contract(
             self.get_current_contract_id_internal()?,
         ))
@@ -1412,7 +1374,7 @@ impl VmCallerEnv for Host {
 
     fn obj_from_u128_pieces(
         &self,
-        vmcaller: &mut VmCaller<Self::VmUserState>,
+        _vmcaller: &mut VmCaller<Self::VmUserState>,
         hi: u64,
         lo: u64,
     ) -> Result<U128Object, Self::Error> {
@@ -1421,23 +1383,23 @@ impl VmCallerEnv for Host {
 
     fn obj_to_u128_lo64(
         &self,
-        vmcaller: &mut VmCaller<Self::VmUserState>,
+        _vmcaller: &mut VmCaller<Self::VmUserState>,
         obj: U128Object,
     ) -> Result<u64, Self::Error> {
-        self.visit_obj(obj, move |u: &u128| Ok(int128_helpers::u128_lo(*u)))
+        self.visit_obj(obj, |u: &u128| Ok(int128_helpers::u128_lo(*u)))
     }
 
     fn obj_to_u128_hi64(
         &self,
-        vmcaller: &mut VmCaller<Self::VmUserState>,
+        _vmcaller: &mut VmCaller<Self::VmUserState>,
         obj: U128Object,
     ) -> Result<u64, Self::Error> {
-        self.visit_obj(obj, move |u: &u128| Ok(int128_helpers::u128_hi(*u)))
+        self.visit_obj(obj, |u: &u128| Ok(int128_helpers::u128_hi(*u)))
     }
 
     fn obj_from_i128_pieces(
         &self,
-        vmcaller: &mut VmCaller<Self::VmUserState>,
+        _vmcaller: &mut VmCaller<Self::VmUserState>,
         hi: i64,
         lo: u64,
     ) -> Result<I128Object, Self::Error> {
@@ -1446,23 +1408,23 @@ impl VmCallerEnv for Host {
 
     fn obj_to_i128_lo64(
         &self,
-        vmcaller: &mut VmCaller<Self::VmUserState>,
+        _vmcaller: &mut VmCaller<Self::VmUserState>,
         obj: I128Object,
     ) -> Result<u64, Self::Error> {
-        self.visit_obj(obj, move |i: &i128| Ok(int128_helpers::i128_lo(*i)))
+        self.visit_obj(obj, |i: &i128| Ok(int128_helpers::i128_lo(*i)))
     }
 
     fn obj_to_i128_hi64(
         &self,
-        vmcaller: &mut VmCaller<Self::VmUserState>,
+        _vmcaller: &mut VmCaller<Self::VmUserState>,
         obj: I128Object,
     ) -> Result<i64, Self::Error> {
-        self.visit_obj(obj, move |i: &i128| Ok(int128_helpers::i128_hi(*i)))
+        self.visit_obj(obj, |i: &i128| Ok(int128_helpers::i128_hi(*i)))
     }
 
     fn obj_from_u256_pieces(
         &self,
-        vmcaller: &mut VmCaller<Self::VmUserState>,
+        _vmcaller: &mut VmCaller<Self::VmUserState>,
         hi_hi: u64,
         hi_lo: u64,
         lo_hi: u64,
@@ -1473,40 +1435,38 @@ impl VmCallerEnv for Host {
 
     fn u256_val_from_be_bytes(
         &self,
-        vmcaller: &mut VmCaller<Self::VmUserState>,
+        _vmcaller: &mut VmCaller<Self::VmUserState>,
         bytes: BytesObject,
     ) -> Result<U256Val, HostError> {
-        let num = self.visit_obj(bytes, move |b: &ScBytes| {
+        let num = self.visit_obj(bytes, |b: &ScBytes| {
             Ok(U256::from_be_bytes(self.fixed_length_bytes_from_slice(
                 "U256 bytes",
                 b.as_slice(),
             )?))
         })?;
-        U256Val::try_from_val(self, &num).map_err(|_| ConversionError.into())
+        self.map_err(U256Val::try_from_val(self, &num))
     }
 
     fn u256_val_to_be_bytes(
         &self,
-        vmcaller: &mut VmCaller<Self::VmUserState>,
+        _vmcaller: &mut VmCaller<Self::VmUserState>,
         val: U256Val,
     ) -> Result<BytesObject, HostError> {
         if let Ok(so) = U256Small::try_from(val) {
             self.add_host_object(self.scbytes_from_slice(&U256::from(so).to_be_bytes())?)
         } else {
             let obj = val.try_into()?;
-            let scb = self.visit_obj(obj, move |u: &U256| {
-                self.scbytes_from_slice(&u.to_be_bytes())
-            })?;
+            let scb = self.visit_obj(obj, |u: &U256| self.scbytes_from_slice(&u.to_be_bytes()))?;
             self.add_host_object(scb)
         }
     }
 
     fn obj_to_u256_hi_hi(
         &self,
-        vmcaller: &mut VmCaller<Self::VmUserState>,
+        _vmcaller: &mut VmCaller<Self::VmUserState>,
         obj: U256Object,
     ) -> Result<u64, HostError> {
-        self.visit_obj(obj, move |u: &U256| {
+        self.visit_obj(obj, |u: &U256| {
             let (hi_hi, _, _, _) = u256_into_pieces(*u);
             Ok(hi_hi)
         })
@@ -1514,10 +1474,10 @@ impl VmCallerEnv for Host {
 
     fn obj_to_u256_hi_lo(
         &self,
-        vmcaller: &mut VmCaller<Self::VmUserState>,
+        _vmcaller: &mut VmCaller<Self::VmUserState>,
         obj: U256Object,
     ) -> Result<u64, HostError> {
-        self.visit_obj(obj, move |u: &U256| {
+        self.visit_obj(obj, |u: &U256| {
             let (_, hi_lo, _, _) = u256_into_pieces(*u);
             Ok(hi_lo)
         })
@@ -1525,10 +1485,10 @@ impl VmCallerEnv for Host {
 
     fn obj_to_u256_lo_hi(
         &self,
-        vmcaller: &mut VmCaller<Self::VmUserState>,
+        _vmcaller: &mut VmCaller<Self::VmUserState>,
         obj: U256Object,
     ) -> Result<u64, HostError> {
-        self.visit_obj(obj, move |u: &U256| {
+        self.visit_obj(obj, |u: &U256| {
             let (_, _, lo_hi, _) = u256_into_pieces(*u);
             Ok(lo_hi)
         })
@@ -1536,10 +1496,10 @@ impl VmCallerEnv for Host {
 
     fn obj_to_u256_lo_lo(
         &self,
-        vmcaller: &mut VmCaller<Self::VmUserState>,
+        _vmcaller: &mut VmCaller<Self::VmUserState>,
         obj: U256Object,
     ) -> Result<u64, HostError> {
-        self.visit_obj(obj, move |u: &U256| {
+        self.visit_obj(obj, |u: &U256| {
             let (_, _, _, lo_lo) = u256_into_pieces(*u);
             Ok(lo_lo)
         })
@@ -1547,7 +1507,7 @@ impl VmCallerEnv for Host {
 
     fn obj_from_i256_pieces(
         &self,
-        vmcaller: &mut VmCaller<Self::VmUserState>,
+        _vmcaller: &mut VmCaller<Self::VmUserState>,
         hi_hi: i64,
         hi_lo: u64,
         lo_hi: u64,
@@ -1558,10 +1518,10 @@ impl VmCallerEnv for Host {
 
     fn i256_val_from_be_bytes(
         &self,
-        vmcaller: &mut VmCaller<Self::VmUserState>,
+        _vmcaller: &mut VmCaller<Self::VmUserState>,
         bytes: BytesObject,
     ) -> Result<I256Val, HostError> {
-        let num = self.visit_obj(bytes, move |b: &ScBytes| {
+        let num = self.visit_obj(bytes, |b: &ScBytes| {
             Ok(I256::from_be_bytes(self.fixed_length_bytes_from_slice(
                 "I256 bytes",
                 b.as_slice(),
@@ -1572,26 +1532,24 @@ impl VmCallerEnv for Host {
 
     fn i256_val_to_be_bytes(
         &self,
-        vmcaller: &mut VmCaller<Self::VmUserState>,
+        _vmcaller: &mut VmCaller<Self::VmUserState>,
         val: I256Val,
     ) -> Result<BytesObject, HostError> {
         if let Ok(so) = I256Small::try_from(val) {
             self.add_host_object(self.scbytes_from_slice(&I256::from(so).to_be_bytes())?)
         } else {
             let obj = val.try_into()?;
-            let scb = self.visit_obj(obj, move |i: &I256| {
-                self.scbytes_from_slice(&i.to_be_bytes())
-            })?;
+            let scb = self.visit_obj(obj, |i: &I256| self.scbytes_from_slice(&i.to_be_bytes()))?;
             self.add_host_object(scb)
         }
     }
 
     fn obj_to_i256_hi_hi(
         &self,
-        vmcaller: &mut VmCaller<Self::VmUserState>,
+        _vmcaller: &mut VmCaller<Self::VmUserState>,
         obj: I256Object,
     ) -> Result<i64, HostError> {
-        self.visit_obj(obj, move |i: &I256| {
+        self.visit_obj(obj, |i: &I256| {
             let (hi_hi, _, _, _) = i256_into_pieces(*i);
             Ok(hi_hi)
         })
@@ -1599,10 +1557,10 @@ impl VmCallerEnv for Host {
 
     fn obj_to_i256_hi_lo(
         &self,
-        vmcaller: &mut VmCaller<Self::VmUserState>,
+        _vmcaller: &mut VmCaller<Self::VmUserState>,
         obj: I256Object,
     ) -> Result<u64, HostError> {
-        self.visit_obj(obj, move |i: &I256| {
+        self.visit_obj(obj, |i: &I256| {
             let (_, hi_lo, _, _) = i256_into_pieces(*i);
             Ok(hi_lo)
         })
@@ -1610,10 +1568,10 @@ impl VmCallerEnv for Host {
 
     fn obj_to_i256_lo_hi(
         &self,
-        vmcaller: &mut VmCaller<Self::VmUserState>,
+        _vmcaller: &mut VmCaller<Self::VmUserState>,
         obj: I256Object,
     ) -> Result<u64, HostError> {
-        self.visit_obj(obj, move |i: &I256| {
+        self.visit_obj(obj, |i: &I256| {
             let (_, _, lo_hi, _) = i256_into_pieces(*i);
             Ok(lo_hi)
         })
@@ -1621,10 +1579,10 @@ impl VmCallerEnv for Host {
 
     fn obj_to_i256_lo_lo(
         &self,
-        vmcaller: &mut VmCaller<Self::VmUserState>,
+        _vmcaller: &mut VmCaller<Self::VmUserState>,
         obj: I256Object,
     ) -> Result<u64, HostError> {
-        self.visit_obj(obj, move |i: &I256| {
+        self.visit_obj(obj, |i: &I256| {
             let (_, _, _, lo_lo) = i256_into_pieces(*i);
             Ok(lo_lo)
         })
@@ -1646,12 +1604,12 @@ impl VmCallerEnv for Host {
     impl_bignum_host_fns_rhs_u32!(i256_shl, checked_shl, I256, I256Val, Int256Shift);
     impl_bignum_host_fns_rhs_u32!(i256_shr, checked_shr, I256, I256Val, Int256Shift);
 
+    // endregion "int" module functions
+    // region: "map" module functions
+
     fn map_new(&self, _vmcaller: &mut VmCaller<Host>) -> Result<MapObject, HostError> {
         self.add_host_object(HostMap::new())
     }
-
-    // endregion "int" module functions
-    // region: "map" module functions
 
     fn map_put(
         &self,
@@ -1673,12 +1631,12 @@ impl VmCallerEnv for Host {
         k: Val,
     ) -> Result<Val, HostError> {
         self.check_val_integrity(k)?;
-        self.visit_obj(m, move |hm: &HostMap| {
+        self.visit_obj(m, |hm: &HostMap| {
             hm.get(&k, self)?.copied().ok_or_else(|| {
                 self.err(
                     ScErrorType::Object,
                     ScErrorCode::MissingValue,
-                    "map key not found",
+                    "map key not found in map_get",
                     &[m.to_val(), k],
                 )
             })
@@ -1697,7 +1655,7 @@ impl VmCallerEnv for Host {
             None => Err(self.err(
                 ScErrorType::Object,
                 ScErrorCode::MissingValue,
-                "map key not found",
+                "map key not found in map_del",
                 &[m.to_val(), k],
             )),
         }
@@ -1715,7 +1673,7 @@ impl VmCallerEnv for Host {
         k: Val,
     ) -> Result<Bool, HostError> {
         self.check_val_integrity(k)?;
-        self.visit_obj(m, move |hm: &HostMap| Ok(hm.contains_key(&k, self)?.into()))
+        self.visit_obj(m, |hm: &HostMap| Ok(hm.contains_key(&k, self)?.into()))
     }
 
     fn map_key_by_pos(
@@ -1891,7 +1849,7 @@ impl VmCallerEnv for Host {
     ) -> Result<VecObject, HostError> {
         let i: u32 = i.into();
         self.check_val_integrity(x)?;
-        let vnew = self.visit_obj(v, move |hv: &HostVec| {
+        let vnew = self.visit_obj(v, |hv: &HostVec| {
             self.validate_index_lt_bound(i, hv.len())?;
             hv.set(i as usize, x, self.as_budget())
         })?;
@@ -1905,7 +1863,8 @@ impl VmCallerEnv for Host {
         i: U32Val,
     ) -> Result<Val, HostError> {
         let i: u32 = i.into();
-        self.visit_obj(v, move |hv: &HostVec| {
+        self.visit_obj(v, |hv: &HostVec| {
+            self.validate_index_lt_bound(i, hv.len())?;
             hv.get(i as usize, self.as_budget()).map(|r| *r)
         })
     }
@@ -1917,7 +1876,7 @@ impl VmCallerEnv for Host {
         i: U32Val,
     ) -> Result<VecObject, HostError> {
         let i: u32 = i.into();
-        let vnew = self.visit_obj(v, move |hv: &HostVec| {
+        let vnew = self.visit_obj(v, |hv: &HostVec| {
             self.validate_index_lt_bound(i, hv.len())?;
             hv.remove(i as usize, self.as_budget())
         })?;
@@ -1936,7 +1895,7 @@ impl VmCallerEnv for Host {
         x: Val,
     ) -> Result<VecObject, HostError> {
         self.check_val_integrity(x)?;
-        let vnew = self.visit_obj(v, move |hv: &HostVec| hv.push_front(x, self.as_budget()))?;
+        let vnew = self.visit_obj(v, |hv: &HostVec| hv.push_front(x, self.as_budget()))?;
         self.add_host_object(vnew)
     }
 
@@ -1945,7 +1904,7 @@ impl VmCallerEnv for Host {
         _vmcaller: &mut VmCaller<Host>,
         v: VecObject,
     ) -> Result<VecObject, HostError> {
-        let vnew = self.visit_obj(v, move |hv: &HostVec| hv.pop_front(self.as_budget()))?;
+        let vnew = self.visit_obj(v, |hv: &HostVec| hv.pop_front(self.as_budget()))?;
         self.add_host_object(vnew)
     }
 
@@ -1956,7 +1915,7 @@ impl VmCallerEnv for Host {
         x: Val,
     ) -> Result<VecObject, HostError> {
         self.check_val_integrity(x)?;
-        let vnew = self.visit_obj(v, move |hv: &HostVec| hv.push_back(x, self.as_budget()))?;
+        let vnew = self.visit_obj(v, |hv: &HostVec| hv.push_back(x, self.as_budget()))?;
         self.add_host_object(vnew)
     }
 
@@ -1965,7 +1924,7 @@ impl VmCallerEnv for Host {
         _vmcaller: &mut VmCaller<Host>,
         v: VecObject,
     ) -> Result<VecObject, HostError> {
-        let vnew = self.visit_obj(v, move |hv: &HostVec| hv.pop_back(self.as_budget()))?;
+        let vnew = self.visit_obj(v, |hv: &HostVec| hv.pop_back(self.as_budget()))?;
         self.add_host_object(vnew)
     }
 
@@ -1990,7 +1949,7 @@ impl VmCallerEnv for Host {
     ) -> Result<VecObject, HostError> {
         let i: u32 = i.into();
         self.check_val_integrity(x)?;
-        let vnew = self.visit_obj(v, move |hv: &HostVec| {
+        let vnew = self.visit_obj(v, |hv: &HostVec| {
             self.validate_index_le_bound(i, hv.len())?;
             hv.insert(i as usize, x, self.as_budget())
         })?;
@@ -2024,7 +1983,7 @@ impl VmCallerEnv for Host {
     ) -> Result<VecObject, HostError> {
         let start: u32 = start.into();
         let end: u32 = end.into();
-        let vnew = self.visit_obj(v, move |hv: &HostVec| {
+        let vnew = self.visit_obj(v, |hv: &HostVec| {
             let range = self.valid_range_from_start_end_bound(start, end, hv.len())?;
             hv.slice(range, self.as_budget())
         })?;
@@ -2289,7 +2248,7 @@ impl VmCallerEnv for Host {
 
     fn bump_contract_instance_and_code(
         &self,
-        vmcaller: &mut VmCaller<Self::VmUserState>,
+        _vmcaller: &mut VmCaller<Self::VmUserState>,
         contract: AddressObject,
         low_expiration_watermark: U32Val,
         high_expiration_watermark: U32Val,
@@ -2638,7 +2597,7 @@ impl VmCallerEnv for Host {
     ) -> Result<BytesObject, HostError> {
         let i: u32 = iv.into();
         let u = self.u8_from_u32val_input("u", u)?;
-        let vnew = self.visit_obj(b, move |hv: &ScBytes| {
+        let vnew = self.visit_obj(b, |hv: &ScBytes| {
             let mut vnew: Vec<u8> = hv.metered_clone(self)?.into();
             match vnew.get_mut(i as usize) {
                 None => Err(self.err(
@@ -2685,7 +2644,7 @@ impl VmCallerEnv for Host {
         i: U32Val,
     ) -> Result<BytesObject, HostError> {
         let i: u32 = i.into();
-        let vnew = self.visit_obj(b, move |hv: &ScBytes| {
+        let vnew = self.visit_obj(b, |hv: &ScBytes| {
             self.validate_index_lt_bound(i, hv.len())?;
             let mut vnew: Vec<u8> = hv.metered_clone(self)?.into();
             // len > i has been verified above but use saturating_sub just in case
@@ -2737,7 +2696,7 @@ impl VmCallerEnv for Host {
         u: U32Val,
     ) -> Result<BytesObject, HostError> {
         let u = self.u8_from_u32val_input("u", u)?;
-        let vnew = self.visit_obj(b, move |hv: &ScBytes| {
+        let vnew = self.visit_obj(b, |hv: &ScBytes| {
             // we allocate the new vector to be able to hold `len + 1` bytes, so that the push
             // will not trigger a reallocation, causing data to be cloned twice.
             let len = hv.len().saturating_add(1);
@@ -2756,7 +2715,7 @@ impl VmCallerEnv for Host {
         _vmcaller: &mut VmCaller<Host>,
         b: BytesObject,
     ) -> Result<BytesObject, HostError> {
-        let vnew = self.visit_obj(b, move |hv: &ScBytes| {
+        let vnew = self.visit_obj(b, |hv: &ScBytes| {
             let mut vnew: Vec<u8> = hv.metered_clone(self)?.into();
             // Popping will not trigger reallocation. Here we don't charge anything since this is
             // just a `len` reduction.
@@ -2822,7 +2781,7 @@ impl VmCallerEnv for Host {
     ) -> Result<BytesObject, HostError> {
         let i: u32 = i.into();
         let u = self.u8_from_u32val_input("u", u)?;
-        let vnew = self.visit_obj(b, move |hv: &ScBytes| {
+        let vnew = self.visit_obj(b, |hv: &ScBytes| {
             self.validate_index_le_bound(i, hv.len())?;
             // we allocate the new vector to be able to hold `len + 1` bytes, so that the push
             // will not trigger a reallocation, causing data to be cloned twice.
@@ -2871,7 +2830,7 @@ impl VmCallerEnv for Host {
     ) -> Result<BytesObject, HostError> {
         let start: u32 = start.into();
         let end: u32 = end.into();
-        let vnew = self.visit_obj(b, move |hv: &ScBytes| {
+        let vnew = self.visit_obj(b, |hv: &ScBytes| {
             let range = self.valid_range_from_start_end_bound(start, end, hv.len())?;
             self.metered_slice_to_vec(&hv.as_slice()[range])
         })?;
