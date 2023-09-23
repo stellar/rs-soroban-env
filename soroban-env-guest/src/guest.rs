@@ -12,7 +12,7 @@ use static_assertions as sa;
 
 // Just the smallest possible version of a runtime assertion-or-panic.
 #[inline(always)]
-pub(crate) fn require(b: bool) {
+fn require(b: bool) {
     if !b {
         core::arch::wasm32::unreachable()
     }
