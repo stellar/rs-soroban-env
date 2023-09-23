@@ -36,8 +36,8 @@ impl<'a, T> VmCaller<'a, T> {
         match &self.0 {
             Some(caller) => Ok(caller),
             None => Err(Error::from_type_and_code(
-                ScErrorType::WasmVm,
-                ScErrorCode::MissingValue,
+                ScErrorType::Context,
+                ScErrorCode::InternalError,
             )),
         }
     }
@@ -45,8 +45,8 @@ impl<'a, T> VmCaller<'a, T> {
         match &mut self.0 {
             Some(caller) => Ok(caller),
             None => Err(Error::from_type_and_code(
-                ScErrorType::WasmVm,
-                ScErrorCode::MissingValue,
+                ScErrorType::Context,
+                ScErrorCode::InternalError,
             )),
         }
     }
