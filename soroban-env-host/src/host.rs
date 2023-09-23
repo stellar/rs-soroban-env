@@ -1316,7 +1316,7 @@ impl VmCallerEnv for Host {
     }
 
     fn get_ledger_timestamp(&self, _vmcaller: &mut VmCaller<Host>) -> Result<U64Val, Self::Error> {
-        self.with_ledger_info(|li| Ok(self.add_host_object(li.timestamp)?.into()))
+        self.with_ledger_info(|li| Ok(U64Val::try_from_val(self, &li.timestamp)?))
     }
 
     fn get_current_call_stack(
