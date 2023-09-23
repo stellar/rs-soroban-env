@@ -29,7 +29,7 @@ macro_rules! impl_bignum_host_fns {
     ($host_fn: ident, $method: ident, $num: ty, $valty: ty, $cost: ident) => {
         fn $host_fn(
             &self,
-            vmcaller: &mut VmCaller<Self::VmUserState>,
+            _vmcaller: &mut VmCaller<Self::VmUserState>,
             lhs_val: $valty,
             rhs_val: $valty,
         ) -> Result<$valty, Self::Error> {
@@ -55,7 +55,7 @@ macro_rules! impl_bignum_host_fns_rhs_u32 {
     ($host_fn: ident, $method: ident, $num: ty, $valty: ty, $cost: ident) => {
         fn $host_fn(
             &self,
-            vmcaller: &mut VmCaller<Self::VmUserState>,
+            _vmcaller: &mut VmCaller<Self::VmUserState>,
             lhs_val: $valty,
             rhs_val: U32Val,
         ) -> Result<$valty, Self::Error> {

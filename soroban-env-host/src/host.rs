@@ -1352,7 +1352,7 @@ impl VmCallerEnv for Host {
 
     fn fail_with_error(
         &self,
-        vmcaller: &mut VmCaller<Self::VmUserState>,
+        _vmcaller: &mut VmCaller<Self::VmUserState>,
         error: Error,
     ) -> Result<Void, Self::Error> {
         if error.is_type(ScErrorType::Contract) {
@@ -1412,7 +1412,7 @@ impl VmCallerEnv for Host {
 
     fn obj_from_u128_pieces(
         &self,
-        vmcaller: &mut VmCaller<Self::VmUserState>,
+        _vmcaller: &mut VmCaller<Self::VmUserState>,
         hi: u64,
         lo: u64,
     ) -> Result<U128Object, Self::Error> {
@@ -1421,7 +1421,7 @@ impl VmCallerEnv for Host {
 
     fn obj_to_u128_lo64(
         &self,
-        vmcaller: &mut VmCaller<Self::VmUserState>,
+        _vmcaller: &mut VmCaller<Self::VmUserState>,
         obj: U128Object,
     ) -> Result<u64, Self::Error> {
         self.visit_obj(obj, move |u: &u128| Ok(int128_helpers::u128_lo(*u)))
@@ -1429,7 +1429,7 @@ impl VmCallerEnv for Host {
 
     fn obj_to_u128_hi64(
         &self,
-        vmcaller: &mut VmCaller<Self::VmUserState>,
+        _vmcaller: &mut VmCaller<Self::VmUserState>,
         obj: U128Object,
     ) -> Result<u64, Self::Error> {
         self.visit_obj(obj, move |u: &u128| Ok(int128_helpers::u128_hi(*u)))
@@ -1437,7 +1437,7 @@ impl VmCallerEnv for Host {
 
     fn obj_from_i128_pieces(
         &self,
-        vmcaller: &mut VmCaller<Self::VmUserState>,
+        _vmcaller: &mut VmCaller<Self::VmUserState>,
         hi: i64,
         lo: u64,
     ) -> Result<I128Object, Self::Error> {
@@ -1446,7 +1446,7 @@ impl VmCallerEnv for Host {
 
     fn obj_to_i128_lo64(
         &self,
-        vmcaller: &mut VmCaller<Self::VmUserState>,
+        _vmcaller: &mut VmCaller<Self::VmUserState>,
         obj: I128Object,
     ) -> Result<u64, Self::Error> {
         self.visit_obj(obj, move |i: &i128| Ok(int128_helpers::i128_lo(*i)))
@@ -1454,7 +1454,7 @@ impl VmCallerEnv for Host {
 
     fn obj_to_i128_hi64(
         &self,
-        vmcaller: &mut VmCaller<Self::VmUserState>,
+        _vmcaller: &mut VmCaller<Self::VmUserState>,
         obj: I128Object,
     ) -> Result<i64, Self::Error> {
         self.visit_obj(obj, move |i: &i128| Ok(int128_helpers::i128_hi(*i)))
@@ -1462,7 +1462,7 @@ impl VmCallerEnv for Host {
 
     fn obj_from_u256_pieces(
         &self,
-        vmcaller: &mut VmCaller<Self::VmUserState>,
+        _vmcaller: &mut VmCaller<Self::VmUserState>,
         hi_hi: u64,
         hi_lo: u64,
         lo_hi: u64,
@@ -1473,7 +1473,7 @@ impl VmCallerEnv for Host {
 
     fn u256_val_from_be_bytes(
         &self,
-        vmcaller: &mut VmCaller<Self::VmUserState>,
+        _vmcaller: &mut VmCaller<Self::VmUserState>,
         bytes: BytesObject,
     ) -> Result<U256Val, HostError> {
         let num = self.visit_obj(bytes, move |b: &ScBytes| {
@@ -1487,7 +1487,7 @@ impl VmCallerEnv for Host {
 
     fn u256_val_to_be_bytes(
         &self,
-        vmcaller: &mut VmCaller<Self::VmUserState>,
+        _vmcaller: &mut VmCaller<Self::VmUserState>,
         val: U256Val,
     ) -> Result<BytesObject, HostError> {
         if let Ok(so) = U256Small::try_from(val) {
@@ -1503,7 +1503,7 @@ impl VmCallerEnv for Host {
 
     fn obj_to_u256_hi_hi(
         &self,
-        vmcaller: &mut VmCaller<Self::VmUserState>,
+        _vmcaller: &mut VmCaller<Self::VmUserState>,
         obj: U256Object,
     ) -> Result<u64, HostError> {
         self.visit_obj(obj, move |u: &U256| {
@@ -1514,7 +1514,7 @@ impl VmCallerEnv for Host {
 
     fn obj_to_u256_hi_lo(
         &self,
-        vmcaller: &mut VmCaller<Self::VmUserState>,
+        _vmcaller: &mut VmCaller<Self::VmUserState>,
         obj: U256Object,
     ) -> Result<u64, HostError> {
         self.visit_obj(obj, move |u: &U256| {
@@ -1525,7 +1525,7 @@ impl VmCallerEnv for Host {
 
     fn obj_to_u256_lo_hi(
         &self,
-        vmcaller: &mut VmCaller<Self::VmUserState>,
+        _vmcaller: &mut VmCaller<Self::VmUserState>,
         obj: U256Object,
     ) -> Result<u64, HostError> {
         self.visit_obj(obj, move |u: &U256| {
@@ -1536,7 +1536,7 @@ impl VmCallerEnv for Host {
 
     fn obj_to_u256_lo_lo(
         &self,
-        vmcaller: &mut VmCaller<Self::VmUserState>,
+        _vmcaller: &mut VmCaller<Self::VmUserState>,
         obj: U256Object,
     ) -> Result<u64, HostError> {
         self.visit_obj(obj, move |u: &U256| {
@@ -1547,7 +1547,7 @@ impl VmCallerEnv for Host {
 
     fn obj_from_i256_pieces(
         &self,
-        vmcaller: &mut VmCaller<Self::VmUserState>,
+        _vmcaller: &mut VmCaller<Self::VmUserState>,
         hi_hi: i64,
         hi_lo: u64,
         lo_hi: u64,
@@ -1558,7 +1558,7 @@ impl VmCallerEnv for Host {
 
     fn i256_val_from_be_bytes(
         &self,
-        vmcaller: &mut VmCaller<Self::VmUserState>,
+        _vmcaller: &mut VmCaller<Self::VmUserState>,
         bytes: BytesObject,
     ) -> Result<I256Val, HostError> {
         let num = self.visit_obj(bytes, move |b: &ScBytes| {
@@ -1572,7 +1572,7 @@ impl VmCallerEnv for Host {
 
     fn i256_val_to_be_bytes(
         &self,
-        vmcaller: &mut VmCaller<Self::VmUserState>,
+        _vmcaller: &mut VmCaller<Self::VmUserState>,
         val: I256Val,
     ) -> Result<BytesObject, HostError> {
         if let Ok(so) = I256Small::try_from(val) {
@@ -1588,7 +1588,7 @@ impl VmCallerEnv for Host {
 
     fn obj_to_i256_hi_hi(
         &self,
-        vmcaller: &mut VmCaller<Self::VmUserState>,
+        _vmcaller: &mut VmCaller<Self::VmUserState>,
         obj: I256Object,
     ) -> Result<i64, HostError> {
         self.visit_obj(obj, move |i: &I256| {
@@ -1599,7 +1599,7 @@ impl VmCallerEnv for Host {
 
     fn obj_to_i256_hi_lo(
         &self,
-        vmcaller: &mut VmCaller<Self::VmUserState>,
+        _vmcaller: &mut VmCaller<Self::VmUserState>,
         obj: I256Object,
     ) -> Result<u64, HostError> {
         self.visit_obj(obj, move |i: &I256| {
@@ -1610,7 +1610,7 @@ impl VmCallerEnv for Host {
 
     fn obj_to_i256_lo_hi(
         &self,
-        vmcaller: &mut VmCaller<Self::VmUserState>,
+        _vmcaller: &mut VmCaller<Self::VmUserState>,
         obj: I256Object,
     ) -> Result<u64, HostError> {
         self.visit_obj(obj, move |i: &I256| {
@@ -1621,7 +1621,7 @@ impl VmCallerEnv for Host {
 
     fn obj_to_i256_lo_lo(
         &self,
-        vmcaller: &mut VmCaller<Self::VmUserState>,
+        _vmcaller: &mut VmCaller<Self::VmUserState>,
         obj: I256Object,
     ) -> Result<u64, HostError> {
         self.visit_obj(obj, move |i: &I256| {
@@ -2289,7 +2289,7 @@ impl VmCallerEnv for Host {
 
     fn bump_contract_instance_and_code(
         &self,
-        vmcaller: &mut VmCaller<Self::VmUserState>,
+        _vmcaller: &mut VmCaller<Self::VmUserState>,
         contract: AddressObject,
         low_expiration_watermark: U32Val,
         high_expiration_watermark: U32Val,
