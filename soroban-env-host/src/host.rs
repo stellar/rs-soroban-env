@@ -1069,6 +1069,7 @@ impl EnvBase for Host {
     }
 
     fn symbol_new_from_slice(&self, s: &str) -> Result<SymbolObject, HostError> {
+        self.charge_budget(ContractCostType::HostMemCmp, Some(s.len() as u64))?;
         for ch in s.chars() {
             SymbolSmall::validate_char(ch)?;
         }
