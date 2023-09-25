@@ -54,7 +54,7 @@ pretty_assertions = "1.4.0"
 
 [features]
 testutils = ["soroban-env-common/testutils"]
-next = ["soroban-env-common/next", "soroban-test-wasms/next"]
+next = ["soroban-env-common/next", "soroban-test-wasms/next", "soroban-synth-wasm/next", "soroban-bench-utils/next"]
 tracy = ["dep:tracy-client"]
 
 [[bench]]
