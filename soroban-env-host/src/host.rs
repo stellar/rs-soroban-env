@@ -2391,7 +2391,7 @@ impl VmCallerEnv for Host {
     // Notes on metering: covered by the components.
     fn try_call(
         &self,
-        vmcaller: &mut VmCaller<Host>,
+        _vmcaller: &mut VmCaller<Host>,
         contract_address: AddressObject,
         func: Symbol,
         args: VecObject,
@@ -2892,7 +2892,7 @@ impl VmCallerEnv for Host {
     // endregion "crypto" module functions
     // region: "test" module functions
 
-    fn dummy0(&self, vmcaller: &mut VmCaller<Self::VmUserState>) -> Result<Val, Self::Error> {
+    fn dummy0(&self, _vmcaller: &mut VmCaller<Self::VmUserState>) -> Result<Val, Self::Error> {
         Ok(().into())
     }
 
@@ -2901,7 +2901,7 @@ impl VmCallerEnv for Host {
 
     fn require_auth_for_args(
         &self,
-        vmcaller: &mut VmCaller<Self::VmUserState>,
+        _vmcaller: &mut VmCaller<Self::VmUserState>,
         address: AddressObject,
         args: VecObject,
     ) -> Result<Void, Self::Error> {
@@ -2914,7 +2914,7 @@ impl VmCallerEnv for Host {
 
     fn require_auth(
         &self,
-        vmcaller: &mut VmCaller<Self::VmUserState>,
+        _vmcaller: &mut VmCaller<Self::VmUserState>,
         address: AddressObject,
     ) -> Result<Void, Self::Error> {
         let args = self.with_current_frame(|f| {
@@ -2943,7 +2943,7 @@ impl VmCallerEnv for Host {
 
     fn authorize_as_curr_contract(
         &self,
-        vmcaller: &mut VmCaller<Self::VmUserState>,
+        _vmcaller: &mut VmCaller<Self::VmUserState>,
         auth_entries: VecObject,
     ) -> Result<Void, HostError> {
         Ok(self
@@ -3003,7 +3003,7 @@ impl VmCallerEnv for Host {
 
     fn prng_reseed(
         &self,
-        vmcaller: &mut VmCaller<Self::VmUserState>,
+        _vmcaller: &mut VmCaller<Self::VmUserState>,
         seed: BytesObject,
     ) -> Result<Void, Self::Error> {
         self.visit_obj(seed, |bytes: &ScBytes| {
@@ -3035,7 +3035,7 @@ impl VmCallerEnv for Host {
 
     fn prng_bytes_new(
         &self,
-        vmcaller: &mut VmCaller<Self::VmUserState>,
+        _vmcaller: &mut VmCaller<Self::VmUserState>,
         length: U32Val,
     ) -> Result<BytesObject, Self::Error> {
         self.add_host_object(
@@ -3045,7 +3045,7 @@ impl VmCallerEnv for Host {
 
     fn prng_u64_in_inclusive_range(
         &self,
-        vmcaller: &mut VmCaller<Self::VmUserState>,
+        _vmcaller: &mut VmCaller<Self::VmUserState>,
         lo: u64,
         hi: u64,
     ) -> Result<u64, Self::Error> {
@@ -3054,7 +3054,7 @@ impl VmCallerEnv for Host {
 
     fn prng_vec_shuffle(
         &self,
-        vmcaller: &mut VmCaller<Self::VmUserState>,
+        _vmcaller: &mut VmCaller<Self::VmUserState>,
         vec: VecObject,
     ) -> Result<VecObject, Self::Error> {
         let vnew = self.visit_obj(vec, |v: &HostVec| {
