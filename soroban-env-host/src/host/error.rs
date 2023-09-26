@@ -285,6 +285,16 @@ impl Host {
         )
     }
 
+    pub(crate) fn err_oob_object_index(&self, index: Option<u32>) -> HostError {
+        let type_ = ScErrorType::Object;
+        let code = ScErrorCode::IndexBounds;
+        let msg = "object index out of bounds";
+        match index {
+            None => self.err(type_, code, msg, &[]),
+            Some(index) => self.err(type_, code, msg, &[U32Val::from(index).to_val()]),
+        }
+    }
+
     pub(crate) fn err_wasmi_fuel_metering_disabled(&self) -> HostError {
         self.err(
             ScErrorType::WasmVm,

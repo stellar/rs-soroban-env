@@ -2699,7 +2699,7 @@ impl VmCallerEnv for Host {
         let vnew = self.visit_obj(b, |hv: &ScBytes| {
             // we allocate the new vector to be able to hold `len + 1` bytes, so that the push
             // will not trigger a reallocation, causing data to be cloned twice.
-            let len = hv.len().saturating_add(1);
+            let len = self.validate_usize_sum_fits_in_u32(hv.len(), 1)?;
             Vec::<u8>::charge_bulk_init_cpy(len as u64, self)?;
             let mut vnew: Vec<u8> = Vec::with_capacity(len);
             vnew.extend_from_slice(hv.as_slice());
@@ -2783,9 +2783,9 @@ impl VmCallerEnv for Host {
         let u = self.u8_from_u32val_input("u", u)?;
         let vnew = self.visit_obj(b, |hv: &ScBytes| {
             self.validate_index_le_bound(i, hv.len())?;
-            // we allocate the new vector to be able to hold `len + 1` bytes, so that the push
+            // we allocate the new vector to be able to hold `len + 1` bytes, so that the insert
             // will not trigger a reallocation, causing data to be cloned twice.
-            let len = hv.len().saturating_add(1);
+            let len = self.validate_usize_sum_fits_in_u32(hv.len(), 1)?;
             Vec::<u8>::charge_bulk_init_cpy(len as u64, self)?;
             let mut vnew: Vec<u8> = Vec::with_capacity(len);
             vnew.extend_from_slice(hv.as_slice());
@@ -2803,14 +2803,9 @@ impl VmCallerEnv for Host {
     ) -> Result<BytesObject, HostError> {
         let vnew = self.visit_obj(b1, |sb1: &ScBytes| {
             self.visit_obj(b2, |sb2: &ScBytes| {
-                if sb2.len() > u32::MAX as usize - sb1.len() {
-                    return Err(self.err_arith_overflow());
-                }
                 // we allocate large enough memory to hold the new combined vector, so that
                 // allocation only happens once, and charge for it upfront.
-                // we already checked above that `len` will not overflow, here using
-                // saturating_add just in case.
-                let len = sb1.len().saturating_add(sb2.len());
+                let len = self.validate_usize_sum_fits_in_u32(sb1.len(), sb2.len())?;
                 Vec::<u8>::charge_bulk_init_cpy(len as u64, self)?;
                 let mut vnew: Vec<u8> = Vec::with_capacity(len);
                 vnew.extend_from_slice(sb1.as_slice());
