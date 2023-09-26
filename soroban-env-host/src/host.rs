@@ -27,11 +27,11 @@ use crate::{
 use crate::Vm;
 use crate::{EnvBase, Object, Symbol, Val};
 
-pub(crate) mod comparison;
+mod comparison;
 mod conversion;
 pub(crate) mod crypto;
 mod data_helper;
-pub(crate) mod declared_size;
+mod declared_size;
 pub(crate) mod error;
 pub(crate) mod frame;
 pub(crate) mod ledger_info_helper;
@@ -106,22 +106,22 @@ pub struct LedgerInfo {
 }
 
 #[derive(Clone, Default)]
-pub(crate) struct HostImpl {
+struct HostImpl {
     source_account: RefCell<Option<AccountId>>,
     ledger: RefCell<Option<LedgerInfo>>,
-    pub(crate) objects: RefCell<Vec<HostObject>>,
+    objects: RefCell<Vec<HostObject>>,
     storage: RefCell<Storage>,
-    pub(crate) context: RefCell<Vec<Context>>,
+    context: RefCell<Vec<Context>>,
     // Note: budget is refcounted and is _not_ deep-cloned when you call HostImpl::deep_clone,
     // mainly because it's not really possible to achieve (the same budget is connected to many
     // metered sub-objects) but also because it's plausible that the person calling deep_clone
     // actually wants their clones to be metered by "the same" total budget
     // FIXME: deep_clone is gone, maybe Budget should not be separately refcounted?
-    pub(crate) budget: Budget,
-    pub(crate) events: RefCell<InternalEventsBuffer>,
+    budget: Budget,
+    events: RefCell<InternalEventsBuffer>,
     authorization_manager: RefCell<AuthorizationManager>,
-    pub(crate) diagnostic_level: RefCell<DiagnosticLevel>,
-    pub(crate) base_prng: RefCell<Option<Prng>>,
+    diagnostic_level: RefCell<DiagnosticLevel>,
+    base_prng: RefCell<Option<Prng>>,
     // Note: we're not going to charge metering for testutils because it's out of the scope
     // of what users will be charged for in production -- it's scaffolding for testing a contract,
     // but shouldn't be charged to the contract itself (and will never be compiled-in to
@@ -139,7 +139,7 @@ pub(crate) struct HostImpl {
 }
 // Host is a newtype on Rc<HostImpl> so we can impl Env for it below.
 #[derive(Clone)]
-pub struct Host(pub(crate) Rc<HostImpl>);
+pub struct Host(Rc<HostImpl>);
 
 #[allow(clippy::derivable_impls)]
 impl Default for Host {
@@ -251,8 +251,6 @@ impl Host {
     pub fn with_storage_and_budget(storage: Storage, budget: Budget) -> Self {
         #[cfg(all(not(target_family = "wasm"), feature = "tracy"))]
         let _client = tracy_client::Client::start();
-        // Here we are missing charge for the Rc::new but that is once for the
-        // lifetime of the host, so that should be okay.
         Self(Rc::new(HostImpl {
             source_account: RefCell::new(None),
             ledger: RefCell::new(None),
@@ -506,6 +504,7 @@ impl Host {
 
     // Testing interface to create values directly for later use via Env functions.
     // It needs to be a `pub` method because benches are considered a separate crate.
+    #[cfg(any(test, feature = "testutils"))]
     pub fn inject_val(&self, v: &ScVal) -> Result<Val, HostError> {
         self.to_host_val(v).map(Into::into)
     }
