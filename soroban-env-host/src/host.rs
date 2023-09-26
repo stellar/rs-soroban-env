@@ -2574,7 +2574,7 @@ impl VmCallerEnv for Host {
         match found {
             None => Err(self.err(
                 ScErrorType::Value,
-                ScErrorCode::InvalidInput,
+                ScErrorCode::MissingValue,
                 "symbol not found in linear memory slices",
                 &[sym.to_val()],
             )),
