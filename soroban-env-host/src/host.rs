@@ -2867,10 +2867,10 @@ impl VmCallerEnv for Host {
         x: BytesObject,
         s: BytesObject,
     ) -> Result<Void, HostError> {
-        let public_key = self.ed25519_pub_key_from_bytesobj_input(k)?;
+        let verifying_key = self.ed25519_pub_key_from_bytesobj_input(k)?;
         let sig = self.ed25519_signature_from_bytesobj_input("sig", s)?;
         let res = self.visit_obj(x, |payload: &ScBytes| {
-            self.verify_sig_ed25519_internal(payload.as_slice(), &public_key, &sig)
+            self.verify_sig_ed25519_internal(payload.as_slice(), &verifying_key, &sig)
         });
         Ok(res?.into())
     }
