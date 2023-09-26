@@ -2827,7 +2827,11 @@ impl VmCallerEnv for Host {
         let end: u32 = end.into();
         let vnew = self.visit_obj(b, |hv: &ScBytes| {
             let range = self.valid_range_from_start_end_bound(start, end, hv.len())?;
-            self.metered_slice_to_vec(&hv.as_slice()[range])
+            self.metered_slice_to_vec(
+                &hv.as_slice()
+                    .get(range)
+                    .ok_or_else(|| self.err_oob_object_index(None))?,
+            )
         })?;
         self.add_host_object(self.scbytes_from_vec(vnew)?)
     }
