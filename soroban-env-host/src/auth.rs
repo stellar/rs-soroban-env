@@ -1827,6 +1827,111 @@ impl Host {
             )
         })
     }
+
+    // Returns the recorded per-address authorization payloads that would cover the
+    // top-level contract function invocation in the enforcing mode.
+    // This should only be called in the recording authorization mode, i.e. only
+    // if `switch_to_recording_auth` has been called.
+    pub fn get_recorded_auth_payloads(&self) -> Result<Vec<RecordedAuthPayload>, HostError> {
+        #[cfg(not(any(test, feature = "testutils")))]
+        {
+            self.try_borrow_authorization_manager()?
+                .get_recorded_auth_payloads(self)
+        }
+        #[cfg(any(test, feature = "testutils"))]
+        {
+            self.try_borrow_previous_authorization_manager()?
+                .as_ref()
+                .ok_or_else(|| {
+                    self.err(
+                        ScErrorType::Auth,
+                        ScErrorCode::InvalidAction,
+                        "previous invocation is missing - no auth data to get",
+                        &[],
+                    )
+                })?
+                .get_recorded_auth_payloads(self)
+        }
+    }
+}
+
+#[cfg(any(test, feature = "testutils"))]
+use crate::{host::frame::ContractReentryMode, xdr::SorobanAuthorizedInvocation, BytesObject};
+#[cfg(any(test, feature = "testutils"))]
+impl Host {
+    /// Invokes the reserved `__check_auth` function on a provided contract.
+    ///
+    /// This is useful for testing the custom account contracts. Otherwise, the
+    /// host prohibits calling `__check_auth` outside of internal implementation
+    /// of `require_auth[_for_args]` calls.
+    pub fn call_account_contract_check_auth(
+        &self,
+        contract: BytesObject,
+        args: VecObject,
+    ) -> Result<Val, HostError> {
+        use crate::native_contract::account_contract::ACCOUNT_CONTRACT_CHECK_AUTH_FN_NAME;
+
+        let contract_id = self.hash_from_bytesobj_input("contract", contract)?;
+        let args_vec = self.call_args_from_obj(args)?;
+        let res = self.call_n_internal(
+            &contract_id,
+            ACCOUNT_CONTRACT_CHECK_AUTH_FN_NAME.try_into_val(self)?,
+            args_vec.as_slice(),
+            ContractReentryMode::Prohibited,
+            true,
+        );
+        if let Err(e) = &res {
+            self.error(
+                e.error,
+                "check auth invocation for a custom account contract failed",
+                &[contract.to_val(), args.to_val()],
+            );
+        }
+        res
+    }
+
+    /// Returns the current state of the authorization manager.
+    ///
+    /// Use this in conjunction with `set_auth_manager` to do authorized
+    /// operations without breaking the current authorization state (useful for
+    /// preserving the auth state while doing the generic test setup).
+    pub fn snapshot_auth_manager(&self) -> Result<AuthorizationManager, HostError> {
+        Ok(self.try_borrow_authorization_manager()?.clone())
+    }
+
+    /// Replaces authorization manager with the provided new instance.
+    ///
+    /// Use this in conjunction with `snapshot_auth_manager` to do authorized
+    /// operations without breaking the current authorization state (useful for
+    /// preserving the auth state while doing the generic test setup).
+    pub fn set_auth_manager(&self, auth_manager: AuthorizationManager) -> Result<(), HostError> {
+        *self.try_borrow_authorization_manager_mut()? = auth_manager;
+        Ok(())
+    }
+
+    // Returns the authorizations that have been authenticated for the last
+    // contract invocation.
+    //
+    // Authenticated means that either the authorization was authenticated using
+    // the actual authorization logic for that authorization in enforced mode,
+    // or that it was recorded in recording mode and authorization was assumed
+    // successful.
+    pub fn get_authenticated_authorizations(
+        &self,
+    ) -> Result<Vec<(ScAddress, SorobanAuthorizedInvocation)>, HostError> {
+        Ok(self
+            .try_borrow_previous_authorization_manager_mut()?
+            .as_mut()
+            .ok_or_else(|| {
+                self.err(
+                    ScErrorType::Auth,
+                    ScErrorCode::InvalidAction,
+                    "previous invocation is missing - no auth data to get",
+                    &[],
+                )
+            })?
+            .get_authenticated_authorizations(self))
+    }
 }
 
 // metering: free for testutils

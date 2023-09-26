@@ -5,18 +5,16 @@ use core::{cell::RefCell, cmp::Ordering, fmt::Debug};
 use std::rc::Rc;
 
 use crate::{
-    auth::{AuthorizationManager, RecordedAuthPayload},
+    auth::AuthorizationManager,
     budget::{AsBudget, Budget},
-    err,
     events::{diagnostic::DiagnosticLevel, Events, InternalEventsBuffer},
     host_object::{HostMap, HostObject, HostObjectType, HostVec},
     impl_bignum_host_fns_rhs_u32, impl_wrapping_obj_from_num, impl_wrapping_obj_to_num,
     num::*,
-    storage::{InstanceStorageMap, Storage},
+    storage::Storage,
     xdr::{
-        int128_helpers, AccountId, Asset, ContractCodeEntry, ContractCostType, ContractDataEntry,
-        ContractEventType, ContractExecutable, CreateContractArgs, Duration, ExtensionPoint, Hash,
-        LedgerEntryData, LedgerKey, LedgerKeyContractCode, PublicKey, ScAddress, ScBytes,
+        int128_helpers, AccountId, Asset, ContractCostType, ContractEventType, ContractExecutable,
+        CreateContractArgs, Duration, Hash, LedgerEntryData, PublicKey, ScAddress, ScBytes,
         ScErrorType, ScString, ScSymbol, ScVal, TimePoint,
     },
     AddressObject, Bool, BytesObject, ConversionError, Error, I128Object, I256Object, MapObject,
@@ -35,6 +33,7 @@ mod declared_size;
 pub(crate) mod error;
 pub(crate) mod frame;
 pub(crate) mod ledger_info_helper;
+mod lifecycle;
 mod mem_helper;
 pub(crate) mod metered_clone;
 pub(crate) mod metered_map;
@@ -45,14 +44,10 @@ mod prng;
 pub use prng::{Seed, SEED_BYTES};
 mod validity;
 pub use error::HostError;
-use soroban_env_common::xdr::{
-    ContractDataDurability, ContractIdPreimage, ContractIdPreimageFromAddress, ScContractInstance,
-    ScErrorCode,
-};
+use soroban_env_common::xdr::{ContractIdPreimage, ContractIdPreimageFromAddress, ScErrorCode};
 
 use self::{
     frame::{Context, ContractReentryMode},
-    metered_clone::MeteredAlloc,
     prng::Prng,
 };
 use self::{
@@ -60,16 +55,10 @@ use self::{
     metered_xdr::metered_write_xdr,
 };
 use crate::impl_bignum_host_fns;
-#[cfg(any(test, feature = "testutils"))]
-use crate::storage::{AccessType, Footprint};
 use crate::Compare;
-#[cfg(any(test, feature = "testutils"))]
-use crate::TryIntoVal;
 #[cfg(any(test, feature = "testutils"))]
 pub use frame::ContractFunctionSet;
 pub(crate) use frame::Frame;
-#[cfg(any(test, feature = "testutils"))]
-use soroban_env_common::xdr::SorobanAuthorizedInvocation;
 
 /// Defines the maximum depth for recursive calls in the host, i.e. `Val` conversion, comparison,
 /// and deep clone, to prevent stack overflow.
@@ -381,59 +370,6 @@ impl Host {
         self.0.budget.clone().charge(ty, input)
     }
 
-    pub fn with_mut_storage<F, U>(&self, f: F) -> Result<U, HostError>
-    where
-        F: FnOnce(&mut Storage) -> Result<U, HostError>,
-    {
-        f(&mut *self.try_borrow_storage_mut()?)
-    }
-
-    /// Immutable accessor to the instance storage of the currently running
-    /// contract.
-    /// Performs lazy initialization of instance storage on access.
-    pub(crate) fn with_instance_storage<F, U>(&self, f: F) -> Result<U, HostError>
-    where
-        F: FnOnce(&InstanceStorageMap) -> Result<U, HostError>,
-    {
-        self.with_current_context_mut(|ctx| {
-            self.maybe_init_instance_storage(ctx)?;
-            f(ctx.storage.as_ref().ok_or_else(|| {
-                self.err(
-                    ScErrorType::Context,
-                    ScErrorCode::InternalError,
-                    "missing instance storage",
-                    &[],
-                )
-            })?)
-        })
-    }
-
-    /// Mutable accessor to the instance storage of the currently running
-    /// contract.
-    /// Performs lazy initialization of instance storage on access.
-    pub(crate) fn with_mut_instance_storage<F, U>(&self, f: F) -> Result<U, HostError>
-    where
-        F: FnOnce(&mut InstanceStorageMap) -> Result<U, HostError>,
-    {
-        self.with_current_context_mut(|ctx| {
-            self.maybe_init_instance_storage(ctx)?;
-            let storage = ctx.storage.as_mut().ok_or_else(|| {
-                self.err(
-                    ScErrorType::Context,
-                    ScErrorCode::InternalError,
-                    "missing instance storage",
-                    &[],
-                )
-            })?;
-            // Consider any mutable access to be modifying the instance storage.
-            // This way we would provide consistent footprint (RO for read-only
-            // ops using `with_instance_storage` and RW for potentially
-            // mutating ops using `with_mut_instance_storage`).
-            storage.is_modified = true;
-            f(storage)
-        })
-    }
-
     /// Accept a _unique_ (refcount = 1) host reference and destroy the
     /// underlying [`HostImpl`], returning its finalized components containing
     /// processing side effects  to the caller as a tuple wrapped in `Ok(...)`.
@@ -449,395 +385,11 @@ impl Host {
             })
     }
 
-    /// Invokes the reserved `__check_auth` function on a provided contract.
-    ///
-    /// This is useful for testing the custom account contracts. Otherwise, the
-    /// host prohibits calling `__check_auth` outside of internal implementation
-    /// of `require_auth[_for_args]` calls.
-    #[cfg(any(test, feature = "testutils"))]
-    pub fn call_account_contract_check_auth(
-        &self,
-        contract: BytesObject,
-        args: VecObject,
-    ) -> Result<Val, HostError> {
-        use crate::native_contract::account_contract::ACCOUNT_CONTRACT_CHECK_AUTH_FN_NAME;
-
-        let contract_id = self.hash_from_bytesobj_input("contract", contract)?;
-        let args_vec = self.call_args_from_obj(args)?;
-        let res = self.call_n_internal(
-            &contract_id,
-            ACCOUNT_CONTRACT_CHECK_AUTH_FN_NAME.try_into_val(self)?,
-            args_vec.as_slice(),
-            ContractReentryMode::Prohibited,
-            true,
-        );
-        if let Err(e) = &res {
-            self.error(
-                e.error,
-                "check auth invocation for a custom account contract failed",
-                &[contract.to_val(), args.to_val()],
-            );
-        }
-        res
-    }
-
-    #[cfg(any(test, feature = "testutils"))]
-    /// Returns the current state of the authorization manager.
-    ///
-    /// Use this in conjunction with `set_auth_manager` to do authorized
-    /// operations without breaking the current authorization state (useful for
-    /// preserving the auth state while doing the generic test setup).
-    pub fn snapshot_auth_manager(&self) -> Result<AuthorizationManager, HostError> {
-        Ok(self.try_borrow_authorization_manager()?.clone())
-    }
-
-    /// Replaces authorization manager with the provided new instance.
-    ///
-    /// Use this in conjunction with `snapshot_auth_manager` to do authorized
-    /// operations without breaking the current authorization state (useful for
-    /// preserving the auth state while doing the generic test setup).
-    #[cfg(any(test, feature = "testutils"))]
-    pub fn set_auth_manager(&self, auth_manager: AuthorizationManager) -> Result<(), HostError> {
-        *self.try_borrow_authorization_manager_mut()? = auth_manager;
-        Ok(())
-    }
-
     // Testing interface to create values directly for later use via Env functions.
     // It needs to be a `pub` method because benches are considered a separate crate.
     #[cfg(any(test, feature = "testutils"))]
     pub fn inject_val(&self, v: &ScVal) -> Result<Val, HostError> {
         self.to_host_val(v).map(Into::into)
-    }
-
-    // Notes on metering: this is covered by the called components.
-    fn create_contract_with_id(
-        &self,
-        contract_id: Hash,
-        contract_executable: ContractExecutable,
-    ) -> Result<(), HostError> {
-        let storage_key = self.contract_instance_ledger_key(&contract_id)?;
-        if self
-            .try_borrow_storage_mut()?
-            .has(&storage_key, self.as_budget())
-            .map_err(|e| self.decorate_contract_instance_storage_error(e, &contract_id))?
-        {
-            return Err(self.err(
-                ScErrorType::Storage,
-                ScErrorCode::ExistingValue,
-                "contract already exists",
-                &[self
-                    .add_host_object(self.scbytes_from_hash(&contract_id)?)?
-                    .into()],
-            ));
-        }
-        // Make sure the contract code exists. Without this check it would be
-        // possible to accidentally create a contract that never may be invoked
-        // (just by providing a bad hash).
-        if let ContractExecutable::Wasm(wasm_hash) = &contract_executable {
-            if !self.wasm_exists(wasm_hash)? {
-                return Err(err!(
-                    self,
-                    (ScErrorType::Storage, ScErrorCode::MissingValue),
-                    "Wasm does not exist",
-                    *wasm_hash
-                ));
-            }
-        }
-        let instance = ScContractInstance {
-            executable: contract_executable,
-            storage: Default::default(),
-        };
-        self.store_contract_instance(instance, contract_id, &storage_key)?;
-        Ok(())
-    }
-
-    fn maybe_initialize_asset_token(
-        &self,
-        contract_id: &Hash,
-        id_preimage: &ContractIdPreimage,
-    ) -> Result<(), HostError> {
-        if let ContractIdPreimage::Asset(asset) = id_preimage {
-            let mut asset_bytes: Vec<u8> = Default::default();
-            metered_write_xdr(self.budget_ref(), asset, &mut asset_bytes)?;
-            self.call_n_internal(
-                contract_id,
-                Symbol::try_from_val(self, &"init_asset")?,
-                &[self
-                    .add_host_object(self.scbytes_from_vec(asset_bytes)?)?
-                    .into()],
-                ContractReentryMode::Prohibited,
-                false,
-            )?;
-            Ok(())
-        } else {
-            Ok(())
-        }
-    }
-
-    fn create_contract_internal(
-        &self,
-        deployer: Option<AddressObject>,
-        args: CreateContractArgs,
-    ) -> Result<AddressObject, HostError> {
-        let has_deployer = deployer.is_some();
-        if has_deployer {
-            self.try_borrow_authorization_manager()?
-                .push_create_contract_host_fn_frame(self, args.metered_clone(self)?)?;
-        }
-        // Make sure that even in case of operation failure we still pop the
-        // stack frame.
-        // This is hacky, but currently this is the only instance where we need
-        // to manually manage auth manager frames (we don't need to authorize
-        // any other host fns and it doesn't seem useful to create extra frames
-        // for them just to make auth work in a single case).
-        let res = self.create_contract_with_optional_auth(deployer, args);
-        if has_deployer {
-            self.try_borrow_authorization_manager()?.pop_frame(self)?;
-        }
-        res
-    }
-
-    fn create_contract_with_optional_auth(
-        &self,
-        deployer: Option<AddressObject>,
-        args: CreateContractArgs,
-    ) -> Result<AddressObject, HostError> {
-        if let Some(deployer_address) = deployer {
-            self.try_borrow_authorization_manager()?.require_auth(
-                self,
-                deployer_address,
-                Default::default(),
-            )?;
-        }
-
-        let id_preimage =
-            self.get_full_contract_id_preimage(args.contract_id_preimage.metered_clone(self)?)?;
-        let hash_id = Hash(self.metered_hash_xdr(&id_preimage)?);
-        self.create_contract_with_id(hash_id.metered_clone(self)?, args.executable)?;
-        self.maybe_initialize_asset_token(&hash_id, &args.contract_id_preimage)?;
-        self.add_host_object(ScAddress::Contract(hash_id))
-    }
-
-    pub(crate) fn get_contract_id_hash(
-        &self,
-        deployer: AddressObject,
-        salt: BytesObject,
-    ) -> Result<Hash, HostError> {
-        let contract_id_preimage = ContractIdPreimage::Address(ContractIdPreimageFromAddress {
-            address: self.visit_obj(deployer, |addr: &ScAddress| addr.metered_clone(self))?,
-            salt: self.u256_from_bytesobj_input("contract_id_salt", salt)?,
-        });
-
-        let id_preimage =
-            self.get_full_contract_id_preimage(contract_id_preimage.metered_clone(self)?)?;
-        Ok(Hash(self.metered_hash_xdr(&id_preimage)?))
-    }
-
-    pub(crate) fn get_asset_contract_id_hash(&self, asset: Asset) -> Result<Hash, HostError> {
-        let id_preimage = self.get_full_contract_id_preimage(ContractIdPreimage::Asset(asset))?;
-        let id_arr: [u8; 32] = self.metered_hash_xdr(&id_preimage)?;
-        Ok(Hash(id_arr))
-    }
-
-    // "testutils" is not covered by budget metering.
-    #[cfg(any(test, feature = "testutils"))]
-    pub fn register_test_contract(
-        &self,
-        contract_address: AddressObject,
-        contract_fns: Rc<dyn ContractFunctionSet>,
-    ) -> Result<(), HostError> {
-        let contract_id = self.contract_id_from_address(contract_address)?;
-        let instance_key = self.contract_instance_ledger_key(&contract_id)?;
-        // Test contract might be overriding an already registered Wasm
-        // contract, in which case we should preserve the instance entry.
-        if self
-            .retrieve_contract_instance_from_storage(&instance_key)
-            .is_err()
-        {
-            // Use empty Wasm as default executable. It shouldn't be observable,
-            // but allows exercising bump logic and make operations like Wasm
-            // update more meaningful.
-            let wasm_hash_obj = self.upload_contract_wasm(vec![])?;
-            let wasm_hash = self.hash_from_bytesobj_input("wasm_hash", wasm_hash_obj)?;
-            let instance = ScContractInstance {
-                executable: ContractExecutable::Wasm(wasm_hash),
-                storage: None,
-            };
-            self.store_contract_instance(instance, contract_id.clone(), &instance_key)?;
-        };
-        let mut contracts = self.try_borrow_contracts_mut()?;
-        contracts.insert(contract_id, contract_fns);
-        Ok(())
-    }
-
-    // Writes an arbitrary ledger entry to storage.
-    // "testutils" are not covered by budget metering.
-    #[cfg(any(test, feature = "testutils"))]
-    pub fn add_ledger_entry(
-        &self,
-        key: &Rc<LedgerKey>,
-        val: &Rc<soroban_env_common::xdr::LedgerEntry>,
-        expiration_ledger: Option<u32>,
-    ) -> Result<(), HostError> {
-        self.as_budget().with_free_budget(|| {
-            self.with_mut_storage(|storage| {
-                storage.put(key, val, expiration_ledger, self.as_budget())
-            })
-        })
-    }
-
-    // Performs the necessary setup to access the provided ledger key/entry in
-    // enforcing storage mode.
-    // "testutils" are not covered by budget metering.
-    #[cfg(any(test, feature = "testutils"))]
-    pub fn setup_storage_entry(
-        &self,
-        key: Rc<LedgerKey>,
-        val: Option<(Rc<soroban_env_common::xdr::LedgerEntry>, Option<u32>)>,
-        access_type: AccessType,
-    ) -> Result<(), HostError> {
-        self.as_budget().with_free_budget(|| {
-            self.with_mut_storage(|storage| {
-                storage
-                    .footprint
-                    .record_access(&key, access_type, self.as_budget())?;
-                storage.map = storage.map.insert(key, val, self.as_budget())?;
-                Ok(())
-            })
-        })
-    }
-
-    // Performs the necessary setup to access all the entries in provided
-    // footprint in enforcing mode.
-    // "testutils" are not covered by budget metering.
-    #[cfg(any(test, feature = "testutils"))]
-    pub fn setup_storage_footprint(&self, footprint: Footprint) -> Result<(), HostError> {
-        for (key, access_type) in footprint.0.map {
-            self.setup_storage_entry(key, None, access_type)?;
-        }
-        Ok(())
-    }
-
-    // Returns the authorizations that have been authenticated for the last
-    // contract invocation.
-    //
-    // Authenticated means that either the authorization was authenticated using
-    // the actual authorization logic for that authorization in enforced mode,
-    // or that it was recorded in recording mode and authorization was assumed
-    // successful.
-    #[cfg(any(test, feature = "testutils"))]
-    pub fn get_authenticated_authorizations(
-        &self,
-    ) -> Result<Vec<(ScAddress, SorobanAuthorizedInvocation)>, HostError> {
-        Ok(self
-            .try_borrow_previous_authorization_manager_mut()?
-            .as_mut()
-            .ok_or_else(|| {
-                self.err(
-                    ScErrorType::Auth,
-                    ScErrorCode::InvalidAction,
-                    "previous invocation is missing - no auth data to get",
-                    &[],
-                )
-            })?
-            .get_authenticated_authorizations(self))
-    }
-
-    fn upload_contract_wasm(&self, wasm: Vec<u8>) -> Result<BytesObject, HostError> {
-        let hash_bytes: [u8; 32] = crypto::sha256_hash_from_bytes(wasm.as_slice(), self)?
-            .try_into()
-            .map_err(|_| {
-                self.err(
-                    ScErrorType::Value,
-                    ScErrorCode::InternalError,
-                    "unexpected hash length",
-                    &[],
-                )
-            })?;
-
-        // Check size before instantiation.
-        let wasm_bytes_m: crate::xdr::BytesM = wasm.try_into().map_err(|_| {
-            self.err(
-                ScErrorType::Value,
-                ScErrorCode::ExceededLimit,
-                "Wasm code is too large",
-                &[],
-            )
-        })?;
-
-        // Instantiate a temporary / throwaway VM using this wasm. This will do
-        // both quick checks like "does this wasm have the right protocol number
-        // to run on this network" and also a full parse-and-link pass to check
-        // that the wasm is basically not garbage. It might still fail to run
-        // but it will at least instantiate. This might seem a bit heavyweight
-        // but really "instantiating a VM" is mostly just "parsing the module
-        // and doing those checks" anyway. Revisit in the future if you want to
-        // try to split these costs up some.
-        if cfg!(any(test, feature = "testutils")) && wasm_bytes_m.as_slice().is_empty() {
-            // Allow a zero-byte contract when testing, as this is used to make
-            // native test contracts behave like wasm. They will never be
-            // instantiated, this is just to exercise their storage logic.
-        } else {
-            let _check_vm = Vm::new(
-                self,
-                Hash(hash_bytes.metered_clone(self)?),
-                wasm_bytes_m.as_slice(),
-            )?;
-        }
-
-        let hash_obj = self.add_host_object(self.scbytes_from_slice(hash_bytes.as_slice())?)?;
-        let code_key = Rc::metered_new(
-            LedgerKey::ContractCode(LedgerKeyContractCode {
-                hash: Hash(hash_bytes.metered_clone(self)?),
-            }),
-            self,
-        )?;
-        if !self
-            .try_borrow_storage_mut()?
-            .has(&code_key, self.as_budget())
-            .map_err(|e| self.decorate_contract_code_storage_error(e, &Hash(hash_bytes)))?
-        {
-            self.with_mut_storage(|storage| {
-                let data = ContractCodeEntry {
-                    hash: Hash(hash_bytes),
-                    ext: ExtensionPoint::V0,
-                    code: wasm_bytes_m,
-                };
-                storage.put(
-                    &code_key,
-                    &Host::new_contract_code(self, data)?,
-                    Some(self.get_min_expiration_ledger(ContractDataDurability::Persistent)?),
-                    self.as_budget(),
-                )
-            })?;
-        }
-        Ok(hash_obj)
-    }
-
-    // Returns the recorded per-address authorization payloads that would cover the
-    // top-level contract function invocation in the enforcing mode.
-    // This should only be called in the recording authorization mode, i.e. only
-    // if `switch_to_recording_auth` has been called.
-    pub fn get_recorded_auth_payloads(&self) -> Result<Vec<RecordedAuthPayload>, HostError> {
-        #[cfg(not(any(test, feature = "testutils")))]
-        {
-            self.try_borrow_authorization_manager()?
-                .get_recorded_auth_payloads(self)
-        }
-        #[cfg(any(test, feature = "testutils"))]
-        {
-            self.try_borrow_previous_authorization_manager()?
-                .as_ref()
-                .ok_or_else(|| {
-                    self.err(
-                        ScErrorType::Auth,
-                        ScErrorCode::InvalidAction,
-                        "previous invocation is missing - no auth data to get",
-                        &[],
-                    )
-                })?
-                .get_recorded_auth_payloads(self)
-        }
     }
 
     fn symbol_matches(&self, s: &[u8], sym: Symbol) -> Result<bool, HostError> {
@@ -868,70 +420,6 @@ impl Host {
                 &[sym.to_val()],
             ))
         }
-    }
-
-    fn put_contract_data_into_ledger(
-        &self,
-        k: Val,
-        v: Val,
-        t: StorageType,
-    ) -> Result<(), HostError> {
-        let durability: ContractDataDurability = t.try_into()?;
-        let key = self.contract_data_key_from_rawval(k, durability)?;
-        // Currently the storage stores the whole ledger entries, while this
-        // operation might only modify only the internal `ScVal` value. Thus we
-        // need to only overwrite the value in case if there is already an
-        // existing ledger entry value for the key in the storage.
-        if self
-            .try_borrow_storage_mut()?
-            .has(&key, self.as_budget())
-            .map_err(|e| self.decorate_contract_data_storage_error(e, k))?
-        {
-            let (current, expiration_ledger) = self
-                .try_borrow_storage_mut()?
-                .get_with_expiration(&key, self.as_budget())
-                .map_err(|e| self.decorate_contract_data_storage_error(e, k))?;
-            let mut current = (*current).metered_clone(self)?;
-            match current.data {
-                LedgerEntryData::ContractData(ref mut entry) => {
-                    entry.val = self.from_host_val(v)?;
-                }
-                _ => {
-                    return Err(self.err(
-                        ScErrorType::Storage,
-                        ScErrorCode::InternalError,
-                        "expected DataEntry",
-                        &[],
-                    ));
-                }
-            }
-            self.try_borrow_storage_mut()?
-                .put(
-                    &key,
-                    &Rc::metered_new(current, self)?,
-                    expiration_ledger,
-                    self.as_budget(),
-                )
-                .map_err(|e| self.decorate_contract_data_storage_error(e, k))?;
-        } else {
-            let data = ContractDataEntry {
-                contract: ScAddress::Contract(self.get_current_contract_id_internal()?),
-                key: self.from_host_val(k)?,
-                val: self.from_host_val(v)?,
-                durability,
-                ext: ExtensionPoint::V0,
-            };
-            self.try_borrow_storage_mut()?
-                .put(
-                    &key,
-                    &Host::new_contract_data(self, data)?,
-                    Some(self.get_min_expiration_ledger(durability)?),
-                    self.as_budget(),
-                )
-                .map_err(|e| self.decorate_contract_data_storage_error(e, k))?;
-        }
-
-        Ok(())
     }
 }
 

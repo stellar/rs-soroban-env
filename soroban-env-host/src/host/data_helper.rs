@@ -6,9 +6,10 @@ use soroban_env_common::xdr::{
     ExtensionPoint, HashIdPreimageContractId, ScAddress, ScContractInstance, ScErrorCode,
     ScErrorType,
 };
-use soroban_env_common::{AddressObject, Env, U32Val};
+use soroban_env_common::{AddressObject, Env, StorageType, U32Val, Val};
 
 use crate::budget::AsBudget;
+use crate::storage::{InstanceStorageMap, Storage};
 use crate::xdr::{
     AccountEntry, AccountId, ContractDataEntry, Hash, HashIdPreimage, LedgerEntry, LedgerEntryData,
     LedgerEntryExt, LedgerKey, LedgerKeyAccount, LedgerKeyContractCode, LedgerKeyContractData,
@@ -20,6 +21,59 @@ use crate::{err, Host, HostError};
 use super::metered_clone::{MeteredAlloc, MeteredClone};
 
 impl Host {
+    pub fn with_mut_storage<F, U>(&self, f: F) -> Result<U, HostError>
+    where
+        F: FnOnce(&mut Storage) -> Result<U, HostError>,
+    {
+        f(&mut *self.try_borrow_storage_mut()?)
+    }
+
+    /// Immutable accessor to the instance storage of the currently running
+    /// contract.
+    /// Performs lazy initialization of instance storage on access.
+    pub(crate) fn with_instance_storage<F, U>(&self, f: F) -> Result<U, HostError>
+    where
+        F: FnOnce(&InstanceStorageMap) -> Result<U, HostError>,
+    {
+        self.with_current_context_mut(|ctx| {
+            self.maybe_init_instance_storage(ctx)?;
+            f(ctx.storage.as_ref().ok_or_else(|| {
+                self.err(
+                    ScErrorType::Context,
+                    ScErrorCode::InternalError,
+                    "missing instance storage",
+                    &[],
+                )
+            })?)
+        })
+    }
+
+    /// Mutable accessor to the instance storage of the currently running
+    /// contract.
+    /// Performs lazy initialization of instance storage on access.
+    pub(crate) fn with_mut_instance_storage<F, U>(&self, f: F) -> Result<U, HostError>
+    where
+        F: FnOnce(&mut InstanceStorageMap) -> Result<U, HostError>,
+    {
+        self.with_current_context_mut(|ctx| {
+            self.maybe_init_instance_storage(ctx)?;
+            let storage = ctx.storage.as_mut().ok_or_else(|| {
+                self.err(
+                    ScErrorType::Context,
+                    ScErrorCode::InternalError,
+                    "missing instance storage",
+                    &[],
+                )
+            })?;
+            // Consider any mutable access to be modifying the instance storage.
+            // This way we would provide consistent footprint (RO for read-only
+            // ops using `with_instance_storage` and RW for potentially
+            // mutating ops using `with_mut_instance_storage`).
+            storage.is_modified = true;
+            f(storage)
+        })
+    }
+
     pub fn contract_instance_ledger_key(
         &self,
         contract_id: &Hash,
@@ -371,5 +425,120 @@ impl Host {
         self.visit_obj(address, |addr: &ScAddress| {
             self.contract_id_from_scaddress(addr.metered_clone(self)?)
         })
+    }
+
+    pub(super) fn put_contract_data_into_ledger(
+        &self,
+        k: Val,
+        v: Val,
+        t: StorageType,
+    ) -> Result<(), HostError> {
+        let durability: ContractDataDurability = t.try_into()?;
+        let key = self.contract_data_key_from_rawval(k, durability)?;
+        // Currently the storage stores the whole ledger entries, while this
+        // operation might only modify only the internal `ScVal` value. Thus we
+        // need to only overwrite the value in case if there is already an
+        // existing ledger entry value for the key in the storage.
+        if self
+            .try_borrow_storage_mut()?
+            .has(&key, self.as_budget())
+            .map_err(|e| self.decorate_contract_data_storage_error(e, k))?
+        {
+            let (current, expiration_ledger) = self
+                .try_borrow_storage_mut()?
+                .get_with_expiration(&key, self.as_budget())
+                .map_err(|e| self.decorate_contract_data_storage_error(e, k))?;
+            let mut current = (*current).metered_clone(self)?;
+            match current.data {
+                LedgerEntryData::ContractData(ref mut entry) => {
+                    entry.val = self.from_host_val(v)?;
+                }
+                _ => {
+                    return Err(self.err(
+                        ScErrorType::Storage,
+                        ScErrorCode::InternalError,
+                        "expected DataEntry",
+                        &[],
+                    ));
+                }
+            }
+            self.try_borrow_storage_mut()?
+                .put(
+                    &key,
+                    &Rc::metered_new(current, self)?,
+                    expiration_ledger,
+                    self.as_budget(),
+                )
+                .map_err(|e| self.decorate_contract_data_storage_error(e, k))?;
+        } else {
+            let data = ContractDataEntry {
+                contract: ScAddress::Contract(self.get_current_contract_id_internal()?),
+                key: self.from_host_val(k)?,
+                val: self.from_host_val(v)?,
+                durability,
+                ext: ExtensionPoint::V0,
+            };
+            self.try_borrow_storage_mut()?
+                .put(
+                    &key,
+                    &Host::new_contract_data(self, data)?,
+                    Some(self.get_min_expiration_ledger(durability)?),
+                    self.as_budget(),
+                )
+                .map_err(|e| self.decorate_contract_data_storage_error(e, k))?;
+        }
+
+        Ok(())
+    }
+}
+
+#[cfg(any(test, feature = "testutils"))]
+use crate::storage::{AccessType, Footprint};
+
+#[cfg(any(test, feature = "testutils"))]
+impl Host {
+    // Writes an arbitrary ledger entry to storage.
+    // "testutils" are not covered by budget metering.
+    pub fn add_ledger_entry(
+        &self,
+        key: &Rc<LedgerKey>,
+        val: &Rc<soroban_env_common::xdr::LedgerEntry>,
+        expiration_ledger: Option<u32>,
+    ) -> Result<(), HostError> {
+        self.as_budget().with_free_budget(|| {
+            self.with_mut_storage(|storage| {
+                storage.put(key, val, expiration_ledger, self.as_budget())
+            })
+        })
+    }
+
+    // Performs the necessary setup to access the provided ledger key/entry in
+    // enforcing storage mode.
+    // "testutils" are not covered by budget metering.
+    pub fn setup_storage_entry(
+        &self,
+        key: Rc<LedgerKey>,
+        val: Option<(Rc<soroban_env_common::xdr::LedgerEntry>, Option<u32>)>,
+        access_type: AccessType,
+    ) -> Result<(), HostError> {
+        self.as_budget().with_free_budget(|| {
+            self.with_mut_storage(|storage| {
+                storage
+                    .footprint
+                    .record_access(&key, access_type, self.as_budget())?;
+                storage.map = storage.map.insert(key, val, self.as_budget())?;
+                Ok(())
+            })
+        })
+    }
+
+    // Performs the necessary setup to access all the entries in provided
+    // footprint in enforcing mode.
+    // "testutils" are not covered by budget metering.
+    pub fn setup_storage_footprint(&self, footprint: Footprint) -> Result<(), HostError> {
+        for (key, access_type) in footprint.0.map {
+            self.setup_storage_entry(key, None, access_type)?;
+        }
+        Ok(())
     }
 }
