@@ -2625,7 +2625,7 @@ impl VmCallerEnv for Host {
         let i: u32 = iv.into();
         self.visit_obj(b, |hv: &ScBytes| {
             hv.get(i as usize)
-                .map(|u| Into::<U32Val>::into(Into::<u32>::into(*u)))
+                .map(|u| U32Val::from(u32::from(*u)))
                 .ok_or_else(|| {
                     self.err(
                         ScErrorType::Object,
@@ -2740,7 +2740,7 @@ impl VmCallerEnv for Host {
     ) -> Result<U32Val, HostError> {
         self.visit_obj(b, |hv: &ScBytes| {
             hv.first()
-                .map(|u| Into::<U32Val>::into(Into::<u32>::into(*u)))
+                .map(|u| U32Val::from(u32::from(*u)))
                 .ok_or_else(|| {
                     self.err(
                         ScErrorType::Object,
@@ -2760,7 +2760,7 @@ impl VmCallerEnv for Host {
     ) -> Result<U32Val, HostError> {
         self.visit_obj(b, |hv: &ScBytes| {
             hv.last()
-                .map(|u| Into::<U32Val>::into(Into::<u32>::into(*u)))
+                .map(|u| U32Val::from(u32::from(*u)))
                 .ok_or_else(|| {
                     self.err(
                         ScErrorType::Object,
