@@ -1,6 +1,6 @@
 use std::hint::black_box;
 
-use crate::{xdr::ContractCostType, Host};
+use crate::{budget::AsBudget, xdr::ContractCostType, Host};
 /// `CostRunner` is an interface to running a host cost entity of a `CostType` (usually a block of
 /// WASM bytecode or a host function), given a sample of `SampleType`.
 pub trait CostRunner: Sized {
@@ -66,6 +66,6 @@ pub trait CostRunner: Sized {
     /// actual input from the host's perspective. So use it carefully. This should be
     /// after the `run`, outside of the CPU-and-memory tracking machineary.
     fn get_tracker(host: &Host) -> (u64, Option<u64>) {
-        host.0.budget.get_tracker(Self::COST_TYPE).unwrap()
+        host.as_budget().get_tracker(Self::COST_TYPE).unwrap()
     }
 }

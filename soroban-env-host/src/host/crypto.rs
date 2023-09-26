@@ -63,7 +63,7 @@ impl Host {
     pub(crate) fn verify_sig_ed25519_internal(
         &self,
         payload: &[u8],
-        public_key: &ed25519_dalek::VerifyingKey,
+        verifying_key: &ed25519_dalek::VerifyingKey,
         sig: &ed25519_dalek::Signature,
     ) -> Result<(), HostError> {
         let _span = tracy_span!("ed25519 verify");
@@ -71,7 +71,7 @@ impl Host {
             ContractCostType::VerifyEd25519Sig,
             Some(payload.len() as u64),
         )?;
-        public_key.verify_strict(payload, sig).map_err(|_| {
+        verifying_key.verify_strict(payload, sig).map_err(|_| {
             self.err(
                 ScErrorType::Crypto,
                 ScErrorCode::InvalidInput,

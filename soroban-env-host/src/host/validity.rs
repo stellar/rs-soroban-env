@@ -13,12 +13,7 @@ impl Host {
         bound: usize,
     ) -> Result<(), HostError> {
         if index as usize >= bound {
-            return Err(self.err(
-                ScErrorType::Object,
-                ScErrorCode::IndexBounds,
-                "index out of bound",
-                &[U32Val::from(index).to_val()],
-            ));
+            return Err(self.err_oob_object_index(Some(index)));
         }
         Ok(())
     }
@@ -30,12 +25,7 @@ impl Host {
         bound: usize,
     ) -> Result<(), HostError> {
         if index as usize > bound {
-            return Err(self.err(
-                ScErrorType::Object,
-                ScErrorCode::IndexBounds,
-                "index out of bound",
-                &[U32Val::from(index).to_val()],
-            ));
+            return Err(self.err_oob_object_index(Some(index)));
         }
         Ok(())
     }
@@ -47,22 +37,8 @@ impl Host {
         end: u32,
         bound: usize,
     ) -> Result<Range<usize>, HostError> {
-        if start as usize > bound {
-            return Err(self.err(
-                ScErrorType::Object,
-                ScErrorCode::IndexBounds,
-                "start index out of bound",
-                &[U32Val::from(start).to_val()],
-            ));
-        }
-        if end as usize > bound {
-            return Err(self.err(
-                ScErrorType::Object,
-                ScErrorCode::IndexBounds,
-                "end index out of bound",
-                &[U32Val::from(end).to_val()],
-            ));
-        }
+        self.validate_index_le_bound(start, bound)?;
+        self.validate_index_le_bound(end, bound)?;
         if start > end {
             return Err(self.err(
                 ScErrorType::Object,
@@ -75,5 +51,23 @@ impl Host {
             start: start as usize,
             end: end as usize,
         })
+    }
+
+    pub(crate) fn validate_usize_sum_fits_in_u32(
+        &self,
+        a: usize,
+        b: usize,
+    ) -> Result<usize, HostError> {
+        let lim = u32::MAX as usize;
+        if a > lim || b > lim || a > (lim - b) {
+            Err(self.err(
+                ScErrorType::Value,
+                ScErrorCode::ExceededLimit,
+                "sum of sizes exceeds u32::MAX",
+                &[],
+            ))
+        } else {
+            Ok(a + b)
+        }
     }
 }
