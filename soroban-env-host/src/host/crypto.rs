@@ -11,15 +11,6 @@ use sha3::Keccak256;
 
 impl Host {
     // Ed25519 functions
-
-    pub(crate) fn ed25519_signature_from_bytes(
-        &self,
-        name: &'static str,
-        bytes: &[u8],
-    ) -> Result<ed25519_dalek::Signature, HostError> {
-        self.fixed_length_bytes_from_slice::<ed25519_dalek::Signature, {ed25519_dalek::SIGNATURE_LENGTH}>(name, bytes)
-    }
-
     pub(crate) fn ed25519_signature_from_bytesobj_input(
         &self,
         name: &'static str,
@@ -83,6 +74,10 @@ impl Host {
 
     // ECDSA secp256k1 functions
 
+    #[cfg(any(test, feature = "testutils"))]
+    // FIXME: this operation is dead code besides the code that claibrates it;
+    // the interface we settled on doesn't involve users converting bytes to
+    // public keys. see https://github.com/stellar/rs-soroban-env/issues/1087
     pub(crate) fn secp256k1_pub_key_from_bytes(
         &self,
         bytes: &[u8],
@@ -95,15 +90,6 @@ impl Host {
                 "invalid ECDSA-secp256k1 public key",
                 &[],
             )
-        })
-    }
-
-    pub(crate) fn secp256k1_pub_key_from_bytesobj_input(
-        &self,
-        k: BytesObject,
-    ) -> Result<k256::PublicKey, HostError> {
-        self.visit_obj(k, |bytes: &ScBytes| {
-            self.secp256k1_pub_key_from_bytes(bytes.as_slice())
         })
     }
 

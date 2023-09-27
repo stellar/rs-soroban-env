@@ -33,6 +33,7 @@ pub(crate) enum ContractReentryMode {
     /// possible for a contract to do a self-call via host).
     SelfAllowed,
     /// Re-entry is fully allowed.
+    #[allow(dead_code)]
     Allowed,
 }
 

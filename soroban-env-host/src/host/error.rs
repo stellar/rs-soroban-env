@@ -295,15 +295,6 @@ impl Host {
         }
     }
 
-    pub(crate) fn err_wasmi_fuel_metering_disabled(&self) -> HostError {
-        self.err(
-            ScErrorType::WasmVm,
-            ScErrorCode::InternalError,
-            "wasmi fuel metering is disabled",
-            &[],
-        )
-    }
-
     /// Given a result carrying some error type that can be converted to an
     /// [Error] and supports [core::fmt::Debug], calls [Host::error] with the
     /// error when there's an error, also passing the result of

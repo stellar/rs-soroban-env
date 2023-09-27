@@ -40,32 +40,6 @@ impl Host {
         self.usize_to_u32(u).map(|v| v.into())
     }
 
-    // Notes on metering: free
-    pub(crate) fn usize_from_rawval_u32_input(
-        &self,
-        name: &'static str,
-        r: Val,
-    ) -> Result<usize, HostError> {
-        self.u32_from_rawval_input(name, r).map(|u| u as usize)
-    }
-
-    // Notes on metering: free
-    pub(crate) fn u32_from_rawval_input(
-        &self,
-        name: &'static str,
-        r: Val,
-    ) -> Result<u32, HostError> {
-        match u32::try_from(r) {
-            Ok(v) => Ok(v),
-            Err(_) => Err(self.err(
-                ScErrorType::Value,
-                ScErrorCode::UnexpectedType,
-                "expecting U32Val",
-                &[r, name.try_into_val(self)?],
-            )),
-        }
-    }
-
     pub(crate) fn u256_from_account(&self, account_id: &AccountId) -> Result<Uint256, HostError> {
         let crate::xdr::PublicKey::PublicKeyTypeEd25519(ed25519) =
             account_id.metered_clone(self)?.0;

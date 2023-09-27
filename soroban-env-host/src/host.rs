@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use core::{cell::RefCell, cmp::Ordering, fmt::Debug};
 use std::rc::Rc;
 
@@ -138,6 +136,7 @@ impl Default for Host {
 macro_rules! impl_checked_borrow_helpers {
     ($field:ident, $t:ty, $borrow:ident, $borrow_mut:ident) => {
         impl Host {
+            #[allow(dead_code)]
             pub(crate) fn $borrow(&self) -> Result<std::cell::Ref<'_, $t>, HostError> {
                 use crate::host::error::TryBorrowOrErr;
                 self.0.$field.try_borrow_or_err_with(
@@ -145,6 +144,7 @@ macro_rules! impl_checked_borrow_helpers {
                     concat!("host.0.", stringify!($field), ".try_borrow failed"),
                 )
             }
+            #[allow(dead_code)]
             pub(crate) fn $borrow_mut(&self) -> Result<std::cell::RefMut<'_, $t>, HostError> {
                 use crate::host::error::TryBorrowOrErr;
                 self.0.$field.try_borrow_mut_or_err_with(
@@ -342,16 +342,6 @@ impl Host {
 
     pub fn get_ledger_protocol_version(&self) -> Result<u32, HostError> {
         self.with_ledger_info(|li| Ok(li.protocol_version))
-    }
-
-    /// Helper for mutating the [`Budget`] held in this [`Host`], either to
-    /// allocate it on contract creation or to deplete it on callbacks from
-    /// the VM or host functions.
-    pub(crate) fn with_budget<T, F>(&self, f: F) -> Result<T, HostError>
-    where
-        F: FnOnce(Budget) -> Result<T, HostError>,
-    {
-        f(self.0.budget.clone())
     }
 
     pub(crate) fn budget_ref(&self) -> &Budget {
@@ -2626,6 +2616,20 @@ impl VmCallerEnv for Host {
         self.add_host_object(vnew)
     }
     // endregion "prng" module functions
+}
+
+#[cfg(any(test, feature = "testutils"))]
+impl Host {
+    /// Helper for mutating the [`Budget`] held in this [`Host`], either to
+    /// allocate it on contract creation or to deplete it on callbacks from
+    /// the VM or host functions.
+    #[allow(dead_code)]
+    pub(crate) fn with_budget<T, F>(&self, f: F) -> Result<T, HostError>
+    where
+        F: FnOnce(Budget) -> Result<T, HostError>,
+    {
+        f(self.0.budget.clone())
+    }
 }
 
 #[cfg(any(test, feature = "testutils"))]
