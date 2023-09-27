@@ -256,7 +256,7 @@ impl Host {
                     .with_free_budget(|| events_ref.externalize(self))
                 {
                     Ok(events) => events,
-                    Err(e) => return None,
+                    Err(_) => return None,
                 };
                 let backtrace = Backtrace::new_unresolved();
                 return Some(Box::new(DebugInfo { backtrace, events }));
@@ -455,7 +455,7 @@ pub(crate) trait DebugArg {
     fn debug_arg(host: &Host, arg: &Self) -> Val {
         // We similarly guard against double-faulting here by try-acquiring the event buffer,
         // which will fail if we're re-entering error reporting _while_ forming a debug argument.
-        if let Ok(guard) = host.0.events.try_borrow_mut() {
+        if let Ok(_guard) = host.0.events.try_borrow_mut() {
             host.as_budget()
                 .with_free_budget(|| Self::debug_arg_maybe_expensive_or_fallible(host, arg))
                 .unwrap_or(
@@ -492,7 +492,7 @@ impl DebugArg for str {
 }
 
 impl DebugArg for usize {
-    fn debug_arg_maybe_expensive_or_fallible(host: &Host, arg: &Self) -> Result<Val, HostError> {
+    fn debug_arg_maybe_expensive_or_fallible(_host: &Host, arg: &Self) -> Result<Val, HostError> {
         u32::try_from(*arg)
             .map(|x| U32Val::from(x).into())
             .map_err(|_| HostError::from(ConversionError))

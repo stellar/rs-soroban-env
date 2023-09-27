@@ -639,7 +639,7 @@ impl Host {
 
         match &res {
             Ok(res) => self.fn_return_diagnostics(id, &func, res)?,
-            Err(err) => {}
+            Err(_err) => {}
         }
 
         res

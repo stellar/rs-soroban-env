@@ -57,11 +57,11 @@ impl Host {
     ) -> Result<u32, HostError> {
         match u32::try_from(r) {
             Ok(v) => Ok(v),
-            Err(cvt) => Err(self.err(
+            Err(_) => Err(self.err(
                 ScErrorType::Value,
                 ScErrorCode::UnexpectedType,
                 "expecting U32Val",
-                &[r],
+                &[r, name.try_into_val(self)?],
             )),
         }
     }
@@ -81,11 +81,11 @@ impl Host {
         let u: u32 = r.into();
         match u8::try_from(u) {
             Ok(v) => Ok(v),
-            Err(cvt) => Err(self.err(
+            Err(_) => Err(self.err(
                 ScErrorType::Value,
                 ScErrorCode::InvalidInput,
                 "expecting U32Val less than 256",
-                &[r.to_val()],
+                &[r.to_val(), name.try_into_val(self)?],
             )),
         }
     }
@@ -119,7 +119,7 @@ impl Host {
                 self.charge_budget(ContractCostType::HostMemCpy, Some(N as u64))?;
                 Ok(arr.into())
             }
-            Err(cvt) => Err(err!(
+            Err(_) => Err(err!(
                 self,
                 (ScErrorType::Object, ScErrorCode::UnexpectedSize),
                 "expected fixed-length bytes slice, got slice with different size",
