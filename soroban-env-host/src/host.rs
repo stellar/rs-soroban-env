@@ -18,8 +18,8 @@ use crate::{
     },
     AddressObject, Bool, BytesObject, Compare, ConversionError, EnvBase, Error, I128Object,
     I256Object, MapObject, Object, StorageType, StringObject, Symbol, SymbolObject, SymbolSmall,
-    SymbolStr, TryFromVal, U128Object, U256Object, U32Val, U64Val, Val, VecObject, Vm, VmCaller,
-    VmCallerEnv, Void, I256, U256, 
+    TryFromVal, U128Object, U256Object, U32Val, U64Val, Val, VecObject, Vm, VmCaller, VmCallerEnv,
+    Void, I256, U256,
 };
 
 mod comparison;
@@ -353,7 +353,7 @@ impl Host {
     }
 
     pub fn charge_budget(&self, ty: ContractCostType, input: Option<u64>) -> Result<(), HostError> {
-        self.0.budget.clone().charge(ty, input)
+        self.0.budget.charge(ty, input)
     }
 
     /// Accept a _unique_ (refcount = 1) host reference and destroy the
@@ -369,43 +369,6 @@ impl Host {
             .map_err(|_| {
                 Error::from_type_and_code(ScErrorType::Context, ScErrorCode::InternalError).into()
             })
-    }
-
-    // Testing interface to create values directly for later use via Env functions.
-    // It needs to be a `pub` method because benches are considered a separate crate.
-    #[cfg(any(test, feature = "testutils"))]
-    pub fn inject_val(&self, v: &ScVal) -> Result<Val, HostError> {
-        self.to_host_val(v).map(Into::into)
-    }
-
-    fn symbol_matches(&self, s: &[u8], sym: Symbol) -> Result<bool, HostError> {
-        if let Ok(ss) = SymbolSmall::try_from(sym) {
-            let sstr: SymbolStr = ss.into();
-            let slice: &[u8] = sstr.as_ref();
-            self.as_budget()
-                .compare(&slice, &s)
-                .map(|c| c == Ordering::Equal)
-        } else {
-            let sobj: SymbolObject = sym.try_into()?;
-            self.visit_obj(sobj, |scsym: &ScSymbol| {
-                self.as_budget()
-                    .compare(&scsym.as_slice(), &s)
-                    .map(|c| c == Ordering::Equal)
-            })
-        }
-    }
-
-    fn check_symbol_matches(&self, s: &[u8], sym: Symbol) -> Result<(), HostError> {
-        if self.symbol_matches(s, sym)? {
-            Ok(())
-        } else {
-            Err(self.err(
-                ScErrorType::Value,
-                ScErrorCode::InvalidInput,
-                "symbol mismatch",
-                &[sym.to_val()],
-            ))
-        }
     }
 }
 
@@ -2620,6 +2583,12 @@ impl VmCallerEnv for Host {
 
 #[cfg(any(test, feature = "testutils"))]
 impl Host {
+    // Testing interface to create values directly for later use via Env functions.
+    // It needs to be a `pub` method because benches are considered a separate crate.
+    pub fn inject_val(&self, v: &ScVal) -> Result<Val, HostError> {
+        self.to_host_val(v).map(Into::into)
+    }
+
     /// Helper for mutating the [`Budget`] held in this [`Host`], either to
     /// allocate it on contract creation or to deplete it on callbacks from
     /// the VM or host functions.
