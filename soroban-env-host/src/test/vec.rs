@@ -1,6 +1,7 @@
 use core::cmp::Ordering;
 
-use soroban_env_common::{xdr::ScVal, Compare, Tag, U32Val};
+use soroban_env_common::{xdr::ScVal, Compare, Symbol, Tag, TryFromVal, U32Val};
+use soroban_test_wasms::LINEAR_MEMORY;
 
 use crate::{
     xdr::{ScErrorCode, ScErrorType},
@@ -334,5 +335,36 @@ fn vec_build_bad_element_integrity() -> Result<(), HostError> {
     assert!(host.vec_push_back(obj, bad_handle).is_err());
     assert!(host.vec_new_from_slice(&[bad_handle]).is_err());
 
+    Ok(())
+}
+
+#[test]
+fn linear_memory_operations() -> Result<(), HostError> {
+    let host = Host::test_host_with_recording_footprint();
+    let id_obj = host.register_test_contract_wasm(LINEAR_MEMORY);
+
+    // Tests vec_unpack_to_linear_memory works when given correct input
+    {
+        let args = host.vec_new()?;
+        let res = host.call(
+            id_obj,
+            Symbol::try_from_val(&host, &"vec_mem_ok").unwrap(),
+            args,
+        );
+
+        assert!(res.is_ok());
+    }
+
+    // Tests vec_unpack_to_linear_memory fails when given incorrect input
+    {
+        let args = host.vec_new()?;
+        let res = host.call(
+            id_obj,
+            Symbol::try_from_val(&host, &"vec_mem_bad").unwrap(),
+            args,
+        );
+        assert!(res.is_err());
+        assert!(res.unwrap_err().error.is_code(ScErrorCode::UnexpectedSize));
+    }
     Ok(())
 }

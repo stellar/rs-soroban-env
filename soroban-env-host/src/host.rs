@@ -1287,6 +1287,14 @@ impl VmCallerEnv for Host {
             len,
         } = self.decode_vmslice(keys_pos, len)?;
         self.visit_obj(map, |mapobj: &HostMap| {
+            if mapobj.len() != len as usize {
+                return Err(self.err(
+                    ScErrorType::Object,
+                    ScErrorCode::UnexpectedSize,
+                    "differing host map and output slice lengths when unpacking map to linear memory",
+                    &[],
+                ));
+            }
             // Step 1: check all key symbols.
             self.metered_vm_scan_slices_in_linear_memory(
                 vmcaller,
@@ -1566,10 +1574,18 @@ impl VmCallerEnv for Host {
     ) -> Result<Void, HostError> {
         let VmSlice { vm, pos, len } = self.decode_vmslice(vals_pos, len)?;
         self.visit_obj(vec, |vecobj: &HostVec| {
+            if vecobj.len() != len as usize {
+                return Err(self.err(
+                    ScErrorType::Object,
+                    ScErrorCode::UnexpectedSize,
+                    "differing host vector and output vector lengths when unpacking vec to linear memory",
+                    &[],
+                ));
+            }
             self.metered_vm_write_vals_to_linear_memory(
                 vmcaller,
                 &vm,
-                vals_pos.into(),
+                pos,
                 vecobj.as_slice(),
                 |x| {
                     Ok(u64::to_le_bytes(
