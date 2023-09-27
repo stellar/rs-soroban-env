@@ -1240,7 +1240,7 @@ impl VmCallerEnv for Host {
             &vm,
             keys_pos,
             len as usize,
-            |n, slice| {
+            |_n, slice| {
                 self.charge_budget(ContractCostType::VmMemRead, Some(slice.len() as u64))?;
                 let scsym = ScSymbol(slice.try_into()?);
                 let sym = Symbol::try_from(self.to_host_val(&ScVal::Symbol(scsym))?)?;
