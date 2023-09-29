@@ -1,11 +1,12 @@
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use soroban_bench_utils::{tracking_allocator::AllocationGroupToken, HostTracker};
+use soroban_env_common::xdr::ContractCostType;
 use soroban_env_host::{
     budget::{AsBudget, COST_MODEL_LIN_TERM_SCALE_BITS},
     cost_runner::CostRunner,
     Host,
 };
-use std::ops::Range;
+use std::{io, ops::Range};
 use tabwriter::{Alignment, TabWriter};
 
 use super::{fit_model, FPCostModel};
@@ -27,6 +28,36 @@ pub struct Measurements {
 }
 
 impl Measurements {
+    // Check that the baseline isn't a significant fraction of the max measurement,
+    // as a basic spot check.
+    fn check_one_baseline_range(
+        &self,
+        cost: ContractCostType,
+        meas: &str,
+        f: impl Fn(&Measurement) -> u64,
+    ) -> Result<(), io::Error> {
+        let max = self.measurements.iter().map(&f).max().unwrap_or_default();
+        let base = f(&self.baseline);
+        if max < base * 10 {
+            println!("max {meas} measurement for {cost} is {max} which is less than 10x baseline {base}, try higher iteration or step size");
+            Err(io::ErrorKind::InvalidData.into())
+        } else {
+            Ok(())
+        }
+    }
+
+    // Confirms that there's a reasonable range of values above the baseline;
+    // only relevant for certain measurements, currently no way to tell
+    // systematically, so gated behind env var
+    pub fn check_range_against_baseline(&self, cost: ContractCostType) -> Result<(), io::Error> {
+        if std::env::var("CHECK_RANGE_AGAINST_BASELINE").is_ok() {
+            self.check_one_baseline_range(cost, "cpu", |m| m.cpu_insns)?;
+            self.check_one_baseline_range(cost, "mem", |m| m.mem_bytes)?;
+            self.check_one_baseline_range(cost, "time", |m| m.time_nsecs)?;
+        }
+        Ok(())
+    }
+
     // This is the preprocess step to convert raw measurements into `averaged_net_measurements`,
     // ready to be fitted by the linear model.
     // We start from `N_r * ( N_x * (a + b * Option<x>) + Overhead_b)`, first substracts baseline

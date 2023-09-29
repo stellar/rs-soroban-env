@@ -4,7 +4,10 @@
 // $ cargo bench --features wasmi,testutils --bench worst_case_linear_models -- VecNew I64Rotr --nocapture
 mod common;
 use common::*;
-use soroban_env_host::{cost_runner::WasmInsnType, xdr::ContractCostType};
+use soroban_env_host::{
+    cost_runner::{CostRunner, WasmInsnType},
+    xdr::ContractCostType,
+};
 use std::{collections::BTreeMap, fmt::Debug, io::Write};
 use tabwriter::{Alignment, TabWriter};
 
@@ -12,7 +15,7 @@ struct WorstCaseLinearModels;
 impl Benchmark for WorstCaseLinearModels {
     fn bench<HCM: HostCostMeasurement>() -> std::io::Result<(FPCostModel, FPCostModel)> {
         let mut measurements = measure_worst_case_costs::<HCM>(1..20)?;
-
+        measurements.check_range_against_baseline(HCM::Runner::COST_TYPE)?;
         measurements.preprocess();
         measurements.report_table();
         let cpu_model = measurements.fit_model_to_cpu();
