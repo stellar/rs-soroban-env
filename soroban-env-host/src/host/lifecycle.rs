@@ -8,7 +8,7 @@ use crate::{
     xdr::{
         Asset, ContractCodeEntry, ContractDataDurability, ContractExecutable, ContractIdPreimage,
         ContractIdPreimageFromAddress, ExtensionPoint, Hash, LedgerKey, LedgerKeyContractCode,
-        ScAddress, ScContractInstance, ScErrorCode, ScErrorType,
+        ScAddress, ScErrorCode, ScErrorType,
     },
     AddressObject, BytesObject, Host, HostError, Symbol, TryFromVal, Vm,
 };
@@ -49,11 +49,7 @@ impl Host {
                 ));
             }
         }
-        let instance = ScContractInstance {
-            executable: contract_executable,
-            storage: Default::default(),
-        };
-        self.store_contract_instance(instance, contract_id, &storage_key)?;
+        self.store_contract_instance(Some(contract_executable), None, contract_id, &storage_key)?;
         Ok(())
     }
 
@@ -242,11 +238,12 @@ impl Host {
             // update more meaningful.
             let wasm_hash_obj = self.upload_contract_wasm(vec![])?;
             let wasm_hash = self.hash_from_bytesobj_input("wasm_hash", wasm_hash_obj)?;
-            let instance = ScContractInstance {
-                executable: ContractExecutable::Wasm(wasm_hash),
-                storage: None,
-            };
-            self.store_contract_instance(instance, contract_id.clone(), &instance_key)?;
+            self.store_contract_instance(
+                Some(ContractExecutable::Wasm(wasm_hash)),
+                None,
+                contract_id.clone(),
+                &instance_key,
+            )?;
         };
         let mut contracts = self.try_borrow_contracts_mut()?;
         contracts.insert(contract_id, contract_fns);

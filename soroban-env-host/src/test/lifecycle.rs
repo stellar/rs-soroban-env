@@ -17,8 +17,8 @@ use soroban_env_common::xdr::{
     SorobanAuthorizationEntry, SorobanAuthorizedFunction, SorobanAuthorizedInvocation,
     SorobanCredentials, VecM, DEFAULT_XDR_RW_DEPTH_LIMIT,
 };
-use soroban_env_common::VecObject;
 use soroban_env_common::{xdr::ScBytes, TryIntoVal, Val};
+use soroban_env_common::{StorageType, VecObject};
 use soroban_test_wasms::{ADD_I32, CREATE_CONTRACT, UPDATEABLE_CONTRACT};
 
 use super::util::{generate_account_id, generate_bytes_array};
@@ -286,6 +286,24 @@ fn test_contract_wasm_update() {
     // Make sure execution continued after the update and we've got the function
     // return value.
     assert_eq!(res, 123);
+    // Verify that instance storage has been updated as well.
+    host.with_test_contract_frame(
+        host.contract_id_from_address(contract_addr_obj).unwrap(),
+        Symbol::try_from_small_str("").unwrap(),
+        || {
+            let stored_value: i32 = host
+                .get_contract_data(
+                    Symbol::try_from_small_str("foo").unwrap().into(),
+                    StorageType::Instance,
+                )
+                .unwrap()
+                .try_into_val(&host)
+                .unwrap();
+            assert_eq!(stored_value, 111);
+            Ok(Val::VOID.into())
+        },
+    )
+    .unwrap();
 
     // Verify the contract update event.
     let events = host.get_events().unwrap().0;

@@ -736,39 +736,17 @@ impl Host {
     // Make the in-memory instance storage persist into the `Storage` by writing
     // its updated contents into corresponding `ContractData` ledger entry.
     fn persist_instance_storage(&self) -> Result<(), HostError> {
-        let updated_instance = self.with_current_context_mut(|ctx| {
+        let updated_instance_storage = self.with_current_context_mut(|ctx| {
             if let Some(storage) = &ctx.storage {
                 if !storage.is_modified {
                     return Ok(None);
                 }
-                let executable = match &ctx.frame {
-                    Frame::ContractVM { instance, .. } => {
-                        instance.executable.metered_clone(self)?
-                    }
-                    Frame::HostFunction(_) => {
-                        return Err(self.err(
-                            ScErrorType::Context,
-                            ScErrorCode::InternalError,
-                            "unexpected storage for host fn",
-                            &[],
-                        ))
-                    }
-                    Frame::Token(_, _, _, instance) => instance.executable.metered_clone(self)?,
-                    // Mock executable for test contract 'instances'. This is
-                    // just a placeholder - it's not used for actually calling
-                    // the test contracts.
-                    #[cfg(any(test, feature = "testutils"))]
-                    Frame::TestContract(t) => t.instance.executable.clone(),
-                };
-                Ok(Some(ScContractInstance {
-                    executable,
-                    storage: Some(self.host_map_to_scmap(&storage.map)?),
-                }))
+                Ok(Some(self.host_map_to_scmap(&storage.map)?))
             } else {
                 Ok(None)
             }
         })?;
-        if let Some(updated_instance) = updated_instance {
+        if updated_instance_storage.is_some() {
             let contract_id = self
                 .get_current_contract_id_opt_internal()?
                 .ok_or_else(|| {
@@ -780,7 +758,8 @@ impl Host {
                     )
                 })?;
             let key = self.contract_instance_ledger_key(&contract_id)?;
-            self.store_contract_instance(updated_instance, contract_id, &key)?;
+
+            self.store_contract_instance(None, updated_instance_storage, contract_id, &key)?;
         }
         Ok(())
     }
