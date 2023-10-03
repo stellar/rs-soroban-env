@@ -44,7 +44,9 @@ mod prng;
 pub use prng::{Seed, SEED_BYTES};
 mod validity;
 pub use error::HostError;
-use soroban_env_common::xdr::{ContractIdPreimage, ContractIdPreimageFromAddress, ScErrorCode};
+use soroban_env_common::xdr::{
+    ContractIdPreimage, ContractIdPreimageFromAddress, ScErrorCode, Uint256,
+};
 
 use self::{
     frame::{Context, ContractReentryMode},
@@ -2438,50 +2440,85 @@ impl VmCallerEnv for Host {
             .into())
     }
 
-    fn account_public_key_to_address(
-        &self,
-        _vmcaller: &mut VmCaller<Self::VmUserState>,
-        pk_bytes: BytesObject,
-    ) -> Result<AddressObject, Self::Error> {
-        let account_id = self.account_id_from_bytesobj(pk_bytes)?;
-        self.add_host_object(ScAddress::Account(account_id))
-    }
-
-    fn contract_id_to_address(
-        &self,
-        _vmcaller: &mut VmCaller<Self::VmUserState>,
-        contract_id_bytes: BytesObject,
-    ) -> Result<AddressObject, Self::Error> {
-        let contract_id = self.hash_from_bytesobj_input("contract_id", contract_id_bytes)?;
-        self.add_host_object(ScAddress::Contract(contract_id))
-    }
-
-    fn address_to_account_public_key(
+    fn address_to_strkey(
         &self,
         _vmcaller: &mut VmCaller<Self::VmUserState>,
         address: AddressObject,
-    ) -> Result<Val, Self::Error> {
-        let addr = self.visit_obj(address, |addr: &ScAddress| addr.metered_clone(self))?;
-        match addr {
-            ScAddress::Account(AccountId(PublicKey::PublicKeyTypeEd25519(pk))) => Ok(self
-                .add_host_object(ScBytes(self.metered_slice_to_vec(&pk.0)?.try_into()?))?
-                .into()),
-            ScAddress::Contract(_) => Ok(().into()),
-        }
+    ) -> Result<StringObject, Self::Error> {
+        let strkey = self.visit_obj(address, |addr: &ScAddress| {
+            // Approximate the strkey encoding cost with two vector allocations:
+            // one for the payload size (32-byte key/hash + 3 bytes for
+            // version/checksum) and  another one for the base32 encoding of
+            // the payload.
+            const PAYLOAD_LEN: u64 = 32 + 3;
+            Vec::<u8>::charge_bulk_init_cpy(
+                (PAYLOAD_LEN + ((PAYLOAD_LEN * 8 + 4) / 5)) as u64,
+                self,
+            )?;
+            let strkey = match addr {
+                ScAddress::Account(acc_id) => {
+                    let AccountId(PublicKey::PublicKeyTypeEd25519(Uint256(ed25519))) = acc_id;
+                    let strkey = stellar_strkey::Strkey::PublicKeyEd25519(
+                        stellar_strkey::ed25519::PublicKey(ed25519.metered_clone(self)?),
+                    );
+                    strkey
+                }
+                ScAddress::Contract(Hash(h)) => stellar_strkey::Strkey::Contract(
+                    stellar_strkey::Contract(h.metered_clone(self)?),
+                ),
+            };
+            Ok(strkey.to_string())
+        })?;
+        self.add_host_object(ScString(strkey.try_into()?))
     }
 
-    fn address_to_contract_id(
+    fn strkey_to_address(
         &self,
         _vmcaller: &mut VmCaller<Self::VmUserState>,
-        address: AddressObject,
-    ) -> Result<Val, Self::Error> {
-        let addr = self.visit_obj(address, |addr: &ScAddress| addr.metered_clone(self))?;
-        match addr {
-            ScAddress::Account(_) => Ok(().into()),
-            ScAddress::Contract(Hash(h)) => Ok(self
-                .add_host_object(ScBytes(self.metered_slice_to_vec(&h)?.try_into()?))?
-                .into()),
-        }
+        strkey_obj: StringObject,
+    ) -> Result<AddressObject, Self::Error> {
+        let sc_addr = self.visit_obj(strkey_obj, |key: &ScString| {
+            const PAYLOAD_LEN: u64 = 32 + 3;
+            let expected_key_len = (PAYLOAD_LEN * 8 + 4) / 5;
+            if expected_key_len != key.0.len() as u64 {
+                return Err(self.err(
+                    ScErrorType::Value,
+                    ScErrorCode::InvalidInput,
+                    "unexpected strkey length",
+                    &[strkey_obj.to_val()],
+                ));
+            }
+            // Approximate the decoding cost as two vector allocations for the
+            // expected payload length (the strkey library does one extra copy).
+            Vec::<u8>::charge_bulk_init_cpy(PAYLOAD_LEN + PAYLOAD_LEN, self)?;
+            // Charge for the key copy to string.
+            // Vec::<u8>::charge_bulk_init_cpy(key.len() as u64, self)?;
+            let key_str = String::from_utf8_lossy(key);
+            let strkey = stellar_strkey::Strkey::from_string(&key_str).map_err(|_| {
+                self.err(
+                    ScErrorType::Value,
+                    ScErrorCode::InvalidInput,
+                    "couldn't process the string as strkey",
+                    &[strkey_obj.to_val()],
+                )
+            })?;
+            match strkey {
+                stellar_strkey::Strkey::PublicKeyEd25519(pk) => Ok(ScAddress::Account(AccountId(
+                    PublicKey::PublicKeyTypeEd25519(Uint256(pk.0)),
+                ))),
+
+                stellar_strkey::Strkey::Contract(c) => Ok(ScAddress::Contract(Hash(c.0))),
+                _ => {
+                    return Err(self.err(
+                        ScErrorType::Value,
+                        ScErrorCode::InvalidInput,
+                        "incorrect strkey type",
+                        &[strkey_obj.to_val()],
+                    ));
+                }
+            }
+        })?;
+        self.add_host_object(sc_addr)
     }
 
     // endregion "address" module functions
