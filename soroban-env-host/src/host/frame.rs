@@ -525,9 +525,13 @@ impl Host {
 
         self.fn_call_diagnostics(id, &func, args)?;
 
+        // Try dispatching the contract to the compiled-in registred
+        // implmentation. Only the contracts with the special (empty) executable
+        // are dispatched in this way, so that it's possible to switch the
+        // compiled-in implementation back to Wasm via
+        // `update_current_contract_wasm`.
         // "testutils" is not covered by budget metering.
-        #[cfg(any(test, feature = "testutils"))]
-        {
+        if cfg!(any(test, feature = "testutils")) && self.is_test_contract_executable(id)? {
             // This looks a little un-idiomatic, but this avoids maintaining a borrow of
             // self.0.contracts. Implementing it as
             //

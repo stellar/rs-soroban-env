@@ -227,24 +227,20 @@ impl Host {
     ) -> Result<(), HostError> {
         let contract_id = self.contract_id_from_address(contract_address)?;
         let instance_key = self.contract_instance_ledger_key(&contract_id)?;
-        // Test contract might be overriding an already registered Wasm
-        // contract, in which case we should preserve the instance entry.
-        if self
-            .retrieve_contract_instance_from_storage(&instance_key)
-            .is_err()
-        {
-            // Use empty Wasm as default executable. It shouldn't be observable,
-            // but allows exercising bump logic and make operations like Wasm
-            // update more meaningful.
-            let wasm_hash_obj = self.upload_contract_wasm(vec![])?;
-            let wasm_hash = self.hash_from_bytesobj_input("wasm_hash", wasm_hash_obj)?;
-            self.store_contract_instance(
-                Some(ContractExecutable::Wasm(wasm_hash)),
-                None,
-                contract_id.clone(),
-                &instance_key,
-            )?;
-        };
+        let wasm_hash_obj = self.upload_contract_wasm(vec![])?;
+        let wasm_hash = self.hash_from_bytesobj_input("wasm_hash", wasm_hash_obj)?;
+        // Use the empty Wasm as an executable to a) mark that the contract
+        // calls should be dispatched via provided `contract_fns` and b) have
+        // the same ledger entries as for 'real' contracts that consist of Wasm
+        // entry and the instance entry, so that instance-related host functions
+        // work properly.
+        self.store_contract_instance(
+            Some(ContractExecutable::Wasm(wasm_hash)),
+            None,
+            contract_id.clone(),
+            &instance_key,
+        )?;
+
         let mut contracts = self.try_borrow_contracts_mut()?;
         contracts.insert(contract_id, contract_fns);
         Ok(())
