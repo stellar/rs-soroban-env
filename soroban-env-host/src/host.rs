@@ -2451,10 +2451,7 @@ impl VmCallerEnv for Host {
             // version/checksum) and  another one for the base32 encoding of
             // the payload.
             const PAYLOAD_LEN: u64 = 32 + 3;
-            Vec::<u8>::charge_bulk_init_cpy(
-                (PAYLOAD_LEN + ((PAYLOAD_LEN * 8 + 4) / 5)) as u64,
-                self,
-            )?;
+            Vec::<u8>::charge_bulk_init_cpy((PAYLOAD_LEN + ((PAYLOAD_LEN * 8 + 4) / 5)), self)?;
             let strkey = match addr {
                 ScAddress::Account(acc_id) => {
                     let AccountId(PublicKey::PublicKeyTypeEd25519(Uint256(ed25519))) = acc_id;
