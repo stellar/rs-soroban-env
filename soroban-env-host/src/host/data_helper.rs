@@ -18,7 +18,6 @@ use crate::xdr::{
 };
 use crate::{err, Host, HostError};
 
-use super::crypto;
 use super::metered_clone::{MeteredAlloc, MeteredClone};
 
 impl Host {
@@ -523,6 +522,8 @@ impl Host {
 
 #[cfg(any(test, feature = "testutils"))]
 use crate::storage::{AccessType, Footprint};
+#[cfg(any(test, feature = "testutils"))]
+use super::crypto;
 
 #[cfg(any(test, feature = "testutils"))]
 impl Host {

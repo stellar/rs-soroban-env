@@ -531,7 +531,8 @@ impl Host {
         // compiled-in implementation back to Wasm via
         // `update_current_contract_wasm`.
         // "testutils" is not covered by budget metering.
-        if cfg!(any(test, feature = "testutils")) && self.is_test_contract_executable(id)? {
+        #[cfg(any(test, feature = "testutils"))]
+        if self.is_test_contract_executable(id)? {
             // This looks a little un-idiomatic, but this avoids maintaining a borrow of
             // self.0.contracts. Implementing it as
             //
