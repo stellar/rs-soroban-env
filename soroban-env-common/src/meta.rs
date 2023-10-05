@@ -58,7 +58,7 @@ soroban_env_macros::generate_env_meta_consts!(
 #[cfg(not(feature = "next"))]
 soroban_env_macros::generate_env_meta_consts!(
     ledger_protocol_version: 20,
-    pre_release_version: 62,
+    pre_release_version: 63,
 );
 
 pub const fn get_ledger_protocol_version(interface_version: u64) -> u32 {

@@ -4,7 +4,7 @@ use std::rc::Rc;
 use soroban_env_common::xdr::{
     BytesM, ContractCodeEntry, ContractDataDurability, ContractExecutable, ContractIdPreimage,
     ExtensionPoint, HashIdPreimageContractId, ScAddress, ScContractInstance, ScErrorCode,
-    ScErrorType,
+    ScErrorType, ScMap,
 };
 use soroban_env_common::{AddressObject, Env, StorageType, U32Val, Val};
 
@@ -150,10 +150,16 @@ impl Host {
             .map_err(|e| self.decorate_contract_code_storage_error(e, wasm_hash))
     }
 
+    // Stores the contract instance specified with its parts (executable and
+    // storage).
+    // When either of parts is `None`, the old value is preserved (when
+    // existent).
+    // `executable` has to be present for newly created contract instances.
     // Notes on metering: `from_host_obj` and `put` to storage covered, rest are free.
     pub(crate) fn store_contract_instance(
         &self,
-        instance: ScContractInstance,
+        executable: Option<ContractExecutable>,
+        instance_storage: Option<ScMap>,
         contract_id: Hash,
         key: &Rc<LedgerKey>,
     ) -> Result<(), HostError> {
@@ -167,19 +173,31 @@ impl Host {
                 .get_with_expiration(key, self.as_budget())?;
             let mut current = (*current).metered_clone(self)?;
 
-            match current.data {
-                LedgerEntryData::ContractData(ref mut entry) => {
-                    entry.val = ScVal::ContractInstance(instance);
-                }
-                _ => {
+            if let LedgerEntryData::ContractData(ref mut entry) = current.data {
+                if let ScVal::ContractInstance(ref mut instance) = entry.val {
+                    if let Some(executable) = executable {
+                        instance.executable = executable;
+                    }
+                    if let Some(storage) = instance_storage {
+                        instance.storage = Some(storage);
+                    }
+                } else {
                     return Err(self.err(
                         ScErrorType::Storage,
                         ScErrorCode::InternalError,
-                        "expected DataEntry",
+                        "expected ScVal::ContractInstance for contract instance",
                         &[],
                     ));
                 }
+            } else {
+                return Err(self.err(
+                    ScErrorType::Storage,
+                    ScErrorCode::InternalError,
+                    "expected DataEntry for contract instance",
+                    &[],
+                ));
             }
+
             self.try_borrow_storage_mut()?
                 .put(
                     &key,
@@ -192,7 +210,17 @@ impl Host {
             let data = ContractDataEntry {
                 contract: ScAddress::Contract(contract_id.metered_clone(self)?),
                 key: ScVal::LedgerKeyContractInstance,
-                val: ScVal::ContractInstance(instance),
+                val: ScVal::ContractInstance(ScContractInstance {
+                    executable: executable.ok_or_else(|| {
+                        self.err(
+                            ScErrorType::Context,
+                            ScErrorCode::MissingValue,
+                            "can't initialize contract without executable",
+                            &[],
+                        )
+                    })?,
+                    storage: instance_storage,
+                }),
                 durability: ContractDataDurability::Persistent,
                 ext: ExtensionPoint::V0,
             };
