@@ -2485,12 +2485,12 @@ impl VmCallerEnv for Host {
                     &[strkey_obj.to_val()],
                 ));
             }
+            // Charge for the key copy to string.
+            Vec::<u8>::charge_bulk_init_cpy(key.len() as u64, self)?;
+            let key_str = String::from_utf8_lossy(key);
             // Approximate the decoding cost as two vector allocations for the
             // expected payload length (the strkey library does one extra copy).
             Vec::<u8>::charge_bulk_init_cpy(PAYLOAD_LEN + PAYLOAD_LEN, self)?;
-            // Charge for the key copy to string.
-            // Vec::<u8>::charge_bulk_init_cpy(key.len() as u64, self)?;
-            let key_str = String::from_utf8_lossy(key);
             let strkey = stellar_strkey::Strkey::from_string(&key_str).map_err(|_| {
                 self.err(
                     ScErrorType::Value,
