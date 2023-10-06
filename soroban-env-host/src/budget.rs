@@ -512,13 +512,26 @@ impl Default for BudgetImpl {
                     cpu.const_term = 1141;
                     cpu.lin_term = ScaledU64(1);
                 }
+                // We don't use a calibrated number for this because sending a
+                // large calibration-buffer to memcpy hits an optimized
+                // large-memcpy path in the stdlib, which has both a large
+                // overhead and a small per-byte cost. But large buffers aren't
+                // really how byte-copies usually get used in metered code. Most
+                // calls have to do with small copies of a few tens or hundreds
+                // of bytes. So instead we just "reason it out": we can probably
+                // copy 8 bytes per instruction on a 64-bit machine, and that
+                // therefore a 1-byte copy is considered 1/8th of an
+                // instruction. We also add in a nonzero constant overhead, to
+                // avoid having anything that can be zero cost and approximate
+                // whatever function call, arg-shuffling, spills, reloads or
+                // other flotsam accumulates around a typical memory copy.
                 ContractCostType::HostMemCpy => {
-                    cpu.const_term = 39;
-                    cpu.lin_term = ScaledU64(24);
+                    cpu.const_term = 250;
+                    cpu.lin_term = ScaledU64((1 << COST_MODEL_LIN_TERM_SCALE_BITS) / 8);
                 }
                 ContractCostType::HostMemCmp => {
-                    cpu.const_term = 20;
-                    cpu.lin_term = ScaledU64(64);
+                    cpu.const_term = 250;
+                    cpu.lin_term = ScaledU64((1 << COST_MODEL_LIN_TERM_SCALE_BITS) / 8);
                 }
                 ContractCostType::DispatchHostFunction => {
                     cpu.const_term = 263;
@@ -529,12 +542,12 @@ impl Default for BudgetImpl {
                     cpu.lin_term = ScaledU64(0);
                 }
                 ContractCostType::ValSer => {
-                    cpu.const_term = 591;
-                    cpu.lin_term = ScaledU64(69);
+                    cpu.const_term = 1000;
+                    cpu.lin_term = ScaledU64((1 << COST_MODEL_LIN_TERM_SCALE_BITS) / 8);
                 }
                 ContractCostType::ValDeser => {
-                    cpu.const_term = 1112;
-                    cpu.lin_term = ScaledU64(34);
+                    cpu.const_term = 1000;
+                    cpu.lin_term = ScaledU64((1 << COST_MODEL_LIN_TERM_SCALE_BITS) / 8);
                 }
                 ContractCostType::ComputeSha256Hash => {
                     cpu.const_term = 2924;
@@ -545,24 +558,24 @@ impl Default for BudgetImpl {
                     cpu.lin_term = ScaledU64(0);
                 }
                 ContractCostType::MapEntry => {
-                    cpu.const_term = 53;
-                    cpu.lin_term = ScaledU64(0);
+                    cpu.const_term = 250;
+                    cpu.lin_term = ScaledU64((1 << COST_MODEL_LIN_TERM_SCALE_BITS) / 8);
                 }
                 ContractCostType::VecEntry => {
-                    cpu.const_term = 0;
-                    cpu.lin_term = ScaledU64(0);
+                    cpu.const_term = 250;
+                    cpu.lin_term = ScaledU64((1 << COST_MODEL_LIN_TERM_SCALE_BITS) / 8);
                 }
                 ContractCostType::VerifyEd25519Sig => {
                     cpu.const_term = 376877;
                     cpu.lin_term = ScaledU64(2747);
                 }
                 ContractCostType::VmMemRead => {
-                    cpu.const_term = 182;
-                    cpu.lin_term = ScaledU64(24);
+                    cpu.const_term = 1000;
+                    cpu.lin_term = ScaledU64((1 << COST_MODEL_LIN_TERM_SCALE_BITS) / 8);
                 }
                 ContractCostType::VmMemWrite => {
-                    cpu.const_term = 182;
-                    cpu.lin_term = ScaledU64(24);
+                    cpu.const_term = 1000;
+                    cpu.lin_term = ScaledU64((1 << COST_MODEL_LIN_TERM_SCALE_BITS) / 8);
                 }
                 ContractCostType::VmInstantiation => {
                     cpu.const_term = 967154;
