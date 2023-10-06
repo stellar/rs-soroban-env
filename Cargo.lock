@@ -1359,6 +1359,7 @@ dependencies = [
  "soroban-wasmi",
  "static_assertions",
  "stellar-xdr",
+ "tracy-client",
 ]
 
 [[package]]

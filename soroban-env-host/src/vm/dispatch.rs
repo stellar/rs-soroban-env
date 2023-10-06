@@ -139,7 +139,7 @@ macro_rules! generate_dispatch_functions {
                 pub(crate) fn $fn_id(mut caller: wasmi::Caller<Host>, $($arg:i64),*) ->
                     Result<(i64,), Trap>
                 {
-                    let _span = tracy_span!(std::stringify!($fn_id));
+                    let _span = tracy_span!(core::stringify!($fn_id));
 
                     let host = caller.data().clone();
 

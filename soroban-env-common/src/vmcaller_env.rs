@@ -177,6 +177,8 @@ macro_rules! vmcaller_none_function_helper {
         // that didn't have an Env on hand when creating the error. This will at
         // least localize the error to a given Env call.
         fn $fn_id(&self, $($arg:$type),*) -> Result<$ret, Self::Error> {
+            #[cfg(all(not(target_family = "wasm"), feature = "tracy"))]
+            let _span = tracy_span!(core::stringify!($fn_id));
             self.augment_err_result(<Self as VmCallerEnv>::$fn_id(self, &mut VmCaller::none(), $($arg),*))
         }
     };

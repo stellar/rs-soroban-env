@@ -18,6 +18,28 @@
 //! [Val] type and XDR types, and re-exports the XDR definitions from
 //! [stellar_xdr] under the module [xdr].
 
+#[allow(unused_macros)]
+#[cfg(all(not(target_family = "wasm"), feature = "tracy"))]
+macro_rules! tracy_span {
+    () => {
+        tracy_client::span!()
+    };
+    ($name:expr) => {
+        tracy_client::span!($name)
+    };
+}
+
+#[allow(unused_macros)]
+#[cfg(any(target_family = "wasm", not(feature = "tracy")))]
+macro_rules! tracy_span {
+    () => {
+        ()
+    };
+    ($name:expr) => {
+        ()
+    };
+}
+
 #[derive(Clone, Debug, Eq, PartialEq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Version<'a> {
