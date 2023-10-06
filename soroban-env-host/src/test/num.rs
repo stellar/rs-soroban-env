@@ -320,6 +320,16 @@ fn test_u256_arith() -> Result<(), HostError> {
     )?;
     check_num_arith_expect_err(&host, U256::new(1), U256::ZERO, Host::u256_div)?;
 
+    // rem_euclid
+    check_num_arith_ok(
+        &host,
+        U256::new(7),
+        U256::new(4),
+        Host::u256_rem_euclid,
+        U256::new(3),
+    )?;
+    check_num_arith_expect_err(&host, U256::new(1), U256::ZERO, Host::u256_rem_euclid)?;
+
     // pow
     check_num_arith_rhs_u32_ok(&host, U256::new(2), 5, Host::u256_pow, U256::new(32))?;
     check_num_arith_rhs_u32_expect_err(&host, U256::MAX, 2, Host::u256_pow)?;
@@ -372,6 +382,16 @@ fn test_i256_arith() -> Result<(), HostError> {
     )?;
     check_num_arith_expect_err(&host, I256::MIN, I256::new(-1), Host::i256_div)?;
     check_num_arith_expect_err(&host, I256::new(1), I256::new(0), Host::i256_div)?;
+
+    // rem_euclid
+    check_num_arith_ok(
+        &host,
+        I256::new(-7),
+        I256::new(4),
+        Host::i256_rem_euclid,
+        I256::new(1),
+    )?;
+    check_num_arith_expect_err(&host, I256::new(1), I256::ZERO, Host::i256_rem_euclid)?;
 
     // pow
     check_num_arith_rhs_u32_ok(&host, I256::new(8), 2, Host::i256_pow, I256::new(64))?;
