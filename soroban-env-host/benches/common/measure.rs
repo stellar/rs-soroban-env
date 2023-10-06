@@ -353,7 +353,8 @@ where
     let mut recycled_samples = Vec::with_capacity(samples.len());
     host.as_budget().reset_unlimited().unwrap();
 
-    let ht = HostTracker::start(alloc_group_token);
+    let mut ht = HostTracker::new();
+    ht.start(alloc_group_token);
 
     runner(host, samples, &mut recycled_samples);
 

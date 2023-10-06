@@ -128,34 +128,45 @@ pub struct HostTracker<'a> {
     mem_tracker: MemTracker,
     start_time: Instant,
     alloc_guard: Option<AllocationGuard<'a>>,
+    #[cfg(feature = "tracy")]
+    tracy_span: Option<tracy_client::Span>,
 }
 
 impl<'a> HostTracker<'a> {
-    pub fn start(token: Option<&'a mut AllocationGroupToken>) -> Self {
+    pub fn new() -> Self {
         // Setup the instrumentation
-        let mut cpu_insn_counter = cpu::InstructionCounter::new();
+        let cpu_insn_counter = cpu::InstructionCounter::new();
         let mem_tracker = MemTracker(Arc::new(AtomicU64::new(0)));
         AllocationRegistry::set_global_tracker(mem_tracker.clone())
             .expect("no other global tracker should be set yet");
         AllocationRegistry::enable_tracking();
 
-        // start the cpu and mem measurement
-        mem_tracker.0.store(0, Ordering::SeqCst);
-        let alloc_guard: Option<AllocationGuard> = if let Some(t) = token {
+        HostTracker {
+            cpu_insn_counter,
+            mem_tracker,
+            start_time: Instant::now(),
+            alloc_guard: None,
+            #[cfg(feature = "tracy")]
+            tracy_span: None,
+        }
+    }
+
+    pub fn start(&mut self, token: Option<&'a mut AllocationGroupToken>) {
+        // start the mem measurement
+        #[cfg(feature = "tracy")]
+        {
+            self.tracy_span = Some(tracy_span!("tracker active"));
+        }
+        self.mem_tracker.0.store(0, Ordering::SeqCst);
+        self.alloc_guard = if let Some(t) = token {
             Some(t.enter())
         } else {
             None
         };
 
-        let start_time = Instant::now();
-        cpu_insn_counter.begin();
-
-        HostTracker {
-            cpu_insn_counter,
-            mem_tracker,
-            start_time,
-            alloc_guard,
-        }
+        // start the cpu measurement
+        self.start_time = Instant::now();
+        self.cpu_insn_counter.begin();
     }
 
     pub fn stop(mut self) -> (u64, u64, u64) {
@@ -165,10 +176,13 @@ impl<'a> HostTracker<'a> {
         if let Some(g) = self.alloc_guard {
             drop(g)
         }
-
         let mem_bytes = self.mem_tracker.0.load(Ordering::SeqCst);
         let time_nsecs = stop_time.duration_since(self.start_time).as_nanos() as u64;
-
+        self.alloc_guard = None;
+        #[cfg(feature = "tracy")]
+        {
+            self.tracy_span = None
+        }
         AllocationRegistry::disable_tracking();
         unsafe {
             AllocationRegistry::clear_global_tracker();
