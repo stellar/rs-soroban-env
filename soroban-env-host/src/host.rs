@@ -88,6 +88,14 @@ pub struct LedgerInfo {
     pub max_entry_expiration: u32,
 }
 
+#[cfg(any(test, feature = "testutils"))]
+pub(crate) enum HostLifecycleEvent {
+    VmInstantiated,
+}
+
+#[cfg(any(test, feature = "testutils"))]
+pub(crate) type HostLifecycleHook = Rc<dyn Fn(HostLifecycleEvent) -> Result<(), HostError>>;
+
 #[derive(Clone, Default)]
 struct HostImpl {
     source_account: RefCell<Option<AccountId>>,
@@ -119,6 +127,12 @@ struct HostImpl {
     // has happened or has been recorded.
     #[cfg(any(test, feature = "testutils"))]
     previous_authorization_manager: RefCell<Option<AuthorizationManager>>,
+    // Store a hook that we will call with various lifecycle events during
+    // the host's execution. No guarantees are made about the stability of this
+    // interface, it exists strictly for internal testing of the host.
+    #[doc(hidden)]
+    #[cfg(any(test, feature = "testutils"))]
+    lifecycle_event_hook: RefCell<Option<HostLifecycleHook>>,
 }
 // Host is a newtype on Rc<HostImpl> so we can impl Env for it below.
 #[derive(Clone)]
@@ -217,6 +231,14 @@ impl_checked_borrow_helpers!(
     try_borrow_previous_authorization_manager_mut
 );
 
+#[cfg(any(test, feature = "testutils"))]
+impl_checked_borrow_helpers!(
+    lifecycle_event_hook,
+    Option<HostLifecycleHook>,
+    try_borrow_lifecycle_event_hook,
+    try_borrow_lifecycle_event_hook_mut
+);
+
 impl Debug for HostImpl {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "HostImpl(...)")
@@ -253,6 +275,8 @@ impl Host {
             contracts: Default::default(),
             #[cfg(any(test, feature = "testutils"))]
             previous_authorization_manager: RefCell::new(None),
+            #[cfg(any(test, feature = "testutils"))]
+            lifecycle_event_hook: RefCell::new(None),
         }))
     }
 
@@ -2598,6 +2622,24 @@ impl Host {
         F: FnOnce(Budget) -> Result<T, HostError>,
     {
         f(self.0.budget.clone())
+    }
+
+    pub(crate) fn set_lifecycle_event_hook(
+        &self,
+        hook: Option<HostLifecycleHook>,
+    ) -> Result<(), HostError> {
+        *self.try_borrow_lifecycle_event_hook_mut()? = hook;
+        Ok(())
+    }
+
+    pub(crate) fn call_any_lifecycle_hook(
+        &self,
+        event: HostLifecycleEvent,
+    ) -> Result<(), HostError> {
+        match &*self.try_borrow_lifecycle_event_hook()? {
+            Some(hook) => hook(event),
+            None => Ok(()),
+        }
     }
 }
 
