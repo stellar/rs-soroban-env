@@ -349,6 +349,7 @@ where
         &mut Vec<<<HCM as HostCostMeasurement>::Runner as CostRunner>::RecycledType>,
     ),
 {
+    assert!(HCM::STEP_SIZE >= (1 << COST_MODEL_LIN_TERM_SCALE_BITS));
     let mut recycled_samples = Vec::with_capacity(samples.len());
     host.as_budget().reset_unlimited().unwrap();
 
