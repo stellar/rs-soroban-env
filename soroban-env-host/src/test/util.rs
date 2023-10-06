@@ -265,21 +265,23 @@ impl Host {
         let mem_metered_diff_percent = 100 * mem_diff / (mem_metered as i64).max(1);
         let metered_insn_nsecs_ratio: f64 = (cpu_metered as f64) / (time_nsecs as f64).max(1.0);
         let actual_insn_nsecs_ratio: f64 = (cpu_actual as f64) / (time_nsecs as f64).max(1.0);
+
         println!();
         println!(
-            "metered cpu insns: {}, actual cpu insns {}, diff: {} ({}%) \n",
+            "metered cpu insns: {}, actual cpu insns {}, diff: {} ({:.3}%)",
             cpu_metered, cpu_actual, cpu_diff, cpu_metered_diff_percent
         );
         println!(
-            "metered mem bytes: {}, actual mem bytes {}, diff: {} ({}%) \n",
+            "metered mem bytes: {}, actual mem bytes {}, diff: {} ({:.3}%)",
             mem_metered, mem_actual, mem_diff, mem_metered_diff_percent
         );
+        println!("time_nsecs: {}", time_nsecs);
         println!(
-            "metered cpu_insn/time_nsecs ratio: {} \n",
+            "metered cpu_insn/time_nsecs ratio: {:.3}",
             metered_insn_nsecs_ratio
         );
         println!(
-            "actual cpu_insn/time_nsecs ratio: {} \n",
+            "actual cpu_insn/time_nsecs ratio: {:.3}",
             actual_insn_nsecs_ratio
         );
         println!();
