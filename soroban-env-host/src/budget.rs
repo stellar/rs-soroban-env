@@ -140,7 +140,7 @@ impl HostCostModel for MeteredCostComponent {
 }
 
 #[derive(Clone)]
-pub struct BudgetDimension {
+struct BudgetDimension {
     /// A set of cost models that map input values (eg. event counts, object
     /// sizes) from some CostType to whatever concrete resource type is being
     /// tracked by this dimension (eg. cpu or memory). CostType enum values are
@@ -177,7 +177,7 @@ impl Debug for BudgetDimension {
 }
 
 impl BudgetDimension {
-    pub fn new() -> Self {
+    fn new() -> Self {
         let mut bd = Self {
             cost_models: Default::default(),
             limit: Default::default(),
@@ -194,7 +194,7 @@ impl BudgetDimension {
         bd
     }
 
-    pub fn try_from_config(cost_params: ContractCostParams) -> Result<Self, HostError> {
+    fn try_from_config(cost_params: ContractCostParams) -> Result<Self, HostError> {
         let cost_models = cost_params
             .0
             .iter()
@@ -217,23 +217,15 @@ impl BudgetDimension {
         &mut self.cost_models[ty as usize]
     }
 
-    pub fn get_count(&self, ty: ContractCostType) -> u64 {
-        self.counts[ty as usize]
-    }
-
-    pub fn get_total_count(&self) -> u64 {
+    fn get_total_count(&self) -> u64 {
         self.total_count
     }
 
-    pub fn get_limit(&self) -> u64 {
-        self.limit
-    }
-
-    pub fn get_remaining(&self) -> u64 {
+    fn get_remaining(&self) -> u64 {
         self.limit.saturating_sub(self.total_count)
     }
 
-    pub fn reset(&mut self, limit: u64) {
+    fn reset(&mut self, limit: u64) {
         self.limit = limit;
         self.total_count = 0;
         for v in &mut self.counts {
@@ -250,7 +242,7 @@ impl BudgetDimension {
     /// input, assuming all batched units have the same input size. If input
     /// is `None`, the input is ignored and the model is treated as a constant
     /// model, and amount charged is iterations * const_term.
-    pub fn charge(
+    fn charge(
         &mut self,
         ty: ContractCostType,
         iterations: u64,
@@ -359,8 +351,8 @@ impl MeterTracker {
 
 #[derive(Clone)]
 pub(crate) struct BudgetImpl {
-    pub cpu_insns: BudgetDimension,
-    pub mem_bytes: BudgetDimension,
+    cpu_insns: BudgetDimension,
+    mem_bytes: BudgetDimension,
     /// For the purpose o calibration and reporting; not used for budget-limiting per se.
     tracker: MeterTracker,
     enabled: bool,
