@@ -2471,12 +2471,32 @@ impl VmCallerEnv for Host {
     fn strkey_to_address(
         &self,
         _vmcaller: &mut VmCaller<Self::VmUserState>,
-        strkey_obj: StringObject,
+        strkey_obj: Val,
     ) -> Result<AddressObject, Self::Error> {
-        let sc_addr = self.visit_obj(strkey_obj, |key: &ScString| {
+        let strkey_obj = Object::try_from(strkey_obj).map_err(|_| {
+            self.err(
+                ScErrorType::Value,
+                ScErrorCode::UnexpectedType,
+                "strkey is not an object",
+                &[strkey_obj],
+            )
+        })?;
+        let sc_addr = self.visit_obj_untyped(strkey_obj, |key_obj: &HostObject| {
+            let key = match key_obj {
+                HostObject::Bytes(b) => b.as_slice(),
+                HostObject::String(s) => s.as_slice(),
+                _ => {
+                    return Err(self.err(
+                        ScErrorType::Value,
+                        ScErrorCode::UnexpectedType,
+                        "strkey is not a string or bytes object",
+                        &[strkey_obj.to_val()],
+                    ));
+                }
+            };
             const PAYLOAD_LEN: u64 = 32 + 3;
             let expected_key_len = (PAYLOAD_LEN * 8 + 4) / 5;
-            if expected_key_len != key.0.len() as u64 {
+            if expected_key_len != key.len() as u64 {
                 return Err(self.err(
                     ScErrorType::Value,
                     ScErrorCode::InvalidInput,

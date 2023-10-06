@@ -1,7 +1,7 @@
 use crate::Host;
 use soroban_env_common::{
-    xdr::{AccountId, Hash, PublicKey, ScAddress, ScString, Uint256},
-    Compare, Env, StringObject,
+    xdr::{AccountId, Hash, PublicKey, ScAddress, ScBytes, ScString, Uint256},
+    Compare, Env, StringObject, Val,
 };
 
 fn extract_string(host: &Host, s: StringObject) -> String {
@@ -9,9 +9,16 @@ fn extract_string(host: &Host, s: StringObject) -> String {
         .unwrap()
 }
 
-fn string_to_object(host: &Host, s: &str) -> StringObject {
+fn string_to_object(host: &Host, s: &str) -> Val {
     host.add_host_object(ScString(s.try_into().unwrap()))
         .unwrap()
+        .to_val()
+}
+
+fn string_to_bytes_object(host: &Host, s: &str) -> Val {
+    host.add_host_object(ScBytes(s.try_into().unwrap()))
+        .unwrap()
+        .to_val()
 }
 
 // Example values are taken from
@@ -37,9 +44,19 @@ fn test_account_address_conversions() {
         "GA7QYNF7SOWQ3GLR2BGMZEHXAVIRZA4KVWLTJJFC7MGXUA74P7UJVSGZ"
     );
 
-    let converted_address_object = host.strkey_to_address(strkey).unwrap();
+    let converted_address_object = host.strkey_to_address(strkey.to_val()).unwrap();
     assert!(host
         .compare(&address_obj, &converted_address_object)
+        .unwrap()
+        .is_eq());
+    let converted_from_bytes_obj = host
+        .strkey_to_address(string_to_bytes_object(
+            &host,
+            "GA7QYNF7SOWQ3GLR2BGMZEHXAVIRZA4KVWLTJJFC7MGXUA74P7UJVSGZ",
+        ))
+        .unwrap();
+    assert!(host
+        .compare(&address_obj, &converted_from_bytes_obj)
         .unwrap()
         .is_eq());
 }
@@ -62,9 +79,20 @@ fn test_contract_address_conversions() {
         "CA7QYNF7SOWQ3GLR2BGMZEHXAVIRZA4KVWLTJJFC7MGXUA74P7UJUWDA"
     );
 
-    let converted_address_object = host.strkey_to_address(strkey).unwrap();
+    let converted_address_object = host.strkey_to_address(strkey.to_val()).unwrap();
     assert!(host
         .compare(&address_obj, &converted_address_object)
+        .unwrap()
+        .is_eq());
+
+    let converted_from_bytes_obj = host
+        .strkey_to_address(string_to_bytes_object(
+            &host,
+            "CA7QYNF7SOWQ3GLR2BGMZEHXAVIRZA4KVWLTJJFC7MGXUA74P7UJUWDA",
+        ))
+        .unwrap();
+    assert!(host
+        .compare(&address_obj, &converted_from_bytes_obj)
         .unwrap()
         .is_eq());
 }
