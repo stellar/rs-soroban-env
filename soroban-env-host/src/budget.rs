@@ -247,10 +247,23 @@ impl BudgetDimension {
         ty: ContractCostType,
         iterations: u64,
         input: Option<u64>,
+        _is_cpu: bool,
     ) -> Result<(), HostError> {
         let cm = self.get_cost_model(ty);
         let amount = cm.evaluate(input)?.saturating_mul(iterations);
-        self.counts[ty as usize] = self.counts[ty as usize].saturating_add(amount);
+
+        #[cfg(all(not(target_family = "wasm"), feature = "tracy"))]
+        if _is_cpu {
+            let _span = tracy_span!("charge");
+            _span.emit_text(ty.name());
+            _span.emit_value(amount);
+        }
+
+        let cell = self
+            .counts
+            .get_mut(ty as usize)
+            .ok_or_else(|| HostError::from((ScErrorType::Budget, ScErrorCode::InternalError)))?;
+        *cell = cell.saturating_add(amount);
         self.total_count = self.total_count.saturating_add(amount);
         if self.is_over_budget() {
             Err((ScErrorType::Budget, ScErrorCode::ExceededLimit).into())
@@ -439,18 +452,22 @@ impl BudgetImpl {
 
         // update tracker for reporting
         self.tracker.count = self.tracker.count.saturating_add(1);
-        let (t_iters, t_inputs) = &mut self.tracker.cost_tracker[ty as usize];
+        let (t_iters, t_inputs) = &mut self
+            .tracker
+            .cost_tracker
+            .get_mut(ty as usize)
+            .ok_or_else(|| HostError::from((ScErrorType::Budget, ScErrorCode::InternalError)))?;
         *t_iters = t_iters.saturating_add(iterations);
         match (t_inputs, input) {
             (None, None) => (),
             (Some(t), Some(i)) => *t = t.saturating_add(i.saturating_mul(iterations)),
             // internal logic error, a wrong cost type has been passed in
-            _ => return Err((ScErrorType::Context, ScErrorCode::InternalError).into()),
+            _ => return Err((ScErrorType::Budget, ScErrorCode::InternalError).into()),
         };
 
         // do the actual budget charging
-        self.cpu_insns.charge(ty, iterations, input)?;
-        self.mem_bytes.charge(ty, iterations, input)
+        self.cpu_insns.charge(ty, iterations, input, true)?;
+        self.mem_bytes.charge(ty, iterations, input, false)
     }
 
     fn get_wasmi_fuel_remaining(&self) -> Result<u64, HostError> {
@@ -1008,7 +1025,13 @@ impl Budget {
     }
 
     pub fn get_tracker(&self, ty: ContractCostType) -> Result<(u64, Option<u64>), HostError> {
-        Ok(self.0.try_borrow_or_err()?.tracker.cost_tracker[ty as usize])
+        self.0
+            .try_borrow_or_err()?
+            .tracker
+            .cost_tracker
+            .get(ty as usize)
+            .map(|x| *x)
+            .ok_or_else(|| (ScErrorType::Budget, ScErrorCode::InternalError).into())
     }
 
     pub fn get_cpu_insns_consumed(&self) -> Result<u64, HostError> {
