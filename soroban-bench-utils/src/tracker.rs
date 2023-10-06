@@ -63,7 +63,15 @@ mod cpu {
         }
         pub fn end_and_count(&mut self) -> u64 {
             self.0.disable().expect("perf_event::Counter::disable");
-            self.0.read().expect("perf_event::Counter::read")
+            let tandc = self
+                .0
+                .read_count_and_time()
+                .expect("perf_event::Counter::read_count_and_time");
+            if tandc.time_enabled == tandc.time_running {
+                tandc.count
+            } else {
+                panic!("time enabled != time running")
+            }
         }
     }
 }
