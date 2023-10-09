@@ -1866,12 +1866,11 @@ impl Host {
     /// of `require_auth[_for_args]` calls.
     pub fn call_account_contract_check_auth(
         &self,
-        contract: BytesObject,
+        contract: AddressObject,
         args: VecObject,
     ) -> Result<Val, HostError> {
         use crate::native_contract::account_contract::ACCOUNT_CONTRACT_CHECK_AUTH_FN_NAME;
-
-        let contract_id = self.hash_from_bytesobj_input("contract", contract)?;
+        let contract_id = self.contract_id_from_address(contract)?;
         let args_vec = self.call_args_from_obj(args)?;
         let res = self.call_n_internal(
             &contract_id,
