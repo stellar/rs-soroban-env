@@ -10,6 +10,12 @@ pub struct ValSerRun;
 impl CostRunner for ValSerRun {
     const COST_TYPE: ContractCostType = ContractCostType::ValSer;
 
+    // In ValSerMeasure, we are already duplicating the byte array 10 times at each level,
+    // and every level (100 of them) contains a duplication of the same bytes with the same input.
+    // So running this once will run ValSer with the same input 1000 times.
+    // No need to run multiple iterations here.
+    const RUN_ITERATIONS: u64 = 1;
+
     type SampleType = (ScVal, Vec<u8>);
 
     type RecycledType = Self::SampleType;

@@ -414,8 +414,15 @@ impl BudgetImpl {
                 ContractCostType::HostMemCmp => init_input(i), // number of bytes in host to compare
                 ContractCostType::DispatchHostFunction => (),
                 ContractCostType::VisitObject => (),
+                // The inputs for `ValSer` and `ValDeser` are subtly different:
+                // `ValSer` works recursively via `WriteXdr`, and each leaf call charges the budget,
+                // and the input is the number of bytes of a leaf entity.
+                // `ValDeser` charges the budget at the top level. Call to `read_xdr` works through
+                // the bytes buffer recursively without worrying about budget charging. So the input
+                // is the length of the total buffer.
+                // This has implication on how their calibration should be set up.
                 ContractCostType::ValSer => init_input(i), // number of bytes in the result buffer
-                ContractCostType::ValDeser => init_input(i), // number of bytes in the buffer
+                ContractCostType::ValDeser => init_input(i), // number of bytes in the input buffer
                 ContractCostType::ComputeSha256Hash => init_input(i), // number of bytes in the buffer
                 ContractCostType::ComputeEd25519PubKey => (),
                 ContractCostType::MapEntry => (),

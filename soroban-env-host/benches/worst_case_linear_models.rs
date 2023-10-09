@@ -1,7 +1,7 @@
 // Run this with
-// $ cargo bench --features wasmi,testutils --bench worst_case_linear_models -- --nocapture
+// $ cargo bench --features testutils --bench worst_case_linear_models -- --nocapture
 // You can optionally pass in args listing the {`ContractCostType`, `WasmInsnType`} combination to run with, e.g.
-// $ cargo bench --features wasmi,testutils --bench worst_case_linear_models -- VecNew I64Rotr --nocapture
+// $ cargo bench --features testutils --bench worst_case_linear_models -- VecNew I64Rotr --nocapture
 mod common;
 use common::*;
 use soroban_env_host::{
