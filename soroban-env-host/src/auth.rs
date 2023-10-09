@@ -1856,7 +1856,7 @@ impl Host {
 }
 
 #[cfg(any(test, feature = "testutils"))]
-use crate::{host::frame::ContractReentryMode, xdr::SorobanAuthorizedInvocation, BytesObject};
+use crate::{host::frame::ContractReentryMode, xdr::SorobanAuthorizedInvocation};
 #[cfg(any(test, feature = "testutils"))]
 impl Host {
     /// Invokes the reserved `__check_auth` function on a provided contract.
