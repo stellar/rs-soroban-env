@@ -25,12 +25,12 @@ impl Contract {
     pub fn bump_persistent(
         e: Env,
         key: Symbol,
-        low_expiration_watermark: u32,
-        high_expiration_watermark: u32,
+        threshold: u32,
+        extend_to: u32,
     ) {
         e.storage()
             .persistent()
-            .bump(&key, low_expiration_watermark, high_expiration_watermark)
+            .bump(&key, threshold, extend_to)
     }
 
     pub fn put_temporary(e: Env, key: Symbol, val: u64) {
@@ -52,12 +52,12 @@ impl Contract {
     pub fn bump_temporary(
         e: Env,
         key: Symbol,
-        low_expiration_watermark: u32,
-        high_expiration_watermark: u32,
+        threshold: u32,
+        extend_to: u32,
     ) {
         e.storage()
             .temporary()
-            .bump(&key, low_expiration_watermark, high_expiration_watermark)
+            .bump(&key, threshold, extend_to)
     }
 
     pub fn put_instance(e: Env, key: Symbol, val: u64) {
@@ -76,18 +76,18 @@ impl Contract {
         e.storage().instance().get(&key).unwrap()
     }
 
-    pub fn bump_instance(e: Env, low_expiration_watermark: u32, high_expiration_watermark: u32) {
+    pub fn bump_instance(e: Env, threshold: u32, extend_to: u32) {
         e.storage()
             .instance()
-            .bump(low_expiration_watermark, high_expiration_watermark)
+            .bump(threshold, extend_to)
     }
 
     pub fn replace_with_bytes_and_bump(
         e: Env,
         key: Symbol,
         num_kilo_bytes: u32,
-        low_expiration_watermark: u32,
-        high_expiration_watermark: u32,
+        threshold: u32,
+        extend_to: u32,
     ) {
         let slice = [0_u8; 1024];
         let mut bytes = Bytes::new(&e);
@@ -97,6 +97,6 @@ impl Contract {
         e.storage().persistent().set(&key, &bytes);
         e.storage()
             .persistent()
-            .bump(&key, low_expiration_watermark, high_expiration_watermark)
+            .bump(&key, threshold, extend_to)
     }
 }

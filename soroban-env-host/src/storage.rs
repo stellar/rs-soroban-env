@@ -333,20 +333,17 @@ impl Storage {
         &mut self,
         host: &Host,
         key: Rc<LedgerKey>,
-        low_expiration_watermark: u32,
-        high_expiration_watermark: u32,
+        threshold: u32,
+        extend_to: u32,
     ) -> Result<(), HostError> {
         let _span = tracy_span!("bump key");
 
-        if low_expiration_watermark > high_expiration_watermark {
+        if threshold > extend_to {
             return Err(host.err(
                 ScErrorType::Storage,
                 ScErrorCode::InvalidInput,
-                "low_expiration_watermark must be <= high_expiration_watermark",
-                &[
-                    low_expiration_watermark.into(),
-                    high_expiration_watermark.into(),
-                ],
+                "threshold must be <= extend_to",
+                &[threshold.into(), extend_to.into()],
             ));
         }
 
@@ -372,9 +369,8 @@ impl Storage {
             ));
         }
 
-        let new_expiration = host.with_ledger_info(|li| {
-            Ok(li.sequence_number.saturating_add(high_expiration_watermark))
-        })?;
+        let new_expiration =
+            host.with_ledger_info(|li| Ok(li.sequence_number.saturating_add(extend_to)))?;
 
         if new_expiration > host.max_expiration_ledger()? {
             return Err(host.err(
@@ -385,8 +381,7 @@ impl Storage {
             ));
         }
 
-        if new_expiration > old_expiration
-            && old_expiration.saturating_sub(ledger_seq) <= low_expiration_watermark
+        if new_expiration > old_expiration && old_expiration.saturating_sub(ledger_seq) <= threshold
         {
             self.map = self.map.insert(
                 key,

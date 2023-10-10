@@ -1697,8 +1697,8 @@ impl VmCallerEnv for Host {
         _vmcaller: &mut VmCaller<Host>,
         k: Val,
         t: StorageType,
-        low_expiration_watermark: U32Val,
-        high_expiration_watermark: U32Val,
+        threshold: U32Val,
+        extend_to: U32Val,
     ) -> Result<Void, HostError> {
         self.check_val_integrity(k)?;
         if matches!(t, StorageType::Instance) {
@@ -1711,12 +1711,7 @@ impl VmCallerEnv for Host {
         }
         let key = self.contract_data_key_from_rawval(k, t.try_into()?)?;
         self.try_borrow_storage_mut()?
-            .bump(
-                self,
-                key,
-                low_expiration_watermark.into(),
-                high_expiration_watermark.into(),
-            )
+            .bump(self, key, threshold.into(), extend_to.into())
             .map_err(|e| self.decorate_contract_data_storage_error(e, k))?;
         Ok(Val::VOID)
     }
@@ -1724,14 +1719,14 @@ impl VmCallerEnv for Host {
     fn bump_current_contract_instance_and_code(
         &self,
         _vmcaller: &mut VmCaller<Host>,
-        low_expiration_watermark: U32Val,
-        high_expiration_watermark: U32Val,
+        threshold: U32Val,
+        extend_to: U32Val,
     ) -> Result<Void, HostError> {
         let contract_id = self.get_current_contract_id_internal()?;
         self.bump_contract_instance_and_code_from_contract_id(
             &contract_id,
-            low_expiration_watermark.into(),
-            high_expiration_watermark.into(),
+            threshold.into(),
+            extend_to.into(),
         )?;
         Ok(Val::VOID)
     }
@@ -1740,14 +1735,14 @@ impl VmCallerEnv for Host {
         &self,
         _vmcaller: &mut VmCaller<Self::VmUserState>,
         contract: AddressObject,
-        low_expiration_watermark: U32Val,
-        high_expiration_watermark: U32Val,
+        threshold: U32Val,
+        extend_to: U32Val,
     ) -> Result<Void, Self::Error> {
         let contract_id = self.contract_id_from_address(contract)?;
         self.bump_contract_instance_and_code_from_contract_id(
             &contract_id,
-            low_expiration_watermark.into(),
-            high_expiration_watermark.into(),
+            threshold.into(),
+            extend_to.into(),
         )?;
         Ok(Val::VOID)
     }
