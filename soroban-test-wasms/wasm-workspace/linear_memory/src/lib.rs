@@ -44,12 +44,11 @@ impl Contract {
     // Same but with a length mismatch
     pub fn vec_mem_bad(e: Env) -> Result<(), Error> {
         let in_buf: [Val; 3] = [Val::from(1), Val::from(2), Val::from(3)];
-        let mut out_buf: [Val; 2] = [Val::from(0); 2];
+        let mut long_buf: [Val; 4] = [Val::from(0); 4];
+        let mut short_buf: [Val; 2] = [Val::from(0); 2];
         let vec: VecObject = e.vec_new_from_slice(&in_buf)?;
-        e.vec_unpack_to_slice(vec, &mut out_buf)?;
-        // Should never get to these lines.
-        assert!(in_buf[0].shallow_eq(&out_buf[0]));
-        assert!(in_buf[1].shallow_eq(&out_buf[1]));
+        assert!(e.vec_unpack_to_slice(vec, &mut short_buf).is_err());
+        assert!(e.vec_unpack_to_slice(vec, &mut long_buf).is_err());
         Ok(())
     }
 }
