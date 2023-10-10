@@ -34,7 +34,7 @@ impl Host {
         mem_pos: u32,
         buf: &[u8],
     ) -> Result<(), HostError> {
-        self.charge_budget(ContractCostType::VmMemWrite, Some(buf.len() as u64))?;
+        self.charge_budget(ContractCostType::MemCpy, Some(buf.len() as u64))?;
         let mem = vm.get_memory(self)?;
         self.map_err(
             mem.write(vmcaller.try_mut()?, mem_pos as usize, buf)
@@ -49,7 +49,7 @@ impl Host {
         mem_pos: u32,
         buf: &mut [u8],
     ) -> Result<(), HostError> {
-        self.charge_budget(ContractCostType::VmMemRead, Some(buf.len() as u64))?;
+        self.charge_budget(ContractCostType::MemCpy, Some(buf.len() as u64))?;
         let mem = vm.get_memory(self)?;
         self.map_err(
             mem.read(vmcaller.try_mut()?, mem_pos as usize, buf)
@@ -81,7 +81,7 @@ impl Host {
             .get_mut(mem_range)
             .ok_or_else(|| self.err_oob_linear_memory())?;
 
-        self.charge_budget(ContractCostType::VmMemWrite, Some(byte_len as u64))?;
+        self.charge_budget(ContractCostType::MemCpy, Some(byte_len as u64))?;
         for (src, dst) in buf.iter().zip(mem_slice.chunks_mut(VAL_SZ)) {
             if dst.len() != VAL_SZ {
                 // This should be impossible unless there's an error above, but just in case.
@@ -122,7 +122,7 @@ impl Host {
             .get(mem_range)
             .ok_or_else(|| self.err_oob_linear_memory())?;
 
-        self.charge_budget(ContractCostType::VmMemRead, Some(byte_len as u64))?;
+        self.charge_budget(ContractCostType::MemCpy, Some(byte_len as u64))?;
         let mut tmp: [u8; VAL_SZ] = [0u8; VAL_SZ];
         for (dst, src) in buf.iter_mut().zip(mem_slice.chunks(VAL_SZ)) {
             if let Ok(src) = TryInto::<&[u8; VAL_SZ]>::try_into(src) {
@@ -162,7 +162,7 @@ impl Host {
     ) -> Result<(), HostError> {
         let mem_data = vm.get_memory(self)?.data(vmcaller.try_mut()?);
         self.charge_budget(
-            ContractCostType::VmMemRead,
+            ContractCostType::MemCpy,
             Some((num_slices as u64).saturating_mul(8)),
         )?;
 
@@ -227,7 +227,7 @@ impl Host {
                 &[],
             ));
         }
-        self.charge_budget(ContractCostType::HostMemCpy, Some(dst.len() as u64))?;
+        self.charge_budget(ContractCostType::MemCpy, Some(dst.len() as u64))?;
         dst.copy_from_slice(src);
         Ok(())
     }
@@ -301,7 +301,7 @@ impl Host {
             .ok_or_else(|| self.err_arith_overflow())? as usize;
         if obj_new.len() < obj_end {
             self.charge_budget(
-                ContractCostType::HostMemAlloc,
+                ContractCostType::MemAlloc,
                 Some((obj_end - obj_new.len()) as u64),
             )?;
             obj_new.resize(obj_end, 0);
@@ -352,7 +352,7 @@ impl Host {
         len: U32Val,
     ) -> Result<HOT::Wrapper, HostError> {
         let VmSlice { vm, pos, len } = self.decode_vmslice(lm_pos, len)?;
-        self.charge_budget(ContractCostType::HostMemAlloc, Some(len as u64))?;
+        self.charge_budget(ContractCostType::MemAlloc, Some(len as u64))?;
         let mut vnew: Vec<u8> = vec![0; len as usize];
         self.metered_vm_read_bytes_from_linear_memory(vmcaller, &vm, pos, &mut vnew)?;
         self.add_host_object::<HOT>(vnew.try_into()?)
@@ -396,7 +396,7 @@ impl Host {
         src: &[T],
         dest: &mut [T],
     ) -> Result<(), HostError> {
-        self.charge_budget(ContractCostType::HostMemCpy, Some(src.len() as u64))?;
+        self.charge_budget(ContractCostType::MemCpy, Some(src.len() as u64))?;
         for (s, d) in src.iter().zip(dest.iter_mut()) {
             *d = *s
         }

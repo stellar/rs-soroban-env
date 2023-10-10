@@ -31,16 +31,27 @@ where
     A: DeclaredSizeForMetering,
 {
     fn charge_access(&self, count: usize, budget: &Budget) -> Result<(), HostError> {
-        budget.bulk_charge(ContractCostType::VecEntry, count as u64, None)
+        budget.charge(
+            ContractCostType::MemCpy,
+            Some(A::DECLARED_SIZE * count as u64),
+        )
     }
 
     fn charge_scan(&self, budget: &Budget) -> Result<(), HostError> {
-        budget.bulk_charge(ContractCostType::VecEntry, self.vec.len() as u64, None)
+        budget.charge(
+            ContractCostType::MemCpy,
+            Some(A::DECLARED_SIZE * self.vec.len() as u64),
+        )
     }
 
+    // Charge binary search includes accessing number of entries expected for
+    // finding an entry. Cost of comparison is charged separately and not covered here.
     fn charge_binsearch(&self, budget: &Budget) -> Result<(), HostError> {
         let mag = 64 - (self.vec.len() as u64).leading_zeros();
-        budget.bulk_charge(ContractCostType::VecEntry, 1 + mag as u64, None)
+        budget.charge(
+            ContractCostType::MemCpy,
+            Some(A::DECLARED_SIZE * (1 + mag) as u64),
+        )
     }
 }
 
@@ -342,10 +353,11 @@ where
         a: &MeteredVector<Elt>,
         b: &MeteredVector<Elt>,
     ) -> Result<Ordering, Self::Error> {
-        self.as_budget().bulk_charge(
-            ContractCostType::VecEntry,
-            a.vec.len().min(b.vec.len()) as u64,
-            None,
+        // Here covers the cost of accessing number of map entries. The cost of
+        // comparing entries is covered by the `compare` call below.
+        self.as_budget().charge(
+            ContractCostType::MemCpy,
+            Some(Elt::DECLARED_SIZE * a.vec.len().min(b.vec.len()) as u64),
         )?;
         <Self as Compare<Vec<Elt>>>::compare(self, &a.vec, &b.vec)
     }
@@ -362,10 +374,11 @@ where
         a: &MeteredVector<Elt>,
         b: &MeteredVector<Elt>,
     ) -> Result<Ordering, Self::Error> {
-        self.as_budget().bulk_charge(
-            ContractCostType::VecEntry,
-            a.vec.len().min(b.vec.len()) as u64,
-            None,
+        // Here covers the cost of accessing number of map entries. The cost of
+        // comparing entries is covered by the `compare` call below.
+        self.as_budget().charge(
+            ContractCostType::MemCpy,
+            Some(Elt::DECLARED_SIZE * a.vec.len().min(b.vec.len()) as u64),
         )?;
         <Self as Compare<Vec<Elt>>>::compare(self, &a.vec, &b.vec)
     }

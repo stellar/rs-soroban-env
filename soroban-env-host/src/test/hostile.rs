@@ -226,7 +226,7 @@ fn excessive_memory_growth() -> Result<(), HostError> {
     let contract_id_obj = host.register_test_contract_wasm(wasm.as_slice());
     let host = host
         .test_budget(0, 0)
-        .enable_model(ContractCostType::WasmMemAlloc, 0, 0, 1, 0);
+        .enable_model(ContractCostType::MemAlloc, 0, 0, 0, 1);
     host.set_diagnostic_level(crate::DiagnosticLevel::Debug)?;
 
     // This one should just run out of memory

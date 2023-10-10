@@ -37,20 +37,30 @@ where
     V: DeclaredSizeForMetering,
     Ctx: AsBudget,
 {
+    const ENTRY_SIZE: u64 = <(K, V) as DeclaredSizeForMetering>::DECLARED_SIZE;
+
     fn charge_access<B: AsBudget>(&self, count: usize, b: &B) -> Result<(), HostError> {
-        b.as_budget()
-            .bulk_charge(ContractCostType::MapEntry, count as u64, None)
+        b.as_budget().charge(
+            ContractCostType::MemCpy,
+            Some(Self::ENTRY_SIZE * count as u64),
+        )
     }
 
     fn charge_scan<B: AsBudget>(&self, b: &B) -> Result<(), HostError> {
-        b.as_budget()
-            .bulk_charge(ContractCostType::MapEntry, self.map.len() as u64, None)
+        b.as_budget().charge(
+            ContractCostType::MemCpy,
+            Some(Self::ENTRY_SIZE * self.map.len() as u64),
+        )
     }
 
+    // Charge binary search includes accessing number of entries expected for
+    // finding an entry. Cost of comparison is charged separately and not covered here.
     fn charge_binsearch<B: AsBudget>(&self, b: &B) -> Result<(), HostError> {
         let mag = 64 - (self.map.len() as u64).leading_zeros();
-        b.as_budget()
-            .bulk_charge(ContractCostType::MapEntry, 1 + mag as u64, None)
+        b.as_budget().charge(
+            ContractCostType::MemCpy,
+            Some(Self::ENTRY_SIZE * (1 + mag) as u64),
+        )
     }
 }
 
@@ -297,6 +307,8 @@ where
 
 impl<K, V> Compare<MeteredOrdMap<K, V, Host>> for Host
 where
+    K: DeclaredSizeForMetering,
+    V: DeclaredSizeForMetering,
     Host: Compare<K, Error = HostError> + Compare<V, Error = HostError>,
 {
     type Error = HostError;
@@ -306,10 +318,14 @@ where
         a: &MeteredOrdMap<K, V, Host>,
         b: &MeteredOrdMap<K, V, Host>,
     ) -> Result<Ordering, Self::Error> {
-        self.as_budget().bulk_charge(
-            ContractCostType::MapEntry,
-            a.map.len().min(b.map.len()) as u64,
-            None,
+        // Here covers the cost of accessing number of map entries. The cost of
+        // comparing entries is covered by the `compare` call below.
+        self.as_budget().charge(
+            ContractCostType::MemCpy,
+            Some(
+                <(K, V) as DeclaredSizeForMetering>::DECLARED_SIZE
+                    * a.map.len().min(b.map.len()) as u64,
+            ),
         )?;
         <Self as Compare<Vec<(K, V)>>>::compare(self, &a.map, &b.map)
     }
@@ -317,6 +333,8 @@ where
 
 impl<K, V> Compare<MeteredOrdMap<K, V, Budget>> for Budget
 where
+    K: DeclaredSizeForMetering,
+    V: DeclaredSizeForMetering,
     Budget: Compare<K, Error = HostError> + Compare<V, Error = HostError>,
 {
     type Error = HostError;
@@ -326,10 +344,14 @@ where
         a: &MeteredOrdMap<K, V, Budget>,
         b: &MeteredOrdMap<K, V, Budget>,
     ) -> Result<Ordering, Self::Error> {
-        self.bulk_charge(
-            ContractCostType::MapEntry,
-            a.map.len().min(b.map.len()) as u64,
-            None,
+        // Here covers the cost of accessing number of map entries. The cost of
+        // comparing entries is covered by the `compare` call below.
+        self.charge(
+            ContractCostType::MemCpy,
+            Some(
+                <(K, V) as DeclaredSizeForMetering>::DECLARED_SIZE
+                    * a.map.len().min(b.map.len()) as u64,
+            ),
         )?;
         <Self as Compare<Vec<(K, V)>>>::compare(self, &a.map, &b.map)
     }

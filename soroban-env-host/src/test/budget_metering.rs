@@ -13,7 +13,7 @@ use soroban_test_wasms::VEC;
 fn xdr_object_conversion() -> Result<(), HostError> {
     let host = Host::test_host()
         .test_budget(100_000, 100_000)
-        .enable_model(ContractCostType::HostMemCpy, 1, 0, 1, 0);
+        .enable_model(ContractCostType::MemCpy, 1, 0, 1, 0);
     let scmap: ScMap = host.map_err(
         vec![
             ScMapEntry {
@@ -30,12 +30,9 @@ fn xdr_object_conversion() -> Result<(), HostError> {
     host.to_host_val(&ScVal::Map(Some(scmap)))?;
     host.with_budget(|budget| {
         // 2 iterations, 1 for the vec cpy, 1 for the bulk bytes cpy
-        assert_eq!(budget.get_tracker(ContractCostType::HostMemCpy)?.0, 2);
+        assert_eq!(budget.get_tracker(ContractCostType::MemCpy)?.0, 2);
         // 72 bytes copied for the ScVal->Val conversion: 24 (Vec bytes) + 2 (map entries) x (8 (padding bytes) + 8 (key bytes) + 8 (val bytes))
-        assert_eq!(
-            budget.get_tracker(ContractCostType::HostMemCpy)?.1,
-            Some(72)
-        );
+        assert_eq!(budget.get_tracker(ContractCostType::MemCpy)?.1, Some(72));
         Ok(())
     })?;
     Ok(())
@@ -87,12 +84,12 @@ fn test_vm_fuel_metering() -> Result<(), HostError> {
     let host = host
         .test_budget(100_000, 1_048_576)
         .enable_model(ContractCostType::WasmInsnExec, 6, 0, 0, 0)
-        .enable_model(ContractCostType::WasmMemAlloc, 0, 0, 1, 0);
+        .enable_model(ContractCostType::MemAlloc, 0, 0, 0, 1);
     host.call(id_obj, sym, args)?;
     let (cpu_count, mem_count, cpu_consumed, mem_consumed) = host.with_budget(|budget| {
         Ok((
             budget.get_tracker(ContractCostType::WasmInsnExec)?.0,
-            budget.get_tracker(ContractCostType::WasmMemAlloc)?.0,
+            budget.get_tracker(ContractCostType::MemAlloc)?.0,
             budget.get_cpu_insns_consumed()?,
             budget.get_mem_bytes_consumed()?,
         ))
@@ -107,7 +104,7 @@ fn test_vm_fuel_metering() -> Result<(), HostError> {
     let host = host
         .test_budget(cpu_required, mem_required)
         .enable_model(ContractCostType::WasmInsnExec, 6, 0, 0, 0)
-        .enable_model(ContractCostType::WasmMemAlloc, 0, 0, 1, 0);
+        .enable_model(ContractCostType::MemAlloc, 0, 0, 0, 1);
     host.call(id_obj, sym, args)?;
     host.with_budget(|budget| {
         assert_eq!(budget.get_cpu_insns_consumed()?, cpu_required);
@@ -120,7 +117,7 @@ fn test_vm_fuel_metering() -> Result<(), HostError> {
     let host = host
         .test_budget(cpu_required, mem_required)
         .enable_model(ContractCostType::WasmInsnExec, 6, 0, 0, 0)
-        .enable_model(ContractCostType::WasmMemAlloc, 0, 0, 1, 0);
+        .enable_model(ContractCostType::MemAlloc, 0, 0, 0, 1);
     let res = host.try_call(id_obj, sym, args);
     assert!(HostError::result_matches_err(res, budget_err));
     host.with_budget(|budget| {
@@ -134,7 +131,7 @@ fn test_vm_fuel_metering() -> Result<(), HostError> {
     let host = host
         .test_budget(cpu_required, mem_required)
         .enable_model(ContractCostType::WasmInsnExec, 6, 0, 0, 0)
-        .enable_model(ContractCostType::WasmMemAlloc, 0, 0, 1, 0);
+        .enable_model(ContractCostType::MemAlloc, 0, 0, 0, 1);
     let res = host.try_call(id_obj, sym, args);
     assert!(HostError::result_matches_err(res, budget_err));
     host.with_budget(|budget| {
@@ -223,9 +220,7 @@ fn map_insert_key_vec_obj() -> Result<(), HostError> {
     m = host.map_put(m, k0.into(), v0)?;
 
     // now we enable various cost models
-    host = host
-        .enable_model(ContractCostType::VisitObject, 10, 0, 1, 0)
-        .enable_model(ContractCostType::MapEntry, 10, 0, 1, 0);
+    host = host.enable_model(ContractCostType::VisitObject, 10, 0, 1, 0);
     host.map_put(m, k1.into(), v1)?;
 
     host.with_budget(|budget| {
@@ -240,7 +235,6 @@ fn map_insert_key_vec_obj() -> Result<(), HostError> {
         // = 12
         assert_eq!(budget.get_tracker(ContractCostType::VisitObject)?.0, 12);
         // upper bound of number of map-accesses, counting both binary-search, point-access and validate-scan.
-        assert_eq!(budget.get_tracker(ContractCostType::MapEntry)?.0, 8);
         Ok(())
     })?;
 
@@ -251,8 +245,8 @@ fn map_insert_key_vec_obj() -> Result<(), HostError> {
 fn test_recursive_type_clone() -> Result<(), HostError> {
     let host = Host::test_host()
         .test_budget(100000, 100000)
-        .enable_model(ContractCostType::HostMemAlloc, 10, 0, 1, 0)
-        .enable_model(ContractCostType::HostMemCpy, 10, 0, 1, 0);
+        .enable_model(ContractCostType::MemAlloc, 10, 0, 1, 0)
+        .enable_model(ContractCostType::MemCpy, 10, 0, 1, 0);
     let scmap: ScMap = host.map_err(
         vec![
             ScMapEntry {
@@ -281,7 +275,7 @@ fn test_recursive_type_clone() -> Result<(), HostError> {
     //*********************************************************************************************************************************************/
     expect!["864"].assert_eq(
         host.as_budget()
-            .get_tracker(ContractCostType::HostMemAlloc)?
+            .get_tracker(ContractCostType::MemAlloc)?
             .1
             .unwrap()
             .to_string()
@@ -291,7 +285,7 @@ fn test_recursive_type_clone() -> Result<(), HostError> {
     // memory layout of the top level type (Vec).
     expect!["888"].assert_eq(
         host.as_budget()
-            .get_tracker(ContractCostType::HostMemCpy)?
+            .get_tracker(ContractCostType::MemCpy)?
             .1
             .unwrap()
             .to_string()
@@ -322,7 +316,6 @@ fn total_amount_charged_from_random_inputs() -> Result<(), HostError> {
 
     let tracker: Vec<(u64, Option<u64>)> = vec![
         (246, None),
-        (184, None),
         (1, Some(152)),
         (1, Some(65)),
         (1, Some(74)),
@@ -332,16 +325,11 @@ fn total_amount_charged_from_random_inputs() -> Result<(), HostError> {
         (1, Some(103)),
         (1, Some(193)),
         (226, None),
-        (250, None),
-        (186, None),
         (1, Some(227)),
-        (1, Some(69)),
-        (1, Some(160)),
         (1, Some(147)),
         (1, Some(147)),
         (47, None),
         (1, Some(1)),
-        (1, None),
         (1, None),
         (1, None),
         (1, None),
@@ -358,31 +346,25 @@ fn total_amount_charged_from_random_inputs() -> Result<(), HostError> {
     let actual = format!("{:?}", host.as_budget());
     expect![[r#"
         =====================================================================================================================================================================
-        Cpu limit: 100000000; used: 10218283
-        Mem limit: 41943040; used: 276044
+        Cpu limit: 100000000; used: 10068892
+        Mem limit: 41943040; used: 275860
         =====================================================================================================================================================================
         CostType                 iterations     input          cpu_insns      mem_bytes      const_term_cpu      lin_term_cpu        const_term_mem      lin_term_mem        
         WasmInsnExec             246            None           1476           0              6                   0                   0                   0                   
-        WasmMemAlloc             184            None           0              184            0                   0                   1                   0                   
-        HostMemAlloc             1              Some(152)      1142           168            1141                1                   16                  128                 
-        HostMemCpy               1              Some(65)       258            0              250                 16                  0                   0                   
-        HostMemCmp               1              Some(74)       259            0              250                 16                  0                   0                   
+        MemAlloc                 1              Some(152)      1142           168            1141                1                   16                  128                 
+        MemCpy                   1              Some(65)       258            0              250                 16                  0                   0                   
+        MemCmp                   1              Some(74)       259            0              250                 16                  0                   0                   
         DispatchHostFunction     176            None           46288          0              263                 0                   0                   0                   
         VisitObject              97             None           10476          0              108                 0                   0                   0                   
         ValSer                   1              Some(49)       1006           165            1000                16                  18                  384                 
         ValDeser                 1              Some(103)      1012           119            1000                16                  16                  128                 
         ComputeSha256Hash        1              Some(193)      9179           40             2924                4149                40                  0                   
         ComputeEd25519PubKey     226            None           5781984        0              25584               0                   0                   0                   
-        MapEntry                 250            None           62500          0              250                 16                  0                   0                   
-        VecEntry                 186            None           46500          0              250                 16                  0                   0                   
         VerifyEd25519Sig         1              Some(227)      381748         0              376877              2747                0                   0                   
-        VmMemRead                1              Some(69)       1008           0              1000                16                  0                   0                   
-        VmMemWrite               1              Some(160)      1020           0              1000                16                  0                   0                   
         VmInstantiation          1              Some(147)      1047534        136937         967154              69991               131103              5080                
         VmCachedInstantiation    1              Some(147)      1047534        136937         967154              69991               131103              5080                
         InvokeVmFunction         47             None           52875          658            1125                0                   14                  0                   
         ComputeKeccak256Hash     1              Some(1)        2917           40             2890                3561                40                  0                   
-        ComputeEcdsaSecp256k1Key 1              None           38363          0              38363               0                   0                   0                   
         ComputeEcdsaSecp256k1Sig 1              None           224            0              224                 0                   0                   0                   
         RecoverEcdsaSecp256k1Key 1              None           1666155        201            1666155             0                   201                 0                   
         Int256AddSub             1              None           1716           119            1716                0                   119                 0                   
@@ -392,7 +374,7 @@ fn total_amount_charged_from_random_inputs() -> Result<(), HostError> {
         Int256Shift              1              None           412            119            412                 0                   119                 0                   
         ChaCha20DrawBytes        1              Some(1)        4926           0              4907                2461                0                   0                   
         =====================================================================================================================================================================
-        Total # times meter was called: 29
+        Total # times meter was called: 23
 
     "#]]
     .assert_eq(&actual);

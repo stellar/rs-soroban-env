@@ -408,10 +408,9 @@ impl BudgetImpl {
             let i = ct as usize;
             match ct {
                 ContractCostType::WasmInsnExec => (),
-                ContractCostType::WasmMemAlloc => (),
-                ContractCostType::HostMemAlloc => init_input(i), // number of bytes in host memory to allocate
-                ContractCostType::HostMemCpy => init_input(i),   // number of bytes in host to copy
-                ContractCostType::HostMemCmp => init_input(i), // number of bytes in host to compare
+                ContractCostType::MemAlloc => init_input(i), // number of bytes in host memory to allocate
+                ContractCostType::MemCpy => init_input(i),   // number of bytes in host to copy
+                ContractCostType::MemCmp => init_input(i),   // number of bytes in host to compare
                 ContractCostType::DispatchHostFunction => (),
                 ContractCostType::VisitObject => (),
                 // The inputs for `ValSer` and `ValDeser` are subtly different:
@@ -425,16 +424,11 @@ impl BudgetImpl {
                 ContractCostType::ValDeser => init_input(i), // number of bytes in the input buffer
                 ContractCostType::ComputeSha256Hash => init_input(i), // number of bytes in the buffer
                 ContractCostType::ComputeEd25519PubKey => (),
-                ContractCostType::MapEntry => (),
-                ContractCostType::VecEntry => (),
                 ContractCostType::VerifyEd25519Sig => init_input(i), // length of the signed message
-                ContractCostType::VmMemRead => init_input(i), // number of bytes in the linear memory to read
-                ContractCostType::VmMemWrite => init_input(i), // number of bytes in the linear memory to write
-                ContractCostType::VmInstantiation => init_input(i), // length of the wasm bytes,
+                ContractCostType::VmInstantiation => init_input(i),  // length of the wasm bytes,
                 ContractCostType::VmCachedInstantiation => init_input(i), // length of the wasm bytes,
                 ContractCostType::InvokeVmFunction => (),
                 ContractCostType::ComputeKeccak256Hash => init_input(i), // number of bytes in the buffer
-                ContractCostType::ComputeEcdsaSecp256k1Key => (),
                 ContractCostType::ComputeEcdsaSecp256k1Sig => (),
                 ContractCostType::RecoverEcdsaSecp256k1Key => (),
                 ContractCostType::Int256AddSub => (),
@@ -523,16 +517,7 @@ impl Default for BudgetImpl {
                     cpu.const_term = 6;
                     cpu.lin_term = ScaledU64(0);
                 }
-                // Host cpu insns per wasm "memory fuel". This has to be zero since
-                // the fuel (representing cpu cost) has been covered by `WasmInsnExec`.
-                // The extra cost of mem processing is accounted for by wasmi's
-                // `config.memory_bytes_per_fuel` parameter.
-                // This type is designated to the mem cost.
-                ContractCostType::WasmMemAlloc => {
-                    cpu.const_term = 0;
-                    cpu.lin_term = ScaledU64(0);
-                }
-                ContractCostType::HostMemAlloc => {
+                ContractCostType::MemAlloc => {
                     cpu.const_term = 1141;
                     cpu.lin_term = ScaledU64(1);
                 }
@@ -549,11 +534,11 @@ impl Default for BudgetImpl {
                 // avoid having anything that can be zero cost and approximate
                 // whatever function call, arg-shuffling, spills, reloads or
                 // other flotsam accumulates around a typical memory copy.
-                ContractCostType::HostMemCpy => {
+                ContractCostType::MemCpy => {
                     cpu.const_term = 250;
                     cpu.lin_term = ScaledU64((1 << COST_MODEL_LIN_TERM_SCALE_BITS) / 8);
                 }
-                ContractCostType::HostMemCmp => {
+                ContractCostType::MemCmp => {
                     cpu.const_term = 250;
                     cpu.lin_term = ScaledU64((1 << COST_MODEL_LIN_TERM_SCALE_BITS) / 8);
                 }
@@ -581,25 +566,9 @@ impl Default for BudgetImpl {
                     cpu.const_term = 25584;
                     cpu.lin_term = ScaledU64(0);
                 }
-                ContractCostType::MapEntry => {
-                    cpu.const_term = 250;
-                    cpu.lin_term = ScaledU64((1 << COST_MODEL_LIN_TERM_SCALE_BITS) / 8);
-                }
-                ContractCostType::VecEntry => {
-                    cpu.const_term = 250;
-                    cpu.lin_term = ScaledU64((1 << COST_MODEL_LIN_TERM_SCALE_BITS) / 8);
-                }
                 ContractCostType::VerifyEd25519Sig => {
                     cpu.const_term = 376877;
                     cpu.lin_term = ScaledU64(2747);
-                }
-                ContractCostType::VmMemRead => {
-                    cpu.const_term = 1000;
-                    cpu.lin_term = ScaledU64((1 << COST_MODEL_LIN_TERM_SCALE_BITS) / 8);
-                }
-                ContractCostType::VmMemWrite => {
-                    cpu.const_term = 1000;
-                    cpu.lin_term = ScaledU64((1 << COST_MODEL_LIN_TERM_SCALE_BITS) / 8);
                 }
                 ContractCostType::VmInstantiation => {
                     cpu.const_term = 967154;
@@ -616,10 +585,6 @@ impl Default for BudgetImpl {
                 ContractCostType::ComputeKeccak256Hash => {
                     cpu.const_term = 2890;
                     cpu.lin_term = ScaledU64(3561);
-                }
-                ContractCostType::ComputeEcdsaSecp256k1Key => {
-                    cpu.const_term = 38363;
-                    cpu.lin_term = ScaledU64(0);
                 }
                 ContractCostType::ComputeEcdsaSecp256k1Sig => {
                     cpu.const_term = 224;
@@ -664,21 +629,15 @@ impl Default for BudgetImpl {
                     mem.const_term = 0;
                     mem.lin_term = ScaledU64(0);
                 }
-                // Bytes per wasmi "memory fuel". By definition this has to be a const = 1
-                // because of the 1-to-1 equivalence of the Wasm mem fuel and a host byte.
-                ContractCostType::WasmMemAlloc => {
-                    mem.const_term = 1;
-                    mem.lin_term = ScaledU64(0);
-                }
-                ContractCostType::HostMemAlloc => {
+                ContractCostType::MemAlloc => {
                     mem.const_term = 16;
                     mem.lin_term = ScaledU64(128);
                 }
-                ContractCostType::HostMemCpy => {
+                ContractCostType::MemCpy => {
                     mem.const_term = 0;
                     mem.lin_term = ScaledU64(0);
                 }
-                ContractCostType::HostMemCmp => {
+                ContractCostType::MemCmp => {
                     mem.const_term = 0;
                     mem.lin_term = ScaledU64(0);
                 }
@@ -706,23 +665,7 @@ impl Default for BudgetImpl {
                     mem.const_term = 0;
                     mem.lin_term = ScaledU64(0);
                 }
-                ContractCostType::MapEntry => {
-                    mem.const_term = 0;
-                    mem.lin_term = ScaledU64(0);
-                }
-                ContractCostType::VecEntry => {
-                    mem.const_term = 0;
-                    mem.lin_term = ScaledU64(0);
-                }
                 ContractCostType::VerifyEd25519Sig => {
-                    mem.const_term = 0;
-                    mem.lin_term = ScaledU64(0);
-                }
-                ContractCostType::VmMemRead => {
-                    mem.const_term = 0;
-                    mem.lin_term = ScaledU64(0);
-                }
-                ContractCostType::VmMemWrite => {
                     mem.const_term = 0;
                     mem.lin_term = ScaledU64(0);
                 }
@@ -740,10 +683,6 @@ impl Default for BudgetImpl {
                 }
                 ContractCostType::ComputeKeccak256Hash => {
                     mem.const_term = 40;
-                    mem.lin_term = ScaledU64(0);
-                }
-                ContractCostType::ComputeEcdsaSecp256k1Key => {
-                    mem.const_term = 0;
                     mem.lin_term = ScaledU64(0);
                 }
                 ContractCostType::ComputeEcdsaSecp256k1Sig => {
@@ -1200,7 +1139,7 @@ impl ResourceLimiter for Host {
         if allow {
             let delta = (desired as u64).saturating_sub(current as u64);
             self.as_budget()
-                .bulk_charge(ContractCostType::WasmMemAlloc, delta, None)
+                .charge(ContractCostType::MemAlloc, Some(delta))
                 .map(|_| true)
                 .map_err(|_| errors::MemoryError::OutOfBoundsGrowth)
         } else {

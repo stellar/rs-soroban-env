@@ -15,12 +15,14 @@ pub struct VecEntrySample {
 impl CostRunner for VecEntryRun {
     const COST_TYPE: ContractCostType = ContractCostType::VecEntry;
 
+    const RUN_ITERATIONS: u64 = 1000;
+
     type SampleType = VecEntrySample;
 
-    type RecycledType = (Option<u64>, Self::SampleType);
+    type RecycledType = VecEntrySample;
 
     fn run_iter(host: &Host, iter: u64, sample: Self::SampleType) -> Self::RecycledType {
-        let v = black_box(
+        let _ = black_box(
             sample
                 .vec
                 .get(
@@ -30,11 +32,11 @@ impl CostRunner for VecEntryRun {
                 .unwrap()
                 .get_payload(),
         );
-        (Some(v), sample)
+        black_box(sample)
     }
 
     fn run_baseline_iter(host: &Host, _iter: u64, sample: Self::SampleType) -> Self::RecycledType {
         black_box(host.charge_budget(Self::COST_TYPE, None).unwrap());
-        black_box((None, sample))
+        black_box(sample)
     }
 }

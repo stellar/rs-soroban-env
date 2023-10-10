@@ -527,7 +527,7 @@ impl EnvBase for Host {
     }
 
     fn symbol_new_from_slice(&self, s: &str) -> Result<SymbolObject, HostError> {
-        self.charge_budget(ContractCostType::HostMemCmp, Some(s.len() as u64))?;
+        self.charge_budget(ContractCostType::MemCmp, Some(s.len() as u64))?;
         for ch in s.chars() {
             SymbolSmall::validate_char(ch)?;
         }
@@ -1217,7 +1217,7 @@ impl VmCallerEnv for Host {
             keys_pos,
             len as usize,
             |_n, slice| {
-                self.charge_budget(ContractCostType::VmMemRead, Some(slice.len() as u64))?;
+                self.charge_budget(ContractCostType::MemCpy, Some(slice.len() as u64))?;
                 let scsym = ScSymbol(slice.try_into()?);
                 let sym = Symbol::try_from(self.to_host_val(&ScVal::Symbol(scsym))?)?;
                 key_syms.push(sym);
@@ -2543,7 +2543,7 @@ impl VmCallerEnv for Host {
     ) -> Result<Void, Self::Error> {
         self.visit_obj(seed, |bytes: &ScBytes| {
             let slice: &[u8] = bytes.as_ref();
-            self.charge_budget(ContractCostType::HostMemCpy, Some(prng::SEED_BYTES))?;
+            self.charge_budget(ContractCostType::MemCpy, Some(prng::SEED_BYTES))?;
             if let Ok(seed32) = slice.try_into() {
                 self.with_current_prng(|prng| {
                     *prng = Prng::new_from_seed(seed32);

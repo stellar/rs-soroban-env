@@ -50,7 +50,7 @@ pub(crate) fn charge_shallow_copy<T: DeclaredSizeForMetering>(
         T::DECLARED_SIZE
     );
     budget.as_budget().charge(
-        ContractCostType::HostMemCpy,
+        ContractCostType::MemCpy,
         Some(n_elts.saturating_mul(T::DECLARED_SIZE)),
     )
 }
@@ -70,7 +70,7 @@ pub(crate) fn charge_heap_alloc<T: DeclaredSizeForMetering>(
         T::DECLARED_SIZE
     );
     budget.as_budget().charge(
-        ContractCostType::HostMemAlloc,
+        ContractCostType::MemAlloc,
         Some(n_elts.saturating_mul(T::DECLARED_SIZE)),
     )
 }

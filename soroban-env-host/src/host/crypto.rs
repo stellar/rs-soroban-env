@@ -74,25 +74,6 @@ impl Host {
 
     // ECDSA secp256k1 functions
 
-    #[cfg(any(test, feature = "testutils"))]
-    // FIXME: this operation is dead code besides the code that claibrates it;
-    // the interface we settled on doesn't involve users converting bytes to
-    // public keys. see https://github.com/stellar/rs-soroban-env/issues/1087
-    pub(crate) fn secp256k1_pub_key_from_bytes(
-        &self,
-        bytes: &[u8],
-    ) -> Result<k256::PublicKey, HostError> {
-        self.charge_budget(ContractCostType::ComputeEcdsaSecp256k1Key, None)?;
-        k256::PublicKey::from_sec1_bytes(bytes).map_err(|_| {
-            self.err(
-                ScErrorType::Crypto,
-                ScErrorCode::InvalidInput,
-                "invalid ECDSA-secp256k1 public key",
-                &[],
-            )
-        })
-    }
-
     pub(crate) fn secp256k1_signature_from_bytes(
         &self,
         bytes: &[u8],

@@ -65,18 +65,6 @@ fn write_budget_params_code(
         base_cpu_per_fuel,
         0
     );
-    println!(
-        "
-        // Host cpu insns per wasm \"memory fuel\". This has to be zero since
-        // the fuel (representing cpu cost) has been covered by `WasmInsnExec`.
-        // The extra cost of mem processing is accounted for by wasmi's
-        // `config.memory_bytes_per_fuel` parameter.
-        // This type is designated to the mem cost. \n
-        ContractCostType::{:?} => {{ cpu.const_term = {}; cpu.lin_term = ScaledU64({}); }}",
-        ContractCostType::WasmMemAlloc,
-        0,
-        0
-    );
 
     for (ty, (cpu, _)) in params
         .iter()
@@ -98,15 +86,6 @@ fn write_budget_params_code(
         ContractCostType::{:?} => {{ mem.const_term = {}; mem.lin_term = ScaledU64({}); }}",
         ContractCostType::WasmInsnExec,
         0,
-        0
-    );
-    println!(
-        "
-        // Bytes per wasmi \"memory fuel\". By definition this has to be a const = 1\n
-        // because of the 1-to-1 equivalence of the Wasm mem fuel and a host byte.\n
-        ContractCostType::{:?} => {{ mem.const_term = {}; mem.lin_term = ScaledU64({}); }}",
-        ContractCostType::WasmMemAlloc,
-        1,
         0
     );
     for (ty, (_, mem)) in params

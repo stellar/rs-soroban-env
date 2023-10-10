@@ -122,7 +122,7 @@ impl Prng {
         let mut v2 = v.metered_clone(budget)?;
         // We charge for both the PRNG draws and the swaps here (as "memcpys").
         self.charge_prng_bytes(budget, 16u64.saturating_mul(v.len() as u64))?;
-        budget.charge(ContractCostType::HostMemCpy, Some(v.len() as u64))?;
+        budget.charge(ContractCostType::MemCpy, Some(v.len() as u64))?;
         v2.as_mut_slice().shuffle(&mut self.0);
         Ok(v2)
     }
@@ -137,7 +137,7 @@ impl Prng {
     pub(crate) fn sub_prng(&mut self, budget: &Budget) -> Result<Prng, HostError> {
         let mut new_seed: Seed = [0; SEED_BYTES as usize];
         chacha20_fill_bytes(&mut self.0, &mut new_seed, budget)?;
-        budget.charge(ContractCostType::HostMemCpy, Some(SEED_BYTES))?;
+        budget.charge(ContractCostType::MemCpy, Some(SEED_BYTES))?;
         Ok(Self(ChaCha20Rng::from_seed(new_seed)))
     }
 }

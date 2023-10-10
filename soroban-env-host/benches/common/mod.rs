@@ -62,7 +62,7 @@ pub(crate) fn for_each_host_cost_measurement<B: Benchmark>(
 ) -> std::io::Result<BTreeMap<ContractCostType, (FPCostModel, FPCostModel)>> {
     let mut params: BTreeMap<ContractCostType, (FPCostModel, FPCostModel)> = BTreeMap::new();
 
-    call_bench::<B, ComputeEcdsaSecp256k1PubKeyMeasure>(&mut params)?;
+    // call_bench::<B, ComputeEcdsaSecp256k1PubKeyMeasure>(&mut params)?;
     call_bench::<B, ComputeEcdsaSecp256k1SigMeasure>(&mut params)?;
     call_bench::<B, ComputeEd25519PubKeyMeasure>(&mut params)?;
     call_bench::<B, ComputeKeccak256HashMeasure>(&mut params)?;
@@ -70,18 +70,18 @@ pub(crate) fn for_each_host_cost_measurement<B: Benchmark>(
     call_bench::<B, RecoverEcdsaSecp256k1KeyMeasure>(&mut params)?;
     call_bench::<B, VerifyEd25519SigMeasure>(&mut params)?;
     call_bench::<B, VmInstantiationMeasure>(&mut params)?;
-    call_bench::<B, VmMemReadMeasure>(&mut params)?;
-    call_bench::<B, VmMemWriteMeasure>(&mut params)?;
+    // call_bench::<B, VmMemReadMeasure>(&mut params)?;
+    // call_bench::<B, VmMemWriteMeasure>(&mut params)?;
     call_bench::<B, VisitObjectMeasure>(&mut params)?;
     call_bench::<B, ValSerMeasure>(&mut params)?;
     call_bench::<B, ValDeserMeasure>(&mut params)?;
-    call_bench::<B, MapEntryMeasure>(&mut params)?;
-    call_bench::<B, VecEntryMeasure>(&mut params)?;
-    call_bench::<B, HostMemCmpMeasure>(&mut params)?;
+    // call_bench::<B, MapEntryMeasure>(&mut params)?;
+    // call_bench::<B, VecEntryMeasure>(&mut params)?;
+    call_bench::<B, MemCmpMeasure>(&mut params)?;
     call_bench::<B, InvokeVmFunctionMeasure>(&mut params)?;
     call_bench::<B, InvokeHostFunctionMeasure>(&mut params)?;
-    call_bench::<B, HostMemAllocMeasure>(&mut params)?;
-    call_bench::<B, HostMemCpyMeasure>(&mut params)?;
+    call_bench::<B, MemAllocMeasure>(&mut params)?;
+    call_bench::<B, MemCpyMeasure>(&mut params)?;
     call_bench::<B, Int256AddSubMeasure>(&mut params)?;
     call_bench::<B, Int256MulMeasure>(&mut params)?;
     call_bench::<B, Int256DivMeasure>(&mut params)?;

@@ -116,8 +116,8 @@ fn test_internal_contract_events_metering_not_free() -> Result<(), HostError> {
 
     let host = host
         .test_budget(100000, 100000)
-        .enable_model(ContractCostType::HostMemAlloc, 10, 0, 1, 0)
-        .enable_model(ContractCostType::HostMemCpy, 10, 0, 1, 0);
+        .enable_model(ContractCostType::MemAlloc, 10, 0, 1, 0)
+        .enable_model(ContractCostType::MemCpy, 10, 0, 1, 0);
 
     let _ = host.with_events_mut(|events| {
         Ok(events.record(InternalEvent::Contract(ce), host.as_budget()))
@@ -149,8 +149,8 @@ fn test_internal_diagnostic_event_metering_free() -> Result<(), HostError> {
 
     let host = host
         .test_budget(100000, 100000)
-        .enable_model(ContractCostType::HostMemAlloc, 10, 0, 1, 0)
-        .enable_model(ContractCostType::HostMemCpy, 10, 0, 1, 0);
+        .enable_model(ContractCostType::MemAlloc, 10, 0, 1, 0)
+        .enable_model(ContractCostType::MemCpy, 10, 0, 1, 0);
 
     let _ = host.with_events_mut(|events| {
         Ok(events.record(InternalEvent::Diagnostic(de), host.as_budget()))
