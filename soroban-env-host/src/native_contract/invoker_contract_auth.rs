@@ -74,7 +74,7 @@ impl InvokerContractAuthEntry {
                     ContractExecutable::Wasm(b) => {
                         host.hash_from_bytesobj_input("wasm_ref", b.as_object())?
                     }
-                    ContractExecutable::Token => {
+                    ContractExecutable::StellarAsset => {
                         return Err(host.err(
                             ScErrorType::Auth,
                             ScErrorCode::InternalError,

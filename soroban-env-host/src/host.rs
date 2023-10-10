@@ -1781,7 +1781,7 @@ impl VmCallerEnv for Host {
     ) -> Result<AddressObject, HostError> {
         let asset: Asset = self.metered_from_xdr_obj(serialized_asset)?;
         let contract_id_preimage = ContractIdPreimage::Asset(asset);
-        let executable = ContractExecutable::Token;
+        let executable = ContractExecutable::StellarAsset;
         let args = CreateContractArgs {
             contract_id_preimage,
             executable,

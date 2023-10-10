@@ -462,7 +462,7 @@ impl Host {
                     || vm.invoke_function_raw(self, func, args),
                 )
             }
-            ContractExecutable::Token => self.with_frame(
+            ContractExecutable::StellarAsset => self.with_frame(
                 Frame::Token(id.metered_clone(self)?, *func, args_vec, instance),
                 || {
                     use crate::native_contract::{NativeContract, Token};

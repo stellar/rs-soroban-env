@@ -71,7 +71,7 @@ impl AuthorizationContext {
                     xdr::ContractExecutable::Wasm(wasm_hash) => {
                         BytesN::<32>::from_slice(host, wasm_hash.as_slice())?
                     }
-                    xdr::ContractExecutable::Token => return Err(host.err(
+                    xdr::ContractExecutable::StellarAsset => return Err(host.err(
                         ScErrorType::Auth,
                         ScErrorCode::InvalidInput,
                         "token executable is not allowed when authorizing create_contract host fn",

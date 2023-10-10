@@ -266,7 +266,7 @@ impl Host {
                     )
                     .map_err(|e| self.decorate_contract_code_storage_error(e, &wasm_hash))?;
             }
-            ContractExecutable::Token => {}
+            ContractExecutable::StellarAsset => {}
         }
         Ok(())
     }
