@@ -10,7 +10,7 @@ pub(crate) fn approve(
     from: Address,
     to: Address,
     amount: i128,
-    expiration_ledger: u32,
+    live_until_ledger: u32,
 ) -> Result<(), HostError> {
     let mut topics = Vec::new(e)?;
     topics.push(&Symbol::try_from_val(e, &"approve")?)?;
@@ -20,7 +20,7 @@ pub(crate) fn approve(
 
     let mut data = Vec::new(e)?;
     data.push(&amount)?;
-    data.push(&expiration_ledger)?;
+    data.push(&live_until_ledger)?;
     e.contract_event(topics.into(), data.into())?;
     Ok(())
 }

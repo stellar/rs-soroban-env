@@ -204,7 +204,7 @@ impl Host {
                 storage.put(
                     &code_key,
                     &Host::new_contract_code(self, data)?,
-                    Some(self.get_min_expiration_ledger(ContractDataDurability::Persistent)?),
+                    Some(self.get_min_live_until_ledger(ContractDataDurability::Persistent)?),
                     self.as_budget(),
                 )
             })?;

@@ -22,7 +22,7 @@ impl Contract {
         e.storage().persistent().get(&key).unwrap()
     }
 
-    pub fn bump_persistent(
+    pub fn extend_persistent(
         e: Env,
         key: Symbol,
         threshold: u32,
@@ -30,7 +30,7 @@ impl Contract {
     ) {
         e.storage()
             .persistent()
-            .bump(&key, threshold, extend_to)
+            .extend(&key, threshold, extend_to)
     }
 
     pub fn put_temporary(e: Env, key: Symbol, val: u64) {
@@ -49,7 +49,7 @@ impl Contract {
         e.storage().temporary().get(&key).unwrap()
     }
 
-    pub fn bump_temporary(
+    pub fn extend_temporary(
         e: Env,
         key: Symbol,
         threshold: u32,
@@ -57,7 +57,7 @@ impl Contract {
     ) {
         e.storage()
             .temporary()
-            .bump(&key, threshold, extend_to)
+            .extend(&key, threshold, extend_to)
     }
 
     pub fn put_instance(e: Env, key: Symbol, val: u64) {
@@ -76,13 +76,13 @@ impl Contract {
         e.storage().instance().get(&key).unwrap()
     }
 
-    pub fn bump_instance(e: Env, threshold: u32, extend_to: u32) {
+    pub fn extend_instance(e: Env, threshold: u32, extend_to: u32) {
         e.storage()
             .instance()
-            .bump(threshold, extend_to)
+            .extend(threshold, extend_to)
     }
 
-    pub fn replace_with_bytes_and_bump(
+    pub fn replace_with_bytes_and_extend(
         e: Env,
         key: Symbol,
         num_kilo_bytes: u32,
@@ -97,6 +97,6 @@ impl Contract {
         e.storage().persistent().set(&key, &bytes);
         e.storage()
             .persistent()
-            .bump(&key, threshold, extend_to)
+            .extend(&key, threshold, extend_to)
     }
 }

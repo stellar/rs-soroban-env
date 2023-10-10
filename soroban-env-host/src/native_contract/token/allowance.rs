@@ -14,7 +14,7 @@ pub fn read_allowance(e: &Host, from: Address, spender: Address) -> Result<i128,
     if let Some(allowance) = StorageUtils::try_get(e, key.try_into_val(e)?, StorageType::Temporary)?
     {
         let val: AllowanceValue = allowance.try_into_val(e)?;
-        if val.expiration_ledger < e.get_ledger_sequence()?.into() {
+        if val.live_until_ledger < e.get_ledger_sequence()?.into() {
             Ok(0)
         } else {
             Ok(val.amount)
@@ -37,7 +37,7 @@ pub fn write_allowance(
     // validates the expiration and then returns the ledger seq
     // The expiration can be less than ledger seq if clearing an allowance
     let ledger_seq = e.with_ledger_info(|li| {
-        if expiration > e.max_expiration_ledger()? {
+        if expiration > e.max_live_until_ledger()? {
             Err(err!(
                 e,
                 ContractError::AllowanceError,
@@ -67,14 +67,14 @@ pub fn write_allowance(
             let mut updated_allowance: AllowanceValue = allowance.try_into_val(e)?;
             updated_allowance.amount = amount;
 
-            let old_expiration = updated_allowance.expiration_ledger;
-            updated_allowance.expiration_ledger = expiration;
+            let old_expiration = updated_allowance.live_until_ledger;
+            updated_allowance.live_until_ledger = expiration;
             Some((updated_allowance, Some(old_expiration)))
         } else if amount > 0 {
             Some((
                 AllowanceValue {
                     amount,
-                    expiration_ledger: expiration,
+                    live_until_ledger: expiration,
                 },
                 None,
             ))
@@ -94,7 +94,7 @@ pub fn write_allowance(
                 && allowance_with_old_expiration.1.unwrap_or(0) < expiration
             {
                 let live_for = expiration - ledger_seq + 1;
-                e.bump_contract_data(
+                e.extend_contract_data(
                     key.try_into_val(e)?,
                     StorageType::Temporary,
                     live_for.into(),
@@ -123,7 +123,7 @@ fn write_allowance_amount(
     let allowance: AllowanceValue = e
         .get_contract_data(key.try_into_val(e)?, StorageType::Temporary)?
         .try_into_val(e)?;
-    write_allowance(e, from, spender, amount, allowance.expiration_ledger)
+    write_allowance(e, from, spender, amount, allowance.live_until_ledger)
 }
 
 // Metering: covered by components

@@ -812,11 +812,11 @@ impl VmCallerEnv for Host {
         ))
     }
 
-    fn get_max_expiration_ledger(
+    fn get_max_live_until_ledger(
         &self,
         _vmcaller: &mut VmCaller<Host>,
     ) -> Result<U32Val, Self::Error> {
-        Ok(self.max_expiration_ledger()?.into())
+        Ok(self.max_live_until_ledger()?.into())
     }
 
     // endregion "context" module functions
@@ -1692,7 +1692,7 @@ impl VmCallerEnv for Host {
     }
 
     // Notes on metering: covered by components
-    fn bump_contract_data(
+    fn extend_contract_data(
         &self,
         _vmcaller: &mut VmCaller<Host>,
         k: Val,
@@ -1705,25 +1705,25 @@ impl VmCallerEnv for Host {
             return Err(self.err(
                 ScErrorType::Storage,
                 ScErrorCode::InvalidAction,
-                "instance storage should be bumped via `bump_current_contract_instance_and_code` function only",
+                "instance storage should be bumped via `extend_current_contract_instance_and_code` function only",
                 &[],
             ))?;
         }
         let key = self.contract_data_key_from_rawval(k, t.try_into()?)?;
         self.try_borrow_storage_mut()?
-            .bump(self, key, threshold.into(), extend_to.into())
+            .extend(self, key, threshold.into(), extend_to.into())
             .map_err(|e| self.decorate_contract_data_storage_error(e, k))?;
         Ok(Val::VOID)
     }
 
-    fn bump_current_contract_instance_and_code(
+    fn extend_current_contract_instance_and_code(
         &self,
         _vmcaller: &mut VmCaller<Host>,
         threshold: U32Val,
         extend_to: U32Val,
     ) -> Result<Void, HostError> {
         let contract_id = self.get_current_contract_id_internal()?;
-        self.bump_contract_instance_and_code_from_contract_id(
+        self.extend_contract_instance_and_code_from_contract_id(
             &contract_id,
             threshold.into(),
             extend_to.into(),
@@ -1731,7 +1731,7 @@ impl VmCallerEnv for Host {
         Ok(Val::VOID)
     }
 
-    fn bump_contract_instance_and_code(
+    fn extend_contract_instance_and_code(
         &self,
         _vmcaller: &mut VmCaller<Self::VmUserState>,
         contract: AddressObject,
@@ -1739,7 +1739,7 @@ impl VmCallerEnv for Host {
         extend_to: U32Val,
     ) -> Result<Void, Self::Error> {
         let contract_id = self.contract_id_from_address(contract)?;
-        self.bump_contract_instance_and_code_from_contract_id(
+        self.extend_contract_instance_and_code_from_contract_id(
             &contract_id,
             threshold.into(),
             extend_to.into(),

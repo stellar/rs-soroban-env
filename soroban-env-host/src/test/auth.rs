@@ -231,7 +231,7 @@ impl AuthTest {
                             .unwrap(),
                         invocation: root_invocation.clone(),
                         nonce,
-                        signature_expiration_ledger: 1000,
+                        signature_live_until_ledger: 1000,
                     });
                 let payload = self.host.metered_hash_xdr(&payload_preimage).unwrap();
                 let signature_args = host_vec![
@@ -248,7 +248,7 @@ impl AuthTest {
                                 .unwrap()
                                 .into(),
                         )),
-                        signature_expiration_ledger: 1000,
+                        signature_live_until_ledger: 1000,
                     }),
                     root_invocation,
                 });
@@ -280,9 +280,9 @@ impl AuthTest {
                 if !storage.has(&nonce_key, self.host.budget_ref())? {
                     return Ok(None);
                 }
-                let (_, expiration_ledger) =
+                let (_, live_until_ledger) =
                     storage.get_with_expiration(&nonce_key, self.host.budget_ref())?;
-                Ok(expiration_ledger)
+                Ok(live_until_ledger)
             })
             .unwrap()
     }
@@ -417,8 +417,8 @@ impl AuthTest {
                 .try_into_val(&self.host)
                 .unwrap();
             for nonce in &self.last_nonces[address_id] {
-                if let Some(expiration_ledger) = self.read_nonce_expiration(&address, *nonce) {
-                    assert_eq!(expiration_ledger, 1000);
+                if let Some(live_until_ledger) = self.read_nonce_expiration(&address, *nonce) {
+                    assert_eq!(live_until_ledger, 1000);
                     consumed += 1;
                 }
             }
@@ -1595,14 +1595,14 @@ fn test_require_auth_within_check_auth() {
             network_id: network_id.clone(),
             invocation: account_0_invocation.clone(),
             nonce: 1111,
-            signature_expiration_ledger: 1000,
+            signature_live_until_ledger: 1000,
         });
     auth_entries.push(SorobanAuthorizationEntry {
         credentials: SorobanCredentials::Address(SorobanAddressCredentials {
             address: test.contracts[0].to_sc_address().unwrap(),
             nonce: 1111,
             signature: ScVal::Void,
-            signature_expiration_ledger: 1000,
+            signature_live_until_ledger: 1000,
         }),
         root_invocation: account_0_invocation,
     });
@@ -1630,7 +1630,7 @@ fn test_require_auth_within_check_auth() {
             network_id: network_id.clone(),
             invocation: account_1_invocation.clone(),
             nonce: 2222,
-            signature_expiration_ledger: 2000,
+            signature_live_until_ledger: 2000,
         });
 
     auth_entries.push(SorobanAuthorizationEntry {
@@ -1638,7 +1638,7 @@ fn test_require_auth_within_check_auth() {
             address: test.contracts[1].to_sc_address().unwrap(),
             nonce: 2222,
             signature: ScVal::Void,
-            signature_expiration_ledger: 2000,
+            signature_live_until_ledger: 2000,
         }),
         root_invocation: account_1_invocation,
     });
@@ -1666,7 +1666,7 @@ fn test_require_auth_within_check_auth() {
             network_id: network_id.clone(),
             invocation: classic_account_invocation.clone(),
             nonce: 3333,
-            signature_expiration_ledger: 3000,
+            signature_live_until_ledger: 3000,
         });
 
     let classic_account_payload_hash = test
@@ -1690,7 +1690,7 @@ fn test_require_auth_within_check_auth() {
                     .unwrap()
                     .into(),
             )),
-            signature_expiration_ledger: 3000,
+            signature_live_until_ledger: 3000,
         }),
         root_invocation: classic_account_invocation.clone(),
     });
@@ -1722,7 +1722,7 @@ fn test_require_auth_within_check_auth() {
                     .unwrap()
                     .into(),
             )),
-            signature_expiration_ledger: 3000,
+            signature_live_until_ledger: 3000,
         }),
         root_invocation: classic_account_invocation,
     });
@@ -1780,7 +1780,7 @@ fn test_require_auth_for_self_within_check_auth() {
             address: test.contracts[0].to_sc_address().unwrap(),
             nonce: 1111,
             signature: ScVal::Void,
-            signature_expiration_ledger: 1000,
+            signature_live_until_ledger: 1000,
         }),
         root_invocation: SorobanAuthorizedInvocation {
             function: SorobanAuthorizedFunction::ContractFn(InvokeContractArgs {

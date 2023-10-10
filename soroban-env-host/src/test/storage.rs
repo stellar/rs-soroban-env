@@ -153,13 +153,13 @@ fn test_storage(host: &Host, contract_id: AddressObject, storage: &str) {
         true
     );
 
-    let max_expiration_ledger: u32 = host.max_expiration_ledger().unwrap().into();
+    let max_live_until_ledger: u32 = host.max_live_until_ledger().unwrap().into();
     let ledger_seq: u32 = host.get_ledger_sequence().unwrap().into();
-    let max_bump = max_expiration_ledger - ledger_seq;
+    let max_bump = max_live_until_ledger - ledger_seq;
     let threshold: u32 = 1;
 
     // Smoke test bump
-    let bump_args = if storage == "instance" {
+    let extend_args = if storage == "instance" {
         host_vec![host, threshold, max_bump]
     } else {
         host_vec![host, key_1, threshold, max_bump]
@@ -168,11 +168,11 @@ fn test_storage(host: &Host, contract_id: AddressObject, storage: &str) {
     host.call(
         contract_id,
         storage_fn_name(host, "bump", storage),
-        bump_args.into(),
+        extend_args.into(),
     )
     .unwrap();
 
-    let bump_args_past_max = if storage == "instance" {
+    let extend_args_past_max = if storage == "instance" {
         host_vec![host, threshold, max_bump + 1]
     } else {
         host_vec![host, key_1, threshold, max_bump + 1]
@@ -182,7 +182,7 @@ fn test_storage(host: &Host, contract_id: AddressObject, storage: &str) {
         .call(
             contract_id,
             storage_fn_name(host, "bump", storage),
-            bump_args_past_max.into(),
+            extend_args_past_max.into(),
         )
         .is_err());
 

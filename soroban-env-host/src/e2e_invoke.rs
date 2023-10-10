@@ -78,10 +78,10 @@ pub struct LedgerEntryExpirationChange {
     /// Durability of the entry.    
     pub durability: ContractDataDurability,
     /// Expiration ledger of the old entry.
-    pub old_expiration_ledger: u32,
+    pub old_live_until_ledger: u32,
     /// Expiration ledger of the new entry. Guaranteed to always be greater than
-    /// or equal to `old_expiration_ledger`.
-    pub new_expiration_ledger: u32,
+    /// or equal to `old_live_until_ledger`.
+    pub new_live_until_ledger: u32,
 }
 
 /// Returns the difference between the `storage` and its initial snapshot as
@@ -118,8 +118,8 @@ pub fn get_ledger_changes<T: SnapshotSource>(
             entry_change.expiration_change = Some(LedgerEntryExpirationChange {
                 key_hash,
                 durability,
-                old_expiration_ledger: 0,
-                new_expiration_ledger: 0,
+                old_live_until_ledger: 0,
+                new_live_until_ledger: 0,
             });
         }
         if init_storage_snapshot.has(key)? {
@@ -129,16 +129,16 @@ pub fn get_ledger_changes<T: SnapshotSource>(
             entry_change.old_entry_size_bytes = buf.len() as u32;
 
             if let Some(ref mut expiration_change) = &mut entry_change.expiration_change {
-                expiration_change.old_expiration_ledger =
+                expiration_change.old_live_until_ledger =
                     old_expiration.ok_or_else(|| internal_error.clone())?;
             }
         }
-        if let Some((_, new_expiration_ledger)) = entry_with_expiration {
+        if let Some((_, new_live_until_ledger)) = entry_with_expiration {
             if let Some(ref mut expiration_change) = &mut entry_change.expiration_change {
                 // Never reduce the final expiration ledger.
-                expiration_change.new_expiration_ledger = max(
-                    new_expiration_ledger.ok_or_else(|| internal_error.clone())?,
-                    expiration_change.old_expiration_ledger,
+                expiration_change.new_live_until_ledger = max(
+                    new_live_until_ledger.ok_or_else(|| internal_error.clone())?,
+                    expiration_change.old_live_until_ledger,
                 );
             }
         }
@@ -180,8 +180,8 @@ pub fn extract_rent_changes(ledger_changes: &Vec<LedgerEntryChange>) -> Vec<Ledg
                 &entry_change.encoded_new_value,
             ) {
                 // Skip the entry if 1. it is not bumped and 2. the entry size has not increased
-                if expiration_change.old_expiration_ledger
-                    >= expiration_change.new_expiration_ledger
+                if expiration_change.old_live_until_ledger
+                    >= expiration_change.new_live_until_ledger
                     && entry_change.old_entry_size_bytes >= encoded_new_value.len() as u32
                 {
                     return None;
@@ -193,8 +193,8 @@ pub fn extract_rent_changes(ledger_changes: &Vec<LedgerEntryChange>) -> Vec<Ledg
                     ),
                     old_size_bytes: entry_change.old_entry_size_bytes,
                     new_size_bytes: encoded_new_value.len() as u32,
-                    old_expiration_ledger: expiration_change.old_expiration_ledger,
-                    new_expiration_ledger: expiration_change.new_expiration_ledger,
+                    old_live_until_ledger: expiration_change.old_live_until_ledger,
+                    new_live_until_ledger: expiration_change.new_live_until_ledger,
                 })
             } else {
                 None
@@ -424,7 +424,7 @@ fn build_storage_map_from_xdr_ledger_entries<T: AsRef<[u8]>, I: ExactSizeIterato
     }
 
     for (entry_buf, expiration_buf) in encoded_ledger_entries.zip(encoded_expiration_entries) {
-        let mut expiration_ledger: Option<u32> = None;
+        let mut live_until_ledger: Option<u32> = None;
 
         let le = Rc::metered_new(
             metered_from_xdr_with_budget::<LedgerEntry>(entry_buf.as_ref(), budget)?,
@@ -438,7 +438,7 @@ fn build_storage_map_from_xdr_ledger_entries<T: AsRef<[u8]>, I: ExactSizeIterato
                 budget,
             )?;
 
-            expiration_ledger = Some(ee.expiration_ledger_seq);
+            live_until_ledger = Some(ee.live_until_ledger_seq);
 
             expiration_map = expiration_map.insert(key.clone(), ee, budget)?;
         }
@@ -450,7 +450,7 @@ fn build_storage_map_from_xdr_ledger_entries<T: AsRef<[u8]>, I: ExactSizeIterato
             )
             .into());
         }
-        storage_map = storage_map.insert(key, Some((le, expiration_ledger)), budget)?;
+        storage_map = storage_map.insert(key, Some((le, live_until_ledger)), budget)?;
     }
 
     // Add non-existing entries from the footprint to the storage.

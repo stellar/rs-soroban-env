@@ -3,7 +3,7 @@ use soroban_env_common::xdr::{ContractDataDurability, LedgerKey};
 use crate::{Host, HostError, LedgerInfo};
 
 impl Host {
-    pub(crate) fn get_min_expiration_ledger(
+    pub(crate) fn get_min_live_until_ledger(
         &self,
         storage_type: ContractDataDurability,
     ) -> Result<u32, HostError> {
@@ -19,7 +19,7 @@ impl Host {
         Ok(ledger_seq.saturating_add(min_expiration.saturating_sub(1)))
     }
 
-    pub(crate) fn max_expiration_ledger(&self) -> Result<u32, HostError> {
+    pub(crate) fn max_live_until_ledger(&self) -> Result<u32, HostError> {
         self.with_ledger_info(|li| {
             Ok(li
                 .sequence_number

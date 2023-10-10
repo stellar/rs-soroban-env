@@ -41,7 +41,7 @@ pub trait TokenTrait {
         from: Address,
         spender: Address,
         amount: i128,
-        expiration_ledger: u32,
+        live_until_ledger: u32,
     ) -> Result<(), HostError>;
 
     fn balance(e: &Host, addr: Address) -> Result<i128, HostError>;
@@ -183,7 +183,7 @@ impl TokenTrait for Token {
 
     fn allowance(e: &Host, from: Address, spender: Address) -> Result<i128, HostError> {
         let _span = tracy_span!("native token allowance");
-        e.bump_current_contract_instance_and_code(
+        e.extend_current_contract_instance_and_code(
             INSTANCE_LIFETIME_THRESHOLD.into(),
             INSTANCE_BUMP_AMOUNT.into(),
         )?;
@@ -196,13 +196,13 @@ impl TokenTrait for Token {
         from: Address,
         spender: Address,
         amount: i128,
-        expiration_ledger: u32,
+        live_until_ledger: u32,
     ) -> Result<(), HostError> {
         let _span = tracy_span!("native token approve");
         check_nonnegative_amount(e, amount)?;
         from.require_auth()?;
 
-        e.bump_current_contract_instance_and_code(
+        e.extend_current_contract_instance_and_code(
             INSTANCE_LIFETIME_THRESHOLD.into(),
             INSTANCE_BUMP_AMOUNT.into(),
         )?;
@@ -212,16 +212,16 @@ impl TokenTrait for Token {
             from.metered_clone(e)?,
             spender.metered_clone(e)?,
             amount,
-            expiration_ledger,
+            live_until_ledger,
         )?;
-        event::approve(e, from, spender, amount, expiration_ledger)?;
+        event::approve(e, from, spender, amount, live_until_ledger)?;
         Ok(())
     }
 
     // Metering: covered by components
     fn balance(e: &Host, addr: Address) -> Result<i128, HostError> {
         let _span = tracy_span!("native token balance");
-        e.bump_current_contract_instance_and_code(
+        e.extend_current_contract_instance_and_code(
             INSTANCE_LIFETIME_THRESHOLD.into(),
             INSTANCE_BUMP_AMOUNT.into(),
         )?;
@@ -230,7 +230,7 @@ impl TokenTrait for Token {
 
     fn spendable_balance(e: &Host, addr: Address) -> Result<i128, HostError> {
         let _span = tracy_span!("native token spendable balance");
-        e.bump_current_contract_instance_and_code(
+        e.extend_current_contract_instance_and_code(
             INSTANCE_LIFETIME_THRESHOLD.into(),
             INSTANCE_BUMP_AMOUNT.into(),
         )?;
@@ -240,7 +240,7 @@ impl TokenTrait for Token {
     // Metering: covered by components
     fn authorized(e: &Host, addr: Address) -> Result<bool, HostError> {
         let _span = tracy_span!("native token authorized");
-        e.bump_current_contract_instance_and_code(
+        e.extend_current_contract_instance_and_code(
             INSTANCE_LIFETIME_THRESHOLD.into(),
             INSTANCE_BUMP_AMOUNT.into(),
         )?;
@@ -253,7 +253,7 @@ impl TokenTrait for Token {
         check_nonnegative_amount(e, amount)?;
         from.require_auth()?;
 
-        e.bump_current_contract_instance_and_code(
+        e.extend_current_contract_instance_and_code(
             INSTANCE_LIFETIME_THRESHOLD.into(),
             INSTANCE_BUMP_AMOUNT.into(),
         )?;
@@ -276,7 +276,7 @@ impl TokenTrait for Token {
         check_nonnegative_amount(e, amount)?;
         spender.require_auth()?;
 
-        e.bump_current_contract_instance_and_code(
+        e.extend_current_contract_instance_and_code(
             INSTANCE_LIFETIME_THRESHOLD.into(),
             INSTANCE_BUMP_AMOUNT.into(),
         )?;
@@ -295,7 +295,7 @@ impl TokenTrait for Token {
         check_non_native(e)?;
         from.require_auth()?;
 
-        e.bump_current_contract_instance_and_code(
+        e.extend_current_contract_instance_and_code(
             INSTANCE_LIFETIME_THRESHOLD.into(),
             INSTANCE_BUMP_AMOUNT.into(),
         )?;
@@ -312,7 +312,7 @@ impl TokenTrait for Token {
         check_non_native(e)?;
         spender.require_auth()?;
 
-        e.bump_current_contract_instance_and_code(
+        e.extend_current_contract_instance_and_code(
             INSTANCE_LIFETIME_THRESHOLD.into(),
             INSTANCE_BUMP_AMOUNT.into(),
         )?;
@@ -331,7 +331,7 @@ impl TokenTrait for Token {
         let admin = read_administrator(e)?;
         admin.require_auth()?;
 
-        e.bump_current_contract_instance_and_code(
+        e.extend_current_contract_instance_and_code(
             INSTANCE_LIFETIME_THRESHOLD.into(),
             INSTANCE_BUMP_AMOUNT.into(),
         )?;
@@ -347,7 +347,7 @@ impl TokenTrait for Token {
         let admin = read_administrator(e)?;
         admin.require_auth()?;
 
-        e.bump_current_contract_instance_and_code(
+        e.extend_current_contract_instance_and_code(
             INSTANCE_LIFETIME_THRESHOLD.into(),
             INSTANCE_BUMP_AMOUNT.into(),
         )?;
@@ -364,7 +364,7 @@ impl TokenTrait for Token {
         let admin = read_administrator(e)?;
         admin.require_auth()?;
 
-        e.bump_current_contract_instance_and_code(
+        e.extend_current_contract_instance_and_code(
             INSTANCE_LIFETIME_THRESHOLD.into(),
             INSTANCE_BUMP_AMOUNT.into(),
         )?;
@@ -380,7 +380,7 @@ impl TokenTrait for Token {
         let admin = read_administrator(e)?;
         admin.require_auth()?;
 
-        e.bump_current_contract_instance_and_code(
+        e.extend_current_contract_instance_and_code(
             INSTANCE_LIFETIME_THRESHOLD.into(),
             INSTANCE_BUMP_AMOUNT.into(),
         )?;

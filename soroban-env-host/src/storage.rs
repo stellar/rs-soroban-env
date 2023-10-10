@@ -279,11 +279,11 @@ impl Storage {
         &mut self,
         key: &Rc<LedgerKey>,
         val: &Rc<LedgerEntry>,
-        expiration_ledger: Option<u32>,
+        live_until_ledger: Option<u32>,
         budget: &Budget,
     ) -> Result<(), HostError> {
         let _span = tracy_span!("storage put");
-        self.put_opt(key, Some((val, expiration_ledger)), budget)
+        self.put_opt(key, Some((val, live_until_ledger)), budget)
     }
 
     /// Attempts to delete the [LedgerEntry] associated with a given [LedgerKey]
@@ -321,15 +321,16 @@ impl Storage {
             .is_some())
     }
 
-    /// Bumps `key` to live for at least `bump_by_ledgers` from now (not
-    /// counting the current ledger).
+    /// Extends `key` to live `extend_to` ledgers from now (not counting the
+    /// current ledger) if the current live_until_ledger for the entry is
+    /// `threshold` ledgers or less away from the current ledger.
     ///
     /// This operation is only defined within a host as it relies on ledger
     /// state.
     ///
     /// This operation does not modify any ledger entries, but does change the
     /// internal storage
-    pub fn bump(
+    pub fn extend(
         &mut self,
         host: &Host,
         key: Rc<LedgerKey>,
@@ -347,7 +348,7 @@ impl Storage {
             ));
         }
 
-        // Bumping deleted/non-existing/out-of-footprint entries will result in
+        // Extending deleted/non-existing/out-of-footprint entries will result in
         // an error.
         let (entry, old_expiration) = self.get_with_expiration(&key, host.budget_ref())?;
         let old_expiration = old_expiration.ok_or_else(|| {
@@ -372,7 +373,7 @@ impl Storage {
         let new_expiration =
             host.with_ledger_info(|li| Ok(li.sequence_number.saturating_add(extend_to)))?;
 
-        if new_expiration > host.max_expiration_ledger()? {
+        if new_expiration > host.max_live_until_ledger()? {
             return Err(host.err(
                 ScErrorType::Storage,
                 ScErrorCode::InvalidAction,
