@@ -83,9 +83,9 @@ pub struct LedgerInfo {
     pub timestamp: u64,
     pub network_id: [u8; 32],
     pub base_reserve: u32,
-    pub min_temp_entry_expiration: u32,
-    pub min_persistent_entry_expiration: u32,
-    pub max_entry_expiration: u32,
+    pub min_temp_entry_ttl: u32,
+    pub min_persistent_entry_ttl: u32,
+    pub max_entry_ttl: u32,
 }
 
 #[cfg(any(test, feature = "testutils"))]
@@ -1705,7 +1705,7 @@ impl VmCallerEnv for Host {
             return Err(self.err(
                 ScErrorType::Storage,
                 ScErrorCode::InvalidAction,
-                "instance storage should be bumped via `extend_current_contract_instance_and_code` function only",
+                "instance storage should be extended via `extend_current_contract_instance_and_code` function only",
                 &[],
             ))?;
         }

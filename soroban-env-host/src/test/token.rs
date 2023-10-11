@@ -58,9 +58,9 @@ impl TokenTest {
             timestamp: 123456,
             network_id: [5; 32],
             base_reserve: 5_000_000,
-            min_persistent_entry_expiration: 4096,
-            min_temp_entry_expiration: 16,
-            max_entry_expiration: 6_312_000,
+            min_persistent_entry_ttl: 4096,
+            min_temp_entry_ttl: 16,
+            max_entry_ttl: 6_312_000,
         })
         .unwrap();
         Self {

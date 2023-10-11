@@ -19,9 +19,9 @@ fn ledger_network_id() -> Result<(), HostError> {
         timestamp: 0,
         network_id: [7; 32],
         base_reserve: 0,
-        min_persistent_entry_expiration: 4096,
-        min_temp_entry_expiration: 16,
-        max_entry_expiration: 6312000,
+        min_persistent_entry_ttl: 4096,
+        min_temp_entry_ttl: 16,
+        max_entry_ttl: 6312000,
     })?;
     let obj = host.get_ledger_network_id()?;
     let np = host.visit_obj(obj, |np: &ScBytes| Ok(np.to_vec()))?;

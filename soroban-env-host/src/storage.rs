@@ -370,23 +370,23 @@ impl Storage {
             ));
         }
 
-        let new_expiration =
+        let new_live_until =
             host.with_ledger_info(|li| Ok(li.sequence_number.saturating_add(extend_to)))?;
 
-        if new_expiration > host.max_live_until_ledger()? {
+        if new_live_until > host.max_live_until_ledger()? {
             return Err(host.err(
                 ScErrorType::Storage,
                 ScErrorCode::InvalidAction,
                 "trying to bump past max expiration ledger",
-                &[new_expiration.into()],
+                &[new_live_until.into()],
             ));
         }
 
-        if new_expiration > old_expiration && old_expiration.saturating_sub(ledger_seq) <= threshold
+        if new_live_until > old_expiration && old_expiration.saturating_sub(ledger_seq) <= threshold
         {
             self.map = self.map.insert(
                 key,
-                Some((entry.clone(), Some(new_expiration))),
+                Some((entry.clone(), Some(new_live_until))),
                 host.budget_ref(),
             )?;
         }

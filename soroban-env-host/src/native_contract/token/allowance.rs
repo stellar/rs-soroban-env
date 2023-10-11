@@ -30,27 +30,27 @@ pub fn write_allowance(
     from: Address,
     spender: Address,
     amount: i128,
-    expiration: u32,
+    live_until: u32,
 ) -> Result<(), HostError> {
     let key = DataKey::Allowance(AllowanceDataKey { from, spender });
 
-    // validates the expiration and then returns the ledger seq
-    // The expiration can be less than ledger seq if clearing an allowance
+    // Validates live_until and then returns the ledger seq
+    // The live_until can be less than ledger seq if clearing an allowance
     let ledger_seq = e.with_ledger_info(|li| {
-        if expiration > e.max_live_until_ledger()? {
+        if live_until > e.max_live_until_ledger()? {
             Err(err!(
                 e,
                 ContractError::AllowanceError,
                 "expiration is greater than max",
-                expiration,
-                li.max_entry_expiration
+                live_until,
+                li.max_entry_ttl
             ))
-        } else if amount > 0 && expiration < li.sequence_number {
+        } else if amount > 0 && live_until < li.sequence_number {
             Err(err!(
                 e,
                 ContractError::AllowanceError,
                 "expiration must be >= ledger sequence",
-                expiration,
+                live_until,
                 li.sequence_number
             ))
         } else {
@@ -60,21 +60,21 @@ pub fn write_allowance(
 
     // Returns the allowance to write and the previous expiration of the existing allowance.
     // If an allowance didn't exist, then the previous expiration will be None.
-    let allowance_with_old_expiration_option: Option<(AllowanceValue, Option<u32>)> =
+    let allowance_with_live_until_option: Option<(AllowanceValue, Option<u32>)> =
         if let Some(allowance) =
             StorageUtils::try_get(e, key.try_into_val(e)?, StorageType::Temporary)?
         {
             let mut updated_allowance: AllowanceValue = allowance.try_into_val(e)?;
             updated_allowance.amount = amount;
 
-            let old_expiration = updated_allowance.live_until_ledger;
-            updated_allowance.live_until_ledger = expiration;
-            Some((updated_allowance, Some(old_expiration)))
+            let old_live_until = updated_allowance.live_until_ledger;
+            updated_allowance.live_until_ledger = live_until;
+            Some((updated_allowance, Some(old_live_until)))
         } else if amount > 0 {
             Some((
                 AllowanceValue {
                     amount,
-                    live_until_ledger: expiration,
+                    live_until_ledger: live_until,
                 },
                 None,
             ))
@@ -82,18 +82,18 @@ pub fn write_allowance(
             None
         };
 
-    match allowance_with_old_expiration_option {
-        Some(allowance_with_old_expiration) => {
+    match allowance_with_live_until_option {
+        Some(allowance_with_live_until) => {
             e.put_contract_data(
                 key.try_into_val(e)?,
-                allowance_with_old_expiration.0.try_into_val(e)?,
+                allowance_with_live_until.0.try_into_val(e)?,
                 StorageType::Temporary,
             )?;
 
-            if allowance_with_old_expiration.0.amount > 0
-                && allowance_with_old_expiration.1.unwrap_or(0) < expiration
+            if allowance_with_live_until.0.amount > 0
+                && allowance_with_live_until.1.unwrap_or(0) < live_until
             {
-                let live_for = expiration - ledger_seq + 1;
+                let live_for = live_until - ledger_seq + 1;
                 e.extend_contract_data(
                     key.try_into_val(e)?,
                     StorageType::Temporary,

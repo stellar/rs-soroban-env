@@ -10,10 +10,10 @@ impl Host {
         let ledger_seq = self.with_ledger_info(|li| Ok(li.sequence_number))?;
         let min_expiration = match storage_type {
             ContractDataDurability::Temporary => {
-                self.with_ledger_info(|li| Ok(li.min_temp_entry_expiration))?
+                self.with_ledger_info(|li| Ok(li.min_temp_entry_ttl))?
             }
             ContractDataDurability::Persistent => {
-                self.with_ledger_info(|li: &LedgerInfo| Ok(li.min_persistent_entry_expiration))?
+                self.with_ledger_info(|li: &LedgerInfo| Ok(li.min_persistent_entry_ttl))?
             }
         };
         Ok(ledger_seq.saturating_add(min_expiration.saturating_sub(1)))
@@ -25,7 +25,7 @@ impl Host {
                 .sequence_number
                 // Entry can live for at most max_entry_expiration ledgers from
                 // now, counting the current one.
-                .saturating_add(li.max_entry_expiration.saturating_sub(1)))
+                .saturating_add(li.max_entry_ttl.saturating_sub(1)))
         })
     }
 }

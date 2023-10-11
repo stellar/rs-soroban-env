@@ -105,7 +105,7 @@ impl AuthTest {
 
         host.with_mut_ledger_info(|li| {
             li.sequence_number = 100;
-            li.max_entry_expiration = 10000;
+            li.max_entry_ttl = 10000;
         })
         .unwrap();
         let mut accounts = vec![];

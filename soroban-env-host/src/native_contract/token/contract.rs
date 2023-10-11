@@ -21,7 +21,7 @@ use super::balance::{
 };
 use super::metadata::{read_name, read_symbol, set_metadata, DECIMAL};
 use super::public_types::{AlphaNum12AssetInfo, AlphaNum4AssetInfo};
-use super::storage_types::{INSTANCE_BUMP_AMOUNT, INSTANCE_TTL_THRESHOLD};
+use super::storage_types::{INSTANCE_EXTEND_AMOUNT, INSTANCE_TTL_THRESHOLD};
 
 pub trait TokenTrait {
     /// init_asset can create a contract for a wrapped classic asset
@@ -185,7 +185,7 @@ impl TokenTrait for Token {
         let _span = tracy_span!("native token allowance");
         e.extend_current_contract_instance_and_code(
             INSTANCE_TTL_THRESHOLD.into(),
-            INSTANCE_BUMP_AMOUNT.into(),
+            INSTANCE_EXTEND_AMOUNT.into(),
         )?;
         read_allowance(e, from, spender)
     }
@@ -204,7 +204,7 @@ impl TokenTrait for Token {
 
         e.extend_current_contract_instance_and_code(
             INSTANCE_TTL_THRESHOLD.into(),
-            INSTANCE_BUMP_AMOUNT.into(),
+            INSTANCE_EXTEND_AMOUNT.into(),
         )?;
 
         write_allowance(
@@ -223,7 +223,7 @@ impl TokenTrait for Token {
         let _span = tracy_span!("native token balance");
         e.extend_current_contract_instance_and_code(
             INSTANCE_TTL_THRESHOLD.into(),
-            INSTANCE_BUMP_AMOUNT.into(),
+            INSTANCE_EXTEND_AMOUNT.into(),
         )?;
         read_balance(e, addr)
     }
@@ -232,7 +232,7 @@ impl TokenTrait for Token {
         let _span = tracy_span!("native token spendable balance");
         e.extend_current_contract_instance_and_code(
             INSTANCE_TTL_THRESHOLD.into(),
-            INSTANCE_BUMP_AMOUNT.into(),
+            INSTANCE_EXTEND_AMOUNT.into(),
         )?;
         get_spendable_balance(e, addr)
     }
@@ -242,7 +242,7 @@ impl TokenTrait for Token {
         let _span = tracy_span!("native token authorized");
         e.extend_current_contract_instance_and_code(
             INSTANCE_TTL_THRESHOLD.into(),
-            INSTANCE_BUMP_AMOUNT.into(),
+            INSTANCE_EXTEND_AMOUNT.into(),
         )?;
         is_authorized(e, addr)
     }
@@ -255,7 +255,7 @@ impl TokenTrait for Token {
 
         e.extend_current_contract_instance_and_code(
             INSTANCE_TTL_THRESHOLD.into(),
-            INSTANCE_BUMP_AMOUNT.into(),
+            INSTANCE_EXTEND_AMOUNT.into(),
         )?;
 
         spend_balance(e, from.metered_clone(e)?, amount)?;
@@ -278,7 +278,7 @@ impl TokenTrait for Token {
 
         e.extend_current_contract_instance_and_code(
             INSTANCE_TTL_THRESHOLD.into(),
-            INSTANCE_BUMP_AMOUNT.into(),
+            INSTANCE_EXTEND_AMOUNT.into(),
         )?;
 
         spend_allowance(e, from.metered_clone(e)?, spender, amount)?;
@@ -297,7 +297,7 @@ impl TokenTrait for Token {
 
         e.extend_current_contract_instance_and_code(
             INSTANCE_TTL_THRESHOLD.into(),
-            INSTANCE_BUMP_AMOUNT.into(),
+            INSTANCE_EXTEND_AMOUNT.into(),
         )?;
 
         spend_balance(e, from.metered_clone(e)?, amount)?;
@@ -314,7 +314,7 @@ impl TokenTrait for Token {
 
         e.extend_current_contract_instance_and_code(
             INSTANCE_TTL_THRESHOLD.into(),
-            INSTANCE_BUMP_AMOUNT.into(),
+            INSTANCE_EXTEND_AMOUNT.into(),
         )?;
 
         spend_allowance(e, from.metered_clone(e)?, spender, amount)?;
@@ -333,7 +333,7 @@ impl TokenTrait for Token {
 
         e.extend_current_contract_instance_and_code(
             INSTANCE_TTL_THRESHOLD.into(),
-            INSTANCE_BUMP_AMOUNT.into(),
+            INSTANCE_EXTEND_AMOUNT.into(),
         )?;
 
         spend_balance_no_authorization_check(e, from.metered_clone(e)?, amount)?;
@@ -349,7 +349,7 @@ impl TokenTrait for Token {
 
         e.extend_current_contract_instance_and_code(
             INSTANCE_TTL_THRESHOLD.into(),
-            INSTANCE_BUMP_AMOUNT.into(),
+            INSTANCE_EXTEND_AMOUNT.into(),
         )?;
 
         write_authorization(e, addr.metered_clone(e)?, authorize)?;
@@ -366,7 +366,7 @@ impl TokenTrait for Token {
 
         e.extend_current_contract_instance_and_code(
             INSTANCE_TTL_THRESHOLD.into(),
-            INSTANCE_BUMP_AMOUNT.into(),
+            INSTANCE_EXTEND_AMOUNT.into(),
         )?;
 
         receive_balance(e, to.metered_clone(e)?, amount)?;
@@ -382,7 +382,7 @@ impl TokenTrait for Token {
 
         e.extend_current_contract_instance_and_code(
             INSTANCE_TTL_THRESHOLD.into(),
-            INSTANCE_BUMP_AMOUNT.into(),
+            INSTANCE_EXTEND_AMOUNT.into(),
         )?;
 
         write_administrator(e, new_admin.metered_clone(e)?)?;

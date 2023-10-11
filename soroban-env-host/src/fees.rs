@@ -8,7 +8,7 @@
 /// (independent of the transaction envelope size).
 pub const TX_BASE_RESULT_SIZE: u32 = 300;
 /// Estimate for any `TtlEntry` ledger entry
-pub const EXPIRATION_ENTRY_SIZE: u32 = 48;
+pub const TTL_ENTRY_SIZE: u32 = 48;
 
 const INSTRUCTIONS_INCREMENT: i64 = 10000;
 const DATA_SIZE_1KB_INCREMENT: i64 = 1024;
@@ -89,10 +89,10 @@ pub struct LedgerEntryRentChange {
     /// Size of the entry in bytes after it has been modified, including the
     /// key.
     pub new_size_bytes: u32,
-    /// Expiration ledger of the entry before it has been modified.
+    /// Live until ledger of the entry before it has been modified.
     /// Should be less than the current ledger for newly-created entires.
     pub old_live_until_ledger: u32,
-    /// Expiration ledger of the entry after it has been modified.
+    /// Live until ledger of the entry after it has been modified.
     pub new_live_until_ledger: u32,
 }
 
@@ -252,10 +252,10 @@ pub fn compute_rent_fee(
         if e.old_live_until_ledger < e.new_live_until_ledger {
             bumped_entries = bumped_entries.saturating_add(1);
             bumped_entry_key_size_bytes =
-                bumped_entry_key_size_bytes.saturating_add(EXPIRATION_ENTRY_SIZE);
+                bumped_entry_key_size_bytes.saturating_add(TTL_ENTRY_SIZE);
         }
     }
-    // The expiration bumps need to be written to the ledger. As they have
+    // The TTL extensions need to be written to the ledger. As they have
     // constant size, we can charge for writing them independently of the actual
     // entry size.
     fee = fee.saturating_add(
