@@ -6,10 +6,10 @@ use std::{cmp::max, rc::Rc};
 
 use soroban_env_common::{
     xdr::{
-        AccountId, ContractDataDurability, ContractEventType, DiagnosticEvent, ExpirationEntry,
-        HostFunction, LedgerEntry, LedgerEntryData, LedgerFootprint, LedgerKey, LedgerKeyAccount,
+        AccountId, ContractDataDurability, ContractEventType, DiagnosticEvent, HostFunction,
+        LedgerEntry, LedgerEntryData, LedgerFootprint, LedgerKey, LedgerKeyAccount,
         LedgerKeyContractCode, LedgerKeyContractData, LedgerKeyTrustLine, ScErrorCode, ScErrorType,
-        SorobanAuthorizationEntry, SorobanResources,
+        SorobanAuthorizationEntry, SorobanResources, TtlEntry,
     },
     Error,
 };
@@ -28,7 +28,7 @@ use crate::{
     DiagnosticLevel, Host, HostError, LedgerInfo, MeteredOrdMap,
 };
 
-pub type ExpirationEntryMap = MeteredOrdMap<Rc<LedgerKey>, Rc<ExpirationEntry>, Budget>;
+pub type TtlEntryMap = MeteredOrdMap<Rc<LedgerKey>, Rc<TtlEntry>, Budget>;
 
 /// Result of invoking a single host function prepared for embedder consumption.
 pub struct InvokeHostFunctionResult {
@@ -91,7 +91,7 @@ pub fn get_ledger_changes<T: SnapshotSource>(
     budget: &Budget,
     storage: &Storage,
     init_storage_snapshot: &T,
-    init_expiration_entries: ExpirationEntryMap,
+    init_expiration_entries: TtlEntryMap,
 ) -> Result<Vec<LedgerEntryChange>, HostError> {
     let mut changes = vec![];
     // Skip allocation metering for this for the sake of simplicity - the
@@ -413,9 +413,9 @@ fn build_storage_map_from_xdr_ledger_entries<T: AsRef<[u8]>, I: ExactSizeIterato
     footprint: &Footprint,
     encoded_ledger_entries: I,
     encoded_expiration_entries: I,
-) -> Result<(StorageMap, ExpirationEntryMap), HostError> {
+) -> Result<(StorageMap, TtlEntryMap), HostError> {
     let mut storage_map = StorageMap::new();
-    let mut expiration_map = ExpirationEntryMap::new();
+    let mut expiration_map = TtlEntryMap::new();
 
     if encoded_ledger_entries.len() != encoded_expiration_entries.len() {
         return Err(
@@ -434,7 +434,7 @@ fn build_storage_map_from_xdr_ledger_entries<T: AsRef<[u8]>, I: ExactSizeIterato
 
         if !expiration_buf.as_ref().is_empty() {
             let ee = Rc::metered_new(
-                metered_from_xdr_with_budget::<ExpirationEntry>(expiration_buf.as_ref(), budget)?,
+                metered_from_xdr_with_budget::<TtlEntry>(expiration_buf.as_ref(), budget)?,
                 budget,
             )?;
 

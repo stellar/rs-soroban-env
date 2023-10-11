@@ -11,13 +11,13 @@ use crate::{
     xdr::{
         AccountEntry, AccountId, Asset, BytesM, ClaimableBalanceEntry, ConfigSettingEntry,
         ContractCodeEntry, ContractDataDurability, ContractEvent, ContractExecutable,
-        ContractIdPreimage, CreateContractArgs, DataEntry, Duration, ExpirationEntry,
-        ExtensionPoint, Hash, LedgerEntry, LedgerEntryExt, LedgerKey, LedgerKeyAccount,
-        LedgerKeyClaimableBalance, LedgerKeyConfigSetting, LedgerKeyContractCode, LedgerKeyData,
-        LedgerKeyLiquidityPool, LedgerKeyOffer, LedgerKeyTrustLine, LiquidityPoolEntry, OfferEntry,
-        PublicKey, ScAddress, ScBytes, ScContractInstance, ScMap, ScMapEntry, ScNonceKey, ScString,
-        ScSymbol, ScVal, ScVec, SorobanAuthorizationEntry, SorobanAuthorizedInvocation, StringM,
-        TimePoint, TrustLineAsset, TrustLineEntry, Uint256, SCSYMBOL_LIMIT,
+        ContractIdPreimage, CreateContractArgs, DataEntry, Duration, ExtensionPoint, Hash,
+        LedgerEntry, LedgerEntryExt, LedgerKey, LedgerKeyAccount, LedgerKeyClaimableBalance,
+        LedgerKeyConfigSetting, LedgerKeyContractCode, LedgerKeyData, LedgerKeyLiquidityPool,
+        LedgerKeyOffer, LedgerKeyTrustLine, LiquidityPoolEntry, OfferEntry, PublicKey, ScAddress,
+        ScBytes, ScContractInstance, ScMap, ScMapEntry, ScNonceKey, ScString, ScSymbol, ScVal,
+        ScVec, SorobanAuthorizationEntry, SorobanAuthorizedInvocation, StringM, TimePoint,
+        TrustLineAsset, TrustLineEntry, TtlEntry, Uint256, SCSYMBOL_LIMIT,
     },
     AddressObject, Bool, BytesObject, DurationObject, DurationSmall, DurationVal, Error, HostError,
     I128Object, I128Small, I128Val, I256Object, I256Small, I256Val, I32Val, I64Object, I64Small,
@@ -138,7 +138,7 @@ impl_declared_size_type!(ClaimableBalanceEntry, 120);
 impl_declared_size_type!(LiquidityPoolEntry, 160);
 impl_declared_size_type!(ContractCodeEntry, 64);
 impl_declared_size_type!(ConfigSettingEntry, 96);
-impl_declared_size_type!(ExpirationEntry, 36);
+impl_declared_size_type!(TtlEntry, 36);
 impl_declared_size_type!(LedgerKey, 120);
 impl_declared_size_type!(LedgerEntry, 256);
 impl_declared_size_type!(AccessType, 1);
@@ -336,7 +336,7 @@ mod test {
         expect!["160"].assert_eq(size_of::<LiquidityPoolEntry>().to_string().as_str());
         expect!["56"].assert_eq(size_of::<ContractCodeEntry>().to_string().as_str());
         expect!["96"].assert_eq(size_of::<ConfigSettingEntry>().to_string().as_str());
-        expect!["36"].assert_eq(size_of::<ExpirationEntry>().to_string().as_str());
+        expect!["36"].assert_eq(size_of::<TtlEntry>().to_string().as_str());
         expect!["112"].assert_eq(size_of::<LedgerKey>().to_string().as_str());
         expect!["256"].assert_eq(size_of::<LedgerEntry>().to_string().as_str());
         expect!["1"].assert_eq(size_of::<AccessType>().to_string().as_str());
@@ -503,7 +503,7 @@ mod test {
         assert_mem_size_le_declared_size!(LiquidityPoolEntry);
         assert_mem_size_le_declared_size!(ContractCodeEntry);
         assert_mem_size_le_declared_size!(ConfigSettingEntry);
-        assert_mem_size_le_declared_size!(ExpirationEntry);
+        assert_mem_size_le_declared_size!(TtlEntry);
         assert_mem_size_le_declared_size!(LedgerKey);
         assert_mem_size_le_declared_size!(LedgerEntry);
         assert_mem_size_le_declared_size!(AccessType);

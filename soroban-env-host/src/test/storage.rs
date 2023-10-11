@@ -167,7 +167,7 @@ fn test_storage(host: &Host, contract_id: AddressObject, storage: &str) {
 
     host.call(
         contract_id,
-        storage_fn_name(host, "bump", storage),
+        storage_fn_name(host, "extend", storage),
         extend_args.into(),
     )
     .unwrap();
@@ -181,7 +181,7 @@ fn test_storage(host: &Host, contract_id: AddressObject, storage: &str) {
     assert!(host
         .call(
             contract_id,
-            storage_fn_name(host, "bump", storage),
+            storage_fn_name(host, "extend", storage),
             extend_args_past_max.into(),
         )
         .is_err());

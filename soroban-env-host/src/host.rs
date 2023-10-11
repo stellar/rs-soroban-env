@@ -2619,6 +2619,7 @@ impl Host {
         f(self.0.budget.clone())
     }
 
+    #[allow(dead_code)]
     pub(crate) fn set_lifecycle_event_hook(
         &self,
         hook: Option<HostLifecycleHook>,

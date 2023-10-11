@@ -347,7 +347,7 @@ impl Compare<LedgerKey> for Budget {
             | (ContractData(_), _)
             | (ContractCode(_), _)
             | (ConfigSetting(_), _)
-            | (Expiration(_), _) => Ok(a.cmp(b)),
+            | (Ttl(_), _) => Ok(a.cmp(b)),
         }
     }
 }
@@ -393,7 +393,7 @@ impl Compare<LedgerEntryData> for Budget {
             | (ContractData(_), _)
             | (ContractCode(_), _)
             | (ConfigSetting(_), _)
-            | (Expiration(_), _) => Ok(a.cmp(b)),
+            | (Ttl(_), _) => Ok(a.cmp(b)),
         }
     }
 }

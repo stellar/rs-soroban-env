@@ -152,7 +152,7 @@ pub(crate) fn authorize_single_invocation_with_nonce(
             SorobanCredentials::Address(SorobanAddressCredentials {
                 address: sc_address,
                 nonce: nonce.unwrap().0,
-                signature_live_until_ledger: nonce.unwrap().1,
+                signature_expiration_ledger: nonce.unwrap().1,
                 signature: ScVal::Void,
             })
         }
@@ -181,7 +181,7 @@ pub(crate) fn authorize_single_invocation_with_nonce(
                     .unwrap(),
                 invocation: root_invocation.clone(),
                 nonce: address_credentials.nonce,
-                signature_live_until_ledger: address_credentials.signature_live_until_ledger,
+                signature_expiration_ledger: address_credentials.signature_expiration_ledger,
             });
         let signature_payload = host.metered_hash_xdr(&signature_payload_preimage).unwrap();
         address_credentials.signature = signer.sign(host, &signature_payload);

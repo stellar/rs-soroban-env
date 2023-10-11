@@ -4,13 +4,13 @@ use soroban_env_host::fees::{
     FeeConfiguration, LedgerEntryRentChange, RentFeeConfiguration, TransactionResources,
     WriteFeeConfiguration, EXPIRATION_ENTRY_SIZE,
 };
-use soroban_env_host::xdr::ExpirationEntry;
+use soroban_env_host::xdr::TtlEntry;
 
 #[test]
 fn expiration_entry_size() {
     let expiration_entry = LedgerEntry {
         last_modified_ledger_seq: 0,
-        data: LedgerEntryData::Expiration(ExpirationEntry {
+        data: LedgerEntryData::Ttl(TtlEntry {
             key_hash: Hash([0; 32]),
             live_until_ledger_seq: 0,
         }),
