@@ -358,26 +358,26 @@ fn total_amount_charged_from_random_inputs() -> Result<(), HostError> {
     let actual = format!("{:?}", host.as_budget());
     expect![[r#"
         =====================================================================================================================================================================
-        Cpu limit: 100000000; used: 10120240
+        Cpu limit: 100000000; used: 10218283
         Mem limit: 41943040; used: 276044
         =====================================================================================================================================================================
         CostType                 iterations     input          cpu_insns      mem_bytes      const_term_cpu      lin_term_cpu        const_term_mem      lin_term_mem        
         WasmInsnExec             246            None           1476           0              6                   0                   0                   0                   
         WasmMemAlloc             184            None           0              184            0                   0                   1                   0                   
         HostMemAlloc             1              Some(152)      1142           168            1141                1                   16                  128                 
-        HostMemCpy               1              Some(65)       51             0              39                  24                  0                   0                   
-        HostMemCmp               1              Some(74)       57             0              20                  64                  0                   0                   
+        HostMemCpy               1              Some(65)       258            0              250                 16                  0                   0                   
+        HostMemCmp               1              Some(74)       259            0              250                 16                  0                   0                   
         DispatchHostFunction     176            None           46288          0              263                 0                   0                   0                   
         VisitObject              97             None           10476          0              108                 0                   0                   0                   
-        ValSer                   1              Some(49)       617            165            591                 69                  18                  384                 
-        ValDeser                 1              Some(103)      1139           119            1112                34                  16                  128                 
+        ValSer                   1              Some(49)       1006           165            1000                16                  18                  384                 
+        ValDeser                 1              Some(103)      1012           119            1000                16                  16                  128                 
         ComputeSha256Hash        1              Some(193)      9179           40             2924                4149                40                  0                   
         ComputeEd25519PubKey     226            None           5781984        0              25584               0                   0                   0                   
-        MapEntry                 250            None           13250          0              53                  0                   0                   0                   
-        VecEntry                 186            None           0              0              0                   0                   0                   0                   
+        MapEntry                 250            None           62500          0              250                 16                  0                   0                   
+        VecEntry                 186            None           46500          0              250                 16                  0                   0                   
         VerifyEd25519Sig         1              Some(227)      381748         0              376877              2747                0                   0                   
-        VmMemRead                1              Some(69)       194            0              182                 24                  0                   0                   
-        VmMemWrite               1              Some(160)      212            0              182                 24                  0                   0                   
+        VmMemRead                1              Some(69)       1008           0              1000                16                  0                   0                   
+        VmMemWrite               1              Some(160)      1020           0              1000                16                  0                   0                   
         VmInstantiation          1              Some(147)      1047534        136937         967154              69991               131103              5080                
         VmCachedInstantiation    1              Some(147)      1047534        136937         967154              69991               131103              5080                
         InvokeVmFunction         47             None           52875          658            1125                0                   14                  0                   

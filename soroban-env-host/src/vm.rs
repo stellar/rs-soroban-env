@@ -258,7 +258,8 @@ impl Vm {
         // Here we do _not_ supply the store with any fuel. Fuel is supplied
         // right before the VM is being run, i.e., before crossing the host->VM
         // boundary.
-        // Missing metering for the Rc, but this is once per Vm so should be okay
+        #[cfg(any(test, feature = "testutils"))]
+        host.call_any_lifecycle_hook(crate::host::HostLifecycleEvent::VmInstantiated)?;
         Ok(Rc::new(Self {
             contract_id,
             module,

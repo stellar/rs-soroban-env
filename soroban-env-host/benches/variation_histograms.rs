@@ -7,6 +7,7 @@ struct LinearModelTables;
 impl Benchmark for LinearModelTables {
     fn bench<HCM: HostCostMeasurement>() -> std::io::Result<(FPCostModel, FPCostModel)> {
         let mut measurements = measure_cost_variation::<HCM>(100)?;
+        measurements.check_range_against_baseline(HCM::Runner::COST_TYPE)?;
         measurements.preprocess();
         measurements.report_histogram("cpu", |m| m.cpu_insns);
         measurements.report_histogram("mem", |m| m.mem_bytes);

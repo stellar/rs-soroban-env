@@ -397,7 +397,9 @@ impl Host {
         dest: &mut [T],
     ) -> Result<(), HostError> {
         self.charge_budget(ContractCostType::HostMemCpy, Some(src.len() as u64))?;
-        dest.copy_from_slice(src);
+        for (s, d) in src.iter().zip(dest.iter_mut()) {
+            *d = *s
+        }
         Ok(())
     }
 }
