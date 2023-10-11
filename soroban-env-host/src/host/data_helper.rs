@@ -170,7 +170,7 @@ impl Host {
         {
             let (current, live_until_ledger) = self
                 .try_borrow_storage_mut()?
-                .get_with_expiration(key, self.as_budget())?;
+                .get_with_live_until_ledger(key, self.as_budget())?;
             let mut current = (*current).metered_clone(self)?;
 
             if let LedgerEntryData::ContractData(ref mut entry) = current.data {
@@ -464,7 +464,7 @@ impl Host {
         {
             let (current, live_until_ledger) = self
                 .try_borrow_storage_mut()?
-                .get_with_expiration(&key, self.as_budget())
+                .get_with_live_until_ledger(&key, self.as_budget())
                 .map_err(|e| self.decorate_contract_data_storage_error(e, k))?;
             let mut current = (*current).metered_clone(self)?;
             match current.data {

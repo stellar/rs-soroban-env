@@ -54,7 +54,7 @@ pub enum AccessType {
 /// A helper type used by [FootprintMode::Recording] to provide access
 /// to a stable read-snapshot of a ledger.
 pub trait SnapshotSource {
-    // Returns the ledger entry for the key and its expiration.
+    // Returns the ledger entry for the key and its live_until ledger.
     fn get(&self, key: &Rc<LedgerKey>) -> Result<(Rc<LedgerEntry>, Option<u32>), HostError>;
     fn has(&self, key: &Rc<LedgerKey>) -> Result<bool, HostError>;
 }
@@ -217,10 +217,10 @@ impl Storage {
     }
 
     /// Attempts to retrieve the [LedgerEntry] associated with a given
-    /// [LedgerKey] and its expiration ledger (if applicable) in the [Storage],
+    /// [LedgerKey] and its live until ledger (if applicable) in the [Storage],
     /// returning an error if the key is not found.
     ///
-    /// Expiration ledgers only exist for `ContractData` and `ContractCode`
+    /// Live until ledgers only exist for `ContractData` and `ContractCode`
     /// ledger entries and are `None` for all the other entry kinds.
     ///
     /// In [FootprintMode::Recording] mode, records the read [LedgerKey] in the
@@ -230,7 +230,7 @@ impl Storage {
     ///
     /// In [FootprintMode::Enforcing] mode, succeeds only if the read
     /// [LedgerKey] has been declared in the [Footprint].
-    pub(crate) fn get_with_expiration(
+    pub(crate) fn get_with_live_until_ledger(
         &mut self,
         key: &Rc<LedgerKey>,
         budget: &Budget,
@@ -239,7 +239,7 @@ impl Storage {
         self.prepare_read_only_access(key, budget)?;
         match self.map.get::<Rc<LedgerKey>>(key, budget)? {
             None | Some(None) => Err((ScErrorType::Storage, ScErrorCode::MissingValue).into()),
-            Some(Some((val, expiration))) => Ok((Rc::clone(val), *expiration)),
+            Some(Some((val, live_until_ledger))) => Ok((Rc::clone(val), *live_until_ledger)),
         }
     }
 
@@ -350,7 +350,7 @@ impl Storage {
 
         // Extending deleted/non-existing/out-of-footprint entries will result in
         // an error.
-        let (entry, old_expiration) = self.get_with_expiration(&key, host.budget_ref())?;
+        let (entry, old_expiration) = self.get_with_live_until_ledger(&key, host.budget_ref())?;
         let old_expiration = old_expiration.ok_or_else(|| {
             host.err(
                 ScErrorType::Storage,
@@ -377,7 +377,7 @@ impl Storage {
             return Err(host.err(
                 ScErrorType::Storage,
                 ScErrorCode::InvalidAction,
-                "trying to bump past max expiration ledger",
+                "trying to bump past max live_until ledger",
                 &[new_live_until.into()],
             ));
         }

@@ -281,7 +281,7 @@ impl AuthTest {
                     return Ok(None);
                 }
                 let (_, live_until_ledger) =
-                    storage.get_with_expiration(&nonce_key, self.host.budget_ref())?;
+                    storage.get_with_live_until_ledger(&nonce_key, self.host.budget_ref())?;
                 Ok(live_until_ledger)
             })
             .unwrap()

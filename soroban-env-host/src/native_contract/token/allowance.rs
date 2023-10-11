@@ -41,7 +41,7 @@ pub fn write_allowance(
             Err(err!(
                 e,
                 ContractError::AllowanceError,
-                "expiration is greater than max",
+                "live_until is greater than max",
                 live_until,
                 li.max_entry_ttl
             ))
@@ -49,7 +49,7 @@ pub fn write_allowance(
             Err(err!(
                 e,
                 ContractError::AllowanceError,
-                "expiration must be >= ledger sequence",
+                "live_until must be >= ledger sequence",
                 live_until,
                 li.sequence_number
             ))
@@ -58,8 +58,8 @@ pub fn write_allowance(
         }
     })?;
 
-    // Returns the allowance to write and the previous expiration of the existing allowance.
-    // If an allowance didn't exist, then the previous expiration will be None.
+    // Returns the allowance to write and the previous live_until ledger of the existing allowance.
+    // If an allowance didn't exist, then the previous live_until ledger will be None.
     let allowance_with_live_until_option: Option<(AllowanceValue, Option<u32>)> =
         if let Some(allowance) =
             StorageUtils::try_get(e, key.try_into_val(e)?, StorageType::Temporary)?
