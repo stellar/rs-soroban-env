@@ -8,7 +8,7 @@ use super::base_types::BytesN;
 #[contracttype]
 pub enum ContractExecutable {
     Wasm(BytesN<32>),
-    Token,
+    StellarAsset,
 }
 
 impl ContractExecutable {
@@ -17,7 +17,7 @@ impl ContractExecutable {
             xdr::ContractExecutable::Wasm(wasm_hash) => Ok(ContractExecutable::Wasm(
                 BytesN::<32>::from_slice(host, &wasm_hash.0)?,
             )),
-            xdr::ContractExecutable::Token => Ok(ContractExecutable::Token),
+            xdr::ContractExecutable::StellarAsset => Ok(ContractExecutable::StellarAsset),
         }
     }
 }
