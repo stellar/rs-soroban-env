@@ -191,6 +191,38 @@ pub fn compute_transaction_resource_fee(
     (non_refundable_fee, refundable_fee)
 }
 
+// Helper for clamping values to the range of positive i64, with
+// invalid cases mapped to i64::MAX.
+trait ClampFee {
+    fn clamp_fee(self) -> i64;
+}
+
+impl ClampFee for i64 {
+    fn clamp_fee(self) -> i64 {
+        if self < 0 {
+            // Negatives shouldn't be possible -- they're banned in the logic
+            // that sets most of the configs, and we're only using i64 for XDR
+            // sake, ultimately I think compatibility with java which only has
+            // signed types -- anyway we're assuming i64::MAX is more likely the
+            // safest in-band default-value for erroneous cses, since it's more
+            // likely to fail a tx, than to open a "0 cost tx" DoS vector.
+            i64::MAX
+        } else {
+            self
+        }
+    }
+}
+
+impl ClampFee for i128 {
+    fn clamp_fee(self) -> i64 {
+        if self < 0 {
+            i64::MAX
+        } else {
+            i64::try_from(self).unwrap_or(i64::MAX)
+        }
+    }
+}
+
 /// Computes the effective write fee per 1 KB of data written to ledger.
 ///
 /// The computed fee should be used in fee configuration for
@@ -202,30 +234,31 @@ pub fn compute_write_fee_per_1kb(
     bucket_list_size_bytes: i64,
     fee_config: &WriteFeeConfiguration,
 ) -> i64 {
-    let fee_rate_multiplier =
-        fee_config.write_fee_1kb_bucket_list_high - fee_config.write_fee_1kb_bucket_list_low;
+    let fee_rate_multiplier = fee_config
+        .write_fee_1kb_bucket_list_high
+        .saturating_sub(fee_config.write_fee_1kb_bucket_list_low)
+        .clamp_fee();
     let bucket_list_size_before_reaching_target =
         bucket_list_size_bytes.min(fee_config.bucket_list_target_size_bytes);
     // Convert multipliers to i128 to make sure we can handle large bucket list
     // sizes.
     let mut write_fee_per_1kb = num_integer::div_ceil(
-        (fee_rate_multiplier as i128) * (bucket_list_size_before_reaching_target as i128),
+        (fee_rate_multiplier as i128)
+            .saturating_mul(bucket_list_size_before_reaching_target as i128),
         fee_config.bucket_list_target_size_bytes as i128,
     )
-    // The fee should be way less than i64::MAX, we do the truncation just in
-    // case.
-    .min(i64::MAX as i128) as i64;
+    .clamp_fee();
     write_fee_per_1kb = write_fee_per_1kb.saturating_add(fee_config.write_fee_1kb_bucket_list_low);
     if bucket_list_size_bytes > fee_config.bucket_list_target_size_bytes {
         let bucket_list_size_after_reaching_target =
             bucket_list_size_bytes - fee_config.bucket_list_target_size_bytes;
         let post_target_fee = num_integer::div_ceil(
             (fee_rate_multiplier as i128)
-                * (bucket_list_size_after_reaching_target as i128)
-                * (fee_config.bucket_list_write_fee_growth_factor as i128),
+                .saturating_mul(bucket_list_size_after_reaching_target as i128)
+                .saturating_mul(fee_config.bucket_list_write_fee_growth_factor as i128),
             fee_config.bucket_list_target_size_bytes as i128,
         )
-        .min(i64::MAX as i128) as i64;
+        .clamp_fee();
         write_fee_per_1kb = write_fee_per_1kb.saturating_add(post_target_fee);
     }
     write_fee_per_1kb
@@ -272,40 +305,74 @@ pub fn compute_rent_fee(
     fee
 }
 
+// Size of half-open range (lo, hi], or None if lo>hi
+fn exclusive_ledger_diff(lo: u32, hi: u32) -> Option<u32> {
+    hi.checked_sub(lo)
+}
+
+// Size of closed range [lo, hi] or None if lo>hi
+fn inclusive_ledger_diff(lo: u32, hi: u32) -> Option<u32> {
+    exclusive_ledger_diff(lo, hi).map(|diff| diff.saturating_add(1))
+}
+
+impl LedgerEntryRentChange {
+    fn entry_is_new(&self) -> bool {
+        self.old_size_bytes == 0 && self.old_live_until_ledger == 0
+    }
+
+    fn extension_ledgers(&self, current_ledger: u32) -> Option<u32> {
+        let ledger_before_extension = if self.entry_is_new() {
+            current_ledger.saturating_sub(1)
+        } else {
+            self.old_live_until_ledger
+        };
+        exclusive_ledger_diff(ledger_before_extension, self.new_live_until_ledger)
+    }
+
+    fn prepaid_ledgers(&self, current_ledger: u32) -> Option<u32> {
+        if self.entry_is_new() {
+            None
+        } else {
+            inclusive_ledger_diff(current_ledger, self.old_live_until_ledger)
+        }
+    }
+
+    fn size_increase(&self) -> Option<u32> {
+        self.new_size_bytes.checked_sub(self.old_size_bytes)
+    }
+}
+
 fn rent_fee_per_entry_change(
     entry_change: &LedgerEntryRentChange,
     fee_config: &RentFeeConfiguration,
     current_ledger: u32,
 ) -> i64 {
     let mut fee: i64 = 0;
-    // Pay for the rent extension (if any).
-    if entry_change.new_live_until_ledger > entry_change.old_live_until_ledger {
+    // If there was a difference-in-expiration, pay for the new ledger range
+    // at the new size.
+    if let Some(rent_ledgers) = entry_change.extension_ledgers(current_ledger) {
         fee = fee.saturating_add(rent_fee_for_size_and_ledgers(
             entry_change.is_persistent,
-            // New portion of rent is payed for the new size of the entry.
             entry_change.new_size_bytes,
-            // Rent should be covered until `old_live_until_ledger` (or start
-            // from the current ledger for new entries), so don't include it
-            // into the number of rent ledgers.
-            entry_change.new_live_until_ledger
-                - entry_change.old_live_until_ledger.max(current_ledger - 1),
-            fee_config,
-        ));
-    }
-    // Pay for the entry size increase (if any).
-    if entry_change.new_size_bytes > entry_change.old_size_bytes && entry_change.old_size_bytes > 0
-    {
-        fee = fee.saturating_add(rent_fee_for_size_and_ledgers(
-            entry_change.is_persistent,
-            // Pay only for the size increase.
-            entry_change.new_size_bytes - entry_change.old_size_bytes,
-            // Cover ledger interval [current; old], as (old, new] is already
-            // covered above for the whole new size.
-            entry_change.old_live_until_ledger - current_ledger + 1,
+            rent_ledgers,
             fee_config,
         ));
     }
 
+    // If there were some ledgers already paid for at an old size, and the size
+    // of the entry increased, those pre-paid ledgers need to pay top-up fees to
+    // account for the change in size.
+    if let (Some(rent_ledgers), Some(entry_size)) = (
+        entry_change.prepaid_ledgers(current_ledger),
+        entry_change.size_increase(),
+    ) {
+        fee = fee.saturating_add(rent_fee_for_size_and_ledgers(
+            entry_change.is_persistent,
+            entry_size,
+            rent_ledgers,
+            fee_config,
+        ));
+    }
     fee
 }
 
