@@ -159,7 +159,7 @@ pub trait MeteredClone: Clone + DeclaredSizeForMetering {
     // Self::IS_SHALLOW and set it to false, you should override this method also (it will actually
     // Err if you don't). This charge does not include shallow copying of `Self` because that
     // should be taken care of by the caller beforehand, e.g. in `metered_clone`.
-    fn charge_for_substructure(&self, budget: impl AsBudget) -> Result<(), HostError> {
+    fn charge_for_substructure(&self, _budget: impl AsBudget) -> Result<(), HostError> {
         if Self::IS_SHALLOW {
             Ok(())
         } else {

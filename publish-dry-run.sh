@@ -15,7 +15,7 @@ mv Cargo.toml.bak Cargo.toml
 
 # Package the crates that will be published. Verification is disabled because
 # we aren't ready to verify yet.
-cargo-hack hack --ignore-private package --no-verify --feature-powerset
+cargo-hack hack --ignore-private package --no-verify --each-feature
 
 # Add each crate that was packaged to the vendor/ directory.
 for crate in target/package/*.crate

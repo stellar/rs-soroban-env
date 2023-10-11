@@ -1,10 +1,10 @@
 all: build test
 
 test:
-	cargo hack --feature-powerset test
+	cargo hack --each-feature test
 
 build:
-	cargo hack --feature-powerset clippy
+	cargo hack --each-feature clippy
 
 watch:
 	cargo watch --clear --watch-when-idle --shell '$(MAKE)'

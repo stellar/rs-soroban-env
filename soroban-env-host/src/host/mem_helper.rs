@@ -1,16 +1,12 @@
-use soroban_env_common::{
-    xdr::{ScErrorCode, ScErrorType},
-    U32Val,
-};
-
-use crate::{host_object::MemHostObjectType, xdr::ContractCostType, Host, HostError, VmCaller};
-
-use std::rc::Rc;
-
 use crate::{
+    budget::AsBudget,
     host::{Frame, VmSlice},
-    Vm,
+    host_object::MemHostObjectType,
+    xdr::{ContractCostType, ScErrorCode, ScErrorType, ScSymbol},
+    Compare, Host, HostError, Symbol, SymbolObject, SymbolSmall, SymbolStr, U32Val, Vm, VmCaller,
 };
+
+use std::{cmp::Ordering, rc::Rc};
 
 impl Host {
     // Notes on metering: free
@@ -360,6 +356,36 @@ impl Host {
         let mut vnew: Vec<u8> = vec![0; len as usize];
         self.metered_vm_read_bytes_from_linear_memory(vmcaller, &vm, pos, &mut vnew)?;
         self.add_host_object::<HOT>(vnew.try_into()?)
+    }
+
+    pub(crate) fn symbol_matches(&self, s: &[u8], sym: Symbol) -> Result<bool, HostError> {
+        if let Ok(ss) = SymbolSmall::try_from(sym) {
+            let sstr: SymbolStr = ss.into();
+            let slice: &[u8] = sstr.as_ref();
+            self.as_budget()
+                .compare(&slice, &s)
+                .map(|c| c == Ordering::Equal)
+        } else {
+            let sobj: SymbolObject = sym.try_into()?;
+            self.visit_obj(sobj, |scsym: &ScSymbol| {
+                self.as_budget()
+                    .compare(&scsym.as_slice(), &s)
+                    .map(|c| c == Ordering::Equal)
+            })
+        }
+    }
+
+    pub(crate) fn check_symbol_matches(&self, s: &[u8], sym: Symbol) -> Result<(), HostError> {
+        if self.symbol_matches(s, sym)? {
+            Ok(())
+        } else {
+            Err(self.err(
+                ScErrorType::Value,
+                ScErrorCode::InvalidInput,
+                "symbol mismatch",
+                &[sym.to_val()],
+            ))
+        }
     }
 
     // Test function for calibration purpose. The caller needs to ensure `src` and `dest` has

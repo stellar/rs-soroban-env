@@ -33,6 +33,7 @@ pub(crate) enum ContractReentryMode {
     /// possible for a contract to do a self-call via host).
     SelfAllowed,
     /// Re-entry is fully allowed.
+    #[allow(dead_code)]
     Allowed,
 }
 
@@ -639,7 +640,7 @@ impl Host {
 
         match &res {
             Ok(res) => self.fn_return_diagnostics(id, &func, res)?,
-            Err(err) => {}
+            Err(_err) => {}
         }
 
         res

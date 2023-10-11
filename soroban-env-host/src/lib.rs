@@ -6,13 +6,9 @@
 //! crate for use by host (or contract local-testing) code. Most of the type and
 //! module definitions visible here are actually defined in the common crate.
 //!
-//! It may seem unusual to configure a contract host _without_ a VM, but this
-//! configuration makes more sense when considering that Soroban supports a
-//! "local testing" configuration where host and guest code are _both compiled
-//! natively_ and linked together for a faster and richer debugging and testing
-//! experience. When testing this way, developers may also wish to enable the
-//! `"testutils"` feature, which enables an interface on [Host] for registering
-//! other test contracts by ID.
+//! When unit-testing contracts natively (not using wasm), developers may also
+//! wish to enable the `"testutils"` feature, which enables an interface on
+//! [Host] for registering other test contracts by ID.
 //!
 //! The [Host] type provides some facilities above and beyond just the [Env]
 //! trait, including:
@@ -55,6 +51,7 @@ pub mod auth;
 pub mod vm;
 pub use vm::Vm;
 #[cfg(any(test, feature = "testutils"))]
+#[doc(hidden)]
 pub mod cost_runner;
 pub mod storage;
 #[cfg(test)]

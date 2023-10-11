@@ -9,10 +9,10 @@ impl Host {
         Ok(())
     }
 
-    // Emits a system event for updating the contract executable.
-    // The only event topic is "executable_update" and the data contains
-    // a vector of [old_executable, new_executable] encoded as contract types
-    // (`ContractExecutable` above).
+    // Emits a system event for updating the contract executable. The topic
+    // vector contains the symbol "executable_update" followed by the
+    // old_executable and new_executable, encoded as contract types
+    // (`ContractExecutable` above). The event data is empty.
     pub(crate) fn emit_update_contract_event(
         &self,
         old_executable: &xdr::ContractExecutable,
