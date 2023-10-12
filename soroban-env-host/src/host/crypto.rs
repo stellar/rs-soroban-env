@@ -231,6 +231,7 @@ pub(crate) fn chacha20_fill_bytes(
     dest: &mut [u8],
     budget: impl AsBudget,
 ) -> Result<(), HostError> {
+    tracy_span!("chacha20");
     budget
         .as_budget()
         .charge(ContractCostType::ChaCha20DrawBytes, Some(dest.len() as u64))?;
