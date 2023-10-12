@@ -224,7 +224,7 @@ pub(crate) struct AccountAuthorizationTracker {
     authenticated: bool,
     // Indicates whether nonce still needs to be verified and consumed.
     need_nonce: bool,
-    // The value of nonce authorized by the address with its expiration ledger.
+    // The value of nonce authorized by the address with its live_until ledger.
     // Must not exist in the ledger.
     nonce: Option<(i64, u32)>,
 }

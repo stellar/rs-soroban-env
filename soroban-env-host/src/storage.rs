@@ -260,7 +260,7 @@ impl Storage {
         };
         self.map = self.map.insert(
             Rc::clone(key),
-            val.map(|(e, expiration)| (Rc::clone(e), expiration)),
+            val.map(|(e, live_until)| (Rc::clone(e), live_until)),
             budget,
         )?;
         Ok(())
@@ -337,7 +337,7 @@ impl Storage {
         threshold: u32,
         extend_to: u32,
     ) -> Result<(), HostError> {
-        let _span = tracy_span!("bump key");
+        let _span = tracy_span!("extend key");
 
         if threshold > extend_to {
             return Err(host.err(
@@ -350,23 +350,23 @@ impl Storage {
 
         // Extending deleted/non-existing/out-of-footprint entries will result in
         // an error.
-        let (entry, old_expiration) = self.get_with_live_until_ledger(&key, host.budget_ref())?;
-        let old_expiration = old_expiration.ok_or_else(|| {
+        let (entry, old_live_until) = self.get_with_live_until_ledger(&key, host.budget_ref())?;
+        let old_live_until = old_live_until.ok_or_else(|| {
             host.err(
                 ScErrorType::Storage,
                 ScErrorCode::InternalError,
-                "trying to bump non-expirable entry",
+                "trying to extend invalid entry",
                 &[],
             )
         })?;
 
         let ledger_seq: u32 = host.get_ledger_sequence()?.into();
-        if old_expiration < ledger_seq {
+        if old_live_until < ledger_seq {
             return Err(host.err(
                 ScErrorType::Storage,
                 ScErrorCode::InternalError,
-                "accessing expired entry",
-                &[old_expiration.into(), ledger_seq.into()],
+                "accessing no-longer-live entry",
+                &[old_live_until.into(), ledger_seq.into()],
             ));
         }
 
@@ -377,12 +377,12 @@ impl Storage {
             return Err(host.err(
                 ScErrorType::Storage,
                 ScErrorCode::InvalidAction,
-                "trying to bump past max live_until ledger",
+                "trying to extend past max live_until ledger",
                 &[new_live_until.into()],
             ));
         }
 
-        if new_live_until > old_expiration && old_expiration.saturating_sub(ledger_seq) <= threshold
+        if new_live_until > old_live_until && old_live_until.saturating_sub(ledger_seq) <= threshold
         {
             self.map = self.map.insert(
                 key,

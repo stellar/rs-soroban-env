@@ -233,8 +233,8 @@ pub fn compute_write_fee_per_1kb(
 
 /// Computes the total rent-related fee for the provided ledger entry changes.
 ///
-/// The rent-related fees consist of the fees for rent bumps and fees for
-/// increasing the entry size (with or without rent bump).
+/// The rent-related fees consist of the fees for TTL extensions and fees for
+/// increasing the entry size (with or without TTL extensions).
 ///
 /// This cannot handle unsantized inputs and relies on sane configuration and
 /// ledger changes. This is due to the fact that rent is managed automatically
@@ -245,14 +245,14 @@ pub fn compute_rent_fee(
     current_ledger_seq: u32,
 ) -> i64 {
     let mut fee: i64 = 0;
-    let mut bumped_entries: i64 = 0;
-    let mut bumped_entry_key_size_bytes: u32 = 0;
+    let mut extended_entries: i64 = 0;
+    let mut extended_entry_key_size_bytes: u32 = 0;
     for e in changed_entries {
         fee = fee.saturating_add(rent_fee_per_entry_change(e, fee_config, current_ledger_seq));
         if e.old_live_until_ledger < e.new_live_until_ledger {
-            bumped_entries = bumped_entries.saturating_add(1);
-            bumped_entry_key_size_bytes =
-                bumped_entry_key_size_bytes.saturating_add(TTL_ENTRY_SIZE);
+            extended_entries = extended_entries.saturating_add(1);
+            extended_entry_key_size_bytes =
+                extended_entry_key_size_bytes.saturating_add(TTL_ENTRY_SIZE);
         }
     }
     // The TTL extensions need to be written to the ledger. As they have
@@ -261,10 +261,10 @@ pub fn compute_rent_fee(
     fee = fee.saturating_add(
         fee_config
             .fee_per_write_entry
-            .saturating_mul(bumped_entries),
+            .saturating_mul(extended_entries),
     );
     fee = fee.saturating_add(compute_fee_per_increment(
-        bumped_entry_key_size_bytes,
+        extended_entry_key_size_bytes,
         fee_config.fee_per_write_1kb,
         DATA_SIZE_1KB_INCREMENT,
     ));

@@ -155,14 +155,14 @@ fn test_storage(host: &Host, contract_id: AddressObject, storage: &str) {
 
     let max_live_until_ledger: u32 = host.max_live_until_ledger().unwrap().into();
     let ledger_seq: u32 = host.get_ledger_sequence().unwrap().into();
-    let max_bump = max_live_until_ledger - ledger_seq;
+    let max_extend = max_live_until_ledger - ledger_seq;
     let threshold: u32 = 1;
 
-    // Smoke test bump
+    // Smoke test extend
     let extend_args = if storage == "instance" {
-        host_vec![host, threshold, max_bump]
+        host_vec![host, threshold, max_extend]
     } else {
-        host_vec![host, key_1, threshold, max_bump]
+        host_vec![host, key_1, threshold, max_extend]
     };
 
     host.call(
@@ -173,9 +173,9 @@ fn test_storage(host: &Host, contract_id: AddressObject, storage: &str) {
     .unwrap();
 
     let extend_args_past_max = if storage == "instance" {
-        host_vec![host, threshold, max_bump + 1]
+        host_vec![host, threshold, max_extend + 1]
     } else {
-        host_vec![host, key_1, threshold, max_bump + 1]
+        host_vec![host, key_1, threshold, max_extend + 1]
     };
 
     assert!(host
