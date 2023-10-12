@@ -324,7 +324,7 @@ where
             ContractCostType::MemCpy,
             Some(
                 <(K, V) as DeclaredSizeForMetering>::DECLARED_SIZE
-                    * a.map.len().min(b.map.len()) as u64,
+                    .saturating_mul(a.map.len().min(b.map.len()) as u64),
             ),
         )?;
         <Self as Compare<Vec<(K, V)>>>::compare(self, &a.map, &b.map)
@@ -350,7 +350,7 @@ where
             ContractCostType::MemCpy,
             Some(
                 <(K, V) as DeclaredSizeForMetering>::DECLARED_SIZE
-                    * a.map.len().min(b.map.len()) as u64,
+                    .saturating_mul(a.map.len().min(b.map.len()) as u64),
             ),
         )?;
         <Self as Compare<Vec<(K, V)>>>::compare(self, &a.map, &b.map)

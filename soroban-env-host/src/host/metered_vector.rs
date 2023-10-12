@@ -33,14 +33,14 @@ where
     fn charge_access(&self, count: usize, budget: &Budget) -> Result<(), HostError> {
         budget.charge(
             ContractCostType::MemCpy,
-            Some(A::DECLARED_SIZE * count as u64),
+            Some(A::DECLARED_SIZE.saturating_mul(count as u64)),
         )
     }
 
     fn charge_scan(&self, budget: &Budget) -> Result<(), HostError> {
         budget.charge(
             ContractCostType::MemCpy,
-            Some(A::DECLARED_SIZE * self.vec.len() as u64),
+            Some(A::DECLARED_SIZE.saturating_mul(self.vec.len() as u64)),
         )
     }
 
@@ -50,7 +50,7 @@ where
         let mag = 64 - (self.vec.len() as u64).leading_zeros();
         budget.charge(
             ContractCostType::MemCpy,
-            Some(A::DECLARED_SIZE * (1 + mag) as u64),
+            Some(A::DECLARED_SIZE.saturating_mul((1 + mag) as u64)),
         )
     }
 }
@@ -357,7 +357,7 @@ where
         // comparing entries is covered by the `compare` call below.
         self.as_budget().charge(
             ContractCostType::MemCpy,
-            Some(Elt::DECLARED_SIZE * a.vec.len().min(b.vec.len()) as u64),
+            Some(Elt::DECLARED_SIZE.saturating_mul(a.vec.len().min(b.vec.len()) as u64)),
         )?;
         <Self as Compare<Vec<Elt>>>::compare(self, &a.vec, &b.vec)
     }
@@ -378,7 +378,7 @@ where
         // comparing entries is covered by the `compare` call below.
         self.as_budget().charge(
             ContractCostType::MemCpy,
-            Some(Elt::DECLARED_SIZE * a.vec.len().min(b.vec.len()) as u64),
+            Some(Elt::DECLARED_SIZE.saturating_mul(a.vec.len().min(b.vec.len()) as u64)),
         )?;
         <Self as Compare<Vec<Elt>>>::compare(self, &a.vec, &b.vec)
     }
