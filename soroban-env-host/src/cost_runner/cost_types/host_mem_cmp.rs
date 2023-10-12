@@ -4,9 +4,9 @@ use soroban_env_common::Compare;
 
 use crate::{budget::AsBudget, cost_runner::CostRunner, xdr::ContractCostType};
 
-pub struct HostMemCmpRun;
-impl CostRunner for HostMemCmpRun {
-    const COST_TYPE: ContractCostType = ContractCostType::HostMemCmp;
+pub struct MemCmpRun;
+impl CostRunner for MemCmpRun {
+    const COST_TYPE: ContractCostType = ContractCostType::MemCmp;
 
     type SampleType = (Vec<u8>, Vec<u8>);
 

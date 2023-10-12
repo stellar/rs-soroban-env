@@ -422,6 +422,7 @@ impl Vm {
     /// to this VM's `Store` and `Instance`, and calls the provided function
     /// back with it. Mainly used for testing.
     #[cfg(any(test, feature = "testutils"))]
+    #[allow(unused)]
     pub(crate) fn with_vmcaller<F, T>(&self, f: F) -> Result<T, HostError>
     where
         F: FnOnce(&mut VmCaller<Host>) -> Result<T, HostError>,

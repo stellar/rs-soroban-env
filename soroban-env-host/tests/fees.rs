@@ -7,7 +7,7 @@ use soroban_env_host::fees::{
 use soroban_env_host::xdr::TtlEntry;
 
 #[test]
-fn expiration_entry_size() {
+fn ttl_entry_size() {
     let expiration_entry = LedgerEntry {
         last_modified_ledger_seq: 0,
         data: LedgerEntryData::Ttl(TtlEntry {

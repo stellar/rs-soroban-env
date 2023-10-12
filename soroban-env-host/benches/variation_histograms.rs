@@ -2,6 +2,7 @@
 // $ cargo bench --features wasmi,testutils --bench variation_histograms -- --nocapture
 mod common;
 use common::*;
+use soroban_env_host::cost_runner::CostRunner;
 
 struct LinearModelTables;
 impl Benchmark for LinearModelTables {

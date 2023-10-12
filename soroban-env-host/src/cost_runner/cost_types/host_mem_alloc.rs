@@ -2,10 +2,10 @@ use std::hint::black_box;
 
 use crate::{budget::AsBudget, cost_runner::CostRunner, xdr::ContractCostType, MeteredVector};
 
-pub struct HostMemAllocRun;
+pub struct MemAllocRun;
 
-impl CostRunner for HostMemAllocRun {
-    const COST_TYPE: ContractCostType = ContractCostType::HostMemAlloc;
+impl CostRunner for MemAllocRun {
+    const COST_TYPE: ContractCostType = ContractCostType::MemAlloc;
 
     type SampleType = u64;
 
