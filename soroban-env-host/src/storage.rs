@@ -54,7 +54,7 @@ pub enum AccessType {
 /// A helper type used by [FootprintMode::Recording] to provide access
 /// to a stable read-snapshot of a ledger.
 pub trait SnapshotSource {
-    // Returns the ledger entry for the key and its expiration.
+    // Returns the ledger entry for the key and its live_until ledger.
     fn get(&self, key: &Rc<LedgerKey>) -> Result<(Rc<LedgerEntry>, Option<u32>), HostError>;
     fn has(&self, key: &Rc<LedgerKey>) -> Result<bool, HostError>;
 }
@@ -217,10 +217,10 @@ impl Storage {
     }
 
     /// Attempts to retrieve the [LedgerEntry] associated with a given
-    /// [LedgerKey] and its expiration ledger (if applicable) in the [Storage],
+    /// [LedgerKey] and its live until ledger (if applicable) in the [Storage],
     /// returning an error if the key is not found.
     ///
-    /// Expiration ledgers only exist for `ContractData` and `ContractCode`
+    /// Live until ledgers only exist for `ContractData` and `ContractCode`
     /// ledger entries and are `None` for all the other entry kinds.
     ///
     /// In [FootprintMode::Recording] mode, records the read [LedgerKey] in the
@@ -230,7 +230,7 @@ impl Storage {
     ///
     /// In [FootprintMode::Enforcing] mode, succeeds only if the read
     /// [LedgerKey] has been declared in the [Footprint].
-    pub(crate) fn get_with_expiration(
+    pub(crate) fn get_with_live_until_ledger(
         &mut self,
         key: &Rc<LedgerKey>,
         budget: &Budget,
@@ -239,7 +239,7 @@ impl Storage {
         self.prepare_read_only_access(key, budget)?;
         match self.map.get::<Rc<LedgerKey>>(key, budget)? {
             None | Some(None) => Err((ScErrorType::Storage, ScErrorCode::MissingValue).into()),
-            Some(Some((val, expiration))) => Ok((Rc::clone(val), *expiration)),
+            Some(Some((val, live_until_ledger))) => Ok((Rc::clone(val), *live_until_ledger)),
         }
     }
 
@@ -260,7 +260,7 @@ impl Storage {
         };
         self.map = self.map.insert(
             Rc::clone(key),
-            val.map(|(e, expiration)| (Rc::clone(e), expiration)),
+            val.map(|(e, live_until)| (Rc::clone(e), live_until)),
             budget,
         )?;
         Ok(())
@@ -279,11 +279,11 @@ impl Storage {
         &mut self,
         key: &Rc<LedgerKey>,
         val: &Rc<LedgerEntry>,
-        expiration_ledger: Option<u32>,
+        live_until_ledger: Option<u32>,
         budget: &Budget,
     ) -> Result<(), HostError> {
         let _span = tracy_span!("storage put");
-        self.put_opt(key, Some((val, expiration_ledger)), budget)
+        self.put_opt(key, Some((val, live_until_ledger)), budget)
     }
 
     /// Attempts to delete the [LedgerEntry] associated with a given [LedgerKey]
@@ -321,76 +321,72 @@ impl Storage {
             .is_some())
     }
 
-    /// Bumps `key` to live for at least `bump_by_ledgers` from now (not
-    /// counting the current ledger).
+    /// Extends `key` to live `extend_to` ledgers from now (not counting the
+    /// current ledger) if the current live_until_ledger for the entry is
+    /// `threshold` ledgers or less away from the current ledger.
     ///
     /// This operation is only defined within a host as it relies on ledger
     /// state.
     ///
     /// This operation does not modify any ledger entries, but does change the
     /// internal storage
-    pub fn bump(
+    pub fn extend(
         &mut self,
         host: &Host,
         key: Rc<LedgerKey>,
-        low_expiration_watermark: u32,
-        high_expiration_watermark: u32,
+        threshold: u32,
+        extend_to: u32,
     ) -> Result<(), HostError> {
-        let _span = tracy_span!("bump key");
+        let _span = tracy_span!("extend key");
 
-        if low_expiration_watermark > high_expiration_watermark {
+        if threshold > extend_to {
             return Err(host.err(
                 ScErrorType::Storage,
                 ScErrorCode::InvalidInput,
-                "low_expiration_watermark must be <= high_expiration_watermark",
-                &[
-                    low_expiration_watermark.into(),
-                    high_expiration_watermark.into(),
-                ],
+                "threshold must be <= extend_to",
+                &[threshold.into(), extend_to.into()],
             ));
         }
 
-        // Bumping deleted/non-existing/out-of-footprint entries will result in
+        // Extending deleted/non-existing/out-of-footprint entries will result in
         // an error.
-        let (entry, old_expiration) = self.get_with_expiration(&key, host.budget_ref())?;
-        let old_expiration = old_expiration.ok_or_else(|| {
+        let (entry, old_live_until) = self.get_with_live_until_ledger(&key, host.budget_ref())?;
+        let old_live_until = old_live_until.ok_or_else(|| {
             host.err(
                 ScErrorType::Storage,
                 ScErrorCode::InternalError,
-                "trying to bump non-expirable entry",
+                "trying to extend invalid entry",
                 &[],
             )
         })?;
 
         let ledger_seq: u32 = host.get_ledger_sequence()?.into();
-        if old_expiration < ledger_seq {
+        if old_live_until < ledger_seq {
             return Err(host.err(
                 ScErrorType::Storage,
                 ScErrorCode::InternalError,
-                "accessing expired entry",
-                &[old_expiration.into(), ledger_seq.into()],
+                "accessing no-longer-live entry",
+                &[old_live_until.into(), ledger_seq.into()],
             ));
         }
 
-        let new_expiration = host.with_ledger_info(|li| {
-            Ok(li.sequence_number.saturating_add(high_expiration_watermark))
-        })?;
+        let new_live_until =
+            host.with_ledger_info(|li| Ok(li.sequence_number.saturating_add(extend_to)))?;
 
-        if new_expiration > host.max_expiration_ledger()? {
+        if new_live_until > host.max_live_until_ledger()? {
             return Err(host.err(
                 ScErrorType::Storage,
                 ScErrorCode::InvalidAction,
-                "trying to bump past max expiration ledger",
-                &[new_expiration.into()],
+                "trying to extend past max live_until ledger",
+                &[new_live_until.into()],
             ));
         }
 
-        if new_expiration > old_expiration
-            && old_expiration.saturating_sub(ledger_seq) <= low_expiration_watermark
+        if new_live_until > old_live_until && old_live_until.saturating_sub(ledger_seq) <= threshold
         {
             self.map = self.map.insert(
                 key,
-                Some((entry.clone(), Some(new_expiration))),
+                Some((entry.clone(), Some(new_live_until))),
                 host.budget_ref(),
             )?;
         }

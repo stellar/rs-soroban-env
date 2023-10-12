@@ -224,7 +224,7 @@ pub(crate) struct AccountAuthorizationTracker {
     authenticated: bool,
     // Indicates whether nonce still needs to be verified and consumed.
     need_nonce: bool,
-    // The value of nonce authorized by the address with its expiration ledger.
+    // The value of nonce authorized by the address with its live_until ledger.
     // Must not exist in the ledger.
     nonce: Option<(i64, u32)>,
 }
@@ -1592,9 +1592,9 @@ impl AccountAuthorizationTracker {
             return Ok(());
         }
         self.need_nonce = false;
-        if let Some((nonce, expiration_ledger)) = &self.nonce {
+        if let Some((nonce, live_until_ledger)) = &self.nonce {
             let ledger_seq = host.with_ledger_info(|li| Ok(li.sequence_number))?;
-            if ledger_seq > *expiration_ledger {
+            if ledger_seq > *live_until_ledger {
                 return Err(host.err(
                     ScErrorType::Auth,
                     ScErrorCode::InvalidInput,
@@ -1602,25 +1602,25 @@ impl AccountAuthorizationTracker {
                     &[
                         self.address.into(),
                         ledger_seq.try_into_val(host)?,
-                        expiration_ledger.try_into_val(host)?,
+                        live_until_ledger.try_into_val(host)?,
                     ],
                 ));
             }
-            let max_expiration_ledger = host.max_expiration_ledger()?;
-            if *expiration_ledger > max_expiration_ledger {
+            let max_live_until_ledger = host.max_live_until_ledger()?;
+            if *live_until_ledger > max_live_until_ledger {
                 return Err(host.err(
                     ScErrorType::Auth,
                     ScErrorCode::InvalidInput,
                     "signature expiration is too late",
                     &[
                         self.address.into(),
-                        max_expiration_ledger.try_into_val(host)?,
-                        expiration_ledger.try_into_val(host)?,
+                        max_live_until_ledger.try_into_val(host)?,
+                        live_until_ledger.try_into_val(host)?,
                     ],
                 ));
             }
 
-            return host.consume_nonce(self.address, *nonce, *expiration_ledger);
+            return host.consume_nonce(self.address, *nonce, *live_until_ledger);
         }
         Err(host.err(
             ScErrorType::Auth,
@@ -1634,7 +1634,7 @@ impl AccountAuthorizationTracker {
     // the authorized invocation tree corresponding to this tracker.
     // metering: covered by components
     fn get_signature_payload(&self, host: &Host) -> Result<[u8; 32], HostError> {
-        let (nonce, expiration_ledger) = self.nonce.ok_or_else(|| {
+        let (nonce, live_until_ledger) = self.nonce.ok_or_else(|| {
             host.err(
                 ScErrorType::Auth,
                 ScErrorCode::InternalError,
@@ -1646,7 +1646,7 @@ impl AccountAuthorizationTracker {
             HashIdPreimage::SorobanAuthorization(HashIdPreimageSorobanAuthorization {
                 network_id: Hash(host.with_ledger_info(|li| li.network_id.metered_clone(host))?),
                 nonce,
-                signature_expiration_ledger: expiration_ledger,
+                signature_expiration_ledger: live_until_ledger,
                 invocation: self.root_invocation_to_xdr(host)?,
             });
 
@@ -1787,7 +1787,7 @@ impl Host {
         &self,
         address: AddressObject,
         nonce: i64,
-        expiration_ledger: u32,
+        live_until_ledger: u32,
     ) -> Result<(), HostError> {
         let nonce_key_scval = ScVal::LedgerKeyNonce(ScNonceKey { nonce });
         let sc_address = self.scaddress_from_address(address)?;
@@ -1796,8 +1796,8 @@ impl Host {
             nonce_key_scval.metered_clone(self)?,
             xdr::ContractDataDurability::Temporary,
         )?;
-        let expiration_ledger = expiration_ledger
-            .max(self.get_min_expiration_ledger(xdr::ContractDataDurability::Temporary)?);
+        let live_until_ledger = live_until_ledger
+            .max(self.get_min_live_until_ledger(xdr::ContractDataDurability::Temporary)?);
         self.with_mut_storage(|storage| {
             if storage.has(&nonce_key, self.budget_ref())? {
                 return Err(self.err(
@@ -1822,7 +1822,7 @@ impl Host {
             storage.put(
                 &nonce_key,
                 &Rc::metered_new(entry, self)?,
-                Some(expiration_ledger),
+                Some(live_until_ledger),
                 self.budget_ref(),
             )
         })

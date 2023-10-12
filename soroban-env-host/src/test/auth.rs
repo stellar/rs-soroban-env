@@ -105,7 +105,7 @@ impl AuthTest {
 
         host.with_mut_ledger_info(|li| {
             li.sequence_number = 100;
-            li.max_entry_expiration = 10000;
+            li.max_entry_ttl = 10000;
         })
         .unwrap();
         let mut accounts = vec![];
@@ -265,7 +265,7 @@ impl AuthTest {
         );
     }
 
-    fn read_nonce_expiration(&self, address: &Address, nonce: i64) -> Option<u32> {
+    fn read_nonce_live_until(&self, address: &Address, nonce: i64) -> Option<u32> {
         let nonce_key_scval = ScVal::LedgerKeyNonce(ScNonceKey { nonce });
         let nonce_key = self
             .host
@@ -280,9 +280,9 @@ impl AuthTest {
                 if !storage.has(&nonce_key, self.host.budget_ref())? {
                     return Ok(None);
                 }
-                let (_, expiration_ledger) =
-                    storage.get_with_expiration(&nonce_key, self.host.budget_ref())?;
-                Ok(expiration_ledger)
+                let (_, live_until_ledger) =
+                    storage.get_with_live_until_ledger(&nonce_key, self.host.budget_ref())?;
+                Ok(live_until_ledger)
             })
             .unwrap()
     }
@@ -417,8 +417,8 @@ impl AuthTest {
                 .try_into_val(&self.host)
                 .unwrap();
             for nonce in &self.last_nonces[address_id] {
-                if let Some(expiration_ledger) = self.read_nonce_expiration(&address, *nonce) {
-                    assert_eq!(expiration_ledger, 1000);
+                if let Some(live_until_ledger) = self.read_nonce_live_until(&address, *nonce) {
+                    assert_eq!(live_until_ledger, 1000);
                     consumed += 1;
                 }
             }
@@ -1736,15 +1736,15 @@ fn test_require_auth_within_check_auth() {
         )
         .unwrap();
     assert_eq!(
-        test.read_nonce_expiration(&test.contracts[0], 1111),
+        test.read_nonce_live_until(&test.contracts[0], 1111),
         Some(1000)
     );
     assert_eq!(
-        test.read_nonce_expiration(&test.contracts[1], 2222),
+        test.read_nonce_live_until(&test.contracts[1], 2222),
         Some(2000)
     );
     assert_eq!(
-        test.read_nonce_expiration(
+        test.read_nonce_live_until(
             &test
                 .key_to_address(&test.keys[0])
                 .try_into_val(&test.host)

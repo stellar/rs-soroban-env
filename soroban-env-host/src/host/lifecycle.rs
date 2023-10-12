@@ -204,7 +204,7 @@ impl Host {
                 storage.put(
                     &code_key,
                     &Host::new_contract_code(self, data)?,
-                    Some(self.get_min_expiration_ledger(ContractDataDurability::Persistent)?),
+                    Some(self.get_min_live_until_ledger(ContractDataDurability::Persistent)?),
                     self.as_budget(),
                 )
             })?;
@@ -234,7 +234,7 @@ impl Host {
             .is_err()
         {
             // Use empty Wasm as default executable. It shouldn't be observable,
-            // but allows exercising bump logic and make operations like Wasm
+            // but allows exercising extension logic and make operations like Wasm
             // update more meaningful.
             let wasm_hash_obj = self.upload_contract_wasm(vec![])?;
             let wasm_hash = self.hash_from_bytesobj_input("wasm_hash", wasm_hash_obj)?;

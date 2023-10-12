@@ -6,10 +6,10 @@ use std::{cmp::max, rc::Rc};
 
 use soroban_env_common::{
     xdr::{
-        AccountId, ContractDataDurability, ContractEventType, DiagnosticEvent, ExpirationEntry,
-        HostFunction, LedgerEntry, LedgerEntryData, LedgerFootprint, LedgerKey, LedgerKeyAccount,
+        AccountId, ContractDataDurability, ContractEventType, DiagnosticEvent, HostFunction,
+        LedgerEntry, LedgerEntryData, LedgerFootprint, LedgerKey, LedgerKeyAccount,
         LedgerKeyContractCode, LedgerKeyContractData, LedgerKeyTrustLine, ScErrorCode, ScErrorType,
-        SorobanAuthorizationEntry, SorobanResources,
+        SorobanAuthorizationEntry, SorobanResources, TtlEntry,
     },
     Error,
 };
@@ -28,7 +28,7 @@ use crate::{
     DiagnosticLevel, Host, HostError, LedgerInfo, MeteredOrdMap,
 };
 
-pub type ExpirationEntryMap = MeteredOrdMap<Rc<LedgerKey>, Rc<ExpirationEntry>, Budget>;
+pub type TtlEntryMap = MeteredOrdMap<Rc<LedgerKey>, Rc<TtlEntry>, Budget>;
 
 /// Result of invoking a single host function prepared for embedder consumption.
 pub struct InvokeHostFunctionResult {
@@ -38,7 +38,7 @@ pub struct InvokeHostFunctionResult {
     /// This contains an entry for *every* item in the input footprint, even if
     /// it wasn't modified at all.
     ///
-    /// Read-only entry can only have their expiration ledger increased.
+    /// Read-only entry can only have their live until ledger increased.
     /// Read-write entries can be modified arbitrarily or removed.
     ///
     /// Empty when invocation fails.
@@ -66,22 +66,22 @@ pub struct LedgerEntryChange {
     /// New value of the ledger entry encoded as `LedgerEntry` XDR.
     /// Only set for non-removed, non-readonly values, otherwise `None`.
     pub encoded_new_value: Option<Vec<u8>>,
-    /// Change of the expiration state of the entry.
-    /// Only set for entries that have expiration, otherwise `None`.
-    pub expiration_change: Option<LedgerEntryExpirationChange>,
+    /// Change of the live until state of the entry.
+    /// Only set for entries that have a TTL, otherwise `None`.
+    pub ttl_change: Option<LedgerEntryLiveUntilChange>,
 }
 
-/// Represents of the expiration-related state of the entry.
-pub struct LedgerEntryExpirationChange {
-    /// Hash of the LedgerKey for the entry that this expiration change is tied to
+/// Represents the live until-related state of the entry.
+pub struct LedgerEntryLiveUntilChange {
+    /// Hash of the LedgerKey for the entry that this live until ledger change is tied to
     pub key_hash: Vec<u8>,
     /// Durability of the entry.    
     pub durability: ContractDataDurability,
-    /// Expiration ledger of the old entry.
-    pub old_expiration_ledger: u32,
-    /// Expiration ledger of the new entry. Guaranteed to always be greater than
-    /// or equal to `old_expiration_ledger`.
-    pub new_expiration_ledger: u32,
+    /// Live until ledger of the old entry.
+    pub old_live_until_ledger: u32,
+    /// Live until ledger of the new entry. Guaranteed to always be greater than
+    /// or equal to `old_live_until_ledger`.
+    pub new_live_until_ledger: u32,
 }
 
 /// Returns the difference between the `storage` and its initial snapshot as
@@ -91,7 +91,7 @@ pub fn get_ledger_changes<T: SnapshotSource>(
     budget: &Budget,
     storage: &Storage,
     init_storage_snapshot: &T,
-    init_expiration_entries: ExpirationEntryMap,
+    init_ttl_entries: TtlEntryMap,
 ) -> Result<Vec<LedgerEntryChange>, HostError> {
     let mut changes = vec![];
     // Skip allocation metering for this for the sake of simplicity - the
@@ -104,41 +104,41 @@ pub fn get_ledger_changes<T: SnapshotSource>(
     // happen in embedder environments, or simply fundamental invariant bugs.
     let internal_error: HostError =
         Error::from_type_and_code(ScErrorType::Storage, ScErrorCode::InternalError).into();
-    for (key, entry_with_expiration) in storage.map.iter(budget)? {
+    for (key, entry_with_live_until_ledger) in storage.map.iter(budget)? {
         let mut entry_change = LedgerEntryChange::default();
         metered_write_xdr(budget, key.as_ref(), &mut entry_change.encoded_key)?;
         let durability = get_key_durability(key);
 
         if let Some(durability) = durability {
-            let key_hash = match init_expiration_entries.get::<Rc<LedgerKey>>(key, budget)? {
+            let key_hash = match init_ttl_entries.get::<Rc<LedgerKey>>(key, budget)? {
                 Some(ee) => ee.key_hash.0.to_vec(),
                 None => sha256_hash_from_bytes(entry_change.encoded_key.as_slice(), budget)?,
             };
 
-            entry_change.expiration_change = Some(LedgerEntryExpirationChange {
+            entry_change.ttl_change = Some(LedgerEntryLiveUntilChange {
                 key_hash,
                 durability,
-                old_expiration_ledger: 0,
-                new_expiration_ledger: 0,
+                old_live_until_ledger: 0,
+                new_live_until_ledger: 0,
             });
         }
         if init_storage_snapshot.has(key)? {
-            let (old_entry, old_expiration) = init_storage_snapshot.get(key)?;
+            let (old_entry, old_live_until_ledger) = init_storage_snapshot.get(key)?;
             let mut buf = vec![];
             metered_write_xdr(budget, old_entry.as_ref(), &mut buf)?;
             entry_change.old_entry_size_bytes = buf.len() as u32;
 
-            if let Some(ref mut expiration_change) = &mut entry_change.expiration_change {
-                expiration_change.old_expiration_ledger =
-                    old_expiration.ok_or_else(|| internal_error.clone())?;
+            if let Some(ref mut ttl_change) = &mut entry_change.ttl_change {
+                ttl_change.old_live_until_ledger =
+                    old_live_until_ledger.ok_or_else(|| internal_error.clone())?;
             }
         }
-        if let Some((_, new_expiration_ledger)) = entry_with_expiration {
-            if let Some(ref mut expiration_change) = &mut entry_change.expiration_change {
-                // Never reduce the final expiration ledger.
-                expiration_change.new_expiration_ledger = max(
-                    new_expiration_ledger.ok_or_else(|| internal_error.clone())?,
-                    expiration_change.old_expiration_ledger,
+        if let Some((_, new_live_until_ledger)) = entry_with_live_until_ledger {
+            if let Some(ref mut ttl_change) = &mut entry_change.ttl_change {
+                // Never reduce the final live until ledger.
+                ttl_change.new_live_until_ledger = max(
+                    new_live_until_ledger.ok_or_else(|| internal_error.clone())?,
+                    ttl_change.old_live_until_ledger,
                 );
             }
         }
@@ -149,7 +149,7 @@ pub fn get_ledger_changes<T: SnapshotSource>(
                 entry_change.read_only = true;
             }
             Some(AccessType::ReadWrite) => {
-                if let Some((entry, _)) = entry_with_expiration {
+                if let Some((entry, _)) = entry_with_live_until_ledger {
                     let mut entry_buf = vec![];
                     metered_write_xdr(budget, entry.as_ref(), &mut entry_buf)?;
                     entry_change.encoded_new_value = Some(entry_buf);
@@ -174,27 +174,25 @@ pub fn extract_rent_changes(ledger_changes: &Vec<LedgerEntryChange>) -> Vec<Ledg
         .iter()
         .filter_map(|entry_change| {
             // Rent changes are only relevant to non-removed entries with
-            // expiration.
-            if let (Some(expiration_change), Some(encoded_new_value)) = (
-                &entry_change.expiration_change,
-                &entry_change.encoded_new_value,
-            ) {
-                // Skip the entry if 1. it is not bumped and 2. the entry size has not increased
-                if expiration_change.old_expiration_ledger
-                    >= expiration_change.new_expiration_ledger
+            // a ttl.
+            if let (Some(ttl_change), Some(encoded_new_value)) =
+                (&entry_change.ttl_change, &entry_change.encoded_new_value)
+            {
+                // Skip the entry if 1. it is not extended and 2. the entry size has not increased
+                if ttl_change.old_live_until_ledger >= ttl_change.new_live_until_ledger
                     && entry_change.old_entry_size_bytes >= encoded_new_value.len() as u32
                 {
                     return None;
                 }
                 Some(LedgerEntryRentChange {
                     is_persistent: matches!(
-                        expiration_change.durability,
+                        ttl_change.durability,
                         ContractDataDurability::Persistent
                     ),
                     old_size_bytes: entry_change.old_entry_size_bytes,
                     new_size_bytes: encoded_new_value.len() as u32,
-                    old_expiration_ledger: expiration_change.old_expiration_ledger,
-                    new_expiration_ledger: expiration_change.new_expiration_ledger,
+                    old_live_until_ledger: ttl_change.old_live_until_ledger,
+                    new_live_until_ledger: ttl_change.new_live_until_ledger,
                 })
             } else {
                 None
@@ -231,7 +229,7 @@ pub fn invoke_host_function<T: AsRef<[u8]>, I: ExactSizeIterator<Item = T>>(
     encoded_auth_entries: I,
     ledger_info: LedgerInfo,
     encoded_ledger_entries: I,
-    encoded_expiration_entries: I,
+    encoded_ttl_entries: I,
     base_prng_seed: T,
     diagnostic_events: &mut Vec<DiagnosticEvent>,
 ) -> Result<InvokeHostFunctionResult, HostError> {
@@ -240,14 +238,14 @@ pub fn invoke_host_function<T: AsRef<[u8]>, I: ExactSizeIterator<Item = T>>(
     let resources: SorobanResources =
         metered_from_xdr_with_budget(encoded_resources.as_ref(), &budget)?;
     let footprint = build_storage_footprint_from_xdr(&budget, resources.footprint)?;
-    let storage_and_expiration_maps = build_storage_map_from_xdr_ledger_entries(
+    let storage_and_ttl_maps = build_storage_map_from_xdr_ledger_entries(
         &budget,
         &footprint,
         encoded_ledger_entries,
-        encoded_expiration_entries,
+        encoded_ttl_entries,
     )?;
 
-    let storage_map = storage_and_expiration_maps.0;
+    let storage_map = storage_and_ttl_maps.0;
     let init_storage_map = storage_map.metered_clone(budget)?;
 
     let storage = Storage::with_enforcing_footprint_and_map(footprint, storage_map);
@@ -292,7 +290,7 @@ pub fn invoke_host_function<T: AsRef<[u8]>, I: ExactSizeIterator<Item = T>>(
             &budget,
             &storage,
             &init_storage_snapshot,
-            storage_and_expiration_maps.1,
+            storage_and_ttl_maps.1,
         )?;
         let encoded_contract_events = encode_contract_events(budget, &events)?;
         Ok(InvokeHostFunctionResult {
@@ -412,19 +410,19 @@ fn build_storage_map_from_xdr_ledger_entries<T: AsRef<[u8]>, I: ExactSizeIterato
     budget: &Budget,
     footprint: &Footprint,
     encoded_ledger_entries: I,
-    encoded_expiration_entries: I,
-) -> Result<(StorageMap, ExpirationEntryMap), HostError> {
+    encoded_ttl_entries: I,
+) -> Result<(StorageMap, TtlEntryMap), HostError> {
     let mut storage_map = StorageMap::new();
-    let mut expiration_map = ExpirationEntryMap::new();
+    let mut ttl_map = TtlEntryMap::new();
 
-    if encoded_ledger_entries.len() != encoded_expiration_entries.len() {
+    if encoded_ledger_entries.len() != encoded_ttl_entries.len() {
         return Err(
             Error::from_type_and_code(ScErrorType::Storage, ScErrorCode::InternalError).into(),
         );
     }
 
-    for (entry_buf, expiration_buf) in encoded_ledger_entries.zip(encoded_expiration_entries) {
-        let mut expiration_ledger: Option<u32> = None;
+    for (entry_buf, ttl_buf) in encoded_ledger_entries.zip(encoded_ttl_entries) {
+        let mut live_until_ledger: Option<u32> = None;
 
         let le = Rc::metered_new(
             metered_from_xdr_with_budget::<LedgerEntry>(entry_buf.as_ref(), budget)?,
@@ -432,15 +430,15 @@ fn build_storage_map_from_xdr_ledger_entries<T: AsRef<[u8]>, I: ExactSizeIterato
         )?;
         let key = Rc::metered_new(ledger_entry_to_ledger_key(&le, budget)?, budget)?;
 
-        if !expiration_buf.as_ref().is_empty() {
+        if !ttl_buf.as_ref().is_empty() {
             let ee = Rc::metered_new(
-                metered_from_xdr_with_budget::<ExpirationEntry>(expiration_buf.as_ref(), budget)?,
+                metered_from_xdr_with_budget::<TtlEntry>(ttl_buf.as_ref(), budget)?,
                 budget,
             )?;
 
-            expiration_ledger = Some(ee.expiration_ledger_seq);
+            live_until_ledger = Some(ee.live_until_ledger_seq);
 
-            expiration_map = expiration_map.insert(key.clone(), ee, budget)?;
+            ttl_map = ttl_map.insert(key.clone(), ee, budget)?;
         }
 
         if !footprint.0.contains_key::<LedgerKey>(&key, budget)? {
@@ -450,7 +448,7 @@ fn build_storage_map_from_xdr_ledger_entries<T: AsRef<[u8]>, I: ExactSizeIterato
             )
             .into());
         }
-        storage_map = storage_map.insert(key, Some((le, expiration_ledger)), budget)?;
+        storage_map = storage_map.insert(key, Some((le, live_until_ledger)), budget)?;
     }
 
     // Add non-existing entries from the footprint to the storage.
@@ -459,7 +457,7 @@ fn build_storage_map_from_xdr_ledger_entries<T: AsRef<[u8]>, I: ExactSizeIterato
             storage_map = storage_map.insert(Rc::clone(k), None, budget)?;
         }
     }
-    Ok((storage_map, expiration_map))
+    Ok((storage_map, ttl_map))
 }
 
 impl Host {
@@ -482,8 +480,10 @@ struct StorageMapSnapshotSource<'a> {
 
 impl<'a> SnapshotSource for StorageMapSnapshotSource<'a> {
     fn get(&self, key: &Rc<LedgerKey>) -> Result<(Rc<LedgerEntry>, Option<u32>), HostError> {
-        if let Some(Some((entry, expiration))) = self.map.get::<Rc<LedgerKey>>(key, self.budget)? {
-            Ok((Rc::clone(entry), *expiration))
+        if let Some(Some((entry, live_until_ledger))) =
+            self.map.get::<Rc<LedgerKey>>(key, self.budget)?
+        {
+            Ok((Rc::clone(entry), *live_until_ledger))
         } else {
             Err(Error::from_type_and_code(ScErrorType::Storage, ScErrorCode::InternalError).into())
         }

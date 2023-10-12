@@ -7,8 +7,8 @@
 /// Rough estimate of the base size of any transaction result in the archives
 /// (independent of the transaction envelope size).
 pub const TX_BASE_RESULT_SIZE: u32 = 300;
-/// Estimate for any `ExpirationEntry` ledger entry
-pub const EXPIRATION_ENTRY_SIZE: u32 = 48;
+/// Estimate for any `TtlEntry` ledger entry
+pub const TTL_ENTRY_SIZE: u32 = 48;
 
 const INSTRUCTIONS_INCREMENT: i64 = 10000;
 const DATA_SIZE_1KB_INCREMENT: i64 = 1024;
@@ -89,11 +89,11 @@ pub struct LedgerEntryRentChange {
     /// Size of the entry in bytes after it has been modified, including the
     /// key.
     pub new_size_bytes: u32,
-    /// Expiration ledger of the entry before it has been modified.
+    /// Live until ledger of the entry before it has been modified.
     /// Should be less than the current ledger for newly-created entires.
-    pub old_expiration_ledger: u32,
-    /// Expiration ledger of the entry after it has been modified.
-    pub new_expiration_ledger: u32,
+    pub old_live_until_ledger: u32,
+    /// Live until ledger of the entry after it has been modified.
+    pub new_live_until_ledger: u32,
 }
 
 /// Rent fee-related network configuration.
@@ -233,8 +233,8 @@ pub fn compute_write_fee_per_1kb(
 
 /// Computes the total rent-related fee for the provided ledger entry changes.
 ///
-/// The rent-related fees consist of the fees for rent bumps and fees for
-/// increasing the entry size (with or without rent bump).
+/// The rent-related fees consist of the fees for TTL extensions and fees for
+/// increasing the entry size (with or without TTL extensions).
 ///
 /// This cannot handle unsantized inputs and relies on sane configuration and
 /// ledger changes. This is due to the fact that rent is managed automatically
@@ -245,26 +245,26 @@ pub fn compute_rent_fee(
     current_ledger_seq: u32,
 ) -> i64 {
     let mut fee: i64 = 0;
-    let mut bumped_entries: i64 = 0;
-    let mut bumped_entry_key_size_bytes: u32 = 0;
+    let mut extended_entries: i64 = 0;
+    let mut extended_entry_key_size_bytes: u32 = 0;
     for e in changed_entries {
         fee = fee.saturating_add(rent_fee_per_entry_change(e, fee_config, current_ledger_seq));
-        if e.old_expiration_ledger < e.new_expiration_ledger {
-            bumped_entries = bumped_entries.saturating_add(1);
-            bumped_entry_key_size_bytes =
-                bumped_entry_key_size_bytes.saturating_add(EXPIRATION_ENTRY_SIZE);
+        if e.old_live_until_ledger < e.new_live_until_ledger {
+            extended_entries = extended_entries.saturating_add(1);
+            extended_entry_key_size_bytes =
+                extended_entry_key_size_bytes.saturating_add(TTL_ENTRY_SIZE);
         }
     }
-    // The expiration bumps need to be written to the ledger. As they have
+    // The TTL extensions need to be written to the ledger. As they have
     // constant size, we can charge for writing them independently of the actual
     // entry size.
     fee = fee.saturating_add(
         fee_config
             .fee_per_write_entry
-            .saturating_mul(bumped_entries),
+            .saturating_mul(extended_entries),
     );
     fee = fee.saturating_add(compute_fee_per_increment(
-        bumped_entry_key_size_bytes,
+        extended_entry_key_size_bytes,
         fee_config.fee_per_write_1kb,
         DATA_SIZE_1KB_INCREMENT,
     ));
@@ -279,16 +279,16 @@ fn rent_fee_per_entry_change(
 ) -> i64 {
     let mut fee: i64 = 0;
     // Pay for the rent extension (if any).
-    if entry_change.new_expiration_ledger > entry_change.old_expiration_ledger {
+    if entry_change.new_live_until_ledger > entry_change.old_live_until_ledger {
         fee = fee.saturating_add(rent_fee_for_size_and_ledgers(
             entry_change.is_persistent,
             // New portion of rent is payed for the new size of the entry.
             entry_change.new_size_bytes,
-            // Rent should be covered until `old_expiration_ledger` (or start
+            // Rent should be covered until `old_live_until_ledger` (or start
             // from the current ledger for new entries), so don't include it
             // into the number of rent ledgers.
-            entry_change.new_expiration_ledger
-                - entry_change.old_expiration_ledger.max(current_ledger - 1),
+            entry_change.new_live_until_ledger
+                - entry_change.old_live_until_ledger.max(current_ledger - 1),
             fee_config,
         ));
     }
@@ -301,7 +301,7 @@ fn rent_fee_per_entry_change(
             entry_change.new_size_bytes - entry_change.old_size_bytes,
             // Cover ledger interval [current; old], as (old, new] is already
             // covered above for the whole new size.
-            entry_change.old_expiration_ledger - current_ledger + 1,
+            entry_change.old_live_until_ledger - current_ledger + 1,
             fee_config,
         ));
     }

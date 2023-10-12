@@ -2,22 +2,22 @@ use soroban_env_common::xdr::{Hash, LedgerEntry, LedgerEntryData, LedgerEntryExt
 use soroban_env_host::fees::{
     compute_rent_fee, compute_transaction_resource_fee, compute_write_fee_per_1kb,
     FeeConfiguration, LedgerEntryRentChange, RentFeeConfiguration, TransactionResources,
-    WriteFeeConfiguration, EXPIRATION_ENTRY_SIZE,
+    WriteFeeConfiguration, TTL_ENTRY_SIZE,
 };
-use soroban_env_host::xdr::ExpirationEntry;
+use soroban_env_host::xdr::TtlEntry;
 
 #[test]
 fn expiration_entry_size() {
     let expiration_entry = LedgerEntry {
         last_modified_ledger_seq: 0,
-        data: LedgerEntryData::Expiration(ExpirationEntry {
+        data: LedgerEntryData::Ttl(TtlEntry {
             key_hash: Hash([0; 32]),
-            expiration_ledger_seq: 0,
+            live_until_ledger_seq: 0,
         }),
         ext: LedgerEntryExt::V0,
     };
     assert_eq!(
-        EXPIRATION_ENTRY_SIZE,
+        TTL_ENTRY_SIZE,
         expiration_entry.to_xdr().unwrap().len() as u32
     );
 }
@@ -137,7 +137,7 @@ fn resource_fee_computation() {
 }
 
 #[test]
-fn test_rent_bump_fees_with_only_bump() {
+fn test_rent_extend_fees_with_only_extend() {
     let fee_config = RentFeeConfiguration {
         fee_per_write_entry: 10,
         fee_per_write_1kb: 1000,
@@ -152,8 +152,8 @@ fn test_rent_bump_fees_with_only_bump() {
                 is_persistent: true,
                 old_size_bytes: 1,
                 new_size_bytes: 1,
-                old_expiration_ledger: 100_000,
-                new_expiration_ledger: 300_000,
+                old_live_until_ledger: 100_000,
+                new_live_until_ledger: 300_000,
             }],
             &fee_config,
             50_000,
@@ -171,8 +171,8 @@ fn test_rent_bump_fees_with_only_bump() {
                 is_persistent: true,
                 old_size_bytes: 10 * 1024,
                 new_size_bytes: 10 * 1024,
-                old_expiration_ledger: 100_000,
-                new_expiration_ledger: 100_001,
+                old_live_until_ledger: 100_000,
+                new_live_until_ledger: 100_001,
             }],
             &fee_config,
             50_000,
@@ -189,8 +189,8 @@ fn test_rent_bump_fees_with_only_bump() {
                 is_persistent: true,
                 old_size_bytes: 1,
                 new_size_bytes: 1,
-                old_expiration_ledger: 100_000,
-                new_expiration_ledger: 100_001,
+                old_live_until_ledger: 100_000,
+                new_live_until_ledger: 100_001,
             }],
             &fee_config,
             50_000,
@@ -207,8 +207,8 @@ fn test_rent_bump_fees_with_only_bump() {
                 is_persistent: true,
                 old_size_bytes: 10 * 1024,
                 new_size_bytes: 10 * 1024,
-                old_expiration_ledger: 100_000,
-                new_expiration_ledger: 300_000,
+                old_live_until_ledger: 100_000,
+                new_live_until_ledger: 300_000,
             }],
             &fee_config,
             50_000,
@@ -225,8 +225,8 @@ fn test_rent_bump_fees_with_only_bump() {
                 is_persistent: true,
                 old_size_bytes: 10 * 1024,
                 new_size_bytes: 5 * 1024,
-                old_expiration_ledger: 100_000,
-                new_expiration_ledger: 300_000,
+                old_live_until_ledger: 100_000,
+                new_live_until_ledger: 300_000,
             }],
             &fee_config,
             50_000,
@@ -243,8 +243,8 @@ fn test_rent_bump_fees_with_only_bump() {
                 is_persistent: false,
                 old_size_bytes: 10 * 1024,
                 new_size_bytes: 10 * 1024,
-                old_expiration_ledger: 100_000,
-                new_expiration_ledger: 300_000,
+                old_live_until_ledger: 100_000,
+                new_live_until_ledger: 300_000,
             }],
             &fee_config,
             50_000,
@@ -262,43 +262,43 @@ fn test_rent_bump_fees_with_only_bump() {
                     is_persistent: false,
                     old_size_bytes: 10 * 1024,
                     new_size_bytes: 10 * 1024,
-                    old_expiration_ledger: 100_000,
-                    new_expiration_ledger: 300_000,
+                    old_live_until_ledger: 100_000,
+                    new_live_until_ledger: 300_000,
                 },
                 LedgerEntryRentChange {
                     is_persistent: true,
                     old_size_bytes: 10 * 1024,
                     new_size_bytes: 10 * 1024,
-                    old_expiration_ledger: 100_000,
-                    new_expiration_ledger: 300_000,
+                    old_live_until_ledger: 100_000,
+                    new_live_until_ledger: 300_000,
                 },
                 LedgerEntryRentChange {
                     is_persistent: true,
                     old_size_bytes: 1,
                     new_size_bytes: 1,
-                    old_expiration_ledger: 100_000,
-                    new_expiration_ledger: 100_001,
+                    old_live_until_ledger: 100_000,
+                    new_live_until_ledger: 100_001,
                 },
                 LedgerEntryRentChange {
                     is_persistent: true,
                     old_size_bytes: 1,
                     new_size_bytes: 1,
-                    old_expiration_ledger: 100_000,
-                    new_expiration_ledger: 300_000,
+                    old_live_until_ledger: 100_000,
+                    new_live_until_ledger: 300_000,
                 },
                 LedgerEntryRentChange {
                     is_persistent: true,
                     old_size_bytes: 10 * 1024,
                     new_size_bytes: 10 * 1024,
-                    old_expiration_ledger: 100_000,
-                    new_expiration_ledger: 300_000,
+                    old_live_until_ledger: 100_000,
+                    new_live_until_ledger: 300_000,
                 },
                 LedgerEntryRentChange {
                     is_persistent: false,
                     old_size_bytes: 10 * 1024,
                     new_size_bytes: 10 * 1024,
-                    old_expiration_ledger: 100_000,
-                    new_expiration_ledger: 300_000,
+                    old_live_until_ledger: 100_000,
+                    new_live_until_ledger: 300_000,
                 }
             ],
             &fee_config,
@@ -312,7 +312,7 @@ fn test_rent_bump_fees_with_only_bump() {
 }
 
 #[test]
-fn test_rent_bump_fees_with_only_size_change() {
+fn test_rent_extend_fees_with_only_size_change() {
     let fee_config = RentFeeConfiguration {
         fee_per_write_entry: 100,
         fee_per_write_1kb: 1000,
@@ -327,8 +327,8 @@ fn test_rent_bump_fees_with_only_size_change() {
                 is_persistent: true,
                 old_size_bytes: 1,
                 new_size_bytes: 100_000,
-                old_expiration_ledger: 100_000,
-                new_expiration_ledger: 100_000,
+                old_live_until_ledger: 100_000,
+                new_live_until_ledger: 100_000,
             }],
             &fee_config,
             25_000,
@@ -344,8 +344,8 @@ fn test_rent_bump_fees_with_only_size_change() {
                 is_persistent: false,
                 old_size_bytes: 1,
                 new_size_bytes: 100_000,
-                old_expiration_ledger: 100_000,
-                new_expiration_ledger: 100_000,
+                old_live_until_ledger: 100_000,
+                new_live_until_ledger: 100_000,
             }],
             &fee_config,
             25_000,
@@ -361,8 +361,8 @@ fn test_rent_bump_fees_with_only_size_change() {
                 is_persistent: true,
                 old_size_bytes: 99_999,
                 new_size_bytes: 100_000,
-                old_expiration_ledger: 100_000,
-                new_expiration_ledger: 100_000,
+                old_live_until_ledger: 100_000,
+                new_live_until_ledger: 100_000,
             }],
             &fee_config,
             25_000,
@@ -378,8 +378,8 @@ fn test_rent_bump_fees_with_only_size_change() {
                 is_persistent: true,
                 old_size_bytes: 1,
                 new_size_bytes: 100_000,
-                old_expiration_ledger: 100_000,
-                new_expiration_ledger: 100_000,
+                old_live_until_ledger: 100_000,
+                new_live_until_ledger: 100_000,
             }],
             &fee_config,
             99_999,
@@ -396,15 +396,15 @@ fn test_rent_bump_fees_with_only_size_change() {
                     is_persistent: true,
                     old_size_bytes: 1,
                     new_size_bytes: 100_000,
-                    old_expiration_ledger: 100_000,
-                    new_expiration_ledger: 100_000,
+                    old_live_until_ledger: 100_000,
+                    new_live_until_ledger: 100_000,
                 },
                 LedgerEntryRentChange {
                     is_persistent: false,
                     old_size_bytes: 1,
                     new_size_bytes: 100_000,
-                    old_expiration_ledger: 100_000,
-                    new_expiration_ledger: 100_000,
+                    old_live_until_ledger: 100_000,
+                    new_live_until_ledger: 100_000,
                 }
             ],
             &fee_config,
@@ -416,7 +416,7 @@ fn test_rent_bump_fees_with_only_size_change() {
 }
 
 #[test]
-fn test_rent_bump_with_size_change_and_bump() {
+fn test_rent_extend_with_size_change_and_extend() {
     let fee_config = RentFeeConfiguration {
         fee_per_write_entry: 10,
         fee_per_write_1kb: 1000,
@@ -431,8 +431,8 @@ fn test_rent_bump_with_size_change_and_bump() {
                 is_persistent: true,
                 old_size_bytes: 1,
                 new_size_bytes: 100_000,
-                old_expiration_ledger: 100_000,
-                new_expiration_ledger: 300_000,
+                old_live_until_ledger: 100_000,
+                new_live_until_ledger: 300_000,
             }],
             &fee_config,
             25_000,
@@ -450,8 +450,8 @@ fn test_rent_bump_with_size_change_and_bump() {
                 is_persistent: false,
                 old_size_bytes: 1,
                 new_size_bytes: 100_000,
-                old_expiration_ledger: 100_000,
-                new_expiration_ledger: 300_000,
+                old_live_until_ledger: 100_000,
+                new_live_until_ledger: 300_000,
             }],
             &fee_config,
             25_000,
@@ -470,15 +470,15 @@ fn test_rent_bump_with_size_change_and_bump() {
                     is_persistent: true,
                     old_size_bytes: 1,
                     new_size_bytes: 100_000,
-                    old_expiration_ledger: 100_000,
-                    new_expiration_ledger: 300_000,
+                    old_live_until_ledger: 100_000,
+                    new_live_until_ledger: 300_000,
                 },
                 LedgerEntryRentChange {
                     is_persistent: false,
                     old_size_bytes: 1,
                     new_size_bytes: 100_000,
-                    old_expiration_ledger: 100_000,
-                    new_expiration_ledger: 300_000,
+                    old_live_until_ledger: 100_000,
+                    new_live_until_ledger: 300_000,
                 }
             ],
             &fee_config,
@@ -497,8 +497,8 @@ fn test_rent_bump_with_size_change_and_bump() {
                 is_persistent: true,
                 old_size_bytes: 1,
                 new_size_bytes: 2,
-                old_expiration_ledger: 100_000,
-                new_expiration_ledger: 100_001,
+                old_live_until_ledger: 100_000,
+                new_live_until_ledger: 100_001,
             }],
             &fee_config,
             99_999,
@@ -511,7 +511,7 @@ fn test_rent_bump_with_size_change_and_bump() {
 }
 
 #[test]
-fn test_rent_bump_without_old_entry() {
+fn test_rent_extend_without_old_entry() {
     let fee_config = RentFeeConfiguration {
         fee_per_write_entry: 10,
         fee_per_write_1kb: 1000,
@@ -526,8 +526,8 @@ fn test_rent_bump_without_old_entry() {
                 is_persistent: true,
                 old_size_bytes: 0,
                 new_size_bytes: 100_000,
-                old_expiration_ledger: 0,
-                new_expiration_ledger: 100_000,
+                old_live_until_ledger: 0,
+                new_live_until_ledger: 100_000,
             }],
             &fee_config,
             25_000,
@@ -544,8 +544,8 @@ fn test_rent_bump_without_old_entry() {
                 is_persistent: false,
                 old_size_bytes: 0,
                 new_size_bytes: 100_000,
-                old_expiration_ledger: 0,
-                new_expiration_ledger: 100_000,
+                old_live_until_ledger: 0,
+                new_live_until_ledger: 100_000,
             }],
             &fee_config,
             25_000,

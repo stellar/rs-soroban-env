@@ -58,9 +58,9 @@ impl TokenTest {
             timestamp: 123456,
             network_id: [5; 32],
             base_reserve: 5_000_000,
-            min_persistent_entry_expiration: 4096,
-            min_temp_entry_expiration: 16,
-            max_entry_expiration: 6_312_000,
+            min_persistent_entry_ttl: 4096,
+            min_temp_entry_ttl: 16,
+            max_entry_ttl: 6_312_000,
         })
         .unwrap();
         Self {
@@ -687,7 +687,7 @@ fn test_transfer_with_allowance() {
 }
 
 #[test]
-fn test_allowance_expiration() {
+fn test_allowance_live_until() {
     let test = TokenTest::setup();
     test.host.enable_debug().unwrap();
 
@@ -734,7 +734,7 @@ fn test_allowance_expiration() {
     );
     assert_eq!(token.balance(user_2.address(&test.host)).unwrap(), 10);
 
-    // advance the ledger past the expiration of the allowance. Allowance is no longer usable
+    // advance the ledger past the live_until of the allowance. Allowance is no longer usable
     test.host
         .with_mut_ledger_info(|li| li.sequence_number = 201)
         .unwrap();
@@ -760,7 +760,7 @@ fn test_allowance_expiration() {
         ContractError::AllowanceError
     );
 
-    // expiration ledger is too low
+    // live_until ledger is too low
     assert_eq!(
         to_contract_err(
             token
@@ -771,7 +771,7 @@ fn test_allowance_expiration() {
         ContractError::AllowanceError
     );
 
-    // set new allowance with expiration == ledger sequence_number
+    // set new allowance with live_until == ledger sequence_number
     token
         .approve(&user, user_2.address(&test.host), 10_000, 201)
         .unwrap();
@@ -1739,7 +1739,7 @@ fn test_auth_rejected_for_incorrect_nonce() {
 
     let args = host_vec![&test.host, user.address(&test.host), 100_i128];
 
-    // Expired nonce
+    // No longer live nonce
     authorize_single_invocation_with_nonce(
         &test.host,
         &admin,
@@ -1775,7 +1775,7 @@ fn test_auth_rejected_for_incorrect_nonce() {
         )
         .is_err());
 
-    // Correct call to consume nonce that expires on the current ledger.
+    // Correct call to consume nonce that is live only until the current ledger.
     authorize_single_invocation_with_nonce(
         &test.host,
         &admin,
@@ -1792,8 +1792,8 @@ fn test_auth_rejected_for_incorrect_nonce() {
         )
         .unwrap();
 
-    // Correct call to consume nonce that expires at the maximum possible entry
-    // lifetime.
+    // Correct call to consume nonce that is live until the maximum possible
+    // entry lifetime.
     authorize_single_invocation_with_nonce(
         &test.host,
         &admin,

@@ -3,11 +3,11 @@ use soroban_env_common::TryIntoVal;
 use soroban_native_sdk_macros::contracttype;
 
 pub(crate) const DAY_IN_LEDGERS: u32 = 17280;
-pub(crate) const INSTANCE_BUMP_AMOUNT: u32 = 7 * DAY_IN_LEDGERS;
-pub(crate) const INSTANCE_LIFETIME_THRESHOLD: u32 = INSTANCE_BUMP_AMOUNT - DAY_IN_LEDGERS;
+pub(crate) const INSTANCE_EXTEND_AMOUNT: u32 = 7 * DAY_IN_LEDGERS;
+pub(crate) const INSTANCE_TTL_THRESHOLD: u32 = INSTANCE_EXTEND_AMOUNT - DAY_IN_LEDGERS;
 
-pub(crate) const BALANCE_BUMP_AMOUNT: u32 = 30 * DAY_IN_LEDGERS;
-pub(crate) const BALANCE_LIFETIME_THRESHOLD: u32 = BALANCE_BUMP_AMOUNT - DAY_IN_LEDGERS;
+pub(crate) const BALANCE_EXTEND_AMOUNT: u32 = 30 * DAY_IN_LEDGERS;
+pub(crate) const BALANCE_TTL_THRESHOLD: u32 = BALANCE_EXTEND_AMOUNT - DAY_IN_LEDGERS;
 
 #[contracttype]
 pub struct AllowanceDataKey {
@@ -18,7 +18,7 @@ pub struct AllowanceDataKey {
 #[contracttype]
 pub struct AllowanceValue {
     pub amount: i128,
-    pub expiration_ledger: u32,
+    pub live_until_ledger: u32,
 }
 
 #[contracttype]

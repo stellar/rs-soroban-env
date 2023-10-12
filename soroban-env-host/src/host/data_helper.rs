@@ -168,9 +168,9 @@ impl Host {
             .has(key, self.as_budget())
             .map_err(|e| self.decorate_contract_instance_storage_error(e, &contract_id))?
         {
-            let (current, expiration_ledger) = self
+            let (current, live_until_ledger) = self
                 .try_borrow_storage_mut()?
-                .get_with_expiration(key, self.as_budget())?;
+                .get_with_live_until_ledger(key, self.as_budget())?;
             let mut current = (*current).metered_clone(self)?;
 
             if let LedgerEntryData::ContractData(ref mut entry) = current.data {
@@ -202,7 +202,7 @@ impl Host {
                 .put(
                     &key,
                     &Rc::metered_new(current, self)?,
-                    expiration_ledger,
+                    live_until_ledger,
                     self.as_budget(),
                 )
                 .map_err(|e| self.decorate_contract_instance_storage_error(e, &contract_id))?;
@@ -228,7 +228,7 @@ impl Host {
                 .put(
                     key,
                     &Host::new_contract_data(self, data)?,
-                    Some(self.get_min_expiration_ledger(ContractDataDurability::Persistent)?),
+                    Some(self.get_min_live_until_ledger(ContractDataDurability::Persistent)?),
                     self.as_budget(),
                 )
                 .map_err(|e| self.decorate_contract_instance_storage_error(e, &contract_id))?;
@@ -236,20 +236,15 @@ impl Host {
         Ok(())
     }
 
-    pub(crate) fn bump_contract_instance_and_code_from_contract_id(
+    pub(crate) fn extend_contract_instance_and_code_from_contract_id(
         &self,
         contract_id: &Hash,
-        low_expiration_watermark: u32,
-        high_expiration_watermark: u32,
+        threshold: u32,
+        extend_to: u32,
     ) -> Result<(), HostError> {
         let key = self.contract_instance_ledger_key(&contract_id)?;
         self.try_borrow_storage_mut()?
-            .bump(
-                self,
-                key.metered_clone(self)?,
-                low_expiration_watermark,
-                high_expiration_watermark,
-            )
+            .extend(self, key.metered_clone(self)?, threshold, extend_to)
             .map_err(|e| self.decorate_contract_instance_storage_error(e, &contract_id))?;
         match self
             .retrieve_contract_instance_from_storage(&key)?
@@ -258,12 +253,7 @@ impl Host {
             ContractExecutable::Wasm(wasm_hash) => {
                 let key = self.contract_code_ledger_key(&wasm_hash)?;
                 self.try_borrow_storage_mut()?
-                    .bump(
-                        self,
-                        key,
-                        low_expiration_watermark,
-                        high_expiration_watermark,
-                    )
+                    .extend(self, key, threshold, extend_to)
                     .map_err(|e| self.decorate_contract_code_storage_error(e, &wasm_hash))?;
             }
             ContractExecutable::StellarAsset => {}
@@ -472,9 +462,9 @@ impl Host {
             .has(&key, self.as_budget())
             .map_err(|e| self.decorate_contract_data_storage_error(e, k))?
         {
-            let (current, expiration_ledger) = self
+            let (current, live_until_ledger) = self
                 .try_borrow_storage_mut()?
-                .get_with_expiration(&key, self.as_budget())
+                .get_with_live_until_ledger(&key, self.as_budget())
                 .map_err(|e| self.decorate_contract_data_storage_error(e, k))?;
             let mut current = (*current).metered_clone(self)?;
             match current.data {
@@ -494,7 +484,7 @@ impl Host {
                 .put(
                     &key,
                     &Rc::metered_new(current, self)?,
-                    expiration_ledger,
+                    live_until_ledger,
                     self.as_budget(),
                 )
                 .map_err(|e| self.decorate_contract_data_storage_error(e, k))?;
@@ -510,7 +500,7 @@ impl Host {
                 .put(
                     &key,
                     &Host::new_contract_data(self, data)?,
-                    Some(self.get_min_expiration_ledger(durability)?),
+                    Some(self.get_min_live_until_ledger(durability)?),
                     self.as_budget(),
                 )
                 .map_err(|e| self.decorate_contract_data_storage_error(e, k))?;
@@ -531,11 +521,11 @@ impl Host {
         &self,
         key: &Rc<LedgerKey>,
         val: &Rc<soroban_env_common::xdr::LedgerEntry>,
-        expiration_ledger: Option<u32>,
+        live_until_ledger: Option<u32>,
     ) -> Result<(), HostError> {
         self.as_budget().with_free_budget(|| {
             self.with_mut_storage(|storage| {
-                storage.put(key, val, expiration_ledger, self.as_budget())
+                storage.put(key, val, live_until_ledger, self.as_budget())
             })
         })
     }

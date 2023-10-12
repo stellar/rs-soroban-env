@@ -18,7 +18,7 @@ use soroban_env_common::xdr::{
 };
 use soroban_env_common::{Env, StorageType, TryIntoVal};
 
-use super::storage_types::{BalanceValue, BALANCE_BUMP_AMOUNT, BALANCE_LIFETIME_THRESHOLD};
+use super::storage_types::{BalanceValue, BALANCE_EXTEND_AMOUNT, BALANCE_TTL_THRESHOLD};
 
 /// This module handles all balance and authorization related logic for both
 /// Accounts and non-Accounts. For Accounts, a trustline is expected (unless this
@@ -39,11 +39,11 @@ pub fn read_balance(e: &Host, addr: Address) -> Result<i128, HostError> {
             if let Some(raw_balance) =
                 StorageUtils::try_get(e, key.try_into_val(e)?, StorageType::Persistent)?
             {
-                e.bump_contract_data(
+                e.extend_contract_data(
                     key.try_into_val(e)?,
                     StorageType::Persistent,
-                    BALANCE_LIFETIME_THRESHOLD.into(),
-                    BALANCE_BUMP_AMOUNT.into(),
+                    BALANCE_TTL_THRESHOLD.into(),
+                    BALANCE_EXTEND_AMOUNT.into(),
                 )?;
                 let balance: BalanceValue = raw_balance.try_into_val(e)?;
                 Ok(balance.amount)
@@ -70,11 +70,11 @@ fn write_balance(e: &Host, addr: Address, balance: BalanceValue) -> Result<(), H
         StorageType::Persistent,
     )?;
 
-    e.bump_contract_data(
+    e.extend_contract_data(
         key.try_into_val(e)?,
         StorageType::Persistent,
-        BALANCE_LIFETIME_THRESHOLD.into(),
-        BALANCE_BUMP_AMOUNT.into(),
+        BALANCE_TTL_THRESHOLD.into(),
+        BALANCE_EXTEND_AMOUNT.into(),
     )?;
     Ok(())
 }
