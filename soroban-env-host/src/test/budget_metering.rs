@@ -29,10 +29,15 @@ fn xdr_object_conversion() -> Result<(), HostError> {
     )?;
     host.to_host_val(&ScVal::Map(Some(scmap)))?;
     host.with_budget(|budget| {
-        // 2 iterations, 1 for the vec cpy, 1 for the bulk bytes cpy
-        assert_eq!(budget.get_tracker(ContractCostType::MemCpy)?.0, 2);
-        // 72 bytes copied for the ScVal->Val conversion: 24 (Vec bytes) + 2 (map entries) x (8 (padding bytes) + 8 (key bytes) + 8 (val bytes))
-        assert_eq!(budget.get_tracker(ContractCostType::MemCpy)?.1, Some(72));
+        // 3 iterations:
+        // - 1 for the vec cpy
+        // - 1 for the bulk bytes cpy
+        // - 1 for Vec -> MeteredOrdMap element scan
+        assert_eq!(budget.get_tracker(ContractCostType::MemCpy)?.0, 3);
+        // 120 bytes in total:
+        // - 72 bytes copied for the ScVal->Val conversion: 24 (Vec bytes) + 2 (map entries) x (8 (padding bytes) + 8 (key bytes) + 8 (val bytes))
+        // - 48 bytes for element scan: 2 elements * 24 bytes per element (8 padding bytes + 8 key bytes + 8 val bytes)
+        assert_eq!(budget.get_tracker(ContractCostType::MemCpy)?.1, Some(120));
         Ok(())
     })?;
     Ok(())
@@ -86,17 +91,17 @@ fn test_vm_fuel_metering() -> Result<(), HostError> {
         .enable_model(ContractCostType::WasmInsnExec, 6, 0, 0, 0)
         .enable_model(ContractCostType::MemAlloc, 0, 0, 0, 1);
     host.call(id_obj, sym, args)?;
-    let (cpu_count, mem_count, cpu_consumed, mem_consumed) = host.with_budget(|budget| {
+    let (cpu_count, cpu_consumed, mem_consumed, wasm_mem_alloc) = host.with_budget(|budget| {
         Ok((
             budget.get_tracker(ContractCostType::WasmInsnExec)?.0,
-            budget.get_tracker(ContractCostType::MemAlloc)?.0,
             budget.get_cpu_insns_consumed()?,
             budget.get_mem_bytes_consumed()?,
+            budget.get_wasm_mem_alloc()?,
         ))
     })?;
     assert_eq!(
-        (cpu_count, mem_count, cpu_consumed, mem_consumed),
-        (4005, 65536, 24030, 65536)
+        (cpu_count, cpu_consumed, wasm_mem_alloc),
+        (4005, 24030, 65536)
     );
 
     // giving it the exact required amount will success
@@ -108,7 +113,7 @@ fn test_vm_fuel_metering() -> Result<(), HostError> {
     host.call(id_obj, sym, args)?;
     host.with_budget(|budget| {
         assert_eq!(budget.get_cpu_insns_consumed()?, cpu_required);
-        assert_eq!(budget.get_mem_bytes_consumed()?, mem_required);
+        assert_eq!(budget.get_wasm_mem_alloc()?, wasm_mem_alloc);
         Ok(())
     })?;
 
@@ -122,12 +127,12 @@ fn test_vm_fuel_metering() -> Result<(), HostError> {
     assert!(HostError::result_matches_err(res, budget_err));
     host.with_budget(|budget| {
         assert_eq!(budget.get_cpu_insns_consumed()?, 0);
-        assert_eq!(budget.get_mem_bytes_consumed()?, mem_consumed);
+        assert_eq!(budget.get_wasm_mem_alloc()?, wasm_mem_alloc);
         Ok(())
     })?;
 
-    // give it one less mem results in failure with no cpu consumption or mem consumption
-    let (cpu_required, mem_required) = (cpu_consumed, mem_consumed - 1);
+    // give it less than 1 page of memory in failure with no cpu consumption or mem consumption
+    let (cpu_required, mem_required) = (cpu_consumed, 65535);
     let host = host
         .test_budget(cpu_required, mem_required)
         .enable_model(ContractCostType::WasmInsnExec, 6, 0, 0, 0)
@@ -136,7 +141,7 @@ fn test_vm_fuel_metering() -> Result<(), HostError> {
     assert!(HostError::result_matches_err(res, budget_err));
     host.with_budget(|budget| {
         assert_eq!(budget.get_cpu_insns_consumed()?, 0);
-        assert_eq!(budget.get_mem_bytes_consumed()?, 0);
+        assert_eq!(budget.get_wasm_mem_alloc()?, 0);
         Ok(())
     })?;
 

@@ -220,7 +220,8 @@ fn wasm_module_with_mem_grow(n_pages: usize) -> Vec<u8> {
 
 #[test]
 fn excessive_memory_growth() -> Result<(), HostError> {
-    // not sure why calling `memory_grow(32)`, wasmi requests 33 pages of memory
+    // `memory_grow(32)`, wasmi will desire 33 pages of memory, that includes the
+    // initial page.
     let wasm = wasm_module_with_mem_grow(32);
     let host = Host::test_host_with_recording_footprint();
     let contract_id_obj = host.register_test_contract_wasm(wasm.as_slice());
@@ -229,9 +230,9 @@ fn excessive_memory_growth() -> Result<(), HostError> {
         .enable_model(ContractCostType::MemAlloc, 0, 0, 0, 1);
     host.set_diagnostic_level(crate::DiagnosticLevel::Debug)?;
 
-    // This one should just run out of memory
+    // This one should just run out of memory.
     {
-        let mem_budget = 33 * 0x10_000;
+        let mem_budget = 32 * 0x10_000;
         host.as_budget().reset_limits(40_000, mem_budget)?;
         let res = host.call(
             contract_id_obj,
@@ -242,11 +243,13 @@ fn excessive_memory_growth() -> Result<(), HostError> {
             res,
             (ScErrorType::Budget, ScErrorCode::ExceededLimit)
         ));
+        // only the intial page has been allocated
+        assert_eq!(host.as_budget().get_wasm_mem_alloc()?, 0x10_000);
     }
 
-    // allowing one extra page should be okay
+    // giving it 33 pages plus some small overhead should be okay
     {
-        let mem_budget = 34 * 0x10_000;
+        let mem_budget = 33 * 0x10_000 + 2000;
         // Note on requiring non-zero cpu limit: even though no cpu instruction
         // is consumed, wasmi does require checking internally there is enough fuel
         // to finish the task. memory_grow is a special instruction that requires extra
@@ -259,6 +262,8 @@ fn excessive_memory_growth() -> Result<(), HostError> {
             host.add_host_object(HostVec::new())?,
         );
         assert!(res.is_ok());
+        // initial 1 page + 32 extra pages has been allocated
+        assert_eq!(host.as_budget().get_wasm_mem_alloc()?, 33 * 0x10_000);
     }
 
     Ok(())

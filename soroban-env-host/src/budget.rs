@@ -350,6 +350,8 @@ struct MeterTracker {
     cost_tracker: [(u64, Option<u64>); ContractCostType::variants().len()],
     // Total number of times the meter is called
     count: u32,
+    #[cfg(test)]
+    wasm_memory: u64,
 }
 
 impl MeterTracker {
@@ -358,6 +360,10 @@ impl MeterTracker {
         for tracker in &mut self.cost_tracker {
             tracker.0 = 0;
             tracker.1 = tracker.1.map(|_| 0);
+        }
+        #[cfg(test)]
+        {
+            self.wasm_memory = 0;
         }
     }
 }
@@ -1085,6 +1091,18 @@ impl Budget {
         )
     }
 
+    #[cfg(test)]
+    pub(crate) fn track_wasm_mem_alloc(&self, delta: u64) -> Result<(), HostError> {
+        let mut bgt = self.0.try_borrow_mut_or_err()?;
+        bgt.tracker.wasm_memory = bgt.tracker.wasm_memory.saturating_add(delta);
+        Ok(())
+    }
+
+    #[cfg(test)]
+    pub fn get_wasm_mem_alloc(&self) -> Result<u64, HostError> {
+        Ok(self.0.try_borrow_or_err()?.tracker.wasm_memory)
+    }
+
     /// Resets the `FuelConfig` we pass into Wasmi before running calibration.
     /// Wasmi instruction calibration requires running the same Wasmi insn
     /// a fixed number of times, record their actual cpu and mem consumption, then
@@ -1127,7 +1145,8 @@ impl ResourceLimiter for Host {
             .get_mem_bytes_remaining()
             .map_err(|_| errors::MemoryError::OutOfBoundsGrowth)?;
 
-        let allow = if desired as u64 > host_limit {
+        let delta = (desired as u64).saturating_sub(current as u64);
+        let allow = if delta > host_limit {
             false
         } else {
             match maximum {
@@ -1137,7 +1156,13 @@ impl ResourceLimiter for Host {
         };
 
         if allow {
-            let delta = (desired as u64).saturating_sub(current as u64);
+            #[cfg(test)]
+            {
+                self.as_budget()
+                    .track_wasm_mem_alloc(delta)
+                    .map_err(|_| errors::MemoryError::OutOfBoundsGrowth)?;
+            }
+
             self.as_budget()
                 .charge(ContractCostType::MemAlloc, Some(delta))
                 .map(|_| true)
