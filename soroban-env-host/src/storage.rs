@@ -18,7 +18,8 @@ use crate::Host;
 use crate::{host::metered_map::MeteredOrdMap, HostError};
 
 pub type FootprintMap = MeteredOrdMap<Rc<LedgerKey>, AccessType, Budget>;
-pub type StorageMap = MeteredOrdMap<Rc<LedgerKey>, Option<(Rc<LedgerEntry>, Option<u32>)>, Budget>;
+pub type EntryWithLiveUntil = (Rc<LedgerEntry>, Option<u32>);
+pub type StorageMap = MeteredOrdMap<Rc<LedgerKey>, Option<EntryWithLiveUntil>, Budget>;
 
 /// The in-memory instance storage of the current running contract. Initially
 /// contains entries from the `ScMap` of the corresponding `ScContractInstance`
@@ -55,7 +56,7 @@ pub enum AccessType {
 /// to a stable read-snapshot of a ledger.
 pub trait SnapshotSource {
     // Returns the ledger entry for the key and its live_until ledger.
-    fn get(&self, key: &Rc<LedgerKey>) -> Result<(Rc<LedgerEntry>, Option<u32>), HostError>;
+    fn get(&self, key: &Rc<LedgerKey>) -> Result<EntryWithLiveUntil, HostError>;
     fn has(&self, key: &Rc<LedgerKey>) -> Result<bool, HostError>;
 }
 
@@ -151,7 +152,7 @@ pub struct Storage {
 }
 
 // Notes on metering: all storage operations: `put`, `get`, `del`, `has` are
-// covered by the underneath `MeteredOrdMap` and the `Footprint`'s own map.
+// covered by the underlying [MeteredOrdMap] and the [Footprint]'s own map.
 impl Storage {
     /// Constructs a new [Storage] in [FootprintMode::Enforcing] using a
     /// given [Footprint] and a storage map populated with all the keys
@@ -174,6 +175,22 @@ impl Storage {
         }
     }
 
+    // Helper function the next 3 `get`-variants funnel into.
+    fn try_get_full(
+        &mut self,
+        key: &Rc<LedgerKey>,
+        budget: &Budget,
+    ) -> Result<Option<EntryWithLiveUntil>, HostError> {
+        let _span = tracy_span!("storage get");
+        self.prepare_read_only_access(key, budget)?;
+        match self.map.get::<Rc<LedgerKey>>(key, budget)? {
+            // Key has to be in the storage map at this point due to
+            // `prepare_read_only_access`.
+            None => Err((ScErrorType::Storage, ScErrorCode::InternalError).into()),
+            Some(pair_option) => Ok(pair_option.clone()),
+        }
+    }
+
     /// Attempts to retrieve the [LedgerEntry] associated with a given
     /// [LedgerKey] in the [Storage], returning an error if the key is not
     /// found.
@@ -190,12 +207,8 @@ impl Storage {
         key: &Rc<LedgerKey>,
         budget: &Budget,
     ) -> Result<Rc<LedgerEntry>, HostError> {
-        let _span = tracy_span!("storage get");
-        self.prepare_read_only_access(key, budget)?;
-        match self.map.get::<Rc<LedgerKey>>(key, budget)? {
-            None | Some(None) => Err((ScErrorType::Storage, ScErrorCode::MissingValue).into()),
-            Some(Some((val, _))) => Ok(Rc::clone(val)),
-        }
+        self.try_get(key, budget)?
+            .ok_or_else(|| (ScErrorType::Storage, ScErrorCode::MissingValue).into())
     }
 
     // Like `get`, but distinguishes between missing values (return `Ok(None)`)
@@ -205,15 +218,8 @@ impl Storage {
         key: &Rc<LedgerKey>,
         budget: &Budget,
     ) -> Result<Option<Rc<LedgerEntry>>, HostError> {
-        let _span = tracy_span!("storage try_get");
-        self.prepare_read_only_access(key, budget)?;
-        match self.map.get::<Rc<LedgerKey>>(key, budget)? {
-            // Key has to be in the storage map at this point due to
-            // `prepare_read_only_access`.
-            None => Err((ScErrorType::Storage, ScErrorCode::InternalError).into()),
-            Some(None) => Ok(None),
-            Some(Some((val, _))) => Ok(Some(Rc::clone(val))),
-        }
+        self.try_get_full(key, budget)
+            .map(|ok| ok.map(|pair| pair.0))
     }
 
     /// Attempts to retrieve the [LedgerEntry] associated with a given
@@ -234,19 +240,16 @@ impl Storage {
         &mut self,
         key: &Rc<LedgerKey>,
         budget: &Budget,
-    ) -> Result<(Rc<LedgerEntry>, Option<u32>), HostError> {
-        let _span = tracy_span!("storage get");
-        self.prepare_read_only_access(key, budget)?;
-        match self.map.get::<Rc<LedgerKey>>(key, budget)? {
-            None | Some(None) => Err((ScErrorType::Storage, ScErrorCode::MissingValue).into()),
-            Some(Some((val, live_until_ledger))) => Ok((Rc::clone(val), *live_until_ledger)),
-        }
+    ) -> Result<EntryWithLiveUntil, HostError> {
+        self.try_get_full(key, budget)?
+            .ok_or_else(|| (ScErrorType::Storage, ScErrorCode::MissingValue).into())
     }
 
+    // Helper function `put` and `del` funnel into.
     fn put_opt(
         &mut self,
         key: &Rc<LedgerKey>,
-        val: Option<(&Rc<LedgerEntry>, Option<u32>)>,
+        val: Option<EntryWithLiveUntil>,
         budget: &Budget,
     ) -> Result<(), HostError> {
         let ty = AccessType::ReadWrite;
@@ -258,11 +261,7 @@ impl Storage {
                 self.footprint.enforce_access(key, ty, budget)?;
             }
         };
-        self.map = self.map.insert(
-            Rc::clone(key),
-            val.map(|(e, live_until)| (Rc::clone(e), live_until)),
-            budget,
-        )?;
+        self.map = self.map.insert(Rc::clone(key), val, budget)?;
         Ok(())
     }
 
@@ -283,7 +282,7 @@ impl Storage {
         budget: &Budget,
     ) -> Result<(), HostError> {
         let _span = tracy_span!("storage put");
-        self.put_opt(key, Some((val, live_until_ledger)), budget)
+        self.put_opt(key, Some((val.clone(), live_until_ledger)), budget)
     }
 
     /// Attempts to delete the [LedgerEntry] associated with a given [LedgerKey]
@@ -330,7 +329,7 @@ impl Storage {
     ///
     /// This operation does not modify any ledger entries, but does change the
     /// internal storage
-    pub fn extend(
+    pub(crate) fn extend(
         &mut self,
         host: &Host,
         key: Rc<LedgerKey>,
