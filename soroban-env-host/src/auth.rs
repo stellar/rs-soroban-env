@@ -1704,7 +1704,7 @@ impl AccountAuthorizationTracker {
     fn snapshot(&self, budget: &Budget) -> Result<AccountAuthorizationTrackerSnapshot, HostError> {
         Ok(AccountAuthorizationTrackerSnapshot {
             invocation_tracker_root_snapshot: self.invocation_tracker.snapshot(budget)?,
-            // We need to snapshot authenctioncation and nocne-related fields as
+            // We need to snapshot authentication and nonce-related fields as
             // during the rollback the nonce might be 'un-consumed' during
             // the storage rollback. We don't snapshot `is_valid` since this is
             // not recoverable and nonce is never consumed for invalid
@@ -1799,7 +1799,19 @@ impl Host {
         let live_until_ledger = live_until_ledger
             .max(self.get_min_live_until_ledger(xdr::ContractDataDurability::Temporary)?);
         self.with_mut_storage(|storage| {
-            if storage.has(&nonce_key, self.budget_ref())? {
+            if storage.has(&nonce_key, self.budget_ref()).map_err(|err| {
+                if err.error.is_type(ScErrorType::Storage)
+                    && err.error.is_code(ScErrorCode::ExceededLimit)
+                {
+                    return self.err(
+                        ScErrorType::Storage,
+                        ScErrorCode::ExceededLimit,
+                        "trying to access nonce outside of footprint for address",
+                        &[address.to_val()],
+                    );
+                }
+                err
+            })? {
                 return Err(self.err(
                     ScErrorType::Auth,
                     ScErrorCode::ExistingValue,
@@ -1857,6 +1869,7 @@ impl Host {
 
 #[cfg(any(test, feature = "testutils"))]
 use crate::{host::frame::ContractReentryMode, xdr::SorobanAuthorizedInvocation};
+
 #[cfg(any(test, feature = "testutils"))]
 impl Host {
     /// Invokes the reserved `__check_auth` function on a provided contract.
