@@ -1,11 +1,16 @@
 use std::hint::black_box;
 
-use crate::{cost_runner::CostRunner, host_object::HostObject, xdr::ContractCostType, Object};
+use crate::{
+    cost_runner::{CostRunner, CostType},
+    host_object::HostObject,
+    xdr::ContractCostType::VisitObject,
+    Object,
+};
 
 pub struct VisitObjectRun;
 
 impl CostRunner for VisitObjectRun {
-    const COST_TYPE: ContractCostType = ContractCostType::VisitObject;
+    const COST_TYPE: CostType = CostType::Contract(VisitObject);
 
     const RUN_ITERATIONS: u64 = 1000;
 
@@ -29,7 +34,7 @@ impl CostRunner for VisitObjectRun {
         _iter: u64,
         sample: Self::SampleType,
     ) -> Self::RecycledType {
-        black_box(host.charge_budget(Self::COST_TYPE, None).unwrap());
+        black_box(host.charge_budget(VisitObject, None).unwrap());
         black_box(sample)
     }
 }

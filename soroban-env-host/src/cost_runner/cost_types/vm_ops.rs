@@ -1,4 +1,9 @@
-use crate::{cost_runner::CostRunner, xdr::ContractCostType, xdr::Hash, Vm};
+use crate::{
+    cost_runner::{CostRunner, CostType},
+    xdr::ContractCostType::VmInstantiation,
+    xdr::Hash,
+    Vm,
+};
 use std::{hint::black_box, rc::Rc};
 
 pub struct VmInstantiationRun;
@@ -10,7 +15,7 @@ pub struct VmInstantiationSample {
 }
 
 impl CostRunner for VmInstantiationRun {
-    const COST_TYPE: ContractCostType = ContractCostType::VmInstantiation;
+    const COST_TYPE: CostType = CostType::Contract(VmInstantiation);
 
     const RUN_ITERATIONS: u64 = 10;
 
@@ -28,7 +33,7 @@ impl CostRunner for VmInstantiationRun {
         _iter: u64,
         sample: Self::SampleType,
     ) -> Self::RecycledType {
-        black_box(host.charge_budget(Self::COST_TYPE, Some(0)).unwrap());
+        black_box(host.charge_budget(VmInstantiation, Some(0)).unwrap());
         black_box((None, sample.wasm))
     }
 }

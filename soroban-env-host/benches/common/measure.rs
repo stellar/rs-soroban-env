@@ -1,9 +1,8 @@
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use soroban_bench_utils::{tracking_allocator::AllocationGroupToken, HostTracker};
-use soroban_env_common::xdr::ContractCostType;
 use soroban_env_host::{
     budget::{AsBudget, COST_MODEL_LIN_TERM_SCALE_BITS},
-    cost_runner::CostRunner,
+    cost_runner::{CostRunner, CostType},
     Host,
 };
 use std::{io, ops::Range};
@@ -32,7 +31,7 @@ impl Measurements {
     // as a basic spot check.
     fn check_one_baseline_range(
         &self,
-        cost: ContractCostType,
+        cost: &CostType,
         meas: &str,
         f: impl Fn(&Measurement) -> u64,
     ) -> Result<(), io::Error> {
@@ -49,7 +48,7 @@ impl Measurements {
     // Confirms that there's a reasonable range of values above the baseline;
     // only relevant for certain measurements, currently no way to tell
     // systematically, so gated behind env var
-    pub fn check_range_against_baseline(&self, cost: ContractCostType) -> Result<(), io::Error> {
+    pub fn check_range_against_baseline(&self, cost: &CostType) -> Result<(), io::Error> {
         if std::env::var("CHECK_RANGE_AGAINST_BASELINE").is_ok() {
             self.check_one_baseline_range(cost, "cpu", |m| m.cpu_insns)?;
             self.check_one_baseline_range(cost, "mem", |m| m.mem_bytes)?;
@@ -460,9 +459,10 @@ pub fn measure_cost_variation<HCM: HostCostMeasurement>(
     let mut rng = StdRng::from_seed([0xff; 32]);
 
     // run baseline measure
+    let mut base_range = std::iter::once(0);
     let baseline = measure_costs_inner::<HCM, _, _>(
         |host| {
-            std::iter::once(0)
+            base_range
                 .next()
                 .map(|_| HCM::new_baseline_case(host, &mut rng))
         },
