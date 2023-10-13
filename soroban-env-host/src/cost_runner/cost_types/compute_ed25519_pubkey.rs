@@ -2,12 +2,15 @@ use std::hint::black_box;
 
 use ed25519_dalek::VerifyingKey;
 
-use crate::{cost_runner::CostRunner, xdr::ContractCostType};
+use crate::{
+    cost_runner::{CostRunner, CostType},
+    xdr::ContractCostType::ComputeEd25519PubKey,
+};
 
 pub struct ComputeEd25519PubKeyRun;
 
 impl CostRunner for ComputeEd25519PubKeyRun {
-    const COST_TYPE: ContractCostType = ContractCostType::ComputeEd25519PubKey;
+    const COST_TYPE: CostType = CostType::Contract(ComputeEd25519PubKey);
 
     type SampleType = Vec<u8>;
 
@@ -26,7 +29,7 @@ impl CostRunner for ComputeEd25519PubKeyRun {
         _iter: u64,
         sample: Self::SampleType,
     ) -> Self::RecycledType {
-        black_box(host.charge_budget(Self::COST_TYPE, None).unwrap());
+        black_box(host.charge_budget(ComputeEd25519PubKey, None).unwrap());
         black_box((None, sample))
     }
 }

@@ -1,6 +1,9 @@
 use std::hint::black_box;
 
-use crate::{cost_runner::CostRunner, xdr::ContractCostType};
+use crate::{
+    cost_runner::{CostRunner, CostType},
+    xdr::ContractCostType::VerifyEd25519Sig,
+};
 use ed25519_dalek::{Signature, VerifyingKey};
 
 pub struct VerifyEd25519SigRun;
@@ -13,7 +16,7 @@ pub struct VerifyEd25519SigSample {
 }
 
 impl CostRunner for VerifyEd25519SigRun {
-    const COST_TYPE: ContractCostType = ContractCostType::VerifyEd25519Sig;
+    const COST_TYPE: CostType = CostType::Contract(VerifyEd25519Sig);
 
     type SampleType = VerifyEd25519SigSample;
 
@@ -32,7 +35,7 @@ impl CostRunner for VerifyEd25519SigRun {
         _iter: u64,
         sample: Self::SampleType,
     ) -> Self::RecycledType {
-        black_box(host.charge_budget(Self::COST_TYPE, Some(0)).unwrap());
+        black_box(host.charge_budget(VerifyEd25519Sig, Some(0)).unwrap());
         black_box(sample)
     }
 }

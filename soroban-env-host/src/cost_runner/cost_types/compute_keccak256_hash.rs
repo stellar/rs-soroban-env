@@ -1,11 +1,14 @@
 use std::hint::black_box;
 
-use crate::{cost_runner::CostRunner, xdr::ContractCostType};
+use crate::{
+    cost_runner::{CostRunner, CostType},
+    xdr::ContractCostType::ComputeKeccak256Hash,
+};
 
 pub struct ComputeKeccak256HashRun;
 
 impl CostRunner for ComputeKeccak256HashRun {
-    const COST_TYPE: ContractCostType = ContractCostType::ComputeKeccak256Hash;
+    const COST_TYPE: CostType = CostType::Contract(ComputeKeccak256Hash);
 
     type SampleType = Vec<u8>;
 
@@ -24,7 +27,7 @@ impl CostRunner for ComputeKeccak256HashRun {
         _iter: u64,
         sample: Self::SampleType,
     ) -> Self::RecycledType {
-        black_box(host.charge_budget(Self::COST_TYPE, Some(0)).unwrap());
+        black_box(host.charge_budget(ComputeKeccak256Hash, Some(0)).unwrap());
         black_box((None, sample))
     }
 }

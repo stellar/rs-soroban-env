@@ -1,5 +1,9 @@
-use crate::{cost_runner::CostRunner, xdr::ContractCostType, xdr::ScVec, Symbol, Val, Vm};
-use std::{hint::black_box, rc::Rc};
+use crate::{
+    cost_runner::{CostRunner, CostType},
+    xdr::{Name, ScVec},
+    Symbol, Val, Vm,
+};
+use std::{fmt, hint::black_box, rc::Rc};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 /// This is a subset of WASM instructions we are interested in for calibration.
@@ -118,6 +122,69 @@ impl WasmInsnType {
     }
 }
 
+impl Name for WasmInsnType {
+    fn name(&self) -> &'static str {
+        match self {
+            WasmInsnType::LocalGet => "LocalGet",
+            WasmInsnType::LocalSet => "LocalSet",
+            WasmInsnType::LocalTee => "LocalTee",
+            WasmInsnType::Br => "Br",
+            WasmInsnType::BrIfEqz => "BrIfEqz",
+            WasmInsnType::BrIfNez => "BrIfNez",
+            WasmInsnType::ReturnIfNez => "ReturnIfNez",
+            WasmInsnType::BrTable => "BrTable",
+            WasmInsnType::Unreachable => "Unreachable",
+            WasmInsnType::Return => "Return",
+            WasmInsnType::CallLocal => "CallLocal",
+            WasmInsnType::CallImport => "CallImport",
+            WasmInsnType::CallIndirect => "CallIndirect",
+            WasmInsnType::Drop => "Drop",
+            WasmInsnType::Select => "Select",
+            WasmInsnType::GlobalGet => "GlobalGet",
+            WasmInsnType::GlobalSet => "GlobalSet",
+            WasmInsnType::I64Load => "I64Load",
+            WasmInsnType::I64Load8S => "I64Load8S",
+            WasmInsnType::I64Load16S => "I64Load16S",
+            WasmInsnType::I64Load32S => "I64Load32S",
+            WasmInsnType::I64Store => "I64Store",
+            WasmInsnType::I64Store8 => "I64Store8",
+            WasmInsnType::I64Store16 => "I64Store16",
+            WasmInsnType::I64Store32 => "I64Store32",
+            WasmInsnType::MemorySize => "MemorySize",
+            WasmInsnType::MemoryGrow => "MemoryGrow",
+            WasmInsnType::Const => "Const",
+            WasmInsnType::I64Eqz => "I64Eqz",
+            WasmInsnType::I64Eq => "I64Eq",
+            WasmInsnType::I64Ne => "I64Ne",
+            WasmInsnType::I64LtS => "I64LtS",
+            WasmInsnType::I64GtS => "I64GtS",
+            WasmInsnType::I64LeS => "I64LeS",
+            WasmInsnType::I64GeS => "I64GeS",
+            WasmInsnType::I64Clz => "I64Clz",
+            WasmInsnType::I64Ctz => "I64Ctz",
+            WasmInsnType::I64Popcnt => "I64Popcnt",
+            WasmInsnType::I64Add => "I64Add",
+            WasmInsnType::I64Sub => "I64Sub",
+            WasmInsnType::I64Mul => "I64Mul",
+            WasmInsnType::I64DivS => "I64DivS",
+            WasmInsnType::I64RemS => "I64RemS",
+            WasmInsnType::I64And => "I64And",
+            WasmInsnType::I64Or => "I64Or",
+            WasmInsnType::I64Xor => "I64Xor",
+            WasmInsnType::I64Shl => "I64Shl",
+            WasmInsnType::I64ShrS => "I64ShrS",
+            WasmInsnType::I64Rotl => "I64Rotl",
+            WasmInsnType::I64Rotr => "I64Rotr",
+        }
+    }
+}
+
+impl fmt::Display for WasmInsnType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.name())
+    }
+}
+
 #[derive(Clone)]
 pub struct WasmInsnSample {
     pub vm: Rc<Vm>,
@@ -140,12 +207,8 @@ macro_rules! impl_wasm_insn_runner {
     ($runner:ident, $insn:ident) => {
         pub struct $runner;
 
-        impl $runner {
-            pub const INSN_TYPE: WasmInsnType = WasmInsnType::$insn;
-        }
-
         impl CostRunner for $runner {
-            const COST_TYPE: ContractCostType = ContractCostType::WasmInsnExec;
+            const COST_TYPE: CostType = CostType::Wasm(WasmInsnType::$insn);
             type SampleType = WasmInsnSample;
             type RecycledType = (Option<Val>, Self::SampleType);
 

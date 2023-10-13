@@ -32,6 +32,9 @@ k256 = {version = "0.13.1", features=["ecdsa", "arithmetic"]}
 # is needed to build the host for wasm (a rare but supported config).
 getrandom = { version = "0.2", features=["js"] }
 sha3 = "0.10.8"
+# NB: this must match the same curve25519-dalek version used by ed25519-dalek above
+# used only for calibration
+curve25519-dalek = { version = "4", default-features = false, features = ["digest"]}
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
 tracy-client = { version = "=0.15.2", features = ["enable", "timer-fallback"], default-features = false, optional = true }
