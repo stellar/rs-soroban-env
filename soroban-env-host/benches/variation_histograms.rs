@@ -7,7 +7,7 @@ use soroban_env_host::cost_runner::CostRunner;
 struct LinearModelTables;
 impl Benchmark for LinearModelTables {
     fn bench<HCM: HostCostMeasurement>() -> std::io::Result<(FPCostModel, FPCostModel)> {
-        let mut measurements = measure_cost_variation::<HCM>(100)?;
+        let mut measurements = measure_cost_variation::<HCM>(100, 1000, false, false)?;
         measurements.check_range_against_baseline(&HCM::Runner::COST_TYPE)?;
         measurements.preprocess();
         measurements.report_histogram("cpu", |m| m.cpu_insns);
