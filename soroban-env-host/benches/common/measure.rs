@@ -452,19 +452,19 @@ pub fn measure_worst_case_costs<HCM: HostCostMeasurement>(
 }
 
 /// Measure the cost variation of a HCM. `sweep_input` specifies whether the input
-/// is fixed or randomized. 
+/// is fixed or randomized.
 ///     if true - input is randomized, with `large_input` specifying the upperbound
 ///               of the input size
 ///     if false - input size is fixed at `large_input`
 /// `iteration` specifies number of iterations to run the measurement
 /// `include_best_case` specifies whether best case is included. Often the best case
-/// is a trivial case that isn't too relevant (and never hit). So if one is more 
+/// is a trivial case that isn't too relevant (and never hit). So if one is more
 /// interested in the worst/average analysis, it might be useful to throw it away.
 pub fn measure_cost_variation<HCM: HostCostMeasurement>(
     large_input: u64,
     iterations: u64,
     sweep_input: bool,
-    include_best_case: bool,    
+    include_best_case: bool,
 ) -> Result<Measurements, std::io::Error> {
     let mut i = 0;
     let mut rng = StdRng::from_seed([0xff; 32]);
@@ -493,15 +493,15 @@ pub fn measure_cost_variation<HCM: HostCostMeasurement>(
                 large_input
             };
             match i {
-                1 => if include_best_case {
-                    Some(HCM::new_best_case(host, &mut rng))
-                } else {
-                    Some(HCM::new_random_case(host, &mut rng, input))
-                }                
-                2 => Some(HCM::new_worst_case(host, &mut rng, large_input)),
-                n if n < iterations => {
-                    Some(HCM::new_random_case(host, &mut rng, input))
+                1 => {
+                    if include_best_case {
+                        Some(HCM::new_best_case(host, &mut rng))
+                    } else {
+                        Some(HCM::new_random_case(host, &mut rng, input))
+                    }
                 }
+                2 => Some(HCM::new_worst_case(host, &mut rng, large_input)),
+                n if n < iterations => Some(HCM::new_random_case(host, &mut rng, input)),
                 _ => None,
             }
         },
