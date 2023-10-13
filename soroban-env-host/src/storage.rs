@@ -18,7 +18,8 @@ use crate::Host;
 use crate::{host::metered_map::MeteredOrdMap, HostError};
 
 pub type FootprintMap = MeteredOrdMap<Rc<LedgerKey>, AccessType, Budget>;
-pub type StorageMap = MeteredOrdMap<Rc<LedgerKey>, Option<(Rc<LedgerEntry>, Option<u32>)>, Budget>;
+pub type EntryWithLiveUntil = (Rc<LedgerEntry>, Option<u32>);
+pub type StorageMap = MeteredOrdMap<Rc<LedgerKey>, Option<EntryWithLiveUntil>, Budget>;
 
 /// The in-memory instance storage of the current running contract. Initially
 /// contains entries from the `ScMap` of the corresponding `ScContractInstance`
@@ -55,7 +56,7 @@ pub enum AccessType {
 /// to a stable read-snapshot of a ledger.
 pub trait SnapshotSource {
     // Returns the ledger entry for the key and its live_until ledger.
-    fn get(&self, key: &Rc<LedgerKey>) -> Result<(Rc<LedgerEntry>, Option<u32>), HostError>;
+    fn get(&self, key: &Rc<LedgerKey>) -> Result<EntryWithLiveUntil, HostError>;
     fn has(&self, key: &Rc<LedgerKey>) -> Result<bool, HostError>;
 }
 
@@ -179,7 +180,7 @@ impl Storage {
         &mut self,
         key: &Rc<LedgerKey>,
         budget: &Budget,
-    ) -> Result<Option<(Rc<LedgerEntry>, Option<u32>)>, HostError> {
+    ) -> Result<Option<EntryWithLiveUntil>, HostError> {
         let _span = tracy_span!("storage get");
         self.prepare_read_only_access(key, budget)?;
         match self.map.get::<Rc<LedgerKey>>(key, budget)? {
@@ -239,7 +240,7 @@ impl Storage {
         &mut self,
         key: &Rc<LedgerKey>,
         budget: &Budget,
-    ) -> Result<(Rc<LedgerEntry>, Option<u32>), HostError> {
+    ) -> Result<EntryWithLiveUntil, HostError> {
         self.try_get_full(key, budget)?
             .ok_or_else(|| (ScErrorType::Storage, ScErrorCode::MissingValue).into())
     }
@@ -248,7 +249,7 @@ impl Storage {
     fn put_opt(
         &mut self,
         key: &Rc<LedgerKey>,
-        val: Option<(&Rc<LedgerEntry>, Option<u32>)>,
+        val: Option<EntryWithLiveUntil>,
         budget: &Budget,
     ) -> Result<(), HostError> {
         let ty = AccessType::ReadWrite;
@@ -260,11 +261,7 @@ impl Storage {
                 self.footprint.enforce_access(key, ty, budget)?;
             }
         };
-        self.map = self.map.insert(
-            Rc::clone(key),
-            val.map(|(e, live_until)| (Rc::clone(e), live_until)),
-            budget,
-        )?;
+        self.map = self.map.insert(Rc::clone(key), val, budget)?;
         Ok(())
     }
 
@@ -285,7 +282,7 @@ impl Storage {
         budget: &Budget,
     ) -> Result<(), HostError> {
         let _span = tracy_span!("storage put");
-        self.put_opt(key, Some((val, live_until_ledger)), budget)
+        self.put_opt(key, Some((val.clone(), live_until_ledger)), budget)
     }
 
     /// Attempts to delete the [LedgerEntry] associated with a given [LedgerKey]
