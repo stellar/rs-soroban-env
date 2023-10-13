@@ -1,11 +1,12 @@
+use super::CostType;
+use crate::{budget::AsBudget, xdr::ContractCostType, Host};
 use std::hint::black_box;
 
-use crate::{budget::AsBudget, xdr::ContractCostType, Host};
 /// `CostRunner` is an interface to running a host cost entity of a `CostType` (usually a block of
 /// WASM bytecode or a host function), given a sample of `SampleType`.
 pub trait CostRunner: Sized {
     /// The type of cost we're measuring.
-    const COST_TYPE: ContractCostType;
+    const COST_TYPE: CostType;
 
     /// Number of iterations to run, used to divide the resulting measured values.
     /// Defaults to 100 to average out the measurement noises for fast-running cases.
@@ -66,6 +67,15 @@ pub trait CostRunner: Sized {
     /// actual input from the host's perspective. So use it carefully. This should be
     /// after the `run`, outside of the CPU-and-memory tracking machineary.
     fn get_tracker(host: &Host) -> (u64, Option<u64>) {
-        host.as_budget().get_tracker(Self::COST_TYPE).unwrap()
+        match Self::COST_TYPE {
+            CostType::Contract(ct) => host.as_budget().get_tracker(ct).unwrap(),
+            CostType::Experimental(_) => {
+                panic!("experimental cost type cannot be tracked by the host")
+            }
+            CostType::Wasm(_) => host
+                .as_budget()
+                .get_tracker(ContractCostType::WasmInsnExec)
+                .unwrap(),
+        }
     }
 }

@@ -1,13 +1,17 @@
 use std::hint::black_box;
 
-use crate::{cost_runner::CostRunner, xdr::ContractCostType, Env, I256Val, U32Val};
+use crate::{
+    cost_runner::{CostRunner, CostType},
+    xdr::ContractCostType::{Int256AddSub, Int256Div, Int256Mul, Int256Pow, Int256Shift},
+    Env, I256Val, U32Val,
+};
 
 macro_rules! impl_int256_cost_runner {
     ($runner:ident, $method:ident, $cost:ident, $sample_type: ty) => {
         pub struct $runner;
 
         impl CostRunner for $runner {
-            const COST_TYPE: ContractCostType = ContractCostType::$cost;
+            const COST_TYPE: CostType = CostType::Contract($cost);
 
             type SampleType = $sample_type;
 
@@ -27,7 +31,7 @@ macro_rules! impl_int256_cost_runner {
                 _iter: u64,
                 _sample: Self::SampleType,
             ) -> Self::RecycledType {
-                black_box(host.charge_budget(Self::COST_TYPE, None).unwrap());
+                black_box(host.charge_budget($cost, None).unwrap());
                 black_box(None)
             }
         }

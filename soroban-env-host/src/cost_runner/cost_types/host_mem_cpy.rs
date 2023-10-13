@@ -1,11 +1,14 @@
 use std::hint::black_box;
 
-use crate::{cost_runner::CostRunner, xdr::ContractCostType};
+use crate::{
+    cost_runner::{CostRunner, CostType},
+    xdr::ContractCostType::MemCpy,
+};
 
 pub struct MemCpyRun;
 
 impl CostRunner for MemCpyRun {
-    const COST_TYPE: ContractCostType = ContractCostType::MemCpy;
+    const COST_TYPE: CostType = CostType::Contract(MemCpy);
 
     type SampleType = (Vec<u8>, Vec<u8>);
 
@@ -24,7 +27,7 @@ impl CostRunner for MemCpyRun {
         _iter: u64,
         sample: Self::SampleType,
     ) -> Self::RecycledType {
-        black_box(host.charge_budget(Self::COST_TYPE, Some(0)).unwrap());
+        black_box(host.charge_budget(MemCpy, Some(0)).unwrap());
         black_box(sample)
     }
 }

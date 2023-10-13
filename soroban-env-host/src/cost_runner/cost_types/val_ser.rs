@@ -1,14 +1,16 @@
 use std::hint::black_box;
 
 use crate::{
-    cost_runner::CostRunner, host::metered_xdr::metered_write_xdr, xdr::ContractCostType,
+    cost_runner::{CostRunner, CostType},
+    host::metered_xdr::metered_write_xdr,
+    xdr::ContractCostType::ValSer,
     xdr::ScVal,
 };
 
 pub struct ValSerRun;
 
 impl CostRunner for ValSerRun {
-    const COST_TYPE: ContractCostType = ContractCostType::ValSer;
+    const COST_TYPE: CostType = CostType::Contract(ValSer);
 
     // In ValSerMeasure, we are already duplicating the byte array 10 times at each level,
     // and every level (100 of them) contains a duplication of the same bytes with the same input.
@@ -36,7 +38,7 @@ impl CostRunner for ValSerRun {
         _iter: u64,
         sample: Self::SampleType,
     ) -> Self::RecycledType {
-        black_box(host.charge_budget(Self::COST_TYPE, Some(0)).unwrap());
+        black_box(host.charge_budget(ValSer, Some(0)).unwrap());
         black_box(sample)
     }
 }
