@@ -42,7 +42,7 @@ impl Host {
         })
     }
 
-    pub fn ed25519_pub_key_from_bytesobj_input(
+    pub(crate) fn ed25519_pub_key_from_bytesobj_input(
         &self,
         k: BytesObject,
     ) -> Result<ed25519_dalek::VerifyingKey, HostError> {
@@ -155,7 +155,9 @@ impl Host {
                 },
             )?;
         let rk = ScBytes::from(crate::xdr::BytesM::try_from(
-            recovered_key.to_encoded_point(false).as_bytes(),
+            recovered_key
+                .to_encoded_point(/*compress:*/ false)
+                .as_bytes(),
         )?);
         self.add_host_object(rk)
     }
@@ -172,7 +174,7 @@ impl Host {
                 return Err(err!(
                     self,
                     (ScErrorType::Object, ScErrorCode::UnexpectedSize),
-                    "expected 32-byte BytesObject for hash, got different size",
+                    "expected 32-byte BytesObject for sha256 hash, got different size",
                     hash.len()
                 ));
             }
@@ -203,7 +205,7 @@ impl Host {
                 return Err(err!(
                     self,
                     (ScErrorType::Object, ScErrorCode::UnexpectedSize),
-                    "expected 32-byte BytesObject for hash, got different size",
+                    "expected 32-byte BytesObject for keccak256 hash, got different size",
                     hash.len()
                 ));
             }
@@ -229,6 +231,7 @@ pub(crate) fn chacha20_fill_bytes(
     dest: &mut [u8],
     budget: impl AsBudget,
 ) -> Result<(), HostError> {
+    tracy_span!("chacha20");
     budget
         .as_budget()
         .charge(ContractCostType::ChaCha20DrawBytes, Some(dest.len() as u64))?;

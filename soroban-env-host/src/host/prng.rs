@@ -89,7 +89,7 @@ impl Prng {
         budget.charge(ContractCostType::ChaCha20DrawBytes, Some(count))
     }
 
-    pub fn new_from_seed(seed: Seed) -> Self {
+    pub(crate) fn new_from_seed(seed: Seed) -> Self {
         Self(ChaCha20Rng::from_seed(seed))
     }
 
