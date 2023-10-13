@@ -379,7 +379,7 @@ impl Host {
             Err(self.err(
                 ScErrorType::Object,
                 ScErrorCode::MissingValue,
-                "unknown object reference",
+                "unknown object reference, is it coming from a different environment?",
                 &[payload_val],
             ))
         }
