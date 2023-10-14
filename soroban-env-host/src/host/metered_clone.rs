@@ -75,20 +75,14 @@ pub(crate) fn charge_heap_alloc<T: DeclaredSizeForMetering>(
     )
 }
 
-pub trait MeteredAlloc<T: MeteredClone>: Sized {
+pub trait MeteredAlloc<T: DeclaredSizeForMetering>: Sized {
     fn metered_new(value: T, budget: impl AsBudget) -> Result<Self, HostError>;
-
-    fn metered_new_from_ref(value: &T, budget: impl AsBudget) -> Result<Self, HostError>;
 }
 
-impl<T: MeteredClone> MeteredAlloc<T> for Rc<T> {
+impl<T: DeclaredSizeForMetering> MeteredAlloc<T> for Rc<T> {
     fn metered_new(value: T, budget: impl AsBudget) -> Result<Self, HostError> {
         charge_heap_alloc::<T>(1, budget)?;
         Ok(Rc::new(value))
-    }
-
-    fn metered_new_from_ref(value: &T, budget: impl AsBudget) -> Result<Self, HostError> {
-        Self::metered_new(value.metered_clone(budget.clone())?, budget)
     }
 }
 

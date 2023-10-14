@@ -372,7 +372,7 @@ fn build_storage_footprint_from_xdr(
     for key in footprint.read_write.as_vec() {
         Storage::check_supported_ledger_key_type(&key)?;
         footprint_map = footprint_map.insert(
-            Rc::metered_new_from_ref(key, budget)?,
+            Rc::metered_new(key.metered_clone(budget)?, budget)?,
             AccessType::ReadWrite,
             budget,
         )?;
@@ -381,7 +381,7 @@ fn build_storage_footprint_from_xdr(
     for key in footprint.read_only.as_vec() {
         Storage::check_supported_ledger_key_type(&key)?;
         footprint_map = footprint_map.insert(
-            Rc::metered_new_from_ref(key, budget)?,
+            Rc::metered_new(key.metered_clone(budget)?, budget)?,
             AccessType::ReadOnly,
             budget,
         )?;
