@@ -336,23 +336,6 @@ fn extract_diagnostic_events(events: &Events, diagnostic_events: &mut Vec<Diagno
     }
 }
 
-fn validate_footprint_key(key: &LedgerKey) -> Result<(), HostError> {
-    if !matches!(
-        key,
-        LedgerKey::Account(_)
-            | LedgerKey::Trustline(_)
-            | LedgerKey::ContractData(_)
-            | LedgerKey::ContractCode(_)
-    ) {
-        // We expect santized inputs here, so just indicate that something
-        // is setup incorrectly with internal ('should never happen') error.
-        return Err(
-            Error::from_type_and_code(ScErrorType::Storage, ScErrorCode::InternalError).into(),
-        );
-    }
-    Ok(())
-}
-
 fn ledger_entry_to_ledger_key(le: &LedgerEntry, budget: &Budget) -> Result<LedgerKey, HostError> {
     match &le.data {
         LedgerEntryData::Account(a) => Ok(LedgerKey::Account(LedgerKeyAccount {
@@ -387,18 +370,18 @@ fn build_storage_footprint_from_xdr(
     let mut footprint_map = FootprintMap::new();
 
     for key in footprint.read_write.as_vec() {
-        validate_footprint_key(&key)?;
+        Storage::check_supported_ledger_key_type(&key)?;
         footprint_map = footprint_map.insert(
-            Rc::metered_new_from_ref(key, budget)?,
+            Rc::metered_new(key.metered_clone(budget)?, budget)?,
             AccessType::ReadWrite,
             budget,
         )?;
     }
 
     for key in footprint.read_only.as_vec() {
-        validate_footprint_key(&key)?;
+        Storage::check_supported_ledger_key_type(&key)?;
         footprint_map = footprint_map.insert(
-            Rc::metered_new_from_ref(key, budget)?,
+            Rc::metered_new(key.metered_clone(budget)?, budget)?,
             AccessType::ReadOnly,
             budget,
         )?;

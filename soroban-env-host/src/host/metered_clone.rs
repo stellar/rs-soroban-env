@@ -1,7 +1,5 @@
 use std::{iter::FromIterator, mem, rc::Rc};
 
-use soroban_env_common::xdr::TtlEntry;
-
 use crate::{
     budget::AsBudget,
     events::{EventError, HostEvent, InternalContractEvent, InternalEvent},
@@ -10,15 +8,14 @@ use crate::{
     native_contract::base_types::Address,
     storage::AccessType,
     xdr::{
-        AccountEntry, AccountId, Asset, BytesM, ClaimableBalanceEntry, ConfigSettingEntry,
-        ContractCodeEntry, ContractCostType, ContractEvent, ContractEventBody, ContractEventType,
-        ContractExecutable, ContractIdPreimage, CreateContractArgs, DataEntry, DepthLimiter,
-        Duration, Hash, LedgerEntry, LedgerEntryData, LedgerEntryExt, LedgerKey, LedgerKeyAccount,
-        LedgerKeyClaimableBalance, LedgerKeyConfigSetting, LedgerKeyContractCode, LedgerKeyData,
-        LedgerKeyLiquidityPool, LedgerKeyOffer, LedgerKeyTrustLine, LiquidityPoolEntry, OfferEntry,
+        AccountEntry, AccountId, Asset, BytesM, ContractCodeEntry, ContractCostType, ContractEvent,
+        ContractEventBody, ContractEventType, ContractExecutable, ContractIdPreimage,
+        CreateContractArgs, DepthLimiter, Duration, Hash, LedgerEntry, LedgerEntryData,
+        LedgerEntryExt, LedgerKey, LedgerKeyAccount, LedgerKeyContractCode, LedgerKeyTrustLine,
         PublicKey, ScAddress, ScBytes, ScContractInstance, ScErrorCode, ScErrorType, ScMap,
-        ScMapEntry, ScNonceKey, ScString, ScSymbol, ScVal, ScVec, SorobanAuthorizationEntry,
-        SorobanAuthorizedInvocation, StringM, TimePoint, TrustLineAsset, TrustLineEntry, Uint256,
+        ScMapEntry, ScNonceKey, ScString, ScSymbol, ScVal, ScVec, Signer,
+        SorobanAuthorizationEntry, SorobanAuthorizedInvocation, StringM, TimePoint, TrustLineAsset,
+        TrustLineEntry, Uint256,
     },
     AddressObject, Bool, BytesObject, DurationObject, DurationSmall, DurationVal, Error, HostError,
     I128Object, I128Small, I128Val, I256Object, I256Small, I256Val, I32Val, I64Object, I64Small,
@@ -75,20 +72,14 @@ pub(crate) fn charge_heap_alloc<T: DeclaredSizeForMetering>(
     )
 }
 
-pub trait MeteredAlloc<T: MeteredClone>: Sized {
+pub trait MeteredAlloc<T: DeclaredSizeForMetering>: Sized {
     fn metered_new(value: T, budget: impl AsBudget) -> Result<Self, HostError>;
-
-    fn metered_new_from_ref(value: &T, budget: impl AsBudget) -> Result<Self, HostError>;
 }
 
-impl<T: MeteredClone> MeteredAlloc<T> for Rc<T> {
+impl<T: DeclaredSizeForMetering> MeteredAlloc<T> for Rc<T> {
     fn metered_new(value: T, budget: impl AsBudget) -> Result<Self, HostError> {
         charge_heap_alloc::<T>(1, budget)?;
         Ok(Rc::new(value))
-    }
-
-    fn metered_new_from_ref(value: &T, budget: impl AsBudget) -> Result<Self, HostError> {
-        Self::metered_new(value.metered_clone(budget.clone())?, budget)
     }
 }
 
@@ -274,24 +265,17 @@ impl MeteredClone for ScAddress {}
 impl MeteredClone for ScNonceKey {}
 impl MeteredClone for PublicKey {}
 impl MeteredClone for TrustLineAsset {}
+impl MeteredClone for Signer {}
+
 impl MeteredClone for LedgerKeyAccount {}
 impl MeteredClone for LedgerKeyTrustLine {}
-impl MeteredClone for LedgerKeyOffer {}
-impl MeteredClone for LedgerKeyData {}
-impl MeteredClone for LedgerKeyClaimableBalance {}
-impl MeteredClone for LedgerKeyLiquidityPool {}
 impl MeteredClone for LedgerKeyContractCode {}
-impl MeteredClone for LedgerKeyConfigSetting {}
+
 impl MeteredClone for LedgerEntryExt {}
 impl MeteredClone for AccountEntry {}
 impl MeteredClone for TrustLineEntry {}
-impl MeteredClone for OfferEntry {}
-impl MeteredClone for DataEntry {}
-impl MeteredClone for ClaimableBalanceEntry {}
-impl MeteredClone for LiquidityPoolEntry {}
 impl MeteredClone for ContractCodeEntry {}
-impl MeteredClone for ConfigSettingEntry {}
-impl MeteredClone for TtlEntry {}
+
 impl MeteredClone for AccessType {}
 impl MeteredClone for InternalContractEvent {}
 impl MeteredClone for EventError {}
@@ -303,8 +287,6 @@ impl MeteredClone for Asset {}
 // composite types
 // cloning Rc is just a ref-count bump
 impl<T> MeteredClone for Rc<T> {}
-// cloning a slice is just cloning the reference
-impl<T> MeteredClone for &[T] {}
 
 impl<K, V> MeteredClone for (K, V)
 where
@@ -540,17 +522,13 @@ impl MeteredClone for LedgerKey {
     const IS_SHALLOW: bool = false;
 
     fn charge_for_substructure(&self, budget: impl AsBudget) -> Result<(), HostError> {
+        use LedgerKey::*;
         match self {
-            LedgerKey::ContractData(d) => d.key.charge_for_substructure(budget),
-            LedgerKey::Account(_)
-            | LedgerKey::Trustline(_)
-            | LedgerKey::Offer(_)
-            | LedgerKey::Data(_)
-            | LedgerKey::ClaimableBalance(_)
-            | LedgerKey::LiquidityPool(_)
-            | LedgerKey::ContractCode(_)
-            | LedgerKey::ConfigSetting(_)
-            | LedgerKey::Ttl(_) => Ok(()),
+            ContractData(d) => d.key.charge_for_substructure(budget),
+            ContractCode(_) | Account(_) | Trustline(_) => Ok(()),
+
+            Offer(_) | Data(_) | ClaimableBalance(_) | LiquidityPool(_) | ConfigSetting(_)
+            | Ttl(_) => Err((ScErrorType::Value, ScErrorCode::InternalError).into()),
         }
     }
 }
@@ -569,8 +547,14 @@ impl MeteredClone for LedgerEntry {
                 c.charge_for_substructure(budget)?;
                 Ok(())
             }
-            Account(_) | Trustline(_) | Offer(_) | Data(_) | ClaimableBalance(_)
-            | LiquidityPool(_) | ConfigSetting(_) | Ttl(_) => Ok(()),
+            Account(ae) => {
+                ae.signers.charge_for_substructure(budget.clone())?;
+                Ok(())
+            }
+            Trustline(_) => Ok(()),
+
+            Offer(_) | Data(_) | ClaimableBalance(_) | LiquidityPool(_) | ConfigSetting(_)
+            | Ttl(_) => Err((ScErrorType::Value, ScErrorCode::InternalError).into()),
         }
     }
 }
