@@ -164,7 +164,7 @@ impl Storage {
         match le.data {
             Account(_) | Trustline(_) | ContractData(_) | ContractCode(_) => Ok(()),
             Offer(_) | Data(_) | ClaimableBalance(_) | LiquidityPool(_) | ConfigSetting(_)
-            | Ttl(_) => Err((ScErrorType::Storage, ScErrorCode::InvalidInput).into()),
+            | Ttl(_) => Err((ScErrorType::Storage, ScErrorCode::InternalError).into()),
         }
     }
 
@@ -178,7 +178,7 @@ impl Storage {
         match lk {
             Account(_) | Trustline(_) | ContractData(_) | ContractCode(_) => Ok(()),
             Offer(_) | Data(_) | ClaimableBalance(_) | LiquidityPool(_) | ConfigSetting(_)
-            | Ttl(_) => Err((ScErrorType::Storage, ScErrorCode::InvalidInput).into()),
+            | Ttl(_) => Err((ScErrorType::Storage, ScErrorCode::InternalError).into()),
         }
     }
 
