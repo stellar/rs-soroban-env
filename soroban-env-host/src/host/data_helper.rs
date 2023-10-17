@@ -511,6 +511,8 @@ impl Host {
 }
 
 #[cfg(any(test, feature = "testutils"))]
+use super::crypto;
+#[cfg(any(test, feature = "testutils"))]
 use crate::storage::{AccessType, Footprint};
 
 #[cfg(any(test, feature = "testutils"))]
@@ -558,5 +560,29 @@ impl Host {
             self.setup_storage_entry(key, None, access_type)?;
         }
         Ok(())
+    }
+
+    // Checks whether the given contract has a special 'dummy' executable
+    // that marks contracts created with `register_test_contract`.
+    // "testutils" are not covered by budget metering.
+    pub(crate) fn is_test_contract_executable(
+        &self,
+        contract_id: &Hash,
+    ) -> Result<bool, HostError> {
+        let key = self.contract_instance_ledger_key(contract_id)?;
+        let instance = self.retrieve_contract_instance_from_storage(&key)?;
+        let test_contract_executable = ContractExecutable::Wasm(
+            crypto::sha256_hash_from_bytes(&[], self)?
+                .try_into()
+                .map_err(|_| {
+                    self.err(
+                        ScErrorType::Value,
+                        ScErrorCode::InternalError,
+                        "unexpected hash length",
+                        &[],
+                    )
+                })?,
+        );
+        Ok(test_contract_executable == instance.executable)
     }
 }
