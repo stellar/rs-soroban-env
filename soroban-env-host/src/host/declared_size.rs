@@ -11,11 +11,12 @@ use crate::{
     xdr::{
         AccountEntry, AccountId, Asset, BytesM, ContractCodeEntry, ContractDataDurability,
         ContractEvent, ContractExecutable, ContractIdPreimage, CreateContractArgs, Duration,
-        ExtensionPoint, Hash, LedgerEntry, LedgerEntryExt, LedgerKey, LedgerKeyAccount,
-        LedgerKeyContractCode, LedgerKeyTrustLine, PublicKey, ScAddress, ScBytes,
-        ScContractInstance, ScMap, ScMapEntry, ScNonceKey, ScString, ScSymbol, ScVal, ScVec,
-        Signer, SorobanAuthorizationEntry, SorobanAuthorizedInvocation, StringM, TimePoint,
-        TrustLineAsset, TrustLineEntry, TtlEntry, Uint256, SCSYMBOL_LIMIT,
+        ExtensionPoint, Hash, Int128Parts, Int256Parts, LedgerEntry, LedgerEntryExt, LedgerKey,
+        LedgerKeyAccount, LedgerKeyContractCode, LedgerKeyTrustLine, PublicKey, ScAddress, ScBytes,
+        ScContractInstance, ScError, ScMap, ScMapEntry, ScNonceKey, ScString, ScSymbol, ScVal,
+        ScVec, Signer, SorobanAuthorizationEntry, SorobanAuthorizedInvocation, StringM, TimePoint,
+        TrustLineAsset, TrustLineEntry, TtlEntry, UInt128Parts, UInt256Parts, Uint256,
+        SCSYMBOL_LIMIT,
     },
     AddressObject, Bool, BytesObject, DurationObject, DurationSmall, DurationVal, Error, HostError,
     I128Object, I128Small, I128Val, I256Object, I256Small, I256Val, I32Val, I64Object, I64Small,
@@ -121,6 +122,11 @@ impl_declared_size_type!(PublicKey, 32);
 impl_declared_size_type!(TrustLineAsset, 45);
 impl_declared_size_type!(Signer, 72);
 
+impl_declared_size_type!(Int128Parts, 16);
+impl_declared_size_type!(UInt128Parts, 16);
+impl_declared_size_type!(Int256Parts, 32);
+impl_declared_size_type!(UInt256Parts, 32);
+
 impl_declared_size_type!(LedgerKeyAccount, 32);
 impl_declared_size_type!(LedgerKeyTrustLine, 77);
 impl_declared_size_type!(LedgerKeyContractCode, 36);
@@ -146,6 +152,7 @@ impl_declared_size_type!(EventError, 1);
 impl_declared_size_type!(ScBytes, 24);
 impl_declared_size_type!(ScString, 24);
 impl_declared_size_type!(ScSymbol, 24);
+impl_declared_size_type!(ScError, 8);
 impl_declared_size_type!(CreateContractArgs, 98);
 impl_declared_size_type!(ContractIdPreimage, 65);
 impl_declared_size_type!(ContractDataDurability, 4);
@@ -308,6 +315,10 @@ mod test {
         expect!["24"].assert_eq(size_of::<ScMap>().to_string().as_str());
         expect!["32"].assert_eq(size_of::<Hash>().to_string().as_str());
         expect!["32"].assert_eq(size_of::<Uint256>().to_string().as_str());
+        expect!["16"].assert_eq(size_of::<Int128Parts>().to_string().as_str());
+        expect!["16"].assert_eq(size_of::<UInt128Parts>().to_string().as_str());
+        expect!["32"].assert_eq(size_of::<Int256Parts>().to_string().as_str());
+        expect!["32"].assert_eq(size_of::<UInt256Parts>().to_string().as_str());
         expect!["33"].assert_eq(size_of::<ContractExecutable>().to_string().as_str());
         expect!["32"].assert_eq(size_of::<AccountId>().to_string().as_str());
         expect!["33"].assert_eq(size_of::<ScAddress>().to_string().as_str());
@@ -335,6 +346,7 @@ mod test {
         expect!["24"].assert_eq(size_of::<ScBytes>().to_string().as_str());
         expect!["24"].assert_eq(size_of::<ScString>().to_string().as_str());
         expect!["24"].assert_eq(size_of::<ScSymbol>().to_string().as_str());
+        expect!["8"].assert_eq(size_of::<ScError>().to_string().as_str());
         expect!["98"].assert_eq(size_of::<CreateContractArgs>().to_string().as_str());
         expect!["65"].assert_eq(size_of::<ContractIdPreimage>().to_string().as_str());
         expect!["4"].assert_eq(size_of::<ContractDataDurability>().to_string().as_str());
@@ -466,6 +478,10 @@ mod test {
         assert_mem_size_le_declared_size!(ScMap);
         assert_mem_size_le_declared_size!(Hash);
         assert_mem_size_le_declared_size!(Uint256);
+        assert_mem_size_le_declared_size!(Int256Parts);
+        assert_mem_size_le_declared_size!(UInt256Parts);
+        assert_mem_size_le_declared_size!(Int128Parts);
+        assert_mem_size_le_declared_size!(UInt128Parts);
         assert_mem_size_le_declared_size!(ContractExecutable);
         assert_mem_size_le_declared_size!(AccountId);
         assert_mem_size_le_declared_size!(ScAddress);
@@ -492,6 +508,7 @@ mod test {
         assert_mem_size_le_declared_size!(ScBytes);
         assert_mem_size_le_declared_size!(ScString);
         assert_mem_size_le_declared_size!(ScSymbol);
+        assert_mem_size_le_declared_size!(ScError);
         assert_mem_size_le_declared_size!(CreateContractArgs);
         assert_mem_size_le_declared_size!(ContractDataDurability);
         assert_mem_size_le_declared_size!(ExtensionPoint);
