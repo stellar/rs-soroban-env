@@ -58,16 +58,10 @@ impl Host {
         a: usize,
         b: usize,
     ) -> Result<usize, HostError> {
-        let lim = u32::MAX as usize;
-        if a > lim || b > lim || a > (lim - b) {
-            Err(self.err(
-                ScErrorType::Value,
-                ScErrorCode::ExceededLimit,
-                "sum of sizes exceeds u32::MAX",
-                &[],
-            ))
-        } else {
-            Ok(a + b)
-        }
+        let a = u32::try_from(a).map_err(|_| self.err_arith_overflow())?;
+        let b = u32::try_from(b).map_err(|_| self.err_arith_overflow())?;
+        a.checked_add(b)
+            .ok_or_else(|| self.err_arith_overflow())
+            .map(|u| u as usize)
     }
 }

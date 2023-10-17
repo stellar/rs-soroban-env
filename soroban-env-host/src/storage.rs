@@ -18,7 +18,8 @@ use crate::Host;
 use crate::{host::metered_map::MeteredOrdMap, HostError};
 
 pub type FootprintMap = MeteredOrdMap<Rc<LedgerKey>, AccessType, Budget>;
-pub type StorageMap = MeteredOrdMap<Rc<LedgerKey>, Option<(Rc<LedgerEntry>, Option<u32>)>, Budget>;
+pub type EntryWithLiveUntil = (Rc<LedgerEntry>, Option<u32>);
+pub type StorageMap = MeteredOrdMap<Rc<LedgerKey>, Option<EntryWithLiveUntil>, Budget>;
 
 /// The in-memory instance storage of the current running contract. Initially
 /// contains entries from the `ScMap` of the corresponding `ScContractInstance`
@@ -54,8 +55,8 @@ pub enum AccessType {
 /// A helper type used by [FootprintMode::Recording] to provide access
 /// to a stable read-snapshot of a ledger.
 pub trait SnapshotSource {
-    // Returns the ledger entry for the key and its expiration.
-    fn get(&self, key: &Rc<LedgerKey>) -> Result<(Rc<LedgerEntry>, Option<u32>), HostError>;
+    // Returns the ledger entry for the key and its live_until ledger.
+    fn get(&self, key: &Rc<LedgerKey>) -> Result<EntryWithLiveUntil, HostError>;
     fn has(&self, key: &Rc<LedgerKey>) -> Result<bool, HostError>;
 }
 
@@ -151,8 +152,36 @@ pub struct Storage {
 }
 
 // Notes on metering: all storage operations: `put`, `get`, `del`, `has` are
-// covered by the underneath `MeteredOrdMap` and the `Footprint`'s own map.
+// covered by the underlying [MeteredOrdMap] and the [Footprint]'s own map.
 impl Storage {
+    /// Only a subset of Stellar's XDR ledger key or entry types are supported
+    /// by Soroban: accounts, trustlines, contract code and data. The rest are
+    /// never used by stellar-core when interacting with the Soroban host, nor
+    /// does the Soroban host ever generate any. Therefore the storage system
+    /// will reject them with [ScErrorCode::InternalError] if they ever occur.
+    pub fn check_supported_ledger_entry_type(le: &LedgerEntry) -> Result<(), HostError> {
+        use crate::xdr::LedgerEntryData::*;
+        match le.data {
+            Account(_) | Trustline(_) | ContractData(_) | ContractCode(_) => Ok(()),
+            Offer(_) | Data(_) | ClaimableBalance(_) | LiquidityPool(_) | ConfigSetting(_)
+            | Ttl(_) => Err((ScErrorType::Storage, ScErrorCode::InternalError).into()),
+        }
+    }
+
+    /// Only a subset of Stellar's XDR ledger key or entry types are supported
+    /// by Soroban: accounts, trustlines, contract code and data. The rest are
+    /// never used by stellar-core when interacting with the Soroban host, nor
+    /// does the Soroban host ever generate any. Therefore the storage system
+    /// will reject them with [ScErrorCode::InternalError] if they ever occur.
+    pub fn check_supported_ledger_key_type(lk: &LedgerKey) -> Result<(), HostError> {
+        use LedgerKey::*;
+        match lk {
+            Account(_) | Trustline(_) | ContractData(_) | ContractCode(_) => Ok(()),
+            Offer(_) | Data(_) | ClaimableBalance(_) | LiquidityPool(_) | ConfigSetting(_)
+            | Ttl(_) => Err((ScErrorType::Storage, ScErrorCode::InternalError).into()),
+        }
+    }
+
     /// Constructs a new [Storage] in [FootprintMode::Enforcing] using a
     /// given [Footprint] and a storage map populated with all the keys
     /// listed in the [Footprint].
@@ -174,6 +203,23 @@ impl Storage {
         }
     }
 
+    // Helper function the next 3 `get`-variants funnel into.
+    fn try_get_full(
+        &mut self,
+        key: &Rc<LedgerKey>,
+        budget: &Budget,
+    ) -> Result<Option<EntryWithLiveUntil>, HostError> {
+        let _span = tracy_span!("storage get");
+        Self::check_supported_ledger_key_type(key)?;
+        self.prepare_read_only_access(key, budget)?;
+        match self.map.get::<Rc<LedgerKey>>(key, budget)? {
+            // Key has to be in the storage map at this point due to
+            // `prepare_read_only_access`.
+            None => Err((ScErrorType::Storage, ScErrorCode::InternalError).into()),
+            Some(pair_option) => Ok(pair_option.clone()),
+        }
+    }
+
     /// Attempts to retrieve the [LedgerEntry] associated with a given
     /// [LedgerKey] in the [Storage], returning an error if the key is not
     /// found.
@@ -190,12 +236,8 @@ impl Storage {
         key: &Rc<LedgerKey>,
         budget: &Budget,
     ) -> Result<Rc<LedgerEntry>, HostError> {
-        let _span = tracy_span!("storage get");
-        self.prepare_read_only_access(key, budget)?;
-        match self.map.get::<Rc<LedgerKey>>(key, budget)? {
-            None | Some(None) => Err((ScErrorType::Storage, ScErrorCode::MissingValue).into()),
-            Some(Some((val, _))) => Ok(Rc::clone(val)),
-        }
+        self.try_get(key, budget)?
+            .ok_or_else(|| (ScErrorType::Storage, ScErrorCode::MissingValue).into())
     }
 
     // Like `get`, but distinguishes between missing values (return `Ok(None)`)
@@ -205,22 +247,15 @@ impl Storage {
         key: &Rc<LedgerKey>,
         budget: &Budget,
     ) -> Result<Option<Rc<LedgerEntry>>, HostError> {
-        let _span = tracy_span!("storage try_get");
-        self.prepare_read_only_access(key, budget)?;
-        match self.map.get::<Rc<LedgerKey>>(key, budget)? {
-            // Key has to be in the storage map at this point due to
-            // `prepare_read_only_access`.
-            None => Err((ScErrorType::Storage, ScErrorCode::InternalError).into()),
-            Some(None) => Ok(None),
-            Some(Some((val, _))) => Ok(Some(Rc::clone(val))),
-        }
+        self.try_get_full(key, budget)
+            .map(|ok| ok.map(|pair| pair.0))
     }
 
     /// Attempts to retrieve the [LedgerEntry] associated with a given
-    /// [LedgerKey] and its expiration ledger (if applicable) in the [Storage],
+    /// [LedgerKey] and its live until ledger (if applicable) in the [Storage],
     /// returning an error if the key is not found.
     ///
-    /// Expiration ledgers only exist for `ContractData` and `ContractCode`
+    /// Live until ledgers only exist for `ContractData` and `ContractCode`
     /// ledger entries and are `None` for all the other entry kinds.
     ///
     /// In [FootprintMode::Recording] mode, records the read [LedgerKey] in the
@@ -230,25 +265,26 @@ impl Storage {
     ///
     /// In [FootprintMode::Enforcing] mode, succeeds only if the read
     /// [LedgerKey] has been declared in the [Footprint].
-    pub(crate) fn get_with_expiration(
+    pub(crate) fn get_with_live_until_ledger(
         &mut self,
         key: &Rc<LedgerKey>,
         budget: &Budget,
-    ) -> Result<(Rc<LedgerEntry>, Option<u32>), HostError> {
-        let _span = tracy_span!("storage get");
-        self.prepare_read_only_access(key, budget)?;
-        match self.map.get::<Rc<LedgerKey>>(key, budget)? {
-            None | Some(None) => Err((ScErrorType::Storage, ScErrorCode::MissingValue).into()),
-            Some(Some((val, expiration))) => Ok((Rc::clone(val), *expiration)),
-        }
+    ) -> Result<EntryWithLiveUntil, HostError> {
+        self.try_get_full(key, budget)?
+            .ok_or_else(|| (ScErrorType::Storage, ScErrorCode::MissingValue).into())
     }
 
+    // Helper function `put` and `del` funnel into.
     fn put_opt(
         &mut self,
         key: &Rc<LedgerKey>,
-        val: Option<(&Rc<LedgerEntry>, Option<u32>)>,
+        val: Option<EntryWithLiveUntil>,
         budget: &Budget,
     ) -> Result<(), HostError> {
+        Self::check_supported_ledger_key_type(key)?;
+        if let Some(le) = &val {
+            Self::check_supported_ledger_entry_type(&le.0)?;
+        }
         let ty = AccessType::ReadWrite;
         match self.mode {
             FootprintMode::Recording(_) => {
@@ -258,11 +294,7 @@ impl Storage {
                 self.footprint.enforce_access(key, ty, budget)?;
             }
         };
-        self.map = self.map.insert(
-            Rc::clone(key),
-            val.map(|(e, expiration)| (Rc::clone(e), expiration)),
-            budget,
-        )?;
+        self.map = self.map.insert(Rc::clone(key), val, budget)?;
         Ok(())
     }
 
@@ -279,11 +311,11 @@ impl Storage {
         &mut self,
         key: &Rc<LedgerKey>,
         val: &Rc<LedgerEntry>,
-        expiration_ledger: Option<u32>,
+        live_until_ledger: Option<u32>,
         budget: &Budget,
     ) -> Result<(), HostError> {
         let _span = tracy_span!("storage put");
-        self.put_opt(key, Some((val, expiration_ledger)), budget)
+        self.put_opt(key, Some((val.clone(), live_until_ledger)), budget)
     }
 
     /// Attempts to delete the [LedgerEntry] associated with a given [LedgerKey]
@@ -311,6 +343,7 @@ impl Storage {
     /// declared in the [Footprint].
     pub fn has(&mut self, key: &Rc<LedgerKey>, budget: &Budget) -> Result<bool, HostError> {
         let _span = tracy_span!("storage has");
+        Self::check_supported_ledger_key_type(key)?;
         self.prepare_read_only_access(key, budget)?;
         Ok(self
             .map
@@ -321,76 +354,73 @@ impl Storage {
             .is_some())
     }
 
-    /// Bumps `key` to live for at least `bump_by_ledgers` from now (not
-    /// counting the current ledger).
+    /// Extends `key` to live `extend_to` ledgers from now (not counting the
+    /// current ledger) if the current live_until_ledger for the entry is
+    /// `threshold` ledgers or less away from the current ledger.
     ///
     /// This operation is only defined within a host as it relies on ledger
     /// state.
     ///
     /// This operation does not modify any ledger entries, but does change the
     /// internal storage
-    pub fn bump(
+    pub(crate) fn extend(
         &mut self,
         host: &Host,
         key: Rc<LedgerKey>,
-        low_expiration_watermark: u32,
-        high_expiration_watermark: u32,
+        threshold: u32,
+        extend_to: u32,
     ) -> Result<(), HostError> {
-        let _span = tracy_span!("bump key");
+        let _span = tracy_span!("extend key");
+        Self::check_supported_ledger_key_type(&key)?;
 
-        if low_expiration_watermark > high_expiration_watermark {
+        if threshold > extend_to {
             return Err(host.err(
                 ScErrorType::Storage,
                 ScErrorCode::InvalidInput,
-                "low_expiration_watermark must be <= high_expiration_watermark",
-                &[
-                    low_expiration_watermark.into(),
-                    high_expiration_watermark.into(),
-                ],
+                "threshold must be <= extend_to",
+                &[threshold.into(), extend_to.into()],
             ));
         }
 
-        // Bumping deleted/non-existing/out-of-footprint entries will result in
+        // Extending deleted/non-existing/out-of-footprint entries will result in
         // an error.
-        let (entry, old_expiration) = self.get_with_expiration(&key, host.budget_ref())?;
-        let old_expiration = old_expiration.ok_or_else(|| {
+        let (entry, old_live_until) = self.get_with_live_until_ledger(&key, host.budget_ref())?;
+        let old_live_until = old_live_until.ok_or_else(|| {
             host.err(
                 ScErrorType::Storage,
                 ScErrorCode::InternalError,
-                "trying to bump non-expirable entry",
+                "trying to extend invalid entry",
                 &[],
             )
         })?;
 
         let ledger_seq: u32 = host.get_ledger_sequence()?.into();
-        if old_expiration < ledger_seq {
+        if old_live_until < ledger_seq {
             return Err(host.err(
                 ScErrorType::Storage,
                 ScErrorCode::InternalError,
-                "accessing expired entry",
-                &[old_expiration.into(), ledger_seq.into()],
+                "accessing no-longer-live entry",
+                &[old_live_until.into(), ledger_seq.into()],
             ));
         }
 
-        let new_expiration = host.with_ledger_info(|li| {
-            Ok(li.sequence_number.saturating_add(high_expiration_watermark))
-        })?;
+        let new_live_until =
+            host.with_ledger_info(|li| Ok(li.sequence_number.saturating_add(extend_to)))?;
 
-        if new_expiration > host.max_expiration_ledger()? {
+        if new_live_until > host.max_live_until_ledger()? {
             return Err(host.err(
                 ScErrorType::Storage,
                 ScErrorCode::InvalidAction,
-                "trying to bump past max expiration ledger",
-                &[new_expiration.into()],
+                "trying to extend past max live_until ledger",
+                &[new_live_until.into()],
             ));
         }
 
-        if new_expiration > old_expiration
-            && old_expiration.saturating_sub(ledger_seq) <= low_expiration_watermark
+        if new_live_until > old_live_until && old_live_until.saturating_sub(ledger_seq) <= threshold
         {
             self.map = self.map.insert(
                 key,
-                Some((entry.clone(), Some(new_expiration))),
+                Some((entry.clone(), Some(new_live_until))),
                 host.budget_ref(),
             )?;
         }

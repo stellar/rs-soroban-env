@@ -1,22 +1,16 @@
 use core::cmp::{min, Ordering};
 
-use soroban_env_common::{
-    xdr::{
-        AccountEntry, AccountId, ClaimableBalanceEntry, ConfigSettingEntry, ContractCostType,
-        ContractDataDurability, ContractExecutable, CreateContractArgs, DataEntry, DepthLimiter,
-        Duration, ExtensionPoint, Hash, LedgerEntry, LedgerEntryData, LedgerEntryExt, LedgerKey,
-        LedgerKeyAccount, LedgerKeyClaimableBalance, LedgerKeyConfigSetting, LedgerKeyContractCode,
-        LedgerKeyData, LedgerKeyLiquidityPool, LedgerKeyOffer, LedgerKeyTrustLine,
-        LiquidityPoolEntry, OfferEntry, PublicKey, ScAddress, ScErrorCode, ScErrorType, ScMap,
-        ScMapEntry, ScNonceKey, ScVal, ScVec, TimePoint, TrustLineAsset, TrustLineEntry, Uint256,
-    },
-    Compare, SymbolStr, I256, U256,
-};
-
 use crate::{
     budget::{AsBudget, Budget},
     host_object::HostObject,
-    Host, HostError,
+    storage::Storage,
+    xdr::{
+        AccountId, ContractCostType, ContractDataDurability, ContractExecutable,
+        CreateContractArgs, DepthLimiter, Duration, Hash, LedgerKey, LedgerKeyAccount,
+        LedgerKeyContractCode, LedgerKeyTrustLine, PublicKey, ScAddress, ScErrorCode, ScErrorType,
+        ScMap, ScMapEntry, ScNonceKey, ScVal, ScVec, TimePoint, TrustLineAsset, Uint256,
+    },
+    Compare, Host, HostError, SymbolStr, I256, U256,
 };
 
 use super::declared_size::DeclaredSizeForMetering;
@@ -100,10 +94,7 @@ impl Compare<&[u8]> for Budget {
     type Error = HostError;
 
     fn compare(&self, a: &&[u8], b: &&[u8]) -> Result<Ordering, Self::Error> {
-        self.charge(
-            ContractCostType::HostMemCmp,
-            Some(min(a.len(), b.len()) as u64),
-        )?;
+        self.charge(ContractCostType::MemCmp, Some(min(a.len(), b.len()) as u64))?;
         Ok(a.cmp(b))
     }
 }
@@ -112,10 +103,7 @@ impl<const N: usize> Compare<[u8; N]> for Budget {
     type Error = HostError;
 
     fn compare(&self, a: &[u8; N], b: &[u8; N]) -> Result<Ordering, Self::Error> {
-        self.charge(
-            ContractCostType::HostMemCmp,
-            Some(min(a.len(), b.len()) as u64),
-        )?;
+        self.charge(ContractCostType::MemCmp, Some(min(a.len(), b.len()) as u64))?;
         Ok(a.cmp(b))
     }
 }
@@ -146,7 +134,7 @@ impl<T: Ord + DeclaredSizeForMetering> Compare<FixedSizeOrdType<'_, T>> for Budg
             <T as DeclaredSizeForMetering>::DECLARED_SIZE
         );
         self.charge(
-            ContractCostType::HostMemCmp,
+            ContractCostType::MemCmp,
             Some(<T as DeclaredSizeForMetering>::DECLARED_SIZE),
         )?;
         Ok(a.0.cmp(b.0))
@@ -191,27 +179,12 @@ impl_compare_fixed_size_ord_type!(ScNonceKey);
 impl_compare_fixed_size_ord_type!(PublicKey);
 impl_compare_fixed_size_ord_type!(TrustLineAsset);
 impl_compare_fixed_size_ord_type!(ContractDataDurability);
+impl_compare_fixed_size_ord_type!(CreateContractArgs);
 
 impl_compare_fixed_size_ord_type!(LedgerKeyAccount);
 impl_compare_fixed_size_ord_type!(LedgerKeyTrustLine);
-impl_compare_fixed_size_ord_type!(LedgerKeyOffer);
-impl_compare_fixed_size_ord_type!(LedgerKeyData);
-impl_compare_fixed_size_ord_type!(LedgerKeyClaimableBalance);
-impl_compare_fixed_size_ord_type!(LedgerKeyLiquidityPool);
+// NB: LedgerKeyContractData is not here: it has a variable-size ScVal.
 impl_compare_fixed_size_ord_type!(LedgerKeyContractCode);
-impl_compare_fixed_size_ord_type!(LedgerKeyConfigSetting);
-
-impl_compare_fixed_size_ord_type!(LedgerEntryExt);
-
-impl_compare_fixed_size_ord_type!(AccountEntry);
-impl_compare_fixed_size_ord_type!(TrustLineEntry);
-impl_compare_fixed_size_ord_type!(OfferEntry);
-impl_compare_fixed_size_ord_type!(DataEntry);
-impl_compare_fixed_size_ord_type!(ClaimableBalanceEntry);
-impl_compare_fixed_size_ord_type!(LiquidityPoolEntry);
-impl_compare_fixed_size_ord_type!(ConfigSettingEntry);
-impl_compare_fixed_size_ord_type!(CreateContractArgs);
-impl_compare_fixed_size_ord_type!(ExtensionPoint);
 
 impl Compare<SymbolStr> for Budget {
     type Error = HostError;
@@ -320,80 +293,38 @@ impl Compare<LedgerKey> for Budget {
     type Error = HostError;
 
     fn compare(&self, a: &LedgerKey, b: &LedgerKey) -> Result<Ordering, Self::Error> {
+        Storage::check_supported_ledger_key_type(a)?;
+        Storage::check_supported_ledger_key_type(b)?;
         use LedgerKey::*;
         match (a, b) {
             (Account(a), Account(b)) => self.compare(&a, &b),
             (Trustline(a), Trustline(b)) => self.compare(&a, &b),
-            (Offer(a), Offer(b)) => self.compare(&a, &b),
-            (Data(a), Data(b)) => self.compare(&a, &b),
-            (ClaimableBalance(a), ClaimableBalance(b)) => self.compare(&a, &b),
-            (LiquidityPool(a), LiquidityPool(b)) => self.compare(&a, &b),
             (ContractData(a), ContractData(b)) => self.compare(
                 &(&a.contract, &a.key, &a.durability),
                 &(&b.contract, &b.key, &b.durability),
             ),
             (ContractCode(a), ContractCode(b)) => self.compare(&a, &b),
-            (ConfigSetting(a), ConfigSetting(b)) => self.compare(&a, &b),
+
+            // All these cases should have been rejected above by check_supported_ledger_key_type.
+            (Offer(_), _)
+            | (Data(_), _)
+            | (ClaimableBalance(_), _)
+            | (LiquidityPool(_), _)
+            | (ConfigSetting(_), _)
+            | (Ttl(_), _)
+            | (_, Offer(_))
+            | (_, Data(_))
+            | (_, ClaimableBalance(_))
+            | (_, LiquidityPool(_))
+            | (_, ConfigSetting(_))
+            | (_, Ttl(_)) => Err((ScErrorType::Value, ScErrorCode::InternalError).into()),
 
             // List out one side of each remaining unequal-discriminant case so
             // we remember to update this code if LedgerKey changes. We don't
             // charge for these since they're just 1-integer compares.
-            (Account(_), _)
-            | (Trustline(_), _)
-            | (Offer(_), _)
-            | (Data(_), _)
-            | (ClaimableBalance(_), _)
-            | (LiquidityPool(_), _)
-            | (ContractData(_), _)
-            | (ContractCode(_), _)
-            | (ConfigSetting(_), _)
-            | (Expiration(_), _) => Ok(a.cmp(b)),
-        }
-    }
-}
-
-impl Compare<LedgerEntry> for Budget {
-    type Error = HostError;
-
-    fn compare(&self, a: &LedgerEntry, b: &LedgerEntry) -> Result<Ordering, Self::Error> {
-        self.compare(
-            &(a.last_modified_ledger_seq, &a.data, &a.ext),
-            &(b.last_modified_ledger_seq, &b.data, &b.ext),
-        )
-    }
-}
-
-impl Compare<LedgerEntryData> for Budget {
-    type Error = HostError;
-
-    fn compare(&self, a: &LedgerEntryData, b: &LedgerEntryData) -> Result<Ordering, Self::Error> {
-        use LedgerEntryData::*;
-        match (a, b) {
-            (Account(a), Account(b)) => self.compare(&a, &b),
-            (Trustline(a), Trustline(b)) => self.compare(&a, &b),
-            (Offer(a), Offer(b)) => self.compare(&a, &b),
-            (Data(a), Data(b)) => self.compare(&a, &b),
-            (ClaimableBalance(a), ClaimableBalance(b)) => self.compare(&a, &b),
-            (LiquidityPool(a), LiquidityPool(b)) => self.compare(&a, &b),
-            (ContractData(a), ContractData(b)) => self.compare(
-                &(&a.contract, &a.key, &a.durability, &a.val),
-                &(&b.contract, &b.key, &b.durability, &b.val),
-            ),
-            (ContractCode(a), ContractCode(b)) => {
-                self.compare(&(&a.ext, &a.hash), &(&b.ext, &b.hash))
+            (Account(_), _) | (Trustline(_), _) | (ContractData(_), _) | (ContractCode(_), _) => {
+                Ok(a.cmp(b))
             }
-            (ConfigSetting(a), ConfigSetting(b)) => self.compare(&a, &b),
-
-            (Account(_), _)
-            | (Trustline(_), _)
-            | (Offer(_), _)
-            | (Data(_), _)
-            | (ClaimableBalance(_), _)
-            | (LiquidityPool(_), _)
-            | (ContractData(_), _)
-            | (ContractCode(_), _)
-            | (ConfigSetting(_), _)
-            | (Expiration(_), _) => Ok(a.cmp(b)),
         }
     }
 }

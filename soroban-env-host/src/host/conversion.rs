@@ -40,32 +40,6 @@ impl Host {
         self.usize_to_u32(u).map(|v| v.into())
     }
 
-    // Notes on metering: free
-    pub(crate) fn usize_from_rawval_u32_input(
-        &self,
-        name: &'static str,
-        r: Val,
-    ) -> Result<usize, HostError> {
-        self.u32_from_rawval_input(name, r).map(|u| u as usize)
-    }
-
-    // Notes on metering: free
-    pub(crate) fn u32_from_rawval_input(
-        &self,
-        name: &'static str,
-        r: Val,
-    ) -> Result<u32, HostError> {
-        match u32::try_from(r) {
-            Ok(v) => Ok(v),
-            Err(cvt) => Err(self.err(
-                ScErrorType::Value,
-                ScErrorCode::UnexpectedType,
-                "expecting U32Val",
-                &[r],
-            )),
-        }
-    }
-
     pub(crate) fn u256_from_account(&self, account_id: &AccountId) -> Result<Uint256, HostError> {
         let crate::xdr::PublicKey::PublicKeyTypeEd25519(ed25519) =
             account_id.metered_clone(self)?.0;
@@ -81,11 +55,11 @@ impl Host {
         let u: u32 = r.into();
         match u8::try_from(u) {
             Ok(v) => Ok(v),
-            Err(cvt) => Err(self.err(
+            Err(_) => Err(self.err(
                 ScErrorType::Value,
                 ScErrorCode::InvalidInput,
                 "expecting U32Val less than 256",
-                &[r.to_val()],
+                &[r.to_val(), name.try_into_val(self)?],
             )),
         }
     }
@@ -116,10 +90,10 @@ impl Host {
     {
         match <[u8; N]>::try_from(bytes_arr) {
             Ok(arr) => {
-                self.charge_budget(ContractCostType::HostMemCpy, Some(N as u64))?;
+                self.charge_budget(ContractCostType::MemCpy, Some(N as u64))?;
                 Ok(arr.into())
             }
-            Err(cvt) => Err(err!(
+            Err(_) => Err(err!(
                 self,
                 (ScErrorType::Object, ScErrorCode::UnexpectedSize),
                 "expected fixed-length bytes slice, got slice with different size",

@@ -204,7 +204,7 @@ impl Host {
                 storage.put(
                     &code_key,
                     &Host::new_contract_code(self, data)?,
-                    Some(self.get_min_expiration_ledger(ContractDataDurability::Persistent)?),
+                    Some(self.get_min_live_until_ledger(ContractDataDurability::Persistent)?),
                     self.as_budget(),
                 )
             })?;
@@ -240,7 +240,6 @@ impl Host {
             contract_id.clone(),
             &instance_key,
         )?;
-
         let mut contracts = self.try_borrow_contracts_mut()?;
         contracts.insert(contract_id, contract_fns);
         Ok(())

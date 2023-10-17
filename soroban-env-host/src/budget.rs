@@ -140,7 +140,7 @@ impl HostCostModel for MeteredCostComponent {
 }
 
 #[derive(Clone)]
-pub struct BudgetDimension {
+struct BudgetDimension {
     /// A set of cost models that map input values (eg. event counts, object
     /// sizes) from some CostType to whatever concrete resource type is being
     /// tracked by this dimension (eg. cpu or memory). CostType enum values are
@@ -177,7 +177,7 @@ impl Debug for BudgetDimension {
 }
 
 impl BudgetDimension {
-    pub fn new() -> Self {
+    fn new() -> Self {
         let mut bd = Self {
             cost_models: Default::default(),
             limit: Default::default(),
@@ -194,7 +194,7 @@ impl BudgetDimension {
         bd
     }
 
-    pub fn try_from_config(cost_params: ContractCostParams) -> Result<Self, HostError> {
+    fn try_from_config(cost_params: ContractCostParams) -> Result<Self, HostError> {
         let cost_models = cost_params
             .0
             .iter()
@@ -217,23 +217,15 @@ impl BudgetDimension {
         &mut self.cost_models[ty as usize]
     }
 
-    pub fn get_count(&self, ty: ContractCostType) -> u64 {
-        self.counts[ty as usize]
-    }
-
-    pub fn get_total_count(&self) -> u64 {
+    fn get_total_count(&self) -> u64 {
         self.total_count
     }
 
-    pub fn get_limit(&self) -> u64 {
-        self.limit
-    }
-
-    pub fn get_remaining(&self) -> u64 {
+    fn get_remaining(&self) -> u64 {
         self.limit.saturating_sub(self.total_count)
     }
 
-    pub fn reset(&mut self, limit: u64) {
+    fn reset(&mut self, limit: u64) {
         self.limit = limit;
         self.total_count = 0;
         for v in &mut self.counts {
@@ -250,15 +242,28 @@ impl BudgetDimension {
     /// input, assuming all batched units have the same input size. If input
     /// is `None`, the input is ignored and the model is treated as a constant
     /// model, and amount charged is iterations * const_term.
-    pub fn charge(
+    fn charge(
         &mut self,
         ty: ContractCostType,
         iterations: u64,
         input: Option<u64>,
+        _is_cpu: bool,
     ) -> Result<(), HostError> {
         let cm = self.get_cost_model(ty);
         let amount = cm.evaluate(input)?.saturating_mul(iterations);
-        self.counts[ty as usize] = self.counts[ty as usize].saturating_add(amount);
+
+        #[cfg(all(not(target_family = "wasm"), feature = "tracy"))]
+        if _is_cpu {
+            let _span = tracy_span!("charge");
+            _span.emit_text(ty.name());
+            _span.emit_value(amount);
+        }
+
+        let cell = self
+            .counts
+            .get_mut(ty as usize)
+            .ok_or_else(|| HostError::from((ScErrorType::Budget, ScErrorCode::InternalError)))?;
+        *cell = cell.saturating_add(amount);
         self.total_count = self.total_count.saturating_add(amount);
         if self.is_over_budget() {
             Err((ScErrorType::Budget, ScErrorCode::ExceededLimit).into())
@@ -345,6 +350,8 @@ struct MeterTracker {
     cost_tracker: [(u64, Option<u64>); ContractCostType::variants().len()],
     // Total number of times the meter is called
     count: u32,
+    #[cfg(test)]
+    wasm_memory: u64,
 }
 
 impl MeterTracker {
@@ -354,13 +361,17 @@ impl MeterTracker {
             tracker.0 = 0;
             tracker.1 = tracker.1.map(|_| 0);
         }
+        #[cfg(test)]
+        {
+            self.wasm_memory = 0;
+        }
     }
 }
 
 #[derive(Clone)]
 pub(crate) struct BudgetImpl {
-    pub cpu_insns: BudgetDimension,
-    pub mem_bytes: BudgetDimension,
+    cpu_insns: BudgetDimension,
+    mem_bytes: BudgetDimension,
     /// For the purpose o calibration and reporting; not used for budget-limiting per se.
     tracker: MeterTracker,
     enabled: bool,
@@ -403,26 +414,27 @@ impl BudgetImpl {
             let i = ct as usize;
             match ct {
                 ContractCostType::WasmInsnExec => (),
-                ContractCostType::WasmMemAlloc => (),
-                ContractCostType::HostMemAlloc => init_input(i), // number of bytes in host memory to allocate
-                ContractCostType::HostMemCpy => init_input(i),   // number of bytes in host to copy
-                ContractCostType::HostMemCmp => init_input(i), // number of bytes in host to compare
+                ContractCostType::MemAlloc => init_input(i), // number of bytes in host memory to allocate
+                ContractCostType::MemCpy => init_input(i),   // number of bytes in host to copy
+                ContractCostType::MemCmp => init_input(i),   // number of bytes in host to compare
                 ContractCostType::DispatchHostFunction => (),
                 ContractCostType::VisitObject => (),
+                // The inputs for `ValSer` and `ValDeser` are subtly different:
+                // `ValSer` works recursively via `WriteXdr`, and each leaf call charges the budget,
+                // and the input is the number of bytes of a leaf entity.
+                // `ValDeser` charges the budget at the top level. Call to `read_xdr` works through
+                // the bytes buffer recursively without worrying about budget charging. So the input
+                // is the length of the total buffer.
+                // This has implication on how their calibration should be set up.
                 ContractCostType::ValSer => init_input(i), // number of bytes in the result buffer
-                ContractCostType::ValDeser => init_input(i), // number of bytes in the buffer
+                ContractCostType::ValDeser => init_input(i), // number of bytes in the input buffer
                 ContractCostType::ComputeSha256Hash => init_input(i), // number of bytes in the buffer
                 ContractCostType::ComputeEd25519PubKey => (),
-                ContractCostType::MapEntry => (),
-                ContractCostType::VecEntry => (),
                 ContractCostType::VerifyEd25519Sig => init_input(i), // length of the signed message
-                ContractCostType::VmMemRead => init_input(i), // number of bytes in the linear memory to read
-                ContractCostType::VmMemWrite => init_input(i), // number of bytes in the linear memory to write
-                ContractCostType::VmInstantiation => init_input(i), // length of the wasm bytes,
+                ContractCostType::VmInstantiation => init_input(i),  // length of the wasm bytes,
                 ContractCostType::VmCachedInstantiation => init_input(i), // length of the wasm bytes,
                 ContractCostType::InvokeVmFunction => (),
                 ContractCostType::ComputeKeccak256Hash => init_input(i), // number of bytes in the buffer
-                ContractCostType::ComputeEcdsaSecp256k1Key => (),
                 ContractCostType::ComputeEcdsaSecp256k1Sig => (),
                 ContractCostType::RecoverEcdsaSecp256k1Key => (),
                 ContractCostType::Int256AddSub => (),
@@ -447,18 +459,22 @@ impl BudgetImpl {
 
         // update tracker for reporting
         self.tracker.count = self.tracker.count.saturating_add(1);
-        let (t_iters, t_inputs) = &mut self.tracker.cost_tracker[ty as usize];
+        let (t_iters, t_inputs) = &mut self
+            .tracker
+            .cost_tracker
+            .get_mut(ty as usize)
+            .ok_or_else(|| HostError::from((ScErrorType::Budget, ScErrorCode::InternalError)))?;
         *t_iters = t_iters.saturating_add(iterations);
         match (t_inputs, input) {
             (None, None) => (),
             (Some(t), Some(i)) => *t = t.saturating_add(i.saturating_mul(iterations)),
             // internal logic error, a wrong cost type has been passed in
-            _ => return Err((ScErrorType::Context, ScErrorCode::InternalError).into()),
+            _ => return Err((ScErrorType::Budget, ScErrorCode::InternalError).into()),
         };
 
         // do the actual budget charging
-        self.cpu_insns.charge(ty, iterations, input)?;
-        self.mem_bytes.charge(ty, iterations, input)
+        self.cpu_insns.charge(ty, iterations, input, true)?;
+        self.mem_bytes.charge(ty, iterations, input, false)
     }
 
     fn get_wasmi_fuel_remaining(&self) -> Result<u64, HostError> {
@@ -507,26 +523,30 @@ impl Default for BudgetImpl {
                     cpu.const_term = 6;
                     cpu.lin_term = ScaledU64(0);
                 }
-                // Host cpu insns per wasm "memory fuel". This has to be zero since
-                // the fuel (representing cpu cost) has been covered by `WasmInsnExec`.
-                // The extra cost of mem processing is accounted for by wasmi's
-                // `config.memory_bytes_per_fuel` parameter.
-                // This type is designated to the mem cost.
-                ContractCostType::WasmMemAlloc => {
-                    cpu.const_term = 0;
-                    cpu.lin_term = ScaledU64(0);
-                }
-                ContractCostType::HostMemAlloc => {
+                ContractCostType::MemAlloc => {
                     cpu.const_term = 1141;
                     cpu.lin_term = ScaledU64(1);
                 }
-                ContractCostType::HostMemCpy => {
-                    cpu.const_term = 39;
-                    cpu.lin_term = ScaledU64(24);
+                // We don't use a calibrated number for this because sending a
+                // large calibration-buffer to memcpy hits an optimized
+                // large-memcpy path in the stdlib, which has both a large
+                // overhead and a small per-byte cost. But large buffers aren't
+                // really how byte-copies usually get used in metered code. Most
+                // calls have to do with small copies of a few tens or hundreds
+                // of bytes. So instead we just "reason it out": we can probably
+                // copy 8 bytes per instruction on a 64-bit machine, and that
+                // therefore a 1-byte copy is considered 1/8th of an
+                // instruction. We also add in a nonzero constant overhead, to
+                // avoid having anything that can be zero cost and approximate
+                // whatever function call, arg-shuffling, spills, reloads or
+                // other flotsam accumulates around a typical memory copy.
+                ContractCostType::MemCpy => {
+                    cpu.const_term = 250;
+                    cpu.lin_term = ScaledU64((1 << COST_MODEL_LIN_TERM_SCALE_BITS) / 8);
                 }
-                ContractCostType::HostMemCmp => {
-                    cpu.const_term = 20;
-                    cpu.lin_term = ScaledU64(64);
+                ContractCostType::MemCmp => {
+                    cpu.const_term = 250;
+                    cpu.lin_term = ScaledU64((1 << COST_MODEL_LIN_TERM_SCALE_BITS) / 8);
                 }
                 ContractCostType::DispatchHostFunction => {
                     cpu.const_term = 263;
@@ -537,12 +557,12 @@ impl Default for BudgetImpl {
                     cpu.lin_term = ScaledU64(0);
                 }
                 ContractCostType::ValSer => {
-                    cpu.const_term = 591;
-                    cpu.lin_term = ScaledU64(69);
+                    cpu.const_term = 1000;
+                    cpu.lin_term = ScaledU64((1 << COST_MODEL_LIN_TERM_SCALE_BITS) / 8);
                 }
                 ContractCostType::ValDeser => {
-                    cpu.const_term = 1112;
-                    cpu.lin_term = ScaledU64(34);
+                    cpu.const_term = 1000;
+                    cpu.lin_term = ScaledU64((1 << COST_MODEL_LIN_TERM_SCALE_BITS) / 8);
                 }
                 ContractCostType::ComputeSha256Hash => {
                     cpu.const_term = 2924;
@@ -552,25 +572,9 @@ impl Default for BudgetImpl {
                     cpu.const_term = 25584;
                     cpu.lin_term = ScaledU64(0);
                 }
-                ContractCostType::MapEntry => {
-                    cpu.const_term = 53;
-                    cpu.lin_term = ScaledU64(0);
-                }
-                ContractCostType::VecEntry => {
-                    cpu.const_term = 0;
-                    cpu.lin_term = ScaledU64(0);
-                }
                 ContractCostType::VerifyEd25519Sig => {
                     cpu.const_term = 376877;
                     cpu.lin_term = ScaledU64(2747);
-                }
-                ContractCostType::VmMemRead => {
-                    cpu.const_term = 182;
-                    cpu.lin_term = ScaledU64(24);
-                }
-                ContractCostType::VmMemWrite => {
-                    cpu.const_term = 182;
-                    cpu.lin_term = ScaledU64(24);
                 }
                 ContractCostType::VmInstantiation => {
                     cpu.const_term = 967154;
@@ -587,10 +591,6 @@ impl Default for BudgetImpl {
                 ContractCostType::ComputeKeccak256Hash => {
                     cpu.const_term = 2890;
                     cpu.lin_term = ScaledU64(3561);
-                }
-                ContractCostType::ComputeEcdsaSecp256k1Key => {
-                    cpu.const_term = 38363;
-                    cpu.lin_term = ScaledU64(0);
                 }
                 ContractCostType::ComputeEcdsaSecp256k1Sig => {
                     cpu.const_term = 224;
@@ -635,21 +635,15 @@ impl Default for BudgetImpl {
                     mem.const_term = 0;
                     mem.lin_term = ScaledU64(0);
                 }
-                // Bytes per wasmi "memory fuel". By definition this has to be a const = 1
-                // because of the 1-to-1 equivalence of the Wasm mem fuel and a host byte.
-                ContractCostType::WasmMemAlloc => {
-                    mem.const_term = 1;
-                    mem.lin_term = ScaledU64(0);
-                }
-                ContractCostType::HostMemAlloc => {
+                ContractCostType::MemAlloc => {
                     mem.const_term = 16;
                     mem.lin_term = ScaledU64(128);
                 }
-                ContractCostType::HostMemCpy => {
+                ContractCostType::MemCpy => {
                     mem.const_term = 0;
                     mem.lin_term = ScaledU64(0);
                 }
-                ContractCostType::HostMemCmp => {
+                ContractCostType::MemCmp => {
                     mem.const_term = 0;
                     mem.lin_term = ScaledU64(0);
                 }
@@ -677,23 +671,7 @@ impl Default for BudgetImpl {
                     mem.const_term = 0;
                     mem.lin_term = ScaledU64(0);
                 }
-                ContractCostType::MapEntry => {
-                    mem.const_term = 0;
-                    mem.lin_term = ScaledU64(0);
-                }
-                ContractCostType::VecEntry => {
-                    mem.const_term = 0;
-                    mem.lin_term = ScaledU64(0);
-                }
                 ContractCostType::VerifyEd25519Sig => {
-                    mem.const_term = 0;
-                    mem.lin_term = ScaledU64(0);
-                }
-                ContractCostType::VmMemRead => {
-                    mem.const_term = 0;
-                    mem.lin_term = ScaledU64(0);
-                }
-                ContractCostType::VmMemWrite => {
                     mem.const_term = 0;
                     mem.lin_term = ScaledU64(0);
                 }
@@ -711,10 +689,6 @@ impl Default for BudgetImpl {
                 }
                 ContractCostType::ComputeKeccak256Hash => {
                     mem.const_term = 40;
-                    mem.lin_term = ScaledU64(0);
-                }
-                ContractCostType::ComputeEcdsaSecp256k1Key => {
-                    mem.const_term = 0;
                     mem.lin_term = ScaledU64(0);
                 }
                 ContractCostType::ComputeEcdsaSecp256k1Sig => {
@@ -1003,7 +977,13 @@ impl Budget {
     }
 
     pub fn get_tracker(&self, ty: ContractCostType) -> Result<(u64, Option<u64>), HostError> {
-        Ok(self.0.try_borrow_or_err()?.tracker.cost_tracker[ty as usize])
+        self.0
+            .try_borrow_or_err()?
+            .tracker
+            .cost_tracker
+            .get(ty as usize)
+            .map(|x| *x)
+            .ok_or_else(|| (ScErrorType::Budget, ScErrorCode::InternalError).into())
     }
 
     pub fn get_cpu_insns_consumed(&self) -> Result<u64, HostError> {
@@ -1111,6 +1091,18 @@ impl Budget {
         )
     }
 
+    #[cfg(test)]
+    pub(crate) fn track_wasm_mem_alloc(&self, delta: u64) -> Result<(), HostError> {
+        let mut bgt = self.0.try_borrow_mut_or_err()?;
+        bgt.tracker.wasm_memory = bgt.tracker.wasm_memory.saturating_add(delta);
+        Ok(())
+    }
+
+    #[cfg(test)]
+    pub fn get_wasm_mem_alloc(&self) -> Result<u64, HostError> {
+        Ok(self.0.try_borrow_or_err()?.tracker.wasm_memory)
+    }
+
     /// Resets the `FuelConfig` we pass into Wasmi before running calibration.
     /// Wasmi instruction calibration requires running the same Wasmi insn
     /// a fixed number of times, record their actual cpu and mem consumption, then
@@ -1153,7 +1145,8 @@ impl ResourceLimiter for Host {
             .get_mem_bytes_remaining()
             .map_err(|_| errors::MemoryError::OutOfBoundsGrowth)?;
 
-        let allow = if desired as u64 > host_limit {
+        let delta = (desired as u64).saturating_sub(current as u64);
+        let allow = if delta > host_limit {
             false
         } else {
             match maximum {
@@ -1163,9 +1156,15 @@ impl ResourceLimiter for Host {
         };
 
         if allow {
-            let delta = (desired as u64).saturating_sub(current as u64);
+            #[cfg(test)]
+            {
+                self.as_budget()
+                    .track_wasm_mem_alloc(delta)
+                    .map_err(|_| errors::MemoryError::OutOfBoundsGrowth)?;
+            }
+
             self.as_budget()
-                .bulk_charge(ContractCostType::WasmMemAlloc, delta, None)
+                .charge(ContractCostType::MemAlloc, Some(delta))
                 .map(|_| true)
                 .map_err(|_| errors::MemoryError::OutOfBoundsGrowth)
         } else {

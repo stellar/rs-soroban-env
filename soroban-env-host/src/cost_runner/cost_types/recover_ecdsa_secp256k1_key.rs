@@ -1,8 +1,8 @@
 use std::hint::black_box;
 
 use crate::{
-    cost_runner::CostRunner,
-    xdr::{ContractCostType, Hash},
+    cost_runner::{CostRunner, CostType},
+    xdr::{ContractCostType::RecoverEcdsaSecp256k1Key, Hash},
 };
 use k256::ecdsa::{RecoveryId, Signature};
 
@@ -16,7 +16,7 @@ pub struct RecoverEcdsaSecp256k1KeySample {
 }
 
 impl CostRunner for RecoverEcdsaSecp256k1KeyRun {
-    const COST_TYPE: ContractCostType = ContractCostType::RecoverEcdsaSecp256k1Key;
+    const COST_TYPE: CostType = CostType::Contract(RecoverEcdsaSecp256k1Key);
 
     type SampleType = RecoverEcdsaSecp256k1KeySample;
 
@@ -35,7 +35,7 @@ impl CostRunner for RecoverEcdsaSecp256k1KeyRun {
         _iter: u64,
         sample: Self::SampleType,
     ) -> Self::RecycledType {
-        black_box(host.charge_budget(Self::COST_TYPE, None).unwrap());
+        black_box(host.charge_budget(RecoverEcdsaSecp256k1Key, None).unwrap());
         black_box(sample)
     }
 }

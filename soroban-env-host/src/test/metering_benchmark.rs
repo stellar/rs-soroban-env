@@ -26,14 +26,19 @@ const LEDGER_INFO: LedgerInfo = LedgerInfo {
     timestamp: 1234,
     network_id: [7; 32],
     base_reserve: 1,
-    min_persistent_entry_expiration: 4096,
-    min_temp_entry_expiration: 16,
-    max_entry_expiration: 6312000,
+    min_persistent_entry_ttl: 4096,
+    min_temp_entry_ttl: 16,
+    max_entry_ttl: 6312000,
 };
 
 #[ignore]
 #[test]
 fn run_add_i32() -> Result<(), HostError> {
+    #[cfg(feature = "tracy")]
+    tracy_client::Client::start();
+
+    let _test_span = tracy_span!("run_add_i32 test");
+
     let account_id = generate_account_id();
     let salt = generate_bytes_array();
     let a = 4i32;
@@ -41,6 +46,7 @@ fn run_add_i32() -> Result<(), HostError> {
 
     // Run 1: record footprint, emulating "preflight".
     let foot = {
+        let _run_span = tracy_span!("add_i32 run 1: recording footprint");
         let host = Host::test_host_with_recording_footprint();
         host.set_ledger_info(LEDGER_INFO.clone())?;
         let contract_id_obj =
@@ -55,6 +61,7 @@ fn run_add_i32() -> Result<(), HostError> {
     };
     // Run 2: enforce preflight footprint
     {
+        let _run_span = tracy_span!("add_i32 run 2: enforcing footprint");
         let store = Storage::with_enforcing_footprint_and_map(
             Footprint::default(),
             MeteredOrdMap::default(),
@@ -70,17 +77,25 @@ fn run_add_i32() -> Result<(), HostError> {
             host.test_vec_obj(&[a, b])?,
         )?;
     }
+    // Give tracy a little time to extract data.
+    #[cfg(feature = "tracy")]
+    std::thread::sleep(std::time::Duration::from_secs(2));
     Ok(())
 }
 
 #[ignore]
 #[test]
 fn run_complex() -> Result<(), HostError> {
+    #[cfg(feature = "tracy")]
+    tracy_client::Client::start();
+
+    let _test_span = tracy_span!("run_complex test");
     let account_id = generate_account_id();
     let salt = generate_bytes_array();
 
     // Run 1: record footprint, emulating "preflight".
     let foot = {
+        let _run_span = tracy_span!("complex run 1: recording footprint");
         let host = Host::test_host_with_recording_footprint();
         host.set_ledger_info(LEDGER_INFO.clone())?;
         let contract_id_obj =
@@ -96,6 +111,7 @@ fn run_complex() -> Result<(), HostError> {
 
     // Run 2: enforce preflight footprint, with empty map -- contract should only write.
     {
+        let _run_span = tracy_span!("complex run 2: enforcing footprint");
         let store = Storage::with_enforcing_footprint_and_map(
             Footprint::default(),
             MeteredOrdMap::default(),
@@ -111,5 +127,8 @@ fn run_complex() -> Result<(), HostError> {
             host.add_host_object(HostVec::new())?,
         )?;
     }
+    // Give tracy a little time to extract data.
+    #[cfg(feature = "tracy")]
+    std::thread::sleep(std::time::Duration::from_secs(2));
     Ok(())
 }

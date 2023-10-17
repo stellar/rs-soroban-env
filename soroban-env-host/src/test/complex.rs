@@ -17,9 +17,9 @@ fn run_complex() -> Result<(), HostError> {
         timestamp: 1234,
         network_id: [7; 32],
         base_reserve: 1,
-        min_persistent_entry_expiration: 4096,
-        min_temp_entry_expiration: 16,
-        max_entry_expiration: 6312000,
+        min_persistent_entry_ttl: 4096,
+        min_temp_entry_ttl: 16,
+        max_entry_ttl: 6312000,
     };
     let account_id = generate_account_id();
     let salt = generate_bytes_array();

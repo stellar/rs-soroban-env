@@ -33,6 +33,7 @@ pub(crate) enum ContractReentryMode {
     /// possible for a contract to do a self-call via host).
     SelfAllowed,
     /// Re-entry is fully allowed.
+    #[allow(dead_code)]
     Allowed,
 }
 
@@ -461,7 +462,7 @@ impl Host {
                     || vm.invoke_function_raw(self, func, args),
                 )
             }
-            ContractExecutable::Token => self.with_frame(
+            ContractExecutable::StellarAsset => self.with_frame(
                 Frame::Token(id.metered_clone(self)?, *func, args_vec, instance),
                 || {
                     use crate::native_contract::{NativeContract, Token};
@@ -644,7 +645,7 @@ impl Host {
 
         match &res {
             Ok(res) => self.fn_return_diagnostics(id, &func, res)?,
-            Err(err) => {}
+            Err(_err) => {}
         }
 
         res

@@ -75,7 +75,7 @@ impl<'a> TestToken<'a> {
         from: &TestSigner,
         spender: Address,
         amount: i128,
-        expiration_ledger: u32,
+        live_until_ledger: u32,
     ) -> Result<(), HostError> {
         self.call_with_single_signer(
             from,
@@ -85,7 +85,7 @@ impl<'a> TestToken<'a> {
                 from.address(self.host),
                 spender,
                 amount,
-                expiration_ledger
+                live_until_ledger
             ],
         )
     }

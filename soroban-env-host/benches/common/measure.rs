@@ -2,10 +2,10 @@ use rand::{rngs::StdRng, Rng, SeedableRng};
 use soroban_bench_utils::{tracking_allocator::AllocationGroupToken, HostTracker};
 use soroban_env_host::{
     budget::{AsBudget, COST_MODEL_LIN_TERM_SCALE_BITS},
-    cost_runner::CostRunner,
+    cost_runner::{CostRunner, CostType},
     Host,
 };
-use std::ops::Range;
+use std::{io, ops::Range};
 use tabwriter::{Alignment, TabWriter};
 
 use super::{fit_model, FPCostModel};
@@ -27,6 +27,36 @@ pub struct Measurements {
 }
 
 impl Measurements {
+    // Check that the baseline isn't a significant fraction of the max measurement,
+    // as a basic spot check.
+    fn check_one_baseline_range(
+        &self,
+        cost: &CostType,
+        meas: &str,
+        f: impl Fn(&Measurement) -> u64,
+    ) -> Result<(), io::Error> {
+        let max = self.measurements.iter().map(&f).max().unwrap_or_default();
+        let base = f(&self.baseline);
+        if max < base * 10 {
+            println!("max {meas} measurement for {cost} is {max} which is less than 10x baseline {base}, try higher iteration or step size");
+            Err(io::ErrorKind::InvalidData.into())
+        } else {
+            Ok(())
+        }
+    }
+
+    // Confirms that there's a reasonable range of values above the baseline;
+    // only relevant for certain measurements, currently no way to tell
+    // systematically, so gated behind env var
+    pub fn check_range_against_baseline(&self, cost: &CostType) -> Result<(), io::Error> {
+        if std::env::var("CHECK_RANGE_AGAINST_BASELINE").is_ok() {
+            self.check_one_baseline_range(cost, "cpu", |m| m.cpu_insns)?;
+            self.check_one_baseline_range(cost, "mem", |m| m.mem_bytes)?;
+            self.check_one_baseline_range(cost, "time", |m| m.time_nsecs)?;
+        }
+        Ok(())
+    }
+
     // This is the preprocess step to convert raw measurements into `averaged_net_measurements`,
     // ready to be fitted by the linear model.
     // We start from `N_r * ( N_x * (a + b * Option<x>) + Overhead_b)`, first substracts baseline
@@ -318,10 +348,12 @@ where
         &mut Vec<<<HCM as HostCostMeasurement>::Runner as CostRunner>::RecycledType>,
     ),
 {
+    assert!(HCM::STEP_SIZE >= (1 << COST_MODEL_LIN_TERM_SCALE_BITS));
     let mut recycled_samples = Vec::with_capacity(samples.len());
     host.as_budget().reset_unlimited().unwrap();
 
-    let ht = HostTracker::start(alloc_group_token);
+    let mut ht = HostTracker::new();
+    ht.start(alloc_group_token);
 
     runner(host, samples, &mut recycled_samples);
 
@@ -419,17 +451,29 @@ pub fn measure_worst_case_costs<HCM: HostCostMeasurement>(
     })
 }
 
+/// Measure the cost variation of a HCM. `sweep_input` specifies whether the input
+/// is fixed or randomized.
+///     if true - input is randomized, with `large_input` specifying the upperbound
+///               of the input size
+///     if false - input size is fixed at `large_input`
+/// `iteration` specifies number of iterations to run the measurement
+/// `include_best_case` specifies whether best case is included. Often the best case
+/// is a trivial case that isn't too relevant (and never hit). So if one is more
+/// interested in the worst/average analysis, it might be useful to throw it away.
 pub fn measure_cost_variation<HCM: HostCostMeasurement>(
     large_input: u64,
+    iterations: u64,
+    sweep_input: bool,
+    include_best_case: bool,
 ) -> Result<Measurements, std::io::Error> {
-    let count = 100;
     let mut i = 0;
     let mut rng = StdRng::from_seed([0xff; 32]);
 
     // run baseline measure
+    let mut base_range = std::iter::once(0);
     let baseline = measure_costs_inner::<HCM, _, _>(
         |host| {
-            std::iter::once(0)
+            base_range
                 .next()
                 .map(|_| HCM::new_baseline_case(host, &mut rng))
         },
@@ -443,13 +487,21 @@ pub fn measure_cost_variation<HCM: HostCostMeasurement>(
     let measurements = measure_costs_inner::<HCM, _, _>(
         |host| {
             i += 1;
+            let input = if sweep_input {
+                rng.gen_range(1..=2 + large_input)
+            } else {
+                large_input
+            };
             match i {
-                1 => Some(HCM::new_best_case(host, &mut rng)),
-                2 => Some(HCM::new_worst_case(host, &mut rng, large_input)),
-                n if n < count => {
-                    let input = rng.gen_range(1..=2 + large_input);
-                    Some(HCM::new_random_case(host, &mut rng, input))
+                1 => {
+                    if include_best_case {
+                        Some(HCM::new_best_case(host, &mut rng))
+                    } else {
+                        Some(HCM::new_random_case(host, &mut rng, input))
+                    }
                 }
+                2 => Some(HCM::new_worst_case(host, &mut rng, large_input)),
+                n if n < iterations => Some(HCM::new_random_case(host, &mut rng, input)),
                 _ => None,
             }
         },

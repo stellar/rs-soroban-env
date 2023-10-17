@@ -1,15 +1,14 @@
 use crate::{
     budget::Budget,
-    xdr::ContractCostType,
-    xdr::{ReadXdr, ScBytes, WriteXdr},
+    xdr::{
+        ContractCostType, DepthLimitedWrite, ReadXdr, ScBytes, ScErrorCode, ScErrorType, WriteXdr,
+        DEFAULT_XDR_RW_DEPTH_LIMIT,
+    },
     BytesObject, Host, HostError,
 };
 use std::io::Write;
 
 use sha2::{Digest, Sha256};
-use soroban_env_common::xdr::{
-    DepthLimitedWrite, ScErrorCode, ScErrorType, DEFAULT_XDR_RW_DEPTH_LIMIT,
-};
 
 struct MeteredWrite<'a, W: Write> {
     budget: &'a Budget,

@@ -15,24 +15,24 @@ pub struct MapEntrySample {
 impl CostRunner for MapEntryRun {
     const COST_TYPE: ContractCostType = ContractCostType::MapEntry;
 
+    const RUN_ITERATIONS: u64 = 1000;
+
     type SampleType = MapEntrySample;
 
-    type RecycledType = (Option<u64>, Self::SampleType);
+    type RecycledType = Self::SampleType;
 
     fn run_iter(host: &crate::Host, iter: u64, sample: Self::SampleType) -> Self::RecycledType {
-        let v = black_box(
+        let _ = black_box(
             sample
                 .map
-                .get(&sample.keys[iter as usize % sample.keys.len()], host)
-                .unwrap()
-                .unwrap()
-                .get_payload(),
+                .get_at_index(iter as usize % sample.keys.len(), host)
+                .unwrap(),
         );
-        (Some(v), sample)
+        sample
     }
 
     fn run_baseline_iter(host: &Host, _iter: u64, sample: Self::SampleType) -> Self::RecycledType {
         black_box(host.charge_budget(Self::COST_TYPE, None).unwrap());
-        black_box((None, sample))
+        black_box(sample)
     }
 }

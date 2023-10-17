@@ -1,7 +1,10 @@
 use soroban_env_common::ConversionError;
 
 use crate::{
-    cost_runner::CostRunner, vm::dummy0, xdr::ContractCostType, HostError, Symbol, Val, Vm,
+    cost_runner::{CostRunner, CostType},
+    vm::dummy0,
+    xdr::ContractCostType::{DispatchHostFunction, InvokeVmFunction},
+    HostError, Symbol, Val, Vm,
 };
 use std::{hint::black_box, rc::Rc};
 
@@ -13,7 +16,7 @@ const TEST_SYM: Symbol = match Symbol::try_from_small_str("test") {
 };
 
 impl CostRunner for InvokeVmFunctionRun {
-    const COST_TYPE: ContractCostType = ContractCostType::InvokeVmFunction;
+    const COST_TYPE: CostType = CostType::Contract(InvokeVmFunction);
 
     type SampleType = Rc<Vm>;
 
@@ -31,7 +34,7 @@ impl CostRunner for InvokeVmFunctionRun {
         _iter: u64,
         sample: Self::SampleType,
     ) -> Self::RecycledType {
-        black_box(host.charge_budget(Self::COST_TYPE, None).unwrap());
+        black_box(host.charge_budget(InvokeVmFunction, None).unwrap());
         black_box((None, sample))
     }
 }
@@ -39,7 +42,7 @@ impl CostRunner for InvokeVmFunctionRun {
 pub struct InvokeHostFunctionRun;
 
 impl CostRunner for InvokeHostFunctionRun {
-    const COST_TYPE: ContractCostType = ContractCostType::DispatchHostFunction;
+    const COST_TYPE: CostType = CostType::Contract(DispatchHostFunction);
 
     const RUN_ITERATIONS: u64 = 1000;
 
@@ -61,7 +64,7 @@ impl CostRunner for InvokeHostFunctionRun {
         _iter: u64,
         sample: Self::SampleType,
     ) -> Self::RecycledType {
-        black_box(host.charge_budget(Self::COST_TYPE, None).unwrap());
+        black_box(host.charge_budget(DispatchHostFunction, None).unwrap());
         black_box(sample)
     }
 }

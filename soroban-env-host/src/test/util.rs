@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, rc::Rc};
+use std::{cell::RefCell, collections::BTreeMap, rc::Rc};
 
 use rand::{thread_rng, RngCore};
 use soroban_env_common::{
@@ -12,6 +12,7 @@ use soroban_synth_wasm::{Arity, ModEmitter, Operand};
 
 use crate::{
     budget::{AsBudget, Budget},
+    host::HostLifecycleEvent,
     storage::{SnapshotSource, Storage},
     xdr, Error, Host, HostError, LedgerInfo,
 };
@@ -107,9 +108,9 @@ impl Host {
             timestamp: 0,
             network_id: [0; 32],
             base_reserve: 0,
-            min_persistent_entry_expiration: 4096,
-            min_temp_entry_expiration: 16,
-            max_entry_expiration: 6_312_000,
+            min_persistent_entry_ttl: 4096,
+            min_temp_entry_ttl: 16,
+            max_entry_ttl: 6_312_000,
         })
         .unwrap();
         host
@@ -202,6 +203,7 @@ impl Host {
         account: AccountId,
         salt: [u8; 32],
     ) -> AddressObject {
+        let _span = tracy_span!("register_test_contract_wasm_from_source_account");
         // Use source account-based auth in order to avoid using nonces which
         // won't work well with enforcing ledger footprint.
         let prev_source_account = self.source_account_id().unwrap();
@@ -246,11 +248,31 @@ impl Host {
         func: Symbol,
         args: VecObject,
     ) -> Result<Val, HostError> {
+        let _span = tracy_span!("measured_call");
         let budget = self.as_budget();
         budget.reset_unlimited()?;
-        let ht = HostTracker::start(None);
+        let ht = Rc::new(RefCell::new(HostTracker::new()));
 
+        if std::env::var("EXCLUDE_VM_INSTANTIATION").is_ok() {
+            let ht2 = ht.clone();
+            let budget2 = budget.clone();
+            self.set_lifecycle_event_hook(Some(Rc::new(move |evt| {
+                match evt {
+                    HostLifecycleEvent::VmInstantiated => {
+                        budget2.reset_unlimited()?;
+                        ht2.borrow_mut().start(None);
+                    }
+                }
+                Ok(())
+            })))?;
+        } else {
+            ht.borrow_mut().start(None);
+        }
         let val = self.call(contract, func, args);
+        self.set_lifecycle_event_hook(None)?;
+
+        let (cpu_actual, mem_actual, time_nsecs) = Rc::into_inner(ht).unwrap().into_inner().stop();
+
         let cpu_metered = budget
             .get_cpu_insns_consumed()
             .expect("unable to retrieve cpu consumed");
@@ -258,28 +280,29 @@ impl Host {
             .get_mem_bytes_consumed()
             .expect("unable to retrieve mem consumed");
 
-        let (cpu_actual, mem_actual, time_nsecs) = ht.stop();
         let cpu_diff = (cpu_metered - cpu_actual) as i64;
         let cpu_metered_diff_percent = 100 * cpu_diff / (cpu_metered as i64).max(1);
         let mem_diff = (mem_metered - mem_actual) as i64;
         let mem_metered_diff_percent = 100 * mem_diff / (mem_metered as i64).max(1);
         let metered_insn_nsecs_ratio: f64 = (cpu_metered as f64) / (time_nsecs as f64).max(1.0);
         let actual_insn_nsecs_ratio: f64 = (cpu_actual as f64) / (time_nsecs as f64).max(1.0);
+
         println!();
         println!(
-            "metered cpu insns: {}, actual cpu insns {}, diff: {} ({}%) \n",
+            "metered cpu insns: {}, actual cpu insns {}, diff: {} ({:.3}%)",
             cpu_metered, cpu_actual, cpu_diff, cpu_metered_diff_percent
         );
         println!(
-            "metered mem bytes: {}, actual mem bytes {}, diff: {} ({}%) \n",
+            "metered mem bytes: {}, actual mem bytes {}, diff: {} ({:.3}%)",
             mem_metered, mem_actual, mem_diff, mem_metered_diff_percent
         );
+        println!("time_nsecs: {}", time_nsecs);
         println!(
-            "metered cpu_insn/time_nsecs ratio: {} \n",
+            "metered cpu_insn/time_nsecs ratio: {:.3}",
             metered_insn_nsecs_ratio
         );
         println!(
-            "actual cpu_insn/time_nsecs ratio: {} \n",
+            "actual cpu_insn/time_nsecs ratio: {:.3}",
             actual_insn_nsecs_ratio
         );
         println!();

@@ -121,13 +121,23 @@ macro_rules! generate_dispatch_functions {
             $(
                 // This defines a "dispatch function" that does several things:
                 //
-                //  1. charges the budget for the call, failing if over budget.
-                //  2. attempts to convert incoming wasmi i64 args to Vals or
-                //     Val-wrappers expected by host functions, failing if
-                //     any conversions fail.
-                //  3. calls the host function
-                //  4. checks the result is Ok, or traps the VM on Err
-                //  5. converts the result back to an i64 for wasmi
+                //  1. Transfers the running "VM fuel" balance from wasmi to the
+                //     host's CPU budget.
+                //  2. Charges the host budget for the call, failing if over.
+                //  3. Attempts to convert incoming wasmi i64 args to Vals or
+                //     Val-wrappers expected by host functions, failing if any
+                //     conversions fail. This step also does
+                //     relative-to-absolute object reference conversion.
+                //  4. Calls the host function.
+                //  5. Augments any error result with this calling context, so
+                //     that we get at minimum a "which host function failed"
+                //     context on error.
+                //  6. Converts the result back to an i64 for wasmi, again
+                //     converting from absolute object references to relative
+                //     along the way.
+                //  7. Checks the result is Ok, or escalates Err to a VM Trap.
+                //  8. Transfers the residual CPU budget back to wasmi "VM
+                //     fuel".
                 //
                 // It is embedded in two nested `$()*` pattern-repetition
                 // expanders that correspond to the pattern-repetition matchers
@@ -139,7 +149,7 @@ macro_rules! generate_dispatch_functions {
                 pub(crate) fn $fn_id(mut caller: wasmi::Caller<Host>, $($arg:i64),*) ->
                     Result<(i64,), Trap>
                 {
-                    let _span = tracy_span!(std::stringify!($fn_id));
+                    let _span = tracy_span!(core::stringify!($fn_id));
 
                     let host = caller.data().clone();
 

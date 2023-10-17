@@ -11,15 +11,6 @@ use sha3::Keccak256;
 
 impl Host {
     // Ed25519 functions
-
-    pub(crate) fn ed25519_signature_from_bytes(
-        &self,
-        name: &'static str,
-        bytes: &[u8],
-    ) -> Result<ed25519_dalek::Signature, HostError> {
-        self.fixed_length_bytes_from_slice::<ed25519_dalek::Signature, {ed25519_dalek::SIGNATURE_LENGTH}>(name, bytes)
-    }
-
     pub(crate) fn ed25519_signature_from_bytesobj_input(
         &self,
         name: &'static str,
@@ -51,7 +42,7 @@ impl Host {
         })
     }
 
-    pub fn ed25519_pub_key_from_bytesobj_input(
+    pub(crate) fn ed25519_pub_key_from_bytesobj_input(
         &self,
         k: BytesObject,
     ) -> Result<ed25519_dalek::VerifyingKey, HostError> {
@@ -82,30 +73,6 @@ impl Host {
     }
 
     // ECDSA secp256k1 functions
-
-    pub(crate) fn secp256k1_pub_key_from_bytes(
-        &self,
-        bytes: &[u8],
-    ) -> Result<k256::PublicKey, HostError> {
-        self.charge_budget(ContractCostType::ComputeEcdsaSecp256k1Key, None)?;
-        k256::PublicKey::from_sec1_bytes(bytes).map_err(|_| {
-            self.err(
-                ScErrorType::Crypto,
-                ScErrorCode::InvalidInput,
-                "invalid ECDSA-secp256k1 public key",
-                &[],
-            )
-        })
-    }
-
-    pub(crate) fn secp256k1_pub_key_from_bytesobj_input(
-        &self,
-        k: BytesObject,
-    ) -> Result<k256::PublicKey, HostError> {
-        self.visit_obj(k, |bytes: &ScBytes| {
-            self.secp256k1_pub_key_from_bytes(bytes.as_slice())
-        })
-    }
 
     pub(crate) fn secp256k1_signature_from_bytes(
         &self,
@@ -188,7 +155,9 @@ impl Host {
                 },
             )?;
         let rk = ScBytes::from(crate::xdr::BytesM::try_from(
-            recovered_key.to_encoded_point(false).as_bytes(),
+            recovered_key
+                .to_encoded_point(/*compress:*/ false)
+                .as_bytes(),
         )?);
         self.add_host_object(rk)
     }
@@ -205,7 +174,7 @@ impl Host {
                 return Err(err!(
                     self,
                     (ScErrorType::Object, ScErrorCode::UnexpectedSize),
-                    "expected 32-byte BytesObject for hash, got different size",
+                    "expected 32-byte BytesObject for sha256 hash, got different size",
                     hash.len()
                 ));
             }
@@ -236,7 +205,7 @@ impl Host {
                 return Err(err!(
                     self,
                     (ScErrorType::Object, ScErrorCode::UnexpectedSize),
-                    "expected 32-byte BytesObject for hash, got different size",
+                    "expected 32-byte BytesObject for keccak256 hash, got different size",
                     hash.len()
                 ));
             }
@@ -262,6 +231,7 @@ pub(crate) fn chacha20_fill_bytes(
     dest: &mut [u8],
     budget: impl AsBudget,
 ) -> Result<(), HostError> {
+    tracy_span!("chacha20");
     budget
         .as_budget()
         .charge(ContractCostType::ChaCha20DrawBytes, Some(dest.len() as u64))?;

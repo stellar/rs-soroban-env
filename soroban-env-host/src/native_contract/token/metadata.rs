@@ -141,10 +141,7 @@ fn render_sep0011_asset<const N: usize>(
     // We also have to charge for strkey_len again since PublicKey::to_string does
     // a std::string::String allocation of its own.
     let charge = capacity + strkey_len;
-    e.charge_budget(
-        crate::xdr::ContractCostType::HostMemAlloc,
-        Some(charge as u64),
-    )?;
+    e.charge_budget(crate::xdr::ContractCostType::MemAlloc, Some(charge as u64))?;
 
     let mut s: std::string::String = std::string::String::with_capacity(capacity);
     render_sep0011_asset_code(&symbuf, &mut s)?;

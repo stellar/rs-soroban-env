@@ -1,6 +1,3 @@
-#![allow(unused_variables)]
-#![allow(dead_code)]
-
 use core::{cell::RefCell, cmp::Ordering, fmt::Debug};
 use std::rc::Rc;
 
@@ -9,21 +6,21 @@ use crate::{
     budget::{AsBudget, Budget},
     events::{diagnostic::DiagnosticLevel, Events, InternalEventsBuffer},
     host_object::{HostMap, HostObject, HostObjectType, HostVec},
-    impl_bignum_host_fns_rhs_u32, impl_wrapping_obj_from_num, impl_wrapping_obj_to_num,
+    impl_bignum_host_fns, impl_bignum_host_fns_rhs_u32, impl_wrapping_obj_from_num,
+    impl_wrapping_obj_to_num,
     num::*,
     storage::Storage,
     xdr::{
         int128_helpers, AccountId, Asset, ContractCostType, ContractEventType, ContractExecutable,
-        CreateContractArgs, Duration, Hash, LedgerEntryData, PublicKey, ScAddress, ScBytes,
-        ScErrorType, ScString, ScSymbol, ScVal, TimePoint,
+        ContractIdPreimage, ContractIdPreimageFromAddress, CreateContractArgs, Duration, Hash,
+        LedgerEntryData, PublicKey, ScAddress, ScBytes, ScErrorCode, ScErrorType, ScString,
+        ScSymbol, ScVal, TimePoint, Uint256,
     },
-    AddressObject, Bool, BytesObject, ConversionError, Error, I128Object, I256Object, MapObject,
-    StorageType, StringObject, SymbolObject, SymbolSmall, SymbolStr, TryFromVal, U128Object,
-    U256Object, U32Val, U64Val, VecObject, VmCaller, VmCallerEnv, Void, I256, U256,
+    AddressObject, Bool, BytesObject, Compare, ConversionError, EnvBase, Error, I128Object,
+    I256Object, MapObject, Object, StorageType, StringObject, Symbol, SymbolObject, SymbolSmall,
+    TryFromVal, U128Object, U256Object, U32Val, U64Val, Val, VecObject, Vm, VmCaller, VmCallerEnv,
+    Void, I256, U256,
 };
-
-use crate::Vm;
-use crate::{EnvBase, Object, Symbol, Val};
 
 mod comparison;
 mod conversion;
@@ -41,21 +38,18 @@ pub(crate) mod metered_vector;
 pub(crate) mod metered_xdr;
 mod num;
 mod prng;
-pub use prng::{Seed, SEED_BYTES};
 mod validity;
+
 pub use error::HostError;
-use soroban_env_common::xdr::{ContractIdPreimage, ContractIdPreimageFromAddress, ScErrorCode};
+pub use prng::{Seed, SEED_BYTES};
 
 use self::{
     frame::{Context, ContractReentryMode},
-    prng::Prng,
-};
-use self::{
     metered_clone::{MeteredClone, MeteredContainer},
     metered_xdr::metered_write_xdr,
+    prng::Prng,
 };
-use crate::impl_bignum_host_fns;
-use crate::Compare;
+
 #[cfg(any(test, feature = "testutils"))]
 pub use frame::ContractFunctionSet;
 pub(crate) use frame::Frame;
@@ -89,10 +83,18 @@ pub struct LedgerInfo {
     pub timestamp: u64,
     pub network_id: [u8; 32],
     pub base_reserve: u32,
-    pub min_temp_entry_expiration: u32,
-    pub min_persistent_entry_expiration: u32,
-    pub max_entry_expiration: u32,
+    pub min_temp_entry_ttl: u32,
+    pub min_persistent_entry_ttl: u32,
+    pub max_entry_ttl: u32,
 }
+
+#[cfg(any(test, feature = "testutils"))]
+pub(crate) enum HostLifecycleEvent {
+    VmInstantiated,
+}
+
+#[cfg(any(test, feature = "testutils"))]
+pub(crate) type HostLifecycleHook = Rc<dyn Fn(HostLifecycleEvent) -> Result<(), HostError>>;
 
 #[derive(Clone, Default)]
 struct HostImpl {
@@ -125,6 +127,12 @@ struct HostImpl {
     // has happened or has been recorded.
     #[cfg(any(test, feature = "testutils"))]
     previous_authorization_manager: RefCell<Option<AuthorizationManager>>,
+    // Store a hook that we will call with various lifecycle events during
+    // the host's execution. No guarantees are made about the stability of this
+    // interface, it exists strictly for internal testing of the host.
+    #[doc(hidden)]
+    #[cfg(any(test, feature = "testutils"))]
+    lifecycle_event_hook: RefCell<Option<HostLifecycleHook>>,
 }
 // Host is a newtype on Rc<HostImpl> so we can impl Env for it below.
 #[derive(Clone)]
@@ -142,6 +150,7 @@ impl Default for Host {
 macro_rules! impl_checked_borrow_helpers {
     ($field:ident, $t:ty, $borrow:ident, $borrow_mut:ident) => {
         impl Host {
+            #[allow(dead_code)]
             pub(crate) fn $borrow(&self) -> Result<std::cell::Ref<'_, $t>, HostError> {
                 use crate::host::error::TryBorrowOrErr;
                 self.0.$field.try_borrow_or_err_with(
@@ -149,6 +158,7 @@ macro_rules! impl_checked_borrow_helpers {
                     concat!("host.0.", stringify!($field), ".try_borrow failed"),
                 )
             }
+            #[allow(dead_code)]
             pub(crate) fn $borrow_mut(&self) -> Result<std::cell::RefMut<'_, $t>, HostError> {
                 use crate::host::error::TryBorrowOrErr;
                 self.0.$field.try_borrow_mut_or_err_with(
@@ -221,6 +231,14 @@ impl_checked_borrow_helpers!(
     try_borrow_previous_authorization_manager_mut
 );
 
+#[cfg(any(test, feature = "testutils"))]
+impl_checked_borrow_helpers!(
+    lifecycle_event_hook,
+    Option<HostLifecycleHook>,
+    try_borrow_lifecycle_event_hook,
+    try_borrow_lifecycle_event_hook_mut
+);
+
 impl Debug for HostImpl {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "HostImpl(...)")
@@ -257,6 +275,8 @@ impl Host {
             contracts: Default::default(),
             #[cfg(any(test, feature = "testutils"))]
             previous_authorization_manager: RefCell::new(None),
+            #[cfg(any(test, feature = "testutils"))]
+            lifecycle_event_hook: RefCell::new(None),
         }))
     }
 
@@ -348,16 +368,6 @@ impl Host {
         self.with_ledger_info(|li| Ok(li.protocol_version))
     }
 
-    /// Helper for mutating the [`Budget`] held in this [`Host`], either to
-    /// allocate it on contract creation or to deplete it on callbacks from
-    /// the VM or host functions.
-    pub(crate) fn with_budget<T, F>(&self, f: F) -> Result<T, HostError>
-    where
-        F: FnOnce(Budget) -> Result<T, HostError>,
-    {
-        f(self.0.budget.clone())
-    }
-
     pub(crate) fn budget_ref(&self) -> &Budget {
         &self.0.budget
     }
@@ -367,7 +377,7 @@ impl Host {
     }
 
     pub fn charge_budget(&self, ty: ContractCostType, input: Option<u64>) -> Result<(), HostError> {
-        self.0.budget.clone().charge(ty, input)
+        self.0.budget.charge(ty, input)
     }
 
     /// Accept a _unique_ (refcount = 1) host reference and destroy the
@@ -383,43 +393,6 @@ impl Host {
             .map_err(|_| {
                 Error::from_type_and_code(ScErrorType::Context, ScErrorCode::InternalError).into()
             })
-    }
-
-    // Testing interface to create values directly for later use via Env functions.
-    // It needs to be a `pub` method because benches are considered a separate crate.
-    #[cfg(any(test, feature = "testutils"))]
-    pub fn inject_val(&self, v: &ScVal) -> Result<Val, HostError> {
-        self.to_host_val(v).map(Into::into)
-    }
-
-    fn symbol_matches(&self, s: &[u8], sym: Symbol) -> Result<bool, HostError> {
-        if let Ok(ss) = SymbolSmall::try_from(sym) {
-            let sstr: SymbolStr = ss.into();
-            let slice: &[u8] = sstr.as_ref();
-            self.as_budget()
-                .compare(&slice, &s)
-                .map(|c| c == Ordering::Equal)
-        } else {
-            let sobj: SymbolObject = sym.try_into()?;
-            self.visit_obj(sobj, |scsym: &ScSymbol| {
-                self.as_budget()
-                    .compare(&scsym.as_slice(), &s)
-                    .map(|c| c == Ordering::Equal)
-            })
-        }
-    }
-
-    fn check_symbol_matches(&self, s: &[u8], sym: Symbol) -> Result<(), HostError> {
-        if self.symbol_matches(s, sym)? {
-            Ok(())
-        } else {
-            Err(self.err(
-                ScErrorType::Value,
-                ScErrorCode::InvalidInput,
-                "symbol mismatch",
-                &[sym.to_val()],
-            ))
-        }
     }
 }
 
@@ -554,7 +527,7 @@ impl EnvBase for Host {
     }
 
     fn symbol_new_from_slice(&self, s: &str) -> Result<SymbolObject, HostError> {
-        self.charge_budget(ContractCostType::HostMemCmp, Some(s.len() as u64))?;
+        self.charge_budget(ContractCostType::MemCmp, Some(s.len() as u64))?;
         for ch in s.chars() {
             SymbolSmall::validate_char(ch)?;
         }
@@ -839,11 +812,11 @@ impl VmCallerEnv for Host {
         ))
     }
 
-    fn get_max_expiration_ledger(
+    fn get_max_live_until_ledger(
         &self,
         _vmcaller: &mut VmCaller<Host>,
     ) -> Result<U32Val, Self::Error> {
-        Ok(self.max_expiration_ledger()?.into())
+        Ok(self.max_live_until_ledger()?.into())
     }
 
     // endregion "context" module functions
@@ -1079,6 +1052,13 @@ impl VmCallerEnv for Host {
     impl_bignum_host_fns!(u256_sub, checked_sub, U256, U256Val, Int256AddSub);
     impl_bignum_host_fns!(u256_mul, checked_mul, U256, U256Val, Int256Mul);
     impl_bignum_host_fns!(u256_div, checked_div, U256, U256Val, Int256Div);
+    impl_bignum_host_fns!(
+        u256_rem_euclid,
+        checked_rem_euclid,
+        U256,
+        U256Val,
+        Int256Div
+    );
     impl_bignum_host_fns_rhs_u32!(u256_pow, checked_pow, U256, U256Val, Int256Pow);
     impl_bignum_host_fns_rhs_u32!(u256_shl, checked_shl, U256, U256Val, Int256Shift);
     impl_bignum_host_fns_rhs_u32!(u256_shr, checked_shr, U256, U256Val, Int256Shift);
@@ -1087,6 +1067,13 @@ impl VmCallerEnv for Host {
     impl_bignum_host_fns!(i256_sub, checked_sub, I256, I256Val, Int256AddSub);
     impl_bignum_host_fns!(i256_mul, checked_mul, I256, I256Val, Int256Mul);
     impl_bignum_host_fns!(i256_div, checked_div, I256, I256Val, Int256Div);
+    impl_bignum_host_fns!(
+        i256_rem_euclid,
+        checked_rem_euclid,
+        I256,
+        I256Val,
+        Int256Div
+    );
     impl_bignum_host_fns_rhs_u32!(i256_pow, checked_pow, I256, I256Val, Int256Pow);
     impl_bignum_host_fns_rhs_u32!(i256_shl, checked_shl, I256, I256Val, Int256Shift);
     impl_bignum_host_fns_rhs_u32!(i256_shr, checked_shr, I256, I256Val, Int256Shift);
@@ -1229,8 +1216,8 @@ impl VmCallerEnv for Host {
             &vm,
             keys_pos,
             len as usize,
-            |n, slice| {
-                self.charge_budget(ContractCostType::VmMemRead, Some(slice.len() as u64))?;
+            |_n, slice| {
+                self.charge_budget(ContractCostType::MemCpy, Some(slice.len() as u64))?;
                 let scsym = ScSymbol(slice.try_into()?);
                 let sym = Symbol::try_from(self.to_host_val(&ScVal::Symbol(scsym))?)?;
                 key_syms.push(sym);
@@ -1276,6 +1263,14 @@ impl VmCallerEnv for Host {
             len,
         } = self.decode_vmslice(keys_pos, len)?;
         self.visit_obj(map, |mapobj: &HostMap| {
+            if mapobj.len() != len as usize {
+                return Err(self.err(
+                    ScErrorType::Object,
+                    ScErrorCode::UnexpectedSize,
+                    "differing host map and output slice lengths when unpacking map to linear memory",
+                    &[],
+                ));
+            }
             // Step 1: check all key symbols.
             self.metered_vm_scan_slices_in_linear_memory(
                 vmcaller,
@@ -1555,10 +1550,18 @@ impl VmCallerEnv for Host {
     ) -> Result<Void, HostError> {
         let VmSlice { vm, pos, len } = self.decode_vmslice(vals_pos, len)?;
         self.visit_obj(vec, |vecobj: &HostVec| {
+            if vecobj.len() != len as usize {
+                return Err(self.err(
+                    ScErrorType::Object,
+                    ScErrorCode::UnexpectedSize,
+                    "differing host vector and output vector lengths when unpacking vec to linear memory",
+                    &[],
+                ));
+            }
             self.metered_vm_write_vals_to_linear_memory(
                 vmcaller,
                 &vm,
-                vals_pos.into(),
+                pos,
                 vecobj.as_slice(),
                 |x| {
                     Ok(u64::to_le_bytes(
@@ -1689,62 +1692,57 @@ impl VmCallerEnv for Host {
     }
 
     // Notes on metering: covered by components
-    fn bump_contract_data(
+    fn extend_contract_data(
         &self,
         _vmcaller: &mut VmCaller<Host>,
         k: Val,
         t: StorageType,
-        low_expiration_watermark: U32Val,
-        high_expiration_watermark: U32Val,
+        threshold: U32Val,
+        extend_to: U32Val,
     ) -> Result<Void, HostError> {
         self.check_val_integrity(k)?;
         if matches!(t, StorageType::Instance) {
             return Err(self.err(
                 ScErrorType::Storage,
                 ScErrorCode::InvalidAction,
-                "instance storage should be bumped via `bump_current_contract_instance_and_code` function only",
+                "instance storage should be extended via `extend_current_contract_instance_and_code` function only",
                 &[],
             ))?;
         }
         let key = self.contract_data_key_from_rawval(k, t.try_into()?)?;
         self.try_borrow_storage_mut()?
-            .bump(
-                self,
-                key,
-                low_expiration_watermark.into(),
-                high_expiration_watermark.into(),
-            )
+            .extend(self, key, threshold.into(), extend_to.into())
             .map_err(|e| self.decorate_contract_data_storage_error(e, k))?;
         Ok(Val::VOID)
     }
 
-    fn bump_current_contract_instance_and_code(
+    fn extend_current_contract_instance_and_code(
         &self,
         _vmcaller: &mut VmCaller<Host>,
-        low_expiration_watermark: U32Val,
-        high_expiration_watermark: U32Val,
+        threshold: U32Val,
+        extend_to: U32Val,
     ) -> Result<Void, HostError> {
         let contract_id = self.get_current_contract_id_internal()?;
-        self.bump_contract_instance_and_code_from_contract_id(
+        self.extend_contract_instance_and_code_from_contract_id(
             &contract_id,
-            low_expiration_watermark.into(),
-            high_expiration_watermark.into(),
+            threshold.into(),
+            extend_to.into(),
         )?;
         Ok(Val::VOID)
     }
 
-    fn bump_contract_instance_and_code(
+    fn extend_contract_instance_and_code(
         &self,
         _vmcaller: &mut VmCaller<Self::VmUserState>,
         contract: AddressObject,
-        low_expiration_watermark: U32Val,
-        high_expiration_watermark: U32Val,
+        threshold: U32Val,
+        extend_to: U32Val,
     ) -> Result<Void, Self::Error> {
         let contract_id = self.contract_id_from_address(contract)?;
-        self.bump_contract_instance_and_code_from_contract_id(
+        self.extend_contract_instance_and_code_from_contract_id(
             &contract_id,
-            low_expiration_watermark.into(),
-            high_expiration_watermark.into(),
+            threshold.into(),
+            extend_to.into(),
         )?;
         Ok(Val::VOID)
     }
@@ -1778,7 +1776,7 @@ impl VmCallerEnv for Host {
     ) -> Result<AddressObject, HostError> {
         let asset: Asset = self.metered_from_xdr_obj(serialized_asset)?;
         let contract_id_preimage = ContractIdPreimage::Asset(asset);
-        let executable = ContractExecutable::Token;
+        let executable = ContractExecutable::StellarAsset;
         let args = CreateContractArgs {
             contract_id_preimage,
             executable,
@@ -2437,50 +2435,102 @@ impl VmCallerEnv for Host {
             .into())
     }
 
-    fn account_public_key_to_address(
-        &self,
-        _vmcaller: &mut VmCaller<Self::VmUserState>,
-        pk_bytes: BytesObject,
-    ) -> Result<AddressObject, Self::Error> {
-        let account_id = self.account_id_from_bytesobj(pk_bytes)?;
-        self.add_host_object(ScAddress::Account(account_id))
-    }
-
-    fn contract_id_to_address(
-        &self,
-        _vmcaller: &mut VmCaller<Self::VmUserState>,
-        contract_id_bytes: BytesObject,
-    ) -> Result<AddressObject, Self::Error> {
-        let contract_id = self.hash_from_bytesobj_input("contract_id", contract_id_bytes)?;
-        self.add_host_object(ScAddress::Contract(contract_id))
-    }
-
-    fn address_to_account_public_key(
+    fn address_to_strkey(
         &self,
         _vmcaller: &mut VmCaller<Self::VmUserState>,
         address: AddressObject,
-    ) -> Result<Val, Self::Error> {
-        let addr = self.visit_obj(address, |addr: &ScAddress| addr.metered_clone(self))?;
-        match addr {
-            ScAddress::Account(AccountId(PublicKey::PublicKeyTypeEd25519(pk))) => Ok(self
-                .add_host_object(ScBytes(self.metered_slice_to_vec(&pk.0)?.try_into()?))?
-                .into()),
-            ScAddress::Contract(_) => Ok(().into()),
-        }
+    ) -> Result<StringObject, Self::Error> {
+        let strkey = self.visit_obj(address, |addr: &ScAddress| {
+            // Approximate the strkey encoding cost with two vector allocations:
+            // one for the payload size (32-byte key/hash + 3 bytes for
+            // version/checksum) and  another one for the base32 encoding of
+            // the payload.
+            const PAYLOAD_LEN: u64 = 32 + 3;
+            Vec::<u8>::charge_bulk_init_cpy(PAYLOAD_LEN + (PAYLOAD_LEN * 8 + 4) / 5, self)?;
+            let strkey = match addr {
+                ScAddress::Account(acc_id) => {
+                    let AccountId(PublicKey::PublicKeyTypeEd25519(Uint256(ed25519))) = acc_id;
+                    let strkey = stellar_strkey::Strkey::PublicKeyEd25519(
+                        stellar_strkey::ed25519::PublicKey(ed25519.metered_clone(self)?),
+                    );
+                    strkey
+                }
+                ScAddress::Contract(Hash(h)) => stellar_strkey::Strkey::Contract(
+                    stellar_strkey::Contract(h.metered_clone(self)?),
+                ),
+            };
+            Ok(strkey.to_string())
+        })?;
+        self.add_host_object(ScString(strkey.try_into()?))
     }
 
-    fn address_to_contract_id(
+    fn strkey_to_address(
         &self,
         _vmcaller: &mut VmCaller<Self::VmUserState>,
-        address: AddressObject,
-    ) -> Result<Val, Self::Error> {
-        let addr = self.visit_obj(address, |addr: &ScAddress| addr.metered_clone(self))?;
-        match addr {
-            ScAddress::Account(_) => Ok(().into()),
-            ScAddress::Contract(Hash(h)) => Ok(self
-                .add_host_object(ScBytes(self.metered_slice_to_vec(&h)?.try_into()?))?
-                .into()),
-        }
+        strkey_obj: Val,
+    ) -> Result<AddressObject, Self::Error> {
+        let strkey_obj = Object::try_from(strkey_obj).map_err(|_| {
+            self.err(
+                ScErrorType::Value,
+                ScErrorCode::UnexpectedType,
+                "strkey is not an object",
+                &[strkey_obj],
+            )
+        })?;
+        let sc_addr = self.visit_obj_untyped(strkey_obj, |key_obj: &HostObject| {
+            let key = match key_obj {
+                HostObject::Bytes(b) => b.as_slice(),
+                HostObject::String(s) => s.as_slice(),
+                _ => {
+                    return Err(self.err(
+                        ScErrorType::Value,
+                        ScErrorCode::UnexpectedType,
+                        "strkey is not a string or bytes object",
+                        &[strkey_obj.to_val()],
+                    ));
+                }
+            };
+            const PAYLOAD_LEN: u64 = 32 + 3;
+            let expected_key_len = (PAYLOAD_LEN * 8 + 4) / 5;
+            if expected_key_len != key.len() as u64 {
+                return Err(self.err(
+                    ScErrorType::Value,
+                    ScErrorCode::InvalidInput,
+                    "unexpected strkey length",
+                    &[strkey_obj.to_val()],
+                ));
+            }
+            // Charge for the key copy to string.
+            Vec::<u8>::charge_bulk_init_cpy(key.len() as u64, self)?;
+            let key_str = String::from_utf8_lossy(key);
+            // Approximate the decoding cost as two vector allocations for the
+            // expected payload length (the strkey library does one extra copy).
+            Vec::<u8>::charge_bulk_init_cpy(PAYLOAD_LEN + PAYLOAD_LEN, self)?;
+            let strkey = stellar_strkey::Strkey::from_string(&key_str).map_err(|_| {
+                self.err(
+                    ScErrorType::Value,
+                    ScErrorCode::InvalidInput,
+                    "couldn't process the string as strkey",
+                    &[strkey_obj.to_val()],
+                )
+            })?;
+            match strkey {
+                stellar_strkey::Strkey::PublicKeyEd25519(pk) => Ok(ScAddress::Account(AccountId(
+                    PublicKey::PublicKeyTypeEd25519(Uint256(pk.0)),
+                ))),
+
+                stellar_strkey::Strkey::Contract(c) => Ok(ScAddress::Contract(Hash(c.0))),
+                _ => {
+                    return Err(self.err(
+                        ScErrorType::Value,
+                        ScErrorCode::InvalidInput,
+                        "incorrect strkey type",
+                        &[strkey_obj.to_val()],
+                    ));
+                }
+            }
+        })?;
+        self.add_host_object(sc_addr)
     }
 
     // endregion "address" module functions
@@ -2493,7 +2543,7 @@ impl VmCallerEnv for Host {
     ) -> Result<Void, Self::Error> {
         self.visit_obj(seed, |bytes: &ScBytes| {
             let slice: &[u8] = bytes.as_ref();
-            self.charge_budget(ContractCostType::HostMemCpy, Some(prng::SEED_BYTES))?;
+            self.charge_budget(ContractCostType::MemCpy, Some(prng::SEED_BYTES))?;
             if let Ok(seed32) = slice.try_into() {
                 self.with_current_prng(|prng| {
                     *prng = Prng::new_from_seed(seed32);
@@ -2548,6 +2598,45 @@ impl VmCallerEnv for Host {
         self.add_host_object(vnew)
     }
     // endregion "prng" module functions
+}
+
+#[cfg(any(test, feature = "testutils"))]
+impl Host {
+    // Testing interface to create values directly for later use via Env functions.
+    // It needs to be a `pub` method because benches are considered a separate crate.
+    pub fn inject_val(&self, v: &ScVal) -> Result<Val, HostError> {
+        self.to_host_val(v).map(Into::into)
+    }
+
+    /// Helper for mutating the [`Budget`] held in this [`Host`], either to
+    /// allocate it on contract creation or to deplete it on callbacks from
+    /// the VM or host functions.
+    #[allow(dead_code)]
+    pub(crate) fn with_budget<T, F>(&self, f: F) -> Result<T, HostError>
+    where
+        F: FnOnce(Budget) -> Result<T, HostError>,
+    {
+        f(self.0.budget.clone())
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn set_lifecycle_event_hook(
+        &self,
+        hook: Option<HostLifecycleHook>,
+    ) -> Result<(), HostError> {
+        *self.try_borrow_lifecycle_event_hook_mut()? = hook;
+        Ok(())
+    }
+
+    pub(crate) fn call_any_lifecycle_hook(
+        &self,
+        event: HostLifecycleEvent,
+    ) -> Result<(), HostError> {
+        match &*self.try_borrow_lifecycle_event_hook()? {
+            Some(hook) => hook(event),
+            None => Ok(()),
+        }
+    }
 }
 
 #[cfg(any(test, feature = "testutils"))]

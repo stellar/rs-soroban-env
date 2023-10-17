@@ -1,11 +1,16 @@
 use std::hint::black_box;
 
-use crate::{budget::AsBudget, cost_runner::CostRunner, xdr::ContractCostType, MeteredVector};
+use crate::{
+    budget::AsBudget,
+    cost_runner::{CostRunner, CostType},
+    xdr::ContractCostType::MemAlloc,
+    MeteredVector,
+};
 
-pub struct HostMemAllocRun;
+pub struct MemAllocRun;
 
-impl CostRunner for HostMemAllocRun {
-    const COST_TYPE: ContractCostType = ContractCostType::HostMemAlloc;
+impl CostRunner for MemAllocRun {
+    const COST_TYPE: CostType = CostType::Contract(MemAlloc);
 
     type SampleType = u64;
 
@@ -24,7 +29,7 @@ impl CostRunner for HostMemAllocRun {
         _iter: u64,
         _sample: Self::SampleType,
     ) -> Self::RecycledType {
-        black_box(host.charge_budget(Self::COST_TYPE, Some(0)).unwrap());
+        black_box(host.charge_budget(MemAlloc, Some(0)).unwrap());
         black_box(None)
     }
 }

@@ -1,18 +1,21 @@
 // Run this with
-// $ cargo bench --features wasmi,testutils --bench worst_case_linear_models -- --nocapture
+// $ cargo bench --features testutils --bench worst_case_linear_models -- --nocapture
 // You can optionally pass in args listing the {`ContractCostType`, `WasmInsnType`} combination to run with, e.g.
-// $ cargo bench --features wasmi,testutils --bench worst_case_linear_models -- VecNew I64Rotr --nocapture
+// $ cargo bench --features testutils --bench worst_case_linear_models -- MemCpy I64Rotr --nocapture
 mod common;
 use common::*;
-use soroban_env_host::{cost_runner::WasmInsnType, xdr::ContractCostType};
-use std::{collections::BTreeMap, fmt::Debug, io::Write};
+use soroban_env_host::{
+    cost_runner::{CostRunner, CostType, WasmInsnType},
+    xdr::ContractCostType,
+};
+use std::{collections::BTreeMap, fmt::Display, io::Write};
 use tabwriter::{Alignment, TabWriter};
 
 struct WorstCaseLinearModels;
 impl Benchmark for WorstCaseLinearModels {
     fn bench<HCM: HostCostMeasurement>() -> std::io::Result<(FPCostModel, FPCostModel)> {
         let mut measurements = measure_worst_case_costs::<HCM>(1..20)?;
-
+        measurements.check_range_against_baseline(&HCM::Runner::COST_TYPE)?;
         measurements.preprocess();
         measurements.report_table();
         let cpu_model = measurements.fit_model_to_cpu();
@@ -23,7 +26,7 @@ impl Benchmark for WorstCaseLinearModels {
     }
 }
 
-fn write_cost_params_table<T: Debug>(
+fn write_cost_params_table<T: Display>(
     tw: &mut TabWriter<Vec<u8>>,
     params: &BTreeMap<T, (FPCostModel, FPCostModel)>,
 ) -> std::io::Result<()> {
@@ -34,13 +37,13 @@ fn write_cost_params_table<T: Debug>(
         .iter()
         .map(|(ty, (cpu, mem))| (ty, (cpu.params_as_u64(), mem.params_as_u64())))
     {
-        writeln!(tw, "{:?}\t{}\t{}\t{}\t{}", ty, cpu.0, cpu.1, mem.0, mem.1).unwrap();
+        writeln!(tw, "{}\t{}\t{}\t{}\t{}", ty, cpu.0, cpu.1, mem.0, mem.1).unwrap();
     }
     tw.flush()
 }
 
 fn write_budget_params_code(
-    params: &BTreeMap<ContractCostType, (FPCostModel, FPCostModel)>,
+    params: &BTreeMap<CostType, (FPCostModel, FPCostModel)>,
     wasm_tier_cost: &BTreeMap<WasmInsnTier, f64>,
 ) {
     println!("");
@@ -62,28 +65,17 @@ fn write_budget_params_code(
         base_cpu_per_fuel,
         0
     );
-    println!(
-        "
-        // Host cpu insns per wasm \"memory fuel\". This has to be zero since
-        // the fuel (representing cpu cost) has been covered by `WasmInsnExec`.
-        // The extra cost of mem processing is accounted for by wasmi's
-        // `config.memory_bytes_per_fuel` parameter.
-        // This type is designated to the mem cost. \n
-        ContractCostType::{:?} => {{ cpu.const_term = {}; cpu.lin_term = ScaledU64({}); }}",
-        ContractCostType::WasmMemAlloc,
-        0,
-        0
-    );
 
     for (ty, (cpu, _)) in params
         .iter()
         .map(|(ty, (cpu, mem))| (ty, (cpu.params_as_u64(), mem.params_as_u64())))
     {
-        println!(
-            "
-            ContractCostType::{:?} => {{ cpu.const_term = {}; cpu.lin_term = ScaledU64({}); }}",
-            ty, cpu.0, cpu.1
-        );
+        if let CostType::Contract(ty) = ty {
+            println!(
+                "ContractCostType::{:?} => {{ cpu.const_term = {}; cpu.lin_term = ScaledU64({}); }}",
+                ty, cpu.0, cpu.1
+            );
+        }
     }
     println!("");
     println!("");
@@ -97,24 +89,16 @@ fn write_budget_params_code(
         0,
         0
     );
-    println!(
-        "
-        // Bytes per wasmi \"memory fuel\". By definition this has to be a const = 1\n
-        // because of the 1-to-1 equivalence of the Wasm mem fuel and a host byte.\n
-        ContractCostType::{:?} => {{ mem.const_term = {}; mem.lin_term = ScaledU64({}); }}",
-        ContractCostType::WasmMemAlloc,
-        1,
-        0
-    );
     for (ty, (_, mem)) in params
         .iter()
         .map(|(ty, (cpu, mem))| (ty, (cpu.params_as_u64(), mem.params_as_u64())))
     {
-        println!(
-            "
-            ContractCostType::{:?} => {{ mem.const_term = {}; mem.lin_term = ScaledU64({}); }}",
-            ty, mem.0, mem.1
-        );
+        if let CostType::Contract(ty) = ty {
+            println!(
+                "ContractCostType::{:?} => {{ mem.const_term = {}; mem.lin_term = ScaledU64({}); }}",
+                ty, mem.0, mem.1
+            );
+        }
     }
 
     println!("");
@@ -131,12 +115,12 @@ fn write_budget_params_code(
 }
 
 fn extract_tier(
-    params_wasm: &BTreeMap<WasmInsnType, (FPCostModel, FPCostModel)>,
+    params_wasm: &BTreeMap<CostType, (FPCostModel, FPCostModel)>,
     insn_tier: &[WasmInsnType],
 ) -> (BTreeMap<WasmInsnType, (FPCostModel, FPCostModel)>, f64) {
     let mut params_tier: BTreeMap<WasmInsnType, (FPCostModel, FPCostModel)> = BTreeMap::new();
     for ty in insn_tier {
-        if let Some(res) = params_wasm.get(&ty) {
+        if let Some(res) = params_wasm.get(&CostType::Wasm(*ty)) {
             params_tier.insert(ty.clone(), res.clone());
         }
     }
@@ -151,7 +135,7 @@ fn extract_tier(
 
 fn process_tier(
     tier: WasmInsnTier,
-    params_wasm: &BTreeMap<WasmInsnType, (FPCostModel, FPCostModel)>,
+    params_wasm: &BTreeMap<CostType, (FPCostModel, FPCostModel)>,
     insn_tier: &[WasmInsnType],
 ) -> f64 {
     println!("\n");
@@ -174,7 +158,7 @@ fn process_tier(
 }
 
 fn extract_wasmi_fuel_costs(
-    params_wasm: &BTreeMap<WasmInsnType, (FPCostModel, FPCostModel)>,
+    params_wasm: &BTreeMap<CostType, (FPCostModel, FPCostModel)>,
 ) -> BTreeMap<WasmInsnTier, f64> {
     let base_cost = process_tier(WasmInsnTier::BASE, params_wasm, &WASM_INSN_BASE);
     let entity_cost = process_tier(WasmInsnTier::ENTITY, params_wasm, &WASM_INSN_ENTITY);
@@ -198,7 +182,7 @@ fn main() -> std::io::Result<()> {
     let mut tw = TabWriter::new(vec![])
         .padding(5)
         .alignment(Alignment::Right);
-    write_cost_params_table::<ContractCostType>(&mut tw, &params)?;
+    write_cost_params_table::<CostType>(&mut tw, &params)?;
     eprintln!("{}", String::from_utf8(tw.into_inner().unwrap()).unwrap());
 
     let wasm_tier_cost = extract_wasmi_fuel_costs(&params_wasm);

@@ -8,9 +8,9 @@ fn randvec(rng: &mut StdRng, len: u64) -> Vec<u8> {
     res
 }
 
-pub struct HostMemCmpMeasure;
-impl HostCostMeasurement for HostMemCmpMeasure {
-    type Runner = HostMemCmpRun;
+pub struct MemCmpMeasure;
+impl HostCostMeasurement for MemCmpMeasure {
+    type Runner = MemCmpRun;
 
     const STEP_SIZE: u64 = 4096;
 
