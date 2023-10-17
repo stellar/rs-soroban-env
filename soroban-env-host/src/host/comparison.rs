@@ -6,9 +6,11 @@ use crate::{
     storage::Storage,
     xdr::{
         AccountId, ContractCostType, ContractDataDurability, ContractExecutable,
-        CreateContractArgs, DepthLimiter, Duration, Hash, LedgerKey, LedgerKeyAccount,
-        LedgerKeyContractCode, LedgerKeyTrustLine, PublicKey, ScAddress, ScErrorCode, ScErrorType,
-        ScMap, ScMapEntry, ScNonceKey, ScVal, ScVec, TimePoint, TrustLineAsset, Uint256,
+        CreateContractArgs, DepthLimiter, Duration, Hash, Int128Parts, Int256Parts, LedgerKey,
+        LedgerKeyAccount, LedgerKeyContractCode, LedgerKeyContractData, LedgerKeyTrustLine,
+        PublicKey, ScAddress, ScContractInstance, ScError, ScErrorCode, ScErrorType, ScMap,
+        ScMapEntry, ScNonceKey, ScVal, ScVec, TimePoint, TrustLineAsset, UInt128Parts,
+        UInt256Parts, Uint256,
     },
     Compare, Host, HostError, SymbolStr, I256, U256,
 };
@@ -168,12 +170,17 @@ impl_compare_fixed_size_ord_type!(i128);
 
 impl_compare_fixed_size_ord_type!(U256);
 impl_compare_fixed_size_ord_type!(I256);
+impl_compare_fixed_size_ord_type!(Int128Parts);
+impl_compare_fixed_size_ord_type!(UInt128Parts);
+impl_compare_fixed_size_ord_type!(Int256Parts);
+impl_compare_fixed_size_ord_type!(UInt256Parts);
 impl_compare_fixed_size_ord_type!(TimePoint);
 impl_compare_fixed_size_ord_type!(Duration);
 impl_compare_fixed_size_ord_type!(Hash);
 impl_compare_fixed_size_ord_type!(Uint256);
 impl_compare_fixed_size_ord_type!(ContractExecutable);
 impl_compare_fixed_size_ord_type!(AccountId);
+impl_compare_fixed_size_ord_type!(ScError);
 impl_compare_fixed_size_ord_type!(ScAddress);
 impl_compare_fixed_size_ord_type!(ScNonceKey);
 impl_compare_fixed_size_ord_type!(PublicKey);
@@ -254,16 +261,38 @@ impl Compare<ScVal> for Budget {
                 <Self as Compare<&[u8]>>::compare(self, &a.as_slice(), &b.as_slice())
             }
 
-            (ContractInstance(a), ContractInstance(b)) => {
-                let cmp = self.compare(&a.executable, &b.executable)?;
-                if cmp.is_eq() {
-                    self.compare(&a.storage, &b.storage)
-                } else {
-                    Ok(cmp)
-                }
-            }
+            (ContractInstance(a), ContractInstance(b)) => self.compare(&a, &b),
 
-            (Bool(_), _)
+            // These two cases are content-free, besides their discriminant.
+            (Void, Void) => Ok(Ordering::Equal),
+            (LedgerKeyContractInstance, LedgerKeyContractInstance) => Ok(Ordering::Equal),
+
+            // Handle types with impl_compare_fixed_size_ord_type:
+            (Bool(a), Bool(b)) => self.compare(&a, &b),
+            (Error(a), Error(b)) => self.compare(&a, &b),
+            (U32(a), U32(b)) => self.compare(&a, &b),
+            (I32(a), I32(b)) => self.compare(&a, &b),
+            (U64(a), U64(b)) => self.compare(&a, &b),
+            (I64(a), I64(b)) => self.compare(&a, &b),
+            (Timepoint(a), Timepoint(b)) => self.compare(&a, &b),
+            (Duration(a), Duration(b)) => self.compare(&a, &b),
+            (U128(a), U128(b)) => self.compare(&a, &b),
+            (I128(a), I128(b)) => self.compare(&a, &b),
+            (U256(a), U256(b)) => self.compare(&a, &b),
+            (I256(a), I256(b)) => self.compare(&a, &b),
+            (Address(a), Address(b)) => self.compare(&a, &b),
+            (LedgerKeyNonce(a), LedgerKeyNonce(b)) => self.compare(&a, &b),
+
+            // List out at least one side of all the remaining cases here so
+            // we don't accidentally forget to update this when/if a new
+            // ScVal type is added.
+            (Vec(_), _)
+            | (Map(_), _)
+            | (Bytes(_), _)
+            | (String(_), _)
+            | (Symbol(_), _)
+            | (ContractInstance(_), _)
+            | (Bool(_), _)
             | (Void, _)
             | (Error(_), _)
             | (U32(_), _)
@@ -276,16 +305,37 @@ impl Compare<ScVal> for Budget {
             | (I128(_), _)
             | (U256(_), _)
             | (I256(_), _)
-            | (Bytes(_), _)
-            | (String(_), _)
-            | (Symbol(_), _)
-            | (Vec(_), _)
-            | (Map(_), _)
             | (Address(_), _)
             | (LedgerKeyContractInstance, _)
-            | (LedgerKeyNonce(_), _)
-            | (ContractInstance(_), _) => Ok(a.cmp(b)),
+            | (LedgerKeyNonce(_), _) => Ok(a.discriminant().cmp(&b.discriminant())),
         })
+    }
+}
+
+impl Compare<ScContractInstance> for Budget {
+    type Error = HostError;
+
+    fn compare(
+        &self,
+        a: &ScContractInstance,
+        b: &ScContractInstance,
+    ) -> Result<Ordering, Self::Error> {
+        self.compare(&(&a.executable, &a.storage), &(&b.executable, &b.storage))
+    }
+}
+
+impl Compare<LedgerKeyContractData> for Budget {
+    type Error = HostError;
+
+    fn compare(
+        &self,
+        a: &LedgerKeyContractData,
+        b: &LedgerKeyContractData,
+    ) -> Result<Ordering, Self::Error> {
+        self.compare(
+            &(&a.contract, &a.key, &a.durability),
+            &(&b.contract, &b.key, &b.durability),
+        )
     }
 }
 
@@ -299,10 +349,7 @@ impl Compare<LedgerKey> for Budget {
         match (a, b) {
             (Account(a), Account(b)) => self.compare(&a, &b),
             (Trustline(a), Trustline(b)) => self.compare(&a, &b),
-            (ContractData(a), ContractData(b)) => self.compare(
-                &(&a.contract, &a.key, &a.durability),
-                &(&b.contract, &b.key, &b.durability),
-            ),
+            (ContractData(a), ContractData(b)) => self.compare(&a, &b),
             (ContractCode(a), ContractCode(b)) => self.compare(&a, &b),
 
             // All these cases should have been rejected above by check_supported_ledger_key_type.
@@ -323,7 +370,7 @@ impl Compare<LedgerKey> for Budget {
             // we remember to update this code if LedgerKey changes. We don't
             // charge for these since they're just 1-integer compares.
             (Account(_), _) | (Trustline(_), _) | (ContractData(_), _) | (ContractCode(_), _) => {
-                Ok(a.cmp(b))
+                Ok(a.discriminant().cmp(&b.discriminant()))
             }
         }
     }
