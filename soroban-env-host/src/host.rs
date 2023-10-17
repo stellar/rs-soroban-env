@@ -670,6 +670,8 @@ impl VmCallerEnv for Host {
 
                 let VmSlice { vm, pos, len } = self.decode_vmslice(vals_pos, vals_len)?;
                 let mut vals: Vec<Val> = vec![Val::VOID.to_val(); len as usize];
+                // charge for conversion from bytes to `Val`s
+                self.charge_budget(ContractCostType::MemCpy, Some(len.saturating_mul(8) as u64))?;
                 self.metered_vm_read_vals_from_linear_memory::<8, Val>(
                     vmcaller,
                     &vm,
@@ -1229,6 +1231,8 @@ impl VmCallerEnv for Host {
         let vals_pos: u32 = vals_pos.into();
         Vec::<Val>::charge_bulk_init_cpy(len as u64, self)?;
         let mut vals: Vec<Val> = vec![Val::VOID.into(); len as usize];
+        // charge for conversion from bytes to `Val`s
+        self.charge_budget(ContractCostType::MemCpy, Some(len.saturating_mul(8) as u64))?;
         self.metered_vm_read_vals_from_linear_memory::<8, Val>(
             vmcaller,
             &vm,
@@ -1279,18 +1283,18 @@ impl VmCallerEnv for Host {
                 len as usize,
                 |n, slice| {
                     let sym = Symbol::try_from(
-                        mapobj
-                            .map
-                            .get(n)
-                            .ok_or_else(|| {
+                        mapobj.get_at_index(n, self).map_err(|he|
+                            if he.error.is_type(ScErrorType::Budget) {
+                                he
+                            } else {
                                 self.err(
                                     ScErrorType::Object,
                                     ScErrorCode::IndexBounds,
                                     "vector out of bounds while unpacking map to linear memory",
                                     &[],
                                 )
-                            })?
-                            .0,
+                            }
+                        )?.0
                     )?;
                     self.check_symbol_matches(slice, sym)?;
                     Ok(())
@@ -1298,6 +1302,8 @@ impl VmCallerEnv for Host {
             )?;
 
             // Step 2: write all vals.
+            // charges memcpy of converting map entries into bytes
+            self.charge_budget(ContractCostType::MemCpy, Some(len.saturating_mul(8) as u64))?;
             self.metered_vm_write_vals_to_linear_memory(
                 vmcaller,
                 &vm,
@@ -1528,6 +1534,8 @@ impl VmCallerEnv for Host {
         let VmSlice { vm, pos, len } = self.decode_vmslice(vals_pos, len)?;
         Vec::<Val>::charge_bulk_init_cpy(len as u64, self)?;
         let mut vals: Vec<Val> = vec![Val::VOID.to_val(); len as usize];
+        // charge for conversion from bytes to `Val`s
+        self.charge_budget(ContractCostType::MemCpy, Some(len.saturating_mul(8) as u64))?;
         self.metered_vm_read_vals_from_linear_memory::<8, Val>(
             vmcaller,
             &vm,
@@ -1558,6 +1566,8 @@ impl VmCallerEnv for Host {
                     &[],
                 ));
             }
+            // charges memcpy of converting vec entries into bytes
+            self.charge_budget(ContractCostType::MemCpy, Some(len.saturating_mul(8) as u64))?;
             self.metered_vm_write_vals_to_linear_memory(
                 vmcaller,
                 &vm,
@@ -2032,6 +2042,7 @@ impl VmCallerEnv for Host {
         self.memobj_new_from_linear_memory::<ScSymbol>(vmcaller, lm_pos, len)
     }
 
+    // Metering: covered by `metered_vm_scan_slices_in_linear_memory` and `symbol_matches`.
     fn symbol_index_in_linear_memory(
         &self,
         vmcaller: &mut VmCaller<Host>,

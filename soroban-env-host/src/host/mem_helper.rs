@@ -57,6 +57,9 @@ impl Host {
         )
     }
 
+    // Note on metering: covers the cost of memcpy from bytes into the linear memory.
+    // It does not include the cost of getting those bytes, which is done by the
+    // closure and must be metered in the closure at the caller side.
     pub(crate) fn metered_vm_write_vals_to_linear_memory<const VAL_SZ: usize, VAL>(
         &self,
         vmcaller: &mut VmCaller<Host>,
@@ -98,6 +101,9 @@ impl Host {
         Ok(())
     }
 
+    // Notes on metering: covers the cost of memcpy from linear memory to local slices.
+    // The cost of converting slices into `VAL`s are not covered and needs to be metered
+    // by the closure at the caller side.
     pub(crate) fn metered_vm_read_vals_from_linear_memory<const VAL_SZ: usize, VAL>(
         &self,
         vmcaller: &mut VmCaller<Host>,
@@ -152,6 +158,12 @@ impl Host {
     // this assumption is incorrect, this will not break the safety of this
     // function, only make it read junk memory in the guest and therefore likely
     // cause the callback to return an error.
+    //
+    // Notes on metering: metering for this function covers memcpy of the `slices`
+    // , each of which is a 8 byte memory (4 byte pos + 4 byte len). The actual
+    // content pointed to by each slice is accessed and passed into the closure
+    // as a reference so there is no cost to it. The actual cost of work done on
+    // the slice needs to be metered in the closure by the caller.
     pub(crate) fn metered_vm_scan_slices_in_linear_memory(
         &self,
         vmcaller: &mut VmCaller<Host>,
@@ -161,6 +173,8 @@ impl Host {
         mut callback: impl FnMut(usize, &[u8]) -> Result<(), HostError>,
     ) -> Result<(), HostError> {
         let mem_data = vm.get_memory(self)?.data(vmcaller.try_mut()?);
+        // charge the cost of copying the slices (pointera to the content, not
+        // the content themselves) upfront
         self.charge_budget(
             ContractCostType::MemCpy,
             Some((num_slices as u64).saturating_mul(8)),
