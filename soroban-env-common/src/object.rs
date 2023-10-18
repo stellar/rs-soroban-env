@@ -1,6 +1,6 @@
 use crate::xdr::{Duration, ScVal, TimePoint};
 use crate::{
-    impl_rawval_wrapper_base, num, val::ValConvert, Compare, ConversionError, Convert, Env, Tag,
+    impl_val_wrapper_base, num, val::ValConvert, Compare, ConversionError, Convert, Env, Tag,
     TryFromVal, Val,
 };
 use core::{cmp::Ordering, fmt::Debug};
@@ -11,7 +11,7 @@ use core::{cmp::Ordering, fmt::Debug};
 #[repr(transparent)]
 #[derive(Copy, Clone)]
 pub struct Object(pub(crate) Val);
-impl_rawval_wrapper_base!(Object);
+impl_val_wrapper_base!(Object);
 
 impl ValConvert for Object {
     fn is_val_type(v: Val) -> bool {

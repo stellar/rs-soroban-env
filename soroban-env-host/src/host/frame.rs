@@ -574,9 +574,9 @@ impl Host {
                     let res: Result<Option<Val>, PanicVal> =
                         testutils::call_with_suppressed_panic_hook(closure);
                     match res {
-                        Ok(Some(rawval)) => {
-                            self.fn_return_diagnostics(id, &func, &rawval)?;
-                            Ok(rawval)
+                        Ok(Some(val)) => {
+                            self.fn_return_diagnostics(id, &func, &val)?;
+                            Ok(val)
                         }
                         Ok(None) => Err(self.err(
                             ScErrorType::Context,

@@ -188,8 +188,8 @@ impl Host {
 
     pub(crate) fn test_bin_obj(&self, vals: &[u8]) -> Result<BytesObject, HostError> {
         let scval: ScVal = self.test_bin_scobj(vals)?;
-        let rawval: Val = self.to_host_val(&scval)?;
-        Ok(rawval.try_into()?)
+        let val: Val = self.to_host_val(&scval)?;
+        Ok(val.try_into()?)
     }
 
     // Registers a contract with provided Wasm code and returns the registered

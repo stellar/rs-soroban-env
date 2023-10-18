@@ -589,24 +589,24 @@ mod tests {
     #[test]
     fn compare_obj_to_small() {
         let host = Host::default();
-        let rawvals: Vec<Val> = all_tags()
+        let vals: Vec<Val> = all_tags()
             .into_iter()
             .map(|t| example_for_tag(&host, t))
             .collect();
-        let scvals: Vec<ScVal> = rawvals
+        let scvals: Vec<ScVal> = vals
             .iter()
             .map(|r| ScVal::try_from_val(&host, r).expect("scval"))
             .collect();
 
-        let rawval_pairs = rawvals.iter().cartesian_product(&rawvals);
+        let val_pairs = vals.iter().cartesian_product(&vals);
         let scval_pairs = scvals.iter().cartesian_product(&scvals);
 
-        let pair_pairs = rawval_pairs.zip(scval_pairs);
+        let pair_pairs = val_pairs.zip(scval_pairs);
 
-        for ((rawval1, rawval2), (scval1, scval2)) in pair_pairs {
-            let rawval_cmp = host.compare(rawval1, rawval2).expect("compare");
+        for ((val1, val2), (scval1, scval2)) in pair_pairs {
+            let val_cmp = host.compare(val1, val2).expect("compare");
             let scval_cmp = scval1.cmp(scval2);
-            assert_eq!(rawval_cmp, scval_cmp);
+            assert_eq!(val_cmp, scval_cmp);
         }
     }
 

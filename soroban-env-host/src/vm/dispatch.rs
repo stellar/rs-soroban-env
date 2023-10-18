@@ -166,7 +166,7 @@ macro_rules! generate_dispatch_functions {
                     // The odd / seemingly-redundant use of `wasmi::Value` here
                     // as intermediates -- rather than just passing Vals --
                     // has to do with the fact that some host functions are
-                    // typed as receiving or returning plain _non-Rawval_ i64 or
+                    // typed as receiving or returning plain _non-val_ i64 or
                     // u64 values. So the call here has to be able to massage
                     // both types into and out of i64, and `wasmi::Value`
                     // happens to be a natural switching point for that: we have

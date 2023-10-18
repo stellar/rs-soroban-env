@@ -3,9 +3,9 @@
 
 use crate::xdr::{ScError, ScValType};
 use crate::{
-    declare_tag_based_object_wrapper, declare_tag_based_wrapper, impl_rawval_wrapper_base,
-    impl_tryfroms_and_tryfromvals_delegating_to_valconvert, Compare, I32Val, SymbolSmall,
-    SymbolStr, U32Val,
+    declare_tag_based_object_wrapper, declare_tag_based_wrapper,
+    impl_tryfroms_and_tryfromvals_delegating_to_valconvert, impl_val_wrapper_base, Compare, I32Val,
+    SymbolSmall, SymbolStr, U32Val,
 };
 
 use super::{Env, Error, TryFromVal};
@@ -158,12 +158,12 @@ pub enum Tag {
 
 impl Tag {
     #[inline(always)]
-    pub const fn rawval_mask() -> i64 {
+    pub const fn val_mask() -> i64 {
         TAG_MASK as i64
     }
 
     #[inline(always)]
-    pub fn rawval_const(&self) -> i64 {
+    pub fn val_const(&self) -> i64 {
         *self as i64
     }
 
@@ -294,7 +294,7 @@ impl<E: Env> Compare<Void> for E {
 #[repr(transparent)]
 #[derive(Copy, Clone)]
 pub struct Bool(Val);
-impl_rawval_wrapper_base!(Bool);
+impl_val_wrapper_base!(Bool);
 
 impl From<bool> for Bool {
     fn from(value: bool) -> Self {

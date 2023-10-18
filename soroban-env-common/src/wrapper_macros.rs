@@ -105,7 +105,7 @@ macro_rules! impl_wrapper_wasmi_conversions {
 
 #[doc(hidden)]
 #[macro_export]
-macro_rules! impl_wrapper_as_and_to_rawval {
+macro_rules! impl_wrapper_as_and_to_val {
     ($wrapper:ty) => {
         // AsRef / AsMut to Val.
         impl AsRef<$crate::Val> for $wrapper {
@@ -168,14 +168,14 @@ macro_rules! impl_wrapper_from_other_type {
 /// Macro for base implementation of a type wrapping a [`Val`]
 #[doc(hidden)]
 #[macro_export]
-macro_rules! impl_rawval_wrapper_base {
+macro_rules! impl_val_wrapper_base {
     ($T:ident) => {
         impl core::fmt::Debug for $T {
             fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
                 self.0.fmt(f)
             }
         }
-        $crate::impl_wrapper_as_and_to_rawval!($T);
+        $crate::impl_wrapper_as_and_to_val!($T);
         $crate::impl_wrapper_wasmi_conversions!($T);
         $crate::impl_tryfroms_and_tryfromvals_delegating_to_valconvert!($T);
     };
@@ -215,7 +215,7 @@ macro_rules! declare_tag_based_wrapper {
         #[derive(Copy, Clone)]
         pub struct $T($crate::Val);
 
-        $crate::impl_rawval_wrapper_base!($T);
+        $crate::impl_val_wrapper_base!($T);
         $crate::impl_wrapper_tag_based_valconvert!($T);
         $crate::impl_wrapper_tag_based_constructors!($T);
     };
@@ -272,7 +272,7 @@ macro_rules! declare_tag_based_small_and_object_wrappers {
         #[repr(transparent)]
         #[derive(Copy, Clone)]
         pub struct $GENERAL($crate::Val);
-        $crate::impl_rawval_wrapper_base!($GENERAL);
+        $crate::impl_val_wrapper_base!($GENERAL);
 
         impl $crate::val::ValConvert for $GENERAL {
             fn is_val_type(v: $crate::Val) -> bool {

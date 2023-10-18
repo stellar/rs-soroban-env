@@ -134,7 +134,7 @@ fn test_num_scval_roundtrips() {
 }
 
 #[test]
-fn test_num_rawval_scval_roundtrip_ordering() {
+fn test_num_val_scval_roundtrip_ordering() {
     let host = Host::default();
     let input_vec = vec![
         0_i128,

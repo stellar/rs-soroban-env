@@ -173,9 +173,9 @@ impl FuncEmitter {
     /// trapping if not. Consumes the top of stack value, so you might need to
     /// call [`FuncEmitter::dup_via`] first.
     pub fn assert_val_tag(&mut self, tag: Tag) -> &mut Self {
-        self.i64_const(Tag::rawval_mask())
+        self.i64_const(Tag::val_mask())
             .i64_and()
-            .i64_const(tag.rawval_const())
+            .i64_const(tag.val_const())
             .i64_ne()
             .if_then_trap()
     }

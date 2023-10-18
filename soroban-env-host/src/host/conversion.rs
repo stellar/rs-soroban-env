@@ -130,7 +130,7 @@ impl Host {
     /// Converts a [`Val`] to an [`ScVal`] and combines it with the currently-executing
     /// [`ContractID`] to produce a [`Key`], that can be used to access ledger [`Storage`].
     // Notes on metering: covered by components.
-    pub fn storage_key_from_rawval(
+    pub fn storage_key_from_val(
         &self,
         k: Val,
         durability: ContractDataDurability,
@@ -164,7 +164,7 @@ impl Host {
     }
 
     // Notes on metering: covered by components.
-    pub(crate) fn contract_data_key_from_rawval(
+    pub(crate) fn contract_data_key_from_val(
         &self,
         k: Val,
         durability: ContractDataDurability,
@@ -202,7 +202,7 @@ impl Host {
         self.visit_obj(args, |hv: &HostVec| hv.to_vec(self.as_budget()))
     }
 
-    // Metering: covered by rawvals_to_vec
+    // Metering: covered by vals_to_vec
     pub(crate) fn vecobject_to_scval_vec(&self, args: VecObject) -> Result<VecM<ScVal>, HostError> {
         self.visit_obj(args, |hv: &HostVec| self.vals_to_scval_vec(hv.as_slice()))
     }
