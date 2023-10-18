@@ -352,13 +352,8 @@ impl Host {
         // and is done inside `from_host_obj`.
         let _span = tracy_span!("Val to ScVal");
         let scval = self.budget_cloned().with_limited_depth(|_| {
-            ScVal::try_from_val(self, &val).map_err(|_| {
-                self.err(
-                    ScErrorType::Value,
-                    ScErrorCode::InvalidInput,
-                    "failed to convert host value to ScVal",
-                    &[val],
-                )
+            ScVal::try_from_val(self, &val).map_err(|cerr: crate::ConversionError| {
+                self.error(cerr.into(), "failed to convert host value to ScVal", &[val])
             })
         })?;
         self.check_val_representable_scval(&scval)?;
@@ -372,14 +367,10 @@ impl Host {
         // Metering of val conversion happens only if an object is encountered,
         // and is done inside `to_host_obj`.
         self.budget_cloned().with_limited_depth(|_| {
-            v.try_into_val(self).map_err(|_| {
-                self.err(
-                    ScErrorType::Value,
-                    ScErrorCode::InternalError,
-                    "failed to convert ScVal to host value",
-                    &[],
-                )
-            })
+            v.try_into_val(self)
+                .map_err(|cerr: crate::ConversionError| {
+                    self.error(cerr.into(), "failed to convert ScVal to host value", &[])
+                })
         })
     }
 
