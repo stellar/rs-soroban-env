@@ -69,6 +69,7 @@ impl Host {
         name: &'static str,
         hash: BytesObject,
     ) -> Result<Hash, HostError> {
+        static_assertions::assert_eq_size!([u8; 32], Hash);
         self.fixed_length_bytes_from_bytesobj_input::<Hash, 32>(name, hash)
     }
 
@@ -77,6 +78,7 @@ impl Host {
         name: &'static str,
         u256: BytesObject,
     ) -> Result<Uint256, HostError> {
+        static_assertions::assert_eq_size!([u8; 32], Uint256);
         self.fixed_length_bytes_from_bytesobj_input::<Uint256, 32>(name, u256)
     }
 
