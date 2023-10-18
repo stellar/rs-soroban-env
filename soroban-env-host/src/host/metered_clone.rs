@@ -1,3 +1,21 @@
+//! Functions to support measurement of the cost of cloning (and allocating)
+//! objects that may contain pointers into the heap.
+//!
+//! Note that in this file the term "substructure" refers to the presence of
+//! _pointers to owned data_ in a type, such that "merely counting the size" of
+//! the type fails to capture the cost of cloning it. For example a struct with
+//! 10 `Option<i32>` fields has "no substructure", because counting the size of
+//! the struct gives you the right cost of cloning it; whereas a struct with
+//! even one `Vec<u8>` is considered to "have substructure" because the struct's
+//! size is just the fixed size of the vector header, and fails to account to
+//! the owned heap allocation that the `Vec` _points to_, and that will be
+//! cloned anytime we clone the struct.
+//!
+//! Consequently in methods where we "charge for the substructure" we are only
+//! concerned with visiting any fields that (transitively) contain owning
+//! pointers. The rest of each struct is considered its "shallow" part and
+//! charged based on its declared size (see [`DeclaredSizeForMetering`]).
+
 use std::{iter::FromIterator, mem, rc::Rc};
 
 use crate::{
@@ -10,12 +28,12 @@ use crate::{
     xdr::{
         AccountEntry, AccountId, Asset, BytesM, ContractCodeEntry, ContractCostType, ContractEvent,
         ContractEventBody, ContractEventType, ContractExecutable, ContractIdPreimage,
-        CreateContractArgs, DepthLimiter, Duration, Hash, LedgerEntry, LedgerEntryData,
-        LedgerEntryExt, LedgerKey, LedgerKeyAccount, LedgerKeyContractCode, LedgerKeyTrustLine,
-        PublicKey, ScAddress, ScBytes, ScContractInstance, ScErrorCode, ScErrorType, ScMap,
-        ScMapEntry, ScNonceKey, ScString, ScSymbol, ScVal, ScVec, Signer,
-        SorobanAuthorizationEntry, SorobanAuthorizedInvocation, StringM, TimePoint, TrustLineAsset,
-        TrustLineEntry, Uint256,
+        CreateContractArgs, DepthLimiter, Duration, Hash, InvokeContractArgs, LedgerEntry,
+        LedgerEntryData, LedgerEntryExt, LedgerKey, LedgerKeyAccount, LedgerKeyContractCode,
+        LedgerKeyTrustLine, PublicKey, ScAddress, ScBytes, ScContractInstance, ScErrorCode,
+        ScErrorType, ScMap, ScMapEntry, ScNonceKey, ScString, ScSymbol, ScVal, ScVec, Signer,
+        SorobanAuthorizationEntry, SorobanAuthorizedFunction, SorobanAuthorizedInvocation, StringM,
+        TimePoint, TrustLineAsset, TrustLineEntry, Uint256,
     },
     AddressObject, Bool, BytesObject, DurationObject, DurationSmall, DurationVal, Error, HostError,
     I128Object, I128Small, I128Val, I256Object, I256Small, I256Val, I32Val, I64Object, I64Small,
@@ -27,10 +45,10 @@ use crate::{
 
 use super::declared_size::DeclaredSizeForMetering;
 
-// Charge for an N-element "shallow copy" of some type, not cloning any substructure. The charge
-// unit is number of elements `n_elts` multiplied by a declared size of each element. In a better
-// world we would multiply by `size_of<Self>` instead but that's not guaranteed to be stable, which
-// might cause metering to differ across compilations, causing problems in concensus and replay.
+/// Charge for an N-element "shallow copy" of some type, not cloning any substructure. The charge
+/// unit is number of elements `n_elts` multiplied by a declared size of each element. In a better
+/// world we would multiply by `size_of<Self>` instead but that's not guaranteed to be stable, which
+/// might cause metering to differ across compilations, causing problems in concensus and replay.
 pub(crate) fn charge_shallow_copy<T: DeclaredSizeForMetering>(
     n_elts: u64,
     budget: impl AsBudget,
@@ -138,18 +156,24 @@ impl<T: DeclaredSizeForMetering, I: Iterator, F> MeteredIterator for std::iter::
 {
 }
 
+/// A type that can be cloned, and charges for the cost of doing so, possibly
+/// failing if the clone runs out of budget. The cost of cloning may include
+/// both "shallow" and "substructure" components.
 pub trait MeteredClone: Clone + DeclaredSizeForMetering {
-    // By default every MeteredClone type just charges as though it's shallow;
-    // if a type is non-shallow (has variable-sized substructure to consider) it
-    // should override both `IS_SHALLOW` (setting it to `false`) and
-    // `charge_for_clone` (correctly charging for cloning the substructure).
+    /// By default every MeteredClone type just charges as though it's shallow;
+    /// if a type is non-shallow (owns any substructure in the heap) it should
+    /// override both `IS_SHALLOW` (setting it to `false`) and
+    /// `charge_for_substructure` (correctly charging for cloning the
+    /// substructure).
     const IS_SHALLOW: bool = true;
 
-    // Called to clone the substructures of Self. The default implementation is a no-op and is
-    // _only_ appropriate when Self is a shallow type (with no substructure). If you override
-    // Self::IS_SHALLOW and set it to false, you should override this method also (it will actually
-    // Err if you don't). This charge does not include shallow copying of `Self` because that
-    // should be taken care of by the caller beforehand, e.g. in `metered_clone`.
+    /// Called to clone the substructures of Self. The default implementation is
+    /// a no-op and is _only_ appropriate when Self is a shallow type (with no
+    /// substructure). If you override `Self::IS_SHALLOW` and set it to false,
+    /// you should override this method also (it will actually Err if you
+    /// don't). This charge does not include shallow copying of `Self` because
+    /// that should be taken care of by the caller beforehand, e.g. in
+    /// `metered_clone`.
     fn charge_for_substructure(&self, _budget: impl AsBudget) -> Result<(), HostError> {
         if Self::IS_SHALLOW {
             Ok(())
@@ -158,9 +182,10 @@ pub trait MeteredClone: Clone + DeclaredSizeForMetering {
         }
     }
 
-    // Called when cloning the substructures of a slice of Self. When Self::IS_SHALLOW, this is a
-    // no-op. If Self::IS_SHALLOW is false, this method will do element-wise charging for
-    // substructure, assuming it is paired with element-wise cloning.
+    /// Called when cloning the substructures of a slice of Self. When
+    /// Self::IS_SHALLOW, this is a no-op. If Self::IS_SHALLOW is false, this
+    /// method will do element-wise charging for substructure, assuming it is
+    /// paired with element-wise cloning.
     fn bulk_charge_for_substructure(
         clones: &[Self],
         budget: impl AsBudget,
@@ -176,7 +201,8 @@ pub trait MeteredClone: Clone + DeclaredSizeForMetering {
         }
     }
 
-    // Convenience method for charging for a deep clone knowing the type is not shallow.
+    /// Convenience method for charging for a deep clone knowing the type is not
+    /// shallow.
     fn charge_deep_clone(&self, budget: impl AsBudget) -> Result<(), HostError> {
         if Self::IS_SHALLOW {
             Err((ScErrorType::Object, ScErrorCode::InternalError).into())
@@ -186,12 +212,14 @@ pub trait MeteredClone: Clone + DeclaredSizeForMetering {
         }
     }
 
-    // Composite helper handles metering before clone. It first charges for the shallow footprint
-    // of the type, followed by charging the substructure clone. The reason
-    // `charge_for_substructure` does not include shallow copying of `Self` is because it is taken
-    // care of here. Typically overriding `IS_SHALLOW` and `charge_for_substructure` should
-    // propertly take care of custom non-trivial cloning. Thus this method should not need to be
-    // overriden.
+    /// Composite helper handles metering and then, if successful, cloning. It
+    /// first charges for the shallow footprint of the type, followed by
+    /// charging the substructure, and finally calling `Clone::clone`. The
+    /// reason `charge_for_substructure` does not include shallow copying of
+    /// `Self` is because it is taken care of here. Typically overriding
+    /// `IS_SHALLOW` and `charge_for_substructure` should propertly take care of
+    /// custom non-trivial cloning. Thus this method should not need to be
+    /// overriden.
     fn metered_clone(&self, budget: impl AsBudget) -> Result<Self, HostError> {
         charge_shallow_copy::<Self>(1, budget.clone())?;
         self.charge_for_substructure(budget)?;
@@ -199,7 +227,7 @@ pub trait MeteredClone: Clone + DeclaredSizeForMetering {
     }
 }
 
-// primitive types
+// region: primitive types
 impl MeteredClone for u8 {}
 impl MeteredClone for u32 {}
 impl MeteredClone for i32 {}
@@ -207,7 +235,9 @@ impl MeteredClone for u64 {}
 impl MeteredClone for i64 {}
 impl MeteredClone for u128 {}
 impl MeteredClone for i128 {}
-// Val-wrapping types
+// endregion: primitive types
+
+// region: Val-wrapping types
 impl MeteredClone for Val {}
 impl MeteredClone for Void {}
 impl MeteredClone for Bool {}
@@ -247,14 +277,21 @@ impl MeteredClone for StringObject {}
 impl MeteredClone for Symbol {}
 impl MeteredClone for SymbolSmall {}
 impl MeteredClone for SymbolObject {}
-// other common types
+// endregion: Val-wrapping types
+
+// region: other env types with no substructure
 impl MeteredClone for SymbolStr {}
 impl MeteredClone for SymbolSmallIter {}
 impl MeteredClone for U256 {}
 impl MeteredClone for I256 {}
 impl MeteredClone for HostObject {}
 impl MeteredClone for Address {}
-// xdr types
+impl MeteredClone for AccessType {}
+impl MeteredClone for InternalContractEvent {}
+impl MeteredClone for EventError {}
+// endregion: other env types with no substructure
+
+// region: xdr types with no substructure
 impl MeteredClone for TimePoint {}
 impl MeteredClone for Duration {}
 impl MeteredClone for Hash {}
@@ -272,19 +309,16 @@ impl MeteredClone for LedgerKeyTrustLine {}
 impl MeteredClone for LedgerKeyContractCode {}
 
 impl MeteredClone for LedgerEntryExt {}
-impl MeteredClone for AccountEntry {}
 impl MeteredClone for TrustLineEntry {}
 impl MeteredClone for ContractCodeEntry {}
 
-impl MeteredClone for AccessType {}
-impl MeteredClone for InternalContractEvent {}
-impl MeteredClone for EventError {}
 impl MeteredClone for CreateContractArgs {}
 impl MeteredClone for ContractIdPreimage {}
-impl MeteredClone for SorobanAuthorizedInvocation {}
-impl MeteredClone for SorobanAuthorizationEntry {}
 impl MeteredClone for Asset {}
-// composite types
+// endregion: xdr types with no substructure
+
+// region: Rust standard composite types
+
 // cloning Rc is just a ref-count bump
 impl<T> MeteredClone for Rc<T> {}
 
@@ -313,6 +347,77 @@ impl<C: MeteredClone, const N: usize> MeteredClone for [C; N] {
         C::bulk_charge_for_substructure(self.as_slice(), budget)
     }
 }
+
+impl<C: MeteredClone> MeteredClone for Vec<C> {
+    const IS_SHALLOW: bool = false;
+
+    fn charge_for_substructure(&self, budget: impl AsBudget) -> Result<(), HostError> {
+        // first take care of Vec clone, which involves allocating memory and shallowly cloning the
+        // data type into it, then deep clone any substructure.
+        charge_heap_alloc::<C>(self.len() as u64, budget.clone())?;
+        charge_shallow_copy::<C>(self.len() as u64, budget.clone())?;
+        C::bulk_charge_for_substructure(self.as_slice(), budget)?;
+        Ok(())
+    }
+}
+
+impl<C: MeteredClone> MeteredClone for Box<C> {
+    const IS_SHALLOW: bool = false;
+
+    fn charge_for_substructure(&self, budget: impl AsBudget) -> Result<(), HostError> {
+        // first take care of the Box clone: allocating memory and shallow cloning of data type.
+        charge_heap_alloc::<C>(1, budget.clone())?;
+        charge_shallow_copy::<C>(1, budget.clone())?;
+        // then take care of any substructure clone (recursively)
+        let inner: &C = self;
+        inner.charge_for_substructure(budget)
+    }
+}
+
+impl<C: MeteredClone> MeteredClone for Option<C> {
+    const IS_SHALLOW: bool = C::IS_SHALLOW;
+
+    fn charge_for_substructure(&self, budget: impl AsBudget) -> Result<(), HostError> {
+        match self {
+            Some(elt) => elt.charge_for_substructure(budget),
+            None => Ok(()),
+        }
+    }
+}
+// endregion: Rust standard composite types
+
+// region: other env types with substructure
+impl MeteredClone for HostEvent {
+    const IS_SHALLOW: bool = false;
+
+    fn charge_for_substructure(&self, budget: impl AsBudget) -> Result<(), HostError> {
+        self.event.charge_for_substructure(budget)
+    }
+}
+
+impl MeteredClone for Events {
+    const IS_SHALLOW: bool = false;
+
+    fn charge_for_substructure(&self, budget: impl AsBudget) -> Result<(), HostError> {
+        self.0.charge_for_substructure(budget)
+    }
+}
+
+impl MeteredClone for InternalEvent {
+    const IS_SHALLOW: bool = false;
+
+    fn charge_for_substructure(&self, budget: impl AsBudget) -> Result<(), HostError> {
+        match self {
+            InternalEvent::Contract(c) => c.charge_for_substructure(budget),
+            InternalEvent::Diagnostic(_) => {
+                Err((ScErrorType::Events, ScErrorCode::InternalError).into())
+            }
+        }
+    }
+}
+// endregion: other env types with substructure
+
+// region: xdr types with substructure
 
 impl MeteredClone for ScVal {
     const IS_SHALLOW: bool = false;
@@ -428,43 +533,6 @@ impl MeteredClone for ScSymbol {
     }
 }
 
-impl<C: MeteredClone> MeteredClone for Vec<C> {
-    const IS_SHALLOW: bool = false;
-
-    fn charge_for_substructure(&self, budget: impl AsBudget) -> Result<(), HostError> {
-        // first take care of Vec clone, which involves allocating memory and shallowly cloning the
-        // data type into it, then deep clone any substructure.
-        charge_heap_alloc::<C>(self.len() as u64, budget.clone())?;
-        charge_shallow_copy::<C>(self.len() as u64, budget.clone())?;
-        C::bulk_charge_for_substructure(self.as_slice(), budget)?;
-        Ok(())
-    }
-}
-
-impl<C: MeteredClone> MeteredClone for Box<C> {
-    const IS_SHALLOW: bool = false;
-
-    fn charge_for_substructure(&self, budget: impl AsBudget) -> Result<(), HostError> {
-        // first take care of the Box clone: allocating memory and shallow cloning of data type.
-        charge_heap_alloc::<C>(1, budget.clone())?;
-        charge_shallow_copy::<C>(1, budget.clone())?;
-        // then take care of any substructure clone (recursively)
-        let inner: &C = self;
-        inner.charge_for_substructure(budget)
-    }
-}
-
-impl<C: MeteredClone> MeteredClone for Option<C> {
-    const IS_SHALLOW: bool = C::IS_SHALLOW;
-
-    fn charge_for_substructure(&self, budget: impl AsBudget) -> Result<(), HostError> {
-        match self {
-            Some(elt) => elt.charge_for_substructure(budget),
-            None => Ok(()),
-        }
-    }
-}
-
 impl MeteredClone for ContractEvent {
     const IS_SHALLOW: bool = false;
 
@@ -477,35 +545,6 @@ impl MeteredClone for ContractEvent {
             let ContractEventBody::V0(event) = &self.body;
             event.topics.charge_for_substructure(budget.clone())?;
             event.data.charge_for_substructure(budget)
-        }
-    }
-}
-
-impl MeteredClone for HostEvent {
-    const IS_SHALLOW: bool = false;
-
-    fn charge_for_substructure(&self, budget: impl AsBudget) -> Result<(), HostError> {
-        self.event.charge_for_substructure(budget)
-    }
-}
-
-impl MeteredClone for Events {
-    const IS_SHALLOW: bool = false;
-
-    fn charge_for_substructure(&self, budget: impl AsBudget) -> Result<(), HostError> {
-        self.0.charge_for_substructure(budget)
-    }
-}
-
-impl MeteredClone for InternalEvent {
-    const IS_SHALLOW: bool = false;
-
-    fn charge_for_substructure(&self, budget: impl AsBudget) -> Result<(), HostError> {
-        match self {
-            InternalEvent::Contract(c) => c.charge_for_substructure(budget),
-            InternalEvent::Diagnostic(_) => {
-                Err((ScErrorType::Events, ScErrorCode::InternalError).into())
-            }
         }
     }
 }
@@ -558,3 +597,53 @@ impl MeteredClone for LedgerEntry {
         }
     }
 }
+
+impl MeteredClone for AccountEntry {
+    const IS_SHALLOW: bool = false;
+
+    fn charge_for_substructure(&self, budget: impl AsBudget) -> Result<(), HostError> {
+        self.home_domain.charge_for_substructure(budget.clone())?;
+        self.signers.charge_for_substructure(budget)
+    }
+}
+
+impl MeteredClone for SorobanAuthorizedInvocation {
+    const IS_SHALLOW: bool = false;
+
+    fn charge_for_substructure(&self, budget: impl AsBudget) -> Result<(), HostError> {
+        self.function.charge_for_substructure(budget.clone())?;
+        self.sub_invocations.charge_for_substructure(budget)
+    }
+}
+
+impl MeteredClone for SorobanAuthorizationEntry {
+    const IS_SHALLOW: bool = false;
+
+    fn charge_for_substructure(&self, budget: impl AsBudget) -> Result<(), HostError> {
+        self.root_invocation.charge_for_substructure(budget)
+    }
+}
+
+impl MeteredClone for SorobanAuthorizedFunction {
+    const IS_SHALLOW: bool = false;
+
+    fn charge_for_substructure(&self, budget: impl AsBudget) -> Result<(), HostError> {
+        match self {
+            // InvokeContractArgs carries a vector as substructure.
+            SorobanAuthorizedFunction::ContractFn(c) => c.charge_for_substructure(budget),
+            // CreateContractArgs has no substructure.
+            SorobanAuthorizedFunction::CreateContractHostFn(_) => Ok(()),
+        }
+    }
+}
+
+impl MeteredClone for InvokeContractArgs {
+    const IS_SHALLOW: bool = false;
+
+    fn charge_for_substructure(&self, budget: impl AsBudget) -> Result<(), HostError> {
+        self.function_name.charge_for_substructure(budget.clone())?;
+        self.args.charge_for_substructure(budget)
+    }
+}
+
+// endregion: xdr types with substructure
