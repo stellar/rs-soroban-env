@@ -101,7 +101,8 @@ impl<T: DeclaredSizeForMetering> MeteredAlloc<T> for Rc<T> {
 }
 
 /// Represents a collection type which can be created from an iterator, and provides
-/// a method for bulk charging its creation cost.
+/// a method for bulk charging its creation cost. This does not clone elements from
+/// the iterator, just moves them into the container, so only charges shallow copies.
 pub trait MeteredContainer: FromIterator<Self::Item> + DeclaredSizeForMetering
 where
     Self: Sized,
