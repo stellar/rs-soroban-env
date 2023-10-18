@@ -189,7 +189,7 @@ impl Host {
         match res {
             Ok(u) => {
                 let v = self.usize_to_u32(u)?;
-                Ok(u64::from(v) | (1 << u32::BITS))
+                Ok(u64::from(v) | (1_u64 << u32::BITS))
             }
             Err(u) => {
                 let v = self.usize_to_u32(u)?;
