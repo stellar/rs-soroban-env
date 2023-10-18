@@ -462,15 +462,15 @@ impl Host {
                 Ok(self.add_host_object(HostMap::from_map(mm, self)?)?.into())
             }
             ScVal::Vec(None) => Err(self.err(
-                ScErrorType::Object,
-                ScErrorCode::MissingValue,
-                "vector body missing",
+                ScErrorType::Value,
+                ScErrorCode::InvalidInput,
+                "ScVal::Vec body missing",
                 &[],
             )),
             ScVal::Map(None) => Err(self.err(
-                ScErrorType::Object,
-                ScErrorCode::MissingValue,
-                "map body missing",
+                ScErrorType::Value,
+                ScErrorCode::InvalidInput,
+                "ScVal::Map body missing",
                 &[],
             )),
             ScVal::U64(u) => {

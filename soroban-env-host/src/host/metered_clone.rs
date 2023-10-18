@@ -325,7 +325,7 @@ impl MeteredClone for ScVal {
                 ScVal::Vec(Some(v)) => ScVec::charge_for_substructure(v, budget),
                 ScVal::Map(Some(m)) => ScMap::charge_for_substructure(m, budget),
                 ScVal::Vec(None) | ScVal::Map(None) => {
-                    Err((ScErrorType::Value, ScErrorCode::MissingValue).into())
+                    Err((ScErrorType::Value, ScErrorCode::InvalidInput).into())
                 }
                 ScVal::Bytes(b) => BytesM::charge_for_substructure(b, budget),
                 ScVal::String(s) => StringM::charge_for_substructure(s, budget),

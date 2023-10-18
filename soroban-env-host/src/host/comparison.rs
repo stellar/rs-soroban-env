@@ -246,7 +246,7 @@ impl Compare<ScVal> for Budget {
             (Map(Some(a)), Map(Some(b))) => self.compare(a, b),
 
             (Vec(None), _) | (_, Vec(None)) | (Map(None), _) | (_, Map(None)) => {
-                Err((ScErrorType::Object, ScErrorCode::MissingValue).into())
+                Err((ScErrorType::Value, ScErrorCode::InvalidInput).into())
             }
 
             (Bytes(a), Bytes(b)) => {
