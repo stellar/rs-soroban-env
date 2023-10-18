@@ -57,7 +57,7 @@ impl Host {
             Ok(v) => Ok(v),
             Err(_) => Err(self.err(
                 ScErrorType::Value,
-                ScErrorCode::InvalidInput,
+                ScErrorCode::ArithDomain,
                 "expecting U32Val less than 256",
                 &[r.to_val(), name.try_into_val(self)?],
             )),
