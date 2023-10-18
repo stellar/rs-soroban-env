@@ -234,7 +234,7 @@ impl Host {
     ) -> Result<VecM<ScVal>, HostError> {
         raw_vals
             .iter()
-            .map(|v| v.try_into_val(self)?)
+            .map(|v| self.from_host_val(*v))
             .collect::<Result<Vec<ScVal>, HostError>>()?
             .try_into()
             .map_err(|_| {
