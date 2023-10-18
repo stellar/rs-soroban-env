@@ -511,6 +511,9 @@ impl Host {
             ScVal::String(s) => Ok(self.add_host_object(s.metered_clone(self)?)?.into()),
             ScVal::Symbol(s) => Ok(self.add_host_object(s.metered_clone(self)?)?.into()),
             ScVal::Address(addr) => Ok(self.add_host_object(addr.metered_clone(self)?)?.into()),
+
+            // None of the following cases should have made it into this function, they
+            // are excluded by the ScValObjRef::classify function.
             ScVal::Bool(_)
             | ScVal::Void
             | ScVal::Error(_)
@@ -520,8 +523,8 @@ impl Host {
             | ScVal::ContractInstance(_)
             | ScVal::LedgerKeyContractInstance => Err(err!(
                 self,
-                (ScErrorType::Object, ScErrorCode::InvalidInput),
-                "converting unsupported value to object",
+                (ScErrorType::Value, ScErrorCode::InternalError),
+                "converting ScValObjRef on non-object ScVal type",
                 *val
             )),
         }
