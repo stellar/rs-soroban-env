@@ -166,7 +166,7 @@ pub(crate) fn authorize_single_invocation_with_nonce(
         function: SorobanAuthorizedFunction::ContractFn(InvokeContractArgs {
             contract_address: contract_address.to_sc_address().unwrap(),
             function_name: ScSymbol(function_name.try_into().unwrap()),
-            args: host.call_args_to_sc_val_vec(args.into()).unwrap(),
+            args: host.vecobject_to_scval_vec(args.into()).unwrap(),
         }),
         sub_invocations: Default::default(),
     };

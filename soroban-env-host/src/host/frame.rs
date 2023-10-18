@@ -391,9 +391,12 @@ impl Host {
         if let Some(id) = self.get_current_contract_id_opt_internal()? {
             Ok(id)
         } else {
+            // This should only ever happen if we try to access the contract ID
+            // from a HostFunction frame (meaning before a contract is running).
+            // Doing so is a logic bug on our part.
             Err(self.err(
                 ScErrorType::Context,
-                ScErrorCode::MissingValue,
+                ScErrorCode::InternalError,
                 "Current context has no contract ID",
                 &[],
             ))
@@ -571,9 +574,9 @@ impl Host {
                     let res: Result<Option<Val>, PanicVal> =
                         testutils::call_with_suppressed_panic_hook(closure);
                     match res {
-                        Ok(Some(rawval)) => {
-                            self.fn_return_diagnostics(id, &func, &rawval)?;
-                            Ok(rawval)
+                        Ok(Some(val)) => {
+                            self.fn_return_diagnostics(id, &func, &val)?;
+                            Ok(val)
                         }
                         Ok(None) => Err(self.err(
                             ScErrorType::Context,
@@ -667,7 +670,7 @@ impl Host {
                         ));
                     };
                     let function_name: Symbol = invoke_args.function_name.try_into_val(self)?;
-                    let args = self.scvals_to_rawvals(invoke_args.args.as_slice())?;
+                    let args = self.scvals_to_val_vec(invoke_args.args.as_slice())?;
                     // since the `HostFunction` frame must be the bottom of the call stack,
                     // reentry is irrelevant, we always pass in `ContractReentryMode::Prohibited`.
                     self.call_n_internal(

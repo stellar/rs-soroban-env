@@ -364,7 +364,7 @@ impl AuthorizedFunction {
                 AuthorizedFunction::ContractFn(ContractFunction {
                     contract_address: host.add_host_object(xdr_contract_fn.contract_address)?,
                     function_name: Symbol::try_from_val(host, &xdr_contract_fn.function_name)?,
-                    args: host.scvals_to_rawvals(xdr_contract_fn.args.as_slice())?,
+                    args: host.scvals_to_val_vec(xdr_contract_fn.args.as_slice())?,
                 })
             }
             SorobanAuthorizedFunction::CreateContractHostFn(xdr_args) => {
@@ -391,7 +391,7 @@ impl AuthorizedFunction {
                 Ok(SorobanAuthorizedFunction::ContractFn(InvokeContractArgs {
                     contract_address: host.scaddress_from_address(contract_fn.contract_address)?,
                     function_name,
-                    args: host.rawvals_to_sc_val_vec(contract_fn.args.as_slice())?,
+                    args: host.vals_to_scval_vec(contract_fn.args.as_slice())?,
                 }))
             }
             AuthorizedFunction::CreateContractHostFn(create_contract_args) => {
@@ -413,7 +413,7 @@ impl AuthorizedFunction {
                         })?,
                     function_name: contract_fn.function_name.try_into_val(host)?,
                     // why is this intentionally non-metered? the visit_obj above is metered.
-                    args: host.rawvals_to_sc_val_vec_non_metered(contract_fn.args.as_slice())?,
+                    args: host.vals_to_scval_vec_non_metered(contract_fn.args.as_slice())?,
                 }))
             }
             AuthorizedFunction::CreateContractHostFn(create_contract_args) => Ok(

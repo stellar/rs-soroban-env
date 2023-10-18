@@ -25,7 +25,7 @@ pub struct InternalContractEvent {
 impl InternalContractEvent {
     // Metering: covered by components
     pub fn to_xdr(&self, host: &Host) -> Result<xdr::ContractEvent, HostError> {
-        let topics = host.call_args_to_sc_val_vec(self.topics)?;
+        let topics = host.vecobject_to_scval_vec(self.topics)?;
         let data = host.from_host_val(self.data)?;
         let contract_id = match self.contract_id {
             Some(id) => Some(host.hash_from_bytesobj_input("contract_id", id)?),

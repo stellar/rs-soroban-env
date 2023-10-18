@@ -3,9 +3,9 @@
 
 use crate::xdr::{ScError, ScValType};
 use crate::{
-    declare_tag_based_object_wrapper, declare_tag_based_wrapper, impl_rawval_wrapper_base,
-    impl_tryfroms_and_tryfromvals_delegating_to_valconvert, Compare, I32Val, SymbolSmall,
-    SymbolStr, U32Val,
+    declare_tag_based_object_wrapper, declare_tag_based_wrapper,
+    impl_tryfroms_and_tryfromvals_delegating_to_valconvert, impl_val_wrapper_base, Compare, I32Val,
+    SymbolSmall, SymbolStr, U32Val,
 };
 
 use super::{Env, Error, TryFromVal};
@@ -158,12 +158,12 @@ pub enum Tag {
 
 impl Tag {
     #[inline(always)]
-    pub const fn rawval_mask() -> i64 {
+    pub const fn val_mask() -> i64 {
         TAG_MASK as i64
     }
 
     #[inline(always)]
-    pub fn rawval_const(&self) -> i64 {
+    pub fn val_const(&self) -> i64 {
         *self as i64
     }
 
@@ -294,7 +294,7 @@ impl<E: Env> Compare<Void> for E {
 #[repr(transparent)]
 #[derive(Copy, Clone)]
 pub struct Bool(Val);
-impl_rawval_wrapper_base!(Bool);
+impl_val_wrapper_base!(Bool);
 
 impl From<bool> for Bool {
     fn from(value: bool) -> Self {
@@ -574,6 +574,40 @@ impl From<&ScError> for Val {
 // Utility methods
 
 impl Val {
+    /// Some ScVals are not representable as Vals at all,
+    /// and only exist in the XDR to serve as special storage
+    /// system key or value payloads managed by the Host.
+    pub const fn can_represent_scval_type(scv_ty: ScValType) -> bool {
+        match scv_ty {
+            ScValType::Bool
+            | ScValType::Void
+            | ScValType::Error
+            | ScValType::U32
+            | ScValType::I32
+            | ScValType::U64
+            | ScValType::I64
+            | ScValType::Timepoint
+            | ScValType::Duration
+            | ScValType::U128
+            | ScValType::I128
+            | ScValType::U256
+            | ScValType::I256
+            | ScValType::Bytes
+            | ScValType::String
+            | ScValType::Symbol
+            | ScValType::Vec
+            | ScValType::Map
+            | ScValType::Address => true,
+            ScValType::ContractInstance
+            | ScValType::LedgerKeyContractInstance
+            | ScValType::LedgerKeyNonce => false,
+        }
+    }
+
+    pub const fn can_represent_scval(scv: &crate::xdr::ScVal) -> bool {
+        Self::can_represent_scval_type(scv.discriminant())
+    }
+
     #[inline(always)]
     pub const fn get_payload(self) -> u64 {
         self.0

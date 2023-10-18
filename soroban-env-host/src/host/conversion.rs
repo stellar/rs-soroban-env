@@ -57,7 +57,7 @@ impl Host {
             Ok(v) => Ok(v),
             Err(_) => Err(self.err(
                 ScErrorType::Value,
-                ScErrorCode::InvalidInput,
+                ScErrorCode::ArithDomain,
                 "expecting U32Val less than 256",
                 &[r.to_val(), name.try_into_val(self)?],
             )),
@@ -69,6 +69,7 @@ impl Host {
         name: &'static str,
         hash: BytesObject,
     ) -> Result<Hash, HostError> {
+        static_assertions::assert_eq_size!([u8; 32], Hash);
         self.fixed_length_bytes_from_bytesobj_input::<Hash, 32>(name, hash)
     }
 
@@ -77,6 +78,7 @@ impl Host {
         name: &'static str,
         u256: BytesObject,
     ) -> Result<Uint256, HostError> {
+        static_assertions::assert_eq_size!([u8; 32], Uint256);
         self.fixed_length_bytes_from_bytesobj_input::<Uint256, 32>(name, u256)
     }
 
@@ -128,7 +130,7 @@ impl Host {
     /// Converts a [`Val`] to an [`ScVal`] and combines it with the currently-executing
     /// [`ContractID`] to produce a [`Key`], that can be used to access ledger [`Storage`].
     // Notes on metering: covered by components.
-    pub fn storage_key_from_rawval(
+    pub fn storage_key_from_val(
         &self,
         k: Val,
         durability: ContractDataDurability,
@@ -138,13 +140,13 @@ impl Host {
 
     pub(crate) fn storage_key_for_address(
         &self,
-        contract_address: ScAddress,
+        contract: ScAddress,
         key: ScVal,
         durability: ContractDataDurability,
     ) -> Result<Rc<LedgerKey>, HostError> {
         Rc::metered_new(
             LedgerKey::ContractData(LedgerKeyContractData {
-                contract: contract_address,
+                contract,
                 key,
                 durability,
             }),
@@ -162,32 +164,24 @@ impl Host {
     }
 
     // Notes on metering: covered by components.
-    pub(crate) fn contract_data_key_from_rawval(
+    pub(crate) fn contract_data_key_from_val(
         &self,
         k: Val,
         durability: ContractDataDurability,
     ) -> Result<Rc<LedgerKey>, HostError> {
         let key_scval = self.from_host_val(k)?;
-        // FIXME: also check for ScVal::ContractInstance here?
-        if let ScVal::LedgerKeyContractInstance | ScVal::LedgerKeyNonce(_) = key_scval {
-            return Err(self.err(
-                ScErrorType::Storage,
-                ScErrorCode::InvalidInput,
-                "value type cannot be used as contract data key",
-                &[k],
-            ));
-        }
+        self.check_val_representable_scval(&key_scval)?;
         self.storage_key_from_scval(key_scval, durability)
     }
 
     /// Converts a binary search result into a u64. `res` is `Some(index)` if
     /// the value was found at `index`, or `Err(index)` if the value was not
     /// found and would've needed to be inserted at `index`. Returns a
-    /// Some(res_u64) where :
-    /// - the high 32 bits is 0x0000_0001 if element existed or 0x0000_0000 if
+    /// Some(res_u64) where:
+    /// - The high 32 bits is 0x0000_0001 if element existed or 0x0000_0000 if
     ///   it didn't
-    /// - the low 32 bits contains the u32 representation of the `index` Err(_)
-    /// if the `index` fails to be converted to an u32.
+    /// - The low 32 bits contains the u32 representation of the `index` Err(_)
+    ///   if the `index` fails to be converted to an u32.
     pub(crate) fn u64_from_binary_search_result(
         &self,
         res: Result<usize, usize>,
@@ -195,7 +189,7 @@ impl Host {
         match res {
             Ok(u) => {
                 let v = self.usize_to_u32(u)?;
-                Ok(u64::from(v) | (1 << u32::BITS))
+                Ok(u64::from(v) | (1_u64 << u32::BITS))
             }
             Err(u) => {
                 let v = self.usize_to_u32(u)?;
@@ -208,19 +202,13 @@ impl Host {
         self.visit_obj(args, |hv: &HostVec| hv.to_vec(self.as_budget()))
     }
 
-    // Metering: covered by rawvals_to_vec
-    pub(crate) fn call_args_to_sc_val_vec(
-        &self,
-        args: VecObject,
-    ) -> Result<VecM<ScVal>, HostError> {
-        self.visit_obj(args, |hv: &HostVec| {
-            self.rawvals_to_sc_val_vec(hv.as_slice())
-        })
+    // Metering: covered by vals_to_vec
+    pub(crate) fn vecobject_to_scval_vec(&self, args: VecObject) -> Result<VecM<ScVal>, HostError> {
+        self.visit_obj(args, |hv: &HostVec| self.vals_to_scval_vec(hv.as_slice()))
     }
 
-    pub(crate) fn rawvals_to_sc_val_vec(&self, raw_vals: &[Val]) -> Result<VecM<ScVal>, HostError> {
-        raw_vals
-            .iter()
+    pub(crate) fn vals_to_scval_vec(&self, vals: &[Val]) -> Result<VecM<ScVal>, HostError> {
+        vals.iter()
             .map(|v| self.from_host_val(*v))
             .metered_collect::<Result<Vec<ScVal>, HostError>>(self)??
             .try_into()
@@ -229,18 +217,17 @@ impl Host {
                     self,
                     (ScErrorType::Object, ScErrorCode::ExceededLimit),
                     "vector size limit exceeded",
-                    raw_vals.len()
+                    vals.len()
                 )
             })
     }
 
-    pub(crate) fn rawvals_to_sc_val_vec_non_metered(
+    pub(crate) fn vals_to_scval_vec_non_metered(
         &self,
-        raw_vals: &[Val],
+        vals: &[Val],
     ) -> Result<VecM<ScVal>, HostError> {
-        raw_vals
-            .iter()
-            .map(|v| v.try_into_val(self)?)
+        vals.iter()
+            .map(|v| self.from_host_val(*v))
             .collect::<Result<Vec<ScVal>, HostError>>()?
             .try_into()
             .map_err(|_| {
@@ -248,13 +235,13 @@ impl Host {
                     self,
                     (ScErrorType::Object, ScErrorCode::ExceededLimit),
                     "vector size limit exceeded",
-                    raw_vals.len()
+                    vals.len()
                 )
             })
     }
 
-    pub(crate) fn scvals_to_rawvals(&self, sc_vals: &[ScVal]) -> Result<Vec<Val>, HostError> {
-        sc_vals
+    pub(crate) fn scvals_to_val_vec(&self, scvals: &[ScVal]) -> Result<Vec<Val>, HostError> {
+        scvals
             .iter()
             .map(|scv| self.to_host_val(scv))
             .metered_collect::<Result<Vec<Val>, HostError>>(self)?
@@ -339,37 +326,44 @@ impl<'a> Convert<ScValObjRef<'a>, Object> for Host {
 }
 
 impl Host {
+    pub(crate) fn check_val_representable_scval(&self, scval: &ScVal) -> Result<(), HostError> {
+        if Val::can_represent_scval(&scval) {
+            Ok(())
+        } else {
+            Err(self.err(
+                ScErrorType::Value,
+                ScErrorCode::InternalError,
+                "unexpected non-Val-representable ScVal type",
+                &[Val::from_u32(scval.discriminant() as u32).into()],
+            ))
+        }
+    }
+
     pub(crate) fn from_host_val(&self, val: Val) -> Result<ScVal, HostError> {
         // This is the depth limit checkpoint for `Val`->`ScVal` conversion.
         // Metering of val conversion happens only if an object is encountered,
         // and is done inside `from_host_obj`.
         let _span = tracy_span!("Val to ScVal");
-        self.budget_cloned().with_limited_depth(|_| {
-            ScVal::try_from_val(self, &val).map_err(|_| {
-                self.err(
-                    ScErrorType::Value,
-                    ScErrorCode::InvalidInput,
-                    "failed to convert host value to ScVal",
-                    &[val],
-                )
+        let scval = self.budget_cloned().with_limited_depth(|_| {
+            ScVal::try_from_val(self, &val).map_err(|cerr: crate::ConversionError| {
+                self.error(cerr.into(), "failed to convert host value to ScVal", &[val])
             })
-        })
+        })?;
+        self.check_val_representable_scval(&scval)?;
+        Ok(scval)
     }
 
     pub(crate) fn to_host_val(&self, v: &ScVal) -> Result<Val, HostError> {
         let _span = tracy_span!("ScVal to Val");
+        self.check_val_representable_scval(&v)?;
         // This is the depth limit checkpoint for `ScVal`->`Val` conversion.
         // Metering of val conversion happens only if an object is encountered,
         // and is done inside `to_host_obj`.
         self.budget_cloned().with_limited_depth(|_| {
-            v.try_into_val(self).map_err(|_| {
-                self.err(
-                    ScErrorType::Value,
-                    ScErrorCode::InternalError,
-                    "failed to convert ScVal to host value",
-                    &[],
-                )
-            })
+            v.try_into_val(self)
+                .map_err(|cerr: crate::ConversionError| {
+                    self.error(cerr.into(), "failed to convert ScVal to host value", &[])
+                })
         })
     }
 
@@ -435,7 +429,7 @@ impl Host {
                     HostObject::Bytes(b) => ScVal::Bytes(b.metered_clone(self)?),
                     HostObject::String(s) => ScVal::String(s.metered_clone(self)?),
                     HostObject::Symbol(s) => ScVal::Symbol(s.metered_clone(self)?),
-                    HostObject::Address(addr) => ScVal::Address(addr.metered_clone(self)?), // For any future `HostObject` types we add, make sure to add some metering.
+                    HostObject::Address(addr) => ScVal::Address(addr.metered_clone(self)?),
                 };
                 Ok(ScValObject::unchecked_from_val(val))
             })
@@ -444,10 +438,11 @@ impl Host {
 
     pub(crate) fn to_host_obj(&self, ob: &ScValObjRef<'_>) -> Result<Object, HostError> {
         let val: &ScVal = (*ob).into();
+        self.check_val_representable_scval(val)?;
         match val {
             // Here we have to make sure host object conversion is charged in each variant
             // below. There is no otherwise ubiquitous metering for ScVal->Val conversion,
-            // since most of them happens in the "common" crate with no access to the host.
+            // since most of them happen in the "common" crate with no access to the host.
             ScVal::Vec(Some(v)) => {
                 Vec::<Val>::charge_bulk_init_cpy(v.len() as u64, self)?;
                 let mut vv = Vec::with_capacity(v.len());
@@ -467,15 +462,15 @@ impl Host {
                 Ok(self.add_host_object(HostMap::from_map(mm, self)?)?.into())
             }
             ScVal::Vec(None) => Err(self.err(
-                ScErrorType::Object,
-                ScErrorCode::MissingValue,
-                "vector body missing",
+                ScErrorType::Value,
+                ScErrorCode::InvalidInput,
+                "ScVal::Vec body missing",
                 &[],
             )),
             ScVal::Map(None) => Err(self.err(
-                ScErrorType::Object,
-                ScErrorCode::MissingValue,
-                "map body missing",
+                ScErrorType::Value,
+                ScErrorCode::InvalidInput,
+                "ScVal::Map body missing",
                 &[],
             )),
             ScVal::U64(u) => {
@@ -516,6 +511,9 @@ impl Host {
             ScVal::String(s) => Ok(self.add_host_object(s.metered_clone(self)?)?.into()),
             ScVal::Symbol(s) => Ok(self.add_host_object(s.metered_clone(self)?)?.into()),
             ScVal::Address(addr) => Ok(self.add_host_object(addr.metered_clone(self)?)?.into()),
+
+            // None of the following cases should have made it into this function, they
+            // are excluded by the ScValObjRef::classify function.
             ScVal::Bool(_)
             | ScVal::Void
             | ScVal::Error(_)
@@ -525,10 +523,10 @@ impl Host {
             | ScVal::ContractInstance(_)
             | ScVal::LedgerKeyContractInstance => Err(err!(
                 self,
-                (ScErrorType::Object, ScErrorCode::InvalidInput),
-                "converting unsupported value to object",
+                (ScErrorType::Value, ScErrorCode::InternalError),
+                "converting ScValObjRef on non-object ScVal type",
                 *val
-            )), // For any future `HostObject` types we add, make sure to add some metering.
+            )),
         }
     }
 }

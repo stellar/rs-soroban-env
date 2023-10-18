@@ -14,7 +14,7 @@ impl HostCostMeasurement for MapEntryMeasure {
 
     fn new_random_case(host: &Host, rng: &mut StdRng, input: u64) -> MapEntrySample {
         let input = 1 + input * Self::STEP_SIZE;
-        let mut keys: Vec<_> = util::to_rawval_u32(0..(input as u32)).collect();
+        let mut keys: Vec<_> = util::u32_iter_to_val_iter(0..(input as u32)).collect();
         let om = keys.iter().cloned().zip(keys.iter().cloned()).collect();
         let map: MeteredOrdMap<_, _, _> = MeteredOrdMap::from_map(om, host).unwrap();
         keys.shuffle(rng);

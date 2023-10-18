@@ -1619,7 +1619,7 @@ impl VmCallerEnv for Host {
         self.check_val_integrity(k)?;
         let res = match t {
             StorageType::Temporary | StorageType::Persistent => {
-                let key = self.storage_key_from_rawval(k, t.try_into()?)?;
+                let key = self.storage_key_from_val(k, t.try_into()?)?;
                 self.try_borrow_storage_mut()?
                     .has(&key, self.as_budget())
                     .map_err(|e| self.decorate_contract_data_storage_error(e, k))?
@@ -1642,7 +1642,7 @@ impl VmCallerEnv for Host {
         self.check_val_integrity(k)?;
         match t {
             StorageType::Temporary | StorageType::Persistent => {
-                let key = self.storage_key_from_rawval(k, t.try_into()?)?;
+                let key = self.storage_key_from_val(k, t.try_into()?)?;
                 let entry = self
                     .try_borrow_storage_mut()?
                     .get(&key, self.as_budget())
@@ -1683,7 +1683,7 @@ impl VmCallerEnv for Host {
         self.check_val_integrity(k)?;
         match t {
             StorageType::Temporary | StorageType::Persistent => {
-                let key = self.contract_data_key_from_rawval(k, t.try_into()?)?;
+                let key = self.contract_data_key_from_val(k, t.try_into()?)?;
                 self.try_borrow_storage_mut()?
                     .del(&key, self.as_budget())
                     .map_err(|e| self.decorate_contract_data_storage_error(e, k))?;
@@ -1719,7 +1719,7 @@ impl VmCallerEnv for Host {
                 &[],
             ))?;
         }
-        let key = self.contract_data_key_from_rawval(k, t.try_into()?)?;
+        let key = self.contract_data_key_from_val(k, t.try_into()?)?;
         self.try_borrow_storage_mut()?
             .extend(self, key, threshold.into(), extend_to.into())
             .map_err(|e| self.decorate_contract_data_storage_error(e, k))?;

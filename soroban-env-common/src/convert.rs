@@ -474,6 +474,10 @@ where
 {
     type Error = ConversionError;
     fn try_from_val(env: &E, val: &ScVal) -> Result<Val, Self::Error> {
+        if !Val::can_represent_scval(val) {
+            return Err(ConversionError);
+        }
+
         if let Some(scvo) = ScValObjRef::classify(val) {
             let obj = Object::try_from_val(env, &scvo)?;
             return Ok(obj.into());
@@ -529,7 +533,8 @@ where
             }
 
             // These should all have been classified as ScValObjRef above, or are
-            // reserved ScVal types that are never passed as vals at all.
+            // reserved ScVal types Val::can_represent_scval would have returned
+            // false from above.
             ScVal::Bytes(_)
             | ScVal::String(_)
             | ScVal::Vec(_)
