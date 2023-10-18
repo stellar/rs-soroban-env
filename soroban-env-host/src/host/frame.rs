@@ -670,7 +670,7 @@ impl Host {
                         ));
                     };
                     let function_name: Symbol = invoke_args.function_name.try_into_val(self)?;
-                    let args = self.scvals_to_rawvals(invoke_args.args.as_slice())?;
+                    let args = self.scvals_to_val_vec(invoke_args.args.as_slice())?;
                     // since the `HostFunction` frame must be the bottom of the call stack,
                     // reentry is irrelevant, we always pass in `ContractReentryMode::Prohibited`.
                     self.call_n_internal(

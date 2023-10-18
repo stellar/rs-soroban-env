@@ -2893,7 +2893,7 @@ fn test_recording_auth_for_token() {
                 function: SorobanAuthorizedFunction::ContractFn(InvokeContractArgs {
                     contract_address: token.address.to_sc_address().unwrap(),
                     function_name: ScSymbol("mint".try_into().unwrap()),
-                    args: test.host.call_args_to_sc_val_vec(args.into()).unwrap()
+                    args: test.host.vecobject_to_scval_vec(args.into()).unwrap()
                 }),
                 sub_invocations: Default::default()
             }

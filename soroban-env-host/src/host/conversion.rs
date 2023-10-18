@@ -203,18 +203,12 @@ impl Host {
     }
 
     // Metering: covered by rawvals_to_vec
-    pub(crate) fn call_args_to_sc_val_vec(
-        &self,
-        args: VecObject,
-    ) -> Result<VecM<ScVal>, HostError> {
-        self.visit_obj(args, |hv: &HostVec| {
-            self.rawvals_to_sc_val_vec(hv.as_slice())
-        })
+    pub(crate) fn vecobject_to_scval_vec(&self, args: VecObject) -> Result<VecM<ScVal>, HostError> {
+        self.visit_obj(args, |hv: &HostVec| self.vals_to_scval_vec(hv.as_slice()))
     }
 
-    pub(crate) fn rawvals_to_sc_val_vec(&self, raw_vals: &[Val]) -> Result<VecM<ScVal>, HostError> {
-        raw_vals
-            .iter()
+    pub(crate) fn vals_to_scval_vec(&self, vals: &[Val]) -> Result<VecM<ScVal>, HostError> {
+        vals.iter()
             .map(|v| self.from_host_val(*v))
             .metered_collect::<Result<Vec<ScVal>, HostError>>(self)??
             .try_into()
@@ -223,17 +217,16 @@ impl Host {
                     self,
                     (ScErrorType::Object, ScErrorCode::ExceededLimit),
                     "vector size limit exceeded",
-                    raw_vals.len()
+                    vals.len()
                 )
             })
     }
 
-    pub(crate) fn rawvals_to_sc_val_vec_non_metered(
+    pub(crate) fn vals_to_scval_vec_non_metered(
         &self,
-        raw_vals: &[Val],
+        vals: &[Val],
     ) -> Result<VecM<ScVal>, HostError> {
-        raw_vals
-            .iter()
+        vals.iter()
             .map(|v| self.from_host_val(*v))
             .collect::<Result<Vec<ScVal>, HostError>>()?
             .try_into()
@@ -242,13 +235,13 @@ impl Host {
                     self,
                     (ScErrorType::Object, ScErrorCode::ExceededLimit),
                     "vector size limit exceeded",
-                    raw_vals.len()
+                    vals.len()
                 )
             })
     }
 
-    pub(crate) fn scvals_to_rawvals(&self, sc_vals: &[ScVal]) -> Result<Vec<Val>, HostError> {
-        sc_vals
+    pub(crate) fn scvals_to_val_vec(&self, scvals: &[ScVal]) -> Result<Vec<Val>, HostError> {
+        scvals
             .iter()
             .map(|scv| self.to_host_val(scv))
             .metered_collect::<Result<Vec<Val>, HostError>>(self)?

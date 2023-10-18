@@ -244,7 +244,7 @@ impl AuthTest {
                         nonce,
                         signature: ScVal::Vec(Some(
                             self.host
-                                .call_args_to_sc_val_vec(signature_args.into())
+                                .vecobject_to_scval_vec(signature_args.into())
                                 .unwrap()
                                 .into(),
                         )),
@@ -1305,7 +1305,7 @@ fn test_out_of_order_auth() {
                     &test.contracts[1],
                     Symbol::try_from_small_str("do_auth").unwrap(),
                     test.host
-                        .call_args_to_sc_val_vec(
+                        .vecobject_to_scval_vec(
                             host_vec![&test.host, test.key_to_address(&test.keys[0]), 10_u32]
                                 .into(),
                         )
@@ -1320,7 +1320,7 @@ fn test_out_of_order_auth() {
                     &test.contracts[0],
                     Symbol::try_from_small_str("order_fn").unwrap(),
                     test.host
-                        .call_args_to_sc_val_vec(
+                        .vecobject_to_scval_vec(
                             host_vec![
                                 &test.host,
                                 test.key_to_address(&test.keys[0]),
@@ -1346,7 +1346,7 @@ fn test_out_of_order_auth() {
                 &test.contracts[0],
                 Symbol::try_from_small_str("order_fn").unwrap(),
                 test.host
-                    .call_args_to_sc_val_vec(
+                    .vecobject_to_scval_vec(
                         host_vec![
                             &test.host,
                             test.key_to_address(&test.keys[0]),
@@ -1361,7 +1361,7 @@ fn test_out_of_order_auth() {
                 &test.contracts[1],
                 Symbol::try_from_small_str("do_auth").unwrap(),
                 test.host
-                    .call_args_to_sc_val_vec(
+                    .vecobject_to_scval_vec(
                         host_vec![&test.host, test.key_to_address(&test.keys[0]), 10_u32].into(),
                     )
                     .unwrap(),
@@ -1380,7 +1380,7 @@ fn test_out_of_order_auth() {
             &test.contracts[0],
             Symbol::try_from_small_str("order_fn").unwrap(),
             test.host
-                .call_args_to_sc_val_vec(
+                .vecobject_to_scval_vec(
                     host_vec![
                         &test.host,
                         test.key_to_address(&test.keys[0]),
@@ -1393,7 +1393,7 @@ fn test_out_of_order_auth() {
                 &test.contracts[1],
                 Symbol::try_from_small_str("do_auth").unwrap(),
                 test.host
-                    .call_args_to_sc_val_vec(
+                    .vecobject_to_scval_vec(
                         host_vec![&test.host, test.key_to_address(&test.keys[0]), 10_u32].into(),
                     )
                     .unwrap(),
@@ -1686,7 +1686,7 @@ fn test_require_auth_within_check_auth() {
             nonce: 4444,
             signature: ScVal::Vec(Some(
                 test.host
-                    .call_args_to_sc_val_vec(signature_args.clone().into())
+                    .vecobject_to_scval_vec(signature_args.clone().into())
                     .unwrap()
                     .into(),
             )),
@@ -1718,7 +1718,7 @@ fn test_require_auth_within_check_auth() {
             nonce: 3333,
             signature: ScVal::Vec(Some(
                 test.host
-                    .call_args_to_sc_val_vec(signature_args.into())
+                    .vecobject_to_scval_vec(signature_args.into())
                     .unwrap()
                     .into(),
             )),
