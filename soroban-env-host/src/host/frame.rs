@@ -391,9 +391,12 @@ impl Host {
         if let Some(id) = self.get_current_contract_id_opt_internal()? {
             Ok(id)
         } else {
+            // This should only ever happen if we try to access the contract ID
+            // from a HostFunction frame (meaning before a contract is running).
+            // Doing so is a logic bug on our part.
             Err(self.err(
                 ScErrorType::Context,
-                ScErrorCode::MissingValue,
+                ScErrorCode::InternalError,
                 "Current context has no contract ID",
                 &[],
             ))
