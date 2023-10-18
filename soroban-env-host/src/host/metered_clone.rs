@@ -22,7 +22,6 @@ use crate::{
     budget::AsBudget,
     events::{EventError, HostEvent, InternalContractEvent, InternalEvent},
     host::Events,
-    host_object::HostObject,
     native_contract::base_types::Address,
     storage::AccessType,
     xdr::{
@@ -284,7 +283,6 @@ impl MeteredClone for SymbolStr {}
 impl MeteredClone for SymbolSmallIter {}
 impl MeteredClone for U256 {}
 impl MeteredClone for I256 {}
-impl MeteredClone for HostObject {}
 impl MeteredClone for Address {}
 impl MeteredClone for AccessType {}
 impl MeteredClone for InternalContractEvent {}
