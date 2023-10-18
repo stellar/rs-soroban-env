@@ -177,11 +177,11 @@ impl Host {
     /// Converts a binary search result into a u64. `res` is `Some(index)` if
     /// the value was found at `index`, or `Err(index)` if the value was not
     /// found and would've needed to be inserted at `index`. Returns a
-    /// Some(res_u64) where :
-    /// - the high 32 bits is 0x0000_0001 if element existed or 0x0000_0000 if
+    /// Some(res_u64) where:
+    /// - The high 32 bits is 0x0000_0001 if element existed or 0x0000_0000 if
     ///   it didn't
-    /// - the low 32 bits contains the u32 representation of the `index` Err(_)
-    /// if the `index` fails to be converted to an u32.
+    /// - The low 32 bits contains the u32 representation of the `index` Err(_)
+    ///   if the `index` fails to be converted to an u32.
     pub(crate) fn u64_from_binary_search_result(
         &self,
         res: Result<usize, usize>,
@@ -445,7 +445,7 @@ impl Host {
                     HostObject::Bytes(b) => ScVal::Bytes(b.metered_clone(self)?),
                     HostObject::String(s) => ScVal::String(s.metered_clone(self)?),
                     HostObject::Symbol(s) => ScVal::Symbol(s.metered_clone(self)?),
-                    HostObject::Address(addr) => ScVal::Address(addr.metered_clone(self)?), // For any future `HostObject` types we add, make sure to add some metering.
+                    HostObject::Address(addr) => ScVal::Address(addr.metered_clone(self)?),
                 };
                 Ok(ScValObject::unchecked_from_val(val))
             })
@@ -458,7 +458,7 @@ impl Host {
         match val {
             // Here we have to make sure host object conversion is charged in each variant
             // below. There is no otherwise ubiquitous metering for ScVal->Val conversion,
-            // since most of them happens in the "common" crate with no access to the host.
+            // since most of them happen in the "common" crate with no access to the host.
             ScVal::Vec(Some(v)) => {
                 Vec::<Val>::charge_bulk_init_cpy(v.len() as u64, self)?;
                 let mut vv = Vec::with_capacity(v.len());
@@ -539,7 +539,7 @@ impl Host {
                 (ScErrorType::Object, ScErrorCode::InvalidInput),
                 "converting unsupported value to object",
                 *val
-            )), // For any future `HostObject` types we add, make sure to add some metering.
+            )),
         }
     }
 }
