@@ -168,15 +168,7 @@ impl Host {
         durability: ContractDataDurability,
     ) -> Result<Rc<LedgerKey>, HostError> {
         let key_scval = self.from_host_val(k)?;
-        // FIXME: also check for ScVal::ContractInstance here?
-        if let ScVal::LedgerKeyContractInstance | ScVal::LedgerKeyNonce(_) = key_scval {
-            return Err(self.err(
-                ScErrorType::Storage,
-                ScErrorCode::InvalidInput,
-                "value type cannot be used as contract data key",
-                &[k],
-            ));
-        }
+        self.check_val_representable_scval(&key_scval)?;
         self.storage_key_from_scval(key_scval, durability)
     }
 
@@ -339,12 +331,25 @@ impl<'a> Convert<ScValObjRef<'a>, Object> for Host {
 }
 
 impl Host {
+    pub(crate) fn check_val_representable_scval(&self, scval: &ScVal) -> Result<(), HostError> {
+        if Val::can_represent_scval(&scval) {
+            Ok(())
+        } else {
+            Err(self.err(
+                ScErrorType::Value,
+                ScErrorCode::InternalError,
+                "unexpected non-Val-representable ScVal type",
+                &[Val::from_u32(scval.discriminant() as u32).into()],
+            ))
+        }
+    }
+
     pub(crate) fn from_host_val(&self, val: Val) -> Result<ScVal, HostError> {
         // This is the depth limit checkpoint for `Val`->`ScVal` conversion.
         // Metering of val conversion happens only if an object is encountered,
         // and is done inside `from_host_obj`.
         let _span = tracy_span!("Val to ScVal");
-        self.budget_cloned().with_limited_depth(|_| {
+        let scval = self.budget_cloned().with_limited_depth(|_| {
             ScVal::try_from_val(self, &val).map_err(|_| {
                 self.err(
                     ScErrorType::Value,
@@ -353,11 +358,14 @@ impl Host {
                     &[val],
                 )
             })
-        })
+        })?;
+        self.check_val_representable_scval(&scval)?;
+        Ok(scval)
     }
 
     pub(crate) fn to_host_val(&self, v: &ScVal) -> Result<Val, HostError> {
         let _span = tracy_span!("ScVal to Val");
+        self.check_val_representable_scval(&v)?;
         // This is the depth limit checkpoint for `ScVal`->`Val` conversion.
         // Metering of val conversion happens only if an object is encountered,
         // and is done inside `to_host_obj`.
@@ -444,6 +452,7 @@ impl Host {
 
     pub(crate) fn to_host_obj(&self, ob: &ScValObjRef<'_>) -> Result<Object, HostError> {
         let val: &ScVal = (*ob).into();
+        self.check_val_representable_scval(val)?;
         match val {
             // Here we have to make sure host object conversion is charged in each variant
             // below. There is no otherwise ubiquitous metering for ScVal->Val conversion,
