@@ -140,13 +140,13 @@ impl Host {
 
     pub(crate) fn storage_key_for_address(
         &self,
-        contract_address: ScAddress,
+        contract: ScAddress,
         key: ScVal,
         durability: ContractDataDurability,
     ) -> Result<Rc<LedgerKey>, HostError> {
         Rc::metered_new(
             LedgerKey::ContractData(LedgerKeyContractData {
-                contract: contract_address,
+                contract,
                 key,
                 durability,
             }),
