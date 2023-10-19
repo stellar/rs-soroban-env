@@ -301,7 +301,6 @@ impl MeteredClone for ScAddress {}
 impl MeteredClone for ScNonceKey {}
 impl MeteredClone for PublicKey {}
 impl MeteredClone for TrustLineAsset {}
-impl MeteredClone for Signer {}
 
 impl MeteredClone for LedgerKeyAccount {}
 impl MeteredClone for LedgerKeyTrustLine {}
@@ -309,7 +308,6 @@ impl MeteredClone for LedgerKeyContractCode {}
 
 impl MeteredClone for LedgerEntryExt {}
 impl MeteredClone for TrustLineEntry {}
-impl MeteredClone for ContractCodeEntry {}
 
 impl MeteredClone for CreateContractArgs {}
 impl MeteredClone for ContractIdPreimage {}
@@ -571,6 +569,14 @@ impl MeteredClone for LedgerKey {
     }
 }
 
+impl MeteredClone for ContractCodeEntry {
+    const IS_SHALLOW: bool = false;
+
+    fn charge_for_substructure(&self, budget: impl AsBudget) -> Result<(), HostError> {
+        self.code.charge_for_substructure(budget)
+    }
+}
+
 impl MeteredClone for LedgerEntry {
     const IS_SHALLOW: bool = false;
 
@@ -593,6 +599,18 @@ impl MeteredClone for LedgerEntry {
 
             Offer(_) | Data(_) | ClaimableBalance(_) | LiquidityPool(_) | ConfigSetting(_)
             | Ttl(_) => Err((ScErrorType::Value, ScErrorCode::InternalError).into()),
+        }
+    }
+}
+
+impl MeteredClone for Signer {
+    const IS_SHALLOW: bool = false;
+
+    fn charge_for_substructure(&self, budget: impl AsBudget) -> Result<(), HostError> {
+        use crate::xdr::SignerKey::*;
+        match &self.key {
+            Ed25519(_) | PreAuthTx(_) | HashX(_) => Ok(()),
+            Ed25519SignedPayload(p) => p.payload.charge_for_substructure(budget),
         }
     }
 }
