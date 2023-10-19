@@ -24,13 +24,12 @@ use crate::{
     storage::AccessType,
     xdr::{
         AccountEntry, AccountId, Asset, BytesM, ContractCodeEntry, ContractCostType,
-        ContractExecutable, ContractIdPreimage,
-        CreateContractArgs, DepthLimiter, Duration, Hash, InvokeContractArgs, LedgerEntry,
-        LedgerEntryData, LedgerEntryExt, LedgerKey, LedgerKeyAccount, LedgerKeyContractCode,
-        LedgerKeyTrustLine, PublicKey, ScAddress, ScBytes, ScContractInstance, ScErrorCode,
-        ScErrorType, ScMap, ScMapEntry, ScNonceKey, ScString, ScSymbol, ScVal, ScVec, Signer,
-        SorobanAuthorizationEntry, SorobanAuthorizedFunction, SorobanAuthorizedInvocation, StringM,
-        TimePoint, TrustLineAsset, TrustLineEntry, Uint256,
+        ContractExecutable, ContractIdPreimage, CreateContractArgs, DepthLimiter, Duration, Hash,
+        InvokeContractArgs, LedgerEntry, LedgerEntryData, LedgerEntryExt, LedgerKey,
+        LedgerKeyAccount, LedgerKeyContractCode, LedgerKeyTrustLine, PublicKey, ScAddress, ScBytes,
+        ScContractInstance, ScErrorCode, ScErrorType, ScMap, ScMapEntry, ScNonceKey, ScString,
+        ScSymbol, ScVal, ScVec, Signer, SorobanAuthorizationEntry, SorobanAuthorizedFunction,
+        SorobanAuthorizedInvocation, StringM, TimePoint, TrustLineAsset, TrustLineEntry, Uint256,
     },
     AddressObject, Bool, BytesObject, DurationObject, DurationSmall, DurationVal, Error, HostError,
     I128Object, I128Small, I128Val, I256Object, I256Small, I256Val, I32Val, I64Object, I64Small,
@@ -539,12 +538,8 @@ impl MeteredClone for LedgerEntry {
                 d.val.charge_for_substructure(budget.clone())?;
                 d.key.charge_for_substructure(budget)
             }
-            ContractCode(c) => {
-                c.charge_for_substructure(budget)
-            }
-            Account(ae) => {
-                ae.charge_for_substructure(budget)
-            }
+            ContractCode(c) => c.charge_for_substructure(budget),
+            Account(ae) => ae.charge_for_substructure(budget),
             Trustline(_) => Ok(()),
 
             Offer(_) | Data(_) | ClaimableBalance(_) | LiquidityPool(_) | ConfigSetting(_)
