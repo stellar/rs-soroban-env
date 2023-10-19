@@ -55,13 +55,6 @@ pub fn read_balance(e: &Host, addr: Address) -> Result<i128, HostError> {
 }
 
 // Metering: *mostly* covered by components.
-pub fn get_spendable_balance(e: &Host, addr: Address) -> Result<i128, HostError> {
-    match addr.to_sc_address()? {
-        ScAddress::Account(acc_id) => Ok(get_classic_balance(e, acc_id)?.1.into()),
-        ScAddress::Contract(_) => read_balance(e, addr),
-    }
-}
-
 fn write_balance(e: &Host, addr: Address, balance: BalanceValue) -> Result<(), HostError> {
     let key = DataKey::Balance(addr);
     e.put_contract_data(
