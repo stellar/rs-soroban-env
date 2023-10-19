@@ -5,6 +5,7 @@ test:
 
 build:
 	cargo hack --each-feature clippy
+	cargo hack clippy --target wasm32-unknown-unknown
 
 watch:
 	cargo watch --clear --watch-when-idle --shell '$(MAKE)'

@@ -13,6 +13,7 @@ use soroban_env_common::Env as _;
 
 // Import a panic handler to collide with any accidentally included libstd panic
 // handler.
+#[cfg(target_family = "wasm")]
 #[panic_handler]
 fn handle_panic(_: &core::panic::PanicInfo) -> ! {
     unreachable!()
