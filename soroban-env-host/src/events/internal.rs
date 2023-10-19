@@ -43,9 +43,9 @@ impl InternalContractEvent {
 /// Internal representation of a structured debug message which is logically
 /// similar to an InternalContractEvent (and will project to a ContractEvent the
 /// same way when we externalize it to XDR) but internally is different: it
-/// stores "plain" rust data values -- String and Vec as well as XDR types like
-/// ScVal -- capturing the input to diagnostics, rather than interacting with
-/// the host object system. It does this for two reasons:
+/// stores more "plain" rust data values -- Vec as well as XDR types like ScVal
+/// -- capturing the input to diagnostics, rather than interacting with the host
+/// object system. It does this for two reasons:
 ///
 ///   1. to avoid to avoid perturbing object numbering when debug-mode is
 ///      enabled -- this could potentially cause hosts running on watcher nodes
