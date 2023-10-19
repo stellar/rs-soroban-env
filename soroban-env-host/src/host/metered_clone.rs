@@ -540,12 +540,10 @@ impl MeteredClone for LedgerEntry {
                 d.key.charge_for_substructure(budget)
             }
             ContractCode(c) => {
-                c.charge_for_substructure(budget)?;
-                Ok(())
+                c.charge_for_substructure(budget)
             }
             Account(ae) => {
-                ae.signers.charge_for_substructure(budget.clone())?;
-                Ok(())
+                ae.charge_for_substructure(budget)
             }
             Trustline(_) => Ok(()),
 
