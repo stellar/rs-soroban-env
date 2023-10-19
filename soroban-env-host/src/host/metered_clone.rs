@@ -20,13 +20,11 @@ use std::{iter::FromIterator, mem, rc::Rc};
 
 use crate::{
     budget::AsBudget,
-    events::{EventError, HostEvent, InternalContractEvent, InternalEvent},
-    host::Events,
     native_contract::base_types::Address,
     storage::AccessType,
     xdr::{
-        AccountEntry, AccountId, Asset, BytesM, ContractCodeEntry, ContractCostType, ContractEvent,
-        ContractEventBody, ContractEventType, ContractExecutable, ContractIdPreimage,
+        AccountEntry, AccountId, Asset, BytesM, ContractCodeEntry, ContractCostType,
+        ContractExecutable, ContractIdPreimage,
         CreateContractArgs, DepthLimiter, Duration, Hash, InvokeContractArgs, LedgerEntry,
         LedgerEntryData, LedgerEntryExt, LedgerKey, LedgerKeyAccount, LedgerKeyContractCode,
         LedgerKeyTrustLine, PublicKey, ScAddress, ScBytes, ScContractInstance, ScErrorCode,
@@ -286,8 +284,6 @@ impl MeteredClone for U256 {}
 impl MeteredClone for I256 {}
 impl MeteredClone for Address {}
 impl MeteredClone for AccessType {}
-impl MeteredClone for InternalContractEvent {}
-impl MeteredClone for EventError {}
 // endregion: other env types with no substructure
 
 // region: xdr types with no substructure
@@ -384,34 +380,6 @@ impl<C: MeteredClone> MeteredClone for Option<C> {
 // endregion: Rust standard composite types
 
 // region: other env types with substructure
-impl MeteredClone for HostEvent {
-    const IS_SHALLOW: bool = false;
-
-    fn charge_for_substructure(&self, budget: impl AsBudget) -> Result<(), HostError> {
-        self.event.charge_for_substructure(budget)
-    }
-}
-
-impl MeteredClone for Events {
-    const IS_SHALLOW: bool = false;
-
-    fn charge_for_substructure(&self, budget: impl AsBudget) -> Result<(), HostError> {
-        self.0.charge_for_substructure(budget)
-    }
-}
-
-impl MeteredClone for InternalEvent {
-    const IS_SHALLOW: bool = false;
-
-    fn charge_for_substructure(&self, budget: impl AsBudget) -> Result<(), HostError> {
-        match self {
-            InternalEvent::Contract(c) => c.charge_for_substructure(budget),
-            InternalEvent::Diagnostic(_) => {
-                Err((ScErrorType::Events, ScErrorCode::InternalError).into())
-            }
-        }
-    }
-}
 // endregion: other env types with substructure
 
 // region: xdr types with substructure
@@ -527,22 +495,6 @@ impl MeteredClone for ScSymbol {
 
     fn charge_for_substructure(&self, budget: impl AsBudget) -> Result<(), HostError> {
         <Self as AsRef<Vec<u8>>>::as_ref(self).charge_for_substructure(budget)
-    }
-}
-
-impl MeteredClone for ContractEvent {
-    const IS_SHALLOW: bool = false;
-
-    fn charge_for_substructure(&self, budget: impl AsBudget) -> Result<(), HostError> {
-        if let ContractEventType::Diagnostic = self.type_ {
-            // Diagnostic events shouldn't be `metered_clone`d
-            Err((ScErrorType::Events, ScErrorCode::InternalError).into())
-        } else {
-            self.contract_id.charge_for_substructure(budget.clone())?;
-            let ContractEventBody::V0(event) = &self.body;
-            event.topics.charge_for_substructure(budget.clone())?;
-            event.data.charge_for_substructure(budget)
-        }
     }
 }
 
