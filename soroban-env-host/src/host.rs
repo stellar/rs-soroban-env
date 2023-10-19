@@ -821,7 +821,7 @@ impl VmCallerEnv for Host {
         Ok(self.max_live_until_ledger()?.into())
     }
 
-    // endregion "context" module functions
+    // endregion: "context" module functions
 
     // region: "int" module functions
 
@@ -1080,7 +1080,7 @@ impl VmCallerEnv for Host {
     impl_bignum_host_fns_rhs_u32!(i256_shl, checked_shl, I256, I256Val, Int256Shift);
     impl_bignum_host_fns_rhs_u32!(i256_shr, checked_shr, I256, I256Val, Int256Shift);
 
-    // endregion "int" module functions
+    // endregion: "int" module functions
     // region: "map" module functions
 
     fn map_new(&self, _vmcaller: &mut VmCaller<Host>) -> Result<MapObject, HostError> {
@@ -1321,7 +1321,7 @@ impl VmCallerEnv for Host {
         Ok(Val::VOID)
     }
 
-    // endregion "map" module functions
+    // endregion: "map" module functions
     // region: "vec" module functions
 
     fn vec_new(&self, _vmcaller: &mut VmCaller<Host>) -> Result<VecObject, HostError> {
@@ -1583,7 +1583,7 @@ impl VmCallerEnv for Host {
         Ok(Val::VOID)
     }
 
-    // endregion "vec" module functions
+    // endregion: "vec" module functions
     // region: "ledger" module functions
 
     // Notes on metering: covered by components
@@ -1851,7 +1851,7 @@ impl VmCallerEnv for Host {
         Ok(Val::VOID)
     }
 
-    // endregion "ledger" module functions
+    // endregion: "ledger" module functions
     // region: "call" module functions
 
     // Notes on metering: here covers the args unpacking. The actual VM work is changed at lower layers.
@@ -1940,7 +1940,7 @@ impl VmCallerEnv for Host {
         }
     }
 
-    // endregion "call" module functions
+    // endregion: "call" module functions
     // region: "buf" module functions
 
     // Notes on metering: covered by components
@@ -2331,7 +2331,7 @@ impl VmCallerEnv for Host {
         self.add_host_object(self.scbytes_from_vec(vnew)?)
     }
 
-    // endregion "buf" module functions
+    // endregion: "buf" module functions
     // region: "crypto" module functions
 
     // Notes on metering: covered by components.
@@ -2383,14 +2383,14 @@ impl VmCallerEnv for Host {
         self.recover_key_ecdsa_secp256k1_internal(&hash, &sig, rid)
     }
 
-    // endregion "crypto" module functions
+    // endregion: "crypto" module functions
     // region: "test" module functions
 
     fn dummy0(&self, _vmcaller: &mut VmCaller<Self::VmUserState>) -> Result<Val, Self::Error> {
         Ok(().into())
     }
 
-    // endregion "test" module functions
+    // endregion: "test" module functions
     // region: "address" module functions
 
     fn require_auth_for_args(
@@ -2544,7 +2544,7 @@ impl VmCallerEnv for Host {
         self.add_host_object(sc_addr)
     }
 
-    // endregion "address" module functions
+    // endregion: "address" module functions
     // region: "prng" module functions
 
     fn prng_reseed(
@@ -2608,7 +2608,7 @@ impl VmCallerEnv for Host {
         })?;
         self.add_host_object(vnew)
     }
-    // endregion "prng" module functions
+    // endregion: "prng" module functions
 }
 
 #[cfg(any(test, feature = "testutils"))]
