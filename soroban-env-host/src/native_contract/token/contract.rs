@@ -16,9 +16,7 @@ use soroban_native_sdk_macros::contractimpl;
 
 use super::admin::{read_administrator, write_administrator};
 use super::asset_info::read_asset_info;
-use super::balance::{
-    check_clawbackable, spend_balance_no_authorization_check,
-};
+use super::balance::{check_clawbackable, spend_balance_no_authorization_check};
 use super::metadata::{read_name, read_symbol, set_metadata, DECIMAL};
 use super::public_types::{AlphaNum12AssetInfo, AlphaNum4AssetInfo};
 use super::storage_types::{INSTANCE_EXTEND_AMOUNT, INSTANCE_TTL_THRESHOLD};
@@ -225,7 +223,6 @@ impl TokenTrait for Token {
         )?;
         read_balance(e, addr)
     }
-
 
     // Metering: covered by components
     fn authorized(e: &Host, addr: Address) -> Result<bool, HostError> {
