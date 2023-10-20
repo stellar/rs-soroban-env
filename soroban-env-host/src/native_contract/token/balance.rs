@@ -33,7 +33,7 @@ use super::storage_types::{BalanceValue, BALANCE_EXTEND_AMOUNT, BALANCE_TTL_THRE
 // Metering: *mostly* covered by components. Not sure about `try_into_val`.
 pub fn read_balance(e: &Host, addr: Address) -> Result<i128, HostError> {
     match addr.to_sc_address()? {
-        ScAddress::Account(acc_id) => Ok(get_classic_balance(e, acc_id)?.0.into()),
+        ScAddress::Account(acc_id) => Ok(get_classic_balance(e, acc_id)?.into()),
         ScAddress::Contract(_) => {
             let key = DataKey::Balance(addr);
             if let Some(raw_balance) =
@@ -367,17 +367,15 @@ pub fn transfer_classic_balance(e: &Host, to_key: AccountId, amount: i64) -> Res
 
 // TODO: Metering analysis
 //returns (total balance, spendable balance)
-fn get_classic_balance(e: &Host, to_key: AccountId) -> Result<(i64, i64), HostError> {
-    let get_trustline_balance_safe = |asset: TrustLineAsset,
-                                      issuer: AccountId,
-                                      to: AccountId|
-     -> Result<(i64, i64), HostError> {
-        if issuer == to {
-            return Ok((i64::MAX, i64::MAX));
-        }
+fn get_classic_balance(e: &Host, to_key: AccountId) -> Result<i64, HostError> {
+    let get_trustline_balance_safe =
+        |asset: TrustLineAsset, issuer: AccountId, to: AccountId| -> Result<i64, HostError> {
+            if issuer == to {
+                return Ok(i64::MAX);
+            }
 
-        get_trustline_balance(e, to, asset)
-    };
+            get_trustline_balance(e, to, asset)
+        };
 
     match read_asset_info(e)? {
         AssetInfo::Native => get_account_balance(e, to_key),
@@ -555,7 +553,7 @@ fn transfer_trustline_balance(
 
 // Metering: covered by components
 //returns (total balance, spendable balance)
-fn get_account_balance(host: &Host, account_id: AccountId) -> Result<(i64, i64), HostError> {
+fn get_account_balance(host: &Host, account_id: AccountId) -> Result<i64, HostError> {
     let lk = host.to_account_key(account_id)?;
 
     host.with_mut_storage(|storage| {
@@ -578,7 +576,7 @@ fn get_account_balance(host: &Host, account_id: AccountId) -> Result<(i64, i64),
                 &[],
             ));
         }
-        Ok((ae.balance, ae.balance - min))
+        Ok(ae.balance)
     })
 }
 
@@ -617,7 +615,7 @@ fn get_trustline_balance(
     host: &Host,
     account_id: AccountId,
     asset: TrustLineAsset,
-) -> Result<(i64, i64), HostError> {
+) -> Result<i64, HostError> {
     let lk = host.to_trustline_key(account_id, asset)?;
     host.with_mut_storage(|storage| {
         let le = read_trustline_entry(host, storage, &lk)?;
@@ -639,7 +637,7 @@ fn get_trustline_balance(
                 &[],
             ));
         }
-        Ok((tl.balance, tl.balance - min))
+        Ok(tl.balance)
     })
 }
 
