@@ -7,6 +7,14 @@ build:
 	cargo hack --each-feature clippy
 	cargo hack clippy --target wasm32-unknown-unknown
 
+# We use "run" to run the soroban-env-host/src/bin/main.rs
+# entrypoint, which both excludes dev-deps (noisy) and
+# actually includes soroban-env-host itself (rather than
+# just its deps). We want to catch ourselves using APIs
+# too!
+check-apis:
+	cargo acl run
+
 watch:
 	cargo watch --clear --watch-when-idle --shell '$(MAKE)'
 

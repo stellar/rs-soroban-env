@@ -23,6 +23,13 @@ jobs:
     - run: rustup update
     - run: cargo fmt --all --check
 
+  cackle:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: cackle-rs/cackle-action@387fe459d8c037a0e7fbcd3d868f1aaba389d057
+      - run: cargo acl -n run
+
   cargo-deny:
     runs-on: ubuntu-latest
     strategy:

@@ -1,0 +1,98 @@
+[common]
+version = 2
+build_flags = []
+
+# Import some predefined API groups that cackle supports. These are
+# equivalent to defining `[api.net]` and `[api.fs]` and so on, but
+# are baked-in to cackle.
+import_std =  ["net", "fs", "env", "process", "terminate"]
+
+# Define a few more API groups we want to be concerned with the use
+# of: those that risk nondeterminism in the program.
+[api.time]
+include = [
+    "std::time",
+]
+
+[api.hash]
+include = [
+    "core::hash",
+    "std::collections::HashMap",
+    "std::collections::hash",
+    "std::sys::unix::rand::hashmap_random_keys",
+    "hashbrown::raw",
+]
+
+[api.rand]
+include = [
+    "rand",
+    "rand_core"
+]
+exclude = [
+    "rand::distributions",
+    "rand::seq",
+]
+
+[api.thread]
+include = [
+    "std::thread",
+]
+
+[pkg.thiserror-impl]
+allow_proc_macro = true
+
+[pkg.wasm-bindgen-macro]
+allow_proc_macro = true
+
+[pkg.soroban-native-sdk-macros]
+allow_proc_macro = true
+
+[pkg.paste]
+allow_proc_macro = true
+
+[pkg.num-derive]
+allow_proc_macro = true
+
+[pkg.proc-macro-error-attr]
+allow_proc_macro = true
+
+[pkg.nalgebra-macros]
+allow_proc_macro = true
+
+[pkg.serde_derive]
+allow_proc_macro = true
+
+[pkg.structopt-derive]
+allow_proc_macro = true
+
+[pkg.num_enum_derive]
+allow_proc_macro = true
+
+[pkg.curve25519-dalek-derive]
+allow_proc_macro = true
+
+[pkg.bytes-lit]
+allow_proc_macro = true
+
+[pkg.soroban-env-macros]
+allow_proc_macro = true
+
+[pkg.rand]
+allow_apis = [
+    "thread",
+]
+
+[pkg.backtrace]
+allow_apis = [
+    "env",
+    "fs",
+    "thread",
+]
+
+[pkg.rand_chacha]
+allow_apis = [
+    "rand",
+]
+
+[pkg.soroban-env-host]
+allow_unsafe = true
