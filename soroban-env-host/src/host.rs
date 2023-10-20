@@ -306,6 +306,7 @@ impl Host {
         }
     }
 
+    #[cfg(any(test, feature = "recording_auth"))]
     pub fn switch_to_recording_auth(&self, disable_non_root_auth: bool) -> Result<(), HostError> {
         *self.try_borrow_authorization_manager_mut()? =
             AuthorizationManager::new_recording(disable_non_root_auth);

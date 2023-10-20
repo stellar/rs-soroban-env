@@ -222,6 +222,7 @@ impl Host {
             })
     }
 
+    #[cfg(any(test, feature = "recording_auth"))]
     pub(crate) fn vals_to_scval_vec_non_metered(
         &self,
         vals: &[Val],
