@@ -18,9 +18,9 @@ impl WriteBytesContract {
     pub fn write(env: Env, xdr_bytes: Bytes) -> BytesN<32> {
         let hash = env.crypto().sha256(&xdr_bytes);
         env.storage().temporary().set(&hash, &xdr_bytes);
-        env.storage().temporary().extend(&hash, BALANCE_TTL_THRESHOLD, EXTEND_AMOUNT);
+        env.storage().temporary().extend_ttl(&hash, BALANCE_TTL_THRESHOLD, EXTEND_AMOUNT);
 
-        env.storage().instance().extend(BALANCE_TTL_THRESHOLD, EXTEND_AMOUNT);
+        env.storage().instance().extend_ttl(BALANCE_TTL_THRESHOLD, EXTEND_AMOUNT);
 
         hash
     }

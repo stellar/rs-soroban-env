@@ -1074,6 +1074,7 @@ name = "soroban-env-host"
 version = "20.0.0-rc2"
 dependencies = [
  "backtrace",
+ "curve25519-dalek",
  "ed25519-dalek",
  "getrandom",
  "k256",
