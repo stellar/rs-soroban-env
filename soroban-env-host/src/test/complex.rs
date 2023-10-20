@@ -21,12 +21,13 @@ fn run_complex() -> Result<(), HostError> {
         min_temp_entry_ttl: 16,
         max_entry_ttl: 6312000,
     };
-    let account_id = generate_account_id();
-    let salt = generate_bytes_array();
+
+    let host = Host::test_host_with_recording_footprint();
+    let account_id = generate_account_id(&host);
+    let salt = generate_bytes_array(&host);
 
     // Run 1: record footprint, emulating "preflight".
     let foot = {
-        let host = Host::test_host_with_recording_footprint();
         host.set_ledger_info(info.clone())?;
         let contract_id_obj =
             host.register_test_contract_wasm_from_source_account(COMPLEX, account_id.clone(), salt);

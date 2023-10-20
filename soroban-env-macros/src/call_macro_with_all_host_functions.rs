@@ -2,7 +2,7 @@ use itertools::iproduct;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use std::{
-    collections::{hash_map::Entry, HashMap},
+    collections::{btree_map::Entry, BTreeMap},
     fs::File,
     iter,
 };
@@ -30,7 +30,7 @@ pub fn generate(file_lit: LitStr) -> Result<TokenStream, Error> {
         )
     })?;
 
-    let mut export_names = HashMap::<String, String>::new();
+    let mut export_names = BTreeMap::<String, String>::new();
     for m in root.modules.iter() {
         // We expect each module in the env interface to label its function
         // export names according to a simple scheme: _ 0-9 a-z A-Z.

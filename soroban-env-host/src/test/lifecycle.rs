@@ -67,9 +67,10 @@ fn test_host() -> Host {
     let storage =
         Storage::with_enforcing_footprint_and_map(Footprint::default(), StorageMap::new());
     let host = Host::with_storage_and_budget(storage, budget);
+    host.set_base_prng_seed(*Host::TEST_PRNG_SEED).unwrap();
     host.set_ledger_info(LedgerInfo {
         protocol_version: crate::meta::get_ledger_protocol_version(crate::meta::INTERFACE_VERSION),
-        network_id: generate_bytes_array(),
+        network_id: generate_bytes_array(&host),
         ..Default::default()
     })
     .unwrap();
@@ -78,8 +79,8 @@ fn test_host() -> Host {
 }
 
 fn test_create_contract_from_source_account(host: &Host, wasm: &[u8]) -> Hash {
-    let source_account = generate_account_id();
-    let salt = generate_bytes_array();
+    let source_account = generate_account_id(host);
+    let salt = generate_bytes_array(host);
     host.set_source_account(source_account.clone()).unwrap();
     let contract_id_preimage = ContractIdPreimage::Address(ContractIdPreimageFromAddress {
         address: ScAddress::Account(source_account.clone()),
@@ -156,7 +157,7 @@ fn create_contract_using_parent_id_test() {
     let parent_contract_address = host
         .add_host_object(ScAddress::Contract(parent_contract_id.clone()))
         .unwrap();
-    let salt = generate_bytes_array();
+    let salt = generate_bytes_array(&host);
     let child_pre_image = HashIdPreimage::ContractId(HashIdPreimageContractId {
         network_id: host
             .hash_from_bytesobj_input("network_id", host.get_ledger_network_id().unwrap())
@@ -372,8 +373,8 @@ fn test_contract_wasm_update() {
 
 fn test_create_contract_from_source_account_recording_auth() {
     let host = Host::test_host_with_recording_footprint();
-    let source_account = generate_account_id();
-    let salt = generate_bytes_array();
+    let source_account = generate_account_id(&host);
+    let salt = generate_bytes_array(&host);
     host.set_source_account(source_account.clone()).unwrap();
     host.switch_to_recording_auth(true).unwrap();
     let contract_id_preimage = ContractIdPreimage::Address(ContractIdPreimageFromAddress {

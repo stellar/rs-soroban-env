@@ -64,12 +64,12 @@ impl TokenTest {
         })
         .unwrap();
         Self {
-            host,
-            issuer_key: generate_signing_key(),
-            user_key: generate_signing_key(),
-            user_key_2: generate_signing_key(),
-            user_key_3: generate_signing_key(),
-            user_key_4: generate_signing_key(),
+            host: host.clone(),
+            issuer_key: generate_signing_key(&host),
+            user_key: generate_signing_key(&host),
+            user_key_2: generate_signing_key(&host),
+            user_key_3: generate_signing_key(&host),
+            user_key_4: generate_signing_key(&host),
             asset_code: [0_u8; 4],
         }
     }
@@ -451,7 +451,7 @@ fn test_zero_amounts() {
     let user = TestSigner::account(&test.user_key);
     let user_2 = TestSigner::account(&test.user_key_2);
 
-    let user_contract_id = generate_bytes_array();
+    let user_contract_id = generate_bytes_array(&test.host);
     let user_contract_address = contract_id_to_address(&test.host, user_contract_id);
 
     test.create_default_account(&user);
@@ -1065,8 +1065,8 @@ fn test_clawback_on_contract() {
         .to_account_key(signing_key_to_account_id(&test.issuer_key))
         .unwrap();
 
-    let user_1 = generate_bytes_array();
-    let user_2 = generate_bytes_array();
+    let user_1 = generate_bytes_array(&test.host);
+    let user_2 = generate_bytes_array(&test.host);
     let user_1_addr = contract_id_to_address(&test.host, user_1);
     let user_2_addr = contract_id_to_address(&test.host, user_2);
 
@@ -1132,7 +1132,7 @@ fn test_auth_revocable_on_contract() {
         .to_account_key(signing_key_to_account_id(&test.issuer_key))
         .unwrap();
 
-    let user_1 = generate_bytes_array();
+    let user_1 = generate_bytes_array(&test.host);
     let user_1_addr = contract_id_to_address(&test.host, user_1);
 
     // contract is authorized by default
@@ -1183,8 +1183,8 @@ fn test_auth_required() {
         .to_account_key(signing_key_to_account_id(&test.issuer_key))
         .unwrap();
 
-    let user_1 = generate_bytes_array();
-    let user_2 = generate_bytes_array();
+    let user_1 = generate_bytes_array(&test.host);
+    let user_2 = generate_bytes_array(&test.host);
     let user_1_addr = contract_id_to_address(&test.host, user_1);
     let user_2_addr = contract_id_to_address(&test.host, user_2);
 
@@ -1624,7 +1624,7 @@ fn test_account_invoker_auth_with_issuer_admin() {
     );
 
     // Contract invoker can't perform unauthorized admin operation.
-    let contract_id = generate_bytes_array();
+    let contract_id = generate_bytes_array(&test.host);
     let contract_invoker = TestSigner::ContractInvoker(Hash(contract_id));
     let contract_id_bytes = BytesN::<32>::try_from_val(
         &test.host,
@@ -1646,8 +1646,8 @@ fn test_account_invoker_auth_with_issuer_admin() {
 fn test_contract_invoker_auth() {
     let test = TokenTest::setup();
 
-    let admin_contract_id = generate_bytes_array();
-    let user_contract_id = generate_bytes_array();
+    let admin_contract_id = generate_bytes_array(&test.host);
+    let user_contract_id = generate_bytes_array(&test.host);
     let admin_contract_invoker = TestSigner::ContractInvoker(Hash(admin_contract_id));
     let user_contract_invoker = TestSigner::ContractInvoker(Hash(user_contract_id));
     let admin_contract_address = contract_id_to_address(&test.host, admin_contract_id);
@@ -2213,7 +2213,7 @@ fn test_native_token_classic_balance_boundaries(
 ) {
     let token = TestToken::new_from_asset(&test.host, Asset::Native);
 
-    let new_balance_key = generate_signing_key();
+    let new_balance_key = generate_signing_key(&test.host);
     let new_balance_acc = signing_key_to_account_id(&new_balance_key);
     let new_balance_signer =
         TestSigner::account_with_multisig(&new_balance_acc, vec![&new_balance_key]);
@@ -2266,7 +2266,7 @@ fn test_native_token_classic_balance_boundaries(
     // to the account being tested. That's not a realistic scenario
     // given limited XLM supply, but that's the only way to
     // cover max_balance.
-    let large_balance_key = generate_signing_key();
+    let large_balance_key = generate_signing_key(&test.host);
     let large_balance_acc = signing_key_to_account_id(&large_balance_key);
     let large_balance_signer =
         TestSigner::account_with_multisig(&large_balance_acc, vec![&large_balance_key]);
@@ -2752,7 +2752,7 @@ fn test_custom_account_auth() {
     use soroban_test_wasms::SIMPLE_ACCOUNT_CONTRACT;
 
     let test = TokenTest::setup();
-    let admin_kp = generate_signing_key();
+    let admin_kp = generate_signing_key(&test.host);
     let account_contract_addr_obj = test
         .host
         .register_test_contract_wasm(SIMPLE_ACCOUNT_CONTRACT);
@@ -2791,7 +2791,7 @@ fn test_custom_account_auth() {
 
     // Create a signer for the new admin, but not yet set its key as the account
     // owner.
-    let new_admin_kp = generate_signing_key();
+    let new_admin_kp = generate_signing_key(&test.host);
     let new_admin = TestSigner::AccountContract(AccountContractSigner {
         address: account_contract_addr,
         sign: simple_account_sign_fn(&test.host, &new_admin_kp),

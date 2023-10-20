@@ -1,5 +1,5 @@
 use ed25519_dalek::SigningKey;
-use rand::{thread_rng, Rng};
+use rand::Rng;
 use soroban_env_common::xdr::{
     AccountId, ContractDataDurability, HashIdPreimage, HashIdPreimageSorobanAuthorization,
     InvokeContractArgs, PublicKey, ScAddress, ScBytes, ScErrorCode, ScErrorType, ScNonceKey,
@@ -110,7 +110,7 @@ impl AuthTest {
         .unwrap();
         let mut accounts = vec![];
         for _ in 0..signer_cnt {
-            accounts.push(generate_signing_key());
+            accounts.push(generate_signing_key(&host));
         }
         for signing_key in &accounts {
             create_account(
@@ -218,7 +218,10 @@ impl AuthTest {
             let sc_address = self.key_to_sc_address(&self.keys[address_id]);
             let mut curr_nonces = vec![];
             for sign_root in &sign_payloads[address_id] {
-                let nonce = thread_rng().gen_range(0..=i64::MAX);
+                let nonce = self
+                    .host
+                    .with_test_prng(|chacha| Ok(chacha.gen_range(0..=i64::MAX)))
+                    .unwrap();
                 curr_nonces.push(nonce);
                 let root_invocation = self.convert_sign_node(sign_root);
                 let payload_preimage =
