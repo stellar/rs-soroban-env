@@ -156,6 +156,7 @@ impl Host {
             .expect("unmatched host frame push/pop");
         self.try_borrow_authorization_manager()?.pop_frame(self)?;
 
+        #[cfg(any(test, feature = "recording_auth"))]
         if self.try_borrow_context()?.is_empty() {
             // When there are no frames left, emulate authentication for the
             // recording auth mode. This is a no-op for the enforcing mode.
