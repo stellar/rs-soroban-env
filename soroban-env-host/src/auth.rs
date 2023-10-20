@@ -25,9 +25,9 @@ use super::xdr::Hash;
 #[cfg(any(test, feature = "recording_auth"))]
 use crate::host::error::TryBorrowOrErr;
 #[cfg(any(test, feature = "recording_auth"))]
-use std::collections::HashMap;
-#[cfg(any(test, feature = "recording_auth"))]
 use rand::Rng;
+#[cfg(any(test, feature = "recording_auth"))]
+use std::collections::HashMap;
 
 // Authorization manager encapsulates host-based authentication & authorization
 // framework.
@@ -1333,8 +1333,8 @@ impl InvocationTracker {
         } else if !self.root_authorized_invocation.is_exhausted
             && allow_matching_root
             && host
-            .compare(&self.root_authorized_invocation.function, &function)?
-            .is_eq()
+                .compare(&self.root_authorized_invocation.function, &function)?
+                .is_eq()
         {
             frame_index = Some(0);
             self.root_authorized_invocation.is_exhausted = true;
