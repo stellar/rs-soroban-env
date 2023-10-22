@@ -467,6 +467,17 @@ impl Host {
         self.0.budget.charge(ty, input)
     }
 
+    pub(crate) fn with_debug_budget<T, F, E>(&self, f: F, e: E) -> T
+    where
+        F: FnOnce() -> Result<T, HostError>,
+        E: Fn() -> T,
+    {
+        if self.is_debug().ok() != Some(true) {
+            return e();
+        }
+        self.as_budget().with_internal_mode(f, e)
+    }
+
     /// Accept a _unique_ (refcount = 1) host reference and destroy the
     /// underlying [`HostImpl`], returning its finalized components containing
     /// processing side effects  to the caller as a tuple wrapped in `Ok(...)`.
@@ -729,7 +740,8 @@ impl EnvBase for Host {
     }
 
     fn log_from_slice(&self, msg: &str, vals: &[Val]) -> Result<Void, HostError> {
-        self.log_diagnostics(msg, vals).map(|_| Void::from(()))
+        self.log_diagnostics(msg, vals);
+        Ok(Void::from(()))
     }
 }
 
@@ -747,9 +759,8 @@ impl VmCallerEnv for Host {
         vals_pos: U32Val,
         vals_len: U32Val,
     ) -> Result<Void, HostError> {
-        if self.is_debug()? {
-            // FIXME: change to a "debug budget" https://github.com/stellar/rs-soroban-env/issues/1061
-            self.as_budget().with_free_budget(|| {
+        self.with_debug_budget(
+            || {
                 let VmSlice { vm, pos, len } = self.decode_vmslice(msg_pos, msg_len)?;
                 let mut msg: Vec<u8> = vec![0u8; len as usize];
                 self.metered_vm_read_bytes_from_linear_memory(vmcaller, &vm, pos, &mut msg)?;
@@ -766,10 +777,12 @@ impl VmCallerEnv for Host {
                     vals.as_mut_slice(),
                     |buf| self.relative_to_absolute(Val::from_payload(u64::from_le_bytes(*buf))),
                 )?;
+                self.log_diagnostics(&msg, &vals);
+                Ok(())
+            },
+            || (),
+        );
 
-                self.log_diagnostics(&msg, &vals)
-            })?;
-        }
         Ok(Val::VOID)
     }
 

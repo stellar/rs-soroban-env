@@ -202,21 +202,6 @@ impl<T> TryBorrowOrErr<T> for RefCell<T> {
 }
 
 impl Host {
-    /// Convenience function that only evaluates the auxiliary debug arguments
-    /// to [Host::error] when [Host::is_debug] is `true`.
-    pub fn error_lazy<'a>(
-        &self,
-        error: Error,
-        msg: &str,
-        debug_args: impl FnOnce() -> &'a [Val] + 'a,
-    ) -> HostError {
-        if let Ok(true) = self.is_debug() {
-            self.error(error, msg, debug_args())
-        } else {
-            self.error(error, msg, &[])
-        }
-    }
-
     /// Convenience function to construct an [Error] and pass to [Host::error].
     pub fn err(&self, type_: ScErrorType, code: ScErrorCode, msg: &str, args: &[Val]) -> HostError {
         let error = Error::from_type_and_code(type_, code);
@@ -229,40 +214,46 @@ impl Host {
     /// enriches the returned [Error] with [DebugInfo] in the form of a
     /// [Backtrace] and snapshot of the [Events] buffer.
     pub fn error(&self, error: Error, msg: &str, args: &[Val]) -> HostError {
-        if let Ok(true) = self.is_debug() {
-            // We _try_ to take a mutable borrow of the events buffer refcell
-            // while building up the event we're going to emit into the events
-            // log, failing gracefully (just emitting a no-debug-info
-            // `HostError` wrapping the supplied `Error`) if we cannot acquire
-            // the refcell. This is to handle the "double fault" case where we
-            // get an error _while performing_ any of the steps needed to record
-            // an error as an event, below.
-            if let Ok(mut events_refmut) = self.0.events.try_borrow_mut() {
-                if let Err(e) = self.err_diagnostics(events_refmut.deref_mut(), error, msg, args) {
-                    return e;
+        self.with_debug_budget(
+            || {
+                // We _try_ to take a mutable borrow of the events buffer refcell
+                // while building up the event we're going to emit into the events
+                // log, failing gracefully (just emitting a no-debug-info
+                // `HostError` wrapping the supplied `Error`) if we cannot acquire
+                // the refcell. This is to handle the "double fault" case where we
+                // get an error _while performing_ any of the steps needed to record
+                // an error as an event, below.
+                // NB: here we call `try_borrow_mut` explicitly (not calling
+                // `self.try_borrow_events_mut` or anything that can trigger the
+                // error-handling workflow underneath) to avoid infinite recursion.
+                if let Ok(mut events_refmut) = self.0.events.try_borrow_mut() {
+                    self.record_err_diagnostics(events_refmut.deref_mut(), error, msg, args);
                 }
-            }
-            let info = self.maybe_get_debug_info();
-            return HostError { error, info };
-        }
-        error.into()
+                Ok(HostError {
+                    error,
+                    info: self.maybe_get_debug_info(),
+                })
+            },
+            || error.into(),
+        )
     }
 
     pub(crate) fn maybe_get_debug_info(&self) -> Option<Box<DebugInfo>> {
-        if let Ok(true) = self.is_debug() {
-            if let Ok(events_ref) = self.0.events.try_borrow() {
-                let events = match self
-                    .as_budget()
-                    .with_free_budget(|| events_ref.externalize(self))
-                {
-                    Ok(events) => events,
-                    Err(_) => return None,
-                };
-                let backtrace = Backtrace::new_unresolved();
-                return Some(Box::new(DebugInfo { backtrace, events }));
-            }
-        }
-        None
+        self.with_debug_budget(
+            || {
+                // NB: here we call `try_borrow` explicitly (not calling
+                // `self.try_borrow_events_mut` or anything that can trigger the
+                // error-handling workflow underneath) to avoid infinite recursion.
+                if let Ok(events_ref) = self.0.events.try_borrow() {
+                    let events = events_ref.externalize(self)?;
+                    let backtrace = Backtrace::new_unresolved();
+                    Ok(Some(Box::new(DebugInfo { backtrace, events })))
+                } else {
+                    Ok(None)
+                }
+            },
+            || None,
+        )
     }
 
     // Some common error patterns here.
@@ -447,12 +438,13 @@ pub(crate) trait DebugArg {
         // We similarly guard against double-faulting here by try-acquiring the event buffer,
         // which will fail if we're re-entering error reporting _while_ forming a debug argument.
         if let Ok(_guard) = host.0.events.try_borrow_mut() {
-            host.as_budget()
-                .with_free_budget(|| Self::debug_arg_maybe_expensive_or_fallible(host, arg))
-                .unwrap_or(
+            host.with_debug_budget(
+                || Self::debug_arg_maybe_expensive_or_fallible(host, arg),
+                || {
                     Error::from_type_and_code(ScErrorType::Events, ScErrorCode::InternalError)
-                        .into(),
-                )
+                        .into()
+                },
+            )
         } else {
             Error::from_type_and_code(ScErrorType::Events, ScErrorCode::InternalError).into()
         }

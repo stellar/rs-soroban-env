@@ -518,37 +518,29 @@ use crate::storage::{AccessType, Footprint};
 #[cfg(any(test, feature = "testutils"))]
 impl Host {
     // Writes an arbitrary ledger entry to storage.
-    // "testutils" are not covered by budget metering.
     pub fn add_ledger_entry(
         &self,
         key: &Rc<LedgerKey>,
         val: &Rc<soroban_env_common::xdr::LedgerEntry>,
         live_until_ledger: Option<u32>,
     ) -> Result<(), HostError> {
-        self.as_budget().with_free_budget(|| {
-            self.with_mut_storage(|storage| {
-                storage.put(key, val, live_until_ledger, self.as_budget())
-            })
-        })
+        self.with_mut_storage(|storage| storage.put(key, val, live_until_ledger, self.as_budget()))
     }
 
     // Performs the necessary setup to access the provided ledger key/entry in
     // enforcing storage mode.
-    // "testutils" are not covered by budget metering.
     pub fn setup_storage_entry(
         &self,
         key: Rc<LedgerKey>,
         val: Option<(Rc<soroban_env_common::xdr::LedgerEntry>, Option<u32>)>,
         access_type: AccessType,
     ) -> Result<(), HostError> {
-        self.as_budget().with_free_budget(|| {
-            self.with_mut_storage(|storage| {
-                storage
-                    .footprint
-                    .record_access(&key, access_type, self.as_budget())?;
-                storage.map = storage.map.insert(key, val, self.as_budget())?;
-                Ok(())
-            })
+        self.with_mut_storage(|storage| {
+            storage
+                .footprint
+                .record_access(&key, access_type, self.as_budget())?;
+            storage.map = storage.map.insert(key, val, self.as_budget())?;
+            Ok(())
         })
     }
 
@@ -564,7 +556,6 @@ impl Host {
 
     // Checks whether the given contract has a special 'dummy' executable
     // that marks contracts created with `register_test_contract`.
-    // "testutils" are not covered by budget metering.
     pub(crate) fn is_test_contract_executable(
         &self,
         contract_id: &Hash,

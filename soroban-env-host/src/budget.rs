@@ -139,7 +139,11 @@ impl HostCostModel for MeteredCostComponent {
     }
 }
 
-#[derive(Clone)]
+/// Helper types to annotate boolean function arguments
+struct IsCpu(bool);
+struct IsInternal(bool);
+
+#[derive(Clone, Default)]
 struct BudgetDimension {
     /// A set of cost models that map input values (eg. event counts, object
     /// sizes) from some CostType to whatever concrete resource type is being
@@ -158,6 +162,16 @@ struct BudgetDimension {
     /// Tracks the sum of _output_ values from the cost model, for purposes
     /// of comparing to limit.
     total_count: u64,
+
+    /// The internal limit tracks work done internally that is not exposed to the
+    /// external user -- it does not affect fees or decide the invocation outcome
+    /// in any way (no error due to exceeding the internal limit). It exists solely
+    /// for dos prevention. Such work include diagnostic logging, or work that
+    /// exists only for preflight.
+    internal_limit: u64,
+
+    /// Similar to `total_count`, but towards the `internal_limit`
+    internal_total_count: u64,
 }
 
 impl Debug for BudgetDimension {
@@ -172,18 +186,19 @@ impl Debug for BudgetDimension {
             writeln!(f, "CostType {:?}, count {}", ct, self.counts[ct as usize])?;
             writeln!(f, "model: {:?}", self.cost_models[ct as usize])?;
         }
+
+        writeln!(
+            f,
+            "internal limit: {}, internal_total_count: {}",
+            self.internal_limit, self.internal_total_count
+        )?;
         Ok(())
     }
 }
 
 impl BudgetDimension {
     fn new() -> Self {
-        let mut bd = Self {
-            cost_models: Default::default(),
-            limit: Default::default(),
-            counts: Default::default(),
-            total_count: Default::default(),
-        };
+        let mut bd = BudgetDimension::default();
         for _ct in ContractCostType::variants() {
             bd.cost_models.push(MeteredCostComponent {
                 const_term: 0,
@@ -206,6 +221,8 @@ impl BudgetDimension {
             limit: Default::default(),
             counts: vec![0; cost_params.0.len()],
             total_count: Default::default(),
+            internal_limit: Default::default(),
+            internal_total_count: Default::default(),
         })
     }
 
@@ -231,10 +248,22 @@ impl BudgetDimension {
         for v in &mut self.counts {
             *v = 0;
         }
+        self.internal_limit = limit;
+        self.internal_total_count = 0;
     }
 
-    pub fn is_over_budget(&self) -> bool {
-        self.total_count > self.limit
+    fn check_budget_limit(&self, internal: bool) -> Result<(), HostError> {
+        let over_limit = if internal {
+            self.internal_total_count > self.internal_limit
+        } else {
+            self.total_count > self.limit
+        };
+
+        if over_limit {
+            Err((ScErrorType::Budget, ScErrorCode::ExceededLimit).into())
+        } else {
+            Ok(())
+        }
     }
 
     /// Performs a bulk charge to the budget under the specified `CostType`.
@@ -247,29 +276,30 @@ impl BudgetDimension {
         ty: ContractCostType,
         iterations: u64,
         input: Option<u64>,
-        _is_cpu: bool,
+        _is_cpu: IsCpu,
+        is_internal: IsInternal,
     ) -> Result<(), HostError> {
         let cm = self.get_cost_model(ty);
         let amount = cm.evaluate(input)?.saturating_mul(iterations);
 
         #[cfg(all(not(target_family = "wasm"), feature = "tracy"))]
-        if _is_cpu {
+        if _is_cpu.0 {
             let _span = tracy_span!("charge");
             _span.emit_text(ty.name());
             _span.emit_value(amount);
         }
 
-        let cell = self
-            .counts
-            .get_mut(ty as usize)
-            .ok_or_else(|| HostError::from((ScErrorType::Budget, ScErrorCode::InternalError)))?;
-        *cell = cell.saturating_add(amount);
-        self.total_count = self.total_count.saturating_add(amount);
-        if self.is_over_budget() {
-            Err((ScErrorType::Budget, ScErrorCode::ExceededLimit).into())
+        if is_internal.0 {
+            self.internal_total_count = self.internal_total_count.saturating_add(amount);
         } else {
-            Ok(())
+            let cell = self.counts.get_mut(ty as usize).ok_or_else(|| {
+                HostError::from((ScErrorType::Budget, ScErrorCode::InternalError))
+            })?;
+            *cell = cell.saturating_add(amount);
+            self.total_count = self.total_count.saturating_add(amount);
         }
+
+        self.check_budget_limit(is_internal.0)
     }
 
     // Resets all model parameters to zero (so that we can override and test individual ones later).
@@ -372,9 +402,9 @@ impl MeterTracker {
 pub(crate) struct BudgetImpl {
     cpu_insns: BudgetDimension,
     mem_bytes: BudgetDimension,
-    /// For the purpose o calibration and reporting; not used for budget-limiting per se.
+    /// For the purpose of calibration and reporting; not used for budget-limiting per se.
     tracker: MeterTracker,
-    enabled: bool,
+    is_in_internal_mode: bool,
     fuel_config: FuelConfig,
     depth_limit: u32,
 }
@@ -391,7 +421,7 @@ impl BudgetImpl {
             cpu_insns: BudgetDimension::try_from_config(cpu_cost_params)?,
             mem_bytes: BudgetDimension::try_from_config(mem_cost_params)?,
             tracker: Default::default(),
-            enabled: true,
+            is_in_internal_mode: false,
             fuel_config: Default::default(),
             depth_limit: DEFAULT_HOST_DEPTH_LIMIT,
         };
@@ -453,28 +483,46 @@ impl BudgetImpl {
         iterations: u64,
         input: Option<u64>,
     ) -> Result<(), HostError> {
-        if !self.enabled {
-            return Ok(());
+        if self.is_in_internal_mode {
+            if matches!(ty, ContractCostType::WasmInsnExec) {
+                // if wasm instruction charging is happening in debug mode, something
+                // is wrong and the guest is executing contract code for free. We stop
+                // with an internal error
+                return Err((ScErrorType::Budget, ScErrorCode::InternalError).into());
+            }
+        } else {
+            // update tracker for reporting
+            self.tracker.count = self.tracker.count.saturating_add(1);
+            let (t_iters, t_inputs) = &mut self
+                .tracker
+                .cost_tracker
+                .get_mut(ty as usize)
+                .ok_or_else(|| {
+                    HostError::from((ScErrorType::Budget, ScErrorCode::InternalError))
+                })?;
+            *t_iters = t_iters.saturating_add(iterations);
+            match (t_inputs, input) {
+                (None, None) => (),
+                (Some(t), Some(i)) => *t = t.saturating_add(i.saturating_mul(iterations)),
+                // internal logic error, a wrong cost type has been passed in
+                _ => return Err((ScErrorType::Budget, ScErrorCode::InternalError).into()),
+            };
         }
 
-        // update tracker for reporting
-        self.tracker.count = self.tracker.count.saturating_add(1);
-        let (t_iters, t_inputs) = &mut self
-            .tracker
-            .cost_tracker
-            .get_mut(ty as usize)
-            .ok_or_else(|| HostError::from((ScErrorType::Budget, ScErrorCode::InternalError)))?;
-        *t_iters = t_iters.saturating_add(iterations);
-        match (t_inputs, input) {
-            (None, None) => (),
-            (Some(t), Some(i)) => *t = t.saturating_add(i.saturating_mul(iterations)),
-            // internal logic error, a wrong cost type has been passed in
-            _ => return Err((ScErrorType::Budget, ScErrorCode::InternalError).into()),
-        };
-
-        // do the actual budget charging
-        self.cpu_insns.charge(ty, iterations, input, true)?;
-        self.mem_bytes.charge(ty, iterations, input, false)
+        self.cpu_insns.charge(
+            ty,
+            iterations,
+            input,
+            IsCpu(true),
+            IsInternal(self.is_in_internal_mode),
+        )?;
+        self.mem_bytes.charge(
+            ty,
+            iterations,
+            input,
+            IsCpu(false),
+            IsInternal(self.is_in_internal_mode),
+        )
     }
 
     fn get_wasmi_fuel_remaining(&self) -> Result<u64, HostError> {
@@ -506,7 +554,7 @@ impl Default for BudgetImpl {
             cpu_insns: BudgetDimension::new(),
             mem_bytes: BudgetDimension::new(),
             tracker: Default::default(),
-            enabled: true,
+            is_in_internal_mode: false,
             fuel_config: Default::default(),
             depth_limit: DEFAULT_HOST_DEPTH_LIMIT,
         };
@@ -779,7 +827,22 @@ impl Debug for BudgetImpl {
             )?;
         }
         writeln!(f, "{:=<165}", "")?;
+        writeln!(
+            f,
+            "Internal details (diagnostics info, does not affect fees) "
+        )?;
         writeln!(f, "Total # times meter was called: {}", self.tracker.count,)?;
+        writeln!(
+            f,
+            "Internal cpu limit: {}; used: {}",
+            self.cpu_insns.internal_limit, self.cpu_insns.internal_total_count
+        )?;
+        writeln!(
+            f,
+            "Internal mem limit: {}; used: {}",
+            self.mem_bytes.internal_limit, self.mem_bytes.internal_total_count
+        )?;
+        writeln!(f, "{:=<165}", "")?;
         Ok(())
     }
 }
@@ -956,24 +1019,50 @@ impl Budget {
         self.0.try_borrow_mut_or_err()?.charge(ty, 1, input)
     }
 
-    pub fn with_free_budget<F, T>(&self, f: F) -> Result<T, HostError>
+    /// Runs a user provided closure in internal mode -- all metering is done through
+    /// the internal budget.
+    ///
+    /// Because the internal mode is optional (depending on the configuration,
+    /// nodes may or may not trigger this path), any error occured during execution
+    /// is swallowed by running a fallback closure provided by the caller.
+    ///
+    /// # Arguments:
+    /// * `f` - A fallible closure to be run in internal mode. If error occurs,
+    ///   fallback closure is run immediately afterwards to replace it
+    ///
+    /// * `e` - A fallback closure to be run in case of any error occuring
+    ///
+    /// # Returns:
+    ///
+    /// Returns a value of type `T`. Any errors arising during the execution are
+    /// suppressed.
+    pub(crate) fn with_internal_mode<T, F, E>(&self, f: F, e: E) -> T
     where
         F: FnOnce() -> Result<T, HostError>,
+        E: Fn() -> T,
     {
         let mut prev = false;
-        self.mut_budget(|mut b| {
-            prev = b.enabled;
-            b.enabled = false;
-            Ok(())
-        })?;
+        let should_execute = self.mut_budget(|mut b| {
+            prev = b.is_in_internal_mode;
+            b.is_in_internal_mode = true;
+            b.cpu_insns.check_budget_limit(true)?;
+            b.mem_bytes.check_budget_limit(true)
+        });
 
-        let res = f();
+        let rt = if should_execute.is_ok() {
+            f().unwrap_or(e())
+        } else {
+            e()
+        };
 
-        self.mut_budget(|mut b| {
-            b.enabled = prev;
+        if let Err(_) = self.mut_budget(|mut b| {
+            b.is_in_internal_mode = prev;
             Ok(())
-        })?;
-        res
+        }) {
+            return e();
+        }
+
+        rt
     }
 
     pub fn get_tracker(&self, ty: ContractCostType) -> Result<(u64, Option<u64>), HostError> {

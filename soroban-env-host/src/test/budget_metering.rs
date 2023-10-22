@@ -379,7 +379,11 @@ fn total_amount_charged_from_random_inputs() -> Result<(), HostError> {
         Int256Shift              1              None           412            119            412                 0                   119                 0                   
         ChaCha20DrawBytes        1              Some(1)        4926           0              4907                2461                0                   0                   
         =====================================================================================================================================================================
+        Internal details (diagnostics info, does not affect fees) 
         Total # times meter was called: 23
+        Internal cpu limit: 100000000; used: 0
+        Internal mem limit: 41943040; used: 0
+        =====================================================================================================================================================================
 
     "#]]
     .assert_eq(&actual);

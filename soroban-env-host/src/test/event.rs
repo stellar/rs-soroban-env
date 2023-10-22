@@ -75,7 +75,7 @@ impl ContractFunctionSet for ContractWithMultipleEvents {
         let data = Val::from(0u32);
         host.record_contract_event(ContractEventType::Contract, topics, data)
             .unwrap();
-        host.log_diagnostics("debug event 0", &[]).unwrap();
+        host.log_diagnostics("debug event 0", &[]);
         host.record_contract_event(ContractEventType::System, topics, data)
             .unwrap();
         Some(().into())

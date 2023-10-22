@@ -528,7 +528,7 @@ impl Host {
             }
         }
 
-        self.fn_call_diagnostics(id, &func, args)?;
+        self.fn_call_diagnostics(id, &func, args);
 
         // Try dispatching the contract to the compiled-in registred
         // implmentation. Only the contracts with the special (empty) executable
@@ -576,7 +576,7 @@ impl Host {
                         testutils::call_with_suppressed_panic_hook(closure);
                     match res {
                         Ok(Some(val)) => {
-                            self.fn_return_diagnostics(id, &func, &val)?;
+                            self.fn_return_diagnostics(id, &func, &val);
                             Ok(val)
                         }
                         Ok(None) => Err(self.err(
@@ -648,7 +648,7 @@ impl Host {
         let res = self.call_contract_fn(id, &func, args);
 
         match &res {
-            Ok(res) => self.fn_return_diagnostics(id, &func, res)?,
+            Ok(res) => self.fn_return_diagnostics(id, &func, res),
             Err(_err) => {}
         }
 

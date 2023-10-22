@@ -66,115 +66,103 @@ impl Host {
         })
     }
 
-    pub fn log_diagnostics(&self, msg: &str, args: &[Val]) -> Result<(), HostError> {
-        if !self.is_debug()? {
-            return Ok(());
-        }
-        let calling_contract = self.get_current_contract_id_unmetered()?;
-        self.as_budget().with_free_budget(|| {
-            let log_sym = SymbolSmall::try_from_str("log")?;
-            let topics = vec![InternalDiagnosticArg::HostVal(log_sym.to_val())];
-            let msg = ScVal::String(ScString::from(StringM::try_from(msg.as_bytes().to_vec())?));
-            let args: Vec<_> = std::iter::once(InternalDiagnosticArg::XdrVal(msg))
-                .chain(args.iter().map(|rv| InternalDiagnosticArg::HostVal(*rv)))
-                .collect();
-            self.record_diagnostic_event(calling_contract, topics, args)
-        })
+    pub fn log_diagnostics(&self, msg: &str, args: &[Val]) {
+        self.with_debug_budget(
+            || {
+                let calling_contract = self.get_current_contract_id_unmetered()?;
+                let log_sym = SymbolSmall::try_from_str("log")?;
+                let topics = vec![InternalDiagnosticArg::HostVal(log_sym.to_val())];
+                let msg =
+                    ScVal::String(ScString::from(StringM::try_from(msg.as_bytes().to_vec())?));
+                let args: Vec<_> = std::iter::once(InternalDiagnosticArg::XdrVal(msg))
+                    .chain(args.iter().map(|rv| InternalDiagnosticArg::HostVal(*rv)))
+                    .collect();
+                self.record_diagnostic_event(calling_contract, topics, args)
+            },
+            || (),
+        )
     }
 
-    pub(crate) fn err_diagnostics(
+    pub(crate) fn record_err_diagnostics(
         &self,
         events: &mut InternalEventsBuffer,
         error: Error,
         msg: &str,
         args: &[Val],
-    ) -> Result<(), HostError> {
-        if !self.is_debug()? {
-            return Ok(());
-        }
+    ) {
+        self.with_debug_budget(
+            || {
+                let error_sym = SymbolSmall::try_from_str("error")?;
+                let contract_id = self.get_current_contract_id_unmetered()?;
+                let topics = vec![
+                    InternalDiagnosticArg::HostVal(error_sym.to_val()),
+                    InternalDiagnosticArg::HostVal(error.to_val()),
+                ];
+                let msg =
+                    ScVal::String(ScString::from(StringM::try_from(msg.as_bytes().to_vec())?));
+                let args: Vec<_> = std::iter::once(InternalDiagnosticArg::XdrVal(msg))
+                    .chain(args.iter().map(|rv| InternalDiagnosticArg::HostVal(*rv)))
+                    .collect();
 
-        self.as_budget().with_free_budget(|| {
-            let error_sym = SymbolSmall::try_from_str("error")?;
-            let contract_id = self.get_current_contract_id_unmetered()?;
-            let topics = vec![
-                InternalDiagnosticArg::HostVal(error_sym.to_val()),
-                InternalDiagnosticArg::HostVal(error.to_val()),
-            ];
-            let msg = ScVal::String(ScString::from(StringM::try_from(msg.as_bytes().to_vec())?));
-            let args: Vec<_> = std::iter::once(InternalDiagnosticArg::XdrVal(msg))
-                .chain(args.iter().map(|rv| InternalDiagnosticArg::HostVal(*rv)))
-                .collect();
-
-            // We do the event-recording ourselves here rather than calling
-            // self.record_system_debug_contract_event because we can/should
-            // only be called with an already-borrowed events buffer (to
-            // insulate against double-faulting).
-            let ce = Rc::new(InternalDiagnosticEvent {
-                contract_id,
-                topics,
-                args,
-            });
-            events.record(InternalEvent::Diagnostic(ce), self.as_budget())
-        })
+                // We do the event-recording ourselves here rather than calling
+                // self.record_system_debug_contract_event because we can/should
+                // only be called with an already-borrowed events buffer (to
+                // insulate against double-faulting).
+                let ce = Rc::new(InternalDiagnosticEvent {
+                    contract_id,
+                    topics,
+                    args,
+                });
+                events.record(InternalEvent::Diagnostic(ce), self.as_budget())
+            },
+            || (),
+        )
     }
 
     // Emits an event with topic = ["fn_call", called_contract_id, function_name] and
     // data = [arg1, args2, ...]
     // Should called prior to opening a frame for the next call so the calling contract can be inferred correctly
-    pub fn fn_call_diagnostics(
-        &self,
-        called_contract_id: &Hash,
-        func: &Symbol,
-        args: &[Val],
-    ) -> Result<(), HostError> {
-        if !self.is_debug()? {
-            return Ok(());
-        }
-
-        let calling_contract = self.get_current_contract_id_unmetered()?;
-
-        self.as_budget().with_free_budget(|| {
-            let topics = vec![
-                InternalDiagnosticArg::HostVal(SymbolSmall::try_from_str("fn_call")?.into()),
-                InternalDiagnosticArg::XdrVal(ScVal::Bytes(ScBytes::try_from(
-                    called_contract_id.as_slice().to_vec(),
-                )?)),
-                InternalDiagnosticArg::HostVal(func.into()),
-            ];
-            self.record_diagnostic_event(
-                calling_contract,
-                topics,
-                args.iter()
-                    .map(|rv| InternalDiagnosticArg::HostVal(*rv))
-                    .collect(),
-            )
-        })
+    pub fn fn_call_diagnostics(&self, called_contract_id: &Hash, func: &Symbol, args: &[Val]) {
+        self.with_debug_budget(
+            || {
+                let calling_contract = self.get_current_contract_id_unmetered()?;
+                let topics = vec![
+                    InternalDiagnosticArg::HostVal(SymbolSmall::try_from_str("fn_call")?.into()),
+                    InternalDiagnosticArg::XdrVal(ScVal::Bytes(ScBytes::try_from(
+                        called_contract_id.as_slice().to_vec(),
+                    )?)),
+                    InternalDiagnosticArg::HostVal(func.into()),
+                ];
+                self.record_diagnostic_event(
+                    calling_contract,
+                    topics,
+                    args.iter()
+                        .map(|rv| InternalDiagnosticArg::HostVal(*rv))
+                        .collect(),
+                )
+            },
+            || (),
+        )
     }
 
     // Emits an event with topic = ["fn_return", function_name] and
     // data = [return_val]
-    pub fn fn_return_diagnostics(
-        &self,
-        contract_id: &Hash,
-        func: &Symbol,
-        res: &Val,
-    ) -> Result<(), HostError> {
-        if !self.is_debug()? {
-            return Ok(());
-        }
+    pub fn fn_return_diagnostics(&self, contract_id: &Hash, func: &Symbol, res: &Val) {
+        self.with_debug_budget(
+            || {
+                let topics = vec![
+                    InternalDiagnosticArg::HostVal(SymbolSmall::try_from_str("fn_return")?.into()),
+                    InternalDiagnosticArg::HostVal(func.into()),
+                ];
 
-        self.as_budget().with_free_budget(|| {
-            let topics = vec![
-                InternalDiagnosticArg::HostVal(SymbolSmall::try_from_str("fn_return")?.into()),
-                InternalDiagnosticArg::HostVal(func.into()),
-            ];
-
-            self.record_diagnostic_event(
-                Some(contract_id.clone()),
-                topics,
-                vec![InternalDiagnosticArg::HostVal(*res)],
-            )
-        })
+                self.record_diagnostic_event(
+                    Some(contract_id.clone()),
+                    topics,
+                    vec![InternalDiagnosticArg::HostVal(*res)],
+                )
+            },
+            || (),
+        )
     }
 }
 
