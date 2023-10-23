@@ -1,7 +1,7 @@
 #![no_std]
 use soroban_sdk::{contract, contractimpl, Env, Bytes, BytesN};
 
-pub(crate) const EXTEND_AMOUNT: u32 = 518400; // 30 days
+pub(crate) const EXTEND_AMOUNT: u32 = 1036800; // 60 days
 pub(crate) const BALANCE_TTL_THRESHOLD: u32 = EXTEND_AMOUNT;
 
 #[contract]
