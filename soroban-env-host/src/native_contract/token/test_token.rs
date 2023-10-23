@@ -101,17 +101,6 @@ impl<'a> TestToken<'a> {
             .try_into_val(self.host)?)
     }
 
-    pub(crate) fn spendable_balance(&self, addr: Address) -> Result<i128, HostError> {
-        Ok(self
-            .host
-            .call(
-                self.address.clone().into(),
-                Symbol::try_from_val(self.host, &"spendable_balance")?,
-                host_vec![self.host, addr].into(),
-            )?
-            .try_into_val(self.host)?)
-    }
-
     pub(crate) fn authorized(&self, addr: Address) -> Result<bool, HostError> {
         Ok(self
             .host

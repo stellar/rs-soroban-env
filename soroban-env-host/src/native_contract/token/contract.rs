@@ -16,9 +16,7 @@ use soroban_native_sdk_macros::contractimpl;
 
 use super::admin::{read_administrator, write_administrator};
 use super::asset_info::read_asset_info;
-use super::balance::{
-    check_clawbackable, get_spendable_balance, spend_balance_no_authorization_check,
-};
+use super::balance::{check_clawbackable, spend_balance_no_authorization_check};
 use super::metadata::{read_name, read_symbol, set_metadata, DECIMAL};
 use super::public_types::{AlphaNum12AssetInfo, AlphaNum4AssetInfo};
 use super::storage_types::{INSTANCE_EXTEND_AMOUNT, INSTANCE_TTL_THRESHOLD};
@@ -45,8 +43,6 @@ pub trait TokenTrait {
     ) -> Result<(), HostError>;
 
     fn balance(e: &Host, addr: Address) -> Result<i128, HostError>;
-
-    fn spendable_balance(e: &Host, addr: Address) -> Result<i128, HostError>;
 
     fn authorized(e: &Host, addr: Address) -> Result<bool, HostError>;
 
@@ -226,15 +222,6 @@ impl TokenTrait for Token {
             INSTANCE_EXTEND_AMOUNT.into(),
         )?;
         read_balance(e, addr)
-    }
-
-    fn spendable_balance(e: &Host, addr: Address) -> Result<i128, HostError> {
-        let _span = tracy_span!("native token spendable balance");
-        e.extend_current_contract_instance_and_code(
-            INSTANCE_TTL_THRESHOLD.into(),
-            INSTANCE_EXTEND_AMOUNT.into(),
-        )?;
-        get_spendable_balance(e, addr)
     }
 
     // Metering: covered by components

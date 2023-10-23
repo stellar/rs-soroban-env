@@ -1318,7 +1318,7 @@ fn test_set_admin() {
 }
 
 #[test]
-fn test_account_spendable_balance() {
+fn test_account_balance() {
     let test = TokenTest::setup();
     let token = TestToken::new_from_asset(&test.host, Asset::Native);
     let user_acc_id = signing_key_to_account_id(&test.user_key);
@@ -1336,9 +1336,6 @@ fn test_account_spendable_balance() {
     );
 
     assert_eq!(token.balance(user_addr.clone()).unwrap(), 100_000_000);
-    // base reserve = 5_000_000
-    // signer + account = 3 base reserves
-    assert_eq!(token.spendable_balance(user_addr).unwrap(), 85_000_000);
 }
 
 #[test]
@@ -1499,10 +1496,6 @@ fn test_trustline_auth() {
         .unwrap();
 
     assert_eq!(token.balance(user.address(&test.host)).unwrap(), 490);
-    assert_eq!(
-        token.spendable_balance(user.address(&test.host)).unwrap(),
-        480
-    );
 }
 
 #[test]
