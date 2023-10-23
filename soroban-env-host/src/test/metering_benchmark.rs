@@ -39,15 +39,15 @@ fn run_add_i32() -> Result<(), HostError> {
 
     let _test_span = tracy_span!("run_add_i32 test");
 
-    let account_id = generate_account_id();
-    let salt = generate_bytes_array();
+    let host = Host::test_host_with_recording_footprint();
+    let account_id = generate_account_id(&host);
+    let salt = generate_bytes_array(&host);
     let a = 4i32;
     let b = 7i32;
 
     // Run 1: record footprint, emulating "preflight".
     let foot = {
         let _run_span = tracy_span!("add_i32 run 1: recording footprint");
-        let host = Host::test_host_with_recording_footprint();
         host.set_ledger_info(LEDGER_INFO.clone())?;
         let contract_id_obj =
             host.register_test_contract_wasm_from_source_account(ADD_I32, account_id.clone(), salt);
@@ -90,13 +90,13 @@ fn run_complex() -> Result<(), HostError> {
     tracy_client::Client::start();
 
     let _test_span = tracy_span!("run_complex test");
-    let account_id = generate_account_id();
-    let salt = generate_bytes_array();
+    let host = Host::test_host_with_recording_footprint();
+    let account_id = generate_account_id(&host);
+    let salt = generate_bytes_array(&host);
 
     // Run 1: record footprint, emulating "preflight".
     let foot = {
         let _run_span = tracy_span!("complex run 1: recording footprint");
-        let host = Host::test_host_with_recording_footprint();
         host.set_ledger_info(LEDGER_INFO.clone())?;
         let contract_id_obj =
             host.register_test_contract_wasm_from_source_account(COMPLEX, account_id.clone(), salt);

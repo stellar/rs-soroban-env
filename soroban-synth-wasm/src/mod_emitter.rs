@@ -1,5 +1,5 @@
 use crate::FuncEmitter;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use wasm_encoder::{
     CodeSection, ConstExpr, CustomSection, ElementSection, Elements, EntityType, ExportKind,
     ExportSection, Function, FunctionSection, GlobalSection, GlobalType, ImportSection,
@@ -10,14 +10,14 @@ use wasm_encoder::{
 /// inputs the function takes. In this crate function types are simplified to all
 /// take only some number (the arity) of I64 values and return a single I64, so a
 /// function type can be defined strictly by its arity.
-#[derive(Hash, PartialEq, Eq, Copy, Clone)]
+#[derive(Hash, PartialEq, Eq, Copy, Clone, PartialOrd, Ord)]
 pub struct Arity(pub u32);
 
 /// Wrapper for a u32 that references a function type in the `type` section of the
 /// module being emitted. There will usually be only one such type for any given
 /// arity, though there may be none: they are emitted into the `type` section on
 /// demand, as references to them are required.
-#[derive(Hash, PartialEq, Eq, Copy, Clone)]
+#[derive(Hash, PartialEq, Eq, Copy, Clone, PartialOrd, Ord)]
 pub struct TypeRef(pub u32);
 
 /// Wrapper for a u32 that references a function in both the `function` and
@@ -52,8 +52,8 @@ pub struct ModEmitter {
     elements: ElementSection,
     codes: CodeSection,
 
-    type_refs: HashMap<Arity, TypeRef>,
-    import_refs: HashMap<(String, String, Arity), FuncRef>,
+    type_refs: BTreeMap<Arity, TypeRef>,
+    import_refs: BTreeMap<(String, String, Arity), FuncRef>,
 }
 
 impl ModEmitter {
@@ -93,8 +93,8 @@ impl ModEmitter {
         let exports = ExportSection::new();
         let elements = ElementSection::new();
         let codes = CodeSection::new();
-        let typerefs = HashMap::new();
-        let importrefs = HashMap::new();
+        let typerefs = BTreeMap::new();
+        let importrefs = BTreeMap::new();
         Self {
             module,
             types,

@@ -53,6 +53,8 @@ use self::{
 #[cfg(any(test, feature = "testutils"))]
 pub use frame::ContractFunctionSet;
 pub(crate) use frame::Frame;
+#[cfg(any(test, feature = "recording_auth"))]
+use rand_chacha::ChaCha20Rng;
 
 /// Defines the maximum depth for recursive calls in the host, i.e. `Val` conversion, comparison,
 /// and deep clone, to prevent stack overflow.
@@ -113,12 +115,25 @@ struct HostImpl {
     authorization_manager: RefCell<AuthorizationManager>,
     diagnostic_level: RefCell<DiagnosticLevel>,
     base_prng: RefCell<Option<Prng>>,
+    // Auth-recording mode generates pseudorandom nonces to populate its output.
+    // We'd like these to be deterministic from one run to the next, but also
+    // completely isolated from any use of the user-accessible PRNGs (either
+    // base or local) such that contracts behave exactly the same whether or not
+    // they're recording auth. Therefore this task gets its own PRNG, seeded when
+    // the base PRNG is seeded (as a derived PRNG).
+    #[cfg(any(test, feature = "recording_auth"))]
+    recording_auth_nonce_prng: RefCell<Option<ChaCha20Rng>>,
+    // Some tests _of the host_ rely on pseudorandom _input_ data. For these cases we attach
+    // yet another unmetered PRNG to the host. This should not be exposed through "testutils"
+    // to clients testing contracts _against_ the host.
+    #[cfg(test)]
+    test_prng: RefCell<Option<ChaCha20Rng>>,
     // Note: we're not going to charge metering for testutils because it's out of the scope
     // of what users will be charged for in production -- it's scaffolding for testing a contract,
     // but shouldn't be charged to the contract itself (and will never be compiled-in to
     // production hosts)
     #[cfg(any(test, feature = "testutils"))]
-    contracts: RefCell<std::collections::HashMap<Hash, Rc<dyn ContractFunctionSet>>>,
+    contracts: RefCell<std::collections::BTreeMap<Hash, Rc<dyn ContractFunctionSet>>>,
     // Store a copy of the `AuthorizationManager` for the last host function
     // invocation. In order to emulate the production behavior in tests, we reset
     // authorization manager after every invocation (as it's not meant to be
@@ -220,8 +235,24 @@ impl_checked_borrow_helpers!(
     try_borrow_base_prng_mut
 );
 
+#[cfg(any(test, feature = "recording_auth"))]
+impl_checked_borrow_helpers!(
+    recording_auth_nonce_prng,
+    Option<ChaCha20Rng>,
+    try_borrow_recording_auth_nonce_prng,
+    try_borrow_recording_auth_nonce_prng_mut
+);
+
+#[cfg(test)]
+impl_checked_borrow_helpers!(
+    test_prng,
+    Option<ChaCha20Rng>,
+    try_borrow_test_prng,
+    try_borrow_test_prng_mut
+);
+
 #[cfg(any(test, feature = "testutils"))]
-impl_checked_borrow_helpers!(contracts, std::collections::HashMap<Hash, Rc<dyn ContractFunctionSet>>, try_borrow_contracts, try_borrow_contracts_mut);
+impl_checked_borrow_helpers!(contracts, std::collections::BTreeMap<Hash, Rc<dyn ContractFunctionSet>>, try_borrow_contracts, try_borrow_contracts_mut);
 
 #[cfg(any(test, feature = "testutils"))]
 impl_checked_borrow_helpers!(
@@ -271,6 +302,10 @@ impl Host {
             ),
             diagnostic_level: Default::default(),
             base_prng: RefCell::new(None),
+            #[cfg(any(test, feature = "recording_auth"))]
+            recording_auth_nonce_prng: RefCell::new(None),
+            #[cfg(test)]
+            test_prng: RefCell::new(None),
             #[cfg(any(test, feature = "testutils"))]
             contracts: Default::default(),
             #[cfg(any(test, feature = "testutils"))]
@@ -294,6 +329,42 @@ impl Host {
     #[cfg(test)]
     pub(crate) fn source_account_id(&self) -> Result<Option<AccountId>, HostError> {
         Ok(self.try_borrow_source_account()?.metered_clone(self)?)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn with_test_prng<T>(
+        &self,
+        f: impl FnOnce(&mut ChaCha20Rng) -> Result<T, HostError>,
+    ) -> Result<T, HostError> {
+        let mut opt = self.try_borrow_test_prng_mut()?;
+        if let Some(p) = opt.as_mut() {
+            f(p)
+        } else {
+            Err(self.err(
+                ScErrorType::Context,
+                ScErrorCode::InternalError,
+                "missing test PRNG",
+                &[],
+            ))
+        }
+    }
+
+    #[cfg(any(test, feature = "recording_auth"))]
+    pub(crate) fn with_recording_auth_nonce_prng<T>(
+        &self,
+        f: impl FnOnce(&mut ChaCha20Rng) -> Result<T, HostError>,
+    ) -> Result<T, HostError> {
+        let mut opt = self.try_borrow_recording_auth_nonce_prng_mut()?;
+        if let Some(p) = opt.as_mut() {
+            f(p)
+        } else {
+            Err(self.err(
+                ScErrorType::Context,
+                ScErrorCode::InternalError,
+                "missing recording-auth nonce PRNG",
+                &[],
+            ))
+        }
     }
 
     pub fn source_account_address(&self) -> Result<Option<AddressObject>, HostError> {
@@ -322,8 +393,23 @@ impl Host {
         Ok(())
     }
 
+    #[allow(unused_variables)]
     pub fn set_base_prng_seed(&self, seed: prng::Seed) -> Result<(), HostError> {
-        *self.try_borrow_base_prng_mut()? = Some(Prng::new_from_seed(seed));
+        let mut base_prng = Prng::new_from_seed(seed);
+        // NB: we must _create_ these PRNGs whether or not we're in a build that
+        // stores / reveals them, so that the base_prng is left in the same state
+        // regardless of build configuration.
+        let recording_auth_nonce_prng = base_prng.unmetered_raw_sub_prng();
+        let test_prng = base_prng.unmetered_raw_sub_prng();
+        #[cfg(test)]
+        {
+            *self.try_borrow_test_prng_mut()? = Some(test_prng);
+        }
+        #[cfg(any(test, feature = "recording_auth"))]
+        {
+            *self.try_borrow_recording_auth_nonce_prng_mut()? = Some(recording_auth_nonce_prng);
+        }
+        *self.try_borrow_base_prng_mut()? = Some(base_prng);
         Ok(())
     }
 

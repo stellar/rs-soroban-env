@@ -1,6 +1,6 @@
 use std::{cell::RefCell, collections::BTreeMap, rc::Rc};
 
-use rand::{thread_rng, RngCore};
+use rand::RngCore;
 use soroban_env_common::{
     xdr::{
         AccountEntry, AccountId, ContractCostType, LedgerEntry, LedgerEntryData, LedgerKey,
@@ -42,15 +42,16 @@ impl AsScVal for ScVec {
     }
 }
 
-pub(crate) fn generate_account_id() -> AccountId {
+pub(crate) fn generate_account_id(host: &Host) -> AccountId {
     AccountId(PublicKey::PublicKeyTypeEd25519(Uint256(
-        generate_bytes_array(),
+        generate_bytes_array(host),
     )))
 }
 
-pub(crate) fn generate_bytes_array() -> [u8; 32] {
+pub(crate) fn generate_bytes_array(host: &Host) -> [u8; 32] {
     let mut bytes: [u8; 32] = Default::default();
-    thread_rng().fill_bytes(&mut bytes);
+    host.with_test_prng(|chacha| Ok(chacha.fill_bytes(&mut bytes)))
+        .unwrap();
     bytes
 }
 
@@ -92,14 +93,19 @@ impl SnapshotSource for MockSnapshotSource {
 
 #[allow(dead_code)]
 impl Host {
+    pub(crate) const TEST_PRNG_SEED: &[u8; 32] = b"12345678901234567890123456789012";
+
     pub(crate) fn test_host() -> Self {
-        Host::default()
+        let host = Host::default();
+        host.set_base_prng_seed(*Host::TEST_PRNG_SEED).unwrap();
+        host
     }
 
     pub(crate) fn test_host_with_recording_footprint() -> Self {
         let snapshot_source = Rc::<MockSnapshotSource>::new(MockSnapshotSource::new());
         let storage = Storage::with_recording_footprint(snapshot_source);
         let host = Host::with_storage_and_budget(storage, Budget::default());
+        host.set_base_prng_seed(*Host::TEST_PRNG_SEED).unwrap();
         host.set_ledger_info(LedgerInfo {
             protocol_version: crate::meta::get_ledger_protocol_version(
                 crate::meta::INTERFACE_VERSION,
@@ -237,8 +243,8 @@ impl Host {
     pub(crate) fn register_test_contract_wasm(&self, contract_wasm: &[u8]) -> AddressObject {
         self.register_test_contract_wasm_from_source_account(
             contract_wasm,
-            generate_account_id(),
-            generate_bytes_array(),
+            generate_account_id(self),
+            generate_bytes_array(self),
         )
     }
 

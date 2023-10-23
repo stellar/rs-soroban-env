@@ -9,7 +9,7 @@ use crate::{
     xdr::{ContractCostType, ScBytes},
     HostError,
 };
-use rand::{distributions::Uniform, prelude::Distribution, seq::SliceRandom};
+use rand::{distributions::Uniform, prelude::Distribution, seq::SliceRandom, RngCore};
 use rand_chacha::{rand_core::SeedableRng, ChaCha20Rng};
 use std::ops::RangeInclusive;
 
@@ -139,5 +139,11 @@ impl Prng {
         chacha20_fill_bytes(&mut self.0, &mut new_seed, budget)?;
         budget.charge(ContractCostType::MemCpy, Some(SEED_BYTES))?;
         Ok(Self(ChaCha20Rng::from_seed(new_seed)))
+    }
+
+    pub(crate) fn unmetered_raw_sub_prng(&mut self) -> ChaCha20Rng {
+        let mut new_seed: Seed = [0; SEED_BYTES as usize];
+        self.0.fill_bytes(&mut new_seed);
+        ChaCha20Rng::from_seed(new_seed)
     }
 }

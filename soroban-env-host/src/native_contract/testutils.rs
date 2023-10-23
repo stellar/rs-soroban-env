@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use crate::{Host, LedgerInfo};
 use ed25519_dalek::{Signer, SigningKey};
-use rand::{thread_rng, Rng};
+use rand::Rng;
 use soroban_env_common::xdr::{
     AccountEntry, AccountEntryExt, AccountEntryExtensionV1, AccountEntryExtensionV1Ext,
     AccountEntryExtensionV2, AccountEntryExtensionV2Ext, AccountId, Hash, HashIdPreimage,
@@ -30,8 +30,9 @@ macro_rules! host_vec {
     };
 }
 
-pub(crate) fn generate_signing_key() -> SigningKey {
-    SigningKey::generate(&mut thread_rng())
+pub(crate) fn generate_signing_key(host: &Host) -> SigningKey {
+    host.with_test_prng(|chacha| Ok(SigningKey::generate(chacha)))
+        .unwrap()
 }
 
 pub(crate) fn signing_key_to_account_id(key: &SigningKey) -> AccountId {
@@ -203,9 +204,11 @@ pub(crate) fn authorize_single_invocation(
 ) {
     let nonce = match signer {
         TestSigner::AccountInvoker(_) => None,
-        TestSigner::Account(_) | TestSigner::AccountContract(_) => {
-            Some((thread_rng().gen_range(0..=i64::MAX), 10000))
-        }
+        TestSigner::Account(_) | TestSigner::AccountContract(_) => Some((
+            host.with_test_prng(|chacha| Ok(chacha.gen_range(0..=i64::MAX)))
+                .unwrap(),
+            10000,
+        )),
         TestSigner::ContractInvoker(_) => {
             return;
         }

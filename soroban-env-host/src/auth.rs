@@ -27,7 +27,7 @@ use crate::host::error::TryBorrowOrErr;
 #[cfg(any(test, feature = "recording_auth"))]
 use rand::Rng;
 #[cfg(any(test, feature = "recording_auth"))]
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 // Authorization manager encapsulates host-based authentication & authorization
 // framework.
@@ -126,7 +126,7 @@ pub struct AuthorizationManagerSnapshot {
     account_trackers_snapshot: AccountTrackersSnapshot,
     invoker_contract_tracker_root_snapshots: Vec<AuthorizedInvocationSnapshot>,
     #[cfg(any(test, feature = "recording_auth"))]
-    tracker_by_address_handle: Option<HashMap<u32, usize>>,
+    tracker_by_address_handle: Option<BTreeMap<u32, usize>>,
 }
 
 // Snapshot of the `account_trackers` in `AuthorizationManager`.
@@ -159,7 +159,7 @@ struct RecordingAuthInfo {
     // This allows to disambiguate between the addresses that have the same
     // value, but are specified as two different objects (e.g. as two different
     // contract function inputs).
-    tracker_by_address_handle: RefCell<HashMap<u32, usize>>,
+    tracker_by_address_handle: RefCell<BTreeMap<u32, usize>>,
     // Whether to allow root authorized invocation to not match the root
     // contract invocation.
     disable_non_root_auth: bool,
@@ -170,7 +170,7 @@ impl RecordingAuthInfo {
     fn try_borrow_tracker_by_address_handle(
         &self,
         host: &Host,
-    ) -> Result<std::cell::Ref<'_, HashMap<u32, usize>>, HostError> {
+    ) -> Result<std::cell::Ref<'_, BTreeMap<u32, usize>>, HostError> {
         self.tracker_by_address_handle.try_borrow_or_err_with(
             host,
             "recording_auth_info.tracker_by_address_handle.try_borrow failed",
@@ -179,7 +179,7 @@ impl RecordingAuthInfo {
     fn try_borrow_tracker_by_address_handle_mut(
         &self,
         host: &Host,
-    ) -> Result<std::cell::RefMut<'_, HashMap<u32, usize>>, HostError> {
+    ) -> Result<std::cell::RefMut<'_, BTreeMap<u32, usize>>, HostError> {
         self.tracker_by_address_handle.try_borrow_mut_or_err_with(
             host,
             "recording_auth_info.tracker_by_address_handle.try_borrow_mut failed",
@@ -1475,7 +1475,8 @@ impl AccountAuthorizationTracker {
             false
         };
         let nonce = if !is_invoker {
-            let random_nonce: i64 = rand::thread_rng().gen_range(0..=i64::MAX);
+            let random_nonce: i64 =
+                host.with_recording_auth_nonce_prng(|p| Ok(p.gen_range(0..=i64::MAX)))?;
             host.consume_nonce(address, random_nonce, 0)?;
             Some((random_nonce, 0))
         } else {
