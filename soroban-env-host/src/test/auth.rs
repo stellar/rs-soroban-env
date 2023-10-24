@@ -1,24 +1,24 @@
 use ed25519_dalek::SigningKey;
 use rand::Rng;
+use soroban_builtin_sdk_macros::contracttype;
 use soroban_env_common::xdr::{
     AccountId, ContractDataDurability, HashIdPreimage, HashIdPreimageSorobanAuthorization,
     InvokeContractArgs, PublicKey, ScAddress, ScBytes, ScErrorCode, ScErrorType, ScNonceKey,
     ScSymbol, ScVal, SorobanAddressCredentials, SorobanAuthorizationEntry,
     SorobanAuthorizedFunction, SorobanAuthorizedInvocation, SorobanCredentials, Uint256, VecM,
 };
-use soroban_native_sdk_macros::contracttype;
 use soroban_test_wasms::{AUTH_TEST_CONTRACT, DELEGATED_ACCOUNT_TEST_CONTRACT};
 
 use crate::auth::RecordedAuthPayload;
 use crate::budget::AsBudget;
-use crate::native_contract::base_types::Address;
-use crate::native_contract::testutils::{
+use crate::builtin_contracts::base_types::Address;
+use crate::builtin_contracts::testutils::{
     create_account, generate_signing_key, sign_payload_for_account, signing_key_to_account_id,
 };
 use crate::{host_vec, Host, LedgerInfo};
 use soroban_env_common::{AddressObject, Env, Symbol, SymbolStr, TryFromVal, TryIntoVal};
 
-use crate::native_contract::base_types::Vec as HostVec;
+use crate::builtin_contracts::base_types::Vec as HostVec;
 
 use pretty_assertions::assert_eq;
 

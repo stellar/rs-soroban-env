@@ -50,7 +50,7 @@ allow_apis = [
 [pkg.wasm-bindgen-macro]
 allow_proc_macro = true
 
-[pkg.soroban-native-sdk-macros]
+[pkg.soroban-builtin-sdk-macros]
 allow_proc_macro = true
 
 [pkg.paste]

@@ -45,7 +45,7 @@ pub use events::diagnostic::DiagnosticLevel;
 mod host;
 pub(crate) mod host_object;
 
-mod native_contract;
+mod builtin_contracts;
 
 pub mod auth;
 pub mod vm;

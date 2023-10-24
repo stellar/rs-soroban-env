@@ -1,6 +1,6 @@
-use crate::native_contract::base_types::{BytesN, String};
+use crate::builtin_contracts::base_types::{BytesN, String};
+use soroban_builtin_sdk_macros::contracttype;
 use soroban_env_common::TryIntoVal;
-use soroban_native_sdk_macros::contracttype;
 
 #[derive(Clone)]
 #[contracttype]

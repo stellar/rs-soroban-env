@@ -99,7 +99,7 @@ fn display_scval(scv: &ScVal, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Resu
         ScVal::ContractInstance(ScContractInstance {
             executable: ContractExecutable::StellarAsset,
             ..
-        }) => write!(f, "ContractInstance(Token)"),
+        }) => write!(f, "ContractInstance(StellarAsset)"),
     }
 }
 

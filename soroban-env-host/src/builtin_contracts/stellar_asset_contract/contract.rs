@@ -1,18 +1,22 @@
-use crate::host::{metered_clone::MeteredClone, Host};
-use crate::native_contract::base_types::{Address, Bytes, BytesN, String};
-use crate::native_contract::contract_error::ContractError;
-use crate::native_contract::token::allowance::{read_allowance, spend_allowance, write_allowance};
-use crate::native_contract::token::asset_info::{has_asset_info, write_asset_info};
-use crate::native_contract::token::balance::{
+use crate::builtin_contracts::base_types::{Address, Bytes, BytesN, String};
+use crate::builtin_contracts::contract_error::ContractError;
+use crate::builtin_contracts::stellar_asset_contract::allowance::{
+    read_allowance, spend_allowance, write_allowance,
+};
+use crate::builtin_contracts::stellar_asset_contract::asset_info::{
+    has_asset_info, write_asset_info,
+};
+use crate::builtin_contracts::stellar_asset_contract::balance::{
     is_authorized, read_balance, receive_balance, spend_balance, write_authorization,
 };
-use crate::native_contract::token::event;
-use crate::native_contract::token::public_types::AssetInfo;
+use crate::builtin_contracts::stellar_asset_contract::event;
+use crate::builtin_contracts::stellar_asset_contract::public_types::AssetInfo;
+use crate::host::{metered_clone::MeteredClone, Host};
 use crate::{err, HostError};
 
+use soroban_builtin_sdk_macros::contractimpl;
 use soroban_env_common::xdr::Asset;
 use soroban_env_common::{ConversionError, Env, EnvBase, TryFromVal, TryIntoVal};
-use soroban_native_sdk_macros::contractimpl;
 
 use super::admin::{read_administrator, write_administrator};
 use super::asset_info::read_asset_info;
@@ -21,63 +25,7 @@ use super::metadata::{read_name, read_symbol, set_metadata, DECIMAL};
 use super::public_types::{AlphaNum12AssetInfo, AlphaNum4AssetInfo};
 use super::storage_types::{INSTANCE_EXTEND_AMOUNT, INSTANCE_TTL_THRESHOLD};
 
-pub trait TokenTrait {
-    /// init_asset can create a contract for a wrapped classic asset
-    /// (Native, AlphaNum4, or AlphaNum12). It will fail if the contractID
-    /// of this contract does not match the expected contractID for this asset
-    /// returned by Host::get_asset_contract_id_hash. This function should only be
-    /// called internally by the host.
-    ///
-    /// No admin will be set for the Native token, so any function that checks the admin
-    /// (clawback, set_auth, mint, set_admin, admin) will always fail
-    fn init_asset(e: &Host, asset_bytes: Bytes) -> Result<(), HostError>;
-
-    fn allowance(e: &Host, from: Address, spender: Address) -> Result<i128, HostError>;
-
-    fn approve(
-        e: &Host,
-        from: Address,
-        spender: Address,
-        amount: i128,
-        live_until_ledger: u32,
-    ) -> Result<(), HostError>;
-
-    fn balance(e: &Host, addr: Address) -> Result<i128, HostError>;
-
-    fn authorized(e: &Host, addr: Address) -> Result<bool, HostError>;
-
-    fn transfer(e: &Host, from: Address, to: Address, amount: i128) -> Result<(), HostError>;
-
-    fn transfer_from(
-        e: &Host,
-        spender: Address,
-        from: Address,
-        to: Address,
-        amount: i128,
-    ) -> Result<(), HostError>;
-
-    fn burn(e: &Host, from: Address, amount: i128) -> Result<(), HostError>;
-
-    fn burn_from(e: &Host, spender: Address, from: Address, amount: i128) -> Result<(), HostError>;
-
-    fn set_authorized(e: &Host, addr: Address, authorize: bool) -> Result<(), HostError>;
-
-    fn mint(e: &Host, to: Address, amount: i128) -> Result<(), HostError>;
-
-    fn clawback(e: &Host, from: Address, amount: i128) -> Result<(), HostError>;
-
-    fn set_admin(e: &Host, new_admin: Address) -> Result<(), HostError>;
-
-    fn admin(e: &Host) -> Result<Address, HostError>;
-
-    fn decimals(e: &Host) -> Result<u32, HostError>;
-
-    fn name(e: &Host) -> Result<String, HostError>;
-
-    fn symbol(e: &Host) -> Result<String, HostError>;
-}
-
-pub struct Token;
+pub struct StellarAssetContract;
 
 fn check_nonnegative_amount(e: &Host, amount: i128) -> Result<(), HostError> {
     if amount < 0 {
@@ -105,13 +53,13 @@ fn check_non_native(e: &Host) -> Result<(), HostError> {
 
 #[contractimpl]
 // Metering: *mostly* covered by components.
-impl TokenTrait for Token {
-    fn init_asset(e: &Host, asset_bytes: Bytes) -> Result<(), HostError> {
-        let _span = tracy_span!("native token init_asset");
+impl StellarAssetContract {
+    pub fn init_asset(e: &Host, asset_bytes: Bytes) -> Result<(), HostError> {
+        let _span = tracy_span!("stellar asset contract init_asset");
         if has_asset_info(e)? {
             return Err(e.error(
                 ContractError::AlreadyInitializedError.into(),
-                "token has been already initialized",
+                "StellarAssetContract has been already initialized",
                 &[],
             ));
         }
@@ -130,7 +78,7 @@ impl TokenTrait for Token {
         match asset {
             Asset::Native => {
                 write_asset_info(e, AssetInfo::Native)?;
-                //No admin for the Native token
+                //No admin for the stellar asset contract
             }
             Asset::CreditAlphanum4(asset4) => {
                 write_administrator(e, Address::from_account(e, &asset4.issuer)?)?;
@@ -177,8 +125,8 @@ impl TokenTrait for Token {
         Ok(())
     }
 
-    fn allowance(e: &Host, from: Address, spender: Address) -> Result<i128, HostError> {
-        let _span = tracy_span!("native token allowance");
+    pub fn allowance(e: &Host, from: Address, spender: Address) -> Result<i128, HostError> {
+        let _span = tracy_span!("stellar asset contract allowance");
         e.extend_current_contract_instance_and_code(
             INSTANCE_TTL_THRESHOLD.into(),
             INSTANCE_EXTEND_AMOUNT.into(),
@@ -187,14 +135,14 @@ impl TokenTrait for Token {
     }
 
     // Metering: covered by components
-    fn approve(
+    pub fn approve(
         e: &Host,
         from: Address,
         spender: Address,
         amount: i128,
         live_until_ledger: u32,
     ) -> Result<(), HostError> {
-        let _span = tracy_span!("native token approve");
+        let _span = tracy_span!("stellar asset contract approve");
         check_nonnegative_amount(e, amount)?;
         from.require_auth()?;
 
@@ -215,8 +163,8 @@ impl TokenTrait for Token {
     }
 
     // Metering: covered by components
-    fn balance(e: &Host, addr: Address) -> Result<i128, HostError> {
-        let _span = tracy_span!("native token balance");
+    pub fn balance(e: &Host, addr: Address) -> Result<i128, HostError> {
+        let _span = tracy_span!("stellar asset contract balance");
         e.extend_current_contract_instance_and_code(
             INSTANCE_TTL_THRESHOLD.into(),
             INSTANCE_EXTEND_AMOUNT.into(),
@@ -225,8 +173,8 @@ impl TokenTrait for Token {
     }
 
     // Metering: covered by components
-    fn authorized(e: &Host, addr: Address) -> Result<bool, HostError> {
-        let _span = tracy_span!("native token authorized");
+    pub fn authorized(e: &Host, addr: Address) -> Result<bool, HostError> {
+        let _span = tracy_span!("stellar asset contract authorized");
         e.extend_current_contract_instance_and_code(
             INSTANCE_TTL_THRESHOLD.into(),
             INSTANCE_EXTEND_AMOUNT.into(),
@@ -235,8 +183,8 @@ impl TokenTrait for Token {
     }
 
     // Metering: covered by components
-    fn transfer(e: &Host, from: Address, to: Address, amount: i128) -> Result<(), HostError> {
-        let _span = tracy_span!("native token transfer");
+    pub fn transfer(e: &Host, from: Address, to: Address, amount: i128) -> Result<(), HostError> {
+        let _span = tracy_span!("stellar asset contract transfer");
         check_nonnegative_amount(e, amount)?;
         from.require_auth()?;
 
@@ -252,14 +200,14 @@ impl TokenTrait for Token {
     }
 
     // Metering: covered by components
-    fn transfer_from(
+    pub fn transfer_from(
         e: &Host,
         spender: Address,
         from: Address,
         to: Address,
         amount: i128,
     ) -> Result<(), HostError> {
-        let _span = tracy_span!("native token transfer_from");
+        let _span = tracy_span!("stellar asset contract transfer_from");
         check_nonnegative_amount(e, amount)?;
         spender.require_auth()?;
 
@@ -276,8 +224,8 @@ impl TokenTrait for Token {
     }
 
     // Metering: covered by components
-    fn burn(e: &Host, from: Address, amount: i128) -> Result<(), HostError> {
-        let _span = tracy_span!("native token burn");
+    pub fn burn(e: &Host, from: Address, amount: i128) -> Result<(), HostError> {
+        let _span = tracy_span!("stellar asset contract burn");
         check_nonnegative_amount(e, amount)?;
         check_non_native(e)?;
         from.require_auth()?;
@@ -293,8 +241,13 @@ impl TokenTrait for Token {
     }
 
     // Metering: covered by components
-    fn burn_from(e: &Host, spender: Address, from: Address, amount: i128) -> Result<(), HostError> {
-        let _span = tracy_span!("native token burn_from");
+    pub fn burn_from(
+        e: &Host,
+        spender: Address,
+        from: Address,
+        amount: i128,
+    ) -> Result<(), HostError> {
+        let _span = tracy_span!("stellar asset contract burn_from");
         check_nonnegative_amount(e, amount)?;
         check_non_native(e)?;
         spender.require_auth()?;
@@ -311,8 +264,8 @@ impl TokenTrait for Token {
     }
 
     // Metering: covered by components
-    fn clawback(e: &Host, from: Address, amount: i128) -> Result<(), HostError> {
-        let _span = tracy_span!("native token clawback");
+    pub fn clawback(e: &Host, from: Address, amount: i128) -> Result<(), HostError> {
+        let _span = tracy_span!("stellar asset contract clawback");
         check_nonnegative_amount(e, amount)?;
         check_clawbackable(e, from.metered_clone(e)?)?;
         let admin = read_administrator(e)?;
@@ -329,8 +282,8 @@ impl TokenTrait for Token {
     }
 
     // Metering: covered by components
-    fn set_authorized(e: &Host, addr: Address, authorize: bool) -> Result<(), HostError> {
-        let _span = tracy_span!("native token set_authorized");
+    pub fn set_authorized(e: &Host, addr: Address, authorize: bool) -> Result<(), HostError> {
+        let _span = tracy_span!("stellar asset contract set_authorized");
         let admin = read_administrator(e)?;
         admin.require_auth()?;
 
@@ -345,8 +298,8 @@ impl TokenTrait for Token {
     }
 
     // Metering: covered by components
-    fn mint(e: &Host, to: Address, amount: i128) -> Result<(), HostError> {
-        let _span = tracy_span!("native token mint");
+    pub fn mint(e: &Host, to: Address, amount: i128) -> Result<(), HostError> {
+        let _span = tracy_span!("stellar asset contract mint");
         check_nonnegative_amount(e, amount)?;
         let admin = read_administrator(e)?;
         admin.require_auth()?;
@@ -362,8 +315,8 @@ impl TokenTrait for Token {
     }
 
     // Metering: covered by components
-    fn set_admin(e: &Host, new_admin: Address) -> Result<(), HostError> {
-        let _span = tracy_span!("native token set_admin");
+    pub fn set_admin(e: &Host, new_admin: Address) -> Result<(), HostError> {
+        let _span = tracy_span!("stellar asset contract set_admin");
         let admin = read_administrator(e)?;
         admin.require_auth()?;
 
@@ -377,24 +330,24 @@ impl TokenTrait for Token {
         Ok(())
     }
 
-    fn admin(e: &Host) -> Result<Address, HostError> {
-        let _span = tracy_span!("native token admin");
+    pub fn admin(e: &Host) -> Result<Address, HostError> {
+        let _span = tracy_span!("stellar asset contract admin");
         read_administrator(e)
     }
 
-    fn decimals(_e: &Host) -> Result<u32, HostError> {
-        let _span = tracy_span!("native token decimals");
+    pub fn decimals(_e: &Host) -> Result<u32, HostError> {
+        let _span = tracy_span!("stellar asset contract decimals");
         // no need to load metadata since this is fixed for all SAC tokens
         Ok(DECIMAL)
     }
 
-    fn name(e: &Host) -> Result<String, HostError> {
-        let _span = tracy_span!("native token name");
+    pub fn name(e: &Host) -> Result<String, HostError> {
+        let _span = tracy_span!("stellar asset contract name");
         read_name(e)
     }
 
-    fn symbol(e: &Host) -> Result<String, HostError> {
-        let _span = tracy_span!("native token symbol");
+    pub fn symbol(e: &Host) -> Result<String, HostError> {
+        let _span = tracy_span!("stellar asset contract symbol");
         read_symbol(e)
     }
 }

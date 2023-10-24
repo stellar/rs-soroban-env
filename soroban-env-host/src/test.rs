@@ -17,10 +17,10 @@ mod map;
 mod num;
 mod post_mvp;
 mod prng;
+mod stellar_asset_contract;
 mod storage;
 mod str;
 mod symbol;
-mod token;
 mod tuple;
 mod vec;
 

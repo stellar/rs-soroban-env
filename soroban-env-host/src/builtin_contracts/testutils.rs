@@ -13,9 +13,9 @@ use soroban_env_common::xdr::{
 };
 use soroban_env_common::{EnvBase, TryFromVal, Val};
 
-use crate::native_contract::base_types::BytesN;
+use crate::builtin_contracts::base_types::BytesN;
 
-pub(crate) use crate::native_contract::base_types::Vec as HostVec;
+pub(crate) use crate::builtin_contracts::base_types::Vec as HostVec;
 
 use super::account_contract::AccountEd25519Signature;
 use super::base_types::Address;
