@@ -223,9 +223,10 @@ impl Host {
                 // the refcell. This is to handle the "double fault" case where we
                 // get an error _while performing_ any of the steps needed to record
                 // an error as an event, below.
-                // NB: here we call `try_borrow_mut` explicitly (not calling
-                // `self.try_borrow_events_mut` or anything that can trigger the
-                // error-handling workflow underneath) to avoid infinite recursion.
+                // We do the event-borrowing ourselves here rather than calling
+                // self.try_borrow_events_mut because we can/should only be called
+                // with an already-borrowed events buffer (to insulate against
+                // double-faulting).
                 if let Ok(mut events_refmut) = self.0.events.try_borrow_mut() {
                     self.record_err_diagnostics(events_refmut.deref_mut(), error, msg, args);
                 }
@@ -241,9 +242,10 @@ impl Host {
     pub(crate) fn maybe_get_debug_info(&self) -> Option<Box<DebugInfo>> {
         self.with_debug_budget(
             || {
-                // NB: here we call `try_borrow` explicitly (not calling
-                // `self.try_borrow_events_mut` or anything that can trigger the
-                // error-handling workflow underneath) to avoid infinite recursion.
+                // We do the event-borrowing ourselves here rather than calling
+                // self.try_borrow_events because we can/should only be called
+                // with an already-borrowed events buffer (to insulate against
+                // double-faulting).
                 if let Ok(events_ref) = self.0.events.try_borrow() {
                     let events = events_ref.externalize(self)?;
                     let backtrace = Backtrace::new_unresolved();

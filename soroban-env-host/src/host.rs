@@ -762,11 +762,15 @@ impl VmCallerEnv for Host {
         self.with_debug_budget(
             || {
                 let VmSlice { vm, pos, len } = self.decode_vmslice(msg_pos, msg_len)?;
+                Vec::<u8>::charge_bulk_init_cpy(len as u64, self)?;
                 let mut msg: Vec<u8> = vec![0u8; len as usize];
                 self.metered_vm_read_bytes_from_linear_memory(vmcaller, &vm, pos, &mut msg)?;
+                // `String::from_utf8_lossy` iternally allocates a `String` which is a `Vec<u8>`
+                Vec::<u8>::charge_bulk_init_cpy(len as u64, self)?;
                 let msg = String::from_utf8_lossy(&msg);
 
                 let VmSlice { vm, pos, len } = self.decode_vmslice(vals_pos, vals_len)?;
+                Vec::<Val>::charge_bulk_init_cpy((len + 1) as u64, self)?;
                 let mut vals: Vec<Val> = vec![Val::VOID.to_val(); len as usize];
                 // charge for conversion from bytes to `Val`s
                 self.charge_budget(ContractCostType::MemCpy, Some(len.saturating_mul(8) as u64))?;

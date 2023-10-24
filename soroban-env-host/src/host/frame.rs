@@ -372,17 +372,30 @@ impl Host {
         res
     }
 
-    /// Returns [`Hash`] contract ID from the VM frame at the top of the context
-    /// stack, or a [`HostError`] if the context stack is empty or has a non-VM
-    /// frame at its top.
-    pub(crate) fn get_current_contract_id_opt_internal(&self) -> Result<Option<Hash>, HostError> {
-        self.with_current_frame(|frame| match frame {
+    fn opt_contract_id_from_frame(&self, frame: &Frame) -> Result<Option<Hash>, HostError> {
+        match frame {
             Frame::ContractVM { vm, .. } => Ok(Some(vm.contract_id.metered_clone(self)?)),
             Frame::HostFunction(_) => Ok(None),
             Frame::Token(id, ..) => Ok(Some(id.metered_clone(self)?)),
             #[cfg(any(test, feature = "testutils"))]
             Frame::TestContract(tc) => Ok(Some(tc.id.metered_clone(self)?)),
+        }
+    }
+
+    /// Internal diagnostic use only. Returns a `None` if current frame don't exist
+    /// (in the case of calling directly from a test).
+    pub(crate) fn get_current_contract_id_from_opt_frame(&self) -> Result<Option<Hash>, HostError> {
+        self.with_current_frame_opt(|opt_frame| match opt_frame {
+            Some(frame) => self.opt_contract_id_from_frame(frame),
+            None => Ok(None),
         })
+    }
+
+    /// Returns [`Hash`] contract ID from the VM frame at the top of the context
+    /// stack, or a [`HostError`] if the context stack is empty or has a non-VM
+    /// frame at its top.
+    pub(crate) fn get_current_contract_id_opt_internal(&self) -> Result<Option<Hash>, HostError> {
+        self.with_current_frame(|frame| self.opt_contract_id_from_frame(frame))
     }
 
     /// Returns [`Hash`] contract ID from the VM frame at the top of the context

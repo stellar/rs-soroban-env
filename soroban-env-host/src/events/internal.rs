@@ -4,7 +4,11 @@ use soroban_env_common::{BytesObject, VecObject};
 
 use super::{Events, HostEvent};
 use crate::{
-    budget::Budget, host::metered_clone::MeteredContainer, xdr, xdr::ScVal, Host, HostError, Val,
+    budget::Budget,
+    host::metered_clone::{MeteredClone, MeteredContainer, MeteredIterator},
+    xdr,
+    xdr::ScVal,
+    Host, HostError, Val,
 };
 
 /// The internal representation of a `ContractEvent` that is stored in the events buffer
@@ -20,7 +24,7 @@ pub struct InternalContractEvent {
 
 impl InternalContractEvent {
     // Metering: covered by components
-    pub fn to_xdr(&self, host: &Host) -> Result<xdr::ContractEvent, HostError> {
+    fn to_xdr(&self, host: &Host) -> Result<xdr::ContractEvent, HostError> {
         let topics = host.vecobject_to_scval_vec(self.topics)?;
         let data = host.from_host_val(self.data)?;
         let contract_id = match self.contract_id {
@@ -43,7 +47,7 @@ impl InternalContractEvent {
 /// -- capturing the input to diagnostics, rather than interacting with the host
 /// object system. It does this for two reasons:
 ///
-///   1. to avoid to avoid perturbing object numbering when debug-mode is
+///   1. to avoid perturbing object numbering when debug-mode is
 ///      enabled -- this could potentially cause hosts running on watcher nodes
 ///      with debug enabled to diverge from validators with debug disabled.
 ///
@@ -71,34 +75,41 @@ pub enum InternalDiagnosticArg {
     XdrVal(ScVal),
 }
 
-fn externalize_args(host: &Host, args: &[InternalDiagnosticArg]) -> Result<Vec<ScVal>, HostError> {
-    let mut scargs: Vec<ScVal> = Vec::new();
-    for arg in args.iter() {
-        match arg {
-            InternalDiagnosticArg::HostVal(h) => scargs.push(host.from_host_val(*h)?),
-            InternalDiagnosticArg::XdrVal(v) => scargs.push(v.clone()),
-        }
-    }
-    Ok(scargs)
-}
-
 impl InternalDiagnosticEvent {
-    pub fn to_xdr(&self, host: &Host) -> Result<xdr::ContractEvent, HostError> {
-        let topics: xdr::VecM<ScVal> = externalize_args(host, &self.topics)?.try_into()?;
-        let args = externalize_args(host, &self.args)?;
-        let data = if args.len() > 1 {
-            ScVal::Vec(Some(xdr::ScVec::from(xdr::VecM::try_from(args)?)))
-        } else if let Some(arg) = args.into_iter().next() {
-            arg
-        } else {
-            ScVal::Void
-        };
-        Ok(xdr::ContractEvent {
-            ext: xdr::ExtensionPoint::V0,
-            contract_id: self.contract_id.clone(),
-            type_: xdr::ContractEventType::Diagnostic,
-            body: xdr::ContractEventBody::V0(xdr::ContractEventV0 { topics, data }),
-        })
+    fn to_xdr(&self, host: &Host) -> Result<Option<xdr::ContractEvent>, HostError> {
+        // this exist as an internal closure to prevent it from being accidentally
+        // called from the outside without `with_debug_budget`
+        let externalize_args =
+            |host: &Host, args: &[InternalDiagnosticArg]| -> Result<Vec<ScVal>, HostError> {
+                args.iter()
+                    .map(|arg| match arg {
+                        InternalDiagnosticArg::HostVal(h) => host.from_host_val(*h),
+                        InternalDiagnosticArg::XdrVal(v) => v.metered_clone(host),
+                    })
+                    .metered_collect::<Result<Vec<ScVal>, HostError>>(host)?
+            };
+
+        let opt_ce = host.with_debug_budget(
+            || {
+                let topics: xdr::VecM<ScVal> = externalize_args(host, &self.topics)?.try_into()?;
+                let args = externalize_args(host, &self.args)?;
+                let data = if args.len() > 1 {
+                    ScVal::Vec(Some(xdr::ScVec::from(xdr::VecM::try_from(args)?)))
+                } else if let Some(arg) = args.into_iter().next() {
+                    arg
+                } else {
+                    ScVal::Void
+                };
+                Ok(Some(xdr::ContractEvent {
+                    ext: xdr::ExtensionPoint::V0,
+                    contract_id: self.contract_id.metered_clone(host)?,
+                    type_: xdr::ContractEventType::Diagnostic,
+                    body: xdr::ContractEventBody::V0(xdr::ContractEventV0 { topics, data }),
+                }))
+            },
+            || None,
+        );
+        Ok(opt_ce)
     }
 }
 
@@ -126,14 +137,21 @@ pub(crate) struct InternalEventsBuffer {
 impl InternalEventsBuffer {
     // Records an InternalEvent
     pub fn record(&mut self, e: InternalEvent, budget: &Budget) -> Result<(), HostError> {
-        // Metering: we use the cost of instantiating a size=1 `Vec` as an estimate for the cost
-        // `Vec.push(event)`. Because the buffer length may be different on different instances
-        // due to diagnostic events and we need a deterministic cost across all instances,
-        // the cost needs to be amortized and buffer size-independent.
+        // Metering: we use the cost of instantiating a size=1 `Vec` as an estimate
+        // for the cost `Vec.push(event)`. Because the buffer length may be different
+        // on different instances due to diagnostic events and we need a deterministic
+        // cost across all instances, the cost needs to be amortized and buffer
+        // size-independent.
+        let charge_internal_event_push =
+            || Vec::<(InternalEvent, EventError)>::charge_bulk_init_cpy(1, budget);
 
-        if let InternalEvent::Contract(_) = e {
-            Vec::<(InternalEvent, EventError)>::charge_bulk_init_cpy(1, budget)?;
+        match e {
+            InternalEvent::Contract(_) => charge_internal_event_push()?,
+            InternalEvent::Diagnostic(_) => {
+                budget.with_internal_mode(charge_internal_event_push, || ())
+            }
         }
+
         self.vec.push((e, EventError::FromSuccessfulCall));
         Ok(())
     }
@@ -173,11 +191,12 @@ impl InternalEventsBuffer {
                     // If the host is not in debug mode, the diagnostic event
                     // (which should not be generated in the first place), will be incored.
                     let de: Option<HostEvent> = host.with_debug_budget(
-                        || {
-                            Ok(Some(HostEvent {
-                                event: d.to_xdr(host)?,
+                        || match d.to_xdr(host)? {
+                            Some(event) => Ok(Some(HostEvent {
+                                event,
                                 failed_call: *status == EventError::FromFailedCall,
-                            }))
+                            })),
+                            None => Ok(None),
                         },
                         || None,
                     );

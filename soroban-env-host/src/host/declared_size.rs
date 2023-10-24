@@ -3,7 +3,10 @@ use crate::{
         AccountAuthorizationTracker, AccountAuthorizationTrackerSnapshot, AuthorizedInvocation,
         AuthorizedInvocationSnapshot, ContractInvocation, InvokerContractAuthorizationTracker,
     },
-    events::{EventError, HostEvent, InternalContractEvent, InternalEvent},
+    events::{
+        EventError, HostEvent, InternalContractEvent, InternalDiagnosticArg,
+        InternalDiagnosticEvent, InternalEvent,
+    },
     host::{frame::Context, Events},
     host_object::HostObject,
     native_contract::base_types::Address,
@@ -123,6 +126,8 @@ impl_declared_size_type!(AuthorizedInvocationSnapshot, 32);
 impl_declared_size_type!(AccountAuthorizationTracker, 232);
 impl_declared_size_type!(AccountAuthorizationTrackerSnapshot, 40);
 impl_declared_size_type!(InvokerContractAuthorizationTracker, 192);
+impl_declared_size_type!(InternalDiagnosticArg, 64);
+impl_declared_size_type!(InternalDiagnosticEvent, 88);
 
 // xdr types
 impl_declared_size_type!(TimePoint, 8);
@@ -342,6 +347,8 @@ mod test {
                 .to_string()
                 .as_str(),
         );
+        expect!["64"].assert_eq(size_of::<InternalDiagnosticArg>().to_string().as_str());
+        expect!["88"].assert_eq(size_of::<InternalDiagnosticEvent>().to_string().as_str());
 
         // xdr types
         expect!["8"].assert_eq(size_of::<TimePoint>().to_string().as_str());
@@ -498,6 +505,8 @@ mod test {
         assert_mem_size_le_declared_size!(AccountAuthorizationTracker);
         assert_mem_size_le_declared_size!(AccountAuthorizationTrackerSnapshot);
         assert_mem_size_le_declared_size!(InvokerContractAuthorizationTracker);
+        assert_mem_size_le_declared_size!(InternalDiagnosticArg);
+        assert_mem_size_le_declared_size!(InternalDiagnosticEvent);
 
         // xdr types
         assert_mem_size_le_declared_size!(TimePoint);
