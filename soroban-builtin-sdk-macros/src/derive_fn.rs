@@ -45,7 +45,7 @@ pub fn derive_contract_function_set<'a>(
         quote! { #(#compile_errors)* }
     } else {
         quote! {
-            impl crate::native_contract::NativeContract for #ty {
+            impl crate::builtin_contracts::BuiltinContract for #ty {
                 fn call(
                     &self,
                     func: &soroban_env_common::Symbol,

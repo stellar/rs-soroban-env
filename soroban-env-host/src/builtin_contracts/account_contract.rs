@@ -3,8 +3,8 @@ use crate::auth::{AuthorizedFunction, AuthorizedInvocation};
 // it doesn't need to be directly invoked. But semantically this is analagous
 // to a generic smart wallet contract that supports authentication and blanket
 // context authorization.
+use crate::builtin_contracts::{base_types::BytesN, contract_error::ContractError};
 use crate::host::{frame::ContractReentryMode, Host};
-use crate::native_contract::{base_types::BytesN, contract_error::ContractError};
 use crate::{err, HostError};
 use core::cmp::Ordering;
 use soroban_env_common::xdr::{
@@ -12,12 +12,12 @@ use soroban_env_common::xdr::{
 };
 use soroban_env_common::{Env, EnvBase, Symbol, TryFromVal, TryIntoVal, Val};
 
-use crate::native_contract::base_types::Vec as HostVec;
+use crate::builtin_contracts::base_types::Vec as HostVec;
 
 const MAX_ACCOUNT_SIGNATURES: u32 = 20;
 
+use soroban_builtin_sdk_macros::contracttype;
 use soroban_env_common::xdr::AccountId;
-use soroban_native_sdk_macros::contracttype;
 
 use super::base_types::Address;
 use super::common_types::ContractExecutable;
@@ -74,7 +74,7 @@ impl AuthorizationContext {
                     xdr::ContractExecutable::StellarAsset => return Err(host.err(
                         ScErrorType::Auth,
                         ScErrorCode::InvalidInput,
-                        "token executable is not allowed when authorizing create_contract host fn",
+                        "StellarAsset executable is not allowed when authorizing create_contract host fn",
                         &[],
                     )),
                 };

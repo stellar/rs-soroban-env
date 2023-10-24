@@ -10,13 +10,13 @@ use soroban_env_common::xdr::{
 use soroban_env_common::{AddressObject, Compare, Symbol, TryFromVal, TryIntoVal, Val, VecObject};
 
 use crate::budget::{AsBudget, Budget};
+use crate::builtin_contracts::account_contract::{
+    check_account_authentication, check_account_contract_auth,
+};
+use crate::builtin_contracts::invoker_contract_auth::invoker_contract_auth_to_authorized_invocation;
 use crate::host::metered_clone::{MeteredAlloc, MeteredClone, MeteredContainer, MeteredIterator};
 use crate::host::Frame;
 use crate::host_object::HostVec;
-use crate::native_contract::account_contract::{
-    check_account_authentication, check_account_contract_auth,
-};
-use crate::native_contract::invoker_contract_auth::invoker_contract_auth_to_authorized_invocation;
 use crate::{Host, HostError};
 
 use super::xdr;
@@ -1072,7 +1072,7 @@ impl AuthorizationManager {
             // `push_create_contract_host_fn_frame`) functions instead to push
             // the frame with the required info.
             Frame::HostFunction(_) => return Ok(()),
-            Frame::Token(id, fn_name, ..) => (id.metered_clone(host)?, *fn_name),
+            Frame::StellarAssetContract(id, fn_name, ..) => (id.metered_clone(host)?, *fn_name),
             #[cfg(any(test, feature = "testutils"))]
             Frame::TestContract(tc) => (tc.id.metered_clone(host)?, tc.func),
         };
@@ -1915,7 +1915,7 @@ impl Host {
         contract: AddressObject,
         args: VecObject,
     ) -> Result<Val, HostError> {
-        use crate::native_contract::account_contract::ACCOUNT_CONTRACT_CHECK_AUTH_FN_NAME;
+        use crate::builtin_contracts::account_contract::ACCOUNT_CONTRACT_CHECK_AUTH_FN_NAME;
         let contract_id = self.contract_id_from_address(contract)?;
         let args_vec = self.call_args_from_obj(args)?;
         let res = self.call_n_internal(

@@ -1,6 +1,6 @@
 [package]
-name = "soroban-native-sdk-macros"
-description = "Soroban native SDK macros."
+name = "soroban-builtin-sdk-macros"
+description = "Soroban builtin SDK macros."
 homepage = "https://github.com/stellar/rs-soroban-env"
 repository = "https://github.com/stellar/rs-soroban-env"
 authors = ["Stellar Development Foundation <info@stellar.org>"]

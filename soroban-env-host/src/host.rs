@@ -2509,7 +2509,7 @@ impl VmCallerEnv for Host {
                         &[],
                     ))
                 }
-                Frame::Token(_, _, args, _) => args,
+                Frame::StellarAssetContract(_, _, args, _) => args,
                 #[cfg(any(test, feature = "testutils"))]
                 Frame::TestContract(c) => &c.args,
             };
