@@ -222,25 +222,6 @@ impl Host {
             })
     }
 
-    #[cfg(any(test, feature = "recording_auth"))]
-    pub(crate) fn vals_to_scval_vec_non_metered(
-        &self,
-        vals: &[Val],
-    ) -> Result<VecM<ScVal>, HostError> {
-        vals.iter()
-            .map(|v| self.from_host_val(*v))
-            .collect::<Result<Vec<ScVal>, HostError>>()?
-            .try_into()
-            .map_err(|_| {
-                err!(
-                    self,
-                    (ScErrorType::Object, ScErrorCode::ExceededLimit),
-                    "vector size limit exceeded",
-                    vals.len()
-                )
-            })
-    }
-
     pub(crate) fn scvals_to_val_vec(&self, scvals: &[ScVal]) -> Result<Vec<Val>, HostError> {
         scvals
             .iter()

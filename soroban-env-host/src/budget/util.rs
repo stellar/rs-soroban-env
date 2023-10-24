@@ -119,3 +119,41 @@ impl Budget {
         Ok(())
     }
 }
+
+#[cfg(any(test, feature = "recording_auth"))]
+impl Budget {
+    /// Fallible version of `with_internal_mode`, enabled only in testing and
+    /// non-production scenarios. The non-fallible `with_internal_mode` is the
+    /// preferred method and should be used if at all possible.
+    /// However, in testing and non-production workflows, sometimes we need the
+    /// convenience of temporarily "turning off" the budget. This can happen for
+    /// several reasons: we want the some test logic to not affect the production
+    /// budget, or we want to maintain an accurate prediction of production budget
+    /// during preflight. In the ladder case, we want to exclude preflight-only
+    /// logic from the budget. By routing metering to the internal budget instead
+    /// of turning the budget off completely, it offers some DOS-mitigation.
+    pub(crate) fn with_internal_mode_fallible<T, F>(&self, f: F) -> Result<T, HostError>
+    where
+        F: FnOnce() -> Result<T, HostError>,
+    {
+        let mut prev = false;
+        let should_execute = self.mut_budget(|mut b| {
+            prev = b.is_in_internal_mode;
+            b.is_in_internal_mode = true;
+            b.cpu_insns.check_budget_limit(true)?;
+            b.mem_bytes.check_budget_limit(true)
+        });
+
+        let rt = match should_execute {
+            Ok(_) => f(),
+            Err(e) => Err(e),
+        };
+
+        self.mut_budget(|mut b| {
+            b.is_in_internal_mode = prev;
+            Ok(())
+        })?;
+
+        rt
+    }
+}
