@@ -3,10 +3,10 @@ use crate::{
         AccountAuthorizationTracker, AccountAuthorizationTrackerSnapshot, AuthorizedInvocation,
         AuthorizedInvocationSnapshot, ContractInvocation, InvokerContractAuthorizationTracker,
     },
+    builtin_contracts::base_types::Address,
     events::{EventError, HostEvent, InternalContractEvent, InternalEvent},
     host::{frame::Context, Events},
     host_object::HostObject,
-    native_contract::base_types::Address,
     storage::AccessType,
     xdr::{
         AccountEntry, AccountId, Asset, BytesM, ContractCodeEntry, ContractDataDurability,

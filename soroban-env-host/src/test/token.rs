@@ -3,19 +3,19 @@ use std::{convert::TryInto, rc::Rc};
 use crate::{
     auth::RecordedAuthPayload,
     budget::AsBudget,
-    host::{frame::TestContractFrame, Frame},
-    host_vec,
-    native_contract::{
+    builtin_contracts::{
         base_types::Address,
         contract_error::ContractError,
+        stellar_asset_contract::test_stellar_asset_contract::TestStellarAssetContract,
         testutils::{
             account_to_address, authorize_single_invocation,
             authorize_single_invocation_with_nonce, contract_id_to_address, create_account,
             generate_signing_key, new_ledger_entry_from_data, signing_key_to_account_id,
             AccountSigner, HostVec, TestSigner,
         },
-        token::test_token::TestToken,
     },
+    host::{frame::TestContractFrame, Frame},
+    host_vec,
     test::util::generate_bytes_array,
     Host, HostError, LedgerInfo,
 };
@@ -35,7 +35,7 @@ use soroban_env_common::{
 use soroban_env_common::{Env, Symbol, TryFromVal, TryIntoVal};
 use stellar_strkey::ed25519;
 
-use crate::native_contract::base_types::BytesN;
+use crate::builtin_contracts::base_types::BytesN;
 
 struct TokenTest {
     host: Host,
@@ -74,14 +74,14 @@ impl TokenTest {
         }
     }
 
-    fn default_token_with_admin_id(&self, new_admin: &Address) -> TestToken {
+    fn default_token_with_admin_id(&self, new_admin: &Address) -> TestStellarAssetContract {
         let token = self.default_token();
         let issuer = TestSigner::account(&self.issuer_key);
         token.set_admin(&issuer, new_admin.clone()).unwrap();
         token
     }
 
-    fn default_token(&self) -> TestToken {
+    fn default_token(&self) -> TestStellarAssetContract {
         let issuer_id = signing_key_to_account_id(&self.issuer_key);
         self.create_account(
             &issuer_id,
@@ -99,7 +99,7 @@ impl TokenTest {
             issuer: issuer_id,
         });
 
-        TestToken::new_from_asset(&self.host, asset)
+        TestStellarAssetContract::new_from_asset(&self.host, asset)
     }
 
     fn create_default_account(&self, user: &TestSigner) {
@@ -335,7 +335,7 @@ fn test_native_token_smart_roundtrip() {
         None,
         0,
     );
-    let token = TestToken::new_from_asset(&test.host, Asset::Native);
+    let token = TestStellarAssetContract::new_from_asset(&test.host, Asset::Native);
     let expected_token_address =
         ScAddress::Contract(test.host.get_asset_contract_id_hash(Asset::Native).unwrap());
 
@@ -402,7 +402,7 @@ fn test_asset_init(asset_code: &[u8]) {
             issuer: issuer_id,
         })
     };
-    let token = TestToken::new_from_asset(&test.host, asset.clone());
+    let token = TestStellarAssetContract::new_from_asset(&test.host, asset.clone());
     let expected_token_address =
         ScAddress::Contract(test.host.get_asset_contract_id_hash(asset).unwrap());
     assert_eq!(
@@ -892,7 +892,7 @@ fn test_burn() {
 #[test]
 fn test_cannot_burn_native() {
     let test = TokenTest::setup();
-    let token = TestToken::new_from_asset(&test.host, Asset::Native);
+    let token = TestStellarAssetContract::new_from_asset(&test.host, Asset::Native);
     let user_acc_id = signing_key_to_account_id(&test.user_key);
 
     let user = TestSigner::account_with_multisig(&user_acc_id, vec![&test.user_key]);
@@ -1320,7 +1320,7 @@ fn test_set_admin() {
 #[test]
 fn test_account_balance() {
     let test = TokenTest::setup();
-    let token = TestToken::new_from_asset(&test.host, Asset::Native);
+    let token = TestStellarAssetContract::new_from_asset(&test.host, Asset::Native);
     let user_acc_id = signing_key_to_account_id(&test.user_key);
     let user_addr = account_to_address(&test.host, user_acc_id.clone());
 
@@ -1931,7 +1931,7 @@ fn test_classic_account_multisig_auth() {
         None,
         0,
     );
-    let token = TestToken::new_from_asset(&test.host, Asset::Native);
+    let token = TestStellarAssetContract::new_from_asset(&test.host, Asset::Native);
     let receiver = TestSigner::account(&test.user_key).address(&test.host);
 
     // Success: account weight (60) + 40 = 100
@@ -2204,7 +2204,7 @@ fn test_native_token_classic_balance_boundaries(
     expected_min_balance: i64,
     expected_max_balance: i64,
 ) {
-    let token = TestToken::new_from_asset(&test.host, Asset::Native);
+    let token = TestStellarAssetContract::new_from_asset(&test.host, Asset::Native);
 
     let new_balance_key = generate_signing_key(&test.host);
     let new_balance_acc = signing_key_to_account_id(&new_balance_key);
@@ -2513,7 +2513,7 @@ fn test_wrapped_asset_classic_balance_boundaries(
         Some((0, 0)),
     );
 
-    let token = TestToken::new_from_asset(
+    let token = TestStellarAssetContract::new_from_asset(
         &test.host,
         Asset::CreditAlphanum12(AlphaNum12 {
             asset_code: AssetCode12([100; 12]),
@@ -2688,7 +2688,7 @@ fn test_classic_transfers_not_possible_for_unauthorized_asset() {
 
     assert_eq!(test.get_trustline_balance(&trustline_key), 100_000_000);
 
-    let token = TestToken::new_from_asset(
+    let token = TestStellarAssetContract::new_from_asset(
         &test.host,
         Asset::CreditAlphanum4(AlphaNum4 {
             asset_code: AssetCode4([99; 4]),
@@ -2734,13 +2734,13 @@ fn simple_account_sign_fn<'a>(
     host: &'a Host,
     kp: &'a SigningKey,
 ) -> Box<dyn Fn(&[u8]) -> Val + 'a> {
-    use crate::native_contract::testutils::sign_payload_for_ed25519;
+    use crate::builtin_contracts::testutils::sign_payload_for_ed25519;
     Box::new(|payload: &[u8]| -> Val { sign_payload_for_ed25519(host, kp, payload).into() })
 }
 
 #[test]
 fn test_custom_account_auth() {
-    use crate::native_contract::testutils::AccountContractSigner;
+    use crate::builtin_contracts::testutils::AccountContractSigner;
     use soroban_env_common::EnvBase;
     use soroban_test_wasms::SIMPLE_ACCOUNT_CONTRACT;
 

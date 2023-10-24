@@ -1,6 +1,6 @@
-use crate::native_contract::base_types::Address;
+use crate::builtin_contracts::base_types::Address;
+use soroban_builtin_sdk_macros::contracttype;
 use soroban_env_common::TryIntoVal;
-use soroban_native_sdk_macros::contracttype;
 
 pub(crate) const DAY_IN_LEDGERS: u32 = 17280;
 pub(crate) const INSTANCE_EXTEND_AMOUNT: u32 = 7 * DAY_IN_LEDGERS;

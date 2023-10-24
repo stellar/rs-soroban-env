@@ -469,8 +469,8 @@ impl Host {
             ContractExecutable::StellarAsset => self.with_frame(
                 Frame::Token(id.metered_clone(self)?, *func, args_vec, instance),
                 || {
-                    use crate::native_contract::{NativeContract, Token};
-                    Token.call(func, self, args)
+                    use crate::builtin_contracts::{BuiltinContract, StellarAssetContract};
+                    StellarAssetContract.call(func, self, args)
                 },
             ),
         }

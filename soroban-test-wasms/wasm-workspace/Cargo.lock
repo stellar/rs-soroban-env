@@ -1086,7 +1086,7 @@ dependencies = [
  "sha2",
  "sha3",
  "soroban-env-common",
- "soroban-native-sdk-macros",
+ "soroban-builtin-sdk-macros",
  "soroban-wasmi",
  "static_assertions",
  "stellar-strkey",
@@ -1117,7 +1117,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "soroban-native-sdk-macros"
+name = "soroban-builtin-sdk-macros"
 version = "20.0.0-rc2"
 dependencies = [
  "itertools",

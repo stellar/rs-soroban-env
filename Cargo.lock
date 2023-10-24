@@ -1345,6 +1345,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "soroban-builtin-sdk-macros"
+version = "20.0.0-rc2"
+dependencies = [
+ "itertools",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.16",
+]
+
+[[package]]
 name = "soroban-env-common"
 version = "20.0.0-rc2"
 dependencies = [
@@ -1394,8 +1404,8 @@ dependencies = [
  "sha2",
  "sha3",
  "soroban-bench-utils",
+ "soroban-builtin-sdk-macros",
  "soroban-env-common",
- "soroban-native-sdk-macros",
  "soroban-synth-wasm",
  "soroban-test-wasms",
  "soroban-wasmi",
@@ -1418,16 +1428,6 @@ dependencies = [
  "serde",
  "serde_json",
  "stellar-xdr",
- "syn 2.0.16",
-]
-
-[[package]]
-name = "soroban-native-sdk-macros"
-version = "20.0.0-rc2"
-dependencies = [
- "itertools",
- "proc-macro2",
- "quote",
  "syn 2.0.16",
 ]
 

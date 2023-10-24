@@ -5,15 +5,15 @@ use crate::host::metered_clone::{MeteredClone, MeteredContainer};
 use crate::host_object::HostVec;
 use crate::{
     auth::{AuthorizedFunction, AuthorizedInvocation, ContractFunction},
-    native_contract::base_types::Vec as ContractTypeVec,
+    builtin_contracts::base_types::Vec as ContractTypeVec,
     Host, HostError,
 };
+use soroban_builtin_sdk_macros::contracttype;
 use soroban_env_common::xdr::{
     self, ContractIdPreimage, ContractIdPreimageFromAddress, CreateContractArgs, ScAddress,
     ScErrorCode, ScErrorType,
 };
 use soroban_env_common::{TryFromVal, TryIntoVal, Val};
-use soroban_native_sdk_macros::contracttype;
 
 #[derive(Clone)]
 #[contracttype]

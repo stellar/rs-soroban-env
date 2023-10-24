@@ -1,8 +1,8 @@
+use crate::builtin_contracts::base_types::Address;
+use crate::builtin_contracts::contract_error::ContractError;
+use crate::builtin_contracts::stellar_asset_contract::storage_types::{AllowanceDataKey, DataKey};
+use crate::builtin_contracts::storage_utils::StorageUtils;
 use crate::host::{metered_clone::MeteredClone, Host};
-use crate::native_contract::base_types::Address;
-use crate::native_contract::contract_error::ContractError;
-use crate::native_contract::storage_utils::StorageUtils;
-use crate::native_contract::token::storage_types::{AllowanceDataKey, DataKey};
 use crate::{err, HostError};
 use soroban_env_common::{Env, StorageType, TryIntoVal};
 

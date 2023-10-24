@@ -1,5 +1,5 @@
 use crate::auth::RecordedAuthPayload;
-use crate::native_contract::testutils::HostVec;
+use crate::builtin_contracts::testutils::HostVec;
 use crate::{
     budget::{AsBudget, Budget},
     host_vec,

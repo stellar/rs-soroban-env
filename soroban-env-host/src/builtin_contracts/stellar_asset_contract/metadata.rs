@@ -1,14 +1,14 @@
 use std::fmt::Write;
 
-use soroban_native_sdk_macros::contracttype;
+use soroban_builtin_sdk_macros::contracttype;
 use stellar_strkey::ed25519;
 
-use crate::{host::Host, native_contract::base_types::BytesN, HostError};
+use crate::{builtin_contracts::base_types::BytesN, host::Host, HostError};
 use soroban_env_common::{
     ConversionError, Env, EnvBase, StorageType, SymbolSmall, TryFromVal, TryIntoVal,
 };
 
-use crate::native_contract::base_types::String;
+use crate::builtin_contracts::base_types::String;
 
 use super::{asset_info::read_asset_info, public_types::AssetInfo};
 

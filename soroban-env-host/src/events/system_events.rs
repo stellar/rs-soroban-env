@@ -1,4 +1,4 @@
-use crate::{native_contract::common_types::ContractExecutable, Host, HostError};
+use crate::{builtin_contracts::common_types::ContractExecutable, Host, HostError};
 use soroban_env_common::{xdr, EnvBase, Symbol, TryFromVal, TryIntoVal, Val, VecObject};
 
 const CONTRACT_EXECUTABLE_UPDATE_TOPIC: &str = "executable_update";

@@ -1,10 +1,9 @@
 use crate::{
-    host_vec,
-    native_contract::{
+    builtin_contracts::{
         base_types::Address,
         testutils::{authorize_single_invocation, HostVec, TestSigner},
     },
-    Host, HostError,
+    host_vec, Host, HostError,
 };
 use soroban_env_common::{
     xdr::{Asset, DepthLimitedWrite, WriteXdr, DEFAULT_XDR_RW_DEPTH_LIMIT},
@@ -12,14 +11,14 @@ use soroban_env_common::{
 };
 use soroban_env_common::{Symbol, TryFromVal, TryIntoVal};
 
-use crate::native_contract::base_types::{Bytes, String};
+use crate::builtin_contracts::base_types::{Bytes, String};
 
-pub(crate) struct TestToken<'a> {
+pub(crate) struct TestStellarAssetContract<'a> {
     pub(crate) address: Address,
     host: &'a Host,
 }
 
-impl<'a> TestToken<'a> {
+impl<'a> TestStellarAssetContract<'a> {
     pub(crate) fn new_from_asset(host: &'a Host, asset: Asset) -> Self {
         let mut asset_bytes_vec = DepthLimitedWrite::new(vec![], DEFAULT_XDR_RW_DEPTH_LIMIT);
         asset.write_xdr(&mut asset_bytes_vec).unwrap();

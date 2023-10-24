@@ -16,7 +16,7 @@ use syn::{
 pub fn contracttype(_metadata: TokenStream, input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     quote! {
-        #[derive(soroban_native_sdk_macros::ContractType)]
+        #[derive(soroban_builtin_sdk_macros::ContractType)]
         #input
     }
     .into()

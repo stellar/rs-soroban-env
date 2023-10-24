@@ -9,7 +9,7 @@ pub(crate) mod public_types;
 mod storage_types;
 
 #[cfg(test)]
-pub(crate) mod test_token;
+pub(crate) mod test_stellar_asset_contract;
 
-pub use contract::Token;
+pub use contract::StellarAssetContract;
 pub use contract::TokenTrait;

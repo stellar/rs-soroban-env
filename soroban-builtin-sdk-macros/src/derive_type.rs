@@ -177,7 +177,7 @@ pub fn derive_type_enum(ident: &Ident, data: &DataEnum) -> TokenStream2 {
                 fn try_from_val(env: &crate::Host, val: &soroban_env_common::VecObject) -> Result<Self, Self::Error> {
                     use soroban_env_common::{EnvBase,TryFromVal};
                     const CASES: &'static [&'static str] = &[#(#str_lits),*];
-                    let vec = crate::native_contract::base_types::Vec::try_from_val(env, val)?;
+                    let vec = crate::builtin_contracts::base_types::Vec::try_from_val(env, val)?;
                     let discriminant: soroban_env_common::Symbol = vec.get(0)?;
                     match u32::from(env.symbol_index_in_strs(discriminant, CASES)?) as usize {
                         #(#froms,)*
@@ -200,7 +200,7 @@ pub fn derive_type_enum(ident: &Ident, data: &DataEnum) -> TokenStream2 {
 
                 fn try_from_val(env: &crate::Host, val: &#ident) -> Result<soroban_env_common::Val, Self::Error> {
                     use soroban_env_common::TryFromVal;
-                    let mut vec = crate::native_contract::base_types::Vec::new(env)?;
+                    let mut vec = crate::builtin_contracts::base_types::Vec::new(env)?;
                     match val {
                         #(#intos)*
                     };

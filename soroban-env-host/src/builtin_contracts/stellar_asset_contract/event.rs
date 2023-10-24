@@ -1,6 +1,6 @@
-use crate::native_contract::base_types::Vec;
+use crate::builtin_contracts::base_types::Vec;
 use crate::HostError;
-use crate::{host::Host, native_contract::base_types::Address};
+use crate::{builtin_contracts::base_types::Address, host::Host};
 use soroban_env_common::{Env, Symbol, TryFromVal, TryIntoVal};
 
 use super::metadata::read_name;

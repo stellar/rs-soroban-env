@@ -1,18 +1,22 @@
-use crate::host::{metered_clone::MeteredClone, Host};
-use crate::native_contract::base_types::{Address, Bytes, BytesN, String};
-use crate::native_contract::contract_error::ContractError;
-use crate::native_contract::token::allowance::{read_allowance, spend_allowance, write_allowance};
-use crate::native_contract::token::asset_info::{has_asset_info, write_asset_info};
-use crate::native_contract::token::balance::{
+use crate::builtin_contracts::base_types::{Address, Bytes, BytesN, String};
+use crate::builtin_contracts::contract_error::ContractError;
+use crate::builtin_contracts::stellar_asset_contract::allowance::{
+    read_allowance, spend_allowance, write_allowance,
+};
+use crate::builtin_contracts::stellar_asset_contract::asset_info::{
+    has_asset_info, write_asset_info,
+};
+use crate::builtin_contracts::stellar_asset_contract::balance::{
     is_authorized, read_balance, receive_balance, spend_balance, write_authorization,
 };
-use crate::native_contract::token::event;
-use crate::native_contract::token::public_types::AssetInfo;
+use crate::builtin_contracts::stellar_asset_contract::event;
+use crate::builtin_contracts::stellar_asset_contract::public_types::AssetInfo;
+use crate::host::{metered_clone::MeteredClone, Host};
 use crate::{err, HostError};
 
+use soroban_builtin_sdk_macros::contractimpl;
 use soroban_env_common::xdr::Asset;
 use soroban_env_common::{ConversionError, Env, EnvBase, TryFromVal, TryIntoVal};
-use soroban_native_sdk_macros::contractimpl;
 
 use super::admin::{read_administrator, write_administrator};
 use super::asset_info::read_asset_info;
@@ -77,7 +81,7 @@ pub trait TokenTrait {
     fn symbol(e: &Host) -> Result<String, HostError>;
 }
 
-pub struct Token;
+pub struct StellarAssetContract;
 
 fn check_nonnegative_amount(e: &Host, amount: i128) -> Result<(), HostError> {
     if amount < 0 {
@@ -105,7 +109,7 @@ fn check_non_native(e: &Host) -> Result<(), HostError> {
 
 #[contractimpl]
 // Metering: *mostly* covered by components.
-impl TokenTrait for Token {
+impl TokenTrait for StellarAssetContract {
     fn init_asset(e: &Host, asset_bytes: Bytes) -> Result<(), HostError> {
         let _span = tracy_span!("native token init_asset");
         if has_asset_info(e)? {

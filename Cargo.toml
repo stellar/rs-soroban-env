@@ -7,7 +7,7 @@ members = [
     "soroban-env-common",
     "soroban-env-common/tests/no_std",
     "soroban-env-macros",
-    "soroban-native-sdk-macros",
+    "soroban-builtin-sdk-macros",
     "soroban-test-wasms",
     "soroban-synth-wasm",
     "soroban-bench-utils",
@@ -23,7 +23,7 @@ soroban-env-common = { version = "20.0.0-rc2", path = "soroban-env-common", defa
 soroban-env-guest = { version = "20.0.0-rc2", path = "soroban-env-guest" }
 soroban-env-host = { version = "20.0.0-rc2", path = "soroban-env-host" }
 soroban-env-macros = { version = "20.0.0-rc2", path = "soroban-env-macros" }
-soroban-native-sdk-macros = { version = "20.0.0-rc2", path = "soroban-native-sdk-macros" }
+soroban-builtin-sdk-macros = { version = "20.0.0-rc2", path = "soroban-builtin-sdk-macros" }
 
 [workspace.dependencies.stellar-xdr]
 version = "20.0.0-rc1"

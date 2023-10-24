@@ -1,5 +1,5 @@
-use crate::native_contract::token::public_types::AssetInfo;
-use crate::native_contract::token::storage_types::InstanceDataKey;
+use crate::builtin_contracts::stellar_asset_contract::public_types::AssetInfo;
+use crate::builtin_contracts::stellar_asset_contract::storage_types::InstanceDataKey;
 use crate::{host::Host, HostError};
 use soroban_env_common::{Env, StorageType, TryIntoVal};
 

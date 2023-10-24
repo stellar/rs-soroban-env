@@ -20,7 +20,7 @@ use std::{iter::FromIterator, mem, rc::Rc};
 
 use crate::{
     budget::AsBudget,
-    native_contract::base_types::Address,
+    builtin_contracts::base_types::Address,
     storage::AccessType,
     xdr::{
         AccountEntry, AccountId, Asset, BytesM, ContractCodeEntry, ContractCostType,

@@ -1,5 +1,5 @@
+use crate::builtin_contracts::base_types::Address;
 use crate::host::Host;
-use crate::native_contract::base_types::Address;
 use crate::HostError;
 use soroban_env_common::{Env, StorageType, TryIntoVal};
 

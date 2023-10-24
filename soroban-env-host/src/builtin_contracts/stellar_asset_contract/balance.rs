@@ -1,14 +1,14 @@
 use std::rc::Rc;
 
 use crate::budget::AsBudget;
+use crate::builtin_contracts::base_types::{Address, BytesN};
+use crate::builtin_contracts::contract_error::ContractError;
+use crate::builtin_contracts::stellar_asset_contract::asset_info::read_asset_info;
+use crate::builtin_contracts::stellar_asset_contract::public_types::AssetInfo;
+use crate::builtin_contracts::stellar_asset_contract::storage_types::DataKey;
+use crate::builtin_contracts::storage_utils::StorageUtils;
 use crate::host::metered_clone::MeteredClone;
 use crate::host::Host;
-use crate::native_contract::base_types::{Address, BytesN};
-use crate::native_contract::contract_error::ContractError;
-use crate::native_contract::storage_utils::StorageUtils;
-use crate::native_contract::token::asset_info::read_asset_info;
-use crate::native_contract::token::public_types::AssetInfo;
-use crate::native_contract::token::storage_types::DataKey;
 use crate::storage::Storage;
 use crate::{err, HostError};
 use soroban_env_common::xdr::{
