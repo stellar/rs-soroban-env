@@ -53,7 +53,7 @@ impl Host {
         Ok(())
     }
 
-    fn maybe_initialize_asset_token(
+    fn maybe_initialize_stellar_asset_contract(
         &self,
         contract_id: &Hash,
         id_preimage: &ContractIdPreimage,
@@ -116,7 +116,7 @@ impl Host {
             self.get_full_contract_id_preimage(args.contract_id_preimage.metered_clone(self)?)?;
         let hash_id = Hash(self.metered_hash_xdr(&id_preimage)?);
         self.create_contract_with_id(hash_id.metered_clone(self)?, args.executable)?;
-        self.maybe_initialize_asset_token(&hash_id, &args.contract_id_preimage)?;
+        self.maybe_initialize_stellar_asset_contract(&hash_id, &args.contract_id_preimage)?;
         self.add_host_object(ScAddress::Contract(hash_id))
     }
 

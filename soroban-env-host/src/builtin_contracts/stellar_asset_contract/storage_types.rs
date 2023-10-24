@@ -28,14 +28,14 @@ pub struct BalanceValue {
     pub clawback: bool,
 }
 
-/// Keys for the persistent data associated with token users.
+/// Keys for the persistent data associated with stellar asset contract users.
 #[contracttype]
 pub enum DataKey {
     Allowance(AllowanceDataKey),
     Balance(Address),
 }
 
-/// Keys for token instance data.
+/// Keys for stellar asset contract instance data.
 #[contracttype]
 pub enum InstanceDataKey {
     Admin,

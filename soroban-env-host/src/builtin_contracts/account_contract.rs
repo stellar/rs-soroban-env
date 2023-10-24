@@ -74,7 +74,7 @@ impl AuthorizationContext {
                     xdr::ContractExecutable::StellarAsset => return Err(host.err(
                         ScErrorType::Auth,
                         ScErrorCode::InvalidInput,
-                        "token executable is not allowed when authorizing create_contract host fn",
+                        "StellarAsset executable is not allowed when authorizing create_contract host fn",
                         &[],
                     )),
                 };

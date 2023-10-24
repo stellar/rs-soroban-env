@@ -1072,7 +1072,7 @@ impl AuthorizationManager {
             // `push_create_contract_host_fn_frame`) functions instead to push
             // the frame with the required info.
             Frame::HostFunction(_) => return Ok(()),
-            Frame::Token(id, fn_name, ..) => (id.metered_clone(host)?, *fn_name),
+            Frame::StellarAssetContract(id, fn_name, ..) => (id.metered_clone(host)?, *fn_name),
             #[cfg(any(test, feature = "testutils"))]
             Frame::TestContract(tc) => (tc.id.metered_clone(host)?, tc.func),
         };

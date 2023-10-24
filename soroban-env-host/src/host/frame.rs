@@ -110,7 +110,7 @@ pub(crate) enum Frame {
         relative_objects: Vec<Object>,
     },
     HostFunction(HostFunctionType),
-    Token(Hash, Symbol, Vec<Val>, ScContractInstance),
+    StellarAssetContract(Hash, Symbol, Vec<Val>, ScContractInstance),
     #[cfg(any(test, feature = "testutils"))]
     TestContract(TestContractFrame),
 }
@@ -379,7 +379,7 @@ impl Host {
         self.with_current_frame(|frame| match frame {
             Frame::ContractVM { vm, .. } => Ok(Some(vm.contract_id.metered_clone(self)?)),
             Frame::HostFunction(_) => Ok(None),
-            Frame::Token(id, ..) => Ok(Some(id.metered_clone(self)?)),
+            Frame::StellarAssetContract(id, ..) => Ok(Some(id.metered_clone(self)?)),
             #[cfg(any(test, feature = "testutils"))]
             Frame::TestContract(tc) => Ok(Some(tc.id.metered_clone(self)?)),
         })
@@ -467,7 +467,7 @@ impl Host {
                 )
             }
             ContractExecutable::StellarAsset => self.with_frame(
-                Frame::Token(id.metered_clone(self)?, *func, args_vec, instance),
+                Frame::StellarAssetContract(id.metered_clone(self)?, *func, args_vec, instance),
                 || {
                     use crate::builtin_contracts::{BuiltinContract, StellarAssetContract};
                     StellarAssetContract.call(func, self, args)
@@ -505,7 +505,7 @@ impl Host {
             for ctx in self.try_borrow_context()?.iter().rev() {
                 let exist_id = match &ctx.frame {
                     Frame::ContractVM { vm, .. } => &vm.contract_id,
-                    Frame::Token(id, ..) => id,
+                    Frame::StellarAssetContract(id, ..) => id,
                     #[cfg(any(test, feature = "testutils"))]
                     Frame::TestContract(tc) => &tc.id,
                     Frame::HostFunction(_) => continue,
@@ -724,7 +724,7 @@ impl Host {
                     &[],
                 ))
             }
-            Frame::Token(_, _, _, instance) => &instance.storage,
+            Frame::StellarAssetContract(_, _, _, instance) => &instance.storage,
             #[cfg(any(test, feature = "testutils"))]
             Frame::TestContract(t) => &t.instance.storage,
         };

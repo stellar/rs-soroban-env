@@ -59,7 +59,7 @@ impl Host {
         self.with_current_frame_opt(|frame| match frame {
             Some(Frame::ContractVM { vm, .. }) => Ok(Some(vm.contract_id.clone())),
             Some(Frame::HostFunction(_)) => Ok(None),
-            Some(Frame::Token(id, ..)) => Ok(Some(id.clone())),
+            Some(Frame::StellarAssetContract(id, ..)) => Ok(Some(id.clone())),
             #[cfg(any(test, feature = "testutils"))]
             Some(Frame::TestContract(tc)) => Ok(Some(tc.id.clone())),
             None => Ok(None),

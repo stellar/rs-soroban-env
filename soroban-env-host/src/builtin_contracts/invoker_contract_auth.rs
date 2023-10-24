@@ -78,7 +78,7 @@ impl InvokerContractAuthEntry {
                         return Err(host.err(
                             ScErrorType::Auth,
                             ScErrorCode::InternalError,
-                            "unexpected authorized token creation",
+                            "unexpected authorized StellarAsset contract creation",
                             &[],
                         ));
                     }
