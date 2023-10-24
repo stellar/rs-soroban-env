@@ -12,4 +12,3 @@ mod storage_types;
 pub(crate) mod test_stellar_asset_contract;
 
 pub use contract::StellarAssetContract;
-pub use contract::TokenTrait;
