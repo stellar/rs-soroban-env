@@ -62,14 +62,6 @@ impl Budget {
     pub(crate) fn get_wasm_mem_alloc(&self) -> Result<u64, HostError> {
         Ok(self.0.try_borrow_or_err()?.tracker.wasm_memory)
     }
-
-    pub(crate) fn get_internal_cpu_insns_consumed(&self) -> Result<u64, HostError> {
-        Ok(self.0.try_borrow_or_err()?.cpu_insns.internal_total_count)
-    }
-
-    pub(crate) fn get_internal_mem_bytes_consumed(&self) -> Result<u64, HostError> {
-        Ok(self.0.try_borrow_or_err()?.mem_bytes.internal_total_count)
-    }
 }
 
 #[cfg(any(test, feature = "testutils"))]
