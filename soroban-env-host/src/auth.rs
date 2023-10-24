@@ -1549,7 +1549,7 @@ impl AccountAuthorizationTracker {
         host.as_budget().with_internal_mode_fallible(|| {
             Ok(RecordedAuthPayload {
                 address: if !self.is_invoker {
-                    Some(host.visit_obj(self.address, |a: &ScAddress| Ok(a.metered_clone(host)?))?)
+                    Some(host.visit_obj(self.address, |a: &ScAddress| a.metered_clone(host))?)
                 } else {
                     None
                 },

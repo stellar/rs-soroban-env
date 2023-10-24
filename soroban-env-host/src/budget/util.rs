@@ -1,10 +1,11 @@
-use super::Budget;
-use crate::{host::error::TryBorrowOrErr, HostError};
+#[cfg(any(test, feature = "testutils", feature = "recording_auth"))]
+use crate::{budget::Budget, HostError};
+
+#[cfg(any(test, feature = "testutils"))]
+use crate::host::error::TryBorrowOrErr;
 
 #[cfg(test)]
-use super::model::ScaledU64;
-#[cfg(test)]
-use crate::xdr::ContractCostType;
+use crate::{budget::model::ScaledU64, xdr::ContractCostType};
 
 #[cfg(test)]
 impl Budget {

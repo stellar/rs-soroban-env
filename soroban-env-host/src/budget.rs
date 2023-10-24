@@ -1,9 +1,7 @@
 mod dimension;
 mod model;
-mod wasmi_helper;
-
-#[cfg(any(test, feature = "testutils"))]
 mod util;
+mod wasmi_helper;
 
 use std::{
     cell::{RefCell, RefMut},
