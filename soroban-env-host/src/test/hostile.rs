@@ -386,6 +386,7 @@ fn excessive_logging() -> Result<(), HostError> {
         // the internal limit has been exceeded
         assert!(host.as_budget().internal_mem_limit_exceeded()?);
         let actual = format!("{}", host.as_budget());
+        // the actual production budget numbers should stay the same
         expected_budget.assert_eq(&actual);
     }
 
