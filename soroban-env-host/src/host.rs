@@ -471,7 +471,7 @@ impl Host {
     /// This wrapper should be used for any work that is part of the production
     /// workflow but in debug mode, i.e. diagnostic related work (logging, or any
     /// operations on diagnostic event).
-    pub(crate) fn with_debug_budget<T, F, E>(&self, f: F, e: E) -> T
+    pub(crate) fn with_debug_mode<T, F, E>(&self, f: F, e: E) -> T
     where
         F: FnOnce() -> Result<T, HostError>,
         E: Fn() -> T,
@@ -479,7 +479,7 @@ impl Host {
         if self.is_debug().ok() != Some(true) {
             return e();
         }
-        self.as_budget().with_internal_mode(f, e)
+        self.as_budget().with_shadow_mode(f, e)
     }
 
     /// Accept a _unique_ (refcount = 1) host reference and destroy the
@@ -763,7 +763,7 @@ impl VmCallerEnv for Host {
         vals_pos: U32Val,
         vals_len: U32Val,
     ) -> Result<Void, HostError> {
-        self.with_debug_budget(
+        self.with_debug_mode(
             || {
                 let VmSlice { vm, pos, len } = self.decode_vmslice(msg_pos, msg_len)?;
                 Vec::<u8>::charge_bulk_init_cpy(len as u64, self)?;

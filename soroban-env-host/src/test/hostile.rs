@@ -364,7 +364,7 @@ fn excessive_logging() -> Result<(), HostError> {
         assert_eq!(SymbolSmall::try_from(res)?.to_string(), "pass");
         // three debug events: fn_call, log, fn_return
         assert_eq!(host.get_events()?.0.len(), 3);
-        assert!(!host.as_budget().internal_mem_limit_exceeded()?);
+        assert!(!host.as_budget().shadow_mem_limit_exceeded()?);
         let actual = format!("{}", host.as_budget());
         expected_budget.assert_eq(&actual);
     }
@@ -384,7 +384,7 @@ fn excessive_logging() -> Result<(), HostError> {
         // the internal limit has been exhausted
         assert_eq!(host.get_events()?.0.len(), 0);
         // the internal limit has been exceeded
-        assert!(host.as_budget().internal_mem_limit_exceeded()?);
+        assert!(host.as_budget().shadow_mem_limit_exceeded()?);
         let actual = format!("{}", host.as_budget());
         // the actual production budget numbers should stay the same
         expected_budget.assert_eq(&actual);

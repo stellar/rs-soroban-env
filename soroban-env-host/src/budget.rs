@@ -17,7 +17,7 @@ use crate::{
     Error, Host, HostError, DEFAULT_HOST_DEPTH_LIMIT,
 };
 
-use dimension::{BudgetDimension, IsCpu, IsInternal};
+use dimension::{BudgetDimension, IsCpu, IsShadowMode};
 use model::ScaledU64;
 use wasmi_helper::FuelConfig;
 
@@ -57,7 +57,7 @@ pub(crate) struct BudgetImpl {
     mem_bytes: BudgetDimension,
     /// For the purpose of calibration and reporting; not used for budget-limiting per se.
     tracker: MeterTracker,
-    is_in_internal_mode: bool,
+    is_in_shadow_mode: bool,
     fuel_config: FuelConfig,
     depth_limit: u32,
 }
@@ -74,7 +74,7 @@ impl BudgetImpl {
             cpu_insns: BudgetDimension::try_from_config(cpu_cost_params)?,
             mem_bytes: BudgetDimension::try_from_config(mem_cost_params)?,
             tracker: Default::default(),
-            is_in_internal_mode: false,
+            is_in_shadow_mode: false,
             fuel_config: Default::default(),
             depth_limit: DEFAULT_HOST_DEPTH_LIMIT,
         };
@@ -136,7 +136,7 @@ impl BudgetImpl {
         iterations: u64,
         input: Option<u64>,
     ) -> Result<(), HostError> {
-        if !self.is_in_internal_mode {
+        if !self.is_in_shadow_mode {
             // update tracker for reporting
             self.tracker.count = self.tracker.count.saturating_add(1);
             let (t_iters, t_inputs) = &mut self
@@ -160,14 +160,14 @@ impl BudgetImpl {
             iterations,
             input,
             IsCpu(true),
-            IsInternal(self.is_in_internal_mode),
+            IsShadowMode(self.is_in_shadow_mode),
         )?;
         self.mem_bytes.charge(
             ty,
             iterations,
             input,
             IsCpu(false),
-            IsInternal(self.is_in_internal_mode),
+            IsShadowMode(self.is_in_shadow_mode),
         )
     }
 
@@ -200,7 +200,7 @@ impl Default for BudgetImpl {
             cpu_insns: BudgetDimension::new(),
             mem_bytes: BudgetDimension::new(),
             tracker: Default::default(),
-            is_in_internal_mode: false,
+            is_in_shadow_mode: false,
             fuel_config: Default::default(),
             depth_limit: DEFAULT_HOST_DEPTH_LIMIT,
         };
@@ -480,13 +480,13 @@ impl Debug for BudgetImpl {
         writeln!(f, "Total # times meter was called: {}", self.tracker.count,)?;
         writeln!(
             f,
-            "Internal cpu limit: {}; used: {}",
-            self.cpu_insns.internal_limit, self.cpu_insns.internal_total_count
+            "Shadow cpu limit: {}; used: {}",
+            self.cpu_insns.shadow_limit, self.cpu_insns.shadow_total_count
         )?;
         writeln!(
             f,
-            "Internal mem limit: {}; used: {}",
-            self.mem_bytes.internal_limit, self.mem_bytes.internal_total_count
+            "Shadow mem limit: {}; used: {}",
+            self.mem_bytes.shadow_limit, self.mem_bytes.shadow_total_count
         )?;
         writeln!(f, "{:=<165}", "")?;
         Ok(())
@@ -665,15 +665,15 @@ impl Budget {
         self.0.try_borrow_mut_or_err()?.charge(ty, 1, input)
     }
 
-    /// Runs a user provided closure in internal mode -- all metering is done through
-    /// the internal budget.
+    /// Runs a user provided closure in shadow mode -- all metering is done through
+    /// the shadow budget.
     ///
-    /// Because the internal mode is optional (depending on the configuration,
+    /// Because the shadow mode is optional (depending on the configuration,
     /// nodes may or may not trigger this path), any error occured during execution
     /// is swallowed by running a fallback closure provided by the caller.
     ///
     /// # Arguments:
-    /// * `f` - A fallible closure to be run in internal mode. If error occurs,
+    /// * `f` - A fallible closure to be run in shadow mode. If error occurs,
     ///   fallback closure is run immediately afterwards to replace it
     ///
     /// * `e` - A fallback closure to be run in case of any error occuring
@@ -682,15 +682,15 @@ impl Budget {
     ///
     /// Returns a value of type `T`. Any errors arising during the execution are
     /// suppressed.
-    pub(crate) fn with_internal_mode<T, F, E>(&self, f: F, e: E) -> T
+    pub(crate) fn with_shadow_mode<T, F, E>(&self, f: F, e: E) -> T
     where
         F: FnOnce() -> Result<T, HostError>,
         E: Fn() -> T,
     {
         let mut prev = false;
         let should_execute = self.mut_budget(|mut b| {
-            prev = b.is_in_internal_mode;
-            b.is_in_internal_mode = true;
+            prev = b.is_in_shadow_mode;
+            b.is_in_shadow_mode = true;
             b.cpu_insns.check_budget_limit(true)?;
             b.mem_bytes.check_budget_limit(true)
         });
@@ -702,7 +702,7 @@ impl Budget {
         };
 
         if let Err(_) = self.mut_budget(|mut b| {
-            b.is_in_internal_mode = prev;
+            b.is_in_shadow_mode = prev;
             Ok(())
         }) {
             return e();

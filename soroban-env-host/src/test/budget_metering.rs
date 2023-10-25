@@ -350,7 +350,7 @@ fn total_amount_charged_from_random_inputs() -> Result<(), HostError> {
     }
 
     for (ty, &(iterations, input)) in tracker.iter().enumerate() {
-        host.as_budget().with_internal_mode(
+        host.as_budget().with_shadow_mode(
             || {
                 host.as_budget()
                     .bulk_charge(ContractCostType::VARIANTS[ty], iterations, input)
@@ -392,8 +392,8 @@ fn total_amount_charged_from_random_inputs() -> Result<(), HostError> {
         =====================================================================================================================================================================
         Internal details (diagnostics info, does not affect fees) 
         Total # times meter was called: 23
-        Internal cpu limit: 100000000; used: 10068892
-        Internal mem limit: 41943040; used: 275860
+        Shadow cpu limit: 100000000; used: 10068892
+        Shadow mem limit: 41943040; used: 275860
         =====================================================================================================================================================================
 
     "#]]
@@ -401,11 +401,11 @@ fn total_amount_charged_from_random_inputs() -> Result<(), HostError> {
 
     assert_eq!(
         host.as_budget().get_cpu_insns_consumed()?,
-        host.as_budget().get_internal_cpu_insns_consumed()?
+        host.as_budget().get_shadow_cpu_insns_consumed()?
     );
     assert_eq!(
         host.as_budget().get_mem_bytes_consumed()?,
-        host.as_budget().get_internal_mem_bytes_consumed()?
+        host.as_budget().get_shadow_mem_bytes_consumed()?
     );
 
     Ok(())

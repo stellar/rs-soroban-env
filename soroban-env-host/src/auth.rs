@@ -1158,7 +1158,7 @@ impl AuthorizationManager {
         host: &Host,
     ) -> Vec<(ScAddress, xdr::SorobanAuthorizedInvocation)> {
         let inv: Option<Vec<(ScAddress, xdr::SorobanAuthorizedInvocation)>> =
-            host.as_budget().with_internal_mode(
+            host.as_budget().with_shadow_mode(
                 || {
                     let inv = self
                         .account_trackers
@@ -1546,7 +1546,7 @@ impl AccountAuthorizationTracker {
     // metering: free for recording
     #[cfg(any(test, feature = "recording_auth"))]
     fn get_recorded_auth_payload(&self, host: &Host) -> Result<RecordedAuthPayload, HostError> {
-        host.as_budget().with_internal_mode_fallible(|| {
+        host.as_budget().with_shadow_mode_fallible(|| {
             Ok(RecordedAuthPayload {
                 address: if !self.is_invoker {
                     Some(host.visit_obj(self.address, |a: &ScAddress| a.metered_clone(host))?)

@@ -214,7 +214,7 @@ impl Host {
     /// enriches the returned [Error] with [DebugInfo] in the form of a
     /// [Backtrace] and snapshot of the [Events] buffer.
     pub fn error(&self, error: Error, msg: &str, args: &[Val]) -> HostError {
-        self.with_debug_budget(
+        self.with_debug_mode(
             || {
                 // We _try_ to take a mutable borrow of the events buffer refcell
                 // while building up the event we're going to emit into the events
@@ -240,7 +240,7 @@ impl Host {
     }
 
     pub(crate) fn maybe_get_debug_info(&self) -> Option<Box<DebugInfo>> {
-        self.with_debug_budget(
+        self.with_debug_mode(
             || {
                 // We do the event-borrowing ourselves here rather than calling
                 // self.try_borrow_events because we can/should only be called
@@ -440,7 +440,7 @@ pub(crate) trait DebugArg {
         // We similarly guard against double-faulting here by try-acquiring the event buffer,
         // which will fail if we're re-entering error reporting _while_ forming a debug argument.
         if let Ok(_guard) = host.0.events.try_borrow_mut() {
-            host.with_debug_budget(
+            host.with_debug_mode(
                 || Self::debug_arg_maybe_expensive_or_fallible(host, arg),
                 || {
                     Error::from_type_and_code(ScErrorType::Events, ScErrorCode::InternalError)

@@ -5,7 +5,7 @@ use core::fmt::Debug;
 
 /// Helper types to annotate boolean function arguments
 pub(crate) struct IsCpu(pub(crate) bool);
-pub(crate) struct IsInternal(pub(crate) bool);
+pub(crate) struct IsShadowMode(pub(crate) bool);
 
 #[derive(Clone, Default)]
 pub(crate) struct BudgetDimension {
@@ -27,15 +27,15 @@ pub(crate) struct BudgetDimension {
     /// of comparing to limit.
     pub(crate) total_count: u64,
 
-    /// The internal limit tracks work done internally that is not exposed to the
+    /// The shadow limit tracks work done internally that is not exposed to the
     /// external user -- it does not affect fees or decide the invocation outcome
-    /// in any way (no error due to exceeding the internal limit). It exists solely
+    /// in any way (no error due to exceeding the shadow limit). It exists solely
     /// for dos prevention. Such work include diagnostic logging, or work that
     /// exists only for preflight.
-    pub(crate) internal_limit: u64,
+    pub(crate) shadow_limit: u64,
 
-    /// Similar to `total_count`, but towards the `internal_limit`
-    pub(crate) internal_total_count: u64,
+    /// Similar to `total_count`, but towards the `shadow_limit`
+    pub(crate) shadow_total_count: u64,
 }
 
 impl Debug for BudgetDimension {
@@ -53,8 +53,8 @@ impl Debug for BudgetDimension {
 
         writeln!(
             f,
-            "internal limit: {}, internal_total_count: {}",
-            self.internal_limit, self.internal_total_count
+            "shadow limit: {}, shadow_total_count: {}",
+            self.shadow_limit, self.shadow_total_count
         )?;
         Ok(())
     }
@@ -85,8 +85,8 @@ impl BudgetDimension {
             limit: Default::default(),
             counts: vec![0; cost_params.0.len()],
             total_count: Default::default(),
-            internal_limit: Default::default(),
-            internal_total_count: Default::default(),
+            shadow_limit: Default::default(),
+            shadow_total_count: Default::default(),
         })
     }
 
@@ -112,13 +112,13 @@ impl BudgetDimension {
         for v in &mut self.counts {
             *v = 0;
         }
-        self.internal_limit = limit;
-        self.internal_total_count = 0;
+        self.shadow_limit = limit;
+        self.shadow_total_count = 0;
     }
 
-    pub(crate) fn check_budget_limit(&self, internal: bool) -> Result<(), HostError> {
-        let over_limit = if internal {
-            self.internal_total_count > self.internal_limit
+    pub(crate) fn check_budget_limit(&self, is_shadow: bool) -> Result<(), HostError> {
+        let over_limit = if is_shadow {
+            self.shadow_total_count > self.shadow_limit
         } else {
             self.total_count > self.limit
         };
@@ -141,7 +141,7 @@ impl BudgetDimension {
         iterations: u64,
         input: Option<u64>,
         _is_cpu: IsCpu,
-        is_internal: IsInternal,
+        is_shadow: IsShadowMode,
     ) -> Result<(), HostError> {
         let cm = self.get_cost_model(ty);
         let amount = cm.evaluate(input)?.saturating_mul(iterations);
@@ -153,8 +153,8 @@ impl BudgetDimension {
             _span.emit_value(amount);
         }
 
-        if is_internal.0 {
-            self.internal_total_count = self.internal_total_count.saturating_add(amount);
+        if is_shadow.0 {
+            self.shadow_total_count = self.shadow_total_count.saturating_add(amount);
         } else {
             let cell = self.counts.get_mut(ty as usize).ok_or_else(|| {
                 HostError::from((ScErrorType::Budget, ScErrorCode::InternalError))
@@ -163,7 +163,7 @@ impl BudgetDimension {
             self.total_count = self.total_count.saturating_add(amount);
         }
 
-        self.check_budget_limit(is_internal.0)
+        self.check_budget_limit(is_shadow.0)
     }
 
     // Resets all model parameters to zero (so that we can override and test individual ones later).

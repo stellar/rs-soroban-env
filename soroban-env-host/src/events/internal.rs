@@ -78,7 +78,7 @@ pub enum InternalDiagnosticArg {
 impl InternalDiagnosticEvent {
     fn to_xdr(&self, host: &Host) -> Result<Option<xdr::ContractEvent>, HostError> {
         // this exist as an internal closure to prevent it from being accidentally
-        // called from the outside without `with_debug_budget`
+        // called from the outside without `with_debug_mode`
         let externalize_args =
             |host: &Host, args: &[InternalDiagnosticArg]| -> Result<Vec<ScVal>, HostError> {
                 args.iter()
@@ -89,7 +89,7 @@ impl InternalDiagnosticEvent {
                     .metered_collect::<Result<Vec<ScVal>, HostError>>(host)?
             };
 
-        let opt_ce = host.with_debug_budget(
+        let opt_ce = host.with_debug_mode(
             || {
                 let topics: xdr::VecM<ScVal> = externalize_args(host, &self.topics)?.try_into()?;
                 let args = externalize_args(host, &self.args)?;
@@ -148,7 +148,7 @@ impl InternalEventsBuffer {
         match e {
             InternalEvent::Contract(_) => charge_internal_event_push()?,
             InternalEvent::Diagnostic(_) => {
-                budget.with_internal_mode(charge_internal_event_push, || ())
+                budget.with_shadow_mode(charge_internal_event_push, || ())
             }
         }
 
@@ -171,8 +171,8 @@ impl InternalEventsBuffer {
     /// either when the host is finished (via `try_finish`), or when an error occurs.
     pub fn externalize(&self, host: &Host) -> Result<Events, HostError> {
         let mut vec: Vec<HostEvent> = vec![];
-        // This line is intentionally unmetered, because metering is taken care during event push
-        // to ensure metering is indifferent of the buffer length.
+        // This line is intentionally unmetered, because metering is taken care of inside the loop
+        // (before push) to ensure metering is indifferent of the buffer length.
         vec.reserve(self.vec.len());
 
         for (event, status) in self.vec.iter() {
@@ -192,7 +192,7 @@ impl InternalEventsBuffer {
                 InternalEvent::Diagnostic(d) => {
                     // If the host is not in debug mode, the diagnostic event
                     // (which should not be generated in the first place), will be incored.
-                    let de: Option<HostEvent> = host.with_debug_budget(
+                    let de: Option<HostEvent> = host.with_debug_mode(
                         || match d.to_xdr(host)? {
                             Some(event) => Ok(Some(HostEvent {
                                 event,
