@@ -120,6 +120,14 @@ impl Budget {
         Ok(())
     }
 
+    pub fn get_internal_cpu_insns_consumed(&self) -> Result<u64, HostError> {
+        Ok(self.0.try_borrow_or_err()?.cpu_insns.internal_total_count)
+    }
+
+    pub fn get_internal_mem_bytes_consumed(&self) -> Result<u64, HostError> {
+        Ok(self.0.try_borrow_or_err()?.mem_bytes.internal_total_count)
+    }
+
     #[allow(unused)]
     pub fn internal_cpu_limit_exceeded(&self) -> Result<bool, HostError> {
         let cpu = &self.0.try_borrow_or_err()?.cpu_insns;

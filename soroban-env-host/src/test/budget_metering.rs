@@ -398,5 +398,15 @@ fn total_amount_charged_from_random_inputs() -> Result<(), HostError> {
 
     "#]]
     .assert_eq(&actual);
+
+    assert_eq!(
+        host.as_budget().get_cpu_insns_consumed()?,
+        host.as_budget().get_internal_cpu_insns_consumed()?
+    );
+    assert_eq!(
+        host.as_budget().get_mem_bytes_consumed()?,
+        host.as_budget().get_internal_mem_bytes_consumed()?
+    );
+
     Ok(())
 }
