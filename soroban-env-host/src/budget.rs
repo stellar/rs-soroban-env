@@ -3,6 +3,8 @@ mod model;
 mod util;
 mod wasmi_helper;
 
+pub use model::COST_MODEL_LIN_TERM_SCALE_BITS;
+
 use std::{
     cell::{RefCell, RefMut},
     fmt::{Debug, Display},
@@ -16,7 +18,7 @@ use crate::{
 };
 
 use dimension::{BudgetDimension, IsCpu, IsInternal};
-use model::{ScaledU64, COST_MODEL_LIN_TERM_SCALE_BITS};
+use model::ScaledU64;
 use wasmi_helper::FuelConfig;
 
 // These are some sane values, however the embedder should typically customize

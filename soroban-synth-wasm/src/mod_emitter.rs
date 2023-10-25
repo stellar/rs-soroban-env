@@ -90,7 +90,8 @@ impl ModEmitter {
             },
             &ConstExpr::i64_const(42),
         );
-        let exports = ExportSection::new();
+        let mut exports = ExportSection::new();
+        exports.export("memory", wasm_encoder::ExportKind::Memory, 0);
         let elements = ElementSection::new();
         let codes = CodeSection::new();
         let typerefs = BTreeMap::new();

@@ -119,6 +119,17 @@ impl Budget {
         self.0.try_borrow_mut_or_err()?.fuel_config.reset();
         Ok(())
     }
+
+    #[allow(unused)]
+    pub fn internal_cpu_limit_exceeded(&self) -> Result<bool, HostError> {
+        let cpu = &self.0.try_borrow_or_err()?.cpu_insns;
+        Ok(cpu.internal_total_count > cpu.internal_limit)
+    }
+
+    pub fn internal_mem_limit_exceeded(&self) -> Result<bool, HostError> {
+        let mem = &self.0.try_borrow_or_err()?.mem_bytes;
+        Ok(mem.internal_total_count > mem.internal_limit)
+    }
 }
 
 #[cfg(any(test, feature = "recording_auth"))]
