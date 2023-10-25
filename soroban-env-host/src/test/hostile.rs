@@ -322,7 +322,7 @@ fn excessive_logging() -> Result<(), HostError> {
 
     let expected_budget = expect![[r#"
         =======================================================
-        Cpu limit: 5000000; used: 1075678
+        Cpu limit: 2000000; used: 1075678
         Mem limit: 500000; used: 203437
         =======================================================
         CostType                 cpu_insns      mem_bytes      
@@ -355,7 +355,7 @@ fn excessive_logging() -> Result<(), HostError> {
 
     // moderate logging
     {
-        host.budget_ref().reset_limits(5_000_000, 500_000)?;
+        host.budget_ref().reset_limits(2_000_000, 500_000)?;
         let res = host.call(
             contract_id_obj,
             Symbol::try_from_small_str("test")?,
@@ -364,14 +364,17 @@ fn excessive_logging() -> Result<(), HostError> {
         assert_eq!(SymbolSmall::try_from(res)?.to_string(), "pass");
         // three debug events: fn_call, log, fn_return
         assert_eq!(host.get_events()?.0.len(), 3);
-        assert!(!host.as_budget().shadow_mem_limit_exceeded()?);
+        assert!(
+            !host.as_budget().shadow_mem_limit_exceeded()?
+                && !host.as_budget().shadow_cpu_limit_exceeded()?
+        );
         let actual = format!("{}", host.as_budget());
         expected_budget.assert_eq(&actual);
     }
 
     // excessive logging
     {
-        host.budget_ref().reset_limits(5_000_000, 500_000)?;
+        host.budget_ref().reset_limits(2_000_000, 500_000)?;
         let res = host.call(
             contract_id_obj,
             Symbol::try_from_small_str("test")?,
@@ -385,6 +388,27 @@ fn excessive_logging() -> Result<(), HostError> {
         assert_eq!(host.get_events()?.0.len(), 0);
         // the internal limit has been exceeded
         assert!(host.as_budget().shadow_mem_limit_exceeded()?);
+        let actual = format!("{}", host.as_budget());
+        // the actual production budget numbers should stay the same
+        expected_budget.assert_eq(&actual);
+    }
+
+    // increasing the shadow budget should make everything happy again
+    {
+        host.budget_ref().reset_limits(2_000_000, 500_000)?;
+        host.set_shadow_budget_limits(2_000_000, 1_000_000)?;
+        let res = host.call(
+            contract_id_obj,
+            Symbol::try_from_small_str("test")?,
+            // log the entire page of linear memory
+            host.test_vec_obj(&[0_u32, 65536_u32, 0_u32, 8192_u32])?,
+        )?;
+        // logging failure occurs in debug mode will not result in invocation failure
+        assert_eq!(SymbolSmall::try_from(res)?.to_string(), "pass");
+        assert!(
+            !host.as_budget().shadow_mem_limit_exceeded()?
+                && !host.as_budget().shadow_cpu_limit_exceeded()?
+        );
         let actual = format!("{}", host.as_budget());
         // the actual production budget numbers should stay the same
         expected_budget.assert_eq(&actual);

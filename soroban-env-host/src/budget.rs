@@ -711,6 +711,12 @@ impl Budget {
         rt
     }
 
+    pub(crate) fn set_shadow_limits(&self, cpu: u64, mem: u64) -> Result<(), HostError> {
+        self.0.try_borrow_mut_or_err()?.cpu_insns.shadow_limit = cpu;
+        self.0.try_borrow_mut_or_err()?.mem_bytes.shadow_limit = mem;
+        Ok(())
+    }
+
     pub fn get_tracker(&self, ty: ContractCostType) -> Result<(u64, Option<u64>), HostError> {
         self.0
             .try_borrow_or_err()?
