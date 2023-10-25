@@ -171,6 +171,8 @@ impl InternalEventsBuffer {
     /// either when the host is finished (via `try_finish`), or when an error occurs.
     pub fn externalize(&self, host: &Host) -> Result<Events, HostError> {
         let mut vec: Vec<HostEvent> = vec![];
+        // This line is intentionally unmetered, because metering is taken care during event push
+        // to ensure metering is indifferent of the buffer length.
         vec.reserve(self.vec.len());
 
         for (event, status) in self.vec.iter() {
