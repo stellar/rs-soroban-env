@@ -141,7 +141,7 @@ impl Budget {
     /// convenience of temporarily "turning off" the budget. This can happen for
     /// several reasons: we want the some test logic to not affect the production
     /// budget, or we want to maintain an accurate prediction of production budget
-    /// during preflight. In the ladder case, we want to exclude preflight-only
+    /// during preflight. In the latter case, we want to exclude preflight-only
     /// logic from the budget. By routing metering to the internal budget instead
     /// of turning the budget off completely, it offers some DOS-mitigation.
     pub(crate) fn with_internal_mode_fallible<T, F>(&self, f: F) -> Result<T, HostError>

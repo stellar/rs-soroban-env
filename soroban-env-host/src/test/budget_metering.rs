@@ -345,9 +345,20 @@ fn total_amount_charged_from_random_inputs() -> Result<(), HostError> {
         (1, Some(1)),
     ];
 
-    for ty in ContractCostType::variants() {
-        host.with_budget(|b| b.bulk_charge(ty, tracker[ty as usize].0, tracker[ty as usize].1))?;
+    for (ty, &(iterations, input)) in tracker.iter().enumerate() {
+        host.with_budget(|b| b.bulk_charge(ContractCostType::VARIANTS[ty], iterations, input))?;
     }
+
+    for (ty, &(iterations, input)) in tracker.iter().enumerate() {
+        host.as_budget().with_internal_mode(
+            || {
+                host.as_budget()
+                    .bulk_charge(ContractCostType::VARIANTS[ty], iterations, input)
+            },
+            || (),
+        )
+    }
+
     let actual = format!("{:?}", host.as_budget());
     expect![[r#"
         =====================================================================================================================================================================
@@ -381,8 +392,8 @@ fn total_amount_charged_from_random_inputs() -> Result<(), HostError> {
         =====================================================================================================================================================================
         Internal details (diagnostics info, does not affect fees) 
         Total # times meter was called: 23
-        Internal cpu limit: 100000000; used: 0
-        Internal mem limit: 41943040; used: 0
+        Internal cpu limit: 100000000; used: 10068892
+        Internal mem limit: 41943040; used: 275860
         =====================================================================================================================================================================
 
     "#]]

@@ -136,14 +136,7 @@ impl BudgetImpl {
         iterations: u64,
         input: Option<u64>,
     ) -> Result<(), HostError> {
-        if self.is_in_internal_mode {
-            if matches!(ty, ContractCostType::WasmInsnExec) {
-                // if wasm instruction charging is happening in debug mode, something
-                // is wrong and the guest is executing contract code for free. We stop
-                // with an internal error
-                return Err((ScErrorType::Budget, ScErrorCode::InternalError).into());
-            }
-        } else {
+        if !self.is_in_internal_mode {
             // update tracker for reporting
             self.tracker.count = self.tracker.count.saturating_add(1);
             let (t_iters, t_inputs) = &mut self
@@ -703,7 +696,7 @@ impl Budget {
         });
 
         let rt = if should_execute.is_ok() {
-            f().unwrap_or(e())
+            f().unwrap_or_else(|_| e())
         } else {
             e()
         };

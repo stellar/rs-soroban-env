@@ -467,6 +467,10 @@ impl Host {
         self.0.budget.charge(ty, input)
     }
 
+    /// Wraps the `budget.with_internal_mode` call with the check `host.is_debug`.
+    /// This wrapper should be used for any work that is part of the production
+    /// workflow but in debug mode, i.e. diagnostic related work (logging, or any
+    /// operations on diagnostic event).
     pub(crate) fn with_debug_budget<T, F, E>(&self, f: F, e: E) -> T
     where
         F: FnOnce() -> Result<T, HostError>,
