@@ -1,6 +1,7 @@
 #![no_std]
+
 use soroban_sdk::{
-    auth::{ContractContext, InvokerContractAuthEntry, SubContractInvocation},
+    auth::{ContractContext, InvokerContractAuthEntry, SubContractInvocation}, Error,
     contract, contractimpl, contracttype, symbol_short, vec, Address, Env, IntoVal, Vec,
 };
 
@@ -13,6 +14,7 @@ pub struct TreeNode {
     pub contract: Address,
     pub need_auth: Vec<bool>,
     pub children: Vec<TreeNode>,
+    pub try_call: bool,
 }
 
 #[contractimpl]
@@ -29,11 +31,19 @@ impl AuthContract {
             }
         }
         for child in tree.children.iter() {
-            env.invoke_contract::<()>(
-                &child.contract.clone(),
-                &symbol_short!("tree_fn"),
-                (addresses.clone(), child).into_val(&env),
-            );
+            if child.try_call {
+                let _ = env.try_invoke_contract::<(), Error>(
+                    &child.contract.clone(),
+                    &symbol_short!("tree_fn"),
+                    (addresses.clone(), child).into_val(&env),
+                );
+            } else {
+                env.invoke_contract::<()>(
+                    &child.contract.clone(),
+                    &symbol_short!("tree_fn"),
+                    (addresses.clone(), child).into_val(&env),
+                );
+            }
         }
     }
 
@@ -102,6 +112,46 @@ impl AuthContract {
                 &symbol_short!("tree_fn"),
                 (addresses.clone(), child).into_val(&env),
             );
+        }
+    }
+
+    // This function covers a really fringe scenario: a combination of
+    // graceful failure handling with `try_call`, an implementation
+    // of `__check_auth` that might have its results changed during
+    // the contract call, and use of auth trees that are not rooted at
+    // the root invocation.
+    // This expects `address` to be implemeted via `conditional_account`
+    // test contract and `contract_address` is another instance of
+    // `AuthContract`.
+    pub fn conditional_auth(env: Env, address: Address, contract_address: Address) {
+        // No `require_auth` at the top level in order to get multiple auth trees.
+
+        // Call contract function that does `require_auth` and allow it to fail.
+        let _ = env.try_invoke_contract::<(), Error>(
+            &contract_address,
+            &symbol_short!("do_auth"),
+            (address.clone(), 123_u32).into_val(&env),
+        );
+        // Call `allow` on the account contract.
+        env.invoke_contract::<()>(
+            &address,
+            &symbol_short!("allow"),
+            ().into_val(&env),
+        );
+        env.invoke_contract::<()>(
+            &contract_address,
+            &symbol_short!("do_auth"),
+            (address.clone(), 123_u32).into_val(&env),
+        );
+        // Make one more call that may never succeed
+        // because `allow` hasn't been called.
+        let res = env.try_invoke_contract::<(), Error>(
+            &contract_address,
+            &symbol_short!("do_auth"),
+            (address.clone(), 123_u32).into_val(&env),
+        );
+        if !res.is_err() {
+            panic!("unexpected not allowed auth succeeded");
         }
     }
 }

@@ -34,7 +34,8 @@ members = [
     "update",
     "delegated_account",
     "err",
-    "write_upgrade_bytes"
+    "write_upgrade_bytes",
+    "conditional_account"
 ]
 [profile.release]
 opt-level = "z"

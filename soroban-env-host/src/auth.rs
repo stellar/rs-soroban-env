@@ -203,7 +203,7 @@ struct InvocationTracker {
     // parent's `sub_invocations` vector or 0 for the
     // `root_authorized_invocation`.
     invocation_id_in_call_stack: Vec<Option<usize>>,
-    // If root invocation is exhuasted, the index of the stack frame where it
+    // If root invocation is exhausted, the index of the stack frame where it
     // was exhausted (i.e. index in `invocation_id_in_call_stack`).
     root_exhausted_frame: Option<usize>,
     // Indicates whether this tracker is fully processed, i.e. the authorized
@@ -226,15 +226,16 @@ pub(crate) struct AccountAuthorizationTracker {
     // Value representing the signature created by the address to authorize
     // the invocations tracked here.
     signature: Val,
-    // Indicates whether this tracker is still valid. If invalidated once, this
-    // can't be used to authorize anything anymore
-    is_valid: bool,
     // Indicates whether this is a tracker for the transaction invoker.
     is_invoker: bool,
-    // Indicates whether authentication has already succesfully happened.
-    authenticated: bool,
-    // Indicates whether nonce still needs to be verified and consumed.
-    need_nonce: bool,
+    // When `true`, indicates that the tracker has been successfully verified,
+    // specifically it has been authenticated and has nonce verified and
+    // consumed.
+    // When `false`, indicates that verification hasn't happened yet or
+    // that it hasn't been successful. The latter case is subtle - we don't cache
+    // the verification failures because a verification failure is not recoverable
+    // and thus is bound to be rolled back.
+    verified: bool,
     // The value of nonce authorized by the address with its live_until ledger.
     // Must not exist in the ledger.
     nonce: Option<(i64, u32)>,
@@ -242,11 +243,10 @@ pub(crate) struct AccountAuthorizationTracker {
 
 pub(crate) struct AccountAuthorizationTrackerSnapshot {
     invocation_tracker_root_snapshot: AuthorizedInvocationSnapshot,
-    authenticated: bool,
-    need_nonce: bool,
+    verified: bool,
 }
 
-// Stores all the authorizations peformed by contracts at runtime.
+// Stores all the authorizations performed by contracts at runtime.
 #[derive(Clone)]
 pub(crate) struct InvokerContractAuthorizationTracker {
     contract_address: AddressObject,
@@ -743,7 +743,7 @@ impl AuthorizationManager {
         }
 
         // Iterate all the trackers and try to find one that
-        // fullfills the authorization requirement.
+        // fulfills the authorization requirement.
         for tracker in self.try_borrow_account_trackers(host)?.iter() {
             // Tracker can only be borrowed by the authorization manager itself.
             // The only scenario in which re-borrow might occur is when
@@ -769,7 +769,7 @@ impl AuthorizationManager {
                     // Found a matching authorization.
                     Ok(true) => return Ok(()),
                     // Found a matching authorization, but another
-                    // requirement hasn't been fullfilled (for
+                    // requirement hasn't been fulfilled (for
                     // example, incorrect authentication or nonce).
                     Err(e) => return Err(e),
                 }
@@ -930,7 +930,7 @@ impl AuthorizationManager {
             }
             #[cfg(any(test, feature = "recording_auth"))]
             AuthorizationMode::Recording(_) => {
-                // All trackers should be avaialable to borrow for copy as in
+                // All trackers should be available to borrow for copy as in
                 // recording mode we can't have recursive authorization.
                 // metering: free for recording
                 AccountTrackersSnapshot::Recording(self.try_borrow_account_trackers(host)?.clone())
@@ -1198,7 +1198,7 @@ impl AuthorizationManager {
         self.account_trackers
             .borrow()
             .iter()
-            .filter(|t| t.borrow().authenticated)
+            .filter(|t| t.borrow().verified)
             .map(|t| {
                 (
                     host.scaddress_from_address(t.borrow().address).unwrap(),
@@ -1448,11 +1448,9 @@ impl AccountAuthorizationTracker {
             address,
             invocation_tracker: InvocationTracker::from_xdr(host, auth_entry.root_invocation)?,
             signature,
-            authenticated: false,
-            need_nonce: !is_invoker,
+            verified: false,
             is_invoker,
             nonce,
-            is_valid: true,
         })
     }
 
@@ -1499,9 +1497,7 @@ impl AccountAuthorizationTracker {
             address,
             invocation_tracker: InvocationTracker::new_recording(function, current_stack_len),
             signature: Val::VOID.into(),
-            is_valid: true,
-            authenticated: true,
-            need_nonce: false,
+            verified: true,
             is_invoker,
             nonce,
         })
@@ -1522,9 +1518,6 @@ impl AccountAuthorizationTracker {
         function: &AuthorizedFunction,
         allow_matching_root: bool,
     ) -> Result<bool, HostError> {
-        if !self.is_valid {
-            return Ok(false);
-        }
         if !self
             .invocation_tracker
             .maybe_push_matching_invocation_frame(host, function, allow_matching_root)?
@@ -1535,30 +1528,26 @@ impl AccountAuthorizationTracker {
             // authorized in a different tracker).
             return Ok(false);
         }
-        if !self.authenticated {
+        if !self.verified {
             let authenticate_res = self
                 .authenticate(host)
                 .map_err(|err| {
                     // Convert any contract errors to auth errors so that it's
                     // not possible to confuse them for the errors of the
                     // contract that has called `require_auth`.
-                    if err.error.is_type(ScErrorType::Contract) {
-                        host.err(
-                            ScErrorType::Auth,
-                            ScErrorCode::InvalidAction,
-                            "failed account authentication",
-                            &[self.address.into(), err.error.to_val()],
-                        )
-                    } else {
-                        err
-                    }
+                    // Also log the original error for diagnosticts.
+                    host.err(
+                        ScErrorType::Auth,
+                        ScErrorCode::InvalidAction,
+                        "failed account authentication with error",
+                        &[self.address.into(), err.error.to_val()],
+                    )
                 })
                 .and_then(|_| self.verify_and_consume_nonce(host));
             if let Some(err) = authenticate_res.err() {
-                self.is_valid = false;
                 return Err(err);
             }
-            self.authenticated = true;
+            self.verified = true;
         }
         Ok(true)
     }
@@ -1626,10 +1615,9 @@ impl AccountAuthorizationTracker {
 
     // metering: covered
     fn verify_and_consume_nonce(&mut self, host: &Host) -> Result<(), HostError> {
-        if !self.need_nonce {
+        if self.is_invoker {
             return Ok(());
         }
-        self.need_nonce = false;
         if let Some((nonce, live_until_ledger)) = &self.nonce {
             let ledger_seq = host.with_ledger_info(|li| Ok(li.sequence_number))?;
             if ledger_seq > *live_until_ledger {
@@ -1743,13 +1731,15 @@ impl AccountAuthorizationTracker {
     fn snapshot(&self, budget: &Budget) -> Result<AccountAuthorizationTrackerSnapshot, HostError> {
         Ok(AccountAuthorizationTrackerSnapshot {
             invocation_tracker_root_snapshot: self.invocation_tracker.snapshot(budget)?,
-            // We need to snapshot authentication and nonce-related fields as
-            // during the rollback the nonce might be 'un-consumed' during
-            // the storage rollback. We don't snapshot `is_valid` since this is
-            // not recoverable and nonce is never consumed for invalid
-            // authorizations.
-            authenticated: self.authenticated,
-            need_nonce: self.need_nonce,
+            // The verification status can be rolled back in case
+            // of a contract failure. In case if the root call has
+            // failed, the nonce will get 'un-consumed' due to storage
+            // rollback. Thus we need to run verification and consume
+            // it again in case if the call is retried. Another subtle
+            // case where this behavior is important is the case when
+            // custom account's authentication function depends on
+            // some ledger state which might get modified in-between calls.
+            verified: self.verified,
         })
     }
 
@@ -1760,14 +1750,13 @@ impl AccountAuthorizationTracker {
     ) -> Result<(), HostError> {
         self.invocation_tracker
             .rollback(&snapshot.invocation_tracker_root_snapshot)?;
-        self.authenticated = snapshot.authenticated;
-        self.need_nonce = snapshot.need_nonce;
+        self.verified = snapshot.verified;
         Ok(())
     }
 
     // metering: free
     fn is_active(&self) -> bool {
-        self.is_valid && self.invocation_tracker.is_active()
+        self.invocation_tracker.is_active()
     }
 
     // metering: free
