@@ -676,39 +676,38 @@ impl Budget {
     /// * `f` - A fallible closure to be run in shadow mode. If error occurs,
     ///   fallback closure is run immediately afterwards to replace it
     ///
-    /// * `e` - A fallback closure to be run in case of any error occuring
+    /// * `fallback` - A fallback closure to be run in case of any error occuring
     ///
     /// # Returns:
     ///
     /// Returns a value of type `T`. Any errors arising during the execution are
     /// suppressed.
-    pub(crate) fn with_shadow_mode<T, F, E>(&self, f: F, e: E) -> T
+    pub(crate) fn with_shadow_mode<T, F, E>(&self, f: F, fallback: E) -> T
     where
         F: FnOnce() -> Result<T, HostError>,
-        E: Fn() -> T,
+        E: FnOnce() -> T,
     {
         let mut prev = false;
-        let should_execute = self.mut_budget(|mut b| {
-            prev = b.is_in_shadow_mode;
-            b.is_in_shadow_mode = true;
-            b.cpu_insns.check_budget_limit(true)?;
-            b.mem_bytes.check_budget_limit(true)
-        });
 
-        let rt = if should_execute.is_ok() {
-            f().unwrap_or_else(|_| e())
-        } else {
-            e()
-        };
+        let mut res = self
+            .mut_budget(|mut b| {
+                prev = b.is_in_shadow_mode;
+                b.is_in_shadow_mode = true;
+                b.cpu_insns.check_budget_limit(true)?;
+                b.mem_bytes.check_budget_limit(true)
+            })
+            .and_then(|_| f());
 
         if let Err(_) = self.mut_budget(|mut b| {
             b.is_in_shadow_mode = prev;
             Ok(())
         }) {
-            return e();
+            res = Err(
+                Error::from_type_and_code(ScErrorType::Budget, ScErrorCode::InternalError).into(),
+            );
         }
 
-        rt
+        res.unwrap_or_else(|_| fallback())
     }
 
     pub(crate) fn set_shadow_limits(&self, cpu: u64, mem: u64) -> Result<(), HostError> {
