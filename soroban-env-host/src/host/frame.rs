@@ -380,25 +380,9 @@ impl Host {
     }
 
     /// Inspects the frame at the top of the context and returns the contract ID
-    /// if it exists.
-    ///
-    /// # Arguments
-    ///
-    /// * `err_on_empty_frame` - Determines the behavior when the frame is empty:
-    ///   - If set to `true`, the function returns an error.
-    ///   - If set to `false`, it returns `None`.
-    ///
-    /// # Returns
-    ///
-    /// * `Ok(Some(Hash))` if a valid contract ID is associated with the current frame.
-    /// * `Ok(None)` if there's no contract ID associated with the current frame
-    ///   or if the frame is empty and `err_on_empty_frame` is set to `false`.
-    /// * `Err(HostError)` if the frame is empty and `err_on_empty_frame` is set
-    ///   to `true`, or for other specific internal errors.
-    pub(crate) fn get_current_contract_id_opt_internal(
-        &self,
-        err_on_empty_frame: bool,
-    ) -> Result<Option<Hash>, HostError> {
+    /// if it exists. Returns `Ok(None)` if the context stack is empty or has a
+    /// non-contract frame on top.
+    pub(crate) fn get_current_contract_id_opt_internal(&self) -> Result<Option<Hash>, HostError> {
         self.with_current_frame_opt(|opt_frame| match opt_frame {
             Some(frame) => match frame {
                 Frame::ContractVM { vm, .. } => Ok(Some(vm.contract_id.metered_clone(self)?)),
@@ -407,18 +391,7 @@ impl Host {
                 #[cfg(any(test, feature = "testutils"))]
                 Frame::TestContract(tc) => Ok(Some(tc.id.metered_clone(self)?)),
             },
-            None => {
-                if err_on_empty_frame {
-                    Err(self.err(
-                        ScErrorType::Context,
-                        ScErrorCode::MissingValue,
-                        "no contract running",
-                        &[],
-                    ))
-                } else {
-                    Ok(None)
-                }
-            }
+            None => Ok(None),
         })
     }
 
@@ -426,7 +399,7 @@ impl Host {
     /// stack, or a [`HostError`] if the context stack is empty or has a non-VM
     /// frame at its top.
     pub(crate) fn get_current_contract_id_internal(&self) -> Result<Hash, HostError> {
-        if let Some(id) = self.get_current_contract_id_opt_internal(true)? {
+        if let Some(id) = self.get_current_contract_id_opt_internal()? {
             Ok(id)
         } else {
             // This should only ever happen if we try to access the contract ID
