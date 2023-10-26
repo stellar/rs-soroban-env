@@ -69,7 +69,7 @@ impl Host {
     pub fn log_diagnostics(&self, msg: &str, args: &[Val]) {
         self.with_debug_mode(
             || {
-                let calling_contract = self.get_current_contract_id_from_opt_frame()?;
+                let calling_contract = self.get_current_contract_id_opt_internal(false)?;
                 let log_sym = SymbolSmall::try_from_str("log")?;
                 Vec::<InternalDiagnosticArg>::charge_bulk_init_cpy(1, self)?;
                 let topics = vec![InternalDiagnosticArg::HostVal(log_sym.to_val())];
@@ -95,7 +95,7 @@ impl Host {
         self.with_debug_mode(
             || {
                 let error_sym = SymbolSmall::try_from_str("error")?;
-                let contract_id = self.get_current_contract_id_from_opt_frame()?;
+                let contract_id = self.get_current_contract_id_opt_internal(false)?;
                 Vec::<InternalDiagnosticArg>::charge_bulk_init_cpy(2, self)?;
                 let topics = vec![
                     InternalDiagnosticArg::HostVal(error_sym.to_val()),
@@ -132,7 +132,7 @@ impl Host {
     pub fn fn_call_diagnostics(&self, called_contract_id: &Hash, func: &Symbol, args: &[Val]) {
         self.with_debug_mode(
             || {
-                let calling_contract = self.get_current_contract_id_from_opt_frame()?;
+                let calling_contract = self.get_current_contract_id_opt_internal(false)?;
                 Vec::<InternalDiagnosticArg>::charge_bulk_init_cpy(3, self)?;
                 let topics = vec![
                     InternalDiagnosticArg::HostVal(SymbolSmall::try_from_str("fn_call")?.into()),

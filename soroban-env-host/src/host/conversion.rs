@@ -232,7 +232,7 @@ impl Host {
     pub(crate) fn bytesobj_from_internal_contract_id(
         &self,
     ) -> Result<Option<BytesObject>, HostError> {
-        if let Some(id) = self.get_current_contract_id_opt_internal()? {
+        if let Some(id) = self.get_current_contract_id_opt_internal(true)? {
             let obj = self.add_host_object::<ScBytes>(
                 self.metered_slice_to_vec(id.as_slice())?.try_into()?,
             )?;
