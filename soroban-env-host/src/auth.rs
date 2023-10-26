@@ -1756,7 +1756,7 @@ impl AccountAuthorizationTracker {
 
     // metering: free
     fn is_active(&self) -> bool {
-        self.verified && self.invocation_tracker.is_active()
+        self.invocation_tracker.is_active()
     }
 
     // metering: free
