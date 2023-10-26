@@ -223,10 +223,6 @@ impl Host {
                 // the refcell. This is to handle the "double fault" case where we
                 // get an error _while performing_ any of the steps needed to record
                 // an error as an event, below.
-                // We do the event-borrowing ourselves here rather than calling
-                // self.try_borrow_events_mut because we can/should only be called
-                // with an already-borrowed events buffer (to insulate against
-                // double-faulting).
                 if let Ok(mut events_refmut) = self.0.events.try_borrow_mut() {
                     self.record_err_diagnostics(events_refmut.deref_mut(), error, msg, args);
                 }
@@ -242,10 +238,6 @@ impl Host {
     pub(crate) fn maybe_get_debug_info(&self) -> Option<Box<DebugInfo>> {
         self.with_debug_mode(
             || {
-                // We do the event-borrowing ourselves here rather than calling
-                // self.try_borrow_events because we can/should only be called
-                // with an already-borrowed events buffer (to insulate against
-                // double-faulting).
                 if let Ok(events_ref) = self.0.events.try_borrow() {
                     let events = events_ref.externalize(self)?;
                     let backtrace = Backtrace::new_unresolved();
@@ -492,7 +484,7 @@ impl DebugArg for usize {
 /// All arguments must be convertible to [Val] with [TryIntoVal]. This is
 /// expected to be called from within a function that returns
 /// `Result<_, HostError>`. If these requirements can't be fulfilled, use
-/// the [Host::error] or [Host::error_lazy] functions directly.
+/// the [Host::error] function directly.
 #[macro_export]
 macro_rules! err {
     ($host:expr, $error:expr, $msg:literal, $($args:expr),*) => {
