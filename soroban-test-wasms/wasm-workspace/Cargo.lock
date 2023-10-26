@@ -1046,6 +1046,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "62bb4feee49fdd9f707ef802e22365a35de4b7b299de4763d44bfea899442ff9"
 
 [[package]]
+name = "soroban-builtin-sdk-macros"
+version = "20.0.0-rc2"
+dependencies = [
+ "itertools",
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "soroban-env-common"
 version = "20.0.0-rc2"
 dependencies = [
@@ -1085,8 +1095,8 @@ dependencies = [
  "rand_chacha",
  "sha2",
  "sha3",
- "soroban-env-common",
  "soroban-builtin-sdk-macros",
+ "soroban-env-common",
  "soroban-wasmi",
  "static_assertions",
  "stellar-strkey",
@@ -1114,16 +1124,6 @@ dependencies = [
  "soroban-env-common",
  "soroban-env-host",
  "thiserror",
-]
-
-[[package]]
-name = "soroban-builtin-sdk-macros"
-version = "20.0.0-rc2"
-dependencies = [
- "itertools",
- "proc-macro2",
- "quote",
- "syn",
 ]
 
 [[package]]
@@ -1269,6 +1269,14 @@ dependencies = [
  "proc-macro2",
  "quote",
  "unicode-ident",
+]
+
+[[package]]
+name = "test_conditional_account"
+version = "0.0.0"
+dependencies = [
+ "soroban-env-common",
+ "soroban-sdk",
 ]
 
 [[package]]

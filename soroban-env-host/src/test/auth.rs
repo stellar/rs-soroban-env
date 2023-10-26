@@ -7,7 +7,9 @@ use soroban_env_common::xdr::{
     ScSymbol, ScVal, SorobanAddressCredentials, SorobanAuthorizationEntry,
     SorobanAuthorizedFunction, SorobanAuthorizedInvocation, SorobanCredentials, Uint256, VecM,
 };
-use soroban_test_wasms::{AUTH_TEST_CONTRACT, DELEGATED_ACCOUNT_TEST_CONTRACT};
+use soroban_test_wasms::{
+    AUTH_TEST_CONTRACT, CONDITIONAL_ACCOUNT_TEST_CONTRACT, DELEGATED_ACCOUNT_TEST_CONTRACT,
+};
 
 use crate::auth::RecordedAuthPayload;
 use crate::budget::AsBudget;
@@ -28,6 +30,7 @@ pub struct ContractTreeNode {
     pub contract: Address,
     pub need_auth: HostVec,
     pub children: HostVec,
+    pub try_call: bool,
 }
 
 struct AuthTest {
@@ -41,6 +44,7 @@ struct SetupNode {
     contract_address: Address,
     need_auth: Vec<bool>,
     children: Vec<SetupNode>,
+    try_call: bool,
 }
 
 struct SignNode {
@@ -56,6 +60,20 @@ impl SetupNode {
             contract_address: contract_address.clone(),
             need_auth,
             children,
+            try_call: false,
+        }
+    }
+
+    fn new_try_call(
+        contract_address: &Address,
+        need_auth: Vec<bool>,
+        children: Vec<SetupNode>,
+    ) -> Self {
+        Self {
+            contract_address: contract_address.clone(),
+            need_auth,
+            children,
+            try_call: true,
         }
     }
 }
@@ -262,7 +280,7 @@ impl AuthTest {
         self.host.set_authorization_entries(contract_auth).unwrap();
         assert_eq!(
             self.host
-                .call(contract_address.into(), fn_name, args.into(),)
+                .call(contract_address.into(), fn_name, args.into())
                 .is_ok(),
             success
         );
@@ -409,6 +427,7 @@ impl AuthTest {
             contract: root.contract_address.clone(),
             need_auth,
             children,
+            try_call: root.try_call,
         }
     }
 
@@ -440,7 +459,7 @@ fn test_single_authorized_call() {
         vec![RecordedAuthPayload {
             address: Some(test.key_to_sc_address(&test.keys[0])),
             nonce: Some(0),
-            invocation: test.convert_sign_node(&expected_sign_payloads[0][0])
+            invocation: test.convert_sign_node(&expected_sign_payloads[0][0]),
         }]
     );
 
@@ -453,7 +472,7 @@ fn test_single_authorized_call() {
         vec![RecordedAuthPayload {
             address: Some(test.key_to_sc_address(&test.keys[0])),
             nonce: Some(0),
-            invocation: test.convert_sign_node(&SignNode::tree_fn(&test.contracts[0], vec![]))
+            invocation: test.convert_sign_node(&SignNode::tree_fn(&test.contracts[0], vec![])),
         }]
     );
 
@@ -516,13 +535,13 @@ fn test_single_authorized_call_for_multiple_addresses() {
             RecordedAuthPayload {
                 address: Some(test.key_to_sc_address(&test.keys[0])),
                 nonce: Some(0),
-                invocation: test.convert_sign_node(&expected_sign_payloads[0][0])
+                invocation: test.convert_sign_node(&expected_sign_payloads[0][0]),
             },
             RecordedAuthPayload {
                 address: Some(test.key_to_sc_address(&test.keys[1])),
                 nonce: Some(0),
-                invocation: test.convert_sign_node(&expected_sign_payloads[1][0])
-            }
+                invocation: test.convert_sign_node(&expected_sign_payloads[1][0]),
+            },
         ]
     );
 
@@ -570,7 +589,7 @@ fn test_single_authorization_for_one_address_among_multiple() {
         vec![RecordedAuthPayload {
             address: Some(test.key_to_sc_address(&test.keys[1])),
             nonce: Some(0),
-            invocation: test.convert_sign_node(&expected_sign_payloads[1][0])
+            invocation: test.convert_sign_node(&expected_sign_payloads[1][0]),
         }]
     );
 
@@ -656,7 +675,7 @@ fn test_single_authorized_call_tree() {
                         ],
                     ),
                 ],
-            ))
+            )),
         }]
     );
 
@@ -864,7 +883,7 @@ fn test_two_authorized_trees() {
                         SignNode::tree_fn(&test.contracts[3], vec![]),
                         SignNode::tree_fn(&test.contracts[2], vec![]),
                     ],
-                ),)
+                ),),
             },
             RecordedAuthPayload {
                 address: Some(test.key_to_sc_address(&test.keys[0])),
@@ -875,8 +894,8 @@ fn test_two_authorized_trees() {
                         SignNode::tree_fn(&test.contracts[4], vec![]),
                         SignNode::tree_fn(&test.contracts[3], vec![]),
                     ],
-                ),)
-            }
+                ),),
+            },
         ]
     );
 
@@ -924,6 +943,175 @@ fn test_two_authorized_trees() {
                         SignNode::tree_fn(&test.contracts[4], vec![]),
                     ],
                 ),
+            ],
+        )]],
+        false,
+    );
+}
+
+#[test]
+fn test_two_authorized_trees_with_rollback() {
+    let mut test = AuthTest::setup(1, 5);
+    let setup = SetupNode::new(
+        &test.contracts[0],
+        vec![false],
+        vec![
+            SetupNode::new_try_call(
+                &test.contracts[1],
+                vec![true],
+                vec![
+                    SetupNode::new(&test.contracts[3], vec![true], vec![]),
+                    SetupNode::new(&test.contracts[2], vec![true], vec![]),
+                ],
+            ),
+            SetupNode::new_try_call(
+                &test.contracts[2],
+                vec![true],
+                vec![
+                    SetupNode::new(&test.contracts[4], vec![true], vec![]),
+                    SetupNode::new(&test.contracts[3], vec![true], vec![]),
+                ],
+            ),
+        ],
+    );
+
+    // Both subtrees fail, no nonces consumed.
+    test.tree_test_enforcing(
+        &setup,
+        vec![vec![
+            SignNode::tree_fn(
+                &test.contracts[1],
+                vec![
+                    SignNode::tree_fn(&test.contracts[2], vec![]),
+                    // Missing child payload
+                ],
+            ),
+            SignNode::tree_fn(
+                &test.contracts[2],
+                vec![
+                    SignNode::tree_fn(&test.contracts[3], vec![]),
+                    // Missing child payload
+                ],
+            ),
+        ]],
+        true,
+    );
+    test.verify_nonces_consumed(vec![0]);
+
+    // First tree fails, second succeeds and consumes nonce
+    test.tree_test_enforcing(
+        &setup,
+        vec![vec![
+            SignNode::tree_fn(
+                &test.contracts[1],
+                vec![
+                    SignNode::tree_fn(&test.contracts[2], vec![]),
+                    // Missing child payload
+                ],
+            ),
+            SignNode::tree_fn(
+                &test.contracts[2],
+                vec![
+                    SignNode::tree_fn(&test.contracts[3], vec![]),
+                    SignNode::tree_fn(&test.contracts[4], vec![]),
+                ],
+            ),
+        ]],
+        true,
+    );
+    test.verify_nonces_consumed(vec![1]);
+
+    // Second tree fails, first succeeds and consumes nonce
+    test.tree_test_enforcing(
+        &setup,
+        vec![vec![
+            SignNode::tree_fn(
+                &test.contracts[1],
+                vec![
+                    SignNode::tree_fn(&test.contracts[2], vec![]),
+                    SignNode::tree_fn(&test.contracts[3], vec![]),
+                ],
+            ),
+            SignNode::tree_fn(
+                &test.contracts[2],
+                vec![
+                    SignNode::tree_fn(&test.contracts[3], vec![]),
+                    // Missing child payload
+                ],
+            ),
+        ]],
+        true,
+    );
+    test.verify_nonces_consumed(vec![1]);
+
+    // Only the valid second tree is passed and consumes nonce.
+    test.tree_test_enforcing(
+        &setup,
+        vec![vec![SignNode::tree_fn(
+            &test.contracts[2],
+            vec![
+                SignNode::tree_fn(&test.contracts[3], vec![]),
+                SignNode::tree_fn(&test.contracts[4], vec![]),
+            ],
+        )]],
+        true,
+    );
+    test.verify_nonces_consumed(vec![1]);
+
+    // No trees passed at all.
+    test.tree_test_enforcing(&setup, vec![vec![]], true);
+    test.verify_nonces_consumed(vec![0]);
+}
+
+#[test]
+fn test_rolled_back_auth_entry_can_be_reused() {
+    let mut test = AuthTest::setup(1, 5);
+    // Setup up two trees that are almost identical besides one deep call.
+    let setup = SetupNode::new(
+        &test.contracts[0],
+        vec![false],
+        vec![
+            SetupNode::new_try_call(
+                &test.contracts[1],
+                vec![true],
+                vec![
+                    SetupNode::new(&test.contracts[3], vec![true], vec![]),
+                    SetupNode::new(&test.contracts[2], vec![true], vec![]),
+                ],
+            ),
+            SetupNode::new(
+                &test.contracts[1],
+                vec![true],
+                vec![
+                    SetupNode::new(&test.contracts[3], vec![true], vec![]),
+                    SetupNode::new(&test.contracts[4], vec![true], vec![]),
+                ],
+            ),
+        ],
+    );
+
+    test.tree_test_enforcing(
+        &setup,
+        vec![vec![SignNode::tree_fn(
+            &test.contracts[1],
+            vec![
+                SignNode::tree_fn(&test.contracts[3], vec![]),
+                SignNode::tree_fn(&test.contracts[4], vec![]),
+            ],
+        )]],
+        true,
+    );
+    test.verify_nonces_consumed(vec![1]);
+
+    // Failure - the payload provided only for the first call and the
+    // second tree doesn't allow failures.
+    test.tree_test_enforcing(
+        &setup,
+        vec![vec![SignNode::tree_fn(
+            &test.contracts[1],
+            vec![
+                SignNode::tree_fn(&test.contracts[3], vec![]),
+                SignNode::tree_fn(&test.contracts[2], vec![]),
             ],
         )]],
         false,
@@ -1002,12 +1190,12 @@ fn test_three_authorized_trees() {
             RecordedAuthPayload {
                 address: Some(test.key_to_sc_address(&test.keys[0])),
                 nonce: Some(0),
-                invocation: test.convert_sign_node(&SignNode::tree_fn(&test.contracts[3], vec![]),)
+                invocation: test.convert_sign_node(&SignNode::tree_fn(&test.contracts[3], vec![])),
             },
             RecordedAuthPayload {
                 address: Some(test.key_to_sc_address(&test.keys[0])),
                 nonce: Some(0),
-                invocation: test.convert_sign_node(&SignNode::tree_fn(&test.contracts[2], vec![]),)
+                invocation: test.convert_sign_node(&SignNode::tree_fn(&test.contracts[2], vec![])),
             },
             RecordedAuthPayload {
                 address: Some(test.key_to_sc_address(&test.keys[0])),
@@ -1018,8 +1206,8 @@ fn test_three_authorized_trees() {
                         SignNode::tree_fn(&test.contracts[4], vec![]),
                         SignNode::tree_fn(&test.contracts[3], vec![]),
                     ],
-                ),)
-            }
+                ),),
+            },
         ]
     );
 
@@ -1160,7 +1348,7 @@ fn test_multi_address_trees() {
                             ],
                         ),
                     ],
-                ),)
+                ),),
             },
             RecordedAuthPayload {
                 address: Some(test.key_to_sc_address(&test.keys[2])),
@@ -1172,7 +1360,7 @@ fn test_multi_address_trees() {
                         SignNode::tree_fn(&test.contracts[4], vec![]),
                         SignNode::tree_fn(&test.contracts[3], vec![]),
                     ],
-                ))
+                )),
             },
             RecordedAuthPayload {
                 address: Some(test.key_to_sc_address(&test.keys[1])),
@@ -1180,7 +1368,7 @@ fn test_multi_address_trees() {
                 invocation: test.convert_sign_node(&SignNode::tree_fn(
                     &test.contracts[1],
                     vec![SignNode::tree_fn(&test.contracts[3], vec![])],
-                ),)
+                ),),
             },
             RecordedAuthPayload {
                 address: Some(test.key_to_sc_address(&test.keys[1])),
@@ -1188,7 +1376,7 @@ fn test_multi_address_trees() {
                 invocation: test.convert_sign_node(&SignNode::tree_fn(
                     &test.contracts[2],
                     vec![SignNode::tree_fn(&test.contracts[3], vec![])],
-                ),)
+                ),),
             },
         ]
     );
@@ -1298,7 +1486,7 @@ fn test_out_of_order_auth() {
             ],
             // Root auth happens after the sub-contract call, so don't disable
             // non-root auth.
-            false
+            false,
         ),
         vec![
             RecordedAuthPayload {
@@ -1314,7 +1502,7 @@ fn test_out_of_order_auth() {
                         )
                         .unwrap(),
                     vec![],
-                ))
+                )),
             },
             RecordedAuthPayload {
                 address: Some(test.key_to_sc_address(&test.keys[0])),
@@ -1333,7 +1521,7 @@ fn test_out_of_order_auth() {
                         )
                         .unwrap(),
                     vec![],
-                ))
+                )),
             },
         ]
     );
@@ -1710,8 +1898,8 @@ fn test_require_auth_within_check_auth() {
         )
         .err()
         .unwrap();
-    assert!(err.error.is_type(ScErrorType::Crypto));
-    assert!(err.error.is_code(ScErrorCode::InvalidInput));
+    assert!(err.error.is_type(ScErrorType::Auth));
+    assert!(err.error.is_code(ScErrorCode::InvalidAction));
 
     // Add the correct entry - now the call should pass
     auth_entries.pop();
@@ -1752,7 +1940,7 @@ fn test_require_auth_within_check_auth() {
                 .key_to_address(&test.keys[0])
                 .try_into_val(&test.host)
                 .unwrap(),
-            3333
+            3333,
         ),
         Some(3000)
     );
@@ -2674,4 +2862,88 @@ fn test_different_auth_trees_with_duplicate_addresses() {
         ],
         false,
     );
+}
+
+#[test]
+fn test_rollback_with_conditional_custom_account_auth() {
+    let test = AuthTest::setup(0, 2);
+    let account_obj = test
+        .host
+        .register_test_contract_wasm(CONDITIONAL_ACCOUNT_TEST_CONTRACT);
+    let account = Address::try_from_val(&test.host, &account_obj).unwrap();
+
+    let auth_entry_prototype = SorobanAuthorizationEntry {
+        credentials: SorobanCredentials::Address(SorobanAddressCredentials {
+            address: account.to_sc_address().unwrap(),
+            nonce: 0,
+            signature: ScVal::Void,
+            signature_expiration_ledger: 1000,
+        }),
+        root_invocation: SorobanAuthorizedInvocation {
+            function: SorobanAuthorizedFunction::ContractFn(InvokeContractArgs {
+                contract_address: test.contracts[1].to_sc_address().unwrap(),
+                function_name: "do_auth".try_into().unwrap(),
+                args: vec![
+                    ScVal::Address(account.to_sc_address().unwrap()),
+                    ScVal::U32(123),
+                ]
+                .try_into()
+                .unwrap(),
+            }),
+            sub_invocations: Default::default(),
+        },
+    };
+    let create_auth_entry = |nonce: i64| {
+        let mut entry = auth_entry_prototype.clone();
+        if let SorobanCredentials::Address(creds) = &mut entry.credentials {
+            creds.nonce = nonce;
+        } else {
+            unreachable!();
+        };
+        entry
+    };
+
+    let do_call = |auth_entries| {
+        test.host.set_authorization_entries(auth_entries).unwrap();
+        test.host.call(
+            test.contracts[0].clone().into(),
+            Symbol::try_from_val(&test.host, &"conditional_auth").unwrap(),
+            host_vec![&test.host, &account, &test.contracts[1]].into(),
+        )
+    };
+
+    // No auth entries at all - fail.
+    assert!(do_call(vec![])
+        .err()
+        .unwrap()
+        .error
+        .is_type(ScErrorType::Auth));
+    // One auth entry - should succeed and consume one nonce (from the second
+    // call in `conditional_auth` fn).
+    assert!(do_call(vec![create_auth_entry(111)]).is_ok());
+    assert_eq!(test.read_nonce_live_until(&account, 111), Some(1000));
+
+    // Two auth entries - only one will be used in the second call.
+    assert!(do_call(vec![create_auth_entry(222), create_auth_entry(333)]).is_ok());
+    assert_eq!(test.read_nonce_live_until(&account, 222), Some(1000));
+    assert_eq!(test.read_nonce_live_until(&account, 333), None);
+
+    // Call `allow` to allow first auth to pass.
+    test.host
+        .call(
+            account.clone().into(),
+            Symbol::try_from_small_str("allow").unwrap(),
+            host_vec![&test.host].into(),
+        )
+        .unwrap();
+    assert!(do_call(vec![
+        create_auth_entry(444),
+        create_auth_entry(555),
+        create_auth_entry(666)
+    ])
+    .is_ok());
+    assert_eq!(test.read_nonce_live_until(&account, 444), Some(1000));
+    assert_eq!(test.read_nonce_live_until(&account, 555), Some(1000));
+    // Third call still can't succeed and won't consume nonce.
+    assert_eq!(test.read_nonce_live_until(&account, 666), None);
 }

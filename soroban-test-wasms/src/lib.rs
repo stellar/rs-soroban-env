@@ -81,6 +81,8 @@ mod curr {
     pub const WRITE_BYTES: &[u8] =
         include_bytes!("../wasm-workspace/opt/curr/soroban_write_upgrade_bytes_contract.wasm")
             .as_slice();
+    pub const CONDITIONAL_ACCOUNT_TEST_CONTRACT: &[u8] =
+        include_bytes!("../wasm-workspace/opt/curr/test_conditional_account.wasm").as_slice();
 }
 
 #[cfg(feature = "next")]
@@ -122,4 +124,6 @@ mod next {
     pub const WRITE_BYTES: &[u8] =
         include_bytes!("../wasm-workspace/opt/next/soroban_write_upgrade_bytes_contract.wasm")
             .as_slice();
+    pub const CONDITIONAL_ACCOUNT_TEST_CONTRACT: &[u8] =
+        include_bytes!("../wasm-workspace/opt/next/test_conditional_account.wasm").as_slice();
 }
