@@ -6,7 +6,6 @@ use soroban_env_common::{
 };
 
 use crate::{
-    budget::AsBudget,
     host::metered_clone::{MeteredAlloc, MeteredClone, MeteredContainer, MeteredIterator},
     Host, HostError, Val,
 };
@@ -57,9 +56,7 @@ impl Host {
                     },
                     self,
                 )?;
-                self.with_events_mut(|events| {
-                    events.record(InternalEvent::Diagnostic(de), self.as_budget())
-                })
+                self.with_events_mut(|events| events.record(InternalEvent::Diagnostic(de), self))
             },
             || (),
         );
@@ -120,7 +117,7 @@ impl Host {
                     },
                     self,
                 )?;
-                events.record(InternalEvent::Diagnostic(ce), self.as_budget())
+                events.record(InternalEvent::Diagnostic(ce), self)
             },
             || (),
         )

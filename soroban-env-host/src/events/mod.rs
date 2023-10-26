@@ -16,7 +16,7 @@ use soroban_env_common::{
     Error, Val, VecObject,
 };
 
-use crate::{budget::AsBudget, Host, HostError};
+use crate::{Host, HostError};
 
 /// The external representation of a host event.
 #[derive(Clone, Debug)]
@@ -159,8 +159,6 @@ impl Host {
             topics,
             data,
         };
-        self.with_events_mut(|events| {
-            Ok(events.record(InternalEvent::Contract(ce), self.as_budget()))
-        })?
+        self.with_events_mut(|events| Ok(events.record(InternalEvent::Contract(ce), self)))?
     }
 }

@@ -4,7 +4,7 @@ use soroban_env_common::{BytesObject, VecObject};
 
 use super::{Events, HostEvent};
 use crate::{
-    budget::Budget,
+    budget::AsBudget,
     host::metered_clone::{MeteredClone, MeteredContainer, MeteredIterator},
     xdr,
     xdr::ScVal,
@@ -76,7 +76,7 @@ pub enum InternalDiagnosticArg {
 }
 
 fn externalize_args(host: &Host, args: &[InternalDiagnosticArg]) -> Result<Vec<ScVal>, HostError> {
-    if !host.is_debug()? {
+    if !host.as_budget().is_in_shadow_mode()? {
         return Err(host.err(
             xdr::ScErrorType::Events,
             xdr::ScErrorCode::InternalError,
@@ -95,7 +95,7 @@ fn externalize_args(host: &Host, args: &[InternalDiagnosticArg]) -> Result<Vec<S
 
 impl InternalDiagnosticEvent {
     fn to_xdr(&self, host: &Host) -> Result<xdr::ContractEvent, HostError> {
-        if !host.is_debug()? {
+        if !host.as_budget().is_in_shadow_mode()? {
             return Err(host.err(
                 xdr::ScErrorType::Events,
                 xdr::ScErrorCode::InternalError,
@@ -145,14 +145,14 @@ pub(crate) struct InternalEventsBuffer {
 
 impl InternalEventsBuffer {
     // Records an InternalEvent
-    pub fn record(&mut self, e: InternalEvent, budget: &Budget) -> Result<(), HostError> {
+    pub fn record(&mut self, e: InternalEvent, host: &Host) -> Result<(), HostError> {
         let mut metered_internal_event_push = |e: InternalEvent| -> Result<(), HostError> {
             // Metering: we use the cost of instantiating a size=1 `Vec` as an
             // estimate for the cost `Vec.push(event)`.  Because the buffer length
             // may be different on different instances due to diagnostic events
             // and we need a deterministic cost across all instances, the cost
             // needs to be amortized and buffer size-independent.
-            Vec::<(InternalEvent, EventError)>::charge_bulk_init_cpy(1, budget)?;
+            Vec::<(InternalEvent, EventError)>::charge_bulk_init_cpy(1, host)?;
             self.vec.push((e, EventError::FromSuccessfulCall));
             Ok(())
         };
@@ -160,7 +160,7 @@ impl InternalEventsBuffer {
         match &e {
             InternalEvent::Contract(_) => metered_internal_event_push(e)?,
             InternalEvent::Diagnostic(_) => {
-                budget.with_shadow_mode(|| metered_internal_event_push(e), || ())
+                host.with_debug_mode(|| metered_internal_event_push(e), || ())
             }
         }
 

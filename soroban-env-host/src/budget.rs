@@ -710,6 +710,10 @@ impl Budget {
         res.unwrap_or_else(|_| fallback())
     }
 
+    pub(crate) fn is_in_shadow_mode(&self) -> Result<bool, HostError> {
+        Ok(self.0.try_borrow_or_err()?.is_in_shadow_mode)
+    }
+
     pub(crate) fn set_shadow_limits(&self, cpu: u64, mem: u64) -> Result<(), HostError> {
         self.0.try_borrow_mut_or_err()?.cpu_insns.shadow_limit = cpu;
         self.0.try_borrow_mut_or_err()?.mem_bytes.shadow_limit = mem;
