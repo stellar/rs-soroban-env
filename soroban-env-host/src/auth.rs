@@ -1312,7 +1312,14 @@ impl InvocationTracker {
             self.root_exhausted_frame = Some(self.invocation_id_in_call_stack.len() - 1);
         }
         if frame_index.is_some() {
-            *self.invocation_id_in_call_stack.last_mut().unwrap() = frame_index;
+            *self.invocation_id_in_call_stack.last_mut().ok_or_else(|| {
+                host.err(
+                    ScErrorType::Auth,
+                    ScErrorCode::InternalError,
+                    "invalid invocation_id_in_call_stack",
+                    &[],
+                )
+            })? = frame_index;
         }
         Ok(frame_index.is_some())
     }

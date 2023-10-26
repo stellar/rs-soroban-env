@@ -151,9 +151,16 @@ impl Host {
         if orp.is_none() {
             self.persist_instance_storage()?;
         }
-        self.try_borrow_context_mut()?
-            .pop()
-            .expect("unmatched host frame push/pop");
+
+        if self.try_borrow_context_mut()?.pop().is_none() {
+            return Err(self.err(
+                ScErrorType::Context,
+                ScErrorCode::InternalError,
+                "unmatched host frame push/pop",
+                &[],
+            ));
+        }
+
         self.try_borrow_authorization_manager()?.pop_frame(self)?;
 
         #[cfg(any(test, feature = "recording_auth"))]
