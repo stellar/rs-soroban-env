@@ -467,6 +467,25 @@ impl Host {
         self.0.budget.charge(ty, input)
     }
 
+    pub fn set_shadow_budget_limits(&self, cpu: u64, mem: u64) -> Result<(), HostError> {
+        self.0.budget.set_shadow_limits(cpu, mem)
+    }
+
+    /// Wraps the `budget.with_internal_mode` call with the check `host.is_debug`.
+    /// This wrapper should be used for any work that is part of the production
+    /// workflow but in debug mode, i.e. diagnostic related work (logging, or any
+    /// operations on diagnostic event).
+    pub(crate) fn with_debug_mode<T, F, E>(&self, f: F, e: E) -> T
+    where
+        F: FnOnce() -> Result<T, HostError>,
+        E: Fn() -> T,
+    {
+        if self.is_debug().ok() != Some(true) {
+            return e();
+        }
+        self.as_budget().with_shadow_mode(f, e)
+    }
+
     /// Accept a _unique_ (refcount = 1) host reference and destroy the
     /// underlying [`HostImpl`], returning its finalized components containing
     /// processing side effects  to the caller as a tuple wrapped in `Ok(...)`.
@@ -729,7 +748,8 @@ impl EnvBase for Host {
     }
 
     fn log_from_slice(&self, msg: &str, vals: &[Val]) -> Result<Void, HostError> {
-        self.log_diagnostics(msg, vals).map(|_| Void::from(()))
+        self.log_diagnostics(msg, vals);
+        Ok(Void::from(()))
     }
 }
 
@@ -747,15 +767,18 @@ impl VmCallerEnv for Host {
         vals_pos: U32Val,
         vals_len: U32Val,
     ) -> Result<Void, HostError> {
-        if self.is_debug()? {
-            // FIXME: change to a "debug budget" https://github.com/stellar/rs-soroban-env/issues/1061
-            self.as_budget().with_free_budget(|| {
+        self.with_debug_mode(
+            || {
                 let VmSlice { vm, pos, len } = self.decode_vmslice(msg_pos, msg_len)?;
+                Vec::<u8>::charge_bulk_init_cpy(len as u64, self)?;
                 let mut msg: Vec<u8> = vec![0u8; len as usize];
                 self.metered_vm_read_bytes_from_linear_memory(vmcaller, &vm, pos, &mut msg)?;
+                // `String::from_utf8_lossy` iternally allocates a `String` which is a `Vec<u8>`
+                Vec::<u8>::charge_bulk_init_cpy(len as u64, self)?;
                 let msg = String::from_utf8_lossy(&msg);
 
                 let VmSlice { vm, pos, len } = self.decode_vmslice(vals_pos, vals_len)?;
+                Vec::<Val>::charge_bulk_init_cpy((len + 1) as u64, self)?;
                 let mut vals: Vec<Val> = vec![Val::VOID.to_val(); len as usize];
                 // charge for conversion from bytes to `Val`s
                 self.charge_budget(ContractCostType::MemCpy, Some(len.saturating_mul(8) as u64))?;
@@ -766,10 +789,12 @@ impl VmCallerEnv for Host {
                     vals.as_mut_slice(),
                     |buf| self.relative_to_absolute(Val::from_payload(u64::from_le_bytes(*buf))),
                 )?;
+                self.log_diagnostics(&msg, &vals);
+                Ok(())
+            },
+            || (),
+        );
 
-                self.log_diagnostics(&msg, &vals)
-            })?;
-        }
         Ok(Val::VOID)
     }
 

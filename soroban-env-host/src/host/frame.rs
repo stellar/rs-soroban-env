@@ -379,16 +379,19 @@ impl Host {
         res
     }
 
-    /// Returns [`Hash`] contract ID from the VM frame at the top of the context
-    /// stack, or a [`HostError`] if the context stack is empty or has a non-VM
-    /// frame at its top.
+    /// Inspects the frame at the top of the context and returns the contract ID
+    /// if it exists. Returns `Ok(None)` if the context stack is empty or has a
+    /// non-contract frame on top.
     pub(crate) fn get_current_contract_id_opt_internal(&self) -> Result<Option<Hash>, HostError> {
-        self.with_current_frame(|frame| match frame {
-            Frame::ContractVM { vm, .. } => Ok(Some(vm.contract_id.metered_clone(self)?)),
-            Frame::HostFunction(_) => Ok(None),
-            Frame::StellarAssetContract(id, ..) => Ok(Some(id.metered_clone(self)?)),
-            #[cfg(any(test, feature = "testutils"))]
-            Frame::TestContract(tc) => Ok(Some(tc.id.metered_clone(self)?)),
+        self.with_current_frame_opt(|opt_frame| match opt_frame {
+            Some(frame) => match frame {
+                Frame::ContractVM { vm, .. } => Ok(Some(vm.contract_id.metered_clone(self)?)),
+                Frame::HostFunction(_) => Ok(None),
+                Frame::StellarAssetContract(id, ..) => Ok(Some(id.metered_clone(self)?)),
+                #[cfg(any(test, feature = "testutils"))]
+                Frame::TestContract(tc) => Ok(Some(tc.id.metered_clone(self)?)),
+            },
+            None => Ok(None),
         })
     }
 
@@ -535,7 +538,7 @@ impl Host {
             }
         }
 
-        self.fn_call_diagnostics(id, &func, args)?;
+        self.fn_call_diagnostics(id, &func, args);
 
         // Try dispatching the contract to the compiled-in registred
         // implmentation. Only the contracts with the special (empty) executable
@@ -583,7 +586,7 @@ impl Host {
                         testutils::call_with_suppressed_panic_hook(closure);
                     match res {
                         Ok(Some(val)) => {
-                            self.fn_return_diagnostics(id, &func, &val)?;
+                            self.fn_return_diagnostics(id, &func, &val);
                             Ok(val)
                         }
                         Ok(None) => Err(self.err(
@@ -655,7 +658,7 @@ impl Host {
         let res = self.call_contract_fn(id, &func, args);
 
         match &res {
-            Ok(res) => self.fn_return_diagnostics(id, &func, res)?,
+            Ok(res) => self.fn_return_diagnostics(id, &func, res),
             Err(_err) => {}
         }
 
@@ -764,16 +767,14 @@ impl Host {
             }
         })?;
         if updated_instance_storage.is_some() {
-            let contract_id = self
-                .get_current_contract_id_opt_internal()?
-                .ok_or_else(|| {
-                    self.err(
-                        ScErrorType::Context,
-                        ScErrorCode::InternalError,
-                        "unexpected missing contract for instance storage",
-                        &[],
-                    )
-                })?;
+            let contract_id = self.get_current_contract_id_internal().map_err(|_| {
+                self.err(
+                    ScErrorType::Context,
+                    ScErrorCode::InternalError,
+                    "unexpected missing contract for instance storage",
+                    &[],
+                )
+            })?;
             let key = self.contract_instance_ledger_key(&contract_id)?;
 
             self.store_contract_instance(None, updated_instance_storage, contract_id, &key)?;

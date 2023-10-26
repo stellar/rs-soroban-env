@@ -1,3 +1,10 @@
+mod dimension;
+mod model;
+mod util;
+mod wasmi_helper;
+
+pub use model::COST_MODEL_LIN_TERM_SCALE_BITS;
+
 use std::{
     cell::{RefCell, RefMut},
     fmt::{Debug, Display},
@@ -6,343 +13,18 @@ use std::{
 
 use crate::{
     host::error::TryBorrowOrErr,
-    xdr::{
-        ContractCostParamEntry, ContractCostParams, ContractCostType, DepthLimiter, ScErrorCode,
-        ScErrorType,
-    },
+    xdr::{ContractCostParams, ContractCostType, DepthLimiter, ScErrorCode, ScErrorType},
     Error, Host, HostError, DEFAULT_HOST_DEPTH_LIMIT,
 };
 
-use wasmi::{errors, FuelCosts, ResourceLimiter};
+use dimension::{BudgetDimension, IsCpu, IsShadowMode};
+use model::ScaledU64;
+use wasmi_helper::FuelConfig;
 
 // These are some sane values, however the embedder should typically customize
 // these to match the network config.
 const DEFAULT_CPU_INSN_LIMIT: u64 = 100_000_000;
 const DEFAULT_MEM_BYTES_LIMIT: u64 = 40 * 1024 * 1024; // 40MB
-
-/// The number of bits to scale the linear term by. The linear coefficient has
-/// been scaled by this factor during parameter fitting to retain more significant
-/// digits. Thus to get the cost from the raw input, we need to scale the result
-/// back by the same factor.
-pub const COST_MODEL_LIN_TERM_SCALE_BITS: u32 = 7;
-
-/// We provide a "cost model" object that evaluates a linear expression:
-///
-///    f(x) = a + b * Option<x>
-///
-/// Where a, b are "fixed" parameters at construction time (extracted from an
-/// on-chain cost schedule, so technically not _totally_ fixed) and Option<x>
-/// is some abstract input variable -- say, event counts or object sizes --
-/// provided at runtime. If the input cannot be defined, i.e., the cost is
-/// constant, input-independent, then pass in `None` as the input.
-///
-/// The same `CostModel` type, i.e. `CostType` (applied to different parameters
-/// and variables) is used for calculating memory as well as CPU time.
-///
-/// The various `CostType`s are carefully choosen such that 1. their underlying
-/// cost characteristics (both cpu and memory) at runtime can be described
-/// sufficiently by a linear model and 2. they together encompass the vast
-/// majority of available operations done by the `env` -- the host and the VM.
-///
-/// The parameters for a `CostModel` are calibrated empirically. See this crate's
-/// benchmarks for more details.
-pub trait HostCostModel {
-    fn evaluate(&self, input: Option<u64>) -> Result<u64, HostError>;
-
-    #[cfg(test)]
-    fn reset(&mut self);
-}
-
-/// A helper type that wraps an u64 to signify the wrapped value have been scaled.
-#[derive(Clone)]
-pub(crate) struct ScaledU64(u64);
-
-impl ScaledU64 {
-    pub const fn unscale(self) -> u64 {
-        self.0 >> COST_MODEL_LIN_TERM_SCALE_BITS
-    }
-
-    #[cfg(test)]
-    pub const fn from_unscaled_u64(u: u64) -> Self {
-        ScaledU64(u << COST_MODEL_LIN_TERM_SCALE_BITS)
-    }
-
-    pub const fn is_zero(&self) -> bool {
-        self.0 == 0
-    }
-
-    pub const fn saturating_mul(&self, rhs: u64) -> Self {
-        ScaledU64(self.0.saturating_mul(rhs))
-    }
-}
-
-impl Display for ScaledU64 {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-impl Debug for ScaledU64 {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Scaled({})", self.0)
-    }
-}
-
-#[derive(Clone, Debug)]
-pub(crate) struct MeteredCostComponent {
-    const_term: u64,
-    lin_term: ScaledU64,
-}
-
-impl TryFrom<&ContractCostParamEntry> for MeteredCostComponent {
-    type Error = HostError;
-
-    fn try_from(entry: &ContractCostParamEntry) -> Result<Self, Self::Error> {
-        if entry.const_term < 0 || entry.linear_term < 0 {
-            return Err((ScErrorType::Context, ScErrorCode::InvalidInput).into());
-        }
-        Ok(MeteredCostComponent {
-            const_term: entry.const_term as u64,
-            lin_term: ScaledU64(entry.linear_term as u64),
-        })
-    }
-}
-
-impl TryFrom<ContractCostParamEntry> for MeteredCostComponent {
-    type Error = HostError;
-
-    fn try_from(entry: ContractCostParamEntry) -> Result<Self, Self::Error> {
-        Self::try_from(&entry)
-    }
-}
-
-impl HostCostModel for MeteredCostComponent {
-    fn evaluate(&self, input: Option<u64>) -> Result<u64, HostError> {
-        let const_term = self.const_term;
-        match input {
-            Some(input) => {
-                let mut res = const_term;
-                if !self.lin_term.is_zero() {
-                    let lin_cost = self.lin_term.saturating_mul(input).unscale();
-                    res = res.saturating_add(lin_cost)
-                }
-                Ok(res)
-            }
-            None => Ok(const_term),
-        }
-    }
-
-    #[cfg(test)]
-    fn reset(&mut self) {
-        self.const_term = 0;
-        self.lin_term = ScaledU64(0);
-    }
-}
-
-#[derive(Clone)]
-struct BudgetDimension {
-    /// A set of cost models that map input values (eg. event counts, object
-    /// sizes) from some CostType to whatever concrete resource type is being
-    /// tracked by this dimension (eg. cpu or memory). CostType enum values are
-    /// used as indexes into this vector, to make runtime lookups as cheap as
-    /// possible.
-    cost_models: Vec<MeteredCostComponent>,
-
-    /// The limit against-which the count is compared to decide if we're
-    /// over budget.
-    limit: u64,
-
-    /// Tracks the output value from individual cost models
-    counts: Vec<u64>,
-
-    /// Tracks the sum of _output_ values from the cost model, for purposes
-    /// of comparing to limit.
-    total_count: u64,
-}
-
-impl Debug for BudgetDimension {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(
-            f,
-            "limit: {}, total_count: {}",
-            self.limit, self.total_count
-        )?;
-
-        for ct in ContractCostType::variants() {
-            writeln!(f, "CostType {:?}, count {}", ct, self.counts[ct as usize])?;
-            writeln!(f, "model: {:?}", self.cost_models[ct as usize])?;
-        }
-        Ok(())
-    }
-}
-
-impl BudgetDimension {
-    fn new() -> Self {
-        let mut bd = Self {
-            cost_models: Default::default(),
-            limit: Default::default(),
-            counts: Default::default(),
-            total_count: Default::default(),
-        };
-        for _ct in ContractCostType::variants() {
-            bd.cost_models.push(MeteredCostComponent {
-                const_term: 0,
-                lin_term: ScaledU64(0),
-            });
-            bd.counts.push(0);
-        }
-        bd
-    }
-
-    fn try_from_config(cost_params: ContractCostParams) -> Result<Self, HostError> {
-        let cost_models = cost_params
-            .0
-            .iter()
-            .map(|p| MeteredCostComponent::try_from(p))
-            .collect::<Result<Vec<MeteredCostComponent>, HostError>>()?;
-
-        Ok(Self {
-            cost_models,
-            limit: Default::default(),
-            counts: vec![0; cost_params.0.len()],
-            total_count: Default::default(),
-        })
-    }
-
-    pub(crate) fn get_cost_model(&self, ty: ContractCostType) -> &MeteredCostComponent {
-        &self.cost_models[ty as usize]
-    }
-
-    pub(crate) fn get_cost_model_mut(&mut self, ty: ContractCostType) -> &mut MeteredCostComponent {
-        &mut self.cost_models[ty as usize]
-    }
-
-    fn get_total_count(&self) -> u64 {
-        self.total_count
-    }
-
-    fn get_remaining(&self) -> u64 {
-        self.limit.saturating_sub(self.total_count)
-    }
-
-    fn reset(&mut self, limit: u64) {
-        self.limit = limit;
-        self.total_count = 0;
-        for v in &mut self.counts {
-            *v = 0;
-        }
-    }
-
-    pub fn is_over_budget(&self) -> bool {
-        self.total_count > self.limit
-    }
-
-    /// Performs a bulk charge to the budget under the specified `CostType`.
-    /// If the input is `Some`, then the total input charged is iterations *
-    /// input, assuming all batched units have the same input size. If input
-    /// is `None`, the input is ignored and the model is treated as a constant
-    /// model, and amount charged is iterations * const_term.
-    fn charge(
-        &mut self,
-        ty: ContractCostType,
-        iterations: u64,
-        input: Option<u64>,
-        _is_cpu: bool,
-    ) -> Result<(), HostError> {
-        let cm = self.get_cost_model(ty);
-        let amount = cm.evaluate(input)?.saturating_mul(iterations);
-
-        #[cfg(all(not(target_family = "wasm"), feature = "tracy"))]
-        if _is_cpu {
-            let _span = tracy_span!("charge");
-            _span.emit_text(ty.name());
-            _span.emit_value(amount);
-        }
-
-        let cell = self
-            .counts
-            .get_mut(ty as usize)
-            .ok_or_else(|| HostError::from((ScErrorType::Budget, ScErrorCode::InternalError)))?;
-        *cell = cell.saturating_add(amount);
-        self.total_count = self.total_count.saturating_add(amount);
-        if self.is_over_budget() {
-            Err((ScErrorType::Budget, ScErrorCode::ExceededLimit).into())
-        } else {
-            Ok(())
-        }
-    }
-
-    // Resets all model parameters to zero (so that we can override and test individual ones later).
-    #[cfg(test)]
-    pub fn reset_models(&mut self) {
-        for model in &mut self.cost_models {
-            model.reset()
-        }
-    }
-}
-
-/// This is a subset of `wasmi::FuelCosts` which are configurable, because it
-/// doesn't derive all the traits we want. These fields (coarsely) define the
-/// relative costs of different wasm instruction types and are for wasmi internal
-/// fuel metering use only. Units are in "fuels".
-#[derive(Clone)]
-pub(crate) struct FuelConfig {
-    /// The base fuel costs for all instructions.
-    pub base: u64,
-    /// The fuel cost for instruction operating on Wasm entities.
-    ///
-    /// # Note
-    ///
-    /// A Wasm entitiy is one of `func`, `global`, `memory` or `table`.
-    /// Those instructions are usually a bit more costly since they need
-    /// multiplie indirect accesses through the Wasm instance and store.
-    pub entity: u64,
-    /// The fuel cost offset for `memory.load` instructions.
-    pub load: u64,
-    /// The fuel cost offset for `memory.store` instructions.
-    pub store: u64,
-    /// The fuel cost offset for `call` and `call_indirect` instructions.
-    pub call: u64,
-}
-
-// These values are calibrated and set by us.
-impl Default for FuelConfig {
-    fn default() -> Self {
-        FuelConfig {
-            base: 1,
-            entity: 2,
-            load: 1,
-            store: 1,
-            call: 41,
-        }
-    }
-}
-
-impl FuelConfig {
-    // These values are the "factory default" and used for calibration.
-    #[cfg(any(test, feature = "testutils"))]
-    fn reset(&mut self) {
-        self.base = 1;
-        self.entity = 1;
-        self.load = 1;
-        self.store = 1;
-        self.call = 1;
-    }
-}
-
-pub(crate) struct WasmiLimits {
-    pub table_elements: u32,
-    pub instances: usize,
-    pub tables: usize,
-    pub memories: usize,
-}
-
-pub(crate) const WASMI_LIMITS_CONFIG: WasmiLimits = WasmiLimits {
-    table_elements: 1000,
-    instances: 1,
-    tables: 1,
-    memories: 1,
-};
 
 #[derive(Clone, Default)]
 struct MeterTracker {
@@ -355,6 +37,7 @@ struct MeterTracker {
 }
 
 impl MeterTracker {
+    #[cfg(any(test, feature = "testutils"))]
     fn reset(&mut self) {
         self.count = 0;
         for tracker in &mut self.cost_tracker {
@@ -372,9 +55,9 @@ impl MeterTracker {
 pub(crate) struct BudgetImpl {
     cpu_insns: BudgetDimension,
     mem_bytes: BudgetDimension,
-    /// For the purpose o calibration and reporting; not used for budget-limiting per se.
+    /// For the purpose of calibration and reporting; not used for budget-limiting per se.
     tracker: MeterTracker,
-    enabled: bool,
+    is_in_shadow_mode: bool,
     fuel_config: FuelConfig,
     depth_limit: u32,
 }
@@ -391,7 +74,7 @@ impl BudgetImpl {
             cpu_insns: BudgetDimension::try_from_config(cpu_cost_params)?,
             mem_bytes: BudgetDimension::try_from_config(mem_cost_params)?,
             tracker: Default::default(),
-            enabled: true,
+            is_in_shadow_mode: false,
             fuel_config: Default::default(),
             depth_limit: DEFAULT_HOST_DEPTH_LIMIT,
         };
@@ -453,28 +136,39 @@ impl BudgetImpl {
         iterations: u64,
         input: Option<u64>,
     ) -> Result<(), HostError> {
-        if !self.enabled {
-            return Ok(());
+        if !self.is_in_shadow_mode {
+            // update tracker for reporting
+            self.tracker.count = self.tracker.count.saturating_add(1);
+            let (t_iters, t_inputs) = &mut self
+                .tracker
+                .cost_tracker
+                .get_mut(ty as usize)
+                .ok_or_else(|| {
+                    HostError::from((ScErrorType::Budget, ScErrorCode::InternalError))
+                })?;
+            *t_iters = t_iters.saturating_add(iterations);
+            match (t_inputs, input) {
+                (None, None) => (),
+                (Some(t), Some(i)) => *t = t.saturating_add(i.saturating_mul(iterations)),
+                // internal logic error, a wrong cost type has been passed in
+                _ => return Err((ScErrorType::Budget, ScErrorCode::InternalError).into()),
+            };
         }
 
-        // update tracker for reporting
-        self.tracker.count = self.tracker.count.saturating_add(1);
-        let (t_iters, t_inputs) = &mut self
-            .tracker
-            .cost_tracker
-            .get_mut(ty as usize)
-            .ok_or_else(|| HostError::from((ScErrorType::Budget, ScErrorCode::InternalError)))?;
-        *t_iters = t_iters.saturating_add(iterations);
-        match (t_inputs, input) {
-            (None, None) => (),
-            (Some(t), Some(i)) => *t = t.saturating_add(i.saturating_mul(iterations)),
-            // internal logic error, a wrong cost type has been passed in
-            _ => return Err((ScErrorType::Budget, ScErrorCode::InternalError).into()),
-        };
-
-        // do the actual budget charging
-        self.cpu_insns.charge(ty, iterations, input, true)?;
-        self.mem_bytes.charge(ty, iterations, input, false)
+        self.cpu_insns.charge(
+            ty,
+            iterations,
+            input,
+            IsCpu(true),
+            IsShadowMode(self.is_in_shadow_mode),
+        )?;
+        self.mem_bytes.charge(
+            ty,
+            iterations,
+            input,
+            IsCpu(false),
+            IsShadowMode(self.is_in_shadow_mode),
+        )
     }
 
     fn get_wasmi_fuel_remaining(&self) -> Result<u64, HostError> {
@@ -506,7 +200,7 @@ impl Default for BudgetImpl {
             cpu_insns: BudgetDimension::new(),
             mem_bytes: BudgetDimension::new(),
             tracker: Default::default(),
-            enabled: true,
+            is_in_shadow_mode: false,
             fuel_config: Default::default(),
             depth_limit: DEFAULT_HOST_DEPTH_LIMIT,
         };
@@ -779,7 +473,22 @@ impl Debug for BudgetImpl {
             )?;
         }
         writeln!(f, "{:=<165}", "")?;
+        writeln!(
+            f,
+            "Internal details (diagnostics info, does not affect fees) "
+        )?;
         writeln!(f, "Total # times meter was called: {}", self.tracker.count,)?;
+        writeln!(
+            f,
+            "Shadow cpu limit: {}; used: {}",
+            self.cpu_insns.shadow_limit, self.cpu_insns.shadow_total_count
+        )?;
+        writeln!(
+            f,
+            "Shadow mem limit: {}; used: {}",
+            self.mem_bytes.shadow_limit, self.mem_bytes.shadow_total_count
+        )?;
+        writeln!(f, "{:=<165}", "")?;
         Ok(())
     }
 }
@@ -956,24 +665,59 @@ impl Budget {
         self.0.try_borrow_mut_or_err()?.charge(ty, 1, input)
     }
 
-    pub fn with_free_budget<F, T>(&self, f: F) -> Result<T, HostError>
+    /// Runs a user provided closure in shadow mode -- all metering is done through
+    /// the shadow budget.
+    ///
+    /// Because the shadow mode is optional (depending on the configuration,
+    /// nodes may or may not trigger this path), any error occured during execution
+    /// is swallowed by running a fallback closure provided by the caller.
+    ///
+    /// # Arguments:
+    /// * `f` - A fallible closure to be run in shadow mode. If error occurs,
+    ///   fallback closure is run immediately afterwards to replace it
+    ///
+    /// * `fallback` - A fallback closure to be run in case of any error occuring
+    ///
+    /// # Returns:
+    ///
+    /// Returns a value of type `T`. Any errors arising during the execution are
+    /// suppressed.
+    pub(crate) fn with_shadow_mode<T, F, E>(&self, f: F, fallback: E) -> T
     where
         F: FnOnce() -> Result<T, HostError>,
+        E: FnOnce() -> T,
     {
         let mut prev = false;
-        self.mut_budget(|mut b| {
-            prev = b.enabled;
-            b.enabled = false;
-            Ok(())
-        })?;
 
-        let res = f();
+        let mut res = self
+            .mut_budget(|mut b| {
+                prev = b.is_in_shadow_mode;
+                b.is_in_shadow_mode = true;
+                b.cpu_insns.check_budget_limit(true)?;
+                b.mem_bytes.check_budget_limit(true)
+            })
+            .and_then(|_| f());
 
-        self.mut_budget(|mut b| {
-            b.enabled = prev;
+        if let Err(_) = self.mut_budget(|mut b| {
+            b.is_in_shadow_mode = prev;
             Ok(())
-        })?;
-        res
+        }) {
+            res = Err(
+                Error::from_type_and_code(ScErrorType::Budget, ScErrorCode::InternalError).into(),
+            );
+        }
+
+        res.unwrap_or_else(|_| fallback())
+    }
+
+    pub(crate) fn is_in_shadow_mode(&self) -> Result<bool, HostError> {
+        Ok(self.0.try_borrow_or_err()?.is_in_shadow_mode)
+    }
+
+    pub(crate) fn set_shadow_limits(&self, cpu: u64, mem: u64) -> Result<(), HostError> {
+        self.0.try_borrow_mut_or_err()?.cpu_insns.shadow_limit = cpu;
+        self.0.try_borrow_mut_or_err()?.mem_bytes.shadow_limit = mem;
+        Ok(())
     }
 
     pub fn get_tracker(&self, ty: ContractCostType) -> Result<(u64, Option<u64>), HostError> {
@@ -1002,210 +746,19 @@ impl Budget {
         Ok(self.0.try_borrow_or_err()?.mem_bytes.get_remaining())
     }
 
-    pub fn reset_default(&self) -> Result<(), HostError> {
-        *self.0.try_borrow_mut_or_err()? = BudgetImpl::default();
-        Ok(())
-    }
-
-    pub fn reset_unlimited(&self) -> Result<(), HostError> {
-        self.reset_unlimited_cpu()?;
-        self.reset_unlimited_mem()?;
-        Ok(())
-    }
-
-    pub fn reset_unlimited_cpu(&self) -> Result<(), HostError> {
-        self.mut_budget(|mut b| {
-            b.cpu_insns.reset(u64::MAX);
-            Ok(())
-        })?; // panic means multiple-mut-borrow bug
-        self.reset_tracker()
-    }
-
-    pub fn reset_unlimited_mem(&self) -> Result<(), HostError> {
-        self.mut_budget(|mut b| {
-            b.mem_bytes.reset(u64::MAX);
-            Ok(())
-        })?;
-        self.reset_tracker()
-    }
-
-    pub fn reset_tracker(&self) -> Result<(), HostError> {
-        self.0.try_borrow_mut_or_err()?.tracker.reset();
-        Ok(())
-    }
-
-    pub fn reset_limits(&self, cpu: u64, mem: u64) -> Result<(), HostError> {
-        self.mut_budget(|mut b| {
-            b.cpu_insns.reset(cpu);
-            b.mem_bytes.reset(mem);
-            Ok(())
-        })?;
-        self.reset_tracker()
-    }
-
-    #[cfg(test)]
-    pub fn reset_models(&self) -> Result<(), HostError> {
-        self.mut_budget(|mut b| {
-            b.cpu_insns.reset_models();
-            b.mem_bytes.reset_models();
-            Ok(())
-        })
-    }
-
-    #[cfg(test)]
-    pub(crate) fn override_model_with_scaled_params(
-        &self,
-        ty: ContractCostType,
-        const_cpu: u64,
-        lin_cpu: ScaledU64,
-        const_mem: u64,
-        lin_mem: ScaledU64,
-    ) -> Result<(), HostError> {
-        let mut bgt = self.0.try_borrow_mut_or_err()?;
-
-        let cpu_model = bgt.cpu_insns.get_cost_model_mut(ty);
-        cpu_model.const_term = const_cpu;
-        cpu_model.lin_term = lin_cpu;
-
-        let mem_model = bgt.mem_bytes.get_cost_model_mut(ty);
-        mem_model.const_term = const_mem;
-        mem_model.lin_term = lin_mem;
-        Ok(())
-    }
-
-    #[cfg(test)]
-    pub(crate) fn override_model_with_unscaled_params(
-        &self,
-        ty: ContractCostType,
-        const_cpu: u64,
-        lin_cpu: u64,
-        const_mem: u64,
-        lin_mem: u64,
-    ) -> Result<(), HostError> {
-        self.override_model_with_scaled_params(
-            ty,
-            const_cpu,
-            ScaledU64::from_unscaled_u64(lin_cpu),
-            const_mem,
-            ScaledU64::from_unscaled_u64(lin_mem),
-        )
-    }
-
-    #[cfg(test)]
-    pub(crate) fn track_wasm_mem_alloc(&self, delta: u64) -> Result<(), HostError> {
-        let mut bgt = self.0.try_borrow_mut_or_err()?;
-        bgt.tracker.wasm_memory = bgt.tracker.wasm_memory.saturating_add(delta);
-        Ok(())
-    }
-
-    #[cfg(test)]
-    pub fn get_wasm_mem_alloc(&self) -> Result<u64, HostError> {
-        Ok(self.0.try_borrow_or_err()?.tracker.wasm_memory)
-    }
-
-    /// Resets the `FuelConfig` we pass into Wasmi before running calibration.
-    /// Wasmi instruction calibration requires running the same Wasmi insn
-    /// a fixed number of times, record their actual cpu and mem consumption, then
-    /// divide those numbers by the number of iterations, which is the fuel count.
-    /// Fuel count is kept tracked on the Wasmi side, based on the `FuelConfig`
-    /// of a specific fuel category. In order to get the correct, unscaled fuel
-    /// count, we have to preset all the `FuelConfig` entries to 1.
-    #[cfg(any(test, feature = "testutils"))]
-    pub fn reset_fuel_config(&self) -> Result<(), HostError> {
-        self.0.try_borrow_mut_or_err()?.fuel_config.reset();
-        Ok(())
-    }
-
     pub(crate) fn get_wasmi_fuel_remaining(&self) -> Result<u64, HostError> {
         self.0.try_borrow_mut_or_err()?.get_wasmi_fuel_remaining()
     }
 
     // generate a wasmi fuel cost schedule based on our calibration
-    pub(crate) fn wasmi_fuel_costs(&self) -> Result<FuelCosts, HostError> {
+    pub(crate) fn wasmi_fuel_costs(&self) -> Result<wasmi::FuelCosts, HostError> {
         let config = &self.0.try_borrow_or_err()?.fuel_config;
-        let mut costs = FuelCosts::default();
+        let mut costs = wasmi::FuelCosts::default();
         costs.base = config.base;
         costs.entity = config.entity;
         costs.load = config.load;
         costs.store = config.store;
         costs.call = config.call;
         Ok(costs)
-    }
-}
-
-impl ResourceLimiter for Host {
-    fn memory_growing(
-        &mut self,
-        current: usize,
-        desired: usize,
-        maximum: Option<usize>,
-    ) -> Result<bool, errors::MemoryError> {
-        let host_limit = self
-            .as_budget()
-            .get_mem_bytes_remaining()
-            .map_err(|_| errors::MemoryError::OutOfBoundsGrowth)?;
-
-        let delta = (desired as u64).saturating_sub(current as u64);
-        let allow = if delta > host_limit {
-            false
-        } else {
-            match maximum {
-                Some(max) => desired <= max,
-                None => true,
-            }
-        };
-
-        if allow {
-            #[cfg(test)]
-            {
-                self.as_budget()
-                    .track_wasm_mem_alloc(delta)
-                    .map_err(|_| errors::MemoryError::OutOfBoundsGrowth)?;
-            }
-
-            self.as_budget()
-                .charge(ContractCostType::MemAlloc, Some(delta))
-                .map(|_| true)
-                .map_err(|_| errors::MemoryError::OutOfBoundsGrowth)
-        } else {
-            Err(errors::MemoryError::OutOfBoundsGrowth)
-        }
-    }
-
-    fn table_growing(
-        &mut self,
-        current: u32,
-        desired: u32,
-        maximum: Option<u32>,
-    ) -> Result<bool, errors::TableError> {
-        let allow = if desired > WASMI_LIMITS_CONFIG.table_elements {
-            false
-        } else {
-            match maximum {
-                Some(max) => desired <= max,
-                None => true,
-            }
-        };
-        if allow {
-            Ok(allow)
-        } else {
-            Err(errors::TableError::GrowOutOfBounds {
-                maximum: maximum.unwrap_or(u32::MAX),
-                current,
-                delta: desired - current,
-            })
-        }
-    }
-
-    fn instances(&self) -> usize {
-        WASMI_LIMITS_CONFIG.instances
-    }
-
-    fn tables(&self) -> usize {
-        WASMI_LIMITS_CONFIG.tables
-    }
-
-    fn memories(&self) -> usize {
-        WASMI_LIMITS_CONFIG.memories
     }
 }

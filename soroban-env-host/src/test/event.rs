@@ -75,7 +75,7 @@ impl ContractFunctionSet for ContractWithMultipleEvents {
         let data = Val::from(0u32);
         host.record_contract_event(ContractEventType::Contract, topics, data)
             .unwrap();
-        host.log_diagnostics("debug event 0", &[]).unwrap();
+        host.log_diagnostics("debug event 0", &[]);
         host.record_contract_event(ContractEventType::System, topics, data)
             .unwrap();
         Some(().into())
@@ -119,9 +119,7 @@ fn test_internal_contract_events_metering_not_free() -> Result<(), HostError> {
         .enable_model(ContractCostType::MemAlloc, 10, 0, 1, 0)
         .enable_model(ContractCostType::MemCpy, 10, 0, 1, 0);
 
-    let _ = host.with_events_mut(|events| {
-        Ok(events.record(InternalEvent::Contract(ce), host.as_budget()))
-    })?;
+    let _ = host.with_events_mut(|events| Ok(events.record(InternalEvent::Contract(ce), &host)))?;
     assert_eq!(host.as_budget().get_cpu_insns_consumed()?, 30);
     assert_eq!(host.as_budget().get_mem_bytes_consumed()?, 3);
 
@@ -133,7 +131,6 @@ fn test_internal_contract_events_metering_not_free() -> Result<(), HostError> {
 
 #[test]
 fn test_internal_diagnostic_event_metering_free() -> Result<(), HostError> {
-    let host = Host::test_host();
     let dummy_id = [0; 32];
     let contract_id = Some(Hash(dummy_id));
     let topics = vec![
@@ -147,14 +144,16 @@ fn test_internal_diagnostic_event_metering_free() -> Result<(), HostError> {
         args,
     });
 
-    let host = host
+    let host = Host::test_host()
         .test_budget(100000, 100000)
         .enable_model(ContractCostType::MemAlloc, 10, 0, 1, 0)
         .enable_model(ContractCostType::MemCpy, 10, 0, 1, 0);
 
-    let _ = host.with_events_mut(|events| {
-        Ok(events.record(InternalEvent::Diagnostic(de), host.as_budget()))
-    })?;
+    // `DEBUG` mode is required for the host to collect diagnostic events
+    host.enable_debug()?;
+
+    let _ =
+        host.with_events_mut(|events| Ok(events.record(InternalEvent::Diagnostic(de), &host)))?;
     assert_eq!(host.as_budget().get_cpu_insns_consumed()?, 0);
     assert_eq!(host.as_budget().get_mem_bytes_consumed()?, 0);
 

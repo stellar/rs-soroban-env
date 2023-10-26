@@ -58,6 +58,7 @@ fn test_synth_wasm() {
           (table (;0;) 128 funcref)
           (memory (;0;) 1)
           (global (;0;) (mut i64) i64.const 42)
+          (export "memory" (memory 0))
           (export "test_map" (func 3))
         )"#]];
     expected.assert_eq(&printed);
@@ -87,6 +88,7 @@ fn call_local() {
           (table (;0;) 128 funcref)
           (memory (;0;) 1)
           (global (;0;) (mut i64) i64.const 42)
+          (export "memory" (memory 0))
           (export "test" (func 1))
         )"#]];
     expected.assert_eq(&printed);
@@ -113,6 +115,7 @@ fn call_import() {
           (table (;0;) 128 funcref)
           (memory (;0;) 1)
           (global (;0;) (mut i64) i64.const 42)
+          (export "memory" (memory 0))
           (export "test" (func 1))
         )"#]];
     expected.assert_eq(&printed);
@@ -160,6 +163,7 @@ fn call_indirect() {
           (table (;0;) 128 funcref)
           (memory (;0;) 1)
           (global (;0;) (mut i64) i64.const 42)
+          (export "memory" (memory 0))
           (export "test" (func 3))
           (elem (;0;) (i32.const 0) func 0 1 2)
         )"#]];
@@ -183,6 +187,7 @@ fn get_global() {
           (table (;0;) 128 funcref)
           (memory (;0;) 1)
           (global (;0;) (mut i64) i64.const 42)
+          (export "memory" (memory 0))
           (export "test" (func 0))
         )"#]];
     expected.assert_eq(&printed);
@@ -211,6 +216,7 @@ fn store_i64() {
           (table (;0;) 128 funcref)
           (memory (;0;) 1)
           (global (;0;) (mut i64) i64.const 42)
+          (export "memory" (memory 0))
           (export "test" (func 0))
         )"#]];
     expected.assert_eq(&printed);
@@ -256,6 +262,7 @@ fn br() {
           (table (;0;) 128 funcref)
           (memory (;0;) 1)
           (global (;0;) (mut i64) i64.const 42)
+          (export "memory" (memory 0))
           (export "test" (func 0))
         )"#]];
     expected.assert_eq(&printed);
@@ -311,6 +318,7 @@ fn br_table() {
           (table (;0;) 128 funcref)
           (memory (;0;) 1)
           (global (;0;) (mut i64) i64.const 42)
+          (export "memory" (memory 0))
           (export "test" (func 0))
         )"#]];
     expected.assert_eq(&printed);

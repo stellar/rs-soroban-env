@@ -2,9 +2,9 @@ pub(crate) mod diagnostic;
 mod internal;
 pub(crate) mod system_events;
 
-pub(crate) use internal::{EventError, InternalEventsBuffer};
-#[cfg(test)]
-pub(crate) use internal::{InternalDiagnosticArg, InternalDiagnosticEvent};
+pub(crate) use internal::{
+    EventError, InternalDiagnosticArg, InternalDiagnosticEvent, InternalEventsBuffer,
+};
 // expose them as pub use for benches
 pub use internal::{InternalContractEvent, InternalEvent};
 use soroban_env_common::{
@@ -16,7 +16,7 @@ use soroban_env_common::{
     Error, Val, VecObject,
 };
 
-use crate::{budget::AsBudget, Host, HostError};
+use crate::{Host, HostError};
 
 /// The external representation of a host event.
 #[derive(Clone, Debug)]
@@ -159,8 +159,6 @@ impl Host {
             topics,
             data,
         };
-        self.with_events_mut(|events| {
-            Ok(events.record(InternalEvent::Contract(ce), self.as_budget()))
-        })?
+        self.with_events_mut(|events| Ok(events.record(InternalEvent::Contract(ce), self)))?
     }
 }

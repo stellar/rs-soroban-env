@@ -153,6 +153,14 @@ impl<T: DeclaredSizeForMetering, I: Iterator, F> MeteredIterator for std::iter::
 {
 }
 
+impl<A, B> MeteredIterator for std::iter::Chain<A, B>
+where
+    A: Iterator,
+    B: Iterator<Item = A::Item>,
+    A::Item: DeclaredSizeForMetering,
+{
+}
+
 /// A type that can be cloned, and charges for the cost of doing so, possibly
 /// failing if the clone runs out of budget. The cost of cloning may include
 /// both "shallow" and "substructure" components.

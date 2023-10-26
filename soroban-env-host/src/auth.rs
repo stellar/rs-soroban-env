@@ -412,27 +412,6 @@ impl AuthorizedFunction {
             }
         }
     }
-
-    // metering: free
-    #[cfg(any(test, feature = "recording_auth"))]
-    fn to_xdr_non_metered(&self, host: &Host) -> Result<xdr::SorobanAuthorizedFunction, HostError> {
-        match self {
-            AuthorizedFunction::ContractFn(contract_fn) => {
-                Ok(SorobanAuthorizedFunction::ContractFn(InvokeContractArgs {
-                    contract_address: host
-                        .visit_obj(contract_fn.contract_address, |addr: &ScAddress| {
-                            Ok(addr.clone())
-                        })?,
-                    function_name: contract_fn.function_name.try_into_val(host)?,
-                    // why is this intentionally non-metered? the visit_obj above is metered.
-                    args: host.vals_to_scval_vec_non_metered(contract_fn.args.as_slice())?,
-                }))
-            }
-            AuthorizedFunction::CreateContractHostFn(create_contract_args) => Ok(
-                SorobanAuthorizedFunction::CreateContractHostFn(create_contract_args.clone()),
-            ),
-        }
-    }
 }
 
 impl AuthorizedInvocation {
@@ -476,36 +455,19 @@ impl AuthorizedInvocation {
     }
 
     // metering: covered
-    fn to_xdr(&self, host: &Host) -> Result<xdr::SorobanAuthorizedInvocation, HostError> {
-        Ok(xdr::SorobanAuthorizedInvocation {
-            function: self.function.to_xdr(host)?,
-            sub_invocations: self
-                .sub_invocations
-                .iter()
-                .map(|i| i.to_xdr(host))
-                .metered_collect::<Result<Vec<xdr::SorobanAuthorizedInvocation>, HostError>>(host)??
-                .try_into()
-                .map_err(|_| HostError::from((ScErrorType::Auth, ScErrorCode::InternalError)))?,
-        })
-    }
-
-    // Non-metered conversion should only be used for the recording preflight
-    // runs or testing.
-    // metering: free
-    #[cfg(any(test, feature = "recording_auth"))]
-    fn to_xdr_non_metered(
+    fn to_xdr(
         &self,
         host: &Host,
         exhausted_sub_invocations_only: bool,
     ) -> Result<xdr::SorobanAuthorizedInvocation, HostError> {
         Ok(xdr::SorobanAuthorizedInvocation {
-            function: self.function.to_xdr_non_metered(host)?,
+            function: self.function.to_xdr(host)?,
             sub_invocations: self
                 .sub_invocations
                 .iter()
                 .filter(|i| i.is_exhausted || !exhausted_sub_invocations_only)
-                .map(|i| i.to_xdr_non_metered(host, exhausted_sub_invocations_only))
-                .collect::<Result<Vec<xdr::SorobanAuthorizedInvocation>, HostError>>()?
+                .map(|i| i.to_xdr(host, exhausted_sub_invocations_only))
+                .metered_collect::<Result<Vec<xdr::SorobanAuthorizedInvocation>, HostError>>(host)??
                 .try_into()
                 .map_err(|_| HostError::from((ScErrorType::Auth, ScErrorCode::InternalError)))?,
         })
@@ -1195,21 +1157,30 @@ impl AuthorizationManager {
         &self,
         host: &Host,
     ) -> Vec<(ScAddress, xdr::SorobanAuthorizedInvocation)> {
-        self.account_trackers
-            .borrow()
-            .iter()
-            .filter(|t| t.borrow().verified)
-            .map(|t| {
-                (
-                    host.scaddress_from_address(t.borrow().address).unwrap(),
-                    t.borrow()
-                        .invocation_tracker
-                        .root_authorized_invocation
-                        .to_xdr_non_metered(host, true)
-                        .unwrap(),
-                )
-            })
-            .collect()
+        let inv: Option<Vec<(ScAddress, xdr::SorobanAuthorizedInvocation)>> =
+            host.as_budget().with_shadow_mode(
+                || {
+                    let inv = self
+                        .account_trackers
+                        .borrow()
+                        .iter()
+                        .filter(|t| t.borrow().verified)
+                        .map(|t| {
+                            (
+                                host.scaddress_from_address(t.borrow().address).unwrap(),
+                                t.borrow()
+                                    .invocation_tracker
+                                    .root_authorized_invocation
+                                    .to_xdr(host, true)
+                                    .unwrap(),
+                            )
+                        })
+                        .metered_collect(host)?;
+                    Ok(Some(inv))
+                },
+                || None,
+            );
+        inv.unwrap()
     }
 }
 
@@ -1571,17 +1542,19 @@ impl AccountAuthorizationTracker {
     // metering: free for recording
     #[cfg(any(test, feature = "recording_auth"))]
     fn get_recorded_auth_payload(&self, host: &Host) -> Result<RecordedAuthPayload, HostError> {
-        Ok(RecordedAuthPayload {
-            address: if !self.is_invoker {
-                Some(host.visit_obj(self.address, |a: &ScAddress| Ok(a.clone()))?)
-            } else {
-                None
-            },
-            invocation: self
-                .invocation_tracker
-                .root_authorized_invocation
-                .to_xdr_non_metered(host, false)?,
-            nonce: self.nonce.map(|(nonce, _)| nonce),
+        host.as_budget().with_shadow_mode_fallible(|| {
+            Ok(RecordedAuthPayload {
+                address: if !self.is_invoker {
+                    Some(host.visit_obj(self.address, |a: &ScAddress| a.metered_clone(host))?)
+                } else {
+                    None
+                },
+                invocation: self
+                    .invocation_tracker
+                    .root_authorized_invocation
+                    .to_xdr(host, false)?,
+                nonce: self.nonce.map(|(nonce, _)| nonce),
+            })
         })
     }
 
@@ -1600,7 +1573,7 @@ impl AccountAuthorizationTracker {
     ) -> Result<xdr::SorobanAuthorizedInvocation, HostError> {
         self.invocation_tracker
             .root_authorized_invocation
-            .to_xdr(host)
+            .to_xdr(host, false)
     }
 
     // metering: covered

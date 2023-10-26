@@ -361,7 +361,7 @@ impl Vm {
                         host.log_diagnostics(
                             "VM call trapped with HostError",
                             &[func_sym.to_val(), he.error.to_val()],
-                        )?;
+                        );
                         return Err(he);
                     }
                     return Err(host.err(

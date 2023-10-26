@@ -1,8 +1,9 @@
+use expect_test::expect;
 use soroban_env_common::{
     xdr::{ContractCostType, ScErrorCode, ScErrorType},
-    Env, EnvBase, Symbol, Tag, Val, VecObject,
+    Env, EnvBase, Symbol, SymbolSmall, Tag, Val, VecObject,
 };
-use soroban_synth_wasm::{Arity, ModEmitter, Operand};
+use soroban_synth_wasm::{Arity, LocalRef, ModEmitter, Operand};
 use soroban_test_wasms::HOSTILE;
 
 use crate::{
@@ -294,4 +295,124 @@ fn broken_object() {
 
     // This iloops externalizing diagnostics for the error it is generating.
     let _args = host.vec_new_from_slice(&[bad_val]);
+}
+
+fn wasm_module_with_linear_memory_logging() -> Vec<u8> {
+    let mut me = ModEmitter::new();
+    // log_from_linear_memory
+    let f0 = me.import_func("x", "_", Arity(4));
+    // the caller
+    let mut fe = me.func(Arity(4), 0);
+    fe.push(Operand::Local(LocalRef(0)));
+    fe.push(Operand::Local(LocalRef(1)));
+    fe.push(Operand::Local(LocalRef(2)));
+    fe.push(Operand::Local(LocalRef(3)));
+    fe.call_func(f0);
+    fe.drop();
+    fe.push(Symbol::try_from_small_str("pass").unwrap());
+    fe.finish_and_export("test").finish()
+}
+
+#[test]
+fn excessive_logging() -> Result<(), HostError> {
+    let wasm = wasm_module_with_linear_memory_logging();
+    let host = Host::test_host_with_recording_footprint();
+    host.enable_debug()?;
+    let contract_id_obj = host.register_test_contract_wasm(wasm.as_slice());
+
+    let expected_budget = expect![[r#"
+        =======================================================
+        Cpu limit: 2000000; used: 1075678
+        Mem limit: 500000; used: 203437
+        =======================================================
+        CostType                 cpu_insns      mem_bytes      
+        WasmInsnExec             294            0              
+        MemAlloc                 18774          67200          
+        MemCpy                   11151          0              
+        MemCmp                   3786           0              
+        DispatchHostFunction     263            0              
+        VisitObject              216            0              
+        ValSer                   0              0              
+        ValDeser                 0              0              
+        ComputeSha256Hash        2924           40             
+        ComputeEd25519PubKey     0              0              
+        VerifyEd25519Sig         0              0              
+        VmInstantiation          1037145        136183         
+        VmCachedInstantiation    0              0              
+        InvokeVmFunction         1125           14             
+        ComputeKeccak256Hash     0              0              
+        ComputeEcdsaSecp256k1Sig 0              0              
+        RecoverEcdsaSecp256k1Key 0              0              
+        Int256AddSub             0              0              
+        Int256Mul                0              0              
+        Int256Div                0              0              
+        Int256Pow                0              0              
+        Int256Shift              0              0              
+        ChaCha20DrawBytes        0              0              
+        =======================================================
+
+    "#]];
+
+    // moderate logging
+    {
+        host.budget_ref().reset_limits(2_000_000, 500_000)?;
+        let res = host.call(
+            contract_id_obj,
+            Symbol::try_from_small_str("test")?,
+            host.test_vec_obj(&[0_u32, 10_u32, 0_u32, 10_u32])?,
+        )?;
+        assert_eq!(SymbolSmall::try_from(res)?.to_string(), "pass");
+        // three debug events: fn_call, log, fn_return
+        assert_eq!(host.get_events()?.0.len(), 3);
+        assert!(
+            !host.as_budget().shadow_mem_limit_exceeded()?
+                && !host.as_budget().shadow_cpu_limit_exceeded()?
+        );
+        let actual = format!("{}", host.as_budget());
+        expected_budget.assert_eq(&actual);
+    }
+
+    // excessive logging
+    {
+        host.budget_ref().reset_limits(2_000_000, 500_000)?;
+        let res = host.call(
+            contract_id_obj,
+            Symbol::try_from_small_str("test")?,
+            // log the entire page of linear memory
+            host.test_vec_obj(&[0_u32, 65536_u32, 0_u32, 8192_u32])?,
+        )?;
+        // logging failure occurs in debug mode will not result in invocation failure
+        assert_eq!(SymbolSmall::try_from(res)?.to_string(), "pass");
+        // no event will be externalized, since the `events.externalize()` happens after
+        // the internal limit has been exhausted
+        assert_eq!(host.get_events()?.0.len(), 0);
+        // the internal limit has been exceeded
+        assert!(host.as_budget().shadow_mem_limit_exceeded()?);
+        let actual = format!("{}", host.as_budget());
+        // the actual production budget numbers should stay the same
+        expected_budget.assert_eq(&actual);
+    }
+
+    // increasing the shadow budget should make everything happy again
+    {
+        host.budget_ref().reset_limits(2_000_000, 500_000)?;
+        host.set_shadow_budget_limits(2_000_000, 1_000_000)?;
+        let res = host.call(
+            contract_id_obj,
+            Symbol::try_from_small_str("test")?,
+            // log the entire page of linear memory
+            host.test_vec_obj(&[0_u32, 65536_u32, 0_u32, 8192_u32])?,
+        )?;
+        // logging failure occurs in debug mode will not result in invocation failure
+        assert_eq!(SymbolSmall::try_from(res)?.to_string(), "pass");
+        assert!(
+            !host.as_budget().shadow_mem_limit_exceeded()?
+                && !host.as_budget().shadow_cpu_limit_exceeded()?
+        );
+        let actual = format!("{}", host.as_budget());
+        // the actual production budget numbers should stay the same
+        expected_budget.assert_eq(&actual);
+    }
+
+    Ok(())
 }

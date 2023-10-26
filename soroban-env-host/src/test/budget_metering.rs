@@ -345,9 +345,20 @@ fn total_amount_charged_from_random_inputs() -> Result<(), HostError> {
         (1, Some(1)),
     ];
 
-    for ty in ContractCostType::variants() {
-        host.with_budget(|b| b.bulk_charge(ty, tracker[ty as usize].0, tracker[ty as usize].1))?;
+    for (ty, &(iterations, input)) in tracker.iter().enumerate() {
+        host.with_budget(|b| b.bulk_charge(ContractCostType::VARIANTS[ty], iterations, input))?;
     }
+
+    for (ty, &(iterations, input)) in tracker.iter().enumerate() {
+        host.as_budget().with_shadow_mode(
+            || {
+                host.as_budget()
+                    .bulk_charge(ContractCostType::VARIANTS[ty], iterations, input)
+            },
+            || (),
+        )
+    }
+
     let actual = format!("{:?}", host.as_budget());
     expect![[r#"
         =====================================================================================================================================================================
@@ -379,9 +390,23 @@ fn total_amount_charged_from_random_inputs() -> Result<(), HostError> {
         Int256Shift              1              None           412            119            412                 0                   119                 0                   
         ChaCha20DrawBytes        1              Some(1)        4926           0              4907                2461                0                   0                   
         =====================================================================================================================================================================
+        Internal details (diagnostics info, does not affect fees) 
         Total # times meter was called: 23
+        Shadow cpu limit: 100000000; used: 10068892
+        Shadow mem limit: 41943040; used: 275860
+        =====================================================================================================================================================================
 
     "#]]
     .assert_eq(&actual);
+
+    assert_eq!(
+        host.as_budget().get_cpu_insns_consumed()?,
+        host.as_budget().get_shadow_cpu_insns_consumed()?
+    );
+    assert_eq!(
+        host.as_budget().get_mem_bytes_consumed()?,
+        host.as_budget().get_shadow_mem_bytes_consumed()?
+    );
+
     Ok(())
 }
