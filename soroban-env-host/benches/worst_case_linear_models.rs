@@ -176,7 +176,11 @@ fn extract_wasmi_fuel_costs(
 
 #[cfg(all(test, any(target_os = "linux", target_os = "macos")))]
 fn main() -> std::io::Result<()> {
-    let params = for_each_host_cost_measurement::<WorstCaseLinearModels>()?;
+    let params = if std::env::var("RUN_EXPERIMENT").is_err() {
+        for_each_host_cost_measurement::<WorstCaseLinearModels>()?
+    } else {
+        for_each_experimental_cost_measurement::<WorstCaseLinearModels>()?
+    };
     let params_wasm = for_each_wasm_insn_measurement::<WorstCaseLinearModels>()?;
 
     let mut tw = TabWriter::new(vec![])
